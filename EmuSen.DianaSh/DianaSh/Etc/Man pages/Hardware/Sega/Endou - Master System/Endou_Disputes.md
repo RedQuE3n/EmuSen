@@ -100,7 +100,7 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   What the panel makes of either is the LCD model's question (`Endou_Plan.md` §2.5), not the VDP's. Pinned by
   `beryl-sms-colours`' `a_game_gear_word_is_red_green_and_blue_from_its_low_bits_at_equal_steps`.
 
-### D-2. OPEN. The YM2413's operator ROMs: whether its log-sine and exponent tables are the OPL2's, entry for entry
+### D-2. The YM2413's operator ROMs: the referee's log-sine and exponent tables are the OPL2's, entry for entry, wherever an entry can be seen
 - Opened: 2026-10-19, at stage 0. *OPLx decapsulated* gives the YM3812's two 256-entry ROMs, read from its die.
   `Nephrite_OperatorTables.md` §4 measured that Nuked-MD's OPN2 computes with tables equal to them, with the caveat
   that the board is a model whose ROMs are evidence about a console only so far as they were read from a die, and
@@ -118,6 +118,34 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   Endou's own, with a provenance page of their own.
 - Pinned by: —
 - Implemented in: —
+- *At stage 9 (2026-10-20):* the referee was not run: its bench is written (`Endou_Opll.md` §7), and building
+  `opll.c` from the fetched tarball waits on the tester's approval. The SMS Power! page the stage-0 summary came from,
+  "YM2413", was read: it says nothing of the ROMs, and links the reverse-engineering notes that carry code, which were
+  not opened (`Endou_Opll.md` §0). Genesis Plus GX's `nuked` YM2413, run as a black box, gives levels that agree with
+  the OPL2's tables to its resolution: a full sine at 4,111 against 510 nine-bit units scaled to it, and every 3 dB
+  volume step to 0.1 dB down to 24 dB [M `volsweep.py`]; through its resampler no single entry can be told from its
+  neighbour. **Still open**, the OPL2's tables used as argued; by `Endou_Plan.md` §3.2's condition they **do not move**
+  to a Beryl crate, and Endou holds its own copy, `src/opll/tables.rs`, with its provenance in `Endou_Opll.md` §2.
+- Pinned by: `opll::tests::the_tables_are_the_opl2_s_as_printed` (the copy), nothing yet against a chip.
+- Implemented in: the stage 9 commit, as argued.
+- *Measured on the referee (2026-10-20):* the tester approved building `opll.c`, and Nuked-OPLL now runs sample for
+  sample (`Endou_Opll.md` §7).
+  - **The test.** A build made for the purpose, never committed, moved one entry up or down by one through an
+    environment variable. All 1,015 changes that stay inside a ROM's width were compared against the referee. The
+    voices were the 54 exact synthetic voices, 40 modulated voices, and 640 voices of TL 0-4 by the four KSL codes
+    across F-numbers and blocks.
+  - **The result.** 1,010 changes alter at least one sample. Five do not: log-sine entries 0 and 1 moved down, 2 and 4
+    moved up, and 6 moved down. **None of the five can alter any output pin** [M `d2.py`, `d2b.py`, `d2c.py`, and an
+    enumeration over every attenuation]. Entries 0 and 1 moved down never change the twelve-bit output. The other
+    three change it only in its lowest bit, at a few attenuations, and the chip drops that bit everywhere it goes: the
+    DAC keeps the top eight bits, the carrier's modulation clears it, and feedback halves each output.
+- Conclusion: **measured.** The referee computes with tables equal to the OPL2's in every entry an output can show.
+  The caveat stays: the referee is a model, and it is evidence about a console only so far as its ROMs came from a die.
+  By `Endou_Plan.md` §3.2 the tables should now move to a Beryl crate that Nephrite and Endou both read. That move
+  touches Nephrite, so it waits on the tester (`Endou_Native.md` §16.15).
+- Pinned by: `opll::tests::the_tables_are_the_opl2_s_as_printed`; against the referee, the synthetic voices of
+  `examples/opllref.rs`, rerun as `Endou_Opll.md` §7 describes.
+- Implemented in: the stage 9 commits.
 
 ### D-3. The I/O chip: on the Mark III a TH pin set as an output reads low and one left an input reads high
 - Opened: 2026-10-19, at stage 2, by the documents and a referee disagreeing. SMS Power!'s "Peripheral Ports" says the
@@ -439,6 +467,85 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   `media::tests::the_checksum_leaves_out_the_header_and_stops_at_the_coded_size`.
 - Implemented in: the stage 6 commit (`src/boot/ram.s`, `media::checksum`).
 
+### D-17. The audio control port with an FM unit: with the I/O chip off a read of `$F2` gives three bits of a line counter, zeros, and the two bits written; the Mark III's unit keeps no bit 1; FM and PSG sound as the bits say; `$F0`-`$F2` are decoded exactly
+- Opened: 2026-10-20, at stage 9, by what the documents leave open of D-13's other half. SMS Power!'s "Audio Control
+  Port": with FM hardware, a read gives "Counter (see below)" in bits 7-5, "Always 0" in 4-2 and the "Last value
+  written, 0 by default" in 1-0; the counter, MacDonald on its forum, is 12 bits "clocked by the C-Sync input into the
+  315-5297", bits 11, 7 and 3 on D7, D6 and D5; writes of `$00`-`$03` choose the PSG, the FM, neither or both on the
+  Japanese Master System, while on the Mark III "Bit 1 ... is forced to 0", so the two never sound together. MacDonald's
+  `smstech` §7: `$F0` the register latch, `$F1` the data, `$F2` bit 0 for detection, reads of `$C0`-`$FF` the I/O
+  chip's unless it is disabled; "It isn't known exactly what data is returned from ports $C0-$FF if the YM2413 is
+  present."
+- Documents read: those; the forum thread the "Audio Control Port" page cites, "FM/PSG mix: testing the audio control
+  port", through a summarising fetch: a Japanese Master System heard as the page says (00 PSG, 01 FM, 02 nothing, 03
+  both) and a Mark III with the unit as 00 PSG, 01 FM, 02 PSG, 03 FM, the poster's correction of 2020-03-25 included; no
+  poster measured the two's levels.
+- Test program: `programs/fm.s` (stage 5) finds the unit on both consoles, its seven reads giving bit 0 back, and the
+  tone sounding after `$F2` = 3 on the Japanese Master System and not on the Mark III.
+- Referee: none; the references' FM units are emulations of the same documents.
+- Conclusion: **argued** from the documents and the posters' tests. The counter is taken as one pulse a line, 228 Z80
+  clocks, counted from power-on: C-Sync's equalising and serration pulses in the vertical interval are not counted, which
+  only a console could show and no game is known to read. `$F0`, `$F1` and `$F2` alone are the unit's ports, the
+  documents naming no mirror; a read of `$F0` or `$F1` with the I/O chip off is the undriven bus, as with no unit.
+- Pinned by: `bus::tests::the_fm_unit_s_ports_answer_on_the_consoles_that_carry_it`, `sound::tests::port_f2_chooses_what_sounds`,
+  `programs::the_fm_unit_is_found_on_the_consoles_that_carry_one`.
+- Implemented in: the stage 9 commit.
+
+### D-18. The key scale's codes: KSL 1, 2 and 3 are 1.5, 3 and 6 dB an octave
+- Opened: 2026-10-20, at stage 9, by the black box against the manual. The *YM2413 Application Manual*, Table III-4,
+  gives D7 D6 = 1 0 as 1.5 dB an octave and 0 1 as 3, and its text lists "1.5 dB/oct, 3 dB/oct, 6 dB/oct, and 0 dB/oct"
+  [R Maxim's HTML, checked against the scan].
+- Documents read: those.
+- Test program: a carrier's sine at F-number `$1A0` with each KSL, in blocks 7 and 5, on Genesis Plus GX's `nuked`
+  YM2413 (`cmpshow.py`): KSL 1 lowers it by 10 dB and 7 dB, KSL 2 by 20 and 14, KSL 3 by more (28.5 in block 5), which
+  are Table III-5's 3 dB an octave halved, as given, and doubled.
+- Referee: the black box above, an emulation; its agreement is evidence only so far as its rule came from a chip.
+- Conclusion: **measured on the black box**: the code read as a number, 1 is 1.5 dB an octave, 2 is 3, 3 is 6. The
+  table's bit order is taken as a transcription's slip, the text's order agreeing with the black box.
+- Pinned by: `opll::tests::the_level_key_scale_codes_are_1_5_3_and_6_db_an_octave`.
+- Implemented in: the stage 9 commit.
+
+### D-19. The DAC's small signals: sign and magnitude, a negative zero four units below the idle level
+- Opened: 2026-10-20, at stage 9. The manual gives a nine-bit DAC and no more [D (II-1), (VI-5)]. On Genesis Plus GX's
+  `nuked` YM2413, a carrier's sine at VOL 0 to 15 measures 69.3, 66.3, 63.3, … 46.1 (VOL 8), 43.5, 40.9, 38.7, 36.3,
+  34.6, 32.6, 32.1 dB [M `volsweep.py`]: 3 dB a step to VOL 8, then less, VOL 14 and 15 nearly equal; its MAME core gives
+  3.0 dB a step throughout. Endou's twelve bits shifted right by three give 3 dB a step to VOL 10 and then lose level
+  faster. A release on the black box ends at about −37 dB and then falls to nothing at level 124 (`Endou_Opll.md` §3.5).
+- Documents read: the manual.
+- Test program: the volume sweep above; the waveform at VOL 15 on the black box shows four levels and no zero.
+- Referee: the referee of `Endou_Opll.md` §7 would give the sums a sample, which a resampler hides.
+- Conclusion: **open.** Endou keeps the nine-bit truncation; quiet notes are up to 8 dB quieter than the black box's.
+- Pinned by: —
+- Implemented in: —
+- *Measured on the referee (2026-10-20):* the chip's two output pins, cycle by cycle, through the header's
+  `OPLL_Clock` [M `p5`]. In a channel's turn, one pin carries the twelve-bit output's top eight bits plus one, and the
+  other carries the sign as +1 or −1. A negative output enters as its ones' complement. An idle turn is +1 on both
+  pins. So against the idle level, an output o ≥ 0 gives o >> 4, and o < 0 gives −((!o >> 4) + 4). A negative zero
+  (−1), which the half wave and an output past the exponent's range both give, sits four units below the idle level,
+  and a silent slot (level 127) gives a positive zero.
+  - **This is the box's anomaly.** A quiet sine's negative half never rises nearer zero than −4, so a quiet note is
+    louder than a truncation gives. At VOL 15 the waveform has four levels and no zero, as the box showed.
+  - Endou now gives each channel's turn by this rule (`opll::dac`), and 54 synthetic voices are exact with it.
+- Conclusion: **measured on the referee.** The rule replaces the nine-bit truncation. `sound::FM_GAIN` became 6, so
+  that a full sine (255 units) keeps D-20's level of 0.59.
+- Pinned by: `opll::tests::the_dac_is_sign_and_magnitude_offset_by_one`.
+- Implemented in: the stage 9 commit "the YM2413 held to the referee sample for sample".
+
+### D-20. The FM unit's level against the PSG's: argued, the references disagreeing
+- Opened: 2026-10-20, at stage 9, as `Endou_Native.md` §12.3 left it: "the YM2413 ... whose level against the PSG's is
+  that stage's measurement".
+- Documents read: the forum thread of D-17, whose posters heard both at `$F2` = 3 and measured no level.
+- Test program: a carrier's sine at full level on one channel and tone 0 at full volume, both sounding (`level.py`):
+  the FM sine's amplitude over the tone's fundamental is 1.53 on Genesis Plus GX (either YM2413 core, at its default
+  pre-amplifiers, 150 for the PSG and 100 for the FM), 0.557 on Gearsystem and 0.531 on SMS Plus GX [M].
+- Referee: none; no recording of a Japanese Master System's output was found (`Endou_References.md` §6e's search
+  stands).
+- Conclusion: **argued**: 0.59 (`sound::FM_GAIN` 3 in nine-bit units, 6 since D-19's DAC rule of 2026-10-20), near the references' median, Genesis Plus GX's two cores being one
+  program's choice of pre-amplifier, adjustable by its player. A recording would settle it as the PSG's analogue stage
+  waits on one.
+- Pinned by: `sound::tests::port_f2_chooses_what_sounds` holds the paths; the level is the constant `FM_GAIN`.
+- Implemented in: the stage 9 commit.
+
 ### D-21. The Game Gear's VDP in GG mode: M1 and M2 give the 224-line display as on the 315-5246, and the LCD's window stays where it is in the frame, display lines 40-183
 - Opened: 2026-10-20, at the Game Gear's stage J1, by a sentence open to two readings. MacDonald §6: "If the GameGear is
   in GG mode, it's resolution is fixed and does not change when the extended resolutions are used. However, the
@@ -536,3 +643,24 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `media::tests::a_game_gear_cartridge_chooses_its_mode_by_its_header`;
   `v1::tests::a_game_gear_cartridge_runs_on_the_game_gear_in_the_mode_its_header_chooses`.
 - Implemented in: the J1 commit (`Media::gg_mode`).
+
+### D-24. OPEN. The YM2413's slot order within a sample: what channels 4-9 and the drums do differently from channels 1-3
+- Opened: 2026-10-20, at stage 9, by the referee. Endou's chip computes all nine channels at one instant of a sample.
+  The chip computes them in turn over eighteen cycles. On channels 1-3, every synthetic voice is equal to the referee's
+  in every sample. Elsewhere it is not.
+- Documents read: the manual, which gives no slot order.
+- Test program: `lead.py`, `eglead.py` and `rfit.py` on the referee [M 2026-10-20]. The same voices were played on
+  every channel. For each slot, the offsets of its tick count, its LFOs and its key-on were searched.
+  - **Channels 4-9:** a modulator's attack at RATE 44 or more differs in a note's first 30-60 samples: 62, 31 and 19
+    samples of 8,000 at RATE 45, 49 and 53. No offset makes it equal.
+  - **Channel 9:** a carrier's decay steps a sample early at some ticks, 6-11 samples of 8,000.
+  - **The drums:** all five start 1-3 samples before Endou's after a write to `$0E`. The bass drum's patch could not be
+    fitted until that start is modelled.
+  - **The bench:** where the bench's sample starts and where it puts a write change which sample a channel answers in.
+    `Endou_Opll.md` §7 records the setting under which every channel lags alike.
+- Referee: Nuked-OPLL, run as a black box. Its slot order is part of what it models, and it can only be observed.
+- Conclusion: **open.** Endou keeps one instant a sample. What differs is a few samples at the start of a fast attack,
+  single samples at decay ticks, and the drums' first samples. The chip's slot order, observed cycle by cycle on the
+  referee's pins, is the next measurement.
+- Pinned by: —
+- Implemented in: —

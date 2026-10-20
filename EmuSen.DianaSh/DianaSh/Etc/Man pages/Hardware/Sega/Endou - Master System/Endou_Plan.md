@@ -65,6 +65,10 @@ SG-1000's joystick as drawings of their own, a separate piece of work; the cover
 Genesis's 0.7 checked in a Nephrite step; the export check refusing a Game Genie-patched game stays; and the go for
 stage 8.
 
+**Decided by the tester, 2026-10-19, on stage 8's questions** (`Endou_Native.md` §15.13), all as recommended: the
+profile's allocation in `emusen-native` is fixed as a step of its own, apart from Endou; the views stay without vectors;
+`beryl-sms-colours` stays a crate of its own; and the go for stage 9.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -106,7 +110,7 @@ result is visible to software.
 | **VDP, mode 4** (315-5124 and 315-5246) | The ports, the address and code registers, the read buffer; VRAM (16 KiB) and CRAM (32 bytes); registers 0–10; the name table with the scroll locks and the left column's mask; sprites (64, eight a line, 8×8 or 8×16, zoom, the early clock), the overflow and collision flags; the 224- and 240-line modes of the 315-5246; the frame and line interrupts with the line counter; the V and H counters and the H counter's latch by TH; NTSC and PAL timing; the CPU's access slots, where too-fast writes are lost [R `msvdp.txt` §15] | Results exact; timing to the dot where test programs measure it (§5.2) |
 | **VDP, the TMS9918 modes** | Graphic I and II, Text, Multicolor and the undocumented combinations [R `msvdp.txt` §6], with the 315-5246's hardwired palette and the 315-5124's behaviour in them; and, for the SG-1000, the **TMS9918A** itself (its palette, 32 sprites with four a line and the fifth-sprite flag) [D] | Exact in results; the TMS9918A's timing where its data manual gives it |
 | **PSG** | Beryl's `beryl-sn76489`: Sega's variant on the Mark III and Master System, the discrete chip on the SG-1000 [R `Beryl_SN76489.md` §2; SMS Power's "SN76489"] | Exact to the clock; the analogue stage as measured (§5.4) |
-| **YM2413 (OPLL)** | Nine two-operator channels, the fifteen fixed instruments and the user instrument, the rhythm mode, the ports `$F0`–`$F2` and the Japanese console's audio control; on the Japanese Master System and on the Mark III with the FM Sound Unit [D] | Exact to the sample (§5.4); **stage 9**, after the gate (§10 Q2) |
+| **YM2413 (OPLL)** | Nine two-operator channels, the fifteen fixed instruments and the original instrument, the rhythm mode, the ports `$F0`–`$F2` and the Japanese console's audio control; on the Japanese Master System and on the Mark III with the FM Sound Unit [D] | Exact to the sample (§5.4); **stage 9**, after the gate (§10 Q2) |
 | **The Pause button** | The console's button, an NMI edge to the Z80 [D] | Exact: the edge at the instruction boundary `beryl-z80` takes it [R `Beryl_Z80.md` §5] |
 | **The Reset button** | The Master System's button, a bit software reads at `$DD` (no Master System II has one) [D] | Exact |
 | **Cartridges** | Plain ROM to 48 KiB; Sega's mapper (315-5235: `$FFFC`–`$FFFF`, the first kilobyte fixed, cartridge RAM in two banks); Codemasters' mapper; the SG-1000's RAM boards; then the Korean and multicart boards (stage 12) [D] | Exact; each board as a document describes it |
@@ -342,7 +346,9 @@ frame; seeded faults.
 - **Conditionally, the operator ROMs.** If D-2 finds that the YM2413's log-sine and exponent ROMs are the OPL2's, as
   they are for the OPN2 on Nuked-MD's board [R `Nephrite_OperatorTables.md` §4], the two tables Nephrite holds in
   `fm_tables.rs` [R] would be needed by two Sega cores, and move to a Beryl crate of their own with their provenance
-  page, so that one owner holds them. If they differ, nothing moves. Stage 9.
+  page, so that one owner holds them. If they differ, nothing moves. Stage 9. *At stage 9 (2026-10-20) D-2 stayed open,
+  the referee not having been run, so nothing moved; Endou holds its own copy with its provenance in `Endou_Opll.md`
+  §2.*
 
 ### 3.3 The VDP crate, and Nephrite's mode 4
 
@@ -385,7 +391,9 @@ The bus and its decoding, the mappers and their identification, I/O and the peri
 the open boot program, the state, settings and the v1 glue. **The YM2413 stays a module** [C]: only the Master System
 carries one among the Sega cores [A], so by the rule of 2026-10-05 it is not a Beryl crate; it keeps the chip
 contract all the same, so that a second user (the NES's VRC7 is an OPLL derivative [D], which MoonRT does not emulate
-[M: no `vrc7` in `EmuSen/Cores`]) would move it into a crate rather than copy it.
+[M: no `vrc7` in `EmuSen/Cores`]) would move it into a crate rather than copy it. *Built 2026-10-20 as `src/opll.rs` and `src/opll/`, keeping
+the contract: the caller runs it a sample at a time, its ports are its two writes, its output the melody's and the
+rhythm's sums (`Endou_Opll.md` §1).*
 
 ### 3.5 From the framework
 
@@ -653,7 +661,8 @@ C3]:
 
 - **Model** per system. `sms`: Mark III, Mark III with the FM Sound Unit (stage 9), Japanese Master System (stage 9),
   Master System, Master System II. `sg1000`: SG-1000, Mark III. Default by the header's region code [D]: export → Master
-  System II; Japanese → Mark III until stage 9, then the Japanese Master System (§10 Q9).
+  System II; Japanese → Mark III until stage 9, then the Japanese Master System (§10 Q9). *Since stage 9
+  (2026-10-20) the six are offered and the Japanese default is the Japanese Master System, with its BIOS setting.*
 - **Region**: auto, Japan, the Americas, Europe, Brazil; NTSC or PAL follows the region, auto taking the Americas for an
   export cartridge (§10 Q9).
 - **Controller per port** (stages 10–11).
@@ -724,7 +733,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **6** | *Built 2026-10-19, `Endou_OpenBoot.md` and `Endou_Native.md` §13.* Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
 | **7** | *Built 2026-10-19, `Endou_Native.md` §14; offered to players by the tester's go.* The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab; the SG-1000 on a shelf of its own, its console `"SG-1000"` apart from `"Master System"` (decided 2026-10-19) | **G4**: the kit's cases on the tester's games; a test that `sms` and `sg1000` land on two shelves; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
 | **8** | *Built 2026-10-19, `Endou_Native.md` §15.* The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
-| **9** | The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
+| **9** | *Built 2026-10-20, `Endou_Native.md` §16 and `Endou_Opll.md`; the referee's comparison open.* The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
 | **10** | The Paddle, the Sports Pad (axes behind port settings) and the 3-D glasses with their display setting | Test programs and the named games at anchors against the references | 2 |
 | **11** | The Light Phaser, with the core ABI's pointer minor proposed and, on the tester's approval, built across `emusen-native`, the header, the hosts and the kit | A kit case for the minor; the phaser's latch on a test program; the named games' hits against the references | 3 |
 | **12** | The Korean and multicart boards, each from a document; the table extended | Each board's synthetic program; each named game to its title against a reference | 2 |
@@ -891,7 +900,7 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
   [M §11.9]. At stage 5, with the PSG mixed: 0.20-0.23 ms on three Master System games, 0.18 on an SG-1000 game, the
   sound 0.005-0.014 ms of it [M §12.8]. At stage 6, after the hand-over: 0.206-0.236 ms on three games, within 0.005 ms of stage 5's
   build measured alongside [M §13.7]. At stage 7, with the Game Genie's check on the cartridge's reads: 0.204-0.239 ms on
-  three games, 0.005-0.006 ms of it the check [M §14.11]. At stage 8, with the debugger built and unarmed: 0.210-0.247 ms on three games, within 0.006 ms of stage 7's build measured alongside [M §15.10].*
+  three games, 0.005-0.006 ms of it the check [M §14.11]. At stage 8, with the debugger built and unarmed: 0.210-0.247 ms on three games, within 0.006 ms of stage 7's build measured alongside [M §15.10]. At stage 9 (2026-10-20): 0.232-0.250 ms on three games without an FM unit, as stage 8's build alongside, and 0.343-0.374 ms on two games on the Japanese Master System, the YM2413 about 0.125 ms of it, inside 0.9 ms [M §16.12].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
   interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the
@@ -900,7 +909,9 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
 - **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged. *Retired
   at stage 4 (2026-10-19) as predicted: both D-7 tests pass, the kit's 64 image reports are identical, and 200,000
   random lines drew the same before the old renderer was deleted [M `Endou_Native.md` §11.6].*
-- **P5.** The YM2413's log-sine and exponent ROMs are the OPL2's, entry for entry (D-2).
+- **P5.** The YM2413's log-sine and exponent ROMs are the OPL2's, entry for entry (D-2). *At stage 9 (2026-10-20): not retired; the black
+  box's levels agree with them to its resolution, which cannot tell an entry from its neighbour, and the referee was not
+  run (`Endou_Opll.md` §2).*
 - **P6.** No bench game behaves differently on the open boot program than on the player's BIOS after the hand-over,
   start-up time apart. *At stage 6 (2026-10-19): not measurable by the project, which runs no real BIOS; against the
   start with no BIOS, 29 of 31 export games reach the same pictures, the other two by the hand-over's phase and the

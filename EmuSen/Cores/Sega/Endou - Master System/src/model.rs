@@ -1,8 +1,8 @@
 //! The consoles Endou models and what each differs in: the I/O chip's control port, the region it reads back, the Reset
-//! button, what an undriven read returns, the VDP, the PSG and the work RAM (Endou_Native.md §9.4, §11), and the Game
-//! Gear's (Jadeite_Native.md §2). The one owner of these facts.
+//! button, what an undriven read returns, the VDP, the PSG, the FM unit and the work RAM (Endou_Native.md §9.4, §11,
+//! §16), and the Game Gear's (Jadeite_Native.md §2). The one owner of these facts.
 
-/// A real console. The Japanese Master System joins with the YM2413 at stage 9 (Endou_Plan.md §5.8).
+/// A real console (Endou_Plan.md §5.8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
     /// Sega's Mark III: no TH function, its TH outputs reading low as a Japanese console's do, and no Reset button [R
@@ -19,7 +19,25 @@ pub enum Model {
     /// The Game Gear: "a NTSC SMS2" to its software [R MacDonald's `msvdp` §14] with the 315-5378 and an LCD. Its own
     /// ports $00-$06 and its stereo are stage J2's; until then it reads as the Master System II there.
     GameGear,
+    /// The Mark III with the FM Sound Unit in its expansion port: a YM2413 that sounds instead of the PSG [R
+    /// MacDonald's `smstech` §1, §7; SMS Power!'s "Audio Control Port"].
+    MarkIIIFm,
+    /// The Japanese Master System: the Mark III's 315-5124 and I/O, a BIOS, no Reset button, and the YM2413 built in,
+    /// sounding beside the PSG as port $F2 chooses [R `smstech` §1; SMS Power!'s "Audio Control Port", "Reset Button"].
+    JapaneseSms,
 }
+
+/// The FM unit a console carries (Endou_Native.md §16.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FmUnit {
+    /// The Mark III's add-on: port $F2's bit 1 reads 0, and the FM and the PSG never sound together.
+    AddOn,
+    /// The Japanese Master System's: bit 0 sounds the FM, and the PSG sounds while bits 0 and 1 are equal.
+    BuiltIn,
+}
+
+/// Every console, in the order of their bytes.
+pub const ALL: [Model; 7] = [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000, Model::GameGear, Model::MarkIIIFm, Model::JapaneseSms];
 
 impl Model {
     pub fn id(self) -> &'static str {
@@ -29,6 +47,8 @@ impl Model {
             Model::Sms2 => "sms2",
             Model::Sg1000 => "sg1000",
             Model::GameGear => "gg",
+            Model::MarkIIIFm => "mark3fm",
+            Model::JapaneseSms => "jsms",
         }
     }
 
@@ -39,18 +59,35 @@ impl Model {
             Model::Sms2 => 2,
             Model::Sg1000 => 3,
             Model::GameGear => 4,
+            Model::MarkIIIFm => 5,
+            Model::JapaneseSms => 6,
         }
     }
 
     pub fn of_byte(b: u8) -> Option<Model> {
-        [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000, Model::GameGear].into_iter().find(|m| m.byte() == b)
+        ALL.into_iter().find(|m| m.byte() == b)
+    }
+
+    /// The YM2413 the console carries, if any.
+    pub fn fm(self) -> Option<FmUnit> {
+        match self {
+            Model::MarkIIIFm => Some(FmUnit::AddOn),
+            Model::JapaneseSms => Some(FmUnit::BuiltIn),
+            _ => None,
+        }
+    }
+
+    /// Whether the console is a Japanese one of the Mark III's line, whose TH pins read as the Mark III's do
+    /// (Endou_Disputes.md D-3).
+    pub fn japanese_io(self) -> bool {
+        matches!(self, Model::MarkIII | Model::MarkIIIFm | Model::JapaneseSms)
     }
 
     /// The VDP: the 315-5124 in the Mark III and the first Master System, the 315-5246 in the second [R MacDonald's
     /// `msvdp` §1], the TMS9918A in the SG-1000 [R SMS Power!'s "Palette"; MacDonald's `sc3000h` §2 for its family].
     pub fn vdp(self) -> beryl_sms_vdp::Variant {
         match self {
-            Model::MarkIII | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
+            Model::MarkIII | Model::MarkIIIFm | Model::JapaneseSms | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
             Model::Sms2 => beryl_sms_vdp::Variant::SMS2,
             Model::Sg1000 => beryl_sms_vdp::Variant::TMS9918A,
             Model::GameGear => beryl_sms_vdp::Variant::GG,
@@ -102,9 +139,15 @@ impl Model {
         !matches!(self, Model::Sms2 | Model::GameGear)
     }
 
-    /// Whether the console has a BIOS: the Master System and the Master System II; the Mark III has none
-    /// (Endou_Disputes.md D-14), nor the SG-1000.
+    /// Whether the console has a BIOS: the Master Systems, the Japanese one among them [R `smstech` §1]; the Mark III
+    /// has none (Endou_Disputes.md D-14), with or without its FM unit, nor the SG-1000.
     pub fn has_bios(self) -> bool {
+        matches!(self, Model::Sms1 | Model::Sms2 | Model::JapaneseSms)
+    }
+
+    /// Whether the console's BIOS checks an export cartridge's header: the export Master Systems' do, the Japanese
+    /// one's does not [R SMS Power!'s "ROM Header"; Endou_OpenBoot.md §1.5].
+    pub fn checks_export_header(self) -> bool {
         matches!(self, Model::Sms1 | Model::Sms2)
     }
 

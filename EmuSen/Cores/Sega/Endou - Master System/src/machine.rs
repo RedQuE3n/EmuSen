@@ -96,7 +96,7 @@ impl Machine {
     pub fn with_boot(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>, boot: Boot, bios: Vec<u8>) -> Machine {
         let pal = market == Market::Europe && model.has_pal();
         let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
-        let sound = Sound::new(Sn76489::new(model.psg()), num, 15);
+        let sound = Sound::with_fm(Sn76489::new(model.psg()), model.fm(), num, 15);
         let mut vdp = Vdp::new(model.vdp(), pal);
         vdp.gg_mode = model == Model::GameGear && media.gg_mode();
         let (width, height) = if model != Model::GameGear { (WIDTH, HEIGHT) } else if vdp.gg_mode { (gg::WIDTH, gg::WINDOW_HEIGHT) } else { (gg::WIDTH, gg::PANEL_HEIGHT) };
@@ -286,10 +286,10 @@ impl Machine {
             return;
         }
         self.height = vdp.height;
-        let (colours, mask): (&[[u8; 4]], usize) = match self.model() {
-            Model::MarkIII | Model::Sms1 => (&SMS1_COLOURS, 0x3F),
-            Model::Sms2 | Model::GameGear => (&SMS_COLOURS, 0x3F),
-            Model::Sg1000 => (&TMS_COLOURS, 0x0F),
+        let (colours, mask): (&[[u8; 4]], usize) = match self.model().vdp() {
+            beryl_sms_vdp::Variant::SMS1 => (&SMS1_COLOURS, 0x3F),
+            beryl_sms_vdp::Variant::TMS9918A => (&TMS_COLOURS, 0x0F),
+            _ => (&SMS_COLOURS, 0x3F),
         };
         for (out, &e) in self.picture.as_chunks_mut::<4>().0.iter_mut().zip(vdp.picture()) {
             out.copy_from_slice(&colours[e as usize & mask]);

@@ -2,7 +2,7 @@
 //! cartridge's (Endou_OpenBoot.md §4), the I/O ports decoded by A7, A6 and A0, and the clock. The bus owns the time:
 //! every machine cycle the Z80 reports advances it, and the devices are brought to it when an access reaches them. The
 //! VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the Master System's consoles, the TMS9918A on the SG-1000
-//! (Endou_Native.md §10, §11); the PSG is `sound`'s.
+//! (Endou_Native.md §10, §11); the PSG and the FM unit's YM2413 at ports $F0-$F2 are `sound`'s (§12, §16).
 
 use beryl_sms_vdp::Vdp;
 
@@ -21,6 +21,9 @@ pub const CARTRIDGE_OFF: u8 = 1 << 6;
 pub const WORK_RAM_OFF: u8 = 1 << 4;
 pub const BIOS_OFF: u8 = 1 << 3;
 pub const IO_OFF: u8 = 1 << 2;
+
+/// The FM unit's audio control port (SMS Power!'s "Audio Control Port").
+pub const AUDIO_CONTROL: u8 = 0xF2;
 
 /// The highest address a Game Genie patches: the cartridge's slot area (SMS Power!'s "Game Genie").
 pub const PATCH_HIGH: u16 = 0xBFFF;
@@ -163,6 +166,7 @@ impl Bus {
                 self.catch_up_vdp();
                 self.vdp.read_data()
             }
+            _ if !self.enabled(IO_OFF) && port == AUDIO_CONTROL && self.model.fm().is_some() => self.audio_control(),
             _ if !self.enabled(IO_OFF) => self.undriven(),
             _ if odd => self.io.port_dd(self.model),
             _ => self.io.port_dc(self.model),
@@ -192,9 +196,24 @@ impl Bus {
                 self.catch_up_vdp();
                 if port & 1 != 0 { self.vdp.write_control(v) } else { self.vdp.write_data(v) }
             }
-            // Ports $C0-$FF take no write: with no FM unit, $F0-$F2 are nothing (Endou_Native.md §12.4, D-13).
-            _ => {}
+            // Ports $C0-$FF take no write but the FM unit's three; with no unit, $F0-$F2 are nothing (Endou_Native.md
+            // §12.4, §16.3, D-13, D-17).
+            _ if self.model.fm().is_none() => {}
+            _ => match port {
+                0xF0 | 0xF1 => self.sound.write_fm(port == 0xF1, v, self.clock),
+                AUDIO_CONTROL => self.sound.write_control(v, self.clock),
+                _ => {}
+            },
         }
+    }
+
+    /// Port $F2 read with the I/O chip off on a console with an FM unit: bits 7-5 bits 11, 7 and 3 of a counter of the
+    /// lines' sync pulses since power-on, taken as one a line; bits 4-2 clear; bits 1-0 as written [R SMS Power!'s
+    /// "Audio Control Port"] (Endou_Disputes.md D-17).
+    fn audio_control(&self) -> u8 {
+        let lines = self.clock / crate::machine::LINE;
+        let counter = ((lines >> 11 & 1) << 7 | (lines >> 7 & 1) << 6 | (lines >> 3 & 1) << 5) as u8;
+        counter | self.sound.fm.as_ref().map_or(0, |f| f.control)
     }
 }
 
@@ -322,6 +341,31 @@ mod tests {
         assert_eq!(b.clock - t, 4);
         b.output(0x40, 0x8F);
         assert_ne!(b.sound.psg, Sn76489::new(Variant::SEGA), "the PSG is written through any port $40-$7F");
+    }
+
+    // Endou_Native.md §16.3, D-17: with an FM unit, $F2 reads back its bits with the I/O chip off and the I/O chip's port
+    // with it on; $F0 and $F1 reach the chip; the Mark III's unit keeps no bit 1; $F2's high bits count the lines.
+    #[test]
+    fn the_fm_unit_s_ports_answer_on_the_consoles_that_carry_it() {
+        for (model, unit, kept) in [(Model::JapaneseSms, crate::model::FmUnit::BuiltIn, 3), (Model::MarkIIIFm, crate::model::FmUnit::AddOn, 1)] {
+            let sound = Sound::with_fm(Sn76489::new(Variant::SEGA), model.fm(), 53_693_175, 15);
+            let board = Board { mapper: Mapper::Plain, ram: 0, battery: false, why: Why::Size };
+            let mut b = Bus::new(model, Cartridge::new(board, vec![0; 0x8000]), 0x2000, sound, Vdp::new(beryl_sms_vdp::Variant::SMS1, false));
+            assert_eq!(b.sound.fm.as_ref().unwrap().unit, unit);
+            b.output(0xF2, 0x03);
+            assert_eq!(b.input(0xF2), 0xFF, "{model:?}: the I/O chip's port B with the I/O chip on, its pad idle");
+            b.output(0x3E, 0xAB | IO_OFF);
+            assert_eq!(b.input(0xF2) & 0x1F, kept, "{model:?}");
+            b.output(0xF0, 0x30);
+            b.output(0xF1, 0x15);
+            assert_eq!(b.sound.fm.as_ref().unwrap().chip.regs[0x30], 0x15, "{model:?}");
+            b.clock = 8 * crate::machine::LINE;
+            assert_eq!(b.input(0xF2) & 0xE0, 0x20, "{model:?}: line 8, the counter's bit 3 on bit 5");
+            b.clock = 0x880 * crate::machine::LINE;
+            assert_eq!(b.input(0xF2) & 0xE0, 0xC0, "{model:?}: bits 11 and 7 on bits 7 and 6");
+            let last = b.data_bus;
+            assert_eq!(b.input(0xF0), last, "{model:?}: $F0 reads nothing, the bus's last byte");
+        }
     }
 
     #[test]

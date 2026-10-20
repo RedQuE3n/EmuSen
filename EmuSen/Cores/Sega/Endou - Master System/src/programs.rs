@@ -181,6 +181,23 @@ fn the_fm_unit_s_ports_are_nothing_without_it() {
     }
 }
 
+/// With an FM unit the detection finds it (SMS Power!'s "FM Chip Detection"): each read of $F2 with the I/O chip off
+/// gives back bit 0 as written; the Japanese Master System then sounds the PSG beside the FM when $F2 is 3, while the
+/// Mark III's unit, which keeps no bit 1, leaves it silent [R SMS Power!'s "Audio Control Port"] (Endou_Native.md §16.3).
+#[test]
+fn the_fm_unit_is_found_on_the_consoles_that_carry_one() {
+    for (model, psg) in [(Model::JapaneseSms, true), (Model::MarkIIIFm, false)] {
+        let mut m = machine(image(&images::FM), model);
+        let x = sound_of(&mut m, 60);
+        assert_eq!((m.bus.ram[0], m.bus.ram[1]), (7, 1), "{model:?}: seven matches, an FM unit");
+        assert_eq!(m.bus.ram[0x10..0x17].iter().map(|v| v & 7).collect::<Vec<_>>(), [1, 0, 1, 0, 1, 0, 1], "{model:?}");
+        let tone = amplitude(&x[12_000..], 440.4);
+        assert_eq!(tone > 2_500.0, psg, "{model:?}: the PSG at $F2 = 3, {tone}");
+        let f = m.bus.sound.fm.as_ref().unwrap();
+        assert_eq!((f.control, f.chip.regs[0x30]), (if psg { 3 } else { 1 }, 0x1F), "{model:?}: the FM written");
+    }
+}
+
 /// ZEXDOC and ZEXALL for the Master System (`Endou_References.md` §2), found through `EMUSEN_ENDOU_CORPUS`
 /// (`~/.cache/emusen/probe/endou`), report in the cartridge's RAM: every one of the 79 tests "OK" and the run complete.
 /// Without the corpus the test passes unrun. Run it in release: about twenty seconds each (Endou_Native.md §9.9).

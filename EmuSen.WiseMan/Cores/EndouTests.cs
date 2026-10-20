@@ -54,13 +54,13 @@ namespace EmuSen.WiseMan.Cores
                 var pack = SystemPacks.For(system.Id)!;
                 Assert.Equal(pack.Entry.Extensions, system.Extensions);
             }
-            Assert.Equal(new[] { (1u, "bios_sms1.sms", 8192L, false, "accuracy"), (2u, "bios_sms2.sms", 8192L, false, "accuracy") }, library.Info.Systems[0].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
-            Assert.Equal(new[] { 2, 0 }, library.Info.Systems[0].Firmware.Select(f => f.Md5.Count));
+            Assert.Equal(new[] { (1u, "bios_sms1.sms", 8192L, false, "accuracy"), (2u, "bios_sms2.sms", 8192L, false, "accuracy"), (3u, "bios_jsms.sms", 8192L, false, "accuracy") }, library.Info.Systems[0].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
+            Assert.Equal(new[] { 2, 0, 1 }, library.Info.Systems[0].Firmware.Select(f => f.Md5.Count));
             Assert.Empty(library.Info.Systems[1].Firmware);
             Assert.Equal(new[] { true, false, false }, library.Info.Systems.Select(s => s.StartsEmpty));
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
             Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7), ("gg.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
-            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms" }, library.Settings.Select(s => s.Key));
         }
 
         [Fact]
@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (name, image, spaces) in new (string, byte[], string[])[]
             {
                 ("export.sms", SyntheticSmsRom.Cartridge(), new[] { "bios", "cram", "ram", "rom", "vram" }),
-                ("japan.sms", SyntheticSmsRom.Cartridge(0x3), new[] { "cram", "ram", "rom", "vram" }),
+                ("japan.sms", SyntheticSmsRom.Cartridge(0x3), new[] { "bios", "cram", "ram", "rom", "vram" }),
                 ("cartridge.sg", SyntheticSmsRom.Sg1000(), new[] { "ram", "rom", "vram" }),
             })
             {
@@ -309,11 +309,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(("Master System (Endou)", "SG-1000 (Endou)"), (CoreCatalog.ShelfFor(sms), CoreCatalog.ShelfFor(sg)));
             Assert.Equal(("Master System (Endou)", "SG-1000 (Endou)"), (EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(sms), EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(sg)));
             Assert.Equal("Master System (Endou)", CoreCatalog.Registry["endou"].DisplayName);
-            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, CoreCatalog.SettingsFor("Master System").Select(s => s.Key));
-            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, CoreCatalog.SettingsFor("SG-1000").Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms" }, CoreCatalog.SettingsFor("Master System").Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms" }, CoreCatalog.SettingsFor("SG-1000").Select(s => s.Key));
         }
 
-        // Decided 2026-10-19: the open boot program by default, machine info naming the replacement; an export cartridge handed over with $AB at $C000 - see Endou_Native.md §13.
+        // Decided 2026-10-19: the open boot program by default, machine info naming the replacement; an export cartridge handed over with $AB at $C000; a Japanese one on the Japanese Master System, whose BIOS it replaces too - see Endou_Native.md §13, §16.
         [Fact]
         public void A_master_system_runs_the_open_boot_program_first_and_names_it()
         {
@@ -326,7 +326,9 @@ namespace EmuSen.WiseMan.Cores
             var kept = new byte[2];
             Assert.True(machine.ReadSpace(1, 0, kept));
             Assert.Equal(new byte[] { 0xAB, 0x00 }, kept);
-            using var mark3 = new CoreMachine(library, SyntheticSmsRom.Cartridge(0x3), "", Array.Empty<(uint, byte[])>());
+            using var japan = new CoreMachine(library, SyntheticSmsRom.Cartridge(0x3), "", Array.Empty<(uint, byte[])>());
+            Assert.Equal(new[] { (3u, "replacement") }, japan.Info.Firmware.Select(f => (f.Which, f.Source)));
+            using var mark3 = new CoreMachine(library, SyntheticSmsRom.Cartridge(0x3), "model=mark3", Array.Empty<(uint, byte[])>());
             Assert.Empty(mark3.Info.Firmware);
         }
 

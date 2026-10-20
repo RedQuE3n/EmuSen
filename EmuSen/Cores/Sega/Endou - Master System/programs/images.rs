@@ -39,8 +39,10 @@ pub const TMS: Program = Program { header: None, ..program("tms", include_str!("
 pub const VOICES: Program = program("voices", include_str!("voices.s"), 2);
 pub const VOICES_SG: Program = Program { header: None, ..program("voices-sg", include_str!("voices.s"), 1) };
 pub const FM: Program = program("fm", include_str!("fm.s"), 2);
+/// A Japanese cartridge, so that a host runs it on the Japanese Master System.
+pub const OPLL: Program = Program { header: Some(3), ..program("opll", include_str!("opll.s"), 2) };
 
-pub const PROGRAMS: [&Program; 15] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH, &TMS, &VOICES, &VOICES_SG, &FM];
+pub const PROGRAMS: [&Program; 16] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH, &TMS, &VOICES, &VOICES_SG, &FM, &OPLL];
 
 /// The Game Gear's: two in its own mode, its header's region code 6 (the Game Gear's export), and a Master System
 /// cartridge's picture for its mode on the Game Gear.

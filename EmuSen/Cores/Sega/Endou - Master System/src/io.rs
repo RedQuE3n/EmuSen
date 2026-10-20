@@ -39,15 +39,12 @@ impl Io {
         if port == 0 { self.pin(model, 0x01, 0x10, !pressed) } else { self.pin(model, 0x04, 0x40, !pressed) }
     }
 
-    /// TH: no pad drives it, so an input reads high. On the Mark III an output reads low whatever its level, as the
-    /// Japanese Master System's does, which is what makes software find a Japanese console (Endou_Disputes.md D-3).
+    /// TH: no pad drives it, so an input reads high. On the Mark III and the Japanese Master System an output reads
+    /// low whatever its level, which is what makes software find a Japanese console (Endou_Disputes.md D-3).
     fn th(&self, model: Model, port: usize) -> bool {
         let (direction, level) = if port == 0 { (0x02, 0x20) } else { (0x08, 0x80) };
         let output = self.control & direction == 0;
-        match model {
-            Model::MarkIII => !output,
-            _ => self.pin(model, direction, level, true),
-        }
+        if model.japanese_io() { !output } else { self.pin(model, direction, level, true) }
     }
 
     /// Both ports' TH levels, as the VDP's H counter latch sees them rise (Endou_Native.md §10.4).
@@ -113,6 +110,7 @@ mod tests {
         assert!(!japanese(Model::Sms1));
         assert!(!japanese(Model::Sms2));
         assert!(japanese(Model::MarkIII));
+        assert!(japanese(Model::MarkIIIFm) && japanese(Model::JapaneseSms));
         let mut io = Io::default();
         io.control = 0b0000_1110;
         io.pads[0] = BUTTON_2;
@@ -127,7 +125,7 @@ mod tests {
         let mut io = Io::default();
         io.pads[0] = RESET | PAUSE;
         assert_eq!(io.port_dd(Model::Sms1) & 0x10, 0);
-        for m in [Model::Sms2, Model::MarkIII] {
+        for m in [Model::Sms2, Model::MarkIII, Model::MarkIIIFm, Model::JapaneseSms] {
             assert_eq!(io.port_dd(m) & 0x10, 0x10, "{m:?}");
         }
         assert_eq!(io.port_dc(Model::Sms1), 0xFF, "Pause is no pad bit");

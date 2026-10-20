@@ -101,7 +101,7 @@ homebrew BIOS replacements (*Simple BIOS*, *DBIOS*), which are firmware, not tes
 | MAME | Fedora's `mame` 0.289 is in the repositories and not installed | — | GPL-2.0 or later [A] | not fetched; *decided 2026-10-19: not used, as a reference or a referee* |
 | Mesen 2 | `github.com/SourMesen/Mesen2`, head `b9fa69d` (2026-06-04) | — | GPL-3.0 [R GitHub] | not built. Its README: "This repository is an archive of Mesen as it was around version 2.1.1 in mid-2025", the latest being MesenCE (`nesdev-org/MesenCE`); it lists "SMS/Game Gear" among its systems [R] |
 | Emulicious | its author's site | — | freeware, closed [A] | not fetched: no headless mode |
-| Nuked-OPLL | `codeload.github.com/nukeykt/Nuked-OPLL/tar.gz/1269cf5a783b65583b50fa2464d08be75830aaa0` (2023-01-19, the repository's last commit) → `refs/nuked-opll/Nuked-OPLL-1269cf5.tar.gz` | — | GPL-2.0 [R GitHub's detection] | **fetched, not extracted**; it holds `LICENSE`, `opll.c`, `opll.h` and a funding file [M `tar tzf`]. Stage 9 opens `opll.h` only. No public release or prebuilt binary exists |
+| Nuked-OPLL | `codeload.github.com/nukeykt/Nuked-OPLL/tar.gz/1269cf5a783b65583b50fa2464d08be75830aaa0` (2023-01-19, the repository's last commit) → `refs/nuked-opll/Nuked-OPLL-1269cf5.tar.gz` | — | GPL-2.0 [R GitHub's detection] | **fetched**; `opll.h` read and, since 2026-10-20, `opll.c` built unread (§6h); it holds `LICENSE`, `opll.c`, `opll.h` and a funding file [M `tar tzf`]. Stage 9 opens `opll.h` only. No public release or prebuilt binary exists |
 
 Their `.info` files, from `buildbot.libretro.com/assets/frontend/info.zip`, are in `refs/info/`. Gearsystem's lists
 `bios.sms` with MD5 `840481177270d5642a14ca71ee72844c` and `bios.gg` with `672e104c3be3a238301aceffc3b23fd6`, a public
@@ -270,6 +270,23 @@ Port Map - Game Gear", "Game Gear Stereo", "GG Cartridge" and "ROM Header"; Sega
 cartridges (read in place, unpacked to a temporary folder and deleted) and on the stage's test programs, with
 Gearsystem's `gearsystem_system` and SMS Plus GX's `smsplus_hardware` set to their Game Gear modes for Master System
 cartridges for D-22 (`Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md` §4).
+
+## 6h. Used at stage 9 (2026-10-20)
+
+Nothing was fetched but a summarising read of one forum thread. Each item is in the probe cache's `PROVENANCE.txt`;
+nothing is committed.
+
+| Item | What was done with it |
+|---|---|
+| Nuked-OPLL's `opll.h` | extracted alone from the tarball of §3 into `refs/nuked-opll/hdr/` (SHA-256 `4af73da6…82de`) and read whole: its enumerations, its state structure's fields and its three functions. `opll.c` was at first not extracted; it was built, unread, once the tester approved (the next row) |
+| Nuked-OPLL's `opll.c` | extracted by `build-opll.sh` into `refs/nuked-opll/bench/` on 2026-10-20, by the tester's leave, and compiled with `tb_opll.c`; **never opened or read**. It was run as a black box through `OPLL_Reset`, `OPLL_Write` and `OPLL_Clock`, and its two output pins were summed or dumped by cycle. The bench's outputs are in `runs/opll/` and are not committed (`Endou_Opll.md` §7) |
+| Genesis Plus GX, pinned | run through the probe with its YM2413 core option at `nuked` and at `mame`, on synthetic programs and on library games read in place, its audio recorded; the recordings in `runs/opll/` |
+| Gearsystem and SMS Plus GX, pinned | run the same way with their FM units on (`gearsystem_ym2413=Auto`, `smsplus_fm_sound=auto`, regions Japanese) |
+| *YM2413 Application Manual* (§1.2) | read whole in Maxim's HTML, the scans beside it for Table III-4 |
+| SMS Power!'s "YM2413", "Audio Control Port", "FM Chip Detection" (§1.2) | read; the reverse-engineering notes "YM2413" links were not opened, carrying code |
+| SMS Power!'s forum, "FM/PSG mix: testing the audio control port" (`https://www.smspower.org/forums/17760-FMPSGMixTestingTheAudioControlPort`), cited by "Audio Control Port" | read through a summarising fetch for its posters' console tests of port `$F2`; not saved (`Endou_Disputes.md` D-17) |
+| *OPLx decapsulated* (§1.1) | its two tables, as for Nephrite |
+| JoppyFurr's *YM2413 TestRom* (MIT) | not run: its pad-driven screens give nothing a recording can grade that the synthetic programs do not, and its licence would allow committing it, which the repository's practice of building its own images makes unnecessary |
 
 ## 7. What was read for this page
 

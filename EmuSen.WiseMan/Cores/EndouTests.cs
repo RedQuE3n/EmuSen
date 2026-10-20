@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (name, image, spaces) in new (string, byte[], string[])[]
             {
                 ("export.sms", SyntheticSmsRom.Cartridge(), new[] { "bios", "cram", "ram", "rom", "vram" }),
-                ("japan.sms", SyntheticSmsRom.Cartridge(0x3), new[] { "cram", "ram", "rom", "vram" }),
+                ("japan.sms", SyntheticSmsRom.Cartridge(0x3), new[] { "bios", "cram", "ram", "rom", "vram" }),
                 ("cartridge.sg", SyntheticSmsRom.Sg1000(), new[] { "ram", "rom", "vram" }),
             })
             {

@@ -18,7 +18,7 @@ pub const BOARD: u32 = UNIT_FIRST_ID + 2;
 pub const IO: u32 = UNIT_FIRST_ID + 3;
 pub const FM: u32 = UNIT_FIRST_ID + 4;
 
-/// The FM unit's registers: the address latch, port $F2, the rhythm register, the user instrument's eight bytes, then
+/// The FM unit's registers: the address latch, port $F2, the rhythm register, the tone register's eight bytes, then
 /// each channel's F-number, block, key, sustain, instrument and volume.
 const FM_NAMES: [&str; 65] = [
     "Address", "Control", "Rhythm", "User0", "User1", "User2", "User3", "User4", "User5", "User6", "User7",

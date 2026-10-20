@@ -2,12 +2,12 @@
 
 use super::*;
 
-/// The user instrument as a plain sine on the carrier: the modulator silent, the carrier at once to full level and held.
+/// The original instrument as a plain sine on the carrier: the modulator silent, the carrier at once to full level and held.
 const SINE: [u8; 8] = [0x21, 0x21, 0x3F, 0x00, 0x00, 0xF0, 0x0F, 0x0F];
 
-fn chip(user: &[u8; 8], fnum: u16, block: u8) -> Opll {
+fn chip(tone: &[u8; 8], fnum: u16, block: u8) -> Opll {
     let mut o = Opll::new();
-    for (i, &v) in user.iter().enumerate() {
+    for (i, &v) in tone.iter().enumerate() {
         o.write_address(i as u8);
         o.write_data(v);
     }
@@ -221,4 +221,37 @@ fn a_state_continues_the_chip_exactly() {
     assert_eq!(run(&mut a, 5000), run(&mut b, 5000));
     bytes[1 + REGISTERS + 72] = 200;
     assert!(!Opll::new().read_state(&mut StateReader::new(&bytes[..n])).unwrap(), "a level past 127 is no chip's");
+}
+
+// §4: each of the fifteen instruments and the five drums sounds; the five measured exactly are the tone registers that
+// sound the same, so the original instrument loaded with one sounds as the instrument does, sample for sample.
+#[test]
+fn every_instrument_and_drum_sounds_and_the_exact_ones_are_their_registers() {
+    for inst in 1..16u8 {
+        let mut o = Opll::new();
+        for (a, v) in [(0x30, inst << 4), (0x10, 0x20), (0x20, 0x19)] {
+            write(&mut o, a, v);
+        }
+        assert!(run(&mut o, 4000).iter().any(|&v| v.abs() > 20), "instrument {inst}");
+    }
+    for bit in [0x10u8, 0x08, 0x04, 0x02, 0x01] {
+        let mut o = Opll::new();
+        for (a, v) in [(0x16, 0x20), (0x17, 0x50), (0x18, 0xC0), (0x26, 0x05), (0x27, 0x05), (0x28, 0x01), (0x0E, 0x20 | bit)] {
+            write(&mut o, a, v);
+        }
+        assert!((0..4000).map(|_| o.sample().1).any(|v| v.abs() > 20), "drum {bit:02x}");
+    }
+    for inst in [1u8, 5, 6, 8, 13] {
+        let play = |original: bool| {
+            let mut o = Opll::new();
+            for (i, &v) in INSTRUMENTS[inst as usize - 1].iter().enumerate() {
+                write(&mut o, i as u8, v);
+            }
+            for (a, v) in [(0x30, if original { 0 } else { inst << 4 }), (0x10, 0x20), (0x20, 0x19)] {
+                write(&mut o, a, v);
+            }
+            run(&mut o, 6000)
+        };
+        assert_eq!(play(true), play(false), "instrument {inst}");
+    }
 }

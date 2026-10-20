@@ -109,12 +109,13 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Endou_shows_its_board_registers_units_and_views()
         {
-            var (core, target) = Run(Image("game.sms", SyntheticSmsRom.Cartridge(region: 0x3)), null);
+            // A Japanese cartridge starts on the Japanese Master System, so its open boot program has handed over by frame 60 - see Endou_Native.md §16.4.
+            var (core, target) = Run(Image("game.sms", SyntheticSmsRom.Cartridge(region: 0x3)), null, frames: 60);
             using (core as IDisposable)
             {
                 string summary = target.GetSummaryText();
                 Assert.StartsWith("Endou ", summary);
-                Assert.Contains(", sms, frame 2\nBoard Plain, 32 KiB ROM\nZ80  AF=", summary);
+                Assert.Contains(", sms, frame 60\nBoard Plain, 32 KiB ROM\nZ80  AF=", summary);
                 Assert.Contains("\nIO   $3E=AB", summary);
                 var shell = DianaShInterpreter.CreateDefault(target);
                 string regs = shell.Submit("regs cpu").Output;

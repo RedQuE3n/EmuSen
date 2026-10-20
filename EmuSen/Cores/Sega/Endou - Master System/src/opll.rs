@@ -170,7 +170,7 @@ impl Opll {
     }
 
     /// The patch a slot plays: the rhythm's own where rhythm mode takes the slot, else its channel's instrument, 0 the
-    /// user's registers $00-$07.
+    /// tone registers $00-$07.
     fn patch(&self, slot: usize) -> &[u8; 8] {
         let ch = slot / 2;
         if ch >= BD && self.rhythm() {

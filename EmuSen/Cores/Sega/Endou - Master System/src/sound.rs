@@ -333,6 +333,27 @@ mod tests {
         assert!(low <= 0 && high >= level(VOLUME[0]) as i16, "the right sounds tone 0: {low} to {high}");
     }
 
+    /// Port $F2's two bits choose what sounds (SMS Power!'s "Audio Control Port"): on the Japanese Master System the FM
+    /// with bit 0, the PSG while the two bits are equal; on the Mark III's unit one or the other (Endou_Native.md §16.3).
+    #[test]
+    fn port_f2_chooses_what_sounds() {
+        let level = |unit: FmUnit, control: u8| {
+            let mut s = Sound::with_fm(Sn76489::new(Variant::SEGA), Some(unit), Z80.0, Z80.1);
+            for v in [0x8E, 0x0F, 0x90] {
+                s.write(v, 0);
+            }
+            for (a, v) in [(0x00, 0x21), (0x01, 0x21), (0x02, 0x3F), (0x04, 0xF0), (0x05, 0xF0), (0x06, 0x0F), (0x07, 0x0F), (0x10, 0xB0), (0x20, 0x19)] {
+                s.write_fm(false, a, 0);
+                s.write_fm(true, v, 0);
+            }
+            s.write_control(control, 0);
+            let x = centred(&samples(&mut s, SECOND / 2), 0);
+            (amplitude(&x, SECOND as f64 / 16.0 / 2.0 / 254.0) > 1000.0, amplitude(&x, 0x1B0 as f64 * SECOND as f64 / 72.0 * 8.0 / 262_144.0) > 500.0)
+        };
+        assert_eq!([0, 1, 2, 3].map(|c| level(FmUnit::BuiltIn, c)), [(true, false), (false, true), (false, false), (true, true)]);
+        assert_eq!([0, 1, 2, 3].map(|c| level(FmUnit::AddOn, c)), [(true, false), (false, true), (true, false), (false, true)]);
+    }
+
     /// A second's clocks give the output rate's samples, to the one the synthesiser holds back.
     #[test]
     fn a_seconds_clocks_make_a_seconds_samples() {

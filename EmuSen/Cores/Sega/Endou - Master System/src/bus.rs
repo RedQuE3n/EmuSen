@@ -341,6 +341,31 @@ mod tests {
         assert_ne!(b.sound.psg, Sn76489::new(Variant::SEGA), "the PSG is written through any port $40-$7F");
     }
 
+    // Endou_Native.md §16.3, D-17: with an FM unit, $F2 reads back its bits with the I/O chip off and the I/O chip's port
+    // with it on; $F0 and $F1 reach the chip; the Mark III's unit keeps no bit 1; $F2's high bits count the lines.
+    #[test]
+    fn the_fm_unit_s_ports_answer_on_the_consoles_that_carry_it() {
+        for (model, unit, kept) in [(Model::JapaneseSms, crate::model::FmUnit::BuiltIn, 3), (Model::MarkIIIFm, crate::model::FmUnit::AddOn, 1)] {
+            let sound = Sound::with_fm(Sn76489::new(Variant::SEGA), model.fm(), 53_693_175, 15);
+            let board = Board { mapper: Mapper::Plain, ram: 0, battery: false, why: Why::Size };
+            let mut b = Bus::new(model, Cartridge::new(board, vec![0; 0x8000]), 0x2000, sound, Vdp::new(beryl_sms_vdp::Variant::SMS1, false));
+            assert_eq!(b.sound.fm.as_ref().unwrap().unit, unit);
+            b.output(0xF2, 0x03);
+            assert_eq!(b.input(0xF2), 0xFF, "{model:?}: the I/O chip's port B with the I/O chip on, its pad idle");
+            b.output(0x3E, 0xAB | IO_OFF);
+            assert_eq!(b.input(0xF2) & 0x1F, kept, "{model:?}");
+            b.output(0xF0, 0x30);
+            b.output(0xF1, 0x15);
+            assert_eq!(b.sound.fm.as_ref().unwrap().chip.regs[0x30], 0x15, "{model:?}");
+            b.clock = 8 * crate::machine::LINE;
+            assert_eq!(b.input(0xF2) & 0xE0, 0x20, "{model:?}: line 8, the counter's bit 3 on bit 5");
+            b.clock = 0x880 * crate::machine::LINE;
+            assert_eq!(b.input(0xF2) & 0xE0, 0xC0, "{model:?}: bits 11 and 7 on bits 7 and 6");
+            let last = b.data_bus;
+            assert_eq!(b.input(0xF0), last, "{model:?}: $F0 reads nothing, the bus's last byte");
+        }
+    }
+
     #[test]
     fn each_machine_cycle_takes_its_length() {
         let mut b = bus(Model::Sms2, Mapper::Plain, vec![0; 0x8000]);

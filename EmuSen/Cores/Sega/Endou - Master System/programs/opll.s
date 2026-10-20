@@ -71,7 +71,7 @@ regs_end:
 
 ; Each voice: frames, pairs, then the pairs.
 voices:
-        ; the user instrument as a carrier's sine at 437 Hz, then keyed off
+        ; the original instrument as a carrier's sine at 437 Hz, then keyed off
         db 60,12, $00,$21, $01,$21, $02,$3F, $03,$00, $04,$F0, $05,$F0, $06,$0F, $07,$0F, $30,$00, $10,$20, $20,$19, $0E,$00
         db 10,1, $20,$09
         ; the modulator at TL 16 with feedback 3, both slots' envelopes moving

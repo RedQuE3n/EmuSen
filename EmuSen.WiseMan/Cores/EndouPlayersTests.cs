@@ -145,7 +145,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Both_cheat_formats_reach_the_machine()
         {
-            // A Japanese header, so the Mark III runs it from reset: an export console's open program sums the patched byte, as a BIOS would, and refuses the game.
+            // A Japanese header, so the Japanese Master System runs it, its open program checking no header: an export console's sums the patched byte, as a BIOS would, and refuses the game.
             byte[] image = SyntheticSmsRom.Banked(2, SyntheticSmsRom.Program(new[] { SyntheticSmsRom.Step.Keep(0x3F00), SyntheticSmsRom.Step.Keep(0x7F00) }));
             image[SyntheticSmsRom.HeaderAt + 15] = 0x3C;
             string path = Write("Cheats.sms", SyntheticSmsRom.WithSegaChecksum(image));

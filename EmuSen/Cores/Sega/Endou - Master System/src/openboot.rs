@@ -9,7 +9,7 @@ use crate::machine::{BIOS_ID, Machine, ROM_ID};
 use crate::media::{SIGNATURE, checksum};
 use crate::model::Model;
 use crate::programs::images::{self, image, with_codemasters_header};
-use crate::v1::{BIOS_PLAYER, BIOS_SMS1, BIOS_SMS2, make_empty};
+use crate::v1::{BIOS_JSMS, BIOS_PLAYER, BIOS_SMS1, BIOS_SMS2, make_empty};
 
 fn request<'a>(image: &'a [u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'a>>) -> Create<'a> {
     let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
@@ -196,16 +196,40 @@ fn the_export_check_refuses_in_words() {
     }
 }
 
-// A Japanese cartridge runs on the Mark III by default, which has no BIOS; on an export console it is refused.
+// A Japanese cartridge runs on the Japanese Master System by default (decided 2026-10-19), whose open boot program checks
+// no header and hands it over; on the Mark III it starts with no BIOS; on an export console it is refused.
 #[test]
-fn a_japanese_cartridge_starts_on_the_mark_iii_and_is_refused_on_an_export_console() {
+fn a_japanese_cartridge_starts_on_the_japanese_consoles_and_is_refused_on_an_export_console() {
     let rom = cartridge(0x8000, KEEPER, 3, 0xC, linear);
-    let mark3 = create(&rom, &[]);
+    let mut jsms = create(&rom, &[]);
+    assert_eq!((jsms.model(), jsms.boot, firmware(&jsms.machine_info())), (Model::JapaneseSms, Boot::Open, vec![(BIOS_JSMS, FirmwareSource::Replacement)]));
+    assert_eq!(jsms.space(BIOS_ID).unwrap(), crate::boot::OPEN_BOOT_JAPAN);
+    frames(&mut jsms, 60);
+    assert_eq!((jsms.bus.memory_control, jsms.bus.ram[0]), (0xAB, 0xAB), "handed over, the slot's value at $C000");
+    let mark3 = create(&rom, &[("model", "mark3")]);
     assert_eq!((mark3.model(), mark3.boot, mark3.bus.memory_control), (Model::MarkIII, Boot::None, 0xAB));
     assert!(mark3.machine_info().firmware.is_empty());
     let mut sms2 = create(&rom, &[("model", "sms2")]);
     frames(&mut sms2, 60);
     assert_eq!(row(&sms2, 15), "IT IS FOR A JAPANESE CONSOLE.");
+}
+
+// The Japanese Master System's open boot program is the export one's but for the header check it skips: a cartridge with
+// no header, which an export console refuses, is handed over.
+#[test]
+fn the_japanese_open_boot_program_hands_over_a_cartridge_with_no_header() {
+    let rom = cartridge(0x8000, KEEPER, 4, 0xC, linear);
+    let differ = OPEN_BOOT.iter().zip(crate::boot::OPEN_BOOT_JAPAN).filter(|(a, b)| a != b).count();
+    assert!((1..=3).contains(&differ), "{differ} bytes differ: one jump in the RAM program");
+    let mut bare = rom.clone();
+    bare[0x7FF0..0x7FF8].fill(0);
+    let routed = |model: &str| Machine::create_as("sms", &request(&bare, &[("model", model)], Vec::new())).unwrap();
+    let mut jsms = routed("jsms");
+    frames(&mut jsms, 60);
+    assert_eq!(jsms.bus.memory_control, 0xAB, "handed over");
+    let mut sms2 = routed("sms2");
+    frames(&mut sms2, 60);
+    assert!(screen(&sms2).iter().any(|r| r == "IT HAS NO SEGA HEADER."), "{:?}", screen(&sms2));
 }
 
 /// A stand-in for a console's own BIOS, written for the tests: it marks $C100, copies a two-instruction hand-over to
@@ -226,7 +250,7 @@ fn firmware(info: &MachineInfo) -> Vec<(u32, FirmwareSource)> {
 fn the_player_s_bios_runs_when_chosen_and_given_and_the_open_program_otherwise() {
     let rom = cartridge(0x8000, KEEPER, 4, 0xC, linear);
     let bios = stand_in();
-    for (model, which, key) in [("sms1", BIOS_SMS1, "bios_sms1"), ("sms2", BIOS_SMS2, "bios_sms2")] {
+    for (model, which, key) in [("sms1", BIOS_SMS1, "bios_sms1"), ("sms2", BIOS_SMS2, "bios_sms2"), ("jsms", BIOS_JSMS, "bios_jsms")] {
         let file = || vec![emusen_native::abi::File { which, data: &bios[..] }];
         let mut chosen = Machine::create(&request(&rom, &[("model", model), (key, BIOS_PLAYER)], file())).unwrap();
         assert_eq!((chosen.boot, firmware(&chosen.machine_info())), (Boot::Player, vec![(which, FirmwareSource::File)]), "{model}");
@@ -236,7 +260,7 @@ fn the_player_s_bios_runs_when_chosen_and_given_and_the_open_program_otherwise()
         let given = Machine::create(&request(&rom, &[("model", model)], file())).unwrap();
         assert_eq!((given.boot, firmware(&given.machine_info())), (Boot::Open, vec![(which, FirmwareSource::Replacement)]), "{model}: given but not chosen");
         let missing = create(&rom, &[("model", model), (key, BIOS_PLAYER)]);
-        assert_eq!((missing.boot, missing.space(BIOS_ID).unwrap()), (Boot::Open, OPEN_BOOT), "{model}: chosen but not given");
+        assert_eq!((missing.boot, missing.space(BIOS_ID).unwrap()), (Boot::Open, crate::boot::open_boot(missing.model())), "{model}: chosen but not given");
     }
     let other = Machine::create(&request(&rom, &[("model", "sms2"), ("bios_sms1", BIOS_PLAYER)], vec![emusen_native::abi::File { which: BIOS_SMS1, data: &bios }])).unwrap();
     assert_eq!(other.boot, Boot::Open, "the first Master System's choice is not the second's");
@@ -274,8 +298,12 @@ fn an_empty_master_system_shows_the_open_program_s_words() {
     let mut sms1 = make_empty(&request(&[], &[("model", "sms1")], Vec::new())).unwrap();
     frames(&mut sms1, 20);
     assert_eq!(row(&sms1, 13), "NO GAME IS IN THE CONSOLE.", "the first Master System's floating bus is no game either");
-    let japan = make_empty(&request(&[], &[("region", "sms.jp")], Vec::new())).unwrap();
-    assert_eq!((japan.model(), japan.boot), (Model::MarkIII, Boot::None), "the Mark III has no BIOS to start into");
+    let mut japan = make_empty(&request(&[], &[("region", "sms.jp")], Vec::new())).unwrap();
+    assert_eq!((japan.model(), japan.boot), (Model::JapaneseSms, Boot::Open), "Japan's console is the Japanese Master System, which has a BIOS");
+    frames(&mut japan, 20);
+    assert_eq!(row(&japan, 13), "NO GAME IS IN THE CONSOLE.");
+    let mark3 = make_empty(&request(&[], &[("region", "sms.jp"), ("model", "mark3")], Vec::new())).unwrap();
+    assert_eq!((mark3.model(), mark3.boot), (Model::MarkIII, Boot::None), "the Mark III has no BIOS to start into");
 }
 
 // Endou_OpenBoot.md §2, U1-U3: the BIOS alone at reset; with the cartridge too, the cartridge's byte on the first
@@ -297,20 +325,21 @@ fn the_bios_slot_shares_the_slot_area_as_each_console_s_does() {
 }
 
 // The gate (Endou_OpenBoot.md §7): each of Endou's Master System programs, booted by the open program on both export
-// consoles, reaches the point it reaches with no BIOS: the RAM it keeps its results in, VRAM, CRAM and the picture. Two
-// differences are the hand-over's (Endou_Native.md §13): $C000 holds $AB where a program does not write it, and the
-// H counter `hlatch.s` latches is one step later, its poll loop meeting a start 76 clocks into the line.
+// consoles and the Japanese one, reaches the point it reaches with no BIOS: the RAM it keeps its results in, VRAM, CRAM
+// and the picture. Two differences are the hand-over's (Endou_Native.md §13): $C000 holds $AB where a program does not
+// write it, and the H counter `hlatch.s` latches is one step later, its poll loop meeting a start 76 clocks into the
+// line. The export consoles take the export programs; the Japanese one every program with a header (§16.4).
 #[test]
 fn every_program_boots_to_the_point_it_reaches_with_no_bios() {
-    for model in [Model::Sms1, Model::Sms2] {
+    for model in [Model::Sms1, Model::Sms2, Model::JapaneseSms] {
         let mut differ = Vec::new();
-        for p in images::PROGRAMS.iter().filter(|p| p.header.is_some()) {
+        for p in images::PROGRAMS.iter().filter(|p| p.header == Some(4) || (p.header.is_some() && !model.checks_export_header())) {
             let rom = image(p);
             let board = crate::board::identify(&rom, crate::media::Console::Sms);
             let media = crate::media::Media::read(&rom).unwrap();
             let market = crate::media::Market::Americas;
             let mut plain = Machine::with_board(media.clone(), market, model, board, rom.clone());
-            let mut booted = Machine::with_boot(media, market, model, board, rom.clone(), Boot::Open, OPEN_BOOT.to_vec());
+            let mut booted = Machine::with_boot(media, market, model, board, rom.clone(), Boot::Open, crate::boot::open_boot(model).to_vec());
             let mut at = 0;
             while booted.bus.memory_control != 0xAB {
                 booted.advance();
@@ -326,6 +355,14 @@ fn every_program_boots_to_the_point_it_reaches_with_no_bios() {
                 differ.push((p.name, ram));
             }
         }
-        assert_eq!(differ, [("picture", vec![(0, 0x00, 0xAB)]), ("hlatch", vec![(0, 0x2C, 0x2D), (1, 0x2C, 0x2D)]), ("voices", vec![(0, 0x00, 0xAB)])], "{model:?}");
+        let want = if model == Model::JapaneseSms {
+            // Port $3F at $A5 reads both TH outputs low on a Japanese console (D-15), the hand-over meets `hlatch.s` a
+            // step earlier, and port $F2's line counter has counted the boot's lines.
+            let counter: Vec<(usize, u8, u8)> = (0..7).map(|i| (16 + i, (i & 1 == 0) as u8, 0xA0 | (i & 1 == 0) as u8)).collect();
+            vec![("pads", vec![(1, 0xFF, 0x3F)]), ("picture", vec![(0, 0x00, 0xAB)]), ("hlatch", vec![(0, 0x2C, 0x2B), (1, 0x2C, 0x2B)]), ("voices", vec![(0, 0x00, 0xAB)]), ("fm", counter), ("opll", vec![(0, 0x00, 0xAB)])]
+        } else {
+            vec![("picture", vec![(0, 0x00, 0xAB)]), ("hlatch", vec![(0, 0x2C, 0x2D), (1, 0x2C, 0x2D)]), ("voices", vec![(0, 0x00, 0xAB)])]
+        };
+        assert_eq!(differ, want, "{model:?}");
     }
 }

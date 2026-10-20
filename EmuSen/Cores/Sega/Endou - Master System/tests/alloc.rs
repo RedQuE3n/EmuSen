@@ -1,5 +1,5 @@
 //! A frame with its sound drained allocates nothing once the machine's buffers have their size (Endou_Native.md §12.5),
-//! nor one through the armed debugger (§15.6). Each thread counts its own allocations, so that tests running beside
+//! the FM unit's included (§16.6), nor one through the armed debugger (§15.6). Each thread counts its own allocations, so that tests running beside
 //! each other do not add to each other's counts.
 
 #[path = "../programs/images.rs"]
@@ -47,7 +47,7 @@ static GLOBAL: Counting = Counting;
 
 #[test]
 fn a_sounding_frame_allocates_nothing() {
-    for (program, model) in [(&images::VOICES, "sms2"), (&images::VOICES_SG, "sg1000"), (&images::VOICES, "mark3")] {
+    for (program, model) in [(&images::VOICES, "sms2"), (&images::VOICES_SG, "sg1000"), (&images::VOICES, "mark3"), (&images::OPLL, "jsms"), (&images::OPLL, "mark3fm")] {
         let image = images::image(program);
         let settings = Settings::from_pairs(vec![("model".to_owned(), model.to_owned())]);
         let request = Create { image: &image, settings, files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
@@ -66,7 +66,7 @@ fn a_sounding_frame_allocates_nothing() {
         for i in 4..724 {
             frame(&mut m, i);
         }
-        assert_eq!(allocations() - before, 0, "{model}: allocations in 720 frames of the voices program");
+        assert_eq!(allocations() - before, 0, "{model}: allocations in 720 frames of the {} program", program.name);
     }
 }
 

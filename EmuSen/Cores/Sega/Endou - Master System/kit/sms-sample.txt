@@ -35,7 +35,7 @@ Miracle Warriors - Seal of the Dark Lord (UE) [!].sms        # added at stage 7 
 Monopoly (U) [!].sms                                         # added at stage 7 from the same tag
 Desert Speedtrap (UE) [!].sms                                # enables cartridge RAM; no battery by the tag
 
-# Japanese headers, on the Mark III by default.
+# Japanese headers, on the Japanese Master System by default, its FM unit sounding where a game uses it.
 Aleste (JUE) [!].sms
 Bank Panic (UE) [!].sms                                      # region code $2, no market
 

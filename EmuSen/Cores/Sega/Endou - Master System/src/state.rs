@@ -11,7 +11,10 @@ use crate::machine::Machine;
 use crate::media::Console;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"ENDO");
-pub const STATE_VERSION: i32 = 6;
+pub const STATE_VERSION: i32 = 7;
+
+/// The last version before the FM unit, read on the consoles without one.
+pub const STATE_VERSION_BEFORE_FM: i32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -88,7 +91,7 @@ impl StateMachine for Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if version != STATE_VERSION {
+        if version != STATE_VERSION && !(version == STATE_VERSION_BEFORE_FM && self.model().fm().is_none()) {
             return Err(StateError::Version(version));
         }
         let (console, model) = (r.u8()?, r.u8()?);
@@ -104,7 +107,9 @@ impl StateMachine for Machine {
         let mut cpu = self.cpu.clone();
         emusen_native::State::read_state(&mut cpu, &mut r)?;
         let mut sound = self.bus.sound.clone();
-        sound.read_state(&mut r)?;
+        if !sound.read_state(&mut r)? {
+            return Err(StateError::Foreign(magic));
+        }
         let (memory_control, io_control, data_bus) = (r.u8()?, r.u8()?, r.u8()?);
         let (nmi, pause_held) = (r.bool()?, r.bool()?);
         let mut regs = [0u8; 4];
@@ -185,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_6_layout_is_pinned() {
+    fn the_version_7_layout_is_pinned_and_unchanged_without_an_fm_unit() {
         let m = machine(&cartridge(0x8000, 4));
         let layout = m.layout();
         let lines: Vec<&str> = layout.lines().collect();
@@ -201,6 +206,44 @@ mod tests {
         assert_eq!(sg.state_size(), 25_942 - 0x2000 + 0x400);
         let big = machine(&cartridge(0x20000, 4));
         assert_eq!(big.state_size(), 25_942 + 0x8000, "a board with RAM keeps it");
+    }
+
+    // Stage 9: a console with an FM unit keeps the chip, its sample count, port $F2 and its level after the PSG's block,
+    // and a state taken mid-note continues the sound exactly; a version 6 state loads only where no FM unit is (§16.7).
+    #[test]
+    fn the_fm_unit_s_state_is_pinned_and_continues_the_sound() {
+        let image = crate::programs::images::image(&crate::programs::images::OPLL);
+        let media = Media::read(&image).unwrap();
+        let mut a = Machine::new(media.clone(), Market::Japan, Model::JapaneseSms, &image);
+        let layout = a.layout();
+        let lines: Vec<&str> = layout.lines().collect();
+        let at = lines.iter().position(|l| l.ends_with(" PsgTicks")).unwrap();
+        assert_eq!(&lines[at..at + 11], ["101 8 u64 PsgTicks", "109 1 u8 OpllAddress", "110 64 u8[64] OpllRegisters", "174 72 u32[18] OpllPhase", "246 18 u8[18] OpllLevel", "264 18 u8[18] OpllStage", "282 72 u16[36] OpllOut", "354 4 u32 OpllCounter", "358 1 u8 OpllAm", "359 4 u32 OpllNoise", "363 8 u64 FmSamples"], "{layout}");
+        assert_eq!(a.state_size(), 25_942 + 267, "the chip's 254 bytes, the sample count, port $F2 and the level");
+        let (mut sa, mut sb) = (vec![0i16; 1 << 16], vec![0i16; 1 << 16]);
+        for _ in 0..90 {
+            a.advance();
+            a.audio.drain(&mut sa, usize::MAX);
+        }
+        let mut s = vec![0; a.state_size()];
+        a.save_state(&mut s).unwrap();
+        let mut b = Machine::new(media, Market::Japan, Model::JapaneseSms, &image);
+        b.load_state(&s).unwrap();
+        for _ in 0..30 {
+            a.advance();
+            b.advance();
+        }
+        let (na, nb) = (a.audio.drain(&mut sa, usize::MAX), b.audio.drain(&mut sb, usize::MAX));
+        assert_eq!((nb, &sb[..nb]), (na, &sa[..na]));
+        assert!(sa[..na].iter().any(|&v| v != 0), "the FM sounds");
+        let mut v6 = s.clone();
+        v6[4] = 6;
+        assert_eq!(b.load_state(&v6).unwrap_err(), StateError::Version(6));
+        let plain = machine(&cartridge(0x8000, 4));
+        let mut s6 = vec![0; plain.state_size()];
+        plain.save_state(&mut s6).unwrap();
+        s6[4] = 6;
+        machine(&cartridge(0x8000, 4)).load_state(&s6).unwrap();
     }
 
     // The kit's C7 found a plain 32 KiB board's state refused by a fresh machine (Endou_Native.md §9.12).

@@ -92,7 +92,7 @@ impl Machine {
     pub fn with_boot(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>, boot: Boot, bios: Vec<u8>) -> Machine {
         let pal = market == Market::Europe;
         let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
-        let sound = Sound::new(Sn76489::new(model.psg()), num, 15);
+        let sound = Sound::with_fm(Sn76489::new(model.psg()), model.fm(), num, 15);
         let vdp = Vdp::new(model.vdp(), pal);
         let bios = if boot == Boot::None { Vec::new() } else { bios };
         let bios_crc = if bios.is_empty() { 0 } else { crate::board::crc32(&bios) };
@@ -259,10 +259,10 @@ impl Machine {
     fn take_picture(&mut self) {
         let vdp = &self.bus.vdp;
         self.height = vdp.height;
-        let (colours, mask): (&[[u8; 4]], usize) = match self.model() {
-            Model::MarkIII | Model::Sms1 => (&SMS1_COLOURS, 0x3F),
-            Model::Sms2 => (&SMS_COLOURS, 0x3F),
-            Model::Sg1000 => (&TMS_COLOURS, 0x0F),
+        let (colours, mask): (&[[u8; 4]], usize) = match self.model().vdp() {
+            beryl_sms_vdp::Variant::SMS1 => (&SMS1_COLOURS, 0x3F),
+            beryl_sms_vdp::Variant::TMS9918A => (&TMS_COLOURS, 0x0F),
+            _ => (&SMS_COLOURS, 0x3F),
         };
         for (out, &e) in self.picture.as_chunks_mut::<4>().0.iter_mut().zip(vdp.picture()) {
             out.copy_from_slice(&colours[e as usize & mask]);

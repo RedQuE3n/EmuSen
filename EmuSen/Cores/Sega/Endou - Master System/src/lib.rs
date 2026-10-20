@@ -19,6 +19,7 @@ pub mod media;
 pub mod model;
 #[cfg(test)]
 mod openboot;
+pub mod opll;
 #[cfg(test)]
 mod programs;
 pub mod sound;

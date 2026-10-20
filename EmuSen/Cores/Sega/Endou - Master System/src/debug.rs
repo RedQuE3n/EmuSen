@@ -1,6 +1,7 @@
 //! The debugger's view of the machine (Endou_Native.md §15): the Z80's observer, its bus as a space read without side
 //! effects, its code listed by `beryl-z80`'s disassembler, and the parts that run no code as units: the VDP, the PSG,
-//! the cartridge's board and the I/O chip's two ports.
+//! the cartridge's board, the I/O chip's two ports and, on the consoles that carry one, the FM unit (Endou_Native.md
+//! §16.8).
 
 use emusen_native::core::{Instruction, UNIT_FIRST_ID, Unit};
 use emusen_native::debug::{Hooks, Observer, stop};
@@ -15,6 +16,19 @@ pub const VDP: u32 = UNIT_FIRST_ID;
 pub const PSG: u32 = UNIT_FIRST_ID + 1;
 pub const BOARD: u32 = UNIT_FIRST_ID + 2;
 pub const IO: u32 = UNIT_FIRST_ID + 3;
+pub const FM: u32 = UNIT_FIRST_ID + 4;
+
+/// The FM unit's registers: the address latch, port $F2, the rhythm register, the user instrument's eight bytes, then
+/// each channel's F-number, block, key, sustain, instrument and volume.
+const FM_NAMES: [&str; 65] = [
+    "Address", "Control", "Rhythm", "User0", "User1", "User2", "User3", "User4", "User5", "User6", "User7",
+    "Fnum0", "Fnum1", "Fnum2", "Fnum3", "Fnum4", "Fnum5", "Fnum6", "Fnum7", "Fnum8",
+    "Block0", "Block1", "Block2", "Block3", "Block4", "Block5", "Block6", "Block7", "Block8",
+    "Key0", "Key1", "Key2", "Key3", "Key4", "Key5", "Key6", "Key7", "Key8",
+    "Sus0", "Sus1", "Sus2", "Sus3", "Sus4", "Sus5", "Sus6", "Sus7", "Sus8",
+    "Inst0", "Inst1", "Inst2", "Inst3", "Inst4", "Inst5", "Inst6", "Inst7", "Inst8",
+    "Vol0", "Vol1", "Vol2", "Vol3", "Vol4", "Vol5", "Vol6", "Vol7", "Vol8",
+];
 
 /// The Z80's observer in the observed frame: the stop asked before each instruction but the one a resume runs unasked,
 /// then its coverage and profile recorded; its stores on the bus and its calls into the hooks. The stores in the
@@ -123,13 +137,26 @@ fn unit(m: &Machine, id: u32) -> Option<(&'static str, &'static str, Registers)>
             ])
         }
         IO if m.model().has_control_ports() => ("IO", "io", vec![("MemoryControl", 8, b.memory_control as i64), ("IoControl", 8, b.io.control as i64)]),
+        FM => {
+            let f = b.sound.fm.as_ref()?;
+            let r = &f.chip.regs;
+            let mut v: Vec<(u32, i64)> = vec![(8, f.chip.address as i64), (2, f.control as i64), (6, (r[0x0E] & 0x3F) as i64)];
+            v.extend(r[..8].iter().map(|&x| (8, x as i64)));
+            v.extend((0..9).map(|c| (9, (r[0x10 + c] as i64) | ((r[0x20 + c] as i64 & 1) << 8))));
+            v.extend((0..9).map(|c| (3, (r[0x20 + c] as i64 >> 1) & 7)));
+            v.extend((0..9).map(|c| (1, (r[0x20 + c] as i64 >> 4) & 1)));
+            v.extend((0..9).map(|c| (1, (r[0x20 + c] as i64 >> 5) & 1)));
+            v.extend((0..9).map(|c| (4, r[0x30 + c] as i64 >> 4)));
+            v.extend((0..9).map(|c| (4, r[0x30 + c] as i64 & 0x0F)));
+            ("FM", "audio", FM_NAMES.iter().zip(v).map(|(&n, (bits, x))| (n, bits, x)).collect())
+        }
         _ => return None,
     })
 }
 
 /// Machine info's `units`, in id order: those the machine has.
 pub fn units(m: &Machine) -> Vec<Unit> {
-    (VDP..=IO)
+    (VDP..=FM)
         .filter_map(|id| unit(m, id).map(|(name, kind, r)| Unit { id, name: name.to_owned(), kind: kind.to_owned(), registers: r.into_iter().map(|(n, bits, _)| (n.to_owned(), bits)).collect() }))
         .collect()
 }
@@ -440,6 +467,18 @@ count:  ld hl,$C000
         let sg = Machine::new(Media::read(&[0u8; 0x2000]).unwrap(), Market::Japan, Model::Sg1000, &[0u8; 0x2000]);
         assert_eq!(sg.units().iter().map(|u| u.name.as_str()).collect::<Vec<_>>(), ["VDP", "PSG", "Board"], "the SG-1000 has no ports $3E and $3F");
         assert_eq!(sg.debug_registers(VDP).unwrap()[sg.units()[0].registers.iter().position(|r| r.0 == "Variant").unwrap()], 4);
+        // A console with an FM unit lists it last, its registers as the chip and port $F2 hold them (Endou_Native.md §16.8).
+        let image = crate::programs::images::image(&crate::programs::images::OPLL);
+        let mut fm = Machine::new(Media::read(&image).unwrap(), Market::Japan, Model::JapaneseSms, &image);
+        for _ in 0..30 {
+            fm.advance();
+        }
+        let units = fm.units();
+        assert_eq!(units.iter().map(|u| (u.id, u.name.as_str(), u.kind.as_str())).collect::<Vec<_>>()[4], (FM, "FM", "audio"));
+        let regs = fm.debug_registers(FM).unwrap();
+        let at = |name: &str| units[4].registers.iter().position(|r| r.0 == name).unwrap();
+        assert_eq!(regs.len(), 65);
+        assert_eq!((regs[at("Control")], regs[at("User0")], regs[at("Fnum0")], regs[at("Block0")], regs[at("Key0")]), (1, 0x21, 0x120, 4, 1), "the program's first voice");
     }
 
     // The bus reads as the Z80 sees it, mirrors and all, with no side effect, and takes no write.

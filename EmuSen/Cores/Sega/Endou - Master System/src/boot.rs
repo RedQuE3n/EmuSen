@@ -1,9 +1,16 @@
 //! What a console runs before its game (Endou_OpenBoot.md): nothing on the Mark III and the SG-1000, which have no BIOS;
-//! on the Master System and the Master System II, Endou's open boot program, built at compile time from `src/boot/`, or
-//! the player's own image of that console's BIOS where the player chooses it (decided 2026-10-19).
+//! on the Master Systems, the Japanese one among them, Endou's open boot program, built at compile time from
+//! `src/boot/`, or the player's own image of that console's BIOS where the player chooses it (decided 2026-10-19).
 
-/// The open boot program's 8 KiB image, assembled by `build.rs`.
+/// The open boot program's 8 KiB image, assembled by `build.rs`: the export Master Systems', and the Japanese Master
+/// System's, which checks no header (Endou_Native.md §16.4).
 pub const OPEN_BOOT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/open_boot.bin"));
+pub const OPEN_BOOT_JAPAN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/open_boot_japan.bin"));
+
+/// The open boot program a console runs.
+pub fn open_boot(model: crate::model::Model) -> &'static [u8] {
+    if model.checks_export_header() { OPEN_BOOT } else { OPEN_BOOT_JAPAN }
+}
 
 include!(concat!(env!("OUT_DIR"), "/open_boot_symbols.rs"));
 

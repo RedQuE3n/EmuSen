@@ -2,7 +2,8 @@
 ; enables the card, the cartridge and the expansion slot in turn and takes the first that holds a game, checks an
 ; export cartridge's header (TMR SEGA, the region code $4, the checksum over the size code's range less the header,
 ; banks past 32 KiB paged into slot 2 by $FFFF), and hands the game over on the VDP's last line with the slot's port
-; $3E value at $C000. A refusal switches the ROM back on and returns to it. build.rs gives ROM_NO_GAME and ROM_REFUSE.
+; $3E value at $C000. A refusal switches the ROM back on and returns to it. build.rs gives ROM_NO_GAME, ROM_REFUSE and
+; JAPAN, 1 for the Japanese Master System's build, which checks no header.
 
 BIOS_ON equ $E3
 NO_HEADER equ 1
@@ -75,7 +76,13 @@ present:
 .data:  or a
         ret
 
-found:  ld hl,(header)
+; The Japanese Master System's BIOS checks no header (Endou_OpenBoot.md §1.5): its build hands any game over.
+found:
+        if JAPAN
+        jp handover
+        else
+        ld hl,(header)
+        endif
         ld a,h
         or l
         ld a,NO_HEADER

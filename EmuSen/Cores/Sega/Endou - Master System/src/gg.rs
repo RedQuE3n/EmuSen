@@ -115,19 +115,23 @@ mod tests {
         [m.picture[i], m.picture[i + 1], m.picture[i + 2]]
     }
 
-    // Equal to Genesis Plus GX's, SMS Plus GX's, PicoDrive's and BlastEm's up to a colour map but for the line the line
-    // interrupt's write lands on, measured 2026-10-20 (Jadeite_Native.md §4).
+    // Equal to Genesis Plus GX's, SMS Plus GX's and PicoDrive's up to a colour map at both frames, and BlastEm's at the
+    // first, measured 2026-10-20 (Jadeite_Native.md §4).
     #[test]
     fn a_game_gear_program_shows_its_window_in_twelve_bits_and_moves_it_for_224_lines() {
         let (yellow, blue, green, magenta, white) = ([255, 255, 0], [0, 0, 255], [0, 255, 0], [255, 0, 255], [255, 255, 255]);
         let m = game_gear(&images::GG, Console::Gg, 10);
-        assert_eq!((m.width, m.height, m.cram_len(), digest(&m)), (160, 144, 64, 0xD866_9150_8E48_9726));
+        assert_eq!((m.width, m.height, m.cram_len(), digest(&m)), (160, 144, 64, 0xF1EB_B7C9_95E6_A4A5));
         assert_eq!((at(&m, 0, 0), at(&m, 159, 143), at(&m, 8, 8)), (yellow, yellow, blue), "the edge cells, the latch's entry 2, and inside");
         assert_eq!((at(&m, 3, 76), at(&m, 4, 76), at(&m, 8, 76), at(&m, 8, 75)), (green, yellow, magenta, blue), "the sprite's last four columns; line 100's colour");
         assert!(m.frame_bytes().chunks(4).all(|p| p[..3] != white), "nothing outside the window shows");
         assert_eq!(m.bus.ram[0], 0xC1, "the frame interrupt on line $C1");
+        let mut m = game_gear(&images::GG, Console::Gg, 10);
+        m.pads[0] = crate::io::PAUSE as u32;
+        m.advance();
+        assert_eq!(m.bus.ram[1], 0, "Start is no NMI in the Game Gear's mode");
         let m = game_gear(&images::GG, Console::Gg, 40);
-        assert_eq!((m.height, m.bus.vdp.height, m.bus.ram[0], digest(&m)), (144, 224, 0xE1, 0x978D_F17F_8DB5_5E0D));
+        assert_eq!((m.height, m.bus.vdp.height, m.bus.ram[0], digest(&m)), (144, 224, 0xE1, 0x6518_5F10_8BE5_C0A5));
         assert_eq!((at(&m, 0, 15), at(&m, 0, 16)), (white, yellow), "lines 40-55 of the taller layout, outside the old window (D-21)");
     }
 

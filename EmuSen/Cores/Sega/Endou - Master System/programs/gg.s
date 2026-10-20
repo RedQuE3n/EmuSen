@@ -1,12 +1,22 @@
 ; The Game Gear's own mode (Jadeite_Native.md §4): CRAM written as words through the latch at even addresses, one
 ; latch written out to two entries by odd writes; tile 1 (colour 1) inside the LCD's window, tile 2 (colour 2) on its
-; edge cells and tile 3 (colour 3, which must never show) outside it; a sprite across the window's left edge on lines 100-107; entry 1
-; changed by the line interrupt at line 99 and set back by the frame interrupt, which keeps the V counter at $C000.
-; From frame 30 M1 asks for 224 lines, whose name table is at $3700 (Endou_Disputes.md D-21); $3700-$37FF holds tile 3.
+; edge cells and tile 3 (colour 3, which must never show) outside it; a sprite across the window's left edge on lines
+; 100-107; entry 1 changed by the line interrupt at line 99 and set back by the frame interrupt, which keeps the V
+; counter at $C000. From frame 30 M1 asks for 224 lines, whose name table is at $3700 (Endou_Disputes.md D-21);
+; $3700-$37FF holds tile 3. Port $06 is written as the stereo register, which is not $3E; an NMI counts at $C001, and
+; Start makes none in this mode.
         di
         jp main
         org $38
+        jp irq
+        org $66
         push af
+        ld a,($C001)
+        inc a
+        ld ($C001),a
+        pop af
+        retn
+irq:    push af
         push hl
         in a,($BF)
         rlca
@@ -41,6 +51,9 @@ main:   im 1
         ld sp,$DFF0
         xor a
         ld (frames),a
+        ld ($C001),a
+        ld a,$FF
+        out ($06),a
         ld hl,regs
         ld bc,(regs_end-regs)<<8|$BF
         otir

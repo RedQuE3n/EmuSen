@@ -1301,6 +1301,9 @@ names) and `Nes6502Disassembler` raise none of these and wait only on the same p
   words and parameter), the vectors, and the SNES's DMA channels, the B bus's names, the symbols and the summary line.
   The facade is `NativeDebugViews`, which each pack's views are unless `EMUSEN_SYSTEMS_NATIVE=0`, fronting the C#
   views; the MoonRT shim's debug target now reads the NES pack's views rather than the C# class.
+  *Since 2026-10-19* the Master System's and the SG-1000's views are `sms::views`, one module for both, their C# twin
+  `SmsDebugViews`, its colours `beryl-sms-colours`' (`Endou_Native.md` §15.5): the first dependency of `emusen-systems` on
+  a Beryl crate, which depends on nothing.
 - **The disassemblers**: `nes::disasm` (the 2A03), `gb::disasm` (the SM83, moved with its C# from the MercuryRT shim)
   and the VR4300's in `emusen-mips` (`vr4300.rs`, MIPS III in the VR4300's spelling, `Spelling` now a field of
   `Dialect`; `EmuSen_Mips.md` §6), reached through `n64::disasm`, its C# with `MarsOperands` moved from the MarsRT shim

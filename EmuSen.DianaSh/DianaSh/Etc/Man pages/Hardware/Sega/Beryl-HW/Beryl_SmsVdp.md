@@ -286,3 +286,14 @@ changed nothing, and whether the 315-5313 locks by the counter as MacDonald says
 question for the board (`Endou_Native.md` §11.15), which a Nephrite dispute step asks the next time Nephrite is worked on
 (decided 2026-10-19; pending, `Nephrite_Native.md` §67). The chip's other differences (the first byte latched, CRAM by code
 bit 1, no buffer refill) are Nephrite's VDP's, outside the composition.
+
+## 10. The colours, a crate of their own (2026-10-19, Endou's stage 8)
+
+The chips' colours, a `--BBGGRR` entry on the 315-5246 and on the 315-5124 (D-1) and the TMS9918A's sixteen codes
+(D-11), were Endou's tables (`machine::SMS_COLOURS`, `SMS1_COLOURS`, `TMS_COLOURS`). At stage 8 the `sms` pack's
+palette view needed the same tables, and a pack's code cannot depend on a core, so they moved, unchanged and with
+their two tests, into `beryl-sms-colours`, which depends on nothing: Endou's picture and `emusen-systems`' views read
+the one table (`Endou_Native.md` §15.5). They are a crate of their own rather than a module of this one so that the
+platform's library, which `emusen-systems` is linked into, links neither the VDP nor `emusen-native`, as it links the
+Nintendo packs' instruction sets (`emusen-6502`, `emusen-sm83`) and nothing else of a core's. The composition still
+writes CRAM entries and never colours, and Nephrite's mode 4 keeps its board's levels.

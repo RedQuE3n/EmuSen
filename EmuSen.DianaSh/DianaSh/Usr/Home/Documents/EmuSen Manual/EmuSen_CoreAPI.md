@@ -3232,6 +3232,13 @@ a host could set anything through a created machine. Its "`EACH` stops at every 
 stopping at once, which is what a debugger's step needs, and to eight steps that each move the machine. C12's "a minor
 far ahead" is 99 and its "larger structs" 32 bytes longer; C13's "several threads" are four.
 
+**What moving means, corrected 2026-10-19** (`Endou_Native.md` §15.7). A step moved the machine when the frame count or
+processor 0's pc changed. An instruction that jumps to itself (the Z80's `JR $`, a 6502's `JMP *`) changes neither, so
+the first core to claim `DEBUG` with such an idle loop, Endou on WiseMan's TMS9918 cartridge, failed C15 for a step the
+core had run. A step now moves the machine when the frame, the pc or the state's digest changes; a core whose
+`state_save` refuses in an open frame is held to the first two, as before. A step that runs nothing still fails: its
+state is the same. The kit's own tests pass unchanged.
+
 ### 24.2 The seeded faults
 
 The test core's machine (`emusen-native/examples/common/test_core.rs`) gained five faults, one for each case, and a

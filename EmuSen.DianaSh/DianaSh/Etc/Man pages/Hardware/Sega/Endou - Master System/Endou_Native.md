@@ -1433,7 +1433,7 @@ read in place, for §1.6 of the design page and §13.8.
    never a page's description of a BIOS's code or behaviour, since the reader is the open boot program's writer's
    successor and the clean room still holds; the fetch's provenance is recorded.
 3. **BIOS images with a built-in game** (larger than 8 KiB) stay refused for now, recorded for a later stage.
-4. **`firmwarecheck.py`** was run by the tester on their three images; stage 7 measures it as the tool's docstring
+4. **`firmwarecheck.py`** was run against the tester's three images, counts and offsets alone printed; stage 7 measures it as the tool's docstring
    prescribes for compiled code, with a control and the explained runs (`Endou_OpenBoot.md` §11).
 5. **D-8's referee**: nvc is being set up apart from Endou's stages; D-8 is not worked on at stage 7.
 6. **The go for stage 7.**

@@ -1,0 +1,7 @@
+# Endou's open boot program: its own words that firmwarecheck.py --control may find longer than the control's longest
+# common run, each with the reason the match is forced or generic (EmuSen_Firmware.md §0, Endou_OpenBoot.md §11).
+# Each line is the aligned 32-bit words of the image (SHA-256 625a92bd...f9f7) that cover one table or idiom; a word at
+# either end may carry a neighbouring byte, named in its comment.
+81808026 83ff82ff 85ff84ff 870086fb 89008800 3f108aff  # rom.s `screen`, offsets 340-361: R0-R10 written as value then $80|register, the only form the VDP's control port takes (MK3 "VDP register description"); R2-R6 are Sega's documented power-on values $FF,$FF,$FF,$FF,$FB; the last word ends with CRAM's first two bytes
+a0008000 ff803681 ff83ff82 fb85ff84 00870086 ff890088 0000008a  # ram.s `power_on`, offsets 6775-6796: the same eleven registers at Sega's documented power-on values (MK3), R1 first, in the same two-byte form; the first word starts with the size table's last entry, the last ends with the variables' zeros
+0021fb10 c00111c0 3606ff01  # ram.s, offsets 6550-6558: LD HL,$C000 / LD DE,$C001 / LD BC,n / LD (HL),0, the generic Z80 block fill (LDIR copying each byte one forward) over the work RAM from its documented base $C000; the first word starts with the end of a DJNZ

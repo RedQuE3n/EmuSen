@@ -273,3 +273,45 @@ directories; a 32 KiB check hands over in the 25th frame, a 128 KiB one in the 6
 (1.9 s); 29 of 31 export games from the library reach the same pictures 300 and 600 frames after the hand-over as with no
 BIOS, the other two explained by the hand-over's phase and the Z80's R register; the four images of §1.6 that no range
 explains are refused in words, as §9's first question says.
+
+## 11. `firmwarecheck.py` with a control (stage 7, 2026-10-19)
+
+The tool was first run on the image of §10 against the tester's three BIOS images in `~/Documents/BIOS/SMS/` (8,192 bytes
+each, named by No-Intro as the Master System's (USA, Europe) v1.3, (Europe) v2.0 and (Japan) v2.1) with
+`--ignore-fill 16`: 4.4–7.2% equal at the same offset, the longest common runs 12–15 bytes, so the default verdict
+fails on its run limit. That limit cannot pass compiled code, which shares idioms with any other code of the same
+processor; the tool's docstring prescribes a **control** for it (`EmuSen_Firmware.md` §0, decided 2026-10-11). Measured
+here as it prescribes, the tool printing counts and offsets only; the three images were not otherwise opened, read,
+dumped or compared.
+
+**The control**, chosen before any run with it: the first 8,192 bytes of ZEXDOC for the Master System (`zexdoc.sms` of
+ZEXALL-SMS 0.20, GPL-2.0, SHA-256 `684cab8d…4375ef30`, in the probe's cache since stage 1, `Endou_References.md` §2),
+cut with `head -c 8192`: hand-written Z80 assembly the size of the replacement, an instruction exerciser with its text
+output, which has nothing to do with any BIOS. **The explained runs**:
+`EmuSen.WiseMan/Reference/analysis/firmware/endou-explained.txt`, three lines of the replacement's own words.
+
+**Run** [M 2026-10-19]: `firmwarecheck.py open_boot.bin <image> --ignore-fill 16 --control <control> --explained
+endou-explained.txt`, with the default `--min-run 4` and `--max-equal 25`:
+
+| Image | Equal at the same offset | Longest common run | Runs of 4+ | Control: equal, longest, runs of 4+ | Runs past the control's longest | Verdict |
+|---|---:|---:|---:|---|---:|---|
+| (USA, Europe) v1.3 | 188 of 2,673 (7.0%) | 12 | 3,894 | 2.9%, 24, 11,355 | 0 | **PASS** |
+| (Europe) v2.0 | 193 of 2,673 (7.2%) | 15 | 4,660 | 2.4%, 24, 13,164 | 0 | **PASS** |
+| (Japan) v2.1 | 117 of 2,673 (4.4%) | 12 | 1,038 | 2.3%, 6, 2,925 | 3, all explained | **PASS** |
+
+**The three runs past the control's longest** (the Japanese image's, the control's longest there being 6):
+
+| Replacement offset | Length | What it is | Why it is forced or generic |
+|---:|---:|---|---|
+| 343 | 12 | `rom.s`'s `screen` table: the end of R1's pair, R2 to R6 at `$FF,$FF,$FF,$FF,$FB`, R7's value | Sega's documented power-on values (§1.4), written in the only form the VDP's control port takes, the value then `$80` with the register's number |
+| 6779 | 11 | `ram.s`'s `power_on` table: R2 to R6 and R7's value, the same values | the same, at the hand-over (§3.2, step 7) |
+| 6550 | 7 | `LD HL,$C000` / `LD DE,$C001` / `LD BC,n` | the Z80's generic block fill, `LDIR` copying each byte one forward, over the work RAM from its documented base |
+
+**What the counts are worth.** Fill is left out of both images alike, which leaves 2,673 of the replacement's bytes
+and 6,435 of the control's, so the control's larger run counts owe something to its size. Per byte outside fill the
+replacement still shares fewer runs of 4+ with every image than the control does: 1.46, 1.74 and 0.39 against 1.76,
+2.05 and 0.45 [M, from the table]. The longest common runs that do not pass the control's longest, the 15 bytes at
+offset 379 among them, lie in the CRAM table's zeros and in the power-on tables: runs of zeros shorter than the fill
+threshold, and the documented register values.
+
+The check is rerun whenever the image's SHA-256 changes.

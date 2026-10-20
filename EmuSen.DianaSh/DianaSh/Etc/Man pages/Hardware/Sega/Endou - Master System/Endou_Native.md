@@ -1486,6 +1486,7 @@ images.
   oblong pad with a cross and two buttons, the console's Pause and Reset buttons in Start's and Select's places
   (`ControllerDiagrams.BorrowsLayout`). The SG-1000 has no Reset button, so the drawing's Select has no control there;
   the diagram test allows a borrowed drawing one such region and no more. A drawing of its own is a question (§14.14).
+  *Resolved 2026-10-19:* each console is drawn on its own pad, and the borrowed drawing and its allowance are gone (§14.15).
 - **Cover aspect.** 1.4 for both, height over width as the field is defined [A]: the Master System's North American
   boxes are portrait, and one retailer sells a single sleeve for them and the Genesis's (`Endou_References.md` §6f);
   the SG-1000 had no North American box, so its value is the Master System's. Neither is measured. The Genesis's 0.7,
@@ -1632,7 +1633,7 @@ out and the patch list kept, 0.002. A cold, out-of-line form of the check cost m
 
 ### 14.12 Open
 
-- The Master System's and the SG-1000's own pad drawings, in LunaP (§14.3).
+- The Master System's and the SG-1000's own pad drawings, in LunaP (§14.3). *Drawn 2026-10-19 (§14.15).*
 - 1,181 of the database's Master System Game Genie codes carry a reference, which a `.cht` entry has nowhere to keep, so
   they are skipped on import, as the Game Boy's are (`EmuSen_Cheats.md` §8, §11); typed, they work.
 - The cover aspects are argued, not measured.
@@ -1671,6 +1672,49 @@ database's two folders; ZEXDOC's README, for the control; the library's file nam
    checked in a Nephrite step later.
 4. **The export check refusing a Game Genie-patched game stays**, as the console would; the Mark III plays it.
 5. **The go for stage 8.**
+
+### 14.15 The pads drawn on their own (2026-10-19)
+
+*Decided 2026-10-19:* §14.14's second question is answered yes. LunaP draws the Master System's control pad and the
+SG-1000's joystick (`LunaP.md` §198.14), and Mistress draws each console on its own, in place of the NES pad that
+§14.3 borrowed.
+
+- **The drawings.** The Master System's pad is a dark oblong with a rounded square direction pad, the first model's hole
+  in its middle, and buttons 1 and 2 on the right. The SG-1000's joystick is the box of the first SG-1000's SJ-200 seen
+  from above: a stick in its middle, and buttons 1 and 2 standing out of its left and right sides. Both are drawn from
+  the products' described shapes, not from a picture. The stick is four switches, so its knob leans toward the
+  directions pressed rather than following an axis.
+- **Pause and Reset.** They are the console's buttons, not the pad's, and core info gives them to the pad's controller
+  (§4.2 of the plan: Pause on Start, Reset on Select). Each drawing shows them on a strip of the console's front, drawn
+  apart above the pad, as the PlayStation's drawing shows its shoulder pairs apart. The SG-1000 has a Pause and no
+  Reset, and its drawing has no Reset region.
+- **The regions are named as Endou names the buttons.** `ControllerDiagrams` maps B to `1`, A to `2`, Start to `Pause`
+  and Select to `Reset` for both consoles, as it maps the Genesis's and the PlayStation's buttons onto their drawings.
+  `BorrowsLayout`, and the diagram test's allowance for one region with no control on a borrowed drawing, are gone:
+  every region of both drawings stands for a control, and every control has one region.
+- **The Mark III** is a model of the Master System's console in core info, not a console of its own, so it shares the
+  Master System's drawing.
+
+**Tests.** `ControllerBindingsDiagramTests`:
+
+- `Every_control_each_console_uses_has_a_region_and_every_region_a_control` now holds both consoles to the full rule.
+- `Every_button_of_endou_s_pads_has_one_region_of_its_own_drawing` (new): for `sms.pad` and `sg1000.pad`, the drawing's
+  regions are exactly core info's button labels, each is hit where it is drawn, and a click on it starts its capture.
+- `A_held_direction_leans_the_sg_1000_s_stick` (new).
+- The click theory and the pad-reach theory each gain rows for both consoles.
+
+All 31 cases pass. In the window-fit audit, Controller Bindings was audited on every tab in its seven cases at both
+sizes: 14 of 14 pass, no feature cut off or overlapping. The recordings of the two consoles' tabs were taken again,
+`EmuSen_InterfaceSpec.md` §6.3.10.
+
+**Seeded faults (2026-10-19).** Each fault was made in `ControllerDiagrams.cs`, `ControllerBindingsDiagramTests` was
+run, and the file was restored byte for byte. LunaP's four seeds for the drawings themselves are in `LunaP.md` §198.14.
+
+| # | Fault | Caught by |
+|---|---|---|
+| M1 | the SG-1000 left on the NES pad | four: the every-control test, the Endou pads test, the click theory and the lean test |
+| M2 | Start not mapped to Pause | five: the every-control test, both rows of the Endou pads test and both click rows |
+| M3 | buttons 1 and 2 swapped | the Endou pads test alone (two rows): no other test knows which RetroPad button is 1 |
 
 ---
 

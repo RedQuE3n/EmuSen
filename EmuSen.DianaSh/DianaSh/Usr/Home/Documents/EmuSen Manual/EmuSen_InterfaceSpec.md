@@ -483,3 +483,22 @@ scroller's view in Graphics Settings (the SNES's SA-1 setting, the NES's console
 help, a crop's help) and Active Cheats (its last two cheats); the new consoles' rows in Collection Settings'
 list and the Cheat Database's systems, below their views; and the pad's paths through all of these.
 
+
+#### 6.3.10 The Master System's and the SG-1000's own drawings (2026-10-19)
+
+The Master System and the SG-1000 are now drawn on their own pads rather than on the NES pad (`Endou_Native.md`
+§14.15). The window-fit audit passes in all 14 Controller Bindings cases at both sizes. The recordings of the
+Controller Bindings window were taken again in its seven cases at both sizes: 28 changed and none new. They are the
+Master System's and the SG-1000's tabs, and no other tab's recording changed **[M]**. Every changed line is a line of
+the drawing's labels or an edge of the focus graph, and nothing else:
+
+- **The labels' lines.** The labels' names are the new regions: Up, Down, Left, Right, 1, 2, Pause, and on the Master
+  System Reset, where the NES pad's were Up, Down, Left, Right, Select, Start, B and A. On the SG-1000 there are seven
+  labels where there were eight. The labels' positions are the new drawing's, and every other attribute of a label
+  line is as it was.
+- **The edges among the labels** follow the new positions. The tab's Down still lands on Up's label.
+- **The bindings list's cells.** The walk ends once every control shown when it began has been left in every
+  direction (`PadAudit.Graph`). Over the NES pad's labels it had not finished before it stepped into the bindings list
+  below the drawing, so it recorded 24 or 32 edges among that list's cells. Over the new labels it finishes first, and
+  those edges are no longer walked; the edge from the player selector down into the list is still recorded. The other
+  consoles' tabs keep their 32.

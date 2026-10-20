@@ -8363,7 +8363,7 @@ This is a finding about the audit and not about Preferences. No player presses i
 
 **Decided 2026-10-07 by the tester: each television console has an Overscan setting, off by default, that hides the edges of its picture; one setting, which the CRT filter shares; applied only where the picture is drawn.** What a crop is, its unit, what it does to the picture's shape and the measurements on real games are `EmuSen_Serenity.md` §2.10; the filter's side is `EmuSen_CRT.md` §15.
 
-**The setting.** Graphics Settings, on the NES, SNES, N64 and Genesis tabs, the row after **Shader and shape**: **Overscan**, one of
+**The setting.** Graphics Settings, on the NES, SNES, N64 and Genesis tabs (*since 2026-10-20 every television console's, the Master System and the SG-1000 among them, `EmuSen_CRT.md` §31; what TV overscan hides of their 192-line pictures is §31.5 there*), the row after **Shader and shape**: **Overscan**, one of
 
 | Choice | Stored | What is hidden |
 |---|---|---|

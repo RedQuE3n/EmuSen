@@ -224,7 +224,7 @@ built.registered[Nope] = False
 built.registered[<null>] = False
 built.available = MarsRT=True
 built.discovered[diamond] = Diamond systems=[psx] opens=True
-built.discovered[endou] = Endou systems=[sms, sg1000] opens=True
+built.discovered[endou] = Endou systems=[sms, sg1000, gg] opens=True
 built.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 built.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 built.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
@@ -1306,7 +1306,7 @@ refused-discovered.registered[Nope] = False
 refused-discovered.registered[<null>] = False
 refused-discovered.available = MarsRT=True
 refused-discovered.discovered[diamond] = Diamond systems=[psx] opens=False report=libdiamond.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
-refused-discovered.discovered[endou] = Endou systems=[sms, sg1000] opens=False report=libendou.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
+refused-discovered.discovered[endou] = Endou systems=[sms, sg1000, gg] opens=False report=libendou.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=False report=<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=False report=<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=False report=<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
@@ -1586,7 +1586,7 @@ off.registered[Nope] = False
 off.registered[<null>] = False
 off.available = MarsRT=True
 off.discovered[diamond] = Diamond systems=[psx] opens=True
-off.discovered[endou] = Endou systems=[sms, sg1000] opens=True
+off.discovered[endou] = Endou systems=[sms, sg1000, gg] opens=True
 off.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 off.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 off.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True

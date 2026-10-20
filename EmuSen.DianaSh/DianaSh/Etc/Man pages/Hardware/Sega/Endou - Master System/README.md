@@ -54,7 +54,8 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   matched frame for frame by two references; nothing changed, the seeded faults that guard it.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
-Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).
+Gear's pages are in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/), its build record from stage J1
+(2026-10-20) `Jadeite_Native.md`; its disputes, D-21 on, are in this folder's log.
 
 The core was first reserved as Endymion, a name now held by the SDL crate; see `Man pages/EmuSen_Core_Naming_Scheme.md`
 §3 and §10.

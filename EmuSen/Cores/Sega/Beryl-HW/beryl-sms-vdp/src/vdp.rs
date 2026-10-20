@@ -143,7 +143,7 @@ impl Vdp {
     }
 
     /// The display's active lines: 224 or 240 where M2 is set with M1 or M3 alone, on the chips that have them [R
-    /// MacDonald §6].
+    /// MacDonald §6]. The Game Gear's own mode is no exception; its LCD's window is fixed instead (Endou_Disputes.md D-21).
     pub fn active_lines(&self) -> u32 {
         let (m2, m1, m3) = (self.regs[0] & 2 != 0, self.regs[1] & 0x10 != 0, self.regs[1] & 8 != 0);
         match (self.mode4() && m2, m1, m3) {
@@ -299,7 +299,7 @@ impl Vdp {
         let tms = self.tms_mode();
         if !self.display() || !(tms || self.mode4()) {
             // Blanked, or the invalid text mode, which is not modelled: the backdrop (Beryl_SmsVdp.md §4.4).
-            let c = if tms { self.tms_entry(tms::backdrop(&self.regs)) } else { self.entry(compose::backdrop(&self.regs)) };
+            let c = self.border();
             self.picture[row + span.start..row + span.end].fill(c);
             return;
         }
@@ -335,6 +335,11 @@ impl Vdp {
         } else {
             tms::SMS_COLOURS[code as usize] as u16
         }
+    }
+
+    /// The entry the chip shows where it draws no picture: the backdrop of register 7, in its mode's colours.
+    pub fn border(&self) -> u16 {
+        if self.tms_mode() { self.tms_entry(tms::backdrop(&self.regs)) } else { self.entry(compose::backdrop(&self.regs)) }
     }
 
     /// CRAM's entry for an index: a `--BBGGRR` byte, or in the Game Gear's mode a 12-bit word.

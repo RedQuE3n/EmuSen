@@ -2,7 +2,7 @@ using System.Text;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Builds a synthetic Master System or SG-1000 cartridge: Sega's header with its checksum and region, a boot stub and a pad reader, and the mappers' banking programs - never real game data - see Endou_Native.md §4, §9.8.
+    // Builds a synthetic Master System, SG-1000 or Game Gear cartridge: Sega's header with its checksum and region, a boot stub and a pad reader, and the mappers' banking programs - never real game data - see Endou_Native.md §4, §9.8.
     public static class SyntheticSmsRom
     {
         // DI; IM 1; LD SP,nn; then forever IN A,($DC); LD ($C000),A; IN A,($DD); LD ($C001),A - the pads' two ports copied to the first bytes of RAM.
@@ -86,14 +86,14 @@ namespace EmuSen.WiseMan.Fixtures
             return code.ToArray();
         }
 
-        // A Master System image of `banks` 16 KiB banks, each holding its own number at $3F00, the program at $0000 and Sega's export header with its checksum.
-        public static byte[] Banked(int banks, byte[] program)
+        // A Master System image of `banks` 16 KiB banks, each holding its own number at $3F00, the program at $0000 and Sega's header with its checksum, the export region $4 unless another is given.
+        public static byte[] Banked(int banks, byte[] program, int region = 0x4)
         {
             var rom = new byte[banks * 0x4000];
             for (int b = 0; b < banks; b++) rom[b * 0x4000 + 0x3F00] = (byte)b;
             program.CopyTo(rom, 0);
             Encoding.ASCII.GetBytes("TMR SEGA").CopyTo(rom, HeaderAt);
-            rom[HeaderAt + 15] = 0x4C;
+            rom[HeaderAt + 15] = (byte)(region << 4 | 0xC);
             return WithSegaChecksum(rom);
         }
 
@@ -183,6 +183,13 @@ namespace EmuSen.WiseMan.Fixtures
             Ports(writes).CopyTo(rom, 0);
             return rom;
         }
+
+        // A Game Gear cartridge in its own mode, header region $6: mode 4 over tile 0, CRAM entry 0 written as the word $00F0 through the latch, then an even write that only latches - see Jadeite_Native.md §4.
+        public static byte[] GgPicture() => Banked(2, Ports(new (byte, byte)[]
+        {
+            (0xBF, 0x06), (0xBF, 0x80), (0xBF, 0x40), (0xBF, 0x81),
+            (0xBF, 0x00), (0xBF, 0xC0), (0xBE, 0xF0), (0xBE, 0x00), (0xBF, 0x00), (0xBF, 0xC0), (0xBE, 0x0F),
+        }), region: 0x6);
 
         // A stand-in for a console's own BIOS, written for the tests and no BIOS's code: it marks $C100 with $5C, then copies to $C700 and runs LD A,$AB; LD ($C000),A; OUT ($3E),A; JP $0000 - see Endou_OpenBoot.md §5.
         public static byte[] StandInBios()

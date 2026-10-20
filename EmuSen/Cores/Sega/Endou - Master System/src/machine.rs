@@ -1,6 +1,6 @@
 //! The machine (Endou_Native.md §9.6, §10, §11, §12): Beryl's Z80 on the bus, run a frame of the master clock at a time,
-//! the Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours, the PSG's samples
-//! queued for the host, and the spaces a host reads.
+//! the Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours or on the Game Gear's
+//! LCD (`gg`), the PSG's samples queued for the host, and the spaces a host reads.
 
 use beryl_sms_vdp::Vdp;
 use beryl_sn76489::Sn76489;
@@ -12,6 +12,7 @@ use crate::board::{Board, identify};
 use crate::boot::Boot;
 use crate::bus::Bus;
 use crate::cart::Cartridge;
+use crate::gg::{self, Shrink};
 use crate::io::PAUSE;
 use crate::media::{Console, Market, Media};
 use crate::model::Model;
@@ -61,9 +62,12 @@ pub struct Machine {
     pub frame_end: u64,
     /// Whether the Pause button was held at the last frame's start, so that a press is one edge.
     pub pause_held: bool,
-    /// The last picture in RGBA, `WIDTH` by `height` of it in use.
+    /// The last picture in RGBA, `width` by `height` of it in use.
     pub picture: Vec<u8>,
+    pub width: u32,
     pub height: u32,
+    /// The Game Gear's LCD in a Master System cartridge's mode; none on another console.
+    pub lcd: Option<Box<Shrink>>,
     pub skip: bool,
     pub pads: [u32; 2],
     /// The samples made and not yet drained, the oldest dropped past the host's limit.
@@ -90,10 +94,13 @@ impl Machine {
     /// A machine whose BIOS slot holds `bios`, the open boot program's image or the player's, run from reset; with
     /// `Boot::None`, none.
     pub fn with_boot(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>, boot: Boot, bios: Vec<u8>) -> Machine {
-        let pal = market == Market::Europe;
+        let pal = market == Market::Europe && model.has_pal();
         let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
         let sound = Sound::new(Sn76489::new(model.psg()), num, 15);
-        let vdp = Vdp::new(model.vdp(), pal);
+        let mut vdp = Vdp::new(model.vdp(), pal);
+        vdp.gg_mode = model == Model::GameGear && media.gg_mode();
+        let (width, height) = if model != Model::GameGear { (WIDTH, HEIGHT) } else if vdp.gg_mode { (gg::WIDTH, gg::WINDOW_HEIGHT) } else { (gg::WIDTH, gg::PANEL_HEIGHT) };
+        let lcd = (model == Model::GameGear && !vdp.gg_mode).then(Box::default);
         let bios = if boot == Boot::None { Vec::new() } else { bios };
         let bios_crc = if bios.is_empty() { 0 } else { crate::board::crc32(&bios) };
         let bus = Bus::with_bios(model, Cartridge::new(board, rom), model.ram(), sound, vdp, bios);
@@ -108,7 +115,9 @@ impl Machine {
             frame_end: 0,
             pause_held: false,
             picture: [0, 0, 0, 255].repeat((WIDTH * MAX_HEIGHT) as usize),
-            height: HEIGHT,
+            width,
+            height,
+            lcd,
             skip: false,
             pads: [0; 2],
             audio: SampleQueue::default(),
@@ -126,7 +135,7 @@ impl Machine {
     }
 
     pub fn pal(&self) -> bool {
-        self.market == Market::Europe
+        self.bus.vdp.pal
     }
 
     pub fn frame_rate(&self) -> (u64, u64) {
@@ -141,6 +150,16 @@ impl Machine {
     /// Whether the console has CRAM: every one but the SG-1000, whose TMS9918A has none.
     pub fn has_cram(&self) -> bool {
         self.model() != Model::Sg1000
+    }
+
+    /// The controller ports: two, the Game Gear's one.
+    pub fn ports(&self) -> u32 {
+        if self.model() == Model::GameGear { 1 } else { 2 }
+    }
+
+    /// CRAM's bytes: 32, or the Game Gear's 64 in its own mode.
+    pub fn cram_len(&self) -> usize {
+        if self.bus.vdp.gg_mode { 2 * CRAM } else { CRAM }
     }
 
     /// The spaces in id order: (id, name, read-only). An empty cartridge slot has no ROM, a console without a BIOS run no
@@ -167,7 +186,7 @@ impl Machine {
         Some(match id {
             RAM_ID => &b.ram,
             VRAM_ID => &b.vdp.vram,
-            CRAM_ID if self.has_cram() => &b.vdp.cram[..CRAM],
+            CRAM_ID if self.has_cram() => &b.vdp.cram[..self.cram_len()],
             ROM_ID if !b.cart.rom.is_empty() => &b.cart.rom,
             CARTRAM_ID if !b.cart.ram.is_empty() => &b.cart.ram,
             BIOS_ID if !b.bios.is_empty() => &b.bios,
@@ -177,12 +196,12 @@ impl Machine {
 
     /// A writable space; the ROM is none.
     pub fn space_mut(&mut self, id: u32) -> Option<&mut [u8]> {
-        let sms = self.has_cram();
+        let (sms, cram) = (self.has_cram(), self.cram_len());
         let b = &mut self.bus;
         Some(match id {
             RAM_ID => &mut b.ram,
             VRAM_ID => &mut b.vdp.vram,
-            CRAM_ID if sms => &mut b.vdp.cram[..CRAM],
+            CRAM_ID if sms => &mut b.vdp.cram[..cram],
             CARTRAM_ID if !b.cart.ram.is_empty() => {
                 b.cart.dirty = true;
                 &mut b.cart.ram
@@ -234,7 +253,8 @@ impl Machine {
     /// What a frame takes at its start: the drawing switch, a Pause press as an NMI edge, the pads, and its end.
     fn begin_frame(&mut self) {
         self.bus.vdp.skip = self.skip;
-        let pause = self.pads[0] as u8 & PAUSE != 0;
+        // In the Game Gear's own mode Start is a port software reads, not NMI (Endou_Plan.md §2.1; stage J2).
+        let pause = self.pads[0] as u8 & PAUSE != 0 && !self.bus.vdp.gg_mode;
         if pause && !self.pause_held {
             self.bus.nmi = true;
         }
@@ -255,13 +275,20 @@ impl Machine {
     }
 
     /// The VDP's colour codes in the console's colours: the 315-5124's or the 315-5246's 64 (Endou_Disputes.md D-1), or
-    /// the TMS9918A's 16 (D-11).
+    /// the TMS9918A's 16 (D-11); on the Game Gear its LCD's picture (`gg`).
     fn take_picture(&mut self) {
         let vdp = &self.bus.vdp;
+        if self.model() == Model::GameGear {
+            match self.lcd.as_mut() {
+                Some(lcd) => lcd.draw(vdp.picture(), vdp.height, vdp.border(), &mut self.picture),
+                None => gg::window(vdp.picture(), vdp.height, &mut self.picture),
+            }
+            return;
+        }
         self.height = vdp.height;
         let (colours, mask): (&[[u8; 4]], usize) = match self.model() {
             Model::MarkIII | Model::Sms1 => (&SMS1_COLOURS, 0x3F),
-            Model::Sms2 => (&SMS_COLOURS, 0x3F),
+            Model::Sms2 | Model::GameGear => (&SMS_COLOURS, 0x3F),
             Model::Sg1000 => (&TMS_COLOURS, 0x0F),
         };
         for (out, &e) in self.picture.as_chunks_mut::<4>().0.iter_mut().zip(vdp.picture()) {
@@ -271,7 +298,7 @@ impl Machine {
 
     /// The picture's bytes in use.
     pub fn frame_bytes(&self) -> &[u8] {
-        &self.picture[..(WIDTH * self.height) as usize * 4]
+        &self.picture[..(self.width * self.height) as usize * 4]
     }
 }
 

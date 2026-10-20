@@ -252,6 +252,25 @@ codecs.
 **Read for the boxes' shape**: one retailer's listing of box protectors, which says the same sleeve fits the Genesis's
 cardboard boxes and the Master System's; no measurement of a Master System box was found.
 
+## 6g. Fetched and used at the Game Gear's stage J1 (2026-10-20)
+
+Recorded in the probe cache's `PROVENANCE.txt`, under `docs/smspower-forum/`; nothing is committed. The source the
+wiki page "Game Gear LCD" cites for its account of a Master System cartridge's picture on the Game Gear (`Endou_Disputes.md`
+D-22), a document under §1.4's first row.
+
+| Item | Where it was fetched | SHA-256 | What was read |
+|---|---|---|---|
+| SMS Power!'s forum topic 9562, "Game Gear SMS mode video scaling", as served 2026-10-20, posts of 2007-01-09 to 2026-06-09 | `https://www.smspower.org/forums/viewtopic.php?t=9562` | `284e817f…ef2a` | whole: Maxim's account of the columns, benryves's measurements from photographs and his weights, enik's comparisons with photographs, and the later posts; it holds no code. The last post's link to an interactive demo, a model's source, was not opened. Its photographs and videos are behind the forum's login and were not fetched |
+| benryves's two diagrams of a single lit line's response, the 224-line and the 192-line display (2007) | `…/forums/files/fa3c30d3_…_191.gif`, `…/7f1064c9_…_120.gif` | `9671dfdb…27b2`, `76a82b66…eba4` | read as pictures, magnified |
+| benryves's two pictures of his own model's output (2007) | `…/forums/files/186fe53c_…_867.gif`, `…/f0d8a032_…_652.gif` | `5253be73…aea3`, `ec7d2b9e…17d5` | fetched with the page, **not viewed**: a model's output, not a measurement |
+
+**Used, from the cache since stage 1:** SMS Power!'s "GG VDP", "Game Gear LCD", "Pixel Aspect Ratio", "Palette", "I/O
+Port Map - Game Gear", "Game Gear Stereo", "GG Cartridge" and "ROM Header"; Sega's Game Gear hardware notes; MacDonald's
+`msvdp` §5-§7, §14 and §15. **Run as black boxes:** the five libretro references of §3 on the tester's six Game Gear
+cartridges (read in place, unpacked to a temporary folder and deleted) and on the stage's test programs, with
+Gearsystem's `gearsystem_system` and SMS Plus GX's `smsplus_hardware` set to their Game Gear modes for Master System
+cartridges for D-22 (`Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md` §4).
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

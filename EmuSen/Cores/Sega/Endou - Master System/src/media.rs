@@ -2,20 +2,22 @@
 //! `$7FF0`, `$3FF0` or `$1FF0` and its checksum compared, the market its region code names, and the console the image
 //! is for. Nothing here maps a board; the mappers are stage 2's.
 
-/// The two systems Endou runs (Endou_Plan.md §1.1); the Game Gear is a later system of the same library (§2).
+/// The systems Endou runs (Endou_Plan.md §1.1), the Game Gear among them in development (§2, Jadeite_Native.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Console {
     Sms,
     Sg1000,
+    Gg,
 }
 
 impl Console {
-    pub const ALL: [Console; 2] = [Console::Sms, Console::Sg1000];
+    pub const ALL: [Console; 3] = [Console::Sms, Console::Sg1000, Console::Gg];
 
     pub fn id(self) -> &'static str {
         match self {
             Console::Sms => "sms",
             Console::Sg1000 => "sg1000",
+            Console::Gg => "gg",
         }
     }
 
@@ -130,6 +132,12 @@ impl Media {
     pub fn market(&self) -> Option<Market> {
         self.header.and_then(|h| h.market())
     }
+
+    /// Whether the cartridge puts a Game Gear in its own mode: a Game Gear cartridge whose header does not name the
+    /// Master System by region code $3 or $4 (Endou_Disputes.md D-23).
+    pub fn gg_mode(&self) -> bool {
+        self.console == Console::Gg && !self.header.is_some_and(|h| matches!(h.region, 0x3 | 0x4))
+    }
 }
 
 fn header_at(rom: &[u8], at: usize) -> Option<Header> {
@@ -235,8 +243,18 @@ mod tests {
         let headed = cartridge(0x8000, 0x4);
         assert_eq!(Media::read_as(&headed, Some(Console::Sg1000)).unwrap(), Media { console: Console::Sg1000, ..Media::read(&headed).unwrap() });
         assert_eq!(Media::read_as(&[], Some(Console::Sms)), Err(Refusal::Empty));
-        assert_eq!(Console::ALL.map(|c| Console::of_id(c.id())), [Some(Console::Sms), Some(Console::Sg1000)]);
-        assert_eq!(Console::of_id("gg"), None);
+        assert_eq!(Console::ALL.map(|c| Console::of_id(c.id())), [Some(Console::Sms), Some(Console::Sg1000), Some(Console::Gg)]);
+        assert_eq!(Console::of_id("sc3000"), None);
+        assert_eq!(Media::read(&headed).unwrap().console, Console::Sms, "the Game Gear is only ever routed");
+    }
+
+    // Endou_Disputes.md D-23: a Game Gear cartridge is in GG mode unless its header names the Master System.
+    #[test]
+    fn a_game_gear_cartridge_chooses_its_mode_by_its_header() {
+        let mode = |region: u8, console| Media::read_as(&cartridge(0x8000, region), Some(console)).unwrap().gg_mode();
+        assert_eq!([5, 6, 7, 3, 4].map(|r| mode(r, Console::Gg)), [true, true, true, false, false]);
+        assert!(!mode(6, Console::Sms), "a Master System cartridge never");
+        assert!(Media::read_as(&[0u8; 0x8000], Some(Console::Gg)).unwrap().gg_mode(), "no header: the Game Gear's");
     }
 
     #[test]

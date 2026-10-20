@@ -1,11 +1,11 @@
 //! Runs an image with pad presses and shows what is on its screen (Endou_Native.md §10.8): the name table at $3800 as
 //! text, for test programs whose font is ASCII from tile 0 at space, and the picture as a PPM.
 //! `cargo run --release --example screen -- <image> <frames> [--system s] [--model m] [--region r] [--press F:BUTTON[:DUR]]...
-//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--ram <file>] [--wav <file>]`; buttons Up, Down, Left, Right, 1, 2,
-//! Pause, Reset. `--wav` writes the sound of every frame run as a 16-bit stereo WAV file at the output rate.
+//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--vdp <file>] [--ram <file>] [--wav <file>]`; buttons Up, Down, Left,
+//! Right, 1, 2, Pause, Reset. `--vdp` writes the VDP's whole picture as RGBA, 256 wide, before a Game Gear's LCD. `--wav` writes the sound of every frame run as a 16-bit stereo WAV file at the output rate.
 
 use emusen_native::core::{Core, Create, Settings, sys};
-use endou::machine::{Machine, WIDTH};
+use endou::machine::Machine;
 
 fn bit(name: &str) -> u32 {
     let names = ["Up", "Down", "Left", "Right", "1", "2", "Pause", "Reset"];
@@ -50,7 +50,7 @@ fn main() {
     }
     if args.iter().any(|a| a == "--regs") {
         let v = &m.bus.vdp;
-        println!("registers {:02X?} vscroll {:02X} line {} cram {:02X?}", v.regs, v.vscroll, v.line, &v.cram[..32]);
+        println!("pc {:04X} registers {:02X?} vscroll {:02X} line {} cram {:02X?}", m.cpu.regs.pc, v.regs, v.vscroll, v.line, &v.cram[..m.cram_len()]);
     }
     if args.iter().any(|a| a == "--text") {
         let rows = m.bus.vdp.vram[0x3800..0x3800 + 0x600].chunks(64);
@@ -59,12 +59,19 @@ fn main() {
             println!("{}", line.trim_end());
         }
     }
-    let height = m.height as usize;
-    let rgba = &m.frame()[..WIDTH as usize * height * 4];
+    let (width, height) = (m.width as usize, m.height as usize);
+    let rgba = &m.frame()[..width * height * 4];
     if let Some(path) = flags("--ppm").pop() {
-        let mut out = format!("P6\n{} {}\n255\n", WIDTH, height).into_bytes();
+        let mut out = format!("P6\n{} {}\n255\n", width, height).into_bytes();
         out.extend(rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
         std::fs::write(path, out).expect("the PPM");
+    }
+    if let Some(path) = flags("--vdp").pop() {
+        let v = &m.bus.vdp;
+        let colour = |e: u16| if v.gg_mode { beryl_sms_colours::gg_colour(e) } else { beryl_sms_colours::SMS_COLOURS[e as usize & 0x3F] };
+        let out: Vec<u8> = v.picture().iter().flat_map(|&e| colour(e)).collect();
+        std::fs::write(path, out).expect("the VDP's picture");
+        eprintln!("the VDP's picture is 256x{}", v.height);
     }
     if let Some(path) = flags("--ram").pop() {
         std::fs::write(path, &m.bus.ram).expect("the RAM");
@@ -72,7 +79,7 @@ fn main() {
     if let Some(path) = flags("--rgba").pop() {
         std::fs::write(path, rgba).expect("the picture");
     }
-    eprintln!("{} frames, {}x{}, frame digest {:016X}", m.frames, WIDTH, height, rgba.iter().fold(0xCBF29CE484222325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100000001B3)));
+    eprintln!("{} frames, {}x{}, frame digest {:016X}", m.frames, width, height, rgba.iter().fold(0xCBF29CE484222325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100000001B3)));
 }
 
 /// 16-bit stereo samples as a WAV file.

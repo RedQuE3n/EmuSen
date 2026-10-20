@@ -187,11 +187,11 @@ fn the_profiler_charges_the_steps_and_the_calls_they_ran_in() {
         run_through(&mut m, 0);
     }
     m.hooks.flush();
-    let charged: i64 = m.hooks.profile.values().sum();
+    let charged: i64 = m.hooks.profile.iter().map(|&(_, n)| n).sum();
     assert_eq!(charged, m.hooks.coverage[0].as_ref().unwrap().covered);
     let calls = m.bus.high_ram[0x10] as i64;
     assert!(calls > 0 && m.hooks.depth() == 0);
-    assert_eq!((m.hooks.profile[&0x220], m.hooks.profile[&0x40]), (4 * calls, 9 * calls));
+    assert_eq!((m.hooks.charged(0x220), m.hooks.charged(0x40)), (4 * calls, 9 * calls));
 }
 
 #[test]

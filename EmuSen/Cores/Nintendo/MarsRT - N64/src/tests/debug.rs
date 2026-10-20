@@ -233,15 +233,15 @@ fn coverage_records_what_the_processor_ran_only_while_armed_and_the_profiler_cou
     assert!(executed(ENTRY + 20));
     assert!(!executed(ENTRY + 24));
     assert_eq!(m.cpu.hooks.coverage[0].as_ref().unwrap().covered, ran);
-    assert_eq!(m.cpu.hooks.profile.values().sum::<i64>(), ran);
-    assert_eq!(m.cpu.hooks.profile[&0], ran);
+    assert_eq!(m.cpu.hooks.profile.iter().map(|&(_, n)| n).sum::<i64>(), ran);
+    assert_eq!(m.cpu.hooks.charged(0), ran);
 
     m.cpu.hooks.configure(false, false, false, false, false, false);
     let before = m.cpu.instructions;
     assert_eq!(m.run_frame_debug(false, false), stop::FRAME);
     assert!(m.cpu.instructions > before);
     assert!(m.cpu.hooks.coverage[0].is_none());
-    assert_eq!(m.cpu.hooks.profile[&0], ran);
+    assert_eq!(m.cpu.hooks.charged(0), ran);
 }
 
 #[test]
@@ -251,8 +251,8 @@ fn the_profiler_charges_an_instruction_to_the_routine_it_ran_in() {
     m.cpu.hooks.breakpoints = vec![at(ENTRY + 8)];
     assert_eq!(m.run_frame_debug(false, false), stop::BREAKPOINT);
     // The jal outside any call, charged before it pushed; its slot, the jr and the jr's slot inside the call, the pop coming after the slot's step.
-    assert_eq!(m.cpu.hooks.profile[&0], 1);
-    assert_eq!(m.cpu.hooks.profile[&(ENTRY + 0x20)], 3);
+    assert_eq!(m.cpu.hooks.charged(0), 1);
+    assert_eq!(m.cpu.hooks.charged(ENTRY + 0x20), 3);
 }
 
 #[test]

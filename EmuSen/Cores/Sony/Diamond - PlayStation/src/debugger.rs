@@ -600,7 +600,7 @@ loop: lw t1, 0(s0)\nlbu t2, 0x10(s1)\nlwl t3, 0x5(s0)\nlwr t3, 0x6(s0)\nlh t4, 0
         assert!(!ran(0x8001_005C) && !ran(0x8001_0101) && !ran(0x8001_0000), "the word after the loop, a byte inside a word, the start-up");
         let covered = c.covered;
         m.debug.hooks.flush();
-        let (routine, outside) = (m.debug.hooks.profile[&0x8001_0100], m.debug.hooks.profile[&0]);
+        let (routine, outside) = (m.debug.hooks.charged(0x8001_0100), m.debug.hooks.charged(0));
         assert_eq!(m.debug.hooks.profile.len(), 2);
         assert_eq!(routine + outside, covered, "every instruction charged once");
         // A pass is seven instructions outside and three calls of nine: the routine's eight and the call's delay slot.

@@ -3,8 +3,6 @@
 //! with its reasons. The mechanism (MercuryRT's observed bus, MarsRT's `HOOKED` interpreter, MoonRT's observing flag)
 //! stays in each core. See EmuSen_NativeCores.md §3.14.
 
-use std::collections::BTreeMap;
-
 /// Why an observed frame stopped, as bits; zero is the frame's end.
 pub mod stop {
     pub const FRAME: u32 = 0;
@@ -155,9 +153,9 @@ pub struct Hooks {
     /// Each processor's coverage while armed; its width is fixed at `new`.
     pub coverage: Vec<Option<Coverage>>,
     widths: Vec<u32>,
-    /// Instructions by the routine they ran in, zero outside any call. A `BTreeMap`, not a `HashMap`: a second hasher
-    /// instantiation changed MercuryRT's plain bus read (Mercury_Native.md §8.5.5).
-    pub profile: BTreeMap<u32, i64>,
+    /// Instructions by the routine they ran in, zero outside any call, as (owner, count) sorted by owner and cleared in
+    /// place by each drain (EmuSen_NativeCores.md §12.8).
+    pub profile: Vec<(u32, i64)>,
     owner: u32,
     run: i64,
     /// The budget the open frame began with, kept while the host continues it past a stop it refused.
@@ -192,7 +190,7 @@ impl Hooks {
             reads_log: Vec::new(),
             coverage: widths.iter().map(|_| None).collect(),
             widths: widths.to_vec(),
-            profile: BTreeMap::new(),
+            profile: Vec::new(),
             owner: 0,
             run: 0,
             budget: 0,
@@ -280,9 +278,17 @@ impl Hooks {
     /// The profile's open run charged to the routine it ran in.
     pub fn flush(&mut self) {
         if self.run != 0 {
-            *self.profile.entry(self.owner).or_insert(0) += self.run;
+            match self.profile.binary_search_by_key(&self.owner, |&(owner, _)| owner) {
+                Ok(i) => self.profile[i].1 += self.run,
+                Err(i) => self.profile.insert(i, (self.owner, self.run)),
+            }
             self.run = 0;
         }
+    }
+
+    /// The instructions charged to `owner` so far, the open run aside; zero for a routine not in the profile.
+    pub fn charged(&self, owner: u32) -> i64 {
+        self.profile.binary_search_by_key(&owner, |&(o, _)| o).map_or(0, |i| self.profile[i].1)
     }
 
     /// What the C# loop records before each step of processor 0: the coverage bit and the profiler's count.
@@ -423,10 +429,11 @@ pub fn drain_profile(hooks: &mut Hooks, out: &mut [i64]) -> usize {
     hooks.flush();
     let count = hooks.profile.len();
     if out.len() >= 2 * count {
-        for (i, (owner, instructions)) in std::mem::take(&mut hooks.profile).into_iter().enumerate() {
+        for (i, &(owner, instructions)) in hooks.profile.iter().enumerate() {
             out[2 * i] = owner as i64;
             out[2 * i + 1] = instructions;
         }
+        hooks.profile.clear();
     }
     count
 }
@@ -585,6 +592,30 @@ mod tests {
     }
 
     #[test]
+    fn the_drain_gives_each_owner_once_ascending_with_its_sum_and_keeps_what_does_not_fit() {
+        let mut h = armed(flag::CALLS | flag::PROFILING);
+        let mut expected = std::collections::BTreeMap::new();
+        for r in 0..100u32 {
+            let target = 0x100 + (r * 29 % 50) * 4;
+            h.note_call(0, target, kind::CALL);
+            for _ in 0..=r % 3 {
+                h.record(target);
+            }
+            h.note_return();
+            h.record(0);
+            *expected.entry(target).or_insert(0i64) += (r % 3 + 1) as i64;
+            *expected.entry(0).or_insert(0) += 1;
+        }
+        let mut small = vec![0i64; 2 * expected.len() - 1];
+        assert_eq!(drain_profile(&mut h, &mut small), expected.len());
+        assert_eq!(small, vec![0; small.len()]);
+        let mut out = vec![0i64; 2 * expected.len()];
+        assert_eq!(drain_profile(&mut h, &mut out), expected.len());
+        assert_eq!(out, expected.iter().flat_map(|(&o, &n)| [o as i64, n]).collect::<Vec<_>>());
+        assert_eq!(drain_profile(&mut h, &mut out), 0);
+    }
+
+    #[test]
     fn a_stack_pushed_down_sets_the_depth_and_the_owner() {
         let mut h = armed(flag::CALLS | flag::PROFILING);
         h.set_stack(&[(1, 0x300), (2, 0x400)]);
@@ -592,7 +623,7 @@ mod tests {
         h.note_return();
         h.record(0);
         h.flush();
-        assert_eq!((h.profile[&0x400], h.profile[&0x300], h.depth()), (1, 1, 1));
+        assert_eq!((h.charged(0x400), h.charged(0x300), h.charged(0x500), h.depth()), (1, 1, 0, 1));
     }
 
     #[test]

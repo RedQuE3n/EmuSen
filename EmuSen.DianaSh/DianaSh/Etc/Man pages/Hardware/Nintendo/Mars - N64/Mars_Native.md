@@ -6574,12 +6574,12 @@ player changes it.
 
 **The debugger on the shared hooks.** `cpu::hooks::Hooks` is now `emusen_native::debug::Hooks` with the three things
 MarsRT's loop keeps beside it: the return that waits for its delay slot and the observed frame's clock (§6.5.1). The
-profile is the crate's `BTreeMap` (`EmuSen_NativeCores.md` §3.14), the flags its numbering (calls 1, writes 2,
-interrupts 4, each 8, profiling 16, coverage of processor n bit 8 + n), the coverage its per-processor bitmaps, 24
-address bits for the CPU and 12 for the signal processor. The signal processor's trace stays where its loop records
-it, in the bus, and is moved into the hooks' bitmap for processor 1 when the host drains it, armed and disarmed as the
-hooks are. An interrupt still stops the loop without pushing a frame, as MarsCore's loop does. The shim's own
-debugger is kept, over the v1 exports, and `CoreEngine`'s generic bridge is never attached to MarsRT.
+profile is the crate's `BTreeMap` (`EmuSen_NativeCores.md` §3.14; a sorted list since 2026-10-20, §12.8), the flags its
+numbering (calls 1, writes 2, interrupts 4, each 8, profiling 16, coverage of processor n bit 8 + n), the coverage its
+per-processor bitmaps, 24 address bits for the CPU and 12 for the signal processor. The signal processor's trace stays
+where its loop records it, in the bus, and is moved into the hooks' bitmap for processor 1 when the host drains it,
+armed and disarmed as the hooks are. An interrupt still stops the loop without pushing a frame, as MarsCore's loop does.
+The shim's own debugger is kept, over the v1 exports, and `CoreEngine`'s generic bridge is never attached to MarsRT.
 
 **The shim.** `MarsRtCore` is a subclass of the generic adapter, `CoreEngine`, and loads the library through
 `PortLibrary`, which `MarsNative` now is, so C# Mars's components and MarsRT share one loader, one switch

@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "Master System", "SG-1000" }, CrtFilter.TelevisionConsoles);
             Assert.Equal(CrtFilter.TelevisionConsoles, CrtFilter.Filter.Consoles);
             Assert.Equal(CrtFilter.TelevisionConsoles, CrtFilters.Lottes.Consoles);
-            Assert.Equal(new[] { "32X" }, ConsoleScreens.All.Where(s => s.Gap is not null).Select(s => s.Console));
+            Assert.Equal(new[] { "32X", "GB", "GBC" }, ConsoleScreens.All.Where(s => s.Gap is not null).Select(s => s.Console));
         }
 
         // The consoles that had the tubes keep exactly the filters they had; the two new ones are offered the same list.
@@ -104,7 +104,7 @@ namespace EmuSen.WiseMan.Mistress
                 ("an attachment's own output taken for its host's", With("32X", s => s with { Gap = null }), Systems, "32X borrows Genesis's profile with no dated gap"),
                 ("a gap with no date", With("32X", s => s with { Gap = "no encoder found" }), Systems, "32X's gap is not a dated note"),
                 ("a television drawn as an LCD", With("SG-1000", s => s with { Kind = ConsoleScreens.Kind.Lcd }), Systems, "SG-1000's LCD profile SG-1000 is no filter"),
-                ("a panel borrowed", With("GBC", s => s with { Profile = "Game Boy LCD" }), Systems, "GBC borrows Game Boy LCD's profile with no dated gap"),
+                ("a panel borrowed", With("GBC", s => s with { Profile = "Game Boy LCD", Gap = null }), Systems, "GBC borrows Game Boy LCD's profile with no dated gap"),
                 ("a handheld given a tube's row", With("GB", s => s with { Kind = ConsoleScreens.Kind.Television }), Systems, "GB's profile Game Boy LCD is no row of the CRT's"),
                 ("a host taken by a console attached to none", With("Master System", s => s with { Profile = "Genesis", HostsPicture = true }), Systems, "Master System takes its host's picture, and is attached to none"),
             };

@@ -29,8 +29,8 @@ namespace EmuSen.Serenity.Shaders
             new("PlayStation", Kind.Television, "PlayStation"),
             new("Master System", Kind.Television, "Master System"),
             new("SG-1000", Kind.Television, "SG-1000"),
-            new("GB", Kind.Lcd, "Game Boy LCD"),
-            new("GBC", Kind.Lcd, "Game Boy Color LCD"),
+            new("GB", Kind.Lcd, "Game Boy LCD") { Gap = "2026-10-20: a fit to measurements of the panel, not a model of it; to be recreated more accurately (EmuSen_CRT.md §31.7)" },
+            new("GBC", Kind.Lcd, "Game Boy Color LCD") { Gap = "2026-10-20: a fit to measurements of the panel, not a model of it; to be recreated more accurately (EmuSen_CRT.md §31.7)" },
         };
 
         // The consoles whose television is drawn on a row of their own, which every filter of a tube is offered for; an attachment is offered its host's.

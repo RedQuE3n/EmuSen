@@ -3636,3 +3636,13 @@ unchanged, so `SystemTableParity`, `SystemCodeParity` and `emusen-systems`' test
    picture of its colour codes, as the NES's, would model it (§31.3).
 5. **Endou's PAL SG-1000** runs at the Master System's PAL rate, 49.70 Hz; the TMS9929A ran at 50.16 Hz (§31.3). The
    filter's row follows the hardware; the core's rate is Endou's.
+
+*Decided 2026-10-20 by the tester:*
+
+- **Q3, TV overscan on the Master System and the SG-1000:** left as it is for now.
+- **Q2, the LCD filters:** they do not meet the rule. The Game Boy's and Game Boy Color's filters are to be recreated
+  more accurately, later and not as part of this step. Until then each console's row in `ConsoleScreens` carries a
+  dated gap saying so.
+- **Q4, the SG-1000's own composite:** to be modelled, as a later step on the to-do list.
+- **Q5, Endou's PAL SG-1000 rate:** to be corrected to the TMS9929A's 50.16 Hz in a small Endou step after stage 9.
+- **Q1, the 32X:** its gap stands until a document names its encoder.

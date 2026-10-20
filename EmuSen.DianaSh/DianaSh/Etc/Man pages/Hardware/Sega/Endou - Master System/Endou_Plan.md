@@ -277,7 +277,47 @@ Nothing of the Game Gear's own is built before the Master System's gate (§8, G4
 
 J1 to J3 (§7): the VDP's GG mode, the window and SMS mode's scaling; the I/O, the EEPROM boards and the open boot
 replacement; the Game Gear to players. **Gear-to-Gear is out** at first: it joins two machines, which the ABI has no
-form for; a later netplay-like design would decide it, and few games need it to be played [A].
+form for; a later netplay-like design would decide it, and few games need it to be played [A]. *Added 2026-10-20:* JL,
+the Game Gear's own LCD model (§2.5), before J3. *J1 built 2026-10-20:* `Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md`.
+
+### 2.5 The LCD model (JL), planned 2026-10-20
+
+*Set by the tester's rule of 2026-10-20:* a handheld needs an accurate model of its own LCD, its panel's response, its
+grid at the display's size and its colours, from documents and measurements, not a borrowed or fitted filter; the rule
+of `EmuSen_CRT.md` §31, every console an accurate display of its own, which `ConsoleScreens` and
+`ConsoleScreenRuleTests` enforce, and which the Game Boy's and Game Boy Color's filters, fits to measurements of their
+panels, were judged on 2026-10-20 not to meet: each carries a dated gap (`EmuSen_CRT.md` §31.7, Q2). The Game Gear is
+not given such a gap; it gets the model before it is offered, so JL comes before J3, and `ConsoleScreenRuleTests` will
+demand a row for `gg` once J3 offers it.
+
+**What it is.** A stage of research and design first, as the CRT's was (`EmuSen_CRT.md`): a page, `Jadeite_Lcd.md`,
+that gathers what is published about the panel (Citizen's UC-320, a 3.2-inch colour STN panel of 160 by 146 dots with a
+cold-cathode backlight [R SMS Power!'s "Game Gear LCD"]), its colour elements' order and shape, its response in time (the
+smear of a moving picture), its gamut, gamma and contrast under the backlight, and the published photographs and
+captures of units; then the model, written from that page alone, as a profile of the screen filters with a row in
+`ConsoleScreens`. What Endou draws stays the console's output to the panel (`Jadeite_Native.md` §3); the panel's
+behaviour is the model's.
+
+**Its gate.** Each property of the model traced to a document or a published measurement, or named as argued; the model
+against published photographs and captures of a Game Gear showing known pictures, GG mode and a Master System
+cartridge's mode (the photographs of SMS Power!'s forum topic 9562 among them), by a measure written down before the
+comparison; its row in `ConsoleScreens` with no gap; the fit audit at both sizes; its cost on the handheld within the
+frame; seeded faults.
+
+**Questions it raises** (for the tester before JL starts):
+
+1. **Measurements.** No console is run or captured for the project (§10 Q11). May published photographs and videos of
+   units be used as measurements, and which, since none was made for the purpose? Recommended: yes, each cited with its
+   source and date as a document is, and weighed as evidence of one unit. **[decision]**
+2. **Which panel.** Game Gears were made over years and are often repaired with replacement screens. Recommended: the
+   original panel only, as Sega shipped it, a replacement panel being another display. **[decision]**
+3. **One model for the three handhelds.** The Game Boy's and Game Boy Color's dated gaps ask for the same kind of model.
+   Recommended: JL builds the model as one component with a profile per panel, the Game Gear's first, and the two Game
+   Boys follow as a separate step on the same component, so the three are not three filters. **[decision]**
+4. **Tiers.** The CRT has Performance, Balanced and Accurate. Recommended: Accurate first, then cheaper tiers only if the
+   handheld's frame budget asks for them, as for the CRT. **[routine]**
+5. **A Master System cartridge's frame of 146 rows** (`Jadeite_Native.md` §8, Q1): the model draws the panel's 146 rows
+   in both modes, which settles it. **[routine]**
 
 ---
 
@@ -699,11 +739,13 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **12** | The Korean and multicart boards, each from a document; the table extended | Each board's synthetic program; each named game to its title against a reference | 2 |
 | **13** | Speed, only if §5.9's budget is missed: exact levers, measured on the bench, under the quota and on the handheld | **G6** | 0–2 |
 | **14** | The gates of §8, the goldens, the clone check as the tester decides it | §8 | 1 |
-| **J1** | The Game Gear's VDP: GG mode's CRAM and window, SMS mode's scaling, TMS9918 colours | GG test programs and pictures against the references | 2 |
+| **J1** | *Built 2026-10-20, `Jadeite_Native.md`.* The Game Gear's VDP: GG mode's CRAM and window, SMS mode's scaling, TMS9918 colours | GG test programs and pictures against the references | 2 |
 | **J2** | The Game Gear's I/O: Start, the region, stereo, the EEPROM boards; its open boot replacement | Synthetic programs; G9 for the Game Gear | 2 |
-| **J3** | The Game Gear to players: `gg.json`, shelf, scraper, codecs, settings, kit | G4 for the Game Gear | 1 |
+| **JL** | *Added 2026-10-20 (§2.5).* The Game Gear's own LCD model: `Jadeite_Lcd.md`'s research and design first, then the model as a profile of the screen filters, the panel's response in time, its grid at the display's size and its colours, from documents and published measurements | Each property traced to a source or named as argued; the model against published photographs and captures by a measure written beforehand; a `ConsoleScreens` row with no gap; the fit audit; the handheld's cost; seeded faults | 3 |
+| **J3** | The Game Gear to players: `gg.json`, shelf, scraper, codecs, settings, kit | G4 for the Game Gear, and `ConsoleScreenRuleTests` with `gg`'s row from JL | 1 |
 
-About 37 steps for the Master System and the SG-1000 and 5 for the Game Gear, or 120–150 hours (P2). The order is the
+About 37 steps for the Master System and the SG-1000 and 5 for the Game Gear, or 120–150 hours (P2); JL, added
+2026-10-20, about 3 more. The order is the
 order of dependence; stage 7 offers the Master System before the FM unit and the peripherals, stages 9 to 12 are
 independent of each other, and J1–J3 need only stage 7.
 

@@ -230,6 +230,54 @@ fn the_taller_displays_are_the_315_5246_s_and_the_first_chip_has_none() {
     assert!(!v.mode4(), "M1 on the 315-5124 is the invalid text mode");
 }
 
+/// The Game Gear's own mode with M2 and M1 set: a 224-line display, as the 315-5246's, with its taller name table and no
+/// end marker; the LCD's window moves to lines 40-183 (D-21).
+#[test]
+fn the_game_gear_s_own_mode_takes_the_224_line_display_and_its_window_stays_in_the_frame() {
+    let mut v = screen(Variant::GG);
+    v.gg_mode = true;
+    reg(&mut v, 1, 0x70);
+    for a in (0x3700..0x3800).step_by(2) {
+        v.vram[a] = 2;
+    }
+    for row in 0..8 {
+        v.vram[64 + row * 4 + 2] = 0xFF;
+    }
+    v.cram[8..10].copy_from_slice(&[0x5A, 0x0A]);
+    assert_eq!(v.active_lines(), 224);
+    v.run(at(262 + 225, 0));
+    assert!(v.irq() && v.read_v() == 0xE1, "the frame interrupt on line $E1, as a 224-line display's");
+    v.run(at(262 + 262, 0));
+    assert_eq!(v.height, 224);
+    assert_eq!(v.picture()[0], 0x0A5A, "row 0 of the taller layout at $3700, tile 2's colour 4, as a 12-bit word");
+    assert!(v.overflow, "the sprite at $3F00's Y of $D0 ends nothing, so the 63 after it fill line 1");
+    assert_eq!((crate::gg_window_top(192), crate::gg_window_top(224)), (24, 40));
+}
+
+/// The Game Gear in the TMS9918's modes shows CRAM's entries 16-31, as words in its own mode; its border is the backdrop's
+/// entry in either [R MacDonald §14].
+#[test]
+fn the_game_gear_shows_the_tms9918_s_codes_in_cram_16_to_31() {
+    let mut v = Vdp::new(Variant::GG, false);
+    v.gg_mode = true;
+    for r in [(0, 0x00), (1, 0x40), (2, 0x0E), (3, 0x80), (4, 0x00), (7, 0xF4)] {
+        reg(&mut v, r.0, r.1);
+    }
+    for row in 0..8 {
+        v.vram[row] = 0xF0;
+    }
+    v.vram[0x2000] = 0x6C;
+    v.cram[2 * 22..2 * 22 + 2].copy_from_slice(&[0x23, 0x01]);
+    v.cram[2 * 28..2 * 28 + 2].copy_from_slice(&[0x56, 0x04]);
+    v.cram[2 * 20..2 * 20 + 2].copy_from_slice(&[0x89, 0x07]);
+    v.run(at(262 + 262, 0));
+    assert_eq!((v.picture()[0], v.picture()[4]), (0x0123, 0x0456), "codes 6 and 12 as entries 22 and 28");
+    assert_eq!(v.border(), 0x0789, "the backdrop, code 4, as entry 20");
+    v.gg_mode = false;
+    v.cram[20] = 0x15;
+    assert_eq!(v.border(), 0x15, "a Master System cartridge's mode reads bytes");
+}
+
 #[test]
 fn a_state_round_trips_and_carries_on_alike() {
     let mut a = screen(Variant::SMS1);

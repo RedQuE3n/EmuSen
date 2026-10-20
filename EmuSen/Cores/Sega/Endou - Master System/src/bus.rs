@@ -175,6 +175,8 @@ impl Bus {
 
     fn port_out(&mut self, port: u8, v: u8) {
         match port >> 6 {
+            // The Game Gear's own ports $00-$06 in its own mode, stage J2's, are not $3E and $3F [R SMS Power!'s "I/O Port Map - Game Gear"].
+            0 if self.vdp.gg_mode && port <= 6 => {}
             0 if self.model.has_control_ports() => {
                 if port & 1 == 0 {
                     self.memory_control = v;

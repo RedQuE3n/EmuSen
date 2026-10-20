@@ -75,6 +75,13 @@ impl Variant {
     }
 }
 
-/// The Game Gear's LCD in GG mode: the central 160 by 144 of a 256 by 192 picture [R SMS Power!'s "GG VDP"]. Its use
-/// is the Game Gear's stage (Endou_Plan.md §7, J1).
+/// The Game Gear's LCD in GG mode: the central 160 by 144 of a 256 by 192 picture [R SMS Power!'s "GG VDP"; Sega's Game
+/// Gear VDP manual, lines 24 and 167 the LCD's top and bottom], as (x, y, width, height). A 224-line display's is lines
+/// 40-183, `gg_window_top`'s (Endou_Disputes.md D-21); Endou's `gg` module draws it.
 pub const GG_WINDOW: (u32, u32, u32, u32) = (48, 24, 160, 144);
+
+/// The display's line at the top of the Game Gear's LCD in GG mode: the window stays where it is in the frame, so a
+/// 224-line display, which starts 16 lines higher, shows it from line 40 (Endou_Disputes.md D-21).
+pub const fn gg_window_top(height: u32) -> u32 {
+    GG_WINDOW.1 + (height - 192) / 2
+}

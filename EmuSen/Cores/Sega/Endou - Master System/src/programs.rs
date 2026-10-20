@@ -32,7 +32,7 @@ fn frames(m: &mut Machine, n: usize) {
 
 #[test]
 fn every_program_assembles_into_its_image() {
-    for p in images::PROGRAMS {
+    for p in images::PROGRAMS.into_iter().chain(images::GG_PROGRAMS) {
         let rom = image(p);
         assert_eq!(rom.len(), p.banks * 0x4000, "{}", p.name);
         let media = Media::read(&rom).unwrap();

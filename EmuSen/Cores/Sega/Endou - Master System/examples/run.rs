@@ -1,7 +1,7 @@
 //! Runs an image for a number of frames and prints what it left: the frames' cost, the board, and the cartridge's RAM
 //! as text where a test program writes its report there, as ZEXALL's SMS port does (Endou_Native.md §9.8).
-//! `cargo run --release --example run -- <image> <frames> [--model mark3|sms1|sms2] [--until <text>]`: with `--until`,
-//! the run stops at the first second whose report holds the text.
+//! `cargo run --release --example run -- <image> <frames> [--model m] [--system sms|sg1000|gg] [--until <text>]`: with
+//! `--until`, the run stops at the first second whose report holds the text; `--system` names the routed system.
 
 use std::time::Instant;
 
@@ -21,7 +21,11 @@ fn main() {
     let settings = flag("--model").map(|m| vec![("model".to_owned(), m)]).unwrap_or_default();
     let until = flag("--until");
     let request = Create { image: &image, settings: Settings::from_pairs(settings), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
-    let mut m = Machine::create(&request).unwrap_or_else(|e| panic!("refused: {e}"));
+    let mut m = match flag("--system") {
+        Some(system) => Machine::create_as(&system, &request),
+        None => Machine::create(&request),
+    }
+    .unwrap_or_else(|e| panic!("refused: {e}"));
     let start = Instant::now();
     let mut run = 0;
     while run < frames {

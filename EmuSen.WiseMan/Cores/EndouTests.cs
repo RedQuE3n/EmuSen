@@ -48,8 +48,8 @@ namespace EmuSen.WiseMan.Cores
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
             Assert.Equal(("endou", "Endou", CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
-            Assert.Equal(new[] { (SmsSystems.MasterSystemId, false), (SmsSystems.Sg1000Id, false) }, library.Info.Systems.Select(s => (s.Id, s.Development)));
-            foreach (var system in library.Info.Systems)
+            Assert.Equal(new[] { (SmsSystems.MasterSystemId, false), (SmsSystems.Sg1000Id, false), ("gg", true) }, library.Info.Systems.Select(s => (s.Id, s.Development)));
+            foreach (var system in library.Info.Systems.Where(s => !s.Development))
             {
                 var pack = SystemPacks.For(system.Id)!;
                 Assert.Equal(pack.Entry.Extensions, system.Extensions);
@@ -57,9 +57,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { (1u, "bios_sms1.sms", 8192L, false, "accuracy"), (2u, "bios_sms2.sms", 8192L, false, "accuracy"), (3u, "bios_jsms.sms", 8192L, false, "accuracy") }, library.Info.Systems[0].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
             Assert.Equal(new[] { 2, 0, 1 }, library.Info.Systems[0].Firmware.Select(f => f.Md5.Count));
             Assert.Empty(library.Info.Systems[1].Firmware);
-            Assert.Equal((true, false), (library.Info.Systems[0].StartsEmpty, library.Info.Systems[1].StartsEmpty));
+            Assert.Equal(new[] { true, false, false }, library.Info.Systems.Select(s => s.StartsEmpty));
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
-            Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
+            Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7), ("gg.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
             Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms" }, library.Settings.Select(s => s.Key));
         }
 
@@ -184,6 +184,26 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(((byte)0, (byte)0, (byte)255), picture.At(8, y));
                 Assert.Equal(((byte)0, (byte)0, (byte)255), picture.At(255, y));
             }
+        }
+
+        // J1: the Game Gear in development - a player is not offered .gg, a developer is; its own mode draws the LCD's 160 by 144 window in 12-bit colours, CRAM written through the latch - see Jadeite_Native.md §2, §4.
+        [Fact]
+        public void The_game_gear_is_a_system_in_development_that_draws_its_lcd_window()
+        {
+            Assert.False(CoreFactory.IsSupported("game.gg"));
+            Assert.DoesNotContain("Game Gear", CoreCatalog.DiscoveredConsoles);
+            CoreDiscovery.UseDevelopment(true);
+            Assert.True(CoreFactory.IsSupported("game.gg"));
+            var library = CoreLibrary.Open(LibraryPath);
+            using var machine = new CoreMachine(library, SyntheticSmsRom.GgPicture(), "", Array.Empty<(uint, byte[])>(), "gg");
+            Assert.Equal(("gg", "ntsc", 160, 144, 160, 146), (machine.Info.System, machine.Info.Region, machine.Info.BaseWidth, machine.Info.BaseHeight, machine.Info.MaxWidth, machine.Info.MaxHeight));
+            for (int frame = 0; frame < 5; frame++) machine.Advance();
+            var frameInfo = machine.FrameInfo;
+            Assert.Equal((160, 144), (frameInfo.Width, frameInfo.Height));
+            var pixels = new byte[160 * 144 * 4];
+            Assert.Equal(pixels.Length, machine.CopyFrame(pixels));
+            for (int i = 0; i < 160 * 144; i += 97)
+                Assert.Equal(((byte)0, (byte)255, (byte)0), (pixels[4 * i], pixels[4 * i + 1], pixels[4 * i + 2]));
         }
 
         // The SG-1000's TMS9918A through the v1 adapter: Graphics I in TI's colours 6 and 12 - see Endou_Native.md §11.
@@ -358,6 +378,7 @@ namespace EmuSen.WiseMan.Cores
                 ("tms.sg", SyntheticSmsRom.TmsPicture()),
                 ("tone.sms", SyntheticSmsRom.Tone()),
                 ("tone.sg", SyntheticSmsRom.Tone(sg1000: true)),
+                ("picture.gg", SyntheticSmsRom.GgPicture()),
             })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };

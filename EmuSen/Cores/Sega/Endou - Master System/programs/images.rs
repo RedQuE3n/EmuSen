@@ -16,10 +16,12 @@ pub struct Program {
     /// Sega's header at $7FF0 with this region code and the size code for 32 KiB, its checksum the first 32 KiB's less the
     /// header (Endou_OpenBoot.md §1.6), so that a host takes the image as the Master System's and an export BIOS takes it.
     pub header: Option<u8>,
+    /// A Game Gear cartridge, written as `.gg` and run as the Game Gear (Jadeite_Native.md §4).
+    pub gg: bool,
 }
 
 const fn program(name: &'static str, source: &'static str, banks: usize) -> Program {
-    Program { name, source, banks, codemasters: false, patch: &[], header: Some(4) }
+    Program { name, source, banks, codemasters: false, patch: &[], header: Some(4), gg: false }
 }
 
 pub const PADS: Program = program("pads", include_str!("pads.s"), 2);
@@ -41,6 +43,14 @@ pub const FM: Program = program("fm", include_str!("fm.s"), 2);
 pub const OPLL: Program = Program { header: Some(3), ..program("opll", include_str!("opll.s"), 2) };
 
 pub const PROGRAMS: [&Program; 16] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH, &TMS, &VOICES, &VOICES_SG, &FM, &OPLL];
+
+/// The Game Gear's: two in its own mode, its header's region code 6 (the Game Gear's export), and a Master System
+/// cartridge's picture for its mode on the Game Gear.
+pub const GG: Program = Program { header: Some(6), gg: true, ..program("gg", include_str!("gg.s"), 2) };
+pub const GG_TMS: Program = Program { header: Some(6), gg: true, ..program("ggtms", include_str!("ggtms.s"), 2) };
+pub const GG_SMS: Program = program("ggsms", include_str!("ggsms.s"), 2);
+
+pub const GG_PROGRAMS: [&Program; 3] = [&GG, &GG_TMS, &GG_SMS];
 
 pub fn image(p: &Program) -> Vec<u8> {
     let mut rom = vec![0u8; p.banks * 0x4000];

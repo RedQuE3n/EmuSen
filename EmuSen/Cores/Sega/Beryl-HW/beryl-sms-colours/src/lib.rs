@@ -1,5 +1,6 @@
 //! The Master System VDP family's colours as RGBA (Beryl_SmsVdp.md §10): a `--BBGGRR` CRAM entry on the 315-5246 and on
-//! the 315-5124, whose first blue level differs (Endou_Disputes.md D-1), and the TMS9918A's sixteen colour codes (D-11).
+//! the 315-5124, whose first blue level differs (Endou_Disputes.md D-1), the TMS9918A's sixteen colour codes (D-11), and
+//! the Game Gear's 12-bit `----BBBBGGGGRRRR` entries (D-1, Jadeite_Native.md §2).
 //! The chips' outputs, which their console shows; the VDP crate composes indices into them and never colours.
 
 /// A two-bit component's level on the 315-5246, four equal steps (Endou_Disputes.md D-1).
@@ -23,6 +24,13 @@ const fn colours(blue: [u8; 4]) -> [[u8; 4]; 64] {
 /// and the first Master System).
 pub const SMS_COLOURS: [[u8; 4]; 64] = colours(LEVELS);
 pub const SMS1_COLOURS: [[u8; 4]; 64] = colours(BLUE_5124);
+
+/// A Game Gear's 12-bit entry as RGBA, each four-bit component at sixteen equal steps, 17 apart (D-1, argued).
+#[inline]
+pub fn gg_colour(word: u16) -> [u8; 4] {
+    let c = |shift: u16| ((word >> shift) & 0xF) as u8 * 17;
+    [c(0), c(4), c(8), 255]
+}
 
 /// The TMS9918A's 16 colours: TI's colour difference levels (TMS9918A data manual, Table 2-3) as RGB, each difference
 /// taken from 0.47, rounded to the nearest of 255 steps, held by a test (Endou_Disputes.md D-11).
@@ -77,6 +85,12 @@ mod tests {
             assert_eq!(TMS_COLOURS[code + 1], [q(r), q(g), q(b), 255], "code {}", code + 1);
         }
         assert_eq!(TMS_COLOURS[0], TMS_COLOURS[1], "transparent over no external video is black");
+    }
+
+    #[test]
+    fn a_game_gear_word_is_red_green_and_blue_from_its_low_bits_at_equal_steps() {
+        assert_eq!((gg_colour(0x0000), gg_colour(0x0FFF), gg_colour(0xF000)), ([0, 0, 0, 255], [255, 255, 255, 255], [0, 0, 0, 255]));
+        assert_eq!(gg_colour(0x0A51), [17, 85, 170, 255]);
     }
 
     #[test]

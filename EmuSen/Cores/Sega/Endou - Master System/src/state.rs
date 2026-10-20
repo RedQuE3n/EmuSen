@@ -49,6 +49,7 @@ fn console_byte(c: Console) -> u8 {
     match c {
         Console::Sms => 0,
         Console::Sg1000 => 1,
+        Console::Gg => 2,
     }
 }
 
@@ -220,6 +221,8 @@ mod tests {
         let at = lines.iter().position(|l| l.ends_with(" PsgTicks")).unwrap();
         assert_eq!(&lines[at..at + 11], ["101 8 u64 PsgTicks", "109 1 u8 OpllAddress", "110 64 u8[64] OpllRegisters", "174 72 u32[18] OpllPhase", "246 18 u8[18] OpllLevel", "264 18 u8[18] OpllStage", "282 72 u16[36] OpllOut", "354 4 u32 OpllCounter", "358 1 u8 OpllAm", "359 4 u32 OpllNoise", "363 8 u64 FmSamples"], "{layout}");
         assert_eq!(a.state_size(), 25_942 + 267, "the chip's 254 bytes, the sample count, port $F2 and the level");
+        let bytes = crate::model::ALL.map(|m| (m.id(), m.byte()));
+        assert_eq!(bytes, [("mark3", 0), ("sms1", 1), ("sms2", 2), ("sg1000", 3), ("gg", 4), ("mark3fm", 5), ("jsms", 6)], "the state's model byte");
         let (mut sa, mut sb) = (vec![0i16; 1 << 16], vec![0i16; 1 << 16]);
         for _ in 0..90 {
             a.advance();

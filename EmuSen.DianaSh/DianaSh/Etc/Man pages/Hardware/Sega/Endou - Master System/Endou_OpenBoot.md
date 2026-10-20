@@ -185,7 +185,8 @@ its own console's tiles from them (a Genesis's packed four-bit pixels, a Master 
 On its own screen, in capitals, the program's name, "ENDOU OPEN BOOT"; then "NO GAME IS IN THE CONSOLE.", or "THE
 GAME CANNOT START." and one of: "IT HAS NO SEGA HEADER. IT MAY BE A JAPANESE GAME."; "IT IS FOR A JAPANESE CONSOLE.";
 "IT IS NOT FOR THIS CONSOLE."; "ITS HEADER'S SIZE CODE IS NOT ONE SEGA LISTS."; "ITS CHECKSUM DOES NOT MATCH ITS
-DATA." After a refusal or with no game it waits halted with interrupts off; a Pause press returns to the wait. *The
+DATA." Below a refusal, since 2026-10-19 (stage 7), two lines say that the Mark III, which checks no header, plays the
+game: "IT PLAYS ON THE MARK III:" and "CHOOSE IT AS THE MODEL." After a refusal or with no game it waits halted with interrupts off; a Pause press returns to the wait. *The
 words as built, 2026-10-19; this page first gave them in a draft form.*
 
 ## 4. The machine around it
@@ -272,7 +273,8 @@ SHA-256 `625a92bd6aa6dd5ea523cd10a2eedef2947a0bba951d0a4cf6a0bb82f694f9f7`, the 
 directories; a 32 KiB check hands over in the 25th frame, a 128 KiB one in the 64th and a 256 KiB one in the 116th
 (1.9 s); 29 of 31 export games from the library reach the same pictures 300 and 600 frames after the hand-over as with no
 BIOS, the other two explained by the hand-over's phase and the Z80's R register; the four images of §1.6 that no range
-explains are refused in words, as §9's first question says.
+explains are refused in words, as §9's first question says. *At stage 7 every refusal gained two lines saying the Mark III
+plays the game (§3.3, decided 2026-10-19); the image is then SHA-256 `b494ae82…7e89` (`Endou_Native.md` §14.4).*
 
 ## 11. `firmwarecheck.py` with a control (stage 7, 2026-10-19)
 
@@ -291,27 +293,34 @@ output, which has nothing to do with any BIOS. **The explained runs**:
 `EmuSen.WiseMan/Reference/analysis/firmware/endou-explained.txt`, three lines of the replacement's own words.
 
 **Run** [M 2026-10-19]: `firmwarecheck.py open_boot.bin <image> --ignore-fill 16 --control <control> --explained
-endou-explained.txt`, with the default `--min-run 4` and `--max-equal 25`:
+endou-explained.txt`, with the default `--min-run 4` and `--max-equal 25`, first on the image of §10 (SHA-256
+`625a92bd…`) and then on stage 7's, whose refusals gain two lines (§3.3; SHA-256
+`b494ae82c210669e43ed619af56afc19a959518b1a3d6f6f6cf026973fef7e89`), the explained file's offsets moved with its
+tables. Both pass on all three images; stage 7's image:
 
 | Image | Equal at the same offset | Longest common run | Runs of 4+ | Control: equal, longest, runs of 4+ | Runs past the control's longest | Verdict |
 |---|---:|---:|---:|---|---:|---|
-| (USA, Europe) v1.3 | 188 of 2,673 (7.0%) | 12 | 3,894 | 2.9%, 24, 11,355 | 0 | **PASS** |
-| (Europe) v2.0 | 193 of 2,673 (7.2%) | 15 | 4,660 | 2.4%, 24, 13,164 | 0 | **PASS** |
-| (Japan) v2.1 | 117 of 2,673 (4.4%) | 12 | 1,038 | 2.3%, 6, 2,925 | 3, all explained | **PASS** |
+| (USA, Europe) v1.3 | 186 of 2,740 (6.8%) | 12 | 3,899 | 2.9%, 24, 11,355 | 0 | **PASS** |
+| (Europe) v2.0 | 186 of 2,740 (6.8%) | 15 | 4,666 | 2.4%, 24, 13,164 | 0 | **PASS** |
+| (Japan) v2.1 | 119 of 2,740 (4.3%) | 12 | 1,038 | 2.3%, 6, 2,925 | 3, all explained | **PASS** |
 
-**The three runs past the control's longest** (the Japanese image's, the control's longest there being 6):
+The image of §10 gave 7.0%, 7.2% and 4.4% equal, the same longest runs, 3,894, 4,660 and 1,038 runs of 4+, and the
+same three runs past the control's longest on the Japanese image, at offsets 343, 6779 and 6550.
+
+**The three runs past the control's longest** (the Japanese image's, the control's longest there being 6), at stage
+7's offsets:
 
 | Replacement offset | Length | What it is | Why it is forced or generic |
 |---:|---:|---|---|
-| 343 | 12 | `rom.s`'s `screen` table: the end of R1's pair, R2 to R6 at `$FF,$FF,$FF,$FF,$FB`, R7's value | Sega's documented power-on values (§1.4), written in the only form the VDP's control port takes, the value then `$80` with the register's number |
+| 354 | 12 | `rom.s`'s `screen` table: the end of R1's pair, R2 to R6 at `$FF,$FF,$FF,$FF,$FB`, R7's value | Sega's documented power-on values (§1.4), written in the only form the VDP's control port takes, the value then `$80` with the register's number |
 | 6779 | 11 | `ram.s`'s `power_on` table: R2 to R6 and R7's value, the same values | the same, at the hand-over (§3.2, step 7) |
 | 6550 | 7 | `LD HL,$C000` / `LD DE,$C001` / `LD BC,n` | the Z80's generic block fill, `LDIR` copying each byte one forward, over the work RAM from its documented base |
 
-**What the counts are worth.** Fill is left out of both images alike, which leaves 2,673 of the replacement's bytes
+**What the counts are worth.** Fill is left out of both images alike, which leaves 2,740 of the replacement's bytes
 and 6,435 of the control's, so the control's larger run counts owe something to its size. Per byte outside fill the
-replacement still shares fewer runs of 4+ with every image than the control does: 1.46, 1.74 and 0.39 against 1.76,
+replacement still shares fewer runs of 4+ with every image than the control does: 1.42, 1.70 and 0.38 against 1.76,
 2.05 and 0.45 [M, from the table]. The longest common runs that do not pass the control's longest, the 15 bytes at
-offset 379 among them, lie in the CRAM table's zeros and in the power-on tables: runs of zeros shorter than the fill
+offset 390 among them, lie in the CRAM table's zeros and in the power-on tables: runs of zeros shorter than the fill
 threshold, and the documented register values.
 
 The check is rerun whenever the image's SHA-256 changes.

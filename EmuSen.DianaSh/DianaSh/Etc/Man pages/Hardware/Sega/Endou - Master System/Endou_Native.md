@@ -1230,7 +1230,7 @@ as one of another model is. The CRC is taken once, when the machine is made. Ver
 |---|---|
 | Sources | `src/boot/rom.s` (the ROM part, `Endou_OpenBoot.md` §3.1), `src/boot/ram.s` (the RAM program, §3.2) |
 | Image | 8,192 bytes: the ROM program's 800 bytes from `$0000`, `beryl-font`'s 64 tiles at `$1000` (bitplane 0), the RAM program's 669 bytes at `$1800`, `$FF` between |
-| SHA-256 | `625a92bd6aa6dd5ea523cd10a2eedef2947a0bba951d0a4cf6a0bb82f694f9f7`, FNV-1a `C16C9C33CA123EA4` pinned by `the_open_boot_program_is_8_kib_and_its_bytes_are_pinned` |
+| SHA-256 | `625a92bd6aa6dd5ea523cd10a2eedef2947a0bba951d0a4cf6a0bb82f694f9f7`, FNV-1a `C16C9C33CA123EA4` pinned by `the_open_boot_program_is_8_kib_and_its_bytes_are_pinned`; since stage 7, with the refusal's two more lines, `b494ae82…7e89` (§14.4) |
 | Rebuilt byte for byte [M] | the same SHA-256 from the debug and release builds in the crate's target directory and from two clean builds in target directories of their own |
 | Its pace | every VDP write at least 16 cycles after the one before with the display off and 29 with it on, Sega's manual's rates, so that it would not depend on D-8's slots |
 | The sum | 16-byte groups, sixteen bytes unrolled, about 23 cycles a byte |
@@ -1437,3 +1437,224 @@ read in place, for §1.6 of the design page and §13.8.
    prescribes for compiled code, with a control and the explained runs (`Endou_OpenBoot.md` §11).
 5. **D-8's referee**: nvc is being set up apart from Endou's stages; D-8 is not worked on at stage 7.
 6. **The go for stage 7.**
+
+---
+
+## 14. Stage 7: the Master System and the SG-1000 to players (2026-10-19)
+
+### 14.1 In one paragraph
+
+Endou is offered to players. Its row of `RustCores.props` and of `rust-cores.yml` no longer carries the development
+mark and neither system of its info does, so a player's build discovers the core, a publish carries `libendou.so` and
+its sidecar, and the library shows two shelves, "Master System (Endou)" and "SG-1000 (Endou)", each with its tabs in
+Mistress's windows (decided 2026-10-19). The systems table names the work RAM as the cheat space and gives both a
+cover aspect; `emusen-systems` gains an `sms` module with the Pro Action Replay and the Game Genie, its C# twin
+`SmsCheatFormats`, and the Game Genie's cipher, the Game Boy's, now has one owner on each side. The core takes the Game
+Genie's patches on the cartridge's reads (`ROM_PATCHES`), lists the MD5s of the first Master System's two released
+8 KiB BIOS images from No-Intro's DAT, keeps nine more battery boards from SMS Power!'s "Memory Backup" tag, and its open
+boot program now says below every refusal that the Mark III plays the game. `firmwarecheck.py` passes against the
+tester's three BIOS images with a control (`Endou_OpenBoot.md` §11). The kit in corpus form passes on 33 of the library's
+images.
+
+### 14.2 The decisions of 2026-10-19, as built
+
+| Decision | Built |
+|---|---|
+| The documented export check stays; the four images it refuses play on the Mark III, and the words say so | every refusal of `Endou_OpenBoot.md` §3.3 ends "IT PLAYS ON THE MARK III:" / "CHOOSE IT AS THE MODEL." (§14.4) |
+| A public BIOS checksum list may be fetched, its checksum table alone read | No-Intro's DAT, its `[BIOS]` rows (`Endou_References.md` §6f); file 1 lists two MD5s (§14.4) |
+| BIOS images with a built-in game stay refused | unchanged: a BIOS file of another size than 8 KiB is refused with words; recorded for a later stage |
+| `firmwarecheck.py` measured with a control | PASS on all three images, on stage 6's image and on this stage's (`Endou_OpenBoot.md` §11) |
+| D-8 set aside while nvc is set up | not worked on |
+| The go for stage 7 | this section |
+
+### 14.3 Offered
+
+- **The mark.** `RustCores.props` and `rust-cores.yml` drop `InDevelopment`/`development`, and `v1.rs`'s systems say
+  `development: false`. A publish's `cores.manifest` names `libendou.so` (§5.3's rule), and its sidecar is unmarked.
+- **The shelves and tabs** follow from the packs, as Nephrite's did (`EmuSen_CoreAPI.md` §27.4): `CoreCatalog` and
+  Crystal's Rust catalog each make one row per console, "SG-1000 (Endou)" (1983) and "Master System (Endou)" (1985),
+  between the N64 and the Genesis in release order. Every console tab strip gains the two tabs: Controller Bindings,
+  Active Cheats, Graphics Settings (the console's Model, Region and BIOS settings from core info's schema) and Shaders.
+- **A defect the gate found: `endou` named the SG-1000.** The registry gave an engine's name to the first of its
+  consoles in release order, which for Endou is the SG-1000, so `core endou` or a launch naming the engine reached the
+  wrong console. Both catalogs now give the name to the console of the first system the engine's info offers
+  (`FirstOfferedConsole`, `first_offered_console`); Nephrite's stays the Genesis's. Pinned by
+  `EndouTests.A_player_is_offered_the_master_system_and_the_sg_1000_on_two_shelves` and the registration golden.
+- **The pad's drawing.** LunaP has no drawing of the Master System's pad; both consoles are drawn on the NES's, a flat
+  oblong pad with a cross and two buttons, the console's Pause and Reset buttons in Start's and Select's places
+  (`ControllerDiagrams.BorrowsLayout`). The SG-1000 has no Reset button, so the drawing's Select has no control there;
+  the diagram test allows a borrowed drawing one such region and no more. A drawing of its own is a question (§14.14).
+- **Cover aspect.** 1.4 for both, height over width as the field is defined [A]: the Master System's North American
+  boxes are portrait, and one retailer sells a single sleeve for them and the Genesis's (`Endou_References.md` §6f);
+  the SG-1000 had no North American box, so its value is the Master System's. Neither is measured. The Genesis's 0.7,
+  argued at Nephrite's stage 1, reads as width over height for a portrait box; a question (§14.14).
+- **Scraper and ES-DE.** Unchanged and checked: ScreenScraper's 2 and 109, ES-DE's `mastersystem` and `sg-1000`
+  (§3), now carried by the shelves (`EsdeSystem`, `System`).
+- **Routing.** `.sms` and `.sg` are each one system's, so `route` takes them without a recogniser, and a 1.15 host names
+  the system beside the image (§2.3). The library has no Master System image named `.bin` (310 `.sms` and 54 `.sg`
+  games, the six firmware files apart), so `.bin` stays the Genesis's and the PlayStation's.
+
+### 14.4 Firmware and the refusal's words
+
+**The checksums.** File 1, the Master System's BIOS, lists the MD5s of No-Intro's `[BIOS] Sega Master System (USA,
+Europe) (v1.3)` and `(Europe) (v2.0)`, the two released 8 KiB images of a console named "Sega Master System"
+(`BIOS_SMS1_MD5`); their SHA-1s are in `Endou_References.md` §6f, the entry having no SHA-1 member. The store now finds
+a player's file by its content whatever it is called (`EmuSen_Firmware.md` §7). File 2, the Master System II's, lists
+none: the DAT's Master System II images, those MacDonald names as the Alex Kidd console's (`smstech` §4), carry a
+built-in game and are 128 or 256 KiB, which Endou does not map yet. The Japanese v2.1 is the Japanese Master System's,
+kept for stage 9's file 3. The kit's C23 finds the same four checksums in core info and in `firmware_for`.
+
+**The refusal's words.** Below each of the five refusals the open boot program writes, on rows 18 and 19, "IT PLAYS ON
+THE MARK III:" and "CHOOSE IT AS THE MODEL." (`rom.s`'s `mark3_text`); "NO GAME IS IN THE CONSOLE." is unchanged. The
+image is now SHA-256 `b494ae82c210669e43ed619af56afc19a959518b1a3d6f6f6cf026973fef7e89`, FNV-1a `E82DC9D19E881194`,
+pinned as before; `firmwarecheck.py` was rerun on it and passes (`Endou_OpenBoot.md` §11).
+
+**A finding on the way.** On an export console the open program's sum reads the cartridge through the Game Genie, so a
+patch inside the summed range makes the check fail and the game is refused, as a BIOS's sum through the device would
+[A]; a patched game plays on the Mark III. `EndouPlayersTests.Both_cheat_formats_reach_the_machine` uses a Japanese
+header for that reason.
+
+### 14.5 The cheat formats
+
+`emusen-systems`' `sms::cheats` and the C# `SmsCheatFormats`, held equal by `CheatCodecParityTests`, shared by `sms`
+and `sg1000` (`PAIRS`, `SystemPacks.ManagedCodecs`); the formats, their sources and their measurements are
+`EmuSen_Cheats.md` §11. In brief: **`sms.par`**, the auto-detect codec, a RAM poke into `RAM` (the work RAM's offset,
+the address from `$C000` folded through its 8 KiB mirror); **`sms.gg`**, the explicit codec, a ROM patch with its
+reference byte as the compare, decoded by `genie_cipher`, now the one owner of the cipher the Game Boy's codec also
+uses. Unlike the Game Boy's, both refuse a code holding anything but hex digits, dashes and spaces: the database's
+`00D5-BD??`, a value the player picks, otherwise reads as a six-digit Game Genie code, as 122 of its entries did before
+the rule. The core takes the patches with `ROM_PATCHES` within machine info's `patches`, `$0000`–`$BFFF`: a patch replaces
+the byte the cartridge gives at its address where the reference matches or none is given (`bus.rs`'s `patched`).
+
+### 14.6 The battery table
+
+Decided at stage 2 (§9.15): SMS Power!'s tag page "Memory Backup" names eight Master System games (`Endou_References.md`
+§6f). Each release No-Intro's DAT lists for them, betas, demos and the Sega Ages re-releases left out, is a row of
+`board.rs`'s table, 8 KiB of battery RAM on Sega's mapper [A for the size, from §9.10's survey]: the eight images of
+stage 2 and nine more, Doki Doki Penguin Land, Phantasy Star (USA, Europe) and its two Japanese releases, Ys (Japan),
+Miracle Warriors, Haja no Fuuin and Monopoly with its Rev A. Two of them are in the library, Miracle Warriors and
+Monopoly, which before this stage kept their RAM only while they ran. *Desert Speedtrap*, which enables
+cartridge RAM (§9.10), is not tagged, and keeps none. `.srm` round trip: `EndouPlayersTests.A_battery_board_s_srm_round_trips`
+on Phantasy Star from the library, read in place, the file under `Saves/Master System`.
+
+### 14.7 The kit in corpus form
+
+`kit/sms-sample.txt`: 33 names of the library's images, chosen by what each exercises (boards, sizes, a copier's
+header, the battery boards, Japanese headers, the export check's refusals, six SG-1000 cartridges), as Nephrite's
+`kit/genesis-sample.txt`:
+
+```
+emusen-core-conform --core libendou.so --images kit/sms-sample.txt --from ~/Documents/Roms/mastersystem
+```
+
+### 14.8 Two windows reworked for the two tabs
+
+With nine console tabs the Controller Bindings window's strip reached under its player selector, which stood in the
+strip's empty right end, at both sizes of the fit audit, and the Active Cheats window's strip wrapped to a second row,
+leaving its list 75 pixels at 1280 × 800, under the two rows the audit requires.
+
+- **Controller Bindings**: each console's page has its own player selector and Use Player 1's, in a row below the
+  drawing, so neither the drawing nor the tab strip gives them room. A row above the drawing, or a second row of tabs,
+  was tried first: either took 44 to 48 pixels from the drawing, whose labels then fell under the audit's readable size
+  (11.41 design pixels of capitals against 11.64). On a pad, Down past the drawing's last row reaches the selector and
+  Up from it returns to the region last chosen. A selector inside a page raises the routed `SelectionChanged` the tabs
+  listen for, so the tabs' handler acts only on their own (`e.Source`); without that check the selector refilled
+  itself in Avalonia's selection update, which refused it (`EmuSen_Input.md` §8.4).
+- **Active Cheats**: the tab strip's bottom margin of 12 is gone, which gives the list back its two rows.
+
+The recordings were re-recorded: 156 changed and 28 new (Controller Bindings' two new tabs in its seven cases, at both sizes).
+Read with ids and positions taken out, the differences are the two tabs in every console tab strip, the selector's
+move below the drawing (out of each recorded view), the rows a wrapped strip pushes below a scroller's view
+(Graphics Settings' and Active Cheats' last rows) and the pad's paths through them; `EmuSen_InterfaceSpec.md` §6.3.9.
+
+### 14.9 The gate (`Endou_Plan.md` §7, stage 7), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| The kit on the offered systems, corpus form | **33 of 33** images pass at 600 frames, four at a time, 19.5 s, with the core's cases (C22 "sms started empty", C23 "4 checksum(s) over 2 entries of core info and 2 of firmware_for"); `EndouTests.The_kit_passes_on_synthetic_cartridges` as before |
+| `sms` and `sg1000` on two shelves | `EndouTests.A_player_is_offered_the_master_system_and_the_sg_1000_on_two_shelves`: "SG-1000 (Endou)" (`sg-1000`, `sg1000`) and "Master System (Endou)" (`mastersystem`, `sms`) in both `CoreCatalog` and Mistress's `RuntimeCatalog`, a file of each extension on its own; the tester's library, read in place: **310 `.sms` to the Master System's shelf and 54 `.sg` to the SG-1000's**, routed and shelved alike by both catalogs (`EndouPlayersTests`, opt-in by `EMUSEN_ENDOU_LIBRARY`) |
+| The parity classes both ways | `CrystalParityTests` (the listings `systems`, `shelves`, `engines`, `cores`; `route` with three new files, `Game.sms`, `Game.sg`, `Headerless.sms`; the settings of both consoles), `SystemTableParity`, `SystemCodeParity`, `CheatCodecParity` (the two new codecs on every generated code): all pass |
+| A library game per system started headless through the session Mistress uses | `EmulatorSession.LoadRom`: *Sonic the Hedgehog* 300 frames on the Master System II with the open boot program, *Flicky* 120 frames on the SG-1000, each drawn (9,519 and 49,152 lit pixels of 256 × 192) |
+| `.srm` round trips | Phantasy Star, 8 KiB written, saved and read back at the next load |
+| States with rewind | the kit's C7, C8 and C12 on 33 images; `EndouPlayersTests.A_rewind_lands_on_the_state_it_held_and_runs_on_alike` through `RewindBuffer` at Mistress's rate |
+| The cheats decode | `SmsCheatFormatsTests` and `EndouPlayersTests.Both_cheat_formats_reach_the_machine` (a poke in RAM, a patch with and without its reference, through the session's registry); the database, `EmuSen_Cheats.md` §11 |
+| Mistress's tests | the blast radius, **1,679 of 1,679** in the classes of §14.9a with the library and the database given, the window-fit audit's 518 among them after the recordings of §14.8 |
+| The sidecar and manifest over a publish | §14.9b |
+| Seeded faults, at least 6 | 12, every one caught, two only after a test was added (§14.10) |
+| The crates | `endou` **78 of 78** and `tests/alloc.rs`; `emusen-systems` 31 of 31; `emusen-crystal`, `emusen-cheats` pass |
+
+**14.9a The WiseMan classes run.** `EndouTests`, `EndouPlayersTests`, `SmsCheatFormatsTests`, `SystemTableParity`,
+`SystemCodeParity`, `CheatCodecParity`, `CoreRegistration*`, `FirmwareOverview`, `FirmwarePageTests`,
+`LibraryScreenTests`, `CrystalParityTests`, `ManagedCrystalCatalogTests`, `RuntimeCatalogTests`, `ConsoleBindingsTests`,
+`ThemedSwitchesTests`, `InputSettingsWindowTests`, `ActiveCheatsWindowTests`, `PlayerBindingsWindowTests`,
+`MultiplayerTests`, `ControllerBindingsDiagramTests`, `PadNavigation*`, `CoreDiscovery*`, `SystemPack*`,
+`ConsoleStartTests`, `ConsoleContextTests`, `RomLibraryTests`, `GameBoyCheat*`, `Mercury*`, `CoreHostParity`,
+`NephriteTests`, `GenesisSettingsTests`, `CheatDatabase*`, `GalaxiaParity`, `CoreFactoryCheatWiring`, `GenesisCheatFormats`,
+`PsxCheatFormats` and `WindowFitAuditTests`. The tests that
+pinned the console order, the tab strips and the startup list now count the two consoles; the registration golden is
+re-recorded with Endou's lines alone (the two rows, their shelves, `.sg` and `.sms`, the two cheat folders, `endou` and
+`sg-1000` in the registry).
+
+**14.9b The publish.** `dotnet publish` of Mistress, linux-x64, Release, self-contained, into a scratch folder: its
+`lib/EmuSen/cores.manifest` names seven libraries and `sha256sum -c` gives seven `OK`, `libendou.so` among them, exit 0;
+the sidecar's SHA-256 is the library's (`330e86c4…`) and it carries no development mark [M]. Nothing was installed.
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, on the desktop (Ryzen 7 7700X).
+
+### 14.10 Seeded faults (2026-10-19)
+
+Each made in the source, the tests named run, the file restored and compared byte for byte (`seed.py` and `seedcs.py`
+in the step's scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| R1 | the Game Genie's reference ignored | `a_game_genie_patches_the_cartridge_s_reads_and_heeds_its_reference` |
+| R2 | the systems still marked in development | `the_descriptors_are_the_consoles` |
+| R3 | the Mark III's lines left off every refusal | the refusal test, the empty console's and the image's pin |
+| R4 | Monopoly's battery row dropped | **nothing at first**: no test named the table's rows. `every_release_of_a_memory_backup_game_has_its_battery_board` was added, and catches it |
+| R5 | a Pro Action Replay address below `$C000` taken | `a_pro_action_replay_code_is_a_work_ram_poke_from_c000` |
+| R6 | the Game Genie's top digit not inverted (`genie_cipher`) | the `sms` cipher test; no Game Boy test of the Rust side catches it, and `CheatCodecParity`, which compares it with the C# twin, was not run for it [A: it would differ] |
+| R7 | the work RAM's mirror not folded | the Pro Action Replay test |
+| C1 | the C# Pro Action Replay's mirror not folded | `CheatCodecParityTests`, two cases |
+| C2 | the Master System drawn on the modern pad | **nothing at first**: the diagram test skipped a borrowed drawing's regions. It now allows one region with no control and no more, and catches it |
+| C3 | the engine's name given to its first console in release order | the shelves test, the registration golden (two cases) and three `CrystalParityTests` |
+| C4 | `sms.json`'s cheat space unnamed | four: the codec's space in `CheatCodecParity`, `SmsCheatFormatsTests`, `EndouTests`, `EndouPlayersTests` |
+| C5 | the tabs' handler acting on a page selector's change | four: `PlayerBindingsWindowTests` (two), `ControllerBindingsDiagramTests` (two) |
+
+### 14.11 The cost
+
+The desktop's mean a frame, release, the median of five differences between runs of 3,600 and 600 frames over 3,000,
+the base (`dbc9a66e`) and this stage alternately [M]: *Sonic the Hedgehog* 0.218 → 0.223 ms, *OutRun* 0.233 → 0.239,
+*Space Harrier* 0.204 → 0.204. The Game Genie's check on every cartridge read costs the 0.005–0.006: with the check left
+out and the patch list kept, 0.002. A cold, out-of-line form of the check cost more (0.010), and was not kept. P1 holds.
+
+### 14.12 Open
+
+- The Master System's and the SG-1000's own pad drawings, in LunaP (§14.3).
+- 1,181 of the database's Master System Game Genie codes carry a reference, which a `.cht` entry has nowhere to keep, so
+  they are skipped on import, as the Game Boy's are (`EmuSen_Cheats.md` §8, §11); typed, they work.
+- The cover aspects are argued, not measured.
+- BIOS images with a built-in game; the Master System II's checksums wait on them.
+- D-8, the analogue stage, and the earlier stages' open items stand.
+
+### 14.13 What was read for this stage
+
+No emulator source, no firmware image or firmware listing, no SMS_MiSTer RTL. The tester's BIOS images were read only by
+`firmwarecheck.py`, which printed counts and offsets. Read: `Endou_Plan.md`, `Endou_Native.md`, `Endou_OpenBoot.md`,
+`Endou_References.md`, `Endou_Disputes.md`; `EmuSen_CoreAPI.md` §6.32 and §27; `EmuSen_Firmware.md` §0 and §7;
+`EmuSen_Cheats.md`; `firmwarecheck.py`; Nephrite's and Diamond's offering commits; No-Intro's DAT's `[BIOS]` rows and the
+eight games' rows; SMS Power!'s "Memory Backup" tag page, "Pro Action Replay" and "Game Genie"; the libretro cheat
+database's two folders; ZEXDOC's README, for the control; the library's file names and lengths, and the CRC-32 of its
+`.sms` images, the firmware files left out by name.
+
+### 14.14 Questions before stage 8
+
+1. **The player selector's place** (§14.8). Each console page now carries it below the drawing; the alternative is a
+   tab strip that scrolls in LunaP, which would keep it beside the tabs. Recommended: keep it below the drawing.
+2. **The Master System's pad drawing** (§14.3): a LunaP drawing of the Master System's pad (and the SG-1000's
+   joystick), in place of the NES's. Recommended: yes, in LunaP, as its own piece of work.
+3. **The cover aspects** (§14.3): measure a Master System box and correct the Genesis's 0.7, which reads as width over
+   height. Recommended: both at 1.4 until measured, and the Genesis's corrected in a Nephrite step.
+4. **A Game Genie patch and the export check** (§14.4): the open program refuses a game whose summed bytes a patch
+   changes. Recommended: keep it, as the console would; the Mark III plays a patched game.
+5. **The go for stage 8** (the debugger), as the plan has it.

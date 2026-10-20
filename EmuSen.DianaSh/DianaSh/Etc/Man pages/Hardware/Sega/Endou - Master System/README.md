@@ -27,11 +27,15 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   (§13, 2026-10-19): the open boot program and the BIOS's slot, the player's own BIOS as an opt-in per console with a
   stand-in boot ROM, the empty console, the checksum's range measured on the library, test programs and games against
   the start with no BIOS, the state's version 6, the seeded faults, D-8's GHDL step, the search for a recording, and the
-  questions before stage 7.
+  questions before stage 7. Stage 7 (§14, 2026-10-19): the Master System and the SG-1000 offered to players on two
+  shelves, the BIOS checksums from No-Intro's DAT, the refusal's words for the Mark III, the cheat formats, the battery
+  table completed, the kit in corpus form, two windows reworked for the two tabs, the gate, the seeded faults and the
+  questions before stage 8.
 - [`Endou_OpenBoot.md`](Endou_OpenBoot.md) — the open boot program's design, written 2026-10-19 before its code (stage
   6): what Sega's manual and the public documents say the BIOS does that a game can see, what they leave unsaid and
   what Endou chooses, the checksum's range measured on the library's export headers, the player's own BIOS as an
-  opt-in per model, the steps with their oracles, the cost's words and the questions for the tester.
+  opt-in per model, the steps with their oracles, the cost's words and the questions for the tester; §11, stage 7's
+  `firmwarecheck.py` with a control, PASS against the tester's three images.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, the corrections to what stage 0 recalled, and GHDL
   (stage 4).

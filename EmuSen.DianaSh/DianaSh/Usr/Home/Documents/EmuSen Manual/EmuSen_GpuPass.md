@@ -721,6 +721,11 @@ if taken; stage 8 one. About 8 to 12 steps in all [A].
 | **Q5** | D1 is a correctness defect found while measuring. Fix it in stage 2 with L3, or at once as a small step of its own? | In stage 2, shown first by its failing test; it shares L3's lines, and its effect (the NES drawn plain for the rest of a game, from its start or a change of tier, until the filter is chosen again) is visible but harms nothing saved |
 | **Q6** | The handheld's measurements were on the charger. Should stage 8 also measure on battery? | Yes, once, for the three tiers at the panel's size: `EmuSen_Serenity.md` §8.4 found the two differ |
 
+*Decided 2026-10-20 by the tester: all six as recommended.* The tester takes stage 1's three runs on the television,
+and stage 2 proceeds beside them; the frontends move to Avalonia's Vulkan mode only if stage 4 meets Q2's threshold;
+L5 is not built in this pass; L4 is the MarsRT pass's; D1 is fixed in stage 2, its failing test first; stage 8
+measures once on battery. The pass starts when B10 closes.
+
 ---
 
 ## 10. The predictions, gathered

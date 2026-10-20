@@ -1,7 +1,7 @@
 //! The YM2413 (OPLL), the FM unit of the Japanese Master System and of the Mark III's FM Sound Unit (Endou_Opll.md).
 //! A chip that is not a processor: the caller owns the clock and runs it a sample at a time, 72 of its clocks each;
-//! writes are its two ports; its output is the melody and rhythm sums a sample, in the DAC's nine-bit units. Each rule
-//! cites the page's section, documented by Yamaha's application manual or measured on the black box (Endou_Opll.md §3).
+//! writes are its two ports; its output is the melody and rhythm sums a sample, in the DAC's units. Each rule
+//! cites the page's section, documented by Yamaha's application manual or measured on the referee (Endou_Opll.md §3).
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
@@ -19,7 +19,7 @@ pub const REGISTERS: usize = 0x40;
 /// The envelope's stages (Endou_Opll.md §3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    /// At key-on, the level is taken to silence at rate 48 before the attack starts [M §3.5].
+    /// At key-on, the level is taken towards silence at rate 12, with the key scale, until it reaches `QUIET` [M §3.5].
     Damp,
     Attack,
     Decay,
@@ -40,7 +40,7 @@ impl Stage {
 /// The silent level: the envelope's seven bits all set [D (III-3): 48 dB in steps of 0.375 dB].
 pub const SILENT: u8 = 127;
 
-/// From this envelope level a slot sounds nothing [M §3.5].
+/// The level at which a damp ends and a falling envelope is cut to silence on its next update [M §3.5].
 pub const QUIET: u8 = 124;
 
 /// An attenuation past the log-sine's range, which `operator` gives as 0.
@@ -110,6 +110,14 @@ const KSL: [u8; 16] = [0, 24, 32, 37, 40, 43, 45, 47, 48, 50, 51, 52, 53, 54, 55
 /// Which of eight envelope ticks step, by the rate's low two bits: 4, 5, 6 or 7 of eight [M §3.5].
 const STEPS: [[u8; 8]; 4] = [[0, 1, 0, 1, 0, 1, 0, 1], [0, 1, 0, 1, 1, 1, 0, 1], [0, 1, 1, 1, 0, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 1]];
 
+/// The groups of four samples rates 48-59 take their extra steps in, by the rate's low two bits (Endou_Opll.md §3.5).
+const GROUPS: [[u8; 4]; 4] = [[0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 1, 0], [1, 1, 1, 0]];
+
+/// How many samples ahead of the carriers a slot reads the sample count: a modulator one (Endou_Opll.md §3.5).
+fn lead(slot: usize) -> u32 {
+    (slot & 1 == 0) as u32
+}
+
 /// The rhythm instruments' channels: the bass drum on channel 7, the high hat and snare on 8, the tom-tom and top cymbal
 /// on 9 [D Table III-9], numbered from 0 here.
 const BD: usize = 6;
@@ -125,11 +133,13 @@ pub struct Opll {
     pub slots: [Slot; 18],
     /// Samples since reset, which the envelope's ticks and the LFOs count.
     pub counter: u32,
-    /// The tremolo's triangle, 0-104, and its direction [M §3.6].
+    /// The tremolo's triangle, 0-105, and its direction [M §3.6].
     pub am: u8,
     pub am_down: bool,
     /// The rhythm's noise register, 23 bits [A §3.8].
     pub noise: u32,
+    /// The rhythm instruments' patches, `RHYTHM_INSTRUMENTS` but where the referee's fitter tries others.
+    pub rhythm_patches: [[u8; 8]; 3],
 }
 
 impl Default for Opll {
@@ -141,7 +151,7 @@ impl Default for Opll {
 impl Opll {
     /// The chip after its IC pin's reset: every register 0 [D (III-1)], every slot silent.
     pub fn new() -> Opll {
-        Opll { address: 0, regs: [0; REGISTERS], slots: [Slot::OFF; 18], counter: 0, am: 0, am_down: false, noise: 1 }
+        Opll { address: 0, regs: [0; REGISTERS], slots: [Slot::OFF; 18], counter: 0, am: 0, am_down: false, noise: 1, rhythm_patches: RHYTHM_INSTRUMENTS }
     }
 
     /// A write to port 0, the address [D Table II-1].
@@ -174,7 +184,7 @@ impl Opll {
     fn patch(&self, slot: usize) -> &[u8; 8] {
         let ch = slot / 2;
         if ch >= BD && self.rhythm() {
-            return &RHYTHM_INSTRUMENTS[ch - BD];
+            return &self.rhythm_patches[ch - BD];
         }
         match self.regs[0x30 + ch] >> 4 {
             0 => self.regs[..8].try_into().expect("eight registers"),
@@ -232,9 +242,10 @@ impl Opll {
 
     /// The vibrato's step this sample, in halves of an F-number unit: eight steps of 1,024 samples, 0, half, full, half,
     /// 0, then the same below [M §3.6].
-    fn vibrato(&self, fnum: u32) -> i32 {
+    fn vibrato(&self, fnum: u32, slot: usize) -> i32 {
         let top = (fnum >> 6) as i32;
-        match (self.counter >> 10) & 7 {
+        // The modulator reads the count two samples on, the carrier one (Endou_Opll.md §3.6).
+        match (self.counter.wrapping_add(lead(slot)) >> 10) & 7 {
             0 | 4 => 0,
             1 | 3 => top >> 1,
             2 => top,
@@ -243,32 +254,56 @@ impl Opll {
         }
     }
 
-    /// A slot's phase step a sample, in its 19-bit cycle: ((2F + vibrato) × 2^block × 2·MUL) / 4 [M §3.2].
-    fn increment(&self, ch: usize, op: &Operator) -> u32 {
+    /// A slot's phase step a sample, in its 19-bit cycle: ((2F + vibrato) × 2^block / 2, floored, × 2·MUL) / 2 (Endou_Opll.md §3.2).
+    fn increment(&self, slot: usize, op: &Operator) -> u32 {
+        let ch = slot / 2;
         let fnum = self.fnum(ch);
-        let f2 = 2 * fnum as i32 + if op.vib { self.vibrato(fnum) } else { 0 };
-        (((f2 as u32) << self.block(ch)) * MUL2[op.mul as usize]) >> 2
+        let f2 = 2 * fnum as i32 + if op.vib { self.vibrato(fnum, slot) } else { 0 };
+        ((((f2 as u32) << self.block(ch)) >> 1) * MUL2[op.mul as usize]) >> 1
     }
 
-    /// A rate's step this sample, by the envelope's tick counter [M §3.5]: rates 4-51 step 4-7 times in eight ticks of
-    /// 2^(13 - rate / 4) samples, 52-55 the same each sample, 56-59 one more each sample, 60-63 two each sample.
-    fn step(&self, rate: u32) -> u8 {
+    /// The envelope's tick count: the sample counter three ahead for a modulator, two for a carrier (Endou_Opll.md §3.5).
+    fn tick(&self, slot: usize) -> u32 {
+        self.counter.wrapping_add(1 + lead(slot))
+    }
+
+    /// A decay, sustain or release step this sample (Endou_Opll.md §3.5): rates 4-47 step 4-7 times in eight ticks of
+    /// 2^(13 - rate / 4) samples, on a tick's fourth sample; 48-59 step on some samples of each four, by `GROUPS`.
+    fn step(&self, rate: u32, slot: usize) -> u8 {
         if rate < 4 {
             return 0;
         }
-        let (high, low) = (rate >> 2, (rate & 3) as usize);
+        let (high, low, t) = (rate >> 2, (rate & 3) as usize, self.tick(slot));
+        let group = GROUPS[low][((t >> 2) & 3) as usize];
         match high {
-            1..=12 => {
-                let shift = 13 - high;
-                if self.counter & ((1 << shift) - 1) != 0 {
-                    0
-                } else {
-                    STEPS[low][((self.counter >> shift) & 7) as usize]
-                }
+            1..=11 => {
+                let mask = (1 << (13 - high)) - 1;
+                if t & mask != 3 & mask { 0 } else { STEPS[low][((t >> (13 - high)) & 7) as usize] }
             }
-            13 => STEPS[low][(self.counter & 7) as usize],
-            14 => 1 + STEPS[low][(self.counter & 7) as usize],
+            12 => match t & 3 {
+                3 => 1,
+                1 => group,
+                _ => 0,
+            },
+            13 => if t & 1 == 1 { 1 } else { group },
+            14 => 1 + group,
             _ => 2,
+        }
+    }
+
+    /// An attack's weight this sample, each step taking (level × weight) / 16 + 1 (Endou_Opll.md §3.5): rates 4-47
+    /// weigh 1 on each of a tick's first four samples, 48-59 every sample 1, 2 or 4, doubled in some groups of four.
+    fn attack_weight(&self, rate: u32, slot: usize) -> u32 {
+        if rate < 4 {
+            return 0;
+        }
+        let (high, low, t) = (rate >> 2, (rate & 3) as usize, self.tick(slot));
+        match high {
+            1..=11 => {
+                let shift = 13 - high;
+                if t & ((1 << shift) - 1) >= 4 { 0 } else { STEPS[low][((t >> shift) & 7) as usize] as u32 }
+            }
+            _ => (1 + GROUPS[low][((t >> 2) & 3) as usize] as u32) << (high - 12).min(2),
         }
     }
 
@@ -282,10 +317,9 @@ impl Opll {
     }
 
     /// One sample: every slot's output, then its envelope and its phase moved on (Endou_Opll.md §3.7). Returns the
-    /// melody's and the rhythm's sums, each channel's carrier in nine bits; the rhythm instruments sound twice [D (III-4)].
+    /// melody's and the rhythm's sums, each channel's carrier through the DAC; the rhythm instruments sound twice [D (III-4)].
     pub fn sample(&mut self) -> (i32, i32) {
         let rhythm = self.rhythm();
-        let am = (self.am >> 3) as u32;
         let (mut melody, mut drums) = (0i32, 0i32);
         let mut ops = [Operator::of(&[0; 8], 0); 18];
         for ch in 0..9 {
@@ -293,22 +327,22 @@ impl Opll {
             let patch = *self.patch(m);
             let (mo, co) = (Operator::of(&patch, 0), Operator::of(&patch, 1));
             (ops[m], ops[c]) = (mo, co);
-            let att_m = self.attenuation(m, &patch, &mo, am);
-            let att_c = self.attenuation(c, &patch, &co, am);
+            let att_m = self.attenuation(m, &patch, &mo, self.tremolo(m));
+            let att_c = self.attenuation(c, &patch, &co, self.tremolo(c));
             if rhythm && ch >= BD {
                 drums += 2 * self.rhythm_channel(ch, &patch, att_m, att_c, &mo, &co);
             } else {
                 let fb = patch[3] & 7;
                 let s = &self.slots[m];
-                let feedback = if fb == 0 { 0 } else { (s.out[0] as i32 + s.out[1] as i32) >> (9 - fb) };
+                let feedback = if fb == 0 { 0 } else { (half(s.out[0]) + half(s.out[1])) >> (8 - fb) };
                 let mod_out = operator((s.phase >> 9) as i32 + feedback, att_m, mo.half);
                 // The carrier takes the modulator's output of the sample before [M §3.7].
                 let sm = &mut self.slots[m];
                 let used = sm.out[0];
                 sm.out = [mod_out, sm.out[0]];
-                let car = operator((self.slots[c].phase >> 9) as i32 + used as i32, att_c, co.half);
+                let car = operator((self.slots[c].phase >> 9) as i32 + (half(used) << 1), att_c, co.half);
                 self.slots[c].out = [car, self.slots[c].out[0]];
-                melody += car as i32 >> 3;
+                melody += dac(car);
             }
         }
         self.envelopes(&ops);
@@ -321,7 +355,7 @@ impl Opll {
     /// silence; past `QUIET` an attenuation no operator sounds at.
     fn attenuation(&self, slot: usize, patch: &[u8; 8], op: &Operator, am: u32) -> u32 {
         let level = self.slots[slot].level;
-        if level >= QUIET {
+        if level == SILENT {
             return MUTE;
         }
         let a = level as u32 + self.volume(slot, patch) + self.ksl(slot / 2, op.ksl) + if op.am { am } else { 0 };
@@ -337,27 +371,27 @@ impl Opll {
             BD => {
                 let fb = patch[3] & 7;
                 let s = &self.slots[m];
-                let feedback = if fb == 0 { 0 } else { (s.out[0] as i32 + s.out[1] as i32) >> (9 - fb) };
+                let feedback = if fb == 0 { 0 } else { (half(s.out[0]) + half(s.out[1])) >> (8 - fb) };
                 let mod_out = operator((s.phase >> 9) as i32 + feedback, att_m, mo.half);
                 let used = self.slots[m].out[0];
                 self.slots[m].out = [mod_out, used];
-                let car = operator((self.slots[c].phase >> 9) as i32 + used as i32, att_c, co.half);
-                car as i32 >> 3
+                let car = operator((self.slots[c].phase >> 9) as i32 + (half(used) << 1), att_c, co.half);
+                dac(car)
             }
             HH_SD => {
                 let noise = self.noise & 1 != 0;
                 let hh = self.cymbal_bit();
                 let hh_phase = if hh { 0x200 | if noise { 0xD0 } else { 0x34 } } else if noise { 0x34 } else { 0xD0 };
-                let hh_out = operator(hh_phase, att_m, mo.half) as i32 >> 3;
+                let hh_out = dac(operator(hh_phase, att_m, mo.half));
                 let sd_bit = (self.slots[m].phase >> 17) & 1 != 0;
                 let sd_phase = if sd_bit { 0x200 } else { 0x100 } ^ if noise { 0x100 } else { 0 };
-                let sd_out = operator(sd_phase as i32, att_c, co.half) as i32 >> 3;
+                let sd_out = dac(operator(sd_phase as i32, att_c, co.half));
                 hh_out + sd_out
             }
             _ => {
-                let tom = operator((self.slots[m].phase >> 9) as i32, att_m, mo.half) as i32 >> 3;
+                let tom = dac(operator((self.slots[m].phase >> 9) as i32, att_m, mo.half));
                 let tc_phase = if self.cymbal_bit() { 0x300 } else { 0x100 };
-                let tc = operator(tc_phase, att_c, co.half) as i32 >> 3;
+                let tc = dac(operator(tc_phase, att_c, co.half));
                 tom + tc
             }
         }
@@ -373,73 +407,97 @@ impl Opll {
         a | b
     }
 
-    /// Every slot's envelope: a key's edge starts its damp or its release, then its stage steps at its rate [M §3.5].
+    /// Every slot's envelope, each carrier before its modulator, whose phase restarts with it (Endou_Opll.md §3.5).
     fn envelopes(&mut self, ops: &[Operator; 18]) {
-        for slot in 0..18 {
-            let ch = slot / 2;
-            let op = ops[slot];
-            let keyed = self.keyed(slot);
-            let s = self.slots[slot];
-            if keyed && !s.key {
-                self.slots[slot].stage = Stage::Damp;
-            } else if !keyed && s.key {
-                self.slots[slot].stage = Stage::Release;
-            }
-            self.slots[slot].key = keyed;
-            let sus = self.regs[0x20 + ch] & 0x20 != 0;
-            let s = self.slots[slot];
-            let r = match s.stage {
-                Stage::Damp => 12,
-                Stage::Attack => op.ar,
-                Stage::Decay => op.dr,
-                Stage::Sustain => if op.sustained { 0 } else { op.rr },
-                Stage::Release if !s.key => if sus { 5 } else if op.sustained { op.rr } else { 7 },
-                Stage::Release => op.rr,
-            };
-            let rate = if s.stage == Stage::Damp { 48 } else { self.rate(ch, &op, r) };
-            let inc = self.step(rate);
-            let mut level = s.level;
-            let mut stage = s.stage;
-            match stage {
-                Stage::Damp => {
-                    level = level.saturating_add(inc).min(SILENT);
-                    if level == SILENT {
-                        // The attack begins with the phase restarted [M §3.5].
-                        stage = Stage::Attack;
-                        self.slots[slot].phase = 0;
-                    }
-                }
-                Stage::Attack => {
-                    if rate >= 60 {
-                        level = 0;
-                    } else if inc > 0 && level > 0 {
-                        let d = ((level as u32 * inc as u32) >> 2) + 1;
-                        level = level.saturating_sub(d as u8);
-                    }
-                    if level == 0 {
-                        stage = Stage::Decay;
-                    }
-                }
-                Stage::Decay => {
-                    if level >= op.sl << 3 {
-                        stage = Stage::Sustain;
-                    } else {
-                        level = level.saturating_add(inc).min(SILENT);
-                    }
-                }
-                Stage::Sustain | Stage::Release => level = level.saturating_add(inc).min(SILENT),
-            }
-            self.slots[slot].level = level;
-            self.slots[slot].stage = stage;
+        for ch in 0..9 {
+            let (m, c) = (2 * ch, 2 * ch + 1);
+            let carrier = self.envelope(c, &ops[c], None);
+            let follows = !(self.rhythm() && ch > BD);
+            self.envelope(m, &ops[m], follows.then_some(carrier));
         }
         self.counter = self.counter.wrapping_add(1);
     }
 
+    /// A slot's envelope: a key's edge starts its damp or its release, then its stage steps at its rate [M §3.5].
+    /// Returns whether its damp ended on this update; a modulator passed its carrier's restarts its phase on that alone.
+    fn envelope(&mut self, slot: usize, op: &Operator, carrier: Option<bool>) -> bool {
+        let ch = slot / 2;
+        let keyed = self.keyed(slot);
+        let s = self.slots[slot];
+        if keyed && !s.key {
+            self.slots[slot].stage = Stage::Damp;
+        } else if !keyed && s.key {
+            self.slots[slot].stage = Stage::Release;
+        }
+        self.slots[slot].key = keyed;
+        let sus = self.regs[0x20 + ch] & 0x20 != 0;
+        let s = Slot { key: s.key, ..self.slots[slot] };
+        let r = match s.stage {
+            Stage::Damp => 12,
+            Stage::Attack => op.ar,
+            Stage::Decay => op.dr,
+            Stage::Sustain => if op.sustained { 0 } else { op.rr },
+            // A modulator holds its level from its key-off (Endou_Opll.md §3.5).
+            Stage::Release if !keyed && carrier.is_some() => 0,
+            Stage::Release if !keyed => if sus { 5 } else if op.sustained { op.rr } else { 7 },
+            Stage::Release => op.rr,
+        };
+        let rate = self.rate(ch, op, r);
+        // Only a percussive tone's rate-7 release steps on the key-off's own update (Endou_Opll.md §3.5).
+        let inc = if s.key && !keyed && (op.sustained || sus) { 0 } else { self.step(rate, slot) };
+        let mut level = s.level;
+        let mut stage = s.stage;
+        let mut ended = false;
+        if carrier == Some(true) {
+            self.slots[slot].phase = 0;
+        }
+        match stage {
+            Stage::Damp => {
+                if level >= QUIET {
+                    // The attack begins; a carrier restarts its phase, and at rate 60 or more the level is 0 at once [M §3.5].
+                    stage = Stage::Attack;
+                    ended = true;
+                    if carrier.is_none() {
+                        self.slots[slot].phase = 0;
+                    }
+                    if self.rate(ch, op, op.ar) >= 60 {
+                        level = 0;
+                    }
+                } else {
+                    level = level.saturating_add(inc).min(SILENT);
+                }
+            }
+            Stage::Attack => {
+                let weight = self.attack_weight(rate, slot);
+                if rate >= 60 {
+                    level = 0;
+                } else if weight > 0 && level > 0 {
+                    level -= (((level as u32 * weight) >> 4) + 1) as u8;
+                }
+                if level == 0 {
+                    stage = Stage::Decay;
+                }
+            }
+            Stage::Decay => {
+                if level >= op.sl << 3 {
+                    stage = Stage::Sustain;
+                } else {
+                    level = level.saturating_add(inc).min(SILENT);
+                }
+            }
+            // A falling envelope at `QUIET` is cut to silence on its next update (Endou_Opll.md §3.5).
+            Stage::Sustain | Stage::Release if level >= QUIET => level = SILENT,
+            Stage::Sustain | Stage::Release => level = level.saturating_add(inc).min(SILENT),
+        }
+        self.slots[slot].level = level;
+        self.slots[slot].stage = stage;
+        ended
+    }
+
     fn phases(&mut self, ops: &[Operator; 18]) {
         for slot in 0..18 {
-            let ch = slot / 2;
             let op = ops[slot];
-            let inc = self.increment(ch, &op);
+            let inc = self.increment(slot, &op);
             let s = &mut self.slots[slot];
             s.phase = (s.phase + inc) & 0x7FFFF;
         }
@@ -448,22 +506,23 @@ impl Opll {
         self.noise = (self.noise >> 1) | bit << 22;
     }
 
-    /// The tremolo: its triangle steps every 64 samples between 0 and 104, each end held twice [M §3.6].
+    /// The tremolo: its triangle steps every 64 samples between 0 and 105, with no hold at either end [M §3.6].
     fn lfo(&mut self) {
-        if self.counter & 63 != 0 {
-            return;
+        if self.counter & 63 == 0 {
+            (self.am, self.am_down) = Opll::tremolo_step(self.am, self.am_down);
         }
-        if self.am_down {
-            if self.am == 0 {
-                self.am_down = false;
-            } else {
-                self.am -= 1;
-            }
-        } else if self.am == 104 {
-            self.am_down = true;
-        } else {
-            self.am += 1;
-        }
+    }
+
+    /// The tremolo's next step: 0 up to 105 and back, a step at each end.
+    fn tremolo_step(am: u8, down: bool) -> (u8, bool) {
+        if down { (am - 1, am - 1 != 0) } else { (am + 1, am + 1 == 105) }
+    }
+
+    /// The tremolo's attenuation for a carrier, and for a modulator, which reads it a sample on (Endou_Opll.md §3.6).
+    fn tremolo(&self, slot: usize) -> u32 {
+        let ahead = lead(slot) == 1 && self.counter.wrapping_add(1) & 63 == 0;
+        let am = if ahead { Opll::tremolo_step(self.am, self.am_down).0 } else { self.am };
+        (am >> 3) as u32
     }
 
     pub fn write_state(&self, w: &mut StateWriter) {
@@ -495,7 +554,7 @@ impl Opll {
         let counter = r.u32()?;
         let am = r.u8()?;
         let noise = r.u32()?;
-        if level.iter().any(|&l| l > SILENT) || phase.iter().any(|&p| p > 0x7FFFF) || am & 0x7F > 104 || stage.iter().any(|&s| Stage::of_byte(s & 0x7F).is_none()) {
+        if level.iter().any(|&l| l > SILENT) || phase.iter().any(|&p| p > 0x7FFFF) || am & 0x7F > 105 || stage.iter().any(|&s| Stage::of_byte(s & 0x7F).is_none()) {
             return Ok(false);
         }
         self.address = address;
@@ -511,24 +570,42 @@ impl Opll {
     }
 }
 
+/// An output as it modulates: its lowest bit dropped, so that feedback adds two halves and a carrier takes an even
+/// offset [M Endou_Opll.md §3.3].
+fn half(out: i16) -> i32 {
+    out as i32 >> 1
+}
+
+/// What one slot's turn adds to the two output pins over a sample, less what an idle turn adds (2): the magnitude's top
+/// eight bits plus one with the sign, on one pin, and the sign alone on the other, so that a quiet negative output is
+/// −4 and a quiet positive one 0 [M Endou_Opll.md §3.3, D-19].
+pub fn dac(out: i16) -> i32 {
+    let m = ((if out < 0 { !out } else { out }) >> 4) as i32 + 1;
+    if out < 0 { -m - 1 - 2 } else { m + 1 - 2 }
+}
+
 /// An operator's output for a ten-bit phase (wrapped) and an attenuation in 0.375 dB: the log-sine of the phase's
 /// quarter, the attenuation added in the same log units, and the exponent back to a 12-bit magnitude with its sign
 /// [D "OPLx decapsulated"; Endou_Opll.md §3.3]. The half-wave sine is silent on its negative half [D (III-1-3)].
 pub fn operator(phase: i32, attenuation: u32, half: bool) -> i16 {
+    if attenuation >= MUTE {
+        return 0;
+    }
     let p = (phase & 0x3FF) as usize;
     let negative = p & 0x200 != 0;
     if negative && half {
-        return 0;
+        return !0;
     }
     let q = if p & 0x100 != 0 { !p & 0xFF } else { p & 0xFF };
     let log = LOGSIN[q] as u32 + (attenuation << 4);
     if log >= 0x1000 {
-        return 0;
+        return if negative { !0 } else { 0 };
     }
     let m = (((EXP[(!log & 0xFF) as usize] as u32 + 1024) << 1) >> (log >> 8)) as i16;
-    if negative { -m } else { m }
+    if negative { !m } else { m }
 }
 
 #[cfg(test)]
 mod tests;
+
 

@@ -1,48 +1,43 @@
 /* The bench for the YM2413 referee (Endou_Opll.md section 7): Nuked-OPLL built as a black box and driven through its
    header alone. Reads voices from stdin, each "voice NAME SAMPLES" then "w SAMPLE ADDRESS DATA" lines and "end", as
    Endou's examples/opllref.rs prints them; writes "NAME" then one line a sample: the sum of the chip's two outputs over
-   the sample's calls. The calls a sample are found first from a sine of known frequency and printed as "calls N". */
+   the sample's calls, from the call at cycle counter 5 (OPLL_FIRST_CYCLE). The calls a sample are printed as "calls N". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "opll.h"
 
 static opll_t chip;
+static int data_call = 6, first_cycle = 5;
 
-static void writes(int address, int data, int calls) {
+/* A write inside a sample's own calls: the address four calls (16 master clocks) before the data, the data at call 6
+   (OPLL_DATA_CALL), where every channel takes it at the next sample (Endou_Opll.md section 7). The voices space their
+   writes two samples apart. */
+static long sample_with_write(int address, int data, int calls) {
     int32_t buf[2];
-    OPLL_Write(&chip, 0, (uint8_t)address);
-    for (int i = 0; i < calls / 6 + 1; i++) OPLL_Clock(&chip, buf);
-    OPLL_Write(&chip, 1, (uint8_t)data);
+    long sum = 0;
+    for (int i = 0; i < calls; i++) {
+        if (i == data_call - 4 && address >= 0) OPLL_Write(&chip, 0, (uint8_t)address);
+        if (i == data_call && address >= 0) OPLL_Write(&chip, 1, (uint8_t)data);
+        OPLL_Clock(&chip, buf);
+        sum += buf[0] + buf[1];
+    }
+    return sum;
 }
 
-/* Calls of OPLL_Clock a sample: a carrier sine at F-number 288, block 4, is 437.0 Hz at the chip's 49,716 samples a
-   second, so its period in calls over its period in samples is the answer, rounded. */
+/* Calls of OPLL_Clock a sample: the header's cycle counter runs from 0 to its last value and back, one a call. The
+   bench then starts each sample's calls at counter 5, so that every channel's turn falls in the sample it belongs to. */
 static int calibrate(void) {
-    const int setup[][2] = {{0, 0x21}, {1, 0x21}, {2, 0x3F}, {3, 0}, {4, 0xF0}, {5, 0xF0}, {6, 0x0F}, {7, 0x0F}, {0x30, 0}, {0x10, 0x20}, {0x20, 0x19}};
     int32_t buf[2];
+    uint32_t top = 0;
     OPLL_Reset(&chip, opll_type_ym2413);
-    for (unsigned i = 0; i < sizeof setup / sizeof setup[0]; i++) {
-        OPLL_Write(&chip, 0, (uint8_t)setup[i][0]);
-        for (int k = 0; k < 200; k++) OPLL_Clock(&chip, buf);
-        OPLL_Write(&chip, 1, (uint8_t)setup[i][1]);
-        for (int k = 0; k < 2000; k++) OPLL_Clock(&chip, buf);
-    }
-    long first = -1, last = -1, crossings = 0, prev = 0;
-    for (long n = 0; n < 4000000; n++) {
-        OPLL_Clock(&chip, buf);
-        long v = buf[0] + buf[1];
-        if (v == 0) continue;
-        if (prev < 0 && v > 0) {
-            if (first < 0) first = n; else { last = n; crossings++; }
-        }
-        prev = v;
-    }
-    double per_cycle = (double)(last - first) / crossings;
-    return (int)(per_cycle / (49715.9 / 437.0) + 0.5);
+    for (int i = 0; i < 1000; i++) { OPLL_Clock(&chip, buf); if (chip.cycles > top) top = chip.cycles; }
+    return (int)top + 1;
 }
 
 int main(void) {
+    if (getenv("OPLL_DATA_CALL")) data_call = atoi(getenv("OPLL_DATA_CALL"));
+    if (getenv("OPLL_FIRST_CYCLE")) first_cycle = atoi(getenv("OPLL_FIRST_CYCLE"));
     int calls = calibrate();
     printf("calls %d\n", calls);
     char line[256], name[128];
@@ -59,14 +54,13 @@ int main(void) {
         }
         if (strncmp(line, "end", 3) != 0) continue;
         OPLL_Reset(&chip, opll_type_ym2413);
+        { int32_t buf[2]; while (chip.cycles != (uint32_t)((first_cycle + calls - 1) % calls)) OPLL_Clock(&chip, buf); }
         printf("%s\n", name);
         size_t k = 0;
-        int32_t buf[2];
         for (long s = 0; s < samples; s++) {
-            while (k < nw && w[k][0] <= s) { writes((int)w[k][1], (int)w[k][2], calls); k++; }
-            long sum = 0;
-            for (int i = 0; i < calls; i++) { OPLL_Clock(&chip, buf); sum += buf[0] + buf[1]; }
-            printf("%ld\n", sum);
+            int a = -1, d = 0;
+            if (k < nw && w[k][0] <= s) { a = (int)w[k][1]; d = (int)w[k][2]; k++; }
+            printf("%ld\n", sample_with_write(a, d, calls));
         }
     }
     free(w);

@@ -23,9 +23,9 @@ pub const PSG_DIVIDER: u64 = 16;
 /// fill half of a 16-bit sample (Endou_Native.md §12.3).
 pub const GAIN: (i32, i32) = (1, 2);
 
-/// The output's units for the YM2413's nine-bit sum: a full sine on one channel is 0.59 of a full-volume PSG tone's
+/// The output's units for the YM2413's DAC sum: a full sine on one channel, 255, is 0.59 of a full-volume PSG tone's
 /// fundamental, near the median of the references' (Endou_Native.md §16.6).
-pub const FM_GAIN: i32 = 3;
+pub const FM_GAIN: i32 = 6;
 
 /// The FM unit: the chip, the samples it has made, and port $F2's two bits as written (Endou_Native.md §16.3).
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -113,48 +113,42 @@ impl Cartridge {
 
     /// A write anywhere in the address space: the board takes what its registers and RAM decode, and ignores the rest.
     /// Sega's mapper sees $FFFC-$FFFF whatever else is there, since the console's RAM keeps a copy [R `smstech` §2].
-    pub fn write(&mut self, a: u16, v: u8) {
-        match self.board.mapper {
-            Mapper::Plain => {}
-            Mapper::SgRam => {
-                if (0x8000..0xC000).contains(&a) && !self.ram.is_empty() {
-                    let n = self.ram.len();
-                    self.ram[(a as usize - 0x8000) % n] = v;
-                    self.dirty = true;
-                }
-            }
+    /// The offset in the cartridge's RAM the byte landed at, for a debugger's watches; none where it landed in no RAM.
+    pub fn write(&mut self, a: u16, v: u8) -> Option<usize> {
+        let at = match self.board.mapper {
+            Mapper::Plain => None,
+            Mapper::SgRam if (0x8000..0xC000).contains(&a) && !self.ram.is_empty() => Some((a as usize - 0x8000) % self.ram.len()),
+            Mapper::SgRam => None,
             Mapper::Sega => match a {
-                0xFFFC => self.regs[0] = v,
+                0xFFFC => {
+                    self.regs[0] = v;
+                    None
+                }
                 0xFFFD..=0xFFFF => {
                     self.regs[(a - 0xFFFC) as usize] = v;
                     let s = self.shift();
                     self.slots = [1, 2, 3].map(|i| self.bank(self.regs[i].wrapping_add(s) as usize));
+                    None
                 }
-                0x8000..0xC000 if self.sega_ram_in_slot_2() => {
-                    let at = self.ram_bank() + (a as usize & 0x3FFF) % self.ram_half();
-                    self.ram[at] = v;
-                    self.dirty = true;
-                }
-                0xC000.. if self.ram_over_work_ram() => {
-                    let at = (a as usize & 0x3FFF) % self.ram_half();
-                    self.ram[at] = v;
-                    self.dirty = true;
-                }
-                _ => {}
+                0x8000..0xC000 if self.sega_ram_in_slot_2() => Some(self.ram_bank() + (a as usize & 0x3FFF) % self.ram_half()),
+                0xC000.. if self.ram_over_work_ram() => Some((a as usize & 0x3FFF) % self.ram_half()),
+                _ => None,
             },
             Mapper::Codemasters => match a {
-                0xA000..0xC000 if self.codemasters_ram() => {
-                    let n = self.ram.len();
-                    self.ram[(a as usize & 0x1FFF) % n] = v;
-                    self.dirty = true;
-                }
+                0xA000..0xC000 if self.codemasters_ram() => Some((a as usize & 0x1FFF) % self.ram.len()),
                 0..0xC000 => {
                     self.regs[1 + a as usize / SLOT] = v;
                     self.remap();
+                    None
                 }
-                _ => {}
+                _ => None,
             },
+        };
+        if let Some(at) = at {
+            self.ram[at] = v;
+            self.dirty = true;
         }
+        at
     }
 }
 

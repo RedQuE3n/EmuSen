@@ -65,6 +65,24 @@ pub struct Registers {
     pub ei_pending: bool,
 }
 
+/// The registers a debugger lists, by name and width in bits, in the order `Registers::values` gives them: Nephrite's
+/// Z80 and Endou's read the one list (Beryl_Z80.md §9).
+pub const REGISTERS: [(&str, u32); 18] = [
+    ("AF", 16), ("BC", 16), ("DE", 16), ("HL", 16), ("AF'", 16), ("BC'", 16), ("DE'", 16), ("HL'", 16),
+    ("IX", 16), ("IY", 16), ("SP", 16), ("PC", 16), ("I", 8), ("R", 8), ("WZ", 16), ("IM", 2), ("IFF1", 1), ("IFF2", 1),
+];
+
+impl Registers {
+    /// The values of `REGISTERS`, in its order.
+    pub fn values(&self) -> [i64; REGISTERS.len()] {
+        [
+            self.af, self.bc, self.de, self.hl, self.af_, self.bc_, self.de_, self.hl_, self.ix, self.iy, self.sp, self.pc,
+            self.i as u16, self.r as u16, self.wz, self.im as u16, self.iff1 as u16, self.iff2 as u16,
+        ]
+        .map(i64::from)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Instruction,
@@ -120,5 +138,14 @@ mod tests {
         assert_eq!((z.regs.pc, z.regs.i, z.regs.r, z.regs.iff1, z.regs.iff2, z.regs.im), (0, 0, 0, false, false, 0));
         assert_eq!((z.regs.af, z.regs.sp, z.regs.hl_, z.regs.iy), (0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF));
         assert!(!z.halted);
+    }
+
+    #[test]
+    fn each_register_listed_reads_its_own_field() {
+        let r = Registers { af: 1, bc: 2, de: 3, hl: 4, af_: 5, bc_: 6, de_: 7, hl_: 8, ix: 9, iy: 10, sp: 11, pc: 12, i: 13, r: 14, wz: 15, im: 2, iff1: true, iff2: false, ..Registers::default() };
+        let named: Vec<(&str, i64)> = REGISTERS.iter().map(|r| r.0).zip(r.values()).collect();
+        assert_eq!(named[..15], [("AF", 1), ("BC", 2), ("DE", 3), ("HL", 4), ("AF'", 5), ("BC'", 6), ("DE'", 7), ("HL'", 8), ("IX", 9), ("IY", 10), ("SP", 11), ("PC", 12), ("I", 13), ("R", 14), ("WZ", 15)]);
+        assert_eq!(named[15..], [("IM", 2), ("IFF1", 1), ("IFF2", 0)]);
+        assert!(REGISTERS.iter().zip(r.values()).all(|(&(_, bits), v)| v < 1 << bits));
     }
 }

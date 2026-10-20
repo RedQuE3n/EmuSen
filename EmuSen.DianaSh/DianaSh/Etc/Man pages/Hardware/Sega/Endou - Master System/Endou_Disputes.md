@@ -86,7 +86,9 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   Master System) the same but for blue's first level, `#68`. Both are **read from a document, not measured**: the equal
   steps are the page's values for the 315-5246, the boost its statement for the 315-5124. What a console puts out
   stays unmeasured, and no console is run for the project.
-- Pinned by: `machine::SMS_COLOURS` and `SMS1_COLOURS` through `machine::tests::the_315_5124_boosts_only_its_first_blue_level`,
+- Pinned by: ~~`machine::SMS_COLOURS` and `SMS1_COLOURS` through `machine::tests::the_315_5124_boosts_only_its_first_blue_level`~~
+  `beryl-sms-colours`' `SMS_COLOURS` and `SMS1_COLOURS` through its `the_315_5124_boosts_only_its_first_blue_level`, the
+  tables and the test moved there unchanged at stage 8 (2026-10-19, `Endou_Native.md` §15.5),
   `programs::a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour` (a digest for each chip) and
   `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`.
 - Implemented in: the stage 3 commit, as the equal steps; the stage 4 commit, the 315-5124's blue.

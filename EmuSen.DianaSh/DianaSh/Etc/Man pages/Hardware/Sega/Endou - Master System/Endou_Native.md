@@ -27,7 +27,7 @@ The documents, test programs and referees the plan named were fetched and pinned
 | Systems | `sms` (`.sms`), `sg1000` (`.sg`), both `development: true` | `Endou_Plan.md` §4.1 |
 | Controllers | `sms.pad`: Up, Down, Left, Right (bits 0–3, port `$DC`'s order), 1 → B, 2 → A, Pause → Start, Reset → Select (bits 4–7); `sg1000.pad` the same without Reset; both on ports 0 and 1 | §4.2 [C] |
 | Spaces | `sms`: RAM 8 KiB (cheats), VRAM 16 KiB, CRAM 32 bytes, ROM read-only; `sg1000`: RAM 1 KiB, VRAM 16 KiB, ROM | §4.3; the SG-1000's 1 KiB [D `sc3000h-20040729.txt`], as Genesis Plus GX also exposes it [M §5.2] |
-| Processors | `Z80`, 16-bit PC, no registers listed until the debugger's stage | below |
+| Processors | `Z80`, 16-bit PC, no registers listed until the debugger's stage. *Since stage 8, `beryl-z80`'s eighteen, its code space `Z80BUS` (§15.3)* | below |
 | Video | 256 × 192, at most 256 × 240, a 4:3 television, RGBA8888, opaque black | §1.2 |
 | Audio | 48,000 Hz silence, each frame's count exact to the rational rate | as Nephrite's output rate [A] |
 | Frame rate | NTSC 53,693,175 / (15 × 228 × 262) = 59.922743 Hz; PAL 53,203,424 / (15 × 228 × 313) = 49.701459 Hz | §5.1 [D]; §5.2 for a witness |
@@ -39,6 +39,7 @@ The documents, test programs and referees the plan named were fetched and pinned
 **Why no registers.** Nephrite lists the Z80's eighteen registers in a table of its own
 (`genesis/debugger.rs`'s `Z80_REGISTERS`). A second user means the list belongs in `beryl-z80`, one owner for both, and
 the move is stage 8's, when Endou's debugger needs it; a copy now would be the duplicate the project's rules forbid.
+*Moved at stage 8, 2026-10-19 (§15.3, `Beryl_Z80.md` §9).*
 
 **The PSG by console.** `Variant::SEGA` for `sms`, `Variant::DISCRETE` for `sg1000`, D-0's conclusion
 (`Endou_Disputes.md`), held by `each_console_has_its_memories_and_its_psg`.
@@ -566,6 +567,7 @@ The chip's picture is CRAM entries; `machine::SMS_COLOURS` turns a `--BBGGRR` en
 component (D-1), once a frame and never when the frame's picture is skipped. The picture's height is the frame's active
 lines, 192, 224 or 240; machine info keeps 256 by 192 with a largest of 256 by 240, and frame info gives each frame's.
 Machine info now says `skip_rendering_state_neutral`, which the kit's C8 checks on every image of §10.7.
+*The colour tables moved unchanged into `beryl-sms-colours` at stage 8 (§15.5).*
 
 ### 10.5 The test programs
 
@@ -1658,3 +1660,225 @@ database's two folders; ZEXDOC's README, for the control; the library's file nam
 4. **A Game Genie patch and the export check** (§14.4): the open program refuses a game whose summed bytes a patch
    changes. Recommended: keep it, as the console would; the Mark III plays a patched game.
 5. **The go for stage 8** (the debugger), as the plan has it.
+
+*Decided 2026-10-19 by the tester: all five as recommended.* No real hardware is used for any of them (`Endou_Plan.md`
+§10 Q11).
+
+1. **The player selector stays below the drawing** in Controller Bindings, each console's page carrying its own.
+2. **LunaP gains its own Master System pad and SG-1000 joystick drawings**, in place of the NES's, as a piece of work
+   of its own apart from Endou's stages; stage 8 leaves `ControllerDiagrams` and the drawings as they are.
+3. **The cover aspects** stay at 1.4 for `sms` and `sg1000`, unmeasured; the Genesis's 0.7, which may be inverted, is
+   checked in a Nephrite step later.
+4. **The export check refusing a Game Genie-patched game stays**, as the console would; the Mark III plays it.
+5. **The go for stage 8.**
+
+---
+
+## 15. Stage 8: the debugger and the views (2026-10-19)
+
+### 15.1 In one paragraph
+
+Endou claims `DEBUG`, `DEBUG_STACK`, `DEBUG_REGISTERS` and `DEBUG_DISASSEMBLE`. The Z80 runs through `beryl-z80`'s
+observer in a debugged frame: breakpoints, `EACH` steps, depth steps and the call stack, data breakpoints and write
+watches on the bus and in the RAM a store lands in, coverage and the profile. Its eighteen registers are `beryl-z80`'s
+list, which Nephrite now reads too; its code lists through `beryl-z80`'s disassembler from a new space, `Z80BUS`, the
+bus as the Z80 reads it; the VDP, the PSG, the cartridge's board and the I/O chip's two ports are units. The views are
+`emusen-systems`' new `sms::views`, shared by the Master System and the SG-1000, with their C# twin `SmsDebugViews`:
+palettes at the chip's levels, the tile sheet, the name table, tiles, sprites, the PSG's channels, the board's label, the
+address map and a summary. The colour tables moved into a crate of their own, `beryl-sms-colours`, so that the pack and
+the picture read one table. The kit's C15 was found to fail on an instruction that jumps to itself and was corrected.
+
+### 15.2 The decisions of 2026-10-19, as built
+
+| Decision | Built |
+|---|---|
+| The player selector stays below the drawing | unchanged; stage 8 adds no tab, sheet or window |
+| LunaP's own pad and joystick drawings, separate work | not touched: `ControllerDiagrams`, LunaP and the drawings are as stage 7 left them |
+| The cover aspects stay at 1.4, the Genesis's checked in a Nephrite step | unchanged |
+| The export check refusing a patched game stays | unchanged |
+| The go for stage 8 | this section |
+
+### 15.3 The processor, its bus and the debugged frame
+
+- **The register list** is `beryl_z80::REGISTERS` with `Registers::values` (`Beryl_Z80.md` §9), the move stage 1 deferred
+  here (§2.1). Nephrite's `Z80_REGISTERS` is the crate's list re-exported, its order and widths as they were.
+- **`Z80BUS`**, space 0, the number the plan kept free for it (`Endou_Plan.md` §4.3): 64 KiB, a view and read-only, read
+  through `Bus::peek`, which is the Z80's read without its cycle: the cartridge's slots, the BIOS's slot with port
+  `$3E`, a Game Genie's patches and work RAM's mirrors, and no port. The processor names it as its code space.
+  The other spaces keep their numbers.
+- **The frame** (`Machine::run_frame_debug`): the frame's start as a plain frame takes it, then each instruction through
+  `debug::Watch`, which asks the hooks' stop before every instruction but the one a resume runs unasked
+  (`run::UNCHECKED`), then records its coverage and profile, as MoonRT's loop does. A stop leaves the frame open in front
+  of its instruction and brings the VDP and the PSG to the bus's time, so a unit read at a stop is the present's; the
+  next call goes on from it, and a plain `advance` finishes it. A state load closes an open frame.
+- **Stores.** The Z80 reports each byte on the bus (`Z80BUS`, its address). Where the byte lands in work RAM or in the
+  cartridge's RAM the bus reports it too, in that space at its offset, from its own decoding (`Bus::landed`, filled only
+  while a watch is armed), and the machine logs it with the instruction's address after the step: a watch or a data
+  breakpoint on `RAM` sees a store through `$C000`-`$FFFF` and its mirror, on `CARTRAM` one through Sega's slot 2 or
+  Codemasters' `$A000`. `Cartridge::write` now answers the RAM offset it wrote. VRAM and CRAM are written through ports
+  and are not stores.
+- **Calls and interrupts.** `CALL`, `RST` and the returns are the Z80's own reports; the frame interrupt is an IRQ entry to
+  `$0038`, the Pause button's NMI an NMI entry to `$0066`, each stopped for with `INTERRUPTS` in front of the handler's
+  first instruction. A `HALT` waits without asking the hooks, as `beryl-z80` steps it.
+- **Disassembly** (`Machine::debug_disassemble`): `beryl-z80`'s decoder over `Z80BUS` at the Z80's addresses, wrapping at
+  64 KiB, or over another space at its offsets, so the ROM lists past 64 KiB; at most 4,096 instructions; processor 1 and
+  an unknown space refused.
+- **Not claimed:** `DEBUG_READS` (the Z80 reports no loads), `DEBUG_TRANSLATE` (no address translation: the bus address
+  is the Z80's), `MUTES` and `TELEMETRY`, none of which stage 8 names.
+
+### 15.4 The units
+
+Ids from 256, in this order, each listed only while the machine has it; read with `debug_registers` and named in
+expressions by the unit's name in lower case (`vdp.R1`, `psg.Tone0`, `board.Mapper`, `io.MemoryControl`).
+
+| Id | Unit | Kind | Registers |
+|---|---|---|---|
+| 256 | `VDP` | video | `R0`-`R10`; `Status` (frame, overflow, collision, and on the TMS9918A the fifth sprite, as a read would give it, nothing cleared), `LineFlag`, `Address`, `Code`, `Second` (the command's first byte written), `Buffer`, `LineCounter`, `VCounter` (port `$7E`'s value), `HLatch`, `Line`, `Lines` (the active lines: 192, 224 or 240), `Mode4`, `IRQ`, `Variant` (the chip: 1 the 315-5124, 2 the 315-5246, 4 the TMS9918A, `beryl-sms-vdp`'s numbers) |
+| 257 | `PSG` | audio | `Tone0`-`Tone2`, `Noise`, `Volume0`-`Volume3` (attenuations, 15 silent), `Latch` |
+| 258 | `Board` | cartridge | `Mapper` (0 plain, 1 Sega's, 2 Codemasters', 3 an SG-1000 RAM board, `debug::mapper_number`), `Control` (Sega's `$FFFC`), `Bank0`-`Bank2` (the slots' registers), `Ram` (bytes), `Battery`; absent with an empty slot |
+| 259 | `IO` | io | `MemoryControl` (port `$3E`), `IoControl` (port `$3F`); absent on the SG-1000, which has neither port |
+
+The `Mapper` numbers and the `Variant` numbers are a surface between the core and the pack: the pack names the first
+(`sms::views::BOARDS`) and chooses colours by the second. The host shows the VDP's registers as the video registers and
+the PSG's and the board's as the sound registers, the board's headed `Board:<label>`.
+
+### 15.5 The views (`emusen-systems`' `sms::views`, and `SmsDebugViews`)
+
+One module for both systems; the views whose layout differs take the system, mode 4's on the Master System and the
+TMS9918's on the SG-1000 (a Mark III running an SG-1000 game is the `sg1000` system).
+
+- **Palettes**: CRAM's background and sprite palettes of sixteen, at the levels of the VDP unit's chip (the 315-5124's
+  first blue level, D-1; the 315-5246's without a unit); with VRAM and no CRAM, the TMS9918A's sixteen colours (D-11).
+  The swatch is a row of sixteen 16-pixel squares a palette.
+- **Tile sheet**: on the Master System VRAM's 512 tiles of four planes, sixteen a row, grey by value (`v × 17`); on the
+  SG-1000 VRAM's 2,048 eight-byte cells as one-plane patterns, thirty-two a row, since which cells are patterns depends
+  on the mode and the registers. **Tiles**: four planes or one, another depth refused with the C# words.
+- **Name table**: mode 4's word, its stride 2, as `$tile pN XY pri`; the TMS9918's byte, its stride 1, as the name.
+- **Sprites** (64 or 32): the table register 5 points at, to the `$D0` that ends it in the 192-line mode or on the
+  TMS9918A; mode 4's X shifted by register 0's bit 3, its tile bank by register 6's bit 2, its size and zoom by register
+  1; the TMS9918's colour as the palette and the early clock's 32 pixels. A sprite shows from the line after its Y; one
+  wholly below the active lines is hidden, one past line 255 starts above the first.
+- **Channels**: the three tones and the noise from the PSG unit, active while the attenuation is under 15, the level
+  its complement out of 100 in whole steps. Machine info lists no audio channels, so no mute applies yet.
+- **Board label**: `Plain`, `Sega`, `Codemasters`, `SG-1000 RAM`. **Summary**: the board and ROM, the Z80's registers,
+  the VDP's mode, display, line and status, the PSG and the I/O ports.
+- **Address map**: `$C000`-`$FFFF` is work RAM and its mirrors, Sega's cartridge RAM where `$FFFC`'s bit 4 puts it, and
+  nothing while port `$3E` disables work RAM; below `$C000` the board, the BIOS's slot and port `$3E` decide, and no
+  place is given, as the NES pack gives none for its banked half.
+- **No vectors.** The plan named the Z80's three entry points (`$0000`, `$0038`, `$0066`, `Endou_Plan.md` §4.6), but the
+  views' vectors are pointers that `vectors` dereferences from a `CpuBus` space; the Z80 in mode 1 has no table of
+  pointers, and listing the entry points as two-byte pointers would show the code's bytes as addresses. The entry points
+  are in the disassembly and the call stack's interrupt entries. A question (§15.12).
+- **The colours** are `beryl-sms-colours`' (`Beryl_SmsVdp.md` §10): a new dependency of `emusen-systems` on a Beryl
+  crate with no dependencies of its own, as it depends on `emusen-6502` and `emusen-sm83`. The C# twin keeps a copy,
+  held equal by the parity class.
+- **Reached** by the C layer's `emusen_systems_view` (the `sms` and `sg1000` arms, the sprite, channel and address
+  answers now shared with the Game Boy's), by the Rust debugger's `views` and by `SmsSystems`' packs through
+  `SystemCode.Views`.
+
+### 15.6 No allocation in an armed frame
+
+`tests/alloc.rs`, its counts now each thread's own so that its tests can run side by side: 720 frames of the voices
+program with breakpoints, write watches and a data breakpoint, calls and coverage armed and every log drained into a
+host's buffers each frame, after a second to warm: **0 allocations** [M]. Frame 22 grows the logs once, to the largest
+frame's stores of the program's first moments. **The profile allocates one block a frame**, 720 in 720 [M]: its map is
+`emusen-native`'s `BTreeMap`, which `drain_profile` takes whole, so the next frame's first routine allocates a node
+again. That is the shared crate's, on every core that profiles, and is recorded as a question (§15.12) rather than
+changed here, since its type is read by MarsRT's and MercuryRT's tests.
+
+### 15.7 The parity script, and the kit's C15 corrected
+
+**`endou.script`** (`EmuSen.WiseMan/Crystal/DebugScripts/`), run by `CrystalDebugParityTests.The_debugger_over_Endou_answers_alike`
+through the C# debugger and the Rust one: 144 answers over a Mark III game whose start sets mode 4, the display and the
+frame interrupt, two CRAM entries, two sprites the second of which ends the table, a name table entry and a tone, and
+whose loop calls a routine counting at `$C000`; then an SG-1000 cartridge. It covers the spaces, the processor and its
+registers, the three register groups with the board's label, every view of both systems, the tile and tilemap
+refusals, the address map, the listing on the bus, in the ROM and in no space, expressions over the Z80's registers,
+the units (`vdp.R1`, the bare `R1`, `psg.Tone0`), memory and labels, a read-only poke, watches on `RAM` and `Z80BUS`
+with the storing instruction's address, a breakpoint and its call stack, a depth step and a single step, a conditional
+logging breakpoint over two units and memory, a data breakpoint, a run to the IRQ, coverage and the profile, the frame
+log, a freeze and a cheat's poke.
+
+**C15 corrected** (`EmuSen_CoreAPI.md` §24.1). The first run of `EndouTests.The_kit_passes_on_synthetic_cartridges` with
+`DEBUG` claimed failed C15 on WiseMan's TMS9918 cartridge: "step 0 under EACH did not move the machine from (2, 140)".
+`$008C` is the program's `JR $`, which jumps to itself, so a step that ran it left the frame and the pc as they were.
+The kit judged a step by those two alone; it now also compares the state's digest, falling back to the two for a core
+that saves no state in an open frame. Shown with the kit built before and after the change, on the same image and
+library: `FAIL C15` before, `pass C15` after [M]; the kit's own 28 tests pass unchanged. Idle loops of that form are
+common in games, so the corpus's 33 images passed only because none was caught in one at the two frames the case runs.
+
+### 15.8 The gate (`Endou_Plan.md` §7, stage 8), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| G7: each claim a test | `endou` crate, `debug::tests`, 12: an armed frame with nothing to hit is the plain frame (state, picture, sound, over four frames); a breakpoint stops in front of its instruction and an unchecked resume runs past it once; a frame stopped and resumed over a hundred times a frame is the plain frame; a stop brings the devices to their time; `EACH` stops in front of every instruction in order; the call stack's calls, depth step, IRQ and NMI; watches and a data breakpoint on the bus and in RAM; a store in the cartridge's RAM; coverage and the profile; the registers and the units; the bus without side effects; the listing on the bus and in the ROM. `beryl-z80`'s `each_register_listed_reads_its_own_field`; `emusen-systems`' four `sms::views` tests |
+| The kit's debug cases | the corpus form, **33 of 33** images with the core's cases, C14 "7 spaces, ..., 1 processors, 4 unit(s) each answered with its registers" and C15 "armed against plain over 300 frames; a breakpoint at the next instruction; eight steps under EACH; range kinds 2-4", run again after §15.7's correction; `EndouTests.The_kit_passes_on_synthetic_cartridges`, seven cartridges, C1-C24 but C16 |
+| The debugger parity scripts | `CrystalDebugParityTests` **16 of 16**, `endou.script`'s 144 answers among them (§15.7), MoonRT's, MercuryRT's and Nephrite's scripts unchanged |
+| The views' parity | `DebugCodeParityTests` **9 of 9**: `Every_sms_view_answers_alike_and_reads_alike`, 64 rounds of generated spaces and units on both systems (palettes with and without units, swatch, tile sheet, sprites, channels, summary with and without units, each unit's label, twelve addresses), every third tilemap entry and every tile of the first 8 KiB at three depths, the stride, vectors, sprite count, DMA and symbols, the answers and the bytes read compared in order; the Game Boy's, the NES's and the SNES's as before. `SystemCodeParityTests` pass |
+| `CoreDebugView` | `CoreDebugViewTests.Endou_shows_its_board_registers_units_and_views`: the summary's board, Z80 and I/O lines, `regs` with the VDP's, the PSG's and the board's rows, a tile, 64 sprites, `$E123` as work RAM's `$123`; 6 of 6 |
+| Seeded faults, at least 6 | 13, every one caught, two only after a test was added (§15.9) |
+| No allocation in an armed frame | 0 in 720 frames; the profile one a frame, the shared crate's (§15.6) |
+| Nephrite unchanged | its crate **194 of 194**; `NephriteTests` and `nephrite.script` pass; the kit's corpus on `genesis-sample.txt`, **64 of 64** images, every image's report identical to stage 7's build (`a0b1c3b9`), digests included, the summaries differing only in times, memory and C13's count of rounds |
+| The plain run unchanged | the kit's 34 reports of `sms-sample.txt` against stage 7's build (`a0b1c3b9`): the frame, state, determinism, image-life and media cases' evidence identical, digests included |
+| The blast radius in WiseMan | 185 tests: `CrystalDebugParityTests`, `DebugCodeParityTests`, `EndouTests`, `EndouPlayersTests` (the library given, read in place), `CoreDebugViewTests`, `SystemCodeParity`, `NephriteTests`, `CrystalParityTests`, `CoreHostParity`, `SessionServiceParity`, `CoreRegistration*`, `BreakpointCondition*`, `MoonRtCoreAbi*`, `VenusRtDebugView*`, `CheatCodecParity`: all pass |
+| The crates | `endou` **88 of 88** and `tests/alloc.rs` 3; `beryl-sms-colours` 2; `beryl-z80` as before with the new test; `emusen-systems` 35; `emusen-core-conform` 28 and 8 |
+
+### 15.9 Seeded faults (2026-10-19)
+
+Each made in the source, the tests named run, the file restored and compared byte for byte (`seed.py` in the step's
+scratch); the C# and the C layer's through a WiseMan build, the Rust debugger's through a tool built apart and named by
+`EMUSEN_CRYSTAL_DEBUG_TOOL`.
+
+| # | Fault | Caught by |
+|---|---|---|
+| 1 | the bus's landed stores never reported (`Bus::watch` left off) | the watch test and the cartridge RAM test |
+| 2 | a store on the bus logged in `RAM`'s space | the watch test |
+| 3 | a store in the cartridge's RAM logged as work RAM's | the cartridge RAM test |
+| 4 | SP and PC swapped in `Registers::values` | `beryl-z80`'s `each_register_listed_reads_its_own_field` |
+| 5 | a stop leaving the VDP and the PSG behind | **nothing at first**: no test read a unit at a stop. `a_stop_brings_every_device_to_its_time` was added, and catches it |
+| 6 | the board listed with an empty slot | **nothing at first**. The units test now creates an empty console and holds it to the VDP, the PSG and the I/O chip, and catches it |
+| 7 | `Z80BUS` read through the Z80's own read, its cycle counted | the bus test, the state compared |
+| 8 | mode 4's tile bank from register 6 not applied (Rust view) | the `sms::views` sprite test |
+| 9 | the 315-5124's colours never chosen (Rust view) | the `sms::views` palette test |
+| 10 | the C# twin's palette bit from bit 12 | `Every_sms_view_answers_alike_and_reads_alike` |
+| 11 | a channel's level and activity swapped in the C layer's answer | the Game Boy's and the Master System's views' parity, and `endou.script` |
+| 12 | the board's label not wired in the Rust debugger | `endou.script` |
+| 13 | the kit's C15 correction reverted (§15.7) | `EndouTests.The_kit_passes_on_synthetic_cartridges` |
+
+### 15.10 The cost
+
+The desktop's mean a frame, release, the median of five differences between runs of 3,600 and 600 frames over 3,000,
+the base (`a0b1c3b9`) and this stage alternately, unarmed, twice, load about 4 [M]: *Sonic the Hedgehog* 0.224 → 0.230
+and 0.229 → 0.229 ms, *OutRun* 0.244 → 0.247 twice, *Space Harrier* 0.207 → 0.211 and 0.208 → 0.210. The difference,
+0.000 to 0.006 ms, is the size of the two runs' spread; what the plain frame gained is a test of `Bus::watch` on each
+store and of `debug_open` at each frame. P1 holds.
+
+### 15.11 Open
+
+- The profile's allocation, in `emusen-native` (§15.6).
+- No vectors (§15.5); no `MUTES`, so the channels view shows none muted.
+- The SG-1000's tile sheet shows every cell of VRAM; which are patterns depends on the mode and registers 3 and 4.
+- The earlier stages' open items stand: D-8, the analogue stage, BIOS images with a built-in game, the cover aspects.
+
+### 15.12 What was read for this stage
+
+No emulator source, no firmware image, no SMS_MiSTer RTL; the library's images only through the kit and the tests, in
+place. Read: `Endou_Plan.md`, `Endou_Native.md`, `Endou_Disputes.md`; `EmuSen_CoreAPI.md` §6.14, §6.33, §6.38, §6.39,
+§24 and §29; `EmuSen_Backend.md` §13.5 and §29.30-§29.36; `emusen-native`'s `debug.rs` and `core`; MoonRT's and
+Nephrite's debuggers and units; the Game Boy's and the NES's pack views, `NativeDebugViews`, `GameBoyDebugViews` and the
+C layer's views; `beryl-z80`, `beryl-sms-vdp`, `beryl-sn76489`; the kit's C15; `CrystalDebugScript` and the parity
+classes; DianaSh's `regs` and `vectors`.
+
+### 15.13 Questions before stage 9
+
+1. **The profile's allocation** (§15.6). `emusen-native`'s `drain_profile` takes the map whole, so every core that
+   profiles allocates once a frame. Recommended: a step of its own that keeps the profile in a sorted list cleared in
+   place, its output the same pairs in the same order, with MarsRT's and MercuryRT's tests moved onto it.
+2. **The Z80's entry points as vectors** (§15.5). Recommended: leave the views without vectors, the entry points being
+   shown by the listing and the call stack; the alternative is a vector kind for an entry point in `InterruptVector`, a
+   change to the views' surface that the Game Boy's pack, which lists its entry points as two-byte pointers, would also
+   take.
+3. **`beryl-sms-colours`** (§15.5, `Beryl_SmsVdp.md` §10): a crate of its own, a new dependency of `emusen-systems` on a
+   Beryl crate. Recommended: keep it; the alternative, a copy of the tables in the pack as the NES pack keeps its own,
+   gives the colours two owners.
+4. **The go for stage 9** (the YM2413 and its models), as the plan has it.

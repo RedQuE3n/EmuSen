@@ -8,6 +8,7 @@ use beryl_sms_vdp::Vdp;
 
 use crate::cart::Cartridge;
 use crate::io::Io;
+use crate::machine::{CARTRAM_ID, RAM_ID};
 use crate::model::Model;
 use crate::sound::Sound;
 
@@ -53,6 +54,10 @@ pub struct Bus {
     pub bios: Vec<u8>,
     /// The cheat device's patches on the cartridge's reads, empty with none.
     pub patches: Vec<Patch>,
+    /// While a debugger watches stores: each byte a store left in work RAM or the cartridge's RAM, as (space, offset,
+    /// value), for the machine to report with the instruction's address (Endou_Native.md §15.3).
+    pub watch: bool,
+    pub landed: Vec<(u32, u32, u8)>,
 }
 
 impl Bus {
@@ -66,7 +71,7 @@ impl Bus {
     pub fn with_bios(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp, bios: Vec<u8>) -> Bus {
         assert!(bios.is_empty() || bios.len().is_power_of_two(), "a BIOS mirrors by its size, a power of two");
         let memory_control = if bios.is_empty() { model.memory_control_at_start() } else { crate::boot::RESET_MEMORY_CONTROL };
-        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios, patches: Vec::new() }
+        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios, patches: Vec::new(), watch: false, landed: Vec::with_capacity(4) }
     }
 
     /// A read nothing drives: the bus's last byte on the consoles that float it, $FF on the Master System II.
@@ -110,14 +115,21 @@ impl Bus {
     }
 
     fn store(&mut self, a: u16, v: u8) {
+        let mut cart = None;
         if a >= 0xC000 {
             if self.enabled(WORK_RAM_OFF) {
-                let n = self.ram.len();
-                self.ram[a as usize & (n - 1)] = v;
+                let at = a as usize & (self.ram.len() - 1);
+                self.ram[at] = v;
+                if self.watch {
+                    self.landed.push((RAM_ID, at as u32, v));
+                }
             }
-            self.cart.write(a, v);
+            cart = self.cart.write(a, v);
         } else if self.enabled(CARTRIDGE_OFF) {
-            self.cart.write(a, v);
+            cart = self.cart.write(a, v);
+        }
+        if let Some(at) = cart.filter(|_| self.watch) {
+            self.landed.push((CARTRAM_ID, at as u32, v));
         }
     }
 

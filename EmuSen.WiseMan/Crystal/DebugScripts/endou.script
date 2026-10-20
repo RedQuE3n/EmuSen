@@ -1,0 +1,145 @@
+# The debugger over Endou on a synthetic Mark III game whose start writes the VDP's registers, CRAM, the sprite table, the name table and the PSG, and whose loop calls a routine counting in RAM; then an SG-1000 cartridge.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.counters
+m.maxsprites
+m.stride
+m.vectors
+m.dmaname 0
+m.palettes
+m.sprites
+m.channels
+m.run 3
+m.regs cpu
+m.regs video
+m.regs apu
+m.palettes
+m.sprites
+m.channels
+m.tiles
+m.swatch
+m.tilemap VRAM 0x3800
+m.tilemap vram 0x3802
+m.tilemap NOPE 0
+m.tilepixels VRAM 0x40 4
+m.tilepixels VRAM 0x40 2
+m.dma
+m.summary
+m.physical 0x0000
+m.physical 0xBFFF
+m.physical 0xC000
+m.physical 0xE123
+m.physical 0xFFFF
+m.disasm Z80BUS 0x0100 6
+m.disasm Z80BUS $CALL 2
+m.disasm z80bus $SUB 3
+m.disasm ROM 0x0038 4
+m.disasm NOPE 0 3
+m.eval - AF
+m.eval - HL
+m.eval - PC
+m.eval - IM
+m.eval - vdp.R1
+m.eval - R1
+m.eval - vdp.Variant
+m.eval - psg.Tone0
+m.eval - Tone0
+m.eval - psg.Volume0
+m.eval - board.Mapper
+m.eval - io.MemoryControl
+m.eval - [$C000]
+m.eval - [RAM:$0]
+m.eval - {$0001}
+m.eval - stackdepth
+m.eval 0 HL
+m.symbols -
+m.symbols 0
+m.peek RAM 0 4
+m.peek Z80BUS 0xC000 4
+m.peek CRAM 0 4
+m.peek VRAM 0x3F00 4
+m.peek VRAM 0x3F80 4
+m.poke Z80BUS 0xC000 0x55
+m.peek RAM 0 1
+m.label $0177 count
+m.eval - count
+m.watch.add RAM 0 1 0
+m.watch.add Z80BUS 0xC000 1 0
+m.armed
+m.run 2
+m.watch.events 1 4
+m.watch.events 2 4
+m.cs.status
+m.bp.add - $SUB $SUB ; - ; -
+m.run 3
+m.bp.state -
+m.cs.bt 4
+m.cs.status
+m.bp.stepdepth - 0
+m.run 3
+m.bp.state -
+m.bp.step - 1
+m.run 2
+m.bp.state -
+m.bp.remove - 1
+m.bp.add - $CALL $CALL ; HL == 0xC000 && vdp.R1 == 0x60 ; HL, vdp.R1, [$C000], stackdepth
+m.run 2
+m.bp.state -
+m.bp.log - 2
+m.bp.remove - 2
+m.bp.data - RAM 0 0 -1 0 0 ; - ; -
+m.run 2
+m.bp.state -
+m.bp.remove - 3
+m.bp.runto - irq
+m.run 2
+m.bp.state -
+m.watch.remove 1
+m.watch.remove 2
+m.cov.arm 0
+m.cs.profile on
+m.run 3
+m.cov.status 0
+m.cov.query 0 0x0100 0x70 8
+m.cov.entries 0 4
+m.cs.status
+m.cs.hot 4
+m.fl.add RAM 0 1
+m.run 2
+m.fl.samples 1 4
+m.fz.add RAM 1 0x77
+m.run 1
+m.peek RAM 1
+m.fz.clear
+m.cheat.poke RAM 2 0x66
+m.run 1
+m.peek RAM 2
+m.cheat.clear
+m.channels
+m.audio
+m.summary
+m.open $CORE $SG
+m.spaces
+m.procs
+m.regs video
+m.regs apu
+m.run 2
+m.palettes
+m.swatch
+m.tiles
+m.maxsprites
+m.stride
+m.tilemap VRAM 0
+m.tilepixels VRAM 8 1
+m.tilepixels VRAM 8 4
+m.sprites
+m.channels
+m.summary
+m.physical 0xC000
+m.physical 0xC400
+m.disasm Z80BUS 0 4
+m.frame

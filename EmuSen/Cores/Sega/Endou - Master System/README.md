@@ -6,6 +6,8 @@ the I/O chip, the Pause and Reset buttons, a frame at a time; stage 3 (2026-10-1
 through Beryl's `beryl-sms-vdp`; stage 4 (2026-10-19) the SG-1000 its TMS9918A and the Mark III as its second model; stage 5 (2026-10-19) mixes and
 outputs Beryl's SN76489 (`src/sound.rs`); stage 6 (2026-10-19) adds the open boot program (`src/boot/`); stage 7
 (2026-10-19) the Game Genie's patches, the battery table from SMS Power!'s tag and the kit's sample, `kit/sms-sample.txt`.
+Stage 8 (2026-10-19) gives the debugger the Z80, its bus as a space and four units (`src/debug.rs`), the views being
+the `sms` pack's in `emusen-systems`.
 Its test programs are in `programs/`, assembled with Beryl's Z80 assembler.
 The plan is `Man pages/Hardware/Sega/Endou - Master System/Endou_Plan.md`, the build record `Endou_Native.md` beside it.
 

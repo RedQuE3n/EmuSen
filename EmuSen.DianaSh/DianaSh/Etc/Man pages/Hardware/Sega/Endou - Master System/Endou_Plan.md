@@ -59,6 +59,12 @@ MD5 and SHA-1, only its checksum table read and its provenance recorded, the cle
 built-in game stay refused, for a later stage; `firmwarecheck.py` is measured with a control at stage 7; D-8's referee
 (nvc) is set up apart, and D-8 is not worked on at stage 7; and the go for stage 7.
 
+**Decided by the tester, 2026-10-19, on stage 7's questions** (`Endou_Native.md` §14.14), all as recommended: the
+Controller Bindings window's player selector stays below the drawing; LunaP gains the Master System's pad and the
+SG-1000's joystick as drawings of their own, a separate piece of work; the cover aspects stay at 1.4 until measured, the
+Genesis's 0.7 checked in a Nephrite step; the export check refusing a Game Genie-patched game stays; and the go for
+stage 8.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -488,7 +494,8 @@ them from core info's schema, the console's Graphics Settings tab appearing when
 with `beryl-z80`'s observer and disassembler; the VDP's, the PSG's and the OPLL's registers as units (core ABI 1.13)
 [R `EmuSen_CoreAPI.md` §6.33]; and the console's views as an `sms` module of `emusen-systems` beside the NES's and
 the Game Boy's [R `EmuSen_Backend.md` §13.5]: palettes at the console's levels, the 512 tiles in their planar format,
-the name table, the 64 sprites, and the Z80's three vectors (`$0000`, `$0038`, `$0066`).
+the name table, the 64 sprites, and the Z80's three vectors (`$0000`, `$0038`, `$0066`). *Built at stage 8
+(`Endou_Native.md` §15) without the vectors, which the views take as pointers while the three are entry points (§15.5).*
 
 ---
 
@@ -676,7 +683,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **5** | *Built 2026-10-19, `Endou_Native.md` §12.* Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow (none: a named loss), `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
 | **6** | *Built 2026-10-19, `Endou_OpenBoot.md` and `Endou_Native.md` §13.* Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
 | **7** | *Built 2026-10-19, `Endou_Native.md` §14; offered to players by the tester's go.* The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab; the SG-1000 on a shelf of its own, its console `"SG-1000"` apart from `"Master System"` (decided 2026-10-19) | **G4**: the kit's cases on the tester's games; a test that `sms` and `sg1000` land on two shelves; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
-| **8** | The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
+| **8** | *Built 2026-10-19, `Endou_Native.md` §15.* The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
 | **9** | The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
 | **10** | The Paddle, the Sports Pad (axes behind port settings) and the 3-D glasses with their display setting | Test programs and the named games at anchors against the references | 2 |
 | **11** | The Light Phaser, with the core ABI's pointer minor proposed and, on the tester's approval, built across `emusen-native`, the header, the hosts and the kit | A kit case for the minor; the phaser's latch on a test program; the named games' hits against the references | 3 |
@@ -842,7 +849,7 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
   [M §11.9]. At stage 5, with the PSG mixed: 0.20-0.23 ms on three Master System games, 0.18 on an SG-1000 game, the
   sound 0.005-0.014 ms of it [M §12.8]. At stage 6, after the hand-over: 0.206-0.236 ms on three games, within 0.005 ms of stage 5's
   build measured alongside [M §13.7]. At stage 7, with the Game Genie's check on the cartridge's reads: 0.204-0.239 ms on
-  three games, 0.005-0.006 ms of it the check [M §14.11].*
+  three games, 0.005-0.006 ms of it the check [M §14.11]. At stage 8, with the debugger built and unarmed: 0.210-0.247 ms on three games, within 0.006 ms of stage 7's build measured alongside [M §15.10].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
   interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the

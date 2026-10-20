@@ -11,6 +11,10 @@ name = "beryl-font"
 version = "0.1.0"
 
 [[package]]
+name = "beryl-sms-colours"
+version = "0.1.0"
+
+[[package]]
 name = "beryl-sms-vdp"
 version = "0.1.0"
 dependencies = [
@@ -41,6 +45,7 @@ name = "endou"
 version = "0.1.0"
 dependencies = [
  "beryl-font",
+ "beryl-sms-colours",
  "beryl-sms-vdp",
  "beryl-sn76489",
  "beryl-z80",

@@ -2,7 +2,7 @@ using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Crystal.Systems.Sms
 {
-    // The Master System's and the SG-1000's system packs, one extension each, which share the two cheat formats - see Endou_Plan.md §4, Endou_Native.md §3 and §14.
+    // The Master System's and the SG-1000's system packs, one extension each, which share the two cheat formats and the debugger's views - see Endou_Plan.md §4, Endou_Native.md §3, §14 and §15.
     public static class SmsSystems
     {
         public const string MasterSystemId = "sms", Sg1000Id = "sg1000";
@@ -56,7 +56,7 @@ namespace EmuSen.Crystal.Systems.Sms
 
         public static ICheatCodeCodec GameGenie() => SystemCode.Codec("sms.gg", ManagedGameGenie());
 
-        public static readonly SystemPack MasterSystemPack = new(MasterSystem, ProActionReplay, GameGenie, ByteOrder: "little");
-        public static readonly SystemPack Sg1000Pack = new(Sg1000, ProActionReplay, GameGenie, ByteOrder: "little");
+        public static readonly SystemPack MasterSystemPack = new(MasterSystem, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(MasterSystemId, SmsDebugViews.MasterSystem), ByteOrder: "little");
+        public static readonly SystemPack Sg1000Pack = new(Sg1000, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(Sg1000Id, SmsDebugViews.Sg1000), ByteOrder: "little");
     }
 }

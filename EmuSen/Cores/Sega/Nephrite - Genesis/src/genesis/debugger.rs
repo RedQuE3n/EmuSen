@@ -22,10 +22,8 @@ pub(crate) const M68K_REGISTERS: [(&str, u32); 20] = [
     ("PC", 32), ("SR", 16), ("USP", 32), ("SSP", 32),
 ];
 
-pub(crate) const Z80_REGISTERS: [(&str, u32); 18] = [
-    ("AF", 16), ("BC", 16), ("DE", 16), ("HL", 16), ("AF'", 16), ("BC'", 16), ("DE'", 16), ("HL'", 16),
-    ("IX", 16), ("IY", 16), ("SP", 16), ("PC", 16), ("I", 8), ("R", 8), ("WZ", 16), ("IM", 2), ("IFF1", 1), ("IFF2", 1),
-];
+/// The Z80's list is `beryl-z80`'s, which Endou's debugger reads too (Beryl_Z80.md §9).
+pub(crate) use beryl_z80::REGISTERS as Z80_REGISTERS;
 
 /// The 68000's observer in the observed frame: its stop is asked before its step, so here it records the step, its
 /// stores and its calls into the hooks.

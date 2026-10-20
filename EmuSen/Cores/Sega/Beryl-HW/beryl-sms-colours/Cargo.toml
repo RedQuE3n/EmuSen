@@ -1,0 +1,18 @@
+[package]
+name = "beryl-sms-colours"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The Master System VDP family's colours as RGBA: the 315-5124's, the 315-5246's and the TMS9918A's. Endou's picture
+# and the sms pack's debugger views read the one table. No dependencies, so the platform's library links nothing of a
+# core's. See Beryl_SmsVdp.md §10 and Endou_Native.md §15.5.
+[lib]
+name = "beryl_sms_colours"
+
+[dependencies]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

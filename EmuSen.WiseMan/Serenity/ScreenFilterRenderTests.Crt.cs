@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Every_variant_of_the_crt_compiles_for_every_console()
         {
-            foreach (string? console in new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", null })
+            foreach (string? console in CrtFilter.Filter.Consoles!.Cast<string?>().Append(null))
                 for (int quality = 0; quality < 3; quality++) for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
                     foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtFilter.Screens.Count) : new[] { CrtFilter.DefaultScreen })
                     {
@@ -135,7 +135,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_crt_suits_the_consoles_that_had_a_television_draws_a_4_to_3_tube_and_counts_scanlines()
         {
-            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation" }, CrtFilter.Filter.Consoles);
+            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "Master System", "SG-1000" }, CrtFilter.Filter.Consoles);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.Contains(CrtFilter.Name, ScreenFilters.NamesFor(console));
             Assert.DoesNotContain(CrtFilter.Name, ScreenFilters.NamesFor("GB"));
             Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("Genesis")[0]);
@@ -154,6 +154,17 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(263 * 3412.5 / 15 % 1, ntsc.PhaseFrame, 6);
             Assert.Equal((48.117, 213.333, 0.75, 0.0, 0.5, false), (Math.Round(pal.ActiveMicroseconds, 3), Math.Round(pal.CyclesAcross, 3), pal.PhaseLine, pal.PhaseFrame, pal.PhaseCrawl, pal.SwitchFrame));
             Assert.Equal(314 * 3405 / 12.0 % 1, pal.PhaseCrawl, 6);
+        }
+
+        // The Master System's and the SG-1000's NTSC line: 342 pixels at three halves of the subcarrier, 228 whole cycles, so nothing moves - see EmuSen_CRT.md §31.3.
+        [Theory]
+        [InlineData("Master System")]
+        [InlineData("SG-1000")]
+        public void The_master_system_s_and_the_sg_1000_s_ntsc_line_stands_still(string console)
+        {
+            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming[console], pal: false);
+            Assert.Equal((47.678, 170.667, 0.0, 0.0, 0.0, false), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame, ntsc.PhaseCrawl, ntsc.SwitchFrame));
+            Assert.Equal(CrtFilter.ConsoleTiming["Genesis"].Where(p => !p.Key.StartsWith("pal.")), CrtFilter.ConsoleTiming[console].Where(p => !p.Key.StartsWith("pal.")));
         }
 
         // Read back onto the headless raster canvas, on a small frame: a white field's light is the tube's white over the display's peak, and neutral.

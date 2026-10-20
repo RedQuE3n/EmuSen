@@ -86,12 +86,6 @@ namespace EmuSen.WiseMan.Mistress
                 bool knobs = diagram.Layout == ControllerLayout.DualShock;
                 foreach (PadControl control in controls.Where(c => !(knobs && c.ToString().Contains("Stick", StringComparison.Ordinal) && c is not (PadControl.L3 or PadControl.R3))))
                     Assert.True(regions.Contains(ControllerDiagrams.RegionFor(console, control)), $"{console} has no region for {control}");
-                // A console drawn on another's pad until LunaP draws its own may leave one region with no control, as the SG-1000's Select, and no more, so the pad borrowed is the nearest (Endou_Native.md §14).
-                if (ControllerDiagrams.BorrowsLayout(console))
-                {
-                    Assert.True(regions.Count(r => ControllerDiagrams.ControlFor(console, r, controls) is null) <= 1, $"{console} borrows a drawing with regions it does not use");
-                    continue;
-                }
                 foreach (string region in regions.Where(r => !(knobs && r == "Analog")))
                     Assert.True(ControllerDiagrams.ControlFor(console, region, controls) is not null, $"{console}'s {region} stands for no control");
                 Assert.Equal(regions.Count, diagram.Regions.Count);
@@ -175,8 +169,55 @@ namespace EmuSen.WiseMan.Mistress
             }
         });
 
+        // The Master System's and the SG-1000's drawings are their own: every button of the pad in Endou's info has one region, named as the engine names it, hit where it is drawn and bound by a click - see Endou_Native.md §14.15.
+        [Theory]
+        [InlineData("Master System", "sms.pad", ControllerLayout.MasterSystem, 8)]
+        [InlineData("SG-1000", "sg1000.pad", ControllerLayout.Sg1000, 7)]
+        public Task Every_button_of_endou_s_pads_has_one_region_of_its_own_drawing(string console, string pad, ControllerLayout layout, int buttons) => UiTest.Run(() =>
+        {
+            Rig rig = Open(console);
+            Assert.Equal(layout, rig.Diagram.Layout);
+            var controller = CoreCatalog.DiscoveredSystem(console)!.Controllers.Single(c => c.Id == pad);
+            Assert.Equal(buttons, controller.Buttons.Count);
+            Assert.Equal(controller.Buttons.Select(b => b.Label).Order(), rig.Diagram.Regions.Select(r => r.Id).Order());
+            IReadOnlyList<PadControl> controls = CoreCatalog.ControlsFor(console);
+            foreach (var button in controller.Buttons)
+            {
+                PadControl control = PadControls.For(new[] { button.Control!.Value }, Array.Empty<PadAxis>()).Single();
+                string region = ControllerDiagrams.RegionFor(console, control);
+                Assert.Equal(button.Label, region);
+                Assert.Equal(control, ControllerDiagrams.ControlFor(console, region, controls));
+                Assert.Equal(region, rig.Diagram.RegionAt(rig.Diagram.PointIn(region)!.Value));
+                rig.Window.MouseDown(InWindow(rig, region), MouseButton.Left);
+                rig.Window.MouseUp(InWindow(rig, region), MouseButton.Left);
+                Assert.Equal(region, rig.Diagram.SelectedRegion);
+                Assert.Equal("Press a button", rig.Diagram.BindingOf(region).Pad);
+                rig.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.None, null);
+                Assert.Equal(PadCapture.None, rig.Window.Capturing);
+            }
+            rig.Window.Close();
+        });
+
+        // The SG-1000's stick is switched: a key held for a direction lights it and leans the knob that way.
+        [Fact]
+        public Task A_held_direction_leans_the_sg_1000_s_stick() => UiTest.Run(() =>
+        {
+            Rig rig = Open("SG-1000");
+            Point rest = rig.Diagram.StickKnobCentre("Stick")!.Value;
+            Key up = rig.Keys.For("SG-1000").ButtonToKey[PadControl.Up];
+            rig.Window.KeyPress(up, RawInputModifiers.None, PhysicalKey.None, null);
+            Assert.True(rig.Diagram.IsPressed("Up"));
+            Point leant = rig.Diagram.StickKnobCentre("Stick")!.Value;
+            Assert.True(leant.Y < rest.Y - 5 && Math.Abs(leant.X - rest.X) < 0.01, $"the knob went from {rest} to {leant}");
+            rig.Window.KeyRelease(up, RawInputModifiers.None, PhysicalKey.None, null);
+            Assert.Equal(rest, rig.Diagram.StickKnobCentre("Stick")!.Value);
+            rig.Window.Close();
+        });
+
         // A click anywhere a region is drawn hits it, and nowhere else does; the click starts that control's capture.
         [Theory]
+        [InlineData("Master System")]
+        [InlineData("SG-1000")]
         [InlineData("NES")]
         [InlineData("GB")]
         [InlineData("SNES")]
@@ -314,6 +355,8 @@ namespace EmuSen.WiseMan.Mistress
 
         // Every region of each drawing is reached from its first by the cross alone, through the router as a pad drives any window.
         [Theory]
+        [InlineData("Master System")]
+        [InlineData("SG-1000")]
         [InlineData("NES")]
         [InlineData("GB")]
         [InlineData("SNES")]

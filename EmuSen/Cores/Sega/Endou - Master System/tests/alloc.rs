@@ -1,6 +1,6 @@
 //! A frame with its sound drained allocates nothing once the machine's buffers have their size (Endou_Native.md §12.5),
-//! the FM unit's included (§16.6), nor one through the armed debugger (§15.6). Each thread counts its own allocations, so that tests running beside
-//! each other do not add to each other's counts.
+//! the FM unit's included (§16.6), nor one through the armed debugger, its profile included (§15.6). Each thread
+//! counts its own allocations, so that tests running beside each other do not add to each other's counts.
 
 #[path = "../programs/images.rs"]
 #[allow(dead_code)]
@@ -109,9 +109,8 @@ fn an_armed_debugger_s_frame_allocates_nothing() {
     assert_eq!(armed_frames(false), 0, "allocations in 720 armed frames of the voices program");
 }
 
-/// The profile is emusen-native's map of routines, taken whole by each drain, so its next frame allocates again
-/// (Endou_Native.md §15.6): measured, not held to zero.
+/// The profile is cleared in place by each drain, so it allocates nothing either (EmuSen_NativeCores.md §12.8).
 #[test]
-fn the_profile_s_allocations_are_counted() {
-    eprintln!("profiling: {} allocations in 720 frames", armed_frames(true));
+fn a_profiled_frame_allocates_nothing() {
+    assert_eq!(armed_frames(true), 0, "allocations in 720 armed frames of the voices program with the profile drained");
 }

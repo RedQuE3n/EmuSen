@@ -25,6 +25,9 @@ namespace EmuSen.WiseMan.Serenity
                 ["Genesis"] = (53.203424, 10, 3420, 12, 313, 0, 256),
                 ["N64"] = (49.65653, 4, 3178, 11.2, 313, (6 + 5 + 6 + 5 + 6) / 5.0 / 11.2, 640),
                 ["PlayStation"] = (53.203425, 1, 3405, 12, 314, 0, 2560),
+                ["Master System"] = (53.203424, 10, 3420, 12, 313, 0, 256),
+                // The TMS9929A's own 10.738635 MHz crystal and a PAL encoder's of 4.43361875: a cycle is the master clock over the subcarrier, a ratio of two crystals.
+                ["SG-1000"] = (10.738635, 2, 342 * 2, 10.738635 / fsc, 313, 0, 256),
             };
             foreach (string console in CrtFilter.Filter.Consoles!)
             {

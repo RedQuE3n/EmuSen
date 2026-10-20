@@ -77,15 +77,19 @@ edge 3 down 26
 edge 26 up 3
 edge 26 down 51
 edge 26 left same
-edge 26 right 3
+edge 26 right 55
 edge 39 up 51
 edge 39 down same
 edge 39 left same
-edge 39 right 3
+edge 39 right 55
 edge 51 up 26
 edge 51 down 39
 edge 51 left same
 edge 51 right 53
+edge 55 up 26
+edge 55 down 39
+edge 55 left 53
+edge 55 right same
 press pageup focus="TextBox PlayStationCodeBox (Cheat code)" tab=PlayStation title="Active Cheats" top=ActiveCheatsWindow
 press pagedown focus="LunaSwitch MasterSwitch" tab=General title="Active Cheats" top=ActiveCheatsWindow
 press first focus="LunaSwitch MasterSwitch" tab=General title="Active Cheats" top=ActiveCheatsWindow

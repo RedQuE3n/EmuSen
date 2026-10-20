@@ -64,7 +64,7 @@ tree
 focus 33
 edge 4 up 9
 edge 4 down same
-edge 4 left 9
+edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge 4 right 6
 edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge 6 down same

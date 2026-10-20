@@ -1592,7 +1592,7 @@ The laptop needs the same, with permission asked first.
 
 **Listed per console.** **CRT** is one of `ScreenFilters.All`'s choices, after None and before CRT (Lottes), and
 `NamesFor` offers it to the NES, SNES, Genesis and N64 and to no handheld. The default filter stays None
-(§9, decision 4).
+(§9, decision 4). *(2026-10-20: the consoles it is offered for are `ConsoleScreens`' televisions, now seven, the Master System and the SG-1000 among them, §31.)*
 
 **The running console is told.** Mistress's `ApplyScreenFilter` sets `GameFrameControl.FilterConsole` before the
 filter, so the chain starts from that console's constants (§11.1's `ConsoleTiming`) and defaults. Before this, the
@@ -3382,3 +3382,267 @@ The filter's own change, 0.19% at the default persistence on the scene of §30.8
 §30.8's options is taken; §30.9's test stays as the guard on its bound. A report of light moving a second after a scene
 change is checked first against the display's dynamic processing (adaptive contrast, dynamic tone mapping, a panel's
 automatic brightness), with the filter on and off.
+
+## 31. Every console has an accurate display of its own (2026-10-20)
+
+**Decided 2026-10-20 by the tester: every console that was shown on a CRT offers the CRT shader.**
+
+**Decided 2026-10-20 by the tester, widening it the same day: "We should be specifically adding an accurate shader
+that applies to each console we make."** Read as a rule: every console EmuSen supports has an accurate display filter
+made for that console. A television console has the CRT with a profile of its own, its row of `ConsoleTiming`: its
+clocks, its line, its encoder's figures and anything else the filter's per-console constants carry. A handheld has a
+model of its own panel. A console drawn on another console's row does not meet the rule, with one exception argued in
+§31.4: an attachment that has no video output, whose picture is its host's signal. A console that does not yet meet it
+carries a dated note of what is missing, in the same table, so that the gap is decided and visible.
+
+Both rules are enforced by `ConsoleScreenRuleTests`: a console cannot be added to the systems table without a row
+here, and a television in that row is offered both tubes and the overscan row without anyone listing it again.
+
+### 31.1 Where the fact lives
+
+Until this step the fact was typed out: `CrtFilter.TelevisionConsoles` was a literal of five names, and every list
+that followed it (both tubes, `GraphicsSettingsWindow.HasOverscan`, the game's Television Standard row) was right only
+while someone remembered to add to it. The Master System and the SG-1000 were added to the systems table on
+2026-10-19 and were offered neither tube, nor an overscan row, which is the defect this section removes. Three forms
+were weighed for the one owner.
+
+1. **A field of the systems table's data files**, `Platform/systems/data/<id>.json`, read by `emusen-systems` and its
+   C# twin (`EmuSen_Backend.md` §12): say `"display": "television"` or `"lcd"`. The table's own criterion admits a
+   display kind, a fact true of the console on every engine. It does not admit the rest of what the rule asks for:
+   which filter, and which profile. Those are Serenity's constants, and the Rust table naming Serenity's filters or
+   rows would make the platform library know a frontend's shaders, which its boundary forbids. Keeping the kind in
+   the table and the profile in Serenity would be two owners for what is one decision, held together by a test, and
+   would still widen interface 13's JSON (`KEYS`, every data file, the C# literals, `SystemTableParity` and
+   `SystemCodeParity`) for a value only the picture reads.
+2. **Serenity, beside the filters it names.** One table, `ConsoleScreens.All`, a row for each console of the systems
+   table, keyed by the table's own `console` names as `ConsoleTiming` already is: the kind of screen and the
+   profile. Nothing crosses a surface, the kind and the profile cannot disagree because they are one row, and the
+   lists that used to be typed are derived from it.
+3. **Mistress.** Rejected: what the frontend offers is a consequence of what the console was, not its owner.
+
+**Chosen: 2.** The tie to the systems table is the test, which reads every system of `SystemPacks` and fails for a
+system with no row, a row with no system, or a row that breaks the rule (§31.6). What would change the choice: a
+second reader of the display kind outside the picture (the library, big picture), at which point the kind would move
+to the table as an optional field and the profile stay here.
+
+### 31.2 The table, and what follows from it
+
+| Console | Screen | Profile | Status |
+|---|---|---|---|
+| NES | television | `ConsoleTiming["NES"]` | its own |
+| SNES | television | `"SNES"` | its own |
+| Genesis | television | `"Genesis"` | its own |
+| Sega CD | television | `"Genesis"`, `HostsPicture` | its host's picture, which is its own (§31.4) |
+| 32X | television | `"Genesis"` | **gap, dated 2026-10-20** (§31.4) |
+| N64 | television | `"N64"` | its own |
+| PlayStation | television | `"PlayStation"` | its own |
+| Master System | television | `"Master System"` | its own, new (§31.3) |
+| SG-1000 | television | `"SG-1000"` | its own, new (§31.3) |
+| GB | LCD | *Game Boy LCD* | its own |
+| GBC | LCD | *Game Boy Color LCD* | its own |
+
+- `CrtFilter.TelevisionConsoles` is now `ConsoleScreens.Televisions`: the televisions drawn on a row of their own,
+  NES, SNES, Genesis, N64, PlayStation, Master System and SG-1000, the first five in the order they had. An
+  attachment is offered its host's through `HostOf`, as before (`EmuSen_Serenity.md` §3.12). Both tubes, the overscan
+  row and the Television Standard row read that list, so the two new consoles gained all three without a change to
+  any of them.
+- **The LCD lists stay as they are.** `HandheldFilters` offers its filters by the console the frontend keys a game
+  under, and a Game Boy Color game runs under the GB core's "GB" (`MercuryModelSettingTests`): the four Game Boy
+  panels are offered on the GB tab, the colour panel among them. Deriving that list from the table would need the map
+  from a system to the core that runs it, which is the catalog's in Mistress and not Serenity's. The test holds it
+  instead: each LCD row's filter must be offered under the console its system's games run under.
+- **Nothing else changed for the consoles that had the tubes.** Their offered lists, their rows, their defaults and
+  their settings are as they were; `BuiltInGoldenTests` draws the filter's 125 variants on those five consoles to the
+  same bytes (§31.6).
+
+### 31.3 The Master System's and the SG-1000's rows
+
+Provenance marks as in §3. SMS Power!'s pages are the copies the Endou stage-1 fetch keeps (`Endou_References.md`
+§1.2, as served 2026-10-19); TI's manual is the scan named there, read as page images.
+
+| | Master clock | Subcarrier | Pixel | Cycles a pixel | Cycles a line | A line | A frame | Lines | Active picture |
+|---|---|---|---|---|---|---|---|---|---|
+| **Master System, NTSC** | 53.693175 MHz | ÷15 | ÷10, 5.369 MHz | 2/3 | 342 × 2/3 = **228** | 0 | 0 | 262 | 256 dots, 47.68 µs, 170⅔ cycles |
+| **Master System, PAL** | 53.203424 MHz | ÷12 | ÷10, 5.320 MHz | 5/6 | 342 × 5/6 = **285** | 0 | 0, V's switch turned over | 313 | 256 dots, 48.12 µs, 213⅓ cycles |
+| **SG-1000, NTSC** (TMS9918A) | 10.738635 MHz | ÷3 | ÷2, 5.369 MHz | 2/3 | **228** | 0 | 0 | 262 | 256 dots, 47.68 µs, 170⅔ cycles |
+| **SG-1000, PAL** (TMS9929A) | 10.738635 MHz | an encoder's own 4.43361875 MHz | ÷2, 5.369 MHz | 0.825732 | 282.4004 | +0.4004 | +0.3370, crawling; V's switch turned over | 313 | 256 dots, 47.68 µs, 211.39 cycles |
+
+Sources:
+
+- **The Master System's clocks.** SMS Power!'s *Clock Rate* [S]: the NTSC crystal "is divided by 15 to give 3579540Hz,
+  used as the system clock … and also for the RF encoder as the Chrominance subcarrier frequency"; the PAL crystal's
+  subcarrier "is obtained by dividing it by 12". *Pixel Aspect Ratio* [S]: "SG-1000, SMS, and Mega Drive in H32 mode
+  all have a pixel output rate 3/2 times the chroma subcarrier … a total signal of 342 pixels by 262 lines", and on
+  PAL a pixel clock 6/5 of the subcarrier. *TV Type Detection* [S]: 262 lines NTSC and 313 PAL, which Endou's frame
+  rates also use (`Endou_Native.md` §2.1). The *Pixel Aspect Ratio* page's "342 by 312" for PAL disagrees by a line;
+  313 is used, the count a program reading the hardware's counter finds. The right-hand columns are **[D]**.
+- **The SG-1000's.** TI's *TMS9918A/TMS9928A/TMS9929A Video Display Processors* data manual [P], §3.6: a 10.738635
+  MHz crystal, "divided by two to generate the pixel clock (5.3 MHz)"; §3.6.1, the TMS9918A's "internal six-phase
+  3.579545 MHz" colour clock; §3.6.2, "The TMS9918A/9928A operates at 262 lines per frame … The TMS9929A operates at
+  313 lines per frame"; Table 3-3, 342 pixel clocks a line, 256 active in the pattern modes and 240 in Text. The
+  TMS9929A runs from the same crystal (§3.6, and MacDonald's *SC-3000 Hardware Notes*: "The main clock runs at
+  10.738635 MHz, which is used directly by the TMS9929A") and puts out Y, R−Y and B−Y, not composite: §3.4.2's
+  Figure 3-4 draws them into a separate "video encoder/driver" with a "burst crystal" of its own, "4.43 MHz TMS9929A
+  PAL", and notes that "the LM1889 is typically used" [P]. The two crystals are unrelated, so the phase moves 0.4004 of
+  a cycle a line and 0.3370 a frame **[D]**, a steady crawl, written as the row's `phaseCrawl`. 313 lines is odd, so
+  the switch turns over between frames. Which encoder Sega's PAL boards used is unfound; TI's LM1889 is the one named.
+- **The two NTSC lines are the Genesis's H32 line**, the same crystal and the same three-halves pixel clock, so the
+  numbers are equal; they are derived here from each console's own documents, and the case
+  `The_master_system_s_and_the_sg_1000_s_ntsc_line_stands_still` holds both the numbers and the equality. The Master
+  System's PAL line is the Genesis's PAL line for the same reason.
+
+**The encoders, and what is unfound.** SMS Power!'s *Video Output* [S] names them: the first Master System's Sony
+V7040, which "takes in the RGB output from the VDP and converts it to composite video", sent to the RF modulator and
+the 8-pin DIN; the Master System II's Sony CXA1145, the Genesis's encoder, whose datasheet [P] gives RGB, Y and C
+−3 dB at 5.0 MHz or above (§3.2); the later PAL Master System II's Fujitsu MB3514; and the Mark III's Rohm BA7230LS.
+The row keeps luma at 5.0 MHz from the CXA1145's datasheet. **Unfound, with the value chosen:** the V7040's, the
+MB3514's and the BA7230LS's datasheets, and every board's chroma pre-filter, so the chroma channel is the standard's
+1.3 MHz **[C]**, as §3.2 does for every console whose encoder's filter is unfound.
+
+The SG-1000's encoder is the TMS9918A itself: COMVID is a composite output, its colours made from the six-phase
+clock, and TI's Table 2-3 gives each colour's luminance and chrominance amplitude but no phase (`Endou_Disputes.md`
+D-11). **Not modelled:** that chip's own chroma wave. The filter encodes Endou's RGB, which is TI's levels as RGB
+(D-11), through its standard encoder, as it drew the NES before §22 gave it its PPU's signal; the encoder's luma and
+chroma widths are unfound and take 5.0 and 1.3 MHz **[C]**. A raw picture of the TMS9918A's colour codes, the way
+Moon hands over the PPU's, would be the step that models it, and is recorded, not built.
+
+**The signal paths.** The first Master System puts out composite, through RF and the DIN, and RGB on the DIN (the
+dim RGB of the V7040 boards, *Video Output*); the Master System II has RF only, its composite, S-Video and RGB reached
+by modification; the Mark III and the SG-1000 have RF. Composite stays the default, as decision 4 makes it for every
+console, with S-Video and RGB as choices; RF is not modelled (decision 10). The European Master System's SCART RGB is
+the RGB choice.
+
+**Not modelled, and why it is recorded.** A Brazilian Master System's PAL-M (*Pixel Aspect Ratio* [S]: system M's
+lines with a 3.5756 MHz PAL subcarrier): Endou runs the Brazil region as NTSC and the filter has no PAL-M. And one
+difference between the core and the hardware, reported to the core's owners rather than changed here: Endou runs an
+SG-1000 set to Europe at the Master System's PAL clocks, 49.70 Hz, where the TMS9929A on its 10.738635 MHz crystal
+gives 10,738,635 ÷ 2 ÷ 342 ÷ 313 = 50.16 Hz **[D]**. The filter's row is the hardware's.
+
+### 31.4 Every console against the rule
+
+- **NES, SNES, Genesis, N64, PlayStation**: each has its own row from its own clocks (§3.2, §23.2, §28), the NES its
+  PPU's own signal as well (§22, §27). The SNES's S-ENC, the N64's ENC-NUS and the PlayStation's encoder have unfound
+  filters and take the standard's values, as §3.2 records; that is a missing measurement within an own profile, not a
+  borrowed one.
+- **Sega CD**: drawn on the Genesis's row, and that is its own: it has no video output, its picture is the Genesis's
+  VDP's signal through the Genesis's encoder (`EmuSen_Serenity.md` §3.12). Marked `HostsPicture`, which the test
+  accepts only for a console attached to the host it names.
+- **32X**: **a gap, dated 2026-10-20 in the table.** The 32X takes the Genesis's analogue RGB through its jumper
+  cable, mixes its own picture with it, and puts the mix out through its own A/V connector (consolemods.org, *Genesis:
+  Video Output Notes* [S], and the teardowns it cites). Whose encoder makes that composite, and with what filters, no
+  document read names. It is drawn on the Genesis's row until one does; `EmuSen_Serenity.md` §3.12's "both of which
+  draw through the Genesis's video output" is true of the Sega CD and not quite of the 32X. No core of this build
+  runs the 32X, so no player sees the gap yet.
+- **GB and GBC**: each has a model of its own panel: the Game Boy's from SameBoy's measured palettes, its response and
+  its dots' shadow (with the Pocket's and the Light's beside it), the Game Boy Color's from Pokefan531's measured
+  matrix and its stripes (`EmuSen_Serenity.md` §3.5). These are fits to measurements of each panel, not physical
+  models of it as the CRT is of a tube; whether they meet "accurate" in the tester's sense is a question (§31.7).
+- **Master System and SG-1000**: their own rows, §31.3.
+
+### 31.5 Overscan on a picture of 192 lines
+
+With the two consoles on the list, the overscan row of `EmuSen_Settings_Reference.md` §4.99 applies to them, and
+was checked against what their televisions showed.
+
+**What Endou hands over.** A frame of 256 × 192, or 224 or 240 lines in the Master System II's taller modes, and only
+the picture: no border (`Endou_Native.md` §2.1). On a game that sets the VDP's left-column mask, the first eight
+columns are that game's backdrop colour (*Sonic the Hedgehog* and *Alex Kidd in Miracle World*, read in place and
+run 900 frames, 2026-10-20: one colour in each of columns 0 to 7, three and nine colours from column 8). Under the
+rule of §14 the frame fills the tube, as it fills the 4:3 rectangle with no filter, so `ScreenFilterRenderTests`'s
+area case now draws 256 × 192, 256 × 224 and 256 × 240 on the Master System and 256 × 192 on the SG-1000, each lit
+within 2 pixels of (107, 0) to (1173, 800) at all three qualities.
+
+**Whole picture, the default, is right.** A television showed the whole picture. TI's Table 3-3 puts 24 border
+lines below the 192 and 27 above, and 13 and 15 border pixels beside the 256 [P]; a 7% raster overscan of an NTSC
+field's 242.5 active lines leaves 226.6 on the glass, about 8 lines lost from each end, all of them border, and of an
+active line of 52.66 µs (§3.1), 283 of these pixels, about 9 from each side, again border **[D]**. The masked left
+column was shown, and read as border because it is the border's colour. Drawn with no border, the frame shows it as
+an eight-pixel stripe of backdrop at the left edge, which is the hardware's picture without its surround.
+
+**TV overscan is not what their television showed.** It enlarges the frame by 7% about its centre, which hides
+3.27% at each edge: 8.4 of 256 columns and 6.3 of 192 lines of the picture itself, which a television showed whole.
+For a console whose frame is its whole raster (the NES's 240 lines) the share is the television's; for one whose
+frame leaves its border out it is not, and the Master System's and SG-1000's 192 lines are the furthest from it (the
+224-line pictures of the SNES and the Genesis lose 7.3 lines that a television mostly showed). It is not changed
+here: making "TV overscan" a share of each console's raster rather than of its frame would change it for the
+consoles that have it, which this step keeps as they were, and the frame without its border is Endou's choice and
+its shape `DisplayShape`'s. Put to the tester (§31.7).
+
+### 31.6 Tests and seeded faults
+
+**The rule's test**, `ConsoleScreenRuleTests` (no device needed):
+
+- *Every system has an accurate screen of its own and every television is offered the CRT*: for every system of
+  `SystemPacks`, exactly one row; a television's profile a row of `ConsoleTiming` other than the standard line's, its
+  own or, for a console marked `HostsPicture`, the host it is attached to; an LCD's profile a filter used by no other
+  console; anything else only with a dated `Gap`. Then, under the console the system's games run under in Mistress
+  (its shelf's core's, the GB core's for the Game Boy Color): a television is offered both tubes in the Shaders list
+  (`ShaderCatalog.BuiltIns`), has the overscan row (`HasOverscan`), and the CRT's defaults for the console it is drawn
+  as (`HostOf`) are its profile's row; an LCD is offered its panel and neither a tube nor an overscan row. And no row
+  names a console the table lacks, and no row of `ConsoleTiming` is left without a console.
+- *The tubes are offered for the televisions with rows of their own*, the list in its order, and the 32X the only gap.
+- *The consoles that had filters keep them*: the five lists the NES, SNES, Genesis, Sega CD, N64 and PlayStation had,
+  the same for the two new consoles, and the Game Boy's seven unchanged.
+- *The rule catches each way of breaking it*: nine broken tables, each found with its own words: a system with no
+  row; a new system (a Game Gear) nobody decided; a borrowed profile; the 32X's gap removed; a gap with no date; a
+  television drawn as an LCD; a borrowed panel; a handheld given a tube's row; a host's picture claimed by a console
+  attached to none.
+
+**The rows.** `The_master_system_s_and_the_sg_1000_s_ntsc_line_stands_still` (both consoles: the numbers, and equality
+with the Genesis's NTSC line); `Every_console_s_pal_line_is_the_arithmetic_of_its_clocks` gains both, the SG-1000's
+with a cycle that is the ratio of its two crystals; the area case draws the two consoles' frames (§31.5); every variant
+compiles for every listed console, the list now taken from the filter rather than typed.
+
+**A game through the CRT.** `MasterSystemScreenTests.A_game_draws_through_the_crt_on_its_console_s_own_row`, for each
+console with WiseMan's `SyntheticSmsRom` (the masked-column picture and the TMS9918A's Graphics I picture): Mistress
+started with the CRT stored for the console builds `CrtFilter.Filter` for that console, the core hands over 256 × 192,
+and the frame drawn on the console's row on the RX 6800 is lit and differs from the same frame on the standard line.
+Library games read in place and drawn at 1280 × 960 (2026-10-20, not kept as tests): *Sonic the Hedgehog*, *Alex Kidd
+in Miracle World*, *Flicky* and *Zaxxon*, each at Accurate on composite and RGB, Balanced, PAL and TV overscan, every
+picture's bytes differing from the same frame's on the standard line, and each picture looked at: the whole face lit
+by the frame, the scanlines and colours as on the other consoles, and on the Master System games the masked column a
+stripe of backdrop at the left edge.
+
+**Results, measured on 2026-10-20 on the RX 6800.** `ConsoleScreenRuleTests` 4 of 4; the Serenity cases that cover
+the filters (`ScreenFilterRenderTests`, `BuiltInGoldenTests`, `ShaderNamesTests`, `ScreenFilterChainTests`) 140 of
+140, the goldens of the five consoles that had the filter unchanged to the byte; `SegaCdScreenTests` 3 of 3;
+`MasterSystemScreenTests` 2 of 2; and the windows the two consoles' tabs grew in: `WindowFitAuditTests`,
+`ThemedLibraryHostTests`, `PadSettingsWindowTests`, `ShaderSettingsWindowTests`, `GraphicsSettingsWindowLayoutTests`,
+`PictureCropTests` and `ShaderBrowseTests`, 661 of 661, no recording changed. The systems table's data files are
+unchanged, so `SystemTableParity`, `SystemCodeParity` and `emusen-systems`' tests were not in the change's reach.
+
+**Seeded faults**, each built and run, then reverted:
+
+| Fault | Caught by |
+|---|---|
+| The SG-1000 dropped from the derived list of televisions | the rule ("SG-1000, a television, is not offered both tubes", "has no overscan row"), the list's order, the offered lists, `The_crt_suits_the_consoles…` |
+| The SG-1000's row removed from the table, a system without the fact | the rule ("sg1000 (SG-1000) has 0 screen rows", "the CRT's row SG-1000 is no console's profile"), and the cases above |
+| The Master System's row of `ConsoleTiming` renamed away | the rule ("profile Master System is no row of the CRT's", "the CRT's row Master System X is no console's profile"), both row cases, the PAL arithmetic, `MasterSystemScreenTests` |
+| The Master System given the Genesis's row | the rule ("Master System borrows Genesis's profile with no dated gap", and drawn on the wrong row), the list, the offered lists |
+
+### 31.7 Questions for the tester
+
+1. **The 32X's own output stage.** Its gap stands until a document names the encoder that makes its composite and
+   the filters around it. No core runs the 32X yet; when one does, it is drawn on the Genesis's row.
+2. **The LCD filters as "accurate".** The Game Boy's and Game Boy Color's are fits to measurements of each panel, not
+   physical models as the CRT is; the rule's test accepts them as each console's own. Whether the rule asks for a
+   modelled panel (its response in time, its grid at the display's size, its reflector) is the tester's to say.
+3. **TV overscan on the Master System and the SG-1000** (§31.5). It hides 8.4 columns and 6.3 lines of a picture a
+   television showed whole. Three forms: leave it; let Endou hand over its border, so the frame is the raster a
+   television drew and the 7% is right as it is for the NES; or make TV overscan a share of each console's raster.
+   The second changes Endou's frame and the shape a game is drawn at, the third the meaning of the setting for every
+   console that has it.
+4. **The SG-1000's own composite.** The TMS9918A's chroma, made from its six-phase clock, is not modelled; a raw
+   picture of its colour codes, as the NES's, would model it (§31.3).
+5. **Endou's PAL SG-1000** runs at the Master System's PAL rate, 49.70 Hz; the TMS9929A ran at 50.16 Hz (§31.3). The
+   filter's row follows the hardware; the core's rate is Endou's.
+
+*Decided 2026-10-20 by the tester:*
+
+- **Q3, TV overscan on the Master System and the SG-1000:** left as it is for now.
+- **Q2, the LCD filters:** they do not meet the rule. The Game Boy's and Game Boy Color's filters are to be recreated
+  more accurately, later and not as part of this step. Until then each console's row in `ConsoleScreens` carries a
+  dated gap saying so.
+- **Q4, the SG-1000's own composite:** to be modelled, as a later step on the to-do list.
+- **Q5, Endou's PAL SG-1000 rate:** to be corrected to the TMS9929A's 50.16 Hz in a small Endou step after stage 9.
+- **Q1, the 32X:** its gap stands until a document names its encoder.

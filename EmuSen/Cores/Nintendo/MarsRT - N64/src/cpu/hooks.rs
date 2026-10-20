@@ -149,8 +149,7 @@ mod tests {
         h.note_return();
         h.record(0);
         h.flush();
-        assert_eq!(h.profile[&0], 3);
-        assert_eq!(h.profile[&0x200], 1);
+        assert_eq!(h.profile, [(0, 3), (0x200, 1)]);
     }
 
     #[test]

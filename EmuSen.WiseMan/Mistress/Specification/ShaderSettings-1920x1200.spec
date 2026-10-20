@@ -102,42 +102,54 @@ tree
           86 Button at=1653,224,135,66 by=clip drawn focus heard=CLOSE limit=1653,224,135,66 op paints=#55555AFF,#9C9CA0FF role=button text=Close
             87 TextBlock at=1678.5,233,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1653,224,135,66 owner=86 paints=#EEEEF0FF role=text size=26 text=CLOSE
 focus 86
-edge 8 up same
+edge 8 up 86
 edge 8 down 26
 edge 26 up 8
 edge 26 down 34
 edge 29 up 8
 edge 29 down 34
 edge 29 left 26
-edge 29 right 8
+edge 29 right 86
 edge 34 up 29
 edge 34 down 45
 edge 34 left same
-edge 34 right 8
+edge 34 right 86
 edge 45 up 34
 edge 45 down 51
 edge 45 left same
-edge 45 right 8
+edge 45 right 79
 edge 51 up 45
 edge 51 down 57
 edge 51 left same
-edge 51 right 8
+edge 51 right 79
 edge 57 up 51
 edge 57 down 63
 edge 57 left same
-edge 57 right 8
+edge 57 right 79
 edge 63 up 57
 edge 63 down 70
 edge 63 left same
-edge 63 right 8
+edge 63 right 79
 edge 70 up 63
 edge 70 down same
 edge 70 left same
 edge 70 right 29
+edge 79 up 86
+edge 79 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2
+edge 79 left 29
+edge 79 right same
 edge 86 up same
 edge 86 down 29
 edge 86 left 8
 edge 86 right same
+edge "item:83/0/0/0/0/0/Reset Quality" up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2
+edge "item:83/0/0/0/0/0/Reset Quality" down item:83/0/0/0/1/Quality
+edge "item:83/0/0/0/0/0/Reset Quality" left 51
+edge "item:83/0/0/0/0/0/Reset Quality" right same
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2 up 79
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2 down "item:83/0/0/0/0/0/Reset Quality"
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2 left 45
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/1/1/0/1/0/3/0/2 right "item:83/0/0/0/0/0/Reset Quality"
 press pageup focus="Dropdown PART_Facet (Category)" tab=GB title=Shaders top=ShaderSettingsWindow
 press pagedown focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow
 press first focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow

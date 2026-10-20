@@ -134,7 +134,7 @@ tree
           118 Button at=1653,205,135,66 by=clip drawn focus heard=CLOSE limit=1653,205,135,66 op paints=#55555AFF,#9C9CA0FF role=button text=Close
             119 TextBlock at=1678.5,214,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1653,205,135,66 owner=118 paints=#EEEEF0FF role=text size=26 text=CLOSE
 focus 118
-edge 8 up same
+edge 8 up 118
 edge 8 down 26
 edge 26 up 8
 edge 26 down 34
@@ -145,7 +145,7 @@ edge 29 right 77
 edge 34 up 29
 edge 34 down 45
 edge 34 left same
-edge 34 right 8
+edge 34 right 84
 edge 45 up 34
 edge 45 down 51
 edge 45 left same
@@ -196,7 +196,7 @@ edge 118 left 8
 edge 118 right same
 edge "item:87/2/0/0/0/0/Reset Television standard" up 108
 edge "item:87/2/0/0/0/0/Reset Television standard" down "item:87/2/0/0/1/Television standard"
-edge "item:87/2/0/0/0/0/Reset Television standard" left 8
+edge "item:87/2/0/0/0/0/Reset Television standard" left "item:87/2/0/0/1/Television standard"
 edge "item:87/2/0/0/0/0/Reset Television standard" right same
 press pageup focus="Dropdown PART_Facet (Category)" tab=GB title=Shaders top=ShaderSettingsWindow
 press pagedown focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow

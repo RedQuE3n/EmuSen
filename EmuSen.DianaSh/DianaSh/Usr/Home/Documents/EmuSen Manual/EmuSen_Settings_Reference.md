@@ -1610,6 +1610,20 @@ another header. Left and right on the strip change tab. Down from the strip goes
 workaround: Avalonia 12.1's search, asked for the control below a tab header, answers the header beside it on the same
 row, and alternates between two headers for as long as it is asked.
 
+Up from the strip, when nothing lies above it, goes to the nearest control on the strip's own row outside it, which on
+a settings sheet is the Close button at the right end of the row. Until 2026-10-19 Close was reached only by up from
+the right-hand column of a page, because the tab headers stopped short of it. The Master System and SG-1000 tabs
+lengthened the shader sheet's strip to under the Close button, so up from that column landed on the strip, and the
+audit found Close unreachable on eight of the nine tabs. The rule does not depend on where the headers end.
+
+The same lengthening put headers above the page's right-hand column, and on a sheet made shorter by a taller status
+bar Avalonia's search, asked for the control right of a shader in the list, answered one of those headers; the router
+then moved to the selected tab and from there into the page's first control, so the sliders could not be walked to.
+A left or right move from the page below a strip now never lands on its headers, and falls back to the nearest control
+that way. A control on the strip's own row, such as Close, still moves left onto the selected tab: a first form of the
+rule that kept every sideways move off the headers sent left from Close into the shader list, a path the audit's
+replay could not repeat once a selection had rebuilt the right-hand column, and lost the list's rows to the audit.
+
 **Dropdowns.** Accept opens one; up and down then move the highlight, which moves the focus and not the choice;
 accept chooses; back closes without choosing. Previously up and down set the choice at every step, so passing over
 "RetroArch Preset..." on the way to another entry opened the preset picker.
@@ -7524,6 +7538,8 @@ slow motion, held turbo and the unthrottled speed therefore behave exactly as th
 | 60.00 | 240.00 | locked, 4 |
 | 50.007 (PAL) | 50.00 / 100.00 | locked, 1 / 2 |
 | 50.007 (PAL) | 60.00 | content: 60 is 20% away |
+| 59.9227 (Master System, SG-1000, Genesis) | 60.00 / 119.90 / 164.90 | locked, 1 / locked, 2 / content |
+| 49.7015 (Master System, PAL) | 50.00 / 60.00 | locked, 1 / content |
 | 60.00 | 144.00 | content: 72 is 20% away |
 | 60.0988 | 164.90, 74.92 (the desktop) | content |
 
@@ -7924,6 +7940,36 @@ the trace holds a million frames):
 2. *This build.* Predicted: every second within 59 to 61 throughout, apart from at most three extra frames after a
    stall.
 3. *This build, Super Mario Bros. 3 on MoonRT, 1200 s,* the second core, with the same prediction.
+
+#### 4.87.14 One refresh a frame on a 60 Hz television: a picture lost every few seconds, on every core (2026-10-20)
+
+Found while answering a report of jittery pacing on the Master System (`Endou_Pacing.md`, which shows the Master
+System paced exactly as the Genesis and the report's game moving its background at 30 Hz on the console itself). The
+handheld was docked to a 3840 by 2160 television at 60 Hz, under gamescope with its 60 frames-a-second limit and
+variable refresh enabled; every session that night was locked at 60.00 Hz, one refresh a frame. The `[fps]` lines count
+a lost picture as a second in which "shown" is below "offered" [M the tester's logs, read in place]:
+
+| Display and lock | Console | Locked seconds | With a lost picture | Per second |
+|---|---|---|---|---|
+| 60.00 Hz, 1 | Master System (Endou) | 327 | 27 | 0.083 |
+| 60.00 Hz, 1 | NES (MoonRT) | 190 | 23 | 0.12 |
+| 60.00 Hz, 1 | SNES (VenusRT) | 118 | 14 | 0.12 |
+| 60.00 Hz, 1 | PlayStation (Diamond) | 47 | 14 | 0.30 |
+| 60.00 Hz, 1, the install of 03:43 | Master System (Endou) | 805 | 5 | 0.006 |
+| 240 Hz, 4, the evening before | Genesis (Nephrite) | 1,448 | 5 | 0.003 |
+
+The emulation thread was not the cause in any of these: its frames were handed over 60 times a second and the core's
+work was under 0.4 ms of each 16.67 ms. A picture lost in "shown" is one the render thread never drew, two arriving
+within one of its draws; the modelled presenter of §4.87.1 loses none after the lock is taken (`Endou_Pacing.md` §3.3),
+so the loss is the real presenter's: the draw, gamescope's queue and the television's latch, the margin of §4.87.6
+measured against something the bench does not model. The rate changed by a factor of fourteen between installs whose
+pacing and presentation code is the same, while the tester also changed the Master System's filter, so it is not
+attributed.
+
+**Owed.** A present trace (`EMUSEN_PRESENT_TRACE`) on the handheld docked to the television, one refresh a frame, a
+game whose picture changes on every frame (*Sonic the Hedgehog* on Endou or *Super Mario Bros. 3* on MoonRT), with the
+margin at 3 ms and at 6 ms (`EMUSEN_SYNC_MARGIN_MS`). It needs the window on the real display and is the tester's to
+run; until then no margin is changed.
 
 ### 4.88 Quitting with Preferences open (2026-10-04)
 
@@ -8349,7 +8395,7 @@ This is a finding about the audit and not about Preferences. No player presses i
 
 **Decided 2026-10-07 by the tester: each television console has an Overscan setting, off by default, that hides the edges of its picture; one setting, which the CRT filter shares; applied only where the picture is drawn.** What a crop is, its unit, what it does to the picture's shape and the measurements on real games are `EmuSen_Serenity.md` §2.10; the filter's side is `EmuSen_CRT.md` §15.
 
-**The setting.** Graphics Settings, on the NES, SNES, N64 and Genesis tabs, the row after **Shader and shape**: **Overscan**, one of
+**The setting.** Graphics Settings, on the NES, SNES, N64 and Genesis tabs (*since 2026-10-20 every television console's, the Master System and the SG-1000 among them, `EmuSen_CRT.md` §31; what TV overscan hides of their 192-line pictures is §31.5 there*), the row after **Shader and shape**: **Overscan**, one of
 
 | Choice | Stored | What is hidden |
 |---|---|---|
@@ -9048,5 +9094,7 @@ Pro Action Replay and the Game Genie (`EmuSen_Cheats.md` §11). Battery saves un
 **The player selector in Controller Bindings** moved below the drawing, one on each console's page, since nine
 console tabs leave the tab strip no room for it (`EmuSen_Input.md` §8.4); the Active Cheats window's tab strip lost its
 bottom margin so that its list keeps two rows when the strip wraps (`EmuSen_InterfaceSpec.md` §6.3.9). The Master
-System and the SG-1000 are drawn on the NES's pad until LunaP has their own (`Endou_Native.md` §14.3).
+System and the SG-1000 are drawn on the NES's pad until LunaP has their own (`Endou_Native.md` §14.3). *Since
+2026-10-19* each is drawn on its own: the Master System's control pad and the SG-1000's joystick, with the console's
+Pause, and the Master System's Reset, drawn apart above the pad (`Endou_Native.md` §14.15, `LunaP.md` §198.14).
 

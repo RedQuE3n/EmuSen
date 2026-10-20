@@ -165,7 +165,29 @@ namespace EmuSen.Mistress.Input
             }
 
             // Nothing in line with the focus: the nearest control that way at all, so a button off to one side is still reached - §4.45.3.
-            (Next(focus, from, root, direction) ?? Nearest(root, from, direction))?.Focus(NavigationMethod.Directional);
+            (Next(focus, from, root, direction) ?? Nearest(root, from, direction) ?? BesideStrip(root, from, direction))?.Focus(NavigationMethod.Directional);
+        }
+
+        // Up from a tab strip with nothing above: the nearest control on the strip's row outside it, such as a sheet's Close - see §4.45.3.
+        private static InputElement? BesideStrip(Control root, InputElement from, NavigationDirection direction)
+        {
+            if (direction != NavigationDirection.Up || from is not TabItem || from.FindAncestorOfType<TabControl>() is not { } strip
+                || from.TranslatePoint(default, root) is not { } origin) return null;
+            var here = new Rect(origin, from.Bounds.Size);
+
+            InputElement? best = null;
+            double bestGap = double.MaxValue;
+            foreach (InputElement candidate in root.GetVisualDescendants().OfType<InputElement>())
+            {
+                if (!candidate.Focusable || !candidate.IsEffectivelyEnabled || !candidate.IsEffectivelyVisible || candidate is ScrollViewer || IsWithin(candidate, strip)) continue;
+                if (candidate.TranslatePoint(default, root) is not { } at) continue;
+                var there = new Rect(at, candidate.Bounds.Size);
+                if (there.Bottom <= here.Top || there.Top >= here.Bottom) continue;
+
+                double gap = Gap(here.Left, here.Right, there.Left, there.Right);
+                if (gap < bestGap) { bestGap = gap; best = candidate; }
+            }
+            return best;
         }
 
         // A virtualising area builds rows again only once its view leaves the range it last built for; a page's scroll that way and back builds them around the view as it is - see EmuSen_Settings_Reference.md §4.83.7.
@@ -212,6 +234,10 @@ namespace EmuSen.Mistress.Input
             return best;
         }
 
+        private static bool SharesRow(InputElement a, InputElement b, InputElement scope) =>
+            a.TranslatePoint(default, (Visual)scope) is { } p && b.TranslatePoint(default, (Visual)scope) is { } q
+            && p.Y < q.Y + b.Bounds.Height && q.Y < p.Y + a.Bounds.Height;
+
         private static double Gap(double start, double end, double otherStart, double otherEnd) =>
             otherEnd < start ? start - otherEnd : otherStart > end ? otherStart - end : 0;
 
@@ -234,6 +260,9 @@ namespace EmuSen.Mistress.Input
                     at = area;
                     continue;
                 }
+
+                // A sideways move lands on a tab header only from a control on the strip's row, never from the page below it - §4.45.3.
+                if (found is TabItem && from is not TabItem && direction is NavigationDirection.Left or NavigationDirection.Right && !SharesRow(from, found, scope)) return null;
 
                 // Another header of the strip the focus is already on is passed over; the strip is one stop.
                 if (found is TabItem { IsSelected: false } && from is TabItem && ReferenceEquals(found.GetVisualParent(), from.GetVisualParent()))

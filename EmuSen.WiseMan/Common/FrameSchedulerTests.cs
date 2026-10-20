@@ -28,6 +28,9 @@ namespace EmuSen.WiseMan.Common
         [InlineData(60.0, 240.0, 4)]
         [InlineData(50.007, 50.0, 1)]
         [InlineData(50.007, 100.0, 2)]
+        [InlineData(59.922743, 60.0, 1)]  // Master System, SG-1000, Genesis
+        [InlineData(59.922743, 119.90, 2)]
+        [InlineData(49.701459, 50.0, 1)]  // Master System, PAL
         public void A_whole_divisor_of_the_refresh_within_tolerance_is_locked_to(double content, double refresh, int k)
         {
             PacingDecision d = Decide(content, refresh);
@@ -45,6 +48,8 @@ namespace EmuSen.WiseMan.Common
         [InlineData(60.0988, 75.0)]
         [InlineData(59.7275, 61.0)]    // 2.1% away
         [InlineData(60.0, 30.0)]       // a display slower than the content
+        [InlineData(59.922743, 164.90)]
+        [InlineData(49.701459, 60.0)]
         public void A_refresh_with_no_divisor_near_the_content_rate_keeps_content_pacing(double content, double refresh)
         {
             PacingDecision d = Decide(content, refresh);

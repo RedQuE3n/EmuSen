@@ -48,6 +48,10 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   the output and added D-13 (the audio control port with no FM unit), argued; stage 6 took D-8's GHDL step, which GHDL
   could not complete, and added D-14 (the Mark III has no BIOS) and D-15 (port `$3F` at the hand-over), argued, and
   D-16 (the export check's sum), measured on the games.
+- [`Endou_Pacing.md`](Endou_Pacing.md) — the frame-pacing report of 2026-10-20 on *Wonder Boy III*: six hypotheses
+  (region, rate, audio, cost, display sync, lag frames) each refuted by measurement, the tester's handheld sessions
+  against the other consoles', Endou and Nephrite paced identically at 59.92 Hz, and the game's own 30 Hz background
+  matched frame for frame by two references; nothing changed, the seeded faults that guard it.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).

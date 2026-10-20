@@ -7538,6 +7538,8 @@ slow motion, held turbo and the unthrottled speed therefore behave exactly as th
 | 60.00 | 240.00 | locked, 4 |
 | 50.007 (PAL) | 50.00 / 100.00 | locked, 1 / 2 |
 | 50.007 (PAL) | 60.00 | content: 60 is 20% away |
+| 59.9227 (Master System, SG-1000, Genesis) | 60.00 / 119.90 / 164.90 | locked, 1 / locked, 2 / content |
+| 49.7015 (Master System, PAL) | 50.00 / 60.00 | locked, 1 / content |
 | 60.00 | 144.00 | content: 72 is 20% away |
 | 60.0988 | 164.90, 74.92 (the desktop) | content |
 
@@ -7938,6 +7940,36 @@ the trace holds a million frames):
 2. *This build.* Predicted: every second within 59 to 61 throughout, apart from at most three extra frames after a
    stall.
 3. *This build, Super Mario Bros. 3 on MoonRT, 1200 s,* the second core, with the same prediction.
+
+#### 4.87.14 One refresh a frame on a 60 Hz television: a picture lost every few seconds, on every core (2026-10-20)
+
+Found while answering a report of jittery pacing on the Master System (`Endou_Pacing.md`, which shows the Master
+System paced exactly as the Genesis and the report's game moving its background at 30 Hz on the console itself). The
+handheld was docked to a 3840 by 2160 television at 60 Hz, under gamescope with its 60 frames-a-second limit and
+variable refresh enabled; every session that night was locked at 60.00 Hz, one refresh a frame. The `[fps]` lines count
+a lost picture as a second in which "shown" is below "offered" [M the tester's logs, read in place]:
+
+| Display and lock | Console | Locked seconds | With a lost picture | Per second |
+|---|---|---|---|---|
+| 60.00 Hz, 1 | Master System (Endou) | 327 | 27 | 0.083 |
+| 60.00 Hz, 1 | NES (MoonRT) | 190 | 23 | 0.12 |
+| 60.00 Hz, 1 | SNES (VenusRT) | 118 | 14 | 0.12 |
+| 60.00 Hz, 1 | PlayStation (Diamond) | 47 | 14 | 0.30 |
+| 60.00 Hz, 1, the install of 03:43 | Master System (Endou) | 805 | 5 | 0.006 |
+| 240 Hz, 4, the evening before | Genesis (Nephrite) | 1,448 | 5 | 0.003 |
+
+The emulation thread was not the cause in any of these: its frames were handed over 60 times a second and the core's
+work was under 0.4 ms of each 16.67 ms. A picture lost in "shown" is one the render thread never drew, two arriving
+within one of its draws; the modelled presenter of §4.87.1 loses none after the lock is taken (`Endou_Pacing.md` §3.3),
+so the loss is the real presenter's: the draw, gamescope's queue and the television's latch, the margin of §4.87.6
+measured against something the bench does not model. The rate changed by a factor of fourteen between installs whose
+pacing and presentation code is the same, while the tester also changed the Master System's filter, so it is not
+attributed.
+
+**Owed.** A present trace (`EMUSEN_PRESENT_TRACE`) on the handheld docked to the television, one refresh a frame, a
+game whose picture changes on every frame (*Sonic the Hedgehog* on Endou or *Super Mario Bros. 3* on MoonRT), with the
+margin at 3 ms and at 6 ms (`EMUSEN_SYNC_MARGIN_MS`). It needs the window on the real display and is the tester's to
+run; until then no margin is changed.
 
 ### 4.88 Quitting with Preferences open (2026-10-04)
 

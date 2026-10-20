@@ -30,12 +30,19 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   questions before stage 7. Stage 7 (§14, 2026-10-19): the Master System and the SG-1000 offered to players on two
   shelves, the BIOS checksums from No-Intro's DAT, the refusal's words for the Mark III, the cheat formats, the battery
   table completed, the kit in corpus form, two windows reworked for the two tabs, the gate, the seeded faults and the
-  questions before stage 8.
+  questions before stage 8 Stage 8 (§15, 2026-10-19): the debugger and the views. Stage 9 (§16, 2026-10-20): the YM2413 as a module of
+  the core, ports `$F0`-`$F2`, the Mark III with the FM Sound Unit and the Japanese Master System as models, the
+  Japanese region's default moved to the latter with its open boot program, the state's version 7, the FM games
+  against the references, the seeded faults, and the questions before stage 10.
 - [`Endou_OpenBoot.md`](Endou_OpenBoot.md) — the open boot program's design, written 2026-10-19 before its code (stage
   6): what Sega's manual and the public documents say the BIOS does that a game can see, what they leave unsaid and
   what Endou chooses, the checksum's range measured on the library's export headers, the player's own BIOS as an
   opt-in per model, the steps with their oracles, the cost's words and the questions for the tester; §11, stage 7's
   `firmwarecheck.py` with a control, PASS against the tester's three images.
+- [`Endou_Opll.md`](Endou_Opll.md) — the YM2413's provenance (stage 9, 2026-10-20): what the documents fix and what
+  was measured on Genesis Plus GX's `nuked` YM2413 run as a black box (rates, levels, key scale, LFOs, the order within
+  a sample), the instrument ROM measured by recordings that differ only in data bytes, D-2 still open, and the referee's
+  bench waiting on the tester's approval.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, the corrections to what stage 0 recalled, and GHDL
   (stage 4).
@@ -47,7 +54,9 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   in the TMS9918's modes), D-11 (the TMS9918A's colours) and D-12 (its 4K mode), each argued; stage 5 measured D-0 on
   the output and added D-13 (the audio control port with no FM unit), argued; stage 6 took D-8's GHDL step, which GHDL
   could not complete, and added D-14 (the Mark III has no BIOS) and D-15 (port `$3F` at the hand-over), argued, and
-  D-16 (the export check's sum), measured on the games.
+  D-16 (the export check's sum), measured on the games; stage 9 left D-2 open and added D-17 (the audio control port
+  with an FM unit) and D-20 (the FM's level against the PSG), argued, D-18 (the key scale's codes), measured on the
+  black box, and D-19 (the DAC's small signals), open.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).

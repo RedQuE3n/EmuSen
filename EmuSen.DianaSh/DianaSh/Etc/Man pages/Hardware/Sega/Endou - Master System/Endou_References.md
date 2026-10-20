@@ -252,6 +252,22 @@ codecs.
 **Read for the boxes' shape**: one retailer's listing of box protectors, which says the same sleeve fits the Genesis's
 cardboard boxes and the Master System's; no measurement of a Master System box was found.
 
+## 6g. Used at stage 9 (2026-10-20)
+
+Nothing was fetched but a summarising read of one forum thread. Each item is in the probe cache's `PROVENANCE.txt`;
+nothing is committed.
+
+| Item | What was done with it |
+|---|---|
+| Nuked-OPLL's `opll.h` | extracted alone from the tarball of §3 into `refs/nuked-opll/hdr/` (SHA-256 `4af73da6…82de`) and read whole: its enumerations, its state structure's fields and its three functions. `opll.c` was not extracted, opened or built; the bench that would build it is `EmuSen.WiseMan/Reference/opll/`, waiting on the tester's approval (`Endou_Opll.md` §0, §7) |
+| Genesis Plus GX, pinned | run through the probe with its YM2413 core option at `nuked` and at `mame`, on synthetic programs and on library games read in place, its audio recorded; the recordings in `runs/opll/` |
+| Gearsystem and SMS Plus GX, pinned | run the same way with their FM units on (`gearsystem_ym2413=Auto`, `smsplus_fm_sound=auto`, regions Japanese) |
+| *YM2413 Application Manual* (§1.2) | read whole in Maxim's HTML, the scans beside it for Table III-4 |
+| SMS Power!'s "YM2413", "Audio Control Port", "FM Chip Detection" (§1.2) | read; the reverse-engineering notes "YM2413" links were not opened, carrying code |
+| SMS Power!'s forum, "FM/PSG mix: testing the audio control port" (`https://www.smspower.org/forums/17760-FMPSGMixTestingTheAudioControlPort`), cited by "Audio Control Port" | read through a summarising fetch for its posters' console tests of port `$F2`; not saved (`Endou_Disputes.md` D-17) |
+| *OPLx decapsulated* (§1.1) | its two tables, as for Nephrite |
+| JoppyFurr's *YM2413 TestRom* (MIT) | not run: its pad-driven screens give nothing a recording can grade that the synthetic programs do not, and its licence would allow committing it, which the repository's practice of building its own images makes unnecessary |
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

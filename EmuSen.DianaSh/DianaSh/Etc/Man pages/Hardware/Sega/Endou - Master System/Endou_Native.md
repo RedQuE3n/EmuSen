@@ -1890,3 +1890,218 @@ classes; DianaSh's `regs` and `vectors`.
 2. **The views stay without vectors**, the entry points being shown by the listing and the call stack.
 3. **`beryl-sms-colours` stays a crate of its own**, the one owner of the colour tables.
 4. **The go for stage 9.**
+
+---
+
+## 16. Stage 9: the YM2413 and its consoles (2026-10-20)
+
+### 16.1 In one paragraph
+
+The Japanese Master System and the Mark III with the FM Sound Unit join the models, and a Japanese cartridge now runs on
+the first by default (decided 2026-10-19, `Endou_Plan.md` §10 Q9). Their YM2413 is a module of the core, `src/opll.rs`
+with its tables and tests, keeping the chip contract: the sound runs it a sample every 72 Z80 clocks and steps its sum
+into the synthesiser beside the PSG, port `$F2` choosing which sounds. Its rules come from Yamaha's application manual
+where it gives them and otherwise from Genesis Plus GX's `nuked` YM2413 run as a black box (`Endou_Opll.md`), which
+also measured the instrument ROM: five of the fifteen instruments equal to it exactly, the rest best fits. The
+referee the plan named, Nuked-OPLL built from its tarball and compared sample for sample, was not run: its bench is
+written and waits on the tester's approval to compile fetched code, so the gate's first line and D-2 stand open. The
+Japanese Master System gets its BIOS setting and an open boot program that checks no header; the state is version 7,
+a version 6 state still loading where no FM unit is; the debugger lists the FM unit. FM games on the Japanese Master
+System follow the references' FM units as closely as the references follow each other (§16.10): on eleven games that switch the unit on, Endou's band envelopes correlate with the references' at 0.93-0.998 on ten, within or under 0.01 below the references' agreement with each other on eight, and at 0.73-0.79 on *Lord of the Sword*, whose music leans on the rhythm.
+
+### 16.2 The decisions of 2026-10-19, as built
+
+| Decision | Built |
+|---|---|
+| The profile's allocation fixed as its own step | not touched: `emusen-native`'s profile is as stage 8 left it |
+| The views stay without vectors | unchanged |
+| `beryl-sms-colours` stays its own crate | unchanged; the picture now chooses its colours by the VDP's variant, so the new models need no row of their own |
+| The go for stage 9 | this section |
+
+### 16.3 The consoles and their ports
+
+| Model | Setting | What it is | Rules |
+|---|---|---|---|
+| Mark III with the FM Sound Unit | `mark3fm` | the Mark III, its unit in the expansion port | no BIOS (D-14); `$F2` keeps only bit 0, the FM sounding at 1 and the PSG at 0 |
+| Japanese Master System | `jsms` | the 315-5124, the Mark III's I/O and TH, no Reset button, a BIOS, the YM2413 built in | `$F2` keeps bits 1-0: the FM at bit 0, the PSG while the two are equal |
+
+Both: `$F0` the YM2413's address, `$F1` its data, `$F2` the audio control port, decoded exactly; a read of `$F2` with
+the I/O chip off is three bits of the line counter, zeros and the bits kept; with the I/O chip on, port `$DD`; `$F2`
+is 0 at power-on, the PSG alone sounding (D-17). `model.rs` is the one owner: `Model::fm` gives the unit,
+`Model::japanese_io` the TH rule both share with the Mark III (D-3), `checks_export_header` which open boot program a
+console runs. FM detection as SMS Power!'s "FM Chip Detection" gives it finds the unit on both and on no other
+console (`programs::the_fm_unit_is_found_on_the_consoles_that_carry_one`, stage 5's test unchanged).
+
+### 16.4 The Japanese Master System's BIOS and its open boot program
+
+The BIOS setting `bios_jsms` (file 3, `bios_jsms.sms`, 8 KiB, the MD5 No-Intro's DAT gives for "(Japan) (v2.1)",
+`Endou_References.md` §6f) offers the player's own image as for the export consoles (decided 2026-10-19). The open
+boot program is assembled twice from the same source, `JAPAN` set for the second: its RAM program's first jump at the
+chosen slot goes straight to the hand-over, since the Japanese console's BIOS checks no header [R SMS Power!'s "ROM
+Header": "Only the export SMS BIOS actually checks this"]. The two images differ in three bytes. No real BIOS was read,
+hashed or run: the tester's Japanese image would be run with `firmwarecheck.py` as `Endou_OpenBoot.md` §11 ran the
+others, by the tester (§16.15).
+
+### 16.5 The chip
+
+`Endou_Opll.md` is its record. In brief: a sample's outputs, then its envelopes, phases and LFOs; 19-bit phases; the
+OPL2's log-sine and exponent tables (D-2, argued); TL, VOL and Table III-5's key scale, its codes measured (D-18);
+envelope rates fitted to the black box's slopes, a damp at rate 48 before each attack and the phase restarted there,
+silence from level 124; the tremolo's 0-13 triangle over 13,440 samples and the vibrato's eight steps; the carrier
+taking the modulator's output of the sample before; the rhythm's drums on channels 7-9, sounding twice. The instrument
+ROM is measured (`Endou_Opll.md` §4); the rhythm's patches are best fits.
+
+### 16.6 The sound
+
+`sound.rs` owns the chip as an `Fm` beside the PSG: its run interleaves the PSG's changes and the FM's samples in clock
+order, each a step of the sum, so a frame allocates nothing (`tests/alloc.rs` now runs `programs/opll.s` on both FM
+consoles too: 0 in 720 frames). The FM's nine-bit sum is scaled by 3, so that a full sine on one channel is 0.59 of a
+full-volume PSG tone's fundamental, near the median of the references' 0.53, 0.56 and 1.53 (D-20). No analogue stage
+is modelled, as for the PSG.
+
+### 16.7 The state, version 7
+
+The FM unit's block follows the PSG's: the address, the 64 registers, the eighteen slots' phases, levels, stages with
+keys and last two outputs, the sample counter, the tremolo, the noise, then the samples made, port `$F2` and the last
+level, 267 bytes; 26,209 bytes for a Japanese Master System with a plain board, pinned by
+`the_fm_unit_s_state_is_pinned_and_continues_the_sound`. A console without an FM unit has version 6's layout, so a
+version 6 state, which players have had since stage 7, loads there and machine info says so (`loads_from` 6 and 7).
+A state continues the FM's sound exactly.
+
+### 16.8 The debugger
+
+The FM unit is unit 260, `FM`, an audio unit listed only on the two consoles: the address, port `$F2`, the rhythm
+register, the tone register's eight bytes and each channel's F-number, block, key, sustain, instrument and volume, 65
+registers (`fm.Fnum0` in an expression). The `sms` views are unchanged; the FM's channels are not among the channels
+view's, a question (§16.15).
+
+### 16.9 The test programs
+
+`programs/opll.s`, a Japanese cartridge, detects the unit, switches it on and plays the original instrument, a modulated
+voice with moving envelopes, a chord of six instruments and the five drums, frame by frame; it is in the boot test's
+list, the allocation test and the state test. `examples/opllref.rs` holds the referee's voices (§16.10).
+
+### 16.10 The gate (`Endou_Plan.md` §7, stage 9), measured 2026-10-20
+
+| Gate item | Result [M] |
+|---|---|
+| The referee sample for sample on synthetic voices | **not run**: Nuked-OPLL's bench (`EmuSen.WiseMan/Reference/opll/`) compiles against `opll.h`; building `opll.c` from the fetched tarball waits on the tester's approval. In its place the black box of `Endou_Opll.md` §0: every rule of §3 there measured or argued, and five instruments equal to it exactly by recordings that differ only in data bytes |
+| FM games against the references' audio | eleven export games that switch the FM unit on when they find it, run on the Japanese Master System, read in place, 900 frames with no input, against Genesis Plus GX with each of its YM2413 cores, Gearsystem and SMS Plus GX with their units on and their regions Japanese; each recording's twenty band envelopes from 2 s to 14 s correlated at the best lag within 1.5 s (Endou's lags of 11-15 windows are its open boot program's start) [M `games.py`]. The table below |
+| Nephrite's FM tests unchanged if the ROMs move | the ROMs did not move (D-2 open), so nothing of Nephrite changed and its tests were not in the blast radius |
+| The Model setting's two models; the Japanese default | offered (§16.3); Japan's default the Japanese Master System, its BIOS setting and open boot program (§16.4) |
+| The crate's tests | **108 of 108** in the library and `tests/alloc.rs` 3, on release; 21 of them new for the stage, `opll::tests` 15 |
+| WiseMan | `EndouTests` (three updated for the Japanese default), `FirmwareOverviewTests`, `EndouPlayersTests` with the library given, `CrystalDebugParityTests` and `CoreDebugViewTests` (one updated, the same reason): **53 of 53**. The Model setting's six choices and the third BIOS setting reach Mistress's sheets: `ThemedLibraryHostTests` 16 of 17 and `PadSettingsWindowTests` with the fit audit 590 of 615 (and the four long-preset cases), every failure the same on stage 8's build (`1f599218`), shader sheets of every console where the pad cannot reach Close (§16.15, question 6) |
+| The kit | in corpus form on `kit/sms-sample.txt`, 600 frames, four at a time: **33 of 33 images pass** with the core's cases (C23 "6 checksum(s) over 3 entries of core info and 3 of firmware_for"); `programs/opll.s` on the Japanese Master System and on the Mark III with the unit, each "EmuSen v1 compliant on this image"; `EndouTests.The_kit_passes_on_synthetic_cartridges` |
+| Seeded faults | 16, every one caught (§16.11) |
+| No allocation per frame | 0 in 720 frames on both FM consoles (§16.6) |
+| The cost | §16.12 |
+
+
+| Game | Endou against Genesis Plus GX `nuked` / `mame` / Gearsystem / SMS Plus GX | The references against each other |
+|---|---|---|
+| OutRun | 0.968 / 0.959 / 0.963 / 0.958 | 0.986-0.994 |
+| After Burner | 0.991 / 0.994 / silent / 0.984 | 0.984-0.994 |
+| Fantasy Zone II | 0.990 / 0.988 / silent / 0.989 | 0.995-0.998 |
+| Aleste | 0.982 / 0.988 / silent / 0.993 | 0.994-0.999 |
+| Kenseiden | 0.992 / 0.997 / 0.996 / 0.982 | 0.989-1.000 |
+| Zillion II | 0.996 / 0.996 / silent / 0.995 | 0.998-0.999 |
+| Thunder Blade | 0.998 / 0.998 / 0.997 / 0.992 | 0.993-0.999 |
+| Power Strike | 0.982 / 0.988 / silent / 0.992 | 0.994-0.999 |
+| Altered Beast | 0.991 / 0.993 / silent / 0.992 | 0.993-0.998 |
+| Captain Silver | 0.959 / 0.961 / silent / 0.935 | 0.956-0.980 |
+| Lord of the Sword | 0.757 / 0.757 / 0.727 / 0.786 | 0.880-0.957 |
+
+Gearsystem gave silence on seven of them over the same 900 frames. Endou lies within the references' spread on After
+Burner, Kenseiden and Thunder Blade, under it by less than 0.01 on Fantasy Zone II, Aleste, Zillion II, Power Strike
+and Altered Beast, by 0.02-0.03 on OutRun and Captain Silver, and by 0.1-0.2 on *Lord of the Sword*; the last keeps the rhythm on throughout and plays
+instruments 3, 7, 9 and 15, best fits (`Endou_Opll.md` §4), beside drums whose patches are best fits too. Earlier in
+the stage, with no FM written by them on Endou or on Genesis Plus GX, *Phantasy Star*, *Ys* and *Wonder Boy III* gave
+nothing for this gate: they leave the unit off at their titles on a Japanese console.
+
+### 16.11 Seeded faults (2026-10-20)
+
+Each made in the source, the tests named run, the file restored and compared byte for byte (`seed.py` in the step's
+scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the carrier taking the modulator's newest output | `the_carrier_takes_the_modulator_s_output_of_the_sample_before` |
+| F2 | a decay stepping before it checks its sustain level | `a_decay_at_its_sustain_level_does_not_step` |
+| F3 | the key scale's codes 1 and 2 as the manual's Table III-4 has them | `the_level_key_scale_codes_are_1_5_3_and_6_db_an_octave` |
+| F4 | no silence from level 124 | `a_slot_past_level_124_is_silent` |
+| F5 | the phase step truncated before the multiple | `the_phase_step_keeps_half_a_unit` |
+| F6 | the tremolo's lower end held once | `the_lfos_have_their_measured_shapes` |
+| F7 | SUS ignored at key-off | `the_release_rate_follows_the_tone_and_sus` |
+| F8 | the Mark III's unit keeping bit 1 | the ports' bus test and the detection program |
+| F9 | `$F2` read as the unit's with the I/O chip on | the ports' bus test |
+| F10 | the FM's sample count saved as 0 | the FM state test |
+| F11 | the FM sounding with `$F2`'s bit 0 clear | `port_f2_chooses_what_sounds` |
+| F12 | a vector allocated each FM sample | `tests/alloc.rs` |
+| F13 | Japan's default left on the Mark III | three: the Japanese cartridge's, the empty console's and the routed system's |
+| F14 | the Japanese open boot program checking the header | three: the header-less hand-over, the Japanese cartridge's and the boot test over every program |
+| F15 | SUS read from the KEY bit | the release test |
+| F16 | the phase not restarted at the attack | `a_key_on_damps_and_restarts_the_phase` |
+
+### 16.12 The cost
+
+The desktop's mean a frame, release, `examples/screen.rs` draining the sound each frame, the median of five differences
+between runs of 3,600 and 600 frames over 3,000, stage 8's build (`1f599218`) and this stage's alternately, twice, load
+about 3-4 [M 2026-10-20]:
+
+| Game | Model | Stage 8 | Stage 9 |
+|---|---|---|---|
+| Sonic the Hedgehog | Master System II (the default) | 0.239, 0.239 ms | 0.232, 0.236 ms |
+| OutRun | the default | 0.252, 0.250 | 0.250, 0.248 |
+| Space Harrier | the default | 0.214, 0.214 | 0.215, 0.216 |
+| Phantasy Star | stage 8: the default; stage 9: the Japanese Master System | 0.221, 0.217 | 0.343, 0.344 |
+| Wonder Boy III | the same | 0.248, 0.248 | 0.373, 0.374 |
+
+A console without an FM unit costs what it did, to the runs' spread. The YM2413 costs about 0.125 ms a frame, its 830
+samples run whether it sounds or not, as the chip runs; deciding each sample's patch and operators once rather than in
+each of its three passes took 0.08 ms of it, by `examples/run.rs` on *Phantasy Star* under a heavier load (0.47 to
+0.39 ms a frame). P1's budget with the OPLL is 0.9 ms; the heaviest
+game here is 0.374.
+
+### 16.13 Open
+
+- The referee's comparison, D-2, and the instruments' exactness where their residual is not 0 (`Endou_Opll.md` §4, §7).
+- The rhythm's patches and noise, best fits; the DAC's small signals (D-19); the attack's last steps.
+- The FM's level against the PSG's (D-20) and the analogue stage, for want of a recording.
+- The FM's channels in the views; `MUTES`.
+- The earlier stages' open items stand.
+
+### 16.14 What was read for this stage
+
+No emulator source, no firmware image, no SMS_MiSTer RTL; of Nuked-OPLL its header alone. Read: `Endou_Plan.md`,
+`Endou_Native.md`, `Endou_Disputes.md`, `Endou_References.md`, `Endou_OpenBoot.md`; `Nephrite_OperatorTables.md` and
+`Nephrite_Disputes.md` D-16 to D-18; the documents of `Endou_Opll.md` §0; `emusen-native`'s `steps.rs`; Endou's own
+crate. The library's games only through the probe, the kit and `examples/screen.rs`, in place.
+
+### 16.15 Questions before stage 10
+
+1. **The referee's build.** Nuked-OPLL's bench is committed and compiles against `opll.h`; running it needs `opll.c`
+   compiled from the tarball pinned in `Endou_References.md` §3, on the desktop (`build-opll.sh`, `Endou_Opll.md` §7).
+   It would give the sample-for-sample gate its numbers, settle D-2 by moving each of the 512 entries by one, check the
+   instrument ROM exactly, and give D-19 its rule. Recommended: approve the compile as a step of its own, opening
+   nothing of the source, before stage 10 or beside it.
+2. **The instrument ROM's provenance.** No document read states the instruments' parameters, so the plan's rule (a
+   document, each value pinned by the referee) could not be met; the table is measured on Genesis Plus GX's `nuked`
+   YM2413, five instruments exactly and the rest as best fits (`Endou_Opll.md` §4). Recommended: accept measurement on a
+   black box as the table's provenance, the referee of question 1 to confirm every entry; the alternative is to search
+   for and fetch a document that states the table, which the reading for this stage did not find.
+3. **The FM's level against the PSG's** (D-20). The references disagree by a factor of three and no recording was found.
+   Recommended: keep 0.59, near the references' median, until a recording of a Japanese Master System is found; the
+   alternative is Genesis Plus GX's 1.53.
+4. **The FM unit in the views.** The `sms` pack's channel view lists the PSG's four channels; the FM's nine (or six and
+   the drums) would be a change to the pack and its C# twin, and a `MUTES` claim would let a player silence them.
+   Recommended: a small step of its own after stage 10, the pack's views and their parity class with it.
+5. **The Japanese Master System's BIOS.** The setting and its file are built and tested with a stand-in; the tester's
+   own image (`~/Documents/BIOS/SMS/`, Japan v2.1) has not been run, by the firmware rule. Recommended: the tester runs
+   `firmwarecheck.py` against it as against the export images (`Endou_OpenBoot.md` §11).
+6. **Thirty Mistress pad tests that fail before this stage.** `PadSettingsWindowTests`' four
+   `A_long_preset_s_sliders_are_reached_under_a_much_taller_status_bar` cases, its seven `…on_the_sheet_are_reached_and_walked_by_pad`,
+   seventeen `Down_from_a_preset_s_first_slider…` and the Shaders entry, and `ThemedLibraryHostTests`' Shaders entry, fail
+   on stage 8's build (`1f599218`) as on this one, the same names, with the LunaP checkout both builds used:
+   a Close button the pad cannot reach on the shader sheets of every console. Nothing of Endou's is on those sheets.
+   Recommended: a step outside Endou's stages to find which LunaP or Mistress change it follows.
+7. **The go for stage 10** (the Paddle, the Sports Pad and the 3-D glasses), as the plan has it.

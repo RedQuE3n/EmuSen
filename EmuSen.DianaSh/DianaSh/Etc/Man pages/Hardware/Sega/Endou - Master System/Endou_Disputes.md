@@ -111,6 +111,16 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   Endou's own, with a provenance page of their own.
 - Pinned by: —
 - Implemented in: —
+- *At stage 9 (2026-10-20):* the referee was not run: its bench is written (`Endou_Opll.md` §7), and building
+  `opll.c` from the fetched tarball waits on the tester's approval. The SMS Power! page the stage-0 summary came from,
+  "YM2413", was read: it says nothing of the ROMs, and links the reverse-engineering notes that carry code, which were
+  not opened (`Endou_Opll.md` §0). Genesis Plus GX's `nuked` YM2413, run as a black box, gives levels that agree with
+  the OPL2's tables to its resolution: a full sine at 4,111 against 510 nine-bit units scaled to it, and every 3 dB
+  volume step to 0.1 dB down to 24 dB [M `volsweep.py`]; through its resampler no single entry can be told from its
+  neighbour. **Still open**, the OPL2's tables used as argued; by `Endou_Plan.md` §3.2's condition they **do not move**
+  to a Beryl crate, and Endou holds its own copy, `src/opll/tables.rs`, with its provenance in `Endou_Opll.md` §2.
+- Pinned by: `opll::tests::the_tables_are_the_opl2_s_as_printed` (the copy), nothing yet against a chip.
+- Implemented in: the stage 9 commit, as argued.
 
 ### D-3. The I/O chip: on the Mark III a TH pin set as an output reads low and one left an input reads high
 - Opened: 2026-10-19, at stage 2, by the documents and a referee disagreeing. SMS Power!'s "Peripheral Ports" says the
@@ -431,3 +441,70 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   `a_header_inside_the_range_is_left_out_of_the_sum`, `the_export_check_refuses_in_words`;
   `media::tests::the_checksum_leaves_out_the_header_and_stops_at_the_coded_size`.
 - Implemented in: the stage 6 commit (`src/boot/ram.s`, `media::checksum`).
+
+### D-17. The audio control port with an FM unit: with the I/O chip off a read of `$F2` gives three bits of a line counter, zeros, and the two bits written; the Mark III's unit keeps no bit 1; FM and PSG sound as the bits say; `$F0`-`$F2` are decoded exactly
+- Opened: 2026-10-20, at stage 9, by what the documents leave open of D-13's other half. SMS Power!'s "Audio Control
+  Port": with FM hardware, a read gives "Counter (see below)" in bits 7-5, "Always 0" in 4-2 and the "Last value
+  written, 0 by default" in 1-0; the counter, MacDonald on its forum, is 12 bits "clocked by the C-Sync input into the
+  315-5297", bits 11, 7 and 3 on D7, D6 and D5; writes of `$00`-`$03` choose the PSG, the FM, neither or both on the
+  Japanese Master System, while on the Mark III "Bit 1 ... is forced to 0", so the two never sound together. MacDonald's
+  `smstech` §7: `$F0` the register latch, `$F1` the data, `$F2` bit 0 for detection, reads of `$C0`-`$FF` the I/O
+  chip's unless it is disabled; "It isn't known exactly what data is returned from ports $C0-$FF if the YM2413 is
+  present."
+- Documents read: those; the forum thread the "Audio Control Port" page cites, "FM/PSG mix: testing the audio control
+  port", through a summarising fetch: a Japanese Master System heard as the page says (00 PSG, 01 FM, 02 nothing, 03
+  both) and a Mark III with the unit as 00 PSG, 01 FM, 02 PSG, 03 FM, the poster's correction of 2020-03-25 included; no
+  poster measured the two's levels.
+- Test program: `programs/fm.s` (stage 5) finds the unit on both consoles, its seven reads giving bit 0 back, and the
+  tone sounding after `$F2` = 3 on the Japanese Master System and not on the Mark III.
+- Referee: none; the references' FM units are emulations of the same documents.
+- Conclusion: **argued** from the documents and the posters' tests. The counter is taken as one pulse a line, 228 Z80
+  clocks, counted from power-on: C-Sync's equalising and serration pulses in the vertical interval are not counted, which
+  only a console could show and no game is known to read. `$F0`, `$F1` and `$F2` alone are the unit's ports, the
+  documents naming no mirror; a read of `$F0` or `$F1` with the I/O chip off is the undriven bus, as with no unit.
+- Pinned by: `bus::tests::the_fm_unit_s_ports_answer_on_the_consoles_that_carry_it`, `sound::tests::port_f2_chooses_what_sounds`,
+  `programs::the_fm_unit_is_found_on_the_consoles_that_carry_one`.
+- Implemented in: the stage 9 commit.
+
+### D-18. The key scale's codes: KSL 1, 2 and 3 are 1.5, 3 and 6 dB an octave
+- Opened: 2026-10-20, at stage 9, by the black box against the manual. The *YM2413 Application Manual*, Table III-4,
+  gives D7 D6 = 1 0 as 1.5 dB an octave and 0 1 as 3, and its text lists "1.5 dB/oct, 3 dB/oct, 6 dB/oct, and 0 dB/oct"
+  [R Maxim's HTML, checked against the scan].
+- Documents read: those.
+- Test program: a carrier's sine at F-number `$1A0` with each KSL, in blocks 7 and 5, on Genesis Plus GX's `nuked`
+  YM2413 (`cmpshow.py`): KSL 1 lowers it by 10 dB and 7 dB, KSL 2 by 20 and 14, KSL 3 by more (28.5 in block 5), which
+  are Table III-5's 3 dB an octave halved, as given, and doubled.
+- Referee: the black box above, an emulation; its agreement is evidence only so far as its rule came from a chip.
+- Conclusion: **measured on the black box**: the code read as a number, 1 is 1.5 dB an octave, 2 is 3, 3 is 6. The
+  table's bit order is taken as a transcription's slip, the text's order agreeing with the black box.
+- Pinned by: `opll::tests::the_level_key_scale_codes_are_1_5_3_and_6_db_an_octave`.
+- Implemented in: the stage 9 commit.
+
+### D-19. OPEN. The DAC's small signals: the black box's quiet notes are louder than nine bits truncated give
+- Opened: 2026-10-20, at stage 9. The manual gives a nine-bit DAC and no more [D (II-1), (VI-5)]. On Genesis Plus GX's
+  `nuked` YM2413, a carrier's sine at VOL 0 to 15 measures 69.3, 66.3, 63.3, … 46.1 (VOL 8), 43.5, 40.9, 38.7, 36.3,
+  34.6, 32.6, 32.1 dB [M `volsweep.py`]: 3 dB a step to VOL 8, then less, VOL 14 and 15 nearly equal; its MAME core gives
+  3.0 dB a step throughout. Endou's twelve bits shifted right by three give 3 dB a step to VOL 10 and then lose level
+  faster. A release on the black box ends at about −37 dB and then falls to nothing at level 124 (`Endou_Opll.md` §3.5).
+- Documents read: the manual.
+- Test program: the volume sweep above; the waveform at VOL 15 on the black box shows four levels and no zero.
+- Referee: the referee of `Endou_Opll.md` §7 would give the sums a sample, which a resampler hides.
+- Conclusion: **open.** Endou keeps the nine-bit truncation; quiet notes are up to 8 dB quieter than the black box's.
+- Pinned by: —
+- Implemented in: —
+
+### D-20. The FM unit's level against the PSG's: argued, the references disagreeing
+- Opened: 2026-10-20, at stage 9, as `Endou_Native.md` §12.3 left it: "the YM2413 ... whose level against the PSG's is
+  that stage's measurement".
+- Documents read: the forum thread of D-17, whose posters heard both at `$F2` = 3 and measured no level.
+- Test program: a carrier's sine at full level on one channel and tone 0 at full volume, both sounding (`level.py`):
+  the FM sine's amplitude over the tone's fundamental is 1.53 on Genesis Plus GX (either YM2413 core, at its default
+  pre-amplifiers, 150 for the PSG and 100 for the FM), 0.557 on Gearsystem and 0.531 on SMS Plus GX [M].
+- Referee: none; no recording of a Japanese Master System's output was found (`Endou_References.md` §6e's search
+  stands).
+- Conclusion: **argued**: 0.59 (`sound::FM_GAIN` 3), near the references' median, Genesis Plus GX's two cores being one
+  program's choice of pre-amplifier, adjustable by its player. A recording would settle it as the PSG's analogue stage
+  waits on one.
+- Pinned by: `sound::tests::port_f2_chooses_what_sounds` holds the paths; the level is the constant `FM_GAIN`.
+- Implemented in: the stage 9 commit.
+

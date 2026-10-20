@@ -109,6 +109,7 @@ namespace EmuSen.WiseMan.Crystal
         public void Generated_scripts_on_cards_of_every_medium_free_and_held_do_the_same()
         {
             int done = 0, refused = 0, held = 0, ops = 0;
+            _golden = new ParityGolden("CardManagerScripts");
             for (int seed = 1; seed <= 60; seed++)
             {
                 string managed = Path.Combine(_root, $"m{seed}"), native = Path.Combine(_root, $"n{seed}");
@@ -140,6 +141,7 @@ namespace EmuSen.WiseMan.Crystal
                     held += shownManaged.Contains("in use by", StringComparison.Ordinal) ? 1 : 0;
                 }
             }
+            _golden.Check(3600);
             _output.WriteLine($"{ops} operations: {done} done, {refused} refused, {held} held");
             Assert.True(done > 150 && refused > 300 && held > 40, $"{ops} operations: {done} done, {refused} refused, {held} held");
         }
@@ -156,8 +158,11 @@ namespace EmuSen.WiseMan.Crystal
             _ => Shown(() => managedHalf ? SaveMediaManager.Managed.Rename(at(a), at(b)) : SaveMediaNative.Rename(at(a), at(b))),
         };
 
-        private static void Same(string managed, string native)
+        private ParityGolden? _golden;
+
+        private void Same(string managed, string native)
         {
+            _golden?.Add(_golden.Count.ToString(), managed.Replace(_root, "<root>", StringComparison.Ordinal));
             if (managed != native) Assert.Fail($"C#:\n{managed}\nRust:\n{native}");
         }
 
@@ -178,7 +183,9 @@ namespace EmuSen.WiseMan.Crystal
                     string[] from = [Path.Combine(dir, "One.mcr"), Path.Combine(dir, "Two.mcr")];
                     shown.Add(Shown(() => half == "m" ? SaveMediaManager.Managed.Import(Path.Combine(dir, "To.mcr"), from) : SaveMediaNative.Import(Path.Combine(dir, "To.mcr"), from)) + "\n" + Tree(dir));
                 }
-                Same(shown[0], shown[1]);
+                _golden = new ParityGolden($"CardManagerFill{extra}");
+                Same(shown[0].Replace(Path.Combine(_root, $"fill{extra}", "m"), "<dir>", StringComparison.Ordinal), shown[1].Replace(Path.Combine(_root, $"fill{extra}", "n"), "<dir>", StringComparison.Ordinal));
+                _golden.Check(1);
                 Assert.StartsWith(extra == 0 ? "True" : "False", shown[0]);
             }
         }
@@ -226,10 +233,12 @@ namespace EmuSen.WiseMan.Crystal
                 string shown = Shown(() => op(dir));
                 return shown + "\n" + string.Join("\n", _said).Replace(dir, "<dir>", StringComparison.Ordinal);
             }
+            _golden = new ParityGolden("CardManagerUnreadable");
             Same(Said("m", d => SaveMediaManager.Managed.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))),
                 Said("n", d => SaveMediaNative.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))));
             Same(Said("m", d => SaveMediaManager.Managed.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))),
                 Said("n", d => SaveMediaNative.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))));
+            _golden.Check(2);
         }
     }
 }

@@ -5,6 +5,8 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 
+using EmuSen.WiseMan.Crystal;
+
 namespace EmuSen.WiseMan.Common
 {
     // emusen-firmware held to the C# store on generated trees: the folders' order and its reports, every image found whole, split or by content, the overview's facts, and installs - see EmuSen_Backend.md §15.1 and EmuSen_Firmware.md §7.
@@ -36,8 +38,14 @@ namespace EmuSen.WiseMan.Common
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private static void Same(string managed, string native)
+        private ParityGolden? _golden;
+
+        // A text with the test's own folders named as the golden names them.
+        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal).Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "<home>", StringComparison.Ordinal);
+
+        private void Same(string managed, string native)
         {
+            _golden?.Add(_golden.Count.ToString(), Plain(managed));
             if (managed != native) Assert.Fail($"C#:   {managed}\nRust: {native}");
         }
 
@@ -73,7 +81,10 @@ namespace EmuSen.WiseMan.Common
             var native = new List<string>();
             foreach (string? value in settings) native.Add($"{value}: {string.Join(" | ", FirmwareNative.Folders(value, home, DataStore.Firmware)!)}");
             Assert.Equal(managed, native);
+            _golden = new ParityGolden("FirmwareFolders");
+            foreach (string line in managed) _golden.Add(_golden.Count.ToString(), Plain(line));
             Same(string.Join("\n", saidManaged), string.Join("\n", _said));
+            _golden.Check(27);
             Assert.True(saidManaged.Count >= 4, string.Join("\n", saidManaged));
         }
 
@@ -117,6 +128,7 @@ namespace EmuSen.WiseMan.Common
         public void Every_image_of_generated_trees_is_found_and_located_alike()
         {
             int found = 0, split = 0, wrong = 0, content = 0;
+            _golden = new ParityGolden("FirmwareTrees");
             for (int seed = 1; seed <= 150; seed++)
             {
                 var (requests, folders) = Tree(seed);
@@ -133,6 +145,7 @@ namespace EmuSen.WiseMan.Common
                     content += m is { ByContent: true } ? 1 : 0;
                 }
             }
+            _golden.Check(1000);
             Assert.True(found > 100 && split > 10 && wrong > 50 && content > 20, $"found {found}, split {split}, wrong {wrong}, by content {content}");
         }
 
@@ -141,6 +154,7 @@ namespace EmuSen.WiseMan.Common
         public void A_file_is_recognised_by_its_content_alike_in_both_halves()
         {
             var random = new Random(7);
+            _golden = new ParityGolden("FirmwareByContent");
             byte[] Bytes(int n) { var b = new byte[n]; random.NextBytes(b); return b; }
             string Folder(string name) => Directory.CreateDirectory(Path.Combine(_root, "content", name)).FullName;
             string chosen = Folder("chosen"), store = Folder("store"), elsewhere = Folder("elsewhere"), absent = Path.Combine(_root, "content", "absent");
@@ -180,6 +194,7 @@ namespace EmuSen.WiseMan.Common
             Expect("the checksums in the core's order before the names'", [order], order, "b.bin", true, image);
             File.Copy(Path.Combine(order, "b.bin"), Path.Combine(order, "B.bin"));
             Expect("then the names in ordinal order", [order], order, "B.bin", true, image);
+            _golden.Check(18);
         }
 
         // A file rewritten in place under its name is hashed again by each half, whose memory of checksums is keyed by the modification time too - see EmuSen_Firmware.md §7.6.
@@ -209,6 +224,7 @@ namespace EmuSen.WiseMan.Common
             File.SetUnixFileMode(Path.Combine(picks, "locked"), UnixFileMode.None);
             string blocked = Path.Combine(_root, "blocked");
             File.WriteAllBytes(blocked, [1]);
+            _golden = new ParityGolden("FirmwareInstalls");
             foreach (string source in new[] { "right", "short", "locked", "absent" })
                 foreach (string store in new[] { "store", "deep/store", "blocked" })
                 {
@@ -222,7 +238,9 @@ namespace EmuSen.WiseMan.Common
                     Assert.Equal((source, store, m), (source, store, n));
                     string Contents(string s) => File.Exists(Path.Combine(s, "widget.rom")) ? Convert.ToHexString(File.ReadAllBytes(Path.Combine(s, "widget.rom"))) : "none";
                     Assert.Equal(Contents(managedStore), Contents(nativeStore));
+                    _golden.Add($"{source} into {store}", $"{m} {Contents(managedStore)}");
                 }
+            _golden.Check(12);
         }
 
         // The facade under the switch reaches the same answers as the C# through the public calls.

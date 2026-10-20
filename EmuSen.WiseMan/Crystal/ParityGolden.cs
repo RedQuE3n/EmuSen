@@ -9,7 +9,7 @@ using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // A parity class's answers as recorded from the C# before it was deleted, one line a case, and the check of the Rust against them; EMUSEN_PARITY_GOLDEN=record rewrites the file - see EmuSen_Backend.md §33.
+    // A parity class's answers as recorded from the C# before it was deleted, one line a case, and the check of the Rust against them; EMUSEN_PARITY_GOLDEN=record rewrites the file - see EmuSen_Backend.md §40.
     public sealed class ParityGolden
     {
         public const string Variable = "EMUSEN_PARITY_GOLDEN";
@@ -117,7 +117,7 @@ namespace EmuSen.WiseMan.Crystal
                 using var file = System.IO.File.Create(File);
                 using var gzip = new GZipStream(file, CompressionLevel.SmallestSize);
                 using var writer = new StreamWriter(gzip, new UTF8Encoding(false)) { NewLine = "\n" };
-                writer.WriteLine($"# {_name}: answers recorded from the C# implementation on 2026-10-20, before it was deleted - see EmuSen_Backend.md §33.");
+                writer.WriteLine($"# {_name}: answers recorded from the C# implementation on {DateTime.UtcNow:yyyy-MM-dd}, before it was deleted - see EmuSen_Backend.md §40.");
                 foreach (var (key, answer) in _lines) writer.WriteLine(Escape(key) + "\t" + Escape(answer));
                 return;
             }

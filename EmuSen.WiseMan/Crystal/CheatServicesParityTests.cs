@@ -30,8 +30,11 @@ namespace EmuSen.WiseMan.Crystal
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private static void Same(string managed, string native)
+        private ParityGolden? _golden;
+
+        private void Same(string managed, string native)
         {
+            _golden?.Add(_golden.Count.ToString(), managed.Replace(_root, "<root>", StringComparison.Ordinal));
             if (managed != native) Assert.Fail($"C#:\n{managed}\nRust:\n{native}");
         }
 
@@ -102,14 +105,20 @@ namespace EmuSen.WiseMan.Crystal
             var r = new Random(20261017);
             for (int i = 0; i < 1500; i++) texts.Add(GeneratedText(r, corpus));
             int read = 0;
-            foreach (string text in texts)
+            var golden = new ParityGolden("ChtTexts");
+            for (int t = 0; t < texts.Count; t++) golden.Add($"text {t}", texts[t]);
+            for (int t = 0; t < texts.Count; t++)
                 foreach (var (auto, patch) in pairs)
                 {
+                    string text = texts[t];
                     string space = auto?.SpaceName ?? CheatImport.DefaultSpaceName;
                     string what = $"{auto?.Id ?? "none"}/{patch?.Id ?? "none"}:\n{text}\n";
-                    Same(what + Shown(() => ChtFile.Managed.Parse(text, auto, space, patch)), what + Shown(() => CheatsNative.Parse(text, auto, space, patch)));
+                    string m = Shown(() => ChtFile.Managed.Parse(text, auto, space, patch));
+                    golden.Add($"{t} {auto?.Id ?? "none"}/{patch?.Id ?? "none"}", m);
+                    Same(what + m, what + Shown(() => CheatsNative.Parse(text, auto, space, patch)));
                     read++;
                 }
+            golden.Check(15000);
             Assert.True(texts.Count > 1520 && read > 15000, $"{texts.Count} texts, {read} reads");
         }
 
@@ -117,6 +126,7 @@ namespace EmuSen.WiseMan.Crystal
         public void Written_cheats_are_the_same_text()
         {
             var r = new Random(1717);
+            var golden = new ParityGolden("ChtWrites");
             for (int i = 0; i < 2000; i++)
             {
                 var cheats = Enumerable.Range(0, r.Next(0, 5)).Select(_ => new ChtCheat
@@ -131,8 +141,10 @@ namespace EmuSen.WiseMan.Crystal
                         RepeatAddAddress = r.Next(-3, 300), RepeatAddValue = (uint)r.Next(3),
                     }).ToArray(),
                 }).ToList();
+                golden.Add(i.ToString(), ChtFile.Managed.Write(cheats));
                 Same(ChtFile.Managed.Write(cheats), CheatsNative.Write(cheats));
             }
+            golden.Check(2000);
         }
 
         // A tree of every shape the index meets: folders of systems with games in them, names that differ only in case, a folder's name repeated deeper down, links, hidden files and files of other kinds.
@@ -173,6 +185,7 @@ namespace EmuSen.WiseMan.Crystal
             string[] needles = ["mario", "MARIO", "mario paint.sfc", "super mario world (usa).zip", "  sonic  ", "sonic", "Ma", "", " ", "zelda", "ſonic", "nothing"];
             string[][] keeps = [[], ["Nintendo - SNES"], ["nintendo - SNES", "Sega - Mega Drive"], ["Absent"], ["Nintendo - SNES", "Sega - Mega Drive", "Sony - PlayStation", "Ünïcode", "sub", "Linked", "Closed", "Database"]];
             int searched = 0, applied = 0;
+            _golden = new ParityGolden("CheatTrees");
             for (int seed = 1; seed <= 80; seed++)
             {
                 string m = Path.Combine(_root, $"m{seed}", "Database"), n = Path.Combine(_root, $"n{seed}", "Database");
@@ -202,6 +215,7 @@ namespace EmuSen.WiseMan.Crystal
                 Same(what + $"{removedM} {Failed(failedM)}\n" + Tree(Path.GetDirectoryName(m)!, times: false), what + $"{removedN} {Failed(failedN)}\n" + Tree(Path.GetDirectoryName(n)!, times: false));
                 applied += removedM;
             }
+            _golden.Check(5000);
             Assert.True(searched > 3000 && applied > 20, $"{searched} searches, {applied} folders pruned");
         }
 

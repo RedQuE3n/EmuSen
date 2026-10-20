@@ -42,6 +42,30 @@ namespace EmuSen.WiseMan.Crystal
         };
 
         [Fact]
+        public void The_table_s_facts_match_the_golden()
+        {
+            var golden = new ParityGolden("SystemTable");
+            foreach (SystemEntry e in SystemPacks.Literals)
+            {
+                foreach (var p in Properties.Where(p => !IsCode(p))) golden.Add($"{e.Id}.{p.Name}", Show(p.GetValue(e)));
+                golden.Add($"{e.Id}.recognises", (e.Recognise is not null).ToString());
+            }
+            foreach (SystemPack pack in SystemPacks.All) golden.Add($"{pack.Entry.Id}.byte_order", pack.ByteOrder ?? "null");
+            foreach (var (system, m) in SystemPacks.MediumLiterals) golden.Add($"{system}.medium {m.Id}", $"{m.Title}|{m.Noun}|{m.Extension}");
+            foreach (var (system, auto, patch) in SystemPacks.ManagedCodecs)
+            {
+                golden.Add($"{system}.codecs", $"{auto?.Id ?? "null"}|{patch?.Id ?? "null"}");
+                golden.Add($"{system}.cheat_space", auto?.Managed().SpaceName ?? "null");
+                foreach (var (id, factory) in new[] { auto, patch }.OfType<(string Id, Func<EmuSen.Crystal.Cheats.ICheatCodeCodec> Managed)>())
+                {
+                    var c = factory();
+                    golden.Add($"{system}.codec {id}", $"{c.Name}|{c.Kind}|{c.SpaceName ?? "null"}");
+                }
+            }
+            golden.Check(100);
+        }
+
+        [Fact]
         public void The_library_gives_a_table()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);

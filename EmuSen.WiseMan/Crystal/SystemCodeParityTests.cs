@@ -123,6 +123,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var differences = new List<string>();
+            var golden = new ParityGolden("Recognisers");
             int count = 0;
             foreach (var (label, image) in Images())
                 foreach (SystemEntry literal in SystemPacks.Literals.Where(l => l.Recognise is not null))
@@ -133,7 +134,9 @@ namespace EmuSen.WiseMan.Crystal
                     m += " reads " + string.Join(",", managed.Asked);
                     n += " reads " + string.Join(",", native.Asked);
                     if (m != n) differences.Add($"{literal.Id} on {label}:\n  library: {n}\n  C#:      {m}");
+                    golden.Add($"{literal.Id} on {label}", m);
                 }
+            golden.Check(1000);
             Assert.True(count > 1000, $"{count} cases");
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
@@ -146,6 +149,7 @@ namespace EmuSen.WiseMan.Crystal
             var entries = SystemPacks.All.Select(p => p.Entry).ToArray();
             string?[] folders = { null, "", "roms", "psx", "PSX", "segacd", "SegaCD", "genesis", "nes", "n64", "gbc", "Ps×" };
             var differences = new List<string>();
+            var golden = new ParityGolden("Routing");
             for (int i = 0; i < 4000; i++)
             {
                 var candidates = entries.OrderBy(_ => r.Next()).Take(r.Next(0, 5)).ToArray();
@@ -155,8 +159,10 @@ namespace EmuSen.WiseMan.Crystal
                 string file = r.Next(4) == 0 ? "Café Game (Disc 1).cue" : $"game{i}.iso";
                 string m = Show(SystemRouting.DecideManaged(file, () => folder, candidates, claims));
                 string n = Show(SystemCode.Route(file, folder, candidates, claims)!);
+                golden.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => $"{c.Item1}:{c.Item2.SystemId}:{c.Item2.Serial}:{c.Item2.Region}"))}", m);
                 if (m != n) differences.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => c.Item1))}:\n  library: {n}\n  C#:      {m}");
             }
+            golden.Check(4000);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
 
@@ -197,12 +203,15 @@ namespace EmuSen.WiseMan.Crystal
                     files.Add(file);
                 }
             var differences = new List<string>();
+            var golden = new ParityGolden("OpenVgdb");
             foreach (SystemEntry literal in SystemPacks.Literals)
                 foreach (byte[] file in files)
                 {
                     string m = Shown(() => literal.OpenVgdbBytes(file)), n = Shown(() => SystemCode.OpenVgdbBytes(literal.Id, file));
+                    golden.Add($"{literal.Id} on {file.Length} bytes {Convert.ToHexString(file.AsSpan(0, Math.Min(4, file.Length)))}", m);
                     if (m != n) differences.Add($"{literal.Id} on {file.Length} bytes {Convert.ToHexString(file.AsSpan(0, Math.Min(4, file.Length)))}: library {n}, C# {m}");
                 }
+            golden.Check(100);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
 
@@ -212,6 +221,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1989);
             var differences = new List<string>();
+            var golden = new ParityGolden("Headers");
             for (int i = 0; i < 6000; i++)
             {
                 byte[] head = new byte[16];
@@ -222,6 +232,7 @@ namespace EmuSen.WiseMan.Crystal
                 byte[] image = new byte[length];
                 head.AsSpan(0, Math.Min(16, length)).CopyTo(image);
                 string m = Shown(() => NesHeader.ReadManaged(image)), n = Shown(() => SystemCode.NesHeader(image));
+                golden.Add($"nes {Convert.ToHexString(head)} {length}", m);
                 if (m != n) differences.Add($"nes {Convert.ToHexString(head)} {length}: library {n}, C# {m}");
             }
             for (int type = 0; type < 256; type++)
@@ -232,8 +243,10 @@ namespace EmuSen.WiseMan.Crystal
                     if (length > 0x147) image[0x147] = (byte)type;
                     if (length > 0x149) image[0x149] = (byte)r.Next(8);
                     string m = Shown(() => GbCartridge.ReadManaged(image)), n = Shown(() => SystemCode.GbHeader(image));
+                    golden.Add($"gb type {type:X2} {length}", m);
                     if (m != n) differences.Add($"gb type {type:X2} {length}: library {n}, C# {m}");
                 }
+            golden.Check(7000);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
     }

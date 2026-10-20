@@ -60,8 +60,11 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return "threw " + e.GetType().Name; }
         }
 
+        [ThreadStatic] private static ParityGolden? _golden;
+
         private static void Same(string what, string native, string managed, List<string> differences)
         {
+            _golden?.Add(what, managed);
             if (native != managed) differences.Add($"{what}:\n  library: {native}\n  C#:      {managed}");
         }
 
@@ -84,11 +87,14 @@ namespace EmuSen.WiseMan.Crystal
         public void The_library_gives_every_medium_a_module_with_the_csharps_facts()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
+            var golden = new ParityGolden("MediumModules");
             foreach (var (n, m) in Formats)
             {
                 Assert.Equal((m.Length, m.Capacity, m.Unit), (n.Length, n.Capacity, n.Unit));
                 Assert.Equal(m.Format(), n.Format());
+                golden.Add(m.Medium, $"{m.Length} {m.Capacity} {m.Unit} {(m.Format() is { } f ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(f)) : "null")}");
             }
+            golden.Check(4);
         }
 
         [Fact]
@@ -201,6 +207,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(20261017);
             var differences = new List<string>();
+            _golden = new ParityGolden("PsxCards");
             for (int i = 0; i < 300; i++)
                 Compare(PsxCardFormat.Id, RandomCard(r, Managed(PsxCardFormat.Id)), RandomCard(r, Managed(PsxCardFormat.Id)), $"card {i}", differences);
             byte[] noise = new byte[PsxCardFormat.CardLength];
@@ -216,6 +223,8 @@ namespace EmuSen.WiseMan.Crystal
             foreach (int length in new[] { 0, 1, PsxCardFormat.CardLength - 1, PsxCardFormat.CardLength + 1 })
                 Compare(PsxCardFormat.Id, new byte[length], Managed(PsxCardFormat.Id).Format()!, $"{length} bytes", differences);
             Compare(PsxCardFormat.Id, new byte[PsxCardFormat.CardLength], new byte[PsxCardFormat.CardLength], "zeros", differences);
+            _golden!.Check();
+            _golden = null;
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
         }
 
@@ -229,6 +238,7 @@ namespace EmuSen.WiseMan.Crystal
             foreach (int lead in Enumerable.Range(0x81, 0x1F).Concat(Enumerable.Range(0xE0, 0x1D)))
                 for (int trail = 1; trail < 256; trail++) sequences.Add(new[] { (byte)lead, (byte)trail, (byte)0x41 });
             var differences = new List<string>();
+            _golden = new ParityGolden("PsxTitles");
             var titles = new List<byte[]>();
             var current = new List<byte>();
             foreach (byte[] s in sequences)
@@ -244,6 +254,8 @@ namespace EmuSen.WiseMan.Crystal
                 Same($"titles card {c}", Shown(() => Native(PsxCardFormat.Id).Read(card)), Shown(() => Managed(PsxCardFormat.Id).Read(card)), differences);
             }
             Assert.True(titles.Count > 700, $"{titles.Count} titles");
+            _golden!.Check();
+            _golden = null;
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(5)));
         }
 
@@ -295,6 +307,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1996);
             var differences = new List<string>();
+            _golden = new ParityGolden("N64Paks");
             for (int i = 0; i < 300; i++) Compare(N64PakFormat.Id, RandomPak(r), RandomPak(r), $"pak {i}", differences);
             byte[] noise = new byte[N64PakFormat.PakLength];
             for (int i = 0; i < 40; i++)
@@ -305,6 +318,8 @@ namespace EmuSen.WiseMan.Crystal
             }
             foreach (int length in new[] { 0, N64PakFormat.PakLength - 1 })
                 Compare(N64PakFormat.Id, new byte[length], RandomPak(r), $"{length} bytes", differences);
+            _golden!.Check();
+            _golden = null;
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
         }
 
@@ -370,6 +385,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1991);
             var differences = new List<string>();
+            _golden = new ParityGolden("SegaCdBackupRams");
             foreach (string medium in new[] { SegaCdBramFormat.BackupRam.Medium, SegaCdBramFormat.RamCartridge.Medium })
             {
                 ISaveMediumFormat m = Managed(medium);
@@ -377,6 +393,8 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (int length in new[] { 0, 0x1000, 0x2001, 0x4000, 0x10_0000 })
                     Compare(medium, new byte[length], RandomBram(r, m), $"{medium} {length} bytes", differences);
             }
+            _golden!.Check();
+            _golden = null;
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
         }
 
@@ -411,6 +429,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void Edits_by_each_half_read_back_by_the_other()
         {
+            var golden = new ParityGolden("MediumEdits");
             var r = new Random(7);
             foreach (var (n, m) in Formats)
             {
@@ -426,14 +445,17 @@ namespace EmuSen.WiseMan.Crystal
                     Assert.Equal(Shown(() => m.Read(by)), Shown(() => n.Read(by)));
                     Assert.Equal(Shown(() => n.Read(other)), Shown(() => m.Read(other)));
                     Assert.Equal(by, other);
+                    golden.Add($"{m.Medium} {i} copied", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(other)) + " " + Shown(() => m.Read(other)));
                     if (m.Read(by).Saves.FirstOrDefault() is { } first)
                     {
                         by = n.Delete(by, first.Id).Image!;
                         other = m.Delete(other, first.Id).Image!;
                         Assert.Equal(by, other);
+                        golden.Add($"{m.Medium} {i} deleted {first.Id}", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(other)));
                     }
                 }
             }
+            golden.Check(80);
         }
     }
 }

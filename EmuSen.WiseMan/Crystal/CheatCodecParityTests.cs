@@ -98,22 +98,27 @@ namespace EmuSen.WiseMan.Crystal
         private static IEnumerable<(string Id, Func<ICheatCodeCodec> Managed)> Codecs() =>
             SystemPacks.ManagedCodecs.SelectMany(c => new[] { c.Auto, c.Explicit }).OfType<(string Id, Func<ICheatCodeCodec> Managed)>().DistinctBy(c => c.Id);
 
-        private static List<string> Compare(IEnumerable<string> codes)
+        private static List<string> Compare(IReadOnlyList<string> codes, ParityGolden golden, bool keyByCode = true)
         {
             var differences = new List<string>();
             foreach (var (id, factory) in Codecs())
             {
                 ICheatCodeCodec managed = factory(), native = new NativeCheatCodec(id, factory());
-                foreach (string code in codes)
+                for (int at = 0; at < codes.Count; at++)
                 {
+                    string code = codes[at];
+                    var answers = new List<string>();
                     foreach (var (what, ask) in new (string, Func<ICheatCodeCodec, object?>)[]
                     {
                         ("CanDecode", c => c.CanDecode(code)), ("Decode", c => c.Decode(code)), ("DecodeCompare", c => c.DecodeCompare(code)), ("DecodeWrites", c => c.DecodeWrites(code)),
                     })
                     {
                         string n = Shown(() => ask(native)), m = Shown(() => ask(managed));
+                        answers.Add(m);
                         if (n != m) differences.Add($"{id} {what} '{code}':\n  library: {n}\n  C#:      {m}");
                     }
+                    if (keyByCode) golden.Add($"{id} {code}", string.Join(" | ", answers));
+                    else golden.AddChunked(id, string.Join(" | ", answers), 50);
                 }
             }
             return differences;
@@ -150,7 +155,9 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var codes = TestCodes();
             Assert.True(codes.Count > 900, $"{codes.Count} codes");
-            var differences = Compare(codes);
+            var golden = new ParityGolden("CheatCodesOfTheTests");
+            var differences = Compare(codes, golden);
+            golden.Check(9000);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
         }
 
@@ -158,7 +165,9 @@ namespace EmuSen.WiseMan.Crystal
         public void Generated_codes_decode_alike_through_every_codec()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            var differences = Compare(GeneratedCodes());
+            var golden = new ParityGolden("CheatCodesGenerated");
+            var differences = Compare(GeneratedCodes(), golden, keyByCode: false);
+            golden.Check(1000);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
         }
 
@@ -175,12 +184,15 @@ namespace EmuSen.WiseMan.Crystal
                 if (SnesCheatFormats.IsGameGenie(code)) { var (a, v) = SnesCheatFormats.DecodeGameGenie(code); patches.Add((a, v)); }
                 if (GenesisCheatFormats.IsGameGenie(code)) { var (a, v) = GenesisCheatFormats.DecodeGameGenie(code); patches.Add((a, v)); }
             }
+            var golden = new ParityGolden("GameGenieEncoders");
             foreach (var (address, value) in patches)
             {
                 string snes = SnesCheatFormats.EncodeGameGenie(address, (byte)value), genesis = GenesisCheatFormats.EncodeGameGenie(address, (ushort)value);
+                golden.Add($"{address} {value}", $"{snes} | {genesis}");
                 if (SystemCode.CheatEncode("snes.gg", address, value) != snes) differences.Add($"snes {address:X} {value:X}: {snes}");
                 if (SystemCode.CheatEncode("md.gg", address, value) != genesis) differences.Add($"genesis {address:X} {value:X}: {genesis}");
             }
+            golden.Check(3000);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
         }
     }

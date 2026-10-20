@@ -9048,5 +9048,7 @@ Pro Action Replay and the Game Genie (`EmuSen_Cheats.md` §11). Battery saves un
 **The player selector in Controller Bindings** moved below the drawing, one on each console's page, since nine
 console tabs leave the tab strip no room for it (`EmuSen_Input.md` §8.4); the Active Cheats window's tab strip lost its
 bottom margin so that its list keeps two rows when the strip wraps (`EmuSen_InterfaceSpec.md` §6.3.9). The Master
-System and the SG-1000 are drawn on the NES's pad until LunaP has their own (`Endou_Native.md` §14.3).
+System and the SG-1000 are drawn on the NES's pad until LunaP has their own (`Endou_Native.md` §14.3). *Since
+2026-10-19* each is drawn on its own: the Master System's control pad and the SG-1000's joystick, with the console's
+Pause, and the Master System's Reset, drawn apart above the pad (`Endou_Native.md` §14.15, `LunaP.md` §198.14).
 

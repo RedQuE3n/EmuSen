@@ -21,15 +21,12 @@ namespace EmuSen.Mistress.Input
             "SNES" => ControllerLayout.Snes,
             "N64" => ControllerLayout.Nintendo64,
             "GB" or "GBC" => ControllerLayout.GameBoy,
-            // A flat oblong pad with a cross and two buttons, the console's Pause and Reset in Start's and Select's places, until LunaP draws its own - see Endou_Native.md §14.
-            "MASTER SYSTEM" or "SG-1000" => ControllerLayout.Nes,
+            "MASTER SYSTEM" => ControllerLayout.MasterSystem,
+            "SG-1000" => ControllerLayout.Sg1000,
             _ when IsGenesis(console) => controller == GenesisThreeButton ? ControllerLayout.Genesis : ControllerLayout.GenesisSixButton,
             "PLAYSTATION" => controller == PlayStationDigital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
             _ => ControllerLayout.Gamepad,
         };
-
-        // A console drawn on another console's pad, whose regions it may not all use - see Endou_Native.md §14.
-        public static bool BorrowsLayout(string console) => console.ToUpperInvariant() is "MASTER SYSTEM" or "SG-1000";
 
         // The Genesis and its attachments, which plug into it and share its pads - see EmuSen_Serenity.md §3.12.
         public static bool IsGenesis(string console) => string.Equals(Library.RuntimeCatalog.HostOf(console), Library.RuntimeCatalog.ConsoleOfSystem(MegaDriveSystem), StringComparison.OrdinalIgnoreCase);
@@ -59,6 +56,15 @@ namespace EmuSen.Mistress.Input
             [PadControl.R] = "R1",
         };
 
+        // Buttons 1 and 2 and the console's Pause and Reset by the RetroPad controls Endou gives them: 1 on B, 2 on A, Pause on Start, Reset on Select - see Endou_Plan.md §4.2.
+        private static readonly Dictionary<PadControl, string> MasterSystem = new()
+        {
+            [PadControl.B] = "1",
+            [PadControl.A] = "2",
+            [PadControl.Start] = "Pause",
+            [PadControl.Select] = "Reset",
+        };
+
         // The N64's Z is the template's L2, its C buttons the right stick and its stick the left one - see Mars_Core.md §5.
         private static readonly Dictionary<PadControl, string> Nintendo64 = new()
         {
@@ -77,6 +83,7 @@ namespace EmuSen.Mistress.Input
             LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region
             : IsGenesis(console) && Genesis.TryGetValue(control, out string? button) ? button
             : string.Equals(console, "PlayStation", StringComparison.OrdinalIgnoreCase) && PlayStation.TryGetValue(control, out string? face) ? face
+            : LayoutFor(console) is ControllerLayout.MasterSystem or ControllerLayout.Sg1000 && MasterSystem.TryGetValue(control, out string? sega) ? sega
             : control.ToString();
 
         // The control a region stands for on a console, or null for a region it has no control for.

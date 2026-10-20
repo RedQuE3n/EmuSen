@@ -39,72 +39,43 @@ tree
           24 StackPanel at=90,202,1100,1056 by=scroll in=23 limit=90,202,1100,454 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=90,202,1100,454
             25 DockPanel at=90,202,1100,450 by=scroll in=23 limit=90,202,1100,454 role=none
               26 ControllerDiagram at=90,202,1100,450 by=scroll caps=11.9682 face="Barlow Condensed" heard="SG-1000 controller" in=23 limit=90,202,1100,454 name=Diagram role=group size=17.1
-                27 DiagramLabel at=381,216,165,54 by=clip drawn focus heard=Up in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                28 DiagramLabel at=201,584,175,54 by=clip drawn focus heard=Down in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                29 DiagramLabel at=161,416,166,54 by=clip drawn focus heard=Left in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                30 DiagramLabel at=383,584,173,54 by=clip drawn focus heard=Right in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                31 DiagramLabel at=563,584,179,54 by=clip drawn focus heard=Select in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                32 DiagramLabel at=750,584,171,54 by=clip drawn focus heard=Start in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                33 DiagramLabel at=698,216,165,54 by=clip drawn focus heard=B in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                34 DiagramLabel at=954,414,165,54 by=clip drawn focus heard=A in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                27 DiagramLabel at=705,216,179,54 by=clip drawn focus heard=Pause in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                28 DiagramLabel at=532,216,165,54 by=clip drawn focus heard=Up in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                29 DiagramLabel at=551,584,175,54 by=clip drawn focus heard=Down in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                30 DiagramLabel at=378,584,166,54 by=clip drawn focus heard=Left in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                31 DiagramLabel at=734,584,173,54 by=clip drawn focus heard=Right in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                32 DiagramLabel at=209,400,165,54 by=clip drawn focus heard=1 in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                33 DiagramLabel at=906,400,165,54 by=clip drawn focus heard=2 in=23 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
 focus 13
 edge 13 up same
-edge 13 down 27
+edge 13 down 28
 edge 27 up 13
-edge 27 down 28
-edge 27 left 29
-edge 27 right 30
+edge 27 down 33
+edge 27 left 28
+edge 27 right 33
 edge 28 up 27
-edge 28 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1
-edge 28 left 29
-edge 28 right 30
-edge 29 up 27
-edge 29 down 28
-edge 29 left same
-edge 29 right 30
-edge 30 up 27
-edge 30 down 28
-edge 30 left 29
+edge 28 down 29
+edge 28 left 30
+edge 28 right 31
+edge 29 up 28
+edge 29 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1
+edge 29 left 30
+edge 29 right 31
+edge 30 up 28
+edge 30 down 29
+edge 30 left 32
 edge 30 right 31
-edge 31 up 30
-edge 31 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1
-edge 31 left 28
-edge 31 right 32
-edge 32 up 33
-edge 32 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1
-edge 32 left 31
-edge 32 right 33
+edge 31 up 28
+edge 31 down 29
+edge 31 left 30
+edge 31 right 33
+edge 32 up 27
+edge 32 down 30
+edge 32 left same
+edge 32 right 28
 edge 33 up 27
-edge 33 down 32
-edge 33 left 32
-edge 33 right 34
-edge 34 up 27
-edge 34 down 32
-edge 34 left 33
-edge 34 right same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1 up 28
+edge 33 down 31
+edge 33 left 28
+edge 33 right same
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1 up 29
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/1/1
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3 up 30
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/5
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/5 up 31
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/5 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/5
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/5 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/5 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/6
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/0/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/3 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/5
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/2 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/1/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/2 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/3/2
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/2 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/2 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/4/2/3

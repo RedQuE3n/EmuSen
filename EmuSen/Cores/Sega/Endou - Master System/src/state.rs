@@ -46,6 +46,7 @@ fn console_byte(c: Console) -> u8 {
     match c {
         Console::Sms => 0,
         Console::Sg1000 => 1,
+        Console::Gg => 2,
     }
 }
 

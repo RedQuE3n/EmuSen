@@ -8,6 +8,7 @@ use crate::board::{Board, Mapper, Row, TABLE, Why, identify_with};
 use crate::boot::{BIOS_SIZE, Boot, OPEN_BOOT};
 use crate::bus::{PATCH_HIGH, Patch};
 use crate::debug;
+use crate::gg;
 use crate::machine::{AUDIO_RATE, HEIGHT, MAX_HEIGHT, Machine, RAM_ID, WIDTH, Z80BUS_ID};
 use crate::media::{Console, Market, Media, Refusal};
 use crate::model::Model;
@@ -18,6 +19,7 @@ pub const STATUS_NO_CARTRIDGE: i32 = -9;
 
 pub const SMS_PAD: &str = "sms.pad";
 pub const SG1000_PAD: &str = "sg1000.pad";
+pub const GG_PAD: &str = "gg.pad";
 
 /// The pad's bits in port `$DC`'s order, pressed as 1, then the console's Pause and Reset buttons, read on port 0
 /// (Endou_Plan.md §4.2); the SG-1000 has a Pause button and no Reset.
@@ -40,6 +42,14 @@ fn pad(id: &str, label: &str, buttons: usize) -> Controller {
         buttons: BUTTONS[..buttons].iter().map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect(),
         axes: Vec::new(),
     }
+}
+
+/// The Game Gear's own controls on port 0, Pause's bit named Start (Jadeite_Native.md §2).
+fn gg_pad() -> Controller {
+    let mut c = pad(GG_PAD, "Game Gear", 7);
+    c.ports = vec![0];
+    c.buttons[6].label = "Start".into();
+    c
 }
 
 /// The region setting (Endou_Plan.md §5.8): from the header, or a market chosen; Europe alone is PAL.
@@ -168,6 +178,7 @@ pub fn market_of(media: &Media, setting: Option<&str>) -> Market {
 pub fn model_of(console: Console, market: Market, setting: Option<&str>) -> Model {
     let chosen = MODELS.iter().find(|m| Some(m.0) == setting).map(|m| m.2);
     match console {
+        Console::Gg => Model::GameGear,
         Console::Sg1000 => if chosen == Some(Model::MarkIII) { Model::MarkIII } else { Model::Sg1000 },
         Console::Sms => chosen.filter(|&m| m != Model::Sg1000).unwrap_or(if market == Market::Japan { Model::MarkIII } else { Model::Sms2 }),
     }
@@ -183,6 +194,11 @@ fn system(id: &str, name: &str, extension: &str, controller: Controller, firmwar
         firmware,
         development: false,
     }
+}
+
+/// The Game Gear: NTSC only, in development until stage J3 offers it (Endou_Plan.md §7).
+fn game_gear() -> emusen_native::core::System {
+    emusen_native::core::System { regions: vec![Region::Ntsc], development: true, ..system("gg", "Sega Game Gear", ".gg", gg_pad(), Vec::new()) }
 }
 
 /// What a console runs before its game: none where it has no BIOS; the player's image where its setting chooses it and
@@ -278,6 +294,7 @@ impl Core for Machine {
             systems: vec![
                 system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8), bios_list()),
                 system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7), Vec::new()),
+                game_gear(),
             ],
             deterministic: true,
             ..Info::default()
@@ -326,14 +343,24 @@ impl Core for Machine {
     }
 
     fn machine_info(&self) -> MachineInfo {
-        let pad = if self.console() == Console::Sms { SMS_PAD } else { SG1000_PAD };
+        let pad = match self.console() {
+            Console::Sms => SMS_PAD,
+            Console::Sg1000 => SG1000_PAD,
+            Console::Gg => GG_PAD,
+        };
+        // The Game Gear's LCD: its window in its own mode, the panel's 146 rows in a Master System cartridge's (`gg`).
+        let video = if self.model() == Model::GameGear {
+            Video { base_width: gg::WIDTH, base_height: gg::WINDOW_HEIGHT, max_width: gg::WIDTH, max_height: gg::PANEL_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
+        } else {
+            Video { base_width: WIDTH, base_height: HEIGHT, max_width: WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
+        };
         MachineInfo {
             system: self.console().id().into(),
             region: Some(if self.pal() { Region::Pal } else { Region::Ntsc }),
             frame_rate: self.frame_rate(),
-            video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
+            video,
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
-            ports: (0..2).map(|p| Port { port: p, controller: Some(pad.into()) }).collect(),
+            ports: (0..self.ports()).map(|p| Port { port: p, controller: Some(pad.into()) }).collect(),
             spaces: std::iter::once(Space { read_only: true, view: true, reports_stores: true, ..Space::new(Z80BUS_ID, "Z80BUS") })
                 .chain(self.spaces().into_iter().map(|(id, name, read_only)| Space { read_only, cheats: id == RAM_ID, reports_stores: debug::reports_stores(id), ..Space::new(id, name) }))
                 .collect(),
@@ -370,7 +397,7 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo::rgba(WIDTH as i32, self.height as i32)
+        FrameInfo::rgba(self.width as i32, self.height as i32)
     }
 
     fn frame(&self) -> &[u8] {
@@ -398,7 +425,8 @@ impl Core for Machine {
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
-        let p = self.pads.get_mut(port as usize).ok_or(status::NO_SUCH_PORT)?;
+        let ports = self.ports();
+        let p = self.pads.get_mut(port as usize).filter(|_| port < ports).ok_or(status::NO_SUCH_PORT)?;
         *p = (*p & !changed) | (mask & changed);
         Ok(())
     }
@@ -583,7 +611,7 @@ mod tests {
         assert_eq!((music.machine_info().system.as_str(), music.model(), music.machine_info().ports[0].controller.as_deref()), ("sg1000", Model::Sg1000, Some(SG1000_PAD)));
         let bios = Machine::create_as("sms", &request(&BIOS)).unwrap();
         assert_eq!((bios.machine_info().system.as_str(), bios.model()), ("sms", Model::MarkIII));
-        assert_eq!(Machine::create_as("gg", &request(&BIOS)).err(), Some(status::BAD_IMAGE));
+        assert_eq!(Machine::create_as("sc3000", &request(&BIOS)).err(), Some(status::BAD_IMAGE));
     }
 
     #[test]
@@ -651,7 +679,7 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let ids: Vec<_> = info.systems.iter().map(|s| (s.id.as_str(), s.extensions.clone(), s.development, s.firmware.len())).collect();
-        assert_eq!(ids, [("sms", vec![".sms".to_string()], false, 2), ("sg1000", vec![".sg".to_string()], false, 0)], "both offered since stage 7");
+        assert_eq!(ids, [("sms", vec![".sms".to_string()], false, 2), ("sg1000", vec![".sg".to_string()], false, 0), ("gg", vec![".gg".to_string()], true, 0)], "two offered since stage 7, the Game Gear in development until J3");
         let bios: Vec<_> = info.systems[0].firmware.iter().map(|f| (f.which, f.name.as_str(), f.size, f.required, f.md5.len())).collect();
         assert_eq!(bios, [(BIOS_SMS1, "bios_sms1.sms", 8192, false, 2), (BIOS_SMS2, "bios_sms2.sms", 8192, false, 0)]);
         assert!(BIOS_SMS1_MD5.iter().all(|m| m.len() == 32 && m.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())));
@@ -661,5 +689,29 @@ mod tests {
         let sms = &info.systems[0].controllers[0];
         assert_eq!(sms.buttons.iter().map(|b| (b.bit, b.label.as_str())).collect::<Vec<_>>()[4..], [(4, "1"), (5, "2"), (6, "Pause"), (7, "Reset")]);
         assert_eq!(info.systems[1].controllers[0].buttons.len(), 7, "the SG-1000 has no Reset button");
+        let gg = &info.systems[2];
+        assert_eq!((gg.regions.clone(), gg.controllers[0].ports.clone(), gg.controllers[0].buttons[6].label.as_str()), (vec![Region::Ntsc], vec![0], "Start"));
+    }
+
+    // Jadeite_Native.md §2: a routed `.gg` runs on the Game Gear, in its own mode unless its header names the Master System,
+    // NTSC whatever the region setting, with one controller port and the LCD's picture sizes.
+    #[test]
+    fn a_game_gear_cartridge_runs_on_the_game_gear_in_the_mode_its_header_chooses() {
+        let make = |region: u8, settings: &[(&str, &str)]| {
+            let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
+            let image = cartridge(0x8000, region);
+            Machine::create_as("gg", &Create { image: &image, settings, files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap()
+        };
+        let mut gg = make(6, &[(REGION_KEY, "sms.eu"), (MODEL_KEY, "sms1")]);
+        let info = gg.machine_info();
+        assert_eq!((gg.model(), gg.bus.vdp.gg_mode, info.system.as_str(), info.region, info.frame_rate), (Model::GameGear, true, "gg", Some(Region::Ntsc), NTSC_FRAME));
+        assert_eq!((info.video.base_width, info.video.base_height, info.video.max_height, info.ports.len()), (160, 144, 146, 1));
+        assert_eq!((info.ports[0].controller.as_deref(), info.firmware.len()), (Some(GG_PAD), 0));
+        assert_eq!(info.spaces.iter().find(|s| s.name == "CRAM").map(|s| gg.space_size(s.id)), Some(Ok(64)));
+        assert_eq!(gg.set_buttons(1, 1, 1), Err(status::NO_SUCH_PORT));
+        Core::advance(&mut gg, &mut 0).unwrap();
+        assert_eq!((gg.frame_info().width, gg.frame_info().height, gg.frame().len()), (160, 144, 160 * 144 * 4));
+        let sms = make(4, &[]);
+        assert_eq!((sms.model(), sms.bus.vdp.gg_mode, sms.frame_info().height, sms.space_size(crate::machine::CRAM_ID)), (Model::GameGear, false, 146, Ok(32)));
     }
 }

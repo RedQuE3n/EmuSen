@@ -1,6 +1,6 @@
 //! The consoles Endou models and what each differs in: the I/O chip's control port, the region it reads back, the Reset
-//! button, what an undriven read returns, the VDP, the PSG and the work RAM (Endou_Native.md §9.4, §11). The one owner
-//! of these facts.
+//! button, what an undriven read returns, the VDP, the PSG and the work RAM (Endou_Native.md §9.4, §11), and the Game
+//! Gear's (Jadeite_Native.md §2). The one owner of these facts.
 
 /// A real console. The Japanese Master System joins with the YM2413 at stage 9 (Endou_Plan.md §5.8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +16,9 @@ pub enum Model {
     /// The SG-1000: no memory or I/O control port, its pads read through the joystick ports [R SMS Power!'s "I/O Port
     /// Map - SG-1000 and SC-3000"], a TMS9918A, a discrete SN76489AN and 1 KiB of work RAM.
     Sg1000,
+    /// The Game Gear: "a NTSC SMS2" to its software [R MacDonald's `msvdp` §14] with the 315-5378 and an LCD. Its own
+    /// ports $00-$06 and its stereo are stage J2's; until then it reads as the Master System II there.
+    GameGear,
 }
 
 impl Model {
@@ -25,6 +28,7 @@ impl Model {
             Model::Sms1 => "sms1",
             Model::Sms2 => "sms2",
             Model::Sg1000 => "sg1000",
+            Model::GameGear => "gg",
         }
     }
 
@@ -34,11 +38,12 @@ impl Model {
             Model::Sms1 => 1,
             Model::Sms2 => 2,
             Model::Sg1000 => 3,
+            Model::GameGear => 4,
         }
     }
 
     pub fn of_byte(b: u8) -> Option<Model> {
-        [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000].into_iter().find(|m| m.byte() == b)
+        [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000, Model::GameGear].into_iter().find(|m| m.byte() == b)
     }
 
     /// The VDP: the 315-5124 in the Mark III and the first Master System, the 315-5246 in the second [R MacDonald's
@@ -48,7 +53,14 @@ impl Model {
             Model::MarkIII | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
             Model::Sms2 => beryl_sms_vdp::Variant::SMS2,
             Model::Sg1000 => beryl_sms_vdp::Variant::TMS9918A,
+            Model::GameGear => beryl_sms_vdp::Variant::GG,
         }
+    }
+
+    /// Whether the console runs PAL where the market is Europe: the Game Gear, every one of whose units is NTSC, does not
+    /// [R MacDonald's `msvdp` §14: "262 scanlines per frame", the machines "the same throughout the world"].
+    pub fn has_pal(self) -> bool {
+        self != Model::GameGear
     }
 
     /// The PSG: the discrete SN76489AN in the SG-1000, Sega's copy in the VDP from the Mark III on (Endou_Disputes.md
@@ -84,9 +96,10 @@ impl Model {
     }
 
     /// Whether a read nothing drives returns the bus's last byte, as MacDonald found on the first Master System, rather
-    /// than $FF, as on the Master System II. The Mark III and the SG-1000 are taken as the first [A].
+    /// than $FF, as on the Master System II. The Mark III and the SG-1000 are taken as the first [A], the Game Gear as the
+    /// second [R SMS Power!'s "I/O Port Map - Game Gear": its undecoded reads $FF].
     pub fn floating_bus(self) -> bool {
-        self != Model::Sms2
+        !matches!(self, Model::Sms2 | Model::GameGear)
     }
 
     /// Whether the console has a BIOS: the Master System and the Master System II; the Mark III has none

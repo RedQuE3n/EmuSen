@@ -1786,6 +1786,10 @@ frame's stores of the program's first moments. **The profile allocates one block
 again. That is the shared crate's, on every core that profiles, and is recorded as a question (§15.12) rather than
 changed here, since its type is read by MarsRT's and MercuryRT's tests.
 
+*Fixed 2026-10-20 in `emusen-native`* (`EmuSen_NativeCores.md` §12.8): the profile is a sorted list cleared in place,
+its drained pairs the same. The measured-only test became `a_profiled_frame_allocates_nothing`: **0 allocations** in
+720 profiled frames [M].
+
 ### 15.7 The parity script, and the kit's C15 corrected
 
 **`endou.script`** (`EmuSen.WiseMan/Crystal/DebugScripts/`), run by `CrystalDebugParityTests.The_debugger_over_Endou_answers_alike`
@@ -1855,7 +1859,7 @@ store and of `debug_open` at each frame. P1 holds.
 
 ### 15.11 Open
 
-- The profile's allocation, in `emusen-native` (§15.6).
+- ~~The profile's allocation, in `emusen-native` (§15.6).~~ Fixed 2026-10-20 (`EmuSen_NativeCores.md` §12.8).
 - No vectors (§15.5); no `MUTES`, so the channels view shows none muted.
 - The SG-1000's tile sheet shows every cell of VRAM; which are patterns depends on the mode and registers 3 and 4.
 - The earlier stages' open items stand: D-8, the analogue stage, BIOS images with a built-in game, the cover aspects.
@@ -1873,7 +1877,8 @@ classes; DianaSh's `regs` and `vectors`.
 
 1. **The profile's allocation** (§15.6). `emusen-native`'s `drain_profile` takes the map whole, so every core that
    profiles allocates once a frame. Recommended: a step of its own that keeps the profile in a sorted list cleared in
-   place, its output the same pairs in the same order, with MarsRT's and MercuryRT's tests moved onto it.
+   place, its output the same pairs in the same order, with MarsRT's and MercuryRT's tests moved onto it. *Decided
+   2026-10-19 as recommended, built 2026-10-20* (`EmuSen_NativeCores.md` §12.8).
 2. **The Z80's entry points as vectors** (§15.5). Recommended: leave the views without vectors, the entry points being
    shown by the listing and the call stack; the alternative is a vector kind for an entry point in `InterruptVector`, a
    change to the views' surface that the Game Boy's pack, which lists its entry points as two-byte pointers, would also

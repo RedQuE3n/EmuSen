@@ -710,7 +710,7 @@ emusen_native_debug_pc(handle, processor: u32, pc: *mut u64) -> i32
   - the unmatched count;
   - the two logs, with a capacity field;
   - the coverage bitmaps, a coverage address width per processor: 16 bits for MercuryRT, 24 and 12 for MarsRT;
-  - the profile, as a **`BTreeMap`**;
+  - the profile, as a **`BTreeMap`** (a sorted list cleared in place since 2026-10-20, §12.8);
 - its methods: `configure`, `set_stack`, `note_call(source, target, kind)`, `note_return`, `flush`, `record`,
   `stop_before`, `covers`, `note_write`, `stamp` and `armed`;
 - the drain helpers.
@@ -1389,7 +1389,7 @@ for no case that needs one.
 | `stamp` | shared, as MercuryRT's |
 | Call kinds | 0 return, 1 call, then C#'s `CallFrameKind` from 2: IRQ 2, NMI 3, BRK 4, COP 5. MercuryRT's 2 is unchanged; the NES needed NMI and BRK apart |
 | An interrupt of any kind | sets the one-shot `INTERRUPT` stop when `INTERRUPTS` is armed |
-| Profile | a `BTreeMap` |
+| Profile | a `BTreeMap`; a sorted list cleared in place since 2026-10-20 (§12.8) |
 | Coverage | per processor, armed by bit 8 + n |
 | Flags | `CALLS` 1, `WRITES` 2, `INTERRUPTS` 4, `EACH` 8, `PROFILING` 16 |
 | `return_after_slot` | not shared: it is MarsRT's delay slot, a mechanism, and stays in MarsRT (§3.14) |
@@ -1537,9 +1537,9 @@ a few thousand from the PSG; Nephrite's frame cost rose by about 1% with both in
 
 `Mars_Native.md` §7 is the record. In outline, against §12.5's list of what was left for it:
 
-- **The hooks** are the shared crate's `debug::Hooks`, with the profile its `BTreeMap` and the flags its numbering;
-  MarsRT keeps beside them only its delay-slot return and its observed frame's clock, and moves its signal processor's
-  trace into the hooks' second bitmap when the host drains it.
+- **The hooks** are the shared crate's `debug::Hooks`, with the profile its `BTreeMap` (a sorted list since §12.8) and
+  the flags its numbering; MarsRT keeps beside them only its delay-slot return and its observed frame's clock, and
+  moves its signal processor's trace into the hooks' second bitmap when the host drains it.
 - **`LegacyNativeMachine` is deleted** with its last user, and `NativeCoreLibrary`'s per-core constructor with it.
 - **`rust-cores.yml`'s `symbol`** for MarsRT is `emusen_core_`.
 - **The exports** are not this page's common set but the core ABI v1's, as `EmuSen_CoreAPI.md` §13.1 has it: 48 of
@@ -1555,3 +1555,54 @@ a few thousand from the PSG; Nephrite's frame cost rose by about 1% with both in
   `CoreEngine.EndFrame` became overridable: Mars's frame end is not the runtime's.
 - **The PGO retrain (5a)** stays deferred; §7.5 of `Mars_Native.md` times the step with the build unguided on both sides.
 
+### 12.8 The profile cleared in place (2026-10-20)
+
+**The defect.** Until this step `Hooks::profile` was a `BTreeMap<u32, i64>`, and `drain_profile` emptied it with
+`std::mem::take`, which moves the map's nodes out and frees them. The next frame's first charged routine allocated a
+node again, and every node past the first eleven owners another: with profiling armed, every core on the shared hooks
+allocated each frame. Endou's stage 8 measured it, 720 allocations in 720 armed frames of its voices program
+(`Endou_Native.md` §15.6). `BTreeMap::clear` would not have helped, since it frees its nodes too. Decided 2026-10-19 by
+the tester: fixed here, in the shared crate, as a step of its own.
+
+**The proof, before and after.** `emusen-native`'s `tests/alloc.rs` counts each thread's allocations over 720 frames
+of synthetic calls, nested calls and returns with the calls and the profile armed and both drained each frame, after
+four to warm. Measured 2026-10-19 on the map, and on this step's list:
+
+| Routines a frame (owners) | `BTreeMap`, taken | sorted list, cleared |
+|---|---|---|
+| 1 (2) | 720 | 0 |
+| 40 (51) | 5,040 | 0 |
+| 300 (376) | 35,280 | 0 |
+
+Endou's `a_profiled_frame_allocates_nothing` replaces its measured-only test of §15.6 and holds the voices program to
+0 as well.
+
+**The form.** The profile is a `Vec<(u32, i64)>` kept sorted by owner. `flush` finds the open run's owner by binary
+search and adds to it, or inserts it at its place; `drain_profile` copies the pairs out in order and clears the list,
+which keeps its capacity. Once a frame has seen as many owners as the largest frame before it, nothing is allocated.
+`Hooks::charged(owner)` reads one owner's count, zero for one never charged; the tests that indexed the map
+(MarsRT's, MercuryRT's and Diamond's) read it through `charged` or compare the list itself.
+
+**Why the output cannot change.** A `BTreeMap` iterates in ascending key order with one entry per key, and so does a
+list kept sorted by binary-search insertion; each owner's count is the same sum of the same runs in both. The drain's
+contract is unchanged: copied whole when the buffer holds every pair, left in place otherwise, the pair count returned
+either way. Nothing crosses the ABI but those pairs, so `emusen_core_debug_profile` and the frontend's API are
+untouched. Argued, and checked two ways: a unit test drains interleaved and repeated owners against a `BTreeMap`
+reference built beside them, and every drain made by the tests of `emusen-native`, Endou, Nephrite and the
+conformance kit was written out, 10,087 drains on the map and the same 10,087, pair for pair, on the list (sorted
+by line, since the tests run side by side; a temporary dump, not kept).
+
+**The cost.** A new owner shifts the owners above it, so a frame costs at most the square of its owners in moves,
+against the map's logarithm per insertion. Measured 2026-10-20 outside the crate, the two structures copied into one
+release program, 200,000 runs charged a frame over 60 frames: 10 owners 0.53 ms the map against 0.48 ms the list, 100
+owners 0.97 against 0.87–1.06, 1,000 owners 1.48 against 1.39–1.67, 3,000 owners 1.95 against 2.17. The binary search
+dominates and the moves do not show; the difference is inside the runs' spread up to a thousand owners and about 10% at
+three thousand, on a frame that is already observed. Nothing changes on a plain frame, which never charges a run.
+
+**The hasher argument of §3.14 still holds.** `Mercury_Native.md` §8.5.5 kept the profile off `HashMap` because a
+second instantiation of std's hasher changed what LLVM inlined into MercuryRT's plain bus read. A `Vec` instantiates
+no hasher. The symbol tables of MercuryRT's and MoonRT's release libraries were compared before and after this step
+(measured 2026-10-20, function names with their hashes removed). No function of the plain path changed size, the bus
+reads, `run_frame` and the CPUs' steps among them. What moved is the hooks' own code (`flush` now inlined into
+`note_call`, `note_return`, `set_stack`, `configure` and `drain_profile`), the map's two helpers replaced by the
+list's `grow_one`, the machine's drop, and `load_state` by 32 and 33 bytes.

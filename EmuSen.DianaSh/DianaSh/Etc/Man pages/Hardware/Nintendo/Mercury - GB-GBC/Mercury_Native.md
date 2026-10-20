@@ -1052,6 +1052,8 @@ which a `bt reset` or the registry's cap can leave disagreeing with the registry
 push of the tables, and `The_registrys_stack_is_the_depth_the_machine_stops_at` holds it.
 
 The profile's runs are kept by owner in a `BTreeMap`, drained sorted. §8.5.5 explains why it is not a `HashMap`.
+*Since 2026-10-20 the shared crate keeps them in a sorted list cleared in place, which allocates nothing in a
+profiled frame and instantiates no hasher (`EmuSen_NativeCores.md` §12.8).*
 
 **Coverage** is one bit for each of the 64K addresses, 8 KB. That is the first 8 KB of the registry's 24-bit bitmap,
 which `CoverageRegistry.Merge` ORs in. MarsRT's bitmap is 2 MB.

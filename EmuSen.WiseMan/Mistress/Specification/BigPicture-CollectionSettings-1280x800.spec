@@ -15,8 +15,8 @@ tree
     1 Grid at=0,0,1280,800 by=clip limit=0,0,1280,800 role=none
       2 MenuPanel at=0,0,1280,800 by=clip heard="Game Collection Settings" limit=0,0,1280,800 name=BigMenu role=menu
         3 HintBar at=410,742,461,48 by=clip heard="A Select, B Back, D-pad left and right Change, D-pad up and down Choose" limit=0,0,1280,800 role=group
-        4 ScrollViewer at=220,133,840,432 by=clip limit=0,0,1280,800 overflow=648 paints=#FFFFFFFF role=scrollviewer viewport=220,133,840,432
-          5 StackPanel at=220,133,840,1080 by=scroll in=4 limit=220,133,840,432 name=BigMenuRows paints=#55555AFF,#9C9CA0FF role=none seen=220,133,840,432
+        4 ScrollViewer at=220,133,840,432 by=clip limit=0,0,1280,800 overflow=756 paints=#FFFFFFFF role=scrollviewer viewport=220,133,840,432
+          5 StackPanel at=220,133,840,1188 by=scroll in=4 limit=220,133,840,432 name=BigMenuRows paints=#55555AFF,#9C9CA0FF role=none seen=220,133,840,432
             6 LunaSwitch at=220,133,840,54 by=scroll drawn focus heard="All Games" in=4 limit=220,133,840,432 name=Autoall op paints=#9C9CA0FF role=button
             7 LunaSwitch at=220,187,840,54 by=scroll drawn focus heard=Favorites in=4 limit=220,133,840,432 name=Autofavorites op paints=#9C9CA0FF role=button
             8 LunaSwitch at=220,241,840,54 by=scroll drawn focus heard="Last Played" in=4 limit=220,133,840,432 name=Autorecent op paints=#9C9CA0FF role=button
@@ -54,7 +54,7 @@ edge 13 up 12
 edge 13 down path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/8
 edge 13 left same
 edge 13 right same
-edge 15 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19
+edge 15 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/21
 edge 15 down same
 edge 15 left same
 edge 15 right same
@@ -95,7 +95,15 @@ edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/18 down path:0/3/0/0/2/3/0/0/0/0/1/1/0/0
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/18 left same
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/18 right same
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/18
-edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19 down 15
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19 down path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19 left same
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19 right same
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/19
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20 down path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/21
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20 left same
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20 right same
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/21 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/20
+edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/21 down 15
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/8 up 13
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/8 down path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/9
 edge path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/9 up path:0/3/0/0/2/3/0/0/0/0/1/1/0/0/0/8

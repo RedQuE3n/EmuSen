@@ -141,7 +141,7 @@ namespace EmuSen.WiseMan.Crystal
             foreach (SystemPack pack in SystemPacks.All)
                 foreach (ICheatCodeCodec? codec in new[] { pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke() })
                     if (codec is not null) Assert.Equal(SystemTable.Active, codec is NativeCheatCodec);
-            Assert.Equal(9, SystemPacks.All.Count(p => p.AutoDetectCodec is not null));
+            Assert.Equal(11, SystemPacks.All.Count(p => p.AutoDetectCodec is not null));
         }
 
         [Fact]

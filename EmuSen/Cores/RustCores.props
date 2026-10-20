@@ -25,7 +25,6 @@
       <Console>the Master System and the SG-1000</Console>
       <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
-      <InDevelopment>true</InDevelopment>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="marsrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>

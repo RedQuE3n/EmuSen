@@ -78,6 +78,8 @@ namespace EmuSen.Crystal.Systems
             (GameBoy.GameBoySystems.GameBoyId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
             (GameBoy.GameBoySystems.GameBoyColorId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
             (N64.N64System.Id, ("n64.gs", N64.N64System.ManagedGameShark), null),
+            (Sms.SmsSystems.MasterSystemId, ("sms.par", Sms.SmsSystems.ManagedProActionReplay), ("sms.gg", Sms.SmsSystems.ManagedGameGenie)),
+            (Sms.SmsSystems.Sg1000Id, ("sms.par", Sms.SmsSystems.ManagedProActionReplay), ("sms.gg", Sms.SmsSystems.ManagedGameGenie)),
         };
 
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);

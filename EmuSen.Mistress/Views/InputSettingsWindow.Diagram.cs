@@ -156,13 +156,6 @@ namespace EmuSen.Mistress.Views
             var diagram = new ControllerDiagram { Layout = LayoutOf(console), Name = "Diagram" };
             Avalonia.Automation.AutomationProperties.SetName(diagram, $"{console} controller");
             diagram.RegionInvoked += (_, e) => ChooseRegion(console, e.Region);
-            // Up past the drawing's top row is the player selector, which stands outside the tab's page.
-            diagram.KeyDown += (_, e) =>
-            {
-                if (e.Handled || e.Key != Key.Up || e.KeyModifiers != KeyModifiers.None || !PlayerBar.IsVisible) return;
-                _playerChoice.Focus(NavigationMethod.Directional);
-                e.Handled = true;
-            };
             _diagrams[console] = diagram;
 
             var status = new TextBlock { Name = "DiagramStatus", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
@@ -174,7 +167,7 @@ namespace EmuSen.Mistress.Views
             page.GetObservable(ScrollViewer.ViewportProperty).Subscribe(new Observer<Size>(v => host.Height = Math.Max(320, v.Height - 4)));
 
             var allBindings = new TextBlock { Text = "All Bindings", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 18, 0, 0) };
-            return new StackPanel { Spacing = 4, Children = { host, allBindings, list } };
+            return new StackPanel { Spacing = 4, Children = { host, NewPlayerBar(console).Bar, allBindings, list } };
         }
 
         // The pad the shown player's port is set to, where the console's engine has a setting for it; the drawing follows it.
@@ -413,21 +406,21 @@ namespace EmuSen.Mistress.Views
             }
 
             object? focused = TopLevel.GetTopLevel(_body)?.FocusManager?.GetFocusedElement();
-            // The selector is a stop between the drawing and the tab strip: Up goes on to the tab shown.
-            if (button == UiButton.Up && ReferenceEquals(focused, _playerChoice) && Tabs.ContainerFromIndex(Tabs.SelectedIndex) is TabItem shown)
+            // The selector is a stop below the drawing: Up goes back to the drawing's region last chosen.
+            if (button == UiButton.Up && ShownPlayerBar is { } bar && ReferenceEquals(focused, bar.Choice) && ShownConsole is { } shown && _diagrams.TryGetValue(shown, out ControllerDiagram? drawn) && drawn.SelectedRegion is { } region)
             {
-                shown.Focus(NavigationMethod.Directional);
+                drawn.Select(region, NavigationMethod.Directional);
                 return true;
             }
             if (_diagrams.FirstOrDefault(d => d.Value.RegionOf(focused) is not null) is not { Value: { } diagram, Key: { } console }) return false;
             switch (button)
             {
-                case UiButton.Up:
-                    if (diagram.MoveSelection(NavigationDirection.Up)) return true;
-                    if (!PlayerBar.IsVisible) return false;
-                    _playerChoice.Focus(NavigationMethod.Directional);
+                case UiButton.Up: return diagram.MoveSelection(NavigationDirection.Up);
+                case UiButton.Down:
+                    if (diagram.MoveSelection(NavigationDirection.Down)) return true;
+                    if (!_playerBars.TryGetValue(console, out PlayerBarParts? parts) || !parts.Bar.IsVisible) return false;
+                    parts.Choice.Focus(NavigationMethod.Directional);
                     return true;
-                case UiButton.Down: return diagram.MoveSelection(NavigationDirection.Down);
                 case UiButton.Left: return diagram.MoveSelection(NavigationDirection.Left);
                 case UiButton.Right: return diagram.MoveSelection(NavigationDirection.Right);
                 case UiButton.Accept:

@@ -1,0 +1,52 @@
+# The conformance kit's sample of Master System and SG-1000 images: names only, chosen by what each exercises, found in
+# the directory given with --from. A comment begins at a line's start or after two spaces. See Endou_Native.md §14.7 and
+# EmuSen_CoreAPI.md §28.
+#
+#   emusen-core-conform --core libendou.so --images kit/sms-sample.txt --from <the library's mastersystem directory>
+
+# Plain 32 KiB boards, on the open boot program's 32 KiB check.
+Teddy Boy (UE) [!].sms
+Ghost House (UE) [!].sms
+Cosmic Spacehead (UE) [!].sms                                # Codemasters' 32 KiB without its mapper
+
+# Sega's mapper, by size and by what each draws.
+Alex Kidd in Miracle World (UE) [!].sms
+Sonic the Hedgehog (UE) [!].sms
+Sonic the Hedgehog 2 (UE) (V2.2).sms
+Space Harrier (UE) [!].sms                                   # line interrupts
+OutRun (UE) [!].sms                                          # the Z80's R register in its attract mode
+Fantasy Zone (UE) [!].sms
+After Burner (UE) [!].sms                                    # a copier's 512-byte header
+Great Ice Hockey (UE) [!].sms                                # 64 KiB
+Black Belt (UE) [!].sms
+Missile Defense 3D (UE) [!].sms                              # the 3-D glasses' port, written
+
+# Codemasters' mapper and its 224-line picture.
+Micro Machines (E) [!].sms                                   # Europe only, run as NTSC unless the region is set
+
+# The battery boards of board.rs's table, the RAM a battery file.
+Phantasy Star (UE) [!].sms
+Golden Axe Warrior (UE) [!].sms
+Ys - The Vanished Omens (UE) [!].sms
+Ultima 4 - Quest of the Avatar (UE) [!].sms
+Golf Mania (UE) [!].sms
+Penguin Land (UE) [!].sms
+Miracle Warriors - Seal of the Dark Lord (UE) [!].sms        # added at stage 7 from SMS Power!'s "Memory Backup" tag
+Monopoly (U) [!].sms                                         # added at stage 7 from the same tag
+Desert Speedtrap (UE) [!].sms                                # enables cartridge RAM; no battery by the tag
+
+# Japanese headers, on the Mark III by default.
+Aleste (JUE) [!].sms
+Bank Panic (UE) [!].sms                                      # region code $2, no market
+
+# The export check's refusals, in words, on the Master System II by default.
+Felipe em Acao (Brazil).sms
+Toto World 3 (Korean) [!].sms
+
+# The SG-1000, on its own console.
+Flicky (SG-1000).sg
+Girl's Garden (SG-1000).sg
+Bank Panic (SG-1000) [!].sg
+Castle, The (SG-1000).sg                                     # the 8 KiB RAM board of board.rs's table
+Music Station V1.6 (SG-1000) [!].sg                          # 512 KiB, Sega's mapper
+Sinbad Mystery (SG-1000).sg                                  # writes $FFFF, which its plain board ignores

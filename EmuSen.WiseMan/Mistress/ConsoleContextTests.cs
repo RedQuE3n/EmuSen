@@ -94,7 +94,7 @@ namespace EmuSen.WiseMan.Mistress
         public void An_unknown_console_name_resolves_to_no_filter()
         {
             Assert.Null(CoreCatalog.ByDisplayName(CoreCatalog.AllConsoles));
-            Assert.Null(CoreCatalog.ByDisplayName("Master System (Endou)"));
+            Assert.Null(CoreCatalog.ByDisplayName("Game Gear (Endou)"));
             Assert.Null(CoreCatalog.ByDisplayName(null));
         }
 

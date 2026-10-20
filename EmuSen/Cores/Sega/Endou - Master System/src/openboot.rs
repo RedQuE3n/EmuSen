@@ -68,7 +68,7 @@ fn row(m: &Machine, r: usize) -> String {
 }
 
 fn screen(m: &Machine) -> Vec<String> {
-    (9..17).map(|r| row(m, r)).filter(|l| !l.is_empty()).collect()
+    (9..21).map(|r| row(m, r)).filter(|l| !l.is_empty()).collect()
 }
 
 /// Sega's power-on VDP registers (Sega's Mark III manual, "VDP register description").
@@ -79,7 +79,7 @@ const POWER_ON: [u8; 11] = [0x36, 0xA0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB, 0x00, 0x00
 fn the_open_boot_program_is_8_kib_and_its_bytes_are_pinned() {
     assert_eq!(OPEN_BOOT.len(), BIOS_SIZE);
     let fnv = OPEN_BOOT.iter().fold(0xCBF2_9CE4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100_0000_01B3));
-    assert_eq!(fnv, 0xC16C_9C33_CA12_3EA4, "{fnv:#018X}");
+    assert_eq!(fnv, 0xE82D_C9D1_9E88_1194, "{fnv:#018X}");
     assert_eq!(&OPEN_BOOT[..4], [0xF3, 0xED, 0x56, 0x31], "DI, IM 1, the stack");
     assert_eq!((OPEN_BOOT[0x66], OPEN_BOOT[0x67]), (0xED, 0x45), "RETN at the NMI's vector");
 }
@@ -163,8 +163,11 @@ fn a_codemasters_board_is_summed_as_the_console_reads_it() {
     assert!(until_handed_over(&mut m, 200), "{:?}", screen(&m));
     let mut wrong = create(&build(linear), &[]);
     frames(&mut wrong, 200);
-    assert_eq!(screen(&wrong)[2..], ["ITS CHECKSUM DOES NOT MATCH", "ITS DATA."], "the image's own banks are not what the console reads");
+    assert_eq!(screen(&wrong)[2..4], ["ITS CHECKSUM DOES NOT MATCH", "ITS DATA."], "the image's own banks are not what the console reads");
 }
+
+/// Every refusal's last lines: the Mark III checks no header, so it plays the game (decided 2026-10-19).
+const MARK_III: [&str; 2] = ["IT PLAYS ON THE MARK III:", "CHOOSE IT AS THE MODEL."];
 
 // The export check refuses in words (Endou_OpenBoot.md §3.3), on both consoles, and waits with the ROM on.
 #[test]
@@ -185,6 +188,7 @@ fn the_export_check_refuses_in_words() {
             frames(&mut m, 60);
             let mut want = vec!["ENDOU OPEN BOOT".to_owned()];
             want.extend(words.iter().map(|w| w.to_string()));
+            want.extend(MARK_III.iter().map(|w| w.to_string()));
             assert_eq!(screen(&m), want, "{model}");
             assert_eq!((m.bus.memory_control, m.cpu.regs.pc), (0xE3, WAIT + 1), "{model}: halted in the ROM's wait");
             assert!(m.bus.vdp.regs[1] & 0x40 != 0, "the display on");

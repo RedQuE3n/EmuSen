@@ -81,8 +81,10 @@ namespace EmuSen.Mistress.Views
         // The player whose pad bindings each console's tab shows; 1 until chosen - see EmuSen_Input.md §8.4.
         private readonly Dictionary<string, int> _playerByConsole = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, (TextBlock Words, TextBlock KeyboardHeader)> _playerRows = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dropdown _playerChoice = new() { Name = "PlayerSelector", Width = 130 };
-        private readonly Button _usePlayer1;
+
+        // Each console's player selector, below its drawing, so neither the drawing nor the tab strip gives it room - see EmuSen_Input.md §8.4.
+        private sealed record PlayerBarParts(StackPanel Bar, Dropdown Choice, Button UsePlayer1);
+        private readonly Dictionary<string, PlayerBarParts> _playerBars = new(StringComparer.OrdinalIgnoreCase);
         // The running game's controller per player, which a cartridge's own ports can add to - see EmuSen_Settings_Reference.md §4.103.
         private readonly (string Console, IReadOnlyList<string?> Controllers)? _running;
 
@@ -115,7 +117,6 @@ namespace EmuSen.Mistress.Views
         {
             InitializeComponent();
             if (selectedConsole is not null && runningControllers is not null) _running = (selectedConsole, runningControllers);
-            _usePlayer1 = Ui.Button("Use Player 1's", UsePlayer1).HelpText("Give the player shown player 1's gamepad buttons again");
             _consoles = EmuSen.Mistress.Library.RuntimeCatalog.Consoles;
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
@@ -219,35 +220,47 @@ namespace EmuSen.Mistress.Views
             return panel;
         }
 
-        // One selector beside the tabs for the console shown, so the drawing keeps its height - see EmuSen_Input.md §8.4.
-        private void SetUpPlayerBar()
+        // A console's player selector, its Use Player 1's beside it; shown below the drawing where the console's ports hold more than one player - see EmuSen_Input.md §8.4.
+        private PlayerBarParts NewPlayerBar(string console)
         {
-            _usePlayer1.Name = "UsePlayer1Button";
-            Avalonia.Automation.AutomationProperties.SetName(_playerChoice, "Player");
-            PlayerBar.Children.Add(Ui.Text("Player").Center());
-            PlayerBar.Children.Add(_playerChoice);
-            PlayerBar.Children.Add(_usePlayer1);
-            _playerChoice.Chose += chosen =>
+            var choice = new Dropdown { Name = "PlayerSelector", Width = 130 };
+            Avalonia.Automation.AutomationProperties.SetName(choice, "Player");
+            var use = Ui.Button("Use Player 1's", UsePlayer1).HelpText("Give the player shown player 1's gamepad buttons again");
+            use.Name = "UsePlayer1Button";
+            var bar = new StackPanel { Name = "PlayerBar", Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 10, Margin = new Avalonia.Thickness(0, 8, 0, 0), IsVisible = false };
+            bar.Children.Add(Ui.Text("Player").Center());
+            bar.Children.Add(choice);
+            bar.Children.Add(use);
+            choice.Chose += chosen =>
             {
-                if (ShownConsole is not { } console || chosen is not string text || !int.TryParse(text.AsSpan("Player ".Length), out int player)) return;
+                if (chosen is not string text || !int.TryParse(text.AsSpan("Player ".Length), out int player)) return;
                 CancelCapture();
                 _playerByConsole[console] = player;
                 RefreshDiagramLayout(console);
                 RefreshPadLabels();
             };
-            Tabs.SelectionChanged += (_, _) => ShowPlayerBar();
+            return _playerBars[console] = new PlayerBarParts(bar, choice, use);
+        }
+
+        private void SetUpPlayerBar()
+        {
+            // The tabs' own change only: a selector inside a page raises the same routed event, which bubbles to the tabs.
+            Tabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.Source, Tabs)) ShowPlayerBar(); };
             ShowPlayerBar();
         }
+
+        private PlayerBarParts? ShownPlayerBar => ShownConsole is { } console && _playerBars.TryGetValue(console, out PlayerBarParts? parts) ? parts : null;
 
         private void ShowPlayerBar()
         {
             string? console = ShownConsole;
+            if (console is null || ShownPlayerBar is not { } parts) return;
             // The players the console's ports hold as its settings stand: an adapter's four where one is set.
-            int ports = console is not null && RunningControllers(console) is { } running ? running.Count : Math.Max(1, EmuSen.Mistress.Library.RuntimeCatalog.PadNow(console).Players.Count);
-            PlayerBar.IsVisible = console is not null && ports > 1;
-            if (!PlayerBar.IsVisible) return;
-            _playerChoice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console!), ports)));
-            _usePlayer1.IsEnabled = _gamepadBindings.HasOwn(console!, PlayerOf(console!));
+            int ports = RunningControllers(console) is { } running ? running.Count : Math.Max(1, EmuSen.Mistress.Library.RuntimeCatalog.PadNow(console).Players.Count);
+            parts.Bar.IsVisible = ports > 1;
+            if (!parts.Bar.IsVisible) return;
+            parts.Choice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console), ports)));
+            parts.UsePlayer1.IsEnabled = _gamepadBindings.HasOwn(console, PlayerOf(console));
         }
 
         private void UsePlayer1()
@@ -266,10 +279,10 @@ namespace EmuSen.Mistress.Views
             if (!_playerRows.TryGetValue(console, out var row)) return;
             int player = PlayerOf(console);
             bool own = _gamepadBindings.HasOwn(console, player);
-            row.Words.Text = player == 1 ? "Showing player 1's gamepad buttons; every other player has these until given its own (Player, above the drawing)."
+            row.Words.Text = player == 1 ? "Showing player 1's gamepad buttons; every other player has these until given its own (Player, below the drawing)."
                 : own ? $"Showing player {player}'s own gamepad buttons." : $"Showing player {player}, who has player 1's gamepad buttons until one is changed here.";
             row.KeyboardHeader.Text = KeyboardHeader(console);
-            if (console == ShownConsole) _usePlayer1.IsEnabled = own;
+            if (_playerBars.TryGetValue(console, out PlayerBarParts? parts)) parts.UsePlayer1.IsEnabled = own;
         }
 
         private Control BuildButtonRow(string console, PadControl button)

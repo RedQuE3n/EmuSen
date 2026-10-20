@@ -169,7 +169,7 @@ namespace EmuSen.WiseMan.Cores
             // The PlayStation and the Sega CD both take .iso, so a disc's content decides.
             Assert.Equal("Sega CD", CoreCatalog.ConsoleForRom(Write("disc.iso", SyntheticMdRom.Disc())));
             Assert.IsType<CoreEngine>(CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
-            Assert.Equal(new[] { "Genesis", "Sega CD", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
             Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Genesis (Nephrite)" && s.EsdeSystem == "genesis");
             Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Sega CD (Nephrite)" && s.EsdeSystem == "segacd");
             Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "sega32x");

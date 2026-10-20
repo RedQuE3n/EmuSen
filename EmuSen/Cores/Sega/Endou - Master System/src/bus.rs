@@ -21,6 +21,18 @@ pub const WORK_RAM_OFF: u8 = 1 << 4;
 pub const BIOS_OFF: u8 = 1 << 3;
 pub const IO_OFF: u8 = 1 << 2;
 
+/// The highest address a Game Genie patches: the cartridge's slot area (SMS Power!'s "Game Genie").
+pub const PATCH_HIGH: u16 = 0xBFFF;
+
+/// A Game Genie's patch: the byte the cartridge gives at `address` replaced by `value`, where it equals `compare` if one
+/// is given. The host sends them; they are not the machine's state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Patch {
+    pub address: u16,
+    pub value: u8,
+    pub compare: Option<u8>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Bus {
     pub model: Model,
@@ -39,6 +51,8 @@ pub struct Bus {
     pub vdp: Vdp,
     /// The BIOS's ROM, empty on a console without one or a machine started with none (`boot::Boot`).
     pub bios: Vec<u8>,
+    /// The cheat device's patches on the cartridge's reads, empty with none.
+    pub patches: Vec<Patch>,
 }
 
 impl Bus {
@@ -52,7 +66,7 @@ impl Bus {
     pub fn with_bios(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp, bios: Vec<u8>) -> Bus {
         assert!(bios.is_empty() || bios.len().is_power_of_two(), "a BIOS mirrors by its size, a power of two");
         let memory_control = if bios.is_empty() { model.memory_control_at_start() } else { crate::boot::RESET_MEMORY_CONTROL };
-        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios }
+        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios, patches: Vec::new() }
     }
 
     /// A read nothing drives: the bus's last byte on the consoles that float it, $FF on the Master System II.
@@ -74,7 +88,7 @@ impl Bus {
         }
         // The card and the expansion slots hold nothing; the BIOS's 8 KiB mirror through the slot area [A]. With both on,
         // the cartridge wins on the first Master System and the two are ANDed on the second [R `smstech` §4].
-        let cart = if self.enabled(CARTRIDGE_OFF) { self.cart.read(a) } else { None };
+        let cart = if self.enabled(CARTRIDGE_OFF) { self.cart.read(a).map(|v| self.patched(a, v)) } else { None };
         if self.bios.is_empty() || !self.enabled(BIOS_OFF) {
             return cart.unwrap_or_else(|| self.undriven());
         }
@@ -84,6 +98,15 @@ impl Bus {
             Some(c) => c,
             None => b,
         }
+    }
+
+    /// The cartridge's byte as a Game Genie between it and the console gives it: the first patch of the address whose
+    /// reference matches, or that has none.
+    fn patched(&self, a: u16, v: u8) -> u8 {
+        if self.patches.is_empty() {
+            return v;
+        }
+        self.patches.iter().find(|p| p.address == a && p.compare.is_none_or(|c| c == v)).map_or(v, |p| p.value)
     }
 
     fn store(&mut self, a: u16, v: u8) {

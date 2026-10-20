@@ -21,10 +21,15 @@ namespace EmuSen.Mistress.Input
             "SNES" => ControllerLayout.Snes,
             "N64" => ControllerLayout.Nintendo64,
             "GB" or "GBC" => ControllerLayout.GameBoy,
+            // A flat oblong pad with a cross and two buttons, the console's Pause and Reset in Start's and Select's places, until LunaP draws its own - see Endou_Native.md §14.
+            "MASTER SYSTEM" or "SG-1000" => ControllerLayout.Nes,
             _ when IsGenesis(console) => controller == GenesisThreeButton ? ControllerLayout.Genesis : ControllerLayout.GenesisSixButton,
             "PLAYSTATION" => controller == PlayStationDigital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
             _ => ControllerLayout.Gamepad,
         };
+
+        // A console drawn on another console's pad, whose regions it may not all use - see Endou_Native.md §14.
+        public static bool BorrowsLayout(string console) => console.ToUpperInvariant() is "MASTER SYSTEM" or "SG-1000";
 
         // The Genesis and its attachments, which plug into it and share its pads - see EmuSen_Serenity.md §3.12.
         public static bool IsGenesis(string console) => string.Equals(Library.RuntimeCatalog.HostOf(console), Library.RuntimeCatalog.ConsoleOfSystem(MegaDriveSystem), StringComparison.OrdinalIgnoreCase);

@@ -120,6 +120,12 @@ fn runs(core: &Discovered, system: &str) -> bool {
     core.sidecar.info.systems.iter().any(|s| s.id == system && !s.development)
 }
 
+/// The console of the first system an engine's info offers to players.
+fn first_offered_console(core: &Discovered) -> Option<&'static str> {
+    let id = &core.sidecar.info.systems.iter().find(|s| !s.development)?.id;
+    emusen_systems::find(id).map(|s| s.console.as_str())
+}
+
 impl<'d> Catalog<'d> {
     pub fn new(discovery: &'d Discovery) -> Catalog<'d> {
         let mut rows: Vec<Row> = HAND_ROWS
@@ -140,7 +146,8 @@ impl<'d> Catalog<'d> {
         }
         let mut registry: Vec<(String, usize)> = HAND_KEYS.iter().map(|(k, r)| (k.to_string(), *r)).collect();
         for (at, row) in rows.iter().enumerate().filter(|(_, r)| r.discovered) {
-            let engine = discovered_for(discovery, row.console()).map(|c| c.engine_name().to_string());
+            // An engine's name reaches the console of the first system its info offers, as Endou's reaches the Master System.
+            let engine = discovered_for(discovery, row.console()).filter(|c| first_offered_console(c) == Some(row.console())).map(|c| c.engine_name().to_string());
             for name in [Some(row.console().to_string()), engine].into_iter().flatten() {
                 if !name.is_empty() && !name.chars().any(char::is_whitespace) {
                     let key = emusen_dotnet::text::to_lower(&name);

@@ -1,5 +1,6 @@
 [built]
 catalog.registry[diamond] = PlayStation (Diamond)
+catalog.registry[endou] = Master System (Endou)
 catalog.registry[gb] = Game Boy (Mercury)
 catalog.registry[gbc] = Game Boy (Mercury)
 catalog.registry[genesis] = Genesis (Nephrite)
@@ -10,13 +11,14 @@ catalog.registry[n64] = Nintendo 64 (Mars)
 catalog.registry[nephrite] = Genesis (Nephrite)
 catalog.registry[nes] = NES (Moon)
 catalog.registry[playstation] = PlayStation (Diamond)
+catalog.registry[sg-1000] = SG-1000 (Endou)
 catalog.registry[snes] = SNES (Venus)
 catalog.registry[venus] = SNES (Venus)
-catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .md, .gen, .bin, .smd, .iso, .cue, .chd, .psexe, .psx, .m3u]
-catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Mega Drive - Genesis, Sega - Mega-CD - Sega CD, Sony - PlayStation]
+catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .sg, .sms, .md, .gen, .bin, .smd, .iso, .cue, .chd, .psexe, .psx, .m3u]
+catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Master System - Mark III, Sega - Mega Drive - Genesis, Sega - Mega-CD - Sega CD, Sega - SG-1000, Sony - PlayStation]
 catalog.all-consoles = All consoles
 catalog.engine-key = Engine
 catalog.gbc-shelf = Game Boy Color (Mercury)
@@ -54,6 +56,18 @@ catalog.core[Nintendo 64 (Mars)].openvgdb = [N64]
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[plain] = 4096 b618e72c0c4f6131
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[eeprom] = 4096 e0f98e2ff4cb68bb
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[byteswapped] = 4096 b618e72c0c4f6131
+catalog.core[SG-1000 (Endou)].console = SG-1000
+catalog.core[SG-1000 (Endou)].extensions = [.sg]
+catalog.core[SG-1000 (Endou)].cheat-systems = [Sega - SG-1000]
+catalog.core[SG-1000 (Endou)].maker-year = Sega 1983
+catalog.core[SG-1000 (Endou)].cover-aspect = 1.4
+catalog.core[SG-1000 (Endou)].openvgdb = [SG1000]
+catalog.core[Master System (Endou)].console = Master System
+catalog.core[Master System (Endou)].extensions = [.sms]
+catalog.core[Master System (Endou)].cheat-systems = [Sega - Master System - Mark III]
+catalog.core[Master System (Endou)].maker-year = Sega 1985
+catalog.core[Master System (Endou)].cover-aspect = 1.4
+catalog.core[Master System (Endou)].openvgdb = [SMS]
 catalog.core[Genesis (Nephrite)].console = Genesis
 catalog.core[Genesis (Nephrite)].extensions = [.md, .gen, .bin, .smd]
 catalog.core[Genesis (Nephrite)].cheat-systems = [Sega - Mega Drive - Genesis]
@@ -77,6 +91,8 @@ catalog.shelf[Game Boy (Mercury)] = GB Game Boy (Mercury) gb Game Boy
 catalog.shelf[Game Boy Color (Mercury)] = GBC Game Boy (Mercury) gbc Game Boy Color
 catalog.shelf[SNES (Venus)] = SNES SNES (Venus) snes Super Nintendo
 catalog.shelf[Nintendo 64 (Mars)] = N64 Nintendo 64 (Mars) n64 Nintendo 64
+catalog.shelf[SG-1000 (Endou)] = SG-1000 SG-1000 (Endou) sg-1000 Sega SG-1000
+catalog.shelf[Master System (Endou)] = Master System Master System (Endou) mastersystem Sega Master System
 catalog.shelf[Genesis (Nephrite)] = Genesis Genesis (Nephrite) genesis Sega Genesis
 catalog.shelf[Sega CD (Nephrite)] = Sega CD Sega CD (Nephrite) segacd Sega CD
 catalog.shelf[PlayStation (Diamond)] = PlayStation PlayStation (Diamond) psx Sony PlayStation
@@ -208,6 +224,7 @@ built.registered[Nope] = False
 built.registered[<null>] = False
 built.available = MarsRT=True
 built.discovered[diamond] = Diamond systems=[psx] opens=True
+built.discovered[endou] = Endou systems=[sms, sg1000] opens=True
 built.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 built.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 built.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
@@ -1289,6 +1306,7 @@ refused-discovered.registered[Nope] = False
 refused-discovered.registered[<null>] = False
 refused-discovered.available = MarsRT=True
 refused-discovered.discovered[diamond] = Diamond systems=[psx] opens=False report=libdiamond.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
+refused-discovered.discovered[endou] = Endou systems=[sms, sg1000] opens=False report=libendou.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=False report=<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=False report=<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=False report=<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
@@ -1344,6 +1362,7 @@ refused-discovered.factory[N64 plain Mars (C#)].probe = NotSupportedException: T
 refused-discovered.factory[N64 plain Mars (C#)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 [off]
 catalog.registry[diamond] = PlayStation (Diamond)
+catalog.registry[endou] = Master System (Endou)
 catalog.registry[gb] = Game Boy (Mercury)
 catalog.registry[gbc] = Game Boy (Mercury)
 catalog.registry[genesis] = Genesis (Nephrite)
@@ -1354,13 +1373,14 @@ catalog.registry[n64] = Nintendo 64 (Mars)
 catalog.registry[nephrite] = Genesis (Nephrite)
 catalog.registry[nes] = NES (Moon)
 catalog.registry[playstation] = PlayStation (Diamond)
+catalog.registry[sg-1000] = SG-1000 (Endou)
 catalog.registry[snes] = SNES (Venus)
 catalog.registry[venus] = SNES (Venus)
-catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
-catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .md, .gen, .bin, .smd, .iso, .cue, .chd, .psexe, .psx, .m3u]
-catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Mega Drive - Genesis, Sega - Mega-CD - Sega CD, Sony - PlayStation]
+catalog.cores = [SNES (Venus), NES (Moon), Game Boy (Mercury), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.release-order = [NES (Moon), Game Boy (Mercury), SNES (Venus), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.filter-choices = [All consoles, SNES (Venus), NES (Moon), Game Boy (Mercury), Game Boy Color (Mercury), Nintendo 64 (Mars), SG-1000 (Endou), Master System (Endou), Genesis (Nephrite), Sega CD (Nephrite), PlayStation (Diamond)]
+catalog.rom-extensions = [.smc, .sfc, .nes, .gb, .gbc, .z64, .n64, .v64, .sg, .sms, .md, .gen, .bin, .smd, .iso, .cue, .chd, .psexe, .psx, .m3u]
+catalog.cheat-systems = [Nintendo - Game Boy, Nintendo - Game Boy Color, Nintendo - Nintendo 64, Nintendo - Nintendo Entertainment System, Nintendo - Satellaview, Nintendo - Super Nintendo Entertainment System, Sega - Master System - Mark III, Sega - Mega Drive - Genesis, Sega - Mega-CD - Sega CD, Sega - SG-1000, Sony - PlayStation]
 catalog.all-consoles = All consoles
 catalog.engine-key = Engine
 catalog.gbc-shelf = Game Boy Color (Mercury)
@@ -1398,6 +1418,18 @@ catalog.core[Nintendo 64 (Mars)].openvgdb = [N64]
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[plain] = 4096 b618e72c0c4f6131
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[eeprom] = 4096 e0f98e2ff4cb68bb
 catalog.core[Nintendo 64 (Mars)].openvgdb-bytes[byteswapped] = 4096 b618e72c0c4f6131
+catalog.core[SG-1000 (Endou)].console = SG-1000
+catalog.core[SG-1000 (Endou)].extensions = [.sg]
+catalog.core[SG-1000 (Endou)].cheat-systems = [Sega - SG-1000]
+catalog.core[SG-1000 (Endou)].maker-year = Sega 1983
+catalog.core[SG-1000 (Endou)].cover-aspect = 1.4
+catalog.core[SG-1000 (Endou)].openvgdb = [SG1000]
+catalog.core[Master System (Endou)].console = Master System
+catalog.core[Master System (Endou)].extensions = [.sms]
+catalog.core[Master System (Endou)].cheat-systems = [Sega - Master System - Mark III]
+catalog.core[Master System (Endou)].maker-year = Sega 1985
+catalog.core[Master System (Endou)].cover-aspect = 1.4
+catalog.core[Master System (Endou)].openvgdb = [SMS]
 catalog.core[Genesis (Nephrite)].console = Genesis
 catalog.core[Genesis (Nephrite)].extensions = [.md, .gen, .bin, .smd]
 catalog.core[Genesis (Nephrite)].cheat-systems = [Sega - Mega Drive - Genesis]
@@ -1421,6 +1453,8 @@ catalog.shelf[Game Boy (Mercury)] = GB Game Boy (Mercury) gb Game Boy
 catalog.shelf[Game Boy Color (Mercury)] = GBC Game Boy (Mercury) gbc Game Boy Color
 catalog.shelf[SNES (Venus)] = SNES SNES (Venus) snes Super Nintendo
 catalog.shelf[Nintendo 64 (Mars)] = N64 Nintendo 64 (Mars) n64 Nintendo 64
+catalog.shelf[SG-1000 (Endou)] = SG-1000 SG-1000 (Endou) sg-1000 Sega SG-1000
+catalog.shelf[Master System (Endou)] = Master System Master System (Endou) mastersystem Sega Master System
 catalog.shelf[Genesis (Nephrite)] = Genesis Genesis (Nephrite) genesis Sega Genesis
 catalog.shelf[Sega CD (Nephrite)] = Sega CD Sega CD (Nephrite) segacd Sega CD
 catalog.shelf[PlayStation (Diamond)] = PlayStation PlayStation (Diamond) psx Sony PlayStation
@@ -1552,6 +1586,7 @@ off.registered[Nope] = False
 off.registered[<null>] = False
 off.available = MarsRT=True
 off.discovered[diamond] = Diamond systems=[psx] opens=True
+off.discovered[endou] = Endou systems=[sms, sg1000] opens=True
 off.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 off.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
 off.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True

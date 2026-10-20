@@ -23,7 +23,7 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
@@ -47,14 +47,15 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("endou", "Endou", 0UL), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
-            Assert.Equal(new[] { (SmsSystems.MasterSystemId, true), (SmsSystems.Sg1000Id, true) }, library.Info.Systems.Select(s => (s.Id, s.Development)));
+            Assert.Equal(("endou", "Endou", CoreInterface.CapRomPatches), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(new[] { (SmsSystems.MasterSystemId, false), (SmsSystems.Sg1000Id, false) }, library.Info.Systems.Select(s => (s.Id, s.Development)));
             foreach (var system in library.Info.Systems)
             {
                 var pack = SystemPacks.For(system.Id)!;
                 Assert.Equal(pack.Entry.Extensions, system.Extensions);
             }
             Assert.Equal(new[] { (1u, "bios_sms1.sms", 8192L, false, "accuracy"), (2u, "bios_sms2.sms", 8192L, false, "accuracy") }, library.Info.Systems[0].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
+            Assert.Equal(new[] { 2, 0 }, library.Info.Systems[0].Firmware.Select(f => f.Md5.Count));
             Assert.Empty(library.Info.Systems[1].Firmware);
             Assert.Equal((true, false), (library.Info.Systems[0].StartsEmpty, library.Info.Systems[1].StartsEmpty));
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
@@ -234,9 +235,9 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // A developer asking for development cores opens the files; the system packs name the consoles.
+        // Since stage 7 a player's build opens both systems on Endou, with the packs' two cheat formats - see Endou_Native.md §14.
         [Fact]
-        public void A_cartridge_opens_on_the_discovered_engine_when_development_cores_are_asked_for()
+        public void A_cartridge_opens_on_endou_for_a_player_with_the_pack_s_codecs()
         {
             Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "endou");
             foreach (var (name, image, system) in new[] { ("game.sms", SyntheticSmsRom.Cartridge(), "sms"), ("game.sg", SyntheticSmsRom.Sg1000(), "sg1000") })
@@ -248,7 +249,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(("endou", system), (core.Info.Id, core.Machine.Info.System));
                 core.RunFrame();
                 Assert.Equal((256, 192), (core.ScreenWidth, core.ScreenHeight));
-                Assert.Null(bundle.CheatAutoDetectCodec);
+                Assert.Equal(("Pro Action Replay", "RAM", "Game Genie"), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName, bundle.CheatExplicitCodec!.Name));
                 (core as IDisposable)?.Dispose();
             }
         }
@@ -269,22 +270,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(guessed, unnamed.Info.System);
         }
 
-        // The stage 1 mark: the build writes the sidecar marked, and a player's discovery sees neither system - see EmuSen_CoreAPI.md §27.
+        // Stage 7: the build writes the sidecar unmarked, and a player's discovery puts the Master System and the SG-1000 on two shelves of their own (decided 2026-10-19) - see Endou_Native.md §14.
         [Fact]
-        public void A_player_is_not_offered_the_core_in_development()
+        public void A_player_is_offered_the_master_system_and_the_sg_1000_on_two_shelves()
         {
             var sidecar = CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!;
-            Assert.True(sidecar.Development);
-            CoreDiscovery.UseDevelopment(false);
-            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "endou");
+            Assert.False(sidecar.Development);
             foreach (string ext in new[] { ".sms", ".sg" })
             {
-                Assert.False(CoreFactory.IsSupported("game" + ext), ext);
-                Assert.False(CoreCatalog.IsRomExtension(ext), ext);
-                Assert.DoesNotContain(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
+                Assert.True(CoreFactory.IsSupported("game" + ext), ext);
+                Assert.True(CoreCatalog.IsRomExtension(ext), ext);
+                Assert.Contains(ext, EmuSen.Mistress.Library.RomLibrary.Extensions);
             }
-            Assert.DoesNotContain("Master System", CoreCatalog.DiscoveredConsoles);
-            Assert.Throws<NotSupportedException>(() => CoreFactory.Create(Write("game.sms", SyntheticSmsRom.Cartridge())));
+            Assert.Equal(new[] { "SG-1000", "Master System" }, CoreCatalog.DiscoveredConsoles.Where(c => c is "SG-1000" or "Master System"));
+            var shelves = CoreCatalog.ShelvesInReleaseOrder.Where(s => s.Core.Console is "SG-1000" or "Master System").Select(s => (s.Name, s.Label, s.EsdeSystem, s.System));
+            Assert.Equal(new[] { ("SG-1000 (Endou)", "SG-1000", "sg-1000", "sg1000"), ("Master System (Endou)", "Master System", "mastersystem", "sms") }, shelves);
+            string sms = Write("Game.sms", SyntheticSmsRom.Cartridge()), sg = Write("Game.sg", SyntheticSmsRom.Sg1000());
+            Assert.Equal(("Master System (Endou)", "SG-1000 (Endou)"), (CoreCatalog.ShelfFor(sms), CoreCatalog.ShelfFor(sg)));
+            Assert.Equal(("Master System (Endou)", "SG-1000 (Endou)"), (EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(sms), EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(sg)));
+            Assert.Equal("Master System (Endou)", CoreCatalog.Registry["endou"].DisplayName);
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, CoreCatalog.SettingsFor("Master System").Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, CoreCatalog.SettingsFor("SG-1000").Select(s => s.Key));
         }
 
         // Decided 2026-10-19: the open boot program by default, machine info naming the replacement; an export cartridge handed over with $AB at $C000 - see Endou_Native.md §13.

@@ -1658,3 +1658,14 @@ database's two folders; ZEXDOC's README, for the control; the library's file nam
 4. **A Game Genie patch and the export check** (§14.4): the open program refuses a game whose summed bytes a patch
    changes. Recommended: keep it, as the console would; the Mark III plays a patched game.
 5. **The go for stage 8** (the debugger), as the plan has it.
+
+*Decided 2026-10-19 by the tester: all five as recommended.* No real hardware is used for any of them (`Endou_Plan.md`
+§10 Q11).
+
+1. **The player selector stays below the drawing** in Controller Bindings, each console's page carrying its own.
+2. **LunaP gains its own Master System pad and SG-1000 joystick drawings**, in place of the NES's, as a piece of work
+   of its own apart from Endou's stages; stage 8 leaves `ControllerDiagrams` and the drawings as they are.
+3. **The cover aspects** stay at 1.4 for `sms` and `sg1000`, unmeasured; the Genesis's 0.7, which may be inverted, is
+   checked in a Nephrite step later.
+4. **The export check refusing a Game Genie-patched game stays**, as the console would; the Mark III plays it.
+5. **The go for stage 8.**

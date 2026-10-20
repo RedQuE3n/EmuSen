@@ -59,6 +59,12 @@ MD5 and SHA-1, only its checksum table read and its provenance recorded, the cle
 built-in game stay refused, for a later stage; `firmwarecheck.py` is measured with a control at stage 7; D-8's referee
 (nvc) is set up apart, and D-8 is not worked on at stage 7; and the go for stage 7.
 
+**Decided by the tester, 2026-10-19, on stage 7's questions** (`Endou_Native.md` §14.14), all as recommended: the
+Controller Bindings window's player selector stays below the drawing; LunaP gains the Master System's pad and the
+SG-1000's joystick as drawings of their own, a separate piece of work; the cover aspects stay at 1.4 until measured, the
+Genesis's 0.7 checked in a Nephrite step; the export check refusing a Game Genie-patched game stays; and the go for
+stage 8.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local

@@ -105,6 +105,33 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Endou on the generic target: its summary, the Z80's registers, the VDP's and the PSG's units, a tile and the sprites, through the shell - see Endou_Native.md §15.
+        [Fact]
+        public void Endou_shows_its_board_registers_units_and_views()
+        {
+            var (core, target) = Run(Image("game.sms", SyntheticSmsRom.Cartridge(region: 0x3)), null);
+            using (core as IDisposable)
+            {
+                string summary = target.GetSummaryText();
+                Assert.StartsWith("Endou ", summary);
+                Assert.Contains(", sms, frame 2\nBoard Plain, 32 KiB ROM\nZ80  AF=", summary);
+                Assert.Contains("\nIO   $3E=AB", summary);
+                var shell = DianaShInterpreter.CreateDefault(target);
+                string regs = shell.Submit("regs cpu").Output;
+                Assert.StartsWith("Z80 registers:", regs);
+                Assert.Contains("IFF2", regs);
+                string all = Regs(target);
+                Assert.Contains("R1", all);
+                Assert.Contains("Volume3", all);
+                Assert.Contains("Board:Plain", all);
+                shell.Submit("tile VRAM 0 4");
+                Assert.Equal("0", shell.LastExitStatus);
+                Assert.Equal(64, target.MaxSprites);
+                PhysicalAddress place = target.ResolvePhysical(0xE123)!.Value;
+                Assert.Equal(("RAM", 0x123, true), (place.Space, place.Offset, place.IsAddressable));
+            }
+        }
+
         [Fact]
         public void Tile_on_a_core_that_decodes_none_says_so()
         {

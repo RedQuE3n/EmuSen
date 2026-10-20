@@ -343,6 +343,103 @@ namespace EmuSen.WiseMan.Crystal
             if (!nativeLog.SequenceEqual(managedLog)) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
         }
 
+        // Units as an engine of the two Sega consoles lists them, a unit left out at times and values past their widths at times - see Endou_Native.md §15.4.
+        private static DebugUnit[] SmsUnits(Random r, bool sg1000)
+        {
+            var vdp = Enumerable.Range(0, 11).Select(i => ($"R{i}", 8)).Concat(new[] { ("Status", 8), ("LineFlag", 1), ("Address", 14), ("Code", 2), ("Second", 1), ("Buffer", 8),
+                ("LineCounter", 8), ("VCounter", 8), ("HLatch", 8), ("Line", 9), ("Lines", 8), ("Mode4", 1), ("IRQ", 1), ("Variant", 3) }).ToArray();
+            var units = new List<DebugUnit>();
+            if (r.Next(8) > 0)
+            {
+                DebugUnit u = GbUnit(r, r.Next(5) == 0 ? "vdp" : "VDP", "video", vdp);
+                var regs = u.Registers.ToArray();
+                void Set(string n, ulong value) { int at = Array.FindIndex(regs, x => x.Name == n); regs[at] = new DebugRegisterValue(n, value, regs[at].BitWidth); }
+                if (r.Next(4) > 0) Set("Lines", (ulong)new[] { 192, 224, 240 }[r.Next(3)]);
+                if (r.Next(3) > 0) Set("Variant", sg1000 ? 4UL : (ulong)r.Next(1, 3));
+                units.Add(u with { Registers = regs });
+            }
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "PSG", "audio", ("Tone0", 10), ("Tone1", 10), ("Tone2", 10), ("Noise", 3), ("Volume0", 4), ("Volume1", 4), ("Volume2", 4), ("Volume3", 4), ("Latch", 3)));
+            if (r.Next(6) > 0)
+            {
+                DebugUnit b = GbUnit(r, "Board", "cartridge", ("Mapper", 2), ("Control", 8), ("Bank0", 8), ("Bank1", 8), ("Bank2", 8), ("Ram", 16), ("Battery", 1));
+                var regs = b.Registers.ToArray();
+                if (r.Next(2) == 0) regs[0] = new DebugRegisterValue("Mapper", 1, 2);
+                if (r.Next(2) == 0) regs[5] = new DebugRegisterValue("Ram", (ulong)new[] { 0, 0x2000, 0x8000 }[r.Next(3)], 16);
+                units.Add(b with { Registers = regs });
+            }
+            if (!sg1000 && r.Next(4) > 0) units.Add(GbUnit(r, "IO", "io", ("MemoryControl", 8), ("IoControl", 8)));
+            return units.ToArray();
+        }
+
+        // A call on both halves of the Master System's or the SG-1000's views over the same spaces and units, the reads compared in order.
+        private static void BothSms(List<string> differences, string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, bool sg1000,
+            Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, object?> call)
+        {
+            ISystemDebugViews managed = sg1000 ? EmuSen.Crystal.Systems.Sms.SmsDebugViews.Sg1000 : EmuSen.Crystal.Systems.Sms.SmsDebugViews.MasterSystem;
+            var nativeLog = new List<string>();
+            var managedLog = new List<string>();
+            var n = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, nativeLog)).ToArray();
+            var m = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, managedLog)).ToArray();
+            Same(differences, what, () => call(new NativeDebugViews(sg1000 ? "sg1000" : "sms", managed), n, units), () => call(managed, m, units));
+            if (!nativeLog.SequenceEqual(managedLog)) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
+        }
+
+        // Every view of the two Sega consoles on generated spaces and units, every tilemap entry and tile of a VRAM's first part, and the address map's edges - see Endou_Native.md §15.5.
+        [Fact]
+        public void Every_sms_view_answers_alike_and_reads_alike()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            var r = new Random(1985);
+            var differences = new List<string>();
+            for (int round = 0; round < 64; round++)
+            {
+                bool sg1000 = round % 2 == 1;
+                byte[] vram = Random(r, round % 9 == 8 ? 0x2000 : 0x4000);
+                for (int i = 0; i < vram.Length; i++) if (r.Next(40) == 0) vram[i] = 0xD0;
+                var spaces = new List<(string, byte[], bool)> { ("RAM", Random(r, sg1000 ? 0x400 : 0x2000), false), ("VRAM", vram, round % 5 == 4), ("ROM", Random(r, 0x8000 << (round % 3)), false) };
+                if (!sg1000 || round % 4 == 1) spaces.Add((round % 7 == 6 ? "cram" : "CRAM", Random(r, round % 11 == 10 ? 16 : 32), false));
+                var all = spaces.ToArray();
+                DebugUnit[] units = round % 13 == 12 ? Array.Empty<DebugUnit>() : SmsUnits(r, sg1000);
+                string label = $"round {round} ({(sg1000 ? "sg1000" : "sms")})";
+                BothSms(differences, $"palettes {label}", all, units, sg1000, (v, s, u) => v.Palettes(s, u));
+                BothSms(differences, $"palettes without units {label}", all, units, sg1000, (v, s, u) => v.Palettes(s));
+                BothSms(differences, $"swatch {label}", all, units, sg1000, (v, s, u) => v.PaletteSwatch(s, u));
+                BothSms(differences, $"tile sheet {label}", all, units, sg1000, (v, s, u) => v.TileSheet(s));
+                BothSms(differences, $"sprites {label}", all, units, sg1000, (v, s, u) => v.Sprites(s, u));
+                uint mutes = (uint)r.Next(16);
+                BothSms(differences, $"channels {label}", all, units, sg1000, (v, s, u) => v.AudioChannels(s, u, mutes));
+                string[] names = { "AF", "BC", "DE", "HL", "AF'", "BC'", "DE'", "HL'", "IX", "IY", "SP", "PC", "I", "R", "WZ", "IM", "IFF1", "IFF2" };
+                var registers = names.Where(x => x != "PC" || round % 9 != 7).Select(x => new DebugRegisterValue(x, (ulong)r.Next(0x20000), 16)).ToArray();
+                BothSms(differences, $"summary {label}", all, units, sg1000, (v, s, u) => v.Summary(registers, s, u));
+                BothSms(differences, $"summary without units {label}", all, units, sg1000, (v, s, u) => v.Summary(registers));
+                foreach (DebugUnit unit in units) BothSms(differences, $"label {unit.Name} {label}", all, units, sg1000, (v, s, u) => v.UnitLabel(unit) ?? "null");
+                foreach (int address in new[] { -1, 0, 0x7FFF, 0xBFFF, 0xC000, 0xC3FF, 0xC400, 0xDFFF, 0xE000, 0xFFFC, 0xFFFF, 0x10000 })
+                    BothSms(differences, $"address {address:X} {label}", all, units, sg1000, (v, s, u) => v.ResolvePhysical(address, s, u));
+            }
+            var bank = new[] { ("VRAM", Random(r, 0x4000), false) };
+            foreach (bool sg1000 in new[] { false, true })
+            {
+                for (int address = -1; address < 0x1000; address += 3)
+                {
+                    int a = address;
+                    BothSms(differences, $"tilemap entry {a} {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilemapEntry(s[0], a));
+                }
+                for (int address = 0; address < 0x2000; address += 8)
+                    foreach (int bpp in new[] { 1, 2, 4 })
+                    {
+                        int a = address, b = bpp;
+                        BothSms(differences, $"tile {a} at {b}bpp {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilePixels(s[0], a, b));
+                    }
+                var none = Array.Empty<DebugUnit>();
+                BothSms(differences, $"stride {sg1000}", bank, none, sg1000, (v, s, u) => v.TilemapEntryStride);
+                BothSms(differences, $"vectors {sg1000}", bank, none, sg1000, (v, s, u) => v.InterruptVectors);
+                BothSms(differences, $"max sprites {sg1000}", bank, none, sg1000, (v, s, u) => v.MaxSprites);
+                BothSms(differences, $"dma {sg1000}", bank, none, sg1000, (v, s, u) => v.DmaChannels(s, u));
+                BothSms(differences, $"symbols {sg1000}", bank, none, sg1000, (v, s, u) => v.SymbolNames);
+            }
+            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+        }
+
         // Every Game Boy view on generated spaces and units in each console mode, every tilemap entry and tile of a VRAM bank, and the address map from end to end - see EmuSen_Backend.md §17.10.
         [Fact]
         public void Every_game_boy_view_answers_alike_and_reads_alike()

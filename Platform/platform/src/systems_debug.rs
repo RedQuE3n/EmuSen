@@ -5,7 +5,7 @@
 use crate::{bytes, fail, given, put, required, status};
 use emusen_dotnet::json::{self, Value};
 use emusen_systems::debug::{Memory, Reference, Space, Tape, Unit};
-use emusen_systems::{gb, n64, nes, snes};
+use emusen_systems::{gb, n64, nes, sms, snes};
 
 fn object(members: Vec<(&str, Value)>) -> Value {
     Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
@@ -118,6 +118,53 @@ fn vectors_json(v: &[(&str, i32, i32, &str)]) -> Value {
     object(vec![("vectors", Value::Array(rows))])
 }
 
+type Sprite = (i32, i32, i32, i32, i32, i32, i32, i32, bool, bool);
+
+fn sprites_json(sprites: Vec<Sprite>) -> Value {
+    let rows = sprites
+        .into_iter()
+        .map(|(index, x, y, width, height, tile, palette, priority, flip_x, flip_y)| {
+            object(vec![
+                ("index", Value::number(index)),
+                ("x", Value::number(x)),
+                ("y", Value::number(y)),
+                ("width", Value::number(width)),
+                ("height", Value::number(height)),
+                ("tile", Value::number(tile)),
+                ("palette", Value::number(palette)),
+                ("priority", Value::number(priority)),
+                ("flip_x", Value::Bool(flip_x)),
+                ("flip_y", Value::Bool(flip_y)),
+            ])
+        })
+        .collect();
+    object(vec![("sprites", Value::Array(rows))])
+}
+
+fn channels_json(channels: Vec<(i32, &str, bool, i32, bool, String)>) -> Value {
+    let rows = channels
+        .into_iter()
+        .map(|(index, name, active, level, muted, info)| {
+            object(vec![
+                ("index", Value::number(index)),
+                ("name", Value::string(name)),
+                ("active", Value::Bool(active)),
+                ("level", Value::number(level)),
+                ("muted", Value::Bool(muted)),
+                ("info", Value::string(info)),
+            ])
+        })
+        .collect();
+    object(vec![("channels", Value::Array(rows))])
+}
+
+fn physical_json(place: Option<(&str, i32, bool)>) -> Value {
+    match place {
+        Some((name, offset, addressable)) => object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]),
+        None => object(vec![("space", Value::Null)]),
+    }
+}
+
 /// Registers as a request names them, each a name and a value.
 fn registers_of(v: Option<&Value>) -> Vec<(String, u64)> {
     match v {
@@ -129,7 +176,7 @@ fn registers_of(v: Option<&Value>) -> Vec<(String, u64)> {
     }
 }
 
-/// One view of a system's, for a request as JSON: `system` (nes or snes), `view`, `spaces` (each name, size and
+/// One view of a system's, for a request as JSON: `system` (nes, snes, gb, gbc, n64, sms or sg1000), `view`, `spaces` (each name, size and
 /// side_effects) and what the view takes (`space`, `address`, `bpp`, `register`, `name`, `registers` as name and value, and
 /// since interface 21 `units`, each a name, a kind and its registers, and `mutes`).
 /// `tape` is the bytes the host has read for this request so far, in the order asked. The answer is an envelope: the
@@ -258,43 +305,8 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("gb" | "gbc", "tile_pixels") => pixels(gb::views::decode_tile_pixels(m, &space, address, bpp)),
         ("gb" | "gbc", "vectors") => (vectors_json(&gb::views::VECTORS), Vec::new()),
         ("gb" | "gbc", "dma_destination") => textual(Some("VRAM".to_string())),
-        ("gb" | "gbc", "sprites") => {
-            let rows = gb::views::sprites(m, &units)
-                .into_iter()
-                .map(|(index, x, y, width, height, tile, palette, priority, flip_x, flip_y)| {
-                    object(vec![
-                        ("index", Value::number(index)),
-                        ("x", Value::number(x)),
-                        ("y", Value::number(y)),
-                        ("width", Value::number(width)),
-                        ("height", Value::number(height)),
-                        ("tile", Value::number(tile)),
-                        ("palette", Value::number(palette)),
-                        ("priority", Value::number(priority)),
-                        ("flip_x", Value::Bool(flip_x)),
-                        ("flip_y", Value::Bool(flip_y)),
-                    ])
-                })
-                .collect();
-            (object(vec![("sprites", Value::Array(rows))]), Vec::new())
-        }
-        ("gb" | "gbc", "audio_channels") => {
-            let mutes = int(r.get("mutes")).unwrap_or(0) as u32;
-            let rows = gb::views::audio_channels(&units, mutes)
-                .into_iter()
-                .map(|(index, name, active, level, muted, info)| {
-                    object(vec![
-                        ("index", Value::number(index)),
-                        ("name", Value::string(name)),
-                        ("active", Value::Bool(active)),
-                        ("level", Value::number(level)),
-                        ("muted", Value::Bool(muted)),
-                        ("info", Value::string(info)),
-                    ])
-                })
-                .collect();
-            (object(vec![("channels", Value::Array(rows))]), Vec::new())
-        }
+        ("gb" | "gbc", "sprites") => (sprites_json(gb::views::sprites(m, &units)), Vec::new()),
+        ("gb" | "gbc", "audio_channels") => (channels_json(gb::views::audio_channels(&units, int(r.get("mutes")).unwrap_or(0) as u32)), Vec::new()),
         ("gb" | "gbc", "dma_channels") => {
             let rows = gb::views::dma_channels(&units)
                 .into_iter()
@@ -316,11 +328,19 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
                 .collect();
             (object(vec![("channels", Value::Array(rows))]), Vec::new())
         }
-        ("gb" | "gbc", "physical") => match gb::views::resolve_physical(address, &units) {
-            Some((name, offset, addressable)) => (object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]), Vec::new()),
-            None => (object(vec![("space", Value::Null)]), Vec::new()),
-        },
+        ("gb" | "gbc", "physical") => (physical_json(gb::views::resolve_physical(address, &units)), Vec::new()),
         ("gb" | "gbc", "summary") => textual(gb::views::summary(&registers, m, &units)),
+        ("sms" | "sg1000", "palettes") => (palettes_json(sms::views::palettes(m, &units)), Vec::new()),
+        ("sms" | "sg1000", "palette_swatch") => picture(sms::views::palette_swatch(m, &units)),
+        ("sms" | "sg1000", "tile_sheet") => picture(sms::views::tile_sheet(m, system)),
+        ("sms" | "sg1000", "stride") => (object(vec![("stride", Value::number(sms::views::tilemap_entry_stride(system)))]), Vec::new()),
+        ("sms" | "sg1000", "max_sprites") => (object(vec![("max_sprites", Value::number(sms::views::max_sprites(system)))]), Vec::new()),
+        ("sms" | "sg1000", "tilemap_entry") => textual(Some(sms::views::decode_tilemap_entry(m, &space, address, system))),
+        ("sms" | "sg1000", "tile_pixels") => pixels(sms::views::decode_tile_pixels(m, &space, address, bpp, system)),
+        ("sms" | "sg1000", "sprites") => (sprites_json(sms::views::sprites(m, &units, system)), Vec::new()),
+        ("sms" | "sg1000", "audio_channels") => (channels_json(sms::views::audio_channels(&units, int(r.get("mutes")).unwrap_or(0) as u32)), Vec::new()),
+        ("sms" | "sg1000", "physical") => (physical_json(sms::views::resolve_physical(address, m, &units)), Vec::new()),
+        ("sms" | "sg1000", "summary") => textual(sms::views::summary(&registers, m, &units)),
         _ => return fail(status::ABSENT, format!("{system} has no view {view}")) as i64,
     };
     let out_bytes = if memory.wants.is_empty() {

@@ -126,6 +126,7 @@ impl StateMachine for Machine {
         r.bytes(&mut cart_ram)?;
         self.frames = frames;
         self.frame_end = frame_end;
+        self.debug_open = false;
         self.cpu = cpu;
         self.pause_held = pause_held;
         let b = &mut self.bus;

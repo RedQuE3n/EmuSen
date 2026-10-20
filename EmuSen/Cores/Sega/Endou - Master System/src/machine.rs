@@ -4,7 +4,8 @@
 
 use beryl_sms_vdp::Vdp;
 use beryl_sn76489::Sn76489;
-use beryl_z80::Z80;
+use beryl_z80::{Step, Z80};
+use emusen_native::debug::{Hooks, run, stop};
 use emusen_native::samples::SampleQueue;
 
 use crate::board::{Board, identify};
@@ -15,7 +16,10 @@ use crate::io::PAUSE;
 use crate::media::{Console, Market, Media};
 use crate::model::Model;
 use crate::sound::Sound;
+use beryl_sms_colours::{SMS_COLOURS, SMS1_COLOURS, TMS_COLOURS};
 
+/// The Z80's bus, a view numbered 0 as the plan numbers it, so that ids never move (Endou_Plan.md §4.3).
+pub const Z80BUS_ID: u32 = 0;
 pub const RAM_ID: u32 = 1;
 pub const VRAM_ID: u32 = 2;
 pub const CRAM_ID: u32 = 3;
@@ -64,6 +68,10 @@ pub struct Machine {
     pub pads: [u32; 2],
     /// The samples made and not yet drained, the oldest dropped past the host's limit.
     pub audio: SampleQueue,
+    /// The debugger's tables and logs (`debug`).
+    pub hooks: Hooks,
+    /// A frame a debugger's stop left open, which the next run goes on with.
+    pub debug_open: bool,
 }
 
 impl Machine {
@@ -104,6 +112,8 @@ impl Machine {
             skip: false,
             pads: [0; 2],
             audio: SampleQueue::default(),
+            hooks: Hooks::new(&[16]),
+            debug_open: false,
         }
     }
 
@@ -183,8 +193,46 @@ impl Machine {
 
     /// One frame: the pads latched and a Pause press made an NMI edge at its start, then the Z80 run until the bus's
     /// clock passes the frame's end, the overshoot carried into the next frame, the VDP's picture taken and the sound's
-    /// samples up to the bus's clock queued.
+    /// samples up to the bus's clock queued. A frame a debugger's stop left open is finished.
     pub fn advance(&mut self) {
+        if !std::mem::take(&mut self.debug_open) {
+            self.begin_frame();
+        }
+        while self.bus.clock < self.frame_end {
+            self.cpu.step(&mut self.bus);
+        }
+        self.end_frame();
+    }
+
+    /// The frame through the debugger's observer: the stop's reasons, zero at the frame's end. A stop leaves the frame
+    /// open in front of the instruction it names, every device brought to its time, and the next call goes on from it;
+    /// `run::UNCHECKED` runs that instruction unasked (Endou_Native.md §15.3).
+    pub fn run_frame_debug(&mut self, flags: u32) -> u32 {
+        if !std::mem::take(&mut self.debug_open) {
+            self.begin_frame();
+        }
+        self.bus.watch = self.hooks.writes;
+        let mut watch = crate::debug::Watch { hooks: &mut self.hooks, unchecked: flags & run::UNCHECKED != 0 };
+        while self.bus.clock < self.frame_end {
+            let at = self.cpu.regs.pc as u32;
+            let step = self.cpu.step_observed(&mut self.bus, &mut watch);
+            for (space, offset, value) in self.bus.landed.drain(..) {
+                watch.hooks.note_write(space, offset, value, at);
+            }
+            if let Step::Observed(why) = step {
+                self.bus.watch = false;
+                self.bus.settle();
+                self.debug_open = true;
+                return why;
+            }
+        }
+        self.bus.watch = false;
+        self.end_frame();
+        stop::FRAME
+    }
+
+    /// What a frame takes at its start: the drawing switch, a Pause press as an NMI edge, the pads, and its end.
+    fn begin_frame(&mut self) {
         self.bus.vdp.skip = self.skip;
         let pause = self.pads[0] as u8 & PAUSE != 0;
         if pause && !self.pause_held {
@@ -193,9 +241,10 @@ impl Machine {
         self.pause_held = pause;
         self.bus.io.pads = [self.pads[0] as u8, self.pads[1] as u8];
         self.frame_end += self.frame_clocks();
-        while self.bus.clock < self.frame_end {
-            self.cpu.step(&mut self.bus);
-        }
+    }
+
+    /// The frame's end: every device at the bus's time, the picture taken and the sound queued.
+    fn end_frame(&mut self) {
         self.bus.settle();
         if !self.skip {
             self.take_picture();
@@ -226,49 +275,6 @@ impl Machine {
     }
 }
 
-/// A two-bit component's level on the 315-5246, four equal steps (Endou_Disputes.md D-1).
-pub const LEVELS: [u8; 4] = [0, 85, 170, 255];
-
-/// The 315-5124's blue, its first level boosted to #68, read from SMS Power!'s "Palette", not measured (D-1, decided
-/// 2026-10-19).
-pub const BLUE_5124: [u8; 4] = [0, 0x68, 170, 255];
-
-const fn colours(blue: [u8; 4]) -> [[u8; 4]; 64] {
-    let mut t = [[0u8; 4]; 64];
-    let mut i = 0;
-    while i < 64 {
-        t[i] = [LEVELS[i & 3], LEVELS[(i >> 2) & 3], blue[(i >> 4) & 3], 255];
-        i += 1;
-    }
-    t
-}
-
-/// The 64 colours of a `--BBGGRR` entry as RGBA: the 315-5246's (the Master System II), and the 315-5124's (the Mark III
-/// and the first Master System).
-pub const SMS_COLOURS: [[u8; 4]; 64] = colours(LEVELS);
-pub const SMS1_COLOURS: [[u8; 4]; 64] = colours(BLUE_5124);
-
-/// The TMS9918A's 16 colours: TI's colour difference levels (TMS9918A data manual, Table 2-3) as RGB, each difference
-/// taken from 0.47, rounded to the nearest of 255 steps, held by a test (Endou_Disputes.md D-11).
-pub const TMS_COLOURS: [[u8; 4]; 16] = [
-    [0x00, 0x00, 0x00, 255],
-    [0x00, 0x00, 0x00, 255],
-    [0x21, 0xC8, 0x42, 255],
-    [0x5E, 0xDC, 0x78, 255],
-    [0x54, 0x55, 0xED, 255],
-    [0x7D, 0x76, 0xFC, 255],
-    [0xD4, 0x52, 0x4D, 255],
-    [0x42, 0xEC, 0xF5, 255],
-    [0xFC, 0x55, 0x54, 255],
-    [0xFF, 0x79, 0x78, 255],
-    [0xD4, 0xC1, 0x54, 255],
-    [0xE6, 0xCE, 0x80, 255],
-    [0x21, 0xB0, 0x3B, 255],
-    [0xC9, 0x5B, 0xBA, 255],
-    [0xCC, 0xCC, 0xCC, 255],
-    [0xFF, 0xFF, 0xFF, 255],
-];
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,43 +284,6 @@ mod tests {
         let media = Media::read(image).unwrap();
         let model = if media.console == Console::Sg1000 { Model::Sg1000 } else { Model::Sms2 };
         Machine::new(media, market, model, image)
-    }
-
-    /// TI's Table 2-3, the TMS9928A's luminance and colour difference levels in volts for codes 1-15.
-    const TI_LEVELS: [(f64, f64, f64); 15] = [
-        (0.00, 0.47, 0.47),
-        (0.53, 0.07, 0.20),
-        (0.67, 0.17, 0.27),
-        (0.40, 0.40, 1.00),
-        (0.53, 0.43, 0.93),
-        (0.47, 0.83, 0.30),
-        (0.73, 0.00, 0.70),
-        (0.53, 0.93, 0.27),
-        (0.67, 0.93, 0.27),
-        (0.73, 0.57, 0.07),
-        (0.80, 0.57, 0.17),
-        (0.47, 0.13, 0.23),
-        (0.53, 0.73, 0.67),
-        (0.80, 0.47, 0.47),
-        (1.00, 0.47, 0.47),
-    ];
-
-    #[test]
-    fn the_tms9918a_s_colours_are_ti_s_levels_as_rgb() {
-        for (code, &(y, ry, by)) in TI_LEVELS.iter().enumerate() {
-            let (r, b) = (y + ry - 0.47, y + by - 0.47);
-            let g = (y - 0.299 * r - 0.114 * b) / 0.587;
-            let q = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            assert_eq!(TMS_COLOURS[code + 1], [q(r), q(g), q(b), 255], "code {}", code + 1);
-        }
-        assert_eq!(TMS_COLOURS[0], TMS_COLOURS[1], "transparent over no external video is black");
-    }
-
-    #[test]
-    fn the_315_5124_boosts_only_its_first_blue_level() {
-        let differ: Vec<usize> = (0..64).filter(|&i| SMS1_COLOURS[i] != SMS_COLOURS[i]).collect();
-        assert_eq!(differ, (16..32).collect::<Vec<_>>());
-        assert_eq!((SMS1_COLOURS[0x10], SMS_COLOURS[0x10]), ([0, 0, 0x68, 255], [0, 0, 0x55, 255]));
     }
 
     #[test]

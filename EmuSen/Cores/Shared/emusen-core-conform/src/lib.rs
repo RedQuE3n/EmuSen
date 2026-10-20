@@ -2646,7 +2646,7 @@ fn c15(s: &mut Session<'_>) -> Case {
         let ids: Vec<i64> = armed.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("processors")?.as_array().map(|a| a.iter().filter_map(|p| p.get("id").and_then(Value::as_i64)).collect())).unwrap_or_default();
         let m = s.machine(&settings)?;
         s.play(&m, 0, 2, false)?;
-        let (run, set, set_bp, pc_of) = (f.debug_run_frame.unwrap(), f.debug_set.unwrap(), f.debug_set_breakpoints.unwrap(), f.debug_pc.unwrap());
+        let (run, set, set_bp, pc_of, ranges) = (f.debug_run_frame.unwrap(), f.debug_set.unwrap(), f.debug_set_breakpoints.unwrap(), f.debug_pc.unwrap(), f.debug_set_ranges.unwrap());
         unsafe {
             let mut first = 0u64;
             pc_of(m.h, 0, &mut first);
@@ -2667,15 +2667,18 @@ fn c15(s: &mut Session<'_>) -> Case {
             let before = at(&m);
             let r = run(m.h, runflag::CONTINUE, &mut p, &mut pc, &mut d);
             c.that(r > 0 && r as u32 & stop::EACH != 0 && at(&m) == before, || format!("with EACH armed, the call stopped with {r:#x} and moved the machine from {before:?} to {:?}", at(&m)));
+            // A step moves the frame, the program counter or the state: an instruction that jumps to itself changes the third
+            // alone. A core that saves no state in an open frame is held to the first two, as before (EmuSen_CoreAPI.md §24.1).
+            let state = |m: &Machine<'_>| m.save(0).ok().map(|v| digest::frame_hash(&v));
             for i in 0..8 {
-                let before = at(&m);
+                let (before, saved) = (at(&m), state(&m));
                 let r = run(m.h, runflag::UNCHECKED | runflag::CONTINUE, &mut p, &mut pc, &mut d);
                 c.that(r == 0 || (r > 0 && r as u32 & stop::EACH != 0), || format!("step {i} under EACH answered {r:#x}"));
-                c.that(at(&m) != before, || format!("step {i} under EACH did not move the machine from {before:?}"));
+                let moved = at(&m) != before || matches!((saved, state(&m)), (Some(a), Some(b)) if a != b);
+                c.that(moved, || format!("step {i} under EACH did not move the machine from {before:?}"));
             }
             set(m.h, 0, i32::MIN, -1);
 
-            let ranges = f.debug_set_ranges.unwrap();
             let none = [u32::MAX - 1, 0, u32::MAX];
             let reads = s.lib.claims(caps::DEBUG_READS);
             for kind in [range::READ_WATCH, range::READ_BREAK, range::READ_BREAK + 1] {

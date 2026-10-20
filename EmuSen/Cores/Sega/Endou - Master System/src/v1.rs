@@ -7,7 +7,8 @@ use emusen_native::core::*;
 use crate::board::{Board, Mapper, Row, TABLE, Why, identify_with};
 use crate::boot::{BIOS_SIZE, Boot, OPEN_BOOT};
 use crate::bus::{PATCH_HIGH, Patch};
-use crate::machine::{AUDIO_RATE, HEIGHT, MAX_HEIGHT, Machine, RAM_ID, WIDTH};
+use crate::debug;
+use crate::machine::{AUDIO_RATE, HEIGHT, MAX_HEIGHT, Machine, RAM_ID, WIDTH, Z80BUS_ID};
 use crate::media::{Console, Market, Media, Refusal};
 use crate::model::Model;
 use crate::state::STATE_VERSION;
@@ -263,7 +264,7 @@ pub fn make_empty(request: &Create<'_>) -> Result<Machine, i32> {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = emusen_native::core::caps::ROM_PATCHES;
+    const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -333,8 +334,16 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p, controller: Some(pad.into()) }).collect(),
-            spaces: self.spaces().into_iter().map(|(id, name, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
-            processors: vec![Processor { id: 0, name: "Z80".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
+            spaces: std::iter::once(Space { read_only: true, view: true, reports_stores: true, ..Space::new(Z80BUS_ID, "Z80BUS") })
+                .chain(self.spaces().into_iter().map(|(id, name, read_only)| Space { read_only, cheats: id == RAM_ID, reports_stores: debug::reports_stores(id), ..Space::new(id, name) }))
+                .collect(),
+            processors: vec![Processor {
+                id: 0,
+                name: "Z80".into(),
+                pc_bits: 16,
+                registers: beryl_z80::REGISTERS.iter().map(|&(n, bits)| (n.to_owned(), bits)).collect(),
+                code_space: Some(Z80BUS_ID),
+            }],
             battery: if self.bus.cart.board.battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
             state: StateFormat { format: "ENDO".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
@@ -395,10 +404,20 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
+        if space == Z80BUS_ID {
+            return Ok(debug::Z80BUS_SIZE as i64);
+        }
         self.space(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
+    /// The bus as the Z80 reads it, with no side effect, its addresses wrapping at 64 KiB; another space past its end 0.
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
+        if space == Z80BUS_ID {
+            for (i, b) in out.iter_mut().enumerate() {
+                *b = self.bus.peek(address.wrapping_add(i as u32) as u16);
+            }
+            return Ok(());
+        }
         let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
             *b = m.get(address as usize + i).copied().unwrap_or(0);
@@ -407,6 +426,9 @@ impl Core for Machine {
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
+        if space == Z80BUS_ID {
+            return Err(status::READ_ONLY);
+        }
         if self.space(space).is_none() {
             return Err(status::NO_SUCH_SPACE);
         }
@@ -429,6 +451,38 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.hooks)
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        Ok(self.run_frame_debug(flags))
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        (processor == 0).then_some(self.cpu.regs.pc as u64)
+    }
+
+    /// The VDP, the PSG, the board and the I/O chip, by the ids from 256 (EmuSen_CoreAPI.md §6.33, Endou_Native.md §15.4).
+    fn units(&self) -> Vec<Unit> {
+        debug::units(self)
+    }
+
+    /// The Z80's registers in `beryl-z80`'s list, or a unit's in its own.
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        match processor {
+            0 => Ok(self.cpu.regs.values().to_vec()),
+            id => debug::unit_values(self, id).ok_or(status::NOT_SUPPORTED),
+        }
+    }
+
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        Machine::debug_disassemble(self, space, address, count).ok_or(status::NO_SUCH_SPACE)
+    }
+
     /// File 0 is the cartridge's RAM where its board keeps it with a battery, else empty.
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match which {
@@ -439,7 +493,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; rom_patches);
+emusen_native::core_exports!(Machine; rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -458,7 +512,7 @@ mod tests {
         let us = create(&cartridge(0x8000, 4), &[]).unwrap();
         let info = us.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("sms", Some(Region::Ntsc), NTSC_FRAME));
-        assert_eq!(info.spaces.iter().map(|s| (s.name.as_str(), s.read_only, s.cheats)).collect::<Vec<_>>(), [("RAM", false, true), ("VRAM", false, false), ("CRAM", false, false), ("ROM", true, false), ("BIOS", true, false)]);
+        assert_eq!(info.spaces.iter().map(|s| (s.name.as_str(), s.read_only, s.cheats)).collect::<Vec<_>>(), [("Z80BUS", true, false), ("RAM", false, true), ("VRAM", false, false), ("CRAM", false, false), ("ROM", true, false), ("BIOS", true, false)]);
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (256, 192, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(SMS_PAD), Some(SMS_PAD)]);
         assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]));

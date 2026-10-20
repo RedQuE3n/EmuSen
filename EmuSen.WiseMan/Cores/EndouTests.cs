@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("endou", "Endou", CoreInterface.CapRomPatches), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("endou", "Endou", CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             Assert.Equal(new[] { (SmsSystems.MasterSystemId, false), (SmsSystems.Sg1000Id, false) }, library.Info.Systems.Select(s => (s.Id, s.Development)));
             foreach (var system in library.Info.Systems)
             {

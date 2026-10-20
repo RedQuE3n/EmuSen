@@ -12,6 +12,8 @@ first were the processors.
   Endou's and Jadeite's (with the Game Gear's stereo register).
 - `beryl-sms-vdp` — the Master System's VDP family (315-5124, 315-5246, 315-5378) in mode 4: Endou's picture, and at
   its stage 4 the TMS9918A's and the Genesis's mode 4 composition (`Beryl_SmsVdp.md`).
+- `beryl-sms-colours` — the Master System VDP family's colours as RGBA, which Endou's picture and the `sms` pack's
+  palette view both read; no dependencies (`Beryl_SmsVdp.md` §10).
 - `beryl-asm` — the front half the processors' assemblers share (expressions, labels, constants, conditionals,
   includes); a development tool, linked by no core's library.
 - `beryl-font` — the open firmware's own five-by-seven font: Nephrite's open Sega CD BIOS and Endou's open boot program,

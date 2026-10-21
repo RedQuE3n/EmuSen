@@ -2,7 +2,8 @@
 //! starts it, the open boot program first where the console has a BIOS; once with no BIOS, the cartridge from reset.
 //! The booted run is aligned at its hand-over, and the two compared at frames after it: the picture's digest, and the
 //! bytes of RAM that differ. Images are read in place and never written.
-//! `cargo run --release --example bootcheck -- <frames,frames,...> <image>...`
+//! `cargo run --release --example bootcheck -- <frames,frames,...> [--system s] <image>...`; `--system` names the routed
+//! system, the Game Gear's `gg` among them.
 
 use emusen_native::core::{Core, Create, Settings, sys};
 use endou::boot::Boot;
@@ -16,17 +17,24 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let at: Vec<usize> = args[1].split(',').map(|f| f.parse().expect("a frame")).collect();
     let last = *at.iter().max().unwrap();
-    for path in &args[2..] {
+    let system = args.iter().position(|a| a == "--system").map(|i| args[i + 1].clone());
+    let paths: Vec<&String> = args[2..].iter().filter(|a| *a != "--system" && Some(*a) != system.as_ref()).collect();
+    for path in paths {
         let image = std::fs::read(path).expect("the image");
         let name = std::path::Path::new(path).file_name().unwrap().to_string_lossy().into_owned();
         let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
-        let mut booted = Machine::create(&request).unwrap_or_else(|e| panic!("{name}: refused {e}"));
+        let mut booted = match &system {
+            Some(s) => Machine::create_as(s, &request),
+            None => Machine::create(&request),
+        }
+        .unwrap_or_else(|e| panic!("{name}: refused {e}"));
         let model = booted.model();
         let rom = image[booted.media.skipped..].to_vec();
         let mut plain = Machine::with_board(booted.media.clone(), booted.market, model, booted.bus.cart.board, rom);
         let mut handed = 0usize;
         if booted.boot != Boot::None {
-            while !(booted.bus.memory_control == 0xAB && booted.cpu.regs.pc < 0xC000) && handed < 600 {
+            let handed_over = model.memory_control_at_start();
+            while !(booted.bus.memory_control == handed_over && booted.cpu.regs.pc < 0xC000) && handed < 600 {
                 booted.advance();
                 handed += 1;
             }

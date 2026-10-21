@@ -2,8 +2,19 @@
 //! written at the Z80's addresses. The slots' ROM offsets are kept worked out, so a read is an index and a mask.
 
 use crate::board::{Board, Mapper};
+use crate::eeprom::Eeprom;
 
 const SLOT: usize = 0x4000;
+
+/// The EEPROM board's register and its enable, $FFFC's bit 4 [R Charles MacDonald, SMS Power! forum topic 770, 1999-12-24].
+pub const EEPROM_REGISTER: u16 = 0x8000;
+pub const EEPROM_ENABLE: u8 = 0x10;
+
+/// The register's bits for the chip's pins: DI on bit 0 [R the same post]; CLK on bit 1 and CS on bit 2, and DO read
+/// back on bit 0, DI and DO tied as the data sheet allows (§3.2), are argued (Endou_Disputes.md D-26).
+pub const EEPROM_DI: u8 = 1 << 0;
+pub const EEPROM_CLK: u8 = 1 << 1;
+pub const EEPROM_CS: u8 = 1 << 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cartridge {
@@ -16,18 +27,23 @@ pub struct Cartridge {
     pub slots: [usize; 3],
     /// Whether the RAM has been written since the battery file was last saved.
     pub dirty: bool,
+    /// The EEPROM board's chip, its memory `ram`, and the register's last byte; idle on every other board.
+    pub eeprom: Eeprom,
+    pub eeprom_register: u8,
 }
 
 impl Cartridge {
     pub fn new(board: Board, rom: Vec<u8>) -> Cartridge {
         let regs = match board.mapper {
             // The 315-5235's power-on values [R SMS Power!'s "Mappers"]; the older chips' are undefined, taken the same.
-            Mapper::Sega => [0, 0, 1, 2],
+            Mapper::Sega | Mapper::SegaEeprom => [0, 0, 1, 2],
             // Banks 0, 1 and 0 [R the same page].
             Mapper::Codemasters => [0, 0, 1, 0],
             _ => [0; 4],
         };
-        let mut c = Cartridge { board, rom, ram: vec![0; board.ram], regs, slots: [0, SLOT, 2 * SLOT], dirty: false };
+        // A 93C46B's cells read as erased, all ones, before anything is written [A].
+        let fill = if board.mapper == Mapper::SegaEeprom { 0xFF } else { 0 };
+        let mut c = Cartridge { board, rom, ram: vec![fill; board.ram], regs, slots: [0, SLOT, 2 * SLOT], dirty: false, eeprom: Eeprom::default(), eeprom_register: 0 };
         c.remap();
         c
     }
@@ -46,7 +62,7 @@ impl Cartridge {
     /// written, so it is applied by `write`, not here [R "Mappers", "ROM bank shifting"].
     fn remap(&mut self) {
         match self.board.mapper {
-            Mapper::Sega | Mapper::Codemasters => {
+            Mapper::Sega | Mapper::SegaEeprom | Mapper::Codemasters => {
                 self.slots = [self.bank(self.regs[1] as usize), self.bank(self.regs[2] as usize), self.bank(self.regs[3] as usize)];
             }
             _ => {}
@@ -72,7 +88,7 @@ impl Cartridge {
             Mapper::Plain => self.rom_at(a),
             Mapper::SgRam if a >= 0x8000 && !self.ram.is_empty() => self.ram[(a - 0x8000) % self.ram.len()],
             Mapper::SgRam => self.rom_at(a),
-            Mapper::Sega => match a {
+            Mapper::Sega | Mapper::SegaEeprom => match a {
                 0..0x400 => self.rom_at(a),
                 0x8000.. if self.sega_ram_in_slot_2() => self.ram[self.ram_bank() + (a & 0x3FFF) % self.ram_half()],
                 _ => self.rom_at(self.slots[a / SLOT] + (a & 0x3FFF)),
@@ -85,7 +101,26 @@ impl Cartridge {
     }
 
     fn sega_ram_in_slot_2(&self) -> bool {
-        self.regs[0] & 0x08 != 0 && !self.ram.is_empty()
+        self.board.mapper == Mapper::Sega && self.regs[0] & 0x08 != 0 && !self.ram.is_empty()
+    }
+
+    /// Whether `a` is the EEPROM board's register, enabled.
+    pub fn eeprom_selected(&self, a: u16) -> bool {
+        self.board.mapper == Mapper::SegaEeprom && a == EEPROM_REGISTER && self.regs[0] & EEPROM_ENABLE != 0
+    }
+
+    /// The register read at the Z80's `clock`: the byte last written, bit 0 DO where the chip drives it (D-26).
+    pub fn eeprom_read(&self, clock: u64) -> u8 {
+        let data = self.eeprom.output(clock).unwrap_or(self.eeprom_register & EEPROM_DI != 0);
+        (self.eeprom_register & !EEPROM_DI) | data as u8
+    }
+
+    /// The register written at `clock`: the chip's pins set from its bits.
+    pub fn eeprom_write(&mut self, v: u8, clock: u64) {
+        self.eeprom_register = v;
+        if self.eeprom.pins(v & EEPROM_CS != 0, v & EEPROM_CLK != 0, v & EEPROM_DI != 0, &mut self.ram, clock) {
+            self.dirty = true;
+        }
     }
 
     fn codemasters_ram(&self) -> bool {
@@ -119,7 +154,7 @@ impl Cartridge {
             Mapper::Plain => None,
             Mapper::SgRam if (0x8000..0xC000).contains(&a) && !self.ram.is_empty() => Some((a as usize - 0x8000) % self.ram.len()),
             Mapper::SgRam => None,
-            Mapper::Sega => match a {
+            Mapper::Sega | Mapper::SegaEeprom => match a {
                 0xFFFC => {
                     self.regs[0] = v;
                     None
@@ -240,6 +275,23 @@ mod tests {
         assert_eq!(c.read(0xA000), Some(15));
         c.write(0xFFFF, 1);
         assert_eq!(slots(&c), [3, 5, 15], "Sega's registers mean nothing here");
+    }
+
+    // Jadeite_Native.md §9.3: the EEPROM board is Sega's mapper with no RAM; its register answers at $8000 only while $FFFC's
+    // bit 4 is set, and neither RAM bit maps the chip's bytes anywhere.
+    #[test]
+    fn the_eeprom_board_s_register_answers_only_while_enabled() {
+        let mut c = cart(Mapper::SegaEeprom, 16, crate::eeprom::BYTES);
+        assert!(c.ram.iter().all(|&b| b == 0xFF), "erased at first");
+        c.write(0xFFFF, 5);
+        assert_eq!((c.eeprom_selected(0x8000), c.read(0x8001)), (false, Some(5)));
+        c.write(0xFFFC, EEPROM_ENABLE | 0x08);
+        assert!(c.eeprom_selected(0x8000) && !c.eeprom_selected(0x8001) && !c.ram_over_work_ram());
+        assert_eq!(c.read(0x8001), Some(5), "bit 3 maps no RAM on this board");
+        c.eeprom_write(EEPROM_CS | EEPROM_DI, 0);
+        assert_eq!(c.eeprom_read(0) & EEPROM_DI, EEPROM_DI, "DO high-Z: bit 0 reads the DI written");
+        c.eeprom_write(EEPROM_CS, 0);
+        assert_eq!(c.eeprom_read(0), EEPROM_CS);
     }
 
     #[test]

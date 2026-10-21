@@ -2,12 +2,14 @@
 //! cartridge's (Endou_OpenBoot.md §4), the I/O ports decoded by A7, A6 and A0, and the clock. The bus owns the time:
 //! every machine cycle the Z80 reports advances it, and the devices are brought to it when an access reaches them. The
 //! VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the Master System's consoles, the TMS9918A on the SG-1000
-//! (Endou_Native.md §10, §11); the PSG and the FM unit's YM2413 at ports $F0-$F2 are `sound`'s (§12, §16).
+//! (Endou_Native.md §10, §11); the PSG and the FM unit's YM2413 at ports $F0-$F2 are `sound`'s (§12, §16). On the
+//! Game Gear in GG mode ports $00-$05 are `ggio`'s and $06 the PSG's stereo register (Jadeite_Native.md §9).
 
 use beryl_sms_vdp::Vdp;
 
 use crate::cart::Cartridge;
-use crate::io::Io;
+use crate::ggio;
+use crate::io::{Io, PAUSE};
 use crate::machine::{CARTRAM_ID, RAM_ID};
 use crate::model::Model;
 use crate::sound::Sound;
@@ -45,6 +47,8 @@ pub struct Bus {
     pub ram: Vec<u8>,
     pub cart: Cartridge,
     pub io: Io,
+    /// The Game Gear's system ports; untouched on the other consoles.
+    pub gg: ggio::Ports,
     pub sound: Sound,
     /// Port $3E as last written.
     pub memory_control: u8,
@@ -74,7 +78,7 @@ impl Bus {
     pub fn with_bios(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp, bios: Vec<u8>) -> Bus {
         assert!(bios.is_empty() || bios.len().is_power_of_two(), "a BIOS mirrors by its size, a power of two");
         let memory_control = if bios.is_empty() { model.memory_control_at_start() } else { crate::boot::RESET_MEMORY_CONTROL };
-        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios, patches: Vec::new(), watch: false, landed: Vec::with_capacity(4) }
+        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), gg: ggio::Ports::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios, patches: Vec::new(), watch: false, landed: Vec::with_capacity(4) }
     }
 
     /// A read nothing drives: the bus's last byte on the consoles that float it, $FF on the Master System II.
@@ -82,8 +86,9 @@ impl Bus {
         if self.model.floating_bus() { self.data_bus } else { 0xFF }
     }
 
+    /// Whether port $3E enables the part `bit` names; a bit the console ignores enables it always.
     fn enabled(&self, bit: u8) -> bool {
-        !self.model.has_control_ports() || self.memory_control & bit == 0
+        !self.model.has_control_ports() || self.memory_control & bit & !self.model.memory_control_ignored() == 0
     }
 
     /// The byte at `a`, as the CPU reads it.
@@ -95,12 +100,22 @@ impl Bus {
             return if self.enabled(WORK_RAM_OFF) { self.ram[a as usize & (self.ram.len() - 1)] } else { self.undriven() };
         }
         // The card and the expansion slots hold nothing; the BIOS's 8 KiB mirror through the slot area [A]. With both on,
-        // the cartridge wins on the first Master System and the two are ANDed on the second [R `smstech` §4].
-        let cart = if self.enabled(CARTRIDGE_OFF) { self.cart.read(a).map(|v| self.patched(a, v)) } else { None };
-        if self.bios.is_empty() || !self.enabled(BIOS_OFF) {
+        // the cartridge wins on the first Master System and the two are ANDed on the second [R `smstech` §4]; the Game
+        // Gear's boot ROM alone answers its kilobyte, the cartridge above it [R the same].
+        let cart = if !self.enabled(CARTRIDGE_OFF) {
+            None
+        } else if self.cart.eeprom_selected(a) {
+            Some(self.cart.eeprom_read(self.clock))
+        } else {
+            self.cart.read(a).map(|v| self.patched(a, v))
+        };
+        if self.bios.is_empty() || !self.enabled(BIOS_OFF) || a >= self.model.bios_window() {
             return cart.unwrap_or_else(|| self.undriven());
         }
         let b = self.bios[a as usize & (self.bios.len() - 1)];
+        if self.model.is_game_gear() {
+            return b;
+        }
         match cart {
             Some(c) if self.model.bios_and_cartridge_are_anded() => b & c,
             Some(c) => c,
@@ -128,6 +143,8 @@ impl Bus {
                 }
             }
             cart = self.cart.write(a, v);
+        } else if self.enabled(CARTRIDGE_OFF) && self.cart.eeprom_selected(a) {
+            self.cart.eeprom_write(v, self.clock);
         } else if self.enabled(CARTRIDGE_OFF) {
             cart = self.cart.write(a, v);
         }
@@ -150,6 +167,8 @@ impl Bus {
     fn port_in(&mut self, port: u8) -> u8 {
         let odd = port & 1 != 0;
         match port >> 6 {
+            // The Game Gear's own ports in GG mode, Start its bit (Jadeite_Native.md §9.2).
+            0 if self.vdp.gg_mode && port <= 6 => self.gg.read(port, self.io.pads[0] & PAUSE != 0, self.model == Model::JapaneseGameGear, self.clock),
             0 => self.undriven(),
             1 if !self.model.has_counters() => self.undriven(),
             1 => {
@@ -175,8 +194,9 @@ impl Bus {
 
     fn port_out(&mut self, port: u8, v: u8) {
         match port >> 6 {
-            // The Game Gear's own ports $00-$06 in its own mode, stage J2's, are not $3E and $3F [R SMS Power!'s "I/O Port Map - Game Gear"].
-            0 if self.vdp.gg_mode && port <= 6 => {}
+            // The Game Gear's own ports $00-$06 in its own mode are not $3E and $3F [R SMS Power!'s "I/O Port Map - Game Gear"].
+            0 if self.vdp.gg_mode && port == 6 => self.sound.write_stereo(v, self.clock),
+            0 if self.vdp.gg_mode && port <= 6 => self.gg.write(port, v, self.clock),
             0 if self.model.has_control_ports() => {
                 if port & 1 == 0 {
                     self.memory_control = v;

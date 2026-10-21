@@ -71,23 +71,25 @@ fn a_sounding_frame_allocates_nothing() {
 }
 
 /// The Game Gear's picture, its window and the shrunk Master System picture, allocates nothing a frame either
-/// (Jadeite_Native.md §3).
+/// (Jadeite_Native.md §3), nor its system ports, stereo and open boot program, nor the EEPROM board (§9).
 #[test]
 fn a_game_gear_frame_allocates_nothing_in_either_mode() {
-    for program in [&images::GG, &images::GG_SMS] {
+    for program in [&images::GG, &images::GG_SMS, &images::GG_IO, &images::GG_EEPROM] {
         let image = images::image(program);
         let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
-        let mut m = Machine::create_as("gg", &request).unwrap();
+        let table = [endou::board::Row { crc: endou::board::crc32(&image), mapper: endou::board::Mapper::SegaEeprom, ram: endou::eeprom::BYTES, battery: true }];
+        let table: &[endou::board::Row] = if program.name == "eeprom" { &table } else { &[] };
+        let mut m = endou::v1::make_as(&request, table, Some(endou::media::Console::Gg)).unwrap();
         let mut out = vec![0i16; 8192];
         Core::advance(&mut m, &mut 0).unwrap();
         m.drain_audio(&mut out, usize::MAX);
         let before = allocations();
-        for _ in 0..60 {
+        for _ in 0..120 {
             Core::advance(&mut m, &mut 0).unwrap();
             let _ = m.frame();
             m.drain_audio(&mut out, usize::MAX);
         }
-        assert_eq!(allocations() - before, 0, "{}: allocations in 60 frames", program.name);
+        assert_eq!(allocations() - before, 0, "{}: allocations in 120 frames", program.name);
     }
 }
 

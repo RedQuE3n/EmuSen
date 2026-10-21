@@ -16,8 +16,8 @@ pub enum Model {
     /// The SG-1000: no memory or I/O control port, its pads read through the joystick ports [R SMS Power!'s "I/O Port
     /// Map - SG-1000 and SC-3000"], a TMS9918A, a discrete SN76489AN and 1 KiB of work RAM.
     Sg1000,
-    /// The Game Gear: "a NTSC SMS2" to its software [R MacDonald's `msvdp` §14] with the 315-5378 and an LCD. Its own
-    /// ports $00-$06 and its stereo are stage J2's; until then it reads as the Master System II there.
+    /// The Game Gear, an export unit: "a NTSC SMS2" to its software [R MacDonald's `msvdp` §14] with the 315-5378, an
+    /// LCD, its own ports $00-$06 in GG mode and a 1 KiB boot ROM on later units (Jadeite_Native.md §9).
     GameGear,
     /// The Mark III with the FM Sound Unit in its expansion port: a YM2413 that sounds instead of the PSG [R
     /// MacDonald's `smstech` §1, §7; SMS Power!'s "Audio Control Port"].
@@ -25,6 +25,9 @@ pub enum Model {
     /// The Japanese Master System: the Mark III's 315-5124 and I/O, a BIOS, no Reset button, and the YM2413 built in,
     /// sounding beside the PSG as port $F2 chooses [R `smstech` §1; SMS Power!'s "Audio Control Port", "Reset Button"].
     JapaneseSms,
+    /// The Japanese Game Gear: the export unit's twin, port $00 reading the domestic market [R Sega's Game Gear hardware
+    /// notes, "I/O port 00H": NJAP 0 "domestic (Japan) mode"].
+    JapaneseGameGear,
 }
 
 /// The FM unit a console carries (Endou_Native.md §16.3).
@@ -37,7 +40,7 @@ pub enum FmUnit {
 }
 
 /// Every console, in the order of their bytes.
-pub const ALL: [Model; 7] = [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000, Model::GameGear, Model::MarkIIIFm, Model::JapaneseSms];
+pub const ALL: [Model; 8] = [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000, Model::GameGear, Model::MarkIIIFm, Model::JapaneseSms, Model::JapaneseGameGear];
 
 impl Model {
     pub fn id(self) -> &'static str {
@@ -49,6 +52,7 @@ impl Model {
             Model::GameGear => "gg",
             Model::MarkIIIFm => "mark3fm",
             Model::JapaneseSms => "jsms",
+            Model::JapaneseGameGear => "ggjp",
         }
     }
 
@@ -61,11 +65,17 @@ impl Model {
             Model::GameGear => 4,
             Model::MarkIIIFm => 5,
             Model::JapaneseSms => 6,
+            Model::JapaneseGameGear => 7,
         }
     }
 
     pub fn of_byte(b: u8) -> Option<Model> {
         ALL.into_iter().find(|m| m.byte() == b)
+    }
+
+    /// Whether the console is a Game Gear, of either market.
+    pub fn is_game_gear(self) -> bool {
+        matches!(self, Model::GameGear | Model::JapaneseGameGear)
     }
 
     /// The YM2413 the console carries, if any.
@@ -90,14 +100,14 @@ impl Model {
             Model::MarkIII | Model::MarkIIIFm | Model::JapaneseSms | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
             Model::Sms2 => beryl_sms_vdp::Variant::SMS2,
             Model::Sg1000 => beryl_sms_vdp::Variant::TMS9918A,
-            Model::GameGear => beryl_sms_vdp::Variant::GG,
+            Model::GameGear | Model::JapaneseGameGear => beryl_sms_vdp::Variant::GG,
         }
     }
 
     /// Whether the console runs PAL where the market is Europe: the Game Gear, every one of whose units is NTSC, does not
     /// [R MacDonald's `msvdp` §14: "262 scanlines per frame", the machines "the same throughout the world"].
     pub fn has_pal(self) -> bool {
-        self != Model::GameGear
+        !self.is_game_gear()
     }
 
     /// The PSG: the discrete SN76489AN in the SG-1000, Sega's copy in the VDP from the Mark III on (Endou_Disputes.md
@@ -122,10 +132,11 @@ impl Model {
         self != Model::Sg1000
     }
 
-    /// Whether TH and TR follow port $3F's directions and levels: the export consoles. The Mark III's TR stays an
-    /// input [A]; its TH is `io`'s (Endou_Disputes.md D-3).
+    /// Whether TH and TR follow port $3F's directions and levels: the export consoles, and the Game Gear as the Master
+    /// System II (decided 2026-10-20, Endou_Disputes.md D-25). The Mark III's TR stays an input [A]; its TH is `io`'s
+    /// (D-3).
     pub fn io_control(self) -> bool {
-        matches!(self, Model::Sms1 | Model::Sms2)
+        matches!(self, Model::Sms1 | Model::Sms2) || self.is_game_gear()
     }
 
     pub fn has_reset_button(self) -> bool {
@@ -136,13 +147,26 @@ impl Model {
     /// than $FF, as on the Master System II. The Mark III and the SG-1000 are taken as the first [A], the Game Gear as the
     /// second [R SMS Power!'s "I/O Port Map - Game Gear": its undecoded reads $FF].
     pub fn floating_bus(self) -> bool {
-        !matches!(self, Model::Sms2 | Model::GameGear)
+        !matches!(self, Model::Sms2) && !self.is_game_gear()
     }
 
-    /// Whether the console has a BIOS: the Master Systems, the Japanese one among them [R `smstech` §1]; the Mark III
-    /// has none (Endou_Disputes.md D-14), with or without its FM unit, nor the SG-1000.
+    /// Whether the console has a BIOS: the Master Systems, the Japanese one among them [R `smstech` §1], and the later
+    /// Game Gears' boot ROM (Jadeite_OpenBoot.md §1.1); the Mark III has none (Endou_Disputes.md D-14), with or without
+    /// its FM unit, nor the SG-1000.
     pub fn has_bios(self) -> bool {
-        matches!(self, Model::Sms1 | Model::Sms2 | Model::JapaneseSms)
+        matches!(self, Model::Sms1 | Model::Sms2 | Model::JapaneseSms) || self.is_game_gear()
+    }
+
+    /// The addresses the BIOS answers below while port $3E enables it: the Game Gear's 1 KiB at $0000-$03FF, the
+    /// cartridge answering above it [R MacDonald's `smstech` §4]; a Master System's BIOS mirrors through the slot area.
+    pub fn bios_window(self) -> u16 {
+        if self.is_game_gear() { 0x0400 } else { 0xC000 }
+    }
+
+    /// Port $3E's bits that do nothing on the console: 7, 6, 5 and 2 on the Game Gear, so that its cartridge and I/O
+    /// stay on [R `smstech` §4: "Bits 7, 6, 5, and 2 have no effect on a GameGear"].
+    pub fn memory_control_ignored(self) -> u8 {
+        if self.is_game_gear() { 0xE4 } else { 0 }
     }
 
     /// Whether the console's BIOS checks an export cartridge's header: the export Master Systems' do, the Japanese
@@ -158,8 +182,9 @@ impl Model {
     }
 
     /// The memory control port's value when the cartridge starts with no BIOS run before it: $AB, the value both export
-    /// BIOSes MacDonald watched leave for a cartridge [R `smstech` §4]; the SG-1000 has no such port.
+    /// BIOSes MacDonald watched leave for a cartridge, and $A8 on the Game Gear, a Majesco unit's [R `smstech` §4]; the
+    /// SG-1000 has no such port.
     pub fn memory_control_at_start(self) -> u8 {
-        0xAB
+        if self.is_game_gear() { 0xA8 } else { 0xAB }
     }
 }

@@ -60,7 +60,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { true, false, false }, library.Info.Systems.Select(s => s.StartsEmpty));
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
             Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7), ("gg.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
-            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2", "bios_jsms", "bios_gg" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { (4u, "bios.gg", 1024L, false, "accuracy") }, library.Info.Systems[2].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
         }
 
         [Fact]
@@ -186,7 +187,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // J1: the Game Gear in development - a player is not offered .gg, a developer is; its own mode draws the LCD's 160 by 144 window in 12-bit colours, CRAM written through the latch - see Jadeite_Native.md §2, §4.
+        // J1: the Game Gear in development - a player is not offered .gg, a developer is; its own mode draws the LCD's 160 by 144 window in 12-bit colours after J2's open boot program - see Jadeite_Native.md §2, §4, §9.
         [Fact]
         public void The_game_gear_is_a_system_in_development_that_draws_its_lcd_window()
         {
@@ -197,7 +198,7 @@ namespace EmuSen.WiseMan.Cores
             var library = CoreLibrary.Open(LibraryPath);
             using var machine = new CoreMachine(library, SyntheticSmsRom.GgPicture(), "", Array.Empty<(uint, byte[])>(), "gg");
             Assert.Equal(("gg", "ntsc", 160, 144, 160, 146), (machine.Info.System, machine.Info.Region, machine.Info.BaseWidth, machine.Info.BaseHeight, machine.Info.MaxWidth, machine.Info.MaxHeight));
-            for (int frame = 0; frame < 5; frame++) machine.Advance();
+            for (int frame = 0; frame < 25; frame++) machine.Advance();
             var frameInfo = machine.FrameInfo;
             Assert.Equal((160, 144), (frameInfo.Width, frameInfo.Height));
             var pixels = new byte[160 * 144 * 4];

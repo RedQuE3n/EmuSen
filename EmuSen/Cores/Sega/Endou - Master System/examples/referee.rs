@@ -1,5 +1,5 @@
 //! The test programs for the referees (Endou_Native.md §9.11, §11): writes each program's image into a folder for the
-//! reference probe to run, a Master System's as `.sms`, an SG-1000's as `.sg` and a Game Gear's as `.gg`, and prints what Endou leaves in RAM after ten frames on each model, one line a run:
+//! reference probe to run, a Master System's as `.sms`, an SG-1000's as `.sg` and a Game Gear's as `.gg`, and prints what Endou leaves in RAM after ten frames on each model, a Game Gear's after its open boot program's hand-over, one line a run:
 //! `<program> <model> <the first 16 bytes of RAM>`. `cargo run --release --example referee -- <folder>`.
 
 #[path = "../programs/images.rs"]
@@ -22,6 +22,15 @@ fn main() {
             }
             let request = Create { image: &image, settings: Settings::from_pairs(settings), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
             let mut m = if p.gg { Machine::create_as("gg", &request) } else { Machine::create(&request) }.expect("the machine");
+            // A Game Gear runs its open boot program first: the ten frames are counted from its hand-over.
+            let mut boot = 0;
+            while p.gg && m.bus.memory_control != 0xA8 {
+                Core::advance(&mut m, &mut 0).unwrap();
+                boot += 1;
+            }
+            if boot > 0 {
+                eprintln!("{}: handed over in frame {boot}", p.name);
+            }
             for _ in 0..10 {
                 Core::advance(&mut m, &mut 0).unwrap();
             }

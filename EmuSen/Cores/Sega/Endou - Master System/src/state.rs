@@ -1,12 +1,14 @@
 //! Endou's own state format, "ENDO" (Endou_Plan.md §5.7, Endou_Native.md §9.7, §10.6): the magic, the version, the
 //! console and model, the boot and its BIOS's CRC-32, the frame count and the clocks, the Z80's block, the sound's (the
 //! PSG, its clock and the step synthesiser's pending differences), the bus's ports and the mapper's registers, the work
-//! RAM, the VDP's block with VRAM and CRAM, then the cartridge's RAM where the board has it. Version 6 is stage 6's;
+//! RAM, the VDP's block with VRAM and CRAM, then the cartridge's RAM where the board has it, and on the Game Gear its
+//! system ports and the EEPROM board's chip (Jadeite_Native.md §9.5). Version 6 is stage 6's;
 //! versions 1 to 5 reached no player and are refused. The layout listing is pinned by a test.
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
 
+use crate::board::Mapper;
 use crate::machine::Machine;
 use crate::media::Console;
 
@@ -79,6 +81,13 @@ impl Machine {
         if !b.cart.ram.is_empty() {
             w.bytes("CARTRAM", &b.cart.ram);
         }
+        if self.model().is_game_gear() {
+            b.gg.write_state(w);
+        }
+        if b.cart.board.mapper == Mapper::SegaEeprom {
+            w.u8("EepromRegister", b.cart.eeprom_register);
+            b.cart.eeprom.write_state(w);
+        }
     }
 }
 
@@ -130,6 +139,15 @@ impl StateMachine for Machine {
         }
         let mut cart_ram = vec![0; self.bus.cart.ram.len()];
         r.bytes(&mut cart_ram)?;
+        let mut gg = self.bus.gg.clone();
+        if self.model().is_game_gear() {
+            gg.read_state(&mut r)?;
+        }
+        let (mut eeprom, mut eeprom_register) = (self.bus.cart.eeprom.clone(), self.bus.cart.eeprom_register);
+        if self.bus.cart.board.mapper == Mapper::SegaEeprom {
+            eeprom_register = r.u8()?;
+            eeprom.read_state(&mut r)?;
+        }
         self.frames = frames;
         self.frame_end = frame_end;
         self.debug_open = false;
@@ -146,6 +164,9 @@ impl StateMachine for Machine {
         b.cart.slots = slots.map(|s| s as usize);
         b.ram = ram;
         b.vdp = vdp;
+        b.gg = gg;
+        b.cart.eeprom = eeprom;
+        b.cart.eeprom_register = eeprom_register;
         if !cart_ram.is_empty() {
             b.cart.ram = cart_ram;
             b.cart.dirty = true;
@@ -222,7 +243,7 @@ mod tests {
         assert_eq!(&lines[at..at + 11], ["101 8 u64 PsgTicks", "109 1 u8 OpllAddress", "110 64 u8[64] OpllRegisters", "174 72 u32[18] OpllPhase", "246 18 u8[18] OpllLevel", "264 18 u8[18] OpllStage", "282 72 u16[36] OpllOut", "354 4 u32 OpllCounter", "358 1 u8 OpllAm", "359 4 u32 OpllNoise", "363 8 u64 FmSamples"], "{layout}");
         assert_eq!(a.state_size(), 25_942 + 267, "the chip's 254 bytes, the sample count, port $F2 and the level");
         let bytes = crate::model::ALL.map(|m| (m.id(), m.byte()));
-        assert_eq!(bytes, [("mark3", 0), ("sms1", 1), ("sms2", 2), ("sg1000", 3), ("gg", 4), ("mark3fm", 5), ("jsms", 6)], "the state's model byte");
+        assert_eq!(bytes, [("mark3", 0), ("sms1", 1), ("sms2", 2), ("sg1000", 3), ("gg", 4), ("mark3fm", 5), ("jsms", 6), ("ggjp", 7)], "the state's model byte");
         let (mut sa, mut sb) = (vec![0i16; 1 << 16], vec![0i16; 1 << 16]);
         for _ in 0..90 {
             a.advance();

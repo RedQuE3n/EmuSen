@@ -50,7 +50,12 @@ pub const GG: Program = Program { header: Some(6), gg: true, ..program("gg", inc
 pub const GG_TMS: Program = Program { header: Some(6), gg: true, ..program("ggtms", include_str!("ggtms.s"), 2) };
 pub const GG_SMS: Program = program("ggsms", include_str!("ggsms.s"), 2);
 
-pub const GG_PROGRAMS: [&Program; 3] = [&GG, &GG_TMS, &GG_SMS];
+/// Stage J2's: the system ports in GG mode, and the EEPROM board's protocol on a 128 KiB cartridge, its board given by
+/// the test (Jadeite_Native.md §9).
+pub const GG_IO: Program = Program { header: Some(6), gg: true, ..program("ggio", include_str!("ggio.s"), 2) };
+pub const GG_EEPROM: Program = Program { header: Some(6), gg: true, ..program("eeprom", include_str!("eeprom.s"), 8) };
+
+pub const GG_PROGRAMS: [&Program; 5] = [&GG, &GG_TMS, &GG_SMS, &GG_IO, &GG_EEPROM];
 
 pub fn image(p: &Program) -> Vec<u8> {
     let mut rom = vec![0u8; p.banks * 0x4000];

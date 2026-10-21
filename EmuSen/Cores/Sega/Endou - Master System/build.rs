@@ -1,6 +1,7 @@
 //! Builds Endou's open boot program from its assembly sources with Beryl's Z80 assembler (Endou_OpenBoot.md §3): the
 //! RAM program for $C700, the font from `beryl-font` as Master System tiles, and the ROM program around them, into an
-//! 8 KiB image in `OUT_DIR`, once for the export Master Systems and once for the Japanese one, which checks no header.
+//! 8 KiB image in `OUT_DIR`, once for the export Master Systems and once for the Japanese one, which checks no header;
+//! and the Game Gear's 1 KiB program with its letters as one bit a dot (Jadeite_OpenBoot.md §3).
 
 use std::path::Path;
 
@@ -15,6 +16,11 @@ const RAM_PROGRAM: u32 = 0xC700;
 const ROM_NO_GAME: i64 = 0x0080;
 const ROM_REFUSE: i64 = 0x0083;
 
+/// The Game Gear's boot ROM, and where its glyphs, A to Z and the full stop, go in it.
+const GG_IMAGE: usize = 0x400;
+const GG_LETTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ.";
+const GG_FONT_AT: usize = GG_IMAGE - 7 * 27 - 3;
+
 fn main() {
     println!("cargo::rerun-if-changed=src/boot");
     let out = Path::new(&std::env::var_os("OUT_DIR").expect("OUT_DIR")).to_path_buf();
@@ -24,6 +30,27 @@ fn main() {
     std::fs::write(out.join("open_boot.bin"), export.0).expect("the image written");
     std::fs::write(out.join("open_boot_japan.bin"), japan.0).expect("the image written");
     std::fs::write(out.join("open_boot_symbols.rs"), export.1).expect("the symbols written");
+    std::fs::write(out.join("open_boot_gg.bin"), game_gear()).expect("the image written");
+}
+
+/// The Game Gear's image: gg.s, then the glyphs at GG_FONT_AT, the rest $FF.
+fn game_gear() -> Vec<u8> {
+    let dir = Path::new("src/boot");
+    let read = |name: &str| std::fs::read_to_string(dir.join(name)).ok();
+    let source = read("gg.s").expect("gg.s is missing");
+    let defines = [("FONT_AT", GG_FONT_AT as i64), ("GLYPHS", GG_LETTERS.len() as i64)];
+    let rom = build("gg.s", assemble_with(&source, 0, &defines, &read));
+    assert!(rom.bytes.len() <= GG_FONT_AT, "the Game Gear's program runs into its glyphs: {} bytes", rom.bytes.len());
+    let mut image = vec![0xFF; GG_IMAGE];
+    image[..rom.bytes.len()].copy_from_slice(&rom.bytes);
+    let glyphs: Vec<beryl_font::Glyph> = beryl_font::glyphs().collect();
+    for (i, &c) in GG_LETTERS.iter().enumerate() {
+        let g = glyphs.iter().find(|g| g.char == c).unwrap_or_else(|| panic!("beryl-font has no {}", c as char));
+        for (row, bits) in g.rows.into_iter().enumerate() {
+            image[GG_FONT_AT + i * 7 + row] = bits << 2;
+        }
+    }
+    image
 }
 
 /// The image for an export Master System, or with `japan` for the Japanese one, and its symbols' source.

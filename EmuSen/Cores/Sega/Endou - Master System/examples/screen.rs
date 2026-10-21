@@ -1,7 +1,7 @@
 //! Runs an image with pad presses and shows what is on its screen (Endou_Native.md §10.8): the name table at $3800 as
 //! text, for test programs whose font is ASCII from tile 0 at space, and the picture as a PPM.
 //! `cargo run --release --example screen -- <image> <frames> [--system s] [--model m] [--region r] [--press F:BUTTON[:DUR]]...
-//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--vdp <file>] [--ram <file>] [--wav <file>]`; buttons Up, Down, Left,
+//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--vdp <file>] [--ram <file>] [--wav <file>] [--no-boot]`; buttons Up, Down, Left,
 //! Right, 1, 2, Pause, Reset. `--vdp` writes the VDP's whole picture as RGBA, 256 wide, before a Game Gear's LCD. `--wav` writes the sound of every frame run as a 16-bit stereo WAV file at the output rate.
 
 use emusen_native::core::{Core, Create, Settings, sys};
@@ -36,6 +36,11 @@ fn main() {
         None => Machine::create(&request),
     }
     .unwrap_or_else(|e| panic!("refused: {e}"));
+    // `--no-boot`: the same console with nothing before the cartridge, as the references run it.
+    if args.iter().any(|a| a == "--no-boot") {
+        let rom = image[m.media.skipped..].to_vec();
+        m = Machine::with_board(m.media.clone(), m.market, m.model(), m.bus.cart.board, rom);
+    }
     let mut sound = Vec::new();
     let mut buf = vec![0i16; 1 << 14];
     for f in 0..frames {

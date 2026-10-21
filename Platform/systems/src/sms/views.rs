@@ -26,7 +26,7 @@ pub const VARIANT_315_5124: u64 = 1;
 pub const CHANNELS: [&str; 4] = ["Tone 1", "Tone 2", "Tone 3", "Noise"];
 
 /// The boards by the `Board` unit's `Mapper`.
-pub const BOARDS: [&str; 4] = ["Plain", "Sega", "Codemasters", "SG-1000 RAM"];
+pub const BOARDS: [&str; 5] = ["Plain", "Sega", "Codemasters", "SG-1000 RAM", "Sega with EEPROM"];
 
 fn sg(system: &str) -> bool {
     system == SG1000
@@ -419,7 +419,9 @@ mod tests {
         assert_eq!(c[3], (3, "Noise", true, 86, true, "Rate=2 White=True Att=2".to_string()));
         let board = |mapper: u64, control: u64| Unit { name: BOARD.into(), kind: "cartridge".into(), registers: vec![("Mapper".into(), mapper), ("Control".into(), control), ("Ram".into(), 0x8000)] };
         assert_eq!((unit_label(&board(2, 0)).as_deref(), unit_label(&board(9, 0)).as_deref(), unit_label(&vdp(&[]))), (Some("Codemasters"), Some("?"), None));
+        assert_eq!(unit_label(&board(4, 0)).as_deref(), Some("Sega with EEPROM"));
         let m = mem(&[("RAM", vec![0; 0x2000])]);
+        assert_eq!(resolve_physical(0xC005, &m, &[board(4, 0x10)]), Some(("RAM", 5, true)), "the EEPROM board's bit 4 maps no RAM");
         assert_eq!((resolve_physical(0xE123, &m, &[]), resolve_physical(0xBFFF, &m, &[])), (Some(("RAM", 0x0123, true)), None));
         assert_eq!(resolve_physical(0xC005, &m, &[board(1, 0x10)]), Some(("CARTRAM", 5, true)));
         let off = Unit { name: IO.into(), kind: "io".into(), registers: vec![("MemoryControl".into(), 0xBB)] };

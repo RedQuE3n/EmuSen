@@ -15,6 +15,8 @@ pub enum Mapper {
     Codemasters,
     /// An SG-1000 board with RAM at $8000-$BFFF, mirrored every `ram` bytes.
     SgRam,
+    /// Sega's mapper with a 93C46B serial EEPROM in place of RAM, on a few Game Gear boards (Jadeite_Native.md §9.3).
+    SegaEeprom,
 }
 
 /// Why a board was chosen, for the log and the tests.
@@ -54,6 +56,11 @@ const fn battery(crc: u32) -> Row {
     Row { crc, mapper: Mapper::Sega, ram: 8 * 1024, battery: true }
 }
 
+/// A Game Gear board with the 93C46B, its 128 bytes the battery file.
+const fn eeprom(crc: u32) -> Row {
+    Row { crc, mapper: Mapper::SegaEeprom, ram: crate::eeprom::BYTES, battery: true }
+}
+
 /// The boards the rules below would place wrongly, each with its source in Endou_Native.md §9.2 and §14.6: Sega boards
 /// with 8 KiB of battery RAM, the games SMS Power! tags "Memory Backup" in every release No-Intro's DAT lists, betas,
 /// demos and re-releases left out; and The Castle's SG-1000 board with 8 KiB at $8000, as the survey saw it written.
@@ -76,6 +83,14 @@ pub const TABLE: &[Row] = &[
     battery(0x6953_8469), // Monopoly (USA, Europe)
     battery(0x026D_94A4), // Monopoly (USA, Europe) (Rev A)
     Row { crc: 0x092F_29D6, mapper: Mapper::SgRam, ram: 8 * 1024, battery: false },
+    // The Game Gear's EEPROM boards: the released games of Nerdly Pleasures' list (2021-10), by their CRC-32 in No-Intro's
+    // Game Gear DAT as libretro-database carries it (2026.10.07), prototypes left out (Jadeite_Native.md §9.3).
+    eeprom(0x056C_AE74), // Hyper Pro Yakyuu '92 (Japan)
+    eeprom(0x36EB_CD6D), // Majors, The - Pro Baseball (USA)
+    eeprom(0x2DA8_E943), // Pro Yakyuu GG League (Japan)
+    eeprom(0x578A_8A38), // World Series Baseball '95 (USA)
+    eeprom(0x3D8D_0DD6), // World Series Baseball (USA)
+    eeprom(0xBB38_CFD7), // World Series Baseball (USA) (Rev A)
 ];
 
 /// The board for an image (its copier header already set aside).
@@ -159,6 +174,17 @@ mod tests {
         assert!(TABLE.iter().all(|r| r.mapper != Mapper::SgRam || r.ram > 0), "an SG-1000 RAM board has RAM");
     }
 
+    // Jadeite_Native.md §9.3: the six released games with the 93C46B, each an EEPROM board of 128 bytes kept as a battery file.
+    #[test]
+    fn every_released_eeprom_game_has_its_eeprom_board() {
+        let crcs = [0x056C_AE74, 0x36EB_CD6D, 0x2DA8_E943, 0x578A_8A38, 0x3D8D_0DD6, 0xBB38_CFD7u32];
+        for crc in crcs {
+            let row = TABLE.iter().find(|r| r.crc == crc).unwrap_or_else(|| panic!("{crc:08X} has no row"));
+            assert_eq!((row.mapper, row.ram, row.battery), (Mapper::SegaEeprom, 128, true), "{crc:08X}");
+        }
+        assert_eq!(TABLE.iter().filter(|r| r.mapper == Mapper::SegaEeprom).count(), crcs.len());
+    }
+
     // A seeded fault that dropped a row of the table passed every test (Endou_Native.md §14.10): the releases of the eight games
     // SMS Power! tags "Memory Backup", by their CRC-32 in No-Intro's DAT, each a battery board.
     #[test]
@@ -186,6 +212,6 @@ mod tests {
             let row = TABLE.iter().find(|r| r.crc == crc).unwrap_or_else(|| panic!("{name} has no row"));
             assert_eq!((row.mapper, row.ram, row.battery), (Mapper::Sega, 0x2000, true), "{name}");
         }
-        assert_eq!(TABLE.iter().filter(|r| r.battery).count(), releases.len(), "no battery row the tag does not name");
+        assert_eq!(TABLE.iter().filter(|r| r.battery && r.mapper == Mapper::Sega).count(), releases.len(), "no battery row the tag does not name");
     }
 }

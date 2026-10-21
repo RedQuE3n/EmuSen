@@ -98,9 +98,9 @@ impl Machine {
         let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
         let sound = Sound::with_fm(Sn76489::new(model.psg()), model.fm(), num, 15);
         let mut vdp = Vdp::new(model.vdp(), pal);
-        vdp.gg_mode = model == Model::GameGear && media.gg_mode();
-        let (width, height) = if model != Model::GameGear { (WIDTH, HEIGHT) } else if vdp.gg_mode { (gg::WIDTH, gg::WINDOW_HEIGHT) } else { (gg::WIDTH, gg::PANEL_HEIGHT) };
-        let lcd = (model == Model::GameGear && !vdp.gg_mode).then(Box::default);
+        vdp.gg_mode = model.is_game_gear() && media.gg_mode();
+        let (width, height) = if !model.is_game_gear() { (WIDTH, HEIGHT) } else if vdp.gg_mode { (gg::WIDTH, gg::WINDOW_HEIGHT) } else { (gg::WIDTH, gg::PANEL_HEIGHT) };
+        let lcd = (model.is_game_gear() && !vdp.gg_mode).then(Box::default);
         let bios = if boot == Boot::None { Vec::new() } else { bios };
         let bios_crc = if bios.is_empty() { 0 } else { crate::board::crc32(&bios) };
         let bus = Bus::with_bios(model, Cartridge::new(board, rom), model.ram(), sound, vdp, bios);
@@ -154,7 +154,7 @@ impl Machine {
 
     /// The controller ports: two, the Game Gear's one.
     pub fn ports(&self) -> u32 {
-        if self.model() == Model::GameGear { 1 } else { 2 }
+        if self.model().is_game_gear() { 1 } else { 2 }
     }
 
     /// CRAM's bytes: 32, or the Game Gear's 64 in its own mode.
@@ -253,7 +253,7 @@ impl Machine {
     /// What a frame takes at its start: the drawing switch, a Pause press as an NMI edge, the pads, and its end.
     fn begin_frame(&mut self) {
         self.bus.vdp.skip = self.skip;
-        // In the Game Gear's own mode Start is a port software reads, not NMI (Endou_Plan.md §2.1; stage J2).
+        // In the Game Gear's own mode Start is port $00's bit 7, not NMI (Endou_Plan.md §2.1, Jadeite_Native.md §9.2).
         let pause = self.pads[0] as u8 & PAUSE != 0 && !self.bus.vdp.gg_mode;
         if pause && !self.pause_held {
             self.bus.nmi = true;
@@ -278,7 +278,7 @@ impl Machine {
     /// the TMS9918A's 16 (D-11); on the Game Gear its LCD's picture (`gg`).
     fn take_picture(&mut self) {
         let vdp = &self.bus.vdp;
-        if self.model() == Model::GameGear {
+        if self.model().is_game_gear() {
             match self.lcd.as_mut() {
                 Some(lcd) => lcd.draw(vdp.picture(), vdp.height, vdp.border(), &mut self.picture),
                 None => gg::window(vdp.picture(), vdp.height, &mut self.picture),

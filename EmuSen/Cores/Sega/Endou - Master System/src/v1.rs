@@ -5,7 +5,7 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::board::{Board, Mapper, Row, TABLE, Why, identify_with};
-use crate::boot::{BIOS_SIZE, Boot, open_boot};
+use crate::boot::{BIOS_SIZE, Boot, GG_BOOT_SIZE, bios_size, open_boot};
 use crate::bus::{PATCH_HIGH, Patch};
 use crate::debug;
 use crate::gg;
@@ -69,10 +69,14 @@ pub const MODELS: [(&str, &str, Model); 6] = [
     ("sg1000", "SG-1000", Model::Sg1000),
 ];
 
-/// The BIOS settings, one per console that has a BIOS (Endou_OpenBoot.md §5, decided 2026-10-19): the open boot program
-/// by default, the player's own image as an opt-in.
-pub const BIOS_KEYS: [(&str, &str, Model); 3] =
-    [("bios_sms1", "Master System BIOS", Model::Sms1), ("bios_sms2", "Master System II BIOS", Model::Sms2), ("bios_jsms", "Japanese Master System BIOS", Model::JapaneseSms)];
+/// The BIOS settings, one per console that has a BIOS (Endou_OpenBoot.md §5, decided 2026-10-19), and one for both Game
+/// Gears' boot ROM (Jadeite_OpenBoot.md §5): the open boot program by default, the player's own image as an opt-in.
+pub const BIOS_KEYS: [(&str, &str, Model); 4] = [
+    ("bios_sms1", "Master System BIOS", Model::Sms1),
+    ("bios_sms2", "Master System II BIOS", Model::Sms2),
+    ("bios_jsms", "Japanese Master System BIOS", Model::JapaneseSms),
+    ("bios_gg", "Game Gear boot ROM", Model::GameGear),
+];
 pub const BIOS_OPEN: &str = "open";
 pub const BIOS_PLAYER: &str = "player";
 
@@ -80,11 +84,17 @@ pub const BIOS_PLAYER: &str = "player";
 pub const BIOS_SMS1: u32 = 1;
 pub const BIOS_SMS2: u32 = 2;
 pub const BIOS_JSMS: u32 = 3;
+pub const BIOS_GG: u32 = 4;
 
 /// The firmware page's words for running on the open boot program (Endou_OpenBoot.md §8), and the Japanese Master
 /// System's, whose BIOS checks no header.
 pub const BIOS_COST: &str = "Games start without Sega's logo screen. The open boot program sets the console up as Sega's manual says the BIOS does, checks an export cartridge's header as the documents describe, and hands the game over the same way; a game that reads the BIOS's code or relies on what the documents leave unsaid may behave differently, the start-up takes a different time, and the BIOS's built-in games are absent.";
 pub const BIOS_JSMS_COST: &str = "Games start without Sega's logo screen. The open boot program sets the console up as Sega's manual says the BIOS does and hands the game over the same way, checking no header, as the Japanese console's BIOS does not; a game that reads the BIOS's code or relies on what the documents leave unsaid may behave differently, the start-up takes a different time, and the BIOS's built-in game is absent.";
+
+/// The Game Gear's boot ROM's words (Jadeite_OpenBoot.md §8).
+pub const BIOS_GG_COST: &str = "Games start without the boot ROM's screen. The open boot program checks for Sega's header as the documents say the Game Gear's boot ROM does and hands the game over the same way; a game that reads the boot ROM's code or relies on what the documents leave unsaid may behave differently, and the start-up takes a different time.";
+pub const BIOS_GG_OPEN_HELP: &str = "Games start without the boot ROM's screen and after a different time, and a game that reads the boot ROM's code may behave differently.";
+pub const BIOS_GG_PLAYER_HELP: &str = "The console's own start-up, exact; used when the file is in the firmware folder, else the open boot program runs.";
 
 /// The MD5 of the 8 KiB image No-Intro's DAT lists for the Japanese Master System, (Japan) v2.1 (Endou_References.md
 /// §6f).
@@ -104,8 +114,15 @@ pub fn bios_file(model: Model) -> Option<u32> {
         Model::Sms1 => Some(BIOS_SMS1),
         Model::Sms2 => Some(BIOS_SMS2),
         Model::JapaneseSms => Some(BIOS_JSMS),
+        Model::GameGear | Model::JapaneseGameGear => Some(BIOS_GG),
         _ => None,
     }
+}
+
+/// The setting that chooses a console's BIOS, where it has one: both Game Gears share theirs.
+pub fn bios_key(model: Model) -> Option<&'static str> {
+    let model = if model.is_game_gear() { Model::GameGear } else { model };
+    BIOS_KEYS.iter().find(|k| k.2 == model).map(|k| k.0)
 }
 
 /// The firmware entry of a console's BIOS.
@@ -114,13 +131,14 @@ pub fn bios(model: Model) -> Option<Firmware> {
         Model::Sms1 => ("bios_sms1.sms", "The Master System's BIOS", &BIOS_SMS1_MD5, BIOS_COST),
         Model::Sms2 => ("bios_sms2.sms", "The Master System II's BIOS", &[], BIOS_COST),
         Model::JapaneseSms => ("bios_jsms.sms", "The Japanese Master System's BIOS", &[BIOS_JSMS_MD5], BIOS_JSMS_COST),
+        Model::GameGear | Model::JapaneseGameGear => ("bios.gg", "The Game Gear's boot ROM", &[], BIOS_GG_COST),
         _ => return None,
     };
     Some(Firmware {
         which: bios_file(model)?,
         name: name.into(),
         label: label.into(),
-        size: BIOS_SIZE as u64,
+        size: bios_size(model) as u64,
         required: false,
         parts: vec![vec![name.into()]],
         replacement: Some(Replacement::Accuracy { cost: cost.into() }),
@@ -167,22 +185,32 @@ fn schema() -> Vec<Setting> {
     .chain(BIOS_KEYS.iter().map(|&(key, label, model)| Setting {
         key: key.into(),
         label: label.into(),
-        help: if model.checks_export_header() {
+        help: if model.is_game_gear() {
+            "What the Game Gear runs before the game. Endou's open boot program checks for Sega's header as the documents say the later units' boot ROM does, with a screen of its own; your own boot ROM, when its file is in the firmware folder, is the console's own start-up. Takes effect when a game is next loaded."
+        } else if model.checks_export_header() {
             "What the console runs before the game. Endou's open boot program sets the console up as Sega's manual describes and checks an export cartridge's header, with a screen of its own; your own BIOS, when its file is in the firmware folder, is the console's own start-up, its logo and any built-in game included. Takes effect when a game is next loaded."
         } else {
             "What the console runs before the game. Endou's open boot program sets the console up as Sega's manual describes and starts any game, checking no header as the Japanese console's BIOS does not, with a screen of its own; your own BIOS, when its file is in the firmware folder, is the console's own start-up, its logo and its built-in game included. Takes effect when a game is next loaded."
         }
         .into(),
-        kind: SettingKind::Choice(vec![
-            Choice { value: BIOS_OPEN.into(), label: "Endou's open boot program".into(), help: Some(BIOS_OPEN_HELP.into()) },
-            Choice { value: BIOS_PLAYER.into(), label: "Your own BIOS".into(), help: Some(BIOS_PLAYER_HELP.into()) },
-        ]),
+        kind: SettingKind::Choice(if model.is_game_gear() {
+            vec![
+                Choice { value: BIOS_OPEN.into(), label: "Endou's open boot program".into(), help: Some(BIOS_GG_OPEN_HELP.into()) },
+                Choice { value: BIOS_PLAYER.into(), label: "Your own boot ROM".into(), help: Some(BIOS_GG_PLAYER_HELP.into()) },
+            ]
+        } else {
+            vec![
+                Choice { value: BIOS_OPEN.into(), label: "Endou's open boot program".into(), help: Some(BIOS_OPEN_HELP.into()) },
+                Choice { value: BIOS_PLAYER.into(), label: "Your own BIOS".into(), help: Some(BIOS_PLAYER_HELP.into()) },
+            ]
+        }),
         default: BIOS_OPEN.into(),
         scope: Scope::Create,
         category: Some("Console".into()),
         effect: Effect::None,
         advanced: false,
-        hidden: false,
+        // The Game Gear's is hidden while the system is in development, until J3 offers it (Jadeite_OpenBoot.md §5).
+        hidden: model.is_game_gear(),
         restart: true,
     }))
     .collect()
@@ -200,7 +228,7 @@ pub fn market_of(media: &Media, setting: Option<&str>) -> Market {
 pub fn model_of(console: Console, market: Market, setting: Option<&str>) -> Model {
     let chosen = MODELS.iter().find(|m| Some(m.0) == setting).map(|m| m.2);
     match console {
-        Console::Gg => Model::GameGear,
+        Console::Gg => if market == Market::Japan { Model::JapaneseGameGear } else { Model::GameGear },
         Console::Sg1000 => if chosen == Some(Model::MarkIII) { Model::MarkIII } else { Model::Sg1000 },
         Console::Sms => chosen.filter(|&m| m != Model::Sg1000).unwrap_or(if market == Market::Japan { Model::JapaneseSms } else { Model::Sms2 }),
     }
@@ -218,27 +246,32 @@ fn system(id: &str, name: &str, extension: &str, controller: Controller, firmwar
     }
 }
 
-/// The Game Gear: NTSC only, in development until stage J3 offers it (Endou_Plan.md §7).
+/// The Game Gear: NTSC only, its boot ROM optional, in development until stage J3 offers it (Endou_Plan.md §7).
 fn game_gear() -> emusen_native::core::System {
-    emusen_native::core::System { regions: vec![Region::Ntsc], development: true, ..system("gg", "Sega Game Gear", ".gg", gg_pad(), Vec::new()) }
+    emusen_native::core::System { regions: vec![Region::Ntsc], development: true, ..system("gg", "Sega Game Gear", ".gg", gg_pad(), bios(Model::GameGear).into_iter().collect()) }
 }
 
 /// What a console runs before its game: none where it has no BIOS; the player's image where its setting chooses it and
 /// the file was given; else the open boot program (Endou_OpenBoot.md §5).
 pub fn boot_for(model: Model, settings: &Settings, files: &[emusen_native::abi::File<'_>]) -> (Boot, Vec<u8>) {
     let Some(which) = bios_file(model) else { return (Boot::None, Vec::new()) };
-    let chosen = BIOS_KEYS.iter().find(|k| k.2 == model).is_some_and(|k| settings.get(k.0) == Some(BIOS_PLAYER));
+    let chosen = bios_key(model).is_some_and(|k| settings.get(k) == Some(BIOS_PLAYER));
     match files.iter().find(|f| f.which == which) {
         Some(f) if chosen => (Boot::Player, f.data.to_vec()),
         _ => (Boot::Open, open_boot(model).to_vec()),
     }
 }
 
-/// Every file is the battery or a BIOS of 8 KiB; any other is refused with words.
+/// Every file is the battery, a BIOS of 8 KiB or the Game Gear's boot ROM of 1 KiB; any other is refused with words.
 fn check_files(files: &[emusen_native::abi::File<'_>]) -> Result<(), i32> {
     for f in files {
         match f.which {
             0 => {}
+            BIOS_GG if f.data.len() == GG_BOOT_SIZE => {}
+            BIOS_GG => {
+                detail(&format!("file {} is {} bytes; the Game Gear's boot ROM is 1,024 bytes", f.which, f.data.len()));
+                return Err(status::BAD_FILE);
+            }
             BIOS_SMS1 | BIOS_SMS2 | BIOS_JSMS if f.data.len() == BIOS_SIZE => {}
             BIOS_SMS1 | BIOS_SMS2 | BIOS_JSMS => {
                 detail(&format!("file {} is {} bytes; a Master System BIOS Endou maps is 8,192 bytes, and the larger ones with a built-in game are not mapped yet", f.which, f.data.len()));
@@ -371,7 +404,7 @@ impl Core for Machine {
             Console::Gg => GG_PAD,
         };
         // The Game Gear's LCD: its window in its own mode, the panel's 146 rows in a Master System cartridge's (`gg`).
-        let video = if self.model() == Model::GameGear {
+        let video = if self.model().is_game_gear() {
             Video { base_width: gg::WIDTH, base_height: gg::WINDOW_HEIGHT, max_width: gg::WIDTH, max_height: gg::PANEL_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
         } else {
             Video { base_width: WIDTH, base_height: HEIGHT, max_width: WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
@@ -705,7 +738,11 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let ids: Vec<_> = info.systems.iter().map(|s| (s.id.as_str(), s.extensions.clone(), s.development, s.firmware.len())).collect();
-        assert_eq!(ids, [("sms", vec![".sms".to_string()], false, 3), ("sg1000", vec![".sg".to_string()], false, 0), ("gg", vec![".gg".to_string()], true, 0)], "two offered since stage 7, the Game Gear in development until J3");
+        assert_eq!(ids, [("sms", vec![".sms".to_string()], false, 3), ("sg1000", vec![".sg".to_string()], false, 0), ("gg", vec![".gg".to_string()], true, 1)], "two offered since stage 7, the Game Gear in development until J3");
+        let gg_boot = &info.systems[2].firmware[0];
+        assert_eq!((gg_boot.which, gg_boot.name.as_str(), gg_boot.size, gg_boot.required), (BIOS_GG, "bios.gg", 1024, false));
+        assert_eq!(gg_boot.replacement, Some(Replacement::Accuracy { cost: BIOS_GG_COST.into() }));
+        assert_eq!(BIOS_GG_COST.split(". ").next(), Some("Games start without the boot ROM's screen"));
         let bios: Vec<_> = info.systems[0].firmware.iter().map(|f| (f.which, f.name.as_str(), f.size, f.required, f.md5.len())).collect();
         assert_eq!(bios, [(BIOS_SMS1, "bios_sms1.sms", 8192, false, 2), (BIOS_SMS2, "bios_sms2.sms", 8192, false, 0), (BIOS_JSMS, "bios_jsms.sms", 8192, false, 1)]);
         assert!(BIOS_SMS1_MD5.iter().chain([&BIOS_JSMS_MD5]).all(|m| m.len() == 32 && m.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())));
@@ -735,12 +772,17 @@ mod tests {
         let info = gg.machine_info();
         assert_eq!((gg.model(), gg.bus.vdp.gg_mode, info.system.as_str(), info.region, info.frame_rate), (Model::GameGear, true, "gg", Some(Region::Ntsc), NTSC_FRAME));
         assert_eq!((info.video.base_width, info.video.base_height, info.video.max_height, info.ports.len()), (160, 144, 146, 1));
-        assert_eq!((info.ports[0].controller.as_deref(), info.firmware.len()), (Some(GG_PAD), 0));
+        assert_eq!((info.ports[0].controller.as_deref(), info.firmware.clone()), (Some(GG_PAD), vec![(BIOS_GG, FirmwareSource::Replacement)]), "the open boot program by default");
         assert_eq!(info.spaces.iter().find(|s| s.name == "CRAM").map(|s| gg.space_size(s.id)), Some(Ok(64)));
         assert_eq!(gg.set_buttons(1, 1, 1), Err(status::NO_SUCH_PORT));
         Core::advance(&mut gg, &mut 0).unwrap();
         assert_eq!((gg.frame_info().width, gg.frame_info().height, gg.frame().len()), (160, 144, 160 * 144 * 4));
         let sms = make(4, &[]);
         assert_eq!((sms.model(), sms.bus.vdp.gg_mode, sms.frame_info().height, sms.space_size(crate::machine::CRAM_ID)), (Model::GameGear, false, 146, Ok(32)));
+        // Jadeite_Native.md §9.1: the market chooses the unit, Japanese or export, which port $00's bit 6 reads.
+        let markets = [make(5, &[]).model(), make(7, &[]).model(), make(6, &[(REGION_KEY, "sms.jp")]).model(), make(5, &[(REGION_KEY, "sms.br")]).model()];
+        assert_eq!(markets, [Model::JapaneseGameGear, Model::GameGear, Model::JapaneseGameGear, Model::GameGear]);
+        assert_eq!(bios_key(Model::JapaneseGameGear), Some("bios_gg"), "both units share the boot ROM's setting");
+        assert!(schema().iter().any(|s| s.key == "bios_gg" && s.hidden), "hidden until J3 offers the Game Gear");
     }
 }

@@ -664,3 +664,66 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   referee's pins, is the next measurement.
 - Pinned by: —
 - Implemented in: —
+
+### D-25. The Game Gear's I/O: TH set as an output and raised latches the H counter, as on the Master System II
+- Opened: 2026-10-20, at stage J1 (`Jadeite_Native.md` §2.3). FluBBa's *SMS VDP Test*, run on the Game Gear in a Master
+  System cartridge's mode, failed 9 of its 54 cases, every one reading the H counter latched through port `$3F`'s TH
+  [M 2026-10-20].
+- Documents read: MacDonald's `msvdp` §11 (TH's rise latches the counter) and §14 ("The GameGear I have behaves like a
+  NTSC SMS2"); his `smstech` §3–§4, whose Game Gear port maps send every odd port of `$07`–`$3F` in GG mode, and of
+  `$00`–`$3F` in the other, to the I/O control register; Sega's Game Gear notes, which describe no port `$3F`. No
+  document says whether the Game Gear's TH lines latch the counter.
+- Test program: FluBBa's test, as at J1; with the I/O chip's TH control given to the Game Gear, all 54 pass [M
+  2026-10-20, `programs::flubba_s_vdp_test_passes_on_every_model`].
+- Referee: none run.
+- Conclusion: **argued, decided 2026-10-20:** the Game Gear's port `$3F` sets TH and TR's directions and levels as the
+  Master System II's does, and TH's rise on either port latches the H counter. Its region read-back through TH is
+  therefore an export console's on both Game Gear models; the Japanese unit's market is port `$00`'s bit 6.
+- Pinned by: `jadeite::th_latches_the_h_counter_and_port_3e_keeps_the_cartridge_and_the_io_on`; FluBBa's test on the
+  Game Gear where the corpus is given.
+- Implemented in: the J2 commit (`Model::io_control`).
+
+### D-26. OPEN. The Game Gear's EEPROM board: which bits of which address drive the 93C46B's pins
+- Opened: 2026-10-20, at stage J2. The chip is documented whole by its data sheet (Microchip DS21172E); the board's
+  wiring to the cartridge bus is not.
+- Documents read: Microchip's *93C46B 1K 5.0V Microwire Serial EEPROM*, DS21172E (1998), whole, as SMS Power! hosts it
+  (`93c46doc.zip`, "used on some GG games"); SMS Power!'s forum topic 770, "93c46 emulation" (1999–2011), whole, read
+  through a summarising fetch: Charles MacDonald, 1999-12-24, "Bit 4 of FFFC is an enable switch for the EEPROM. Bit 0
+  of 8000 is where the data is written to serially. I think bit 1 of the same address might distinguish between a read
+  or write operation, but that's pure speculation", and "no address in the 0000-BFFF range (including 8000) was being
+  read after 8000 was written to"; Zoop the same day, "Pure speculation, but I do think data is read bit per bit from
+  8000, bit 1"; later posts on the 93C46B's sequential read. Searches of SMS Power!'s wiki, its forum and the web for a
+  wiring account found none (a negative result, 2026-10-20). The games' own code, which shows the wiring, is not in the
+  tester's library, and no commercial image is fetched.
+- Test program: `programs/eeprom.s`, which drives the chip as the rule below has it; it shows the chip's protocol, not
+  the board's wiring.
+- Referee: none can be: the references identify these boards by their games, and none of the games is at hand.
+- Conclusion: **open.** Implemented as argued, the documented parts first: the register at `$8000` while `$FFFC`'s bit
+  4 is set [D, MacDonald]; DI on bit 0 of a write [D, MacDonald]; CLK on bit 1 and CS on bit 2 of a write [A, the
+  simplest wiring after DI]; DO on bit 0 of a read, DI and DO tied as the data sheet's §3.2 allows, the byte's other
+  bits as written [A]. One table of four constants in `cart` holds the wiring, so that a document or a game's
+  observation can settle it in one place. Until then the six boards of the table run their games but their saves are
+  unverified. The decision asked of the tester is in `Jadeite_Native.md` §9.8.
+- Pinned by: `cart::tests::the_eeprom_board_s_register_answers_only_while_enabled`,
+  `jadeite::the_eeprom_s_protocol_runs_through_the_board_s_register`.
+- Implemented in: the J2 commit (`cart::EEPROM_*`).
+
+### D-27. The Game Gear's EXT port with nothing linked: inputs read high, nothing is received, and a byte sent holds TXFL for ten bit times
+- Opened: 2026-10-20, at stage J2. Sega's notes give the registers and their power-on values but not how an unlinked
+  unit's lines read; MacDonald's `smstech` §3 gives one unit's power-on reads, "C0 7F FF 00 FF 00 FF".
+- Documents read: Sega's Game Gear notes, "System control port" and its supplement, "Communications"; SMS Power!'s "Gear
+  to Gear Cable" (the serial format, "8 data bits ... no parity bit, and 1 stop bit"; its account of parallel data at
+  port `$03` disagrees with Sega's notes, which put it at port `$01`, and Sega's are followed); MacDonald's `smstech` §3.
+- Test program: `programs/ggio.s`, run on Endou and on the five references through the probe, its RAM at frame 30 [M
+  2026-10-20]. Genesis Plus GX, Gearsystem and SMS Plus GX read MacDonald's power-on values, as Endou does; PicoDrive
+  reads 0 at every port but `$00`; BlastEm exposes no RAM. Port `$01`'s pins, set half as outputs, read `$5F` on all
+  four that answer. After a byte written to `$03` at 300 bits a second with TON set, Gearsystem holds TXFL for 3,615
+  loops of 33 cycles, Endou for 3,616; Genesis Plus GX and SMS Plus GX never set it, and so read `$D0`.
+- Referee: none run.
+- Conclusion: **argued:** an input pin no cable drives reads 1, as Sega's notes say of the joystick board's open
+  inputs; PC4 and PC5, taken over by TON and RON, read their idle level, 1; port `$04` reads `$FF` and RXRD and FRER
+  stay 0, no line ever being driven low; a byte written to `$03` with TON set holds TXFL for ten bit times (a start bit,
+  eight, a stop bit) at the rate port `$05` sets, from the Z80's clock of 3,579,545 Hz. No NMI is ever made: PC6 is
+  never driven low with nothing linked.
+- Pinned by: `ggio::tests`, `jadeite::the_system_ports_answer_as_an_unlinked_unit_s`.
+- Implemented in: the J2 commit (`ggio`).

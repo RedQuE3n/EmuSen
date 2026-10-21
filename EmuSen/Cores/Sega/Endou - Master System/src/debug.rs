@@ -77,6 +77,7 @@ pub fn mapper_number(m: Mapper) -> i64 {
         Mapper::Sega => 1,
         Mapper::Codemasters => 2,
         Mapper::SgRam => 3,
+        Mapper::SegaEeprom => 4,
     }
 }
 

@@ -120,7 +120,8 @@ image in `OUT_DIR` (`open_boot_gg.bin`), beside the Master System's two. 1 KiB h
 
 1. `DI`, `IM 1`, the stack at `$DFF0`; `RETN` at `$0066` and `RETI` at `$0038`.
 2. The V counter awaited at `$B0` (§1.4); the PSG's four volumes off.
-3. The mode from port `$00` (U3), kept in a register pair's spare bit.
+3. The mode from port `$00` (U3). *As built: read where CRAM is written, the only step that depends on it, and not
+   kept.*
 4. The VDP: display off, the Mark III manual's table addresses, the name table and sprite table cleared, the sprite list
    ended at `$3F00`, the glyphs written as tiles, CRAM's first two colours black and white in the mode's form, the
    program's name; the display on.
@@ -129,7 +130,8 @@ image in `OUT_DIR` (`open_boot_gg.bin`), beside the Master System's two. 1 KiB h
    `$C000`; `OUT ($3E),A` and `JP $0000` at `$C700`; the V counter awaited at `$FF`; the status read; `JP $C700`.
 
 **The words** (U5), each line at most 20 letters, the window's width: "ENDOU OPEN BOOT"; after a refusal, "THE GAME
-CANNOT START.", "IT HAS NO SEGA", "HEADER."
+CANNOT", "START. IT HAS NO", "SEGA HEADER." *The words as built; this page first broke them after "START." and "SEGA",
+a line of 22 letters, wider than the window.*
 
 ## 4. The machine around it
 
@@ -188,3 +190,13 @@ the documents leave unsaid may behave differently, and the start-up takes a diff
    rows, as stage 7 fetched the Master System's, and the entry given its image's MD5. **[routine]**
 4. **`firmwarecheck.py`** against the player's images, with the control named in `EmuSen_Firmware.md` §0. *Recommended:*
    the tester runs it when convenient, and its numbers are recorded here. **[routine]**
+
+## 10. As built (2026-10-20)
+
+The steps of §7 were built the same day; `Jadeite_Native.md` §9.4 is their record. In brief [M]: the image is 1,024
+bytes, the program 595 bytes from `$0000` and the 27 glyphs at `$0340`, SHA-256
+`9625f874735340f6f7d93fafbb28836477cbd62f54ef5d0ded72c1760443aae7`, the same from three builds; it hands over in the
+15th frame; the tester's six Game Gear games reach the pictures they reach with no boot ROM 300 and 600 frames after
+it; a cartridge without the signature is refused in words in both modes; the stand-in boot ROM made by a test runs and
+hands over. The program detects its mode by port `$00` as U3 has it, and writes CRAM in the mode's form. The questions
+of §9 are carried in `Jadeite_Native.md` §9.8.

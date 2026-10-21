@@ -102,8 +102,9 @@ fn th_latches_the_h_counter_and_port_3e_keeps_the_cartridge_and_the_io_on() {
     m.bus.clock = 1100;
     m.bus.output(0x3F, 0b1111_0101);
     assert_ne!(m.bus.vdp.read_h(), latched, "TH rising latched the counter again");
+    m.bus.io.pads[0] = crate::io::UP;
     m.bus.output(0x3E, 0xE4 | 0x08);
-    assert_eq!((m.bus.peek(0x0000), m.bus.input(0xDC)), (image(&images::GG_IO)[0], 0xFF), "the cartridge and the pad still answer");
+    assert_eq!((m.bus.peek(0x0000), m.bus.input(0xDC)), (image(&images::GG_IO)[0], 0xFE), "the cartridge and the pad still answer");
     m.bus.output(0x3E, 0x10 | 0x08);
     assert_eq!(m.bus.peek(0xC000), 0xFF, "bit 4 still switches the work RAM off");
 }
@@ -154,6 +155,21 @@ fn the_eeprom_is_a_battery_file_and_its_state_continues() {
     frames(&mut a, 10);
     frames(&mut b, 10);
     assert_eq!((&b.bus.ram[..0x12], &b.bus.cart.ram), (&a.bus.ram[..0x12], &a.bus.cart.ram));
+}
+
+// A seeded fault that left the system ports out of a loaded state passed every test (Jadeite_Native.md §9.7).
+#[test]
+fn a_state_carries_the_system_ports() {
+    use emusen_native::ffi::StateMachine;
+    let mut a = on(&images::GG_IO, Model::GameGear, sega(0));
+    frames(&mut a, 2);
+    a.bus.gg.write(1, 0x2A, a.bus.clock);
+    let mut s = vec![0; a.state_size()];
+    a.save_state(&mut s).unwrap();
+    let mut b = on(&images::GG_IO, Model::GameGear, sega(0));
+    b.load_state(&s).unwrap();
+    assert_eq!((&b.bus.gg, b.bus.sound.psg.stereo), (&a.bus.gg, a.bus.sound.psg.stereo));
+    assert_ne!(b.bus.gg, crate::ggio::Ports::default());
 }
 
 /// A program that keeps what the console handed it: $C000 at $C010 and A at $C011, then reads Start forever.
@@ -255,6 +271,19 @@ fn a_cartridge_without_sega_s_header_is_refused_in_words() {
         m.pads[0] = PAUSE as u32;
         frames(&mut m, 2);
         assert!(m.cpu.regs.pc < 0x400 && m.cpu.halted, "{region}: back to the halt");
+    }
+}
+
+// A seeded fault that looked only at $7FF0 passed every test but the image's pin (Jadeite_Native.md §9.7): a header at
+// $3FF0 or $1FF0 is found too (Jadeite_OpenBoot.md U2).
+#[test]
+fn a_header_at_3ff0_or_1ff0_is_found() {
+    for at in [0x3FF0usize, 0x1FF0] {
+        let mut rom = keeper(6, false);
+        rom[at..at + 8].copy_from_slice(crate::media::SIGNATURE);
+        rom[at + 15] = 0x6C;
+        let mut m = game_gear(&rom, &[]);
+        assert!(until_handed_over(&mut m, 60), "{at:04X}");
     }
 }
 

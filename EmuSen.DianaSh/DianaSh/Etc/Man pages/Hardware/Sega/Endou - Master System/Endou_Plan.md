@@ -278,7 +278,8 @@ Nothing of the Game Gear's own is built before the Master System's gate (§8, G4
 J1 to J3 (§7): the VDP's GG mode, the window and SMS mode's scaling; the I/O, the EEPROM boards and the open boot
 replacement; the Game Gear to players. **Gear-to-Gear is out** at first: it joins two machines, which the ABI has no
 form for; a later netplay-like design would decide it, and few games need it to be played [A]. *Added 2026-10-20:* JL,
-the Game Gear's own LCD model (§2.5), before J3. *J1 built 2026-10-20:* `Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md`.
+the Game Gear's own LCD model (§2.5), before J3. *J1 built 2026-10-20:* `Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md`. *J2 built 2026-10-20:* the same page's
+§9, and `Jadeite_OpenBoot.md`.
 
 ### 2.5 The LCD model (JL), planned 2026-10-20
 
@@ -639,7 +640,8 @@ and hands the game over the same way; a game that reads the BIOS's code or relie
 may behave differently, the start-up takes a different time, and the BIOS's built-in games are absent." *Risk:* low;
 the contract is narrow and P6 predicts no bench game differs. **G9** holds it (§8), and `firmwarecheck.py` measures it
 against the player's images if the tester supplies them to the probe cache [R `EmuSen_Firmware.md` §0]. The Game Gear's
-boot ROM, a licence screen and a header check [D], gets the same treatment at J2.
+boot ROM, a licence screen and a header check [D], gets the same treatment at J2. *Built 2026-10-20
+(`Jadeite_OpenBoot.md`): the documents read describe its header check and its mapping, not its screen.*
 
 ### 5.6 Cartridge boards, and how a board is chosen
 
@@ -743,7 +745,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **13** | Speed, only if §5.9's budget is missed: exact levers, measured on the bench, under the quota and on the handheld | **G6** | 0–2 |
 | **14** | The gates of §8, the goldens, the clone check as the tester decides it | §8 | 1 |
 | **J1** | *Built 2026-10-20, `Jadeite_Native.md`.* The Game Gear's VDP: GG mode's CRAM and window, SMS mode's scaling, TMS9918 colours | GG test programs and pictures against the references | 2 |
-| **J2** | *Go decided 2026-10-20, port `$00`'s NTSC and export bits first; the two frame sizes kept until JL; the TH lines' latch of the H counter modelled as the Master System II's, with a dispute entry.* The Game Gear's I/O: Start, the region, stereo, the EEPROM boards; its open boot replacement | Synthetic programs; G9 for the Game Gear | 2 |
+| **J2** | *Built 2026-10-20, `Jadeite_Native.md` §9 and `Jadeite_OpenBoot.md`.* *Go decided 2026-10-20, port `$00`'s NTSC and export bits first; the two frame sizes kept until JL; the TH lines' latch of the H counter modelled as the Master System II's, with a dispute entry.* The Game Gear's I/O: Start, the region, stereo, the EEPROM boards; its open boot replacement | Synthetic programs; G9 for the Game Gear | 2 |
 | **JL** | *Added 2026-10-20 (§2.5).* The Game Gear's own LCD model: `Jadeite_Lcd.md`'s research and design first, then the model as a profile of the screen filters, the panel's response in time, its grid at the display's size and its colours, from documents and published measurements | Each property traced to a source or named as argued; the model against published photographs and captures by a measure written beforehand; a `ConsoleScreens` row with no gap; the fit audit; the handheld's cost; seeded faults | 3 |
 | **J3** | The Game Gear to players: `gg.json`, shelf, scraper, codecs, settings, kit | G4 for the Game Gear, and `ConsoleScreenRuleTests` with `gg`'s row from JL | 1 |
 

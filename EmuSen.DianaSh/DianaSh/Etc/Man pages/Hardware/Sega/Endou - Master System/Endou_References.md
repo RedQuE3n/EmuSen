@@ -288,6 +288,25 @@ nothing is committed.
 | *OPLx decapsulated* (§1.1) | its two tables, as for Nephrite |
 | JoppyFurr's *YM2413 TestRom* (MIT) | not run: its pad-driven screens give nothing a recording can grade that the synthetic programs do not, and its licence would allow committing it, which the repository's practice of building its own images makes unnecessary |
 
+## 6i. Fetched and used at the Game Gear's stage J2 (2026-10-20)
+
+Recorded in the probe cache's `PROVENANCE.txt`; nothing is committed.
+
+| Item | Where it was fetched | SHA-256 | What was read |
+|---|---|---|---|
+| Microchip, *93C46B 1K 5.0V Microwire Serial EEPROM*, DS21172E (1998), as `93c46doc.zip` (`21172e.pdf` inside), listed by SMS Power!'s "Documents" as "used on some GG games" | `https://www.smspower.org/uploads/Development/93c46doc.zip`, to `docs/microchip/` | zip `f06053b5…41f4`, PDF `5ade9086…92ea` | whole, through `pdftotext` (`Jadeite_Native.md` §9.3) |
+| No-Intro's Game Gear DAT as libretro-database carries it, version 2026.10.07 | `https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/Sega%20-%20Game%20Gear.dat`, to `docs/nointro/gg-libretro.dat` | `dc978b44…ebe0` | the rows of the six EEPROM games and of *Nomo Hideo no World Series Baseball*; it holds no firmware rows |
+| SMS Power!'s forum topic 770, "93c46 emulation" (1999–2011) | `https://www.smspower.org/forums/770-93c46Emulation` | not saved | through a summarising fetch: the posts' accounts of the board's register (`Endou_Disputes.md` D-26) |
+| Nerdly Pleasures, "The EverDrive GG X7 - The Only Game Gear Flash Cart You'll Ever Need?" (2021-10) | `http://nerdlypleasures.blogspot.com/2021/10/the-everdrive-gg-x7-only-game-gear.html` | not saved | through a summarising fetch: its list of the games that save to an EEPROM |
+| Retrode's forum, the SMS/GG firmware's v0.24 notes | `https://forum.retrode.com/index.php?msg=2784` | not saved | through a summarising fetch: *Nomo's World Series Baseball* "corrected ... from EEPROM to SRAM"; no wiring is given |
+
+**Used, from the cache since stage 1:** Sega's Game Gear hardware notes ("System control port" and its supplement);
+MacDonald's `smstech` §1, §3, §4 and §7, its §6 skipped; SMS Power!'s "I/O Port Map - Game Gear", "Game Gear Stereo",
+"Gear to Gear Cable", "Port $3E", "ROM Header", "GG Cartridge", "Documents" and the "Memory Backup" tag. **Run as black
+boxes:** the five libretro references on `ggio.gg` (RAM and audio) and on the tester's six Game Gear cartridges
+(pictures and audio to frame 1,800), read in place, unpacked to a temporary folder and deleted. **Searched with no
+result:** SMS Power!'s wiki and forum and the web for an account of the EEPROM board's CLK, CS and DO (2026-10-20).
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

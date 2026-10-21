@@ -21,7 +21,7 @@ namespace EmuSen.Crystal.Systems.Sms
         public static readonly string[] Channels = { "Tone 1", "Tone 2", "Tone 3", "Noise" };
 
         // The boards by the Board unit's Mapper - see Endou_Native.md §15.4.
-        public static readonly string[] Boards = { "Plain", "Sega", "Codemasters", "SG-1000 RAM" };
+        public static readonly string[] Boards = { "Plain", "Sega", "Codemasters", "SG-1000 RAM", "Sega with EEPROM" };
 
         // A component's four levels on the 315-5246, and the 315-5124's blue - beryl-sms-colours is the Rust owner, see Endou_Disputes.md D-1.
         private static readonly byte[] Levels = { 0, 85, 170, 255 }, Blue5124 = { 0, 0x68, 170, 255 };

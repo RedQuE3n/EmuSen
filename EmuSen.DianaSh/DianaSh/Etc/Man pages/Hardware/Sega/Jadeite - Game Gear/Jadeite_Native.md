@@ -202,11 +202,22 @@ for §2.2, the bytes at `$0038`, `$0066` and `$2940`, as hexadecimal; nothing of
 1. **One frame size for both modes?** GG mode's frame is 160 by 144, a Master System cartridge's 160 by 146, both
    declared at 4:3. Recommended: keep them as built until the LCD model (JL), which draws the panel at the display's size
    and can place GG mode's 144 rows on the panel's 146; a host's 1.4% squash in the rarer mode until then. **[decision]**
+   *Decided 2026-10-20:* the two frame sizes stay, GG mode 160 by 144 and a Master System cartridge's mode 160 by 146,
+   both at 4:3, until JL settles the panel.
 2. **The go for J2** as the plan has it: the Game Gear's I/O (Start, the region and NTSC bits of port `$00`, the link
    port's registers with nothing attached, stereo), the EEPROM boards, and its open boot replacement. Recommended: the
    go, with port `$00`'s NTSC bit first, since every Game Gear game reads PAL there today. **[decision]**
+   *Decided 2026-10-20:* J2 goes ahead, port `$00`'s NTSC and export bits first.
 3. **The H counter's latch on the Game Gear** (§2.3): no document read says whether the Game Gear's TH lines latch it.
    Recommended: in J2, model port `$3F` as the Master System II's unless a document says otherwise, with a dispute
    entry, since that is what passes FluBBa's test. **[routine]**
+   *Decided 2026-10-20:* accepted; the Game Gear's TH lines latch the H counter as the Master System II's do, with a
+   dispute entry.
 4. **The kit's corpus form naming a system** (§6): recommended a `--system` option for the corpus form, a change to the
    kit proposed at J3, where the Game Gear's library is first run as players will run it. **[routine]**
+   *Decided 2026-10-20:* accepted; J3 adds the option, and J2 leaves the kit's corpus form as it is.
+
+The same day the tester answered `Endou_Plan.md` §2.5's three questions for the LCD model, yes to each (recorded
+there): published photographs and videos of real Game Gear screens count as measurements, each cited; only the
+original Game Gear panel is modelled at first; and the model is one LCD component with a profile per panel, so that the
+Game Boy and the Game Boy Color reuse it later. JL is not built in J2.

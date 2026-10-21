@@ -308,12 +308,15 @@ frame; seeded faults.
 
 1. **Measurements.** No console is run or captured for the project (§10 Q11). May published photographs and videos of
    units be used as measurements, and which, since none was made for the purpose? Recommended: yes, each cited with its
-   source and date as a document is, and weighed as evidence of one unit. **[decision]**
+   source and date as a document is, and weighed as evidence of one unit. **[decision]** *Decided 2026-10-20:* yes,
+   each photograph or video cited.
 2. **Which panel.** Game Gears were made over years and are often repaired with replacement screens. Recommended: the
-   original panel only, as Sega shipped it, a replacement panel being another display. **[decision]**
+   original panel only, as Sega shipped it, a replacement panel being another display. **[decision]** *Decided
+   2026-10-20:* yes, the original Game Gear panel only at first.
 3. **One model for the three handhelds.** The Game Boy's and Game Boy Color's dated gaps ask for the same kind of model.
    Recommended: JL builds the model as one component with a profile per panel, the Game Gear's first, and the two Game
-   Boys follow as a separate step on the same component, so the three are not three filters. **[decision]**
+   Boys follow as a separate step on the same component, so the three are not three filters. **[decision]** *Decided
+   2026-10-20:* yes, one LCD component with a profile per panel.
 4. **Tiers.** The CRT has Performance, Balanced and Accurate. Recommended: Accurate first, then cheaper tiers only if the
    handheld's frame budget asks for them, as for the CRT. **[routine]**
 5. **A Master System cartridge's frame of 146 rows** (`Jadeite_Native.md` §8, Q1): the model draws the panel's 146 rows
@@ -740,7 +743,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **13** | Speed, only if §5.9's budget is missed: exact levers, measured on the bench, under the quota and on the handheld | **G6** | 0–2 |
 | **14** | The gates of §8, the goldens, the clone check as the tester decides it | §8 | 1 |
 | **J1** | *Built 2026-10-20, `Jadeite_Native.md`.* The Game Gear's VDP: GG mode's CRAM and window, SMS mode's scaling, TMS9918 colours | GG test programs and pictures against the references | 2 |
-| **J2** | The Game Gear's I/O: Start, the region, stereo, the EEPROM boards; its open boot replacement | Synthetic programs; G9 for the Game Gear | 2 |
+| **J2** | *Go decided 2026-10-20, port `$00`'s NTSC and export bits first; the two frame sizes kept until JL; the TH lines' latch of the H counter modelled as the Master System II's, with a dispute entry.* The Game Gear's I/O: Start, the region, stereo, the EEPROM boards; its open boot replacement | Synthetic programs; G9 for the Game Gear | 2 |
 | **JL** | *Added 2026-10-20 (§2.5).* The Game Gear's own LCD model: `Jadeite_Lcd.md`'s research and design first, then the model as a profile of the screen filters, the panel's response in time, its grid at the display's size and its colours, from documents and published measurements | Each property traced to a source or named as argued; the model against published photographs and captures by a measure written beforehand; a `ConsoleScreens` row with no gap; the fit audit; the handheld's cost; seeded faults | 3 |
 | **J3** | The Game Gear to players: `gg.json`, shelf, scraper, codecs, settings, kit | G4 for the Game Gear, and `ConsoleScreenRuleTests` with `gg`'s row from JL | 1 |
 

@@ -19,7 +19,7 @@ emusen-mcd-bram = { path = "../../EmuSen/Cores/Shared/emusen-mcd-bram" }
 # The MIPS instruction set, for the VR4300's disassembly (EmuSen_Backend.md F8).
 emusen-mips = { path = "../../EmuSen/Cores/Shared/emusen-mips" }
 # The SM83 instruction set as text, which MercuryRT decodes with too (EmuSen_Backend.md §17.2 D10).
-emusen-sm83 = { path = "../../EmuSen/Cores/Shared/emusen-sm83" }
+silvermillennium-sm83 = { path = "../../EmuSen/Cores/Nintendo/SilverMillennium-HW/silvermillennium-sm83" }
 # The 6502 instruction set as text, which MoonRT disassembles with too (EmuSen_Backend.md §21).
 emusen-6502 = { path = "../../EmuSen/Cores/Shared/emusen-6502" }
 # The Master System VDP family's colours, which Endou's picture shows too (Endou_Native.md §15.5).

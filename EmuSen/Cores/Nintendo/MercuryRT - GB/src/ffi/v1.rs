@@ -416,7 +416,7 @@ impl v1::Core for Machine {
         ])
     }
 
-    /// `count` instructions from `address`, each byte read as `space_read` reads it, decoded by `emusen-sm83`.
+    /// `count` instructions from `address`, each byte read as `space_read` reads it, decoded by `silvermillennium-sm83`.
     fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
         if processor != 0 {
             return Err(status::NOT_SUPPORTED);
@@ -431,7 +431,7 @@ impl v1::Core for Machine {
         let mut pc = address;
         for _ in 0..count {
             let opcode = self.read_space(space, pc as i32);
-            let length = emusen_sm83::length_of(opcode);
+            let length = silvermillennium_sm83::length_of(opcode);
             let bytes: Vec<u8> = (0..length as u32).map(|b| self.read_space(space, pc.wrapping_add(b) as i32)).collect();
             let (low, high) = (bytes.get(1).copied().unwrap_or(0), bytes.get(2).copied().unwrap_or(0));
             let operand = match length {
@@ -439,18 +439,18 @@ impl v1::Core for Machine {
                 3 => low as i32 | (high as i32) << 8,
                 _ => -1,
             };
-            let reference = emusen_sm83::classify(opcode, operand, pc as i32).map(|(k, t)| {
+            let reference = silvermillennium_sm83::classify(opcode, operand, pc as i32).map(|(k, t)| {
                 let kind = match k {
-                    emusen_sm83::Reference::Call => Reference::Call,
-                    emusen_sm83::Reference::Read => Reference::Read,
-                    emusen_sm83::Reference::Write => Reference::Write,
+                    silvermillennium_sm83::Reference::Call => Reference::Call,
+                    silvermillennium_sm83::Reference::Read => Reference::Read,
+                    silvermillennium_sm83::Reference::Write => Reference::Write,
                 };
                 (kind, t as u32)
             });
             out.push(Instruction {
                 address: pc,
-                mnemonic: emusen_sm83::mnemonic_of(opcode, low),
-                operands: emusen_sm83::format_operand(opcode, pc as i32, low, high),
+                mnemonic: silvermillennium_sm83::mnemonic_of(opcode, low),
+                operands: silvermillennium_sm83::format_operand(opcode, pc as i32, low, high),
                 bytes,
                 reference,
             });

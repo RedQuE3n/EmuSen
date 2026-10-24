@@ -9,7 +9,7 @@ over MercuryRT is `MercuryRtDebugTarget`, which reads the machine's state throug
 
 *Since 2026-10-18 (`EmuSen_Backend.md` §17.10)* the shim is gone: MercuryRT is shown through the generic
 `CoreDebugTarget` like every v1 core. Its CPU registers come through `DEBUG_REGISTERS`, its PPU, APU, timer, channel and
-HDMA registers through core ABI 1.13's units, its disassembly through `DEBUG_DISASSEMBLE` on `emusen-sm83`, and the
+HDMA registers through core ABI 1.13's units, its disassembly through `DEBUG_DISASSEMBLE` on `silvermillennium-sm83` (`emusen-sm83` until 2026-10-23), and the
 console-shaped views of §3 (palettes, sprites, the tilemap's colour attribute, the channels, HDMA, the address map and
 the summary) from the Game Boy pack's `GameBoyDebugViews` and its twin in `emusen-systems`, which read those spaces and
 units and none of the machine's state.

@@ -50,6 +50,14 @@ Sailor Moon herself (codename **Moon**, not the character's full title) anchors 
 
 **Luna and Artemis aren't Sailor Senshi themselves** — they're the two guardian cats who mentor and advise the Sailor Guardians throughout the series (Luna mentors Sailor Moon directly; Artemis mentors Sailor Venus and later the whole team). Deliberately kept as their own small group rather than folded into Inner or Outer Senshi above, since they're a different kind of character entirely — fitting company for the *handheld* wing of Nintendo's lineup specifically, companions alongside the main console generations the way the DS/3DS families themselves sit alongside (rather than replacing) Nintendo's home consoles.
 
+### The shared hardware library
+
+| What | Codename | Folder | Status |
+|---|---|---|---|
+| The shared hardware library of the Nintendo cores (SilverMillennium Hardware): every crate more than one Nintendo core can use, one chip each | **SilverMillennium** | `Cores/Nintendo/SilverMillennium-HW/` | Begun 2026-10-23 with `silvermillennium-sm83`, see `Man pages/Hardware/Nintendo/SilverMillennium-HW/README.md` |
+
+**Decided 2026-10-23 by the tester: crates shared between the Nintendo cores live in SilverMillennium Hardware**, named for the Silver Millennium, the Moon Kingdom the Sailor Guardians served in their past lives, as Beryl Hardware and BlackMoon Hardware are named for the Sega and Sony cores' factions (§3, §4). The crates are prefixed `silvermillennium-<chip>`. The first is the SM83's instruction table, `emusen-sm83` until that day: the Game Boy's processor is Nintendo's alone, and the Super Game Boy, the Game Boy Advance and the Transfer Pak would use it beside MercuryRT. A chip that other manufacturers' machines also use stays in `Cores/Shared/`. So do `emusen-mips`, shared with the Sony cores, and `emusen-6502`: the 6502 is MOS Technology's processor, and its likelier second user is another maker's machine. Code that one core alone uses stays in that core.
+
 ---
 
 ## 3. Sega consoles → Dark Kingdom / Shitennou

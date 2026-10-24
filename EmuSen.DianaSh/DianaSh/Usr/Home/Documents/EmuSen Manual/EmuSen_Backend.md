@@ -2953,7 +2953,7 @@ Asked one by one, each with its recommendation; nothing here is decided by this 
   last paragraph).
 - **Q2. `EmuSen_DianaSh.md` Q28 for MercuryRT**: MercuryRT exports `DEBUG_REGISTERS` for its processor within B4?
   *Recommended: yes*, as Q28 recommended; the capability is optional in v1 already.
-- **Q3. The SM83's decoder in `EmuSen/Cores/Shared/emusen-sm83`**, used by MercuryRT's `DEBUG_DISASSEMBLE` and by
+- **Q3. The SM83's decoder in `EmuSen/Cores/Shared/emusen-sm83`** (since 2026-10-23 `silvermillennium-sm83` in `EmuSen/Cores/Nintendo/SilverMillennium-HW/`, `EmuSen_Core_Naming_Scheme.md` §2), used by MercuryRT's `DEBUG_DISASSEMBLE` and by
   `emusen-systems`, amending F8's "the others in their packs" for the SM83 as `emusen-mips` was placed for MIPS?
   *Recommended: yes*: the core decodes, as every generic core does, and the pack keeps its one owner. The alternative,
   `CoreDebugTarget` falling back to a pack's disassembler for a core without the capability, keeps the decoder where it

@@ -556,10 +556,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "emusen-sm83"
-version = "0.1.0"
-
-[[package]]
 name = "emusen-sqlite"
 version = "0.1.0"
 dependencies = [
@@ -577,7 +573,7 @@ dependencies = [
  "emusen-mips",
  "emusen-n64-pak",
  "emusen-psx-card",
- "emusen-sm83",
+ "silvermillennium-sm83",
 ]
 
 [[package]]
@@ -1141,6 +1137,10 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "silvermillennium-sm83"
+version = "0.1.0"
 
 [[package]]
 name = "simd_cesu8"

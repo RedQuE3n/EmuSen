@@ -67,7 +67,7 @@ fn the_cpu_s_sixteen_registers_are_machine_info_s_and_debug_registers_answers_th
 }
 
 #[test]
-fn the_disassembly_is_emusen_sm83_s_over_the_space_named() {
+fn the_disassembly_is_silvermillennium_sm83_s_over_the_space_named() {
     let image = rom(0x00);
     let mut m = create(&image, Vec::new()).unwrap();
     let listing = <Machine as Core>::debug_disassemble(&mut m, 0, 0, 0x100, 3).unwrap();

@@ -137,7 +137,7 @@ such; a majority alone rules nothing).
 
 **Two findings that shape S3** [M]: the probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs/src/backends/
 libretro.rs`) answers no `SET_HW_RENDER` request, so none of the three PlayStation 2 libretro cores can draw through it
-as it stands; and the probe has no README (the task of writing this page named one), its documentation being
+as it stands; and the probe has no README of its own, its documentation being
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.50. A hardware context for the probe (headless EGL with OpenGL, or the
 libretro Vulkan interface) is a feature of its own, evaluated at S3 against PCSX2's standalone form with PINE, which
 needs no probe change (§11 Q4).
@@ -697,8 +697,7 @@ the CDVD's speed) parameters of the accurate model, tagged in the state.
 
 ## 7. Stages
 
-**Each stage is one supervised step of about three hours** with a check-in after it, as the brief for this plan set
-[C]. A stage's oracle must be met, or its misses recorded as disputes or named losses, before the next that depends on
+**Each stage is one supervised step of about three hours** with a check-in after it [C]. A stage's oracle must be met, or its misses recorded as disputes or named losses, before the next that depends on
 it begins. The effort is predicted (P3). Phases B to F are partly independent once A is done; the open BIOS (O) and
 the enhancements (E) are separate tracks.
 
@@ -826,3 +825,252 @@ then states that the open replacement is owed, as the policy requires before the
   against a control.
 - **GE, the enhancements.** Each offered only with its stage's gate met and E1's exactness test passing in CI on every
   change to the core.
+
+---
+
+## 9. Shared code
+
+The reuse rule: when two places need the same thing, it goes in one shared crate, with one owner for each fact. Each
+item says what moves where, and why.
+
+### 9.1 `emusen-mips`: the R5900, the MMI and the VUs
+
+`emusen-mips` owns the instruction set of the project's MIPS processors (`EmuSen_Mips.md` §1), with no execution. The
+R3000's decode is MIPS I exactly and the VR4300's is a decode of its own (`EmuSen_Mips.md` §2.4, §6). **The R5900 gets a
+decode of its own too** [C]: `src/r5900.rs`, since its map differs from MIPS III in both directions (it adds the MMI
+opcode space, the second multiplier's instructions, LQ and SQ, and lacks some MIPS III instructions [R the TX79 manual,
+to be read at S5]), so sharing the VR4300's decode would make one opcode two rules, the argument `rsp.rs` was made by.
+With it: the R5900's COP0 table (its registers' names), COP1's names, and COP2's macro-mode names in VU0's table. **The
+VU micro mode** is a table of its own as well: a micro instruction is a 64-bit pair of an upper and a lower instruction
+with flag bits, not a MIPS word, so it is `src/vu.rs`, with its own spelling, as `rsp.rs` is beside `vr4300.rs` [C]. The
+assembler gains both, for the project's test programs and the open BIOS's entry code. **Nothing of Diamond's or MarsRT's
+text changes**: their goldens are S5's gate.
+
+### 9.2 `blackmoon-r3000` for the IOP
+
+The IOP is an R3000A-family core, and `blackmoon-r3000` was built for it from the start: its README names Sapphire as
+its second user, PRId is a constant a core sets for its own chip, and the caches and scratchpad were placed in the
+core's bus, not the crate, so that a second core with different caches could use it (`BlackMoon_R3000.md` §2). **What
+moves**: nothing. **What Sapphire adds in its own IOP bus**: the IOP's memory map, its caches and scratchpad, its wait
+states, and the PRId of its chip; ps2tek notes that the BIOS chooses the PlayStation 2's boot path when "PRid >= 59h"
+[R], so the PRId Sapphire sets is at least that, the exact value a dispute step's. **Not used**: `blackmoon-gte`, since the
+IOP has no GTE in PlayStation 2 mode [A], and the PlayStation mode is Diamond's (§4.1). A dispute about the processor
+itself goes to the crate's record and is checked against Diamond's goldens, since a change reaches both cores.
+
+### 9.3 Diamond's SPU as the base of the SPU2
+
+Diamond's SPU is inside the `diamond` crate (`src/spu`, `Diamond_SPU.md`). The SPU2's voices are the PlayStation's
+voices [A, from ps2tek's description of the SPU2 as the SPU doubled with additions; read in full at S2], so **the voice
+moves into a crate of its own**, `blackmoon-spu`, in BlackMoon-HW [C, §11 Q10]: ADPCM decoding, the interpolation table,
+ADSR, sweep, noise and pitch modulation, each voice's state, and the reverb's algorithm with its addressing as a
+parameter. **What stays in each core**: the register maps, the mixing and routing (one core in Diamond, two in
+Sapphire), the transfer paths (the SPU's FIFO, the SPU2's AutoDMA), CD and external input, the output rate (44,100 or
+48,000 Hz). **Gate**: Diamond's SPU goldens, every sample, unchanged by the extraction, run before Sapphire uses the
+crate (S26).
+
+### 9.4 `emusen-disc` for DVDs
+
+`emusen-disc` is a compact disc as sectors (`EmuSen_Disc.md` §1). A DVD is not a compact disc: 2,048-byte user sectors
+with a 16-byte header of its own (sector ID with the layer bit, IED, CPR_MAI) and an EDC, no subchannel and no MSF
+[R ECMA-267's contents, to be read at S23]. **What it gains** [C]: a medium kind, CD or DVD, chosen when an image is
+opened; the DVD's geometry with one or two layers and the layer break (taken from where the image's second layer
+begins, by the rule ECMA-267 and the PlayStation 2's discs give, settled at S23 and a dispute candidate); DVD sectors
+read whole or synthesised with their header and EDC from ECMA-267, as CD sectors are from ECMA-130; CHD's DVD form
+(`createdvd`); and later the block-compressed ISO forms, each from its published description. **What it does not gain**:
+the CDVD's commands or timing, which are Sapphire's, as the HC05's are Diamond's. **Users**: Sapphire; later Kunzite and
+any DVD-based core.
+
+### 9.5 Cards: a new `emusen-ps2-card`, not `emusen-psx-card`
+
+`emusen-psx-card` is the PlayStation card's file system, 128 KiB of fifteen blocks (`EmuSen_MediumFormats.md`). The
+PlayStation 2's card is another medium: 8 MiB, pages with spare bytes for error correction, erase blocks, a superblock,
+a cluster-allocated file system with directories [R ps2tek "SIO2 PS2 Memcard Filesystem"]. Nothing of the layout is
+shared, so **a new crate**, `emusen-ps2-card`, in `EmuSen/Cores/Shared/`, `no_std`, allocating nothing, as the three
+medium crates are, with the same two users: the host's card tools and the open BIOS's card module, which may build on it
+(`EmuSen_MediumFormats.md` §1) [C]. The PlayStation card in a PlayStation 2 is a PS1 game's concern and goes to Diamond
+with the disc.
+
+### 9.6 The recompiler: `emusen-jit`
+
+**What moves** [C, §11 Q10]: from MarsRT's `cpu/blocks/jit/mod.rs` (239 lines [M]) and the parts of `cpu/blocks/` that
+are not the VR4300's: the compiler's thread and its queue, the slots code is published in (one pointer, stored with
+Release and read with Acquire), the Cranelift module with its W^X batches and its code budget, the counters, and the
+shape of the verifier that steps an interpreter beside the blocks (`Mars_Native.md` §5.8.4, §5.8.5). They become
+`emusen-jit` in `EmuSen/Cores/Shared/`, generic over a processor's lowering: a trait that turns a block's words into
+Cranelift IR and names its exits. **What stays**: MarsRT's emitter (`jit/emit.rs`, 1,076 lines), its block shapes and
+dispatcher; Sapphire's EE and VU emitters are its own. **Why now, and why not further**: two processors need the same
+thread, publication and verifier, which are subtle (W^X, atomics that ThreadSanitizer sees, the code budget) and were
+proven once; the emitters lower different semantics and share nothing worth a generic layer, which is
+`Diamond_Plan.md` §9.1's argument against a shared interpreter. **Whose change**: the extraction touches MarsRT, so it
+is made at S35 with MarsRT's own tests as its gate, its speed measured unchanged, and the tester's leave (§11 Q10).
+Diamond may adopt the crate when its own recompiler is wanted (`Diamond_Speed.md` §7.2).
+
+### 9.7 The framework's shared pieces
+
+`emusen-native` (the exports, `StateWriter`, `SampleQueue` for 48 kHz, the observers, the settings schema),
+`emusen-core-conform` (both forms, with the mapped-image estimate of §10), the test runner, `emusen-gpu` for the device
+path and the enhanced renderer, and Galaxia for every path. Nothing new is needed beyond §10's items.
+
+---
+
+## 10. What the framework should gain, found by planning this core
+
+Each item is to be weighed for its form (extension, module or component) in `EmuSen_CoreAPI_Extensions.md` before it
+is built, as Diamond's were.
+
+- **Per-button analogue values** ("pressure") for pads: twelve buttons of the DualShock 2 with 0–255 each. An optional
+  capability in a minor, the digital reading staying the default for every other core.
+- **128-bit registers** in `DEBUG_REGISTERS`, if S1's reading finds the ABI's register value narrower.
+- **A mapped-only rule for large images**: a host that cannot lend a mapping refuses an image over a stated size
+  rather than copying it; the kit's memory estimate counts a mapped image as mapped.
+- **The routed system's recogniser** gains the PlayStation 2's `BOOT2` rule beside Diamond's `BOOT` (a system pack
+  change, no ABI change).
+- **A console medium** for the drive's EEPROM, under `EmuSen_SaveMedia.md`'s `console` kind, which exists.
+- **The probe's hardware render**, if S3 finds PCSX2's standalone form with PINE insufficient: a headless OpenGL or
+  Vulkan context for libretro cores that ask for one.
+
+---
+
+## 11. Questions for the tester
+
+Each with a recommendation. **[decision]** changes scope, an interface, cost or what the player sees; **[routine]**
+does not. **What S1 needs answered before it starts**: Q9 (the names and markets it declares) and the go. S2 needs Q1,
+Q2 and Q3; S3 needs Q4 and Q5; S10 needs Q6; S6 needs Q14; S24 needs Q7; S28 needs Q8; S35 needs Q10's last part; S47
+needs Q11.
+
+1. **Q1 [decision], Sony's Linux-kit manuals** (§2.2). May writers read the EE, VU, DMAC, IPU and GS manuals Sony
+   shipped with the Linux for PlayStation 2 kit? *Recommended:* yes, each use cited by document and section, as
+   Diamond's Q1 allowed Sony's documents, with ps2tek's screening (§2.2) applied to them for replacement writers; copies
+   only from the tester's own or a lawful source, kept in the probe's cache, never committed.
+2. **Q2 [routine], ps2tek's revision and status.** *Recommended:* pinned at `1c91660` (2022-01-27, its last push), cited
+   as a document of unstated sources written by an emulator's author, its BIOS chapter screened and partly excluded for
+   replacement writers (§2.2).
+3. **Q3 [decision], SDKs and homebrew.** ps2sdk's directories are named after the BIOS's IOP modules (§2.4), so it
+   probably holds reimplementations of them; Open-PS2-Loader holds replacement drive modules. *Recommended:* their code
+   is never read by anyone; running binaries built with them (ps2autotests) is allowed for every role; anyone who reads
+   them is excluded from the open BIOS and from the stages that model the IOP's kernel interface. And may the project's
+   own test programs be compiled with ps2toolchain's GCC (a compiler, not a library)? *Recommended:* yes for the
+   compiler alone, linking none of ps2sdk; otherwise `emusen-mips`'s assembler and Rust only.
+4. **Q4 [decision], the referees.** *Recommended:* PCSX2's standalone release, pinned by SHA-256 like DuckStation's,
+   run headless under a private compositor with its software renderer and read through PINE; Play! standalone as the
+   second lineage; the libretro forms only if the probe gains a hardware-render context, which is built only if S3
+   shows the standalone forms insufficient. All local black boxes, never distributed, sources never read.
+5. **Q5 [routine], Play!'s own BIOS.** It runs only its high-level BIOS. *Recommended:* used for games' outputs only,
+   as PCSX-ReARMed's kernel was for Diamond; a replacement writer never sees its kernel's own output.
+6. **Q6 [decision], the open BIOS: form, and when.** *Recommended:* form A, native kernel images for both processors
+   (§5.9), in Rust (the IOP's on `mipsel-sony-psx`, the EE's on a restricted MIPS target with a CI scan), started only on
+   the tester's go and written by people never exposed (§1.4); estimated at 30,000–50,000 lines and 25–40 steps. *And
+   whether its EE kernel's first phase comes early* (O2–O3 before S10), so that the EE's ps2autotests run with no
+   firmware folder as Diamond's tests did: *recommended* no, given the decision of 2026-10-19 — S10 runs on the player's
+   BIOS once S24 exists, and the EE stages are graded by the project's own programs until then.
+7. **Q7 [decision], the card's authentication under the player's BIOS.** The BIOS authenticates a card before using it
+   (ps2tek: SECRMAN sends F0h, F3h, F7h, "unknown purpose"); no public document describing the exchange was found (§12),
+   and a trace of the BIOS's traffic is forbidden by §1.4. *Recommended:* (a) one research step for public documents
+   of the protocol, including the published documentation (not the code) of open card-emulating devices; (b) if none
+   suffices, cards on the player's BIOS path wait, and saving is offered on the open BIOS path only, which never
+   authenticates. MagicGate's keys are never sought.
+8. **Q8 [decision], games.** The library holds no PlayStation 2 game; the handheld's card holds Jak and Daxter (USA,
+   Rev 1) as an `.iso`, which is not touched. *Recommended:* dumps of discs the tester owns, under
+   `AppSettings.RomDirectory`'s `ps2/`, DVDs as `.iso` and CD titles as `.cue`/`.bin`, read only. A bench chosen for what
+   each loads: Jak and Daxter (VU1, streaming), Ratchet & Clank (VU1, effects), Gran Turismo 4 (GS and VU1 load, the
+   progressive modes), Shadow of the Colossus (the heaviest load commonly cited), Final Fantasy X (IPU movies),
+   Metal Gear Solid 2 (post-processing from eDRAM), Silent Hill 2 (render-to-texture, noise filter), Kingdom Hearts,
+   God of War (a dual-layer DVD), one CD-ROM title, one PAL disc and one Japanese disc. Any subset serves.
+9. **Q9 [routine], the BIOS entries and versions.** *Recommended:* three market entries with No-Intro canonical names,
+   `ps2-0230a-20080220.bin` and `ps2-0230e-20080220.bin` for the Americas and Europe and the newest Japanese retail
+   version for Japan, each listing every retail version's MD5 cited from a public database at S2; the gates run the
+   Americas and Europe images the tester holds of version 0230 and the newest Japanese one the tester holds
+   (`ps2-0210j-20040917.bin` by its name); the images stay in `~/Documents/BIOS/PS2/`, read only, reached by the
+   firmware folder setting and `--sysdir`, never read by the project's tools.
+10. **Q10 [decision], the shared crates.** *Recommended:* `emusen-mips` gains `r5900.rs` and `vu.rs` (§9.1);
+    `blackmoon-r3000` serves the IOP unchanged (§9.2); Diamond's SPU voice moves into `blackmoon-spu` (§9.3), Diamond's
+    goldens the gate; `emusen-disc` gains the DVD medium (§9.4); a new `emusen-ps2-card` (§9.5); and `emusen-jit`
+    extracted from MarsRT at S35 (§9.6), MarsRT's tests and speed the gate.
+11. **Q11 [decision], the speed targets.** *Recommended:* the desktop target of §5.12 with the exact levers; the handheld
+    best effort, measured and its misses named; the laptop not a full-speed target; Nephrite's 33 % quota rule not
+    applied to this core.
+12. **Q12 [decision], scope at the player gate.** *Recommended:* the DualShock 2 with pressure, cards and the multitap;
+    left out as §1.2 says: DEV9's disk and network, USB, i.LINK, DVD-Video, the PS1 mode (Diamond's), arcade boards and
+    development consoles.
+13. **Q13 [routine], the clean-room review.** *Recommended:* the clone check and the disputes reading at G8, as for
+    Diamond.
+14. **Q14 [decision], the EE's timing model.** *Recommended:* the documented timing at instruction granularity with the
+    caches modelled (§5.2), losses named, rather than a cycle-exact pipeline no oracle can grade.
+15. **Q15 [routine], the recompiler's default.** *Recommended:* on once its six oracles pass, as MarsRT's was on
+    2026-09-22, since the interpreter cannot run games at full speed; the interpreter a switch away and still exact.
+16. **Q16 [routine], formats.** *Recommended:* `.elf` from S1; `.iso`, `.cue`/`.bin` and `.chd` at S23 with DVDs always
+    mapped; `.m3u` at S29; the compressed and other dump forms later, each from a published description.
+17. **Q17 [routine], cheats.** *Recommended:* plain RAM writes at the player gate; the devices' encrypted formats later,
+    and only from published descriptions of their encryption.
+
+---
+
+## 12. Negative results
+
+- No public PlayStation 2 FPGA core [A, to be confirmed at S2]; no console measurements by decision.
+- No R5900 single-step suite (SingleStepTests' repositories, listed 2026-10-23) [M]; no AccuracyCoin-like suite; no GS
+  picture oracle from consoles; ps2autotests' GS coverage is two signal programs [M].
+- The probe answers no hardware-render request, so no PlayStation 2 libretro core draws through it as it stands [M];
+  the probe has no README [M].
+- No PlayStation 2 folder in libretro's cheat database and no PlayStation 2 system in OpenVGDB [M].
+- No rustc target for the R5900 [R a search of rustc's platform documentation].
+- No public document of the card's authentication exchange [R two searches]; ps2tek calls its commands' purpose
+  unknown.
+- Sony's Linux-kit manuals omit the IOP [R a 2002 forum post].
+- ps2tek states no sources and quotes an emulator's values in places (§2.1).
+- No PlayStation 2 game in the library and no measurement of any kind on the handheld or the laptop.
+
+## 13. Predictions to be retired
+
+- **P1.** D-0 is settled for 294.912 / 147.456 / 36.864 MHz on every model the referees and the test suite's logs can
+  distinguish, with no model at 299 MHz.
+- **P2.** ps2autotests' programs print through a channel that is not a plain EE serial port (they were run under
+  ps2link), so S4 finds that at least some need the IOP and the SIF running before they print anything.
+- **P3.** The whole is about 65 steps (48 accurate, 5 enhancement, 12 open BIOS); the GS's rules, the VU pipelines, the
+  CDVD and the IOP's module interface overrun their single steps.
+- **P4.** The R5900 differs from the TX79 manual in at least one instruction's result that ps2autotests records.
+- **P5.** The GS stages raise more disputes than any other unit, and at least one is decided by a single witness for
+  want of agreeing lineages.
+- **P6.** At least half the disputes fall in §2.3's thin areas, most of them the CDVD's timing, the floats' last bit and
+  the VU pipelines.
+- **P7.** The IPU's IDCT departs from the standard's reference arithmetic in rounding, and one dispute settles it.
+- **P8.** The player's BIOS refuses an emulated card until Q7's answer is built.
+- **P9.** All 78 ps2autotests pass on the player's BIOS within three steps of S24, but for entries named in disputes.
+- **P10.** The open BIOS takes 25–40 steps and at least one bench game needs an IOP kernel behaviour no document
+  describes.
+- **P11.** Running VU1, the GS and the IOP on their own threads changes no golden.
+- **P12.** With every exact lever, the desktop meets §5.12's target on the bench, and at least one VU1-bound bench game
+  misses full speed on the handheld at first.
+- **P13.** A dual-layer DVD image opens mapped in under a second on the desktop and the handheld; a copy would take
+  tens of seconds and is never made.
+- **P14.** Rewind on a 41 MiB state costs more than a frame's budget to snapshot at the default interval and needs its
+  own setting.
+- **P15.** The EE recompiler built on `emusen-jit` with inlined instructions and held registers is at least five times
+  faster than the interpreter on the bench, unlike MarsRT's few per cent, because the EE is the bound.
+- **P16.** `blackmoon-spu`'s extraction leaves Diamond's SPU goldens unchanged at the first attempt.
+
+## 14. Sources, read 2026-10-23
+
+- ps2tek: <https://psi-rockin.github.io/ps2tek/> and <https://github.com/PSI-Rockin/ps2tek> (`1c91660`).
+- ps2autotests: <https://github.com/unknownbrackets/ps2autotests> (`97469ff`, ISC).
+- Toshiba, TX79 Core Architecture manual, rev. 2.0 (2001-04):
+  <https://ftp.mirrorservice.org/sites/www.bitsavers.org/components/toshiba/_dataSheet/TMPR79xx-um-r2.0_200104.pdf>;
+  TX7901 user's manual: <https://bitsavers.mirrorservice.org/components/toshiba/_dataSheet/TMPR79xx-um-r1.0_200111.pdf>.
+- GCC manual, MIPS Options: <https://gcc.gnu.org/onlinedocs/gcc/MIPS-Options.html>.
+- Kunimatsu et al., IEEE Micro 20(2), 2000; Suzuoki et al., IEEE JSSC 34(11), 1999: records at <https://dblp.org>;
+  Hot Chips 11 slides: <https://old.hotchips.org/wp-content/uploads/hc_archives/hc11/2_Mon/hc99.s3.1.Kunimatsu.pdf>.
+- Wikipedia, PlayStation 2 technical specifications:
+  <https://en.wikipedia.org/wiki/PlayStation_2_technical_specifications>.
+- The Linux kit's manuals: <https://www.everyeye.it/articoli/speciale-linux-ps2-1034.html>;
+  <https://empegbbs.com/ubbthreads.php/ubb/printthread/Board/14/main/11921/type/thread>;
+  <https://en.wikipedia.org/wiki/Linux_for_PlayStation_2>.
+- PCSX2 command-line arguments: <https://pcsx2.net/docs/advanced/cli/>; IPC protocol (PINE):
+  <https://wiki.pcsx2.net/IPC_Protocol> (refused a direct read, quoted by a search engine).
+- Play!: <https://github.com/jpd002/Play->.
+- libretro core information: <https://github.com/libretro/libretro-core-info> (`pcsx2_libretro.info`,
+  `pcee2_libretro.info`, `play_libretro.info`); buildbot: <https://buildbot.libretro.com/nightly/linux/x86_64/latest/>.
+- ES-DE systems: <https://gitlab.com/es-de/emulationstation-de/-/raw/master/resources/systems/linux/es_systems.xml>.
+- Batocera, PlayStation 2: <https://wiki.batocera.org/systems:ps2>.
+- chdman's DVD form: <https://docs.libretro.com/guides/disc-images/>; <https://ravener.is-a.dev/posts/compressing-games-to-chd/>.
+- GitHub's API for licences, commits and directory names: ps2sdk, ps2toolchain, Open-PS2-Loader, ps2link, PCSX2,
+  DobieStation, Play!, SingleStepTests.

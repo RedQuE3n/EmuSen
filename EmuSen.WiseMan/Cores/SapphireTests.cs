@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.Cores
 
         // The gate of Sapphire_Plan.md §7's S1: the kit's C1-C15 on a synthetic program and synthetic CD and DVD images, nothing failing.
         [Fact]
-        public void The_kit_passes_on_a_synthetic_program_and_synthetic_discs()
+        public async Task The_kit_passes_on_a_synthetic_program_and_synthetic_discs()
         {
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
             Assert.True(File.Exists(runner), $"no kit runner at {runner}");
@@ -169,9 +169,10 @@ namespace EmuSen.WiseMan.Cores
                 using var process = Process.Start(start)!;
                 var stderr = process.StandardError.ReadToEndAsync();
                 string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                _output.WriteLine($"{name}:\n{output}{stderr.Result}");
-                Assert.True(process.ExitCode == 0, output + stderr.Result);
+                string errors = await stderr;
+                await process.WaitForExitAsync();
+                _output.WriteLine($"{name}:\n{output}{errors}");
+                Assert.True(process.ExitCode == 0, output + errors);
                 var passed = output.Split('\n').Where(l => l.StartsWith("pass C")).Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]).ToHashSet();
                 Assert.All(Enumerable.Range(1, 15).Select(n => $"C{n}"), c => Assert.Contains(c, passed));
                 Assert.DoesNotContain(output.Split('\n'), l => l.StartsWith("fail"));

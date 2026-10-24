@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             var owed = ConsoleScreens.OwedRows;
             Assert.Equal(new[] { "PlayStation 2" }, owed.Select(o => o.Console));
-            Assert.Empty(Breaches(ConsoleScreens.All, owed, Systems, RunsUnder, _ => false).Where(b => b.Contains("PlayStation 2")));
+            Assert.DoesNotContain(Breaches(ConsoleScreens.All, owed, Systems, RunsUnder, _ => false), b => b.Contains("PlayStation 2"));
             var cases = new (string What, IReadOnlyList<Screen> Screens, IReadOnlyList<ConsoleScreens.Owed> Owed, Func<SystemEntry, bool> Shelf, string Expected)[]
             {
                 ("a shelf", ConsoleScreens.All, owed, s => s.Id == "ps2", "PlayStation 2 reaches players with its screen row still owed"),

@@ -33,6 +33,14 @@ namespace EmuSen.Serenity.Shaders
             new("GBC", Kind.Lcd, "Game Boy Color LCD") { Gap = "2026-10-20: a fit to measurements of the panel, not a model of it; to be recreated more accurately (EmuSen_CRT.md §31.7)" },
         };
 
+        // A console of the systems table still in development, offered to no player, whose screen row is owed before it reaches one, with a dated note of why - see EmuSen_CRT.md §31.8.
+        public sealed record Owed(string Console, string Note);
+
+        public static IReadOnlyList<Owed> OwedRows { get; } = new Owed[]
+        {
+            new("PlayStation 2", "2026-10-24: a television; its profile needs the PCRTC's clocks, which wait on D-0 and on stage S20, and it is made when the console reaches players at S29 (Sapphire_Plan.md §4.6)"),
+        };
+
         // The consoles whose television is drawn on a row of their own, which every filter of a tube is offered for; an attachment is offered its host's.
         public static IReadOnlyList<string> Televisions { get; } = All.Where(s => s.Kind == Kind.Television && s.Profile == s.Console).Select(s => s.Console).ToArray();
     }

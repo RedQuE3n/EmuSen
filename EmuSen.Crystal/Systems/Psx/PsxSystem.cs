@@ -55,16 +55,18 @@ namespace EmuSen.Crystal.Systems.Psx
             return image.Slice(data, 32).SequenceEqual(Licence);
         }
 
-        // The licence's market and the BOOT line's serial, where the first sectors hold them; null for no PlayStation disc - see EmuSen_CoreAPI_Extensions.md §8.4.
+        // The licence's market and the BOOT line's serial; null for no PlayStation disc, or for one whose SYSTEM.CNF names a BOOT2 program, the PlayStation 2's - see EmuSen_CoreAPI_Extensions.md §8.4, Sapphire_Plan.md §4.1.
         public static Recognition? Recognise(IMediaProbe probe)
         {
             byte[] head = probe.Read(12 * 1024);
             if (!IsDisc(head)) return null;
-            var sectors = new DiscSectors(probe.Read(160 * 1024));
-            var four = sectors.Sector(4);
+            head = probe.Read(160 * 1024);
+            var four = new DiscSectors(head).Sector(4);
             string line2 = four.Length <= 32 ? "" : Encoding.ASCII.GetString(four.Slice(32, Math.Min(38, four.Length - 32)));
             string region = line2.Contains("Amer") ? "Americas" : line2.Contains("Euro") ? "Europe" : "Japan";
-            return new Recognition(Id, SerialOf(sectors.RootFile("SYSTEM.CNF")), region);
+            byte[]? config = DiscSectors.RootFileThrough(probe, 160 * 1024, head, "SYSTEM.CNF", DiscSectors.RootFileLimit);
+            if (Ps2.Ps2System.Boot2(config) is not null) return null;
+            return new Recognition(Id, SerialOf(config), region);
         }
 
         // SYSTEM.CNF's BOOT line as the game's serial: "cdrom:\SLUS_007.70;1" is SLUS-00770 - see Diamond_Plan.md §4.1.
@@ -74,12 +76,17 @@ namespace EmuSen.Crystal.Systems.Psx
             foreach (string line in Encoding.ASCII.GetString(config).Split('\n'))
             {
                 if (!line.TrimStart().StartsWith("BOOT", StringComparison.OrdinalIgnoreCase) || line.IndexOf('=') < 0) continue;
-                string file = line[(line.IndexOf('=') + 1)..].Trim();
-                file = file[(Math.Max(file.LastIndexOf('\\'), file.LastIndexOf(':')) + 1)..];
-                file = file.Split(';')[0].Replace(".", "").Replace('_', '-').Trim().ToUpperInvariant();
-                return file.Length is >= 6 and <= 12 && file.Contains('-') ? file : null;
+                return SerialOfFile(line[(line.IndexOf('=') + 1)..].Trim());
             }
             return null;
+        }
+
+        // A boot line's program as a serial: "cdrom:\SLUS_007.70;1" is SLUS-00770, as the PlayStation 2's pack takes BOOT2's.
+        public static string? SerialOfFile(string file)
+        {
+            file = file[(Math.Max(file.LastIndexOf('\\'), file.LastIndexOf(':')) + 1)..];
+            file = file.Split(';')[0].Replace(".", "").Replace('_', '-').Trim().ToUpperInvariant();
+            return file.Length is >= 6 and <= 12 && file.Contains('-') ? file : null;
         }
 
         // The BIOS a console of each market holds, all optional, the core's open replacement in their place - see Diamond_Plan.md §5.9.

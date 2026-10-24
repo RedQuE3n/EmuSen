@@ -18,6 +18,7 @@ on:
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
+      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
       - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
       - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
       - 'EmuSen/Cores/Shared/**'
@@ -63,6 +64,7 @@ on:
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
       - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
+      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
       - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
       - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
       - 'EmuSen/Cores/Shared/**'
@@ -292,7 +294,7 @@ jobs:
         shell: bash
         run: |
           status=0
-          for dir in "EmuSen/Cores/Nintendo/MarsRT - N64" "EmuSen/Cores/Nintendo/MercuryRT - GB" "EmuSen/Cores/Nintendo/MoonRT - NES" "EmuSen/Cores/Nintendo/VenusRT - SNES" "EmuSen/Cores/Sega/Nephrite - Genesis" "EmuSen/Cores/Sega/Endou - Master System" "EmuSen/Cores/Sony/Diamond - PlayStation/v1" Platform EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/ "EmuSen/Cores/Nintendo/SilverMillennium-HW"/*/; do
+          for dir in "EmuSen/Cores/Nintendo/MarsRT - N64" "EmuSen/Cores/Nintendo/MercuryRT - GB" "EmuSen/Cores/Nintendo/MoonRT - NES" "EmuSen/Cores/Nintendo/VenusRT - SNES" "EmuSen/Cores/Sega/Nephrite - Genesis" "EmuSen/Cores/Sega/Endou - Master System" "EmuSen/Cores/Sony/Diamond - PlayStation/v1" "EmuSen/Cores/Sony/Sapphire - PlayStation 2" Platform EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/ "EmuSen/Cores/Nintendo/SilverMillennium-HW"/*/; do
             case "$dir" in *emusen-core-abi-check/) continue ;; esac
             if [ "${{ matrix.without_c }}" = "true" ] && [ "$dir" = "Platform" ]; then continue; fi
             echo "::group::$dir"
@@ -330,6 +332,7 @@ jobs:
               {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},
               {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
               {"name": "endou", "dir": "EmuSen/Cores/Sega/Endou - Master System", "symbol": "emusen_core_"},
+              {"name": "sapphire", "dir": "EmuSen/Cores/Sony/Sapphire - PlayStation 2", "symbol": "emusen_core_", "development": true},
               {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}
             ]
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; macOS is Apple Silicon only, as Intel Macs are not a target.
@@ -588,6 +591,11 @@ jobs:
           name: endou-${{ matrix.rid }}
           path: native
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: sapphire-${{ matrix.rid }}
+          path: native
+
       # Absent when its job failed; the tests that need it then say so, and the rest run.
       - uses: actions/download-artifact@v4
         continue-on-error: true
@@ -620,7 +628,7 @@ jobs:
           mkdir -p "$out/dianash"
           for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
           chmod +x "$out/dianash/nano" 2>/dev/null || true
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*endou* "$out"/*v1_test_core* "$out"/*v1_plain_core*
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*endou* "$out"/*sapphire* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
 
       # Printed in full, so each platform's digests can be read off the log.
@@ -630,7 +638,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~CoreHostParity|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~Endou|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~CoreHostParity|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~Endou|FullyQualifiedName~Sapphire|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
       # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.

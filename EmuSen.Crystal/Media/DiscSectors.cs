@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Crystal.Media
 {
@@ -34,14 +35,26 @@ namespace EmuSen.Crystal.Media
         }
 
         // The bytes of a file in the volume's root directory, by its name without the version, where the head holds them; null otherwise, a record running past its sector ending that sector's scan - see EmuSen_Backend.md §13.3.
-        public byte[]? RootFile(string name)
+        public byte[]? RootFile(string name) => Reach(name, out _);
+
+        // The image's bytes up to the end of sector n, in this head's sector size.
+        private long EndOf(long n) => (n + 1) * (_raw ? Raw : User);
+
+        // A root file's bytes, or null with needs the image's bytes it lies within where it is past the head's end, else 0 - see Sapphire_Native.md §3.2.
+        public byte[]? Reach(string name, out long needs)
         {
+            needs = 0;
             var pvd = Sector(16);
             if (pvd.Length < 190 || pvd[0] != 1 || !pvd.Slice(1, 5).SequenceEqual("CD001"u8)) return null;
             long extent = BitConverter.ToInt32(pvd.Slice(156 + 2, 4)), size = BitConverter.ToInt32(pvd.Slice(156 + 10, 4));
             for (long block = 0; block * User < size; block++)
             {
                 var dir = Sector(extent + block);
+                if (dir.IsEmpty && extent + block >= 0)
+                {
+                    needs = EndOf(extent + block);
+                    return null;
+                }
                 for (int at = 0; at + 33 < dir.Length && dir[at] != 0; at += dir[at])
                 {
                     if (at + 33 + dir[at + 32] > dir.Length) break;
@@ -49,15 +62,34 @@ namespace EmuSen.Crystal.Media
                     if (!string.Equals(entry.Split(';')[0], name, StringComparison.OrdinalIgnoreCase)) continue;
                     long start = BitConverter.ToInt32(dir.Slice(at + 2, 4));
                     int length = BitConverter.ToInt32(dir.Slice(at + 10, 4));
-                    if (length < 0) return null;
+                    if (length < 0 || start < 0) return null;
                     for (long done = 0, s = start; done < length; done += User, s++)
-                        if (Sector(s).IsEmpty) return null;
+                        if (Sector(s).IsEmpty)
+                        {
+                            needs = EndOf(start + (length - 1) / User);
+                            return null;
+                        }
                     var file = new byte[length];
                     for (int done = 0; done < length; done += User) Sector(start + done / User)[..Math.Min(User, length - done)].CopyTo(file.AsSpan(done));
                     return file;
                 }
             }
             return null;
+        }
+
+        // How far into an image a recogniser reads for a root file, past where a DVD's bridge volume puts its directory and first files - see Sapphire_Native.md §3.2.
+        public const int RootFileLimit = 32 << 20;
+
+        // A root file read through the probe from the first asked bytes on, asking for as much as the volume places it in, up to limit; null where absent, cut short or past the limit.
+        public static byte[]? RootFileThrough(IMediaProbe probe, int asked, byte[] head, string name, int limit)
+        {
+            while (true)
+            {
+                if (new DiscSectors(head).Reach(name, out long needs) is { } file) return file;
+                if (needs <= asked || needs > limit || head.Length < asked) return null;
+                asked = (int)needs;
+                head = probe.Read(asked);
+            }
         }
     }
 }

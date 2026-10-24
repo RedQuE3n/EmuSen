@@ -78,6 +78,11 @@ namespace EmuSen.WiseMan.Crystal
             foreach (string config in new[] { "BOOT=cdrom:\\SLUS_007.70;1", "  boot = cdrom:SCES_123.45;1\n", "BOOT2 = cdrom0:\\SLPS_000.01;1", "TCB = 4\nBOOT cdrom:\\X\nBOOT = cdrom:\\AB_CD.EF;1",
                 "BOOT = cdrom:\\TOOLONGNAME_123.45;1", "BOOT = cdrom:\\NODASH.EXE;1", "BOOT = éééé-éé", "", "BOOT=" })
                 discs.Add(($"psx cnf '{config}'", Cnf(iso, config)));
+            discs.Add(("ps2 cd iso", SyntheticPs2Disc.Cd().Iso));
+            discs.Add(("ps2 cd raw", SyntheticPs2Disc.Cd().DataTrack));
+            discs.Add(("ps2 cd licensed", SyntheticPs2Disc.Cd(licence: true).Iso));
+            discs.Add(("ps2 dvd", SyntheticPs2Disc.Dvd().Iso));
+            discs.Add(("ps2 no boot2", SyntheticPs2Disc.Dvd("BOOT = cdrom:\\X_123.45;1\r\n").Iso));
             discs.Add(("sega cd", SyntheticMdRom.Disc()));
             discs.Add(("sega cd europe", SyntheticMdRom.Disc("E", 0x20000)));
             discs.Add(("genesis", SyntheticMdRom.Cartridge()));
@@ -95,7 +100,7 @@ namespace EmuSen.WiseMan.Crystal
             foreach (var (label, image) in discs)
             {
                 yield return (label, image);
-                foreach (int cut in new[] { 0, 12, 15, 16, 30, 0x40, 0x1FF, 0x200, 0x8005, 0x8006, 0x8010, 8223, 8224, 9463, 9464, 12 * 1024, 20 * 2048, 21 * 2048 + 10 })
+                foreach (int cut in new[] { 0, 12, 15, 16, 30, 0x40, 0x1FF, 0x200, 0x8005, 0x8006, 0x8010, 8223, 8224, 9463, 9464, 12 * 1024, 20 * 2048, 21 * 2048 + 10, 40 * 1024, 300 * 2048, 301 * 2048 + 10 })
                     if (cut < image.Length) yield return ($"{label} cut {cut}", image[..cut]);
                 for (int n = 0; n < 6; n++)
                 {
@@ -161,7 +166,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var candidates = SystemPacks.All.Select(p => p.Entry).Where(e => e.Extensions.Contains(".bin")).ToArray();
-            Assert.Equal(new[] { "md", "32x", "psx" }, candidates.Select(c => c.Id));
+            Assert.Equal(new[] { "md", "32x", "psx", "ps2" }, candidates.Select(c => c.Id));
             foreach (var (system, expected) in new[] { ("SEGA 32X", "32x"), ("SEGA GENESIS", "md"), ("SEGA MEGA DRIVE", "md") })
             {
                 byte[] image = SyntheticMdRom.Cartridge(system);

@@ -24,12 +24,27 @@ namespace EmuSen.WiseMan.Mistress
             RuntimeCatalog.Shelves.FirstOrDefault(s => s.System == system.Id)?.Core.Console ?? system.Console;
 
         // Every way a row can break the rule, in words; empty when the rows keep it.
-        public static List<string> Breaches(IReadOnlyList<Screen> screens, IReadOnlyList<SystemEntry> systems, Func<SystemEntry, string> runsUnder)
+        public static List<string> Breaches(IReadOnlyList<Screen> screens, IReadOnlyList<SystemEntry> systems, Func<SystemEntry, string> runsUnder) =>
+            Breaches(screens, ConsoleScreens.OwedRows, systems, runsUnder, HasShelf);
+
+        // A system a player can reach, by its shelf; one in development has none - see EmuSen_CoreAPI.md §27.4.
+        private static bool HasShelf(SystemEntry system) => RuntimeCatalog.Shelves.Any(s => s.System == system.Id);
+
+        // The same, an owed row standing in for a screen row only while its console has no shelf and no row.
+        public static List<string> Breaches(IReadOnlyList<Screen> screens, IReadOnlyList<ConsoleScreens.Owed> owed, IReadOnlyList<SystemEntry> systems, Func<SystemEntry, string> runsUnder, Func<SystemEntry, bool> hasShelf)
         {
             var breaches = new List<string>();
+            foreach (ConsoleScreens.Owed o in owed.Where(o => !Dated.IsMatch(o.Note))) breaches.Add($"{o.Console}'s owed row is not a dated note: \"{o.Note}\"");
+            foreach (ConsoleScreens.Owed o in owed.Where(o => systems.All(e => e.Console != o.Console))) breaches.Add($"{o.Console} has an owed row and is no system of the table");
             foreach (SystemEntry system in systems)
             {
                 Screen[] rows = screens.Where(s => s.Console == system.Console).ToArray();
+                if (owed.Any(o => o.Console == system.Console))
+                {
+                    if (rows.Length > 0) breaches.Add($"{system.Console} has a screen row and an owed row");
+                    else if (hasShelf(system)) breaches.Add($"{system.Console} reaches players with its screen row still owed");
+                    continue;
+                }
                 if (rows.Length != 1) { breaches.Add($"{system.Id} ({system.Console}) has {rows.Length} screen rows, where it must have one"); continue; }
                 Screen screen = rows[0];
                 if (screen.Gap is { } gap && !Dated.IsMatch(gap)) breaches.Add($"{system.Console}'s gap is not a dated note: \"{gap}\"");
@@ -110,6 +125,25 @@ namespace EmuSen.WiseMan.Mistress
             };
             foreach (var (what, screens, systems, expected) in cases)
                 Assert.True(Breaches(screens, systems, RunsUnder).Any(b => b.StartsWith(expected, StringComparison.Ordinal)), $"{what}: not caught; got\n{string.Join("\n", Breaches(screens, systems, RunsUnder))}");
+        }
+
+        // An owed row holds only while its console is in development: a shelf, a row beside it, an undated note and a console of no system are each caught - see EmuSen_CRT.md §31.8.
+        [Fact]
+        public void An_owed_row_holds_only_for_a_console_offered_to_no_player()
+        {
+            var owed = ConsoleScreens.OwedRows;
+            Assert.Equal(new[] { "PlayStation 2" }, owed.Select(o => o.Console));
+            Assert.DoesNotContain(Breaches(ConsoleScreens.All, owed, Systems, RunsUnder, _ => false), b => b.Contains("PlayStation 2"));
+            var cases = new (string What, IReadOnlyList<Screen> Screens, IReadOnlyList<ConsoleScreens.Owed> Owed, Func<SystemEntry, bool> Shelf, string Expected)[]
+            {
+                ("a shelf", ConsoleScreens.All, owed, s => s.Id == "ps2", "PlayStation 2 reaches players with its screen row still owed"),
+                ("a row beside it", ConsoleScreens.All.Append(new Screen("PlayStation 2", ConsoleScreens.Kind.Television, "PlayStation")).ToArray(), owed, _ => false, "PlayStation 2 has a screen row and an owed row"),
+                ("an undated note", ConsoleScreens.All, new[] { new ConsoleScreens.Owed("PlayStation 2", "later") }, _ => false, "PlayStation 2's owed row is not a dated note"),
+                ("no such system", ConsoleScreens.All, owed.Append(new ConsoleScreens.Owed("Dreamcast", "2026-10-24: x")).ToArray(), _ => false, "Dreamcast has an owed row and is no system of the table"),
+                ("nothing owed", ConsoleScreens.All, Array.Empty<ConsoleScreens.Owed>(), _ => false, "ps2 (PlayStation 2) has 0 screen rows"),
+            };
+            foreach (var (what, screens, o, shelf, expected) in cases)
+                Assert.True(Breaches(screens, o, Systems, RunsUnder, shelf).Any(b => b.StartsWith(expected, StringComparison.Ordinal)), $"{what}: not caught; got\n{string.Join("\n", Breaches(screens, o, Systems, RunsUnder, shelf))}");
         }
     }
 }

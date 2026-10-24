@@ -1,5 +1,15 @@
 # Sapphire (Sony PlayStation 2)
 
-No hardware notes yet — the `Sapphire - PlayStation 2` core hasn't been started (see `EmuSen/Cores/Sony/Sapphire - PlayStation 2/README.md`). This folder is a placeholder so `Man pages/Hardware/` mirrors `EmuSen/Cores/` ahead of time; pages get added here the same way `Venus - SNES/`'s were, once there's a core here to document.
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23 and not yet started in code. The core will live
+in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
-See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.
+- **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
+  Diamond; every unit with its source and oracle (the EE and its MMI, COP0, the FPU, VU0 and VU1, VIF, GIF, the GS,
+  IPU, DMAC, INTC, timers, SIF, the IOP, SPU2, CDVD, SIO2) and what is left out; PS1 discs routed to Diamond; the
+  player's BIOS first and the open replacement as a separate track; the speed budget and the recompilers; the GS's
+  exact software reference and its Vulkan path; the shared crates; the stages, gates, questions and predictions.
+- **`Sapphire_Disputes.md`** — the disputes log, opened with D-0, the system clocks.
+
+The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
+(`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this
+documentation set is organised.

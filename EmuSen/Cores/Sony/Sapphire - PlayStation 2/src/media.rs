@@ -157,7 +157,7 @@ pub fn serial_of(program: &str) -> Option<String> {
     ((6..=12).contains(&file.len()) && file.contains('-')).then_some(file)
 }
 
-/// An image's data sectors as user data: 2,048-byte sectors, or raw 2,352-byte ones told by their sync, the user data
+/// An image's data sectors, 2,048 bytes each: an .iso's, or a raw track's 2,352-byte sectors told by their sync, the data
 /// 16 bytes in for mode 1 and 24 for mode 2 (ECMA-130 §14).
 pub struct Sectors<'a> {
     bytes: &'a [u8],
@@ -287,7 +287,7 @@ pub mod sample {
         volume(300, PS2_CNF, false)
     }
 
-    /// The same volume as mode 2 form 1 raw sectors: the sync, the mode byte, the subheader, the user data.
+    /// The same volume as mode 2 form 1 raw sectors: the sync, the mode byte, the subheader, the data.
     pub fn raw(user: &[u8]) -> Vec<u8> {
         user.chunks(USER)
             .flat_map(|data| {

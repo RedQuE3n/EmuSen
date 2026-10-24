@@ -45,7 +45,7 @@ and `SapphireTests`. It wrote no emulation rule, and read no emulator source and
   size. The entry and segments are recorded; nothing is loaded. Refused with what it is instead: a 64-bit or
   big-endian ELF, another machine, an IOP module (`e_type` FF80h, an `.irx`, the plan's §4.1 rule 3), another type, no
   segment to load; and as truncated, with the bytes needed, where a header or segment runs past the end.
-- **A disc**: 2,048-byte sectors, or raw 2,352-byte ones told by their sync, the user data 16 bytes in for mode 1 and 24
+- **A disc**: 2,048-byte sectors, or raw 2,352-byte ones told by their sync, their 2,048 data bytes 16 in for mode 1 and 24
   for mode 2 (ECMA-130 §14); the primary volume descriptor at sector 16 (ECMA-119 §8.4); `SYSTEM.CNF` in the root
   directory (§9.1). **A line whose key is `BOOT2`** makes it a PlayStation 2 disc, its serial the program's name in the
   form the PlayStation's pack already reads (`cdrom0:\SLUS_203.12;1` is SLUS-20312). A disc with a `BOOT` line and no

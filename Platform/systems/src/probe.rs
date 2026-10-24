@@ -359,7 +359,7 @@ mod tests {
         image
     }
 
-    /// The same volume as a raw track of mode 2 form 1 sectors: the sync, the mode byte, the subheader, then the user data.
+    /// The same volume as a raw track of mode 2 form 1 sectors: the sync, the mode byte, the subheader, then the data.
     pub(crate) fn raw(user: &[u8]) -> Vec<u8> {
         user.chunks(USER).flat_map(|data| {
             let mut sector = vec![0u8; RAW];

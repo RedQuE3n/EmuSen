@@ -705,7 +705,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **0** | This plan | The tester's go (2026-10-23) |
+| **0** | This plan (2026-10-23) | The tester's go for S1 |
 | **S1** | The crate `sapphire` on the core ABI v1 as a stub with the `InDevelopment` mark: an ELF recognised and refused with words; the system pack `ps2` (§4.1) with the recogniser's `BOOT2` rule and Diamond's `BOOT` rule beside it; the three firmware entries (§5.9); the `SPH2` header | The kit's C1–C15 on a synthetic ELF and a synthetic ISO; a synthetic PS1 disc routed to Diamond, a PS2 CD and DVD to Sapphire, by test |
 | **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation |
 | **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written |
@@ -720,7 +720,7 @@ the enhancements (E) are separate tracks.
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |
-| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot once S24 exists, or earlier on the open EE kernel's first phase if §11 Q6 says so | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
+| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
 
 **Phase C — the EE's peripherals**
 
@@ -877,8 +877,8 @@ opened; the DVD's geometry with one or two layers and the layer break (taken fro
 begins, by the rule ECMA-267 and the PlayStation 2's discs give, settled at S23 and a dispute candidate); DVD sectors
 read whole or synthesised with their header and EDC from ECMA-267, as CD sectors are from ECMA-130; CHD's DVD form
 (`createdvd`); and later the block-compressed ISO forms, each from its published description. **What it does not gain**:
-the CDVD's commands or timing, which are Sapphire's, as the HC05's are Diamond's. **Users**: Sapphire; later Kunzite and
-any DVD-based core.
+the CDVD's commands or timing, which are Sapphire's, as the HC05's are Diamond's. **Users**: Sapphire; later any core whose discs are
+DVD-ROM.
 
 ### 9.5 Cards: a new `emusen-ps2-card`, not `emusen-psx-card`
 

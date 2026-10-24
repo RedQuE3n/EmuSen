@@ -1,0 +1,19 @@
+{
+  "id": "ps2",
+  "name": "Sony PlayStation 2",
+  "console": "PlayStation 2",
+  "manufacturer": "Sony",
+  "release_year": 2000,
+  "extensions": [".elf", ".iso", ".chd", ".cue", ".bin", ".m3u"],
+  "cheat_systems": [],
+  "openvgdb_systems": [],
+  "cover_aspect": 1.41,
+  "esde_system": "ps2",
+  "esde_full_name": "Sony PlayStation 2",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 58,
+  "cheat_space": null,
+  "media": [],
+  "byte_order": "little"
+}

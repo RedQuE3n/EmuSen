@@ -3646,3 +3646,21 @@ unchanged, so `SystemTableParity`, `SystemCodeParity` and `emusen-systems`' test
 - **Q4, the SG-1000's own composite:** to be modelled, as a later step on the to-do list.
 - **Q5, Endou's PAL SG-1000 rate:** to be corrected to the TMS9929A's 50.16 Hz in a small Endou step after stage 9.
 - **Q1, the 32X:** its gap stands until a document names its encoder.
+
+### 31.8 A console in development: the owed row (2026-10-24)
+
+The PlayStation 2 joined the systems table on 2026-10-24 with Sapphire's stage S1 (`Sapphire_Native.md` §4), offered
+to no player: its engine marks the system `development: true`, so it has no shelf, no Graphics Settings tab and no
+overscan row (`EmuSen_CoreAPI.md` §27.4). The rule of §31 asks for a screen row for every console of the table, and a
+television's row is a profile of its own. The PlayStation 2's profile needs the PCRTC's clocks and line, which wait on
+its first dispute, D-0, the system clocks (`Sapphire_Disputes.md`), and on S20's reading; a row now would be either a
+borrowed profile, which for a console that is no attachment the rule's test rightly refuses (it is offered no tube and
+no overscan), or numbers no document behind them.
+
+**Chosen [C]: an owed row.** `ConsoleScreens.OwedRows` holds the console and a dated note of why its row is owed. The
+test accepts an owed row in place of a screen row **only while the console has no shelf**: the step that offers the
+system to players fails `ConsoleScreenRuleTests` until the row with its own profile replaces the owed one. An owed
+row beside a screen row, one with an undated note, and one naming a console the table lacks are each refused
+(`An_owed_row_holds_only_for_a_console_offered_to_no_player`). This keeps §31's two properties for a console in
+development: the gap is decided and visible in the same table, and it cannot reach a player unnoticed. The row is
+Sapphire's S29 (`Sapphire_Plan.md` §4.6).

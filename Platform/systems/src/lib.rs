@@ -15,6 +15,7 @@ pub mod n64;
 pub mod nes;
 pub mod openvgdb;
 pub mod probe;
+pub mod ps2;
 pub mod psx;
 pub mod sms;
 pub mod snes;
@@ -32,9 +33,9 @@ pub struct System {
     pub release_year: i32,
     /// What the console's games come as, those the runtime expands included (`.m3u`); lower case, each with its dot.
     pub extensions: Vec<String>,
-    /// The libretro cheat database's folders for the console.
+    /// The libretro cheat database's folders for the console; empty where the database has none (Sapphire_Native.md §3.1).
     pub cheat_systems: Vec<String>,
-    /// OpenVGDB's `systemShortName` for the console.
+    /// OpenVGDB's `systemShortName` for the console; empty where OpenVGDB has no such system.
     pub openvgdb_systems: Vec<String>,
     /// Height over width of the console's North American box.
     pub cover_aspect: f64,
@@ -102,7 +103,7 @@ pub const KEYS: [&str; 17] = [
 pub const MEDIUM_KEYS: [&str; 3] = ["id", "title", "noun"];
 
 /// The data files, by the id each is named for, in the table's order.
-pub const DATA: [(&str, &str); 11] = [
+pub const DATA: [(&str, &str); 12] = [
     ("nes", include_str!("../data/nes.json")),
     ("snes", include_str!("../data/snes.json")),
     ("md", include_str!("../data/md.json")),
@@ -114,6 +115,7 @@ pub const DATA: [(&str, &str); 11] = [
     ("n64", include_str!("../data/n64.json")),
     ("sms", include_str!("../data/sms.json")),
     ("sg1000", include_str!("../data/sg1000.json")),
+    ("ps2", include_str!("../data/ps2.json")),
 ];
 
 struct Fields<'a> {
@@ -146,6 +148,15 @@ impl<'a> Fields<'a> {
     }
 
     fn texts(&self, key: &str) -> Result<Vec<String>, Error> {
+        let texts = self.texts_or_none(key)?;
+        if texts.is_empty() {
+            return self.fail(format!("{key} is empty"));
+        }
+        Ok(texts)
+    }
+
+    /// A list of words that may be empty, each word once.
+    fn texts_or_none(&self, key: &str) -> Result<Vec<String>, Error> {
         let Value::Array(items) = self.value(key)? else { return self.fail(format!("{key} is not a list")) };
         let mut texts = Vec::with_capacity(items.len());
         for item in items {
@@ -153,9 +164,6 @@ impl<'a> Fields<'a> {
                 Some(text) if !text.trim().is_empty() => texts.push(text.to_string()),
                 _ => return self.fail(format!("{key} holds something that is not a word")),
             }
-        }
-        if texts.is_empty() {
-            return self.fail(format!("{key} is empty"));
         }
         if (1..texts.len()).any(|i| texts[..i].contains(&texts[i])) {
             return self.fail(format!("{key} names one twice"));
@@ -220,8 +228,8 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
             _ => return f.fail("release_year is not a year"),
         },
         extensions: f.texts("extensions")?,
-        cheat_systems: f.texts("cheat_systems")?,
-        openvgdb_systems: f.texts("openvgdb_systems")?,
+        cheat_systems: f.texts_or_none("cheat_systems")?,
+        openvgdb_systems: f.texts_or_none("openvgdb_systems")?,
         cover_aspect: match f.token("cover_aspect")?.parse::<f64>() {
             Ok(aspect) if aspect.is_finite() && aspect > 0.0 => aspect,
             _ => return f.fail("cover_aspect is not a positive number"),
@@ -388,7 +396,7 @@ mod tests {
     fn the_embedded_table_reads_whole_in_its_order() {
         let systems = table().expect("the committed data files are a table");
         let ids: Vec<&str> = systems.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000"]);
+        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000", "ps2"]);
         for (file, _) in DATA {
             assert!(find(file).is_some(), "{file} is in the table");
         }
@@ -427,6 +435,17 @@ mod tests {
         assert_eq!((sms.byte_order.as_deref(), sms.cheat_space.as_deref(), sms.media.len()), (Some("little"), Some("RAM"), 0));
         assert_eq!((sms.cover_aspect, sg.cover_aspect, sg.cheat_space.as_deref()), (1.4, 1.4, Some("RAM")), "stage 7's values, Endou_Native.md §14");
         assert_eq!(crate::cheats::PAIRS.iter().filter(|p| p.1 == Some("sms.par") && p.2 == Some("sms.gg")).map(|p| p.0).collect::<Vec<_>>(), ["sms", "sg1000"]);
+    }
+
+    // Sapphire's system as Sapphire_Native.md §3.1 sources each fact; no cheat folder and no OpenVGDB system exist for it.
+    #[test]
+    fn the_playstation_2_is_a_system_with_no_cheat_folder_or_openvgdb_system() {
+        let ps2 = find("ps2").unwrap();
+        assert_eq!((ps2.console.as_str(), ps2.esde_system.as_str(), ps2.esde_full_name.as_str(), ps2.screenscraper_system, ps2.release_year), ("PlayStation 2", "ps2", "Sony PlayStation 2", Some(58), 2000));
+        assert_eq!(ps2.extensions, [".elf", ".iso", ".chd", ".cue", ".bin", ".m3u"]);
+        assert!(ps2.cheat_systems.is_empty() && ps2.openvgdb_systems.is_empty() && ps2.media.is_empty() && ps2.cheat_space.is_none());
+        assert!(crate::probe::recognises("ps2") && crate::cheats::PAIRS.iter().all(|p| p.0 != "ps2"));
+        assert_eq!(refused("nes", &nes().replace("\"cheat_systems\": [", "\"cheat_systems\": [\"A\", \"A\", ")), "cheat_systems names one twice");
     }
 
     #[test]

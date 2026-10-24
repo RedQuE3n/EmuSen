@@ -104,3 +104,7 @@ screenscraper.json
 __pycache__/
 *.pyc
 
+
+# PlayStation 2 programs and IOP modules, never committed (Sapphire_Native.md §4).
+*.elf
+*.irx

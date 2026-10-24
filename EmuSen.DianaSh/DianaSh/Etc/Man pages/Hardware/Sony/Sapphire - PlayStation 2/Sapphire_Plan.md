@@ -15,7 +15,8 @@ Every claim carries one of five marks:
   their addresses in §14.
 - **[A]** *argued*: reasoning from the documents or from other cores' measurements, with no measurement here.
 - **[C]** *a choice*: either a rule set for this core, said so, or a recommendation awaiting the tester (§11).
-- **P1–P16** *predicted*, numbered in §13 so that a later stage can retire each.
+- **P1–P16** *predicted*, numbered in §13 so that a later stage can retire each; P17–P19 were added on 2026-10-24
+  with the speed decision below.
 
 **The tester's decisions this page records:**
 
@@ -28,6 +29,31 @@ Every claim carries one of five marks:
 - *Standing, restated for this core:* no real hardware, ever. The tester's consoles are too old and fragile to be
   measured, so there are no console measurements and no homebrew run on a console. Disputes are settled by reference
   emulators run as black boxes, and by the logs and pictures recorded from consoles that public test suites ship.
+- *Decided 2026-10-23 (routine), as recommended:* Q2 (ps2tek pinned at `1c91660`), Q5 (Play!'s outputs for games
+  only), Q9 (three market entries with No-Intro names), Q13 (the clean-room review at G8), Q15 (the recompiler on by
+  default once its oracles pass), Q16 (the formats' stages) and Q17 (plain RAM writes as the only cheats at the player
+  gate). §11 records each.
+- *Decided 2026-10-24 by the tester, as recommended:* Q1 (Sony's Linux-kit manuals may be read, cited by document and
+  section), Q3 (SDK and loader sources never read; ps2toolchain's compiler alone allowed), Q4 (PCSX2 standalone and
+  Play! as the referees), Q6 (the open BIOS in form A, begun on the tester's go, its EE kernel not brought ahead of
+  S10), Q7 (a research step for the card's authentication, then cards on the open BIOS path only if it finds
+  nothing), Q8 (the tester's own dumps, under `AppSettings.RomDirectory`'s `ps2/`), Q10 (the shared crates), Q12 (the
+  scope at the player gate) and Q14 (the EE's timing at instruction granularity). **The go for S1** came with them; it
+  covers S1 alone.
+- *Changed by the tester on 2026-10-24, Q11:* **the full-speed target is the handheld** (the Legion Go S), not the
+  desktop alone. §5.12 carries the revised targets.
+- *A standing decision for this core, 2026-10-24.* The tester: "I am ok with deviating from accuracy now that we are
+  past the nintendo 64 era. I understand its going to be difficult and compromises will need to be made. We can focus
+  on trying to be as accurate as possible while also balancing performance." For Sapphire, therefore, **accuracy is
+  balanced against speed, and the default build aims for full speed on the handheld**. Every compromise is chosen on
+  purpose, measured (the accuracy it loses against the speed it gains) and named in the plan's losses (§5.13); none is
+  taken because it is convenient. The exact interpreter and the software GS stay, where they are built, as the
+  references every compromise is graded against and every dispute is settled on. What this changes is revised in
+  place with notes dated 2026-10-24: §1.1, §5.2, §5.3, §5.4, §5.12, §6.1, §8 and §13; §5.13 lists the candidate
+  compromises, none decided.
+- *Target games named by the tester on 2026-10-24:* **Jak and Daxter** (a test copy of the USA disc is kept read-only in
+  the probe's cache, `~/.cache/emusen/probe/sapphire/discs/`, never committed or copied into the repository),
+  **Kingdom Hearts** and **Dark Cloud 2** (not yet dumped). Q8's bench stays beside them, its three titles first.
 
 ---
 
@@ -38,6 +64,13 @@ Every claim carries one of five marks:
 The whole console is in scope but for the parts §1.2 leaves out. "Exact" means bit-identical results and, where a
 column says so, the same cycle at which a result is visible to software. The clocks are ps2tek's [R ps2tek "EE
 Architecture", "EE Timers", "CDVD Reads and Seeks"]; that they hold on every model is the first dispute (§2.3, D-0).
+
+*Amended 2026-10-24, by the speed decision above.* The table's targets are now the **reference's** targets: what the
+exact interpreter and the software GS are built to, graded by the oracles of §3 and used to settle disputes. The
+**default path**, what a player runs, is the reference with the compromises §5.13 has chosen, each measured and
+named; where none is chosen for a part, the default is the reference. Before the decision this page held the default
+to the table; that reading is retired, and the purpose of the core is restated as *as accurate as the handheld's full
+speed allows, every departure deliberate and recorded*.
 
 | Part | What is in scope | Target |
 |---|---|---|
@@ -447,6 +480,11 @@ clock nine times the PlayStation's (§5.12); the model is made exact to what can
 rather than guessed. **The interpreter is the reference**: every recompiled tier reproduces its registers, memory,
 events and cycle counts bit for bit (§5.12).
 
+*Amended 2026-10-24.* The model above stays the reference's. Whether the default path keeps it, or charges a fixed
+cost an instruction or a block in its place, is compromise C1 of §5.13, decided by measurement at S32 and S36. The
+recompiler's bit-for-bit claim is made against the interpreter with every compromise off; each compromise is then
+measured separately against that pair.
+
 ### 5.3 Floating point, exact
 
 The FPU and the VUs follow the PlayStation 2's own format: no NaN, no infinity, no denormals, rounding towards zero,
@@ -456,6 +494,11 @@ rounding is the first open rule (§2.3), graded by `ee_fpu/*` and `vu/*`. A reco
 point only where a test over every class of input shows it equal to the software path, with the host's rounding mode
 set to truncation and denormals flushed; any input class where it is not equal stays on the software path [C]. This is
 the largest single cost of exactness in the VU recompiler and is priced in §5.12.
+
+*Amended 2026-10-24.* The software floats stay the reference and the rule above stays the exact tier's. Host floats
+with clamping on input classes **not** proven equal become a candidate for the default path, compromise C3 of §5.13,
+decided on the classes' measured differences in `ee_fpu/*`, `vu/*` and the bench's anchors against the VU1
+recompiler's measured gain.
 
 ### 5.4 The GS: an exact software reference, then the device
 
@@ -478,6 +521,15 @@ the largest single cost of exactness in the VU recompiler and is priced in §5.1
   (`EmuSen_GpuPass.md` L4, assigned to MarsRT's pass by its Q4); the chain's output format stays a parameter (its §7);
   and its tests run on the RX 6800 only, one GPU-heavy run at a time.
 - **Enhancements** (internal resolution and the rest) are a third renderer that never writes eDRAM (§6).
+- *Amended 2026-10-24: the GS's default.* The software rasteriser stays the reference, the grader of every GS stage
+  and the witness in every GS dispute, and a setting a player may choose. **The device path becomes the intended
+  default**, since the handheld's full speed is the target and the software path's own estimate (3–30 ms a frame on
+  one desktop thread, §5.12) leaves no room for the rest of the machine on the handheld. It is offered as the default
+  when it equals the reference, or, if it does not, when its departures are measured and named. Whether it stays a
+  compute rasteriser held bit-exact, or relaxes rules where the bit-exact form costs most (the host's rasterisation and
+  blending in a graphics pipeline, eDRAM synchronised lazily), is compromises C5 and C6 of §5.13, decided at S44–S46
+  on the eDRAM and picture differences per bench game against the reference and the GS's frame time on the handheld's
+  GPU. The rule that the enhancements never write eDRAM is unchanged.
 
 ### 5.5 The SPU2
 
@@ -649,12 +701,30 @@ published by one atomic pointer, W^X batches, code never freed a block at a time
 validated against memory, the verifier that steps the interpreter beside the blocks, and the six-oracle method of its
 §5.8.5. Those are the parts to share (§9.6); the emitter is each processor's own.
 
-**Targets** [C, §11 Q11]:
+*Amended 2026-10-24.* The five levers above stay exact and are taken first, since each buys speed at no cost in
+accuracy. They are no longer the whole of the default path: where they leave the handheld short of full speed, the
+compromises of §5.13 are measured next, cheapest in accuracy first, and the default takes those the tester accepts.
+**The recompilers' role changes accordingly**: still graded bit for bit against the interpreter with every compromise
+off (the six oracles), they are also where most compromises live (C1, C3, C4), each a switch in the emitter whose
+effect is measured against the exact output.
+
+**Targets** [C, §11 Q11; *superseded 2026-10-24*, below]:
 
 - **The desktop**: every bench game at full speed with the exact levers on, leaving a fifth of the frame: a mean of
   13.4 ms of wall time a frame for the emulation's threads together, and no frame over 16.7 ms at the 95th percentile.
 - **The handheld**: full speed on battery for the bench games the desktop runs within 9.5 ms (13.4 / 1.4); the others
   measured and named. Some VU1-bound titles are expected to miss at first (P12).
+
+**Targets, decided 2026-10-24 by the tester** (Q11 changed):
+
+- **The handheld is the full-speed target**: every target game and every bench game at full speed on the Legion Go S,
+  on battery, in the default build: a mean of 13.4 ms of wall time a frame for the emulation's threads together,
+  leaving a fifth of the NTSC frame, and no frame over 16.7 ms at the 95th percentile (the desktop's former target,
+  moved). The exact levers come first and the compromises of §5.13 after them; a game that still misses is named with
+  its measured shortfall and the compromise that would close it, for the tester to accept or refuse.
+- **The desktop** follows from it: whatever runs at full speed on the handheld runs on the desktop with about 1.3–1.4
+  times the margin [A, `Nephrite_Plan.md` §5.5's ratio, to be measured at S32]. The desktop additionally runs the
+  reference path (no compromises) as fast as it can, for grading; that speed is reported, not targeted.
 - **The laptop**: **not a full-speed target**. Nephrite's rule (full speed at a 33 % CPU quota) cannot hold for a
   machine nine times the PlayStation's clock, and claiming otherwise would be dishonest; the laptop is measured and
   reported.
@@ -665,7 +735,34 @@ validated against memory, the verifier that steps the interpreter beside the blo
 
 **The speed settings that are not exact**, offered only after all of the above (`effect: accuracy`, each with its
 cost): the EE's timing reduced to a fixed cost an instruction; the VUs' floats on the host's arithmetic where it is not
-proven equal; the CDVD's delays shortened. And, apart from accuracy, the enhancements of §6.
+proven equal; the CDVD's delays shortened. And, apart from accuracy, the enhancements of §6. *Amended 2026-10-24:*
+these three are now candidates for the default path, C1, C3 and C9 of §5.13; one chosen for the default is still a
+setting, `effect: accuracy`, whose other value is the reference's behaviour.
+
+### 5.13 The compromises: candidates, each with the measurement that decides it
+
+*Added 2026-10-24, by the speed decision. None is decided.* Each candidate is a departure of the default path from the
+reference. It is taken only when a measurement shows the speed it buys on the handheld and the accuracy it costs, the
+tester accepts the trade, and it is then named in machine info's words and in this list's losses. The reference
+behaviour stays one setting away for every candidate taken. The order is the one in which each is expected to be
+weighed, cheapest in accuracy first [A].
+
+| # | Candidate: the default path would | What it gives up | What decides it, and when |
+|---|---|---|---|
+| **C7** | Synchronise VU1, the IOP and the GS with the EE at a bounded slack (a quantum of cycles or a scanline) instead of at every observation point (§5.1) | The exact cycle at which one unit sees another's writes, inside the quantum | The goldens and ps2autotests that change at each quantum, against the threads' wait time saved; S42 |
+| **C11** | Skip waits recognised by pattern (a VSync or interrupt wait loop) without the exact cycle accounting of lever 1 | Timer and counter values read inside a skipped wait | The bench's anchors that differ, against the frame time saved; S33 |
+| **C8** | Time the IOP by a fixed cost an instruction instead of Diamond's every-bus-access model | IOP-side timing that a module measures | `kernel/iop/*` and `cpu/iop/*`, the bench's anchors, against the IOP's share of the frame; S32 |
+| **C1** | Charge the EE a fixed cost an instruction or a block instead of §5.2's documented issue, latency and cache model | Timing-sensitive games; the performance-counter test | `ee_cop0/performance`, the bench's anchors in picture and RAM, against the EE's share of the frame with and without the model; S32, S36 |
+| **C2** | Model the caches' coherency effects (stale data after a missing write-back) but not their contents' timing, or neither | Games that read stale lines as a console does, or that time cache misses | The project's cache programs and the bench, against the cost of the tags on every access; S7, S37 |
+| **C3** | Compute the FPU's and the VUs' floats on the host's arithmetic with clamping on the input classes not proven equal (§5.3) | The last bit and the edge classes (the PlayStation 2's own overflow and denormal rules) on those classes | `ee_fpu/*`, `vu/*`, each class's differing results and the bench's anchors, against the VU1 recompiler's speed with and without software floats; S39–S41 |
+| **C4** | Drop the cycle-exact visibility of the VUs' MAC, status and clipping flags and of Q and P where the analysis of a microprogram cannot prove a read harmless | Microprograms that read a flag or Q inside its delay | `vu/lower/*`, `vu/upper/*`, `vu/games/triace` and the bench's pictures, against VU1's frame time; S40 |
+| **C5** | Draw on the device with the host's rasterisation and blending (a graphics pipeline) instead of a compute rasteriser held bit-exact (§5.4) | Pixel coverage at edges, blending's rounding, the GS's exact tie rules | eDRAM and picture differences per bench game against the software reference (pixels differing, largest error), against the GS's frame time on the handheld's GPU; S44–S46 |
+| **C6** | Keep render targets on the device and bring the eDRAM mirror up to date only at local-to-host transfers and detected reinterpretations | Readbacks the detection misses | The bench's readback effects (§6.2's list) against the synchronisation's measured cost; S44 |
+| **C9** | Shorten the CDVD's seek and read times | Loading screens' length and any game that times its reads | The bench's load times and anchors, against the time a player waits (not frame time, which it does not change); S23 |
+
+**Not candidates** [A]: the SPU2 and the IPU, which §5.12 prices at under 1 ms and about 1–3 ms of the frame and
+which a player hears and sees directly; and the instruction results of every processor, which no compromise may
+change but C3's named float classes.
 
 ---
 
@@ -680,6 +777,11 @@ enhancement off**, pinned by the accurate goldens recorded before the layer exis
 edits through the accurate code; each enhancement **its own setting** with `effect: enhancement` and its `hardware`
 value the default; optional, skippable **state blocks**; and the two that change the emulation itself (the clocks and
 the CDVD's speed) parameters of the accurate model, tagged in the state.
+
+*Amended 2026-10-24.* "The accurate path is the default" no longer holds for this core: the **reference path** stays
+bit-exact with every enhancement off and is what E1's goldens pin, and the **default path** is the reference with the
+compromises of §5.13 the tester has accepted. The enhancements remain a separable layer over either; a compromise is
+not an enhancement (it is `effect: accuracy`, not `effect: enhancement`) and is never mixed into the layer.
 
 ### 6.2 The enhancements
 
@@ -778,6 +880,13 @@ the enhancements (E) are separate tracks.
 | **S44–S46** | The GS on the device: the compute rasteriser's eDRAM mirror and transfers (S44), primitives and texturing (S45), the pixel pipeline and the PCRTC on the device with the picture handed through the slot (S46) | eDRAM equal to the software reference after every frame of every program and bench game; the validation layer with the synchronisation heuristic clean; RX 6800 only |
 | **S47** | The targets (§5.12) | G6 |
 
+*Amended 2026-10-24, the speed decision.* Phase G's gates that ask for "every golden equal" (S33, S34, S36–S43) hold
+for the levers, which stay exact; each compromise of §5.13 is a step of its own inside the phase, gated not by equality
+but by its measurement written into §5.13's row (accuracy lost, speed gained on the handheld) and the tester's
+acceptance. S44–S46's gate becomes: eDRAM equal to the software reference after every frame, **or** each difference
+measured and attributed to an accepted C5 or C6. S47's target is the handheld's (§5.12). S28's bench begins with the
+tester's three target games, Jak and Daxter, Kingdom Hearts and Dark Cloud 2.
+
 **Phase H — the gates**: **S48**, the goldens and the clone check (§8).
 
 **The enhancements** (after S29, beside phase G): **E1**, the layer's frame and the accurate goldens recorded first;
@@ -815,7 +924,13 @@ then states that the open replacement is owed, as the policy requires before the
 - **G4, the frontend.** The kit's C1–C15 on the tester's discs; cards round-trip; the fit audit; the CRT profile.
 - **G5, the goldens.** The bench discs, each at three anchors, equal to the referees in picture and RAM, or
   dispute-logged.
-- **G6, speed.** §5.12's desktop target on the bench; the handheld's measured and its misses named.
+- **G6, speed.** §5.12's desktop target on the bench; the handheld's measured and its misses named. *Amended
+  2026-10-24:* §5.12's handheld target on the target games and the bench, in the default build, with the compromises
+  taken listed in machine info and in §5.13; the reference path's speed on the desktop reported.
+- *Amended 2026-10-24, for G3, G5 and GE.* The pictures and goldens are recorded on the **reference path**, which is
+  what the referees are compared with and what disputes are settled on; the default path is graded against the
+  reference, each difference attributed to an accepted compromise or treated as a defect. GE's exactness test (E1)
+  pins the reference path.
 - **G7, the debugger.** Each claim a test.
 - **G8, the clean room.** `clonecheck.py` over Sapphire's and the shared crates' sources against the reference
   emulators' sources, the reference side never printed, finds nothing above its threshold; the disputes log read end to
@@ -933,74 +1048,78 @@ is built, as Diamond's were.
 
 ## 11. Questions for the tester
 
+*Answered: Q2, Q5, Q9, Q13, Q15, Q16 and Q17 decided 2026-10-23 (routine) as recommended; Q1, Q3, Q4, Q6, Q7, Q8, Q10,
+Q12 and Q14 decided 2026-10-24 by the tester as recommended; Q11 changed by the tester on 2026-10-24, the handheld
+being the full-speed target (§5.12). The questions are kept as asked, below, with each decision beside it.*
+
 Each with a recommendation. **[decision]** changes scope, an interface, cost or what the player sees; **[routine]**
 does not. **What S1 needs answered before it starts**: Q9 (the names and markets it declares) and the go. S2 needs Q1,
 Q2 and Q3; S3 needs Q4 and Q5; S10 needs Q6; S6 needs Q14; S24 needs Q7; S28 needs Q8; S35 needs Q10's last part; S47
 needs Q11.
 
-1. **Q1 [decision], Sony's Linux-kit manuals** (§2.2). May writers read the EE, VU, DMAC, IPU and GS manuals Sony
+1. **Q1 [decision], Sony's Linux-kit manuals** (§2.2). *Decided 2026-10-24 by the tester: as recommended.* May writers read the EE, VU, DMAC, IPU and GS manuals Sony
    shipped with the Linux for PlayStation 2 kit? *Recommended:* yes, each use cited by document and section, as
    Diamond's Q1 allowed Sony's documents, with ps2tek's screening (§2.2) applied to them for replacement writers; copies
    only from the tester's own or a lawful source, kept in the probe's cache, never committed.
-2. **Q2 [routine], ps2tek's revision and status.** *Recommended:* pinned at `1c91660` (2022-01-27, its last push), cited
+2. **Q2 [routine], ps2tek's revision and status.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* pinned at `1c91660` (2022-01-27, its last push), cited
    as a document of unstated sources written by an emulator's author, its BIOS chapter screened and partly excluded for
    replacement writers (§2.2).
-3. **Q3 [decision], SDKs and homebrew.** ps2sdk's directories are named after the BIOS's IOP modules (§2.4), so it
+3. **Q3 [decision], SDKs and homebrew.** *Decided 2026-10-24 by the tester: as recommended.* ps2sdk's directories are named after the BIOS's IOP modules (§2.4), so it
    probably holds reimplementations of them; Open-PS2-Loader holds replacement drive modules. *Recommended:* their code
    is never read by anyone; running binaries built with them (ps2autotests) is allowed for every role; anyone who reads
    them is excluded from the open BIOS and from the stages that model the IOP's kernel interface. And may the project's
    own test programs be compiled with ps2toolchain's GCC (a compiler, not a library)? *Recommended:* yes for the
    compiler alone, linking none of ps2sdk; otherwise `emusen-mips`'s assembler and Rust only.
-4. **Q4 [decision], the referees.** *Recommended:* PCSX2's standalone release, pinned by SHA-256 like DuckStation's,
+4. **Q4 [decision], the referees.** *Decided 2026-10-24 by the tester: as recommended.* *Recommended:* PCSX2's standalone release, pinned by SHA-256 like DuckStation's,
    run headless under a private compositor with its software renderer and read through PINE; Play! standalone as the
    second lineage; the libretro forms only if the probe gains a hardware-render context, which is built only if S3
    shows the standalone forms insufficient. All local black boxes, never distributed, sources never read.
-5. **Q5 [routine], Play!'s own BIOS.** It runs only its high-level BIOS. *Recommended:* used for games' outputs only,
+5. **Q5 [routine], Play!'s own BIOS.** *Decided 2026-10-23 (routine): as recommended.* It runs only its high-level BIOS. *Recommended:* used for games' outputs only,
    as PCSX-ReARMed's kernel was for Diamond; a replacement writer never sees its kernel's own output.
-6. **Q6 [decision], the open BIOS: form, and when.** *Recommended:* form A, native kernel images for both processors
+6. **Q6 [decision], the open BIOS: form, and when.** *Decided 2026-10-24 by the tester: as recommended.* *Recommended:* form A, native kernel images for both processors
    (§5.9), in Rust (the IOP's on `mipsel-sony-psx`, the EE's on a restricted MIPS target with a CI scan), started only on
    the tester's go and written by people never exposed (§1.4); estimated at 30,000–50,000 lines and 25–40 steps. *And
    whether its EE kernel's first phase comes early* (O2–O3 before S10), so that the EE's ps2autotests run with no
    firmware folder as Diamond's tests did: *recommended* no, given the decision of 2026-10-19 — S10 runs on the player's
    BIOS once S24 exists, and the EE stages are graded by the project's own programs until then.
-7. **Q7 [decision], the card's authentication under the player's BIOS.** The BIOS authenticates a card before using it
+7. **Q7 [decision], the card's authentication under the player's BIOS.** *Decided 2026-10-24 by the tester: as recommended.* The BIOS authenticates a card before using it
    (ps2tek: SECRMAN sends F0h, F3h, F7h, "unknown purpose"); no public document describing the exchange was found (§12),
    and a trace of the BIOS's traffic is forbidden by §1.4. *Recommended:* (a) one research step for public documents
    of the protocol, including the published documentation (not the code) of open card-emulating devices; (b) if none
    suffices, cards on the player's BIOS path wait, and saving is offered on the open BIOS path only, which never
    authenticates. MagicGate's keys are never sought.
-8. **Q8 [decision], games.** The library holds no PlayStation 2 game; the handheld's card holds Jak and Daxter (USA,
+8. **Q8 [decision], games.** *Decided 2026-10-24 by the tester: as recommended, with three target games named: Jak and Daxter (a test copy in the probe's cache), Kingdom Hearts and Dark Cloud 2, the bench beside them.* The library holds no PlayStation 2 game; the handheld's card holds Jak and Daxter (USA,
    Rev 1) as an `.iso`, which is not touched. *Recommended:* dumps of discs the tester owns, under
    `AppSettings.RomDirectory`'s `ps2/`, DVDs as `.iso` and CD titles as `.cue`/`.bin`, read only. A bench chosen for what
    each loads: Jak and Daxter (VU1, streaming), Ratchet & Clank (VU1, effects), Gran Turismo 4 (GS and VU1 load, the
    progressive modes), Shadow of the Colossus (the heaviest load commonly cited), Final Fantasy X (IPU movies),
    Metal Gear Solid 2 (post-processing from eDRAM), Silent Hill 2 (render-to-texture, noise filter), Kingdom Hearts,
    God of War (a dual-layer DVD), one CD-ROM title, one PAL disc and one Japanese disc. Any subset serves.
-9. **Q9 [routine], the BIOS entries and versions.** *Recommended:* three market entries with No-Intro canonical names,
+9. **Q9 [routine], the BIOS entries and versions.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* three market entries with No-Intro canonical names,
    `ps2-0230a-20080220.bin` and `ps2-0230e-20080220.bin` for the Americas and Europe and the newest Japanese retail
    version for Japan, each listing every retail version's MD5 cited from a public database at S2; the gates run the
    Americas and Europe images the tester holds of version 0230 and the newest Japanese one the tester holds
    (`ps2-0210j-20040917.bin` by its name); the images stay in `~/Documents/BIOS/PS2/`, read only, reached by the
    firmware folder setting and `--sysdir`, never read by the project's tools.
-10. **Q10 [decision], the shared crates.** *Recommended:* `emusen-mips` gains `r5900.rs` and `vu.rs` (§9.1);
+10. **Q10 [decision], the shared crates.** *Decided 2026-10-24 by the tester: as recommended.* *Recommended:* `emusen-mips` gains `r5900.rs` and `vu.rs` (§9.1);
     `blackmoon-r3000` serves the IOP unchanged (§9.2); Diamond's SPU voice moves into `blackmoon-spu` (§9.3), Diamond's
     goldens the gate; `emusen-disc` gains the DVD medium (§9.4); a new `emusen-ps2-card` (§9.5); and `emusen-jit`
     extracted from MarsRT at S35 (§9.6), MarsRT's tests and speed the gate.
-11. **Q11 [decision], the speed targets.** *Recommended:* the desktop target of §5.12 with the exact levers; the handheld
+11. **Q11 [decision], the speed targets.** *Changed by the tester on 2026-10-24: the handheld is the full-speed target, §5.12.* *Recommended:* the desktop target of §5.12 with the exact levers; the handheld
     best effort, measured and its misses named; the laptop not a full-speed target; Nephrite's 33 % quota rule not
     applied to this core.
-12. **Q12 [decision], scope at the player gate.** *Recommended:* the DualShock 2 with pressure, cards and the multitap;
+12. **Q12 [decision], scope at the player gate.** *Decided 2026-10-24 by the tester: as recommended.* *Recommended:* the DualShock 2 with pressure, cards and the multitap;
     left out as §1.2 says: DEV9's disk and network, USB, i.LINK, DVD-Video, the PS1 mode (Diamond's), arcade boards and
     development consoles.
-13. **Q13 [routine], the clean-room review.** *Recommended:* the clone check and the disputes reading at G8, as for
+13. **Q13 [routine], the clean-room review.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* the clone check and the disputes reading at G8, as for
     Diamond.
-14. **Q14 [decision], the EE's timing model.** *Recommended:* the documented timing at instruction granularity with the
+14. **Q14 [decision], the EE's timing model.** *Decided 2026-10-24 by the tester: as recommended, for the reference; whether the default path keeps it is C1 of §5.13.* *Recommended:* the documented timing at instruction granularity with the
     caches modelled (§5.2), losses named, rather than a cycle-exact pipeline no oracle can grade.
-15. **Q15 [routine], the recompiler's default.** *Recommended:* on once its six oracles pass, as MarsRT's was on
+15. **Q15 [routine], the recompiler's default.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* on once its six oracles pass, as MarsRT's was on
     2026-09-22, since the interpreter cannot run games at full speed; the interpreter a switch away and still exact.
-16. **Q16 [routine], formats.** *Recommended:* `.elf` from S1; `.iso`, `.cue`/`.bin` and `.chd` at S23 with DVDs always
+16. **Q16 [routine], formats.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* `.elf` from S1; `.iso`, `.cue`/`.bin` and `.chd` at S23 with DVDs always
     mapped; `.m3u` at S29; the compressed and other dump forms later, each from a published description.
-17. **Q17 [routine], cheats.** *Recommended:* plain RAM writes at the player gate; the devices' encrypted formats later,
+17. **Q17 [routine], cheats.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* plain RAM writes at the player gate; the devices' encrypted formats later,
     and only from published descriptions of their encryption.
 
 ---
@@ -1048,6 +1167,21 @@ needs Q11.
 - **P15.** The EE recompiler built on `emusen-jit` with inlined instructions and held registers is at least five times
   faster than the interpreter on the bench, unlike MarsRT's few per cent, because the EE is the bound.
 - **P16.** `blackmoon-spu`'s extraction leaves Diamond's SPU goldens unchanged at the first attempt.
+
+*Amended 2026-10-24, by the speed decision; the predictions above are left as written.* P11 stands as a prediction
+about the threads under the exact synchronisation of §5.1; with C7 taken it says nothing of the default path. **P12
+stands, and is now a prediction about the reference path alone**: it predicts that the exact levers will not reach the
+handheld's full speed, which is the case §5.13 exists for; it is retired at S47 by the reference path's handheld
+measurement, whichever way that falls. P15 stands, measured with every compromise off. The rest are untouched. Three
+are added:
+
+- **P17.** The exact levers alone leave at least one of the three target games short of the handheld's full speed, so
+  that at least one compromise of §5.13 is taken for the default path.
+- **P18.** C5, the GS drawn by the host's graphics pipeline, changes pixels in every bench game against the software
+  reference but changes no golden in RAM; and the bit-exact compute form fits the handheld's frame for at least one
+  target game, so that C5 is weighed game by game rather than for the core.
+- **P19.** No compromise is needed on the desktop for any bench game: the desktop meets full speed on the reference path
+  with the exact levers alone.
 
 ## 14. Sources, read 2026-10-23
 

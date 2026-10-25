@@ -366,14 +366,14 @@ fn every_encoding_of_the_tx79_tables_decodes_disassembles_and_reassembles() {
             let expect = if itself { Option::None } else { name(c).map(|n| format!("{n}.{fmt}")) };
             let word = 0x11 << 26 | rs << 21 | i as u32;
             if matches!(fmt, "d" | "l") {
-                t.differences += 1;
+                if expect.is_some() { t.differences += 1 } else { t.reserved += 1 }
                 assert_eq!(operation(word), Option::None, "{fmt}[{i:#x}] {c}: the EE has no {fmt} format (D-1)");
             } else {
                 cell(fmt, i, c, expect, word, s, &mut t);
             }
         }
     }
-    assert_eq!((t.named, t.reserved, t.differences), (261, 371, 174), "named, reserved and different cells");
+    assert_eq!((t.named, t.reserved, t.differences), (261, 462, 83), "named, reserved and different cells");
 }
 
 /// ps2tek's own tables where the EE differs from the TX79: every named cell decodes to ps2tek's name and reads back,

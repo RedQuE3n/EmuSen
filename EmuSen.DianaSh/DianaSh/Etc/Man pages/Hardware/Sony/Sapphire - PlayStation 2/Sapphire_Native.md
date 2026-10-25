@@ -2577,8 +2577,8 @@ word for word; `the_programs_carry_every_micro_instruction` (164 operations, XGK
 `xtop_and_xitop_read_the_link`; `a_t_bit_raises_vu1_s_interrupt`. `tests/vu_micro.rs` **24 of 24** (§23.3's pins, and
 §23.8's two console texts). `tests/vu0.rs` **14 of 14**: S12's gate unchanged on the new micro mode, its stand-in moved
 to the interface's new answers and its halting test kept for a machine built with `Unbuilt`. The crate's other tests
-unchanged, on the tree with S21 beneath: lib **25 of 25** (one new, the EFU's own values), `cop0` 19, `dmac` 17, `fpu` 9,
-`interpreter` 23, `iop` 13, `mmi` 13, `programs` 3; lib, `micro`, `vu_micro` and `vu0` also under `test-checked`; clippy
+unchanged, on the tree with S21 and S16 beneath: lib **25 of 25** (one new, the EFU's own values), `cop0` 19, `dmac` 17,
+`fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `mmi` 13, `programs` 3; lib, `micro`, `vu_micro` and `vu0` also under `test-checked`; clippy
 clean. `blast.sh`'s crates: `blackmoon-gte` 10 of 10, `blackmoon-r3000` 38 of 38, Diamond 306 of 306, its `precision`
 8 of 8 and `v1` 5 of 5, `Platform/systems` 39 of 39; WiseMan with `blast.sh`'s filter (`CheatCodec`, `DebugCodeParity`,
 `Diamond`, `SapphireTests`, `SystemCodeParity`, `SystemTableParity`) 116 of 116. `emusen-mips` **21 of 21**,

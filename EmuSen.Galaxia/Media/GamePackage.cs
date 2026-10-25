@@ -52,6 +52,23 @@ namespace EmuSen.Galaxia.Media
             }
         }
 
+        // How many soft patches the list holds - see EmuSen_GamePackages.md §5.4.
+        public int Patches => Document["patches"] is JsonArray list ? list.Count : 0;
+
+        // The patched image's hashes as "patched" records them; null with no patches or none taken - see EmuSen_GamePackages.md §5.5.
+        public Library.RomHashes? Patched =>
+            Patches > 0 && Document["patched"] is JsonObject p && Text(p, "md5") is { } md5 && Text(p, "crc32") is { } crc && Text(p, "sha1") is { } sha
+            && p["size"] is JsonValue size && size.TryGetValue(out long bytes)
+                ? new Library.RomHashes(md5, crc, sha, bytes) : null;
+
+        // What a state saved on the patched image records as its ROM.
+        public (string Md5, long Size)? PatchedIdentity => Patched is { } h ? (h.Md5, h.Size) : null;
+
+        // Whether the scraper sends the patched image's hashes first: patches, and "identity" set to "patched".
+        public bool ScrapesAsPatched => (string?)Document["identity"] == "patched" && Patched is not null;
+
+        private static string? Text(JsonObject o, string name) => o[name] is JsonValue v && v.TryGetValue(out string? s) ? s.ToLowerInvariant() : null;
+
         // A new manifest in the schema's order, with the fields later steps fill left empty.
         public static GamePackage Create(string? title, string system, string mode, PackageFile game)
         {

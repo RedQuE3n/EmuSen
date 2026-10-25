@@ -72,8 +72,15 @@ namespace EmuSen.Mistress.Views
         private void Current(string path, string md5, long bytes)
         {
             if (path != _currentRomPath) return;
-            _currentRomBytes = bytes;
-            _currentRomMd5 = md5;
+            (_currentRomMd5, _currentRomBytes) = PatchedIdentityOf(path) ?? (md5, bytes);
+        }
+
+        // What a state saved on this game records as its ROM: a patched package's patched image, else null for the file's own - see EmuSen_GamePackages.md §5.5.
+        private static (string Md5, long Size)? PatchedIdentityOf(string path)
+        {
+            if (EmuSen.Galaxia.Media.GamePackages.RootFor(path) is not { } root) return null;
+            try { return EmuSen.Galaxia.Media.GamePackage.Read(Path.Combine(root, EmuSen.Galaxia.Media.GamePackage.FileName)).PatchedIdentity; }
+            catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException) { return null; }
         }
 
         // Rows whose file has gone, matched by contents against files nobody has a row for; only files of a missing one's size are hashed, on a worker.
@@ -111,7 +118,7 @@ namespace EmuSen.Mistress.Views
         private async Task<bool> SameGameOrConfirmedAsync(StateRecord? record, string romPath)
         {
             if (record?.RomMd5 is not string saved) return true;
-            string? md5 = romPath == _currentRomPath ? _currentRomMd5 : null;
+            string? md5 = romPath == _currentRomPath ? _currentRomMd5 : PatchedIdentityOf(romPath)?.Md5;
             if (md5 is null && Stat(romPath) is { } stat)
                 md5 = _records.KnownHash(romPath, stat.Bytes, stat.Modified) ?? await Task.Run(() => TryMd5(romPath));
             if (md5 is null || md5 == saved) return true;

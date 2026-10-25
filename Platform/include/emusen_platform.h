@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 25u
+#define EMUSEN_PLATFORM_ABI_VERSION 26u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -278,6 +278,17 @@ int32_t emusen_galaxia_mapped_advise(const emusen_galaxia_mapped *mapped, uint64
 
 /* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
 int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
+
+/* ---- Soft patches (EmuSen_GamePackages.md, sections 5.4 and 15; since 26) ---- */
+
+/*
+ * The image `image` with the soft patches of the package at `folder` applied, as the runtime hands it to a core: 0 with
+ * the bytes held as a mapping in `mapped`, read with emusen_galaxia_mapped_bytes and freed with emusen_galaxia_unmap;
+ * 0 with null where the package lists no patch; REFUSED with words naming the patch and both values where one does not
+ * apply (another source, a changed patch file, a target that is not the one recorded); IO where the manifest does not
+ * read. The package's files are only read.
+ */
+int32_t emusen_patch_package_image(const uint8_t *folder, size_t folder_len, const uint8_t *image, size_t image_len, emusen_galaxia_mapped **mapped);
 
 /* ---- Galaxia: migration (EmuSen_Galaxia.md, section 3.2) ---- */
 

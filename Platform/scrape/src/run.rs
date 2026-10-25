@@ -667,8 +667,21 @@ impl Scraper {
         };
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
         let file_name = path::file_name(STYLE, rom).to_string();
-        let Some(mut answer) = self.ask(w, system_id, hashes, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
-        let mut matched_by = if by_name { "name" } else { "file" };
+        // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (EmuSen_GamePackages.md §5.5).
+        let patched = if by_name { None } else { patched_first(rom) };
+        let first = patched.clone().unwrap_or_else(|| hashes.clone());
+        let Some(mut answer) = self.ask(w, system_id, first, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
+        let mut matched_by = if by_name { "name" } else if patched.is_some() { "patched" } else { "file" };
+        if patched.is_some() && answer.status == Status::NotFound {
+            match self.turn(w) {
+                None => return Ok(None),
+                Some(false) => return Ok(Some(self.stopped(item))),
+                Some(true) => {}
+            }
+            let Some(second) = self.ask(w, system_id, hashes, &file_name, None) else { return Ok(None) };
+            answer = second;
+            matched_by = "file";
+        }
 
         if answer.status == Status::NotFound && bytes as u64 <= openemu::HASH_LIMIT {
             let core_first = self.route(rom, &cores).and_then(|s| consoles::core_of(&cores, &s.id)).and_then(|c| c.systems.first().cloned());
@@ -1131,4 +1144,41 @@ fn local_day_time(utc: i64) -> String {
     let days = local.div_euclid(emusen_dotnet::date::TICKS_PER_DAY);
     let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     format!("{} {}", names[emusen_dotnet::date::weekday(days) as usize], emusen_dotnet::date::local_text(local, "HH:mm"))
+}
+
+/// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the runtime resolves it.
+fn patched_first(rom: &str) -> Option<Hashes> {
+    let places = emusen_galaxia::claims::Places::of(&emusen_galaxia::tree::tree());
+    let folder = emusen_galaxia::claims::resolve(&places.roots(), rom).ok()?.package?;
+    let doc = emusen_galaxia::package::read(&emusen_galaxia::dotnet_files::join(&folder, emusen_galaxia::package::FILE_NAME)).ok()?.ok()?;
+    scraped_first(&doc)
+}
+
+/// What a package's manifest has the scraper send first: the patched image's hashes under `identity: patched`, else
+/// none, so that the file's own, the dump's, are sent (EmuSen_GamePackages.md §5.5).
+pub fn scraped_first(doc: &emusen_galaxia::json::Value) -> Option<Hashes> {
+    if !emusen_galaxia::package::scrapes_as_patched(doc) {
+        return None;
+    }
+    emusen_galaxia::package::patched(doc).map(|p| Hashes { md5: p.md5, crc32: p.crc32, sha1: p.sha1, size: p.size })
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::scraped_first;
+
+    #[test]
+    fn a_patched_package_sends_its_dump_unless_its_identity_is_patched() {
+        let manifest = |identity: &str| {
+            format!(
+                r#"{{"format":"emusen-package","version":"1.0","system":"snes","mode":"linked","game":{{"role":"image","where":"library","path":"snes/a.sfc"}},
+                "patches":[{{"file":"a.bps","format":"bps"}}],"patched":{{"size":4,"crc32":"0000000a","md5":"0000000000000000000000000000000b","sha1":"000000000000000000000000000000000000000c"}},"identity":"{identity}"}}"#
+            )
+        };
+        let original = emusen_galaxia::package::parse(&manifest("original")).unwrap();
+        assert_eq!(scraped_first(&original), None, "identity original sends the file's hashes, the dump's");
+        let patched = emusen_galaxia::package::parse(&manifest("patched")).unwrap();
+        let h = scraped_first(&patched).unwrap();
+        assert_eq!((h.crc32.as_str(), h.size), ("0000000a", 4));
+    }
 }

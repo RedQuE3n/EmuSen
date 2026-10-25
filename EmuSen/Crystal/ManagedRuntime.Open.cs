@@ -69,6 +69,7 @@ namespace EmuSen.Crystal.Managed
             try { return CoreFactory.Load(path, headless: true, new CheatRegistry(), chosen, lender, options); }
             catch (Cores.Native.CoreNotApprovedException e) { throw new CrystalException(CrystalNumbers.NotApproved, e.Message); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
+            catch (IOException e) when (options.PackageRoot is not null) { throw new CrystalException(CrystalNumbers.Io, e.Message); }
         }
 
         private static CoreBundle StartConsole(string asked, string? engine, CoreOptions options, Func<IDeviceLend?>? lender, out string console)

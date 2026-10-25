@@ -136,14 +136,5 @@ pub fn image_at(folder: &str, source: &[u8]) -> Result<Option<Vec<u8>>, String> 
 /// What a state saved on a patched package's game records as its ROM: the patched image's MD5 and size, where the
 /// list is not empty and `patched` holds them (EmuSen_GamePackages.md §5.5).
 pub fn patched_identity(doc: &Value) -> Option<(String, u64)> {
-    if entries(doc).is_empty() {
-        return None;
-    }
-    let p = doc.get("patched")?;
-    let md5 = text(p, "md5")?.to_ascii_lowercase();
-    let size = match p.get("size") {
-        Some(Value::Number(t)) => t.parse::<u64>().ok()?,
-        _ => return None,
-    };
-    Some((md5, size))
+    emusen_galaxia::package::patched(doc).map(|p| (p.md5, p.size))
 }

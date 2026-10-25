@@ -29,6 +29,13 @@ namespace EmuSen.Galaxia.Media
             return new MappedFile { _native = handle, Pointer = bytes, Length = length };
         }
 
+        // A mapping the platform library made and holds, such as a patched image's bytes; freed as any of its mappings.
+        internal static MappedFile FromNative(nint handle)
+        {
+            long length = GalaxiaNative.MappedBytes(handle, out byte* bytes);
+            return new MappedFile { _native = handle, Pointer = bytes, Length = length };
+        }
+
         // The length bytes at offset, where the file holds them; shorter at its end.
         public ReadOnlySpan<byte> Span(long offset, int length)
         {

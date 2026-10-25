@@ -12,7 +12,15 @@ namespace EmuSen.Galaxia.Media
         private readonly IDisposable? _hold;
 
         public string Path { get; }
-        public MappedFile Image { get; }
+        public MappedFile Image { get; private set; }
+
+        // The image replaced by bytes made from it, a packaged game's patched image, the mapping let go - see EmuSen_GamePackages.md §5.4.
+        public void Patch(MappedFile patched)
+        {
+            MappedFile old = Image;
+            Image = patched;
+            old.Dispose();
+        }
 
         // A sheet's tracks and then an .sbi, in the order a core numbers them.
         public IReadOnlyList<MappedFile> Companions { get; }

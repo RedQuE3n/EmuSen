@@ -166,11 +166,22 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     };
     let empty = if asked.path.is_none() { console_asked } else { None };
     let mut session = Session::new(sessions.next_id(), engine, path.map(str::to_string), name, empty, asked.opened, rt.events.clone());
+    // A state saved on a patched package's game records the patched image it was made on (EmuSen_GamePackages.md §5.5).
+    if let Some((md5, bytes)) = package.as_deref().and_then(patched_identity) {
+        *session.identity.lock().unwrap_or_else(|p| p.into_inner()) = (Some(md5), bytes as i64);
+    }
     session.package = package;
     let session = Arc::new(session);
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());
     Ok(session)
+}
+
+/// The patched image's MD5 and size where the package at `folder` lists patches.
+fn patched_identity(folder: &str) -> Option<(String, u64)> {
+    let manifest = emusen_galaxia::dotnet_files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let doc = emusen_galaxia::package::read(&manifest).ok()?.ok()?;
+    emusen_patch::package::patched_identity(&doc)
 }
 
 /// Every listed setting applied as the layers give it, game over console, `ApplyStored`.

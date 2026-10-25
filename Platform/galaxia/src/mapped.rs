@@ -11,6 +11,9 @@ use std::path::Path;
 pub struct Mapped {
     /// `None` for an empty file, which has nothing to map.
     map: Option<memmap2::Mmap>,
+    /// Bytes held in memory in place of a mapping: a packaged game's image with its soft patches applied
+    /// (EmuSen_GamePackages.md §5.4), unchanged and in place for the value's life as a mapping is.
+    held: Option<Box<[u8]>>,
     /// The file, open for the mapping's life after it, as the C# half holds its stream: on Windows its share mode is
     /// what refuses another program's writer, rename and deletion.
     _held: Option<File>,
@@ -41,21 +44,29 @@ impl Mapped {
             return Err(directory());
         }
         if meta.len() == 0 {
-            return Ok(Mapped { map: None, _held: None });
+            return Ok(Mapped { map: None, held: None, _held: None });
         }
         // SAFETY: the mapping is read-only and private to this value; the file's bytes are the caller's promise not to
         // change, as memmap2 asks: the program never writes a file it maps, and says so of other programs in §3.8.
         let map = unsafe { memmap2::Mmap::map(&file) }?;
-        Ok(Mapped { map: Some(map), _held: Some(file) })
+        Ok(Mapped { map: Some(map), held: None, _held: Some(file) })
     }
 
     /// No file: nothing mapped, as a console started with no disc is given.
     pub fn empty() -> Mapped {
-        Mapped { map: None, _held: None }
+        Mapped { map: None, held: None, _held: None }
+    }
+
+    /// Bytes held in memory standing in for a mapped file, read as one is; nothing is advised for them.
+    pub fn held(bytes: Vec<u8>) -> Mapped {
+        Mapped { map: None, held: Some(bytes.into_boxed_slice()), _held: None }
     }
 
     pub fn bytes(&self) -> &[u8] {
-        self.map.as_deref().unwrap_or(&[])
+        match &self.held {
+            Some(held) => held,
+            None => self.map.as_deref().unwrap_or(&[]),
+        }
     }
 
     /// Advises the system that the `len` bytes from `offset` will be read soon, so that it may read them from the

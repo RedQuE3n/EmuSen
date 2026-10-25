@@ -62,17 +62,29 @@ namespace EmuSen.Crystal.Managed
             });
         }
 
-        private StateRecord Record() => new()
+        private (string Md5, long Size)? PatchedIdentity()
         {
-            Console = Console,
-            Core = CoreFactory.Running(Core),
-            StateVersion = Core is IStateFormat format ? format.StateVersion : 0,
-            Build = BuildName,
-            SavedAt = DateTime.Now,
-            RomFile = Path.GetFileName(GameKey),
-            RomMd5 = GamePath is null ? null : _romMd5,
-            RomBytes = GamePath is null ? 0 : Interlocked.Read(ref _romBytes),
-        };
+            if (PackageRoot is null) return null;
+            try { return Galaxia.Media.GamePackage.Read(Path.Combine(PackageRoot, Galaxia.Media.GamePackage.FileName)).PatchedIdentity; }
+            catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException) { return null; }
+        }
+
+        // A state saved on a patched package's game records the patched image it was made on - see EmuSen_GamePackages.md §5.5.
+        private StateRecord Record()
+        {
+            var patched = GamePath is null ? null : PatchedIdentity();
+            return new()
+            {
+                Console = Console,
+                Core = CoreFactory.Running(Core),
+                StateVersion = Core is IStateFormat format ? format.StateVersion : 0,
+                Build = BuildName,
+                SavedAt = DateTime.Now,
+                RomFile = Path.GetFileName(GameKey),
+                RomMd5 = GamePath is null ? null : patched?.Md5 ?? _romMd5,
+                RomBytes = GamePath is null ? 0 : patched?.Size ?? Interlocked.Read(ref _romBytes),
+            };
+        }
 
         // Why the record says a state is not this machine's to load, or null: another console's, or this engine's version outside what the machine reads - see EmuSen_Backend.md §14.12.
         private string? Refusal(StateRecord record)

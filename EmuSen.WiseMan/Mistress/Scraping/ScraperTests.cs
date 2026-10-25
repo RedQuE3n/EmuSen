@@ -52,14 +52,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private HttpMessageHandler? _handler;
 
-        private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true, Func<string, string>? folderOf = null)
+        private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true, Func<string, string>? folderOf = null, Func<string, string?>? packageOf = null)
         {
             var client = new ScreenScraperClient(new HttpClient(_handler ?? _server), FakeScreenScraper.Developer, null);
             ScrapeChoices chosen = choices ?? new ScrapeChoices();
             var scraper = new Scraper(client, _store, _quota, () => chosen, handCover ?? ((_, _) => false),
                 path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock)
             {
-                IdlePoll = TimeSpan.FromMilliseconds(20), FolderOf = folderOf ?? (_ => ""),
+                IdlePoll = TimeSpan.FromMilliseconds(20), FolderOf = folderOf ?? (_ => ""), PackageOf = packageOf ?? (_ => null),
             };
             _open.Add(scraper);
             if (start) scraper.Start();
@@ -115,6 +115,50 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(ScrapeOutcome.Retry, result.Outcome);
             Assert.Contains("character set", result.Detail);
             Assert.True(scraper.IsRunning);
+        }
+
+        // A patched package's manifest beside the test's games: its patched image's hashes recorded, and the identity the scraper sends.
+        private string PatchedPackage(string name, byte[] patchedImage, string identity)
+        {
+            string folder = Path.Combine(_root, "Packages", name);
+            Directory.CreateDirectory(folder);
+            RomHashes t = RomHash.Of(patchedImage);
+            var p = EmuSen.Galaxia.Media.GamePackage.Create(name, "snes", "linked", new EmuSen.Galaxia.Media.PackageFile("image", "library", "snes/" + name));
+            p.Document["patches"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["file"] = "a.bps", ["format"] = "bps" });
+            p.Document["patched"] = new System.Text.Json.Nodes.JsonObject { ["size"] = t.Size, ["crc32"] = t.Crc32, ["md5"] = t.Md5, ["sha1"] = t.Sha1 };
+            p.Document["identity"] = identity;
+            Assert.True(p.Write(Path.Combine(folder, EmuSen.Galaxia.Media.GamePackage.FileName)));
+            return folder;
+        }
+
+        [Fact]
+        public void A_patched_package_is_scraped_by_its_dump_unless_its_identity_is_patched_and_then_by_the_patched_image_first()
+        {
+            byte[] dump = Filled(2048, 61), hack = Filled(2304, 62), base2 = Filled(2048, 63);
+            string original = Rom("Original (USA).sfc", dump), hacked = Rom("Hacked (USA).sfc", base2);
+            RomHashes d = RomHash.Of(dump), h = RomHash.Of(hack), d2 = RomHash.Of(base2);
+            var packages = new Dictionary<string, string>
+            {
+                [original] = PatchedPackage("Original (USA).sfc", hack, "original"),
+                [hacked] = PatchedPackage("Hacked (USA).sfc", hack, "patched"),
+            };
+            _server.Games.Add(new FakeGame(81, "Original", d.Md5));
+            _server.Games.Add(new FakeGame(82, "Hacked base", d2.Md5));
+            Scraper scraper = Start(packageOf: p => packages.GetValueOrDefault(p));
+
+            Queue(scraper, original, "snes", ScrapePriority.Shown);
+            Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
+            string asked = _server.JeuInfos.Single();
+            Assert.Equal((d.Md5, d.Crc32, d.Sha1, "2048"), (FakeScreenScraper.Param(asked, "md5"), FakeScreenScraper.Param(asked, "crc"), FakeScreenScraper.Param(asked, "sha1"), FakeScreenScraper.Param(asked, "romtaille")));
+
+            Queue(scraper, hacked, "snes", ScrapePriority.Shown);
+            ScrapeResult second = Next();
+            Assert.Equal(ScrapeOutcome.Found, second.Outcome);
+            string[] both = _server.JeuInfos.Skip(1).ToArray();
+            Assert.Equal(2, both.Length);
+            Assert.Equal((h.Md5, h.Sha1, "2304"), (FakeScreenScraper.Param(both[0], "md5"), FakeScreenScraper.Param(both[0], "sha1"), FakeScreenScraper.Param(both[0], "romtaille")));
+            Assert.Equal(d2.Md5, FakeScreenScraper.Param(both[1], "md5"));
+            Assert.Equal("file", second.MatchedBy);
         }
 
         [Fact]

@@ -120,6 +120,11 @@ Each medium of a console has its own mode, *Per game*, *Shared* or *Named*, and 
 | **Shared** | `<Noun> n`, the same file in every game | the default for a medium whose import exists (§9) |
 | **Named** | the name the player chose for slot *n* | — |
 
+**A packaged game's** *Per game* media are in its package instead: `<package>/saves/<package's name><suffix>`, the
+battery file's rule there (`EmuSen_GamePackages.md` §3.5, built 2026-10-25 at step 5, §14). The plain
+`Saves/<console>/<game><suffix>` is read until the first write copies it in, and is never removed. *Shared* and
+*Named* files stay in `Saves/<console>/Cards` and `Console`: they are the console's, not a game's.
+
 The **noun** is the medium's word for one of its kind, `Card`, `Pak`, `Cartridge`, `Backup RAM`, from the console's
 system pack (§4), and `Card` for a removable medium no pack knows, `Memory` for a console one. So the PlayStation's
 shared cards stay `Card 1` and `Card 2`, as 1.7 named them, and the Sega CD's are `Cartridge 1` and `Backup RAM 1`.

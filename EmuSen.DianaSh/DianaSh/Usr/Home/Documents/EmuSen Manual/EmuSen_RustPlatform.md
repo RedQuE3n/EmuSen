@@ -3477,3 +3477,21 @@ turns into the token's `OperationCanceledException`. The flag is the caller's fo
 **Tested**: `cargo test --profile test-checked` of `emusen-galaxia`, `emusen-platform` and `emusen-scrape`; the
 header's export list against the facade's (`The_library_has_every_export_the_facade_calls_and_no_other`); and the
 parity cases of `EmuSen_Galaxia.md` §5.4 and §3.10.
+
+## 40. Interface 25, 2026-10-25: the claim index of game packages
+
+Step 5 of `EmuSen_GamePackages.md` §7 (its §14 records it; `EmuSen_Galaxia.md` §3.11 and §5.5 describe the rules).
+Interface 24, the library tool's four job calls, is recorded in `EmuSen_GamePackages.md` §12.3. The number went from 24
+to 25 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.
+
+| Added | What |
+|---|---|
+| `emusen_galaxia_package_index` | every package folder under `Packages`, and each readable package's system, game and claimed files, as JSON |
+| `emusen_galaxia_package_resolve` | what a path opens as, `{"game", "package", "moved"}`, the manifest rewritten where a moved game was found; a refusal is `EMUSEN_PLATFORM_IO` with its words |
+| `EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM` (5), `_PACKAGE_STATE` (6), `_PACKAGE_RESUME_STATE` (7) | kinds of `emusen_galaxia_save_path` whose `rom` is the package's folder |
+
+Both new calls take the three folders as arguments rather than reading them, so that the parity class can run them
+over generated trees; the runtimes pass the tree's `Packages` and `Compressed` and the settings' `RomDirectory`.
+
+**Tested**: `cargo test --profile test-checked` of `emusen-galaxia`, `emusen-platform`, `emusen-crystal`,
+`emusen-library`, `emusen-library-tool` and `emusen-library-module`; the parity cases of `EmuSen_Galaxia.md` §3.11.

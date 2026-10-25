@@ -234,3 +234,70 @@ pub fn narrow<'a>(scan: &'a Scan, system: Option<&str>) -> (Outcome, Vec<&'a Gam
     };
     (outcome, games)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Temp(std::path::PathBuf);
+
+    impl Temp {
+        fn new(label: &str) -> Temp {
+            let dir = std::env::temp_dir().join(format!("emusen-scan-{label}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Temp(std::fs::canonicalize(&dir).unwrap())
+        }
+
+        fn at(&self, rel: &str) -> String {
+            self.0.join(rel).to_string_lossy().into_owned()
+        }
+
+        fn put(&self, rel: &str, bytes: &[u8]) {
+            let at = self.0.join(rel);
+            std::fs::create_dir_all(at.parent().unwrap()).unwrap();
+            std::fs::write(at, bytes).unwrap();
+        }
+    }
+
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_package_is_one_entry_and_nothing_it_claims_or_holds_is_listed_again() {
+        let t = Temp::new("packages");
+        t.put("roms/nes/Claimed.nes", b"NES\x1aclaimed");
+        t.put("roms/nes/Free.nes", b"NES\x1afree");
+        t.put("roms/psx/Disc.cue", b"FILE \"Disc.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
+        t.put("roms/psx/Disc.bin", &[0u8; 2352]);
+        t.put("compressed/psx/Disc.chd", b"not read");
+        t.put("compressed/psx/Stray.chd", b"not read either");
+        let manifest = |system: &str, game: &str, extra: &str| format!("{{\"format\":\"emusen-package\",\"version\":\"1.0\",\"system\":\"{system}\",\"mode\":\"linked\",\"game\":{game}{extra}}}");
+        t.put("packages/NES/Claimed.nes/package.json", manifest("nes", "{\"role\":\"image\",\"where\":\"library\",\"path\":\"nes/Claimed.nes\"}", "").as_bytes());
+        t.put("packages/NES/Claimed.nes/saves/Claimed.nes", b"NES\x1anot a game of its own");
+        t.put(
+            "packages/PlayStation/Disc.chd/package.json",
+            manifest("psx", "{\"role\":\"image\",\"where\":\"compressed\",\"path\":\"psx/Disc.chd\"}", ",\"container\":{\"type\":\"chd\",\"sources\":[{\"where\":\"library\",\"path\":\"psx/Disc.cue\"}]}").as_bytes(),
+        );
+        t.put("packages/NES/Gone.nes/package.json", manifest("nes", "{\"role\":\"image\",\"where\":\"library\",\"path\":\"nes/Gone.nes\"}", "").as_bytes());
+        t.put("packages/NES/Broken.nes/package.json", b"{ not json");
+        t.put("packages/NES/Broken.nes/Inside.nes", b"NES\x1a");
+        let ids: Vec<String> = ["nes", "psx"].iter().map(|s| s.to_string()).collect();
+        let beside = Beside { packages: Some(t.at("packages")), compressed: Some(t.at("compressed")) };
+        let found = scan_with(&[t.at("roms")], &beside, &ids, &Progress::default()).unwrap();
+        let shown: Vec<(String, Option<String>, Option<String>)> = found.games.iter().map(|g| (g.path.clone(), g.system.clone(), g.package.clone())).collect();
+        let expect = vec![
+            (t.at("roms/nes/Claimed.nes"), Some("nes".to_string()), Some(t.at("packages/NES/Claimed.nes"))),
+            (t.at("compressed/psx/Disc.chd"), Some("psx".to_string()), Some(t.at("packages/PlayStation/Disc.chd"))),
+            (t.at("roms/nes/Free.nes"), Some("nes".to_string()), None),
+            (t.at("compressed/psx/Stray.chd"), Some("psx".to_string()), None),
+        ];
+        assert_eq!(shown, expect);
+        assert_eq!(found.outcome, Outcome::Ok);
+        let plain = scan(&[t.at("roms")], &ids, &Progress::default()).unwrap();
+        assert_eq!(plain.games.iter().map(|g| g.path.clone()).collect::<Vec<_>>(), [t.at("roms/nes/Claimed.nes"), t.at("roms/psx/Disc.cue"), t.at("roms/nes/Free.nes")]);
+    }
+}

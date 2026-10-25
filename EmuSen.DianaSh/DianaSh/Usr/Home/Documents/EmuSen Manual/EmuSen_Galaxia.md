@@ -1,6 +1,6 @@
 # EmuSen.Galaxia — the librarian
 
-*This revision (2026-10-25): a dump's identity, whole, ranged, transformed and per track (§5.4), and a game package's manifest with the two directories packages and converted discs live in (§3.10), both in C# and Rust. Previously: on macOS the tree lives in `~/Library/Application Support/EmuSen`, outside the app bundle, and the bundle's manual is seeded into it (§3.4, 2026-09-27). Previously: the DianaSh shell was rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaShSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
+*This revision (2026-10-25, again): the claim index of game packages and "one game, one save" (§3.11), and `SaveLibrary` and `GameCheats` with a package root (§5.5), both in C# and Rust. Previously (2026-10-25): a dump's identity, whole, ranged, transformed and per track (§5.4), and a game package's manifest with the two directories packages and converted discs live in (§3.10), both in C# and Rust. Previously: on macOS the tree lives in `~/Library/Application Support/EmuSen`, outside the app bundle, and the bundle's manual is seeded into it (§3.4, 2026-09-27). Previously: the DianaSh shell was rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaShSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
 
 ---
 
@@ -368,6 +368,50 @@ parity cases `A_manifest_is_taken_and_laid_out_to_the_same_bytes_both_ways`,
 `A_manifest_is_written_and_read_back_to_the_same_bytes_both_ways`; in Rust, `package.rs`'s five cases and the C
 layer's.
 
+### 3.11 The claim index, and one game, one save (2026-10-25)
+
+*Built at step 5 of `EmuSen_GamePackages.md` §7; §14 there is the record.* Which package claims which file is
+Galaxia's, since it is where a game's files are (§3.8, §3.10): `EmuSen.Galaxia/Media/GamePackages.cs` and
+`Platform/galaxia/src/claims.rs`, held to one answer by the parity class.
+
+- **The index is the manifests.** Every folder under `Packages` holding `package.json` is a package and is not looked
+  inside; hidden folders are passed over, subfolders taken in ordinal order, 32 levels at most. A package claims its
+  game, its companions, and the library files a converted disc was made from (`container.sources`), each by the full
+  path its `where` and `path` name: `library` under `AppSettings.RomDirectory`, `compressed` under `Compressed`,
+  `package` under its own folder, or `absolute`. A manifest this build refuses is a package's folder that claims
+  nothing. **No second index is kept**, so that it cannot disagree with the manifests: 1,003 packages are walked and
+  read in 19 ms on the desktop with a warm cache [M, 2026-10-25].
+- **Resolving a path** (`GamePackages.Resolve`, `claims::resolve`) answers the game file to open and the package whose
+  stores it uses:
+  - a package's folder, or its `package.json`, opens its game;
+  - a file a package claims opens that package's game, or the file itself where that game is gone;
+  - a file no package claims, whose size and then hashes are those of a package's game that is gone, is that game
+    moved: the manifest is rewritten to name it, with each companion under the game's old folder moved under its new
+    one;
+  - anything else opens as it is, as before packages.
+
+  A claimed game whose size or time differs from `seen` is hashed: still the dump, `seen` is rewritten; another
+  dump is refused with words naming both hashes. The hashes compared are `dump.file`, else the sheet's for a disc
+  game, else for a zip the archive's own in `container`; a CHD's dump is the original's, so a converted disc is not
+  hashed at open (the CHD tool checks it). A package whose game is gone and not found by size and hashes in the
+  library is refused with words.
+- **The two runtimes resolve at open**, the C# `ManagedRuntime.Open` and Crystal in Rust's `open`, so every frontend
+  and the shell's `core` reach one package by either path. The session keeps the package root; the engine's battery
+  files and the session's states take it (§5.5).
+- **The library scan** walks `Packages` and `Compressed` beside the library (`RomLibrary.Scan`; `emusen_library_scan`
+  1.2's `packages` and `compressed`): nothing inside a package's folder is a game of its own, no claimed file is listed,
+  and each package whose game is there is one entry, its path the game's and its shelf the manifest's `system`. No
+  file is read for a claim.
+- **The interface, 25**: `emusen_galaxia_package_index` and `_package_resolve` (JSON answers; a refusal is
+  `EMUSEN_PLATFORM_IO` with its words, `IOException` in C#), and the save kinds `EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM`,
+  `_STATE` and `_RESUME_STATE`.
+
+**Tests**: `GalaxiaParityTests`' `The_claim_index_is_the_same_both_ways`,
+`A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` (each half over its own copy of a tree, the
+manifests it leaves compared byte for byte), `A_packaged_game_s_saves_and_states_are_named_alike_both_ways_by_the_package_s_own_name`
+and `A_packaged_game_s_cheat_list_is_kept_in_its_package`; `LibraryParityTests.A_library_with_packages_beside_it_is_listed_alike`;
+in Rust, `claims.rs`'s two cases and `emusen-library`'s package scan.
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.
@@ -458,6 +502,30 @@ record's provenance line is added either way. A record written before this chang
 engine's, and is judged as before. That is the one case still judged by the old rule, and it errs as before: a
 pre-change VenusRT record read by C# Venus is called a newer build's.
 
+### 5.5 A packaged game's saves (2026-10-25)
+
+*`EmuSen_GamePackages.md` §3.5, built at step 5 (§14 there).* A package root is a parameter, as the state directory
+override is (§5.1), and not a lookup: the runtime resolves it once at open (§3.11) and passes it down.
+
+```csharp
+string SramPathFor(romPath, console, packageRoot)                  // <package>/saves/<name>.srm
+string StatePathFor(romPath, slot, directoryOverride, packageRoot) // <package>/states/<name>[.slotN].state
+string ResumeStatePathFor(romPath, directoryOverride, packageRoot) // <package>/states/<name>.resume.state
+GameCheats.For(console, romPath, packageRoot)                      // <package>/cheats.json
+```
+
+- **`<name>` is the package's own**: its folder's name less the extension, which is the game file's stem when the
+  package is made and does not change when the game moves or is renamed. So a game opened by its plain path, by its
+  package, or at a new place found by its hashes reaches one save.
+- **A package root wins over the state folder setting**, since a packaged game's states are its package's.
+- **What was kept before is read until the first write copies it in**: `BatterySave.Open` with a package root names
+  the plain `Saves/<console>/<stem>` save (then its earlier homes) as the one to read, as it already did for a save of
+  2026-09-28's move, and `Settle` copies it in; `GameCheats` reads the console's list until the package has its own.
+  Nothing is removed. `pkg migrate` copies them all at once (`man pkg`).
+- **Both halves**: `SaveLibrary.Managed`'s three `Package…PathFor` and `saves.rs`' `package_sram_path`,
+  `package_state_path` and `package_resume_state_path`, held alike by the parity class; `GameCheats`' package file is
+  its C# alone, since only Mistress keeps a cheat list.
+
 ### 5.4 A ROM's identity (2026-09-21)
 
 *Extended 2026-10-25 (`EmuSen_GamePackages.md` §2.2, §11.1): `RomHash` is the one owner of a dump's hashes.*
@@ -527,6 +595,9 @@ In `EmuSen.WiseMan/Galaxia/`:
   transform hashed only where it changes the bytes; each track of generated sheets (one file a track, one file of
   three tracks in two modes, a WAVE track) equal to the generated bytes' hashes; a sheet refused alike.
 - **`GamePackageTests`** and the manifest's parity cases (§3.10).
+- **The claim index's parity cases** (§3.11), and **`GamePackageGateTests`**: `pkg make` and `pkg migrate` through the
+  platform library leave the library's every file as it was, a moved game is found again, and `pkg check` catches a
+  changed file and a missing one.
 - **`SaveLibraryTests`** — both names, slot 1's unsuffixed form, blank-override fallback, and that the ROM's own folder never leaks into the answer.
 
 And, unchanged and still green, `DianaSh/HierTests.cs` and `DianaSh/DianaShSandboxTests.cs` — see §2 for why their staying untouched is the point.

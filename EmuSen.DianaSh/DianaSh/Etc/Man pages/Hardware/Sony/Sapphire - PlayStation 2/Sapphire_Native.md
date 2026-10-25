@@ -4241,12 +4241,13 @@ boundary unless the ratio is a power of two, and each formula in its document's 
 for word; `generated_textured_primitives_draw_as_the_model_draws_them` (six rounds of 120 textured primitives of every
 kind over 16 pages of generated memory, each with random TEX0 in every PSM and CLUT mode, TEX1, CLAMP, MIPTBP1 and 2,
 TEXA, TEXCLUT and FOGCOL, UV or STQ with Q of either sign, fog and shading at random: every pixel equal between the
-source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`. Lib **43 of 43** (two new, on
-`exact`'s quotient and logarithm against direct computation). The crate's other tests unchanged, on the tree with S17
-beneath: `cop0` **19 of 19**, `dmac` **17 of 17**, `draw` **13 of 13**, `fpu` **9 of 9**, `gs` **12 of 12**,
-`interpreter` **23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of 13**, `programs` **3 of 3**, `sif`
-**5 of 5**, `vu0` **14 of 14**, `vu_micro` **24 of 24**; lib, `gs`, `draw` and `texture` also under `test-checked`;
-clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`) **5 of 5**.
+source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`. Lib **46 of 46** (two new, on
+`exact`'s quotient and logarithm against direct computation). The crate's other tests unchanged, on the tree with S17,
+S20 and S14 beneath: `cop0` **19 of 19**, `dmac` **18 of 18**, `draw` **13 of 13**, `fpu` **9 of 9**, `gs` **12 of
+12**, `interpreter` **23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of 13**, `pcrtc` **5 of 5**,
+`programs` **3 of 3**, `sif` **5 of 5**, `vif` **12 of 12**, `vu0` **14 of 14**, `vu_micro` **24 of 24**; lib, `gs`,
+`draw` and `texture` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`) **5 of
+5**.
 
 ### 31.7 On the referees (measured 2026-10-25)
 

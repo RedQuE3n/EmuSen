@@ -1,0 +1,538 @@
+#!/usr/bin/env python3
+"""Runs an EE program on a PlayStation 2 referee as a black box and prints its outputs only: RAM words.
+
+See Sapphire_Referees.md §2 for what each referee is, how it is driven and why, and §3 for how their outputs are
+weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
+
+    ps2referee.py fetch
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] ADDRESS:WORDS ...
+    ps2referee.py boot REFEREE DISC [--bios MARKET] [--for N]
+
+REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
+core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
+`americas` (the default), `europe` or `japan`, the gates' image of that market, reached through a link in the cache's
+BIOS folder; Play! takes none. --for is wall seconds for the standalone referees and frames for the probe. --until
+ends a standalone run as soon as the word at ADDRESS reads VALUE (hexadecimal both); the record is read then. ADDRESS
+is hexadecimal, WORDS decimal. `boot` runs a disc for N seconds and prints only what the referee's log says of the
+boot and the time it took, never the disc's bytes or a picture.
+
+Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
+private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
+ps2-referees.sha256, refuses any whose SHA-256 differs, unpacks them, and makes the BIOS folder of links. Exit codes:
+0 done, 1 a refused or failed run, 2 a usage error.
+"""
+import fcntl
+import hashlib
+import json
+import os
+import random
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+PINS = HERE.parent / "ps2-referees.sha256"
+CACHE = Path.home() / ".cache/emusen/probe/sapphire/referees"
+PROBE = Path(os.environ.get("EMUSEN_PS2_PROBE", Path.home() / ".cache/emusen/probe/sapphire/probe/probe"))
+CORES = Path.home() / ".cache/emusen/probe/libretro/cores"
+BIOS_HOME = Path.home() / "Documents/BIOS/PS2"
+# The gates' images (Sapphire_Plan.md §11 Q9, Sapphire_Native.md §12.7); only links to them are ever made.
+MARKETS = {"americas": "ps2-0230a-20080220.bin", "europe": "ps2-0230e-20080220.bin", "japan": "ps2-0200j-20040614.bin"}
+LIBRETRO = {"lrps2": "pcsx2", "pcee2": "pcee2", "play_libretro": "play"}
+STANDALONE = ("pcsx2", "play")
+EE_RAM = 32 << 20
+
+# PCSX2's settings for a headless black-box run (Sapphire_Referees.md §2.1): no wizard, no prompts, the software
+# renderer, no audio device, PINE on, fast boot so an ELF is entered without the BIOS's menu.
+PCSX2_SETTINGS = {
+    "UI": {"SetupWizardIncomplete": "false", "ConfirmShutdown": "false", "InhibitScreensaver": "false"},
+    "EmuCore": {"EnablePINE": "true", "EnableFastBoot": "true", "EnableDiscordPresence": "false", "EnablePatches": "false",
+                "WarnAboutUnsafeSettings": "false"},
+    "EmuCore/GS": {"Renderer": "13"},
+    "SPU2/Output": {"Backend": "Null", "OutputMuted": "true"},
+    "Logging": {"EnableFileLogging": "true"},
+}
+
+
+def die(message, code=1):
+    print(message, file=sys.stderr)
+    sys.exit(code)
+
+
+def pins():
+    out = {}
+    for line in PINS.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            name, sha, url = line.split()[:3]
+            out[name] = (sha, url)
+    return out
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def bios_folder(cache=CACHE, home=BIOS_HOME):
+    """The referees' BIOS folder: links to the gates' images, made without opening them (Sapphire_Referees.md §2)."""
+    folder = cache / "system/pcsx2/bios"
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in MARKETS.values():
+        link = folder / name
+        if link.is_symlink() and os.readlink(link) == str(home / name):
+            continue
+        if link.exists() or link.is_symlink():
+            if not link.is_symlink():
+                die(f"{link} is a file, not a link: the BIOS folder holds links only")
+            link.unlink()
+        link.symlink_to(home / name)
+    for entry in folder.glob("*.bin"):
+        if not entry.is_symlink():
+            die(f"{entry} is not a link: the BIOS folder holds links to images only")
+    return folder
+
+
+def fetch():
+    CACHE.mkdir(parents=True, exist_ok=True)
+    for name, (sha, url) in pins().items():
+        path = CACHE / name
+        if not path.exists():
+            print(f"fetching {url}")
+            urllib.request.urlretrieve(url, path)
+        if sha256(path) != sha:
+            die(f"{name}: SHA-256 is not the pinned one; re-pinning is a deliberate edit of {PINS.name}")
+        folder = CACHE / ("pcsx2" if name.startswith("pcsx2") else "play")
+        if not (folder / "squashfs-root").exists():
+            path.chmod(0o755)
+            folder.mkdir(exist_ok=True)
+            subprocess.run([str(path), "--appimage-extract"], cwd=folder, check=True, stdout=subprocess.DEVNULL)
+    bios_folder()
+    resources = CACHE / "system/pcsx2/resources"
+    if not resources.is_symlink():
+        resources.symlink_to(CACHE / "pcsx2/squashfs-root/usr/bin/resources")
+    print("ready")
+
+
+def ini_merge(text, wanted):
+    """An INI's text with each wanted key set, sections and keys otherwise kept in their order."""
+    sections, order, current = {}, [], None
+    for line in text.splitlines():
+        m = re.match(r"\[(.+)\]$", line.strip())
+        if m:
+            current = m.group(1)
+            if current not in sections:
+                order.append(current)
+                sections[current] = {}
+        elif current and "=" in line:
+            k, v = line.split("=", 1)
+            sections[current][k.strip()] = v.strip()
+    for section, values in wanted.items():
+        if section not in sections:
+            sections[section] = {}
+            order.append(section)
+        sections[section].update(values)
+    return "".join(f"[{s}]\n" + "".join(f"{k} = {v}\n" for k, v in sections[s].items()) + "\n" for s in order)
+
+
+class PineFail(Exception):
+    """PINE's FAIL answer: PCSX2 gives it while no machine is running."""
+
+
+class Pine:
+    """A PINE client on a Unix socket: each message a little-endian u32 size counting itself, then an opcode and its
+    arguments; each answer the size, a result code (0 OK, FFh FAIL) and its value (Sapphire_Referees.md §2.1)."""
+    READ32, VERSION, TITLE, ID, STATUS = 2, 8, 11, 12, 15
+
+    def __init__(self, path, timeout=5.0):
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.settimeout(timeout)
+        self.s.connect(str(path))
+
+    def close(self):
+        self.s.close()
+
+    def _ask(self, opcode, args=b""):
+        body = bytes([opcode]) + args
+        self.s.sendall(struct.pack("<I", 4 + len(body)) + body)
+        head = self._exactly(4)
+        size = struct.unpack("<I", head)[0]
+        if size < 5:
+            raise ValueError(f"a PINE answer of {size} bytes")
+        rest = self._exactly(size - 4)
+        if rest[0] != 0:
+            raise PineFail(f"PINE answered FAIL to opcode {opcode}")
+        return rest[1:]
+
+    def _exactly(self, n):
+        out = b""
+        while len(out) < n:
+            chunk = self.s.recv(n - len(out))
+            if not chunk:
+                raise EOFError("PINE closed the socket")
+            out += chunk
+        return out
+
+    def read32(self, address):
+        value = self._ask(self.READ32, struct.pack("<I", address))
+        if len(value) != 4:
+            raise ValueError(f"a Read32 answer of {len(value)} bytes")
+        return struct.unpack("<I", value)[0]
+
+    def words(self, address, count):
+        return [self.read32(address + 4 * i) for i in range(count)]
+
+    def text(self, opcode):
+        """An answer that is a string: its u32 length, then the bytes, a NUL ending them."""
+        value = self._ask(opcode)
+        n = struct.unpack("<I", value[:4])[0]
+        return value[4:4 + n].rstrip(b"\0").decode(errors="replace")
+
+    def version(self):
+        return self.text(self.VERSION)
+
+
+def confined(cmd, name):
+    """The command in a user scope of its own, which `reap` stops with all it started (Diamond_Referees.md §2.5)."""
+    unit = f"emusen-referee-{os.getpid()}-{name}"
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "-p", "CPUWeight=20", "--"] + cmd, unit
+
+
+def reap(unit):
+    subprocess.run(["systemctl", "--user", "stop", f"{unit}.scope"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def in_private_kwin(inner, seconds, name, done):
+    """`inner`, a Python script, run inside a private virtual KWin with its own message bus: never the desktop. The
+    scope is stopped as soon as `done` exists, since the compositor's own exit takes some ten seconds more."""
+    env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    env["XDG_CONFIG_HOME"] = str(CACHE / "kwin-config")
+    cmd, unit = confined(["timeout", str(int(seconds) + 60), "dbus-run-session", "--", "kwin_wayland", "--virtual", "--no-lockscreen",
+                          "--no-global-shortcuts", "--no-kactivities", "--xwayland", "--socket", f"emusen-referee-{os.getpid()}",
+                          "--exit-with-session", f"{sys.executable} -I {inner}"], name)
+    p = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        while p.poll() is None and not Path(done).exists():
+            time.sleep(0.05)
+    finally:
+        reap(unit)
+        p.wait()
+
+
+def free_slot():
+    """A PINE slot whose socket does not exist now, so that a run never reads another PCSX2's RAM."""
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+    while True:
+        slot = random.randint(28100, 29999)
+        if not (runtime / f"pcsx2.sock.{slot}").exists():
+            return slot
+
+
+class Scan:
+    """RAM found in a referee's own process, which this script started, for a referee with no interface to it
+    (Sapphire_Referees.md §2.2): the done word searched for in the process's writable mappings through /proc/<pid>/mem,
+    as a debugger reads it, and every address read relative to where it was found, within that mapping only."""
+    LARGEST = 1 << 30
+
+    def __init__(self, pid, done, maps=None, mem=None):
+        self.pid, self.done, self.at, self.span, self.hits = pid, done, None, None, 0
+        self.maps = maps or f"/proc/{pid}/maps"
+        self.mem = mem or f"/proc/{pid}/mem"
+
+    def mappings(self):
+        for line in open(self.maps):
+            fields = line.split()
+            lo, hi = (int(x, 16) for x in fields[0].split("-"))
+            if fields[1].startswith("rw") and hi - lo <= self.LARGEST:
+                yield lo, hi
+
+    def find(self):
+        """Whether the done word is now in some mapping, word-aligned; the first place found is used from then on."""
+        needle = struct.pack("<I", self.done[1])
+        found = []
+        with open(self.mem, "rb", buffering=0) as m:
+            for lo, hi in self.mappings():
+                try:
+                    m.seek(lo)
+                    data = m.read(hi - lo)
+                except OSError:
+                    continue
+                i = data.find(needle)
+                while i >= 0:
+                    if (lo + i) % 4 == 0:
+                        found.append((lo + i, (lo, hi)))
+                    i = data.find(needle, i + 1)
+        self.hits = len(found)
+        if found:
+            self.at, self.span = found[0]
+        return bool(found)
+
+    def words(self, address, count):
+        host = self.at + address - self.done[0]
+        if host < self.span[0] or host + 4 * count > self.span[1]:
+            raise ValueError(f"{address:08X}+{4 * count} lies outside the mapping where the done word was found")
+        with open(self.mem, "rb", buffering=0) as m:
+            m.seek(host)
+            data = m.read(4 * count)
+        return list(struct.unpack(f"<{count}I", data))
+
+
+def cpu_seconds(pid):
+    """The process's user and system time so far, all its threads together."""
+    fields = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()
+    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+
+def inner_main(job):
+    """Inside the private compositor: starts the referee, waits for it to draw where a log is given, reads RAM when the
+    done word appears (through PINE or a scan), and writes the result file before ending the referee."""
+    env = dict(os.environ, **job.get("env", {}))
+    start = time.monotonic()
+    out = {"words": {}, "until": None}
+    since = lambda: round(time.monotonic() - start, 3)
+    with open(job["log"], "w") as log:
+        p = subprocess.Popen(job["cmd"], cwd=job["cwd"], env=env, stdout=log, stderr=subprocess.STDOUT)
+        reader = None
+        try:
+            # PCSX2 fails to acquire its render window when a PINE client connects before its GS opens (measured 2026-10-24).
+            while job.get("emulog") and since() < job["seconds"] and p.poll() is None:
+                text = open(job["emulog"], errors="replace").read() if os.path.exists(job["emulog"]) else ""
+                if "swap chain" in text or "GS failed to open" in text:
+                    break
+                time.sleep(0.05)
+            out["drawing"] = since()
+            while since() < job["seconds"] and p.poll() is None:
+                try:
+                    if reader is None:
+                        reader = Pine(job["socket"]) if job["socket"] else Scan(p.pid, job["until"])
+                        out["connected"] = since()
+                    if job["until"] is None:
+                        if out.get("cpu_from") is None:
+                            out["cpu_from"], cpu = since(), cpu_seconds(p.pid)
+                        if since() >= job["seconds"] - 2:
+                            out["cpu"] = round(cpu_seconds(p.pid) - cpu, 3)
+                            out["cpu_to"] = since()
+                            break
+                    elif isinstance(reader, Scan):
+                        if reader.find():
+                            out["until"], out["hits"] = since(), reader.hits
+                            break
+                        time.sleep(0.45)
+                    elif reader.read32(job["until"][0]) == job["until"][1]:
+                        out["until"] = since()
+                        break
+                except PineFail:
+                    pass
+                except OSError:
+                    if not job["socket"]:
+                        raise
+                    reader = None
+                time.sleep(0.05)
+            if job.get("ask") and isinstance(reader, Pine):
+                out["answers"] = {}
+                for op in job["ask"]:
+                    try:
+                        out["answers"][str(op)] = reader.text(op)
+                    except PineFail:
+                        out["answers"][str(op)] = None
+                try:
+                    out["status"] = struct.unpack("<I", reader._ask(Pine.STATUS)[:4])[0]
+                except PineFail:
+                    out["status"] = None
+            if out["until"] is not None and p.poll() is None:
+                for a, n in job["dumps"]:
+                    out["words"][str(a)] = reader.words(a, n)
+                if job["again"]:
+                    out["read"], cpu = since(), cpu_seconds(p.pid)
+                    time.sleep(job["again"])
+                    out["again"] = {str(a): reader.words(a, n) for a, n in job["dumps"]}
+                    out["reread"], out["cpu"] = since(), round(cpu_seconds(p.pid) - cpu, 3)
+        except (OSError, EOFError, ValueError, PineFail) as e:
+            out["error"] = str(e)
+        finally:
+            out["ended"], out["exit"] = since(), p.poll()
+            with open(job["result"] + ".part", "w") as f:
+                json.dump(out, f)
+            os.rename(job["result"] + ".part", job["result"])
+            p.kill()
+
+
+def run_inner(job, name, seconds):
+    """`job` run by inner_main inside a private compositor; its result, with the run's wall time."""
+    with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
+        job = dict(job, log=str(Path(tmp) / "log"), result=str(Path(tmp) / "result.json"), seconds=seconds)
+        if job.get("emulog") == "":
+            job["emulog"] = str(Path(tmp) / "emulog.txt")
+            job["cmd"] = [job["emulog"] if c == "@EMULOG@" else c for c in job["cmd"]]
+        inner = Path(tmp) / "inner.py"
+        inner.write_text(f"import json, sys\nsys.path.insert(0, {str(HERE)!r})\nimport ps2referee\nps2referee.inner_main(json.loads({json.dumps(job)!r}))\n")
+        began = time.monotonic()
+        in_private_kwin(inner, seconds, name, job["result"])
+        out = json.loads(Path(job["result"]).read_text()) if Path(job["result"]).exists() else {"words": {}}
+        out["wall"] = round(time.monotonic() - began, 3)
+        text = Path(job["emulog"]).read_text(errors="replace") if job.get("emulog") and Path(job["emulog"]).exists() else ""
+        return out, text
+
+
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True):
+    """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
+    settings file is shared."""
+    data = CACHE / "pcsx2-data"
+    with open(CACHE / "pcsx2.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        slot = free_slot()
+        ini = data / "PCSX2/inis/PCSX2.ini"
+        ini.parent.mkdir(parents=True, exist_ok=True)
+        wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
+                  "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]}}
+        ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
+        root = CACHE / "pcsx2/squashfs-root"
+        job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data)] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
+               "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "until": list(until) if until else None, "dumps": dumps, "again": again, "ask": [Pine.TITLE, Pine.ID],
+               "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
+        job["cmd"][-2:-2] = ["-logfile", "@EMULOG@"]
+        out, text = run_inner(job, "pcsx2", seconds)
+        out["bios_loaded"] = bios_loaded(text, market)
+        return out
+
+
+def run_play(target, seconds, until, dumps, again=0):
+    """Play!'s standalone release in a private KWin, its home folder the cache's, its RAM found by a scan of its process
+    (Sapphire_Referees.md §2.2). It takes no BIOS."""
+    root, home = CACHE / "play/squashfs-root", CACHE / "play-home"
+    home.mkdir(exist_ok=True)
+    job = {"cmd": [str(root / "usr/bin/Play"), "--elf", str(target)], "cwd": str(root), "socket": None,
+           "env": {"QT_QPA_PLATFORM": "xcb", "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_DATA_HOME": str(home / ".local/share"),
+                   "XDG_CACHE_HOME": str(home / ".cache")},
+           "until": list(until), "dumps": dumps, "again": again}
+    out, _ = run_inner(job, "play", seconds)
+    return out
+
+
+# Each core's options for a run (Sapphire_Referees.md §2.3): the market's image, and the software renderer, since the
+# probe offers no hardware context.
+LIBRETRO_OPTIONS = {"lrps2": ["pcsx2_renderer=Software (SW)"], "pcee2": ["pcsx2_renderer=software"], "play_libretro": []}
+
+
+def libretro_command(referee, target, market, frames, out):
+    core = LIBRETRO[referee]
+    cmd = [str(PROBE), str(target), str(out), str(frames), str(frames), "--core", str(CORES / f"{core}_libretro.so"), "--system", "ps2"]
+    if referee != "play_libretro":
+        cmd += ["--sysdir", str(CACHE / "system"), "--option", f"pcsx2_bios={MARKETS[market]}"]
+    for o in LIBRETRO_OPTIONS[referee]:
+        cmd += ["--option", o]
+    return cmd
+
+
+def record_words(dump, dumps):
+    """The words asked for, from a dump of the EE's RAM (its first 32 MiB are RAM from address 0)."""
+    return {str(a): [struct.unpack_from("<I", dump, (a & (EE_RAM - 1)) + 4 * i)[0] for i in range(n)] for a, n in dumps}
+
+
+def run_libretro(referee, target, market, frames, until, dumps):
+    """The reference probe on a PlayStation 2 core, the EE's RAM read at frame N (Sapphire_Referees.md §2.3); the probe's
+    other dumps are removed unread, since on the player's BIOS they hold its memory."""
+    bios_folder()
+    with tempfile.TemporaryDirectory(dir=CACHE) as tmp:
+        cmd, unit = confined(libretro_command(referee, target, market, frames, tmp), referee)
+        env = dict(os.environ, LD_LIBRARY_PATH=str(CACHE / "lib"))
+        began = time.monotonic()
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", cwd=tmp, env=env)
+        finally:
+            reap(unit)
+        out = {"wall": round(time.monotonic() - began, 3), "exit": p.returncode,
+               "refused": [line.split("context, ", 1)[1].split(", and")[0] for line in p.stdout.splitlines() if "hardware render context" in line],
+               "screen": next((line.split()[1:] for line in p.stdout.splitlines() if line.startswith("  ") and "RAM @" not in line), None)}
+        ram = next(Path(tmp).glob("*_ram_f*.bin"), None)
+        data = ram.read_bytes() if ram else b""
+        out["words"] = record_words(data, dumps) if len(data) >= EE_RAM else {}
+        if until:
+            out["until"] = bool(data) and struct.unpack_from("<I", data, until[0] & (EE_RAM - 1))[0] == until[1]
+        return out
+
+
+# What PCSX2's log says of each gate image when it loads it (measured 2026-10-24).
+BIOS_FOUND = {"americas": "BIOS Found: USA     v02.30", "europe": "BIOS Found: Europe  v02.30", "japan": "BIOS Found: Japan   v02.00"}
+
+
+def bios_loaded(log, market):
+    """Whether PCSX2's log says it loaded the image of the market given: a run on any other firmware is refused."""
+    return BIOS_FOUND[market] in log
+
+
+def main(argv):
+    if argv[:1] == ["fetch"]:
+        return fetch()
+    if len(argv) < 3 or argv[0] not in ("ram", "boot"):
+        die(__doc__, 2)
+    mode, referee, target = argv[0], argv[1], Path(argv[2]).resolve()
+    rest = argv[3:]
+
+    def option(name, default=None):
+        if name in rest:
+            i = rest.index(name)
+            value = rest[i + 1]
+            del rest[i:i + 2]
+            return value
+        return default
+
+    market = option("--bios", "americas")
+    if market not in MARKETS:
+        die(f"--bios is one of {', '.join(MARKETS)}", 2)
+    count = int(option("--for", "60"))
+    again = float(option("--again", "0"))
+    throttled = "--throttled" in rest
+    if throttled:
+        rest.remove("--throttled")
+    until = option("--until")
+    until = tuple(int(x, 16) for x in until.split("=")) if until else None
+    dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
+    if mode == "boot":
+        if referee != "pcsx2":
+            die("boot runs on pcsx2 only", 2)
+        out = run_pcsx2(target, market, count, None, [], 0, False)
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+        print(json.dumps({k: v for k, v in out.items() if k != "words"}))
+        return
+    if until is None and referee in STANDALONE:
+        die("--until names the done word, which a standalone run waits for", 2)
+    if referee == "pcsx2":
+        out = run_pcsx2(target, market, count, until, dumps, again, not throttled)
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+    elif referee == "play":
+        out = run_play(target, count, until, dumps, again)
+    elif referee in LIBRETRO:
+        out = run_libretro(referee, target, market, count, until, dumps)
+        if not out["words"] or (until and not out["until"]):
+            die(f"{referee}: no record in RAM at frame {count} (exit {out['exit']}; contexts refused: {', '.join(out['refused']) or 'none'})")
+    else:
+        die(f"unknown referee {referee}", 2)
+    if referee in STANDALONE and out.get("until") is None:
+        die(f"{referee}: the done word never appeared in {count} seconds ({out.get('error', 'no error')})")
+    print(json.dumps({k: v for k, v in out.items() if k not in ("words", "again")}))
+    for a, n in dumps:
+        ws = out["words"].get(str(a), [])
+        print(f"== RAM {a:08X} {n}")
+        for i in range(0, len(ws), 8):
+            print(" ".join("%08X" % w for w in ws[i:i + 8]))
+        if again:
+            ws = out.get("again", {}).get(str(a), [])
+            print(f"== RAM {a:08X} {n} again")
+            for i in range(0, len(ws), 8):
+                print(" ".join("%08X" % w for w in ws[i:i + 8]))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

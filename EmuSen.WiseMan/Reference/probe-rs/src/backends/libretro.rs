@@ -101,6 +101,29 @@ fn boots_openbios_without_firmware(core: &str) -> bool {
     matches!(core, "beetle-psx" | "beetle-psx-hw" | "swanstation")
 }
 
+/// A hardware context's name as libretro.h spells it, for the refusal SET_HW_RENDER is answered with (Sapphire_Referees.md §2.3).
+fn hw_context_name(kind: sys::retro_hw_context_type) -> &'static str {
+    match kind {
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_NONE => "none",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGL => "OpenGL",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGLES2 => "OpenGL ES 2",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGL_CORE => "OpenGL core",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGLES3 => "OpenGL ES 3",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGLES_VERSION => "OpenGL ES",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_VULKAN => "Vulkan",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_D3D11 => "Direct3D 11",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_D3D10 => "Direct3D 10",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_D3D12 => "Direct3D 12",
+        sys::retro_hw_context_type_RETRO_HW_CONTEXT_D3D9 => "Direct3D 9",
+        _ => "an unknown context",
+    }
+}
+
+/// The line a refused SET_HW_RENDER prints: the context and the version the core asked for.
+fn hw_refusal(kind: sys::retro_hw_context_type, major: c_uint, minor: c_uint) -> String {
+    format!("[WARN] the core asked for a hardware render context, {} {major}.{minor}, and was refused: the probe has none\n", hw_context_name(kind))
+}
+
 /// Whether a --sysdir holds any file at all.
 fn has_dumps(dir: &str) -> bool {
     !dir.is_empty() && std::fs::read_dir(dir).is_ok_and(|mut d| d.any(|e| e.is_ok_and(|e| e.path().is_file())))
@@ -312,6 +335,14 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_GEOMETRY => true,
+
+        sys::RETRO_ENVIRONMENT_SET_HW_RENDER => {
+            if !data.is_null() {
+                let hw = unsafe { &*data.cast::<sys::retro_hw_render_callback>() };
+                print!("{}", hw_refusal(hw.context_type, hw.version_major, hw.version_minor));
+            }
+            false
+        }
 
         sys::RETRO_ENVIRONMENT_GET_LOG_INTERFACE => {
             unsafe { (*data.cast::<sys::retro_log_callback>()).log = Some(log_shim()) };
@@ -998,6 +1029,15 @@ mod tests {
 
     // "ram" on an NES, "wram" on the two machines whose native backends use
     // that name - a cross-emulator diff compares columns by name.
+    #[test]
+    fn a_refused_hardware_context_is_named_with_its_version() {
+        assert_eq!(hw_refusal(sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGL_CORE, 3, 3), "[WARN] the core asked for a hardware render context, OpenGL core 3.3, and was refused: the probe has none\n");
+        assert_eq!(hw_context_name(sys::retro_hw_context_type_RETRO_HW_CONTEXT_VULKAN), "Vulkan");
+        assert_eq!(hw_context_name(sys::retro_hw_context_type_RETRO_HW_CONTEXT_OPENGL), "OpenGL");
+        assert_eq!(hw_context_name(sys::retro_hw_context_type_RETRO_HW_CONTEXT_D3D11), "Direct3D 11");
+        assert_eq!(hw_context_name(sys::retro_hw_context_type_RETRO_HW_CONTEXT_DUMMY), "an unknown context");
+    }
+
     #[test]
     fn anchor_space_follows_the_system() {
         let mut backend = LibretroBackend::new("/dev/null");

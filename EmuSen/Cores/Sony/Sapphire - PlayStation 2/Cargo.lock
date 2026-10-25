@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "emusen-mips"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-native"
 version = "0.1.0"
 
@@ -10,5 +14,6 @@ version = "0.1.0"
 name = "sapphire"
 version = "0.1.0"
 dependencies = [
+ "emusen-mips",
  "emusen-native",
 ]

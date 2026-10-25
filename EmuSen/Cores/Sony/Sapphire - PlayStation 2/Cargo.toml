@@ -12,6 +12,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
 
+[dev-dependencies]
+# The assembler of the referees' programs, for examples/elf.rs and tests/programs.rs (Sapphire_Referees.md §4.1).
+emusen-mips = { path = "../../Shared/emusen-mips" }
+
 [profile.release]
 panic = "abort"
 opt-level = 3

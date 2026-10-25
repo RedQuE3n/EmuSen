@@ -4605,6 +4605,10 @@ which the classes the change reaches were added: `DiamondShellTests`, `SaveMedia
   kit's C1-C15 passing on the program and both discs, with C16 (`MEDIA`, the drive empty for every image) and C22 (the
   console started empty, two machines alike over 120 frames, a state carried to a third, the drive empty and `MEDIA`
   claimed) now run on Sapphire and passing.
+- **After the rebase onto WiseMan** (S19 and the game packages' patched saves beneath): Sapphire 334 of 334;
+  `emusen-ps2-card` 5, `emusen-systems` 41, `emusen-platform` 33, 4 and 3, `emusen-savemedia` 3; WiseMan, every class
+  above with `SapphireTests` and every `MemoryCards` case of the fit audit and the specification, **501 of 501**. The
+  OSDSYS and referee runs of §30.18 and §30.19 were made on the tree before the rebase, S24's with part B.
 
 ### 30.23 What was read for part B
 

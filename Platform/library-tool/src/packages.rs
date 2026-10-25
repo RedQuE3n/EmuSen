@@ -465,8 +465,9 @@ fn files_in(folder: &str, keep: impl Fn(&str) -> bool) -> Vec<String> {
 
 /// `pkg migrate`: the game's existing stores copied into its package once (§3.5, `DataMigration`'s rule): its battery
 /// saves and per-game save media from `Saves/<console>` and the places earlier builds kept them, its states and their
-/// pictures from the state folder, and its cheat list. Nothing is overwritten, moved or removed; a file already in the
-/// package wins. `migrated` with what was copied, or `nothing`.
+/// pictures from the state folder with each state's record, its cheat list, its own settings with its crop, and its art
+/// from the media store (§18.4). Nothing is overwritten, moved or removed; a file already in the package wins.
+/// `migrated` with what was copied, or `nothing`.
 pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
@@ -504,8 +505,16 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
         }
     }
     let state_folder = ctx.state_folder.clone().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| ctx.tree.save_states());
+    let mut states: Vec<(String, String)> = Vec::new();
     for f in files_in(&state_folder, |n| state_of(n, &stem)) {
-        from.push((path::combine_all(Style::HOST, &[folder, package::STATES_FOLDER, &renamed(&f)]), f));
+        let to = path::combine_all(Style::HOST, &[folder, package::STATES_FOLDER, &renamed(&f)]);
+        if f.ends_with(emusen_galaxia::saves::STATE_EXTENSION) {
+            states.push((to.clone(), f.clone()));
+        }
+        from.push((to, f));
+    }
+    for (to, art) in art_of(ctx, &doc, folder, game.as_deref()) {
+        from.push((to, art));
     }
     let lists = [cheats::game_list(Style::HOST, Some(console), game.as_deref().or(Some(rel))), cheats::game_list(Style::HOST, None, game.as_deref().or(Some(rel)))];
     if let Some(list) = lists.iter().flatten().map(|l| path::combine_all(Style::HOST, &[&ctx.tree.config(), &l.category, &l.file_name()])).find(|p| dotnet_files::file_exists(p)) {
@@ -522,15 +531,117 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
             Err(w) => failed.push(format!("{source}: {w}")),
         }
     }
+    match settings_into(ctx, &system.id, folder, game.as_deref().unwrap_or(rel)) {
+        Ok(Some((to, source))) => copied.push((to, source)),
+        Ok(None) => {}
+        Err(Some(w)) => failed.push(w),
+        Err(None) => kept += 1,
+    }
+    let records = records_into(ctx, &states, &mut failed);
     let list = Value::Array(copied.iter().map(|(to, source)| obj(vec![("from", text(source)), ("to", text(&package_rel(ctx, to)))])).collect());
     let outcome = if !failed.is_empty() {
         Outcome::said("failed", format!("{} file(s) could not be copied: {}", failed.len(), failed.join("; ")))
-    } else if copied.is_empty() {
-        Outcome::said("nothing", if kept > 0 { "everything was already in the package" } else { "the game has no saves, states or cheats to copy" })
+    } else if copied.is_empty() && records.copied == 0 {
+        Outcome::said("nothing", if kept > 0 { "everything was already in the package" } else { "the game has no saves, states, records, settings, art or cheats to copy" })
     } else {
         Outcome::new("migrated")
     };
-    head(&doc, outcome.with("copied", list).with("kept", Value::number(kept)))
+    let outcome = outcome.with("copied", list).with("kept", Value::number(kept)).with("records", Value::number(records.copied));
+    head(&doc, match records.unread {
+        Some(why) => outcome.with("records_words", text(&format!("the states' records were not copied: {why}"))),
+        None => outcome,
+    })
+}
+
+/// What `pkg migrate` did with the states' records: how many it copied, and why none could be read, if so.
+struct Records {
+    copied: u64,
+    unread: Option<String>,
+}
+
+/// Each copied state's record, from states.db (or the records.db it was copied from), written beside the state in the
+/// package; a state already there takes its record only while it is still the same bytes as the one copied from
+/// (EmuSen_GamePackages.md §18.4). Nothing is written to either database.
+fn records_into(ctx: &Context, states: &[(String, String)], failed: &mut Vec<String>) -> Records {
+    if states.is_empty() {
+        return Records { copied: 0, unread: None };
+    }
+    let Some(sqlite) = ctx.sqlite.clone() else { return Records { copied: 0, unread: Some("this program has no SQLite loaded to read states.db with".into()) } };
+    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
+    let mut copied = 0;
+    for (to, source) in states {
+        let Some(at) = emusen_galaxia::saves::package_record_path(to) else { continue };
+        if dotnet_files::file_exists(&at) || !dotnet_files::file_exists(to) || std::fs::read(to).ok() != std::fs::read(source).ok() {
+            continue;
+        }
+        let Some(record) = emusen_crystal::states::kept_record(sqlite.clone(), &library, source) else { continue };
+        match emusen_crystal::states::write_package_copy(to, &record) {
+            Ok(()) => copied += 1,
+            Err(w) => failed.push(format!("{source}'s record: {w}")),
+        }
+    }
+    Records { copied, unread: None }
+}
+
+/// The game's own settings, the runtime's file of them, copied into the package's `settings.json`, with the crop
+/// games.db holds for the game added as its `Crop` where the package's has none yet (§18.2): the file written and what
+/// it came from; none for nothing to copy; `Err(None)` for a package that already has them, `Err(Some)` for a failure.
+fn settings_into(ctx: &Context, system: &str, folder: &str, game: &str) -> Result<Option<(String, String)>, Option<String>> {
+    let plain = emusen_crystal::settings::game_settings_path(&ctx.tree, system, game);
+    let target = emusen_crystal::settings::package_settings_path(folder);
+    let crop = crop_of(ctx, game).map(|c| [c.left, c.right, c.top, c.bottom].iter().map(|v| emusen_dotnet::json::format_f64(*v).unwrap_or_default()).collect::<Vec<_>>().join(" "));
+    let has_plain = dotnet_files::file_exists(&plain);
+    let has_crop = |values: &[(String, String)]| values.iter().any(|(k, _)| k == CROP_KEY);
+    if dotnet_files::file_exists(&target) {
+        let mut values = emusen_crystal::settings::values_at(&target);
+        let Some(crop) = crop.filter(|_| !has_crop(&values)) else { return if has_plain { Err(None) } else { Ok(None) } };
+        values.push((CROP_KEY.into(), crop));
+        return emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, "games.db".into()))).map_err(Some);
+    }
+    match crop {
+        None if has_plain => std::fs::read(&plain).map_err(|e| Some(format!("{plain}: {e}"))).and_then(|b| emusen_galaxia::atomic::write(&target, &b).map_err(Some)).map(|()| Some((target, plain))),
+        None => Ok(None),
+        Some(crop) => {
+            let mut values = if has_plain { emusen_crystal::settings::values_at(&plain) } else { Vec::new() };
+            if !has_crop(&values) {
+                values.push((CROP_KEY.into(), crop));
+            }
+            emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, if has_plain { plain } else { "games.db".into() }))).map_err(Some)
+        }
+    }
+}
+
+/// The game's crop in its settings, `GameSettings.CropKey`.
+const CROP_KEY: &str = "Crop";
+
+/// The crop games.db holds for a game, read only; none where there is none, or no SQLite to read it with.
+fn crop_of(ctx: &Context, game: &str) -> Option<emusen_library::records::Crop> {
+    let sqlite = ctx.sqlite.clone()?;
+    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
+    let at = path::combine(Style::HOST, &library, "games.db");
+    if !dotnet_files::file_exists(&at) {
+        return None;
+    }
+    let db = emusen_sqlite::Connection::open_read_only(sqlite, &at).ok()?;
+    emusen_library::records::crop(&db, &path::full_path(game)).ok().flatten()
+}
+
+/// The game's art in the media store, each type's file to copy and where in the package it goes, named by the
+/// package's name (§18.3); a type the package already has a file of is left.
+fn art_of(ctx: &Context, doc: &Value, folder: &str, game: Option<&str>) -> Vec<(String, String)> {
+    let (Some(game), Some(system)) = (game, doc.get("system").and_then(Value::as_str)) else { return Vec::new() };
+    let store = ctx.tree.directory(emusen_galaxia::tree::Directory::Media).unwrap_or_default();
+    let named = emusen_scrape::media::Game { file: game, folder_path: emusen_galaxia::game_folders::of(ctx.library.as_deref(), game), folder: false };
+    let mut found = Vec::new();
+    for kind in emusen_scrape::kinds::ALL_FOLDER_ORDER {
+        if emusen_scrape::media::find_in_package(folder, kind.esde_type).is_some() {
+            continue;
+        }
+        if let Some(art) = emusen_scrape::media::find_in(&store, system, &named, kind.esde_type) {
+            found.push((package::media_path(folder, kind.folder, path::extension(Style::HOST, &art)), art));
+        }
+    }
+    found
 }
 
 #[cfg(test)]

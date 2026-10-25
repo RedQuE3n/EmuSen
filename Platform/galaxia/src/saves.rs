@@ -84,6 +84,18 @@ pub fn picture_path(state_path: &str) -> String {
     path::change_extension(STYLE, state_path, ".png")
 }
 
+/// Where a package keeps a state's record: beside the state, the same name with `.json`, for a state in a package's
+/// `states` folder; none for any other state, whose record is states.db's (EmuSen_GamePackages.md §18.1).
+pub fn package_record_path(state_path: &str) -> Option<String> {
+    let full = path::full_path(state_path);
+    let folder = path::directory_name(STYLE, &full)?;
+    if path::file_name(STYLE, &folder) != crate::package::STATES_FOLDER {
+        return None;
+    }
+    let root = path::directory_name(STYLE, &folder)?;
+    crate::dotnet_files::file_exists(&path::combine(STYLE, &root, crate::package::FILE_NAME)).then(|| path::change_extension(STYLE, &full, ".json"))
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;

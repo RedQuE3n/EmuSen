@@ -22,6 +22,11 @@ emusen-systems = { path = "../systems" }
 # The soft patches a package lists, checked and applied as the runtimes apply them (pkg patch, pkg check).
 emusen-patch = { path = "../patch" }
 emusen-dotnet = { path = "../dotnet" }
+# pkg migrate's other stores (EmuSen_GamePackages.md §18.4): a state's record and a game's own settings as the runtime
+# keeps them, the art as the media store lays it out, the crop from games.db, each read through its owner.
+emusen-crystal = { path = "../crystal" }
+emusen-scrape = { path = "../scrape" }
+emusen-sqlite = { path = "../sqlite" }
 # The pin's SHA-256; the workspace's, from Galaxia.
 sha2 = "0.11"
 

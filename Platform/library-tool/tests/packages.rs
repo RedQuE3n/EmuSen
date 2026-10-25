@@ -121,6 +121,9 @@ fn packages_are_made_migrated_listed_and_checked_and_the_library_is_left_as_it_w
     put(&t.at("home/Saves/NES/Alpha.srm"), b"the save");
     put(&t.at("home/Saves/NES/Alpha Two.srm"), b"another game's save");
     put(&t.at("home/etc/EmuSen/cheats/NES/Alpha.json"), br#"{"cheats":[]}"#);
+    put(&t.at("home/etc/EmuSen/games/nes/Alpha.json"), b"{\n  \"Engine\": \"MoonRT (Rust)\"\n}");
+    put(&t.at("home/Media/nes/covers/Alpha.png"), b"a cover");
+    put(&t.at("home/Media/nes/covers/Alpha Two.png"), b"another game's cover");
     let before = listing(&t.at("library"));
 
     let made = run(&ctx, r#"{"op":"pkg-make","paths":["/"]}"#);
@@ -148,6 +151,11 @@ fn packages_are_made_migrated_listed_and_checked_and_the_library_is_left_as_it_w
     assert_eq!(read("states/Alpha.png").as_deref(), Some(&b"picture"[..]));
     assert_eq!(read("cheats.json").as_deref(), Some(&br#"{"cheats":[]}"#[..]));
     assert!(read("states/Alpha Two.state").is_none() && read("saves/Alpha Two.srm").is_none(), "another game's files stay out");
+    // The stores of §18: the game's own settings and its art; the states' records need states.db, which no SQLite here reads, and say so.
+    assert_eq!(read("settings.json").as_deref(), Some(&b"{\n  \"Engine\": \"MoonRT (Rust)\"\n}"[..]));
+    assert_eq!(read("media/covers/Alpha.png").as_deref(), Some(&b"a cover"[..]));
+    assert!(read("states/Alpha.json").is_none() && summary(&migrated).contains("the states' records were not copied"), "{}", summary(&migrated));
+    assert_eq!(std::fs::read(t.at("home/Media/nes/covers/Alpha.png")).unwrap(), b"a cover", "the store's art is left");
     std::fs::write(format!("{alpha}/saves/Alpha.srm"), b"played since").unwrap();
     let again = run(&ctx, r#"{"op":"pkg-migrate","paths":["NES/Alpha.nes"]}"#);
     assert_eq!(state(&again, "NES/Alpha.nes"), "nothing", "{}", summary(&again));

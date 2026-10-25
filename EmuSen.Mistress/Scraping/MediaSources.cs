@@ -7,9 +7,9 @@ using EmuSen.Mistress.BigPicture.Theme;
 
 namespace EmuSen.Mistress.Scraping
 {
-    public enum MediaSource { None, HandPlaced, ScreenScraper, EsdeFolder, OpenEmu, OtherGame }
+    public enum MediaSource { None, HandPlaced, ScreenScraper, EsdeFolder, OpenEmu, OtherGame, Package }
 
-    // Where a game's picture is looked for, in order: another game's cover the player chose, what the player placed, ScreenScraper's, an ES-DE folder, OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60 and §4.65.
+    // Where a game's picture is looked for, in order: another game's cover the player chose, what the player placed, a packaged game's package, ScreenScraper's, an ES-DE folder, OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60, §4.65 and EmuSen_GamePackages.md §18.3.
     public sealed class MediaSources : ISceneMedia
     {
         private static readonly string[] Extensions = [".png", ".jpg", ".jpeg"];
@@ -23,8 +23,9 @@ namespace EmuSen.Mistress.Scraping
 
         // handPlaced takes a console and a ROM's title; openEmuRoot is null when the failover is not ticked; coverFrom names the game whose cover a ROM shows, with a stamp that changes when any choice does.
         public MediaSources(Func<string, string, string?> handPlaced, string scrapedRoot, string? esdeRoot, string? openEmuRoot,
-            Func<string, string?>? coverFrom = null, string choiceStamp = "", string? romDirectory = null)
+            Func<string, string?>? coverFrom = null, string choiceStamp = "", string? romDirectory = null, IReadOnlyDictionary<string, string>? packages = null)
         {
+            _packages = packages ?? new Dictionary<string, string>();
             _handPlaced = handPlaced;
             _scraped = new EsdeMediaFolder(scrapedRoot);
             _esde = string.IsNullOrWhiteSpace(esdeRoot) ? null : new EsdeMediaFolder(esdeRoot);
@@ -35,6 +36,9 @@ namespace EmuSen.Mistress.Scraping
         }
 
         private readonly string? _romDirectory;
+
+        // Each packaged game's file and its package's folder, as the library's scan found them.
+        private readonly IReadOnlyDictionary<string, string> _packages = new Dictionary<string, string>();
 
         private readonly NativeScraping? _native;
 
@@ -59,6 +63,9 @@ namespace EmuSen.Mistress.Scraping
             if (_native is { } n) return n.Present(system.Name, games.Select(g => (g.File, g.FolderPath, g is { Folder: true, IsCollection: false })));
             var found = new HashSet<string>(_scraped.Present(system, games), StringComparer.Ordinal);
             if (_esde is not null) found.UnionWith(_esde.Present(system, games));
+            foreach (SceneGame g in games)
+                if (!g.Folder && _packages.TryGetValue(g.File, out string? package))
+                    found.UnionWith(EsdeMediaFolder.Folders.Keys.Where(t => EsdeMediaFolder.FindInPackage(package, t) is not null));
             if (!found.Contains(ScrapeRules.Cover.EsdeType) && games.Any(g => Locate(system.Name, g, ScrapeRules.Cover.EsdeType, null).Path is not null)) found.Add(ScrapeRules.Cover.EsdeType);
             return found;
         }
@@ -70,7 +77,7 @@ namespace EmuSen.Mistress.Scraping
             string openEmu = _openEmu is not null && Directory.Exists(_openEmu)
                 ? string.Join(",", Directory.EnumerateDirectories(_openEmu).Select(d => Directory.GetLastWriteTimeUtc(d).Ticks))
                 : "";
-            return $"{_scraped.Stamp(system)}|{_esde?.Stamp(system)}|{openEmu}|{_choiceStamp}";
+            return $"{_scraped.Stamp(system)}|{_esde?.Stamp(system)}|{openEmu}|{_choiceStamp}|{EsdeMediaFolder.PackageStamp(_packages.Values.Order(StringComparer.Ordinal))}";
         }
 
         // The library's cover for a ROM on the shelf ES-DE calls esdeSystem.
@@ -94,6 +101,7 @@ namespace EmuSen.Mistress.Scraping
             var system = new ThemeSystem(esdeSystem, esdeSystem, esdeSystem);
 
             if (cover && console is not null && _handPlaced(console, title) is string hand) return (MediaSource.HandPlaced, hand);
+            if (file && _packages.TryGetValue(romPath, out string? package) && EsdeMediaFolder.FindInPackage(package, mediaType) is string packaged) return (MediaSource.Package, packaged);
             if (_scraped.Find(system, game, mediaType) is string scraped) return (MediaSource.ScreenScraper, scraped);
             if (_esde?.Find(system, game, mediaType) is string esde) return (MediaSource.EsdeFolder, esde);
             if (cover && console is not null && _openEmu is not null && OpenEmuCover(_openEmu, console, title) is string openEmu) return (MediaSource.OpenEmu, openEmu);

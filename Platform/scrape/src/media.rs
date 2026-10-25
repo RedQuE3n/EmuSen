@@ -1,5 +1,5 @@
 //! Where a game's picture is looked for, in order, `MediaSources.Locate` ported: another game's cover the player chose,
-//! what the player placed, ScreenScraper's store, an ES-DE folder, OpenEmu's failover folder. Both frontends ask this,
+//! what the player placed, a packaged game's package, ScreenScraper's store, an ES-DE folder, OpenEmu's failover folder. Both frontends ask this,
 //! so a game shows the same cover in each. See EmuSen_Settings_Reference.md §4.60, §4.65 and EmuSen_Backend.md §30.6.
 
 use crate::Scraper;
@@ -16,6 +16,7 @@ pub enum Source {
     ScreenScraper,
     EsdeFolder,
     OpenEmu,
+    Package,
 }
 
 impl Source {
@@ -26,6 +27,7 @@ impl Source {
             Source::ScreenScraper => "screenscraper",
             Source::EsdeFolder => "esde",
             Source::OpenEmu => "openemu",
+            Source::Package => "package",
         }
     }
 }
@@ -60,6 +62,31 @@ pub fn find_in(root: &str, system: &str, game: &Game, media_type: &str) -> Optio
         }
     }
     None
+}
+
+/// A packaged game's file of a type in its package, `EsdeMediaFolder.FindInPackage` (EmuSen_GamePackages.md §18.3).
+pub fn find_in_package(root: &str, media_type: &str) -> Option<String> {
+    let folder = kinds::by_type(media_type)?.folder;
+    kinds::extensions(media_type).iter().map(|ext| emusen_galaxia::package::media_path(root, folder, ext)).find(|p| file_exists(p))
+}
+
+/// Each packaged game's media folder and its type folders' write times, `EsdeMediaFolder.PackageStamp`.
+fn package_stamp(roots: &[&str]) -> String {
+    roots
+        .iter()
+        .map(|r| {
+            let dir = path::combine(STYLE, r, emusen_galaxia::package::MEDIA_FOLDER);
+            if !emusen_galaxia::dotnet_files::directory_exists(&dir) {
+                return "0".to_string();
+            }
+            let mut subs: Vec<String> = std::fs::read_dir(&dir)
+                .map(|entries| entries.flatten().filter(|e| emusen_galaxia::dotnet_files::listed_as_directory(e)).map(|e| emusen_galaxia::dotnet_files::join(&dir, &e.file_name().to_string_lossy())).collect())
+                .unwrap_or_default();
+            subs.sort();
+            std::iter::once(dir).chain(subs).filter_map(|d| std::fs::metadata(&d).ok().map(|m| emusen_galaxia::dotnet_files::write_ticks(&m).to_string())).collect::<Vec<_>>().join(";")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Where `CoverFetcher` writes: `<root>/<console>/<libretro-safe stem>.<ext>`.
@@ -125,6 +152,12 @@ impl Scraper {
                     return Some((Source::Hand, hand));
                 }
             }
+        }
+        if file
+            && let Some(package) = settings.package_of(game.file)
+            && let Some(packaged) = find_in_package(package, media_type)
+        {
+            return Some((Source::Package, packaged));
         }
         if let Some(scraped) = find_in(&self.root(), esde_system, game, media_type) {
             return Some((Source::ScreenScraper, scraped));
@@ -226,6 +259,14 @@ impl Scraper {
                 }
             }
         }
+        for (file, _, folder) in games {
+            let Some(package) = settings.package_of(file).filter(|_| !*folder) else { continue };
+            for kind in kinds::ALL_FOLDER_ORDER {
+                if !found.iter().any(|f| f == kind.esde_type) && find_in_package(package, kind.esde_type).is_some() {
+                    found.push(kind.esde_type.to_string());
+                }
+            }
+        }
         let cover = kinds::COVER.esde_type;
         if !found.iter().any(|f| f == cover)
             && games.iter().any(|(file, folder_path, folder)| self.locate(system, &Game { file, folder_path: folder_path.clone(), folder: *folder }, cover).is_some())
@@ -255,6 +296,8 @@ impl Scraper {
             String::new()
         };
         let esde = settings.esde_media.as_deref().filter(|e| !emusen_dotnet::text::is_blank(Some(e))).map(|e| stamp_in(e, system)).unwrap_or_default();
-        format!("{}|{esde}|{openemu_stamp}|{choice}", stamp_in(&self.root(), system))
+        let mut roots: Vec<&str> = settings.packages.iter().map(|(_, f)| f.as_str()).collect();
+        roots.sort();
+        format!("{}|{esde}|{openemu_stamp}|{choice}|{}", stamp_in(&self.root(), system), package_stamp(&roots))
     }
 }

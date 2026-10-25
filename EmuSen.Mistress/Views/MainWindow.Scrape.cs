@@ -144,7 +144,21 @@ namespace EmuSen.Mistress.Views
 
         internal MediaSources MediaSourcesNow() => _native is { } n ? new MediaSources(n, CoverChoiceStamp, _appSettings.RomDirectory) : new(
             (console, title) => _artwork.Find(console, title), MediaStore.DefaultRoot, _appSettings.EsdeMediaDirectory,
-            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp, _appSettings.RomDirectory);
+            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp, _appSettings.RomDirectory, PackagesByGame);
+
+        // Each packaged game's file and its package's folder, from the last scan of the whole library - see EmuSen_GamePackages.md §18.3.
+        private IReadOnlyDictionary<string, string> PackagesByGame
+        {
+            get
+            {
+                if (!ReferenceEquals(_packagesScan, _allScan))
+                    (_packagesScan, _packagesByGame) = (_allScan, _allScan.Entries.Where(e => e.Package is not null).GroupBy(e => e.FullPath, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Package!, StringComparer.Ordinal));
+                return _packagesByGame;
+            }
+        }
+
+        private RomLibraryResult? _packagesScan;
+        private IReadOnlyDictionary<string, string> _packagesByGame = new Dictionary<string, string>();
 
         // Why ScreenScraper cannot answer a run now, or null when it can.
         private string? ScreenScraperUnusable()

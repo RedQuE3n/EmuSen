@@ -264,7 +264,7 @@ impl Runtime {
         let discovery = self.discovery();
         let catalog = Catalog::new(&discovery);
         let tree = emusen_galaxia::tree::tree();
-        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system)))
+        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system), None))
     }
 
     /// The library's shelves in release order.
@@ -478,16 +478,20 @@ impl Runtime {
     }
 
     pub fn state_record_json(&self, at: &str) -> Result<String, Refused> {
-        self.records_needed()?;
-        self.with_records(|r| match r.map(|r| r.read(at)).transpose()?.flatten() {
+        if emusen_galaxia::saves::package_record_path(at).is_none() {
+            self.records_needed()?;
+        }
+        self.with_records(|r| match crate::states::read(r, at)? {
             Some(record) => Ok(crate::saving::record_json(&record)),
             None => Err((emusen_session_service::abi::status::ABSENT, format!("no record of the state at {at}"))),
         })
     }
 
     pub fn state_forget(&self, at: &str) -> Result<(), Refused> {
-        self.records_needed()?;
-        self.with_records(|r| r.map_or(Ok(()), |r| r.forget(at)))
+        if emusen_galaxia::saves::package_record_path(at).is_none() {
+            self.records_needed()?;
+        }
+        self.with_records(|r| crate::states::forget(r, at))
     }
 }
 

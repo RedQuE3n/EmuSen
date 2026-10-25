@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using EmuSen.Galaxia.Library;
 using Microsoft.Data.Sqlite;
 
 namespace EmuSen.Mistress.Library
@@ -26,8 +29,22 @@ namespace EmuSen.Mistress.Library
 
     public sealed partial class GameRecords
     {
+        // A packaged game's crop is its package's settings.json's, this file's row read until the package holds one; a package's folder reads its game's - see EmuSen_GamePackages.md §18.2.
+        public Func<string, (string Game, string? Package)> OpenedAs { get; set; } = path => EmuSen.Galaxia.Media.GamePackages.OpenedAs(path);
+
+        // The system whose plain settings a package's first settings.json copies in.
+        public Func<string, string?> SystemOf { get; set; } = path => RuntimeCatalog.Route(path).System;
+
         // Null for a game with no crop of its own, which is drawn with its console's.
         public GameCrop? Crop(string path)
+        {
+            (string game, string? root) = OpenedAs(path);
+            if (root is not null && GameSettings.Read(null, game, root).TryGetValue(GameSettings.CropKey, out string? kept))
+                return GameSettings.ParseCrop(kept) is { } c ? new GameCrop(c.Left, c.Right, c.Top, c.Bottom) : null;
+            return RowCrop(root is null ? path : game);
+        }
+
+        private GameCrop? RowCrop(string path)
         {
             if (_native is { } n) return n.Crop(path);
             using SqliteCommand command = _db.CreateCommand();
@@ -39,6 +56,7 @@ namespace EmuSen.Mistress.Library
 
         public void SetCrop(string path, GameCrop crop)
         {
+            if (OpenedAs(path) is (string game, string root)) { SetPackagedCrop(game, root, GameSettings.CropText(crop.Left, crop.Right, crop.Top, crop.Bottom)); return; }
             if (_native is { } n) { n.SetCrop(path, crop); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = """
@@ -53,6 +71,20 @@ namespace EmuSen.Mistress.Library
             command.ExecuteNonQuery();
         }
 
-        public void ClearCrop(string path) => _ = _native is { } n ? Native(() => n.ClearCrop(path)) : Write(path, "UPDATE game SET crop_left = NULL, crop_right = NULL, crop_top = NULL, crop_bottom = NULL WHERE path = $path");
+        private void SetPackagedCrop(string path, string root, string text)
+        {
+            string? system = SystemOf(path);
+            Dictionary<string, string> values = GameSettings.Read(system, path, root);
+            values[GameSettings.CropKey] = text;
+            GameSettings.Write(system, path, root, values);
+        }
+
+        public void ClearCrop(string path)
+        {
+            if (OpenedAs(path) is (string game, string root)) SetPackagedCrop(game, root, "");
+            else ClearRowCrop(path);
+        }
+
+        private void ClearRowCrop(string path) => _ = _native is { } n ? Native(() => n.ClearCrop(path)) : Write(path, "UPDATE game SET crop_left = NULL, crop_right = NULL, crop_top = NULL, crop_bottom = NULL WHERE path = $path");
     }
 }

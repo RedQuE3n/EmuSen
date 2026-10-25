@@ -30,6 +30,15 @@ namespace EmuSen.Galaxia.Media
         // A package's own places for a game's battery saves, its states and its cheat list - see EmuSen_GamePackages.md §3.2.
         public const string SavesFolder = "saves", StatesFolder = "states", CheatsFile = "cheats.json";
 
+        // A packaged game's own settings, the crop among them, and its art under ES-DE's type folders - see EmuSen_GamePackages.md §18.2 and §18.3.
+        public const string SettingsFile = "settings.json", MediaFolder = "media";
+
+        // The name a package's files go by: its folder's, less the extension - see EmuSen_GamePackages.md §14.2.
+        public static string NameOf(string root) => Library.SaveLibrary.Managed.PackageStem(root);
+
+        // A packaged game's art of one ES-DE type folder: <package>/media/<type folder>/<package's name><extension> - see EmuSen_GamePackages.md §18.3.
+        public static string MediaPathFor(string root, string typeFolder, string extension) => Path.Combine(root, MediaFolder, typeFolder, NameOf(root) + extension);
+
         private GamePackage(JsonObject document) => Document = document;
 
         // Every member as read or set, in its order; a caller edits it and Write checks it.

@@ -379,6 +379,25 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
     }
 }
 
+/// The package a game file opens with under `tree`, or none; a refusal is no package here, and is said where the game
+/// is opened, `GamePackages.RootFor`.
+pub fn root_for(tree: &crate::tree::Tree, at: &str) -> Option<String> {
+    opened_as(tree, at).1
+}
+
+/// The game file a path opens and the package whose stores it uses, the path itself and none where it is refused,
+/// `GamePackages.OpenedAs`.
+pub fn opened_as(tree: &crate::tree::Tree, at: &str) -> (String, Option<String>) {
+    if at.is_empty() {
+        return (String::new(), None);
+    }
+    let places = Places::of(tree);
+    match resolve(&places.roots(), at) {
+        Ok(r) => (r.game, r.package),
+        Err(_) => (at.to_string(), None),
+    }
+}
+
 /// What `at` opens as (§3.5, "one game, one save"): a package's folder or manifest opens its game; a file a package
 /// claims opens that package's game with its stores, unless the package's game is now another dump, when the file opens
 /// as it is, a plain game with its plain saves (decided 2026-10-25, §14.8 Q34), the package refusing only when it is

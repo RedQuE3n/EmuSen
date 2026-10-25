@@ -43,13 +43,16 @@ fn chdman() -> String {
     std::env::var("EMUSEN_CHDMAN").ok().filter(|c| !c.is_empty()).unwrap_or_else(|| path::combine(Style::HOST, &tree::base_directory(), if cfg!(windows) { "chdman.exe" } else { "chdman" }))
 }
 
-/// The process's tree, and `AppSettings.RomDirectory` and `StateDirectory` as the settings file holds them.
+/// The process's tree, `AppSettings.RomDirectory` and `StateDirectory` as the settings file holds them, and the
+/// process's SQLite where it has one loaded or one ships beside it.
 fn context() -> Context {
     let tree = tree::tree().clone();
     let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
     let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
     let states = settings.get("StateDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
-    Context { state_folder: states, ..Context::pinned(tree, library, chdman()) }
+    let beside = path::combine(Style::HOST, &tree::base_directory(), emusen_sqlite::SHIPPED_NAME);
+    let sqlite = emusen_sqlite::Sqlite::of_process(&[beside]).ok().map(std::sync::Arc::new);
+    Context { state_folder: states, sqlite, ..Context::pinned(tree, library, chdman()) }
 }
 
 /// Starts a job from a request (EmuSen_GamePackages.md §12.3); PARSE with words for one that is not a request.

@@ -134,7 +134,7 @@ namespace EmuSen.Mistress.Scraping
             if (doc.RootElement.ValueKind == JsonValueKind.Null) return (MediaSource.None, null);
             MediaSource source = Text(doc.RootElement, "source") switch
             {
-                "other_game" => MediaSource.OtherGame, "hand" => MediaSource.HandPlaced, "screenscraper" => MediaSource.ScreenScraper, "esde" => MediaSource.EsdeFolder, "openemu" => MediaSource.OpenEmu, _ => MediaSource.None,
+                "other_game" => MediaSource.OtherGame, "hand" => MediaSource.HandPlaced, "screenscraper" => MediaSource.ScreenScraper, "esde" => MediaSource.EsdeFolder, "openemu" => MediaSource.OpenEmu, "package" => MediaSource.Package, _ => MediaSource.None,
             };
             return (source, Text(doc.RootElement, "path"));
         }

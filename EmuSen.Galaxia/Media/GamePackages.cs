@@ -48,11 +48,14 @@ namespace EmuSen.Galaxia.Media
             Native(path, places.Packages, places.Library, places.Compressed) ? ResolutionFromJson(GalaxiaNative.PackageResolve(path, places.Packages, places.Library, places.Compressed)) : Managed.Resolve(places, path);
 
         // The package a game file opens with, or null; a refusal is no package here, and is said where the game is opened.
-        public static string? RootFor(string? path, PackagePlaces? places = null)
+        public static string? RootFor(string? path, PackagePlaces? places = null) => string.IsNullOrEmpty(path) ? null : OpenedAs(path, places).Package;
+
+        // The game file a path opens and the package whose stores it uses; the path itself and none where it is refused, the twin of claims.rs' opened_as.
+        public static (string Game, string? Package) OpenedAs(string path, PackagePlaces? places = null)
         {
-            if (string.IsNullOrEmpty(path)) return null;
-            try { return Resolve(path, places ?? PackagePlaces.Current()).Package; }
-            catch (IOException) { return null; }
+            if (string.IsNullOrEmpty(path)) return (path, null);
+            try { return Resolve(path, places ?? PackagePlaces.Current()) is var r ? (r.Game, r.Package) : default; }
+            catch (IOException) { return (path, null); }
         }
 
         // Whether full is folder or lies under it.

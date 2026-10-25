@@ -11,3 +11,7 @@ name = "emusen_sqlite"
 
 [dependencies]
 libloading = "0.9"
+
+# RTLD_NOLOAD, to find the SQLite a host already loaded.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

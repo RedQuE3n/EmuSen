@@ -69,6 +69,14 @@ namespace EmuSen.Galaxia.Library
         public static string PicturePathFor(string statePath) =>
             GalaxiaNative.Takes(statePath) ? GalaxiaNative.SavePath(GalaxiaSave.Picture, statePath) : Managed.PicturePathFor(statePath);
 
+        // A packaged state's record, beside it with .json, or null for a state outside a package's states folder, the twin of saves.rs' package_record_path - see EmuSen_GamePackages.md §18.1.
+        public static string? PackageRecordPathFor(string statePath)
+        {
+            string full = Path.GetFullPath(statePath);
+            if (Path.GetDirectoryName(full) is not { } folder || Path.GetFileName(folder) != Media.GamePackage.StatesFolder) return null;
+            return Path.GetDirectoryName(folder) is { } root && File.Exists(Path.Combine(root, Media.GamePackage.FileName)) ? Path.ChangeExtension(full, ".json") : null;
+        }
+
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {

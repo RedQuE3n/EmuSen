@@ -126,5 +126,90 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.True(State(caught, "PlayStation/Ruby Lantern (Synthetic).cue") == "missing", Shown(caught));
             Assert.True(State(caught, "NES/USA/Granite Choir (Synthetic).nes") == "verified", Shown(caught));
         }
+
+        private static string Hash(string file) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
+
+        // The stores step 5 left (§18): pkg migrate copies a state's record, the game's own settings with its crop, and its art into the package, leaves every original byte for byte as it was, and the readers find them by either path and after the package moves.
+        [Fact]
+        public void Migrating_copies_the_state_records_settings_crop_and_art_in_and_leaves_their_originals_as_they_were()
+        {
+            string snes = Path.Combine(_library, "snes", "Amber Quay (Synthetic).sfc");
+            Put(snes, SyntheticRom.BuildBlank());
+            string states = Path.Combine(_library, "States"), state = Path.Combine(states, "Amber Quay (Synthetic).slot3.state");
+            Put(state, new byte[] { 7, 7, 7 });
+            new AppSettings { RomDirectory = _library, StateDirectory = states }.Save();
+            // states.db's row for the state, as the runtime keeps it.
+            string statesDb = Path.Combine(DataStore.Library, "states.db");
+            using (var records = EmuSen.Crystal.Managed.StateRecords.Open(statesDb))
+                records.Write(state, new StateRecord { Console = "SNES", Core = "VenusRT (Rust)", StateVersion = 4, Build = "an old build", SavedAt = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc), RomFile = "Amber Quay (Synthetic).sfc", RomMd5 = "abc", RomBytes = 9 });
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            // games.db's crop, the runtime's file of the game's own settings, and the media store's art.
+            string gamesDb = Path.Combine(DataStore.Library, "games.db");
+            using (var games = EmuSen.Mistress.Library.GameRecords.OpenManaged(gamesDb))
+            {
+                games.OpenedAs = p => (p, null);
+                games.SetCrop(snes, new EmuSen.Mistress.Library.GameCrop(2.5, 0, 1, 12));
+            }
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            string plain = GameSettings.PlainPath("snes", snes);
+            Put(plain, "{\n  \"Engine\": \"VenusRT (Rust)\"\n}"u8.ToArray());
+            string cover = Path.Combine(DataStore.Media, "snes", "covers", "Amber Quay (Synthetic).png"), video = Path.Combine(DataStore.Media, "snes", "videos", "Amber Quay (Synthetic).mp4");
+            Put(cover, new byte[] { 0x89, 1, 2 });
+            Put(video, new byte[] { 3, 4 });
+            string[] originals = { state, statesDb, gamesDb, plain, cover, video };
+            var before = originals.Select(Hash).ToArray();
+            string listing = Listing();
+
+            Assert.True(State(Run("{\"op\":\"pkg-make\",\"paths\":[\"snes\"]}"), "snes/Amber Quay (Synthetic).sfc") == "made");
+            string package = Path.Combine(DataStore.Packages, "SNES", "Amber Quay (Synthetic).sfc");
+            List<JsonElement> migrated = Run("{\"op\":\"pkg-migrate\",\"paths\":[\"SNES\"]}");
+            Assert.True(State(migrated, "SNES/Amber Quay (Synthetic).sfc") == "migrated", Shown(migrated));
+            JsonElement outcome = migrated.Single(e => e.GetProperty("event").GetString() == "package");
+            Assert.True(outcome.GetProperty("records").GetInt64() == 1, Shown(migrated));
+
+            string copied = Path.Combine(package, "states", "Amber Quay (Synthetic).slot3.state");
+            StateRecord? record = EmuSen.Crystal.Managed.StateRecords.ReadPackaged(Path.Combine(package, "states", "Amber Quay (Synthetic).slot3.json"), copied);
+            Assert.NotNull(record);
+            Assert.Equal(("VenusRT (Rust)", 4, "an old build", "abc", 9L), (record!.Core, record.StateVersion, record.Build, record.RomMd5, record.RomBytes));
+            string settings = File.ReadAllText(Path.Combine(package, "settings.json"));
+            Assert.Contains("\"Engine\": \"VenusRT (Rust)\"", settings);
+            Assert.Contains("\"Crop\": \"2.5 0 1 12\"", settings);
+            Assert.Equal(new byte[] { 0x89, 1, 2 }, File.ReadAllBytes(Path.Combine(package, "media", "covers", "Amber Quay (Synthetic).png")));
+            Assert.Equal(new byte[] { 3, 4 }, File.ReadAllBytes(Path.Combine(package, "media", "videos", "Amber Quay (Synthetic).mp4")));
+            Assert.Equal(before, originals.Select(Hash).ToArray());
+            Assert.Equal(listing, Listing());
+
+            // The readers, by the plain path and by the package: the record, the crop and the engine, and the art.
+            using (var states2 = EmuSen.Crystal.Managed.StateRecords.Open(statesDb))
+                Assert.Equal(record, states2.Read(copied));
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            using (var games = EmuSen.Mistress.Library.GameRecords.OpenManaged(gamesDb))
+            {
+                games.SystemOf = _ => "snes";
+                Assert.Equal(new EmuSen.Mistress.Library.GameCrop(2.5, 0, 1, 12), games.Crop(snes));
+                Assert.Equal(new EmuSen.Mistress.Library.GameCrop(2.5, 0, 1, 12), games.Crop(package));
+            }
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Assert.Equal("VenusRT (Rust)", EmuSen.Crystal.Managed.ManagedRuntime.GameSetting(snes, "Engine"));
+            Assert.Equal("VenusRT (Rust)", EmuSen.Crystal.Managed.ManagedRuntime.GameSetting(package, "Engine"));
+            string Cover(string where) => new EmuSen.Mistress.Scraping.MediaSources((_, _) => null, DataStore.Media, null, null, romDirectory: _library,
+                packages: new Dictionary<string, string> { [snes] = where }).Locate("snes", snes, "cover").Path!;
+            Assert.Equal(Path.Combine(package, "media", "covers", "Amber Quay (Synthetic).png"), Cover(package));
+
+            // Migrating again copies nothing more and changes nothing.
+            List<JsonElement> again = Run("{\"op\":\"pkg-migrate\",\"paths\":[\"SNES\"]}");
+            Assert.True(State(again, "SNES/Amber Quay (Synthetic).sfc") == "nothing", Shown(again));
+            Assert.Equal(before, originals.Select(Hash).ToArray());
+
+            // The package moved: its record, settings and art go with it.
+            string moved = Path.Combine(DataStore.Packages, "SNES", "Elsewhere", "Amber Quay (Synthetic).sfc");
+            Directory.CreateDirectory(Path.GetDirectoryName(moved)!);
+            Directory.Move(package, moved);
+            Assert.Equal(record, EmuSen.Crystal.Managed.StateRecords.ReadPackaged(Path.Combine(moved, "states", "Amber Quay (Synthetic).slot3.json"), Path.Combine(moved, "states", "Amber Quay (Synthetic).slot3.state")));
+            Assert.Equal(moved, GamePackages.RootFor(snes));
+            Assert.Equal("VenusRT (Rust)", EmuSen.Crystal.Managed.ManagedRuntime.GameSetting(snes, "Engine"));
+            Assert.Equal(Path.Combine(moved, "media", "covers", "Amber Quay (Synthetic).png"), Cover(moved));
+            Assert.Equal(listing, Listing());
+        }
     }
 }

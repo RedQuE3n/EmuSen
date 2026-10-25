@@ -85,6 +85,20 @@ fn transaction(db: &Connection, work: impl FnOnce(&Connection) -> Result<(), Ref
     }
 }
 
+/// A row of `SELECT state_bytes, state_modified, console, ... rom_bytes` as its record.
+fn record_of(r: &emusen_sqlite::Row) -> StateRecord {
+    StateRecord {
+        console: r.text(2),
+        core: r.text(3),
+        state_version: r.int64(4) as i32,
+        build: r.text(5),
+        saved_at: emusen_galaxia::clock::round_trip(&r.text(6)).unwrap_or_else(|| r.text(6)),
+        rom_file: r.text(7),
+        rom_md5: r.text_or_null(8),
+        rom_bytes: r.int64(9),
+    }
+}
+
 pub struct StateRecords {
     db: Connection,
 }
@@ -125,17 +139,7 @@ impl StateRecords {
                 &[("$path", Bound::Text(&key))],
                 |r| {
                     if row.is_none() {
-                        let record = StateRecord {
-                            console: r.text(2),
-                            core: r.text(3),
-                            state_version: r.int64(4) as i32,
-                            build: r.text(5),
-                            saved_at: emusen_galaxia::clock::round_trip(&r.text(6)).unwrap_or_else(|| r.text(6)),
-                            rom_file: r.text(7),
-                            rom_md5: r.text_or_null(8),
-                            rom_bytes: r.int64(9),
-                        };
-                        row = Some((r.int64(0), r.int64(1), record));
+                        row = Some((r.int64(0), r.int64(1), record_of(r)));
                     }
                 },
             )
@@ -202,6 +206,103 @@ SELECT path, state_bytes, state_modified, console, core, state_version, build, s
     run(db, "INSERT INTO copied (source, at) VALUES ($source, $at)", &[("$source", source), ("$at", Bound::Text(&at))])
 }
 
+/// A package's record of one of its states, the C# `StateRecords.WritePackaged`: the record's members and the state's
+/// size and time, one line of JSON beside the state, so that a package moved or renamed keeps it (EmuSen_GamePackages.md §18.1).
+pub fn package_record_text(r: &StateRecord, state_bytes: i64, state_modified: i64) -> String {
+    let q = emusen_dotnet::json::quoted;
+    let md5 = r.rom_md5.as_deref().map_or("null".to_string(), q);
+    format!(
+        "{{\"Console\":{},\"Core\":{},\"StateVersion\":{},\"Build\":{},\"SavedAt\":{},\"RomFile\":{},\"RomMd5\":{md5},\"RomBytes\":{},\"StateBytes\":{state_bytes},\"StateModified\":{state_modified}}}\n",
+        q(&r.console),
+        q(&r.core),
+        r.state_version,
+        q(&r.build),
+        q(&r.saved_at),
+        q(&r.rom_file),
+        r.rom_bytes
+    )
+}
+
+fn write_packaged(record_at: &str, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
+    let Some((bytes, modified)) = stat(&path::full_path(state_path)) else { return Ok(()) };
+    emusen_galaxia::atomic::write(record_at, package_record_text(r, bytes, modified).as_bytes()).map_err(|words| (crate::abi::status::IO, words))
+}
+
+/// A package's record while its state is the file it was written for; none where it is not, or does not bind.
+pub fn read_packaged(record_at: &str, state_path: &str) -> Option<StateRecord> {
+    let (bytes, modified) = stat(&path::full_path(state_path))?;
+    let doc = parse_file(record_at)?;
+    let number = |name: &str| match member(&doc, name) {
+        Some(Value::Number(t)) => t.as_str().parse::<i64>().ok(),
+        _ => None,
+    };
+    (number("StateBytes") == Some(bytes) && number("StateModified") == Some(modified)).then(|| bind(&doc)).flatten()
+}
+
+/// A state's record wherever it is kept: a packaged state's in its package, read first, then states.db's.
+pub fn read(records: Option<&StateRecords>, state_path: &str) -> Result<Option<StateRecord>, Refused> {
+    if let Some(at) = emusen_galaxia::saves::package_record_path(state_path)
+        && emusen_galaxia::dotnet_files::file_exists(&at)
+    {
+        return Ok(read_packaged(&at, state_path));
+    }
+    records.map_or(Ok(None), |r| r.read(state_path))
+}
+
+/// A state's record kept: a packaged state's in its package, any other's in states.db.
+pub fn write(records: Option<&StateRecords>, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
+    match emusen_galaxia::saves::package_record_path(state_path) {
+        Some(at) => write_packaged(&at, state_path, r),
+        None => records.map_or(Ok(()), |db| db.write(state_path, r)),
+    }
+}
+
+/// A state's record forgotten, from its package and from states.db.
+pub fn forget(records: Option<&StateRecords>, state_path: &str) -> Result<(), Refused> {
+    if let Some(at) = emusen_galaxia::saves::package_record_path(state_path) {
+        match std::fs::remove_file(&at) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err((crate::abi::status::IO, emusen_dotnet::file::io_message(&e, &at))),
+        }
+    }
+    records.map_or(Ok(()), |r| r.forget(state_path))
+}
+
+/// The record states.db, else the records.db it was copied from, holds for a state while it is the file it was
+/// written for, both read only and neither written: `pkg migrate`'s source (EmuSen_GamePackages.md §18.4).
+pub fn kept_record(sqlite: Arc<Sqlite>, library_folder: &str, state_path: &str) -> Option<StateRecord> {
+    let key = path::full_path(state_path);
+    let (bytes, modified) = stat(&key)?;
+    for file in [FILE_NAME, RECORDS_FILE_NAME] {
+        let at = path::combine(Style::HOST, library_folder, file);
+        if !emusen_galaxia::dotnet_files::file_exists(&at) {
+            continue;
+        }
+        let Ok(db) = Connection::open_read_only(sqlite.clone(), &at) else { continue };
+        let mut found: Option<StateRecord> = None;
+        let _ = db.query(
+            "SELECT state_bytes, state_modified, console, core, state_version, build, saved_at, rom_file, rom_md5, rom_bytes FROM state_record WHERE path = $path",
+            &[("$path", Bound::Text(&key))],
+            |r| {
+                if found.is_none() && r.int64(0) == bytes && r.int64(1) == modified {
+                    found = Some(record_of(r));
+                }
+            },
+        );
+        if found.is_some() {
+            return found;
+        }
+    }
+    read_sidecar(&key)
+}
+
+/// A record copied into a package for a state copied there: written beside the copy with the copy's size and time.
+pub fn write_package_copy(copy: &str, r: &StateRecord) -> Result<(), String> {
+    let at = emusen_galaxia::saves::package_record_path(copy).ok_or_else(|| format!("{copy} is not in a package's states folder"))?;
+    write_packaged(&at, copy, r).map_err(|(_, words)| words)
+}
+
 /// A member by its name without regard to case, the last of several, as `PropertyNameCaseInsensitive` binds it.
 fn member<'a>(v: &'a Value, name: &str) -> Option<&'a Value> {
     match v {
@@ -212,9 +313,16 @@ fn member<'a>(v: &'a Value, name: &str) -> Option<&'a Value> {
 
 /// The sidecar an earlier build wrote, `StateRecord.ReadSidecar`: none for no sidecar or one that does not bind.
 pub fn read_sidecar(state_path: &str) -> Option<StateRecord> {
-    let at = path::change_extension(Style::HOST, state_path, ".json");
-    let text = std::fs::read_to_string(&at).ok()?;
-    let doc = emusen_dotnet::json::parse(text.trim_start_matches('\u{feff}')).ok()?;
+    bind(&parse_file(&path::change_extension(Style::HOST, state_path, ".json"))?)
+}
+
+fn parse_file(at: &str) -> Option<Value> {
+    let text = std::fs::read_to_string(at).ok()?;
+    emusen_dotnet::json::parse(text.trim_start_matches('\u{feff}')).ok()
+}
+
+/// A record's members bound as `StateRecord` binds them, case ignored; none where one does not bind.
+fn bind(doc: &Value) -> Option<StateRecord> {
     let text_of = |name: &str| -> Option<Option<String>> {
         match member(&doc, name)? {
             Value::String(t) => Some(Some(t.text.clone())),

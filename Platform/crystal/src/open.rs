@@ -192,7 +192,7 @@ pub fn apply_stored(s: &Session, ctx: &Ctx, stored: &emusen_galaxia::consoles::C
     let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
     s.raise_said(&e);
     let system = e.machine.as_ref().map(|_| e.mi.system.clone());
-    let game = crate::settings::game_values(ctx.tree, system.as_deref(), &s.game_key());
+    let game = crate::settings::game_values(ctx.tree, system.as_deref(), &s.game_key(), s.package.as_deref());
     for setting in e.listed() {
         let own = game.iter().find(|(k, _)| *k == setting.key).map(|(_, v)| v.clone());
         let layered = match own {
@@ -228,7 +228,7 @@ fn open_game(
     let chosen = engine.map(str::to_string).or_else(|| {
         let (row, _) = crate::route::route(catalog, discovery, at);
         let system = crate::route::system_of_file(catalog, discovery, at);
-        crate::settings::engine_for(tree, at, row.map(|r| catalog.rows[r].console()), system.as_deref())
+        crate::settings::engine_for(tree, at, row.map(|r| catalog.rows[r].console()), system.as_deref(), package.as_deref())
     });
     let (core_name, missing) = crate::firmware::needed(rt, tree, at, chosen.as_deref());
     if !missing.is_empty() {

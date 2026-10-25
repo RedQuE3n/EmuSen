@@ -17,7 +17,7 @@ namespace EmuSen.Crystal.Managed
         public static byte[] FirmwareNeededJson(string path, string? engine) => CrystalJson.Write(w =>
         {
             w.WriteStartArray();
-            foreach (FirmwareRequest r in Common.EmulatorSession.MissingFirmwareFor(path, engine ?? EngineFor(path))) Request(w, r);
+            foreach (FirmwareRequest r in Common.EmulatorSession.MissingFirmwareFor(path, engine ?? EngineFor(path, Galaxia.Media.GamePackages.RootFor(path)))) Request(w, r);
             w.WriteEndArray();
         });
 

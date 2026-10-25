@@ -66,7 +66,7 @@ namespace EmuSen.Crystal.Managed
         private static CoreBundle OpenGame(string path, string? engine, CoreOptions options, Func<IDeviceLend?>? lender)
         {
             if (!File.Exists(path)) throw new CrystalException(CrystalNumbers.Io, $"{path} does not exist");
-            string? chosen = engine ?? EngineFor(path);
+            string? chosen = engine ?? EngineFor(path, options.PackageRoot);
             if (EmulatorSession.MissingFirmwareFor(path, chosen) is { Count: > 0 } missing)
                 throw new CrystalException(CrystalNumbers.Firmware, $"{Path.GetFileName(path)} needs firmware the library does not hold: {string.Join("; ", missing.Select(m => m.Describe()))}");
             try { return CoreFactory.Load(path, headless: true, new CheatRegistry(), chosen, lender, options); }

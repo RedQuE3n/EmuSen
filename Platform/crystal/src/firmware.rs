@@ -129,7 +129,7 @@ pub fn needed(rt: &Runtime, tree: &Tree, at: &str, engine: Option<&str>) -> (Str
     let chosen = engine.map(str::to_string).or_else(|| {
         let (row, _) = crate::route::route(&catalog, &discovery, at);
         let system = crate::route::system_of_file(&catalog, &discovery, at);
-        crate::settings::engine_for(tree, at, row.map(|r| catalog.rows[r].console()), system.as_deref())
+        crate::settings::engine_for(tree, at, row.map(|r| catalog.rows[r].console()), system.as_deref(), emusen_galaxia::claims::root_for(tree, at).as_deref())
     });
     let _ = emusen_galaxia::consoles::load(tree);
     let Ok(Some(core)) = crate::route::v1_engine(&catalog, &discovery, at, chosen.as_deref()) else { return (String::new(), Vec::new()) };

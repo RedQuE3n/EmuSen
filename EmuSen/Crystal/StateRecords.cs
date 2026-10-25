@@ -101,6 +101,7 @@ namespace EmuSen.Crystal.Managed
         // The record while the state is the file it was written for; a pre-database sidecar is read in its place, as records.db read it.
         public StateRecord? Read(string statePath)
         {
+            if (SaveLibrary.PackageRecordPathFor(statePath) is { } packaged && File.Exists(packaged)) return ReadPackaged(packaged, statePath);
             string key = Path.GetFullPath(statePath);
             if (Stat(key) is not { } stat) return null;
             lock (_gate)
@@ -118,6 +119,11 @@ namespace EmuSen.Crystal.Managed
 
         public void Write(string statePath, StateRecord record)
         {
+            if (SaveLibrary.PackageRecordPathFor(statePath) is { } packaged)
+            {
+                WritePackaged(packaged, statePath, record);
+                return;
+            }
             string key = Path.GetFullPath(statePath);
             if (Stat(key) is not { } stat) return;
             lock (_gate)
@@ -148,10 +154,67 @@ namespace EmuSen.Crystal.Managed
 
         public void Forget(string statePath)
         {
+            if (SaveLibrary.PackageRecordPathFor(statePath) is { } packaged && File.Exists(packaged)) File.Delete(packaged);
             lock (_gate)
             {
                 if (_closed) return;
                 Execute(_db, null, "DELETE FROM state_record WHERE path = $path", ("$path", Path.GetFullPath(statePath)));
+            }
+        }
+
+        // A package's record of one of its states: one line of JSON beside it with the state's size and time, so that a package moved or renamed keeps it - see EmuSen_GamePackages.md §18.1.
+        public static byte[] PackagedText(StateRecord record, long stateBytes, long stateModified)
+        {
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+            using (var w = new System.Text.Json.Utf8JsonWriter(buffer))
+            {
+                w.WriteStartObject();
+                w.WriteString("Console", record.Console);
+                w.WriteString("Core", record.Core);
+                w.WriteNumber("StateVersion", record.StateVersion);
+                w.WriteString("Build", record.Build);
+                w.WriteString("SavedAt", record.SavedAt.ToString("o", CultureInfo.InvariantCulture));
+                w.WriteString("RomFile", record.RomFile);
+                if (record.RomMd5 is null) w.WriteNull("RomMd5");
+                else w.WriteString("RomMd5", record.RomMd5);
+                w.WriteNumber("RomBytes", record.RomBytes);
+                w.WriteNumber("StateBytes", stateBytes);
+                w.WriteNumber("StateModified", stateModified);
+                w.WriteEndObject();
+            }
+            return [.. buffer.WrittenSpan, (byte)'\n'];
+        }
+
+        private static void WritePackaged(string recordPath, string statePath, StateRecord record)
+        {
+            if (Stat(Path.GetFullPath(statePath)) is not { } stat) return;
+            if (!AtomicFile.Write(recordPath, PackagedText(record, stat.Bytes, stat.Modified))) throw new IOException($"{recordPath} could not be written");
+        }
+
+        // A package's record while its state is the file it was written for, else null.
+        public static StateRecord? ReadPackaged(string recordPath, string statePath)
+        {
+            if (Stat(Path.GetFullPath(statePath)) is not { } stat) return null;
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(recordPath);
+                using (var doc = System.Text.Json.JsonDocument.Parse(bytes, new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true }))
+                {
+                    long? Number(string name)
+                    {
+                        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+                        System.Text.Json.JsonElement? found = null;
+                        foreach (var p in doc.RootElement.EnumerateObject())
+                            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)) found = p.Value;
+                        return found is { ValueKind: System.Text.Json.JsonValueKind.Number } v && v.TryGetInt64(out long n) ? n : null;
+                    }
+                    if (Number("StateBytes") != stat.Bytes || Number("StateModified") != stat.Modified) return null;
+                }
+                return System.Text.Json.JsonSerializer.Deserialize<StateRecord>(bytes, EmuSen.Galaxia.ConfigJson.Options);
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            {
+                return null;
             }
         }
 

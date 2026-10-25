@@ -407,7 +407,7 @@ pub fn pair(name: &'static str, build: impl Fn(usize) -> (Ee, s21::Program)) -> 
     Pair { name, image, expected, ee_words }
 }
 
-/// The IOP's side, begun: S21's program, its quiescing stopping every channel the SIF's among them.
+/// The IOP's side, begun: S21's program, its quiescing stopping every channel, the SIF's among them.
 pub fn iop_side(name: &'static str) -> s21::Program {
     s21::Program::new(name)
 }
@@ -742,7 +742,7 @@ pub fn registers() -> Pair {
 }
 
 /// `s22-sif1`, the EE to the IOP: a normal-mode transfer, its first quadword the IOP's tag, read by an IOP chain
-/// without CHCR's bit 8; an EE chain stopped by a tag interrupt and resumed while the IOP waits for the rest; the EE
+/// without CHCR's bit 8, its completion setting DICR2's flag under its mask and interrupt 3; an EE chain stopped by a tag interrupt and resumed while the IOP waits for the rest; the EE
 /// started first, its channel holding with eight quadwords in the FIFO until the IOP starts; and, last, an EE source
 /// chain (cnt, ref, end) read by an IOP chain with bit 8, the middle tag with IRQ setting DICR2's flag and the master
 /// flag's interrupt 3 and the chain going on (ps2tek "SIF DMA", "IOP DMA"; EE User's Manual §5.6; D-140, D-143, D-144).
@@ -761,6 +761,7 @@ pub fn sif1() -> Pair {
         let a = pattern(0x5100_0000, 8);
         e.fill(e0, &cat(&[&[iop_tag(d0, false, true), 8], &pad, &a]));
         iop_fill(&mut i, d0, &marks(9));
+        i.poke(DICR2, 0x3F00_0000 | 1 << (16 + iop::SIF1 - 7));
         i.poke(ichcr(iop::SIF1), iop::STR | iop::CHAIN);
         meet(&mut e, &mut i, 1);
         e.poke(madr(SIF1), e0);
@@ -777,6 +778,10 @@ pub fn sif1() -> Pair {
         i.rec(ichcr(iop::SIF1), Some(iop::CHAIN));
         i.rec(imadr(iop::SIF1), Some(d0 + 32));
         iop_rec_words(&mut i, d0, &cat(&[&a, &[CC]]));
+        i.rec_masked(DICR2, 0x3F00_0000, 1 << (24 + iop::SIF1 - 7));
+        i.rec_masked(s21::reg::I_STAT, 8, 8);
+        i.poke(DICR2, 0x3F00_0000);
+        i.poke(s21::reg::I_STAT, 0);
         // An EE chain stopped by its tag interrupt after the first packet, and resumed.
         let t2 = EE_AREA + 0x300;
         let (b5, b6) = (pattern(0x5500_0000, 4), pattern(0x5600_0000, 4));
@@ -951,11 +956,11 @@ pub fn sif0() -> Pair {
 }
 
 /// `s22-sif0-normal`, the IOP to the EE without CHCR's bit 8: the IOP's two-word tag, its data alone crossing into an
-/// EE transfer in normal mode, the two words after the tag left in memory and TADR past the tag alone (ps2tek "IOP DMA";
-/// D-142).
+/// EE transfer in normal mode, the two words after the tag left in memory and TADR past the tag alone; the completion
+/// setting DICR2's flag under its mask and the master flag's interrupt 3 (ps2tek "IOP DMA"; D-142).
 pub fn sif0_normal() -> Pair {
     use ee::*;
-    use s21::reg::{chcr as ichcr, madr as imadr, tadr as itadr};
+    use s21::reg::{DICR2, chcr as ichcr, madr as imadr, tadr as itadr};
     pair("s22-sif0-normal", |n| {
         let mut e = ee_side("s22-sif0-normal", n);
         let mut i = iop_side("s22-sif0-normal");
@@ -972,11 +977,14 @@ pub fn sif0_normal() -> Pair {
         e.poke(qwc(SIF0), 2);
         e.poke(chcr(SIF0), STR);
         meet(&mut e, &mut i, 2);
+        i.poke(DICR2, 0x3F00_0000 | 1 << (16 + iop::SIF0 - 7));
         i.poke(itadr(iop::SIF0), s2);
         i.poke(ichcr(iop::SIF0), iop::STR | iop::CHAIN | iop::DIR);
         i.wait(ichcr(iop::SIF0), iop::STR, false, 100_000);
         i.rec(imadr(iop::SIF0), Some(s2 + 0x30));
         i.rec(itadr(iop::SIF0), Some(s2 + 8));
+        i.rec_masked(DICR2, 0x3F00_0000, 1 << (24 + iop::SIF0 - 7));
+        i.rec_masked(s21::reg::I_STAT, 8, 8);
         meet(&mut e, &mut i, 3);
         e.wait(chcr(SIF0), STR, false, 200_000);
         e.rec_words(c, &cat(&[&p3, &marks(4)]));

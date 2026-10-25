@@ -66,6 +66,8 @@ pub struct Vu {
     pub q_next: Option<Landing>,
     pub div_free: u64,
     pub p_next: Option<Landing>,
+    /// A second EFU result, which can start a cycle before the first lands (§3.4.6).
+    pub p_later: Option<Landing>,
     pub efu_free: u64,
 }
 
@@ -93,6 +95,7 @@ impl Vu {
             q_next: None,
             div_free: 0,
             p_next: None,
+            p_later: None,
             efu_free: 0,
         }
     }
@@ -109,12 +112,22 @@ impl Vu {
             }
             self.q_next = None;
         }
-        if let Some(l) = self.p_next
+        while let Some(l) = self.p_next
             && l.at <= t
         {
             self.p = l.value;
-            self.p_next = None;
+            self.p_next = self.p_later.take();
         }
+    }
+
+    /// Sends an EFU result to P at its landing, behind one still in flight.
+    pub fn send_p(&mut self, l: Landing) {
+        if self.p_next.is_some() { self.p_later = Some(l) } else { self.p_next = Some(l) }
+    }
+
+    /// The most recent EFU result in flight, which WAITP waits for.
+    pub fn p_last(&self) -> Option<Landing> {
+        self.p_later.or(self.p_next)
     }
 
     pub fn vf(&self, n: usize) -> [u32; 4] {
@@ -391,7 +404,7 @@ impl Vpu {
         self.run_to(t);
         let busy = |free: u64, bit: u32| if free > t + 1 { bit } else { 0 };
         let (v0, v1) = (&self.units.vu0, &self.units.vu1);
-        let efu = v1.p_next.map_or(0, |l| busy(l.at, vpu_stat::EFU));
+        let efu = v1.p_last().map_or(0, |l| busy(l.at, vpu_stat::EFU));
         let unit0 = self.micro0.stat() | busy(v0.div_free, vpu_stat::DIV);
         let unit1 = self.micro1.stat() | busy(v1.div_free, vpu_stat::DIV) | efu;
         unit0 | unit1 << vpu_stat::VU1
@@ -446,6 +459,7 @@ impl Vpu {
             self.units.link.fbrst &= !(0xC << fbrst::VU1);
             self.units.vu1.q_next = None;
             self.units.vu1.p_next = None;
+            self.units.vu1.p_later = None;
         }
     }
 

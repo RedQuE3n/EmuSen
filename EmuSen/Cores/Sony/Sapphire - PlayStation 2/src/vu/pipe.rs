@@ -326,7 +326,7 @@ impl Pipe {
                 Class::Div(_) => t.max(vu.div_free),
                 Class::WaitQ => t.max(vu.q_next.map_or(0, |l| l.at)),
                 Class::Efu(_) if self.unit == 1 => t.max(vu.efu_free),
-                Class::WaitP => t.max(vu.p_next.map_or(0, |l| l.at - 1)),
+                Class::WaitP => t.max(vu.p_last().map_or(0, |l| l.at - 1)),
                 _ => t,
             };
         }
@@ -414,7 +414,7 @@ impl Pipe {
                     }
                     if let (Class::Efu(latency), Some(p)) = (e.class, low_out.p) {
                         let at = t + u64::from(latency);
-                        vu.p_next = Some(Landing { at, value: p, flags: None });
+                        vu.send_p(Landing { at, value: p, flags: None });
                         vu.efu_free = at - 1;
                     }
                 }

@@ -1,8 +1,9 @@
 //! The EE core's timing model at instruction granularity (Sapphire_Plan.md §5.2, Q14): the issue and latency table
 //! of the EE Core User's Manual, pinned as data, the in-order two-way issue it describes, and from S7 the caches'
 //! refills and the bus's transfers, from S8 the multimedia rows on both multipliers, from S9 the floating-point rows
-//! with the FPU's registers, its accumulator, FCR31 and its divider. Sapphire_Native.md §16.4, §17.5, §18.4 and §19.5
-//! record each rule's source and the losses named.
+//! with the FPU's registers, its accumulator, FCR31 and its divider, from S12 COP2's macro rows with VU0's registers by
+//! number and VU0's divider (VU User's Manual §5.4). Sapphire_Native.md §16.4, §17.5, §18.4, §19.5 and §21.5 record each
+//! rule's source and the losses named.
 
 /// A physical pipe of Table 1-1 (EE Core User's Manual §1.3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,6 +128,17 @@ pub const FLOAT: [Row; 11] = [
     row("LWC1", &[Pipe::C1, Pipe::Ls], 2, 1),
 ];
 
+/// COP2's macro rows, from S12 (VU User's Manual §5.4.1 to §5.4.4, §7.4), as the macro instruction reader sees them:
+/// an FMAC result four cycles on, an integer one the next cycle, a transfer to VU0 two cycles on (§5.4.4's stall).
+pub const COP2: [Row; 6] = [
+    row("FMAC", &[Pipe::C2], 4, 1),
+    row("IALU", &[Pipe::C2], 1, 1),
+    row("VDIV / VSQRT", &[Pipe::C2], 7, 7),
+    row("VRSQRT", &[Pipe::C2], 13, 13),
+    row("QMTC2 / CTC2 / LQC2", &[Pipe::C2, Pipe::Ls], 2, 1),
+    row("QMFC2 / CFC2 / SQC2", &[Pipe::C2, Pipe::Ls], 1, 1),
+];
+
 /// The integer rows by index, for the instruction table.
 pub mod rows {
     pub const ALU: usize = 0;
@@ -157,21 +169,40 @@ pub mod rows {
     pub const FRSQRT: usize = FLOAT + 8;
     pub const FMADD: usize = FLOAT + 9;
     pub const LWC1: usize = FLOAT + 10;
+    /// COP2's rows follow the floating-point ones, in `COP2`'s order.
+    pub const COP2: usize = FLOAT + 11;
+    pub const VFMAC: usize = COP2;
+    pub const VIALU: usize = COP2 + 1;
+    pub const VDIV: usize = COP2 + 2;
+    pub const VRSQRT: usize = COP2 + 3;
+    pub const VTO: usize = COP2 + 4;
+    pub const VFROM: usize = COP2 + 5;
 }
 
 /// A row of either table by its index (`rows`).
 pub fn row_of(i: usize) -> &'static Row {
-    if i < rows::FLOAT { &INTEGER[i] } else { &FLOAT[i - rows::FLOAT] }
+    if i < rows::FLOAT {
+        &INTEGER[i]
+    } else if i < rows::COP2 {
+        &FLOAT[i - rows::FLOAT]
+    } else {
+        &COP2[i - rows::COP2]
+    }
 }
 
-/// The resources the scoreboard tracks: the 32 GPRs, then HI/LO, HI1/LO1 and SA, the 32 FPRs, ACC and FCR31.
+/// The resources the scoreboard tracks: the 32 GPRs, then HI/LO, HI1/LO1 and SA, the 32 FPRs, ACC and FCR31, and VU0's
+/// registers 1 to 31 by number, a VF and the VI or control register of its number being one (§5.4.2).
 pub const HILO0: usize = 32;
 pub const HILO1: usize = 33;
 pub const SA: usize = 34;
 pub const FPR0: usize = 35;
 pub const ACC: usize = FPR0 + 32;
 pub const FCR31: usize = ACC + 1;
-const RESOURCES: usize = FCR31 + 1;
+/// VU0's register `n` (1 to 31) is resource `VU0R + n - 1`; register 0 is no hazard.
+pub const VU0R: usize = FCR31 + 1;
+const RESOURCES: usize = VU0R + 31;
+/// The VU0 resources, for a transfer from VU0, which reads a cycle after a macro instruction would (§5.4.4).
+const VU0_MASK: u128 = ((1u128 << 31) - 1) << VU0R;
 
 /// A cache line's refill: "a burst of 4 bus cycles (8 CPU cycles)" (EE Core User's Manual §6.3.3), the minimum.
 pub const REFILL: u64 = 8;
@@ -201,12 +232,25 @@ pub struct Issue {
     pub blocking: bool,
     /// Config.DIE clear: one instruction a cycle (§3.2, "Config Register").
     pub single: bool,
+    /// The earliest cycle it may issue in for a reason outside the pipe: VU0 running a microprogram, a VWAITQ.
+    pub earliest: u64,
+    /// Nothing issues beside it: VWAITQ, which holds the pipeline until Q is written (§5.4.7).
+    pub alone: bool,
 }
 
 impl Issue {
     pub fn new(category: Category, row: usize) -> Issue {
-        Issue { category, row, reads: 0, writes: 0, taken: false, fetch: 0, data: 0, blocking: false, single: false }
+        Issue { category, row, reads: 0, writes: 0, taken: false, fetch: 0, data: 0, blocking: false, single: false, earliest: 0, alone: false }
     }
+}
+
+/// Where an instruction would issue: its cycle, whether beside the one before, in which pipe, and Table 1-3's stall.
+#[derive(Clone, Copy, Debug)]
+struct Plan {
+    at: u64,
+    paired: bool,
+    pipe: u8,
+    stall: u64,
 }
 
 /// The in-order two-way issue of §1.3.6: each instruction issues in the cycle its operands are ready and its unit is
@@ -218,6 +262,10 @@ pub struct Timing {
     mac1_free: u64,
     /// The cycle the FPU's divider, which DIV.S, SQRT.S and RSQRT.S share, takes its next operation [A].
     fdiv_free: u64,
+    /// The cycle VU0's divider takes its next macro VDIV, VSQRT or VRSQRT (§5.4.2, "DIV resource hazard").
+    vdiv_free: u64,
+    /// The earliest cycle of the next COP2 operation after a transfer to VU0 (§5.4.4: "always stalls for one cycle").
+    cop2_floor: u64,
     /// The cycle the last instruction issued in, its category and pipe, its writes, and whether it may take a partner.
     last: u64,
     last_category: Option<Category>,
@@ -241,6 +289,8 @@ impl Default for Timing {
             mac0_free: 0,
             mac1_free: 0,
             fdiv_free: 0,
+            vdiv_free: 0,
+            cop2_floor: 0,
             last: 0,
             last_category: None,
             last_pipe: 0,
@@ -266,52 +316,76 @@ impl Timing {
         self.paired
     }
 
+    /// The cycle an instruction would issue in, the model unchanged.
+    pub fn would_issue(&self, i: Issue) -> u64 {
+        self.plan(&i).at
+    }
+
     /// Charges one instruction and returns the cycle it issued in.
     pub fn issue(&mut self, i: Issue) -> u64 {
-        let row = row_of(i.row);
+        let p = self.plan(&i);
+        self.commit(&i, p)
+    }
+
+    fn uses_mac0(i: &Issue) -> bool {
+        matches!(i.row, rows::MULT | rows::DIV | rows::MADD | rows::MMULT | rows::MMDIV)
+    }
+    fn uses_mac1(i: &Issue) -> bool {
+        matches!(i.row, rows::MULT1 | rows::DIV1 | rows::MADD1 | rows::MMULT | rows::MMDIV)
+    }
+
+    fn plan(&self, i: &Issue) -> Plan {
         let next = if self.instructions == 0 { 0 } else { self.last + 1 };
         let mut earliest = if i.fetch > 0 { next.max(self.floor) + i.fetch } else { 0 };
+        earliest = earliest.max(i.earliest);
         if i.data > 0 {
             earliest = earliest.max(self.mem_free);
         }
+        let from_vu = i.row == rows::VFROM;
         for r in 0..RESOURCES {
             if i.reads >> r & 1 == 1 {
-                earliest = earliest.max(self.ready[r]);
+                let late = u64::from(from_vu && VU0_MASK >> r & 1 == 1);
+                earliest = earliest.max(self.ready[r] + late);
             }
         }
-        let uses_mac0 = matches!(i.row, rows::MULT | rows::DIV | rows::MADD | rows::MMULT | rows::MMDIV);
-        let uses_mac1 = matches!(i.row, rows::MULT1 | rows::DIV1 | rows::MADD1 | rows::MMULT | rows::MMDIV);
-        if uses_mac0 {
+        if Self::uses_mac0(i) {
             earliest = earliest.max(self.mac0_free);
         }
-        if uses_mac1 {
+        if Self::uses_mac1(i) {
             earliest = earliest.max(self.mac1_free);
         }
-        let uses_fdiv = matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT);
-        if uses_fdiv {
+        if matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT) {
             earliest = earliest.max(self.fdiv_free);
         }
+        if matches!(i.row, rows::VDIV | rows::VRSQRT) {
+            earliest = earliest.max(self.vdiv_free);
+        }
+        if i.category == Category::Cop2Operate {
+            earliest = earliest.max(self.cop2_floor);
+        }
         let (p0, p1) = logical(i.category);
-        let mut stall = 0;
-        let paired = self.instructions > 0
+        let partner = if self.instructions > 0
             && self.open
             && i.fetch == 0
             && !i.single
             && earliest <= self.last
             && i.writes & self.last_writes == 0
             && i.reads & self.last_writes == 0
-            && match self.partner(i.category, p0, p1) {
-                Some((pipe, cell)) => {
-                    stall = u64::from(cell == Pair::Y);
-                    self.last_pipe = pipe;
-                    true
-                }
-                None => false,
-            };
-        let at = if paired { self.last } else { earliest.max(self.floor).max(next) };
-        if !paired {
-            self.last_pipe = if p0 { 0 } else { 1 };
+        {
+            self.partner(i.category, p0, p1)
+        } else {
+            None
+        };
+        match partner {
+            Some((pipe, cell)) => Plan { at: self.last, paired: true, pipe, stall: u64::from(cell == Pair::Y) },
+            None => Plan { at: earliest.max(self.floor).max(next), paired: false, pipe: if p0 { 0 } else { 1 }, stall: 0 },
         }
+    }
+
+    fn commit(&mut self, i: &Issue, p: Plan) -> u64 {
+        let row = row_of(i.row);
+        let (at, stall) = (p.at, p.stall);
+        self.last_pipe = p.pipe;
         let done = at + stall + u64::from(row.latency.max(1)) + i.data;
         if i.data > 0 {
             self.mem_free = at + 1 + i.data;
@@ -321,16 +395,23 @@ impl Timing {
                 self.ready[r] = done;
             }
         }
-        if uses_mac0 {
+        if Self::uses_mac0(i) {
             self.mac0_free = at + u64::from(row.throughput);
         }
-        if uses_mac1 {
+        if Self::uses_mac1(i) {
             self.mac1_free = at + u64::from(row.throughput);
         }
-        if uses_fdiv {
+        if matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT) {
             self.fdiv_free = at + u64::from(row.throughput);
         }
-        self.open = !paired;
+        if matches!(i.row, rows::VDIV | rows::VRSQRT) {
+            self.vdiv_free = at + u64::from(row.throughput);
+        }
+        if i.row == rows::VTO {
+            self.cop2_floor = at + 2;
+        }
+        let paired = p.paired;
+        self.open = !paired && !i.alone;
         self.last = at;
         self.last_category = Some(i.category);
         self.last_writes = if paired { self.last_writes | i.writes } else { i.writes };

@@ -22,4 +22,5 @@ pub mod machine;
 pub mod media;
 pub mod state;
 pub mod timer;
+pub mod vu;
 pub mod v1;

@@ -38,6 +38,16 @@ pub(super) mod uses {
 }
 use uses::{HILO0 as H0, HILO1 as H1, RA, RD, RS, RT, SA as S};
 
+/// Which unit an instruction's `reads` and `writes` and its timing belong to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Kind {
+    Cpu,
+    /// COP1: `reads` and `writes` name the FPU's fields (`super::fpu::uses`).
+    Fpu,
+    /// COP2: the registers come from the word (`super::cop2::issue`).
+    Cop2,
+}
+
 pub(super) struct Op {
     pub name: &'static str,
     pub run: Run,
@@ -45,8 +55,7 @@ pub(super) struct Op {
     pub row: usize,
     pub reads: u8,
     pub writes: u8,
-    /// A COP1 instruction, whose `reads` and `writes` name the FPU's fields (`super::fpu::uses`).
-    pub fpu: bool,
+    pub kind: Kind,
 }
 
 pub(super) fn rs(w: u32) -> usize {
@@ -932,7 +941,7 @@ fn later(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 }
 
 pub(super) const fn op(name: &'static str, run: Run, category: Category, row: usize, reads: u8, writes: u8) -> Op {
-    Op { name, run, category, row, reads, writes, fpu: false }
+    Op { name, run, category, row, reads, writes, kind: Kind::Cpu }
 }
 
 use Category::{Alu, Branch, Cop0, Eret as EretC, LoadStore, Mac0, Mac1, SaOperate, Sync};
@@ -1108,16 +1117,17 @@ pub(super) fn predicted_branch(o: &Op) -> bool {
 }
 
 pub(super) fn is_load(o: &Op) -> bool {
-    o.category == LoadStore && o.writes & RT != 0 || o.name == "lwc1"
+    o.category == LoadStore && o.writes & RT != 0 || matches!(o.name, "lwc1" | "lqc2")
 }
 
 pub(super) fn is_store(o: &Op) -> bool {
-    o.category == LoadStore && o.name.starts_with('s') || o.name == "swc1"
+    o.category == LoadStore && o.name.starts_with('s') || matches!(o.name, "swc1" | "sqc2")
 }
 
-/// Every instruction the interpreter has, in one index space: S6's and S7's, S8's multimedia instructions, S9's COP1.
+/// Every instruction the interpreter has, in one index space: S6's and S7's, S8's multimedia instructions, S9's COP1,
+/// S12's COP2.
 fn all() -> impl Iterator<Item = &'static Op> {
-    TABLE.iter().chain(super::mmi::TABLE).chain(super::fpu::TABLE)
+    TABLE.iter().chain(super::mmi::TABLE).chain(super::fpu::TABLE).chain(super::cop2::TABLE)
 }
 
 /// The names the interpreter executes, the decoder's spelling.
@@ -1135,26 +1145,31 @@ pub(super) fn index(w: u32) -> u16 {
     match r5900::operation(w) {
         None => RESERVED,
         Some(Decoded::Cpu(name, _)) => by_name().get(name).copied().unwrap_or(LATER),
-        Some(Decoded::Vu0(_)) => LATER,
+        Some(Decoded::Vu0(_)) => (TABLE.len() + super::mmi::TABLE.len() + super::fpu::TABLE.len() + super::cop2::VU) as u16,
     }
 }
 
 pub(super) fn get(i: u16) -> &'static Op {
     let i = i as usize;
     let mmi = TABLE.len() + super::mmi::TABLE.len();
+    let fpu = mmi + super::fpu::TABLE.len();
     if i < TABLE.len() {
         &TABLE[i]
     } else if i < mmi {
         &super::mmi::TABLE[i - TABLE.len()]
-    } else {
+    } else if i < fpu {
         &super::fpu::TABLE[i - mmi]
+    } else {
+        &super::cop2::TABLE[i - fpu]
     }
 }
 
 /// What the timing model is told of `op` at `w`: the resources by register number.
 pub(super) fn issue(op: &Op, w: u32) -> Issue {
-    if op.fpu {
-        return super::fpu::issue(op, w);
+    match op.kind {
+        Kind::Fpu => return super::fpu::issue(op, w),
+        Kind::Cop2 => return super::cop2::issue(op, w),
+        Kind::Cpu => {}
     }
     let bits = |u: u8| -> u128 {
         let mut m = 0u128;

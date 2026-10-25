@@ -129,7 +129,7 @@ fn fused(e: &mut Ee, w: u32, subtract: bool, into_acc: bool) -> R {
         e.fpr[fd(w)] = r.value.bits;
     }
     exponent_flags(e, r.value);
-    if r.product_underflow {
+    if r.product.underflow {
         e.fcr31 |= flag::SU;
     }
     Ok(())
@@ -290,7 +290,7 @@ fn bc1tl(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
 }
 
 const fn fop(name: &'static str, run: super::ops::Run, category: Category, row: usize, reads: u8, writes: u8) -> Op {
-    Op { name, run, category, row, reads, writes, fpu: true }
+    Op { name, run, category, row, reads, writes, kind: super::ops::Kind::Fpu }
 }
 
 use Category::{Branch, Cop1Move as Move, Cop1Operate as Operate};

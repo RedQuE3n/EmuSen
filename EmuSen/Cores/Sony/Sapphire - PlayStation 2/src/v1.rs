@@ -4,6 +4,7 @@
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
+use crate::bios;
 use crate::machine::{AUDIO_RATE, BIOS_BYTES, BIOS_ID, Machine, Market, PAL_HEIGHT, RAM_ID, WIDTH};
 use crate::media::{Media, Refusal};
 use crate::state::STATE_VERSION;
@@ -66,13 +67,13 @@ pub const BIOS_EUROPE: u32 = 18;
 
 const BIOS_COST: &str = "No PlayStation 2 program runs yet, with this file or without it. A player's own BIOS is the first path, from the stage that boots it (S24); Sapphire's own open BIOS takes its place later, as a separate track (Sapphire_Plan.md §5.9).";
 
-/// The three markets' BIOS by their No-Intro names; Japan's is the newest retail version among the tester's images,
-/// confirmed against a public database at S2 (Sapphire_Plan.md §11 Q9).
+/// The three markets' BIOS by their Redump names, each the market's newest retail console version, with every retail
+/// version's MD5 so that a player's file is found by its content (Sapphire_Native.md §12.3).
 pub fn bios(market: Market) -> Firmware {
-    let (which, name, label) = match market {
-        Market::Japan => (BIOS_JAPAN, "ps2-0210j-20040917.bin", "PlayStation 2 BIOS (Japan)"),
-        Market::Americas => (BIOS_AMERICAS, "ps2-0230a-20080220.bin", "PlayStation 2 BIOS (Americas)"),
-        Market::Europe => (BIOS_EUROPE, "ps2-0230e-20080220.bin", "PlayStation 2 BIOS (Europe)"),
+    let (which, name, label, md5): (_, _, _, &[&str]) = match market {
+        Market::Japan => (BIOS_JAPAN, "ps2-0230j-20080220.bin", "PlayStation 2 BIOS (Japan)", &bios::JAPAN),
+        Market::Americas => (BIOS_AMERICAS, "ps2-0230a-20080220.bin", "PlayStation 2 BIOS (Americas)", &bios::AMERICAS),
+        Market::Europe => (BIOS_EUROPE, "ps2-0230e-20080220.bin", "PlayStation 2 BIOS (Europe)", &bios::EUROPE),
     };
     Firmware {
         which,
@@ -82,7 +83,7 @@ pub fn bios(market: Market) -> Firmware {
         required: false,
         parts: vec![vec![name.into()]],
         replacement: Some(Replacement::None { cost: BIOS_COST.into() }),
-        md5: Vec::new(),
+        md5: md5.iter().map(|&m| m.into()).collect(),
     }
 }
 
@@ -411,12 +412,23 @@ mod tests {
         let ps2 = &info.systems[0];
         assert_eq!((ps2.id.as_str(), ps2.extensions.as_slice(), ps2.development), ("ps2", &[".elf".to_string()][..], true));
         assert_eq!(ps2.firmware.iter().map(|f| (f.which, f.name.as_str(), f.size, f.required)).collect::<Vec<_>>(), [
-            (16, "ps2-0210j-20040917.bin", 4 << 20, false),
+            (16, "ps2-0230j-20080220.bin", 4 << 20, false),
             (17, "ps2-0230a-20080220.bin", 4 << 20, false),
             (18, "ps2-0230e-20080220.bin", 4 << 20, false),
         ]);
         assert_eq!(ps2.controllers.iter().map(|c| (c.id.as_str(), c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(DUALSHOCK2, 16, 4), (DIGITAL, 14, 0)]);
         assert_eq!(Machine::firmware_for(&cd()).iter().map(|f| f.which).collect::<Vec<_>>(), [BIOS_AMERICAS]);
         assert!(Machine::firmware_for(&[1, 2, 3]).is_empty());
+    }
+
+    #[test]
+    fn each_market_lists_its_retail_images_with_the_canonical_one_first() {
+        let lists = [Market::Japan, Market::Americas, Market::Europe].map(|m| bios(m).md5);
+        assert_eq!(lists.iter().map(Vec::len).collect::<Vec<_>>(), [27, 15, 16]);
+        assert_eq!(lists.iter().map(|l| l[0].as_str()).collect::<Vec<_>>(), ["80ac46fa7e77b8ab4366e86948e54f83", "21038400dc633070a78ad53090c53017", "dc69f0643a3030aaa4797501b483d6c4"]);
+        let all: Vec<&String> = lists.iter().flatten().collect();
+        assert!(all.iter().all(|m| m.len() == 32 && m.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())));
+        assert_eq!(all.iter().collect::<std::collections::HashSet<_>>().len(), all.len(), "no image in two markets or twice in one");
+        assert_eq!(Machine::firmware_for(&cd())[0].md5, lists[1]);
     }
 }

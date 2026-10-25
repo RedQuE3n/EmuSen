@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stage S1 built 2026-10-24. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 and S2 built 2026-10-24. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -12,7 +12,12 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   development (an EE program by its ELF header, a disc by `SYSTEM.CNF`'s `BOOT2`, the three BIOS entries, the `SPH2`
   state); the system `ps2` with its recogniser and the PlayStation's `BOOT2` exclusion, root files read as far as a
   DVD's volume places them; the CRT row owed while the console is offered to no player; the fixtures, the kit's gate
-  and the seeded faults.
+  and the seeded faults; and stage S2 (2026-10-24): the references pinned, the Japanese BIOS entry renamed to
+  `ps2-0230j-20080220.bin`, and each BIOS entry listing its market's retail MD5s from Redump's datfile.
+- **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
+  pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
+  BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
+  and its lists; the IOP's cache facts and the SPU2's 48 voices.
 - **`Sapphire_Disputes.md`** — the disputes log, opened with D-0, the system clocks.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends

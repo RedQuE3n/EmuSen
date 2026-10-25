@@ -55,10 +55,10 @@ namespace EmuSen.Crystal.Systems.Ps2
             return Boot2(config) is { } program ? new Recognition(Id, Psx.PsxSystem.SerialOfFile(program), null) : null;
         }
 
-        // The BIOS of each market by its No-Intro name, each optional - see Sapphire_Plan.md §5.9, Sapphire_Native.md §2.5.
+        // The BIOS of each market by its Redump name, each optional - see Sapphire_Plan.md §5.9, Sapphire_Native.md §2.5 and §12.3.
         public static readonly IReadOnlyList<(string Market, string Name, long Size)> Bios = new[]
         {
-            ("Japan", "ps2-0210j-20040917.bin", 4_194_304L),
+            ("Japan", "ps2-0230j-20080220.bin", 4_194_304L),
             ("Americas", "ps2-0230a-20080220.bin", 4_194_304L),
             ("Europe", "ps2-0230e-20080220.bin", 4_194_304L),
         };

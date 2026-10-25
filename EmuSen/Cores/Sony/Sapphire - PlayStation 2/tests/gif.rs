@@ -93,8 +93,6 @@ fn a_second_direct_reaches_the_gs_in_every_form_of_the_probe() {
     }
 }
 
-/// The GSs
-
 /// The GS's host interface as a list of what reached it.
 #[derive(Default)]
 struct Recorder(Vec<(u8, u64)>);

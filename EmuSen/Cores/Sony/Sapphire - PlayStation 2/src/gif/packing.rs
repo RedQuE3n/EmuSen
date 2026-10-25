@@ -165,7 +165,7 @@ impl Packet {
 
     /// GIF_CNT (§7.6): LOOPCNT, REGCNT (the descriptor in process, 1 the lowest and 0 the sixteenth) and VUADDR.
     pub fn cnt(&self, vuaddr: u16) -> u32 {
-        u32::from(self.loops) | u32::from(self.reg + 1 & 0xF) << 16 | u32::from(vuaddr & 0x3FF) << 20
+        u32::from(self.loops) | u32::from((self.reg + 1) & 0xF) << 16 | u32::from(vuaddr & 0x3FF) << 20
     }
 }
 

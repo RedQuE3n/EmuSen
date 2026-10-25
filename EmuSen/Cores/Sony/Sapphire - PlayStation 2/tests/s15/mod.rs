@@ -354,9 +354,9 @@ pub fn packed() -> Program {
     b.regs(&[(s17::r::ZBUF_1, zbuf(0, Z32, true))]);
     // Three sprites from PRE's PRIM field, REGS {RGBAQ, XYZ2, XYZ2}.
     let mut pk = vec![tag(3, true, Some(SPRITE as u32), 0, &[0x1, 0x5, 0x5])];
-    for k in 0..3 {
+    for (k, &c) in colours.iter().take(3).enumerate() {
         let x = 2 + 7 * k as i32;
-        pk.extend([p_rgba(colours[k], 0xA5_5A00 | k as u32), p_xyz(x, 1, 0, false, 0x5A5A_1234), p_xyz(x + 5, 6, 0, false, 0x2468_ACE0)]);
+        pk.extend([p_rgba(c, 0xA5_5A00 | k as u32), p_xyz(x, 1, 0, false, 0x5A5A_1234), p_xyz(x + 5, 6, 0, false, 0x2468_ACE0)]);
     }
     b.send3(&pk);
     // XYZF2 into the Z buffer, ADC 0, and a sprite whose second vertex has ADC 1 (to XYZF3: no drawing kick).
@@ -481,11 +481,11 @@ pub fn paths() -> Program {
     b.send3(&pk);
     b.rec_label();
     let pk = region_packet(1);
-    b.chain3(&[pk.clone()], false);
+    b.chain3(std::slice::from_ref(&pk), false);
     b.arrive(&pk);
     b.rec_label();
     let pk = region_packet(2);
-    b.chain3(&[pk.clone()], true);
+    b.chain3(std::slice::from_ref(&pk), true);
     b.arrive(&pk);
     b.rec_label();
     let pk = region_packet(3);

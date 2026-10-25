@@ -54,6 +54,11 @@ Every claim carries one of five marks:
 - *Target games named by the tester on 2026-10-24:* **Jak and Daxter** (a test copy of the USA disc is kept read-only in
   the probe's cache, `~/.cache/emusen/probe/sapphire/discs/`, never committed or copied into the repository),
   **Kingdom Hearts** and **Dark Cloud 2** (not yet dumped). Q8's bench stays beside them, its three titles first.
+- *Two player-facing gates added on 2026-10-24 by the tester's request.* The tester: "the goal with PS2 is similar to
+  PSX with the ability to boot it without a disc and use the memory card functions." The plan built the parts (S24,
+  the player's BIOS to OSDSYS; S25, the card and its crate; O12, the menu without a disc on the open BIOS) and promised
+  neither to the player. **G10, start without a disc**, and **G11, the Memory Cards window for the PlayStation 2**,
+  are therefore gates of §8, placed at S25 and offered with the system at S29 (§7); neither is built before then.
 
 ---
 
@@ -871,7 +876,7 @@ the enhancements (E) are separate tracks.
 | **S22** | The SIF: registers and its three DMA channels | The project's programs passing messages both ways, EE and IOP each checking the other's record |
 | **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) |
 | **S24** | **The player's BIOS to its menu**: what is missing for it, SIO2's pad, the EEPROM synthesised; the writers of this stage are thereafter not replacement writers | OSDSYS's picture at an anchor equal to PCSX2's on the same BIOS within a stated count of pixels, for the Americas and Europe versions of §11 Q9; then **all 78 ps2autotests on the player's BIOS** equal their expected texts, each miss a dispute |
-| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says |
+| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap; **the start without a disc** (G10) and **the PlayStation 2's tab of the Memory Cards window** (G11) built on them, behind the `InDevelopment` mark | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says; G10's and G11's tests (§8) *Amended 2026-10-24: G10 and G11 added here.* |
 | **S26** | The SPU2 on the shared voice crate (§9.3) | The project's voice programs against the referees' sound; Diamond's SPU goldens unchanged by the crate's extraction |
 | **S27** | The IPU | The project's MPEG-2 streams decoded equal to the standard's arithmetic, each difference a dispute |
 | **S28** | Games on the player's BIOS to their title screens and into play (needs §11 Q8) | The bench discs at three anchors each against the referees in picture and RAM, or dispute-logged |
@@ -880,7 +885,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S29** | The PlayStation 2 to players: the pack's serial, region, shelf and media, the settings, the firmware page's entries, the DualShock 2 drawing, the CRT profile (§4.6), `.m3u` and the disc change | The kit's C1–C15 on the tester's discs in the corpus form; the fit audit with the PlayStation 2's tab, drawing and shelf at both sizes; `ConsoleScreenRuleTests` |
+| **S29** | The PlayStation 2 to players: the pack's serial, region, shelf and media, the settings, the firmware page's entries, the DualShock 2 drawing, the CRT profile (§4.6), `.m3u` and the disc change; the start without a disc and the Memory Cards tab (G10, G11) offered with the system | The kit's C1–C15 on the tester's discs in the corpus form; the fit audit with the PlayStation 2's tab, drawing and shelf at both sizes; `ConsoleScreenRuleTests`; G10 and G11 met on the player's build *Amended 2026-10-24.* |
 | **S30** | States: `SPH2`'s layout listing, loading back, the rewind codec measured on a 41 MiB state | States round-trip at every anchor of the bench; rewind's cost recorded (P14) |
 | **S31** | The debugger: four processors, 128-bit registers, the VUs' disassembly, breakpoints, stepping, coverage | Each claim a test; every table armed gives the plain run's digests |
 
@@ -921,7 +926,7 @@ Diamond's E-stages were (`Diamond_Plan.md` §7).
 | **O2–O4** | The EE kernel: exceptions and interrupts (O2), threads, semaphores, alarms and handlers (O3), SIF DMA, the CRT, `LoadExecPS2` and the ELF loader (O4) | ps2autotests' `kernel/ee/*` equal their expected texts on the open kernel |
 | **O5–O9** | The IOP kernel: memory and the module loader with its linker (O5), interrupts and threads (O6), the synchronisation objects and pools (O7), I/O, the file server and SIF RPC (O8), the reboot into a disc's module image (O9) | ps2autotests' `kernel/iop/*` and `cpu/iop/*`; a game's own IOP modules loaded and linked |
 | **O10–O11** | CDVD's file system and server (O10); SIO2, pads, the card's file system and server on §9.5's crate (O11) | Games boot with no firmware folder; their cards are read under the player's BIOS and the reverse |
-| **O12** | The menu without a disc, and `firmwarecheck.py` against the tester's images with a control (`EmuSen_Firmware.md` §0) | G9 |
+| **O12** | The menu without a disc, and `firmwarecheck.py` against the tester's images with a control (`EmuSen_Firmware.md` §0) | G9; G10's start reaching the open BIOS's menu with no firmware folder *Amended 2026-10-24.* |
 
 About 48 accurate stages, 5 enhancement stages and 12 open-BIOS stages: **65 steps, 200–260 hours** if each fits its
 step (P3). The GS's rules, the VU pipelines, the CDVD and the IOP's module interface are the most likely to overrun.
@@ -959,6 +964,37 @@ then states that the open replacement is owed, as the policy requires before the
   against a control.
 - **GE, the enhancements.** Each offered only with its stage's gate met and E1's exactness test passing in CI on every
   change to the core.
+- **G10, start without a disc** (*added 2026-10-24 at the tester's request*). A player-facing way to boot the console
+  to its menu with an empty tray, as the PlayStation's is (`Diamond_Shell.md` §1.1, §1.2 and §1.5, read 2026-10-24).
+  The form is Diamond's and needs no new surface: the `ps2` system's core-info entry gains `starts_empty: true`
+  (the core ABI's minor 1.11); `create` takes a null image with the system named and makes the console with the tray
+  closed and empty, its firmware chosen from the files the host passes from the system's `firmware` list; the drive
+  then takes a disc through `MEDIA`, which the kit's C22 requires of a system with a drive. Mistress offers it from core
+  info alone, never from a list of consoles (`MainWindow.ConsoleStart.cs`, read 2026-10-24: `RuntimeCatalog`'s
+  `ConsolesThatStartEmpty` feeds *Start a Console*, the library's *Start PlayStation 2* button, the pad menu's row and
+  big picture's *Start PlayStation 2 With No Disc*), with *Insert Disc…* and *Eject Disc* in a running session;
+  DianaSh's `core <corename> --console ps2` the same. **It needs the player's BIOS** until O12: with no BIOS in the
+  firmware folder the start is refused with the core's words, as a game is, never with a black screen. Its tests: the
+  kit's C22 on `ps2`; OSDSYS's picture at an anchor with an empty tray, not black and changed by a press, on the
+  tester's machine only and never in CI (as `Diamond_Shell.md` §4.5); a synthetic disc inserted afterwards reaching
+  the recogniser and the drive. Built at S25, when the BIOS reaches OSDSYS (S24) and the pad drives it; offered with
+  the system at S29; on the open BIOS at O12.
+- **G11, the Memory Cards window for the PlayStation 2** (*added 2026-10-24 at the tester's request*). Mistress's
+  Memory Cards window gains the PlayStation 2's tab with the PlayStation's actions (`EmuSen_SaveMedia.md` §6.5, read
+  2026-10-24; `MemoryCardsWindow.cs`, whose *Copy Save*, *Move Save*, *Delete Save*, *New Card* and *Import Every
+  Game's Saves* reach the runtime's card manager as `CardsCopy`, `CardsMove`, `CardsDelete`, `CardsNew` and
+  `CardsImport`; the fit audit's `MemoryCardsPlayStation` and `MemoryCardsPlayStationHeld` cases): a card's saves
+  listed with title, size and game and the card's free space, copied or moved to another card, deleted, and imported
+  from each game's own card, all or none. The window gains nothing of the PlayStation 2's own: the medium `ps2.card`
+  (§4.4) is declared by the core as `removable`, and its file system is §9.5's crate `emusen-ps2-card` behind the card
+  manager's format surface (`EmuSen_SaveMedia.md` §6.2: read, copy, delete and format, pure, bytes in and bytes out),
+  so DianaSh's `memcard` gets the same actions. The PlayStation 2's saves are directories of files, not blocks, so the
+  medium's unit is the crate's (clusters, or kilobytes as OSDSYS shows them), written down when the crate is. Its
+  tests: the PlayStation 2's tab in WiseMan's fit audit at 1280 × 800 and 1920 × 1200 beside the PlayStation's cases,
+  a held card's writes refused; the crate's copy, delete and import round-tripped on a card formatted by PCSX2 (a black
+  box) and read back by PCSX2, and on one formatted by the player's BIOS on Sapphire where §11 Q7 lets the BIOS use a
+  card. The window works on card files whether or not the player's BIOS accepts the card in play, so P8's refusal
+  does not block it. Built at S25 with the crate; offered with the system at S29.
 
 ---
 

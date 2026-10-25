@@ -331,6 +331,11 @@ and excluded for every writer (`Sapphire_References.md` §2).*
 | **Referees** | §1.6 | — | Everything, run whole | RAM, pictures, sound |
 | **Commercial discs** | the tester's own, **none in the library** [M: `~/Documents/Roms/` holds no PlayStation 2 folder, the memory note of 2026-10-19]; one on the handheld's card, not touched (§11 Q8) | not redistributable | Integration and the goldens | References at anchors |
 
+*Found 2026-10-24 at S4 (`Sapphire_Native.md` §14.5): `cpu/ee/alu` and `cpu/ee/lsudelay`, run on PCSX2 with the
+Americas and Europe BIOS, print their whole expected texts, `-- TEST BEGIN` to `-- TEST END`, on the **IOP's console**;
+nothing of them reaches the EE's console, which a project program shows carries KPUTCHAR (1000F180h). An EE program's
+text therefore crosses to the IOP before it is printed, and the IOP's console is the channel Sapphire must keep.*
+
 **Negative results of the survey** [M, GitHub's organisation listing and search, 2026-10-23]: SingleStepTests publishes
 no R5900 suite (its repositories include `r3000`, which the IOP's crate already passes, and none for the EE); no GS,
 SPU2, IPU or CDVD suite with console results was found; ps2autotests' GS coverage is two programs, both about
@@ -365,7 +370,10 @@ found to use (P2); **an expected-text grader** that compares a run's whole outpu
 normalising line ends, as the README asks [R]; **a synthetic ELF builder** in WiseMan (`SyntheticPs2Elf`, the counterpart
 of `SyntheticRom`) and **a synthetic disc builder** (ISO 9660 with `SYSTEM.CNF`, single- and dual-layer DVD images,
 CD images), so CI never needs a commercial disc; and **a RAM-record reader** for the project's own programs, shared in
-form with Diamond's.
+form with Diamond's. *Built 2026-10-24 at S4 (`Sapphire_Native.md` §14): the expected-text grader (`ExpectedText`), the
+RAM-record reader (`RamRecordForm`, Diamond's and Sapphire's forms), `SyntheticPs2Elf` with its recording program, and
+`SyntheticPs2Disc` with CD sets and dual-layer DVDs on one ISO 9660 writer shared with the PlayStation's builder; the TTY
+reader takes the channel's space as data, the IOP's console once Sapphire keeps it.*
 
 ### 3.4 The conformance kit's corpus form
 
@@ -843,7 +851,7 @@ the enhancements (E) are separate tracks.
 | **S1** | The crate `sapphire` on the core ABI v1 as a stub with the `InDevelopment` mark: an ELF recognised and refused with words; the system pack `ps2` (§4.1) with the recogniser's `BOOT2` rule and Diamond's `BOOT` rule beside it; the three firmware entries (§5.9); the `SPH2` header | The kit's C1–C15 on a synthetic ELF and a synthetic ISO; a synthetic PS1 disc routed to Diamond, a PS2 CD and DVD to Sapphire, by test *Built 2026-10-24, `Sapphire_Native.md`: met; the CRT row recorded as owed (its §6).* |
 | **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation *Built 2026-10-24, `Sapphire_Native.md` §12, `Sapphire_References.md`: met; the Japanese entry renamed to `0230j`.* |
 | **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written *Built 2026-10-24, `Sapphire_Native.md` §13, `Sapphire_Referees.md`: met; `record.s`'s twelve words equal on PCSX2, LRPS2, PCEE2 and Play!, `play_libretro` refused for want of an OpenGL context.* |
-| **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) |
+| **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) *Built 2026-10-24, `Sapphire_Native.md` §14: met; `cpu/ee/alu`'s whole text reached PCSX2's IOP console and not its EE console, which carries KPUTCHAR (P2 held).* |
 
 **Phase B — the EE**
 
@@ -1215,7 +1223,8 @@ needs Q11.
 - **P1.** D-0 is settled for 294.912 / 147.456 / 36.864 MHz on every model the referees and the test suite's logs can
   distinguish, with no model at 299 MHz.
 - **P2.** ps2autotests' programs print through a channel that is not a plain EE serial port (they were run under
-  ps2link), so S4 finds that at least some need the IOP and the SIF running before they print anything.
+  ps2link), so S4 finds that at least some need the IOP and the SIF running before they print anything. *Held
+  2026-10-24 at S4: an EE test's text reaches PCSX2's IOP console and not KPUTCHAR (`Sapphire_Native.md` §14.5).*
 - **P3.** The whole is about 65 steps (48 accurate, 5 enhancement, 12 open BIOS); the GS's rules, the VU pipelines, the
   CDVD and the IOP's module interface overrun their single steps.
 - **P4.** The R5900 differs from the TX79 manual in at least one instruction's result that ps2autotests records.

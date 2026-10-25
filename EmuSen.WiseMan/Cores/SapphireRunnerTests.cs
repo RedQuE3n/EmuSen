@@ -177,35 +177,38 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((78, 55, 23), (corpus.Count, corpus.Count(p => p.Name.EndsWith(".elf")), corpus.Count(p => p.Name.EndsWith(".irx"))));
         }
 
-        // The reader on snapshots: the words once the done word is there, each wrong word named, nothing without it.
+        // The reader on snapshots laid out at each form's documented addresses, not the form's own: the words once the done word is there, each wrong word named, nothing without it.
         [Fact]
         public void The_ram_record_reader_reads_words_only_behind_the_done_word()
         {
-            var form = RamRecordForm.Sapphire;
-            byte[] Ram(bool done, int spoil = -1)
+            foreach (var (form, size, doneAt, doneWord, from) in new[] { (RamRecordForm.Sapphire, 32 << 20, 0x1F_FFF0, 0x5A99_D00Eu, 0x20_0000), (RamRecordForm.Diamond, 2 << 20, 0xF_FFF0, 0xD1A0_D00Eu, 0x10_0000) })
             {
-                var ram = new byte[32 << 20];
-                for (int i = 0; i < RecordWords.Length; i++) BitConverter.TryWriteBytes(ram.AsSpan((int)form.From + 4 * i), RecordWords[i] ^ (i == spoil ? 1u : 0));
-                if (done) BitConverter.TryWriteBytes(ram.AsSpan((int)form.DoneAt), form.DoneWord);
-                return ram;
-            }
-            RomRun Run(byte[]? ram) => new("synthetic", new[] { new RomSnapshot(1, ram is null ? new Dictionary<string, byte[]>() : new Dictionary<string, byte[]> { ["ram"] = ram }, null) }, 0, Array.Empty<short>());
-            Assert.Equal(RecordWords, form.Read(Run(Ram(true)).Snapshots[0], RecordWords.Length));
-            foreach (var (run, outcome, detail) in new (RomRun, RomOutcome, string)[]
-            {
-                (Run(Ram(true)), RomOutcome.Passed, "12 words"),
-                (Run(Ram(true, spoil: 7)), RomOutcome.Failed, "word 7: FFFFFFFC against FFFFFFFD"),
-                (Run(Ram(false)), RomOutcome.Incomplete, "no done word"),
-                (Run(null), RomOutcome.NoDump, "no ram"),
-            })
-            {
-                var verdict = form.Grade(run, RecordWords);
-                Assert.Equal((outcome, true), (verdict.Outcome, verdict.Detail.Contains(detail)));
+                byte[] Ram(bool done, int spoil = -1)
+                {
+                    var ram = new byte[size];
+                    for (int i = 0; i < RecordWords.Length; i++) BitConverter.TryWriteBytes(ram.AsSpan(from + 4 * i), RecordWords[i] ^ (i == spoil ? 1u : 0));
+                    if (done) BitConverter.TryWriteBytes(ram.AsSpan(doneAt), doneWord);
+                    return ram;
+                }
+                Assert.Equal(RecordWords, form.Read(Run(Ram(true)).Snapshots[0], RecordWords.Length));
+                foreach (var (run, outcome, detail) in new (RomRun, RomOutcome, string)[]
+                {
+                    (Run(Ram(true)), RomOutcome.Passed, "12 words"),
+                    (Run(Ram(true, spoil: 7)), RomOutcome.Failed, "word 7: FFFFFFFC against FFFFFFFD"),
+                    (Run(Ram(false)), RomOutcome.Incomplete, "no done word"),
+                    (Run(null), RomOutcome.NoDump, "no ram"),
+                })
+                {
+                    var verdict = form.Grade(run, RecordWords);
+                    Assert.Equal((form.Name, outcome, true), (form.Name, verdict.Outcome, verdict.Detail.Contains(detail)));
+                }
             }
             var small = new byte[0x20_0000];
-            BitConverter.TryWriteBytes(small.AsSpan((int)form.DoneAt), form.DoneWord);
-            Assert.Null(form.Read(Run(small).Snapshots[0], 4));
+            BitConverter.TryWriteBytes(small.AsSpan(0x1F_FFF0), 0x5A99_D00Eu);
+            Assert.Null(RamRecordForm.Sapphire.Read(Run(small).Snapshots[0], 4));
         }
+
+        private static RomRun Run(byte[]? ram) => new("synthetic", new[] { new RomSnapshot(1, ram is null ? new Dictionary<string, byte[]>() : new Dictionary<string, byte[]> { ["ram"] = ram }, null) }, 0, Array.Empty<short>());
 
         // End to end on Diamond, the form's other console: its program leaves the words where the reader finds them; read in Sapphire's form, the same run has no record.
         [Fact]

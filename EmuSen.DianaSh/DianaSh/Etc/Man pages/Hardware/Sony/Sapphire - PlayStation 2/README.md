@@ -1,20 +1,23 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S3 built 2026-10-24. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S4 built 2026-10-24. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
   Diamond; every unit with its source and oracle (the EE and its MMI, COP0, the FPU, VU0 and VU1, VIF, GIF, the GS,
   IPU, DMAC, INTC, timers, SIF, the IOP, SPU2, CDVD, SIO2) and what is left out; PS1 discs routed to Diamond; the
   player's BIOS first and the open replacement as a separate track; the speed budget and the recompilers; the GS's
-  exact software reference and its Vulkan path; the shared crates; the stages, gates, questions and predictions.
+  exact software reference and its Vulkan path; the shared crates; the stages, gates, questions and predictions;
+  since 2026-10-24 the gates G10 (start without a disc) and G11 (the Memory Cards window's PlayStation 2 tab).
 - **`Sapphire_Native.md`** — the build record, from stage S1 (2026-10-24): the stub crate on the core ABI v1, marked in
   development (an EE program by its ELF header, a disc by `SYSTEM.CNF`'s `BOOT2`, the three BIOS entries, the `SPH2`
   state); the system `ps2` with its recogniser and the PlayStation's `BOOT2` exclusion, root files read as far as a
   DVD's volume places them; the CRT row owed while the console is offered to no player; the fixtures, the kit's gate
   and the seeded faults; and stage S2 (2026-10-24): the references pinned, the Japanese BIOS entry renamed to
   `ps2-0230j-20080220.bin`, and each BIOS entry listing its market's retail MD5s from Redump's datfile; and stage S3 (2026-10-24): the referees installed and driven headless, the gate's
-  program read from each, and the probe naming the hardware contexts it refuses.
+  program read from each, and the probe naming the hardware contexts it refuses; and stage S4 (2026-10-24): the
+  runners (the synthetic program and discs, dual-layer DVDs among them, the expected-text grader, the RAM-record reader
+  shared in form with Diamond's) and ps2autotests' output channel found by observation, the IOP's console.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

@@ -2,7 +2,7 @@ using EmuSen.WiseMan.Fixtures.RomRunner;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // A synthetic EE program: an ELF32 header for a little-endian MIPS executable, one loadable segment and code of the test's own, never real program data - see Sapphire_Native.md §5 and §14.1.
+    // A synthetic EE program: an ELF32 header for a little-endian MIPS executable, one loadable segment and code of the test's own, never real program data - see Sapphire_Native.md §5 and §14.3.
     public static class SyntheticPs2Elf
     {
         public const uint Entry = 0x0010_0000;

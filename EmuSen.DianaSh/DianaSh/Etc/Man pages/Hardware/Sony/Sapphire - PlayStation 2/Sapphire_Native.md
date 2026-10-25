@@ -3517,9 +3517,10 @@ for word; `generated_primitives_draw_as_the_model_draws_them` (six rounds of 400
 shadings, vertices anywhere about a page and a little outside it, in odd rounds on halves and whole pixels only, where
 the ties fall, Z over its whole range, drawn with GEQUAL into PSMZ32 over generated data, every pixel and every Z equal
 between the source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`. The crate's other
-tests unchanged: lib **24 of 24**, `cop0` **19 of 19**, `dmac` **17 of 17**, `fpu` **9 of 9**, `gs` **12 of 12**,
-`interpreter` **23 of 23**, `iop` **13 of 13**, `mmi` **13 of 13**, `programs` **3 of 3**, `vu0` **14 of 14**; `draw`
-and `gs` also under `test-checked`; clippy clean.
+tests unchanged, on the tree with S13, S23 and S22 beneath: lib **41 of 41**, `cop0` **19 of 19**, `dmac` **17 of 17**,
+`fpu` **9 of 9**, `gs` **12 of 12**, `interpreter` **23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi`
+**13 of 13**, `programs` **3 of 3**, `sif` **5 of 5**, `vu0` **14 of 14**, `vu_micro` **24 of 24**; `draw` and `gs`
+also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`) **5 of 5**.
 
 ### 27.7 On the referees (measured 2026-10-25)
 

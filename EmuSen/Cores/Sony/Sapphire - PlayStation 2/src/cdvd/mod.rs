@@ -104,6 +104,8 @@ pub mod scmd {
     /// Two the player's BIOS sends at boot, whose purpose no document gives [M PCSX2, D-328].
     pub const BOOT_1A: u8 = 0x1A;
     pub const BOOT_22: u8 = 0x22;
+    pub const BOOT_17: u8 = 0x17;
+    pub const BOOT_1E: u8 = 0x1E;
     /// Those below 40h that PCSX2 answers with the one byte 00h, the player's BIOS sending 24h at boot and retrying it on
     /// 80h; no document gives their purpose [M PCSX2, D-328].
     pub const ACKNOWLEDGED: [u8; 12] = [0x0B, 0x13, 0x14, 0x16, 0x18, 0x1B, 0x1C, 0x24, 0x29, 0x31, 0x38, 0x3E];
@@ -601,6 +603,8 @@ impl Cdvd {
             c if scmd::ACKNOWLEDGED.contains(&c) => &[0],
             scmd::BOOT_1A => &[1],
             scmd::BOOT_22 => &[0; 10],
+            scmd::BOOT_17 => &[0; 9],
+            scmd::BOOT_1E => &[0x00, 0x14, 0x00, 0x00, 0x00],
             scmd::REGION => match &self.region {
                 Some(r) => {
                     block[..15].copy_from_slice(r);

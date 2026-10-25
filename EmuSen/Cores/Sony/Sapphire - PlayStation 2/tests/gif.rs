@@ -294,3 +294,30 @@ fn the_mskpath3_console_text_follows_from_gif_stat() {
     lines.push("-- TEST END".into());
     assert_eq!(lines.join("\n") + "\n", text);
 }
+
+/// A GIFtag with NLOOP 0 outputs nothing (§7.2.1), so PATH3 holding the GIF with only such tags behind it gives it up
+/// when its data stops, and a kick waiting meanwhile is granted; once PATH3 has sent data the rule of D-280 holds and
+/// it keeps the GIF (D-330).
+#[test]
+fn a_path3_packet_that_has_output_nothing_does_not_hold_the_gif() {
+    use sapphire::gif::Gif;
+    use sapphire::vu::{VU1_MEM, Vu};
+    let mut vu1 = Vu::new(VU1_MEM);
+    vu1.set_mem_q(0, s15::manual::tag(1, true, None, 0, &[0xE]));
+    vu1.set_mem_q(1, s15::manual::ad(0x62, 7));
+    let mut g = Gif::new();
+    let mut gs = Recorder::default();
+    g.put(0, false, 10);
+    g.run_to(20, &vu1, &mut gs);
+    g.kick(0, 30, 40);
+    g.run_to(100, &vu1, &mut gs);
+    assert_eq!(gs.0.iter().filter(|w| w.0 == 0x62).map(|w| w.1).collect::<Vec<_>>(), [7], "PATH1 granted after a zero tag");
+    let mut g = Gif::new();
+    let mut gs = Recorder::default();
+    g.put(s15::manual::tag(1, false, None, 0, &[0xE]), false, 10);
+    g.put(s15::manual::ad(0x62, 1), false, 10);
+    g.run_to(20, &vu1, &mut gs);
+    g.kick(0, 30, 40);
+    g.run_to(100, &vu1, &mut gs);
+    assert_eq!(gs.0.iter().filter(|w| w.0 == 0x62).map(|w| w.1).collect::<Vec<_>>(), [1], "PATH3 keeps the GIF in its open packet");
+}

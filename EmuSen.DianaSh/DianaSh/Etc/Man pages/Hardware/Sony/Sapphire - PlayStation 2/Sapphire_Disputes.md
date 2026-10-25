@@ -3337,3 +3337,186 @@ through the reset too.
 - **Depends on it:** `Ipu::macroblock`, `Ipu::block`.
 - **Pinned by:** `odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard`.
 - **Implemented in:** stage S27's commit.
+### D-320. SIF: the EE's CTRL bit 19 is the IOP's reset line, held while set; the IOP starts at its reset vector when it clears, its INTC, DMAC, timers and cache control reset with it, its RAM kept
+
+- **Opened:** 2026-10-25, at stage S24: S22 left the IOP's reset by bit 19 unmodelled (D-141), and the tester decided on
+  2026-10-25 that S24 models it with the IOP's boot path.
+- **Documents read:** ps2tek "BIOS PS Compatibility": "Bit 19 is set in SIF_CTRL. This is probably to assert the reset
+  line on the IOP … PS1DRV waits 1000000h ticks, then unsets bit 19, which probably deasserts the reset line, allowing
+  the IOP to run"; psx-spx "Exception Vectors" (the R3000A's reset at BFC00000h with BEV set, as Diamond starts it).
+- **Test program:** `s22-probe-ee` (S22): the referee's IOP stops answering after the EE's write of bit 19.
+- **Referee:** PCSX2 2.8.2 (S22, D-141): the IOP stops answering and its RAM reads zero; nothing more can be read.
+- **Conclusion:** a level, as ps2tek reads it: the write that sets the bit resets the IOP's processor and its own units
+  and holds it; the write that clears it releases it at BFC00000h. The IOP's RAM, the SIF and the devices beside the
+  IOP (the drive, SIO2, the SPU2) keep their state [C]; PCSX2's zero RAM is taken as the IOP's own boot clearing it.
+  The player's BIOS did not write the bit on the way to its menu (§35.4), so the rule is pinned by its test alone.
+  **Argued.**
+- **Depends on it:** `IopBus::sif_write_from_ee`, `Iop::reset`, `IopBus::reset_units`, `Board::write_register`.
+- **Pinned by:** `ctrl_bit_19_holds_the_iop_in_reset_until_it_clears`.
+- **Implemented in:** stage S24's commit.
+
+### D-321. EE DMAC: D_ENABLE reads 1201h at power-on, CPND clear
+
+- **Opened:** 2026-10-25, at stage S24: the player's BIOS read D_ENABLER and went no further, its next step the memory
+  controller (§35.4).
+- **Documents read:** *EE User's Manual* §5.2's D_ENABLER and D_ENABLEW (CPND, bit 16, "Initial Value 0", the other
+  bits "-"); ps2tek "DMAC I/O": "All other bits appear to be garbage, but writable. SCPH-39001 (and other BIOSes?) seems
+  to expect D_ENABLER to be set to 1201h upon boot".
+- **Test program:** none; the BIOS on Sapphire, observed through the hardware's reports only.
+- **Referee:** not consulted.
+- **Conclusion:** 1201h at reset, CPND clear as the manual gives it and the bits it leaves undefined as ps2tek says the
+  BIOS expects; with it the BIOS goes on to the memory controller. **Argued.**
+- **Depends on it:** `dmac::ENABLE_AT_RESET`.
+- **Pinned by:** `the_power_on_values_the_bios_relies_on`.
+- **Implemented in:** stage S24's commit.
+
+### D-322. EE memory controller: MCH_RICM (1000F430h) starts a serial command to the RDRAMs and reads 0; MCH_DRD (1000F440h) holds the data and answers the read: the two devices' identity in turn, 0D0Dh and 0090h for registers 23h and 24h, the device field for 40h, zero otherwise
+
+- **Opened:** 2026-10-25, at stage S24: after D-321 the BIOS wrote both registers and read MCH_DRD once, then stopped
+  (§35.4).
+- **Documents read:** ps2tek "EE RDRAM initialization" (the registers' names and fields, and "the following logic used
+  in emulators", a quotation not taken as evidence, as D-124 kept ps2tek's quoted values out); a Samsung Direct RDRAM
+  data sheet (K4R881869E, 2003, `docs/rdram/`), which names the serial interface (CMD, SCK, SIO0, SIO1) and its control
+  registers but whose short form gives no register values.
+- **Test program:** `programs/s24/mch.s`: 22 serial commands from a table, each with MCH_DRD's value, then both
+  registers read.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): MCH_RICM reads 0 at once; register 21h read answers 1Fh twice, then
+  0, until a serial write (operation 1) to 21h with MCH_DRD's bit 7 clear starts again; 23h 0D0Dh; 24h 0090h; 40h the
+  command's bits 4-0; any other register, and any operation but a read, 0.
+- **Conclusion:** the referee's answers, described as two RDRAMs on the serial chain (32 MiB); with them the BIOS
+  initialises its memory, copies its kernel and goes on. One lineage. **Measured.**
+- **Depends on it:** `mch::Mch`.
+- **Pinned by:** `the_serial_answers_are_the_referees`, `the_power_on_values_the_bios_relies_on`.
+- **Implemented in:** stage S24's commit.
+
+### D-323. IOP DMAC: SIF0 and SIF1 run in chain mode whatever CHCR's transfer mode says
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS starts SIF1 with CHCR 41000300h (bit 8, mode 1) and BCR 20h, and on S21's
+  slice mode the EE's packets never completed (§35.4).
+- **Documents read:** ps2tek "IOP DMA": "Only the SIF0, SIF1, and SPU1 channels can use tag mode. SIF0 and SIF1 use it
+  exclusively"; bit 8 in slice mode "Causes DMA to hang".
+- **Test program:** `s24-sif1-slice` (`tests/s24`): the IOP's channel 10 started with 01000300h, two EE packets with IOP
+  tags for their own areas.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): MADR's area untouched, each packet at its tag's address, the channel
+  stopped at the end tag; DICR2's flag set with its mask clear.
+- **Conclusion:** chain mode for both channels, as ps2tek's "exclusively" says and the referee does; the flag under its
+  mask as S21 reads ps2tek, PCSX2's recorded. **Measured.**
+- **Depends on it:** `iop::dma::Channel::mode_of`.
+- **Pinned by:** `sif1_with_mode_1_and_bit_8_reads_the_ees_tags_as_a_chain`.
+- **Implemented in:** stage S24's commit.
+
+### D-324. IOP DMAC: DMACINTEN is 1 at power-on, channel interrupts on and IRQ 3 passed to the INTC
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS never writes DMACINTEN and waits on SIF1's completion interrupt, which S21's
+  zero held back (§35.4).
+- **Documents read:** ps2tek "IOP DMA" (DMACINTEN's two bits; no reset value).
+- **Test program:** none.
+- **Referee:** not consulted.
+- **Conclusion:** 1 at reset, since software that never writes the register receives DMA interrupts [A]. **Argued.**
+- **Depends on it:** `iop::dma::DMACINTEN_AT_RESET`.
+- **Pinned by:** `the_power_on_values_the_bios_relies_on`.
+- **Implemented in:** stage S24's commit.
+
+### D-325. SIF0: a packet's data is padded with zero words to whole quadwords, which the EE's destination tag counts; MADR moves by the words read
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS sends a packet of six words under an EE tag of two quadwords, and the EE's
+  channel waited for the last two (§35.4).
+- **Documents read:** *EE Overview* §2.6 ("the EE-DMAC reads the packet from the SIF, interprets the first word as a
+  tag"), §3.1.2 (the destination chain tag of 128 bits and QWC); ps2tek "IOP DMA".
+- **Test program:** `s24-sif0-odd`: a six-word packet under QWC 2, then a four-word one under QWC 1, the first area's eight
+  words distinct.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): both quadwords filled, the six words then two earlier words of the packet;
+  the second packet at its own address.
+- **Conclusion:** the EE takes the quadwords its tag counts and the next packet stays aligned; what fills the last
+  quadword no document gives, so zeros [C], PCSX2's repeated words recorded. **Measured** for the alignment.
+- **Depends on it:** `iop::dma::sif0_padding`.
+- **Pinned by:** `a_sif0_packet_short_of_its_quadwords_is_padded_and_the_next_stays_aligned`,
+  `each_dma_mode_reaches_its_stand_in`.
+- **Implemented in:** stage S24's commit.
+
+### D-326. IOP map: 1E000000h-1EFFFFFFh, the DVD player's ROMs' place, and the SPU2's window past its registers to 1F90FFFFh read zero without a bus error
+
+- **Opened:** 2026-10-25, at stage S24: the rebooted IOP read BE000000h and took a bus error (S21's D-61), and later wrote
+  1F900B60h past S21's SPU2 window (§35.4).
+- **Documents read:** `Sapphire_Plan.md` §5.9 (the DVD player's ROMs are not taken); ps2tek "Memory Map"; S21's D-61.
+- **Test program:** `s21-map`'s load at 9E000000h.
+- **Referee:** PCSX2 2.8.2 (S21): no bus error at any of the loads.
+- **Conclusion:** the place is on the bus with no image in it, reading zero as D-61's I/O gaps do; D-61's bus error at
+  1E000000h is overturned. **Argued**, the referee agreeing.
+- **Depends on it:** `iop::bus::decode`.
+- **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents`,
+  `halfword_dma_writes_merge_and_the_absent_places_read_zero`.
+- **Implemented in:** stage S24's commit.
+
+### D-327. IOP bus: a halfword or byte written to a DMA channel's register changes only its own bytes
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS wrote BCR's block count as a halfword after its block size, and the
+  word written in S21's way zeroed the block size (§35.4).
+- **Documents read:** ps2tek "IOP DMA" (BCR's halves); psx-spx "DMA Channels".
+- **Test program:** none.
+- **Referee:** not consulted.
+- **Conclusion:** the bytes written replace their own lanes [A, as a memory-mapped register with byte enables]. **Argued.**
+- **Depends on it:** `IopBus::write`.
+- **Pinned by:** `halfword_dma_writes_merge_and_the_absent_places_read_zero`.
+- **Implemented in:** stage S24's commit.
+
+### D-328. CDVD S commands the BIOS sends at boot: 36h answers the market's region parameters, 1Ah 01h, 22h ten zeros, 17h nine zeros, 1Eh 00h 14h 00h 00h 00h, and twelve below 40h 00h, as PCSX2 answers them
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS retried 36h, then 22h, then 24h, without end on S23's 80h, and polled
+  1Eh 272 times on the way to its menu (§35.4).
+- **Documents read:** ps2tek "CDVD S Commands" (none of these listed); CDVDMAN's exports.
+- **Test program:** S23's `ssweep` with the Europe and Japan images; `programs/s24/scmd.s` with the parameters the
+  drive's report showed (1Ah with 02h 1Eh 41h 43h, 24h with 01h, 17h with 08h).
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): 36h fifteen bytes, 00h 08h 00h, the market's letter twice, the
+  language, two letters, five zeros ("AAengAU", "EEengEE", "JJjpnJJ"); 1Ah 01h with or without parameters; 22h ten
+  zeros; 17h with 08h nine zeros; 1Eh 00h 14h 00h 00h 00h; 0Bh, 13h, 14h, 16h, 18h, 1Bh, 1Ch, 24h, 29h, 31h, 38h, 3Eh 00h;
+  03h's subcommands 01h to 08h 81h, as Sapphire already answers.
+- **Conclusion:** the referee's answers for these, 36h by the console's market; MagicGate's commands and every other stay
+  absent (D-125). One lineage. **Measured.**
+- **Depends on it:** `Cdvd::scmd`, `cdvd::REGION_*`, `scmd::ACKNOWLEDGED`.
+- **Pinned by:** `the_boot_s_commands_answer_as_measured`.
+- **Implemented in:** stage S24's commit.
+
+### D-329. SPU2: STATX gives ATTR's bits 5-0, the IRQ flag in bit 6 and ATTR's bit 5 in bit 7, as psx-spx gives the PlayStation's SPUSTAT; D-266's zero is overturned
+
+- **Opened:** 2026-10-25, at stage S24: after a DMA write to core 1 the BIOS polled core 1's STATX with interrupts off and
+  went no further (§35.4).
+- **Documents read:** psx-spx (Diamond's pinned copy) "SPU Status Register": "5-0 Current SPU Mode (same as ATTR.Bit5-0,
+  but, applied a bit delayed)", "6 IRQ9 Flag", "7 Data Transfer DMA Read/Write Request ;seems to be same as
+  ATTR.Bit5", "after writing to ATTR, it'd be usually recommended to wait until the LSBs of STATX are updated"; ps2tek
+  names the register only.
+- **Test program:** `s24-statx`: each core's STATX after ATTR in each transfer mode, then around a DMA write.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): 0 in every case, as at S26.
+- **Conclusion:** the document's bits, applied at once [C]; the busy and request bits 0, the transfers being immediate. The
+  BIOS goes on with them; PCSX2's zero is recorded. **Argued**, against one lineage.
+- **Depends on it:** `spu2::cores::Core::status`.
+- **Pinned by:** `s26-irq`'s STATX word (0040h with the flag up).
+- **Implemented in:** stage S24's commit.
+
+### D-330. GIF: a path whose packet has output nothing, only GIFtags with NLOOP 0, does not hold the GIF while its data stops; D-280 holds once it has output
+
+- **Opened:** 2026-10-25, at stage S24: the BIOS's GS setup ends its PATH3 stream with a zero qword, read as a GIFtag of
+  NLOOP 0 and no EOP; PATH3 then held the GIF, and VU1's first XGKICK waited for ever (GIF_STAT APATH 3 with TAG0-3 zero,
+  §35.4).
+- **Documents read:** *EE User's Manual* §7.2.1: "when NLOOP is 0, the GIF does not output anything, and values other than
+  the EOP field are disregarded"; §7.1.2; D-280.
+- **Test program:** none on a referee; `a_path3_packet_that_has_output_nothing_does_not_hold_the_gif`.
+- **Referee:** PCSX2 (D-280) lets any path whose data stops give up the GIF.
+- **Conclusion:** the packet that holds the GIF begins with output; a stream of NLOOP 0 tags alone frees it when the data
+  stops. **Argued**, the referee consistent.
+- **Depends on it:** `gif::Gif::run_to`.
+- **Pinned by:** `a_path3_packet_that_has_output_nothing_does_not_hold_the_gif`.
+- **Implemented in:** stage S24's commit.
+
+### D-331. GIF, PATH1: an XGKICK whose packet has no EOP in VU1's memory yet is told one pass over the memory, not never
+
+- **Opened:** 2026-10-25, at stage S24: OSDSYS's VU1 program kicked a packet completed after the kick (as D-288 lets PATH1
+  read it), S15's estimate was "never", and VU1's next XGKICK waited for it.
+- **Documents read:** VU User's Manual §3.4.9 (XGKICK waits while PATH1 is busy); D-288.
+- **Test program:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
+- **Referee:** not consulted.
+- **Conclusion:** the VU's estimate for such a packet is one pass over VU1's 1,024 qwords [C]; the GIF's transfer itself
+  stays exact, read as it is sent. A named loss: the VU's wait behind such a packet. **Argued.**
+- **Depends on it:** `gif::Path1Port::kick`, `Gif::run_to`'s estimate.
+- **Pinned by:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
+- **Implemented in:** stage S24's commit.

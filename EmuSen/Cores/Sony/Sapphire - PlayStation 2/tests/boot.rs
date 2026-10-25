@@ -84,3 +84,37 @@ fn ctrl_bit_19_holds_the_iop_in_reset_until_it_clears() {
     b.write(0x1000_F240, 4, 0x100);
     assert!(!b.iop.held && b.iop.cpu.regs.pc == sapphire::iop::RESET, "released at the reset vector");
 }
+
+/// Power-on values the player's BIOS relies on without writing them: D_ENABLER 1201h, as ps2tek says the BIOS expects
+/// (D-321), and DMACINTEN with channel interrupts on (D-324); the memory controller answers the RDRAMs' identity reads
+/// (D-322).
+#[test]
+fn the_power_on_values_the_bios_relies_on() {
+    use sapphire::ee::Bus;
+    let mut sys = System::new(s22::EE_ORIGIN);
+    let b = &mut sys.board;
+    assert_eq!(b.read(0x1000_F520, 4) as u32, 0x1201);
+    assert_eq!(b.iop.bus.dmac.dmacinten, 1);
+    b.write(0x1000_F440, 4, 0);
+    b.write(0x1000_F430, 4, 0x8021_0040);
+    b.write(0x1000_F430, 4, 0x8021_0000);
+    let ids: Vec<u32> = (0..3).map(|_| b.read(0x1000_F440, 4) as u32).collect();
+    assert_eq!(ids, [0x1F, 0x1F, 0], "two RDRAMs answer");
+}
+
+/// A halfword written to a DMA channel's register changes its own half alone: BCR's block count written after its block
+/// size (D-327); the DVD player's ROMs' place and the SPU2's window past its registers read zero without a bus error
+/// (D-326).
+#[test]
+fn halfword_dma_writes_merge_and_the_absent_places_read_zero() {
+    use blackmoon_r3000::{Bus as IopBus, Size};
+    let mut sys = System::new(s22::EE_ORIGIN);
+    let bus = &mut sys.board.iop.bus;
+    bus.write(0xBF80_10C4, Size::Word, 0x10);
+    bus.write(0xBF80_10C6, Size::Half, 0x30);
+    assert_eq!(bus.read(0xBF80_10C4, Size::Word), 0x0030_0010);
+    for a in [0xBE00_0000u32, 0xBE7F_FFFC, 0xBF90_0B60] {
+        assert_eq!(bus.read(a, Size::Word), 0, "{a:08x}");
+        assert!(!bus.bus_error(), "{a:08x}");
+    }
+}

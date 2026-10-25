@@ -288,13 +288,13 @@ impl Core for Machine {
 
     fn machine_info(&self) -> MachineInfo {
         let which = bios(self.market).which;
-        let g = self.sys.board.pcrtc.picture.frame_info();
+        let (_, width, height) = (if self.pal() { crate::clock::PAL } else { crate::clock::NTSC }).picture;
         let processor = |id: u32, name: &str, pc_bits: u32| Processor { id, name: name.into(), pc_bits, registers: Vec::new(), code_space: None };
         MachineInfo {
             system: "ps2".into(),
             region: Some(if self.pal() { Region::Pal } else { Region::Ntsc }),
             frame_rate: self.frame_rate(),
-            video: Video { base_width: g.width as u32, base_height: g.height as u32, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
+            video: Video { base_width: width, base_height: height, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p, controller: self.ports[p as usize].map(str::to_string) }).collect(),
             spaces: MEMORIES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
@@ -530,9 +530,10 @@ mod tests {
     #[test]
     fn the_two_cards_are_slots_of_ps2_card_and_a_card_file_of_the_wrong_size_is_refused() {
         let slots: Vec<_> = Machine::battery_files("ps2").unwrap().into_iter().map(|b| (b.which, b.kind, b.medium, b.label)).collect();
+        let nvm = |w| (w, BatteryKind::Console, Some("ps2.nvm".into()), Some("Inside the console".into()));
         assert_eq!(
             slots,
-            [(0, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 1".into())), (1, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 2".into()))],
+            [(0, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 1".into())), (1, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 2".into())), nvm(2), nvm(3), nvm(4)],
             "Sapphire_Plan.md §4.4"
         );
         let file = |which, data| emusen_native::abi::File { which, data };
@@ -543,7 +544,7 @@ mod tests {
         let mut m = create_with(&elf(), &[], vec![file(1, &card[..])]).unwrap();
         assert_eq!(m.battery(1).unwrap(), (&card[..], flags::BATTERY_TRACKED));
         assert!(m.battery(0).unwrap().0.iter().all(|&b| b == 0xFF), "slot 1 holds an erased card");
-        assert_eq!(m.machine_info().battery.len(), 2);
+        assert_eq!(m.machine_info().battery.iter().map(|b| b.which).collect::<Vec<_>>(), [0, 1, 3], "the cards and the American console's EEPROM");
         assert!(m.firmware.is_empty(), "a card is not firmware");
         m.set_axis(0, 2, 1.0).unwrap();
         m.set_axis(0, 1, -1.0).unwrap();

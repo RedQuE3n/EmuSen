@@ -1,4 +1,4 @@
-# S commands with parameters, as the player's BIOS was seen to send them (Sapphire_Native.md §35.3, D-328): a table at
+# The S commands the player's BIOS was seen to send, with its parameters (Sapphire_Native.md §35.3, D-328): a table at
 # `cmds` of entries of five words, the command, the parameter count and up to three words holding the parameter bytes
 # low first; each sent after the result FIFO is drained, then the S status, the count of result bytes (at most 16)
 # and the bytes read until the status says none is left. 20 words an entry from 00200000h, then the done word.
@@ -7,24 +7,14 @@
         ori s0, s0, 0x2000
         bgezal zero, past
         nop
-cmds:   .word 0x1A
+cmds:   .word 0x1a
         .word 4
-        .word 0x43411E02
+        .word 0x43411e02
         .word 0
         .word 0
         .word 0x22
         .word 0
-        .word 0
-        .word 0
-        .word 0
-        .word 0x1A
-        .word 0
-        .word 0
-        .word 0
-        .word 0
-        .word 0x03
-        .word 1
-        .word 0
+        .word 0x0
         .word 0
         .word 0
         .word 0x24
@@ -32,24 +22,24 @@ cmds:   .word 0x1A
         .word 0x1
         .word 0
         .word 0
-        .word 0x24
+        .word 0x17
         .word 1
-        .word 0x0
+        .word 0x8
         .word 0
         .word 0
-        .word 0x24
-        .word 1
-        .word 0x2
-        .word 0
-        .word 0
-        .word 0x24
+        .word 0x1e
         .word 0
         .word 0x0
         .word 0
         .word 0
-        .word 0xFF
+        .word 0x36
+        .word 0
+        .word 0x0
         .word 0
         .word 0
+        .word 0xff
+        .word 0
+        .word 0x0
         .word 0
         .word 0
 past:   addu s1, ra, zero

@@ -80,6 +80,9 @@ impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let mode = if market == Market::Europe { clock::PAL } else { clock::NTSC };
         let mut sys = Box::new(System { ee: crate::ee::Ee::reset(), board: crate::board::Board::new(mode) });
+        // SMODE2 interlaced in frame mode from the first field, as the BIOS sets it, so the picture is the standard's
+        // whole frame before the BIOS programs the PCRTC, and with no BIOS (Sapphire_Native.md §35.6) [C].
+        crate::ee::Bus::write(&mut sys.board, 0x1200_0020, 8, 3);
         sys.board.iop.bus.cdvd.region = Some(match market {
             Market::Japan => crate::cdvd::REGION_JAPAN,
             Market::Americas => crate::cdvd::REGION_AMERICAS,
@@ -228,9 +231,10 @@ mod tests {
         let t0 = m.sys.board.now;
         m.advance();
         m.advance();
-        let field = clock::NTSC.field(true);
+        let rate = m.frame_rate();
+        let field = clock::EE_HZ * rate.1 / rate.0;
         let took = m.sys.board.now - t0;
-        assert!(took <= 2 * field + IDLE_STEP && took + IDLE_STEP >= field, "{took} for two frames of {field}");
+        assert!(took.abs_diff(2 * field) < 2 * IDLE_STEP, "{took} for two frames of {field}: the first field is the reset's non-interlaced one");
         assert_eq!(m.frames, 2);
     }
 

@@ -521,9 +521,10 @@ def run_pcsx2_menu(market, seconds, png, blank_nvm=False):
             slot = free_slot()
             ini = data / "PCSX2/inis/PCSX2.ini"
             ini.parent.mkdir(parents=True, exist_ok=True)
-            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
+            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot), **json.loads(os.environ.get("PS2REFEREE_CORE", "{}"))},
                       "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
-                      "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]}, **PCSX2_CARDS}
+                      "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]}, **PCSX2_CARDS,
+                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], **json.loads(os.environ.get("PS2REFEREE_GS", "{}"))}}
             ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
             root = CACHE / "pcsx2/squashfs-root"
             job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "-bios"],

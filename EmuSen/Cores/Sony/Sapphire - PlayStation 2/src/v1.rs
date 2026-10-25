@@ -221,7 +221,7 @@ impl Core for Machine {
             detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
-        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && f.data.len() != CARD_BYTES) {
+        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
             detail(&format!("file {} is {} bytes; a PlayStation 2 memory card is {CARD_BYTES}, every page of 512 bytes followed by its 16 spare bytes", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
@@ -230,7 +230,8 @@ impl Core for Machine {
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
         let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
         m.firmware = request.files.iter().map(|f| f.which).filter(|w| !CARD_FILES.contains(w)).collect();
-        for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which)) {
+        // An empty file is a card not yet saved: the slot keeps its erased card.
+        for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
             m.cards[f.which as usize].image.copy_from_slice(f.data);
         }
         if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
@@ -478,6 +479,7 @@ mod tests {
         );
         let file = |which, data| emusen_native::abi::File { which, data };
         assert_eq!(create_with(&elf(), &[], vec![file(0, &[0u8; 1000][..])]).err(), Some(status::BAD_FILE));
+        assert!(create_with(&elf(), &[], vec![file(0, &[][..])]).is_ok(), "an empty file is a card not yet saved");
         let mut card = vec![0xFFu8; CARD_BYTES];
         card[0] = 0x53;
         let mut m = create_with(&elf(), &[], vec![file(1, &card[..])]).unwrap();

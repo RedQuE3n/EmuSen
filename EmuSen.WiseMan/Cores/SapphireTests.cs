@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("sapphire", "Sapphire", 0UL), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("sapphire", "Sapphire", CoreInterface.CapAxes), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = library.Info.Systems.Single();
             Assert.Equal((Ps2System.Id, true), (system.Id, system.Development));
             Assert.Equal(Ps2System.CoreExtensions, system.Extensions);

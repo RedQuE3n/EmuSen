@@ -47,16 +47,16 @@ pub(super) struct Op {
     pub writes: u8,
 }
 
-fn rs(w: u32) -> usize {
+pub(super) fn rs(w: u32) -> usize {
     (w >> 21 & 31) as usize
 }
-fn rt(w: u32) -> usize {
+pub(super) fn rt(w: u32) -> usize {
     (w >> 16 & 31) as usize
 }
-fn rd(w: u32) -> usize {
+pub(super) fn rd(w: u32) -> usize {
     (w >> 11 & 31) as usize
 }
-fn sa(w: u32) -> u32 {
+pub(super) fn sa(w: u32) -> u32 {
     w >> 6 & 31
 }
 fn simm(w: u32) -> u64 {
@@ -65,14 +65,14 @@ fn simm(w: u32) -> u64 {
 fn uimm(w: u32) -> u64 {
     (w & 0xFFFF) as u64
 }
-fn sext32(v: u32) -> u64 {
+pub(super) fn sext32(v: u32) -> u64 {
     v as i32 as i64 as u64
 }
 fn exc(e: Exception) -> Result<(), Stop> {
     Err(Stop::Exception(e))
 }
 
-type R = Result<(), Stop>;
+pub(super) type R = Result<(), Stop>;
 
 // Arithmetic: a word operation computes on bits 31..0 and writes the sign-extended result to bits 63..0.
 fn add(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
@@ -380,10 +380,10 @@ fn maddu1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 }
 
 /// A signed word division; a zero divisor's result, which the manual leaves undefined, is Sapphire_Disputes.md D-6's.
-fn quotient_signed(n: i32, d: i32) -> (u32, u32) {
+pub(super) fn quotient_signed(n: i32, d: i32) -> (u32, u32) {
     if d == 0 { (if n < 0 { 1 } else { u32::MAX }, n as u32) } else { (n.wrapping_div(d) as u32, n.wrapping_rem(d) as u32) }
 }
-fn quotient_unsigned(n: u32, d: u32) -> (u32, u32) {
+pub(super) fn quotient_unsigned(n: u32, d: u32) -> (u32, u32) {
     match (n.checked_div(d), n.checked_rem(d)) {
         (Some(q), Some(r)) => (q, r),
         _ => (u32::MAX, n),
@@ -669,9 +669,7 @@ fn ld(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 fn lq(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let a = load_address(e, w)?;
     let v = e.read(b, a & !15, 16)?;
-    if rt(w) != 0 {
-        e.gpr[rt(w)] = v;
-    }
+    e.set_quad(rt(w), v);
     Ok(())
 }
 fn store(e: &mut Ee, b: &mut dyn Bus, w: u32, bytes: u32) -> R {
@@ -928,7 +926,7 @@ fn later(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     if usable { Err(Stop::Halt) } else { exc(Exception::Unusable(n)) }
 }
 
-const fn op(name: &'static str, run: Run, category: Category, row: usize, reads: u8, writes: u8) -> Op {
+pub(super) const fn op(name: &'static str, run: Run, category: Category, row: usize, reads: u8, writes: u8) -> Op {
     Op { name, run, category, row, reads, writes }
 }
 
@@ -1112,14 +1110,14 @@ pub(super) fn is_store(o: &Op) -> bool {
     o.category == LoadStore && o.name.starts_with('s')
 }
 
-/// The names this stage executes, the decoder's spelling.
+/// The names the interpreter executes, the decoder's spelling: S6's and S7's, then S8's multimedia instructions.
 pub fn names() -> impl Iterator<Item = &'static str> {
-    TABLE[2..].iter().map(|o| o.name)
+    TABLE[2..].iter().chain(super::mmi::TABLE).map(|o| o.name)
 }
 
 fn by_name() -> &'static HashMap<&'static str, u16> {
     static MAP: OnceLock<HashMap<&'static str, u16>> = OnceLock::new();
-    MAP.get_or_init(|| TABLE.iter().enumerate().skip(2).map(|(i, o)| (o.name, i as u16)).collect())
+    MAP.get_or_init(|| TABLE.iter().chain(super::mmi::TABLE).enumerate().skip(2).map(|(i, o)| (o.name, i as u16)).collect())
 }
 
 /// The table's index for a word, through the decoder alone.
@@ -1132,7 +1130,8 @@ pub(super) fn index(w: u32) -> u16 {
 }
 
 pub(super) fn get(i: u16) -> &'static Op {
-    &TABLE[i as usize]
+    let i = i as usize;
+    if i < TABLE.len() { &TABLE[i] } else { &super::mmi::TABLE[i - TABLE.len()] }
 }
 
 /// What the timing model is told of `op` at `w`: the resources by register number.

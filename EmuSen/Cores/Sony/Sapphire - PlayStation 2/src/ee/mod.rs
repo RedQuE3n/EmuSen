@@ -1,7 +1,7 @@
-//! The EE core (R5900) interpreter (Sapphire_Plan.md §7, S6 and S7): 128-bit GPRs, the MIPS III subset, the second
-//! multiplier, branch-likely, LQ and SQ; COP0 in full with the TLB, the caches and the scratchpad, the counters and
-//! the breakpoints; each instruction decoded by `emusen_mips::r5900` and executed as the EE Core Instruction Set
-//! Manual's Operation sections write it, and charged to the timing model (`timing`). Sapphire_Native.md §16 and §17
+//! The EE core (R5900) interpreter (Sapphire_Plan.md §7, S6 to S8): 128-bit GPRs, the MIPS III subset, the second
+//! multiplier, branch-likely, LQ and SQ, the multimedia instructions; COP0 in full with the TLB, the caches and the
+//! scratchpad, the counters and the breakpoints; each instruction decoded by `emusen_mips::r5900` and executed as the EE Core Instruction Set
+//! Manual's Operation sections write it, and charged to the timing model (`timing`). Sapphire_Native.md §16 to §18
 //! are the record; the interpreter is the reference later speed work is graded against.
 
 pub mod bus;
@@ -9,6 +9,7 @@ pub mod cache;
 pub mod cop0;
 pub mod map;
 mod memory;
+mod mmi;
 mod ops;
 pub mod timing;
 pub mod tlb;
@@ -101,7 +102,7 @@ pub enum Level2 {
     Debug,
 }
 
-/// Why the interpreter stopped: an instruction a later stage implements (COP1, COP2, MMI).
+/// Why the interpreter stopped: an instruction a later stage implements (COP1, COP2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Halt {
     Unimplemented { pc: u32, word: u32 },
@@ -264,6 +265,13 @@ impl Ee {
     pub(crate) fn set(&mut self, r: usize, v: u64) {
         if r != 0 {
             self.gpr[r] = self.gpr[r] & !(u64::MAX as u128) | v as u128;
+        }
+    }
+
+    /// A 128-bit write, as the multimedia instructions and LQ make.
+    pub(crate) fn set_quad(&mut self, r: usize, v: u128) {
+        if r != 0 {
+            self.gpr[r] = v;
         }
     }
 

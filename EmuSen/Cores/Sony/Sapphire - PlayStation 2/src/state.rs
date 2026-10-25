@@ -263,6 +263,12 @@ mod tests {
         a.set_space_byte(RAM_ID, (32 << 20) - 1, 0x5A);
         a.set_space_byte(9, 3, 0xA5);
         a.sys.ee.gpr[7] = 0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210;
+        let b = &mut a.sys.board;
+        for w in 1..=5 {
+            b.iop.bus.sif.fifo[1].push(w * 0x1111);
+        }
+        (b.iop.bus.sif.mscom, b.intc.mask, b.timers[2].count, b.dmac.ch[3].madr) = (0xA5A5, 0x7FFF, 77, 0x1230);
+        (b.vpu.units.vu1.acc, b.iop.bus.spu2.regs[5]) = ([1, 2, 3, 4], 0x55);
         let s = saved(&a);
         let mut b = machine(Market::Americas);
         b.load_state(&s).unwrap();

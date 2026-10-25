@@ -3038,8 +3038,8 @@ No referee's log was read: the driver reads it inside the run for the BIOS line 
   one-sector buffer for DMA, and the next sector, once off the disc, waits for the buffer to be taken [A: ps2tek's "Once
   one sector has been read, the CDVD DMA channel can store the data in memory and allow the CDVD drive to continue"];
   the read ends, with I_STAT bits 0 and 1 (ps2tek: "both bits 1 AND 0"), when its last block has been taken [A: so that
-  the data is in memory when the interrupt comes]. A count of zero ends after the seek. ReadCd's blocks are the user
-  data (2,048), the sector from its subheader (2,328) or from its header (2,340) [A from ECMA-130's layout]; CD-DA's the
+  the data is in memory when the interrupt comes]. A count of zero ends after the seek. ReadCd's blocks are its 2,048
+  bytes of user data, the sector from its subheader (2,328) or from its header (2,340) [A from ECMA-130's layout]; CD-DA's the
   raw 2,352 bytes; ReadDvd's the Data Frame (D-121, D-122). ReadCd of a DVD gives its Main Data, the rest of a larger
   block zero [A]. LBA 0 is 00:02:00 on a CD.
 - **GetToc** (09h, "a block size of 2064 bytes"): a DVD's physical format information (ECMA-267 §26.5.1: version 1,
@@ -3128,7 +3128,7 @@ Each was applied, `emusen-disc`'s unit and DVD tests and the drive's module run,
 
 - **§5.6's "DVD reads report what ECMA-267's sector header gives"**: ps2tek describes the drive's block otherwise in two
   fields; D-121 and D-122 take ECMA-267's fields and ps2tek's numbering, open until a block is read on the IOP.
-- **The brief's "region and model queries ps2tek describes"**: ps2tek describes none at the S-command level, only
+- **S23's "region and model queries ps2tek describes"**: ps2tek describes none at the S-command level, only
   CDVDMAN's exports for them; they answer as absent (D-125), as do MagicGate's and SECRMAN's.
 - **§3.2's CDVD row** names the referees as the oracle for timing: one lineage reaches the drive from the EE, and none
   the reads' data; S21's IOP and S24's BIOS are the next witnesses.

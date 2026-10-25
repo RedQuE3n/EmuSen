@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Memory Cards", "Crop This Game..."];
-        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Firmware", "Preferences"];
+        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Compressed Discs", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.
         private (MainWindow Window, PadDriver Pad) Playing(bool bigScreen, int width = 1280, int height = 800)
@@ -423,7 +423,7 @@ namespace EmuSen.WiseMan.Mistress
             { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) }, { "Graphics", typeof(GraphicsSettingsWindow) },
             { "Shaders", typeof(ShaderSettingsWindow) }, { "Cheats", typeof(ActiveCheatsWindow) }, { "Preferences", typeof(PreferencesWindow) },
             { "Collections", typeof(CollectionSettingsWindow) }, { "Scrape Games...", typeof(PreferencesWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
-            { "Memory Cards", typeof(MemoryCardsWindow) },
+            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) },
         };
 
         [Theory]

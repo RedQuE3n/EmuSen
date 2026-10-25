@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string MainMenuTitle = "Main Menu", GameSettingsMenu = "Game Settings", LibraryMenu = "Library", SettingsMenu = "Settings", EmuSenMenu = "EmuSen";
-        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", SwapPlayersRow = "Swap Players 1 and 2";
+        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", CompressedDiscsMenu = "Compressed Discs", SwapPlayersRow = "Swap Players 1 and 2";
 
         // One page of the menu: its title (null for the first, whose title is the game's or Main Menu), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
@@ -126,6 +126,7 @@ namespace EmuSen.Mistress.Views
             Opens("Shaders", ShowShaderSettings),
             Opens("Cheats", ShowActiveCheats),
             Opens(MemoryCardsMenu, ShowMemoryCards),
+            Opens(CompressedDiscsMenu, ShowCompressedDiscs),
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];

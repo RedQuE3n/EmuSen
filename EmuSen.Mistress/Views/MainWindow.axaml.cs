@@ -451,6 +451,9 @@ namespace EmuSen.Mistress.Views
         // Every console's memory cards and the like, on the running game's console, whose held cards it shows and does not change - see EmuSen_SaveMedia.md §6.5.
         private void ShowMemoryCards() => _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, _session is null ? null : _activeConsole), this);
 
+        // The library's discs converted to CHD beside it, checked and listed; the library is only read - see EmuSen_GamePackages.md §13.
+        private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory), this);
+
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
         private void ShowShaderSettings() =>
             _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
@@ -756,6 +759,7 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
                     new LunaAction("_Memory Cards...", ShowMemoryCards),
+                    new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.

@@ -394,10 +394,19 @@ fn package_of(
     doc
 }
 
+/// A disc's bytes in the library: the file named and, for a sheet, every file it names.
+fn disc_bytes(item: &Item) -> u64 {
+    let named = seen(&item.path).map_or(0, |s| s.size);
+    if !emusen_galaxia::image_sets::is_sheet(&item.path) {
+        return named;
+    }
+    named + emusen_galaxia::image_sets::companions(&item.path).unwrap_or_default().iter().filter_map(|f| seen(f)).map(|s| s.size).sum::<u64>()
+}
+
 /// `chd ls`'s view of one disc: converted, changed since, its CHD gone, or not converted.
 pub fn list(ctx: &Context, item: &Item) -> Outcome {
     let placed = place(ctx, item);
-    let size = seen(&item.path).map_or(0, |s| s.size);
+    let size = disc_bytes(item);
     let base = |state| Outcome::new(state).with("size", Value::number(size));
     let Ok(doc) = manifest(&placed) else { return base("not converted") };
     let chd = seen(&placed.chd);

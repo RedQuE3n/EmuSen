@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26) and S25's part A (§30) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30) and S24 (§35) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -5390,3 +5390,255 @@ streams.
 - The FMV library a game links, which drives these commands on the player's BIOS: S28's games.
 - The IPU in the machine's frame (`machine.rs` holds no `System` yet): S10.
 - The state format's new contents: S30.
+## 35. Stage S24, the player's BIOS to its menu (2026-10-25)
+
+*Numbered §35 and its disputes from D-320, since S27 (§34, from D-300) is built beside it.*
+
+### 35.1 In one paragraph
+
+The plan's §7 row S24, its first half, on the tester's go of 2026-10-25. **`machine` now holds the board**
+(`board::System`, the EE core and every unit of S6 to S26), the player's BIOS in the boot ROM at 1FC00000h for the EE and
+the IOP alike, both processors started at their reset vectors, the IOP's reset line on the SIF's CTRL bit 19 (D-320), the
+drive of S23 joined to the IOP's bus (its registers at 1F402000h, channel 3, IRQ 2), the pads and cards of S25 on SIO2,
+and the console's market taken from the BIOS entry the player's file came in. The EEPROM is the console medium `ps2.nvm`,
+one file per console model, blank (all zeros) until the BIOS writes it, read and written through S23's S commands.
+`v1` hands on the PCRTC's picture (S20) and the SPU2's sound (S26) in place of S1's black stub. Run on the tester's
+Americas image `ps2-0230a-20080220.bin`, observed only through the hardware's own reports (§35.4), **the BIOS reaches
+OSDSYS's first screen, the initial setup's "Select language", 11.5 seconds of console time after power-on** (fully drawn
+at 12.0), through the Sony Computer Entertainment animation and both logos; **the picture equals PCSX2's on the same BIOS
+but for the date and time OSDSYS draws in the top corners on Sapphire** (§35.8), and **the menu answers the pad** (§35.9).
+Fourteen behaviours of the board were missing or wrong on the way, each found from the reports, built from a document or
+measured on PCSX2, and recorded (D-320 to D-331); five exact speed changes made a boot of about ten minutes possible
+(§35.7). S10 (the EE's ps2autotests by fast boot) is next and attaches where §35.11 says. No emulator, SDK, loader or
+ps2autotests source was read; the BIOS image was handed to the machine and to PCSX2 by path, never opened, hashed or
+analysed, and no program counter, instruction or memory holding BIOS code or data was logged or read.
+
+### 35.2 The machine
+
+- **`src/machine.rs`**: `Machine` keeps the media, the market, `Box<System>`, the frame count, the ports and the frontend's
+  buttons and sticks. `Machine::new` makes the board in the market's standard (NTSC for Japan and the Americas, PAL for
+  Europe), the EE at its Reset exception (`Ee::reset`, BFC00000h with ERL and BEV), SMODE2 interlaced in frame mode from
+  the first field [C, as the BIOS sets it, so the picture is the standard's 640 × 448 or 640 × 512 frame before the BIOS
+  programs the PCRTC and with no BIOS], a DualShock 2 in each port the settings name and an erased card in each slot.
+  `insert_bios` copies the image into the EE's map and the IOP's bus (4 MiB each, read-only to both) and resets both
+  processors. `advance` runs the EE an instruction at a time, the board brought along after each, until the PCRTC begins
+  its next field (V-blank's rise), so a frame is a field at the standard's 59.94 Hz or 50 Hz; with no BIOS, or once the EE
+  stops on an instruction the interpreter lacks (`Stop::Unimplemented`, which keeps neither the address nor the word),
+  the board alone runs in steps of 16,384 cycles. The memories of §4.3 are read and written where the board keeps them
+  (`space_byte`, `set_space_byte`); the state keeps them alone until S30 (§35.6).
+- **`src/iop/mod.rs`, `bus.rs`**: `Iop::reset` (BFC00000h, SR's BEV, its own INTC, DMAC, timers and cache control reset,
+  RAM kept, held while the ROM is empty); the drive on the bus (`cdvd_read`, `cdvd_write`, `sync_cdvd` raising IRQ 2 at
+  the drive's interrupt's rise, its events among the bus's); a held IOP's units still run, so the SPU2 makes its sound
+  and the timers count with no BIOS.
+- **`src/cdvd/mod.rs`**: `cdvd::Ports`, channel 3 taking the buffered sector four bytes a word; the region answer and the
+  boot commands (D-328); counts of the S and N commands received and each S command's last parameters, the drive's own
+  report.
+- **`src/v1.rs`**: the market from the setting, else from the BIOS entry given (`console_market`: the Americas', then
+  Europe's, then Japan's); the BIOS loaded when the market's entry is given, so a setting naming another market starts
+  a machine with no BIOS; the frame and its size from `pcrtc::Picture`; the sound drained from the SPU2's queue; buttons
+  and sticks handed to the pad in their port (`Machine::sync_pad`); the cards in SIO2's slots; the EEPROM's files
+  (§35.5); the description's words now say the console starts to its menu.
+- **`src/reports.rs`**, the hardware's reports (§35.4); **`src/mch.rs`**, the memory controller's serial interface
+  (D-322).
+- **No new cross-component dependency.** `blackmoon-r3000` was already a dependency; the tests reach its `Bus` trait.
+
+### 35.3 Firmware, the market and the drive
+
+The three entries of §5.9 are unchanged (S1, S2): 4,194,304 bytes, `required: false`, each with its market's retail MD5s,
+by which the host finds a player's file whatever its name; the core never reads an image for anything but running it.
+The console's market is the entry's: on *Automatic* a European file makes a European console, PAL. The drive answers the
+region query (S command 36h) with that market's parameters, measured on PCSX2 with each gate image (D-328), and reports
+every disc as authenticated as §5.6 says; no disc is put in the drive at this stage, an image's disc being S29's (and
+G10's) work, so the BIOS boots to its menu with the tray closed and empty.
+
+### 35.4 What the boot was allowed to show, and what it showed
+
+`Sapphire_Plan.md` §1.4 and the brief allow the emulated hardware's own reports and nothing of the BIOS's code. The board
+keeps (`reports::Reports`): every access to a register no unit answers or an address no device holds, by processor,
+address and direction, with its count, first and last cycle and last value written, KPUTCHAR's values never kept (they
+are the BIOS's text); on request, the same counts for the registers the units do answer; the EE's and the IOP's
+exceptions counted by their code; the EE's bus traffic past its caches by memory, counts only; the drive's commands
+(§35.2); the IOP's resets; and, when a run ended, the SIF's, the DMACs', the SPU2's, the GIF's and the VIF's registers.
+`examples/s24.rs` runs a console on a BIOS given by path for a count of frames, presses buttons at chosen frames, writes
+the pictures and prints these reports and registers; nothing else. The boot, run after run (measured 2026-10-25):
+
+| Where it stopped | What the reports showed | The cause, and the rule built |
+|---|---|---|
+| The EE, 2.3 ms after power-on | uncached fetches from the boot ROM alone, no RAM access, no register after reading D_ENABLER | D_ENABLE 0 at reset (D-321) |
+| The EE, at the memory controller | MCH_RICM written, MCH_DRD read once, then nothing | no answer from the RDRAMs (D-322) |
+| The IOP and the EE, at the first SIF packet | SIF1 started with CHCR 41000300h; the EE's packet never reached the IOP's memory | SIF1 run in slice mode (D-323); then no IRQ 3, DMACINTEN 0 (D-324) |
+| The EE, at the IOP's reply | SIF0's FIFO left two words short of the EE's quadword | the packet's padding (D-325) |
+| The IOP, rebooted | a bus error at BE000000h; later 1F900B60h | the DVD player's ROMs' place, the SPU2's window (D-326) |
+| The IOP, at the sound's setup | SPU2 channel 4's BCR written by halfwords, a transfer of 65,536-word blocks | the halfword lanes (D-327) |
+| The IOP, at the drive | S command 36h, then 22h, then 24h retried without end | the boot S commands (D-328) |
+| The IOP, after a SPU2 transfer | core 1's STATX polled 22 million times with interrupts off | STATX's bits (D-329) |
+| The EE, at the first picture | D1_CHCR polled 203 million times; VU1 running, VIF1 waiting on it; GIF_STAT APATH 3, TAG0-3 zero | PATH3 held by a zero tag (D-330), then VU1's XGKICK waiting "never" (D-331) |
+
+The EE's CTRL bit 19 was never written on the way (D-320 rests on its test). The BIOS read the EEPROM's area 1, two
+blocks, and wrote nothing to it on the way to the menu.
+
+### 35.5 The EEPROM and the pads
+
+- **The medium `ps2.nvm`** (`Sapphire_Plan.md` §4.4): three console files in core info, 2, 3 and 4, `.jp.nvm`, `.us.nvm`
+  and `.eu.nvm`, labelled "Inside the console", one per console model, since the EEPROM holds a model's and a market's
+  parameters [R ps2tek "CDVD S Commands", in outline]; machine info lists the market's alone. A file of another length
+  than 1,024 bytes is refused with words; an empty or absent one starts the console blank. `battery` hands the bytes
+  back, `BATTERY_CHANGED` once WriteConfig has written; `battery_saved` clears it.
+- **Blank but valid.** No permitted source gives the EEPROM's layout: ps2tek names OpenConfig, ReadConfig and CloseConfig
+  and nothing of the contents, its BIOS chapter only CDVDMAN's exports; psdevwiki refused the fetch (HTTP 403, as at S2);
+  the later ps2tek edition (Israelson's) is byte-identical in its CDVD chapter [M, SHA-256 equal]. So **blank is all
+  zeros** (S23's), and its validity was measured instead of synthesised: PCSX2 run with its own default EEPROM and with
+  one of zeros (`ps2referee.py menu --blank-nvm`) draws the same language screen at 20 s to the pixel [M], and the BIOS on
+  Sapphire reaches that screen from zeros. The plan's "synthesised from the documented layout", and a checksum, have no
+  document to stand on (§35.12, Q2).
+- **The pads.** The frontend's buttons and sticks reach SIO2's DualShock 2 in their port whenever they change; the BIOS's
+  PADMAN polls them (SIO2's SEND3 queue run 757 times in ten seconds of boot) [M].
+
+### 35.6 The picture and the sound
+
+`frame` is the PCRTC's woven RGBA picture (S20) at its own size, `frame_info` its size and the television's 4:3 shape;
+machine info's base size is the standard's nominal frame. The sound is the SPU2's output at 48,000 Hz, drained from its
+queue (S26); with no BIOS the units still run and the sound is the SPU2's silence. The state format keeps the memories
+alone, version 1's layout unchanged, the processors' and units' registers being S30's. A console with no BIOS loading a
+state is brought from power-on to the state's frame first (`Machine::replay_to`; its clocks are its whole state, the
+cards, the EEPROM and the pads kept, the sound made on the way dropped), so the kit's C7 and C8 hold; a console running a
+BIOS refuses every load (`StateError::Running`) until S30.
+
+### 35.7 Speed, and the exact changes that made a boot practical
+
+The first boot ran at 2.3 frames a second of wall time while the EE spun in its boot ROM, and at 0.6 once OSDSYS drew.
+Five changes, each a pure function's shortcut or a cache, every test and the boot's own traffic counts equal before and
+after [M]:
+
+1. The EE's timing model visits only the resources an instruction reads and writes (bit iteration) rather than all 100
+   (`ee::timing`): 8.7 s to 3.4 s for 20 frames of the boot.
+2. The board caches the PCRTC's next event while nothing changes the timing (`Board::pcrtc_next`): 3.4 s to 2.7 s.
+3. The TLB memoises its last page's lookup until an entry is written (`ee::tlb`).
+4. The board's idle shortcut: with no event due and the GIF, both VIFs and both VUs idle (`Gif::quiet`, `Vif::idle_to`,
+   `Vpu::idle_to`), `run_to` moves the clocks and brings the IOP along, which is what the whole path does: 70 s to 39 s for
+   120 frames.
+5. The LOD's log2 (`gs::exact::log2_scaled`) taken from double precision where the estimate lies more than 2^-24 of a
+   unit from an integer, the exact 256-bit steps otherwise; 20,000 random cases at four depths equal; OSDSYS's drawing
+   0.57 to 1.1 frames a second.
+
+A boot to the menu now takes about 7.5 minutes of wall time on the desktop (1 to 3 frames a second, about 30 times
+slower than the console), which is the reference path's speed; the speed stages (S32 on) own the rest.
+
+### 35.8 The gate: OSDSYS against PCSX2 (measured 2026-10-25)
+
+The anchor is the initial setup's language screen, which neither console leaves without a press and whose only motion
+is the clock's seconds on Sapphire. PCSX2 2.8.2 booted the same image with no disc (`-bios`), a blank EEPROM, software
+rendering, and its picture taken from a state saved through PINE 20 s after it began to draw
+(`ps2referee.py menu`); the state's screenshot is 640 × 480 whatever the settings, so Sapphire's 640 × 448 frame is
+scaled to it bilinearly, and pixels are compared per channel.
+
+| Sapphire's frame against PCSX2's picture | Pixels of 307,200 differing by more than 32 | in the top 70 rows | elsewhere | elsewhere by more than 64 |
+|---|---|---|---|---|
+| Americas `0230a`, frame 759 (12.65 s); PCSX2 weaving, top field first (`--deinterlace 2`, its default here) | 8,906 | 2,249 | 6,657 | 2,131 |
+| **Americas, frame 759; PCSX2 weaving, bottom field first (`--deinterlace 3`)** | **2,518** | **2,249** | **269** | **0** |
+| Europe `0230e`, frame 800 (16.0 s, PAL, 640 × 512 scaled); PCSX2 weaving, top field first | 7,283 | 2,364 | 4,919 | 687 |
+| **Europe, frame 800; PCSX2 weaving, bottom field first** | **2,638** | **2,364** | **274** | **1** |
+
+With PCSX2 showing the woven frame as Sapphire's PCRTC hands it on, the two equal but for the **date and time OSDSYS
+draws in the top corners on Sapphire** (2,249 and 2,364 pixels: the clock of the drive's RTC, 1999/12/31 15:00 at
+power-on as the BIOS shows the drive's 2000-01-01 00:00) and **269 and 274 pixels of the text's edges** where the scaling
+meets PCSX2's own; outside the clock's rows no pixel differs by more than 64 on the Americas image and one on Europe's.
+PCSX2 draws no clock on that screen, with its clock the host's and with its setting for a manual clock at 2000-01-01
+(whose effect was not confirmed); why OSDSYS shows it on Sapphire is open (§35.12, Q3). The stated count for the gate is
+therefore **at most 300 pixels outside the clock's rows differing by more than 32 after the scaling, and at most 10 by
+more than 64**: met on both images.
+
+**Boot time to the menu** [M]: Americas, the language screen beginning 11.5 s after power-on (frame 690) and whole at
+12.0 s (frame 720), about 7.5 minutes of wall time; Europe, beginning 11.4 s (frame 570 at 50 Hz) and whole at 12.0 s
+(frame 600); PCSX2 on the Americas image between 14 and 16 s after it begins to draw, the Europe image's not measured.
+
+### 35.9 The menu answers the pad (measured 2026-10-25)
+
+`examples/s24.rs` pressed the frontend's buttons on port 1 at chosen frames (Americas image, measured 2026-10-25):
+
+| Frames | Pressed | What the picture did |
+|---|---|---|
+| 760-765 | Cross (bit 14) on the language screen | the text faded out by 820 and **"User Preferences: Language ◀ English ▶"** was drawn by 979 |
+| 980-985 | Down (bit 6) | nothing, as the language is chosen with Left and Right |
+| 1060-1065 | Cross | **"User Preferences: Time Zone ◀ GMT +4:30 Kabul ▶"** by 1100 |
+
+So the presses reach OSDSYS through SIO2 and its PADMAN, and the initial setup steps on, which is the gate's "the menu
+responds to the pad" [M]. On the first run Down, pressed on the language screen itself, changed nothing (§35.4's
+pictures equal), that screen having no list to move in.
+
+### 35.10 Tests and seeded faults (2026-10-25)
+
+**Tests** [M, `cargo test --release`]: the crate whole, **301 of 301**, among them: `tests/boot.rs` **5 of 5**, new (SIF1
+in chain mode and SIF0's padding against PCSX2's records, CTRL bit 19's reset line, the power-on values with the memory
+controller's answers, halfword DMA writes and the absent places); the lib **59 of 59** (new: `mch`'s serial answers, the
+drive's boot S commands, the machine with and without a BIOS, the drive's market, the pads in their ports, the EEPROM's
+files, a state brought to its frame and refused by a running console, the LOD shortcut against the exact steps over
+20,000 cases, the reports' KPUTCHAR rule); `tests/gif.rs` **16 of 16** (a zero tag freeing PATH3; PATH1's estimate);
+`tests/iop.rs` **13 of 13** (`s21-map` at 9E000000h, SIF0's padding in the FIFO); `tests/spu2.rs` **10 of 10** (`s26-irq`'s
+STATX); every other test file unchanged and passing. The lib, `boot`, `gif`, `iop` and `sif` also under `test-checked`;
+clippy clean on every target. `SapphireTests` (WiseMan, the blast radius's filter) **5 of 5**, the kit's C7 and C8 passing
+by §35.6's rule after failing on a first run that kept the memories alone.
+
+**Seeded faults:**
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the EE's CTRL bit 19 not resetting the IOP | `ctrl_bit_19_holds_the_iop_in_reset_until_it_clears` |
+| F2 | a European console answering the region query with the Americas' parameters; then given the Americas' EEPROM file | `the_drive_reports_the_consoles_market`; `the_eeprom_is_the_markets_console_file` |
+| F3 | the pad's port swapped, port 1's buttons handed to port 2 | `the_buttons_and_sticks_reach_the_pad_in_their_port` |
+
+Each was applied, the tests named run, and the source restored [M]. The brief's "EEPROM's checksum wrong" has no checksum
+to break (§35.5); F2's second half stands in for it.
+
+### 35.11 Where S10 attaches, and what this stage does not cover
+
+- **S10**: an ELF given as the image is recognised and the console boots its BIOS to the menu without it; S10 enters it by
+  fast boot once the kernel is up, and catches the IOP's console in a `tty` space at the module interface (§7's S10 row),
+  then runs the 78 ps2autotests on this machine. The second half of S24's gate is S10's.
+- **S25 part B** (the tester's go): the OSDSYS card checks, a card formatted by the BIOS both ways, G10's start without a
+  disc, G11; P8, the BIOS refusing an emulated card, to be recorded there.
+- **Not modelled, each named**: the EE's SIO beyond its transmit register (F100h-F150h written, read zero); the registers
+  at 1000F400h-1000F4A0h other than MCH, 1000F500h, 1000F510h, 1F801470h, 1F803204h and 1F803800h on the EE, and the IOP's
+  SSBUS and configuration registers (1F801000h-1F801020h, 1F801400h-1F801420h, 1F801450h, 1F801460h-1F80146Ch,
+  1F801560h-1F8015F0h, 1F802070h, FFFE0140h, FFFE0144h), all taking their writes and reading zero as before, the reports
+  listing them; the EE's reads of 1F8019xxh and 1F402005h; the drive's RTC from 2000-01-01, not the host's clock; a disc in
+  the drive (S29, G10); the processors' state in `SPH2` (S30).
+- **Seen and not fixed** (the intro, not the gate's anchor): white bands above and below the Sony Computer Entertainment
+  animation's picture, and its light trails drawn as small textured squares where PCSX2 draws glowing points; GS work for
+  S17 and S18's owners (§35.12, Q4).
+- The CRT profile and the audits stay owed while the console is offered to no player (§6).
+
+### 35.12 Questions this stage leaves
+
+1. **Q1 [decision], the S commands taken from the referee (D-328).** The BIOS needs answers to eight S commands no
+   document describes; Sapphire gives PCSX2's. *Recommended*: keep them, each measured and its parameters recorded, and
+   add others only when a boot or a game shows the need, as this stage did.
+2. **Q2 [decision], the EEPROM's layout.** No permitted document gives it; the blank of zeros is the one PCSX2 accepts in
+   the same way. *Recommended*: accept zeros as "blank but valid" and drop the plan's synthesis from a layout until a
+   permitted source appears.
+3. **Q3 [routine], the clock on the language screen.** *Recommended*: a dispute step comparing the drive's RTC answers
+   with PCSX2's under a set clock, before S29 offers the console.
+4. **Q4 [routine], the intro's bands and light trails.** *Recommended*: hand them to the GS's next stage as defects to
+   prove with a program.
+5. **Q5 [routine], the field order.** Sapphire's woven frame equals PCSX2's weave with the bottom field first, not the top
+   (6,657 pixels apart). *Recommended*: keep S20's parity; check it against a program that marks each field, at S10.
+
+### 35.13 What was read for this stage
+
+`Sapphire_Plan.md` §1.3, §1.4, §4.4, §5.1, §5.6, §5.9, §7 (S10, S24, S25), §8, §11 (Q6, Q7, Q9), §12; this page's §20 to §33
+(each unit's record and what it left for S24); `Sapphire_Disputes.md` (D-61, D-124 to D-126, D-141 to D-145, D-266,
+D-280, D-288); `Sapphire_Referees.md` §2; `EmuSen_Firmware.md` §0; Diamond's `machine.rs` (the project's own reset of
+the R3000A). ps2tek at `1c91660`: "EE RDRAM initialization", "DMAC I/O" (D_ENABLER), "IOP DMA", "CDVD I/O Ports", "CDVD
+S Commands", "EE Timers", the I/O maps, "BIOS Boot Process", "BIOS PS Compatibility" (bit 19), "BIOS IOP IOPBOOT",
+"SIFMAN", "IGREETING", "EESYNC", "EECONF" (the BIOS chapter, as a writer of a player's-BIOS stage may); the later
+edition's index (Israelson, fetched 2026-10-25, byte-identical); Sony's *EE User's Manual* §2.2.1, §5.2 (D_ENABLE),
+chapter 7 (§7.1, §7.2.1), *EE Overview* §2.6, §3.1.2, *EE Core User's Manual* (PRId, Count); psx-spx "SPU Status
+Register", "Exception Vectors"; Samsung's K4R881869E Direct RDRAM data sheet (2003). PCSX2 2.8.2 run as a black box, its
+outputs only: RAM through PINE, and pictures from states it saved. No emulator, SDK, loader or ps2autotests source, and
+no firmware: the BIOS images were handed by path to Sapphire and to PCSX2 and never opened by any tool; no program
+counter, instruction, or memory holding BIOS code or data was printed, logged or read, and the EE's console text was
+never kept.
+
+**Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures with a referee's,
+read ps2tek's BIOS chapter and saw BIOS boot banners quoted there; **this writer is exposed and will never write the open
+replacement**.

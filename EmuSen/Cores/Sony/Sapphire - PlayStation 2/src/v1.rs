@@ -527,6 +527,38 @@ mod tests {
         assert_eq!(Machine::firmware_for(&cd())[0].md5, lists[1]);
     }
 
+    /// The frontend's buttons and sticks reach the pad in their own port on SIO2, which the BIOS polls (Sapphire_Native.md
+    /// §35.5); a port with nothing plugged in has no pad.
+    #[test]
+    fn the_buttons_and_sticks_reach_the_pad_in_their_port() {
+        let mut m = create(&elf(), &[(PAD_KEYS[1], "none")]).unwrap();
+        m.set_buttons(0, 1 << 14 | 1 << 6, u32::MAX).unwrap();
+        m.set_axis(0, 0, 1.0).unwrap();
+        let pad = m.sys.board.iop.bus.sio2.pad_mut(0, 0).unwrap().input;
+        assert_eq!((pad.buttons, pad.sticks[2]), (1 << 14 | 1 << 6, 0xFF), "Cross and Down, left stick right");
+        assert!(m.sys.board.iop.bus.sio2.pad_mut(1, 0).is_none(), "nothing in port 2");
+    }
+
+    /// The console's EEPROM is the medium `ps2.nvm`, the market's own file: loaded at create, handed back, and marked
+    /// changed once the drive writes it (Sapphire_Plan.md §4.4; Sapphire_Native.md §35.5).
+    #[test]
+    fn the_eeprom_is_the_markets_console_file() {
+        let file = |which, data| emusen_native::abi::File { which, data };
+        let mut nvm = vec![0u8; nvm::BYTES];
+        nvm[16] = 0x5A;
+        assert_eq!(create_with(&elf(), &[], vec![file(NVM_FILES[1], &nvm[..100])]).err(), Some(status::BAD_FILE));
+        let mut m = create_with(&elf(), &[(REGION_KEY, "ps2.eu")], vec![file(NVM_FILES[2], &nvm[..]), file(NVM_FILES[1], &[7u8; nvm::BYTES][..])]).unwrap();
+        assert_eq!(m.battery(NVM_FILES[2]).unwrap(), (&nvm[..], flags::BATTERY_TRACKED), "the European console's file, the American one ignored");
+        assert_eq!(m.battery(NVM_FILES[1]).err(), Some(status::BAD_FILE));
+        m.nvm_mut().open([1, 0, 1]);
+        m.nvm_mut().write(&[9; 16]);
+        assert_eq!(m.battery(NVM_FILES[2]).unwrap().1, flags::BATTERY_TRACKED | flags::BATTERY_CHANGED);
+        m.battery_saved(NVM_FILES[2]).unwrap();
+        assert_eq!(m.battery(NVM_FILES[2]).unwrap().1, flags::BATTERY_TRACKED);
+        let blank = create(&elf(), &[]).unwrap();
+        assert!(blank.nvm().bytes.iter().all(|&b| b == 0), "no file: blank");
+    }
+
     #[test]
     fn the_two_cards_are_slots_of_ps2_card_and_a_card_file_of_the_wrong_size_is_refused() {
         let slots: Vec<_> = Machine::battery_files("ps2").unwrap().into_iter().map(|b| (b.which, b.kind, b.medium, b.label)).collect();

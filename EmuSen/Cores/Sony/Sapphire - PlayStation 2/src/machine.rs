@@ -78,6 +78,16 @@ pub struct Machine {
 
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
+        let sys = Machine::console(market, ports);
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None };
+        for slot in &mut m.sys.board.iop.bus.sio2.slots {
+            slot.cards[0] = Some(MemoryCard::erased());
+        }
+        m
+    }
+
+    /// The console at power-on in the market's standard, with a DualShock 2 in each port named.
+    fn console(market: Market, ports: [Option<&'static str>; 2]) -> Box<System> {
         let mode = if market == Market::Europe { clock::PAL } else { clock::NTSC };
         let mut sys = Box::new(System { ee: crate::ee::Ee::reset(), board: crate::board::Board::new(mode) });
         // SMODE2 interlaced in frame mode from the first field, as the BIOS sets it, so the picture is the standard's
@@ -88,12 +98,30 @@ impl Machine {
             Market::Americas => crate::cdvd::REGION_AMERICAS,
             Market::Europe => crate::cdvd::REGION_EUROPE,
         });
-        let sio2 = &mut sys.board.iop.bus.sio2;
         for (n, plug) in ports.iter().enumerate() {
-            sio2.slots[n].pads[0] = plug.map(|_| DualShock2::default());
-            sio2.slots[n].cards[0] = Some(MemoryCard::erased());
+            sys.board.iop.bus.sio2.slots[n].pads[0] = plug.map(|_| DualShock2::default());
         }
-        Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None }
+        sys
+    }
+
+    /// A console with no BIOS brought to frame `frames` from power-on, which is its whole state, since nothing but the
+    /// units' clocks runs (the state's rule until S30, Sapphire_Native.md §35.6): the cards, the EEPROM and the pads'
+    /// input kept, the sound made on the way dropped.
+    pub fn replay_to(&mut self, frames: i64) {
+        let old = std::mem::replace(&mut self.sys, Machine::console(self.market, self.ports));
+        let (b, o) = (&mut self.sys.board.iop.bus, &old.board.iop.bus);
+        for n in 0..2 {
+            b.sio2.slots[n].cards = o.sio2.slots[n].cards.clone();
+        }
+        b.cdvd.nvm = o.cdvd.nvm.clone();
+        self.frames = 0;
+        for port in 0..2 {
+            self.sync_pad(port);
+        }
+        while self.frames < frames {
+            self.advance();
+        }
+        self.sys.board.iop.bus.spu2.out.clear();
     }
 
     /// The player's BIOS in the boot ROM, the same image at 1FC00000h for the EE and the IOP, and both processors at
@@ -160,7 +188,7 @@ impl Machine {
             7 => vu(1).data.get(at).copied(),
             8 => b.iop.bus.ram.get(at).copied(),
             9 => b.iop.bus.spu2.ram.get(at).copied(),
-            BIOS_ID => Some(b.map.rom.get(at).copied().unwrap_or(0)).filter(|_| at < BIOS_BYTES),
+            BIOS_ID => (at < BIOS_BYTES).then(|| b.map.rom.get(at).copied().unwrap_or(0)),
             _ => None,
         }
     }
@@ -236,6 +264,15 @@ mod tests {
         let took = m.sys.board.now - t0;
         assert!(took.abs_diff(2 * field) < 2 * IDLE_STEP, "{took} for two frames of {field}: the first field is the reset's non-interlaced one");
         assert_eq!(m.frames, 2);
+    }
+
+    /// The drive answers the region query with the console's own market (D-328).
+    #[test]
+    fn the_drive_reports_the_consoles_market() {
+        let want = [(Market::Japan, crate::cdvd::REGION_JAPAN), (Market::Americas, crate::cdvd::REGION_AMERICAS), (Market::Europe, crate::cdvd::REGION_EUROPE)];
+        for (market, region) in want {
+            assert_eq!(machine(market).sys.board.iop.bus.cdvd.region, Some(region), "{market:?}");
+        }
     }
 
     #[test]

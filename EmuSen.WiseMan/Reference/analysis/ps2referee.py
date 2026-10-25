@@ -8,7 +8,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--wave DIR] [--screen FILE] [--cards A,B] [--multitap] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
-    ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm]
+    ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -35,7 +35,9 @@ and returns only the program's own text: the lines from the first that ends with
 last that ends with its last; the rest of the log is never printed or kept (Sapphire_Native.md §14). `menu` boots the
 BIOS with no disc (`-bios`) at the console's speed, saves a state through PINE N seconds after PCSX2 begins to draw,
 and keeps only the state's picture in PNG, its one member read, the state removed at once; --blank-nvm gives the console
-an EEPROM of zeros for the run, as Sapphire's blank one, and puts PCSX2's own back afterwards (Sapphire_Native.md §35).
+an EEPROM of zeros for the run, as Sapphire's blank one, and puts PCSX2's own back afterwards; --deinterlace is PCSX2's
+deinterlacing setting, 3 (weave, the bottom field first) by default, which shows the woven frame as Sapphire's PCRTC
+hands it on (Sapphire_Native.md §35).
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
 private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
@@ -503,7 +505,7 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
         return out
 
 
-def run_pcsx2_menu(market, seconds, png, blank_nvm=False):
+def run_pcsx2_menu(market, seconds, png, blank_nvm=False, deinterlace=3):
     """PCSX2 booted to its BIOS's menu with no disc, the picture `seconds` after it begins to draw (Sapphire_Native.md §35):
     PINE saves a state, whose screenshot member alone is read and kept; the state is removed. Nothing else of the state
     is opened, since it holds the console's memory."""
@@ -521,10 +523,10 @@ def run_pcsx2_menu(market, seconds, png, blank_nvm=False):
             slot = free_slot()
             ini = data / "PCSX2/inis/PCSX2.ini"
             ini.parent.mkdir(parents=True, exist_ok=True)
-            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot), **json.loads(os.environ.get("PS2REFEREE_CORE", "{}"))},
+            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
                       "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
                       "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]}, **PCSX2_CARDS,
-                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], **json.loads(os.environ.get("PS2REFEREE_GS", "{}"))}}
+                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": str(deinterlace)}}
             ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
             root = CACHE / "pcsx2/squashfs-root"
             job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "-bios"],
@@ -696,6 +698,7 @@ def main(argv):
         die("--screen is for the probe's cores", 2)
     if disc and (referee != "pcsx2" or mode != "ram"):
         die("--disc is for ram runs on pcsx2", 2)
+    deinterlace = option("--deinterlace", "3")
     blank = "--blank-nvm" in rest
     if blank:
         if mode != "menu":
@@ -720,7 +723,7 @@ def main(argv):
     if mode == "menu":
         if referee != "pcsx2":
             die("menu runs on pcsx2 only", 2)
-        out = run_pcsx2_menu(market, count, target, blank)
+        out = run_pcsx2_menu(market, count, target, blank, int(deinterlace))
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         print(json.dumps({k: v for k, v in out.items() if k != "words"}))

@@ -17,7 +17,8 @@ fn main() {
         std::fs::write(dir.join(format!("{}.expected", p.name)), text).expect("written");
         println!("{}: {} record words ({} the EE's)", p.name, p.expected.len(), p.ee_words);
     }
-    for p in [s24::statx()] {
+    {
+        let p = s24::statx();
         let name = p.name;
         let (source, expected) = p.finish();
         let iop = s21::assemble(&source);

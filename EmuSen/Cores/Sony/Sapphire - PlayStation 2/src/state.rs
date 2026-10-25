@@ -1,7 +1,9 @@
 //! Sapphire's own state format, "SPH2" (Sapphire_Plan.md §4.7, §5.10): the magic, the version, the frame count, the
 //! market, then every writable memory in id order. Later stages append their blocks under a new version; the layout
 //! listing is pinned by a test. The disc is never in it. The processors' and units' registers join it at S30; until
-//! then a state holds the memories alone (Sapphire_Native.md §35.6).
+//! then a state holds the memories alone, a console with no BIOS is brought to the state's frame from power-on before
+//! they are put back (its clocks are its whole state), and a console running a BIOS refuses a load (Sapphire_Native.md
+//! §35.6).
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
@@ -18,6 +20,8 @@ pub enum StateError {
     Version(i32),
     /// A state of a console of another market, by its byte.
     Market(u8),
+    /// Any state, for a console running a BIOS: its processors and units are not in the format until S30.
+    Running,
     BufferTooSmall { needed: usize },
 }
 
@@ -25,7 +29,7 @@ impl Status for StateError {
     fn status(&self) -> i32 {
         match self {
             StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) | StateError::Market(_) => status::FOREIGN,
+            StateError::Foreign(_) | StateError::Market(_) | StateError::Running => status::FOREIGN,
             StateError::Version(_) => status::VERSION,
             StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
         }
@@ -64,6 +68,9 @@ impl StateMachine for Machine {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
+        if self.booted {
+            return Err(StateError::Running);
+        }
         let mut r = StateReader::new(data);
         let magic = r.u32().map_err(|_| StateError::Foreign(0))?;
         if magic != STATE_MAGIC {
@@ -86,7 +93,7 @@ impl StateMachine for Machine {
                 loaded.push((id, bytes));
             }
         }
-        self.frames = frames;
+        self.replay_to(frames);
         for (id, bytes) in loaded {
             for (a, &b) in bytes.iter().enumerate() {
                 self.set_space_byte(id, a, b);
@@ -149,6 +156,11 @@ mod tests {
         a.save_state(&mut s).unwrap();
         let mut b = machine(Market::Americas);
         b.load_state(&s).unwrap();
+        assert_eq!(b.sys.board.now, {
+            let mut r = machine(Market::Americas);
+            r.replay_to(7);
+            r.sys.board.now
+        }, "brought to the state's frame from power-on");
         assert_eq!((b.frames, b.space_byte(RAM_ID, (32 << 20) - 1), b.space_byte(9, 3)), (7, Some(0x5A), Some(0xA5)));
         let mut c = machine(Market::Americas);
         assert_eq!(c.load_state(&s[..s.len() - 1]).unwrap_err().status(), status::TRUNCATED);
@@ -159,5 +171,8 @@ mod tests {
         assert_eq!(c.load_state(&v2).unwrap_err().status(), status::VERSION);
         assert_eq!(machine(Market::Europe).load_state(&s).unwrap_err(), StateError::Market(1));
         assert_eq!((c.frames, c.space_byte(RAM_ID, (32 << 20) - 1)), (0, Some(0)), "a refused load changes nothing");
+        let mut d = machine(Market::Americas);
+        d.insert_bios(&vec![0; crate::machine::BIOS_BYTES]);
+        assert_eq!(d.load_state(&s), Err(StateError::Running), "a console running a BIOS takes no state until S30");
     }
 }

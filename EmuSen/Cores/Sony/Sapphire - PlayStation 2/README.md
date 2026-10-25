@@ -45,4 +45,9 @@ model of the standard (`standard.rs`) and the manual's post-processing (`manual.
 (`driver.rs`), and `cargo run --release --example s27 -- <folder>` writes the replay and register programs for the
 referees, with `explain`, `pixels`, `csc` and `timing` to read their records.
 
+Since stage S24 (`Sapphire_Native.md` §35) `src/machine.rs` is the console on the board with the player's BIOS, and
+`cargo run --release --example s24 -- <bios> <americas|europe|japan> <frames> <folder> [frame[:bits]...]` boots it on a
+BIOS given by path, pressing buttons at chosen frames and writing the pictures, printing only the hardware's own reports;
+`examples/s24probe.rs` writes the stage's measurement programs for the referees and `programs/s24/` holds its bare ones.
+
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

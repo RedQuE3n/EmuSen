@@ -11,6 +11,7 @@
 //! core in `board::System`. S12: the vector units (`vu`), VU0 in macro mode through COP2, micro mode an interface for S13.
 //! S21: the IOP (`iop`), `blackmoon-r3000` on its own bus, a unit of the board.
 //! S16: the GS (`gs`), its registers, its local memory in every format's layout and its transfers, on the board.
+//! S13: micro mode for both units (`vu::pipe`), with VU1's EFU (`vu::efu`).
 
 pub mod bios;
 pub mod blank;

@@ -896,6 +896,12 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
   `multiply_over_every_pair_of_input_classes_equals_the_manual`, `the_multiply_adds_and_the_outer_product_equal_the_manual`,
   `divide_square_root_and_reciprocal_root_equal_the_manual`.
 - **Implemented in:** stage S12's commit.
+- **Revisited 2026-10-25, at stage S13** (`Sapphire_Native.md` §23.8): `vu/games/triace`'s microprogram is generated at
+  run time and its twelve values cannot be computed on Sapphire before S10 runs the program; PCSX2, on IEEE 754 towards
+  zero, misses one of them (42546665h for the console's 42546666h). In `vu/lower/efu` the nano code on this module's
+  multiplier and divider gives the console's last bit where IEEE 754 towards zero does not (EATAN of 1.0, 3F490FDAh;
+  ERCPR of 3FFFFFFFh, 3F000001h), evidence from the EFU's datapath beside the argument. The conclusion stands,
+  **argued**; `triace` on Sapphire at S10 decides it.
 
 ### D-44. VU flags: each lane in the field mask sets Z for a zero result, S for its sign bit (a clamped −0 or −MAX included), U and O for the exponent's underflow and overflow; a lane out of the mask clears its four; the status flag collects them; a multiply-add's sticky flags also take its product's
 
@@ -1012,6 +1018,9 @@ through the reset too.
 - **Referee:** PCSX2 2.8.2 equal on every judgement; Play! 0.72 keeps more than 24 bits and sets +x where −x is due.
 - **Conclusion:** the title; **measured** against PCSX2 alone; `vu/upper/clip`'s console text (S13) is to be read against
   it once its constants are known from a run.
+- **Measured 2026-10-25, at stage S13:** PCSX2 2.8.2 reproduces `vu/upper/clip`'s 32 console lines; their "Basic test"
+  judgements (15h, 2Ah, 19h, 26h; zeros equal) and "Multi test" (each judgement seen four cycles after its CLIP) are
+  reproduced on the interpreter by `the_clip_console_text_s_multi_test_holds` (`Sapphire_Native.md` §23.8).
 - **Depends on it:** `vu/ops.rs`'s `clip`.
 - **Pinned by:** `the_flagless_instructions_and_clip_equal_the_manual`.
 - **Implemented in:** stage S12's commit.
@@ -1047,6 +1056,10 @@ through the reset too.
 - **Depends on it:** `Vpu::q_pending` and `settle_q`; `ee/cop2.rs`'s `vu_op`; the timing model's `alone`.
 - **Pinned by:** `divide_square_root_and_reciprocal_root_equal_the_manual`, `the_macro_timing_follows_section_5_4`.
 - **Implemented in:** stage S12's commit.
+- **Measured 2026-10-25, at stage S13, in micro mode** (`Sapphire_Native.md` §23.8): ps2autotests' `vu/lower/fdivdelay`
+  console text reads the old Q six times after DIV and SQRT and twelve after RSQRT, then the quotient: Q reaches the T
+  stage 7 and 13 cycles after the divide, the figures' F stage. PCSX2 2.8.2 reproduces all 350 lines;
+  `the_fdivdelay_console_text_s_single_delayed_lines_hold` reproduces the three "single delayed" cases.
 
 ### D-52. FBRST's reset clears the unit's status, MAC and clipping flags
 
@@ -1262,6 +1275,100 @@ through the reset too.
 - **Pinned by:** `each_dma_mode_reaches_its_stand_in`, `a_burst_holds_the_bus_and_chopping_opens_windows`,
   `priorities_order_the_channels_and_a_channel_without_dreq_waits`.
 - **Implemented in:** stage S21's commit.
+- **Built 2026-10-25, at stage S13:** `Micro::release` answers the cycle after the first pair with M set, §5.4.6's
+  figure's; pinned by `the_m_bit_releases_the_interlocked_transfers` and `the_ee_waits_for_micro_mode_as_section_5_4_draws_it`.
+  The referees are not compared (the programs' records cannot show a transfer's cycle).
+
+### D-80. VU micro mode: a conditional branch, JR or JALR reads an integer register written by the integer unit in the pair just before as it was before the write; one pair between, or a flag check as the writer, gives the new value
+
+- **Opened:** 2026-10-25, at stage S13 (numbered from D-80, the numbers below set aside for stage S21, built beside it).
+- **Documents read:** *VU User's Manual* §3.4.8: "a one-instruction slot is necessary between a branch condition setting
+  instruction and a condition branching instruction. Flag check instructions (FCAND, FCEQ, FCGET, FCOR, FMAND, FMEQ,
+  FMOR, FSAND, FSEQ, and FSOR) are an exception, and a conditional branch instruction can be placed immediately after
+  them"; every conditional branch page's Remarks, the same; §3.4.7 (integer results bypassed to the next instruction's
+  T stage, which the branch's need for a slot shows does not reach the branch unit). Nothing says what a branch without
+  the slot reads. JR and JALR are not named; they read the same integer registers in the same unit [A].
+- **Test program:** `s13-visible`: IADDIU VI01 ← 0 with VI01 1 before, then IBNE VI01, VI00 at once, after one pair, and
+  after FSAND; `tests/vu_micro.rs`'s `a_branch_reads_an_integer_written_just_before_as_it_was`.
+- **Referee:** measured 2026-10-25: PCSX2 2.8.2 and Play! 0.72 both take the branch right after the IADDIU (the old 1)
+  and not after a pair between or after FSAND, as implemented.
+- **Conclusion:** the title; **argued** from §3.4.8, two lineages agreeing.
+- **Depends on it:** `vu/pipe.rs`'s `branch_vi` and `vi_last`.
+- **Pinned by:** `a_branch_reads_an_integer_written_just_before_as_it_was`, `what_each_pair_sees_equals_the_manual_s_pipeline`.
+- **Implemented in:** stage S13's commit.
+
+### D-81. VU micro mode: the I bit writes I at its pair's T stage for the next pair; its own pair's upper instruction reads I as it was
+
+- **Opened:** 2026-10-25, at stage S13.
+- **Documents read:** *VU User's Manual* §3.1.4 ("the content of the Lower OP field is written to the I register at the
+  T stage of the instruction … It is used by the next instruction to be executed, such as ADDi/MULi"), Figure 3-1 (the
+  LOI pair's upper is a MUL that reads no I). Whether an upper instruction reading I in the I bit's own pair sees the
+  constant is not said; both read at T.
+- **Test program:** `s13-visible`: I ← 1.0, then `[i] addi.x vf2, vf0, i | 4.0` and `addi.x vf3, vf0, i`.
+- **Referee:** measured 2026-10-25: PCSX2 2.8.2 and Play! 0.72 both give 1.0 and then 4.0.
+- **Conclusion:** the title; **argued**, two lineages agreeing.
+- **Depends on it:** `vu/pipe.rs`'s `execute` (I written after the upper instruction runs).
+- **Pinned by:** `the_i_bit_loads_i_for_the_next_pair`, `what_each_pair_sees_equals_the_manual_s_pipeline`.
+- **Implemented in:** stage S13's commit.
+
+### D-82. TPC holds the address a microprogram stopped at in doublewords, as CMSAR0 and VCALLMSR take it; CMSAR1 takes bytes
+
+- **Opened:** 2026-10-25, at stage S13.
+- **Documents read:** *VU User's Manual* §5.1.3: TPC "indicates the PC … at which the micro subroutine has stopped",
+  its unit not given; CMSAR0's VCALLMSR page: "Specify the address divided by 8"; CMSAR1: "a 16-bit address (an address
+  in byte units in Micro Mem)"; §7.3.1: "read the TPC … transfer the value to CMSAR0 … VCALLMSR", and for VU1 "transfer
+  the value to CMSAR1", which with CMSAR1's bytes contradicts the first; branches and JALR's link count doublewords
+  (§4.3, the `vu/lower/branch` console text's link 4 two pairs on).
+- **Test program:** `s13-visible`: an E bit at pair 2 of a VU0 microprogram, TPC read by CFC2 after it.
+- **Referee:** measured 2026-10-25: PCSX2 2.8.2 and Play! 0.72 both read 4.
+- **Conclusion:** the title; **argued**, two lineages agreeing; §7.3.1's VU1 restart read as needing TPC times 8.
+- **Depends on it:** `vu/pipe.rs` (`tpc`), `Vpu::set_ccr`'s CMSAR1.
+- **Pinned by:** `figure_3_19_the_e_bit_and_its_delay_slot`, `what_each_pair_sees_equals_the_manual_s_pipeline`.
+- **Implemented in:** stage S13's commit.
+
+### D-83. VU micro mode: a divide's I and D reach the status flag with its quotient, at the F stage
+
+- **Opened:** 2026-10-25, at stage S13.
+- **Documents read:** §3.4.4 times the FMAC's flags (the S stage); §3.4.5's FDIV pipeline writes back at F; DIV's,
+  SQRT's and RSQRT's pages give the flags but no stage. Macro mode (S12) writes them as the instruction runs, which no
+  figure there separates.
+- **Test program:** `s13-divider`: FSAND of I and D in the pair after WAITQ.
+- **Referee:** not separable: both referees' divider flags differ for other reasons (D-46).
+- **Conclusion:** the title; **argued**, the flags as a result of the divider, landing with its other result.
+- **Depends on it:** `Landing::flags`, `Vu::settle`.
+- **Pinned by:** `the_divider_in_micro_mode_equals_the_manual`.
+- **Implemented in:** stage S13's commit.
+
+### D-84. The EFU computes as §7.2's nano code on the format's arithmetic, its accumulator adding each clamped product as ADD adds; its own last bits are a loss
+
+- **Opened:** 2026-10-25, at stage S13.
+- **Documents read:** *VU User's Manual* §7.2 (each function as pseudo microinstructions "for reference purpose": MUL,
+  MULA, MADDA, MADD, ADD, SUB, DIV, SQRT, RSQRT on the constants of §4.3's pages, in order); §4.3's EFU pages (the
+  approximations, the ranges they are valid in, no flags); §7.4's latencies.
+- **Test program:** ps2autotests' `vu/lower/efu` console text, 208 values of 13 functions over 16 named inputs, whose
+  values its own lines give (`Sapphire_Native.md` §23.8); `s13-efu` over the same inputs. With D-30's multiply-add (an
+  accumulator of exponent field 255 kept) the nano code equals 181 of the 208; adding the clamped product as ADD adds
+  equals 193, every overflowing input among them (ESUM of 7F800000h gives 7FFFFFFFh, ESIN of 7FFFFFFFh 7FD76AA2h,
+  EATANxy of zero 7FC90FD7h), and the other 15 are within two in the last place [M].
+- **Referee:** measured 2026-10-25: PCSX2 2.8.2 equals 93 of the console's 208 values, Play! 0.72 88; both compute on the
+  host (NaNs, infinities).
+- **Conclusion:** the title; **measured** against the console's text for the accumulator, the last bits of 15 values a
+  named loss.
+- **Depends on it:** `vu/efu.rs`.
+- **Pinned by:** `the_efu_against_the_console_s_text`, `the_efu_equals_the_nano_code`.
+- **Implemented in:** stage S13's commit.
+
+### D-85. VU1 started by CMSAR1 runs its first pair 3 cycles after the CTC2, as VCALLMS's
+
+- **Opened:** 2026-10-25, at stage S13.
+- **Documents read:** §5.4.5's figures (VCALLMS: I Q R A D, the first pair's M, then T); §5.1.3 and §5.5 (CMSAR1 starts
+  VU1 when written) with no figure.
+- **Test program:** none separates it; the EE sees VU1 only through BC2F, BC2T and VPU-STAT.
+- **Referee:** not consulted.
+- **Conclusion:** the title; **argued**, a named loss.
+- **Depends on it:** `Vpu::set_ccr` (`pipe::START`).
+- **Pinned by:** none.
+- **Implemented in:** stage S13's commit.
 
 *D-100 on are stage S16's, built beside S21 and S13 (whose entries begin at D-80).*
 

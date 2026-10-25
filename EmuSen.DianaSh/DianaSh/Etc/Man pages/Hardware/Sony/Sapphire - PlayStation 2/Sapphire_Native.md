@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22) and S16 (§24) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23) and S16 (§24) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -2451,6 +2451,266 @@ passed to PCSX2 by path.
 - The IOP in PlayStation mode (Diamond's, §4.1), its 33.8688 MHz clock and TBIN.
 - The machine running the IOP with the EE (S10, S24), the IOP's state in `SPH2` (S30), its debugger view (S31) and its
   speed (S32 to S34).
+## 23. Stage S13, VU micro mode, both units (2026-10-25)
+
+*Numbered §23 because stage S21 (the IOP), built beside it, writes §22; its disputes start at D-80 for the same
+reason.*
+
+### 23.1 In one paragraph
+
+The plan's §7 row S13, on the tester's go of 2026-10-25. `emusen-mips` gains the micro-only lower instructions,
+§4.3's 46 operation codes read from the *VU User's Manual*: the 28 whose bits 31–25 select them (LQ, SQ, ILW, ISW,
+IADDIU, ISUBIU, the twelve flag instructions, B, BAL, JR, JALR and the six conditional branches) in a table of their
+own, and MFP, XTOP, XITOP, XGKICK, WAITP and the eleven EFU instructions in the 1000000 class's empty rows, none of them
+a COP2 word; its VU assembler takes labels. Sapphire gains **`vu::pipe::Pipe`**, micro mode for each unit behind S12's
+`vu::micro::Micro`: a pair of instructions issued a cycle at its T stage, held back only by §3.4's hazards (a register
+field written by the FMAC pipeline, an integer register loaded by ILW or ILWR, the divider and the EFU busy, WAITQ,
+WAITP, PATH1 busy behind an XGKICK), every result computed as its pair issues, and what the pipelines make visible later
+modelled where no hazard check hides it: the MAC, status and clipping flags written at the S stage four cycles on, Q at
+the divider's F stage, P at the EFU's, and an integer result that a branch in the very next pair does not yet see. The
+E bit and its delay slot, the M bit, the D and T bits with FBRST's enables, TPC, VPU-STAT's bits and the D and T
+interrupts to the INTC are §1.3's, §3.5's and §7.3's; XGKICK ends at a defined interface (`vu::Path1`, a stand-in until
+S15), XTOP and XITOP read a link VIF drives at S14, and VIF's MSCAL family will start a unit through `Vpu::start`. VU1's
+EFU is **`vu::efu`**, §7.2's nano code on `sapphire::float`. VCALLMS, VCALLMSR and CMSAR1 no longer halt the
+interpreter. Seven bare programs of the project's (1,948 record words over 487 result quadwords, every micro instruction
+but the three that reach outside the VPU) and 24 transcriptions of the manual's pipeline figures and rules equal the
+manual on the interpreter. PCSX2 reproduces six of the seven `vu/*` console texts whole but for its own log lines; its
+EFU and its arithmetic miss the console in `vu/lower/efu` and in one of `vu/games/triace`'s twelve values, while the
+EFU's nano code on the format's arithmetic equals 193 of `efu`'s 208 console values and is within two in the last place
+of the rest. Disputes D-80 to D-85; D-43 stands with console evidence beside its argument, and D-51's micro form is
+measured. No emulator, SDK or loader source, no ps2autotests source and no firmware was read.
+
+### 23.2 What was built
+
+- **`emusen-mips`** (`vu.rs`): `Unit::Micro`; `LOWER`, the lower instructions by bits 31–25; the 1000000 class's micro
+  rows; `lower(w)`, a lower word's operation in micro mode, beside `operation(w)`, which still decodes COP2 and the
+  upper word and leaves the micro-only operations out; the forms of §4.1.2's types 7, 8 and 9 and the EFU's; an
+  operation's fixed bits per operation (the EFU's vector instructions fix their field mask); `imm11`, `imm12` and
+  `imm15` as §4.1.2 splits them; labels in `vu::assemble`, a branch's offset counted from its delay slot as IBEQ's page
+  counts it. The zero lower word now reads as `lq vf0, 0x0(vi0)`, LQ's operation code being 0000000.
+- **`src/vu/pipe.rs`**: `Pipe`, one unit's micro mode; `START` and `FMAC`, the two pipeline constants the EE's side
+  shares.
+- **`src/vu/efu.rs`**: the eleven elementary functions as §7.2's nano code computes them (§23.4).
+- **`src/vu/ops.rs`**: the 46 micro-only operations; `Ctx::micro`, under which an operation hands its flags back in
+  `Deferred` instead of writing them (S12's macro mode still writes them at once); the classes `Fcheck`, `FlagSet`,
+  `Efu`, `WaitP`, `Branch` and `External`.
+- **`src/vu/mod.rs`**: Q and P in flight (`Landing`) and the divider's and EFU's next free cycle move into each `Vu`, so
+  that macro and micro mode share VU0's divider; `Link`, the units' reach outside the VPU (FBRST's enables, the D and T
+  interrupts, VIF's TOP and ITOP, PATH1); `Path1` and `Path1StandIn`; `Vpu::start`, the one entry for VCALLMS,
+  VCALLMSR, CMSAR1 and VIF; VPU-STAT's VDS, VTS, VFS, VGW and EFU bits.
+- **`src/ee/cop2.rs`**: the waits of §5.4.5 and §5.4.6 (§23.6); a macro divide waits for a divide a microprogram left
+  running; VCALLMS's one-cycle stall after a macro instruction, a named loss at S12, is charged.
+- **`src/board.rs`**: the D and T interrupts raised at the INTC's VU0 and VU1 sources.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native` and `emusen-mips` alone.
+
+### 23.3 The pipelines: what the manual gives, and how each is read
+
+[R *VU User's Manual* §3.1, §3.3, §3.4, §3.5, §4.3's Remarks and Throughput/Latency lines, §5.4.5, §5.4.6, §7.3,
+§7.4; A where marked]:
+
+| Rule | Source | Implemented |
+|---|---|---|
+| A pair issues both halves together; a hazard in either stalls both | §3.4.2 | `plan`, one T stage a pair |
+| A register field written by an FMAC-pipeline instruction is read from the writer's S stage, field by field; VF00 never waits | §3.4.1, §3.4.4, Figures 3-3 and 3-4 | `vf_ready`, T + 4 |
+| An integer register loaded by ILW or ILWR is read 4 cycles on; integer results bypass to the next pair | §3.4.1, §3.4.7, Figure 3-14 | `vi_ready`; the integer unit's results at once |
+| The MAC, status and clipping flags are written at the S stage, read at T | §3.4.4, Figures 3-16 and 3-17 | `FlagWrite`, T + 4 |
+| FSSET and FCSET write at the S stage; their pair's upper instruction's effect on that flag is ignored | their pages, §3.3.4 | `drain` |
+| Q at the F stage, 7 cycles after DIV or SQRT and 13 after RSQRT; no hazard check; another divide waits for F | §3.4.5, Figures 3-7 and 3-8, §7.4 | `Vu::q_next`, `div_free` |
+| WAITQ issues at F and its pair's upper instruction reads the quotient | Figure 3-9 | `plan` |
+| P at the EFU's latency; another EFU operation may issue at the last N stage, a cycle before; MFP has no hazard check; WAITP issues at the last N stage and the pair after reads P | §3.4.6, Figures 3-10 to 3-12, §7.4 | `Vu::p_next`, `p_later`, `efu_free` |
+| A conditional branch needs a pair between it and the integer write it reads, but not after a flag check | §3.4.8, every branch page | D-80: the value before the write |
+| One delay slot after a branch; the target counted from the slot; BAL and JALR link the pair after the slot | §3.5, §4.3 | `jump`; JALR reads its target first (the `branch` console text) |
+| The upper instruction's write wins over the lower's to the same register, whole | §3.4.3, the lower pages' Remarks | the lower's write held and dropped |
+| Both halves read their operands at T | §3.4.4 ("no stalls … between the Upper instruction and the Lower instruction in the same instruction") [A] | the lower runs first, its register write held back |
+| The I bit loads the lower word into I at T for the next instruction | §3.1.4, Figure 3-1 | D-81: the pair's own upper reads the old I |
+| The E bit stops the unit after one delay slot; TPC holds the next address | §3.5.3, Figure 3-19 | D-82: TPC in doublewords |
+| A D or T bit stops after its pair, no delay slot, when FBRST enables it; on a branch after the slot, TPC the target; an interrupt to the EE | §4.1.3, §7.3.1 | `halting`; INTC VU0 and VU1 |
+| QMTC2.I and CTC2.I proceed after the first pair with M set | §4.1.3, §5.4.6's figure | `release_t` + 1 (D-54) |
+| A microprogram's first pair issues 3 cycles after VCALLMS, 4 after a macro instruction | §5.4.5's figures | `pipe::START`; D-85 for CMSAR1 |
+| A second XGKICK while PATH1 is busy delays the pair after it, not itself | §3.4.9, Figure 3-18 | `kick_wait` |
+| A divide or an EFU operation left running at the E bit lands at its latency | §3.5.3 | `Landing` outlives the run |
+| The VU runs at the EE's clock | ps2tek "VU Architecture": "294.912 MHz (same as EE)" [R] | one cycle a pair at most |
+
+**Pinned** [M, `tests/vu_micro.rs`]: Figure 3-3 (eight pairs, no stall), Figure 3-4 (T stages 0, 4, 5, 9), Figures 3-7
+to 3-9 (the quotient at the seventh pair, the old Q before, the second DIV at 7, WAITQ at 7), Figures 3-11 and 3-12
+(ESADD's second at 10, MFP at 11, WAITP at 10), Figure 3-14, Figure 3-15 (a three-pass loop, fourteen pairs in fourteen
+cycles), Figures 3-16 and 3-17 (FSAND's flag, the stalled case's 0, 4, 8, 9, 10), Figure 3-18 (the third pair at the
+transfer's end), Figure 3-19 (TPC 4); Q's latency read 1 to 14 pairs after DIV, SQRT and RSQRT; the MAC and clipping
+flags 1 to 5 pairs after; FSSET and FCSET; the write priority and the read at T; the I bit; ILW's 4; the D and T bits
+on VU0 and VU1; the M bit; JALR; the divider and the EFU as resources; VU0 without an EFU; a force break and a reset.
+
+### 23.4 The EFU
+
+§7.2 gives each function as "pseudo microinstructions for reference purpose": MUL, MULA, MADDA, MADD, ADD, SUB, DIV,
+SQRT and RSQRT on the constants of §4.3's pages, in a fixed order with fixed operand places [R]. `vu::efu` computes that
+code on `sapphire::float`, the multiplier recoding the second operand as D-26 has it, the divisions rounded as D-27,
+RSQRT as D-28. One reading parts from the FMAC's: the EFU's accumulator adds a clamped product as ADD adds, without
+D-30's rule that keeps an accumulator of exponent field 255, which the console's text decides (D-84). Against the
+console's `vu/lower/efu` text, 13 functions over 16 named inputs whose values the lines themselves give (§23.8): **193
+of 208 values equal, the other 15 within two in the last place** [M, `the_efu_against_the_console_s_text`]: five of
+ESIN's one or two low, six reciprocals and reciprocal roots one low, two roots one high, one EEXP low and one EATAN high.
+No document gives the EFU's own last bits, and no single rounding rule fits the fifteen: rounding the divides and roots
+up, truncating them, or mixing those with rounding to the nearest equals 60 to 72 of the 96 values they produce, against
+87 for the nano code's own rounding [M, a scratch comparison, not kept]; it is a named loss (§23.9).
+
+### 23.5 The gate: the programs (measured 2026-10-25)
+
+`tests/s13/` generates seven programs in S6's form. Each enables COP2, writes a microprogram and its constants through
+kseg1 into the unit's micro and data memories, starts it (VCALLMS then VNOP for VU0; CTC2 to CMSAR1 then BC2T until VU1
+ends), and copies the result quadwords the microprogram stored with SQ and ISW into the record. The expected record
+comes from `tests/s13/manual.rs` (the pipeline's delays, §7.2's nano code as a transcription apart from `src/vu`, on
+`s9::manual`'s arithmetic) and `s12::manual`.
+
+| Program | Results (record words) | What it covers |
+|---|---|---|
+| `s13-integer` | 52 (208) | LQ and SQ with masks and negative offsets, ILW, ISW, IADDIU and ISUBIU over their edges, the integer ALU, MTIR, MFIR, LQI, LQD, SQI, SQD, ILWR, ISWR, MOVE, MR32, RINIT, RGET, RNEXT, RXOR |
+| `s13-flags` | 18 (72) | FSAND, FSEQ, FSOR, FSSET, FMAND, FMEQ, FMOR, FCSET, FCGET, FCAND, FCEQ, FCOR, each four cycles after the flag's writer |
+| `s13-branch` | 38 (152) | IBLTZ, IBGTZ, IBLEZ, IBGEZ over −1, 0 and 1, IBEQ and IBNE, B, each with its delay slot; BAL's link; JR and JALR, JALR with one register |
+| `s13-divider` | 16 (64) | DIV, SQRT, RSQRT with WAITQ: Q, and I and D after it |
+| `s13-upper` | 94 (376) | every upper operation once, each FMAC result into a register or ACC, OPMULA with OPMSUB, the conversions, ABS, CLIP, NOP |
+| `s13-efu` | 209 (836) | VU1's eleven EFU operations over `efu`'s sixteen inputs, read by WAITP and MFP; MFP's mask |
+| `s13-visible` | 60 (240) | Q 1 to 8 pairs after DIV and 1 to 14 after RSQRT; FSAND, FMAND and FCGET 1 to 5 pairs after their writers; a branch on an integer written just before, a pair before and after FSAND; the I bit; the write priority; the E bit's delay slot and TPC; P 1 to 12 pairs after ESADD on VU1 |
+
+**Tests** [M, `cargo test --release`]: `tests/micro.rs` **12 of 12** — the seven programs, each equal to its record
+word for word; `the_programs_carry_every_micro_instruction` (164 operations, XGKICK, XTOP and XITOP excepted);
+`the_efu_against_the_console_s_text`; `the_ee_waits_for_micro_mode_as_section_5_4_draws_it`;
+`xtop_and_xitop_read_the_link`; `a_t_bit_raises_vu1_s_interrupt`. `tests/vu_micro.rs` **24 of 24** (§23.3's pins, and
+§23.8's two console texts). `tests/vu0.rs` **14 of 14**: S12's gate unchanged on the new micro mode, its stand-in moved
+to the interface's new answers and its halting test kept for a machine built with `Unbuilt`. The crate's other tests
+unchanged: lib **19 of 19** (one new, the EFU's own values), `cop0` 19, `dmac` 17, `fpu` 9, `interpreter` 23, `mmi` 13,
+`programs` 3; lib, `micro`, `vu_micro` and `vu0` also under `test-checked`; clippy clean. `emusen-mips` **21 of 21**,
+two new (`every_micro_only_lower_operation_reads_back`, `the_manual_s_micro_pages_read_back`).
+
+### 23.6 The EE's side (§5.4.5, §5.4.6)
+
+`Micro::finish` now answers the T stage of a microprogram's last pair (the E bit's delay slot), and the EE waits a
+distance behind it drawn from the figures: a macro instruction issues 3 cycles after it (its T stage meets that pair's
+S stage), QMFC2.I and CFC2.I 4 (they read as they issue), and another VCALLMS at once (its first pair then follows by
+`START`, the second VCALLMS's D stage stalling). `Micro::release` answers the cycle after the first pair with M set.
+VCALLMS after a macro instruction waits a cycle. **Pinned** [M, `the_ee_waits_for_micro_mode_as_section_5_4_draws_it`].
+
+### 23.7 On the referees (measured 2026-10-25)
+
+`examples/s13.rs` writes each program as an ELF; `ps2referee.py ram … --until 1FFFF0=5A99D00E 200000:<words>` read each
+record from PCSX2 2.8.2 (Americas BIOS, fast boot, its VU recompiler) and Play! 0.72, one process at a time; `s13
+explain` lists the result quadwords that differ.
+
+| Program (results) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s13-integer` (52) | 0 | 0 | |
+| `s13-flags` (18) | 0 | 4 | Play!: FSEQ's equal case 0, FSSET clears the status flag's low bits, FCSET not written |
+| `s13-branch` (38) | 0 | 0 | |
+| `s13-divider` (16) | 8 | 8 | both: 0/0 and 1/0 give 7F7FFFFFh (IEEE 754's largest) for ±MAX; the divider's I and D as at S12 (D-46) |
+| `s13-upper` (94) | 0 | 1 | Play!: SUBAq into ACC leaves ACC unchanged |
+| `s13-efu` (209) | 115 | 119 | both compute the EFU on the host: NaNs and infinities, the last bits; §23.8 |
+| `s13-visible` (60) | 0 | 2 | Play!: the lower write kept against the upper's (§3.4.3); P landing a cycle early (10 pairs after ESADD) |
+
+So **PCSX2 is a witness for every pipeline reading the programs test**: the flags' four cycles, Q's 7 and 13, P's 11,
+the branch on an integer written just before (D-80), the I bit's own pair (D-81), the write priority, the E bit's delay
+slot and TPC in doublewords (D-82); Play! for all but the write priority and P's cycle. Neither is a witness for the
+EFU's values or the divider's flags.
+
+### 23.8 The console texts: `vu/*` on PCSX2, and what they decide (measured 2026-10-25)
+
+Each of the seven needs the BIOS's kernel, so Sapphire runs them at S10. Run now through `ps2referee.py tty pcsx2 …
+--channel iop` (Americas BIOS) and compared with their expected texts, the consoles' outputs, after line ends are
+normalised and PCSX2's own `microVU0: Cached Prog` log lines in the channel dropped [M `diff`]:
+
+| Text (lines) | PCSX2 | What it decides |
+|---|---|---|
+| `vu/lower/branch` (4) | equal | JALR with one register reads its target before it links (the target 4, the link 4), as implemented |
+| `vu/lower/fdivdelay` (350) | equal | D-51's micro form: "DIV single delayed" and "SQRT single delayed" read 1.00 six times and then the quotient, "RSQRT single delayed" twelve times: the quotient reaches the seventh pair and the thirteenth; reproduced as `the_fdivdelay_console_text_s_single_delayed_lines_hold`, the lines' shape read as a divide and one ADDq a pair |
+| `vu/lower/integer` (167) | one line | PCSX2 changes the status flag on the first IADD; the values all equal |
+| `vu/lower/random` (53) | equal but trailing blanks | D-48 again |
+| `vu/upper/clip` (32) | equal | D-49 and the clipping flag's four cycles: "Multi test" reads 0000 four times then 0015, 056A, 0A99 and 0666 three times, four CLIPs each beside an FCGET and then six FCGETs; reproduced as `the_clip_console_text_s_multi_test_holds` |
+| `vu/lower/efu` (223) | 118 lines differ | the EFU (§23.4, D-84): on the 208 values PCSX2 equals 93 and Play! 88 (from `s13-efu`'s same inputs), the nano code 193 |
+| `vu/games/triace` (5) | one value of twelve | the console prints 42546666h where PCSX2, whose VU arithmetic S12 measured as IEEE 754 towards zero (§21.7), prints 42546665h (D-43) |
+
+**The inputs of `efu`** are named in its lines only (`CVF_ZERO` … `CVF_3PI_OVER2`); their values were read off the
+lines themselves: ESUM gives four times a lane, ESADD the squares' sum of three, the scalar functions read z (ERCPR of
+`CVF_INCREASING` prints 1/3), `CVF_GARBAGE2` is DEADBEEFh in every lane (ESQRT 4F152108h, ESADD 7EB0E16Bh, ERCPR
+negative) and `CVF_GARBAGE1` has exponent field 0 (every function prints a zero's result). `tests/s13/manual.rs`
+transcribes the 208 values as `EFU_CONSOLE`.
+
+**D-43** (whether the VU computes as the FPU's console-decided arithmetic): `triace`'s microprogram is generated by its
+program at run time, so it cannot be read out of the ELF without reading the test's code, and PINE reads VU0's data
+memory but not its micro memory [M: zeros from 11000000h after a microprogram was written there]; the twelve values
+cannot be computed on Sapphire before S10 runs the program. What the texts give now: IEEE 754 towards zero, the
+referees' arithmetic, misses one of `triace`'s values, and in `efu` the nano code on the module's multiplier and divider
+gives the console's last bit where IEEE 754 towards zero does not — EATAN of 1.0 is 1 × π/4 with π/4 recoded, 3F490FDAh
+on the console as D-26's dropped column gives, 3F490FDBh on PCSX2 (0 on Play!); ERCPR of 3FFFFFFFh is 3F000001h, D-27's
+rounding to the nearest, 3F000000h on both referees. That is the EFU's datapath, not the FMAC's, so it is evidence beside
+D-43, not a measurement of it. D-43 stands, argued as at S12; no constant changes.
+
+### 23.9 Named losses
+
+- **The EFU's last bits**: 15 of the console's 208 values off by one or two in the last place (§23.4).
+- **The divider's I and D in micro mode** land with the quotient at the F stage (D-83); no document times them.
+- **CMSAR1's start**: VU1's first pair issues `START` cycles after the CTC2, as VCALLMS's; §5.4.5 draws only VCALLMS
+  (D-85).
+- **A store and a load in consecutive pairs**: the load sees the store; no document orders VU memory within the
+  pipeline.
+- **A COP2 transfer writing a register in the cycle a microprogram writes it**: §3.4.3 gives the transfer priority; the
+  EE's write lands in its own instruction, outside the pairs' order.
+- **What §3.5.3 forbids** in the E bit's delay slot, a branch in a branch's delay slot (taken as MIPS takes it), the E
+  bit on a branch (the slot runs, then the unit stops at the target), and a word no page draws (executed as nothing) are
+  not checked or modelled beyond that.
+- **A microprogram that never ends**: `finish` and `release` run at most 2²⁴ pairs, about 57 ms of the console's time,
+  then let the EE go on with the unit still running.
+- **VU0's EFU, XGKICK and XTOP words** do nothing (the units are VU1's, §1.1.2, the pages' Remarks).
+- **PATH1** takes a stand-in's fixed time until S15; VGW is set while a pair waits for it.
+- **The micro memory's PC** wraps at the memory's size.
+
+### 23.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the flags written at T + 3, a cycle early | `what_each_pair_sees_…`, `figures_3_16_and_3_17_…`, `the_mac_and_clipping_flags_land_at_s`, `the_clip_console_text_s_multi_test_holds` |
+| F2 | the E bit's delay slot skipped (the unit stops at the E bit's pair) | `what_each_pair_sees_…`, `the_ee_waits_…`, `figure_3_3_…`, `figure_3_15_…`, `figure_3_19_…`, `the_m_bit_…` |
+| F3 | a branch right after a flag check reading the integer as it was (the manual gives the new value) | `what_each_pair_sees_…`, `a_branch_reads_an_integer_written_just_before_as_it_was`, `figures_3_16_and_3_17_…` |
+| F4 | Q landing a cycle early | `what_each_pair_sees_…`, `figures_3_7_to_3_9_…`, `q_lands_at_the_divider_s_latency`, `the_divider_and_the_efu_are_resources`, `the_fdivdelay_console_text_…` |
+
+Each was applied to `src/vu/pipe.rs`, `tests/micro.rs` and `tests/vu_micro.rs` run, and the source restored [M].
+
+### 23.11 What the plan got wrong, or left open
+
+- **§3.2's VU row** names the referees as the secondary oracle: for the pipeline's visibility PCSX2 is a witness (§23.7),
+  for the EFU and the divider's flags neither is, and the EFU's own console text grades it better than either.
+- **§5.3** speaks of the VUs' arithmetic as the FPU's; the EFU parts from it in its accumulator (D-84) and in its last
+  bits.
+- **S13's gate** names `vu/lower/*`, `vu/upper/clip` and `vu/games/triace`: they need the BIOS's kernel (S10); met now on
+  PCSX2 against the console texts, two of them reproduced on the interpreter by programs whose shape their lines give.
+- **C4 (§5.13)** prices dropping the flags' and Q's cycle-exact visibility: the interpreter's cost of keeping it is a
+  queue of at most four flag writes and two landings a unit, with no allocation per pair.
+
+### 23.12 Questions this stage leaves
+
+1. **Q1 [routine], the EFU's last bits (D-84).** *Recommended*: keep the nano code on the format's arithmetic, 193 of
+   208 console values exact and the rest within two in the last place, as the reference and a named loss; a table of
+   corrections fitted to fifteen values would claim more than the evidence gives.
+2. **Q2 [routine], a branch on an integer written just before (D-80).** *Recommended*: keep the value before the write,
+   §3.4.8's need for a slot read so, with both lineages agreeing.
+3. **Q3 [routine], `triace` and D-43.** *Recommended*: grade `vu/games/triace` on Sapphire when S10 runs its kernel, and
+   decide D-43 then by its twelve values; until then the FPU's readings stay, as S12's Q1 recommended.
+4. **Q4 [routine], TPC's unit (D-82).** *Recommended*: doublewords, as CMSAR0 and VCALLMSR take it and both referees
+   read it; §7.3.1's restart of VU1 through CMSAR1, which takes bytes, then needs the address times 8.
+
+### 23.13 What was read for this stage
+
+`Sapphire_Plan.md` §2's VU row, §3.2's conformance line, §5.3, §5.13's C3 and C4, §7's S13 row and §11; this page's
+§19, §20 and §21; `Sapphire_Disputes.md` D-43 to D-54; `EmuSen_Mips.md` §8.4 and §9; `Sapphire_References.md` §1.1.
+Sony's *VU User's Manual* (Version 5.0) chapters 1 and 3 whole, §4.1, §4.3 whole, §5.1.3, §5.4.5 to §5.4.8, §5.5, the
+VCALLMS and VCALLMSR pages of §6.2, §7.2 to §7.4; ps2tek's "Vector Unit (VU)" section (architecture, registers, format,
+pipelining). ps2autotests' `vu/lower/*.expected`, `vu/upper/clip.expected` and `vu/games/triace.expected` (the consoles'
+texts) and the `.elf` files run as black boxes; four bytes of `triace.elf` (its first instruction, as `--until`'s word)
+and its section table. No emulator, SDK or loader source, no ps2autotests source and no firmware.
+
+### 23.14 What this stage does not cover
+
+- The `vu/*` console texts on Sapphire: S10 (the kernel), `triace`'s values and D-43 with them.
+- VIF's MSCAL family, TOP and ITOP (S14); the GIF behind PATH1 and XGKICK's real transfer time (S15).
+- The micro memory's state in `SPH2` with the rest (S10, S30); micro mode in the recompiler (S40–S41).
+- The VU's own debug interrupts' handling in the BIOS's kernel (S10, S24).
 
 ## 24. Stage S16, the GS's registers, local memory and transfers (2026-10-25)
 

@@ -461,6 +461,11 @@ fn store_words(p: &mut Program, at: u32, words: &[u32]) {
 
 /// The script as an EE program, with its expected record (64 bits an entry).
 pub fn program(script: &Script) -> Program {
+    program_for(script, &expected(script))
+}
+
+/// The script as an EE program whose record is graded by `want`, another model's expected record (S17's drawing).
+pub fn program_for(script: &Script, want: &[Option<u64>]) -> Program {
     let mut prog = Program::kernel(script.name);
     let p = &mut prog;
     p.emit("di");
@@ -474,7 +479,6 @@ pub fn program(script: &Script) -> Program {
     poke(p, GIF_MODE, 0);
     poke(p, VIF1_FBRST, 1);
     poke(p, VIF1_STAT, 0);
-    let want = expected(script);
     let mut at = 0;
     for op in &script.ops {
         match op {

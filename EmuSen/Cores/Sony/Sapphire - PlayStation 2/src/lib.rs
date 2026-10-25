@@ -22,6 +22,7 @@
 //! S25: SIO2 (`sio2`), the DualShock 2, the memory card and the multitap behind it, on the IOP's bus.
 //! S15: the GIF (`gif`), its three paths, their arbitration and PATH3's masking, driving the GS's host interface.
 //! S26: the SPU2 (`spu2`), two cores of `blackmoon-spu`'s voices on the IOP's bus and its DMA channels 4 and 7.
+//! S27: the IPU (`ipu`), MPEG-2 macroblock decoding as H.262 defines it and its colour conversion, on channels 3 and 4.
 
 pub mod bios;
 pub mod board;
@@ -34,6 +35,7 @@ pub mod gif;
 pub mod gs;
 pub mod intc;
 pub mod iop;
+pub mod ipu;
 pub mod machine;
 pub mod media;
 pub mod pcrtc;

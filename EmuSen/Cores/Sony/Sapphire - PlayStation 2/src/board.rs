@@ -9,6 +9,8 @@
 //! From S14 VIF0 and VIF1 take the DMAC's channels 0 and 1, their registers at 10003800h and FIFOs at 10004000h
 //! (Sapphire_Native.md §28.5). From S15 the GIF (`gif`) takes channel 2, VIF1's PATH2 and VU1's PATH1, its registers at
 //! 10003000h and its FIFO at 10006000h, and drives the GS's host interface (Sapphire_Native.md §33.5).
+//! From S27 the IPU takes the DMAC's channels 3 and 4, its registers at 10002000h and FIFOs at 10007000h, its interrupt
+//! latched by the INTC as a command ends (Sapphire_Native.md §34.7).
 
 use std::collections::VecDeque;
 
@@ -20,6 +22,7 @@ use crate::gif::{self, Gif};
 use crate::gs::{self, Gs, HostInterface};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
+use crate::ipu::{self, Ipu};
 use crate::pcrtc::Pcrtc;
 use crate::pcrtc::timing::Mode;
 use crate::sif::{self, EePorts};
@@ -27,8 +30,8 @@ use crate::timer::{self, Timer};
 use crate::vif::{self, Reach, Vif};
 use crate::vu::Vpu;
 
-/// A stand-in for a peripheral the DMAC reaches before its stage exists (the IPU's channels; the SIF's reach `sif` since
-/// S22, the VIFs' and the GIF's their units since S14 and S15): it takes every qword offered, keeping them when `keep` is set, and gives the qwords queued in
+/// A stand-in for a peripheral the DMAC reaches before its stage exists (none since S27: the SIF's reach `sif` since
+/// S22, the VIFs', the GIF's and the IPU's their units since S14, S15 and S27): it takes every qword offered, keeping them when `keep` is set, and gives the qwords queued in
 /// `give`, holding its channel when it has none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StandIn {
@@ -63,10 +66,11 @@ impl Peripherals for StandIns {
     }
 }
 
-/// The DMAC's peripherals on the board: VIF0 and VIF1 on channels 0 and 1, the GIF's FIFO on channel 2, the stand-ins
-/// on the rest.
+/// The DMAC's peripherals on the board: VIF0 and VIF1 on channels 0 and 1, the GIF's FIFO on channel 2, the IPU on 3
+/// and 4, the stand-ins on the rest.
 struct Ports<'a, 'b> {
     vif: &'a mut [Vif; 2],
+    ipu: &'a mut Ipu,
     stand: &'a mut StandIns,
     gif: &'a mut GifPort<'b>,
     /// Channel 1's direction as D1_CHCR.DIR gives it: to memory when clear.
@@ -81,6 +85,8 @@ impl Peripherals for Ports<'_, '_> {
             dmac::VIF0 => self.vif[0].request(want, false, self.gif),
             dmac::VIF1 => self.vif[1].request(want, self.vif1_to_memory, self.gif),
             dmac::GIF => self.gif.gif.request(want),
+            dmac::FROM_IPU => self.ipu.request_out(want),
+            dmac::TO_IPU => self.ipu.request_in(want),
             _ => self.stand.request(ch, want),
         }
     }
@@ -89,6 +95,9 @@ impl Peripherals for Ports<'_, '_> {
         match ch {
             dmac::VIF0 | dmac::VIF1 => self.vif[ch].put(q, tag),
             dmac::GIF => self.gif.gif.put(q, tag, self.at),
+            dmac::TO_IPU if !tag => self.ipu.put(q),
+            // A tag a chain sends by TTE is not part of the IPU's bit stream (Sapphire_Disputes.md D-325).
+            dmac::TO_IPU => {}
             _ => self.stand.put(ch, q, tag),
         }
     }
@@ -97,6 +106,7 @@ impl Peripherals for Ports<'_, '_> {
         match ch {
             dmac::VIF1 => self.vif[1].get(self.gif),
             dmac::VIF0 | dmac::GIF => 0,
+            dmac::FROM_IPU => self.ipu.get(),
             _ => self.stand.get(ch),
         }
     }
@@ -162,6 +172,8 @@ pub struct Board {
     pub vif: [Vif; 2],
     /// The GIF (from S15): channel 2's peripheral, PATH2 behind VIF1 and PATH1 behind VU1's XGKICK.
     pub gif: Gif,
+    /// The IPU (from S27), on the DMAC's channels 3 and 4.
+    pub ipu: Ipu,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
@@ -184,6 +196,7 @@ impl Board {
             gs: Gs::new(),
             vif: [Vif::new(0), Vif::new(1)],
             gif: Gif::new(),
+            ipu: Ipu::new(),
             now: 0,
             next: 0,
             edges_taken: Some(0),
@@ -273,6 +286,7 @@ impl Board {
                 }
                 self.iop.run_to(at);
                 self.step_dmac(at, spram);
+                self.sync_ipu(at);
             }
             self.reschedule();
             debug_assert!(self.next > at, "an event at {at} asked for its own time again");
@@ -309,11 +323,21 @@ impl Board {
         let sif2_from_memory = self.dmac.ch[dmac::SIF2].chcr & dmac::chcr::DIR != 0;
         let vif1_to_memory = self.dmac.ch[dmac::VIF1].chcr & dmac::chcr::DIR == 0;
         let dma = self.dmac.ch[dmac::GIF].str();
-        let Board { dmac, map, vif, ports, gif, gs, iop, .. } = self;
+        let Board { dmac, map, vif, ports, gif, gs, iop, ipu, .. } = self;
         let mut gif = GifPort { gif, gs, dma };
-        let mut vifs = Ports { vif, stand: ports, gif: &mut gif, vif1_to_memory, at };
+        let mut vifs = Ports { vif, ipu, stand: ports, gif: &mut gif, vif1_to_memory, at };
         let mut ports = EePorts { others: &mut vifs, sif: &mut iop.bus.sif, sif2_from_memory };
         dmac.step(at, map, spram, &mut ports);
+    }
+
+    /// The IPU's interrupt at a command's end, and the DMAC woken for a FIFO the IPU has filled or drained.
+    fn sync_ipu(&mut self, at: u64) {
+        if self.ipu.take_irq() {
+            self.intc.raise(intc::source::IPU);
+        }
+        if self.ipu.take_wake() {
+            self.dmac.wake(at.max(self.now));
+        }
     }
 
     /// Brings the GIF to cycle `t`: the XGKICKs VU1 made handed to it, then its paths run, the DMAC woken for FIFO room
@@ -422,6 +446,12 @@ impl Bus for Board {
             }
             return 0;
         }
+        if (ipu::CMD..ipu::REGS_END).contains(&paddr) || (ipu::OUT_FIFO..ipu::FIFO_END).contains(&paddr) {
+            let v = self.ipu.read(paddr, bytes);
+            self.sync_ipu(self.now);
+            self.reschedule();
+            return v;
+        }
         if IOP_RAM.contains(&paddr) {
             let a = (paddr - IOP_RAM.start) as usize;
             let mut v = [0u8; 16];
@@ -469,6 +499,12 @@ impl Bus for Board {
                     self.dmac.wake(self.now);
                 }
             }
+            self.reschedule();
+            return;
+        }
+        if (ipu::CMD..ipu::REGS_END).contains(&paddr) || (ipu::OUT_FIFO..ipu::FIFO_END).contains(&paddr) {
+            self.ipu.write(paddr, bytes, value);
+            self.sync_ipu(self.now);
             self.reschedule();
             return;
         }

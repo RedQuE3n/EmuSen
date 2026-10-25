@@ -178,6 +178,16 @@ the LOD to eight fractional bits and ignores Q with UV (D-242), takes MMAG at a 
 alpha unblended between mip levels in two pixel columns of every four (D-250), and crosses texel boundaries within
 single precision's reach (D-247).
 
+*Added 2026-10-25 at S27* (`Sapphire_Native.md` §34.11): **PCSX2 is a witness for the IPU's register behaviour and its
+handling of the bit stream** (the FIFO's depth and filling, BCLR, FB, VDEC's and FDEC's values but D-308's lengths, the
+pointer and the flags at every slice's end, CBP, INT_IPU), **for non-intra and MPEG-1 decoding** within its IDCT's one
+step, and **for every PACK word**; not for intra output's range (D-301), the alternate scan's weights (D-303), IDEC's
+scale (D-304), CSC's last step (D-319) or IDP's width (D-316), each of which a stated rule reproduces word for word.
+**Play! is a witness for VDEC's output and IPU_TOP** (D-308, D-311) and leaves the pointer short at a slice's end
+(D-305), after which its replays are out of step. A third lineage stands behind the corpus itself: **ffmpeg's decoding,
+run as a black box, matches the project's model of H.262 within one step**, which the IPU's stage takes as the witness
+for the model's tables and arithmetic.
+
 ## 4. The project's programs
 
 ### 4.1 The gate: `programs/record.s`
@@ -270,6 +280,15 @@ gives PCSX2 its SDL backend with SDL 3's disk driver, which writes the output as
 `DIR/pcsx2.raw`; that output has passed PCSX2's own output stage (a high-pass, about half the level, D-270), so it shows
 routing and level and not samples. The settings return to the null backend on the next run without `--wave`. Play!
 reaches no IOP program (§4.3), so the SPU2 has one lineage.
+
+### 4.7 Replay programs on the IPU (2026-10-25, stage S27)
+
+An IPU program carries a command log and its stream image behind its code, and replays the log through the IPU's
+registers with toIPU and fromIPU moving the data, recording IPU_CMD, IPU_CTRL without its FIFO counts (which depend on
+the referee's DMA pace), IPU_BP's pointer, the command's EE cycles by Count and its output (`Sapphire_Native.md`
+§34.10); `examples/s27.rs explain` reads a referee's record by command and counts the output's lanes by their
+difference, so that a hypothesis about a departure can be built into a scratch copy of the IPU and compared word for
+word.
 
 ## 5. Exposure, and a retail disc
 

@@ -5085,3 +5085,308 @@ source and no firmware.
 - `dma/vif/mskpath3` on Sapphire: S10 (the kernel).
 - The GS's own timing and its host FIFO's depth (S43); texturing's use of Q (S18).
 - The GIF's state in `SPH2` with the rest (S10, S30).
+
+## 34. Stage S27, the IPU (2026-10-25)
+
+*Numbered §34 and its disputes from D-300, since S25 (§30, from D-220), S26 (§32, from D-260) and S15 (§33, from D-280)
+are built beside it.*
+
+### 34.1 In one paragraph
+
+The plan's §7 row S27, on the tester's go of 2026-10-25. The crate gains **`ipu`**, written from the *EE User's
+Manual* (EEUM) chapter 8 with ps2tek's "Image Processing Unit" where the manual is silent, and from ITU-T H.262
+(02/2000), the twin of ISO/IEC 13818-2, for the decoding: the ten commands, IPU_CMD, IPU_CTRL, IPU_BP and IPU_TOP with
+their status and error bits, INT_IPU, the input FIFO with its internal buffer and the output FIFO, and the DMAC's
+channels 3 and 4 in place of S11's stand-ins. IDEC and BDEC decode MPEG-2 macroblocks, and MPEG-1's with IPU_CTRL.MP1,
+through Annex B's tables, the inverse scan, inverse quantisation, saturation and mismatch control of §7.3 and §7.4, and
+Annex A's reference IDCT, evaluated in double precision and decided exactly near every half; IDEC, CSC and PACK convert
+through §8.6's arithmetic, its dither and its vector quantisation. The gate's corpus is twelve streams of the project's
+own making, encoded by ffmpeg run as a black box, and two written symbol by symbol for the cases no encoder writes; a
+decoder of H.262 written apart from `src/ipu/` decodes them, ffmpeg's own decoding agreeing with it to within one
+step in 1,983 of 147,456 samples, the two IDCTs' rounding. Driven through the stream by its commands as an FMV player
+would drive it, **Sapphire's IPU gives that decoder's every block, picture and pointer**, and 32 replay programs and a
+register program (163,964 graded record words) give the same on the interpreter with the board. On PCSX2 and Play!,
+run as black boxes, the referees' IDCTs depart from the reference by one step (PCSX2) and two (Play!), as P7 predicted,
+and each lineage departs elsewhere in ways two hypotheses each reproduce word for word; the disagreements are disputes
+D-300 to D-326. No emulator, decoder, SDK or ps2autotests source and no firmware was read.
+
+### 34.2 What was built
+
+- **`src/ipu/vlc.rs`**: Annex B's Tables B.1 to B.4 and B.9 to B.15 as the standard prints them (codes as text,
+  extracted from the standard's text and checked to be prefix-free and to leave exactly the code space the standard
+  leaves, `every_table_is_prefix_free_and_as_complete_as_the_standard`), ISO/IEC 11172-2's stuffing and D-picture codes
+  where H.262 §D.9 gives them, and a decoder that groups each table's codes by their leading zeros and indexes the bits
+  after the first one; the tables are built once.
+- **`src/ipu/bits.rs`**: the input, the FIFO's eight qwords behind the internal buffer's two, read as one stream from
+  BP, each byte's highest bit first (H.262's bslbf order); a qword enters the internal buffer when a command reads it
+  (D-302).
+- **`src/ipu/idct.rs`**: Annex A's saturated mathematical integer-number IDCT (§34.5).
+- **`src/ipu/csc.rs`**: §8.6.1 to §8.6.3 in the manual's order and precision, and the macroblock layouts of §8.2.
+- **`src/ipu/mod.rs`**: the unit. A command runs symbol by symbol, each symbol waiting for the 32 bits VDEC's and
+  FDEC's notes ask to be present; IDEC and BDEC keep a macroblock's state (its modes, its block, the coefficient index,
+  the six transformed blocks) between symbols, and their output waits in a buffer of up to one macroblock for room in
+  the output FIFO. BUSY clears when the command's last output is in the FIFO, INT_IPU with it (D-310).
+- **`src/board.rs`**: the IPU on the board, its registers at 10002000h to 1000203Fh and FIFOs at 10007000h and 10007010h,
+  channel 3 taking from the output FIFO and channel 4 giving to the input FIFO through `dmac::Peripherals`, the DMAC
+  woken whenever a FIFO's count changes, INT_IPU latched by the INTC. Additive: a field, two match arms each in `Ports`,
+  the bus's two ranges, `sync_ipu`.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native`, `emusen-mips`, `blackmoon-r3000`
+  and `emusen-disc` alone. ffmpeg is a tool of the corpus's making, not a dependency.
+
+### 34.3 Sources, and what each gave
+
+- **ITU-T H.262 (02/2000)**, free from the ITU and pinned at S2 (`Sapphire_References.md` §1): §6.2 and §6.3 (the
+  syntax the model and the driver walk), §7.1 to §7.6 (variable-length decoding, the inverse scan, inverse
+  quantisation, saturation, mismatch control, the IDCT's place, motion compensation for the model), Annex A (the
+  reference IDCT and its accuracy rules), Annex B (every table), §D.9 (MPEG-1's differences: its oddification, its
+  escape lengths, stuffing, D-pictures). ISO/IEC 11172-2 itself is not lawfully available to the project; MPEG-1's
+  arithmetic is §D.9's description, argued where it is short (D-307, D-326) and witnessed by ffmpeg's decoding.
+- **EEUM chapter 8** (Version 5.0, the Linux kit's, Q1): the commands and their fields, the registers, the FIFOs'
+  depth, the data formats, the symbols IDEC and BDEC decode, VDEC's tables with their output (§8.5.3, transcribed whole
+  into `manual.rs` and graded row by row, `vdec_gives_every_row_of_the_manuals_tables`), §8.6's arithmetic.
+- **ps2tek** at `1c91660`, "Image Processing Unit": BCLR's BP width (D-312), IPU_CMD's value before a command and
+  IPU_TOP's BUSY below 32 bits (D-311), RST's interrupt (D-315).
+
+### 34.4 The input, the pointer and the commands' readings
+
+[R EEUM §8.3, §8.4; ps2tek; A; M where a referee measured]:
+
+- **The internal buffer** (D-302): IPU_BP.FP counts the qwords a command's reads have reached, at most two, IFC the
+  rest; the FIFO takes eight, a ninth is refused. Both referees keep pushed qwords in the FIFO until a command reads.
+- **FB** takes its bits whole, 0 to 63 (D-313); BCLR's BP is 7 bits (D-312); BCLR acts even while a command waits,
+  ending it, and any other command written meanwhile is ignored (D-314).
+- **IPU_CMD** reads VDEC's or FDEC's result; after a reset or BCLR and before either, the stream's next 32 bits,
+  reading which takes the first qword in (D-311). **IPU_TOP** looks at the next 32 bits, BUSY while a command runs or
+  fewer than 32 bits are in (ps2tek, D-311).
+- **Start codes** (D-305): at eight or more zero bits where a macroblock or an MBAI would begin, a start code is 23 or
+  more zeros and a one that ends a byte; the pointer is left at its prefix, after the stuffing, so that FDEC then reads
+  the whole code, as IDEC's notes ask. Anything else there is an error code, the pointer at its first zero.
+- **VDEC** gives the code's length in bits 31..16 for every table, as §8.5.3 prints it (D-308); bits no code begins,
+  a start code included, give 0 and ECD (D-306).
+- **IDEC** resets the DC predictors at its start, decodes from the first macroblock's MBT, takes MBAI from the second
+  on and ends with ECD at any increment but 1 (§8.4, D-318), passes MPEG-1's stuffing (D-326), decodes DT under DTD
+  and QSC under Intra + Q; a D-picture's macroblocks are DC alone and end_of_macroblock (D-326).
+- **BDEC** decodes CBP for a non-intra macroblock (CBP shown in IPU_CTRL, 3Fh for an intra one, D-309), resets the
+  predictors only with DCR, and ends after the last EOB with no flag, or at a start code with SCD, or with ECD (§8.4's
+  cases a to c).
+- **SETIQ** takes 64 bytes from the pointer in the stream's order and stores them through the zigzag scan, as §7.3.1
+  says a downloaded matrix is (the FMV player SETIQs straight from the sequence header); **SETVQ** 16 RGB16 entries;
+  **CSC** and **PACK** take whole macroblocks of RAW8 and RGB32; **SETTH** the two 9-bit thresholds. Every command ends
+  with INT_IPU (D-310).
+
+### 34.5 The IDCT
+
+Annex A defines the reference as the real transform rounded to the nearest integer, halves away from zero, saturated to
+[−256, 255], and admits any approximation within IEEE 1180's bounds. The plan (§5.7) asks for the reference, and
+for the IPU's departure as a dispute (P7, D-300). The real transform is evaluated in double precision,
+separably, from cosines written as the nearest doubles; for coefficients in the standard's range the error stays below
+10^-10, so a value further than 2^-20 from a half-integer rounds correctly. Near a half the value is decided exactly:
+8f(x, y) gathers into integer multiples of cos(kπ/16), k = 0 to 7 (each product of two cosines being half the sum of
+the cosines of the sum and the difference of their angles, and C(0) being cos(4π/16)); these are a basis of the field
+Q(cos(π/16)) over the rationals, so f is a half only when the seven irrational multiples vanish, and otherwise its side
+of the half is read from the multiples with the cosines in fixed point to 2^-100 [A]. Measured on the corpus
+[M, `the_corpus_values_near_a_half_are_few_and_decided_exactly`]: of 159,744 real values none lay within 2^-20 of a half,
+the nearest 2.1 × 10^-6 from one, which is why a tie rule on doubles alone, first tried, would not do: a game's hour of
+FMV holds some 10^10 values. The test model decides near-halves by the same mathematics in its own code, and the random
+blocks of `the_rational_terms_give_exact_halves_and_the_exact_reading_agrees_everywhere` agree with the exact reading at
+every position. Annex A's item 4 blocks are exact (`annex_a_item_4_blocks_give_the_exact_saturated_transform`).
+
+### 34.6 The post-processing's readings
+
+[R EEUM §8.6; A]: §8.6.1's products "& ~0x003f" are floors of the two's-complement values, kept as halves; step 5 is
+read with Y less 16, step 4's result, though it prints Y; step 8's "round off bit 0" adds a half and floors; each
+chroma sample serves the 2 × 2 luminance samples it lies on, no document giving an interpolation (D-319). §8.6.2's
+dither adds the table's halves and floors before clipping; A1 is A8 = 40h alone (D-320); with SGN the dither works on
+the reversed values, which is what "clipping is not performed correctly" describes (D-321). §8.6.3 takes the first
+entry at the least distance (D-320). PCSX2's PACK equals every word in both RGB16 forms and INDX4, its own witness for
+the dither's orientation and flooring, A1 and the VQ's tie.
+
+### 34.7 The board
+
+Channel 3 asks the IPU for as many qwords as the output FIFO holds and channel 4 for its room; a qword handed over at a
+unit's end runs the IPU as far as it can; the board wakes the DMAC after each step if a FIFO's count changed
+(`sync_ipu`), and after each EE access to the IPU's registers or FIFOs. A tag sent by TTE on channel 4 is not given to
+the IPU (D-325). The S11 stand-ins for channels 3 and 4 are no longer reached.
+
+### 34.8 Timing, and what is not modelled
+
+- **The IPU's decoding takes no time** (D-324): a command's progress is bound by its data's arrival and its output's
+  departure, a qword a bus cycle each way on the DMAC. Measured by the programs' Count on each command, from IPU_CMD's
+  write to BUSY's clearing [M, `examples/s27.rs timing`]: a BDEC of 48 qwords takes 90 to 144 EE cycles on Sapphire, 262
+  to 346 on PCSX2 and 1 on Play!; an IDEC of four macroblocks in RGB32 (256 qwords) 636 to 684, 1,207 to 1,319 and
+  4,801; in RGB16 (128 qwords) 288 to 324, 675 to 787 and 4,799; a CSC of 7 macroblocks to RGB32 (448 qwords) 1,230 to
+  1,236 on Sapphire and 1,424 on PCSX2. No document gives the IPU's rate, and the two lineages disagree by a factor of
+  four on IDEC and wholly on BDEC, so neither is a witness; FMV pacing on Sapphire is the DMA's and the EE's until a
+  game at S28 shows otherwise.
+- MPEG-2's 4:2:2 and 4:4:4 macroblocks, which the IPU's formats cannot hold; the scalable extensions; concealment
+  vectors inside IDEC (no symbol of §8.5.1 carries them).
+- The state format's new contents (the IPU's registers, FIFOs, tables and a command in progress): `SPH2` gains them
+  with the rest (S10, S30).
+
+### 34.9 The corpus
+
+`tests/s27/streams/`, of the project's own making, 64 × 48, encoded by ffmpeg 8.1.3 (built by gcc 16), run as a black
+box on 2026-10-25 from its `testsrc2` pattern with `noise=alls=40:allf=t` for the intra streams; each stream's
+`ffmpeg -pix_fmt yuv420p` decoding is kept beside it as the witness. Escapes come from the noise at low quantiser
+scales; every stream is closed with a sequence_end_code by the harness, ffmpeg writing none.
+
+| Stream | Bytes | Frames | What it exercises (ffmpeg's options) |
+|---|---|---|---|
+| `intra-q2` | 10,771 | 3 | I only, quantiser 2, many escapes (`-g 1 -qscale:v 2`) |
+| `intra-tools` | 4,223 | 2 | non-linear scale, Table B.15, alternate scan, 10-bit DC (`-non_linear_quant 1 -intra_vlc 1 -alternate_scan 1 -intra_dc_precision 2`) |
+| `intra-matrix` | 2,708 | 2 | a loaded intra matrix, 9-bit DC (`-intra_matrix …`, `-intra_dc_precision 1`) |
+| `intra-field` | 5,467 | 2 | interlaced, dct_type per macroblock (`-flags +ildct+ilme -top 1`) |
+| `intra-alt`, `intra-nonlinear`, `intra-ivf`, `intra-dc11` | 2,441, 1,480, 1,875, 2,113 | 1 each | each tool of `intra-tools` alone, and 11-bit DC |
+| `pb` | 3,402 | 7 | P and B, a loaded non-intra matrix (`-g 6 -bf 2 -qscale:v 4 -inter_matrix …`) |
+| `pb-rate` | 7,647 | 5 | P and B under rate control, Intra + Q and MC Coded + Q, non-linear scale, alternate scan (`-b:v 400k -lumi_mask 0.3 -p_mask 0.3`) |
+| `mpeg1-intra`, `mpeg1-pb` | 5,635, 2,891 | 2, 5 | MPEG-1 (`-c:v mpeg1video`), I only and P and B |
+
+`encode.rs` writes two more symbol by symbol: `odd_mpeg2`, an I-picture of escapes for levels a code exists for,
+±2047, the forbidden 0 and the reserved −2048 by escape, runs to the 64th coefficient; an I-picture at 11-bit DC with
+Table B.15 and the non-linear scale under Intra + Q 31; a P-picture whose non-intra blocks begin with escapes, run 63
+among them; and `odd_mpeg1`, an I-picture with stuffing before increments and both of MPEG-1's escape lengths, and a
+D-picture.
+
+### 34.10 The gate (measured 2026-10-25)
+
+**The standard's model** (`tests/s27/standard.rs`) decodes every stream from §6.2's syntax with its own copy of Annex
+B's tables matched bit by bit, its own inverse quantisation and a direct double sum for the IDCT, and frame prediction
+for the P- and B-pictures. **ffmpeg's decodings agree with it within one step**: 1,983 of the 32 frames' 147,456
+samples differ, every one by one, at most 1.5 % of a stream's samples (`the_corpus_decodes_as_the_standard_and_ffmpeg_agree`),
+which is what two compliant IDCTs give and what a table's error would not.
+
+**The driver** (`tests/s27/driver.rs`) runs the IPU through each stream by its commands alone, as §8.1.3's flow does:
+the stream behind a preamble holding the two default matrices, BCLR, SETTH, SETIQ for each matrix the stream loads,
+IPU_CTRL for each picture, VDEC on every MBAI, macroblock_type and motion_code, FDEC on every fixed-length field, then
+IDEC on an I-picture's slices or BDEC on each coded macroblock, FB carrying the pointer to each symbol the model placed
+and FDEC with FB 32 crossing longer gaps. Every VDEC and FDEC result, every block, picture, CBP, flag and pointer is
+checked against the model and `manual.rs`, §8.6 written apart from `src/ipu/csc.rs` in the manual's own units.
+
+| Test (`tests/ipu.rs`) | What it shows |
+|---|---|
+| `the_corpus_decodes_as_the_standard_and_ffmpeg_agree` | the model against ffmpeg, as above |
+| `bdec_gives_the_standards_blocks_for_every_macroblock_of_the_corpus` | BDEC over all twelve streams: 1,931 commands, every coded macroblock's 48 qwords |
+| `idec_gives_the_standards_pictures_through_the_manuals_csc` | IDEC on every I-picture's slices, RGB32 |
+| `odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard` | both written streams, BDEC and IDEC |
+| `error_and_start_codes_end_idec_and_bdec_where_section_8_4_says` | six cases: an increment of 2 inside IDEC, a code no table holds, a run past the 64th coefficient, zeros that make no start code, a start code after stuffing, one after a further zero byte |
+| `csc_and_pack_follow_the_manuals_post_processing` | CSC to RGB32 and RGB16 truncated and dithered, under thresholds; PACK to RGB16 and INDX4, truncated and dithered; ramps of Y, Cb and Cr and random samples |
+| `vdec_gives_every_row_of_the_manuals_tables` | §8.5.3's 105 rows, error rows and MP1's two among them |
+| `every_table_is_prefix_free_and_as_complete_as_the_standard` | Annex B as built |
+| `the_corpus_values_near_a_half_are_few_and_decided_exactly` | §34.5's measurement |
+| `the_programs_replay_their_logs_through_the_dmac_on_the_board` | the 32 replay programs on the interpreter with the board, every graded word |
+| `the_registers_and_fifos_answer_the_ee_as_chapter_8_says` | the register program, 346 records |
+
+**The programs** (`tests/s27/program.rs`, `registers.rs`; `cargo run --release --example s27 -- <folder>`): a replay
+program carries a driver's command log and the stream image behind its code; toIPU carries the image in normal mode
+from the first BCLR on, fromIPU is started for each command's output straight into the record, and IPU_CMD (graded for
+VDEC and FDEC), IPU_CTRL (its FIFO counts cleared, which depend on the DMA's pace), IPU_BP's pointer and the command's
+EE cycles by Count are recorded. Thirty-two of them (BDEC over the twelve streams and the two written ones, IDEC over the
+nine intra streams and the written ones, five IDEC variants on `intra-matrix`: RGB16 truncated and dithered, SGN, the
+thresholds 60 and 140, SGN with the dither, and `s27-post` and `s27-errors`), and the register program: 163,964 graded
+record words, every one equal on Sapphire.
+
+**Tests** [M, `cargo test --release`, on the tree with S25, S15 and S26 beneath]: `tests/ipu.rs` **11 of 11**; lib
+**59 of 59** (seven new: the input's order and its buffer, the CSC's steps and dither, Annex A's item 4, a DC's halves,
+the exact reading against random blocks). The crate's other tests unchanged with the IPU on the board: `cop0` **19 of
+19**, `dmac` **18 of 18**, `draw` **13 of 13**, `fpu` **9 of 9**, `gif` **15 of 15**, `gs` **12 of 12**, `interpreter`
+**23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of 13**, `pcrtc` **5 of 5**, `programs` **3 of 3**,
+`sif` **5 of 5**, `sio2` **5 of 5**, `spu2` **10 of 10**, `texture` **11 of 11**, `vif` **12 of 12**, `vu0` **14 of
+14**, `vu_micro` **24 of 24**; lib and `ipu` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter
+(`SapphireTests`) **5 of 5**.
+
+### 34.11 On the referees (measured 2026-10-25)
+
+`ps2referee.py ram <referee> … --until 1FFFF0=5A99D00E 200000:<words>` read each program's record from PCSX2 2.8.2
+(Americas BIOS, fast boot) and Play! 0.72, one process at a time; `examples/s27.rs explain` reads them by command and
+counts the output's lanes (BDEC's samples, RGB32's bytes, RGB16's fields) by their difference. Only the records were
+read. Each departure was then tested by building its hypothesis into a scratch copy of the IPU and comparing again.
+
+**PCSX2.**
+
+- **Agrees**: every VDEC and FDEC value but D-308's lengths, every pointer and flag on the streams, the FIFO's
+  depth and its filling, BCLR's pointer and BCLR while busy, FB past 32, VDEC's error codes, CBP 3Fh for intra
+  macroblocks, INT_IPU at each command, IPU_CMD before a command, non-intra inverse quantisation and mismatch control,
+  MPEG-1's oddification and escapes (`bdec-pb`, `bdec-mpeg1-pb`: every lane within one step), Table B.15, the
+  non-linear scale, field DCT, 9-bit DC, every PACK word, CSC's luma ramp.
+- **Its IDCT** departs by one step in 1.4 to 6.6 % of the samples (678 of 12,288 lanes on `bdec-pb`): P7's departure, in
+  a lineage whose transform is its own (D-300).
+- **Intra BDEC output clamped to 0 to 255** (D-301): clamping every intra macroblock's samples reproduces every lane of
+  the six intra streams but its IDCT's steps; above 255 it wraps on the written stream's largest levels.
+- **Alternate scan** (D-303): pairing each QFS[n] with the matrix's n-th byte in the stream's zigzag order, instead of
+  W[v][u] with QF[v][u], reproduces every lane of `bdec-intra-alt`, `bdec-intra-tools` and `bdec-pb-rate` but its IDCT's.
+- **IDEC's QSC** (D-304): taking QSC as quantiser_scale itself (IPU_CTRL.QST forced to its non-linear table, equal to
+  the code up to 8) reproduces IDEC's pictures within its CSC's and IDCT's steps (`idec-rgb16`: 708 of 24,576 fields one
+  step low, 141 one step high, 3 by two).
+- **CSC** (D-319): one step lower in 910 of the first CSC's 1,792 pixels, never on the luma ramp; flooring the products
+  towards zero reproduces 1,072.
+- **IPU_CTRL** keeps IDP's low bit alone (D-316), so 10- and 11-bit DC decode otherwise (`intra-dc11`); **VDEC** omits
+  the length for macroblock_type, motion_code and dmvector (D-308); **IPU_TOP** reads 0 (D-311); **RST** raises no
+  interrupt (D-315); **IDEC** stays busy at an increment of 2 (D-318) and **SGN with the dither** never ends
+  (`idec-sgn-dither`, no done word in 90 s, D-321).
+
+**Play!.**
+
+- **Agrees**: VDEC's lengths for every table (D-308), IPU_TOP's BUSY and value (D-311), BCLR while busy (D-314), the
+  pointer within a slice, the first slice's blocks within its IDCT's two steps.
+- **Departs**: no CBP (D-309); the pointer left at the first zero after a slice's last EOB rather than at the start
+  code (D-305), after which the replays are out of step with it; SETIQ's FB ignored; the FIFO unbounded (D-302); no
+  INT_IPU and DATA unchanged after a VDEC error (D-306, D-310); MPEG-1 stuffing an error in IDEC (D-326); IDEC stuck at
+  an increment of 2 (D-318); `s27-post` never ends (CSC). Its IPU completes every command at once but IDEC, which takes
+  4,800 cycles (D-324).
+
+So **PCSX2 is a witness for the commands' register behaviour, the bit stream's handling, non-intra decoding and PACK**,
+and its departures in intra decoding, the alternate scan, IDEC's scale and CSC are each reproduced exactly by a rule no
+document gives; **Play! is a witness for VDEC's output and IPU_TOP**, and departs too early in each stream to weigh its
+decoding.
+
+### 34.12 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | Table B.14's codes for run 0, levels 5 and 6 swapped, in `vlc.rs` | `bdec_gives_…`, `idec_gives_…`, `the_programs_replay_…` |
+| F2 | Mismatch control skipped, in `Ipu::reconstruct` | `bdec_gives_…`, `idec_gives_…`, `odd_escapes_…`, `the_programs_replay_…` |
+| F3 | The dither matrix transposed, `DITHER[x][y]`, in `csc::rgb16` | `csc_and_pack_follow_the_manuals_post_processing` |
+
+Each was applied, `tests/ipu.rs` and the lib's tests run, and the source restored [M]. F1 passes the tables' own check,
+which sees codes and not values, and is caught by the model's own copy of the tables.
+
+### 34.13 What the plan got wrong, or left open
+
+- **§5.7 and §2.3** expected the IDCT's rounding to be the IPU's one departure (P7). On the referees the IDCT departs as
+  predicted, but it is the smallest of each lineage's departures; the alternate scan's weighting, intra output's range
+  and IDEC's scale are larger, and no document decides them against the standard.
+- **§3.2's row** names "the project's MPEG-2 streams against the standard" with the referees for IDCT rounding: the
+  standard needed a decoder of its own on the project's side (the model) and a third lineage for the model itself,
+  ffmpeg's decoding, run as a black box.
+- **The gate's "output read back by an EE program"** needs the command sequence an FMV player issues; the replay
+  program carries it as a table, so the EE program is one loop and the stream's walk is the driver's.
+- **MPEG-1** rests on H.262 §D.9 alone (§34.3).
+
+### 34.14 Questions this stage leaves
+
+1. **Q1 [decision], the alternate scan's weighting (D-303).** PCSX2 pairs coefficients with the matrix's bytes in
+   zigzag order under the alternate scan, which an FMV encoded with a loaded matrix and the alternate scan would show
+   as wrong weights; the standard pairs them by place. *Recommended*: keep the standard's pairing, and at S28 compare an
+   FMV of a bench game whose stream uses the alternate scan (interlaced FMVs often do) on Sapphire and PCSX2 frame by
+   frame; if PCSX2's pictures are the right ones there, the IPU is PCSX2's and the dispute turns.
+2. **Q2 [decision], IDEC's QSC (D-304).** *Recommended*: keep Table 7-6's mapping, which BDEC uses on both lineages;
+   S28's FMVs decoded by IDEC decide it the same way as Q1.
+3. **Q3 [routine], intra BDEC's range (D-301).** *Recommended*: keep RAW16's signed samples, the manual's format; an
+   FMV player that adds a prediction to an intra block never does, so games cannot tell.
+4. **Q4 [routine], the decoding's time (D-324).** *Recommended*: keep it untimed until S32's bench or a game at S28
+   shows FMV pacing that depends on it; the two lineages disagree by a factor of four.
+
+### 34.15 What was read for this stage
+
+`Sapphire_Plan.md` §1.1 (the IPU row), §2, §3, §5.7, §7 and §11; this page's §20 (S11, the DMAC and channels 3 and 4);
+`Sapphire_Disputes.md`'s shape and D-34 to D-42; `Sapphire_Referees.md` §2 and §3. ITU-T H.262 (02/2000) §4.1, §6.1.3,
+§6.2, §6.3.9 to §6.3.18, §7.1 to §7.6, Annex A, Annex B and §D.9; the *EE User's Manual* (Version 5.0) §1.2.8, §2.2.1,
+§3.1 and chapter 8 whole; ps2tek at `1c91660`, "Image Processing Unit" and its I/O map. No emulator, decoder, SDK or
+loader source, no ps2autotests source and no firmware. ffmpeg's source was not read; its binary made and decoded the
+streams.
+
+### 34.16 What this stage does not cover
+
+- The FMV library a game links, which drives these commands on the player's BIOS: S28's games.
+- The IPU in the machine's frame (`machine.rs` holds no `System` yet): S10.
+- The state format's new contents: S30.

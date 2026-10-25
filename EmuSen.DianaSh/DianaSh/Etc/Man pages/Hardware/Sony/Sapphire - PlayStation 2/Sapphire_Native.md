@@ -761,7 +761,7 @@ was read.
 
 - **`ee/mod.rs`**: `Ee` (32 × 128-bit GPRs, HI and LO as 128-bit registers whose bits 63..0 are pipeline 0's and
   127..64 pipeline 1's, SA, the PC with its delay-slot state, COP0's 32 words), `step` and `run`, the level 1 exception
-  sequence of the User's Manual §4.1.2 (EPC and Cause.BD left alone when Status.EXL is set; the vector by Status.BEV),
+  sequence of the EE Core User's Manual §4.1.2 (EPC and Cause.BD left alone when Status.EXL is set; the vector by Status.BEV),
   the operating modes of §3.2's table and the address errors a mode raises (§4.2.9). An instruction a later stage
   executes stops the interpreter with `Halt::Unimplemented` and its word, never a made-up result; a coprocessor
   instruction whose coprocessor is unusable raises the unusable exception first, as §4.2.14 says.

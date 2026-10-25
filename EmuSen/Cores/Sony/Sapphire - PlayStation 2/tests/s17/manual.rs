@@ -60,6 +60,29 @@ fn to16(v: u32) -> u32 {
     r | g << 5 | b << 10 | a << 15
 }
 
+/// Figure 3-6's rule for the point (px, py) against triangle abc: its weights when it is inside, or on a left or top
+/// side but not a right or bottom one. Each side is classed by the third vertex: a slanted side is a left side when the
+/// third vertex lies to the right of the side's line at its own height, a level side a top side when the third vertex
+/// lies below it.
+fn holds(a: V, b: V, c: V, px: i128, py: i128) -> Option<[i128; 3]> {
+    let cross = |p: V, q: V, x: i128, y: i128| (q.x - p.x) * (y - p.y) - (q.y - p.y) * (x - p.x);
+    let drawn_side = |p: V, q: V, r: V| {
+        if p.y == q.y {
+            r.y > p.y
+        } else {
+            ((r.x - p.x) * (q.y - p.y) - (q.x - p.x) * (r.y - p.y)) * (q.y - p.y).signum() > 0
+        }
+    };
+    let mut weights = [0i128; 3];
+    for (i, &(p, q, r)) in [(b, c, a), (c, a, b), (a, b, c)].iter().enumerate() {
+        weights[i] = cross(p, q, px, py) * cross(p, q, r.x, r.y).signum();
+        if weights[i] < 0 || (weights[i] == 0 && !drawn_side(p, q, r)) {
+            return None;
+        }
+    }
+    Some(weights)
+}
+
 impl Model {
     fn attrs(&self) -> u64 {
         if self.regs[0x1A] & 1 == 1 { self.regs[0x00] } else { self.regs[0x1B] }
@@ -165,11 +188,45 @@ impl Model {
         bitsof(self.attrs(), 3, 1) == 1
     }
 
+    fn antialiased(&self) -> bool {
+        bitsof(self.attrs(), 7, 1) == 1
+    }
+
+    /// §3.6's coverage of a line's pixel (Sapphire_Disputes.md D-406): 80h less 80h × the line's offset from the
+    /// pixel's centre along the minor axis, at the centre's column, below 80h as §3.6.2 says.
+    fn cov_line(&self, a: V, b: V, x: i128, y: i128) -> Option<i128> {
+        if !self.antialiased() {
+            return None;
+        }
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let (off, den) = if dx.abs() >= dy.abs() { (a.y * dx + (16 * x - a.x) * dy - 16 * y * dx, dx) } else { (a.x * dy + (16 * y - a.y) * dx - 16 * x * dy, dy) };
+        let (off, den) = (off.abs(), den.abs());
+        Some(((128 * (16 * den - off)).div_euclid(16 * den)).clamp(0, 127))
+    }
+
+    /// The coverage of a triangle's pixel (D-406): half the number of the 256 points at the centres of its sixteenths
+    /// that the triangle's drawing rule holds.
+    fn cov_triangle(&self, a: V, b: V, c: V, x: i128, y: i128) -> Option<i128> {
+        if !self.antialiased() {
+            return None;
+        }
+        let d = |v: V| V { x: 2 * v.x, y: 2 * v.y, ..v };
+        let mut n = 0;
+        for j in 0..16 {
+            for k in 0..16 {
+                if holds(d(a), d(b), d(c), 2 * (16 * x - 8 + k) + 1, 2 * (16 * y - 8 + j) + 1).is_some() {
+                    n += 1;
+                }
+            }
+        }
+        Some(n / 2)
+    }
+
     /// Point: the pixel whose centre is within half a pixel, the lower bound in (§3.2.9, figure 3-3).
     fn point(&mut self, a: V) {
         for (x, y) in self.candidates(&[a.x], &[a.y]) {
             if 16 * x - 8 <= a.x && a.x < 16 * x + 8 && 16 * y - 8 <= a.y && a.y < 16 * y + 8 {
-                self.pixel(x, y, a.z, a.c, &frag([a; 3], [1, 0, 0], [1, 0, 0], [a.t.q; 3], a));
+                self.pixel(x, y, a.z, a.c, &frag([a; 3], [1, 0, 0], [1, 0, 0], [a.t.q; 3], a), None);
             }
         }
     }
@@ -184,7 +241,7 @@ impl Model {
                 // S and U run from a to b along x, T and V along y; Q and F are b's (§3.2.8; Native §31.3).
                 let lin = |p: i128, pa: i128, pb: i128| if pb > pa { [pb - p, p - pa, 0] } else { [p - pb, pa - p, 0] };
                 let bf = V { t: Tv { f: b.t.f, ..a.t }, ..a };
-                self.pixel(x, y, b.z, b.c, &frag([bf, b, b], lin(16 * x, a.x, b.x), lin(16 * y, a.y, b.y), [b.t.q; 3], b));
+                self.pixel(x, y, b.z, b.c, &frag([bf, b, b], lin(16 * x, a.x, b.x), lin(16 * y, a.y, b.y), [b.t.q; 3], b), None);
             }
         }
     }
@@ -226,54 +283,31 @@ impl Model {
             let z = lerp(a.z, b.z).clamp(0, u32::MAX as i128);
             let c = if self.gouraud() { [0, 1, 2, 3].map(|i| lerp(a.c[i], b.c[i]).clamp(0, 255)) } else { b.c };
             let w = [d - t, t, 0];
-            self.pixel(x, y, z, c, &frag([a, b, b], w, w, [a.t.q, b.t.q, b.t.q], b));
+            self.pixel(x, y, z, c, &frag([a, b, b], w, w, [a.t.q, b.t.q, b.t.q], b), self.cov_line(a, b, x, y));
         }
     }
 
-    /// Triangle: centres inside, or on a left or top side (figure 3-6). Each side is classed by the third vertex: a
-    /// slanted side is a left side when the third vertex lies to the right of the side's line at its own height, a
-    /// level side a top side when the third vertex lies below it.
+    /// Triangle: the centres `holds` takes (figure 3-6), colour and Z by the weights it gives.
     fn triangle(&mut self, a: V, b: V, c: V) {
         let last = c;
-        let cross = |p: V, q: V, x: i128, y: i128| (q.x - p.x) * (y - p.y) - (q.y - p.y) * (x - p.x);
-        let area = cross(a, b, c.x, c.y);
+        let area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
         if area == 0 {
             return;
         }
-        let sides = [(b, c, a), (c, a, b), (a, b, c)];
-        let drawn_side = |p: V, q: V, r: V| {
-            if p.y == q.y {
-                r.y > p.y
-            } else {
-                ((r.x - p.x) * (q.y - p.y) - (q.x - p.x) * (r.y - p.y)) * (q.y - p.y).signum() > 0
-            }
-        };
         for (x, y) in self.candidates(&[a.x, b.x, c.x], &[a.y, b.y, c.y]) {
-            let (px, py) = (16 * x, 16 * y);
-            let mut weights = [0i128; 3];
-            let mut inside = true;
-            for (i, &(p, q, r)) in sides.iter().enumerate() {
-                let e = cross(p, q, px, py);
-                let towards = cross(p, q, r.x, r.y);
-                weights[i] = e * towards.signum();
-                if weights[i] < 0 || (weights[i] == 0 && !drawn_side(p, q, r)) {
-                    inside = false;
-                }
-            }
-            if !inside {
-                continue;
-            }
+            let Some(weights) = holds(a, b, c, 16 * x, 16 * y) else { continue };
             let total = area.abs();
             let mix = |va: i128, vb: i128, vc: i128| (va * weights[0] + vb * weights[1] + vc * weights[2]).div_euclid(total);
             let z = mix(a.z, b.z, c.z);
             let col = if self.gouraud() { [0, 1, 2, 3].map(|i| mix(a.c[i], b.c[i], c.c[i])) } else { last.c };
-            self.pixel(x, y, z, col, &frag([a, b, c], weights, weights, [a.t.q, b.t.q, c.t.q], last));
+            self.pixel(x, y, z, col, &frag([a, b, c], weights, weights, [a.t.q, b.t.q, c.t.q], last), self.cov_triangle(a, b, c, x, y));
         }
     }
 
-    /// §3.7's tests in order (scissoring, then the depth test; the alpha tests are S19's and off in every program) and
-    /// §3.9's format conversion and masks.
-    fn pixel(&mut self, x: i128, y: i128, z: i128, c: [i128; 4], frag: &Frag) {
+    /// §3.7's tests in order (scissoring, the alpha test with AFAIL, the destination alpha test, the depth test),
+    /// §3.8's blending, and §3.9's dithering, clamp, alpha correction, format conversion and masks (`pixel_ops`).
+    /// `cov` is the pixel's coverage when the primitive is antialiased (§3.6.1).
+    fn pixel(&mut self, x: i128, y: i128, z: i128, c: [i128; 4], frag: &Frag, cov: Option<i128>) {
         let ctx = self.ctxt();
         let (sx0, sx1, sy0, sy1) = self.scissor();
         if x < sx0 || x > sx1 || y < sy0 || y > sy1 {
@@ -283,40 +317,180 @@ impl Model {
         if (msk == 2 && y % 2 == 0) || (msk == 3 && y % 2 == 1) {
             return;
         }
+        let frame = self.regs[0x4C + ctx];
+        let Some(fpsm) = frame_format(bitsof(frame, 24, 6) as u32) else { return };
         // §3.4 and §3.5: texture mapping and fog before the tests (figure 3-1).
         let c = self.tex.shade(&self.regs, self.attrs(), &self.mem, frag, c);
-        let frame = self.regs[0x4C + ctx];
         let zbuf = self.regs[0x4E + ctx];
-        let test = self.regs[0x47 + ctx];
-        let Some(fpsm) = frame_format(bitsof(frame, 24, 6) as u32) else { return };
         let (fbp, fbw, fbmsk) = (bitsof(frame, 0, 9) as u32 * 32, bitsof(frame, 16, 6) as u32, (frame >> 32) as u32);
-        let (x, y) = (x as u32, y as u32);
         let zpsm = 0x30 | bitsof(zbuf, 24, 4) as u32;
         let zbp = bitsof(zbuf, 0, 9) as u32 * 32;
-        let mut z_out = None;
-        if bitsof(test, 16, 1) == 1 && [m16::Z32, m16::Z24, m16::Z16, m16::Z16S].contains(&zpsm) {
-            let top = (1i128 << bits(zpsm)) - 1;
-            let zv = z.min(top) as u32;
-            let old = self.mem.get(zpsm, zbp, fbw, x, y);
-            let ok = match bitsof(test, 17, 2) {
-                0 => false,
-                1 => true,
-                2 => zv >= old,
-                _ => zv > old,
-            };
-            if !ok {
-                return;
+        let regs = pixel_ops::Regs {
+            test: self.regs[0x47 + ctx],
+            alpha: self.regs[0x42 + ctx],
+            fba: self.regs[0x4A + ctx],
+            pabe: self.regs[0x49],
+            dthe: self.regs[0x45],
+            dimx: self.regs[0x44],
+            colclamp: self.regs[0x46],
+            abe: bitsof(self.attrs(), 6, 1) == 1,
+        };
+        let (xu, yu) = (x as u32, y as u32);
+        let z_format = [m16::Z32, m16::Z24, m16::Z16, m16::Z16S].contains(&zpsm);
+        let fb = self.mem.get(fpsm, fbp, fbw, xu, yu);
+        let zb = if z_format { self.mem.get(zpsm, zbp, fbw, xu, yu) } else { 0 };
+        let p = pixel_ops::Pixel { x, y, z, c, cov };
+        let out = pixel_ops::run(&regs, &p, fpsm, fbmsk, fb, z_format.then_some((zpsm, zb, bitsof(zbuf, 32, 1) == 1)));
+        if let Some(v) = out.frame {
+            self.mem.put(fpsm, fbp, fbw, xu, yu, v);
+        }
+        if let Some(zv) = out.z {
+            self.mem.put(zpsm, zbp, fbw, xu, yu, zv);
+        }
+    }
+}
+
+/// §3.6 to §3.9 for one pixel that has passed scissoring and been textured and fogged, as the manual's tables state
+/// them, each table transcribed as a table: what is written to the frame and the Z buffer, given the pixel and both
+/// buffers' present values.
+pub mod pixel_ops {
+    use super::{bits, to16};
+
+    pub struct Regs {
+        pub test: u64,
+        pub alpha: u64,
+        pub fba: u64,
+        pub pabe: u64,
+        pub dthe: u64,
+        pub dimx: u64,
+        pub colclamp: u64,
+        pub abe: bool,
+    }
+
+    pub struct Pixel {
+        pub x: i128,
+        pub y: i128,
+        pub z: i128,
+        pub c: [i128; 4],
+        pub cov: Option<i128>,
+    }
+
+    pub struct Out {
+        pub frame: Option<u32>,
+        pub z: Option<u32>,
+    }
+
+    fn field(v: u64, lo: u32, n: u32) -> u64 {
+        (v >> lo) & ((1 << n) - 1)
+    }
+
+    /// A frame value as RGBA in eight bits a channel, the way §3.8.1's last paragraph treats the formats.
+    fn unpack(fpsm: u32, v: u32) -> [i128; 4] {
+        if bits(fpsm) == 16 {
+            let ch = |s: u32| i128::from((v >> s) & 31) * 8;
+            [ch(0), ch(5), ch(10), if v & 0x8000 != 0 { 0x80 } else { 0 }]
+        } else {
+            let ch = |s: u32| i128::from((v >> s) & 255);
+            [ch(0), ch(8), ch(16), if bits(fpsm) == 24 { 0x80 } else { ch(24) }]
+        }
+    }
+
+    pub fn run(r: &Regs, p: &Pixel, fpsm: u32, fbmsk: u32, fb: u32, zbuf: Option<(u32, u32, bool)>) -> Out {
+        let none = Out { frame: None, z: None };
+        let mut c = p.c;
+        // §3.6.1's table, row by row: (AA1, ABE, A is 80h) -> (alpha output is Cov, blending runs).
+        let blending_asked = match (p.cov, r.abe) {
+            (None, abe) => abe,
+            (Some(cov), false) => {
+                c[3] = cov;
+                true
             }
-            if bitsof(zbuf, 32, 1) == 0 {
+            (Some(cov), true) => {
+                if c[3] == 0x80 {
+                    c[3] = cov;
+                }
+                true
+            }
+        };
+        // §3.7.2: the comparison as a list indexed by ATST, then AFAIL's table of what stays effective.
+        let (mut eff_rgb, mut eff_a, mut eff_z) = (true, true, true);
+        if field(r.test, 0, 1) == 1 {
+            let (a, aref) = (c[3], i128::from(field(r.test, 4, 8)));
+            let passes = [false, true, a < aref, a <= aref, a == aref, a >= aref, a > aref, a != aref];
+            if !passes[field(r.test, 1, 3) as usize] {
+                let rgba32 = bits(fpsm) == 32;
+                let table = [(false, false, false), (true, true, false), (false, false, true), if rgba32 { (true, false, false) } else { (true, true, false) }];
+                (eff_rgb, eff_a, eff_z) = table[field(r.test, 12, 2) as usize];
+                if !eff_rgb && !eff_a && !eff_z {
+                    return none;
+                }
+            }
+        }
+        // §3.7.3's three tables.
+        if field(r.test, 14, 1) == 1 {
+            let datm = field(r.test, 15, 1) as u32;
+            let pass = match bits(fpsm) {
+                32 => (fb >> 31) == datm,
+                16 => ((fb >> 15) & 1) == datm,
+                _ => true,
+            };
+            if !pass {
+                return none;
+            }
+        }
+        // §3.7.4, with D-163's clamp; the Z write needs ZMSK 0, an effective Z, and full coverage (§3.6.2).
+        let mut z_out = None;
+        if field(r.test, 16, 1) == 1
+            && let Some((zpsm, old, zmsk)) = zbuf
+        {
+            let zv = p.z.min((1i128 << bits(zpsm)) - 1) as u32;
+            let pass = [false, true, zv >= old, zv > old][field(r.test, 17, 2) as usize];
+            if !pass {
+                return none;
+            }
+            if !zmsk && eff_z && p.cov.is_none_or(|v| v >= 0x80) {
                 z_out = Some(zv);
             }
         }
-        let rgba = (c[0] | c[1] << 8 | c[2] << 16 | c[3] << 24) as u32;
-        let (v, m) = if bits(fpsm) == 16 { (to16(rgba), to16(fbmsk)) } else { (rgba, fbmsk) };
-        let old = self.mem.get(fpsm, fbp, fbw, x, y);
-        self.mem.put(fpsm, fbp, fbw, x, y, (old & m) | (v & !m));
-        if let Some(zv) = z_out {
-            self.mem.put(zpsm, zbp, fbw, x, y, zv);
+        if !eff_rgb && !eff_a {
+            return Out { frame: None, z: z_out };
         }
+        // §3.8.1: (A - B) * C + D with X * Y = (X x Y) >> 7, unclamped; PABE (§3.8.2) by the source alpha's MSB.
+        let d = unpack(fpsm, fb);
+        let mut rgb = [c[0], c[1], c[2]];
+        if blending_asked && !(field(r.pabe, 0, 1) == 1 && c[3] < 0x80) {
+            let colour = |sel: u64, i: usize| [c[i], d[i], 0][sel.min(2) as usize];
+            let coef = [c[3], d[3], i128::from(field(r.alpha, 32, 8))][field(r.alpha, 4, 2).min(2) as usize];
+            for (i, v) in rgb.iter_mut().enumerate() {
+                let diff = colour(field(r.alpha, 0, 2), i) - colour(field(r.alpha, 2, 2), i);
+                *v = (diff * coef).div_euclid(128) + colour(field(r.alpha, 6, 2), i);
+            }
+        }
+        // §3.9.1: the 4 x 4 matrix of DIMX, DMyx at bits 16y + 4x, each int 1:2:0, added at [Y % 4][X % 4].
+        if field(r.dthe, 0, 1) == 1 && bits(fpsm) == 16 {
+            let mut m = [[0i128; 4]; 4];
+            for (row, line) in m.iter_mut().enumerate() {
+                for (col, e) in line.iter_mut().enumerate() {
+                    let raw = field(r.dimx, (16 * row + 4 * col) as u32, 3) as i128;
+                    *e = if raw >= 4 { raw - 8 } else { raw };
+                }
+            }
+            let off = m[p.y.rem_euclid(4) as usize][p.x.rem_euclid(4) as usize];
+            rgb = rgb.map(|v| v + off);
+        }
+        // §3.9.2: clamped to [0, 255], or the lower 8 bits.
+        let rgb = rgb.map(|v| if field(r.colclamp, 0, 1) == 1 { v.clamp(0, 255) } else { v.rem_euclid(256) } as u32);
+        // §3.9.3: As with FBA ORed in as its MSB.
+        let a = c[3] as u32 | if field(r.fba, 0, 1) == 1 { 0x80 } else { 0 };
+        let mut v = rgb[0] | rgb[1] << 8 | rgb[2] << 16 | a << 24;
+        let mut keep = fbmsk;
+        if !eff_a {
+            keep |= 0xFF00_0000;
+        }
+        if bits(fpsm) == 16 {
+            v = to16(v);
+            keep = to16(keep);
+        }
+        Out { frame: Some((fb & keep) | (v & !keep)), z: z_out }
     }
 }

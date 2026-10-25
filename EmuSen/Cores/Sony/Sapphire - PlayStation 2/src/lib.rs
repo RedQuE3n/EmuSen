@@ -25,6 +25,7 @@
 //! S24: the console assembled (`machine`): the player's BIOS in the boot ROM for both processors, the IOP reset by the
 //! SIF, the drive joined to the IOP's bus, the EEPROM a console medium, the pads, the picture and the sound handed on,
 //! and the hardware's own reports of what no unit answers (`reports`).
+//! S30: every unit's state in `state`'s format SPH2, written beside each unit and composed by `board::System`.
 
 pub mod bios;
 pub mod board;

@@ -11,9 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
-
-[dev-dependencies]
-# The assembler of the referees' programs, for examples/elf.rs and tests/programs.rs (Sapphire_Referees.md §4.1).
+# The R5900's decode, which the interpreter executes by (Sapphire_Plan.md §9.1), and the assembler of the project's programs.
 emusen-mips = { path = "../../Shared/emusen-mips" }
 
 [profile.release]

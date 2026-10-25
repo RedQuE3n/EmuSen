@@ -3,9 +3,11 @@
 //!
 //! Stage S1: a stub. The image is read (`media`): an EE program as an ELF, or a disc whose SYSTEM.CNF names a BOOT2
 //! program; the machine (`machine`) holds the memories, a frame counter, a black picture and silence, and nothing is
-//! emulated. `state` is the format SPH2, and `v1` the core ABI's glue.
+//! emulated. `state` is the format SPH2, and `v1` the core ABI's glue. Stage S6: `ee`, the EE core's integer
+//! interpreter and its timing model, run by the project's programs and not yet by the machine (S10 loads programs).
 
 pub mod bios;
+pub mod ee;
 pub mod machine;
 pub mod media;
 pub mod state;

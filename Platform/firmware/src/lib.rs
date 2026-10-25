@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn the_store_alone_when_the_setting_names_the_store_or_nothing_usable() {
-        let d = Dir::new("order");
+        let d = Dir::new("store-alone");
         let store = d.sub("store");
         assert_eq!(folders(None, "/h", &store).0, [store.clone()]);
         assert_eq!(folders(Some(&format!("{store}/")), "/h", &store).0, [store.clone()]);

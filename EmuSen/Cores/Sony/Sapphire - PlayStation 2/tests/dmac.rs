@@ -305,3 +305,16 @@ fn the_board_holds_no_h_blank_event_unless_a_timer_needs_it() {
     b.run_to(clock::NTSC.lines * clock::NTSC.line * BUS, &mut spr);
     assert_eq!(b.intc.stat, 0b1100, "VB_ON at line 240 and VB_OFF at the field's end");
 }
+
+#[test]
+fn a_register_write_on_a_blanking_edge_does_not_take_the_edge_again() {
+    let mut b = Board::new(clock::NTSC);
+    let mut spr = vec![0u8; 16 << 10];
+    b.write(sapphire::timer::BASE + 0x1810, 4, 0x83);
+    let edge = 10 * clock::NTSC.line * BUS;
+    b.run_to(edge, &mut spr);
+    let before = b.timers[3].count;
+    b.write(0x1000_E000, 4, 1);
+    b.run_to(edge + 1, &mut spr);
+    assert_eq!(b.timers[3].count, before, "the H-blank edge at the write's time was taken once, before it");
+}

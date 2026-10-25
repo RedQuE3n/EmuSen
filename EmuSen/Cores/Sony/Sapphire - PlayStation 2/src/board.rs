@@ -86,6 +86,8 @@ pub struct Board {
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
+    /// The time whose blanking edges were last taken, so an event rescheduled at that time does not take them again.
+    edges_taken: Option<u64>,
 }
 
 impl Board {
@@ -102,6 +104,7 @@ impl Board {
             gs: Gs::new(),
             now: 0,
             next: 0,
+            edges_taken: None,
         };
         b.reschedule();
         b
@@ -142,8 +145,9 @@ impl Board {
             for n in 0..4 {
                 self.sync_timer(n, at);
             }
-            let e = self.blank.edges(at);
+            let e = if self.edges_taken == Some(at) { Default::default() } else { self.blank.edges(at) };
             if e.h_rise || e.h_fall || e.v_rise || e.v_fall {
+                self.edges_taken = Some(at);
                 let (h, v) = (self.blank.h(at), self.blank.v(at));
                 for n in 0..4 {
                     if self.timers[n].edges(e.h_rise, e.h_fall, e.v_rise, e.v_fall, h, v) != 0 {

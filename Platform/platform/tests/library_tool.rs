@@ -6,7 +6,7 @@
 use emusen_disc::ecma130::{self, RAW};
 use emusen_galaxia::tree::{self, Override};
 use emusen_platform::dianash::{dianash_free, dianash_new, dianash_output_take, dianash_session_new, dianash_submit};
-use emusen_platform::library_tool::{emusen_library_tool_free, emusen_library_tool_next, emusen_library_tool_start, LibraryJob};
+use emusen_platform::library_tool::{emusen_tool_job_free, emusen_tool_job_next, emusen_tool_job_start, LibraryJob};
 use std::path::PathBuf;
 
 fn data(sectors: u32) -> Vec<u8> {
@@ -73,13 +73,13 @@ fn chd_runs_in_a_shell_this_library_makes_over_the_settings_library() {
 fn a_request_that_is_not_one_is_refused_and_a_job_ends_with_zero() {
     let mut job: *mut LibraryJob = std::ptr::null_mut();
     let bad = br#"{"op": "erase"}"#;
-    assert_eq!(unsafe { emusen_library_tool_start(bad.as_ptr(), bad.len(), &mut job) }, -1025);
+    assert_eq!(unsafe { emusen_tool_job_start(bad.as_ptr(), bad.len(), &mut job) }, -1025);
     let ls = br#"{"op": "ls", "paths": ["nowhere"]}"#;
-    assert_eq!(unsafe { emusen_library_tool_start(ls.as_ptr(), ls.len(), &mut job) }, 0);
+    assert_eq!(unsafe { emusen_tool_job_start(ls.as_ptr(), ls.len(), &mut job) }, 0);
     let mut events = Vec::new();
     let mut out = vec![0u8; 4096];
     loop {
-        let n = unsafe { emusen_library_tool_next(job, 1000, out.as_mut_ptr(), out.len()) };
+        let n = unsafe { emusen_tool_job_next(job, 1000, out.as_mut_ptr(), out.len()) };
         if n == 0 {
             break;
         }
@@ -88,7 +88,7 @@ fn a_request_that_is_not_one_is_refused_and_a_job_ends_with_zero() {
         }
     }
     assert!(events.last().unwrap().contains("\"event\":\"end\""), "{events:?}");
-    assert_eq!(unsafe { emusen_library_tool_free(job) }, 0);
+    assert_eq!(unsafe { emusen_tool_job_free(job) }, 0);
 }
 
 /// A job longer than the line's budget goes on in the background: `ps` lists it as `chd1` until it ends, and what it

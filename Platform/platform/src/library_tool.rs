@@ -9,7 +9,7 @@ use emusen_galaxia::{config, setting_folders, tree};
 use emusen_library_tool::{job, Context};
 use std::time::Duration;
 
-/// The opaque `emusen_library_job`.
+/// The opaque `emusen_tool_job`.
 pub struct LibraryJob(job::Job);
 
 /// `emusen_library_tool.h`'s table, laid out as the header lays it out.
@@ -30,10 +30,10 @@ pub const MINOR: u32 = 0;
 /// The service's one table, for every shell.
 pub static TABLE: LibraryToolV1 = LibraryToolV1 {
     size: std::mem::size_of::<LibraryToolV1>() as u32,
-    start: emusen_library_tool_start,
-    next: emusen_library_tool_next,
-    stop: emusen_library_tool_stop,
-    free: emusen_library_tool_free,
+    start: emusen_tool_job_start,
+    next: emusen_tool_job_next,
+    stop: emusen_tool_job_stop,
+    free: emusen_tool_job_free,
     last_error: crate::emusen_platform_last_error,
 };
 
@@ -56,7 +56,7 @@ fn context() -> Context {
 /// # Safety
 /// `request` must be valid for `len` bytes; `job` must be valid for a write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_library_tool_start(request: *const u8, len: usize, job: *mut *mut LibraryJob) -> i32 {
+pub unsafe extern "C" fn emusen_tool_job_start(request: *const u8, len: usize, job: *mut *mut LibraryJob) -> i32 {
     if job.is_null() {
         return fail(status::NULL, "the job's place is null");
     }
@@ -78,9 +78,9 @@ pub unsafe extern "C" fn emusen_library_tool_start(request: *const u8, len: usiz
 /// none came in time; 0 once the last was taken.
 ///
 /// # Safety
-/// `job` must be a job from `emusen_library_tool_start`; `out` must be valid for `len` bytes, or null.
+/// `job` must be a job from `emusen_tool_job_start`; `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_library_tool_next(job: *mut LibraryJob, wait_ms: u32, out: *mut u8, len: usize) -> i64 {
+pub unsafe extern "C" fn emusen_tool_job_next(job: *mut LibraryJob, wait_ms: u32, out: *mut u8, len: usize) -> i64 {
     let Some(job) = (unsafe { job.as_ref() }) else { return fail(status::NULL, "the job is null") as i64 };
     match job.0.peek(Duration::from_millis(wait_ms as u64)) {
         Some(event) => {
@@ -98,9 +98,9 @@ pub unsafe extern "C" fn emusen_library_tool_next(job: *mut LibraryJob, wait_ms:
 /// Asks a job to stop; it ends with what it did, its last events still to be taken.
 ///
 /// # Safety
-/// `job` must be a job from `emusen_library_tool_start`.
+/// `job` must be a job from `emusen_tool_job_start`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_library_tool_stop(job: *mut LibraryJob) -> i32 {
+pub unsafe extern "C" fn emusen_tool_job_stop(job: *mut LibraryJob) -> i32 {
     let Some(job) = (unsafe { job.as_ref() }) else { return fail(status::NULL, "the job is null") };
     job.0.stop();
     0
@@ -109,9 +109,9 @@ pub unsafe extern "C" fn emusen_library_tool_stop(job: *mut LibraryJob) -> i32 {
 /// Stops a job, waits for it to end and frees it.
 ///
 /// # Safety
-/// `job` must be a job from `emusen_library_tool_start`, not used again.
+/// `job` must be a job from `emusen_tool_job_start`, not used again.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_library_tool_free(job: *mut LibraryJob) -> i32 {
+pub unsafe extern "C" fn emusen_tool_job_free(job: *mut LibraryJob) -> i32 {
     if job.is_null() {
         return fail(status::NULL, "the job is null");
     }

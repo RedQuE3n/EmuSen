@@ -217,19 +217,19 @@ int64_t emusen_galaxia_package_format(const uint8_t *manifest, size_t manifest_l
  * emusen.library service (Platform/library-tool/include/emusen_library_tool.h) that every shell this library makes is
  * handed, so that the shell's module and Mistress's window run one tool.
  */
-typedef struct emusen_library_job emusen_library_job;
+typedef struct emusen_tool_job emusen_tool_job;
 
 /* A job started; PARSE with words for a request that is not one. What a job refuses (an unset library, a chdman that is not the pinned one) is its end event's "error". */
-int32_t emusen_library_tool_start(const uint8_t *request, size_t len, emusen_library_job **job);
+int32_t emusen_tool_job_start(const uint8_t *request, size_t len, emusen_tool_job **job);
 
 /* The next event, waiting up to wait_ms for one: its length, copied and taken only when `out` holds all of it; ABSENT when none came in time; 0 once the last was taken. */
-int64_t emusen_library_tool_next(emusen_library_job *job, uint32_t wait_ms, uint8_t *out, size_t len);
+int64_t emusen_tool_job_next(emusen_tool_job *job, uint32_t wait_ms, uint8_t *out, size_t len);
 
 /* Asks a job to stop: a running chdman is ended and its partial file removed; the job ends with what it did. */
-int32_t emusen_library_tool_stop(emusen_library_job *job);
+int32_t emusen_tool_job_stop(emusen_tool_job *job);
 
 /* Stops a job, waits for it to end, and frees it. */
-int32_t emusen_library_tool_free(emusen_library_job *job);
+int32_t emusen_tool_job_free(emusen_tool_job *job);
 
 /* ---- Galaxia: mapped files (EmuSen_Galaxia.md, section 3.8) ---- */
 

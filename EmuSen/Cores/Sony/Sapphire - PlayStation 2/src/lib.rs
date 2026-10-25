@@ -20,6 +20,7 @@
 //! S14: VIF0 and VIF1 (`vif`) on the DMAC's channels 0 and 1, writing the VUs' memories and starting micro mode.
 //! S18: texture mapping (`gs::texture`: the CLUT buffer, LOD, mipmaps, filters, wrap modes, TEXA) and fog.
 //! S25: SIO2 (`sio2`), the DualShock 2, the memory card and the multitap behind it, on the IOP's bus.
+//! S15: the GIF (`gif`), its three paths, their arbitration and PATH3's masking, driving the GS's host interface.
 
 pub mod bios;
 pub mod board;
@@ -28,6 +29,7 @@ pub mod clock;
 pub mod dmac;
 pub mod ee;
 pub mod float;
+pub mod gif;
 pub mod gs;
 pub mod intc;
 pub mod iop;

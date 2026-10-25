@@ -217,9 +217,15 @@ impl Vu {
 }
 
 /// PATH1 as VU1's XGKICK reaches it: the packet's quadword address in VU1's data memory and the cycle of the kick, and
-/// the cycle the transfer ends (§3.4.9). The GIF implements it at S15.
+/// the cycle the transfer ends (§3.4.9). The GIF implements it at S15 (`gif::Path1Port`).
 pub trait Path1 {
     fn kick(&mut self, data: &[u8], addr: u16, at: u64) -> u64;
+    /// The cycle a PATH1 transfer kicked now could start, as the board estimates it before the VU runs (from S15).
+    fn set_free(&mut self, _at: u64) {}
+    /// The next kick not yet handed to the GIF: VU1's qword address, the kick's cycle and the end the VU was told.
+    fn take_kick(&mut self) -> Option<(u16, u64, u64)> {
+        None
+    }
 }
 
 /// PATH1 until the GIF exists: each kick recorded, every transfer taking `busy` cycles.

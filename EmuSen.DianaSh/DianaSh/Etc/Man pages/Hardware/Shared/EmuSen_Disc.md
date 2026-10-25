@@ -26,7 +26,7 @@ controller is `src/cdrom/` (`Diamond_CDROM.md`); a Sega CD's CDC and CDD will be
 look inside an ISO 9660 volume (Diamond's `run --boot`) read the directory records themselves.
 
 **Dependencies**: the `chd` crate 0.3.4 (BSD-3-Clause), used as a dependency whose code is not read, as Q9 decided
-[R]. Nothing else: not `emusen-native`, and never Galaxia, since a core builds and runs with no frontend.
+[R]; 0.3.5 and 0.4.0 were measured on 2026-10-25 and not taken (§13.1). Nothing else: not `emusen-native`, and never Galaxia, since a core builds and runs with no frontend.
 
 ## 2. The surface
 
@@ -38,6 +38,7 @@ look inside an ISO 9660 volume (Diamond's `run --boot`) read the directory recor
 | `Disc::from_user_image(bytes, IsoForm)` | 2,048-byte user sectors as one data track, for a caller that knows them to be one without a volume descriptor |
 | `Disc::apply_sbi(bytes)` | the `.sbi` beside the image (§3.5) |
 | `Disc::read(at, &mut [u8; 2352]) -> Sector` | sector `at`'s raw bytes and whether it is data (its mode) or audio, stored or synthesised |
+| `Disc::damage() -> Option<&str>` (§13) | the first stored sector `read` could not read, and why, in words naming the CHD's hunk; that sector and its hunk were given as sectors the image does not hold |
 | `Disc::subq(at) -> SubQ` | the sector's subchannel Q, twelve bytes with the CRC |
 | `Disc::toc() -> Toc`, `Disc::lead_in(pointer)`, `Disc::tracks()`, `Disc::track_at(at)`, `Disc::lead_out()` | the table of contents and the tracks on the time line |
 | `samples(&raw)` | an audio sector's 588 stereo frames, little-endian, left first |
@@ -155,7 +156,8 @@ The crate's CHD path reads the metadata through the `chd` crate's `metadata_refs
 and decompresses one hunk at a time into a cache. A test builds three sheets (two files with a stored pause, an
 unstored PREGAP, an `.iso`), has chdman convert each, and requires every sector, its kind, its Q and the TOC to equal
 the sheet's, through the lead-out [M]. It is opt-in, by `EMUSEN_DISC_CHDMAN` naming the chdman binary, because chdman
-is not part of the build. The tester's library holds no CHD [M, a listing], so no real CHD was read.
+is not part of the build. The tester's library holds no CHD [M, a listing], so no real CHD was read. A damaged hunk is
+checked for and refused in words since 2026-10-25 (§13).
 
 ## 6. Tests (2026-10-11)
 
@@ -362,3 +364,140 @@ three tracks in two modes, a late first index, a WAVE track, and the refusals); 
 of the two files it was joined from; and `GalaxiaParityTests`' track cases. On 2026-10-25 the 167 tracks of the
 tester's eight cue sheets were hashed by both halves, read-only, and each equalled its file's own hashes as Python's
 `hashlib` and `zlib` took them [M].
+
+## 13. A damaged CHD is refused, never a crash (2026-10-25)
+
+*Decided 2026-10-25 by the tester (`EmuSen_GamePackages.md` §12.7, Q21): fixed in this crate, so that every reader of a
+CHD (Diamond, Nephrite, the library tool and the platform library) is covered by one owner, and measured against the
+corruptions of step 3. Measured on the development desktop on 2026-10-25 with chdman 0.289 (`EmuSen_GamePackages.md`
+§12.1). The marks are those at the top. No source of the `chd` crate, libchdr or MAME was read; the crate was treated as
+a black box, its documented API and its panic messages being all that was taken from it.*
+
+### 13.1 The defect, reproduced, and the newer releases
+
+The cores and the platform library are built with `panic = "abort"` (`Platform/Cargo.toml`), so a panic inside the
+crate ends whatever reads the disc. `tests/damage.rs` rebuilds the measurement of `EmuSen_GamePackages.md` §12.2: the
+step 3 gate's two synthetic discs (`Two`, mode 2 data and audio with a stored pause; `Noise`, the same data and audio no
+codec shrinks) made into CHDs by chdman with its default codecs, then four bytes changed (XOR 5Ah) at each stored hunk's
+first byte and 5 and 200 bytes into it, each file read whole through `Disc::from_image` and `Disc::read` in a child
+process, so that a panic is counted as one and does not end the run. The two CHDs hold 9 and 13 stored hunks, so **the
+set is 66 corruptions**, not the 67 §12.2 first wrote; the log of that measurement lists the same 66.
+
+| `chd` release | Panics | Refused in words | Refused silently, the hunk synthesised | Read as before |
+|---|---|---|---|---|
+| 0.3.4, this crate before §13 | **10** | 0 | 56 | 0 |
+| 0.3.5 (2026-10-14) | 10 | 0 | 56 | 0 |
+| 0.4.0 (2026-10-16) | 10 | 0 | 56 | 0 |
+| 0.3.4 with §13.2's checks | **0** | **66** | 0 | 0 |
+
+[M] Every panic is the four bytes at a cdlz hunk's first byte, and every one says "range end index 23510 out of range
+for slice of length 405" or the like. The release notes of 0.3.5 and 0.4.0 (the crate's GitHub releases and commit
+titles, read 2026-10-25) name a dependency's security update, a writer for every codec and "some bugs in `ChdReader`",
+and nothing about damaged input; measured, neither release changes a single outcome, so the first candidate of the
+decision, a newer release, was not taken. 0.4.0 also changes the API this crate calls (`metadata_refs` yields results,
+`block_offset` a plain number).
+
+### 13.2 The checks, and where each fact comes from
+
+`ChdImage::unit` checks a hunk before the crate decodes it and after, and answers words instead of bytes when a check
+fails. The words name the hunk; `Disc::read` prefixes the sector and keeps the first such words for `Disc::damage`.
+
+1. **The map entry, followed.** The entry for the hunk (`Map::get_entry`) is read through the crate's documented API:
+   `V5CompressedMapEntry::{hunk_type, block_offset, block_size, hunk_crc}` and `V5UncompressedMapEntry` (docs.rs, `chd`
+   0.3.5, read 2026-10-25). A `CompressionSelf` entry is followed to the hunk it names, at most four times and never to
+   itself or past the hunk count. *Measured* on a disc of repeated silence: such an entry's `block_offset` is the number
+   of the hunk copied, its size 0 and its CRC 0000h, so the CRC compared is the named hunk's. A parent's entries and a
+   map older than v5 are left to the crate, unchecked: no CHD this project reads has either.
+2. **The block within the file**: the entry's offset plus its size at most the file's length, else "its block is bytes
+   … of a …-byte file". For an uncompressed map this is the only check there is (3 and 4 need a compressed entry).
+3. **A framed codec's stream within its block.** *Measured, not read*: the first panic's message names a slice of 405
+   bytes, which is the 408-byte block less three, and an end of 23,510, which is 5BD6h, the clean block's bytes 1 and 2
+   (`01 8C`) each XORed with 5Ah. So a cdlz block begins with one byte and then a two-byte big-endian length of what
+   follows, and the crate slices by that length without comparing it. In a 32-unit hunk (chdman's `-hs 78336`) the
+   block begins `FF FF FF FF 00 02 9A`: four leading bytes, one a bit for each of eight frames, then a three-byte length
+   (666, with 685 bytes after it). cdzl's blocks (in the same CHDs) and cdzs's (chdman's `--fast` codecs, `cdzs,cdfl`)
+   begin alike. The check therefore reads `units / 8` rounded up leading bytes, then a length of two bytes where a hunk is
+   under 65,536 bytes and three otherwise, and refuses a length greater than what follows them. The widths were measured
+   at 19,584 and 78,336 bytes; that the change falls at 65,536 is argued, a two-byte field being unable to name more [A].
+   Which of the header's four codec slots is framed is read from `HeaderV5::compression` (cdlz, cdzl, cdzs). A cdfl
+   block begins `FF F8`, a FLAC frame's sync, with no such length, and no change to a cdfl block panicked in §13.3's
+   sweep, so cdfl is not checked.
+4. **The decoded bytes against the map's CRC.** *Measured*: on all 314 stored hunks of eight compressed synthetic CHDs
+   (both hunk sizes, the default and `--fast` codecs, repeated silence), `hunk_crc` equals the CRC-16 of the whole decoded hunk
+   with G(x) = x¹⁶ + x¹² + x⁵ + 1, the register starting at FFFFh, not reflected and not inverted: the catalogue's
+   CRC-16/IBM-3740 ("CRC-16/CCITT-FALSE", check value 29B1h; Greg Cook, "Catalogue of parametrised CRC algorithms",
+   <https://reveng.sourceforge.io/crc-catalogue/16.htm>, read 2026-10-25). `subq::ccitt` computes it, the same
+   polynomial the subchannel's CRC already used, eight bytes a step by eight tables. The crate does not compare it
+   itself: before §13 a hunk whose leading flag byte was changed decoded without error to other bytes (§13.3).
+
+A refused hunk reaches the core as it did before §13, when the crate refused it silently: `read` gives each of its
+sectors as a sector the image does not hold (§3.2), empty data of the track's mode or silence, which every core already
+handles. What changed is that the program goes on, and that the reason is kept.
+
+### 13.3 The wider sweep
+
+Beyond the 66, seven CHDs (`Two` and `Noise` with the default codecs, with `--fast`'s, in 32-unit hunks, and `Two`
+uncompressed) were changed one byte at a time (XOR 01h, 5Ah or FFh in each hunk's first 24 bytes and at
+five later places; 01h or FFh at every byte before the first hunk and after the last) and cut short at 11 to 21 lengths
+each, every case read whole in its own process: 49,298 cases [M].
+
+| Where | Before §13 | After |
+|---|---|---|
+| A hunk's block | 78 panics, 1,251 silently wrong, 3,914 refused without words, 157 as before | **0 panics**, 756 silently wrong, 4,487 refused in words, 157 as before |
+| Before the first hunk (header, metadata, an uncompressed map) | 1,796 refused at open, 394 silently wrong, 40,944 as before | 1,796 refused at open, 316 silently wrong, 78 refused in words, 40,944 as before |
+| After the last hunk (the compressed map) | 581 refused at open, **25 panics**, 42 as before | the same |
+| Cut short | 102 refused at open, 12 silently wrong, 2 as before | 102 refused at open, 14 refused in words |
+
+- *The 756 silently wrong hunks are all the uncompressed CHD's* (`-c none`): an uncompressed map records no CRC, and a
+  changed byte of stored data is data. Only the header's SHA-1 over the whole disc would see it.
+- *The 316 before the first hunk* are changes to the `CHT2` metadata text (a digit of `FRAMES` or `PREGAP`, which give a
+  disc of another shape) and to the uncompressed CHD's header and map. The metadata has no check of its own either; the
+  library tool's check 3 compares the table of contents with the package's, which is how a converted disc is guarded.
+- **The 25 panics after the last hunk remain**: they are in the crate's decoding of the compressed map, at
+  `Chd::open`, on bytes 17 to 21 or so of the map (its Huffman tree, by the panic's location), and occur in 0.3.5 and
+  0.4.0 alike [M]. A check before that decoding would need the map's compressed form, which no public document
+  describes and which could only be learnt from MAME's or the crate's source. They are left, and named in
+  `EmuSen_GamePackages.md` §12.7 (Q25). The map is some tens of bytes of a CHD's end, where the 66 and the sweep's
+  4,487 hunk cases are the bulk of its bytes. For them the library tool still runs its reader only over a CHD that
+  chdman's verify passes (`EmuSen_GamePackages.md` §12.2), which a damaged map does not.
+
+### 13.4 The cost on a clean CHD
+
+`Disc::read` over every sector of a disc in turn, repeated to 400 MB, the best of five passes and of three rounds,
+release build, on the 7700X while other builds ran beside it [M]:
+
+| CHD | Before | After | |
+|---|---|---|---|
+| `Two` (7,034 bytes) | 468.7 MB/s | 437.8 MB/s | −6.6% |
+| `Noise` (143,838 bytes) | 415.3 MB/s | 389.5 MB/s | −6.2% |
+| a disc of 4,000 data and 2,000 noise sectors (4,715,758 bytes) | 360.8 MB/s | 319.1 MB/s | −11.6% |
+
+The rates count the 150 synthesised sectors before track 1. The CRC is the cost: a first build that took it a byte at
+a time read the large disc at 228 MB/s (−36%); by eight tables it is a tenth. A drive at 2× needs 0.35 MB/s. Every clean
+CHD of §13.3 (seven), the repeated-silence disc and the large disc read byte-identical before and after, by an FNV-1a digest of every
+sector's bytes and kind.
+
+### 13.5 Tests, and the faults seeded
+
+`tests/damage.rs`, opt-in by `EMUSEN_DISC_CHDMAN` like the other CHD test: `every_damaged_hunk_is_refused_without_a_panic`
+(the 66, all refused, and each hunk's first byte alone changed, 22 more, all refused: ten by the CRC alone),
+`a_chd_of_repeated_hunks_reads_whole` (self-references followed, every sector equal to the sheet's, no damage) and
+`a_truncated_chd_refuses_the_hunk_past_its_end` (an uncompressed CHD cut by one byte and in a hunk's middle).
+`subq.rs`'s `the_table_gives_the_catalogues_check_value` holds the tables to the catalogue's two check values and to
+the bitwise register over ten lengths. `cargo test --profile test-checked`: 15 unit, 3 damage and 13 disc tests, with
+chdman named [M].
+
+| Fault seeded, one at a time, put back | Caught by |
+|---|---|
+| the CRC compared never | the first-byte half of the 66's test: 10 of 22 read silently wrong |
+| the block's end bound one byte short (`offset + size − 1`) | the truncated test: the CHD cut by one byte was read without refusal |
+| the framed codec's length not checked | the 66's test: the 10 panics returned |
+
+`a_chd_reads_as_its_sheet` still catches a panic around the broken read with `catch_unwind`; since §13 none occurs.
+
+### 13.6 Reading log for §13
+
+The `chd` crate's generated documentation on docs.rs for 0.3.5 (`chd::map`, `chd::header::HeaderV5`, `Chd`, `Hunk`:
+items and signatures, not source), its GitHub release notes for 0.4.0 and the titles of its commits since 0.3.4, and
+the crates.io version list, all read 2026-10-25; Greg Cook's CRC catalogue as cited. Not read: the crate's source,
+libchdr, MAME's `chd.h`, `chdcodec.cpp` or any other file of MAME.

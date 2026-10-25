@@ -635,6 +635,43 @@ impl Cdvd {
     }
 }
 
+/// The registers' window on the IOP's bus, byte registers from `BASE` [R ps2tek "CDVD I/O Ports"].
+pub const END: u32 = BASE + 0x40;
+
+/// The IOP DMAC's peripherals with the drive on channel 3, which takes the buffered sector four bytes a word, the
+/// others going to `others` (Sapphire_Native.md §35.3).
+pub struct Ports<'a, P: crate::iop::dma::Peripherals> {
+    pub others: &'a mut P,
+    pub cdvd: &'a mut Cdvd,
+    /// The IOP cycle of the DMAC's step.
+    pub now: u64,
+}
+
+impl<P: crate::iop::dma::Peripherals> crate::iop::dma::Peripherals for Ports<'_, P> {
+    fn request(&mut self, ch: usize, want: u32, to_memory: bool) -> u32 {
+        match ch {
+            crate::iop::dma::CDVD if to_memory => want.min((self.cdvd.dma_ready() / 4) as u32),
+            crate::iop::dma::CDVD => 0,
+            _ => self.others.request(ch, want, to_memory),
+        }
+    }
+
+    fn put(&mut self, ch: usize, w: u32) {
+        if ch != crate::iop::dma::CDVD {
+            self.others.put(ch, w);
+        }
+    }
+
+    fn get(&mut self, ch: usize) -> u32 {
+        if ch != crate::iop::dma::CDVD {
+            return self.others.get(ch);
+        }
+        let mut b = [0u8; 4];
+        self.cdvd.dma_take(self.now, &mut b);
+        u32::from_le_bytes(b)
+    }
+}
+
 /// GetToc's 2,064-byte block: a DVD's physical format information (ECMA-267 §26.5.1) in its first 2,048 bytes; a CD's
 /// lead-in items A0h, A1h, A2h and each track's, ten bytes of Q each from byte 0 [C, §25.4].
 fn toc(disc: &mut Disc) -> [u8; FRAME] {

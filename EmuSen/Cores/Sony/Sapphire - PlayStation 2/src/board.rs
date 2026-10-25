@@ -23,7 +23,9 @@ use crate::gs::{self, Gs, HostInterface};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
 use crate::ipu::{self, Ipu};
+use crate::mch::{self, Mch};
 use crate::pcrtc::Pcrtc;
+use crate::reports::{Access, Reports, Side};
 use crate::pcrtc::timing::Mode;
 use crate::sif::{self, EePorts};
 use crate::timer::{self, Timer};
@@ -176,7 +178,18 @@ pub struct Board {
     pub ipu: Ipu,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
+    /// The memory controller's serial interface to the RDRAMs (S24).
+    pub mch: Mch,
+    /// The IOP's resets by the EE's write to the SIF's CTRL (S24).
+    pub iop_resets: u64,
+    /// The EE's bus accesses past its caches by memory, counts only: RDRAM reads, RDRAM writes, boot ROM reads (S24).
+    pub traffic: [u64; 3],
+    /// Accesses no unit answers on the EE's side, for the hardware's reports (S24).
+    pub reports: Reports,
     next: u64,
+    /// The PCRTC's next event as last computed, with the H-blank wish it was asked with: still the next while `now` is
+    /// before it and nothing has changed the timing (a pure function of both, cached; Sapphire_Native.md §35.7).
+    pcrtc_next: Option<(u64, bool)>,
     /// The time whose blanking edges were last taken, so an event rescheduled at that time does not take them again;
     /// the timing's start at 0 is no edge.
     edges_taken: Option<u64>,
@@ -198,8 +211,13 @@ impl Board {
             gif: Gif::new(),
             ipu: Ipu::new(),
             now: 0,
+            mch: Mch::default(),
+            iop_resets: 0,
+            traffic: [0; 3],
+            reports: Reports::default(),
             next: 0,
             edges_taken: Some(0),
+            pcrtc_next: None,
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
         b.reschedule();
@@ -224,12 +242,22 @@ impl Board {
         if self.pcrtc.set_mode(self.now, mode) {
             self.iop.bus.blank = self.pcrtc.timing;
         }
+        self.pcrtc_next = None;
         self.reschedule();
     }
 
     /// The next time any unit needs attention.
     fn reschedule(&mut self) {
-        let mut next = self.pcrtc.next_event(self.now, self.wants_h()).min(self.dmac.next_event());
+        let want = self.wants_h();
+        let edge = match self.pcrtc_next {
+            Some((e, w)) if w == want && self.now < e => e,
+            _ => {
+                let e = self.pcrtc.next_event(self.now, want);
+                self.pcrtc_next = Some((e, want));
+                e
+            }
+        };
+        let mut next = edge.min(self.dmac.next_event());
         for t in &self.timers {
             next = next.min(t.next_event());
         }
@@ -251,6 +279,7 @@ impl Board {
         while self.next <= t {
             let at = self.next;
             self.now = at;
+            self.pcrtc_next = None;
             for n in 0..4 {
                 self.sync_timer(n, at);
             }
@@ -381,6 +410,7 @@ impl Board {
     }
 
     fn read_register(&mut self, paddr: u32) -> u32 {
+        self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
         if let Some((n, reg)) = timer::decode(paddr) {
             self.sync_timer(n, self.now);
             return self.timers[n].read(reg);
@@ -390,21 +420,38 @@ impl Board {
         }
         match paddr {
             intc::I_STAT | intc::I_MASK => self.intc.read(paddr),
-            _ => self.dmac.read(paddr),
+            mch::RICM | mch::DRD => self.mch.read(paddr),
+            _ if Dmac::answers(paddr) => self.dmac.read(paddr),
+            _ => {
+                self.reports.note(Side::Ee, paddr, Access::Read, None, self.now);
+                0
+            }
         }
     }
 
     fn write_register(&mut self, paddr: u32, v: u32) {
+        self.reports.touch(Side::Ee, paddr, Access::Write, Some(v), self.now);
         if let Some((n, reg)) = timer::decode(paddr) {
             self.sync_timer(n, self.now);
             let (h, v_) = (self.pcrtc.timing.h(self.now), self.pcrtc.timing.v(self.now));
             self.timers[n].write(reg, v, h, v_);
         } else if let Some(offset) = sif::ee_register(paddr) {
-            self.iop.bus.sif_write_from_ee(offset, v);
+            self.iop.run_to(self.now);
+            match self.iop.bus.sif_write_from_ee(offset, v) {
+                Some(true) => {
+                    self.iop.reset();
+                    self.iop.held = true;
+                    self.iop_resets += 1;
+                }
+                Some(false) => self.iop.held = self.iop.bus.rom.is_empty(),
+                None => {}
+            }
         } else {
             match paddr {
                 intc::I_STAT | intc::I_MASK => self.intc.write(paddr, v),
-                _ => self.dmac.write(paddr, v, self.now),
+                mch::RICM | mch::DRD => self.mch.write(paddr, v),
+                _ if Dmac::answers(paddr) => self.dmac.write(paddr, v, self.now),
+                _ => self.reports.note(Side::Ee, paddr, Access::Write, Some(v), self.now),
             }
         }
         self.reschedule();
@@ -453,6 +500,7 @@ impl Bus for Board {
             return v;
         }
         if IOP_RAM.contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
             let a = (paddr - IOP_RAM.start) as usize;
             let mut v = [0u8; 16];
             v[..bytes].copy_from_slice(&self.iop.bus.ram[a..a + bytes]);
@@ -467,6 +515,7 @@ impl Bus for Board {
             return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
         }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
             self.run_gif(self.now);
             return u128::from(self.gs.read_privileged(paddr, bytes));
         }
@@ -475,7 +524,13 @@ impl Bus for Board {
                 let w = self.read_register(paddr & !0xF);
                 return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
             }
+            self.reports.note(Side::Ee, paddr, Access::Read, None, self.now);
             return 0;
+        }
+        match map::region(paddr) {
+            Region::Rdram => self.traffic[0] += 1,
+            Region::BootRom => self.traffic[2] += 1,
+            _ => self.reports.note(Side::Ee, paddr, Access::Read, None, self.now),
         }
         self.map.read(paddr, bytes)
     }
@@ -509,6 +564,7 @@ impl Bus for Board {
             return;
         }
         if IOP_RAM.contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Write, None, self.now);
             let a = (paddr - IOP_RAM.start) as usize;
             self.iop.bus.ram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
             return;
@@ -527,11 +583,13 @@ impl Bus for Board {
             return;
         }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             self.run_gif(self.now);
             self.gs.write_privileged(paddr, bytes, value as u64);
             if self.pcrtc.written(self.now, &self.gs) {
                 self.iop.bus.blank = self.pcrtc.timing;
             }
+            self.pcrtc_next = None;
             self.run_gif(self.now);
             self.reschedule();
             return;
@@ -539,8 +597,15 @@ impl Bus for Board {
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) && bytes >= 4 {
                 self.write_register(paddr & !0xF, value as u32);
+            } else {
+                self.reports.note(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             }
             return;
+        }
+        if map::region(paddr) != Region::Rdram {
+            self.reports.note(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
+        } else {
+            self.traffic[1] += 1;
         }
         self.map.write(paddr, bytes, value)
     }

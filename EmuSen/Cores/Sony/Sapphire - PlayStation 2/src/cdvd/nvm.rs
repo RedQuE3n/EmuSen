@@ -22,11 +22,13 @@ struct Session {
 pub struct Nvm {
     pub bytes: Box<[u8; BYTES]>,
     session: Option<Session>,
+    /// Written since the frontend last saved the medium.
+    pub dirty: bool,
 }
 
 impl Default for Nvm {
     fn default() -> Nvm {
-        Nvm { bytes: Box::new([0; BYTES]), session: None }
+        Nvm { bytes: Box::new([0; BYTES]), session: None, dirty: false }
     }
 }
 
@@ -56,6 +58,7 @@ impl Nvm {
             self.bytes[s.block * BLOCK..(s.block + 1) * BLOCK].copy_from_slice(data);
             s.block += 1;
             s.left -= 1;
+            self.dirty = true;
         }
     }
 

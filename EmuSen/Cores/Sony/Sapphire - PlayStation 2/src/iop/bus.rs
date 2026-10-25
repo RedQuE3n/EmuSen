@@ -10,8 +10,10 @@ use super::dma::{self, Dmac, StandIns};
 use super::icache::{self, ICache, Lookup};
 use super::intc::{self, Intc, source};
 use super::timer::{self, Timer};
+use crate::cdvd::{self, Cdvd};
 use crate::pcrtc::timing::Timing;
 use crate::clock::IOP;
+use crate::reports::{Access, Reports, Side};
 use crate::sif::{self, IopPorts, Sif};
 use crate::sio2::{self, Sio2};
 use crate::spu2::{self, Spu2};
@@ -39,10 +41,14 @@ pub const ROM_STALL: u64 = 6;
 pub enum Target {
     Ram(u32),
     Scratch(u32),
-    /// The I/O registers at 1F400000h-1F4FFFFFh (CDVD), 1F801000h-1F80FFFFh and the SPU2's 1F900000h-1F9007FFh.
+    /// The I/O registers at 1F400000h-1F4FFFFFh (CDVD), 1F801000h-1F80FFFFh and the SPU2's 1F900000h-1F9007FFh, the rest
+    /// of 1F900000h-1F90FFFFh reading zero as D-61's I/O gaps do (the BIOS writes 1F900B60h; Sapphire_Disputes.md D-326).
     Io(u32),
     /// The SIF's registers at 1D000000h, S22's.
     Sif(u32),
+    /// 1E000000h-1EFFFFFFh, the place of the DVD player's ROMs, whose images are not taken (Sapphire_Plan.md §5.9): on the
+    /// bus, reading zero, taking writes without effect (Sapphire_Disputes.md D-326).
+    Absent,
     Rom(u32),
     CacheControl,
     /// KSEG2's other control registers at FFFE0000h-FFFE01FFh, which read zero [C].
@@ -67,7 +73,8 @@ pub fn decode(address: u32) -> Target {
     match p {
         0..RAM_WINDOW => Target::Ram(p & (RAM as u32 - 1)),
         0x1D00_0000..0x1D00_0100 => Target::Sif(p),
-        0x1F40_0000..0x1F50_0000 | 0x1F80_1000..0x1F81_0000 | 0x1F90_0000..0x1F90_0800 => Target::Io(p),
+        0x1E00_0000..0x1F00_0000 => Target::Absent,
+        0x1F40_0000..0x1F50_0000 | 0x1F80_1000..0x1F81_0000 | 0x1F90_0000..0x1F91_0000 => Target::Io(p),
         0x1F80_0000..0x1F80_0400 if address < 0xA000_0000 => Target::Scratch(p - SCRATCH_BASE),
         ROM_BASE..0x2000_0000 => Target::Rom(p - ROM_BASE),
         _ => Target::None,
@@ -124,6 +131,13 @@ pub struct IopBus {
     pub sio2: Sio2,
     /// The SPU2, its registers at 1F900000h, its cores behind channels 4 and 7 (S26).
     pub spu2: Spu2,
+    /// The CDVD drive, its registers at 1F402000h, its buffer behind channel 3 and its interrupt IRQ 2 (S23, joined
+    /// at S24).
+    pub cdvd: Cdvd,
+    /// The drive's interrupt line as last seen, so that IRQ 2 is raised at its rise.
+    cdvd_line: bool,
+    /// Accesses no unit answers, for the hardware's reports (S24).
+    pub reports: Reports,
     pub blank: Timing,
     /// The bus's clock, in IOP cycles.
     pub now: u64,
@@ -149,6 +163,9 @@ impl IopBus {
             sif: Sif::default(),
             sio2: Sio2::default(),
             spu2: Spu2::new(),
+            cdvd: Cdvd::new(None),
+            cdvd_line: false,
+            reports: Reports::default(),
             blank,
             now: 0,
             synced: 0,
@@ -179,7 +196,7 @@ impl IopBus {
         for t in &self.timers {
             next = next.min(t.next_event());
         }
-        self.next = next.min(self.spu2.next_event().saturating_mul(IOP));
+        self.next = next.min(self.spu2.next_event().saturating_mul(IOP)).min(self.cdvd.next_event().saturating_mul(IOP));
     }
 
     /// Brings every unit to EE cycle `t`, taking the events due on the way in time order: blanking edges, timer
@@ -219,9 +236,16 @@ impl IopBus {
                 self.dmac.wake_from(at.div_ceil(IOP));
             }
             self.sync_spu2(at);
+            if self.cdvd.next_event().saturating_mul(IOP) <= at {
+                self.cdvd.run(at / IOP);
+                self.sync_cdvd();
+                self.dmac.wake_from(at.div_ceil(IOP));
+            }
             if self.dmac.next_event().saturating_mul(IOP) <= at {
-                let IopBus { dmac, ram, ports, sif, sio2, spu2, .. } = self;
-                let mut spu = spu2::Ports { others: &mut sio2::Ports { others: ports, sio2 }, spu2, irq: false };
+                let IopBus { dmac, ram, ports, sif, sio2, spu2, cdvd, .. } = self;
+                let now = at.div_ceil(IOP);
+                let mut drive = cdvd::Ports { others: &mut sio2::Ports { others: ports, sio2 }, cdvd, now };
+                let mut spu = spu2::Ports { others: &mut drive, spu2, irq: false };
                 if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: &mut spu, sif }) {
                     self.intc.raise(source::DMA);
                 }
@@ -231,6 +255,7 @@ impl IopBus {
                 if self.spu2.take_wake() {
                     self.dmac.wake_from(at.div_ceil(IOP));
                 }
+                self.sync_cdvd();
             }
             self.synced = at;
             self.reschedule();
@@ -249,6 +274,46 @@ impl IopBus {
             self.dmac.wake_from(t.div_ceil(IOP));
             self.reschedule();
         }
+    }
+
+    /// IRQ 2 raised at the rise of the drive's interrupt line (ps2tek "IOP Interrupts").
+    fn sync_cdvd(&mut self) {
+        let line = self.cdvd.irq();
+        if line && !self.cdvd_line {
+            self.intc.raise(source::CDVD);
+        }
+        self.cdvd_line = line;
+    }
+
+    /// A read of the drive's byte registers at `p`, a wider access taking the bytes in order [C].
+    fn cdvd_read(&mut self, p: u32, size: Size) -> u32 {
+        self.run_units(self.now * IOP);
+        let v = (0..size.bytes()).fold(0u32, |v, k| v | u32::from(self.cdvd.read8(p - cdvd::BASE + k)) << (8 * k));
+        self.reschedule();
+        v
+    }
+
+    fn cdvd_write(&mut self, p: u32, size: Size, value: u32) {
+        self.run_units(self.now * IOP);
+        for k in 0..size.bytes() {
+            self.cdvd.write8(p - cdvd::BASE + k, (value >> (8 * k)) as u8, self.now);
+        }
+        self.sync_cdvd();
+        self.dmac.wake_from(self.now);
+        self.reschedule();
+        self.horizon = self.horizon.min(self.next);
+    }
+
+    /// The IOP's own units at the processor's reset (Sapphire_Native.md §35.2, D-320): the INTC, the DMAC, the six
+    /// timers and the cache control; RAM, the SIF and the devices beside the IOP keep their state.
+    pub fn reset_units(&mut self) {
+        let t = self.now * IOP;
+        self.intc = Intc::default();
+        self.dmac = Dmac::default();
+        self.dmac.wake_from(self.now);
+        self.timers = core::array::from_fn(|n| Timer::reset_at(n, t));
+        self.icache = ICache::default();
+        self.reschedule();
     }
 
     /// A read of the SPU2's registers at `p`, by halfwords (Sapphire_Native.md §32.3).
@@ -291,11 +356,17 @@ impl IopBus {
         }
     }
 
-    /// The EE's write to a SIF register at `offset`, which may raise the IOP's interrupt (Sapphire_Disputes.md D-141).
-    pub fn sif_write_from_ee(&mut self, offset: u32, v: u32) {
+    /// The EE's write to a SIF register at `offset`, which may raise the IOP's interrupt (Sapphire_Disputes.md D-141);
+    /// the IOP's reset line when the write changes it, CTRL's bit 19 asserting it while set (D-320).
+    pub fn sif_write_from_ee(&mut self, offset: u32, v: u32) -> Option<bool> {
         if self.sif.ee_write(offset, v) {
             self.intc.raise(sif::IOP_SOURCE);
         }
+        let line = v & sif::CTRL_IOP_RESET != 0;
+        (offset == sif::reg::CTRL && line != self.sif.reset_line).then(|| {
+            self.sif.reset_line = line;
+            line
+        })
     }
 
     /// The bus's next event, in EE cycles.
@@ -327,7 +398,10 @@ impl IopBus {
         } else {
             match p {
                 intc::I_STAT | intc::I_MASK | intc::I_CTRL => self.intc.read(p),
-                _ => 0,
+                _ => {
+                    self.reports.note(Side::Iop, p, Access::Read, None, t);
+                    0
+                }
             }
         };
         self.reschedule();
@@ -335,7 +409,8 @@ impl IopBus {
     }
 
     /// An I/O register's write, the units brought to the clock first; a run of instructions stops after it, since it
-    /// may change what is scheduled.
+    /// may change what is scheduled. A halfword or byte written to a DMA channel's register changes only its own lanes
+    /// (the BIOS writes BCR's upper half alone; Sapphire_Disputes.md D-327).
     fn write_io(&mut self, p: u32, v: u32) {
         let t = self.now * IOP;
         self.run_units(t);
@@ -351,6 +426,8 @@ impl IopBus {
             self.intc.write(p, v);
         } else if sio2::is_register(p) {
             self.sio2.write(p, v, t);
+        } else {
+            self.reports.note(Side::Iop, p, Access::Write, Some(v), t);
         }
         self.reschedule();
         self.horizon = self.horizon.min(self.next);
@@ -358,6 +435,9 @@ impl IopBus {
 
     /// A data read's value and cost at `target`.
     fn read_at(&mut self, target: Target, size: Size) -> u32 {
+        if let Target::Io(p) | Target::Sif(p) = target {
+            self.reports.touch(Side::Iop, p, Access::Read, None, self.now * IOP);
+        }
         match target {
             Target::Ram(a) => {
                 self.now += RAM_STALL;
@@ -368,6 +448,10 @@ impl IopBus {
                 self.now += IO_STALL;
                 self.spu2_read(p, size)
             }
+            Target::Io(p) if (cdvd::BASE..cdvd::END).contains(&p) => {
+                self.now += IO_STALL;
+                self.cdvd_read(p, size)
+            }
             Target::Io(p) => {
                 self.now += IO_STALL;
                 let w = self.read_io(p & !3);
@@ -377,7 +461,7 @@ impl IopBus {
                 self.now += IO_STALL;
                 self.sif.iop_read(p & 0xF0) >> (8 * (p & 3))
             }
-            Target::Control => {
+            Target::Control | Target::Absent => {
                 self.now += IO_STALL;
                 0
             }
@@ -392,6 +476,12 @@ impl IopBus {
             }
         }
     }
+
+    /// An access no device answers, noted by its virtual address (`Target::None`).
+    fn unmapped(&mut self, address: u32, access: Access, value: Option<u32>) {
+        self.reports.note(Side::Iop, address, access, value, self.now * IOP);
+        self.fault = true;
+    }
 }
 
 impl Bus for IopBus {
@@ -403,7 +493,7 @@ impl Bus for IopBus {
             return match target {
                 Target::Ram(_) | Target::Rom(_) => self.read_at(target, Size::Word),
                 _ => {
-                    self.fault = true;
+                    self.unmapped(address, Access::Fetch, None);
                     0
                 }
             };
@@ -434,19 +524,38 @@ impl Bus for IopBus {
 
     fn read(&mut self, address: u32, size: Size) -> u32 {
         let target = decode(address);
+        if target == Target::None {
+            self.unmapped(address, Access::Read, None);
+            return 0;
+        }
+        if target == Target::Control {
+            self.reports.note(Side::Iop, address, Access::Read, None, self.now * IOP);
+        }
         self.read_at(target, size)
     }
 
     fn write(&mut self, address: u32, size: Size, value: u32) {
-        match decode(address) {
+        let target = decode(address);
+        if let Target::Io(p) | Target::Sif(p) = target {
+            self.reports.touch(Side::Iop, p, Access::Write, Some(value), self.now * IOP);
+        }
+        match target {
             Target::Ram(a) => put(&mut self.ram, a as usize, size, value),
             Target::Scratch(a) => put(&mut self.scratch, a as usize, size, value),
             Target::Io(p) if (spu2::BASE..spu2::END).contains(&p) => self.spu2_write(p, size, value),
+            Target::Io(p) if (cdvd::BASE..cdvd::END).contains(&p) => self.cdvd_write(p, size, value),
+            Target::Io(p) if size != Size::Word && dma::is_register(p & !3) => {
+                let shift = 8 * (p & 3);
+                let mask = if size == Size::Byte { 0xFF } else { 0xFFFF } << shift;
+                let merged = self.dmac.read(p & !3) & !mask | value << shift & mask;
+                self.write_io(p & !3, merged)
+            }
             Target::Io(p) => self.write_io(p & !3, value << (8 * (p & 3))),
             Target::Sif(p) => self.sif.iop_write(p & 0xF0, value << (8 * (p & 3))),
-            Target::Rom(_) | Target::Control => {}
+            Target::Rom(_) | Target::Absent => {}
+            Target::Control => self.reports.note(Side::Iop, address, Access::Write, Some(value), self.now * IOP),
             Target::CacheControl => self.icache.bcc = value & icache::bcc::WRITABLE,
-            Target::None => self.fault = true,
+            Target::None => self.unmapped(address, Access::Write, Some(value)),
         }
     }
 

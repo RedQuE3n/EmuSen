@@ -1,13 +1,16 @@
-//! Sapphire on the core ABI v1: `Core` over the stage S1 machine, and `core_exports!`. The descriptors are the
-//! console's facts of Sapphire_Plan.md §4; Sapphire_Native.md §2 records what the stub answers.
+//! Sapphire on the core ABI v1: `Core` over the machine, and `core_exports!`. The descriptors are the console's facts
+//! of Sapphire_Plan.md §4; Sapphire_Native.md §2 records the S1 answers and §35 the machine S24 assembled: the
+//! PCRTC's picture and the SPU2's sound handed on, the pads and cards on SIO2, the EEPROM as the medium `ps2.nvm`.
 
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::bios;
-use crate::machine::{AUDIO_RATE, BIOS_BYTES, BIOS_ID, Machine, Market, PAL_HEIGHT, RAM_ID, WIDTH};
+use crate::cdvd::nvm;
+use crate::machine::{AUDIO_RATE, BIOS_BYTES, MEMORIES, Machine, Market, RAM_ID};
+use crate::pcrtc::{MAX_HEIGHT, MAX_WIDTH};
 use crate::media::{Media, Refusal};
-use crate::sio2::card::CARD_BYTES;
+use crate::sio2::card::{CARD_BYTES, MemoryCard};
 use crate::state::STATE_VERSION;
 
 /// An image that is neither an ELF nor an ISO 9660 volume.
@@ -67,13 +70,32 @@ pub const CARD_SUFFIXES: [&str; 2] = [".ps2", ".2.ps2"];
 pub const CARD_MEDIUM: &str = "ps2.card";
 pub const CARD_LABELS: [&str; 2] = ["Slot 1", "Slot 2"];
 
+/// The console's EEPROM, the medium `ps2.nvm` (Sapphire_Plan.md §4.4), a console file kept per console model: files 2,
+/// 3 and 4 for the Japanese, American and European consoles (Sapphire_Native.md §35.5).
+pub const NVM_FILES: [u32; 3] = [2, 3, 4];
+pub const NVM_SUFFIXES: [&str; 3] = [".jp.nvm", ".us.nvm", ".eu.nvm"];
+pub const NVM_MEDIUM: &str = "ps2.nvm";
+pub const NVM_LABEL: &str = "Inside the console";
+
+fn market_index(m: Market) -> usize {
+    match m {
+        Market::Japan => 0,
+        Market::Americas => 1,
+        Market::Europe => 2,
+    }
+}
+
+fn nvm_battery(n: usize) -> Battery {
+    Battery::console(NVM_FILES[n], NVM_SUFFIXES[n]).medium(NVM_MEDIUM).label(NVM_LABEL)
+}
+
 /// File numbers of the BIOS by market, above the sixteen kept for the cards and the console's own memory
 /// (Sapphire_Native.md §2.5).
 pub const BIOS_JAPAN: u32 = 16;
 pub const BIOS_AMERICAS: u32 = 17;
 pub const BIOS_EUROPE: u32 = 18;
 
-const BIOS_COST: &str = "No PlayStation 2 program runs yet, with this file or without it. A player's own BIOS is the first path, from the stage that boots it (S24); Sapphire's own open BIOS takes its place later, as a separate track (Sapphire_Plan.md §5.9).";
+const BIOS_COST: &str = "Without a BIOS of the console's market nothing runs: the console starts at its menu with the player's own BIOS (S24), and Sapphire's own open BIOS takes its place later, as a separate track (Sapphire_Plan.md §5.9).";
 
 /// The three markets' BIOS by their Redump names, each the market's newest retail console version, with every retail
 /// version's MD5 so that a player's file is found by its content (Sapphire_Native.md §12.3).
@@ -139,6 +161,16 @@ pub fn market_of(setting: Option<&str>) -> Market {
     REGIONS.iter().find(|r| Some(r.0) == setting).map_or(Market::Americas, |r| r.2)
 }
 
+/// The market of the console: the setting's when it names one; on Automatic, that of the BIOS entry the player's file
+/// came in, the Americas' first, so that the BIOS's own market decides the region (Sapphire_Plan.md §5.9); with none, the
+/// Americas'.
+pub fn console_market(setting: Option<&str>, files: &[u32]) -> Market {
+    if let Some(r) = REGIONS.iter().find(|r| Some(r.0) == setting) {
+        return r.2;
+    }
+    [Market::Americas, Market::Europe, Market::Japan].into_iter().find(|&m| files.contains(&bios(m).which)).unwrap_or(Market::Americas)
+}
+
 impl Core for Machine {
     const CAPABILITIES: u64 = caps::AXES;
 
@@ -150,7 +182,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. At this stage it recognises a program or a disc and shows a black picture; nothing is emulated yet.".into()),
+            description: Some("The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. In development: with the player's own BIOS the console starts to its menu; programs and discs are recognised but not yet started.".into()),
             systems: vec![emusen_native::core::System {
                 id: "ps2".into(),
                 name: "Sony PlayStation 2".into(),
@@ -169,9 +201,13 @@ impl Core for Machine {
         schema()
     }
 
-    /// Both cards' files: each removable, a card the player carries, a slot of the medium `ps2.card` (EmuSen_SaveMedia.md §3.2).
+    /// Both cards' files, each removable, a card the player carries, a slot of the medium `ps2.card`; and the EEPROM of
+    /// each console model, the console's own medium `ps2.nvm` (EmuSen_SaveMedia.md §3.2).
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "ps2").then(|| (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n]).medium(CARD_MEDIUM).label(CARD_LABELS[n])).collect())
+        (system == "ps2").then(|| {
+            let cards = (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n]).medium(CARD_MEDIUM).label(CARD_LABELS[n]));
+            cards.chain((0..3).map(nvm_battery)).collect()
+        })
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
@@ -213,7 +249,7 @@ impl Core for Machine {
                 return Err(STATUS_NO_BOOT2);
             }
         };
-        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which)) {
+        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which) && !NVM_FILES.contains(&f.which)) {
             detail(&format!("file {} is not one Sapphire names", f.which));
             return Err(status::BAD_FILE);
         }
@@ -225,34 +261,45 @@ impl Core for Machine {
             detail(&format!("file {} is {} bytes; a PlayStation 2 memory card is {CARD_BYTES}, every page of 512 bytes followed by its 16 spare bytes", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
+        if let Some(f) = request.files.iter().find(|f| NVM_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != nvm::BYTES) {
+            detail(&format!("file {} is {} bytes; the console's EEPROM is {}", f.which, f.data.len(), nvm::BYTES));
+            return Err(status::BAD_FILE);
+        }
         let s = &request.settings;
-        let market = market_of(s.get(REGION_KEY));
+        let firmware: Vec<u32> = request.files.iter().map(|f| f.which).filter(|w| (BIOS_JAPAN..=BIOS_EUROPE).contains(w)).collect();
+        let market = console_market(s.get(REGION_KEY), &firmware);
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
         let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
-        m.firmware = request.files.iter().map(|f| f.which).filter(|w| !CARD_FILES.contains(w)).collect();
+        m.firmware = firmware;
         // An empty file is a card not yet saved: the slot keeps its erased card.
         for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
-            m.cards[f.which as usize].image.copy_from_slice(f.data);
+            *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");
+        }
+        // An empty or absent file is a console whose EEPROM is not yet saved: it starts blank (Sapphire_Native.md §35.5).
+        let nvm_file = NVM_FILES[market_index(market)];
+        if let Some(f) = request.files.iter().find(|f| f.which == nvm_file && !f.data.is_empty()) {
+            m.nvm_mut().bytes.copy_from_slice(f.data);
         }
         if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
-            m.memory_mut(BIOS_ID).expect("the BIOS").bytes.copy_from_slice(file.data);
+            m.insert_bios(file.data);
         }
         Ok(m)
     }
 
     fn machine_info(&self) -> MachineInfo {
         let which = bios(self.market).which;
+        let g = self.sys.board.pcrtc.picture.frame_info();
         let processor = |id: u32, name: &str, pc_bits: u32| Processor { id, name: name.into(), pc_bits, registers: Vec::new(), code_space: None };
         MachineInfo {
             system: "ps2".into(),
             region: Some(if self.pal() { Region::Pal } else { Region::Ntsc }),
             frame_rate: self.frame_rate(),
-            video: Video { base_width: WIDTH, base_height: self.height(), max_width: WIDTH, max_height: PAL_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
+            video: Video { base_width: g.width as u32, base_height: g.height as u32, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p, controller: self.ports[p as usize].map(str::to_string) }).collect(),
-            spaces: self.memories.iter().map(|m| Space { read_only: m.read_only, cheats: m.id == RAM_ID, ..Space::new(m.id, m.name) }).collect(),
+            spaces: MEMORIES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
             processors: vec![processor(0, "R5900", 32), processor(1, "IOP", 32), processor(2, "VU0", 12), processor(3, "VU1", 14)],
-            battery: (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).collect(),
+            battery: (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).chain(std::iter::once(nvm_battery(market_index(self.market)))).collect(),
             state: StateFormat { format: "SPH2".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: None,
@@ -275,11 +322,11 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo::rgba(WIDTH as i32, self.height() as i32)
+        self.sys.board.pcrtc.picture.frame_info()
     }
 
     fn frame(&self) -> &[u8] {
-        &self.picture
+        &self.sys.board.pcrtc.picture.rgba
     }
 
     fn audio_rate(&self) -> i32 {
@@ -287,60 +334,63 @@ impl Core for Machine {
     }
 
     fn audio_buffered(&self) -> usize {
-        self.silence * 2
+        self.sys.board.iop.bus.spu2.out.len()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let frames = self.silence.min(max_frames).min(out.len() / 2);
-        out[..frames * 2].fill(0);
-        self.silence -= frames;
-        frames * 2
+        self.sys.board.iop.bus.spu2.out.drain(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        self.audio_limit = samples;
-        self.silence = self.silence.min(samples / 2);
+        self.sys.board.iop.bus.spu2.out.set_limit(samples);
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
         let p = self.pads.get_mut(port as usize).ok_or(status::NO_SUCH_PORT)?;
         *p = (*p & !changed) | (mask & changed);
+        self.sync_pad(port as usize);
         Ok(())
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        self.memory(space).map(|m| m.bytes.len() as i64).ok_or(status::NO_SUCH_SPACE)
+        MEMORIES.iter().find(|m| m.0 == space).map(|m| m.2 as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        let m = self.memory(space).ok_or(status::NO_SUCH_SPACE)?;
+        self.space_size(space)?;
         for (i, b) in out.iter_mut().enumerate() {
-            *b = m.bytes.get(address as usize + i).copied().unwrap_or(0);
+            *b = self.space_byte(space, address as usize + i).unwrap_or(0);
         }
         Ok(())
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        let m = self.memory_mut(space).ok_or(status::NO_SUCH_SPACE)?;
-        if m.read_only {
+        let m = MEMORIES.iter().find(|m| m.0 == space).ok_or(status::NO_SUCH_SPACE)?;
+        if m.3 {
             return Err(status::READ_ONLY);
         }
         for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.bytes.get_mut(address as usize + i) {
-                *d = b;
-            }
+            self.set_space_byte(space, address as usize + i, b);
         }
         Ok(())
     }
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
-        let c = CARD_FILES.iter().position(|&w| w == which).map(|n| &self.cards[n]).ok_or(status::BAD_FILE)?;
+        if which == NVM_FILES[market_index(self.market)] {
+            let n = self.nvm();
+            return Ok((&n.bytes[..], flags::BATTERY_TRACKED | if n.dirty { flags::BATTERY_CHANGED } else { 0 }));
+        }
+        let c = CARD_FILES.iter().position(|&w| w == which).and_then(|n| self.card(n)).ok_or(status::BAD_FILE)?;
         Ok((&c.image, flags::BATTERY_TRACKED | if c.dirty { flags::BATTERY_CHANGED } else { 0 }))
     }
 
     fn battery_saved(&mut self, which: u32) -> Result<(), i32> {
+        if which == NVM_FILES[market_index(self.market)] {
+            self.nvm_mut().dirty = false;
+            return Ok(());
+        }
         let n = CARD_FILES.iter().position(|&w| w == which).ok_or(status::BAD_FILE)?;
-        self.cards[n].dirty = false;
+        self.card_mut(n).ok_or(status::BAD_FILE)?.dirty = false;
         Ok(())
     }
 
@@ -350,6 +400,7 @@ impl Core for Machine {
         if let Some(&at) = [2usize, 3, 0, 1].get(axis as usize) {
             sticks[at] = crate::sio2::pad::stick(value);
         }
+        self.sync_pad(port as usize);
         Ok(())
     }
 }
@@ -359,7 +410,7 @@ emusen_native::core_exports!(Machine; axes);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::machine::{NTSC_FRAME, PAL_FRAME};
+    use crate::machine::BIOS_ID;
     use crate::media::sample::{cd, dvd, elf, raw, volume};
 
     fn create_with(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
@@ -376,7 +427,9 @@ mod tests {
         for image in [elf(), cd(), raw(&cd()), dvd()] {
             let mut m = create(&image, &[]).unwrap();
             let info = m.machine_info();
-            assert_eq!((info.system.as_str(), info.region, info.frame_rate, info.video.base_height), ("ps2", Some(Region::Ntsc), NTSC_FRAME, 448));
+            let rate = m.frame_rate();
+            assert_eq!(rate.0 * 1001, rate.1 * 60_000, "NTSC's 59.94 Hz");
+            assert_eq!((info.system.as_str(), info.region, info.frame_rate, info.video.base_height), ("ps2", Some(Region::Ntsc), rate, 448));
             assert_eq!(info.processors.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["R5900", "IOP", "VU0", "VU1"]);
             assert_eq!(info.spaces.iter().filter(|s| s.cheats).map(|s| s.name.as_str()).collect::<Vec<_>>(), ["RAM"]);
             assert_eq!(info.firmware, [(BIOS_AMERICAS, FirmwareSource::Absent)]);
@@ -388,8 +441,9 @@ mod tests {
                 assert!(out[..n].iter().all(|&s| s == 0));
                 total += n / 2;
             }
-            assert_eq!(total as u128, AUDIO_RATE as u128 * 60 * NTSC_FRAME.1 as u128 / NTSC_FRAME.0 as u128);
-            assert!(m.frame().chunks(4).all(|p| p == [0, 0, 0, 255]));
+            let want = AUDIO_RATE as i64 * 60 * rate.1 as i64 / rate.0 as i64;
+            assert!((total as i64 - want).abs() <= 32, "{total} samples for {want}");
+            assert!(m.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && m.frame().len() == 640 * 448 * 4);
         }
     }
 
@@ -397,7 +451,7 @@ mod tests {
     fn the_settings_choose_the_market_and_the_ports() {
         let eu = create(&elf(), &[(REGION_KEY, "ps2.eu"), (PAD_KEYS[1], "none")]).unwrap();
         let info = eu.machine_info();
-        assert_eq!((eu.market, info.region, info.frame_rate, info.video.base_height), (Market::Europe, Some(Region::Pal), PAL_FRAME, 512));
+        assert_eq!((eu.market, info.region, info.frame_rate.0, info.video.base_height), (Market::Europe, Some(Region::Pal), info.frame_rate.1 * 50, 512));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(DUALSHOCK2), None]);
         assert_eq!(info.firmware, [(BIOS_EUROPE, FirmwareSource::Absent)]);
         for s in schema() {
@@ -426,7 +480,11 @@ mod tests {
         assert_eq!(create_with(&elf(), &[], vec![file(0, &bios)]).err(), Some(status::BAD_FILE));
         assert_eq!(create_with(&elf(), &[], vec![file(BIOS_AMERICAS, &bios[..1000])]).err(), Some(status::BAD_FILE));
         let m = create_with(&elf(), &[], vec![file(BIOS_AMERICAS, &bios)]).unwrap();
-        assert_eq!((m.machine_info().firmware, m.memory(BIOS_ID).unwrap().bytes[0]), (vec![(BIOS_AMERICAS, FirmwareSource::File)], 7));
+        assert_eq!((m.machine_info().firmware, m.space_byte(BIOS_ID, 0)), (vec![(BIOS_AMERICAS, FirmwareSource::File)], Some(7)));
+        let eu = create_with(&elf(), &[], vec![file(BIOS_EUROPE, &bios)]).unwrap();
+        assert_eq!((eu.market, eu.booted), (Market::Europe, true), "on Automatic the BIOS's own market is the console's");
+        let us = create_with(&elf(), &[(REGION_KEY, "ps2.us")], vec![file(BIOS_EUROPE, &bios)]).unwrap();
+        assert_eq!((us.market, us.booted), (Market::Americas, false), "a market named by the setting takes only its own BIOS");
     }
 
     #[test]

@@ -490,8 +490,8 @@ pub fn map() -> Program {
     p.rec_log(1, Some(7), None);
     p.guarded(|p| p.peek(0x9F80_0400));
     p.rec_log(1, Some(7), None);
-    p.guarded(|p| p.peek(0x9E00_0000));
-    p.rec_log(1, Some(7), None);
+    // 1E000000h, the DVD player's ROMs' place, their images not taken: zero, no bus error (D-326).
+    p.rec(0x9E00_0000, Some(0));
     // The cache control register's bits: 6 and 10 read zero (IBLKSZ kept at 1, since psx-spx calls 2 and 3 a crash).
     p.poke(BCC, 0xFFFF_FDFF);
     p.rec(BCC, Some(0xFFFF_F9BF));

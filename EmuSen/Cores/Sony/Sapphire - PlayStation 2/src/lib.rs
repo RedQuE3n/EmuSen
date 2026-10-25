@@ -23,6 +23,9 @@
 //! S15: the GIF (`gif`), its three paths, their arbitration and PATH3's masking, driving the GS's host interface.
 //! S26: the SPU2 (`spu2`), two cores of `blackmoon-spu`'s voices on the IOP's bus and its DMA channels 4 and 7.
 //! S27: the IPU (`ipu`), MPEG-2 macroblock decoding as H.262 defines it and its colour conversion, on channels 3 and 4.
+//! S24: the console assembled (`machine`): the player's BIOS in the boot ROM for both processors, the IOP reset by the
+//! SIF, the drive joined to the IOP's bus, the EEPROM a console medium, the pads, the picture and the sound handed on,
+//! and the hardware's own reports of what no unit answers (`reports`).
 
 pub mod bios;
 pub mod board;
@@ -37,8 +40,10 @@ pub mod intc;
 pub mod iop;
 pub mod ipu;
 pub mod machine;
+pub mod mch;
 pub mod media;
 pub mod pcrtc;
+pub mod reports;
 pub mod sif;
 pub mod sio2;
 pub mod spu2;

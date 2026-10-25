@@ -565,7 +565,10 @@ impl Ipu {
         Step::Go
     }
 
+    /// The blocks of a macroblock, `pattern` its pattern_code, which IPU_CTRL.CBP shows: the coded_block_pattern BDEC
+    /// read, or 3Fh for an intra macroblock (D-309).
     fn begin_blocks(&mut self, pattern: u8) {
+        self.ctrl = self.ctrl & !(0x3F << 8) | u32::from(pattern) << 8;
         let m = &mut self.mb;
         m.pattern = pattern;
         m.block = 0;
@@ -637,7 +640,6 @@ impl Ipu {
                 }
                 let Some((len, cbp)) = t.cbp.decode(self.input.peek32()) else { return self.error() };
                 self.input.skip(u32::from(len));
-                self.ctrl = self.ctrl & !(0x3F << 8) | u32::from(cbp) << 8;
                 self.begin_blocks(cbp);
                 self.phase = Phase::Block;
                 Step::Go

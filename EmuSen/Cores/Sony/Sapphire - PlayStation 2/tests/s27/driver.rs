@@ -31,9 +31,11 @@ impl Options {
     pub const IDEC32: Options = Options { idec: true, rgb16: false, dither: false, sgn: false, th: (0, 0) };
 }
 
-/// One command as issued, and what the IPU gave: IPU_CMD after it, IPU_CTRL, IPU_BP and its output qwords.
+/// One command as issued, with the IPU_CTRL written before it if one was, and what the IPU gave: IPU_CMD after it,
+/// IPU_CTRL, IPU_BP and its output qwords.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Issued {
+    pub ctrl_write: Option<u32>,
     pub word: u32,
     pub cmd: u64,
     pub ctrl: u32,
@@ -67,19 +69,26 @@ pub struct Driver {
     matrices: [[u8; 64]; 2],
     frame_pred_frame_dct: bool,
     kind: u32,
+    ctrl_write: Option<u32>,
 }
 
 impl Driver {
     pub fn new(stream: &[u8]) -> Driver {
+        Driver::over(image(stream))
+    }
+
+    /// A driver over qwords given as they are, for the commands that take raw data.
+    pub fn over(data: Vec<u128>) -> Driver {
         Driver {
             ipu: Ipu::new(),
-            data: image(stream),
+            data,
             pushed: 0,
             cursor: 0,
             log: Vec::new(),
             matrices: [st::DEFAULT_INTRA, [16; 64]],
             frame_pred_frame_dct: true,
             kind: 1,
+            ctrl_write: None,
         }
     }
 
@@ -104,7 +113,7 @@ impl Driver {
                 out.push(self.ipu.get());
             }
             if !self.ipu.busy() {
-                let i = Issued { word, cmd: self.ipu.read_cmd(), ctrl: self.ipu.read_ctrl(), bp: self.ipu.read_bp(), out };
+                let i = Issued { ctrl_write: self.ctrl_write.take(), word, cmd: self.ipu.read_cmd(), ctrl: self.ipu.read_ctrl(), bp: self.ipu.read_bp(), out };
                 self.log.push(i.clone());
                 return Ok(i);
             }
@@ -274,6 +283,7 @@ impl Driver {
             | u32::from(c.mpeg1) << 23
             | c.picture_coding_type << 24;
         self.ipu.write_ctrl(v);
+        self.ctrl_write = Some(v);
     }
 }
 

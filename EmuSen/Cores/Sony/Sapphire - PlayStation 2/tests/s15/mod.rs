@@ -13,7 +13,7 @@ pub mod manual;
 use crate::s6::{Program, RECORD};
 use crate::s11::reg::{chcr, madr, qwc, tadr};
 use crate::s11::{K1, li, poke, wait};
-use crate::s14::{self, Stream, VU_DATA};
+use crate::s14::{self, Stream, VU_DATA, vreg};
 use crate::s16::{self, bitbltbuf, ee_address, ga, r as gr, trxpos, trxreg};
 use crate::s17::{self, ALWAYS, Buf, SPRITE, begin, target, test, zbuf};
 use crate::s16::manual::{CT32, Z32};
@@ -755,5 +755,109 @@ pub fn regs() -> Program {
 }
 
 pub fn all() -> Vec<Program> {
-    vec![packed(), reglist(), paths(), arbitration(), regs()]
+    vec![packed(), reglist(), paths(), arbitration(), regs(), intermittent()]
+}
+
+/// The second-DIRECT probe (Sapphire_Native.md §33.8): S14's `s14-direct` opening, two DIRECT packets of a LABEL each
+/// with VIF1's CODE and STAT and SIGLBLID recorded after each, in four forms: as S14 sent it (no GIF reset, the
+/// second stream followed by MSKPATH3 and the FLUSH family), with the GIF reset by GIF_CTRL first, with the second
+/// stream DIRECT alone, and with a PATH3 packet between the two.
+pub fn second_direct(form: u32) -> Program {
+    let name = ["s15-direct-a", "s15-direct-b", "s15-direct-c", "s15-direct-d"][form as usize];
+    let mut p = Program::kernel(name);
+    s14::prologue(&mut p);
+    let mut m = s17::manual::Model::default();
+    if form == 1 {
+        poke(&mut p, GIF_CTRL, 1);
+        poke(&mut p, GIF_MODE, 0);
+    }
+    poke(&mut p, 0x1200_1000, 1);
+    crate::s11::rec(&mut p, GIF_STAT, None);
+    crate::s11::rec(&mut p, chcr(2), None);
+    let mut at = 0x0034_0000 + 0x3_0000;
+    let rec = |p: &mut Program, m: &mut s17::manual::Model, code: u32| {
+        crate::s11::rec(p, s14::vreg(1, s14::r::CODE), Some(code));
+        crate::s11::rec_masked(p, s14::vreg(1, s14::r::STAT), 0x1F00_000F, 0);
+        crate::s11::rec(p, GIF_STAT, None);
+        li(p, "t6", K1 | ee_address(ga::SIGLBLID));
+        p.emit("lw t2, 4(t6)");
+        let want = (m.mem.read_privileged(ga::SIGLBLID) >> 32) as u32 & 0xFFFF;
+        p.emit("andi t2, t2, 0xffff");
+        p.record("t2", Some(u64::from(want)));
+    };
+    let direct = |p: &mut Program, m: &mut s17::manual::Model, at: &mut u32, id: u32, tail: bool| {
+        let pk = label_packet(id);
+        let words: Vec<[u32; 4]> = pk.iter().map(|&q| core::array::from_fn(|i| (q >> (32 * i)) as u32)).collect();
+        let mut s = Stream::new();
+        s.direct(false, &words);
+        if tail {
+            s.code(0x06, 0, 0x8000).code(0x11, 0, 0).code(0x13, 0, 0).code(0x06, 0, 0);
+        }
+        s14::send(p, 1, &s, *at);
+        *at += 0x400;
+        for (r, v) in Model::default().packet(&pk).0 {
+            m.write(r, v);
+        }
+        if tail { 0x0600_0000 } else { 0x5000_0002 }
+    };
+    let c = direct(&mut p, &mut m, &mut at, 0x1234, false);
+    rec(&mut p, &mut m, c);
+    if form == 3 {
+        let pk = label_packet(0x2345);
+        let mut b = Build { p: std::mem::replace(&mut p, Program::new(name)), gs: m, gif: Model::default(), buf: 0x0050_0000 };
+        b.send3(&pk);
+        (p, m) = (b.p, b.gs);
+    }
+    let c = direct(&mut p, &mut m, &mut at, 0x5678, form != 2);
+    rec(&mut p, &mut m, c);
+    s14::reset(&mut p, 1);
+    p
+}
+
+/// `s15-intermittent`: the intermittent mode against a transfer in flight, which both referees can show: an IMAGE
+/// packet of 4,096 qwords (a 128×128 PSMCT32 upload, its data whatever memory holds) started by DMA, and at once a
+/// LABEL by DIRECT, DIRECTHL or XGKICK; SIGLBLID and D2_CHCR.STR read as soon as the other path has been given its
+/// packet, and again once both are done. In the intermittent mode DIRECT and XGKICK reach the GS while the DMA still
+/// runs, DIRECTHL and the continuous mode only after it (§7.1.3).
+pub fn intermittent() -> Program {
+    let mut b = Build::new("s15-intermittent");
+    let n = 30720;
+    let cases: [(u32, Option<bool>, u32); 4] = [(mode_imt(), Some(false), 0x0F24), (mode_imt(), Some(true), 0x0F25), (0, Some(false), 0x0F26), (mode_imt(), None, 0x0F13)];
+    for &(m, two, id) in &cases {
+        poke(&mut b.p, GIF_MODE, m);
+        b.regs(&[(gr::BITBLTBUF, bitbltbuf(0, 0, 0, 110 * 32, 4, CT32)), (gr::TRXPOS, 0), (gr::TRXREG, trxreg(240, 512)), (gr::TRXDIR, 0)]);
+        let at = b.alloc(n + 1);
+        b.store(at, &[tag(n as u32, true, None, 2, &[])]);
+        poke(&mut b.p, madr(2), at);
+        poke(&mut b.p, qwc(2), n as u32 + 1);
+        poke(&mut b.p, chcr(2), 0x101);
+        let other = label_packet(id);
+        match two {
+            Some(hl) => b.path2(&other, hl, false),
+            None => b.kick(&other, 0x40),
+        }
+        if two.is_some() {
+            s14::wait_clear(&mut b.p, vreg(1, s14::r::STAT), 0x1F00_0003, 100);
+        } else {
+            crate::s11::delay(&mut b.p, 100);
+        }
+        let before = b.gs.mem.read_privileged(ga::SIGLBLID) >> 32;
+        let overtakes = m != 0 && two != Some(true);
+        li(&mut b.p, "t6", K1 | ee_address(ga::SIGLBLID));
+        b.p.emit("lw t2, 4(t6)");
+        b.p.record("t2", Some(if overtakes { u64::from(id) } else { before }));
+        b.rec_reg(chcr(2), 0x100, Some(0x100));
+        b.rec_reg(GIF_STAT, st::ALL, None);
+        wait(&mut b.p, chcr(2), 0x100, false, 400_000);
+        if two.is_some() {
+            s14::idle(&mut b.p, 1);
+        }
+        b.gif_idle();
+        b.gs.write_privileged(ga::BUSDIR, 0);
+        b.gs.write(gr::BITBLTBUF, 0);
+        b.apply(&[label(id)]);
+        b.rec_label();
+    }
+    poke(&mut b.p, GIF_MODE, 0);
+    b.finish()
 }

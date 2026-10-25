@@ -275,6 +275,47 @@ impl<P: iop_dma::Peripherals> iop_dma::Peripherals for IopPorts<'_, P> {
     }
 }
 
+/// Words a SIF FIFO holds in the state: its 32, with room to spare.
+const FIFO_SLOTS: usize = 64;
+
+/// The SIF's block of `SPH2` (Sapphire_Native.md §38.2): the registers, the reset line, the three FIFOs and the wakes.
+impl emusen_native::State for Sif {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Registers", &[self.mscom, self.smcom, self.msflg, self.smflg, self.bd6]);
+        w.bools("Lines", &[self.reset_line, self.wake_ee, self.wake_iop]);
+        w.u32s("FifoLengths", &self.fifo.each_ref().map(|f| f.words.len() as u32));
+        w.u32s("Fifo0", &crate::state::slots::<_, FIFO_SLOTS>(&self.fifo[0].words));
+        w.u32s("Fifo1", &crate::state::slots::<_, FIFO_SLOTS>(&self.fifo[1].words));
+        w.u32s("Fifo2", &crate::state::slots::<_, FIFO_SLOTS>(&self.fifo[2].words));
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut g = [0u32; 5];
+        r.u32s(&mut g)?;
+        [self.mscom, self.smcom, self.msflg, self.smflg, self.bd6] = g;
+        let mut l = [false; 3];
+        r.bools(&mut l)?;
+        [self.reset_line, self.wake_ee, self.wake_iop] = l;
+        let mut lengths = [0u32; 3];
+        r.u32s(&mut lengths)?;
+        for (f, len) in self.fifo.iter_mut().zip(lengths) {
+            let mut words = [0u32; FIFO_SLOTS];
+            r.u32s(&mut words)?;
+            crate::state::refill(&mut f.words, len, &words);
+        }
+        Ok(())
+    }
+}
+
+impl Sif {
+    /// Whether the FIFOs are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        self.fifo.iter().all(|f| f.words.len() <= FIFO_SLOTS)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

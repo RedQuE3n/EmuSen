@@ -766,3 +766,51 @@ pub fn decode(paddr: u32) -> Option<(usize, u32)> {
     };
     ok.then_some((c, reg))
 }
+
+/// The DMAC's block of `SPH2` (Sapphire_Native.md §38.2): each channel's registers and the chain packet in progress,
+/// the common registers, the unit of transfer in flight, the release period, the next wake and the round robin.
+impl emusen_native::State for Dmac {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let regs: [[u32; 8]; CHANNELS] = std::array::from_fn(|n| {
+            let c = &self.ch[n];
+            [c.chcr, c.madr, c.qwc, c.tadr, c.asr[0], c.asr[1], c.sadr, c.block]
+        });
+        w.u32s("Channels", regs.as_flattened());
+        w.bytes("ChannelBits", &self.ch.each_ref().map(|c| u8::from(c.open) | u8::from(c.ends) << 1 | u8::from(c.stall) << 2 | u8::from(c.tadr_follows) << 3 | u8::from(c.in_ring) << 4));
+        w.u32s("Registers", &[self.ctrl, self.stat, self.pcr, self.sqwc, self.rbsr, self.rbor, self.stadr, self.enable]);
+        let u = self.unit;
+        w.u8("Unit", u.map_or(0xFF, |u| u.ch as u8));
+        w.u8("UnitWork", u.map_or(0, |u| matches!(u.work, Work::Tag) as u8));
+        w.u32("UnitQwords", match u.map(|u| u.work) {
+            Some(Work::Data(n)) => n,
+            _ => 0,
+        });
+        w.u64s("Times", &[u.map_or(0, |u| u.end), self.release_until, self.wake, self.last_c as u64]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut regs = [0u32; CHANNELS * 8];
+        r.u32s(&mut regs)?;
+        let mut bits = [0u8; CHANNELS];
+        r.bytes(&mut bits)?;
+        for (n, c) in self.ch.iter_mut().enumerate() {
+            let g = &regs[8 * n..8 * n + 8];
+            (c.chcr, c.madr, c.qwc, c.tadr, c.asr, c.sadr, c.block) = (g[0], g[1], g[2], g[3], [g[4], g[5]], g[6], g[7]);
+            let b = bits[n];
+            (c.open, c.ends, c.stall, c.tadr_follows, c.in_ring) = (b & 1 != 0, b & 2 != 0, b & 4 != 0, b & 8 != 0, b & 16 != 0);
+        }
+        let mut g = [0u32; 8];
+        r.u32s(&mut g)?;
+        [self.ctrl, self.stat, self.pcr, self.sqwc, self.rbsr, self.rbor, self.stadr, self.enable] = g;
+        let ch = r.u8()?;
+        let tag = r.u8()? != 0;
+        let qwords = r.u32()?;
+        let mut t = [0u64; 4];
+        r.u64s(&mut t)?;
+        self.unit = (usize::from(ch) < CHANNELS).then(|| Unit { ch: usize::from(ch), work: if tag { Work::Tag } else { Work::Data(qwords) }, end: t[0] });
+        (self.release_until, self.wake, self.last_c) = (t[1], t[2], (t[3] as usize).min(CHANNELS - 1));
+        Ok(())
+    }
+}

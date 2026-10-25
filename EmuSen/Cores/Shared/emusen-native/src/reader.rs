@@ -80,6 +80,10 @@ impl<'a> StateReader<'a> {
         Ok(u64::from_le_bytes(self.fixed()?))
     }
 
+    pub fn u128(&mut self) -> Result<u128, Truncated> {
+        Ok(u128::from_le_bytes(self.fixed()?))
+    }
+
     pub fn f64(&mut self) -> Result<f64, Truncated> {
         Ok(f64::from_le_bytes(self.fixed()?))
     }
@@ -134,6 +138,10 @@ impl<'a> StateReader<'a> {
 
     pub fn u64s(&mut self, into: &mut [u64]) -> Result<(), Truncated> {
         self.array(into, u64::from_le_bytes)
+    }
+
+    pub fn u128s(&mut self, into: &mut [u128]) -> Result<(), Truncated> {
+        self.array(into, u128::from_le_bytes)
     }
 
     fn array<T, const N: usize>(&mut self, into: &mut [T], le: fn([u8; N]) -> T) -> Result<(), Truncated> {

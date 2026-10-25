@@ -5503,7 +5503,8 @@ queue (S26); with no BIOS the units still run and the sound is the SPU2's silenc
 alone, version 1's layout unchanged, the processors' and units' registers being S30's. A console with no BIOS loading a
 state is brought from power-on to the state's frame first (`Machine::replay_to`; its clocks are its whole state, the
 cards, the EEPROM and the pads kept, the sound made on the way dropped), so the kit's C7 and C8 hold; a console running a
-BIOS refuses every load (`StateError::Running`) until S30.
+BIOS refuses every load (`StateError::Running`) until S30. *Superseded 2026-10-25 at S30 (§38.5): every unit is in the state, both rules
+are gone, and a running console loads.*
 
 ### 35.7 Speed, and the exact changes that made a boot practical
 
@@ -5886,3 +5887,237 @@ pictures; **this writer is exposed to the BIOS's output and will never write the
   interface directly, as S17's and S18's do.
 - The device path's pixel pipeline (S46), graded against this one.
 - The state format's new contents: none; the operations keep no state beyond the registers.
+
+## 38. Stage S30, save states and rewind's cost (2026-10-25)
+
+*Numbered §38 and its disputes from D-420, since S10 (§36, from D-360), S25's part B (§30.12 on, from D-380) and S19
+(§37, from D-400) took the numbers before it. The stage raised no dispute: a state format is the project's own choice,
+and nothing in it is a reading of the hardware.*
+
+### 38.1 In one paragraph
+
+The plan's §7 row S30, on the tester's go of 2026-10-25. **`SPH2` version 2** holds every unit's state: after a header
+(the frame count, the market, the BIOS entry by its declared identity, the image's identity and the EE's stop) comes the
+picture, the one block whose length varies, and then every block in a fixed order (`Sapphire_Plan.md` §4.7) — the EE with COP0, COP1, its issue model, the TLB and the caches; RDRAM; the scratchpad; both VUs with their memories
+and micro modes; VIF0, VIF1, the GIF; the GS with its 4 MiB, CLUT buffer and every register; the PCRTC; the DMAC, the
+INTC, the timers; the IOP with its RAM, cache, scratchpad, DMAC and timers; the SIF; the drive; SIO2 with the pads and
+the cards' bus state; the SPU2 with its RAM, voices and effects; the IPU; the memory controller; and the scheduler. **A
+state is 43,231,819 bytes (41.2 MiB) for an NTSC console showing 640 × 448, and 43,395,659 for a PAL one showing 640 ×
+512**; the plan's estimate of about 41 MiB held. Every queue is written in fixed slots, so a machine's state keeps one
+length while its picture keeps one size, which the rewind chain needs (`EmuSen_Rewind_And_FastForward.md` §1.8). The
+layout listing is pinned line for line against `tests/sph2/version-2.layout`. **S24's rule refusing every load on a
+running console is gone**, and with it the replay of a console with no BIOS: a state loads on a console running the
+player's BIOS, mid-frame or at a frame's end, and continues as the console that saved it. **The gate is met**: on both
+0230 images, states saved at five frames of the boot to OSDSYS's language screen, each loaded into a console just made,
+continued 30 frames with every picture, every sample and the state at the end equal (§38.6); 30 of the project's programs,
+each saved at four instants of its run, held to the machine that saved them in state and sound; the kit's C1 to C15
+passing. **P14 measured** (§38.7): a capture costs the emulation thread 6.5 ms at the median on the desktop, under a
+frame's 16.7 ms, a restore 4.3 ms, and the delta's encoding 4.6 ms on the idle board; what binds is the budget, which at
+96 MiB holds 1.5 s of history if a tenth of the state changes between captures. No emulator, SDK or loader source and no
+firmware was read; the BIOS image was handed to the machine by path and never opened, hashed or analysed, and of its runs
+only whether pictures, sound and states were equal was kept.
+
+### 38.2 The format
+
+- **The header**: `Magic` (`SPH2`), `Version` (2), `Frames`, `Market` (0 Japan, 1 the Americas, 2 Europe), `Bios` (the
+  file number of the market's BIOS entry, 16 to 18, when the console runs one, else 0), `Image` (`Media::identity`, FNV-1a
+  over what recognition read: a program's entry and segments, or a disc's framing, sector count, BOOT2 program and serial;
+  never 0) and `Stop` (whether the EE has stopped on an instruction the interpreter lacks). A load refuses a state of
+  another market (`FOREIGN`), another BIOS entry or none where this console has one or the reverse (`STATUS_OTHER_BIOS`,
+  -14, in words), another image (`WRONG_MEDIA`), and any version but 2 (`VERSION`).
+- **The picture** follows the header: its place and pitch, size, shape and field, and its RGBA rows. It comes first
+  because it alone has a length of its own. A load reads the header and the picture's shape, computes the state's whole
+  length (the raster's bytes and the blocks' fixed length, `Machine::blocks_len`), and refuses a shorter state as
+  truncated and a longer one as foreign **before it changes anything**; past that check nothing can fail, so a load is
+  read in place, with no copy of the machine. The kit's C7 holds a refused load to changing nothing (§38.8).
+- **The blocks**, each written by its unit beside the unit (`impl emusen_native::State` in each module, the board's
+  composition in `board.rs`): every register and every place a unit keeps between two of the board's steps. What one
+  instruction's execution keeps for itself and sets again before the next (the EE's stalls, entry, word and counting
+  mode), pure memos (the EE's decode memo, the TLB's last lookup, the board's next PCRTC event, all cleared or rebuilt on
+  a load) and the hardware's reports (the exception counts, the traffic counts, the drive's command counts, the
+  unanswered accesses) are not machine state and are not written. The stand-ins behind DMA channels no unit answers keep
+  nothing a program sees. The samples not yet taken by the host are not kept (Diamond's rule, `Diamond_SPU.md` §9).
+- **Fixed length.** Every queue is written as a count and fixed slots, the slots past its length zero: the GIF's PATH3 FIFO
+  64 qwords (16 are the DMAC's; the EE's stores are not refused when it is full), its XGKICKs 16, each VIF's FIFO 64 qwords,
+  the GS's writes held behind a SIGNAL 64, the IPU's FIFOs 16 qwords each, the SIF's FIFOs 64 words each (32 are the
+  hardware's), SIO2's three byte FIFOs 2,048 each, the VU pipe's flag writes in flight 16, the drive's sector buffer
+  2,352 bytes. Each unit's `fits` says whether its queues are within their slots; a save at an instant where one is not is
+  refused in words (`STATUS_QUEUE_PAST_STATE`, -15) rather than written short. No program of the project's comes near any
+  bound. Enumerations are written by code; an optional value as a flag and a value; a 128-bit register as one
+  (`StateWriter::u128`, §38.9). The listing names each field once, arrays as one line, so version 2's listing is 525 lines.
+- **The picture's size** changes only at a field's start, when the read circuits or the mode change; the state's length
+  changes with it, and `v1` raises `STATE_SIZE` with the new length after that frame, as MarsRT does for its save chip
+  (`EmuSen_CoreAPI.md` §6.9's size contract is "constant for the life of a machine, except across a load that changes the
+  machine's configuration"; Sapphire departs from it as MarsRT already does). A fixed raster at the PCRTC's largest
+  picture, 1920 × 1125, would have kept the length constant at 8.6 MB more a state, a fifth of it; it was not chosen
+  (§38.11, Q2). The rewind chain begins again at such a change.
+
+### 38.3 What a state never holds
+
+- **The BIOS image** (Sapphire_Plan.md §5.9): firmware, never written; the state names the entry by its file number. Two
+  retail images of one market cannot be told apart that way, since the core is never told which file the host matched;
+  a state of `0230a` loads on `0220a` (§38.11, Q3).
+- **The disc and the program's bytes**: named by `Image`, never held.
+- **The cards' images and the EEPROM's bytes**: the player's media, which `EmuSen_CoreAPI.md` §6.27 and §6.28 have the host
+  keep apart and a load leave as they stood, with no `BATTERY_CHANGED` of the load's own. The core keeps that rule under both
+  flags and without them: a card's bus state (terminator, page, offset, the page being gathered, a write in progress, the
+  flash's busy time) and the EEPROM's open session are in the state; their contents are not. A console whose BIOS reads its
+  EEPROM after a load reads the player's, not the state's; a card's contents are likewise the player's.
+- **Which pads and cards are present, the multitap, and the frontend's buttons and sticks**: the machine's settings, files
+  and input, held as they stand across a load. A pad's modes, masks, rumble map and motors are in the state.
+
+### 38.4 Versions
+
+Version 1 (S24) held the memories alone; the console has been offered to no player (`development: true`), so no player has
+a state of it, and **the oldest version read is 2** (`OLDEST_STATE_VERSION`), as Nephrite's Sega CD's oldest is the first
+it was offered with (`Nephrite_Native.md` §53.1). Machine info's `state.loads_from` lists 2 alone. Version 1's listing,
+pinned at S24, is retired with its test; a later stage that changes a block raises the version, keeps the older layout's
+reader back to the oldest a player has had, and adds the new listing's file beside version 2's.
+
+### 38.5 Loading back
+
+`Machine::load_state` checks the header and the length, writes the picture, reads every block into the machine in place,
+sets the frame count and the stop, and clears the samples not yet taken. The board's next event is restored with the
+scheduler; the PCRTC's cached next event, the TLB's memo and the units' derived values are rebuilt from the state on their
+next use. `Machine::replay_to` and `StateError::Running` (§35.6) are removed: a console with no BIOS and one running a BIOS
+load alike. A state taken at any instruction loads exactly (the lib test `a_running_console_loads_mid_frame_…` on a boot ROM
+of zeros, written for it, and every program of §38.6 cut between instructions or between the board's steps).
+
+### 38.6 The gate (measured 2026-10-25)
+
+**The player's BIOS** (`examples/s30.rs bios`, the image handed by path; nothing printed but equality and timings). One
+console booted the image; at each frame named its state was saved and loaded into a console just made on the same image,
+both ran 30 frames, and every frame's picture and sound and the state at the end were compared, and the loaded console
+saved again was compared with the state it loaded:
+
+| Image | Frames saved at | Save, load, save | Pictures differing in 30 frames | Sound differing | State 30 frames on |
+|---|---|---|---|---|---|
+| Americas `0230a` | 60, 300, 600, 700, 760 (the language screen begins at 690) | equal at all five | 0 at all five | 0 at all five | equal at all five |
+| Europe `0230e` | 60, 300, 500, 590, 640 (at 50 Hz; the language screen begins at 570) | equal at all five | 0 at all five | 0 at all five | equal at all five |
+
+**The project's programs** (`tests/state.rs`, 11 tests): each run to its done word, then again with its state saved at a
+fifth, two fifths, three fifths and four fifths of its run; each state loaded into a machine just made (the cards' images
+carried, as a host keeps them, §38.3) and held to the machine that saved it until the next instant, their states and every
+sample equal there. DMA chains (`s11-chain`, `callret`, `interleave`, `stall`, `mfifo`); VU microprograms (three of S13's);
+VIF's UNPACK, the microprogram it starts and VIF1's double buffer (S14); the GIF's paths, arbitration and intermittent mode
+(S15); GS drawing through PATH3 (S17's triangles, Gouraud triangles and sprites); the PCRTC's timing (S20); SIF1, SIF0 and
+SIF2 between the EE and the IOP (S22); SIO2's pad, card and multitap (S25); SPU2 voices, reverb, AutoDMA and the IRQ
+addresses with their sound (S26); two IPU programs (S27); and the board alone over six PAL fields. All equal [M].
+
+**The kit** (`SapphireTests`, WiseMan): C1 to C15 on the synthetic program, CD and DVD, with C7's eight save points over
+120 frames, a refused load changing nothing, save-load-save byte-identical, and C8's load at the middle; the picture's
+change of size at the first field announced by `STATE_SIZE`, as C7's watch asks. All pass.
+
+### 38.7 Rewind's cost, P14 (measured 2026-10-25)
+
+`SapphireRewindTests.P14_the_chains_costs_on_a_41_MiB_state` (opt-in, `EMUSEN_SAPPHIRE_P14`; Release build) runs
+`RewindBuffer` at its defaults (a capture every 4 frames, a 96 MiB budget) over `CoreEngine` on the synthetic program, the
+board idle with no BIOS, the desktop loaded by the other stages' work (load average 3.6 to 5.6):
+
+| Measure | Desktop | Handheld, estimated |
+|---|---|---|
+| A capture on the emulation thread (the core's `state_save` into the reused stream, and the copy into the spare buffer) | **6.5 ms** median of 60, 59 ms the first | 8.5 to 9.1 ms |
+| The frame with the chain on, the idle board (1.16 ms without) | 3.20 ms, 2.0 ms more a frame | — |
+| Encoding a delta on the pool thread, one frame apart on the idle board (240 bytes) | 4.6 ms | 6.0 to 6.4 ms |
+| A restore (`Apply` and `state_load`) | **4.3 ms** median of 16, 23 ms the most | 5.6 to 6.0 ms |
+| The core's own save into a buffer it allocates, and its load (`examples/s30.rs`, on the BIOS's boot) | 17.3 to 22.5 ms; 12.9 to 17.7 ms | — |
+
+The handheld is estimated by the 1.3 to 1.4 times a thread is slower there than on the desktop (`Nephrite_Plan.md` §5.5,
+argued and not yet measured, Sapphire_Plan.md §5.12); a capture is mostly copying and its true ratio is the two machines'
+memory bandwidth, which no page records, so the estimate is a floor. The delta's size, and with it the budget's reach, is
+the change between captures; on states of which a share differs in runs of 64 bytes:
+
+| Share of the state differing | Encode | Delta | Apply | History held by 96 MiB at 4 frames a capture |
+|---|---|---|---|---|
+| 0.1 % | 4.6 ms | 46 KB | 0.6 ms | 146 s |
+| 1 % | 5.8 ms | 453 KB | 0.7 ms | 15 s |
+| 10 % | 16.5 ms | 4.5 MB | 7.6 ms | 1.5 s |
+| 50 % | 94 ms | 22.3 MB | 12 ms | 0.3 s |
+| 100 % | 107 ms | 43.2 MB | 23 ms | 0.2 s |
+
+A game's GS memory alone rewrites its frame and depth buffers every frame, at 640 × 448 in PSMCT32 2.3 MB, about 5 % of the
+state before RDRAM's own churn [A]: the reach under the default budget is of the order of a second or two, not the minutes of
+the 16-bit consoles (§1.2 there). **Verdict on P14**: its first half does not hold on the desktop: a capture costs 6.5 ms,
+under a frame's 16.7 ms (39 % of one frame, 10 % of the four it is spread over), and on the handheld's estimate it still
+fits. Its second half holds for another reason than the one predicted: **rewind can be offered as it is for its cost, but
+not with the default budget**, which holds seconds; it needs its own budget, of the order of 1 GiB for about 16 s if a tenth
+of the state changes, or a longer interval, chosen once a game's change between captures is measured (S28). No new codec was built at this stage.
+The deltas of the BIOS's boot were not measured: a delta's size is a measure of memory holding the BIOS's data, which
+§1.4 keeps from a writer (§38.11, Q1).
+
+### 38.8 Tests and seeded faults (2026-10-25)
+
+**Tests** [M, `cargo test --release`]: the crate whole, **345 of 345**: the lib 68 (state's four: the listing pinned
+against its file, a state round-tripping byte for byte with every refusal changing nothing, a running console loading
+mid-frame, a queue past its slots refused), `tests/state.rs` **11 of 11**, new, every other file unchanged and passing; the
+lib and `tests/state.rs` also under `test-checked`; clippy clean on every target. `emusen-native` 84 of 84 (its new
+`wide_words_read_back_little_endian`), `blackmoon-spu` 6 of 6, Diamond checked (`cargo check --tests`); WiseMan's
+`SapphireTests` 5 of 5 and `SapphireRewindTests` 2 of 2 (`Rewind_at_the_default_interval_lands_on_the_state_it_held`, new).
+The other crates the blast radius lists depend on `emusen-native` alone, whose change adds two methods to each of the
+writer and the reader and changes nothing else; they were not run.
+
+**Seeded faults:**
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | a unit's field left out of the state: the DMAC's next wake, neither written nor read | `gs_drawing_round_trips_mid_run`, `the_gifs_paths_round_trip_mid_run`, `the_ipus_decoding_round_trips_mid_run` |
+| F2 | a block read in the wrong order: the drive's before the SIF's | `a_state_round_trips_byte_for_byte_…` (once the test filled those blocks, below), `the_sifs_messages_round_trip_mid_run` |
+| F3 | the scheduler's pending event lost: the board's next event not restored | every test of `tests/state.rs`, `a_state_round_trips_…`, `a_running_console_loads_mid_frame_…` |
+
+Each was applied, the tests named run, and the source restored [M]. F2 first passed the lib's round trip, because a console
+with no program leaves the SIF's and the drive's blocks at their defaults and a misplaced read of zeros reads zeros; the
+test now sets values in the SIF, the INTC, a timer, a DMA channel, VU1 and the SPU2 before it saves, and catches it.
+
+### 38.9 Shared code
+
+- **`emusen-native`**: `StateWriter::u128`, `u128s` and `StateReader::u128`, `u128s`, a 128-bit word little-endian, for
+  the EE's registers; nothing else changes and no other core's bytes move.
+- **`blackmoon-spu`**: `reverb::RING` made public, so the SPU2's state writes the reverb's rings by the crate's own length
+  rather than a copy of it.
+- **No new cross-component dependency**: the R3000A's block is `blackmoon-r3000`'s own (`BlackMoon_R3000.md` §4); the voices'
+  are written by Sapphire from the voice's public fields, as Diamond's are.
+
+### 38.10 What the plan got wrong, or left open
+
+- **§4.7's list of the state's contents** omits the picture, which a woven frame needs (the other field's rows), and the
+  FIFOs' fixed slots; both are here. Its 41 MiB held: 41.2 MiB.
+- **§5.10's "pinned by a test from version 1"**: version 1 was pinned at S24 with the memories alone; S30's format is
+  version 2, and version 1 is not read (§38.4).
+- **P14** predicted a capture over a frame's budget; it is under it, and the budget's reach is what needs the setting
+  (§38.7).
+
+### 38.11 Questions this stage leaves
+
+1. **Q1 [decision], the deltas of the BIOS's boot.** The chain's delta sizes on OSDSYS would give the reach of the budget on a
+   real workload before S28, but a delta's size is computed over memory holding the BIOS's data. *Recommended*: leave them
+   unmeasured and measure the reach on the first bench game at S28; if the tester holds a delta's size to be a timing-like
+   figure the rules allow, measure it on the boot then.
+2. **Q2 [decision], the picture's raster in the state.** The state's length follows the picture's size, with `STATE_SIZE` raised
+   when it changes, against §6.9's size contract, as MarsRT does. *Recommended*: keep it (8.6 MB a state saved, and a size
+   change is rare: a mode change); the alternative is a fixed raster at 1920 × 1125.
+3. **Q3 [routine], a state on another retail BIOS of the same market.** The core is told the entry, not the file, so it cannot
+   refuse a state of `0230a` on `0220a`. *Recommended*: an ABI minor that passes the matched firmware's checksum, which the
+   host already computes, to be named in the state; until then, the entry.
+4. **Q4 [decision], rewind's budget for the PlayStation 2.** *Recommended*: a per-system budget (or interval) in the rewind
+   settings, its default chosen at S28 from a game's measured change; rewind otherwise offered as it is.
+
+### 38.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §4.7, §5.9, §5.10, §5.12, §7 (S30), §13 (P14); this page's §35 and each unit's record of what it
+left for S30 (§17 to §34); `EmuSen_Rewind_And_FastForward.md` §1; `EmuSen_CoreAPI.md` §6.9, §6.27, §6.28; the project's own
+state code: Diamond's `state.rs` and `spu/state.rs`, Nephrite's `state.rs`, MarsRT's `tell_state_size`, `blackmoon-r3000`'s
+`state.rs`, `emusen-native`'s writer and reader, the kit's C7 and C8, `RewindBuffer` and `XorDeltaCodec`. No hardware
+document was needed. No emulator, SDK or loader source, no ps2autotests source and no firmware: the BIOS images were handed
+by path to Sapphire alone, never opened, hashed or analysed by any tool; of their runs only equality and timings were
+printed, never a value, an offset into a memory, a program counter or an instruction.
+
+**Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures, sound and states,
+and is a writer of a player's-BIOS stage; **this writer is exposed and will never write the open replacement**.
+
+### 38.13 What this stage does not cover
+
+- A game's state and its reach under the budget (S28); the debugger's view of the state (S31).
+- The snapshot capability (`SNAPSHOT`): Sapphire has no threads, so its state needs no settling and the snapshot would be
+  the state.
+- S10's ELF loading and S25's part B, beside it: their units' fields are those of this stage's blocks; a field they add is
+  a new version.

@@ -319,3 +319,125 @@ impl Core {
         self.out
     }
 }
+
+fn halves(e: &[Envelope]) -> impl Iterator<Item = u16> + '_ {
+    e.iter().flat_map(|e| [e.level as u16, e.counter])
+}
+
+fn envelope(level: u16, counter: u16) -> Envelope {
+    Envelope { level: level as i16, counter }
+}
+
+/// A core's block of `SPH2` (Sapphire_Native.md §38.2): its registers and volumes as written, each voice's registers,
+/// decoder, counter, envelope and output, the key ons and offs, the noise, the main volumes' sweeps, the reverb's
+/// address and filters, the IRQ flag, the transfer address, AutoDMA, the input sweeps and this sample's sums and output.
+impl emusen_native::State for Core {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u16s("Registers", &self.regs);
+        w.u16s("Volumes", &self.vol);
+        let v = &self.voices;
+        let mut regs = [0u16; VOICES * 5];
+        let mut words = [0u32; VOICES * 4];
+        let mut samples = [0u16; VOICES * 34];
+        let mut envelopes = [0u16; VOICES * 6];
+        for (n, v) in v.iter().enumerate() {
+            regs[5 * n..5 * n + 5].copy_from_slice(&[v.volume[0], v.volume[1], v.pitch, v.adsr[0], v.adsr[1]]);
+            words[4 * n..4 * n + 4].copy_from_slice(&[v.start, v.repeat, v.address, v.counter]);
+            for (d, s) in samples[34 * n..34 * n + 34].iter_mut().zip(v.samples.iter().chain(&v.history).chain([&v.out])) {
+                *d = *s as u16;
+            }
+            for (d, s) in envelopes[6 * n..6 * n + 6].iter_mut().zip(halves(&[v.envelope, v.current[0], v.current[1]])) {
+                *d = s;
+            }
+        }
+        w.u16s("VoiceRegisters", &regs);
+        w.u32s("VoiceWords", &words);
+        w.bytes("VoiceDecoded", &v.each_ref().map(|v| v.decoded));
+        w.bytes("VoicePhases", &v.each_ref().map(|v| v.phase.code()));
+        w.u16s("VoiceSamples", &samples);
+        w.u16s("VoiceEnvelopes", &envelopes);
+        w.u32s("VoiceStarts", &self.ssa);
+        w.u32s("Keys", &[self.endx, self.key_on, self.key_off, self.tsa]);
+        w.i32s("Noise", &[i32::from(self.noise.level), self.noise.timer]);
+        let mut env = [0u16; 12];
+        for (d, s) in env.iter_mut().zip(halves(&self.main).chain(halves(&self.inputs))) {
+            *d = s;
+        }
+        w.u16s("Sweeps", &env);
+        let r = &self.reverb;
+        w.u32("ReverbAddress", r.address);
+        let mut ring = [0u16; 4 * blackmoon_spu::reverb::RING];
+        for (d, s) in ring.iter_mut().zip(r.input.as_flattened().iter().chain(r.output.as_flattened())) {
+            *d = *s as u16;
+        }
+        w.u16s("ReverbRings", &ring);
+        w.bytes("ReverbPhase", &[r.at, u8::from(r.right)]);
+        w.bools("Flags", &[self.irq, self.adma.filled[0], self.adma.filled[1]]);
+        w.u32s("Adma", &[self.adma.play, self.adma.buffer, self.adma.words]);
+        w.i32s("Sums", &self.sums);
+        w.i32s("Out", &self.out);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u16s(&mut self.regs)?;
+        r.u16s(&mut self.vol)?;
+        let mut regs = [0u16; VOICES * 5];
+        let mut words = [0u32; VOICES * 4];
+        let mut decoded = [0u8; VOICES];
+        let mut phases = [0u8; VOICES];
+        let mut samples = [0u16; VOICES * 34];
+        let mut envelopes = [0u16; VOICES * 6];
+        r.u16s(&mut regs)?;
+        r.u32s(&mut words)?;
+        r.bytes(&mut decoded)?;
+        r.bytes(&mut phases)?;
+        r.u16s(&mut samples)?;
+        r.u16s(&mut envelopes)?;
+        for (n, v) in self.voices.iter_mut().enumerate() {
+            let g = &regs[5 * n..5 * n + 5];
+            (v.volume, v.pitch, v.adsr) = ([g[0], g[1]], g[2], [g[3], g[4]]);
+            let k = &words[4 * n..4 * n + 4];
+            (v.start, v.repeat, v.address, v.counter) = (k[0] & ADDRESS_MASK, k[1] & ADDRESS_MASK, k[2], k[3]);
+            v.decoded = decoded[n].min(28);
+            v.phase = voice::Phase::of(phases[n]);
+            let s = &samples[34 * n..34 * n + 34];
+            for (d, x) in v.samples.iter_mut().zip(s) {
+                *d = *x as i16;
+            }
+            (v.history, v.out) = ([s[31] as i16, s[32] as i16], s[33] as i16);
+            let e = &envelopes[6 * n..6 * n + 6];
+            (v.envelope, v.current) = (envelope(e[0], e[1]), [envelope(e[2], e[3]), envelope(e[4], e[5])]);
+        }
+        r.u32s(&mut self.ssa)?;
+        let mut k = [0u32; 4];
+        r.u32s(&mut k)?;
+        [self.endx, self.key_on, self.key_off, self.tsa] = k;
+        let mut n = [0i32; 2];
+        r.i32s(&mut n)?;
+        self.noise = Noise { level: n[0] as i16, timer: n[1] };
+        let mut env = [0u16; 12];
+        r.u16s(&mut env)?;
+        self.main = [envelope(env[0], env[1]), envelope(env[2], env[3])];
+        self.inputs = std::array::from_fn(|i| envelope(env[4 + 2 * i], env[5 + 2 * i]));
+        let rv = &mut self.reverb;
+        rv.address = r.u32()?;
+        let mut ring = [0u16; 4 * blackmoon_spu::reverb::RING];
+        r.u16s(&mut ring)?;
+        for (d, s) in rv.input.as_flattened_mut().iter_mut().chain(rv.output.as_flattened_mut()).zip(ring) {
+            *d = s as i16;
+        }
+        let mut phase = [0u8; 2];
+        r.bytes(&mut phase)?;
+        (rv.at, rv.right) = (phase[0] % blackmoon_spu::reverb::RING as u8, phase[1] != 0);
+        let mut f = [false; 3];
+        r.bools(&mut f)?;
+        (self.irq, self.adma.filled) = (f[0], [f[1], f[2]]);
+        let mut a = [0u32; 3];
+        r.u32s(&mut a)?;
+        (self.adma.play, self.adma.buffer, self.adma.words) = (a[0] % 512, a[1] & 1, a[2]);
+        r.i32s(&mut self.sums)?;
+        r.i32s(&mut self.out)
+    }
+}

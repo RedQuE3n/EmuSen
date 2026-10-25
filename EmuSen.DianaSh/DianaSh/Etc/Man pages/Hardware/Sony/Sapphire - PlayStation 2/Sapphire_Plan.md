@@ -506,7 +506,10 @@ D-0. The progressive and 1080i modes some games offer need the profile's answer 
   the frame count, the disc's identity, then each block in a fixed order. About 41 MiB [A: RDRAM 32, eDRAM 4, IOP RAM
   2, SPU2 RAM 2, the VUs' 40 KiB, the scratchpad, the caches with their tags, the FIFOs, registers]. The disc is never
   in it. At 41 MiB a state is twelve times Diamond's, so the rewind buffer's delta codec (`EmuSen_Rewind_And_
-  FastForward.md`) is measured on it at S30 before rewind is offered (P14).
+  FastForward.md`) is measured on it at S30 before rewind is offered (P14). *Built 2026-10-25 at S30 (`Sapphire_Native.md`
+  §38.2): the header also names the market, the BIOS entry by its file number and the EE's stop; the picture follows it,
+  the one block whose length varies; 41.2 MiB with a 640 × 448 picture. The cards' images and the EEPROM's bytes are the
+  player's media, kept apart (§38.3).*
 - **Settings**, each with the stage that makes it meaningful: the BIOS per market (§5.9), the pad per port, the
   multitap, the card mode, then the speed levers (`effect: exact`) and the enhancements (`effect: enhancement`, §6).
   Defaults are a real console's.
@@ -734,7 +737,9 @@ outputs of calls, not banners, and are allowed [C].
 ### 5.10 The state format
 
 `SPH2` (§4.7): the layout listing pinned by a test from version 1; an older version loaded in its own layout back to the
-oldest a player has had, as Nephrite's `OLDEST_STATE_VERSION` does.
+oldest a player has had, as Nephrite's `OLDEST_STATE_VERSION` does. *Amended 2026-10-25 at S30 (`Sapphire_Native.md` §38.4):
+version 1 (S24, the memories alone) was never a player's; version 2 holds every unit, its listing pinned against its file,
+and is the oldest read.*
 
 ### 5.11 Disc images and the ABI
 
@@ -953,7 +958,7 @@ the enhancements (E) are separate tracks.
 | Stage | What it covers | Its gate |
 |---|---|---|
 | **S29** | The PlayStation 2 to players: the pack's serial, region, shelf and media, the settings, the firmware page's entries, the DualShock 2 drawing, the CRT profile (§4.6), `.m3u` and the disc change; the start without a disc and the Memory Cards tab (G10, G11) offered with the system | The kit's C1–C15 on the tester's discs in the corpus form; the fit audit with the PlayStation 2's tab, drawing and shelf at both sizes; `ConsoleScreenRuleTests`; G10 and G11 met on the player's build *Amended 2026-10-24.* |
-| **S30** | States: `SPH2`'s layout listing, loading back, the rewind codec measured on a 41 MiB state | States round-trip at every anchor of the bench; rewind's cost recorded (P14) |
+| **S30** | States: `SPH2`'s layout listing, loading back, the rewind codec measured on a 41 MiB state | States round-trip at every anchor of the bench; rewind's cost recorded (P14) *Built 2026-10-25, `Sapphire_Native.md` §38: met; `SPH2` version 2 with every unit's state in §4.7's order, the picture first so that a load knows its length, 43,231,819 bytes for a 640 × 448 picture, the queues in fixed slots, the listing pinned against `tests/sph2/version-2.layout`; S24's refusal of loads on a running console removed; states saved at five frames of the boot to OSDSYS on both 0230 images and at four instants of 30 of the project's programs continuing equal in picture, sound and state; the kit's C1 to C15; P14 measured, a capture 6.5 ms and a restore 4.3 ms on the desktop, the default budget holding seconds; no dispute.* |
 | **S31** | The debugger: four processors, 128-bit registers, the VUs' disassembly, breakpoints, stepping, coverage | Each claim a test; every table armed gives the plain run's digests |
 
 **Phase G — speed** (§5.12)
@@ -1326,7 +1331,9 @@ needs Q11.
   tens of seconds and is never made. *Half held 2026-10-25 at S23 (`Sapphire_Native.md` §25.7): 1.15 ms cold on the desktop;
   a copy there took 0.52 s, not tens of seconds; the handheld not measured.*
 - **P14.** Rewind on a 41 MiB state costs more than a frame's budget to snapshot at the default interval and needs its
-  own setting.
+  own setting. *Half held 2026-10-25 at S30 (`Sapphire_Native.md` §38.7): a capture costs the emulation thread 6.5 ms on the
+  desktop, under a frame's 16.7 ms (8.5 to 9.1 ms estimated on the handheld), and a restore 4.3 ms; it needs its own setting
+  for its reach, not its cost: the 96 MiB default holds about 1.5 s if a tenth of the state changes between captures.*
 - **P15.** The EE recompiler built on `emusen-jit` with inlined instructions and held registers is at least five times
   faster than the interpreter on the bench, unlike MarsRT's few per cent, because the EE is the bound.
 - **P16.** `blackmoon-spu`'s extraction leaves Diamond's SPU goldens unchanged at the first attempt.

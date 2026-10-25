@@ -50,4 +50,10 @@ Since stage S24 (`Sapphire_Native.md` §35) `src/machine.rs` is the console on t
 BIOS given by path, pressing buttons at chosen frames and writing the pictures, printing only the hardware's own reports;
 `examples/s24probe.rs` writes the stage's measurement programs for the referees and `programs/s24/` holds its bare ones.
 
+Since stage S30 (`Sapphire_Native.md` §38) `src/state.rs` is the whole console's state, SPH2 version 2, each unit's
+block written beside the unit and composed in `src/board.rs`; `tests/sph2/version-2.layout` is its listing, which
+`cargo run --example s30 -- layout <file>` writes, and `cargo run --release --example s30 -- bios <bios>
+<americas|europe|japan> <span> <frame>...` saves and loads states on the player's BIOS, printing only whether pictures,
+sound and states are equal. `tests/state.rs` cuts the project's programs mid-run.
+
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

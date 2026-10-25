@@ -291,3 +291,46 @@ impl Pcrtc {
         changed
     }
 }
+
+impl Picture {
+    /// The picture's geometry and shape in `SPH2`, which come first in the state so that a load knows the raster's
+    /// length, and with it the state's, before it changes anything (Sapphire_Native.md §38.2).
+    pub fn write_shape(&self, w: &mut emusen_native::StateWriter) {
+        let g = &self.geometry;
+        w.u64s("Place", &[g.x0, g.pitch]);
+        w.u32s("Size", &[g.width, g.y0, g.height, self.aspect.0, self.aspect.1]);
+        w.bool("Odd", self.odd);
+    }
+
+    /// The shape read back, with the raster's length it implies; nothing is changed.
+    pub fn read_shape(r: &mut emusen_native::StateReader) -> Result<(Geometry, (u32, u32), bool, usize), emusen_native::Truncated> {
+        let mut p = [0u64; 2];
+        r.u64s(&mut p)?;
+        let mut s = [0u32; 5];
+        r.u32s(&mut s)?;
+        let odd = r.bool()?;
+        let g = Geometry { x0: p[0], pitch: p[1], width: s[0].min(MAX_WIDTH), y0: s[1], height: s[2].min(MAX_HEIGHT) };
+        Ok((g, (s[3], s[4]), odd, (g.width * g.height * 4) as usize))
+    }
+}
+
+/// The PCRTC's block of `SPH2` (Sapphire_Native.md §38.2): the timing, the field in progress, the next line to read
+/// and its time, and the fields begun. The picture is its own block, after the state's header.
+impl emusen_native::State for Pcrtc {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.structure("Timing", &self.timing);
+        w.u64s("Field", &[self.field.number, self.field.start, self.line, self.read_at, self.fields]);
+        w.bool("Odd", self.field.odd);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.timing.read_state(r)?;
+        let mut f = [0u64; 5];
+        r.u64s(&mut f)?;
+        self.field = Field { number: f[0], odd: r.bool()?, start: f[1] };
+        (self.line, self.read_at, self.fields) = (f[2], f[3], f[4]);
+        Ok(())
+    }
+}

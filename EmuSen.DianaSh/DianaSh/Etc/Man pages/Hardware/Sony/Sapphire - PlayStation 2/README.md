@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24 and S19 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19 and S30 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -90,6 +90,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   reset line, the drive on the IOP's bus, the EEPROM as the console medium `ps2.nvm`, the picture and the sound through
   `v1`, the hardware's own reports as the only window on the boot, OSDSYS's language screen reached on both 0230 images
   and compared with PCSX2's, the pad stepping the initial setup on, and D-340 to D-351.
+  And stage S30 (2026-10-25, §38): `SPH2` version 2 with every unit's state in the plan's order, the picture first so
+  that a load knows its length, the queues in fixed slots, the BIOS entry and the image named and never held, the cards'
+  and the EEPROM's contents kept apart, the listing pinned against its file; loading on a running console, mid-frame;
+  states equal at five frames of the OSDSYS boot on both 0230 images and at four instants of 30 of the project's programs;
+  P14 measured, a capture 6.5 ms and a restore 4.3 ms, the default rewind budget holding seconds.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

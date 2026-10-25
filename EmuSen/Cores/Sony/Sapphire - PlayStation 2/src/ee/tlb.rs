@@ -115,6 +115,29 @@ impl Tlb {
     }
 }
 
+/// The TLB's block of `SPH2`: each entry's four words; the memo is cleared, being a pure function of them.
+impl emusen_native::State for Tlb {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let mut words = [0u32; ENTRIES * 4];
+        for (d, e) in words.as_chunks_mut::<4>().0.iter_mut().zip(&self.entries) {
+            d.copy_from_slice(&[e.mask, e.hi, e.lo0, e.lo1]);
+        }
+        w.u32s("Entries", &words);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut words = [0u32; ENTRIES * 4];
+        r.u32s(&mut words)?;
+        for (e, s) in self.entries.iter_mut().zip(words.as_chunks::<4>().0) {
+            *e = Entry { mask: s[0], hi: s[1], lo0: s[2], lo1: s[3] };
+        }
+        self.memo.set(None);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

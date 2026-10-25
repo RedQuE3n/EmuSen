@@ -317,6 +317,54 @@ impl Timing {
     }
 }
 
+fn write_span(w: &mut emusen_native::StateWriter, s: &Span) {
+    let m = &s.mode;
+    let (scan, lines) = match m.scan {
+        Scan::Either { lines } => (0, lines),
+        Scan::Progressive => (1, 0),
+        Scan::Interlaced => (2, 0),
+    };
+    w.u64s("Mode", &[m.vck.0, m.vck.1, m.line, m.lines, lines, m.vblank, m.hblank, m.vsync, m.picture.0, s.epoch]);
+    w.u32s("Picture", &[m.picture.1, m.picture.2, m.aspect.0, m.aspect.1]);
+    w.bytes("Scan", &[scan, u8::from(s.int)]);
+}
+
+fn read_span(r: &mut emusen_native::StateReader) -> Result<Span, emusen_native::Truncated> {
+    let mut v = [0u64; 10];
+    r.u64s(&mut v)?;
+    let mut p = [0u32; 4];
+    r.u32s(&mut p)?;
+    let mut s = [0u8; 2];
+    r.bytes(&mut s)?;
+    let scan = match s[0] {
+        1 => Scan::Progressive,
+        2 => Scan::Interlaced,
+        _ => Scan::Either { lines: v[4].max(1) },
+    };
+    let mode = Mode { vck: (v[0].max(1), v[1].max(1)), line: v[2].max(1), lines: v[3].max(1), scan, vblank: v[5], hblank: v[6], vsync: v[7], picture: (v[8].max(1), p[0], p[1]), aspect: (p[2], p[3]) };
+    Ok(Span { mode, int: s[1] != 0, epoch: v[9] })
+}
+
+/// The timing's block of `SPH2` (Sapphire_Native.md §38.2): the mode, INT and epoch in force and the change waiting;
+/// the denominators are kept above zero so that no state divides by zero.
+impl emusen_native::State for Timing {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.group("Now", |w| write_span(w, &self.now));
+        w.bool("Waiting", self.next.is_some());
+        w.group("Next", |w| write_span(w, self.next.as_ref().unwrap_or(&self.now)));
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.now = read_span(r)?;
+        let waiting = r.bool()?;
+        let next = read_span(r)?;
+        self.next = waiting.then_some(next);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

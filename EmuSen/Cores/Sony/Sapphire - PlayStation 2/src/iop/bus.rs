@@ -601,3 +601,45 @@ impl Bus for IopBus {
         self.now * IOP < self.horizon
     }
 }
+
+impl IopBus {
+    /// The bus's own part of the IOP's block in `SPH2` (Sapphire_Native.md §38.2): RAM, the cache, the scratchpad, the
+    /// INTC, the DMAC, the timers, the timing it follows and its clocks. The SIF, the drive, SIO2 and the SPU2 are
+    /// blocks of their own; the boot ROM is firmware and never in a state; the stand-ins and reports keep nothing a
+    /// program sees.
+    pub fn write_own(&self, w: &mut emusen_native::StateWriter) {
+        w.bytes("Ram", &self.ram);
+        w.u32("CacheControl", self.icache.bcc);
+        w.u32s("CacheTags", &self.icache.tags);
+        w.u32s("CacheWords", &self.icache.words);
+        w.bytes("Scratchpad", &self.scratch);
+        w.u32s("Intc", &[self.intc.stat, self.intc.mask, self.intc.ctrl]);
+        w.structure("Dmac", &self.dmac);
+        w.structures("Timers", &self.timers);
+        w.structure("Blank", &self.blank);
+        w.u64s("Clocks", &[self.now, self.synced, self.next, self.horizon]);
+        w.bools("Lines", &[self.cdvd_line, self.fault]);
+    }
+
+    pub fn read_own(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        use emusen_native::State;
+        r.bytes(&mut self.ram)?;
+        self.icache.bcc = r.u32()?;
+        r.u32s(&mut self.icache.tags)?;
+        r.u32s(&mut self.icache.words)?;
+        r.bytes(&mut self.scratch)?;
+        let mut i = [0u32; 3];
+        r.u32s(&mut i)?;
+        (self.intc.stat, self.intc.mask, self.intc.ctrl) = (i[0], i[1], i[2]);
+        self.dmac.read_state(r)?;
+        r.structures(&mut self.timers)?;
+        self.blank.read_state(r)?;
+        let mut c = [0u64; 4];
+        r.u64s(&mut c)?;
+        [self.now, self.synced, self.next, self.horizon] = c;
+        let mut l = [false; 2];
+        r.bools(&mut l)?;
+        [self.cdvd_line, self.fault] = l;
+        Ok(())
+    }
+}

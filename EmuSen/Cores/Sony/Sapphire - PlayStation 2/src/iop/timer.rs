@@ -356,6 +356,28 @@ pub fn decode(paddr: u32) -> Option<(usize, u32)> {
     BASES.iter().position(|&b| (b..b + 12).contains(&paddr)).map(|n| (n, (paddr - BASES[n]) & !3))
 }
 
+/// An IOP timer's block of `SPH2` (Sapphire_Native.md §38.2): its registers, the time its count holds at, its gate.
+impl emusen_native::State for Timer {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Registers", &[self.count, self.mode, self.target]);
+        w.u64("Synced", self.synced);
+        w.bools("Gate", &[self.gate_high, self.gate_seen]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut g = [0u32; 3];
+        r.u32s(&mut g)?;
+        [self.count, self.mode, self.target] = g;
+        self.synced = r.u64()?;
+        let mut b = [false; 2];
+        r.bools(&mut b)?;
+        [self.gate_high, self.gate_seen] = b;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

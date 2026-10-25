@@ -272,3 +272,28 @@ impl DualShock2 {
         }
     }
 }
+
+impl DualShock2 {
+    /// The pad's block of `SPH2` (Sapphire_Native.md §38.2): its modes, masks, rumble map and motors. The buttons and
+    /// sticks are the frontend's, held as they stand across a load.
+    pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.bools("Modes", &[self.analog, self.locked, self.config, self.configured]);
+        w.u32("Mask", self.mask);
+        w.bytes("Rumble", &self.rumble);
+        w.bytes("Attributes", &self.attributes);
+        w.bytes("Motors", &[self.small, self.large]);
+    }
+
+    pub fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut m = [false; 4];
+        r.bools(&mut m)?;
+        [self.analog, self.locked, self.config, self.configured] = m;
+        self.mask = r.u32()?;
+        r.bytes(&mut self.rumble)?;
+        r.bytes(&mut self.attributes)?;
+        let mut motors = [0u8; 2];
+        r.bytes(&mut motors)?;
+        [self.small, self.large] = motors;
+        Ok(())
+    }
+}

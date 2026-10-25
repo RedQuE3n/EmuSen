@@ -424,3 +424,79 @@ impl Gs {
         self.transfer.active == Some(Direction::LocalToHost)
     }
 }
+
+/// General register writes held behind a stalled SIGNAL in the state.
+const HELD_SLOTS: usize = 64;
+
+/// The GS's block of `SPH2` (Sapphire_Native.md §38.2): the general and privileged registers, CSR's events and FIELD,
+/// IMR, SIGLBLID, the transfer, the vertex queue, the CLUT buffer, a SIGNAL waiting with the writes behind it, the
+/// interrupt line, and the 4 MiB.
+impl emusen_native::State for Gs {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u64s("Registers", &self.regs);
+        w.u64s("Privileged", &self.privileged);
+        w.u32s("Events", &[self.events, self.field]);
+        w.u64s("ImrSiglblid", &[self.imr, self.siglblid]);
+        w.structure("Transfer", &self.transfer);
+        let q = &self.queue;
+        w.u32("QueueLength", q.n as u32);
+        w.i32s("QueueXy", q.v.map(|v| [v.x, v.y]).as_flattened());
+        w.u32s("QueueZ", &q.v.map(|v| v.z));
+        w.u64s("QueueRgbaqStUv", q.v.map(|v| [v.rgbaq, v.st, v.uv]).as_flattened());
+        w.bytes("QueueF", &q.v.map(|v| v.f));
+        w.u16s("ClutEntries", &self.clut.entries);
+        w.u32s("ClutCbp", &self.clut.cbp);
+        crate::state::opt_u64(w, "Pending", self.pending);
+        let h = crate::state::slots::<_, HELD_SLOTS>(&self.held);
+        w.u32("HeldLength", self.held.len() as u32);
+        w.bytes("HeldRegisters", &h.map(|e| e.0));
+        w.u64s("HeldData", &h.map(|e| e.1));
+        w.bools("Line", &[self.line, self.rose]);
+        w.u32s("Local", &self.local.words);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u64s(&mut self.regs)?;
+        r.u64s(&mut self.privileged)?;
+        let mut e = [0u32; 2];
+        r.u32s(&mut e)?;
+        [self.events, self.field] = e;
+        let mut i = [0u64; 2];
+        r.u64s(&mut i)?;
+        [self.imr, self.siglblid] = i;
+        self.transfer.read_state(r)?;
+        let n = r.u32()?;
+        let mut xy = [0i32; 6];
+        let mut z = [0u32; 3];
+        let mut c = [0u64; 9];
+        let mut f = [0u8; 3];
+        r.i32s(&mut xy)?;
+        r.u32s(&mut z)?;
+        r.u64s(&mut c)?;
+        r.bytes(&mut f)?;
+        self.queue.n = (n as usize).min(3);
+        self.queue.v = std::array::from_fn(|k| draw::Vertex { x: xy[2 * k], y: xy[2 * k + 1], z: z[k], rgbaq: c[3 * k], st: c[3 * k + 1], uv: c[3 * k + 2], f: f[k] });
+        r.u16s(&mut self.clut.entries)?;
+        r.u32s(&mut self.clut.cbp)?;
+        self.pending = crate::state::read_opt_u64(r)?;
+        let len = r.u32()?;
+        let mut regs = [0u8; HELD_SLOTS];
+        let mut data = [0u64; HELD_SLOTS];
+        r.bytes(&mut regs)?;
+        r.u64s(&mut data)?;
+        crate::state::refill::<_, HELD_SLOTS>(&mut self.held, len, &std::array::from_fn(|k| (regs[k], data[k])));
+        let mut l = [false; 2];
+        r.bools(&mut l)?;
+        [self.line, self.rose] = l;
+        r.u32s(&mut self.local.words)
+    }
+}
+
+impl Gs {
+    /// Whether the writes held behind a SIGNAL are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        self.held.len() <= HELD_SLOTS
+    }
+}

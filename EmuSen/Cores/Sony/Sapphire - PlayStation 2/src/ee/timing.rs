@@ -455,3 +455,39 @@ impl Timing {
         best
     }
 }
+
+/// The categories in Table 1-1's order, a category's code in `SPH2` its place here.
+const CATEGORIES: [Category; 15] = {
+    use Category::*;
+    [LoadStore, Sync, Lzc, Eret, SaOperate, Cop0, Cop1Move, Cop2Move, Cop1Operate, Cop2Operate, Alu, Mac0, Mac1, Branch, WideOperate]
+};
+
+/// The issue model's block of `SPH2`: every resource's ready cycle, the units' free cycles, and the last issue.
+impl emusen_native::State for Timing {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u64s("Ready", &self.ready);
+        w.u64s("Free", &[self.mac0_free, self.mac1_free, self.fdiv_free, self.vdiv_free, self.cop2_floor, self.last, self.floor, self.mem_free, self.instructions]);
+        w.u8("LastCategory", self.last_category.map_or(0xFF, |c| CATEGORIES.iter().position(|&k| k == c).unwrap_or(0) as u8));
+        w.u8("LastPipe", self.last_pipe);
+        w.u128("LastWrites", self.last_writes);
+        w.bools("Open", &[self.open, self.paired]);
+        w.u8("GroupEnds", self.group_ends);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u64s(&mut self.ready)?;
+        let mut f = [0u64; 9];
+        r.u64s(&mut f)?;
+        [self.mac0_free, self.mac1_free, self.fdiv_free, self.vdiv_free, self.cop2_floor, self.last, self.floor, self.mem_free, self.instructions] = f;
+        self.last_category = CATEGORIES.get(usize::from(r.u8()?)).copied();
+        self.last_pipe = r.u8()?;
+        self.last_writes = r.u128()?;
+        let mut b = [false; 2];
+        r.bools(&mut b)?;
+        [self.open, self.paired] = b;
+        self.group_ends = r.u8()?;
+        Ok(())
+    }
+}

@@ -139,6 +139,12 @@ impl<'a> StateWriter<'a> {
         self.put(&v.to_le_bytes());
     }
 
+    /// A 128-bit word, little-endian, as no C# writer made: for a core whose registers are that wide.
+    pub fn u128(&mut self, name: &str, v: u128) {
+        self.record(name, "u128", None, 16);
+        self.put(&v.to_le_bytes());
+    }
+
     /// `BinaryWriter.Write(double)`: the IEEE 754 bits, little-endian.
     pub fn f64(&mut self, name: &str, v: f64) {
         self.record(name, "f64", None, 8);
@@ -193,6 +199,10 @@ impl<'a> StateWriter<'a> {
 
     pub fn u64s(&mut self, name: &str, v: &[u64]) {
         self.array(name, "u64", v, u64::to_le_bytes);
+    }
+
+    pub fn u128s(&mut self, name: &str, v: &[u128]) {
+        self.array(name, "u128", v, u128::to_le_bytes);
     }
 
     fn array<T: Copy, const N: usize>(&mut self, name: &str, ty: &str, v: &[T], le: fn(T) -> [u8; N]) {

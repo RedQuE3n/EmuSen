@@ -142,6 +142,38 @@ impl Input {
     }
 }
 
+/// The input's qwords in the state: the FIFO's eight and the internal buffer's two, with room to spare.
+pub const SLOTS: usize = 16;
+
+/// The input's block of `SPH2` (Sapphire_Native.md §38.2): its qwords, BP and FP.
+impl emusen_native::State for Input {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32("Length", self.q.len() as u32);
+        w.u128s("Qwords", &crate::state::slots::<_, SLOTS>(&self.q));
+        w.u32s("Pointers", &[self.bp, self.fp as u32]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let len = r.u32()?;
+        let mut q = [0u128; SLOTS];
+        r.u128s(&mut q)?;
+        crate::state::refill(&mut self.q, len, &q);
+        let mut p = [0u32; 2];
+        r.u32s(&mut p)?;
+        self.bp = p[0] & 0x7F;
+        self.fp = (p[1] as usize).min(INTERNAL_QWORDS).min(self.q.len());
+        Ok(())
+    }
+}
+
+impl Input {
+    pub fn fits(&self) -> bool {
+        self.q.len() <= SLOTS
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

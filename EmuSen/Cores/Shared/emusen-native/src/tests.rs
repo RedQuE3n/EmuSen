@@ -69,6 +69,23 @@ fn arrays_carry_no_length_and_read_back() {
 }
 
 #[test]
+fn wide_words_read_back_little_endian() {
+    let mut buf = [0u8; 48];
+    let mut w = StateWriter::new(&mut buf);
+    w.u128("a", 0x0102_0304_0506_0708_090A_0B0C_0D0E_0F10);
+    w.u128s("b", &[1, u128::MAX]);
+    assert_eq!((w.len(), buf[0], buf[15], buf[16]), (48, 0x10, 0x01, 1));
+    let mut r = StateReader::new(&buf);
+    let mut b = [0u128; 2];
+    assert_eq!(r.u128(), Ok(0x0102_0304_0506_0708_090A_0B0C_0D0E_0F10));
+    r.u128s(&mut b).unwrap();
+    assert_eq!(b, [1, u128::MAX]);
+    let mut layout = StateWriter::layout();
+    layout.u128s("b", &b);
+    assert_eq!(layout.into_layout(), "0 32 u128[2] b\n");
+}
+
+#[test]
 fn a_counter_and_a_layout_count_what_a_writer_writes() {
     let pairs = [Pair { a: 1, b: 2 }, Pair { a: 3, b: 4 }];
     let write = |w: &mut StateWriter| {

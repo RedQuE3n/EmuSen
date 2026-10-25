@@ -208,3 +208,39 @@ pub fn cycles(mut read: impl FnMut(u32) -> u128, from: u32, limit: u32) -> Optio
     }
     None
 }
+
+/// A path's packet in `SPH2` (Sapphire_Native.md §38.2): its GIFtag's fields and how far it has gone.
+impl emusen_native::State for Packet {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let t = &self.tag;
+        let flg = match t.flg {
+            Flg::Packed => 0,
+            Flg::Reglist => 1,
+            Flg::Image => 2,
+        };
+        w.u16s("Counts", &[t.nloop, t.prim, self.loops]);
+        w.u8("Bits", u8::from(t.eop) | u8::from(t.pre) << 1 | u8::from(self.open) << 2 | flg << 3);
+        w.bytes("Regs", &[t.nreg, self.reg]);
+        w.u64("RegList", t.regs);
+        w.u32("Taken", self.taken);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut c = [0u16; 3];
+        r.u16s(&mut c)?;
+        let bits = r.u8()?;
+        let mut regs = [0u8; 2];
+        r.bytes(&mut regs)?;
+        let flg = match bits >> 3 & 3 {
+            1 => Flg::Reglist,
+            2 => Flg::Image,
+            _ => Flg::Packed,
+        };
+        self.tag = Tag { nloop: c[0], eop: bits & 1 != 0, pre: bits & 2 != 0, prim: c[1], flg, nreg: regs[0], regs: r.u64()? };
+        (self.loops, self.open, self.reg) = (c[2], bits & 4 != 0, regs[1]);
+        self.taken = r.u32()?;
+        Ok(())
+    }
+}

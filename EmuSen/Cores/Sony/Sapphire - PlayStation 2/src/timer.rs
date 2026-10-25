@@ -208,3 +208,25 @@ pub fn decode(paddr: u32) -> Option<(usize, u32)> {
         _ => None,
     }
 }
+
+/// A timer's block of `SPH2` (Sapphire_Native.md §38.2): its registers, the time its count holds at, its gate's level.
+impl emusen_native::State for Timer {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u16s("Count", &[self.count, self.comp, self.hold]);
+        w.u32("Mode", self.mode);
+        w.u64("Synced", self.synced);
+        w.bool("GateHigh", self.gate_high);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut c = [0u16; 3];
+        r.u16s(&mut c)?;
+        [self.count, self.comp, self.hold] = c;
+        self.mode = r.u32()?;
+        self.synced = r.u64()?;
+        self.gate_high = r.bool()?;
+        Ok(())
+    }
+}

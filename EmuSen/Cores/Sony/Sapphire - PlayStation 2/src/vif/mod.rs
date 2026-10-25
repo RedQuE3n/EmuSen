@@ -672,3 +672,131 @@ impl Vif {
         if self.reversed() { self.fifo.pop_front().map_or(0, |(q, _)| q) } else { 0 }
     }
 }
+
+/// VIF FIFO entries in the state: room for the EE's stores past the 8 or 16 the DMAC fills.
+const FIFO_SLOTS: usize = 64;
+
+impl Cmd {
+    /// The command in `SPH2`: a tag, four bytes, eight words and 128 bits, whichever of them its kind uses.
+    fn saved(&self) -> (u8, [u8; 4], [u32; 8], u128) {
+        let mut words = [0u32; 8];
+        match *self {
+            Cmd::Idle => (0, [0; 4], words, 0),
+            Cmd::Wait { gif, path3, then } => {
+                let (code, at) = match then {
+                    Then::Done => (0, 0),
+                    Then::Start(None) => (1, 0),
+                    Then::Start(Some(a)) => (2, a),
+                    Then::Load => (3, 0),
+                };
+                words[0] = u32::from(at);
+                (1, [u8::from(gif), u8::from(path3), code, 0], words, 0)
+            }
+            Cmd::Words { to, got, need, w } => {
+                words[..4].copy_from_slice(&w);
+                (2, [to, got, need, 0], words, 0)
+            }
+            Cmd::Mpg { addr, left, low } => {
+                words[..3].copy_from_slice(&[addr, left, low.unwrap_or(0)]);
+                (3, [u8::from(low.is_some()), 0, 0, 0], words, 0)
+            }
+            Cmd::Direct { hl, left, got, w } => {
+                words[0] = left;
+                words[1..5].copy_from_slice(&w);
+                (4, [u8::from(hl), got, 0, 0], words, 0)
+            }
+            Cmd::Unpack(ref u) => {
+                let (f, w, bits) = u.saved();
+                (5, [u8::from(f[0]), u8::from(f[1]), 0, 0], w, bits)
+            }
+        }
+    }
+
+    fn restored(tag: u8, b: [u8; 4], w: [u32; 8], bits: u128) -> Cmd {
+        let four = [w[0], w[1], w[2], w[3]];
+        match tag {
+            1 => Cmd::Wait {
+                gif: b[0] != 0,
+                path3: b[1] != 0,
+                then: match b[2] {
+                    1 => Then::Start(None),
+                    2 => Then::Start(Some(w[0] as u16)),
+                    3 => Then::Load,
+                    _ => Then::Done,
+                },
+            },
+            2 => Cmd::Words { to: b[0], got: b[1].min(4), need: b[2].min(4), w: four },
+            3 => Cmd::Mpg { addr: w[0], left: w[1], low: (b[0] != 0).then_some(w[2]) },
+            4 => Cmd::Direct { hl: b[0] != 0, left: w[0], got: b[1].min(4), w: [w[1], w[2], w[3], w[4]] },
+            5 => Cmd::Unpack(Unpack::restored([b[0] != 0, b[1] != 0], w, bits)),
+            _ => Cmd::Idle,
+        }
+    }
+}
+
+/// A VIF's block of `SPH2` (Sapphire_Native.md §38.2): its registers, the FIFO, the qword being taken apart, the
+/// command in progress, the VIFcode held, the stall and stop flags and its clock.
+impl emusen_native::State for Vif {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Registers", &[self.stat, self.err, self.mark, self.cycle, self.num, self.code, self.itops, self.itop, self.base, self.ofst, self.tops, self.top]);
+        w.u32s("Row", &self.fill.row);
+        w.u32s("Col", &self.fill.col);
+        w.u32s("MaskMode", &[self.fill.mask, self.fill.mode]);
+        let f = crate::state::slots::<_, FIFO_SLOTS>(&self.fifo);
+        w.u32("FifoLength", self.fifo.len() as u32);
+        w.u128s("FifoQwords", &f.map(|e| e.0));
+        w.bools("FifoTags", &f.map(|e| e.1));
+        w.u32s("Current", &self.cur);
+        w.u8("CurrentAt", self.cur_at as u8);
+        let (tag, bytes, words, bits) = self.cmd.saved();
+        w.u8("Command", tag);
+        w.bytes("CommandBytes", &bytes);
+        w.u32s("CommandWords", &words);
+        w.u128("CommandBits", bits);
+        crate::state::opt_u32(w, "Held", self.held);
+        w.bools("Flags", &[self.i_bit, self.stall_next, self.stop_next, self.dmac_waiting, self.wake, self.irq]);
+        w.u64s("Time", &[self.time, self.received]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut g = [0u32; 12];
+        r.u32s(&mut g)?;
+        [self.stat, self.err, self.mark, self.cycle, self.num, self.code, self.itops, self.itop, self.base, self.ofst, self.tops, self.top] = g;
+        r.u32s(&mut self.fill.row)?;
+        r.u32s(&mut self.fill.col)?;
+        let mut mm = [0u32; 2];
+        r.u32s(&mut mm)?;
+        [self.fill.mask, self.fill.mode] = mm;
+        let len = r.u32()?;
+        let mut q = [0u128; FIFO_SLOTS];
+        let mut tags = [false; FIFO_SLOTS];
+        r.u128s(&mut q)?;
+        r.bools(&mut tags)?;
+        crate::state::refill::<_, FIFO_SLOTS>(&mut self.fifo, len, &std::array::from_fn(|i| (q[i], tags[i])));
+        r.u32s(&mut self.cur)?;
+        self.cur_at = usize::from(r.u8()?).min(4);
+        let tag = r.u8()?;
+        let mut bytes = [0u8; 4];
+        r.bytes(&mut bytes)?;
+        let mut words = [0u32; 8];
+        r.u32s(&mut words)?;
+        self.cmd = Cmd::restored(tag, bytes, words, r.u128()?);
+        self.held = crate::state::read_opt_u32(r)?;
+        let mut f = [false; 6];
+        r.bools(&mut f)?;
+        [self.i_bit, self.stall_next, self.stop_next, self.dmac_waiting, self.wake, self.irq] = f;
+        let mut t = [0u64; 2];
+        r.u64s(&mut t)?;
+        [self.time, self.received] = t;
+        Ok(())
+    }
+}
+
+impl Vif {
+    /// Whether the FIFO is within its slots in the state.
+    pub fn fits(&self) -> bool {
+        self.fifo.len() <= FIFO_SLOTS
+    }
+}

@@ -67,6 +67,21 @@ impl Nvm {
     }
 }
 
+impl Nvm {
+    /// The session open in `SPH2`: whether one is, for writing, its next block and the blocks left. The bytes are the
+    /// console's medium, kept apart from every state (Sapphire_Native.md §38.3).
+    pub fn session_saved(&self) -> ([bool; 2], [u32; 2]) {
+        let s = self.session.unwrap_or(Session { write: false, block: 0, left: 0 });
+        ([self.session.is_some(), s.write], [s.block as u32, s.left as u32])
+    }
+
+    pub fn restore_session(&mut self, flags: [bool; 2], v: [u32; 2]) {
+        let block = (v[0] as usize).min(BYTES / BLOCK);
+        let left = (v[1] as usize).min(BYTES / BLOCK - block);
+        self.session = flags[0].then_some(Session { write: flags[1], block, left });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

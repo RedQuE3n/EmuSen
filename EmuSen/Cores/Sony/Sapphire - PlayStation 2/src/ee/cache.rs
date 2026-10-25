@@ -149,3 +149,89 @@ impl Btac {
         }
     }
 }
+
+/// A data tag's D, V, R and L as bits 0 to 3 of a byte, and an instruction tag's V and R as bits 0 and 1.
+fn dbits(t: &DTag) -> u8 {
+    u8::from(t.dirty) | u8::from(t.valid) << 1 | u8::from(t.lrf) << 2 | u8::from(t.lock) << 3
+}
+
+/// The caches' blocks of `SPH2`: every tag and line, the UCAB and the BTAC.
+impl emusen_native::State for DCache {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let tags = self.tags.as_flattened();
+        w.u32s("Frames", &std::array::from_fn::<u32, { DSETS * 2 }, _>(|i| tags[i].pfn));
+        w.bytes("Bits", &std::array::from_fn::<u8, { DSETS * 2 }, _>(|i| dbits(&tags[i])));
+        w.bytes("Lines", self.data.as_flattened().as_flattened());
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut frames = [0u32; DSETS * 2];
+        let mut bits = [0u8; DSETS * 2];
+        r.u32s(&mut frames)?;
+        r.bytes(&mut bits)?;
+        for (i, t) in self.tags.as_flattened_mut().iter_mut().enumerate() {
+            let b = bits[i];
+            *t = DTag { pfn: frames[i], dirty: b & 1 != 0, valid: b & 2 != 0, lrf: b & 4 != 0, lock: b & 8 != 0 };
+        }
+        r.bytes(self.data.as_flattened_mut().as_flattened_mut())
+    }
+}
+
+impl emusen_native::State for ICache {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let tags = self.tags.as_flattened();
+        w.u32s("Frames", &std::array::from_fn::<u32, { ISETS * 2 }, _>(|i| tags[i].pfn));
+        w.bytes("Bits", &std::array::from_fn::<u8, { ISETS * 2 }, _>(|i| u8::from(tags[i].valid) | u8::from(tags[i].lrf) << 1));
+        w.u32s("Lines", self.data.as_flattened().as_flattened());
+        w.bytes("Side", self.side.as_flattened().as_flattened());
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut frames = [0u32; ISETS * 2];
+        let mut bits = [0u8; ISETS * 2];
+        r.u32s(&mut frames)?;
+        r.bytes(&mut bits)?;
+        for (i, t) in self.tags.as_flattened_mut().iter_mut().enumerate() {
+            *t = ITag { pfn: frames[i], valid: bits[i] & 1 != 0, lrf: bits[i] & 2 != 0 };
+        }
+        r.u32s(self.data.as_flattened_mut().as_flattened_mut())?;
+        r.bytes(self.side.as_flattened_mut().as_flattened_mut())
+    }
+}
+
+impl emusen_native::State for Ucab {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.bool("Valid", self.valid);
+        w.u32("Tag", self.tag);
+        w.bytes("Line", &self.data);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.valid = r.bool()?;
+        self.tag = r.u32()?;
+        r.bytes(&mut self.data)
+    }
+}
+
+impl emusen_native::State for Btac {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Entries", &std::array::from_fn::<u32, 128, _>(|i| if i % 2 == 0 { self.entries[i / 2].0 } else { self.entries[i / 2].1 }));
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut words = [0u32; 128];
+        r.u32s(&mut words)?;
+        for (e, s) in self.entries.iter_mut().zip(words.as_chunks::<2>().0) {
+            *e = (s[0], s[1]);
+        }
+        Ok(())
+    }
+}

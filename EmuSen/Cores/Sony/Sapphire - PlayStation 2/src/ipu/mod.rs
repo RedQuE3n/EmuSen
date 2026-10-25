@@ -860,3 +860,76 @@ impl Ipu {
         self.next_block();
     }
 }
+
+const JOBS: [Job; 10] = [Job::Idle, Job::Idec, Job::Bdec, Job::Vdec, Job::Fdec, Job::SetIq, Job::SetVq, Job::Csc, Job::Pack, Job::Ending];
+const PHASES: [Phase; 8] = [Phase::First, Phase::Next, Phase::MbType, Phase::Modes, Phase::Cbp, Phase::Block, Phase::EndOfMacroblock, Phase::After];
+
+/// The IPU's block of `SPH2` (Sapphire_Native.md §38.2): both FIFOs, the output not yet in the FIFO, the registers, the
+/// command and where it is, the matrices and tables, the DC predictors, the macroblock being decoded, and the bytes
+/// gathered.
+impl emusen_native::State for Ipu {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.structure("Input", &self.input);
+        w.u32("OutLength", self.out.len() as u32);
+        w.u128s("Out", &crate::state::slots::<_, { bits::SLOTS }>(&self.out));
+        w.u128s("Pending", &self.pending);
+        w.u32s("Registers", &[self.pending_at as u32, self.pending_len as u32, self.ctrl, self.cmd, self.skip, self.data, self.th.0, self.th.1, self.gathered as u32, self.left]);
+        w.bytes("Job", &[JOBS.iter().position(|&j| j == self.job).unwrap_or(0) as u8, PHASES.iter().position(|&p| p == self.phase).unwrap_or(0) as u8]);
+        w.bools("Flags", &[self.busy, self.issued, self.irq, self.wake]);
+        w.bytes("Iq", self.iq.as_flattened());
+        w.u16s("Vq", &self.vq);
+        w.i32s("DcPred", &self.dc_pred);
+        let m = &self.mb;
+        w.bools("Macroblock", &[m.intra, m.quant, m.field_dct, m.at == In::Coef]);
+        w.u32s("MacroblockWords", &[m.qsc, u32::from(m.pattern), m.block as u32, m.n as u32]);
+        w.i32s("Qfs", &m.qfs);
+        w.u16s("Blocks", m.out.map(|b| b.map(|s| s as u16)).as_flattened());
+        w.bytes("Raw", &self.raw[..]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.input.read_state(r)?;
+        let len = r.u32()?;
+        let mut out = [0u128; bits::SLOTS];
+        r.u128s(&mut out)?;
+        crate::state::refill(&mut self.out, len, &out);
+        r.u128s(&mut self.pending)?;
+        let mut g = [0u32; 10];
+        r.u32s(&mut g)?;
+        (self.pending_at, self.pending_len, self.ctrl, self.cmd, self.skip, self.data) = ((g[0] as usize).min(64), (g[1] as usize).min(64), g[2], g[3], g[4], g[5]);
+        (self.th, self.gathered, self.left) = ((g[6], g[7]), (g[8] as usize).min(1024), g[9]);
+        let mut j = [0u8; 2];
+        r.bytes(&mut j)?;
+        self.job = JOBS.get(usize::from(j[0])).copied().unwrap_or(Job::Idle);
+        self.phase = PHASES.get(usize::from(j[1])).copied().unwrap_or(Phase::First);
+        let mut f = [false; 4];
+        r.bools(&mut f)?;
+        [self.busy, self.issued, self.irq, self.wake] = f;
+        r.bytes(self.iq.as_flattened_mut())?;
+        r.u16s(&mut self.vq)?;
+        r.i32s(&mut self.dc_pred)?;
+        let m = &mut self.mb;
+        let mut b = [false; 4];
+        r.bools(&mut b)?;
+        (m.intra, m.quant, m.field_dct, m.at) = (b[0], b[1], b[2], if b[3] { In::Coef } else { In::DcSize });
+        let mut mw = [0u32; 4];
+        r.u32s(&mut mw)?;
+        (m.qsc, m.pattern, m.block, m.n) = (mw[0], mw[1] as u8, (mw[2] as usize).min(6), (mw[3] as usize).min(64));
+        r.i32s(&mut m.qfs)?;
+        let mut blocks = [0u16; 6 * 64];
+        r.u16s(&mut blocks)?;
+        for (d, s) in m.out.as_flattened_mut().iter_mut().zip(blocks) {
+            *d = s as i16;
+        }
+        r.bytes(&mut self.raw[..])
+    }
+}
+
+impl Ipu {
+    /// Whether the FIFOs are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        self.input.fits() && self.out.len() <= bits::SLOTS
+    }
+}

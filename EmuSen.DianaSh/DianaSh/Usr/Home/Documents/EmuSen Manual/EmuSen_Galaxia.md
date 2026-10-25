@@ -412,6 +412,23 @@ manifests it leaves compared byte for byte), `A_packaged_game_s_saves_and_states
 and `A_packaged_game_s_cheat_list_is_kept_in_its_package`; `LibraryParityTests.A_library_with_packages_beside_it_is_listed_alike`;
 in Rust, `claims.rs`'s two cases and `emusen-library`'s package scan.
 
+### 3.12 A packaged game's soft patches: what Galaxia holds for them (2026-10-25)
+
+*Built at step 6 of `EmuSen_GamePackages.md` §7; §15 there is the record.* What a patch does is `emusen-patch`'s
+(`Platform/patch`), never Galaxia's, which interprets no content (§1). Galaxia keeps only what a patched image needs of
+the places and identities it already owns:
+
+- **Bytes held in place of a mapping.** `Mapped::held` in Rust holds an image in memory and answers `bytes()` as a
+  mapping does, unchanged and at one address for its life; `DiscFiles.Patch` in C# swaps a disc's image for such bytes
+  and lets the mapping go, and `MappedFile.FromNative` wraps a mapping the platform library made, such as the one
+  `emusen_patch_package_image` answers (interface 26). A loan to a core that claims `BORROW` holds them as it holds a
+  mapped file (§3.8); nothing is advised for them (§3.9).
+- **The manifest's patch fields** (§3.10): `package::patched` and `scrapes_as_patched` in Rust, `GamePackage.Patches`,
+  `Patched`, `PatchedIdentity` and `ScrapesAsPatched` in C#, which read `patches`, `patched` and `identity` as
+  `EmuSen_GamePackages.md` §15.2 writes them. A state's record takes the patched image's MD5 and size from them, and
+  the scraper the hashes it sends first under `identity: patched`.
+- **`RomHash.sha1_of`**, the SHA-1 of bytes held, which an IPS patch is pinned to (§5.4).
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.

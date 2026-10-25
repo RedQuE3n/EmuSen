@@ -3747,10 +3747,11 @@ chapter 6 transcribed apart from `src/vif`.
 **Tests** [M, `cargo test --release`]: `tests/vif.rs` **12 of 12** — the seven programs, each equal to its record word
 for word (`s14-direct`'s also checking PATH2's six qwords in order and the PATH3 mask set and cleared); the console texts
 of §28.7; the DMAC waiting on a full FIFO (§28.4); VIF1 reversed carrying a 64-pixel local-to-host transfer to memory.
-`tests/dmac.rs` **17 of 17** on the real VIFs, S11's assertions on its stand-ins at channels 0 and 1 moved to the VIFs
-(VIF0 receiving three qwords of NOPs, VIF1 seventy). The crate's other tests unchanged: lib **39 of 39**, `cop0` 19,
-`fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3, `vu0` 14, `vu_micro` 24; lib, `vif`,
-`dmac`, `micro` and `vu0` also under `test-checked`; clippy clean.
+`tests/dmac.rs` **18 of 18** on the real VIFs, S11's assertions on its stand-ins at channels 0 and 1 moved to the VIFs
+(VIF0 receiving three qwords of NOPs, VIF1 seventy). On the tree with S22, S17 and S20 beneath, the crate's other tests
+unchanged: lib **44 of 44**, `cop0` 19, `draw` 13, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13,
+`pcrtc` 5, `programs` 3, `sif` 5, `vu0` 14, `vu_micro` 24; lib, `vif`, `dmac`, `micro` and `vu0` also under
+`test-checked`; clippy clean. The programs' ELFs are byte for byte those the referees ran before the rebase.
 
 ### 28.7 The console texts: `dma/vif/*` on the VIF directly, and on PCSX2 (measured 2026-10-25)
 
@@ -3816,8 +3817,8 @@ it; Play! is a witness for little beyond TTE and the formats' common fields.
 ### 28.10 The blast radius (measured 2026-10-25)
 
 `blast.sh WiseMan sapphire-s14` names the Sapphire crate and WiseMan's `SapphireTests`: the crate as §28.6 gives it,
-and WiseMan's filter **5 of 5**, run once at CPU weight 20, `LunaP.props` pointed at the sibling LunaP checkout by a
-local change that is not committed.
+and WiseMan's filter **5 of 5** before and after the rebase onto S22's, S17's and S20's merges, each run once at CPU
+weight 20, `LunaP.props` pointed at the sibling LunaP checkout by a local change that is not committed.
 
 ### 28.11 Seeded faults (2026-10-25)
 

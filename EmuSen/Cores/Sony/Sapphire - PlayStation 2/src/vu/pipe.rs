@@ -5,7 +5,7 @@
 //! on (§3.4.5); P at the EFU's, its latency on (§3.4.6, §7.4); and an integer result a branch in the very next pair does
 //! not yet see (§3.4.8). A register read waits for the FMAC write before it field by field, and an integer read for
 //! ILW's and ILWR's load; ACC, I, Q, P and R are never waited on (§3.4.1). Sapphire_Native.md §23 records each reading
-//! and Sapphire_Disputes.md D-80 on the ones the manual leaves open.
+//! and Sapphire_Disputes.md D-80 to D-85 the ones the manual leaves open.
 
 use std::collections::VecDeque;
 

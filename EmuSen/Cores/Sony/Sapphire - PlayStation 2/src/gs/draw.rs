@@ -6,9 +6,9 @@
 use super::psm::Psm;
 use super::{Gs, raster, reg};
 
-/// A vertex as the queue holds it (§3.2.3's figure 3-2): its window coordinates in sixteenths of a pixel, the
-/// primitive coordinates less XYOFFSET at its vertex kick (ps2tek "XYOFFSET"), signed since the offset may exceed them;
-/// Z; and RGBAQ, ST, UV and the fog coefficient as they stood at the kick.
+/// A vertex (§3.2.3's figure 3-2): its coordinates in sixteenths of a pixel, primitive coordinates in the queue and
+/// window coordinates once the drawing kick has subtracted XYOFFSET (signed, since the offset may exceed them); Z; and
+/// RGBAQ, ST, UV and the fog coefficient as they stood at its vertex kick.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Vertex {
     pub x: i32,
@@ -209,11 +209,9 @@ impl Gs {
         if fogged {
             self.regs[reg::FOG as usize] = data & 0xFF00_0000_0000_0000;
         }
-        let ctxt = self.attributes().context() as u8;
-        let offset = self.regs[(reg::XYOFFSET_1 + ctxt) as usize];
         let v = Vertex {
-            x: (data & 0xFFFF) as i32 - (offset & 0xFFFF) as i32,
-            y: (data >> 16 & 0xFFFF) as i32 - (offset >> 32 & 0xFFFF) as i32,
+            x: (data & 0xFFFF) as i32,
+            y: (data >> 16 & 0xFFFF) as i32,
             z: if fogged { (data >> 32) as u32 & 0xFF_FFFF } else { (data >> 32) as u32 },
             rgbaq: self.regs[reg::RGBAQ as usize],
             st: self.regs[reg::ST as usize],
@@ -228,8 +226,11 @@ impl Gs {
             return;
         }
         if matches!(r, reg::XYZ2 | reg::XYZF2) {
+            // XYOFFSET of the drawing's context, at the drawing kick (Sapphire_Disputes.md D-162).
             let env = Environment::read(self, self.attributes());
-            let v = self.queue.v;
+            let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
+            let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
+            let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
             let local = &mut self.local;
             match kind {
                 Kind::Point => raster::point(&env, local, &v[0]),

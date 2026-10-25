@@ -9,7 +9,7 @@
 
 use crate::s16::manual::{self as m16, bits};
 
-/// A vertex in window coordinates (sixteenths), with Z and its colour.
+/// A vertex in primitive coordinates (sixteenths) while queued, in window coordinates when drawn, with Z and colour.
 #[derive(Clone, Copy, Debug)]
 struct V {
     x: i128,
@@ -85,12 +85,11 @@ impl Model {
     /// §3.2.3's vertex kick and §3.2.4's drawing kick, by the tables of register orders.
     fn vertex(&mut self, reg: u8, v: u64) {
         let with_fog = reg == 0x04 || reg == 0x0C;
-        let off = self.regs[0x18 + self.ctxt()];
         let rgba = self.regs[0x01];
         let z = if with_fog { bitsof(v, 32, 24) } else { bitsof(v, 32, 32) };
         self.queue.push(V {
-            x: bitsof(v, 0, 16) as i128 - bitsof(off, 0, 16) as i128,
-            y: bitsof(v, 16, 16) as i128 - bitsof(off, 32, 16) as i128,
+            x: bitsof(v, 0, 16) as i128,
+            y: bitsof(v, 16, 16) as i128,
             z: z as i128,
             c: [0, 8, 16, 24].map(|s| bitsof(rgba, s, 8) as i128),
         });
@@ -105,6 +104,10 @@ impl Model {
         }
         let q = self.queue.clone();
         if reg == 0x04 || reg == 0x05 {
+            // §2.4.3: window = primitive - offset, the offset the drawing's context names.
+            let o = self.regs[0x18 + self.ctxt()];
+            let w: Vec<V> = q.iter().map(|v| V { x: v.x - bitsof(o, 0, 16) as i128, y: v.y - bitsof(o, 32, 16) as i128, ..*v }).collect();
+            let q = w;
             match kind {
                 0 => self.point(q[0]),
                 1 | 2 => self.line(q[0], q[1]),
@@ -192,16 +195,15 @@ impl Model {
             if !(meets || on) || holds(b.x, b.y, x, y) {
                 continue;
             }
-            // Along the major axis, clamped to the segment: t = (centre - a) / (b - a).
-            let (mut n, mut d) = if xmajor { (cx - a.x, dx) } else { (cy - a.y, dy) };
+            // Along the major axis: t = (centre - a) / (b - a), continued past the ends, the result held to its range.
+            let (mut t, mut d) = if xmajor { (cx - a.x, dx) } else { (cy - a.y, dy) };
             if d < 0 {
-                n = -n;
+                t = -t;
                 d = -d;
             }
-            let t = n.clamp(0, d);
             let lerp = |p: i128, q: i128| (p * (d - t) + q * t).div_euclid(d);
-            let z = lerp(a.z, b.z);
-            let c = if self.gouraud() { [0, 1, 2, 3].map(|i| lerp(a.c[i], b.c[i])) } else { b.c };
+            let z = lerp(a.z, b.z).clamp(0, u32::MAX as i128);
+            let c = if self.gouraud() { [0, 1, 2, 3].map(|i| lerp(a.c[i], b.c[i]).clamp(0, 255)) } else { b.c };
             self.pixel(x, y, z, c);
         }
     }

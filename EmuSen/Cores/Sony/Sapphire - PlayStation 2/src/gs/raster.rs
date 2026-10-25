@@ -4,14 +4,17 @@
 //!
 //! - a **point** draws the pixel nearest its vertex, a half rounding up;
 //! - a **line** draws the pixels whose diamond (§3.2.9's figure 3-5: |dx| + |dy| < 1/2 about the centre) it passes
-//!   through, the start's drawn and the end's not; a crossing of the major axis's column exactly between two diamonds
-//!   takes the one further down (x-major) or right (y-major), as a half rounds up;
+//!   through, the start's drawn and the end's not: one pixel in each column of its major axis it crosses, the one whose
+//!   diamond holds the crossing (a crossing exactly between two diamonds taking the one further down for an x-major
+//!   line, further right for a y-major one, as a half rounds up), from the start's pixel when the start lies in a
+//!   diamond to the pixel before the end's when the end does, an end on a diamond's edge lying in none;
 //! - a **triangle** draws the pixels whose centre is inside it, or on a left or top side but not a right or bottom one;
 //! - a **sprite** draws the centres in [x0, x1) × [y0, y1), its top and left sides in and its bottom and right out.
 //!
 //! Colour is the last vertex's when flat (§3.2.8) and, when Gouraud, the vertices' colours interpolated linearly at the
-//! pixel's centre (along the major axis for a line, clamped to its ends) and rounded down; Z is interpolated so whatever
-//! the shading, and a sprite takes its second vertex's (§3.2.8). The documents give the rule but not the DDA's fixed
+//! pixel's centre and rounded down; along a line that is by the major axis, continued past an end whose pixel's centre
+//! lies beyond it and held to the channel's range (D-161). Z is interpolated so whatever the shading, and a sprite takes
+//! its second vertex's (§3.2.8). The documents give the rule but not the DDA's fixed
 //! point; the interpolation is therefore exact, a reading recorded as Sapphire_Disputes.md D-160. The loops of sprites
 //! and triangles run over the primitive's bounding box within the scissoring area, whose test (`pixel`) the pixels
 //! outside it would fail first. Sapphire_Native.md §27.
@@ -46,8 +49,9 @@ pub fn sprite(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
     }
 }
 
-/// Whether the point (`u`, `v`), in sixteenths along the line's major and minor axes, lies in the diamond of the pixel
-/// nearest it: inside, or at the one corner a crossing between two diamonds is given to.
+/// Whether an end of a line, (`u`, `v`) in sixteenths along its major and minor axes, lies in the diamond of the pixel
+/// nearest it: inside, or at the corner a crossing between two diamonds is given to; on an edge it lies in none
+/// (Sapphire_Disputes.md D-161).
 fn in_diamond(u: i32, v: i32) -> bool {
     let (cu, cv) = (16 * nearest(u), 16 * nearest(v));
     (u - cu).abs() + (v - cv).abs() < 8 || (u == cu && v == cv - 8)
@@ -81,11 +85,11 @@ pub fn line(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
     let gouraud = env.attributes.gouraud();
     let mut c = first;
     while (last - c) * s >= 0 {
-        let num = i64::from(16 * c - au) * i64::from(s);
+        let t = i64::from(16 * c - au) * i64::from(s);
         let r = (i64::from(av) * du + i64::from(16 * c - au) * dv + 8 * du).div_euclid(16 * du) as i32;
-        let t = num.clamp(0, du);
-        let z = ((i64::from(a.z) * (du - t) + i64::from(b.z) * t) / du) as u32;
-        let rgba = if gouraud { std::array::from_fn(|i| ((i64::from(ca[i]) * (du - t) + i64::from(cb[i]) * t) / du) as u32) } else { cb };
+        let lerp = |p: u32, q: u32| (i64::from(p) * (du - t) + i64::from(q) * t).div_euclid(du);
+        let z = lerp(a.z, b.z).clamp(0, i64::from(u32::MAX)) as u32;
+        let rgba = if gouraud { std::array::from_fn(|i| lerp(ca[i], cb[i]).clamp(0, 255) as u32) } else { cb };
         let (x, y) = if xmajor { (c, r) } else { (r, c) };
         pixel::draw(env, local, x, y, z, rgba);
         c += s;

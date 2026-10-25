@@ -1151,6 +1151,11 @@ standard output, exit status and host action each line gives, over fixed inputs.
 - **What is not golden**, named in the corpus with its reason: anything that prints a time, a process id or a path of
   the machine the test runs on (`vstop`'s numbers, `pwd` outside the sandbox's fixed root); these are matched by
   pattern, and the pattern is in the file.
+- **A command only the Rust shell has** (added 2026-10-25 with `chd`, the first module with no C# class,
+  `EmuSen_GamePackages.md` §12.3): its file carries the line `shell rust`, and is run, and expected among the
+  commands, on the Rust shell alone; it is recorded there. The listings of `help` and of `man` with no argument, which
+  name every command, are held as patterns in which that command's usage lines are optional, so that both shells
+  match them and a recording from the C# shell keeps them.
 
 ### 13.2 The steps
 

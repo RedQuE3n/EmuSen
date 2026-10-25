@@ -1,0 +1,78 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command chd
+shell rust
+usage 1   chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state
+usage 2   chd convert <path>... [--fast] [-j <n>]
+usage 3                                 convert them to CHD in Compressed, each checked three ways and given a package
+usage 4   chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents
+usage 5   chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)
+
+case the usage, and what a command line refuses
+target none
+covers 2-3,5
+$ chd
+out 210
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
+status 1
+action none
+$ chd frobnicate
+out 210
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
+status 1
+action none
+$ chd convert
+out 272
+chd convert: name what to convert, or / for the whole library
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
+status 1
+action none
+$ chd convert psx -j 0
+out 252
+chd: -j needs a number of threads above 0
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
+status 1
+action none
+$ chd check psx --fast
+out 252
+chd: --fast is not an option of chd check
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
+status 1
+action none
+$ chd wait
+out 25
+chd wait: no such chd job
+status 1
+action none
+$ chd wait chd9
+out 30
+chd wait: no such chd job chd9
+status 1
+action none
+end
+
+case with no library set, every request is refused before anything is read or written
+target none
+covers 1-4
+$ chd ls
+out 73
+chd: AppSettings.RomDirectory is not set: there is no library to convert.
+status 1
+action none
+$ chd check psx
+out 73
+chd: AppSettings.RomDirectory is not set: there is no library to convert.
+status 1
+action none
+$ chd convert / --fast -j 2
+out 73
+chd: AppSettings.RomDirectory is not set: there is no library to convert.
+status 1
+action none
+end

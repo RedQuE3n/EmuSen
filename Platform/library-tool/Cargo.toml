@@ -1,0 +1,28 @@
+[package]
+name = "emusen-library-tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The library tool: the library's discs converted to CHD by the shipped chdman, checked three ways, each given a linked
+# package; listed and checked again. A batch is a job whose events the shell's module and Mistress's window read alike.
+# See EmuSen_GamePackages.md §2.4, §4 and §12.
+[lib]
+name = "emusen_library_tool"
+
+[dependencies]
+# Where a file lives, how it is read and hashed, the archives, the manifest and the atomic write.
+emusen-galaxia = { path = "../galaxia" }
+# What a sheet means and how a CHD reads: check 2 and check 3 read through it, never through chdman.
+emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
+# The routing of a library file to its system, whose one owner is the library's scan.
+emusen-library = { path = "../library" }
+emusen-systems = { path = "../systems" }
+emusen-dotnet = { path = "../dotnet" }
+# The pin's SHA-256; the workspace's, from Galaxia.
+sha2 = "0.11"
+
+# Free space at the output, before a disc is started (§4.6).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

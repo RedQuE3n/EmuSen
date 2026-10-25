@@ -1,0 +1,23 @@
+Written offer of the source of chdman, as section 3(b) of the GNU General Public License, version 2 asks
+(licenses/GPL-2.0.txt).
+
+EmuSen's builds carry chdman, MAME's Compressed Hunks of Data manager, built from MAME's own source and unmodified.
+Which release, and the SHA-256 of the binary for each platform, is recorded in one place, Platform/library-tool/chdman.pin
+in EmuSen's source:
+
+  MAME release  0.289
+  release tag   mame0289, in MAME's public repository, https://github.com/mamedev/mame
+  source        https://github.com/mamedev/mame/releases/download/mame0289/mame0289s.exe
+  its SHA-256   6243eac3a80df6be602bf0af7889305691737bc26c2ded1433ec11b7c6a3c7b9
+
+The scripts used to control its compilation are part of EmuSen's source: Platform/library-tool/build-chdman.sh, which
+unpacks that archive and builds the tools alone with the options of MAME's "Compiling MAME" documentation of the same
+release.
+
+For at least three years from the date on which a build of EmuSen carrying chdman was distributed, the EmuSen project
+will give any third party, on request, a complete machine-readable copy of the corresponding source code of that
+chdman, the archive and the build script above, on a medium customarily used for software interchange, for a charge no
+more than the cost of physically performing the distribution. Requests go to the project through its repository,
+https://github.com/RedQuE3n/EmuSen (an issue titled "chdman source").
+
+The same source is also published by the MAME project at the tag and address above.

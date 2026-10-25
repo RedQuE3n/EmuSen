@@ -89,6 +89,34 @@ pub fn hashes(path: &str, range: Option<(u64, u64)>) -> std::io::Result<Hashes> 
     hashes_with(path, range, false, &|| false)
 }
 
+/// The hashes taken as bytes arrive, in pieces: one read of a file or a range, or bytes rebuilt from another container.
+pub struct Hasher {
+    md5: Md5,
+    crc: Crc32,
+    sha: Option<Sha1>,
+    size: u64,
+}
+
+impl Hasher {
+    /// MD5 and CRC-32, and SHA-1 when `sha1`.
+    pub fn new(sha1: bool) -> Hasher {
+        Hasher { md5: Md5::new(), crc: Crc32::default(), sha: sha1.then(Sha1::new), size: 0 }
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.md5.update(bytes);
+        self.crc.append(bytes);
+        if let Some(sha) = self.sha.as_mut() {
+            sha.update(bytes);
+        }
+        self.size += bytes.len() as u64;
+    }
+
+    pub fn finish(self) -> Hashes {
+        Hashes { md5: hex(&self.md5.finalize()), crc32: self.crc.hex(), sha1: self.sha.map(|sha| hex(&sha.finalize())), size: self.size }
+    }
+}
+
 /// As [`hashes`], with SHA-1 too when `sha1`; `stop` is asked before each 64 KiB read, and a stop is `ErrorKind::Interrupted`.
 pub fn hashes_with(path: &str, range: Option<(u64, u64)>, sha1: bool, stop: &dyn Fn() -> bool) -> std::io::Result<Hashes> {
     let mut file = std::fs::File::open(path)?;
@@ -97,10 +125,8 @@ pub fn hashes_with(path: &str, range: Option<(u64, u64)>, sha1: bool, stop: &dyn
         file.seek(SeekFrom::Start(offset))?;
         left = length;
     }
-    let (mut md5, mut crc) = (Md5::new(), Crc32::default());
-    let mut sha = sha1.then(Sha1::new);
+    let mut hasher = Hasher::new(sha1);
     let mut buffer = vec![0u8; 1 << 16];
-    let mut size = 0u64;
     while left > 0 {
         if stop() {
             return Err(std::io::Error::from(std::io::ErrorKind::Interrupted));
@@ -110,22 +136,17 @@ pub fn hashes_with(path: &str, range: Option<(u64, u64)>, sha1: bool, stop: &dyn
         if read == 0 {
             break;
         }
-        md5.update(&buffer[..read]);
-        crc.append(&buffer[..read]);
-        if let Some(sha) = sha.as_mut() {
-            sha.update(&buffer[..read]);
-        }
-        size += read as u64;
+        hasher.update(&buffer[..read]);
         left -= read as u64;
     }
-    Ok(Hashes { md5: hex(&md5.finalize()), crc32: crc.hex(), sha1: sha.map(|sha| hex(&sha.finalize())), size })
+    Ok(hasher.finish())
 }
 
 /// All three hashes of bytes held in memory, as the C# `RomHashes.Of(byte[])` takes them of a transformed image.
 pub fn hashes_of(bytes: &[u8]) -> Hashes {
-    let mut crc = Crc32::default();
-    crc.append(bytes);
-    Hashes { md5: hex(&Md5::digest(bytes)), crc32: crc.hex(), sha1: Some(hex(&Sha1::digest(bytes))), size: bytes.len() as u64 }
+    let mut hasher = Hasher::new(true);
+    hasher.update(bytes);
+    hasher.finish()
 }
 
 /// The hashes of the form `transform` makes of a file's bytes, or none where it makes none or the same bytes: the

@@ -68,7 +68,7 @@ Apache-2.0, The Rust Project Developers). The crates under `EmuSen/Cores/Shared/
 
 The others use the crates below, as `cargo tree` gave each library's normal and build dependencies for every target on
 2026-10-15. MarsRT's are for its Cranelift recompiler and its Vulkan path. Nephrite's, Diamond's and the platform
-library's shared set is `emusen-disc`'s, which reads CHD images through the `chd` crate. CHD is MAME's format; no part of MAME is in a build today. chdman (MAME's tool, its source file BSD-3-Clause, copyright Aaron Giles; MAME as a whole GPL-2.0-or-later, "The MAME License", MAME Documentation 0.289) will be listed here with its licence texts and a written offer of its source when a build ships it (`EmuSen_GamePackages.md` §4.9). The platform library also
+library's shared set is `emusen-disc`'s, which reads CHD images through the `chd` crate. CHD is MAME's format; no code of MAME is in these libraries. chdman, MAME's tool for it, is shipped beside them as a program of its own (§1.7). The platform library also
 uses the MD5 crates for the hash by which a ROM file is recognised after a rename, `libloading` (with `windows-link`
 on Windows) to call the SDL3, the Shaderc and the SQLite the program ships, `sha2` (with `cpufeatures`, and on some
 processors `libc`) for the keys of the compiled-shader cache, `ash`, without its own loader, for Vulkan's
@@ -215,6 +215,41 @@ shipped in every build up to its removal as the SNES's reference engine and the 
 missing. VenusRT, the SNES's engine, is a separate rewrite that takes nothing from Mesen or from Venus (C#).
 Venus (C#) was removed from the source on 2026-10-16, and this credit stands for the repository's history and for the
 releases that carry it, 0.9.1 among them (`VenusRT_Native.md` §68).
+
+### 1.7 chdman, from MAME
+
+Since 2026-10-25 a build carries one program that is not EmuSen's: chdman, the Compressed Hunks of Data manager of
+[MAME](https://www.mamedev.org/), beside the platform library as `chdman` (`chdman.exe` on Windows). EmuSen's CHD tool
+runs it to write CHD files and to verify them (`EmuSen_GamePackages.md` §4, §12). It is MAME's own code, built
+unmodified from MAME's source archive by `Platform/library-tool/build-chdman.sh`, following MAME's documentation
+"Compiling MAME"; the release and the SHA-256 of each platform's binary are recorded in
+`Platform/library-tool/chdman.pin`, and the CHD tool refuses a chdman whose SHA-256 is not the pinned one. Its manual
+is MAME's own page, ["chdman – CHD (Compressed Hunks of Data) File Manager"](https://docs.mamedev.org/tools/chdman.html),
+MAME Documentation 0.289.
+
+| Component | Version | Licence | Copyright |
+|---|---|---|---|
+| chdman (its source file) | MAME 0.289, tag `mame0289` | BSD-3-Clause ([`licenses/chdman-BSD-3-Clause.txt`](licenses/chdman-BSD-3-Clause.txt)) | Aaron Giles |
+| MAME as a whole, from which chdman is built | 0.289 | GNU General Public License, version 2 or later ([`licenses/GPL-2.0.txt`](licenses/GPL-2.0.txt)) | 1997-2026 MAMEDev and contributors ("The MAME License", MAME Documentation 0.289) |
+
+**The written offer of chdman's source**, as GPL-2.0's section 3 asks of a binary distributed without it, is
+[`licenses/chdman-SOURCE-OFFER.txt`](licenses/chdman-SOURCE-OFFER.txt). It names the release tag, `mame0289` in MAME's
+public repository, and the source archive the binary was built from.
+
+**Libraries inside chdman.** MAME builds chdman with libraries of its own source tree linked in. Those below were found
+by the names and notices the binary itself carries (measured on 2026-10-25 with `strings`; MAME's source is not read),
+and their licences are the upstream projects' own texts, read on 2026-10-25:
+
+| Library | Licence | Copyright |
+|---|---|---|
+| [zlib](https://zlib.net/) 1.3.2 | zlib ([`licenses/zlib-Zlib.txt`](licenses/zlib-Zlib.txt)) | 1995-2026 Jean-loup Gailly and Mark Adler |
+| [LZMA SDK](https://www.7-zip.org/sdk.html) (the LZMA coder) | Public domain | Igor Pavlov |
+| [libFLAC](https://xiph.org/flac/) | BSD-3-Clause ([`licenses/libFLAC-BSD-3-Clause.txt`](licenses/libFLAC-BSD-3-Clause.txt)) | 2000-2009 Josh Coalson; 2011-2025 Xiph.Org Foundation |
+| [Zstandard](https://github.com/facebook/zstd) | BSD-3-Clause ([`licenses/zstd-BSD-3-Clause.txt`](licenses/zstd-BSD-3-Clause.txt)), offered by its authors also under GPL-2.0 | Meta Platforms, Inc. and affiliates |
+| [utf8proc](https://github.com/JuliaStrings/utf8proc) | MIT ("expat"), with the original utf8proc licence and the Unicode data licence it includes ([`licenses/utf8proc-MIT.txt`](licenses/utf8proc-MIT.txt)) | 2014-2021 Steven G. Johnson, Jiahao Chen, Tony Kelman, Jonas Fonseca and contributors; 2009, 2013 Public Software Group e. V.; Unicode, Inc. |
+| GCC's C++ and support libraries (`libstdc++`, `libgcc`), linked in so that one binary runs on the desktop and the handheld | GPL-3.0 with the GCC Runtime Library Exception, which asks nothing of a program built with them | Free Software Foundation, Inc. |
+
+chdman loads `libSDL2-2.0.so.0` and the C library from the system it runs on; neither is shipped.
 
 ## 2. Downloaded only at the player's request, never shipped
 

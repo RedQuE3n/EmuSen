@@ -38,6 +38,9 @@ emusen-cheats = { path = "../cheats" }
 emusen-net = { path = "../net" }
 # The player's library and the SQLite it is lent, under its own stable header (EmuSen_Backend.md §28).
 emusen-library = { path = "../library" }
+# The library tool and its command module, emusen.library, handed the tool as a service (EmuSen_GamePackages.md §12.3).
+emusen-library-tool = { path = "../library-tool" }
+emusen-library-module = { path = "../emusen-library-module" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).
 emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }

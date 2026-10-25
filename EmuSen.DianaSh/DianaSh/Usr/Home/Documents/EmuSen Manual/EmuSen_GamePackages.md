@@ -1,5 +1,9 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, again: step 3 is built (§12). chdman is obtained, pinned and shipped as §4.9 now records; the CHD
+tool, its module and the platform library's calls are built; the synthetic gate passed and the tester's PlayStation and
+Sega CD folders were converted on the desktop. The handheld's run is what step 3 leaves (§12.7).*
+
 *Revised 2026-10-25: the tester answered §9 (§9.0). Q1 and Q4–Q17 as recommended; Q2, no removal of originals for
 now, so step 8 is deferred; Q3 changed, so that EmuSen ships chdman (§4.1, §4.9). Every citation of MAME and chdman
 now names its licence and the documentation's version (§10).*
@@ -732,9 +736,35 @@ obligations below are met.
    documented build instructions only ("Compiling MAME", MAME Documentation, of the pinned release), and an obtained
    binary comes from MAME's own release or a distribution's package, chosen at step 3.
 
-**Settled at step 3, not now**: which platforms get which binary (the desktop, the handheld's SteamOS, and later
+~~**Settled at step 3, not now**: which platforms get which binary (the desktop, the handheld's SteamOS, and later
 Windows and macOS when they resume), whether it is built in CI or obtained, and where it sits in the published tree.
-Each comes back to the tester as part of step 3's go.
+Each comes back to the tester as part of step 3's go.~~ **Settled at step 3 (2026-10-25)**, with the research and the
+measurements in §12.1:
+
+- **The release.** MAME 0.289, published 2026-07-30, is the latest: it is the newest release and the newest tag of
+  MAME's repository on 2026-10-25, and MAME's release page offers it [R, §10].
+- **The route: built, not obtained.** MAME publishes no Linux binary, only Windows ones and the source [R]. Fedora 44's
+  `mame-tools` 0.289 is a distribution's own package, but its chdman links `libutf8proc.so.3` and `libSDL3.so.0`,
+  and would not start on the desktop for want of the first [M]. So chdman is **built from MAME's source archive for
+  the tag, `mame0289s.exe`, checked against the SHA-256 MAME publishes**, with the options MAME's "Compiling MAME"
+  gives for the tools alone (`TOOLS=1 EMULATOR=0`). The documented prerequisites are installed with `dnf`, which
+  needs root, so the build runs **in a throwaway Fedora 44 container** (rootless podman), where they are installed
+  as documented and nothing is installed on the machine; no sudo is used. MAME's source is unpacked and built and
+  never read. The recipe is `Platform/library-tool/build-chdman.sh`.
+- **One binary for both machines.** Linking GCC's C++ library in (`ARCHOPTS="-static-libstdc++ -static-libgcc"`,
+  and the distribution's `libstdc++-static` in the container) leaves a binary that needs glibc 2.38 or later and
+  `libSDL2-2.0.so.0`: the desktop has glibc 2.43, and the handheld's SteamOS glibc 2.43 and SDL2 2.32.70, and the
+  binary printed its version line on both [M]. Windows and macOS are paused (`chdman.pin` has no binary for them,
+  and the tool says so and converts nothing there).
+- **Where it sits**: beside the platform library, as `chdman` (`chdman.exe` on Windows), copied there by
+  `Platform.targets` from `~/.cache/emusen/toolchains/chdman/<rid>/` where the recipe leaves it. It is not built in CI:
+  the binary is made on the desktop, and its hash is the pin.
+- **The pin**: `Platform/library-tool/chdman.pin`, the one place for the release, the tag, the source archive and its
+  SHA-256, and each platform's binary's SHA-256. The binary is never committed.
+- **The obligations**: 1, `THIRD_PARTY_NOTICES.md` §1.7 and `licenses/` (`chdman-BSD-3-Clause.txt`, `GPL-2.0.txt`,
+  and the licences of the libraries the binary carries); 2, `licenses/chdman-SOURCE-OFFER.txt`, naming `mame0289`;
+  3, the README's "Disc images: CHD and chdman", linking MAME's chdman page; 4, the pin checked before chdman is run,
+  a mismatch refused with both hashes named (§12.4); 5, built as a black box, as above.
 
 ---
 
@@ -918,7 +948,8 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 ## 7. Phasing
 
 Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
-steps 1 and 2 are built and their gates passed (§11); step 3 waits for the tester's go. Every test uses
+steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
+run done (§12), and its handheld run is left (§12.7); step 4 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -926,7 +957,7 @@ them. No commercial image is committed.
 |---|---|---|
 | **1** *(built 2026-10-25, §11.1)* | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
 | **2** *(built 2026-10-25, §11.2)* | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
-| **3** | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
+| **3** *(built 2026-10-25, §12; the handheld's run left)* | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
 | **4** | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
 | **6** | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
@@ -957,8 +988,11 @@ them. No commercial image is committed.
 
 - **P1.** Converting the tester's lone-track and cue/bin PlayStation discs to CHD with the default codecs takes each
   to 50–75% of its original size. Measured on two discs: 52.3% and 73.4%. Zipped discs are not predicted.
+  *Retired 2026-10-25, otherwise than stated (§12.5): of 37 PlayStation discs, 30 fell in 50–75% and 7 below it, from
+  26.9%; none above.*
 - **P2.** Every disc of the tester's PlayStation and Sega CD folders passes all three checks of §4.3. The round trip
-  was measured on two discs.
+  was measured on two discs. *Retired 2026-10-25 as stated, on the desktop (§12.5): 42 of 42, at conversion and again
+  by `chd check`.*
 - **P3.** A CHD launch from the handheld's card takes no longer than 1.3's 95–120 ms for the same disc loose
   (`EmuSen_CoreAPI_Extensions.md` §10.2.5), since less is read from the card.
 - **P4.** In 30 s of play on the handheld, CHD decoding adds under 1.5% of one core, and no frame over its period that
@@ -1136,7 +1170,18 @@ Decided 2026-10-25 by the tester:
   (<https://www.mintlify.com/laromicas/datoso/concepts/dats-and-roms>), and the libretro forum thread "Redump DAT
   parsing bug? (Libretro-DATs/libretro-db)" (<https://forums.libretro.com/t/redump-dat-parsing-bug-libretro-dats-libretro-db/21440>).
 
-**Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code.
+- For §4.9 and §12, read 2026-10-25: "Compiling MAME", MAME Documentation 0.289,
+  <https://docs.mamedev.org/initialsetup/compilingmame.html> (the Fedora prerequisites, `TOOLS`, `EMULATOR`,
+  `NOWERROR`, `ARCHOPTS`, `USE_QTDEBUG`, `NO_OPENGL`, `NO_USE_PORTAUDIO`, `NO_USE_PULSEAUDIO`, `USE_TAPTUN`); MAME's
+  release page, <https://www.mamedev.org/release.html>, and its GitHub releases and tags
+  (<https://github.com/mamedev/mame/releases/tag/mame0289>, with the published `SHA256SUMS`); Fedora 44's `mame-tools`
+  0.289-1.fc44 as `dnf` describes it (its requirements, and its files unpacked from the package, never installed). The
+  licence texts of §12.1 are the upstream projects' own files, read the same day: GNU's GPL-2.0
+  (<https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt>), libFLAC's `COPYING.Xiph`, Zstandard's `LICENSE`,
+  utf8proc's `LICENSE.md` and zlib's `LICENSE`, each from its project's repository.
+
+**Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code. MAME's
+source archive was unpacked and built at step 3 and none of its files was opened.
 
 ---
 
@@ -1238,8 +1283,285 @@ minutes. Four faults were seeded, each caught and put back:
 
 ### 11.4 Left, and for the tester
 
-- **Step 3**, the CHD tool and shipping chdman (§4.9), waits for the tester's go.
+- ~~**Step 3**, the CHD tool and shipping chdman (§4.9), waits for the tester's go.~~ Built 2026-10-25 (§12).
 - **Q18 [routine]: comments in a hand-written manifest are dropped when the program rewrites it**, as the config files'
   are. *Recommended:* keep it so; a person's notes belong in an unknown field (`"my notes": ...`), which is kept.
 - **Q19 [routine]: Redump's own description of its datfile fields** is still unread (§11.1). *Recommended:* read it
   when step 3 compares a converted disc against a datfile, which is the first use of the fields.
+
+---
+
+## 12. Built 2026-10-25: step 3
+
+*Measured on the development desktop on 2026-10-25, with the chdman of §12.1. The ROM library was only read: its
+`psx` and `SCD` folders were listed with every file's size, time and MD5 before and after the run of §12.5, and the
+listings were identical. MAME's source archive was unpacked and built and none of its files was opened.* Marks as at
+the top: what was run is [M].
+
+### 12.1 chdman: obtained, pinned and shipped
+
+**The release** [R, read 2026-10-25]. MAME 0.289, published 2026-07-30, is the newest release and the newest tag of
+MAME's repository (`mame0289`), and the one MAME's release page offers. The page offers Windows binaries and the source
+archive `mame0289s.exe`, a self-extracting 7-Zip archive, and no Linux binary; the release publishes each file's
+SHA-256 in `SHA256SUMS`.
+
+**Routes weighed.**
+
+| Route | What was found | Taken |
+|---|---|---|
+| A binary from MAME | none for Linux [R] | no |
+| Fedora 44's `mame-tools` 0.289-1.fc44, a distribution's package, unpacked and not installed | its chdman needs `libutf8proc.so.3`, which the desktop lacks, and `libSDL3.so.0`; it would not start [M] | no |
+| Build on the desktop as "Compiling MAME" writes, `make TOOLS=1 EMULATOR=0` | the documented Fedora prerequisites are installed with `sudo dnf`; without them the generated project stopped for want of `sdl2`, `alsa`, `fontconfig` and `qmake6`, and with the documented options `USE_QTDEBUG=0 NO_OPENGL=1 NO_USE_PORTAUDIO=1 NO_USE_PULSEAUDIO=1 USE_TAPTUN=0` the tools' own OSD library still needed `SDL2/SDL.h` [M] | no: it needs sudo |
+| The same, in a throwaway `registry.fedoraproject.org/fedora:44` container (rootless podman), the prerequisites installed in it as documented | built; nothing installed on the machine, no sudo [M] | **yes** |
+
+**The build** [M]: `build-chdman.sh` checks the archive's SHA-256 against the pin (it equals MAME's published one),
+unpacks it, and runs in the container the documented prerequisites' `dnf install`, with `libstdc++-static` beside them,
+then `make TOOLS=1 EMULATOR=0 NOWERROR=1 ARCHOPTS="-static-libstdc++ -static-libgcc"` at `nice 19`, the container at a
+fifth of the default CPU weight. About three minutes of wall clock on the 7700X, most of it the first run's 1,468
+compilations. The first link failed for want of a static C++ library, which `libstdc++-static` supplied. The binary is
+17,536,288 bytes, SHA-256 `55abb0d2…87e0f`, and prints `chdman - MAME Compressed Hunks of Data (CHD) manager 0.289
+(unknown)`, "unknown" standing for the Git revision an archive does not carry.
+
+**Why the C++ library is linked in.** Fedora 44's `libstdc++` exports `GLIBCXX_3.4.36` and the handheld's SteamOS
+`GLIBCXX_3.4.35` [M, `strings`], so a binary linked to the desktop's would not be sure to load there. Linked in, the
+binary needs only glibc 2.38 or later (`objdump -T`) and `libSDL2-2.0.so.0`; both machines have glibc 2.43, and the
+handheld SDL2 2.32.70. Copied to the handheld's scratch folder through `hh.sh`, it printed its version line there, and
+was removed [M]. **One binary serves the desktop and the handheld.**
+
+**Inside the binary** are libraries of MAME's tree, found by the names and notices it carries (`strings`): zlib 1.3.2,
+the LZMA SDK's coder, libFLAC, Zstandard and utf8proc, besides GCC's C++ library. `THIRD_PARTY_NOTICES.md` §1.7 lists
+each with its licence; the texts in `licenses/` are the upstream projects' own (§10).
+
+**Where it sits, and the pin**: §4.9. `Platform.targets` copies `~/.cache/emusen/toolchains/chdman/<rid>/chdman` beside
+the platform library wherever it exists, so a build or publish on the desktop carries it; one without it carries none,
+and the tool says so ("chdman was not found at …: nothing was converted").
+
+### 12.2 The tool: `Platform/library-tool`
+
+The crate `emusen-library-tool`, over Galaxia, `emusen-disc`, the library's routing (`emusen-library`) and the systems
+table. Its parts: `pin.rs` (the pin read and a binary checked), `chdman.rs` (chdman run as a program, stopped by killing
+it), `discs.rs` (the library's discs found and prepared), `checks.rs` (checks 2 and 3), `convert.rs` (one disc
+converted, listed or checked, and its package) and `job.rs` (a request on a thread, its events queued).
+
+**Finding the discs.** The files under each named path, a sheet's and a list's own files taken as their game's
+(Galaxia's `ImageSets.Shelved`), with the extensions `.cue`, `.bin`, `.iso`, `.zip` and `.m3u`, each routed by the
+library scan's own `route` among every system of the table; those routed to the PlayStation or the Sega CD are the
+tool's. Where the routing names none, because no recogniser claimed the file and its own folder is no ES-DE system's
+(`psx/Rayman (USA)/` holds Rayman), the nearest folder above it named for one of the two systems decides. The tester's
+`SCD` folder routes by the Sega CD's recogniser, its name being none of ES-DE's.
+
+**Preparing a disc.** A scratch folder `Compressed/.scratch-<process>-<n>` holds the sheet chdman reads and a link named
+as the sheet names each file, pointing at it where it lies (§4.2). A lone raw track gets a sheet of one `MODE1/2352`
+or `MODE2/2352` track by its mode byte, an ISO 9660 image one of `MODE1/2048`; a zip is unpacked once into `Unpacked`
+through Galaxia's `disc_set::unpack`. **Skipped with the reason**, before anything is unpacked or written: a zip of
+several track files and no sheet ("its tracks' order and gaps are unknown"), a sheet naming a WAVE file (a CHD keeps
+the samples and not the file's header, so check 2 could not equal the original file), a file that is neither a raw data
+track nor an ISO image, and an `.m3u`, whose discs are named one by one (§12.6).
+
+**The checks, as built.**
+
+- *The original's record* is taken before chdman runs: every track's three hashes through `RomHash::tracks` (§11.1),
+  read through the links; the sheet's own hashes; and the original disc's table of contents, the sheet over its files
+  mapped read-only (`emusen-disc`'s `Disc::from_sheet`).
+- *Check 1* is `chdman verify`, passed only on a clean exit that prints "Overall SHA1 verification successful".
+- *Check 3* compares, track for track, the number, data or audio, the pause's first sector, index 01 and the end, then
+  the lead-out and point A0h's disc type, of the CHD opened through `emusen-disc` against the original's.
+- *Check 2* rebuilds each track's bytes from the CHD as its file held them and hashes them with Galaxia's `Hasher`.
+  Where a track begins in the CHD is its index 01 less the pause its file stores (its first INDEX to index 01), equal
+  to the original's by check 3; how many sectors is the recorded size over the mode's sector size. So the record and
+  the sheet alone place every track: `chd check` needs neither the original files nor their layout, and a track whose
+  file ends in part of a sector is refused with words, since no CHD keeps that part. Audio comes back little-endian,
+  a cooked sector's 2,048 or 2,336 bytes are cut from the raw sector `emusen-disc` frames.
+- **Otherwise than §4.3 said: checks 3 and 2 are not run over a CHD that check 1 found damaged.** Measured on
+  2026-10-25 on two synthetic CHDs: 67 corruptions, four bytes changed at a stored hunk's start or 5 or 200 bytes into
+  it, read through `emusen-disc`; **10 made `chd` 0.3.4 panic** (every one at a hunk's first byte), and the platform
+  library is built to abort on a panic. So a damaged CHD would end the program whose shell or window checked it. The
+  disc has failed by check 1 in any case, and the words say why the others were not run. Where check 1 passes, every
+  hunk decompressed in chdman, and check 2 runs as designed.
+- *Not compared*: index points past 01, which a CHD's track metadata does not hold, and a sheet's `FLAGS`, which the CHD
+  reader does not carry into the control nibble.
+
+**The rules of §4.6, as built.** A disc is started only with its original's size and 64 MiB free at the output
+(`statvfs`); chdman writes `<name>.chd.partial-<process>`; the original files' sizes and times are taken before and
+after, and a change discards the result; a failure removes the partial; one disc failing never stops the batch; a stop
+kills chdman and removes its partial. **A disc is done** when its package names this CHD, the CHD has the size and
+time recorded beside its SHA-1, and every library file it was converted from has the size and time recorded: the
+file system is the job's record, and a CHD changed underneath is converted again rather than trusted. Partial files and
+scratch folders an hour old are removed at the next conversion. Each disc's event is appended to
+`Logs/chd_<day>.log`.
+
+**The package** (§4.4): `Packages/<console>/<path less the console folder>.chd/package.json`, linked, its fields as
+`EmuSen_Galaxia.md` §3.10 lists them, with the original sheet's bytes beside it. Written after the CHD is in place, so
+a package never names a CHD that is not there.
+
+**Threads.** chdman compresses with every thread the machine has, Q9's desktop default; the handheld's half is the
+caller's to ask for (`-j`), since the tool does not know which device it runs on (§12.7, Q20).
+
+### 12.3 The surfaces
+
+- **The platform interface, 24.** `emusen_tool_job_start` (a request in, a job out; `PARSE` with words for a request
+  that is not one), `emusen_tool_job_next` (the next event by the length-query idiom, taken only when the buffer holds
+  it; `ABSENT` when none came within the wait; 0 after the last), `emusen_tool_job_stop` and `emusen_tool_job_free`.
+  The library never calls its host: a window polls. The prefix `emusen_library_` is the library's stable header's
+  alone (`emusen_library.h`, whose test holds every such export to it), so the calls are `emusen_tool_job_`. The C#
+  side gains nothing yet but the version, 24; step 4's window binds them.
+- **The service `emusen.library` 1.0** (`Platform/library-tool/include/emusen_library_tool.h`): the same four calls
+  and `emusen_platform_last_error`, as a table. A module never links Galaxia (`EmuSen_DianaSh.md` §16 Q11), and the tool
+  reads Galaxia's tree and settings, so it is lent; the platform library hands the table to every shell it makes, in
+  `dianash_new` and again in `dianash_set_services` unless the host names its own.
+- **The module `emusen.library`** (`Platform/emusen-library-module`), linked into the platform library beside the
+  other four of EmuSen's modules, its command `chd` and its page `Lib/dianash/emusen.library/man/chd.1`.
+- **The request**: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, paths relative
+  to the library with `/` between parts and no `..`, none for the whole library.
+- **The events**, one JSON object a line:
+
+| Event | Fields |
+|---|---|
+| `start` | `op`, `discs`, `refused` (the words for each path that names nothing); for convert and check `chdman` (its version line); for convert `codecs`, `threads`, `output` |
+| `disc` | `source`, `system`, `state`; `index` and `of` for convert and check; then by state: `words`, `output` and `package` (paths under `Compressed` and `Packages`), `original` and `chd` (bytes), `seconds`, `checks` (`chdman`, `tracks`, `toc`, each `passed` or `failed: <words>`); for ls `size` |
+| `end` | `op`, `counts` (each state's number), `seconds`, and `error` where the job refused to run: an unset or missing library, an overlap of it and the folders written, a chdman not found or not the pinned one |
+
+A disc's states: convert gives `working`, then `converted`, `already`, `skipped`, `failed` or `stopped`; check gives
+`verified`, `failed` or `not converted`; ls gives `converted`, `not converted`, `changed` or `missing`.
+
+**`chd` and the line's budget.** DianaSh gives a line ten seconds (`EmuSen_DianaSh.md` §6.6), and `io->cancelled`
+answers 1 once they are spent as once the player cancels, without saying which. A batch takes minutes. So each `chd`
+request is a job the module follows, one line a disc, until it ends or the line is cancelled; a job still running then
+goes on in the background as `chd<n>`, which `ps` lists with how far it has got, `chd wait chd<n>` follows again, and
+`kill chd<n>` stops (the manifest's `jobs` claims the prefix `chd`). `chd wait` is the one subcommand beyond §7's three;
+it exists for this. The module keeps its jobs in its per-shell slot, and a shell that ends stops and frees them.
+
+### 12.4 The gate, the tests, and the faults seeded
+
+**The synthetic gate** (`Platform/library-tool/tests/gate.rs`, generated sheets made as `emusen-disc`'s own CHD test
+makes them; the chdman runs need `EMUSEN_CHDMAN`, set to the pinned binary) [M]:
+
+1. *Generated sheets round-trip through all three checks*: a two-file dump with a stored pause, one file of three tracks
+   with an unstored `PREGAP`, a lone raw track, a disc whose audio no codec shrinks, a zipped sheet and an ISO in a
+   `segacd` folder are each converted, each check `passed`, each package written; `ls` calls each `converted`, `check`
+   each `verified`, a second `convert` each `already`; the same with `--fast`, which answers §4.8's question: **CHDs
+   written with `cdzs,cdfl` read through `emusen-disc` as `chd` 0.3.4 builds it**. The library's listing (every
+   file's path, size, time and MD5) is the same after as before.
+2. *A corrupted CHD fails check 2*: a CHD made from the same dump with one sample of track 2 changed, whole, so that
+   chdman's verify passes it, with the package's SHA-1 made its own: check 1 and check 3 pass, and check 2 fails,
+   "track 2 rebuilt from the CHD has SHA-1 … and the original …". A second case: bytes changed at a stored hunk's start
+   fail check 1, and checks 2 and 3 are not run, the program still running.
+3. *A CHD of another layout* (the same tracks with a longer unstored pause) fails check 3, and check 2 is not run.
+4. *A resumed batch finishes*: a batch stopped after its first disc leaves no partial file and no scratch folder; a
+   partial two hours old is removed; run again, the first disc is `already` and the rest `converted`.
+5. *The pin refuses a wrong binary*: a file that is not the pinned chdman ends the job with "chdman at … has SHA-256 …,
+   but this build is pinned to … (MAME 0.289, linux-x64): it was not run, and nothing was converted", both hashes
+   named, and nothing written. A library that holds the output folders is refused before anything is written.
+
+**Through the platform library** (`Platform/platform/tests/library_tool.rs`): a shell `dianash_new` makes runs `chd ls`,
+`chd convert`, `chd check` and the usage over a library read from a tree's `appsettings.json`, writing only under the
+tree's `Compressed` and `Packages`; a request that is not one is refused `PARSE`; with the line's budget made 1 ms a
+conversion goes on in the background as `chd1`, `ps` lists it until it ends, and its package is there.
+
+**Run** [M]: `cargo test --profile test-checked` of `emusen-library-tool` (2 and the gate's 7, with
+`EMUSEN_CHDMAN` set; without it the gate's chdman cases say they are skipped and pass), `emusen-library-module` (3),
+`emusen-platform` (33, `dianash_abi` 4 and `library_tool` 3), `emusen-galaxia` (86 and 1) and `emusen-library` (11, its
+`library_abi` among them, which caught the first spelling of the calls, §12.3). WiseMan, the blast radius `blast.sh`
+named (`DataStoreTests`, `DianaSh`, `Galaxia`, `GamePackageTests`, `GameRecords`, `Golden`, `Library`): 1,744 passed,
+11 skipped and 5 failed, four of them the golden corpus meeting `chd`, which only the Rust shell has; with the corpus's
+`shell rust` and the listings' patterns (`EmuSen_DianaSh.md` §13.1) and `chd.golden` recorded, `GoldenCorpusTests`,
+`ManPageTests` and `NativeSwitchTests` pass on both shells, 208 and 207, but for the fifth. **The fifth is not this
+step's**: `core.golden`'s refusals list the supported cores, and this tree's list has `endou`, which the recording of
+WiseMan at `f4522996` does not; nothing of step 3 touches the core registry.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| check 2 placing each track at its index 01, the stored pause forgotten | five of the gate's cases, the round trip first: the two-file dump's second track, whose file stores its pause, no longer equals the dump |
+| the pin compared by the hashes' length, not their digits | `pin.rs`'s refusal test |
+| check 3 comparing each track's number alone | the gate's other-layout case: check 3 then named only the lead-out, two sectors on, and not the track whose pause moved |
+
+### 12.5 The tester's PlayStation and Sega CD folders, on the desktop
+
+**How it was run** [M, 2026-10-25]. Over the published sandbox `out/linux-x64/Mistress`, whose settings name the library
+`/home/red/Documents/Roms/`, through `Platform/library-tool/examples/run_tool.rs`, which finds the tree as the program
+does and prints the resolved folders before anything is written: `Compressed`, `Packages`, `Unpacked` and `Logs` under
+that sandbox's `home`, none of them inside the library, which `checked_library` confirmed. `convert psx SCD`, chdman
+with all 16 threads, the whole run at `nice 19` and a fifth of the default CPU weight, on the Ryzen 7 7700X from the
+NVMe drive.
+
+**The library, before and after.** Both folders were listed with every entry's path, every file's size, modification
+time to the nanosecond and MD5, and every folder's time: 219 entries (92 files in `psx`, 119 in `SCD`, and their
+folders), 18.6 GiB read. **The two listings were byte-identical.** Nothing under `RomDirectory` was written (P7 holds
+for step 3).
+
+**The result: 42 discs found, 42 converted, every one passing all three checks; none skipped or failed.**
+
+| | Discs | Original | CHD | CHD / original | Time, summed per disc |
+|---|---|---|---|---|---|
+| PlayStation (`psx`) | 37 | 19,651,378,656 B | 11,109,573,404 B | 56.5% | 962.4 s |
+| Sega CD (`SCD`) | 5 | 2,743,610,352 B | 1,365,864,840 B | 49.8% | 98.3 s |
+| **Both** | **42** | 22,394,989,008 B | 12,475,438,244 B | **55.7%** | 1,060.7 s, the batch's own clock |
+
+- *The forms*: 3 cue sheets in `psx` (Rayman's 51 tracks among them) and 5 in `SCD`, 17 zips unpacked through
+  `Unpacked` (each held a sheet; none was refused for want of one), and 17 lone raw tracks.
+- *Time per disc*: 12.2 to 40.2 s, 25.3 s on average, each disc's hashing of the original, unpacking where zipped,
+  chdman's compression, chdman's verify, the rebuilt tracks' hashing and the table of contents. The whole batch took
+  17 min 41 s of wall clock and 4,224 CPU-seconds (407% of one thread on average: compression is chdman's many
+  threads, the verify and check 2 one each), at most 680 MiB resident.
+- *Size*: from 26.9% (Ape Escape) to 73.4% (Crash Bandicoot) of the original. **P1 is retired, not as stated**: of the
+  37 PlayStation discs, 30 fell in its 50–75%, and 7 below it (26.9% to 44.6%), discs whose data holds long runs that
+  LZMA takes well; none above.
+- *Against §4.7's measurements of 2026-10-16* (Fedora's chdman 0.289): Rayman's CHD is 323,075,192 B against
+  323,075,270 B then, and Crash Bandicoot's 464,082,238 B against 464,161,384 B. The release is the same and the bytes
+  are not: Fedora's build links the system's compression libraries and this one MAME's own, so CHDs of one release
+  differ by build. Check 2 is indifferent to it, since it compares the rebuilt tracks with the dump, not CHD with CHD;
+  the manifest records the binary's SHA-256 beside the version.
+
+**Checked again, from the packages alone.** `check psx SCD` ran the three checks over the 42 CHDs in place against
+their packages, the originals not read: **42 verified**, in 723.4 s. `ls psx SCD` then called all 42 `converted`, and a
+third listing of the two folders, taken after both, was still identical to the first. **P2 is retired as stated** on
+the desktop: every disc of the two folders passed all three checks, twice.
+
+**What the run leaves**: 12 GB of CHDs under the sandbox's `home/Compressed`, 42 packages under `home/Packages`
+(`PlayStation/` and `Sega CD/`), the zips' unpacked copies in `home/Unpacked` (3.9 GB, kept by that folder's own
+4 GiB rule, §3.7 of `EmuSen_Galaxia.md`), and one line a disc in `home/Logs/chd_2026-10-25.log`.
+
+### 12.6 Otherwise than the plan, and found on the way
+
+- **Checks 2 and 3 skip a CHD check 1 found damaged** (§12.2), because `chd` 0.3.4 panics on some damaged hunks, and
+  the platform library aborts on a panic. The same reader serves play: **a damaged CHD that a player launches can stop
+  the core's process the same way.** That is not this step's to fix; Q21 asks it.
+- **The 10-second line budget** made `chd` a job that may go on in the background, with `chd wait` (§12.3).
+- **Where the console is found**: the nearest console folder, where the scan's routing names no system (§12.2).
+- **A zip's sheet is recorded under the name it is unpacked as**: `disc_set::unpack` names the image entry after the
+  archive's stem (`EmuSen_Galaxia.md` §3.7), so `dump.sheet.file` is `Tekken 3.cue` whatever the entry was called.
+  The bytes and their hashes are the entry's.
+- **`.m3u`** lists are not converted as one: each disc is named on its own, and a new list in `Compressed` is left to
+  a later step; the tester's two folders hold none.
+- **The C# shell has no `chd`**: under `EMUSEN_DIANASH_NATIVE=0` the command is unknown, since a module is the Rust
+  shell's. The C# shell is retired at S7 (`EmuSen_DianaSh.md` §13.11).
+- **The done-check reads sizes and times**, not the CHD's SHA-1, which §4.6 named: reading a header's SHA-1 needs
+  chdman or the `chd` crate's API, whose documentation for 0.3.4 did not build on docs.rs, and a size and time
+  recorded beside the SHA-1 answer the same question cheaply, as `games.db`'s `seen` does (§3.3).
+
+### 12.7 Left, and for the tester
+
+- **The handheld's run (P1–P4 there)**: the same two folders converted on the Legion Go S, its batch time, battery
+  drain and temperature recorded, as §7's gate asks. The binary already runs there (§12.1); the run is what is left.
+  P2 holds on the desktop; P3 and P4, the handheld's launch and play, wait with it.
+- **Step 4**, Mistress's window over the four calls of §12.3, waits for the tester's go.
+- **Q20 [routine]: the handheld's thread default.** Q9 gives the handheld half its threads, and the tool, which does not
+  know the device, uses every thread unless asked. *Recommended:* step 4's window and the handheld's run pass half
+  (`-j 8` there); the tool keeps no device rule of its own.
+- **Q21 [decision]: a damaged CHD can stop the program that reads it.** `chd` 0.3.4 panicked on 10 of 67 damaged
+  hunks measured, and the cores and the platform library abort on a panic; the tool now keeps its reader away from a
+  CHD chdman finds damaged, but a player who launches one is not protected. *Recommended:* a step of its own for
+  `emusen-disc`: hunks checked before they are decoded, or the reader moved to a version of the crate that refuses
+  rather than panics, measured with the same 67 corruptions.
+- **Q22 [routine]: chdman's copyright line.** `licenses/chdman-BSD-3-Clause.txt` says "Copyright (c) Aaron Giles", as
+  the tester read chdman's file header; its exact line, with any years, was not read here, since MAME's source is not.
+  *Recommended:* the tester copies the header's line into that file.
+- **Q23 [decision]: chdman needs `libSDL2-2.0.so.0` on the player's machine.** MAME's tools link its SDL layer; both
+  the desktop and SteamOS have the library, but a Linux system without SDL2 would refuse to start chdman, and the tool
+  would say so and convert nothing. *Recommended:* accept it for Linux now (SDL2 is in every desktop distribution's
+  base and in SteamOS) and look again when Windows and macOS resume, where a build will be needed in any case.
+- **Q24 [routine]: `chd wait`**, a fourth subcommand, exists because a batch outlives DianaSh's ten-second line
+  budget (§12.3). *Recommended:* keep it; the window of step 4 polls the job and needs nothing of it.
+

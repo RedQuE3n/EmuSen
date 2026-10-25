@@ -285,6 +285,7 @@ impl Board {
                 self.dmac.wake(self.now);
                 if self.dmac.next_event() <= self.now {
                     self.step_dmac(self.now, spram);
+                    self.sync_ipu(self.now);
                 }
                 self.reschedule();
             }

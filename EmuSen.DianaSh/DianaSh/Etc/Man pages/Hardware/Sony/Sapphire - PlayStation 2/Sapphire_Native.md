@@ -5569,9 +5569,10 @@ pictures equal), that screen having no list to move in.
 
 ### 35.10 Tests and seeded faults (2026-10-25)
 
-**Tests** [M, `cargo test --release`]: the crate whole, **301 of 301**, among them: `tests/boot.rs` **5 of 5**, new (SIF1
+**Tests** [M, `cargo test --release`]: the crate whole, **301 of 301** before S27's rebase and **319 of 319** on the tree
+with S27 beneath (its `tests/ipu.rs` 11 and seven lib tests added), among them: `tests/boot.rs` **5 of 5**, new (SIF1
 in chain mode and SIF0's padding against PCSX2's records, CTRL bit 19's reset line, the power-on values with the memory
-controller's answers, halfword DMA writes and the absent places); the lib **59 of 59** (new: `mch`'s serial answers, the
+controller's answers, halfword DMA writes and the absent places); the lib **59 of 59**, 66 with S27's (new: `mch`'s serial answers, the
 drive's boot S commands, the machine with and without a BIOS, the drive's market, the pads in their ports, the EEPROM's
 files, a state brought to its frame and refused by a running console, the LOD shortcut against the exact steps over
 20,000 cases, the reports' KPUTCHAR rule); `tests/gif.rs` **16 of 16** (a zero tag freeing PATH3; PATH1's estimate);

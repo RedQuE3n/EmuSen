@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15 and S26 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26 and S27 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -78,7 +78,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   second DIRECT found a PCSX2 defect;
   and stage S26 (2026-10-25, §32): the SPU2, its voice moved first into `blackmoon-spu` with Diamond's goldens unchanged,
   two cores on the IOP's bus and DMA channels 4 and 7, the mix, effects areas, AutoDMA, core 0 into core 1 and the IRQ
-  addresses, at 48,000 Hz exactly, its sound graded through the output areas PCSX2 also writes and its captured output.
+  addresses, at 48,000 Hz exactly, its sound graded through the output areas PCSX2 also writes and its captured output;
+  and stage S27 (2026-10-25, §34): the IPU, its ten commands, registers, FIFOs and DMA channels, MPEG-2 and MPEG-1
+  macroblocks decoded as H.262 defines it with Annex A's reference IDCT decided exactly, §8.6's colour conversion, the
+  project's streams decoded equal to a model of the standard that ffmpeg's decoding matches, PCSX2 a witness for the
+  commands and the stream's handling and Play! for VDEC, their departures disputes D-300 to D-326.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -117,7 +121,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and MSKPATH3, the intermittent mode's slices, the GIF's timing, BUSDIR, PATH1's wrap, the masks at the arbitration,
   PCSX2's second DIRECT and Q; D-260 to D-270 since S26, the SPU2's key on, output
   areas, mix, transfers, effects area, IRQ addresses, read-backs, AutoDMA, a voice's start, the voice's rules where PCSX2
-  departs, and the output's level.
+  departs, and the output's level; D-300 to D-326 since S27, the IPU's IDCT, intra RAW16's range, the input buffer's
+  filling, the alternate scan's weights, IDEC's scale, start codes, VDEC's errors and lengths, MPEG-1's arithmetic,
+  CBP, the interrupt, IPU_CMD's and IPU_TOP's quirks, BCLR, FB, commands while busy, RST, IPU_CTRL's fields, IDP 3,
+  IDEC's increment, CSC, the dither and VQ, SGN, the escape's odd levels, errors inside a macroblock, the decoding's
+  time, TTE on toIPU, and MPEG-1's stuffing and D-pictures.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A, the SPU2's voices) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

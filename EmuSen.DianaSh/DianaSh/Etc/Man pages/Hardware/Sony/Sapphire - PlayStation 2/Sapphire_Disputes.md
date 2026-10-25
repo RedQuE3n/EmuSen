@@ -2992,3 +2992,348 @@ through the reset too.
 - **Depends on it:** `gif::packing::Packet::take`.
 - **Pinned by:** `every_packing_conversion_writes_what_section_7_3_draws`.
 - **Implemented in:** stage S15's commit.
+
+### D-300. IPU, the IDCT: Annex A's saturated mathematical integer-number IDCT, the real transform rounded halves away from zero and saturated to [−256, 255]
+
+- **Opened:** 2026-10-25, at stage S27, by P7 (`Sapphire_Plan.md` §13).
+- **Documents read:** H.262 §7.5 and Annex A (the reference and IEEE 1180's bounds for approximations); EEUM §8.1
+  ("IDCT" in the flow, no arithmetic); ps2tek: nothing on the transform.
+- **Test program:** every `s27-bdec-*` and `s27-idec-*` program; `the_corpus_values_near_a_half_are_few_and_decided_exactly`
+  (159,744 real values, none within 2^-20 of a half, the nearest 2.1 × 10^-6).
+- **Referee:** PCSX2 2.8.2 within one step of the reference in 1.4 to 6.6 % of BDEC's samples (`bdec-pb`: 678 of 12,288);
+  Play! 0.72 within two in its first slices; ffmpeg's decoding of the corpus within one in 1,983 of 147,456 samples.
+- **Conclusion:** the reference, evaluated in double precision and decided exactly within 2^-20 of a half
+  (`Sapphire_Native.md` §34.5); **argued**: no document gives the IPU's own transform, and the two lineages' transforms
+  differ from each other as much as from the reference, so P7's departure is the referees', not a rule.
+- **Depends on it:** `ipu::idct`.
+- **Pinned by:** `annex_a_item_4_blocks_give_the_exact_saturated_transform`, `the_rational_terms_give_exact_halves_and_the_exact_reading_agrees_everywhere`, `bdec_gives_the_standards_blocks_for_every_macroblock_of_the_corpus`.
+- **Implemented in:** stage S27's commit.
+
+### D-301. IPU, BDEC's RAW16 holds the IDCT's samples as they are, intra or not, sign-extended to 16 bits
+
+- **Opened:** 2026-10-25, at stage S27, by PCSX2's intra blocks.
+- **Documents read:** EEUM §8.2 ("RAW16 YCbCr pixel (Signed 16-bit) Only lower 9 bits are effective"), §8.2.5's
+  `short` structure; H.262 Annex A's range and §7.6.8 (saturation to [0, 255] after the prediction is added, which is
+  the EE's step, the IPU doing no motion compensation, §8.1).
+- **Test program:** the six intra streams through BDEC; `odd_mpeg2` and `odd_mpeg1`'s largest levels.
+- **Referee:** PCSX2 clamps every intra macroblock's samples at 0, which reproduces every lane of the six intra streams
+  but its IDCT's steps, and above 255 gives the low byte of a 9-bit value on the written streams; Play! out of step
+  before the question arises.
+- **Conclusion:** as stated; **argued** from the format's signed nine bits.
+- **Depends on it:** `Ipu::finish_macroblock`.
+- **Pinned by:** `bdec_gives_the_standards_blocks_for_every_macroblock_of_the_corpus`.
+- **Implemented in:** stage S27's commit.
+
+### D-302. IPU, the input: eight qwords in the FIFO, a ninth refused; a qword enters the internal buffer only when a command reads it, FP counting at most two
+
+- **Opened:** 2026-10-25, at stage S27; first read the other way (the internal buffer filled first), overturned below.
+- **Documents read:** EEUM §8.3 (both FIFOs "8-qword size"; IPU_BP: FP "No. of qwords remaining in IPU except
+  IPU_in_FIFO", two bits; the resume formula (IFC + FP) × 128 − BP); ps2tek: the same fields.
+- **Test program:** `s27-registers`: ten qwords pushed by the EE with IPU_BP and IPU_CTRL after each; FDEC at FB 0, 12,
+  32, 40 and 63 with the counts after each; IPU_CMD's quirk read.
+- **Referee:** PCSX2: IFC 1 to 8 with FP 0 as qwords are pushed, the ninth and tenth refused, FP 1 once a command has
+  read the first qword, 1 again past a qword's end, equal at every record of the FIFO tests. Play!: FP 0 while pushing
+  too, but IFC climbing past 8 (no limit).
+- **Conclusion:** as stated; **measured**, the two lineages agreeing that pushed qwords stay in the FIFO; the depth is
+  the manual's.
+- **Depends on it:** `ipu::bits::Input`.
+- **Pinned by:** `qwords_enter_the_internal_buffer_as_a_command_reads_them`, `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-303. IPU, inverse quantisation: the weight W[v][u] multiplies QF[v][u], the coefficient at the same place, under either scan
+
+- **Opened:** 2026-10-25, at stage S27, by PCSX2's alternate-scan streams.
+- **Documents read:** H.262 §7.3 (QF[v][u] = QFS[scan[alternate_scan][v][u]]), §7.3.1 (a downloaded matrix through
+  scan[0]), §7.4.2.3 (F''[v][u] from QF[v][u] and W[w][v][u]); EEUM §8.4 SETIQ (64 bytes into the table).
+- **Test program:** `s27-bdec-intra-alt`, `-intra-tools`, `-pb-rate` (alternate scan); `intra-nonlinear` and
+  `intra-ivf` apart.
+- **Referee:** PCSX2: pairing QFS[n] with the matrix's n-th byte in zigzag order reproduces every lane of the three
+  streams but its IDCT's steps; with the zigzag scan the two pairings are one. ffmpeg's decoding agrees with the
+  standard's. Play! out of step.
+- **Conclusion:** the standard's pairing; **argued**, one lineage against the standard and an independent decoder;
+  `Sapphire_Native.md` §34.14 Q1 names the frame-by-frame comparison at S28 that would decide it.
+- **Depends on it:** `Ipu::reconstruct`.
+- **Pinned by:** `bdec_gives_the_standards_blocks_for_every_macroblock_of_the_corpus`.
+- **Implemented in:** stage S27's commit.
+
+### D-304. IPU, IDEC's QSC is quantiser_scale_code, mapped to quantiser_scale through Table 7-6 by IPU_CTRL.QST, as BDEC's is
+
+- **Opened:** 2026-10-25, at stage S27, by PCSX2's IDEC pictures.
+- **Documents read:** EEUM §8.4 (IDEC's and BDEC's QSC, "Quantizer Step Code"), §8.3 (QST, "Linear step / Non-linear
+  step"); H.262 §7.4.2.2 and Table 7-6.
+- **Test program:** every `s27-idec-*` program.
+- **Referee:** PCSX2: taking IDEC's QSC as the scale itself reproduces its pictures within its CSC's and IDCT's steps
+  (`idec-rgb16`: 708 of 24,576 fields a step low, 141 high, 3 by two); its BDEC maps the code as the standard does.
+  Play! out of step.
+- **Conclusion:** as stated; **argued**: the field's name and BDEC's mapping on both lineages; §34.14 Q2.
+- **Depends on it:** `Ipu::reconstruct`.
+- **Pinned by:** `idec_gives_the_standards_pictures_through_the_manuals_csc`.
+- **Implemented in:** stage S27's commit.
+
+### D-305. IPU, start codes: at eight or more zeros where a macroblock or an increment would begin, 23 or more zeros and a one ending a byte; the pointer left at the prefix, after any stuffing
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.4 (IDEC's notes: the start code "must be aligned on a byte boundary following the EOB",
+  "the internal pointer after decoding points to the beginning of the detected start code"; BDEC's cases a to c, "more
+  than 7 zero bits"); H.262 §6.2.1 (stuffing zeros before a byte-aligned prefix).
+- **Test program:** every slice's end in the replay programs; `s27-errors`' cases 4 to 6.
+- **Referee:** PCSX2 equal at every slice's end; Play! leaves the pointer at the first zero after the last EOB, six bits
+  short on `bdec-intra-q2`'s first slice.
+- **Conclusion:** as stated; **measured**, one lineage with the manual's notes (FDEC after IDEC reads the whole code only
+  from the prefix).
+- **Depends on it:** `Ipu::start_code`.
+- **Pinned by:** `error_and_start_codes_end_idec_and_bdec_where_section_8_4_says`, `bdec_gives_…`, `idec_gives_…`.
+- **Implemented in:** stage S27's commit.
+
+### D-306. IPU, VDEC: bits no code of the table begins, a start code among them, give DATA 0 and ECD, the pointer unmoved
+
+- **Opened:** 2026-10-25, at stage S27; first read with SCD for a start code, overturned below.
+- **Documents read:** EEUM §8.5.3 (the ERROR rows, 00000000h), §8.3 (ECD and SCD "set to 1 when encountering the Error
+  Code/Start Code").
+- **Test program:** `s27-registers`: VDEC on a start code, on '0000 0001 001', and on macroblock_type with PCT 0.
+- **Referee:** PCSX2 and Play!: ECD in all three, the pointer unmoved; PCSX2 DATA 0, Play! DATA unchanged and no INT_IPU.
+- **Conclusion:** as stated; **measured**, both lineages on the flag.
+- **Depends on it:** `Ipu::vdec`.
+- **Pinned by:** `vdec_gives_every_row_of_the_manuals_tables`, `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-307. IPU, MPEG-1 (IPU_CTRL.MP1): each reconstructed coefficient but the intra DC made odd towards zero when even, then saturated; no mismatch control on F[7][7]; quantiser_scale twice the code
+
+- **Opened:** 2026-10-25, at stage S27; ISO/IEC 11172-2 is not lawfully available to the project.
+- **Documents read:** H.262 §D.9.1 ("adding (or removing) one to each non-zero coefficient that would have been even
+  after inverse quantisation"), §D.9.3 (the escape's 14- and 22-bit forms), §D.9.14 (otherwise MPEG-2's process).
+- **Test program:** `s27-bdec-mpeg1-intra`, `-mpeg1-pb`, `s27-idec-mpeg1-intra`, `s27-*-odd-mpeg1`.
+- **Referee:** ffmpeg's decoding of both MPEG-1 streams within one step of the model (144 and 309 samples); PCSX2's
+  BDEC within one step in every lane of `bdec-mpeg1-pb` and, intra clamp aside (D-301), of `bdec-mpeg1-intra`.
+- **Conclusion:** as stated; **measured**, two lineages with §D.9's words.
+- **Depends on it:** `Ipu::reconstruct`, `Ipu::block`'s escape.
+- **Pinned by:** `bdec_gives_…`, `odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard`.
+- **Implemented in:** stage S27's commit.
+
+### D-308. IPU, VDEC's DATA: the code's length in bits 31..16 and its value in 15..0 for every table
+
+- **Opened:** 2026-10-25, at stage S27, by PCSX2's macroblock_type.
+- **Documents read:** EEUM §8.5.3's four tables, each row's "Decoded data" with the length (00010001h for '1').
+- **Test program:** every VDEC of the replay programs; `s27-registers`' motion_code and dmvector.
+- **Referee:** Play! equal to the manual in every table; PCSX2 equal for macroblock_address_increment but without the
+  length for macroblock_type (00000001h), motion_code (FFFFFFF0h) and dmvector (FFFFFFFFh).
+- **Conclusion:** the manual's; **measured**, one lineage with the document.
+- **Depends on it:** `Ipu::vdec`.
+- **Pinned by:** `vdec_gives_every_row_of_the_manuals_tables`.
+- **Implemented in:** stage S27's commit.
+
+### D-309. IPU, IPU_CTRL.CBP: BDEC's coded_block_pattern, or 3Fh for an intra macroblock of either command
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.3 (CBP, "Coded block pattern", read-only); ps2tek ("written to by BDEC/IDEC"); H.262
+  §6.3.17.4 (pattern_code all 1 for an intra macroblock).
+- **Test program:** every BDEC and IDEC of the replay programs.
+- **Referee:** PCSX2 3Fh after every intra BDEC and IDEC; Play! 0.
+- **Conclusion:** as stated; **measured**, one lineage with the standard's pattern_code.
+- **Depends on it:** `Ipu::begin_blocks`.
+- **Pinned by:** `bdec_gives_…`, `the_programs_replay_…`.
+- **Implemented in:** stage S27's commit.
+
+### D-310. IPU, INT_IPU: requested as every command ends, BCLR and SETTH among them
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.1.2 ("When it becomes possible to accept the next command after the end of IPU
+  processing, the BUSY flag ... is cleared to 0, and a request for the command end interrupt (INT_IPU) is made").
+- **Test program:** `s27-registers`: I_STAT's bit 8 after each command.
+- **Referee:** PCSX2 at every command; Play! not after a VDEC that ends with an error code, nor after some BCLRs.
+- **Conclusion:** as stated; **measured**, one lineage with the manual's general sentence.
+- **Depends on it:** `Ipu::advance`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-311. IPU, IPU_CMD after a reset or BCLR and before VDEC or FDEC reads the stream's next 32 bits, taking the first qword in; IPU_TOP looks at the next 32 bits, BUSY while a command runs or fewer than 32 bits are in
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** ps2tek ("if data is in the IPU through DMA but no commands have been sent, IPU_CMD will contain
+  the first 32 bits of the bitstream"; IPU_TOP's "busy bit is set when less than 32 bits are in the FIFO"); EEUM §8.3
+  (IPU_TOP: "The bit stream does not proceed").
+- **Test program:** `s27-registers`.
+- **Referee:** IPU_CMD: both lineages after the reset and after BCLR, FP 1 after the read on both. IPU_TOP: Play! equal;
+  PCSX2 reads 0 throughout.
+- **Conclusion:** as stated; **measured**, both lineages for IPU_CMD, one with ps2tek for IPU_TOP.
+- **Depends on it:** `Ipu::read_cmd`, `Ipu::read_top`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-312. IPU, BCLR's BP is seven bits
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.4 (BP, bits 6:0); ps2tek ("0-7 BP").
+- **Test program:** `s27-registers`: BCLR 85h.
+- **Referee:** both lineages leave BP 5.
+- **Conclusion:** the manual's; **measured**.
+- **Depends on it:** `Input::clear`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-313. IPU, FB takes its six bits whole, 33 to 63 as well
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.4 (FB 5:0, "(0-32)").
+- **Test program:** `s27-registers`: FDEC at FB 40 and 63.
+- **Referee:** both lineages take 40 and 63 bits.
+- **Conclusion:** as stated; **measured**.
+- **Depends on it:** `Ipu::command`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-314. IPU, a command written while one runs is ignored, but BCLR acts, ending the running command
+
+- **Opened:** 2026-10-25, at stage S27; first read as every command ignored, overturned below.
+- **Documents read:** EEUM §8.4 (BCLR: STR cleared before it), §8.1.2; nothing on a write while BUSY.
+- **Test program:** `s27-registers`: FDEC waiting for bits, SETIQ written, then BCLR 10h, then a qword pushed.
+- **Referee:** both lineages: SETIQ without effect, BCLR acting (INT_IPU, the pointer at 10h), the waiting FDEC gone.
+- **Conclusion:** as stated; **measured**, both lineages.
+- **Depends on it:** `Ipu::command`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-315. IPU, RST: any command ended, INT_IPU if one ran, both FIFOs emptied, the pointer, ECD, SCD and CBP cleared, the written fields taken
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.1.2 ("each of the IPU_CTRL.BUSY, IPU_CTRL.IFC, and IPU_CTRL.OFC bits are cleared to 0,
+  and data being decoded inside the IPU is abandoned"); ps2tek ("A reset triggers an IPU interrupt if a command is
+  currently executing").
+- **Test program:** `s27-registers`: RST while FDEC waits.
+- **Referee:** both lineages clear the command, the counts and the pointer; neither raises INT_IPU.
+- **Conclusion:** as stated, ps2tek's interrupt kept; **argued**: a document's explicit sentence against two lineages
+  whose waiting FDEC may not be a running command in their models.
+- **Depends on it:** `Ipu::write_ctrl`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-316. IPU, IPU_CTRL keeps IDP (17:16), AS, IVF, QST, MP1 and PCT (26:24)
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.3 (the r/w fields).
+- **Test program:** `s27-registers`: BFFFFFFFh written.
+- **Referee:** PCSX2 07F10000h (IDP's high bit dropped, so 10- and 11-bit DC decode otherwise, `intra-dc11`); Play!
+  3FFF0000h.
+- **Conclusion:** the manual's; **argued**, the lineages disagreeing with it and each other.
+- **Depends on it:** `ctrl::WRITABLE`.
+- **Pinned by:** `the_registers_and_fifos_answer_the_ee_as_chapter_8_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-317. IPU, IDP 3 is 11-bit intra DC precision
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.3 (IDP 11 "Reserved"); H.262 Tables 7-2 and 7-4 (intra_dc_precision 3: reset 1024,
+  multiplier 1).
+- **Test program:** `s27-bdec-intra-dc11`, `s27-idec-intra-dc11`, `odd_mpeg2`'s second picture.
+- **Referee:** PCSX2 departs as D-316 explains; Play! out of step.
+- **Conclusion:** the standard's; **argued**.
+- **Depends on it:** `Ipu::dc_reset`, `Ipu::reconstruct`.
+- **Pinned by:** `bdec_gives_…`, `odd_escapes_…`.
+- **Implemented in:** stage S27's commit.
+
+### D-318. IPU, IDEC ends with ECD at an increment other than 1, its macroblocks before it output
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.4 IDEC's notes ("if the result is anything but 1, decoding is ended as an error code").
+- **Test program:** `s27-errors`' first case.
+- **Referee:** both lineages keep IDEC busy, past the program's wait of 4,000,000 passes.
+- **Conclusion:** the manual's; **argued**, a document's explicit sentence.
+- **Depends on it:** `Ipu::macroblock`.
+- **Pinned by:** `error_and_start_codes_end_idec_and_bdec_where_section_8_4_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-319. IPU, CSC: §8.6.1's products floored to halves, Y less 16 in step 5, the halves rounded up, each chroma sample on its 2 × 2 luminance samples
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.6.1 (the steps; step 5 prints "Y(u8.0)" where step 4 computes Y1); §8.2.4 (RAW8's 8 × 8
+  chroma).
+- **Test program:** `s27-post`'s CSCs (ramps of Y, Cb and Cr; random samples), every IDEC.
+- **Referee:** PCSX2 equal on the luma ramp, one step lower in 910 of the first CSC's 1,792 pixels; flooring the
+  products towards zero reproduces 1,072 of them; its formula otherwise not identified. Play! never ends `s27-post`.
+- **Conclusion:** as stated; **argued** from the manual's notation (two's-complement masks floor) and step 4's purpose.
+- **Depends on it:** `csc::convert`, `csc::convert_raw8`.
+- **Pinned by:** `grey_and_the_primaries_follow_the_manuals_steps`, `csc_and_pack_follow_the_manuals_post_processing`.
+- **Implemented in:** stage S27's commit.
+
+### D-320. IPU, the dither adds the table's halves and floors before clipping; A1 is A8 = 40h; VQ takes the first entry at the least distance
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.6.2 (R10 = R8 + D in s10.1, clipped to u8.0, then >> 3; A1 = (A8 == 0x40)), §8.6.3.
+- **Test program:** `s27-post`'s PACKs (RGB16 truncated and dithered, INDX4 truncated and dithered, a CLUT with two
+  equal entries), CSC to RGB16.
+- **Referee:** PCSX2 equal in every PACK word; its CSC to RGB16 departs only as its CSC does (D-319).
+- **Conclusion:** as stated; **measured**, one lineage on every word.
+- **Depends on it:** `csc::rgb16`, `csc::vq`.
+- **Pinned by:** `the_dither_adds_halves_and_truncates`, `csc_and_pack_follow_the_manuals_post_processing`.
+- **Implemented in:** stage S27's commit.
+
+### D-321. IPU, IDEC's SGN reverses each colour's highest bit after the alpha and before the dither, which works on the reversed values
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.6.1 step 11; §8.6.2 ("When DTE=1 (Dither ON) and SGN=1 are set ... clipping is not
+  performed correctly").
+- **Test program:** `s27-idec-sgn`, `s27-idec-sgn-dither`.
+- **Referee:** PCSX2 equal on SGN within D-304's and D-319's departures, and never ends with the dither too (no done
+  word in 90 s); Play! out of step.
+- **Conclusion:** as stated; **argued**: the order of the manual's steps.
+- **Depends on it:** `csc::signed`, `Ipu::finish_macroblock`.
+- **Pinned by:** the S27 programs' records (`s27-idec-sgn`, `s27-idec-sgn-dither`) on the board.
+- **Implemented in:** stage S27's commit.
+
+### D-322. IPU, Table B.16's escape levels 0 (forbidden) and −2048 (reserved) are decoded as those values
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** H.262 Table B.16; EEUM §8.4 ("Bit strings that do not correspond to the symbols ... are
+  processed as error codes"), which does not say a forbidden value is not a symbol.
+- **Test program:** `odd_mpeg2`.
+- **Referee:** neither lineage reached them in step.
+- **Conclusion:** as stated; **argued**: the escape's fields are fixed-length and decodable.
+- **Depends on it:** `Ipu::block`.
+- **Pinned by:** `odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard`.
+- **Implemented in:** stage S27's commit.
+
+### D-323. IPU, an error code inside a macroblock ends the command with nothing of that macroblock output; a run past the 64th coefficient is an error code
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM §8.4 (BDEC's case c; nothing on partial output); H.262 §7.2.2.4 (n < 64).
+- **Test program:** `s27-errors`' cases 2 and 3.
+- **Referee:** out of step after the first case on both.
+- **Conclusion:** as stated; **argued**.
+- **Depends on it:** `Ipu::block`, `Ipu::error`.
+- **Pinned by:** `error_and_start_codes_end_idec_and_bdec_where_section_8_4_says`.
+- **Implemented in:** stage S27's commit.
+
+### D-324. IPU, the decoding takes no time: a command is bound by its data's arrival and its output's departure
+
+- **Opened:** 2026-10-25, at stage S27, by the plan's "FMV smoothness depends on timing under DMA, measured" (§5.7).
+- **Documents read:** none gives the IPU's rate.
+- **Test program:** every replay program records each command's EE cycles by Count.
+- **Referee:** BDEC of 48 qwords: PCSX2 262 to 346 cycles, Play! 1; IDEC of four macroblocks in RGB32: PCSX2 1,207 to
+  1,319, Play! 4,801; Sapphire 90 to 144 and 636 to 684 (`Sapphire_Native.md` §34.8).
+- **Conclusion:** as stated, a named loss; **argued**: the lineages disagree by a factor of four and wholly on BDEC.
+- **Depends on it:** `Ipu::advance`; FMV pacing.
+- **Pinned by:** `the_programs_replay_their_logs_through_the_dmac_on_the_board` (the records' cycles are not graded).
+- **Implemented in:** stage S27's commit.
+
+### D-325. IPU, a DMAtag sent by TTE on channel 4 is not given to the IPU
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** EEUM chapter 5 (TTE), §8.1.2 (the input is the bit stream).
+- **Test program:** none; no program chains toIPU with TTE.
+- **Referee:** not consulted.
+- **Conclusion:** as stated; **argued**: a tag in the stream would corrupt it.
+- **Depends on it:** `board::Ports::put`.
+- **Pinned by:** none yet.
+- **Implemented in:** stage S27's commit.
+
+### D-326. IPU, MP1: IDEC and VDEC pass macroblock stuffing; a D-picture's macroblock (PCT 4) is its DC coefficients alone and end_of_macroblock '1'
+
+- **Opened:** 2026-10-25, at stage S27.
+- **Documents read:** H.262 §D.9.2, §D.9.6; EEUM §8.5.3 (the stuffing row under MP1 1, the D-picture's macroblock_type).
+- **Test program:** `odd_mpeg1` through IDEC and BDEC; `vdec_gives_every_row_of_the_manuals_tables`.
+- **Referee:** Play! gives ECD at the stuffing in IDEC; PCSX2 passes it, its pointer and flags after the slice equal,
+  and departs on the D-picture's IDEC (its PCT left at 1).
+- **Conclusion:** as stated; **argued** from §D.9.
+- **Depends on it:** `Ipu::macroblock`, `Ipu::block`.
+- **Pinned by:** `odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard`.
+- **Implemented in:** stage S27's commit.

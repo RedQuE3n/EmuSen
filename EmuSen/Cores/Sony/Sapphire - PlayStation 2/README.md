@@ -38,5 +38,11 @@ programs for the referees.
 bus; `tests/spu2.rs` grades it by `tests/s26/gate.rs`'s programs, and `cargo run --release --example s26 -- <folder>`
 writes them and the stage's measurement programs for the referees, `s26 grade <name> <run>` and `s26 diff <name> <run>`
 grading and comparing a run's record.
+`src/ipu/` is the IPU (stage S27, `Sapphire_Native.md` §34): its commands, registers and FIFOs on the DMAC's channels 3
+and 4, MPEG-2 and MPEG-1 macroblocks as ITU-T H.262 defines them, Annex A's reference IDCT, and §8.6's colour
+conversion; `tests/ipu.rs` grades it by `tests/s27/`'s streams (`streams/`, made by ffmpeg, and `encode.rs`'s) against a
+model of the standard (`standard.rs`) and the manual's post-processing (`manual.rs`), driving it as an FMV player would
+(`driver.rs`), and `cargo run --release --example s27 -- <folder>` writes the replay and register programs for the
+referees, with `explain`, `pixels`, `csc` and `timing` to read their records.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

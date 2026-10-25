@@ -339,6 +339,27 @@ Neither is made by the skeleton: the step that first writes into each makes it. 
   `_format` (interface 23). `GalaxiaParityTests` holds them to the same bytes for every manifest of its corpus, the
   same refusals with the same words, and the same files on disk.
 
+**What step 3 writes there (2026-10-25)** (`EmuSen_GamePackages.md` §12, `Platform/library-tool`). The CHD tool is the
+first writer of both folders, and makes them:
+
+- `Compressed/<the library-relative path, with .chd>`: `psx/Rayman (USA)/Rayman (USA).cue` becomes
+  `Compressed/psx/Rayman (USA)/Rayman (USA).chd`, written first as `<name>.chd.partial-<process>` and renamed into
+  place after its three checks. A partial file or a `.scratch-<process>-<n>` folder older than an hour is a stopped
+  process's and is removed at the next conversion, as `Unpacked`'s partial folders are (§3.7).
+- `Packages/<console>/<the path less the library's console folder, with .chd>/`: `package.json`, linked
+  (`game.where` is `compressed`), and the original sheet's bytes under its own name where the dump had one.
+- Before the first write the tool resolves `Compressed`, `Packages`, `Logs` and `Unpacked` with every link followed and
+  refuses a batch in which any of them and `AppSettings.RomDirectory` lie one inside the other.
+- **`container`'s fields**, which step 2 left to this step: `type` (`chd`), `program` and `version` (chdman's version
+  line), `sha256` (of the binary, the pin's), `codecs`, `compression` (chdman's words), `sha1` and `data_sha1` (as
+  `chdman info` reports them), `source` (the library-relative path converted), `sources` (each library file read,
+  with `where`, `path`, `size` and `mtime`), `sheet` (the sheet chdman read, made for a lone image), `toc` (each track's
+  `track`, `audio`, `pregap`, `start` and `end` on the disc's time line, the `lead_out` and the `disc_type`), `checks`
+  (each check's word) and `converted` (when). `dump.tracks` holds one entry a track in the sheet's order, each with its
+  `file`, `size` and three hashes; these are fields the schema already allows, so the manifest stays version 1.0.
+- **`RomHash`** gained `Hasher` in Rust, the three hashes taken as bytes arrive, which check 2 hashes a track rebuilt
+  from a CHD with; `hashes_with` and `hashes_of` are written over it, so a dump's hashes keep one owner.
+
 **Tests**: `GamePackageTests` (a manifest written by hand in an editor, with comments, tabs, a trailing comma, CRLF and
 a byte-order mark, loads; a round trip through the file keeps unknown fields in their places; a newer major is refused
 and a refused document leaves the file as it was; an unwritable place reports), run in both states of the switch; the

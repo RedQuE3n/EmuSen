@@ -137,6 +137,7 @@ pub fn line(e: &Value) -> Option<String> {
             };
             Some(head + &detail)
         }
+        "end" if e.get("error").is_some() => None,
         "end" => {
             let counts = match e.get("counts") {
                 Some(Value::Object(c)) => c.iter().map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.as_str() } else { "" }, k.text)).collect::<Vec<_>>().join(", "),

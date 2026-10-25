@@ -176,6 +176,9 @@ fn image_of(tree: &Tree, at: &str) -> Result<String, String> {
 
 /// A library disc made ready in `scratch`, which this makes and the caller removes.
 pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, String> {
+    if image_sets::is_playlist(&item.path) {
+        return Err("an .m3u is not converted by this step: name each of its discs, and the list is left as it is".into());
+    }
     let image = image_of(tree, &item.path)?;
     let (form, sheet, original, names, files) = if image_sets::is_sheet(&image) {
         let bytes = std::fs::read(&image).map_err(|e| format!("{image}: {e}"))?;

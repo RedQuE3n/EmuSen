@@ -300,6 +300,31 @@ fn a_corrupted_chd_fails_check_two() {
     assert!(check_word(&event, "tracks").starts_with("failed: track 2 rebuilt from the CHD has SHA-1"), "{}", check_word(&event, "tracks"));
 }
 
+/// A whole CHD of the same tracks laid out with a longer unstored pause: its tracks' bytes are the dump's, so only the
+/// table of contents, check 3, can see it, and check 2 is not run over a disc whose tracks do not start where the
+/// original's did.
+#[test]
+fn a_chd_of_another_layout_fails_check_three() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("layout");
+    library(&temp.at("library"));
+    let ctx = context(&temp, &chdman, None);
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["psx/One.cue"]}"#);
+    assert_eq!(state_of(&got, "psx/One.cue"), "converted", "{}", summary(&got));
+    let other = temp.at("other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(temp.at("library/psx/One.bin"), other.join("One.bin")).unwrap();
+    std::fs::write(other.join("One.cue"), ONE_FILE.replace("PREGAP 00:00:03", "PREGAP 00:00:05")).unwrap();
+    let tool = emusen_library_tool::chdman::Chdman::open(&chdman, rom_hash_sha256(&chdman).as_deref(), "0.289").unwrap();
+    let chd = temp.at("home/Compressed/psx/One.chd");
+    std::fs::remove_file(&chd).unwrap();
+    tool.create_cd(&other.join("One.cue").to_string_lossy(), &chd.to_string_lossy(), None, 2, &|| false).unwrap();
+    let event = check_event(&ctx, "psx/One.cue", "psx/One.cue");
+    assert_eq!(event.get("state").and_then(Value::as_str), Some("failed"));
+    assert!(check_word(&event, "toc").starts_with("failed: track 2 differs"), "{}", check_word(&event, "toc"));
+    assert_eq!(check_word(&event, "tracks"), "failed: not run, since the table of contents differs");
+}
+
 /// Bytes changed at a stored hunk's start: chdman's verify fails it, and EmuSen's reader, which `chd` 0.3.4 can stop
 /// on such a hunk, is not run over it, so the check ends with the disc failed and the program still running.
 #[test]

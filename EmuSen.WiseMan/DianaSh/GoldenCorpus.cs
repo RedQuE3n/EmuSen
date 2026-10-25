@@ -50,6 +50,8 @@ namespace EmuSen.WiseMan.DianaSh
     public sealed class GoldenFile
     {
         public string Command = "";
+        // "rust" for a command only the Rust shell has, a module with no C# class, run and expected on that shell alone - see EmuSen_DianaSh.md §13.4.
+        public string? Shell;
         public List<string> Usage = new();
         public List<(string Fragment, string Reason)> Unreachable = new();
         public List<(int Line, string Reason)> Uncovered = new();
@@ -92,6 +94,7 @@ namespace EmuSen.WiseMan.DianaSh
                 switch (word)
                 {
                     case "command": file.Command = rest; break;
+                    case "shell": file.Shell = rest; break;
                     case "usage": file.Usage.Add(rest[(rest.IndexOf(' ') + 1)..]); break;
                     case "unreachable":
                         int dash = rest.IndexOf(" -- ", StringComparison.Ordinal);
@@ -162,6 +165,7 @@ namespace EmuSen.WiseMan.DianaSh
             void Block(string word, byte[] block) { Text($"{word} {block.Length}\n"); o.Write(block); Text("\n"); }
             Text(Header);
             Text($"command {Command}\n");
+            if (Shell is not null) Text($"shell {Shell}\n");
             for (int i = 0; i < Usage.Count; i++) Text($"usage {i + 1} {Usage[i]}\n");
             foreach (var (line, reason) in Uncovered) Text($"uncovered {line} -- {reason}\n");
             foreach (var (fragment, reason) in Unreachable) Text($"unreachable {Quote(fragment)} -- {reason}\n");

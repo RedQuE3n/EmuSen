@@ -2,7 +2,7 @@
 //! through its FIFO, from the DMAC's channel or from the EE's stores, and runs the VIFcodes in it: the registers it
 //! sets, MPG into micro memory, UNPACK into data memory (`unpack`), the MSCAL family starting the VU through
 //! `Vpu::start` with VIF1's double buffering and the TOP and ITOP that XTOP and XITOP read, the FLUSH family's waits,
-//! DIRECT and DIRECTHL to PATH2 and MSKPATH3, which end at `Gif` (the GIF implements it at S15), the i bit's
+//! DIRECT and DIRECTHL to PATH2 and MSKPATH3, which end at `Gif` (the GIF implements it since S15), the i bit's
 //! interrupt and stall, FBRST and the error masks; and VIF1 carries the GS's local-to-host data to the DMAC when FDR
 //! reverses it. A VIF runs on its own clock and is brought forward by `run_to` as the VU is: at its events while the
 //! DMAC waits on its FIFO, before the DMAC looks at the FIFO, and whenever the EE reaches it. Sapphire_Native.md §28.
@@ -79,7 +79,7 @@ pub mod err {
 pub const DEPTH: [usize; 2] = [8, 16];
 
 /// VIF1 as it reaches the GIF (§6.4's DIRECT, DIRECTHL, MSKPATH3, FLUSH, FLUSHA and MSCALF; chapter 5's reversed
-/// channel 1): S15's GIF implements it, `Path2StandIn` until then. Times are EE cycles.
+/// channel 1): the GIF implements it (`gif::Gif` through the board, from S15). Times are EE cycles.
 pub trait Gif {
     /// A qword of DIRECT's data (DIRECTHL's with `hl`, which waits out PATH3's IMAGE data) offered to PATH2 at `at`:
     /// the cycle it is taken, or none while PATH2 cannot have the GIF.
@@ -91,25 +91,6 @@ pub trait Gif {
     fn mask_path3(&mut self, masked: bool, at: u64);
     /// The next qword of the GS's local-to-host data while the host interface is reversed (GS User's Manual §4.2.2).
     fn host_read(&mut self) -> Option<u128>;
-}
-
-/// PATH2 until the GIF exists: every qword taken at once and counted (kept with `keep`), the paths always idle, the
-/// PATH3 mask recorded.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Path2StandIn {
-    pub keep: bool,
-    pub taken: Vec<(u128, bool)>,
-    pub count: u64,
-    pub masked: bool,
-}
-
-impl Path2StandIn {
-    pub fn take(&mut self, q: u128, hl: bool) {
-        self.count += 1;
-        if self.keep {
-            self.taken.push((q, hl));
-        }
-    }
 }
 
 /// What a VIF reaches while it runs: its VU through the VPU, and the GIF.

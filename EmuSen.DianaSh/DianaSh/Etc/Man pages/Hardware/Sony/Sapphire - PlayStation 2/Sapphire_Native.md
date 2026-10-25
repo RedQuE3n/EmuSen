@@ -4653,6 +4653,7 @@ emulator, SDK, loader or ps2autotests source and no firmware was read.
   `dmac::Peripherals`), `kick` and `path1_free`, the registers. `Path1Port`, PATH1 as VU1 reaches it (`vu::Path1`).
 - **`src/vu/mod.rs`**: `vu::Path1` gains two methods with defaults, additive, `set_free` (the board's estimate of when a
   PATH1 transfer could start) and `take_kick` (a kick handed on to the GIF); `Path1StandIn` and its test are unchanged.
+- **`src/vif/mod.rs`**: S14's `Path2StandIn` removed, `vif::Gif` itself unchanged.
 - **`src/board.rs`**: the GIF on the board; `Ports` gives it channel 2; `GifPort`, the GIF as VIF1 reaches it, in
   place of the stand-in; the GIF's registers at 10003000h and FIFO at 10006000h (§33.5); `run_gif`, brought before the
   VIFs, before the DMAC acts, after the VUs run and around the EE's reaches of the GS's privileged registers.

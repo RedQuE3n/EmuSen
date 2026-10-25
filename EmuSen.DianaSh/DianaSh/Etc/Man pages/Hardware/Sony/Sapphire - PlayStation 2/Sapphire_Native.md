@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13) and S4 (§14) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14) and S5 (§15) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -631,3 +631,109 @@ or loader source; no firmware; none of PCSX2's log but the programs' own lines.
 - IOP programs (`.irx`): the protocol claims them, but they are loaded by the IOP's kernel and run from S21 on.
 - Any ps2autotests program on Sapphire, which runs nothing yet.
 - G10 and G11, which are S25's and S29's.
+
+## 15. Stage S5, the R5900's and the vector units' tables (2026-10-24)
+
+### 15.1 In one paragraph
+
+The plan's §7 row S5 and §9.1, on the tester's go of 2026-10-24, preceded by the record of §14.8 Q1's decision in the
+plan (the IOP's console caught at the module interface on the player's BIOS, a port of the project's own on the open
+BIOS; `Sapphire_Plan.md`'s decisions, S10 and O8). `emusen-mips` gains `src/r5900.rs`, the EE core's decode, disassembly
+and assembly as a table of its own (290 mnemonics), and `src/vu.rs`, the vector units' operations as one table read in
+micro mode (a 64-bit pair, an upper word with five flags and a lower word) and in macro mode (the EE's COP2, VU0's names
+with a `v`). The map is the TX79 manual's opcode tables where the EE agrees and ps2tek's where it differs, each of the
+83 differing cells under one of three disputes (D-1 to D-3); the vector units' layouts are Sony's Hot Chips slides', and
+two choices the documents leave open are D-4 and D-5. The R3000's, the VR4300's and the RSP's text is unchanged over
+three million words, and Diamond's, BlackMoon's, the platform library's and Sapphire's tests pass. `EmuSen_Mips.md` §8 and
+§9 are the record of the tables; this section records the stage. No emulator, assembler, binutils, LLVM or SDK source and
+no Sony manual was read.
+
+### 15.2 What was built
+
+- **`r5900.rs`**: one Rust table per table of the manual (A.5, B.5, C.2, D.4), indexed by the same field, so that the
+  source reads against the manual cell for cell; `operation(word)` gives the operation or `None` for a reserved
+  encoding, `decode(word, pc)` the text and the address a word names, in the VR4300's `Instruction` shape; `Dialect::R5900`
+  sends `disassemble`, `assemble` and `assemble_line` to it. Appendix A's spelling, the IOP's (`EmuSen_Mips.md` §8.4).
+- **`vu.rs`**: ps2tek's "COP2 Special1" and "COP2 Special2" as two tables of operations, each with its micro name, its
+  half (upper, lower or macro only) and its operand form; `operation`, `text`, `encode`, `disassemble(pair)`,
+  `assemble_pair` and `assemble`. COP2's rs values from 10h reach it from `r5900.rs`.
+- **The assembler** reads both: `assemble(source, origin, &Dialect::R5900)` for EE programs, `vu::assemble(source)` for
+  microprograms; the helpers it shares with the MIPS I assembler moved to crate visibility, not copied.
+
+### 15.3 Where the documents ran out
+
+- **The VU micro-only lower instructions** (those with their own opcode in bits 31–25: the LQ and SQ kind, the integer
+  immediates, branches, the flag instructions, the EFU, XGKICK, XTOP, XITOP, MFP, WAITP) have **no encoding in any
+  source this stage may read**: ps2tek names some of them in its pipeline and VIF sections and gives no bits, and the
+  Hot Chips slides draw only the `1000000` class. Such a lower word is written `.word`. S13 cannot start without them
+  (§15.6 Q1).
+- **Operand layouts** for 30-odd VU operations outside the FMAC family (ITOF, FTOI, ABS, CLIP, MOVE, MR32, the
+  loads and stores but LQI, DIV, SQRT, RSQRT, MTIR, MFIR, ILWR, ISWR, the random unit, the integer ALU, CALLMS) are not
+  given; they are written `Raw`, the name and the 25 bits, which reads back exactly and claims nothing.
+- **COP2's interlock bit**: ps2tek names QMTC2.I and CTC2.I but not the bit; the moves are decoded without it.
+- **VU0's control registers** are not numbered by any source read; CFC2 and CTC2 write them `$n`.
+
+### 15.4 Tests (2026-10-24)
+
+| Item | Result [M] |
+|---|---|
+| `emusen-mips` (`cargo test --release`) | **18 of 18**, five new: `every_encoding_of_the_tx79_tables_decodes_disassembles_and_reassembles` (the gate: 806 cells, 261 named, 462 reserved, 83 differing as ps2tek reads them), `the_ee_s_cells_by_ps2tek`, `the_spelling_is_appendix_a_s`, `every_encoding_of_the_documented_tables_reads_back_in_both_modes` (120 VU operations, both modes), `the_hot_chips_examples_and_the_flags`; clippy clean |
+| The R3000's, VR4300's and RSP's text, unchanged | 3,020,480 words through `disassemble` (MIPS I with `decode` and the assembler's read-back, and the VR4300's), `vr4300::decode` and `rsp::decode`: the same four hashes before and after the stage, by a throwaway program kept out of the repository |
+| `blast.sh`'s crates (`cargo test --release`) | `blackmoon-gte` **10 of 10**, `blackmoon-r3000` **38 of 38**, run again with `EMUSEN_BLACKMOON_CORPUS` set so that its r3000 suite's 55,000 opcodes go through the MIPS I decode and assembler (38 of 38), Diamond **306 of 306** (its goldens), Diamond's `precision` **8 of 8** and `v1` **5 of 5**, Sapphire **17 of 17**, `Platform/systems` **39 of 39** (MarsRT's VR4300 and RSP text through the platform library) |
+| WiseMan, `blast.sh`'s filter (`CheatCodec`, `DebugCodeParity`, `Diamond`, `SapphireTests`, `SystemCodeParity`, `SystemTableParity`) | **116 of 116** |
+
+**Seeded faults**, each made in place, the crate's tests run, the file restored:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | MMI0's PADDW and PSUBW cells swapped | the gate test |
+| F2 | C.LT.S given the `fd, fs` form | `the_spelling_is_appendix_a_s` (the round trip alone cannot see a form that reads back its own text) |
+| F3 | the assembler's check that a word decodes to the mnemonic it was given, removed | `the_spelling_is_appendix_a_s` (`mfc0 v0, Debug` accepted) |
+| F4 | BC1FL and BC1TL removed | the gate test (D-2's cells) and `the_ee_s_cells_by_ps2tek` |
+| V1 | Special2 indexed without its column bits | both VU tests and `the_ee_s_cells_by_ps2tek` |
+| V2 | the field mask's letters in reverse | both VU tests and `the_ee_s_cells_by_ps2tek` |
+| V3 | the lower class `1000000` as `1000001` | at first **nothing**: the writer and the reader shared the constant, so every round trip agreed; the slides' literal words (`0x8104_2B7C`, LQI; `[e] nop | move`) are now checked bit for bit, and catch it |
+
+### 15.5 What the plan got wrong, or left open
+
+- **§9.1's "lacks some MIPS III instructions [R the TX79 manual, to be read at S5]"**: read; they are DMULT, DMULTU,
+  DDIV, DDIVU, LL, LLD, SC and SCD (§3.3's note and A.5's η cells), and on the EE also the FPU's double and long formats
+  (D-1), which the plan's §1.1 already said in other words.
+- **S5's gate, "every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same
+  word"**, cannot hold literally where the EE differs: the 83 differing cells decode as ps2tek reads them (66 of them
+  reserved), each named with its dispute in the test, as P6 requires. The other 723 cells meet the gate as written.
+- **"Every VU encoding in the documented tables likewise"** holds for ps2tek's two tables (120 operations, both modes);
+  the micro-only lower instructions are in no document this stage could read (§15.3).
+- **P4** (the R5900 differs from the TX79 in an instruction's result that ps2autotests records) is not retired: S5
+  decodes and does not execute. D-1 makes it likely for COP1.
+
+### 15.6 Questions this stage leaves
+
+1. **Q1 [decision], the VU micro-only encodings.** S13 needs the lower instructions with their own opcodes, and S12 and
+   S13 the operand layouts of the operations now written `Raw`; no document allowed at this stage gives them. The
+   plan's §11 Q1 (2026-10-24) allows Sony's Linux-kit manuals, among them a VU user's manual, from the tester's own or a
+   lawful copy, while this stage's sources excluded Sony's VU manual. *Recommended*: the tester settles which holds; if
+   Q1 does, a lawful copy of the Linux kit's VU manual is sought and read by S12's writer, each use cited by section, the
+   `Raw` forms and the `.word` lower words replaced there; if not, a dispute step per instruction, learning the encoding
+   by running candidate words on the referees as black boxes, which the disputes log's rules allow but which would
+   take far longer and rest on emulators' choices.
+2. **Q2 [routine], fields fixed at zero.** The decode ignores them, as the VR4300's does (`EmuSen_Mips.md` §8.2).
+   *Recommended*: kept; S6's interpreter revisits it if `cpu/ee/*` or a project program shows a reserved instruction
+   exception for one.
+3. **Q3 [routine], evidence for D-1 and D-2.** *Recommended*: at S9, a project program executing each TX79-only COP1
+   encoding and each likely FPU branch, its record read on PCSX2 and Play!, as the disputes' evidence.
+
+### 15.7 What was read for this stage
+
+`Sapphire_Plan.md` §2, §7, §9.1, §11 and §13; `Sapphire_References.md`; `Sapphire_Native.md` §14; `EmuSen_Mips.md`;
+`emusen-mips`'s sources; Toshiba's *TX79 Core Architecture* rev. 2.0, §3.3, §4.2's Table 4-1, §10.5, the opcode tables
+A.5, B.5, C.2 and D.4 and the Format lines and encoding pictures of Appendices A to D (the TX7901 manual was searched and
+has no opcode table); ps2tek's "EE" chapter (architecture, registers, instruction decoding, COP0 registers, COP1) and
+"Vector Unit" chapter; Kunimatsu et al.'s Hot Chips 11 slides whole. No emulator, assembler, binutils, LLVM, GCC or SDK
+source, no Sony manual and no firmware.
+
+### 15.8 What this stage does not cover
+
+- Execution of any kind: the interpreter is S6, COP1 S9, VU0 macro mode S12, micro mode S13.
+- The VU micro-only lower instructions and the `Raw` operations' operand layouts (§15.3, Q1).
+- A debugger surface: the processors' disassembly through the platform library waits on S31.

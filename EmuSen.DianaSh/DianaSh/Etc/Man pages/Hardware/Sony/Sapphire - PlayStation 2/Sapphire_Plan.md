@@ -863,7 +863,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S5** | `emusen-mips`: the R5900's decode and disassembly as a table of its own (§9.1), MMI, COP0, COP1 and COP2's macro forms, the VU micro tables; the assembler for both | Every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same word; the R3000 and VR4300 goldens unchanged |
+| **S5** | `emusen-mips`: the R5900's decode and disassembly as a table of its own (§9.1), MMI, COP0, COP1 and COP2's macro forms, the VU micro tables; the assembler for both | Every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same word; the R3000 and VR4300 goldens unchanged *Built 2026-10-24, `Sapphire_Native.md` §15: met for the 723 cells where the EE agrees with the TX79, the other 83 decoded as ps2tek reads them under disputes D-1 to D-3; ps2tek's two VU tables read back in both modes; the VU micro-only lower instructions in no allowed document (§15.6 Q1); the other processors' text unchanged.* |
 | **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned |
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
@@ -1036,7 +1036,9 @@ With it: the R5900's COP0 table (its registers' names), COP1's names, and COP2's
 VU micro mode** is a table of its own as well: a micro instruction is a 64-bit pair of an upper and a lower instruction
 with flag bits, not a MIPS word, so it is `src/vu.rs`, with its own spelling, as `rsp.rs` is beside `vr4300.rs` [C]. The
 assembler gains both, for the project's test programs and the open BIOS's entry code. **Nothing of Diamond's or MarsRT's
-text changes**: their goldens are S5's gate.
+text changes**: their goldens are S5's gate. *Built 2026-10-24 at S5 (`EmuSen_Mips.md` §8, §9): the instructions
+the R5900 lacks are DMULT, DMULTU, DDIV, DDIVU, LL, LLD, SC and SCD [R the TX79 manual, §3.3 and A.5], and on the EE the
+FPU's double and long formats as well (`Sapphire_Disputes.md` D-1).*
 
 ### 9.2 `blackmoon-r3000` for the IOP
 

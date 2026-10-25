@@ -424,6 +424,8 @@ mod tests {
         assert_eq!(text(operation(maddx).unwrap(), maddx, true), "vmaddx.xyzw vf1, vf2, vf3");
         let lqi = 0b01101 << 6 | 0x3C | 5 << 11 | 4 << 16 | 0x8 << 21;
         assert_eq!(text(operation(lqi).unwrap(), lqi, false), "lqi.x vf4, vi5");
+        assert_eq!(disassemble(0x0000_02FF_8104_2B7C), "nop | lqi.x vf4, vi5", "the slides' bits: 1000000, dest, ft, is, 01101 1111 00");
+        assert_eq!(assemble_pair("[e] nop | move"), Ok(0x4000_02FF_8000_033C));
         let pair = ((1u64 << 30 | NOP as u64) << 32) | (LOWER_OP | 0x33C) as u64;
         assert_eq!(disassemble(pair), "[e] nop | move");
         let constant = ((I_BIT | 0x22) as u64) << 32 | 0x3F80_0000;

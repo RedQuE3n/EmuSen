@@ -29,11 +29,12 @@ namespace EmuSen.WiseMan.Fixtures
         public static readonly string[] SoundNames = ["systembrowse", "quicksysselect", "select", "back", "scroll", "favorite", "launch"];
 
         private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
+        private readonly FixedRunFolder _folder = new("EmuSenThemedSession");
 
         public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null,
             EmuSen.LunaP.Controls.DeviceStatus? status = null, string? extraSystem = null, bool sounds = true, Action<string>? roms = null)
         {
-            Root = Path.Combine(Path.GetTempPath(), "EmuSenThemedSession", Guid.NewGuid().ToString("N"));
+            Root = _folder.Root;
             RomDirectory = Path.Combine(Root, "Roms");
             Directory.CreateDirectory(RomDirectory);
             ConfigStore.OverrideDirectory = Path.Combine(Root, "Config");
@@ -209,7 +210,7 @@ namespace EmuSen.WiseMan.Fixtures
             Theme.Dispose();
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
-            try { if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); } catch { }
+            _folder.Dispose();
         }
     }
 }

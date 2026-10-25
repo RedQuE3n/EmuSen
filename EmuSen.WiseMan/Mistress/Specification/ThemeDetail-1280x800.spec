@@ -24,18 +24,18 @@ tree
             9 TextBlock at=285,453,42,29 box=42,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="1 of 2" layout=42,28.8 limit=128,182,1024,515 name=ThemeDetailPosition paints=#9C9CA0FF role=text size=24 text="1 of 2"
             10 Button at=339,445,81,44 by=panel drawn focus heard=NEXT limit=128,182,1024,515 name=ThemeDetailNext op paints=#55555AFF,#9C9CA0FF role=button text=Next
               11 TextBlock at=356,451,47,32 box=47,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=NEXT layout=46.25,31.2 limit=339,445,81,44 owner=10 paints=#9C9CA0FF role=text size=26 text=NEXT
-        12 ScrollViewer at=705,194,423,300 by=panel fades=b focus limit=128,182,1024,515 name=ThemeDetailFacts overflow=166 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=705,194,423,300
-          13 StackPanel at=705,194,415,466 by=scroll in=12 limit=705,194,423,300 paints=#9C9CA0FF role=none seen=705,194,415,300
+        12 ScrollViewer at=705,194,423,300 by=panel fades=b focus limit=128,182,1024,515 name=ThemeDetailFacts overflow=137 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=705,194,423,300
+          13 StackPanel at=705,194,415,437 by=scroll in=12 limit=705,194,423,300 paints=#9C9CA0FF role=none seen=705,194,415,300
             14 TextBlock at=705,194,415,29 box=415,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="by Bo Sample   ·   github.com/bo/plain-shelf-es-de" in=12 layout=410.52,28.8 limit=705,194,423,300 name=ThemeDetailAuthor paints=#9C9CA0FF role=text size=24 text="by Bo Sample   ·   github.com/bo/plain-shelf-es-de"
             15 FieldRow at=705,231,415,62 by=scroll heard="Last Updated" in=12 limit=705,194,423,300 paints=#9C9CA0FF role=group
               16 TextBlock at=705,231,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Last Updated" in=12 layout=107.69,28.8 limit=705,231,415,62 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Last Updated"
               17 TextBlock at=705,264,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="2026-09-20, commit 1111111, on branch master" in=12 layout=364.82,28.8 limit=705,231,415,62 name=ThemeDetailUpdated paints=#9C9CA0FF role=text size=24 text="2026-09-20, commit 1111111, on branch master"
-            18 FieldRow at=705,301,415,149 by=scroll heard=Here in=12 limit=705,194,423,300 paints=#9C9CA0FF role=group
-              19 TextBlock at=705,301,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Here in=12 layout=37.78,28.8 limit=705,301,415,149 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Here
+            18 FieldRow at=705,301,415,120 by=scroll heard=Here in=12 limit=705,194,423,300 paints=#9C9CA0FF role=group
+              19 TextBlock at=705,301,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Here in=12 layout=37.78,28.8 limit=705,301,415,120 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Here
               20 TextBlock name=ThemeDetailState paints=#9C9CA0FF role=text volatile="its words name the run's own folders"
-            21 FieldRow at=705,458,415,62 by=scroll heard="Variants (2)" in=12 limit=705,194,423,300 paints=#9C9CA0FF role=group seen=705,458,415,36
-              22 TextBlock at=705,458,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Variants (2)" in=12 layout=92.69,28.8 limit=705,458,415,62 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Variants (2)"
-              23 TextBlock at=705,491,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="List, Grid" in=12 layout=71.9,28.8 limit=705,458,415,62 name=ThemeDetailVariants paints=#9C9CA0FF role=text seen=705,491,415,3 size=24 text="List, Grid"
+            21 FieldRow at=705,429,415,62 by=scroll heard="Variants (2)" in=12 limit=705,194,423,300 paints=#9C9CA0FF role=group
+              22 TextBlock at=705,429,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Variants (2)" in=12 layout=92.69,28.8 limit=705,429,415,62 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Variants (2)"
+              23 TextBlock at=705,462,415,29 box=415,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="List, Grid" in=12 layout=71.9,28.8 limit=705,429,415,62 name=ThemeDetailVariants paints=#9C9CA0FF role=text size=24 text="List, Grid"
       24 StackPanel at=152,506,976,179 by=panel limit=128,182,1024,515 role=none
         25 FieldRow at=152,506,976,90 by=panel heard=Licence limit=128,182,1024,515 name=ThemeDetailLicenceRow paints=#9C9CA0FF role=group
           26 TextBlock at=152,506,976,29 box=976,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Licence layout=63.5,28.8 limit=152,506,976,90 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Licence

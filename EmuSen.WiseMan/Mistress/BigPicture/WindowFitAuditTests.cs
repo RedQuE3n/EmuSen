@@ -74,7 +74,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         private readonly ITestOutputHelper _out;
-        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenWindowFit", Guid.NewGuid().ToString("N"));
+        private readonly FixedRunFolder _folder = new("EmuSenWindowFit");
+        private string _root => _folder.Root;
         private readonly string _romDir;
         private static readonly FieldInfo Factory = typeof(MainWindow).GetField("HttpFactory", BindingFlags.Static | BindingFlags.NonPublic)!;
         private readonly object _realFactory = Factory.GetValue(null)!;
@@ -91,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Factory.SetValue(null, _realFactory);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
-            try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+            _folder.Dispose();
         }
 
         internal static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");

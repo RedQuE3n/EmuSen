@@ -14,6 +14,10 @@ pub const FORMAT: &str = "emusen-package";
 pub const MAJOR: u32 = 1;
 /// The minor version this build writes in a new manifest.
 pub const MINOR: u32 = 0;
+/// A package's own places for a game's battery saves, its states and its cheat list (EmuSen_GamePackages.md §3.2).
+pub const SAVES_FOLDER: &str = "saves";
+pub const STATES_FOLDER: &str = "states";
+pub const CHEATS_FILE: &str = "cheats.json";
 
 /// Why a text is not a manifest this build takes.
 #[derive(Clone, Debug, PartialEq, Eq)]

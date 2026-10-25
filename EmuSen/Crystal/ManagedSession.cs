@@ -75,6 +75,10 @@ namespace EmuSen.Crystal.Managed
         public SessionService Provider { get; }
         public EmuSenSessionV1* Table => Provider.Table;
         public string? GamePath { get; }
+
+        // The package the game opened as, whose folder keeps its states; null for a plain file - see EmuSen_GamePackages.md §3.5.
+        public string? PackageRoot { get; init; }
+
         public string Console { get; }
 
         // The console a session started empty was asked for, its states named as Hotaru names them.

@@ -7,7 +7,7 @@ use crate::{Error, Progress};
 use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
-use emusen_galaxia::{archive, dotnet_files, image_sets};
+use emusen_galaxia::{archive, claims, dotnet_files, image_sets};
 use emusen_systems::probe::{self, Candidate, Recognition};
 use std::sync::atomic::Ordering;
 
@@ -31,11 +31,21 @@ impl Outcome {
     }
 }
 
-/// One game the scan found, and the system it is shelved as, none where no named system takes it.
+/// One game the scan found, the system it is shelved as, none where no named system takes it, and the package it is
+/// the game of, none for a file no package claims.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Game {
     pub path: String,
     pub system: Option<String>,
+    pub package: Option<String>,
+}
+
+/// The two folders a scan walks beside its roots since game packages (EmuSen_GamePackages.md §3.6): `Packages`, whose
+/// package folders are one entry each, and `Compressed`. Neither changes the scan's outcome.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Beside {
+    pub packages: Option<String>,
+    pub compressed: Option<String>,
 }
 
 /// A finished scan.
@@ -120,8 +130,22 @@ pub fn route(at: &str, systems: &Systems) -> Option<String> {
     }
 }
 
+/// The system a package's manifest names, among the named systems: the one of its ES-DE name, else of its id.
+fn system_named(manifest: &str, systems: &Systems) -> Option<String> {
+    let by = |f: &dyn Fn(&emusen_systems::System) -> bool| systems.entries.iter().find(|s| f(s)).map(|s| s.id.clone());
+    by(&|s| equals_ignore_case(&s.esde_system, manifest)).or_else(|| by(&|s| equals_ignore_case(&s.id, manifest)))
+}
+
 /// Walks the roots, keeping what was found in a `Scan`; `progress` is updated as it goes and asked whether to stop.
 pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Scan, Error> {
+    scan_with(roots, &Beside::default(), ids, progress)
+}
+
+/// The scan with packages (EmuSen_GamePackages.md §3.6): `Packages` and `Compressed` walked too where they are
+/// folders; nothing inside a package's folder is a game of its own, a file a package claims is not listed, and each
+/// package whose game is there is one entry, its path the game's and shelved by the manifest's system. A library
+/// path of a manifest is under the first root. No file is read for a claim: the manifests are the index.
+pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &Progress) -> Result<Scan, Error> {
     let systems = Systems::named(ids);
     let extensions = systems.extensions();
     let given: Vec<String> = roots.iter().filter(|r| !emusen_dotnet::text::is_blank(Some(r))).cloned().collect();
@@ -158,6 +182,25 @@ pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Sca
             Err(_) => missing = true,
         }
     }
+    let index = beside.packages.as_deref().filter(|p| dotnet_files::directory_exists(p)).map(|packages| {
+        let compressed = beside.compressed.clone().unwrap_or_default();
+        for folder in [packages, compressed.as_str()].into_iter().filter(|f| dotnet_files::directory_exists(f)) {
+            let mut files = Vec::new();
+            let _ = dotnet_files::visit_files_with(folder, options, |at, _| {
+                if extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, at))) {
+                    files.push(at.to_string());
+                }
+            });
+            found.extend(image_sets::shelved(files));
+        }
+        claims::index(&claims::Roots { packages, library: given.first().map(String::as_str), compressed: &compressed })
+    });
+    if let Some(index) = &index {
+        found.retain(|at| {
+            let full = path::full_path(at);
+            !index.inside_package(&full) && index.claimant(&full).is_none()
+        });
+    }
     progress.phase.store(2, Ordering::Relaxed);
     for at in found {
         if progress.cancelled() {
@@ -165,7 +208,12 @@ pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Sca
         }
         let system = route(&at, &systems);
         progress.games.fetch_add(1, Ordering::Relaxed);
-        scan.games.push(Game { path: at, system });
+        scan.games.push(Game { path: at, system, package: None });
+    }
+    for p in index.iter().flat_map(|i| i.packages.iter()).filter(|p| dotnet_files::file_exists(&p.game)) {
+        let system = system_named(&p.system, &systems).or_else(|| route(&p.game, &systems));
+        progress.games.fetch_add(1, Ordering::Relaxed);
+        scan.games.push(Game { path: p.game.clone(), system, package: Some(p.folder.clone()) });
     }
     scan.games.sort_by(|a, b| compare_ignore_case(path::file_name_without_extension(Style::HOST, &a.path), path::file_name_without_extension(Style::HOST, &b.path)));
     scan.outcome = if missing { Outcome::NotFound } else if scan.games.is_empty() { Outcome::Empty } else { Outcome::Ok };

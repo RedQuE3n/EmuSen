@@ -18,9 +18,12 @@ namespace EmuSen.Galaxia.Library
         // The slot that keeps the plain <rom>.state name - see EmuSen_Galaxia.md §5.1.
         public const int DefaultStateSlot = 1;
 
-        // One folder per console, named as the ROM library names them (NES, SNES, N64, GB, GBC) - see EmuSen_Settings_Reference.md §4.85.11.
-        public static string SramPathFor(string romPath, string console) =>
-            GalaxiaNative.Takes(romPath, console) ? GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console) : Managed.SramPathFor(romPath, console);
+        // One folder per console, named as the ROM library names them (NES, SNES, N64, GB, GBC); a packaged game's in its package - see EmuSen_GamePackages.md §3.5.
+        public static string SramPathFor(string romPath, string console, string? packageRoot = null)
+        {
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, console) ? GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console) : Managed.SramPathFor(romPath, console);
+            return GalaxiaNative.Takes(romPath, packageRoot) ? GalaxiaNative.SavePath(GalaxiaSave.PackageSram, romPath, packageRoot) : Managed.PackageSramPathFor(packageRoot, romPath);
+        }
 
         // The folders of a console's shared and named save media, beside its per-game saves: removable ones, and the console's own - see EmuSen_SaveMedia.md §3.3.
         public const string CardsFolder = "Cards", ConsoleFolder = "Console";
@@ -48,13 +51,19 @@ namespace EmuSen.Galaxia.Library
         public static string FlatSramPathFor(string romPath) =>
             GalaxiaNative.Takes(romPath) ? GalaxiaNative.SavePath(GalaxiaSave.FlatSram, romPath) : Managed.FlatSramPathFor(romPath);
 
-        // directoryOverride is a parameter, not an AppSettings read - see EmuSen_Galaxia.md §5.1.
-        public static string StatePathFor(string romPath, int slot = DefaultStateSlot, string? directoryOverride = null) =>
-            GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot) : Managed.StatePathFor(romPath, slot, directoryOverride);
+        // directoryOverride is a parameter, not an AppSettings read, and a package root is one too, which wins - see EmuSen_Galaxia.md §5.1.
+        public static string StatePathFor(string romPath, int slot = DefaultStateSlot, string? directoryOverride = null, string? packageRoot = null)
+        {
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot) : Managed.StatePathFor(romPath, slot, directoryOverride);
+            return GalaxiaNative.Takes(romPath, packageRoot) ? GalaxiaNative.SavePath(GalaxiaSave.PackageState, romPath, packageRoot, slot) : Managed.PackageStatePathFor(packageRoot, romPath, slot);
+        }
 
         // Written when a game is closed and offered at its next start - see EmuSen_Galaxia.md §5.2.
-        public static string ResumeStatePathFor(string romPath, string? directoryOverride = null) =>
-            GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride) : Managed.ResumeStatePathFor(romPath, directoryOverride);
+        public static string ResumeStatePathFor(string romPath, string? directoryOverride = null, string? packageRoot = null)
+        {
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride) : Managed.ResumeStatePathFor(romPath, directoryOverride);
+            return GalaxiaNative.Takes(romPath, packageRoot) ? GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, romPath, packageRoot) : Managed.PackageResumeStatePathFor(packageRoot, romPath);
+        }
 
         // The picture on screen when a state was written, beside it - see EmuSen_Galaxia.md §5.2.
         public static string PicturePathFor(string statePath) =>
@@ -84,6 +93,15 @@ namespace EmuSen.Galaxia.Library
             }
 
             public static string PicturePathFor(string statePath) => Path.ChangeExtension(statePath, ".png");
+
+            public static string PackageSramPathFor(string root, string romPath) =>
+                Path.Combine(root, Media.GamePackage.SavesFolder, Path.GetFileNameWithoutExtension(romPath) + SramExtension);
+
+            public static string PackageStatePathFor(string root, string romPath, int slot) =>
+                Path.Combine(root, Media.GamePackage.StatesFolder, Path.GetFileNameWithoutExtension(romPath) + (slot == DefaultStateSlot ? "" : $".slot{slot}") + StateExtension);
+
+            public static string PackageResumeStatePathFor(string root, string romPath) =>
+                Path.Combine(root, Media.GamePackage.StatesFolder, Path.GetFileNameWithoutExtension(romPath) + ".resume" + StateExtension);
         }
     }
 }

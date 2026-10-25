@@ -24,13 +24,26 @@ pub struct BatterySave {
 impl BatterySave {
     pub const NONE: BatterySave = BatterySave { path: None, previous: None };
 
-    /// A game's own file, `BatterySave.Open`.
-    pub fn open(tree: &Tree, rom: &str, console: &str, disabled: bool, extension: &str) -> BatterySave {
+    /// A game's own file, `BatterySave.Open`: in its package where it opened as one, the plain save then read until
+    /// copied in, as an earlier place is (EmuSen_GamePackages.md §3.5).
+    pub fn open(tree: &Tree, rom: &str, console: &str, disabled: bool, extension: &str, package: Option<&str>) -> BatterySave {
         if disabled || rom.is_empty() {
             return BatterySave::NONE;
         }
-        let at = path::change_extension(Style::HOST, &saves::sram_path(tree, rom, console), extension);
-        let previous = if emusen_galaxia::dotnet_files::file_exists(&at) { None } else { previous_home(tree, rom, console, extension) };
+        let exists = emusen_galaxia::dotnet_files::file_exists;
+        let plain = path::change_extension(Style::HOST, &saves::sram_path(tree, rom, console), extension);
+        let Some(root) = package.filter(|p| !p.is_empty()) else {
+            let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
+            return BatterySave { path: Some(plain), previous };
+        };
+        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root, rom), extension);
+        let previous = if exists(&at) {
+            None
+        } else if exists(&plain) {
+            Some(plain)
+        } else {
+            previous_home(tree, rom, console, extension)
+        };
         BatterySave { path: Some(at), previous }
     }
 

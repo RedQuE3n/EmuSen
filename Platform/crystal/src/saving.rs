@@ -33,11 +33,17 @@ fn check_slot(slot: u32) -> Result<i32, Refused> {
 
 impl Session {
     pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
-        emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref())
+        match &self.package {
+            Some(root) => emusen_galaxia::saves::package_state_path(root, &self.game_key(), slot),
+            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()),
+        }
     }
 
     pub fn resume_path(&self, tree: &Tree) -> String {
-        emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref())
+        match &self.package {
+            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, &self.game_key()),
+            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()),
+        }
     }
 
     /// `[{"slot","path","exists","saved_at"}]`, the resume state as slot 0.

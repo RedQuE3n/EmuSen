@@ -559,9 +559,9 @@ namespace EmuSen.Mistress.Views
                 refresh: w => w.Refresh());
         }
 
-        // In the console's folder, so two consoles' games of one name keep separate lists - see EmuSen_Config_Reference.md §3.4b.
+        // In the console's folder, so two consoles' games of one name keep separate lists, and a packaged game's in its package - see EmuSen_Config_Reference.md §3.4b.
         private static GameCheats? CheatsFor(string? romPath) =>
-            GameCheats.For(romPath is null ? null : RuntimeCatalog.ConsoleForRom(romPath), romPath);
+            GameCheats.For(romPath is null ? null : RuntimeCatalog.ConsoleForRom(romPath), romPath, EmuSen.Galaxia.Media.GamePackages.RootFor(romPath));
 
         // Whatever was saved for this ROM, brought back; returns how many - see §4.15.
         private int LoadSavedCheatsFor(string path)

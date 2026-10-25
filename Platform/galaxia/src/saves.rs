@@ -48,6 +48,22 @@ pub fn resume_state_path(tree: &Tree, rom_path: &str, directory_override: Option
     path::combine(STYLE, &state_directory(tree, directory_override), &format!("{}.resume{STATE_EXTENSION}", stem(rom_path)))
 }
 
+/// `<package>/saves/<stem>.srm`: a packaged game's battery save, whatever its console (EmuSen_GamePackages.md §3.5).
+pub fn package_sram_path(root: &str, rom_path: &str) -> String {
+    path::combine_all(STYLE, &[root, crate::package::SAVES_FOLDER, &format!("{}{SRAM_EXTENSION}", stem(rom_path))])
+}
+
+/// `<package>/states/<stem>.state` for slot 1 and `.slotN.state` for the rest; the state folder setting gives way to it.
+pub fn package_state_path(root: &str, rom_path: &str, slot: i32) -> String {
+    let suffix = if slot == DEFAULT_STATE_SLOT { String::new() } else { format!(".slot{slot}") };
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}{suffix}{STATE_EXTENSION}", stem(rom_path))])
+}
+
+/// `<package>/states/<stem>.resume.state`.
+pub fn package_resume_state_path(root: &str, rom_path: &str) -> String {
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}.resume{STATE_EXTENSION}", stem(rom_path))])
+}
+
 /// The picture beside a state: the same name with `.png`.
 pub fn picture_path(state_path: &str) -> String {
     path::change_extension(STYLE, state_path, ".png")
@@ -82,6 +98,14 @@ mod tests {
         assert_eq!(state_path(&tree(), "/roms/a.nes", 1, Some("/elsewhere")), "/elsewhere/a.state");
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", None), "/r/home/Saves/Save States/a.resume.state");
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", Some("/elsewhere")), "/elsewhere/a.resume.state");
+    }
+
+    #[test]
+    fn a_packaged_game_keeps_its_saves_and_states_in_its_package() {
+        assert_eq!(package_sram_path("/p/SNES/Zelda (U).sfc", "/roms/SNES/Zelda (U).sfc"), "/p/SNES/Zelda (U).sfc/saves/Zelda (U).srm");
+        assert_eq!(package_state_path("/p/g.nes", "/roms/a.b.nes", 1), "/p/g.nes/states/a.b.state");
+        assert_eq!(package_state_path("/p/g.nes", "/roms/a.b.nes", 3), "/p/g.nes/states/a.b.slot3.state");
+        assert_eq!(package_resume_state_path("/p/g.nes", "/roms/a.nes"), "/p/g.nes/states/a.resume.state");
     }
 
     #[test]

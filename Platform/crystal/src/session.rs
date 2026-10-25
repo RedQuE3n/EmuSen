@@ -86,6 +86,8 @@ pub struct Session {
     pub id: u32,
     pub engine: Mutex<Engine>,
     pub game_path: Option<String>,
+    /// The package the game opened as, whose folder keeps its states (EmuSen_GamePackages.md §3.5).
+    pub package: Option<String>,
     pub console: String,
     /// The console a session started empty was asked for.
     pub empty_console: Option<String>,
@@ -136,6 +138,7 @@ impl Session {
             id,
             engine: Mutex::new(engine),
             game_path,
+            package: None,
             console,
             empty_console,
             opened,

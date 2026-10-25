@@ -144,8 +144,14 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
     let ctx = Ctx { tree: &tree, is_image: &is_image, folders: &folders };
     let stored = emusen_galaxia::consoles::load(&tree);
-    let (engine, console_asked) = match asked.path {
-        Some(at) => (open_game(rt, &catalog, &discovery, &tree, &ctx, &stored, at, asked.engine, options)?, None),
+    let resolved = match asked.path {
+        Some(at) => Some(emusen_galaxia::claims::resolve(&emusen_galaxia::claims::Places::of(&tree).roots(), at).map_err(|words| (crate::abi::status::IO, words))?),
+        None => None,
+    };
+    let path = resolved.as_ref().map(|r| r.game.as_str());
+    let package = resolved.as_ref().and_then(|r| r.package.clone());
+    let (engine, console_asked) = match path {
+        Some(at) => (open_game(rt, &catalog, &discovery, &tree, &ctx, &stored, at, asked.engine, options, package.clone())?, None),
         None => {
             let (e, console) = start_console(rt, &catalog, &discovery, &tree, &folders, &stored, asked.console.unwrap_or(""), asked.engine, options)?;
             (e, Some(console))
@@ -156,10 +162,12 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     } else if let Some(c) = &console_asked {
         c.clone()
     } else {
-        asked.path.and_then(|p| crate::route::route(&catalog, &discovery, p).0).map(|r| catalog.rows[r].console().to_string()).unwrap_or_else(|| engine.display_name.clone())
+        path.and_then(|p| crate::route::route(&catalog, &discovery, p).0).map(|r| catalog.rows[r].console().to_string()).unwrap_or_else(|| engine.display_name.clone())
     };
     let empty = if asked.path.is_none() { console_asked } else { None };
-    let session = Arc::new(Session::new(sessions.next_id(), engine, asked.path.map(str::to_string), name, empty, asked.opened, rt.events.clone()));
+    let mut session = Session::new(sessions.next_id(), engine, path.map(str::to_string), name, empty, asked.opened, rt.events.clone());
+    session.package = package;
+    let session = Arc::new(session);
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());
     Ok(session)
@@ -197,6 +205,7 @@ fn open_game(
     at: &str,
     engine: Option<&str>,
     options: Options,
+    package: Option<String>,
 ) -> Result<Engine, Refused> {
     if !emusen_galaxia::dotnet_files::file_exists(at) {
         return Err((crate::abi::status::IO, format!("{at} does not exist")));
@@ -229,6 +238,7 @@ fn open_game(
         .or(row_console)
         .unwrap_or_else(|| core.sidecar.info.id.clone());
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
+    e.package = package;
     e.load_rom(ctx.tree, at, system, console, ctx.is_image, ctx.folders).map_err(|r| (r.status, r.words))?;
     Ok(e)
 }

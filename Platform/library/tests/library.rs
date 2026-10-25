@@ -105,3 +105,43 @@ fn a_newer_file_is_refused_unwritten() {
     assert_eq!(refused.status(), emusen_library::abi::NEWER_FILE);
     assert_eq!(refused.words(), "games.db is schema 7; this build knows 6.");
 }
+
+#[test]
+fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
+    let Some(sqlite) = sqlite() else { return };
+    let t = Temp::new("packages");
+    t.put("roms/nes/Claimed.nes", b"NES\x1aclaimed");
+    t.put("roms/nes/Free.nes", b"NES\x1afree");
+    t.put("roms/psx/Disc.cue", b"FILE \"Disc.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
+    t.put("roms/psx/Disc.bin", &[0u8; 2352]);
+    t.put("compressed/psx/Disc.chd", b"not read");
+    t.put("compressed/psx/Stray.chd", b"not read either");
+    let manifest = |game: &str, extra: &str| format!("{{\"format\":\"emusen-package\",\"version\":\"1.0\",\"system\":\"nes\",\"mode\":\"linked\",\"game\":{game}{extra}}}");
+    t.put("packages/NES/Claimed.nes/package.json", manifest("{\"role\":\"image\",\"where\":\"library\",\"path\":\"nes/Claimed.nes\"}", "").as_bytes());
+    t.put("packages/NES/Claimed.nes/saves/Claimed.nes", b"NES\x1anot a game of its own");
+    t.put(
+        "packages/PlayStation/Disc.chd/package.json",
+        manifest("{\"role\":\"image\",\"where\":\"compressed\",\"path\":\"psx/Disc.chd\"}", ",\"container\":{\"sources\":[{\"where\":\"library\",\"path\":\"psx/Disc.cue\"},{\"where\":\"library\",\"path\":\"psx/Disc.bin\"}]}").replace("\"nes\"", "\"psx\"").as_bytes(),
+    );
+    t.put("packages/NES/Gone.nes/package.json", manifest("{\"role\":\"image\",\"where\":\"library\",\"path\":\"nes/Gone.nes\"}", "").as_bytes());
+    t.put("packages/NES/Broken.nes/package.json", b"{ not json");
+    t.put("packages/NES/Broken.nes/Inside.nes", b"NES\x1a");
+    let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
+    let systems: Vec<String> = ["nes", "psx"].iter().map(|s| s.to_string()).collect();
+    let request = format!(
+        "{{\"roots\":[{}],\"systems\":[\"nes\",\"psx\"],\"packages\":{},\"compressed\":{}}}",
+        emusen_dotnet::json::quoted(&t.at("roms")),
+        emusen_dotnet::json::quoted(&t.at("packages")),
+        emusen_dotnet::json::quoted(&t.at("compressed"))
+    );
+    assert_eq!(lib.scan_request(&request).unwrap(), 4);
+    let games = lib.games_request("").unwrap();
+    let q = |s: &str| emusen_dotnet::json::quoted(s);
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":{}}}", q(&t.at("roms/nes/Claimed.nes")), q(&t.at("packages/NES/Claimed.nes")))), "{games}");
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"psx\",\"package\":{}}}", q(&t.at("compressed/psx/Disc.chd")), q(&t.at("packages/PlayStation/Disc.chd")))), "{games}");
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":null}}", q(&t.at("roms/nes/Free.nes")))), "{games}");
+    assert!(games.contains("Stray.chd") && !games.contains("Disc.cue") && !games.contains("Inside.nes") && !games.contains("Gone.nes"), "{games}");
+    assert!(games.matches("Claimed.nes\"").count() == 1, "{games}");
+    // Without the two folders the scan is the one before packages.
+    assert_eq!(lib.scan(&[t.at("roms")], &systems).unwrap(), 3);
+}

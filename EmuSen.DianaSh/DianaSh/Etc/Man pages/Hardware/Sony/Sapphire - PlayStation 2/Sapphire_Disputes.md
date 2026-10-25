@@ -1918,6 +1918,223 @@ through the reset too.
 - **Pinned by:** `lines_draw_the_diamonds_they_pass_through_but_their_end`.
 - **Implemented in:** stage S17's commit.
 
+*D-180 on are stage S14's, built beside S22 (from D-140), S17 (from D-160) and S20 (from D-200).*
+
+### D-180. UNPACK's fields the manual leaves indeterminate: V2 writes X and Y again into Z and W; V3 writes 0 into W
+
+- **Opened:** 2026-10-25, at stage S14, by §6.3.4's figures ("Indeterminate" in V2's Z and W and V3's W) and §6.3.7's
+  example 4, which shows the indeterminate fields written and added to Row unless masked.
+- **Documents read:** *EE User's Manual* (Version 5.0) §6.3.4, §6.3.6, §6.3.7; ps2tek "VIF UNPACK" ("Indetermin.").
+- **Test program:** ps2autotests' `dma/vif/unpack` text, a console's (`Sapphire_References.md` §2): every V2 line prints
+  X, Y, X, Y; every V3 line prints 0 in W; one vector each, over a memory whose earlier contents the text does not show.
+  `s14-unpack`: three vectors of each format over a memory filled with a pattern first.
+- **Referee:** PCSX2 2.8.2 equals the console's lines and `s14-unpack`'s V2 fields; in V3's W it writes the element after
+  the vector in 8 of each VIF's 15 vectors and 0 in the others, by no rule the alignments show. Play! 0.72 writes 0 in V2's Z and W
+  (against the console) and in V3's W.
+- **Conclusion:** V2: Z = X and W = Y, **measured** (the console's text, PCSX2 beside it). V3: W written 0, the console's
+  single vector and Play!, **argued**; PCSX2's partial reading of the next element is recorded, not followed.
+- **Depends on it:** `vif::unpack::decode`.
+- **Pinned by:** `the_unpack_console_text_holds`, `every_unpack_format_equals_section_6_3_4`.
+- **Implemented in:** stage S14's commit.
+
+### D-181. CYCLE with WL 0: one block that never ends, every write taking a vector into the next qword, the write cycles counting 1 to 4 and staying at 4
+
+- **Opened:** 2026-10-25, at stage S14: §6.3.5's formulas divide by WL.
+- **Documents read:** §6.3.5, the CYCLE register's page, the UNPACK page's length formula.
+- **Test program:** ps2autotests' `dma/vif/stcycl` text: every line with WL 0, whatever CL, shows eight consecutive
+  qwords written in cycles 1, 2, 3, 4, 4, 4, 4, 4 (its masks fill from Col, so it shows where and in which cycle, not
+  what is read); `dma/vif/unpack`'s "No data" lines show an UNPACK waiting for data (VPS 1) after a reset, which leaves
+  CYCLE 0 if the program set nothing. `s14-cycle` with CL 1 and CL 0 under WL 0.
+- **Referee:** PCSX2 equals the `stcycl` lines; in `s14-cycle` it takes more words than four V4-16 vectors (the MARK
+  after them read as data). Play! takes fewer.
+- **Conclusion:** WL 0 compares below every CL, so the write is a skipping one whose block never closes: each write takes
+  a vector, at ADDR + k, its cycle min(k, 3); the reading that WL 0 counts as 256 (filling, CL vectors read) fits the
+  `stcycl` text but would complete the "No data" UNPACK at once after a reset. **Argued**.
+- **Depends on it:** `vif::unpack::Cycle`.
+- **Pinned by:** `the_stcycl_console_text_holds`, `skipping_and_filling_writes_equal_section_6_3_5`.
+- **Implemented in:** stage S14's commit.
+
+### D-182. MODE 3: the input written unadded and kept in Row
+
+- **Opened:** 2026-10-25, at stage S14: VIFn_MODE's page calls 11 "Undefined".
+- **Documents read:** §6.3.7, VIFn_MODE's page.
+- **Test program:** ps2autotests' `dma/vif/stmod` text: "mode 3 (no mask)" writes 0 to 15 and leaves Row at the last
+  vector, C, D, E, F; with the diagonal mask the Row fields the mask writes keep their values (Row 1000h written in the
+  first cycle's X, then the X, Y, Z of earlier vectors). Reproduced on both VIFs (`the_stmod_console_text_holds`) and in
+  `s14-mask`.
+- **Referee:** PCSX2 equal; Play! leaves Row unchanged and writes it.
+- **Conclusion:** the title, for fields written as is; **measured** (the console's text, PCSX2 beside it).
+- **Depends on it:** `vif::unpack::write`.
+- **Pinned by:** `the_stmod_console_text_holds`, `the_mask_and_the_addition_modes_equal_sections_6_3_6_and_6_3_7`.
+- **Implemented in:** stage S14's commit.
+
+### D-183. A filling write decompresses the vector at the stream's pointer without taking it, and its 0 specifiers write that vector through MODE; words that have not arrived read 0
+
+- **Opened:** 2026-10-25, at stage S14: §6.3.5 says only that "the data read is suspended" and the fields filled "according
+  to the specification of the MASK register"; a 0 specifier on a filling write has no input.
+- **Documents read:** §6.3.5, §6.3.6, §6.3.7 ("Processing to add the Row register value is performed only when the m bit
+  of the CMD field is 0 or the mask specifier of the corresponding field is 0").
+- **Test program:** `s14-cycle`: V3-32 under CL 2 and WL 4 without the m bit, so three filling writes have only 0
+  specifiers, one of them after the last vector, where the stream holds a MARK.
+- **Referee:** PCSX2 writes in each of the three the vector its next read takes (and in the last the MARK's word and the
+  NOPs after it); Play! writes 0.
+- **Conclusion:** the title, the decoder reading at a pointer that does not advance; the stronger witness (PCSX2 equals
+  the VIF's console texts but where §28.7 of the build record says) and one mechanism for the read and the fill.
+  **Argued**, PCSX2 the witness.
+- **Depends on it:** `vif::unpack::Unpack::next`, `Vif::peek`.
+- **Pinned by:** `skipping_and_filling_writes_equal_section_6_3_5`.
+- **Implemented in:** stage S14's commit.
+
+### D-184. VIF1's double buffer: OFFSET sets TOPS to BASE and clears DBF; the MSCAL family copies TOPS to TOP, reverses DBF and sets TOPS to the buffer DBF then names (0 BASE, 1 BASE + OFFSET), all 10 bits wide
+
+- **Opened:** 2026-10-25, at stage S14: the manual's pages disagree. OFFSET's page, §6.3.8 and VIF1_TOPS's page set TOPS
+  at OFFSET; VIF1_OFST's page says "the VIF1_BASE register value is transferred to the VIF1_TOP register". VIF1_TOPS's
+  page ("if the DBF flag ... is 0, the VIF1_BASE value is set again ... Since the DBF flag value is reversed at this
+  time") leaves open whether DBF is read before or after its reversal.
+- **Documents read:** §6.3.8, the OFFSET, BASE and MSCAL pages, VIF1_BASE's, VIF1_OFST's, VIF1_TOP's, VIF1_TOPS's and
+  VIF1_STAT's (DBF: "0 TOPS=BASE, 1 TOPS=BASE+OFFSET") pages; ps2tek "VIF Commands".
+- **Test program:** `s14-dbuf`: BASE and OFFSET, then MSCAL, MSCAL, MSCNT and OFFSET, each microprogram storing XTOP and
+  XITOP at the qword TOP names, UNPACKs with FLG between; BASE 3F0h with OFFSET 20h.
+- **Referee:** PCSX2 equal on every register and memory word but TOPS after BASE 3F0h and OFFSET 20h, which it keeps as
+  410h (its UNPACK lands at the same qword, VU1's memory wrapping); Play! reads every double-buffer register as 0.
+- **Conclusion:** the title: TOP is left by OFFSET (the majority of the pages, and PCSX2), DBF read after its reversal
+  (STAT's field definition); **measured** for both (PCSX2), **argued** for TOPS's width (the register's page).
+- **Depends on it:** `Vif::fetch` (OFFSET), `Vif::wait` (the MSCAL family).
+- **Pinned by:** `vif1_s_double_buffer_equals_section_6_3_8`.
+- **Implemented in:** stage S14's commit.
+
+### D-185. NUM keeps 8 bits on VIF0 and 16 on VIF1
+
+- **Opened:** 2026-10-25, at stage S14: both NUM pages draw bits 7:0, but VIF1's counts DIRECT's IMMEDIATE, up to 65,536.
+- **Documents read:** VIF0_NUM's and VIF1_NUM's pages.
+- **Test program:** ps2autotests' `dma/vif/unpack` text: "No data UNPACK(NUM: 256)" prints NUM 0 on VIF0 and 256 on VIF1.
+- **Referee:** PCSX2 prints 256 on both (the one line of the text it misses); Play! 0 on VIF1.
+- **Conclusion:** VIF0 8 bits, **measured** (the console); VIF1 more than 8, **measured**, 16 **argued** (DIRECT's count).
+- **Depends on it:** `Vif::num_bits`.
+- **Pinned by:** `the_unpack_console_text_holds`, `every_unpack_format_equals_section_6_3_4`.
+- **Implemented in:** stage S14's commit.
+
+### D-186. STAT's VPS and FQC: VPS 0 idle, 1 a command waiting for its data, 2 a VIFcode held by a stall (the i bit's, an undefined code's) or a command waiting on the VU or the GIF, 3 data in hand; FQC the FIFO's qwords without the one being taken apart
+
+- **Opened:** 2026-10-25, at stage S14: VPS's four values name states the manual does not tie to the commands.
+- **Documents read:** VIFn_STAT's pages.
+- **Test program:** ps2autotests' `dma/vif/intstall` text: after a VIFcode with the i bit, STAT reads 00000C02 (VPS 2,
+  VIS, INT) with FQC 0 and the DMA ended; `dma/vif/unpack`: an UNPACK with no data reads VPS 1. `s14-regs`.
+- **Referee:** PCSX2 counts the qword being taken apart in FQC (01000C02 for the console's 00000C02) and reports VPS 3
+  for VIF1's dataless UNPACK written through the FIFO; Play! reads 0 in most states.
+- **Conclusion:** the title; **measured** for VPS 1 and 2 and FQC (the console's texts), **argued** for the waits.
+- **Depends on it:** `Vif::status`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`, `the_unpack_console_text_holds`.
+- **Implemented in:** stage S14's commit.
+
+### D-187. FBRST.RST empties the FIFO, drops the VIFcode in progress and clears STAT (but DBF and FDR), NUM, CODE and ERR; CYCLE, MODE, MASK, Row, Col, ITOPS, ITOP, MARK and the double buffer's registers are kept
+
+- **Opened:** 2026-10-25, at stage S14: "Resets the whole VIF0 (including VIF0-FIFO)".
+- **Documents read:** VIFn_FBRST's and VIFn_STAT's pages.
+- **Test program:** ps2autotests' `dma/vif/intstall` text: the STMASK case, after the MARK case set MRK, reads STAT without
+  MRK. `s14-regs`: every register read after RST.
+- **Referee:** PCSX2 and Play! keep CYCLE, MODE, MASK, Row, Col, ITOPS and MARK; PCSX2 clears ERR and CODE and keeps MRK;
+  Play! keeps ERR.
+- **Conclusion:** the title: the registers both lineages keep, kept; MRK cleared as the console's text shows if its
+  program resets between cases (its source is not read); ERR as PCSX2, the stronger witness. **Argued**.
+- **Depends on it:** `Vif::fbrst`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-188. Undefined VIFcodes: with ERR.ME1 clear, ER1, INT_VIF and a stall at the code, STC going on after it; with ME1 set, a NOP. VIF1's own codes are undefined on VIF0, MSCALF not; an UNPACK with vl 3 and vn other than 3 is undefined
+
+- **Opened:** 2026-10-25, at stage S14: §6.3.2's list marks OFFSET, BASE, MSKPATH3, FLUSH, FLUSHA, MSCALF, DIRECT and
+  DIRECTHL "VIF1 only", but MSCALF's own page gives "VIF0/VIF1"; §6.3.4's table has no format for 63h, 67h and 6Bh.
+- **Documents read:** §6.3.2, §6.3.4, §6.4's pages, VIFn_ERR's and VIFn_STAT's pages; §3.1's INTC table ("VIF0's
+  detection of VIFcode with an interrupt bit or an exception").
+- **Test program:** `s14-regs`: 08h, OFFSET on VIF0 and 63h on both, with ME1 clear and set.
+- **Referee:** PCSX2 sets no ER1, raises no interrupt and runs the MARK after each; Play! sets ER1 and raises the
+  interrupt but does not stall, and STC leaves ER1 set.
+- **Conclusion:** the title, MSCALF by its page; **argued** (the documents), Play! a partial witness for ER1 and the
+  interrupt.
+- **Depends on it:** `Vif::fetch`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-189. The i bit: INT and the interrupt as its VIFcode ends; the next VIFcode but after MARK is fetched and held with VIS until STC; ERR.MII ignores the bit wholly; the DMA goes on filling the FIFO meanwhile
+
+- **Opened:** 2026-10-25, at stage S14: "the processing of the following VIFcode (excluding the VIFcode MARK) stalls"
+  reads two ways; MARK's own page says "No stall".
+- **Documents read:** §6.3.2 and every page of §6.4, VIFn_ERR's MII, VIFn_STAT's VIS and INT, VIFn_FBRST's STC.
+- **Test program:** ps2autotests' `dma/vif/intstall` text, three lines a VIF: NOP with the i bit leaves MASK unchanged and
+  STAT 00000C02, MARK with it changes MASK and reads 00000840 (INT, MRK, no stall), STMASK with it changes MASK and
+  stalls; the text prints no DMA warning, so the DMA ended. Read as one-qword packets (their source is not read), the
+  shape `s14-regs` sends, with a four-qword packet whose later qwords wait in the FIFO.
+- **Referee:** in the text's own program PCSX2 holds the DMA (its warnings: "DMA transfer timed out"), counts the qword
+  in FQC and, on VIF1, leaves MASK unchanged in MARK's and STMASK's cases; in `s14-regs` it equals every MASK and holds
+  the four-qword packet's DMA. Play! raises no interrupt for the i bit and runs nothing held after STC.
+- **Conclusion:** the title; **measured** for which codes stall (the console's text, the MARK reading MARK's page gives),
+  **argued** for MII and for the FIFO.
+- **Depends on it:** `Vif::complete`, `Vif::fetch`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-190. FBRST.FBK stalls at once and FBRST.STP after the VIFcode in process (at once when none is), each holding the FIFO's data until STC
+
+- **Opened:** 2026-10-25, at stage S14.
+- **Documents read:** VIFn_FBRST's pages ("Causes a ForceBreak ... (Stall occurrence)", "Stops after end of VIFcode in
+  process"), VIFn_STAT's VSS and VFS.
+- **Test program:** `s14-regs`: FBK while an UNPACK waits for data, then its data; STP while idle, then a MARK; STP while
+  an UNPACK waits, then its data and a MARK.
+- **Referee:** PCSX2 sets VFS and VSS but goes on in each case; Play! does not stop.
+- **Conclusion:** the title, the pages' words; **argued**.
+- **Depends on it:** `Vif::fbrst`, `Vif::step`, `Vif::fetch`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-191. MARK keeps 16 bits, the EE's write as the VIFcode's
+
+- **Opened:** 2026-10-25, at stage S14.
+- **Documents read:** VIFn_MARK's page (MARK 15:0).
+- **Test program:** `s14-regs`: the EE writes 155AAh.
+- **Referee:** PCSX2 and Play! both read 155AAh back.
+- **Conclusion:** 16 bits, the register's page before two lineages that do not mask a write; **argued**.
+- **Depends on it:** `Vif::write`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-192. ITOPS and ITOP keep 10 bits on both VIFs, and XITOP reads ITOP whole
+
+- **Opened:** 2026-10-25, at stage S14: VU0's 256 qwords need 8.
+- **Documents read:** VIFn_ITOP's and VIFn_ITOPS's pages (9:0 on both), XITOP's page.
+- **Test program:** `s14-micro`: ITOP 2ABh, then MSCAL of a microprogram storing XITOP.
+- **Referee:** PCSX2 keeps 2ABh in VIF0's ITOPS but reads ABh from ITOP and from XITOP; Play! reads its registers as 0
+  and XITOP as 2ABh.
+- **Conclusion:** the pages' 10 bits; **argued**.
+- **Depends on it:** `Vif::fetch` (ITOP), `Vif::wait`.
+- **Pinned by:** `mpg_and_the_mscal_family_start_and_wait_for_the_vus`.
+- **Implemented in:** stage S14's commit.
+
+### D-193. A chain with TTE hands a VIF its tags' upper 64 bits as stream words; ER0 is not raised
+
+- **Opened:** 2026-10-25, at stage S14: §6.3.1's figure places VIFcodes beside the DMAtag; VIFn_STAT's ER0 "cannot be used
+  appropriately due to a failure in determining DMAtag Mismatch error".
+- **Documents read:** §6.3.1, §5.2.3's Figure 5-3, VIFn_ERR's ME0.
+- **Test program:** `s14-regs`: cnt and end tags carrying MARK and STMOD in their upper halves.
+- **Referee:** PCSX2 and Play! equal.
+- **Conclusion:** the title; **measured** for TTE, ER0 a named loss (the manual's own advice is to mask it).
+- **Depends on it:** `Vif::word`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
+- **Implemented in:** stage S14's commit.
+
+### D-194. The VIF's time: BUSCLK, one bus cycle a VIFcode and one a write (an UNPACK qword, an MPG instruction, a DIRECT qword); a microprogram the MSCAL family starts issues its first pair 3 EE cycles after; a wait on the VU ends the cycle after its last pair's T stage
+
+- **Opened:** 2026-10-25, at stage S14: no document times the VIF.
+- **Documents read:** chapter 6 whole; the *VU User's Manual*'s §5.4.5 (VCALLMS's start).
+- **Test program:** `the_dmac_waits_on_a_full_fifo`: an S-32 UNPACK of 256 words, 65 qwords by DMA into VIF1's
+  16-qword FIFO, ends at 402 EE cycles, the VIF's pace (392 for the 49 qwords it must take first) and not the DMAC's
+  130 [M].
+- **Referee:** not consulted: neither lineage's timing is a witness for the console's.
+- **Conclusion:** the title; **argued**, a named loss.
+- **Depends on it:** `Vif::step`, `Vif::wait`; every transfer's timing.
+- **Pinned by:** `the_dmac_waits_on_a_full_fifo`.
+- **Implemented in:** stage S14's commit.
+
 ### D-200. The PCRTC's NTSC and PAL timing: a line of 858 and 864 pixels of 13.5 MHz (3,432 and 3,456 VCK of 54 MHz); 525 and 625 lines a frame interlaced, a field half of it; 263 and 314 lines a non-interlaced field; the video clock its own, not BUSCLK's
 
 - **Opened:** 2026-10-25, at stage S20, by D-42 and by the referees' fields (`s20-timing`).

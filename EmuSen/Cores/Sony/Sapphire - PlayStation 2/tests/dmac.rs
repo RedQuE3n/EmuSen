@@ -21,7 +21,6 @@ fn assemble(source: &str, origin: u32) -> Vec<u32> {
 fn run(source: &str, limit: u64) -> System {
     let mut sys = System::new(ORIGIN);
     sys.board.map.load(ORIGIN, &assemble(source, ORIGIN));
-    sys.board.ports.ports[dmac::VIF0].keep = true;
     let n = sys.run(limit, &mut |s| s.peek(DONE_AT, 4) as u32 == DONE).unwrap_or_else(|h| panic!("{h:?}"));
     assert!(n < limit, "no done word in {limit} instructions, pc {:08x}", sys.ee.pc);
     sys
@@ -62,9 +61,10 @@ fn source_and_destination_chains_walk_their_tags_as_chapter_5_says() {
 #[test]
 fn call_and_ret_push_and_pop_the_address_stack() {
     let sys = grade_system(s11::callret());
-    let vif0 = &sys.board.ports.ports[dmac::VIF0];
-    assert_eq!(vif0.taken.len(), 3, "VIF0 receives the three packets' data and no tag");
-    assert!(vif0.taken.iter().all(|&(q, tag)| q == 0 && !tag));
+    let vif0 = &sys.board.vif[0];
+    assert_eq!(vif0.received, 3, "VIF0 receives the three packets' data and no tag");
+    assert_eq!(vif0.read(sapphire::vif::reg::CODE), 0, "every word a NOP");
+    assert_eq!(vif0.read(sapphire::vif::reg::STAT) & 0x3F03, 0, "idle, no error, no stall");
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn stall_control_holds_and_releases_the_drain() {
 #[test]
 fn the_mfifo_drain_holds_while_empty_and_wraps_with_the_ring() {
     let sys = grade_system(s11::mfifo());
-    assert_eq!(sys.board.ports.ports[dmac::VIF1].count, 70, "VIF1 receives every cnt packet's data and no tag");
+    assert_eq!(sys.board.vif[1].received, 70, "VIF1 receives every cnt packet's data and no tag");
 }
 
 #[test]

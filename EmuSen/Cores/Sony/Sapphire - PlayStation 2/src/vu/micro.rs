@@ -28,6 +28,10 @@ pub trait Micro {
     /// The unit's VPU-STAT bits VBS, VDS, VTS, VFS and VGW, in VU0's positions (§5.1.3); the divider's and the EFU's
     /// the caller reads off the units.
     fn stat(&self) -> u32;
+    /// The T stage of the last pair run since a reset, without running anything (VIF's waits, S14).
+    fn last(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// Micro mode not built: never running, and refusing a start, which halts the interpreter with the starting word; kept

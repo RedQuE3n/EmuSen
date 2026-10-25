@@ -943,7 +943,7 @@ the enhancements (E) are separate tracks.
 | **S22** | The SIF: registers and its three DMA channels | The project's programs passing messages both ways, EE and IOP each checking the other's record *Built 2026-10-25, `Sapphire_Native.md` §26: met; the SIF in `sif`, a FIFO of 128 bytes for each of SIF0, SIF1 and SIF2 between both DMACs' channels, the stand-ins replaced; five paired programs and 194 graded words equal on Sapphire to ps2tek's and the EE manuals' records; on PCSX2, the one lineage that runs them, 57 differ, where it holds no FIFO, ends an IOP chain at an IRQ tag, sends SIF0's tag words without bit 8, takes the EE's SMCOM write and moves nothing on SIF2; the EE's CTRL bit 18 raising the IOP's interrupt 1 its single witness's reading; D-140 to D-145, D-68 amended; the SIF RPC protocol S24's, above `sif`.* |
 | **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) *Built 2026-10-25, `Sapphire_Native.md` §25: met but for P13's handheld half (the handheld did not answer); the drive's answers where ps2tek is silent measured on PCSX2's lineage, the only one that reaches it from the EE, disputes D-120 to D-128.* |
 | **S24** | **The player's BIOS to its menu**: what is missing for it, SIO2's pad, the EEPROM synthesised; the writers of this stage are thereafter not replacement writers | OSDSYS's picture at an anchor equal to PCSX2's on the same BIOS within a stated count of pixels, for the Americas and Europe versions of §11 Q9; then **all 78 ps2autotests on the player's BIOS** equal their expected texts, each miss a dispute |
-| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap; **the start without a disc** (G10) and **the PlayStation 2's tab of the Memory Cards window** (G11) built on them, behind the `InDevelopment` mark | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says; G10's and G11's tests (§8) *Amended 2026-10-24: G10 and G11 added here.* |
+| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap; **the start without a disc** (G10) and **the PlayStation 2's tab of the Memory Cards window** (G11) built on them, behind the `InDevelopment` mark | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says; G10's and G11's tests (§8) *Amended 2026-10-24: G10 and G11 added here.* *Part A built 2026-10-25, `Sapphire_Native.md` §30: Q7's research step (Q7(b) holds); SIO2 in `sio2` with channels 11 and 12, the DualShock 2, the card with its flash's times, the multitap's frame; `emusen-ps2-card`; the medium `ps2.card` declared by the core; five programs, 1,007 graded words, equal on Sapphire to the documents' records; on PCSX2, the one lineage with an IOP window, the pad's identification, modes and rumble map equal but for eight words, the card's commands equal but for the reply's first bytes, its terminator commands and its erase's alignment (D-220 to D-230). Part B, after S24 and on the tester's go: the OSDSYS checks, a BIOS-formatted card both ways, G10 and G11.* |
 | **S26** | The SPU2 on the shared voice crate (§9.3) | The project's voice programs against the referees' sound; Diamond's SPU goldens unchanged by the crate's extraction |
 | **S27** | The IPU | The project's MPEG-2 streams decoded equal to the standard's arithmetic, each difference a dispute |
 | **S28** | Games on the player's BIOS to their title screens and into play (needs §11 Q8) | The bench discs at three anchors each against the referees in picture and RAM, or dispute-logged |
@@ -1221,6 +1221,18 @@ needs Q11.
    of the protocol, including the published documentation (not the code) of open card-emulating devices; (b) if none
    suffices, cards on the player's BIOS path wait, and saving is offered on the open BIOS path only, which never
    authenticates. MagicGate's keys are never sought.
+   *The research step, done 2026-10-25 at S25 (part A), `Sapphire_Native.md` §30.2:* the exchange's *sequence* is now
+   documented in public, its *cryptography* is not, and answering it needs keys. A later edition of ps2tek (Matías
+   Israelson's, revision `295bc61`, "SIO2 PS2 Memcards") names F0h's subcommands (the card sending CardIV,
+   CardMaterial, CardNonce and three CardResponses, the console sending three MechaChallenges), F3h as "reset
+   cryptography" and F7h as the selection of one of four MagicGate key sets (developer, retail, one unknown, arcade);
+   the pinned ps2tek says the drive controller "contains the actual MagicGate keys" ("BIOS IOP SECRMAN"); the published
+   README of SD2PSX, an open card-emulating device, says the console variants "use different magicgate keysets" which
+   the device "must actively support". So a card answers the challenges with values computed under keys it holds, and
+   the drive controller checks them under its own: no document gives a way to answer without the keys. **Q7(b)
+   holds**: on the player's BIOS path the card's authentication commands get no answer (built, `sio2::card`), P8 to be
+   recorded at part B, and the open BIOS path never sends them. Neither a key nor any device's firmware was sought or
+   read; the later ps2tek edition credits ps2sdk's homebrew SECRMAN driver as its source, which was not read.
 8. **Q8 [decision], games.** *Decided 2026-10-24 by the tester: as recommended, with three target games named: Jak and Daxter (a test copy in the probe's cache), Kingdom Hearts and Dark Cloud 2, the bench beside them.* The library holds no PlayStation 2 game; the handheld's card holds Jak and Daxter (USA,
    Rev 1) as an `.iso`, which is not touched. *Recommended:* dumps of discs the tester owns, under
    `AppSettings.RomDirectory`'s `ps2/`, DVDs as `.iso` and CD titles as `.cue`/`.bin`, read only. A bench chosen for what
@@ -1272,7 +1284,14 @@ needs Q11.
 - No PlayStation 2 folder in libretro's cheat database and no PlayStation 2 system in OpenVGDB [M].
 - No rustc target for the R5900 [R a search of rustc's platform documentation].
 - No public document of the card's authentication exchange [R two searches]; ps2tek calls its commands' purpose
-  unknown.
+  unknown. *Revised 2026-10-25 at S25 (Q7's research step, §11):* its sequence is documented (a later ps2tek edition's
+  F0h subcommands, F3h, F7h's key sets), its cryptography is not, and every source says the card and the drive
+  controller hold MagicGate keys; so no document lets a card answer it without them.
+- *Added 2026-10-25 at S25:* no public document of the PlayStation 2 multitap's commands (a search of the documents and
+  psdevwiki; psx-spx calls its protocol unknown and gives a different peripheral byte from ps2tek's), of SIO2's port
+  rates or SEND1 and SEND2, or of the card's own write and erase times (its flash's data sheet stands in,
+  `Sapphire_Native.md` §30.5); PCSX2 makes a new card erased and formats none without a BIOS, so no referee card
+  formatted by a referee alone exists (§30.9).
 - Sony's Linux-kit manuals omit the IOP [R a 2002 forum post].
 - ps2tek states no sources and quotes an emulator's values in places (§2.1).
 - No PlayStation 2 game in the library and no measurement of any kind on the handheld or the laptop.

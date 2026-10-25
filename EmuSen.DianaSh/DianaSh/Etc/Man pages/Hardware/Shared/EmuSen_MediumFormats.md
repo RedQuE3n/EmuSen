@@ -1,13 +1,14 @@
 # EmuSen_MediumFormats — the save media's file systems as crates without the standard library
 
 *Built 2026-10-17, with the backend's step B3 (`EmuSen_Backend.md` §13).* Three crates in `EmuSen/Cores/Shared/`, one
-per save medium whose file system EmuSen reads:
+per save medium whose file system EmuSen reads, and a fourth since 2026-10-25 (§6):
 
 | Crate | Medium | Layout from |
 |---|---|---|
 | `emusen-psx-card` | the PlayStation memory card, `psx.card` | psx-spx, "Memory Card Data Format" |
 | `emusen-n64-pak` | the N64 Controller Pak, `n64.pak` | N64brew, "Controller Pak/Filesystem" |
 | `emusen-mcd-bram` | the Sega CD's backup RAM, internal (`mcd.backup`) and cartridge (`mcd.ramcart`) | `Nephrite_Bram.md` |
+| `emusen-ps2-card` | the PlayStation 2 memory card, `ps2.card` (since 2026-10-25, §6) | ps2tek "SIO2 PS2 Memcard Filesystem"; Ross Ridge, "PlayStation 2 Memory Card File System" |
 
 The marks are `Diamond_Plan.md`'s: **[M]** measured on 2026-10-17 with the tool named; **[R]** read from a source;
 **[A]** argued; **[C]** a choice.
@@ -96,3 +97,80 @@ parity class reads every lead with every trail, and every single byte, through a
   the BIOS's `BRMDEL` byte for byte [M].
 
 Both are dev-dependencies of the cores' test rigs only; neither core's own code names a crate.
+
+## 6. `emusen-ps2-card`, the PlayStation 2 card (2026-10-25)
+
+*Built at Sapphire's stage S25, part A (`Sapphire_Native.md` §30; `Sapphire_Plan.md` §9.5). Its users are the ones §1
+names: the host's card tools, through the card manager's format surface at Sapphire's part B (G11), and an open BIOS's
+card module, which may build on it. Sapphire's own SIO2 does not use it: the console's card is raw pages, the file
+system its BIOS's.*
+
+### 6.1 What it reads
+
+An image is the raw card: 16,384 pages of 512 bytes, each followed by 16 spare bytes, 8,650,752 bytes, which is what
+other emulators' `.ps2` files hold [R ps2tek "SIO2 PS2 Memcards", its Get Specs; M: PCSX2 2.8.2's new cards are that
+size]. The layout is Ridge's [R Ross Ridge, "PlayStation 2 Memory Card File System", public domain, at
+<https://ps2savetools.com/ps2memcardformat.html>, read 2026-10-25; its first address, the University of Waterloo's
+CS Club, redirects to a port no longer answering]: the superblock in page 0 (ps2tek's table gives the same fields);
+clusters of two pages; a FAT of 32-bit entries, the top bit set for a cluster in use and the rest the next cluster,
+all ones ending a chain, reached through the superblock's list of indirect clusters, which name the FAT's clusters;
+directories of 512-byte entries (mode, length, created, first cluster, the "." entry's link to its parent, modified,
+attribute, a name of up to 31 bytes), "." and ".." first, the root's "." standing for the root and holding its count
+of entries; every cluster number relative to the first allocatable cluster.
+
+### 6.2 What it does, and the choices
+
+- **Read**: `Card::open` (the superblock checked, the root proved readable), `saves` (the root's directories past "."
+  and ".."), `find`, `read` (a file's bytes from an offset, a cluster at a time), `clusters_of` (a save with everything
+  in it), `free_clusters`.
+- **Write**: `format`, `mkdir`, `create` (a file written whole), `delete` (a directory with everything in it: entries'
+  EXISTS bit cleared, clusters freed), `copy_save` (a top-level save to another card, its modes and times kept). A
+  refusal leaves the image as it was: room and names are checked first, and `copy_save` reads every cluster of the save
+  before it writes one.
+- **The free count** [A]: Ridge says Sony's drivers round the allocatable clusters down to a thousand, so that cards
+  with different numbers of bad blocks show the same free space. The crate reads that as a limit on the clusters in
+  use: a new card has 7,999 of its 8,000 free, the root taking one. What OSDSYS shows on a new card is to be compared at
+  Sapphire's part B, when the player's BIOS formats one.
+- **Format** [C, Ridge's "Standard Memory Card Layout"]: the superblock (magic, version 1.2.0.0, 512-byte pages, two
+  a cluster, sixteen an erase block, 8,192 clusters, the first allocatable 41, its end 8,135, the backups blocks 1,023
+  and 1,022, the indirect cluster 8, no bad blocks, type 2, flags 52h); the FAT in clusters 9 to 40, every entry
+  7FFFFFFFh (Ridge requires only the top bit clear) but the root's, which ends its chain; the root at cluster 41 with
+  "." (mode 8427h) and ".." (mode A427h, hidden); every other page erased. The modes and the free entry's value are
+  choices to be compared with a BIOS-formatted card at part B.
+- **Error correction** [R Ridge; M one lineage, `Sapphire_Disputes.md` D-226]: a 20-bit Hamming code for each 128-byte
+  chunk in three bytes, the column parities' even groups in the first byte's low nibble and the odd in its high, the
+  line parities' even and odd groups in the second and third, each parity stored complemented with the unused bits
+  clear, so that an erased chunk's code is 77h 7Fh 7Fh. Every page read is checked unless its code bytes are erased
+  (FFh), whatever the superblock's flags (Sony's 52h has Ridge's ECC bit clear): one wrong data bit is put right, one
+  wrong code bit ignored, more refused as `Damage::Ecc`.
+- **Damage**: `Length`, `Unformatted`, `Superblock`, `Ecc`, `Chain` (outside the card, a loop, a free entry in a chain,
+  a chain shorter than its file) and `Directory` (a count its chain cannot hold, a directory whose first entry does not
+  exist); each with `words()`, a sentence a host may show. Every refusal is a value: nothing panics on any image
+  (§6.5).
+
+### 6.3 What is not done
+
+Bad blocks are honoured when allocating (no cluster in a listed block is given) but never found or added; the backup
+blocks' recovery after a write cut short (Ridge "Backup Blocks") is the firmware's, not a host tool's, and is not
+done; pages of 1,024 bytes and other geometries Ridge allows are refused as `Superblock`; names are bytes, their
+character set the host's; the icon files a save carries (`icon.sys` and the icons) are read as files, their meaning
+the host's at part B.
+
+### 6.4 The referees' cards
+
+PCSX2 2.8.2 makes a new card with every byte FFh (its `Mcd001.ps2` and `Mcd002.ps2`, MD5
+914e26ce1e2661e14d39d87310d3cdd3, measured 2026-10-25), and formats it only through a BIOS; its folder card, read
+through SIO2 from an IOP program, shows an empty folder as unformatted too. The crate reads such a card as
+`Unformatted`. **A card formatted by a referee therefore needs a BIOS**, and the cross-check with one, both ways, waits
+for Sapphire's part B (`Sapphire_Plan.md` §7, S25), as G11's test does.
+
+### 6.5 Tests (measured 2026-10-25)
+
+`cargo test --release` in the crate, **5 of 5**: the formatted card's layout, codes and free count; the code of an
+erased chunk and every single-bit error in four bytes of a chunk put right, two refused, a code bit noticed; a save made
+of a directory and eight files (the directory growing past its first cluster), read back at offsets, counted, listed
+and deleted to the cluster; a save copied to another card and read back the same, a clash and a full card refused with
+the target unchanged; damaged cards refused in words (the wrong length, PCSX2's erased card, a bad superblock, two
+wrong bits in the FAT, a FAT loop through a copy) and 512 single-byte corruptions of the superblock, the FAT and the
+root, each opened, listed and edited without a panic. Clippy clean on every target.
+

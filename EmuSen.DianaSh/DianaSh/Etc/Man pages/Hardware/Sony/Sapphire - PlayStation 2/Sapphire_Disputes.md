@@ -2267,6 +2267,189 @@ through the reset too.
 - **Pinned by:** `the_display_programs_pictures_equal_the_manuals`.
 - **Implemented in:** stage S20's commit.
 
+### D-220. SIO2, the ports: SEND3's two port bits select one of four ports, 0 and 1 the controller connectors and 2 and 3 the card slots; a peripheral byte that nothing on its port answers reads HiZ
+
+*D-220 to D-230 were opened at stage S25, part A (`Sapphire_Native.md` §30), numbered after the stages built beside it
+(S17 from D-160, S14 from D-180, S20 from D-200).*
+
+- **Opened:** 2026-10-25, at stage S25, by ps2tek's two-bit port field and psx-spx's note on the PlayStation 2's ports.
+- **Documents read:** ps2tek "SIO2 Registers" (SEND3 bits 0-1 "Port"; SEND1/SEND2 "Port1/2 Control?", four of each by
+  the address rule); psx-spx "PS2 multitap" ("plugs into both the controller and memory card ports (which are not
+  wired in parallel on the PS2)").
+- **Test program:** `s25-probe` (a controller read and a card probe on each of the four ports); `s25-card`'s last
+  exchanges (the slot 2 card on port 3, a controller's command on port 3).
+- **Referee:** PCSX2 2.8.2 answers by the port's low bit: the controller in port 1 answers on ports 0 and 2, the card in
+  slot 1 on ports 0 and 2, and so for port 3 (measured 2026-10-25). One lineage, against the four ports.
+- **Conclusion:** the title, **argued** from the two documents: four port selects for four connectors not wired
+  together. PCSX2's routing accepts either reading; S24's BIOS (PADMAN, MCMAN) shows which ports it uses, and a BIOS
+  that sent cards' commands on ports 0 and 1 would show this reading wrong at once.
+- **Depends on it:** `sio2::Sio2::start`'s routing.
+- **Pinned by:** `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes`, `the_dualshock_2_answers_identification_configuration_and_modes_as_documented`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-221. SIO2, RECV1: 1100h after a queue whose peripherals all answered; after one that met no device, 2D100h when the missing peripheral's byte is a controller's (01h) and 1D100h otherwise
+
+- **Opened:** 2026-10-25, at stage S25, by ps2tek's value failing its own rule.
+- **Documents read:** ps2tek "SIO2_RECV1": "(RECV1 & F000h) == 1000h after a memory card command, the memory card is
+  connected"; "(RECV1 & 2000h) == 0 after a pad command, the pad is connected"; "Known value for a disconnected
+  peripheral is 1D100h. Known value for a connected peripheral is 1100h". 1D100h has bit 13 clear, so by the second rule
+  it reads as a connected pad.
+- **Test program:** `s25-probe`, `s25-pad` (port 1 empty), `s25-tap-*` (the multitap's byte with no tap).
+- **Referee:** PCSX2 2.8.2: 1100h for every answered command; 2D100h for a controller's command to an empty port;
+  1D100h for the multitap's byte 21h with no tap (measured 2026-10-25). RECV2 reads 0000000Fh, RECV3 0, and the
+  register at 1F808280h 1 after a queue.
+- **Conclusion:** the title, **measured** on one lineage and argued: both values meet both of ps2tek's rules, and
+  ps2tek's 1D100h stands for the non-controller case. Which bits a queue of several commands leaves is not documented;
+  Sapphire leaves the last missing peripheral's [C].
+- **Depends on it:** `sio2::{CONNECTED, NO_PAD, NO_DEVICE}`.
+- **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented`, `the_authentication_commands_get_no_answer`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-222. The memory card, the reply's place: the card answers byte k of a command (k counted from the peripheral byte 81h) with byte k - 2 of ps2tek's reply list, and HiZ (FFh) for the peripheral and command bytes; a command sent two bytes longer than ps2tek's command list receives the whole reply
+
+- **Opened:** 2026-10-25, at stage S25, by ps2tek's lists, which give a command's bytes and its reply's but not where
+  the one meets the other.
+- **Documents read:** ps2tek "SIO2 PS2 Memcards" (every command's "Command", "Reply" and "Length"; 26h's reply "2B + 2
+  + 2 + 4 + 1 + Terminator" eleven bytes for a command of eleven); ps2tek "SIO2 Controller Commands" ("the reply comes
+  immediately after the appropriate byte has been sent"); psx-spx "Controllers and Memory Cards" (a card drives
+  nothing until it has its address byte: HiZ).
+- **Test program:** `s25-probe` and `s25-probe-write`, every reply read with eight bytes more; `s25-card`.
+- **Referee:** PCSX2 2.8.2 places ps2tek's list from byte 2 for every command but the reads and writes (11h, 12h, 21h to
+  23h, 26h, 27h, 28h, BFh, F3h), its last byte (the terminator) pushed into FIFOOUT one past the transfer's end; it
+  answers 00h, not FFh, to the peripheral and command bytes; for 42h and 43h it gives 00h, 2Bh at bytes 2 and 3 where
+  the list puts 2Bh and the terminator, the data from byte 4 as the list does, and for a short read the checksum and
+  terminator straight after the data rather than at the list's fixed places (measured 2026-10-25; of `s25-card`'s 848
+  graded words, 19 differ in the first two bytes alone, 40 in the reads' and writes' first bytes, 5 in short reads).
+- **Conclusion:** the title, **argued** from the documents and the one lineage's placement of the data: the reading in
+  which every list fits its command's length and a reply byte depends only on the bytes before it. A byte past what is
+  clocked is never received, so the programs send two bytes more than ps2tek's command lists.
+- **Depends on it:** `sio2::card::MemoryCard::exchange`.
+- **Pinned by:** `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-223. The DualShock 2, 43h outside configuration mode: it answers as 42h does, without the pressure bytes, before entering configuration mode
+
+- **Opened:** 2026-10-25, at stage S25.
+- **Documents read:** ps2tek "SIO2 Controller Commands" ("Reply: header reply (with mode byte) + same as Read Data
+  (but without pressure values in DS2 mode)"); psx-spx "Normal Mode - Command 43h" ("the response is same as for
+  command 42h (button data) (and analog inputs when in analog mode)").
+- **Test program:** `s25-pad`, 43h from digital and from analogue mode with every reply byte enabled.
+- **Referee:** PCSX2 2.8.2 answers the mode byte and 00h for every following byte (two words, measured 2026-10-25).
+- **Conclusion:** the title, on both documents; **argued**. PCSX2 against.
+- **Depends on it:** `sio2::pad::DualShock2::exchange`.
+- **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-224. The DualShock 2, configuration replies psx-spx gives and PCSX2 does not: 46h with an index past 1 answers zeros; 48h with index 0 or 1 answers 01h at byte 7 (counted from 0); 44h with a mode past 1 answers FFh at byte 5; 40h keeps the value written and answers the old one, FFh for an index past 0Bh; byte 8 of 40h's and 4Fh's reply is not graded
+
+- **Opened:** 2026-10-25, at stage S25.
+- **Documents read:** psx-spx "Config Mode - Command 46h", "48h", "44h" ("Dualshock2 sets Err=FFh upon Led=02h..FFh"),
+  "40h" ("Set NEW Val, array[Idx]=Val"; "Old Val (or FFh when Idx>0Bh)"), and its note "Some Dualshock2 Config Mode
+  commands do occasionally send 00h, 5Ah, or FFh as last (9th) reply byte"; ps2tek gives none of these.
+- **Test program:** `s25-pad`.
+- **Referee:** PCSX2 2.8.2: 46h index 2 answers index 1's bytes; 48h answers zeros; 44h with mode 2 answers zeros; 40h
+  answers 02h whatever was written and for index 0Ch; the ninth byte of 4Fh and 40h is 5Ah (six words, measured
+  2026-10-25).
+- **Conclusion:** the title, psx-spx's, the one document; **argued**. PCSX2 against on each.
+- **Depends on it:** `sio2::pad::DualShock2::exchange`.
+- **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-225. The DualShock 2, 41h: in analogue mode FFh FFh 03h 00h 00h 5Ah, the bytes 4Fh can enable, whatever 4Fh last set; in digital mode zeros
+
+- **Opened:** 2026-10-25, at stage S25, by the two documents' disagreement.
+- **Documents read:** psx-spx "Command 41h": "Reply HiZ F3h 5Ah FFh FFh 03h 00h 00h 00h", "a constant bitmask
+  indicating which reply bytes can be enabled"; ps2tek "41h - Query Masked Mode": "header reply + 3 mask bytes + 00 +
+  00 + 5A", "used to find out what buttons are included in poll responses", zeros in digital mode.
+- **Test program:** `s25-pad`: 41h in digital mode, after 44h's analogue mode (reply bytes 3Fh), after 4Fh (3FFFFh).
+- **Referee:** PCSX2 2.8.2: zeros in digital mode; FFh FFh 03h 00h 00h 5Ah after 44h and after 4Fh alike (measured
+  2026-10-25; a first version of the program graded ps2tek's current mask, 3Fh, and differed there).
+- **Conclusion:** the title, **measured** on one lineage: psx-spx's constant for the three bytes, ps2tek's zeros in
+  digital mode and its last byte 5Ah.
+- **Depends on it:** `sio2::pad::DualShock2::exchange`.
+- **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-226. The card's error correction: each parity of Ridge's 20-bit code is stored complemented, the unused bits clear, so that an erased chunk's code is 77h 7Fh 7Fh
+
+- **Opened:** 2026-10-25, at stage S25, by Ridge's silence on the stored form and a referee's spare bytes.
+- **Documents read:** Ross Ridge, "PlayStation 2 Memory Card File System", "Error Correction Code" (the column parities
+  in the first byte, even groups low and odd high; the line parities' even and odd groups in the second and third; four
+  codes in the spare area's first twelve bytes); nothing on whether a parity is stored as such or complemented.
+- **Test program:** `s25-probe` and `s25-probe-write`, pages read with their spare bytes from a folder card.
+- **Referee:** PCSX2 2.8.2's folder card, which keeps no spare bytes of its own, answers 77h 7Fh 7Fh four times and
+  FFh FFh FFh FFh for every page's spare area, whatever was written (measured 2026-10-25): the code of an erased chunk
+  (FFh bytes) in the complemented form, and the code an all-zero chunk has too. Its file card stores the spare bytes as
+  written, as a flash does.
+- **Conclusion:** the title, **measured** for the erased chunk on one lineage and argued for the rest: an erased page
+  then carries a code that checks, which the plain form would not. The bits' order inside each byte is Ridge's
+  description read in the natural order, unwitnessed until part B reads a card the BIOS formatted.
+- **Depends on it:** `emusen_ps2_card::ecc`.
+- **Pinned by:** `an_erased_chunks_code_reads_77h_7fh_7fh_and_one_wrong_bit_is_put_right`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-227. The DualShock 2's sticks: the reply's bytes 6 to 9 are the right stick's X and Y, then the left stick's X and Y
+
+- **Opened:** 2026-10-25, at stage S25.
+- **Documents read:** psx-spx "Standard Controllers" (halfword 2 RightJoyX, RightJoyY; halfword 3 LeftJoyX, LeftJoyY)
+  and its 4Fh table in the same order; ps2tek "Input Format" lists "right y, right x, left y, right x", which names the
+  right stick's X twice.
+- **Test program:** `s25-pressure` grades the sticks centred; the order is checked by `v1`'s `set_axis` test.
+- **Referee:** not a witness: PCSX2 given no input centres every stick at 7Fh.
+- **Conclusion:** psx-spx's order, ps2tek's list taken as a slip; **argued**.
+- **Depends on it:** `sio2::pad::Input`, `v1::set_axis`.
+- **Pinned by:** `the_two_cards_are_slots_of_ps2_card_and_a_card_file_of_the_wrong_size_is_refused`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-228. The multitap: its peripheral byte is 21h, answered on both ports of its slot; 12h and 13h answer FFh 80h 5Ah 04h 00h 5Ah, 21h and 22h FFh 80h 5Ah 00h 00h 00h 5Ah; which slot 21h and 22h select is Sapphire's choice
+
+- **Opened:** 2026-10-25, at stage S25, by the two documents' different peripheral bytes and the absence of any
+  document of the commands.
+- **Documents read:** ps2tek "SIO2 Registers" ("21h - Multitap", "61h - Infrared"); psx-spx "PS2 multitap"
+  ("accepting switching commands with address 61h", the protocol otherwise unknown).
+- **Test program:** `s25-tap-21-0`, `s25-tap-21-2`, `s25-tap-61-0` (every command byte 00h to 2Fh and five more under
+  each peripheral byte, with and without a multitap), `s25-tap-slots` (each selection followed by a controller read
+  and a card probe), `s25-tap`.
+- **Referee:** PCSX2 2.8.2 with a multitap in port 1: 21h answers 12h, 13h, 21h and 22h as the title says, on port 0
+  and port 2, and nothing else; 61h answers nothing; no selection changes what the controller and card ports then
+  answer (measured 2026-10-25).
+- **Conclusion:** ps2tek's byte, the one witness's frame, **measured**; the selection (the byte after the command's
+  00h, 0 to 3, routing the controller port's traffic for 21h and the card port's for 22h, any other value none) is a
+  choice [C] with no witness, the multitap's slots past A reachable through it only.
+- **Depends on it:** `sio2::tap`, `sio2::Slot`.
+- **Pinned by:** `a_multitap_answers_its_frame_and_routes_the_slot_it_selects`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-229. The memory card, three readings: 27h answers the terminator it replaces; 28h's last byte is 55h whatever the terminator; 82h erases the whole erase block holding the address 21h gave
+
+- **Opened:** 2026-10-25, at stage S25.
+- **Documents read:** ps2tek "27h - Set Terminator" ("Reply: XX + 2B + Old terminator"), "28h - Get Terminator" ("2B +
+  Terminator + 55"), "82h - Erase Block" ("Erases data at the address given by command 21h ... (512 + 16) * 16 bytes");
+  Toshiba's TC58128AFT data sheet (a block erase takes a block's address, the page's bits ignored); Ridge "NAND Flash
+  Memory Basics".
+- **Test program:** `s25-card`: the terminator set to AAh and back; a block erased by its first page and later by its
+  last.
+- **Referee:** PCSX2 2.8.2 answers the new terminator to 27h (two words) and the terminator, not 55h, as 28h's last
+  byte (one word); an erase from page 47 leaves pages 32 and 33 as they were, so it erases from the address given rather
+  than the block holding it (273 words of the last two page reads) (measured 2026-10-25).
+- **Conclusion:** the title, ps2tek's and the flash's, **argued**; PCSX2 against on each. A BIOS that erases only by a
+  block's first page cannot tell the erase readings apart.
+- **Depends on it:** `sio2::card::MemoryCard::exchange`.
+- **Pinned by:** `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes`, `a_write_clears_bits_and_an_erase_sets_its_whole_block`.
+- **Implemented in:** stage S25 part A's commit.
+
+### D-230. SIO2, SEND3's length: bits 18 to 26 hold a command's length counting its peripheral byte
+
+- **Opened:** 2026-10-25, at stage S25, by ps2tek's field being too narrow for its own commands.
+- **Documents read:** ps2tek "SIO2_SEND3": "8-16 Fake command length", "18-24 Real command length (counting peripheral
+  byte)"; ps2tek "43h - Read Data": a command of 132 bytes after the peripheral byte, more than seven bits hold.
+- **Test program:** `s25-card`, every read and write a command of 134 bytes.
+- **Referee:** PCSX2 2.8.2 sends and answers all 134 bytes (measured 2026-10-25), so it reads at least eight bits.
+- **Conclusion:** nine bits, as wide as the fake length's field, **argued**; the bits above 24 are otherwise unused.
+- **Depends on it:** `sio2::LENGTH_MAX`.
+- **Pinned by:** `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes`.
+- **Implemented in:** stage S25 part A's commit.
+
 ### D-240. GS, the texture function: with TCC RGB every function keeps the fragment's alpha, DECAL included
 
 - **Opened:** 2026-10-25, at stage S18.
@@ -2438,3 +2621,4 @@ through the reset too.
 - **Depends on it:** `gs::texture::Sampler::sample`.
 - **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
 - **Implemented in:** stage S18's commit.
+

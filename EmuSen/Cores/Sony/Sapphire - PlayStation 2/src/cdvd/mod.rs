@@ -431,8 +431,8 @@ impl Cdvd {
     /// Brings the drive to `now`, taking every event due by then.
     pub fn run(&mut self, now: u64) {
         while self.next_event() <= now {
-            if self.detect.is_some_and(|t| t <= now) {
-                self.detected(self.detect.unwrap());
+            if let Some(t) = self.detect.filter(|&t| self.pending.is_none_or(|(p, _)| t <= p)) {
+                self.detected(t);
                 continue;
             }
             let (at, event) = self.pending.take().unwrap();

@@ -3073,8 +3073,8 @@ No referee's log was read: the driver reads it inside the run for the BIOS line 
 ### 25.6 The gate: the synthetic discs, sector for sector (measured 2026-10-25)
 
 `cdvd/tests.rs` drives the registers as CDVDMAN would, with its own builders (a DVD of 300 sectors, a dual-layer DVD of
-1,100 broken at 1,024 by D-127's rule, CDs of 60 data sectors and of 60 data and 20 audio): **15 of 15**, with
-`timing`, `rtc` and `nvm`'s four.
+1,100 broken at 1,024 by D-127's rule, CDs of 60 data sectors and of 60 data and 20 audio): **10 of 10**, and
+`timing`'s two, `rtc`'s and `nvm`'s one each, 14 in the module.
 
 | Test | What it holds |
 |---|---|

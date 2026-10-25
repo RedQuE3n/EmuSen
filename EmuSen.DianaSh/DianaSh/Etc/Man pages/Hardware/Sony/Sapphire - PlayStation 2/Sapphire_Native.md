@@ -3300,11 +3300,13 @@ ungraded, for D-141; `examples/s22.rs` writes them with the gate.
 **Tests** [M, `cargo test --release`]: `tests/sif.rs` **5 of 5**: the four gate tests, the five programs each equal to its
 record word for word (every FIFO drained at the end of `s22-sif1` and `s22-sif0`), and `a_full_fifo_holds_the_ees_channel_until_the_iop_takes_words`
 (the EE's SIF1 of twenty quadwords stopping at eight with nothing scheduled, the rest crossing once the IOP's channel
-starts, every word placed); lib **26 of 26** (the two `sif` tests among them); `tests/iop.rs` **13 of 13**,
+starts, every word placed); on the tree with S13, S16 and S23 beneath, lib **41 of 41** (the two `sif` tests among
+them); `tests/iop.rs` **13 of 13**,
 `each_dma_mode_reaches_its_stand_in` now reading SIF2's and SIF0's FIFOs and filling SIF1's with a quadword tag (the
-S21 program unchanged); the crate's other tests unchanged: `cop0` 19, `dmac` 17, `fpu` 9, `interpreter` 23, `mmi` 13,
-`programs` 3, `vu0` 14; lib, `dmac`, `iop` and `sif` also under `test-checked`; clippy clean on every target.
-`SapphireTests` (WiseMan, the blast radius's filter): **5 of 5**.
+S21 program unchanged); the crate's other tests unchanged: `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23,
+`micro` 12, `mmi` 13, `programs` 3, `vu0` 14, `vu_micro` 24; lib, `dmac`, `iop` and `sif` also under `test-checked`;
+clippy clean on every target. `SapphireTests` (WiseMan, the blast radius's filter): **5 of 5**, before and after the
+rebase.
 
 ### 26.8 On the referees (measured 2026-10-25)
 

@@ -173,7 +173,10 @@ libretro.rs`) answers no `SET_HW_RENDER` request, so none of the three PlayStati
 as it stands; and the probe has no README of its own, its documentation being
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.50. A hardware context for the probe (headless EGL with OpenGL, or the
 libretro Vulkan interface) is a feature of its own, evaluated at S3 against PCSX2's standalone form with PINE, which
-needs no probe change (§11 Q4).
+needs no probe change (§11 Q4). *Measured 2026-10-24 at S3 (`Sapphire_Referees.md` §2.3, §6): the first finding holds
+for `play_libretro` only, which asks for OpenGL core 3.2 and runs nothing without it; LRPS2 and PCEE2 fall back to their
+software renderers, give the whole RAM, and PCEE2 hands the frontend pictures. PCEE2 reports version 2.9.138 and runs an
+ELF with no `resources` folder. The hardware context is evaluated there and not built.*
 
 **Lineage** [A]: PCSX2, LRPS2 and PCEE2 are one family and count as one witness where they agree; Play! is an
 independent lineage; DobieStation is a third but tied to ps2tek. **Firmware for the referees**: the player's BIOS, as
@@ -826,7 +829,7 @@ the enhancements (E) are separate tracks.
 | **0** | This plan (2026-10-23) | The tester's go for S1 |
 | **S1** | The crate `sapphire` on the core ABI v1 as a stub with the `InDevelopment` mark: an ELF recognised and refused with words; the system pack `ps2` (§4.1) with the recogniser's `BOOT2` rule and Diamond's `BOOT` rule beside it; the three firmware entries (§5.9); the `SPH2` header | The kit's C1–C15 on a synthetic ELF and a synthetic ISO; a synthetic PS1 disc routed to Diamond, a PS2 CD and DVD to Sapphire, by test *Built 2026-10-24, `Sapphire_Native.md`: met; the CRT row recorded as owed (its §6).* |
 | **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation *Built 2026-10-24, `Sapphire_Native.md` §12, `Sapphire_References.md`: met; the Japanese entry renamed to `0230j`.* |
-| **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written |
+| **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written *Built 2026-10-24, `Sapphire_Native.md` §13, `Sapphire_Referees.md`: met; `record.s`'s twelve words equal on PCSX2, LRPS2, PCEE2 and Play!, `play_libretro` refused for want of an OpenGL context.* |
 | **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) |
 
 **Phase B — the EE**
@@ -1058,7 +1061,8 @@ is built, as Diamond's were.
   change, no ABI change).
 - **A console medium** for the drive's EEPROM, under `EmuSen_SaveMedia.md`'s `console` kind, which exists.
 - **The probe's hardware render**, if S3 finds PCSX2's standalone form with PINE insufficient: a headless OpenGL or
-  Vulkan context for libretro cores that ask for one.
+  Vulkan context for libretro cores that ask for one. *Evaluated 2026-10-24 at S3 (`Sapphire_Referees.md` §6): not needed by
+  the PCSX2 family's cores; recommended not built, Play!'s pictures to be taken as RAM by the project's GS programs.*
 
 ---
 

@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stage S2 the same day (§12).* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12) and S3 (§13) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -380,4 +380,84 @@ the tester's Japanese PlayStation 2 BIOS images.
 
 - Running anything of ps2autotests (S4), the referees (S3), and every emulation rule.
 - Diamond's MD5 lists (`EmuSen_Firmware.md` §7.8), owed by Diamond, not by this stage.
+
+## 13. Stage S3, the referees (2026-10-24)
+
+### 13.1 In one paragraph
+
+The plan's §7 row S3, on the tester's go of 2026-10-24. PCSX2 2.8.2 and Play! 0.72 are installed user-locally from
+their pinned releases, and LRPS2, PCEE2 and `play_libretro` from the buildbot's pinned nightlies; PCSX2 runs headless
+under a private KWin with its software renderer and is read through PINE, Play! under the same compositor with its RAM
+found in its own process, and the cores through the probe, which now names each hardware context it refuses. The gate's
+program `programs/record.s`, assembled with `emusen-mips`, gave the same twelve words on PCSX2 (three markets), LRPS2,
+PCEE2 and Play!, equal to the values the architecture fixes; `play_libretro` alone runs nothing without an OpenGL
+context. The whole record is `Sapphire_Referees.md`; this section keeps what the build changed. No emulator source, no
+SDK or loader source and no firmware was read; the BIOS images were linked, never opened.
+
+### 13.2 What was built
+
+- **The crate**: `media::program` writes an EE program of the project's own as an ELF (the header, one segment at
+  `PROGRAM_ORIGIN`, 00100000h), and the tests' sample uses it; `examples/elf.rs` assembles a program with `emusen-mips`
+  into one; `programs/record.s` (the gate) and `programs/frames.s` (a frame counter for the referees' cost);
+  `tests/programs.rs`. **A new dependency, said here** [C]: `emusen-mips` as a dev-dependency only, the assembler of
+  the referees' programs, the crate the plan's §9.1 assigns to Sapphire; the library and its cdylib are unchanged.
+- **The driver** `EmuSen.WiseMan/Reference/analysis/ps2referee.py` (`fetch`, `ram`, `boot`), modelled on Diamond's
+  `psxreferee.py`; its pins `ps2-referees.sha256`; three rows in `libretro-cores.sha256`; `tests/test_ps2referee.py`.
+- **The probe**: `SET_HW_RENDER` is answered false as before, and prints one line naming the context and version asked
+  for (`hw_context_name`, `hw_refusal`); documented in `EmuSen_Debugging_Tools_Reference_v5.md` §3.50.
+
+### 13.3 Measured
+
+The referees' table, costs and the RAM each exposes are `Sapphire_Referees.md` §2; the record is §4.1. In short:
+PCSX2 2.56 ms a frame unlimited and about 1.2 s a run, Play! 0.4 ms of CPU a frame at the console's speed, LRPS2
+0.28 ms a frame, PCEE2 2.31 ms; Jak and Daxter booted once on PCSX2 (PINE: SCUS-97124, running after 58 s).
+
+### 13.4 Tests (2026-10-24)
+
+| Item | Result [M] |
+|---|---|
+| The crate's tests (`cargo test --release`) | **16 of 16**, two new in `tests/programs.rs` |
+| The probe's tests (`cargo test --release --features libretro`) | **51 of 51**, one new: `a_refused_hardware_context_is_named_with_its_version` |
+| `analysis/tests/test_ps2referee.py` (`python3 -m unittest`) | **18 of 18**, all new: PINE's framing against a fake server, the scan against a faked process with a decoy, the BIOS folder of links, the settings file, the probe's command line |
+| WiseMan, `blast.sh`'s filter (`ContractShapeTests`, `CrystalDebugParity`, `CrystalParityTests`, `DebugCodeParity`, `SapphireTests`, `SystemCodeParity`, `SystemTableParity`) | **79 of 79** |
+
+**Seeded faults**, each made in place, its tests run, the file restored from a copy:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | PINE's size field not counting itself | `PineTests`, four tests (the fake server reads a short message) |
+| F2 | The scan reading an address on the wrong side of the done word | `ScanTests.test_the_record_is_read_relative_to_the_done_word`, `test_a_read_past_what_is_mapped_is_refused` |
+| F3 | The BIOS folder's check that every `.bin` is a link removed | at first **nothing**: the check of the gates' three names hid it; `test_any_other_image_copied_in_is_refused` was added and catches it |
+| F4 | The scan taking the first place the done word appears, without the program beside it | four `ScanTests`, the decoy among them |
+| F5 | The probe naming OpenGL core as OpenGL | `a_refused_hardware_context_is_named_with_its_version` |
+| F6 | `record.s` writing its done word 4 bytes off | `tests/programs.rs`, `the_record_ends_with_its_done_word_and_a_branch_to_itself` |
+
+### 13.5 What the plan got wrong, or left open
+
+- **§1.6's first finding** is half right: LRPS2 and PCEE2 run without a hardware context on their software renderers,
+  and PCEE2 hands pictures; only `play_libretro` cannot run. Amended there with a dated note.
+- **§1.6's table**: PCEE2 is 2.9.138 and needs no `resources` folder for an ELF; Play! needs no CHD for an ELF.
+- **PINE's draft numbers** the title, serial, CRC, version and status one lower than PCSX2 answers them.
+- **§10's hardware render** is evaluated (`Sapphire_Referees.md` §6) and not built: the condition of §11 Q4 is not met.
+
+### 13.6 Questions this stage leaves
+
+- **A hardware context for the probe** [decision]: *recommended* none (form C of `Sapphire_Referees.md` §6): Play!'s
+  pictures taken as RAM by the project's GS programs reading the GS's memory back to the EE, with headless EGL (form A)
+  held in reserve for the first GS dispute that needs Play!'s picture and finds its readback wanting.
+- **DobieStation** [decision]: *recommended* not installed; built user-locally only if a dispute needs a third lineage
+  that ps2tek does not decide (`Sapphire_Referees.md` §7).
+- **S3's writer is exposed** [routine]: PCSX2's log of the BIOS's boot was read while finding a start-up fault
+  (`Sapphire_Referees.md` §5). *Recommended*: recorded, the writer excluded from the open BIOS, and the driver keeping
+  no log, as built.
+
+### 13.7 What was read for this stage
+
+`Sapphire_Referees.md` §9 lists it. No emulator, SDK or loader source; no firmware.
+
+### 13.8 What this stage does not cover
+
+- ps2autotests' first run and its output channel (S4, P2), and the runners of §3.3 (S4).
+- Pictures from any referee (`Sapphire_Referees.md` §6 proposes how they will be taken).
+- The handheld: no referee was run on it.
 

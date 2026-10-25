@@ -601,7 +601,8 @@ pub fn irq() -> Gate {
     p.delay(20_000);
     p.rec_masked(s21::reg::I_STAT, 0x200, 0x200);
     rec_h(p, super::SPU2 + 0x7C2, Some(8));
-    rec_h(p, reg(1, r::STATX), Some(0));
+    // STATX with the flag up: psx-spx's bit 6 (D-329); PCSX2 reads 0.
+    rec_h(p, reg(1, r::STATX), Some(0x40));
     sh(p, reg(1, r::ATTR), 0);
     rec_h(p, super::SPU2 + 0x7C2, Some(0));
     g

@@ -96,3 +96,49 @@ pub fn sif0_odd() -> Pair {
         (e, i)
     })
 }
+
+/// `s24-statx`, an IOP program: each core's STATX read after ATTR is written with each transfer mode (bits 5-4) and
+/// with low bits set, then after a sixteen-word DMA write to core 1 on channel 7; every word recorded, ungraded (D-329).
+pub fn statx() -> s21::Program {
+    use s21::reg::{DPCR2, bcr, chcr, madr};
+    let mut p = s21::Program::new("s24-statx");
+    p.li("t5", 0xBF90_0000);
+    for (core, attr, statx) in [(0u32, 0x19Au32, 0x344u32), (1, 0x59A, 0x744)] {
+        let _ = core;
+        for v in [0xC000u32, 0xC010, 0xC020, 0xC030, 0xC03F, 0xC000] {
+            p.li("t7", v);
+            p.emit(format!("sh t7, 0x{attr:x}(t5)"));
+            p.delay(200);
+            p.emit(format!("lhu t2, 0x{statx:x}(t5)"));
+            p.emit("nop");
+            p.record("t2", None);
+        }
+    }
+    p.li("t7", 0xC020);
+    p.emit("sh t7, 0x59A(t5)");
+    p.emit("sh zero, 0x5A8(t5)");
+    p.li("t7", 0x2000);
+    p.emit("sh t7, 0x5AA(t5)");
+    p.poke(DPCR2, 0x0000_0008);
+    p.poke(madr(7), s21::AREA);
+    p.poke(bcr(7), 0x0001_0010);
+    p.poke(chcr(7), 0x0100_0201);
+    p.emit("lhu t2, 0x744(t5)");
+    p.emit("nop");
+    p.record("t2", None);
+    p.wait(chcr(7), 0x0100_0000, false, 100_000);
+    p.rec(chcr(7), None);
+    for _ in 0..3 {
+        p.emit("lhu t2, 0x744(t5)");
+        p.emit("nop");
+        p.record("t2", None);
+        p.delay(500);
+    }
+    p.li("t7", 0xC000);
+    p.emit("sh t7, 0x59A(t5)");
+    p.delay(200);
+    p.emit("lhu t2, 0x744(t5)");
+    p.emit("nop");
+    p.record("t2", None);
+    p
+}

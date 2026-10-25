@@ -99,7 +99,18 @@ pub mod scmd {
     pub const READ_CONFIG: u8 = 0x41;
     pub const WRITE_CONFIG: u8 = 0x42;
     pub const CLOSE_CONFIG: u8 = 0x43;
+    /// The console's region parameters [M PCSX2, Sapphire_Disputes.md D-328].
+    pub const REGION: u8 = 0x36;
+    /// Two the player's BIOS sends at boot, whose purpose no document gives [M PCSX2, D-328].
+    pub const BOOT_1A: u8 = 0x1A;
+    pub const BOOT_22: u8 = 0x22;
 }
+
+/// S command 36h's fifteen bytes for each market, measured on PCSX2 2.8.2 with the gates' images (2026-10-25): a
+/// zero, 08h, a zero, the market's letter twice, the language, two letters and five zeros; no document describes them.
+pub const REGION_JAPAN: [u8; 15] = *b"\x00\x08\x00JJjpnJJ\x00\x00\x00\x00\x00";
+pub const REGION_AMERICAS: [u8; 15] = *b"\x00\x08\x00AAengAU\x00\x00\x00\x00\x00";
+pub const REGION_EUROPE: [u8; 15] = *b"\x00\x08\x00EEengEE\x00\x00\x00\x00\x00";
 
 /// MechaconVersion's four bytes, chosen by D-124 from the referees' answer, not from ps2tek's quotation.
 pub const VERSION: [u8; 4] = [0x03, 0x06, 0x02, 0x00];
@@ -209,6 +220,13 @@ pub struct Cdvd {
     taken: usize,
     pub rtc: Rtc,
     pub nvm: Nvm,
+    /// The console's answer to S command 36h, set by the machine from its market; absent (80h) without one.
+    pub region: Option<[u8; 15]>,
+    /// The S and N commands received, counted by number: the drive's own report of what it was asked (S24).
+    pub s_count: [u32; 256],
+    pub n_count: [u32; 256],
+    /// Each S command's last parameters and their count, for the same report.
+    pub s_last: Box<[([u8; 16], usize); 256]>,
 }
 
 /// The disk type a disc settles at: a CD with audio tracks beside its data is the CDDA kind, one of audio alone music.
@@ -258,6 +276,10 @@ impl Cdvd {
             taken: 0,
             rtc: Rtc::default(),
             nvm: Nvm::default(),
+            region: None,
+            s_count: [0; 256],
+            n_count: [0; 256],
+            s_last: Box::new([([0; 16], 0); 256]),
         };
         if let Some(d) = disc {
             c.load(d);
@@ -352,6 +374,7 @@ impl Cdvd {
     }
 
     fn start(&mut self, cmd: u8, now: u64) {
+        self.n_count[cmd as usize] += 1;
         let p = self.n_params.take();
         let word = |at: usize| u32::from_le_bytes([p[at], p[at + 1], p[at + 2], p[at + 3]]);
         self.n_command = cmd;
@@ -539,7 +562,10 @@ impl Cdvd {
     }
 
     fn scmd(&mut self, cmd: u8, now: u64) {
+        self.s_count[cmd as usize] += 1;
+        let given = self.s_params.len;
         let p = self.s_params.take();
+        self.s_last[cmd as usize] = (p, given);
         self.s_command = cmd;
         let mut block = [0u8; BLOCK];
         let answer: &[u8] = match cmd {
@@ -569,6 +595,15 @@ impl Cdvd {
                 &[0]
             }
             scmd::FORBID_DVD => &[FORBID_DVD_ANSWER],
+            scmd::BOOT_1A => &[1],
+            scmd::BOOT_22 => &[0; 10],
+            scmd::REGION => match &self.region {
+                Some(r) => {
+                    block[..15].copy_from_slice(r);
+                    &block[..15]
+                }
+                None => &[ABSENT],
+            },
             scmd::OPEN_CONFIG => {
                 self.nvm.open([p[0], p[1], p[2]]);
                 &[0]

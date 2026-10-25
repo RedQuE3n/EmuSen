@@ -695,6 +695,11 @@ def main(argv):
         die("--screen is for the probe's cores", 2)
     if disc and (referee != "pcsx2" or mode != "ram"):
         die("--disc is for ram runs on pcsx2", 2)
+    blank = "--blank-nvm" in rest
+    if blank:
+        if mode != "menu":
+            die("--blank-nvm is for menu runs", 2)
+        rest.remove("--blank-nvm")
     until = option("--until")
     until = tuple(int(x, 16) for x in until.split("=")) if until else None
     dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
@@ -712,7 +717,6 @@ def main(argv):
                           **{k: v for k, v in out.items() if k in ("until", "wall", "exit", "error", "bios_loaded")}}))
         return
     if mode == "menu":
-        blank = "--blank-nvm" in rest
         if referee != "pcsx2":
             die("menu runs on pcsx2 only", 2)
         out = run_pcsx2_menu(market, count, target, blank)

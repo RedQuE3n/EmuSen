@@ -80,6 +80,11 @@ impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let mode = if market == Market::Europe { clock::PAL } else { clock::NTSC };
         let mut sys = Box::new(System { ee: crate::ee::Ee::reset(), board: crate::board::Board::new(mode) });
+        sys.board.iop.bus.cdvd.region = Some(match market {
+            Market::Japan => crate::cdvd::REGION_JAPAN,
+            Market::Americas => crate::cdvd::REGION_AMERICAS,
+            Market::Europe => crate::cdvd::REGION_EUROPE,
+        });
         let sio2 = &mut sys.board.iop.bus.sio2;
         for (n, plug) in ports.iter().enumerate() {
             sio2.slots[n].pads[0] = plug.map(|_| DualShock2::default());

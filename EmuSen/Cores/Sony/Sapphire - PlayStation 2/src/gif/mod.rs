@@ -269,6 +269,12 @@ impl Gif {
         }
     }
 
+    /// Whether `run_to` would find nothing to send: no path waiting, PATH3's FIFO empty, and the GIF free or held by
+    /// PATH3 or PATH2 between their qwords (the board's shortcut, Sapphire_Native.md §35.7).
+    pub fn quiet(&self) -> bool {
+        self.owner != Some(Path::One) && self.kicks.is_empty() && self.p2.is_none() && self.fifo.is_empty() && !self.ip3
+    }
+
     /// The cycle the board next needs the GIF: only while the DMAC waits on the FIFO and the GIF can move.
     pub fn next_event(&self) -> u64 {
         if self.dmac_waiting { self.resume.unwrap_or(u64::MAX) } else { u64::MAX }

@@ -54,6 +54,12 @@ fn main() {
     }
     println!("EE exceptions {:?} level 2 {:?}; IOP exceptions {:?}", m.sys.ee.exceptions, m.sys.ee.exceptions2, m.sys.board.iop.exceptions);
     sif_state(&m);
+    let cd = &m.sys.board.iop.bus.cdvd;
+    let counts = |c: &[u32; 256]| c.iter().enumerate().filter(|p| *p.1 > 0).map(|(n, k)| format!("{n:02X}h x{k}")).collect::<Vec<_>>().join(", ");
+    println!("CDVD S commands: {}; N commands: {}", counts(&cd.s_count), counts(&cd.n_count));
+    for (n, (p, len)) in cd.s_last.iter().enumerate().filter(|(n, _)| cd.s_count[*n] > 0) {
+        println!("  S {n:02X}h last parameters {:02X?}", &p[..*len]);
+    }
     println!("-- registers answered");
     for l in m.sys.board.reports.register_lines().iter().chain(m.sys.board.iop.bus.reports.register_lines().iter()) {
         println!("{l}");
@@ -92,10 +98,15 @@ fn sif_state(m: &Machine) {
     }
     println!("EE D_STAT {:08X} D_CTRL {:08X} D_ENABLE {:08X} I_STAT {:08X} I_MASK {:08X}", b.dmac.stat, b.dmac.ctrl, b.dmac.enable, b.intc.stat, b.intc.mask);
     let d = &b.iop.bus.dmac;
-    for c in [9usize, 10] {
+    for c in [4usize, 7, 9, 10] {
         let ch = &d.ch[c];
         println!("IOP ch{c} chcr {:08X} madr {:08X} bcr {:08X} tadr {:08X}", ch.chcr, ch.madr, ch.bcr, ch.tadr);
     }
+    let spu = &b.iop.bus.spu2;
+    for (n, core) in spu.cores.iter().enumerate() {
+        println!("SPU2 core{n} ATTR {:04X} STATX {:04X} TSA {:08X}", core.read(sapphire::spu2::regs::ATTR), core.read(sapphire::spu2::regs::STATX), core.tsa);
+    }
+    println!("IOP DPCR {:08X} DICR {:08X}", d.dpcr, d.dicr);
     println!("IOP DPCR2 {:08X} DICR2 {:08X} DMACEN {:08X}; FIFOs {:?}", d.dpcr2, d.dicr2, d.dmacen, b.iop.bus.sif.fifo.iter().map(|f| f.len()).collect::<Vec<_>>());
 }
 

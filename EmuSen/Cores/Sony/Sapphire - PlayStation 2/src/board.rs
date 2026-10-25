@@ -274,8 +274,22 @@ impl Board {
         }
     }
 
-    /// Brings every unit to time `t`, running the events due on the way; the scratchpad is the core's.
+    /// Brings every unit to time `t`, running the events due on the way; the scratchpad is the core's. With no event
+    /// due and the GIF, the VIFs and the VUs idle, only the clocks move and the IOP is brought along, which is what the
+    /// whole path would do (Sapphire_Native.md §35.7).
     pub fn run_to(&mut self, t: u64, spram: &mut [u8]) {
+        if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
+            self.now = self.now.max(t);
+            self.iop.run_to(self.now);
+            if self.iop.bus.sif.take_wake_ee() {
+                self.dmac.wake(self.now);
+                if self.dmac.next_event() <= self.now {
+                    self.step_dmac(self.now, spram);
+                }
+                self.reschedule();
+            }
+            return;
+        }
         while self.next <= t {
             let at = self.next;
             self.now = at;

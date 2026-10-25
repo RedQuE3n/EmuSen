@@ -392,6 +392,12 @@ impl Vpu {
         self.micro1.run_to(&mut self.units, t);
     }
 
+    /// Whether `run_to(t)` would change nothing but the units' clocks, those moved if so (Sapphire_Native.md §35.7).
+    pub fn idle_to(&mut self, t: u64) -> bool {
+        let Vpu { micro0, micro1, units, .. } = self;
+        micro0.idle_to(units, t) & micro1.idle_to(units, t)
+    }
+
     /// VU1 running a microprogram: the COP2 condition signal BC2F and BC2T test (§5.5.1).
     pub fn vu1_busy(&mut self, t: u64) -> bool {
         self.micro1.run_to(&mut self.units, t);

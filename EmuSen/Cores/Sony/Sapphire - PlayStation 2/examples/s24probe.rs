@@ -17,4 +17,13 @@ fn main() {
         std::fs::write(dir.join(format!("{}.expected", p.name)), text).expect("written");
         println!("{}: {} record words ({} the EE's)", p.name, p.expected.len(), p.ee_words);
     }
+    for p in [s24::statx()] {
+        let name = p.name;
+        let (source, expected) = p.finish();
+        let iop = s21::assemble(&source);
+        let ee = s21::wrap(&iop, expected.len());
+        let words = emusen_mips::assemble(&ee, s21::EE_ORIGIN, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        std::fs::write(dir.join(format!("{name}.elf")), sapphire::media::program(&words, s21::EE_ORIGIN)).expect("written");
+        println!("{name}: {} record words", expected.len());
+    }
 }

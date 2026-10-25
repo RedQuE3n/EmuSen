@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21) and S21 (§22) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22) and S16 (§24) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -2451,3 +2451,237 @@ passed to PCSX2 by path.
 - The IOP in PlayStation mode (Diamond's, §4.1), its 33.8688 MHz clock and TBIN.
 - The machine running the IOP with the EE (S10, S24), the IOP's state in `SPH2` (S30), its debugger view (S31) and its
   speed (S32 to S34).
+
+## 24. Stage S16, the GS's registers, local memory and transfers (2026-10-25)
+
+*Numbered §24 and its disputes from D-100, since S21 (§22, from D-60) and S13 (§23, from D-80) are built beside it.*
+
+### 24.1 In one paragraph
+
+The plan's §7 row S16, on the tester's go of 2026-10-25 for the next stage that needs nothing of the VUs or the IOP,
+built beside S13 and S21. The crate gains **`gs`**: the general registers as the host interface writes them, the
+privileged registers at 12000000h, CSR and IMR with the SIGNAL, FINISH and LABEL events, HSINT and VSINT, the interrupt
+the GS gives the INTC, and its 4 MiB of local memory with **`gs::local`, the one owner of the layout** of all thirteen
+storage formats (pages, blocks and columns as the *GS User's Manual*'s chapter 8 draws them, a base pointer inside a
+page counted on in blocks, addresses wrapping at the memory's end), on which **`gs::transfer`** runs host to local,
+local to host and local to local. The GS acts at once on each write; nothing of its timing is modelled. **`gs::HostInterface`**
+is what the GIF (S15) will drive (register writes, image data, local-to-host reads, the stall, BUSDIR's direction); the
+tests drive it directly. Five programs of the project's, 51,268 graded record words, each a script rendered twice (as an
+EE program sending A+D and IMAGE packets through the GIF's DMA channel and reading local-to-host data through VIF1's into
+its record, and as calls on the interface) are equal on Sapphire to the record a model transcribed from the manual
+gives. **PCSX2 reproduces every format's layout and round trip at a page's start, the transfers' offsets, restart and
+end, the registers' masks, the SIGNAL stall and the reset**, and departs at a depth buffer based inside a page (D-105),
+X's wrap at 2048 (D-106), an overlapping copy (D-107) and the interrupt's edges (D-103); Play!'s local-to-host transfer
+works for the colour and texture formats, so the S3 decision (the referees' pictures as RAM) holds for it, but it moves
+no depth format and performs no local-to-local transfer. PCSX2 reproduces the console texts of `gs/label` and
+`gs/signal`, which Sapphire runs with S10. Disputes D-100 to D-107. No emulator, SDK or loader source, no ps2autotests
+source and no firmware was read.
+
+### 24.2 What was built
+
+- **`src/gs/psm.rs`**: the thirteen formats by their codes (§7.1's BITBLTBUF table), the bits a pixel takes (§4.3),
+  the four page shapes (§8.1, §8.3: 64×32 pixels for the 32-bit formats and the H formats, 64×64 for the 16-bit, 128×64
+  for PSMT8, 128×128 for PSMT4), and each format's block order, read from §8.3's figures as the interleaving of the
+  block's coordinate bits, the depth orders being the colour orders with block bits 3 and 4 inverted.
+- **`src/gs/local.rs`**: `Local`, the memory as 1 Mi words; `address(psm, bp, bw, x, y)`, a pixel's word and the lowest
+  bit of its field; `page_table(psm)`, the eight page tables (45,056 entries, built at compile time), which the device
+  path (S44) can upload as they are. Within a column the word order is §8.3.1's (two pixels across, then the two below);
+  the 16-bit columns use it twice, the low halves then the high (§8.3.2); the 8- and 4-bit columns take the even byte or
+  nibble in their first two rows and the odd in the last two, with the word order turned by four pixels in rows 2 and 3
+  of even columns and rows 0 and 1 of odd ones (§8.3.3, §8.3.4). PSMT8H, PSMT4HL and PSMT4HH are the 32-bit layout's
+  bits 31..24, 27..24 and 31..28 (§2.6.3); PSMCT24 and PSMZ24 keep bits 31..24.
+- **`src/gs/transfer.rs`**: TRXDIR's three directions with BITBLTBUF, TRXPOS and TRXREG as they stand when it is
+  written (§4.1); transfer data one stream of pixels packed from bit 0 in 64-bit units (§4.3), so a PSMT4 row of eight
+  pixels ends inside a unit and the next row continues in it, as the *Restriction*'s "Texture Width" note ("There will be
+  no offset of the transfer position") implies; coordinates wrapping at 2048 (§4.1.3); a TRXDIR written before the end
+  starting a new transfer (§4.2.1); HWREG outside a host-to-local transfer doing nothing (HWREG's page); the bits after
+  the last pixel dropped, and local-to-host data's last unit filled with zeros [A].
+- **`src/gs/mod.rs`**: `Gs`, the registers (§7.3's addresses, every defined one stored as written for S17 to S19), CSR,
+  IMR, SIGLBLID, the stalled SIGNAL and the writes held behind it, the interrupt line; `HostInterface`.
+- **`board.rs`**: the `Gs` on the board, its privileged registers answered for 12000000h to 1200FFFFh, a bus error from
+  12010000h to 13FFFFFFh (EE User's Manual §2.2.3), its interrupt latched as the INTC's source 0 at its rise, HSINT and
+  VSINT from the blanking stand-in, and `sync_gs` for whoever drives the host interface.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native` and `emusen-mips` alone.
+
+### 24.3 The readings the manual leaves open
+
+[R *GS User's Manual* chapters 2, 4, 6, 7 and 8; *EE User's Manual* §2.2.3, §3.1, §7.1; the *Restriction* document,
+"Restrictions on GS"; ps2tek "GS"; A]:
+
+- **The registers.** The general registers are write-only (§7.1); a write to an address §7.3 does not list is dropped
+  [A]. The privileged registers are reached at GA[6:0], the EE's address bit 12 and bits 9..4 (EEUM §2.2.3), so the
+  images the map lists (bits 10 and 11) and, by the same sentence, bits 13 to 15 reach the same register (D-102). SIGLBLID
+  is read and written whole (§7.2's "(r/w)"; `gs/label`'s console text implies a program writing it, [A]); every
+  other address reads CSR (D-100). A store narrower than SD writes its own byte lanes, so a 32-bit store to CSR acts only
+  on the bits it carries and `programs/frames.s`'s `sw` of 8 clears VSINT alone [A].
+- **CSR** (§7.2): its five events cleared by writing 1; FIFO reads 01 (empty) unless writes are held behind a stalled
+  SIGNAL, then 00; REV 1Bh and ID 55h (D-101); FLUSH drops the held writes; RESET clears the events, the stalled SIGNAL,
+  the held writes and a transfer, and sets IMR to 7F00h ("All initial values after reset are 1", bits 13 and 14 "should
+  be set to 1"), the registers and the memory kept [A]; NFIELD and FIELD read 0 until S20.
+- **SIGNAL, FINISH, LABEL** (chapter 6, §7.1): SIGNAL and LABEL update SIGID or LBLID where IDMSK is 1; SIGNAL sets
+  its flag, and a second SIGNAL while the flag is set stalls the GS with every write after it held, until the flag is
+  cleared, when the second SIGNAL is taken at once (SIGID updated, the flag set again) and the held writes follow; FINISH
+  sets its flag at once, the GS having no drawing or transfer left in progress to wait for [A].
+- **The interrupt** (§6.1, §6.2.1, the *Restriction*'s "GS Interrupt Handler"): one line, any event whose IMR bit is
+  clear; the INTC latches it at its rise (D-103). So an event while the line is high gives no request, and the stalled
+  SIGNAL taken at its first's clear gives none until IMR's mask goes to 1 and back, as §6.2.1 says.
+- **BUSDIR** (§4.2.2): bit 0 reverses the host interface; while reversed the general registers cannot be written
+  ("cannot be accessed") and a write is lost [A], and local-to-host data can be read.
+- **Local to local** (§4.2.3): each pixel read in the source's format and written in the destination's, in TRXPOS's
+  order (figure 4-1: bit 0 bottom to top, bit 1 right to left), so overlapping rectangles copy in that order (D-107);
+  formats of different widths copy the low bits [A], §4.1.1 forbidding them.
+- **A format outside BITBLTBUF's table**: the transfer does not start [A] ("Operation is undefined").
+- **A PSMT8 or PSMT4 buffer an odd number of units wide**: the pages across rounded down (D-104).
+
+### 24.4 The interfaces: where the later stages attach
+
+- **The GIF (S15)** drives `gs::HostInterface` on the board's `gs`: `write(reg, data)` for PACKED, REGLIST and A+D
+  output, `image(data)` for IMAGE, `read()` for local-to-host data, `stalled()` to hold its paths, `reversed()` for
+  BUSDIR's direction (which the GIF watches, EEUM §7.1.5, for GIF_STAT.DIR), and then `Board::sync_gs`. The GS keeps
+  writes that arrive while stalled in order, so the GIF's FIFO depth and timing stay S15's.
+- **VIF1 (S14)** carries local-to-host data to memory (EEUM chapter 5's channel table: channel 1 "can switch directions"; VIF1_STAT.FDR) by
+  `read()`.
+- **Drawing (S17 to S19)** reads the stored registers (`Gs::register`) and reaches memory only through `gs::local`;
+  S19 owns the overlap of local-to-local transfers (D-107).
+- **The PCRTC (S20)** reads `Gs::privileged_register`, replaces `hsync` and `vsync` with its own timing, and drives
+  NFIELD, FIELD and EDWINT.
+- **The device path (S44)** mirrors `gs::local`'s page tables.
+
+### 24.5 The board
+
+`Board` answers the privileged registers through `Bus` (LD and SD, and narrower accesses by lanes); a write brings the
+interrupt line to the INTC and reschedules, since clearing HSINT asks for the next H-sync. The stand-in (§20.5) gives
+HSINT at each line's start and VSINT at V-blank's start; H-blank's edges are scheduled while HSINT is clear or a timer
+wants them, so a program that never clears HSINT costs one edge. Measured [M, `hsint_and_vsint_follow_the_blanking_stand_in`]:
+HSINT at the first line's end, VSINT at line 240, VSINT unmasked reaching I_STAT bit 0.
+
+### 24.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s16/` writes each program as a script (`Op`): A+D packets of general registers, IMAGE packets of data from a
+32-bit linear congruential generator the EE program runs itself, privileged registers by SD and LD (and SW, LWU at
+other addresses), the FINISH handshake of §4.2.2's steps 1 to 3, and steps 5 to 7 (BUSDIR 1, the data read into the
+record by VIF1's channel, BUSDIR 0), I_STAT's bit 0. `s16::program` renders it as a bare EE program in S7's form (packets
+built through kseg1 at 00300000h and sent by the GIF's channel in normal mode, the record from 00200000h, the done word
+at 001FFFF0h); the tests run the same script on the board's GS. The expected record comes from `tests/s16/manual.rs`,
+written apart from `src/gs/`: §8.3's block and column figures transcribed as printed and read cell by cell, the transfer
+data as a list of bits, the events of chapter 6.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s16-formats-c` | 15,872 | PSMCT32, PSMCT24, PSMCT16, PSMCT16S: one page-rectangle each from block 1 (§8.5), read back raw as PSMCT32 over the same 32 blocks and in its own format; PSMCT24's page filled first, so its kept bits show |
+| `s16-formats-z` | 19,968 | PSMZ32 and PSMZ16 from a page's start, read raw; then PSMZ32, PSMZ24, PSMZ16, PSMZ16S as above |
+| `s16-formats-t` | 12,800 | PSMT8 and PSMT8H read raw and in their own format; PSMT4, PSMT4HL and PSMT4HH raw only (§4.1.1 forbids them local to host) |
+| `s16-places` | 2,496 | TRXPOS's offsets both ways; the wrap at 2048; pages across a buffer two units wide; PSMT8 one unit wide (D-104); local to local in PSMCT32, PSMCT16 to PSMZ16 and PSMT8H to PSMT8; an overlapping copy (D-107); TRXDIR restarting a transfer, TRXDIR 3 ending one, data beyond the end and outside a transfer |
+| `s16-regs` | 132 of 154 | CSR's events and FIFO; HSINT and VSINT, VSINT unmasked to the INTC; the PCRTC's and other write-only registers, IMR, BUSDIR and seven reserved addresses read; SIGLBLID through its images and by 32-bit stores; LABEL's and SIGNAL's masks; the second SIGNAL's stall with a LABEL and a FINISH behind it; IMR and the INTC's GS bit through eleven cases; CSR's reset |
+
+Every format is thus written host to local, read back local to host where §4.1.1 allows, and reinterpreted as PSMCT32,
+which §8.3 defines ("Data with the same block number and column number in the same page shows the same memory regardless
+of the pixel storage format"); local to local across PSMCT16 and PSMZ16 and across PSMT8H and PSMT8 reinterprets between
+formats of one width.
+
+**Tests** [M, `cargo test --release`]: `tests/gs.rs` **12 of 12** — the five programs, each equal to its record entry for
+entry; `every_formats_page_falls_as_chapter_8s_figures_show` (every pixel of four pages of each format at four bases
+and widths against the transcription); `every_word_of_a_page_is_reached_once_in_every_format`;
+`the_conversion_tables_of_8_6_hold_in_every_column` (§8.6's PSMT4, PSMT8 and PSMT16 to PSMCT32 tables, a second
+transcription independent of §8.3's figures); `the_console_texts_of_gs_label_and_gs_signal_follow_from_the_masked_updates`;
+`the_privileged_registers_answer_their_images_and_above_them_a_bus_error`; `the_gs_interrupt_is_one_line_the_intc_latches_at_its_rise`;
+`hsint_and_vsint_follow_the_blanking_stand_in`; `the_host_interface_stalls_on_a_second_signal_and_reads_only_when_reversed`;
+`the_programs_assemble_and_their_records_end_in_the_done_word`. The crate's other tests unchanged, on the tree with S21
+beneath: lib **24 of 24**, `cop0` **19 of 19**, `dmac` **17 of 17**, `fpu` **9 of 9**, `interpreter` **23 of 23**, `iop`
+**13 of 13**, `mmi` **13 of 13**, `programs` **3 of 3**, `vu0` **14 of 14**; `gs`, `dmac` and lib also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s
+filter (`SapphireTests`) **5 of 5**.
+
+### 24.7 On the referees (measured 2026-10-25)
+
+`examples/s16.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until 1FFFF0=5A99D00E
+200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one process at a time.
+Only the records were read.
+
+| Program (graded words) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s16-formats-c` (15,872) | 0 | 2,048 | Play! reads PSMCT16S back as zeros; its raw layout equal |
+| `s16-formats-z` (19,968) | 1,024 | all | PCSX2 equal from a page's start; from block 1 four blocks of each depth format land elsewhere (D-105), the round trips equal. Play! moves no depth format |
+| `s16-formats-t` (12,800) | 0 | 0 | both equal in every texture format |
+| `s16-places` (2,496) | 62 | 392 | PCSX2 does not wrap X at 2048, writing the wrapped pixels elsewhere and reading them as 0 (D-106), and copies an overlap as a shift (D-107). Play! performs no local-to-local transfer (368 words) and does not end a transfer at TRXDIR 3 (24) |
+| `s16-regs` (132) | 13 | 52 | PCSX2 reads CSR at the images (D-102) and raises the INTC at each unmasked event and each mask cleared over a set flag (D-103); every write-only and reserved register reads CSR (D-100); REV 1Bh, ID 55h (D-101). Play! reads CCCCCCCCCCCCCCCCh from the write-only registers, ID 0 and REV 7, keeps no images, ignores IDMSK in LABEL and SIGNAL, does not stall the second SIGNAL, and its reset leaves FINISH and IMR |
+
+So **PCSX2 is a witness for the layout of every format at a page's start, the transfers' offsets, restart and end,
+local to local without overlap, CSR, SIGNAL's stall and the reset**; Play! for the colour and texture formats' layouts,
+their local-to-host transfer and X's wrap. Both answer D-104 alike. **The S3 decision holds**: Play!'s local-to-host
+transfer reads PSMCT32, PSMCT24 and PSMCT16 back exactly, so the project's GS programs can read their pictures back from
+Play! as RAM (`Sapphire_Referees.md` §6's form C); a picture kept in PSMCT16S or a depth format cannot be read from
+Play! this way.
+
+### 24.8 ps2autotests' `gs/label` and `gs/signal` on PCSX2 (measured 2026-10-25)
+
+Both call the BIOS's kernel, so Sapphire runs them at S10. Run now through `ps2referee.py tty pcsx2 … --channel iop`
+(Americas BIOS) and compared with their expected texts, the consoles' outputs, after line ends are normalised [M
+`diff`]: **both equal** (4 and 4 lines). Their values follow from SIGLBLID written whole and a LABEL or SIGNAL masked to
+bits 4 to 7, which `the_console_texts_of_gs_label_and_gs_signal_follow_from_the_masked_updates` reproduces on the board
+[A: the sequence is inferred from the values, the programs' sources not read].
+
+### 24.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | PSMCT16's columns 0 and 1 swapped within each block, in `local::entry` | `every_formats_page_falls_…`, `the_conversion_tables_of_8_6_…`, `every_format_round_trips_…`, `transfers_take_their_places_…` |
+| F2 | TRXPOS's source offset ignored local to host | `transfers_take_their_places_…` |
+| F3 | FINISH not raising its CSR bit | `the_registers_csr_imr_…`, `the_gs_interrupt_is_one_line_…`, `the_host_interface_stalls_…`, `every_format_round_trips_…`, `transfers_take_their_places_…` |
+
+Each was applied, `tests/gs.rs` run, and the source restored [M]. A swap of two columns is a permutation, so
+`every_word_of_a_page_is_reached_once_…` alone does not see F1, as expected.
+
+### 24.10 What is not modelled
+
+Each a named loss, and a dispute candidate if an oracle measures it [A]:
+
+- **The GS's timing**: every write acts at once; FINISH is set at the write; the host interface's FIFO is never
+  "almost full"; a transfer's data is written or read as it arrives. S15 decides the GIF's side, S17 whether drawing
+  time is charged, S43 the threads.
+- **TEXFLUSH** and the order of writes to memory it guards (§4.2.1): with an instant GS there is no texture page buffer
+  to be stale (S18).
+- **NFIELD, FIELD, EDWINT, EXTWRITE's feedback write** and the PCRTC's own H-sync and V-sync: S20.
+- **The *Restriction*'s "Texture Width"** failure (a few pixels not written for odd widths, "in some rare cases"): every
+  pixel is written.
+- **The machine's GSMEM space** (`machine.rs`) is not yet the GS's memory: the machine holds no `System` until S10.
+
+### 24.11 What the plan got wrong, or left open
+
+- **§2.3** names "the page and block layouts of the 4- and 8-bit formats" as thin: the *GS User's Manual*'s chapter 8,
+  fetched at S6, draws every format's blocks and columns and §8.6 gives a second table for the 4-, 8- and 16-bit columns;
+  both lineages agree with them at a page's start. What the documents leave open is the depth formats' order from a base
+  inside a page (D-105) and an odd width for PSMT8 and PSMT4 (D-104).
+- **§3.2's GS row** names `gs/label` and `gs/signal` as the primary oracle: they test SIGLBLID's masked updates only
+  (§24.8); the project's programs carry the rest.
+- **S16's gate** asks for "referees' pictures of a transfer program": by the S3 decision these are the records the
+  programs read back local to host, which both referees give for the colour formats (§24.7).
+- **The privileged registers SMODE1, SRFSH, SYNCH1, SYNCH2 and SYNCV** are in the *EE User's Manual*'s map (§2.2.3) and
+  ps2tek's, with no fields in either document or in the *GS User's Manual*; they are stored as written for S20.
+
+### 24.12 Questions this stage leaves
+
+1. **Q1 [routine], a depth format from a base inside a page (D-105).** *Recommended*: keep §8.5's order, which PCSX2 alone
+   departs from and Play! cannot test; look again if a game at S28 draws or textures from such a base.
+2. **Q2 [routine], the GS's interrupt as one line (D-103).** *Recommended*: keep the two documents' reading against
+   PCSX2's per-event requests; the kernel tests at S10 and the bench at S28 exercise the handler.
+3. **Q3 [routine], CSR's REV and ID (D-101).** *Recommended*: PCSX2's 1Bh and 55h until a console text prints CSR.
+4. **Q4 [routine], an overlapping local-to-local copy (D-107).** *Recommended*: pixel by pixel in TRXPOS's order now,
+   decided at S19 with programs that copy in each of the four orders.
+
+### 24.13 What was read for this stage
+
+`Sapphire_Plan.md` §2, §3.2, §5.4, §5.12, §5.13 (C5, C6), §7 (S15 to S20), §10 and §11; `Sapphire_Referees.md` §2, §6
+and §7; this page's §20; `Sapphire_Disputes.md` D-0 to D-54; `Sapphire_References.md` §3. Sony's *GS User's Manual*
+(Version 5.0) chapters 2, 4 and 6 whole, §1's contents, §3.1, chapter 7's register pages and §7.3, chapter 8 whole; the
+*EE User's Manual* §2.2.3, chapter 5's channel table, §7.1 and the VIF1_STAT and GIF_STAT pages; the kit's *Restriction*
+document whole. ps2tek at `1c91660`: "Memory Map", "I/O Maps" (the privileged registers), "Graphics Interface (GIF)" and
+every "GS" section. ps2autotests' `gs/label.expected` and `gs/signal.expected` (the consoles' texts, not the programs'
+source). No emulator, SDK or loader source, no ps2autotests source and no firmware.
+
+### 24.14 What this stage does not cover
+
+- The GIF and its paths (S15), VIF1's FIFO (S14): until then nothing on the EE's side writes the general registers or
+  reads local-to-host data on Sapphire; the tests drive the interface.
+- Drawing (S17 to S19) and the PCRTC (S20).
+- `gs/label` and `gs/signal` on Sapphire: S10.
+- The state format's new contents (the GS's registers and its 4 MiB): `SPH2` gains them with the rest (S10, S30).

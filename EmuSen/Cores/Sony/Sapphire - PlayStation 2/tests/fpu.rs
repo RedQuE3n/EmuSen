@@ -188,3 +188,19 @@ fn the_floating_point_rows_give_their_latencies_and_repeat_rates() {
     // C.EQ.S writes C at the add row's latency; BC1T reads it.
     assert_eq!(cycles("c.eq.s f1, f2\nbc1f 0x100100\nnop"), 5);
 }
+
+/// A chain of four taken BC1Ts, each in the last one's delay slot, reaches the fourth target, and four BC1TLs the
+/// second, as `cpu/ee_fpu/branchdelay`'s console text prints (Sapphire_Disputes.md D-362); BEQ's chain reaches the
+/// second, as `cpu/ee/branchdelay`'s does.
+#[test]
+fn a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it() {
+    for (branch, want) in [("bc1t", 4u32), ("bc1tl", 2), ("beq zero, zero,", 2)] {
+        let chain: String = (1..=4).map(|k| format!("{branch} t{k}\n")).collect();
+        let targets: String = (1..=4).map(|k| format!("t{k}:\naddiu t6, zero, {k}\nbeq zero, zero, out\nnop\n")).collect();
+        let source = format!(
+            "mfc0 t0, Status\nlui t1, 0x2000\nor t0, t0, t1\nmtc0 t0, Status\nsync.p\naddiu t6, zero, -1\nc.eq.s f0, f0\n{chain}nop\n{targets}out:\nlui t1, 0x20\nsw t6, 0(t1)\nlui t0, 0x5a99\nori t0, t0, 0xd00e\nlui t1, 0x1f\nori t1, t1, 0xfff0\nsw t0, 0(t1)\nend:\nbeq zero, zero, end\nnop\n"
+        );
+        let (ee, mut ram) = run(&source, 10_000);
+        assert_eq!(ee.peek(&mut ram, RECORD, 4) as u32, want, "{branch}");
+    }
+}

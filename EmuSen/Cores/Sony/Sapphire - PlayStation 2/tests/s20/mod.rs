@@ -261,7 +261,7 @@ pub fn hsyncs(ops: &mut Vec<Op>, n: usize) {
 }
 
 /// An image to upload: its format, base pointer and width, size, and the generator's seed.
-type Image = (u32, (u32, u32), (u32, u32), u32);
+pub type Image = (u32, (u32, u32), (u32, u32), u32);
 
 /// A display program: SMODE2 and PMODE off first, the images uploaded, the circuits set, three V-syncs waited for,
 /// and the images read back so that a referee's memory can be compared (S3's form).
@@ -424,9 +424,57 @@ fn wait64(p: &mut Program, pa: u32, mask: u64) {
     p.place(&out);
 }
 
+/// `s10-fieldmark`'s two buffers, each 64 by 32 in PSMCT32: the even field's at FBP 0, the odd field's at FBP 1.
+pub const MARK_EVEN: Image = (CT32, (0, 1), (64, 32), 0x2010);
+pub const MARK_ODD: Image = (CT32, (32, 1), (64, 32), 0x2011);
+
+/// `s10-fieldmark`'s setup: both buffers uploaded, circuit 1 on the first, interlaced in FIELD mode.
+pub fn fieldmark_script() -> Script {
+    use ga::*;
+    show("s10-fieldmark", 1, &[MARK_EVEN, MARK_ODD], [
+        (DISPFB1, dispfb(0, 1, CT32, 0, 0)),
+        (DISPLAY1, display(DX, DY, 4, 1, 4 * 64, 32)),
+        (BGCOLOR, 0x20_2020),
+        (DISPFB2, 0),
+        (DISPLAY2, 0),
+        (PMODE, pmode(true, false, true, false, true, 0xFF)),
+    ])
+}
+
+/// `s10-fieldmark` (Sapphire_Native.md §36.8): interlaced in FIELD mode, circuit 1 shows the first buffer in each field
+/// CSR's FIELD calls even and the second in each it calls odd, switched at every V-sync after its done word, so a woven
+/// picture shows which field a referee lays on the frame's first raster.
+pub fn fieldmark() -> Program {
+    use ga::*;
+    let mut p = s16::program(&fieldmark_script());
+    p.emit("lui t0, 0x5a99");
+    p.emit("ori t0, t0, 0xd00e");
+    p.emit("lui t1, 0xa01f");
+    p.emit("ori t1, t1, 0xfff0");
+    p.emit("sw t0, 0(t1)");
+    let (top, odd) = (p.label(), p.label());
+    p.place(&top);
+    sd(&mut p, s16::ee_address(CSR), 8);
+    wait64(&mut p, s16::ee_address(CSR), 8);
+    li(&mut p, "t6", K1 | s16::ee_address(CSR));
+    p.emit("ld t2, 0(t6)");
+    p.emit("andi t2, t2, 0x2000");
+    p.emit(format!("bne t2, zero, {odd}"));
+    p.emit("nop");
+    sd(&mut p, s16::ee_address(DISPFB1), dispfb(0, 1, CT32, 0, 0));
+    p.emit(format!("beq zero, zero, {top}"));
+    p.emit("nop");
+    p.place(&odd);
+    sd(&mut p, s16::ee_address(DISPFB1), dispfb(1, 1, CT32, 0, 0));
+    p.emit(format!("beq zero, zero, {top}"));
+    p.emit("nop");
+    p
+}
+
 pub fn all() -> Vec<Program> {
     let mut v = vec![timing()];
     v.extend(display_programs());
+    v.push(fieldmark());
     v
 }
 

@@ -14,11 +14,12 @@ use crate::sio2::pad::{DualShock2, Input};
 /// A memory the machine shows, by its space id and name (Sapphire_Plan.md §4.3).
 pub const RAM_ID: u32 = 1;
 pub const BIOS_ID: u32 = 10;
+pub const TTY_ID: u32 = 11;
 
 /// Each memory by id, name, size and whether it is read-only [R ps2tek "Memory Map", "VU", "GS", "SPU2", by the plan's
 /// citations]: the EE's RDRAM, its scratchpad, the GS's eDRAM, the VUs' micro and data memories, the IOP's RAM, the
-/// SPU2's sound RAM, and the boot ROM, the player's image when given.
-pub const MEMORIES: [(u32, &str, usize, bool); 10] = [
+/// SPU2's sound RAM, the boot ROM, the player's image when given, and the IOP's console text (S10).
+pub const MEMORIES: [(u32, &str, usize, bool); 11] = [
     (RAM_ID, "RAM", 32 << 20, false),
     (2, "SCRATCH", 16 << 10, false),
     (3, "GSMEM", 4 << 20, false),
@@ -29,7 +30,20 @@ pub const MEMORIES: [(u32, &str, usize, bool); 10] = [
     (8, "IOPRAM", 2 << 20, false),
     (9, "SPU2RAM", 2 << 20, false),
     (BIOS_ID, "BIOS", BIOS_BYTES, true),
+    (TTY_ID, "TTY", crate::iop::tty::TTY_BYTES, true),
 ];
+
+/// SIF's SMFLAG bit the IOP sets once it has finished booting (ps2tek "SIF Registers"; "BIOS IOP EESYNC").
+pub const IOP_BOOTED: u32 = 0x4_0000;
+
+/// ExecPS2, the EE kernel's call that clears the kernel's state and starts a program already in memory as the main
+/// thread (ps2tek "BIOS EE Syscalls", 07h): its number, given in v1.
+pub const EXEC_PS2: u64 = 7;
+
+/// The program's one argument, its name as a loader gives it in argv[0] [C], and where the argument block is put for
+/// the kernel to copy: past the program and its heap's start, below the main thread's stack (Sapphire_Native.md §36.2).
+pub const PROGRAM_NAME: &[u8] = b"host:program.elf\0";
+pub const ARGS: usize = 0x01F0_0000;
 
 /// The boot ROM's size, every BIOS image's (Sapphire_Plan.md §5.9).
 pub const BIOS_BYTES: usize = 4 << 20;
@@ -74,12 +88,16 @@ pub struct Machine {
     /// A BIOS is in the boot ROM and the processors run from reset.
     pub booted: bool,
     pub stop: Option<Stop>,
+    /// The EE program the fast boot enters once the BIOS is up, until it is entered (S10).
+    pub program: Option<Vec<u8>>,
+    /// The frame at whose run the program was entered.
+    pub entered: Option<i64>,
 }
 
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let sys = Machine::console(market, ports);
-        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None };
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None };
         for slot in &mut m.sys.board.iop.bus.sio2.slots {
             slot.cards[0] = Some(MemoryCard::erased());
         }
@@ -180,6 +198,7 @@ impl Machine {
             8 => b.iop.bus.ram.get(at).copied(),
             9 => b.iop.bus.spu2.ram.get(at).copied(),
             BIOS_ID => (at < BIOS_BYTES).then(|| b.map.rom.get(at).copied().unwrap_or(0)),
+            TTY_ID => b.iop.tty.text.get(at).copied(),
             _ => None,
         }
     }
@@ -207,11 +226,54 @@ impl Machine {
         slot.map(|s| *s = v).is_some()
     }
 
+    /// The fast boot (Sapphire_Native.md §36.2): an EE program given as the image is entered in OSDSYS's place once the
+    /// BIOS is up, with no BIOS code read or changed. The IOP has finished booting (SMFLAG's bit 18, EESYNC's) and the EE
+    /// runs a program in user mode, at an instruction boundary outside a delay slot.
+    pub fn at_entry(&self) -> bool {
+        self.sys.board.iop.bus.sif.smflg & IOP_BOOTED != 0 && !self.sys.ee.kernel() && !self.sys.ee.in_delay_slot()
+    }
+
+    /// Enters the program as its loader would: the EE's caches written back and emptied, the segments written into RAM
+    /// with their bss cleared, and the kernel's ExecPS2 called in place of the running program's next instruction with
+    /// the entry, `gp` from the program's register information and one argument, its name; the kernel clears its own
+    /// state and starts the program as its main thread.
+    pub fn enter_program(&mut self) {
+        let Some(image) = self.program.take() else { return };
+        let Ok(crate::media::Media::Elf(elf)) = crate::media::Media::read(&image) else { return };
+        let System { ee, board } = &mut *self.sys;
+        ee.flush_caches(board);
+        for &(address, offset, file, memory) in &elf.segments {
+            let ram = &mut board.map.rdram;
+            for i in 0..memory {
+                let at = (address.wrapping_add(i) & 0x1FFF_FFFF) as usize;
+                if let Some(b) = ram.get_mut(at) {
+                    *b = if i < file { image[(offset + i) as usize] } else { 0 };
+                }
+            }
+        }
+        let ram = &mut board.map.rdram;
+        ram[ARGS..ARGS + 16].fill(0);
+        ram[ARGS + 16..ARGS + 16 + PROGRAM_NAME.len()].copy_from_slice(PROGRAM_NAME);
+        ram[ARGS..ARGS + 4].copy_from_slice(&((ARGS + 16) as u32).to_le_bytes());
+        for (r, v) in [(3, EXEC_PS2 as u32), (4, elf.entry), (5, elf.gp), (6, 1), (7, ARGS as u32)] {
+            ee.gpr[r] = v as i32 as i64 as u64 as u128;
+        }
+        let pc = ee.pc;
+        ee.raise(crate::ee::Exception::Syscall, pc, false);
+        board.iop.tty.device = true;
+        self.entered = Some(self.frames + 1);
+    }
     /// One frame: the console run until the PCRTC begins its next field, which is when V-blank rises.
     pub fn advance(&mut self) {
         let target = self.sys.board.pcrtc.fields + 1;
         while self.sys.board.pcrtc.fields < target {
-            if self.booted && self.stop.is_none() {
+            if self.booted && self.stop.is_none() && self.program.is_some() {
+                if self.at_entry() {
+                    self.enter_program();
+                } else if self.sys.step().is_err() {
+                    self.stop = Some(Stop::Unimplemented);
+                }
+            } else if self.booted && self.stop.is_none() {
                 for _ in 0..1024 {
                     if self.sys.step().is_err() {
                         self.stop = Some(Stop::Unimplemented);
@@ -223,6 +285,9 @@ impl Machine {
                 let System { ee, board } = &mut *self.sys;
                 board.run_to(t, &mut ee.spram[..]);
             }
+        }
+        if self.booted {
+            self.sys.board.iop.resolve_tty();
         }
         self.frames += 1;
     }
@@ -272,5 +337,48 @@ mod tests {
         assert!(!m.set_space_byte(BIOS_ID, 0, 1));
         m.insert_bios(&vec![0; BIOS_BYTES]);
         assert!(m.booted && !m.sys.board.iop.held && m.sys.board.iop.cpu.regs.pc == crate::iop::RESET && m.sys.ee.pc == 0xBFC0_0000);
+    }
+
+    /// The fast boot (S10): only once the IOP has finished booting and the EE runs in user mode is the program written
+    /// past the caches, its bss cleared, every dirty line written back first, and ExecPS2 called in place of the next
+    /// instruction with the entry, `gp` and the program's name as its one argument.
+    #[test]
+    fn the_fast_boot_enters_the_program_through_execps2_once_the_bios_is_up() {
+        use crate::ee::cop0::{CAUSE, EPC, STATUS};
+        let mut image = crate::media::program(&[0x1111_1111, 0x2222_2222], crate::media::PROGRAM_ORIGIN);
+        let h = crate::media::ELF_HEADER;
+        image[h + 20..h + 24].copy_from_slice(&64u32.to_le_bytes());
+        let mut m = Machine::new(Media::read(&image).unwrap(), Market::Americas, [None, None]);
+        m.insert_bios(&vec![0; BIOS_BYTES]);
+        m.program = Some(image);
+        m.sys.ee.cop0[STATUS] = 0x10;
+        assert!(!m.at_entry(), "the IOP has not finished booting");
+        m.sys.board.iop.bus.sif.smflg = IOP_BOOTED;
+        m.sys.ee.cop0[STATUS] = 0;
+        assert!(!m.at_entry(), "kernel mode");
+        m.sys.ee.cop0[STATUS] = 0x10;
+        assert!(m.at_entry());
+        let base = crate::media::PROGRAM_ORIGIN;
+        m.sys.board.map.rdram[base as usize + 8..base as usize + 64].fill(0x5A);
+        let dc = &mut m.sys.ee.dcache;
+        dc.tags[0][0] = crate::ee::cache::DTag { pfn: base >> 12, dirty: true, valid: true, lrf: false, lock: false };
+        dc.data[0][0] = [0xEE; 64];
+        dc.tags[0][1] = crate::ee::cache::DTag { pfn: 0x0020_0000 >> 12, dirty: true, valid: true, lrf: false, lock: false };
+        dc.data[0][1] = [0xAB; 64];
+        let pc = m.sys.ee.pc;
+        m.enter_program();
+        let ram = &m.sys.board.map.rdram;
+        let at = base as usize;
+        assert_eq!(&ram[at..at + 8], &[0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x22, 0x22], "the segment over the line written back");
+        assert!(ram[at + 8..at + 64].iter().all(|&b| b == 0), "the bss cleared");
+        assert!(ram[0x20_0000..0x20_0040].iter().all(|&b| b == 0xAB), "a dirty line elsewhere written back");
+        assert!(m.sys.ee.dcache.tags.iter().flatten().all(|t| !t.valid), "the data cache emptied");
+        let g = |r: usize| m.sys.ee.gpr[r] as u32;
+        assert_eq!((g(3), g(4), g(5), g(6), g(7)), (EXEC_PS2 as u32, base, 0, 1, ARGS as u32));
+        let argv0 = u32::from_le_bytes(ram[ARGS..ARGS + 4].try_into().unwrap()) as usize;
+        assert_eq!(&ram[argv0..argv0 + PROGRAM_NAME.len()], PROGRAM_NAME);
+        assert_eq!(u32::from_le_bytes(ram[ARGS + 4..ARGS + 8].try_into().unwrap()), 0, "argv ends after the name");
+        assert_eq!((m.sys.ee.cop0[CAUSE] >> 2 & 31, m.sys.ee.cop0[EPC], m.sys.ee.pc), (8, pc, 0x8000_0180), "SYSCALL taken at the next instruction");
+        assert!(m.program.is_none() && m.entered == Some(1));
     }
 }

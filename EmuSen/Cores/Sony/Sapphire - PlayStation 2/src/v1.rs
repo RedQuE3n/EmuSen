@@ -190,7 +190,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. In development: with the player's own BIOS the console starts to its menu; programs and discs are recognised but not yet started.".into()),
+            description: Some("The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. In development: with the player's own BIOS the console starts to its menu, and an EE program is started in the menu's place by fast boot; discs are recognised but not yet started.".into()),
             systems: vec![emusen_native::core::System {
                 id: "ps2".into(),
                 name: "Sony PlayStation 2".into(),
@@ -496,6 +496,10 @@ impl Machine {
         }
         if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
             m.insert_bios(file.data);
+            // An EE program is entered by fast boot once the BIOS is up (Sapphire_Native.md §36.2).
+            if matches!(m.media, Media::Elf(_)) {
+                m.program = Some(request.image.to_vec());
+            }
         }
         Ok(m)
     }
@@ -577,6 +581,8 @@ mod tests {
         assert_eq!(create_with(&elf(), &[], vec![file(BIOS_AMERICAS, &bios[..1000])]).err(), Some(status::BAD_FILE));
         let m = create_with(&elf(), &[], vec![file(BIOS_AMERICAS, &bios)]).unwrap();
         assert_eq!((m.machine_info().firmware, m.space_byte(BIOS_ID, 0)), (vec![(BIOS_AMERICAS, FirmwareSource::File)], Some(7)));
+        assert_eq!(m.program.as_deref(), Some(&elf()[..]), "an EE program waits for the fast boot");
+        assert!(create(&elf(), &[]).unwrap().program.is_none(), "no BIOS: nothing to enter it by");
         let eu = create_with(&elf(), &[], vec![file(BIOS_EUROPE, &bios)]).unwrap();
         assert_eq!((eu.market, eu.booted), (Market::Europe, true), "on Automatic the BIOS's own market is the console's");
         let us = create_with(&elf(), &[(REGION_KEY, "ps2.us")], vec![file(BIOS_EUROPE, &bios)]).unwrap();

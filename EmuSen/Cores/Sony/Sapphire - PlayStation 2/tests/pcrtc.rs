@@ -220,3 +220,33 @@ fn the_timing_program_sees_the_documents_fields() {
         assert!((vs - manual::VSYNC as i64 * line).abs() < 120 && (fl - vs).abs() < 60, "setting {s}: VSINT {vs} and FIELD {fl} after V-blank's start");
     }
 }
+
+/// `s10-fieldmark` on the interpreter: past its done word it shows the first buffer in each field CSR calls even and the
+/// second in each it calls odd, so the woven picture's even rasters are the first buffer's and its odd rasters the
+/// second's (D-204), the picture a referee's is set beside to learn which field it lays first (Sapphire_Native.md §36.8).
+#[test]
+fn the_fieldmark_program_weaves_the_even_field_on_the_even_rasters() {
+    let (source, _) = s20::fieldmark().finish();
+    let mut sys = System::new(s6::ORIGIN);
+    sys.board.map.load(s6::ORIGIN, &assemble(&source));
+    let n = sys.run(400_000_000, &mut |s| s.peek(s6::DONE_AT, 4) as u32 == s6::DONE).unwrap_or_else(|h| panic!("{h:?}"));
+    assert!(n < 400_000_000, "no done word, pc {:08x}", sys.ee.pc);
+    let want_fields = sys.board.pcrtc.fields + 4;
+    while sys.board.pcrtc.fields < want_fields {
+        sys.step().unwrap();
+    }
+    let script = s20::fieldmark_script();
+    let mut gs = s20::memory(&script);
+    let mut picture_of = |fbp: u32| {
+        gs.write_privileged(ga::DISPFB1, s20::dispfb(fbp, 1, s16::manual::CT32, 0, 0));
+        manual::picture(&gs, true)
+    };
+    let (even, odd) = (picture_of(0), picture_of(1));
+    let g = sys.board.pcrtc.picture.geometry;
+    let row = (g.width * 4) as usize;
+    assert!(even != odd, "the buffers differ");
+    for r in 0..g.height as usize {
+        let from = if (g.y0 as usize + r).is_multiple_of(2) { &even } else { &odd };
+        assert!(sys.board.pcrtc.picture.rgba[r * row..(r + 1) * row] == from[r * row..(r + 1) * row], "raster {}", g.y0 as usize + r);
+    }
+}

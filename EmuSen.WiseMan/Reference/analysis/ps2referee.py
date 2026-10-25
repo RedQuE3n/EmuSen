@@ -10,6 +10,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
     ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
     ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N]
+    ps2referee.py picture pcsx2 ELF PNG [--bios MARKET] [--for N] [--deinterlace N]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -38,7 +39,9 @@ BIOS with no disc (`-bios`) at the console's speed, saves a state through PINE N
 and keeps only the state's picture in PNG, its one member read, the state removed at once; --blank-nvm gives the console
 an EEPROM of zeros for the run, as Sapphire's blank one, and puts PCSX2's own back afterwards; --deinterlace is PCSX2's
 deinterlacing setting, 3 (weave, the bottom field first) by default, which shows the woven frame as Sapphire's PCRTC
-hands it on (Sapphire_Native.md §35).
+hands it on (Sapphire_Native.md §35). `picture` does the same for a program entered by fast boot: the state is saved N
+seconds after PCSX2 begins to draw, so the picture is the program's, taken long after the firmware handed over
+(Sapphire_Native.md §36.8).
 `pads` boots the BIOS with no disc at the console's speed with the card file CARD in slot 1, a copy of it placed in
 PCSX2's memory card folder (`--card none` leaves slot 1 empty), and plays SCRIPT: lines `SECONDS key NAME [HOLD]`, a key of PCSX2's keyboard pad pressed
 SECONDS after PCSX2 begins to draw and held HOLD seconds (0.15 by default), sent to PCSX2's window on the private
@@ -514,7 +517,7 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
         return out
 
 
-def run_pcsx2_menu(market, seconds, png, blank_nvm=False, deinterlace=3):
+def run_pcsx2_menu(market, seconds, png, blank_nvm=False, deinterlace=3, elf=None):
     """PCSX2 booted to its BIOS's menu with no disc, the picture `seconds` after it begins to draw (Sapphire_Native.md §35):
     PINE saves a state, whose screenshot member alone is read and kept; the state is removed. Nothing else of the state
     is opened, since it holds the console's memory."""
@@ -538,7 +541,8 @@ def run_pcsx2_menu(market, seconds, png, blank_nvm=False, deinterlace=3):
                       "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": str(deinterlace)}}
             ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
             root = CACHE / "pcsx2/squashfs-root"
-            job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "-bios"],
+            start = ["--", str(elf)] if elf else ["-bios"]
+            job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@"] + start,
                    "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "until": None, "dumps": [], "again": 0,
                    "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}"), "save_at": seconds, "save_slot": 1}
             out, text = run_inner(job, "pcsx2", seconds + 30)
@@ -835,7 +839,7 @@ def bios_loaded(log, market):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu", "pads"):
+    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu", "pads", "picture"):
         die(__doc__, 2)
     mode, referee, target = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -849,6 +853,7 @@ def main(argv):
         return default
 
     expected = Path(rest.pop(0)).read_text(errors="replace") if mode in ("tty", "pads") and rest else None
+    png = Path(rest.pop(0)).resolve() if mode == "picture" and rest else None
     channel = option("--channel", "ee")
     out_file = option("--out")
     market = option("--bios", "americas")
@@ -917,6 +922,14 @@ def main(argv):
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         print(json.dumps(out))
+        return
+    if mode == "picture":
+        if referee != "pcsx2" or png is None:
+            die("picture runs on pcsx2 with an ELF and a PNG to write", 2)
+        out = run_pcsx2_menu(market, count, png, False, int(deinterlace), elf=target)
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+        print(json.dumps({k: v for k, v in out.items() if k != "words"}))
         return
     if mode == "menu":
         if referee != "pcsx2":

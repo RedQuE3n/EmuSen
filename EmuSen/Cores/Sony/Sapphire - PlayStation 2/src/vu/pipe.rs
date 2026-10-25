@@ -510,7 +510,8 @@ impl Pipe {
     }
 
     /// A branch at `pc` issued at `t`: its target when taken; BAL and JALR write the address after the delay slot
-    /// (§4.3: "PC + 2 × 8"), JALR having read its target first (the `vu/lower/branch` console text).
+    /// (§4.3: "PC + 2 × 8"), JALR having read its target first; JR and JALR read the target as it now is, a write in the
+    /// pair just before included (D-80 as amended by the `vu/lower/branch` console text).
     fn branch_of(&mut self, vu: &mut Vu, o: &Operation, w: u32, pc: u16, t: u64, mask: u16) -> Option<u16> {
         let rel = pc.wrapping_add(1).wrapping_add(table::imm11(w) as u16) & mask;
         let (a, b) = (self.branch_vi(vu, ft(w), t), self.branch_vi(vu, fs(w), t));
@@ -521,10 +522,11 @@ impl Pipe {
                 self.write_alu(vu, ft(w), link, t);
                 Some(rel)
             }
-            "jr" => Some(b & mask),
+            "jr" => Some(vu.vi(fs(w)) & mask),
             "jalr" => {
+                let target = vu.vi(fs(w));
                 self.write_alu(vu, ft(w), link, t);
-                Some(b & mask)
+                Some(target & mask)
             }
             "ibeq" => (a == b).then_some(rel),
             "ibne" => (a != b).then_some(rel),

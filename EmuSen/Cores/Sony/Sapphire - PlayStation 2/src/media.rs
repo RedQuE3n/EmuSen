@@ -13,6 +13,9 @@ pub const ET_EXEC: u16 = 2;
 pub const ET_IRX: u16 = 0xFF80;
 /// `p_type` of a segment loaded into memory.
 pub const PT_LOAD: u32 = 1;
+/// `p_type` of the MIPS register information, whose sixth word is the value of `gp` the program expects (the System V
+/// ABI's MIPS supplement, "Register Information").
+pub const PT_MIPS_REGINFO: u32 = 0x7000_0000;
 
 pub const USER: usize = 2048;
 pub const RAW: usize = 2352;
@@ -24,6 +27,8 @@ const LICENCE: &[u8; 32] = b"          Licensed  by          ";
 pub struct Elf {
     pub entry: u32,
     pub segments: Vec<(u32, u32, u32, u32)>,
+    /// `gp` from the register information, zero without one.
+    pub gp: u32,
 }
 
 /// A PlayStation 2 disc: whether its sectors are raw, how many there are, the program BOOT2 names and its serial.
@@ -117,8 +122,12 @@ fn read_elf(image: &[u8]) -> Result<Elf, Refusal> {
         return Err(Refusal::Truncated { needs: table, has });
     }
     let mut segments = Vec::new();
+    let mut gp = 0;
     for i in 0..phnum {
         let h = &image[(phoff + i * phentsize) as usize..];
+        if u32_at(h, 0) == PT_MIPS_REGINFO && u32_at(h, 16) >= 24 && u64::from(u32_at(h, 4)) + 24 <= has {
+            gp = u32_at(image, u32_at(h, 4) as usize + 20);
+        }
         if u32_at(h, 0) != PT_LOAD {
             continue;
         }
@@ -135,7 +144,7 @@ fn read_elf(image: &[u8]) -> Result<Elf, Refusal> {
     if segments.is_empty() {
         return not("an executable with no segment to load".into());
     }
-    Ok(Elf { entry, segments })
+    Ok(Elf { entry, segments, gp })
 }
 
 fn read_disc(sectors: &Sectors) -> Result<Disc, Refusal> {

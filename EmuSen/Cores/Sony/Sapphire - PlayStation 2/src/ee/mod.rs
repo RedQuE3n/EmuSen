@@ -157,6 +157,9 @@ pub struct Ee {
     watch_load: bool,
     /// A branch-likely nullified its slot.
     nullified: bool,
+    /// The instruction before was a taken BC1F or BC1T, and this one is in its delay slot (Sapphire_Disputes.md D-362).
+    bc1_taken: bool,
+    pub(crate) in_bc1_slot: bool,
     /// This instruction wrote Wired, so Random holds 47 past its cycle.
     wired_written: bool,
     /// Instructions in the current issue cycle, and the cycles already given to Count and the counters.
@@ -209,6 +212,8 @@ impl Ee {
             count_mode: None,
             watch_load: false,
             nullified: false,
+            bc1_taken: false,
+            in_bc1_slot: false,
             wired_written: false,
             group: 0,
             cycles_seen: 0,
@@ -262,6 +267,11 @@ impl Ee {
     pub fn kernel(&self) -> bool {
         let s = self.status();
         s & (status::EXL | status::ERL) != 0 || s & status::KSU == 0
+    }
+
+    /// Whether the instruction at `pc` is a branch's delay slot.
+    pub fn in_delay_slot(&self) -> bool {
+        self.delay
     }
 
     fn supervisor(&self) -> bool {
@@ -474,6 +484,7 @@ impl Ee {
     pub fn step(&mut self, bus: &mut dyn Bus) -> Result<(), Halt> {
         let pc = self.pc;
         let in_delay = self.delay;
+        self.in_bc1_slot = in_delay && std::mem::take(&mut self.bc1_taken);
         self.count_mode = self.mode_index();
         self.stall_fetch = 0;
         self.stall_data = 0;

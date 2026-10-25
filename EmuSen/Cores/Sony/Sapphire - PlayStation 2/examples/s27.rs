@@ -128,8 +128,43 @@ fn csc(dir: &std::path::Path, referee: &str) {
     }
 }
 
+/// The EE cycles each kind of command took, from IPU_CMD's write to BUSY clear, on each referee's record and on
+/// Sapphire's (the program run on the board): count, least, median and most, by command and by its output qwords.
+fn timing(dir: &std::path::Path, names: &[String]) {
+    const NAMES: [&str; 10] = ["BCLR", "IDEC", "BDEC", "VDEC", "FDEC", "SETIQ", "SETVQ", "CSC", "PACK", "SETTH"];
+    for p in s27::programs().into_iter().filter(|p| names.iter().any(|n| *n == p.name)) {
+        let mut sys = sapphire::board::System::new(s27::program::ORIGIN);
+        sys.board.map.load(s27::program::ORIGIN, &p.image);
+        sys.run(400_000_000, &mut |s| s.peek(s27::program::DONE_AT, 4) as u32 == s27::program::DONE).unwrap();
+        let mine: Vec<u32> = (0..p.expected.len()).map(|i| sys.peek(s27::program::RECORD + 4 * i as u32, 4) as u32).collect();
+        for (who, got) in [("sapphire", Some(mine)), ("pcsx2", None), ("play", None)] {
+            let got = got.or_else(|| std::fs::read_to_string(dir.join(format!("{who}-{}.txt", p.name))).ok().map(|t| words_of(&t)));
+            let Some(got) = got else { continue };
+            let mut by: std::collections::BTreeMap<(usize, usize), Vec<u32>> = Default::default();
+            let mut at = 0;
+            for (cmd, &out) in p.out.iter().enumerate() {
+                if let Some(&c) = got.get(at + 4) {
+                    by.entry(((p.words[cmd] >> 28) as usize, out)).or_default().push(c);
+                }
+                at += 8 + 4 * out;
+            }
+            let rows: Vec<String> = by
+                .iter_mut()
+                .map(|((c, out), v)| {
+                    v.sort_unstable();
+                    format!("{} ({out} qwords) x{}: {}/{}/{}", NAMES[*c], v.len(), v[0], v[v.len() / 2], v[v.len() - 1])
+                })
+                .collect();
+            println!("== {} on {who}: {}", p.name, rows.join("; "));
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("timing") {
+        return timing(std::path::Path::new(&args[1]), &args[2..]);
+    }
     if args.first().map(String::as_str) == Some("csc") {
         return csc(std::path::Path::new(&args[1]), &args[2]);
     }

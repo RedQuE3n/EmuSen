@@ -4718,7 +4718,8 @@ release) and copies its ring after about 1,300 samples, past the key on, but for
 check by check; the output at 48,000 Hz exactly over a second; and core 0's output reaching the output through core 1's
 AVOL and MMIX's external gates, which the areas cannot show. Also under `test-checked`. `tests/iop.rs` **13 of 13**, its
 `each_dma_mode_reaches_its_stand_in` now finding the slice and both bursts in the SPU2's cores at their transfer
-addresses, where S21 had stand-ins; `tests/sif.rs` 5 of 5; lib 44 of 44. Clippy clean. `blackmoon-spu` 6 of 6 (also
+addresses, where S21 had stand-ins; `tests/sif.rs` 5 of 5; `tests/sio2.rs` 5 of 5; lib 52 of 52; on the tree with S14,
+S18 and S25 beneath, S25's SIO2 sharing the IOP's DMA peripherals with the SPU2. Clippy clean. `blackmoon-spu` 6 of 6 (also
 `test-checked`). Diamond, after the move: lib 176, programs 84, shell 10, `diamond-v1` 5, `precision` 8, the goldens
 unchanged (`BlackMoon_SPU.md` §3). WiseMan, the blast radius's filter `Diamond|SapphireTests`: **80 of 80**.
 

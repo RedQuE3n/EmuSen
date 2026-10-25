@@ -73,45 +73,61 @@ class PineTests(unittest.TestCase):
 
 
 class ScanTests(unittest.TestCase):
-    """A process faked as a maps file and a memory file: the done word in the second writable mapping."""
+    """A process faked as a maps file and a memory file. A recompiler-like cache holds the done word first; the RAM,
+    split in two mappings by a read-only page as a referee's write-protected code page splits it, holds the program at
+    00100000h and the done word at 001FFFF0h, so RAM's address 0 is at host 00100000h."""
+    CODE = bytes(range(16))
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         d = Path(self.dir.name)
         self.mem = d / "mem"
-        memory = bytearray(0x30000)
-        struct.pack_into("<I", memory, 0x0FF0, 0x5A99D00E)      # in the read-only mapping: ignored
-        struct.pack_into("<I", memory, 0x21000, 0x5A99D00E)     # the done word at 001FFFF0h
-        struct.pack_into("<3I", memory, 0x21010, 0x80000000, 0xF8000000, 0x08000000)
+        memory = bytearray(0x400000)
+        struct.pack_into("<I", memory, 0x00010FF0, 0x5A99D00E)   # in a read-only mapping: ignored
+        struct.pack_into("<I", memory, 0x00020100, 0x5A99D00E)   # a cache's constant, with no program beside it
+        memory[0x00200000:0x00200010] = self.CODE                # the program, in the read-only page
+        struct.pack_into("<I", memory, 0x002FFFF0, 0x5A99D00E)   # the done word at 001FFFF0h
+        struct.pack_into("<3I", memory, 0x00300000, 0x80000000, 0xF8000000, 0x08000000)
         self.mem.write_bytes(bytes(memory))
         self.maps = d / "maps"
-        self.maps.write_text("00000000-00010000 r--p 00000000 00:00 0\n"
-                             "00010000-00020000 rw-p 00000000 00:00 0\n"
-                             "00020000-00030000 rw-p 00000000 00:00 0 [heap]\n")
-        self.scan = ps2referee.Scan(0, (0x001FFFF0, 0x5A99D00E), maps=self.maps, mem=self.mem)
+        self.maps.write_text("00010000-00011000 r--p 00000000 00:00 0\n"
+                             "00020000-00030000 rw-p 00000000 00:00 0\n"
+                             "00100000-00200000 rw-p 00000000 00:00 0\n"
+                             "00200000-00201000 r--p 00000000 00:00 0\n"
+                             "00201000-00400000 rw-p 00000000 00:00 0 [heap]\n")
+        self.scan = ps2referee.Scan(0, (0x001FFFF0, 0x5A99D00E), (0x00100000, self.CODE), maps=self.maps, mem=self.mem)
 
     def tearDown(self):
         self.dir.cleanup()
 
-    def test_the_done_word_is_found_in_a_writable_mapping_only(self):
+    def test_ram_is_where_the_program_sits_beside_the_done_word(self):
         self.assertTrue(self.scan.find())
-        self.assertEqual((self.scan.at, self.scan.span, self.scan.hits), (0x21000, (0x20000, 0x30000), 1))
+        self.assertEqual((self.scan.at, self.scan.hits), (0x002FFFF0, 2))
 
     def test_the_record_is_read_relative_to_the_done_word(self):
         self.scan.find()
         self.assertEqual(self.scan.words(0x00200000, 3), [0x80000000, 0xF8000000, 0x08000000])
         self.assertEqual(self.scan.words(0x001FFFF0, 1), [0x5A99D00E])
 
-    def test_a_read_past_the_mapping_is_refused(self):
+    def test_a_read_past_what_is_mapped_is_refused(self):
         self.scan.find()
-        with self.assertRaises(ValueError):
-            self.scan.words(0x00200000, 0x4000)
-        with self.assertRaises(ValueError):
-            self.scan.words(0x001E0000, 1)
+        with self.assertRaises(OSError):
+            self.scan.words(0x00300000, 4)
 
-    def test_no_done_word_finds_nothing(self):
-        scan = ps2referee.Scan(0, (0x001FFFF0, 0x12345678), maps=self.maps, mem=self.mem)
+    def test_no_place_with_the_program_finds_nothing(self):
+        scan = ps2referee.Scan(0, (0x001FFFF0, 0x5A99D00E), (0x00100000, bytes(16)), maps=self.maps, mem=self.mem)
         self.assertFalse(scan.find())
+        self.assertEqual(scan.hits, 2)
+
+    def test_the_anchor_is_the_elfs_loaded_segment(self):
+        elf = Path(self.dir.name) / "p.elf"
+        header = bytearray(84)
+        header[:4] = b"\x7fELF"
+        struct.pack_into("<I", header, 28, 52)
+        struct.pack_into("<H", header, 44, 1)
+        struct.pack_into("<5I", header, 52, 1, 84, 0x00100000, 0x00100000, 16)
+        elf.write_bytes(bytes(header) + self.CODE)
+        self.assertEqual(ps2referee.elf_segment(elf), (0x00100000, self.CODE))
 
 
 class BiosFolderTests(unittest.TestCase):
@@ -140,6 +156,12 @@ class BiosFolderTests(unittest.TestCase):
         folder = ps2referee.bios_folder(self.cache, self.home)
         (folder / "ps2-0230a-20080220.bin").unlink()
         (folder / "ps2-0230a-20080220.bin").write_bytes(b"\0")
+        with self.assertRaises(SystemExit):
+            ps2referee.bios_folder(self.cache, self.home)
+
+    def test_any_other_image_copied_in_is_refused(self):
+        folder = ps2referee.bios_folder(self.cache, self.home)
+        (folder / "ps2-0100j-20000117.bin").write_bytes(b"\0")
         with self.assertRaises(SystemExit):
             ps2referee.bios_folder(self.cache, self.home)
 

@@ -5,21 +5,26 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] ADDRESS:WORDS ...
-    ps2referee.py boot REFEREE DISC [--bios MARKET] [--for N]
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] ADDRESS:WORDS ...
+    ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
 `americas` (the default), `europe` or `japan`, the gates' image of that market, reached through a link in the cache's
 BIOS folder; Play! takes none. --for is wall seconds for the standalone referees and frames for the probe. --until
-ends a standalone run as soon as the word at ADDRESS reads VALUE (hexadecimal both); the record is read then. ADDRESS
-is hexadecimal, WORDS decimal. `boot` runs a disc for N seconds and prints only what the referee's log says of the
-boot and the time it took, never the disc's bytes or a picture.
+names the done word: a standalone run reads RAM as soon as the word at ADDRESS reads VALUE (hexadecimal both), and a
+probe run is refused unless it holds it at frame N. --again reads the same words S seconds later, with the CPU time the
+referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
+speed instead of unlimited. ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
+console's speed and prints only what PINE says of it (its title, serial and status) and the CPU time it took, never
+the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5).
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
 private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
-ps2-referees.sha256, refuses any whose SHA-256 differs, unpacks them, and makes the BIOS folder of links. Exit codes:
-0 done, 1 a refused or failed run, 2 a usage error.
+ps2-referees.sha256, refuses any whose SHA-256 differs, unpacks them, and makes the BIOS folder of links and the
+library link Play!'s core needs; the cores themselves come from `build-probe.sh libretro-core`, pinned in
+libretro-cores.sha256, and the probe from `build-probe.sh libretro "" ~/.cache/emusen/probe/sapphire/probe`. Exit
+codes: 0 done, 1 a refused or failed run, 2 a usage error.
 """
 import fcntl
 import hashlib
@@ -117,9 +122,11 @@ def fetch():
             folder.mkdir(exist_ok=True)
             subprocess.run([str(path), "--appimage-extract"], cwd=folder, check=True, stdout=subprocess.DEVNULL)
     bios_folder()
-    resources = CACHE / "system/pcsx2/resources"
-    if not resources.is_symlink():
-        resources.symlink_to(CACHE / "pcsx2/squashfs-root/usr/bin/resources")
+    # Play!'s core asks for libbz2.so.1.0, which Fedora names libbz2.so.1 (Sapphire_Referees.md §2.3).
+    lib = CACHE / "lib/libbz2.so.1.0"
+    lib.parent.mkdir(exist_ok=True)
+    if not lib.is_symlink():
+        lib.symlink_to("/usr/lib64/libbz2.so.1")
     print("ready")
 
 
@@ -237,14 +244,27 @@ def free_slot():
             return slot
 
 
+def elf_segment(path):
+    """An ELF's first loaded segment as (address, bytes in the file): what a referee places in the EE's RAM."""
+    image = Path(path).read_bytes()
+    phoff, phnum = struct.unpack_from("<I", image, 28)[0], struct.unpack_from("<H", image, 44)[0]
+    for i in range(phnum):
+        kind, offset, address, _, size = struct.unpack_from("<5I", image, phoff + 32 * i)
+        if kind == 1:
+            return address, image[offset:offset + size]
+    raise ValueError(f"{path}: no segment to load")
+
+
 class Scan:
     """RAM found in a referee's own process, which this script started, for a referee with no interface to it
-    (Sapphire_Referees.md §2.2): the done word searched for in the process's writable mappings through /proc/<pid>/mem,
-    as a debugger reads it, and every address read relative to where it was found, within that mapping only."""
+    (Sapphire_Referees.md §2.2), read through /proc/<pid>/mem as a debugger reads it. The done word is searched for in
+    the process's writable mappings; a place is the EE's RAM only if the program's own code sits where it would in RAM,
+    relative to it, since a recompiler's code cache holds the same word as a constant. Every address is then read
+    relative to that place."""
     LARGEST = 1 << 30
 
-    def __init__(self, pid, done, maps=None, mem=None):
-        self.pid, self.done, self.at, self.span, self.hits = pid, done, None, None, 0
+    def __init__(self, pid, done, anchor, maps=None, mem=None):
+        self.pid, self.done, self.anchor, self.at, self.hits = pid, done, anchor, None, 0
         self.maps = maps or f"/proc/{pid}/maps"
         self.mem = mem or f"/proc/{pid}/mem"
 
@@ -255,35 +275,41 @@ class Scan:
             if fields[1].startswith("rw") and hi - lo <= self.LARGEST:
                 yield lo, hi
 
+    def _read(self, m, host, n):
+        m.seek(host)
+        data = m.read(n)
+        if len(data) != n:
+            raise OSError(f"{n} bytes at {host:#x} are not all mapped")
+        return data
+
     def find(self):
-        """Whether the done word is now in some mapping, word-aligned; the first place found is used from then on."""
+        """Whether the done word is now in RAM; how many places held the word is kept in `hits`."""
         needle = struct.pack("<I", self.done[1])
         found = []
         with open(self.mem, "rb", buffering=0) as m:
             for lo, hi in self.mappings():
                 try:
-                    m.seek(lo)
-                    data = m.read(hi - lo)
+                    data = self._read(m, lo, hi - lo)
                 except OSError:
                     continue
                 i = data.find(needle)
                 while i >= 0:
                     if (lo + i) % 4 == 0:
-                        found.append((lo + i, (lo, hi)))
+                        found.append(lo + i)
                     i = data.find(needle, i + 1)
-        self.hits = len(found)
-        if found:
-            self.at, self.span = found[0]
-        return bool(found)
+            self.hits = len(found)
+            for at in found:
+                try:
+                    if self._read(m, at + self.anchor[0] - self.done[0], len(self.anchor[1])) == self.anchor[1]:
+                        self.at = at
+                        return True
+                except (OSError, ValueError):
+                    continue
+        return False
 
     def words(self, address, count):
-        host = self.at + address - self.done[0]
-        if host < self.span[0] or host + 4 * count > self.span[1]:
-            raise ValueError(f"{address:08X}+{4 * count} lies outside the mapping where the done word was found")
         with open(self.mem, "rb", buffering=0) as m:
-            m.seek(host)
-            data = m.read(4 * count)
-        return list(struct.unpack(f"<{count}I", data))
+            return list(struct.unpack(f"<{count}I", self._read(m, self.at + address - self.done[0], 4 * count)))
 
 
 def cpu_seconds(pid):
@@ -313,7 +339,7 @@ def inner_main(job):
             while since() < job["seconds"] and p.poll() is None:
                 try:
                     if reader is None:
-                        reader = Pine(job["socket"]) if job["socket"] else Scan(p.pid, job["until"])
+                        reader = Pine(job["socket"]) if job["socket"] else Scan(p.pid, job["until"], (job["anchor"][0], bytes.fromhex(job["anchor"][1])))
                         out["connected"] = since()
                     if job["until"] is None:
                         if out.get("cpu_from") is None:
@@ -396,7 +422,7 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True):
                   "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
         root = CACHE / "pcsx2/squashfs-root"
-        job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data)] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
+        job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui"] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
                "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "until": list(until) if until else None, "dumps": dumps, "again": again, "ask": [Pine.TITLE, Pine.ID],
                "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
         job["cmd"][-2:-2] = ["-logfile", "@EMULOG@"]
@@ -410,7 +436,8 @@ def run_play(target, seconds, until, dumps, again=0):
     (Sapphire_Referees.md §2.2). It takes no BIOS."""
     root, home = CACHE / "play/squashfs-root", CACHE / "play-home"
     home.mkdir(exist_ok=True)
-    job = {"cmd": [str(root / "usr/bin/Play"), "--elf", str(target)], "cwd": str(root), "socket": None,
+    address, code = elf_segment(target)
+    job = {"cmd": [str(root / "usr/bin/Play"), "--elf", str(target)], "cwd": str(root), "socket": None, "anchor": [address, code.hex()],
            "env": {"QT_QPA_PLATFORM": "xcb", "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_DATA_HOME": str(home / ".local/share"),
                    "XDG_CACHE_HOME": str(home / ".cache")},
            "until": list(until), "dumps": dumps, "again": again}

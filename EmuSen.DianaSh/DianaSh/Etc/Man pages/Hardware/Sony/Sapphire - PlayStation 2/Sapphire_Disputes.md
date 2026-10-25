@@ -1796,3 +1796,116 @@ through the reset too.
 - **Depends on it:** `sif::EePorts` (SIF2's direction from the EE channel's CHCR.DIR), `IopPorts`.
 - **Pinned by:** `sif2_carries_data_both_ways`.
 - **Implemented in:** stage S22's commit.
+
+### D-160. GS, Gouraud shading: a pixel's colour is the vertices' colours interpolated exactly at its centre and rounded down
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** *GS User's Manual* §3.1 ("The RGBA value, Z value, texture value and Fog value for each pixel are
+  calculated from the gradient obtained in the preprocessing stage"), §3.2.8, §2.4.4 (pixels centred where the window
+  coordinates are whole), RGBAQ's page (8-bit channels). No precision is given for the gradient or the DDA's
+  accumulator, and no rounding.
+- **Test program:** `s17-gouraud` (a Gouraud triangle over a whole PSMCT32 page from colours at both ends of their
+  range, the same into PSMCT24 and PSMCT16, Gouraud lines in every direction), and the Gouraud primitives of
+  `s17-triangles`, `s17-lines`, `s17-formats`, `s17-depth-32`, `s17-depth-16` and `s17-kick`.
+- **Referee:** PCSX2 2.8.2 floors as the reading does but departs by one: on the page-sized triangle 141 of its 4,208
+  channel values, every one of them within 1/16 of a whole number (74 a step low just above one, 67 a step high just
+  below), and so on the other programs' Gouraud pixels (their colour differences are all of one step, in PSMCT16 one
+  step of a 5-bit channel). No fixed-point DDA of 8 to 24 fractional bits, anchored at the origin or at each row, and no
+  single-precision plane reproduces PCSX2's values (the nearest leaves 48 differing), so the departures are taken as its
+  arithmetic's precision [A]. Play! 0.72 is no witness (`Sapphire_Referees.md`, S17's note).
+- **Conclusion:** exact barycentric weights at the centre, rounded down; **argued**. The documents give the rule and not
+  the precision; an exact reference is the one every faster implementation can be measured against, and PCSX2's
+  departures are a step either way of it, not a different rounding. A second lineage's pictures (Play! through the
+  probe's reserved OpenGL context, `Sapphire_Plan.md` §10) would weigh it; a game's gradient would not decide it.
+- **Depends on it:** `gs::raster::triangle`, `gs::raster::line`; S18's texture coordinates and fog, interpolated the same
+  way; the device path's exactness (S44 to S46, C5).
+- **Pinned by:** `gouraud_colour_and_z_are_interpolated_exactly_and_rounded_down`, `generated_primitives_draw_as_the_model_draws_them`.
+- **Implemented in:** stage S17's commit.
+
+### D-161. GS, lines: an end of a line on the edge of a pixel's diamond lies in no pixel's area
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** *GS User's Manual* §3.2.9 and figures 3-4 and 3-5: "By defining the area for each pixel as shown
+  with small gray squares in Figure 3-5, the pixels located in the areas where a line goes through are drawn. However, a
+  pixel located at the endpoint of a line is not drawn", the start drawn; the areas are diamonds, |dx| + |dy| < 1/2
+  about each centre, touching at their corners. Whether a diamond's edges belong to it is not said.
+- **Test program:** `s17-lines`: 32 lines, among them ends at (+5, −3) sixteenths from a centre; its line strip and
+  meeting lines, drawn with GREATER over Z already written at their Z so that a pixel drawn twice keeps its first
+  colour, with vertices at (+4, −4) and (+4, +4); `s17-gouraud`'s radiating lines, whose starts lie at (−2, +6), (−8,
+  0) and (0, −8) from a centre.
+- **Referee:** PCSX2 2.8.2 agrees with the reading at every interior pixel of every line and at the ends that lie inside
+  a diamond or in the spaces between. Of the ends on an edge, it gives the upper-right edge to the diamond (four
+  places, six ends: three starts drawn and three ends' columns left out, where the reading leaves out the start's
+  column and draws the end's), and treats starts on a lower-left edge, at a left corner and at a top corner, and a
+  vertex on a lower-right edge, as the reading does. Play! 0.72 is no witness.
+- **Conclusion:** an end on an edge lies in no diamond: the start's pixel is then the first column crossed and the end's
+  column is drawn when the line crosses it; **argued**: the figure draws closed shapes touching only at corners, and
+  giving the edges to the diamond as PCSX2 does for one of the four would need a rule no document states. A crossing of
+  a column exactly at a corner shared by two diamonds takes the lower one for an x-major line and the right one for a
+  y-major one, as a half rounds up; PCSX2 agrees at every such crossing the programs make.
+- **Depends on it:** `gs::raster::line`'s end test; nothing else.
+- **Pinned by:** `lines_draw_the_diamonds_they_pass_through_but_their_end`, `generated_primitives_draw_as_the_model_draws_them`.
+- **Implemented in:** stage S17's commit.
+
+### D-162. GS, XYOFFSET: it is subtracted at the drawing kick, the offset of the drawing's context, from every vertex of the primitive
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** *GS User's Manual* §2.4.3 (window = primitive − offset, the offset in XYOFFSET), §3.3.1 (XYOFFSET
+  among the drawing environment's registers), §3.3.2's second example (PRMODE's CTXT set to 1 before one vertex of a
+  strip, "Drawing 2nd Triangle with Context 2", and back to 0, "Drawing 3rd Triangle with Context 1"); ps2tek "GS Vertex
+  Attributes": "When a vertex kick occurs, XYOFFSET is subtracted from the vertex's X and Y coordinates."
+- **Test program:** `s17-kick`: a strip whose fourth vertex is kicked under context 2 by PRMODE, with XYOFFSET_2 differing
+  from XYOFFSET_1 by (−5.1875, 2.5625); context 2 by PRIM's CTXT, and by PRIM's while PRMODECONT selects PRMODE.
+- **Referee:** PCSX2 2.8.2 equals the drawing-kick reading in every pixel (but one-step Gouraud values, D-160); under
+  ps2tek's reading the strip's triangles and the context-2 picture differ from it in 205 words of the two pictures and
+  the Z buffer.
+- **Conclusion:** at the drawing kick, every vertex by the drawing's context; **measured**, PCSX2 with the manual's
+  example, whose third triangle (vertices 2 to 4, one kicked under context 2) is drawn as an ordinary context-1 triangle
+  only under this reading. ps2tek's sentence is the same where XYOFFSET does not change inside a primitive.
+- **Depends on it:** `gs::draw::Gs::vertex_kick`.
+- **Pinned by:** `the_vertex_queue_prmode_and_the_contexts_follow_section_3_2`.
+- **Implemented in:** stage S17's commit.
+
+### D-163. GS, the depth test: a pixel's Z beyond its Z buffer format's range is clamped to the format's largest value, for the test and the write
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** *GS User's Manual* §2.3.2 and §2.5.3 (Z32, Z24, Z16), §3.7.4, XYZ2's page (Z 32 bits), XYZF2's
+  (24 bits). Nothing on a Z wider than the buffer's format.
+- **Test program:** `s17-zrange`: Z = 01234567h written with ALWAYS into PSMZ24 and PSMZ16, a Gouraud triangle with Z
+  from 0 to FFFFFFFFh beside it, and a sprite at 00FFFFFFh tested with GREATER across both.
+- **Referee:** PCSX2 2.8.2: equal, every word of both pictures and both Z buffers.
+- **Conclusion:** clamped; **measured**, one lineage. Keeping the format's low bits instead would wrap a far surface
+  near.
+- **Depends on it:** `gs::pixel::z_max`, `gs::pixel::draw`.
+- **Pinned by:** `z_beyond_a_formats_range_is_clamped`.
+- **Implemented in:** stage S17's commit.
+
+### D-164. GS, Z interpolation: a pixel's Z is the vertices' Z interpolated exactly at its centre and rounded down, in all 32 bits
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** as D-160; Z is "calculated from the gradient" with no precision given.
+- **Test program:** `s17-gouraud` (a quad with Z from 10000000h to F0000000h read back from PSMZ32), the depth programs'
+  Gouraud-Z triangles in every Z format.
+- **Referee:** PCSX2 2.8.2 departs in the low bits: by one or two in 1,037 of the quad's 2,048 words, by up to 203 in
+  869 PSMZ32 words of `s17-depth-32` (about 2⁻²⁴ of the range, a single-precision float's [A]), by one in PSMZ24 and
+  PSMZ16. Every pass and fail of every depth test is the same in both, including the equalities GEQUAL and GREATER
+  divide.
+- **Conclusion:** exact, rounded down; **argued**, as D-160.
+- **Depends on it:** `gs::raster`; the device path's exactness.
+- **Pinned by:** `gouraud_colour_and_z_are_interpolated_exactly_and_rounded_down`, `every_depth_test_holds_in_psmz32_and_psmz24`.
+- **Implemented in:** stage S17's commit.
+
+### D-165. GS, Gouraud lines: a pixel whose centre lies beyond an end takes the colour the line's gradient gives there, held to 0 to 255, and Z likewise to its 32 bits
+
+- **Opened:** 2026-10-25, at stage S17.
+- **Documents read:** as D-160; §3.2.9 draws the start's pixel, whose centre may lie before the start along the major
+  axis.
+- **Test program:** `s17-lines`' line 20, from (3, 2) to (5, 4) sixteenths from a centre, which draws that centre's
+  pixel 1.5 of its own lengths before its start.
+- **Referee:** PCSX2 2.8.2: the colour continued along the line and saturated (EFh, 16h, 64h, 07h to 63h, 8Ah, 70h, 1Bh
+  gives FFh, 00h, 52h, 00h), not the start's colour.
+- **Conclusion:** continued and held to the channel's range; **measured**, one lineage; a DDA started at the first pixel's
+  centre gives it.
+- **Depends on it:** `gs::raster::line`.
+- **Pinned by:** `lines_draw_the_diamonds_they_pass_through_but_their_end`.
+- **Implemented in:** stage S17's commit.

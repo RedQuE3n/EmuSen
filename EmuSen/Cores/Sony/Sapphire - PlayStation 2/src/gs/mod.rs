@@ -1,12 +1,16 @@
 //! The GS (GS User's Manual; ps2tek "GS"), stage S16: its general registers as the host interface writes them, its
 //! privileged registers at 12000000h, CSR and IMR with the SIGNAL, FINISH and LABEL events, the interrupt it gives the
 //! INTC, its local memory (`local`, in the page and block layout of every format, `psm`) and the three transfers
-//! (`transfer`). The GS acts at once on each write: nothing of its timing is modelled yet. Drawing (S17 to S19) attaches
-//! at the drawing registers this module stores, the PCRTC (S20) at the privileged registers and `hsync`/`vsync`.
-//! Sapphire_Native.md §24.
+//! (`transfer`). The GS acts at once on each write: nothing of its timing is modelled yet. Drawing (S17): the vertex
+//! queue and the drawing kick (`draw`), the primitives' coverage and interpolation (`raster`) and the pixel pipeline
+//! (`pixel`), into which texturing (S18) and the other pixel operations (S19) slot; the PCRTC (S20) attaches at the
+//! privileged registers and `hsync`/`vsync`. Sapphire_Native.md §24, §27.
 
+pub mod draw;
 pub mod local;
+pub mod pixel;
 pub mod psm;
+pub mod raster;
 pub mod transfer;
 
 use std::collections::VecDeque;
@@ -161,6 +165,8 @@ pub struct Gs {
     imr: u64,
     siglblid: u64,
     pub transfer: Transfer,
+    /// The vertex queue (§3.2.3).
+    pub queue: draw::Queue,
     /// A SIGNAL written while the flag of the one before was set, waiting with the writes after it.
     pending: Option<u64>,
     held: VecDeque<(u8, u64)>,
@@ -193,6 +199,7 @@ impl Gs {
             imr: IMR_RESET,
             siglblid: 0,
             transfer: Transfer::default(),
+            queue: draw::Queue::default(),
             pending: None,
             held: VecDeque::new(),
             line: false,
@@ -200,7 +207,7 @@ impl Gs {
         }
     }
 
-    /// A general register as last written (the drawing registers' storage until S17 reads them).
+    /// A general register as last written.
     pub fn register(&self, reg: u8) -> u64 {
         self.regs.get(reg as usize).copied().unwrap_or(0)
     }
@@ -262,6 +269,14 @@ impl Gs {
                 self.transfer.start(data as u32 & 3, b, p, s, &mut self.local);
             }
             reg::HWREG => self.transfer.hwreg(data, &mut self.local),
+            reg::PRIM => {
+                self.regs[r as usize] = data;
+                self.queue.reset();
+            }
+            reg::XYZ2 | reg::XYZF2 | reg::XYZ3 | reg::XYZF3 => {
+                self.regs[r as usize] = data;
+                self.vertex_kick(r, data);
+            }
             _ if reg::defined(r) => self.regs[r as usize] = data,
             _ => {}
         }

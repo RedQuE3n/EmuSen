@@ -22,5 +22,9 @@ the layout's one owner) and the three transfers; `tests/gs.rs` grades it by `tes
 `cargo run --release --example s16 -- <folder>` writes for the referees. `src/vu/` is the vector units
 (S12, S13): `tests/s13/` and `tests/micro.rs` grade micro mode by the stage's programs, `tests/vu_micro.rs` by the VU
 manual's pipeline figures, and `cargo run --release --example s13 -- <folder>` writes the programs for the referees.
+Since stage S17 (§27) the GS draws: the vertex queue and drawing kick (`gs::draw`), every primitive's coverage and
+interpolation (`gs::raster`) and the pixel pipeline (`gs::pixel`); `tests/draw.rs` grades it by `tests/s17/`'s programs
+and their model, which `cargo run --release --example s17 -- <folder>` writes for the referees with a background record
+each.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

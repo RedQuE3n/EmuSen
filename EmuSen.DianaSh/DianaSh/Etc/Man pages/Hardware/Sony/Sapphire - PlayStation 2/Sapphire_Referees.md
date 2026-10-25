@@ -161,6 +161,15 @@ formats' layouts and their local-to-host transfer, which carries §6's form C, a
 performs no local-to-local transfer, and of the registers keeps CSR's events and SIGLBLID but neither IDMSK, the stall nor
 the reset.
 
+*Added 2026-10-25 at S17* (`Sapphire_Native.md` §27.7): **PCSX2 is a witness for the GS's coverage rules** (points,
+sprites, triangles' sides, lines' interiors and the corners their columns cross), the vertex queue, the contexts,
+scissoring and SCANMSK, every frame and Z format with FBMSK, every depth test with ZMSK and ZTE 0, and Z's clamp; not
+for interpolation's last step (Gouraud colour and Z depart by a step either way near whole values, D-160, D-164) nor
+for line ends on a diamond's edge (D-161). **Play! is no witness for drawing**: its GS draws through a GPU renderer, and
+its local-to-host transfer, which reads transferred data exactly, reads every drawn picture back as it was before the
+drawing; form C (§6) therefore carries transfers and not drawing, and a second lineage for S17 to S19 needs form A, the
+reserve kept at S3.
+
 ## 4. The project's programs
 
 ### 4.1 The gate: `programs/record.s`

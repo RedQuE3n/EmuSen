@@ -14,6 +14,7 @@
 //! S13: micro mode for both units (`vu::pipe`), with VU1's EFU (`vu::efu`).
 //! S23: the CDVD drive controller (`cdvd`) at its register interface, on `emusen-disc`'s CDs and DVDs.
 //! S22: the SIF (`sif`), its registers and the FIFOs joining the two DMACs' SIF channels.
+//! S17: the GS draws every primitive, flat and Gouraud, with scissoring, FBMSK and the depth test.
 
 pub mod bios;
 pub mod blank;

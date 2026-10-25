@@ -3,6 +3,8 @@
 //! brings these units to the core's time after each instruction. A unit is brought forward only at the events it
 //! schedules (a DMA unit's end, a timer's flag, a blanking edge) or when the core reads or writes it; nothing is
 //! polled cycle by cycle. The core reaches the registers through `Bus`; the units drive its Int0, Int1 and CPCOND0.
+//! From S16 the GS sits on the board too: its privileged registers at 12000000h, its interrupt latched by the INTC at
+//! its rising edge, and HSINT and VSINT from the blanking stand-in (Sapphire_Native.md §24.5).
 
 use std::collections::VecDeque;
 
@@ -11,6 +13,7 @@ use crate::clock::{self, Standard};
 use crate::dmac::{self, Dmac, Peripherals};
 use crate::ee::map::{self, Map, Region};
 use crate::ee::{Bus, Ee, Halt};
+use crate::gs::{self, Gs};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
 use crate::timer::{self, Timer};
@@ -77,6 +80,8 @@ pub struct Board {
     pub vpu: Vpu,
     /// The IOP, a unit of its own with its bus and units, brought to the board's time (Sapphire_Native.md §22).
     pub iop: Iop,
+    /// The GS (from S16); the GIF (S15) will reach its host interface through the board.
+    pub gs: Gs,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
@@ -93,6 +98,7 @@ impl Board {
             ports: StandIns::default(),
             vpu: Vpu::new(),
             iop: Iop::new(Blank::new(standard)),
+            gs: Gs::new(),
             now: 0,
             next: 0,
         };
@@ -101,7 +107,15 @@ impl Board {
     }
 
     fn wants_h(&self) -> bool {
-        self.timers.iter().any(Timer::wants_h)
+        self.timers.iter().any(Timer::wants_h) || self.gs.wants_hsync()
+    }
+
+    /// The GS's interrupt, latched into I_STAT at its rising edge (EE User's Manual §3.1); called after the GS's host
+    /// interface is driven (the GIF, from S15).
+    pub fn sync_gs(&mut self) {
+        if self.gs.take_rise() {
+            self.intc.raise(intc::source::GS);
+        }
     }
 
     /// The next time any unit needs attention.
@@ -135,9 +149,14 @@ impl Board {
                         self.intc.raise(intc::source::TIMER0 + n as u32);
                     }
                 }
+                if e.h_rise {
+                    self.gs.hsync();
+                }
                 if e.v_rise {
                     self.intc.raise(intc::source::VB_ON);
+                    self.gs.vsync();
                 }
+                self.sync_gs();
                 if e.v_fall {
                     self.intc.raise(intc::source::VB_OFF);
                 }
@@ -206,6 +225,9 @@ impl Bus for Board {
             v[..bytes].copy_from_slice(&self.iop.bus.ram[a..a + bytes]);
             return u128::from_le_bytes(v);
         }
+        if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            return u128::from(self.gs.read_privileged(paddr, bytes));
+        }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) {
                 let w = self.read_register(paddr & !0xF);
@@ -225,6 +247,12 @@ impl Bus for Board {
             self.iop.bus.ram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
             return;
         }
+        if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.gs.write_privileged(paddr, bytes, value as u64);
+            self.sync_gs();
+            self.reschedule();
+            return;
+        }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) && bytes >= 4 {
                 self.write_register(paddr & !0xF, value as u32);
@@ -235,7 +263,7 @@ impl Bus for Board {
     }
 
     fn error(&mut self, paddr: u32) -> bool {
-        self.map.error(paddr)
+        self.map.error(paddr) || (gs::privileged::END..gs::privileged::BUS_ERROR_END).contains(&paddr)
     }
 
     fn vpu(&mut self) -> Option<&mut Vpu> {

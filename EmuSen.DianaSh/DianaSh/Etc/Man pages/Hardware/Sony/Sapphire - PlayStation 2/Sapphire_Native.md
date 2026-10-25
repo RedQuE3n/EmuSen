@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17) and S8 (§18) on 2026-10-25.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18) and S9 (§19) on 2026-10-25.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -1424,3 +1424,253 @@ section and no firmware.
 - COP1 (S9) and COP2 (S12): still halting.
 - The multimedia instructions in the recompiler: S38, graded against this interpreter.
 
+
+## 19. Stage S9, COP1, the FPU, in software floats (2026-10-25)
+
+### 19.1 In one paragraph
+
+The plan's §7 row S9, on the tester's go of 2026-10-25. The interpreter of §16 to §18 gains COP1: the 34 instructions of
+the *EE Core Instruction Set Manual*'s (INST) chapter 5, each decoded by `emusen-mips`'s `r5900` table alone and executed
+as its page writes it, with the 32 FPRs, the accumulator and FCR31's condition, cause and sticky flags, and charged to
+the timing model through the *EE Core User's Manual*'s (CORE) floating-point rows. Their arithmetic is one module,
+**`sapphire::float`** (`src/float.rs`), the PlayStation 2's single-precision format on integers, the same bits on every
+host, which the vector units will use from S12: there is one owner of the format. Where the manuals stop, at the last
+bit that ps2tek calls "not well understood", ps2autotests' `cpu/ee_fpu` console texts, recorded on consoles, decide:
+the adder keeps no sticky bit, the multiplier recodes its second operand as Booth digits and loses its lowest column,
+so that its product is not commutative, and DIV.S and SQRT.S round to the nearest; the module reproduces 900 of the
+texts' 901 result lines, the 901st (one RSQRT.S quotient) named as a loss. Six programs of the project's, 48,648
+record words over every instruction and every input class, are equal on the interpreter to chapter 5 as `tests/s9/manual.rs`
+transcribes it. PCSX2 and Play!, run as black boxes, both clamp exponent 255 to IEEE 754's largest number and multiply
+exactly, and PCSX2 reproduces 721 of the console texts' 1,068 lines: neither lineage is a witness for the FPU's last
+bit, and PCSX2 is the one witness for the adder's single extra bit. Disputes D-24 to D-33. No emulator, SDK or loader
+source, no ps2autotests source and no firmware was read.
+
+### 19.2 What was built, and the readings the manual leaves open
+
+- **`src/float.rs`**, `sapphire::float`: `add`, `sub`, `mul`, `div`, `sqrt`, `rsqrt`, `fused` (the multiply-adds),
+  `max`, `min`, `order` (the compares'), `to_word`, `from_word`. A number is IEEE 754's single layout read with no NaN,
+  infinity or denormal (CORE §8.1.1): an exponent field of 255 is an ordinary exponent, 0 is zero whatever the fraction.
+  Each result comes with its exponent overflow (±7FFFFFFFh) and underflow (±0); the flags they become are the caller's.
+- **`src/ee/fpu.rs`**: the 34 instructions in one table, the third index space after S6's and S7's and S8's; FCR0,
+  FCR31's fixed and writable bits, its fields. `Ee` gains `fpr`, `acc` and `fcr31`; COP1 is usable when Status.CU1 is set.
+- **`src/ee/timing.rs`**: the floating-point rows of §2.12 (pinned since S6) in use, the FPRs, ACC and FCR31 among the
+  scoreboard's resources (now 69, so the masks are 128 bits), and the divider DIV.S, SQRT.S and RSQRT.S share (§19.5).
+- **`emusen-mips`**: SQRT.S's operand in ft, the form `FdFt` (D-24).
+- **`ps2referee.py --interpreter`**: PCSX2's EE on its interpreter, its recompiler written back every run (§19.6).
+
+**Readings** [R INST chapter 5, CORE chapter 8, Version 5.0; the console texts; A]:
+
+- **The format.** Arithmetic takes an exponent field of 0 as zero and keeps its sign for the zero rules of Table 8-5;
+  MOV.S, ABS.S, NEG.S, MAX.S and MIN.S move the bits as they are (the console's `abs CF_MIN_EXP: 00000001`). A zero
+  operand of ADD.S gives the other operand unchanged, exponent 255 or not.
+- **The last bit**: §19.3. **Overflow** is an exponent above 255 and gives ±7FFFFFFFh (`maxmin` in the pages);
+  **underflow** an exponent below 1, ±0. A cancelling sum is +0.
+- **The flags** (D-32): an instruction writes the cause flags its page names, clearing them where their condition does
+  not hold (Table 8-2), sets their sticky flags and keeps the others; DIV.S raises I and D but never O or U; SQRT.S raises
+  I for a negative operand and clears D; RSQRT.S raises D for a zero ft and I for a negative one (D-28); ABS.S, NEG.S,
+  MAX.S and MIN.S clear O and U; MOV.S and the conversions touch nothing.
+- **The multiply-adds** (D-30): an overflowing product gives ±7FFFFFFFh of ±TEMP's sign with O; an accumulator whose
+  exponent field is 255 is kept, with O; otherwise ACC ± TEMP by ADD.S, its O and U; a product that underflows sets SU
+  alone, as the pseudocode's "multiply underflow occurred".
+- **DIV.S** by zero (either zero, a would-be denormal included): ±7FFFFFFFh by the operands' signs combined, I for 0/0,
+  D otherwise. **SQRT.S** of either zero gives +0 (D-29). **RSQRT.S** takes fs's sign alone (D-28).
+- **MAX.S and MIN.S** order the bits as sign and magnitude, −0 below +0 (D-31); the **compares** read every zero as
+  equal and exponent 255 as a number (`lt 7f800000, 7f800001: true`).
+- **CVT.W.S** truncates towards zero and clamps above exponent field 9Dh, with no flag (its page); **CVT.S.W** keeps
+  the top 24 significant bits (VU User's Manual §2.2).
+- **The moves** (D-33): MFC1 and CFC1 sign-extend; MTC1 and CTC1 take bits 31..0; CFC1 reads FCR31 for a register
+  number with bit 4 set and FCR0 (00002E30h) otherwise; CTC1 writes FCR31's C, I, D, O, U and sticky bits, bits 24 and 0
+  staying 1, and leaves FCR0. **LWC1 and SWC1** are LW and SW to an FPR, their data breakpoint judged on the FPR's value.
+- **BC1F, BC1T, BC1FL, BC1TL** test C; the likely forms nullify the slot when not taken (D-2's evidence: `s9-misc`,
+  equal on both referees).
+
+### 19.3 The last bit: what the documents give, and what the console texts decide
+
+**The documents** [R]: "The FPU only supports 'Rounding towards 0' … the FPU does not use the Guard, Round and Sticky
+bits during rounding … the results may differ from the IEEE 754 Rounding to 0. This difference is usually restricted to
+the least significant bit only" (CORE §8.7, §8.8); "A 24-bit calculation including hidden bits is performed, and the
+result is truncated" (VU User's Manual §2.2); for the significand the multiply stage performs "the Booth
+function/Wallace multiplication" (CORE §1.3.3). No document says how many bits the adder aligns to, which multiplier
+columns are summed, or how the divider rounds.
+
+**The console texts** [R ps2autotests' `cpu/ee_fpu/*.expected`, the files alone]: 901 lines print an instruction's
+operands and result in hexadecimal; the named constants were read from the text's own `mov` lines (`mov CF_MAX_EXP:
+7f800001`). Every reading below was tried against all of them with a model written for the purpose in the probe's
+scratch [M, 2026-10-25], and `examples/s9.rs texts` grades the module against them:
+
+| Operation | Readings tried | Lines equal | What decides |
+|---|---|---|---|
+| ADD.S, SUB.S, ADDA.S, SUBA.S | IEEE 754 towards zero; alignment to 24 bits and 0, 1, 2 or 3 more, the rest lost | 132; 144 each | `add CF_MIN, CF_ONE: ffffffff`: no sticky bit (D-25); the number of extra bits not decided |
+| MUL.S, MULA.S | the exact product truncated; ft recoded as radix-4 Booth digits, the columns below *k* lost | 66; 72 for *k* = 1–22 | `mul CF_ONE, CF_MAX_MANTISSA: 3ffffffe` against `mul CF_MAX_MANTISSA, CF_ONE: 3fffffff` (D-26) |
+| DIV.S | truncated; nearest | 35; 36 | `div CF_ONE, CF_MAX_MANTISSA: 3f000001` (D-27) |
+| SQRT.S | truncated; nearest | 15; 21 | six roots one unit above truncation (D-27) |
+| RSQRT.S | §19.3's list in D-28 | at most 38 of 39 | no reading fits all (D-28) |
+| the multiply-adds | D-30's rules over the multiplier above | 236 | |
+
+**The module**: 900 of 901 lines; the miss is `rsqrt 3f800000, 41c80000`, 3E4CCCCDh on the console and 3E4CCCCCh here.
+
+**Ties.** Neither rounding to the nearest can meet a tie [A]: a quotient of two 24-bit significands with 25 significant
+bits and an odd last would need the divisor's odd part to divide the dividend, leaving at most 24 bits; a root with 25
+would square to at least 49. So "nearest" needs no tie rule.
+
+**What remains open**, each a named loss: the adder's extra bit (D-25, one taken on PCSX2's evidence, none being the
+documents' literal reading), the multiplier's lowest summed column (D-26, 1 taken, the texts allowing 1 to 22), and
+RSQRT.S's rounding (D-28). Each is one constant or one function in `float.rs`; a console text with an addition that
+loses bits and renormalises, a product whose low columns matter, or more reciprocal roots would decide them.
+
+### 19.4 The gate: the programs (measured 2026-10-25)
+
+`tests/s9/` generates six programs in S6's form, entered at 00100000h with the record from 00200000h and the done word
+at 001FFFF0h. Each sets Status.CU1, loads its operands into FPRs by MTC1 from constants, sets the destination to a
+sentinel, clears FCR31 by CTC1, runs the instruction, and records the register written by MFC1 and FCR31 by CFC1; ACC is
+read by MADD.S with a product of −0, which leaves it unchanged (D-30), and set by ADDA.S with −0. The expected record
+comes from `tests/s9/manual.rs`, chapter 5 transcribed on exact integer arithmetic (a value as its significand and a
+power of two, quotients and roots carried far past 24 bits and rounded at the end), written apart from `float.rs` and
+`fpu.rs`. **The input classes** (32): ±0; the smallest normals 00800000h, 80800000h, 00800001h; 7FFFFFFFh, FFFFFFFFh and
+IEEE 754's largest 7F7FFFFFh; the patterns IEEE 754 reads as infinities and NaNs, 7F800000h, FF800000h, 7FC00000h,
+7F800001h; would-be denormals 00000001h, 007FFFFFh, 80400000h; 1.0, −1.0, 0.5, 1.5, 3.0, 3FFFFFFFh, 3F800001h; 2⁶⁴, 2⁶⁵,
+2⁻⁶⁴ and 2⁻⁶³, whose products overflow and underflow; π, 0.1, −123.456, 4B7FFFFFh, 2³¹, 1/3.
+
+| Program | Cases | Record words | What it covers |
+|---|---|---|---|
+| `s9-add` | 2,048 | 8,192 | ADD.S and SUB.S over every ordered pair of the classes |
+| `s9-muldiv` | 2,048 | 8,192 | MUL.S and DIV.S over every ordered pair: both orders of the multiplier, x/0 and 0/0, overflow and underflow |
+| `s9-acc` | 5,040 | 24,768 | ADDA.S, SUBA.S, MULA.S over 144 pairs; MADD.S, MSUB.S, MADDA.S, MSUBA.S over eight accumulators (±0, ±1, 7FFFFFFFh, 7F800000h, the smallest normal, π) by 144 pairs; the register written, FCR31 and ACC after each |
+| `s9-roots` | 1,056 | 4,224 | SQRT.S of every class (ft, with π in fs); RSQRT.S over every ordered pair |
+| `s9-misc` | 1,093 | 3,122 | ABS.S, NEG.S, MOV.S, CVT.W.S of every class and CVT.S.W of 44 integers, from an FCR31 with O, U, SO, SU set; MAX.S and MIN.S over 144 pairs; the four compares over 144 pairs from C set opposite to their answer; MFC1 and MTC1 with bits above 31; CFC1 of all 32 numbers; CTC1's writable bits; LWC1 and SWC1 at each word of a quadword and at negative offsets; the four branches taken and not |
+| `s9-exc` | 15 | 150 | COP1 unusable with CU1 clear (ADD.S, MFC1, CTC1, LWC1, SWC1, BC1T); LWC1's and SWC1's address errors; the TX79's CVT.D.S, ADD.D, C.UN.S, DMFC1 and LDC1 reserved (D-1's evidence) |
+
+**Tests** [M, `cargo test --release`, `tests/fpu.rs`]: **9 of 9** — the six programs, each equal to its record word for
+word; `the_programs_execute_every_cop1_instruction_the_interpreter_has` (all 34, from the assembled words through the
+decoder); `the_format_reproduces_the_console_lines_that_decide_its_readings` (36 console lines and two compares, cited
+from the texts); and the timing rows (§19.5). Lib **18 of 18**, two new: the Booth sum is the exact product or at most
+two units of its lowest column below it over 200,000 random significands, and no quotient reaches a tie. `interpreter`
+(S6) **23 of 23**, its halting check moved to QMFC2 alone; `cop0` (S7) **19 of 19**; `mmi` (S8) **13 of 13**, its count of
+S8's instructions bounded to S8's 91; `programs` **3 of 3**; `fpu` and lib also under `test-checked`; clippy clean.
+`emusen-mips` **18 of 18**; `ps2referee.py`'s tests **24 of 24**, one new (the recompiler written back every run).
+WiseMan's `SapphireTests` **5 of 5**. `examples/s9.rs texts`: 900 of 901 console lines.
+
+### 19.5 The timing model (§5.2, Q14)
+
+[R CORE §1.3.3, §1.3.5, §1.3.6, §2.12; A]:
+
+1. **The categories.** Table 1-1's COP1 Move (pipe 1) takes MFC1, MTC1, CFC1, CTC1, LWC1 and SWC1 ("COP1 move, COP1
+   Load/Store"); COP1 Operate (pipe 0) the rest; BC1 the branch category. A COP1 Move beside a COP1 Operate is Table
+   1-3's Y cell.
+2. **The rows** of §2.12's floating-point table: MTC1 2, MFC1 2, LWC1 2; ADD.S, SUB.S, ABS.S, NEG.S and C.cond.S 4; CVT 4;
+   MUL.S 4; MOV.S 4; DIV.S 8, repeating every 7; SQRT.S 8 and 7; RSQRT.S 14 and 13; the MADD row 4 for the four
+   multiply-adds. The three long operations share one divider, the others issue beside it.
+3. **The resources**: each FPR, ACC and FCR31 is scoreboarded like a GPR; a flag-writing instruction writes FCR31 at its
+   row's latency, and BC1 and CFC1 read it, so C.EQ.S followed by BC1F waits 4 cycles.
+
+**Named losses** [A], each a dispute candidate if an oracle ever measures it: the rows §2.12 does not give — SWC1 (taken
+as LWC1's), CTC1 and CFC1 (MTC1's and MFC1's), ADDA.S and SUBA.S (the add row), MULA.S (the multiply row), MAX.S and MIN.S
+(the add row); one divider for DIV.S, SQRT.S and RSQRT.S, which no document states; the multiply-adds' accumulator
+forwarded at the MADD row, not waited for; FCR31's sticky bits read and written as one resource.
+
+**Pinned** [M, `the_floating_point_rows_give_their_latencies_and_repeat_rates`], on bodies repeated so that each pass
+starts warm: two independent ADD.S 2 cycles, dependent 5; dependent MUL.S 5; two DIV.S 14 a pass (the divider's 7
+twice), DIV.S and SQRT.S 14, DIV.S and an independent ADD.S 7, a dependent one 9; two RSQRT.S 26; MTC1 to its reader 3
+(the reader beside the next MTC1 in a Y cell), MFC1 to its reader 2 (the next MFC1 beside the reader), LWC1 to its
+reader 3; ADD.S, MTC1 and an ALU instruction 3; C.EQ.S, BC1F and its slot 5.
+
+### 19.6 On the referees (measured 2026-10-25)
+
+**The project's programs.** `examples/s9.rs` writes each as an ELF with its expected record; `ps2referee.py ram …
+--until 1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one
+process at a time. Only the records were read.
+
+| Program (graded words) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s9-add` (8,192) | 923 | 1,072 | both clamp exponent 255 to 7F7FFFFFh; neither raises O or U; on the 800 in-range sums PCSX2 equals the module (one extra bit, D-25) and Play! equals IEEE 754 towards zero |
+| `s9-muldiv` (8,192) | 1,266 | 1,187 | clamping; both multiply exactly and commutatively (70 in-range products each, D-26); Play! truncates quotients (121), PCSX2 rounds them as the module does (D-27); Play! raises no D or I |
+| `s9-acc` (24,768) | 5,162 | 4,769 | clamping, the exact multiplier, no O, U or SU from the multiply-adds (D-30) |
+| `s9-roots` (4,224) | 654 | 1,067 | clamping; PCSX2's roots equal the module's, Play! truncates three; PCSX2 gives 45 reciprocal roots one unit above the module's, one of them against the console (D-28) and raises I for −0 (D-29) |
+| `s9-misc` (3,122) | 446 | 447 | both return fs for max(+0, −0) and flush would-be denormals in MAX.S and MIN.S (D-31); both keep O and U through ABS.S, NEG.S, MAX.S, MIN.S (D-32); clamping in ABS.S and NEG.S; the compares, moves, loads, stores and branches equal on both, SQRT.S read from ft on both (D-24) |
+| `s9-exc` (120) | 60 | 60 | neither raises the unusable, address error or reserved instruction exception from COP1, as at S6 (§16.6) |
+
+**ps2autotests' `cpu/ee_fpu`, on PCSX2.** The nine programs need the BIOS's kernel, so Sapphire runs them at S10. Run now
+through `ps2referee.py tty pcsx2 … --channel iop` (Americas BIOS) and compared with their expected texts, the consoles'
+outputs, after line ends are normalised [M `diff`]:
+
+| Text (lines) | PCSX2, recompiler | PCSX2, interpreter |
+|---|---|---|
+| `fcr` (53) | 6 differ: an overflow's O and SO not raised; ±7F7FFFFFh printed where the console prints exponent 255 | 25: FCR0 00002E00h, FCR1 to FCR31 0 |
+| `transfer` (26) | equal | 2: FCR31's fixed bits and CTC1's mask not modelled |
+| `branch` (26) | equal | equal |
+| `branchdelay` (4) | none printed: the referee stopped on a signal (a branch in a branch's delay slot, undefined) | 1 |
+| `arithmetic` (293) | 116: exponent 255 clamped, max(+0, −0) | 52 |
+| `muldiv` (360) | 184: clamping, the commutative multiplier, the multiply-adds | 155 |
+| `compare` (170) | 4: 7F800000h and 7F800001h compared as equal | 4 |
+| `convert` (70) | equal | equal |
+| `sqrt` (66) | 33: clamping, RSQRT.S's last bit | 34 |
+
+So **the PCSX2 lineage cannot be trusted on the FPU's arithmetic**, reproducing 721 of the 1,068 lines on its
+recompiler and 795 on its interpreter: it reads exponent 255 as IEEE 754's infinity clamped, its multiplier is exact, and its flags are partly
+modelled. It is trustworthy on the moves, FCR31's bits (recompiler), the branches and the conversions, and in the
+normal range on DIV.S and SQRT.S, where it agrees with the console's rounding. Its adder's single extra bit is the one
+reading it alone supplies (D-25). Play! was not run on the texts (`tty` drives PCSX2 alone, §18.10 Q3). Only the
+expected texts and the programs' own output were read, never `.cpp` or `shared.h`.
+
+### 19.7 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the addition rounding to the nearest instead of truncating | `add_and_subtract_over_every_pair_of_input_classes_equal_the_manual`, `the_accumulator_instructions_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings` |
+| F2 | an underflowing result kept as a denormal instead of flushed to ±0 | `add_and_subtract_…`, `multiply_and_divide_…`, `square_root_and_reciprocal_square_root_equal_the_manual`, `the_accumulator_instructions_…` |
+| F3 | the overflow flag O left clear (SO still set) | `add_and_subtract_…`, `multiply_and_divide_…`, `the_accumulator_instructions_…` |
+
+Each was applied, `tests/fpu.rs` run, and the source restored [M]. Found while building, not seeded: MAX.S's order first
+put −0 equal to +0, which two console lines exposed through `examples/s9.rs texts`; and ACC first set by ADDA.S with +0,
+which turned −0 into +0, exposed by `s9-acc`.
+
+### 19.8 What the plan got wrong, or left open
+
+- **§1.1's COP1 row and §5.3 say "rounding forced towards zero"**: for DIV.S and SQRT.S the console texts show rounding
+  to the nearest (D-27), and the "towards zero" of the other operations is towards zero of an inexact intermediate
+  (D-25, D-26), not of the exact result. §5.3's software floats were the right call: no host's floating point gives the
+  multiplier's non-commutative last bit.
+- **§3.2's FPU row names the referees as the secondary oracle**: on the FPU they are not one (§19.6); the console texts,
+  read directly, carry the stage. PCSX2's weight is per unit, as §18.7 found for the MMI the other way.
+- **§5.13's C3** (host floats with clamping on the classes not proven equal): the classes are now measurable — exponent
+  255, the would-be denormals, overflow and underflow, and in the normal range every product (D-26), every sum that
+  loses bits to alignment (D-25) and every quotient and root (D-27). A host's multiply agrees with the module only
+  where the product's lowest column cannot reach the result, which no cheap test proves; C3's measurement at S39–S41
+  should count how often games' products differ, against the speed.
+- **S9's gate** ("the project's programs on every input class … equal to the manual's record") holds; the referees
+  cross-check far less than at S6 to S8.
+
+### 19.9 Questions this stage leaves
+
+1. **Q1 [routine], the adder's extra bit (D-25).** *Recommended*: keep one bit, PCSX2's reading, since the console texts
+   allow it and the lineage that separates the readings gives it on all 800 in-range sums; the documents' literal "no
+   guard bit" stays the alternative in D-25, one constant away, until a console text decides.
+2. **Q2 [routine], the multiplier's lowest summed column (D-26).** *Recommended*: keep *k* = 1, the departure from the
+   exact product the texts force and no more; revisit if VU tests (S12, S13) show the same multiplier with more
+   evidence, since `vu/*`'s console texts may exercise it.
+3. **Q3 [routine], RSQRT.S (D-28).** *Recommended*: accept the 38-of-39 reading as a named loss; look again at S12, where
+   VU0's RSQRT and its console texts may share the unit.
+4. **Q4 [routine], the referees on the FPU.** *Recommended*: record in `Sapphire_Referees.md`'s next edit that neither
+   lineage is a witness for the FPU's arithmetic (exponent 255 clamped, exact multiplier) and that PCSX2's EE interpreter
+   is weaker than its recompiler on FCR access; weigh the console texts first for every FPU and VU dispute.
+5. **Q5 [routine], C3 (§5.13).** *Recommended*: when C3 is weighed (S39–S41), measure the share of game products and sums
+   where a host's arithmetic differs from `float`, per class, before any host path is offered.
+
+### 19.10 What was read for this stage
+
+`Sapphire_Plan.md` §1.1 (the COP1 row), §2, §3.2, §5 (§5.1 to §5.3, §5.13's C3), §7 and §11; this page's §16 to §18;
+`Sapphire_Disputes.md`; `Sapphire_References.md` §1.1 and §2; `Mars_FpuMath.md` §1 to §5 and §11 for MarsRT's method;
+`EmuSen_Mips.md` §8; `emusen-mips`'s `r5900.rs` (COP1's tables and forms); `ps2referee.py`. Sony's *EE Core Instruction
+Set Manual* chapter 5 whole and §6.1; *EE Core User's Manual* §1.3.3, §1.4.2, §1.8, §2.10.1, §2.12 and chapter 8 whole;
+*VU User's Manual* §2.2 to §2.4. ps2tek at `1c91660`: "EE COP1 Registers", "EE COP1 Floating Point Format".
+ps2autotests' `cpu/ee_fpu/*.expected` (the consoles' text, not the programs' source). The first page of Tago et al.,
+"CPU for PlayStation 2", DATE 2001, found by a search for the multiplier's design (nothing on it). PCSX2's own settings
+file, for the name of its EE recompiler switch. No emulator, SDK or loader source, no ps2autotests source and no
+firmware.
+
+### 19.11 What this stage does not cover
+
+- `ee_fpu/*` on Sapphire, and the machine running programs: S10.
+- COP2 (S12): still halting. The VUs' own flags (MAC, status, clipping) and their FMAC's agreement with `float`: S12, S13.
+- COP1 in the recompiler: S38, graded against this interpreter; C3's host path: S39–S41.
+- The state format's new contents (the FPRs, ACC, FCR31): `SPH2` gains them with the rest of the EE (S10, S30).

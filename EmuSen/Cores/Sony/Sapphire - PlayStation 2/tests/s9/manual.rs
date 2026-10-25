@@ -61,9 +61,9 @@ fn pack(s: u32, e: i32, m: u128) -> (u32, bool, bool) {
     }
 }
 
-/// ADD.S: the smaller operand aligned to the larger's 24 bits with what falls below lost, then the sum truncated
-/// (VU User's Manual §2.2, "a 24-bit calculation including hidden bits is performed, and the result is truncated"; the
-/// console's `add CF_MIN, CF_ONE`, D-25). A zero operand leaves the other as it is; zeros sum by Table 8-5.
+/// ADD.S: the smaller operand kept to one bit below the larger's 24 with what falls below lost, then the sum truncated
+/// (D-25: the console's `add CF_MIN, CF_ONE` rules out a sticky bit, PCSX2 gives the one bit). A zero operand leaves
+/// the other as it is; zeros sum by Table 8-5.
 pub fn add(a: u32, b: u32) -> (u32, bool, bool) {
     let (x, y) = match (number(a), number(b)) {
         (None, None) => return ((a & b) & 0x8000_0000, false, false),
@@ -73,12 +73,13 @@ pub fn add(a: u32, b: u32) -> (u32, bool, bool) {
     };
     let (big, small) = if (x.1, x.2) >= (y.1, y.2) { (x, y) } else { (y, x) };
     let lost = (big.1 - small.1) as u32;
-    let kept = if lost >= 64 { 0 } else { small.2 >> lost };
-    let total = if big.0 == small.0 { big.2 as i128 + kept as i128 } else { big.2 as i128 - kept as i128 };
+    let kept = if lost >= 64 { 0 } else { (small.2 << 1) >> lost };
+    let wide = (big.2 << 1) as i128;
+    let total = if big.0 == small.0 { wide + kept as i128 } else { wide - kept as i128 };
     if total == 0 {
         return (0, false, false);
     }
-    truncate(big.0, total.unsigned_abs(), big.1)
+    truncate(big.0, total.unsigned_abs(), big.1 - 1)
 }
 pub fn sub(a: u32, b: u32) -> (u32, bool, bool) {
     add(a, b ^ 0x8000_0000)

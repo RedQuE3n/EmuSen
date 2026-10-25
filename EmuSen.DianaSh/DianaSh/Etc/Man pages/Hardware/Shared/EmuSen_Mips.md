@@ -183,6 +183,10 @@ indexed by the same field, so the source reads cell for cell against the manual:
   [R "FPU.S", "FPU.W"]. Its compares at 34h and 36h are named C.LT and C.LE where the TX79 names those cells C.OLT and
   C.OLE; ps2tek's names are written.
 - **D-2, BC1FL and BC1TL.** ps2tek's BC1 table has the likely forms; the TX79's has BC1F and BC1T alone.
+- **D-24, SQRT.S's operand.** *Added 2026-10-25 (Sapphire stage S9).* The TX79's computational layout puts SQRT's
+  operand in fs; Sony's *EE Core Instruction Set Manual* (SQRT.S's page) puts it in ft, with fs fixed at zero, and
+  writes the Format `SQRT.S fd, ft`. The form `FdFt` decodes, disassembles and assembles it so; every other COP1
+  operation keeps the layout above.
 - **D-3, COP2, LQC2 and SQC2.** The TX79 reserves the OpCode cells 12h, 36h and 3Eh; ps2tek gives them to COP2, LQC2
   and SQC2, and Sony's Hot Chips slides describe the "co-processor mode: MIPS COP2 instruction" [R]. COP2's operations
   are VU0's, written by §9's table with a `v`.

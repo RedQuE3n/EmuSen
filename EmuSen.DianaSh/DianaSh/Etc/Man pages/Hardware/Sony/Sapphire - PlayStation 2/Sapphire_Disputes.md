@@ -498,3 +498,209 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `ee/mmi.rs`'s `clamp_signed`, `pmfhl_sh`, `pmfhl_slw`.
 - **Pinned by:** `parallel_add_and_subtract_wrap_and_saturate_as_the_manual_says`, `moves_to_and_from_hi_and_lo_equal_the_manual`.
 - **Implemented in:** stage S8's commit.
+
+### D-24. R5900, SQRT.S: the operand is FPR[ft], the fs field fixed at zero
+
+- **Opened:** 2026-10-25, at stage S9: `emusen-mips` decoded SQRT.S with the TX79's computational layout (D-1), its
+  operand in fs, while Sony's page puts it in ft.
+- **Documents read:** *EE Core Instruction Set Manual*, Version 5.0, SQRT.S's page: the operation code shows ft at bits
+  20..16 and 00000 at 15..11, the Format is `SQRT.S fd, ft`, the Operation `FPR[fd] ← SQRT(FPR[ft])`. RSQRT.S's page
+  keeps fs and ft (`FPR[fs] / SQRT(FPR[ft])`). The TX79 manual's SQRT takes fs.
+- **Test program:** `s9-roots`: SQRT.S of every input class in f2 (ft) with π in f1 (fs).
+- **Referee:** PCSX2 2.8.2 and Play! 0.72, measured 2026-10-25: both give each root of ft, never π's root.
+- **Conclusion:** ft, as Sony's page writes; **measured**, the document and two lineages agreeing.
+- **Depends on it:** `emusen-mips`'s form `FdFt` (decode, disassembly, assembly); `ee/fpu.rs`'s `sqrt_s`.
+- **Pinned by:** `square_root_and_reciprocal_square_root_equal_the_manual`; `emusen-mips`'s round-trip test, through the
+  form's operand bits.
+- **Implemented in:** stage S9's commit.
+
+### D-25. EE FPU, addition: the smaller operand is aligned to the larger's 24 bits and one more, what falls below is lost, and the sum is truncated
+
+- **Opened:** 2026-10-25, at stage S9, by the last bit after rounding that ps2tek calls "not well understood" (plan §2.3).
+- **Documents read:** *EE Core User's Manual* §8.7: "the FPU does not use the Guard, Round and Sticky bits during
+  rounding. Also, since 'Rounding toward 0' does not require full value prior to rounding, unlike the definition of
+  IEEE 754, the results may differ from the IEEE 754 Rounding to 0. This difference is usually restricted to the least
+  significant bit only"; §8.8 the same. *VU User's Manual* §2.2: "A 24-bit calculation including hidden bits is
+  performed, and the result is truncated." ps2tek "EE COP1 Floating Point Format": the last bit "may vary after a round,
+  and the details on this are not well understood".
+- **Test program:** ps2autotests' `cpu/ee_fpu/arithmetic` console text (a console's output, read alone): `add CF_MIN,
+  CF_ONE: ffffffff` and `sub CF_MAX, CF_ONE: 7fffffff`, where IEEE 754's rounding towards zero, with its sticky bit,
+  gives FFFFFFFEh and 7FFFFFFEh: the small operand vanishes before the sum is formed. Every one of the text's 144 add,
+  adda, sub and suba lines is equal under alignment with 0, 1, 2 or 3 bits kept below the larger operand's 24
+  [M, `examples/s9.rs texts` and a model search]: the text does not decide how many. The project's `s9-add`, 2,048 cases.
+- **Referee:** measured 2026-10-25 on the 800 cases of `s9-add` whose operands and result are normal and below the
+  exponent 254: PCSX2 2.8.2 equal to one bit kept on all 800 (none, 754; two, 770; IEEE 754 towards zero, 524); Play!
+  0.72 equal to IEEE 754 towards zero on all 800, which the console's two lines above exclude. PCSX2's results are not
+  its host's rounding towards zero, so its one bit is a choice of its own, and its weight elsewhere on the FPU is weak
+  (`Sapphire_Native.md` §19.6); here it is the only witness that separates the readings.
+- **Conclusion:** one bit kept, PCSX2 named as the single witness; **measured** for the absence of a sticky bit (the
+  console), **argued** for the one bit. The documents' literal reading, no bit at all, differs from it only where an
+  operand loses bits to the alignment and the sum then shifts left one place (1.0 − 0.1 gives 3F666668h with none,
+  3F666667h with one); a console text with such a case would settle it.
+- **Depends on it:** `float::add` (`GUARD`), every addition the VUs will make (S12, S13).
+- **Pinned by:** `add_and_subtract_over_every_pair_of_input_classes_equal_the_manual`,
+  `the_format_reproduces_the_console_lines_that_decide_its_readings`.
+- **Implemented in:** stage S9's commit.
+
+### D-26. EE FPU, multiplication: the product is summed from a radix-4 Booth recoding of FPR[ft] with its lowest column left out, so it is not commutative in its last bit
+
+- **Opened:** 2026-10-25, at stage S9, by the console text below.
+- **Documents read:** *EE Core User's Manual* §1.3.3, the COP1 pipeline's X stage: "For significand, the Booth
+  function/Wallace multiplication is performed"; §8.7 and §8.8 as D-25.
+- **Test program:** ps2autotests' `cpu/ee_fpu/muldiv` console text: `mul CF_MAX_MANTISSA, CF_ONE: 3fffffff` but `mul
+  CF_ONE, CF_MAX_MANTISSA: 3ffffffe`, and `mul CF_ONE, CF_MAX: 7ffffffe` against `mul CF_MAX, CF_ONE: 7fffffff`; the
+  same in `mula` and `madd`. The exact product truncated gives 3FFFFFFFh for both orders. A multiplier that recodes ft
+  as radix-4 Booth digits (each partial product a multiple of fs, a negative one as its ones' complement and a carry-in
+  of 1) and leaves out every column below column *k* reproduces all 72 mul and mula lines and all 236 multiply-add
+  lines for every *k* from 1 to 22, and fails for 0 (the exact product) and from 23 on [M, model search]. With fs = 1.0
+  the recoding of ft's low bits leaves a ones' complement row whose low bits and carry-in are lost, one unit below the
+  product, which borrows through the zeros of fs × 2²³.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 give the exact product truncated, commutative, on both orders (`s9-muldiv`,
+  70 in-range cases each against the interpreter); the console's lines above exclude that.
+- **Conclusion:** Booth recoding of ft, *k* = 1, the reading nearest the documented truncation (the product is exact
+  or one or two units of its lowest column below it); **measured** for the recoding of ft and its loss, **open** for
+  *k*, which the texts bound to 1–22 and nothing available narrows.
+- **Depends on it:** `float::booth` (`DROPPED_COLUMNS`), MUL.S, MULA.S and the multiply-adds; the VUs' FMAC if it is the
+  same multiplier (S12).
+- **Pinned by:** `multiply_and_divide_over_every_pair_of_input_classes_equal_the_manual`,
+  `the_format_reproduces_the_console_lines_that_decide_its_readings`, `the_booth_sum_is_the_exact_product_or_just_below_it`.
+- **Implemented in:** stage S9's commit.
+
+### D-27. EE FPU, DIV.S and SQRT.S round to the nearest, not towards zero
+
+- **Opened:** 2026-10-25, at stage S9, by the console texts below.
+- **Documents read:** *EE Core User's Manual* §8.7 ("The FPU only supports 'Rounding towards 0'"), Table 8-6; the
+  DIV.S and SQRT.S pages, which name no rounding.
+- **Test program:** ps2autotests' console texts: `div CF_ONE, CF_MAX_MANTISSA: 3f000001`, where the quotient
+  1/(2 − 2⁻²³) lies half a unit and a little above 3F000000h; `sqrt CF_MAX_MANTISSA: 3fb504f3`, `sqrt 7fffffff:
+  5fb504f3`, `sqrt CF_GARBAGE2: 4f152108`, each where truncation gives one less. All 36 div lines and all 21 sqrt lines
+  are equal under rounding to the nearest; truncation fails one div line and six sqrt lines. Neither operation can
+  meet a tie (`Sapphire_Native.md` §19.3), so the nearest is one rule.
+- **Referee:** PCSX2 2.8.2 equal to the nearest on every in-range quotient and root of `s9-muldiv` and `s9-roots`;
+  Play! 0.72 truncates (121 quotients and 3 roots one unit below).
+- **Conclusion:** the nearest, against §8.7's words; **measured**, the console's texts with one lineage agreeing.
+- **Depends on it:** `float::div`, `float::sqrt`, `float::nearest`; RSQRT.S through D-28.
+- **Pinned by:** `multiply_and_divide_over_every_pair_of_input_classes_equal_the_manual`,
+  `square_root_and_reciprocal_square_root_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings`.
+- **Implemented in:** stage S9's commit.
+
+### D-28. EE FPU, RSQRT.S: FPR[fs] over SQRT.S's root of FPR[ft], the quotient truncated, signed as FPR[fs]; D for a zero ft, I for a negative one
+
+- **Opened:** 2026-10-25, at stage S9.
+- **Documents read:** RSQRT.S's page: `FPR[fs] / SQRT(FPR[ft])`, "When the value of FPR[ft] is 0, Flag D and Flag SD
+  are set", "When the value of FPR[ft] is negative, Flag I and Flag SI are set and the value of FPR[fs] divided by
+  SQRT(ABS(FPR[ft])) is stored". *EE Core User's Manual* Table 8-5: `(+0)/SQRT(+0)` 7FFFFFFFh with I, `(+0)/SQRT(-0)`
+  FFFFFFFFh with I.
+- **Test program:** ps2autotests' `cpu/ee_fpu/sqrt` console text, 39 rsqrt lines. The sign is fs's alone: `rsqrt
+  00000000, 80000000: 7fffffff` and `rsqrt 80000000, 00000000: ffffffff`, against Table 8-5's FFFFFFFFh for the
+  first. Of the readings tried [M, model search]: the exact quotient rounded to the nearest, 29 lines; truncated, 37; the
+  root rounded to the nearest and the quotient to the nearest, 32; **the root rounded to the nearest (SQRT.S's) and the
+  quotient truncated, 38**; the root kept to 24 to 33 bits by truncation or rounding with either quotient rounding, at
+  most 38; a reciprocal root times fs, at most 35. No single rounding threshold on the quotient fits both `rsqrt 3f800000,
+  41c80000: 3e4ccccd` (a fraction of 0.8 rounded up) and `rsqrt 7fffffff, 7fffffff: 5fb504f2` (0.70 against the rounded
+  root, rounded down). The one line not reproduced is `rsqrt 3f800000, 41c80000`, 1/√25, where the console gives
+  3E4CCCCDh and the reading 3E4CCCCCh. The flags are not in the text.
+- **Referee:** PCSX2 2.8.2 rounds 45 in-range quotients of `s9-roots` one unit above the reading, and gives `rsqrt
+  CF_ONE, CF_MAX_MANTISSA` 3F3504F4h where the console gives 3F3504F3h; for ft = −0 it raises I and D together. Play!
+  0.72 differs in 1,067 words of the program.
+- **Conclusion:** the reading in the title, the page's flags; **open**: 38 of 39 console lines, the 39th named as a loss.
+- **Depends on it:** `float::rsqrt`, `ee/fpu.rs`'s `rsqrt_s`.
+- **Pinned by:** `square_root_and_reciprocal_square_root_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings`.
+- **Implemented in:** stage S9's commit.
+
+### D-29. EE FPU, SQRT.S of −0 gives +0
+
+- **Opened:** 2026-10-25, at stage S9.
+- **Documents read:** SQRT.S's page: "If the value of FPR[ft] is –0, the result is –0."
+- **Test program:** ps2autotests' `cpu/ee_fpu/sqrt` console text: `sqrt 80000000/-0.00: 00000000/+0.00`, and `sqrt
+  CF_NEGZERO: 00000000`.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 give +0 (`s9-roots`).
+- **Conclusion:** +0 for either zero, the would-be denormals among them, against the page; **measured**, the console
+  and two lineages. I is raised for a negative value, never for −0 or a negative would-be denormal (the page's
+  "FPR[ft] < 0" read on values; PCSX2 raises it on the sign bit, Play! never).
+- **Depends on it:** `float::sqrt`, `ee/fpu.rs`'s `sqrt_s`.
+- **Pinned by:** `square_root_and_reciprocal_square_root_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings`.
+- **Implemented in:** stage S9's commit.
+
+### D-30. EE FPU, the multiply-adds: a zero product adds by ADD.S's sign rule; a product with exponent field 255 is a number; MSUB's overflow takes −TEMP's sign; an accumulator with exponent field 255 is kept, with O
+
+- **Opened:** 2026-10-25, at stage S9: MADD.S's, MSUB.S's, MADDA.S's and MSUBA.S's Operation sections cannot be read
+  literally against the console's text.
+- **Documents read:** the four pages' pseudocode: `if (TEMP.exp = 0x00) then FPR[fd] ← ACC`; `if (TEMP.exp >= 0xFF) then
+  FPR[fd] ← maxmin(TEMP.sign)`; `if (ACC.exp >= 0xFF) … FPR[fd] ← ACC … FCR31.O ← 1`; `if (TEMP.exp = plusminuszero)
+  then FCR31.SU ← 1`.
+- **Test program:** ps2autotests' `cpu/ee_fpu/muldiv` console text, 236 multiply-add lines: `madd (80000000)
+  80000000, 80000000: 00000000` (−0 + +0 = +0, where `FPR[fd] ← ACC` gives −0); `msub (80000000) 00000000, 80000000:
+  00000000`; `madd (CF_ZERO) CF_MAX_EXP, CF_ONE: 7f800001` (a product with exponent field 255 passed through, where
+  `TEMP.exp >= 0xFF` read on the field gives 7FFFFFFFh); `msub (00000000) 7fffffff, 7fffffff: ffffffff` (the overflow's
+  sign is −TEMP's, where `maxmin(TEMP.sign)` gives 7FFFFFFFh); `madd (ffffffff) 7fffffff, 7fffffff: 7fffffff` (the
+  product's overflow wins over the sum). All 236 lines are reproduced by: product overflow, maxmin of ±TEMP; otherwise an
+  accumulator with exponent field 255 kept; otherwise ACC ± TEMP by ADD.S. The texts print no flags.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 clamp exponent 255 and multiply exactly (`s9-acc`), so they answer for none of
+  these rules; both set neither O nor SU from a multiply-add.
+- **Conclusion:** the rules in the title; the accumulator branch and the flags as the pseudocode writes them (O and SO
+  with the kept accumulator, SU alone for a product that underflows, O and U otherwise from the sum, D-32's clearing);
+  **measured** for the values, **argued** for the flags.
+- **Depends on it:** `float::fused`, `ee/fpu.rs`'s `fused`.
+- **Pinned by:** `the_accumulator_instructions_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings`.
+- **Implemented in:** stage S9's commit.
+
+### D-31. EE FPU, MAX.S and MIN.S compare the bits as sign and magnitude: −0 below +0, a would-be denormal kept and ordered above zero
+
+- **Opened:** 2026-10-25, at stage S9.
+- **Documents read:** MAX.S's and MIN.S's Operation sections: `if (FPR[fs] >= FPR[ft]) then FPR[fd] ← FPR[fs]`, which,
+  with the compares' "+0 = −0", returns fs for max(−0, +0). *EE Core User's Manual* Table 8-5: Max(−0, +0) = +0,
+  Min(+0, −0) = −0.
+- **Test program:** ps2autotests' `cpu/ee_fpu/arithmetic` console text: `max 80000000, 00000000: 00000000`, `min
+  00000000, 80000000: 80000000`, `min CF_MIN_EXP, CF_ONE: 00000001`, `max CF_GARBAGE1, CF_GARBAGE2: 00001337`.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 both return fs for max(+0, −0) and flush the would-be denormals
+  (`s9-misc`, 75 words each), against the console.
+- **Conclusion:** the title's order, Table 8-5 and the console against the Operation sections and both lineages;
+  **measured**. The compares themselves read every zero, the would-be denormals included, as equal (the console's `eq
+  00000000, 00000001: true`).
+- **Depends on it:** `float::max`, `float::min`, `float::raw_order`.
+- **Pinned by:** `moves_conversions_picks_compares_loads_stores_and_branches_equal_the_manual`.
+- **Implemented in:** stage S9's commit.
+
+### D-32. EE FPU, FCR31's flags: an instruction writes the cause flags its page names, cleared where their condition is absent, sets their sticky flags, and keeps every other flag; DIV.S raises no O or U, CVT.W.S no I, ABS.S, NEG.S, MAX.S and MIN.S clear O and U
+
+- **Opened:** 2026-10-25, at stage S9.
+- **Documents read:** chapter 5's opening: "Flags that are not indicated in the instructions are not changed". *EE Core
+  User's Manual* Table 8-2: each cause flag "is set to 1 when … Otherwise, the bit is cleared to 0"; the sticky flags
+  "are never set to 0 unless software explicitly clears them". The pages: ADD.S, SUB.S, MUL.S and the accumulator forms
+  name O, U, SO, SU; DIV.S names I, D, SI, SD, though its Description says an overflow gives ±maximum; SQRT.S names I,
+  SI and `Flag D ← 0`; RSQRT.S I, D, SI, SD; ABS.S, NEG.S, MAX.S and MIN.S `Flag O ← 0`, `Flag U ← 0`; MOV.S, the
+  conversions and C.cond.S none but C. CVT.W.S's page clamps with no flag; Table 8-6 says "I bit (SI bit) is set" for a
+  conversion's overflow, Table 8-4 "None".
+- **Test program:** `s9-add`, `s9-muldiv`, `s9-roots` (FCR31 after every case from a cleared FCR31); `s9-misc` (ABS.S,
+  NEG.S, MAX.S, MIN.S, MOV.S and the conversions from an FCR31 with O, U, SO and SU set, the compares with C set
+  opposite to their answer and O and SI set). ps2autotests' `cpu/ee_fpu/fcr` console text, from a cleared FCR31:
+  sqrt(−1) 01020041h (I, SI), 0/0 01020041h, 1/0 01010021h (D, SD), an overflow 01008011h (O, SO); an underflow
+  01000001h, none set, by an operation the text does not name.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 both keep O and U through ABS.S, NEG.S, MAX.S and MIN.S (`s9-misc`, 352 words
+  each), raise neither O nor U from any arithmetic, and Play! no D or I from DIV.S: their agreement is the absence of
+  flag modelling, not evidence about it. The compares' C and the other flags kept: equal on both.
+- **Conclusion:** the title; the pages and Table 8-2, CVT.W.S's page over Table 8-6; **argued**. PCSX2 raises I for
+  SQRT.S and RSQRT.S of −0 (D-29).
+- **Depends on it:** `ee/fpu.rs`'s `exponent_flags`, `divide_flags`, `unary`, `pick`, `compare`.
+- **Pinned by:** the S9 programs' FCR31 words.
+- **Implemented in:** stage S9's commit.
+
+### D-33. EE FPU, the control registers: FCR0 reads 00002E30h; FCR31 holds bits 24 and 0 at 1 and lets CTC1 write 0083C078h; CFC1 and CTC1 select FCR31 by bit 4 of the register number and FCR0 otherwise
+
+- **Opened:** 2026-10-25, at stage S9.
+- **Documents read:** *EE Core User's Manual* §8.3: FCR0's implementation number 2Eh and its revision "Revision
+  Number"; Figure 8-5, FCR31 with bit 24 drawn as 1 and bits 2..0 as 001; §8.7 ("the two least significant bits … are
+  hardwired to '01'"); CTC1's page: "This operation is only defined when fs is 0 or 31".
+- **Test program:** ps2autotests' `cpu/ee_fpu/fcr` and `transfer` console texts: FCR0 00002E30h; FCR1 to FCR15 read
+  00002E30h and FCR16 to FCR30 read FCR31's value; CTC1 of all ones to FCR31 reads back 0183C079h; writes to the
+  enables, the rounding mode, FS and the other condition bits leave them as they were. `s9-misc`: CFC1 of all 32
+  numbers, CTC1 of all ones, of zero to FCR0 and of a mixed pattern.
+- **Referee:** PCSX2 2.8.2 (recompiler) reproduces the `fcr` lines on the registers and `transfer` whole, and equals
+  `s9-misc`'s moves; its interpreter reads FCR0 as 00002E00h and FCR1 to FCR31 as 0, and keeps every bit CTC1 writes.
+  Play! 0.72 equals `s9-misc`'s moves.
+- **Conclusion:** the title, the console's record over the manual's unstated revision; CTC1 to a number other than 0
+  or 31 is undefined and taken by the same bit 4 [A]; **measured**.
+- **Depends on it:** `ee/fpu.rs`'s `FCR0`, `FCR31_FIXED`, `FCR31_WRITABLE`, `cfc1`, `ctc1`.
+- **Pinned by:** `moves_conversions_picks_compares_loads_stores_and_branches_equal_the_manual`.
+- **Implemented in:** stage S9's commit.

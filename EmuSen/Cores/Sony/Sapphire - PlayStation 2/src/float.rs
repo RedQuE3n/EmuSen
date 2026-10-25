@@ -7,7 +7,7 @@
 //!
 //! The rounding is the console's, as ps2autotests' `cpu/ee_fpu` console texts decide it where the manuals stop
 //! (Sapphire_Native.md §19.3, Sapphire_Disputes.md D-25 to D-28): an addition aligns the smaller operand to the larger's
-//! 24 bits and drops what falls below, then truncates; a multiplication forms its product from a radix-4 Booth recoding
+//! 24 bits and one more and drops what falls below, then truncates; a multiplication forms its product from a radix-4 Booth recoding
 //! of the second operand with the lowest column dropped, then truncates; a division and a square root round to the
 //! nearest; RSQRT divides by the rounded square root and truncates.
 
@@ -93,7 +93,11 @@ fn nearest(s: u32, mut e: i32, q: u64, sticky: bool) -> Outcome {
     finish(s, e, m)
 }
 
-/// `a + b`. A zero operand gives the other unchanged; two zeros give −0 only when both are −0 (Table 8-5).
+/// The bits the adder keeps below the larger operand's 24 when it aligns the smaller (Sapphire_Disputes.md D-25).
+const GUARD: u32 = 1;
+
+/// `a + b`: the smaller operand aligned to the larger's 24 bits and `GUARD` more, what falls below lost, the sum
+/// truncated. A zero operand gives the other unchanged; two zeros give −0 only when both are −0 (Table 8-5).
 pub fn add(a: u32, b: u32) -> Outcome {
     match (is_zero(a), is_zero(b)) {
         (true, true) => return Outcome::of(zero(sign(a) & sign(b))),
@@ -103,13 +107,14 @@ pub fn add(a: u32, b: u32) -> Outcome {
     }
     let (big, small) = if a & MAX >= b & MAX { (a, b) } else { (b, a) };
     let d = exponent(big) - exponent(small);
-    let aligned = if d < 24 { significand(small) >> d } else { 0 };
-    let m = if sign(big) == sign(small) { significand(big) + aligned } else { significand(big) - aligned };
+    let aligned = if d < 25 { significand(small) << GUARD >> d } else { 0 };
+    let wide = significand(big) << GUARD;
+    let m = if sign(big) == sign(small) { wide + aligned } else { wide - aligned };
     if m == 0 {
         return Outcome::of(0);
     }
     let lead = 63 - m.leading_zeros() as i32;
-    let e = exponent(big) + lead - 23;
+    let e = exponent(big) + lead - 23 - GUARD as i32;
     let m = if lead >= 23 { m >> (lead - 23) } else { m << (23 - lead) };
     finish(sign(big), e, m)
 }

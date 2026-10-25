@@ -264,9 +264,9 @@ fn moves(p: &mut Program) {
     record_fcr(p, 0x0183_C079);
     p.emit("cfc1 t2, fcr0");
     p.record("t2", Some(0x2E30));
-    p.constant("t0", 0x7E7C_3F87);
+    p.constant("t0", 0x7E8A_4069);
     p.emit("ctc1 t0, fcr31");
-    record_fcr(p, FIXED | 0x7E7C_3F87 & 0x0083_C078);
+    record_fcr(p, FIXED | 0x0082_4068);
     p.emit("ctc1 zero, fcr31");
 }
 

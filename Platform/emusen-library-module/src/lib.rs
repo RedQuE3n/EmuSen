@@ -34,7 +34,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     (
         "pkg",
         false,
-        "  pkg make <path>...            a linked package for each game under each path (relative to the library)\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)\n  pkg migrate <package>...      the game's saves, states and cheats copied into its package\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
+        "  pkg make <path>...            a linked package for each game under each path (relative to the library)\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
     ),
 ];
 
@@ -234,7 +234,13 @@ pub fn package_line(e: &Value) -> String {
                 Some(Value::Array(c)) => c.len(),
                 _ => 0,
             };
-            format!("[{}/{}] {named}: {}, {copied} file(s) copied, {} already there{said}", token(e, "index"), token(e, "of"), text(e, "state"), token(e, "kept"))
+            let records = match token(e, "records").as_str() {
+                "" | "0" => String::new(),
+                n => format!(", {n} state record(s)"),
+            };
+            let unread = text(e, "records_words");
+            let unread = if unread.is_empty() { String::new() } else { format!("; {unread}") };
+            format!("[{}/{}] {named}: {}, {copied} file(s) copied, {} already there{records}{said}{unread}", token(e, "index"), token(e, "of"), text(e, "state"), token(e, "kept"))
         }
         state => {
             let to = text(e, "to");
@@ -361,7 +367,7 @@ fn start_line(e: &Value) -> Option<String> {
     match text(e, "op") {
         "pkg-make" => Some(format!("Making packages for {n} game(s) in Packages, each linked to its game where it is.")),
         "pkg-check" => Some(format!("Checking {n} package(s) against their manifests.")),
-        "pkg-migrate" => Some(format!("Copying the saves, states and cheats of {n} package(s) into them.")),
+        "pkg-migrate" => Some(format!("Copying the saves, states, records, settings, art and cheats of {n} package(s) into them.")),
         _ => None,
     }
 }
@@ -559,6 +565,10 @@ mod tests {
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":2,"source":"SNES/a.sfc","state":"made","package":"SNES/a.sfc"}"#)), "[1/2] SNES/a.sfc: made, Packages/SNES/a.sfc");
         assert_eq!(package_line(&e(r#"{"event":"package","index":2,"of":2,"package":"NES/b.nes","state":"changed","words":"b.nes has SHA-1 1"}"#)), "[2/2] NES/b.nes: changed: b.nes has SHA-1 1");
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":1,"package":"NES/b.nes","state":"migrated","copied":[{"from":"a","to":"b"}],"kept":0}"#)), "[1/1] NES/b.nes: migrated, 1 file(s) copied, 0 already there");
+        assert_eq!(
+            package_line(&e(r#"{"event":"package","index":1,"of":1,"package":"NES/b.nes","state":"migrated","copied":[],"kept":1,"records":2,"records_words":"the states' records were not copied: why"}"#)),
+            "[1/1] NES/b.nes: migrated, 0 file(s) copied, 1 already there, 2 state record(s); the states' records were not copied: why"
+        );
         assert_eq!(listing_line(&e(r#"{"event":"package","package":"NES/b.nes","state":"moved","mode":"linked","system":"nes","to":"NES/USA/b.nes"}"#)), "moved    NES/b.nes  (linked, nes)  now NES/USA/b.nes");
     }
 }

@@ -61,13 +61,32 @@ DESCRIPTION
     Game Boy) every file named for the game, its battery save and its own
     save media; from the state folder (AppSettings.StateDirectory, else
     Saves/Save States) its states, its resume state and their pictures;
-    and its cheat list. A file is the game's when it is the game's name
+    its cheat list; each copied state's record from states.db, written
+    beside the state in the package as the same name with .json; the
+    game's own settings (its engine among them) from
+    /etc/EmuSen/games/<system>/, with its crop from games.db, into the
+    package's settings.json; and its art from the media store
+    (home/Media/<system>/<type>/) into the package's media/<type>/ under
+    the package's name. A file is the game's when it is the game's name
     followed by one or two parts of a dot and letters or digits (.srm,
     .1.mcr), so that "Super Mario Bros. 3" is never "Super Mario Bros".
-    Nothing is overwritten: a file already in the package wins, and
-    running migrate again copies nothing. The originals are left as they
-    were. Shared and named cards, the console's own memory, the library's
-    records (favourites, play time) and scraped art are not moved.
+    Nothing is overwritten: a file already in the package wins, a crop is
+    added to a settings.json only where it holds none, and running
+    migrate again copies nothing. The originals are left as they were,
+    states.db and games.db among them, which are only read. The records
+    and the crop need the program's SQLite; where none is loaded, migrate
+    says the records were not copied, and running it again in a program
+    that has one copies them. Shared and named cards, the console's own
+    memory, the library's records (favourites, play time) and scraped
+    metadata are not moved.
+
+    Once a package holds them, its game's stores are read there by every
+    route to the game, its plain path and its package alike, and travel
+    with the package when it is moved or renamed: a state's record while
+    the state is still the file it was written for, the settings and the
+    crop once the package has a settings.json (until then the game's own
+    file and games.db are read, and the first change copies them in), and
+    the art before the media store's.
 
     'patch add' gives <package> a soft patch: an IPS, UPS or BPS file
     that is applied to the game each time it is loaded, so that the core

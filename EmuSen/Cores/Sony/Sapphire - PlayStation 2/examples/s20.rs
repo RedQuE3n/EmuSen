@@ -1,5 +1,7 @@
 //! Writes stage S20's programs for the referees: `s20 <folder>` makes `<name>.elf` and `<name>.expected` (one record
-//! word a line in hexadecimal, `-` where any value is expected) for each (Sapphire_Native.md §29).
+//! word a line in hexadecimal, `-` where any value is expected) for each, and for each display program
+//! `<name>.picture`, the picture the manual's model gives (RGBA rows, its width and height first as two little-endian
+//! words), to set beside a referee's (Sapphire_Native.md §29.8).
 
 #[path = "../tests/s6/mod.rs"]
 mod s6;
@@ -22,5 +24,13 @@ fn main() {
         std::fs::write(dir.join(format!("{name}.expected")), text).expect("written");
         let graded = expected.iter().filter(|w| w.is_some()).count();
         println!("{name}: {} words of code and data, {} record words, {graded} graded", words.len(), expected.len());
+    }
+    for script in s20::displays() {
+        let gs = s20::memory(&script);
+        let interlaced = gs.privileged.get(&s16::ga::SMODE2).is_some_and(|v| v & 1 == 1);
+        let (_, _, w, _, h) = s20::manual::rectangle(&gs);
+        let mut bytes = [w.to_le_bytes(), h.to_le_bytes()].concat();
+        bytes.extend(s20::manual::picture(&gs, interlaced));
+        std::fs::write(dir.join(format!("{}.picture", script.name)), bytes).expect("written");
     }
 }

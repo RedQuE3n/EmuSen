@@ -5,7 +5,7 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] ADDRESS:WORDS ...
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--screen FILE] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
 
@@ -19,6 +19,9 @@ referee spent meanwhile, which with programs/frames.s measures a frame's cost; -
 speed instead of unlimited; --interpreter runs PCSX2's EE on its interpreter instead of its recompiler, the default, so
 the two can be weighed apart (Sapphire_Native.md §19.6); --disc puts a synthetic disc image in PCSX2's drive while the
 program runs in place of the disc's own (`-elf`), so that the program can read the drive (Sapphire_Native.md §25).
+--screen keeps a probe run's picture at frame N, the core's screen as the probe dumps it, in FILE with its manifest's
+screen line beside it as FILE.json: the project's display programs are graded on PCEE2's software pictures
+(Sapphire_Native.md §29.8); the picture is the program's, taken after the firmware has handed over.
 ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
 console's speed and prints only what PINE says of it (its title, serial and status) and the CPU time it took, never
 the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5). `tty` runs a
@@ -522,7 +525,7 @@ def record_words(dump, dumps):
     return {str(a): [struct.unpack_from("<I", dump, (a & (EE_RAM - 1)) + 4 * i)[0] for i in range(n)] for a, n in dumps}
 
 
-def run_libretro(referee, target, market, frames, until, dumps):
+def run_libretro(referee, target, market, frames, until, dumps, screen=None):
     """The reference probe on a PlayStation 2 core, the EE's RAM read at frame N (Sapphire_Referees.md §2.3); the probe's
     other dumps are removed unread, since on the player's BIOS they hold its memory."""
     bios_folder()
@@ -537,6 +540,12 @@ def run_libretro(referee, target, market, frames, until, dumps):
         out = {"wall": round(time.monotonic() - began, 3), "exit": p.returncode,
                "refused": [line.split("context, ", 1)[1].split(", and")[0] for line in p.stdout.splitlines() if "hardware render context" in line],
                "screen": next((line.split()[1:] for line in p.stdout.splitlines() if line.startswith("  ") and "RAM @" not in line), None)}
+        shot = next(Path(tmp).glob("*_screen_f*.bin"), None)
+        if screen and shot:
+            shutil.copyfile(shot, screen)
+            manifest = next(Path(tmp).glob("*_manifest_f*.json"), None)
+            line = next((l for l in manifest.read_text().splitlines() if '"screen"' in l), "") if manifest else ""
+            Path(str(screen) + ".json").write_text(line.strip() + "\n")
         ram = next(Path(tmp).glob("*_ram_f*.bin"), None)
         data = ram.read_bytes() if ram else b""
         out["words"] = record_words(data, dumps) if len(data) >= EE_RAM else {}
@@ -587,6 +596,9 @@ def main(argv):
             die("--interpreter is PCSX2's", 2)
         rest.remove("--interpreter")
     disc = option("--disc")
+    screen = option("--screen")
+    if screen and referee not in LIBRETRO:
+        die("--screen is for the probe's cores", 2)
     if disc and (referee != "pcsx2" or mode != "ram"):
         die("--disc is for ram runs on pcsx2", 2)
     until = option("--until")
@@ -622,7 +634,7 @@ def main(argv):
     elif referee == "play":
         out = run_play(target, count, until, dumps, again)
     elif referee in LIBRETRO:
-        out = run_libretro(referee, target, market, count, until, dumps)
+        out = run_libretro(referee, target, market, count, until, dumps, Path(screen).resolve() if screen else None)
         if not out["words"] or (until and not out["until"]):
             die(f"{referee}: no record in RAM at frame {count} (exit {out['exit']}; contexts refused: {', '.join(out['refused']) or 'none'})")
     else:

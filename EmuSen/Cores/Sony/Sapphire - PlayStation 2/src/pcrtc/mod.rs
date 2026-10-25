@@ -104,14 +104,15 @@ impl Pmode {
 }
 
 /// The merge of one pixel (§5.2.3): OUT2 is circuit 2's colour inside its rectangle and BGCOLOR elsewhere; OUT1
-/// blends circuit 1 over OUT2 or BGCOLOR by its doubled alpha or ALP, `(Rs·A + Rd·(FFh − A)) / FFh`; where circuit 1
+/// blends circuit 1 over OUT2 or BGCOLOR by its doubled alpha or ALP, `(Rs·A + Rd·(FFh − A)) / FFh` to the nearest
+/// (Sapphire_Disputes.md D-203); where circuit 1
 /// gives nothing, OUT1 is what it would blend over.
 pub fn merge(pm: &Pmode, bg: [u8; 3], one: Option<([u8; 3], u8)>, two: Option<([u8; 3], u8)>) -> [u8; 3] {
     let out2 = two.map_or(bg, |p| p.0);
     let d = if pm.slbg { bg } else { out2 };
     let Some((s, a1)) = one else { return d };
     let a = if pm.mmod { u32::from(pm.alp) } else { (2 * u32::from(a1)).min(0xFF) };
-    std::array::from_fn(|i| ((u32::from(s[i]) * a + u32::from(d[i]) * (0xFF - a)) / 0xFF) as u8)
+    std::array::from_fn(|i| ((u32::from(s[i]) * a + u32::from(d[i]) * (0xFF - a) + 0x7F) / 0xFF) as u8)
 }
 
 /// The picture's place on the screen: its left edge in VCK and VCK a pixel, its first raster, and its size.
@@ -153,6 +154,15 @@ pub struct Picture {
     pub aspect: (u32, u32),
     pub odd: bool,
     pub rgba: Vec<u8>,
+}
+
+impl Picture {
+    /// The picture as the core ABI describes it (EmuSen_CoreAPI.md §6.6): RGBA8888 rows at the picture's own size, the
+    /// television's shape as its aspect.
+    pub fn frame_info(&self) -> emusen_native::core::FrameInfo {
+        let g = &self.geometry;
+        emusen_native::core::FrameInfo { aspect_num: self.aspect.0, aspect_den: self.aspect.1, ..emusen_native::core::FrameInfo::rgba(g.width as i32, g.height as i32) }
+    }
 }
 
 pub struct Pcrtc {

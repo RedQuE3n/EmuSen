@@ -262,7 +262,7 @@ fn hsint_and_vsint_follow_the_pcrtcs_timing() {
     b.run_to(line, &mut spr);
     assert_eq!(b.read(csr_at, 8) & 0xC, 4, "HSINT at the next line");
     b.write(csr_at, 8, 4);
-    b.run_to(NTSC.cycles(NTSC.vsync * NTSC.line), &mut spr);
+    b.run_to(NTSC.cycles(4 * NTSC.line), &mut spr);
     assert_eq!(b.read(csr_at, 8) & 0xC, 0xC, "VSINT at the V-sync four lines in, HSINT again with the line");
     b.write(privileged::address(privileged::IMR), 8, 0x7700);
     assert_eq!(b.intc.stat & 1, 1, "VSINT unmasked reaches the INTC");

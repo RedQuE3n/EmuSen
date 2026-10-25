@@ -101,22 +101,22 @@ pub struct Fill {
     pub mode: u32,
 }
 
-/// One write's fields (§6.3.6, §6.3.7): each field's specifier from MASK (all 0 without the m bit); 0 writes the input,
-/// added to its Row register in offset mode, added and kept in Row in difference mode, and kept in Row unadded in
-/// mode 3 (D-182); 1 writes Row, 2 the write cycle's Col, 3 nothing. `input` is none on a filling write (D-183). The
-/// fields to write come back as a bit each, x lowest.
-pub fn write(fill: &mut Fill, input: Option<[u32; 4]>, masked: bool, row: usize, last: [u32; 4]) -> ([u32; 4], u32) {
+/// One write's fields (§6.3.6, §6.3.7): each field's specifier from MASK (all 0 without the m bit); 0 writes the
+/// decompressed data, added to its Row register in offset mode, added and kept in Row in difference mode, and kept in
+/// Row unadded in mode 3 (D-182); 1 writes Row, 2 the write cycle's Col, 3 nothing. The fields to write come back as a
+/// bit each, x lowest.
+pub fn write(fill: &mut Fill, data: [u32; 4], masked: bool, row: usize) -> ([u32; 4], u32) {
     let mut out = [0; 4];
     let mut enable = 0;
     for f in 0..4 {
         let m = if masked { fill.mask >> (2 * (4 * row + f)) & 3 } else { 0 };
         let v = match m {
             0 => {
-                let d = input.unwrap_or(last)[f];
-                match (input, fill.mode) {
-                    (None, _) | (_, 0) => d,
-                    (_, 1) => d.wrapping_add(fill.row[f]),
-                    (_, 2) => {
+                let d = data[f];
+                match fill.mode {
+                    0 => d,
+                    1 => d.wrapping_add(fill.row[f]),
+                    2 => {
                         fill.row[f] = d.wrapping_add(fill.row[f]);
                         fill.row[f]
                     }
@@ -149,8 +149,6 @@ pub struct Unpack {
     pub cycle: Cycle,
     bits: u128,
     held: u32,
-    /// The last vector read, which a filling write's 0 specifiers write again (D-183).
-    last: [u32; 4],
 }
 
 /// What the next write needs.
@@ -171,18 +169,7 @@ impl Unpack {
         };
         let imm = code & 0xFFFF;
         let addr = (imm & 0x3FF) + if imm & 0x8000 != 0 { tops.unwrap_or(0) } else { 0 };
-        Some(Unpack {
-            format,
-            usn: imm & 0x4000 != 0,
-            masked: cmd & 0x10 != 0,
-            addr,
-            num,
-            done: 0,
-            cycle: Cycle::of(cycle),
-            bits: 0,
-            held: 0,
-            last: [0; 4],
-        })
+        Some(Unpack { format, usn: imm & 0x4000 != 0, masked: cmd & 0x10 != 0, addr, num, done: 0, cycle: Cycle::of(cycle), bits: 0, held: 0 })
     }
 
     pub fn finished(&self) -> bool {
@@ -195,24 +182,30 @@ impl Unpack {
         self.held += 32;
     }
 
-    /// The next write, or the word it waits for; `fill` is the VIF's Row, Col, MASK and MODE.
-    pub fn next(&mut self, fill: &mut Fill) -> Next {
+    /// The next write, or the word it waits for; `fill` is the VIF's Row, Col, MASK and MODE. A filling write takes no
+    /// vector but decompresses the one at the stream's pointer all the same (D-183): `peek(i)` is the `i`th word of
+    /// the stream past the bits held, 0 where none has arrived.
+    pub fn next(&mut self, fill: &mut Fill, peek: &dyn Fn(usize) -> u32) -> Next {
         let k = self.done;
-        let input = if self.cycle.reads(k) {
-            let need = self.format.bits();
-            if self.held < need {
-                return Next::Word;
-            }
-            let raw = if need == 128 { self.bits } else { self.bits & ((1u128 << need) - 1) };
+        let need = self.format.bits();
+        let reads = self.cycle.reads(k);
+        if reads && self.held < need {
+            return Next::Word;
+        }
+        let mut raw = self.bits;
+        let mut have = self.held;
+        let mut i = 0;
+        while have < need {
+            raw |= u128::from(peek(i)) << have;
+            have += 32;
+            i += 1;
+        }
+        let raw = if need == 128 { raw } else { raw & ((1u128 << need) - 1) };
+        if reads {
             self.bits = if need == 128 { 0 } else { self.bits >> need };
             self.held -= need;
-            let v = decode(self.format, raw, self.usn);
-            self.last = v;
-            Some(v)
-        } else {
-            None
-        };
-        let (fields, enable) = write(fill, input, self.masked, self.cycle.row(k), self.last);
+        }
+        let (fields, enable) = write(fill, decode(self.format, raw, self.usn), self.masked, self.cycle.row(k));
         self.done += 1;
         if self.finished() {
             self.bits = 0;

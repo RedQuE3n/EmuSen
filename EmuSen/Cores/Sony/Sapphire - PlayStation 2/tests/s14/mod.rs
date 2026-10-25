@@ -5,7 +5,7 @@
 //! the error masks, DIRECT and the FLUSH family. Like S11's they run from kseg0 with everything else through kseg1.
 //! The expected words come from `manual`, apart from `src/vif`.
 
-#![allow(dead_code)]
+#![allow(dead_code, clippy::needless_range_loop)]
 
 pub mod console;
 pub mod manual;
@@ -118,7 +118,7 @@ impl Stream {
 
     pub fn qwords(&self) -> Vec<[u32; 4]> {
         let mut w = self.0.clone();
-        while w.len() % 4 != 0 {
+        while !w.len().is_multiple_of(4) {
             w.push(0);
         }
         w.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()
@@ -452,11 +452,11 @@ pub fn cycle() -> Program {
             (2, 4, 0x7C, 9, 0x70),
             (2, 4, 0x68, 7, 0x80),
             (0, 3, 0x7E, 5, 0x90),
-            (1, 0, 0x6D, 4, 0xA0),
-            (0, 0, 0x7C, 5, 0xA8),
             (253, 4, 0x70, 8, 0),
             (1, 1, 0x6C, 8, QWORDS[n] - 4),
             (5, 2, 0x65, 5, 0xB0),
+            (1, 0, 0x6D, 4, 0xA0),
+            (0, 0, 0x7C, 5, 0xA8),
         ];
         for (k, &(cl, wl, cmd, num, addr)) in cases.iter().enumerate() {
             let mut regs = Regs { col: cols, mask: col_mask, cl, wl, ..Regs::default() };
@@ -470,7 +470,9 @@ pub fn cycle() -> Program {
             s.code(0x01, 0, wl << 8 | cl).col(cols).mask(col_mask);
             s.unpack(cmd, num, addr, &d);
             s.code(0x07, 0, 0x100 + k as u32);
-            let w = manual::unpack(&mut regs, cmd, num, addr, false, &d);
+            let mut stream = d.clone();
+            stream.push(0x07 << 24 | (0x100 + k as u32));
+            let w = manual::unpack(&mut regs, cmd, num, addr, false, &stream);
             mem.apply(&w);
             send(p, n, &s, at);
             at += 0x800;
@@ -552,6 +554,9 @@ pub fn micro_program() -> Program {
         let first = micro("nop | iaddiu vi6, vi0, 0x61\nnop | isw.x vi6, 0x43(vi0)\n[e] nop | move vf0, vf0\nnop | move vf0, vf0");
         let second = micro("nop | iaddiu vi7, vi0, 0x62\nnop | isw.x vi7, 0x44(vi0)\n[e] nop | move vf0, vf0\nnop | move vf0, vf0");
         let mut s = Stream::new();
+        if n == 1 {
+            s.code(0x03, 0, 0).code(0x02, 0, 0);
+        }
         s.mpg(0, &rep).mpg(16, &lng).mpg(48, &cpy).mpg(64, &first).mpg(64 + first.len() as u32, &second);
         send(p, n, &s, at);
         at += 0x800;
@@ -709,7 +714,8 @@ pub fn dbuf() -> Program {
 
 /// `s14-regs`: on both VIFs, MARK by VIFcode and by the EE's write; the console's `intstall` shapes (NOP, MARK and STMASK
 /// with the i bit, each followed by an STMASK) with STAT, MASK and I_STAT, then STC; the stall holding a packet's
-/// later qwords in the FIFO; FBRST's FBK and STP with STC; RST's effect on the registers (D-187); ERR's MII and ME1;
+/// later qwords in the FIFO; FBRST's FBK and STP with STC; RST, which keeps the registers a program sets (D-187); ERR's
+/// MII and ME1;
 /// an undefined VIFcode's ER1 and interrupt; VIF1's codes on VIF0 and an UNPACK of no format (D-188); STROW through
 /// the FIFO; a chain with TTE, whose tags' upper halves are VIFcodes.
 pub fn regs() -> Program {
@@ -796,7 +802,7 @@ pub fn regs() -> Program {
         s.code(0x07, 0, 0x11);
         fifo(p, n, &s);
         crate::s11::delay(p, 50);
-        rec(p, vreg(n, r::MARK), Some(0));
+        rec(p, vreg(n, r::MARK), Some(0x99));
         rec(p, vreg(n, r::STAT), Some(0x0100_0100));
         poke(p, vreg(n, r::FBRST), 8);
         idle(p, n);
@@ -822,8 +828,10 @@ pub fn regs() -> Program {
         send(p, n, &s, next());
         rec(p, vreg(n, r::CYCLE), Some(0x0203));
         poke(p, vreg(n, r::FBRST), 1);
-        for off in [r::STAT, r::ERR, r::MARK, r::CYCLE, r::MODE, r::NUM, r::MASK, r::CODE, r::ITOPS, r::R0, r::R0 + 0x30, r::C0, r::C0 + 0x30] {
-            rec(p, vreg(n, off), Some(0));
+        let kept = [(r::STAT, 0), (r::ERR, 0), (r::MARK, 0x22), (r::CYCLE, 0x0203), (r::MODE, 2), (r::NUM, 0), (r::MASK, 0x1234_5678), (r::CODE, 0)];
+        let kept2 = [(r::ITOPS, 0x55), (r::R0, 1), (r::R0 + 0x30, 4), (r::C0, 5), (r::C0 + 0x30, 8)];
+        for (off, v) in kept.into_iter().chain(kept2) {
+            rec(p, vreg(n, off), Some(v));
         }
         poke(p, vreg(n, r::ERR), 2);
         // MII: the i bit ignored.
@@ -901,11 +909,11 @@ pub fn regs() -> Program {
     std::mem::replace(p, Program::new("s14-regs"))
 }
 
-/// The GS's SIGLBLID privileged register, which an A+D write of SIGNAL through PATH2 sets on the referees.
+/// The GS's SIGLBLID privileged register, whose LBLID an A+D write of LABEL through PATH2 sets on the referees.
 pub const SIGLBLID: u32 = 0x1200_1080;
 
-/// `s14-direct`: VIF1's DIRECT and DIRECTHL with NUM and CODE after; MSKPATH3; FLUSH, FLUSHA and MSCALF with a
-/// microprogram that stores a mark. DIRECT's packet writes SIGNAL by A+D, which the referees' GS shows in SIGLBLID; on
+/// `s14-direct`: VIF1's DIRECT with NUM and CODE after; MSKPATH3; FLUSH, FLUSHA and MSCALF with a microprogram that
+/// stores a mark; DIRECTHL last. Each packet writes LABEL by A+D, which the referees' GS shows in SIGLBLID; on
 /// Sapphire PATH2 ends at its stand-in until S15, so those words are graded there by the tests instead.
 pub fn direct() -> Program {
     let mut p = Program::kernel("s14-direct");
@@ -914,9 +922,9 @@ pub fn direct() -> Program {
     let n = 1;
     let mut at = BUF + 0x3_0000;
     poke(p, 0x1200_1000, 1);
-    // A GIFtag of one loop, EOP, PACKED, one register A+D (EE User's Manual §7.2.2); SIGNAL's ID and IDMSK.
+    // A GIFtag of one loop, EOP, PACKED, one register A+D (EE User's Manual §7.2.2); LABEL's ID and IDMSK.
     let giftag = [1 | 1 << 15, 0x1000_0000, 0xE, 0];
-    let signal = [0x0000_1234, 0x0000_FFFF, 0x60, 0];
+    let signal = [0x0000_1234, 0x0000_FFFF, 0x62, 0];
     let mut s = Stream::new();
     s.direct(false, &[giftag, signal]);
     send(p, n, &s, at);
@@ -924,10 +932,10 @@ pub fn direct() -> Program {
     rec(p, vreg(n, r::NUM), Some(0));
     rec(p, vreg(n, r::CODE), Some(0x5000_0002));
     li(p, "t6", K1 | SIGLBLID);
-    p.emit("lw t2, 0(t6)");
+    p.emit("lw t2, 4(t6)");
     p.record("t2", None);
     let mut s = Stream::new();
-    s.direct(true, &[giftag, [0x0000_5678, 0x0000_FFFF, 0x62, 0]]);
+    s.direct(false, &[giftag, [0x0000_5678, 0x0000_FFFF, 0x62, 0]]);
     s.code(0x06, 0, 0x8000).code(0x11, 0, 0).code(0x13, 0, 0).code(0x06, 0, 0);
     send(p, n, &s, at);
     at += 0x400;
@@ -943,6 +951,17 @@ pub fn direct() -> Program {
     send(p, n, &s, at);
     rec_slot(p, n, 0x50, [Some(0x5A), Some(0), Some(0), Some(0)]);
     rec(p, vreg(n, r::CODE), Some(0x1100_0000));
+    // DIRECTHL last, a LABEL again.
+    let mut s = Stream::new();
+    s.direct(true, &[giftag, [0x0000_9ABC, 0x0000_FFFF, 0x62, 0]]);
+    send(p, n, &s, at + 0x400);
+    rec(p, vreg(n, r::CODE), Some(0x5100_0002));
+    peek(p, vreg(n, r::STAT));
+    p.emit("andi t2, t2, 0x3f3f");
+    p.record("t2", Some(0));
+    li(p, "t6", K1 | SIGLBLID);
+    p.emit("lw t2, 4(t6)");
+    p.record("t2", None);
     reset(p, n);
     std::mem::replace(p, Program::new("s14-direct"))
 }

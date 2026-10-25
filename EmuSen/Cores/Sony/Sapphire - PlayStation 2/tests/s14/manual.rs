@@ -60,13 +60,13 @@ pub fn data_words(cmd: u32, num: u32, cl: u32, wl: u32) -> u32 {
 }
 
 /// An UNPACK's writes in order: each one's qword address before wrapping and its four fields (none: not written).
-/// `num` is NUM with 0 as 256; `addr` ADDR with TOPS already added.
+/// `num` is NUM with 0 as 256; `addr` ADDR with TOPS already added; `data` the stream from the UNPACK's first data
+/// word to the end of what has arrived, which a filling write decompresses from without taking (D-183).
 pub fn unpack(r: &mut Regs, cmd: u32, num: u32, addr: u32, usn: bool, data: &[u32]) -> Vec<(u32, [Option<u32>; 4])> {
     let masked = cmd & 0x10 != 0;
     let (cl, wl) = (r.cl, r.wl);
     let mut out = Vec::new();
     let mut read = 0;
-    let mut last = [0u32; 4];
     for k in 0..num {
         // WL 0: one block that never ends, every write reading (D-181).
         let cycle = if wl == 0 { k } else { k % wl };
@@ -77,33 +77,27 @@ pub fn unpack(r: &mut Regs, cmd: u32, num: u32, addr: u32, usn: bool, data: &[u3
         } else {
             (addr + k, cycle < cl)
         };
-        let v = if input {
-            last = vector(cmd, data, read, usn);
+        let d = vector(cmd, data, read, usn);
+        if input {
             read += 1;
-            Some(last)
-        } else {
-            None
-        };
+        }
         let row = cycle.min(3) as usize;
         let mut fields = [None; 4];
         for (f, field) in fields.iter_mut().enumerate() {
             let m = if masked { r.mask >> (2 * (4 * row + f)) & 3 } else { 0 };
             *field = match m {
-                0 => match v {
-                    None => Some(last[f]),
-                    Some(d) => Some(match r.mode {
-                        0 => d[f],
-                        1 => d[f].wrapping_add(r.row[f]),
-                        2 => {
-                            r.row[f] = r.row[f].wrapping_add(d[f]);
-                            r.row[f]
-                        }
-                        _ => {
-                            r.row[f] = d[f];
-                            d[f]
-                        }
-                    }),
-                },
+                0 => Some(match r.mode {
+                    0 => d[f],
+                    1 => d[f].wrapping_add(r.row[f]),
+                    2 => {
+                        r.row[f] = r.row[f].wrapping_add(d[f]);
+                        r.row[f]
+                    }
+                    _ => {
+                        r.row[f] = d[f];
+                        d[f]
+                    }
+                }),
                 1 => Some(r.row[f]),
                 2 => Some(r.col[row]),
                 _ => None,

@@ -243,6 +243,23 @@ impl Vif {
         Some(w)
     }
 
+    /// The `i`th word of the stream past the next one `word` gives, without taking it; 0 where none has arrived.
+    fn peek(&self, i: usize) -> u32 {
+        let left = 4 - self.cur_at;
+        if i < left {
+            return self.cur[self.cur_at + i];
+        }
+        let mut i = i - left;
+        for &(q, tag) in &self.fifo {
+            let from = if tag { 2 } else { 0 };
+            if i < 4 - from {
+                return (q >> (32 * (from + i))) as u32;
+            }
+            i -= 4 - from;
+        }
+        0
+    }
+
     /// The memory size of this VIF's VU in qwords (VU User's Manual §1.1.5), where UNPACK's addresses wrap
     /// (D-181, the console's `stcycl` text).
     fn data_qwords(&self) -> u32 {
@@ -369,7 +386,10 @@ impl Vif {
                 Some(BUS + taken.saturating_sub(self.time))
             }
             Cmd::Unpack(mut u) => loop {
-                match u.next(&mut self.fill) {
+                let mut fill = self.fill;
+                let next = u.next(&mut fill, &|i| self.peek(i));
+                self.fill = fill;
+                match next {
                     Next::Word => {
                         let Some(x) = self.word() else {
                             self.cmd = Cmd::Unpack(u);
@@ -575,7 +595,7 @@ impl Vif {
     }
 
     /// A register write (§6.5): MARK, which clears MRK; FBRST; ERR; and VIF1_STAT's FDR. The rest are read-only.
-    pub fn write(&mut self, off: u32, v: u32, vpu: &mut Vpu) {
+    pub fn write(&mut self, off: u32, v: u32) {
         match off {
             reg::MARK => {
                 self.mark = v & 0xFFFF;
@@ -583,21 +603,27 @@ impl Vif {
             }
             reg::ERR => self.err = v & 7,
             reg::STAT if self.unit == 1 => self.stat = self.stat & !stat::FDR | v & stat::FDR,
-            reg::FBRST => self.fbrst(v, vpu),
+            reg::FBRST => self.fbrst(v),
             _ => {}
         }
     }
 
-    /// FBRST (§6.5): RST resets the whole VIF with its FIFO (D-187), FBK stalls it at once, STP after the VIFcode in
-    /// process, STC cancels a stall and clears its flags.
-    fn fbrst(&mut self, v: u32, vpu: &mut Vpu) {
+    /// FBRST (§6.5): RST empties the FIFO, drops the VIFcode in progress and clears STAT, NUM, CODE and ERR, keeping the
+    /// registers a program sets (D-187); FBK stalls at once, STP after the VIFcode in process, STC cancels a stall and
+    /// clears its flags.
+    fn fbrst(&mut self, v: u32) {
         if v & fbrst::RST != 0 {
-            let (unit, time, received) = (self.unit, self.time, self.received);
-            *self = Vif { time, received, ..Vif::new(unit) };
-            vpu.units.link.itop[unit] = 0;
-            if unit == 1 {
-                vpu.units.link.top[1] = 0;
-            }
+            self.fifo.clear();
+            self.cur_at = 4;
+            self.cmd = Cmd::Idle;
+            self.held = None;
+            self.i_bit = false;
+            self.stall_next = false;
+            self.stop_next = false;
+            self.stat &= stat::DBF | stat::FDR;
+            self.num = 0;
+            self.code = 0;
+            self.err = 0;
             self.wake = true;
         }
         if v & fbrst::FBK != 0 {
@@ -646,10 +672,11 @@ impl Vif {
 
     /// A qword taken from the reversed FIFO by the DMAC or by the EE's load; 0 when there is none.
     pub fn get(&mut self, gif: &mut dyn Gif) -> u128 {
-        if self.reversed() && self.fifo.is_empty() {
-            if let Some(q) = gif.host_read() {
-                self.fifo.push_back((q, false));
-            }
+        if self.reversed()
+            && self.fifo.is_empty()
+            && let Some(q) = gif.host_read()
+        {
+            self.fifo.push_back((q, false));
         }
         if self.reversed() { self.fifo.pop_front().map_or(0, |(q, _)| q) } else { 0 }
     }

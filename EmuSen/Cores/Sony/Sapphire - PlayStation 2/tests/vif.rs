@@ -83,7 +83,14 @@ fn direct_reaches_path2_and_the_flush_family_waits_for_the_paths() {
     let sys = grade_with(s14::direct(), |s| s.board.path2.keep = true);
     let q = |w: [u32; 4]| w.iter().rev().fold(0u128, |a, &x| a << 32 | u128::from(x));
     let tag = q([1 | 1 << 15, 0x1000_0000, 0xE, 0]);
-    let want = vec![(tag, false), (q([0x1234, 0xFFFF, 0x60, 0]), false), (tag, true), (q([0x5678, 0xFFFF, 0x62, 0]), true)];
+    let want = vec![
+        (tag, false),
+        (q([0x1234, 0xFFFF, 0x62, 0]), false),
+        (tag, false),
+        (q([0x5678, 0xFFFF, 0x62, 0]), false),
+        (tag, true),
+        (q([0x9ABC, 0xFFFF, 0x62, 0]), true),
+    ];
     assert_eq!(sys.board.path2.taken, want);
     assert!(!sys.board.path2.masked, "MSKPATH3 set and then cleared");
 }
@@ -217,6 +224,7 @@ fn the_stmod_console_text_holds() {
 /// S-32 UNPACK with the m bit and NUM 8 under each CL and WL: each qword shows the write cycle that wrote it, and the
 /// addresses wrap at the memory's size (VIF0's 256 qwords; VIF1's 1,024 do not wrap there).
 #[test]
+#[allow(clippy::needless_range_loop)]
 fn the_stcycl_console_text_holds() {
     for n in 0..2 {
         let mut rig = Rig::new();

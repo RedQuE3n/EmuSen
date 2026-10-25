@@ -414,7 +414,7 @@ impl Bus for Board {
             self.run_vifs(self.now);
             if paddr < vif::FIFO[0] {
                 if bytes >= 4 {
-                    self.vif[((paddr - vif::REGS[0]) >> 10) as usize].write(paddr & 0x3F0, value as u32, &mut self.vpu);
+                    self.vif[((paddr - vif::REGS[0]) >> 10) as usize].write(paddr & 0x3F0, value as u32);
                 }
             } else if bytes == 16 {
                 self.vif[usize::from(paddr >= vif::FIFO[1])].put(value, false);

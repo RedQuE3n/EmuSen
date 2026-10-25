@@ -1,7 +1,8 @@
 chdman, MAME's Compressed Hunks of Data manager, as EmuSen's builds ship it (THIRD_PARTY_NOTICES.md, section 1.7).
 
-chdman's source file is under the BSD 3-Clause License, copyright Aaron Giles, as its header states (read by the
-project's tester on 2026-10-25). MAME as a whole, from which chdman is built, is distributed under the GNU General
+chdman's source file is under the BSD 3-Clause License, copyright Aaron Giles, as its header states at tag mame0289
+("// license:BSD-3-Clause", "// copyright-holders:Aaron Giles", src/tools/chdman.cpp, read 2026-10-25); the header
+names no years. MAME as a whole, from which chdman is built, is distributed under the GNU General
 Public License, version 2 or later (licenses/GPL-2.0.txt): "Copyright (c) 1997-2026 MAMEDev and contributors"
 ("The MAME License", MAME Documentation 0.289, https://docs.mamedev.org/license.html). Where the two differ, a build of
 chdman is distributed under the GNU General Public License, version 2 or later, and the written offer of its source is

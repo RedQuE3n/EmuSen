@@ -7,34 +7,37 @@ usage 1   pkg make <path>...            a linked package for each game under eac
 usage 2   pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)
 usage 3   pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)
 usage 4   pkg migrate <package>...      the game's saves, states and cheats copied into its package
-usage 5   pkg wait [pkg<n>]             follow a pkg job that went on in the background
+usage 5   pkg patch add <package> <file>
+usage 6                                 an IPS, UPS or BPS patch checked, copied in and applied at load
+usage 7   pkg patch rm <package> <n>    patch n taken out of the package's list
+usage 8   pkg wait [pkg<n>]             follow a pkg job that went on in the background
 
 case the usage, and what a command line refuses
 target none
-covers 1-5
+covers 1-8
 $ pkg
-out 222
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+out 284
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg frobnicate
-out 222
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+out 284
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg make
-out 270
+out 332
 pkg make: name what to make, or / for all of it
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg migrate
-out 276
+out 338
 pkg migrate: name what to migrate, or / for all of it
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
@@ -49,22 +52,38 @@ pkg make: --zip is not in this build yet; packages are linked, and the game stay
 status 1
 action none
 $ pkg check NES --fast
-out 264
+out 326
 pkg: --fast is not an option of pkg check
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg ls NES SNES
-out 250
+out 312
 pkg ls: one console at most
-Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
-$ pkg patch add NES/a.nes a.ips
-out 98
-pkg patch: soft patches are not in this build yet; packages are made, listed, checked and migrated
+$ pkg patch
+out 336
+pkg patch: add <package> <file> or rm <package> <n>
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg patch rm NES/a.nes 0
+out 352
+pkg patch rm: 0 is not a patch's number; pkg ls numbers them from 1
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg patch add NES/a.nes
+out 336
+pkg patch: add <package> <file> or rm <package> <n>
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg wait
@@ -103,6 +122,16 @@ pkg: AppSettings.RomDirectory is not set: there is no library for a package to l
 status 1
 action none
 $ pkg migrate NES/a.nes
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+$ pkg patch add NES/a.nes /a.ips
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+$ pkg patch rm NES/a.nes 1
 out 87
 pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
 status 1

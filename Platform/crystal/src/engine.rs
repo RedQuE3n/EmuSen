@@ -390,7 +390,7 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub fn load_rom(&mut self, tree: &Tree, at: &str, system: Option<SystemDetail>, console: String, is_image: &dyn Fn(&str) -> bool, folders: &[String]) -> Result<(), Refused> {
         let set = DiscSet::of(tree, at, is_image).map_err(Refused::io)?;
-        let disc = set.open(tree, 0, is_image).map_err(Refused::io)?;
+        let disc = self.patched(set.open(tree, 0, is_image).map_err(Refused::io)?, at)?;
         let asked = self.lib.firmware_for(disc.image.bytes()).ok().and_then(|t| emusen_native::json::parse(t.as_bytes()).ok()).map(|v| crate::firmware::entries(&v)).unwrap_or_default();
         let firmware = self.firmware_files(&asked, folders);
         self.release_media();
@@ -417,7 +417,7 @@ impl Engine {
             .collect();
         if wanted.iter().any(|(w, s)| s.read().is_some() && !saves.iter().any(|(sw, ss)| sw == w && ss.path == s.path)) {
             drop(machine);
-            let again = if self.lends() { set.open(tree, 0, is_image).map_err(Refused::io)? } else { disc.take().expect("held") };
+            let again = if self.lends() { self.patched(set.open(tree, 0, is_image).map_err(Refused::io)?, at)? } else { disc.take().expect("held") };
             machine = self.create(&again, &firmware, &wanted, &placement, routed.as_deref())?;
             kept = self.lends();
             disc = Some(again);
@@ -426,6 +426,18 @@ impl Engine {
         self.made = Made::Game(system);
         self.adopt(tree, machine, placement, &asked, wanted, Some(set), at, console, None, loan);
         Ok(())
+    }
+
+    /// The disc's image with its package's soft patches applied, where the game is a package that lists any; the core is
+    /// handed these bytes and the file is never written (EmuSen_GamePackages.md §5.4). Refused with the patch's words.
+    fn patched(&self, mut disc: DiscFiles, at: &str) -> Result<DiscFiles, Refused> {
+        let Some(package) = self.package.as_deref() else { return Ok(disc) };
+        match emusen_patch::package::image_at(package, disc.image.bytes()) {
+            Ok(Some(image)) => disc.image = emusen_galaxia::mapped::Mapped::held(image),
+            Ok(None) => {}
+            Err(words) => return Err(Refused::io(format!("{} was not opened, since its soft patches did not apply: {words}", path::file_name(Style::HOST, at)))),
+        }
+        Ok(disc)
     }
 
     /// The console of `system_id` with nothing in it, `CoreEngine.StartConsole`.

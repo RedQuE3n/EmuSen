@@ -20,6 +20,8 @@ emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
 emusen-systems = { path = "../systems" }
 # The tree, the config files, the save names and the files a probe reads.
 emusen-galaxia = { path = "../galaxia" }
+# A packaged game's soft patches, applied to the image before create (EmuSen_GamePackages.md §5.4).
+emusen-patch = { path = "../patch" }
 # The firmware store: the folders searched, an image found, installed or located (EmuSen_Backend.md §15.1).
 emusen-firmware = { path = "../firmware" }
 # The card manager over the media's files (EmuSen_Backend.md §15.2).

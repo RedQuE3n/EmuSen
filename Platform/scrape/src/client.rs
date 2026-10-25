@@ -118,6 +118,7 @@ pub struct MediaAnswer {
 }
 
 /// The three hashes `jeuInfos` asks for, with the size.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hashes {
     pub md5: String,
     pub crc32: String,

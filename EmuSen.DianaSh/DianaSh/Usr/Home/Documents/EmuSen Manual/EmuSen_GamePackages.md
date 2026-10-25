@@ -1,5 +1,10 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, a fifth time: step 6 is built (§15). Soft patching: `emusen-patch` applies IPS, UPS and BPS, each
+written from its published specification, now read; `pkg patch add` and `pkg patch rm`; both runtimes hand the core the
+patched image and never write the game; the `patched` identity for a state's record and the scraper; *Game Package* in
+Mistress. Step 7 waits for the tester's go.*
+
 *Revised 2026-10-25, a fourth time: step 5 is built (§14). Linked packages for every console: the claim index in
 Galaxia, saves, states and cheats with a package root in both runtimes, the scan's package rules, and `pkg make`,
 `pkg ls`, `pkg check` and `pkg migrate` in `emusen.library`. Step 6 waits for the tester's go.*
@@ -488,7 +493,7 @@ cost nobody asked for at scan time. A package is made:
 ### 3.7 The `pkg` command
 
 Added to `emusen.library` in stage 5 (§7), with its page at `Lib/dianash/emusen.library/man/pkg.1`. *Built
-2026-10-25 (§14.4)* but for `--self-contained` and `--zip`, which are step 7's, and `pkg patch`, step 6's; `pkg wait`
+2026-10-25 (§14.4)* but for `--self-contained` and `--zip`, which are step 7's; `pkg patch` *built at step 6 (§15.2)*; `pkg wait`
 joins it as `chd wait` joined `chd`:
 
 ```
@@ -867,7 +872,7 @@ the manifest's patches in order to a host-owned buffer, and that buffer is the i
   the same place, take bytes from the patch, copy from the source at a relative place, or copy from the target already
   written. It carries CRC32s of the source, the target and the patch.
   - The CRC fields' order and the variable-length number encoding are to be read from the specification itself at
-    stage 6. On 2026-10-16 only secondary descriptions were reachable: vidua's notes, and RetroArch's implementation
+    stage 6. *Read at step 6 (§15.1): source, target, then the patch's own CRC-32, little-endian.* On 2026-10-16 only secondary descriptions were reachable: vidua's notes, and RetroArch's implementation
     named in a search.
 
 **The checks** [C]:
@@ -960,7 +965,7 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
 steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
 run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 is built
-and its gate passed (§14); step 6 waits for the tester's go. Every test uses
+and its gate passed (§14); step 6 is built and its gate passed (§15); step 7 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -971,7 +976,7 @@ them. No commercial image is committed.
 | **3** *(built 2026-10-25, §12; the handheld's run left)* | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
 | **4** *(built 2026-10-25, §13)* | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** *(built 2026-10-25, §14)* | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
-| **6** | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
+| **6** *(built 2026-10-25, §15)* | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
 | **7** | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
 | **8** | *Deferred 2026-10-25 (§9 Q2): not built until the tester revisits it.* **Replacing originals** (§4.5) | Removal goes to the trash and is refused without a terminal, for a failed check, and for a changed source. A shared track is kept. The library after replacement holds exactly the CHDs, at their checked hashes |
 | **9** | *If wanted:* `pkg export esde` (media, and optionally a `gamelist.xml`) | ES-DE shows the exported art for the packaged games |
@@ -1015,7 +1020,8 @@ them. No commercial image is committed.
   the page cache.*
 - **P7.** No step of §7 writes, renames or removes anything under `RomDirectory`, except step 8 when chosen. Checked by
   the before and after listings. *Holds for step 5 (§14.7): the listings before and after making and migrating
-  packages, in Rust and in WiseMan, were the same file for file.*
+  packages, in Rust and in WiseMan, were the same file for file.* *Holds for step 6 (§15.8): the listings before and after
+  adding and removing patches were the same, and both runtimes left the patched game's file as it was.*
 
 ---
 
@@ -1194,7 +1200,17 @@ Decided 2026-10-25 by the tester:
   (<https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt>), libFLAC's `COPYING.Xiph`, Zstandard's `LICENSE`,
   utf8proc's `LICENSE.md` and zlib's `LICENSE`, each from its project's repository.
 
-**Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code. MAME's
+- For §15, read 2026-10-25: zerosoft, "IPS file format" (<http://zerosoft.zophar.net/ips.php>); SnesLab, "IPS file
+  format" (<https://sneslab.net/wiki/IPS_file_format>), for the truncation after `EOF`; the nesdev forum thread "Patch
+  formats (such as xdelta, vcdiff, bps)" (<https://nesdev.nes.science/f13/t12046.xhtml>), as a search engine's summary,
+  on the truncation's byte order and Lunar IPS; "UPS File Format Specification", 18 April 2008, the Internet Archive's
+  copy of <http://individual.utoronto.ca/dmeunier/ups-spec.pdf>; byuu (Near), "BPS File Format Specification" 1.0,
+  `bps_spec.md` in the Internet Archive's copy of romhacking.net document 746's download
+  (<https://www.romhacking.net/documents/746/>); vidua's notes, "BPS" (<https://vidua.readthedocs.io/en/latest/bps.html>),
+  on the CRCs' byte order and the offsets; docs.libretro.com, "Softpatching ROMs with RetroArch", again, for the names.
+
+**Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code; for §15, no
+patcher's source (Flips, beat, upset, xdelta or any other). MAME's
 source archive was unpacked and built at step 3 and none of its files was opened.
 
 ---
@@ -1985,7 +2001,7 @@ the runtime case passed, 284.
 
 ### 14.8 Left, and for the tester
 
-- **Step 6**, soft patching, waits for the tester's go.
+- ~~**Step 6**, soft patching, waits for the tester's go.~~ Built 2026-10-25 (§15).
 - **Q30 [decision]: the stores this step did not move.** State records, the crop and engine (§9 Q12) and art (§9 Q13)
   stay where they are, and nothing reads them from a package. *Recommended:* a step of their own before step 7, since a
   self-contained package is what would carry them to another machine, and each needs its reader changed with it
@@ -1999,7 +2015,241 @@ the runtime case passed, 284.
   hash rule.
 - **Q33 [routine]: no *Make Package* in Mistress yet.** §3.6 lists it among the ways a package is made; step 5's row
   names the command only. *Recommended:* add it to a game's options with step 6, whose *Add Patch* needs the same
-  window.
+  window. *Built so at step 6 (§15.5).*
 - **Q34 [routine]: a changed dump refuses its plain path too.** A claimed file that is another dump now is refused
   however it is opened, so that its saves are not written against another game. *Recommended:* keep it; the words name
   both hashes and what to do.
+
+---
+
+## 15. Built 2026-10-25: step 6
+
+*Measured on the development desktop on 2026-10-25. No patch was added to, and no package made of, the ROM library: every
+test made its images in a temporary folder (generated bytes in Rust, SyntheticRom and the test core's images in
+WiseMan), and each format's targets were built by the tests themselves.* Marks as at the top: what was run is [M].
+
+### 15.1 `emusen-patch`: the three formats
+
+A crate of its own, `Platform/patch`, as §2.3 planned: `ips.rs`, `ups.rs` and `bps.rs` are pure functions, bytes in and
+bytes out, with no file, clock or state; `lib.rs` names the format by its marker, reads what a patch says of itself
+(`info`), applies one (`apply`) and a list in order (`apply_list`). Its one dependency is Galaxia, for CRC-32 and
+SHA-1, whose owner is `RomHash` (§2.2); `package.rs` is the one composition with files, below. §2.3 lists IPS, BPS and
+UPS, and so those are the formats; PPF and xdelta stay with disc patches (§9 Q15). Each was written from its published
+description, read 2026-10-25, and no patcher's source was read [R]:
+
+- **IPS**: zerosoft's "IPS file format" and SnesLab's "IPS file format": `PATCH`, records of a three-byte offset and
+  a two-byte size, big-endian, then the bytes, or a two-byte run length and one byte where the size is zero, then
+  `EOF`; and the truncation extension, three big-endian bytes after `EOF` (SnesLab, and the nesdev thread "Patch
+  formats (such as xdelta, vcdiff, bps)", which names Lunar IPS among its writers).
+- **UPS**: "UPS File Format Specification" of 18 April 2008, the `ups-spec.pdf` §10 had been unable to read, found in
+  the Internet Archive's copy of `individual.utoronto.ca/dmeunier/ups-spec.pdf`. Its sizes, blocks of a relative
+  offset and XORed bytes to a terminating zero, the input read as zero past its end, and three CRC-32s, the patch's
+  over every byte before it.
+- **BPS**: byuu's (Near's) "BPS File Format Specification" 1.0, romhacking.net document 746, whose download §10 had not
+  reached: `bps_spec.md` from the Internet Archive's copy of the document's zip. The number encoding, the four actions
+  with their offsets, metadata, and the footer's order: source, target, then the patch's own CRC-32 over every byte
+  before it. Neither specification says the CRCs' byte order; vidua's notes say little-endian, and the gate's targets
+  agree.
+
+**Decided where the descriptions are silent** [C], each named in its module so that a later reading can overturn it:
+
+1. *IPS*: a record past the source's end lengthens the image, the bytes between left zero; a record whose offset reads
+   as `EOF` (0x454F46) is the end marker, as any reader must take it; after `EOF`, nothing or exactly three bytes,
+   anything else refused; a truncation longer than the image refused, since the extension only shortens.
+2. *UPS*: the terminating zero stands for one byte equal in both files, so the position moves past it: the reading in
+   which a block ends at the first byte the files share. An image that is already the output is refused ("it has been
+   patched before") rather than unpatched, although the format runs both ways, since a package's list only patches
+   forward.
+3. *BPS*: an image that is the target is refused the same way; every offset is bounded as the specification says, a
+   TargetCopy never reaching the byte being written.
+
+**The checks.** A UPS or BPS patch checks its own CRC-32 first ("the patch file is damaged: its bytes have CRC-32 …,
+and it records …"), then the image against the source's size and CRC-32, refused with both in the words before a byte
+is written ("the BPS patch was made for an image of 1048576 bytes with CRC-32 …, and this image has 1048576 bytes with
+CRC-32 …"); after applying, the result against the target's CRC-32. IPS carries none, so a package pins each IPS patch
+to the SHA-1 of the image it is added to, its place in the list (`source_sha1`), and `apply_list` refuses another
+image naming both SHA-1s. A patched image past 64 MiB is refused from the header, before anything is allocated.
+
+**No allocation beyond the output image.** Each format allocates its result once, at the size its header or its
+records give: IPS scans its records first for the size and the truncation, UPS takes its output size, BPS its target
+size. A list of several patches makes one image a patch and lets the last go. **Cost** [M, the desktop, `cargo run
+--release`, best of five, with WiseMan's tests running beside it, so an upper bound]: over a 64 MiB image changed one
+byte in 4,096, IPS 23 ms, UPS 234 ms and BPS 233 ms, the two checksummed formats dominated by two CRC-32s of 64 MiB
+each at RomHash's byte-at-a-time table. A 4 MiB SNES image is a sixteenth of that.
+
+### 15.2 The patch list in the manifest, and `pkg patch`
+
+**The fields** (§3.3), all of them allowed by step 2's schema, so the manifest stays 1.0 [C]:
+
+- each `patches` entry: `file` (its name in the package's root), `format`, `name` (the name the file had when it was
+  added, kept for the layout below; a field older builds keep unread), `sha1` (the file's), and either `source_crc32`
+  and `target_crc32` (UPS, BPS, from the footer) or `source_sha1` (IPS, the image at its place in the list);
+- `patched`: `patches_sha1`, `size`, `crc32`, `md5` and `sha1` of the image the list makes. **`patches_sha1` is the
+  SHA-1 of one line a patch, in order, of its format, a space and its file's SHA-1, each ended by a line feed**, so it
+  changes when the list or any file of it does (`emusen_patch::package::key`);
+- `identity`, `original` unless the player sets `patched` (§15.4).
+
+**`pkg patch add <package> <file>`** (the request op `pkg-patch-add`, the service 1.2): the file read and its structure
+and own checksum checked; the game's image read (the entry inside, for a zip) and held to `dump.file`, so that a patch
+is never pinned to another file; the list so far applied to it; the new patch applied to that result, which checks it;
+the file copied into the package's root under a hidden name, the list laid out, `patched` taken again and the manifest
+written. The file given is only read. A disc game is refused ("disc patches are left to a page of their own"), as §9
+Q15 decided. Where a UPS or BPS patch's source is the system pack's comparable form of the image (an NES image without
+its iNES header, say), the refusal says so, "It was made for this image's comparable form, … (its copier header taken
+off): EmuSen gives the core the image as dumped, so the patch was not added", as §5.4 asked: said, never applied
+silently.
+
+**`pkg patch rm <package> <n>`** (`pkg-patch-rm`): patch `n` taken out, from 1 in the order `pkg ls` lists them; the
+rest applied again to the image first, and the removal refused, nothing changed, where they no longer apply ("without
+patch 1 the rest no longer apply …", as when an IPS pinned to the image a BPS made is left without the BPS); the
+removed copy set aside, the rest laid out, `patched` taken again (null for an empty list), then the copy removed. It is
+the package's copy that goes: the file the player gave was never moved.
+
+**The layout, RetroArch's convention** (§5.4, §9 Q10): a list of one BPS or one UPS is named `<name>.bps` or
+`<name>.ups`, a list of IPS patches alone `<name>.ips`, `<name>.ips1`, `<name>.ips2` in order, `<name>` being the
+package's own (§14.2); any other list keeps each file's own name, made distinct, and `pkg ls` and the `added` event say
+that RetroArch will not apply it (`retroarch: false`). Renames go through hidden names, so that two files may swap, and
+are refused before anything moves where a name is taken by a file that is no patch of the list.
+
+**`pkg check`** also reads every patch, holds it to its SHA-1, and applies the list to the image, so that a changed patch
+file is `changed` with words naming it; **`pkg ls`** lists each package's patches, whether RetroArch applies them, and
+its identity. The man page is `man pkg`.
+
+### 15.3 Patching at load, in both runtimes
+
+Where §5.4 put it: after the image is opened and before create, in `CoreEngine.LoadRom` (C#) and `Engine::load_rom`
+(Crystal in Rust), for every v1 engine, whenever the session opened as a package (§14.1). The list is read from the
+package, each file held to its recorded SHA-1, applied by `emusen-patch`, and the result held to `patched.sha1` where
+`patches_sha1` names this same list, which gives an IPS list its target check. A refusal ends the open with the words
+of the patch that refused ("hack.tst was not opened, since its soft patches did not apply: hack.ips is not the patch
+that was added: its SHA-1 is …, and the package recorded …"); the core is never handed a half-patched image.
+
+- **The bytes the core is handed** are held in memory standing in for the mapping: Galaxia's `Mapped::held` in Rust,
+  and in C# a mapping the platform library made (`MappedFile.FromNative`), swapped into the disc's files by
+  `DiscFiles.Patch`. A core that claims `BORROW` keeps them for the machine's life as it keeps a mapping, whose
+  promise (readable, unchanged, in place) they keep; a core that copies has them freed when create returns, as before.
+  A machine made again, by a reset that loads afresh, patches again. Nothing advises the system for held bytes.
+- **The C# runtime has no rule of its own**: patching is `emusen-patch`'s alone, reached through the platform library
+  as §2.3 said (Rule B), by `emusen_patch_package_image` (interface **26**), which answers a Galaxia mapping the host
+  reads and frees as any other. Without the platform library, a package that lists patches refuses to open with words
+  naming the library, rather than starting unpatched.
+- **The original is never written** (P7): the game file is mapped read-only and only read; the patched image exists
+  only in memory.
+
+### 15.4 The `patched` identity
+
+As §5.5's table has it:
+
+- **The scraper** sends the dump's hashes for a patched package, the file's own, which is the dump the claim index
+  holds it to; under `identity: patched` it sends `patched` first and the dump after a 404, recording "patched" or
+  "file" as how the game was matched. Both halves: `Scraper.PatchedFirst` in Mistress and `run::patched_first` in
+  `emusen-scrape`, over `GamePackage.ScrapesAsPatched` and `package::scrapes_as_patched`. The identity is set in the
+  manifest; no command sets it yet (Q37).
+- **A state's record** names the patched image's MD5 and size, in both runtimes, so that a state made on one list
+  is "a different copy" to another (`EmuSen_Settings_Reference.md` §4.37); Mistress compares against the same MD5.
+- **`games.db`** keeps the dump's identity, so adding a patch keeps the game's favourites, play time and edits.
+- **Saves.** §5.5 keeps them apart only through the state's record; the battery save is the package's, patched or not
+  (Q35).
+
+### 15.5 *Make Package* and *Add Patch* in Mistress
+
+§14.8's Q33, as recommended: `GamePackageWindow`, a LunaP `ToolWindow` titled *Game Package*, reached as *Game
+Package…* from a game's context menu in the library and from the game options sheet, which the pad opens with Select
+in big picture and which the desktop's options menu shares. It shows the package's place, *Make Package* where there is
+none (the request `pkg-make` for the game's library path), the list with *Remove* on each patch, and *Add* for each
+IPS, UPS or BPS file beside the game in the library, where RetroArch and ES-DE keep a hack; on the desktop *Browse…*
+picks any file, and in big picture, where a system file picker cannot be driven by the pad, the files beside the game
+are the choice, and the window says so when there are none. Every action is a job of the library tool, so the window
+and `pkg` cannot disagree; a package made or changed scans the library again when the window closes.
+
+### 15.6 The surfaces
+
+| Surface | Change |
+|---|---|
+| `emusen-patch` | new: `Format`, `Refusal`, `Info`, `info`, `apply`, `Step`, `apply_list`, `MAX_IMAGE`; `package::{read_list, apply_listed, image, image_at, key, patched_json, patched_identity, entries, inside}` |
+| The platform interface | 25 → **26**: `emusen_patch_package_image` |
+| The service `emusen.library` | 1.1 → **1.2**: the request ops `pkg-patch-add` (`patch`) and `pkg-patch-rm` (`index`), the `package` event's `patch`, `patches`, `retroarch`, `identity`, `patched_crc32`; the table unchanged |
+| The module `emusen.library` | `pkg patch add` and `pkg patch rm`, the patch file a shell path resolved through the sandbox; asks for the service at 1.2 |
+| Galaxia, Rust | `Mapped::held`, `rom_hash::sha1_of`, `package::{Patched, patched, scrapes_as_patched}` |
+| Galaxia, C# | `GamePackage.Patches`, `Patched`, `PatchedIdentity`, `ScrapesAsPatched`; `DiscFiles.Patch`; `MappedFile.FromNative` (internal); `Native.SoftPatches` |
+| The runtimes | `CoreEngine` and `Engine` patch at load; `ManagedSession` and Crystal's `open` record the patched identity |
+| Mistress | `GamePackageWindow`, `ShowGamePackage`, the *Game Package…* entries; `Scraper.PackageOf` |
+
+The core ABI is unchanged, as §0 said it would be.
+
+### 15.7 Otherwise than the plan, and found on the way
+
+- **The primary specifications were read** (§15.1), which §5.4 and §10 had left owed; nothing in them contradicted the
+  secondary descriptions the design had used.
+- **IPS is pinned to the image at its place in the list**, not to the dump, which §3.3's words ("the dump it was made
+  for") read as for a first patch only. A second IPS patch is made for the image the first made.
+- **A manifest gains `patches[].name`**, the file's own name, so that a list that stops fitting RetroArch's convention
+  can give each file its own name back; it is a field the schema already allows.
+- **The transformed form is said, not offered.** §5.4 asked that the refusal "offers the transformed form"; giving the
+  core the headerless image would change the bytes a whole console's games are handed, so the words name the form and
+  the patch is not added (Q36).
+- **No command sets `identity`.** §3.7 lists none; the field is set in the manifest by hand (Q37).
+
+### 15.8 The gate, the tests, and the faults seeded
+
+**The gate** [M]:
+
+1. *Each format applied to synthetic images reproduces targets made independently in the test*:
+   `Platform/patch/tests/formats.rs` builds each target from a source of generated bytes (bytes changed, blocks moved
+   back and forward, a run, a repeated phrase, the length grown and cut), then the patch from source to target with the
+   test's own encoders (`tests/encoders`, written from the same descriptions with a bit-at-a-time CRC-32 and no code
+   of the crate's), and requires the crate's result to equal the target: IPS with records, runs and the truncation, UPS,
+   and BPS with all four actions used. The same encoders make the patches of `library-tool/tests/patches.rs`, whose
+   images the package applies at load to the targets the test built, and WiseMan's runtimes are handed an IPS patch
+   written in the test.
+2. *Mismatched sources are refused with words*: both checksums named for UPS and BPS, both SHA-1s for IPS in a list, an
+   image patched before named as such, the headerless form named, a changed patch file named, at `pkg patch add`, at
+   `pkg check` and at load.
+3. *The scraper sends `dump` for a patched package under `identity: original`*:
+   `ScraperTests.A_patched_package_is_scraped_by_its_dump_unless_its_identity_is_patched_and_then_by_the_patched_image_first`,
+   the request's `md5`, `crc`, `sha1` and `romtaille` those of the dump; under `identity: patched` the patched image's
+   first and the dump's after the 404. In Rust, `run.rs`' identity case.
+4. *The library tree unchanged*: `library-tool/tests/patches.rs` and `GamePackageWindowTests` list every library file's
+   path, size, time and MD5 before and after making packages and adding and removing patches;
+   `CrystalParityTests.A_patched_package_s_core_is_handed_the_patched_image_and_the_file_is_never_written_both_ways`
+   holds the game's bytes and the library's tree, both runtimes alike. **P7 holds for step 6.**
+5. *Both runtimes hand the core the patched image*: in the same case, a state saved after 20 frames of the patched
+   package equals, byte for byte, one saved after 20 frames of the target image opened as a plain file, in each
+   runtime, and the two runtimes' answers and files are equal; the state's record names the patched image's MD5.
+6. *The window*: `WindowFitAuditTests` at 1280 × 800 and 1920 × 1200 for a game with no package and for a long-named game
+   whose package holds two patches with two more beside it, recorded in the interface specification; and
+   `ThemedGameOptionsTests.The_game_package_window_is_reached_by_the_pad_and_so_is_every_control_in_it`.
+
+**Run** [M]: `cargo test --profile test-checked` of `emusen-patch` (formats 8), `emusen-library-tool` (4, gate 7,
+packages 2, patches 1), `emusen-library-module` (4), `emusen-galaxia` (89, advise 1), `emusen-crystal` (6, `crystal_abi` 6,
+`frame_alloc` 1), `emusen-scrape` (3 with the identity case, and its integration tests), `emusen-platform` (33,
+`dianash_abi` 4, `library_tool` 3) and `emusen-library` (2, 3, `library_abi` 6, `routing` 2). WiseMan: the blast
+radius `blast.sh` named, with `CoreAdapterTests` added for `CoreEngine`: 4,256 passed, 62 skipped (the picture and
+bench tools) and 2 failed, in 25 minutes. The two were the big-picture game options view's recordings, at both sizes,
+whose list had gained *Game Package…*; recorded again, the specification's classes passed, 300. The golden corpus's
+`pkg`, `help` and `man` were given `pkg patch` and the new page; `GoldenCorpusTests` passed, 102.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| UPS's terminating zero not moving the position past its byte | `formats.rs`' `ups_reproduces_independent_targets` |
+| BPS's SourceCopy not moving its source offset past what it copied | `formats.rs`' BPS gate and the list case |
+| Crystal's Rust engine handing the core the image unpatched | `CrystalParityTests.A_patched_package_s_core_is_handed_the_patched_image_and_the_file_is_never_written_both_ways`: the state differed from the target's |
+| Mistress's scraper sending the patched image first whatever the identity | `ScraperTests.A_patched_package_is_scraped_by_its_dump_unless_its_identity_is_patched_and_then_by_the_patched_image_first`: two requests for an `identity: original` package |
+
+### 15.9 Left, and for the tester
+
+- **Step 7**, self-contained packages and zip per package, waits for the tester's go.
+- **Q35 [decision]: a package's battery save is shared by the game patched and unpatched.** One file is claimed by one
+  package, so a patch added to a package that has been played runs the hack on the original's save; §5.5 keeps them
+  apart only in the state's record. *Recommended:* keep it for linked packages, and say so in the window and `man
+  pkg`; at step 7 a hack becomes a self-contained package of its own, with its own saves.
+- **Q36 [decision]: a patch made for the headerless form is refused, not applied to that form.** *Recommended:* keep
+  the refusal; applying it would hand the core an image other than the dump, which is a choice per console for a later
+  page.
+- **Q37 [routine]: no command or control sets `identity`.** *Recommended:* add `pkg identity <package>
+  original|patched` and a switch in the window with step 7.
+- **Q38 [routine]: the checksummed formats' cost is RomHash's CRC-32**, a byte-at-a-time table at about 0.6 GB/s, two
+  passes over a 64 MiB image at load. *Recommended:* leave it; a slicing CRC in `RomHash` is a measured change of its
+  own if a 64 MiB patched game's launch is ever seen to lag.

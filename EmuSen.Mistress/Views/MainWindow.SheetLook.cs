@@ -32,6 +32,7 @@ namespace EmuSen.Mistress.Views
             typeof(GamelistFilterWindow), typeof(FolderEditorWindow), typeof(GraphicsSettingsWindow), typeof(ShaderSettingsWindow), typeof(ResumeWindow),
             typeof(RewindReelWindow), typeof(ScreenshotWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
             typeof(InputSettingsWindow), typeof(GameCropWindow), typeof(MemoryCardsWindow), typeof(InsertDiscWindow), typeof(CompressedDiscsWindow),
+            typeof(GamePackageWindow),
         ];
 
         // A framed sheet's help bar, from what its window holds: choose and back always, tabs and sideways values where there are any.

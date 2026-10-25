@@ -127,6 +127,34 @@ pub fn new(title: Option<&str>, system: &str, mode: &str, game: Value) -> Value 
     ])
 }
 
+/// The patched image's hashes as `patched` records them, where the list holds patches and they were taken; what a
+/// state saved on it records and what the scraper sends first under `identity: patched` (EmuSen_GamePackages.md §5.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Patched {
+    pub md5: String,
+    pub crc32: String,
+    pub sha1: String,
+    pub size: u64,
+}
+
+pub fn patched(doc: &Value) -> Option<Patched> {
+    if !matches!(doc.get("patches"), Some(Value::Array(items)) if !items.is_empty()) {
+        return None;
+    }
+    let p = doc.get("patched")?;
+    let text = |name: &str| p.get(name).and_then(Value::as_str).map(str::to_ascii_lowercase);
+    let size = match p.get("size") {
+        Some(Value::Number(t)) => t.parse::<u64>().ok()?,
+        _ => return None,
+    };
+    Some(Patched { md5: text("md5")?, crc32: text("crc32")?, sha1: text("sha1")?, size })
+}
+
+/// Whether the scraper sends the patched image's hashes first: a list of patches, and `identity` set to `patched`.
+pub fn scrapes_as_patched(doc: &Value) -> bool {
+    doc.get("identity").and_then(Value::as_str) == Some("patched") && patched(doc).is_some()
+}
+
 /// A file entry, `game`'s shape and each companion's.
 pub fn file_entry(role: &str, place: &str, path: &str, size: Option<u64>) -> Value {
     let mut members = vec![

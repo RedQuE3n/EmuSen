@@ -277,7 +277,7 @@ namespace EmuSen.Cores.Native
             CoreMachine machine;
             List<(uint Which, BatterySave Save)> wanted;
             MediaPlacement? placement = null;
-            DiscFiles disc = set.Open(0);
+            DiscFiles disc = Patched(set.Open(0), path);
             // Whether a machine has taken the keeping of the disc's files, as one that borrows does.
             bool kept = false;
             try
@@ -298,7 +298,7 @@ namespace EmuSen.Cores.Native
                 {
                     machine.Dispose();
                     kept = false;
-                    if (Lends) disc = set.Open(0);
+                    if (Lends) disc = Patched(set.Open(0), path);
                     machine = Create(disc, firmware, wanted, placement, system?.Id);
                     kept = Lends;
                 }
@@ -314,6 +314,22 @@ namespace EmuSen.Cores.Native
                 if (!kept) disc.Dispose();
             }
             Adopt(machine, placement!, asked, wanted, set, path, console, null);
+        }
+
+        // The disc's image with its package's soft patches applied, which the core is handed; the file is never written - see EmuSen_GamePackages.md §5.4.
+        private DiscFiles Patched(DiscFiles disc, string path)
+        {
+            if (Options.PackageRoot is not { } package) return disc;
+            try
+            {
+                if (EmuSen.Galaxia.Native.SoftPatches.Apply(package, disc.Image) is { } patched) disc.Patch(patched);
+                return disc;
+            }
+            catch (System.IO.IOException refused)
+            {
+                disc.Dispose();
+                throw new System.IO.IOException($"{System.IO.Path.GetFileName(path)} was not opened, since its soft patches did not apply: {refused.Message}", refused);
+            }
         }
 
         // The console of systemId with nothing in it, its firmware and save media placed as Diamond_Shell.md §11.2 gives.

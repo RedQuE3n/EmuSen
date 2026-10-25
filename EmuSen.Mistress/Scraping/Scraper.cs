@@ -65,6 +65,9 @@ namespace EmuSen.Mistress.Scraping
         // The folder a ROM sits in below its console's, which its media are stored under as ES-DE stores them (§30); called on a worker's thread.
         public Func<string, string> FolderOf { get; init; } = _ => "";
 
+        // The package a game opens as, or null; a test names its own - see EmuSen_GamePackages.md §5.5.
+        public Func<string, string?> PackageOf { get; init; } = path => Galaxia.Media.GamePackages.RootFor(path);
+
         // Called with every jeuInfos answer, for the live measurement; its Body carries credentials and must be redacted before it is kept.
         public Action<string, JeuInfosAnswer>? Answered { get; init; }
 
@@ -278,8 +281,16 @@ namespace EmuSen.Mistress.Scraping
             hashes ??= RomHash.Of(path, stop);
             Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
-            JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop, byName ? known!.GameId : null);
-            string matchedBy = byName ? "name" : "file";
+            // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (§5.5 of EmuSen_GamePackages.md).
+            RomHashes? patched = byName ? null : PatchedFirst(path);
+            JeuInfosAnswer answer = await AskAsync(path, systemId, patched ?? hashes, fileName, stop, byName ? known!.GameId : null);
+            string matchedBy = byName ? "name" : patched is null ? "file" : "patched";
+            if (patched is not null && answer.Status == ScrapeStatus.NotFound)
+            {
+                if (!await TurnAsync(stop)) return Stopped(item);
+                answer = await AskAsync(path, systemId, hashes, fileName, stop);
+                matchedBy = "file";
+            }
 
             // Step (2) of §5.2: only after a 404, only for a file small enough to hold in memory, and only when the core's transform changes the bytes.
             if (answer.Status == ScrapeStatus.NotFound && info.Length <= Library.CoverFetcher.HashLimitBytes && _transform(path) is { } transform)
@@ -318,6 +329,14 @@ namespace EmuSen.Mistress.Scraping
                     ErrorLog.Warning("scraping", $"ScreenScraper could not answer; queued to retry: {ScrapeRedactor.Redact(Reason(answer))}", path);
                     return new ScrapeResult(path, item.System, ScrapeOutcome.Retry, false, [], Reason(answer));
             }
+        }
+
+        // The patched image's hashes where the game is a package whose identity is "patched", else null.
+        private RomHashes? PatchedFirst(string path)
+        {
+            if (PackageOf(path) is not { } package) return null;
+            try { return Galaxia.Media.GamePackage.Read(Path.Combine(package, Galaxia.Media.GamePackage.FileName)) is { ScrapesAsPatched: true } p ? p.Patched : null; }
+            catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException) { return null; }
         }
 
         private async Task<JeuInfosAnswer> AskAsync(string path, int systemId, RomHashes hashes, string fileName, CancellationToken stop, long? gameId = null)

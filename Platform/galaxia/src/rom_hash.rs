@@ -195,6 +195,13 @@ pub fn sha1(path: &str) -> std::io::Result<String> {
     Ok(hex(&hasher.finalize()))
 }
 
+/// The SHA-1 of bytes held in memory alone, which a package's IPS patch is pinned to (EmuSen_GamePackages.md §5.4).
+pub fn sha1_of(bytes: &[u8]) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(bytes);
+    hex(&hasher.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_support::TempDir;

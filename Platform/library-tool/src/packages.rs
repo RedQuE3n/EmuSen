@@ -253,7 +253,7 @@ pub fn of_console(ctx: &Context, console: &str) -> Vec<String> {
         .collect()
 }
 
-fn read(folder: &str) -> Result<Value, String> {
+pub(crate) fn read(folder: &str) -> Result<Value, String> {
     let manifest = dotnet_files::join(folder, package::FILE_NAME);
     match package::read(&manifest) {
         Ok(Ok(doc)) => Ok(doc),
@@ -262,8 +262,18 @@ fn read(folder: &str) -> Result<Value, String> {
     }
 }
 
-fn head(doc: &Value, outcome: Outcome) -> Outcome {
+pub(crate) fn head(doc: &Value, outcome: Outcome) -> Outcome {
     let game = doc.get("game");
+    let patches = emusen_patch::package::entries(doc);
+    let formats: Vec<(emusen_patch::Format, String)> = patches.iter().map(|e| (e.get("format").and_then(Value::as_str).and_then(emusen_patch::Format::named).unwrap_or(emusen_patch::Format::Ips), String::new())).collect();
+    let outcome = if patches.is_empty() {
+        outcome
+    } else {
+        outcome
+            .with("patches", Value::Array(patches.iter().map(|e| text(e.get("file").and_then(Value::as_str).unwrap_or(""))).collect()))
+            .with("retroarch", Value::Bool(crate::patches::names("", &formats).1))
+            .with("identity", text(doc.get("identity").and_then(Value::as_str).unwrap_or("original")))
+    };
     outcome
         .with("mode", text(doc.get("mode").and_then(Value::as_str).unwrap_or("")))
         .with("system", text(doc.get("system").and_then(Value::as_str).unwrap_or("")))
@@ -399,6 +409,9 @@ pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
                 return head(&doc, Outcome::said("changed", format!("track {} ({}) is not the one recorded ({})", t.number, t.file, claims::named(want))));
             }
         }
+    }
+    if let Err(words) = crate::patches::check(ctx, folder, &doc) {
+        return head(&doc, Outcome::said("changed", words));
     }
     if let Some(now) = claims::seen_of(&game).filter(|n| !same_seen(&doc, n))
         && doc.get("game").and_then(|g| g.get("seen")).is_some()

@@ -125,12 +125,13 @@ impl Session {
         let identity = Arc::new(Mutex::new((None, 0)));
         if let Some(at) = game_path.clone() {
             let theirs = identity.clone();
+            // A patched package's identity, set at open, is never overwritten by the file's (EmuSen_GamePackages.md §5.5).
             let _ = std::thread::Builder::new().name("crystal-identify".to_string()).spawn(move || {
-                if let Ok(m) = std::fs::metadata(&at) {
-                    theirs.lock().unwrap_or_else(|p| p.into_inner()).1 = m.len() as i64;
-                }
-                if let Ok(md5) = emusen_galaxia::rom_hash::md5(&at) {
-                    theirs.lock().unwrap_or_else(|p| p.into_inner()).0 = Some(md5);
+                let bytes = std::fs::metadata(&at).map_or(0, |m| m.len() as i64);
+                let md5 = emusen_galaxia::rom_hash::md5(&at).ok();
+                let mut known = theirs.lock().unwrap_or_else(|p| p.into_inner());
+                if known.0.is_none() {
+                    *known = (md5, bytes);
                 }
             });
         }

@@ -1,12 +1,14 @@
 NAME
-    pkg - make game packages, list them, check them, and copy a game's
-    saves, states and cheats into its package
+    pkg - make game packages, list them, check them, copy a game's saves,
+    states and cheats into its package, and give it soft patches
 
 SYNOPSIS
     pkg make <path>...
     pkg ls [<console>]
     pkg check [<package>...]
     pkg migrate <package>...
+    pkg patch add <package> <file>
+    pkg patch rm <package> <n>
     pkg wait [pkg<n>]
 
 DESCRIPTION
@@ -67,6 +69,50 @@ DESCRIPTION
     were. Shared and named cards, the console's own memory, the library's
     records (favourites, play time) and scraped art are not moved.
 
+    'patch add' gives <package> a soft patch: an IPS, UPS or BPS file
+    that is applied to the game each time it is loaded, so that the core
+    runs the patched game while the dump in the library keeps every byte
+    and hash it had. The patch is checked before anything is written:
+    a UPS or BPS patch against the source checksum it carries, refused
+    with both checksums named when the game is another image (or when it
+    is the patched image already); an IPS patch, which carries none, is
+    pinned to the SHA-1 of the image it is added to. Where a patch was
+    made for the game's comparable form, the image with its copier header
+    taken off, the words say so; the patch is still not added. The file
+    is copied into the package's root and appended to its list, which is
+    applied in order, each patch to the image the one before made; <file>
+    itself is only read. The manifest records each patch's SHA-1 and
+    checksums, and the hashes of the patched image as 'patched'.
+
+    The copies are named as RetroArch finds patches beside a game when
+    the list allows it: one BPS or one UPS patch as <name>.bps or
+    <name>.ups, IPS patches alone as <name>.ips, <name>.ips1, <name>.ips2
+    in their order, <name> being the package's own. Any other list keeps
+    each file's own name, and 'ls' and 'patch' say that RetroArch will not
+    apply it.
+
+    'patch rm' takes patch <n> (from 1, in the order 'ls' and the manifest
+    list them) out of the list and removes its copy from the package; the
+    rest are renamed as above. It is refused, and nothing changes, when
+    the patches after it would no longer apply without it.
+
+    Disc games take no patches here: disc patches are left to a page of
+    their own. A patched image may be 64 MiB at most.
+
+SOFT PATCHES AT LOAD
+    Opening a patched package, by its folder or by its game's plain path,
+    applies its list in both runtimes before the core is made: every file
+    is held to the SHA-1 recorded, every checksum is checked, and the
+    result is held to the 'patched' hashes. Anything that fails refuses
+    the game with words naming the patch and both values; the core is
+    never given a half-patched image, and the game's file is never
+    written. 'check' does the same without a core: the game, then every
+    patch and what they make. A state saved on a patched game records the
+    patched image's MD5, so that a state of another list is asked about.
+    The scraper sends the dump's hashes for a patched package unless its
+    manifest's "identity" is "patched", when it sends the patched image's
+    first and the dump's after a miss.
+
 ONE GAME, ONE SAVE
     Once a package claims a game, opening the game by its plain path, from
     'core', the library or a recent list, opens it as the package: its
@@ -94,10 +140,13 @@ EXAMPLES
     pkg ls NES
     pkg check NES
     pkg migrate "SNES/Super Metroid (USA).sfc"
+    pkg patch add "SNES/Super Metroid (USA).sfc" ~/Patches/Redesign.bps
+    pkg patch rm "SNES/Super Metroid (USA).sfc" 1
     pkg wait pkg1
 
 SEE ALSO
     chd (converted discs, each given a package), EmuSen_GamePackages.md
-    (sections 3 and 14: the package, its manifest, the stores it takes,
-    and what this step built), EmuSen_Galaxia.md (sections 3.10 and 3.11:
+    (sections 3, 5.4, 5.5, 14 and 15: the package, its manifest, the
+    stores it takes, soft patches, and what each step built),
+    EmuSen_Galaxia.md (sections 3.10 and 3.11:
     the manifest and the claim index)

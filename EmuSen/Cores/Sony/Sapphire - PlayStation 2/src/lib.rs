@@ -5,6 +5,7 @@
 //! program; the machine (`machine`) holds the memories, a frame counter, a black picture and silence, and nothing is
 //! emulated. `state` is the format SPH2, and `v1` the core ABI's glue.
 
+pub mod bios;
 pub mod machine;
 pub mod media;
 pub mod state;

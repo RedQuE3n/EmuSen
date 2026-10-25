@@ -78,6 +78,12 @@ RAM, so neither can produce a record without the firmware.
 - **Outputs**: RAM through PINE, read when the done word appears (`--until`); the log is read only for the BIOS line
   and the swap chain, never printed or kept (§5). `--again S` reads the words again S seconds later with the CPU time
   PCSX2 spent meanwhile, from `/proc/<pid>/stat`.
+- **A printing program's text** (*added 2026-10-24 at S4*, `Sapphire_Native.md` §14.5): `ps2referee.py tty` switches
+  one of PCSX2's log channels on in its settings, `EnableEEConsole` or `EnableIOPConsole` under `[Logging]` (the names
+  PCSX2 writes into its own settings file), with timestamps off, waits until the expected text's last line reaches the
+  log, and returns only the lines from the first that ends with the expected text's first line to the last that ends
+  with its last. The rest of the log, which holds the BIOS's output, is read by the driver and never printed or kept, so
+  the run exposes nobody to it. A project program writing to KPUTCHAR shows that the EE's console carries KPUTCHAR.
 - **Cost** [M, `programs/frames.s`, §4.2]: unlimited, 3,910 frames in 10.0 s (391 a second, 2.56 ms each) for 10.36 s of
   CPU; at the console's speed, 600 frames in 10 s for 2.66 s of CPU. Start-up: the GS draws 0.50–0.60 s after launch and
   the record is in RAM 0.20–0.25 s later. These are an idle program's costs; a game's are §5's.

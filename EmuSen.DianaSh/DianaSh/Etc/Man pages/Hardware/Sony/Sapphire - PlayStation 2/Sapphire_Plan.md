@@ -54,6 +54,16 @@ Every claim carries one of five marks:
 - *Target games named by the tester on 2026-10-24:* **Jak and Daxter** (a test copy of the USA disc is kept read-only in
   the probe's cache, `~/.cache/emusen/probe/sapphire/discs/`, never committed or copied into the repository),
   **Kingdom Hearts** and **Dark Cloud 2** (not yet dumped). Q8's bench stays beside them, its three titles first.
+- *Two player-facing gates added on 2026-10-24 by the tester's request.* The tester: "the goal with PS2 is similar to
+  PSX with the ability to boot it without a disc and use the memory card functions." The plan built the parts (S24,
+  the player's BIOS to OSDSYS; S25, the card and its crate; O12, the menu without a disc on the open BIOS) and promised
+  neither to the player. **G10, start without a disc**, and **G11, the Memory Cards window for the PlayStation 2**,
+  are therefore gates of §8, placed at S25 and offered with the system at S29 (§7); neither is built before then.
+- *Decided 2026-10-24 by the tester, both as S3 recommended (`Sapphire_Referees.md` §6, §7):* **the probe gets no
+  hardware render context now**; the referees' pictures come from Play!, taken as RAM, the project's GS programs
+  reading the GS's memory back to the EE, and a headless EGL context stays in reserve for the first GS dispute that
+  needs it (§1.6, §10). **DobieStation is not built now**; it is built user-locally only if a dispute needs a third
+  lineage that ps2tek does not decide (§1.6).
 
 ---
 
@@ -176,7 +186,10 @@ libretro Vulkan interface) is a feature of its own, evaluated at S3 against PCSX
 needs no probe change (§11 Q4). *Measured 2026-10-24 at S3 (`Sapphire_Referees.md` §2.3, §6): the first finding holds
 for `play_libretro` only, which asks for OpenGL core 3.2 and runs nothing without it; LRPS2 and PCEE2 fall back to their
 software renderers, give the whole RAM, and PCEE2 hands the frontend pictures. PCEE2 reports version 2.9.138 and runs an
-ELF with no `resources` folder. The hardware context is evaluated there and not built.*
+ELF with no `resources` folder. The hardware context is evaluated there and not built.* *Decided 2026-10-24 by the
+tester: no hardware context now; Play!'s pictures taken as RAM through the project's GS programs, a headless EGL context
+in reserve for the first GS dispute that needs it. DobieStation is not built now, and is built user-locally only if a
+dispute needs a third lineage that ps2tek does not decide.*
 
 **Lineage** [A]: PCSX2, LRPS2 and PCEE2 are one family and count as one witness where they agree; Play! is an
 independent lineage; DobieStation is a third but tied to ps2tek. **Firmware for the referees**: the player's BIOS, as
@@ -318,6 +331,11 @@ and excluded for every writer (`Sapphire_References.md` §2).*
 | **Referees** | §1.6 | — | Everything, run whole | RAM, pictures, sound |
 | **Commercial discs** | the tester's own, **none in the library** [M: `~/Documents/Roms/` holds no PlayStation 2 folder, the memory note of 2026-10-19]; one on the handheld's card, not touched (§11 Q8) | not redistributable | Integration and the goldens | References at anchors |
 
+*Found 2026-10-24 at S4 (`Sapphire_Native.md` §14.5): `cpu/ee/alu` and `cpu/ee/lsudelay`, run on PCSX2 with the
+Americas and Europe BIOS, print their whole expected texts, `-- TEST BEGIN` to `-- TEST END`, on the **IOP's console**;
+nothing of them reaches the EE's console, which a project program shows carries KPUTCHAR (1000F180h). An EE program's
+text therefore crosses to the IOP before it is printed, and the IOP's console is the channel Sapphire must keep.*
+
 **Negative results of the survey** [M, GitHub's organisation listing and search, 2026-10-23]: SingleStepTests publishes
 no R5900 suite (its repositories include `r3000`, which the IOP's crate already passes, and none for the EE); no GS,
 SPU2, IPU or CDVD suite with console results was found; ps2autotests' GS coverage is two programs, both about
@@ -352,7 +370,10 @@ found to use (P2); **an expected-text grader** that compares a run's whole outpu
 normalising line ends, as the README asks [R]; **a synthetic ELF builder** in WiseMan (`SyntheticPs2Elf`, the counterpart
 of `SyntheticRom`) and **a synthetic disc builder** (ISO 9660 with `SYSTEM.CNF`, single- and dual-layer DVD images,
 CD images), so CI never needs a commercial disc; and **a RAM-record reader** for the project's own programs, shared in
-form with Diamond's.
+form with Diamond's. *Built 2026-10-24 at S4 (`Sapphire_Native.md` §14): the expected-text grader (`ExpectedText`), the
+RAM-record reader (`RamRecordForm`, Diamond's and Sapphire's forms), `SyntheticPs2Elf` with its recording program, and
+`SyntheticPs2Disc` with CD sets and dual-layer DVDs on one ISO 9660 writer shared with the PlayStation's builder; the TTY
+reader takes the channel's space as data, the IOP's console once Sapphire keeps it.*
 
 ### 3.4 The conformance kit's corpus form
 
@@ -830,7 +851,7 @@ the enhancements (E) are separate tracks.
 | **S1** | The crate `sapphire` on the core ABI v1 as a stub with the `InDevelopment` mark: an ELF recognised and refused with words; the system pack `ps2` (§4.1) with the recogniser's `BOOT2` rule and Diamond's `BOOT` rule beside it; the three firmware entries (§5.9); the `SPH2` header | The kit's C1–C15 on a synthetic ELF and a synthetic ISO; a synthetic PS1 disc routed to Diamond, a PS2 CD and DVD to Sapphire, by test *Built 2026-10-24, `Sapphire_Native.md`: met; the CRT row recorded as owed (its §6).* |
 | **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation *Built 2026-10-24, `Sapphire_Native.md` §12, `Sapphire_References.md`: met; the Japanese entry renamed to `0230j`.* |
 | **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written *Built 2026-10-24, `Sapphire_Native.md` §13, `Sapphire_Referees.md`: met; `record.s`'s twelve words equal on PCSX2, LRPS2, PCEE2 and Play!, `play_libretro` refused for want of an OpenGL context.* |
-| **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) |
+| **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) *Built 2026-10-24, `Sapphire_Native.md` §14: met; `cpu/ee/alu`'s whole text reached PCSX2's IOP console and not its EE console, which carries KPUTCHAR (P2 held).* |
 
 **Phase B — the EE**
 
@@ -871,7 +892,7 @@ the enhancements (E) are separate tracks.
 | **S22** | The SIF: registers and its three DMA channels | The project's programs passing messages both ways, EE and IOP each checking the other's record |
 | **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) |
 | **S24** | **The player's BIOS to its menu**: what is missing for it, SIO2's pad, the EEPROM synthesised; the writers of this stage are thereafter not replacement writers | OSDSYS's picture at an anchor equal to PCSX2's on the same BIOS within a stated count of pixels, for the Americas and Europe versions of §11 Q9; then **all 78 ps2autotests on the player's BIOS** equal their expected texts, each miss a dispute |
-| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says |
+| **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap; **the start without a disc** (G10) and **the PlayStation 2's tab of the Memory Cards window** (G11) built on them, behind the `InDevelopment` mark | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says; G10's and G11's tests (§8) *Amended 2026-10-24: G10 and G11 added here.* |
 | **S26** | The SPU2 on the shared voice crate (§9.3) | The project's voice programs against the referees' sound; Diamond's SPU goldens unchanged by the crate's extraction |
 | **S27** | The IPU | The project's MPEG-2 streams decoded equal to the standard's arithmetic, each difference a dispute |
 | **S28** | Games on the player's BIOS to their title screens and into play (needs §11 Q8) | The bench discs at three anchors each against the referees in picture and RAM, or dispute-logged |
@@ -880,7 +901,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S29** | The PlayStation 2 to players: the pack's serial, region, shelf and media, the settings, the firmware page's entries, the DualShock 2 drawing, the CRT profile (§4.6), `.m3u` and the disc change | The kit's C1–C15 on the tester's discs in the corpus form; the fit audit with the PlayStation 2's tab, drawing and shelf at both sizes; `ConsoleScreenRuleTests` |
+| **S29** | The PlayStation 2 to players: the pack's serial, region, shelf and media, the settings, the firmware page's entries, the DualShock 2 drawing, the CRT profile (§4.6), `.m3u` and the disc change; the start without a disc and the Memory Cards tab (G10, G11) offered with the system | The kit's C1–C15 on the tester's discs in the corpus form; the fit audit with the PlayStation 2's tab, drawing and shelf at both sizes; `ConsoleScreenRuleTests`; G10 and G11 met on the player's build *Amended 2026-10-24.* |
 | **S30** | States: `SPH2`'s layout listing, loading back, the rewind codec measured on a 41 MiB state | States round-trip at every anchor of the bench; rewind's cost recorded (P14) |
 | **S31** | The debugger: four processors, 128-bit registers, the VUs' disassembly, breakpoints, stepping, coverage | Each claim a test; every table armed gives the plain run's digests |
 
@@ -921,7 +942,7 @@ Diamond's E-stages were (`Diamond_Plan.md` §7).
 | **O2–O4** | The EE kernel: exceptions and interrupts (O2), threads, semaphores, alarms and handlers (O3), SIF DMA, the CRT, `LoadExecPS2` and the ELF loader (O4) | ps2autotests' `kernel/ee/*` equal their expected texts on the open kernel |
 | **O5–O9** | The IOP kernel: memory and the module loader with its linker (O5), interrupts and threads (O6), the synchronisation objects and pools (O7), I/O, the file server and SIF RPC (O8), the reboot into a disc's module image (O9) | ps2autotests' `kernel/iop/*` and `cpu/iop/*`; a game's own IOP modules loaded and linked |
 | **O10–O11** | CDVD's file system and server (O10); SIO2, pads, the card's file system and server on §9.5's crate (O11) | Games boot with no firmware folder; their cards are read under the player's BIOS and the reverse |
-| **O12** | The menu without a disc, and `firmwarecheck.py` against the tester's images with a control (`EmuSen_Firmware.md` §0) | G9 |
+| **O12** | The menu without a disc, and `firmwarecheck.py` against the tester's images with a control (`EmuSen_Firmware.md` §0) | G9; G10's start reaching the open BIOS's menu with no firmware folder *Amended 2026-10-24.* |
 
 About 48 accurate stages, 5 enhancement stages and 12 open-BIOS stages: **65 steps, 200–260 hours** if each fits its
 step (P3). The GS's rules, the VU pipelines, the CDVD and the IOP's module interface are the most likely to overrun.
@@ -959,6 +980,37 @@ then states that the open replacement is owed, as the policy requires before the
   against a control.
 - **GE, the enhancements.** Each offered only with its stage's gate met and E1's exactness test passing in CI on every
   change to the core.
+- **G10, start without a disc** (*added 2026-10-24 at the tester's request*). A player-facing way to boot the console
+  to its menu with an empty tray, as the PlayStation's is (`Diamond_Shell.md` §1.1, §1.2 and §1.5, read 2026-10-24).
+  The form is Diamond's and needs no new surface: the `ps2` system's core-info entry gains `starts_empty: true`
+  (the core ABI's minor 1.11); `create` takes a null image with the system named and makes the console with the tray
+  closed and empty, its firmware chosen from the files the host passes from the system's `firmware` list; the drive
+  then takes a disc through `MEDIA`, which the kit's C22 requires of a system with a drive. Mistress offers it from core
+  info alone, never from a list of consoles (`MainWindow.ConsoleStart.cs`, read 2026-10-24: `RuntimeCatalog`'s
+  `ConsolesThatStartEmpty` feeds *Start a Console*, the library's *Start PlayStation 2* button, the pad menu's row and
+  big picture's *Start PlayStation 2 With No Disc*), with *Insert Disc…* and *Eject Disc* in a running session;
+  DianaSh's `core <corename> --console ps2` the same. **It needs the player's BIOS** until O12: with no BIOS in the
+  firmware folder the start is refused with the core's words, as a game is, never with a black screen. Its tests: the
+  kit's C22 on `ps2`; OSDSYS's picture at an anchor with an empty tray, not black and changed by a press, on the
+  tester's machine only and never in CI (as `Diamond_Shell.md` §4.5); a synthetic disc inserted afterwards reaching
+  the recogniser and the drive. Built at S25, when the BIOS reaches OSDSYS (S24) and the pad drives it; offered with
+  the system at S29; on the open BIOS at O12.
+- **G11, the Memory Cards window for the PlayStation 2** (*added 2026-10-24 at the tester's request*). Mistress's
+  Memory Cards window gains the PlayStation 2's tab with the PlayStation's actions (`EmuSen_SaveMedia.md` §6.5, read
+  2026-10-24; `MemoryCardsWindow.cs`, whose *Copy Save*, *Move Save*, *Delete Save*, *New Card* and *Import Every
+  Game's Saves* reach the runtime's card manager as `CardsCopy`, `CardsMove`, `CardsDelete`, `CardsNew` and
+  `CardsImport`; the fit audit's `MemoryCardsPlayStation` and `MemoryCardsPlayStationHeld` cases): a card's saves
+  listed with title, size and game and the card's free space, copied or moved to another card, deleted, and imported
+  from each game's own card, all or none. The window gains nothing of the PlayStation 2's own: the medium `ps2.card`
+  (§4.4) is declared by the core as `removable`, and its file system is §9.5's crate `emusen-ps2-card` behind the card
+  manager's format surface (`EmuSen_SaveMedia.md` §6.2: read, copy, delete and format, pure, bytes in and bytes out),
+  so DianaSh's `memcard` gets the same actions. The PlayStation 2's saves are directories of files, not blocks, so the
+  medium's unit is the crate's (clusters, or kilobytes as OSDSYS shows them), written down when the crate is. Its
+  tests: the PlayStation 2's tab in WiseMan's fit audit at 1280 × 800 and 1920 × 1200 beside the PlayStation's cases,
+  a held card's writes refused; the crate's copy, delete and import round-tripped on a card formatted by PCSX2 (a black
+  box) and read back by PCSX2, and on one formatted by the player's BIOS on Sapphire where §11 Q7 lets the BIOS use a
+  card. The window works on card files whether or not the player's BIOS accepts the card in play, so P8's refusal
+  does not block it. Built at S25 with the crate; offered with the system at S29.
 
 ---
 
@@ -1062,7 +1114,9 @@ is built, as Diamond's were.
 - **A console medium** for the drive's EEPROM, under `EmuSen_SaveMedia.md`'s `console` kind, which exists.
 - **The probe's hardware render**, if S3 finds PCSX2's standalone form with PINE insufficient: a headless OpenGL or
   Vulkan context for libretro cores that ask for one. *Evaluated 2026-10-24 at S3 (`Sapphire_Referees.md` §6): not needed by
-  the PCSX2 family's cores; recommended not built, Play!'s pictures to be taken as RAM by the project's GS programs.*
+  the PCSX2 family's cores; recommended not built, Play!'s pictures to be taken as RAM by the project's GS programs.
+  Decided 2026-10-24 by the tester as recommended: not built now, headless EGL kept in reserve for the first GS dispute
+  that needs it.*
 
 ---
 
@@ -1169,7 +1223,8 @@ needs Q11.
 - **P1.** D-0 is settled for 294.912 / 147.456 / 36.864 MHz on every model the referees and the test suite's logs can
   distinguish, with no model at 299 MHz.
 - **P2.** ps2autotests' programs print through a channel that is not a plain EE serial port (they were run under
-  ps2link), so S4 finds that at least some need the IOP and the SIF running before they print anything.
+  ps2link), so S4 finds that at least some need the IOP and the SIF running before they print anything. *Held
+  2026-10-24 at S4: an EE test's text reaches PCSX2's IOP console and not KPUTCHAR (`Sapphire_Native.md` §14.5).*
 - **P3.** The whole is about 65 steps (48 accurate, 5 enhancement, 12 open BIOS); the GS's rules, the VU pipelines, the
   CDVD and the IOP's module interface overrun their single steps.
 - **P4.** The R5900 differs from the TX79 manual in at least one instruction's result that ps2autotests records.

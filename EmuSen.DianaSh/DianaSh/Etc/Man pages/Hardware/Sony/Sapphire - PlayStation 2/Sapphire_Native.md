@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12) and S3 (§13) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13) and S4 (§14) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -442,10 +442,10 @@ PCSX2 2.56 ms a frame unlimited and about 1.2 s a run, Play! 0.4 ms of CPU a fra
 
 ### 13.6 Questions this stage leaves
 
-- **A hardware context for the probe** [decision]: *recommended* none (form C of `Sapphire_Referees.md` §6): Play!'s
+- **A hardware context for the probe** [decision] (*decided 2026-10-24 by the tester, as recommended*): *recommended* none (form C of `Sapphire_Referees.md` §6): Play!'s
   pictures taken as RAM by the project's GS programs reading the GS's memory back to the EE, with headless EGL (form A)
   held in reserve for the first GS dispute that needs Play!'s picture and finds its readback wanting.
-- **DobieStation** [decision]: *recommended* not installed; built user-locally only if a dispute needs a third lineage
+- **DobieStation** [decision] (*decided 2026-10-24 by the tester, as recommended*): *recommended* not installed; built user-locally only if a dispute needs a third lineage
   that ps2tek does not decide (`Sapphire_Referees.md` §7).
 - **S3's writer is exposed** [routine]: PCSX2's log of the BIOS's boot was read while finding a start-up fault
   (`Sapphire_Referees.md` §5). *Recommended*: recorded, the writer excluded from the open BIOS, and the driver keeping
@@ -461,3 +461,172 @@ PCSX2 2.56 ms a frame unlimited and about 1.2 s a run, Play! 0.4 ms of CPU a fra
 - Pictures from any referee (`Sapphire_Referees.md` §6 proposes how they will be taken).
 - The handheld: no referee was run on it.
 
+
+---
+
+## 14. Stage S4, the runners (2026-10-24)
+
+### 14.1 In one paragraph
+
+The plan's §7 row S4, on the tester's go of 2026-10-24, preceded by the two gates the tester asked for the same day
+(G10, start without a disc, and G11, the Memory Cards window's PlayStation 2 tab, `Sapphire_Plan.md` §8, placed at S25
+and offered at S29; nothing of either is built). The four runners of the plan's §3.3 are in WiseMan as data beside the
+generic runner (`Nephrite_Native.md` §3): the synthetic program `SyntheticPs2Elf` with a recording program, the synthetic
+disc builder for CD sets and single- and dual-layer DVDs on one ISO 9660 writer the PlayStation's builder now shares,
+the expected-text grader `ExpectedText`, and the RAM-record reader `RamRecordForm`, whose one form serves Diamond's
+programs and Sapphire's. One ps2autotests program, `cpu/ee/alu`, was run on PCSX2 with the player's BIOS: its whole
+expected text reached **the IOP's console**, not the EE's, which a project program shows carries KPUTCHAR (P2 held,
+§14.5). Each runner has a positive and a negative control. No emulator source, no SDK or loader source and no firmware
+was read, and nothing of PCSX2's log but the program's own lines was seen.
+
+### 14.2 The synthetic discs, and the writer they share
+
+- **`Fixtures/Iso9660Image.cs`**: ECMA-119's primary descriptor, set terminator, both path tables and one root directory
+  with its files, written into 2,048-byte sectors. It is the PlayStation builder's former private code moved, not
+  copied: `SyntheticPsxDisc` and `SyntheticPs2Disc` both call it, and the PlayStation's disc is **byte-identical** to
+  what it was, data and raw track and sheet, for three markets and both modes [M: a throwaway test comparing the old
+  builder's output with the new, passing, then removed]. The PlayStation 2's volumes gain the path tables and the full
+  descriptor they lacked at S1.
+- **`SyntheticPs2Disc`**: `Cd()` (the volume, its raw mode 2 form 1 track through `CdSector` and a one-track sheet;
+  `WriteSet` writes `.cue` and `.bin`), `Dvd()` (2,048-byte sectors, the root at sector 300; `WriteSet` writes `.iso`),
+  and **`DualLayerDvd(layer0)`**: layer 0 of the given sectors, a file `LAYER1.BIN` placed 32 sectors past the break and
+  listed in the root, and the primary descriptor and terminator again at layer 1's sectors 16 and 17. The record names
+  the break (`LayerBreak`), since an image records none.
+  - **Why layer 0 is a multiple of 16** [R ECMA-267, 3rd edition, §25 and the physical format's bytes 13–15]: in OTP
+    mode layer 1's first sector number is layer 0's last inverted, and that last is chosen so its inverse is a multiple
+    of 16; with the data zone starting at 30000h, layer 0 holds a multiple of 16 sectors. The builder refuses any other.
+  - **Why a second descriptor at layer 1's sector 16** [A]: an image is its logical sectors only, and the layer break
+    lives in the lead-in's physical format information, which no image carries. CDVDMAN exports a per-layer file search
+    (`sceCdLayerSearchFile(fp, path, layer)`, ps2tek's export list, cleared for every writer) and a call returning layer
+    1's start (`sceCdReadDvdDualInfo`), which suggests a volume readable from each layer. The layout is the builder's
+    choice, to be confirmed or corrected at S23 when `emusen-disc` gains the DVD medium (§14.8 Q2).
+- **The host's reader** (`EmuSen.Crystal/Media/DiscSectors.cs`) is the control: it reads `SYSTEM.CNF` and the program from
+  every form, raw track included, and `LAYER1.BIN` whole across the break.
+
+### 14.3 The RAM-record reader, and the recording program
+
+`Fixtures/RomRunner/RamRecord.cs`. A **form** is a space, the done word's place and value, the record's start, and the
+segment a program addresses them through: **Diamond's** `ram`, D1A0D00Eh at 0FFFF0h, words from 100000h, through
+80000000h (`Diamond_Referees.md` §2.4); **Sapphire's** `ram`, 5A99D00Eh at 1FFFF0h, words from 200000h, through
+00000000h (`Sapphire_Referees.md` §4.1). `Read` returns the words only once the done word is in place; `Grade` passes,
+fails naming each word that differs, or is incomplete without the done word; `Protocol` is the form as data for
+`TestRomGrader`. `Program(words)` writes a bare MIPS I program in the form (each word stored in turn, the done word, a
+branch to itself) with WiseMan's `MipsAssembler`, and `SyntheticPs2Elf.Recording(words)` makes it an EE program.
+
+**On the referees** [M, `ps2referee.py ram … --until 1FFFF0=5A99D00E 200000:12`]: `Recording` with `record.s`'s twelve
+words, written by `SapphireRunnerTests` where `EMUSEN_SAPPHIRE_PROGRAMS` names a folder, read back equal on **PCSX2**
+(Americas) and **Play!**; the same program in an ELF for machine 40 never wrote its done word on PCSX2 in 15 s.
+
+### 14.4 The expected-text grader
+
+`Fixtures/RomRunner/ExpectedText.cs`, after ps2autotests' README ("A test that has run accurately will produce the same
+data as contained in the `.expected` file … take care to normalize newlines") [R]. Line ends are normalised (CR LF and
+lone CR to LF, the final line feeds dropped); the output is graded from the expected text's first line on, so a
+kernel's own lines before it are left out, as Diamond's heading rule does (`Diamond_Native.md` §11.12); after that every
+line must be equal and nothing may follow. A run cut off mid-text is **incomplete**, any other difference **failed** with
+its line named. `Protocol(suffix, expected, space)` is one program as data; `Corpus(root, space)` makes one protocol for
+each `.elf` and `.irx` with its `.expected` beside it. The space defaults to `tty`, and `TtyReader.Text` takes a space,
+so the channel is data (§14.5).
+
+### 14.5 The output channel, by observation (P2)
+
+`ps2referee.py tty pcsx2 ELF EXPECTED --channel ee|iop|none` (`Sapphire_Referees.md` §2.1) turns on one of PCSX2's two
+console channels and returns only the program's own lines. `programs/kputchar.s` is the instrument's control: a bare EE
+program writing `EMUSEN KPUTCHAR CONTROL` a byte at a time to **KPUTCHAR, 1000F180h** [R ps2tek "Memory Map", "Misc
+registers": "KPUTCHAR - Console output"], through KSEG1.
+
+| Program | BIOS | Channel | Expected lines found [M] | Wall |
+|---|---|---|---|---|
+| `kputchar.elf` (the project's) | Americas | EE | 1 of 1 | 1.7 s |
+| `kputchar.elf` | Americas | IOP | 0 of 1 | 15 s (timed out) |
+| `cpu/ee/alu.elf` | Americas | EE | 0 of 752 | 40 s (timed out) |
+| `cpu/ee/alu.elf` | Americas | **IOP** | **752 of 752**, the 787-line region `diff`-identical to `alu.expected` | 1.7 s |
+| `cpu/ee/alu.elf` | Americas | none (negative control) | 0 of 752 | 15 s (timed out) |
+| `cpu/ee/lsudelay.elf` | Americas | IOP | 3 of 3, identical | 1.7 s |
+| `cpu/ee/alu.elf` | Europe | IOP | 752 of 752 | 1.6 s |
+
+**Finding** [M, A]: the EE test's text, `-- TEST BEGIN` and `-- TEST END` included, reaches the IOP's console and none
+of it KPUTCHAR, so an EE program's output crosses the SIF to the IOP before it is printed: P2 held. The expected texts
+were recorded on consoles through ps2link [R README], yet on a retail BIOS with no ps2link the same text appears whole on
+the IOP's console, so the expected files and a retail BIOS run agree. **What this asks of Sapphire**: its TTY reader
+must keep what the IOP prints. How PCSX2 catches that text is not known here and is not read; ps2tek's section "IOP
+Console", excluded for every writer, is described in the S2 screening as an emulator's hook on program-counter values
+inside a BIOS image (`Sapphire_References.md` §3), which Sapphire may not copy. The question is §14.8 Q1.
+
+**Exposure**: the driver read PCSX2's log and printed only the program's region; this stage's writer saw no line of the
+BIOS's output and stays eligible as a replacement writer as far as the log goes. Of ps2tek, the writer read the memory
+map, the CDVD disk-type register and CDVDMAN's export list, each cleared for every writer (`Sapphire_References.md` §3);
+of ps2autotests, the README, `common/common-ee.cpp` and `common-ee.h` (the project's own, not among the five excluded),
+`cpu/ee/alu.cpp`'s first lines and the expected texts.
+
+### 14.6 Tests (2026-10-24)
+
+| Item | Result [M] |
+|---|---|
+| `SapphireRunnerTests` (new), with `EMUSEN_PS2AUTOTESTS` and `EMUSEN_SAPPHIRE_PROGRAMS` set | **9 of 9**: the program's fields and spoiled forms; every disc form through the host's reader and the core; the refusals and the builder's rule of 16; the grader on text; the grader on Diamond's TTY through the generic runner; the fetched corpus counted (78: 55 `.elf`, 23 `.irx`); the reader on snapshots; the reader on Diamond's own run and not in Sapphire's form; the referees' programs written |
+| WiseMan, `blast.sh`'s filter (`DiamondTests`, `SapphireRunnerTests`, `SapphireTests`) plus `SystemCodeParityTests`, which builds the PlayStation 2's discs | **45 of 45** |
+| The crate (`cargo test --release`) | **17 of 17**, one new: `the_channel_control_writes_its_line_to_kputchar_a_byte_at_a_time_then_its_done_word` |
+| `analysis/tests/test_ps2referee.py` | **23 of 23**, five new (`TtyTests`): only the program's lines returned, a fixed prefix cut, nothing without the program, a wrong line kept and not counted, one channel a mode |
+
+**Seeded faults**, each made in place, the tests run, the file restored:
+
+| # | Fault | Caught by |
+|---|---|---|
+| E1 | `SyntheticPs2Elf`'s memory size without the bss | `The_synthetic_program_is_an_ee_executable_and_its_spoiled_forms_are_refused` |
+| E2 | The segment's file offset pointing at the program header | the same |
+| E3 | The entry 4 bytes past the origin | the same |
+| D1 | The dual-layer image without layer 1's descriptor | `Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it` |
+| D2 | The builder's rule of 16 removed | `A_disc_that_names_no_program_is_refused_and_the_builder_refuses_a_layer_break_off_the_rule` |
+| D3 | The CD's sheet naming mode 1 | `Each_synthetic_disc_reads_back…` |
+| X1 | A lone CR left unnormalised | `The_expected_text_grader_passes_only_the_whole_text_with_line_ends_normalised` |
+| X2 | One line past the end allowed | the same |
+| X3 | A cut-off run graded failed, not incomplete | the same |
+| R1 | The reader ignoring the done word | `The_ram_record_reader_reads_words_only_behind_the_done_word` and the Diamond test |
+| R2 | The recording program storing each word 4 bytes on | `The_ram_record_reader_reads_a_record_diamond_left_and_not_one_in_another_form` |
+| R3 | Diamond's form with its done word at 0FFFF4h | at first **nothing**: the recording program and the reader share the form, so the run was self-consistent; the snapshot test now lays each form's record out at the documents' addresses, not the form's, and catches it |
+| T1 | `ps2referee.py`'s `program_text` returning the whole log | `TtyTests`, two tests |
+| T2 | The fixed prefix not cut | `test_a_fixed_prefix_on_every_line_is_cut_by_the_first_lines` |
+| T3 | The IOP mode switching both consoles on | `test_each_channel_switches_one_console_on` |
+
+### 14.7 What the plan got wrong, or left open
+
+- **§3.3 and S4's row** list `SyntheticPs2Elf` and the disc builder as S4's; both began at S1 (§5), and S4 extended them
+  (the bss, the origin, the recording program; the CD set, the dual-layer DVD, the shared writer).
+- **§3.3's TTY reader "over the output channels ps2autotests is found to use"**: the channel is found, but no core
+  keeps it yet, so the reader is the existing `TtyReader` with the space as data; Sapphire's crate gains the space when
+  it can print (S10), by Q1's answer.
+- **The README's "same data"** is read as the text from its first line on, so that a kernel's lines before it do not fail
+  a run; nothing after the last line is allowed.
+
+### 14.8 Questions this stage leaves
+
+1. **Q1 [decision], how Sapphire keeps what the IOP prints.** PCSX2 catches it by a means not read here, which ps2tek's
+   excluded section describes as a hook on program-counter values inside a BIOS image; Sapphire may not do that.
+   *Recommended*: on the open BIOS, its TTY device writes to a port of the project's own, as Diamond's open kernel prints
+   through the DUART; on the player's BIOS, the console is caught at the IOP's module interface, the output export
+   resolved at run time through the export tables ps2tek lists (cleared for every writer), never at an address inside
+   the image, and kept in a `tty` space; decided before S10, whose gate needs it. Until then the EE stages are graded by
+   the project's RAM records, as the plan's §11 Q6 already says.
+2. **Q2 [routine], the dual-layer layout.** *Recommended*: at S23, a synthetic dual-layer image booted on PCSX2 and Play!
+   with a program that reads `LAYER1.BIN` and records it, to learn whether they take the layout of §14.2, and the builder
+   corrected if they do not.
+3. **Q3 [routine], a referee baseline of the EE tests.** *Recommended*: when S10 begins, all 55 `.elf` programs run on
+   PCSX2 through `tty` and graded by `ExpectedText` (about 2 s each), so that each later miss on Sapphire is known to be
+   the core's or the referee's.
+
+### 14.9 What was read for this stage
+
+`Sapphire_Plan.md` §3, §4.1, §4.4, §7, §8, §9.5, §11 and §13; `Sapphire_Native.md`; `Sapphire_References.md` §3 (the
+exclusions, by `DOCS.txt`); `Sapphire_Referees.md`; `Nephrite_Native.md` §3; `Diamond_Shell.md` §1.1, §1.2, §1.5 and
+§4.5; `EmuSen_SaveMedia.md` §6.2 and §6.5; `MainWindow.ConsoleStart.cs`, `MemoryCardsWindow.cs` and the fit audit's
+memory card cases; the project's runners, builders and `DiscSectors.cs`; ECMA-267 §25 and §26.5.1; ps2tek's memory map,
+the CDVD disk-type register and CDVDMAN's export list; ps2autotests' README, `common-ee.cpp`, `common-ee.h`, `alu.cpp`'s
+opening and the expected texts. PCSX2's own settings file was read for the names of its log switches. No emulator, SDK
+or loader source; no firmware; none of PCSX2's log but the programs' own lines.
+
+### 14.10 What this stage does not cover
+
+- A `tty` space in the crate, and the IOP console's capture (S10, Q1).
+- IOP programs (`.irx`): the protocol claims them, but they are loaded by the IOP's kernel and run from S21 on.
+- Any ps2autotests program on Sapphire, which runs nothing yet.
+- G10 and G11, which are S25's and S29's.

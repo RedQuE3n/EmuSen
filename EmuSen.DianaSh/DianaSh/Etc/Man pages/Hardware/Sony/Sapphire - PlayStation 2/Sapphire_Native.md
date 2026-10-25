@@ -6055,8 +6055,8 @@ float constant changes.
 
 ### 36.7 The 23 IOP programs
 
-The `.irx` programs are IOP modules whose `_start` prints and runs the test (their sources, read at S10). The brief's
-way, "the documented way an EE program loads an IOP module", is LOADFILE's RPC (ps2tek "BIOS IOP LOADFILE": server
+The `.irx` programs are IOP modules whose `_start` prints and runs the test (their sources, read at S10). The way
+S10's row asks for, the documented way an EE program loads an IOP module, is LOADFILE's RPC (ps2tek "BIOS IOP LOADFILE": server
 80000006h, function 00h `SifLoadModule`), and it is not enough: no permitted document gives the call's argument
 layout (ps2tek: "Newer LOADFILE modules seem to have a different interface. Needs more research"), and the module must
 be in a file the IOP can open, which on a retail console without ps2link means a disc in the drive (S29's). The other

@@ -155,3 +155,40 @@ pub fn copy(local: &mut Local, src: Buffer, (sx, sy): (u32, u32), dst: Buffer, (
         }
     }
 }
+
+/// A transfer's block of `SPH2` (Sapphire_Native.md §38.2): its direction, buffer, rectangle, place and the bits held.
+impl emusen_native::State for Transfer {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u8("Active", match self.active {
+            None => 0,
+            Some(Direction::HostToLocal) => 1,
+            Some(Direction::LocalToHost) => 2,
+        });
+        let b = self.buffer;
+        w.u8("Psm", b.map_or(0xFF, |b| b.psm.code() as u8));
+        w.u32s("Buffer", &[b.map_or(0, |b| b.bp), b.map_or(0, |b| b.bw)]);
+        w.u32s("Rectangle", &[self.x0, self.y0, self.w, self.h, self.x, self.y]);
+        w.u128("Bits", self.acc);
+        w.u32("Held", self.held);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.active = match r.u8()? {
+            1 => Some(Direction::HostToLocal),
+            2 => Some(Direction::LocalToHost),
+            _ => None,
+        };
+        let psm = Psm::from_code(u32::from(r.u8()?));
+        let mut b = [0u32; 2];
+        r.u32s(&mut b)?;
+        self.buffer = psm.map(|psm| Buffer { psm, bp: b[0], bw: b[1] });
+        let mut v = [0u32; 6];
+        r.u32s(&mut v)?;
+        [self.x0, self.y0, self.w, self.h, self.x, self.y] = v;
+        self.acc = r.u128()?;
+        self.held = r.u32()?;
+        Ok(())
+    }
+}

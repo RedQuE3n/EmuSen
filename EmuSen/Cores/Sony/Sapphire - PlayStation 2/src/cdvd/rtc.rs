@@ -61,6 +61,17 @@ impl Rtc {
     }
 }
 
+impl Rtc {
+    /// The clock in `SPH2`: the moment it held and the drive time it held at (Sapphire_Native.md §38.2).
+    pub fn saved(&self) -> [u64; 2] {
+        [self.base, self.at]
+    }
+
+    pub fn restored(v: [u64; 2]) -> Rtc {
+        Rtc { base: v[0], at: v[1] }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,7 +9,7 @@ use crate::mask;
 use crate::tables::FIR;
 
 /// The filter's history is a ring of 64 samples, of which the last 39 are taken.
-const RING: usize = 64;
+pub const RING: usize = 64;
 
 /// The work area: from `start` to `end` (exclusive), in bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

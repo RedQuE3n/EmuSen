@@ -258,6 +258,36 @@ pub fn program(code: &[u32], origin: u32) -> Vec<u8> {
 }
 
 /// Images the tests build: never a real program or disc's data (Sapphire_Native.md §5).
+impl Media {
+    /// What a state names its image by, never 0 (Sapphire_Native.md §38.2): FNV-1a over what recognition read, a
+    /// program's entry and segments, a disc's framing, sector count, BOOT2 program and serial. It reads nothing more of
+    /// the image, so its cost does not grow with the disc.
+    pub fn identity(&self) -> u64 {
+        let mut h = 0xCBF2_9CE4_8422_2325u64;
+        let mut eat = |bytes: &[u8]| bytes.iter().for_each(|&b| h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01B3));
+        match self {
+            Media::Elf(e) => {
+                eat(b"ELF");
+                eat(&e.entry.to_le_bytes());
+                for s in &e.segments {
+                    for v in [s.0, s.1, s.2, s.3] {
+                        eat(&v.to_le_bytes());
+                    }
+                }
+            }
+            Media::Disc(d) => {
+                eat(b"DISC");
+                eat(&[u8::from(d.raw)]);
+                eat(&d.sectors.to_le_bytes());
+                eat(d.program.as_bytes());
+                eat(&[0]);
+                eat(d.serial.as_deref().unwrap_or("").as_bytes());
+            }
+        }
+        h.max(1)
+    }
+}
+
 #[cfg(test)]
 pub mod sample {
     use super::*;

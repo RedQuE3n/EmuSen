@@ -285,5 +285,102 @@ impl<P: iop_dma::Peripherals> iop_dma::Peripherals for Ports<'_, P> {
     }
 }
 
+/// Bytes each SIO2 FIFO holds in the state: a whole SEND3 queue of replies, sixteen transfers of 128 bytes, with room.
+const FIFO_SLOTS: usize = 2048;
+
+fn write_bytes(w: &mut emusen_native::StateWriter, name: &str, q: &VecDeque<u8>) {
+    let (a, b) = q.as_slices();
+    let mut slots = [0u8; FIFO_SLOTS];
+    let n = a.len().min(FIFO_SLOTS);
+    slots[..n].copy_from_slice(&a[..n]);
+    let m = b.len().min(FIFO_SLOTS - n);
+    slots[n..n + m].copy_from_slice(&b[..m]);
+    w.group(name, |w| {
+        w.u32("Length", q.len() as u32);
+        w.bytes("Bytes", &slots);
+    });
+}
+
+fn read_bytes(r: &mut emusen_native::StateReader, q: &mut VecDeque<u8>) -> Result<(), emusen_native::Truncated> {
+    let len = r.u32()?;
+    let mut slots = [0u8; FIFO_SLOTS];
+    r.bytes(&mut slots)?;
+    q.clear();
+    q.extend(&slots[..(len as usize).min(FIFO_SLOTS)]);
+    Ok(())
+}
+
+/// SIO2's block of `SPH2` (Sapphire_Native.md §38.2): the registers, the three FIFOs, the transfer's end, and in each
+/// port the multitap, each pad's block and each card's bus state, a slot with none written as an empty one. Which
+/// pads and cards are present is the machine's settings and files, kept across a load.
+impl emusen_native::State for Sio2 {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Send3", &self.send3);
+        w.u32s("Send12", &self.send12);
+        w.u32s("Registers", &[self.ctrl, self.recv1, self.istat, self.pending_recv1]);
+        write_bytes(w, "FifoIn", &self.fifo_in);
+        write_bytes(w, "FifoOut", &self.fifo_out);
+        write_bytes(w, "Pending", &self.pending);
+        crate::state::opt_u64(w, "DoneAt", self.done_at);
+        w.bool("Wake", self.wake);
+        for (name, s) in ["Port1", "Port2"].into_iter().zip(&self.slots) {
+            w.group(name, |w| {
+                w.bool("Tap", s.tap);
+                crate::state::opt_u32(w, "PadSlot", s.pad_slot.map(|n| n as u32));
+                crate::state::opt_u32(w, "CardSlot", s.card_slot.map(|n| n as u32));
+                for (name, p) in ["Pad1", "Pad2", "Pad3", "Pad4"].into_iter().zip(&s.pads) {
+                    w.group(name, |w| p.clone().unwrap_or_default().write_state(w));
+                }
+                for (name, c) in ["Card1", "Card2", "Card3", "Card4"].into_iter().zip(&s.cards) {
+                    w.group(name, |w| match c {
+                        Some(c) => c.write_bus(w),
+                        None => MemoryCard::write_absent(w),
+                    });
+                }
+            });
+        }
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u32s(&mut self.send3)?;
+        r.u32s(&mut self.send12)?;
+        let mut g = [0u32; 4];
+        r.u32s(&mut g)?;
+        [self.ctrl, self.recv1, self.istat, self.pending_recv1] = g;
+        read_bytes(r, &mut self.fifo_in)?;
+        read_bytes(r, &mut self.fifo_out)?;
+        read_bytes(r, &mut self.pending)?;
+        self.done_at = crate::state::read_opt_u64(r)?;
+        self.wake = r.bool()?;
+        for s in &mut self.slots {
+            r.bool()?;
+            s.pad_slot = crate::state::read_opt_u32(r)?.map(|n| (n as usize).min(tap::SLOTS - 1));
+            s.card_slot = crate::state::read_opt_u32(r)?.map(|n| (n as usize).min(tap::SLOTS - 1));
+            for p in &mut s.pads {
+                match p {
+                    Some(p) => p.read_state(r)?,
+                    None => DualShock2::default().read_state(r)?,
+                }
+            }
+            for c in &mut s.cards {
+                match c {
+                    Some(c) => c.read_bus(r)?,
+                    None => MemoryCard::skip_bus(r)?,
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Sio2 {
+    /// Whether the FIFOs are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        [&self.fifo_in, &self.fifo_out, &self.pending].iter().all(|q| q.len() <= FIFO_SLOTS)
+    }
+}
+
 #[cfg(test)]
 mod tests;

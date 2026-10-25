@@ -37,6 +37,15 @@ pub trait Micro {
     fn idle_to(&mut self, _units: &mut Units, _t: u64) -> bool {
         false
     }
+    /// The micro mode's block of `SPH2`; none for a micro mode that keeps nothing (Sapphire_Native.md §38.2).
+    fn write_state(&self, _w: &mut emusen_native::StateWriter) {}
+    fn read_state(&mut self, _r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        Ok(())
+    }
+    /// Whether the micro mode's queues are within their slots in the state.
+    fn fits(&self) -> bool {
+        true
+    }
 }
 
 /// Micro mode not built: never running, and refusing a start, which halts the interpreter with the starting word; kept

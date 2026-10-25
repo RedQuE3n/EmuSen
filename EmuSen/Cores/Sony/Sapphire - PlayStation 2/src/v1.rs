@@ -11,7 +11,7 @@ use crate::machine::{AUDIO_RATE, BIOS_BYTES, MEMORIES, Machine, Market, RAM_ID};
 use crate::pcrtc::{MAX_HEIGHT, MAX_WIDTH};
 use crate::media::{Media, Refusal};
 use crate::sio2::card::{CARD_BYTES, MemoryCard};
-use crate::state::STATE_VERSION;
+use crate::state::{OLDEST_STATE_VERSION, STATE_VERSION, STATUS_OTHER_BIOS, STATUS_QUEUE_PAST_STATE};
 
 /// An image that is neither an ELF nor an ISO 9660 volume.
 pub const STATUS_NOT_PS2: i32 = -9;
@@ -221,6 +221,8 @@ impl Core for Machine {
             STATUS_ELF_TRUNCATED => Some("the ELF is shorter than its headers and segments say".into()),
             STATUS_PLAYSTATION_DISC => Some("the disc is a PlayStation game, which Diamond runs, not a PlayStation 2 game".into()),
             STATUS_NO_BOOT2 => Some("the disc's SYSTEM.CNF names no PlayStation 2 program (no BOOT2 line)".into()),
+            STATUS_OTHER_BIOS => Some("the state was made on a console with another BIOS than this one's, or with a BIOS where this console has none, or with none where it has one".into()),
+            STATUS_QUEUE_PAST_STATE => Some("a queue inside the console holds more than the state has room for at this instant; the state can be saved a moment later".into()),
             _ => None,
         }
     }
@@ -300,7 +302,7 @@ impl Core for Machine {
             spaces: MEMORIES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
             processors: vec![processor(0, "R5900", 32), processor(1, "IOP", 32), processor(2, "VU0", 12), processor(3, "VU1", 14)],
             battery: (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).chain(std::iter::once(nvm_battery(market_index(self.market)))).collect(),
-            state: StateFormat { format: "SPH2".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
+            state: StateFormat { format: "SPH2".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_STATE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
             patches: None,
             skip_rendering_state_neutral: false,
@@ -308,8 +310,14 @@ impl Core for Machine {
         }
     }
 
+    /// A frame; when the picture's size has changed, the state's length with it, which the host is told as the
+    /// picture's own size (Sapphire_Native.md §38.2).
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
+        let before = self.sys.board.pcrtc.picture.rgba.len();
         Machine::advance(self);
+        if self.sys.board.pcrtc.picture.rgba.len() != before {
+            emit(event::STATE_SIZE, emusen_native::ffi::StateMachine::state_size(self) as i64, 0);
+        }
         Ok(())
     }
 

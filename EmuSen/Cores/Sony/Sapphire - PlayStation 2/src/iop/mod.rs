@@ -91,3 +91,21 @@ impl Iop {
         }
     }
 }
+
+impl Iop {
+    /// The IOP's block of `SPH2` (Sapphire_Native.md §38.2): the R3000A's registers (its crate's block), whether it is
+    /// held in reset, and its bus's own part. The exception counts are the hardware's reports.
+    pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        use emusen_native::State;
+        w.group("Cpu", |w| self.cpu.write_state(w));
+        w.bool("Held", self.held);
+        w.group("Bus", |w| self.bus.write_own(w));
+    }
+
+    pub fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        use emusen_native::State;
+        self.cpu.read_state(r)?;
+        self.held = r.bool()?;
+        self.bus.read_own(r)
+    }
+}

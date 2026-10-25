@@ -226,6 +226,14 @@ pub trait Path1 {
     fn take_kick(&mut self) -> Option<(u16, u64, u64)> {
         None
     }
+    /// PATH1's block of `SPH2`; none for a stand-in (Sapphire_Native.md §38.2).
+    fn write_state(&self, _w: &mut emusen_native::StateWriter) {}
+    fn read_state(&mut self, _r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        Ok(())
+    }
+    fn fits(&self) -> bool {
+        true
+    }
 }
 
 /// PATH1 until the GIF exists: each kick recorded, every transfer taking `busy` cycles.
@@ -516,5 +524,109 @@ impl Vpu {
     pub fn write(&mut self, paddr: u32, bytes: usize, value: u128) {
         let (m, at) = self.memory(paddr);
         m[at..at + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
+    }
+}
+
+fn write_landing(w: &mut emusen_native::StateWriter, name: &str, l: Option<Landing>) {
+    w.group(name, |w| {
+        w.bool("Some", l.is_some());
+        let l = l.unwrap_or(Landing { at: 0, value: 0, flags: None });
+        w.u64("At", l.at);
+        w.u32("Value", l.value);
+        crate::state::opt_u32(w, "Flags", l.flags);
+    });
+}
+
+fn read_landing(r: &mut emusen_native::StateReader) -> Result<Option<Landing>, emusen_native::Truncated> {
+    let some = r.bool()?;
+    let l = Landing { at: r.u64()?, value: r.u32()?, flags: crate::state::read_opt_u32(r)? };
+    Ok(some.then_some(l))
+}
+
+/// A unit's block of `SPH2` (Sapphire_Native.md §38.2): its registers, flags, memories and the results in flight.
+impl emusen_native::State for Vu {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Vf", self.vf.as_flattened());
+        w.u16s("Vi", &self.vi);
+        w.u32s("Acc", &self.acc);
+        w.u32s("Iqpr", &[self.i, self.q, self.p, self.r]);
+        w.u32s("Flags", &[self.status, self.mac, self.clip]);
+        w.u16("Tpc", self.tpc);
+        write_landing(w, "QNext", self.q_next);
+        w.u64("DivFree", self.div_free);
+        write_landing(w, "PNext", self.p_next);
+        write_landing(w, "PLater", self.p_later);
+        w.u64("EfuFree", self.efu_free);
+        w.bytes("Data", &self.data);
+        w.bytes("Micro", &self.micro);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u32s(self.vf.as_flattened_mut())?;
+        r.u16s(&mut self.vi)?;
+        r.u32s(&mut self.acc)?;
+        let mut v = [0u32; 4];
+        r.u32s(&mut v)?;
+        [self.i, self.q, self.p, self.r] = v;
+        let mut f = [0u32; 3];
+        r.u32s(&mut f)?;
+        [self.status, self.mac, self.clip] = f;
+        self.tpc = r.u16()?;
+        self.q_next = read_landing(r)?;
+        self.div_free = r.u64()?;
+        self.p_next = read_landing(r)?;
+        self.p_later = read_landing(r)?;
+        self.efu_free = r.u64()?;
+        r.bytes(&mut self.data)?;
+        r.bytes(&mut self.micro)
+    }
+}
+
+/// The VPU's block of `SPH2`: both units, the link's registers and PATH1's port, VU0's control registers, and each
+/// unit's micro mode.
+impl emusen_native::State for Vpu {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let u = &self.units;
+        w.structure("Vu0", &u.vu0);
+        w.structure("Vu1", &u.vu1);
+        w.u32s("Link", &[u.link.fbrst, u.link.irq]);
+        w.u16s("Tops", &[u.link.top[0], u.link.top[1], u.link.itop[0], u.link.itop[1]]);
+        w.group("Path1", |w| u.link.path1.write_state(w));
+        w.u16s("Cmsar", &[self.cmsar0, self.cmsar1]);
+        w.u32("Ccr24", self.ccr24);
+        crate::state::opt_u64(w, "LastMacro", self.last_macro);
+        w.group("Micro0", |w| self.micro0.write_state(w));
+        w.group("Micro1", |w| self.micro1.write_state(w));
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let u = &mut self.units;
+        u.vu0.read_state(r)?;
+        u.vu1.read_state(r)?;
+        let mut l = [0u32; 2];
+        r.u32s(&mut l)?;
+        [u.link.fbrst, u.link.irq] = l;
+        let mut t = [0u16; 4];
+        r.u16s(&mut t)?;
+        (u.link.top, u.link.itop) = ([t[0], t[1]], [t[2], t[3]]);
+        u.link.path1.read_state(r)?;
+        let mut c = [0u16; 2];
+        r.u16s(&mut c)?;
+        [self.cmsar0, self.cmsar1] = c;
+        self.ccr24 = r.u32()?;
+        self.last_macro = crate::state::read_opt_u64(r)?;
+        self.micro0.read_state(r)?;
+        self.micro1.read_state(r)
+    }
+}
+
+impl Vpu {
+    /// Whether the units' queues are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        self.units.link.path1.fits() && self.micro0.fits() && self.micro1.fits()
     }
 }

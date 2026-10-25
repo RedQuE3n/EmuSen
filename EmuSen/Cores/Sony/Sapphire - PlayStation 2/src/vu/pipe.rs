@@ -31,7 +31,7 @@ enum State {
 }
 
 /// What one pair leaves for its S stage.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct FlagWrite {
     at: u64,
     d: Deferred,
@@ -552,6 +552,18 @@ impl Pipe {
 }
 
 impl Micro for Pipe {
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        self.write(w);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.read(r)
+    }
+
+    fn fits(&self) -> bool {
+        self.flags.len() <= FLAG_SLOTS
+    }
+
     fn start(&mut self, units: &mut Units, addr: u16, first: u64) -> bool {
         let mask = self.pairs(units) - 1;
         self.state = State::Run;
@@ -621,5 +633,89 @@ impl Micro for Pipe {
         let run = self.state == State::Run;
         let gw = if run && self.kick_wait > self.now { vpu_stat::VGW } else { 0 };
         (u32::from(run) * vpu_stat::VBS) | self.stopped_by | gw
+    }
+}
+
+/// Flag writes in flight in the state: an FMAC pair's land 4 cycles on, one pair a cycle.
+const FLAG_SLOTS: usize = 16;
+
+/// A flag write as the state holds it: which of its six optional values are present, and its eight words.
+fn deferred_words(d: &Deferred) -> (u8, [u32; 8]) {
+    let opts = [d.mac, d.clip_shift, d.clip_set, d.sticky_set, d.divide, d.p];
+    let some = opts.iter().enumerate().fold(0, |b, (i, o)| b | u8::from(o.is_some()) << i);
+    (some, [d.mac.unwrap_or(0), d.clip_shift.unwrap_or(0), d.clip_set.unwrap_or(0), d.sticky_set.unwrap_or(0), d.divide.unwrap_or(0), d.p.unwrap_or(0), d.zsuo, d.sticky])
+}
+
+fn deferred_of(some: u8, v: &[u32]) -> Deferred {
+    let o = |i: usize| (some >> i & 1 != 0).then_some(v[i]);
+    Deferred { mac: o(0), clip_shift: o(1), clip_set: o(2), sticky_set: o(3), divide: o(4), p: o(5), zsuo: v[6], sticky: v[7] }
+}
+
+/// A unit's micro mode in `SPH2` (Sapphire_Native.md §38.2): its state and program counter, the next pair's time, the
+/// branch, end and halt in progress, the hazards' ready cycles and the flag writes in flight. The trace is a test's.
+impl Pipe {
+    fn write(&self, w: &mut emusen_native::StateWriter) {
+        w.u8("State", match self.state {
+            State::Ready => 0,
+            State::Run => 1,
+            State::Stop => 2,
+        });
+        w.u16("Pc", self.pc);
+        w.u64("NextT", self.next_t);
+        crate::state::opt_u64(w, "LastT", self.last_t);
+        crate::state::opt_u32(w, "Jump", self.jump.map(u32::from));
+        w.bool("Ending", self.ending);
+        crate::state::opt_u32(w, "Halting", self.halting);
+        w.u64s("VfReady", self.vf_ready.as_flattened());
+        w.u64s("ViReady", &self.vi_ready);
+        w.u16("ViLastSome", self.vi_last.iter().enumerate().fold(0, |b, (i, o)| b | u16::from(o.is_some()) << i));
+        w.u64s("ViLastAt", &self.vi_last.map(|o| o.map_or(0, |v| v.0)));
+        w.u16s("ViLastValue", &self.vi_last.map(|o| o.map_or(0, |v| v.1)));
+        w.u32("FlagsLength", self.flags.len() as u32);
+        let slots = crate::state::slots::<_, FLAG_SLOTS>(&self.flags);
+        let words: [(u8, [u32; 8]); FLAG_SLOTS] = slots.map(|f| deferred_words(&f.d));
+        w.u64s("FlagsAt", &slots.map(|f| f.at));
+        w.bytes("FlagsSome", &words.map(|d| d.0));
+        w.u32s("FlagsValues", words.map(|d| d.1).as_flattened());
+        w.u64s("Times", &[self.path1_free, self.kick_wait, self.now]);
+        crate::state::opt_u64(w, "ReleaseT", self.release_t);
+        w.u32("StoppedBy", self.stopped_by);
+    }
+
+    fn read(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.state = match r.u8()? {
+            1 => State::Run,
+            2 => State::Stop,
+            _ => State::Ready,
+        };
+        self.pc = r.u16()?;
+        self.next_t = r.u64()?;
+        self.last_t = crate::state::read_opt_u64(r)?;
+        self.jump = crate::state::read_opt_u32(r)?.map(|j| j as u16);
+        self.ending = r.bool()?;
+        self.halting = crate::state::read_opt_u32(r)?;
+        r.u64s(self.vf_ready.as_flattened_mut())?;
+        r.u64s(&mut self.vi_ready)?;
+        let some = r.u16()?;
+        let mut at = [0u64; 16];
+        r.u64s(&mut at)?;
+        let mut value = [0u16; 16];
+        r.u16s(&mut value)?;
+        self.vi_last = std::array::from_fn(|i| (some >> i & 1 != 0).then_some((at[i], value[i])));
+        let len = r.u32()?;
+        let mut at = [0u64; FLAG_SLOTS];
+        let mut some = [0u8; FLAG_SLOTS];
+        let mut values = [0u32; FLAG_SLOTS * 8];
+        r.u64s(&mut at)?;
+        r.bytes(&mut some)?;
+        r.u32s(&mut values)?;
+        let slots: [FlagWrite; FLAG_SLOTS] = std::array::from_fn(|i| FlagWrite { at: at[i], d: deferred_of(some[i], &values[8 * i..8 * i + 8]) });
+        crate::state::refill(&mut self.flags, len, &slots);
+        let mut t = [0u64; 3];
+        r.u64s(&mut t)?;
+        [self.path1_free, self.kick_wait, self.now] = t;
+        self.release_t = crate::state::read_opt_u64(r)?;
+        self.stopped_by = r.u32()?;
+        Ok(())
     }
 }

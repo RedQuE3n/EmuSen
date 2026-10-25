@@ -71,6 +71,24 @@ impl Mch {
     }
 }
 
+/// The memory controller's block of `SPH2` (Sapphire_Native.md §38.2): its two registers and the identity count.
+impl emusen_native::State for Mch {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u32s("Registers", &[self.ricm, self.drd]);
+        w.u8("Answered", self.answered);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut g = [0u32; 2];
+        r.u32s(&mut g)?;
+        [self.ricm, self.drd] = g;
+        self.answered = r.u8()?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

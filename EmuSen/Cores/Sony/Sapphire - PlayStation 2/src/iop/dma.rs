@@ -585,3 +585,44 @@ impl Peripherals for StandIns {
         self.ports[ch].give.pop_front().unwrap_or(0)
     }
 }
+
+/// The IOP DMAC's block of `SPH2` (Sapphire_Native.md §38.2): each channel's registers and its transfer in progress,
+/// the common registers, the bus's hold and the next unit's start, the transfer ending, and whether it idles.
+impl emusen_native::State for Dmac {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let regs: [[u32; 8]; CHANNELS] = std::array::from_fn(|n| {
+            let c = &self.ch[n];
+            [c.madr, c.bcr, c.chcr, c.tadr, c.addr, c.left, c.tag, c.size]
+        });
+        w.u32s("Channels", regs.as_flattened());
+        w.bytes("ChannelBits", &self.ch.map(|c| u8::from(c.begun) | u8::from(c.in_packet) << 1));
+        w.u32s("Registers", &[self.dpcr, self.dicr, self.dpcr2, self.dicr2, self.dmacen, self.dmacinten]);
+        w.bools("Flags", &[self.master, self.idle, self.finish.is_some()]);
+        let (ch, at) = self.finish.unwrap_or((0, 0));
+        w.u64s("Times", &[self.hold, self.free, ch as u64, at]);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut regs = [0u32; CHANNELS * 8];
+        r.u32s(&mut regs)?;
+        let mut bits = [0u8; CHANNELS];
+        r.bytes(&mut bits)?;
+        for (n, c) in self.ch.iter_mut().enumerate() {
+            let g = &regs[8 * n..8 * n + 8];
+            (c.madr, c.bcr, c.chcr, c.tadr, c.addr, c.left, c.tag, c.size) = (g[0], g[1], g[2], g[3], g[4], g[5], g[6], g[7]);
+            (c.begun, c.in_packet) = (bits[n] & 1 != 0, bits[n] & 2 != 0);
+        }
+        let mut g = [0u32; 6];
+        r.u32s(&mut g)?;
+        [self.dpcr, self.dicr, self.dpcr2, self.dicr2, self.dmacen, self.dmacinten] = g;
+        let mut f = [false; 3];
+        r.bools(&mut f)?;
+        let mut t = [0u64; 4];
+        r.u64s(&mut t)?;
+        (self.master, self.idle, self.hold, self.free) = (f[0], f[1], t[0], t[1]);
+        self.finish = (f[2] && (t[2] as usize) < CHANNELS).then_some((t[2] as usize, t[3]));
+        Ok(())
+    }
+}

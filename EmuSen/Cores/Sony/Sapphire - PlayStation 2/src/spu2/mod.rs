@@ -282,3 +282,29 @@ impl<P: dma::Peripherals> dma::Peripherals for Ports<'_, P> {
         }
     }
 }
+
+/// The SPU2's block of `SPH2` (Sapphire_Native.md §38.2): both cores, the registers outside them, the next sample's
+/// time, the wake and the output areas' place, then the 2 MiB of sound RAM. The samples not yet taken by the host are
+/// not machine state.
+impl emusen_native::State for Spu2 {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.structure("Core0", &self.cores[0]);
+        w.structure("Core1", &self.cores[1]);
+        w.u16s("Registers", &self.regs);
+        w.u64("NextTick", self.next_tick);
+        w.bool("Wake", self.wake);
+        w.u16("Area", self.area);
+        w.bytes("Ram", &self.ram);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.structures(&mut self.cores)?;
+        r.u16s(&mut self.regs)?;
+        self.next_tick = r.u64()?;
+        self.wake = r.bool()?;
+        self.area = r.u16()? & 0x1FF;
+        r.bytes(&mut self.ram)
+    }
+}

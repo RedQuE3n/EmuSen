@@ -675,3 +675,74 @@ impl System {
         self.ee.peek(&mut self.board, paddr, bytes)
     }
 }
+
+/// The core and the board as `SPH2` holds them, every block in the plan's order (Sapphire_Plan.md §4.7,
+/// Sapphire_Native.md §38.2): the EE with COP0, COP1, its issue model, the TLB and the caches; RDRAM; the scratchpad;
+/// the VUs with their memories and micro modes; VIF0, VIF1, the GIF; the GS with its 4 MiB; the PCRTC; the DMAC, the
+/// INTC and the timers; the IOP with its RAM, cache, scratchpad, DMAC and timers; the SIF; the drive; SIO2; the SPU2
+/// with its RAM; the IPU; the memory controller; and the scheduler. The boot ROM is firmware and never in a state; the
+/// stand-ins, the reports and the traffic counts keep nothing a program sees; the PCRTC's next event is a cache.
+impl System {
+    pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let b = &self.board;
+        w.structure("Ee", &self.ee);
+        w.bytes("Rdram", &b.map.rdram);
+        w.bytes("Scratchpad", &self.ee.spram[..]);
+        w.structure("Vpu", &b.vpu);
+        w.structure("Vif0", &b.vif[0]);
+        w.structure("Vif1", &b.vif[1]);
+        w.structure("Gif", &b.gif);
+        w.structure("Gs", &b.gs);
+        w.structure("Pcrtc", &b.pcrtc);
+        w.structure("Dmac", &b.dmac);
+        w.u32s("Intc", &[b.intc.stat, b.intc.mask]);
+        w.structures("Timers", &b.timers);
+        w.group("Iop", |w| b.iop.write_state(w));
+        w.structure("Sif", &b.iop.bus.sif);
+        w.structure("Cdvd", &b.iop.bus.cdvd);
+        w.structure("Sio2", &b.iop.bus.sio2);
+        w.structure("Spu2", &b.iop.bus.spu2);
+        w.structure("Ipu", &b.ipu);
+        w.structure("Mch", &b.mch);
+        w.u64s("Scheduler", &[b.now, b.next]);
+        crate::state::opt_u64(w, "EdgesTaken", b.edges_taken);
+    }
+
+    pub fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        use emusen_native::State;
+        let b = &mut self.board;
+        self.ee.read_state(r)?;
+        r.bytes(&mut b.map.rdram)?;
+        r.bytes(&mut self.ee.spram[..])?;
+        b.vpu.read_state(r)?;
+        r.structures(&mut b.vif)?;
+        b.gif.read_state(r)?;
+        b.gs.read_state(r)?;
+        b.pcrtc.read_state(r)?;
+        b.dmac.read_state(r)?;
+        let mut i = [0u32; 2];
+        r.u32s(&mut i)?;
+        (b.intc.stat, b.intc.mask) = (i[0], i[1]);
+        r.structures(&mut b.timers)?;
+        b.iop.read_state(r)?;
+        b.iop.bus.sif.read_state(r)?;
+        b.iop.bus.cdvd.read_state(r)?;
+        b.iop.bus.sio2.read_state(r)?;
+        b.iop.bus.spu2.read_state(r)?;
+        b.ipu.read_state(r)?;
+        b.mch.read_state(r)?;
+        let mut s = [0u64; 2];
+        r.u64s(&mut s)?;
+        [b.now, b.next] = s;
+        b.edges_taken = crate::state::read_opt_u64(r)?;
+        b.pcrtc_next = None;
+        Ok(())
+    }
+
+    /// Whether every queue is within its slots in the state, so that it can be saved at this instant.
+    pub fn fits(&self) -> bool {
+        let b = &self.board;
+        let io = &b.iop.bus;
+        b.vpu.fits() && b.vif.iter().all(Vif::fits) && b.gif.fits() && b.gs.fits() && io.sif.fits() && io.cdvd.fits() && io.sio2.fits() && b.ipu.fits()
+    }
+}

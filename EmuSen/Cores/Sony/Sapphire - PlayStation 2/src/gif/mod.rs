@@ -511,4 +511,117 @@ impl Path1 for Path1Port {
     fn take_kick(&mut self) -> Option<(u16, u64, u64)> {
         self.kicks.pop_front()
     }
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u64("Free", self.free);
+        write_kicks(w, &self.kicks);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.free = r.u64()?;
+        read_kicks(r, &mut self.kicks)
+    }
+
+    fn fits(&self) -> bool {
+        self.kicks.len() <= KICK_SLOTS
+    }
+}
+
+/// XGKICKs waiting in the state, and PATH3's FIFO with room for the EE's stores past the 16 the DMAC fills.
+const KICK_SLOTS: usize = 16;
+const FIFO_SLOTS: usize = 64;
+
+fn path_code(p: Option<Path>) -> u8 {
+    p.map_or(0xFF, |p| p as u8)
+}
+
+fn path_of(c: u8) -> Option<Path> {
+    [Path::One, Path::Two, Path::Three].get(usize::from(c)).copied()
+}
+
+fn write_kicks(w: &mut emusen_native::StateWriter, kicks: &VecDeque<(u16, u64, u64)>) {
+    let k = crate::state::slots::<_, KICK_SLOTS>(kicks);
+    w.u32("KicksLength", kicks.len() as u32);
+    w.u16s("KicksAddr", &k.map(|k| k.0));
+    w.u64s("KicksAt", &k.map(|k| k.1));
+    w.u64s("KicksEnd", &k.map(|k| k.2));
+}
+
+fn read_kicks(r: &mut emusen_native::StateReader, kicks: &mut VecDeque<(u16, u64, u64)>) -> Result<(), emusen_native::Truncated> {
+    let len = r.u32()?;
+    let mut addr = [0u16; KICK_SLOTS];
+    let mut at = [0u64; KICK_SLOTS];
+    let mut end = [0u64; KICK_SLOTS];
+    r.u16s(&mut addr)?;
+    r.u64s(&mut at)?;
+    r.u64s(&mut end)?;
+    crate::state::refill::<_, KICK_SLOTS>(kicks, len, &std::array::from_fn(|i| (addr[i], at[i], end[i])));
+    Ok(())
+}
+
+/// The GIF's block of `SPH2` (Sapphire_Native.md §38.2): its time and arbitration, each path's packet, the registers,
+/// the XGKICKs waiting, PATH2's request and PATH3's FIFO.
+impl emusen_native::State for Gif {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u64s("Times", &[self.time, self.p1_end, self.batch.0, self.batch.1 as u64]);
+        w.bytes("Paths", &[path_code(self.owner), path_code(self.last)]);
+        w.structure("Path1", &self.packet[0]);
+        w.structure("Path2", &self.packet[1]);
+        w.structure("Path3", &self.packet[2]);
+        w.u32s("Registers", &[self.q, self.mode, self.p3cnt, self.p3tag]);
+        w.u128("Tag", self.tag);
+        w.u16("VuAddr", self.vuaddr);
+        w.bools("Flags", &[self.pse, self.m3p, self.ip3, self.dmac_waiting, self.wake, self.output]);
+        write_kicks(w, &self.kicks);
+        let p2 = self.p2.unwrap_or((0, false));
+        w.bools("Path2Request", &[self.p2.is_some(), p2.1]);
+        w.u64("Path2At", p2.0);
+        crate::state::opt_u64(w, "Resume", self.resume);
+        let f = crate::state::slots::<_, FIFO_SLOTS>(&self.fifo);
+        w.u32("FifoLength", self.fifo.len() as u32);
+        w.u128s("FifoQwords", &f.map(|e| e.0));
+        w.u64s("FifoAt", &f.map(|e| e.1));
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut t = [0u64; 4];
+        r.u64s(&mut t)?;
+        (self.time, self.p1_end, self.batch) = (t[0], t[1], (t[2], t[3] as usize));
+        let mut p = [0u8; 2];
+        r.bytes(&mut p)?;
+        (self.owner, self.last) = (path_of(p[0]), path_of(p[1]));
+        for packet in &mut self.packet {
+            packet.read_state(r)?;
+        }
+        let mut g = [0u32; 4];
+        r.u32s(&mut g)?;
+        [self.q, self.mode, self.p3cnt, self.p3tag] = g;
+        self.tag = r.u128()?;
+        self.vuaddr = r.u16()?;
+        let mut f = [false; 6];
+        r.bools(&mut f)?;
+        [self.pse, self.m3p, self.ip3, self.dmac_waiting, self.wake, self.output] = f;
+        read_kicks(r, &mut self.kicks)?;
+        let mut p2 = [false; 2];
+        r.bools(&mut p2)?;
+        let at = r.u64()?;
+        self.p2 = p2[0].then_some((at, p2[1]));
+        self.resume = crate::state::read_opt_u64(r)?;
+        let len = r.u32()?;
+        let mut q = [0u128; FIFO_SLOTS];
+        let mut at = [0u64; FIFO_SLOTS];
+        r.u128s(&mut q)?;
+        r.u64s(&mut at)?;
+        crate::state::refill::<_, FIFO_SLOTS>(&mut self.fifo, len, &std::array::from_fn(|i| (q[i], at[i])));
+        Ok(())
+    }
+}
+
+impl Gif {
+    /// Whether the GIF's queues are within their slots in the state.
+    pub fn fits(&self) -> bool {
+        self.kicks.len() <= KICK_SLOTS && self.fifo.len() <= FIFO_SLOTS
+    }
 }

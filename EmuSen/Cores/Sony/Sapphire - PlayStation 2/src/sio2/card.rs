@@ -187,3 +187,40 @@ impl MemoryCard {
         true
     }
 }
+
+impl MemoryCard {
+    /// The card's bus state in `SPH2` (Sapphire_Native.md §38.2): the terminator, the page and place named, the page
+    /// gathered, a write in progress and the flash's busy time. The image is the player's card, kept apart from every
+    /// state (§38.3).
+    pub fn write_bus(&self, w: &mut emusen_native::StateWriter) {
+        w.u8("Terminator", self.terminator);
+        w.u32s("Page", &[self.page, self.offset as u32]);
+        w.bytes("Buffer", &self.buffer[..]);
+        w.bool("Writing", self.writing);
+        w.u64("BusyUntil", self.busy_until);
+    }
+
+    pub fn read_bus(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.terminator = r.u8()?;
+        let mut p = [0u32; 2];
+        r.u32s(&mut p)?;
+        (self.page, self.offset) = (p[0], (p[1] as usize).min(RAW_PAGE));
+        r.bytes(&mut self.buffer[..])?;
+        self.writing = r.bool()?;
+        self.busy_until = r.u64()?;
+        Ok(())
+    }
+
+    /// The bus state of a slot with no card, so that every state of a machine has one length.
+    pub fn write_absent(w: &mut emusen_native::StateWriter) {
+        MemoryCard::erased_bus().write_bus(w);
+    }
+
+    fn erased_bus() -> MemoryCard {
+        MemoryCard { image: Vec::new(), terminator: 0, page: 0, offset: 0, buffer: Box::new([0; RAW_PAGE]), writing: false, busy_until: 0, dirty: false }
+    }
+
+    pub fn skip_bus(r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        MemoryCard::erased_bus().read_bus(r)
+    }
+}

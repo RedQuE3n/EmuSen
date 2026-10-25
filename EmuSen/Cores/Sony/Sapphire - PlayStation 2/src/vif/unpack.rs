@@ -214,3 +214,15 @@ impl Unpack {
         Next::Write(self.addr + self.cycle.offset(k), fields, enable)
     }
 }
+
+impl Unpack {
+    /// An UNPACK in progress as `SPH2` holds it (Sapphire_Native.md §38.2): USN and m, eight words, the bits held.
+    pub(super) fn saved(&self) -> ([bool; 2], [u32; 8], u128) {
+        let f = &self.format;
+        ([self.usn, self.masked], [f.vn, f.vl, self.addr, self.num, self.done, self.cycle.cl, self.cycle.wl, self.held], self.bits)
+    }
+
+    pub(super) fn restored(flags: [bool; 2], w: [u32; 8], bits: u128) -> Unpack {
+        Unpack { format: Format { vn: w[0] & 3, vl: w[1] & 3 }, usn: flags[0], masked: flags[1], addr: w[2], num: w[3], done: w[4], cycle: Cycle { cl: w[5], wl: w[6] }, bits, held: w[7] }
+    }
+}

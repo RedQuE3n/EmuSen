@@ -104,26 +104,6 @@ impl Machine {
         sys
     }
 
-    /// A console with no BIOS brought to frame `frames` from power-on, which is its whole state, since nothing but the
-    /// units' clocks runs (the state's rule until S30, Sapphire_Native.md §35.6): the cards, the EEPROM and the pads'
-    /// input kept, the sound made on the way dropped.
-    pub fn replay_to(&mut self, frames: i64) {
-        let old = std::mem::replace(&mut self.sys, Machine::console(self.market, self.ports));
-        let (b, o) = (&mut self.sys.board.iop.bus, &old.board.iop.bus);
-        for n in 0..2 {
-            b.sio2.slots[n].cards = o.sio2.slots[n].cards.clone();
-        }
-        b.cdvd.nvm = o.cdvd.nvm.clone();
-        self.frames = 0;
-        for port in 0..2 {
-            self.sync_pad(port);
-        }
-        while self.frames < frames {
-            self.advance();
-        }
-        self.sys.board.iop.bus.spu2.out.clear();
-    }
-
     /// The player's BIOS in the boot ROM, the same image at 1FC00000h for the EE and the IOP, and both processors at
     /// their reset vectors (Sapphire_Plan.md §5.9).
     pub fn insert_bios(&mut self, image: &[u8]) {
@@ -214,12 +194,6 @@ impl Machine {
             _ => None,
         };
         slot.map(|s| *s = v).is_some()
-    }
-
-    /// The whole of memory `id`, for the state.
-    pub fn space_bytes(&self, id: u32) -> Vec<u8> {
-        let size = MEMORIES.iter().find(|m| m.0 == id).map_or(0, |m| m.2);
-        (0..size).map(|a| self.space_byte(id, a).unwrap_or(0)).collect()
     }
 
     /// One frame: the console run until the PCRTC begins its next field, which is when V-blank rises.

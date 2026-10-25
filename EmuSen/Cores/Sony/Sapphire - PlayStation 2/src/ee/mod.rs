@@ -660,3 +660,65 @@ impl Ee {
         Ok(limit)
     }
 }
+
+/// The core's block of `SPH2` (Sapphire_Native.md §38.2): the registers, COP0 and its debug and performance registers,
+/// COP1, the lines from the board, the issue model, the TLB and the caches. What one instruction's execution keeps
+/// for itself (its stalls, its entry, the counting mode) is set again before each instruction and is not saved; the
+/// decode memo is a pure function of the word, and the exception counts are the hardware's reports, not the machine.
+impl emusen_native::State for Ee {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.u128s("Gpr", &self.gpr);
+        w.u128("Hi", self.hi);
+        w.u128("Lo", self.lo);
+        w.u64("Sa", self.sa);
+        w.u32s("Fpr", &self.fpr);
+        w.u32("Acc", self.acc);
+        w.u32("Fcr31", self.fcr31);
+        w.u32("Pc", self.pc);
+        w.u32("NextPc", self.next_pc);
+        w.bool("Delay", self.delay);
+        w.u32s("Cop0", &self.cop0);
+        w.u32s("Debug", &self.debug);
+        w.u32("Pccr", self.pccr);
+        w.u32s("Pcr", &self.pcr);
+        w.bools("Lines", &[self.cpcond0, self.int0, self.int1]);
+        w.u8("Group", self.group);
+        w.u64("CyclesSeen", self.cycles_seen);
+        w.structure("Timing", &self.timing);
+        w.structure("Tlb", &self.tlb);
+        w.structure("DCache", &self.dcache);
+        w.structure("ICache", &self.icache);
+        w.structure("Ucab", &self.ucab);
+        w.structure("Btac", &self.btac);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        r.u128s(&mut self.gpr)?;
+        self.hi = r.u128()?;
+        self.lo = r.u128()?;
+        self.sa = r.u64()?;
+        r.u32s(&mut self.fpr)?;
+        self.acc = r.u32()?;
+        self.fcr31 = r.u32()?;
+        self.pc = r.u32()?;
+        self.next_pc = r.u32()?;
+        self.delay = r.bool()?;
+        r.u32s(&mut self.cop0)?;
+        r.u32s(&mut self.debug)?;
+        self.pccr = r.u32()?;
+        r.u32s(&mut self.pcr)?;
+        let mut lines = [false; 3];
+        r.bools(&mut lines)?;
+        [self.cpcond0, self.int0, self.int1] = lines;
+        self.group = r.u8()?;
+        self.cycles_seen = r.u64()?;
+        self.timing.read_state(r)?;
+        self.tlb.read_state(r)?;
+        self.dcache.read_state(r)?;
+        self.icache.read_state(r)?;
+        self.ucab.read_state(r)?;
+        self.btac.read_state(r)
+    }
+}

@@ -745,5 +745,121 @@ fn toc(disc: &mut Disc) -> [u8; FRAME] {
     b
 }
 
+/// The sector buffer's room in the state: the largest block a read cuts, CD-DA's 2,352 bytes.
+const BUFFER_SLOT: usize = 2352;
+
+fn form_code(f: Form) -> (u8, u32) {
+    match f {
+        Form::Cd(n) => (0, n as u32),
+        Form::CdDa => (1, 0),
+        Form::Dvd => (2, 0),
+        Form::Toc => (3, 0),
+    }
+}
+
+fn form_of(code: u8, n: u32) -> Form {
+    match code {
+        1 => Form::CdDa,
+        2 => Form::Dvd,
+        3 => Form::Toc,
+        _ => Form::Cd((n as usize).min(BUFFER_SLOT)),
+    }
+}
+
+/// The drive's block of `SPH2` (Sapphire_Native.md §38.2): the tray, the N and S commands with their FIFOs, the status
+/// registers, the head's position and the spindle, the command ending and the disc's detection, the read in progress,
+/// the sector buffer, the clock and the EEPROM's session. The disc is named by the state's header, never held in it;
+/// the region answer is the console's market; the command counts are the drive's reports.
+impl emusen_native::State for Cdvd {
+    type Error = emusen_native::Truncated;
+
+    fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        let fifos = [&self.n_params, &self.s_params, &self.s_result];
+        w.bytes("FifoBytes", &[fifos[0].bytes, fifos[1].bytes, fifos[2].bytes].as_flattened());
+        w.u32s("FifoAt", &fifos.map(|f| [f.len as u32, f.pos as u32]).as_flattened());
+        w.bytes("Registers", &[self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command]);
+        w.bools("Flags", &[self.tray_open, self.busy, self.spinning]);
+        w.u32("Position", self.position);
+        let (at, event) = self.pending.unwrap_or((0, Event::Sector));
+        w.bool("Pending", self.pending.is_some());
+        w.u64("PendingAt", at);
+        w.u8("PendingEvent", match event {
+            Event::Complete(s) => s,
+            Event::Sector => 0xFF,
+        });
+        w.bool("PendingSector", matches!(event, Event::Sector));
+        crate::state::opt_u64(w, "Detect", self.detect);
+        let r = self.read.unwrap_or(Read { lba: 0, left: 0, form: Form::Dvd, block: 0, waiting: false });
+        let (form, size) = form_code(r.form);
+        w.bools("Read", &[self.read.is_some(), r.waiting]);
+        w.u32s("ReadWords", &[r.lba, r.left, size]);
+        w.u8("ReadForm", form);
+        w.u64("ReadBlock", r.block);
+        let mut buffer = [0u8; BUFFER_SLOT];
+        buffer[..self.buffer.len().min(BUFFER_SLOT)].copy_from_slice(&self.buffer[..self.buffer.len().min(BUFFER_SLOT)]);
+        w.u32s("BufferAt", &[self.buffer.len() as u32, self.taken as u32]);
+        w.bytes("Buffer", &buffer);
+        w.u64s("Clock", &self.rtc.saved());
+        let (flags, session) = self.nvm.session_saved();
+        w.bools("Eeprom", &flags);
+        w.u32s("EepromSession", &session);
+    }
+
+    fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        let mut bytes = [0u8; 48];
+        r.bytes(&mut bytes)?;
+        let mut at = [0u32; 6];
+        r.u32s(&mut at)?;
+        for (k, f) in [&mut self.n_params, &mut self.s_params, &mut self.s_result].into_iter().enumerate() {
+            f.bytes.copy_from_slice(&bytes[16 * k..16 * k + 16]);
+            f.len = (at[2 * k] as usize).min(16);
+            f.pos = (at[2 * k + 1] as usize).min(f.len);
+        }
+        let mut g = [0u8; 7];
+        r.bytes(&mut g)?;
+        [self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command] = g;
+        let mut f = [false; 3];
+        r.bools(&mut f)?;
+        [self.tray_open, self.busy, self.spinning] = f;
+        self.position = r.u32()?;
+        let pending = r.bool()?;
+        let at = r.u64()?;
+        let status = r.u8()?;
+        let sector = r.bool()?;
+        self.pending = pending.then_some((at, if sector { Event::Sector } else { Event::Complete(status) }));
+        self.detect = crate::state::read_opt_u64(r)?;
+        let mut rf = [false; 2];
+        r.bools(&mut rf)?;
+        let mut rw = [0u32; 3];
+        r.u32s(&mut rw)?;
+        let form = form_of(r.u8()?, rw[2]);
+        let block = r.u64()?;
+        self.read = rf[0].then_some(Read { lba: rw[0], left: rw[1], form, block, waiting: rf[1] });
+        let mut b = [0u32; 2];
+        r.u32s(&mut b)?;
+        let mut buffer = [0u8; BUFFER_SLOT];
+        r.bytes(&mut buffer)?;
+        self.buffer.clear();
+        self.buffer.extend_from_slice(&buffer[..(b[0] as usize).min(BUFFER_SLOT)]);
+        self.taken = (b[1] as usize).min(self.buffer.len());
+        let mut c = [0u64; 2];
+        r.u64s(&mut c)?;
+        self.rtc = rtc::Rtc::restored(c);
+        let mut e = [false; 2];
+        r.bools(&mut e)?;
+        let mut s = [0u32; 2];
+        r.u32s(&mut s)?;
+        self.nvm.restore_session(e, s);
+        Ok(())
+    }
+}
+
+impl Cdvd {
+    /// Whether the sector buffer is within its slot in the state.
+    pub fn fits(&self) -> bool {
+        self.buffer.len() <= BUFFER_SLOT
+    }
+}
+
 #[cfg(test)]
 mod tests;

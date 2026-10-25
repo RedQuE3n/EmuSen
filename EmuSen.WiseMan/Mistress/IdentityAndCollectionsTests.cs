@@ -97,7 +97,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(Records(window).IsFavourite(before));
             Assert.Contains(rpgs, Records(window).CollectionsOf(after));
             Assert.False(Records(window).IsFavourite(Path.Combine(_romDir, "Other (USA).sfc")));
-            Assert.Contains("renamed or moved", window.GetControl<TextBlock>("StatusText").Text);
+            WaitFor(() => window.GetControl<TextBlock>("StatusText").Text?.Contains("renamed or moved") == true);
             window.Close();
         }, default);
 

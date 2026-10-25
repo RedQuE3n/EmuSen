@@ -487,6 +487,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-patch"
+version = "0.1.0"
+dependencies = [
+ "emusen-galaxia",
+]
+
+[[package]]
 name = "emusen-platform"
 version = "0.1.0"
 dependencies = [

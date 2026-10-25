@@ -1,0 +1,15 @@
+[package]
+name = "emusen-patch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Soft patches: IPS, UPS and BPS applied to an image, bytes in and bytes out, each format written from its published
+# description; and a package's patch list applied as its manifest records it. See EmuSen_GamePackages.md §2.3, §5.4 and §15.
+[lib]
+name = "emusen_patch"
+
+[dependencies]
+# CRC-32 and SHA-1, whose one owner is RomHash; the manifest, and where a package's files are.
+emusen-galaxia = { path = "../galaxia" }

@@ -674,14 +674,13 @@ impl Scraper {
             let core_first = self.route(rom, &cores).and_then(|s| consoles::core_of(&cores, &s.id)).and_then(|c| c.systems.first().cloned());
             if let Some(first) = core_first {
                 let file = std::fs::read(rom).map_err(|e| io(e, rom))?;
-                if let Some(changed) = emusen_systems::openvgdb::bytes(&first, &file).filter(|c| *c != file) {
+                if let Some(h) = emusen_galaxia::rom_hash::transformed(&file, |f| emusen_systems::openvgdb::bytes(&first, f)) {
                     match self.turn(w) {
                         None => return Ok(None),
                         Some(false) => return Ok(Some(self.stopped(item))),
                         Some(true) => {}
                     }
                     self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
-                    let h = emusen_galaxia::rom_hash::hashes_of(&changed);
                     let Some(second) = self.ask(w, system_id, Hashes { md5: h.md5, crc32: h.crc32, sha1: h.sha1.unwrap_or_default(), size: h.size }, &file_name, None) else { return Ok(None) };
                     if second.status == Status::Found {
                         matched_by = "transformed";

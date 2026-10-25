@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public Task Moving_through_the_gamelist_asks_nothing_and_scrape_this_game_fills_its_text_and_pictures() => Session.Dispatch(() =>
         {
-            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHashes.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = "Scraped description." });
+            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHash.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = "Scraped description." });
             using var s = new ThemedSession();
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.Down(2);

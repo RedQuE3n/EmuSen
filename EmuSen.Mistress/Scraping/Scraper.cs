@@ -242,7 +242,7 @@ namespace EmuSen.Mistress.Scraping
             if (md5 is null)
             {
                 // The file the library lists is hashed whole at any size, as ScreenScraper lists it (§46).
-                hashes = RomHashes.Of(path, stop);
+                hashes = RomHash.Of(path, stop);
                 md5 = hashes.Md5;
                 _store.RememberFile(path, info.Length, modified, md5);
             }
@@ -275,7 +275,7 @@ namespace EmuSen.Mistress.Scraping
             bool byName = known is { State: ScrapeState.Found, MatchedBy: "name", GameId: not null };
 
             if (!await TurnAsync(stop)) return Stopped(item);
-            hashes ??= RomHashes.Of(path, stop);
+            hashes ??= RomHash.Of(path, stop);
             Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
             JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop, byName ? known!.GameId : null);
@@ -285,12 +285,11 @@ namespace EmuSen.Mistress.Scraping
             if (answer.Status == ScrapeStatus.NotFound && info.Length <= Library.CoverFetcher.HashLimitBytes && _transform(path) is { } transform)
             {
                 byte[] bytes = await File.ReadAllBytesAsync(path, stop);
-                byte[] changed = transform(bytes);
-                if (!changed.AsSpan().SequenceEqual(bytes))
+                if (RomHash.Transformed(bytes, transform) is { } changed)
                 {
                     if (!await TurnAsync(stop)) return Stopped(item);
                     Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
-                    JeuInfosAnswer second = await AskAsync(path, systemId, RomHashes.Of(changed), fileName, stop);
+                    JeuInfosAnswer second = await AskAsync(path, systemId, changed, fileName, stop);
                     if (second.Status != ScrapeStatus.NotFound) answer = second;
                     if (second.Status == ScrapeStatus.Found) matchedBy = "transformed";
                 }

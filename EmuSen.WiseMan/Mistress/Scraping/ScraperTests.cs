@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using EmuSen.Cores;
 using EmuSen.Mistress.Scraping;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -104,7 +105,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void An_answer_in_a_charset_dotnet_has_not_is_an_answer_that_could_not_be_read_and_the_run_goes_on()
         {
             string rom = Rom("Charset (USA).sfc", Filled(512, 9));
-            _server.Games.Add(new FakeGame(78, "Charset", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(78, "Charset", RomHash.Of(rom).Md5));
             _handler = new Charset(_server, "klingon");
             Scraper scraper = Start();
 
@@ -120,7 +121,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_game_found_by_its_file_s_hashes_gets_its_text_and_each_default_kind_in_es_de_s_layout()
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(4096, 1));
-            RomHashes h = RomHashes.Of(rom);
+            RomHashes h = RomHash.Of(rom);
             _server.Games.Add(new FakeGame(77, "F-Zero", h.Md5));
             Scraper scraper = Start();
 
@@ -211,13 +212,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             byte[] ines = new byte[] { (byte)'N', (byte)'E', (byte)'S', 0x1A }.Concat(new byte[12]).Concat(body).ToArray();
             string nes = Rom("Metroid (USA).nes", ines);
             string gb = Rom("Unknown Game (USA).gb", Filled(0x8000, 3));
-            _server.Games.Add(new FakeGame(5, "Metroid", RomHashes.Of(body).Md5) { SystemId = 3 });
+            _server.Games.Add(new FakeGame(5, "Metroid", RomHash.Of(body).Md5) { SystemId = 3 });
             Scraper scraper = Start();
 
             Queue(scraper, nes, "nes", ScrapePriority.Shown);
             ScrapeResult found = Next();
             Assert.Equal((ScrapeOutcome.Found, "transformed"), (found.Outcome, found.MatchedBy));
-            Assert.Equal([RomHashes.Of(ines).Md5, RomHashes.Of(body).Md5], _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")));
+            Assert.Equal([RomHash.Of(ines).Md5, RomHash.Of(body).Md5], _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")));
             Assert.Equal(body.Length.ToString(), FakeScreenScraper.Param(_server.JeuInfos.Last(), "romtaille"));
 
             int before = _server.JeuInfos.Count();
@@ -231,7 +232,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_cover_the_player_already_has_is_not_fetched_and_a_file_already_there_is_not_replaced()
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 4));
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Directory.CreateDirectory(Stored("snes", "screenshots"));
             File.WriteAllBytes(Stored("snes", "screenshots", "F-Zero (USA).png"), [7, 7, 7]);
             Scraper scraper = Start(handCover: (system, path) => path.EndsWith("F-Zero (USA).sfc"));
@@ -251,7 +252,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 5));
             string hack = Rom("My Hack.sfc", Filled(2048, 6));
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Scraper scraper = Start();
             Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Queue(scraper, hack, "snes", ScrapePriority.Shown);
@@ -269,7 +270,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_kind_turned_on_later_is_asked_for_only_when_the_game_offered_it()
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 7));
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Scraper scraper = Start();
             Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
@@ -286,7 +287,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_kind_turned_on_later_that_the_game_never_offered_costs_no_request()
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 70));
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = [("box-2D", "us", "png"), ("ss", "wor", "png")] });
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5) { Media = [("box-2D", "us", "png"), ("ss", "wor", "png")] });
             Scraper scraper = Start();
             Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
@@ -303,7 +304,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             byte[] bytes = Filled(2048, 8);
             string rom = Rom("F-Zero (USA).sfc", bytes);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Scraper scraper = Start();
             Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
@@ -331,7 +332,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Directory.CreateDirectory(Path.Combine(Roms, "SNES", "USA"));
             Directory.CreateDirectory(Path.Combine(Roms, "SNES", "Racing"));
             string rom = Rom(Path.Combine("SNES", "USA", "F-Zero (USA).sfc"), Filled(2048, 21));
-            RomHashes h = RomHashes.Of(rom);
+            RomHashes h = RomHash.Of(rom);
             _server.Games.Add(new FakeGame(77, "F-Zero", h.Md5));
             Scraper scraper = Start(folderOf: p => EmuSen.Mistress.Library.GameFolders.Of(Roms, p));
             Queue(scraper, rom, "snes", ScrapePriority.Shown);
@@ -361,7 +362,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string eu = Rom("Game (Europe).sfc", Filled(1024, 9));
             string kr = Rom("Game (Korea).sfc", Filled(1024, 10));
-            _server.Games.Add(new FakeGame(1, "Game", RomHashes.Of(eu).Md5, RomHashes.Of(kr).Md5)
+            _server.Games.Add(new FakeGame(1, "Game", RomHash.Of(eu).Md5, RomHash.Of(kr).Md5)
             {
                 Media = [("box-2D", "us", "png"), ("box-2D", "eu", "jpg"), ("box-2D", "jp", "png")],
             });
@@ -405,8 +406,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string a = Rom("A (USA).sfc", Filled(1024, 13));
             string b = Rom("B (USA).sfc", Filled(1024, 14));
-            _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5));
-            _server.Games.Add(new FakeGame(2, "B", RomHashes.Of(b).Md5));
+            _server.Games.Add(new FakeGame(1, "A", RomHash.Of(a).Md5));
+            _server.Games.Add(new FakeGame(2, "B", RomHash.Of(b).Md5));
             _server.ForcedStatus = 430;
             Scraper scraper = Start();
             Queue(scraper, a, "snes", ScrapePriority.Shown);
@@ -430,7 +431,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void An_interrupted_queue_resumes_without_asking_again_for_what_was_done()
         {
             var roms = Enumerable.Range(0, 4).Select(i => Rom($"G{i} (USA).sfc", Filled(1024, 20 + i))).ToList();
-            foreach ((string rom, int i) in roms.Select((r, i) => (r, i))) _server.Games.Add(new FakeGame(100 + i, $"G{i}", RomHashes.Of(rom).Md5));
+            foreach ((string rom, int i) in roms.Select((r, i) => (r, i))) _server.Games.Add(new FakeGame(100 + i, $"G{i}", RomHash.Of(rom).Md5));
             _server.Gate = new SemaphoreSlim(0);
             Scraper scraper = Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
             foreach (string rom in roms) scraper.Enqueue(rom, "snes", ScrapePriority.Library);
@@ -471,7 +472,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             _server.User!["maxdownloadspeed"] = "1";
             string a = Rom("A (USA).sfc", Filled(1024, 62));
-            _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
+            _server.Games.Add(new FakeGame(1, "A", RomHash.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
             Scraper scraper = Start();
             Queue(scraper, a, "snes", ScrapePriority.Shown);
             Next();
@@ -484,7 +485,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.User = null;
             string a = Rom("A (USA).sfc", Filled(1024, 60));
             string b = Rom("B (USA).sfc", Filled(1024, 61));
-            _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
+            _server.Games.Add(new FakeGame(1, "A", RomHash.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
             Scraper scraper = Start();
             Queue(scraper, a, "snes", ScrapePriority.Shown);
             Queue(scraper, b, "snes", ScrapePriority.Shown);

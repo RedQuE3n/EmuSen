@@ -111,7 +111,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string cue = File_("Synthetic Disc (USA)/Synthetic Disc (USA).cue", Encoding.ASCII.GetBytes(
                 "FILE \"Synthetic Disc (USA) (Track 01).bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n" +
                 "FILE \"Synthetic Disc (USA) (Track 02).bin\" BINARY\r\n  TRACK 02 AUDIO\r\n    INDEX 00 00:00:00\r\n    INDEX 01 00:02:00\r\n"));
-            RomHashes sheet = RomHashes.Of(cue);
+            RomHashes sheet = RomHash.Of(cue);
             _server.Games.Add(new FakeGame(19275, "Synthetic Disc", sheet.Md5) { SystemId = 57 });
             Scraper scraper = Start(folderOf: _ => "Synthetic Disc (USA)");
 
@@ -128,7 +128,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string bin = Large("Synthetic Racing (USA).bin", 3);
             var info = new FileInfo(bin);
-            RomHashes whole = RomHashes.Of(bin);
+            RomHashes whole = RomHash.Of(bin);
             _server.Games.Add(new FakeGame(19700, "Synthetic Racing", whole.Md5) { SystemId = 57 });
             Scraper scraper = Start();
 
@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_chd_past_the_old_cap_is_hashed_whole_and_found()
         {
             string chd = Large("Synthetic Hedgehog CD (USA).chd", 5);
-            RomHashes whole = RomHashes.Of(chd);
+            RomHashes whole = RomHash.Of(chd);
             _server.Games.Add(new FakeGame(12702, "Synthetic Hedgehog CD", whole.Md5) { SystemId = 20 });
             Scraper scraper = Start();
 
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File_("Synthetic Saga (USA) (Disc 1).cue", Encoding.ASCII.GetBytes("FILE \"Synthetic Saga (USA) (Disc 1).bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"));
             File_("Synthetic Saga (USA) (Disc 1).bin", Filled(2352 * 16, 6));
             string m3u = File_("Synthetic Saga (USA).m3u", Encoding.ASCII.GetBytes("Synthetic Saga (USA) (Disc 1).cue\n"));
-            RomHashes list = RomHashes.Of(m3u);
+            RomHashes list = RomHash.Of(m3u);
             _server.Games.Add(new FakeGame(214640, "Synthetic Saga", list.Md5) { SystemId = 57 });
             Scraper scraper = Start();
 
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_refused_request_is_recorded_with_its_reason_logged_once_and_named_in_the_run_s_line()
         {
             string bin = File_("Synthetic Refusal (USA).bin", Filled(2352 * 8, 7));
-            RomHashes h = RomHashes.Of(bin);
+            RomHashes h = RomHash.Of(bin);
             _server.ForcedStatus = 400;
             Scraper scraper = Start();
             var run = new ScrapeProgress(1);

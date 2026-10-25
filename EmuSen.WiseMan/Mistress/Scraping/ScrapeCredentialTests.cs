@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using EmuSen.Galaxia;
 using EmuSen.Mistress.Scraping;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {

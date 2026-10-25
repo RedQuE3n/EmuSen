@@ -1,6 +1,7 @@
 //! A ROM file's identity across a rename: the MD5 of every byte, header included, and with it the CRC-32 that zip and
 //! ScreenScraper compute and, when asked, the SHA-1 ScreenScraper also takes, of the whole file or a byte range, in one
-//! read. See EmuSen_Galaxia.md §5.4, EmuSen_GamePackages.md §2.2, EmuSen_Backend.md §28.2 and §30.4.
+//! read; a console's comparable form, by a transform its system pack owns; and a disc's tracks, each where
+//! `emusen-disc` places it. See EmuSen_Galaxia.md §5.4, EmuSen_GamePackages.md §2.2, EmuSen_Backend.md §28.2 and §30.4.
 
 use md5::{Digest, Md5};
 use sha1::Sha1;
@@ -127,6 +128,37 @@ pub fn hashes_of(bytes: &[u8]) -> Hashes {
     Hashes { md5: hex(&Md5::digest(bytes)), crc32: crc.hex(), sha1: Some(hex(&Sha1::digest(bytes))), size: bytes.len() as u64 }
 }
 
+/// The hashes of the form `transform` makes of a file's bytes, or none where it makes none or the same bytes: the
+/// transform is the system pack's, and this knows no console (EmuSen_GamePackages.md §2.2).
+pub fn transformed(file: &[u8], transform: impl FnOnce(&[u8]) -> Option<Vec<u8>>) -> Option<Hashes> {
+    transform(file).filter(|changed| changed.as_slice() != file).map(|changed| hashes_of(&changed))
+}
+
+/// One track of a sheet as dumped: its number, its file as the sheet names it, where it begins there, and its hashes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrackHashes {
+    pub number: u8,
+    pub file: String,
+    pub offset: u64,
+    pub hashes: Hashes,
+}
+
+/// Every track of the cue sheet at `sheet_path`, each hashed over the bytes `emusen-disc` places it in, its files found
+/// beside the sheet as a disc's are; SHA-1 always. `stop` is as [`hashes_with`]'s.
+pub fn tracks(sheet_path: &str, stop: &dyn Fn() -> bool) -> std::io::Result<Vec<TrackHashes>> {
+    let refuse = |words: String| std::io::Error::new(std::io::ErrorKind::InvalidData, words);
+    let text = emusen_dotnet::file::decode(&std::fs::read(sheet_path)?);
+    let names = emusen_disc::set::companions(&text).map_err(|e| refuse(e.to_string()))?;
+    let spans = emusen_disc::set::track_spans(&text).map_err(refuse)?;
+    let paths = crate::image_sets::companions(sheet_path).map_err(refuse)?;
+    let mut out = Vec::with_capacity(spans.len());
+    for span in spans {
+        let hashes = hashes_with(&paths[span.file], Some((span.offset, span.length.unwrap_or(u64::MAX))), true, stop)?;
+        out.push(TrackHashes { number: span.number, file: names[span.file].clone(), offset: span.offset, hashes });
+    }
+    Ok(out)
+}
+
 /// A file's SHA-1 alone, as the C# `Scraper.Sha1Of` takes it of a kept media file.
 pub fn sha1(path: &str) -> std::io::Result<String> {
     let mut file = std::fs::File::open(path)?;
@@ -170,6 +202,38 @@ mod tests {
         let part = super::hashes(&file, Some((6, 100))).unwrap();
         assert_eq!((part.md5.as_str(), part.size), ("68053af2923e00204c3ca7c6a3150cf7", 3));
         assert_eq!(whole.sha1, None);
+    }
+
+    #[test]
+    fn a_transform_is_hashed_only_where_it_changes_the_bytes() {
+        let file = b"HEADERbody";
+        assert_eq!(super::transformed(file, |f| Some(f[6..].to_vec())), Some(super::hashes_of(b"body")));
+        assert_eq!(super::transformed(file, |f| Some(f.to_vec())), None);
+        assert_eq!(super::transformed(file, |_| None), None);
+    }
+
+    #[test]
+    fn each_tracks_hashes_are_its_files_or_its_range_of_one() {
+        let temp = TempDir::new("tracks");
+        let (one, two): (Vec<u8>, Vec<u8>) = ((0..2352 * 3).map(|i| (i % 251) as u8).collect(), (0..2352 * 2).map(|i| (i % 241) as u8).collect());
+        std::fs::write(temp.join("g (Track 1).bin"), &one).unwrap();
+        std::fs::write(temp.join("G (TRACK 2).BIN"), &two).unwrap();
+        let sheet = temp.join("g.cue");
+        std::fs::write(&sheet, "FILE \"g (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\nFILE \"g (Track 2).bin\" BINARY\n TRACK 02 AUDIO\n  INDEX 00 00:00:00\n  INDEX 01 00:00:01\n").unwrap();
+        let tracks = super::tracks(&sheet, &|| false).unwrap();
+        assert_eq!(tracks.iter().map(|t| (t.number, t.file.as_str(), t.offset)).collect::<Vec<_>>(), [(1, "g (Track 1).bin", 0), (2, "g (Track 2).bin", 0)]);
+        assert_eq!((tracks[0].hashes.clone(), tracks[1].hashes.clone()), (super::hashes_of(&one), super::hashes_of(&two)));
+        let joined = [one.clone(), two.clone()].concat();
+        std::fs::write(temp.join("j.bin"), &joined).unwrap();
+        let single = temp.join("j.cue");
+        std::fs::write(&single, "FILE j.bin BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nINDEX 00 00:00:03\nINDEX 01 00:00:04\n").unwrap();
+        let split = super::tracks(&single, &|| false).unwrap();
+        assert_eq!((split[0].hashes.clone(), split[1].hashes.clone(), split[1].offset), (super::hashes_of(&one), super::hashes_of(&two), 3 * 2352));
+        assert_eq!(super::tracks(&temp.join("absent.cue"), &|| false).unwrap_err().kind(), std::io::ErrorKind::NotFound);
+        std::fs::write(&single, "TRACK 01 AUDIO\n").unwrap();
+        assert_eq!(super::tracks(&single, &|| false).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+        std::fs::write(&single, "FILE gone.bin BINARY\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").unwrap();
+        assert_eq!(super::tracks(&single, &|| false).unwrap_err().kind(), std::io::ErrorKind::NotFound);
     }
 
     #[test]

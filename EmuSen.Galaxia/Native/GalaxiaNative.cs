@@ -237,6 +237,9 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<nint, byte**, long> _mappedBytes;
         private static delegate* unmanaged[Cdecl]<nint, int> _unmap;
         private static delegate* unmanaged[Cdecl]<nint, ulong, ulong, int> _mappedAdvise;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, ulong, ulong, int*, byte*, nuint, long> _romHashes;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _romHashesOf;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, int*, byte*, nuint, long> _romTracks;
 
         // Every export this class calls; a name the library lacks refuses the library - see EmuSen_RustPlatform.md §3.1.
         internal static readonly string[] Exports =
@@ -254,6 +257,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_suggest", "emusen_galaxia_number_format", "emusen_galaxia_text_decode",
             "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap", "emusen_galaxia_mapped_advise",
             "emusen_galaxia_medium_lock_take", "emusen_galaxia_medium_lock_release", "emusen_galaxia_medium_lock_holder",
+            "emusen_galaxia_rom_hashes", "emusen_galaxia_rom_hashes_of", "emusen_galaxia_rom_tracks",
         };
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.
@@ -313,6 +317,10 @@ namespace EmuSen.Galaxia.Native
             _mappedBytes = (delegate* unmanaged[Cdecl]<nint, byte**, long>)found[next++];
             _unmap = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
             _mappedAdvise = (delegate* unmanaged[Cdecl]<nint, ulong, ulong, int>)found[next++];
+            next += 3; // the medium lock's three are MediumLockNative's
+            _romHashes = (delegate* unmanaged[Cdecl]<byte*, nuint, ulong, ulong, int*, byte*, nuint, long>)found[next++];
+            _romHashesOf = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
+            _romTracks = (delegate* unmanaged[Cdecl]<byte*, nuint, int*, byte*, nuint, long>)found[next++];
 
             // The program's directory and .NET's own application-data folder are passed, not found - see EmuSen_RustPlatform.md §5.5.
             Utf8 home = new(AppContext.BaseDirectory), data = new(ConfigRoot.ApplicationData);
@@ -559,6 +567,50 @@ namespace EmuSen.Galaxia.Native
                 // .NET tells a missing folder from a missing file, and a caller may catch either.
                 throw new DirectoryNotFoundException(missing.Message);
             }
+        }
+
+        // A dump's hashes as the library's JSON, of length bytes from offset (-1 to the end); a stop lands within 64 KiB - see EmuSen_GamePackages.md §3.3.
+        public static string RomHashes(string path, long offset, long length, System.Threading.CancellationToken stop)
+        {
+            Utf8 file = new(path);
+            ulong to = length < 0 ? ulong.MaxValue : (ulong)length;
+            return Stoppable(stop, flag => Text((o, n) => { fixed (byte* p = file.Bytes) return _romHashes(p, file.Length, (ulong)offset, to, (int*)flag, o, n); })!, path);
+        }
+
+        public static string RomHashesOf(ReadOnlySpan<byte> bytes)
+        {
+            byte[] copy = bytes.ToArray();
+            return Text((o, n) => { fixed (byte* p = copy) return _romHashesOf(p, (nuint)copy.Length, o, n); })!;
+        }
+
+        public static string RomTracks(string sheet, System.Threading.CancellationToken stop)
+        {
+            Utf8 file = new(sheet);
+            try
+            {
+                return Stoppable(stop, flag => Document((o, n) => { fixed (byte* p = file.Bytes) return _romTracks(p, file.Length, (int*)flag, o, n); })!, sheet);
+            }
+            catch (FormatException bad) { throw new InvalidDataException(bad.Message); }
+        }
+
+        // A call handed a flag the token sets, read by the library before each read; a stopped call is the token's exception.
+        private static string Stoppable(System.Threading.CancellationToken stop, Func<nint, string> call, string path)
+        {
+            stop.ThrowIfCancellationRequested();
+            nint flag = (nint)NativeMemory.AllocZeroed(sizeof(int));
+            try
+            {
+                using (stop.Register(() => System.Threading.Volatile.Write(ref *(int*)flag, 1)))
+                {
+                    try { return call(flag); }
+                    catch (IOException) when (stop.IsCancellationRequested) { stop.ThrowIfCancellationRequested(); throw; }
+                    catch (FileNotFoundException missing) when (!System.IO.Directory.Exists(Path.GetDirectoryName(Path.GetFullPath(path))))
+                    {
+                        throw new DirectoryNotFoundException(missing.Message);
+                    }
+                }
+            }
+            finally { NativeMemory.Free((void*)flag); }
         }
 
         // How many files were copied; the files left in place are reported, and a tree that would not list is an exception, as in the C#.

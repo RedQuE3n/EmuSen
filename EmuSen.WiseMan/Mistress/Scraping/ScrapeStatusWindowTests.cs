@@ -111,7 +111,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             return path;
         }
 
-        protected static string Md5(string path) => RomHashes.Of(path).Md5;
+        protected static string Md5(string path) => RomHash.Of(path).Md5;
 
         protected static void WaitFor(Func<bool> condition, string what)
         {

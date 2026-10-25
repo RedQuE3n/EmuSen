@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 22u
+#define EMUSEN_PLATFORM_ABI_VERSION 23u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -165,6 +165,26 @@ int32_t emusen_galaxia_file_write(const uint8_t *file, size_t file_len, const ui
 
 /* A file's MD5, every byte of it, as 32 lower-case hexadecimal digits. */
 int64_t emusen_galaxia_rom_md5(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/*
+ * A dump's identity (EmuSen_GamePackages.md, section 3.3; since 23). Hashes cross as the JSON object
+ * {"crc32", "md5", "sha1", "size"}, each hash in lower-case hexadecimal. `stop`, when not null, is read before each
+ * 64 KiB a hash reads, from whatever thread sets it: nonzero ends the call with EMUSEN_PLATFORM_IO and the words
+ * "stopped". A missing file is EMUSEN_PLATFORM_NOT_FOUND, an unreadable one EMUSEN_PLATFORM_IO or _ACCESS.
+ */
+
+/* A file's hashes in one read, of `length` bytes from `offset`, fewer where it ends; UINT64_MAX reads to its end. */
+int64_t emusen_galaxia_rom_hashes(const uint8_t *file, size_t file_len, uint64_t offset, uint64_t length, const int32_t *stop, uint8_t *out, size_t len);
+
+/* The hashes of bytes the host holds: a system pack's comparable form of a dump, which the library does not make. */
+int64_t emusen_galaxia_rom_hashes_of(const uint8_t *data, size_t data_len, uint8_t *out, size_t len);
+
+/*
+ * Each track of a cue sheet, its files found beside it as a disc's are, hashed over the bytes emusen_disc_track_spans
+ * places it in: a JSON array of {"track", "file", "offset", "crc32", "md5", "sha1", "size"}, "file" as the sheet
+ * names it. EMUSEN_PLATFORM_PARSE with words for a sheet that is not one.
+ */
+int64_t emusen_galaxia_rom_tracks(const uint8_t *sheet, size_t sheet_len, const int32_t *stop, uint8_t *out, size_t len);
 
 /* ---- Galaxia: mapped files (EmuSen_Galaxia.md, section 3.8) ---- */
 
@@ -393,6 +413,14 @@ int64_t emusen_disc_playlist(const uint8_t *list, size_t list_len, uint8_t *out,
 
 /* The .sbi a disc's LibCrypt patches are looked for in beside an image: the image's stem with .sbi. */
 int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
+
+/*
+ * Each track of a cue sheet as a byte range of its file, as a JSON array of {"track", "file", "offset", "length"}:
+ * "file" the FILE line's position, "offset" the track's first INDEX in bytes, "length" up to the next track in the
+ * same file or null to the file's end; a WAVE file's one track is the whole file. EMUSEN_PLATFORM_PARSE with words for
+ * a sheet that is not one, or a WAVE file naming several tracks. Since 23.
+ */
+int64_t emusen_disc_track_spans(const uint8_t *sheet, size_t sheet_len, uint8_t *out, size_t len);
 
 /* ---- The systems table and the packs' code: emusen-systems (EmuSen_Backend.md, sections 5, 12 and 13) ---- */
 

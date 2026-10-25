@@ -21,6 +21,7 @@ using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Mistress.BigPicture;
 using EmuSen.WiseMan.Mistress.Scraping;
 using Xunit.Abstractions;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -55,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress
             NoNetwork.ScrapeClock.SetValue(null, new FakeScrapeClock(new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero)));
             NoNetwork.DeveloperSource.SetValue(null, (Func<DeveloperCredentials?>)(() => FakeScreenScraper.Developer));
             ConfirmField.SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, _) => Task.FromResult(true)));
-            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHashes.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = "Scraped description." });
+            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHash.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = "Scraped description." });
         }
 
         public void Dispose()

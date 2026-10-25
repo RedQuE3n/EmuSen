@@ -151,7 +151,7 @@ impl Texturing {
             }
             0x16 | 0x17 => {
                 let c = (reg - 0x16) as usize;
-                let keep = (1u64 << 20) - 1 | ((1u64 << 11) - 1) << 26;
+                let keep = ((1u64 << 20) - 1) | (((1u64 << 11) - 1) << 26);
                 regs[0x06 + c] = (regs[0x06 + c] & keep) | (v & !keep);
                 self.load(regs[0x06 + c], regs[0x1C], mem);
             }
@@ -201,9 +201,9 @@ impl Texturing {
             // §3.5 as a blend towards FOGCOL, exact at F = 0 as FOG's page says (D-248): FOGCOL + (C - FOGCOL) × F / 256.
             let col = regs[0x3D];
             let f = frag_fog(frag);
-            for i in 0..3 {
+            for (i, o) in out.iter_mut().take(3).enumerate() {
                 let fc = bitsof(col, 8 * i as u32, 8) as i128;
-                out[i] = fc + ((out[i] - fc) * f).div_euclid(256);
+                *o = fc + ((*o - fc) * f).div_euclid(256);
             }
         }
         out

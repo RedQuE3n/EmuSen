@@ -58,22 +58,18 @@ impl Big {
 
     /// The square of a number of at most 384 bits.
     fn square(&self) -> Big {
-        let mut r = [0u128; LIMBS + 1];
         let n = LIMBS / 2;
+        let mut r = Big::ZERO;
         for i in 0..n {
             let mut carry = 0u128;
             for j in 0..n {
-                let t = u128::from(self.0[i]) * u128::from(self.0[j]) + (r[i + j] & u128::from(u64::MAX)) + carry;
-                r[i + j] = t & u128::from(u64::MAX);
+                let t = u128::from(self.0[i]) * u128::from(self.0[j]) + u128::from(r.0[i + j]) + carry;
+                r.0[i + j] = t as u64;
                 carry = t >> 64;
             }
-            r[i + n] += carry;
+            r.0[i + n] = carry as u64;
         }
-        let mut out = Big::ZERO;
-        for i in 0..LIMBS {
-            out.0[i] = r[i] as u64;
-        }
-        out
+        r
     }
 
     fn shr1(&mut self) {
@@ -273,7 +269,8 @@ mod tests {
 
     #[test]
     fn log2_is_floored_at_every_scale() {
-        for (q, want) in [(1.0f32, 0), (0.5, 16), (2.0, -16), (0.7071068, 7), (0.70710677, 8), (0.25, 32), (3.0, -26)] {
+        // The single-precision neighbours of 1/sqrt(2) either side, 3F3504F4h above and 3F3504F3h below.
+        for (q, want) in [(1.0f32, 0), (0.5, 16), (2.0, -16), (f32::from_bits(0x3F35_04F4), 7), (f32::from_bits(0x3F35_04F3), 8), (0.25, 32), (3.0, -26)] {
             let d = Sum::of(&[f(q), f(0.0), f(0.0)], [1, 0, 0]);
             assert_eq!(log2_scaled(1, &d, 4), Some(want), "{q}");
         }

@@ -440,6 +440,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-library-tool"
+version = "0.1.0"
+dependencies = [
+ "emusen-disc",
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-library",
+ "emusen-systems",
+ "libc",
+ "sha2",
+]
+
+[[package]]
 name = "emusen-mcd-bram"
 version = "0.1.0"
 

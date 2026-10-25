@@ -1,0 +1,10 @@
+# The chdman EmuSen ships: the one place its release and every binary's SHA-256 are recorded (EmuSen_GamePackages.md
+# §4.9, §12.1). The tool refuses a chdman whose SHA-256 is not the one pinned for its platform. build-chdman.sh makes the
+# binary from the source archive named here; THIRD_PARTY_NOTICES.md and licenses/ carry its licences and source offer.
+release 0.289
+tag mame0289
+source https://github.com/mamedev/mame/releases/download/mame0289/mame0289s.exe
+source-sha256 6243eac3a80df6be602bf0af7889305691737bc26c2ded1433ec11b7c6a3c7b9
+# Built 2026-10-25 by build-chdman.sh in registry.fedoraproject.org/fedora:44; runs on the desktop (Fedora 44) and the
+# handheld (SteamOS, glibc 2.43): needs glibc 2.38 or later and libSDL2-2.0.so.0.
+linux-x64 55abb0d257ba692ff14c4bd20073f1717ac54f362e2bdc56ee3e637783c87e0f

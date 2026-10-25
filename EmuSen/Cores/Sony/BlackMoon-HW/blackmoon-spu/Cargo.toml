@@ -1,0 +1,16 @@
+[package]
+name = "blackmoon-spu"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# BlackMoon's SPU voice: ADPCM, the interpolation, the envelopes, noise, pitch modulation and the reverb's algorithm, which the PlayStation's SPU (Diamond) and both cores of the PlayStation 2's SPU2 (Sapphire) run. See Sapphire_Plan.md §9.3 and BlackMoon_SPU.md.
+[lib]
+name = "blackmoon_spu"
+
+[dependencies]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

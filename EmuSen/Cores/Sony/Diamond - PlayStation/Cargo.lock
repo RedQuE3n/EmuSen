@@ -49,6 +49,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "blackmoon-spu"
+version = "0.1.0"
+
+[[package]]
 name = "block-buffer"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -139,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "blackmoon-gte",
  "blackmoon-r3000",
+ "blackmoon-spu",
  "diamond-renderer",
  "emusen-core-conform",
  "emusen-disc",

@@ -161,6 +161,11 @@ namespace EmuSen.Mistress.Library
         public static IReadOnlyList<string> ConsolesThatStartEmpty =>
             Systems.Where(s => s.StartsEmpty).OrderBy(s => s.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.ReleaseYear).Select(s => s.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
+        // The consoles an engine runs that no shelf shows: one offered in development where development cores are shown, whose games do not run yet, or one shelved under another's name; a tool lists them after the shelves' - see Sapphire_Native.md §30.17.
+        public static IReadOnlyList<string> UnshelvedConsoles =>
+            Systems.Where(s => s.Engines.Count > 0 && s.AttachedTo is null && !ConsoleNames.Contains(s.Console, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(s => s.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.ReleaseYear).Select(s => s.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
         public static bool StartsEmpty(string? console) => console is not null && ConsolesThatStartEmpty.Contains(console, StringComparer.OrdinalIgnoreCase);
 
         // A console's pad as its engine reads it; every button and no stick for a console this build does not know.

@@ -10,8 +10,6 @@ use emusen_ps2_card::{self as card, Card, Entry, Time};
 /// browser shows it, 7,998 KB (Hardware/Shared/EmuSen_MediumFormats.md §6.2; Sapphire_Native.md §30.17).
 pub const CAPACITY: usize = 7998;
 
-const BLANK_FREE: usize = CAPACITY;
-
 /// `icon.sys`'s length, its title's place and length, and where it says the title's second line begins (gothi, "icon.sys
 /// format", ps2savetools.com, read 2026-10-25).
 const ICON_SYS: &[u8] = b"icon.sys";
@@ -125,6 +123,8 @@ pub fn format(image: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BLANK_FREE: usize = CAPACITY;
 
     fn blank() -> Vec<u8> {
         let mut image = vec![0u8; card::CARD_LENGTH];

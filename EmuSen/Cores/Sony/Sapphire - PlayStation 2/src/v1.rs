@@ -684,7 +684,7 @@ mod tests {
         Machine::create_empty("ps2", &request).unwrap()
     }
 
-    fn insert<'a>(m: &mut Machine, image: Option<&'a [u8]>) -> Result<(), i32> {
+    fn insert(m: &mut Machine, image: Option<&[u8]>) -> Result<(), i32> {
         m.media_insert(DRIVE, &Insert { image, files: Vec::new(), restore: false })
     }
 
@@ -693,7 +693,7 @@ mod tests {
     #[test]
     fn the_console_starts_empty_with_the_tray_closed_and_the_bios_given_naming_the_market() {
         assert!(Machine::starts_empty("ps2") && !Machine::starts_empty("psx"));
-        assert!(Machine::CAPABILITIES & caps::MEDIA != 0);
+        const { assert!(Machine::CAPABILITIES & caps::MEDIA != 0) };
         let m = empty(Vec::new());
         assert_eq!((m.media.clone(), m.booted), (Media::Empty, false));
         assert_eq!(m.drives(), [Drive { drive: DRIVE, label: "DVD drive".into(), kind: "dvd".into(), lid_open: false, loaded: false }]);

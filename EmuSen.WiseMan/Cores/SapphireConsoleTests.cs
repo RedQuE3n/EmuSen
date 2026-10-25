@@ -80,7 +80,7 @@ namespace EmuSen.WiseMan.Cores
             string program = Path.Combine(dir, "program.elf");
             File.WriteAllBytes(program, SyntheticPs2Elf.Build());
             var refused = Assert.ThrowsAny<Exception>(() => core.InsertDisc(program));
-            Assert.Contains("no disc", refused.Message);
+            Assert.Contains("not put in the drive", refused.Message);
 
             core.EjectDisc();
             for (int f = 0; f < 90; f++) core.RunFrame();

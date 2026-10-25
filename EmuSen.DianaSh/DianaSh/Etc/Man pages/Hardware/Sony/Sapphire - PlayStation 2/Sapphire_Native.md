@@ -2357,8 +2357,8 @@ of three hits, uncached and IS1 clear 15,047; the IOP's clock at 50,000 cycles f
 uncached instructions 2,000 passes in it; the EE writing IOP RAM through 1C000000h while a held IOP follows the clock;
 on the units directly, DPCR's priorities and the tie, a channel without a request scheduling nothing until woken, a
 burst's hold and chopping's windows, and the cache's refill rules. Lib **24 of 24** (the IOP's INTC and five timer
-tests among them); the crate's other tests unchanged: `cop0` 19, `dmac` 17, `fpu` 9, `interpreter` 23, `mmi` 13,
-`programs` 3; lib, `dmac` and `iop` also under `test-checked`; clippy clean. `blackmoon-r3000`: **38 of 38**, the r3000
+tests among them); the crate's other tests unchanged, on the tree with S12 beneath: `cop0` 19, `dmac` 17, `fpu` 9,
+`interpreter` 23, `mmi` 13, `programs` 3, `vu0` 14; lib, `dmac` and `iop` also under `test-checked`; clippy clean. `blackmoon-r3000`: **38 of 38**, the r3000
 corpus **55,000 of 55,000** (`EMUSEN_BLACKMOON_CORPUS`), the crate's source unchanged, so Diamond's tests, which reach
 it only through it, were not re-run. `SapphireTests` (WiseMan, the blast radius's filter): **5 of 5**.
 

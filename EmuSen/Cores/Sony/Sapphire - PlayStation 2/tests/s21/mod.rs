@@ -832,9 +832,10 @@ pub fn dma() -> Program {
     p
 }
 
-/// `s21-dma-modes`, on Sapphire only, its channels ending at the stand-ins: slice mode to SPU2 (7), a linked list to
-/// SIF2 (2), a chain from memory to SIF0 (9) with the tag's two words first and an IRQ tag, a chain to memory from
-/// SIF1 (10) with the stand-in's tag, and a burst to SPU (4) started by its request (psx-spx; ps2tek).
+/// `s21-dma-modes`, on Sapphire only, its channels ending at the stand-ins and the SIF's FIFOs: slice mode to SPU2
+/// (7), a linked list to SIF2 (2), a chain from memory to SIF0 (9) with the tag's two words first and an IRQ tag, a
+/// chain to memory from SIF1 (10) with the tag put in its FIFO, and a burst to SPU (4) started by its request (psx-spx;
+/// ps2tek).
 pub fn dma_modes() -> Program {
     let mut p = Program::new("s21-dma-modes");
     p.poke(DPCR, 0x0000_0F00 | 0x000F_0000);
@@ -914,9 +915,9 @@ pub fn dma_modes() -> Program {
     p
 }
 
-/// What `dma_modes` gives SIF1's stand-in: a tag ending the chain, its address and size, and two words.
-pub fn sif1_queue() -> [u32; 4] {
-    [(AREA + 0x4000) | 1 << 31, 2, 0xA000_0000, 0xA000_0001]
+/// What `dma_modes` finds in SIF1's FIFO: a tag ending the chain, its address and size in a quadword, and two words.
+pub fn sif1_queue() -> [u32; 6] {
+    [(AREA + 0x4000) | 1 << 31, 2, 0, 0, 0xA000_0000, 0xA000_0001]
 }
 
 /// Starts timer `n` with mode `m` and target `t`.

@@ -220,6 +220,17 @@ bits modelled; a fetch from the IOP's scratchpad stops it). **Play!** cannot: it
 drops stores there, and its IOP is its own high-level BIOS. LRPS2 and PCEE2 are PCSX2's lineage. The IOP therefore has
 one referee lineage.
 
+### 4.4 Paired programs on the SIF (2026-10-25, stage S22)
+
+S22's programs are two at once, an EE program and the IOP program it places by §4.3's route, stepping together
+through a mailbox of two words in IOP RAM that the EE reaches through its window, so that neither the handshake nor
+the record depends on the SIF they test (`Sapphire_Native.md` §26.7). `examples/s22.rs` writes each as one ELF and
+`ps2referee.py ram` reads the whole record from EE RAM as for any program, the EE having copied the IOP's record after
+its own. **PCSX2** runs them; **Play!** cannot, for §4.3's reason. PCSX2 is a witness for the mailbox registers, the
+two-word EE tag of SIF0 and the quadword IOP tag of SIF1, and for nothing on the FIFOs' depth, which it does not hold,
+or on SIF2, which it does not move (`Sapphire_Disputes.md` D-140 to D-145). A disagreement that leaves words in a FIFO
+spoils every later part of a program on the referee, so each program puts the part PCSX2 is known to stop on last.
+
 ## 5. Exposure, and a retail disc
 
 - **This stage's writer is exposed** (`Sapphire_Plan.md` §1.4): while finding why PCSX2 failed to draw, the writer read

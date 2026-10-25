@@ -73,6 +73,14 @@ pub trait Peripherals {
     fn request(&mut self, ch: usize, want: usize) -> usize;
     fn put(&mut self, ch: usize, q: u128, tag: bool);
     fn get(&mut self, ch: usize) -> u128;
+    /// Whether a destination chain's tag can be taken now; a peripheral whose tag is narrower than a qword says so.
+    fn tag_ready(&mut self, ch: usize) -> bool {
+        self.request(ch, 1) > 0
+    }
+    /// A destination chain's tag, its DMAtag in bits 63..0.
+    fn get_tag(&mut self, ch: usize) -> u128 {
+        self.get(ch)
+    }
 }
 
 /// Memory by physical address, as the DMAC reaches it (main memory and what the map places beside it); `None` and
@@ -369,8 +377,11 @@ impl Dmac {
                             return None;
                         }
                     }
-                    let needs_port = c != TO_SPR && c != FROM_SPR && (mode == Mode::DestChain || self.ch[c].chcr & chcr::TTE != 0);
-                    if needs_port && dev.request(c, 1) == 0 {
+                    let spr = c == TO_SPR || c == FROM_SPR;
+                    if !spr && mode == Mode::DestChain && !dev.tag_ready(c) {
+                        return None;
+                    }
+                    if !spr && mode == Mode::SourceChain && self.ch[c].chcr & chcr::TTE != 0 && dev.request(c, 1) == 0 {
                         return None;
                     }
                     return Some(Work::Tag);
@@ -572,7 +583,7 @@ impl Dmac {
         } else if c == FROM_SPR {
             self.spr_read(c, spr)
         } else {
-            dev.get(c)
+            dev.get_tag(c)
         };
         let tag = q as u64;
         let id = (tag >> 28 & 7) as u32;

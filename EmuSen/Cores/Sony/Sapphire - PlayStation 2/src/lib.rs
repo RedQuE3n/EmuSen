@@ -13,6 +13,7 @@
 //! S16: the GS (`gs`), its registers, its local memory in every format's layout and its transfers, on the board.
 //! S13: micro mode for both units (`vu::pipe`), with VU1's EFU (`vu::efu`).
 //! S23: the CDVD drive controller (`cdvd`) at its register interface, on `emusen-disc`'s CDs and DVDs.
+//! S22: the SIF (`sif`), its registers and the FIFOs joining the two DMACs' SIF channels.
 
 pub mod bios;
 pub mod blank;
@@ -27,6 +28,7 @@ pub mod intc;
 pub mod iop;
 pub mod machine;
 pub mod media;
+pub mod sif;
 pub mod state;
 pub mod timer;
 pub mod vu;

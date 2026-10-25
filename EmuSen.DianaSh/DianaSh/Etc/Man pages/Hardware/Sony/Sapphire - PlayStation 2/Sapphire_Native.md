@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24) and S23 (§25) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25) and S22 (§26) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -3170,3 +3170,223 @@ emulator, SDK, loader or ps2autotests source and no firmware; no referee's log.
   time: S24 and S30.
 - The PlayStation mode's CD-ROM commands (Diamond's), DVD-Video (§1.2), and the block-compressed ISO forms.
 - P13 on the handheld.
+
+## 26. Stage S22, the SIF between the EE and the IOP (2026-10-25)
+
+*§23 to §25 are stages S13, S16 and S23's, built beside this one on their own branches; the SIF needs nothing of the
+VUs, the GS or the CDVD.*
+
+### 26.1 In one paragraph
+
+The plan's §7 row S22, on the tester's go of 2026-10-25, once both sides of the SIF were merged. The crate gains
+**`sif`**: the SIF's mailbox registers at the EE's 1000F200h and the IOP's 1D000000h (MSCOM, SMCOM, MSFLG, SMFLG, CTRL,
+BD6, ps2tek "SIF Registers"), and a FIFO of 32 words, 128 bytes, for each of SIF0, SIF1 and SIF2 (the *EE User's
+Manual*'s figure), joining the EE DMAC's channels 5 to 7 to the IOP DMAC's 9, 10 and 2 so that a transfer is one
+transfer: the EE moves quadwords into and out of a FIFO, the IOP words, and a channel that would overfill or underrun
+its FIFO holds until the other side's channel moves words, which wakes it. The stand-ins S11 and S21 left at those
+channels are replaced. SIF0's EE destination tag is the two words the IOP sends after its own tag (D-142); the IOP takes
+SIF1's tag as a quadword (D-143); the IOP's chain now moves only as many words as its FIFO allows, the packet going on in
+later units. The EE's CTRL write with bit 18 raises the IOP's interrupt 1, the one witness's reading (D-141). Five
+paired programs of the project's, an EE program carrying an IOP program and stepping with it through a mailbox in IOP
+RAM, 194 graded record words, are equal on Sapphire to the records ps2tek's SIF and IOP DMA chapters and the EE manuals
+give, each side checking what the other sent. PCSX2, the only lineage with an IOP window, runs them and differs on 57:
+it holds no FIFO, ends an IOP chain at an IRQ tag, sends SIF0's tag words without bit 8, takes the EE's write to SMCOM
+and moves nothing on SIF2; the disagreements are D-140 to D-145, and D-68 is amended. The SIF RPC protocol the BIOS's
+modules speak over these is S24's (§26.13). No emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 26.2 What was built
+
+- **`sif/mod.rs`**: `Sif`, the registers and the three FIFOs; `EePorts`, which wraps the EE's stand-ins and answers
+  `dmac::Peripherals` for channels 5, 6 and 7 from the FIFOs, SIF2's direction its EE channel's CHCR.DIR; `IopPorts`,
+  the same for `iop::dma::Peripherals` and channels 9, 10 and 2. A FIFO changed by one side marks the other to be woken.
+  Two unit tests: the flags and COMs, and a quadword's four words and a full FIFO.
+- **`dmac.rs`** gains two provided methods on `Peripherals`, `tag_ready` and `get_tag`, by which a peripheral whose
+  destination tag is narrower than a quadword says so; the stand-ins keep the defaults. A destination chain's tag is
+  read through them.
+- **`iop/dma.rs`**: the chain mode keeps its packet (`in_packet`, the tag's first word, the address and words left) across
+  units, reads its tag only when the peripheral can give or take the tag's words, moves as many data words as the
+  peripheral allows, and acts on IRQ and end when the packet's last word has moved; a chain into memory takes a quadword
+  tag (D-143); `ready` asks for the tag's words before a packet; `wake_from` wakes the DMAC not before a given cycle.
+- **`iop/bus.rs`**: the field `sif`; the SIF's registers read and written at `Target::Sif`, at the I/O registers' cost;
+  the DMAC stepped with `IopPorts`; a FIFO the EE has changed wakes the DMAC at the next `run_units`;
+  `sif_write_from_ee`, the EE's write, raising the IOP's interrupt 1 when CTRL's bit 18 is set.
+- **`board.rs`**: the EE's SIF registers answered from `iop.bus.sif`; the DMAC stepped with `EePorts`; before the
+  DMAC's event at a time the IOP is first brought to that time, so that the EE's DMAC sees the FIFO as the IOP has left
+  it then and the IOP never sees a word the EE moves later; after the IOP is brought to the board's time, a FIFO it has
+  changed wakes the DMAC at once.
+- **`lib.rs`** declares the module. No new dependency: `sapphire` depends on `emusen-native`, `emusen-mips` and
+  `blackmoon-r3000`, and `sif` on the crate's own `dmac` and `iop::dma` interfaces only.
+
+### 26.3 The registers
+
+[R ps2tek "SIF Registers"; D-141]: MSCOM is written by the EE alone and SMCOM by the IOP alone, each read by both; a
+write to MSFLG from the EE sets the bits written as 1 and one from the IOP clears them, SMFLG the reverse, a write of 0
+changing nothing; CTRL reads F0000102h on the EE and F0000002h on the IOP (ps2tek's bits 1, 8 and 28 to 31), writes
+changing neither, but the EE's write with bit 18 set raises the IOP's interrupt 1 (ps2tek's "GPU (used in PSX mode)")
+[the one witness, D-141]; BD6 is a word both sides write and read [C]; the other offsets of 1000F200h-1000F2FFh and
+1D000000h-1D0000FFh read zero [C]. A byte or halfword store on the IOP side is shifted to its lane, as the I/O
+registers' are. The EE's INT_SBUS and the timers' HOLD have no driver: no document says what raises INT_SBUS, and no
+write the probes tried raised it on the referee.
+
+### 26.4 The FIFOs and the transfers
+
+[R EEUM §1.2, §5.1, §5.9; *EE Overview* §2.6, §3.1.2; ps2tek "SIF DMA", "IOP DMA"; A where marked]:
+
+- **Size** (D-140): 32 words, one FIFO a transfer. The EE asks for room or words in whole quadwords and moves a
+  quadword as four words, its bits 31..0 first; the IOP asks for and moves words.
+- **SIF0**, the IOP to the EE: the IOP's channel 9 in chain mode from memory, its tag's address and size in words, with
+  CHCR's bit 8 the two words after the tag sent first; the EE's channel 5 in normal mode (data quadwords) or destination
+  chain mode, whose tag is those two words, bits 63..0 of a DMAtag, bits 127..64 never crossing (D-142). The EE's cnt,
+  cnts and end act as for fromSPR (§20.4).
+- **SIF1**, the EE to the IOP: the EE's channel 6 in normal mode or source chain mode (TTE sending the DMAtag's quadword
+  too); the IOP's channel 10 in chain mode into memory, taking a quadword as its tag, the first two words the IOP's tag
+  and the last two dropped, whatever bit 8 (D-143). So an EE packet carries its IOP tag in its first quadword.
+- **SIF2**, either way: the EE's channel 7 in normal mode, its direction CHCR.DIR; the IOP's channel 2 in any mode, its
+  direction its own DIR (D-145).
+- **IRQ and end** on the IOP's tags: IRQ with DICR2's tag enable sets the channel's flag and the chain goes on; the end
+  bit ends it, its completion flag set under DICR2's mask (D-144, D-68).
+- **Holding and waking**: a channel whose FIFO cannot take or give what it needs is held, the EE's scheduling nothing
+  and the IOP's DMAC idle; a FIFO changed by the other side wakes it, the EE's at the board's next time (an EE
+  instruction at most later), the IOP's at its bus's next service.
+- **Interrupts at each end**: the EE's are its DMAC's, CIS5, CIS6 and CIS7 and INT1 through their masks (§20.4); the
+  IOP's are its DMAC's, the channels' DICR2 flags and the master flag's interrupt 3 (§22.5). Neither side's transfer
+  raises anything on the other.
+
+### 26.5 Timing
+
+The documents give the FIFO's size and nothing on its timing. **Argued**, each a named loss and a dispute candidate
+if an oracle measures it [A]: a word crosses at each side's DMA rate, a quadword a bus cycle on the EE (§20.3) and a word
+an IOP cycle on the IOP (§22.5, D-68), with no cost of the SBUS's own; the EE's read or write of a SIF register costs
+nothing beyond its instruction, and the IOP's costs an I/O register's two cycles (D-63); a woken EE channel starts at
+the board's time, up to an instruction after the IOP's change. No new clock figure: the stage adds nothing to `clock`.
+
+### 26.6 What is not modelled
+
+Each a named loss, and a dispute candidate if an oracle measures it [A]:
+
+- The manual's one FIFO shared by the three transfers (EEUM §5.3.3) and the deadlock it warns of (D-140).
+- INT_SBUS, its HOLD latch in timers 0 and 1, and INT_SFIFO ("Error detection during SFIFO transfer"): no document says
+  what raises them.
+- The IOP's reset by the EE's CTRL bit 19, which the referee shows (D-141): the IOP's boot path is S24's.
+- CTRL's further bits as the referee shows them (D-141); BD6's meaning.
+- An IOP packet whose size leaves part of a quadword: the words stay in the FIFO for the next packet; the EE's side
+  waits for whole quadwords.
+- A linked list or burst on the IOP's SIF2 that outruns its FIFO: those modes ask for their words a unit at a time as
+  S21 built them, so the FIFO is not checked there.
+- The SBUS's own timing and the EE core's waits on SIF registers (§26.5); the state format's new contents (S30).
+
+### 26.7 The gate: the programs (measured 2026-10-25)
+
+`tests/s22/` generates each program as a pair: an EE program for the R5900 (S7's form, entered at 00100000h, run from
+kseg0, registers and buffers through kseg1) and an IOP program in S21's form (`tests/s21`'s `Program`, its quiescing
+first). The EE program places the IOP program by S21's route and the two then step together through a mailbox of two
+words in IOP RAM at 0017F000h, which the EE reaches through its window, every wait bounded; neither the handshake nor
+the record depends on the SIF. The EE writes its record of words from 00200000h, waits for the IOP's done word,
+records it, copies the IOP's record after its own and writes 5A99D00Eh at 001FFFF0h. Every expected word is derived in
+the generator from the documents, written apart from `src/sif/`. On Sapphire the IOP is entered at its program once the
+EE has written the exception vector, as a referee's IOP enters it at its next interrupt.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s22-registers` | 28 of 29 | MSCOM and SMCOM written by their side, read by both, the other side's write ignored; MSFLG set by the EE and cleared by the IOP, SMFLG the reverse, a 0 changing neither; CTRL's documented bits on each side; the EE's CTRL with bit 8 raising nothing and with bit 18 setting the IOP's I_STAT bit 1, the interrupt taken with IM2 |
+| `s22-sif1` | 75 | a normal-mode transfer read by an IOP chain without bit 8, its completion flag and interrupt 3; an EE chain stopped by its tag interrupt and resumed while the IOP waits; the EE first, eight of sixteen quadwords moved and the channel held until the IOP starts; last, an EE chain of cnt, ref and end read by an IOP chain with bit 8, its middle tag with IRQ setting DICR2's flag, the master flag and interrupt 3, the chain going on |
+| `s22-sif0` | 39 | the IOP first, 30 of 64 words moved beside the EE's two-word tag and its channel held until the EE's destination chain starts; last, two IOP tags with bit 8 carrying the EE's cnt and end, the first with IRQ |
+| `s22-sif0-normal` | 20 | an IOP tag without bit 8 into the EE's normal mode, the data alone crossing, TADR past two words, the completion flag and interrupt 3 |
+| `s22-sif2` | 32 | the EE's channel 7 into the IOP's channel 2 in slice mode, then the reverse |
+
+Two probes, `s22-probe-iop` and `s22-probe-ee`, record what the documents leave open about CTRL, BD6 and INT_SBUS,
+ungraded, for D-141; `examples/s22.rs` writes them with the gate.
+
+**Tests** [M, `cargo test --release`]: `tests/sif.rs` **5 of 5**: the four gate tests, the five programs each equal to its
+record word for word (every FIFO drained at the end of `s22-sif1` and `s22-sif0`), and `a_full_fifo_holds_the_ees_channel_until_the_iop_takes_words`
+(the EE's SIF1 of twenty quadwords stopping at eight with nothing scheduled, the rest crossing once the IOP's channel
+starts, every word placed); on the tree with S13, S16 and S23 beneath, lib **41 of 41** (the two `sif` tests among
+them); `tests/iop.rs` **13 of 13**,
+`each_dma_mode_reaches_its_stand_in` now reading SIF2's and SIF0's FIFOs and filling SIF1's with a quadword tag (the
+S21 program unchanged); the crate's other tests unchanged: `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23,
+`micro` 12, `mmi` 13, `programs` 3, `vu0` 14, `vu_micro` 24; lib, `dmac`, `iop` and `sif` also under `test-checked`;
+clippy clean on every target. `SapphireTests` (WiseMan, the blast radius's filter): **5 of 5**, before and after the
+rebase.
+
+### 26.8 On the referees (measured 2026-10-25)
+
+`examples/s22.rs` writes each pair as one ELF with its expected record; `ps2referee.py ram pcsx2 … --until
+1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot), one process at a time.
+Only the records were read. Play! cannot run an IOP program (§22.9).
+
+| Program (graded words) | PCSX2 | What the differences are |
+|---|---|---|
+| `s22-registers` (28) | 3 | it takes the EE's write to SMCOM (two words); the IOP's CTRL bit 8 reads as the EE last wrote it (D-141); the flags, MSCOM, the interrupt from bit 18 and its taking equal |
+| `s22-sif1` (75) | 8 | the EE's sixteen quadwords all leave with the IOP stopped (two words, D-140); the IOP's chain ends at the IRQ tag, the third packet never taken (five), and DICR bit 31 reads 0 with the DICR2 flag set (one) (D-144); the quadword tag, the tag interrupt's stop and resume, the completion flags and every other word equal (D-143) |
+| `s22-sif0` (39) | 11 | the IOP's 64 words all leave with the EE stopped (two, D-140); the IOP's chain ends at the IRQ tag, the EE's destination chain left waiting (nine, D-144); the two-word EE tag places every word of both chains (D-142) |
+| `s22-sif0-normal` (20) | 9 | without bit 8 the two words after the tag cross anyway and TADR steps 16, the EE's buffer reading EEEE0002h, EEEE0003h, 63000000h, 63000001h, 63000000h to 63000003h (D-142) |
+| `s22-sif2` (32) | 26 | neither channel moves a word, both left running (D-145) |
+
+So **PCSX2 is a witness for the mailbox registers, SIF0's two-word EE tag, SIF1's quadword IOP tag, the EE's tag
+interrupt across the SIF and the IOP's completion flags**, and for nothing on the FIFOs' depth or SIF2. Its first runs
+showed that a disagreement which leaves words in a FIFO spoils every later part of a program, so each program puts the
+part PCSX2 is known to stop on last, and the case without bit 8 has a program of its own.
+
+### 26.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the EE's write to SMFLG setting its bits instead of clearing them | `the_mailbox_registers_pass_values_and_flags_both_ways`, `the_flags_set_on_one_side_and_clear_on_the_other` |
+| F2 | SIF0 losing the last quadword in its FIFO, the EE taking zeros for it | `sif0_carries_the_iops_packets_to_the_ee_with_the_ees_tags` |
+| F3 | the EE's CTRL bit 18 raising the EE's INT_SBUS instead of the IOP's interrupt 1 | `the_mailbox_registers_pass_values_and_flags_both_ways` |
+
+Each was applied, `tests/sif.rs`, `tests/iop.rs` and the lib's tests run, and the source restored [M].
+
+### 26.10 What the plan got wrong, or left open
+
+- **§1.1's SIF row** calls the unit "Exact"; the documents give the registers' names, the FIFO's size and SIF0's tag
+  sentence, and no timing, CTRL or BD6 rule, and no driver for INT_SBUS. The stage is exact where they speak, and
+  D-140 to D-145 say where they do not.
+- **§3.2's row for the SIF** names the referees as the secondary oracle: one lineage, PCSX2, and a witness for only part
+  of the unit (§26.8).
+- **S21's D-68** left a chain into memory's tags to this stage; they are a quadword (D-143), and the chain's units now
+  stop where the peripheral does.
+- **§5.1's catch-up**, "the IOP at SIF registers and SIF DMA": the IOP is brought to the board's time after every EE
+  instruction (S21) and now before each DMAC event too, so the EE's register accesses and its DMAC both meet the IOP at
+  their own time.
+
+### 26.11 Questions this stage leaves
+
+1. **Q1 [routine], the FIFOs' depth (D-140).** *Recommended*: keep the manual's 128 bytes a transfer; PCSX2 holds no
+   FIFO and so cannot say; S24's BIOS and S28's games stall on it only if they depend on it.
+2. **Q2 [routine], the EE's CTRL bit 18 (D-141).** *Recommended*: keep the IOP's interrupt 1 from it, the one witness's
+   reading and the only driver that interrupt has, until S24's BIOS shows otherwise.
+3. **Q3 [decision], the IOP's reset by the EE's CTRL bit 19 (D-141).** The referee resets the IOP on it; the BIOS's
+   reboot of the IOP (a disc's own modules, `Sapphire_Plan.md` O9's subject) needs some reset. *Recommended*: S24 models
+   the IOP's reset with its boot path, on this bit if its BIOS writes it, since S24 is where the IOP first boots.
+4. **Q4 [routine], the IRQ tag (D-144).** *Recommended*: keep ps2tek's reading, the chain going on, against PCSX2's stop;
+   S24's BIOS modules show which they rely on.
+5. **Q5 [routine], SIF0 without bit 8 (D-142).** *Recommended*: keep ps2tek's reading; a program that sends SIF0 without
+   bit 8 into a destination chain would show PCSX2's reading wrong at once, so the BIOS presumably never does.
+6. **Q6 [routine], INT_SBUS (D-141).** *Recommended*: leave it undriven until a document or S24's BIOS names its source.
+
+### 26.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.1 and §2 (the SIF rows), §3.2, §5.1, §7 (S22 and S24) and §11; this page's §20 and §22;
+`Sapphire_Disputes.md` (the rules, D-34 to D-42, D-60 to D-68); `Sapphire_Referees.md` §4.3; the crate's `dmac.rs`,
+`board.rs`, `iop/` and `tests/s11`, `tests/s21` (the project's own code); `ps2referee.py`'s usage. Sony's *EE User's
+Manual*: §1.2 (the built-in devices' table and §1.2.9), §2.1.2, §2.2.1's register map, §3.1, chapter 4's Tn_HOLD, §5.1,
+§5.3.2, §5.3.3 and §5.9's tables; the *EE Overview* §2.6 and §3.1.2. ps2tek at `1c91660`: "SIF Registers" and "SIF DMA"
+(lines 4209-4292), the EE and IOP I/O maps' SIF and DMA rows (lines 150-260), "IOP DMA" (lines 3960-4110), "IOP
+Interrupts" (lines 3905-3960), "EE Timers" (lines 1180-1235), "EE Interrupt Controller" (lines 3095-3130), the headings
+of "SIF RPC Basics" to "SIF RPC Commands" as a search listed them (lines 4294-4447, not read further), "BIOS IOP SSBUSC"'s
+export list (lines 5415-5440, X.4, cleared), and a search's one-line hit at line 5086 (X.1, excluded for replacement
+writers; this writer writes no open BIOS and no stage modelling the IOP's kernel interface). No emulator, SDK, loader or
+ps2autotests source and no firmware; the BIOS was only passed to PCSX2 by path, and the probes' first words, the
+registers as its firmware left them, were not used.
+
+### 26.13 What this stage does not cover
+
+- **The SIF RPC protocol** (ps2tek "SIF RPC Basics" onward): S24's. It is software, the BIOS's SIFMAN, SIFCMD and the EE
+  kernel's SIF calls running on the two processors, and attaches to nothing in `sif` but what a program reaches: the
+  registers (the receive addresses in MSCOM and SMCOM, the boot flags in MSFLG and SMFLG), SIF0 and SIF1's chains, and
+  the interrupts at each end. S24 needs no new interface from this stage; a high-level form of it would sit above the
+  DMACs, not in `sif`.
+- The IOP's reset and boot (S24), the CDVD (S23), SIO2 (S25) and the SPU2 (S26) on the IOP's other channels.
+- The machine running the two processors (S10, S24), the SIF's state in `SPH2` (S30), its debugger view (S31) and the
+  cost of the IOP's catch-up at each EE DMAC event (S32).

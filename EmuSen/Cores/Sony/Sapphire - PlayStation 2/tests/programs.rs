@@ -1,10 +1,12 @@
-//! The referees' programs (Sapphire_Referees.md §4): each assembles with emusen-mips, and its ELF is one the core reads.
+//! The referees' programs (Sapphire_Referees.md §4), in programs/ and its folders: each assembles with emusen-mips, and
+//! its ELF is one the core reads.
 
 use sapphire::media::{self, Media, PROGRAM_ORIGIN};
 
 fn programs() -> Vec<(String, Vec<u32>)> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("programs");
-    let mut out: Vec<_> = std::fs::read_dir(&dir).expect("programs/").map(|e| e.expect("an entry").path()).filter(|p| p.extension().is_some_and(|x| x == "s")).collect();
+    let entries = |d: &std::path::Path| std::fs::read_dir(d).expect("programs/").map(|e| e.expect("an entry").path()).collect::<Vec<_>>();
+    let mut out: Vec<_> = entries(&dir).into_iter().flat_map(|p| if p.is_dir() { entries(&p) } else { vec![p] }).filter(|p| p.extension().is_some_and(|x| x == "s")).collect();
     out.sort();
     out.into_iter()
         .map(|p| {

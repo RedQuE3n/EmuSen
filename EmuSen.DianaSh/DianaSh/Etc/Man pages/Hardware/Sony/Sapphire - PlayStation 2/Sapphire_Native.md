@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23) and S16 (§24) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24) and S23 (§25) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -2948,3 +2948,225 @@ source). No emulator, SDK or loader source, no ps2autotests source and no firmwa
 - Drawing (S17 to S19) and the PCRTC (S20).
 - `gs/label` and `gs/signal` on Sapphire: S10.
 - The state format's new contents (the GS's registers and its 4 MiB): `SPH2` gains them with the rest (S10, S30).
+## 25. Stage S23, the CDVD drive and emusen-disc's DVDs (2026-10-25)
+
+### 25.1 In one paragraph
+
+The plan's §7 row S23, on the tester's go of 2026-10-25, built beside S13, S16 and S21 and recorded here as §25 with its
+disputes from D-120. `emusen-disc` gains DVDs as §9.4 designed them (`EmuSen_Disc.md` §14): a medium chosen when an
+image is opened, one or two layers with the break taken from where the image's second volume begins, every sector read
+as its ECMA-267 Data Frame, whole or synthesised with its ID, IED, CPR_MAI and EDC, CHD's DVD form, and images opened
+over the host's bytes, never copied. The crate gains no drive's commands or timing. Sapphire gains **`cdvd`**, the
+drive controller at its register interface (§5.6's open replacement of the Mechacon's firmware): the N commands (NOP,
+Standby, Stop, Pause, Seek, the CD reads in three block sizes, CD-DA, the DVD read, GetToc) timed by ps2tek's formula and
+seek classes, the S commands (the version, the sticky status, the tray, the clock, ForbidDVD, the EEPROM's sessions),
+the drive's interrupt and a one-sector buffer for the IOP's DMA channel 3, which S21's bus and DMA will drive; disc
+authentication is not modelled and every disc is taken as the console's own, as §5.6 says; MagicGate's and SECRMAN's
+commands, and every other command no document describes, answer as absent. Where ps2tek is silent the answers are
+PCSX2's, read as a black box from EE programs written for the purpose, the only lineage that lets the EE reach the
+drive; nine disputes record them. Synthetic CDs and single- and dual-layer DVDs read sector for sector through the drive
+with the layer break placed. P13's mapped open is 1.15 ms cold on the desktop; the handheld did not answer. No emulator,
+SDK, loader or ps2autotests source and no firmware was read.
+
+### 25.2 What was built
+
+- **`emusen-disc`** (`EmuSen_Disc.md` §14): `ecma267.rs` (the Data Frame's codec and §25's numbers), `dvd.rs` (`Dvd<B>`,
+  the layer break, the frames, `CD_LIMIT`), `medium.rs` (`Kind`, `Medium<B>`), `open::open_medium`, and `ChdImage`
+  opening either medium by its unit. Its one owner of GF(2⁸) is `ecma130`'s, which the IED uses.
+- **`cdvd/`** in Sapphire: `mod.rs` (the registers, the N and S commands, the events, the buffer, `open`), `timing.rs`
+  (the formula, the classes, the radius), `rtc.rs` (the clock), `nvm.rs` (the EEPROM's sessions), `tests.rs`. Its time
+  is the IOP's cycle (36.864 MHz, D-0), since the drive is the IOP's device. Its surface for S21 is three calls and a
+  line: `read8(offset)` and `write8(offset, value, now)` for the registers at 1F402000h, `dma_ready()` and
+  `dma_take(now, bytes)` for channel 3, `irq()` for the IOP's IRQ2; and `next_event()` and `run(now)` for the scheduler.
+- **`cdvd::open`**, Sapphire's choices for a disc: CD-XA framing, and an image of 2,048-byte sectors taken for a DVD
+  unless its sheet or bytes say a CD [C: the library's DVD titles are kept as `.iso` and its CD titles as `.cue` and
+  `.bin`, Q8 and Q16]; more sectors than a CD's time code names are a DVD regardless. A PlayStation 2 CD kept as a bare
+  `.iso` is therefore read as a DVD, a named loss until a disc is found that needs otherwise.
+- **The dual-layer builder** (`SyntheticPs2Disc.DualLayerDvd`, S4) corrected to D-127's rule: layer 0's descriptor names
+  layer 0's sectors and layer 1's descriptor its own, where both had named the whole image; `SapphireRunnerTests` pins
+  it.
+- **The referees' tools**: `ps2referee.py ram pcsx2 … --disc DISC` puts a synthetic disc in PCSX2's drive while the
+  program runs in its place (`-elf`); `ps2cdvd.py` writes the drive programs of §25.3; `ps2discs.py` writes their sparse
+  synthetic discs; `programs/s23/reach.s` and `ssweep.s` are the two written by hand.
+- **New dependency, named**: `sapphire` depends on `emusen-disc` (as Diamond and Nephrite do); `emusen-disc` still
+  depends on `chd` alone.
+
+### 25.3 The drive on the referees (measured 2026-10-25)
+
+ps2tek describes eight S commands, nine N commands and the registers in outline, and nothing of most commands'
+parameters, results or errors. A dispute step therefore drove the drive's registers from EE programs, one referee
+process at a time, with only RAM read back (`ps2referee.py ram`), on synthetic discs from `ps2discs.py`: a
+single-layer DVD of 1,000,000 sectors, a dual-layer one of 1,100,000 broken at 600,000, and a CD of 30,000 raw sectors.
+
+- **Who reaches the drive.** `reach.s` reads the registers at BF402000h and sends S command 03h: PCSX2 2.8.2, LRPS2 and
+  PCEE2 answer alike (N status 4Ch, drive status 0Ah, MechaconVersion 03h 06h 02h 00h); **Play! 0.72 answers CCh at every
+  register**, so the PlayStation 2's drive is visible from the EE on one lineage only, and every measurement below is
+  that lineage's. A `.cue` given to PCSX2 with `-elf` never ran the program; the `.bin` alone did (disk type 12h).
+- **The S commands** (`ssweep.s`, every command but 0Fh, which ends PCSX2's run, sent with no parameters, twice with no
+  disc and once each on the DVDs; `ps2cdvd.py scmd config|tray|rtc`): D-124 and D-125. 202 of 255 answer the one byte
+  80h; the answers did not change between a single- and a dual-layer disc.
+- **The N commands' times** (`ps2cdvd.py ncmd dvd|dual|cd|thrdvd|thrcd`, each command timed by COP0 Count from its
+  write until the busy bit clears, read at 294.912 MHz):
+
+| Command (disc) | PCSX2 | ps2tek |
+|---|---|---|
+| Seek, delta 15 (DVD) or 7 (CD), and 0 | 0.168 ms | block_timing × delta |
+| Seek, delta 16 (DVD) or 8 (CD) to 14,763 or 4,370 | 30.000 ms | ~30 ms below 14,764 or 4,371 |
+| Seek, delta 14,764 or 4,372 and more | 100.000 ms | ~100 ms |
+| Seek after Stop | 333.33 ms more | 333 ms to spin up |
+| Stop | 166.667 ms | "166 ms delay?" |
+| Pause | 10 EE cycles | — |
+| Standby; a short seek after it until the first fast seek | 9.93 ms; 8.84 ms (DVD). 14.28 ms; 10.78 ms (CD) | — |
+| Seek across the dual-layer break, 599,990 to 600,010 | 30.000 ms, as any 20 sectors | — |
+
+- **The reads.** A read needs the IOP's DMA channel 3 to take each block, which an EE program cannot drive: ReadDvd and
+  ReadCd stay busy (N status 8Dh) for the whole bounded wait. ReadDvd with the eight parameter bytes ps2tek lists ends
+  at once with error 22h; with eleven it runs. No block's bytes were read from any referee (D-121, D-122).
+- **The N commands' numbers** (`ps2cdvd.py nsweep`, 00h–1Fh with eleven zero parameters): D-126.
+
+No referee's log was read: the driver reads it inside the run for the BIOS line and the swap chain only (§13).
+
+### 25.4 The model
+
+- **N commands** (ps2tek "CDVD N Commands"): a command written while the drive is busy is ignored [A]; its parameters
+  are the bytes written to 05h before it, zeros past them, and their count is not checked (D-126, a named loss). Busy
+  shows as N status 80h, idle as 40h, bit 0 for an error. Standby seeks to sector 0; Stop takes 166.67 ms and leaves the
+  drive stopped at sector 0; Pause and NOP end at once; Seek moves the head; every N command ends with I_STAT bit 1.
+  A command that needs the disc with none ready ends at once with error 01h [C].
+- **Reads**: the seek first, with no interrupt of its own; then one block a block_timing, at ps2tek's speeds (24 ×
+  153,600 bytes a second on a CD, 4 × 1,382,400 on a DVD), the block's size in the formula; each block waits in a
+  one-sector buffer for DMA, and the next sector, once off the disc, waits for the buffer to be taken [A: ps2tek's "Once
+  one sector has been read, the CDVD DMA channel can store the data in memory and allow the CDVD drive to continue"];
+  the read ends, with I_STAT bits 0 and 1 (ps2tek: "both bits 1 AND 0"), when its last block has been taken [A: so that
+  the data is in memory when the interrupt comes]. A count of zero ends after the seek. ReadCd's blocks are its 2,048
+  bytes of user data, the sector from its subheader (2,328) or from its header (2,340) [A from ECMA-130's layout];
+  CD-DA's the raw 2,352 bytes; ReadDvd's the Data Frame (D-121, D-122). ReadCd of a DVD gives its Main Data, the
+  rest of a larger block zero [A]. LBA 0 is 00:02:00 on a CD.
+- **GetToc** (09h, "a block size of 2064 bytes"): a DVD's physical format information (ECMA-267 §26.5.1: version 1,
+  120 mm at 10.08 Mbit/s, the structure byte with OTP and Type C for a dual-layer disc, the Data Zone's first and last
+  sectors and layer 0's last) and, for a CD, the lead-in's items A0h, A1h, A2h and each track's, ten bytes of Q each [C,
+  since ps2tek gives the block's size alone].
+- **S commands** answer at once [M: PCSX2's were done before the first poll], their results read from 18h until the
+  status's bit 6 says none is left (D-124, D-125).
+- **The tray and the disc's detection** (D-128): opening ends any N command, stops the disc and sets I_STAT bit 3
+  ("Disk ejected"); closing over a disc leaves the drive status 00h and the disk type 01h for half the 333 ms spin-up,
+  the kind's detecting value (02h a CD, 03h a DVD, 04h a dual-layer DVD) for the rest, then its type; the host changes
+  the disc only with the tray open (`insert`).
+- **The disk type**: 12h a CD of data, 13h a CD with audio tracks beside its data, FDh one of audio alone, 14h a DVD
+  [R ps2tek's table]. The PlayStation's types (10h, 11h) are not given: Sapphire refuses those discs (§4.1).
+- **Authentication**: no exchange is modelled; every disc reads as authenticated for the console's region, as §5.6
+  requires, which the machine info will say in words when the drive reaches the machine (S24).
+- **Losses, named**: the parameter count unchecked; ps2tek's other registers (byte 13h and the like) read 0; the spindle
+  and retry bytes of a read ignored; the speeds fixed; no read errors, the Lead-out read past a disc's end; the BREAK's
+  interrupt [A]; the detecting values' timing [C].
+
+### 25.5 The clock and the EEPROM
+
+- **The clock** (ReadRTC, WriteRTC): seconds, minutes, hours, day, month and a two-digit year in BCD, the first and
+  fifth bytes zero [R ps2tek], running on the drive's time from what the host sets; 2000-based [C], every fourth year a
+  leap year. PCSX2's answers have the same form and read back what was written [M].
+- **The EEPROM** (`nvm.rs`): 1,024 bytes [C, the size of the file PCSX2 keeps beside each BIOS, S3's listing] in
+  16-byte blocks, three areas of sixteen blocks [C]; OpenConfig's parameters mode, area, count (D-125, measured); a
+  session reads or writes the next block of its count, zeros past it, a write in a reading session ignored. Blank is
+  all zeros. The medium `ps2.nvm` and the layout the BIOS expects are S24's (§4.4), which may move the areas.
+
+### 25.6 The gate: the synthetic discs, sector for sector (measured 2026-10-25)
+
+`cdvd/tests.rs` drives the registers as CDVDMAN would, with its own builders (a DVD of 300 sectors, a dual-layer DVD of
+1,100 broken at 1,024 by D-127's rule, CDs of 60 data sectors and of 60 data and 20 audio): **10 of 10**, and
+`timing`'s two, `rtc`'s and `nvm`'s one each, 14 in the module.
+
+| Test | What it holds |
+|---|---|
+| `at_power_on_the_registers_report_the_disc` | each disc's type, the drive and N statuses, no interrupt |
+| `the_s_commands_answer_as_the_documents_and_the_record_say` | the version, an unknown subcommand, eight absent commands among them 84h, 85h and 8Eh, ForbidDVD, the clock ninety seconds on, an EEPROM area written and read |
+| `the_tray_opens_closes_and_the_disc_is_detected_as_it_spins_up` | the tray's statuses and interrupt, a refused second opening, the sticky status, a seek with no disc, detection's stages for a dual-layer DVD and for a DVD put in with the tray open |
+| `seeks_take_ps2teks_times_and_raise_the_interrupt_at_their_end` | each class's time, not a cycle early, the interrupt and its acknowledgement, Stop, the spin-up after it, Standby, Pause, a CD's bounds |
+| `a_dual_layer_seek_is_timed_across_the_radius` | D-123 through the registers |
+| `a_dvd_reads_sector_for_sector_with_the_layer_break_placed` | every sector of both DVDs read: its layer bit, b29, its number from the volume's start, IED and EDC, its data, one block after the last |
+| `a_read_waits_for_its_buffer_to_be_taken` | the buffer's back-pressure and the interrupt after the last block is taken |
+| `a_cd_reads_its_block_sizes_and_its_audio` | the three block sizes, CD-DA at its block time, the two wrong-medium errors, ReadCd of a DVD |
+| `break_ends_a_read_and_get_toc_reports_the_disc` | BREAK; GetToc's physical format information on both DVDs and a CD's lead-in items |
+| `an_image_opens_as_the_playstation_2s_disc_kinds` | `cdvd::open`: an `.iso`, a raw track, a sheet, a dual-layer image's break, junk refused |
+
+S4's synthetic discs (`SyntheticPs2Disc`) are read through `emusen-disc` in the same terms by the crate's own DVD tests,
+whose builders follow the corrected rule, and through the host's reader by `SapphireRunnerTests`.
+
+### 25.7 P13, load time
+
+`EmuSen_Disc.md` §14.5: the test copy of Jak and Daxter, opened mapped and read-only with none of it in the page cache,
+mapped in 0.010 ms and opened in **1.151 ms** (the layer break's two sectors read from the drive), against 519 ms to
+read it whole; the synthetic dual-layer image of 2.25 GB opens in 0.016–0.019 ms with its break found. **The open holds
+P13 on the desktop; P13's "a copy would take tens of seconds" does not** (half a second on NVMe). **The handheld half is
+left**: `hh.sh guard` found no route to the handheld on 2026-10-25.
+
+### 25.8 The blast radius (measured 2026-10-25)
+
+`blast.sh WiseMan sapphire-s23`'s crates, `cargo test --release`, `EMUSEN_DISC_CHDMAN` named, and its WiseMan filter, one
+run at a time at CPU weight 20:
+
+| Where | Result |
+|---|---|
+| `emusen-disc` | **42 of 42**: 18 unit, 3 damage, 13 disc, 8 DVD |
+| Sapphire, after the branch was rebased onto S21's, S16's and S13's merges | lib **39 of 39** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14, `vu_micro` 24; `cdvd` also under `test-checked`; clippy clean |
+| Diamond, Diamond's `v1` | **306 of 306**, **5 of 5**: the crate's first user, unchanged |
+| Nephrite | **194 of 194**: its second, unchanged |
+| `emusen-core-conform`, `Platform/galaxia`, `library`, `library-tool`, `platform` | 36, 87, 11, 9 and 40, every one passing |
+| WiseMan (`Diamond`, `Galaxia`, `GameRecords`, `Library`, `NephriteTests`, `SapphireRunnerTests`, `SapphireTests`) | **562 passed, 0 failed, 11 skipped**: eight `SettingPathsOpenTests` and three big-picture tools, skipped by their own conditions, none near the disc; on the rebased tree `SapphireRunnerTests` and `SapphireTests` again, **14 of 14** |
+
+### 25.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the layer break placed one sector late (`find_layer_break` answering V + 1) | `emusen-disc`'s `a_dual_layer_images_second_volume_places_the_layer_break` and `whole_data_frames_are_read_as_stored_and_told_by_their_first_id`; the drive's `a_dvd_reads_sector_for_sector_with_the_layer_break_placed`, `break_ends_a_read_and_get_toc_reports_the_disc` and `an_image_opens_as_the_playstation_2s_disc_kinds` |
+| F2 | a DVD sector header's layer bit left clear (`sector_information` dropping b24) | `ecma267`'s `the_sector_information_and_numbers_are_section_16_and_25s`, `a_dual_layer_images_second_volume_places_the_layer_break`, the drive's `a_dvd_reads_sector_for_sector_with_the_layer_break_placed` |
+| F3 | a seek timed from the wrong layer (`radius` giving layer 1's sectors their logical place) | `a_dual_layer_seek_is_measured_across_the_radius`, `a_dual_layer_seek_is_timed_across_the_radius` |
+
+Each was applied, `emusen-disc`'s unit and DVD tests and the drive's module run, and the file restored from git [M].
+
+### 25.10 What the plan got wrong, or left open
+
+- **§5.6's "DVD reads report what ECMA-267's sector header gives"**: ps2tek describes the drive's block otherwise in two
+  fields; D-121 and D-122 take ECMA-267's fields and ps2tek's numbering, open until a block is read on the IOP.
+- **S23's "region and model queries ps2tek describes"**: ps2tek describes none at the S-command level, only
+  CDVDMAN's exports for them; they answer as absent (D-125), as do MagicGate's and SECRMAN's.
+- **§3.2's CDVD row** names the referees as the oracle for timing: one lineage reaches the drive from the EE, and none
+  the reads' data; S21's IOP and S24's BIOS are the next witnesses.
+- **§9.4's "a dispute candidate"** for the layer break is D-127, open: no referee shows its rule through the EE, and the
+  one real disc is single-layer.
+- **S4's Q2** (the dual-layer layout on the referees): not answerable from the EE, since PCSX2 shows nothing of layers
+  there; the builder now follows D-127.
+- **P13** is half held, half wrong on the desktop (§25.7), and waits on the handheld.
+
+### 25.11 Questions this stage leaves
+
+1. **Q1 [routine], the version bytes (D-124).** *Recommended*: keep 03h 06h 02h 00h, the only witness's answer, and let
+   S24 show whether the BIOS's CDVDMAN accepts them; change them only on that evidence.
+2. **Q2 [routine], the contiguous seek (D-120).** *Recommended*: keep ps2tek's block_timing × delta under PCSX2's measured
+   bounds; S32's bench, where streaming games load, would show a game that depends on PCSX2's constant.
+3. **Q3 [routine], dual-layer seeks across the radius (D-123).** *Recommended*: keep the OTP geometry; it costs nothing
+   on single-layer discs, and the first dual-layer disc of the bench (God of War, Q8) is where it matters.
+4. **Q4 [decision], a PlayStation 2 CD kept as `.iso`** (§25.2). *Recommended*: keep an `.iso` a DVD, as the library
+   keeps its DVDs, and refuse nothing; if a player's CD title is found as `.iso`, a per-game setting can say CD.
+5. **Q5 [routine], P13's handheld half.** *Recommended*: run `open_mapped` on the handheld's card the next time it
+   answers, with the test copy kept there (Q8), and record it here.
+6. **Q6 [routine], the EEPROM's areas (§25.5).** *Recommended*: leave them as chosen until S24, whose BIOS writes its
+   settings through them and so shows the layout it needs.
+
+### 25.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.3, §2, §4.4, §5.6, §5.9, §5.11, §7, §9.4, §11 and §13; `EmuSen_Disc.md` whole; `Diamond_Plan.md`
+§5.6; this page's §14 and §20; `Sapphire_Disputes.md`; `Sapphire_Referees.md` §2 and §4; `DOCS.txt` §X (the
+exclusions). ECMA-267 (3rd edition, 2001) §4, §7, §12.6, §15–§17, §23–§28; ECMA-119 §8.4; ECMA-130 §22.3.3.4. ps2tek at
+`1c91660`: the IOP's memory map, "CDVD Drive" whole (its I/O ports, N commands, reads and seeks, S commands; the three
+lines of `DOCS.txt` X.3 passed over as evidence), CDVDMAN's and SECRMAN's export lists. chdman 0.289's `info -v`. No
+emulator, SDK, loader or ps2autotests source and no firmware; no referee's log.
+
+### 25.13 What this stage does not cover
+
+- The drive on the IOP's bus and DMA channel 3, and its IRQ2 into the IOP's INTC: S21's bus and DMA plug into
+  `read8`, `write8`, `dma_take` and `irq` once both land.
+- The drive in the machine and in the state format; the EEPROM as the `ps2.nvm` medium; the clock set from the host's
+  time: S24 and S30.
+- The PlayStation mode's CD-ROM commands (Diamond's), DVD-Video (§1.2), and the block-compressed ISO forms.
+- P13 on the handheld.

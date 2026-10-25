@@ -941,7 +941,7 @@ the enhancements (E) are separate tracks.
 |---|---|---|
 | **S21** | The IOP on `blackmoon-r3000`: its memory map, RAM, caches and scratchpad in Sapphire's IOP bus, its INTC, DMA and six timers, its PRId | The r3000 suite still passes; the project's bare-metal IOP programs *Built 2026-10-25, `Sapphire_Native.md` §22: met; the crate unchanged and its suite passing, seven programs and 174 graded words equal to ps2tek's and psx-spx's records; an IOP program placed on PCSX2 through an EE program and the IOP's exception vector, Play! unable; PCSX2 differing on 41 of 153 words where it models no IOP cache, wait state, bus error or register width; PRId 1Fh; D-60 to D-68; `cpu/iop/*` and `kernel/iop/*` wait for S24's BIOS.* |
 | **S22** | The SIF: registers and its three DMA channels | The project's programs passing messages both ways, EE and IOP each checking the other's record |
-| **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) |
+| **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) *Built 2026-10-25, `Sapphire_Native.md` §25: met but for P13's handheld half (the handheld did not answer); the drive's answers where ps2tek is silent measured on PCSX2's lineage, the only one that reaches it from the EE, disputes D-120 to D-128.* |
 | **S24** | **The player's BIOS to its menu**: what is missing for it, SIO2's pad, the EEPROM synthesised; the writers of this stage are thereafter not replacement writers | OSDSYS's picture at an anchor equal to PCSX2's on the same BIOS within a stated count of pixels, for the Americas and Europe versions of §11 Q9; then **all 78 ps2autotests on the player's BIOS** equal their expected texts, each miss a dispute |
 | **S25** | SIO2: the DualShock 2 with pressure and rumble, the card (pages, erase, timing, the medium of §4.4, its crate §9.5), the multitap; **the start without a disc** (G10) and **the PlayStation 2's tab of the Memory Cards window** (G11) built on them, behind the `InDevelopment` mark | The pad drives OSDSYS; a card formatted by the player's BIOS on Sapphire is read by the crate and by PCSX2, and the reverse, or the refusal of §5.8 recorded as P8 says; G10's and G11's tests (§8) *Amended 2026-10-24: G10 and G11 added here.* |
 | **S26** | The SPU2 on the shared voice crate (§9.3) | The project's voice programs against the referees' sound; Diamond's SPU goldens unchanged by the crate's extraction |
@@ -1119,7 +1119,8 @@ begins, by the rule ECMA-267 and the PlayStation 2's discs give, settled at S23 
 read whole or synthesised with their header and EDC from ECMA-267, as CD sectors are from ECMA-130; CHD's DVD form
 (`createdvd`); and later the block-compressed ISO forms, each from its published description. **What it does not gain**:
 the CDVD's commands or timing, which are Sapphire's, as the HC05's are Diamond's. **Users**: Sapphire; later any core whose discs are
-DVD-ROM.
+DVD-ROM. *Built 2026-10-25 at S23 (`EmuSen_Disc.md` §14): the break is the first volume's Volume Space Size where a second
+volume descriptor lies 16 sectors past it (D-127, open); CHD's DVD form measured from chdman 0.289.*
 
 ### 9.5 Cards: a new `emusen-ps2-card`, not `emusen-psx-card`
 
@@ -1299,7 +1300,8 @@ needs Q11.
 - **P12.** With every exact lever, the desktop meets §5.12's target on the bench, and at least one VU1-bound bench game
   misses full speed on the handheld at first.
 - **P13.** A dual-layer DVD image opens mapped in under a second on the desktop and the handheld; a copy would take
-  tens of seconds and is never made.
+  tens of seconds and is never made. *Half held 2026-10-25 at S23 (`Sapphire_Native.md` §25.7): 1.15 ms cold on the desktop;
+  a copy there took 0.52 s, not tens of seconds; the handheld not measured.*
 - **P14.** Rewind on a 41 MiB state costs more than a frame's budget to snapshot at the default interval and needs its
   own setting.
 - **P15.** The EE recompiler built on `emusen-jit` with inlined instructions and held registers is at least five times

@@ -5,7 +5,7 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] ADDRESS:WORDS ...
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
 
@@ -17,7 +17,9 @@ names the done word: a standalone run reads RAM as soon as the word at ADDRESS r
 probe run is refused unless it holds it at frame N. --again reads the same words S seconds later, with the CPU time the
 referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
 speed instead of unlimited; --interpreter runs PCSX2's EE on its interpreter instead of its recompiler, the default, so
-the two can be weighed apart (Sapphire_Native.md §19.6). ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
+the two can be weighed apart (Sapphire_Native.md §19.6); --disc puts a synthetic disc image in PCSX2's drive while the
+program runs in place of the disc's own (`-elf`), so that the program can read the drive (Sapphire_Native.md §25).
+ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
 console's speed and prints only what PINE says of it (its title, serial and status) and the CPU time it took, never
 the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5). `tty` runs a
 program that prints (ps2autotests') on PCSX2 with one of its log channels on, the EE's console, the IOP's or neither,
@@ -430,7 +432,7 @@ def run_inner(job, name, seconds):
         return out, text
 
 
-def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False):
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
     settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
     data = CACHE / "pcsx2-data"
@@ -449,6 +451,8 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
                "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "until": list(until) if until else None, "dumps": dumps, "again": again, "ask": [Pine.TITLE, Pine.ID],
                "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
         job["cmd"][-2:-2] = ["-logfile", "@EMULOG@"]
+        if disc:
+            job["cmd"][-2:] = ["-elf", str(target), "--", str(disc)]
         if stop_text:
             job["stop_text"] = stop_text
         out, text = run_inner(job, "pcsx2", seconds)
@@ -582,6 +586,9 @@ def main(argv):
         if referee != "pcsx2":
             die("--interpreter is PCSX2's", 2)
         rest.remove("--interpreter")
+    disc = option("--disc")
+    if disc and (referee != "pcsx2" or mode != "ram"):
+        die("--disc is for ram runs on pcsx2", 2)
     until = option("--until")
     until = tuple(int(x, 16) for x in until.split("=")) if until else None
     dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
@@ -609,7 +616,7 @@ def main(argv):
     if until is None and referee in STANDALONE:
         die("--until names the done word, which a standalone run waits for", 2)
     if referee == "pcsx2":
-        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter)
+        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter, disc=Path(disc).resolve() if disc else None)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
     elif referee == "play":

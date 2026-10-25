@@ -12,10 +12,12 @@
 //! S21: the IOP (`iop`), `blackmoon-r3000` on its own bus, a unit of the board.
 //! S16: the GS (`gs`), its registers, its local memory in every format's layout and its transfers, on the board.
 //! S13: micro mode for both units (`vu::pipe`), with VU1's EFU (`vu::efu`).
+//! S23: the CDVD drive controller (`cdvd`) at its register interface, on `emusen-disc`'s CDs and DVDs.
 
 pub mod bios;
 pub mod blank;
 pub mod board;
+pub mod cdvd;
 pub mod clock;
 pub mod dmac;
 pub mod ee;

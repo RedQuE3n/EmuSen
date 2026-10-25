@@ -15,6 +15,8 @@ emusen-native = { path = "../../Shared/emusen-native" }
 emusen-mips = { path = "../../Shared/emusen-mips" }
 # The IOP's processor, the R3000A, used as its crate's design intends with Sapphire's own IOP bus (Sapphire_Plan.md §9.2).
 blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
+# Discs as sectors, CDs and DVDs, which the CDVD drive reads (Sapphire_Plan.md §9.4).
+emusen-disc = { path = "../../Shared/emusen-disc" }
 
 [profile.release]
 panic = "abort"

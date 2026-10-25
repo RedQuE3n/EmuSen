@@ -126,7 +126,7 @@ impl Program {
 
     /// Stores `reg`'s 128 bits at s1, which a quadword record keeps aligned, and moves s1 on (none: any value).
     pub fn record_quad(&mut self, reg: &str, v: Option<u128>) {
-        assert!(self.expected.len() % 2 == 0, "{}: a quadword record at an odd doubleword", self.name);
+        assert!(self.expected.len().is_multiple_of(2), "{}: a quadword record at an odd doubleword", self.name);
         self.emit(format!("sq {reg}, 0(s1)"));
         self.emit("daddiu s1, s1, 16");
         self.expected.push(v.map(|v| v as u64));

@@ -452,10 +452,10 @@ fn multiply_halfwords(e: &mut Ee, w: u32, f: impl Fn(u32, u32) -> u32) -> R {
     for (i, &prod) in p.iter().enumerate() {
         let i = i as u32;
         let word = i % 2 + 2 * (i / 4);
-        let reg = if (i / 2) % 2 == 0 { &mut e.lo } else { &mut e.hi };
+        let reg = if (i / 2).is_multiple_of(2) { &mut e.lo } else { &mut e.hi };
         let v = f(lane(*reg, 32, word) as u32, prod);
         *reg = with_word(*reg, word, v);
-        if i % 2 == 0 {
+        if i.is_multiple_of(2) {
             out = with_word(out, i / 2, v);
         }
     }

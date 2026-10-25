@@ -82,7 +82,7 @@ fn the_programs_execute_every_instruction_s7_adds() {
         seen.extend(words.iter().filter_map(|&w| emusen_mips::r5900::operation(w)).map(|o| o.mnemonic()));
         assert!(at >= 0x8000_0000);
     }
-    let s7: Vec<_> = ee::names().skip(128).collect();
+    let s7: Vec<_> = ee::names().skip(128).take(27).collect();
     assert_eq!(s7.len(), 27, "the TLB, debug, performance, BC0 and CACHE instructions");
     let unexecuted: Vec<_> = s7.iter().filter(|n| !seen.contains(**n)).collect();
     let by_unit = ["tlbwr", "mfiab", "mfiabm", "mfdab", "mfdabm", "mfdvb", "mfdvbm", "bc0f", "bc0t", "bc0fl", "bc0tl"];

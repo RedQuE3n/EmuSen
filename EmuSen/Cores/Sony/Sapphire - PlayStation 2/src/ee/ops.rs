@@ -68,95 +68,131 @@ type R = Result<(), Stop>;
 // Arithmetic: a word operation computes on bits 31..0 and writes the sign-extended result to bits 63..0.
 fn add(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i32).checked_add(e.get(rt(w)) as i32) {
-        Some(v) => Ok(e.set(rd(w), v as i64 as u64)),
+        Some(v) => {
+            e.set(rd(w), v as i64 as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn addu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rs(w)) as u32).wrapping_add(e.get(rt(w)) as u32))))
+    e.set(rd(w), sext32((e.get(rs(w)) as u32).wrapping_add(e.get(rt(w)) as u32)));
+    Ok(())
 }
 fn sub(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i32).checked_sub(e.get(rt(w)) as i32) {
-        Some(v) => Ok(e.set(rd(w), v as i64 as u64)),
+        Some(v) => {
+            e.set(rd(w), v as i64 as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn subu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rs(w)) as u32).wrapping_sub(e.get(rt(w)) as u32))))
+    e.set(rd(w), sext32((e.get(rs(w)) as u32).wrapping_sub(e.get(rt(w)) as u32)));
+    Ok(())
 }
 fn addi(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i32).checked_add(simm(w) as i32) {
-        Some(v) => Ok(e.set(rt(w), v as i64 as u64)),
+        Some(v) => {
+            e.set(rt(w), v as i64 as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn addiu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), sext32((e.get(rs(w)) as u32).wrapping_add(simm(w) as u32))))
+    e.set(rt(w), sext32((e.get(rs(w)) as u32).wrapping_add(simm(w) as u32)));
+    Ok(())
 }
 fn dadd(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i64).checked_add(e.get(rt(w)) as i64) {
-        Some(v) => Ok(e.set(rd(w), v as u64)),
+        Some(v) => {
+            e.set(rd(w), v as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn daddu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rs(w)).wrapping_add(e.get(rt(w)))))
+    e.set(rd(w), e.get(rs(w)).wrapping_add(e.get(rt(w))));
+    Ok(())
 }
 fn dsub(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i64).checked_sub(e.get(rt(w)) as i64) {
-        Some(v) => Ok(e.set(rd(w), v as u64)),
+        Some(v) => {
+            e.set(rd(w), v as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn dsubu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rs(w)).wrapping_sub(e.get(rt(w)))))
+    e.set(rd(w), e.get(rs(w)).wrapping_sub(e.get(rt(w))));
+    Ok(())
 }
 fn daddi(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     match (e.get(rs(w)) as i64).checked_add(simm(w) as i64) {
-        Some(v) => Ok(e.set(rt(w), v as u64)),
+        Some(v) => {
+            e.set(rt(w), v as u64);
+            Ok(())
+        }
         None => exc(Exception::Overflow),
     }
 }
 fn daddiu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), e.get(rs(w)).wrapping_add(simm(w))))
+    e.set(rt(w), e.get(rs(w)).wrapping_add(simm(w)));
+    Ok(())
 }
 
 // Logic, comparison and conditional moves on bits 63..0.
 fn and(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rs(w)) & e.get(rt(w))))
+    e.set(rd(w), e.get(rs(w)) & e.get(rt(w)));
+    Ok(())
 }
 fn or(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rs(w)) | e.get(rt(w))))
+    e.set(rd(w), e.get(rs(w)) | e.get(rt(w)));
+    Ok(())
 }
 fn xor(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rs(w)) ^ e.get(rt(w))))
+    e.set(rd(w), e.get(rs(w)) ^ e.get(rt(w)));
+    Ok(())
 }
 fn nor(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), !(e.get(rs(w)) | e.get(rt(w)))))
+    e.set(rd(w), !(e.get(rs(w)) | e.get(rt(w))));
+    Ok(())
 }
 fn andi(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), e.get(rs(w)) & uimm(w)))
+    e.set(rt(w), e.get(rs(w)) & uimm(w));
+    Ok(())
 }
 fn ori(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), e.get(rs(w)) | uimm(w)))
+    e.set(rt(w), e.get(rs(w)) | uimm(w));
+    Ok(())
 }
 fn xori(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), e.get(rs(w)) ^ uimm(w)))
+    e.set(rt(w), e.get(rs(w)) ^ uimm(w));
+    Ok(())
 }
 fn lui(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), sext32(w << 16)))
+    e.set(rt(w), sext32(w << 16));
+    Ok(())
 }
 fn slt(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rs(w)) as i64) < e.get(rt(w)) as i64) as u64))
+    e.set(rd(w), ((e.get(rs(w)) as i64) < e.get(rt(w)) as i64) as u64);
+    Ok(())
 }
 fn sltu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), (e.get(rs(w)) < e.get(rt(w))) as u64))
+    e.set(rd(w), (e.get(rs(w)) < e.get(rt(w))) as u64);
+    Ok(())
 }
 fn slti(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), ((e.get(rs(w)) as i64) < simm(w) as i64) as u64))
+    e.set(rt(w), ((e.get(rs(w)) as i64) < simm(w) as i64) as u64);
+    Ok(())
 }
 fn sltiu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rt(w), (e.get(rs(w)) < simm(w)) as u64))
+    e.set(rt(w), (e.get(rs(w)) < simm(w)) as u64);
+    Ok(())
 }
 fn movz(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     if e.get(rt(w)) == 0 {
@@ -173,49 +209,64 @@ fn movn(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 
 // Shifts: the word forms on bits 31..0, the doubleword forms on 63..0.
 fn sll(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rt(w)) as u32) << sa(w))))
+    e.set(rd(w), sext32((e.get(rt(w)) as u32) << sa(w)));
+    Ok(())
 }
 fn srl(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rt(w)) as u32) >> sa(w))))
+    e.set(rd(w), sext32((e.get(rt(w)) as u32) >> sa(w)));
+    Ok(())
 }
 fn sra(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rt(w)) as i32) >> sa(w)) as i64 as u64))
+    e.set(rd(w), ((e.get(rt(w)) as i32) >> sa(w)) as i64 as u64);
+    Ok(())
 }
 fn sllv(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rt(w)) as u32) << (e.get(rs(w)) & 31))))
+    e.set(rd(w), sext32((e.get(rt(w)) as u32) << (e.get(rs(w)) & 31)));
+    Ok(())
 }
 fn srlv(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), sext32((e.get(rt(w)) as u32) >> (e.get(rs(w)) & 31))))
+    e.set(rd(w), sext32((e.get(rt(w)) as u32) >> (e.get(rs(w)) & 31)));
+    Ok(())
 }
 fn srav(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rt(w)) as i32) >> (e.get(rs(w)) & 31)) as i64 as u64))
+    e.set(rd(w), ((e.get(rt(w)) as i32) >> (e.get(rs(w)) & 31)) as i64 as u64);
+    Ok(())
 }
 fn dsll(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) << sa(w)))
+    e.set(rd(w), e.get(rt(w)) << sa(w));
+    Ok(())
 }
 fn dsrl(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) >> sa(w)))
+    e.set(rd(w), e.get(rt(w)) >> sa(w));
+    Ok(())
 }
 fn dsra(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rt(w)) as i64) >> sa(w)) as u64))
+    e.set(rd(w), ((e.get(rt(w)) as i64) >> sa(w)) as u64);
+    Ok(())
 }
 fn dsll32(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) << (sa(w) + 32)))
+    e.set(rd(w), e.get(rt(w)) << (sa(w) + 32));
+    Ok(())
 }
 fn dsrl32(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) >> (sa(w) + 32)))
+    e.set(rd(w), e.get(rt(w)) >> (sa(w) + 32));
+    Ok(())
 }
 fn dsra32(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rt(w)) as i64) >> (sa(w) + 32)) as u64))
+    e.set(rd(w), ((e.get(rt(w)) as i64) >> (sa(w) + 32)) as u64);
+    Ok(())
 }
 fn dsllv(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) << (e.get(rs(w)) & 63)))
+    e.set(rd(w), e.get(rt(w)) << (e.get(rs(w)) & 63));
+    Ok(())
 }
 fn dsrlv(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.get(rt(w)) >> (e.get(rs(w)) & 63)))
+    e.set(rd(w), e.get(rt(w)) >> (e.get(rs(w)) & 63));
+    Ok(())
 }
 fn dsrav(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), ((e.get(rt(w)) as i64) >> (e.get(rs(w)) & 63)) as u64))
+    e.set(rd(w), ((e.get(rt(w)) as i64) >> (e.get(rs(w)) & 63)) as u64);
+    Ok(())
 }
 
 // HI and LO: pipeline 0 owns bits 63..0 (HI0, LO0), pipeline 1 bits 127..64 (HI1, LO1).
@@ -227,32 +278,40 @@ fn put(v: &mut u128, upper: bool, x: u64) {
     *v = if upper { *v & LOW | (x as u128) << 64 } else { *v & !LOW | x as u128 };
 }
 fn mfhi(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), half(e.hi, false)))
+    e.set(rd(w), half(e.hi, false));
+    Ok(())
 }
 fn mflo(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), half(e.lo, false)))
+    e.set(rd(w), half(e.lo, false));
+    Ok(())
 }
 fn mthi(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let v = e.get(rs(w));
-    Ok(put(&mut e.hi, false, v))
+    put(&mut e.hi, false, v);
+    Ok(())
 }
 fn mtlo(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let v = e.get(rs(w));
-    Ok(put(&mut e.lo, false, v))
+    put(&mut e.lo, false, v);
+    Ok(())
 }
 fn mfhi1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), half(e.hi, true)))
+    e.set(rd(w), half(e.hi, true));
+    Ok(())
 }
 fn mflo1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), half(e.lo, true)))
+    e.set(rd(w), half(e.lo, true));
+    Ok(())
 }
 fn mthi1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let v = e.get(rs(w));
-    Ok(put(&mut e.hi, true, v))
+    put(&mut e.hi, true, v);
+    Ok(())
 }
 fn mtlo1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let v = e.get(rs(w));
-    Ok(put(&mut e.lo, true, v))
+    put(&mut e.lo, true, v);
+    Ok(())
 }
 
 /// The 64-bit product (or accumulated sum) into LO, HI and rd, as the multiply forms' Operation sections write it.
@@ -272,47 +331,54 @@ fn accumulator(e: &Ee, upper: bool) -> u64 {
 }
 fn mult(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = signed_product(e, w);
-    Ok(product(e, w, false, p))
+    product(e, w, false, p);
+    Ok(())
 }
 fn multu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = unsigned_product(e, w);
-    Ok(product(e, w, false, p))
+    product(e, w, false, p);
+    Ok(())
 }
 fn mult1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = signed_product(e, w);
-    Ok(product(e, w, true, p))
+    product(e, w, true, p);
+    Ok(())
 }
 fn multu1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = unsigned_product(e, w);
-    Ok(product(e, w, true, p))
+    product(e, w, true, p);
+    Ok(())
 }
 fn madd(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = accumulator(e, false).wrapping_add(signed_product(e, w));
-    Ok(product(e, w, false, p))
+    product(e, w, false, p);
+    Ok(())
 }
 fn maddu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = accumulator(e, false).wrapping_add(unsigned_product(e, w));
-    Ok(product(e, w, false, p))
+    product(e, w, false, p);
+    Ok(())
 }
 fn madd1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = accumulator(e, true).wrapping_add(signed_product(e, w));
-    Ok(product(e, w, true, p))
+    product(e, w, true, p);
+    Ok(())
 }
 fn maddu1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let p = accumulator(e, true).wrapping_add(unsigned_product(e, w));
-    Ok(product(e, w, true, p))
+    product(e, w, true, p);
+    Ok(())
 }
 
 /// A signed word division; a zero divisor's result, which the manual leaves undefined, is Sapphire_Disputes.md D-6's.
 fn quotient_signed(n: i32, d: i32) -> (u32, u32) {
-    if d == 0 {
-        (if n < 0 { 1 } else { u32::MAX }, n as u32)
-    } else {
-        (n.wrapping_div(d) as u32, n.wrapping_rem(d) as u32)
-    }
+    if d == 0 { (if n < 0 { 1 } else { u32::MAX }, n as u32) } else { (n.wrapping_div(d) as u32, n.wrapping_rem(d) as u32) }
 }
 fn quotient_unsigned(n: u32, d: u32) -> (u32, u32) {
-    if d == 0 { (u32::MAX, n) } else { (n / d, n % d) }
+    match (n.checked_div(d), n.checked_rem(d)) {
+        (Some(q), Some(r)) => (q, r),
+        _ => (u32::MAX, n),
+    }
 }
 fn divide(e: &mut Ee, upper: bool, (q, r): (u32, u32)) {
     put(&mut e.lo, upper, sext32(q));
@@ -320,35 +386,40 @@ fn divide(e: &mut Ee, upper: bool, (q, r): (u32, u32)) {
 }
 fn div(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let qr = quotient_signed(e.get(rs(w)) as i32, e.get(rt(w)) as i32);
-    Ok(divide(e, false, qr))
+    divide(e, false, qr);
+    Ok(())
 }
 fn divu(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let qr = quotient_unsigned(e.get(rs(w)) as u32, e.get(rt(w)) as u32);
-    Ok(divide(e, false, qr))
+    divide(e, false, qr);
+    Ok(())
 }
 fn div1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let qr = quotient_signed(e.get(rs(w)) as i32, e.get(rt(w)) as i32);
-    Ok(divide(e, true, qr))
+    divide(e, true, qr);
+    Ok(())
 }
 fn divu1(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let qr = quotient_unsigned(e.get(rs(w)) as u32, e.get(rt(w)) as u32);
-    Ok(divide(e, true, qr))
+    divide(e, true, qr);
+    Ok(())
 }
 
-// SA, the funnel shift's amount, kept as the Operation sections write it (Sapphire_Native.md §16.2).
+// SA, the funnel shift's amount, kept as the byte count MFSA reads back (Sapphire_Disputes.md D-9).
 fn mfsa(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    Ok(e.set(rd(w), e.sa))
+    e.set(rd(w), e.sa);
+    Ok(())
 }
 fn mtsa(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    e.sa = e.get(rs(w));
+    e.sa = e.get(rs(w)) & 15;
     Ok(())
 }
 fn mtsab(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    e.sa = ((e.get(rs(w)) ^ uimm(w)) & 15) * 8;
+    e.sa = (e.get(rs(w)) ^ uimm(w)) & 15;
     Ok(())
 }
 fn mtsah(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
-    e.sa = ((e.get(rs(w)) ^ uimm(w)) & 7) * 16;
+    e.sa = ((e.get(rs(w)) ^ uimm(w)) & 7) * 2;
     Ok(())
 }
 
@@ -530,8 +601,15 @@ fn load(e: &mut Ee, b: &mut dyn Bus, w: u32, bytes: u32, signed: bool) -> R {
     let p = physical(e, address(e, w), bytes, false)?;
     let v = b.read(p, bytes as usize) as u64;
     let bits = bytes * 8;
-    let v = if bits == 64 { v } else if signed { ((v << (64 - bits)) as i64 >> (64 - bits)) as u64 } else { v };
-    Ok(e.set(rt(w), v))
+    let v = if bits == 64 {
+        v
+    } else if signed {
+        ((v << (64 - bits)) as i64 >> (64 - bits)) as u64
+    } else {
+        v
+    };
+    e.set(rt(w), v);
+    Ok(())
 }
 fn lb(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     load(e, b, w, 1, true)
@@ -600,7 +678,8 @@ fn lwl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let shift = (3 - k) * 8;
     let reg = e.get(rt(w)) as u32;
     let v = (m as u32) << shift | reg & mask(shift / 8) as u32;
-    Ok(e.set(rt(w), sext32(v)))
+    e.set(rt(w), sext32(v));
+    Ok(())
 }
 fn lwr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let (_, k, m) = unit(e, b, w, 4, false)?;
@@ -608,19 +687,22 @@ fn lwr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let reg = e.get(rt(w));
     let low = (m as u32) >> shift | (reg as u32) & !(mask(4 - k) as u32);
     let v = if k == 0 { sext32(low) } else { reg & !0xFFFF_FFFF | low as u64 };
-    Ok(e.set(rt(w), v))
+    e.set(rt(w), v);
+    Ok(())
 }
 fn ldl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let (_, k, m) = unit(e, b, w, 8, false)?;
     let shift = (7 - k) * 8;
     let v = m << shift | e.get(rt(w)) & mask(shift / 8);
-    Ok(e.set(rt(w), v))
+    e.set(rt(w), v);
+    Ok(())
 }
 fn ldr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let (_, k, m) = unit(e, b, w, 8, false)?;
     let shift = k * 8;
     let v = m >> shift | e.get(rt(w)) & !mask(8 - k);
-    Ok(e.set(rt(w), v))
+    e.set(rt(w), v);
+    Ok(())
 }
 fn swl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     let (p, k, m) = unit(e, b, w, 4, true)?;
@@ -667,7 +749,8 @@ fn writable(r: usize) -> u32 {
 }
 fn mfc0(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     cop0_usable(e)?;
-    Ok(e.set(rt(w), sext32(e.cop0[rd(w)])))
+    e.set(rt(w), sext32(e.cop0[rd(w)]));
+    Ok(())
 }
 fn mtc0(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     cop0_usable(e)?;

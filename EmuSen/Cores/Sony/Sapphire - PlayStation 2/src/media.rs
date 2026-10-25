@@ -228,6 +228,11 @@ impl<'a> Sectors<'a> {
 /// Where the project's programs are loaded and entered.
 pub const PROGRAM_ORIGIN: u32 = 0x0010_0000;
 
+/// Where the segment starts in the file: congruent with the origin modulo the segment's alignment, 16, as the ELF
+/// format requires; at 84 bytes, a 160 KiB program read its constants 12 bytes astray on PCSX2 (Sapphire_Native.md
+/// §16.6).
+pub const SEGMENT_OFFSET: u32 = 0x60;
+
 /// An EE program of the project's own as an ELF: the header, one loadable segment of `code` at `origin`, entered there
 /// (Sapphire_Referees.md §4.1). The tests' sample and the referees' programs are written by it.
 pub fn program(code: &[u32], origin: u32) -> Vec<u8> {
@@ -242,8 +247,9 @@ pub fn program(code: &[u32], origin: u32) -> Vec<u8> {
     image[40..42].copy_from_slice(&(ELF_HEADER as u16).to_le_bytes());
     image[42..44].copy_from_slice(&(PROGRAM_HEADER as u16).to_le_bytes());
     image[44..46].copy_from_slice(&1u16.to_le_bytes());
+    image.resize(SEGMENT_OFFSET as usize, 0);
     let h = &mut image[ELF_HEADER..];
-    let (offset, bytes) = ((ELF_HEADER + PROGRAM_HEADER) as u32, code.len() as u32 * 4);
+    let (offset, bytes) = (SEGMENT_OFFSET, code.len() as u32 * 4);
     for (at, v) in [(0, PT_LOAD), (4, offset), (8, origin), (12, origin), (16, bytes), (20, bytes), (24, 5), (28, 16)] {
         h[at..at + 4].copy_from_slice(&v.to_le_bytes());
     }
@@ -317,7 +323,7 @@ mod tests {
     #[test]
     fn an_ee_program_is_its_entry_and_segments() {
         let Ok(Media::Elf(elf)) = Media::read(&elf()) else { panic!("not read") };
-        assert_eq!((elf.entry, elf.segments.as_slice()), (0x0010_0000, &[(0x0010_0000, 84, 8, 8)][..]));
+        assert_eq!((elf.entry, elf.segments.as_slice()), (0x0010_0000, &[(0x0010_0000, SEGMENT_OFFSET, 8, 8)][..]));
     }
 
     #[test]
@@ -338,7 +344,7 @@ mod tests {
         assert_eq!(words(with(16, &1u16.to_le_bytes())), "an ELF of type 0x0001, not an executable");
         assert_eq!(words(with(ELF_HEADER, &2u32.to_le_bytes())), "an executable with no segment to load");
         let e = elf();
-        assert_eq!(Media::read(&e[..e.len() - 1]), Err(Refusal::Truncated { needs: 92, has: 91 }));
+        assert_eq!(Media::read(&e[..e.len() - 1]), Err(Refusal::Truncated { needs: SEGMENT_OFFSET as u64 + 8, has: SEGMENT_OFFSET as u64 + 7 }));
         assert_eq!(Media::read(&e[..60]), Err(Refusal::Truncated { needs: 84, has: 60 }));
         assert_eq!(Media::read(&e[..20]), Err(Refusal::Truncated { needs: 52, has: 20 }));
     }

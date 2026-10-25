@@ -20,7 +20,8 @@ pub const SENTINEL: u64 = 0xF0E1_D2C3_B4A5_9687;
 
 /// The operands: word values (bits 63..31 equal) first, then values a word instruction may not take.
 pub const WORDS: [u64; 11] = [0, 1, 2, 31, 32, 0x7FFF_FFFF, 0xFFFF_FFFF_8000_0000, u64::MAX, 0x1234_5678, 0xFFFF_FFFF_89AB_CDEF, 63];
-pub const WIDE: [u64; 6] = [0x0123_4567_89AB_CDEF, 0x7FFF_FFFF_FFFF_FFFF, 0x8000_0000_0000_0000, 0xFFFF_FFFF_0000_0000, 0x0000_0000_FFFF_FFFF, 0x0000_0000_8000_0000];
+pub const WIDE: [u64; 6] =
+    [0x0123_4567_89AB_CDEF, 0x7FFF_FFFF_FFFF_FFFF, 0x8000_0000_0000_0000, 0xFFFF_FFFF_0000_0000, 0x0000_0000_FFFF_FFFF, 0x0000_0000_8000_0000];
 pub const IMMEDIATES: [u16; 7] = [0, 1, 0x7FFF, 0x8000, 0xFFFF, 0x1234, 0x8001];
 pub const SHIFTS: [u32; 5] = [0, 1, 7, 16, 31];
 
@@ -117,7 +118,7 @@ impl Program {
         self.place("end");
         self.emit("beq zero, zero, end");
         self.emit("nop");
-        while self.here() % 16 != 0 {
+        while !self.here().is_multiple_of(16) {
             self.emit("nop");
         }
         let base = self.here();
@@ -173,7 +174,9 @@ pub fn three() -> Program {
                 p.constant("t1", b);
                 p.constant("t2", SENTINEL);
                 p.emit(match name {
-                    "sllv" | "srlv" | "srav" | "dsllv" | "dsrlv" | "dsrav" => format!("{name} t2, t1, t0"),
+                    "sllv" | "srlv" | "srav" | "dsllv" | "dsrlv" | "dsrav" => {
+                        format!("{name} t2, t1, t0")
+                    }
                     _ => format!("{name} t2, t0, t1"),
                 });
                 p.record("t2", o.dest);
@@ -261,7 +264,8 @@ pub fn muldiv() -> Program {
     p
 }
 
-/// SA: MTSAB and MTSAH as their Operation sections write SA, read back by MFSA, and MTSA restoring MFSA's value.
+/// SA: MTSAB and MTSAH read back by MFSA, and MTSA restoring MFSA's value. The manual writes SA as a bit count and
+/// calls MFSA's value opaque; both referee lineages read back the byte count, the ruling of Sapphire_Disputes.md D-9.
 pub fn shift_amount() -> Program {
     let mut p = Program::new("sa");
     for &a in &values() {
@@ -269,10 +273,10 @@ pub fn shift_amount() -> Program {
             p.constant("t0", a);
             p.emit(format!("mtsab t0, 0x{imm:x}"));
             p.emit("mfsa t2");
-            p.record("t2", Some(((a ^ imm as u64) & 15) * 8));
+            p.record("t2", Some((a ^ imm as u64) & 15));
             p.emit(format!("mtsah t0, 0x{imm:x}"));
             p.emit("mfsa t2");
-            p.record("t2", Some(((a ^ imm as u64) & 7) * 16));
+            p.record("t2", Some(((a ^ imm as u64) & 7) * 2));
         }
     }
     p.emit("mtsab zero, 9");
@@ -280,7 +284,7 @@ pub fn shift_amount() -> Program {
     p.emit("mtsab zero, 0");
     p.emit("mtsa t3");
     p.emit("mfsa t2");
-    p.record("t2", Some(72));
+    p.record("t2", Some(9));
     p
 }
 
@@ -498,9 +502,14 @@ fn taken(p: &mut Program, code: u32, epc: u32, bd: bool, ce: u32, badvaddr: Opti
     p.expected.push(Some(status as i32 as i64 as u64));
 }
 
+/// The exception programs, one a class, so that a referee that takes one class and not another reads clearly.
+pub const EXCEPTION_CLASSES: [&str; 9] =
+    ["exc-address", "exc-overflow", "exc-trap", "exc-call", "exc-reserved", "exc-unusable", "exc-delay", "exc-eidi", "exc-user"];
+
 /// The exceptions an integer instruction raises, each from its own instruction, through the handler.
-pub fn exceptions() -> Program {
-    let mut p = Program::new("exceptions");
+pub fn exceptions(class: &'static str) -> Program {
+    let mut p = Program::new(class);
+    let on = |c: &str| c == class;
     p.emit("di");
     p.emit("mtc0 zero, Status");
     p.emit("sync.p");
@@ -514,9 +523,13 @@ pub fn exceptions() -> Program {
     p.emit("sync.p");
     let exl = 2;
     let mut bad: Option<u64> = None;
-    // Address errors first, so BadVAddr is known for every later record.
     p.emit(format!("lui t4, 0x{:x}", AREA >> 16));
-    for (name, k, store) in [("lh", 1, false), ("lhu", 3, false), ("lw", 2, false), ("lwu", 1, false), ("ld", 4, false), ("sh", 1, true), ("sw", 2, true), ("sd", 12, true)] {
+    for (name, k, store) in
+        [("lh", 1, false), ("lhu", 3, false), ("lw", 2, false), ("lwu", 1, false), ("ld", 4, false), ("sh", 1, true), ("sw", 2, true), ("sd", 12, true)]
+    {
+        if !on("exc-address") {
+            break;
+        }
         p.constant("t2", SENTINEL);
         let at = p.here();
         p.emit(format!("{name} t2, {k}(t4)"));
@@ -535,7 +548,7 @@ pub fn exceptions() -> Program {
         ("dsub", 0x8000_0000_0000_0000, 1),
         ("dsub", 0x7FFF_FFFF_FFFF_FFFF, u64::MAX),
     ];
-    for &(name, a, b) in overflowing {
+    for &(name, a, b) in overflowing.iter().filter(|_| on("exc-overflow")) {
         assert_eq!(manual::integer(name, a, b, 0, 0, 0, 0, 0).exception, Some(manual::OVERFLOW));
         p.constant("t0", a);
         p.constant("t1", b);
@@ -545,7 +558,9 @@ pub fn exceptions() -> Program {
         taken(&mut p, 12, at, false, 0, bad, exl);
         p.record("t2", Some(SENTINEL));
     }
-    for &(name, a, imm) in &[("addi", 0x7FFF_FFFFu64, 1u16), ("addi", 0xFFFF_FFFF_8000_0000, 0xFFFF), ("daddi", 0x7FFF_FFFF_FFFF_FFFF, 1), ("daddi", 0x8000_0000_0000_0000, 0x8000)] {
+    let immediate: &[(&str, u64, u16)] =
+        &[("addi", 0x7FFF_FFFF, 1), ("addi", 0xFFFF_FFFF_8000_0000, 0xFFFF), ("daddi", 0x7FFF_FFFF_FFFF_FFFF, 1), ("daddi", 0x8000_0000_0000_0000, 0x8000)];
+    for &(name, a, imm) in immediate.iter().filter(|_| on("exc-overflow")) {
         assert_eq!(manual::integer(name, a, 0, imm, 0, 0, 0, 0).exception, Some(manual::OVERFLOW));
         p.constant("t0", a);
         p.constant("t2", SENTINEL);
@@ -556,7 +571,7 @@ pub fn exceptions() -> Program {
     }
     // Traps, true and false, over operands whose signed and unsigned readings differ.
     let operands = [0u64, 1, u64::MAX, 0x8000_0000_0000_0000];
-    for name in ["tge", "tgeu", "tlt", "tltu", "teq", "tne"] {
+    for name in ["tge", "tgeu", "tlt", "tltu", "teq", "tne"].into_iter().filter(|_| on("exc-trap")) {
         for &a in &operands {
             for &b in &operands {
                 p.constant("t0", a);
@@ -571,7 +586,7 @@ pub fn exceptions() -> Program {
             }
         }
     }
-    for name in ["tgei", "tgeiu", "tlti", "tltiu", "teqi", "tnei"] {
+    for name in ["tgei", "tgeiu", "tlti", "tltiu", "teqi", "tnei"].into_iter().filter(|_| on("exc-trap")) {
         for &a in &operands {
             for &imm in &[0u16, 1, 0xFFFF, 0x8000] {
                 p.constant("t0", a);
@@ -586,23 +601,23 @@ pub fn exceptions() -> Program {
         }
     }
     // SYSCALL and BREAK, with and without a code; reserved encodings; coprocessors 1 and 2 unusable.
-    for (text, code) in [("syscall", 8), ("syscall 0x12345", 8), ("break", 9), ("break 0x3ff", 9)] {
+    for (text, code) in [("syscall", 8), ("syscall 0x12345", 8), ("break", 9), ("break 0x3ff", 9)].into_iter().filter(|_| on("exc-call")) {
         let at = p.here();
         p.emit(text);
         taken(&mut p, code, at, false, 0, bad, exl);
     }
-    for word in [0x0000_0001u32, 0x7000_0002, 0xC000_0000, 0xD000_0000, 0xE000_0000, 0x0000_001C, 0x0000_001E] {
+    for word in [0x0000_0001u32, 0x7000_0002, 0xC000_0000, 0xD000_0000, 0xE000_0000, 0x0000_001C, 0x0000_001E].into_iter().filter(|_| on("exc-reserved")) {
         let at = p.here();
         p.emit(format!(".word 0x{word:08x}"));
         taken(&mut p, 10, at, false, 0, bad, exl);
     }
-    for (text, ce) in [("mfc1 t2, f0", 1), ("qmfc2 t2, vf0", 2)] {
+    for (text, ce) in [("mfc1 t2, f0", 1), ("qmfc2 t2, vf0", 2)].into_iter().filter(|_| on("exc-unusable")) {
         let at = p.here();
         p.emit(text);
         taken(&mut p, 11, at, false, ce, bad, exl);
     }
     // An exception in a delay slot: EPC is the branch's, BD set; the branch's target is past its slot.
-    for branch in ["beq zero, zero, ", "bne zero, zero, ", "beql zero, zero, ", "bgezal zero, "] {
+    for branch in ["beq zero, zero, ", "bne zero, zero, ", "beql zero, zero, ", "bgezal zero, "].into_iter().filter(|_| on("exc-delay")) {
         let past = p.label();
         p.constant("t0", 0x7FFF_FFFF);
         p.constant("t1", 1);
@@ -612,14 +627,18 @@ pub fn exceptions() -> Program {
         p.place(&past);
         taken(&mut p, 12, at, true, 0, bad, exl);
     }
-    // EI and DI change Status.EIE in kernel mode.
-    p.emit("ei");
-    p.emit("mfc0 t2, Status");
-    p.record("t2", Some(0x1_0000));
-    p.emit("di");
-    p.emit("mfc0 t2, Status");
-    p.record("t2", Some(0));
-    // User mode, last: kernel addresses refused, COP0 unusable; the done word is in kuseg.
+    if on("exc-eidi") {
+        p.emit("ei");
+        p.emit("mfc0 t2, Status");
+        p.record("t2", Some(0x1_0000));
+        p.emit("di");
+        p.emit("mfc0 t2, Status");
+        p.record("t2", Some(0));
+    }
+    if !on("exc-user") {
+        return p;
+    }
+    // User mode: kernel addresses refused, COP0 unusable; the done word is in kuseg.
     p.emit("addiu t3, zero, 0x10");
     p.emit("mtc0 t3, Status");
     p.emit("sync.p");
@@ -708,16 +727,21 @@ pub fn undefined() -> Program {
         p.emit("mfhi t3");
         p.record("t3", Some((prod >> 32) as u32 as i32 as i64 as u64));
     }
-    p.constant("t0", 0x1234_5678_9ABC_DEF0);
-    p.emit("mtsa t0");
-    p.emit("mfsa t2");
-    p.record("t2", Some(0x1234_5678_9ABC_DEF0));
+    for v in [0x1234_5678_9ABC_DEF0u64, 5, 0x1F, 0x13, 0xFF, 0x10, 0x7F, 0x8F] {
+        p.constant("t0", v);
+        p.emit("mtsa t0");
+        p.emit("mfsa t2");
+        p.record("t2", Some(v & 15));
+    }
     p
 }
 
 /// Every program, in the order the referees run them.
 pub fn all() -> Vec<Program> {
-    vec![three(), immediates(), muldiv(), shift_amount(), memory(), branches(), exceptions(), upper(), undefined()]
+    let mut all = vec![three(), immediates(), muldiv(), shift_amount(), memory(), branches()];
+    all.extend(EXCEPTION_CLASSES.iter().map(|c| exceptions(c)));
+    all.extend([upper(), undefined()]);
+    all
 }
 
 /// The mnemonics the programs execute, for the gate's count against the interpreter's table.

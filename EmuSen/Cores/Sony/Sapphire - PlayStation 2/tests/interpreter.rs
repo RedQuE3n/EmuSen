@@ -6,7 +6,6 @@ mod s6;
 use sapphire::ee::timing::{self, Category, FLOAT, INTEGER, Issue, Pair, Pipe, Timing};
 use sapphire::ee::{self, Ee, Halt, bus::Ram, cop0};
 
-
 use s6::{DONE, DONE_AT, ORIGIN, Program, RECORD};
 
 fn assemble(source: &str, origin: u32) -> Vec<u32> {
@@ -71,7 +70,9 @@ fn branches_jumps_and_links_equal_the_manual() {
 
 #[test]
 fn exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says() {
-    grade(s6::exceptions());
+    for class in s6::EXCEPTION_CLASSES {
+        grade(s6::exceptions(class));
+    }
 }
 
 #[test]

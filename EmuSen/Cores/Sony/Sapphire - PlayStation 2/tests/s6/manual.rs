@@ -45,6 +45,7 @@ pub const TRAP: u32 = 13;
 
 /// A three-register or immediate integer operation: `a` is GPR[rs], `b` GPR[rt] or sign_extend(immediate) as each page
 /// says, `imm` the raw 16 bits, `sa` the shift field.
+#[allow(clippy::too_many_arguments)]
 pub fn integer(name: &str, a: u64, b: u64, imm: u16, sa: u32, old: u64, hi: u128, lo: u128) -> Outcome {
     let simm = sign_extend(imm as u128, 16);
     let uimm = zero_extend(imm as u128, 16);
@@ -127,11 +128,7 @@ pub fn integer(name: &str, a: u64, b: u64, imm: u16, sa: u32, old: u64, hi: u128
         "dsllv" | "dsrlv" | "dsrav" => {
             let s = bits(a as u128, 5, 0) as u32;
             let base = &name[..4];
-            return if s >= 32 {
-                integer(&format!("{base}32"), 0, b, 0, s - 32, old, hi, lo)
-            } else {
-                integer(base, 0, b, 0, s, old, hi, lo)
-            };
+            return if s >= 32 { integer(&format!("{base}32"), 0, b, 0, s - 32, old, hi, lo) } else { integer(base, 0, b, 0, s, old, hi, lo) };
         }
         _ => panic!("not an integer operation: {name}"),
     };
@@ -270,9 +267,7 @@ pub fn store(name: &str, mem: &mut [u8; 16], k: usize, reg: u64) {
         }
         "swr" => {
             let (word, byte) = (k / 4 * 4, k % 4);
-            for i in byte..4 {
-                mem[word + i] = r[i - byte];
-            }
+            mem[word + byte..word + 4].copy_from_slice(&r[..4 - byte]);
         }
         "sdl" => {
             let (dw, byte) = (k / 8 * 8, k % 8);
@@ -282,9 +277,7 @@ pub fn store(name: &str, mem: &mut [u8; 16], k: usize, reg: u64) {
         }
         "sdr" => {
             let (dw, byte) = (k / 8 * 8, k % 8);
-            for i in byte..8 {
-                mem[dw + i] = r[i - byte];
-            }
+            mem[dw + byte..dw + 8].copy_from_slice(&r[..8 - byte]);
         }
         _ => panic!("not a store: {name}"),
     }

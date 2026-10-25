@@ -95,7 +95,18 @@ impl Ee {
     pub fn new(pc: u32) -> Ee {
         let mut cop0 = [0; 32];
         cop0[cop0::PRID] = PRID;
-        Ee { gpr: [0; 32], hi: 0, lo: 0, sa: 0, pc, next_pc: pc.wrapping_add(4), delay: false, cop0, timing: Timing::default(), memo: vec![(1, u16::MAX); MEMO].into_boxed_slice() }
+        Ee {
+            gpr: [0; 32],
+            hi: 0,
+            lo: 0,
+            sa: 0,
+            pc,
+            next_pc: pc.wrapping_add(4),
+            delay: false,
+            cop0,
+            timing: Timing::default(),
+            memo: vec![(1, u16::MAX); MEMO].into_boxed_slice(),
+        }
     }
 
     pub fn status(&self) -> u32 {

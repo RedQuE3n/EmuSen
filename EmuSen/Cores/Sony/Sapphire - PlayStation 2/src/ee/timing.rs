@@ -52,15 +52,8 @@ pub enum Pair {
 }
 
 /// Table 1-3's columns, the categories pipe 0 takes, in the manual's order.
-pub const PIPE0: [Category; 7] = [
-    Category::SaOperate,
-    Category::Cop1Operate,
-    Category::Cop2Operate,
-    Category::Alu,
-    Category::Mac0,
-    Category::Branch,
-    Category::WideOperate,
-];
+pub const PIPE0: [Category; 7] =
+    [Category::SaOperate, Category::Cop1Operate, Category::Cop2Operate, Category::Alu, Category::Mac0, Category::Branch, Category::WideOperate];
 
 /// Table 1-3's rows, the categories pipe 1 takes, in the manual's order, each with its row of the table.
 pub const PIPE1: [(Category, [Pair; 7]); 10] = {

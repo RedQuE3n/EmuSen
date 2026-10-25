@@ -23,7 +23,7 @@ fn each_program_assembles_into_an_elf_the_core_reads() {
         match Media::read(&media::program(&words, PROGRAM_ORIGIN)) {
             Ok(Media::Elf(elf)) => {
                 assert_eq!(elf.entry, PROGRAM_ORIGIN, "{name}");
-                assert_eq!(elf.segments, vec![(PROGRAM_ORIGIN, 84, words.len() as u32 * 4, words.len() as u32 * 4)], "{name}");
+                assert_eq!(elf.segments, vec![(PROGRAM_ORIGIN, media::SEGMENT_OFFSET, words.len() as u32 * 4, words.len() as u32 * 4)], "{name}");
             }
             other => panic!("{name}: {other:?}"),
         }

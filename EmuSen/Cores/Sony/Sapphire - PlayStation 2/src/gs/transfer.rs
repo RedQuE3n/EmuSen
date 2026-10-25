@@ -144,7 +144,7 @@ impl Transfer {
 
 /// A local-to-local transfer, pixel by pixel in TRXPOS's order (§4.1.2's figure 4-1: bit 0 bottom to top, bit 1 right
 /// to left), each pixel read in the source's format and written in the destination's. Overlapping rectangles are
-/// copied in that order, a reading S19 is to test (Sapphire_Native.md §24.3).
+/// copied in that order (Sapphire_Disputes.md D-107, decided at S19, Sapphire_Native.md §37.4).
 pub fn copy(local: &mut Local, src: Buffer, (sx, sy): (u32, u32), dst: Buffer, (dx, dy): (u32, u32), (w, h): (u32, u32), order: u32) {
     for j in 0..h {
         let ry = if order & 1 != 0 { h - 1 - j } else { j };

@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27 and S24 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24 and S19 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -66,6 +66,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and stage S18 (2026-10-25, §31): texture mapping in every format, the CLUT buffer as the GS's own state under CLD,
   LOD, mipmaps and their filters, the wrap modes, TEXA and fog, texture coordinates and the LOD exact, PCSX2 a witness
   for addressing, the CLUT, the tables and fog's formula but not for the filters' and the LOD's arithmetic;
+  and stage S19 (2026-10-25, §37): the alpha test with AFAIL, the destination alpha test, blending with FIX and PABE,
+  dithering, COLCLAMP, FBA, the masks after them and antialiasing as far as the documents define it, PCSX2 equal on the
+  tests, the blend and the masks; local-to-local overlap decided in TRXPOS's order; the BIOS intro's white bands and
+  square light trails found to be blending missing and fixed;
   and stage S25, part A (2026-10-25, §30): the card's authentication researched and left unanswered (Q7(b)); SIO2 with
   its queue, FIFOs, interrupt and DMA channels; the DualShock 2's modes, configuration and motors; the memory card's
   pages, spare bytes, erase and its flash's times; the multitap's frame; `emusen-ps2-card` for the card's file system;
@@ -120,6 +124,8 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   VIF's timing; D-240 to D-250 since S18, DECAL's alpha with TCC RGB, the LOD's boundary and arithmetic, the CLUT's
   load and addressing, REGION_CLAMP's order, MTBA, texture coordinates' precision, fog's formula, bilinear rounding and
   the blend between levels;
+  D-400 to D-406 since S19, AFAIL, DATE in PSMCT24, the blend's arithmetic, dithering's formats, COLCLAMP after a dither,
+  PABE and FBA, and antialiasing's coverage, with D-107 closed;
   D-280 to D-291 since S15, a packet holding the GIF, descriptors 0Ch and 0Dh, GIF_STAT's fields, TTE on channel 2, RST
   and MSKPATH3, the intermittent mode's slices, the GIF's timing, BUSDIR, PATH1's wrap, the masks at the arbitration,
   PCSX2's second DIRECT and Q; D-260 to D-270 since S26, the SPU2's key on, output

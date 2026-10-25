@@ -37,7 +37,8 @@ pub const fn z_max(psm: Psm) -> u32 {
 }
 
 /// A frame pixel as the blend reads it, Cd's three channels and Ad (§3.8.1): RGBA16's channels as their five bits at
-/// the top of eight (D-404) and its alpha 0 or 80h; RGB24's alpha 80h. A Z format reads as its colour twin.
+/// the top of eight (Sapphire_Disputes.md D-402) and its alpha 0 or 80h; RGB24's alpha 80h. A Z format reads as its
+/// colour twin.
 fn destination(psm: Psm, d: u32) -> ([i32; 3], i32) {
     match psm.bits() {
         16 => ([d & 0x1F, d >> 5 & 0x1F, d >> 10 & 0x1F].map(|c| (c << 3) as i32), if d >> 15 & 1 != 0 { 0x80 } else { 0 }),
@@ -188,7 +189,7 @@ fn output(env: &Environment, fpsm: Psm, x: u32, y: u32, rgba: [u32; 4], old: Opt
             1 => ad,
             _ => (b.alpha >> 32) as i32 & 0xFF,
         };
-        c = std::array::from_fn(|i| ((pick(b.alpha & 3, i) - pick(b.alpha >> 2 & 3, i)) * cv >> 7) + pick(b.alpha >> 6 & 3, i));
+        c = std::array::from_fn(|i| (((pick(b.alpha & 3, i) - pick(b.alpha >> 2 & 3, i)) * cv) >> 7) + pick(b.alpha >> 6 & 3, i));
     }
     if let Some(dimx) = env.dither.filter(|_| fpsm.bits() == 16) {
         let dm = ((dimx >> (16 * (y & 3) + 4 * (x & 3))) as i32 & 7) << 29 >> 29;

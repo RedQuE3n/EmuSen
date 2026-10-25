@@ -479,7 +479,7 @@ pub mod pixel_ops {
             rgb = rgb.map(|v| v + off);
         }
         // §3.9.2: clamped to [0, 255], or the lower 8 bits.
-        let rgb = rgb.map(|v| if field(r.colclamp, 0, 1) == 1 { v.max(0).min(255) } else { v.rem_euclid(256) } as u32);
+        let rgb = rgb.map(|v| if field(r.colclamp, 0, 1) == 1 { v.clamp(0, 255) } else { v.rem_euclid(256) } as u32);
         // §3.9.3: As with FBA ORed in as its MSB.
         let a = c[3] as u32 | if field(r.fba, 0, 1) == 1 { 0x80 } else { 0 };
         let mut v = rgb[0] | rgb[1] << 8 | rgb[2] << 16 | a << 24;

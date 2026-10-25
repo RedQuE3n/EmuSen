@@ -1504,18 +1504,24 @@ through the reset too.
 
 ### D-107. A local-to-local transfer whose rectangles overlap copies pixel by pixel in TRXPOS's order
 
-- **Opened:** 2026-10-25, at stage S16, for S19, whose gate names "local-to-local overlap".
+- **Opened:** 2026-10-25, at stage S16, for S19, whose gate names "local-to-local overlap". **Closed** 2026-10-25 at S19.
 - **Documents read:** *GS User's Manual* §4.1.2 and figure 4-1 (the four orders, "enabled only when transmitting from
-  local buffer to local buffer"); nothing on overlap.
-- **Test program:** `s16-places`: PSMCT32 8×2 copied one pixel to the right in order 0 (left to right, top to bottom).
-- **Referee:** PCSX2 2.8.2 copies as if the source were read whole first (a shift by one); Play! 0.72 performs no
-  local-to-local transfer.
-- **Conclusion:** pixel by pixel in the order, so order 0 smears the first pixel along the row; **argued**: an order the
-  program chooses can matter only if the copy runs in it, and order 2 is the one that shifts right. **Open** for S19,
-  whose programs copy in each order at several overlaps.
+  local buffer to local buffer", and where each starts); TRXPOS's page (DIR, "Enabled only in Local -> Local
+  Transmission"); nothing on overlap.
+- **Test program:** `s16-places`: PSMCT32 8×2 copied one pixel to the right in order 0. `s19-overlap`: a 6×4 PSMCT32
+  rectangle copied onto itself at (1, 0), (-1, 0), (0, 1), (0, -1), (2, 1) and (-1, -2) in each of the four orders; a
+  9×7 PSMCT16 one at (1, 1) in each order; a 17×9 PSMT8 one a pixel left and right in orders 0 and 2.
+- **Referee:** PCSX2 2.8.2 copies as if the source were read whole first (a shift) in 23 of the 24 PSMCT32 cases and all
+  four PSMT8 ones, in TRXPOS's order in one (order 2 at (2, 1)), and as neither in one PSMCT16 case (387 words of 1,073
+  differ from the reading, 60 from a shift); Play! 0.72 performs no local-to-local transfer.
+- **Conclusion:** pixel by pixel in the order, so that the order a program chooses gives the shift (2 for a copy to the
+  right, 1 for one downwards) and the others smear; **argued**: the documents give the orders for local-to-local
+  transfers alone, where only an overlap can feel them, and the referee follows no single rule, so it is no witness for
+  one (`Sapphire_Native.md` §37.4).
 - **Depends on it:** `gs::transfer::copy`.
-- **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`.
-- **Implemented in:** stage S16's commit.
+- **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`,
+  `overlapping_local_to_local_copies_run_in_trxpos_order`.
+- **Implemented in:** stage S16's commit; tested at S19.
 ### D-120. CDVD seeks: contiguous below 16 sectors on a DVD and 8 on a CD at a block's time a sector, fast below 14,764 and 4,371 at 30 ms, full otherwise at 100 ms; a stopped drive spins up for 333 ms first, and Stop takes 166.67 ms
 
 - **Opened:** 2026-10-25, at stage S23, by ps2tek's "Unknown what delta is needed for a contiguous read" and its quotation
@@ -3521,3 +3527,135 @@ through the reset too.
 - **Depends on it:** `gif::Path1Port::kick`, `Gif::run_to`'s estimate.
 - **Pinned by:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
 - **Implemented in:** stage S24's commit.
+
+### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
+
+- **Opened:** 2026-10-25, at stage S19.
+- **Documents read:** *GS User's Manual* §3.7 ("executed in this order"), §3.7.2's tables (KEEP, FB_ONLY, ZB_ONLY,
+  RGB_ONLY; "*RGB_ONLY is effective only when the color format is RGBA32. In other formats, operation is made with
+  FB_ONLY"; "Controlled values do not become effective even if they pass in other pixel tests after this"), TEST's page;
+  ps2tek "GS Tests and Pixel Control".
+- **Test program:** `s19-atest`: every ATST under every AFAIL at AREF 80h, then at AREF 00h, FFh, 3Ch and C3h with AFAIL
+  turning, each cell holding texels' alphas and flat alphas at AREF - 1, AREF, AREF + 1 and 80h, over PSMZ32 with Z
+  written, in PSMCT32, PSMCT16 and PSMCT24.
+- **Referee:** PCSX2 2.8.2 equal on all 16,384 words, frames and Z buffers.
+- **Conclusion:** the alpha compared is the pixel's after texturing (and after antialiasing's replacement, D-406); a
+  failing pixel under FB_ONLY, ZB_ONLY or RGB_ONLY still meets the destination alpha test and the depth test, and only
+  what passes them all and AFAIL leaves is written; RGB_ONLY keeps the frame's alpha byte in PSMCT32 (and in PSMZ32 named
+  as a frame, its colour twin [A]) and is FB_ONLY in PSMCT24 and the 16-bit formats. **Measured**, the referee agreeing.
+- **Depends on it:** `gs::pixel::draw`.
+- **Pinned by:** `every_alpha_test_under_every_afail_leaves_effective_what_3_7_2_says`.
+- **Implemented in:** stage S19's commit.
+
+### D-401. GS, the destination alpha test in PSMCT24: every pixel passes, whatever DATM
+
+- **Opened:** 2026-10-25, at stage S19, by the referee.
+- **Documents read:** §3.7.3: "Frame Buffer is PSMCT24 (RGB24): Because the frame buffer does not have A value, all
+  pixels pass regardless of the setting of DATE and DATM"; ps2tek: "If the format is PSMCT24, all pixels pass due to
+  the lack of alpha."
+- **Test program:** `s19-date`: DATE with DATM 0 and 1, alone, under ZB_ONLY, FB_ONLY and RGB_ONLY, with GEQUAL, in
+  context 2 and over a blend, in PSMCT32, PSMCT16 and PSMCT24 over frames of generated data (whose upper bytes in
+  PSMCT24 are random).
+- **Referee:** PCSX2 2.8.2 equal in PSMCT32 and PSMCT16 (8,192 words); in PSMCT24 it draws no pixel of any cell whose
+  test has DATE set, with either DATM and whatever the stored upper byte holds (1,920 words of the frame and its Z).
+- **Conclusion:** every pixel passes in PSMCT24, as both documents state in words. **Argued**: the referee's failure is
+  independent of the memory it would test, so it is its renderer's, not a rule of the frame's contents.
+- **Depends on it:** `gs::pixel::destination_alpha`.
+- **Pinned by:** `the_destination_alpha_test_reads_the_frames_alpha_bit_in_each_format`.
+- **Implemented in:** stage S19's commit.
+
+### D-402. GS, alpha blending's arithmetic: (A - B) × C taken as a signed product shifted right by 7 with the floor, D added, nothing clamped; RGBA16's Cd its five bits at the top of eight and Ad 0 or 80h; RGB24's Ad 80h; the reserved selection 11 as 10
+
+- **Opened:** 2026-10-25, at stage S19.
+- **Documents read:** §3.8.1 ("Output Color = (A - B) * C + D, However, X * Y = (X x Y) >> 7"; "In the RGBA16 mode ...
+  Alpha is treated as 0 when A is 0 and as 0x80 when A is 1. In the RGB24 mode, Alpha is treated as 0x80"; "passed to
+  the following Dithering processing as it is without being clamped"); ALPHA's page (FIX at bits 39:32, "11 Reserved"
+  for each field); ps2tek "GS Alpha Blending" (which places FIX at bits 8 to 15, against ALPHA's page: P6, the manual
+  kept).
+- **Test program:** `s19-blend`: the 81 selections of A, B, C and D with FIX from 00h, 01h, 40h, 7Fh, 80h, 81h, C0h and
+  FFh, DECAL texels as Cs and As over generated frames, in PSMCT32 with COLCLAMP 1 and 0, in PSMCT16 and in PSMCT24;
+  the reserved selection of each field.
+- **Referee:** PCSX2 2.8.2 equal on all 24,576 words, the reserved selections among them.
+- **Conclusion:** as above; how RGBA16's five bits become eight is not written, and the reading (the bits at the top,
+  the low three 0) is the referee's too. **Measured.**
+- **Depends on it:** `gs::pixel::output`, `gs::pixel::destination`.
+- **Pinned by:** `every_blend_selection_with_fix_follows_3_8_1_and_colclamp`.
+- **Implemented in:** stage S19's commit.
+
+### D-403. GS, dithering: only into the 16-bit formats; DTHE does nothing to a PSMCT32 or PSMCT24 frame
+
+- **Opened:** 2026-10-25, at stage S19, by the referee.
+- **Documents read:** §3.9.1 ("If the frame buffer color format is RGBA16, the RGB luminance values are each converted
+  from 8 bits to 5 bits. At this time, it is possible to decrease the Mach band by dithering"; the formula; "When the
+  color format of the frame buffer is RGBA32 or RGB24, the result of dithering is not guaranteed"); DTHE's page ("If the
+  pixel storage mode of the frame buffer is PSMCT32 or PSMCT24, dithering should be turned off"); DIMX's page.
+- **Test program:** `s19-dither`: §3.9.1's example matrix, every element 3, every element -4 and a generated matrix,
+  each under COLCLAMP 1 and 0, over texels and flat colours at both ends of the range, in PSMCT16, PSMCT16S, PSMCT32 and
+  PSMCT24; `s19-masks`' dithered cells.
+- **Referee:** PCSX2 2.8.2 adds DIMX[Y % 4][X % 4] in the 16-bit formats and nothing in PSMCT32 and PSMCT24: those two
+  pages are equal word for word (3,070 words changed by drawing) with nothing added, and 1,183 words of each differed
+  while the offset was added.
+- **Conclusion:** dithering in PSMCT16 and PSMCT16S alone. **Measured** on one lineage: the documents define the
+  operation for RGBA16 and leave the others undefined ("not guaranteed"), so the referee's behaviour is the only
+  evidence for them; DMyx is int 1:2:0 at bits 16y + 4x, Y and X the window coordinates.
+- **Depends on it:** `gs::pixel::output`.
+- **Pinned by:** `dithering_adds_dimx_at_y_and_x_modulo_4_before_the_clamp`.
+- **Implemented in:** stage S19's commit.
+
+### D-404. GS, COLCLAMP 0 after dithering: the low eight bits of the dithered value, whether or not the pixel was blended
+
+- **Opened:** 2026-10-25, at stage S19, by the referee.
+- **Documents read:** figure 3-17 (dithering, then clamping, then format conversion); §3.8.1's "without being clamped";
+  §3.9.2 ("stored with 9 bits ... clamping to set this value within the range of 0-255, or to extract the lower 8
+  bits"); COLCLAMP's page ("Lower 8 bits are enabled (wraps around)"); ps2tek ("each color component will be ANDed with
+  0xFF").
+- **Test program:** `s19-dither`'s COLCLAMP 0 cells: flat colours 00h to 03h and FCh to FFh, unblended, dithered by
+  matrices reaching -4 and 3; blends past the range, added and subtracted, dithered.
+- **Referee:** PCSX2 2.8.2 wraps a blended pixel's dithered value as the reading does (the four blend cells equal) and
+  clamps an unblended one (113 words of each 16-bit page, each a channel at 0 against 31 or 31 against 0).
+- **Conclusion:** the documents' order, the dithered value's low eight bits under COLCLAMP 0, for every pixel. **Argued**:
+  no document makes the clamp depend on whether the pixel was blended. The 9-bit storage of §3.9.2 is read as the range
+  a blend can reach, not as a wrap at 512 [A]: COLCLAMP 1 clamps the whole value, which the referee confirms on blends
+  past 511 (`s19-blend`).
+- **Depends on it:** `gs::pixel::output`.
+- **Pinned by:** `dithering_adds_dimx_at_y_and_x_modulo_4_before_the_clamp`.
+- **Implemented in:** stage S19's commit.
+
+### D-405. GS, PABE and FBA: PABE switches blending off for a pixel whose alpha's MSB is 0 and does nothing where blending is off; FBA ORs bit 7 into the alpha written, in RGBA32 and RGBA16 alike, after the tests and the blend have used the pixel's own
+
+- **Opened:** 2026-10-25, at stage S19.
+- **Documents read:** §3.8.2; PABE's page; §3.9.3 and figure 3-18 (FBA ORed into bit 7 of RGBA32's alpha, into RGBA16's
+  alpha bit); FBA's page ("RGBA32 Mode: A = As | (FBA<<8)", against the figure's bit 7: the page's shift is taken as a
+  misprint [A]).
+- **Test program:** `s19-pabe`: ABE 0 and 1 with PABE 0 and 1 under two blends, with FBA, flat alphas 7Fh and 80h;
+  `s19-fba`: FBA 0 and 1 in both contexts, with blending, under RGB_ONLY and FB_ONLY and with FBMSK keeping the alpha
+  bit; both in PSMCT32 and PSMCT16.
+- **Referee:** PCSX2 2.8.2 equal on all 8,192 words.
+- **Conclusion:** as above. **Measured.**
+- **Depends on it:** `gs::pixel::draw`, `gs::pixel::output`.
+- **Pinned by:** `pabe_blends_only_pixels_whose_alpha_msb_is_set`, `fba_ors_the_alpha_msb_in_each_context`.
+- **Implemented in:** stage S19's commit.
+
+### D-406. GS, antialiasing: AA1 on a line or a triangle replaces alpha by the pixel's coverage as §3.6.1's table says and blends; the pixels drawn are the primitive's own; a triangle's coverage is half the count of the 256 points at its sixteenths' centres that the triangle holds, a line's 80h × (1 - |e|) held below 80h; Z is written only at full coverage
+
+- **Opened:** 2026-10-25, at stage S19.
+- **Documents read:** §3.6 ("Line, LineStrip, Triangle, TriangleStrip, and TriangleFan"; Cov "ratio of the area which
+  covers the pixel"; "When the coverage is 100%, Cov = 0 x 80"; the table of AA1, ABE and the alpha output; "writing to
+  the Z buffer is not performed for pixels whose coverage Cov is less than 0x80. As for the line, Cov is always less
+  than 0x80"); §3.8 ("When performing antialiasing ... the blending function operates automatically"); §3.2.2's points
+  and sprites drawn with antialiasing off.
+- **Test program:** `s19-aa`: triangles and lines with AA1 under ABE 0 and 1, alpha 80h and 40h, the same without AA1,
+  a sprite and a point with AA1, over PSMCT32 and a PSMZ32 buffer with Z written.
+- **Referee:** PCSX2 2.8.2 equals the reading on the primitives without AA1, the AA1 sprite and point, and every
+  interior pixel; it draws further pixels outside each AA1 triangle's edges, with coverages of its own, and an AA1 line
+  as two pixels in each column whose alphas share 80h (239 of the 498 words drawing changes, frame and Z, differ).
+- **Conclusion:** the documents give the table, the Z rule and coverage as an area ratio, but no precision, no width for
+  a line and no word on pixels outside the drawing rules; the reading keeps the drawing rules, measures a triangle's area
+  at the vertices' own resolution (sixteenths), takes a line as one pixel wide along its minor axis (so a line's pixel is
+  covered by 1 - |e|, e its offset from the line at the centre's column, held below 80h as §3.6.2 states), and
+  applies PABE to the coverage as to any alpha [A]. **Argued**; the referee's extra pixels are its renderer's choice and
+  no witness for the area's precision.
+- **Depends on it:** `gs::raster::coverage`, `gs::raster::line_coverage`, `gs::pixel::draw`.
+- **Pinned by:** `antialiasing_replaces_alpha_by_coverage_and_writes_no_z_below_it`,
+  `generated_primitives_under_generated_pixel_operations_draw_as_the_model_draws_them`.
+- **Implemented in:** stage S19's commit.

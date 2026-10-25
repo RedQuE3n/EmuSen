@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30) and S24 (§35) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30), S24 (§35) and S19 (§37) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -5644,3 +5644,245 @@ never kept.
 **Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures with a referee's,
 read ps2tek's BIOS chapter and saw BIOS boot banners quoted there; **this writer is exposed and will never write the open
 replacement**.
+
+## 37. Stage S19, the GS's pixel operations, local-to-local overlap, and the BIOS intro's drawing defects (2026-10-25)
+
+*Numbered §37 and its disputes from D-400, since S10 (§36, from D-360) and S25's part B (§30.12 on, from D-380) are
+built beside it.*
+
+### 37.1 In one paragraph
+
+The plan's §7 row S19, on the tester's standing go of 2026-10-25. The GS's pipeline gains, in S17's marked places and
+in the manual's order, **the alpha test with AFAIL's four outcomes, the destination alpha test, alpha blending with
+FIX and PABE, dithering, COLCLAMP and FBA**, FBMSK and ZMSK after every one of them, and **antialiasing** as far as the
+documents define it: AA1 on a line or a triangle replaces alpha by the pixel's coverage by §3.6.1's table, blends, and
+writes Z only at full coverage. Eleven programs of the project's, 98,304 graded record words, are equal on Sapphire
+to the record of S17's model extended by **`pixel_ops`**, written apart from `src/gs/` with each of the manual's tables
+transcribed as a table, which also draws 2,400 generated primitives under generated pixel-operation registers as the
+source does. **PCSX2 equals seven programs word for word**: every ATST under every AFAIL, all 81 blend selections with
+FIX under both COLCLAMPs in three frame formats, PABE, FBA, the masks, and the two programs that isolate the intro's
+defects. It departs in four places, each a dispute: DATE in PSMCT24 (D-401), COLCLAMP 0 after dithering an unblended
+pixel (D-404), antialiasing's coverage (D-406), and overlapping local-to-local copies (D-107, closed); and it shows that
+**dithering acts only on the 16-bit formats** (D-403), where the documents leave the others undefined. **Both intro
+defects S24 saw were alpha blending missing**: switched off alone, it brings back the white bands and the square light
+trails, and the intro now draws as PCSX2 draws it (§37.8). Disputes D-400 to D-406. No emulator, SDK or loader source,
+no ps2autotests source and no firmware was read; the BIOS was only run, and only its pictures were looked at.
+
+### 37.2 What was built
+
+- **`src/gs/pixel.rs`**: `draw` in the order of figure 3-1 and §3.7: scissoring and SCANMSK, texture mapping and fog,
+  antialiasing's alpha, the alpha test (`alpha_passes`) and AFAIL, the destination alpha test (`destination_alpha`), the
+  depth test, then `output`: the blend over the frame's pixel (`destination`, Cd and Ad as §3.8.1 treats each format),
+  dithering in the 16-bit formats, COLCLAMP, FBA; then format conversion, FBMSK (with RGB_ONLY's alpha byte kept), and
+  the frame and Z writes. The frame's pixel is read once, and only when DATE, the blend or a mask needs it; nothing
+  allocates.
+- **`src/gs/draw.rs`**: `Environment` carries `Blend` (ABE, antialiasing, PABE, the context's ALPHA), DIMX when DTHE is
+  set, COLCLAMP and the context's FBA, read at the drawing kick; antialiasing is cleared for points and sprites.
+- **`src/gs/raster.rs`**: under AA1, a triangle's pixel's coverage (`coverage`, the 256 points at the centres of its
+  sixteenths, in doubled integer coordinates, a pixel whose four corners lie inside taken whole at once) and a line's
+  (`line_coverage`, from the DDA's exact minor coordinate); `FULL` (80h) otherwise.
+- **`tests/s17/manual.rs`**: the model's `pixel` hands each pixel to **`pixel_ops::run`** (§3.6.1's table as its rows,
+  §3.7.2's comparisons as a list indexed by ATST and AFAIL's table of what stays effective, §3.7.3's three tables, §3.8.1's
+  selections as lists, the dither matrix decoded into a 4 × 4 array, the clamp and FBA in their words), and its triangle
+  rule moves into `holds`, which the coverage count calls at the sub-pixel points.
+- **`tests/s19/mod.rs`** and **`tests/pixel.rs`**: the programs, the generated primitives, the intro programs, and the
+  assembly check; **`examples/s19.rs`** writes them for the referees.
+- **No new cross-component dependency**; `gs::local` and `gs::transfer` are unchanged.
+
+### 37.3 The readings the documents leave open
+
+[R *GS User's Manual* figure 3-1, §3.6, §3.7, §3.8, §3.9 and figures 3-17 and 3-18, and chapter 7's pages for ALPHA,
+COLCLAMP, DIMX, DTHE, FBA, PABE, TEST, FRAME and ZBUF; ps2tek "GS Alpha Blending", "GS Tests and Pixel Control"; A]:
+
+- **The order** (figure 3-1, §3.7, figure 3-17). The alpha compared is the pixel's after texture mapping, after fog
+  (which changes colour only) and after antialiasing's replacement. A pixel failing the alpha test goes on through the
+  destination alpha test and the depth test with what AFAIL leaves effective (D-400); a pixel failing either of those
+  writes nothing.
+- **AFAIL** (D-400): KEEP writes nothing; FB_ONLY the frame alone; ZB_ONLY the Z buffer alone; RGB_ONLY the frame's
+  colour alone, its alpha byte kept, in PSMCT32 (and PSMZ32 named as a frame), FB_ONLY in every other format.
+- **DATE** (D-401): bit 7 of A in PSMCT32, the alpha bit in the 16-bit formats, every pixel passing in PSMCT24, as the
+  manual's three tables say; the frame's present value is tested.
+- **The blend** (D-402): (A - B) × C as a signed product, shifted right by 7 with the floor, D added, nothing clamped;
+  RGBA16's Cd its five bits at the top of eight, its Ad 0 or 80h; RGB24's Ad 80h; As written as it is; a reserved
+  selection (11) selects as 10. Blending runs when ABE is set, or AA1 on a line or a triangle; PABE then switches it off
+  for a pixel whose alpha's MSB is 0 (D-405).
+- **Dithering** (D-403): into PSMCT16 and PSMCT16S only; DIMX's DMyx (int 1:2:0 at bits 16y + 4x) added at [Y % 4][X % 4],
+  Y and X the window coordinates, after the blend and before the clamp.
+- **COLCLAMP** (D-404): 1 clamps the dithered value to 0 to FFh, 0 keeps its low eight bits, for every pixel.
+- **FBA** (D-405): bit 7 ORed into the alpha written, after the tests and the blend have used the pixel's own; RGBA16's
+  alpha bit is that bit.
+- **FBMSK and ZMSK**: after every other operation, a 1 keeping the frame's bit (in RGBA16 packed as S17 packs it); ZMSK
+  keeps the Z buffer whatever AFAIL says, the depth test still deciding.
+- **Antialiasing** (D-406): AA1 on lines and triangles only (§3.2.2's points and sprites are drawn without it); alpha
+  becomes Cov when ABE is 0, or when ABE is 1 and alpha is 80h, and the blend runs; Z is written only at Cov 80h, so never
+  for a line. The pixels drawn are the primitive's own. A triangle's Cov is half the number of the 256 points at the
+  centres of the pixel's sixteenths that its drawing rule holds; a line's is 80h × (1 - |e|), e the line's offset from
+  the pixel's centre along the minor axis at the centre's column, held to 7Fh at most, as §3.6.2 says a line's always is.
+
+### 37.4 Local-to-local overlap (D-107, closed)
+
+S16 copied pixel by pixel in TRXPOS's order and left the reading open. `s19-overlap` copies a 6×4 rectangle of a PSMCT32
+buffer of generated data onto itself at six offsets, (1, 0), (-1, 0), (0, 1), (0, -1), (2, 1) and (-1, -2), in each of
+the four orders of figure 4-1; then a 9×7 PSMCT16 rectangle at (1, 1) in each order, and a 17×9 PSMT8 one a pixel left
+and right in orders 0 and 2. PCSX2's records were compared with three readings [M]: pixel by pixel in TRXPOS's order
+(the source's), as a shift (the source read whole before any pixel is written), and pixel by pixel in order 0 whatever
+TRXPOS says. **PCSX2 copies as a shift in 23 of the 24 PSMCT32 cases and in all four PSMT8 ones; in TRXPOS's order in one
+(order 2 at (2, 1)); and as neither in one PSMCT16 case.** No single rule reproduces it, so it is no witness for the
+order. The documents give the four orders "only when transmitting from local buffer to local buffer", where they can
+matter only to an overlapping copy, and draw where each starts; the copy therefore runs pixel by pixel in TRXPOS's
+order, so that the order a program chooses (2 for a copy to the right, 1 for one downwards) gives the shift, and the
+other orders smear. **Argued**, recorded in D-107.
+
+### 37.5 Cost
+
+Not measured for speed, as the stage asks. The pipeline adds per pixel a branch on each test, the blend's three
+products, and one frame read when DATE, the blend or a mask needs it; an antialiased triangle's edge pixel costs up to
+256 sub-pixel tests. Nothing allocates. The eleven programs and the generated primitives run in 1.0 s on the desktop
+in release.
+
+### 37.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s19/` writes each program as an S16 script: S18's registers, DIMX, and a DECAL texture with TCC RGBA over a page
+of generated data, so that a sprite reading it 1:1 brings every pixel its own colour and alpha (texel addressing being
+exact and equal on PCSX2 since S18); frames and Z buffers filled with generated data; every page drawn read back raw as
+PSMCT32. The expected record is S17's model's with `pixel_ops`.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s19-atest` | 16,384 | every ATST under every AFAIL at AREF 80h; AREF 00h, FFh, 3Ch and C3h with AFAIL turning; texels' alphas and flat alphas at AREF - 1, AREF, AREF + 1, 80h; over PSMZ32 with Z written; in PSMCT32, PSMCT16 and PSMCT24 |
+| `s19-date` | 12,288 | DATE off, DATM 0 and 1, each under ZB_ONLY (a pixel the destination test stops writes no Z), DATM 0 with GEQUAL, DATM 1 with FB_ONLY and with RGB_ONLY, in context 2, over a blend by Ad, and reading alpha a first sprite wrote; in PSMCT32, PSMCT16 and PSMCT24 |
+| `s19-blend` | 24,576 | the 81 selections of A, B, C and D with FIX from eight values, in PSMCT32 under COLCLAMP 1 and 0, in PSMCT16 and PSMCT24; the reserved selection of each field |
+| `s19-pabe` | 4,096 | ABE 0 and 1 with PABE 0 and 1 under the normal and an additive blend, with FBA, flat alphas 7Fh and 80h; PSMCT32 and PSMCT16 |
+| `s19-fba` | 4,096 | FBA 0 and 1 in both contexts, with blending, under RGB_ONLY and FB_ONLY, with FBMSK keeping the alpha bit; PSMCT32 and PSMCT16 |
+| `s19-dither` | 8,192 | four matrices (§3.9.1's example, all 3, all -4, a generated one) under COLCLAMP 1 and 0 over texels and over flat colours 00h to 03h and FCh to FFh; after a blend; DTHE 0; blends past the range added and subtracted; PSMCT16, PSMCT16S, PSMCT32, PSMCT24 |
+| `s19-masks` | 8,192 | generated FBMSKs over a blend, with RGB_ONLY, with FBA, with dithering; ZMSK with ZB_ONLY and with GEQUAL; PSMCT32 and PSMCT16 |
+| `s19-overlap` | 10,240 | §37.4's copies in every order |
+| `s19-aa` | 4,096 | AA1 triangles and lines under ABE 0 and 1 with alpha 80h and 40h, the same without AA1, an AA1 sprite and point; Z written |
+| `s19-glow` | 4,096 | §37.8's light trails: a texture the GS draws as nested squares of rising alpha, drawn as sprites under the additive blend over a dark frame |
+| `s19-band` | 2,048 | §37.8's bands: white sprites at alpha 0 under the normal blend over a dark frame, one at 40h, one unblended |
+
+**Tests** [M, `cargo test --release`]: `tests/pixel.rs` **13 of 13**: the programs, each equal to its record word for
+word (glow and band in one test, which also shows that the same scripts with ABE cleared, as the pipeline drew before
+this stage, give white bands and the texture's squares); `the_programs_run_whole_on_the_interpreter_through_path3_and_vif1`
+(each program as the referee runs it, an EE program on the interpreter with the board, its packets through the GIF's
+PATH3 and its pages read back through VIF1, every record word graded);
+`generated_primitives_under_generated_pixel_operations_draw_as_the_model_draws_them` (eight rounds of 300 primitives of
+every kind, flat, Gouraud or textured, ABE and AA1 at random, each under generated TEST, ALPHA, PABE, FBA, DTHE, DIMX,
+COLCLAMP, FBMSK and ZMSK, over generated frames in PSMCT32, PSMCT24, PSMCT16 and PSMCT16S with a PSMZ32 buffer: every
+pixel and every Z equal between the source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`.
+The crate whole **332 of 332** (S24's 319 and `pixel`'s 13), `pixel`, `draw`, `texture`, `gs` and the lib also under `test-checked`; clippy clean on every target. `SapphireTests` (WiseMan, the blast radius's filter) **5 of 5**.
+
+### 37.7 On the referee (measured 2026-10-25)
+
+`examples/s19.rs` writes each program as an ELF with its expected record and a background record (the same script with
+no vertex kicked and no local-to-local copy made); `ps2referee.py ram pcsx2 … --until 1FFFF0=5A99D00E 200000:<words>`
+read each from PCSX2 2.8.2 (Americas BIOS, fast boot, software renderer), one process at a time. Only the records were
+read. One picture lineage, as the tester decided on 2026-10-25 ("Use one reference for now"); Play! is no witness for
+drawing (§27.7).
+
+| Program (words changed by drawing) | PCSX2: words differing | What they are |
+|---|---|---|
+| `s19-atest` (10,674) | 0 | — every ATST under every AFAIL, the frame and the Z buffer, in PSMCT32, PSMCT16 and PSMCT24 (D-400) |
+| `s19-date` (5,074) | 1,920 | all in PSMCT24, where PCSX2 draws no pixel under DATE (D-401); PSMCT32 and PSMCT16 equal |
+| `s19-blend` (17,859) | 0 | — every selection with FIX under both COLCLAMPs, Cd and Ad in PSMCT16 and PSMCT24, the reserved selections (D-402) |
+| `s19-pabe` (2,304) | 0 | — (D-405) |
+| `s19-fba` (2,223) | 0 | — (D-405) |
+| `s19-dither` (5,630) | 226 | 113 in each 16-bit page, unblended pixels whose dithered value PCSX2 clamps under COLCLAMP 0 (D-404); the PSMCT32 and PSMCT24 pages equal with nothing added to them (D-403) |
+| `s19-masks` (4,058) | 0 | — FBMSK after the blend, RGB_ONLY, FBA and dithering; ZMSK |
+| `s19-overlap` (1,073) | 387 | against TRXPOS's order; 60 against a shift (§37.4, D-107) |
+| `s19-aa` (498) | 239 | pixels PCSX2 adds outside the AA1 triangles' edges and its two-pixel AA1 lines (D-406); every interior pixel, the primitives without AA1 and the AA1 sprite and point equal |
+| `s19-glow` (2,304) | 0 | — |
+| `s19-band` (2,048) | 0 | — |
+
+So **PCSX2 is a witness for the alpha test and every AFAIL outcome, the destination alpha test in PSMCT32 and the
+16-bit formats, the blend's arithmetic with every selection and FIX, COLCLAMP 1, PABE, FBA, the masks after every
+operation, and dithering in the 16-bit formats**; not for DATE in PSMCT24, COLCLAMP 0 after a dither, antialiasing or an
+overlapping copy, where its departures follow no rule a document states.
+
+### 37.8 The BIOS intro's two defects (measured 2026-10-25)
+
+S24 saw, in the Sony Computer Entertainment animation, white bands above and below the picture and the light trails drawn
+as small textured squares where PCSX2 draws glowing points (§35.11, Q4). Pictures of the intro on Sapphire are an allowed
+observation (`Sapphire_Plan.md` §1.4), never a trace of the BIOS running: `examples/s24.rs` ran the Americas image
+`ps2-0230a-20080220.bin`, handed to the machine by path, and wrote the PCRTC's pictures at chosen frames; nothing else of
+the run was kept. PCSX2's pictures came from `ps2referee.py menu pcsx2 … --for 2, 3, 4 --blank-nvm` (states saved 2, 3 and
+4 s after it begins to draw, their screenshots alone kept).
+
+- **Before this stage** (the tree at e229078e5): frames 140 to 260 hold **120 rows of pure white (FFFFFFh), the top 60 and
+  the bottom 60 of 448**, and each light is a square of its texture with a small mark in it; the company's name stands on
+  a dark box.
+- **The feature at fault, by ablation**: the S19 pipeline with ABE ignored alone (a build used for this measurement only)
+  brings back all three, the bands' 120 white rows exact (rows 0 to 59 and 388 to 447) and the squares, 203,709 to
+  234,260 pixels of frames 140, 180 and 220 differing from the pipeline with blending; with the alpha test ignored alone,
+  neither defect returns (3,590 to 4,034 pixels differ, none in the bands). **Both defects were alpha blending missing.**
+- **The project's programs that isolate it**: `s19-band` (a white sprite blended by an alpha of 0 leaves the dark frame;
+  unblended it is white) and `s19-glow` (a texture whose alpha falls from 80h at the centre to 08h at the rim, drawn under
+  the additive blend Cs × As + Cd, is a glow; unblended it is the texture's square). Both are equal on PCSX2 word for
+  word (§37.7), and the test shows the scripts with ABE cleared drawing the white band and the square.
+- **After**: on the final tree, frames 140, 180 and 220 hold no white pixel at all, every pixel of the band rows 000000h as on PCSX2, the lights points with fading trails, and the name without its box. **Frame 180 (3.0 s after power-on) against PCSX2's picture 3 s after it began to draw**, scaled to 640 × 480 bilinearly and compared per channel as at S24 (§35.8): **261 pixels differ by more than 32 and 65 by more than 64**, against 111,607 and 87,698 for the same frame before this stage; frames 140 and 220 lie further from that moment of the animation (820 and 9,750 by more than 32).
+
+The light trails' alpha and blend in the BIOS's own drawing are not observed (only pictures are); the programs reproduce
+the picture's form, and the ablation names the feature.
+
+### 37.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | AFAIL FB_ONLY writing Z as well, in `pixel::draw` | `every_alpha_test_under_every_afail_…`, `the_destination_alpha_test_…`, `generated_primitives_under_generated_pixel_operations_…` |
+| F2 | The blend's C taken from the source's alpha where FIX is selected, in `pixel::output` | `every_blend_selection_with_fix_…`, `pabe_blends_only_…`, `fba_ors_the_alpha_msb_…`, `dithering_adds_dimx_…`, `generated_primitives_…` |
+| F3 | The dither matrix indexed by X % 4 for the row and Y % 4 for the column, in `pixel::output` | `dithering_adds_dimx_…`, `fbmsk_and_zmsk_keep_their_bits_…`, `generated_primitives_…` |
+
+Each was applied, `tests/draw.rs` and `tests/pixel.rs` run, and the source restored [M]; S17's programs do not see them,
+as expected (they draw with the pixel operations off). While the stage was built, the model also
+caught a defect of the source's own: antialiasing's alpha replaced when ABE was set and alpha was not 80h, the table's rows
+inverted (`antialiasing_…`, `generated_primitives_…`).
+
+### 37.10 What is not modelled
+
+- **Drawing time**, as at S17 and S18: every pixel operation is free.
+- **Antialiasing's pixels outside the drawing rules**: none are drawn (D-406); a named reading, against PCSX2's.
+- **The texture page buffer** (S18's §31.9): a primitive that blends over its own texture reads the pixels it has written.
+- **Dithering into PSMCT32 and PSMCT24**, which the documents leave undefined: nothing is added (D-403).
+
+### 37.11 What the plan got wrong, or left open
+
+- **S19's row** lists "local-to-local overlap" as a pixel operation; it is the transfers' (S16), settled here as D-107 asked.
+- **The gate's "each picture equal to the referees'"**: as at S17 and S18, PCSX2 alone; equal on the operations the documents
+  fix, departing where they leave a choice (antialiasing, dithering's undefined formats) and in three places they do not
+  (DATE in PSMCT24, COLCLAMP 0 after a dither, the overlap).
+- **S24's Q4** handed the intro's defects to "the GS's next stage" as texturing or drawing defects; both were blending, which
+  S17 and S18 had marked as S19's.
+
+### 37.12 Questions this stage leaves
+
+1. **Q1 [decision], antialiasing's coverage (D-406).** The documents give the table and the Z rule but no precision, no line
+   width and nothing on pixels outside the drawing rules; PCSX2 draws extra edge pixels and two-pixel lines. *Recommended*:
+   keep the documented minimum (the primitive's own pixels, the area at sixteenths, a line one pixel wide), and look again
+   if a game at S28 draws with AA1 and its picture shows the edges PCSX2 draws.
+2. **Q2 [routine], dithering in PSMCT32 and PSMCT24 (D-403).** *Recommended*: keep PCSX2's measured behaviour, nothing added,
+   while the documents call the result "not guaranteed".
+3. **Q3 [routine], DATE in PSMCT24 and COLCLAMP 0 after a dither (D-401, D-404).** *Recommended*: keep the manual's words
+   against PCSX2's two departures.
+4. **Q4 [routine], an overlapping local-to-local copy (D-107).** *Recommended*: keep TRXPOS's order; PCSX2 follows no single
+   rule.
+5. The second picture lineage stays S17's Q1 [decision], unbuilt, as the tester decided on 2026-10-25.
+
+### 37.13 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §2, §5.4, §7 (S16 to S20), §8, §10 and §11; this page's §24, §27, §31 and §35; `Sapphire_Referees.md`
+§2 and §6; `Sapphire_Disputes.md` D-100 to D-107, D-160 to D-165 and D-240 to D-250. Sony's *GS User's Manual* (Version 5.0)
+figure 3-1 with its text, §3.6 to §3.9 whole with figures 3-17 and 3-18, §4.1.2 to §4.1.4 and figure 4-1, and chapter 7's
+pages for ALPHA, COLCLAMP, DIMX, DTHE, FBA, PABE, TEST and TRXPOS. ps2tek at `1c91660`: "GS Alpha Blending", "GS Tests and
+Pixel Control", "GS Special Effects and Optimizations". No emulator, SDK or loader source, no ps2autotests source and no
+firmware: the BIOS image was handed by path to Sapphire and to PCSX2, never opened, hashed or analysed, and of its runs only
+pictures were kept.
+
+**Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and on PCSX2 and compared the intro's
+pictures; **this writer is exposed to the BIOS's output and will never write the open replacement**.
+
+### 37.14 What this stage does not cover
+
+- The GIF (S15) is built, so the EE's side now reaches every operation here through PATH3; the programs drive the host
+  interface directly, as S17's and S18's do.
+- The device path's pixel pipeline (S46), graded against this one.
+- The state format's new contents: none; the operations keep no state beyond the registers.

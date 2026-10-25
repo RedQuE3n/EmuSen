@@ -121,7 +121,7 @@ pub fn atests() -> Script {
                 regs.push((r::TEST_1, atest(atst, aref, afail)));
                 cell(&mut regs, (x, y, 8, 6), texel(k + 32 * n as u32), 0, 0x1357_9BDF);
                 for (i, a) in [aref.wrapping_sub(1) & 0xFF, aref, (aref + 1) & 0xFF, 0x80].into_iter().enumerate() {
-                    flat(&mut regs, (x + 2 * i as i32, y + 6, 2, 2), [17 * k & 0xFF, 0x5A, 0xA5 ^ k, a], 0, 0x1357_9BDF);
+                    flat(&mut regs, (x + 2 * i as i32, y + 6, 2, 2), [(17 * k) & 0xFF, 0x5A, 0xA5 ^ k, a], 0, 0x1357_9BDF);
                 }
             }
         }
@@ -421,8 +421,77 @@ pub fn overlaps() -> Script {
     Script { name: "s19-overlap", ops: o }
 }
 
+/// `s19-glow`: the BIOS intro's light trails, isolated (Sapphire_Native.md §37.8): a 16×16 texture drawn by the GS as
+/// nested flat squares whose alpha rises from 08h at the rim to 80h at the centre, then drawn as overlapping sprites
+/// with DECAL and TCC RGBA and the additive blend Cs × As + Cd, over a dark frame. Without blending each sprite is the
+/// texture's square; with it, a glow fading into the frame.
+pub fn glow() -> Script {
+    let mut o = Vec::new();
+    let ops = &mut o;
+    begin(ops);
+    let t = Buf::new(95, 1, CT32, 64, 32);
+    t.fill(ops, 0x1919_0A00);
+    s17::target(ops, &t, None, test(true, ALWAYS));
+    let mut regs = Vec::new();
+    for (i, a) in [0x08u32, 0x20, 0x50, 0x80].into_iter().enumerate() {
+        let (lo, size) = (2 * i as i32, 16 - 4 * i as i32);
+        flat(&mut regs, (lo, lo, size, size), [0xFF, 0x70 + 0x20 * i as u32, 0x50, a], 0, 0);
+    }
+    regs.push((s18::r::TEXFLUSH, 0));
+    ops.push(Op::Regs(regs));
+    let (f, _) = frame_page(ops, 96, CT32, None, 0x1919_0A01);
+    // A dark frame: the generated data with every colour bit above the lowest three masked off by a sprite.
+    let mut regs = vec![(r::FRAME_1, frame(f.page, 1, CT32, 0x00F8_F8F8 ^ 0xFFFF_FFFF))];
+    flat(&mut regs, (0, 0, 64, 32), [0, 0, 0, 0], 0, 0);
+    regs.push((r::FRAME_1, frame(f.page, 1, CT32, 0)));
+    let g = Tex::new(95, 1, CT32, 4, 4).func(DECAL, true);
+    regs.extend([(s18::r::TEX0_1, g.bits()), (r::ALPHA_1, alpha(0, 2, 0, 1, 0))]);
+    for (k, &(x, y)) in [(2, 2), (10, 6), (30, 3), (36, 9), (50, 14), (20, 15), (6, 15), (44, 1)].iter().enumerate() {
+        let at = if k == 7 { 0 } else { ABE };
+        regs.push(prim(SPRITE, TME | FST | at));
+        regs.extend([rgbaq([0x80; 4], 1.0), s18::uv(8, 8), xyz2(16 * x, 16 * y, 0), s18::uv(16 * 16 + 8, 16 * 16 + 8), xyz2(16 * (x + 16), 16 * (y + 16), 0)]);
+    }
+    ops.push(Op::Regs(regs));
+    t.read(ops);
+    f.read(ops);
+    Script { name: "s19-glow", ops: o }
+}
+
+/// `s19-band`: the BIOS intro's white bands, isolated (Sapphire_Native.md §37.8): white sprites over the top and bottom
+/// eight rows of a dark frame under the normal blend (Cs, Cd, As, Cd) with alpha 0, which leaves the frame as it was,
+/// beside one at alpha 40h and an unblended one. Without blending each band is white.
+pub fn band() -> Script {
+    let mut o = Vec::new();
+    let ops = &mut o;
+    begin(ops);
+    let (f, _) = frame_page(ops, 97, CT32, None, 0x1919_0B01);
+    let mut regs = vec![(r::FRAME_1, frame(f.page, 1, CT32, 0x00F8_F8F8 ^ 0xFFFF_FFFF))];
+    flat(&mut regs, (0, 0, 64, 32), [0, 0, 0, 0], 0, 0);
+    regs.extend([(r::FRAME_1, frame(f.page, 1, CT32, 0)), (r::ALPHA_1, alpha(0, 1, 0, 1, 0))]);
+    flat(&mut regs, (0, 0, 64, 8), [0xFF, 0xFF, 0xFF, 0], ABE, 0);
+    flat(&mut regs, (0, 24, 64, 8), [0xFF, 0xFF, 0xFF, 0], ABE, 0);
+    flat(&mut regs, (0, 12, 32, 8), [0xFF, 0xFF, 0xFF, 0x40], ABE, 0);
+    flat(&mut regs, (32, 12, 32, 8), [0xFF, 0xFF, 0xFF, 0], 0, 0);
+    ops.push(Op::Regs(regs));
+    f.read(ops);
+    Script { name: "s19-band", ops: o }
+}
+
+/// The script with ABE cleared in every PRIM: what the pipeline before S19, which had no blending, would draw.
+pub fn unblended(script: &Script) -> Script {
+    let ops = script
+        .ops
+        .iter()
+        .map(|op| match op {
+            Op::Regs(list) => Op::Regs(list.iter().map(|&(reg, v)| if reg == r::PRIM { (reg, v & !ABE) } else { (reg, v) }).collect()),
+            other => other.clone(),
+        })
+        .collect();
+    Script { name: script.name, ops }
+}
+
 pub fn all() -> Vec<Script> {
-    vec![atests(), dates(), blends(), pabes(), fbas(), dithers(), masks(), overlaps(), antialias()]
+    vec![atests(), dates(), blends(), pabes(), fbas(), dithers(), masks(), overlaps(), antialias(), glow(), band()]
 }
 
 /// `s19-aa`: antialiasing (§3.6): triangles and lines with AA1 under ABE 0 and 1, alpha 80h and 40h, over a PSMCT32

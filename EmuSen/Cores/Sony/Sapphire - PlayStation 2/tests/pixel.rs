@@ -90,6 +90,33 @@ fn antialiasing_replaces_alpha_by_coverage_and_writes_no_z_below_it() {
     grade(&s19::antialias());
 }
 
+/// The BIOS intro's two defects as the project's own programs (Sapphire_Native.md §37.8): drawn without blending, as
+/// before S19, the bands are white and the light trails the texture's squares; blended, the bands leave the dark frame
+/// and the trails' rims add a little light to it.
+#[test]
+fn the_intros_bands_and_light_trails_are_blends_drawn_white_and_square_without_blending() {
+    grade(&s19::band());
+    grade(&s19::glow());
+    let words = |s: &Script| s17::expected(s).into_iter().flat_map(|w| w.map(|w| [w as u32, (w >> 32) as u32]).unwrap()).collect::<Vec<_>>();
+    let (b, u) = (words(&s19::band()), words(&s19::unblended(&s19::band())));
+    for i in (0..8 * 64).chain(24 * 64..32 * 64) {
+        assert_eq!(u[i] & 0xFF_FFFF, 0xFF_FFFF, "unblended, the band is white");
+        assert_eq!(b[i] & 0xF8_F8F8, 0, "blended by alpha 0, the band leaves the dark frame");
+    }
+    // The last blended sprite at (6, 15): unblended its pixels are the texels; blended, the rim's alpha of 08h adds
+    // Cs × 8 >> 7 to what lies beneath, so no rim pixel is the texel.
+    let (g, v) = (words(&s19::glow()), words(&s19::unblended(&s19::glow())));
+    for j in 0..16 {
+        for i in 0..16 {
+            let (texel, at) = (g[64 * j + i], 2048 + 64 * (15 + j) + 6 + i);
+            assert_eq!(v[at], texel, "unblended, the sprite is the texture's square");
+            if i < 2 || j < 2 || i >= 14 {
+                assert_ne!(g[at], texel, "blended, the rim is not the texel");
+            }
+        }
+    }
+}
+
 #[test]
 fn overlapping_local_to_local_copies_run_in_trxpos_order() {
     grade(&s19::overlaps());
@@ -153,6 +180,23 @@ fn generated_primitives_under_generated_pixel_operations_draw_as_the_model_draws
         f.read(&mut ops);
         z.read(&mut ops);
         grade(&Script { name: "generated", ops });
+    }
+}
+
+/// The programs as the referees run them: EE programs on the interpreter with the board, their packets sent through
+/// the GIF's PATH3 and their pages read back through VIF1, every record word graded by the model.
+#[test]
+fn the_programs_run_whole_on_the_interpreter_through_path3_and_vif1() {
+    use s6::{DONE, DONE_AT, ORIGIN, RECORD};
+    for script in s19::all() {
+        let (source, expected) = s17::program(&script).finish();
+        let mut sys = sapphire::board::System::new(ORIGIN);
+        sys.board.map.load(ORIGIN, &emusen_mips::assemble(&source, ORIGIN, &emusen_mips::Dialect::R5900).unwrap());
+        let limit = 400_000_000;
+        let n = sys.run(limit, &mut |s| s.peek(DONE_AT, 4) as u32 == DONE).unwrap_or_else(|h| panic!("{h:?}"));
+        assert!(n < limit, "{}: no done word in {limit} instructions", script.name);
+        let wrong = expected.iter().enumerate().filter(|&(i, w)| w.is_some_and(|w| w != sys.peek(RECORD + 4 * i as u32, 4) as u32)).count();
+        assert_eq!(wrong, 0, "{}: record words differing", script.name);
     }
 }
 

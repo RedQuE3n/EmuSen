@@ -155,8 +155,9 @@ fn a_later_stages_instruction_halts_with_its_word_and_a_usable_coprocessor() {
     steps(&mut ee, &mut ram, 1);
     assert_eq!(ee.step(&mut ram), Err(Halt::Unimplemented { pc: ORIGIN + 4, word: 0x4408_0800 }));
     assert_eq!(ee.pc, ORIGIN + 4, "the machine is left before the instruction");
-    let (mut ee, mut ram) = machine("paddw t0, t1, t2");
-    assert!(matches!(ee.step(&mut ram), Err(Halt::Unimplemented { .. })), "MMI is S8's");
+    let (mut ee, mut ram) = machine("qmfc2 t0, vf1");
+    ee.cop0[cop0::STATUS] = 1 << 30;
+    assert!(matches!(ee.step(&mut ram), Err(Halt::Unimplemented { .. })), "COP2 is S12's");
 }
 
 // The timing model (EE Core User's Manual §1.3.5, §1.3.6, §2.12).

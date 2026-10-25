@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17) on 2026-10-25.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17) and S8 (§18) on 2026-10-25.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -1230,3 +1230,188 @@ emulator, SDK or loader source and no firmware.
 - The ITLB, DTLB, BTAC prediction and the write-back buffer's timing (§17.6).
 - The state format's new contents (the TLB, the caches, the counters): `SPH2` gains them when the machine runs the EE
   (S10, S30).
+
+## 18. Stage S8, the multimedia instructions (2026-10-25)
+
+### 18.1 In one paragraph
+
+The plan's §7 row S8, on the tester's go of 2026-10-25. The interpreter of §16 and §17 gains the EE core's multimedia
+instructions: the 91 entries of the MMI space S6 did not already execute (MMI0 to MMI3, PMFHL's five forms and PMTHL.LW,
+the six parallel shifts by sa, PLZCW and QFSRV), each decoded by `emusen-mips`'s `r5900` table alone and executed on the
+128-bit GPRs, HI and LO as chapter 3 of the *EE Core Instruction Set Manual* (INST) writes it, and charged to the timing
+model through the *EE Core User's Manual*'s (CORE) Wide Operate category and its multimedia multiply and divide rows.
+Nine bare programs of the project's, 3,941 cases and 20,712 record words over every encoding with operands chosen for
+the edges, run on the interpreter equal to the manual's record, transcribed apart from the interpreter. On PCSX2 the
+nine are equal word for word; Play! does not execute eight of the instructions and clamps one otherwise. ps2autotests'
+six `cpu/ee_simd` programs, whose expected texts are consoles' outputs, run on PCSX2 equal to those texts line for line,
+so the PCSX2 lineage is a strong witness on the MMI; those texts decided where the manual leaves a result undefined
+(D-21, D-22). Disputes D-20 to D-23 are opened and D-9 closed. No emulator, SDK or loader source, no ps2autotests source
+and no firmware was read.
+
+### 18.2 What was built, and the readings the manual leaves open
+
+- **`ee/mmi.rs`**: one function a mnemonic, looked up by the decoder's own name as `ops.rs`'s are (the two tables are one
+  index space, S6's and S7's entries first), on helpers that read and build a 128-bit value lane by lane. `Ee::set_quad`
+  is the 128-bit write the multimedia instructions and LQ make.
+- **`ee/timing.rs`**: the rows "Multimedia Multiply" and "Multimedia Divide" (§2.12, pinned since S6) now occupy both
+  multipliers (§18.4).
+
+**Readings** [R INST chapter 3, Version 5.0; A]:
+
+- **Saturation and clamping** follow the Descriptions' signed or unsigned ranges; the Operation sections' comparisons of
+  bit strings with hexadecimal bounds cannot be read literally (D-23).
+- **PADDH's Operation section** lists seven of its eight halfwords, the eighth line missing; the Description ("eight
+  16-bit integers") and the figure give the eighth, and every lineage agrees.
+- **PDIVBW's remainder** is sign-extended, the Operation section and the figure against the Description (D-20); its
+  divisor is GPR[rt]15..0 read as signed.
+- **PHMADH's and PHMSBH's undefined words** of HI and LO hold the odd product beside each sum, complemented for PHMSBH,
+  as the console's record shows (D-21).
+- **Undefined inputs** (a zero divisor, operands that are not word values, PSRLH and PSRAH by 16 or more) take D-22's
+  readings: D-6's rule word by word, the words 31..0 and 95..64, sa3..0.
+- **PLZCW** writes GPR[rd]63..0 alone, as its Operation section does, leaving bits 127..64; the count includes bit 31
+  itself, the page's example (000FFF0FFF0FF00Fh gives 0000000B00000007h) confirming it.
+- **QFSRV** shifts GPR[rs] || GPR[rt] right by 8 × SA bits, SA holding the byte count (D-9); SA = 0 gives GPR[rt].
+- **PMTHL.LW** leaves HI's and LO's words 1 and 3, as its Operation section and figure say ("not changed").
+- **The multiply-add forms' accumulators** are read from HI and LO before the instruction, lane by lane; the halfword
+  forms take product *i* to word (*i* mod 2) + 2⌊*i*/4⌋ of LO when ⌊*i*/2⌋ is even and of HI when odd, the even
+  products' words also to GPR[rd], as the pages' assignments list them.
+
+### 18.3 The documents' answer to S6's question on SA
+
+D-9 left QFSRV's use of SA to this stage. QFSRV after every count MTSAB and MTSAH can set is equal on both lineages
+with SA as the byte count, and PCSX2 reproduces the `funnel` console text whole; the entry is closed (D-9's addendum).
+
+### 18.4 The timing model (§5.2, Q14)
+
+[R CORE §1.3.5, §1.3.6, §2.12; A]:
+
+1. **The categories.** Table 1-1 places "128-bit multimedia instructions" in Wide Operate, which issues to logical pipe 0
+   alone (Table 1-2) and uses I0 and I1 both; PLZCW in LZC ("Leading Zero Count", pipe 1). PMFHI, PMFLO, PMTHI, PMTLO,
+   PMFHL and PMTHL are taken as Wide Operate with §2.12's "Transfer to HI / LO registers" row, Table 1-1's MAC0 and MAC1
+   rows ("Move to/from HI/LO") being read as the 64-bit moves [A]; QFSRV as Wide Operate reading SA, Table 1-1's SA
+   Operate being "Move to/from SA register" [A].
+2. **The rows.** The parallel arithmetic, logic, compare, shift and rearranging instructions take the "Add/Sub, and logical
+   operations" row (latency 1); the ten multiplies "Multimedia Multiply" (latency 4 to GPR[rd], HI and LO, a repeat rate
+   of 2) and the three divides "Multimedia Divide" (37, 37), both on "I0+I1": each occupies MAC0 and MAC1, so a MULT1
+   delays a PMULTW issued after it, and a DIV1 waits for PDIVW's divider.
+3. **Pairing** is S6's rule on Table 1-3: a Wide Operate instruction pairs with a load or store (O), and with an ALU or
+   LZC instruction in pipe 1 with the one-cycle stall of its Y cell; two Wide Operate instructions never pair.
+
+**Named losses** [A], each a dispute candidate if an oracle ever measures it: PLZCW's and QFSRV's latencies, which §2.12
+does not tabulate, taken as 1; the multimedia multiply-adds' accumulators forwarded at the repeat rate, as S6's MADD
+(§16.2), not waited for; whether the Wide Operate instructions that use only one physical pipe's worth of work (the
+logic, for instance) hold I1 as well is not stated beyond Table 1-1's mark, which is followed for all of them.
+
+### 18.5 The gate: the programs (measured 2026-10-25)
+
+`tests/s8/` generates nine programs in S6's form (`tests/s6/mod.rs`'s `Program`, which gains a quadword record), entered
+at 00100000h and writing their record from 00200000h with the done word at 001FFFF0h. Each case loads GPR[rs] and
+GPR[rt] by LQ from constants, the destination from a sentinel quadword, and HI and LO by S6's moves (MTHI, MTHI1, MTLO,
+MTLO1), runs the instruction, and records GPR[rd] by SQ and HI and LO by MFHI, MFHI1, MFLO and MFLO1 where it touches them.
+The expected record comes from `tests/s8/manual.rs`, the pages' Operation sections transcribed field by field in the
+pseudocode's vocabulary with 128-bit integer arithmetic, written apart from `ee/mmi.rs`. **The operands**: for each lane
+width a list of edges (bytes 00h, 01h, 7Fh, 80h, FFh, 81h …; halfwords 0000h, 0001h, 7FFFh, 8000h, FFFFh, 8001h …;
+words 7FFFFFFFh, 80000000h, FFFFFFFFh, 1 …) set against every rotation of itself, so that every pair of edges meets in
+some lane, and five plain values (zero, all ones, a counting pattern, alternate bits) against one another.
+
+| Program | Cases | Record words | What it covers |
+|---|---|---|---|
+| `s8-arith` | 755 | 3,020 | the wrapping, signed-saturating and unsigned-saturating adds and subtracts at every width; PADSBH |
+| `s8-compare` | 472 | 1,888 | PCEQ and PCGT at every width, PMAX, PMIN, PABS at their limits |
+| `s8-lanes` | 1,458 | 5,832 | the logic, the six extends, the three packs, PINTH, PINTEH, PCPYLD, PCPYUD; the nine rearrangements, PEXT5 and PPAC5 |
+| `s8-shift` | 255 | 1,020 | the halfword shifts by sa 0 to 15 (PSLLH's by 16 to 31 too, its page defining them by sa3..0), the word shifts by 0, 1, 15, 16, 31, the variable forms by amounts with bits above 4 set and words 1 and 3 ignored |
+| `s8-hilo` | 279 | 1,224 | PMFHI, PMFLO and PMFHL's five forms over HI and LO at every clamp's edge; PMTHI, PMTLO, PMTHL.LW read back in full |
+| `s8-multiply` | 450 | 5,400 | the five halfword multiplies and the five word multiplies with GPR[rd], HI and LO; PHMADH's and PHMSBH's defined words alone |
+| `s8-divide` | 105 | 840 | PDIVW and PDIVUW on word values with no zero divisor, minimum by −1 included; PDIVBW by seven divisors with bits above them |
+| `s8-misc` | 49 | 200 | PLZCW over runs of every length class and the page's example; QFSRV at every MTSAB and MTSAH count |
+| `s8-undefined` | 118 | 1,288 | D-21's and D-22's inputs, with the interpreter's reading as the record |
+
+**Tests** [M, `cargo test --release`, `tests/mmi.rs`]: **13 of 13** — the nine programs, each equal to its record word
+for word; `the_programs_execute_every_multimedia_encoding` (all 91, counted from the assembled words through the
+decoder, and the interpreter's set equal to the decoder's MMI space less S6's entries); and the timing rows on
+sequences whose cycles follow from the manual by hand (two Wide Operate instructions 2 cycles, beside a load 1, a Y pair
+costing the next instruction a cycle; PMULTH to PMFHI 5 and to a reader of GPR[rd] 5, PMULTH after PMULTH 3, PMULTW
+after MULT1 3, PMADDH after PMADDH 3; PDIVW to PMFLO 38, DIV1 after PDIVW 75, a load and an ALU instruction beside
+PDIVBW 2). The crate's other tests: `interpreter` (S6) **23 of 23**, its check that a later stage's instruction halts
+moved from PADDW to QMFC2; `cop0` (S7) **19 of 19**, its count of S7's instructions bounded to S7's 27; lib **16 of 16**;
+`programs` **3 of 3**; `mmi` and `interpreter` also under the `test-checked` profile (overflow checks); clippy clean.
+WiseMan's `SapphireTests` **5 of 5**.
+
+### 18.6 On the referees (measured 2026-10-25)
+
+`examples/s8.rs` writes each program as an ELF with its expected record and its source; `ps2referee.py ram … --until
+1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and from Play! 0.72, one
+process at a time. Only the programs' records were read.
+
+| Program (record words) | PCSX2 | Play! | Reading |
+|---|---|---|---|
+| `s8-compare`, `s8-lanes`, `s8-shift`, `s8-misc` | 0 | 0 | both lineages equal the manual |
+| `s8-arith` (3,020) | 0 | 164 | Play! does not execute PADSBH (GPR[rd] keeps the sentinel) |
+| `s8-divide` (840) | 0 | 248 | Play! does not execute PDIVUW (HI and LO keep their presets) |
+| `s8-hilo` (1,224) | 0 | 202 | Play! does not execute PMFHL.SLW or PMTHL.LW, and clamps PMFHL.SH otherwise (D-23) |
+| `s8-multiply` (5,400) | 0 | 1,808 | Play! does not execute PMSUBH, PMADDW, PMADDUW or PMSUBW |
+| `s8-undefined` (1,288) | 0 | 478 | after D-21 and D-22's rulings; Play! as above, and zero in PHMADH's and PHMSBH's undefined words |
+
+The first run of `s8-undefined` differed on both lineages in the same 13 words, PDIVBW by zero, where the interpreter
+then sign-extended the dividend's low halfword into HI: both give the whole dividend, as the console's record does, and
+the interpreter was changed to it (D-22). PHMADH's and PHMSBH's undefined words, first left as they were, differed on
+both, each differently (D-21).
+
+### 18.7 ps2autotests' `cpu/ee_simd`, on PCSX2 (measured 2026-10-25)
+
+The six programs need the BIOS's kernel, so Sapphire runs them at S10. Run now on PCSX2 through `ps2referee.py tty
+pcsx2 … --channel iop` (Americas BIOS), each program's text is equal to its expected file after line ends are
+normalised: `arithmetic` 744 lines, `compare` 182, `funnel` 46, `logic` 400, `muldiv` 770, `shuffle` 626, 2,768 lines
+with no difference [M `diff`]. Those texts were recorded on consoles [R the README], so **the PCSX2 lineage is exact
+on every multimedia instruction the six print**, and the MMI disputes lean on it where Play! disagrees. Play! was not
+run: `ps2referee.py`'s `tty` path drives PCSX2 alone, and Play! does not execute eight of the instructions the texts
+cover (§18.6). Only the expected texts and the programs' own output were read, never `.cpp` or `shared.h`.
+
+### 18.8 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | PADDSH wrapping instead of saturating | `parallel_add_and_subtract_wrap_and_saturate_as_the_manual_says` |
+| F2 | PSRLH shifting 32-bit lanes | `parallel_shifts_take_each_lane_widths_amount_as_the_manual_says`, `the_undefined_multimedia_inputs_give_the_interpreters_recorded_reading` |
+| F3 | PMADDW accumulating doubleword 1 from HI's and LO's word 0, the wrong half | `parallel_multiplies_write_gpr_rd_hi_and_lo_as_the_manual_says`, `the_undefined_multimedia_inputs_give_the_interpreters_recorded_reading` |
+
+Each was applied, `tests/mmi.rs` run, and the source restored [M].
+
+### 18.9 What the plan got wrong, or left open
+
+- **§3.2's MMI row** names "the TX79 manual's definitions" as the secondary oracle; the EE Core Instruction Set
+  Manual's chapter 3 now gives the EE's own, and the TX79 manual was not needed.
+- **S8's gate, "`ee_simd/*` waits on S10"**, holds for Sapphire running them; but their console texts serve now, through
+  PCSX2, as the evidence that weighs the referees (§18.7) and decided D-21 and D-22.
+- **§5.2's table** did not say which category PMFHI and its kin and QFSRV fall in; §18.4 records the reading.
+- **Play! as the second lineage on the EE** is weaker on the MMI than on the integer set: eight instructions are not
+  executed (§18.6, Q2).
+
+### 18.10 Questions this stage leaves
+
+1. **Q1 [routine], D-21.** The undefined words of PHMADH and PHMSBH are taken from the console's record and PCSX2, Play!
+   writing zero. *Recommended*: keep the console's reading; S10 runs `muldiv` on Sapphire against the same text.
+2. **Q2 [routine], the witnesses for the MMI.** *Recommended*: weigh PCSX2 as the strongest single witness on the
+   multimedia instructions, since it reproduces all six `ee_simd` console texts, and keep Play! as the second lineage
+   for the units it does model; record its eight unexecuted instructions in `Sapphire_Referees.md`'s table at the next
+   stage that edits it.
+3. **Q3 [routine], `ee_simd` on Play!.** *Recommended*: do not extend `ps2referee.py`'s `tty` path to Play! for this;
+   Sapphire runs the six against the console texts itself at S10.
+4. **Q4 [routine], the timing categories of §18.4.** *Recommended*: keep PMFHI and its kin and QFSRV in Wide Operate
+   as named readings; no oracle measures the EE's pairing before S32's bench.
+
+### 18.11 What was read for this stage
+
+`Sapphire_Plan.md` §2, §3.2, §5 (§5.1 to §5.3), §7 and §11; this page's §16 and §17; `Sapphire_Disputes.md`;
+`Sapphire_References.md` §1.1; `emusen-mips`'s `r5900.rs` (the MMI tables and the assembler's forms); `ps2referee.py`'s
+usage; S7's referee script. Sony's *EE Core Instruction Set Manual* chapter 3's opening and every multimedia page, DIV1's,
+PLZCW's and QFSRV's (pages 137 to 284); *EE Core User's Manual* §1.3.5, §1.3.6, §1.4, §2.12, §3.1. ps2autotests'
+`cpu/ee_simd/*.expected` (the consoles' text). No emulator, SDK or loader source, no ps2autotests source, no ps2tek
+section and no firmware.
+
+### 18.12 What this stage does not cover
+
+- The machine running programs and `ee_simd` on Sapphire: S10.
+- COP1 (S9) and COP2 (S12): still halting.
+- The multimedia instructions in the recompiler: S38, graded against this interpreter.
+

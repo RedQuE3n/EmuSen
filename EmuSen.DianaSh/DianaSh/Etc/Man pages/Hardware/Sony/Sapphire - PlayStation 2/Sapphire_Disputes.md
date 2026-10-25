@@ -257,6 +257,11 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `ee/ops.rs`'s SA instructions; S8's QFSRV.
 - **Pinned by:** `the_shift_amount_register_reads_back_as_written`, `the_undefined_inputs_give_the_interpreters_recorded_reading`.
 - **Implemented in:** stage S6's commit.
+- *Added 2026-10-25, at stage S8:* **QFSRV shifts by 8 × SA bits**, SA holding the byte count. `s8-misc` runs QFSRV after
+  MTSAB of every count 0 to 15 over two operand pairs and after MTSAH of every count 0 to 7 with rs = rt (the page's
+  rotation): all 200 record words equal on PCSX2 2.8.2 and on Play! 0.72 [M], and PCSX2 reproduces ps2autotests'
+  `cpu/ee_simd/funnel` console text whole (`Sapphire_Native.md` §18.7). The open question this entry left is closed,
+  **measured**; pinned by `plzcw_and_qfsrv_equal_the_manual`.
 
 ### D-10. R5900, LWR: at a byte other than 0, bits 63..32 of the destination are kept
 
@@ -415,3 +420,81 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `Tlb::read`.
 - **Pinned by:** `the_scratchpad_is_reached_through_s_entries_alone`.
 - **Implemented in:** stage S7's commit.
+
+### D-20. R5900, PDIVBW: each remainder is sign-extended from bit 15 into its word of HI
+
+- **Opened:** 2026-10-25, at stage S8: the *EE Core Instruction Set Manual*'s PDIVBW page is not consistent with itself.
+  Its Description says the four remainders "are zero-extended and stored in the words … in the HI register"; its
+  Operation section writes "HI31..0 ← (r015)16 || r015..0" and its figure "sign ext(A0 MOD B0)".
+- **Documents read:** the PDIVBW page (Description, Restrictions, Operation, figure, Programming Notes).
+- **Test program:** `s8-divide`: PDIVBW over five dividend quadwords by seven divisors in GPR[rt]15..0 (1, −1, 32,767,
+  −32,768, 3, −3, 256) with other bits above them, among them negative dividends whose remainders are negative.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72, measured 2026-10-25: all 280 words of PDIVBW equal to the Operation
+  section's reading on both. ps2autotests' console record `cpu/ee_simd/muldiv.expected` shows negative remainders
+  sign-extended ("pdivbw C_P_S8_A, C_P_S8_B: H: fffffffffffff755 …"), and PCSX2 reproduces that text whole.
+- **Conclusion:** sign extension, the Operation section and the figure against the Description; **measured**, two
+  lineages and the console's record agreeing. For every divisor but zero the remainder's magnitude is below 32,768,
+  so the sign extension of r15..0 is the remainder's own 32 bits [A]; the interpreter writes those, which also gives
+  D-22's zero divisor.
+- **Depends on it:** `ee/mmi.rs`'s `pdivbw`.
+- **Pinned by:** `parallel_divides_equal_the_manual`.
+- **Implemented in:** stage S8's commit.
+
+### D-21. R5900, PHMADH and PHMSBH: the words of HI and LO the figures call undefined hold the odd product beside each sum, complemented for PHMSBH
+
+- **Opened:** 2026-10-25, at stage S8, by `s8-undefined` on the referees.
+- **Documents read:** the PHMADH and PHMSBH pages. The Operation sections write LO31..0, HI31..0, LO95..64 and HI95..64
+  and nothing else of HI and LO; the figures mark HI and LO 63..32 and 127..96 "Undefined".
+- **Test program:** `s8-undefined`: fourteen operand pairs for each, HI and LO preset by MTHI, MTHI1, MTLO and MTLO1,
+  every word of HI and LO read back.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): for PHMADH, LO63..32 = A1×B1, HI63..32 = A3×B3, LO127..96 = A5×B5 and
+  HI127..96 = A7×B7, the product of each pair's high halfwords; for PHMSBH the bitwise complement of each. Play! 0.72
+  writes zero in all eight words. **ps2autotests' console record** `cpu/ee_simd/muldiv.expected` decides: "phmadh -1, -1:
+  … H: 0000000100000002", where every product is 1 and every sum 2, the undefined word holding 1; "phmsbh 0, 0: … H:
+  ffffffff00000000", the complement of a zero product; "phmsbh -2147483648, -1: … L: ffff7fff00008000", the complement
+  of 0x8000 beside 0x8000. PCSX2 reproduces the console text whole.
+- **Conclusion:** product 2j+1 in the word beside sum j, complemented for PHMSBH; **measured**, the console's record
+  with one lineage agreeing and the other against. The first reading built, the words left as they were, matched
+  neither referee and is overturned.
+- **Depends on it:** `ee/mmi.rs`'s `horizontal`.
+- **Pinned by:** `the_undefined_multimedia_inputs_give_the_interpreters_recorded_reading`.
+- **Implemented in:** stage S8's commit.
+
+### D-22. R5900, the multimedia instructions' undefined inputs: a zero divisor as D-6 word by word, operands that are not word values computed on words 31..0 and 95..64, and PSRLH and PSRAH by sa3..0
+
+- **Opened:** 2026-10-25, at stage S8, by the Restrictions sections: a zero divisor is undefined for PDIVW, PDIVUW and
+  PDIVBW; operands that are not sign-extended words (bits 127..95 and 63..31 each equal) for PMULTW, PMULTUW, PMADDW,
+  PMADDUW, PMSUBW, PDIVW and PDIVUW; and "The value of sa must be within the range from 0 to 15. Otherwise, the result
+  is undefined" for PSRLH and PSRAH, whose Operation sections take s ← sa3..0 nonetheless.
+- **Test program:** `s8-undefined`: each divide by zero in one doubleword or word beside a defined one, over six
+  dividends; each word multiply and divide on operands with bits set in words 1 and 3; PSRLH and PSRAH by 16, 17, 23
+  and 31.
+- **Referee:** PCSX2 2.8.2 equal on all of it (measured 2026-10-25). Play! 0.72 equal on PDIVW and PDIVBW by zero,
+  PMULTW, PMULTUW and PDIVW on such operands, and both shifts; it does not execute PDIVUW, PMADDW, PMADDUW or PMSUBW at all
+  (`Sapphire_Native.md` §18.6). The console's record agrees for PDIVBW by zero: "pdivbw 53, 0: H: 0000000000000035 …
+  L: ffffffffffffffff …", "pdivbw -2147483648, 0: H: ffffffff80000000 … L: 0000000100000001 …", LO ±1 and HI the whole
+  dividend.
+- **Conclusion:** the rules in the title; **measured**, two lineages agreeing (and the console for PDIVBW), PCSX2 alone
+  for PDIVUW, PMADDW, PMADDUW and PMSUBW. A program relying on them relies on undefined behaviour.
+- **Depends on it:** `ee/mmi.rs`'s divides and word multiplies, `psrlh`, `psrah`.
+- **Pinned by:** `the_undefined_multimedia_inputs_give_the_interpreters_recorded_reading`.
+- **Implemented in:** stage S8's commit.
+
+### D-23. R5900, the saturating and clamping multimedia instructions: the bounds are the lane's signed or unsigned range, as the Descriptions give them
+
+- **Opened:** 2026-10-25, at stage S8: the Operation sections of the saturating instructions cannot be read literally.
+  PADDSB's compares the unsigned sum of two bytes with 0x7F ("if ((GPR[rs]7..0 + GPR[rt]7..0) > 0x7F) then GPR[rd]7..0 ←
+  0x7F"), which taken as written saturates −1 + 1 (0xFF + 0x01) to 0x7F; PADDSW's second condition, "0x100000000 <= …
+  < 0x80000000", is an empty range; PMFHL.SH's clamp compares a word with 0xFFFF8000 and PMFHL.SLW's a doubleword with
+  0xFFFFFFFF80000000, which unsigned would clamp every positive value. The Descriptions say "Arithmetic results beyond
+  the range of a signed 8-bit integer are saturated", and the figures "Clamp to signed halfword", "Clamp to Signed Word".
+- **Test program:** `s8-arith` (every saturating add and subtract over every pair of each width's edges), `s8-hilo`
+  (PMFHL.SH and PMFHL.SLW over HI and LO at every clamp's edge).
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 equal on every saturating add and subtract; PCSX2 equal on PMFHL.SH and
+  PMFHL.SLW, while Play! does not execute PMFHL.SLW and clamps 24 of PMFHL.SH's words otherwise (a word of 1 and a word
+  of FFFF7FFFh, below −32,768, each read back as FFFFh). PCSX2 reproduces the console's `arithmetic` and `muldiv` texts whole.
+- **Conclusion:** the Descriptions' ranges; **measured**, two lineages on the adds and subtracts, PCSX2 and the console's
+  record on PMFHL.
+- **Depends on it:** `ee/mmi.rs`'s `clamp_signed`, `pmfhl_sh`, `pmfhl_slw`.
+- **Pinned by:** `parallel_add_and_subtract_wrap_and_saturate_as_the_manual_says`, `moves_to_and_from_hi_and_lo_equal_the_manual`.
+- **Implemented in:** stage S8's commit.

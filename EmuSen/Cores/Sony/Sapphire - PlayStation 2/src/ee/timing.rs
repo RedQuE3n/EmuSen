@@ -1,6 +1,7 @@
 //! The EE core's timing model at instruction granularity (Sapphire_Plan.md §5.2, Q14): the issue and latency table
 //! of the EE Core User's Manual, pinned as data, the in-order two-way issue it describes, and from S7 the caches'
-//! refills and the bus's transfers. Sapphire_Native.md §16.4 and §17.5 record each rule's source and the losses named.
+//! refills and the bus's transfers, from S8 the multimedia rows on both multipliers. Sapphire_Native.md §16.4, §17.5
+//! and §18.4 record each rule's source and the losses named.
 
 /// A physical pipe of Table 1-1 (EE Core User's Manual §1.3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,6 +141,8 @@ pub mod rows {
     pub const MADD1: usize = 10;
     pub const LOAD: usize = 11;
     pub const STORE: usize = 12;
+    pub const MMULT: usize = 13;
+    pub const MMDIV: usize = 14;
 }
 
 /// The resources the scoreboard tracks: the 32 GPRs, then HI/LO, HI1/LO1 and SA.
@@ -251,8 +254,8 @@ impl Timing {
                 earliest = earliest.max(self.ready[r]);
             }
         }
-        let uses_mac0 = matches!(i.row, rows::MULT | rows::DIV | rows::MADD);
-        let uses_mac1 = matches!(i.row, rows::MULT1 | rows::DIV1 | rows::MADD1);
+        let uses_mac0 = matches!(i.row, rows::MULT | rows::DIV | rows::MADD | rows::MMULT | rows::MMDIV);
+        let uses_mac1 = matches!(i.row, rows::MULT1 | rows::DIV1 | rows::MADD1 | rows::MMULT | rows::MMDIV);
         if uses_mac0 {
             earliest = earliest.max(self.mac0_free);
         }

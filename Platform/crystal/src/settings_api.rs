@@ -242,9 +242,9 @@ fn refusal(row: &Row, value: &str) -> Option<String> {
 }
 
 /// A value as the layers give it, the game's own over the console's; none where neither holds one, `Layered`.
-fn layered(tree: &Tree, console: &str, system: Option<&str>, game: Option<&str>, key: &str) -> Option<String> {
+fn layered(tree: &Tree, console: &str, system: Option<&str>, game: Option<&str>, package: Option<&str>, key: &str) -> Option<String> {
     if let Some(game) = game
-        && let Some((_, own)) = crate::settings::game_values(tree, system, game).into_iter().find(|(k, _)| k == key)
+        && let Some((_, own)) = crate::settings::game_values(tree, system, game, package).into_iter().find(|(k, _)| k == key)
     {
         return if key == ENGINE_KEY { crate::settings::current(Some(own)) } else { Some(own) };
     }
@@ -260,37 +260,17 @@ fn system_of(s: &Session) -> Option<String> {
 
 /// A session's stored value of a key, game over console, `GetSettingOf`.
 pub fn setting_of(tree: &Tree, s: &Session) -> impl Fn(&str) -> Option<String> {
-    let (console, system, game) = (s.console.clone(), system_of(s), s.game_key());
+    let (console, system, game, package) = (s.console.clone(), system_of(s), s.game_key(), s.package.clone());
     let tree = tree.clone();
-    move |key| layered(&tree, &console, system.as_deref(), Some(&game), key)
+    move |key| layered(&tree, &console, system.as_deref(), Some(&game), package.as_deref(), key)
 }
 
 /// The game's values written whole, indented as `JsonSerializer` writes a dictionary.
-fn write_game_values(tree: &Tree, system: Option<&str>, game: &str, values: &[(String, String)]) -> Result<(), Refused> {
-    let Some(system) = system else {
+fn write_game_values(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>, values: &[(String, String)]) -> Result<(), Refused> {
+    let Some(at) = crate::settings::write_place(tree, system, game, package) else {
         return Err((svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, game))));
     };
-    let at = crate::settings::game_settings_path(tree, system, game);
-    if let Some(folder) = path::directory_name(Style::HOST, &at) {
-        let _ = std::fs::create_dir_all(folder);
-    }
-    let mut text = String::new();
-    if values.is_empty() {
-        text.push_str("{}");
-    } else {
-        text.push('{');
-        for (i, (k, v)) in values.iter().enumerate() {
-            text.push_str(if i == 0 { "\n  " } else { ",\n  " });
-            text.push_str(&emusen_dotnet::json::quoted(k));
-            text.push_str(": ");
-            text.push_str(&emusen_dotnet::json::quoted(v));
-        }
-        text.push_str("\n}");
-    }
-    if emusen_galaxia::atomic::write(&at, text.as_bytes()).is_err() {
-        return Err((abi::status::IO, format!("{at} could not be written")));
-    }
-    Ok(())
+    crate::settings::write_values(&at, values).map_err(|words| (abi::status::IO, words))
 }
 
 impl Runtime {
@@ -333,7 +313,7 @@ impl Runtime {
         let tree = emusen_galaxia::tree::tree();
         let stored = match (&s, scope) {
             (Some(s), abi::SCOPE_GAME) => setting_of(&tree, s)(key),
-            _ => layered(&tree, &name, None, None, key),
+            _ => layered(&tree, &name, None, None, None, key),
         };
         if let Some(v) = stored {
             return Ok(v);
@@ -364,7 +344,8 @@ impl Runtime {
         if scope == abi::SCOPE_GAME {
             let s = s.as_ref().expect("a game's scope names a session");
             let system = system_of(s);
-            let mut values = crate::settings::game_values(&tree, system.as_deref(), &s.game_key());
+            let package = s.package.as_deref();
+            let mut values = crate::settings::game_values(&tree, system.as_deref(), &s.game_key(), package);
             match value {
                 None => values.retain(|(k, _)| k != key),
                 Some(v) => match values.iter_mut().find(|(k, _)| k == key) {
@@ -372,7 +353,7 @@ impl Runtime {
                     None => values.push((key.to_string(), v.to_string())),
                 },
             }
-            write_game_values(&tree, system.as_deref(), &s.game_key(), &values)?;
+            write_game_values(&tree, system.as_deref(), &s.game_key(), package, &values)?;
         } else {
             let mut stored = emusen_galaxia::consoles::load(&tree);
             match value {
@@ -422,15 +403,19 @@ impl Runtime {
 
     /// A game's own value with no session, `GameSetting`.
     pub fn game_setting_get(&self, at: &str, key: &str) -> Result<String, Refused> {
+        let (game, package) = emusen_galaxia::claims::opened_as(&emusen_galaxia::tree::tree(), at);
+        let at = game.as_str();
         let (console, system) = self.console_and_system(at);
         let tree = emusen_galaxia::tree::tree();
-        let own = crate::settings::game_values(&tree, system.as_deref(), at).into_iter().find(|(k, _)| k == key).map(|(_, v)| v);
+        let own = crate::settings::game_values(&tree, system.as_deref(), at, package.as_deref()).into_iter().find(|(k, _)| k == key).map(|(_, v)| v);
         let own = own.ok_or_else(|| (svc::ABSENT, "the game holds no value of its own for that key".to_string()))?;
         Ok(if key == ENGINE_KEY && console.is_some() { crate::settings::current(Some(own.clone())).unwrap_or(own) } else { own })
     }
 
     /// A game's own value set or forgotten with no session, `SetGameSetting`.
     pub fn game_setting_set(&self, at: &str, key: &str, value: Option<&str>) -> Result<(), Refused> {
+        let (game, package) = emusen_galaxia::claims::opened_as(&emusen_galaxia::tree::tree(), at);
+        let at = game.as_str();
         let (row_console, system) = self.console_and_system(at);
         let console = row_console.or_else(|| system.as_deref().map(emusen_dotnet::text::to_upper)).ok_or_else(|| {
             (svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, at)))
@@ -447,7 +432,7 @@ impl Runtime {
         {
             return Err((svc::BAD_ARGUMENT, why));
         }
-        let mut values = crate::settings::game_values(&tree, system.as_deref(), at);
+        let mut values = crate::settings::game_values(&tree, system.as_deref(), at, package.as_deref());
         match value {
             None => values.retain(|(k, _)| k != key),
             Some(v) => match values.iter_mut().find(|(k, _)| k == key) {
@@ -455,7 +440,7 @@ impl Runtime {
                 None => values.push((key.to_string(), v.to_string())),
             },
         }
-        write_game_values(&tree, system.as_deref(), at, &values)?;
+        write_game_values(&tree, system.as_deref(), at, package.as_deref(), &values)?;
         drop(tree);
         let full = path::full_path(at);
         for open in self.sessions.all() {
@@ -501,12 +486,12 @@ impl Runtime {
             if !offered {
                 continue;
             }
-            let mut values = crate::settings::game_values(&tree, Some(&system), &game);
+            let mut values = crate::settings::game_values(&tree, Some(&system), &game, None);
             if values.iter().any(|(k, _)| k == ENGINE_KEY) {
                 continue;
             }
             values.push((ENGINE_KEY.to_string(), engine));
-            if write_game_values(&tree, Some(&system), &game, &values).is_ok() {
+            if write_game_values(&tree, Some(&system), &game, None, &values).is_ok() {
                 copied += 1;
             }
         }

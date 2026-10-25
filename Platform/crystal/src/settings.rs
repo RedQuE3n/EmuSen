@@ -36,11 +36,36 @@ pub fn game_settings_path(tree: &Tree, system: &str, game: &str) -> String {
     path::combine_all(Style::HOST, &[&config, "games", system, &format!("{stem}.json")])
 }
 
+/// A packaged game's own settings, `GameSettings.PackagePath` (EmuSen_GamePackages.md §18.2).
+pub fn package_settings_path(package: &str) -> String {
+    path::combine(Style::HOST, package, emusen_galaxia::package::SETTINGS_FILE)
+}
+
+/// The file a game's values are read from, `GameSettings.ReadPath`: its package's where it has one, else the plain file.
+pub fn read_place(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>) -> Option<String> {
+    match package.map(package_settings_path) {
+        Some(at) if emusen_galaxia::dotnet_files::file_exists(&at) => Some(at),
+        _ => system.map(|s| game_settings_path(tree, s, game)),
+    }
+}
+
+/// The file they are written to, `GameSettings.WritePath`: a packaged game's package, so its first write copies them in.
+pub fn write_place(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>) -> Option<String> {
+    match package {
+        Some(root) => Some(package_settings_path(root)),
+        None => system.map(|s| game_settings_path(tree, s, game)),
+    }
+}
+
 /// A game's own values, in the file's order; none where it has no file or one that is not a map of strings.
-pub fn game_values(tree: &Tree, system: Option<&str>, game: &str) -> Vec<(String, String)> {
-    let Some(system) = system else { return Vec::new() };
-    let at = game_settings_path(tree, system, game);
-    let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(&at) else { return Vec::new() };
+pub fn game_values(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>) -> Vec<(String, String)> {
+    let Some(at) = read_place(tree, system, game, package) else { return Vec::new() };
+    values_at(&at)
+}
+
+/// The values of one settings file, `GameSettings.Read`'s parse.
+pub fn values_at(at: &str) -> Vec<(String, String)> {
+    let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(at) else { return Vec::new() };
     let text = emusen_dotnet::file::decode(&bytes);
     let none = |why: String| {
         crate::error_log::warning("settings", &format!("{at} is not a game's settings, and is read as none: {why}"));
@@ -64,9 +89,30 @@ pub fn game_values(tree: &Tree, system: Option<&str>, game: &str) -> Vec<(String
     }
 }
 
+/// A game's values written whole to `at`, indented as `JsonSerializer` writes a dictionary, `GameSettings.Write`.
+pub fn write_values(at: &str, values: &[(String, String)]) -> Result<(), String> {
+    if let Some(folder) = path::directory_name(Style::HOST, at) {
+        let _ = std::fs::create_dir_all(folder);
+    }
+    let mut text = String::new();
+    if values.is_empty() {
+        text.push_str("{}");
+    } else {
+        text.push('{');
+        for (i, (k, v)) in values.iter().enumerate() {
+            text.push_str(if i == 0 { "\n  " } else { ",\n  " });
+            text.push_str(&emusen_dotnet::json::quoted(k));
+            text.push_str(": ");
+            text.push_str(&emusen_dotnet::json::quoted(v));
+        }
+        text.push_str("\n}");
+    }
+    emusen_galaxia::atomic::write(at, text.as_bytes()).map_err(|_| format!("{at} could not be written"))
+}
+
 /// The engine a game opens on, `ManagedRuntime.EngineFor`: the game's own choice, else its console's.
-pub fn engine_for(tree: &Tree, game: &str, row_console: Option<&str>, system: Option<&str>) -> Option<String> {
-    let own = game_values(tree, system, game).into_iter().find(|(k, _)| k == crate::catalog::ENGINE_KEY).map(|(_, v)| v);
+pub fn engine_for(tree: &Tree, game: &str, row_console: Option<&str>, system: Option<&str>, package: Option<&str>) -> Option<String> {
+    let own = game_values(tree, system, game, package).into_iter().find(|(k, _)| k == crate::catalog::ENGINE_KEY).map(|(_, v)| v);
     if let Some(own) = own {
         return if row_console.is_none() { Some(own) } else { current(Some(own)) };
     }
@@ -93,8 +139,8 @@ mod tests {
             t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
         }
         let t = tree().clone();
-        assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes").is_empty());
-        assert_eq!(super::game_values(&t, Some("nes"), "/roms/Good.nes"), vec![("Engine".to_string(), "MoonRT (Rust)".to_string())]);
+        assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes", None).is_empty());
+        assert_eq!(super::game_values(&t, Some("nes"), "/roms/Good.nes", None), vec![("Engine".to_string(), "MoonRT (Rust)".to_string())]);
         let written: String = std::fs::read_dir(&logs).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
         assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: the value of \"Engine\" is not a string."), "{written}");
         assert!(!written.contains("Good.json"));

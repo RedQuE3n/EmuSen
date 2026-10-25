@@ -6,7 +6,7 @@ shell rust
 usage 1   pkg make <path>...            a linked package for each game under each path (relative to the library)
 usage 2   pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)
 usage 3   pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)
-usage 4   pkg migrate <package>...      the game's saves, states and cheats copied into its package
+usage 4   pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in
 usage 5   pkg patch add <package> <file>
 usage 6                                 an IPS, UPS or BPS patch checked, copied in and applied at load
 usage 7   pkg patch rm <package> <n>    patch n taken out of the package's list

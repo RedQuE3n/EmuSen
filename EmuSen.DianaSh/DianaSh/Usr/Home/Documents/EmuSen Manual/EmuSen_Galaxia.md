@@ -398,7 +398,9 @@ Galaxia's, since it is where a game's files are (§3.8, §3.10): `EmuSen.Galaxia
   library is refused with words.
 - **The two runtimes resolve at open**, the C# `ManagedRuntime.Open` and Crystal in Rust's `open`, so every frontend
   and the shell's `core` reach one package by either path. The session keeps the package root; the engine's battery
-  files and the session's states take it (§5.5).
+  files and the session's states take it (§5.5), and since 2026-10-25 the game's own settings and the engine chosen at
+  open (§5.6); a state's record follows its state's place (§5.3c). `OpenedAs` (`opened_as`) answers the game and the
+  package together for the readers that are given a path with no session.
 - **The library scan** walks `Packages` and `Compressed` beside the library (`RomLibrary.Scan`; `emusen_library_scan`
   1.2's `packages` and `compressed`): nothing inside a package's folder is a game of its own, no claimed file is listed,
   and each package whose game is there is one entry, its path the game's and its shelf the manifest's `system`. No
@@ -520,6 +522,18 @@ record's provenance line is added either way. A record written before this chang
 engine's, and is judged as before. That is the one case still judged by the old rule, and it errs as before: a
 pre-change VenusRT record read by C# Venus is called a newer build's.
 
+### 5.3c A packaged state's record travels with it (2026-10-25)
+
+*`EmuSen_GamePackages.md` §18.1.* A state in a package's `states` folder (the folder named `states` with `package.json`
+in the folder above it) keeps its record beside it, the state's name with `.json`, as one line of JSON: §5.3's members
+and the state's size and modification time in .NET's ticks, the stamp `states.db` keeps (`SaveLibrary.PackageRecordPathFor`
+and `saves::package_record_path` name the place; the runtimes' `StateRecords` and `states.rs` read and write it). It is
+answered only while the state is the file it was written for, so §5.3a's rule, that a record fails towards none and
+never towards a wrong one, holds. §5.3a's two objections to a sidecar do not apply inside a package: its folder is
+EmuSen's own, never the ROM library, and the record now travels with its state, which is what a package moved, renamed
+or copied needs. Every other state's record stays a row of `states.db`, keyed by its full path; a packaged state with no
+file beside it is still looked up there, where a build before this one recorded it.
+
 ### 5.5 A packaged game's saves (2026-10-25)
 
 *`EmuSen_GamePackages.md` §3.5, built at step 5 (§14 there).* A package root is a parameter, as the state directory
@@ -546,6 +560,18 @@ GameCheats.For(console, romPath, packageRoot)                      // <package>/
 - **Both halves**: `SaveLibrary.Managed`'s three `Package…PathFor` and `saves.rs`' `package_sram_path`,
   `package_state_path` and `package_resume_state_path`, held alike by the parity class; `GameCheats`' package file is
   its C# alone, since only Mistress keeps a cheat list.
+
+### 5.6 A game's own settings, and a packaged game's (2026-10-25)
+
+*`EmuSen_GamePackages.md` §18.2.* Where a game's own settings live is Galaxia's: `GameSettings` (moved from the C#
+runtime, which delegates to it) and its Rust twin in Crystal's `settings.rs`. A game's are
+`/etc/EmuSen/games/<system>/<stem>.json`, a map of strings (`EmuSen_Backend.md` §14.7); a packaged game's are its
+package's `settings.json` once that exists, and the plain file is read until then. A write for a packaged game always
+goes to the package, so its first one copies in what was read; the plain file is never written for it. The crop is one
+key of the same file, `Crop`, four invariant percentages or `""` for none, which Mistress's `GameRecords` reads before
+`games.db` for a packaged game and writes there; where `settings.json` holds no `Crop`, `games.db`'s row is read.
+Every path given is resolved first (`GamePackages.OpenedAs`, `claims::opened_as`), so a package's folder reads its
+game's settings.
 
 ### 5.4 A ROM's identity (2026-09-21)
 

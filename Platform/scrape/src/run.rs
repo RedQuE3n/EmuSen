@@ -800,13 +800,19 @@ impl Scraper {
         let stored = self.store().media(md5, bytes).map_err(|e| e.words())?;
         let root = self.root();
         let folder = settings.folder_of(rom);
+        // A packaged game's art is written into its package, never over or in place of the store's (EmuSen_GamePackages.md §18.3).
+        let package = package_of(rom);
         for kind in wanted {
             let kept = stored.iter().find(|s| s.ty == kind.esde_type && file_exists(&path::combine(STYLE, &root, &s.relative_path)));
             if kept.is_some() && !refresh {
                 continue;
             }
             let Some(media) = rules::choose_media(&game.media, kind, &regions, choices.region_fallback) else { continue };
-            let relative = layout::relative(&item.system, kind.folder, &folder, &format!("{stem}{}", rules::extension(media.format.as_deref(), kind.payload)));
+            let extension = rules::extension(media.format.as_deref(), kind.payload);
+            let relative = match &package {
+                Some(p) => emusen_galaxia::package::media_path(p, kind.folder, &extension),
+                None => layout::relative(&item.system, kind.folder, &folder, &format!("{stem}{extension}")),
+            };
             let mut local_sha1 = None;
             if let Some(k) = kept {
                 let at = path::combine(STYLE, &root, &k.relative_path);
@@ -841,7 +847,7 @@ impl Scraper {
             if !matches!(got.outcome, MediaOutcome::Saved | MediaOutcome::AlreadyThere) {
                 continue;
             }
-            if let Some(k) = kept.filter(|_| !replace) {
+            if let Some(k) = kept.filter(|k| !replace && package.as_deref().is_none_or(|p| emusen_galaxia::claims::within(&path::full_path(&path::combine(STYLE, &root, &k.relative_path)), p))) {
                 let old = path::combine(STYLE, &root, &k.relative_path);
                 std::fs::remove_file(&old).map_err(|e| io(e, &old))?;
             }
@@ -877,6 +883,9 @@ impl Scraper {
         let root = self.root();
         let media = self.store().media(md5, bytes).map_err(|e| e.words())?;
         for m in media {
+            if path::is_rooted(STYLE, &m.relative_path) {
+                continue;
+            }
             let old = path::combine(STYLE, &root, &m.relative_path);
             let relative = layout::relative(&layout::system_of(&m.relative_path), &layout::kind_folder_of(&m.relative_path), &settings.folder_of(rom), &format!("{stem}{}", path::extension(STYLE, &m.relative_path)));
             let target = path::combine(STYLE, &root, &relative);
@@ -1146,10 +1155,14 @@ fn local_day_time(utc: i64) -> String {
     format!("{} {}", names[emusen_dotnet::date::weekday(days) as usize], emusen_dotnet::date::local_text(local, "HH:mm"))
 }
 
+/// The package `rom` opens as, as the runtime resolves it, `Scraper.PackageOf`.
+fn package_of(rom: &str) -> Option<String> {
+    emusen_galaxia::claims::root_for(&emusen_galaxia::tree::tree(), rom)
+}
+
 /// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the runtime resolves it.
 fn patched_first(rom: &str) -> Option<Hashes> {
-    let places = emusen_galaxia::claims::Places::of(&emusen_galaxia::tree::tree());
-    let folder = emusen_galaxia::claims::resolve(&places.roots(), rom).ok()?.package?;
+    let folder = package_of(rom)?;
     let doc = emusen_galaxia::package::read(&emusen_galaxia::dotnet_files::join(&folder, emusen_galaxia::package::FILE_NAME)).ok()?.ok()?;
     scraped_first(&doc)
 }

@@ -28,13 +28,15 @@ pub struct Context {
     pub release: String,
     /// `AppSettings.StateDirectory`, where `pkg migrate` finds a game's states; none for the tree's own.
     pub state_folder: Option<String>,
+    /// The process's SQLite, for `pkg migrate` to read states.db's records and games.db's crop; none copies neither.
+    pub sqlite: Option<std::sync::Arc<emusen_sqlite::Sqlite>>,
 }
 
 impl Context {
     /// A context over the pin this build carries, for this platform.
     pub fn pinned(tree: Tree, library: Option<String>, chdman: String) -> Context {
         let pin = pin::pinned();
-        Context { tree, library, chdman, pin: pin.binary(pin::rid()).map(str::to_string), release: pin.release.clone(), state_folder: None }
+        Context { tree, library, chdman, pin: pin.binary(pin::rid()).map(str::to_string), release: pin.release.clone(), state_folder: None, sqlite: None }
     }
 
     /// The folders a package's paths are relative to (EmuSen_GamePackages.md §14).

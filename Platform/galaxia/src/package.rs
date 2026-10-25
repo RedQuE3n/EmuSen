@@ -18,6 +18,17 @@ pub const MINOR: u32 = 0;
 pub const SAVES_FOLDER: &str = "saves";
 pub const STATES_FOLDER: &str = "states";
 pub const CHEATS_FILE: &str = "cheats.json";
+/// A packaged game's own settings, its crop among them, `GamePackage.SettingsFile` (EmuSen_GamePackages.md §18.2).
+pub const SETTINGS_FILE: &str = "settings.json";
+/// A packaged game's art, under ES-DE's type folders, `GamePackage.MediaFolder` (EmuSen_GamePackages.md §18.3).
+pub const MEDIA_FOLDER: &str = "media";
+
+/// A packaged game's art of one ES-DE type folder, `GamePackage.MediaPathFor`: `<package>/media/<type folder>/<package's
+/// name><extension>` (EmuSen_GamePackages.md §18.3).
+pub fn media_path(root: &str, type_folder: &str, extension: &str) -> String {
+    let style = crate::dotnet_path::Style::HOST;
+    crate::dotnet_path::combine_all(style, &[root, MEDIA_FOLDER, type_folder, &format!("{}{extension}", crate::saves::package_stem(root))])
+}
 
 /// Why a text is not a manifest this build takes.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -354,6 +354,42 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             }
         }
 
+        // A packaged game's art goes into its package in both halves, the store keeping none of it; each half's package compared, emptied between them - see EmuSen_GamePackages.md §18.3.
+        [Fact]
+        public void A_packaged_game_s_art_is_written_into_its_package_alike()
+        {
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            try
+            {
+                new EmuSen.Galaxia.Models.AppSettings { RomDirectory = Roms }.Save();
+                string rom = Rom("snes/Packed (USA).sfc", Filled(2500, 50)), plain = Rom("snes/Plain (USA).sfc", Filled(2501, 51));
+                _server.Games.Add(new FakeGame(400, "Packed", RomHash.Of(rom).Md5));
+                _server.Games.Add(new FakeGame(401, "Plain", RomHash.Of(plain).Md5));
+                string package = Path.Combine(DataStore.Packages, "SNES", "Packed (USA).sfc");
+                EmuSen.WiseMan.Crystal.CrystalParityTests.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
+                string media = Path.Combine(package, EmuSen.Galaxia.Media.GamePackage.MediaFolder);
+                var games = new List<(string, string)> { (rom, "snes"), (plain, "snes") };
+                string a = Path.Combine(_root, "packed", "csharp"), b = Path.Combine(_root, "packed", "rust");
+                Side csharp = CSharp(a, games, new ScrapeChoices(), ScrapePriority.Library);
+                string csharpPackage = Tree(media);
+                Directory.Delete(media, recursive: true);
+                Side rust = Rust(b, games, new ScrapeChoices(), ScrapePriority.Library);
+                Assert.Equal(csharp.Results, rust.Results);
+                Assert.Equal(csharp.Db, rust.Db);
+                Assert.Equal(csharp.Tree, rust.Tree);
+                Assert.Equal(csharpPackage, Tree(media));
+                Assert.Contains("covers/Packed (USA).png", csharpPackage);
+                Assert.DoesNotContain("Packed", csharp.Tree);
+                Assert.Contains("Plain (USA).png", csharp.Tree);
+            }
+            finally
+            {
+                DataStore.OverrideDirectory = null;
+                ConfigStore.OverrideDirectory = null;
+            }
+        }
+
         // The store's failover covers alone, by their path below openemu/.
         private static string TreeUnder(string store) => Tree(Path.Combine(store, "openemu"));
     }

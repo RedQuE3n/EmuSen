@@ -42,7 +42,7 @@ namespace EmuSen.Mistress.Views
             {
                 ["roms"] = _appSettings.RomDirectory, ["art"] = ArtworkDirectory, ["esde_media"] = _appSettings.EsdeMediaDirectory, ["openemu"] = _appSettings.OpenEmuFallback,
                 ["user_agent"] = $"EmuSen/{(BuildName ?? "unknown").Split('+')[0]}", ["developer_files"] = DeveloperFromFiles,
-                ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(),
+                ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(), ["packages"] = PackagesByGame,
             });
             return ScrapeTest() is string test ? json[..^1] + ",\"test\":" + test + "}" : json;
         }

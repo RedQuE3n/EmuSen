@@ -161,6 +161,28 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal("file", second.MatchedBy);
         }
 
+        // A packaged game's art goes into its package's media folder by the package's name, and media.db names it there - see EmuSen_GamePackages.md §18.3.
+        [Fact]
+        public void A_packaged_game_s_art_is_written_into_its_package_by_the_package_s_name_and_not_into_the_store()
+        {
+            string rom = Rom("Packed (USA).sfc", Filled(4096, 71));
+            RomHashes h = RomHash.Of(rom);
+            string package = Path.Combine(_root, "Packages", "SNES", "Packed Package.sfc");
+            Directory.CreateDirectory(package);
+            _server.Games.Add(new FakeGame(83, "Packed", h.Md5));
+            Scraper scraper = Start(packageOf: p => p == rom ? package : null);
+
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
+            ScrapeResult result = Next();
+
+            Assert.Equal(ScrapeOutcome.Found, result.Outcome);
+            Assert.True(result.HasCover);
+            foreach (string folder in (string[])["covers", "screenshots", "marquees", "miximages"])
+                Assert.True(File.Exists(Path.Combine(package, "media", folder, "Packed Package.png")), folder);
+            Assert.False(Directory.Exists(Stored("snes")));
+            Assert.All(_store.Media(h.Md5, h.Size), m => Assert.StartsWith(package, m.RelativePath));
+        }
+
         [Fact]
         public void A_game_found_by_its_file_s_hashes_gets_its_text_and_each_default_kind_in_es_de_s_layout()
         {

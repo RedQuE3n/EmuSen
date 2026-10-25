@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.Contains("has SHA-1", refused);
                 a.Add(refused.Replace(_root, "<root>"));
                 return a;
-            }, also: () => TreeOf(DataStore.Packages) + "\n--\n" + TreeOf(library));
+            }, also: () => PackageTreeOf(DataStore.Packages) + "\n--\n" + TreeOf(library));
         }
     }
 }

@@ -1163,6 +1163,7 @@ namespace EmuSen.Mistress.Views
             // The disk walk happens here, once for every console, with each file's route asked again - see EmuSen_Backend.md §14.13.
             RuntimeCatalog.Forget();
             _allScan = RomLibrary.Scan(_appSettings.RomDirectory);
+            _native?.Settings(NativeSettings());
             _libraryScan = RomLibrary.Narrow(_allScan, SelectedConsole);
             ShowLibraryEntries();
             ReclaimMovedGames();

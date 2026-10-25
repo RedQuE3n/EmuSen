@@ -89,6 +89,8 @@ pub struct Settings {
     pub developer_files: bool,
     /// The systems each engine runs together, by id: the runtime's fact (EmuSen_Backend.md §30.12).
     pub cores: Vec<Vec<String>>,
+    /// Each packaged game's file and its package's folder, as the host's library scan found them (EmuSen_GamePackages.md §18.3).
+    pub packages: Vec<(String, String)>,
     pub test: Test,
 }
 
@@ -129,6 +131,16 @@ impl Settings {
                 _ => return Err(Error::BadRequest("The request's cores is not a list of lists.".into())),
             };
         }
+        if let Some(p) = r.get("packages") {
+            s.packages = match p {
+                Value::Object(members) => members
+                    .iter()
+                    .map(|(k, v)| v.as_str().map(|f| (k.text.clone(), f.to_string())).ok_or_else(|| Error::BadRequest("The request's packages holds a folder that is not text.".into())))
+                    .collect::<Result<Vec<_>, _>>()?,
+                Value::Null => Vec::new(),
+                _ => return Err(Error::BadRequest("The request's packages is not a map of game files to folders.".into())),
+            };
+        }
         if let Some(t) = r.get("test") {
             if !t.is_null() {
                 let connect = json::text_or_none(t, "connect")?.map(|c| c.parse::<SocketAddr>().map_err(|_| Error::BadRequest("The request's test.connect is not an address.".into()))).transpose()?;
@@ -136,6 +148,11 @@ impl Settings {
             }
         }
         Ok(s)
+    }
+
+    /// The package a library file is the game of, as the host's scan found it; none for a file no package claims.
+    pub fn package_of(&self, rom: &str) -> Option<&str> {
+        self.packages.iter().rev().find(|(game, _)| game == rom).map(|(_, folder)| folder.as_str())
     }
 
     /// The game's folder below its console's, by the ROM folder the settings name.

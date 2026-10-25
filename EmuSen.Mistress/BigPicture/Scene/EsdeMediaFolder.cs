@@ -35,6 +35,21 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return game.FolderPath.Length == 0 ? [stem] : [game.FolderPath + "/" + stem, stem];
         }
 
+        // A packaged game's file of a type in its package, the twin of media.rs' find_in_package - see EmuSen_GamePackages.md §18.3.
+        public static string? FindInPackage(string root, string mediaType)
+        {
+            if (!Folders.TryGetValue(mediaType, out string? folder)) return null;
+            foreach (string ext in ExtensionsOf(mediaType))
+                if (Galaxia.Media.GamePackage.MediaPathFor(root, folder, ext) is var path && File.Exists(path)) return path;
+            return null;
+        }
+
+        // Each packaged game's media folder and its type folders' write times, in the order given.
+        public static string PackageStamp(IEnumerable<string> roots) =>
+            string.Join(",", roots.Select(r => Path.Combine(r, Galaxia.Media.GamePackage.MediaFolder)).Select(d => Directory.Exists(d)
+                ? string.Join(";", Directory.EnumerateDirectories(d).Order(StringComparer.Ordinal).Prepend(d).Select(x => Directory.GetLastWriteTimeUtc(x).Ticks))
+                : "0"));
+
         public string? Find(ThemeSystem system, SceneGame game, string mediaType)
         {
             if (!Folders.TryGetValue(mediaType, out string? folder)) return null;

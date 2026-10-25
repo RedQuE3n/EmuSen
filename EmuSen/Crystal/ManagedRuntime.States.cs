@@ -57,22 +57,24 @@ namespace EmuSen.Crystal.Managed
         // A game's own value with no session; the engine's choice read through its console's catalog, as a session reads it.
         public static string? GameSetting(string path, string key)
         {
-            if (!GameValues(SystemOfFile(path), path).TryGetValue(key, out string? own)) return null;
+            (path, string? package) = Galaxia.Media.GamePackages.OpenedAs(path);
+            if (!GameValues(SystemOfFile(path), path, package).TryGetValue(key, out string? own)) return null;
             return key == CoreCatalog.EngineKey && CoreCatalog.ConsoleForRom(path) is { } console ? CoreCatalog.EngineChosen(console, own) : own;
         }
 
         public void SetGameSetting(string path, string key, string? value)
         {
+            (path, string? package) = Galaxia.Media.GamePackages.OpenedAs(path);
             string console = CoreCatalog.ConsoleForRom(path) ?? SystemOfFile(path)?.ToUpperInvariant()
                 ?? throw new CrystalException(SessionAbi.NotSupported, $"{Path.GetFileName(path)} runs as no system of the table, so it has no file of its own settings");
             CoreSetting row = Schema(console, null).FirstOrDefault(r => r.Key == key)
                 ?? throw new CrystalException(SessionAbi.NoSuchId, $"the {console} has no setting \"{key}\"");
             if (value is not null && Refusal(row, value) is { } why) throw new CrystalException(SessionAbi.BadArgument, why);
             string? system = SystemOfFile(path);
-            Dictionary<string, string> values = GameValues(system, path);
+            Dictionary<string, string> values = GameValues(system, path, package);
             if (value is null) values.Remove(key);
             else values[key] = value;
-            WriteGameValues(system, path, values);
+            WriteGameValues(system, path, package, values);
             foreach (ManagedSession open in Sessions.Where(o => o.GamePath is { } p && string.Equals(Path.GetFullPath(p), Path.GetFullPath(path), StringComparison.Ordinal)))
                 open.ApplySetting(key, GetSettingOf(open, key));
             Events.Raise(0, CrystalNumbers.EventSettings, "settings", w =>
@@ -113,10 +115,10 @@ namespace EmuSen.Crystal.Managed
                 if (engine.Length == 0 || SystemOfFile(path) is not { } system) continue;
                 string console = CoreCatalog.ConsoleForRom(path) ?? system.ToUpperInvariant();
                 if (Schema(console, null).FirstOrDefault(r => r.Key == CoreCatalog.EngineKey)?.Choices?.Contains(engine) != true) continue;
-                Dictionary<string, string> values = GameValues(system, path);
+                Dictionary<string, string> values = GameValues(system, path, null);
                 if (values.ContainsKey(CoreCatalog.EngineKey)) continue;
                 values[CoreCatalog.EngineKey] = engine;
-                WriteGameValues(system, path, values);
+                WriteGameValues(system, path, null, values);
                 copied++;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(EngineChoicesCopied)!);

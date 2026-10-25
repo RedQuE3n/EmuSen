@@ -8,6 +8,15 @@ use std::mem::ManuallyDrop;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// The file the program ships SQLite as, SQLitePCLRaw's e_sqlite3.
+pub const SHIPPED_NAME: &str = if cfg!(windows) {
+    "e_sqlite3.dll"
+} else if cfg!(target_os = "macos") {
+    "libe_sqlite3.dylib"
+} else {
+    "libe_sqlite3.so"
+};
+
 pub const BUSY: i32 = 5;
 pub const LOCKED: i32 = 6;
 pub const CORRUPT: i32 = 11;
@@ -90,6 +99,37 @@ impl Sqlite {
         Ok(Sqlite { f, _library: ManuallyDrop::new(library), owned: true })
     }
 
+    /// SQLite as this process already has it loaded, by the file name the program ships it under, as a .NET host loads
+    /// it; else the first of `candidates` that loads; so that a tool no host lends SQLite to still holds the process's
+    /// one copy where there is one (EmuSen_GamePackages.md §18.4).
+    pub fn of_process(candidates: &[String]) -> Result<Sqlite, String> {
+        if let Some(loaded) = Sqlite::already_loaded() {
+            return Ok(loaded);
+        }
+        let mut why = Vec::new();
+        for c in candidates {
+            match Sqlite::open(c) {
+                Ok(s) => return Ok(s),
+                Err(w) => why.push(w),
+            }
+        }
+        Err(if why.is_empty() { format!("{SHIPPED_NAME} is not loaded in this program") } else { format!("{SHIPPED_NAME} is not loaded in this program, and {}", why.join("; ")) })
+    }
+
+    #[cfg(unix)]
+    fn already_loaded() -> Option<Sqlite> {
+        let library: libloading::Library = unsafe { libloading::os::unix::Library::open(Some(SHIPPED_NAME), libc::RTLD_NOW | libc::RTLD_NOLOAD) }.ok()?.into();
+        let f = unsafe { Functions::load(&library) }.ok()?;
+        Some(Sqlite { f, _library: ManuallyDrop::new(library), owned: true })
+    }
+
+    #[cfg(windows)]
+    fn already_loaded() -> Option<Sqlite> {
+        let library: libloading::Library = libloading::os::windows::Library::open_already_loaded(SHIPPED_NAME).ok()?.into();
+        let f = unsafe { Functions::load(&library) }.ok()?;
+        Some(Sqlite { f, _library: ManuallyDrop::new(library), owned: true })
+    }
+
     /// SQLite as the host has it loaded, by its loader's handle.
     ///
     /// # Safety
@@ -104,6 +144,12 @@ impl Sqlite {
         let library: libloading::Library = unsafe { libloading::os::windows::Library::from_raw(handle as isize) }.into();
         let f = unsafe { Functions::load(&library) }?;
         Ok(Sqlite { f, _library: ManuallyDrop::new(library), owned: false })
+    }
+}
+
+impl std::fmt::Debug for Sqlite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.owned { "Sqlite (opened)" } else { "Sqlite (lent)" })
     }
 }
 

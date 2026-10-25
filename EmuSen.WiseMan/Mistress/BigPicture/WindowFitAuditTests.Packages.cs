@@ -33,7 +33,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Directory.CreateDirectory(Path.Combine(_romDir, "nes"));
             File.WriteAllBytes(Path.Combine(_romDir, "nes", PackagedTitle + ".nes"), SyntheticNesRom.Build());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
-            CrystalParityTests.PackageFor(Path.Combine(DataStore.Packages, "NES", PackagedTitle + ".nes"), _romDir, $"nes/{PackagedTitle}.nes", "nes");
+            string packaged = Path.Combine(DataStore.Packages, "NES", PackagedTitle + ".nes");
+            CrystalParityTests.PackageFor(packaged, _romDir, $"nes/{PackagedTitle}.nes", "nes");
+            // Its cover in its package's media folder, which the window's sources read for it (§18.3).
+            string cover = Path.Combine(packaged, "media", "covers", PackagedTitle + ".png");
+            Directory.CreateDirectory(Path.GetDirectoryName(cover)!);
+            using (var bitmap = new SkiaSharp.SKBitmap(8, 8))
+            using (var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
+                File.WriteAllBytes(cover, data.ToArray());
             string chd = Path.Combine(DataStore.Compressed, "psx", "Ruby Lantern (Synthetic).chd");
             Directory.CreateDirectory(Path.GetDirectoryName(chd)!);
             File.WriteAllBytes(chd, new byte[64]);
@@ -56,6 +63,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(3, entries.Count);
                 Assert.Single(entries, e => e.Title == PackagedTitle && e.Package is not null);
                 Assert.Single(entries, e => e.FullPath == chd && e.Shelf.StartsWith("PlayStation", StringComparison.Ordinal));
+                var packages = entries.Where(e => e.Package is not null).ToDictionary(e => e.FullPath, e => e.Package!);
+                Assert.Equal(cover, new EmuSen.Mistress.Scraping.MediaSources((_, _) => null, DataStore.Media, null, null, romDirectory: _romDir, packages: packages).Cover("nes", Path.Combine(_romDir, "nes", PackagedTitle + ".nes")));
                 var faults = new List<string>();
                 faults.AddRange(FitAudit.Check(list, null, smallest: 0).Select(f => $"list: {f}"));
                 faults.AddRange(FitAudit.Check(window.GetControl<SourceList>("LibrarySidebar"), null, smallest: 0).Select(f => $"sidebar: {f}"));

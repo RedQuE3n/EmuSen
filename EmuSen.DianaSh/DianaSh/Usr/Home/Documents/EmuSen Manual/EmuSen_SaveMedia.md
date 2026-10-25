@@ -125,7 +125,10 @@ battery file's rule there (`EmuSen_GamePackages.md` §3.5, built 2026-10-25 at s
 `Saves/<console>/<game><suffix>` is read until the first write copies it in, and is never removed. A game opened with
 the package's soft patches applied has its own, `<package>/saves/<package's name>.patched-<key><suffix>`, and reads
 nothing before it (decided 2026-10-25, `EmuSen_GamePackages.md` §16). *Shared* and
-*Named* files stay in `Saves/<console>/Cards` and `Console`: they are the console's, not a game's.
+*Named* files stay in `Saves/<console>/Cards` and `Console`: they are the console's, not a game's. A packaged game's
+medium settings (*Per game*, *Shared* or *Named* for each medium, when chosen for the one game) are among its own
+settings, which since 2026-10-25 are its package's `settings.json` once it has one (`EmuSen_GamePackages.md` §18.2); a
+medium's mode chosen for the console stays the console's.
 
 The **noun** is the medium's word for one of its kind, `Card`, `Pak`, `Cartridge`, `Backup RAM`, from the console's
 system pack (§4), and `Card` for a removable medium no pack knows, `Memory` for a console one. So the PlayStation's

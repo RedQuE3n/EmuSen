@@ -100,9 +100,7 @@ impl Session {
         }
         let bytes = e.state_bytes().map_err(|r| (r.status, r.words))?;
         std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
-        if let Some(records) = records {
-            records.write(at, &self.record(e))?;
-        }
+        crate::states::write(records, at, &self.record(e))?;
         self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
             j.str("op", "saved").str("path", at);
         });
@@ -121,8 +119,7 @@ impl Session {
         if !emusen_galaxia::dotnet_files::file_exists(at) {
             return Err((svc::ABSENT, format!("no state at {at}")));
         }
-        if let Some(records) = records
-            && let Some(r) = records.read(at)?
+        if let Some(r) = crate::states::read(records, at)?
             && let Some(why) = self.refusal(e, &r)
         {
             return Err((abi::status::STATE_REFUSED, why));

@@ -403,13 +403,17 @@ namespace EmuSen.Mistress.Scraping
 
             var written = new List<string>();
             int unchanged = 0;
+            // A packaged game's art is written into its package, never over or in place of the store's - see EmuSen_GamePackages.md §18.3.
+            string? package = PackageOf(path);
             IReadOnlyList<StoredMedia> stored = _store.Media(md5, bytes);
             foreach (ScrapeMediaKind kind in kinds)
             {
                 StoredMedia? kept = stored.FirstOrDefault(s => s.Type == kind.EsdeType && File.Exists(Path.Combine(_store.Root, s.RelativePath)));
                 if (kept is not null && !refresh) continue;
                 if (ScrapeRules.ChooseMedia(game.Media, kind, regions, choices.RegionFallback) is not { } media) continue;
-                string relative = MediaStore.Relative(item.System, kind.Folder, FolderOf(path), stem + ScrapeRules.Extension(media, kind.Payload));
+                string relative = package is not null
+                    ? Galaxia.Media.GamePackage.MediaPathFor(package, kind.Folder, ScrapeRules.Extension(media, kind.Payload))
+                    : MediaStore.Relative(item.System, kind.Folder, FolderOf(path), stem + ScrapeRules.Extension(media, kind.Payload));
                 string? localSha1 = null;
                 if (kept is not null)
                 {
@@ -424,7 +428,8 @@ namespace EmuSen.Mistress.Scraping
                 await ThrottleAsync(got, stop);
                 if (got.Outcome == MediaOutcome.Unchanged) { unchanged++; continue; }
                 if (got.Outcome is not (MediaOutcome.Saved or MediaOutcome.AlreadyThere)) continue;
-                if (kept is not null && !replace) File.Delete(Path.Combine(_store.Root, kept.RelativePath));
+                if (kept is not null && !replace && (package is null || Galaxia.Media.GamePackages.Within(Path.GetFullPath(Path.Combine(_store.Root, kept.RelativePath)), package)))
+                    File.Delete(Path.Combine(_store.Root, kept.RelativePath));
                 Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Arrived, kind.EsdeType, got.Path));
                 _store.RecordMedia(md5, bytes, new StoredMedia(kind.EsdeType, relative, media.Region, got.Sha1), _clock.Now);
                 written.Add(relative);
@@ -458,6 +463,7 @@ namespace EmuSen.Mistress.Scraping
             string stem = Path.GetFileNameWithoutExtension(path);
             foreach (StoredMedia media in _store.Media(md5, bytes))
             {
+                if (Path.IsPathRooted(media.RelativePath)) continue;
                 string old = Path.Combine(_store.Root, media.RelativePath);
                 string relative = MediaStore.Relative(MediaStore.SystemOf(media.RelativePath), MediaStore.KindFolderOf(media.RelativePath), FolderOf(path),
                     stem + Path.GetExtension(media.RelativePath));

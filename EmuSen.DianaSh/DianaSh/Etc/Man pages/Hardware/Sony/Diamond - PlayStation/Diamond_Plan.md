@@ -196,6 +196,15 @@ the write-ups, patents and Sony's documents are fetched by the stage that first 
 replacement writers' exclusions of §2.2 by file and line, and adds the CD controller's microcontroller chapters as to
 be screened before any writer reads them, that controller being firmware (§5.6) [C].
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
 ### 2.2 Sony's confidential documents, and psx-spx's provenance
 
 Sony's developer documents (the run-time library references and overviews, the hardware notes and the file-format

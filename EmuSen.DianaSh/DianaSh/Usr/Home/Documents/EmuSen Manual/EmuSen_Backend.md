@@ -9322,3 +9322,14 @@ Each was made in the source, run, and reverted, the file compared byte for byte 
 | C. The C# 32X literal has no recogniser | `Every_system_has_code_where_its_literal_has`, the routing case |
 | D. The 32X's data file drops `.bin` | the systems crate's two routing tests, the library's case; `SystemTableParityTests` (two cases), the routing case |
 | E. `probe::recognises` leaves out `32x`, so its recogniser is never asked | the systems crate's routing test, the library's case; `Every_system_has_code_where_its_literal_has` |
+
+---
+
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).

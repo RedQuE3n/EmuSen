@@ -2215,3 +2215,14 @@ longer waits on two interrupts and so shifts every case after it; `y2-past-field
 now expects no interrupt in case 7, as Beetle PSX gave in §29.4. `diamond-v1`'s 5 and `precision`'s 8 lib tests pass.
 Debug [M, `cargo test --lib`]: 181 passing, the two program tests passing in debug too. The kit [M,
 `emusen-core-conform --frames 600`, `libdiamond.so` from `v1/`]: 22 of 22 on `gpu/animated-triangle` and on Ape Escape.
+
+---
+
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).

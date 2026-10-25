@@ -241,6 +241,15 @@ Redump's BIOS datfile was added as the database of §5.9.*
 | **Wikipedia, "PlayStation 2 technical specifications"** | en.wikipedia.org, read 2026-10-23 | Public, secondary, cites Sony's papers and Hennessy and Patterson in places | Clock, memory and fill-rate figures | Its figures conflict with one another (D-0) |
 | **Batocera's wiki, PlayStation 2 page** | wiki.batocera.org | Public | Image names in the No-Intro form and their MD5s | — |
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
 ### 2.2 Sony's Linux-kit manuals, and ps2tek's BIOS chapter
 
 **The manuals.** Sony distributed its hardware manuals with the Linux for PlayStation 2 kit (beta 2001, release 1.0 in

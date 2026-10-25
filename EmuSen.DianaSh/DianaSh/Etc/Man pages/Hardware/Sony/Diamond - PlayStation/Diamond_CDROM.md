@@ -507,6 +507,15 @@ transfer sections; `memorycontrol.md`'s DEV5 and auto-increment; `kernelbios.md`
 CDROM rows; ECMA-130 §14, §22 and Annex A; ps1-tests' `cdrom/getloc`, `disc-swap` and `timing` sources (`main.cpp`) and
 logs, and `common/measure.hpp`'s first lines (its header, which names no copied source); chdman's output.
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
 **Not read**: any emulator's source; the BIOS; the HC05's program or psx-spx's chapters on it; PSn00bSDK's library;
 `common/dma.hpp` (which getloc and disc-swap include, so that their binaries were run as black boxes).
 

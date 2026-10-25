@@ -2223,8 +2223,20 @@ The core ABI is unchanged, as §0 said it would be.
 **Run** [M]: `cargo test --profile test-checked` of `emusen-patch` (formats 8), `emusen-library-tool` (4, gate 7,
 packages 2, patches 1), `emusen-library-module` (4), `emusen-galaxia` (89, advise 1), `emusen-crystal` (6, `crystal_abi` 6,
 `frame_alloc` 1), `emusen-scrape` (3 with the identity case, and its integration tests), `emusen-platform` (33,
-`dianash_abi` 4, `library_tool` 3) and `emusen-library`. WiseMan: the blast radius `blast.sh` named, with
-`CoreAdapterTests` added for `CoreEngine`; the counts are in §15.9's run line.
+`dianash_abi` 4, `library_tool` 3) and `emusen-library` (2, 3, `library_abi` 6, `routing` 2). WiseMan: the blast
+radius `blast.sh` named, with `CoreAdapterTests` added for `CoreEngine`: 4,256 passed, 62 skipped (the picture and
+bench tools) and 2 failed, in 25 minutes. The two were the big-picture game options view's recordings, at both sizes,
+whose list had gained *Game Package…*; recorded again, the specification's classes passed, 300. The golden corpus's
+`pkg`, `help` and `man` were given `pkg patch` and the new page; `GoldenCorpusTests` passed, 102.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| UPS's terminating zero not moving the position past its byte | `formats.rs`' `ups_reproduces_independent_targets` |
+| BPS's SourceCopy not moving its source offset past what it copied | `formats.rs`' BPS gate and the list case |
+| Crystal's Rust engine handing the core the image unpatched | `CrystalParityTests.A_patched_package_s_core_is_handed_the_patched_image_and_the_file_is_never_written_both_ways`: the state differed from the target's |
+| Mistress's scraper sending the patched image first whatever the identity | `ScraperTests.A_patched_package_is_scraped_by_its_dump_unless_its_identity_is_patched_and_then_by_the_patched_image_first`: two requests for an `identity: original` package |
 
 ### 15.9 Left, and for the tester
 

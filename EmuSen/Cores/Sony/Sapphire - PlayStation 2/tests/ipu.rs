@@ -39,6 +39,7 @@ fn the_corpus_decodes_as_the_standard_and_ffmpeg_agree() {
         let max = diff.iter().map(|d| d.abs()).max().unwrap();
         let n = diff.iter().filter(|&&d| d != 0).count();
         println!("{}: {} frames, {} samples differ from ffmpeg, at most by {max}", s.name, d.frames.len(), n);
+        assert!(max <= 1 && n * 20 < diff.len(), "{}: {n} samples differ, at most by {max}: more than two IDCTs' rounding", s.name);
     }
 }
 
@@ -63,13 +64,10 @@ fn idec_gives_the_standards_pictures_through_the_manuals_csc() {
 
 #[test]
 fn the_programs_replay_their_logs_through_the_dmac_on_the_board() {
-    for (name, o) in [("intra-matrix", Options::IDEC32), ("pb", Options::BDEC)] {
-        let s = s27::corpus().into_iter().find(|s| s.name == name).unwrap();
-        let bytes = s.complete();
-        let d = standard::decode(&bytes);
-        let log = driver::drive(&bytes, &d, o).unwrap();
-        let p = program::build(name, &driver::image(&bytes), &log);
-        grade(&p);
+    let programs = s27::programs();
+    assert_eq!(programs.len(), 32);
+    for p in &programs {
+        grade(p);
     }
 }
 

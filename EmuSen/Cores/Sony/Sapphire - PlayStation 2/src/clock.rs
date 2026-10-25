@@ -24,3 +24,11 @@ pub const PAL: Standard = Standard { line: 9436, lines: 312, active: 286 };
 /// The bus cycles at each line's start during which the stand-in holds H-blank high: a choice [C], about a sixth of
 /// the line as an analogue picture's blanking is, until the PCRTC's own timing replaces it at S20.
 pub const HBLANK: u64 = 1600;
+
+/// EE cycles in one IOP cycle: the IOP at 36.864 MHz, an eighth of the EE's [R ps2tek "CDVD Reads and Seeks":
+/// "IOP_CLOCK is ~36,864,000 Hz"; D-0's family]. Sapphire_Native.md §22.
+pub const IOP: u64 = 8;
+
+/// The IOP's timer 0 on its external clock, the pixel clock of 13.5 MHz "regardless of screen mode" [R ps2tek "IOP
+/// Timers"], as EE cycles a tick: 294.912 / 13.5 = 8192 / 375 exactly, so its ticks are counted as a ratio.
+pub const PIXEL: (u64, u64) = (8192, 375);

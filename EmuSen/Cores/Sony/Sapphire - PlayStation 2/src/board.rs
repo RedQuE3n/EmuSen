@@ -12,6 +12,7 @@ use crate::dmac::{self, Dmac, Peripherals};
 use crate::ee::map::{self, Map, Region};
 use crate::ee::{Bus, Ee, Halt};
 use crate::intc::{self, Intc};
+use crate::iop::Iop;
 use crate::timer::{self, Timer};
 use crate::vu::Vpu;
 
@@ -74,6 +75,8 @@ pub struct Board {
     pub ports: StandIns,
     /// VU0 and VU1, which the core reaches through COP2 and the map at 11000000h (from S12).
     pub vpu: Vpu,
+    /// The IOP, a unit of its own with its bus and units, brought to the board's time (Sapphire_Native.md §22).
+    pub iop: Iop,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
@@ -89,6 +92,7 @@ impl Board {
             blank: Blank::new(standard),
             ports: StandIns::default(),
             vpu: Vpu::new(),
+            iop: Iop::new(Blank::new(standard)),
             now: 0,
             next: 0,
         };
@@ -146,6 +150,7 @@ impl Board {
         }
         self.now = self.now.max(t);
         self.vpu.run_to(t);
+        self.iop.run_to(self.now);
     }
 
     /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
@@ -187,10 +192,19 @@ fn is_unit_register(paddr: u32) -> bool {
 /// The VU memories in the EE's map (EE User's Manual §2.1).
 const VU_MEMORY: std::ops::Range<u32> = 0x1100_0000..0x1101_0000;
 
+/// The EE's window onto IOP RAM, 1C000000h to 1C1FFFFFh [R ps2tek "Memory Map"].
+const IOP_RAM: std::ops::Range<u32> = 0x1C00_0000..0x1C20_0000;
+
 impl Bus for Board {
     fn read(&mut self, paddr: u32, bytes: usize) -> u128 {
         if VU_MEMORY.contains(&paddr) {
             return self.vpu.read(paddr, bytes);
+        }
+        if IOP_RAM.contains(&paddr) {
+            let a = (paddr - IOP_RAM.start) as usize;
+            let mut v = [0u8; 16];
+            v[..bytes].copy_from_slice(&self.iop.bus.ram[a..a + bytes]);
+            return u128::from_le_bytes(v);
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) {
@@ -205,6 +219,11 @@ impl Bus for Board {
     fn write(&mut self, paddr: u32, bytes: usize, value: u128) {
         if VU_MEMORY.contains(&paddr) {
             return self.vpu.write(paddr, bytes, value);
+        }
+        if IOP_RAM.contains(&paddr) {
+            let a = (paddr - IOP_RAM.start) as usize;
+            self.iop.bus.ram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
+            return;
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) && bytes >= 4 {

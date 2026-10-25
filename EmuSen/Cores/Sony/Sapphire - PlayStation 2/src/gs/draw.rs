@@ -4,6 +4,7 @@
 //! through the pipeline (`pixel`). Sapphire_Native.md §27.
 
 use super::psm::Psm;
+use super::texture::Sampler;
 use super::{Gs, raster, reg};
 
 /// A vertex (§3.2.3's figure 3-2): its coordinates in sixteenths of a pixel, primitive coordinates in the queue and
@@ -169,6 +170,10 @@ pub struct Environment {
     pub scissor: (i32, i32, i32, i32),
     pub test: u64,
     pub scanmsk: u32,
+    /// The context's texture registers when TME is set (S18).
+    pub texture: Option<Sampler>,
+    /// FOGCOL's colour when FGE is set (S18).
+    pub fog: Option<[u32; 3]>,
 }
 
 impl Environment {
@@ -190,6 +195,14 @@ impl Environment {
             scissor: ((s & 0x7FF) as i32, (s >> 16 & 0x7FF) as i32, (s >> 32 & 0x7FF) as i32, (s >> 48 & 0x7FF) as i32),
             test: gs.regs[(reg::TEST_1 + c) as usize],
             scanmsk: gs.regs[reg::SCANMSK as usize] as u32 & 3,
+            texture: attributes.textured().then(|| {
+                let r = |a: u8| gs.regs[(a + c) as usize];
+                Sampler::new([r(reg::TEX0_1), r(reg::TEX1_1), r(reg::CLAMP_1), r(reg::MIPTBP1_1), r(reg::MIPTBP2_1), gs.regs[reg::TEXA as usize]], attributes.uv())
+            }),
+            fog: attributes.fogged().then(|| {
+                let f = gs.regs[reg::FOGCOL as usize];
+                [f as u32 & 0xFF, (f >> 8) as u32 & 0xFF, (f >> 16) as u32 & 0xFF]
+            }),
         }
     }
 }
@@ -231,12 +244,12 @@ impl Gs {
             let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
             let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
             let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
-            let local = &mut self.local;
+            let (local, clut) = (&mut self.local, &self.clut);
             match kind {
-                Kind::Point => raster::point(&env, local, &v[0]),
-                Kind::Line | Kind::LineStrip => raster::line(&env, local, &v[0], &v[1]),
-                Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => raster::triangle(&env, local, [&v[0], &v[1], &v[2]]),
-                Kind::Sprite => raster::sprite(&env, local, &v[0], &v[1]),
+                Kind::Point => raster::point(&env, local, clut, &v[0]),
+                Kind::Line | Kind::LineStrip => raster::line(&env, local, clut, &v[0], &v[1]),
+                Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => raster::triangle(&env, local, clut, [&v[0], &v[1], &v[2]]),
+                Kind::Sprite => raster::sprite(&env, local, clut, &v[0], &v[1]),
                 Kind::Prohibited => {}
             }
         }

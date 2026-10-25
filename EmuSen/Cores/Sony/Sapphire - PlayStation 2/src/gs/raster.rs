@@ -18,10 +18,15 @@
 //! therefore exact, a reading recorded as Sapphire_Disputes.md D-160 and D-164. The loops of sprites and triangles run
 //! over the primitive's bounding box within the scissoring area, whose test (`pixel`) the pixels outside it would fail
 //! first. Sapphire_Native.md §27.
+//!
+//! Texture coordinates and the fog coefficient (S18, §31) are interpolated by the same weights whatever the shading: a
+//! triangle's barycentric ones, a line's along its major axis (continued past an end, the fog held to 0 to 255), a
+//! sprite's along x for S and U and along y for T and V with the second vertex's Q and fog, a point's its vertex's.
 
 use super::draw::{Environment, Vertex};
 use super::local::Local;
-use super::pixel;
+use super::pixel::{self, Shade};
+use super::texture::{Clut, Setup};
 
 /// The whole pixels from `lo` to `hi` inclusive whose centres lie in [a, b) sixteenths, clipped: ceil(a) to ceil(b) - 1.
 fn span(a: i32, b: i32, lo: i32, hi: i32) -> (i32, i32) {
@@ -33,18 +38,40 @@ const fn nearest(v: i32) -> i32 {
     (v + 8).div_euclid(16)
 }
 
-pub fn point(env: &Environment, local: &mut Local, v: &Vertex) {
-    pixel::draw(env, local, nearest(v.x), nearest(v.y), v.z, v.rgba());
+/// The primitive's texture setup, when it is textured; `q` the Q each vertex contributes.
+fn setup(env: &Environment, v: [&Vertex; 3], q: [u32; 3], last: &Vertex) -> Option<Setup> {
+    env.texture.as_ref().map(|t| Setup::new(t, v, q, last))
 }
 
-pub fn sprite(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
+fn q(v: &Vertex) -> u32 {
+    (v.rgbaq >> 32) as u32
+}
+
+/// The shade at weights `wu` (and `wv` along V) with fog coefficient `f`.
+fn shade(tex: &Option<Setup>, wu: [i64; 3], wv: [i64; 3], f: u32) -> Shade {
+    let (u, v, lod) = tex.as_ref().map_or((0, 0, 0), |t| t.at(wu, wv));
+    Shade { u, v, lod, f }
+}
+
+pub fn point(env: &Environment, local: &mut Local, clut: &Clut, v: &Vertex) {
+    let tex = setup(env, [v; 3], [q(v); 3], v);
+    pixel::draw(env, local, clut, nearest(v.x), nearest(v.y), v.z, v.rgba(), || shade(&tex, [1, 0, 0], [1, 0, 0], u32::from(v.f)));
+}
+
+pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex) {
     let (sx0, sx1, sy0, sy1) = env.scissor;
     let (x0, x1) = span(a.x.min(b.x), a.x.max(b.x), sx0, sx1);
     let (y0, y1) = span(a.y.min(b.y), a.y.max(b.y), sy0, sy1);
     let c = b.rgba();
+    let tex = setup(env, [a, b, b], [q(b); 3], b);
+    // Weights of a and b at a centre along one axis, their total made positive whichever corner comes first.
+    let along = |p: i32, pa: i32, pb: i32| {
+        let s = (pb - pa).signum() as i64;
+        [i64::from(pb - 16 * p) * s, i64::from(16 * p - pa) * s, 0]
+    };
     for y in y0..=y1 {
         for x in x0..=x1 {
-            pixel::draw(env, local, x, y, b.z, c);
+            pixel::draw(env, local, clut, x, y, b.z, c, || shade(&tex, along(x, a.x, b.x), along(y, a.y, b.y), u32::from(b.f)));
         }
     }
 }
@@ -57,7 +84,7 @@ fn in_diamond(u: i32, v: i32) -> bool {
     (u - cu).abs() + (v - cv).abs() < 8 || (u == cu && v == cv - 8)
 }
 
-pub fn line(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
+pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex) {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     if dx == 0 && dy == 0 {
         return;
@@ -83,6 +110,7 @@ pub fn line(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
     };
     let (ca, cb) = (a.rgba(), b.rgba());
     let gouraud = env.attributes.gouraud();
+    let tex = setup(env, [a, b, b], [q(a), q(b), q(b)], b);
     let mut c = first;
     while (last - c) * s >= 0 {
         let t = i64::from(16 * c - au) * i64::from(s);
@@ -91,7 +119,8 @@ pub fn line(env: &Environment, local: &mut Local, a: &Vertex, b: &Vertex) {
         let z = lerp(a.z, b.z).clamp(0, i64::from(u32::MAX)) as u32;
         let rgba = if gouraud { std::array::from_fn(|i| lerp(ca[i], cb[i]).clamp(0, 255) as u32) } else { cb };
         let (x, y) = if xmajor { (c, r) } else { (r, c) };
-        pixel::draw(env, local, x, y, z, rgba);
+        let w = [du - t, t, 0];
+        pixel::draw(env, local, clut, x, y, z, rgba, || shade(&tex, w, w, lerp(u32::from(a.f), u32::from(b.f)).clamp(0, 255) as u32));
         c += s;
     }
 }
@@ -108,7 +137,7 @@ const fn top_left(p: &Vertex, q: &Vertex) -> i64 {
     (dy < 0 || (dy == 0 && dx > 0)) as i64
 }
 
-pub fn triangle(env: &Environment, local: &mut Local, [a, b, c]: [&Vertex; 3]) {
+pub fn triangle(env: &Environment, local: &mut Local, clut: &Clut, [a, b, c]: [&Vertex; 3]) {
     let last = c;
     let area = edge(a, b, i64::from(c.x), i64::from(c.y));
     if area == 0 {
@@ -122,6 +151,8 @@ pub fn triangle(env: &Environment, local: &mut Local, [a, b, c]: [&Vertex; 3]) {
     let bias = [top_left(b, c), top_left(c, a), top_left(a, b)];
     let (ca, cb, cc) = (a.rgba(), b.rgba(), c.rgba());
     let gouraud = env.attributes.gouraud();
+    let tex = setup(env, [a, b, c], [q(a), q(b), q(c)], last);
+    let fog = [a.f, b.f, c.f].map(i64::from);
     for y in y0..=y1 {
         for x in x0..=x1 {
             let (px, py) = (16 * i64::from(x), 16 * i64::from(y));
@@ -131,7 +162,7 @@ pub fn triangle(env: &Environment, local: &mut Local, [a, b, c]: [&Vertex; 3]) {
             }
             let z = ((i128::from(a.z) * i128::from(w[0]) + i128::from(b.z) * i128::from(w[1]) + i128::from(c.z) * i128::from(w[2])) / i128::from(area)) as u32;
             let rgba = if gouraud { std::array::from_fn(|i| ((i64::from(ca[i]) * w[0] + i64::from(cb[i]) * w[1] + i64::from(cc[i]) * w[2]) / area) as u32) } else { last.rgba() };
-            pixel::draw(env, local, x, y, z, rgba);
+            pixel::draw(env, local, clut, x, y, z, rgba, || shade(&tex, w, w, ((fog[0] * w[0] + fog[1] * w[1] + fog[2] * w[2]) / area) as u32));
         }
     }
 }

@@ -1,11 +1,22 @@
 //! The pixel pipeline (GS User's Manual figure 3-1, §3.7, §3.9), in the documented order: the scissoring test and
-//! SCANMSK; texture mapping, fog and antialiasing (S18, S19); the alpha test and the
-//! destination alpha test (S19); the depth test; alpha blending, dithering, colour clamp and alpha correction (S19);
-//! format conversion, FBMSK and ZMSK, and the writes through `local`. Sapphire_Native.md §27.
+//! SCANMSK; texture mapping and fog (`texture`, S18) and antialiasing (S19); the alpha test and the destination alpha
+//! test (S19); the depth test; alpha blending, dithering, colour clamp and alpha correction (S19); format conversion,
+//! FBMSK and ZMSK, and the writes through `local`. Sapphire_Native.md §27, §31.
 
 use super::draw::Environment;
 use super::local::Local;
 use super::psm::Psm;
+use super::texture::{self, Clut};
+
+/// What texturing and fog take at a pixel: the texture coordinates in sixteenths of a texel, the LOD in sixteenths and
+/// the fog coefficient, which `raster` interpolates only when a pixel needs them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Shade {
+    pub u: i64,
+    pub v: i64,
+    pub lod: i32,
+    pub f: u32,
+}
 
 /// RGBA32 packed into RGBA16, the upper five bits of each colour and alpha's top bit (§3.9.4); FBMSK is packed the same
 /// way, its bits standing for the pixel before conversion (§3.9.5).
@@ -21,8 +32,10 @@ pub const fn z_max(psm: Psm) -> u32 {
     }
 }
 
-/// One pixel of a primitive at window coordinates (`x`, `y`), with its Z and its colour's four 8-bit channels.
-pub fn draw(env: &Environment, local: &mut Local, x: i32, y: i32, z: u32, rgba: [u32; 4]) {
+/// One pixel of a primitive at window coordinates (`x`, `y`), with its Z, its colour's four 8-bit channels, and what
+/// texturing and fog take, computed only once the pixel has passed scissoring.
+#[allow(clippy::too_many_arguments)]
+pub fn draw(env: &Environment, local: &mut Local, clut: &Clut, x: i32, y: i32, z: u32, rgba: [u32; 4], shade: impl FnOnce() -> Shade) {
     // The scissoring test (§3.7.1): the area's bounds pass.
     let (sx0, sx1, sy0, sy1) = env.scissor;
     if x < sx0 || x > sx1 || y < sy0 || y > sy1 {
@@ -33,6 +46,17 @@ pub fn draw(env: &Environment, local: &mut Local, x: i32, y: i32, z: u32, rgba: 
         return;
     }
     let Some(fpsm) = env.frame.psm else { return };
+    // Texture mapping (§3.4), then fog (§3.5), on the fragment's colour.
+    let mut rgba = rgba;
+    if env.texture.is_some() || env.fog.is_some() {
+        let s = shade();
+        if let Some(t) = &env.texture {
+            rgba = t.function(t.sample(local, clut, s.u, s.v, s.lod), rgba);
+        }
+        if let Some(col) = env.fog {
+            rgba = texture::fog(rgba, s.f, col);
+        }
+    }
     let (x, y) = (x as u32, y as u32);
     let (bw, test) = (env.frame.bw, env.test);
     // The depth test (§3.7.4): with ZTE 0 there is neither test nor write, as the Restriction's "Depth Test" equates it

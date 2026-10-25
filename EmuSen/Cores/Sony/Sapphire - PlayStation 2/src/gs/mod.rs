@@ -3,14 +3,16 @@
 //! INTC, its local memory (`local`, in the page and block layout of every format, `psm`) and the three transfers
 //! (`transfer`). The GS acts at once on each write: nothing of its timing is modelled yet. Drawing (S17): the vertex
 //! queue and the drawing kick (`draw`), the primitives' coverage and interpolation (`raster`) and the pixel pipeline
-//! (`pixel`), into which texturing (S18) and the other pixel operations (S19) slot; the PCRTC (S20) attaches at the
-//! privileged registers and `hsync`/`vsync`. Sapphire_Native.md §24, §27.
+//! (`pixel`), into which texturing and fog (S18: `texture`, the CLUT's buffer, `exact`) and the other pixel operations
+//! (S19) slot; the PCRTC (S20) attaches at the privileged registers and `hsync`/`vsync`. Sapphire_Native.md §24, §27, §31.
 
 pub mod draw;
+pub mod exact;
 pub mod local;
 pub mod pixel;
 pub mod psm;
 pub mod raster;
+pub mod texture;
 pub mod transfer;
 
 use std::collections::VecDeque;
@@ -169,6 +171,8 @@ pub struct Gs {
     pub transfer: Transfer,
     /// The vertex queue (§3.2.3).
     pub queue: draw::Queue,
+    /// The CLUT's temporary buffer and CBP0, CBP1 (§3.4.7).
+    pub clut: texture::Clut,
     /// A SIGNAL written while the flag of the one before was set, waiting with the writes after it.
     pending: Option<u64>,
     held: VecDeque<(u8, u64)>,
@@ -204,6 +208,7 @@ impl Gs {
             siglblid: 0,
             transfer: Transfer::default(),
             queue: draw::Queue::default(),
+            clut: texture::Clut::default(),
             pending: None,
             held: VecDeque::new(),
             line: false,
@@ -277,6 +282,20 @@ impl Gs {
             reg::PRIM => {
                 self.regs[r as usize] = data;
                 self.queue.reset();
+            }
+            reg::TEX0_1 | reg::TEX0_2 => {
+                self.regs[r as usize] = data;
+                let c = r - reg::TEX0_1;
+                if self.regs[(reg::TEX1_1 + c) as usize] >> 9 & 1 != 0 {
+                    self.regs[(reg::MIPTBP1_1 + c) as usize] = texture::auto_miptbp1(data);
+                }
+                self.clut.load(data, self.regs[reg::TEXCLUT as usize], &self.local);
+            }
+            reg::TEX2_1 | reg::TEX2_2 => {
+                self.regs[r as usize] = data;
+                let t = (reg::TEX0_1 + r - reg::TEX2_1) as usize;
+                self.regs[t] = (self.regs[t] & !texture::TEX2_BITS) | (data & texture::TEX2_BITS);
+                self.clut.load(self.regs[t], self.regs[reg::TEXCLUT as usize], &self.local);
             }
             reg::XYZ2 | reg::XYZF2 | reg::XYZ3 | reg::XYZF3 => {
                 self.regs[r as usize] = data;

@@ -24,6 +24,13 @@ impl Big {
         self.0.iter().all(|&l| l == 0)
     }
 
+    /// log2 of the number from its top 64 bits, within about 2^-52 of the truth; the number is non-zero.
+    fn log2(&self) -> f64 {
+        let b = self.bits();
+        let top = if b > 64 { self.shr(b - 64).0[0] } else { self.0[0] };
+        (top as f64).log2() + f64::from(b.saturating_sub(64))
+    }
+
     fn bits(&self) -> u32 {
         for i in (0..LIMBS).rev() {
             if self.0[i] != 0 {
@@ -215,6 +222,9 @@ pub fn quotient(num: &Sum, den: &Sum, scale: i32) -> i64 {
     }
 }
 
+/// How far from an integer the double-precision estimate of `log2_scaled` must lie to be taken.
+const CLEAR: f64 = 1.0 / (1u64 << 24) as f64;
+
 /// floor(2^bits × log2(w / |den|)) for a positive weight total `w` and `bits` up to 7: the LOD's log2(1/|Q|), Q being
 /// den / w; `None` when den is 0. The ratio's significand is taken to 256 bits and squared once a bit, each square's
 /// excess over 2 giving the next bit (Sapphire_Native.md §31.3); every step truncates below 2^-250 of the value, so the
@@ -223,6 +233,18 @@ pub fn log2_scaled(w: u64, den: &Sum, bits: u32) -> Option<i64> {
     if den.is_zero() || w == 0 {
         return None;
     }
+    // The same floor from double precision where its estimate lies clear of an integer, the estimate's error being far
+    // below CLEAR; the exact steps otherwise (Sapphire_Native.md §35.7).
+    let est = ((w as f64).log2() - den.mag.log2() - f64::from(den.exp)) * f64::from(1u32 << bits);
+    let floor = est.floor();
+    if est - floor > CLEAR && floor + 1.0 - est > CLEAR {
+        return Some(floor as i64);
+    }
+    log2_exact(w, den, bits)
+}
+
+/// `log2_scaled` by the exact steps alone.
+fn log2_exact(w: u64, den: &Sum, bits: u32) -> Option<i64> {
     let (n, d) = (Big::from_u128(u128::from(w)), den.mag);
     // e = floor(log2(n / d)), then the significand m = n / d / 2^e as floor(m × 2^255), in [2^255, 2^256).
     let s = i64::from(n.bits()) - i64::from(d.bits());
@@ -249,6 +271,28 @@ mod tests {
 
     fn f(v: f32) -> Float {
         Float::from_bits(v.to_bits())
+    }
+
+    /// The double-precision shortcut gives the exact floor: random weights and sums of one to three terms, each depth.
+    #[test]
+    fn the_shortcut_equals_the_exact_steps() {
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for _ in 0..20_000 {
+            let fl = |v: u64| f((v % 4096) as f32 / 64.0 + 0.001 * ((v >> 20) % 1000) as f32);
+            let q = [fl(next()), fl(next()), fl(next())];
+            let wts = [(next() % 4096) as i64, (next() % 4096) as i64, (next() % 4096) as i64];
+            let d = Sum::of(&q, wts);
+            let w = next() % 100_000 + 1;
+            for bits in [4, 5, 6, 7] {
+                assert_eq!(log2_scaled(w, &d, bits), log2_exact(w, &d, bits), "{w} {q:?} {wts:?} {bits}");
+            }
+        }
     }
 
     #[test]

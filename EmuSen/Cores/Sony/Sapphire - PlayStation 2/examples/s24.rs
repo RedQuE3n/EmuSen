@@ -42,6 +42,9 @@ fn main() {
         m.advance();
         if shots.contains_key(&m.frames) {
             write_ppm(&m, &out.join(format!("frame-{}.ppm", m.frames)));
+            let gs = &m.sys.board.gs;
+            let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE1, SMODE2, DISPFB1, DISPLAY1, DISPFB2, DISPLAY2, BGCOLOR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
+            println!("frame {} PMODE SMODE1 SMODE2 DISPFB1 DISPLAY1 DISPFB2 DISPLAY2 BGCOLOR {}; picture {:?}", m.frames, r.join(" "), m.sys.board.pcrtc.picture.geometry);
         }
         if last_report.elapsed().as_secs() >= 20 {
             last_report = Instant::now();

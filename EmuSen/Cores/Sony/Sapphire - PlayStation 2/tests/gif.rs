@@ -219,11 +219,12 @@ fn the_fifo_holds_sixteen_qwords_and_the_gif_paces_the_dma() {
 }
 
 /// PATH1's port tells VU1 its packet's end from the packet in VU1's memory (an arbitration cycle, a cycle a GIFtag and
-/// a PACKED qword), a second kick starting behind it; a packet with no EOP in the memory is never done.
+/// a PACKED qword), a second kick starting behind it; a packet with no EOP in the memory yet is told one pass over it,
+/// since the VU may complete it while PATH1 reads (D-288, D-331).
 #[test]
 fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     use sapphire::clock::BUS;
-    use sapphire::gif::{ENDLESS, Path1Port};
+    use sapphire::gif::Path1Port;
     use sapphire::vu::Path1;
     let mut data = vec![0u8; 16 << 10];
     let put = |data: &mut Vec<u8>, a: usize, q: u128| data[16 * a..16 * a + 16].copy_from_slice(&q.to_le_bytes());
@@ -236,7 +237,7 @@ fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     let mut endless = vec![0u8; 16 << 10];
     put(&mut endless, 0, s15::manual::tag(1, false, None, 0, &[0xE]));
     port.set_free(0);
-    assert_eq!(port.kick(&endless, 1, 0), ENDLESS, "no EOP anywhere");
+    assert_eq!(port.kick(&endless, 1, 0), BUS * (1 + 1024), "no EOP in the memory yet: one pass over it");
 }
 
 /// On the GIF directly: with PATH3's packet, a kick and a DIRECT all waiting at once, PATH1 goes first, then PATH2,

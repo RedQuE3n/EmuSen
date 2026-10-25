@@ -74,9 +74,6 @@ pub enum Path {
     Three = 2,
 }
 
-/// An XGKICK's end estimated as never: a PATH1 packet with no EOP in VU1's memory runs round it for ever.
-pub const ENDLESS: u64 = u64::MAX / 4;
-
 /// VU1's memory in qwords, where PATH1's addresses wrap (GIF_CNT's 10-bit VUADDR).
 const VU1_QWORDS: u32 = 1024;
 
@@ -114,6 +111,8 @@ pub struct Gif {
     wake: bool,
     /// The cycle the next step begins, when the last run stopped only because it lies beyond.
     resume: Option<u64>,
+    /// The path holding the GIF has output something since it was granted: data, or a GIFtag with NLOOP above 0.
+    output: bool,
 }
 
 impl Default for Gif {
@@ -146,6 +145,7 @@ impl Gif {
             dmac_waiting: false,
             wake: false,
             resume: None,
+            output: false,
         }
     }
 
@@ -183,6 +183,7 @@ impl Gif {
     /// The arbitration's idle cycle, then `path` holds the GIF.
     fn grant(&mut self, path: Path, at: u64) {
         self.owner = Some(path);
+        self.output = false;
         self.time = at + BUS;
         if path == Path::Three {
             self.ip3 = false;
@@ -209,6 +210,7 @@ impl Gif {
         }
         self.time = at + s.cycles * BUS;
         self.last = Some(path);
+        self.output |= !s.tag || self.packet[path as usize].open;
         if s.end {
             self.owner = None;
         }
@@ -233,7 +235,7 @@ impl Gif {
                         let (addr, _, _) = self.kicks.pop_front().expect("a kick");
                         self.vuaddr = addr;
                         let c = packing::cycles(|i| vu1.mem_q((i % VU1_QWORDS) as usize), u32::from(addr), VU1_QWORDS);
-                        self.p1_end = c.map_or(ENDLESS, |c| self.time + c * BUS);
+                        self.p1_end = self.time + c.unwrap_or(u64::from(VU1_QWORDS)) * BUS;
                     }
                 }
                 Some(Path::One) => {
@@ -251,7 +253,14 @@ impl Gif {
                         self.interrupt(at);
                         continue;
                     }
-                    let Some(&(w, arrived)) = self.fifo.front() else { return };
+                    let Some(&(w, arrived)) = self.fifo.front() else {
+                        // A packet that has output nothing does not hold the GIF while PATH3's data stops (D-330).
+                        if !self.output && !self.packet[Path::Three as usize].open {
+                            self.owner = None;
+                            continue;
+                        }
+                        return;
+                    };
                     let at = self.time.max(arrived);
                     if at > t {
                         self.resume = Some(at);
@@ -487,7 +496,9 @@ impl Path1 for Path1Port {
             let a = (i % qwords) as usize * 16;
             u128::from_le_bytes(data[a..a + 16].try_into().unwrap())
         };
-        let end = packing::cycles(read, u32::from(addr), qwords).map_or(ENDLESS, |c| start + BUS * (1 + c));
+        // A packet whose EOP is not yet in VU1's memory is completed as PATH1 reads it (D-288); the VU is told one pass
+        // over the memory, never a time that cannot come (Sapphire_Disputes.md D-331).
+        let end = start + BUS * (1 + packing::cycles(read, u32::from(addr), qwords).unwrap_or(u64::from(qwords)));
         self.kicks.push_back((addr, at, end));
         self.free = end;
         end

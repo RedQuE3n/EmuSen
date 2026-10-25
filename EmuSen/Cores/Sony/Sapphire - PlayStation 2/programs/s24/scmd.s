@@ -27,6 +27,26 @@ cmds:   .word 0x1A
         .word 0
         .word 0
         .word 0
+        .word 0x24
+        .word 1
+        .word 0x1
+        .word 0
+        .word 0
+        .word 0x24
+        .word 1
+        .word 0x0
+        .word 0
+        .word 0
+        .word 0x24
+        .word 1
+        .word 0x2
+        .word 0
+        .word 0
+        .word 0x24
+        .word 0
+        .word 0x0
+        .word 0
+        .word 0
         .word 0xFF
         .word 0
         .word 0

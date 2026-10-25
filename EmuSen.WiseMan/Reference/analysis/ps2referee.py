@@ -43,8 +43,8 @@ hands it on (Sapphire_Native.md §35).
 PCSX2's memory card folder (`--card none` leaves slot 1 empty), and plays SCRIPT: lines `SECONDS key NAME [HOLD]`, a key of PCSX2's keyboard pad pressed
 SECONDS after PCSX2 begins to draw and held HOLD seconds (0.15 by default), sent to PCSX2's window on the private
 compositor's Xwayland, and `SECONDS shot NAME`, a state saved through PINE whose picture alone is kept as OUTDIR/NAME.png; the
-card's file as PCSX2 left it is copied to OUTDIR/card.ps2 afterwards, an output of the black box (Sapphire_Native.md
-§30.17). The keys are PCSX2's own defaults for its first pad: Up, Down, Left, Right, K Cross, L Circle, I Triangle, J
+card's file as PCSX2 left it is copied to OUTDIR/card.ps2 afterwards, an output of the black box, and the console's
+EEPROM, which a script through the initial setup changes, is put back as it was (Sapphire_Native.md §30.18). The keys are PCSX2's own defaults for its first pad: Up, Down, Left, Right, K Cross, L Circle, I Triangle, J
 Square, Return Start.
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
@@ -688,6 +688,9 @@ def run_pcsx2_pads(market, seconds, outdir, script, card):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     name = "sapphire-s25b-pads.ps2"
+    # The console's EEPROM, which a script stepping through the initial setup changes, put back afterwards.
+    nvm = bios_folder() / MARKETS[market].replace(".bin", ".nvm")
+    kept = nvm.read_bytes() if nvm.exists() else None
     with open(CACHE / "pcsx2.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for f in states.glob("*.p2s*"):
@@ -724,6 +727,10 @@ def run_pcsx2_pads(market, seconds, outdir, script, card):
         finally:
             (cards / name).unlink(missing_ok=True)
             ini.write_text(ini_merge(ini.read_text(), PCSX2_CARDS))
+            if kept is None:
+                nvm.unlink(missing_ok=True)
+            else:
+                nvm.write_bytes(kept)
         return out
 
 

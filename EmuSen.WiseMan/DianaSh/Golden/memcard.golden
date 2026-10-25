@@ -141,7 +141,7 @@ memcard: '/../x.mcr' is outside the project sandbox (<ROOT>)
 status 1
 action none
 $ memcard ls notes.txt
-out 176
+out 175
 memcard: notes.txt is no card: the media known are .crm (Backup RAM Cartridge), .brm (Internal Backup RAM), .mcr (Memory Card), .mpk (Controller Pak), .ps2 (Memory Card (PS2))
 status 1
 action none

@@ -94,7 +94,13 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   that a load knows its length, the queues in fixed slots, the BIOS entry and the image named and never held, the cards'
   and the EEPROM's contents kept apart, the listing pinned against its file; loading on a running console, mid-frame;
   states equal at five frames of the OSDSYS boot on both 0230 images and at four instants of 30 of the project's programs;
-  P14 measured, a capture 6.5 ms and a restore 4.3 ms, the default rewind budget holding seconds.
+  P14 measured, a capture 6.5 ms and a restore 4.3 ms, the default rewind budget holding seconds;
+  and stage S25, part B (2026-10-25, §30.15-§30.24): the start without a disc (G10), the console with its tray closed and
+  empty through the core ABI's empty start and `MEDIA`, refused by the host in the firmware entry's words with no BIOS;
+  the Memory Cards tab (G11) with `ps2.card` read by `emusen-ps2-card` in the kilobytes the browser shows; the player's
+  BIOS on PCSX2, driven through its keyboard pad, formatting a card that the crate edited and the BIOS read back, and
+  the reverse (D-380 to D-382); OSDSYS on Sapphire stepping through its setup to the main menu with an empty tray, and its
+  browser never drawing with a card in slot 1 (P8 as observed, D-383 open).
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

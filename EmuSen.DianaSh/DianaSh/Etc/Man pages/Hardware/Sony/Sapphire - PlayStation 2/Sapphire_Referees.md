@@ -248,6 +248,18 @@ two-word EE tag of SIF0 and the quadword IOP tag of SIF1, and for nothing on the
 or on SIF2, which it does not move (`Sapphire_Disputes.md` D-140 to D-145). A disagreement that leaves words in a FIFO
 spoils every later part of a program on the referee, so each program puts the part PCSX2 is known to stop on last.
 
+### 4.5 SIO2 programs, with the referee's cards and multitap (2026-10-25, stage S25)
+
+S25's programs are IOP programs placed by §4.3's route that talk to SIO2's devices (`Sapphire_Native.md` §30.8).
+`ps2referee.py ram pcsx2 … --cards A,B` puts the cards named A and B, files or folders in PCSX2's memory card folder, in
+its two slots for one run, and `--multitap` plugs a multitap into its first port; both are put back in its settings
+afterwards, so that no other run meets them. The project's cards there are its own erased files
+(`sapphire-s25.ps2`, `sapphire-s25b.ps2`) and an empty folder card (`sapphire-s25-folder.ps2`); PCSX2's own
+`Mcd001.ps2` and `Mcd002.ps2`, which every other run keeps in its slots, are never written. **PCSX2** answers through
+its pads, cards and multitap with no input given, so a pressed button cannot be graded there; **Play!** cannot run an
+IOP program. PCSX2 makes a new card with every byte FFh and formats none without a BIOS, so a referee's formatted card
+waits for a BIOS (part B).
+
 ## 5. Exposure, and a retail disc
 
 - **This stage's writer is exposed** (`Sapphire_Plan.md` §1.4): while finding why PCSX2 failed to draw, the writer read

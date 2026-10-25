@@ -37,6 +37,12 @@ article, cited by page. **Not fetched**: the IEEE Micro and IEEE JSSC papers (be
 stand in for the first); Sony's Linux-kit manuals (Q1 allowed only the tester's own or a lawful copy, and none was found
 on Sony's hosting; fetched at S6, §1.1); psdevwiki's pages (HTTP 403).
 
+**Added 2026-10-25, at stage S25** (`Sapphire_Native.md` §30.13), in `docs/` with their SHA-256s:
+`ps2tek-israpps/*.html`, five SIO2 pages of Matías Israelson's later ps2tek edition (revision `295bc61`, The Unlicense;
+three read: the registers, the memory cards, the card's file system); `ridge/ps2mcfs.html`, Ross Ridge's "PlayStation 2
+Memory Card File System" (public domain, `0735ce5cd8b1…`); `toshiba-nand/TC58128AFT.pdf`, Toshiba's 128-Mbit NAND data
+sheet (`2f49e662f496…`). psx-spx is read in Diamond's pinned copy.
+
 ### 1.1 Sony's Linux-kit manuals (fetched 2026-10-24, stage S6)
 
 *Decided 2026-10-24 by the tester* (`Sapphire_Plan.md` §2.2, §11 Q1): archived online copies of the manuals Sony shipped

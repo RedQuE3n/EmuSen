@@ -5,7 +5,7 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--screen FILE] ADDRESS:WORDS ...
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--screen FILE] [--cards A,B] [--multitap] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
 
@@ -17,7 +17,9 @@ names the done word: a standalone run reads RAM as soon as the word at ADDRESS r
 probe run is refused unless it holds it at frame N. --again reads the same words S seconds later, with the CPU time the
 referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
 speed instead of unlimited; --interpreter runs PCSX2's EE on its interpreter instead of its recompiler, the default, so
-the two can be weighed apart (Sapphire_Native.md §19.6); --disc puts a synthetic disc image in PCSX2's drive while the
+the two can be weighed apart (Sapphire_Native.md §19.6); --cards A,B puts the cards named A and B, files or folders in
+PCSX2's memory card folder, in its two slots for the run, and --multitap plugs a multitap into its first port, both put
+back as they were afterwards (Sapphire_Native.md §30); --disc puts a synthetic disc image in PCSX2's drive while the
 program runs in place of the disc's own (`-elf`), so that the program can read the drive (Sapphire_Native.md §25).
 --screen keeps a probe run's picture at frame N, the core's screen as the probe dumps it, in FILE with its manifest's
 screen line beside it as FILE.json: the project's display programs are graded on PCEE2's software pictures
@@ -435,7 +437,12 @@ def run_inner(job, name, seconds):
         return out, text
 
 
-def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None):
+# The cards and pads as every run but those naming --cards or --multitap leaves them (Sapphire_Native.md §30).
+PCSX2_CARDS = {"MemoryCards": {"Slot1_Enable": "true", "Slot1_Filename": "Mcd001.ps2", "Slot2_Enable": "true", "Slot2_Filename": "Mcd002.ps2"},
+               "Pad": {"MultitapPort1": "false"}}
+
+
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None, cards=None, multitap=False):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
     settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
     data = CACHE / "pcsx2-data"
@@ -447,7 +454,9 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
         wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
                   "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
                   "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]},
-                  "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"}}
+                  "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"},
+                  "MemoryCards": {**PCSX2_CARDS["MemoryCards"], **({"Slot1_Filename": cards[0], "Slot2_Filename": cards[1]} if cards else {})},
+                  "Pad": {"MultitapPort1": "true" if multitap else "false"}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
         root = CACHE / "pcsx2/squashfs-root"
         job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui"] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
@@ -458,7 +467,11 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
             job["cmd"][-2:] = ["-elf", str(target), "--", str(disc)]
         if stop_text:
             job["stop_text"] = stop_text
-        out, text = run_inner(job, "pcsx2", seconds)
+        try:
+            out, text = run_inner(job, "pcsx2", seconds)
+        finally:
+            if cards or multitap:
+                ini.write_text(ini_merge(ini.read_text(), PCSX2_CARDS))
         out["bios_loaded"] = bios_loaded(text, market)
         if channel:
             out["log"] = text
@@ -595,6 +608,15 @@ def main(argv):
         if referee != "pcsx2":
             die("--interpreter is PCSX2's", 2)
         rest.remove("--interpreter")
+    cards = option("--cards")
+    cards = cards.split(",") if cards else None
+    if cards and (referee != "pcsx2" or mode != "ram" or len(cards) != 2 or any("/" in c or c.startswith(".") for c in cards)):
+        die("--cards A,B names two cards in PCSX2's memory card folder, for ram runs on pcsx2", 2)
+    multitap = "--multitap" in rest
+    if multitap:
+        if referee != "pcsx2":
+            die("--multitap is PCSX2's", 2)
+        rest.remove("--multitap")
     disc = option("--disc")
     screen = option("--screen")
     if screen and referee not in LIBRETRO:
@@ -628,7 +650,7 @@ def main(argv):
     if until is None and referee in STANDALONE:
         die("--until names the done word, which a standalone run waits for", 2)
     if referee == "pcsx2":
-        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter, disc=Path(disc).resolve() if disc else None)
+        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter, disc=Path(disc).resolve() if disc else None, cards=cards, multitap=multitap)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
     elif referee == "play":

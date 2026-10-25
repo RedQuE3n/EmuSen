@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25) and S22 (§26) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26) and S25's part A (§30) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -469,7 +469,6 @@ PCSX2 2.56 ms a frame unlimited and about 1.2 s a run, Play! 0.4 ms of CPU a fra
 - ps2autotests' first run and its output channel (S4, P2), and the runners of §3.3 (S4).
 - Pictures from any referee (`Sapphire_Referees.md` §6 proposes how they will be taken).
 - The handheld: no referee was run on it.
-
 
 ---
 
@@ -1423,7 +1422,6 @@ section and no firmware.
 - The machine running programs and `ee_simd` on Sapphire: S10.
 - COP1 (S9) and COP2 (S12): still halting.
 - The multimedia instructions in the recompiler: S38, graded against this interpreter.
-
 
 ## 19. Stage S9, COP1, the FPU, in software floats (2026-10-25)
 
@@ -4103,6 +4101,286 @@ kept.
 - The state format's new contents (the timing, the field, the picture's geometry): `SPH2` gains them with the rest (S30).
 - The picture on the device (S46).
 
+## 30. Stage S25, part A: SIO2, the DualShock 2, the memory card and `emusen-ps2-card` (2026-10-25)
+
+*§27 to §29 are stages S17, S14 and S20's, built beside this one and merged before it; SIO2 needs nothing of them.
+Part B, after S24 and on the tester's go, adds what needs the player's BIOS: the pad driving OSDSYS, a card formatted by
+the BIOS read both ways, G10 and G11.*
+
+### 30.1 In one paragraph
+
+The plan's §7 row S25, on the tester's go of 2026-10-25 for the next logical stage, in the part that needs no firmware.
+Q7's research step came first (§30.2): the card's authentication is documented in its sequence but not its cryptography,
+and every source places MagicGate keys in the card and the drive, so Q7(b) holds and the card answers none of F0h, F3h
+and F7h. The crate gains **`sio2`** on the IOP's bus (§30.3): SEND3's queue of up to sixteen commands, SEND1 and SEND2,
+FIFOIN and FIFOOUT, CTRL, the three RECV words and the interrupt flags at 1F808200h, the IOP's interrupt 17 at a queue's
+end, channels 11 and 12 filling and emptying the FIFOs in place of their stand-ins, and four ports, the two controller
+connectors and the two card slots (D-220). Behind it, **the DualShock 2** (§30.4) as a state machine on psx-spx's and
+ps2tek's protocol, digital, analogue and pressure modes, configuration mode and its commands, the reply bytes 4Fh
+enables and both motors; **the memory card** (§30.5) on ps2tek's commands, pages with their spare bytes, the flash's AND
+on a write and block erase, its program, erase and load times taken from its flash's data sheet, a command to a busy
+card held until it is ready; **the multitap's frame** (§30.6), with no document, as the one witness gives it. The new
+shared crate **`emusen-ps2-card`** reads and writes the card's file system from Ross Ridge's public-domain description
+(`EmuSen_MediumFormats.md` §6). The core declares the medium **`ps2.card`**, files 0 and 1, and takes the sticks
+(§30.7). Five programs of the project's, 1,007 graded words, are equal on Sapphire to the documents' records; PCSX2, the
+only lineage with an IOP window, runs four of them and differs where D-220 to D-230 say (§30.9). No emulator, SDK,
+loader or ps2autotests source, no card-emulating device's code and no firmware was read.
+
+### 30.2 Q7(a): the card's authentication, researched (2026-10-25)
+
+What was sought, as the tester decided on 2026-10-24: public documents of the exchange SECRMAN runs with F0h, F3h and
+F7h, including the published documentation, not the code, of open card-emulating devices; never MagicGate's keys.
+
+| Source | What it says |
+|---|---|
+| ps2tek at `1c91660`, "SIO2 PS2 Memcards" | F0h "used by SECRMAN while detecting the card and does some XOR checksumming", F3h and F7h "Unknown purpose" |
+| ps2tek at `1c91660`, "BIOS IOP SECRMAN" (lines 6408-6412, cleared, `Sapphire_References.md` §3.4) | "authenticating PS2 memory cards"; "The bulk of this work is handled by the CDVD Drive, which contains the actual MagicGate keys"; the exports `SecrAuthCard`, `SecrResetAuthCard` |
+| ps2tek, Matías Israelson's later edition, revision `295bc61` (<https://israpps.github.io/ps2tek/PS2/IOP/SIO2/MemoryCard.html>, read 2026-10-25; its page files pinned with their SHA-256s under `~/.cache/emusen/probe/sapphire/docs/ps2tek-israpps/`) | F0h's subcommands: 01h CardIV, 02h CardMaterial, 04h CardNonce requested from the card, 06h, 07h and 0Bh the drive's MechaChallenges sent to it, 0Fh, 11h and (as printed) 03h its CardResponses requested, the rest unknown, 0Ah "usually fails on magicgate mismatch"; F3h "instructs the card to reset cryptography", sent at the start of SecrAuthCard; F7h "orders the card to select a mg keyset": 0 developer, 1 retail, 2 unknown, 3 arcade. Its stated source is ps2sdk's homebrew SECRMAN driver, which was not read |
+| SD2PSX (sd2psXtd's firmware), its README (<https://github.com/sd2psXtd/firmware>, read 2026-10-25) | console variants "use different magicgate keysets to ensure their memory cards are inaccessible in other devices", which the device "must actively support"; retail cards "use developer magicgate by default until the console actively requests" retail |
+| psdevwiki, "Memory Card" | refused the read (HTTP 403); a search engine's abstract: F7h changes the card's key, an official card holds four MagicGate keys |
+| A search for the protocol's cryptography (2026-10-25, two queries) | nothing public |
+
+**Conclusion** [R]: the exchange is a challenge and response under MagicGate keys, the card computing its responses
+with keys it holds and the drive controller checking them with its own; its sequence is now public, its cryptography
+is not, and no document gives a way for a card to answer without the keys. **Q7(b) holds**: the card answers none of
+F0h, F3h and F7h (no byte driven, RECV1 as for a missing device; `the_authentication_commands_get_no_answer`), the
+player's BIOS is expected to refuse the card (P8, recorded at part B), and the open BIOS path never sends them. The
+drive controller's side of the exchange, its S commands for SECRMAN, is S23's unit and was not sought: answering it
+would mean forging the drive's verdict, which is the tester's to weigh (§30.12 Q1). Recorded in the plan's §11 Q7 and
+§12.
+
+### 30.3 SIO2 (`sio2/mod.rs`)
+
+[R ps2tek "SIO2 Registers"; A and C where marked]:
+
+- **Registers**: SEND3 at 1F808200h, sixteen words; SEND1 and SEND2 at 1F808240h, one of each for each port, by the
+  address's bit 2, kept as written [C: their meaning, "Port1/2 Control?", is unknown]; FIFOIN (1F808260h) takes a
+  written byte; FIFOOUT (1F808264h) gives a byte, FFh when empty [A: HiZ; PCSX2 reads the same]; CTRL (1F808268h): bit 0
+  starts the queue, bits 2 and 3 empty both FIFOs, neither kept, the other bits kept as written; RECV1 to RECV3; the
+  flags at 1F808280h, bit 0 set at a queue's end, cleared by writing it [A: SIO2MAN's handler "reads from this and
+  writes to it the value read"; PCSX2 reads 1 after a queue].
+- **The queue**: each SEND3 entry until a zero, its port in bits 0-1 and its length, counting the peripheral byte, in
+  bits 18-26 (D-230); its bytes taken from FIFOIN (00h for any missing [C]) and sent to its port's device, whose reply
+  bytes are held until the queue ends and then placed in FIFOOUT with RECV1 (D-221). A command is answered whole, which
+  is the same as byte by byte, since a reply byte depends only on the bytes before it.
+- **The ports** (D-220): 0 and 1 the controller connectors, 2 and 3 the card slots; the peripheral byte picks the device
+  (01h a controller, 81h a card, 21h a multitap); one nobody answers reads HiZ.
+- **Timing** [C]: a byte at 250,000 a second, 147 IOP cycles, on every port: no document gives SIO2's rates or says
+  what SEND1 and SEND2 set. A queue ends after its bytes, each card command started no sooner than its card is ready
+  (§30.5). The IOP's interrupt 17 is raised at the end [R ps2tek "IOP Interrupts"]; no CTRL bit is read as masking it
+  [C].
+- **DMA**: channel 11 (SIO2in) puts each word's four bytes into FIFOIN, lowest first, always ready; channel 12 (SIO2out)
+  takes FIFOOUT's bytes four to a word, ready for as many whole words as FIFOOUT holds, the DMAC woken when a queue ends
+  [R ps2tek "SIO2_FIFOIN": "The SIO2in DMA channel also writes to this register"; A for the byte order]. `sio2::Ports`
+  wraps the stand-ins as `sif::IopPorts` does, so the IOP's bus steps its DMAC with both.
+- **What changed outside the module**, small and additive: `iop/bus.rs` gains the field `sio2`, its registers in the I/O
+  read and write, its end in `run_units` and `reschedule`, and the DMAC stepped through `sio2::Ports`; `lib.rs` declares
+  the module. No new dependency: `sio2` uses the crate's own `clock` and `iop::dma` interfaces.
+
+### 30.4 The DualShock 2 (`sio2/pad.rs`)
+
+[R psx-spx "Controllers - Configuration Commands" to "Controllers - Analog Buttons (Dualshock2)", "Standard
+Controllers"; ps2tek "SIO2 Controller Commands", "SIO2 Standard Controllers"]:
+
+- **Outside configuration mode**, 42h and 43h: the header FFh, the mode, 5Ah; the buttons (0 pressed); in analogue mode
+  the bytes 4Fh enables, the sticks (right X, right Y, left X, left Y, D-227) and the twelve pressures in psx-spx's
+  order, padded to whole halfwords, the mode 41h digital and 70h plus the halfwords analogue (73h with the sticks, 79h
+  with every byte). 43h answers as 42h without the pressures and enters configuration mode on 01h (D-223); any other
+  command is unanswered.
+- **In configuration mode**, the mode F3h and six bytes: 40h (twelve attributes, the old value back, FFh past 0Bh),
+  41h (D-225), 42h (buttons and sticks whatever the mode), 43h (00h leaves), 44h (the mode and the lock; a mode past 1
+  answers FFh), 45h (03h, 02h, the mode, 02h, 01h, 00h), 46h, 47h, 48h, 4Ch, 4Dh (the motors' map, the old map back)
+  and 4Fh (the reply bytes, refused if bits 18-39 are set); every other command six zeros (D-224 for those PCSX2
+  answers otherwise).
+- **The motors**: 42h's bytes 3 to 8 through 4Dh's map, 00h the small motor's bit 0 and 01h the large motor's speed;
+  before configuration mode is ever entered, the first analogue pads' one-motor method (40h-7Fh then an odd byte). The
+  motors' state is kept in the pad (`small`, `large`): the frontend has no rumble path yet, so it goes nowhere until the
+  core ABI's output event the plans ask for exists (`Sapphire_Plan.md` §4.2, `Diamond_Plan.md` §10).
+- **The Analog button** (`press_analog`): the mode toggled unless locked, the reply bytes reset, the motors stopped.
+- **Input**: the frontend's buttons arrive in the report's bit order (`v1::BUTTONS`), the sticks through `set_axis`
+  (§30.7); pressure follows the plan's rule until the ABI carries analogue buttons, FFh for a pressed button and 00h for
+  a released one (`Input::from_digital`).
+- **Not modelled**, each a named loss: the watchdog that resets a pad after about a second without a read once
+  configuration mode was used (psx-spx's Caution); the 5Ah byte becoming 00h after the Analog button following
+  configuration commands (its Caution 3); 40h's attributes having any effect.
+
+### 30.5 The memory card (`sio2/card.rs`)
+
+[R ps2tek "SIO2 PS2 Memcards"; Ridge "NAND Flash Memory Basics"; A and C where marked]:
+
+- **Commands**: 11h and 12h (acknowledged), 21h to 23h (the address in pages; 22h opens a page's write buffer, 23h a
+  read), 26h (512-byte pages, 16 an erase block, 16,384 pages, the XOR checksum 52h), 27h and 28h (the terminator, 55h
+  at reset), 42h (up to 128 bytes into the page at the running offset, the spare bytes as the page's last 16), 43h (up
+  to 128 bytes from it with their XOR), 81h (a write's page programmed), 82h (the block holding 21h's address erased to
+  FFh), BFh (acknowledged); F0h, F3h and F7h unanswered (§30.2). The reply's place is D-222's: ps2tek's list from the
+  command's third byte, HiZ before it; so the programs send two bytes more than ps2tek's command lists.
+- **The flash** [R Ridge; M PCSX2's file card]: a write clears bits and never sets one, so a page written twice without
+  an erase holds the AND of the two; an erase sets the whole block, sixteen pages and their spare bytes, to FFh (D-229).
+  The spare bytes are stored as written: their error correction is the BIOS's, computed by MCMAN, and the crate's for
+  the host (`EmuSen_MediumFormats.md` §6.2).
+- **Its times** [A]: no document gives the card's own; Ridge names the flash in Sony's cards, Toshiba's TC58V64AFT,
+  whose data sheet was not found, and its family's TC58128AFT data sheet (Toshiba, 128-Mbit NAND E2PROM; a copy at
+  <https://www.insidegadgets.com/wp-content/uploads/2013/10/TC58128AFT.pdf>, read 2026-10-25) gives a page's programming
+  200 to 300 µs typical (1 ms at most), a block's erase 2 ms typical (10 ms at most) and a page's load into its register
+  25 µs at most. Sapphire takes 250 µs, 2 ms and 25 µs: a page programmed by 81h, a block erased by 82h, a page loaded
+  by 23h each make the card busy for that long after its command, and the next command to the card waits. That is why a
+  game's saving screen lasts as long as it does (`Sapphire_Plan.md` §5.8); the SIO2 transfer's own share is §30.3's
+  byte time.
+- **What the card is**: a battery file of 8,650,752 bytes, every page followed by its spare bytes (`Sapphire_Plan.md`
+  §4.4), its `dirty` flag the battery's "changed".
+
+### 30.6 The multitap (`sio2/tap.rs`)
+
+No document gives its commands (D-228). ps2tek gives its peripheral byte, 21h, and psx-spx says it plugs into both a
+slot's controller and card ports. The one witness, PCSX2 with a multitap in its first port, answers 12h and 13h with FFh
+80h 5Ah 04h 00h 5Ah (four slots) and 21h and 22h with FFh 80h 5Ah 00h 00h 00h 5Ah, on both ports, and nothing else
+(measured 2026-10-25). Sapphire answers the same, and its choice [C] for the selection the witness does not show: 21h's
+byte after the command's 00h selects which of the tap's four controller slots the controller port then reaches, 22h
+which card slot, any other value none; a tap starts with slot A selected for both. A `Slot` holds the tap's four pads
+and four cards; without a tap only the first of each is used.
+
+### 30.7 The medium `ps2.card`, the sticks, and what a frontend sees
+
+- **The medium** (`Sapphire_Plan.md` §4.4; `EmuSen_SaveMedia.md` §3.2): core info's `battery[]` for `ps2` gains two
+  removable slots of the medium `ps2.card`, files 0 and 1, suffixes `.ps2` and `.2.ps2`, labelled "Slot 1" and "Slot 2";
+  machine info lists both; `battery` returns a card's bytes with `BATTERY_TRACKED`, and `BATTERY_CHANGED` once SIO2 has
+  written it; `battery_saved` clears that. A card file of any other non-zero length is refused at create with words; an
+  empty file (a card not yet saved, as the kit's C14 passes every listed battery file) or none leaves the slot an erased
+  card [C], every byte FFh, as PCSX2 makes one; the card manager's *New Card* formats with the crate at part B. *Per
+  game* is the runtime's default for every medium (`EmuSen_SaveMedia.md` §3.3), so nothing in the core chooses it. The
+  systems table's `media` row (the medium's title and noun) and the card manager's format module come with G11 at part
+  B; until then the runtime names the medium `Card`, its rule for a removable medium no pack knows. `ps2.nvm` is S24's.
+- **The sticks**: `set_axis` keeps each port's sticks, the descriptor's left X, left Y, right X, right Y in the pad's
+  order, -1.0 to 1.0 as 00h to FFh with 0.0 at 80h; the core now claims `AXES` (the core ABI's existing capability, its
+  export named in `core_exports!`).
+- **WiseMan**: `SapphireTests`' check of the capabilities now expects `AXES`; the kit's C14 first failed on an empty
+  card file refused, which showed the rule above.
+- **Nothing reaches a player**: the system stays `development: true`, so the runtime offers no shelf, no Memory Cards
+  tab and no controller screen for it. The S1 machine does not yet run the board: the cards and sticks wait in `Machine`
+  for S24, which joins the two.
+
+### 30.8 The gate: the programs (measured 2026-10-25)
+
+`tests/s25/` generates IOP programs in S21's form (`tests/s21`'s `Program`, run from kseg1), each exchange a SEND3
+entry, its bytes written to FIFOIN from a table in the program and its reply read from FIFOOUT after the SIO2 interrupt,
+every wait bounded; every expected byte derived from the documents, written apart from `src/sio2/`.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s25-pad` | 108 | 42h digital; the empty port 2; 43h entering configuration mode; 45h, 41h, 46h, 47h, 48h, 4Ch, 44h (analogue and locked, then a refused mode), 41h, 4Fh enabling every reply byte, 4Dh's map set and read back, 40h's attributes, 42h in configuration mode, 43h leaving; 42h in mode 79h with twelve pressures; 43h from analogue mode; back to digital |
+| `s25-pressure` (Sapphire only: a referee given no input holds nothing) | 7 | Right, Cross and R2 held: their bits clear and their pressures FFh in psx-spx's order |
+| `s25-card` | 848 | probe; specs; the terminator read, changed to AAh, read and put back; BFh; 12h; a block erased, a page written with its spare bytes and read back, a page written twice without an erase reading the AND, a page of the block still erased, the block erased again by its last page and read; the second slot's card; a controller's command on a card port; F3h, F7h and F0h unanswered; each erase timed by the IOP's timer 3 across the next command, 2 ms and its bytes within 4,000 cycles |
+| `s25-dma` | 6 | a queue of a controller read and a card probe sent by channel 11 and its replies taken by channel 12, both in slice mode, their completion |
+| `s25-tap` | 38 | a multitap's frame on both ports; slot A selected and answering, slot B selected and empty, slot A again; the card behind it; an unknown command |
+
+Probes, ungraded, for the referee: `s25-probe` (every port's answer to a controller read and a card probe, the status
+registers, the pad's configuration commands, the card's pages and spare bytes, eight bytes more read after each reply),
+`s25-probe-write` (an erase, pages written and read back on a file card and a folder card), `s25-tap-21-0`,
+`s25-tap-21-2`, `s25-tap-61-0` (every command byte under each peripheral byte, with and without a multitap) and
+`s25-tap-slots`. `examples/s25.rs` writes the gate's programs and the probes for the referees; `ps2referee.py ram` gains
+`--cards A,B`, the cards in PCSX2's two slots for one run, and `--multitap`, both put back afterwards.
+
+**Tests** [M, `cargo test --release`]: `tests/sio2.rs` **5 of 5**: the five programs, each equal to its record word for
+word, with the pad's state after `s25-pad`, a card left erased and written (`dirty`) after `s25-card`, the multitap
+routing. The lib's `sio2::tests` **5 of 5** (a queue's time and a busy card holding the next command, the erase's 2 ms
+in EE cycles and the program and load times; a write's AND and a block erase; the authentication commands; both motors
+through 4Dh and the old method; the pressure rule) and `v1`'s new test (the two slots of `ps2.card`, a card file of the
+wrong size refused, a card file returned by `battery`, the sticks' order), lib **47 of 47** before the rebase;
+`emusen-ps2-card` **5 of 5** (`EmuSen_MediumFormats.md` §6.5). Counts on the rebased tree are in §30.11.
+
+### 30.9 On the referees (measured 2026-10-25)
+
+`examples/s25.rs` wrote each program as an EE program carrying it (S21's route); `ps2referee.py ram pcsx2 … --until
+1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot, the software renderer),
+one process at a time, with two erased card files of the project's in its slots (`--cards`) and for `s25-tap` a
+multitap (`--multitap`). Only the records were read. Play! cannot run an IOP program (§22.9).
+
+| Program (graded words) | PCSX2 | What the differences are |
+|---|---|---|
+| `s25-pad` (108) | 8 | 43h outside configuration mode answers zeros for the buttons (two words, D-223); 46h past index 1, 48h, 44h's refused mode, 40h's stored value and index 0Ch (six, D-224); the identification, the mode bytes, 41h (D-225), the motors' map, the pressures and every other word equal |
+| `s25-card` (848) | 342 | the first two bytes of every reply 00h, not HiZ (19 words, D-222); the reads' and writes' first bytes (40, D-222); a short read's checksum and terminator placed after its data (5, D-222); 27h answering the new terminator and 28h's last byte (3, D-229); the erases timed at PCSX2's own speed (2); an erase from page 47 leaving pages 32 and 33 written (273, D-229); the probe, the specs, the data and spare bytes written and read back, the AND of two writes and the erase of a block from its first page equal |
+| `s25-dma` (6) | 3 | channel 11 completes; channel 12 is left running and moves nothing |
+| `s25-tap` (38) | 4 | the selection of slot B changes nothing (two words, D-228); the reply's first bytes (one, D-222); 41h under the tap's byte is answered (one) |
+
+So **PCSX2 is a witness** for the DualShock 2's identification, modes, 41h, motor map and pressure layout, for RECV1's
+two disconnected values, for the card's specs, terminator, data placement, spare bytes and flash rules, and for the
+multitap's frame; not for SIO2's ports (it answers by the port's low bit, D-220), the reply's first bytes, the erase's
+alignment, SIO2out's DMA, the multitap's selection or any timing. It makes a new card with every byte FFh and formats
+none without a BIOS; its folder card reads an empty folder as unformatted and returns a fixed spare area whose code is
+the complemented form's for an erased chunk (D-226). **No card formatted by a referee alone exists**: the crate's
+cross-check with a referee's formatted card waits for part B, when the player's BIOS formats one on PCSX2
+(`EmuSen_MediumFormats.md` §6.4).
+
+### 30.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the pressure bytes' order with Right and Left swapped | `pressure_reads_ffh_for_a_pressed_button_and_00h_for_a_released_one`, `the_pressure_bytes_follow_the_buttons_held_in_the_documented_order` |
+| F2 | a page write keeping only the 512 data bytes, its spare bytes skipped | `a_write_clears_bits_and_an_erase_sets_its_whole_block`, `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes` |
+| F3 | the card's erase finishing at once | `a_queue_ends_after_its_bytes_and_a_busy_card_holds_the_next_command`, `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes` (the timed command after each erase) |
+| F4 | `emusen-ps2-card` writing a page's data without its error correction, the code bytes left erased | `a_formatted_card_has_the_standard_layout_and_8000_clusters_free`, `damaged_cards_are_refused_in_words_never_a_panic` |
+
+F3 was first missed: both tests compared the busy time with the constant they tested, so an erase of no time passed.
+They now hold the documents' figure, 589,824 EE cycles and 73,728 IOP cycles, and catch it. Each fault was applied, the
+lib's `sio2` tests and `tests/sio2.rs` run (F4: the crate's tests), and the source restored [M].
+
+### 30.11 The blast radius (measured 2026-10-25)
+
+`blast.sh WiseMan sapphire-s25` lists the two crates and WiseMan's `SapphireTests`. After the rebase onto WiseMan
+(S14, S17 and S20 beneath), `cargo test --release` in `sapphire`: lib **50 of 50**, `cop0` 19, `dmac` 18, `draw` 13,
+`fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `pcrtc` 5, `programs` 3, `sif` 5, **`sio2` 5**, `vif`
+12, `vu0` 14, `vu_micro` 24, every one passing; lib, `iop`, `sif` and `sio2` also under `test-checked`; clippy clean on
+every target. `emusen-ps2-card` **5 of 5** under both profiles, clippy clean. `SapphireTests` (WiseMan, the blast
+radius's filter) **5 of 5**, after its capabilities check was given `AXES` and the empty card file accepted (§30.7).
+
+### 30.12 Questions this stage leaves
+
+1. **Q1 [decision], the drive's side of the card's authentication.** Q7(b) holds for the card (§30.2). The exchange's
+   verdict is the drive controller's, and Sapphire's drive (S23) is its own model: it could report every card genuine
+   without any key. That would be answering for the drive rather than the card, a choice no document supports and one
+   that makes the player's BIOS accept cards it would refuse. *Recommended*: not now; record P8 at part B as the plan
+   says, and offer saving on the open BIOS path, which never authenticates; revisit only if the tester wants the
+   player's BIOS to use cards.
+2. **Q2 [routine], the ports (D-220).** *Recommended*: keep four ports; S24's BIOS shows on which ports PADMAN and MCMAN
+   send, and the routing changes in one place if they differ.
+3. **Q3 [routine], the card's reply place (D-222).** *Recommended*: keep it; part B's BIOS-formatted card is the test,
+   since MCMAN reads the replies at fixed places.
+4. **Q4 [routine], an empty slot's card.** A slot with no card file holds an erased card [C], so the player's BIOS can
+   format it. *Recommended*: keep it; the card manager's *New Card* writes a formatted one through the crate at G11.
+5. **Q5 [routine], rumble.** *Recommended*: the motors' state stays in the pad until the core ABI gains the output event
+   both Sony plans ask for; a minor for it is the framework's, proposed with G11 or later.
+
+### 30.13 What was read for this stage
+
+`Sapphire_Plan.md`: the 2026-10-24 decisions on G10 and G11, §2 (the SIO2 row), §4.2, §4.4, §5.8, §7 (S24, S25), §8
+(G10, G11), §9.5, §11 Q7, §12; this page's §22 and §26; `Sapphire_Disputes.md` (the rules, D-140 to D-145);
+`Sapphire_Referees.md` §2.1, §4.3, §4.4; `Sapphire_References.md` §3 (the exclusions); `EmuSen_MediumFormats.md`;
+`EmuSen_SaveMedia.md` §3, §4, §6.2, §7; the crate's `iop/`, `sif/`, `v1.rs`, `machine.rs`, `tests/s21`, `tests/s22`,
+`examples/s21.rs`, `emusen-psx-card` (the project's own code); `ps2referee.py`. ps2tek at `1c91660`: "PS2 Serial Port
+(SIO2)" to "SIO2 Command Sequence" (lines 3475-3905), its I/O map's SIO2 rows (lines 250-290), "IOP Interrupts" and "IOP
+DMA" (lines 3905-4110), "BIOS IOP SECRMAN" (lines 6408-6440, cleared). Line 3529, the value SIO2MAN writes to CTRL on a
+reset, excluded for the open BIOS's writers (`Sapphire_References.md` §3.1), was read while reading the register's
+section: this writer writes no open BIOS, and the value is used nowhere. ps2tek's later edition (revision `295bc61`):
+"SIO2 Registers", "SIO2 PS2 Memcards", "SIO2 PS2 Memcard Filesystem" (the same tables as the pinned edition but for the
+memory card's authentication), saved with two more pages not read and their SHA-256s (`Sapphire_References.md` §1).
+psx-spx (Diamond's pinned copy): "Controllers and Memory Cards", from "Controllers - Standard Digital/Analog
+Controllers" to "Controllers - Analog Buttons (Dualshock2)", "Controller and Memory Card Multitap Adaptor" (its PS2
+note), "MX4SIO", "Memory Card Read/Write Commands" (its timings), "Memory Card Notes". Ross Ridge, "PlayStation 2 Memory
+Card File System" (public domain; <https://ps2savetools.com/ps2memcardformat.html>, read 2026-10-25, SHA-256 0735ce5c…,
+under `~/.cache/emusen/probe/sapphire/docs/ridge/`). Toshiba's TC58128AFT data sheet (its characteristics). The SD2PSX
+firmware's README; searches for the authentication's documents, the TC58V64AFT's data sheet and the PS2 multitap's
+protocol (2026-10-25). No emulator, SDK, loader, ps2autotests or card-emulator source and no firmware; the BIOS was only
+passed to PCSX2 by path.
+
+### 30.14 What this stage does not cover
+
+- **Part B** (after S24, on the tester's go): the pad driving OSDSYS; a card formatted by the player's BIOS on Sapphire
+  read by the crate and by PCSX2, and the reverse, or P8's refusal recorded; G10, the start without a disc; G11, the
+  Memory Cards window's PlayStation 2 tab with the format module behind the card manager.
+- The machine running SIO2 with the frontend's input and the cards' files (S24 joins the S1 machine and the board);
+  SIO2's state in `SPH2` (S30); its debugger view (S31); rumble out to the frontend (an ABI minor); the infrared
+  receiver (61h) and other peripherals.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -4332,3 +4610,4 @@ Optimizations". No emulator, SDK or loader source, no ps2autotests source and no
 - The alpha test, destination alpha, blending, PABE, FBA, colour clamp, dithering and antialiasing (S19); the PCRTC (S20).
 - The GIF (S15): until then nothing on the EE's side textures on Sapphire; the tests drive the host interface.
 - The state format's new contents (the CLUT buffer): `SPH2` gains them with the rest (S10, S30).
+

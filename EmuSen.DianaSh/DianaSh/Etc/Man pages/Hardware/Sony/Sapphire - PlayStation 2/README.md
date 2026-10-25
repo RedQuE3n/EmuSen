@@ -65,7 +65,12 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   for the data path but not the stalls;
   and stage S18 (2026-10-25, §31): texture mapping in every format, the CLUT buffer as the GS's own state under CLD,
   LOD, mipmaps and their filters, the wrap modes, TEXA and fog, texture coordinates and the LOD exact, PCSX2 a witness
-  for addressing, the CLUT, the tables and fog's formula but not for the filters' and the LOD's arithmetic.
+  for addressing, the CLUT, the tables and fog's formula but not for the filters' and the LOD's arithmetic;
+  and stage S25, part A (2026-10-25, §30): the card's authentication researched and left unanswered (Q7(b)); SIO2 with
+  its queue, FIFOs, interrupt and DMA channels; the DualShock 2's modes, configuration and motors; the memory card's
+  pages, spare bytes, erase and its flash's times; the multitap's frame; `emusen-ps2-card` for the card's file system;
+  the medium `ps2.card` declared; PCSX2 a witness for most of the pad and the card's data, not for the reply's first
+  bytes, the erase's alignment or the multitap's selection (D-220 to D-230).
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

@@ -81,7 +81,9 @@ here.
   crates with no standard library and no allocation, for a host's card tool and an open firmware alike (the backend's
   D14), built 2026-10-17 at its step B3: the surface, the damaged volumes the C# threw on and the name it rewrote, a
   title's code page 932 and NFKC from tables generated from .NET, and the round trips with Diamond's open kernel and
-  Nephrite's open BIOS.
+  Nephrite's open BIOS. Since 2026-10-25 (Sapphire's S25, part A, §6) `emusen-ps2-card`, the PlayStation 2 card's raw
+  format, its spare bytes' error correction and its FAT file system with directories, from Ross Ridge's public-domain
+  description; its round trips, the damaged cards it refuses, and the referees' cards it can and cannot read yet.
 
 ## Atari
 

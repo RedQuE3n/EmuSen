@@ -1,0 +1,18 @@
+[package]
+name = "emusen-ps2-card"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The PlayStation 2 memory card's raw format and file system with no standard library and no allocation, every edit
+# made in place: the host's card tools read and edit a card through it, and an open firmware's card module may build on
+# it. See Hardware/Shared/EmuSen_MediumFormats.md §6.
+[lib]
+name = "emusen_ps2_card"
+
+[dependencies]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

@@ -13,6 +13,7 @@ use super::timer::{self, Timer};
 use crate::pcrtc::timing::Timing;
 use crate::clock::IOP;
 use crate::sif::{self, IopPorts, Sif};
+use crate::sio2::{self, Sio2};
 
 pub const RAM: usize = 2 << 20;
 /// RAM's window: 2 MiB mirrored through the first 8 MiB, as the PlayStation's default [A: psx-spx "Memory Mirrors",
@@ -118,6 +119,8 @@ pub struct IopBus {
     pub ports: StandIns,
     /// The SIF, its registers here at 1D000000h and at the EE's 1000F200h, its FIFOs behind channels 2, 9 and 10 (S22).
     pub sif: Sif,
+    /// SIO2, its registers at 1F808200h and its FIFOs behind channels 11 and 12 (S25).
+    pub sio2: Sio2,
     pub blank: Timing,
     /// The bus's clock, in IOP cycles.
     pub now: u64,
@@ -141,6 +144,7 @@ impl IopBus {
             timers: core::array::from_fn(Timer::new),
             ports: StandIns::default(),
             sif: Sif::default(),
+            sio2: Sio2::default(),
             blank,
             now: 0,
             synced: 0,
@@ -167,7 +171,7 @@ impl IopBus {
     }
 
     fn reschedule(&mut self) {
-        let mut next = self.blank.next_edge(self.synced, self.wants_h()).min(self.dmac.next_event().saturating_mul(IOP));
+        let mut next = self.blank.next_edge(self.synced, self.wants_h()).min(self.dmac.next_event().saturating_mul(IOP)).min(self.sio2.next_event());
         for t in &self.timers {
             next = next.min(t.next_event());
         }
@@ -204,9 +208,15 @@ impl IopBus {
                     self.intc.raise(source::VBLANK_END);
                 }
             }
+            if self.sio2.complete(at) {
+                self.intc.raise(sio2::SOURCE);
+            }
+            if self.sio2.take_wake() {
+                self.dmac.wake_from(at.div_ceil(IOP));
+            }
             if self.dmac.next_event().saturating_mul(IOP) <= at {
-                let IopBus { dmac, ram, ports, sif, .. } = self;
-                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: ports, sif }) {
+                let IopBus { dmac, ram, ports, sif, sio2, .. } = self;
+                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: &mut sio2::Ports { others: ports, sio2 }, sif }) {
                     self.intc.raise(source::DMA);
                 }
             }
@@ -259,6 +269,8 @@ impl IopBus {
             self.timers[n].read(reg)
         } else if dma::is_register(p) {
             self.dmac.read(p)
+        } else if sio2::is_register(p) {
+            self.sio2.read(p)
         } else {
             match p {
                 intc::I_STAT | intc::I_MASK | intc::I_CTRL => self.intc.read(p),
@@ -284,6 +296,8 @@ impl IopBus {
             }
         } else if let intc::I_STAT | intc::I_MASK | intc::I_CTRL = p {
             self.intc.write(p, v);
+        } else if sio2::is_register(p) {
+            self.sio2.write(p, v, t);
         }
         self.reschedule();
         self.horizon = self.horizon.min(self.next);

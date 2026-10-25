@@ -6091,7 +6091,7 @@ deadlocked ran until the runner's idle limit (four minutes each).
 
 ### 36.10 Tests and seeded faults (2026-10-25)
 
-**Tests** [M, `cargo test --release`, the crate whole]: **329 of 329**, ten new: `iop::tty`'s three (the hook found by its
+**Tests** [M, `cargo test --release`, the crate whole]: **329 of 329**, and **342 of 342** on the tree with S19 beneath, the 55 EE texts unchanged (52 equal); ten new: `iop::tty`'s three (the hook found by its
 table and followed, a call kept whole once its first instruction ran, the device's answer), the machine's
 `the_fast_boot_enters_the_program_through_execps2_once_the_bios_is_up`, `tests/iop.rs`'s
 `a_flag_under_its_mask_survives_the_master_enable_clear_and_raises_irq3_when_set` and

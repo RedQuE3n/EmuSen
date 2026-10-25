@@ -30,6 +30,8 @@ fn mask_text(dest: u32) -> String {
 /// A program and the VU0 state the generator tracks as it emits: the flags, ACC, I, Q, R and the clip flags.
 pub struct Gen {
     pub p: Program,
+    /// Where each FMAC or divider case's records start (a word index) and what it ran: (lane, fs, second, ACC).
+    pub notes: Vec<Note>,
     pub flags: Flags,
     pub acc: Lanes,
     pub i: u32,
@@ -55,7 +57,7 @@ impl Gen {
         p.emit("vadd.xyzw vf0, vf0, vf0");
         p.emit("ctc2 zero, vi16");
         p.emit("ctc2 zero, vi18");
-        let mut g = Gen { p, flags: Flags::default(), acc: [0; 4], i: 0, q: 0, clip: 0 };
+        let mut g = Gen { p, notes: Vec::new(), flags: Flags::default(), acc: [0; 4], i: 0, q: 0, clip: 0 };
         g.flags.divide(false, false);
         let r: Vec<_> = (0..4).map(|l| (l, manual::add(VF00[l], VF00[l]), None)).collect();
         g.flags.fmac(&r);
@@ -120,6 +122,20 @@ impl Gen {
     }
 }
 
+/// A case for the referees' analysis (examples/s12.rs).
+pub struct Note {
+    pub at: usize,
+    pub what: String,
+    pub lanes: Vec<(usize, u32, u32, u32)>,
+}
+
+impl Gen {
+    fn note(&mut self, what: String, lanes: Vec<(usize, u32, u32, u32)>) {
+        let at = self.p.expected.len() * 2;
+        self.notes.push(Note { at, what, lanes });
+    }
+}
+
 /// The second operand of an FMAC family: VF[ft] lane by lane, a broadcast field of it, I or Q.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Second {
@@ -168,6 +184,8 @@ pub fn fmac_case(g: &mut Gen, family: &str, to_acc: bool, second: Second, dest: 
     g.p.emit(format!("{name}{} {target}, vf1, {}", mask_text(dest), second.operand()));
     let mut out = if to_acc { g.acc } else { SENTINEL };
     let mut results = Vec::new();
+    let lanes = manual::lanes_of(dest).map(|l| (l, a[l], second.value(g, b, l), g.acc[l])).collect();
+    g.note(format!("{name}{}{}", mask_text(dest), if to_acc { " acc" } else { "" }), lanes);
     for l in manual::lanes_of(dest) {
         let y = second.value(g, b, l);
         let (r, p): (R, Option<R>) = match family {
@@ -237,6 +255,11 @@ fn variants(g: &mut Gen, family: &str, to_acc: bool) {
 /// VADD and VSUB over every ordered pair of the classes (S9's thirty-two), VADDA and VSUBA likewise; then the
 /// broadcast, I and Q forms and the field masks.
 pub fn add() -> Program {
+    add_gen().p
+}
+
+/// The generator of `add`, with its notes.
+pub fn add_gen() -> Gen {
     let mut g = Gen::new("s12-add");
     for family in ["add", "sub"] {
         for to_acc in [false, true] {
@@ -249,11 +272,16 @@ pub fn add() -> Program {
     for dest in 0..16 {
         fmac_case(&mut g, "add", false, Second::Vector, dest, [0x3F80_0000, 0x4000_0000, 0x4040_0000, 0x4080_0000], [0x3F80_0000; 4]);
     }
-    g.p
+    g
 }
 
 /// VMUL and VMULA over every ordered pair (the product is not commutative in its last bit, D-26), then the variants.
 pub fn mul() -> Program {
+    mul_gen().p
+}
+
+/// The generator of `mul`, with its notes.
+pub fn mul_gen() -> Gen {
     let mut g = Gen::new("s12-mul");
     for to_acc in [false, true] {
         for (a, b) in pairs(&VALUES, &VALUES) {
@@ -261,12 +289,17 @@ pub fn mul() -> Program {
         }
         variants(&mut g, "mul", to_acc);
     }
-    g.p
+    g
 }
 
 /// VMADD, VMSUB, VMADDA and VMSUBA over eight accumulators by every ordered pair of S9's twelve, then the variants;
 /// VOPMULA and VOPMSUB on vectors of the classes.
 pub fn fused() -> Program {
+    fused_gen().p
+}
+
+/// The generator of `fused`, with its notes.
+pub fn fused_gen() -> Gen {
     let mut g = Gen::new("s12-fused");
     for family in ["madd", "msub"] {
         for to_acc in [false, true] {
@@ -282,7 +315,7 @@ pub fn fused() -> Program {
         let acc = [0, 1, 2, 3].map(|i| ACCUMULATORS[(k + i) % 8]);
         outer(&mut g, acc, a, b);
     }
-    g.p
+    g
 }
 
 /// VOPMULA then VOPMSUB: ACC's x, y, z ← the first terms of vf1 × vf2, vf3 ← ACC less the second terms (§4.2).
@@ -330,6 +363,11 @@ fn unary_case(g: &mut Gen, text: &str, dest: u32, a: Lanes, f: impl Fn(u32) -> u
 /// The instructions that set no MAC flag: VABS, VMAX and VMINI with their broadcast and I forms, the conversions,
 /// VMOVE, VMR32, VMFIR, VMTIR, VNOP, and VCLIP's judgements; the flags read after each group, unchanged.
 pub fn misc() -> Program {
+    misc_gen().p
+}
+
+/// The generator of `misc`, with its notes.
+pub fn misc_gen() -> Gen {
     let mut g = Gen::new("s12-misc");
     for (a, _) in pairs(&VALUES, &[0]) {
         unary_case(&mut g, "vabs", 0xF, a, |x| x & MAX);
@@ -410,12 +448,17 @@ pub fn misc() -> Program {
         }
     }
     g.record_flags();
-    g.p
+    g
 }
 
 /// VDIV, VSQRT and VRSQRT, Q read by CFC2 after VWAITQ with the status flag, over every pair of the classes in fields
 /// the fsf and ftf bits choose; and Q read before the quotient lands (§5.4.7).
 pub fn fdiv() -> Program {
+    fdiv_gen().p
+}
+
+/// The generator of `fdiv`, with its notes.
+pub fn fdiv_gen() -> Gen {
     let mut g = Gen::new("s12-fdiv");
     for (name, f) in [("vdiv", manual::div as fn(u32, u32) -> (u32, bool, bool)), ("vrsqrt", manual::rsqrt)] {
         for (k, (a, b)) in pairs(&VALUES, &VALUES).into_iter().enumerate() {
@@ -427,6 +470,7 @@ pub fn fdiv() -> Program {
                 g.p.emit(format!("{name} q, vf1{}, vf2{}", ['x', 'y', 'z', 'w'][fs], ['x', 'y', 'z', 'w'][ft]));
                 g.p.emit("vwaitq");
                 let (q, invalid, divide) = f(a[fs], b[ft]);
+                g.note(name.to_string(), vec![(0, a[fs], b[ft], 0)]);
                 g.flags.divide(invalid, divide);
                 g.q = q;
                 g.record_ccr(22, Some(q));
@@ -442,6 +486,7 @@ pub fn fdiv() -> Program {
             g.p.emit(format!("vsqrt q, vf2{}", ['x', 'y', 'z', 'w'][lane]));
             g.p.emit("vwaitq");
             let (q, invalid, divide) = manual::sqrt(a[lane]);
+            g.note("vsqrt".into(), vec![(0, 0, a[lane], 0)]);
             g.flags.divide(invalid, divide);
             g.q = q;
             g.record_ccr(22, Some(q));
@@ -470,13 +515,18 @@ pub fn fdiv() -> Program {
         out[0] = r.0;
         g.record_vf(3, Some(out));
     }
-    g.p
+    g
 }
 
 /// The integer unit: VIADD, VISUB, VIAND and VIOR over pairs of values written by CTC2, VIADDI over its immediates;
 /// the loads and stores on VU0's data memory, written and read by the EE at B1004000h, and VU1's registers through VU0's
 /// window from 4000h; the random unit; the flags read at the end, unchanged by all of them.
 pub fn int() -> Program {
+    int_gen().p
+}
+
+/// The generator of `int`, with its notes.
+pub fn int_gen() -> Gen {
     let mut g = Gen::new("s12-int");
     let vals: [u32; 10] = [0, 1, 2, 0xFFFF, 57005, 3855, 0x7FFF, 0x8000, 0xFFFF_FFFF, 0x1234_5678];
     for (name, f) in [
@@ -612,13 +662,18 @@ pub fn int() -> Program {
         }
     }
     g.record_flags();
-    g.p
+    g
 }
 
 /// The transfers: QMFC2 and QMTC2 with VF00 and the GPR's 128 bits, with and without the interlock; CFC2 and CTC2 on
 /// every control register, all ones written and read, then zero; LQC2 and SQC2 at offsets, VF00 loaded; BC2F, BC2T and
 /// the likely forms with VU1 idle; COP2 unusable, and LQC2's and SQC2's address errors, through the handler.
 pub fn transfer() -> Program {
+    transfer_gen().p
+}
+
+/// The generator of `transfer`, with its notes.
+pub fn transfer_gen() -> Gen {
     let mut g = Gen::new("s12-transfer");
     let v = 0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210u128;
     g.p.quad("t1", v);
@@ -715,7 +770,7 @@ pub fn transfer() -> Program {
         g.p.record("t3", Some(fall));
     }
     exceptions(&mut g);
-    g.p
+    g
 }
 
 /// COP2 unusable with Status.CU2 clear, CE 2; LQC2's and SQC2's address errors; each through S6's handler.
@@ -757,5 +812,9 @@ fn exceptions(g: &mut Gen) {
 
 /// Every program, in the order the referees run them.
 pub fn all() -> Vec<Program> {
-    vec![add(), mul(), fused(), misc(), fdiv(), int(), transfer()]
+    all_gens().into_iter().map(|g| g.p).collect()
+}
+
+pub fn all_gens() -> Vec<Gen> {
+    vec![add_gen(), mul_gen(), fused_gen(), misc_gen(), fdiv_gen(), int_gen(), transfer_gen()]
 }

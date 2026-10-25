@@ -575,6 +575,15 @@ impl Micro for Pipe {
         self.state == State::Run
     }
 
+    fn idle_to(&mut self, units: &mut Units, t: u64) -> bool {
+        let vu = if self.unit == 0 { &units.vu0 } else { &units.vu1 };
+        let idle = self.state != State::Run && self.flags.is_empty() && vu.q_next.is_none() && vu.p_next.is_none() && vu.p_later.is_none();
+        if idle {
+            self.now = self.now.max(t);
+        }
+        idle
+    }
+
     fn finish(&mut self, units: &mut Units, _: u64) -> Option<u64> {
         self.run_bounded(units, |_| false);
         let vu = if self.unit == 0 { &mut units.vu0 } else { &mut units.vu1 };

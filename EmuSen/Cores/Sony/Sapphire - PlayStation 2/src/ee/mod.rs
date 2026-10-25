@@ -166,6 +166,9 @@ pub struct Ee {
     current: u16,
     current_word: u32,
     stall_until: u64,
+    /// Level 1 exceptions taken, by ExcCode, and level 2 by EXC2: the core's own count, for the hardware's reports (S24).
+    pub exceptions: [u64; 16],
+    pub exceptions2: [u64; 4],
 }
 
 const MEMO: usize = 4096;
@@ -212,6 +215,8 @@ impl Ee {
             current: 0,
             current_word: 0,
             stall_until: 0,
+            exceptions: [0; 16],
+            exceptions2: [0; 4],
         }
     }
 
@@ -350,6 +355,7 @@ impl Ee {
     /// Takes a level 1 exception from the instruction at `pc` (EE Core User's Manual §4.1.2's pseudo-code).
     pub fn raise(&mut self, e: Exception, pc: u32, in_delay: bool) {
         let s = self.cop0[cop0::STATUS];
+        self.exceptions[e.code() as usize] += 1;
         let mut c = self.cop0[cop0::CAUSE] & !(0x1F << 2) | e.code() << 2;
         if let Some(v) = e.vaddr() {
             self.cop0[cop0::BADVADDR] = v;
@@ -393,6 +399,7 @@ impl Ee {
             Level2::Counter => (2, 0x80),
             Level2::Debug => (3, 0x100),
         };
+        self.exceptions2[code as usize] += 1;
         let c = self.cop0[cop0::CAUSE] & !(7 << cause::EXC2_SHIFT) & !cause::BD2;
         self.cop0[cop0::CAUSE] = c | code << cause::EXC2_SHIFT | if in_delay { cause::BD2 } else { 0 };
         self.cop0[cop0::ERROREPC] = if in_delay { pc.wrapping_sub(4) } else { pc };

@@ -352,3 +352,23 @@ fn an_image_opens_as_the_playstation_2s_disc_kinds() {
     assert_eq!(d.dvd().map(|v| v.layer_break()), Some(Some(LAYER0)));
     assert!(kind(vec![0xA5; 5000], vec![]).is_err());
 }
+
+/// The S commands the player's BIOS sends at boot answer as PCSX2 does (D-348): 36h the console's region parameters,
+/// absent without a market; 1Ah with the BIOS's parameters 01h; 22h ten zeros; 24h and the others PCSX2 acknowledges
+/// 00h; a MagicGate command still absent (§5.6).
+#[test]
+fn the_boot_s_commands_answer_as_measured() {
+    let mut c = Cdvd::new(None);
+    assert_eq!(s(&mut c, 0x36, &[], 0), [ABSENT]);
+    c.region = Some(REGION_EUROPE);
+    assert_eq!(s(&mut c, 0x36, &[], 0), b"\x00\x08\x00EEengEE\x00\x00\x00\x00\x00");
+    assert_eq!(s(&mut c, 0x1A, &[0x02, 0x1E, 0x41, 0x43], 0), [1]);
+    assert_eq!(s(&mut c, 0x22, &[], 0), [0; 10]);
+    assert_eq!(s(&mut c, 0x17, &[0x08], 0), [0; 9]);
+    assert_eq!(s(&mut c, 0x1E, &[], 0), [0x00, 0x14, 0x00, 0x00, 0x00]);
+    for cmd in scmd::ACKNOWLEDGED {
+        assert_eq!(s(&mut c, cmd, &[1], 0), [0], "{cmd:02x}");
+    }
+    assert_eq!(s(&mut c, 0x84, &[], 0), [ABSENT]);
+    assert_eq!((c.s_count[0x24], c.s_last[0x1A]), (1, ([0x02, 0x1E, 0x41, 0x43, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4)));
+}

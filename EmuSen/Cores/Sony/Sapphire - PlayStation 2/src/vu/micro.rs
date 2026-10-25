@@ -32,6 +32,11 @@ pub trait Micro {
     fn last(&self) -> Option<u64> {
         None
     }
+    /// Whether `run_to(t)` would do nothing but move the unit's clock, and if so that move made: no microprogram
+    /// running and nothing left to land (the board's shortcut, Sapphire_Native.md §35.7).
+    fn idle_to(&mut self, _units: &mut Units, _t: u64) -> bool {
+        false
+    }
 }
 
 /// Micro mode not built: never running, and refusing a start, which halts the interpreter with the starting word; kept
@@ -57,5 +62,8 @@ impl Micro for Unbuilt {
     fn reset(&mut self) {}
     fn stat(&self) -> u32 {
         0
+    }
+    fn idle_to(&mut self, _: &mut Units, _: u64) -> bool {
+        true
     }
 }

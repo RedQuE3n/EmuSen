@@ -219,11 +219,12 @@ fn the_fifo_holds_sixteen_qwords_and_the_gif_paces_the_dma() {
 }
 
 /// PATH1's port tells VU1 its packet's end from the packet in VU1's memory (an arbitration cycle, a cycle a GIFtag and
-/// a PACKED qword), a second kick starting behind it; a packet with no EOP in the memory is never done.
+/// a PACKED qword), a second kick starting behind it; a packet with no EOP in the memory yet is told one pass over it,
+/// since the VU may complete it while PATH1 reads (D-288, D-351).
 #[test]
 fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     use sapphire::clock::BUS;
-    use sapphire::gif::{ENDLESS, Path1Port};
+    use sapphire::gif::Path1Port;
     use sapphire::vu::Path1;
     let mut data = vec![0u8; 16 << 10];
     let put = |data: &mut Vec<u8>, a: usize, q: u128| data[16 * a..16 * a + 16].copy_from_slice(&q.to_le_bytes());
@@ -236,7 +237,7 @@ fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     let mut endless = vec![0u8; 16 << 10];
     put(&mut endless, 0, s15::manual::tag(1, false, None, 0, &[0xE]));
     port.set_free(0);
-    assert_eq!(port.kick(&endless, 1, 0), ENDLESS, "no EOP anywhere");
+    assert_eq!(port.kick(&endless, 1, 0), BUS * (1 + 1024), "no EOP in the memory yet: one pass over it");
 }
 
 /// On the GIF directly: with PATH3's packet, a kick and a DIRECT all waiting at once, PATH1 goes first, then PATH2,
@@ -292,4 +293,31 @@ fn the_mskpath3_console_text_follows_from_gif_stat() {
     }
     lines.push("-- TEST END".into());
     assert_eq!(lines.join("\n") + "\n", text);
+}
+
+/// A GIFtag with NLOOP 0 outputs nothing (§7.2.1), so PATH3 holding the GIF with only such tags behind it gives it up
+/// when its data stops, and a kick waiting meanwhile is granted; once PATH3 has sent data the rule of D-280 holds and
+/// it keeps the GIF (D-350).
+#[test]
+fn a_path3_packet_that_has_output_nothing_does_not_hold_the_gif() {
+    use sapphire::gif::Gif;
+    use sapphire::vu::{VU1_MEM, Vu};
+    let mut vu1 = Vu::new(VU1_MEM);
+    vu1.set_mem_q(0, s15::manual::tag(1, true, None, 0, &[0xE]));
+    vu1.set_mem_q(1, s15::manual::ad(0x62, 7));
+    let mut g = Gif::new();
+    let mut gs = Recorder::default();
+    g.put(0, false, 10);
+    g.run_to(20, &vu1, &mut gs);
+    g.kick(0, 30, 40);
+    g.run_to(100, &vu1, &mut gs);
+    assert_eq!(gs.0.iter().filter(|w| w.0 == 0x62).map(|w| w.1).collect::<Vec<_>>(), [7], "PATH1 granted after a zero tag");
+    let mut g = Gif::new();
+    let mut gs = Recorder::default();
+    g.put(s15::manual::tag(1, false, None, 0, &[0xE]), false, 10);
+    g.put(s15::manual::ad(0x62, 1), false, 10);
+    g.run_to(20, &vu1, &mut gs);
+    g.kick(0, 30, 40);
+    g.run_to(100, &vu1, &mut gs);
+    assert_eq!(gs.0.iter().filter(|w| w.0 == 0x62).map(|w| w.1).collect::<Vec<_>>(), [1], "PATH3 keeps the GIF in its open packet");
 }

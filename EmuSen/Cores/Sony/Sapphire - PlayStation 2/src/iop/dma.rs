@@ -27,6 +27,10 @@ pub const DPCR2: u32 = 0x1F80_1570;
 pub const DICR2: u32 = 0x1F80_1574;
 pub const DMACEN: u32 = 0x1F80_1578;
 pub const DMACINTEN: u32 = 0x1F80_157C;
+/// DMACINTEN at power-on: channel interrupts on and IRQ 3 passed to the INTC. No document gives it; the player's BIOS
+/// never writes the register and waits on SIF1's completion interrupt, so its bit 0 is set at reset [A, observed at S24;
+/// Sapphire_Disputes.md D-344].
+pub const DMACINTEN_AT_RESET: u32 = 1;
 
 /// Channel `n`'s register block: MADR, BCR, CHCR and TADR at +0, +4, +8 and +C.
 pub const fn base(n: usize) -> u32 {
@@ -102,11 +106,20 @@ pub struct Channel {
     /// In chain mode: a tag has been read and its words are still moving (`addr`, `left`), and its first word.
     in_packet: bool,
     tag: u32,
+    /// In chain mode: the packet's words, as its tag gives them.
+    size: u32,
 }
 
 impl Channel {
     pub fn mode(&self) -> u32 {
         self.chcr >> chcr::MODE_SHIFT & 3
+    }
+
+    /// The mode channel `n` runs in: SIF0 and SIF1 always in chain mode, which they "use exclusively" (ps2tek "IOP
+    /// DMA"), whatever CHCR's field says; the BIOS starts SIF1 with mode 1 and bit 8, and PCSX2 then reads its tags from
+    /// the FIFO as a chain's (Sapphire_Disputes.md D-343).
+    pub fn mode_of(&self, n: usize) -> u32 {
+        if n == SIF0 || n == SIF1 { 3 } else { self.mode() }
     }
 
     fn step(&self, n: usize) -> u32 {
@@ -143,7 +156,7 @@ impl Default for Dmac {
             dpcr2: 0,
             dicr2: 0,
             dmacen: 0,
-            dmacinten: 0,
+            dmacinten: DMACINTEN_AT_RESET,
             master: false,
             hold: 0,
             free: 0,
@@ -213,10 +226,10 @@ impl Dmac {
         if c.chcr & chcr::STR == 0 || !self.enabled(n) || self.dmacen & 1 == 0 {
             return false;
         }
-        if c.mode() == 0 && c.chcr & (chcr::TRIGGER | chcr::PAUSE) == chcr::TRIGGER | chcr::PAUSE {
+        if c.mode_of(n) == 0 && c.chcr & (chcr::TRIGGER | chcr::PAUSE) == chcr::TRIGGER | chcr::PAUSE {
             return false;
         }
-        let need = match c.mode() {
+        let need = match c.mode_of(n) {
             1 => block(c.bcr),
             3 if !(c.begun && c.in_packet) => chain_tag_words(c).max(1),
             _ => 1,
@@ -306,7 +319,7 @@ impl Dmac {
         let step = c.step(n);
         let device = n != OTC && c.chcr & chcr::TRIGGER == 0;
         let mut irq = false;
-        match c.mode() {
+        match c.mode_of(n) {
             0 => {
                 let chop = c.chcr & chcr::CHOP != 0;
                 let window = if chop { 1 << (c.chcr >> chcr::DMA_WINDOW_SHIFT & 7) } else { c.left };
@@ -404,6 +417,7 @@ impl Dmac {
                     c.tag = tag[0];
                     c.addr = tag[0] & 0x00FF_FFFC;
                     c.left = tag[1] & 0x00FF_FFFF;
+                    c.size = c.left;
                     c.madr = c.addr;
                     cost += words as u64;
                 }
@@ -426,6 +440,11 @@ impl Dmac {
                 let end = self.hold_for(now, cost, GAP);
                 if c.left == 0 {
                     c.in_packet = false;
+                    if n == SIF0 && from_memory {
+                        for _ in 0..sif0_padding(c.size) {
+                            dev.put(n, 0);
+                        }
+                    }
                     if c.tag & 1 << 30 != 0 && self.dicr2 & 1 << n != 0 {
                         irq |= self.flag(n, true);
                     }
@@ -501,6 +520,13 @@ impl Dmac {
 fn chain_tag_words(c: &Channel) -> u32 {
     let extra = if c.chcr & chcr::CHOP != 0 { 2 } else { 0 };
     if c.chcr & chcr::DIR != 0 { extra } else { 4 }
+}
+
+/// The zero words SIF0 adds after a packet of `words` so that its data fills whole quadwords, which the EE's channel
+/// takes as its own tag counts them (EE Overview §2.6, §3.1.2): the BIOS sends packets of six words for two quadwords.
+/// PCSX2 fills them with earlier words of the packet; MADR moves by the words read alone (Sapphire_Disputes.md D-345).
+fn sif0_padding(words: u32) -> u32 {
+    words.next_multiple_of(4) - words
 }
 
 /// A burst's words or a slice's block: BCR's low half, 0 meaning 10000h (psx-spx).

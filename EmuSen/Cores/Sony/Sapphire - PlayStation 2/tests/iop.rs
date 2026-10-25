@@ -102,8 +102,8 @@ fn each_dma_mode_reaches_its_stand_in() {
     assert_eq!(fifo(sif::SIF2), [0x2000_0000, 0x2000_0001, 0x2000_0002], "the list's words, no headers, in SIF2's FIFO");
     assert_eq!(
         fifo(sif::SIF0),
-        [0x9000_0000, 0x9000_0001, 0x9100_0000, 0x9100_0001, 0x9000_0002, 0x9000_0003, 0x9200_0000, 0x9200_0001, 0x9200_0002],
-        "each tag's two words before its data, in SIF0's FIFO"
+        [0x9000_0000, 0x9000_0001, 0x9100_0000, 0x9100_0001, 0, 0, 0x9000_0002, 0x9000_0003, 0x9200_0000, 0x9200_0001, 0x9200_0002, 0],
+        "each tag's two words before its data, in SIF0's FIFO, the data padded with zeros to whole quadwords (D-345)"
     );
     assert!(b.iop.bus.sif.fifo[sif::SIF1].is_empty(), "the tag and its words taken from SIF1's FIFO");
     assert_eq!(spu2.cores[0].tsa, 2 * (5 + 32), "the requested burst and the chopped one");

@@ -201,6 +201,8 @@ pub const FCR31: usize = ACC + 1;
 /// VU0's register `n` (1 to 31) is resource `VU0R + n - 1`; register 0 is no hazard.
 pub const VU0R: usize = FCR31 + 1;
 const RESOURCES: usize = VU0R + 31;
+/// Every resource's bit, so that only these are visited.
+const ALL: u128 = if RESOURCES >= 128 { u128::MAX } else { (1u128 << RESOURCES) - 1 };
 /// The VU0 resources, for a transfer from VU0, which reads a cycle after a macro instruction would (§5.4.4).
 const VU0_MASK: u128 = ((1u128 << 31) - 1) << VU0R;
 
@@ -342,11 +344,12 @@ impl Timing {
             earliest = earliest.max(self.mem_free);
         }
         let from_vu = i.row == rows::VFROM;
-        for r in 0..RESOURCES {
-            if i.reads >> r & 1 == 1 {
-                let late = u64::from(from_vu && VU0_MASK >> r & 1 == 1);
-                earliest = earliest.max(self.ready[r] + late);
-            }
+        let mut reads = i.reads & ALL;
+        while reads != 0 {
+            let r = reads.trailing_zeros() as usize;
+            reads &= reads - 1;
+            let late = u64::from(from_vu && VU0_MASK >> r & 1 == 1);
+            earliest = earliest.max(self.ready[r] + late);
         }
         if Self::uses_mac0(i) {
             earliest = earliest.max(self.mac0_free);
@@ -390,10 +393,10 @@ impl Timing {
         if i.data > 0 {
             self.mem_free = at + 1 + i.data;
         }
-        for r in 0..RESOURCES {
-            if i.writes >> r & 1 == 1 {
-                self.ready[r] = done;
-            }
+        let mut writes = i.writes & ALL;
+        while writes != 0 {
+            self.ready[writes.trailing_zeros() as usize] = done;
+            writes &= writes - 1;
         }
         if Self::uses_mac0(i) {
             self.mac0_free = at + u64::from(row.throughput);

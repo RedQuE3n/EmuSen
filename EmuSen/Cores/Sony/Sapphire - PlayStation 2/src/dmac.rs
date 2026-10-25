@@ -31,6 +31,10 @@ pub const D_RBSR: u32 = 0x1000_E040;
 pub const D_RBOR: u32 = 0x1000_E050;
 pub const D_STADR: u32 = 0x1000_E060;
 pub const D_ENABLER: u32 = 0x1000_F520;
+/// D_ENABLE's value at power-on: CPND clear, as the EE User's Manual gives it, and the bits it leaves undefined as ps2tek
+/// says the BIOS expects them, 1201h ("SCPH-39001 (and other BIOSes?) seems to expect D_ENABLER to be set to 1201h upon
+/// boot"); with zero the player's BIOS stops before its memory controller (Sapphire_Disputes.md D-341).
+pub const ENABLE_AT_RESET: u32 = 0x1201;
 pub const D_ENABLEW: u32 = 0x1000_F590;
 
 /// Dn_CHCR's fields (§5.9).
@@ -184,7 +188,7 @@ impl Default for Dmac {
             rbsr: 0,
             rbor: 0,
             stadr: 0,
-            enable: 0,
+            enable: ENABLE_AT_RESET,
             unit: None,
             release_until: 0,
             wake: u64::MAX,
@@ -674,6 +678,11 @@ impl Dmac {
             }
         }
         self.end_packet(c);
+    }
+
+    /// Whether the DMAC answers at `paddr`: its common registers and each channel's block.
+    pub fn answers(paddr: u32) -> bool {
+        matches!(paddr, D_CTRL | D_STAT | D_PCR | D_SQWC | D_RBSR | D_RBOR | D_STADR | D_ENABLER | D_ENABLEW) || decode(paddr).is_some()
     }
 
     pub fn read(&self, paddr: u32) -> u32 {

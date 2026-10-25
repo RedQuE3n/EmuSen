@@ -58,11 +58,14 @@ pub enum Target {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tlb {
     pub entries: [Entry; ENTRIES],
+    /// The last lookup's 4 KiB page and ASID with the lowest matching index found: every address of one page meets the
+    /// same entries, the smallest pair being 8 KiB, so the answer stands until an entry is written (a pure memo).
+    memo: std::cell::Cell<Option<(u32, u32, Option<usize>)>>,
 }
 
 impl Default for Tlb {
     fn default() -> Self {
-        Tlb { entries: [Entry::default(); ENTRIES] }
+        Tlb { entries: [Entry::default(); ENTRIES], memo: std::cell::Cell::new(None) }
     }
 }
 
@@ -72,6 +75,7 @@ impl Tlb {
         let g = lo0 & lo1 & 1;
         self.entries[index] =
             Entry { mask: pagemask, hi: (entryhi & VPN2 | g << 12 | entryhi & 0xFFF) & !pagemask, lo0: lo0 & !1, lo1: lo1 & !1 };
+        self.memo.set(None);
     }
 
     /// TLBR's Operation: (PageMask, EntryHi, EntryLo0, EntryLo1); a scratchpad entry's C fields read 2 (§5.2.5).
@@ -89,7 +93,15 @@ impl Tlb {
 
     /// The entry translating `vaddr` under `asid`, the lowest index where several match (undefined, §5.2.2).
     pub fn lookup(&self, vaddr: u32, asid: u32) -> Option<Hit> {
-        let index = self.entries.iter().position(|e| e.matches(vaddr, asid))?;
+        let page = vaddr >> 12;
+        let index = match self.memo.get() {
+            Some((p, a, found)) if p == page && a == asid => found,
+            _ => {
+                let found = self.entries.iter().position(|e| e.matches(vaddr, asid));
+                self.memo.set(Some((page, asid, found)));
+                found
+            }
+        }?;
         let e = &self.entries[index];
         if e.scratchpad() {
             return Some(Hit { index, valid: e.lo0 & 2 != 0, dirty: e.lo0 & 4 != 0, target: Target::Scratchpad(vaddr & 0x3FFF) });

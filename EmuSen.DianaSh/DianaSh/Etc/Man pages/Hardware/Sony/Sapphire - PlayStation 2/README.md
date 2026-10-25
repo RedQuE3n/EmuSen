@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26 and S27 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27 and S24 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -82,7 +82,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and stage S27 (2026-10-25, §34): the IPU, its ten commands, registers, FIFOs and DMA channels, MPEG-2 and MPEG-1
   macroblocks decoded as H.262 defines it with Annex A's reference IDCT decided exactly, §8.6's colour conversion, the
   project's streams decoded equal to a model of the standard that ffmpeg's decoding matches, PCSX2 a witness for the
-  commands and the stream's handling and Play! for VDEC, their departures disputes D-300 to D-326.
+  commands and the stream's handling and Play! for VDEC, their departures disputes D-300 to D-326; and stage S24 (2026-10-25, §35): the machine on the board with the player's BIOS, the IOP's
+  reset line, the drive on the IOP's bus, the EEPROM as the console medium `ps2.nvm`, the picture and the sound through
+  `v1`, the hardware's own reports as the only window on the boot, OSDSYS's language screen reached on both 0230 images
+  and compared with PCSX2's, the pad stepping the initial setup on, and D-340 to D-351.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -125,7 +128,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   filling, the alternate scan's weights, IDEC's scale, start codes, VDEC's errors and lengths, MPEG-1's arithmetic,
   CBP, the interrupt, IPU_CMD's and IPU_TOP's quirks, BCLR, FB, commands while busy, RST, IPU_CTRL's fields, IDP 3,
   IDEC's increment, CSC, the dither and VQ, SGN, the escape's odd levels, errors inside a macroblock, the decoding's
-  time, TTE on toIPU, and MPEG-1's stuffing and D-pictures.
+  time, TTE on toIPU, and MPEG-1's stuffing and D-pictures; D-340 to D-351 since S24, what the player's BIOS showed the board
+  lacked: the IOP's reset line, D_ENABLE and DMACINTEN at power-on, the memory controller's RDRAM answers, SIF0's and
+  SIF1's chains and padding, the absent ROMs' place, halfword DMA writes, the boot S commands, STATX, PATH3's zero tag
+  and PATH1's estimate.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A, the SPU2's voices) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

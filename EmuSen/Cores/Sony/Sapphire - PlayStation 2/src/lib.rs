@@ -1,9 +1,8 @@
 //! Sapphire, the Sony PlayStation 2 core in Rust, on the core ABI v1. Written from hardware documents under
 //! Sapphire_Plan.md §1.4's clean-room protocol; the build record is Sapphire_Native.md.
 //!
-//! Stage S1: a stub. The image is read (`media`): an EE program as an ELF, or a disc whose SYSTEM.CNF names a BOOT2
-//! program; the machine (`machine`) holds the memories, a frame counter, a black picture and silence, and nothing is
-//! emulated. `state` is the format SPH2, and `v1` the core ABI's glue. Stage S6: `ee`, the EE core's integer
+//! Stage S1: the image is read (`media`): an EE program as an ELF, or a disc whose SYSTEM.CNF names a BOOT2 program;
+//! `state` is the format SPH2, and `v1` the core ABI's glue. Since S24 the machine (`machine`) is the whole console. Stage S6: `ee`, the EE core's integer
 //! interpreter and its timing model; S7: COP0, the TLB, the caches, the physical memory map, the counters and the
 //! breakpoints; S8: the multimedia instructions; S9: COP1, on `float`, the PlayStation 2's single-precision format in
 //! software; run by the project's programs and not yet by the machine (S10 loads programs). S11: the DMAC (`dmac`),
@@ -23,6 +22,9 @@
 //! S15: the GIF (`gif`), its three paths, their arbitration and PATH3's masking, driving the GS's host interface.
 //! S26: the SPU2 (`spu2`), two cores of `blackmoon-spu`'s voices on the IOP's bus and its DMA channels 4 and 7.
 //! S27: the IPU (`ipu`), MPEG-2 macroblock decoding as H.262 defines it and its colour conversion, on channels 3 and 4.
+//! S24: the console assembled (`machine`): the player's BIOS in the boot ROM for both processors, the IOP reset by the
+//! SIF, the drive joined to the IOP's bus, the EEPROM a console medium, the pads, the picture and the sound handed on,
+//! and the hardware's own reports of what no unit answers (`reports`).
 
 pub mod bios;
 pub mod board;
@@ -37,8 +39,10 @@ pub mod intc;
 pub mod iop;
 pub mod ipu;
 pub mod machine;
+pub mod mch;
 pub mod media;
 pub mod pcrtc;
+pub mod reports;
 pub mod sif;
 pub mod sio2;
 pub mod spu2;

@@ -72,6 +72,11 @@ impl Timer {
         Timer { n, count: 0, mode: mode::INTF, target: 0, synced: 0, gate_high: false, gate_seen: false }
     }
 
+    /// Timer `n` as a reset leaves it at EE cycle `t`: counting from zero from then.
+    pub fn reset_at(n: usize, t: u64) -> Timer {
+        Timer { synced: t, ..Timer::new(n) }
+    }
+
     /// The largest count: FFFFh on timers 0 to 2, FFFFFFFFh on 3 to 5.
     pub fn max(&self) -> u64 {
         if self.n < 3 { 0xFFFF } else { 0xFFFF_FFFF }

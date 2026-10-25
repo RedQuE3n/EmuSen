@@ -265,3 +265,23 @@ fn the_arbitration_grants_path1_then_path2_then_path3() {
         assert_eq!(labels(&gs), [1, 2, 3]);
     }
 }
+
+/// ps2autotests' `dma/vif/mskpath3` console text (its `.expected`, a console's; the program's source not read), whose
+/// values follow from GIF_STAT read whole with M3P its only bit set [A]: MSKPATH3 through VIF1's FIFO sets and clears
+/// it. PCSX2 reproduces the text (Sapphire_Native.md §33.7); Sapphire runs the program itself with S10.
+#[test]
+fn the_mskpath3_console_text_follows_from_gif_stat() {
+    use sapphire::board::Board;
+    use sapphire::ee::Bus;
+    let text = "-- TEST BEGIN\nmask value (initial): 00000000\nmask value (after mskpath3(true))): 00000002\nmask value (after mskpath3(false))): 00000000\n-- TEST END\n";
+    let mut b = Board::new(sapphire::clock::NTSC);
+    let mut spr = vec![0u8; 16 << 10];
+    let mut lines = vec!["-- TEST BEGIN".to_string(), format!("mask value (initial): {:08x}", b.read(s15::GIF_STAT, 4))];
+    for (on, what) in [(true, "true"), (false, "false")] {
+        b.write(0x1000_5000, 16, u128::from(0x0600_0000u32 | if on { 0x8000 } else { 0 }));
+        b.run_to(b.now + 100, &mut spr);
+        lines.push(format!("mask value (after mskpath3({what}))): {:08x}", b.read(s15::GIF_STAT, 4)));
+    }
+    lines.push("-- TEST END".into());
+    assert_eq!(lines.join("\n") + "\n", text);
+}

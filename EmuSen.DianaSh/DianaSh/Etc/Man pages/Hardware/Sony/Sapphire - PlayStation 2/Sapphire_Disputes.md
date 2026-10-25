@@ -2622,3 +2622,179 @@ through the reset too.
 - **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
 - **Implemented in:** stage S18's commit.
 
+### D-280. GIF: a path holds the GIF from its packet's first GIFtag to its EOP primitive's end, though its data stops meanwhile; the other paths wait
+
+- **Opened:** 2026-10-25, at stage S15: §7.1.2 checks the other paths "whenever transfer of a GS packet in a path ends",
+  and says nothing of a path whose data stops mid-packet (a DMA that ends before the EOP primitive).
+- **Documents read:** *EE User's Manual* (Version 5.0) §7.1.2, §7.1.3, §7.2.1 ("Transfer processing is performed in
+  units of GS packets"), DIRECTHL's page; ps2tek "Graphics Interface (GIF)" ("Only one PATH may run at a time … when
+  one PATH stops, the highest priority queued PATH will begin transfer").
+- **Test program:** `s15-arbitration`: PATH3 sends a packet's first primitive (EOP clear) and its DMA ends; then a DIRECT,
+  an XGKICK, or both; then the packet's rest. `s15-intermittent`'s continuous and DIRECTHL cases against a transfer in
+  flight.
+- **Referee:** PCSX2 2.8.2 lets DIRECT and XGKICK reach the GS before the rest of PATH3's packet, GIF_STAT reading idle
+  between. Play! 0.72 holds DIRECT until PATH3's packet ends, in every case that shows it, and delivers XGKICK at once.
+- **Conclusion:** as the title: the manual's unit of transfer is the packet, and Play!'s lineage holds PATH2 as it says;
+  PCSX2's switch at a DMA's end is recorded, not followed. **Argued**, with one lineage agreeing for PATH2 and none for
+  PATH1.
+- **Depends on it:** `gif::Gif::run_to`, `path2`.
+- **Pinned by:** `the_paths_are_arbitrated_at_packet_ends_and_path3_masked_and_interrupted_as_section_7_1_says`.
+- **Implemented in:** stage S15's commit.
+
+### D-281. GIF, PACKED: the descriptors 0Ch (XYZF3) and 0Dh (XYZ3) write the qword's lower 64 bits, unpacked, as TEX0 and CLAMP do
+
+- **Opened:** 2026-10-25, at stage S15, by PCSX2's record of `s15-packed`.
+- **Documents read:** *EE User's Manual* §7.2.3's table ("0x0c XYZF3 … Lower 64 bits", "0x0d XYZ3 … Lower 64 bits"),
+  §7.3.2 (packing formats drawn only for 00h to 05h, 0Ah, 0Eh, 0Fh); ps2tek "GIF Data Formats" ("All registers not
+  specified below output the lower 64-bits"; 04h and 05h alone given the XYZ packing).
+- **Test program:** `s15-packed`: two sprites whose first vertex is a register value through 0Dh and 0Ch, the second a
+  packed XYZ2.
+- **Referee:** PCSX2 packs 0Ch and 0Dh as XYZF and XYZ (Y from bits 47..32, so the raw value's Z gives Y 0 and the sprite
+  runs from the page's top); every other descriptor equal. Play! shows no drawing (`Sapphire_Native.md` §27.7).
+- **Conclusion:** the lower 64 bits, as both documents give them. **Argued**, the documents against one lineage.
+- **Depends on it:** `gif::packing::packed`.
+- **Pinned by:** `packed_mode_writes_each_descriptor_as_section_7_3_draws_it`, `every_packing_conversion_writes_what_section_7_3_draws`.
+- **Implemented in:** stage S15's commit.
+
+### D-282. GIF_STAT: P1Q a kick waiting, P2Q PATH2 refused and waiting, P3Q PATH3's data or interrupted transfer waiting while it does not hold the GIF; OPH and APATH the path holding the GIF, or whose last output is still being sent; the registers §7.6 makes readable only under PSE answered at any time
+
+- **Opened:** 2026-10-25, at stage S15: §7.6 names the fields without saying when a held path counts as outputting, and
+  marks GIF_TAG0 to GIF_TAG3, GIF_CNT, P3CNT and P3TAG "accessible only when stopped temporarily by the PSE flag".
+- **Documents read:** §7.6's pages; ps2tek "GIF I/O".
+- **Test program:** `s15-arbitration` and `s15-regs`: GIF_STAT at every step; the tag registers and GIF_CNT under PSE
+  with a packet held after its third data qword (LOOPCNT 2, REGCNT 2 by "decremented when starting processing of the
+  NREGSth register descriptor"); P3CNT 24 and P3TAG 8020h after an interruption.
+- **Referee:** PCSX2 never sets P1Q, P2Q or P3Q, shows OPH and APATH only while data moves (and OPH while BUSDIR is
+  reversed and after it), and reads 0 from the tag and count registers under PSE. Play! reads E00h or 200h whatever the
+  state.
+- **Conclusion:** as the title, by the fields' names. **Argued**; neither lineage models them.
+- **Depends on it:** `gif::Gif::status`, `read`.
+- **Pinned by:** `the_gif_registers_pause_reset_and_report_as_section_7_6_says`, the arbitration program.
+- **Implemented in:** stage S15's commit.
+
+### D-283. DMAC channel 2: a DMAtag sent by TTE is not GIF data and the GIF drops it
+
+- **Opened:** 2026-10-25, at stage S15: TTE sends the tag's quadword before its packet (D-36), and a VIF takes its upper
+  64 bits as VIFcodes (D-193); the GIF's data is GIFtags and their data, which a DMAtag is not.
+- **Documents read:** *EE User's Manual* §5.2.3, Dn_CHCR's TTE, §7.2.1 ("For PATH2 and PATH3, however, the VIFcode and
+  DMATag are put in front of the GS packet"); ps2tek "DMAC Chain Mode".
+- **Test program:** `s15-paths`: a packet by chain DMA with TTE, its tags' upper 64 bits zero; were the tag taken as a
+  GIFtag, its QWC would be read as NLOOP and the packet lost.
+- **Referee:** PCSX2 draws the region and Play! receives its LABEL: both drop the tag.
+- **Conclusion:** dropped. **Measured** on both lineages.
+- **Depends on it:** `gif::Gif::put`.
+- **Pinned by:** `every_path_carries_the_same_packets_to_the_gs`.
+- **Implemented in:** stage S15's commit.
+
+### D-284. GIF_CTRL.RST clears the paths' packets, the FIFO, the waiting kicks, PATH3's interruption, the tag and count registers and GIF_MODE, and keeps MSKPATH3's mask
+
+- **Opened:** 2026-10-25, at stage S15: RST returns "the internal register" to its initial value and GIF_STAT's initial
+  value is 0, while §7.1.4 says the mask set by the VIF "can be cancelled only by the VIF".
+- **Documents read:** GIF_CTRL's, GIF_MODE's and GIF_STAT's pages; §7.1.4.
+- **Test program:** `s15-regs`: RST with a PATH3 packet held mid-way (PATH2 then goes at once), and with GIF_MODE 5 and
+  MSKPATH3 set (GIF_STAT then M3P alone).
+- **Referee:** PCSX2 lets PATH2 go and clears GIF_MODE's bits, and clears M3P too. Play! does not end the packet.
+- **Conclusion:** as the title, §7.1.4's sentence deciding M3P. **Argued** against one lineage.
+- **Depends on it:** `gif::Gif::reset`.
+- **Pinned by:** `the_gif_registers_pause_reset_and_report_as_section_7_6_says`.
+- **Implemented in:** stage S15's commit.
+
+### D-285. The intermittent mode: the slice is 8 qwords of the IMAGE primitive's data counted from its start; a PATH1 or DIRECT request present when PATH3 reaches a slice's end, or arriving while it waits there, takes the GIF; DIRECTHL never does, and waits behind an interrupted PATH3 at the next arbitration
+
+- **Opened:** 2026-10-25, at stage S15: §7.1.3 checks other requests "whenever 1 slice (8 qwords) is transferred",
+  without saying where slices are counted from or what a request arriving at a waiting boundary meets.
+- **Documents read:** §7.1.3, GIF_MODE's and GIF_STAT's IMT, P3CNT's and P3TAG's pages, DIRECTHL's page.
+- **Test program:** `s15-arbitration`: an IMAGE packet held after 8 data qwords placed on an 8-qword boundary of memory, so
+  that a slice counted from the primitive and one counted from memory agree, then DIRECT, DIRECTHL or XGKICK, in each
+  mode. `s15-intermittent`: the same against a transfer of 30,720 qwords in flight.
+- **Referee:** PCSX2 lets DIRECT overtake the running transfer in the intermittent mode (the LABEL while D2_CHCR.STR is
+  set); its continuous and DIRECTHL cases finish the DMA first and decide nothing; it lets every path pass a held packet
+  (D-280). Play! has no intermittent mode (DIRECT waits), and holds DIRECTHL.
+- **Conclusion:** as the title. **Argued**, PCSX2 a witness for DIRECT's overtaking.
+- **Depends on it:** `gif::Gif::at_slice`, `interrupt`, `choose`.
+- **Pinned by:** the arbitration and intermittent programs.
+- **Implemented in:** stage S15's commit.
+
+### D-286. The GIF's time: a bus cycle a GIFtag, a PACKED qword and each 64-bit output of REGLIST and IMAGE; a bus cycle at each arbitration; a DMA unit's qwords arriving a bus cycle apart; XGKICK told an estimated end
+
+- **Opened:** 2026-10-25, at stage S15: no document times the GIF beyond its idle cycles.
+- **Documents read:** §7.1's figure (128-bit inputs at BUSCLK, a 64-bit output), §7.1.2, §7.3.1, §7.4.1, §7.5.1 (the idle
+  cycles); *GS User's Manual* §1.1.2 (host transfers at most 1.2 GB/s).
+- **Test program:** `the_fifo_holds_sixteen_qwords_and_the_gif_paces_the_dma`: 200 qwords take 400 EE cycles as PACKED,
+  738 as IMAGE.
+- **Referee:** not consulted for timing; PCSX2's GIF DMA of 30,720 qwords finishes within a few hundred EE instructions,
+  far faster than any rate the documents allow.
+- **Conclusion:** as the title, each a named loss (`Sapphire_Native.md` §33.4, §33.9). **Argued**.
+- **Depends on it:** `gif::packing::Packet::take`'s cycles, `gif::Gif::put`, `gif::Path1Port`.
+- **Pinned by:** the FIFO's test, `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
+- **Implemented in:** stage S15's commit.
+
+### D-287. While BUSDIR reverses the host interface the GIF sends nothing, its paths waiting; the GS's stalled SIGNAL does not stop the GIF
+
+- **Opened:** 2026-10-25, at stage S15: §7.1.5 has the GIF set its direction from BUSDIR, and S16's GS drops a general
+  register write while reversed and holds every write behind a stalled SIGNAL, unbounded.
+- **Documents read:** §7.1.5; *GS User's Manual* §4.2.2 ("The general-purpose port register cannot be accessed while the
+  FIFO is in the reverse direction"), §6.2.1, CSR's FIFO field.
+- **Test program:** S16's programs through PATH3, whose readbacks reverse the bus after the FINISH handshake.
+- **Referee:** PCSX2 sets OPH while BUSDIR is reversed and keeps it after (`s15-regs`).
+- **Conclusion:** as the title; the GS's own FIFO depth is not documented, so the GIF does not wait on CSR.FIFO.
+  **Argued**.
+- **Depends on it:** `gif::Gif::run_to`, `path2`.
+- **Pinned by:** `s16s_programs_run_whole_through_path3_and_vif1`.
+- **Implemented in:** stage S15's commit.
+
+### D-288. PATH1 reads its packet from VU1's memory as it sends it, the address wrapping at 1,024 qwords
+
+- **Opened:** 2026-10-25, at stage S15: §7.1.1 has XGKICK start the transfer from VU1's memory, not copy it, and GIF_CNT's
+  VUADDR is 10 bits.
+- **Documents read:** §7.1.1, GIF_CNT's page; *VU User's Manual* XGKICK's page and §3.4.9.
+- **Test program:** `s15-paths`: a packet of 10 qwords kicked at qword 1,020.
+- **Referee:** PCSX2 draws it and Play! receives its LABEL: both wrap.
+- **Conclusion:** as the title. **Measured** on both lineages for the wrap; the reading at the time of sending argued.
+- **Depends on it:** `gif::Gif::run_to`.
+- **Pinned by:** `every_path_carries_the_same_packets_to_the_gs`.
+- **Implemented in:** stage S15's commit.
+
+### D-289. PATH3's masks are read at the arbitration: a packet in progress when M3R or MSKPATH3 is set finishes, and the next waits, its data kept in the FIFO
+
+- **Opened:** 2026-10-25, at stage S15: GIF_MODE's page has M3R "enabled after the end of transmission", MSKPATH3's page
+  "applies to the next data block or later", and ps2tek has the mask apply "once GIF DMA ends its transfer".
+- **Documents read:** §7.1.4, GIF_MODE's page, MSKPATH3's page; ps2tek "GIF I/O", "GIF PATH3 Masking".
+- **Test program:** `s15-arbitration`: M3R set while PATH3's packet is held mid-way after its DMA ended, then the
+  packet's rest, then another packet.
+- **Referee:** PCSX2 and Play! both finish the packet and hold the next until M3R is cleared.
+- **Conclusion:** as the title: ps2tek's DMA-end reading would have held the rest, which both lineages send. **Measured**
+  on both lineages.
+- **Depends on it:** `gif::Gif::choose`.
+- **Pinned by:** the arbitration program.
+- **Implemented in:** stage S15's commit.
+
+### D-290. PCSX2's second DIRECT (S14): a referee defect, not a protocol rule
+
+- **Opened:** 2026-10-25, at stage S14 (`Sapphire_Native.md` §28.8): PCSX2 takes `s14-direct`'s first DIRECT and never
+  its second.
+- **Documents read:** §7.1.2, §7.1.4; DIRECT's page.
+- **Test program:** `s15-direct-a` to `-d` (`Sapphire_Native.md` §33.8): two DIRECTs with no GIF reset, with one, with
+  the second stream DIRECT alone, and with a PATH3 packet between.
+- **Referee:** PCSX2 hangs in (a) and (c): GIF_STAT 0 at the start, E00h (APATH PATH3) after the first DIRECT with no
+  PATH3 data and channel 2 stopped, then E80h; it takes both in (b) and (d). Play! takes both in every form.
+- **Conclusion:** PCSX2, entered by fast boot, holds a PATH3 request that waits through an idle GIF and is granted after
+  a PATH2 packet with nothing to send; under §7.1.2 an idle GIF grants a request at once and PATH3 has no data, so the
+  hang has no reading in the documents. The programs reset the GIF first. **Measured**.
+- **Depends on it:** nothing in the core; every S15 program's opening.
+- **Pinned by:** `a_second_direct_reaches_the_gs_in_every_form_of_the_probe`.
+- **Implemented in:** stage S15's commit.
+
+### D-291. Q is the GIF's own register: ST's packed form sets it and writes only S and T, RGBAQ's packed form gives it, and every GIFtag sets it to 1.0
+
+- **Opened:** 2026-10-25, at stage S15: §7.3.2 keeps Q "in the internal register of the GIF" and outputs it with the
+  next RGBAQ, initialised "whenever the GIFtag is read"; ps2tek's "STQ" writes "ST register and Q component of RGBAQ",
+  its RGBA leaves Q unchanged, and "The GS Q register is initialized to 1.0f when reading a GIFtag".
+- **Documents read:** §7.3.2's ST and RGBAQ; ps2tek "GIFtags", "GIF Data Formats".
+- **Test program:** none can see Q before texturing (S18); `every_packing_conversion_writes_what_section_7_3_draws`
+  checks the writes the manual's reading gives.
+- **Referee:** not consulted.
+- **Conclusion:** the manual's reading. **Open** until S18's programs draw with Q.
+- **Depends on it:** `gif::packing::Packet::take`.
+- **Pinned by:** `every_packing_conversion_writes_what_section_7_3_draws`.
+- **Implemented in:** stage S15's commit.

@@ -11,15 +11,48 @@ pub const LEAD_OUT: u8 = 0xAA;
 
 /// G(x) = x¹⁶ + x¹² + x⁵ + 1, most significant bit first, the register starting at zero; the field holds it inverted.
 pub fn crc16(data: &[u8]) -> u16 {
-    let mut r: u16 = 0;
-    for &b in data {
-        r ^= (b as u16) << 8;
-        for _ in 0..8 {
-            r = if r & 0x8000 != 0 { r << 1 ^ 0x1021 } else { r << 1 };
-        }
-    }
-    !r
+    !ccitt(0, data)
 }
+
+/// The same G(x) over `data`, the register starting at `r`; a CHD's hunk CRC starts at FFFFh. Eight bytes a step by
+/// eight tables (slicing), the rest a byte at a time: `CCITT[k][v]` is byte `v` followed by `k` zero bytes.
+pub fn ccitt(mut r: u16, data: &[u8]) -> u16 {
+    let mut blocks = data.chunks_exact(8);
+    for b in &mut blocks {
+        let t = &CCITT;
+        r = t[7][(r >> 8) as usize ^ b[0] as usize] ^ t[6][(r & 0xFF) as usize ^ b[1] as usize] ^ t[5][b[2] as usize] ^ t[4][b[3] as usize] ^ t[3][b[4] as usize] ^ t[2][b[5] as usize] ^ t[1][b[6] as usize] ^ t[0][b[7] as usize];
+    }
+    for &b in blocks.remainder() {
+        r = r << 8 ^ CCITT[0][(r >> 8) as u8 as usize ^ b as usize];
+    }
+    r
+}
+
+const CCITT: [[u16; 256]; 8] = {
+    let mut t = [[0u16; 256]; 8];
+    let mut i = 0;
+    while i < 256 {
+        let mut r = (i as u16) << 8;
+        let mut k = 0;
+        while k < 8 {
+            r = if r & 0x8000 != 0 { r << 1 ^ 0x1021 } else { r << 1 };
+            k += 1;
+        }
+        t[0][i] = r;
+        i += 1;
+    }
+    let mut k = 1;
+    while k < 8 {
+        let mut i = 0;
+        while i < 256 {
+            let p = t[k - 1][i];
+            t[k][i] = p << 8 ^ t[0][(p >> 8) as usize];
+            i += 1;
+        }
+        k += 1;
+    }
+    t
+};
 
 /// One sector's Q: bytes 0–9 and the CRC, big-endian, in 10–11.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -104,5 +137,23 @@ mod tests {
         assert!(!bad.valid());
         assert_eq!(q.getloc(), [1, 1, 0, 0, 0, 0, 2, 0]);
         assert_eq!(q.0[0], 0x41);
+    }
+
+    /// The register started at FFFFh is the catalogue's CRC-16/CCITT-FALSE, whose check value over "123456789" is 29B1h.
+    #[test]
+    fn the_table_gives_the_catalogues_check_value() {
+        assert_eq!(ccitt(0xFFFF, b"123456789"), 0x29B1);
+        assert_eq!(ccitt(0, b"123456789"), 0x31C3);
+        let data: Vec<u8> = (0..1000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+        for len in [0, 1, 7, 8, 9, 15, 16, 17, 999, 1000] {
+            let mut r = 0xFFFFu16;
+            for &b in &data[..len] {
+                r ^= (b as u16) << 8;
+                for _ in 0..8 {
+                    r = if r & 0x8000 != 0 { r << 1 ^ 0x1021 } else { r << 1 };
+                }
+            }
+            assert_eq!(ccitt(0xFFFF, &data[..len]), r, "{len} bytes");
+        }
     }
 }

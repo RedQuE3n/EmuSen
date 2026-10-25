@@ -206,7 +206,7 @@ fn word(r: &Result<(), String>) -> Value {
 }
 
 /// Checks 3 and 2, in that order, through EmuSen's reader; neither is run over a CHD that check 1 found damaged, since
-/// `chd` 0.3.4 stops the program on some damaged hunks (§12.2), and the disc has failed in any case.
+/// a damaged compressed map can still stop the program at open (EmuSen_Disc.md §13.3), and the disc has failed anyway.
 fn reader_checks(check1: &Result<(), String>, at: &str, toc: &Toc, sheet: &str, expected: &[Hashes], stop: &dyn Fn() -> bool) -> (Result<(), String>, Result<(), String>) {
     if check1.as_ref().is_err_and(|w| w != "stopped") {
         let words = "not run, since chdman found the CHD damaged".to_string();

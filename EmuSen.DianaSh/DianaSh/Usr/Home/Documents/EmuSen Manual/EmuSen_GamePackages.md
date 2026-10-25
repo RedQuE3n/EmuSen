@@ -1373,11 +1373,13 @@ track nor an ISO image, and an `.m3u`, whose discs are named one by one (§12.6)
   file ends in part of a sector is refused with words, since no CHD keeps that part. Audio comes back little-endian,
   a cooked sector's 2,048 or 2,336 bytes are cut from the raw sector `emusen-disc` frames.
 - **Otherwise than §4.3 said: checks 3 and 2 are not run over a CHD that check 1 found damaged.** Measured on
-  2026-10-25 on two synthetic CHDs: 67 corruptions, four bytes changed at a stored hunk's start or 5 or 200 bytes into
-  it, read through `emusen-disc`; **10 made `chd` 0.3.4 panic** (every one at a hunk's first byte), and the platform
+  2026-10-25 on two synthetic CHDs: 66 corruptions (first written 67), four bytes changed at a stored hunk's start
+  or 5 or 200 bytes into it, read through `emusen-disc`; **10 made `chd` 0.3.4 panic** (every one at a hunk's first byte), and the platform
   library is built to abort on a panic. So a damaged CHD would end the program whose shell or window checked it. The
   disc has failed by check 1 in any case, and the words say why the others were not run. Where check 1 passes, every
-  hunk decompressed in chdman, and check 2 runs as designed.
+  hunk decompressed in chdman, and check 2 runs as designed. *Since `EmuSen_Disc.md` §13 (the same day)* no damaged
+  hunk panics, but a damaged compressed map still can, at open, so the departure is kept for that reason alone
+  (§12.6, Q25); check 2 names a hunk the reader refuses where chdman's verify has passed.
 - *Not compared*: index points past 01, which a CHD's track metadata does not hold, and a sheet's `FLAGS`, which the CHD
   reader does not carry into the control nibble.
 
@@ -1525,9 +1527,17 @@ the desktop: every disc of the two folders passed all three checks, twice.
 
 ### 12.6 Otherwise than the plan, and found on the way
 
-- **Checks 2 and 3 skip a CHD check 1 found damaged** (§12.2), because `chd` 0.3.4 panics on some damaged hunks, and
-  the platform library aborts on a panic. The same reader serves play: **a damaged CHD that a player launches can stop
-  the core's process the same way.** That is not this step's to fix; Q21 asks it.
+- **Checks 2 and 3 skipped a CHD check 1 found damaged** (§12.2), because `chd` 0.3.4 panics on some damaged hunks,
+  and the platform library aborts on a panic. The same reader serves play: a damaged CHD that a player launched could
+  stop the core's process the same way. *Built the same day as its own `emusen-disc` step (Q21, `EmuSen_Disc.md`
+  §13):* each hunk is checked before the crate decodes it (its block within the file, a cdlz, cdzl or cdzs block's
+  stream length within the block) and after (the map's CRC-16), and a damaged hunk is refused in words that name the
+  sector and the hunk. Of the 66 corruptions, 10 panicked and 56 were refused without words before; all 66 are refused
+  in words after, with 0 panics, and a player who launches such a disc is protected. The cost on a clean CHD's read is
+  6–12% of rates of 320–440 MB/s on the synthetic CHDs (`EmuSen_Disc.md` §13.4). **The departure is kept**, for a
+  reason other than the first: a wider sweep found 25 single-byte changes to the compressed map that still panic in
+  the crate at open (Q25), and chdman's verify failing is what keeps the tool's reader from such a file. Check 2 now
+  names a hunk the reader refuses, should one pass chdman's verify.
 - **The 10-second line budget** made `chd` a job that may go on in the background, with `chd wait` (§12.3).
 - **Where the console is found**: the nearest console folder, where the scan's routing names no system (§12.2).
 - **A zip's sheet is recorded under the name it is unpacked as**: `disc_set::unpack` names the image entry after the
@@ -1550,11 +1560,20 @@ the desktop: every disc of the two folders passed all three checks, twice.
 - **Q20 [routine]: the handheld's thread default.** Q9 gives the handheld half its threads, and the tool, which does not
   know the device, uses every thread unless asked. *Recommended:* step 4's window and the handheld's run pass half
   (`-j 8` there); the tool keeps no device rule of its own.
-- **Q21 [decision]: a damaged CHD can stop the program that reads it.** `chd` 0.3.4 panicked on 10 of 67 damaged
-  hunks measured, and the cores and the platform library abort on a panic; the tool now keeps its reader away from a
-  CHD chdman finds damaged, but a player who launches one is not protected. *Recommended:* a step of its own for
-  `emusen-disc`: hunks checked before they are decoded, or the reader moved to a version of the crate that refuses
-  rather than panics, measured with the same 67 corruptions.
+- **Q21 [decision]: a damaged CHD can stop the program that reads it.** `chd` 0.3.4 panicked on 10 of 66 damaged
+  hunks measured (first written 67), and the cores and the platform library abort on a panic. *Recommended:* a step of
+  its own for `emusen-disc`, measured with the same corruptions. **Decided 2026-10-25 by the tester as recommended,
+  and built the same day** (`EmuSen_Disc.md` §13): the newer releases 0.3.5 and 0.4.0 panic on the same 10, so the
+  hunks are checked before they are decoded and after; 0 of the 66 panic and all are refused in words. §12.2's departure
+  is kept, since a damaged map can still panic at open (Q25).
+- **Q25 [decision]: a damaged compressed map can still stop the program at open.** In a wider sweep of 49,298
+  single-byte changes and truncations of seven synthetic CHDs (`EmuSen_Disc.md` §13.3), no hunk panics any more, but
+  25 changes to the compressed map at a CHD's end panic in the crate's decoding of the map, in `Chd::open`, in 0.3.4,
+  0.3.5 and 0.4.0 alike. Checking the map before the crate decodes it would need its compressed form, which no public
+  document describes. *Recommended:* report it to the `chd` crate's maintainer with one of the synthetic files and the
+  panic's message, take a release that fixes it when one comes, and measure it with the same sweep; until then accept
+  it: the map is tens of bytes at a CHD's end, and the tool keeps its reader from any CHD chdman's verify fails (§12.2),
+  so the risk is a player's launch of a CHD whose map is damaged. The departure of §12.2 is removed when it is fixed.
 - **Q22 [routine]: chdman's copyright line.** `licenses/chdman-BSD-3-Clause.txt` says "Copyright (c) Aaron Giles", as
   the tester read chdman's file header; its exact line, with any years, was not read here, since MAME's source is not.
   *Recommended:* the tester copies the header's line into that file.

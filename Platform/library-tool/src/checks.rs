@@ -137,6 +137,9 @@ pub fn tracks(chd: &mut Disc<Bytes>, sheet: &str, expected: &[Hashes], stop: &dy
             chd.read(at, &mut raw);
             hasher.update(crate::discs::file_form(t.mode, &raw));
         }
+        if let Some(w) = chd.damage() {
+            return Err(format!("track {} could not be rebuilt from the CHD: {w}", t.number));
+        }
         let got = hasher.finish();
         if got.crc32 != want.crc32 || got.md5 != want.md5 || got.sha1 != want.sha1 {
             return Err(format!("track {} rebuilt from the CHD has SHA-1 {} and the original {}", t.number, got.sha1.unwrap_or_default(), want.sha1.clone().unwrap_or_default()));

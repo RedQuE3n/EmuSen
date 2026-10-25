@@ -325,8 +325,8 @@ fn a_chd_of_another_layout_fails_check_three() {
     assert_eq!(check_word(&event, "tracks"), "failed: not run, since the table of contents differs");
 }
 
-/// Bytes changed at a stored hunk's start: chdman's verify fails it, and EmuSen's reader, which `chd` 0.3.4 can stop
-/// on such a hunk, is not run over it, so the check ends with the disc failed and the program still running.
+/// Bytes changed at a stored hunk's start: chdman's verify fails it, and EmuSen's reader is not run over it, since a
+/// damaged map can still stop it at open (EmuSen_Disc.md §13.3), so the disc fails and the program goes on.
 #[test]
 fn a_damaged_chd_fails_check_one_and_is_not_read() {
     let Some(chdman) = chdman() else { return };

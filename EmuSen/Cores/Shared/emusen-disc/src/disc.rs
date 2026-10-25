@@ -105,6 +105,8 @@ pub struct Disc<B: AsRef<[u8]> = Vec<u8>> {
     lone: bool,
     /// A zero block for synthesised sectors' user data.
     zeros: Box<[u8; RAW]>,
+    /// The first stored sector that could not be read, in words: a CHD's damaged hunk (§13).
+    damage: Option<String>,
 }
 
 #[derive(Debug)]
@@ -204,7 +206,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
     }
 
     fn new(tracks: Vec<Track>, lead_out: u32, sources: Vec<Source<B>>, iso: IsoForm) -> Disc<B> {
-        Disc { tracks, lead_out, sources, patches: Vec::new(), iso, lone: false, zeros: Box::new([0; RAW]) }
+        Disc { tracks, lead_out, sources, patches: Vec::new(), iso, lone: false, zeros: Box::new([0; RAW]), damage: None }
     }
 
     /// A disc from one file's bytes: a CHD, a lone raw track (data by its sync, else audio), or an `.iso`'s user
@@ -270,6 +272,12 @@ impl<B: AsRef<[u8]>> Disc<B> {
         self.tracks.get(i)
     }
 
+    /// The first stored sector `read` could not read, and why: a CHD's hunk that is damaged. `read` gave it, and every
+    /// other sector of the hunk, as a sector the image does not hold.
+    pub fn damage(&self) -> Option<&str> {
+        self.damage.as_deref()
+    }
+
     /// The file and byte where sector `at` is stored: the first byte `read` takes for it, or in a CHD the first of
     /// the stored hunk it decodes. `None` for a sector the image does not hold (§3.2) and for a CHD's hunk that is a
     /// copy of another, which has no bytes of its own. It reads nothing of the image.
@@ -304,7 +312,10 @@ impl<B: AsRef<[u8]>> Disc<B> {
         let (src, swapped): (&[u8], bool) = match &mut self.sources[s.file] {
             Source::Chd(c) => match c.unit(s.offset + n) {
                 Ok(u) => (&u[..size], true),
-                Err(_) => return self.synthesise(at, audio, s.mode, out),
+                Err(w) => {
+                    self.damage.get_or_insert_with(|| format!("sector {at}: {w}"));
+                    return self.synthesise(at, audio, s.mode, out);
+                }
             },
             Source::Bytes(b) => {
                 let o = (s.offset + n * size as u64) as usize;

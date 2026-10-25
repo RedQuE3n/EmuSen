@@ -11,15 +11,32 @@ pub const LEAD_OUT: u8 = 0xAA;
 
 /// G(x) = x¹⁶ + x¹² + x⁵ + 1, most significant bit first, the register starting at zero; the field holds it inverted.
 pub fn crc16(data: &[u8]) -> u16 {
-    let mut r: u16 = 0;
-    for &b in data {
-        r ^= (b as u16) << 8;
-        for _ in 0..8 {
-            r = if r & 0x8000 != 0 { r << 1 ^ 0x1021 } else { r << 1 };
-        }
-    }
-    !r
+    !ccitt(0, data)
 }
+
+/// The same G(x) over `data`, the register starting at `r`, a byte at a time by table; a CHD's hunk CRC starts at FFFFh.
+pub fn ccitt(mut r: u16, data: &[u8]) -> u16 {
+    for &b in data {
+        r = r << 8 ^ CCITT[(r >> 8) as u8 as usize ^ b as usize];
+    }
+    r
+}
+
+const CCITT: [u16; 256] = {
+    let mut t = [0u16; 256];
+    let mut i = 0;
+    while i < 256 {
+        let mut r = (i as u16) << 8;
+        let mut k = 0;
+        while k < 8 {
+            r = if r & 0x8000 != 0 { r << 1 ^ 0x1021 } else { r << 1 };
+            k += 1;
+        }
+        t[i] = r;
+        i += 1;
+    }
+    t
+};
 
 /// One sector's Q: bytes 0–9 and the CRC, big-endian, in 10–11.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -104,5 +121,12 @@ mod tests {
         assert!(!bad.valid());
         assert_eq!(q.getloc(), [1, 1, 0, 0, 0, 0, 2, 0]);
         assert_eq!(q.0[0], 0x41);
+    }
+
+    /// The register started at FFFFh is the catalogue's CRC-16/CCITT-FALSE, whose check value over "123456789" is 29B1h.
+    #[test]
+    fn the_table_gives_the_catalogues_check_value() {
+        assert_eq!(ccitt(0xFFFF, b"123456789"), 0x29B1);
+        assert_eq!(ccitt(0, b"123456789"), 0x31C3);
     }
 }

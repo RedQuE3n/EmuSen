@@ -200,7 +200,7 @@ fn a_chd_reads_as_its_sheet() {
         }
         // Since 1.4: a sector's place is its stored hunk's first byte in the file. Shown without reading the container's
         // source: with the sixteen bytes there changed the sector no longer reads as it did (the decoder may refuse
-        // the hunk, or stop on it: chd 0.3.4 indexes past a slice on some, which is caught here and counts), and
+        // the hunk, which since §13 it does in words, where chd 0.3.4 alone indexed past a slice on some), and
         // every sector whose hunk is stored elsewhere still does; a sector the image does not hold has no place.
         let mut places: Vec<u64> = Vec::new();
         for at in 0..from_sheet.lead_out() + 10 {

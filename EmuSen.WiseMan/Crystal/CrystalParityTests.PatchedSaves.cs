@@ -90,7 +90,7 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.Equal(kept, File.ReadAllBytes(originalSave));
                 Assert.Equal(original, File.ReadAllBytes(game));
                 return a;
-            }, also: () => TreeOf(DataStore.Packages) + "\n--\n" + TreeOf(library));
+            }, also: () => PackageTreeOf(DataStore.Packages) + "\n--\n" + TreeOf(library));
         }
     }
 }

@@ -164,7 +164,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
 fn context(temp: &Temp, chdman: &str, pinned: Option<String>) -> Context {
     let tree = Tree { root: temp.at("root").to_string_lossy().into_owned(), data_override: Some(temp.at("home").to_string_lossy().into_owned()), ..Tree::default() };
     let pin = pinned.or_else(|| rom_hash_sha256(chdman));
-    Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into() }
+    Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into(), state_folder: None }
 }
 
 fn rom_hash_sha256(at: &str) -> Option<String> {

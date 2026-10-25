@@ -146,10 +146,10 @@ int64_t emusen_galaxia_legacy_root_for(const uint8_t *config_root, size_t config
 #define EMUSEN_GALAXIA_SAVE_STATE 2u        /* <stem>.state for slot 1, <stem>.slotN.state otherwise; extra is the directory override */
 #define EMUSEN_GALAXIA_SAVE_RESUME_STATE 3u /* <stem>.resume.state; extra is the directory override */
 #define EMUSEN_GALAXIA_SAVE_PICTURE 4u      /* rom is a state's path; the same name with .png */
-/* A packaged game's own (EmuSen_GamePackages.md, section 3.5; since 25): extra is the package's folder, required. */
-#define EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM 5u         /* <package>/saves/<stem>.srm */
-#define EMUSEN_GALAXIA_SAVE_PACKAGE_STATE 6u        /* <package>/states/<stem>.state, or .slotN.state */
-#define EMUSEN_GALAXIA_SAVE_PACKAGE_RESUME_STATE 7u /* <package>/states/<stem>.resume.state */
+/* A packaged game's own (EmuSen_GamePackages.md, sections 3.5 and 14; since 25): rom is the package's folder, and <name> its name less the extension. */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM 5u         /* <package>/saves/<name>.srm */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_STATE 6u        /* <package>/states/<name>.state, or .slotN.state */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_RESUME_STATE 7u /* <package>/states/<name>.resume.state */
 
 /* A save file's path. A null or blank directory override is the tree's own Save States directory. */
 int64_t emusen_galaxia_save_path(uint32_t kind, const uint8_t *rom, size_t rom_len, const uint8_t *extra, size_t extra_len, int32_t slot, uint8_t *out, size_t len);

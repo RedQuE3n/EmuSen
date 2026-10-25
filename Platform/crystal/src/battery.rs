@@ -36,7 +36,7 @@ impl BatterySave {
             let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
             return BatterySave { path: Some(plain), previous };
         };
-        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root, rom), extension);
+        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root), extension);
         let previous = if exists(&at) {
             None
         } else if exists(&plain) {

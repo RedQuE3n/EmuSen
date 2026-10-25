@@ -25,7 +25,7 @@ pub struct LibraryToolV1 {
 
 pub const SERVICE: &str = "emusen.library";
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 0;
+pub const MINOR: u32 = 1;
 
 /// The service's one table, for every shell.
 pub static TABLE: LibraryToolV1 = LibraryToolV1 {
@@ -43,12 +43,13 @@ fn chdman() -> String {
     std::env::var("EMUSEN_CHDMAN").ok().filter(|c| !c.is_empty()).unwrap_or_else(|| path::combine(Style::HOST, &tree::base_directory(), if cfg!(windows) { "chdman.exe" } else { "chdman" }))
 }
 
-/// The process's tree, and `AppSettings.RomDirectory` as the settings file holds it.
+/// The process's tree, and `AppSettings.RomDirectory` and `StateDirectory` as the settings file holds them.
 fn context() -> Context {
     let tree = tree::tree().clone();
     let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
     let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
-    Context::pinned(tree, library, chdman())
+    let states = settings.get("StateDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
+    Context { state_folder: states, ..Context::pinned(tree, library, chdman()) }
 }
 
 /// Starts a job from a request (EmuSen_GamePackages.md §12.3); PARSE with words for one that is not a request.

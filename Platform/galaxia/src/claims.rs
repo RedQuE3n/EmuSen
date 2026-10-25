@@ -180,11 +180,13 @@ fn number(v: Option<&Value>) -> Option<u64> {
     }
 }
 
-/// The hashes a manifest records for its game: `dump.file`, else the sheet's for a disc whose game is its sheet; none
-/// for a game held in a container, whose dump is the original's and not the container's (the CHD tool checks those).
+/// The hashes that identify a manifest's game file as it lies: `dump.file`, else the sheet's for a disc whose game is
+/// its sheet; for a game in a zip, the archive's own, which `container` holds; none for any other container, whose
+/// dump is the original's and not the container's (the CHD tool checks those).
 pub fn recorded(doc: &Value) -> Option<&Value> {
-    if matches!(doc.get("container"), Some(Value::Object(_))) {
-        return None;
+    if let Some(container @ Value::Object(_)) = doc.get("container") {
+        let zip = container.get("type").and_then(Value::as_str) == Some("zip");
+        return if zip && ["sha1", "md5", "crc32"].iter().any(|k| container.get(k).and_then(Value::as_str).is_some()) { Some(container) } else { None };
     }
     let dump = doc.get("dump")?;
     [dump.get("file"), dump.get("sheet")].into_iter().flatten().find(|h| matches!(h, Value::Object(_)) && ["sha1", "md5", "crc32"].iter().any(|k| h.get(k).and_then(Value::as_str).is_some()))

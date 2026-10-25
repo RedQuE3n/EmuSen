@@ -134,6 +134,58 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Equal(Show(RomLibrary.ScanManaged(odd)), Show(RomLibrary.ScanNative(odd)));
         }
 
+        private static string ShowPackaged(RomLibraryResult r) => Show(r) + "\n--\n" + string.Join("\n", r.Entries.Select(e => e.Package ?? "-"));
+
+        // Packages beside a generated library: linked ones, a converted disc's claiming its sheet, one whose game is gone, a refused manifest, a nested folder and loose files - see EmuSen_GamePackages.md §3.6.
+        [Fact]
+        public void A_library_with_packages_beside_it_is_listed_alike()
+        {
+            for (int seed = 1; seed <= 3; seed++)
+            {
+                string root = Generate(seed);
+                string packages = Path.Combine(_root, $"packages{seed}"), compressed = Path.Combine(_root, $"compressed{seed}");
+                var deep = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden };
+                string[] games = Directory.EnumerateFiles(root, "*.nes", deep).Concat(Directory.EnumerateFiles(root, "*.sfc", deep))
+                    .Where(f => { string r = Path.GetRelativePath(root, f); return !r.Contains("Locked") && !r.Contains("Link"); }).Order(StringComparer.Ordinal).Take(4).ToArray();
+                foreach (string game in games)
+                {
+                    string rel = Path.GetRelativePath(root, game).Replace('\\', '/');
+                    string system = game.EndsWith(".nes", StringComparison.Ordinal) ? "nes" : "snes";
+                    Put(Path.Combine(packages, system.ToUpperInvariant(), rel, "package.json"), Encoding.UTF8.GetBytes($"{{\"format\": \"emusen-package\", \"version\": \"1.0\", \"system\": \"{system}\", \"mode\": \"linked\", \"game\": {{\"role\": \"image\", \"where\": \"library\", \"path\": \"{rel}\"}}}}"));
+                    Put(Path.Combine(packages, system.ToUpperInvariant(), rel, "saves", Path.GetFileName(game)), SyntheticNesRom.Build());
+                }
+                string? cue = Directory.EnumerateFiles(root, "Disc One.cue", deep).FirstOrDefault();
+                if (cue is not null)
+                {
+                    string rel = Path.GetRelativePath(root, cue).Replace('\\', '/');
+                    Put(Path.Combine(compressed, "psx", "Disc One.chd"), new byte[64]);
+                    Put(Path.Combine(packages, "PlayStation", "Disc One.chd", "package.json"), Encoding.UTF8.GetBytes("{\"format\": \"emusen-package\", \"version\": \"1.0\", \"system\": \"psx\", \"mode\": \"linked\", " +
+                        $"\"game\": {{\"role\": \"image\", \"where\": \"compressed\", \"path\": \"psx/Disc One.chd\"}}, \"container\": {{\"type\": \"chd\", \"sources\": [{{\"where\": \"library\", \"path\": \"{rel}\"}}]}}}}"));
+                }
+                Put(Path.Combine(compressed, "psx", "Stray.chd"), new byte[64]);
+                Put(Path.Combine(packages, "NES", "Gone.nes", "package.json"), Encoding.UTF8.GetBytes("{\"format\": \"emusen-package\", \"version\": \"1.0\", \"system\": \"nes\", \"mode\": \"linked\", \"game\": {\"role\": \"image\", \"where\": \"library\", \"path\": \"nes/Gone.nes\"}}"));
+                Put(Path.Combine(packages, "NES", "Broken.nes", "package.json"), Encoding.UTF8.GetBytes("{ not json"));
+                Put(Path.Combine(packages, "NES", "Broken.nes", "Inside.nes"), SyntheticNesRom.Build());
+                Put(Path.Combine(packages, "Loose.nes"), SyntheticNesRom.Build());
+                var beside = new RomLibrary.Beside(packages, compressed);
+                string managed = ShowPackaged(RomLibrary.ScanManaged(root, null, beside));
+                Assert.Equal(managed, ShowPackaged(RomLibrary.ScanNative(root, null, beside)));
+                foreach (string shelf in RuntimeCatalog.FilterChoices)
+                    Assert.Equal(ShowPackaged(RomLibrary.ScanManaged(root, shelf, beside)), ShowPackaged(RomLibrary.ScanNative(root, shelf, beside)));
+                RomLibraryResult scanned = RomLibrary.ScanManaged(root, null, beside);
+                foreach (string game in games) Assert.Single(scanned.Entries, e => e.FullPath == game && e.Package is not null);
+                Assert.DoesNotContain(scanned.Entries, e => e.FullPath.Contains("Inside.nes") || e.FullPath.Contains("Gone.nes") || e.FullPath.EndsWith(Path.Combine("saves", Path.GetFileName(games[0])), StringComparison.Ordinal));
+                Assert.Contains(scanned.Entries, e => e.FullPath.EndsWith("Loose.nes", StringComparison.Ordinal) && e.Package is null);
+                Assert.Contains(scanned.Entries, e => e.FullPath.EndsWith("Stray.chd", StringComparison.Ordinal));
+                if (cue is not null)
+                {
+                    Assert.DoesNotContain(scanned.Entries, e => e.FullPath == cue);
+                    Assert.Single(scanned.Entries, e => e.FullPath.EndsWith("Disc One.chd", StringComparison.Ordinal) && e.Shelf.StartsWith("PlayStation", StringComparison.Ordinal));
+                }
+                Assert.Equal(Show(RomLibrary.ScanManaged(root)), Show(RomLibrary.ScanNative(root, null, RomLibrary.Beside.None)));
+            }
+        }
+
         // Every row of every table, each value with its SQLite type, and the schema and version.
         private static string Dump(string db)
         {

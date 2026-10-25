@@ -161,7 +161,8 @@ namespace EmuSen.Galaxia.Media
 
             public static JsonObject? Recorded(JsonObject doc)
             {
-                if (doc["container"] is JsonObject) return null;
+                if (doc["container"] is JsonObject container)
+                    return Text(container["type"]) == "zip" && new[] { "sha1", "md5", "crc32" }.Any(k => Text(container[k]) is not null) ? container : null;
                 if (doc["dump"] is not JsonObject dump) return null;
                 foreach (JsonNode? h in new[] { dump["file"], dump["sheet"] })
                     if (h is JsonObject o && new[] { "sha1", "md5", "crc32" }.Any(k => Text(o[k]) is not null)) return o;

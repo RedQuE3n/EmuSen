@@ -1,0 +1,110 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command pkg
+shell rust
+usage 1   pkg make <path>...            a linked package for each game under each path (relative to the library)
+usage 2   pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)
+usage 3   pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)
+usage 4   pkg migrate <package>...      the game's saves, states and cheats copied into its package
+usage 5   pkg wait [pkg<n>]             follow a pkg job that went on in the background
+
+case the usage, and what a command line refuses
+target none
+covers 1-5
+$ pkg
+out 222
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg frobnicate
+out 222
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg make
+out 270
+pkg make: name what to make, or / for all of it
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg migrate
+out 276
+pkg migrate: name what to migrate, or / for all of it
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg make nes --self-contained
+out 119
+pkg make: --self-contained is not in this build yet; packages are linked, and the game stays where it is in the library
+status 1
+action none
+$ pkg make nes --zip
+out 108
+pkg make: --zip is not in this build yet; packages are linked, and the game stays where it is in the library
+status 1
+action none
+$ pkg check NES --fast
+out 264
+pkg: --fast is not an option of pkg check
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg ls NES SNES
+out 250
+pkg ls: one console at most
+Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]
+  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
+status 1
+action none
+$ pkg patch add NES/a.nes a.ips
+out 98
+pkg patch: soft patches are not in this build yet; packages are made, listed, checked and migrated
+status 1
+action none
+$ pkg wait
+out 25
+pkg wait: no such pkg job
+status 1
+action none
+$ pkg wait pkg9
+out 30
+pkg wait: no such pkg job pkg9
+status 1
+action none
+$ pkg wait chd1
+out 30
+pkg wait: no such pkg job chd1
+status 1
+action none
+end
+
+case with no library set, every request is refused before anything is read or written
+target none
+covers 1-4
+$ pkg ls
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+$ pkg check NES
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+$ pkg make /
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+$ pkg migrate NES/a.nes
+out 87
+pkg: AppSettings.RomDirectory is not set: there is no library for a package to link to.
+status 1
+action none
+end

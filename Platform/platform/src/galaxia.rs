@@ -193,14 +193,9 @@ pub unsafe extern "C" fn emusen_galaxia_save_path(kind: u32, rom: *const u8, rom
             save::STATE => saves::state_path(&tree, rom, slot, extra),
             save::RESUME_STATE => saves::resume_state_path(&tree, rom, extra),
             save::PICTURE => saves::picture_path(rom),
-            save::PACKAGE_SRAM | save::PACKAGE_STATE | save::PACKAGE_RESUME_STATE => {
-                let root = extra.filter(|e| !path::is_blank(Some(e))).ok_or_else(|| fail(status::NULL, "a packaged game's save needs its package"))?;
-                match kind {
-                    save::PACKAGE_SRAM => saves::package_sram_path(root, rom),
-                    save::PACKAGE_STATE => saves::package_state_path(root, rom, slot),
-                    _ => saves::package_resume_state_path(root, rom),
-                }
-            }
+            save::PACKAGE_SRAM => saves::package_sram_path(rom),
+            save::PACKAGE_STATE => saves::package_state_path(rom, slot),
+            save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom),
             _ => return Err(fail(status::BAD_ARGUMENT, format!("no save kind {kind}"))),
         })
     };

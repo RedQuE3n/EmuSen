@@ -1,11 +1,12 @@
 /*
- * emusen_library_tool.h - the emusen.library service, version 1.0: the library tool's jobs as a DianaSh command module
+ * emusen_library_tool.h - the emusen.library service, version 1.1: the library tool's jobs as a DianaSh command module
  * reaches them. A module never links Galaxia (EmuSen_DianaSh.md, section 16, Q11), so the tool, which reads Galaxia's
  * tree and settings, is lent to it as this table, which the platform library hands every shell it makes; the shell
  * copies it into each call unread. The calls are the platform library's own emusen_tool_job_* (emusen_platform.h),
  * whose rules they keep: text is UTF-8 with a length, results are copied by the length-query idiom, statuses are the
  * platform library's, and the words for a failure are read with last_error on the same thread. Requests and events
- * are EmuSen_GamePackages.md, section 12.3's.
+ * are EmuSen_GamePackages.md, section 12.3's; since 1.1 the table is unchanged and a request may also be a pkg one,
+ * whose ops and package events are section 14's.
  */
 #ifndef EMUSEN_LIBRARY_TOOL_H
 #define EMUSEN_LIBRARY_TOOL_H
@@ -15,7 +16,7 @@
 
 #define EMUSEN_LIBRARY_TOOL_SERVICE "emusen.library"
 #define EMUSEN_LIBRARY_TOOL_MAJOR 1u
-#define EMUSEN_LIBRARY_TOOL_MINOR 0u
+#define EMUSEN_LIBRARY_TOOL_MINOR 1u
 
 typedef struct emusen_tool_job emusen_tool_job;
 

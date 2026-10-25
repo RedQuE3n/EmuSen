@@ -125,8 +125,8 @@ mod tests {
             b[63] = i32::from(b[0] % 2 == 0);
             let mut out = [0i16; 64];
             idct(&b, &mut out);
-            for k in 0..64 {
-                assert_eq!(i32::from(out[k]), exact(&b, k % 8, k / 8).clamp(-256, 255), "block {i} at {k}");
+            for (k, o) in out.iter().enumerate() {
+                assert_eq!(i32::from(*o), exact(&b, k % 8, k / 8).clamp(-256, 255), "block {i} at {k}");
             }
         }
     }
@@ -163,8 +163,8 @@ mod tests {
                 *c = if r % 3 == 0 { (r >> 4) % 64 - 32 } else { 0 };
             }
             idct(&b, &mut out);
-            for k in 0..64 {
-                assert_eq!(i32::from(out[k]), exact(&b, k % 8, k / 8).clamp(-256, 255), "at {k}");
+            for (k, o) in out.iter().enumerate() {
+                assert_eq!(i32::from(*o), exact(&b, k % 8, k / 8).clamp(-256, 255), "at {k}");
             }
         }
     }

@@ -136,7 +136,7 @@ fn csc(dir: &std::path::Path, referee: &str) {
 /// Sapphire's (the program run on the board): count, least, median and most, by command and by its output qwords.
 fn timing(dir: &std::path::Path, names: &[String]) {
     const NAMES: [&str; 10] = ["BCLR", "IDEC", "BDEC", "VDEC", "FDEC", "SETIQ", "SETVQ", "CSC", "PACK", "SETTH"];
-    for p in s27::programs().into_iter().filter(|p| names.iter().any(|n| *n == p.name)) {
+    for p in s27::programs().into_iter().filter(|p| names.contains(&p.name)) {
         let mut sys = sapphire::board::System::new(s27::program::ORIGIN);
         sys.board.map.load(s27::program::ORIGIN, &p.image);
         sys.run(400_000_000, &mut |s| s.peek(s27::program::DONE_AT, 4) as u32 == s27::program::DONE).unwrap();

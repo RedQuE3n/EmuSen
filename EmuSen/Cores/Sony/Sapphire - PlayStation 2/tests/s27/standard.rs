@@ -670,7 +670,12 @@ fn decode_block(b: &mut Bits, s: &State, i: usize, intra: bool, qsc: u32, dc_pre
         n = 1;
     }
     let one = intra && s.ctrl.intra_vlc_format;
-    while s.ctrl.picture_coding_type != 4 {
+    // A D-picture's blocks hold their DC coefficient alone (H.262 §D.9.6).
+    let d_picture = s.ctrl.picture_coding_type == 4;
+    loop {
+        if d_picture {
+            break;
+        }
         let table: Vec<(&str, (i32, i32))> = if one {
             B15.iter().map(|e| (e.0, (e.1, e.2))).collect()
         } else {

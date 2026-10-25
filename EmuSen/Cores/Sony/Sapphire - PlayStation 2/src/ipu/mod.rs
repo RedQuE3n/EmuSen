@@ -468,7 +468,7 @@ impl Ipu {
         if z == self.input.available() {
             return Step::Wait;
         }
-        if z >= 23 && (self.input.bp() + z + 1) % 8 == 0 {
+        if z >= 23 && (self.input.bp() + z + 1).is_multiple_of(8) {
             self.input.skip(z - 23);
             self.ctrl |= ctrl::SCD;
             return Step::End;

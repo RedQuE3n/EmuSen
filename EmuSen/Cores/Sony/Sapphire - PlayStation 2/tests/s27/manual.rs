@@ -50,8 +50,8 @@ pub fn vq(p: u16, clut: &[u16; 16]) -> u8 {
     let a = parts(p);
     let mut best = 0;
     let mut least = i32::MAX;
-    for i in 0..16 {
-        let b = parts(clut[i]);
+    for (i, &e) in clut.iter().enumerate() {
+        let b = parts(e);
         let d1: i32 = (0..3).map(|k| (a[k] - b[k]).abs() * (a[k] - b[k]).abs()).sum();
         if d1 < least {
             least = d1;

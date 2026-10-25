@@ -73,7 +73,7 @@ pub fn convert_raw8(raw: &[u8; 384], th0: u32, th1: u32, out: &mut Pixels) {
 /// The qwords of a macroblock in RGB32 (64) or RGB16 (32, dithered or not), in the order §8.2.2 and §8.2.3 give.
 pub fn pack(px: &Pixels, rgb16_out: bool, dither: bool, out: &mut [u128; 64]) -> usize {
     if !rgb16_out {
-        for (q, p) in out.iter_mut().zip(px.chunks_exact(4)) {
+        for (q, p) in out.iter_mut().zip(px.as_chunks::<4>().0) {
             *q = p.iter().rev().fold(0u128, |a, &w| a << 32 | u128::from(w));
         }
         return 64;

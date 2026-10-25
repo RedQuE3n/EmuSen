@@ -122,8 +122,8 @@ pub fn raw8_inputs() -> Vec<[u8; 384]> {
     let mut v = Vec::new();
     for kind in 0..7 {
         let mut m = [128u8; 384];
-        for i in 0..384 {
-            m[i] = match (kind, i) {
+        for (i, s) in m.iter_mut().enumerate() {
+            *s = match (kind, i) {
                 (0, i) if i < 256 => i as u8,
                 (1, i) if (256..320).contains(&i) => (4 * (i - 256)) as u8,
                 (2, i) if i >= 320 => (4 * (i - 320)) as u8,

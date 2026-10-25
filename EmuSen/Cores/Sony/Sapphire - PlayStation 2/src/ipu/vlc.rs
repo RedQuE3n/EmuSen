@@ -93,7 +93,7 @@ const DC_SIZE_CHROMINANCE: &[(&str, u8)] = &[
 ];
 /// Table B.14, DCT coefficients Table zero: the code without its sign bit, the run, the level.
 const DCT_ZERO: &[(&str, u8, u8)] = &[
-    ("10", EOB, 0), ("1", 0 | FIRST, 1), ("11", 0 | LATER, 1),
+    ("10", EOB, 0), ("1", FIRST, 1), ("11", LATER, 1),
     ("011", 1, 1), ("0100", 0, 2), ("0101", 2, 1),
     ("0010 1", 0, 3), ("0011 1", 3, 1), ("0011 0", 4, 1),
     ("0001 10", 1, 2), ("0001 11", 5, 1), ("0001 01", 6, 1),

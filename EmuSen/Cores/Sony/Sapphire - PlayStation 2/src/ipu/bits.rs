@@ -138,7 +138,7 @@ impl Input {
 
     /// Whether BP lies on a byte of the stream (qwords lie on 16-byte boundaries of memory).
     pub fn aligned(&self) -> bool {
-        self.bp % 8 == 0
+        self.bp.is_multiple_of(8)
     }
 }
 

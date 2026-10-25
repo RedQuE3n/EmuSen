@@ -18,10 +18,10 @@ pub struct W {
 impl W {
     pub fn put(&mut self, v: u32, n: usize) {
         for k in (0..n).rev() {
-            if self.bits % 8 == 0 {
+            if self.bits.is_multiple_of(8) {
                 self.bytes.push(0);
             }
-            if v >> k & 1 == 1 {
+            if k < 32 && v >> k & 1 == 1 {
                 *self.bytes.last_mut().unwrap() |= 0x80 >> (self.bits % 8);
             }
             self.bits += 1;
@@ -37,7 +37,7 @@ impl W {
 
     /// Zeros to the next byte, then a start code.
     pub fn start(&mut self, value: u8) {
-        while self.bits % 8 != 0 {
+        while !self.bits.is_multiple_of(8) {
             self.put(0, 1);
         }
         self.put(1, 24);

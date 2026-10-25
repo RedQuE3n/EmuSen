@@ -46,7 +46,7 @@ pub enum Clock {
 }
 
 /// The signal a timer's gate follows: H-blank (timer 0), V-blank (timers 1 and 3), or none, where the modes stop or
-/// run freely (timers 2, 4 and 5) [R psx-spx for 0 to 2; A for 3 to 5, ps2tek being silent: D-64].
+/// run freely (timers 2, 4 and 5) [R psx-spx for 0 to 2; A for 3 to 5, ps2tek being silent: D-67].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Gate {
     H,
@@ -269,7 +269,7 @@ impl Timer {
     }
 
     /// The blanking edges at a time the timer is synced to, with the signals' levels after them: an H-blank tick, and
-    /// the gate's resets (mode 1 at the rise, mode 2 at the rise and the fall, D-64) and first rise (mode 3); whether a
+    /// the gate's resets (mode 1 at the rise, mode 2 at the rise and the fall, D-67) and first rise (mode 3); whether a
     /// request rose.
     pub fn edges(&mut self, e: Edges, h: bool, v: bool) -> bool {
         let mut rose = false;

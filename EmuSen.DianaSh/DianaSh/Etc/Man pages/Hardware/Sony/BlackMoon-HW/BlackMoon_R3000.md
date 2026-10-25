@@ -49,6 +49,11 @@ names and layout only; no emulator's source and no firmware was read.
   3 with the timing model of `Diamond_Plan.md` §5.2, when the cost of each is known, and recorded here. *Decided at
   stage 3*: **in Diamond's bus** (`Diamond_Native.md` §11.4), the refill's cost being the region's and the scratchpad
   a region of the map; the crate keeps no cache.
+  *The second user, 2026-10-25* (`Sapphire_Native.md` §22): Sapphire's IOP uses the crate as it stands, with nothing
+  moved out of it. Its own bus holds the IOP's map, a 4 KiB I-cache and 1 KiB scratchpad of its own (the PlayStation's
+  sizes, its "enhanced" cache unread, `Sapphire_Disputes.md` D-62), its wait states and its units; `R3000::prid` is set
+  to 1Fh (D-60); coprocessor 2's calls answer zero, the IOP having no GTE in that mode; `running` bounds a run by the
+  bus's next event. The crate's suite was run unchanged: 38 of 38, and the corpus 55,000 of 55,000.
 - **`Registers`**: R0–R31, HI, LO, the PC, coprocessor 0's SR, CAUSE, EPC, BadVaddr, TAR, DCIC, BPC, BDA, BPCM and BDAM
   (psx-spx "COP0 Register Summary"), and the two delays the R3000A makes architectural: **`BranchDelay`** (whether the
   next instruction is a delay slot, whether the branch is taken, its target) and **`LoadDelay`** (the register a load
@@ -556,6 +561,23 @@ In the shape of `Diamond_Disputes.md`. Each entry's evidence and rule; the proce
 - **Pinned by, since the second step:** `swc0_swc1_and_swc3_store_on_the_bus` (failing before the change) and
   Diamond's `swcz_stores_zero_on_the_bus`.
 - **Implemented in, since the second step:** the same commit as D-20's second step.
+
+### D-22. Cause's IP2 follows the external request whether or not SR enables it; on the PlayStation 2's IOP too
+
+- **Opened:** 2026-10-25, at Sapphire's stage S21, the crate's second user, whose referee shows no IP bit at all.
+- **Documents read:** psx-spx "cop0r13" (bits 8-15 the pending interrupts, bit 10 the controller's request) and
+  "Interrupts"; ps2tek "IOP Interrupts" ("If I_CTRL && (I_STAT & I_MASK), then COP0.Cause:8 is set", whatever Status
+  says, an interrupt taken only when "COP0.Status:8 is also set").
+- **Test program:** Sapphire's `s21-intc` (`Sapphire_Native.md` §22.8): Cause read with the IOP's request unmasked and
+  SR's IEc clear, and the logged Cause of the interrupt taken with IEc and IM2.
+- **Referee:** PCSX2 2.8.2 takes the interrupt by IM2 (`Sapphire_Disputes.md` D-65) and shows 0 in Cause's IP field
+  both times. Play! cannot run an IOP program. Diamond's referees were not asked, the PlayStation's rule being psx-spx's.
+- **Conclusion:** unchanged: IP2 is set from `Bus::interrupt` at every boundary, as psx-spx and ps2tek both say, PCSX2's
+  IOP departing. **Argued** for the IOP; the crate was not changed, so Diamond's goldens stand as they are.
+- **Depends on it:** `exec.rs`'s step.
+- **Pinned by:** `a_masked_or_disabled_interrupt_is_not_taken_but_ip2_follows_the_line`; Sapphire's
+  `the_intc_masks_latches_and_drives_ip2`.
+- **Implemented in:** nothing new; the rule is stage 2's.
 
 ## 9. The gate (G1's first half)
 

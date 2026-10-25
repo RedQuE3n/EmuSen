@@ -196,6 +196,18 @@ general knowledge of the GS, A, confirmed by the measurement below]. With `--aga
 referee's frames per wall second and CPU per frame (§2). It counted 600 frames in 10 s on every referee held to the
 console's speed, and 589–591 by frame 600 on the probe (the BIOS's boot takes the first nine to eleven) [M].
 
+### 4.3 IOP programs, through an EE program (2026-10-25, stage S21)
+
+`ps2referee.py` runs EE programs only, and needs nothing more for the IOP: an EE program places the IOP program and
+reads its record (`Sapphire_Native.md` §22.9). It copies the IOP program into IOP RAM through the EE's window at
+BC000000h, writes a jump to it at the IOP's general exception vector (IOP RAM 80h), so that the IOP's next interrupt
+under the BIOS's kernel enters it, and copies its done word and record back into EE RAM, where `ram` reads them as for
+any program. Nothing of the BIOS is read, traced or patched; the vector is the processor's. **PCSX2** runs them (PRId
+1Fh, the OTC list, the flags, the prescalers equal to the documents; no IOP cache, wait states, bus errors or undefined
+bits modelled; a fetch from the IOP's scratchpad stops it). **Play!** cannot: its EE reads CCCCCCCCh at BC000000h and
+drops stores there, and its IOP is its own high-level BIOS. LRPS2 and PCEE2 are PCSX2's lineage. The IOP therefore has
+one referee lineage.
+
 ## 5. Exposure, and a retail disc
 
 - **This stage's writer is exposed** (`Sapphire_Plan.md` §1.4): while finding why PCSX2 failed to draw, the writer read

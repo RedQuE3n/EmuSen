@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9 and S11 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12 and S21 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -35,7 +35,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the later peripherals' channels ending at a defined interface, and PCSX2 reproducing the stage's seven console texts;
   and stage S12 (2026-10-25): VU0 in macro mode, the vector units' state and operations on `sapphire::float` with the
   VU's own flags, COP2's transfers and interlocks, the macro timing, micro mode's interface for S13, and neither referee
-  a witness for the VU's arithmetic.
+  a witness for the VU's arithmetic;
+  and stage S21 (2026-10-25, §22): the IOP on `blackmoon-r3000`, unchanged, with Sapphire's own IOP bus, its map,
+  I-cache, scratchpad, wait states, INTC, 13-channel DMAC and six timers, PRId 1Fh, a unit of the board, and an IOP
+  program placed on PCSX2 through an EE program and the IOP's exception vector.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -54,7 +57,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   DMAC's stall control, TADR after an end, TTE, undefined tags, register widths and priority control, the timers'
   ZRET and gates, the interrupt lines' levels and the blanking stand-in, with D-15 closed; D-43 to D-54 since S12, the
   VU float's sharing of the FPU's readings, the VU's flags, VU0's control registers, the divider's flags, MAX, the random
-  unit's series, CLIP, VU0's data addresses, Q's delay, FBRST's reset, the empty field mask and the M bit.
+  unit's series, CLIP, VU0's data addresses, Q's delay, FBRST's reset, the empty field mask and the M bit; D-60 to D-68 since S21, the
+  IOP's PRId, map, cache, access times, timers' modes, clocks and gates, its interrupt line and its DMAC's registers and
+  readings.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

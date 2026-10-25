@@ -97,7 +97,7 @@ namespace EmuSen.WiseMan.Fixtures
             d[at + 3] = (byte)v;
         }
 
-        private static void Both32(Span<byte> d, int at, uint v)
+        internal static void Both32(Span<byte> d, int at, uint v)
         {
             BitConverter.TryWriteBytes(d.Slice(at, 4), v);
             Big32(d, at + 4, v);

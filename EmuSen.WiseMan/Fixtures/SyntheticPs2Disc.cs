@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.Fixtures
         public static Ps2Disc Dvd(string? config = null, byte[]? program = null) =>
             Build(DvdRoot, config ?? SystemCnf("PAL"), licence: false, raw: false, program, layer0: null);
 
-        // Layer 0 of the sectors given, a multiple of 16 (ECMA-267 §25), a file past the break and the descriptors again at layer 1's sector 16 [A] - see Sapphire_Native.md §14.2.
+        // Layer 0 of the sectors given, a multiple of 16 (ECMA-267 §25), its descriptor naming them; a file past the break and a descriptor of layer 1's sectors at its sector 16 - see Sapphire_Native.md §14.2 and §25.2.
         public static Ps2Disc DualLayerDvd(int layer0 = 1024, string? config = null, byte[]? program = null)
         {
             if (layer0 % 16 != 0) throw new ArgumentException($"layer 0 of {layer0} sectors is no multiple of 16", nameof(layer0));
@@ -67,7 +67,10 @@ namespace EmuSen.WiseMan.Fixtures
             Iso9660Image.Write(user, root, files);
             if (layer0 is int l1)
             {
-                user.AsSpan(Iso9660Image.PrimaryVolume * CdSector.User, CdSector.User).CopyTo(user.AsSpan((l1 + Iso9660Image.PrimaryVolume) * CdSector.User));
+                Span<byte> first = user.AsSpan(Iso9660Image.PrimaryVolume * CdSector.User, CdSector.User), second = user.AsSpan((l1 + Iso9660Image.PrimaryVolume) * CdSector.User, CdSector.User);
+                first.CopyTo(second);
+                Iso9660Image.Both32(first, 80, (uint)l1);
+                Iso9660Image.Both32(second, 80, (uint)(total - l1));
                 Iso9660Image.TerminatorAt(user, l1 + Iso9660Image.Terminator);
             }
             if (!raw) return new Ps2Disc(user, Array.Empty<byte>(), null, layer0);

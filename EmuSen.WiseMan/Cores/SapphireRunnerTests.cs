@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Every form read back by the host's ISO 9660 reader and taken by Sapphire; a dual-layer image's file past the break read whole, its descriptors at layer 1's sector 16.
+        // Every form read back by the host's ISO 9660 reader and taken by Sapphire; a dual-layer image's file past the break read whole, layer 0's descriptor naming its sectors and layer 1's at its sector 16.
         [Fact]
         public void Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it()
         {
@@ -93,9 +93,11 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.Equal(1024, dual.LayerBreak);
             Assert.Equal(SyntheticPs2Disc.Layer1Pattern(3 * CdSector.User + 100), new DiscSectors(dual.Iso).RootFile(SyntheticPs2Disc.Layer1File));
-            Assert.True(new DiscSectors(dual.Iso).Sector(dual.LayerBreak!.Value + 16).SequenceEqual(new DiscSectors(dual.Iso).Sector(16)));
+            byte[] first = new DiscSectors(dual.Iso).Sector(16).ToArray(), second = new DiscSectors(dual.Iso).Sector(dual.LayerBreak!.Value + 16).ToArray();
             Assert.Equal(0xFF, new DiscSectors(dual.Iso).Sector(dual.LayerBreak.Value + 17)[0]);
-            Assert.Equal(dual.Iso.Length / CdSector.User, BitConverter.ToInt32(dual.Iso, 16 * CdSector.User + 80));
+            Assert.Equal(dual.LayerBreak, BitConverter.ToInt32(first, 80));
+            Assert.Equal(dual.Iso.Length / CdSector.User - dual.LayerBreak, BitConverter.ToInt32(second, 80));
+            Assert.True(first.AsSpan(0, 80).SequenceEqual(second.AsSpan(0, 80)) && first.AsSpan(88).SequenceEqual(second.AsSpan(88)), "the descriptors differ in their volume space size alone");
 
             string cue = SyntheticPs2Disc.Cd().WriteSet(_root, "cd");
             Assert.Equal(("cd.cue", "FILE \"cd.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"), (Path.GetFileName(cue), File.ReadAllText(cue)));

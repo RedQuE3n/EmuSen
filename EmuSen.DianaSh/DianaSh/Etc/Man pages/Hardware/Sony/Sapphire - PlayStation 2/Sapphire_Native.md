@@ -4628,8 +4628,8 @@ of its EOP primitive; between packets the waiting paths are arbitrated PATH1, PA
 PATH3 is skipped while GIF_MODE's M3R or MSKPATH3 masks it, its data kept in the FIFO and the DMA held once the FIFO is
 full (§7.1.4); in the intermittent mode PATH3's IMAGE data gives way to PATH1 and DIRECT at each slice of 8 qwords, not
 to DIRECTHL (§7.1.3); GIF_CTRL resets and pauses, GIF_STAT and the tag and count registers report. S11's stand-in at
-channel 2 and S14's PATH2 stand-in are gone, and **S16's and S17's programs now run whole on Sapphire through PATH3 and
-VIF1**, every one of their 276,548 graded words equal. Six programs of the project's (6,728 graded words) are equal on
+channel 2 and S14's PATH2 stand-in are gone, and **S16's, S17's and S18's programs now run whole on Sapphire through
+PATH3 and VIF1**, every one of their 473,156 graded words equal. Six programs of the project's (6,728 graded words) are equal on
 the interpreter to records `tests/s15/manual.rs` gives from chapter 7 over S17's model of the GS; PCSX2 equals the
 REGLIST and IMAGE program whole, the PACKED program but two descriptors (D-281), the masks, the FIFO's depth and the
 held DMA, TTE's tag (D-283), PATH1's wrap and DIRECT overtaking a running IMAGE transfer in the intermittent mode, and
@@ -4739,19 +4739,21 @@ prints), turns them into writes for S17's model.
 | `s15-regs` | 48 of 52 | GIF_STAT at rest and after GIF_MODE's writes; PSE mid-packet with GIF_TAG0 to GIF_TAG3 and GIF_CNT (LOOPCNT 2, REGCNT 2), and before a packet; RST ending a packet so PATH2 goes at once, clearing GIF_MODE and keeping M3P; DIR with BUSDIR; the EE's stores into the FIFO while M3R holds it |
 | `s15-intermittent` | 24 of 32 | an IMAGE packet of 30,720 qwords started by DMA and at once a LABEL by DIRECT, DIRECTHL or XGKICK: SIGLBLID and D2_CHCR.STR as soon as the other path has its packet, and again after both |
 
-**S16's and S17's programs through the real path**: every program of §24.6 and §27.6, until now graded on Sapphire by
-driving the host interface directly, runs whole as the EE program the referees ran, its packets through channel 2 and
-the GIF and its local-to-host data through VIF1: **all 51,268 and 225,280 graded words equal**.
+**S16's, S17's and S18's programs through the real path**: every program of §24.6, §27.6 and §31, until now graded on
+Sapphire by driving the host interface directly, runs whole as the EE program the referees ran, its packets through
+channel 2 and the GIF and its local-to-host data through VIF1: **all 51,268, 225,280 and 196,608 graded words equal**,
+S18's on the tree with S18 and S25 beneath after the rebase.
 
-**Tests** [M, `cargo test --release`]: `tests/gif.rs` **14 of 14** — the six programs and the S16 and S17 programs, each
-equal to its record word for word; `every_packing_conversion_writes_what_section_7_3_draws` (2,000 generated packets
+**Tests** [M, `cargo test --release`]: `tests/gif.rs` **15 of 15** — the six programs and the S16, S17 and S18 programs,
+each equal to its record word for word; `every_packing_conversion_writes_what_section_7_3_draws` (2,000 generated packets
 in every format, every descriptor with random bits, against the manual's transcription, the fog byte and Q among the
 writes no picture shows); the FIFO's depth and the GIF's pace (§33.4); `Path1Port`'s estimates and a packet with no EOP;
 the arbitration on the unit directly with GIF_MODE's mask; the `mskpath3` console text (§33.7); the second-DIRECT
 probe's four forms (§33.8). `tests/vif.rs` **12 of 12** with PATH2 the GIF's: `s14-direct`'s three LABELs now reach
-SIGLBLID in turn on Sapphire. The crate's other tests unchanged: lib 44, `cop0` 19, `dmac` 18, `draw` 13, `fpu` 9, `gs`
-12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `pcrtc` 5, `programs` 3, `sif` 5, `vu0` 14, `vu_micro` 24; lib,
-`gif`, `vif` and `dmac` also under `test-checked`; clippy clean.
+SIGLBLID in turn on Sapphire. The crate's other tests unchanged, on the tree with S18 and S25 beneath: lib 52, `cop0` 19,
+`dmac` 18, `draw` 13, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `pcrtc` 5, `programs` 3, `sif`
+5, `sio2` 5, `texture` 11, `vu0` 14, `vu_micro` 24; lib, `gif`, `vif` and `dmac` also under `test-checked`; clippy
+clean.
 
 ### 33.7 On the referees (measured 2026-10-25)
 
@@ -4829,7 +4831,7 @@ on PCSX2 (`s15-arbitration` sends seven); Play! takes both in every form.
 |---|---|---|
 | F1 | PACKED XYZF2 dropping the fog byte (`packing::packed`) | `every_packing_conversion_writes_what_section_7_3_draws` |
 | F2 | PATH3 not masked by MSKPATH3 (`Gif::masked` reading M3R alone) | `the_paths_are_arbitrated_at_packet_ends_and_path3_masked_and_interrupted_as_section_7_1_says` |
-| F3 | IMAGE's NLOOP counted in doublewords (two loops a qword) | the packing test, the FIFO's test, `s15-reglist`, `s15-arbitration`, S16's and S17's programs through PATH3 |
+| F3 | IMAGE's NLOOP counted in doublewords (two loops a qword) | the packing test, the FIFO's test, `s15-reglist`, `s15-arbitration`, S16's and S17's programs through PATH3 (before S18's joined them) |
 
 Each was applied, `tests/gif.rs` and `tests/vif.rs` run, and the source restored [M]. No picture shows the fog byte, so
 F1 has one witness, as expected; `tests/vif.rs` sees none of the three, its DIRECT packets having no fog, mask or IMAGE.
@@ -4837,8 +4839,8 @@ F1 has one witness, as expected; `tests/vif.rs` sees none of the three, its DIRE
 ### 33.11 The blast radius (measured 2026-10-25)
 
 `blast.sh WiseMan sapphire-s15` names the Sapphire crate and WiseMan's `SapphireTests`: the crate as §33.6 gives it, and
-WiseMan's filter **5 of 5**, run once at CPU weight 20, `LunaP.props` pointed at the sibling LunaP checkout by a local
-change that is not committed.
+WiseMan's filter **5 of 5** before the rebase onto S18's and S25's merges and again after, each run once at CPU weight
+20, `LunaP.props` pointed at the sibling LunaP checkout by a local change that is not committed.
 
 ### 33.12 What the plan got wrong, or left open
 

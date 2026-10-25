@@ -73,7 +73,7 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   bytes, the erase's alignment or the multitap's selection (D-220 to D-230);
   and stage S15 (2026-10-25, §33): the GIF, its three paths (XGKICK, DIRECT and DIRECTHL, channel 2 and the EE's
   stores through a FIFO of 16 qwords), the PACKED, REGLIST and IMAGE formats with one owner, the arbitration at packet
-  ends, PATH3's masks and the intermittent mode, GIF_CTRL's reset and pause and GIF_STAT, S16's and S17's programs run
+  ends, PATH3's masks and the intermittent mode, GIF_CTRL's reset and pause and GIF_STAT, S16's, S17's and S18's programs run
   whole through PATH3 and VIF1, PCSX2 a witness for the formats and the masks and Play! for a held PATH2, and S14's
   second DIRECT found a PCSX2 defect.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and

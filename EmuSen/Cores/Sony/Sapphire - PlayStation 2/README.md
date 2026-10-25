@@ -32,7 +32,7 @@ grades them by `tests/s18/`'s programs and S17's model extended by `tests/s18/ma
 `cargo run --release --example s18 -- <folder>` writes for the referees.
 `src/gif/` is the GIF (stage S15, `Sapphire_Native.md` §33): its three paths, their arbitration and PATH3's masks, and
 the GIFtag's formats (`gif::packing`, their one owner); `tests/gif.rs` grades it by `tests/s15/`'s programs and runs
-S16's and S17's programs whole through PATH3 and VIF1, and `cargo run --release --example s15 -- <folder>` writes the
+S16's, S17's and S18's programs whole through PATH3 and VIF1, and `cargo run --release --example s15 -- <folder>` writes the
 programs for the referees.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

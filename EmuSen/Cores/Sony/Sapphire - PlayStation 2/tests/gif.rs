@@ -1,8 +1,8 @@
 //! Stage S15, the GIF (Sapphire_Native.md §33): the project's programs sending GS packets down each path and
 //! interleaving them, run on the interpreter with the board and graded by the records `s15::manual` gives from the EE
-//! User's Manual's chapter 7 over S16's and S17's models of the GS; S16's and S17's own programs, until now graded by
-//! driving the GS's host interface directly, run whole through PATH3 and VIF1; and what no program can show a
-//! referee (each packing conversion's output, the FIFO's depth against the DMAC, the paths' cost), on the units.
+//! User's Manual's chapter 7 over S16's and S17's models of the GS; S16's, S17's and S18's own programs, until
+//! now graded by driving the GS's host interface directly, run whole through PATH3 and VIF1; and what no program can
+//! show a referee (each packing conversion's output, the FIFO's depth against the DMAC, the paths' cost), on the units.
 
 mod s6;
 mod s11;
@@ -10,6 +10,7 @@ mod s14;
 mod s15;
 mod s16;
 mod s17;
+mod s18;
 
 use sapphire::board::System;
 
@@ -51,6 +52,13 @@ fn s16s_programs_run_whole_through_path3_and_vif1() {
 #[test]
 fn s17s_programs_draw_through_path3() {
     for script in s17::all() {
+        grade(s17::program(&script));
+    }
+}
+
+#[test]
+fn s18s_programs_texture_through_path3() {
+    for script in s18::all() {
         grade(s17::program(&script));
     }
 }

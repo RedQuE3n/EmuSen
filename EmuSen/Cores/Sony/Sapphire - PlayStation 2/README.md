@@ -49,6 +49,10 @@ Since stage S24 (`Sapphire_Native.md` §35) `src/machine.rs` is the console on t
 `cargo run --release --example s24 -- <bios> <americas|europe|japan> <frames> <folder> [frame[:bits]...]` boots it on a
 BIOS given by path, pressing buttons at chosen frames and writing the pictures, printing only the hardware's own reports;
 `examples/s24probe.rs` writes the stage's measurement programs for the referees and `programs/s24/` holds its bare ones.
+Since stage S10 (`Sapphire_Native.md` §36) an EE program given as the image is entered by fast boot once the BIOS is up
+(`Machine::enter_program`), and the IOP's console is kept in the `TTY` space (`src/iop/tty.rs`);
+`cargo run --release --example s10 -- <bios> <americas|europe|japan> <program.elf> <expected>` runs a ps2autotests
+program on a BIOS given by path and grades its text against the expected file.
 
 Since stage S30 (`Sapphire_Native.md` §38) `src/state.rs` is the whole console's state, SPH2 version 2, each unit's
 block written beside the unit and composed in `src/board.rs`; `tests/sph2/version-2.layout` is its listing, which

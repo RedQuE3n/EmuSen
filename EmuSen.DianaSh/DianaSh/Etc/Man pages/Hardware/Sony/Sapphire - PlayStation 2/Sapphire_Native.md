@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30), S24 (§35) and S19 (§37) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30), S24 (§35), S19 (§37) and S10 (§36) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -5893,7 +5893,9 @@ has no checksum to break (§35.5); F2's second half stands in for it.
 4. **Q4 [routine], the intro's bands and light trails.** *Recommended*: hand them to the GS's next stage as defects to
    prove with a program.
 5. **Q5 [routine], the field order.** Sapphire's woven frame equals PCSX2's weave with the bottom field first, not the top
-   (6,657 pixels apart). *Recommended*: keep S20's parity; check it against a program that marks each field, at S10.
+   (6,657 pixels apart). *Recommended*: keep S20's parity; check it against a program that marks each field, at S10. *Settled at S10
+   (§36.8): PCSX2's "bottom field first" lays the field CSR calls even on the first raster, as Sapphire does; S20's parity
+   kept.*
 
 ### 35.13 What was read for this stage
 
@@ -5914,6 +5916,274 @@ never kept.
 **Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures with a referee's,
 read ps2tek's BIOS chapter and saw BIOS boot banners quoted there; **this writer is exposed and will never write the open
 replacement**.
+
+## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
+
+*Numbered §36 and its disputes from D-360, S25's part B writing in §30 from D-380 beside it.*
+
+### 36.1 In one paragraph
+
+The plan's §7 row S10 and the second half of S24's, on the tester's go of 2026-10-25. **An EE program given as the image
+is entered by fast boot** (§36.2): the BIOS boots as at S24, and once the IOP has finished booting and the EE runs a
+program in user mode, the machine writes the program into RAM past the caches and calls the kernel's ExecPS2 in place of
+that program's next instruction, as ps2tek documents the call; no BIOS code is read, changed or traced. **The IOP's console
+is kept in a `tty` space** (§36.3), caught at IOMAN's `write` resolved at run time through the export tables, as decided
+on 2026-10-24, and answered as an attached TTY answers for a fast-booted program. Run so, **ps2autotests' 55 EE programs
+print 52 of their console texts whole** on the Americas image (§36.5), among them all of S10's gate but one line that is
+D-28's named loss, `vu/games/triace`'s twelve values, which settle D-43 (§36.6), and every kernel, DMA, VIF, GS and VU
+program but `intstall` (D-363) and `efu` (S13's named loss). Six defects of the machine were found by the texts and fixed
+(D-360 to D-362, D-364, D-80 and D-181 amended), the first two in the IOP's DMAC and the cause of a deadlock of the SIF's
+RPC. **The 23 IOP programs (`.irx`) are not run** (§36.7): no permitted document gives a way to load one that does not
+need a decision. S24's field-order question is settled by a field-marking program on PCSX2 (§36.8). No emulator, SDK or
+loader source and no firmware was read; §36.12 records what this writer was exposed to.
+
+### 36.2 The fast boot
+
+[R ps2tek "BIOS Boot Process" (cleared for a writer of a player's-BIOS stage, `Sapphire_Plan.md` §2.2), "BIOS EE
+Syscalls", "SIF Registers", "BIOS IOP EESYNC"; A where marked; C the choices]:
+
+- **The documented process.** The EE kernel is copied to RAM and its first program loaded ("The EELOAD module is loaded,
+  which in turn loads OSDSYS"); the IOP boots its modules, and EESYNC "calls SIFMAN.sceSifSetSMFlag(0x40000)", "the write
+  does indicate that the IOP has finished booting"; ExecPS2 (07h) "clears all of the internal kernel state and creates a
+  thread with priority 0 (main thread). The thread begins executing from the entry point".
+- **The entry point** (`Machine::at_entry`): SMFLAG's bit 18 set and the EE in user mode at an instruction boundary
+  outside a delay slot — a register and the processor's mode, never a program counter. Measured: the first user-mode
+  instruction at frame 5, the flag at frame 7, **the entry at frame 8 (0.13 s of console time) on the Americas image and
+  frame 7 (0.14 s) on Europe's**, about 2.5 s of wall time [M]. An entry at the first user-mode instruction alone, before
+  the flag, also runs the programs [M]; the flag is kept so that the IOP's modules are up as they are when OSDSYS starts
+  a program.
+- **The loader's part** (`Machine::enter_program`): every dirty data cache line written back and both caches, the UCAB and
+  the BTAC emptied (`Ee::flush_caches`), as a loader leaves them before writing code past the caches; each loadable
+  segment written into RAM, its bss cleared; then the registers of an ExecPS2 call (v1 7, a0 the entry, a1 `gp` from the
+  ELF's MIPS register information when it has one, a2 1, a3 the argument vector) and the SYSCALL exception taken at the
+  running program's next instruction. The kernel does the rest.
+- **One argument** [C]: argv[0] is `host:program.elf`, written at 01F00000h for the kernel to copy. With argc 0 every
+  program stopped 13,446 instructions in, reading an instruction word as a pointer (BadVAddr 3C030011h, the program's own
+  code read through a garbage argument) [M]; a loader always passes the program's name, and ps2link, which recorded the
+  expected texts, passes a `host:` path.
+- **The core ABI**: `create` with an ELF and the market's BIOS sets the program for the fast boot (`v1.rs`); without a BIOS
+  the console stays held as before. A disc's boot is S29's.
+
+### 36.3 The IOP's console in a `tty` space
+
+[Decided 2026-10-24, `Sapphire_Plan.md`'s decisions; R ps2tek "BIOS IOP Module Linking", "BIOS IOP IOMAN", "SIF RPC
+Commands"; M]:
+
+- **The export.** IOMAN's `write`, export 7 (`int write(int fd, void *ptr, size_t size)`), found through the table named
+  `ioman`; a call to it with descriptor 1 is the console's text. The PC compared is the table's function pointer, read
+  at run time from IOP RAM, never an address in the image.
+- **Finding the table.** A scan of IOP RAM for the magic word 41C00000h found one table at a time and none once the IOP
+  had booted [M]: the word does not stay once LOADCORE has registered the table, while the name and the entries do. So
+  the IOP's bus notes where a processor store completes the magic word (`IopBus::export_tables`, the newest 256), and the
+  console takes the newest noted table whose name is `ioman` and whose entry points into RAM (`Tty::resolve`, at each
+  frame's end); a table overwritten is let go and looked for again, so a rebooted IOP's modules are found anew.
+- **The capture** (`iop::tty`): while the hook is armed the IOP runs an instruction at a time, each boundary shown to it
+  (`Iop::run_watched`); a call's descriptor, buffer and size are taken from a0 to a2 and kept once its first instruction
+  has run, an interrupt taken at the boundary entering it again later. The `tty` space (`TTY`, 11, 256 KiB, read-only)
+  holds the bytes, NULs left out, as Diamond's TTY does; WiseMan's `TtyReader` reads it by name.
+- **The device** (D-364) [C]: on a fast-booted program the console has a TTY attached, as a console running ps2link has:
+  a write to standard output is answered with its size, the bytes kept and the caller resumed at its return address, the
+  BIOS's stub not run. The retail TTY driver is "stubbed" (ps2tek); it returned 0, and FILEIO, having written the head
+  of a misaligned buffer, never fetched the rest, so lines were cut to eight bytes. A disc's game keeps the retail
+  console, the capture only observing.
+- **What the texts are graded from**: the text from the expected text's first line to its closing line; what follows is
+  the BIOS's once the program has exited (`examples/s10.rs`), as `ps2referee.py tty` returns only a program's region.
+  The BIOS's own boot text in the space is never printed.
+
+### 36.4 The runner
+
+`examples/s10.rs <bios> <market> <program.elf> <expected> [frames] [out]` boots, enters the program, and grades its text
+whole as WiseMan's `ExpectedText` does (every line equal, nothing after); it stops when the closing line arrives, when the
+text has not grown for 600 frames, or at the frame limit, and prints the verdict with the frames, console seconds and wall
+seconds, the capture's call counts and the IOP's resets. `S10_STATE` adds the DMACs', the SIF's and both INTCs' registers
+at the end, the hardware's own report of which unit waits on which; `S10_ALL` and `S10_REPORTS` add S24's register
+counts. One program a process, one process at a time.
+
+### 36.5 The 55 EE programs (measured 2026-10-25)
+
+Americas image `ps2-0230a-20080220.bin`, the build of this stage's last commit, one program at a time [M]:
+
+| Folder | Programs | Equal to the console's text | Wall time, each |
+|---|---|---|---|
+| `cpu/ee` | alu, branch, branchdelay, lsu, lsudelay, muldiv | **6 of 6** | 2.9 to 12.9 s |
+| `cpu/ee_cop0` | performance | **1 of 1** | 6.4 s |
+| `cpu/ee_fpu` | arithmetic, branch, branchdelay, compare, convert, fcr, muldiv, sqrt, transfer | **8 of 9**: `sqrt` 65 of 66 lines, the one D-28 names | 2.8 to 16.8 s |
+| `cpu/ee_simd` | arithmetic, compare, funnel, logic, muldiv, shuffle | **6 of 6** | 5.7 to 19.0 s |
+| `memory/ee` | default | **1 of 1** | 2.8 s |
+| `cpu/vu0_macro` | integer, transfer | **2 of 2** | 5.8, 13.3 s |
+| `dma/dmac`, `dma/spr` | cpcond, tagintr; chain, interleave, normal | **5 of 5** | 2.8 to 6.9 s |
+| `dma/vif` | basic, intstall, mskpath3, stcycl, stmod, unpack | **5 of 6**: `intstall` 14 of 18 lines, FQC (D-363) | 4.5 to 11.1 s |
+| `gs` | label, signal | **2 of 2** | 4.8, 4.5 s |
+| `kernel/ee` | interrupt/dmac_order, interrupt/intc_order, thread/delete, exit, resume, sleep, stat, suspend, terminate, wakeup | **10 of 10** | 2.7 to 13.8 s |
+| `vu` | games/triace, lower/branch, lower/efu, lower/fdivdelay, lower/integer, lower/random, upper/clip | **6 of 7**: `efu` 209 of 223 lines, each other one a last-place difference of S13's named loss (§23.4) | 2.7 to 6.4 s |
+| **All** | 55 | **52** | **353 s in all** |
+
+**S10's gate** (`cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default`): 22 of 23 programs equal,
+the 23rd but the one line D-28 names, on the Americas image; **the same on Europe's** `ps2-0230e-20080220.bin` (entered at
+frame 7, 3.3 to 19.5 s each) [M].
+
+**What the texts found, in the order they did** (each a dispute with its cause, and fixed where the documents and the
+texts support it):
+
+1. **A deadlock of the SIF's RPC** (D-360). The programs stopped after 14 to 400 lines. The hardware's record of the last
+   exchange: the IOP's DMA interrupt handler clears DICR's master enable while it dispatches and sets it again 20 to 70
+   IOP cycles later; an EE call packet completing in that window set no flag under D-68's reading (psx-spx's PlayStation:
+   the flag needs the master enable), so no IRQ 3 came and the call was never answered. ps2tek, the PlayStation 2's
+   document, gates the flag by the channel's mask alone and the master flag by bit 23; with its reading the flag waits and
+   IRQ 3 is raised as the enable returns.
+2. **A transfer that began before its start** (D-361). The record of the same exchange showed a SIF0 transfer the IOP
+   started run from the DMAC's last free cycle, thousands of cycles before the write to CHCR: a register write on an idle
+   DMAC did not move its clock. The write now wakes it from its own time.
+3. **Lines cut to eight bytes** (D-364): the retail TTY stub's 0, §36.3.
+4. **`cpu/ee_fpu/branchdelay`** (D-362): four taken BC1Ts in a row reach the fourth target on the console, BC1TLs and BEQs
+   the second; the reading that a taken BC1F or BC1T in a taken one's slot supersedes it gives all three.
+5. **`vu/lower/branch`** (D-80 amended): `JALR VI01, VI01` right after `IADDI VI01, VI00, 6` jumps to 6 on the console;
+   Sapphire read the value before the write, as D-80 extended to JR and JALR by argument, jumped to 0 and ran the
+   program's start again. JR and JALR now read the target as it is; the conditional branches keep D-80's measured rule.
+6. **`dma/vif/unpack`'s "Set 4096 bytes" line** (D-181 amended): with its packet read from the source, WL 0 must count as
+   256, a filling cycle; `stcycl`'s 171 cases hold unchanged.
+
+The three misses left: `sqrt`'s 1/√25 (D-28's named loss, S9), `efu`'s fourteen last places (S13's named loss), and
+`intstall`'s FQC (D-363, open: the console reads 0 with the DMA ended and two qwords past the stall; no document says
+where they are kept).
+
+### 36.6 D-43, by `vu/games/triace`
+
+`triace` prints its twelve values equal to the console's text on Sapphire, the VU's FMAC and divider on the FPU's readings
+(D-25 to D-28); PCSX2 on IEEE 754 towards zero misses one of them (§23.8). D-43's conclusion is now **measured**; no
+float constant changes.
+
+### 36.7 The 23 IOP programs
+
+The `.irx` programs are IOP modules whose `_start` prints and runs the test (their sources, read at S10). The brief's
+way, "the documented way an EE program loads an IOP module", is LOADFILE's RPC (ps2tek "BIOS IOP LOADFILE": server
+80000006h, function 00h `SifLoadModule`), and it is not enough: no permitted document gives the call's argument
+layout (ps2tek: "Newer LOADFILE modules seem to have a different interface. Needs more research"), and the module must
+be in a file the IOP can open, which on a retail console without ps2link means a disc in the drive (S29's). The other
+documented route, MODLOAD's `LoadModuleBuffer` (0Ah) and `StartModule` (08h) called on the IOP, needs an IOP thread to
+call them from, and THBASE's `CreateThread` takes a parameter block no permitted document lays out. So the 23 are not
+run (cpu/iop: alu, branch, branchdelay, hilodelay, lsu, lsudelay, muldiv; kernel/iop: eventflag delete and poll,
+interrupt register and release, libc sprintf and strtok, messagebox poll, receive and send, thread cancelwakeup, create,
+delete, releasewait and stat, vpool create and pallocate), and the way to load them is §36.14 Q1.
+
+### 36.8 The field order (S24's Q5), by `s10-fieldmark`
+
+`tests/s20`'s `fieldmark` (written by `examples/s20.rs` as `s10-fieldmark.elf`): interlaced in FIELD mode, circuit 1 shows
+one 64 × 32 buffer in each field CSR's FIELD calls even and another in each it calls odd, switched at every V-sync. On
+Sapphire the woven picture's even rasters are the even field's (D-204; `the_fieldmark_program_weaves_the_even_field_on_the_even_rasters`).
+PCSX2 2.8.2 ran it by fast boot (`ps2referee.py picture`, new: S24's `menu` capture for a program, the state saved 8 s
+after drawing begins; its picture is the display rectangle scaled to 640 × 480) [M]:
+
+| PCSX2's deinterlacing | Set beside the even field first | beside the odd field first |
+|---|---|---|
+| 3, weave with the bottom field first (S24's match) | **0 pixels differ by more than 32**, mean 0.52 | 291,331 of 307,200 |
+| 2, weave with the top field first | 291,306 | **0**, mean 0.52 |
+
+So PCSX2's "bottom field first" lays the field CSR calls even on the first raster, as Sapphire does, and S24's 6,657 pixels
+at setting 2 were PCSX2's naming of its own setting: **S20's parity is kept**, the field CSR calls even filling the even
+rasters.
+
+### 36.9 Speed
+
+The board runs at 1 to 3 frames a second as at S24; the programs' own work is short, so a program takes 2.7 to 19.5 s of
+wall time, 2.5 s of it the boot to the entry, and the 55 together 353 s [M]. Before D-360 and D-361, a program that
+deadlocked ran until the runner's idle limit (four minutes each).
+
+### 36.10 Tests and seeded faults (2026-10-25)
+
+**Tests** [M, `cargo test --release`, the crate whole]: **329 of 329**, ten new: `iop::tty`'s three (the hook found by its
+table and followed, a call kept whole once its first instruction ran, the device's answer), the machine's
+`the_fast_boot_enters_the_program_through_execps2_once_the_bios_is_up`, `tests/iop.rs`'s
+`a_flag_under_its_mask_survives_the_master_enable_clear_and_raises_irq3_when_set` and
+`a_channel_started_on_an_idle_dmac_begins_at_its_write`, `tests/fpu.rs`'s
+`a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it`, `tests/vif.rs`'s `the_unpack_set_line_holds`,
+`tests/vu_micro.rs`'s `jalr_reads_its_target_written_just_before_as_it_now_is`, `tests/pcrtc.rs`'s
+`the_fieldmark_program_weaves_the_even_field_on_the_even_rasters`; every S21, S22, S25 and S26 program on the IOP's DMAC
+passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5** (17 minutes, most of it the
+kit's runs of the core's debug build). The ps2autotests runs of §36.5 need the player's BIOS and are not in CI.
+
+**Seeded faults**, each made in place, the tests named run, and the source restored [M]:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the console losing a write's last byte (`Tty::keep`) | `a_call_to_standard_output_is_kept_whole_once_its_first_instruction_ran`, `a_call_to_standard_output_is_answered_by_the_device_with_its_size` |
+| F2 | the fast boot entering at the first user-mode instruction, before the IOP has finished booting | `the_fast_boot_enters_the_program_through_execps2_once_the_bios_is_up` |
+| F3 | PEXTLW's lanes swapped, GPR[rt]'s word above GPR[rs]'s | `logic_interleave_pack_and_rearrangement_equal_the_manual` (S8's programs); and `cpu/ee_simd/shuffle` on the player's BIOS, failing at its line 280, `pextlw 0, 1` |
+
+### 36.11 Where the plan was wrong, or left open
+
+- **§7's S10 row and §3.1** take the `.irx` programs as loaded "the documented way an EE program loads an IOP module";
+  no permitted document gives that way whole (§36.7).
+- **§3.3's TTY reader over "the output channels"**: on the player's BIOS the console must also answer as a TTY for the
+  texts to print whole (D-364), which no plan line foresaw.
+- **D-68's flag rule** followed psx-spx's PlayStation where ps2tek's PlayStation 2 text differs; the BIOS's handler
+  decided it (D-360).
+- **D-43** waited on `triace` and is measured; **D-80's** extension to JR and JALR and **D-181's** WL 0 were argued and
+  are now measured otherwise.
+
+### 36.12 Exposure, and what was observed
+
+**Exposure** (§1.4): this writer ran the player's BIOS on Sapphire and on PCSX2, read ps2tek's BIOS chapter including the
+parts excluded for replacement writers (the ROMDIR dump, "BIOS Boot Process", IGREETING's banner example), and met the
+BIOS's own console text in the `tty` space (never printed, but one module's line after a program's exit, shown once in a
+runner's verdict before the runner cut the text at the program's closing line); **this writer is exposed and will never
+write the open replacement**.
+
+**Observed while the BIOS ran**, beyond S24's reports: the EE's operating mode at instruction boundaries and SMFLAG (the
+entry), the EE's exception counts, BadVAddr and whether EPC lay inside the test program, the test program's own calls into
+the kernel (v1 and a0 to a3, v0 on return) while finding the argument defect, the IOP's SR, I_CTRL, DICR and DICR2 with
+their cycles, the SIF channels' DMA tags, the SIF RPC packets crossing them in ps2tek's documented `SifCmdHeader` and
+`SifRpc*` layouts, and IOMAN `write`'s arguments. No program counter inside the boot ROM or inside BIOS code in RAM, no
+instruction of the BIOS and no BIOS image was read; the packets are an interface's traffic, but they are data the BIOS's
+modules made, so §36.14 Q4 asks whether such a trace is within a writer's allowance. These diagnostics are not in the
+committed code; the runner keeps only the register state of `S10_STATE`.
+
+### 36.13 Named losses
+
+- **`efu`'s last places** (S13) and **RSQRT.S's 1/√25** (D-28), unchanged.
+- **The fast boot's argument**: a program sees argv[0] `host:program.elf`, not the path it came from.
+- **The TTY device** (D-364): a fast-booted program's writes to standard output succeed, as on a console with ps2link,
+  where a retail console's stub returns 0.
+- **The IOP runs an instruction at a time** once the console's hook is armed; its cost is in §36.9's times.
+
+### 36.14 Questions this stage leaves
+
+1. **Q1 [decision], how the 23 `.irx` programs are loaded** (§36.7). *Recommended*: a dispute step that learns LOADFILE's
+   `SifLoadModule` arguments on PCSX2 with a project EE program speaking ps2tek's documented SIF RPC, then the modules
+   read from a synthetic disc through the drive, the path a game's own modules take; it brings S29's disc in the drive
+   forward. The alternative, the machine calling MODLOAD's exports from an IOP thread it borrows, needs no disc but
+   reaches into the IOP's threads and loads modules no way a program does.
+2. **Q2 [decision], the TTY device for fast-booted programs** (D-364). *Recommended*: keep it, named as a loss: the
+   expected texts are a console with a TTY's, and a disc's game keeps the retail stub.
+3. **Q3 [routine], `intstall`'s FQC** (D-363). *Recommended*: leave it open, D-186's reading kept, until a program of the
+   project's on a referee faithful to the stall can decide where the qwords wait.
+4. **Q4 [decision], interface traces while the BIOS runs** (§36.12). *Recommended*: allow a writer of a player's-BIOS
+   stage the DMA tags and the documented SIF RPC packets, kept out of commits, the exposure recorded as here.
+5. **Q5 [routine], the fast boot's argument**. *Recommended*: keep `host:program.elf`; give the image's own name when the
+   frontend passes a path.
+
+### 36.15 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §2.2, §3, §5.9, §7 (S10, S24), §8, the decisions; this page's §14, §16, §19, §21, §23, §28, §29,
+§35; `Sapphire_Disputes.md` D-10, D-28, D-43, D-68, D-80, D-181, D-185 to D-189, D-144; `Sapphire_References.md` §2, §3.
+ps2tek at `1c91660`: the BIOS chapter's introduction, "BIOS File Structure", "BIOS Boot Process", "BIOS EE Syscalls" (01h to
+15h), "BIOS IOP Module Linking", "BIOS List of IOP Modules", the sections of SYSMEM, LOADCORE, INTRMAN, THREADMAN and THBASE,
+IOMAN, MODLOAD, ROMDRV, STDIO, SIFMAN, IGREETING, SIFCMD, REBOOT, LOADFILE, SIFINIT, FILEIO, SECRMAN and EESYNC; "Subsystem
+Interface (SIF)" whole; "IOP DMA" (DICR, DICR2, the chain tags); the IOP timers' targets (lines 4160–4181, read while
+finding where "IOP Console" begins; its lines 4182–4208, excluded for every writer, were not read). psx-spx "DMA Channels"
+(DICR). Sony's *EE Core User's Manual* §6.5 (the UCAB). ps2autotests: the README, the expected texts, the first five lines
+of each `common/` file (as at S2), `common-ee.cpp`, `common-iop.c` and `.h`, and of the tests' own sources `cpu/ee/alu.cpp`
+(its macros), `cpu/ee/shared.h` (`PRINT_R`), `cpu/ee/branchdelay.cpp` (the BEQ chain), `cpu/ee_fpu/branchdelay.cpp`,
+`cpu/iop/alu.c` and `kernel/iop/thread/create.c` (their `_start`), `dma/dmasend.cpp`, `dma/vif/intstall.cpp`,
+`dma/vif/unpack.cpp`, `vu/lower/branch.cpp`, `vu/test_runner.cpp` and `.h` and `vu/assemble/block.h` (the JALR and B
+emitters). PCSX2 2.8.2 run as a black box, its pictures only. No emulator, SDK or loader source; no firmware opened,
+hashed, listed or traced.
+
+### 36.16 What this stage does not cover
+
+- The 23 `.irx` programs (Q1), and with them G1's `cpu/iop/*` and G2's IOP half.
+- A disc in the drive and its boot (S29, G10); OSDSYS starting a program; `Exit` back to OSDSYS after a program.
+- The processors' state in `SPH2` (S30): a fast-booted console still refuses a state load, as S24's running console does.
 
 ## 37. Stage S19, the GS's pixel operations, local-to-local overlap, and the BIOS intro's drawing defects (2026-10-25)
 

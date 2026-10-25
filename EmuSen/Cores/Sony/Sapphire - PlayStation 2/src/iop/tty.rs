@@ -62,10 +62,10 @@ impl Tty {
     /// Keeps the hook while its table still names `ioman` with the same entry, else takes the newest table among
     /// `tables` that does: a rebooted IOP's modules land anew.
     pub fn resolve(&mut self, ram: &[u8], tables: &[u32]) {
-        if let Some((at, f)) = self.hook {
-            if Self::table(ram, at) == Some(f) {
-                return;
-            }
+        if let Some((at, f)) = self.hook
+            && Self::table(ram, at) == Some(f)
+        {
+            return;
         }
         self.hook = tables.iter().rev().find_map(|&at| Self::table(ram, at as usize).map(|f| (at as usize, f)));
     }

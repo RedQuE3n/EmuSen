@@ -3108,7 +3108,7 @@ run at a time at CPU weight 20:
 | Where | Result |
 |---|---|
 | `emusen-disc` | **42 of 42**: 18 unit, 3 damage, 13 disc, 8 DVD |
-| Sapphire, after the branch was rebased onto S21's and S16's merges | lib **38 of 38** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14; `cdvd` also under `test-checked`; clippy clean |
+| Sapphire, after the branch was rebased onto S21's, S16's and S13's merges | lib **39 of 39** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14, `vu_micro` 24; `cdvd` also under `test-checked`; clippy clean |
 | Diamond, Diamond's `v1` | **306 of 306**, **5 of 5**: the crate's first user, unchanged |
 | Nephrite | **194 of 194**: its second, unchanged |
 | `emusen-core-conform`, `Platform/galaxia`, `library`, `library-tool`, `platform` | 36, 87, 11, 9 and 40, every one passing |

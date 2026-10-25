@@ -5,7 +5,8 @@
 use crate::chdman::Chdman;
 use crate::convert::{self, obj, Options, Outcome};
 use crate::discs::{self, Item};
-use crate::Context;
+use crate::{packages, Context};
+use emusen_galaxia::claims;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{self, Value};
 use std::collections::VecDeque;
@@ -19,6 +20,17 @@ pub enum Op {
     Convert,
     Check,
     List,
+    /// `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` (EmuSen_GamePackages.md §3.7, §14).
+    PkgMake,
+    PkgList,
+    PkgCheck,
+    PkgMigrate,
+}
+
+impl Op {
+    fn packages(&self) -> bool {
+        matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -26,16 +38,23 @@ pub struct Request {
     pub op: Op,
     pub paths: Vec<String>,
     pub options: Options,
+    /// `pkg ls`'s console, none for every package.
+    pub console: Option<String>,
 }
 
-/// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`.
+/// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
+/// `{"op": "pkg-make" | "pkg-ls" | "pkg-check" | "pkg-migrate", "paths": [...], "console": null}`.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
         Some("convert") => Op::Convert,
         Some("check") => Op::Check,
         Some("ls") => Op::List,
-        _ => return Err("the request's op is not convert, check or ls".into()),
+        Some("pkg-make") => Op::PkgMake,
+        Some("pkg-ls") => Op::PkgList,
+        Some("pkg-check") => Op::PkgCheck,
+        Some("pkg-migrate") => Op::PkgMigrate,
+        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check or pkg-migrate".into()),
     };
     let paths = match doc.get("paths") {
         None | Some(Value::Null) => Vec::new(),
@@ -46,7 +65,8 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some(Value::Number(t)) => t.parse::<usize>().map_err(|_| "the request's threads are not a whole number")?,
         _ => 0,
     };
-    Ok(Request { op, paths, options: Options { fast: doc.get("fast").and_then(Value::as_bool).unwrap_or(false), threads } })
+    let console = doc.get("console").and_then(Value::as_str).map(str::to_string);
+    Ok(Request { op, paths, options: Options { fast: doc.get("fast").and_then(Value::as_bool).unwrap_or(false), threads }, console })
 }
 
 struct Queue {
@@ -128,6 +148,10 @@ fn op_word(op: &Op) -> &'static str {
         Op::Convert => "convert",
         Op::Check => "check",
         Op::List => "ls",
+        Op::PkgMake => "pkg-make",
+        Op::PkgList => "pkg-ls",
+        Op::PkgCheck => "pkg-check",
+        Op::PkgMigrate => "pkg-migrate",
     }
 }
 
@@ -152,8 +176,12 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     let mut counts: Vec<(&'static str, u64)> = Vec::new();
     let library = match ctx.checked_library() {
         Ok(l) => l,
+        Err(words) if req.op.packages() => return end(queue, &req.op, &counts, started, Some(words.replace("there is no library to convert.", "there is no library for a package to link to."))),
         Err(words) => return end(queue, &req.op, &counts, started, Some(words)),
     };
+    if req.op.packages() {
+        return run_packages(ctx, &library, req, queue, stop, started);
+    }
     let chdman = match req.op {
         Op::List => None,
         _ => match Chdman::open(&ctx.chdman, ctx.pin.as_deref(), &ctx.release) {
@@ -220,6 +248,86 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     end(queue, &req.op, &counts, started, None);
 }
 
+/// A `pkg` request: one `package` event for each game made or package listed, checked or migrated, between the start
+/// and the end (EmuSen_GamePackages.md §14). `source` is the library path a game was made from, `package` the package's
+/// folder under `Packages`.
+fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool, started: Instant) {
+    let mut counts: Vec<(&'static str, u64)> = Vec::new();
+    let (games, folders, refused) = match req.op {
+        Op::PkgMake => {
+            let (g, r) = packages::games(library, &req.paths);
+            (g, Vec::new(), r)
+        }
+        Op::PkgList if req.console.is_some() => (Vec::new(), packages::of_console(ctx, req.console.as_deref().unwrap_or("")), Vec::new()),
+        _ => {
+            let (f, r) = packages::named(ctx, &req.paths);
+            (Vec::new(), f, r)
+        }
+    };
+    let total = games.len() + folders.len();
+    let log_at = path::combine(Style::HOST, &ctx.logs(), &format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10]));
+    let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("packages", Value::number(total))];
+    if req.op != Op::PkgList {
+        start.push(("log", Value::string(&log_at)));
+    }
+    start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
+    emit(queue, obj(start));
+    let mut index = if req.op == Op::PkgMake { claims::index(&ctx.places().roots()) } else { claims::Index::default() };
+    let jobs: Vec<(Option<&packages::Game>, Option<&String>)> = games.iter().map(|g| (Some(g), None)).chain(folders.iter().map(|f| (None, Some(f)))).collect();
+    for (i, (game, folder)) in jobs.into_iter().enumerate() {
+        if stop() {
+            count(&mut counts, "stopped");
+            continue;
+        }
+        let begun = Instant::now();
+        let outcome = match (&req.op, game, folder) {
+            (Op::PkgMake, Some(g), _) => packages::make(ctx, &mut index, g, stop),
+            (Op::PkgList, _, Some(f)) => packages::list(ctx, f),
+            (Op::PkgCheck, _, Some(f)) => packages::check(ctx, f, stop),
+            (_, _, Some(f)) => packages::migrate(ctx, f),
+            _ => continue,
+        };
+        count(&mut counts, outcome.state);
+        let mut members = vec![("event", Value::string("package")), ("index", Value::number(i + 1)), ("of", Value::number(total))];
+        match (game, folder) {
+            (Some(g), _) => members.extend([("source", Value::string(&g.rel)), ("system", Value::string(&g.system.console))]),
+            (_, Some(f)) => members.push(("package", Value::string(packages::package_rel(ctx, f)))),
+            _ => {}
+        }
+        members.push(("state", Value::string(outcome.state)));
+        if let Some(words) = &outcome.words {
+            members.push(("words", Value::string(words)));
+        }
+        let mut event: Vec<(json::Text, Value)> = members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect();
+        for (k, v) in outcome.facts {
+            match event.iter_mut().find(|(e, _)| e.text == k.text) {
+                Some(slot) => slot.1 = v,
+                None => event.push((k, v)),
+            }
+        }
+        let event = Value::Object(event);
+        if req.op != Op::PkgList {
+            let mut line = String::new();
+            json::write_compact(&mut line, &event);
+            let text = format!("{}	{}	{:.1}s	{line}
+", convert::utc(std::time::SystemTime::now()), op_word(&req.op), begun.elapsed().as_secs_f64());
+            append(&log_at, &text);
+        }
+        emit(queue, event);
+    }
+    end(queue, &req.op, &counts, started, None);
+}
+
+fn append(at: &str, text: &str) {
+    if let Some(dir) = std::path::Path::new(at).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(at) {
+        let _ = f.write_all(text.as_bytes());
+    }
+}
+
 /// The batch's log, `Logs/chd_<day>.log` by the day it started, so that one batch keeps to one file (§4.6).
 fn log_path(ctx: &Context, started: std::time::SystemTime) -> String {
     let stamp = convert::utc(started);
@@ -232,11 +340,5 @@ fn log(at: &str, op: &Op, item: &Item, event: &Value, took: Duration) {
     let mut line = String::new();
     json::write_compact(&mut line, event);
     let text = format!("{stamp}\t{}\t{}\t{:.1}s\t{line}\n", op_word(op), item.rel, took.as_secs_f64());
-    if let Some(dir) = std::path::Path::new(at).parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(at) {
-        let _ = f.write_all(text.as_bytes());
-    }
+    append(at, &text);
 }

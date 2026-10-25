@@ -27,6 +27,9 @@ namespace EmuSen.Galaxia.Media
         public const int Major = 1;
         public const int Minor = 0;
 
+        // A package's own places for a game's battery saves, its states and its cheat list - see EmuSen_GamePackages.md §3.2.
+        public const string SavesFolder = "saves", StatesFolder = "states", CheatsFile = "cheats.json";
+
         private GamePackage(JsonObject document) => Document = document;
 
         // Every member as read or set, in its order; a caller edits it and Write checks it.

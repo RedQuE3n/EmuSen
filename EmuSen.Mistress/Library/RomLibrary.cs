@@ -31,6 +31,9 @@ namespace EmuSen.Mistress.Library
         // The library shelf, which splits the Game Boy's core into Game Boy and Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
         public string Shelf => KnownShelf ?? RuntimeCatalog.ShelfFor(FullPath) ?? "Unknown";
 
+        // The folder of the package this is the game of, null for a file no package claims - see EmuSen_GamePackages.md §3.6.
+        public string? Package { get; init; }
+
         public bool Equals(RomEntry? other) => other is not null && FullPath == other.FullPath;
 
         public override int GetHashCode() => FullPath.GetHashCode();
@@ -57,19 +60,29 @@ namespace EmuSen.Mistress.Library
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
         };
 
-        // <coreDisplayName> narrows to one console; null or RuntimeCatalog.AllConsoles keeps everything; the library's scan when the switch says so.
-        public static RomLibraryResult Scan(string? romDirectory, string? coreDisplayName = null) =>
-            EmuSen.Crystal.Client.Library.GameLibrary.Active ? ScanNative(romDirectory, coreDisplayName) : ScanManaged(romDirectory, coreDisplayName);
+        // The folders a scan walks beside the library since game packages - see EmuSen_GamePackages.md §3.6.
+        public sealed record Beside(string? Packages, string? Compressed)
+        {
+            public static Beside None { get; } = new(null, null);
+
+            public static Beside Tree => new(EmuSen.Galaxia.Library.DataStore.Packages, EmuSen.Galaxia.Library.DataStore.Compressed);
+        }
+
+        // <coreDisplayName> narrows to one console; null or RuntimeCatalog.AllConsoles keeps everything; the library's scan when the switch says so; the tree's Packages and Compressed beside it.
+        public static RomLibraryResult Scan(string? romDirectory, string? coreDisplayName = null) => Scan(romDirectory, Beside.Tree, coreDisplayName);
+
+        public static RomLibraryResult Scan(string? romDirectory, Beside beside, string? coreDisplayName = null) =>
+            EmuSen.Crystal.Client.Library.GameLibrary.Active ? ScanNative(romDirectory, coreDisplayName, beside) : ScanManaged(romDirectory, coreDisplayName, beside);
 
         // The library's scan, on a database of its own that lives for the call.
-        public static RomLibraryResult ScanNative(string? romDirectory, string? coreDisplayName = null)
+        public static RomLibraryResult ScanNative(string? romDirectory, string? coreDisplayName = null, Beside? beside = null)
         {
             using var lib = EmuSen.Crystal.Client.Library.GameLibrary.Open(":memory:");
-            return ScanWith(lib, romDirectory, coreDisplayName);
+            return ScanWith(lib, romDirectory, coreDisplayName, beside);
         }
 
         // A scan through a handle, kept there for the reclaim and identity that follow it.
-        internal static RomLibraryResult ScanWith(EmuSen.Crystal.Client.Library.GameLibrary lib, string? romDirectory, string? coreDisplayName = null)
+        internal static RomLibraryResult ScanWith(EmuSen.Crystal.Client.Library.GameLibrary lib, string? romDirectory, string? coreDisplayName = null, Beside? beside = null)
         {
             var stream = new MemoryStream();
             using (var w = new System.Text.Json.Utf8JsonWriter(stream))
@@ -81,13 +94,19 @@ namespace EmuSen.Mistress.Library
                 w.WriteStartArray("systems");
                 foreach (string system in RuntimeCatalog.Shelves.Select(s => s.System).Distinct()) w.WriteStringValue(system);
                 w.WriteEndArray();
+                if (beside?.Packages is { } packages) w.WriteString("packages", packages);
+                if (beside?.Compressed is { } compressed) w.WriteString("compressed", compressed);
                 w.WriteEndObject();
             }
             lib.Scan(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
             using var games = System.Text.Json.JsonDocument.Parse(lib.Games(""));
             var shelves = RuntimeCatalog.Shelves.GroupBy(s => s.System).ToDictionary(g => g.Key, g => g.First().Name);
             var entries = games.RootElement.GetProperty("games").EnumerateArray()
-                .Select(g => new RomEntry(g.GetProperty("path").GetString()!) { KnownShelf = g.GetProperty("system").GetString() is { } system && shelves.TryGetValue(system, out string? shelf) ? shelf : "Unknown" })
+                .Select(g => new RomEntry(g.GetProperty("path").GetString()!)
+                {
+                    KnownShelf = g.GetProperty("system").GetString() is { } system && shelves.TryGetValue(system, out string? shelf) ? shelf : "Unknown",
+                    Package = g.TryGetProperty("package", out var package) ? package.GetString() : null,
+                })
                 .ToList();
             RomLibraryStatus status = games.RootElement.GetProperty("status").GetString() switch
             {
@@ -101,7 +120,7 @@ namespace EmuSen.Mistress.Library
         }
 
         // The C# scan: the failover and the parity class's oracle.
-        public static RomLibraryResult ScanManaged(string? romDirectory, string? coreDisplayName = null)
+        public static RomLibraryResult ScanManaged(string? romDirectory, string? coreDisplayName = null, Beside? beside = null)
         {
             if (string.IsNullOrWhiteSpace(romDirectory))
             {
@@ -119,12 +138,27 @@ namespace EmuSen.Mistress.Library
                 var shelf = RuntimeCatalog.ShelfByName(coreDisplayName);
                 string[] extensions = Extensions;
 
-                var files = Directory.EnumerateFiles(romDirectory, "*", Recursive)
+                List<string> Walk(string root) => Directory.EnumerateFiles(root, "*", Recursive)
                     .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
                     .ToList();
                 // A sheet's tracks and a list's discs are the sheet's and the list's game, not games of their own.
-                entries = EmuSen.Galaxia.Media.ImageSets.Shelved(files)
-                    .Select(f => new RomEntry(f))
+                var found = EmuSen.Galaxia.Media.ImageSets.Shelved(Walk(romDirectory)).ToList();
+                var packaged = new List<RomEntry>();
+                if (beside?.Packages is { } packages && Directory.Exists(packages))
+                {
+                    string compressed = beside.Compressed ?? "";
+                    foreach (string folder in new[] { packages, compressed }.Where(Directory.Exists))
+                    {
+                        try { found.AddRange(EmuSen.Galaxia.Media.ImageSets.Shelved(Walk(folder))); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                    }
+                    // Nothing inside a package is a game of its own, a claimed file is the package's, and each package is one entry - see EmuSen_GamePackages.md §3.6.
+                    var index = EmuSen.Galaxia.Media.GamePackages.Index(new EmuSen.Galaxia.Media.PackagePlaces(packages, romDirectory, compressed));
+                    found.RemoveAll(f => { string full = Path.GetFullPath(f); return index.InsidePackage(full) || index.Claimant(full) is not null; });
+                    packaged.AddRange(index.Packages.Where(p => File.Exists(p.Game)).Select(p => new RomEntry(p.Game) { KnownShelf = ShelfNamed(p.System) ?? RuntimeCatalog.ShelfFor(p.Game) ?? "Unknown", Package = p.Folder }));
+                }
+                entries = found.Select(f => new RomEntry(f))
+                    .Concat(packaged)
                     .Where(e => shelf is null || e.Shelf == shelf.Name)
                     .OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -147,6 +181,11 @@ namespace EmuSen.Mistress.Library
             List<RomEntry> entries = all.Entries.Where(e => e.Shelf == console).ToList();
             return new RomLibraryResult(entries.Count == 0 ? RomLibraryStatus.Empty : RomLibraryStatus.Ok, all.Directory, entries, console);
         }
+
+        // The shelf a package's manifest names: the one of its ES-DE name, else of its system's id, as the library's scan has it.
+        private static string? ShelfNamed(string system) =>
+            (RuntimeCatalog.Shelves.FirstOrDefault(s => string.Equals(s.EsdeSystem, system, StringComparison.OrdinalIgnoreCase))
+             ?? RuntimeCatalog.Shelves.FirstOrDefault(s => string.Equals(s.System, system, StringComparison.OrdinalIgnoreCase)))?.Name;
 
         // The shelf's name only when it names a real shelf in this build.
         private static string? Narrowed(string? coreDisplayName) =>

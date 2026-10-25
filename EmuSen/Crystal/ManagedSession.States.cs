@@ -18,9 +18,9 @@ namespace EmuSen.Crystal.Managed
         // The player's state folder, read at each use, so every program names a state alike - see EmuSen_Backend.md §4.3's F4.
         private static string? StateFolder => AppSettings.Load().StateDirectory;
 
-        public string StatePath(int slot) => SaveLibrary.StatePathFor(GameKey, slot, StateFolder);
+        public string StatePath(int slot) => SaveLibrary.StatePathFor(GameKey, slot, StateFolder, PackageRoot);
 
-        public string ResumePath => SaveLibrary.ResumeStatePathFor(GameKey, StateFolder);
+        public string ResumePath => SaveLibrary.ResumeStatePathFor(GameKey, StateFolder, PackageRoot);
 
         public void SaveState(string path) => Change(() =>
         {

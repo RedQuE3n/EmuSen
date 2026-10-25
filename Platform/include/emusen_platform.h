@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 24u
+#define EMUSEN_PLATFORM_ABI_VERSION 25u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -146,6 +146,10 @@ int64_t emusen_galaxia_legacy_root_for(const uint8_t *config_root, size_t config
 #define EMUSEN_GALAXIA_SAVE_STATE 2u        /* <stem>.state for slot 1, <stem>.slotN.state otherwise; extra is the directory override */
 #define EMUSEN_GALAXIA_SAVE_RESUME_STATE 3u /* <stem>.resume.state; extra is the directory override */
 #define EMUSEN_GALAXIA_SAVE_PICTURE 4u      /* rom is a state's path; the same name with .png */
+/* A packaged game's own (EmuSen_GamePackages.md, sections 3.5 and 14; since 25): rom is the package's folder, and <name> its name less the extension. */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM 5u         /* <package>/saves/<name>.srm */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_STATE 6u        /* <package>/states/<name>.state, or .slotN.state */
+#define EMUSEN_GALAXIA_SAVE_PACKAGE_RESUME_STATE 7u /* <package>/states/<name>.resume.state */
 
 /* A save file's path. A null or blank directory override is the tree's own Save States directory. */
 int64_t emusen_galaxia_save_path(uint32_t kind, const uint8_t *rom, size_t rom_len, const uint8_t *extra, size_t extra_len, int32_t slot, uint8_t *out, size_t len);
@@ -205,6 +209,25 @@ int32_t emusen_galaxia_package_write(const uint8_t *file, size_t file_len, const
 
 /* A manifest checked and laid out as it is written: indented by two, System.Text.Json's escapes, numbers as their tokens, a final line ending. */
 int64_t emusen_galaxia_package_format(const uint8_t *manifest, size_t manifest_len, uint8_t *out, size_t len);
+
+/*
+ * The claim index (EmuSen_GamePackages.md, sections 3.5, 3.6 and 14; since 25). A folder under `packages` holding a
+ * package.json is a package and is not looked inside; a manifest's paths are under `library` (AppSettings.RomDirectory,
+ * null or blank for none), `compressed`, the package's folder, or absolute. The manifests are the index: nothing else is
+ * kept. Paths cross as full paths.
+ */
+
+/* {"folders": [every package folder], "packages": [{"folder", "system", "game", "claims": [game, companions, sources]}]}, refused manifests in folders alone. */
+int64_t emusen_galaxia_package_index(const uint8_t *packages, size_t packages_len, const uint8_t *library, size_t library_len, const uint8_t *compressed, size_t compressed_len, uint8_t *out, size_t len);
+
+/*
+ * What `at` opens as, {"game", "package" | null, "moved"}: a package's folder or manifest opens its game; a file a
+ * package claims opens that package's game, or itself where that game is gone; a file whose size and hashes are those
+ * of a package's game that is gone is that game moved, and its manifest is rewritten; anything else is itself. A game
+ * whose size or time changed is hashed: a different dump is EMUSEN_PLATFORM_IO with words naming both hashes, as is a
+ * package whose game is gone and not found by size and hashes in the library.
+ */
+int64_t emusen_galaxia_package_resolve(const uint8_t *at, size_t at_len, const uint8_t *packages, size_t packages_len, const uint8_t *library, size_t library_len, const uint8_t *compressed, size_t compressed_len, uint8_t *out, size_t len);
 
 /* ---- The library tool (EmuSen_GamePackages.md, sections 4 and 12.3; since 24) ---- */
 

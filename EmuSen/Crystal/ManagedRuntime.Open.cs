@@ -28,8 +28,17 @@ namespace EmuSen.Crystal.Managed
         public ManagedSession Open(string? path, string? console, string? engine, OpenedWith with)
         {
             if (path is null == console is null) throw new CrystalException(SessionAbi.BadArgument, "a session opens a game or starts a console: one of the two is given");
+            // A package's folder, or a file a package claims, opens as that package - see EmuSen_GamePackages.md §3.5.
+            Galaxia.Media.PackageResolution? resolved = null;
+            if (path is not null)
+            {
+                try { resolved = Galaxia.Media.GamePackages.Resolve(path, Galaxia.Media.PackagePlaces.Current()); }
+                catch (IOException refused) { throw new CrystalException(CrystalNumbers.Io, refused.Message); }
+                path = resolved.Game;
+            }
             var options = new CoreOptions
             {
+                PackageRoot = resolved?.Package,
                 BatteryRamDisabled = (with.Flags & CrystalNumbers.OpenNoBattery) != 0,
                 AudioBufferMaxSamples = with.AudioBufferMaxSamples > 0 ? (int)Math.Min(with.AudioBufferMaxSamples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
             };
@@ -37,7 +46,7 @@ namespace EmuSen.Crystal.Managed
             Func<IDeviceLend?>? lender = with.Device == 0 ? null : () => PlatformLend.Make(with.Device, refusals.Note);
             CoreBundle bundle = path is not null ? OpenGame(path, engine, options, lender) : StartConsole(console!, engine, options, lender, out console);
             string name = (bundle.Core as Cores.Native.CoreEngine)?.Console is { Length: > 0 } running ? running : console ?? CoreCatalog.ConsoleForRom(path!) ?? bundle.Core.CoreName;
-            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, with);
+            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, with) { PackageRoot = resolved?.Package };
             session.ApplyStored(key => GetSettingOf(session, key));
             Add(session);
             return session;

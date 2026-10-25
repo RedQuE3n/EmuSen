@@ -48,6 +48,28 @@ pub fn resume_state_path(tree: &Tree, rom_path: &str, directory_override: Option
     path::combine(STYLE, &state_directory(tree, directory_override), &format!("{}.resume{STATE_EXTENSION}", stem(rom_path)))
 }
 
+/// The name a package's saves and states go by: its folder's, less the extension, since the folder is named after the
+/// game's file when it is made and does not change when the game moves (EmuSen_GamePackages.md §3.2, §14).
+pub fn package_stem(root: &str) -> &str {
+    path::file_name_without_extension(STYLE, path::trim_ending_separator(STYLE, root))
+}
+
+/// `<package>/saves/<name>.srm`: a packaged game's battery save, whatever its console or the file it opened from.
+pub fn package_sram_path(root: &str) -> String {
+    path::combine_all(STYLE, &[root, crate::package::SAVES_FOLDER, &format!("{}{SRAM_EXTENSION}", package_stem(root))])
+}
+
+/// `<package>/states/<name>.state` for slot 1 and `.slotN.state` for the rest; the state folder setting gives way to it.
+pub fn package_state_path(root: &str, slot: i32) -> String {
+    let suffix = if slot == DEFAULT_STATE_SLOT { String::new() } else { format!(".slot{slot}") };
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}{suffix}{STATE_EXTENSION}", package_stem(root))])
+}
+
+/// `<package>/states/<name>.resume.state`.
+pub fn package_resume_state_path(root: &str) -> String {
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}.resume{STATE_EXTENSION}", package_stem(root))])
+}
+
 /// The picture beside a state: the same name with `.png`.
 pub fn picture_path(state_path: &str) -> String {
     path::change_extension(STYLE, state_path, ".png")
@@ -82,6 +104,14 @@ mod tests {
         assert_eq!(state_path(&tree(), "/roms/a.nes", 1, Some("/elsewhere")), "/elsewhere/a.state");
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", None), "/r/home/Saves/Save States/a.resume.state");
         assert_eq!(resume_state_path(&tree(), "/roms/a.nes", Some("/elsewhere")), "/elsewhere/a.resume.state");
+    }
+
+    #[test]
+    fn a_packaged_game_keeps_its_saves_and_states_in_its_package_by_its_own_name() {
+        assert_eq!(package_sram_path("/p/SNES/Zelda (U).sfc"), "/p/SNES/Zelda (U).sfc/saves/Zelda (U).srm");
+        assert_eq!(package_state_path("/p/a.b.nes/", 1), "/p/a.b.nes/states/a.b.state");
+        assert_eq!(package_state_path("/p/a.b.nes", 3), "/p/a.b.nes/states/a.b.slot3.state");
+        assert_eq!(package_resume_state_path("/p/g.nes"), "/p/g.nes/states/g.resume.state");
     }
 
     #[test]

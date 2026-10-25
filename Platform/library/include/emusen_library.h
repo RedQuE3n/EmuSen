@@ -1,4 +1,4 @@
-/* emusen_library.h - the player's library, version 1.1. Owned by the library component, emusen-library.
+/* emusen_library.h - the player's library, version 1.2. Owned by the library component, emusen-library.
  *
  * The library of games below every frontend: the scan of the player's ROM folders, a dump's identity, and games.db
  * with the player's records (favourites, play time, collections, metadata edits, a crop stored for the frontend, cover
@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_LIBRARY_MAJOR 1u
-#define EMUSEN_LIBRARY_MINOR 1u
+#define EMUSEN_LIBRARY_MINOR 2u
 #define EMUSEN_LIBRARY_VERSION ((EMUSEN_LIBRARY_MAJOR << 16) | EMUSEN_LIBRARY_MINOR)
 
 /* ---- Statuses: the band -1140 to -1159 (EmuSen_Backend.md D12), beside the platform's shared codes ------------- */
@@ -86,7 +86,12 @@ int32_t emusen_library_close(emusen_library *lib);
  * systems are the systems this build opens, the system of each of the frontend API's shelves. A file is listed when
  * its extension is one a named system takes, or an archive's; a sheet's tracks and a list's discs are their game's.
  * Each is routed among the named systems taking its image's extension, by content and then by its folder's ES-DE
- * name; hidden entries are skipped and unreadable folders passed over; games are ordered by title ignoring case. */
+ * name; hidden entries are skipped and unreadable folders passed over; games are ordered by title ignoring case.
+ * @since 1.2: "packages" and "compressed", optional folders walked beside the roots without changing the status: a
+ * folder under "packages" holding a package.json is one game, its path the game file its manifest names and its system
+ * the manifest's; nothing inside such a folder is a game of its own, and no file a package claims (its game, its
+ * companions, the library files it was made from) is listed a second time. A manifest's library paths are under the
+ * first root. No file is read for a claim (EmuSen_GamePackages.md, section 3.6). */
 int64_t emusen_library_scan(emusen_library *lib, const uint8_t *request, size_t len);
 
 /* {"running": true, "phase": "walk" | "route" | "hash" | "", "files": n, "games": n, "hashed": n, "to_hash": n} */
@@ -96,7 +101,9 @@ int64_t emusen_library_progress(emusen_library *lib, uint8_t *out, size_t out_le
 int32_t emusen_library_cancel(emusen_library *lib);
 
 /* The last scan, narrowed by an optional filter, {"system": "gbc"}; an empty filter is none. Answer:
- *   {"status": "ok" | "empty" | "not_found" | "no_directory", "roots": [...], "games": [{"path": "...", "system": "gbc" | null}]} */
+ *   {"status": "ok" | "empty" | "not_found" | "no_directory", "roots": [...], "games": [{"path": "...", "system": "gbc" | null,
+ *   "package": "..." | null}]}
+ * @since 1.2: "package", the folder of the package a game is the game of. */
 int64_t emusen_library_games(emusen_library *lib, const uint8_t *filter, size_t len, uint8_t *out, size_t out_len);
 
 /* What a dump is. Request {"path": "...", "systems": [...] (else the last scan's), "crc32": false, "sha1": false,

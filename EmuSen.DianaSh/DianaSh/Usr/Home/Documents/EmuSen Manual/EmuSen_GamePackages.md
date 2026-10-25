@@ -1,5 +1,9 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, a fourth time: step 5 is built (§14). Linked packages for every console: the claim index in
+Galaxia, saves, states and cheats with a package root in both runtimes, the scan's package rules, and `pkg make`,
+`pkg ls`, `pkg check` and `pkg migrate` in `emusen.library`. Step 6 waits for the tester's go.*
+
 *Revised 2026-10-25, a third time: step 4 is built (§13). Mistress's Compressed Discs window runs the CHD tool
 through the platform library's four job calls, reached from Settings, the pad menu and big picture as Memory Cards
 is. Step 5 waits for the tester's go.*
@@ -483,7 +487,9 @@ cost nobody asked for at scan time. A package is made:
 
 ### 3.7 The `pkg` command
 
-Added to `emusen.library` in stage 5 (§7), with its page at `Lib/dianash/emusen.library/man/pkg.1`:
+Added to `emusen.library` in stage 5 (§7), with its page at `Lib/dianash/emusen.library/man/pkg.1`. *Built
+2026-10-25 (§14.4)* but for `--self-contained` and `--zip`, which are step 7's, and `pkg patch`, step 6's; `pkg wait`
+joins it as `chd wait` joined `chd`:
 
 ```
 pkg make <game>... [--self-contained] [--zip]   a package for each game, linked unless asked
@@ -953,8 +959,8 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 
 Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
 steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
-run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 waits
-for the tester's go. Every test uses
+run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 is built
+and its gate passed (§14); step 6 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -964,7 +970,7 @@ them. No commercial image is committed.
 | **2** *(built 2026-10-25, §11.2)* | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
 | **3** *(built 2026-10-25, §12; the handheld's run left)* | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
 | **4** *(built 2026-10-25, §13)* | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
-| **5** | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
+| **5** *(built 2026-10-25, §14)* | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
 | **6** | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
 | **7** | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
 | **8** | *Deferred 2026-10-25 (§9 Q2): not built until the tester revisits it.* **Replacing originals** (§4.5) | Removal goes to the trash and is refused without a terminal, for a failed check, and for a changed source. A shared track is kept. The library after replacement holds exactly the CHDs, at their checked hashes |
@@ -1004,9 +1010,12 @@ them. No commercial image is committed.
   the same disc loose does not have.
 - **P5.** A zipped 64 MiB cartridge's first launch on the handheld spends under 1.5 s unpacking.
 - **P6.** Making a linked package for a game already played, and migrating its stores, takes under 1 s on the desktop,
-  dominated by hashing.
+  dominated by hashing. *Retired 2026-10-25 as stated (§14.7): 18 ms to make a 4 MiB game's package and 3 ms to
+  migrate its save, three states and their pictures; 237 ms for a 64 MiB game, the largest N64 image, with the file in
+  the page cache.*
 - **P7.** No step of §7 writes, renames or removes anything under `RomDirectory`, except step 8 when chosen. Checked by
-  the before and after listings.
+  the before and after listings. *Holds for step 5 (§14.7): the listings before and after making and migrating
+  packages, in Rust and in WiseMan, were the same file for file.*
 
 ---
 
@@ -1820,3 +1829,177 @@ holds each phrase of the tool to a sentence of the window's own.
   desktop (§12.5), and the overall bar moves at each. **Accepted 2026-10-25 as recommended.**
 - **Q29 [routine]: the faster codecs (`--fast`, §4.8) are not offered in the window.** *Recommended:* leave them to
   `chd convert --fast` until the handheld's run measures what they buy. **Accepted 2026-10-25 as recommended.**
+
+## 14. Built 2026-10-25: step 5
+
+*Measured on the development desktop on 2026-10-25. No package was made or migrated on the ROM library: every test made
+its own library in a temporary folder (SyntheticRom, SyntheticNesRom, generated sheets), and the measurements of
+§14.7 ran over random files in a probe folder under `~/.cache/emusen/`, removed once the figures were recorded here.*
+Marks as at the top: what was run is [M].
+
+### 14.1 The claim index
+
+Built in Galaxia as §3.5 and §3.6 planned, described in `EmuSen_Galaxia.md` §3.11: `GamePackages` in C# and
+`claims.rs` in Rust, with `emusen_galaxia_package_index` and `emusen_galaxia_package_resolve` between them.
+
+- **The manifests are the index.** No second file is kept. A package claims its game, its companions, and the
+  library files a converted disc was made from (`container.sources`), each by full path.
+- **Resolving a path** gives the game file to open and the package whose stores it uses. A package's folder opens its
+  game; a claimed file opens its package's game; a file whose size and then hashes are those of a package's game that
+  is gone is that game moved, and the manifest names its new place; anything else opens as before.
+- **A changed dump is refused at open**, as §3.4 has it: a claimed game whose size or time moved is hashed, its time
+  recorded when it is still the dump, and refused with both hashes named when it is not. The words point at `pkg check`
+  and `pkg make`.
+
+### 14.2 Saves, states and cheats with a package root
+
+`SaveLibrary` and `GameCheats` take the package root as a parameter (`EmuSen_Galaxia.md` §5.5), and both runtimes
+resolve it once at open: `ManagedRuntime.Open` in C# and `open` in Crystal's Rust. The engine's battery files take it
+through `CoreOptions.PackageRoot` (C#) and `Engine::package` (Rust), the session's states through
+`ManagedSession.PackageRoot` and `Session::package`. Mistress asks Galaxia for the root where it names a resume state
+or a cheat list itself, and takes it from the library entry where the scan already knows it.
+
+- **A package's saves are named by the package**, not by the file opened: `<package>/saves/<name>.srm`, where
+  `<name>` is the package folder's name less its extension. The folder is named after the game when it is made
+  (§3.2), so the two agree then, and a game moved or renamed in the library keeps its save.
+- **The plain save is read until the first write copies it in**, by `BatterySave`'s existing rule for a save kept
+  elsewhere before; the cheat list likewise. A package made by a conversion, which no one migrated, therefore starts
+  from the game's save rather than from nothing.
+
+### 14.3 The scan
+
+`RomLibrary.Scan` walks `Packages` and `Compressed` beside the library, in both its halves (`ScanManaged`, and
+`emusen_library_scan` 1.2's `packages` and `compressed` in `emusen-library`). Nothing inside a package's folder is a
+game of its own; a claimed file is not listed; each package whose game is there is one entry, shelved by the
+manifest's `system`, and its entry carries the package's folder (`RomEntry.Package`, the games answer's `package`). A
+package whose game is gone is not listed; `pkg ls` names it. No file is read for a claim. With no `Packages` folder,
+or with the two fields left out, the scan is the one before packages.
+
+### 14.4 The `pkg` command
+
+`Platform/library-tool/src/packages.rs`, run as jobs of the library tool through the `emusen.library` service (1.1:
+the table unchanged, four request ops more), printed by the module's `pkg` (`man pkg`).
+
+| Request op | What it does | A package's states |
+|---|---|---|
+| `pkg-make` | a linked package for each game under each library path, routed as the scan routes it; `Packages/<console>/<the path less the library's console folder>/` | `made`, `already` (a package claims it), `failed`, `stopped` |
+| `pkg-ls` | each package, or one console's, read and never written; a file is hashed only where its size or time moved | `ok`, `changed`, `moved` (with `to`), `missing`, `refused` |
+| `pkg-check` | the game and every file hashed against the manifest; a moved game found and the manifest rewritten; a touched one's time recorded | `verified`, `moved`, `changed`, `missing`, `refused`, `stopped` |
+| `pkg-migrate` | the game's battery saves and own save media, states, resume state, pictures and cheat list copied in, each renamed to the package's name; nothing overwritten | `migrated` (with `copied`, `kept`), `nothing`, `failed` |
+
+Events are `start` (`op`, `packages`, `refused`, `log`), one `package` a game or package (`index`, `of`, `source` or
+`package`, `state`, `words`, then `mode`, `system`, `where` and `game` where a manifest was read), and `end`. Make,
+check and migrate write each outcome to `Logs/pkg_<day>.log`. A manifest of `pkg make` holds §3.3's fields: the game
+with `size` and `seen`, `dump.file` with `dump.transformed` where the system pack's transform changes the bytes (the
+OpenVGDB forms of `emusen-systems`), a sheet's `dump.tracks`, `sheet` and `form`, its tracks and `.sbi` as companions,
+an `.m3u`'s discs as companions, and for a zip the image inside as `dump.file` with the archive's own hashes and the
+entry's name in `container` (`type: zip`).
+
+**Which files migrate takes** [C]: in `Saves/<console>/` (and the earlier places, the flat `Saves` for the SNES and
+N64, `MD` and `MCD` for the Genesis and Sega CD, beside the ROM for the NES and Game Boy) a file whose name is the
+game's stem and then one or two parts of a dot and up to sixteen letters or digits, so that `Super Mario Bros. 3.srm`
+is never `Super Mario Bros`'s; in the state folder (`AppSettings.StateDirectory`, else `Saves/Save States`) the
+game's `.state`, `.slotN.state` and `.resume.state` and their `.png`; and its cheat list, the console's or the flat
+one. The console's folder is read first, so where both hold a save, the newer place's wins.
+
+### 14.5 The surfaces
+
+| Surface | Change |
+|---|---|
+| The platform interface | 24 → **25**: `emusen_galaxia_package_index`, `emusen_galaxia_package_resolve`, save kinds 5–7 (`PACKAGE_SRAM`, `PACKAGE_STATE`, `PACKAGE_RESUME_STATE`, the package's folder as `rom`) |
+| `emusen_library.h` | 1.1 → **1.2**: the scan's optional `packages` and `compressed`, the games answer's `package` |
+| The service `emusen.library` | 1.0 → **1.1**: the four `pkg-*` request ops and the `package` event; the table unchanged |
+| The module `emusen.library` | the command `pkg` and its job prefix `pkg`; its manifest asks for the service at 1.1 |
+| Galaxia, C# | `GamePackages`, `PackagePlaces`, `PackageIndex`, `ClaimingPackage`, `PackageResolution`; a `packageRoot` parameter on `SaveLibrary`'s three game paths and on `GameCheats.For`, `GameCheats.PackageFile`; `GamePackage.SavesFolder`, `StatesFolder`, `CheatsFile` |
+| Galaxia, Rust | `claims` (the index, `resolve`, `Places`), `saves::package_*`, `package::SAVES_FOLDER`, `STATES_FOLDER`, `CHEATS_FILE` |
+| The runtimes | `CoreOptions.PackageRoot`, `BatterySave.Open`'s `packageRoot`, `ManagedSession.PackageRoot`; Crystal's `Engine::package`, `Session::package`, `BatterySave::open`'s `package` |
+| Mistress | `RomEntry.Package`, `RomLibrary.Beside` and the scan's overloads that take it |
+
+The core ABI is unchanged, as §0 said it would be.
+
+### 14.6 Otherwise than the plan, and found on the way
+
+- **A library entry's path is the game file, not the package's folder.** The folder is what ES-DE would take; Mistress
+  keys everything by a game's path (`games.db`, art, the scraper, the launch), so an entry names the file and carries
+  the package beside it. For a linked package that is the path the game had before, so favourites, play time,
+  collections and edits stay where they were: §3.5's "keyed by the package's path and its hash" is not needed for
+  linked packages, and is left to step 7, where a self-contained package's game has a path of its own (Q32).
+- **Saves are named by the package's name** (§14.2), which §3.5 left to `SaveLibrary`'s stem rule; with the stem a
+  game moved to another name would have lost its save.
+- **A converted disc's package claims the library files it was made from**, so the library lists the disc once, as
+  its CHD, and opening the original sheet opens the package's CHD with its save (Q31).
+- **The plain save is read until copied in** (§14.2), beyond §3.5's migration on request.
+- **`pkg ls` sees a change by size or time**, and so misses a file rewritten to the same size within the second its
+  time was recorded; `pkg check` hashes every file and catches it. Measured in the Rust test, which rewrote a
+  cartridge's bytes within that second.
+- **Left by this step**: the state records of `records.db`, the crop and engine §9 Q12 moves to `settings.json`, and
+  the art §9 Q13 moves to `media/` are not migrated, and nothing reads them from a package yet (Q30). A state without
+  its record loads as before (`EmuSen_Galaxia.md` §5.3a).
+
+### 14.7 The gate, the tests, and the faults seeded
+
+**The gate** [M]:
+
+1. *The library tree unchanged after making and migrating packages*: `GamePackageGateTests` (WiseMan, through the
+   platform library's job calls as a frontend reaches them) and `library-tool/tests/packages.rs` (Rust) list every
+   library file's path, size, time and MD5 before and after `pkg make /` and `pkg migrate`, with states kept in the
+   library as the author's machine keeps them: the same.
+2. *A game opened by its plain path and by its package reaches one save*:
+   `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways`, the test core in
+   both runtimes. The plain path's session names the package's states; its battery save is copied into the package and
+   the plain one left as it was; the package's session names the same slots and loads the state the first saved; the
+   two runtimes' answers and the files they leave in `Saves`, `Packages` and the library are equal.
+3. *A moved library file is found again by hash*: in the same test the game moved and renamed opens by its new path
+   with the same slots, and the manifest names the new place; `pkg ls` names where it is and `pkg check` rewrites the
+   manifest; the parity case resolves a moved file and a package whose game moved, alike in both halves.
+4. *`pkg check` catches a changed file and a missing one*: a cartridge's byte changed, a sheet's track changed, a
+   track file removed and a game removed, each named with its words.
+5. *The fit audit*: `WindowFitAuditTests.The_library_with_packages_lists_each_game_once_and_nothing_is_cut_off` at
+   1280 × 800 and 1920 × 1200, the library holding a packaged game with a 92-character title and a converted disc's
+   package: each listed once, nothing in the list or the sidebar cut off or overlapping. The scan's entries reach no
+   window of their own; a package is a library entry like any other.
+
+**P6, measured** [M, 2026-10-25, the files just written, so in the page cache; `run_tool` over a probe tree]: `pkg make`
+took 3.6 ms for a 512 KiB Game Boy image, 18 ms for a 4 MiB SNES image and 237 ms for a 64 MiB N64 image; `pkg migrate`
+of the SNES game's save, three states and three pictures 2.8 ms; `pkg check` of the three 229 ms. `pkg ls` of 1,003
+packages took 19 ms, so the claim index read at each open costs less than that, and no second index was built.
+
+**Run** [M]: `cargo test --profile test-checked` of `emusen-galaxia` (89), `emusen-crystal` (6, `crystal_abi` 6,
+`frame_alloc` 1), `emusen-library` (2, `library_abi` 6, `routing` 2; its `library.rs` found no SQLite this machine's
+`emusen-sqlite` would load and ran nothing, as before this step, so the package scan is also a unit test of `scan.rs`),
+`emusen-library-tool` (4, the gate's 7 with its chdman cases skipped, `packages` 2), `emusen-library-module` (4) and
+`emusen-platform` (33, `dianash_abi` 4, `library_tool` 3). WiseMan, the blast radius `blast.sh` named with
+`BatterySave`, `CoreAdapterTests` and `GenesisBatteryTests` added for the three files of `EmuSen/Cores` it did not map:
+4,238 passed, 62 skipped and 2 failed, in 26 minutes. The two were `help.golden` and `man.golden`, whose listing of the
+Rust shell's module commands had not been given `pkg` correctly; corrected (and `pkg.golden` and `man pkg`'s case
+recorded), `GoldenCorpusTests`, `ManPageTests`, `NativeSwitchTests`, `GalaxiaParityTests`, `GamePackageGateTests` and
+the runtime case passed, 284.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| Crystal's Rust session naming a packaged game's states in the state folder, as for a plain file | `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways`: the plain path's slots did not name the package's states |
+| the claim index leaving out the library files a converted disc was made from | `scan.rs`' package case: the original sheet listed beside its package's CHD |
+| `pkg migrate` taking every file whose name begins with the game's | `packages.rs`' name rule case, and the Rust gate: "Alpha Two"'s save and state copied into Alpha's package |
+
+### 14.8 Left, and for the tester
+
+- **Step 6**, soft patching, waits for the tester's go.
+- **Q30 [decision]: the stores this step did not move.** State records, the crop and engine (§9 Q12) and art (§9 Q13)
+  stay where they are, and nothing reads them from a package. *Recommended:* a step of their own before step 7, since a
+  self-contained package is what would carry them to another machine, and each needs its reader changed with it
+  (`records.db`'s key, Mistress's crop and engine, the media store).
+- **Q31 [decision]: opening a converted disc's original opens its CHD.** The package claims the sheet it was made
+  from, so the library lists the disc once and both routes reach one save, but the original files are then played only
+  where the CHD is gone. *Recommended:* keep it; a player who wants the original played makes no package of it, or
+  removes the package.
+- **Q32 [routine]: a library entry is keyed by its game file** (§14.6). *Recommended:* keep it for linked packages; at
+  step 7 a self-contained package's game moves into the package, and its `games.db` rows follow by the orphan pass's
+  hash rule.
+- **Q33 [routine]: no *Make Package* in Mistress yet.** §3.6 lists it among the ways a package is made; step 5's row
+  names the command only. *Recommended:* add it to a game's options with step 6, whose *Add Patch* needs the same
+  window.
+- **Q34 [routine]: a changed dump refuses its plain path too.** A claimed file that is another dump now is refused
+  however it is opened, so that its saves are not written against another game. *Recommended:* keep it; the words name
+  both hashes and what to do.

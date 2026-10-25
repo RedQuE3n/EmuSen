@@ -25,17 +25,65 @@ pub struct LibraryToolV1 {
 /// The platform library's ABSENT: no event yet.
 const ABSENT: i64 = -1030;
 
-pub const COMMANDS: &[(&str, bool, &str)] = &[(
-    "chd",
-    false,
-    "  chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state\n  chd convert <path>... [--fast] [-j <n>]\n                                convert them to CHD in Compressed, each checked three ways and given a package\n  chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents\n  chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)",
-)];
+pub const COMMANDS: &[(&str, bool, &str)] = &[
+    (
+        "chd",
+        false,
+        "  chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state\n  chd convert <path>... [--fast] [-j <n>]\n                                convert them to CHD in Compressed, each checked three ways and given a package\n  chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents\n  chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)",
+    ),
+    (
+        "pkg",
+        false,
+        "  pkg make <path>...            a linked package for each game under each path (relative to the library)\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)\n  pkg migrate <package>...      the game's saves, states and cheats copied into its package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
+    ),
+];
 
 pub struct LibraryCommands;
 
 pub static MODULE: LibraryCommands = LibraryCommands;
 
 const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
+
+const PKG_USAGE: &str = "Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
+
+fn compact(members: Vec<(&str, Value)>) -> String {
+    let mut out = String::new();
+    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    out
+}
+
+/// The request a `pkg` command line makes, or the usage; self-contained and zipped packages are a later step's.
+pub fn pkg_request(args: &[String]) -> Result<String, String> {
+    let mut words = args.iter().skip(1);
+    let sub = words.next().map(String::as_str).unwrap_or("");
+    let op = match sub {
+        "make" => "pkg-make",
+        "ls" => "pkg-ls",
+        "check" => "pkg-check",
+        "migrate" => "pkg-migrate",
+        "patch" => return Err("pkg patch: soft patches are not in this build yet; packages are made, listed, checked and migrated".into()),
+        _ => return Err(PKG_USAGE.into()),
+    };
+    let mut paths = Vec::new();
+    for w in words {
+        match w.as_str() {
+            "--self-contained" | "--zip" if op == "pkg-make" => return Err(format!("pkg make: {w} is not in this build yet; packages are linked, and the game stays where it is in the library")),
+            o if o.starts_with('-') && o.len() > 1 => return Err(format!("pkg: {o} is not an option of pkg {sub}\n{PKG_USAGE}")),
+            p => paths.push(Value::string(p)),
+        }
+    }
+    if matches!(op, "pkg-make" | "pkg-migrate") && paths.is_empty() {
+        return Err(format!("pkg {sub}: name what to {sub}, or / for all of it\n{PKG_USAGE}"));
+    }
+    if op == "pkg-ls" {
+        if paths.len() > 1 {
+            return Err(format!("pkg ls: one console at most\n{PKG_USAGE}"));
+        }
+        let console = paths.pop().unwrap_or(Value::Null);
+        return Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(Vec::new())), ("console", console)]));
+    }
+    Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(paths))]))
+}
 
 /// The request a command line makes, or the usage.
 pub fn request(args: &[String]) -> Result<String, String> {
@@ -149,9 +197,40 @@ pub fn line(e: &Value) -> Option<String> {
     }
 }
 
+/// One package event of a batch as its line: its index, what it named and how it went.
+pub fn package_line(e: &Value) -> String {
+    let words = text(e, "words");
+    let said = if words.is_empty() { String::new() } else { format!(": {words}") };
+    let named = if e.get("source").is_some() { text(e, "source") } else { text(e, "package") };
+    match text(e, "state") {
+        "made" | "already" => format!("[{}/{}] {named}: {}, Packages/{}", token(e, "index"), token(e, "of"), text(e, "state"), text(e, "package")),
+        "migrated" | "nothing" => {
+            let copied = match e.get("copied") {
+                Some(Value::Array(c)) => c.len(),
+                _ => 0,
+            };
+            format!("[{}/{}] {named}: {}, {copied} file(s) copied, {} already there{said}", token(e, "index"), token(e, "of"), text(e, "state"), token(e, "kept"))
+        }
+        state => {
+            let to = text(e, "to");
+            format!("[{}/{}] {named}: {state}{said}{}", token(e, "index"), token(e, "of"), if to.is_empty() { String::new() } else { format!(", now {to}") })
+        }
+    }
+}
+
+/// A listing's line: the state, the package, its mode and system, and why.
+pub fn listing_line(e: &Value) -> String {
+    let words = text(e, "words");
+    let to = text(e, "to");
+    let why = if !to.is_empty() { format!("  now {to}") } else if words.is_empty() { String::new() } else { format!("  {words}") };
+    format!("{:<9}{}  ({}, {}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
+}
+
 /// One job this shell started: its number, what it does, the tool's handle, and how far it has got.
 struct Running {
     id: u32,
+    prefix: &'static str,
+    listing: bool,
     op: String,
     job: *mut c_void,
     table: *const LibraryToolV1,
@@ -207,7 +286,7 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
             continue;
         }
         if n < 0 {
-            call.err(&format!("chd: {}\n", last_error(table)));
+            call.err(&format!("{}: {}\n", r.prefix, last_error(table)));
             return Followed::Ended(1);
         }
         if n as usize > buffer.len() {
@@ -217,28 +296,44 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
         let Ok(event) = json::parse(&String::from_utf8_lossy(&buffer[..n as usize])) else { continue };
         if let Some(Value::Array(refused)) = event.get("refused") {
             for words in refused.iter().filter_map(Value::as_str) {
-                call.err(&format!("chd: {words}\n"));
+                call.err(&format!("{}: {words}\n", r.prefix));
                 *status = 1;
             }
         }
         if let Some(words) = event.get("error").and_then(Value::as_str) {
-            call.err(&format!("chd: {words}\n"));
+            call.err(&format!("{}: {words}\n", r.prefix));
             *status = 1;
         }
         match text(&event, "event") {
-            "start" => r.of = number(&event, "discs").unwrap_or(0),
+            "start" => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).unwrap_or(0),
             "disc" if text(&event, "state") == "working" => r.current = text(&event, "source").to_string(),
-            "disc" => {
+            "disc" | "package" => {
                 r.done += 1;
-                if text(&event, "state") == "failed" {
+                if matches!(text(&event, "state"), "failed" | "changed" | "missing" | "refused") {
                     *status = 1;
                 }
             }
             _ => {}
         }
-        if let Some(l) = line(&event) {
+        let printed = match (text(&event, "event"), r.listing) {
+            ("package", true) => Some(listing_line(&event)),
+            ("package", false) => Some(package_line(&event)),
+            ("start", _) if r.prefix == "pkg" => start_line(&event),
+            _ => line(&event),
+        };
+        if let Some(l) = printed {
             call.out(&format!("{l}\n"));
         }
+    }
+}
+
+fn start_line(e: &Value) -> Option<String> {
+    let n = token(e, "packages");
+    match text(e, "op") {
+        "pkg-make" => Some(format!("Making packages for {n} game(s) in Packages, each linked to its game where it is.")),
+        "pkg-check" => Some(format!("Checking {n} package(s) against their manifests.")),
+        "pkg-migrate" => Some(format!("Copying the saves, states and cheats of {n} package(s) into them.")),
+        _ => None,
     }
 }
 
@@ -261,9 +356,9 @@ fn drain(r: &mut Running) -> bool {
         }
         let Ok(event) = json::parse(&String::from_utf8_lossy(&buffer[..n as usize])) else { continue };
         match (text(&event, "event"), text(&event, "state")) {
-            ("start", _) => r.of = number(&event, "discs").unwrap_or(0),
+            ("start", _) => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).unwrap_or(0),
             ("disc", "working") => r.current = text(&event, "source").to_string(),
-            ("disc", _) => r.done += 1,
+            ("disc" | "package", _) => r.done += 1,
             _ => {}
         }
     }
@@ -279,39 +374,40 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
             status
         }
         Followed::Detached => {
-            let id = jobs.running[at].id;
-            call.out(&format!("chd{id} goes on in the background: chd wait chd{id} follows it, ps lists it, kill chd{id} stops it.\n"));
+            let (id, p) = (jobs.running[at].id, jobs.running[at].prefix);
+            call.out(&format!("{p}{id} goes on in the background: {p} wait {p}{id} follows it, ps lists it, kill {p}{id} stops it.\n"));
             status
         }
     }
 }
 
-fn start(call: &Call, jobs: &mut Jobs) -> Answer {
+fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     let args = call.args();
-    let request = match request(&args) {
+    let request = match if prefix == "pkg" { pkg_request(&args) } else { request(&args) } {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
-    let Some(table) = call.service(SERVICE, MAJOR).map(|t| t as *const LibraryToolV1) else { return Answer::fail("chd: needs emusen.library, which this program does not provide") };
+    let Some(table) = call.service(SERVICE, MAJOR).map(|t| t as *const LibraryToolV1) else { return Answer::fail(format!("{prefix}: needs emusen.library, which this program does not provide")) };
     let mut job: *mut c_void = std::ptr::null_mut();
     if unsafe { ((*table).start)(request.as_ptr(), request.len(), &mut job) } != 0 {
-        return Answer::fail(format!("chd: {}", last_error(unsafe { &*table })));
+        return Answer::fail(format!("{prefix}: {}", last_error(unsafe { &*table })));
     }
     jobs.next += 1;
-    jobs.running.push(Running { id: jobs.next, op: args[1].clone(), job, table, done: 0, of: 0, current: String::new(), stopping: false });
+    let listing = prefix == "pkg" && args.get(1).map(String::as_str) == Some("ls");
+    jobs.running.push(Running { id: jobs.next, prefix, listing, op: args[1].clone(), job, table, done: 0, of: 0, current: String::new(), stopping: false });
     let at = jobs.running.len() - 1;
     Answer::with(String::new(), follow_or_detach(call, jobs, at))
 }
 
-fn wait(call: &Call, jobs: &mut Jobs) -> Answer {
+fn wait(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     let args = call.args();
     let at = match args.get(2) {
-        None => jobs.running.len().checked_sub(1),
-        Some(id) => id.strip_prefix("chd").and_then(|n| n.parse::<u32>().ok()).and_then(|n| jobs.running.iter().position(|r| r.id == n)),
+        None => jobs.running.iter().rposition(|r| r.prefix == prefix),
+        Some(id) => id.strip_prefix(prefix).and_then(|n| n.parse::<u32>().ok()).and_then(|n| jobs.running.iter().position(|r| r.id == n && r.prefix == prefix)),
     };
     match at {
         Some(at) => Answer::with(String::new(), follow_or_detach(call, jobs, at)),
-        None => Answer::fail(format!("chd wait: no such chd job{}", args.get(2).map(|a| format!(" {a}")).unwrap_or_default())),
+        None => Answer::fail(format!("{prefix} wait: no such {prefix} job{}", args.get(2).map(|a| format!(" {a}")).unwrap_or_default())),
     }
 }
 
@@ -322,13 +418,15 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 0, true)], commands: COMMANDS, aliases: &[], jobs: &["chd"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 1, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
         call.answer(match call.command().as_str() {
-            "chd" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call)),
-            "chd" => start(call, jobs_of(call)),
+            "chd" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "chd"),
+            "chd" => start(call, jobs_of(call), "chd"),
+            "pkg" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "pkg"),
+            "pkg" => start(call, jobs_of(call), "pkg"),
             other => Answer::fault(format!("emusen.library has no command '{other}'")),
         })
     }
@@ -337,8 +435,9 @@ impl Module for LibraryCommands {
         let jobs = jobs_of(call);
         for r in jobs.running.iter_mut() {
             let ended = drain(r);
-            let progress = if ended { "ended".to_string() } else if r.stopping { "stopping".to_string() } else { format!("{}/{} discs", r.done, r.of) };
-            call.out(&format!("  chd{:<7} {:<11} {progress}{}\n", r.id, r.op, if r.current.is_empty() || ended { String::new() } else { format!(", {}", r.current) }));
+            let unit = if r.prefix == "pkg" { "packages" } else { "discs" };
+            let progress = if ended { "ended".to_string() } else if r.stopping { "stopping".to_string() } else { format!("{}/{} {unit}", r.done, r.of) };
+            call.out(&format!("  {}{:<7} {:<11} {progress}{}\n", r.prefix, r.id, r.op, if r.current.is_empty() || ended { String::new() } else { format!(", {}", r.current) }));
         }
         jobs.running.retain(|r| {
             let ended = unsafe { ((*r.table).next)(r.job, 0, std::ptr::null_mut(), 0) } == 0;
@@ -350,15 +449,17 @@ impl Module for LibraryCommands {
     }
 
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
-        let n = id.strip_prefix("chd")?.parse::<u32>().ok()?;
+        let prefix = ["chd", "pkg"].into_iter().find(|p| id.starts_with(p))?;
+        let n = id.strip_prefix(prefix)?.parse::<u32>().ok()?;
         let jobs = jobs_of(call);
-        let Some(r) = jobs.running.iter_mut().find(|r| r.id == n) else {
-            call.err(&format!("kill: no chd job chd{n} found.\n"));
+        let Some(r) = jobs.running.iter_mut().find(|r| r.id == n && r.prefix == prefix) else {
+            call.err(&format!("kill: no {prefix} job {prefix}{n} found.\n"));
             return Some(1);
         };
         unsafe { ((*r.table).stop)(r.job) };
         r.stopping = true;
-        call.out(&format!("chd{n} is stopping: its current disc is abandoned and nothing of it is left behind; chd wait chd{n} shows how far it got.\n"));
+        let what = if prefix == "pkg" { "the packages not reached are left as they are" } else { "its current disc is abandoned and nothing of it is left behind" };
+        call.out(&format!("{prefix}{n} is stopping: {what}; {prefix} wait {prefix}{n} shows how far it got.\n"));
         Some(0)
     }
 }
@@ -401,8 +502,27 @@ mod tests {
     }
 
     #[test]
-    fn the_manifest_names_chd_its_jobs_and_requires_the_service() {
+    fn the_manifest_names_chd_and_pkg_their_jobs_and_requires_the_service() {
         let m = LibraryCommands.manifest();
-        assert!(m.starts_with("{\"manifest\":1,\"id\":\"emusen.library\"") && m.contains("\"name\":\"chd\"") && m.contains("\"required\":true") && m.contains("\"jobs\":[\"chd\"]"), "{m}");
+        assert!(m.starts_with("{\"manifest\":1,\"id\":\"emusen.library\"") && m.contains("\"name\":\"chd\"") && m.contains("\"name\":\"pkg\"") && m.contains("\"required\":true") && m.contains("\"jobs\":[\"chd\",\"pkg\"]"), "{m}");
+    }
+
+    #[test]
+    fn a_pkg_command_line_is_a_request_or_the_usage() {
+        assert_eq!(pkg_request(&args("pkg make SNES nes/a.nes")).unwrap(), r#"{"op":"pkg-make","paths":["SNES","nes/a.nes"]}"#);
+        assert_eq!(pkg_request(&args("pkg ls")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":null}"#);
+        assert_eq!(pkg_request(&args("pkg ls SNES")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":"SNES"}"#);
+        assert_eq!(pkg_request(&args("pkg check")).unwrap(), r#"{"op":"pkg-check","paths":[]}"#);
+        assert_eq!(pkg_request(&args("pkg migrate SNES/a.sfc")).unwrap(), r#"{"op":"pkg-migrate","paths":["SNES/a.sfc"]}"#);
+        assert!(pkg_request(&args("pkg make")).unwrap_err().contains("name what to make"));
+        assert!(pkg_request(&args("pkg make a.nes --self-contained")).unwrap_err().contains("not in this build yet"));
+        assert!(pkg_request(&args("pkg patch add a b")).unwrap_err().starts_with("pkg patch:"));
+        assert!(pkg_request(&args("pkg ls a b")).unwrap_err().contains("one console"));
+        assert!(pkg_request(&args("pkg")).unwrap_err().starts_with("Usage: pkg"));
+        let e = |t: &str| json::parse(t).unwrap();
+        assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":2,"source":"SNES/a.sfc","state":"made","package":"SNES/a.sfc"}"#)), "[1/2] SNES/a.sfc: made, Packages/SNES/a.sfc");
+        assert_eq!(package_line(&e(r#"{"event":"package","index":2,"of":2,"package":"NES/b.nes","state":"changed","words":"b.nes has SHA-1 1"}"#)), "[2/2] NES/b.nes: changed: b.nes has SHA-1 1");
+        assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":1,"package":"NES/b.nes","state":"migrated","copied":[{"from":"a","to":"b"}],"kept":0}"#)), "[1/1] NES/b.nes: migrated, 1 file(s) copied, 0 already there");
+        assert_eq!(listing_line(&e(r#"{"event":"package","package":"NES/b.nes","state":"moved","mode":"linked","system":"nes","to":"NES/USA/b.nes"}"#)), "moved    NES/b.nes  (linked, nes)  now NES/USA/b.nes");
     }
 }

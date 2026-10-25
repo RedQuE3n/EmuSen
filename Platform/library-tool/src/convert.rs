@@ -6,12 +6,11 @@ use crate::chdman::Chdman;
 use crate::checks::{self, Toc};
 use crate::discs::{self, Item};
 use crate::Context;
-use emusen_dotnet::date;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{Text, Value};
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash::{self, Hashes};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime};
 
 /// `createcd`'s codecs for *Faster to decode* (§4.8, Q7); otherwise chdman's own defaults, `cdlz,cdzl,cdfl`.
 pub const FAST_CODECS: &str = "cdzs,cdfl";
@@ -34,15 +33,15 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn new(state: &'static str) -> Outcome {
+    pub fn new(state: &'static str) -> Outcome {
         Outcome { state, words: None, facts: Vec::new() }
     }
 
-    fn said(state: &'static str, words: impl Into<String>) -> Outcome {
+    pub fn said(state: &'static str, words: impl Into<String>) -> Outcome {
         Outcome { state, words: Some(words.into()), facts: Vec::new() }
     }
 
-    fn with(mut self, name: &str, value: Value) -> Outcome {
+    pub fn with(mut self, name: &str, value: Value) -> Outcome {
         self.facts.push((Text::new(name), value));
         self
     }
@@ -94,12 +93,9 @@ pub fn seen(at: &str) -> Option<Seen> {
     Some(Seen { size: meta.len(), modified: meta.modified().ok()? })
 }
 
-/// A time as the manifest's `mtime`: UTC to the second, `yyyy-MM-ddTHH:mm:ssZ`.
+/// A time as the manifest's `mtime`: UTC to the second, `yyyy-MM-ddTHH:mm:ssZ`, Galaxia's rule.
 pub fn utc(t: SystemTime) -> String {
-    let secs = t.duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let (y, m, d) = date::civil(secs.div_euclid(86_400));
-    let s = secs.rem_euclid(86_400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3600, s / 60 % 60, s % 60)
+    emusen_galaxia::claims::mtime_text(t)
 }
 
 fn seen_json(s: &Seen) -> Value {

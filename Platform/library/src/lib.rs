@@ -133,8 +133,13 @@ impl Library {
 
     /// Scans the roots for the systems named, keeping the result; how many games it found.
     pub fn scan(&self, roots: &[String], systems: &[String]) -> Result<usize, Error> {
+        self.scan_with(roots, &scan::Beside::default(), systems)
+    }
+
+    /// The scan with `Packages` and `Compressed` beside the roots (1.2).
+    pub fn scan_with(&self, roots: &[String], beside: &scan::Beside, systems: &[String]) -> Result<usize, Error> {
         self.progress.start()?;
-        let result = scan::scan(roots, systems, &self.progress);
+        let result = scan::scan_with(roots, beside, systems, &self.progress);
         self.progress.finish();
         let found = result?;
         let count = found.games.len();
@@ -188,7 +193,8 @@ impl Library {
     /// `emusen_library_scan`'s request.
     pub fn scan_request(&self, request: &str) -> Result<usize, Error> {
         let r = json::parse(request)?;
-        self.scan(&json::strings(&r, "roots")?, &json::strings(&r, "systems")?)
+        let beside = scan::Beside { packages: json::text_or_none(&r, "packages")?, compressed: json::text_or_none(&r, "compressed")? };
+        self.scan_with(&json::strings(&r, "roots")?, &beside, &json::strings(&r, "systems")?)
     }
 
     /// `emusen_library_games`' filter and answer.
@@ -206,6 +212,8 @@ impl Library {
             out.push_str(&emusen_dotnet::json::quoted(&g.path));
             out.push_str(",\"system\":");
             json::write_text_or_null(&mut out, g.system.as_deref());
+            out.push_str(",\"package\":");
+            json::write_text_or_null(&mut out, g.package.as_deref());
             out.push('}');
         }
         out.push_str("]}");

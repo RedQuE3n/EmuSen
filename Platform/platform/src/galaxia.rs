@@ -5,7 +5,7 @@ use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
-use emusen_galaxia::{atomic, package, rom_hash, saves};
+use emusen_galaxia::{atomic, claims, package, rom_hash, saves};
 
 /// What `emusen_galaxia_save_path` names.
 pub mod save {
@@ -14,6 +14,9 @@ pub mod save {
     pub const STATE: u32 = 2;
     pub const RESUME_STATE: u32 = 3;
     pub const PICTURE: u32 = 4;
+    pub const PACKAGE_SRAM: u32 = 5;
+    pub const PACKAGE_STATE: u32 = 6;
+    pub const PACKAGE_RESUME_STATE: u32 = 7;
 }
 
 /// What `emusen_galaxia_migrate` copies.
@@ -190,6 +193,9 @@ pub unsafe extern "C" fn emusen_galaxia_save_path(kind: u32, rom: *const u8, rom
             save::STATE => saves::state_path(&tree, rom, slot, extra),
             save::RESUME_STATE => saves::resume_state_path(&tree, rom, extra),
             save::PICTURE => saves::picture_path(rom),
+            save::PACKAGE_SRAM => saves::package_sram_path(rom),
+            save::PACKAGE_STATE => saves::package_state_path(rom, slot),
+            save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom),
             _ => return Err(fail(status::BAD_ARGUMENT, format!("no save kind {kind}"))),
         })
     };
@@ -419,6 +425,86 @@ pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, mani
     let result = || -> Result<String, i32> {
         let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
         Ok(package::format(&doc))
+    };
+    answer(result(), out, len)
+}
+
+fn roots_from<'a>(packages: &'a str, library: Option<&'a str>, compressed: &'a str) -> claims::Roots<'a> {
+    claims::Roots { packages, library: library.filter(|l| !path::is_blank(Some(l))), compressed }
+}
+
+fn strings(out: &mut String, items: &[String]) {
+    out.push('[');
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&emusen_galaxia::json::quoted(item));
+    }
+    out.push(']');
+}
+
+/// The claim index under `packages` as JSON: every package folder, and each package whose manifest reads with its
+/// system, its game and the files it claims, each a full path (EmuSen_GamePackages.md §14).
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_index(
+    packages: *const u8,
+    packages_len: usize,
+    library: *const u8,
+    library_len: usize,
+    compressed: *const u8,
+    compressed_len: usize,
+    out: *mut u8,
+    len: usize,
+) -> i64 {
+    let result = || -> Result<String, i32> {
+        let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
+        let index = claims::index(&roots_from(p, l, c));
+        let mut j = String::from("{\"folders\":");
+        strings(&mut j, &index.folders);
+        j.push_str(",\"packages\":[");
+        for (i, pkg) in index.packages.iter().enumerate() {
+            if i > 0 {
+                j.push(',');
+            }
+            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", emusen_galaxia::json::quoted(&pkg.folder), emusen_galaxia::json::quoted(&pkg.system), emusen_galaxia::json::quoted(&pkg.game)));
+            strings(&mut j, &pkg.claims);
+            j.push('}');
+        }
+        j.push_str("]}");
+        Ok(j)
+    };
+    answer(result(), out, len)
+}
+
+/// What `at` opens as: `{"game", "package" | null, "moved"}`; IO with words for a package that refuses it (a changed
+/// dump, a game gone and not found), and the manifest rewritten where a moved game was found (§3.4, §3.5).
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn emusen_galaxia_package_resolve(
+    at: *const u8,
+    at_len: usize,
+    packages: *const u8,
+    packages_len: usize,
+    library: *const u8,
+    library_len: usize,
+    compressed: *const u8,
+    compressed_len: usize,
+    out: *mut u8,
+    len: usize,
+) -> i64 {
+    let result = || -> Result<String, i32> {
+        let at = unsafe { required(at, at_len) }?;
+        let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
+        let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
+        let package = r.package.as_deref().map_or_else(|| "null".to_string(), emusen_galaxia::json::quoted);
+        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", emusen_galaxia::json::quoted(&r.game), r.moved))
     };
     answer(result(), out, len)
 }

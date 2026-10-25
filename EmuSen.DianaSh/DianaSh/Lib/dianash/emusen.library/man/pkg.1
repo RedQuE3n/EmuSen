@@ -1,0 +1,103 @@
+NAME
+    pkg - make game packages, list them, check them, and copy a game's
+    saves, states and cheats into its package
+
+SYNOPSIS
+    pkg make <path>...
+    pkg ls [<console>]
+    pkg check [<package>...]
+    pkg migrate <package>...
+    pkg wait [pkg<n>]
+
+DESCRIPTION
+    The package commands of the emusen.library module. A game package is
+    a folder under Packages holding package.json, its manifest, and
+    everything EmuSen keeps for that game: its battery saves in saves/,
+    its states and their pictures in states/, and its cheat list in
+    cheats.json. This build makes linked packages: the manifest names the
+    game where it already is in the library, with its size, its time and
+    the dump's CRC-32, MD5 and SHA-1, and nothing is copied.
+
+    THE LIBRARY IS ONLY READ. Nothing under AppSettings.RomDirectory is
+    written, renamed or removed: no package, no link, no sidecar. Saves
+    and states an earlier build kept in the library are copied out of it
+    and left where they are.
+
+    'make' makes a package for each game under each <path>, a file or a
+    folder of the library written relative to it with / between its parts
+    (nes, "snes/Super Metroid (USA).sfc"); / is the whole library. A game
+    is what the library view shows: a cue sheet and its tracks are one, as
+    are an .m3u and its discs; its console is the library scan's routing,
+    then the nearest console folder above it. The package goes to
+    Packages/<console>/, at the game's path less the library's console
+    folder, named as its file is (nes/USA/Beta.nes becomes
+    Packages/NES/USA/Beta.nes/), as ES-DE names a folder it takes as one
+    game. A game a package already claims is said as 'already'. Packages
+    are made only when asked, never by a scan.
+
+    'ls' lists the packages, or one console's (by its name, its system's
+    ES-DE name, or its folder under Packages), with their mode and state:
+    ok; changed, the game is no longer the dump recorded; moved, the game
+    is gone from its place and a file of its size and hashes is elsewhere
+    in the library, which is named; missing, the game or one of its files
+    is gone and not found; refused, a manifest this build does not read.
+    A file is hashed only when its size or time differs from the one
+    recorded, and ls writes nothing.
+
+    'check' hashes the game and every file of each <package>, a folder
+    relative to Packages (a console's folder names each package in it;
+    none names them all), against the manifest: the whole file, or for a
+    cue sheet the sheet and every track; for a zip the archive and the
+    game inside it. A moved game is found again and the manifest names its
+    new place; a game whose time alone changed has its time recorded. A
+    converted disc's package is checked by its CHD's size and time, and
+    'chd check' runs its three checks.
+
+    'migrate' copies the game's stores into each <package> once: from
+    Saves/<console>/ (and the places earlier builds kept them: the flat
+    Saves folder for the SNES and N64, beside the ROM for the NES and the
+    Game Boy) every file named for the game, its battery save and its own
+    save media; from the state folder (AppSettings.StateDirectory, else
+    Saves/Save States) its states, its resume state and their pictures;
+    and its cheat list. A file is the game's when it is the game's name
+    followed by one or two parts of a dot and letters or digits (.srm,
+    .1.mcr), so that "Super Mario Bros. 3" is never "Super Mario Bros".
+    Nothing is overwritten: a file already in the package wins, and
+    running migrate again copies nothing. The originals are left as they
+    were. Shared and named cards, the console's own memory, the library's
+    records (favourites, play time) and scraped art are not moved.
+
+ONE GAME, ONE SAVE
+    Once a package claims a game, opening the game by its plain path, from
+    'core', the library or a recent list, opens it as the package: its
+    battery save and states are the package's, and a save kept in Saves
+    before is read until the first write copies it in. A package claims
+    its game, its companions (a sheet's tracks, an .m3u's discs) and the
+    library files a converted disc was made from. A claimed game whose
+    size or time changed is hashed when it is opened: still the dump, its
+    time is recorded; another dump, it is refused with both hashes named.
+    A game that moved in the library is found again by its size and then
+    its hashes when it or its package is opened, and the manifest is
+    rewritten to name where it now is.
+
+JOBS
+    Each command runs as a job, followed one line a package until it ends
+    or the line's budget is spent; a longer one goes on in the background
+    as pkg<n>: 'ps' lists it, 'pkg wait pkg<n>' follows it again, and
+    'kill pkg<n>' stops it, the packages not reached left as they are.
+    make, check and migrate write each package's outcome, one line each,
+    to Logs/pkg_<day>.log.
+
+EXAMPLES
+    pkg make nes
+    pkg make "snes/Super Metroid (USA).sfc"
+    pkg ls NES
+    pkg check NES
+    pkg migrate "SNES/Super Metroid (USA).sfc"
+    pkg wait pkg1
+
+SEE ALSO
+    chd (converted discs, each given a package), EmuSen_GamePackages.md
+    (sections 3 and 14: the package, its manifest, the stores it takes,
+    and what this step built), EmuSen_Galaxia.md (sections 3.10 and 3.11:
+    the manifest and the claim index)

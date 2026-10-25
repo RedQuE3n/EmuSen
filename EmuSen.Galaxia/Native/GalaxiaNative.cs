@@ -51,6 +51,9 @@ namespace EmuSen.Galaxia.Native
         State,
         ResumeState,
         Picture,
+        PackageSram,
+        PackageState,
+        PackageResumeState,
     }
 
     // As EMUSEN_GALAXIA_MIGRATE_*.
@@ -246,6 +249,8 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _packageRead;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _packageWrite;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _packageFormat;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long> _packageIndex;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long> _packageResolve;
 
         // Every export this class calls; a name the library lacks refuses the library - see EmuSen_RustPlatform.md §3.1.
         internal static readonly string[] Exports =
@@ -265,6 +270,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_medium_lock_take", "emusen_galaxia_medium_lock_release", "emusen_galaxia_medium_lock_holder",
             "emusen_galaxia_rom_hashes", "emusen_galaxia_rom_hashes_of", "emusen_galaxia_rom_tracks",
             "emusen_galaxia_package_read", "emusen_galaxia_package_write", "emusen_galaxia_package_format",
+            "emusen_galaxia_package_index", "emusen_galaxia_package_resolve",
         };
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.
@@ -331,6 +337,8 @@ namespace EmuSen.Galaxia.Native
             _packageRead = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _packageWrite = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
             _packageFormat = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
+            _packageIndex = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
+            _packageResolve = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
 
             // The program's directory and .NET's own application-data folder are passed, not found - see EmuSen_RustPlatform.md §5.5.
             Utf8 home = new(AppContext.BaseDirectory), data = new(ConfigRoot.ApplicationData);
@@ -633,6 +641,22 @@ namespace EmuSen.Galaxia.Native
         {
             Utf8 text = new(manifest);
             return Refusable(() => Document((o, n) => { fixed (byte* m = text.Bytes) return _packageFormat(m, text.Length, o, n); })!);
+        }
+
+        // The claim index as the library's JSON - see EmuSen_GamePackages.md §14.
+        public static string PackageIndex(string packages, string? library, string compressed)
+        {
+            Utf8 p = new(packages), l = new(library), c = new(compressed);
+            return Document((o, n) => { fixed (byte* pp = p.Bytes, pl = l.Bytes, pc = c.Bytes) return _packageIndex(pp, p.Length, pl, l.Length, pc, c.Length, o, n); })!;
+        }
+
+        // What a path opens as, as the library's JSON; a package that refuses it is IOException with its words.
+        public static string PackageResolve(string at, string packages, string? library, string compressed)
+        {
+            Utf8 a = new(at), p = new(packages), l = new(library), c = new(compressed);
+            string text = Document((o, n) => { fixed (byte* pa = a.Bytes, pp = p.Bytes, pl = l.Bytes, pc = c.Bytes) return _packageResolve(pa, a.Length, pp, p.Length, pl, l.Length, pc, c.Length, o, n); })!;
+            Drain();
+            return text;
         }
 
         private static string Refusable(Func<string> call)

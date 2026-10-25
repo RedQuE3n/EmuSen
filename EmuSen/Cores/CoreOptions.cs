@@ -9,6 +9,9 @@ namespace EmuSen.Cores
         // The most undrained samples a core keeps before the oldest pair goes - see EmuSen_Settings_Reference.md §4.85.2.
         public int AudioBufferMaxSamples { get; init; } = Common.SampleQueue.DefaultLimit;
 
+        // The package the game opened as, whose folder keeps its battery saves; null for a plain file - see EmuSen_GamePackages.md §3.5.
+        public string? PackageRoot { get; init; }
+
         public static CoreOptions Default { get; } = new();
 
         // What audio.json asks of the cores, as the frontends read it at start.

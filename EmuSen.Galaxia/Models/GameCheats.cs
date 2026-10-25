@@ -8,11 +8,15 @@ namespace EmuSen.Galaxia.Models
     // The cheat list a frontend keeps for one game, in its console's folder, with the flat file of earlier builds still read - see EmuSen_Config_Reference.md §3.4b.
     public sealed class GameCheats
     {
-        private GameCheats(string category, string name)
+        private GameCheats(string category, string name, string? package = null)
         {
             Category = category;
             Name = name;
+            PackageFile = string.IsNullOrWhiteSpace(package) ? null : Path.Combine(package, Media.GamePackage.CheatsFile);
         }
+
+        // A packaged game's own list, <package>/cheats.json, which Save writes; the console's list is read until then - see EmuSen_GamePackages.md §3.5.
+        public string? PackageFile { get; }
 
         // The ROM's file name without its extension, as the list is shown to the player.
         public string Name { get; }
@@ -25,19 +29,26 @@ namespace EmuSen.Galaxia.Models
 
         private ConfigFile<CheatFile> Legacy => CheatFile.For(Name);
 
-        public bool Exists => File.Exists || Legacy.Exists;
+        public bool Exists => (PackageFile is { } own && System.IO.File.Exists(own)) || File.Exists || Legacy.Exists;
 
-        // Null when the path gives no usable name; derived names are sanitized, not refused, because nobody typed them.
-        public static GameCheats? For(string? console, string? romPath) =>
-            GalaxiaNative.Takes(console, romPath) ? ForNative(console, romPath) : Managed.For(console, romPath);
+        // Null when the path gives no usable name; derived names are sanitized, not refused, because nobody typed them; a package root moves the list into the package.
+        public static GameCheats? For(string? console, string? romPath, string? packageRoot = null)
+        {
+            GameCheats? named = GalaxiaNative.Takes(console, romPath) ? ForNative(console, romPath) : Managed.For(console, romPath);
+            return named is null || string.IsNullOrWhiteSpace(packageRoot) ? named : new GameCheats(named.Category, named.Name, packageRoot);
+        }
 
         internal static GameCheats? ForNative(string? console, string? romPath) =>
             GalaxiaNative.CheatGameList(console, romPath) is { } list ? new GameCheats(list.Category, list.Name) : null;
 
-        // The console's file when there is one, else the flat file an earlier build saved; null for neither, or unreadable.
-        public CheatFile? Load() => File.Exists ? File.Load() : Legacy.Load();
+        // The package's list when there is one, else the console's file, else the flat file an earlier build saved; null for none, or unreadable.
+        public CheatFile? Load()
+        {
+            if (PackageFile is { } own && System.IO.File.Exists(own)) return CheatFile.LoadFrom(own);
+            return File.Exists ? File.Load() : Legacy.Load();
+        }
 
-        public bool Save(CheatFile list) => File.Save(list);
+        public bool Save(CheatFile list) => PackageFile is { } own ? CheatFile.SaveTo(own, list) : File.Save(list);
 
         // Null when nothing needed writing, else whether the write succeeded; an empty list over no saved one is nothing - see EmuSen_Config_Reference.md §3.4b.
         public bool? SaveIfChanged(CheatFile list)

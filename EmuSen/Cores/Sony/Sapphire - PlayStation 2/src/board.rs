@@ -20,9 +20,9 @@ use crate::sif::{self, EePorts};
 use crate::timer::{self, Timer};
 use crate::vu::Vpu;
 
-/// A stand-in for a peripheral the DMAC reaches before its stage exists (VIF0, VIF1, GIF, IPU, SIF): it takes every
-/// qword offered, keeping them when `keep` is set, and gives the qwords queued in `give`, holding its channel when it
-/// has none.
+/// A stand-in for a peripheral the DMAC reaches before its stage exists (VIF0, VIF1, GIF, IPU; the SIF's channels reach
+/// `sif` since S22): it takes every qword offered, keeping them when `keep` is set, and gives the qwords queued in
+/// `give`, holding its channel when it has none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StandIn {
     pub taken: Vec<(u128, bool)>,

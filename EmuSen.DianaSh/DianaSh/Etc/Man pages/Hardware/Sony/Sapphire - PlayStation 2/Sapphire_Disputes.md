@@ -1270,7 +1270,10 @@ through the reset too.
   linked list, both chains, a requested burst and a chopped one, into the stand-ins); the unit tests of `tests/iop.rs`.
 - **Referee:** not consulted; no referee's IOP channel but OTC can be driven without a peripheral's own state.
 - **Conclusion:** the title, each [A] or [C]; **argued**, S22 (SIF0, SIF1 and SIF2's tags), S23, S25 and S26 measure
-  what their peripherals need.
+  what their peripherals need. *Amended 2026-10-25 at S22*: a chain to memory takes from the peripheral a quadword of
+  four words, its first two the tag, whatever CHCR's bit 8 (D-143), ~~two words, four with bit 8~~; and a chain's
+  unit moves only as many words as its peripheral gives or takes, the packet going on in later units (S22's FIFOs).
+  The IRQ tag going on is kept against PCSX2, which ends the transfer there (D-144).
 - **Depends on it:** `iop::dma`'s `unit`, `WORD`, `GAP`, `LIMIT`.
 - **Pinned by:** `each_dma_mode_reaches_its_stand_in`, `a_burst_holds_the_bus_and_chopping_opens_windows`,
   `priorities_order_the_channels_and_a_channel_without_dreq_waits`.
@@ -1662,3 +1665,134 @@ through the reset too.
 - **Depends on it:** `Cdvd::new`, `Cdvd::tray`.
 - **Pinned by:** `at_power_on_the_registers_report_the_disc`, `the_tray_opens_closes_and_the_disc_is_detected_as_it_spins_up`.
 - **Implemented in:** stage S23's commit.
+
+### D-140. SIF, the FIFOs: each of SIF0, SIF1 and SIF2 has a FIFO of 32 words (128 bytes); a channel that would overfill or underrun it holds until the other side's channel moves words
+
+- **Opened:** 2026-10-25, at stage S22.
+- **Documents read:** *EE User's Manual* (EEUM) §1.2's table of built-in devices: "SIF 32-bit (address/data
+  multiplex), 128-byte FIFO embedded"; *EE Overview* §2.6: "The DMA controllers (DMACs) for the IOP and EE operate in
+  cooperation through the bidirectional FIFO (SFIFO) in the SIF", Figure 2-13 placing a "pack/unpack" stage between the
+  IOP's 32-bit side and the EE's 128-bit side; EEUM §5.3.3: "the SIF0, SIF1, and SIF2 share the FIFO and might cause a
+  deadlock"; ps2tek "SIF DMA": "a set of fifos (First In First Out) located in the SIF, refered to as SIF0 and SIF1",
+  "if a SIF0/SIF1 transfer is started on either component and the fifo is empty the transfer continues running until
+  the respective fifo starts filling with data".
+- **Test program:** `s22-sif1`, the EE's SIF1 of sixteen quadwords started with the IOP's channel stopped, QWC read
+  after a delay (eight left, STR set); `s22-sif0`, the IOP's SIF0 of 66 words started with the EE's channel stopped,
+  MADR read after a delay (30 data words moved beside the two words of the EE's tag); the unit test
+  `a_full_fifo_holds_the_ees_channel_until_the_iop_takes_words`.
+- **Referee:** PCSX2 2.8.2 holds neither side: the EE's sixteen quadwords and the IOP's 66 words all leave memory with
+  the other side's channel stopped, and are delivered whole once it starts (measured 2026-10-25).
+- **Conclusion:** the title. The size is the manual's; one FIFO a channel, of that size, is **argued**: the manual's
+  "share the FIFO" is read as the warning it gives (a held channel can deadlock the others), which a FIFO a channel
+  does not reproduce, and ps2tek names a FIFO for each of SIF0 and SIF1. The EE moves whole quadwords, four words with
+  the first in bits 31..0, and asks for room or words in quadwords; the IOP moves words. PCSX2 is no witness on the
+  depth.
+- **Depends on it:** `sif::FIFO_WORDS`, `EePorts::request`, `IopPorts::request`.
+- **Pinned by:** `sif1_carries_the_ees_packets_to_the_iop_in_every_mode`, `sif0_carries_the_iops_packets_to_the_ee_with_the_ees_tags`,
+  `a_full_fifo_holds_the_ees_channel_until_the_iop_takes_words`, `a_quadword_is_four_words_low_first_and_a_full_fifo_takes_no_more`.
+- **Implemented in:** stage S22's commit.
+
+### D-141. SIF registers: MSCOM is written by the EE and SMCOM by the IOP, each read by both; MSFLG is set by the EE's writes and cleared by the IOP's, SMFLG the reverse; CTRL reads F0000102h on the EE and F0000002h on the IOP, and the EE's write with bit 18 set raises the IOP's interrupt 1; BD6 is a word both sides write and read; nothing drives the EE's INT_SBUS
+
+- **Opened:** 2026-10-25, at stage S22.
+- **Documents read:** ps2tek "SIF Registers": MSCOM "Only writable by EE", SMCOM "Only writable by IOP", MSFLG "IOP
+  writes mask", SMFLG "EE writes mask", "If the EE sends 20000h to MSFLG, the IOP can read this and clear MSFLG by
+  writing 20000h to it. The opposite is true for SMFLG"; CTRL "1 Always 1? 8 Always 1 for EE, 0 for IOP? 28-31 Always
+  0xF? Other Unknown", "Very little is known about this register"; BD6 "Nothing is known about this register"; ps2tek's
+  IOP interrupt table (IRQ1 "GPU (used in PSX mode)"); EEUM §3.1 (INT_SBUS, "Detection of an interrupt from a peripheral
+  on SBUS", on a falling edge) and chapter 4's Tn_HOLD ("The value of Tn_COUNT is copied when an SBUS interrupt
+  occurs"); EEUM §2.2.1 lists only SB_SMFLG of the SIF's registers. No document says what raises INT_SBUS or what a
+  write to CTRL does.
+- **Test program:** two probes, recorded and not graded, run on PCSX2 only: `s22-probe-iop` (each bit of CTRL written
+  by the IOP, with the EE's I_STAT, timer 0's HOLD and CTRL after it; SMFLG and SMCOM written by the IOP; BD6 written by
+  each side) and `s22-probe-ee` (each bit of CTRL written by the EE, with the IOP's I_STAT and CTRL). Their first words,
+  the registers as the referee's firmware left them, are not used. Then `s22-registers`, graded.
+- **Referee:** PCSX2 2.8.2 (measured 2026-10-25): the EE reads CTRL as F0000102h throughout, its own writes changing
+  nothing it reads; the IOP reads F0000002h, with bit 8 as the EE last wrote it; the IOP's writes of bits 4 to 7 set
+  them in both sides' views, its bit 5 setting bit 13 too; the EE's write of bit 18 sets the IOP's I_STAT bit 1, and of
+  bit 19 the IOP stops answering and its RAM reads zero (read as a reset of the IOP); no write of the IOP's (CTRL's 32
+  bits, SMFLG, SMCOM) set the EE's I_STAT bit 1, and HOLD stayed 0; BD6 read back what the EE wrote until the IOP wrote
+  it, after which both sides read 0. On `s22-registers` PCSX2 differs on 3 of 28 words: it takes the EE's write to SMCOM,
+  and reads the IOP's CTRL bit 8 as set after the EE wrote it.
+- **Conclusion:** the title. The flags and COMs are ps2tek's words, PCSX2 agreeing but on the EE's SMCOM write, against
+  which the document is kept; CTRL's reads are ps2tek's documented bits, PCSX2's further bits not modelled; the IOP's
+  interrupt from the EE's bit 18 is the single witness's reading, the only driver the IOP's interrupt 1 has in
+  PlayStation 2 mode; the IOP's reset by bit 19 is not modelled (the IOP's boot is S24's); BD6 as plain storage is a
+  choice [C]. No witness drives INT_SBUS or HOLD, so neither is driven. **Argued**, bit 18 **measured** on one lineage.
+- **Depends on it:** `sif::Sif`'s reads and writes, `sif::CTRL_EE`, `CTRL_IOP`, `CTRL_IOP_INTERRUPT`, `IOP_SOURCE`;
+  `IopBus::sif_write_from_ee`.
+- **Pinned by:** `the_mailbox_registers_pass_values_and_flags_both_ways`, `the_flags_set_on_one_side_and_clear_on_the_other`.
+- **Implemented in:** stage S22's commit.
+
+### D-142. SIF0's tags: the EE's destination tag is the two words the IOP sends after its own tag with CHCR's bit 8, the tag's bits 127..64 not crossing; without bit 8 the data alone crosses and TADR steps over two words
+
+- **Opened:** 2026-10-25, at stage S22.
+- **Documents read:** ps2tek "IOP DMA": "If Dn_CHCR.8 is set, 2 words after the tag in memory (TADR + 8) will be
+  transferred first. This is used by SIF0 to transfer a DMAtag to the EE's DMAC", "TADR will be incremented by the size
+  of the tag, which is either 2 or 4 words"; *EE Overview* §3.1.2: the destination chain tag is 128 bits, bits 127..64
+  "(Arbitrary)", and Figure 3-3's "Destination Chain DMA from SIF"; §2.6: "The EE-DMAC reads the packet from the SIF,
+  interprets the first word as a tag".
+- **Test program:** `s22-sif0`: two IOP tags with bit 8 carrying a cnt and an end tag into an EE destination chain, and
+  64 words behind an end tag of sixteen quadwords; `s22-sif0-normal`: an IOP tag without bit 8, two marked words after
+  it, into the EE's normal mode.
+- **Referee:** PCSX2 2.8.2 places every word of `s22-sif0`'s chains where the two-word reading puts them (a four-word
+  tag would shift the data by two words). Without bit 8 it sends the two words after the tag anyway and steps TADR by
+  16: the EE's buffer reads EEEE0002h, EEEE0003h, 63000000h, 63000001h, then 63000000h to 63000003h, 9 of 20 words
+  differing (measured 2026-10-25).
+- **Conclusion:** the title. The two-word EE tag **measured** on one lineage and argued from ps2tek's sentence (the
+  quadword's other half never crosses, so nothing of the packet's data is lost to it); bit 8's choice is ps2tek's,
+  against PCSX2, whose second quadword repeating two words is no hardware rule anyone has written.
+- **Depends on it:** `EePorts::tag_ready`, `get_tag`; `dmac::Peripherals`'s two methods of that name; `iop::dma`'s chain.
+- **Pinned by:** `sif0_carries_the_iops_packets_to_the_ee_with_the_ees_tags`.
+- **Implemented in:** stage S22's commit.
+
+### D-143. SIF1's tags on the IOP: a chain into memory takes a quadword of four words from the FIFO as its tag, the first two the IOP's tag, whatever CHCR's bit 8
+
+- **Opened:** 2026-10-25, at stage S22, by D-68, which left the tags of a chain into memory to this stage.
+- **Documents read:** ps2tek "IOP DMA" (the tag's two words; bit 8 described for a chain from memory only); *EE
+  Overview* §2.6 and Figure 2-14 (the SIF's packets drawn with their tags in 128-bit rows); EEUM §5.1 (SIF1 a source
+  chain, moving quadwords).
+- **Test program:** `s22-sif1`, its first version with a two-word IOP tag before ten words in three quadwords, its
+  second with each EE packet's first quadword the IOP's tag and two marked words; both with bit 8 clear and set.
+- **Referee:** PCSX2 2.8.2, on the first version, took the first four words as the tag whether bit 8 was set or not, so
+  the data landed two words late; on the second, every word equal (measured 2026-10-25).
+- **Conclusion:** the title, **measured** on one lineage and argued: the EE's packets are whole quadwords, so a tag of
+  two words would leave every later packet half a quadword out of step. The last two words are dropped. ~~Two words,
+  four with bit 8~~ (S21's chain to memory, written before the FIFO existed).
+- **Depends on it:** `iop::dma`'s `chain_tag_words` and chain.
+- **Pinned by:** `sif1_carries_the_ees_packets_to_the_iop_in_every_mode`, `each_dma_mode_reaches_its_stand_in`.
+- **Implemented in:** stage S22's commit.
+
+### D-144. IOP chains, the IRQ tag: a tag with IRQ and without the end bit sets the channel's DICR2 flag and the chain goes on (D-68 kept); PCSX2 ends the transfer there
+
+- **Opened:** 2026-10-25, at stage S22.
+- **Documents read:** ps2tek "IOP DMA": bit 30 "IRQ - raises IQE interrupt in DICR2 when all words in this tag are
+  transferred", bit 31 "End of transfer, raises transfer completion interrupt", "This works independently of the
+  channel's interrupt mask"; "DICR.31 = DICR.15 | (DICR.23 && (DICR.24-30 || DICR2.24-29)".
+- **Test program:** the last part of `s22-sif1` (an EE chain of three packets, the IOP's second tag with IRQ) and of
+  `s22-sif0` (two IOP tags, the first with IRQ), each last so that a stop leaves nothing behind for a later part.
+- **Referee:** PCSX2 2.8.2 sets the DICR2 flag and raises interrupt 3, and ends the IOP's transfer at the IRQ tag on
+  both channels: the third SIF1 packet is never taken and the second SIF0 packet never sent, the EE's destination chain
+  left waiting (14 words of the two programs). Its DICR bit 31 reads 0 with a DICR2 flag set and the master enable on
+  (one word) (measured 2026-10-25).
+- **Conclusion:** D-68's reading kept, the title: ps2tek gives the IRQ and end bits separate effects, and its formula
+  puts DICR2's flags in bit 31. PCSX2 against, its stop indistinguishable from the document's reading to a program
+  that always sets both bits. **Argued**; S24's BIOS shows which its modules rely on.
+- **Depends on it:** `iop::dma`'s chain.
+- **Pinned by:** `sif1_carries_the_ees_packets_to_the_iop_in_every_mode`, `sif0_carries_the_iops_packets_to_the_ee_with_the_ees_tags`.
+- **Implemented in:** stage S22's commit.
+
+### D-145. SIF2: the EE's channel 7 and the IOP's channel 2 meet in one FIFO of 32 words, each side's direction its own channel's DIR, the EE in normal mode, the IOP in any mode
+
+- **Opened:** 2026-10-25, at stage S22.
+- **Documents read:** EEUM §5.1: SIF2 "both", priority group B, slice, no chain; §5.9: DIR "Effective only on VIF1
+  (ch-1) and SIF2 (ch-7) channels"; ps2tek: "SIF2 (bidirectional, used for PSX mode and debugging)" on the EE, "SIF2
+  (EE<->IOP, GPU in PSX mode)" on the IOP.
+- **Test program:** `s22-sif2`: two quadwords from the EE into the IOP's slice of two blocks of four, then eight words
+  from the IOP's slice into the EE's normal mode.
+- **Referee:** PCSX2 2.8.2 moves nothing on either channel, both left running (26 of 32 words differing; measured
+  2026-10-25). No lineage is a witness.
+- **Conclusion:** the title, on the documents alone; **argued**.
+- **Depends on it:** `sif::EePorts` (SIF2's direction from the EE channel's CHCR.DIR), `IopPorts`.
+- **Pinned by:** `sif2_carries_data_both_ways`.
+- **Implemented in:** stage S22's commit.

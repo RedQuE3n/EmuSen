@@ -9,6 +9,7 @@
 //! software; run by the project's programs and not yet by the machine (S10 loads programs). S11: the DMAC (`dmac`),
 //! the INTC (`intc`), the EE timers (`timer`) and the blanking stand-in (`blank`) on one clock (`clock`), with the
 //! core in `board::System`. S12: the vector units (`vu`), VU0 in macro mode through COP2, micro mode an interface for S13.
+//! S21: the IOP (`iop`), `blackmoon-r3000` on its own bus, a unit of the board.
 
 pub mod bios;
 pub mod blank;
@@ -18,6 +19,7 @@ pub mod dmac;
 pub mod ee;
 pub mod float;
 pub mod intc;
+pub mod iop;
 pub mod machine;
 pub mod media;
 pub mod state;

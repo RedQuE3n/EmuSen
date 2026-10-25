@@ -939,7 +939,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S21** | The IOP on `blackmoon-r3000`: its memory map, RAM, caches and scratchpad in Sapphire's IOP bus, its INTC, DMA and six timers, its PRId | The r3000 suite still passes; the project's bare-metal IOP programs |
+| **S21** | The IOP on `blackmoon-r3000`: its memory map, RAM, caches and scratchpad in Sapphire's IOP bus, its INTC, DMA and six timers, its PRId | The r3000 suite still passes; the project's bare-metal IOP programs *Built 2026-10-25, `Sapphire_Native.md` §22: met; the crate unchanged and its suite passing, seven programs and 174 graded words equal to ps2tek's and psx-spx's records; an IOP program placed on PCSX2 through an EE program and the IOP's exception vector, Play! unable; PCSX2 differing on 41 of 153 words where it models no IOP cache, wait state, bus error or register width; PRId 1Fh; D-60 to D-68; `cpu/iop/*` and `kernel/iop/*` wait for S24's BIOS.* |
 | **S22** | The SIF: registers and its three DMA channels | The project's programs passing messages both ways, EE and IOP each checking the other's record |
 | **S23** | The CDVD model (§5.6) and `emusen-disc`'s DVD layout (§9.4): reads, seeks, layers, CD modes and CD-DA, the clock, the EEPROM, the tray | Synthetic CDs and single- and dual-layer DVDs read sector for sector, the layer break placed; DVD images opened mapped on the desktop and the handheld, load time recorded (P13) |
 | **S24** | **The player's BIOS to its menu**: what is missing for it, SIO2's pad, the EEPROM synthesised; the writers of this stage are thereafter not replacement writers | OSDSYS's picture at an anchor equal to PCSX2's on the same BIOS within a stated count of pixels, for the Americas and Europe versions of §11 Q9; then **all 78 ps2autotests on the player's BIOS** equal their expected texts, each miss a dispute |
@@ -1092,7 +1092,9 @@ its second user, PRId is a constant a core sets for its own chip, and the caches
 core's bus, not the crate, so that a second core with different caches could use it (`BlackMoon_R3000.md` §2). **What
 moves**: nothing. **What Sapphire adds in its own IOP bus**: the IOP's memory map, its caches and scratchpad, its wait
 states, and the PRId of its chip; ps2tek notes that the BIOS chooses the PlayStation 2's boot path when "PRid >= 59h"
-[R], so the PRId Sapphire sets is at least that, the exact value a dispute step's. **Not used**: `blackmoon-gte`, since the
+[R], so the PRId Sapphire sets is at least that, the exact value a dispute step's. *Amended 2026-10-25 at S21
+(`Sapphire_Disputes.md` D-60): the sentence reads the other way, 59h and above being the EE's path, so the IOP's PRId is
+below 59h, and at least 0Fh not to take TBIN's; Sapphire sets 1Fh, PCSX2's value.* **Not used**: `blackmoon-gte`, since the
 IOP has no GTE in PlayStation 2 mode [A], and the PlayStation mode is Diamond's (§4.1). A dispute about the processor
 itself goes to the crate's record and is checked against Diamond's goldens, since a change reaches both cores.
 

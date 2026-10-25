@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 emusen-native = { path = "../../Shared/emusen-native" }
 # The R5900's decode, which the interpreter executes by (Sapphire_Plan.md §9.1), and the assembler of the project's programs.
 emusen-mips = { path = "../../Shared/emusen-mips" }
+# The IOP's processor, the R3000A, used as its crate's design intends with Sapphire's own IOP bus (Sapphire_Plan.md §9.2).
+blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 
 [profile.release]
 panic = "abort"

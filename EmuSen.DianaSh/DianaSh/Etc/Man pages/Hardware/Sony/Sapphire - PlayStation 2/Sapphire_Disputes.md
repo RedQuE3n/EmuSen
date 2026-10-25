@@ -1085,3 +1085,180 @@ through the reset too.
 - **Depends on it:** `vu/micro.rs`'s `release`; S13.
 - **Pinned by:** `vcallms_starts_micro_mode_and_the_ee_waits` (on the stand-in).
 - **Implemented in:** stage S12's commit.
+
+*D-55 to D-59 are unused: stage S12, built beside S21, ended at D-54, and S21's entries begin at D-60.*
+
+### D-60. IOP, PRId: 1Fh, inside the range ps2tek's BIOS chapter leaves (at least 0Fh, below 59h)
+
+- **Opened:** 2026-10-25, at stage S21, whose plan (`Sapphire_Plan.md` §9.2 and the stage's row) read ps2tek as
+  requiring a PRId of at least 59h.
+- **Documents read:** ps2tek at `1c91660`, "BIOS Boot Process" (lines 4620-4621): "The BIOS checks which CPU is
+  executing by checking COP0.PRid (register 15). If PRid >= 59h, the EE boot code is executed. Else, the IOP boot code
+  is executed"; "BIOS PlayStation Compatibility" (line 5095): "RESET will jump to TBIN if COP0.PRid is less than 0Fh or
+  if I/O register 1F801570.3 is set". So the IOP's PRId is below 59h (59h and above is the EE's path) and, to boot the
+  PlayStation 2's IOP path rather than TBIN, at least 0Fh. No document gives the value. psx-spx "cop0r15": the
+  PlayStation's CXD8606CQ reads 2.
+- **Test program:** `s21-map` records PRId and whether it lies in 0Fh to 58h.
+- **Referee:** PCSX2 2.8.2 reads **1Fh**, inside the range. Play! 0.72 cannot run an IOP program (§22.9 of the build
+  record).
+- **Conclusion:** 1Fh, the one value the strongest single witness gives, inside the documents' range. **Measured** on one
+  lineage; the plan's "at least 59h" was a misreading of the first sentence, corrected in `Sapphire_Plan.md` §9.2.
+- **Depends on it:** `iop::PRID`, which `Iop::new` sets on `blackmoon-r3000`'s `R3000::prid`; S24's boot path.
+- **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents` (the range word graded, the value
+  against `iop::PRID`).
+- **Implemented in:** stage S21's commit.
+
+### D-61. IOP memory map: RAM's 2 MiB mirrored through 8 MiB; the unused regions (past 8 MiB, the scratchpad in KSEG1, the gap after it, 1E000000h) a bus error on a load, and a fetch from the scratchpad an instruction bus error
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** ps2tek "Memory Map": the IOP's RAM "2 MB" at 0 "(same as on PSX)", I/O at 1F800000h, the SPU2 at
+  1F900000h, the BIOS at 1FC00000h, the cache control at FFFE0000h; nothing on mirrors or errors. psx-spx at `6d7d1bc`,
+  "Memory Mirrors": "2MB RAM can be mirrored to the first 8MB (strangely, enabled by default)", "The Scratchpad is
+  mirrored only in KUSEG and KSEG0, but not in KSEG1"; "Memory Exceptions": "Bus Error ------> Unused Memory Regions
+  (including Gaps in I/O Region)"; "Scratchpad": "NOT executable. Attempts to jump to this region will cause a bus error
+  on the first instruction fetch".
+- **Test program:** `s21-map`: a word read through its three mirrors and written through the last; loads at 00800000h,
+  BF800000h, 9F800400h and 9E000000h, each logged by the program's handler; `s21-fetch`: a jump to 9F800000h.
+- **Referee:** PCSX2 2.8.2 mirrors RAM as psx-spx does (four words equal) and raises no bus error at any of the four
+  loads; on the fetch from the scratchpad it stops altogether (no done word from the EE either), so `s21-fetch` runs on
+  Sapphire only.
+- **Conclusion:** psx-spx's PlayStation rules, which ps2tek's "same as on PSX" points to; the mirrors **measured**, the
+  bus errors **argued**, PCSX2 not a witness for them. Which I/O addresses within 1F801000h-1F80FFFFh meet no device on
+  the IOP is unknown; they read zero rather than fault [C], so that S22 to S26 add their devices without moving a
+  fault.
+- **Depends on it:** `iop::bus::decode`.
+- **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents`, `a_fetch_from_the_scratchpad_is_an_instruction_bus_error`.
+- **Implemented in:** stage S21's commit.
+
+### D-62. IOP I-cache and cache control: 4 KiB, direct-mapped, psx-spx's PlayStation rules (stale code until a flush, a refill from the word to the line's end, the isolated cache taking stores and loads); BCC's bits 6 and 10 read zero
+
+- **Opened:** 2026-10-25, at stage S21, by `Sapphire_References.md` §5.1: no public document gives the IOP's cache, and
+  Sony told Microprocessor Report of "some minor enhancements to the cache".
+- **Documents read:** psx-spx "i-Cache" (256 lines of four words, the tag, the fill behaviour, "Store instructions …
+  do not affect the i-cache"), "FFFE0130h - BCC" (the bits, TAG mode's stores and loads); ps2tek "Memory Map" (the cache
+  control in KSEG2, nothing more); Microprocessor Report, 1999-04-19, page 4 and Table 1.
+- **Test program:** `s21-cache`, run from KSEG1 so that only its routines are cached: a routine rewritten through KSEG1
+  and called through KSEG0 before and after a flush; two routines 4 KiB apart (one line) and two 2 KiB apart; a line
+  entered at word 2 and then at word 0; a store and a load with SR's IsC; a loop timed cached, uncached and with IS1
+  clear. An 8 KiB or two-way cache would show at the 4 KiB pair.
+- **Referee:** PCSX2 2.8.2 models no IOP I-cache: rewritten code runs at once (three words differ), so neither the size
+  nor the fill can be seen; its isolated store reaches neither memory nor anything a load then reads (the load returns
+  memory); BCC reads 14000200h whatever is written.
+- **Conclusion:** psx-spx's rules at 4 KiB, **argued**; **open** for the enhancement, which only a lineage modelling the
+  IOP's cache, or a game at S28 that depends on it, can show.
+- **Depends on it:** `iop::icache`, `iop::bus`'s fetch.
+- **Pinned by:** `the_icache_holds_stale_code_until_flushed_and_conflicts_at_4_kib`, `a_miss_fills_to_the_lines_end_and_iblksz_0_fills_two_words`.
+- **Implemented in:** stage S21's commit.
+
+### D-63. IOP access times: a cache hit 1 cycle, an uncached fetch or load from RAM 1 + 4, an I/O register's load 1 + 2, the scratchpad and stores nothing beyond the instruction
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** none gives the IOP's; psx-spx "DMA Channels" ("CPU DRAM access takes 1 opcode cycle plus 6
+  waitstates"); the PlayStation's figures measured on its console (`Diamond_Native.md` §11.3: RAM 4 cycles' stall,
+  internal registers 2), taken as the IOP's [A].
+- **Test program:** `s21-cache`'s three timed loops (1,000 passes of three instructions): Sapphire 3,039, 15,047 and
+  15,047 IOP cycles; graded only by the documents' shape (cached at least twice as fast; IS1 clear as uncached).
+- **Referee:** PCSX2 2.8.2: 3,023, 3,024 and 3,029, no wait states anywhere.
+- **Conclusion:** the PlayStation's measured figures, **argued**; no write queue (a store costs nothing extra) and the
+  boot ROM's 6 cycles a placeholder [C]; S32's bench measures what they cost a game.
+- **Depends on it:** `iop::bus`'s `RAM_STALL`, `IO_STALL`, `ROM_STALL`.
+- **Pinned by:** `the_icache_holds_stale_code_until_flushed_and_conflicts_at_4_kib`, `the_iop_keeps_its_ratio_to_the_ee_clock`.
+- **Implemented in:** stage S21's commit.
+
+### D-64. IOP timers, the request bit and ZRET: with ZRET the count runs to the target inclusive before 0; a repeated pulse leaves bit 10 set; one-shot clears it and requests nothing more until the mode or the target is written; toggle inverts it, requesting as it falls
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** psx-spx "Timers": ZRET "the counter increments up to (including) the selected target value, and
+  does then restart at 0000h"; "Normally, Pulse mode should be used (INTF is permanently set, except for a few clock
+  cycles when an IRQ occurs)"; one-shot "suppresses any further IRQs until a new write to the Mode register"; toggle
+  "IRQ4/5/6 are triggered only each 2nd time, ie. when INTF changes from 1 to 0". ps2tek "IOP Timers": bit 6 "if unset,
+  bit 10 is set to 0 after interrupt occurs"; "This raises an IRQ in I_STAT if both mode.4 and mode.10 are enabled";
+  "If mode.7 (LEVL) is not set, writes to target set mode.10 to 1"; "Writes to mode reset the count to zero and set bit
+  10 to 1. Reads from mode clear the two raised interrupt flags."
+- **Test program:** `s21-timers`: timer 5 sampled 400 times with ZRET at 9 on the clock over 256; a repeated pulse's
+  mode after its request; a one-shot's mode and I_STAT after a further 16,000 cycles, then the target written; a toggle's
+  bit after each target.
+- **Referee:** PCSX2 2.8.2: the largest count 8 (the target never read, as the EE timers' D-38); bit 10 clear after a
+  repeated pulse; bit 10 left set after a one-shot, which requests again; the target's re-arming and the toggle equal.
+- **Conclusion:** the documents' readings, which agree with each other; **argued**, PCSX2 departing on three. psx-spx's
+  holds ("it will stay at 0000h for 2 clock cycles" after a write or a reset) are not modelled [A], a named loss until a
+  lineage measures the IOP's.
+- **Depends on it:** `iop::timer`'s `distances`, `event`, `write`.
+- **Pinned by:** `the_timers_widths_clocks_flags_requests_and_gates_equal_the_documents`,
+  `zret_counts_through_the_target_and_a_repeated_pulse_requests_each_time`, `one_shot_clears_the_request_bit_and_toggle_requests_every_second_time`.
+- **Implemented in:** stage S21's commit.
+
+### D-65. IOP INTC: the controller's line is the processor's Int0, Cause's IP2 (bit 10), enabled by SR's IM2, as on the PlayStation; ps2tek's "COP0.Cause:8" is not bit 8
+
+- **Opened:** 2026-10-25, at stage S21, by ps2tek's wording against psx-spx's and the crate's.
+- **Documents read:** ps2tek "IOP Interrupts": "If I_CTRL && (I_STAT & I_MASK), then COP0.Cause:8 is set. When
+  COP0.Status:8 is also set when this occurs, COP0.Cause.Excode is set to 00h and the IOP jumps to 80000080h"; psx-spx
+  "Interrupts" and "cop0r13": the PlayStation's controller on Cause bit 10; `BlackMoon_R3000.md` §2 (`Bus::interrupt`,
+  "as Cause's IP2 sees it").
+- **Test program:** `s21-intc`: Cause read with a request unmasked and SR's IEc clear; an interrupt with SR 401h (IEc,
+  IM2) and with 1 (IEc alone), each over a window of a hundred loop passes; a probe beside it with SR 101h (IEc, IM0).
+- **Referee:** PCSX2 2.8.2 takes the interrupt with IM2 and not with IM0 or IEc alone, a few instructions after the
+  enable (its test is not at every instruction, so a four-instruction window saw none); it shows no IP bit in Cause at
+  any time, the logged Cause being 0.
+- **Conclusion:** IP2 and IM2, **measured** (the enabling bit on PCSX2, the PlayStation's wiring in psx-spx); ps2tek's
+  "Cause:8" read as the IP field's start, not bit 8. That Cause shows IP2 while the interrupt is disabled is the
+  processor's (`BlackMoon_R3000.md` D-22), where PCSX2 departs.
+- **Depends on it:** `iop::intc::Intc::line` through `Bus::interrupt`; S24's BIOS.
+- **Pinned by:** `the_intc_masks_latches_and_drives_ip2`.
+- **Implemented in:** stage S21's commit.
+
+### D-66. IOP DMAC registers: MADR and TADR keep 24 bits, CHCR the bits ps2tek names (OTC's three, its step always backward), DICR its documented bits; the trigger bit clears as a transfer begins; DMACEN clear holds every transfer; DMACINTEN's bit 0 keeps the flags from the master flag and bit 1 the master flag from the INTC
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** ps2tek "IOP DMA" (Dn_MADR and Dn_TADR "24-31 Unused, zero"; Dn_CHCR's bit list; DMACEN "0=All
+  transfers disabled"; DMACINTEN "When 0, all channel interrupts disabled. Master interrupt flag is 0 in all cases but bus
+  error interrupts", "When 1, DMA interrupts disabled - IRQ 3 is never sent to INTC"); psx-spx "DMA Channels" ("Bit 28 is
+  automatically cleared upon BEGIN of the transfer", "D6_CHCR has only three read/write-able bits: 24,28,30 … bit 1 is
+  always 1", DICR's bits and its master flag "recalculated on every write").
+- **Test program:** `s21-dma`: every register written with all ones and read; OTC's CHCR after a transfer; a transfer
+  started with DMACEN clear, then with the channel's enable clear; the master flag and I_STAT with DMACINTEN 0 and 3.
+- **Referee:** PCSX2 2.8.2 keeps every bit of CHCR, MADR, TADR and DICR written (OTC's CHCR too, without its forced bit
+  1); leaves bit 28 set after a transfer; runs a transfer with DMACEN clear; raises the master flag with DMACINTEN 0 and
+  IRQ 3 with its bit 1 set. OTC's list, MADR and BCR kept, the flags, the master flag's IRQ 3, the bus error flag and the
+  channel enable's hold equal.
+- **Conclusion:** the documents' readings; **argued**, PCSX2 a witness only for the list and the flags.
+- **Depends on it:** `iop::dma`'s `write`, `ready`, `master_now`, `update`.
+- **Pinned by:** `otc_and_the_dmac_registers_equal_the_documents`.
+- **Implemented in:** stage S21's commit.
+
+### D-67. IOP timers' clocks and gates: timer 0's external clock is the 13.5 MHz pixel clock; timers 1 and 3 count H-blank, 262 a field on the stand-in; timer 0's gate is H-blank, 1's and 3's V-blank, 2's, 4's and 5's a stop in modes 0 and 3; gate mode 2 resets at both edges
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** ps2tek "IOP Timers" (bit 8: "Timer 0: pixel clock (13.5 MHz regardless of screen mode)", "Timer
+  1/3: HBLANK"; the prescalers; nothing on the gates of timers 3 to 5); psx-spx "Timers" (the synchronisation modes of
+  timers 0 to 2; timer 2's "0 or 3 = Stop counter at current value"); `Diamond_Disputes.md` D-6 (mode 2 reads zero
+  outside the blank on the PlayStation's console log); D-42 (the stand-in's field).
+- **Test program:** `s21-timers`: each prescaler against the IOP's clock; timer 0 on its external clock against it
+  (4,096 : 1,500); timers 1 and 3 on H-blank between two V-blank starts; timer 2 in gate modes 0, 3 and 1; timer 1's
+  V-blank gate in modes 0 and 3; timer 0's H-blank gate in mode 0; timers 3 to 5's gates recorded ungraded.
+- **Referee:** PCSX2 2.8.2: the four prescalers equal; timer 0's external clock not 13.5 MHz; 525 H-blanks a field
+  (as on the EE timers, D-42); timer 2 counting in gate mode 3; no H-blank gate on timer 0; timer 1's V-blank gate
+  equal; timers 3 to 5's gates as Sapphire's reading (timer 3 counting outside V-blank, 4 stopped, 5 counting).
+- **Conclusion:** ps2tek's clocks and psx-spx's gates, timers 3 to 5's gates by analogy [A], with PCSX2's agreement on
+  them the only evidence; **argued** but the prescalers and timer 1's gate, **measured**; the H-blank count waits for S20
+  as D-42 does.
+- **Depends on it:** `iop::timer`'s `clock`, `gate`, `counting`, `edges`; `clock::PIXEL`.
+- **Pinned by:** `the_timers_widths_clocks_flags_requests_and_gates_equal_the_documents`, `the_prescalers_and_the_pixel_clock`.
+- **Implemented in:** stage S21's commit.
+
+### D-68. IOP DMAC, the readings no document gives: a word a cycle on every channel with the processor held through a unit; a cycle's gap between blocks and nodes; a chain's IRQ tag sets the channel's flag and the chain goes on; a chain to memory takes its tags from the peripheral; a list ends at an address with bit 23 set; an address past 8 MiB a bus error ending the transfer
+
+- **Opened:** 2026-10-25, at stage S21.
+- **Documents read:** ps2tek "IOP DMA" (the chain tag's format, "raises IQE interrupt in DICR2 when all words in this tag
+  are transferred", "a tag interrupt can still happen even when the transfer interrupt is disabled", the IOP's chain
+  mode used by SIF0 and SIF1); psx-spx "DMA Channels" (the transfer rates, "CPU Operation during DMA", the linked list's
+  end, the bus error flag); Microprocessor Report's "4× PlayStation DMA" (no figure per channel).
+- **Test program:** `s21-dma-modes`, on Sapphire only, since its channels reach peripherals a referee has (slice,
+  linked list, both chains, a requested burst and a chopped one, into the stand-ins); the unit tests of `tests/iop.rs`.
+- **Referee:** not consulted; no referee's IOP channel but OTC can be driven without a peripheral's own state.
+- **Conclusion:** the title, each [A] or [C]; **argued**, S22 (SIF0, SIF1 and SIF2's tags), S23, S25 and S26 measure
+  what their peripherals need.
+- **Depends on it:** `iop::dma`'s `unit`, `WORD`, `GAP`, `LIMIT`.
+- **Pinned by:** `each_dma_mode_reaches_its_stand_in`, `a_burst_holds_the_bus_and_chopping_opens_windows`,
+  `priorities_order_the_channels_and_a_channel_without_dreq_waits`.
+- **Implemented in:** stage S21's commit.

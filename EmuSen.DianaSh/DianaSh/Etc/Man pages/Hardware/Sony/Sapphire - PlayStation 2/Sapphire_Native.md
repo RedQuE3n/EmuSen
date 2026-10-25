@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20) and S12 (§21) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21) and S21 (§22) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -2180,3 +2180,274 @@ loader source, no ps2autotests source and no firmware.
 - The DMAC's and VIF0's reach into VU0's memories (S14); the scratchpad channels' burst to them.
 - COP2 in the recompiler: S38–S39; C3's host path: S39–S41.
 - The state format's new contents (both units, the control registers): `SPH2` gains them with the rest (S10, S30).
+
+## 22. Stage S21, the IOP on `blackmoon-r3000` (2026-10-25)
+
+*§21 is stage S12's, built beside this one on its own branch; the IOP needs nothing of the VUs.*
+
+### 22.1 In one paragraph
+
+The plan's §7 row S21, on the tester's go of 2026-10-25. The crate gains **`iop`**: the IOP, `blackmoon-r3000`'s
+R3000A used as its crate's design intends (`BlackMoon_R3000.md` §2), nothing moved out of the crate, on Sapphire's own
+IOP bus, which holds the IOP's memory map (2 MiB of RAM with psx-spx's mirrors, the boot ROM as an empty slot for S24,
+the SIF's registers for S22, the I/O regions, the cache control in KSEG2), a 4 KiB I-cache and 1 KiB scratchpad (the
+PlayStation's sizes, a named reading, D-62), the wait states (D-63), and the IOP's units: the **INTC** with I_CTRL, the
+**DMAC** with its 13 channels in burst (with chopping), slice, linked-list and chain modes, DPCR2, DICR2, DMACEN and
+DMACINTEN, ending at `iop::dma::Peripherals` for the channels whose peripherals come later, OTC working end to end, and
+the **six timers**, three of 16 bits and three of 32, on the IOP's clock, its prescalers, the pixel clock and H-blank,
+with their gates and request modes. The IOP runs at an eighth of the EE's clock (`clock::IOP`) and joins S11's board as
+a unit with its own next event; with no firmware it is held until a program is entered. PRId is **1Fh** (D-60): the
+plan's "at least 59h" misread ps2tek, whose BIOS chapter puts the IOP below 59h and at or above 0Fh. Seven bare IOP
+programs of the project's, 174 graded record words, equal on Sapphire the records ps2tek and psx-spx give. **A referee
+can run an IOP program**: an EE program copies it into IOP RAM through the EE's window at 1C000000h and points the
+IOP's exception vector at it, so that the IOP's next interrupt enters it; this works on PCSX2 and not on Play!, whose
+EE has no window onto IOP RAM. PCSX2 differs on 41 of the 153 words its five programs grade, chiefly where it models no
+IOP cache, wait state, bus error or register width; the disagreements are D-60 to D-68, and one about the processor
+itself is `BlackMoon_R3000.md` D-22. `blackmoon-r3000`'s suite passes unchanged (38 of 38, the corpus 55,000 of
+55,000). No emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 22.2 What was built
+
+- **`iop/mod.rs`**: `Iop`, the R3000A with PRId 1Fh and processor number 1 beside `IopBus`; `enter` releases it at a
+  program in kernel mode with SR clear; `run_to` runs it to an EE cycle by `R3000::run`, each run bounded by the bus's
+  next event, the units serviced between runs; while held its clock follows the board's and nothing runs.
+- **`iop/bus.rs`**: `IopBus`, the crate's `Bus`: `decode` (§22.3), the I-cache's fetch with its refill, the access
+  times, the I/O registers dispatched to the units (registers of later stages reading zero), the isolated calls to the
+  cache, coprocessor 2's calls answering zero (the IOP has no GTE in PlayStation 2 mode, `Sapphire_Plan.md` §9.2),
+  `bus_error`, `running`. The units' events are kept in EE cycles and taken in time order by `run_units` (blanking
+  edges, timer requests, the DMAC's units); before each run `service` brings them to the clock and holds the processor
+  while the DMAC has the bus.
+- **`iop/icache.rs`**: the I-cache and BCC (§22.3). **`iop/intc.rs`**: §22.4. **`iop/dma.rs`**: §22.5, with
+  `StandIns` for the channels 0 to 12 until their stages. **`iop/timer.rs`**: §22.6.
+- **`clock.rs`** gains `IOP` (8 EE cycles an IOP cycle) and `PIXEL` (8,192/375 EE cycles a pixel-clock tick).
+  **`board.rs`** gains the field `iop`, brought to the board's time at the end of each `run_to`, and the EE's window
+  onto IOP RAM at 1C000000h-1C1FFFFFh [R ps2tek "Memory Map"], answered before the physical map. Both changes are
+  additions; `lib.rs` declares the module.
+- **A new dependency**: `sapphire` now depends on `blackmoon-r3000` (with `emusen-native` and `emusen-mips`), as
+  `Sapphire_Plan.md` §9.2 and the tester's Q10 decided; no crate it depends on was changed.
+
+### 22.3 The memory map, the I-cache and the access times
+
+[R ps2tek "Memory Map" and "I/O Maps"; psx-spx "Memory Map", "i-Cache", "FFFE0130h - BCC"; A where marked]:
+
+- **Segments**: KUSEG's first 512 MiB, KSEG0 and KSEG1 decode to one physical space; KUSEG above it and KSEG2 but the
+  control registers meet no device, a bus error.
+- **RAM**: 2 MiB, mirrored through the first 8 MiB (psx-spx's default; ps2tek's "same as on PSX"); past it a bus error
+  (D-61).
+- **Scratchpad**: 1 KiB at 1F800000h in KUSEG and KSEG0 only, not executable; KSEG1's and the gap up to 1F801000h a bus
+  error (D-61). The I-cache's "minor enhancements" are unread (D-62).
+- **I/O**: 1F400000h-1F4FFFFFh (CDVD's registers), 1F801000h-1F80FFFFh (the INTC, DMAC and timers now; SIO2, DEV9 and
+  the rest later) and the SPU2's 1F900000h-1F9007FFh answer, registers of later stages reading zero and taking writes
+  without effect [C]; a fetch from them is a bus error [A, psx-spx: the PlayStation executes only from its DMA and SPU
+  registers]. A byte or halfword store to a register is shifted to its lane, as Diamond's D-45.
+- **SIF** at 1D000000h-1D0000FFh: zero, S22's. **Boot ROM** at 1FC00000h, 4 MiB: empty, reading zero, until S24 gives
+  it the player's image (the EE's ROM and the IOP's being one, ps2tek "Same as EE BIOS"). **Cache control** at
+  FFFE0130h; FFFE0000h-FFFE01FFh's other addresses read zero [C].
+- **The I-cache** (D-62): 256 lines of four words, a tag of the physical address's bits 31-12 and a valid bit a word;
+  KUSEG and KSEG0 cached while BCC's IS1 is set, KSEG1 never; a miss fills from the word to the line's end, two words
+  from word 0 with IBLKSZ 0; a tag that matches with the word invalid refills the line; stores never touch it; with SR's
+  IsC a store writes the tag (TAG set) or the word, and a load reads them, TAG's match in bit 4. BCC keeps every bit but
+  6 and 10; it is 0 at power-on, the cache off [C], and the project's programs write the PlayStation kernel's 1E988h.
+- **The access times** (D-63), in IOP cycles beyond the instruction's own, which a fetch carries: a cache hit 1 in all;
+  an uncached fetch from RAM 1 + 4, a load from RAM 4, from an I/O register 2, from the boot ROM 6 [C]; a refill 1 + 4
+  for its first word and 1 for each further one, as Diamond's [C]; the scratchpad and every store nothing more (no
+  write queue).
+
+### 22.4 The INTC
+
+[R ps2tek "IOP Interrupts"; psx-spx "Interrupts"]: 26 sources (VBLANK start 0, the GPU's 1, CDVD 2, DMA 3, timers 0 to
+2 on 4 to 6, SIO0 7, SIO1 8, SPU2 9, PIO 10, VBLANK end 11, 12 and 13, timers 3 to 5 on 14 to 16, SIO2 17, 18 to 25);
+a request sets its I_STAT bit masked or not; I_STAT's bits written 0 are acknowledged, those written 1 kept; I_MASK
+keeps 26 bits, I_CTRL one; a read of I_CTRL returns it and clears it; bits 26 to 31 ("garbage") read zero [C]. The line,
+`I_CTRL AND (I_STAT AND I_MASK)`, is the processor's Int0, Cause's IP2, enabled by SR's IM2 (D-65). At this stage the
+blanking stand-in raises VBLANK start and end (its V-blank's rise and fall), the DMAC IRQ 3, the timers their six;
+`Intc::raise` is the interface the later peripherals call.
+
+### 22.5 The DMAC
+
+[R ps2tek "IOP DMA"; psx-spx "DMA Channels"; A where marked; D-66, D-68]:
+
+- **Registers**: per channel MADR and TADR (24 bits), BCR (32), CHCR (ps2tek's bits; OTC's three, its bit 1 always
+  set); channels 0 to 6 at 1F801080h, 7 to 12 at 1F801500h. DPCR (reset 07777777h, ps2tek) and DPCR2 (reset 0 [C]) give
+  each channel three bits of priority and an enable; DICR keeps its per-block enables, bus error flag, masks and master
+  enable, its flags cleared by writing 1, its bit 31 the master flag; DICR2 its tag enables (channels 4, 9 and 10 only),
+  masks and flags; DMACEN and DMACINTEN their documented bits, both 0 at reset [C].
+- **Starting**: a channel runs while its START is set, DPCR or DPCR2 enables it, DMACEN's bit 0 is set and either its
+  trigger (bit 28, cleared as the transfer begins) or its peripheral's request; in burst mode bit 29 with the trigger
+  pauses it. The ready channel with the best priority goes first, DPCR's and DPCR2's three bits on one scale, the higher
+  channel first on a tie [A].
+- **Modes**: a **burst** moves BC words at once (0 meaning 10000h), MADR and BCR left as written; with **chopping**, in
+  windows of 2^N words with 2^M cycles for the processor between them, MADR and BC updated to the end. A **slice** moves
+  BS words a block, BA blocks, MADR and BA updated, a whole block needing the peripheral's request. A **linked list**
+  moves each node's words after its header and follows its address, ending at one with bit 23 set. A **chain** reads a
+  two-word tag at TADR (address, IRQ and end bits; a size in words), with CHCR's bit 8 sends the tag's next two words to
+  the peripheral first, moves its words from the address, TADR stepping over the tag, and ends at a tag with its end
+  bit; a chain into memory takes its tags from the peripheral [A, S22's to settle]. OTC writes its reversed list, the
+  last entry FFFFFFh.
+- **Timing** [A]: a word a cycle on every channel; a unit (a burst, a chopped window, a block, a node, a tag with its
+  data) holds the bus, and the processor waits until it ends, its effects taking place at its start and its completion
+  (START cleared, the flag) at its end; a cycle's gap between blocks and nodes lets the processor in.
+- **Flags**: a completion sets its channel's flag only with its mask and the master enable; DICR's per-block enables
+  set it after each block or node; a chain's IRQ tag with DICR2's enable sets it regardless of the mask [A]. The master
+  flag is the bus error flag or the master enable with any flag, the flags counting only with DMACINTEN's bit 0; IRQ 3
+  is raised as it rises, unless DMACINTEN's bit 1 is set.
+- **Errors**: an address past the 8 MiB window ends the transfer with DICR's bus error flag and no completion flag [A].
+
+### 22.6 The timers
+
+[R ps2tek "IOP Timers"; psx-spx "Timers"; A where marked; D-64, D-67]:
+
+- **Registers**: count and target of 16 bits on timers 0 to 2 (1F801100h on) and 32 on 3 to 5 (1F801480h on); the
+  mode's bits 0 to 9 and 13 to 14 written, 10 to 12 read-only. Writing the mode resets the count and the flags and sets
+  bit 10; reading it clears the flags; writing the target sets bit 10 unless LEVL is set.
+- **Clocks**: the IOP's; timer 0's external clock the pixel clock, 13.5 MHz, counted as a ratio of EE cycles; timers 1
+  and 3's H-blank, a tick at each rise; timer 2 over 8 with bit 9; timers 4 and 5 over 1, 8, 16 or 256 by bits 13 and 14.
+  The dividers run freely from time 0 [A, as the EE timers'].
+- **Counting**: the target flag when the count reaches the target and the overflow flag when it reaches FFFFh or
+  FFFFFFFFh, set whatever the enables; with ZRET the count runs to the target inclusive and then restarts, without it to
+  the maximum and wraps.
+- **Requests**: a target or overflow with its enable requests if bit 10 is set; one-shot then clears bit 10, toggle with
+  repeat inverts it, pulse with repeat leaves it; a request sets the timer's I_STAT bit.
+- **Gates**: timer 0's H-blank, 1's and 3's V-blank, in psx-spx's four modes (0 pausing in the blank, 1 resetting at its
+  start, 2 resetting at both edges and counting only in it, 3 waiting for its first start); timers 2, 4 and 5 stopped by
+  modes 0 and 3 and free in 1 and 2 [A for 3 to 5].
+- **Evaluation**: as the EE timers', a count valid at a time advanced in closed form, event by event only while a
+  request can still rise; the next request's tick is the only event a timer schedules, H-blank's edges reaching the IOP
+  only while a timer counts or gates on them.
+
+### 22.7 What is not modelled
+
+Each a named loss, and a dispute candidate if an oracle measures it [A]:
+
+- The processor waits through a whole DMA unit, where psx-spx lets it run from the cache and the scratchpad and queue
+  up to four stores; the write queue is not modelled at all (a store costs nothing beyond its instruction).
+- psx-spx's two-cycle holds of a timer after a write or a reset; the IOP's own DMA rates per channel; the cache's
+  "enhancements"; BCC's lock, invalidate and scratchpad bits, and the data cache psx-spx calls broken.
+- CHCR's bit 30 (snooping) and iLink's bits are kept and do nothing; DICR2's tag interrupt on a channel other than
+  4, 9 and 10 cannot be enabled.
+- The blanking stand-in (§20.5) gives the IOP its H-blank and V-blank, so timers 1 and 3 count 262 H-blanks a field
+  until S20 (D-42, D-67).
+- `machine.rs` does not yet hold the board; the IOP's state is not in `SPH2` (S30).
+
+### 22.8 The gate: the programs (measured 2026-10-25)
+
+`tests/s21/` generates the programs as R3000A assembly for `emusen-mips` with `blackmoon-r3000`'s dialect. Each is
+entered at 00100000h through KSEG1, runs from KSEG0 (`s21-cache` stays in KSEG1, so that only its routines are cached),
+puts the units in a known state first (interrupts off and acknowledged, every channel stopped, flags and masks clear,
+every timer free-running, BCC at 1E988h), and writes its record of 32-bit words from 00180000h and 5A99D00Eh at
+0017FFF0h. A second entry, through the exception vector, is the program's handler, which logs Cause, EPC, BadVaddr and SR
+and resumes at the address the program set, interrupts disabled. Every expected word is derived in the generator from
+the documents, written apart from `src/iop/`; where they give no value a word is recorded ungraded, or graded by the
+range they give.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s21-map` | 28 of 33 | PRId's range (and its value, ungraded); RAM through KSEG0, KSEG1 and KUSEG, its byte and halfword lanes and its three mirrors; bus errors past 8 MiB, at KSEG1's scratchpad, the gap after it and 1E000000h; the scratchpad's ends; BCC's bits; syscall's and break's codes and EPC |
+| `s21-cache` | 18 of 21 | stale code until a flush; the 4 KiB conflict and none at 2 KiB; a refill from word 2, then the whole line; the isolated cache; cached against uncached and IS1 clear |
+| `s21-intc` | 16 of 20 | I_MASK's width; I_CTRL's read that clears it; IP2 masked, unmasked and with I_CTRL clear; an interrupt with IEc alone (none) and with IM2 (taken, IP2 and code 0); I_STAT's acknowledge; V-blank's start and end and the field's and the blank's lengths |
+| `s21-dma` | 44 of 45 | every register's width; OTC's list of 16 with the processor held, MADR, BCR and CHCR after; the flag with and without the mask; the bus error flag's master flag and IRQ 3; DMACINTEN 0 and 3; DMACEN and the enable holding a transfer |
+| `s21-timers` | 47 of 52 | widths of count and target on all six; the 16-bit wrap with OVFF and none at 32; the mode's write; timer 2's stop and run; the four prescalers and the pixel clock against the IOP's clock; H-blank over a field on timers 1 and 3; ZRET; a repeated pulse, a one-shot re-armed by the target, a toggle; an overflow request; timer 1's V-blank gate in modes 0 and 3; timer 0's H-blank gate; timers 3 to 5's gates ungraded |
+| `s21-fetch` | 3 of 3 | a fetch from the scratchpad: IBE at its address (Sapphire only, §22.9) |
+| `s21-dma-modes` | 18 of 19 | slice to SPU2, a linked list to SIF2, a chain from memory to SIF0 with the tag's words first and an IRQ tag, a chain into memory from SIF1, a requested burst and a chopped one to SPU (Sapphire only: their channels reach the stand-ins) |
+
+**Tests** [M, `cargo test --release`]: `tests/iop.rs` **13 of 13** — the seven programs, each equal to its record word
+for word (the stand-ins receiving the slice's twelve words, the list's three, the chain's nine with each tag's two words
+first, SIF1's tag and words taken, SPU's 5 and 32); PRId equal to D-60's; the cached loop 3,039 cycles for 1,000 passes
+of three hits, uncached and IS1 clear 15,047; the IOP's clock at 50,000 cycles for 400,000 EE cycles and a loop of five
+uncached instructions 2,000 passes in it; the EE writing IOP RAM through 1C000000h while a held IOP follows the clock;
+on the units directly, DPCR's priorities and the tie, a channel without a request scheduling nothing until woken, a
+burst's hold and chopping's windows, and the cache's refill rules. Lib **24 of 24** (the IOP's INTC and five timer
+tests among them); the crate's other tests unchanged, on the tree with S12 beneath: `cop0` 19, `dmac` 17, `fpu` 9,
+`interpreter` 23, `mmi` 13, `programs` 3, `vu0` 14; lib, `dmac` and `iop` also under `test-checked`; clippy clean. `blackmoon-r3000`: **38 of 38**, the r3000
+corpus **55,000 of 55,000** (`EMUSEN_BLACKMOON_CORPUS`), the crate's source unchanged, so Diamond's tests, which reach
+it only through it, were not re-run. `SapphireTests` (WiseMan, the blast radius's filter): **5 of 5**.
+
+### 22.9 On the referees (measured 2026-10-25)
+
+**Placing an IOP program.** `ps2referee.py` runs EE programs, and needs no change: `examples/s21.rs` writes each IOP
+program inside an EE program (`tests/s21`'s `wrap`) that clears the IOP program's done word and handler flag through the
+EE's window at BC000000h, copies the program to IOP RAM at 00100000h, and writes at IOP RAM 80h a jump to its KSEG1
+entry, so that the IOP's next interrupt, on the BIOS's own kernel after fast boot, enters it at the general exception
+vector; the program then owns the IOP, its first act undoing what the kernel left. The EE waits a bounded time for the
+done word in IOP RAM and copies it and the record into EE RAM, where `ps2referee.py ram … --until 1FFFF0=5A99D00E
+200000:<words>` reads them. Only the IOP's architectural vector is touched; nothing of the BIOS is read, traced or
+patched. *Where it works*: PCSX2 2.8.2 (Americas BIOS, fast boot), every program but `s21-fetch` (§D-61). *Where not*:
+Play! 0.72, whose EE reads CCCCCCCCh at BC000000h and drops the stores there (its IOP being its own high-level BIOS
+besides, Q5); LRPS2 and PCEE2 are PCSX2's lineage and add no witness. So the IOP's programs have one referee, one
+lineage, and the rulings that rest on it say so.
+
+| Program (graded words) | PCSX2 | What the differences are |
+|---|---|---|
+| `s21-map` (28) | 12 | no bus error at any of the four loads (ten words: the counts and codes, and two later counts shifted by them); BCC reads 14000200h (D-61, D-62); RAM, its lanes and mirrors, PRId 1Fh, syscall's and break's codes and EPC equal |
+| `s21-cache` (18) | 5 | no IOP I-cache (stale code, the 4 KiB conflict, the partial line); an isolated load reads memory; no wait states, the three loops 3,023, 3,024 and 3,029 cycles (D-62, D-63) |
+| `s21-intc` (16) | 2 | no IP bit in Cause, pending or taken; the interrupt taken by IM2 and not by IEc alone, its field 614,405 and blank 53,837 cycles against the stand-in's 613,733 and 51,535 (D-65, `BlackMoon_R3000.md` D-22) |
+| `s21-dma` (44) | 13 | every bit of CHCR, MADR, TADR and DICR kept; bit 28 left set after a transfer; a transfer run with DMACEN clear; the master flag with DMACINTEN 0 and IRQ 3 with its bit 1; the OTC list, the processor held through it, the flags and the enable's hold equal (D-66) |
+| `s21-timers` (47) | 9 | timer 2 counting in gate mode 3; the pixel clock not 13.5 MHz; 525 H-blanks a field on timers 1 and 3; ZRET's largest count 8; bit 10 clear after a repeated pulse and set after a one-shot, which requests again; no H-blank gate on timer 0; the widths, wraps, prescalers, overflow, toggle, re-arming and V-blank gate equal (D-64, D-67) |
+
+PCSX2 reproduces the IOP's register-level behaviour where it touches what the BIOS needs (the OTC list, the flags,
+the prescalers, the V-blank gate, PRId) and models none of the cache, wait states, bus errors or undefined bits, so it
+is a witness for the former and for nothing else here, as it was for the EE's DMAC (§20.8).
+
+### 22.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | timers 0 to 2 counting to FFFFFFFFh, as 32-bit | `the_timers_widths_clocks_flags_requests_and_gates_equal_the_documents`, `sixteen_bit_timers_wrap_at_ffffh_and_thirty_two_bit_ones_do_not`, `the_prescalers_and_the_pixel_clock` |
+| F2 | a burst ignoring CHCR's chopping | `each_dma_mode_reaches_its_stand_in`, `a_burst_holds_the_bus_and_chopping_opens_windows` |
+| F3 | I_MASK's bit 15 not masking timer 4's request | `the_intc_masks_latches_and_drives_ip2` |
+
+Each was applied, `tests/iop.rs` and the lib's IOP tests run, and the source restored [M].
+
+### 22.11 What the plan got wrong, or left open
+
+- **§9.2's PRId**: "the BIOS chooses the PlayStation 2's boot path when PRid >= 59h", so "at least that", reverses
+  ps2tek's sentence: 59h and above is the EE's path; the IOP's is below it, and at least 0Fh not to take TBIN's (D-60).
+  Amended in §9.2.
+- **§3.2's referees for the IOP**: the plan did not say how a referee runs an IOP program. One can, through an EE program
+  and the IOP's exception vector, on PCSX2 only (§22.9).
+- **§7's S21 gate** names "the r3000 suite still passes"; the crate is unchanged, so the gate is met by construction and
+  confirmed by running it.
+- **The caches**: §9.2 and `Sapphire_References.md` §5.1 give no IOP data cache; the stage's "instruction and data
+  caches" are the I-cache and the scratchpad, the PlayStation's data cache serving as the scratchpad (psx-spx).
+
+### 22.12 Questions this stage leaves
+
+1. **Q1 [routine], the IOP's PRId (D-60).** *Recommended*: keep 1Fh, PCSX2's value inside ps2tek's range, until S24's
+   BIOS shows otherwise (a PRId it rejects would send the IOP down TBIN's path, which S24 would see).
+2. **Q2 [routine], the IOP's cache size (D-62).** *Recommended*: keep the PlayStation's 4 KiB; `s21-cache`'s 4 KiB pair is
+   the probe for an 8 KiB or set-associative cache if a lineage ever models one; otherwise S28's games decide.
+3. **Q3 [routine], bus errors on the IOP (D-61).** *Recommended*: keep psx-spx's, since PCSX2 models none and the BIOS
+   meets none at S24 if it never strays; revisit if S24's BIOS takes one.
+4. **Q4 [decision], sharing the PlayStation's units.** The IOP's I-cache, its timers 0 to 2 and its DMA channels 0 to 6
+   are the PlayStation's, which Diamond already models in its own bus (`icache.rs`, `timers.rs`, `dma.rs`); S21 wrote
+   Sapphire's own, as the plan's §9.2 decided ("What moves: nothing"), and they differ (13 channels and DICR2, 32-bit
+   timers and prescalers, the IOP's clock ratios). *Recommended*: leave them apart until S24 and S28 show what the IOP's
+   really are; then consider a `blackmoon` crate for the R3000A's I-cache alone, the one part that is the same chip's,
+   with Diamond's goldens as the gate.
+5. **Q5 [routine], interrupt timing on the referee (D-65).** PCSX2 tests the IOP's interrupts only at intervals, so a
+   program's window must be longer than four instructions to see one. *Recommended*: the project's programs keep a
+   window of a hundred passes; no change to Sapphire, which tests at every instruction as the processor does.
+
+### 22.13 What was read for this stage
+
+`Sapphire_Plan.md` §2 (the IOP and SIF rows), §3.2, §5.1, §7 (S21 and S22), §9.2, §11; this page's §20;
+`Sapphire_Disputes.md` (the rules, D-0, D-38, D-42); `Sapphire_References.md` §3 and §5.1; `BlackMoon_R3000.md` §2, §5.5,
+§6 and §8; `Diamond_Native.md` §11.2-§11.4, §11.6 and §11.7 (the project's own PlayStation readings, for their form and
+the measured access times); Diamond's `bus.rs` (its `Bus` implementation and DMA hold) and `icache.rs`'s header (the
+project's own code, for the crate's use); `blackmoon-r3000`'s `lib.rs`, `exec.rs`'s step and `cop0.rs`; `ps2referee.py`'s
+usage. ps2tek at `1c91660`: "PS2 Overview", "Memory Map", "I/O Maps", "IOP Interrupts", "IOP DMA", "IOP Timers" (to line
+4181, stopping before "IOP Console", which DOCS.txt X.2 excludes for every writer), "EE Cache"'s coherency passage (lines
+1090-1108), and the two PRId sentences of the BIOS chapter, lines 4616-4625 (in "BIOS Boot Process", excluded for
+replacement writers by X.1, so this writer is not one) and 5090-5101; psx-spx at `6d7d1bc`: "Timers", "DMA Channels",
+"Memory Map", "Memory Control"'s BCC. No emulator, SDK, loader or ps2autotests source and no firmware; the BIOS was only
+passed to PCSX2 by path.
+
+### 22.14 What this stage does not cover
+
+- **ps2autotests' `cpu/iop/*` (7 programs) and `kernel/iop/*` (16)**: they are IRX modules that the BIOS's IOP kernel
+  loads and links, so they run with S24's BIOS (or the open BIOS's O5-O8); recorded for S24's gate.
+- The SIF's registers and its three channels on both sides (S22), CDVD (S23), SIO2 (S25), the SPU2 (S26), DEV9 and USB
+  (left out, §1.2), each reaching the IOP through `Intc::raise`, `iop::dma::Peripherals` and `IopBus`'s I/O dispatch.
+- The IOP in PlayStation mode (Diamond's, §4.1), its 33.8688 MHz clock and TBIN.
+- The machine running the IOP with the EE (S10, S24), the IOP's state in `SPH2` (S30), its debugger view (S31) and its
+  speed (S32 to S34).

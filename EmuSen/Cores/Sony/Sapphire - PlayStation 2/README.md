@@ -13,6 +13,9 @@ and recorded in `Sapphire_Native.md` beside the plan. `cargo test --release` run
 caches, the physical memory map, the counters and the breakpoints since stage S7 (§17); the machine does not run it yet. `tests/s6/` generates the stage's programs over every integer encoding with the record the EE Core
 manual's definitions give, and `tests/interpreter.rs` grades the interpreter by them; `cargo run --release --example s6
 -- <folder>` writes them as ELFs with their expected records for the referees. `tests/s7/` and `tests/cop0.rs` do the
-same for stage S7's programs, written by `cargo run --release --example s7 -- <folder>`.
+same for stage S7's programs, written by `cargo run --release --example s7 -- <folder>`. `src/iop/` is the IOP (stage
+S21, `Sapphire_Native.md` §22): `blackmoon-r3000` on Sapphire's own IOP bus with its cache, INTC, DMAC and timers;
+`tests/s21/` generates the stage's bare IOP programs, `tests/iop.rs` grades them, and `cargo run --release --example s21
+-- <folder>` writes each inside an EE program that places it in IOP RAM for the referees.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

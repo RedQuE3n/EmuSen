@@ -14,6 +14,7 @@ use crate::pcrtc::timing::Timing;
 use crate::clock::IOP;
 use crate::sif::{self, IopPorts, Sif};
 use crate::sio2::{self, Sio2};
+use crate::spu2::{self, Spu2};
 
 pub const RAM: usize = 2 << 20;
 /// RAM's window: 2 MiB mirrored through the first 8 MiB, as the PlayStation's default [A: psx-spx "Memory Mirrors",
@@ -121,6 +122,8 @@ pub struct IopBus {
     pub sif: Sif,
     /// SIO2, its registers at 1F808200h and its FIFOs behind channels 11 and 12 (S25).
     pub sio2: Sio2,
+    /// The SPU2, its registers at 1F900000h, its cores behind channels 4 and 7 (S26).
+    pub spu2: Spu2,
     pub blank: Timing,
     /// The bus's clock, in IOP cycles.
     pub now: u64,
@@ -145,6 +148,7 @@ impl IopBus {
             ports: StandIns::default(),
             sif: Sif::default(),
             sio2: Sio2::default(),
+            spu2: Spu2::new(),
             blank,
             now: 0,
             synced: 0,
@@ -175,13 +179,13 @@ impl IopBus {
         for t in &self.timers {
             next = next.min(t.next_event());
         }
-        self.next = next;
+        self.next = next.min(self.spu2.next_event().saturating_mul(IOP));
     }
 
     /// Brings every unit to EE cycle `t`, taking the events due on the way in time order: blanking edges, timer
     /// requests and the DMAC's units, whose cycles hold the processor.
     pub fn run_units(&mut self, t: u64) {
-        if self.sif.take_wake_iop() {
+        if self.sif.take_wake_iop() | self.spu2.take_wake() {
             self.dmac.wake_from(self.synced.max(t).div_ceil(IOP));
             self.reschedule();
         }
@@ -214,10 +218,18 @@ impl IopBus {
             if self.sio2.take_wake() {
                 self.dmac.wake_from(at.div_ceil(IOP));
             }
+            self.sync_spu2(at);
             if self.dmac.next_event().saturating_mul(IOP) <= at {
-                let IopBus { dmac, ram, ports, sif, sio2, .. } = self;
-                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: &mut sio2::Ports { others: ports, sio2 }, sif }) {
+                let IopBus { dmac, ram, ports, sif, sio2, spu2, .. } = self;
+                let mut spu = spu2::Ports { others: &mut sio2::Ports { others: ports, sio2 }, spu2, irq: false };
+                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: &mut spu, sif }) {
                     self.intc.raise(source::DMA);
+                }
+                if spu.irq {
+                    self.intc.raise(source::SPU2);
+                }
+                if self.spu2.take_wake() {
+                    self.dmac.wake_from(at.div_ceil(IOP));
                 }
             }
             self.synced = at;
@@ -225,6 +237,47 @@ impl IopBus {
             debug_assert!(self.next > at, "an event at {at} asked for its own time again");
         }
         self.synced = self.synced.max(t);
+        self.sync_spu2(t);
+    }
+
+    /// The SPU2 brought to EE cycle `t`, its IRQ raised if one rose; a buffer AutoDMA freed wakes the DMAC.
+    fn sync_spu2(&mut self, t: u64) {
+        if self.spu2.run(t / IOP) {
+            self.intc.raise(source::SPU2);
+        }
+        if self.spu2.take_wake() {
+            self.dmac.wake_from(t.div_ceil(IOP));
+            self.reschedule();
+        }
+    }
+
+    /// A read of the SPU2's registers at `p`, by halfwords (Sapphire_Native.md §32.3).
+    fn spu2_read(&mut self, p: u32, size: Size) -> u32 {
+        self.run_units(self.now * IOP);
+        let o = p - spu2::BASE;
+        let v = match size {
+            Size::Word => self.spu2.read16(o & !3) as u32 | (self.spu2.read16((o & !3) + 2) as u32) << 16,
+            _ => (self.spu2.read16(o & !1) as u32) >> (8 * (o & 1)),
+        };
+        self.reschedule();
+        v
+    }
+
+    /// A write to the SPU2's registers: a word as two halfwords, low first; a byte at an even address as a halfword's,
+    /// at an odd one ignored [A, the PlayStation's, Diamond_SPU.md §2].
+    fn spu2_write(&mut self, p: u32, size: Size, value: u32) {
+        self.run_units(self.now * IOP);
+        let o = p - spu2::BASE;
+        let rose = match size {
+            Size::Word => self.spu2.write16(o & !3, value as u16) | self.spu2.write16((o & !3) + 2, (value >> 16) as u16),
+            _ if size == Size::Byte && o & 1 != 0 => false,
+            _ => self.spu2.write16(o & !1, value as u16),
+        };
+        if rose {
+            self.intc.raise(source::SPU2);
+        }
+        self.reschedule();
+        self.horizon = self.horizon.min(self.next);
     }
 
     /// Before an instruction: the units brought to the clock, and the processor held while the DMAC has the bus.
@@ -311,6 +364,10 @@ impl IopBus {
                 get(&self.ram, a as usize, size)
             }
             Target::Scratch(a) => get(&self.scratch, a as usize, size),
+            Target::Io(p) if (spu2::BASE..spu2::END).contains(&p) => {
+                self.now += IO_STALL;
+                self.spu2_read(p, size)
+            }
             Target::Io(p) => {
                 self.now += IO_STALL;
                 let w = self.read_io(p & !3);
@@ -384,6 +441,7 @@ impl Bus for IopBus {
         match decode(address) {
             Target::Ram(a) => put(&mut self.ram, a as usize, size, value),
             Target::Scratch(a) => put(&mut self.scratch, a as usize, size, value),
+            Target::Io(p) if (spu2::BASE..spu2::END).contains(&p) => self.spu2_write(p, size, value),
             Target::Io(p) => self.write_io(p & !3, value << (8 * (p & 3))),
             Target::Sif(p) => self.sif.iop_write(p & 0xF0, value << (8 * (p & 3))),
             Target::Rom(_) | Target::Control => {}

@@ -21,6 +21,7 @@
 //! S18: texture mapping (`gs::texture`: the CLUT buffer, LOD, mipmaps, filters, wrap modes, TEXA) and fog.
 //! S25: SIO2 (`sio2`), the DualShock 2, the memory card and the multitap behind it, on the IOP's bus.
 //! S15: the GIF (`gif`), its three paths, their arbitration and PATH3's masking, driving the GS's host interface.
+//! S26: the SPU2 (`spu2`), two cores of `blackmoon-spu`'s voices on the IOP's bus and its DMA channels 4 and 7.
 
 pub mod bios;
 pub mod board;
@@ -38,6 +39,7 @@ pub mod media;
 pub mod pcrtc;
 pub mod sif;
 pub mod sio2;
+pub mod spu2;
 pub mod state;
 pub mod timer;
 pub mod vu;

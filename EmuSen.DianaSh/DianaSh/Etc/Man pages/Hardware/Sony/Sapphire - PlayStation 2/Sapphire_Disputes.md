@@ -85,3 +85,93 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
     pre-release article, so the design family again (150 and 37.5 = 150 / 4), against ps2tek's 147.456 and 36.864.
     copetti.org's article (read 2026-10-24) gives the IOP at 37.5 MHz, citing its own sources.
   - The conclusion stays open; the evidence still to take is the project's own counting program on the referees (S4).
+
+### D-1. R5900, COP1: the EE's FPU has the single format alone with Sony's own operations, not the TX79's MIPS III FPU
+
+- **Opened:** 2026-10-24, at stage S5, by the R5900's table (`EmuSen_Mips.md` §8.2), the TX79 manual and ps2tek
+  disagreeing over 78 cells of COP1's tables and the OpCode table.
+- **Documents read** (2026-10-24):
+  - Toshiba, *TX79 Core Architecture*, rev. 2.0, 2001-04: D.4 "COP1 Instruction Encoding" gives rs = S, D, W and L,
+    DMFC1 and DMTC1; the function table for S and D holds ROUND, TRUNC, CEIL and FLOOR to L and W, CVT.S, CVT.D, CVT.W,
+    CVT.L and sixteen compares (C.F to C.NGT); W and L convert to S and D; A.5 holds LDC1 and SDC1 (35h, 3Dh). §10.5's
+    tables list the same instructions as MIPS I to III. The manual describes Toshiba's derivative, not the EE (plan P4).
+  - ps2tek at `1c91660`, "EE Instruction Decoding": COP1's rs table holds MFC1, CFC1, MTC1, CTC1, BC1, S and W only;
+    "FPU.S" holds ADD.S to NEG.S, RSQRT.S (16h), ADDA.S, SUBA.S, MULA.S, MADD.S, MSUB.S, MADDA.S, MSUBA.S (18h–1Fh but
+    1Bh), CVT.W (24h), MAX.S, MIN.S (28h, 29h), C.F, C.EQ, C.LT and C.LE (30h, 32h, 34h, 36h); "FPU.W" holds CVT.S alone;
+    the OpCode table has `---` at 35h and 3Dh. "EE COP1 Floating Point Format": "COP1, along with the rest of the PS2,
+    only supports single-precision floats".
+  - The plan's own reading (`Sapphire_Plan.md` §1.1, the COP1 row): single precision only.
+- **The two sides**: every TX79 cell for the D and L formats, DMFC1, DMTC1, LDC1, SDC1, the rounding conversions,
+  CVT.D, CVT.L, CVT.D.W and the twelve compares other than F, EQ, OLT and OLE is reserved on ps2tek's EE (66 cells); the
+  TX79 reserves the cells ps2tek gives to RSQRT, the accumulator forms, MAX and MIN (ten); and the compares at 34h and
+  36h are named C.OLT and C.OLE by the TX79, C.LT and C.LE by ps2tek (two). With no NaN on the EE (ps2tek), ordered
+  and unordered compares cannot be told apart by an operand, so the names may differ while the results agree [A].
+- **Test program:** none yet. **Evidence to take** at S9: a program of the project's that executes each TX79-only
+  encoding and records whether it is taken as a reserved instruction (or an unimplemented operation), run on the
+  referees; `ee_fpu/*`'s expected texts for whatever they exercise.
+- **Referee:** not consulted.
+- **Conclusion:** ps2tek's tables are implemented: the TX79-only encodings decode as reserved, ps2tek's operations
+  decode with the TX79's computational layout (fd at bits 10–6, fs at 15–11, ft at 20–16), the accumulator forms
+  writing fs and ft [A]; argued.
+- **Depends on it:** the R5900's decode and disassembly; S9's COP1; the open BIOS's instruction scan.
+- **Pinned by:** `emusen-mips`'s `every_encoding_of_the_tx79_tables_decodes_disassembles_and_reassembles` (its
+  differences list names D-1 for each cell) and `the_ee_s_cells_by_ps2tek`.
+- **Implemented in:** stage S5's commit.
+
+### D-2. R5900, BC1: the EE has the likely forms BC1FL and BC1TL, which the TX79 reserves
+
+- **Opened:** 2026-10-24, at stage S5.
+- **Documents read:** the TX79 manual, D.4, BC1's rt table: BC1F (0), BC1T (1), every other cell `*`; ps2tek, "BC1":
+  BC1F, BC1T, BC1FL, BC1TL (0–3). Both give BC0FL and BC0TL in COP0's BC0 table (C.2; ps2tek "BC0"), and ps2tek gives
+  BC2FL and BC2TL.
+- **Test program:** none yet; at S9, a program branching on each and recording whether the delay slot ran.
+- **Referee:** not consulted.
+- **Conclusion:** BC1FL and BC1TL decode, as ps2tek has them; argued from ps2tek alone and the TX79's own COP0 likely
+  forms.
+- **Depends on it:** the decode; S9.
+- **Pinned by:** the gate test's differences (D-2) and `the_ee_s_cells_by_ps2tek`.
+- **Implemented in:** stage S5's commit.
+
+### D-3. R5900: OpCode 12h is COP2, VU0's macro mode, and 36h and 3Eh are LQC2 and SQC2, which the TX79 reserves
+
+- **Opened:** 2026-10-24, at stage S5.
+- **Documents read:** the TX79 manual, A.5: 12h `*`, 36h and 3Eh η; ps2tek, "EE Instruction Decoding": COP2 at 12h with
+  its own rs table (QMFC2, CFC2, QMTC2, CTC2, BC2, Special1 for every rs from 10h), LQC2 at 36h and SQC2 at 3Eh;
+  Kunimatsu et al., Hot Chips 11 (1999): "Co-processor mode – MIPS COP2 instruction: 32-bit opcode", VU0 "available"
+  in it, with COP2's layout drawn.
+- **Conclusion:** COP2, LQC2 and SQC2 decode as ps2tek has them, COP2's operations by `vu.rs`'s table; argued, two
+  sources agreeing (ps2tek and Sony's slides) against a manual of another product. The operand fields of QMFC2, QMTC2,
+  CFC2, CTC2, LQC2 and SQC2 are the MIPS coprocessor moves' and loads' (rt, and rd or the base and offset) [A]; ps2tek
+  names interlocking forms (".I") whose bit no source read gives.
+- **Depends on it:** the decode; S12 (VU0 macro mode).
+- **Pinned by:** the gate test's differences (D-3) and `the_ee_s_cells_by_ps2tek`.
+- **Implemented in:** stage S5's commit.
+
+### D-4. VU: which half of a micro instruction runs ITOF, FTOI, ABS, NOP, MOVE, MR32, MTIR, MFIR and WAITQ
+
+- **Opened:** 2026-10-24, at stage S5, by `vu.rs` (`EmuSen_Mips.md` §9.2).
+- **Documents read:** Kunimatsu et al., Hot Chips 11: the upper unit's list (ADD/SUB, MUL, MADD/MSUB, MAX/MIN, outer
+  product, clipping) and the lower unit's (DIV/SQRT/RSQRT, load/store, jump/branch, EFU, random unit; the integer ALU in
+  the block diagram); ps2tek, "VU Instruction Format": the upper unit "mostly executes floating-point arithmetic", the
+  lower "integer calculations, branches, and some specialized floating-point operations"; ps2tek's "FDIV Pipeline"
+  puts WAITQ with DIV, SQRT and RSQRT.
+- **The rule implemented** [A]: every operation the documents place lies in Special1's rows to 2Fh or Special2's rows
+  0000–0101 if upper, and in Special1's row 110 or Special2's rows 0110 onwards if lower; the nine operations are
+  placed by the same rows (ITOF, FTOI, ABS and NOP upper; MOVE, MR32, MTIR, MFIR, WAITQ lower).
+- **Test program:** none yet; S13's microprograms placing each in the other half, run on the referees.
+- **Referee:** not consulted.
+- **Conclusion:** argued, by the tables' rows; open.
+- **Depends on it:** the micro decode and disassembly; S13.
+- **Pinned by:** `vu.rs`'s `every_encoding_of_the_documented_tables_reads_back_in_both_modes`.
+- **Implemented in:** stage S5's commit.
+
+### D-5. VU: the field mask's bit order, x at bit 24 and w at bit 21
+
+- **Opened:** 2026-10-24, at stage S5.
+- **Documents read:** the Hot Chips slides draw dest as four bits (24–21) without naming them; ps2tek's MAC flag
+  register orders each group x, y, z, w from the high bit (`|Ox|Oy|Oz|Ow|Ux|…|Zw|`), and its clip flags put x lowest.
+- **Conclusion:** x at bit 24, by the MAC flags' order; argued, one analogy; open. It changes only how the mask is
+  written, never which bits a word holds.
+- **Depends on it:** the text of every masked VU operation; S12 and S13.
+- **Pinned by:** `the_hot_chips_examples_and_the_flags` (`lqi.x`, a mask of bit 24 alone).
+- **Implemented in:** stage S5's commit.

@@ -21,6 +21,9 @@ The marks are `Diamond_Plan.md`'s: **[M]** measured on 2026-10-11 with the tool 
   names differ between the R3000A (BPC, TAR, DCIC…) and an R4000-style processor (Index, EntryHi, Count…).
 - **MarsRT** may adopt the disassembler when it gains `DEBUG_DISASSEMBLE`, a change for MarsRT's own owner to decide
   and measure (the plan's §9.1). Nothing in MarsRT was read or changed for this crate.
+- **Sapphire** (the PlayStation 2) takes the R5900's table (§8) and the vector units' (§9) from its stage S5 on: for its
+  test programs now, and later for its interpreter's decode, its debugger and the open BIOS's scan of its EE image
+  (`Sapphire_Plan.md` §5.9, §9.1).
 
 ## 2. The decode
 
@@ -64,7 +67,8 @@ table in its own crate; the decode and the disassembler do not change.
 MIPS III (the VR4300) and the RSP extend the map: 64-bit operations, the likely branches, traps, LL/SC, 64-bit loads
 and stores; the RSP's vector unit on coprocessor 2 with its own load and store forms. They are to be a second decode
 function beside `decode`, the same `Op` gaining their operations, and the RSP's vector unit a `Coprocessor` table, so
-that an R3000A's decode stays exactly MIPS I [C]. None of it is built.
+that an R3000A's decode stays exactly MIPS I [C]. *Built since, each as a table of its own rather than an extension of
+`Op`*: the VR4300's (§6), the RSP's (§7), the R5900's (§8) and the PlayStation 2's vector units' (§9).
 
 ## 3. The disassembler
 
@@ -142,3 +146,164 @@ processor `rsp` (interface 19). The C# moved to `Crystal/Systems/N64/RspDisassem
 library and its `DecodeManaged` the failover, held by `DebugCodeParityTests.Every_rsp_word_disassembles_alike` over
 every primary opcode crossed with every function, element and register pattern the decode reads, and 200,000 random
 words, at IMEM addresses that wrap.
+
+## 8. The R5900 (2026-10-24)
+
+*Built at Sapphire's stage S5 (`Sapphire_Plan.md` §7 and §9.1), as the tester decided with that plan's §11 Q10 on
+2026-10-24.* `src/r5900.rs`: the PlayStation 2's EE core, decoded and written as a table of its own. The marks are the
+plan's; the sources are the documents pinned at its stage S2 (`Sapphire_References.md` §1): Toshiba's *TX79 Core
+Architecture*, rev. 2.0 (2001-04), Appendices A to D, and ps2tek at `1c91660`, "EE Instruction Decoding", "EE COP0
+Registers" and "EE COP1". No emulator's, assembler's or SDK's source and no Sony manual was read.
+
+### 8.1 Why a table of its own
+
+The R5900's map differs from MIPS III in both directions [R the TX79 manual, A.5 and §3.3]: it adds the MMI opcode
+space, the second multiplier's instructions (MULT1, DIV1, MADD1…), the three-operand MULT and MADD, MFSA and MTSA, LQ
+and SQ, and lacks DMULT, DMULTU, DDIV, DDIVU, LL, LLD, SC and SCD, whose cells the manual marks η ("currently not
+supported … Reserved Instruction exception"). Folded into the VR4300's decode, one opcode would carry two rules, the
+argument `rsp.rs` was made by (§7) [A]. Nothing in `decode.rs`, `vr4300.rs` or `rsp.rs` changed: their text over
+3,020,480 words (every primary opcode with every function, five register patterns each, and three million random words
+at varied addresses) hashes the same before and after [M, a throwaway program over `disassemble`, `vr4300::decode` and
+`rsp::decode`, 2026-10-24].
+
+### 8.2 The map
+
+The manual's opcode tables are A.5 (the OpCode field, SPECIAL's function, REGIMM's rt), B.5 (MMI's function and the
+MMI0 to MMI3 tables by bits 10–6), C.2 (COP0's rs, MF0 and MT0 with rd = Debug or Perf, BC0's rt, C0's function) and
+D.4 (COP1's rs, BC1's rt, the function with rs = S or D, and with rs = W or L). `r5900.rs` holds one Rust table for each,
+indexed by the same field, so the source reads cell for cell against the manual: 290 mnemonics.
+
+**Where the EE differs from the TX79, ps2tek's tables are followed** and each difference is a dispute
+(`Sapphire_Plan.md` P6, `Sapphire_Disputes.md`):
+
+- **D-1, COP1.** The TX79's FPU is MIPS III's, with the D and L formats, DMFC1, DMTC1, LDC1, SDC1, the rounding
+  conversions and sixteen compare conditions [R D.4, §10.5]. ps2tek's EE has single precision only ("COP1, along with
+  the rest of the PS2, only supports single-precision floats", "EE COP1 Floating Point Format") and its own operations:
+  RSQRT.S, ADDA.S, SUBA.S, MULA.S, MADD.S, MSUB.S, MADDA.S, MSUBA.S, MAX.S, MIN.S, four compares, CVT.W.S and CVT.S.W
+  [R "FPU.S", "FPU.W"]. Its compares at 34h and 36h are named C.LT and C.LE where the TX79 names those cells C.OLT and
+  C.OLE; ps2tek's names are written.
+- **D-2, BC1FL and BC1TL.** ps2tek's BC1 table has the likely forms; the TX79's has BC1F and BC1T alone.
+- **D-3, COP2, LQC2 and SQC2.** The TX79 reserves the OpCode cells 12h, 36h and 3Eh; ps2tek gives them to COP2, LQC2
+  and SQC2, and Sony's Hot Chips slides describe the "co-processor mode: MIPS COP2 instruction" [R]. COP2's operations
+  are VU0's, written by §9's table with a `v`.
+
+What ps2tek leaves out and the TX79 gives is taken from the TX79 [C]: the C790's own COP0 moves (MFBPC to MTDVBM through
+rd = Debug, MFPS, MFPC, MTPS and MTPC through rd = Perf, by C.2's two small tables), SYNC.P (stype's top bit, A's
+SYNC.stype), PMFHL's five formats and PMTHL's one (B's PMFHL.fmt and PMTHL.fmt; the other fmt values are reserved
+here, the manual naming none), and every instruction's operand order (each page's Format line). The EE's COP0 register
+names are the TX79's Table 4-1, which ps2tek's list repeats ("PRId" as the TX79 writes it).
+
+**Fields the format fixes at zero are not decoded** [C]: SPECIAL's sa where an instruction has none, BREAK's code
+read as a code, a COP0 move's low bits outside Debug and Perf, and the like. The VR4300's decode does the same, and no
+document says whether the C790 raises a reserved instruction exception for them; S6's interpreter is where it would
+matter, and ps2autotests' `cpu/ee/*` there.
+
+### 8.3 What it returns
+
+`operation(word) -> Option<Op>`: `Op::Cpu(name, form)` or `Op::Vu0(&vu::Operation)`, `None` where the EE reserves the
+encoding; an interpreter and the open BIOS's scan ("refuses any instruction the R5900 lacks", `Sapphire_Plan.md` §5.9)
+both read it. `decode(word, pc)` returns the VR4300's `Instruction` shape (mnemonic, operands, and the address the word
+names: a branch's or jump's target, or a load's or store's address when its base is the zero register), so that the
+N64's processors and the EE give a debugger one shape. `disassemble(word, pc, &Dialect::R5900)` writes the same text.
+
+### 8.4 The spelling
+
+**Appendix A's**, the R3000's (§3) [C]: the IOP beside the EE is written so, and one console's two processors read
+alike. Lower-case mnemonics, the general registers by their conventional names with `fp` for 30 (ps2tek's "EE
+Registers" table gives the same names), signed hexadecimal immediates and offsets, the shift amount in decimal, a
+branch's or jump's target as the address it reaches, `nop` for the zero word and `.word` for a reserved one. What is
+the R5900's own:
+
+- The three-operand multiplies (MULT, MULTU, MADD, MADDU and their pipeline-1 forms) are always written with rd, the
+  C790's Format line; the assembler also takes the two-operand MIPS form, rd zero.
+- `sync` and `sync.p`; `pmfhl.lw`, `.uw`, `.slw`, `.lh`, `.sh`; `pmthl.lw`; `mfps rt, reg` with the counter's number.
+- COP0's registers by name, a reserved one `$n`; the FPU's `fN` and `fcrN`; the vector registers in COP2's moves and
+  loads as `vfN`; VU0's control registers in CFC2 and CTC2 as `$n`, since no source read here numbers them.
+- CACHE's operation and PREF's hint as numbers, as the VR4300's spelling writes CACHE's; Table C-1's names are not used.
+
+**Left out**: ps2tek names "QMTC2.I/CTC2.I" (the interlocking forms, "VU Instruction Format") without giving the bit
+that selects them, so QMFC2, QMTC2, CFC2 and CTC2 are decoded without it, and a word with any of their low eleven bits
+set reads as the plain move.
+
+### 8.5 The assembler
+
+`assemble` and `assemble_line` with `Dialect::R5900` read what `decode` writes, with `asm.rs`'s labels, comments and
+`.word`; `r5900::encode` builds each instruction from its table's canonical word and its form's fields, and refuses
+any text whose word decodes to another mnemonic (`mfc0 t0, Debug` is `mfbpc`'s encoding, so it is refused). A VU0
+operation is read by §9's `vu::encode` behind the COP2 bits.
+
+### 8.6 How it is tested
+
+[M, `cargo test --release`, 2026-10-24.] **The gate, `every_encoding_of_the_tx79_tables_decodes_disassembles_and_reassembles`**:
+every cell of the manual's tables transcribed into the test (806 cells: 261 named, 462 reserved, 83 where the EE's
+table differs), not read from `r5900.rs`. A named cell decodes to the manual's mnemonic and, with its operand fields set
+at random 64 times at random addresses, disassembles and reassembles to the same word; a reserved cell (`*`, `η`, `ϕ`)
+decodes to nothing; and each of the 83 cells of the differences above decodes as ps2tek's table reads, its dispute
+named in the test. `the_ee_s_cells_by_ps2tek`: ps2tek's own primary rows 6 and 7, COP1, BC1, BC2, FPU.S, FPU.W and COP2
+tables cell for cell, and every VU0 operation under each of COP2's sixteen rs values reading back. `the_spelling_is_appendix_a_s`:
+words built by hand from the manuals' encoding pictures, one or two of each kind of operand, and two refusals.
+
+## 9. The vector units (2026-10-24)
+
+*Built at the same stage.* `src/vu.rs`: the operations VU0 and VU1 share, read in micro mode as a 64-bit pair and in
+macro mode as the EE's COP2 word.
+
+### 9.1 One table, two modes
+
+Sony's Hot Chips 11 slides (Kunimatsu et al., 1999, "Instruction opcode to support 2 modes") draw the three layouts
+side by side [R]: the **upper word** of a VLIW instruction is I, E, M, D, T (bits 31–27), two zero bits, then dest (4
+bits), ft, fs, fd and a 6-bit opcode, MADDbc as the example (`0010--`); the **lower word** is `1000000` ("Lower OP.",
+bits 31–25), then dest, ft, is and an 11-bit opcode, LQI as the example (`01101 1111 00`); and the **COP2 word** is
+`010010`, a 1 (co), then the same 25 bits, VMADDbc and VLQI as its examples, "A VLIW instruction includes two COP2
+instructions". ps2tek gives the 64-bit pair's order ("the lower 32-bit word is the lower instruction and the upper word
+is the upper instruction"), the five flags' meanings, and the two macro tables, "COP2 Special1" by bits 5–0 and
+"COP2 Special2" by bits 10–6 and 1–0 where bits 5–2 are 1111 [R]. So `vu.rs` holds those two tables once, each
+operation with its micro name (the slides' "MADD bc"), and macro mode writes it with ps2tek's `v` ("VMADDx"). The
+slides' two examples sit in ps2tek's tables where their bits say (MADDx at 08h; LQI at row 0110, column 4), so the
+layouts and the tables agree [A].
+
+ps2tek's tables carry two printing slips, read as the obvious names: "VSUbi" (VSUBi) and "CALLMSR" without its V [A].
+
+### 9.2 Which half runs an operation
+
+The slides list the upper unit's operations (add and subtract, multiply, multiply-add and -subtract, maximum and
+minimum, the outer product, clipping) and the lower unit's (divide, square root and reciprocal square root, loads and
+stores, jumps and branches, the EFU, the random unit, and in the block diagram the integer ALU) [R]. Every operation so
+placed is in Special1's rows up to 2Fh or Special2's rows 0000–0101 if upper, and in Special1's row 110 or Special2's
+rows 0110 onwards if lower, so the table puts each operation by its row [A], and Special1's VCALLMS and VCALLMSR, which
+call a microprogram, in macro mode alone. **The rule places nine operations the documents do not**: ITOF and FTOI (four
+each), ABS and NOP upper, and MOVE, MR32, MTIR, MFIR and WAITQ lower. `Sapphire_Disputes.md` D-4.
+
+**dest's bit order** is not drawn: bit 24 is taken as x and bit 21 as w, as ps2tek's MAC flag register puts x highest
+(`Ox|Oy|Oz|Ow…`) [A]. `Sapphire_Disputes.md` D-5.
+
+### 9.3 What the documents do not give
+
+- **The micro-only lower instructions**: those with an opcode of their own in bits 31–25 rather than the `1000000`
+  class, which ps2tek's pipeline section and VIF chapter name (WAITP, XITOP, the EFU's ESADD to EATAN) and which the
+  slides' lower list implies (loads and stores of the LQ and SQ kind, branches, integer immediates): no source read
+  here gives their encodings, so such a lower word is written `.word`. S13 (VU micro mode) needs them.
+- **Operand layouts** beyond the slides' two: an operation whose fields are the slides' upper layout with an fd, fs and
+  ft (the FMAC family, and its accumulator and q and i forms) is written with them; every other operation is written
+  `Raw`, its name alone when its 25 bits are its canonical ones, otherwise its name and the 25 bits in hexadecimal, as
+  §3 writes a coprocessor command (`div 0x0102bbc`). This makes no claim about which field an undocumented operation
+  reads, and reads back exactly.
+- **VU1's own operations** (the EFU, XGKICK): undocumented encodings, as above; the one table serves both units.
+
+### 9.4 The spelling and the assembler
+
+A pair is written `upper | lower`: the upper's set flags first in brackets, in the order I, E, M, D, T (`[e] nop |
+move`); with the I bit, the lower is the constant in hexadecimal (`[i] addi vf0, vf0, i | 0x3f800000`); an operation
+`name.dest vfD, vfS, vfT` (`maddx.xyzw vf1, vf2, vf3`), the accumulator `acc`, the q and i registers `q` and `i`; an
+upper word that is no upper operation, or has bits 26–25 set, is `.word` whole, flags included; a lower word that is not
+in the `1000000` class or not a lower operation is `.word`. `vu::assemble_pair` and `vu::assemble` read that text back
+(a program one pair to a line, `#` and `;` comments, no labels while no branch is decodable); `vu::encode` reads one
+operation, which `r5900::encode` uses for COP2.
+
+### 9.5 How it is tested
+
+[M, 2026-10-24.] `every_encoding_of_the_documented_tables_reads_back_in_both_modes`: ps2tek's two tables transcribed
+cell for cell (60 cells of Special1 below its four 1111 cells, all 128 of Special2): each of the 120 named cells decodes
+to its name and reads back 64 times with random fields and flags, in macro mode and in micro mode in its own half; each
+empty cell decodes to nothing. `the_hot_chips_examples_and_the_flags`: the slides' VMADDx and LQI words, the flags, the
+I bit's constant, and the refusals (an integer add in the upper half, a field mask out of order).

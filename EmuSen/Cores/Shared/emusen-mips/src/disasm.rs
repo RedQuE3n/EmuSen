@@ -45,6 +45,8 @@ pub enum Spelling {
     #[default]
     AppendixA,
     Vr4300,
+    /// The R5900's own table, written in Appendix A's spelling (EmuSen_Mips.md §8).
+    R5900,
 }
 
 /// The coprocessors a processor has, by number, an absent one written with numbers only; and its spelling. The VR4300's
@@ -58,6 +60,7 @@ pub struct Dialect {
 impl Dialect {
     pub const MIPS_I: Dialect = Dialect { cop: [None; 4], spelling: Spelling::AppendixA };
     pub const VR4300: Dialect = Dialect { cop: [None; 4], spelling: Spelling::Vr4300 };
+    pub const R5900: Dialect = Dialect { cop: [None; 4], spelling: Spelling::R5900 };
 }
 
 /// An instruction ready to be written as text: `word`, fetched from `pc`.
@@ -89,8 +92,12 @@ fn cop_register(f: &mut fmt::Formatter, names: Option<&[&'static str; 32]>, n: u
 
 impl fmt::Display for Disassembly<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.dialect.spelling == Spelling::Vr4300 {
-            let i = crate::vr4300::decode(self.word, self.pc);
+        if self.dialect.spelling != Spelling::AppendixA {
+            let i = if self.dialect.spelling == Spelling::Vr4300 {
+                crate::vr4300::decode(self.word, self.pc)
+            } else {
+                crate::r5900::decode(self.word, self.pc)
+            };
             f.write_str(&i.mnemonic)?;
             return if i.operands.is_empty() { Ok(()) } else { write!(f, " {}", i.operands) };
         }

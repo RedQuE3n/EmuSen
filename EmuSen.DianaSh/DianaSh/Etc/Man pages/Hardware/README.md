@@ -62,7 +62,8 @@ here.
 - [`Shared/EmuSen_Mips.md`](Shared/EmuSen_Mips.md) — `emusen-mips`, the MIPS instruction set as data: fields, the
   decode of MIPS I as the R3000 decodes it with an extension point per coprocessor, the disassembler with a table per
   coprocessor, and an assembler for test programs; no execution. Built 2026-10-11 at Diamond's stage 2, used by
-  `blackmoon-r3000` and `blackmoon-gte`, open to MarsRT's disassembler.
+  `blackmoon-r3000` and `blackmoon-gte`, open to MarsRT's disassembler; the VR4300's and the RSP's tables since
+  2026-10-17 and 2026-10-18, and since 2026-10-24 (Sapphire's stage S5) the R5900's and the PlayStation 2 vector units'.
 - [`Shared/EmuSen_Disc.md`](Shared/EmuSen_Disc.md) — `emusen-disc`, a disc as sectors: a cue sheet's tracks placed on
   the time line, an `.iso`, a lone raw track or a CHD (its CD layout measured from chdman's output), ECMA-130's EDC and
   RSPC derived from the standard, subchannel Q and its pause countdown, the TOC, `.sbi` patches, CD-DA samples and the

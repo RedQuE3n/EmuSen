@@ -21,11 +21,11 @@ impl fmt::Display for AsmError {
 
 impl std::error::Error for AsmError {}
 
-fn err<T>(message: impl Into<String>) -> Result<T, AsmError> {
+pub(crate) fn err<T>(message: impl Into<String>) -> Result<T, AsmError> {
     Err(AsmError { line: 0, message: message.into() })
 }
 
-fn number(s: &str) -> Option<i64> {
+pub(crate) fn number(s: &str) -> Option<i64> {
     let (negative, digits) = match s.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, s.strip_prefix('+').unwrap_or(s)),
@@ -37,7 +37,7 @@ fn number(s: &str) -> Option<i64> {
     Some(if negative { -v } else { v })
 }
 
-fn gpr(s: &str) -> Result<u32, AsmError> {
+pub(crate) fn gpr(s: &str) -> Result<u32, AsmError> {
     let name = s.strip_prefix('$').unwrap_or(s);
     if let Some(i) = GPR_NAMES.iter().position(|n| *n == name) {
         return Ok(i as u32);
@@ -61,7 +61,7 @@ fn cop_register(s: &str, names: Option<&[&'static str; 32]>) -> Result<u32, AsmE
     }
 }
 
-fn ranged(s: &str, lo: i64, hi: i64) -> Result<u32, AsmError> {
+pub(crate) fn ranged(s: &str, lo: i64, hi: i64) -> Result<u32, AsmError> {
     match number(s) {
         Some(v) if (lo..=hi).contains(&v) => Ok(v as u32),
         Some(_) => err(format!("out of range: {s}")),
@@ -69,12 +69,15 @@ fn ranged(s: &str, lo: i64, hi: i64) -> Result<u32, AsmError> {
     }
 }
 
-fn split_operands(s: &str) -> Vec<&str> {
+pub(crate) fn split_operands(s: &str) -> Vec<&str> {
     if s.trim().is_empty() { Vec::new() } else { s.split(',').map(str::trim).collect() }
 }
 
 /// One instruction at `pc`, a branch's or jump's target given as an address or as a label `labels` knows.
 fn encode(text: &str, pc: u32, dialect: &Dialect, labels: &dyn Fn(&str) -> Option<u32>) -> Result<u32, AsmError> {
+    if dialect.spelling == crate::Spelling::R5900 {
+        return crate::r5900::encode(text, pc, labels);
+    }
     let text = text.trim();
     let (mnemonic, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
     let mnemonic = mnemonic.to_ascii_lowercase();
@@ -174,7 +177,7 @@ pub fn assemble_line(text: &str, pc: u32, dialect: &Dialect) -> Result<u32, AsmE
     encode(text, pc, dialect, &|_| None)
 }
 
-fn strip_comment(line: &str) -> &str {
+pub(crate) fn strip_comment(line: &str) -> &str {
     let end = line.find(['#', ';']).unwrap_or(line.len());
     line[..end].trim()
 }

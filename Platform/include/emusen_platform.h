@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 26u
+#define EMUSEN_PLATFORM_ABI_VERSION 27u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -147,6 +147,8 @@ int64_t emusen_galaxia_legacy_root_for(const uint8_t *config_root, size_t config
 #define EMUSEN_GALAXIA_SAVE_RESUME_STATE 3u /* <stem>.resume.state; extra is the directory override */
 #define EMUSEN_GALAXIA_SAVE_PICTURE 4u      /* rom is a state's path; the same name with .png */
 /* A packaged game's own (EmuSen_GamePackages.md, sections 3.5 and 14; since 25): rom is the package's folder, and <name> its name less the extension. */
+/* Since 27, extra is the patch list's save key for a game opened with its patches applied, eight hex digits, and <name>
+   is then <name>.patched-<key>; null or empty for the game unpatched (EmuSen_GamePackages.md, section 16). */
 #define EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM 5u         /* <package>/saves/<name>.srm */
 #define EMUSEN_GALAXIA_SAVE_PACKAGE_STATE 6u        /* <package>/states/<name>.state, or .slotN.state */
 #define EMUSEN_GALAXIA_SAVE_PACKAGE_RESUME_STATE 7u /* <package>/states/<name>.resume.state */

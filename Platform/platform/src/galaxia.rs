@@ -178,7 +178,15 @@ pub unsafe extern "C" fn emusen_galaxia_legacy_root_for(config_root: *const u8, 
     answer(result(), out, len)
 }
 
-/// A save file's path, by its `EMUSEN_GALAXIA_SAVE_*` kind. `rom` is the ROM's path, or the state's for a picture; `extra` is the console for a save, the directory override for a state.
+/// A package kind's `extra`: the patch list's save key, or none for the game opened unpatched; anything but hex digits refused.
+fn save_key(extra: Option<&str>) -> Result<Option<&str>, i32> {
+    match extra.filter(|k| !k.is_empty()) {
+        Some(key) if !package::is_save_key(key) => Err(fail(status::BAD_ARGUMENT, format!("{key:?} is not a patch list's save key"))),
+        key => Ok(key),
+    }
+}
+
+/// A save file's path, by its `EMUSEN_GALAXIA_SAVE_*` kind. `rom` is the ROM's path, the state's for a picture, or the package's folder; `extra` is the console for a save, the directory override for a state, the patch list's save key for a package's kinds.
 ///
 /// # Safety
 /// Each pointer must be valid for its length, or null.
@@ -193,9 +201,9 @@ pub unsafe extern "C" fn emusen_galaxia_save_path(kind: u32, rom: *const u8, rom
             save::STATE => saves::state_path(&tree, rom, slot, extra),
             save::RESUME_STATE => saves::resume_state_path(&tree, rom, extra),
             save::PICTURE => saves::picture_path(rom),
-            save::PACKAGE_SRAM => saves::package_sram_path(rom),
-            save::PACKAGE_STATE => saves::package_state_path(rom, slot),
-            save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom),
+            save::PACKAGE_SRAM => saves::package_sram_path(rom, save_key(extra)?),
+            save::PACKAGE_STATE => saves::package_state_path(rom, slot, save_key(extra)?),
+            save::PACKAGE_RESUME_STATE => saves::package_resume_state_path(rom, save_key(extra)?),
             _ => return Err(fail(status::BAD_ARGUMENT, format!("no save kind {kind}"))),
         })
     };

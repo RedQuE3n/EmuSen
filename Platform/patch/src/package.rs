@@ -69,14 +69,7 @@ pub fn read_list(folder: &str, doc: &Value) -> Result<Vec<Listed>, String> {
 /// `patched.patches_sha1`: the SHA-1 of one line a patch, in order, of its format, a space and its file's SHA-1, each
 /// line ended by a line feed (EmuSen_GamePackages.md §15.2). It changes when the list or any of its files does.
 pub fn key(list: &[(Format, &str)]) -> String {
-    let mut lines = String::new();
-    for (format, sha1) in list {
-        lines.push_str(format.name());
-        lines.push(' ');
-        lines.push_str(&sha1.to_ascii_lowercase());
-        lines.push('\n');
-    }
-    rom_hash::sha1_of(lines.as_bytes())
+    emusen_galaxia::package::patches_key(&list.iter().map(|(f, s)| (f.name(), *s)).collect::<Vec<_>>())
 }
 
 fn key_of(list: &[Listed]) -> String {

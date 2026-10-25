@@ -137,12 +137,16 @@ namespace EmuSen.WiseMan.Galaxia
         {
             string[] roots = { At("Packages", "SNES", "Zelda (U).sfc"), At("p.q") + Path.DirectorySeparatorChar, "relative/pkg", At("Packages", "PlayStation", "a.b.chd") };
             foreach (string root in roots)
-            {
-                Assert.Equal(SaveLibrary.Managed.PackageSramPathFor(root), GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root));
-                Assert.Equal(SaveLibrary.Managed.PackageResumeStatePathFor(root), GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root));
-                foreach (int slot in new[] { 1, 2, 0, -1, int.MaxValue })
-                    Assert.Equal(SaveLibrary.Managed.PackageStatePathFor(root, slot), GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, null, slot));
-            }
+                foreach (string? key in new[] { null, "", "0a1b2c3d" })
+                {
+                    Assert.Equal(SaveLibrary.Managed.PackageSramPathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root, key));
+                    Assert.Equal(SaveLibrary.Managed.PackageResumeStatePathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root, key));
+                    foreach (int slot in new[] { 1, 2, 0, -1, int.MaxValue })
+                        Assert.Equal(SaveLibrary.Managed.PackageStatePathFor(root, slot, key), GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, key, slot));
+                }
+            Assert.Equal(Path.Combine(roots[0], "saves", "Zelda (U).patched-0a1b2c3d.srm"), SaveLibrary.SramPathFor("/roms/x.sfc", "SNES", roots[0], "0a1b2c3d"));
+            Assert.Equal(Path.Combine(roots[3], "states", "a.b.patched-0a1b2c3d.slot3.state"), SaveLibrary.StatePathFor("/roms/psx/a.b.cue", 3, null, roots[3], "0a1b2c3d"));
+            Assert.Throws<ArgumentException>(() => GalaxiaNative.SavePath(GalaxiaSave.PackageSram, roots[0], "../../x"));
             Assert.Equal(Path.Combine(roots[0], "saves", "Zelda (U).srm"), SaveLibrary.SramPathFor("/roms/SNES/USA/Zelda (moved).sfc", "SNES", roots[0]));
             Assert.Equal(Path.Combine(roots[3], "states", "a.b.slot3.state"), SaveLibrary.StatePathFor("/roms/psx/a.b.cue", 3, At("ignored"), roots[3]));
             Assert.Equal(Path.Combine(roots[1], "states", "p.resume.state"), SaveLibrary.ResumeStatePathFor("x.sfc", null, roots[1]));

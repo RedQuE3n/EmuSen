@@ -64,10 +64,10 @@ namespace EmuSen.Mistress.Views
         // What opens a game under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
         internal Func<CrystalOpen, GameSession>? EarlyLoader { get; set; }
 
-        // A packaged game's resume state is in its package, as the runtime names it - see EmuSen_GamePackages.md §3.5.
+        // A packaged game's resume state is in its package, by its patch list's key where it has one, as the runtime names it - see EmuSen_GamePackages.md §3.5, §5.5.
         private string ResumeStatePath(string romPath) => ResumeStatePath(romPath, EmuSen.Galaxia.Media.GamePackages.RootFor(romPath));
 
-        private string ResumeStatePath(string romPath, string? package) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory, package);
+        private string ResumeStatePath(string romPath, string? package) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory, package, EmuSen.Galaxia.Media.GamePackage.SaveKeyAt(package));
 
         // Null cancels the launch; with no resume state there is nothing to ask.
         private async Task<ResumeChoice?> ChooseResumeAsync(string romPath)

@@ -25,8 +25,9 @@ impl BatterySave {
     pub const NONE: BatterySave = BatterySave { path: None, previous: None };
 
     /// A game's own file, `BatterySave.Open`: in its package where it opened as one, the plain save then read until
-    /// copied in, as an earlier place is (EmuSen_GamePackages.md §3.5).
-    pub fn open(tree: &Tree, rom: &str, console: &str, disabled: bool, extension: &str, package: Option<&str>) -> BatterySave {
+    /// copied in, as an earlier place is (EmuSen_GamePackages.md §3.5); a patched game's by its list's key, with nothing
+    /// read before it, so that a hack starts its own save and never reaches the original's (§5.5).
+    pub fn open(tree: &Tree, rom: &str, console: &str, disabled: bool, extension: &str, package: Option<&str>, key: Option<&str>) -> BatterySave {
         if disabled || rom.is_empty() {
             return BatterySave::NONE;
         }
@@ -36,8 +37,8 @@ impl BatterySave {
             let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
             return BatterySave { path: Some(plain), previous };
         };
-        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root), extension);
-        let previous = if exists(&at) {
+        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root, key), extension);
+        let previous = if exists(&at) || key.is_some_and(|k| !k.is_empty()) {
             None
         } else if exists(&plain) {
             Some(plain)

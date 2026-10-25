@@ -122,7 +122,9 @@ Each medium of a console has its own mode, *Per game*, *Shared* or *Named*, and 
 
 **A packaged game's** *Per game* media are in its package instead: `<package>/saves/<package's name><suffix>`, the
 battery file's rule there (`EmuSen_GamePackages.md` §3.5, built 2026-10-25 at step 5, §14). The plain
-`Saves/<console>/<game><suffix>` is read until the first write copies it in, and is never removed. *Shared* and
+`Saves/<console>/<game><suffix>` is read until the first write copies it in, and is never removed. A game opened with
+the package's soft patches applied has its own, `<package>/saves/<package's name>.patched-<key><suffix>`, and reads
+nothing before it (decided 2026-10-25, `EmuSen_GamePackages.md` §16). *Shared* and
 *Named* files stay in `Saves/<console>/Cards` and `Console`: they are the console's, not a game's.
 
 The **noun** is the medium's word for one of its kind, `Card`, `Pak`, `Cartridge`, `Backup RAM`, from the console's

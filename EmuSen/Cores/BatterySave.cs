@@ -25,14 +25,15 @@ namespace EmuSen.Cores
         // The save folders, one per console as the ROM library names them.
         public const string Nes = "NES", Snes = "SNES", N64 = "N64", GameBoy = "GB", GameBoyColor = "GBC", Genesis = "Genesis", SegaCd = "Sega CD", S32x = "32X";
 
-        // disabled is the core's CoreOptions.BatteryRamDisabled, latched here; an earlier save (before 2026-09-28, or the plain one of a packaged game) is read in place and copied in by Settle - see EmuSen_GamePackages.md §3.5.
-        public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool disabled = false, string extension = SaveLibrary.SramExtension, string? packageRoot = null)
+        // disabled is the core's CoreOptions.BatteryRamDisabled, latched here; an earlier save (before 2026-09-28, or the plain one of a packaged game) is read in place and copied in by Settle, never for a patched game - see EmuSen_GamePackages.md §3.5, §5.5.
+        public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool disabled = false, string extension = SaveLibrary.SramExtension, string? packageRoot = null, string? saveKey = null)
         {
             if (disabled || !hasRam || string.IsNullOrEmpty(romPath)) return None;
             string plain = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console), extension);
             if (string.IsNullOrEmpty(packageRoot)) return new BatterySave(plain, File.Exists(plain) ? null : PreviousHome(romPath, console, extension));
-            string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console, packageRoot), extension);
-            return new BatterySave(path, File.Exists(path) ? null : File.Exists(plain) ? plain : PreviousHome(romPath, console, extension));
+            string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console, packageRoot, saveKey), extension);
+            if (!string.IsNullOrEmpty(saveKey) || File.Exists(path)) return new BatterySave(path);
+            return new BatterySave(path, File.Exists(plain) ? plain : PreviousHome(romPath, console, extension));
         }
 
         // The save kept before copied into its own place, once a load knows the machine keeps the file; the original untouched.

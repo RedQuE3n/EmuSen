@@ -155,6 +155,47 @@ pub fn scrapes_as_patched(doc: &Value) -> bool {
     doc.get("identity").and_then(Value::as_str) == Some("patched") && patched(doc).is_some()
 }
 
+/// `patched.patches_sha1`'s rule: the SHA-1 of one line a patch, in order, of its format, a space and its file's SHA-1,
+/// each line ended by a line feed (EmuSen_GamePackages.md §15.2).
+pub fn patches_key(list: &[(&str, &str)]) -> String {
+    let mut lines = String::new();
+    for (format, sha1) in list {
+        lines.push_str(format);
+        lines.push(' ');
+        lines.push_str(&sha1.to_ascii_lowercase());
+        lines.push('\n');
+    }
+    crate::rom_hash::sha1_of(lines.as_bytes())
+}
+
+/// How many hex digits of the list's key name a patched game's saves.
+pub const SAVE_KEY_DIGITS: usize = 8;
+
+/// The key a patched game's battery saves, save media and states are named apart by: the first eight hex digits of
+/// `patches_key` over the list as its entries record it, an entry without a SHA-1 (written by hand) keyed by its file's
+/// name; none for an empty list, whose game keeps the original's saves (EmuSen_GamePackages.md §5.5, §16).
+pub fn save_key(doc: &Value) -> Option<String> {
+    let entries = match doc.get("patches") {
+        Some(Value::Array(items)) if !items.is_empty() => items,
+        _ => return None,
+    };
+    let text = |e: &Value, name: &str| e.get(name).and_then(Value::as_str).unwrap_or("").to_string();
+    let lines: Vec<(String, String)> = entries.iter().map(|e| (text(e, "format"), e.get("sha1").and_then(Value::as_str).map_or_else(|| text(e, "file"), str::to_string))).collect();
+    let pairs: Vec<(&str, &str)> = lines.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
+    Some(patches_key(&pairs)[..SAVE_KEY_DIGITS].to_string())
+}
+
+/// `save_key` of the manifest in the package at `folder`; none where it lists no patches or does not read.
+pub fn save_key_at(folder: &str) -> Option<String> {
+    let doc = read(&crate::dotnet_files::join(folder, FILE_NAME)).ok()?.ok()?;
+    save_key(&doc)
+}
+
+/// Whether `key` is one `save_key` could give: hex digits, so that it can never name a place outside the package.
+pub fn is_save_key(key: &str) -> bool {
+    key.len() == SAVE_KEY_DIGITS && key.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 /// A file entry, `game`'s shape and each companion's.
 pub fn file_entry(role: &str, place: &str, path: &str, size: Option<u64>) -> Value {
     let mut members = vec![
@@ -521,6 +562,25 @@ mod tests {
         assert!(matches!(refusal("{\"format\": "), Refusal::NotJson(_)));
         assert!(parse(&base(r#", "game2": {"where": "anything"}, "dump": {"file": {"md5": "00112233445566778899AABBCCDDEEFF"}}"#)).is_ok());
         assert!(parse(&base(r#", "companions": [{"role": "extra", "where": "absolute", "path": "D:\\msu\\a.pcm"}]"#)).is_ok());
+    }
+
+    #[test]
+    fn a_patch_lists_save_key_follows_the_list_and_none_names_the_original() {
+        let doc = parse(SPEC).unwrap();
+        let key = save_key(&doc).unwrap();
+        assert_eq!(key, patches_key(&[("bps", "0123456789ABCDEF0123456789abcdef01234567")])[..SAVE_KEY_DIGITS]);
+        assert_eq!(patches_key(&[("ips", "ab")]), crate::rom_hash::sha1_of(b"ips ab\n"));
+        assert!(is_save_key(&key) && !is_save_key("../x/abc") && !is_save_key("0123456"));
+        let other = parse(&SPEC.replace("0123456789abcdef0123456789abcdef01234567", "1123456789abcdef0123456789abcdef01234567")).unwrap();
+        assert_ne!(save_key(&other), Some(key.clone()), "another patch file is another save");
+        let unsigned = parse(&SPEC.replace("\"sha1\": \"0123456789abcdef0123456789abcdef01234567\",\n", "")).unwrap();
+        assert_eq!(save_key(&unsigned).unwrap(), patches_key(&[("bps", "Super Metroid (USA).bps")])[..SAVE_KEY_DIGITS]);
+        assert_eq!(save_key(&parse(&SPEC.replace("\"patches\": [", "\"patches\": [], \"was\": [")).unwrap()), None);
+        let temp = TempDir::new("package-key");
+        std::fs::create_dir_all(temp.join("p.sfc")).unwrap();
+        std::fs::write(temp.join(&format!("p.sfc/{FILE_NAME}")), SPEC).unwrap();
+        assert_eq!(save_key_at(&temp.join("p.sfc")), Some(key));
+        assert_eq!(save_key_at(&temp.join("absent")), None);
     }
 
     #[test]

@@ -539,6 +539,9 @@ GameCheats.For(console, romPath, packageRoot)                      // <package>/
   the plain `Saves/<console>/<stem>` save (then its earlier homes) as the one to read, as it already did for a save of
   2026-09-28's move, and `Settle` copies it in; `GameCheats` reads the console's list until the package has its own.
   Nothing is removed. `pkg migrate` copies them all at once (`man pkg`).
+- **A patched game's are its own** (decided 2026-10-25, `EmuSen_GamePackages.md` §16): with a save key, the
+  package's patch list's, each name is `<name>.patched-<key>`, and nothing kept before is read for it. The key is a
+  parameter beside the package root (`saveKey`), resolved once at open as the root is.
 - **Both halves**: `SaveLibrary.Managed`'s three `Package…PathFor` and `saves.rs`' `package_sram_path`,
   `package_state_path` and `package_resume_state_path`, held alike by the parity class; `GameCheats`' package file is
   its C# alone, since only Mistress keeps a cheat list.

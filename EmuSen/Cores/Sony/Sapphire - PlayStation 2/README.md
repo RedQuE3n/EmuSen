@@ -19,6 +19,8 @@ S21, `Sapphire_Native.md` §22): `blackmoon-r3000` on Sapphire's own IOP bus wit
 -- <folder>` writes each inside an EE program that places it in IOP RAM for the referees. `src/gs/` is the GS (stage
 S16, `Sapphire_Native.md` §24): its registers, its local memory in every format's page and block layout (`gs::local`,
 the layout's one owner) and the three transfers; `tests/gs.rs` grades it by `tests/s16/`'s programs, which
-`cargo run --release --example s16 -- <folder>` writes for the referees.
+`cargo run --release --example s16 -- <folder>` writes for the referees. `src/vu/` is the vector units
+(S12, S13): `tests/s13/` and `tests/micro.rs` grade micro mode by the stage's programs, `tests/vu_micro.rs` by the VU
+manual's pipeline figures, and `cargo run --release --example s13 -- <folder>` writes the programs for the referees.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

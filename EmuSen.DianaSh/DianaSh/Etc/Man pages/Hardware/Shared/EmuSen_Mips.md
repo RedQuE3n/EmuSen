@@ -250,7 +250,7 @@ named in the test. `the_ee_s_cells_by_ps2tek`: ps2tek's own primary rows 6 and 7
 tables cell for cell, and every VU0 operation under each of COP2's sixteen rs values reading back. `the_spelling_is_appendix_a_s`:
 words built by hand from the manuals' encoding pictures, one or two of each kind of operand, and two refusals.
 
-## 9. The vector units (2026-10-24; operand forms 2026-10-25)
+## 9. The vector units (2026-10-24; operand forms and the micro-only instructions 2026-10-25)
 
 *Built at the same stage.* `src/vu.rs`: the operations VU0 and VU1 share, read in micro mode as a 64-bit pair and in
 macro mode as the EE's COP2 word.
@@ -286,16 +286,16 @@ each), ABS and NOP upper, and MOVE, MR32, MTIR, MFIR and WAITQ lower. `Sapphire_
 
 ### 9.3 What the documents do not give
 
-- **The micro-only lower instructions**: those with an opcode of their own in bits 31–25 rather than the `1000000`
-  class, which ps2tek's pipeline section and VIF chapter name (WAITP, XITOP, the EFU's ESADD to EATAN) and which the
-  slides' lower list implies (loads and stores of the LQ and SQ kind, branches, integer immediates): no source read
-  here gives their encodings, so such a lower word is written `.word`. S13 (VU micro mode) needs them.
+- ~~**The micro-only lower instructions** … no source read here gives their encodings, so such a lower word is written
+  `.word`. S13 (VU micro mode) needs them.~~ *Superseded 2026-10-25 at S13* (§9.6): every one is read from the *VU
+  User's Manual*'s §4.3.
 - ~~**Operand layouts** beyond the slides' two … written `Raw`~~ *Superseded 2026-10-25 at S12*: every operation of the
   shared table now has the *VU User's Manual*'s own operand form, read from its §4.1 (the field types), §4.2 and §4.3
   (each micro instruction's operation code and mnemonic line) and §6.2 (each macro instruction's); `Raw` is gone. A
   word whose bits outside its form's fields differ from the documented ones (a field the page draws as zero, set) is
   written as its name and its 25 bits in hexadecimal (`vnop 0x00102ff`), which reads back exactly and claims nothing.
-- **VU1's own operations** (the EFU, XGKICK): undocumented encodings, as above; the one table serves both units.
+- **VU1's own operations** (the EFU, XGKICK): ~~undocumented encodings~~ in §4.3 (§9.6); the one table serves both
+  units, and which unit has them is the core's business.
 
 ### 9.4 The spelling and the assembler
 
@@ -309,7 +309,7 @@ vi12`, `viadd vi4, vi5, vi6`, `viaddi vi4, vi5, -1`, `vlqi.xyzw vf10, (vi4++)`, 
 `waitq` bare; an
 upper word that is no upper operation, or has bits 26–25 set, is `.word` whole, flags included; a lower word that is not
 in the `1000000` class or not a lower operation is `.word`. `vu::assemble_pair` and `vu::assemble` read that text back
-(a program one pair to a line, `#` and `;` comments, no labels while no branch is decodable); `vu::encode` reads one
+(a program one pair to a line, `#` and `;` comments; labels since S13, §9.6); `vu::encode` reads one
 operation, which `r5900::encode` uses for COP2.
 
 ### 9.5 How it is tested
@@ -325,3 +325,32 @@ documented form reads back in both modes; `the_manual_s_macro_pages_read_back`: 
 operation-code pictures, each disassembled to its page's mnemonic line and reassembled to the same bits, and a VNOP with
 a field the page fixes at zero written whole. `the_spelling_is_appendix_a_s` adds the transfers' interlock bit
 (`ctc2.i v0, vi16`, `cfc2.ni`, `qmtc2.i`). LQI's text follows the manual's `(vi5++)` in the slides' word.
+
+### 9.6 The micro-only lower instructions (2026-10-25, stage S13)
+
+[R *VU User's Manual* §4.1.2, §4.3's operation-code pictures and mnemonic lines.] 46 lower instructions have no macro
+form (§1.2's table): **28 selected by bits 31–25** (types 7, 8 and 9: LQ 0000000, SQ 0000001, ILW 0000100, ISW 0000101,
+IADDIU 0001000, ISUBIU 0001001, FCEQ 0010000, FCSET 0010001, FCAND 0010010, FCOR 0010011, FSEQ 0010100, FSSET 0010101,
+FSAND 0010110, FSOR 0010111, FMEQ 0011000, FMAND 0011010, FMOR 0011011, FCGET 0011100, B 0100000, BAL 0100001, JR
+0100100, JALR 0100101, IBEQ 0101000, IBNE 0101001, IBLTZ 0101100, IBGTZ 0101101, IBLEZ 0101110, IBGEZ 0101111), held in
+`vu::LOWER`; and **18 in the 1000000 class's rows** 11001 to 11111 of Special2, which ps2tek's tables leave empty:
+MFP, XTOP, XITOP, XGKICK, ESADD, ERSADD, ELENG, ERLENG, EATANxy, EATANxz, ESUM, ESQRT, ERSQRT, ERCPR, WAITP, ESIN,
+EATAN, EEXP. They are `Unit::Micro`: `vu::operation` (COP2 and the upper word) leaves them out, so the EE's decode is
+unchanged, and `vu::lower` reads a lower word in micro mode. The EFU's vector instructions fix their field mask (ESADD's
+1110, EATANxy's 1100, ESUM's 1111), so an operation now carries its fixed bits. Type 8's Imm15 is split, bits 14–11 in
+bits 24–21 (`imm15`); FSAND's family's Imm12 has bit 11 in bit 21 (`imm12`); FSSET's low six bits are drawn zero.
+
+**The spelling**, each the page's mnemonic line: `lq.xyzw vf10, -0x2(vi4)`, `sq.yw vf1, 0x3(vi4)` (fs, then it as the
+base), `ilw.y vi10, 0x5(vi4)`, `iaddiu vi4, vi5, 0x7fff`, `fcand vi1, 0x041041`, `fcset 0x000000`, `fsand vi1, 0x200`,
+`fsset 0xfc0`, `fmand vi1, vi10`, `fcget vi1`, `b -0x3`, `bal vi15, -0x1`, `jr vi4`, `jalr vi15, vi4`, `ibne vi4, vi5,
+0x2`, `ibgez vi4, -0x4` (the branches' Imm11 as written, in instructions from the delay slot, since a pair's text has no
+address), `esadd p, vf10`, `esin p, vf10x`, `mfp.x vf10, p`, `xgkick vi10`, `xtop vi10`, `waitp`. A word whose fixed
+bits differ is its name and its whole 32 bits (`b 0x40010003`). The zero lower word, once `.word 0x00000000`, is now
+`lq vf0, 0x0(vi0)`. `vu::assemble` takes labels (`name:` before a pair) and resolves a branch's label to its offset from
+the delay slot.
+
+**Tested** [M]: `every_micro_only_lower_operation_reads_back` (each of the 46 decodes from its selector in a lower word
+and not as a COP2 word, and reads back 64 times with random operands; the empty classes decode to nothing);
+`the_manual_s_micro_pages_read_back` (22 words built from the pages' pictures, written as the pages write them, and a
+three-pair loop's labels).
+

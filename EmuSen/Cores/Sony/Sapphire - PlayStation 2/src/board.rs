@@ -169,6 +169,12 @@ impl Board {
         }
         self.now = self.now.max(t);
         self.vpu.run_to(t);
+        let irq = self.vpu.take_interrupts();
+        for (unit, source) in [intc::source::VU0, intc::source::VU1].into_iter().enumerate() {
+            if irq >> unit & 1 == 1 {
+                self.intc.raise(source);
+            }
+        }
         self.iop.run_to(self.now);
     }
 

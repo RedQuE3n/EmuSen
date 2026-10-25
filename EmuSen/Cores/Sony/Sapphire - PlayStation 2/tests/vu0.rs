@@ -9,7 +9,7 @@ mod s12;
 
 use sapphire::board::System;
 use sapphire::ee::Halt;
-use sapphire::vu::micro::Micro;
+use sapphire::vu::micro::{Micro, Unbuilt};
 use sapphire::vu::{Units, ops};
 
 use s6::{DONE, DONE_AT, ORIGIN, Program, RECORD};
@@ -86,7 +86,8 @@ fn the_programs_execute_every_macro_instruction() {
         let (source, _) = p.finish();
         covered.extend(s6::covered(&source));
     }
-    let mut want: Vec<String> = ops::TABLE.iter().map(|e| format!("v{}", e.name)).collect();
+    use emusen_mips::vu::{SPECIAL1, SPECIAL2, Unit};
+    let mut want: Vec<String> = SPECIAL1.iter().chain(SPECIAL2.iter()).flatten().filter(|o| o.unit != Unit::Micro).map(|o| format!("v{}", o.name)).collect();
     want.extend(["qmfc2", "qmtc2", "cfc2", "ctc2", "lqc2", "sqc2", "bc2f", "bc2t", "bc2fl", "bc2tl"].map(String::from));
     assert_eq!(want.len(), 120 + 10);
     let missing: Vec<_> = want.iter().filter(|n| !covered.contains(*n) && !n.starts_with("vcallms")).collect();
@@ -166,11 +167,11 @@ impl Micro for Scripted {
     fn busy(&self) -> bool {
         self.started.is_some()
     }
-    fn finish(&mut self, units: &mut Units, at: u64) -> u64 {
-        self.end(units).unwrap_or(at).max(at)
+    fn finish(&mut self, units: &mut Units, _: u64) -> Option<u64> {
+        self.end(units)
     }
-    fn release(&mut self, _: &mut Units, at: u64) -> u64 {
-        self.started.map_or(at, |(_, s)| (s + self.release).max(at))
+    fn release(&mut self, _: &mut Units, _: u64) -> Option<u64> {
+        self.started.map(|(_, s)| s + self.release)
     }
     fn force_break(&mut self, _: &mut Units, _: u64) {
         self.started = None;
@@ -223,18 +224,20 @@ fn vcallms_starts_micro_mode_and_the_ee_waits() {
 }
 
 #[test]
-fn micro_mode_unbuilt_halts_the_interpreter_at_its_start() {
+fn a_machine_without_micro_mode_halts_the_interpreter_at_its_start() {
     let mut sys = System::new(ORIGIN);
     let words = assemble("vcallms 0x10\nnop", ORIGIN);
     sys.board.map.load(ORIGIN, &words);
+    sys.board.vpu.micro0 = Box::new(Unbuilt);
     sys.ee.cop0[sapphire::ee::cop0::STATUS] |= sapphire::ee::status::CU2;
-    assert_eq!(sys.step(), Err(Halt::Unimplemented { pc: ORIGIN, word: words[0] }), "VCALLMS is S13's");
+    assert_eq!(sys.step(), Err(Halt::Unimplemented { pc: ORIGIN, word: words[0] }), "VCALLMS with no micro mode");
     let words = assemble("addiu t0, zero, 0x100\nctc2 t0, vi31", ORIGIN);
     let mut sys = System::new(ORIGIN);
     sys.board.map.load(ORIGIN, &words);
+    sys.board.vpu.micro1 = Box::new(Unbuilt);
     sys.ee.cop0[sapphire::ee::cop0::STATUS] |= sapphire::ee::status::CU2;
     sys.step().unwrap();
-    assert_eq!(sys.step(), Err(Halt::Unimplemented { pc: ORIGIN + 4, word: words[1] }), "starting VU1 by CMSAR1 is S13's");
+    assert_eq!(sys.step(), Err(Halt::Unimplemented { pc: ORIGIN + 4, word: words[1] }), "starting VU1 by CMSAR1 with no micro mode");
 }
 
 /// The macro timing of §5.4.2 to §5.4.4 and §5.4.7, each cycle count read off the figures.

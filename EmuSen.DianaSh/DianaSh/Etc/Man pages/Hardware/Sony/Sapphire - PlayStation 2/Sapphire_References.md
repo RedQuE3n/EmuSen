@@ -71,7 +71,7 @@ gaps; the gaps are filled at the stages named, not now:
 
 | S5's gap | Where the kit's manuals answer it | Filled at |
 |---|---|---|
-| The VU micro-only lower instructions' encodings (the LQ and SQ kind, integer immediates, branches, flag instructions, EFU, XGKICK, XTOP, XITOP, MFP, WAITP) | *VU User's Manual* §4.1.2 (the lower word's types 1–9), §4.3 (each lower instruction's page, its operation code) | S13 |
+| The VU micro-only lower instructions' encodings (the LQ and SQ kind, integer immediates, branches, flag instructions, EFU, XGKICK, XTOP, XITOP, MFP, WAITP) | *VU User's Manual* §4.1.2 (the lower word's types 1–9), §4.3 (each lower instruction's page, its operation code) | S13 *Filled 2026-10-25 (`Sapphire_Native.md` §23.2, `EmuSen_Mips.md` §9.6)* |
 | The operand layouts written `Raw` (ITOF, FTOI, ABS, CLIP, MOVE, MR32, the loads and stores, DIV, SQRT, RSQRT, MTIR, MFIR, ILWR, ISWR, the random unit, the integer ALU, CALLMS) | *VU User's Manual* §4.1.1–§4.1.3 (the fields), §4.2 and §4.3 (each instruction), §6.1 and §6.2 (the macro forms) | S12 (macro), S13 (micro) *Filled 2026-10-25 at S12 for both modes' shared table (`Sapphire_Native.md` §21.2)* |
 | COP2's interlock bit (QMTC2.I, CTC2.I) | *VU User's Manual* §6.2's pages for QMFC2, QMTC2, CFC2 and CTC2; §5.4.4 (transfers with the EE core) | S12 *Filled: bit 0, §6.1.1's type 11* |
 | VU0's control registers' numbers | *VU User's Manual* §5.1.3 (control registers), §5.5.5 (VU1's as VU0 sees them) | S12 *Filled: CCR[2,16] to CCR[2,31], their widths from ps2autotests' console text (D-45)* |

@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(s.Window.OwnedWindows);
             // In a big-screen session the menu carries ES-DE's title, not the game's name (§4.69, Q85).
             Assert.Equal("Gamelist Options", ((MenuPanel)Sheet(s).GetVisualDescendants().OfType<Control>().Single(c => c.Name == "GameOptionsMenu")).Title);
-            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Crop This Game...", "Use Another Game's Cover...", "Scrape This Game...", "Find by Name..." }, options.Entries.Select(b => b.Content as string));
+            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Crop This Game...", "Use Another Game's Cover...", "Game Package...", "Scrape This Game...", "Find by Name..." }, options.Entries.Select(b => b.Content as string));
 
             // The view hears nothing under the sheet.
             s.Pad.Down();
@@ -118,6 +118,31 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             Assert.False(Sheets(s).IsPresenting);
             Assert.Equal("gamelist", s.View);
+        });
+
+        // Game Package... is reached from the options by the pad, and every control of its window with it - see EmuSen_GamePackages.md §15.
+        [Fact]
+        public Task The_game_package_window_is_reached_by_the_pad_and_so_is_every_control_in_it() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            string game = s.Themed.SelectedGame!.File;
+            string stem = Path.GetFileNameWithoutExtension(game);
+            WindowFitAuditTests.PackageWithPatches(game, "SNES", stem + ".ips", stem + ".ips1");
+            File.WriteAllBytes(Path.Combine(s.RomDirectory, "Restoration.ips"), "PATCHEOF"u8.ToArray());
+            try
+            {
+                Choose(s, "Game Package...");
+                var window = Assert.IsType<GamePackageWindow>(Sheets(s).Current);
+                Assert.NotNull(window.Package);
+                s.Window.UpdateLayout();
+                Control sheet = Sheet(s);
+                HashSet<InputElement> reached = PadAudit.Reachable(sheet, s.Pad);
+                List<InputElement> operable = PadAudit.Operable(sheet);
+                Assert.Contains(operable, c => c is Button { Name: "GamePackagePatch.1.Remove" });
+                Assert.Contains(operable, c => c is Button { Name: "GamePackageAdd.0" });
+                Assert.Empty(operable.Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
+            }
+            finally { File.Delete(Path.Combine(s.RomDirectory, "Restoration.ips")); }
         });
 
         // P84: the menu and the editor leave nothing unreachable to the pad at 1280 by 800.

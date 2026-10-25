@@ -124,6 +124,8 @@ namespace EmuSen.Mistress.Views
             if (CropOffered(path)) options.Add(new GameOption(CropThisGame, () => ShowGameCrop(path, title)) { Opens = true });
             if (StandardOffered(path)) options.Add(StandardOption(path));
             AddCoverEntries(options, path, title);
+            // A package and its soft patches, made only when asked - see EmuSen_GamePackages.md §15.
+            options.Add(new GameOption("Game Package...", () => ShowGamePackage(path, title)) { Opens = true });
             // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
             if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))) { Opens = true });
             // ES-DE's search by name, only from here and only when the player presses Search in it - see EmuSen_BigPicture.md §38.

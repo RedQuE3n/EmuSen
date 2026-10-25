@@ -39,7 +39,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
-            "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
+            "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName",
+            "GamePackageNew", "GamePackageLongTitle"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
@@ -55,6 +56,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
             ["FindByNameLongTitle"] = typeof(FindByNameWindow), ["CoverPickerLongTitle"] = typeof(CoverPickerWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
+            ["GamePackageNew"] = typeof(GamePackageWindow), ["GamePackageLongTitle"] = typeof(GamePackageWindow),
         };
 
         // A window is framed as a menu only once the audit opens it at both sizes, and every case opens a window that is framed.
@@ -558,6 +560,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 case "ScrapeStatusIdle":
                     s.Window.ShowScrapeStatus();
+                    break;
+                case "GamePackageNew":
+                case "GamePackageLongTitle":
+                    ShowGamePackage(s.Window, s.RomDirectory, which);
                     break;
                 case "FindByName":
                     Call(s.Window, "ShowFindByName", rom, ThemedSession.SnesGames[2]);

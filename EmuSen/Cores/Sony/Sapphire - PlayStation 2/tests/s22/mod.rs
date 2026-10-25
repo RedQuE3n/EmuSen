@@ -407,7 +407,7 @@ pub fn pair(name: &'static str, build: impl Fn(usize) -> (Ee, s21::Program)) -> 
     Pair { name, image, expected, ee_words }
 }
 
-/// The IOP's side, begun: S21's program with its quiescing, then the IOP's SIF channels stopped as well.
+/// The IOP's side, begun: S21's program, its quiescing stopping every channel the SIF's among them.
 pub fn iop_side(name: &'static str) -> s21::Program {
     s21::Program::new(name)
 }

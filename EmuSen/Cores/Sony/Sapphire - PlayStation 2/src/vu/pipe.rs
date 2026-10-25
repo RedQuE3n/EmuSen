@@ -604,6 +604,10 @@ impl Micro for Pipe {
         *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), ..Pipe::new(self.unit) };
     }
 
+    fn last(&self) -> Option<u64> {
+        self.last_t
+    }
+
     fn stat(&self) -> u32 {
         let run = self.state == State::Run;
         let gw = if run && self.kick_wait > self.now { vpu_stat::VGW } else { 0 };

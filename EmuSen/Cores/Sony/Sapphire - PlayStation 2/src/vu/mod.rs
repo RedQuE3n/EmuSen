@@ -356,6 +356,25 @@ impl Vpu {
         m.start(&mut self.units, addr, first)
     }
 
+    /// Brings one unit's micro mode to EE cycle `t` (a VIF's write to its memories, S14).
+    pub fn run_unit(&mut self, unit: usize, t: u64) {
+        let m = if unit == 0 { &mut self.micro0 } else { &mut self.micro1 };
+        m.run_to(&mut self.units, t);
+    }
+
+    /// Whether a unit, brought to cycle `t`, is neither running nor stopped by a D bit, a T bit or a force break: the
+    /// state the VIF's MSCAL family, FLUSH family and MPG wait for (VU User's Manual §1.3.3).
+    pub fn ready(&mut self, unit: usize, t: u64) -> bool {
+        self.run_unit(unit, t);
+        let m = if unit == 0 { &self.micro0 } else { &self.micro1 };
+        m.stat() & (vpu_stat::VBS | vpu_stat::VDS | vpu_stat::VTS | vpu_stat::VFS) == 0
+    }
+
+    /// The T stage of a unit's last pair since a reset.
+    pub fn last(&self, unit: usize) -> Option<u64> {
+        if unit == 0 { self.micro0.last() } else { self.micro1.last() }
+    }
+
     /// The interrupts a D or T bit raised since the last call, bit 0 VU0 and bit 1 VU1, for the INTC.
     pub fn take_interrupts(&mut self) -> u32 {
         std::mem::take(&mut self.units.link.irq)

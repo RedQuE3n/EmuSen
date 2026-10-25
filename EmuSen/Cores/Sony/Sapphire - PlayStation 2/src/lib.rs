@@ -17,6 +17,7 @@
 //! S20: the PCRTC (`pcrtc`), the video timing in place of S11's blanking stand-in, and the picture.
 //! S22: the SIF (`sif`), its registers and the FIFOs joining the two DMACs' SIF channels.
 //! S17: the GS draws every primitive, flat and Gouraud, with scissoring, FBMSK and the depth test.
+//! S14: VIF0 and VIF1 (`vif`) on the DMAC's channels 0 and 1, writing the VUs' memories and starting micro mode.
 
 pub mod bios;
 pub mod board;
@@ -36,3 +37,4 @@ pub mod state;
 pub mod timer;
 pub mod vu;
 pub mod v1;
+pub mod vif;

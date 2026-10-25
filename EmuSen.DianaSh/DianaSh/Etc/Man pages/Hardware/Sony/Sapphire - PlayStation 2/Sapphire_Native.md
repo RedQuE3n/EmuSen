@@ -5285,13 +5285,14 @@ nine intra streams and the written ones, five IDEC variants on `intra-matrix`: R
 thresholds 60 and 140, SGN with the dither, and `s27-post` and `s27-errors`), and the register program: 163,964 graded
 record words, every one equal on Sapphire.
 
-**Tests** [M, `cargo test --release`]: `tests/ipu.rs` **11 of 11**; lib **53 of 53** (seven new: the input's order and
-its buffer, the CSC's steps and dither, Annex A's item 4, a DC's halves, the exact reading against random blocks). The
-crate's other tests unchanged with the IPU on the board: `cop0` **19 of 19**, `dmac` **18 of 18**, `draw` **13 of 13**,
-`fpu` **9 of 9**, `gs` **12 of 12**, `interpreter` **23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of
-13**, `pcrtc` **5 of 5**, `programs` **3 of 3**, `sif` **5 of 5**, `texture` **11 of 11**, `vif` **12 of 12**, `vu0`
-**14 of 14**, `vu_micro` **24 of 24**; lib and `ipu` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s
-filter (`SapphireTests`) **5 of 5**.
+**Tests** [M, `cargo test --release`, on the tree with S25, S15 and S26 beneath]: `tests/ipu.rs` **11 of 11**; lib
+**59 of 59** (seven new: the input's order and its buffer, the CSC's steps and dither, Annex A's item 4, a DC's halves,
+the exact reading against random blocks). The crate's other tests unchanged with the IPU on the board: `cop0` **19 of
+19**, `dmac` **18 of 18**, `draw` **13 of 13**, `fpu` **9 of 9**, `gif` **15 of 15**, `gs` **12 of 12**, `interpreter`
+**23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of 13**, `pcrtc` **5 of 5**, `programs` **3 of 3**,
+`sif` **5 of 5**, `sio2` **5 of 5**, `spu2` **10 of 10**, `texture` **11 of 11**, `vif` **12 of 12**, `vu0` **14 of
+14**, `vu_micro` **24 of 24**; lib and `ipu` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter
+(`SapphireTests`) **5 of 5**.
 
 ### 34.11 On the referees (measured 2026-10-25)
 

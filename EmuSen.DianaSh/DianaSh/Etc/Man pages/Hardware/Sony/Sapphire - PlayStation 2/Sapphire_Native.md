@@ -3752,8 +3752,8 @@ with `tests/s20/manual.rs`, chapter 5 transcribed apart from `src/pcrtc/` over S
 (the switch at raster 45, the line after the fortieth H-sync past the V-sync), `the_even_field_by_csr_reads_the_even_rasters`,
 `the_picture_is_described_to_the_frontend_with_its_size_and_shape`, `the_timing_program_sees_the_documents_fields`
 (`s20-timing` on the interpreter, 40 s); lib **44 of 44** with `pcrtc::timing`'s three. The crate's other tests on the tree
-with S22 beneath, updated where they named the stand-in's figures: `cop0` 19, `dmac` **18** (one new, §29.9), `fpu` 9,
-`gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3, `sif` 5, `vu0` 14, `vu_micro` 24, all passing;
+with S22 and S17 beneath, updated where they named the stand-in's figures: `cop0` 19, `dmac` **18** (one new, §29.9),
+`draw` 13, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3, `sif` 5, `vu0` 14, `vu_micro` 24, all passing;
 lib, `pcrtc`, `gs` and `dmac` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`)
 **5 of 5**.
 

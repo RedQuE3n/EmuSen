@@ -64,6 +64,12 @@ Every claim carries one of five marks:
   reading the GS's memory back to the EE, and a headless EGL context stays in reserve for the first GS dispute that
   needs it (§1.6, §10). **DobieStation is not built now**; it is built user-locally only if a dispute needs a third
   lineage that ps2tek does not decide (§1.6).
+- *Decided 2026-10-24 by the tester, as S4 recommended (`Sapphire_Native.md` §14.8 Q1):* **how Sapphire keeps what the
+  IOP prints.** On the open BIOS, the TTY device writes its text to a port of the project's own, as Diamond's open
+  kernel prints through the DUART. On the player's BIOS, the text is caught at the IOP's module interface: the output
+  export is resolved at run time through the export tables ps2tek lists (cleared for every writer,
+  `Sapphire_References.md` §3.4), never at an address inside the BIOS image, and the text is kept in a `tty` space.
+  The player's BIOS capture is built at S10, whose gate needs it, and the open BIOS's port with its I/O at O8 (§7).
 
 ---
 
@@ -862,7 +868,7 @@ the enhancements (E) are separate tracks.
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |
-| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
+| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not; **the IOP's console kept in a `tty` space**, caught at the IOP's module interface with the output export resolved at run time through the export tables, never at an address in the image *(decided 2026-10-24)* | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
 
 **Phase C — the EE's peripherals**
 
@@ -940,7 +946,7 @@ Diamond's E-stages were (`Diamond_Plan.md` §7).
 |---|---|---|
 | **O1** | The image's frame: the build for both processors, the R5900 instruction scan, the reproducible hashes, the reset path | The image boots to a defined loop on Sapphire; CI rebuilds the same bytes |
 | **O2–O4** | The EE kernel: exceptions and interrupts (O2), threads, semaphores, alarms and handlers (O3), SIF DMA, the CRT, `LoadExecPS2` and the ELF loader (O4) | ps2autotests' `kernel/ee/*` equal their expected texts on the open kernel |
-| **O5–O9** | The IOP kernel: memory and the module loader with its linker (O5), interrupts and threads (O6), the synchronisation objects and pools (O7), I/O, the file server and SIF RPC (O8), the reboot into a disc's module image (O9) | ps2autotests' `kernel/iop/*` and `cpu/iop/*`; a game's own IOP modules loaded and linked |
+| **O5–O9** | The IOP kernel: memory and the module loader with its linker (O5), interrupts and threads (O6), the synchronisation objects and pools (O7), I/O, the file server and SIF RPC, the TTY device writing to the project's own port (O8, decided 2026-10-24), the reboot into a disc's module image (O9) | ps2autotests' `kernel/iop/*` and `cpu/iop/*`; a game's own IOP modules loaded and linked |
 | **O10–O11** | CDVD's file system and server (O10); SIO2, pads, the card's file system and server on §9.5's crate (O11) | Games boot with no firmware folder; their cards are read under the player's BIOS and the reverse |
 | **O12** | The menu without a disc, and `firmwarecheck.py` against the tester's images with a control (`EmuSen_Firmware.md` §0) | G9; G10's start reaching the open BIOS's menu with no firmware folder *Amended 2026-10-24.* |
 

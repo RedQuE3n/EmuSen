@@ -600,7 +600,8 @@ of ps2autotests, the README, `common/common-ee.cpp` and `common-ee.h` (the proje
 
 ### 14.8 Questions this stage leaves
 
-1. **Q1 [decision], how Sapphire keeps what the IOP prints.** PCSX2 catches it by a means not read here, which ps2tek's
+1. **Q1 [decision], how Sapphire keeps what the IOP prints.** *Decided 2026-10-24 by the tester: as recommended;
+   recorded in `Sapphire_Plan.md`'s decisions and at S10 and O8.* PCSX2 catches it by a means not read here, which ps2tek's
    excluded section describes as a hook on program-counter values inside a BIOS image; Sapphire may not do that.
    *Recommended*: on the open BIOS, its TTY device writes to a port of the project's own, as Diamond's open kernel prints
    through the DUART; on the player's BIOS, the console is caught at the IOP's module interface, the output export

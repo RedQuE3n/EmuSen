@@ -307,6 +307,10 @@ impl Cdvd {
         self.disc.as_ref()
     }
 
+    pub fn tray_open(&self) -> bool {
+        self.tray_open
+    }
+
     /// The host's disc change: only with the tray open, as a player's hand would.
     pub fn insert(&mut self, disc: Option<Disc>) -> bool {
         if !self.tray_open {

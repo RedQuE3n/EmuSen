@@ -6,6 +6,9 @@ using System.Text;
 
 namespace EmuSen.Cores.Native
 {
+    // A console started empty refused by the host, since the firmware its machine chose is absent and nothing replaces it - see Sapphire_Native.md §30.15.
+    public sealed class ConsoleFirmwareException(string message) : InvalidOperationException(message);
+
     // A core refused a call: its status, and its own words for it from last_error or status_text - see EmuSen_CoreAPI.md §6.18.
     public sealed class CoreRefusedException(int status, string message) : InvalidOperationException(message)
     {

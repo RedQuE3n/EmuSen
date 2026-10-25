@@ -276,6 +276,14 @@ impl IopBus {
         }
     }
 
+    /// The player's hand on the drive's tray at EE cycle `t`, the units brought there first (Sapphire_Plan.md §8, G10).
+    pub fn tray(&mut self, open: bool, t: u64) {
+        self.run_units(t);
+        self.cdvd.tray(open, t / IOP);
+        self.sync_cdvd();
+        self.reschedule();
+    }
+
     /// IRQ 2 raised at the rise of the drive's interrupt line (ps2tek "IOP Interrupts").
     fn sync_cdvd(&mut self) {
         let line = self.cdvd.irq();

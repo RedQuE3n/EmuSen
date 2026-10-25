@@ -63,7 +63,7 @@ namespace EmuSen.Crystal.Systems
         public static IReadOnlyList<(string System, SaveMedia.SaveMediumEntry Medium)> MediumLiterals { get; } = new[]
         {
             (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.RamCartridgeLiteral), (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.BackupRamLiteral),
-            (Psx.PsxSystem.Id, Psx.PsxSystem.CardLiteral), (N64.N64System.Id, N64.N64System.PakLiteral),
+            (Psx.PsxSystem.Id, Psx.PsxSystem.CardLiteral), (N64.N64System.Id, N64.N64System.PakLiteral), (Ps2.Ps2System.Id, Ps2.Ps2System.CardLiteral),
         };
 
         // Each pack's codecs by the library's ids with the C# codecs' factories, in the table's order: the parity class's oracle for the library's codecs - see EmuSen_Backend.md §13.

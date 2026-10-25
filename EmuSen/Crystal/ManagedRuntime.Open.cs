@@ -80,6 +80,7 @@ namespace EmuSen.Crystal.Managed
             console = ConsoleNamed(asked) ?? throw new CrystalException(CrystalNumbers.NoEngine, $"no console named \"{asked}\" starts with nothing in it in this build");
             string? chosen = engine ?? ConsoleEngine(console);
             try { return CoreFactory.LoadConsole(console, new CheatRegistry(), chosen, lender, options); }
+            catch (Cores.Native.ConsoleFirmwareException e) { throw new CrystalException(CrystalNumbers.Firmware, e.Message); }
             catch (Cores.Native.CoreNotApprovedException e) { throw new CrystalException(CrystalNumbers.NotApproved, e.Message); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
         }

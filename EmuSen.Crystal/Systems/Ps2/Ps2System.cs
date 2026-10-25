@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using EmuSen.Crystal.Media;
+using EmuSen.Crystal.SaveMedia;
 
 namespace EmuSen.Crystal.Systems.Ps2
 {
-    // The PlayStation 2's system pack: its systems-table entry, its recogniser, its firmware and its screen; no codec and no medium yet - see Sapphire_Plan.md §4, Sapphire_Native.md §3.
+    // The PlayStation 2's system pack: its systems-table entry, its recogniser, its firmware, its screen and its memory card; no codec yet - see Sapphire_Plan.md §4, Sapphire_Native.md §3 and §30.16.
     public static class Ps2System
     {
         public const string Id = "ps2";
@@ -66,6 +67,9 @@ namespace EmuSen.Crystal.Systems.Ps2
         // A television's 4:3, the shape the console's pictures are shown in at S1.
         public const double DisplayAspect = 4.0 / 3.0;
 
-        public static readonly SystemPack Pack = new(Entry, null, null, ByteOrder: "little");
+        // The memory card, the medium ps2.card: the table's words with this literal's extension and module - see EmuSen_SaveMedia.md §7.4.
+        public static readonly SaveMediumEntry CardLiteral = new(Ps2CardFormat.Id, "Memory Card (PS2)", "Card", ".ps2", Ps2CardFormat.Instance), Card = SystemTable.Medium(CardLiteral);
+
+        public static readonly SystemPack Pack = new(Entry, null, null, Media: new[] { Card }, ByteOrder: "little");
     }
 }

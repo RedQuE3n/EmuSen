@@ -3112,7 +3112,7 @@ run at a time at CPU weight 20:
 | Diamond, Diamond's `v1` | **306 of 306**, **5 of 5**: the crate's first user, unchanged |
 | Nephrite | **194 of 194**: its second, unchanged |
 | `emusen-core-conform`, `Platform/galaxia`, `library`, `library-tool`, `platform` | 36, 87, 11, 9 and 40, every one passing |
-| WiseMan (`Diamond`, `Galaxia`, `GameRecords`, `Library`, `NephriteTests`, `SapphireRunnerTests`, `SapphireTests`) | **562 passed, 0 failed, 11 skipped**: eight `SettingPathsOpenTests` and three big-picture tools, skipped by their own conditions, none near the disc |
+| WiseMan (`Diamond`, `Galaxia`, `GameRecords`, `Library`, `NephriteTests`, `SapphireRunnerTests`, `SapphireTests`) | **562 passed, 0 failed, 11 skipped**: eight `SettingPathsOpenTests` and three big-picture tools, skipped by their own conditions, none near the disc; on the rebased tree `SapphireRunnerTests` and `SapphireTests` again, **14 of 14** |
 
 ### 25.9 Seeded faults (2026-10-25)
 

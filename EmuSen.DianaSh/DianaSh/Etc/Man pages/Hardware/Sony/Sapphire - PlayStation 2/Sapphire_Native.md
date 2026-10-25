@@ -4611,3 +4611,273 @@ Optimizations". No emulator, SDK or loader source, no ps2autotests source and no
 - The GIF (S15): until then nothing on the EE's side textures on Sapphire; the tests drive the host interface.
 - The state format's new contents (the CLUT buffer): `SPH2` gains them with the rest (S10, S30).
 
+## 33. Stage S15, the GIF, its three paths and their arbitration (2026-10-25)
+
+*Numbered §33 and its disputes from D-280, since S25 (§30, from D-220), S18 (§31, from D-240) and S26 (§32, from
+D-260) are built beside it.*
+
+### 33.1 In one paragraph
+
+The plan's §7 row S15, on the tester's go of 2026-10-25. The crate gains **`gif`**, the GIF written from the *EE User's
+Manual* (EEUM) chapter 7, with ps2tek's "Graphics Interface (GIF)" beside it: GS packets taken from **PATH1** (VU1's
+XGKICK, through `gif::Path1Port` in place of S13's stand-in), **PATH2** (VIF1's DIRECT and DIRECTHL, through S14's
+`vif::Gif`) and **PATH3** (the DMAC's channel 2 and the EE's stores at 10006000h, through a FIFO of 16 qwords), and
+written to S16's `gs::HostInterface` in the PACKED, REGLIST and IMAGE formats by **`gif::packing`**, the one owner of
+the GIFtag and of every register descriptor's packing. One path holds the GIF from its packet's first GIFtag to the end
+of its EOP primitive; between packets the waiting paths are arbitrated PATH1, PATH2, PATH3 with an idle cycle (§7.1.2);
+PATH3 is skipped while GIF_MODE's M3R or MSKPATH3 masks it, its data kept in the FIFO and the DMA held once the FIFO is
+full (§7.1.4); in the intermittent mode PATH3's IMAGE data gives way to PATH1 and DIRECT at each slice of 8 qwords, not
+to DIRECTHL (§7.1.3); GIF_CTRL resets and pauses, GIF_STAT and the tag and count registers report. S11's stand-in at
+channel 2 and S14's PATH2 stand-in are gone, and **S16's, S17's and S18's programs now run whole on Sapphire through
+PATH3 and VIF1**, every one of their 473,156 graded words equal. Six programs of the project's (6,728 graded words) are equal on
+the interpreter to records `tests/s15/manual.rs` gives from chapter 7 over S17's model of the GS; PCSX2 equals the
+REGLIST and IMAGE program whole, the PACKED program but two descriptors (D-281), the masks, the FIFO's depth and the
+held DMA, TTE's tag (D-283), PATH1's wrap and DIRECT overtaking a running IMAGE transfer in the intermittent mode, and
+departs on a path holding the GIF when its data stops (D-280), where Play! holds as the manual does; ps2autotests'
+`dma/vif/mskpath3` text is reproduced by PCSX2 and by the GIF directly. **S14's second DIRECT that PCSX2 never takes
+is a referee defect**: PCSX2, entered by fast boot without a GIF reset, grants PATH3 after the first PATH2 packet
+although no PATH3 data or channel exists, and that PATH3 then holds the GIF (D-290). Disputes D-280 to D-291. No
+emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 33.2 What was built
+
+- **`src/gif/packing.rs`**: `Tag` (§7.2.2's fields, NREG 0 as 16, FLG 11 as IMAGE), `Packet` (one path's place in its
+  GS packet: the primitive open, LOOPCNT, the descriptor next, the data qwords taken), `Packet::take` (a GIFtag, or one
+  qword of data written out: PRE's PRIM, each PACKED descriptor's packing, REGLIST's halves with A+D and NOP skipped and
+  an odd count's last half dropped, IMAGE's two halves to HWREG), the cost of each in bus cycles (§33.4), and
+  `cycles`, a packet's cost read from memory, which PATH1's estimate uses.
+- **`src/gif/mod.rs`**: `Gif`, the unit: its clock, the path holding it, a `Packet` a path, Q, GIF_MODE, PSE, the
+  MSKPATH3 mask, PATH3's interruption with P3CNT and P3TAG, the last GIFtag, PATH1's VU address, the XGKICKs waiting,
+  PATH2's request, the FIFO; `run_to` (arbitration, PATH1's qwords read from VU1's memory as they are sent, PATH3's
+  from the FIFO), `path2`, `idle_at` and `mask_path3` (behind `vif::Gif`), `request` and `put` (behind
+  `dmac::Peripherals`), `kick` and `path1_free`, the registers. `Path1Port`, PATH1 as VU1 reaches it (`vu::Path1`).
+- **`src/vu/mod.rs`**: `vu::Path1` gains two methods with defaults, additive, `set_free` (the board's estimate of when a
+  PATH1 transfer could start) and `take_kick` (a kick handed on to the GIF); `Path1StandIn` and its test are unchanged.
+- **`src/vif/mod.rs`**: S14's `Path2StandIn` removed, `vif::Gif` itself unchanged.
+- **`src/board.rs`**: the GIF on the board; `Ports` gives it channel 2; `GifPort`, the GIF as VIF1 reaches it, in
+  place of the stand-in; the GIF's registers at 10003000h and FIFO at 10006000h (§33.5); `run_gif`, brought before the
+  VIFs, before the DMAC acts, after the VUs run and around the EE's reaches of the GS's privileged registers.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native`, `emusen-mips`, `blackmoon-r3000`
+  and `emusen-disc` alone; `src/gs/` is untouched (S18 works in it).
+
+### 33.3 The readings the manual leaves open
+
+[R EEUM §6.4's MSKPATH3, FLUSH, FLUSHA, DIRECT and DIRECTHL pages, chapter 7 whole; VU User's Manual §3.4.9 and
+XGKICK's page; GS User's Manual §4.2.2 and §1.1.2's transfer speed; ps2tek "Graphics Interface (GIF)", "DMAC I/O"; M
+the referees' records of §33.7; A where marked]:
+
+| Rule | Source | Implemented |
+|---|---|---|
+| A path holds the GIF from its first GIFtag to its EOP primitive's end, though its data stops meanwhile | §7.1.2, §7.2.1 ("Transfer processing is performed in units of GS packets") | D-280 |
+| Arbitration when the GIF is free: the earliest request decides when, the priority PATH1, PATH2, PATH3 which; one idle bus cycle | §7.1.2 | `Gif::choose`, `grant` |
+| NLOOP 0: nothing output, the EOP kept; Q set to 1.0 at every GIFtag | §7.2.2; §7.3.2's RGBAQ | `Packet::take` |
+| PACKED: PRIM 10..0; RGBAQ R, G, B, A from bits 7..0 of each word with the GIF's Q; ST the lower 64 bits, Q from 95..64; UV 13..0 and 45..32; XYZF2 X 15..0, Y 47..32, Z 91..68, F 107..100, ADC 111 to XYZF3; XYZ2 Z 95..64, ADC to XYZ3; FOG 107..100; A+D's address 71..64 | §7.3.2's figures; ps2tek agreeing | `packing::packed` |
+| TEX0, CLAMP and the descriptors 0Ch and 0Dh write the lower 64 bits; 0Bh likewise (to an address the GS drops) | §7.2.3's table; ps2tek's "all registers not specified" | D-281 |
+| Q is the GIF's, given with RGBAQ, not written to the GS by ST | §7.3.2; ps2tek reads ST as writing Q to the GS | D-291 |
+| REGLIST: PRE ignored, A+D and NOP not output, an odd count's last half dropped | §7.4.1 | `Packet::take` |
+| IMAGE (and FLG 11): NLOOP qwords, each two writes of HWREG | §7.5 | `Packet::take` |
+| PATH3 masked by M3R or M3P only at the arbitration, so a packet in progress finishes | §7.1.4; GIF_MODE's page | D-289 |
+| The FIFO takes PATH3's data while masked; the DMA holds once it is full | ps2tek "GIF PATH3 Masking"; PCSX2 | `Gif::request` |
+| A DMAtag sent by TTE is not GIF data | D-283 | `Gif::put` |
+| RST: the packets, the FIFO, the kicks, the interruption and GIF_MODE cleared; MSKPATH3's mask kept | GIF_CTRL's page; §7.1.4 | D-284 |
+| PSE: nothing moves; the paths' data waits | GIF_CTRL's page | `Gif::run_to` |
+| The intermittent mode's slice: 8 qwords of the IMAGE primitive's data; a request seen while PATH3 waits at a slice's end taken at once; DIRECTHL never overtakes, and waits behind an interrupted PATH3 | §7.1.3; DIRECTHL's page | D-285 |
+| XGKICK: the packet read from VU1's memory as it is sent, its address wrapping at 1,024 qwords | §7.1.1; GIF_CNT's VUADDR | D-288 |
+| FLUSH and MSCALF wait for PATH1 and PATH2 idle and FLUSHA also for no PATH3 request: data in the FIFO, a packet in progress or interrupted, or channel 2's STR | §6.4's pages | `Gif::idle_at` |
+| GIF_STAT: P1Q a kick waiting, P2Q PATH2 refused and waiting, P3Q PATH3's data or interruption waiting while another path or none holds the GIF; OPH and APATH the path holding the GIF or whose last output is still being sent; DIR BUSDIR's | §7.6 | D-282 |
+| GIF_TAG0 to GIF_TAG3, GIF_CNT, P3CNT and P3TAG answered at any time, the write-only GIF_CTRL and GIF_MODE reading 0 | §7.6 ("accessible only when stopped") [A] | `Gif::read` |
+| While BUSDIR reverses the host interface the GIF sends nothing | §7.1.5 [A] | D-287 |
+| The FIFO's 16 qwords mirrored over 10006000h to 10006FFFh; an EE store into it taken even when full | §2.2.1's map [A] | `Board::write` |
+
+### 33.4 The timings: the documents' and the argued
+
+**The documents'** [R]: one idle cycle at each arbitration and one when PRIM is not output (§7.1.2, §7.3.1, §7.4.1,
+§7.5.1); the paths' inputs 128 bits wide at BUSCLK, the output to the GS 64 bits (§7.1's figure); the GS's host
+transfers at most 1.2 GB/s (GS User's Manual §1.1.2), 64 bits a bus cycle. **Argued**, each a named loss (D-286): a
+GIFtag costs one bus cycle (PRIM output or the idle one), a PACKED qword one, a REGLIST or IMAGE qword two (one for
+REGLIST's last odd half), the arbitration one; the qwords of one DMA unit, which the DMAC hands over together at its end
+(§20.3), arrive one a bus cycle up to it; the end XGKICK is told is estimated when it is kicked, from the packet in
+VU1's memory and the GIF's state as the board last gave it (behind the kicks waiting, the PATH1 packet being sent, or
+the primitive another path is sending), so a kick queued behind a PATH3 packet whose data comes later is told too early;
+a request is noticed when the board next brings the GIF forward, at the instruction's granularity of §5.2. **Measured**
+[M, `the_fifo_holds_sixteen_qwords_and_the_gif_paces_the_dma`]: 200 qwords to the GIF take 400 EE cycles as a PACKED
+packet (the DMAC's pace) and 738 as an IMAGE one (the GIF's, the last 16 in the FIFO).
+
+### 33.5 The interfaces and the board
+
+- **`dmac::Peripherals`** on channel 2: `request` answers the FIFO's room, whatever the masks, a zero holding the
+  channel until the GIF frees a slot and the board wakes the DMAC; `put` takes a qword (a TTE tag dropped).
+- **`vif::Gif`** (S14's) through `GifPort`: `path2` is `Gif::path2`, `idle_at` `Gif::idle_at` with channel 2's STR as
+  PATH3's request, `mask_path3` M3P, `host_read` the GS's local-to-host data as before.
+- **`vu::Path1`** through `Path1Port`, installed in the VPU's link by `Board::new`: the kick recorded and its end
+  estimated; the board sets the estimate before the VUs run and hands the kicks to the GIF after.
+- **`gs::HostInterface`** (S16's): every write and HWREG's image data. The GS's own SIGNAL stall keeps holding what
+  arrives behind it, unbounded, as S16 built it; the GIF does not stop for it (D-287).
+- **The board** brings the GIF forward before the VIFs (so PATH2 meets it at the VIFs' time), before the DMAC acts at
+  each event (so the FIFO's room is current), after the VUs run (so a kick starts at once), and around the EE's reaches
+  of the GIF's registers and FIFO and of the GS's privileged registers (so CSR, SIGLBLID and BUSDIR see every write the
+  GIF has made). It schedules an event only while the DMAC waits on the FIFO and the GIF can free a slot.
+
+### 33.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s15/` writes six bare programs in S14's form (kseg0 code, everything else through kseg1), each starting with S14's
+prologue, the GIF reset with GIF_MODE 0, MSKPATH3 cleared and the kick microprogram loaded by VIF1, CSR's events
+cleared, and S17's drawing environment into a 64×32 PSMCT32 frame at page 100 cleared by a sprite. Packets are built in
+memory and sent by normal or chain DMA, stored into the GIF's FIFO, sent as DIRECT or DIRECTHL by VIF1's channel, or
+written into VU1's memory and kicked by a microprogram that VU1 starts at CMSAR1's write and that reads the packet's
+address from qword 200h. The record is local memory read back local to host (S16's route), SIGLBLID's LBLID after
+LABELs, and the GIF's and VIF1's registers. Each program states the order its packets reach the GS by §7.1, and
+`tests/s15/manual.rs`, chapter 7 transcribed apart from `src/gif/` (each descriptor read at the bit positions its figure
+prints), turns them into writes for S17's model.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s15-packed` | 2,308 | PRE's PRIM; RGBAQ, XYZ2 and XYZF2 with junk in every bit the packing drops; XYZF2's Z into a Z buffer; ADC sending a vertex to XYZF3 (no kick); PRIM as data with PRE 0; A+D with junk above bit 71; NOP; sixteen descriptors (NREG 0); NLOOP 0 inside a packet and ending one, a second packet in the same DMA; 0Ch and 0Dh as raw vertices; ST, UV, FOG, TEX0, CLAMP and 0Bh; the frame and a Z rectangle read back |
+| `s15-reglist` | 2,052 | REGLIST under PRE (ignored), an odd count's dropped half shown by the next sprite's colour, A+D and NOP skipped; IMAGE with FLG 2 and 3 in one packet, and with a PACKED primitive between two IMAGE ones |
+| `s15-paths` | 2,064 | the same kind of packet by normal DMA, chain DMA without and with TTE, the EE's stores into the FIFO, DIRECT, DIRECTHL, XGKICK, and XGKICK across VU1's memory's end, each into its own region |
+| `s15-arbitration` | 232 | PATH2 waiting for PATH3's packet held mid-way; PATH1 queued behind it without stalling VU1; PATH1 before PATH2 when both wait; MSKPATH3 holding a short packet in the FIFO while PATH2 goes and a long one with the DMA held at 16 qwords (QWC 8 left); M3R set during a packet and holding the next; the intermittent mode's DIRECT and XGKICK interrupting PATH3's IMAGE data at a slice's end (P3CNT 24, P3TAG 8020h under PSE), DIRECTHL and the continuous mode not; GIF_STAT and VIF1's VGW at each step, and the upload read back |
+| `s15-regs` | 48 of 52 | GIF_STAT at rest and after GIF_MODE's writes; PSE mid-packet with GIF_TAG0 to GIF_TAG3 and GIF_CNT (LOOPCNT 2, REGCNT 2), and before a packet; RST ending a packet so PATH2 goes at once, clearing GIF_MODE and keeping M3P; DIR with BUSDIR; the EE's stores into the FIFO while M3R holds it |
+| `s15-intermittent` | 24 of 32 | an IMAGE packet of 30,720 qwords started by DMA and at once a LABEL by DIRECT, DIRECTHL or XGKICK: SIGLBLID and D2_CHCR.STR as soon as the other path has its packet, and again after both |
+
+**S16's, S17's and S18's programs through the real path**: every program of §24.6, §27.6 and §31, until now graded on
+Sapphire by driving the host interface directly, runs whole as the EE program the referees ran, its packets through
+channel 2 and the GIF and its local-to-host data through VIF1: **all 51,268, 225,280 and 196,608 graded words equal**,
+S18's on the tree with S18 and S25 beneath after the rebase.
+
+**Tests** [M, `cargo test --release`]: `tests/gif.rs` **15 of 15** — the six programs and the S16, S17 and S18 programs,
+each equal to its record word for word; `every_packing_conversion_writes_what_section_7_3_draws` (2,000 generated packets
+in every format, every descriptor with random bits, against the manual's transcription, the fog byte and Q among the
+writes no picture shows); the FIFO's depth and the GIF's pace (§33.4); `Path1Port`'s estimates and a packet with no EOP;
+the arbitration on the unit directly with GIF_MODE's mask; the `mskpath3` console text (§33.7); the second-DIRECT
+probe's four forms (§33.8). `tests/vif.rs` **12 of 12** with PATH2 the GIF's: `s14-direct`'s three LABELs now reach
+SIGLBLID in turn on Sapphire. The crate's other tests unchanged, on the tree with S18 and S25 beneath: lib 52, `cop0` 19,
+`dmac` 18, `draw` 13, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `pcrtc` 5, `programs` 3, `sif`
+5, `sio2` 5, `texture` 11, `vu0` 14, `vu_micro` 24; lib, `gif`, `vif` and `dmac` also under `test-checked`; clippy
+clean.
+
+### 33.7 On the referees (measured 2026-10-25)
+
+`examples/s15.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until 1FFFF0=5A99D00E
+200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot, software renderer) and Play! 0.72, one
+process at a time; `s15 explain` lists the records that differ. Only the records were read.
+
+| Program (records) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s15-packed` (1,154) | 64 | 1,024 | PCSX2: the two sprites whose first vertex came by descriptor 0Dh and 0Ch, which it packs as XYZ and XYZF (D-281); every other descriptor, junk bit, ADC, NLOOP-0 tag, NREG 0 and the Z buffer equal. Play!: no drawing reaches its local memory (§27.7); both LABELs equal |
+| `s15-reglist` (1,026) | **0** | 896 | Play!: the IMAGE rectangles equal, the drawing absent |
+| `s15-paths` (1,032) | 2 | 1,024 | PCSX2: PATH1's LABEL read a step late, after VU1's end and GIF_STAT's idle; the frame equal, TTE's region (D-283) and the wrap across VU1's memory (D-288) among it. Play!: every LABEL equal, the drawing absent |
+| `s15-arbitration` (116) | 27 | 94 | below |
+| `s15-regs` (26) | 10 | 20 | below |
+| `s15-intermittent` (16) | 5 | 6 | below |
+
+**The arbitration and the registers.** PCSX2 lets PATH2 and PATH1 take the GIF while PATH3's packet waits for data
+after its DMA ended, so the held-packet cases run in another order (D-280); **Play! holds PATH2 behind PATH3's packet
+as the manual does**, in `s15-arbitration`'s first case and the intermittent cases with DIRECTHL and the continuous mode,
+while delivering XGKICK at once. Both hold PATH3 while MSKPATH3 or M3R masks it, let PATH2 go meanwhile and send PATH3
+once unmasked, and finish a packet M3R was set during and hold the next (D-289); PCSX2 takes 16 qwords into the FIFO and
+holds the DMA with QWC 8, as Sapphire does, Play! holds the DMA without taking any (QWC 24). PCSX2's GIF_STAT shows M3R,
+M3P, IMT, PSE, DIR and FQC as Sapphire does, never P1Q, P2Q or P3Q, OPH and APATH only while data moves (and OPH while
+BUSDIR is reversed and after, D-287), and reads 0 from GIF_TAG0 to GIF_TAG3, GIF_CNT, P3CNT and P3TAG (D-282); it pauses
+a packet for PSE, clears M3P on RST (D-284), and, in the intermittent mode, lets DIRECT overtake an IMAGE transfer whose
+DMA still runs (`s15-intermittent`'s first case: the LABEL with STR set, D-285). Its other intermittent cases finish the
+30,720-qword DMA before the other path is given its packet, so they decide nothing. Play!'s GIF_STAT reads E00h or 200h
+whatever the state, it neither pauses nor resets a packet, and it has no intermittent mode.
+
+**ps2autotests' `dma/vif/mskpath3`** (5 lines) needs the BIOS's kernel, so Sapphire runs it with S10. Run through
+`ps2referee.py tty pcsx2 … --channel iop` against its expected text, the console's output, after line ends are
+normalised [M `diff`]: **equal**. Its three values follow from GIF_STAT read whole with M3P its only bit, which
+`the_mskpath3_console_text_follows_from_gif_stat` reproduces on the board through VIF1's FIFO [A: the program's source
+is not read].
+
+So **PCSX2 is a witness for the formats (but 0Ch and 0Dh), the masks with the FIFO and the held DMA, TTE, PATH1's wrap,
+GIF_MODE's and GIF_STAT's mask bits and DIRECT overtaking IMAGE in the intermittent mode**; not for a packet holding the
+GIF, the queue bits, the tag and count registers or PATH1's timing. Play! is a witness for PATH2 waiting on a held packet,
+the masks and IMAGE's data.
+
+### 33.8 S14's second DIRECT on PCSX2 (measured 2026-10-25)
+
+`s14-direct` (§28.8) found PCSX2 taking its first DIRECT and never its second, VIF1 left with VGW. `s15::second_direct`
+sends two DIRECT packets of a LABEL each in four forms, recording VIF1's CODE and STAT, GIF_STAT and SIGLBLID after
+each (and GIF_STAT and D2_CHCR at the start, ungraded): (a) as `s14-direct` sent them, with no GIF reset; (b) with
+GIF_CTRL.RST first; (c) with the second stream DIRECT alone; (d) with a PATH3 packet between the two.
+
+| Form | PCSX2 | Play! |
+|---|---|---|
+| (a) | second DIRECT never taken: VGW, FQC 3, SIGLBLID kept; GIF_STAT 0 at the start, **E00h (OPH, APATH = PATH3) after the first DIRECT**, E80h after the second; D2_CHCR 0 throughout | both taken |
+| (b) | both taken; GIF_STAT 0 after the first | both taken |
+| (c) | as (a) | both taken |
+| (d) | both taken | both taken |
+
+So PCSX2, entered by fast boot, holds a PATH3 request that GIF_STAT does not show and that waits through an idle GIF,
+is granted at the end of the first PATH2 packet, and then holds the GIF with no data in the FIFO and channel 2 stopped;
+a GIF reset clears it and a PATH3 packet ends it. Under §7.1.2 an idle GIF grants a waiting request at once, so a request
+that waits through an idle GIF has no reading in the manual, and PATH3 has nothing to send. **It is a referee defect,
+not a protocol rule** (D-290): a program that resets the GIF first, as every S15 program does, has every DIRECT taken
+on PCSX2 (`s15-arbitration` sends seven); Play! takes both in every form.
+
+### 33.9 Named losses
+
+- **The GIF's timing** (§33.4, D-286): argued throughout; XGKICK's end estimated; requests noticed at the instruction's
+  granularity, so a path asking within an instruction of another's packet ending may meet the other order.
+- **PATH1's data** is read from VU1's memory as the GIF sends it, with VU1 brought to the board's time first; a
+  microprogram writing its own packet during the transfer meets what hardware would at a time the model approximates.
+- **The GS's host FIFO** is unbounded behind a stalled SIGNAL (S16's), so the GIF never waits for the GS (D-287).
+- **ps2tek's warning** that A+D on PATH3 while PATH1 runs may lock up the GS is not modelled.
+- **The FIFO's** reads by the EE answer 0.
+
+### 33.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | PACKED XYZF2 dropping the fog byte (`packing::packed`) | `every_packing_conversion_writes_what_section_7_3_draws` |
+| F2 | PATH3 not masked by MSKPATH3 (`Gif::masked` reading M3R alone) | `the_paths_are_arbitrated_at_packet_ends_and_path3_masked_and_interrupted_as_section_7_1_says` |
+| F3 | IMAGE's NLOOP counted in doublewords (two loops a qword) | the packing test, the FIFO's test, `s15-reglist`, `s15-arbitration`, S16's and S17's programs through PATH3 (before S18's joined them) |
+
+Each was applied, `tests/gif.rs` and `tests/vif.rs` run, and the source restored [M]. No picture shows the fog byte, so
+F1 has one witness, as expected; `tests/vif.rs` sees none of the three, its DIRECT packets having no fog, mask or IMAGE.
+
+### 33.11 The blast radius (measured 2026-10-25)
+
+`blast.sh WiseMan sapphire-s15` names the Sapphire crate and WiseMan's `SapphireTests`: the crate as §33.6 gives it, and
+WiseMan's filter **5 of 5** before the rebase onto S18's and S25's merges and again after, each run once at CPU weight
+20, `LunaP.props` pointed at the sibling LunaP checkout by a local change that is not committed.
+
+### 33.12 What the plan got wrong, or left open
+
+- **§1.1's GIF row** grades arbitration "as `dma/vif/mskpath3` records it": that text records only GIF_STAT's M3P bit
+  before, during and after MSKPATH3 (§33.7); the arbitration rests on the manual, the project's programs and the
+  referees, which split on a packet holding the GIF (D-280).
+- **§3.2's row** names the referees as the secondary oracle: PCSX2 is one for the formats and the masks, Play! for the
+  order of a held PATH2; neither for the registers chapter 7 marks readable only under PSE.
+- **S15's gate** asks for drawings "cross-checked on PCSX2 and Play! where it reaches": Play!'s drawing never reaches
+  its local memory (§27.7), so the drawings rest on PCSX2 and the LABELs on both.
+
+### 33.13 Questions this stage leaves
+
+1. **Q1 [routine], a path holding the GIF when its data stops (D-280).** *Recommended*: keep the manual's packet-level
+   arbitration, which Play! follows for PATH2 and PCSX2 does not; S28's games, some of which split a packet across
+   transfers, would show a difference.
+2. **Q2 [routine], descriptors 0Ch and 0Dh (D-281).** *Recommended*: keep the lower 64 bits, as both documents give
+   them, against PCSX2's packing.
+3. **Q3 [routine], RST and MSKPATH3's mask (D-284).** *Recommended*: keep the mask, §7.1.4's "can be cancelled only by
+   the VIF", against PCSX2.
+4. **Q4 [routine], the GIF's timing (D-286).** *Recommended*: keep a bus cycle a 64-bit output until S32's bench shows a
+   game whose timing depends on it.
+5. **Q5 [routine], Q from ST (D-291).** *Recommended*: keep §7.3.2's internal Q given with RGBAQ; S18's texturing
+   programs can decide it against ps2tek's reading, which writes Q to the GS at ST.
+
+### 33.14 What was read for this stage
+
+`Sapphire_Plan.md` §1.1's GIF and VIF rows, §1.5, §2, §3.2, §7's S14 to S17 rows and §11; this page's §20, §23, §24,
+§27 and §28; `Sapphire_Disputes.md`. Sony's *EE User's Manual* (Version 5.0) chapter 7 whole, §2.2.1's map, §5.2.3 and
+CHCR's TTE, chapter 6's MSKPATH3, FLUSH, FLUSHA, MSCALF, DIRECT and DIRECTHL pages; the *VU User's Manual* §3.4.9 and
+XGKICK's page; the *GS User's Manual* §1.1.2 and §4.2; the *EE Overview* §2.5. ps2tek at `1c91660`: "Graphics
+Interface (GIF)" with its I/O, GIFtags, data formats and PATH3 masking, "DMAC I/O". ps2autotests' `dma/vif/mskpath3`
+expected text (the console's) and its `.elf` run as a black box on PCSX2. No emulator, SDK, loader or ps2autotests
+source and no firmware.
+
+### 33.15 What this stage does not cover
+
+- `dma/vif/mskpath3` on Sapphire: S10 (the kernel).
+- The GS's own timing and its host FIFO's depth (S43); texturing's use of Q (S18).
+- The GIF's state in `SPH2` with the rest (S10, S30).

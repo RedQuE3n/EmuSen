@@ -76,23 +76,16 @@ fn the_registers_the_interrupt_stall_fbrst_and_the_error_masks() {
     grade(s14::regs());
 }
 
-/// DIRECT's and DIRECTHL's qwords reach PATH2 in order, MSKPATH3 reaches the GIF's side, and the FLUSH family and
-/// MSCALF go on once the paths are idle (the stand-in's, until S15).
+/// DIRECT's and DIRECTHL's packets reach the GS through PATH2 in order (each a LABEL, whose ID the program reads back
+/// from SIGLBLID), MSKPATH3 reaches the GIF, and the FLUSH family and MSCALF go on once the paths are idle (from S15
+/// the GIF's own, Sapphire_Native.md §33).
 #[test]
 fn direct_reaches_path2_and_the_flush_family_waits_for_the_paths() {
-    let sys = grade_with(s14::direct(), |s| s.board.path2.keep = true);
-    let q = |w: [u32; 4]| w.iter().rev().fold(0u128, |a, &x| a << 32 | u128::from(x));
-    let tag = q([1 | 1 << 15, 0x1000_0000, 0xE, 0]);
-    let want = vec![
-        (tag, false),
-        (q([0x1234, 0xFFFF, 0x62, 0]), false),
-        (tag, false),
-        (q([0x5678, 0xFFFF, 0x62, 0]), false),
-        (tag, true),
-        (q([0x9ABC, 0xFFFF, 0x62, 0]), true),
-    ];
-    assert_eq!(sys.board.path2.taken, want);
-    assert!(!sys.board.path2.masked, "MSKPATH3 set and then cleared");
+    let mut sys = grade(s14::direct());
+    let label = |s: &mut System, record: u32| s.peek(RECORD + 8 * record, 4) as u32 & 0xFFFF;
+    assert_eq!([label(&mut sys, 2), label(&mut sys, 5), label(&mut sys, 13)], [0x1234, 0x5678, 0x9ABC], "each DIRECT's LABEL in turn");
+    let stat = sys.board.gif.status(sys.board.now, false);
+    assert_eq!(stat & sapphire::gif::stat::M3P, 0, "MSKPATH3 set and then cleared");
 }
 
 /// A board driven through the EE's map alone, as the console texts' programs drive it.

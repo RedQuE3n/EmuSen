@@ -6,8 +6,9 @@
 //! From S16 the GS sits on the board too: its privileged registers at 12000000h, its interrupt latched by the INTC at
 //! its rising edge. From S20 the PCRTC (`pcrtc`) gives H-blank, V-blank, V-sync and the field in place of S11's
 //! stand-in, and reads each displayed line from the GS's memory at its time (Sapphire_Native.md §29.4).
-//! From S14 VIF0 and VIF1 take the DMAC's channels 0 and 1, their registers at 10003800h and FIFOs at 10004000h; their
-//! PATH2 ends at a stand-in until the GIF (S15) (Sapphire_Native.md §28.5).
+//! From S14 VIF0 and VIF1 take the DMAC's channels 0 and 1, their registers at 10003800h and FIFOs at 10004000h
+//! (Sapphire_Native.md §28.5). From S15 the GIF (`gif`) takes channel 2, VIF1's PATH2 and VU1's PATH1, its registers at
+//! 10003000h and its FIFO at 10006000h, and drives the GS's host interface (Sapphire_Native.md §33.5).
 
 use std::collections::VecDeque;
 
@@ -15,6 +16,7 @@ use crate::clock::{self, Standard};
 use crate::dmac::{self, Dmac, Peripherals};
 use crate::ee::map::{self, Map, Region};
 use crate::ee::{Bus, Ee, Halt};
+use crate::gif::{self, Gif};
 use crate::gs::{self, Gs, HostInterface};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
@@ -22,11 +24,11 @@ use crate::pcrtc::Pcrtc;
 use crate::pcrtc::timing::Mode;
 use crate::sif::{self, EePorts};
 use crate::timer::{self, Timer};
-use crate::vif::{self, Gif, Path2StandIn, Reach, Vif};
+use crate::vif::{self, Reach, Vif};
 use crate::vu::Vpu;
 
-/// A stand-in for a peripheral the DMAC reaches before its stage exists (VIF0, VIF1, GIF, IPU; the SIF's channels reach
-/// `sif` since S22): it takes every qword offered, keeping them when `keep` is set, and gives the qwords queued in
+/// A stand-in for a peripheral the DMAC reaches before its stage exists (the IPU's channels; the SIF's reach `sif` since
+/// S22, the VIFs' and the GIF's their units since S14 and S15): it takes every qword offered, keeping them when `keep` is set, and gives the qwords queued in
 /// `give`, holding its channel when it has none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StandIn {
@@ -61,20 +63,24 @@ impl Peripherals for StandIns {
     }
 }
 
-/// The DMAC's peripherals on the board: VIF0 and VIF1 on channels 0 and 1, the stand-ins on the rest.
-struct Ports<'a> {
+/// The DMAC's peripherals on the board: VIF0 and VIF1 on channels 0 and 1, the GIF's FIFO on channel 2, the stand-ins
+/// on the rest.
+struct Ports<'a, 'b> {
     vif: &'a mut [Vif; 2],
     stand: &'a mut StandIns,
-    gif: &'a mut dyn Gif,
+    gif: &'a mut GifPort<'b>,
     /// Channel 1's direction as D1_CHCR.DIR gives it: to memory when clear.
     vif1_to_memory: bool,
+    /// The cycle the DMAC's step runs at, when the qwords it puts arrive.
+    at: u64,
 }
 
-impl Peripherals for Ports<'_> {
+impl Peripherals for Ports<'_, '_> {
     fn request(&mut self, ch: usize, want: usize) -> usize {
         match ch {
             dmac::VIF0 => self.vif[0].request(want, false, self.gif),
             dmac::VIF1 => self.vif[1].request(want, self.vif1_to_memory, self.gif),
+            dmac::GIF => self.gif.gif.request(want),
             _ => self.stand.request(ch, want),
         }
     }
@@ -82,6 +88,7 @@ impl Peripherals for Ports<'_> {
     fn put(&mut self, ch: usize, q: u128, tag: bool) {
         match ch {
             dmac::VIF0 | dmac::VIF1 => self.vif[ch].put(q, tag),
+            dmac::GIF => self.gif.gif.put(q, tag, self.at),
             _ => self.stand.put(ch, q, tag),
         }
     }
@@ -89,30 +96,31 @@ impl Peripherals for Ports<'_> {
     fn get(&mut self, ch: usize) -> u128 {
         match ch {
             dmac::VIF1 => self.vif[1].get(self.gif),
-            dmac::VIF0 => 0,
+            dmac::VIF0 | dmac::GIF => 0,
             _ => self.stand.get(ch),
         }
     }
 }
 
-/// The GIF as VIF1 reaches it until S15: PATH2's stand-in, and the GS's host interface for the local-to-host data.
-struct GifStandIn<'a> {
-    path2: &'a mut Path2StandIn,
+/// The GIF as VIF1 reaches it (`vif::Gif`): PATH2, the paths' idle for the FLUSH family with channel 2's STR as PATH3's
+/// request, MSKPATH3, and the GS's host interface for the local-to-host data.
+struct GifPort<'a> {
+    gif: &'a mut Gif,
     gs: &'a mut Gs,
+    dma: bool,
 }
 
-impl Gif for GifStandIn<'_> {
+impl vif::Gif for GifPort<'_> {
     fn path2(&mut self, q: u128, hl: bool, at: u64) -> Option<u64> {
-        self.path2.take(q, hl);
-        Some(at)
+        self.gif.path2(q, hl, at, self.gs)
     }
 
-    fn idle_at(&mut self, _: bool, at: u64) -> Option<u64> {
-        Some(at)
+    fn idle_at(&mut self, path3: bool, at: u64) -> Option<u64> {
+        self.gif.idle_at(path3, self.dma, at)
     }
 
     fn mask_path3(&mut self, masked: bool, _: u64) {
-        self.path2.masked = masked;
+        self.gif.mask_path3(masked);
     }
 
     fn host_read(&mut self) -> Option<u128> {
@@ -148,11 +156,12 @@ pub struct Board {
     pub vpu: Vpu,
     /// The IOP, a unit of its own with its bus and units, brought to the board's time (Sapphire_Native.md §22).
     pub iop: Iop,
-    /// The GS (from S16); the GIF (S15) will reach its host interface through the board.
+    /// The GS (from S16), its host interface driven by the GIF (from S15).
     pub gs: Gs,
-    /// VIF0 and VIF1 (from S14), and PATH2's stand-in behind VIF1 until the GIF.
+    /// VIF0 and VIF1 (from S14).
     pub vif: [Vif; 2],
-    pub path2: Path2StandIn,
+    /// The GIF (from S15): channel 2's peripheral, PATH2 behind VIF1 and PATH1 behind VU1's XGKICK.
+    pub gif: Gif,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
@@ -174,11 +183,12 @@ impl Board {
             iop: Iop::new(Pcrtc::new(standard).timing),
             gs: Gs::new(),
             vif: [Vif::new(0), Vif::new(1)],
-            path2: Path2StandIn::default(),
+            gif: Gif::new(),
             now: 0,
             next: 0,
             edges_taken: Some(0),
         };
+        b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
         b.reschedule();
         b
     }
@@ -213,6 +223,7 @@ impl Board {
         for v in &self.vif {
             next = next.min(v.next_event());
         }
+        next = next.min(self.gif.next_event());
         self.next = next.max(self.now);
     }
 
@@ -269,6 +280,8 @@ impl Board {
         self.now = self.now.max(t);
         self.run_vifs(t);
         self.reschedule();
+        let free = self.gif.path1_free(self.now);
+        self.vpu.units.link.path1.set_free(free);
         self.vpu.run_to(t);
         let irq = self.vpu.take_interrupts();
         for (unit, source) in [intc::source::VU0, intc::source::VU1].into_iter().enumerate() {
@@ -276,6 +289,8 @@ impl Board {
                 self.intc.raise(source);
             }
         }
+        self.run_gif(t);
+        self.reschedule();
         self.iop.run_to(self.now);
         if self.iop.bus.sif.take_wake_ee() {
             self.dmac.wake(self.now);
@@ -293,18 +308,34 @@ impl Board {
         }
         let sif2_from_memory = self.dmac.ch[dmac::SIF2].chcr & dmac::chcr::DIR != 0;
         let vif1_to_memory = self.dmac.ch[dmac::VIF1].chcr & dmac::chcr::DIR == 0;
-        let Board { dmac, map, vif, ports, path2, gs, iop, .. } = self;
-        let mut gif = GifStandIn { path2, gs };
-        let mut vifs = Ports { vif, stand: ports, gif: &mut gif, vif1_to_memory };
+        let dma = self.dmac.ch[dmac::GIF].str();
+        let Board { dmac, map, vif, ports, gif, gs, iop, .. } = self;
+        let mut gif = GifPort { gif, gs, dma };
+        let mut vifs = Ports { vif, stand: ports, gif: &mut gif, vif1_to_memory, at };
         let mut ports = EePorts { others: &mut vifs, sif: &mut iop.bus.sif, sif2_from_memory };
         dmac.step(at, map, spram, &mut ports);
     }
 
-    /// Brings VIF0 and VIF1 to cycle `t` (each before its VU), waking the DMAC for a FIFO they freed or filled and
-    /// raising their interrupts.
+    /// Brings the GIF to cycle `t`: the XGKICKs VU1 made handed to it, then its paths run, the DMAC woken for FIFO room
+    /// freed, and the GS's interrupt latched.
+    fn run_gif(&mut self, t: u64) {
+        while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick() {
+            self.gif.kick(addr, at, told);
+        }
+        self.gif.run_to(t, &self.vpu.units.vu1, &mut self.gs);
+        if self.gif.take_wake() {
+            self.dmac.wake(t.max(self.now));
+        }
+        self.sync_gs();
+    }
+
+    /// Brings the GIF, then VIF0 and VIF1 to cycle `t` (each before its VU), waking the DMAC for a FIFO they freed or
+    /// filled and raising their interrupts.
     fn run_vifs(&mut self, t: u64) {
-        let Board { vif, vpu, path2, gs, dmac, intc: unit_intc, now, .. } = self;
-        let mut gif = GifStandIn { path2, gs };
+        self.run_gif(t);
+        let dma = self.dmac.ch[dmac::GIF].str();
+        let Board { vif, vpu, gif, gs, dmac, intc: unit_intc, now, .. } = self;
+        let mut gif = GifPort { gif, gs, dma };
         for (n, v) in vif.iter_mut().enumerate() {
             v.run_to(t, &mut Reach { vpu, gif: &mut gif });
             if v.take_wake() {
@@ -314,6 +345,10 @@ impl Board {
                 unit_intc.raise(intc::source::VIF0 + n as u32);
             }
         }
+        if gif.gif.take_wake() {
+            dmac.wake(t.max(*now));
+        }
+        self.sync_gs();
     }
 
     /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
@@ -376,7 +411,8 @@ impl Bus for Board {
                 return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
             }
             if paddr >= vif::FIFO[1] && bytes == 16 {
-                let mut gif = GifStandIn { path2: &mut self.path2, gs: &mut self.gs };
+                let dma = self.dmac.ch[dmac::GIF].str();
+                let mut gif = GifPort { gif: &mut self.gif, gs: &mut self.gs, dma };
                 let q = self.vif[1].get(&mut gif);
                 if self.vif[1].take_wake() {
                     self.dmac.wake(self.now);
@@ -392,7 +428,16 @@ impl Bus for Board {
             v[..bytes].copy_from_slice(&self.iop.bus.ram[a..a + bytes]);
             return u128::from_le_bytes(v);
         }
+        if (gif::REGS..gif::REGS_END).contains(&paddr) || (gif::FIFO..gif::FIFO_END).contains(&paddr) {
+            self.run_gif(self.now);
+            if paddr >= gif::FIFO {
+                return 0;
+            }
+            let w = self.gif.read(paddr & 0xF0, self.now, self.gs.reversed());
+            return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
+        }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.run_gif(self.now);
             return u128::from(self.gs.read_privileged(paddr, bytes));
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
@@ -432,12 +477,26 @@ impl Bus for Board {
             self.iop.bus.ram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
             return;
         }
+        if (gif::REGS..gif::REGS_END).contains(&paddr) || (gif::FIFO..gif::FIFO_END).contains(&paddr) {
+            self.run_gif(self.now);
+            if paddr >= gif::FIFO {
+                if bytes == 16 {
+                    self.gif.put(value, false, self.now);
+                }
+            } else if bytes >= 4 {
+                self.gif.write(paddr & 0xF0, value as u32);
+            }
+            self.run_gif(self.now);
+            self.reschedule();
+            return;
+        }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.run_gif(self.now);
             self.gs.write_privileged(paddr, bytes, value as u64);
             if self.pcrtc.written(self.now, &self.gs) {
                 self.iop.bus.blank = self.pcrtc.timing;
             }
-            self.sync_gs();
+            self.run_gif(self.now);
             self.reschedule();
             return;
         }

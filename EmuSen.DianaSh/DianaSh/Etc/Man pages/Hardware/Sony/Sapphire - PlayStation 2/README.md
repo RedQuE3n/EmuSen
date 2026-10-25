@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14 and S18 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18 and S15 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -70,7 +70,12 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   its queue, FIFOs, interrupt and DMA channels; the DualShock 2's modes, configuration and motors; the memory card's
   pages, spare bytes, erase and its flash's times; the multitap's frame; `emusen-ps2-card` for the card's file system;
   the medium `ps2.card` declared; PCSX2 a witness for most of the pad and the card's data, not for the reply's first
-  bytes, the erase's alignment or the multitap's selection (D-220 to D-230).
+  bytes, the erase's alignment or the multitap's selection (D-220 to D-230);
+  and stage S15 (2026-10-25, §33): the GIF, its three paths (XGKICK, DIRECT and DIRECTHL, channel 2 and the EE's
+  stores through a FIFO of 16 qwords), the PACKED, REGLIST and IMAGE formats with one owner, the arbitration at packet
+  ends, PATH3's masks and the intermittent mode, GIF_CTRL's reset and pause and GIF_STAT, S16's, S17's and S18's programs run
+  whole through PATH3 and VIF1, PCSX2 a witness for the formats and the masks and Play! for a held PATH2, and S14's
+  second DIRECT found a PCSX2 defect.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -104,7 +109,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   NUM's width, VPS and FQC, RST, undefined VIFcodes, the i bit, FBK and STP, MARK's and ITOP's widths, TTE and the
   VIF's timing; D-240 to D-250 since S18, DECAL's alpha with TCC RGB, the LOD's boundary and arithmetic, the CLUT's
   load and addressing, REGION_CLAMP's order, MTBA, texture coordinates' precision, fog's formula, bilinear rounding and
-  the blend between levels.
+  the blend between levels;
+  D-280 to D-291 since S15, a packet holding the GIF, descriptors 0Ch and 0Dh, GIF_STAT's fields, TTE on channel 2, RST
+  and MSKPATH3, the intermittent mode's slices, the GIF's timing, BUSDIR, PATH1's wrap, the masks at the arbitration,
+  PCSX2's second DIRECT and Q.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

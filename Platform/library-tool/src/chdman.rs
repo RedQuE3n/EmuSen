@@ -73,7 +73,7 @@ fn wait(mut child: Child, stop: &dyn Fn() -> bool) -> Result<Ran, String> {
 
 /// The last line of what chdman printed that says something, for words that name its failure.
 fn last_words(text: &str) -> String {
-    text.split(['\n', '\r']).map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("no output").to_string()
+    text.split(['\n', '\r']).map(str::trim).filter(|l| !l.is_empty()).next_back().unwrap_or("no output").to_string()
 }
 
 impl Chdman {

@@ -135,13 +135,13 @@ fn lone_mode(at: &str, size: u64) -> Result<(&'static str, Form), String> {
     let head = emusen_galaxia::image_probe::head_of(at, 16 * 2048 + 8).map_err(|e| format!("{at}: {e}"))?;
     const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
     if head.len() >= 16 && head[..12] == SYNC {
-        if size % 2352 != 0 {
+        if !size.is_multiple_of(2352) {
             return Err(format!("{} is not a whole number of 2,352-byte sectors", path::file_name(Style::HOST, at)));
         }
         return Ok((if head[15] == 1 { "MODE1/2352" } else { "MODE2/2352" }, Form::LoneTrack));
     }
     if head.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001") {
-        if size % 2048 != 0 {
+        if !size.is_multiple_of(2048) {
             return Err(format!("{} is not a whole number of 2,048-byte sectors", path::file_name(Style::HOST, at)));
         }
         return Ok(("MODE1/2048", Form::Iso));

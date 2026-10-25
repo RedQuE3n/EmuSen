@@ -5,14 +5,15 @@
 # (rootless podman), so nothing is installed on the machine and no sudo is used. See EmuSen_GamePackages.md §4.9, §12.1.
 #
 # Usage: bash build-chdman.sh [<work-dir>]      default ~/.cache/emusen/toolchains/mame<release>
-# Output: ~/.cache/emusen/toolchains/chdman-<release>/linux-x64/chdman, and its SHA-256 compared with the pin.
+# Output: ~/.cache/emusen/toolchains/chdman/linux-x64/chdman, where Platform.targets finds it, and its SHA-256 compared
+# with the pin.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 pin="$here/chdman.pin"
 field() { awk -v k="$1" '$1 == k { print $2 }' "$pin"; }
 release=$(field release); tag=$(field tag); url=$(field source); want=$(field source-sha256); pinned=$(field linux-x64)
 work=${1:-$HOME/.cache/emusen/toolchains/$tag}
-out=$HOME/.cache/emusen/toolchains/chdman-$release/linux-x64
+out=$HOME/.cache/emusen/toolchains/chdman/linux-x64
 mkdir -p "$work" "$out"
 cd "$work"
 

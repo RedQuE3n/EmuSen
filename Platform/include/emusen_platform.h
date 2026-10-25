@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 23u
+#define EMUSEN_PLATFORM_ABI_VERSION 24u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -205,6 +205,31 @@ int32_t emusen_galaxia_package_write(const uint8_t *file, size_t file_len, const
 
 /* A manifest checked and laid out as it is written: indented by two, System.Text.Json's escapes, numbers as their tokens, a final line ending. */
 int64_t emusen_galaxia_package_format(const uint8_t *manifest, size_t manifest_len, uint8_t *out, size_t len);
+
+/* ---- The library tool (EmuSen_GamePackages.md, sections 4 and 12.3; since 24) ---- */
+
+/*
+ * A job of the library tool: the library's disc games converted to CHD by the pinned chdman beside this library, checked
+ * again, or listed, on a thread of the library's own. A request and every event are one JSON object each:
+ *   request  {"op": "convert" | "check" | "ls", "paths": [library-relative paths], "fast": false, "threads": 0}
+ *   events   {"event": "start", ...}, then {"event": "disc", "state": ..., ...} for each disc, then {"event": "end", ...}
+ * The fields of each are section 12.3's. The same four calls, with emusen_platform_last_error, are the table of the
+ * emusen.library service (Platform/library-tool/include/emusen_library_tool.h) that every shell this library makes is
+ * handed, so that the shell's module and Mistress's window run one tool.
+ */
+typedef struct emusen_library_job emusen_library_job;
+
+/* A job started; PARSE with words for a request that is not one. What a job refuses (an unset library, a chdman that is not the pinned one) is its end event's "error". */
+int32_t emusen_library_tool_start(const uint8_t *request, size_t len, emusen_library_job **job);
+
+/* The next event, waiting up to wait_ms for one: its length, copied and taken only when `out` holds all of it; ABSENT when none came in time; 0 once the last was taken. */
+int64_t emusen_library_tool_next(emusen_library_job *job, uint32_t wait_ms, uint8_t *out, size_t len);
+
+/* Asks a job to stop: a running chdman is ended and its partial file removed; the job ends with what it did. */
+int32_t emusen_library_tool_stop(emusen_library_job *job);
+
+/* Stops a job, waits for it to end, and frees it. */
+int32_t emusen_library_tool_free(emusen_library_job *job);
 
 /* ---- Galaxia: mapped files (EmuSen_Galaxia.md, section 3.8) ---- */
 

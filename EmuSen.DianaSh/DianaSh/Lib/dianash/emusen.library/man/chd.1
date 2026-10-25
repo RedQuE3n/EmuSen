@@ -1,0 +1,106 @@
+NAME
+    chd - convert the library's disc games to CHD, check them, list them
+
+SYNOPSIS
+    chd ls [<path>...]
+    chd convert <path>... [--fast] [-j <threads>]
+    chd check [<path>...]
+    chd wait [chd<n>]
+
+DESCRIPTION
+    The CHD tool of the emusen.library module. A <path> is a file or a
+    folder of the library, AppSettings.RomDirectory, written relative to
+    it with / between its parts: psx, "psx/Rayman (USA)", SCD. / is the
+    whole library, and so is no path for ls and check. The disc games
+    under each path are its PlayStation and Sega CD discs: a cue sheet
+    and its tracks, a lone raw track, an ISO image, or a zip holding one.
+    Which console a file is for is the library scan's own routing, then
+    the nearest console folder above it (psx, segacd).
+
+    THE LIBRARY IS ONLY READ. Nothing under it is written, renamed or
+    removed: no CHD, no package, no link. A batch whose output folders and
+    the library overlap is refused before anything is written.
+
+    'convert' converts each disc with chdman, MAME's CHD manager, which a
+    build ships beside the platform library. The CHD goes to Compressed,
+    at the disc's path in the library with .chd (psx/Rayman (USA).cue
+    becomes Compressed/psx/Rayman (USA).chd), first as a partial file
+    that is renamed into place only when three checks pass in the same
+    run:
+
+        1  chdman's own verify: every hunk decompressed, the overall SHA-1
+           compared;
+        2  every track rebuilt from the CHD through EmuSen's own reader,
+           a reader other than chdman's, and its CRC-32, MD5 and SHA-1
+           compared with those taken of the original before chdman ran;
+        3  the table of contents (tracks, their pauses and starts, the
+           lead-out and the disc type) equal to the original disc's.
+
+    Checks 2 and 3 are not run over a CHD that check 1 found damaged; the
+    disc has failed in any case. Each converted disc is given a linked
+    package in Packages/<console>/, whose package.json names the CHD and
+    records the original dump: every track's hashes, the sheet's, the
+    form, and the CHD's codecs and SHA-1s.
+
+    A disc already converted, whose package names a CHD still at the size
+    and time recorded and whose originals have not changed, is skipped,
+    so that a stopped batch run again converts only the rest. A disc is
+    started only with the free space of its original and 64 MiB more at
+    the output; one whose original changes during its conversion is
+    discarded; a zip of several tracks with no sheet, a sheet naming a
+    WAVE file, and a file that is neither a raw track nor an ISO image are
+    skipped with the reason. One disc failing never stops a batch.
+
+    --fast writes chdman's Zstandard codecs, cdzs,cdfl, in place of its
+    defaults, cdlz,cdzl,cdfl: about 1.3 to 1.8 times faster to decode for
+    a CHD about a point larger. -j sets the threads chdman compresses
+    with; all of the machine's by default.
+
+    'check' runs the three checks again on discs already converted,
+    against their packages; the originals are not read. 'ls' lists the
+    disc games with their state: converted, not converted, changed (an
+    original changed since its conversion) or missing (its CHD is gone).
+
+JOBS
+    Each command runs as a job, followed one line a disc until it ends or
+    the line's budget is spent. A job that outlives the budget goes on in
+    the background as chd<n>: 'ps' lists it with how far it has got,
+    'chd wait chd<n>' follows it again, and 'kill chd<n>' stops it, which
+    ends chdman and removes its partial file, so that nothing of the
+    current disc is left. Every disc's outcome is also written, one line
+    each, to Logs/chd_<day>.log.
+
+CHDMAN
+    The chdman run is the one pinned in Platform/library-tool/chdman.pin:
+    MAME 0.289, built from MAME's source archive by build-chdman.sh. A
+    chdman whose SHA-256 is not the pinned one is refused with both
+    hashes named, and nothing is converted. chdman's source file is under
+    the BSD 3-Clause License, copyright Aaron Giles, and MAME as a whole
+    under the GNU General Public License, version 2 or later;
+    THIRD_PARTY_NOTICES.md lists its licences and the written offer of
+    its source.
+
+EXAMPLES
+    chd ls psx
+    chd convert psx SCD
+    chd convert "psx/Crash Bandicoot (USA).bin" --fast
+    chd check psx
+    ps
+    chd wait chd1
+    kill chd1
+
+SOURCES
+    MAME Documentation 0.289, "chdman - CHD (Compressed Hunks of Data)
+    File Manager", https://docs.mamedev.org/tools/chdman.html: the
+    commands createcd, verify and info, the codecs and createcd's
+    defaults.
+    MAME Documentation 0.289, "The MAME License",
+    https://docs.mamedev.org/license.html.
+    MAME Documentation 0.289, "Compiling MAME",
+    https://docs.mamedev.org/initialsetup/compilingmame.html: TOOLS=1 and
+    EMULATOR=0, by which chdman is built alone.
+
+SEE ALSO
+    EmuSen_GamePackages.md (sections 4 and 12: the design, the checks,
+    the events and the measurements), EmuSen_Galaxia.md (section 3.10,
+    the package manifest), EmuSen_Disc.md (how a CHD is read)

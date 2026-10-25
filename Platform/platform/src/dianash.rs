@@ -110,12 +110,16 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     let mut shell = Shell::new(settings);
-    let modules: [&'static dyn dianash_module::Module; 5] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE];
+    let modules: [&'static dyn dianash_module::Module; 6] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE, &emusen_library_module::MODULE];
     for module in modules {
         if let Err(words) = shell.add_module(module) {
             fail(status::BAD_MANIFEST, words);
             return std::ptr::null_mut();
         }
+    }
+    if let Err(code) = shell.set_services(&with_library(&[])) {
+        fail(code, "the library tool's service could not be handed to the shell");
+        return std::ptr::null_mut();
     }
     let cancel = shell.cancel_flag();
     Box::into_raw(Box::new(DianashShell { shell: Mutex::new(shell), cancel }))
@@ -160,6 +164,23 @@ pub unsafe extern "C" fn dianash_add_commands(sh: *mut DianashShell, session: u3
     }
 }
 
+/// The host's services and, unless it names its own, the library tool's, which this library hands every shell so that
+/// `emusen.library` runs without the host's help (EmuSen_GamePackages.md §12.3).
+fn with_library(given: &[dianash_service]) -> Vec<dianash_service> {
+    let name = crate::library_tool::SERVICE.as_bytes();
+    let mut all = given.to_vec();
+    if !given.iter().any(|s| unsafe { s.name.slice() } == Some(name)) {
+        all.push(dianash_service {
+            size: std::mem::size_of::<dianash_service>() as u32,
+            name: emusen_dianash::abi::dianash_bytes::of(name),
+            major: crate::library_tool::MAJOR,
+            minor: crate::library_tool::MINOR,
+            table: &crate::library_tool::TABLE as *const crate::library_tool::LibraryToolV1 as *const std::ffi::c_void,
+        });
+    }
+    all
+}
+
 /// The services the host provides, copied into every call.
 ///
 /// # Safety
@@ -177,7 +198,7 @@ pub unsafe extern "C" fn dianash_set_services(sh: *mut DianashShell, services: *
     } else {
         unsafe { std::slice::from_raw_parts(services, count) }
     };
-    match shell.set_services(given) {
+    match shell.set_services(&with_library(given)) {
         Ok(()) => status::OK,
         Err(code) => fail(code, "a service has no name"),
     }

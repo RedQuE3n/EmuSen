@@ -1,0 +1,17 @@
+[package]
+name = "emusen-library-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.library, the library's tools as a command module (EmuSen_GamePackages.md §2.4, §12.3): `chd`, over the library
+# tool lent as the emusen.library service, since a module never links Galaxia (EmuSen_DianaSh.md §16 Q11). `pkg` joins
+# it at step 5.
+[lib]
+name = "emusen_library_module"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+# .NET's JSON, to read the tool's events.
+emusen-dotnet = { path = "../dotnet" }

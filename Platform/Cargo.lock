@@ -440,6 +440,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-library-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+]
+
+[[package]]
 name = "emusen-library-tool"
 version = "0.1.0"
 dependencies = [
@@ -495,6 +503,8 @@ dependencies = [
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-library",
+ "emusen-library-module",
+ "emusen-library-tool",
  "emusen-native",
  "emusen-net",
  "emusen-savemedia",

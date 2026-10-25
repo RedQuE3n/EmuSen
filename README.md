@@ -613,9 +613,14 @@ with [`VenusRT_DspHle.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Ninte
   BSD-3-Clause), whose code is not read. Its CD layout was measured from the output of MAME's chdman 0.289; chdman's
   source file is BSD-3-Clause (copyright Aaron Giles), and MAME as a whole is GPL-2.0-or-later
   ([The MAME License](https://docs.mamedev.org/license.html)). chdman is documented in MAME's own
-  [chdman page](https://docs.mamedev.org/tools/chdman.html) (MAME Documentation 0.289). It is not part of a build
-  today; when EmuSen ships it, as decided on 2026-10-25, it is listed in `THIRD_PARTY_NOTICES.md` with its licence texts
-  and a written offer of its source (`EmuSen_GamePackages.md` §4.9).
+  [chdman page](https://docs.mamedev.org/tools/chdman.html) (MAME Documentation 0.289).
+- [MAME](https://www.mamedev.org/)'s **chdman**, shipped with EmuSen since 2026-10-25 and run by its CHD tool (`chd`
+  in DianaSh) to write and verify CHD files. It is built unmodified from MAME 0.289's source (tag `mame0289`), following
+  MAME's "Compiling MAME", and pinned by SHA-256; MAME's source is not read. chdman's source file is BSD-3-Clause
+  (copyright Aaron Giles) and MAME as a whole GPL-2.0-or-later ([The MAME License](https://docs.mamedev.org/license.html)).
+  Its manual is MAME's [chdman page](https://docs.mamedev.org/tools/chdman.html); its licences, the libraries inside it
+  and the written offer of its source are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) §1.7
+  (`EmuSen_GamePackages.md` §4.9, §12).
 
 ### Screen filters
 

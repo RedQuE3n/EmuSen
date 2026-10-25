@@ -21,6 +21,10 @@
     <_EmuSenNanoFile>nano</_EmuSenNanoFile>
     <_EmuSenNanoFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">nano.exe</_EmuSenNanoFile>
     <_EmuSenNanoBuilt>$(EmuSenPlatformTargetDir)/$(EmuSenNativeProfile)/$(_EmuSenNanoFile)</_EmuSenNanoBuilt>
+    <!-- chdman, the one third-party program the published tree carries, beside the library; built by Platform/library-tool/build-chdman.sh, pinned by SHA-256 in chdman.pin and never committed (EmuSen_GamePackages.md §4.9, §12.1). -->
+    <_EmuSenChdmanFile>chdman</_EmuSenChdmanFile>
+    <_EmuSenChdmanFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">chdman.exe</_EmuSenChdmanFile>
+    <EmuSenChdman Condition="'$(EmuSenChdman)' == ''">$(HOME)/.cache/emusen/toolchains/chdman/$(NETCoreSdkPortableRuntimeIdentifier)/$(_EmuSenChdmanFile)</EmuSenChdman>
     <!-- A library built elsewhere for this machine, for one without Rust: <dir>/<rid>/<file>, the layout a publish for another platform takes. -->
     <_EmuSenPlatformPrebuilt Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(NETCoreSdkPortableRuntimeIdentifier)/$(_EmuSenPlatformFile)</_EmuSenPlatformPrebuilt>
   </PropertyGroup>
@@ -46,6 +50,7 @@
     <ItemGroup>
       <None Include="$(_EmuSenPlatformSource)" Condition="'$(_EmuSenPlatformSource)' != '' And Exists('$(_EmuSenPlatformSource)')" Link="$(_EmuSenPlatformFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <None Include="$(_EmuSenNanoBuilt)" Condition="'$(_EmuSenPlatformCargoFound)' == 'true' And Exists('$(_EmuSenNanoBuilt)')" Link="dianash/$(_EmuSenNanoFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(EmuSenChdman)" Condition="Exists('$(EmuSenChdman)')" Link="$(_EmuSenChdmanFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <None Include="$(MSBuildThisFileDirectory)dianash-program/nano.dianash.json" Condition="'$(_EmuSenPlatformCargoFound)' == 'true' And Exists('$(_EmuSenNanoBuilt)')" Link="dianash/nano.dianash.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>

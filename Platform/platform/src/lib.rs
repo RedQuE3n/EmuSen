@@ -22,6 +22,8 @@ pub mod galaxia;
 pub mod galaxia_config;
 // The library's stable header, emusen_library.h, exported beside this interface (EmuSen_Backend.md §28).
 pub mod library;
+// The library tool: CHD conversion jobs, for Mistress's window and, as the emusen.library service, for every shell (EmuSen_GamePackages.md §12.3).
+pub mod library_tool;
 pub mod scrape;
 pub mod net;
 pub mod serenity;
@@ -30,7 +32,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 23;
+pub const ABI_VERSION: u32 = 24;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -281,6 +283,7 @@ mod tests {
         exported.extend(exports_in(include_str!("savemedia.rs")));
         exported.extend(exports_in(include_str!("cheats.rs")));
         exported.extend(exports_in(include_str!("net.rs")));
+        exported.extend(exports_in(include_str!("library_tool.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

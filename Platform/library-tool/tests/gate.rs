@@ -187,7 +187,7 @@ fn run(ctx: &Context, request: &str) -> Vec<Value> {
 }
 
 fn state_of<'a>(events: &'a [Value], source: &str) -> &'a str {
-    events.iter().filter(|e| e.get("event").and_then(Value::as_str) == Some("disc") && e.get("source").and_then(Value::as_str) == Some(source)).last().and_then(|e| e.get("state")).and_then(Value::as_str).unwrap_or("absent")
+    events.iter().filter(|e| e.get("event").and_then(Value::as_str) == Some("disc") && e.get("source").and_then(Value::as_str) == Some(source)).next_back().and_then(|e| e.get("state")).and_then(Value::as_str).unwrap_or("absent")
 }
 
 fn summary(events: &[Value]) -> String {

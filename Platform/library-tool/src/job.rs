@@ -183,7 +183,14 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
             count(&mut counts, "stopped");
             continue;
         }
-        let head = |state: &str| vec![("event", Value::string("disc")), ("index", Value::number(i + 1)), ("of", Value::number(items.len())), ("source", Value::string(&item.rel)), ("system", Value::string(&item.system.console)), ("state", Value::string(state))];
+        let head = |state: &str| {
+            let mut h = vec![("event", Value::string("disc"))];
+            if req.op != Op::List {
+                h.extend([("index", Value::number(i + 1)), ("of", Value::number(items.len()))]);
+            }
+            h.extend([("source", Value::string(&item.rel)), ("system", Value::string(&item.system.console)), ("state", Value::string(state))]);
+            h
+        };
         if req.op != Op::List {
             emit(queue, obj(head("working")));
         }

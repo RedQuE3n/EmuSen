@@ -502,3 +502,17 @@ the drawing's labels or an edge of the focus graph, and nothing else:
   below the drawing, so it recorded 24 or 32 edges among that list's cells. Over the new labels it finishes first, and
   those edges are no longer walked; the edge from the player selector down into the list is still recorded. The other
   consoles' tabs keep their 32.
+
+#### 6.3.11 The Compressed Discs window (2026-10-25)
+
+Mistress's window for the CHD tool (`EmuSen_GamePackages.md` §13) adds five cases, each opened over a running game with
+a scripted job: `CompressedDiscsEmpty`, `CompressedDiscs` (a listing), `CompressedDiscsRunning`,
+`CompressedDiscsFinished` and `CompressedDiscsFailed`. Their ten recordings are new, and no other recording changed.
+
+The first recording of the running state found the rule of §4.4 broken: a disabled dropdown and a disabled check box
+paint `#FFFFFF33` and `#FFFFFF66`, Fluent's disabled colours, which no palette in reach declares. The window now hides
+its two choosers during a batch and leaves its check boxes enabled, and the rules then find nothing in any of the ten.
+
+The paragraph that names the run's folders, its first, is recorded as volatile, as the normaliser marks words that
+hold the run's own paths.
+

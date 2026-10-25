@@ -160,7 +160,9 @@ namespace EmuSen.Mistress.Views
         {
             string[] chosen = Shown().Where(d => d.Chosen).Select(d => d.Source).ToArray();
             if (chosen.Length > 0) return chosen;
-            return _folder.SelectedItem is string label && _folders.TryGetValue(label, out string? folder) ? [folder] : [];
+            if (_folder.SelectedItem is not string label || !_folders.TryGetValue(label, out string? folder)) return [];
+            // The library's own folder names its discs one by one, since an empty path is the whole library.
+            return folder.Length > 0 ? [folder] : Shown().Select(d => d.Source).ToArray();
         }
 
         private int Threads() => _threads.SelectedIndex + 1;

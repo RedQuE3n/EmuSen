@@ -1,5 +1,9 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, a third time: step 4 is built (§13). Mistress's Compressed Discs window runs the CHD tool
+through the platform library's four job calls, reached from Settings, the pad menu and big picture as Memory Cards
+is. Step 5 waits for the tester's go.*
+
 *Revised 2026-10-25, again: step 3 is built (§12). chdman is obtained, pinned and shipped as §4.9 now records; the CHD
 tool, its module and the platform library's calls are built; the synthetic gate passed and the tester's PlayStation and
 Sega CD folders were converted on the desktop. The handheld's run is what step 3 leaves (§12.7).*
@@ -949,7 +953,8 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 
 Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
 steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
-run done (§12), and its handheld run is left (§12.7); step 4 waits for the tester's go. Every test uses
+run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 waits
+for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -958,7 +963,7 @@ them. No commercial image is committed.
 | **1** *(built 2026-10-25, §11.1)* | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
 | **2** *(built 2026-10-25, §11.2)* | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
 | **3** *(built 2026-10-25, §12; the handheld's run left)* | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
-| **4** | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
+| **4** *(built 2026-10-25, §13)* | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
 | **6** | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
 | **7** | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
@@ -1417,8 +1422,8 @@ caller's to ask for (`-j`), since the tool does not know which device it runs on
 
 | Event | Fields |
 |---|---|
-| `start` | `op`, `discs`, `refused` (the words for each path that names nothing); for convert and check `chdman` (its version line); for convert `codecs`, `threads`, `output` |
-| `disc` | `source`, `system`, `state`; `index` and `of` for convert and check; then by state: `words`, `output` and `package` (paths under `Compressed` and `Packages`), `original` and `chd` (bytes), `seconds`, `checks` (`chdman`, `tracks`, `toc`, each `passed` or `failed: <words>`); for ls `size` |
+| `start` | `op`, `discs`, `refused` (the words for each path that names nothing); for convert and check `chdman` (its version line) and, since step 4, `log` (the batch's log, §13.4); for convert `codecs`, `threads`, `output` |
+| `disc` | `source`, `system`, `state`; `index` and `of` for convert and check; then by state: `words`, `output` and `package` (paths under `Compressed` and `Packages`), `original` and `chd` (bytes), `seconds`, `checks` (`chdman`, `tracks`, `toc`, each `passed` or `failed: <words>`); for ls `size`, the disc's bytes in the library: the file named and, for a sheet, every file it names (since step 4, §13.4) |
 | `end` | `op`, `counts` (each state's number), `seconds`, and `error` where the job refused to run: an unset or missing library, an overlap of it and the folders written, a chdman not found or not the pinned one |
 
 A disc's states: convert gives `working`, then `converted`, `already`, `skipped`, `failed` or `stopped`; check gives
@@ -1565,3 +1570,224 @@ the desktop: every disc of the two folders passed all three checks, twice.
 - **Q24 [routine]: `chd wait`**, a fourth subcommand, exists because a batch outlives DianaSh's ten-second line
   budget (§12.3). *Recommended:* keep it; the window of step 4 polls the job and needs nothing of it.
 
+## 13. Built 2026-10-25: step 4
+
+*Measured on the development desktop on 2026-10-25. No batch was run on the ROM library: every test made its own
+discs in a temporary folder, as step 3's gate makes them, and the fit audit's states are fed a scripted job.* Marks as
+at the top: what was run is [M].
+
+### 13.1 The binding
+
+`EmuSen.Galaxia/Native/LibraryToolJob.cs` binds the four calls of §12.3 on the managed side of the platform library,
+beside Galaxia's own, and finds them by name through `PlatformLibrary.Export`, as `MediumLockNative` finds the medium
+lock's.
+
+- **`LibraryToolJob.Start(request)`** returns an `IToolJob`. A request the tool refuses (`PARSE`) is a
+  `FormatException` carrying the tool's words. A library that is not loaded, or lacks a call, is an
+  `InvalidOperationException` that names `PlatformLibrary.Report`.
+- **`Next(wait)`** follows the length-query idiom. A buffer of 4 KiB is grown when an event is longer, and the event is
+  taken only once the buffer holds it. `ABSENT` returns null, and 0 marks the job `Ended`.
+- **`Stop()`** asks the job to stop, and **`Dispose()`** frees it, which stops it and waits for its thread.
+
+The four calls are not added to `GalaxiaNative.Exports`. A library without them is therefore not refused for the rest
+of Galaxia; only the tool is unavailable. The tool has no C# implementation, so a frontend without the platform library
+says so and converts nothing.
+
+**The library never calls its host.** The window polls: every 100 ms while a job runs, it takes every queued event
+with no wait, at most 256 a tick. With no job, nothing runs.
+
+### 13.2 The window
+
+`EmuSen.Mistress/Views/CompressedDiscsWindow.cs`, a LunaP `ToolWindow` titled *Compressed Discs*.
+
+**Where it is reached.**
+
+- *Settings → Compressed Discs…* in the desktop's menus, after *Memory Cards…*.
+- *Settings → Compressed Discs* in the pad menu's main menu, which big picture draws as its own panel.
+- In big picture the window is framed as a sheet (`MainWindow.FramedWindows`), so it is used by the controller grammar
+  alone.
+- It is not in a game's *Game Settings*, where Memory Cards is: a batch holds half the machine's threads for minutes
+  while the game plays. Q25 asks the tester.
+
+**What it shows**, from the top:
+
+1. **A plain statement.** "The library is left untouched: nothing in `<RomDirectory>` is changed, moved or removed.
+   The CHDs go to `<Compressed>`."
+2. **Convert or check.** The buttons *Convert*, *Check Converted*, *Stop* and *Resume*.
+   - The first two name what they act on: *Convert 3 Chosen*, *Convert All 37* for a folder, *Convert Every Disc*.
+   - Their help says what a CHD is kept for: the three checks of §4.3.
+   - It also says that closing the window stops a batch, and that converting again does only what is left.
+3. **Progress.** A bar of the discs the job has finished out of `of`, then "*n* of *m* discs done", and the disc now
+   working.
+   - The log's path, from the start event's `log` (§13.4).
+   - A disc's own progress is its state (waiting, converting and checking, then its result with its seconds). The tool
+     does not report chdman's progress within a disc (Q27).
+4. **Discs from.** *Every folder*, or each of the library's top folders that holds a disc, with its count and its
+   console: "psx: 37 PlayStation discs".
+5. **Threads.** "*n* of *total*". The default is half the machine's threads, at least one, as §12.7's Q20
+   recommended and the tester decided on 2026-10-25. The request's `threads` carries the choice, and the tool keeps no
+   device rule of its own.
+6. **Discs.** Each disc is a check box with its path below the folder, then a line with its size and state.
+   - Size: the listing's `size`, the whole disc's (§13.4).
+   - State: one of §12.3's states in the window's words (§13.3).
+   - Where an event carried them, a third line gives the three checks' results, each named as a player would read it:
+     "chdman's verify: passed; every track against the original: failed, track 2's file ends in part of a 2352-byte
+     sector, which a CHD does not keep; the table of contents: passed."
+
+Under all of these sits the status line: what the last batch did ("2 discs converted and verified, 1 already
+converted, 1 failed, 1 left as it is, in … s. Nothing in the library was changed."), or why the tool did nothing.
+
+**How it runs.**
+
+- *Opening* lists the whole library with an `ls` job. An empty listing shows "No discs to convert" with the forms the
+  tool takes.
+- *What a batch names*: the chosen discs among those shown; with none chosen, the folder shown; with *Every folder*,
+  the whole library.
+  Discs lying in the library's own folder are named one by one, since an empty path is the whole library.
+- *Stop* is `emusen_tool_job_stop`.
+  - The tool ends chdman and removes its partial file.
+  - The discs the job had not reached are marked *stopped* by the window, since the tool counts them without an event
+    (§12.3's `run`).
+  - *Resume* is offered once a batch ended with any disc stopped.
+- *Resume* sends the last conversion's request again. The file system is the job's record (§4.6), so the discs already
+  converted come back `already` and only the rest are converted.
+- *Closing* the window frees its job, which stops it.
+- **No removal of originals anywhere**, as §9 Q2 decided. The window has no control that writes the library, and its
+  first line says so in plain words.
+
+**Hidden rather than disabled.** While a batch runs, the folder and thread choosers are hidden, so that the choice
+cannot change under the batch.
+
+- A disabled dropdown or check box paints Fluent's disabled colours (`#FFFFFF33` and `#FFFFFF66`), and the menu look's
+  palette declares neither. The recorded rules' palette reach (`EmuSen_InterfaceSpec.md` §4.4) found both in the
+  running state's first recording [M].
+- The check boxes stay enabled during a batch, and a disc chosen then is chosen for the next batch.
+- Declaring the disabled colours would be a change to LunaP's menu palette for one window, and was not made.
+
+### 13.3 The words
+
+`CompressedDiscsWords` gives the window's own words for everything the tool says.
+
+- **The table.** It holds one entry for each refusal (the end event's `error`, the start event's `refused`) and one
+  for each reason a disc gives in `words`, as `Platform/library-tool` writes them.
+- **An unmatched phrase.** The tool's own words are kept after "Nothing was done:". The words of a package the tool
+  could not write are passed on as written.
+- **Examples:**
+
+| The tool says | The window says |
+|---|---|
+| `AppSettings.RomDirectory is not set: there is no library to convert.` | No library folder is set, so there are no discs to convert. Choose the library's folder in Preferences, then open this again. |
+| `Compressed (…) and the library (…) overlap: …` | EmuSen's Compressed folder (…) and the library (…) overlap. The library is never written to, so nothing was done: keep the library outside EmuSen's own folders. |
+| `chdman at … has SHA-256 …, but this build is pinned to …` | The chdman beside EmuSen is not the one this build was made with, so it was not run and nothing was converted. Installing EmuSen again puts the right one back. |
+| `chdman at … could not be run: …` | chdman could not be started (…), so nothing was converted. On Linux it needs SDL2 (libSDL2-2.0.so.0) installed. |
+| `1048576 bytes are free at …, and the disc needs 627108864 with the margin` | Failed, and no CHD was kept: there is not room for it: 1.0 MB free at …, and it needs 598 MB |
+| `Dusk.zip holds 2 track files and no sheet, …` | Left as it is: Dusk.zip holds 2 track files and no cue sheet, so the order of its tracks and the gaps between them are unknown |
+
+**A disc's states** are said as follows:
+
+| State | Words |
+|---|---|
+| `not converted` | Not converted |
+| `converted`, in a listing | Converted and verified: its CHD's size, and the share of the original's |
+| `converted`, in a batch | the same, with its seconds |
+| `changed`, `missing` | Changed since it was converted, or its CHD is gone: converting it again replaces or makes it |
+| `already` | Already converted and verified |
+| `skipped` | Left as it is: the reason |
+| `failed` | Failed, and no CHD was kept: the reason; in a check, Failed the check: the reason |
+| `stopped` | Stopped before it finished: Resume converts it |
+| `verified` | Verified again: all three checks passed |
+
+### 13.4 Two extensions of §12.3's events
+
+Both are fields that the shell's module does not print, so `chd.golden` is unchanged.
+
+- **The start event of a conversion or a check carries `log`**, the path of the batch's log. The window shows it.
+  - Each disc's line now goes to the file named by the day the batch started, not by the day each disc ended.
+  - So one batch keeps to one file, and the path the start event names is exact. §4.6's "each batch appends … to
+    `Logs/chd_<day>.log`" reads so.
+- **The listing's `size` is the whole disc's**: the file named and, for a sheet, every file it names, found with
+  Galaxia's `image_sets::companions`.
+  - It was the named file's alone, which for a cue sheet is a few hundred bytes.
+  - The window's "see each disc's size" needed the whole.
+
+**The service stays `emusen.library` 1.0.** Its table is unchanged. The one module that reads the events ships in the
+same library as the tool, and it reads neither field.
+
+### 13.5 The gate, the tests, and the faults seeded
+
+**The fit audit and the pad** [M]. `WindowFitAuditTests` gained five cases: `CompressedDiscsEmpty`, `CompressedDiscs`
+(a listing), `CompressedDiscsRunning`, `CompressedDiscsFinished` and `CompressedDiscsFailed`.
+
+- *How each opens.* The window is opened as Settings opens it, over a running game, with a scripted job. Each state is
+  therefore the same in every run.
+  - The listing has five discs: one converted, one not converted with a title as long as a No-Intro name gets, one
+    changed, one missing, and a Sega CD disc.
+  - The batch states press *Convert* on three of them. The failed state has a check's failure, a disc left as it is,
+    and the free space short.
+- *The audit.* Both sizes pass `FitAudit.Check`, with nothing cut off, past its panel or overlapping.
+- *The recordings.* All ten states are recorded in `Specification/`, and `InterfaceSpecFiles.Check` holds them to the
+  rules of `EmuSen_InterfaceSpec.md` §4: every operable control is reached by the pad's walk, named, and painted from
+  the palette.
+- *Repeatability.* A second run compared equal to the recording.
+- `PadMenuTests` opens the window from the main menu's *Settings*, and its list of that submenu's rows gained the
+  entry.
+
+**Real batches** (`CompressedDiscsWindowTests`, headless, with the pinned chdman that `Platform.targets` copies beside
+the tests; without it the batch test says why it is skipped and passes) [M]. The test library holds five discs:
+
+- a cue sheet with an audio track, built by `SyntheticPsxDisc`;
+- a lone data track 152 seconds long, the one to stop on;
+- a sheet whose audio file ends 100 bytes into a sector;
+- a zip of two tracks and no sheet;
+- one more sheet.
+
+The test drives the window through a whole batch:
+
+1. *The listing.* The window lists the five, each `not converted`, the first with the size of its sheet and two tracks.
+   The plain statement names the library, and the threads default to half the machine's.
+2. *Stop.* *Convert* is pressed, then *Stop* as soon as the first disc is `converted`. The last disc is `stopped` in
+   the window's words. No partial file or scratch folder is left in `Compressed`, and the log the start event named
+   exists.
+3. *Resume.* The first disc comes back `already`, the long track and the last sheet are converted, and the zip is left
+   as it is, in the window's words.
+   - The short audio file fails check 2 with its words, and no CHD is kept for it.
+   - The summary reads "2 discs converted and verified, 1 already converted, 1 failed, 1 left as it is, … Nothing in
+     the library was changed."
+4. *Check.* With two discs chosen, *Check 2 Chosen* verifies both, and each disc's checks line names the three passes.
+5. *The library.* Its listing (every file's path, size, time and MD5) is the same at the end as at the start.
+
+The whole batch takes about a second. A second test opens the window with no library set, and over a library that
+holds EmuSen's own folders. Each refusal is said in the window's words, and *Convert* is disabled. A theory of 30 cases
+holds each phrase of the tool to a sentence of the window's own.
+
+**Rust** [M]: `cargo test --profile test-checked`, with `EMUSEN_CHDMAN` set.
+
+- `emusen-library-tool` passes 2 unit tests and the gate's 7. The round trip now also holds the start event's `log`,
+  with a line for each disc in it, and a sheet's listed `size` equal to its three files.
+- `emusen-library-module` passes 3, and `emusen-platform`'s `library_tool` 3.
+
+**WiseMan, the blast radius `blast.sh` named** [M]: 2,645 passed, 62 skipped and none failed, in 20 min 42 s, over `CompressedDiscsWindowTests`, `DataStoreTests`, every test under `EmuSen.WiseMan.Mistress`, `Galaxia`, `GamePackageTests`, `GameRecords`, `Library`, `PadMenuTests` and `WindowFitAuditTests`. Cargo: `emusen-galaxia` (86 and 1) and `emusen-library` (11) pass as before.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| the threads default set to every thread, not half | `CompressedDiscsWindowTests`' batch test, the threads chooser's default (the recordings do not show the chooser, which lies below their view) |
+| the discs a stopped job never reached left `waiting` rather than marked `stopped` | the batch test: the last disc "waiting" where "stopped" was expected |
+| the listing's `size` back to the named file alone | the gate's round trip: the sheet's size was not its three files' |
+
+### 13.6 Left, and for the tester
+
+- **The handheld's run** of §12.7 is still left; this step did not touch it.
+- **Q25 [decision]: the window in a game's Game Settings.** Memory Cards is there, and this window is not, because a
+  batch holds half the machine's threads while the game plays. The desktop's *Settings* menu reaches it during a game
+  all the same. *Recommended:* leave it out of *Game Settings*, and keep the desktop menu as it is.
+- **Q26 [decision]: closing the window stops a batch.** A batch of the tester's two folders took 17 minutes on the
+  desktop (§12.5). The window owns its job, and closing it frees the job. Because the file system is the record,
+  converting again does only what is left, and the window says so. *Recommended:* keep it. A batch that outlives its
+  window would need a job owned by the main window, with a status a player can find again, as the scraper's has.
+- **Q27 [routine]: a disc's progress is its state, not a percentage.** The tool runs chdman with its output read
+  only at the end, and reports a disc when it is done. *Recommended:* keep it. A disc takes 12 to 40 seconds on the
+  desktop (§12.5), and the overall bar moves at each.
+- **Q28 [routine]: the faster codecs (`--fast`, §4.8) are not offered in the window.** *Recommended:* leave them to
+  `chd convert --fast` until the handheld's run measures what they buy.

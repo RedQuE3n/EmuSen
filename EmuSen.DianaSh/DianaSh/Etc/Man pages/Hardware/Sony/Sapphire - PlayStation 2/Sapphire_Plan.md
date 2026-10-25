@@ -253,6 +253,16 @@ under a developer's agreement, but they are Sony's copyright and their online co
 covers on the EE side. **What they would not**: the IOP, the SPU2, the CDVD and the SIO2. Whether writers may read them
 is the tester's choice (§11 Q1); Wikipedia already cites the GS user's manual for its fill rate [R].
 
+*Decided 2026-10-24 by the tester, for Q1: archived online copies of the manuals Sony shipped with the kit may be
+read*, Q1's "lawful source" being taken to include them. Only the kit's own edition is read; a licensee SDK edition, or
+any copy marked confidential for licensees, is refused at its title page. *Fetched 2026-10-24 at S6*
+(`Sapphire_References.md` §1.1): the EE Core User's Manual, the EE Core Instruction Set Manual, the EE User's Manual,
+the VU User's Manual and the GS User's Manual, with the EE Overview and the kit's list of restrictions beside them, each
+"Version 5.0", "Publication date: October 2001", none marked confidential, taken file by file from the kit's own
+Release 1.0 Disc 1 as the Internet Archive keeps it and checked against a second archived copy of the same disc. They
+are kept in the probe's cache and never committed. Like ps2tek's BIOS chapter, they are screened for replacement
+writers before one reads them (§1.4).
+
 **ps2tek's BIOS chapter, screened for replacement writers** [C, set 2026-10-23]. The chapter's sections are "BIOS File
 Structure", "BIOS Boot Process", "BIOS EE Threading", "BIOS EE Syscalls", "BIOS EE Patches", "BIOS PlayStation
 Compatibility", "BIOS IOP Module Linking", "BIOS List of IOP Modules" and one section per IOP module [R the table of
@@ -1142,7 +1152,10 @@ needs Q11.
 1. **Q1 [decision], Sony's Linux-kit manuals** (§2.2). *Decided 2026-10-24 by the tester: as recommended.* May writers read the EE, VU, DMAC, IPU and GS manuals Sony
    shipped with the Linux for PlayStation 2 kit? *Recommended:* yes, each use cited by document and section, as
    Diamond's Q1 allowed Sony's documents, with ps2tek's screening (§2.2) applied to them for replacement writers; copies
-   only from the tester's own or a lawful source, kept in the probe's cache, never committed.
+   only from the tester's own or a lawful source, kept in the probe's cache, never committed. *Decided 2026-10-24 by the
+   tester: archived online copies of the manuals Sony shipped with the kit count as that source*, the kit's own edition
+   only, a licensee edition or a copy marked confidential refused at its title page. Fetched at S6 (§2.2,
+   `Sapphire_References.md` §1.1).
 2. **Q2 [routine], ps2tek's revision and status.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* pinned at `1c91660` (2022-01-27, its last push), cited
    as a document of unstated sources written by an emulator's author, its BIOS chapter screened and partly excluded for
    replacement writers (§2.2).

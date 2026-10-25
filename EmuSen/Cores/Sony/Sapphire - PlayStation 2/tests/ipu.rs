@@ -100,3 +100,59 @@ fn the_registers_and_fifos_answer_the_ee_as_chapter_8_says() {
     }
     assert!(wrong.is_empty(), "{name}: {} of {} words differ: {:?}", wrong.len(), expected.len(), &wrong[..wrong.len().min(10)]);
 }
+
+#[test]
+fn odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard() {
+    for (name, bytes) in [("odd-mpeg2", s27::encode::odd_mpeg2()), ("odd-mpeg1", s27::encode::odd_mpeg1())] {
+        let d = standard::decode(&bytes);
+        for o in [Options::BDEC, Options::IDEC32] {
+            driver::drive(&bytes, &d, o).unwrap_or_else(|e| panic!("{name} {o:?}: {e}"));
+        }
+    }
+}
+
+#[test]
+fn error_and_start_codes_end_idec_and_bdec_where_section_8_4_says() {
+    s27::errors().unwrap();
+}
+
+#[test]
+fn vdec_gives_every_row_of_the_manuals_tables() {
+    use sapphire::ipu::{Ipu, code, ctrl};
+    for &(tbl, pct, mp1, bits, data) in s27::manual::VDEC_TABLE {
+        for mpeg1 in [false, true] {
+            if (mp1 == '0' && mpeg1) || (mp1 == '1' && !mpeg1) {
+                continue;
+            }
+            let mut ipu = Ipu::new();
+            ipu.write_ctrl(pct << 24 | u32::from(mpeg1) << 23);
+            let stream: String = format!("{bits}{}", "1".repeat(128 - bits.len()));
+            let q = u128::from_str_radix(&stream, 2).unwrap();
+            ipu.put(q.swap_bytes());
+            ipu.put(u128::MAX);
+            ipu.command(code::VDEC << 28 | tbl << 26);
+            assert!(!ipu.busy());
+            assert_eq!(ipu.read_cmd() as u32, data, "TBL {tbl}, PCT {pct}, MP1 {mpeg1}: {bits}");
+            assert_eq!(ipu.read_bp() & 0x7F, data >> 16, "TBL {tbl}: {bits}: the pointer moves by the code's length");
+            assert_eq!(ipu.read_ctrl() & ctrl::ECD != 0, data == 0, "TBL {tbl}: {bits}: ECD for an error row");
+        }
+    }
+}
+
+#[test]
+fn every_table_is_prefix_free_and_as_complete_as_the_standard() {
+    use sapphire::ipu::vlc;
+    // The code space each table leaves unused, in 4096ths: zero where the standard leaves none (H.262 Annex B).
+    let unused = [("B.1", 46), ("B.2", 1024), ("B.3", 64), ("B.4", 64), ("B.9", 8), ("B.10", 48), ("B.11", 0), ("B.12", 0), ("B.13", 0), ("B.14 first", 1), ("B.14", 1), ("B.15", 9)];
+    for (name, codes) in vlc::all_codes() {
+        for a in &codes {
+            for b in &codes {
+                assert!(a == b || !b.starts_with(a.as_str()), "{name}: {a} is a prefix of {b}");
+            }
+        }
+        let used: f64 = codes.iter().map(|c| 0.5f64.powi(c.len() as i32)).sum();
+        let left = ((1.0 - used) * 4096.0).round() as i32;
+        let want = unused.iter().find(|u| u.0 == name).unwrap().1;
+        assert_eq!(left, want, "{name}: unused code space");
+    }
+}

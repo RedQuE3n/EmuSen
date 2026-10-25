@@ -75,6 +75,16 @@ pub fn programs() -> Vec<program::Program> {
     let mut v = Vec::new();
     let (image, log) = post().unwrap_or_else(|e| panic!("post: {e}"));
     v.push(program::build("s27-post", &image, &log));
+    let (image, log) = errors().unwrap_or_else(|e| panic!("errors: {e}"));
+    v.push(program::build("s27-errors", &image, &log));
+    for (name, bytes) in [("odd-mpeg2", encode::odd_mpeg2()), ("odd-mpeg1", encode::odd_mpeg1())] {
+        let d = standard::decode(&bytes);
+        let image = driver::image(&bytes);
+        for (mode, o) in [("bdec", driver::Options::BDEC), ("idec", driver::Options::IDEC32)] {
+            let log = driver::drive(&bytes, &d, o).unwrap_or_else(|e| panic!("{name}: {e}"));
+            v.push(program::build(&format!("s27-{mode}-{name}"), &image, &log));
+        }
+    }
     for s in corpus() {
         let bytes = s.complete();
         let d = standard::decode(&bytes);
@@ -199,6 +209,116 @@ pub fn post() -> Result<(Vec<u128>, Vec<driver::Issued>), String> {
             .collect();
         if i.out != want {
             return Err(format!("PACK rgb16 {rgb16} dither {dither}: output differs at qword {:?}", i.out.iter().zip(&want).position(|(a, b)| a != b)));
+        }
+    }
+    Ok((data, d.log))
+}
+
+/// The error and end cases on IDEC and BDEC (EE User's Manual §8.4), each a short stream after BCLR with what the
+/// command must leave: an increment of 2 inside IDEC (ECD after the first macroblock, the pointer at the increment), a
+/// code no table holds (ECD, no output, the pointer at the code), a run past the 64th coefficient (the same, at the
+/// escape), zeros after a macroblock that make no start code (the output, then ECD at the zeros), a start code after
+/// stuffing (SCD at its prefix), and one after a whole zero byte more. The cases follow each other in one image, FDEC
+/// with FB 32 carrying the pointer to each. The log and the image, for the referees.
+pub fn errors() -> Result<(Vec<u128>, Vec<driver::Issued>), String> {
+    use encode::W;
+    use sapphire::ipu::{code, ctrl};
+    let dc0 = |w: &mut W| {
+        for i in 0..6 {
+            encode::dc(w, i >= 4, 0);
+            w.code("10");
+        }
+    };
+    let flat = manual::raw16_qwords(&[[128; 64]; 6], false);
+    let px: Vec<[u8; 4]> = (0..256).map(|_| manual::csc(128, 128, 128, 0, 0)).collect();
+    let flat_rgb = manual::rgb32_qwords(&px);
+    // Each case: the stream from bit 0 of its own qwords, the command, the output, the flags, the pointer.
+    struct Case {
+        w: W,
+        word: u32,
+        out: Vec<u128>,
+        flags: u32,
+        bp: usize,
+    }
+    let mut cases = Vec::new();
+    let mut w = W::default();
+    w.code("1");
+    dc0(&mut w);
+    let at = w.bits;
+    w.code("011");
+    w.code("1");
+    dc0(&mut w);
+    w.start(0xB7);
+    cases.push(Case { w, word: code::IDEC << 28 | 1 << 16, out: flat_rgb.clone(), flags: ctrl::ECD, bp: at });
+    let mut w = W::default();
+    encode::dc(&mut w, false, 0);
+    let at = w.bits;
+    w.code("0000 0000 0000 1");
+    w.put(0, 32);
+    w.start(0xB7);
+    cases.push(Case { w, word: code::BDEC << 28 | 1 << 27 | 1 << 26 | 1 << 16, out: Vec::new(), flags: ctrl::ECD, bp: at });
+    let mut w = W::default();
+    encode::dc(&mut w, false, 0);
+    w.code("11");
+    w.put(0, 1);
+    let at = w.bits;
+    w.code("0000 01");
+    w.put(63, 6);
+    w.put(1, 12);
+    w.start(0xB7);
+    cases.push(Case { w, word: code::BDEC << 28 | 1 << 27 | 1 << 26 | 1 << 16, out: Vec::new(), flags: ctrl::ECD, bp: at });
+    let mut w = W::default();
+    dc0(&mut w);
+    let at = w.bits;
+    w.put(0, 12);
+    w.put(1, 1);
+    w.put(0, 40);
+    w.start(0xB7);
+    cases.push(Case { w, word: code::BDEC << 28 | 1 << 27 | 1 << 26 | 1 << 16, out: flat.clone(), flags: ctrl::ECD, bp: at });
+    let mut w = W::default();
+    dc0(&mut w);
+    w.start(0x01);
+    let at = w.bits - 32;
+    w.put(0, 32);
+    cases.push(Case { w, word: code::BDEC << 28 | 1 << 27 | 1 << 26 | 1 << 16, out: flat.clone(), flags: ctrl::SCD, bp: at });
+    let mut w = W::default();
+    w.code("1");
+    dc0(&mut w);
+    while w.bits % 8 != 0 {
+        w.put(0, 1);
+    }
+    w.put(0, 8);
+    let at = w.bits;
+    w.start(0xB3);
+    w.put(0, 32);
+    cases.push(Case { w, word: code::IDEC << 28 | 1 << 16, out: flat_rgb.clone(), flags: ctrl::SCD, bp: at });
+
+    let mut data = Vec::new();
+    let mut starts = Vec::new();
+    for c in &cases {
+        starts.push(data.len());
+        data.extend(registers::qwords(&c.w.bytes));
+    }
+    data.extend([0u128; 2]);
+    let mut d = driver::Driver::over(data.clone());
+    d.run(code::BCLR << 28)?;
+    d.write_ctrl(1 << 24);
+    for (k, c) in cases.iter().enumerate() {
+        let mut gap = (starts[k] * 128 - d.position()) as u32;
+        while gap > 32 {
+            d.run(code::FDEC << 28 | 32)?;
+            gap -= 32;
+        }
+        let i = d.run(c.word | gap)?;
+        if i.out != c.out {
+            return Err(format!("case {k}: {} qwords out, expected {}", i.out.len(), c.out.len()));
+        }
+        if i.ctrl & (ctrl::ECD | ctrl::SCD) != c.flags {
+            return Err(format!("case {k}: IPU_CTRL {:08x}, flags expected {:08x}", i.ctrl, c.flags));
+        }
+        let at = d.position() - starts[k] * 128;
+        if at != c.bp {
+            return Err(format!("case {k}: the pointer at {at}, expected {}", c.bp));
         }
     }
     Ok((data, d.log))

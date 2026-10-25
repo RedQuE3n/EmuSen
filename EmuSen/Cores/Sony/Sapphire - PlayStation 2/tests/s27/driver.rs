@@ -275,6 +275,12 @@ impl Driver {
         self.after(s.mbs.last().unwrap(), &i, "IDEC")
     }
 
+    /// IPU_CTRL written before the next command, and logged with it.
+    pub fn write_ctrl(&mut self, v: u32) {
+        self.ipu.write_ctrl(v);
+        self.ctrl_write = Some(v);
+    }
+
     pub fn set_ctrl(&mut self, c: st::Ctrl) {
         let v = c.intra_dc_precision << 16
             | u32::from(c.alternate_scan) << 20
@@ -316,7 +322,7 @@ pub fn drive(stream: &[u8], dec: &Decoded, o: Options) -> Result<Vec<Issued>, St
                 d.kind = ctrl.picture_coding_type;
             }
             Event::Slice(s) => {
-                if o.idec && d.kind == 1 {
+                if (o.idec && d.kind == 1) || d.kind == 4 {
                     d.idec(s, o)?;
                 } else {
                     for mb in &s.mbs {

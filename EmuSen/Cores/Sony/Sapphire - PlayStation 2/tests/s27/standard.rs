@@ -133,6 +133,9 @@ pub mod annex_b {
 
 use annex_b::*;
 
+/// ISO/IEC 11172-2's D-picture macroblock_type, its one code (H.262 §D.9.6).
+pub const D_PICTURE: &[(&str, [u8; 5])] = &[("1", [0, 0, 0, 0, 1])];
+
 /// The default intra matrix, row by row (H.262 §6.3.11); the non-intra default is 16 throughout.
 pub const DEFAULT_INTRA: [u8; 64] = [
     8, 16, 19, 22, 26, 27, 29, 34, 16, 16, 22, 24, 27, 29, 34, 37, 19, 22, 26, 27, 29, 34, 34, 38, 22, 22, 26, 27, 29, 34, 37, 40, 22, 26, 27,
@@ -622,7 +625,7 @@ fn decode_block(b: &mut Bits, s: &State, i: usize, intra: bool, qsc: u32, dc_pre
         n = 1;
     }
     let one = intra && s.ctrl.intra_vlc_format;
-    loop {
+    while s.ctrl.picture_coding_type != 4 {
         let table: Vec<(&str, (i32, i32))> = if one {
             B15.iter().map(|e| (e.0, (e.1, e.2))).collect()
         } else {
@@ -768,7 +771,8 @@ fn decode_slice(b: &mut Bits, s: &mut State, at: usize, vertical: u32) -> Slice 
         let table = match kind {
             1 => B2,
             2 => B3,
-            _ => B4,
+            3 => B4,
+            _ => D_PICTURE,
         };
         let (k, type_len) = b.vlc(table).expect("macroblock_type");
         let [quant, fwd, bwd, pattern, intra] = k.map(|v| v == 1);
@@ -809,6 +813,9 @@ fn decode_slice(b: &mut Bits, s: &mut State, at: usize, vertical: u32) -> Slice 
             if cbp >> (5 - i) & 1 == 1 {
                 blocks[i] = decode_block(b, s, i, intra, qsc, &mut dc_pred);
             }
+        }
+        if kind == 4 {
+            assert_eq!(b.read(1), 1, "end_of_macroblock");
         }
         let pos_end = b.pos;
         if intra {

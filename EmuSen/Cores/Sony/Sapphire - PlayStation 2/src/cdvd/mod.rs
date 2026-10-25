@@ -17,6 +17,13 @@ use timing::{CD_SPEED, DVD_SPEED, PROMPT, SPIN_UP, STOP, block};
 /// A disc in the drive: a compact disc or a DVD over the host's kept bytes.
 pub type Disc = emusen_disc::Medium<Kept>;
 
+/// The disc an image and its companions make, by the PlayStation 2's rules (§25.2): CD-XA framing for 2,048-byte
+/// sectors read raw, and an image of 2,048-byte sectors taken for a DVD, as the library's DVD titles are kept, unless
+/// its sheet or its bytes say a CD. The host's bytes are kept, never copied (Sapphire_Plan.md §5.11).
+pub fn open(image: Kept, companions: Vec<Kept>) -> Result<Disc, emusen_disc::Refusal> {
+    emusen_disc::open_medium(image, companions, emusen_disc::IsoForm::Mode2Form1, emusen_disc::Lone::Detect, emusen_disc::Kind::Dvd)
+}
+
 /// The registers' base on the IOP's bus, and their offsets from it [R ps2tek "CDVD I/O Ports"].
 pub const BASE: u32 = 0x1F40_2000;
 pub mod reg {

@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21 and S16 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S16 and S23 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -44,7 +44,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   `gs/label`'s and `gs/signal`'s console texts, and Play!'s local-to-host transfer confirming the referees' pictures as
   RAM; and stage S13 (2026-10-25, §23): micro mode for both units, the pipelines with
   the flags', Q's and P's visible delays, the branches, the E, M, D and T bits, XGKICK at an interface, VU1's EFU from
-  the manual's nano code graded by the console's text, and PCSX2 a witness for the pipeline's visibility.
+  the manual's nano code graded by the console's text, and PCSX2 a witness for the pipeline's visibility; and stage S23 (2026-10-25, §25): the CDVD drive controller at its register
+  interface, its N and S commands, seeks and reads timed, the tray, the clock and the EEPROM, on `emusen-disc`'s new
+  DVDs with their layer break, the drive's answers where ps2tek is silent read from PCSX2's lineage, and P13's mapped
+  open.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -67,7 +70,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   IOP's PRId, map, cache, access times, timers' modes, clocks and gates, its interrupt line and its DMAC's registers and
   readings; D-100 to D-107 since S16, the GS's privileged reads, CSR's revision and ID, the registers' images, the
   interrupt line, an odd PSMT8 width, a depth format based inside a page, the transfers' wrap and an overlapping copy; D-80 to D-85 since S13, a branch on an integer
-  just written, the I bit's own pair, TPC's unit, the divider's flags in micro mode, the EFU and CMSAR1's start.
+  just written, the I bit's own pair, TPC's unit, the divider's flags in micro mode, the EFU and CMSAR1's start; D-120 to D-128 since S23, the CDVD's seeks, ReadDvd's block and
+  its b29, dual-layer seeks, the version bytes, the S commands' answers, CD-DA's command, the layer break in an image
+  and the registers at rest.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

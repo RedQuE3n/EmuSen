@@ -4,7 +4,8 @@
 sectors a drive reads from it, built from a cue sheet and its track files, an `.iso`, a lone raw track or a CHD.
 Planned in `Diamond_Plan.md` §9.2 and decided with its §11 Q9 on 2026-10-11, with the set module of
 `EmuSen_CoreAPI_Extensions.md` §2 (decided the same day). Its first user is Diamond; Nephrite's paused stage 8 (the Sega
-CD, `Nephrite_Plan.md` §5.8) is its second, and its interface was drawn for both.
+CD, `Nephrite_Plan.md` §5.8) is its second, and its interface was drawn for both. *Since 2026-10-25 (§14) it also
+holds DVDs, for Sapphire.*
 
 The marks are `Diamond_Plan.md`'s: **[M]** measured on 2026-10-11 with the tool named; **[R]** read from a source;
 **[A]** argued; **[C]** a choice.
@@ -501,3 +502,133 @@ The `chd` crate's generated documentation on docs.rs for 0.3.5 (`chd::map`, `chd
 items and signatures, not source), its GitHub release notes for 0.4.0 and the titles of its commits since 0.3.4, and
 the crates.io version list, all read 2026-10-25; Greg Cook's CRC catalogue as cited. Not read: the crate's source,
 libchdr, MAME's `chd.h`, `chdcodec.cpp` or any other file of MAME.
+
+## 14. DVDs (2026-10-25)
+
+*Added at Sapphire's stage S23 (`Sapphire_Native.md` §25), as `Sapphire_Plan.md` §9.4 designed it and its §11 Q10 decided
+on 2026-10-24. The marks are those at the top. A DVD is not a compact disc: 2,048-byte logical sectors whose Data Frame
+carries its own header and EDC, no subchannel, no time code and no tracks, and one or two layers. So it is a second
+type beside `Disc`, not a mode of it, and the crate gains no drive's commands or timing, which are Sapphire's as the
+HC05's are Diamond's.*
+
+### 14.1 The surface, and the medium chosen at open
+
+| Item | What it is |
+|---|---|
+| `Dvd<B>`, for `B: AsRef<[u8]>` | a DVD over any backing, as `Disc<B>` is (§9.1) |
+| `Dvd::from_image(bytes)`, `Dvd::from_user_image(bytes)` | a DVD CHD, whole 2,064-byte Data Frames, or 2,048-byte sectors (with a volume descriptor at sector 16, or on the caller's word) |
+| `Dvd::sectors()`, `layers()`, `layer_break()`, `physical(lba)` | the Data Zone's logical sectors over both layers, one or two layers, layer 1's first logical sector, and a sector's layer and physical sector number |
+| `Dvd::track_path()`, `set_track_path(TrackPath)` | Opposite Track Path unless the console says Parallel (§14.3) |
+| `Dvd::read(lba, &mut [u8; 2064]) -> DvdSector`, `Dvd::read_user(lba, &mut [u8; 2048])` | a sector's whole Data Frame, stored or synthesised, or its Main Data alone; `DvdSector` gives the layer, the physical sector number, the zone and whether it was synthesised |
+| `Dvd::damage()`, `place(lba)`, `fingerprint(sectors)` | as `Disc`'s (§13, §10, §9.3) |
+| `ecma267::{frame, id, ied, edc, holds, sector_information, physical, Zone, TrackPath}` | the Data Frame's codec |
+| `Kind`, `Medium<B>`, `open::open_medium(image, companions, IsoForm, Lone, Kind)` | the medium an image holds |
+| `dvd::CD_LIMIT`, `dvd::is_frames` | the most sectors a compact disc's time code names; whether bytes begin with a Data Frame |
+
+**Which medium** [C]. What a container's bytes say decides it: a cue sheet, a raw track (its sync) and a CD CHD are
+compact discs; whole Data Frames (their first ID names (030000) and its IED holds) and a DVD CHD are DVDs. Bytes that
+cannot say, 2,048-byte sectors, are the console's word, `Kind`, as `IsoForm` and `Lone` are its words; except that more
+of them than a compact disc's time code can name are a DVD whatever the console says: 100 minutes of 75 sectors, 99:59:74
+the last, less the 150 before 00:02:00, so `CD_LIMIT` is 449,850 [R ECMA-130 §22.3.3.4's time code; A]. `open_medium`
+reads the same bytes `open` does, and a CHD once.
+
+### 14.2 The layer break, taken from the image
+
+An image holds a disc's logical sectors and nothing of its lead-in, where ECMA-267 records layer 0's last sector (§26.5.1,
+bytes 13–15 of the physical format information). So the break is taken from what the image does hold [A, entered as
+`Sapphire_Disputes.md` D-127]: **where the primary volume descriptor at sector 16 gives a Volume Space Size V (ECMA-119
+§8.4.8, "the number of Logical Blocks in which the Volume Space of the volume is recorded") smaller than the image, V is a
+multiple of 16, and sector V + 16 holds a second primary volume descriptor, layer 1 begins at logical sector V.** Each
+part of the rule has its reason:
+
+- the volume is the first layer's: the image's sectors past V belong to another volume, and the PlayStation 2's drive
+  manager searches a file on a named layer and reports layer 1's start (`sceCdLayerSearchFile(fp, path, layer)`,
+  `sceCdReadDvdDualInfo(is_dual, layer1_start)`, ps2tek's CDVDMAN export list, cleared for every writer), which a volume
+  readable from each layer explains;
+- V a multiple of 16: in Opposite Track Path mode layer 1's first sector number is layer 0's last inverted, and that last
+  is chosen so that its inverse is a multiple of 16 (ECMA-267 §25); with the Data Zone starting at (030000), layer 0
+  then holds a multiple of 16 sectors. A V off the rule is no break;
+- the second descriptor at V + 16: the layer's own volume, its descriptor where a volume's is, sixteen sectors in.
+
+An image that meets the rule in no part is one layer. Opening reads sector 16 and sector V + 16 and no more, so the rule
+costs two sectors whatever the image's size. The one dual-layer case it has not met is a real disc: the test copy of
+Jak and Daxter (1,460,305,920 bytes, 713,040 sectors) is single-layer and opens as one layer [M, §14.5], which is the
+rule's negative case only.
+
+### 14.3 The Data Frame (ECMA-267, 3rd edition, April 2001)
+
+- **The frame** (§16, figure 16): 2,064 bytes, the ID (4), the IED (2), CPR_MAI (6), 2,048 bytes of Main Data, the EDC
+  (4). The scrambling, ECC blocks, recording frames and modulation of §17 to §22 lie below what a drive hands on and are
+  not modelled.
+- **The ID** (§16.1, figures 17 and 18): the Sector Information byte, then the physical sector number in binary, most
+  significant first. b24 the layer number (ZERO on layer 0 and on a single-layer disk), b25 ZERO (read-only data), b27
+  and b26 the zone (00 Data, 01 Lead-in, 10 Lead-out, 11 Middle), b28 ZERO, b29 the reflectivity (ONE for 40 % or less),
+  b30 and b31 ZERO. **b29** is set on a dual-layer disk and clear on a single-layer one, since §12.6 gives the former 18
+  % to 30 % and the latter 45 % to 85 % [R; A: the crate takes the layer count for the reflectivity class].
+- **The IED** (§16.2): IED(x) = I(x)·x² mod GE(x), I(x) the ID's four bytes from x³ down, GE(x) = (x + α⁰)(x + α¹)
+  over GF(2⁸) by x⁸ + x⁴ + x³ + x² + 1, the field and α ECMA-130's RSPC already uses (`ecma130::gf_mul`, `alpha`), so
+  one owner holds the field. The test does not compare the encoder with itself: it evaluates the six bytes as a
+  polynomial at GE's two roots and finds zero.
+- **CPR_MAI** (§16.3): application-dependent, zeros by default; synthesised as zeros.
+- **The EDC** (§16.4): the 2,060 bytes as one bit field from the first byte's most significant bit, times x³², mod
+  G(x) = x³² + x³¹ + x⁴ + 1, stored with its msb first. A test divides the field bit by bit and compares, and finds a
+  whole frame divisible by G(x).
+- **Sector numbers** (§24 table 5, §25): the Data Zone's first sector is (030000); on a single layer and on layer 0 the
+  number counts up from it; on layer 1 in Opposite Track Path mode from layer 0's last inverted (24 bits), in Parallel
+  Track Path mode from (030000) again. Past the image's end the Lead-out Zone (§28): Main Data zero, numbers counted on.
+- **Which path** [C]: an image records no physical format information (§26.5.1 byte 2), so the crate numbers OTP, the
+  usual form of a disc read straight through, and a console that knows otherwise says so (`set_track_path`).
+
+A stored frame (an image of whole frames) is read as stored, CPR_MAI and all; every other frame is built around the
+stored Main Data, so `DvdSector::synthesised` is true for an `.iso`'s frames and false for `read_user`'s data.
+
+### 14.4 CHD's DVD form
+
+Measured from chdman 0.289 (`createdvd`) on synthetic images, as §5 was for CDs [M, 2026-10-25]: the unit is 2,048
+bytes and the default hunk 4,096 (two units); the codecs are the generic `lzma`, `zlib`, `huff` and `flac`, not the CD
+codecs; the metadata is one entry tagged `DVD ` of one byte; the units are the logical sectors in order, and the logical
+size their number times 2,048. `ChdImage::open_either` opens a CHD of either medium by its unit (2,448 a CD's, 2,048 a
+DVD's) and its metadata; `open_dvd` refuses a CD's and `open` a DVD's, in words. §13's checks hold unchanged: the block
+within the file, the CRC of the decoded hunk; the framed-codec check applies to no DVD codec, since none is a CD codec.
+**Damage** [M, `a_damaged_dvd_chd_is_refused_in_words`]: four bytes changed at each of the 300 stored hunks of a
+600-sector DVD CHD (default codecs, a quarter of it noise): **300 of 300 refused in words, none read silently wrong and
+none a panic**, 130 by the CRC and 170 by the decoder's own error.
+
+### 14.5 Opened mapped (P13)
+
+`examples/open_mapped.rs` maps an image read-only, as a host lends one (`Sapphire_Plan.md` §5.11), and times the map,
+`open_medium`, a first sector and a thousand sectors spread over the disc. Desktop (7700X, NVMe), release build,
+2026-10-25 [M]:
+
+| Image | Page cache before | Map | Open | 1,000 sectors spread |
+|---|---|---|---|---|
+| Jak and Daxter, the test copy (read-only), 1.46 GB, single-layer | **none** (`fincore`: 0 pages) | 0.010 ms | **1.151 ms** | 794.8 ms |
+| the same, again | partly | 0.012 ms | 0.005 ms | 3.1 ms |
+| synthetic dual-layer, 2.25 GB sparse, break at 600,000 | — | 0.011–0.015 ms | 0.016–0.019 ms | 2.0–44.2 ms |
+| synthetic single-layer, 2.05 GB sparse | — | 0.011–0.016 ms | 0.010–0.011 ms | 3.0–334.1 ms |
+
+Reading the whole test copy into memory instead took **519 ms** with almost none of it cached. **P13** predicted a
+mapped open under a second and a copy of tens of seconds: the open is a thousandth of the bound on the desktop; the copy
+is half a second there, not tens, so the second half of P13 is wrong for the desktop and waits on the handheld, whose
+card is the slower medium. **The handheld half is left**: it did not answer on 2026-10-25 (`hh.sh guard`: "No route to
+host").
+
+### 14.6 Tests (2026-10-25)
+
+`cargo test --profile test-checked` with chdman named: **18 unit** (three new in `ecma267.rs`: the IED's codewords, the
+EDC's bitwise division, the ID's bits and §25's numbers), 3 damage, 13 disc, and **8 DVD tests** in `tests/dvds.rs`:
+`a_single_layer_image_reads_as_ecma_267s_frames`, `a_dual_layer_images_second_volume_places_the_layer_break`,
+`an_image_whose_volumes_place_no_break_is_one_layer` (no second descriptor; a volume of 1,000; the whole image; a second
+descriptor a sector late), `whole_data_frames_are_read_as_stored_and_told_by_their_first_id`,
+`every_form_reads_the_same_from_borrowed_bytes_as_from_owned` (owned, borrowed, `Arc<[u8]>`, places, the fingerprint),
+`the_medium_is_chosen_when_an_image_is_opened` (the console's word, whole frames, a raw track, a sheet, and an image of
+`CD_LIMIT` + 1 sectors), and with chdman named `a_dvd_chd_reads_as_its_image` (single and dual layer, default codecs and
+`-c none`) and `a_damaged_dvd_chd_is_refused_in_words`. The crate's earlier tests pass unchanged; its other users'
+results are `Sapphire_Native.md` §25.8's.
+
+### 14.7 Reading log for §14
+
+ECMA-267, 3rd edition (April 2001): §4, §7, §12.6, §15 to §17, §23 to §28 with table 5 and figures 16 to 18, 24 to 27;
+ECMA-119 §8.4 (the primary volume descriptor's Volume Space Size); ECMA-130 §22.3.3.4; ps2tek at `1c91660`, "CDVD Drive"
+and CDVDMAN's export list; chdman 0.289's `info -v` output. Not read: the `chd` crate's source, libchdr, MAME, or any
+emulator's disc or DVD code.

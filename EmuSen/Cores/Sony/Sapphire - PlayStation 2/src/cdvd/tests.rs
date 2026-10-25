@@ -340,3 +340,15 @@ fn break_ends_a_read_and_get_toc_reports_the_disc() {
     assert_eq!((f[2], f[7], f[12], f[17], f[22]), (0xA0, 0x01, 0xA1, 0x02, 0xA2), "A0h's first track, A1h's last, A2h");
     assert_eq!((f[32], f[42]), (0x01, 0x02), "each track's pointer");
 }
+
+#[test]
+fn an_image_opens_as_the_playstation_2s_disc_kinds() {
+    let kind = |image: Vec<u8>, companions: Vec<Vec<u8>>| super::open(Kept::from(image), companions.into_iter().map(Kept::from).collect()).map(|m| m.kind());
+    assert_eq!(kind(dvd_image(300, None), vec![]), Ok(Kind::Dvd), "an .iso is a DVD");
+    assert_eq!(kind((0..CD_DATA).flat_map(cd_data).collect(), vec![]), Ok(Kind::Cd), "a raw track is a CD");
+    let sheet = b"FILE \"d.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n".to_vec();
+    assert_eq!(kind(sheet, vec![(0..CD_DATA).flat_map(cd_data).collect()]), Ok(Kind::Cd), "a sheet is a CD");
+    let mut d = super::open(Kept::from(dvd_image(TOTAL, Some(LAYER0))), vec![]).unwrap();
+    assert_eq!(d.dvd().map(|v| v.layer_break()), Some(Some(LAYER0)));
+    assert!(kind(vec![0xA5; 5000], vec![]).is_err());
+}

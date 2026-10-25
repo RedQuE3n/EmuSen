@@ -84,6 +84,10 @@ RAM, so neither can produce a record without the firmware.
   log, and returns only the lines from the first that ends with the expected text's first line to the last that ends
   with its last. The rest of the log, which holds the BIOS's output, is read by the driver and never printed or kept, so
   the run exposes nobody to it. A project program writing to KPUTCHAR shows that the EE's console carries KPUTCHAR.
+- **A disc in the drive** (*added 2026-10-25 at S23*, `Sapphire_Native.md` §25.3): `ps2referee.py ram pcsx2 … --disc DISC`
+  gives PCSX2 `-elf PROGRAM -- DISC`, so the program runs in the disc's place with the disc in the drive. A raw `.bin`
+  works; a `.cue` beside it never ran the program. PCSX2's lineage maps the CDVD's registers at BF402000h for the EE, so
+  an EE program can drive the drive's N and S commands; Play! answers CCh there.
 - **Cost** [M, `programs/frames.s`, §4.2]: unlimited, 3,910 frames in 10.0 s (391 a second, 2.56 ms each) for 10.36 s of
   CPU; at the console's speed, 600 frames in 10 s for 2.66 s of CPU. Start-up: the GS draws 0.50–0.60 s after launch and
   the record is in RAM 0.20–0.25 s later. These are an idle program's costs; a game's are §5's.

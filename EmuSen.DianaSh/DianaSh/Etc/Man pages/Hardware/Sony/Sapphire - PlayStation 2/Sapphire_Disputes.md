@@ -1505,3 +1505,160 @@ through the reset too.
 - **Depends on it:** `gs::transfer::copy`.
 - **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`.
 - **Implemented in:** stage S16's commit.
+### D-120. CDVD seeks: contiguous below 16 sectors on a DVD and 8 on a CD at a block's time a sector, fast below 14,764 and 4,371 at 30 ms, full otherwise at 100 ms; a stopped drive spins up for 333 ms first, and Stop takes 166.67 ms
+
+- **Opened:** 2026-10-25, at stage S23, by ps2tek's "Unknown what delta is needed for a contiguous read" and its quotation
+  of an emulator's bound (excluded as evidence, `DOCS.txt` X.3).
+- **Documents read:** ps2tek at `1c91660`, "CDVD Reads and Seeks" ("Contiguous read: When the seek delta is very small or
+  zero, seek time = block_timing * delta"; "Fast seek: When seek delta < 14764 for DVD reads and < 4371 for CD reads,
+  seek time = ~30 ms"; "Full seek: Seek time = ~100 ms"; "it takes 333 ms for the drive to spin and finish the seek";
+  the formula), "CDVD N Commands" (Stop: "Seems to have a 166 ms delay?").
+- **Test program:** `ncmd_*` (`Sapphire_Native.md` §25.3): N command Seek sent from the EE to the drive's registers on a
+  synthetic DVD and CD, each timed by COP0 Count until the N status's busy bit clears; deltas 0, 8, 15, 16, 960, 13,000,
+  14,763, 14,764, 14,765 and the disc's length on the DVD; 4, 7, 8, 12, 3,370, 4,370, 4,372 on the CD; Stop, then a
+  seek; Standby; Pause.
+- **Referee:** PCSX2 2.8.2 (its lineage alone reaches the drive from the EE; Play! 0.72 answers CCh at every register):
+  a fast seek 30.000 ms below 14,764 sectors on the DVD and 4,371 on the CD and a full seek 100.000 ms at and past them,
+  exactly ps2tek's bounds; a delta of 15 (DVD) or 7 (CD) sectors 0.168 ms and of 16 or 8 a fast seek, the same either
+  way; Stop 166.667 ms and the seek after it 333.33 ms longer; Pause 10 EE cycles. After Standby a short seek took 8.84 ms
+  (DVD) and 10.78 ms (CD) until the first fast seek, and Standby itself 9.93 and 14.28 ms.
+- **Conclusion:** ps2tek's formula and classes with the contiguous bounds PCSX2 shows (16 and 8, measured); the time of a
+  contiguous move is ps2tek's block_timing × delta rather than PCSX2's constant, the document before the single lineage;
+  Standby is a seek to sector 0; Pause and NOP complete at once (`timing::PROMPT`). **Measured** for the bounds and the
+  classes, **argued** for the contiguous time.
+- **Depends on it:** `cdvd/timing.rs`; every load's timing.
+- **Pinned by:** `the_formula_and_the_classes_are_ps2teks`, `seeks_take_ps2teks_times_and_raise_the_interrupt_at_their_end`.
+- **Implemented in:** stage S23's commit.
+
+### D-121. CDVD ReadDvd: each 2,064-byte block is the sector's ECMA-267 Data Frame, its sector number counted from (030000) at the start of each layer
+
+- **Opened:** 2026-10-25, at stage S23: `Sapphire_Plan.md` §5.6 has DVD reads report "what ECMA-267's sector header
+  gives", and ps2tek describes another header.
+- **Documents read:** ECMA-267 §16 and §25 (an Opposite Track Path disk numbers layer 1 from layer 0's last inverted);
+  ps2tek "CDVD N Commands", ReadDvd: "0 Volume number + 0x20; 1 3 Sector number - volume start + 0x30000, in big-endian;
+  4 8 ? (all zeroes); 12 2048 Raw sector data; 2060 4 ? (all zeroes)".
+- **Test program:** none that reaches the data: a read waits for the IOP's DMA channel 3 to take each block, and an EE
+  program cannot drive it (on PCSX2 ReadDvd stays busy, N status 8Dh, for the whole bounded wait).
+- **Referee:** not reachable.
+- **Conclusion:** the fields where ps2tek and ECMA-267 agree in place (the ID with the layer in bit 0 of byte 0, then the
+  number) are ECMA-267's, with the IED, CPR_MAI and EDC it defines, ps2tek's "?" being unknown rather than zero; the
+  number is ps2tek's, from (030000) at each layer's start, since ps2tek describes what the drive hands on and ECMA-267
+  what the disc holds; so Sapphire reads a DVD with `TrackPath::Parallel`. **Argued**; open until a program on the IOP
+  (S21, S24) reads a block.
+- **Depends on it:** `Cdvd::load`, ReadDvd's blocks.
+- **Pinned by:** `a_dvd_reads_sector_for_sector_with_the_layer_break_placed`.
+- **Implemented in:** stage S23's commit.
+
+### D-122. CDVD ReadDvd: byte 0's 20h is set on a dual-layer disc and clear on a single-layer one
+
+- **Opened:** 2026-10-25, at stage S23.
+- **Documents read:** ECMA-267 §16.1 (b29: "ONE if the reflectivity is 40 % max."), §12.6 (Types A and B 45 % to 85 %,
+  Types C and D 18 % to 30 %); ps2tek's "Volume number + 0x20" for every disc.
+- **Test program, referee:** as D-121, not reachable.
+- **Conclusion:** ECMA-267's: b29 by the reflectivity, which the layer count gives; ps2tek's constant 20h matches a
+  dual-layer disc's. **Argued**; open with D-121.
+- **Depends on it:** `ecma267::sector_information`, `Dvd::read`.
+- **Pinned by:** `a_dual_layer_images_second_volume_places_the_layer_break`, `a_dvd_reads_sector_for_sector_with_the_layer_break_placed`.
+- **Implemented in:** stage S23's commit.
+
+### D-123. CDVD seeks on a dual-layer disc: the distance is taken across the radius, layer 1's sectors over the layer 0 sectors they lie on, and a change of layer costs at least a fast seek
+
+- **Opened:** 2026-10-25, at stage S23.
+- **Documents read:** ECMA-267 §25 and figure 26 (in OTP mode layer 1 runs outward-in from layer 0's outer end), §23
+  ("a Middle Zone in each layer to allow the read-out beam to move from Layer 0 to Layer 1"); ps2tek, which gives seeks
+  by "delta" and nothing of layers.
+- **Test program:** `ncmd_dual`: seeks across a synthetic dual-layer DVD's break (600,000), 599,990 to 600,010 and
+  back, and along layer 1.
+- **Referee:** PCSX2 2.8.2 times a seek by the logical difference alone: 599,990 to 600,010 (20 sectors) a fast seek,
+  600,030 to 599,980 the same, 1,000,000 to 10 a full seek; no cost for the layer.
+- **Conclusion:** the title, with the PS2's dual-layer discs taken as OTP: a seek from layer 0's end to layer 1's start
+  moves no distance but refocuses, and a seek from sector 0 to layer 1's inner end is a short radial move. **Argued**
+  from the disc's geometry; the single lineage does not model layers.
+- **Depends on it:** `timing::radius`, `timing::seek`.
+- **Pinned by:** `a_dual_layer_seek_is_measured_across_the_radius`, `a_dual_layer_seek_is_timed_across_the_radius`.
+- **Implemented in:** stage S23's commit.
+
+### D-124. CDVD MechaconVersion (S command 03h, subcommand 00h) answers the four bytes 03h 06h 02h 00h
+
+- **Opened:** 2026-10-25, at stage S23, as `Sapphire_Plan.md` §5.6 requires: "chosen at S23 by a dispute step from the
+  referees' behaviour, never copied from the quotation".
+- **Documents read:** ps2tek "CDVD S Commands": four result bytes, "Unknown what the bytes mean. Newer versions of
+  CDVDMAN do checks on them of some sort." Its next line, an emulator's value, is excluded as evidence (`DOCS.txt` X.3)
+  and was not used.
+- **Test program:** `reach` (`Sapphire_Native.md` §25.3): S command 03h sent from the EE with parameter 00h, the status
+  and the result bytes read until the status says none is left.
+- **Referee:** PCSX2 2.8.2, LRPS2 and PCEE2 (one lineage, three builds) answer 03h 06h 02h 00h; Play! 0.72 reaches no
+  drive register from the EE.
+- **Conclusion:** the referees' answer, the strongest and only witness; its meaning is not known, so the value is kept
+  until S24's BIOS shows whether CDVDMAN accepts it. **Measured** on one lineage; open.
+- **Depends on it:** `cdvd::VERSION`; S24.
+- **Pinned by:** `the_s_commands_answer_as_the_documents_and_the_record_say`.
+- **Implemented in:** stage S23's commit.
+
+### D-125. CDVD S commands: one the drive does not implement answers the one byte 80h, an unknown subcommand of 03h 81h; ForbidDVD answers 05h; the tray request 06h opens with 00h and closes with 01h, answering 00h, and 80h when the tray is already so; OpenConfig takes mode, area and count; the writing commands answer 00h
+
+- **Opened:** 2026-10-25, at stage S23: ps2tek lists eight S commands and the parameters or results of few.
+- **Documents read:** ps2tek "CDVD S Commands" (03h:00h, 05h, 08h, 09h, 15h, 40h, 41h, 43h; ForbidDVD's quoted value is
+  excluded as evidence) and CDVDMAN's exports (`sceCdTrayReq`, `sceCdOpenConfig(block, mode, block_count, result)`,
+  `sceCdWriteConfig`), which name the calls but not their command numbers or byte order.
+- **Test program:** `ssweep` (every S command 00h–FFh but 0Fh, sent with no parameters, twice, and on single- and
+  dual-layer DVDs), `s_config`, `s_tray` and `s_rtc` (§25.3).
+- **Referee:** PCSX2 2.8.2: 202 of the 255 commands answer one byte 80h; 03h with 01h or 02h answers 81h; 0Fh ends the
+  run (the console's power, by its effect); 15h answers 05h; 06h with 00h opens the tray (drive status 01h) and with 01h
+  closes it (00h), each answering 00h, and 80h for 02h or when already open; OpenConfig's first parameter is the mode (1
+  writes, 0 reads), its second the area and its third the count: area 0 and area 1 kept apart, a count's second block
+  blank, reading past it zeros; WriteRTC, OpenConfig, WriteConfig, CloseConfig and UpdateStickyFlags answer 00h; ReadRTC
+  reads back what WriteRTC wrote. Fifty-three commands answer otherwise (02h with eleven bytes, 36h with fifteen holding a
+  region text, 84h and 85h with thirteen bytes of what reads as noise, and others); the answers did not differ between a
+  single- and a dual-layer disc.
+- **Conclusion:** the referee's answers for the eight commands ps2tek names and for the tray request, whose call
+  CDVDMAN exports; every other command answered as absent (80h), MagicGate's and SECRMAN's among them, as §5.6 requires
+  of the keys, and the region and model queries too, since no document describes them. **Measured** on one lineage.
+- **Depends on it:** `Cdvd::scmd`, `cdvd::nvm`.
+- **Pinned by:** `the_s_commands_answer_as_the_documents_and_the_record_say`, `the_tray_opens_closes_and_the_disc_is_detected_as_it_spins_up`, `areas_are_written_and_read_back_by_sessions`.
+- **Implemented in:** stage S23's commit.
+
+### D-126. CDVD N command 07h reads a CD's audio sectors whole; a DVD read of a CD and an audio read of a DVD end at once with error 14h; a CD read of a DVD gives its Main Data
+
+- **Opened:** 2026-10-25, at stage S23: the plan's S23 row names CD-DA reads, and ps2tek lists no N command for them.
+- **Documents read:** ps2tek "CDVD N Commands" (00h–06h, 08h, 09h); CDVDMAN's export `sceCdReadCDDA`.
+- **Test program:** `nsweep` (N commands 00h–1Fh, eleven zero parameters, on a synthetic CD and DVD).
+- **Referee:** PCSX2 2.8.2: 07h runs on the CD and ends with error 14h on the DVD; 08h ends with error 14h on the CD;
+  06h runs on both; every command given more parameters than it takes ends with error 22h.
+- **Conclusion:** 07h is the CD-DA read, its blocks the 2,352-byte raw sectors, timed at ps2tek's CD speed; the medium
+  checks and the error value as measured. The parameter count is not checked (a named loss). **Measured** on one
+  lineage for the number and the checks, **argued** for the block.
+- **Depends on it:** `Cdvd::start`.
+- **Pinned by:** `a_cd_reads_its_block_sizes_and_its_audio`.
+- **Implemented in:** stage S23's commit.
+
+### D-127. A dual-layer DVD image's layer 1 begins at its first volume's Volume Space Size, where that is a multiple of 16 and a second primary volume descriptor lies 16 sectors past it
+
+- **Opened:** 2026-10-25, at stage S23 (`Sapphire_Plan.md` §9.4: "taken from where the image's second layer begins, by
+  the rule ECMA-267 and the PlayStation 2's discs give … a dispute candidate"; `Sapphire_Native.md` §14.8 Q2).
+- **Documents read:** ECMA-119 §8.4.8; ECMA-267 §25 and §26.5.1 (bytes 13–15, layer 0's last sector, in the lead-in an
+  image does not hold); ps2tek's CDVDMAN exports `sceCdReadDvdDualInfo` and `sceCdLayerSearchFile`.
+- **Test program:** the S sweep and the seeks on synthetic single- and dual-layer DVDs (D-123, D-125).
+- **Referee:** PCSX2 2.8.2 reports disk type 14h for both and the same S answers; its seeks ignore layers. Nothing it
+  shows through the EE tells where it puts a break. Play! not reachable.
+- **Conclusion:** the title (`EmuSen_Disc.md` §14.2); S4's builder corrected to it (layer 0's descriptor naming layer 0's
+  sectors, layer 1's its own). The one real disc at hand is single-layer and opens as one layer. **Argued**; open until
+  a dual-layer disc of the tester's (Q8's God of War) or a program on the IOP shows it.
+- **Depends on it:** `Dvd::find_layer_break`; ReadDvd's layer bit and numbering; seeks.
+- **Pinned by:** `a_dual_layer_images_second_volume_places_the_layer_break`, `an_image_whose_volumes_place_no_break_is_one_layer`.
+- **Implemented in:** stage S23's commit.
+
+### D-128. CDVD registers at rest: the N status 40h, the drive status 0Ah with a disc and 00h without; after the tray closes the drive status 00h, the disk type 01h for half the spin-up and its detecting value for the rest
+
+- **Opened:** 2026-10-25, at stage S23.
+- **Documents read:** ps2tek "CDVD I/O Ports" (the N status's bits, bit 2 "DEV9 device connected", bit 3 unknown; the
+  drive status's bits; the disk types 01h–04h "Detecting").
+- **Test program:** `reach` with no disc, `s_tray`.
+- **Referee:** PCSX2 2.8.2: N status 4Ch (bits 2 and 3 set as well as ready), drive status 0Ah with no disc in it as with
+  one, disk type 00h without a disc and 12h or 14h with one; 00h right after the tray closes.
+- **Conclusion:** bit 2 clear, since the plan leaves DEV9 out (§11 Q12); bit 3 clear, unknown; the drive status 00h with
+  no disc, nothing spinning; the closing as PCSX2 shows it; the detecting values' timing a choice [C], since no witness
+  shows it. **Argued**.
+- **Depends on it:** `Cdvd::new`, `Cdvd::tray`.
+- **Pinned by:** `at_power_on_the_registers_report_the_disc`, `the_tray_opens_closes_and_the_disc_is_detected_as_it_spins_up`.
+- **Implemented in:** stage S23's commit.

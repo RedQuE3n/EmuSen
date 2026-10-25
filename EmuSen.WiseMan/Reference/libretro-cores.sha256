@@ -1,7 +1,7 @@
 # The reference emulators' prebuilt libretro cores, fetched from the libretro buildbot's nightlies by
 # `build-probe.sh libretro-core <core>` into ~/.cache/emusen/probe/libretro/cores and used only if the
 # unpacked core's SHA-256 is the one pinned here. Black boxes: only the binary is unpacked, and no
-# firmware is ever fetched. Re-pinning is a deliberate edit of this file. Nephrite_Native.md §8, Diamond_References.md §3, Endou_References.md §3.
+# firmware is ever fetched. Re-pinning is a deliberate edit of this file. Nephrite_Native.md §8, Diamond_References.md §3, Endou_References.md §3, Sapphire_Referees.md §2.3.
 #
 # buildbot dir   core              sha256 of <core>_libretro.so                                       the core's own version, when pinned
 linux/x86_64     genesis_plus_gx   de23e3c647e0b1a8767c8f91f2dad402a10de3f59016f0b321f963d549b481f5   v1.7.4 58c3414, 2026-10-04
@@ -13,3 +13,6 @@ linux/x86_64     pcsx_rearmed      0ed6829d94051c4f0ab881050adbceab294b4325756f2
 linux/x86_64     swanstation       ac62165645184bd666bc610e0054e5ebdf34855bab25fa1e3e85efd24ea22e09   1.0.0 dd48056, 2026-10-10
 linux/x86_64     gearsystem        c6cf3b7ed31bf264be362937fdbf45a0f680824474cb147509d5185ca7b7e766   3.9.22-20-g190873a, 2026-10-19
 linux/x86_64     smsplus           e2b29b3571a28fbb49275cb7c213d26bddef5a077db006d195d5210bb28c93c2   1.8 3844b46, 2026-10-19
+linux/x86_64     play              45fc902809d4f15754b213f1026fb8b2f7570c1240a1d9a14d31a8067326b962   2026-10-24 nightly (Sapphire_Referees.md §2.3)
+linux/x86_64     pcsx2             05d645004f13868c2a118b6e4693997b8f0077c82e40afbb24d6ba9c1c8abbbe   LRPS2, 2026-10-24 nightly (Sapphire_Referees.md §2.3)
+linux/x86_64     pcee2             00275dbf721caed74e9435a99d1abc43a5704f6f4a831c913178bf1db6589ae7   PCEE2, 2026-10-24 nightly (Sapphire_Referees.md §2.3)

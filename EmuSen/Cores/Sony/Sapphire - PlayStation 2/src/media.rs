@@ -225,6 +225,32 @@ impl<'a> Sectors<'a> {
     }
 }
 
+/// Where the project's programs are loaded and entered.
+pub const PROGRAM_ORIGIN: u32 = 0x0010_0000;
+
+/// An EE program of the project's own as an ELF: the header, one loadable segment of `code` at `origin`, entered there
+/// (Sapphire_Referees.md §4.1). The tests' sample and the referees' programs are written by it.
+pub fn program(code: &[u32], origin: u32) -> Vec<u8> {
+    let mut image = vec![0u8; ELF_HEADER + PROGRAM_HEADER];
+    image[..4].copy_from_slice(&ELF_MAGIC);
+    image[4..7].copy_from_slice(&[1, 1, 1]);
+    image[16..18].copy_from_slice(&ET_EXEC.to_le_bytes());
+    image[18..20].copy_from_slice(&EM_MIPS.to_le_bytes());
+    image[20..24].copy_from_slice(&1u32.to_le_bytes());
+    image[24..28].copy_from_slice(&origin.to_le_bytes());
+    image[28..32].copy_from_slice(&(ELF_HEADER as u32).to_le_bytes());
+    image[40..42].copy_from_slice(&(ELF_HEADER as u16).to_le_bytes());
+    image[42..44].copy_from_slice(&(PROGRAM_HEADER as u16).to_le_bytes());
+    image[44..46].copy_from_slice(&1u16.to_le_bytes());
+    let h = &mut image[ELF_HEADER..];
+    let (offset, bytes) = ((ELF_HEADER + PROGRAM_HEADER) as u32, code.len() as u32 * 4);
+    for (at, v) in [(0, PT_LOAD), (4, offset), (8, origin), (12, origin), (16, bytes), (20, bytes), (24, 5), (28, 16)] {
+        h[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    image.extend(code.iter().flat_map(|w| w.to_le_bytes()));
+    image
+}
+
 /// Images the tests build: never a real program or disc's data (Sapphire_Native.md §5).
 #[cfg(test)]
 pub mod sample {
@@ -232,25 +258,7 @@ pub mod sample {
 
     /// An EE program: the ELF header, one loadable segment at 00100000h, and a branch to itself with its delay slot.
     pub fn elf() -> Vec<u8> {
-        let code: [u32; 2] = [0x1000_FFFF, 0];
-        let mut image = vec![0u8; ELF_HEADER + PROGRAM_HEADER];
-        image[..4].copy_from_slice(&ELF_MAGIC);
-        image[4..7].copy_from_slice(&[1, 1, 1]);
-        image[16..18].copy_from_slice(&ET_EXEC.to_le_bytes());
-        image[18..20].copy_from_slice(&EM_MIPS.to_le_bytes());
-        image[20..24].copy_from_slice(&1u32.to_le_bytes());
-        image[24..28].copy_from_slice(&0x0010_0000u32.to_le_bytes());
-        image[28..32].copy_from_slice(&(ELF_HEADER as u32).to_le_bytes());
-        image[40..42].copy_from_slice(&(ELF_HEADER as u16).to_le_bytes());
-        image[42..44].copy_from_slice(&(PROGRAM_HEADER as u16).to_le_bytes());
-        image[44..46].copy_from_slice(&1u16.to_le_bytes());
-        let h = &mut image[ELF_HEADER..];
-        let offset = (ELF_HEADER + PROGRAM_HEADER) as u32;
-        for (at, v) in [(0, PT_LOAD), (4, offset), (8, 0x0010_0000), (12, 0x0010_0000), (16, 8), (20, 8), (24, 5), (28, 16)] {
-            h[at..at + 4].copy_from_slice(&v.to_le_bytes());
-        }
-        image.extend(code.iter().flat_map(|w| w.to_le_bytes()));
-        image
+        program(&[0x1000_FFFF, 0], PROGRAM_ORIGIN)
     }
 
     /// An ISO 9660 volume of 2,048-byte sectors, its root directory at `root` holding SYSTEM.CNF in the next sector, and

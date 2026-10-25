@@ -2177,6 +2177,14 @@ Argument and load failures agree on exit `1` across five paths. On the C# side, 
 
 One difference is **not** attributable to the port: `bsnes_mercury_performance_libretro.so` segfaults during `retro_load_game` under **both** probes, at exit 139. It is a pre-existing limitation of the libretro backend with that core and is recorded here so it is not rediscovered as a port regression.
 
+
+**A refused hardware context is named.** *Added 2026-10-24, at Sapphire's stage S3.* The probe has no OpenGL or Vulkan
+context, so `SET_HW_RENDER` is answered `false` as before; it now also prints one line, `[WARN] the core asked for a
+hardware render context, <context> <major>.<minor>, and was refused: the probe has none`, with the context named as
+`libretro.h` spells it (`hw_context_name`) and the version fields as the core filled them (a Vulkan request may pack
+its version into the major field). Measured with it: `play_libretro` asks for OpenGL core 3.2 and runs nothing;
+`pcsx2_libretro` asks for four contexts in turn and falls back to software; `pcee2_libretro` asks for Vulkan 1.1 and
+falls back too (`Sapphire_Referees.md` §2.3, where a context for the probe is also evaluated).
 ---
 
 ### 3.51 What a dump set costs, and why the audio codec was the wrong lever first

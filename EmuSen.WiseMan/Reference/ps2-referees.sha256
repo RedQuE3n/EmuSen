@@ -1,0 +1,8 @@
+# The standalone PlayStation 2 referees, release binaries fetched by `analysis/ps2referee.py fetch` into
+# ~/.cache/emusen/probe/sapphire/referees and used only if the file's SHA-256 is the one pinned here. Black boxes:
+# only the release is unpacked, its source never read, and no firmware is ever fetched. Re-pinning is a deliberate
+# edit of this file. Sapphire_Referees.md §2.
+#
+# file                                          sha256                                                            url
+pcsx2-v2.8.2-linux-appimage-x64-Qt.AppImage     0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea  https://github.com/PCSX2/pcsx2/releases/download/v2.8.2/pcsx2-v2.8.2-linux-appimage-x64-Qt.AppImage
+Play!-8de4a71f-x86_64.AppImage                  5523586c7d89f90e0e6eb9cbc70008d1d6ef3d38656fea809517d3f5fd3004d3  https://purei.org/downloads/play/stable/0.72/Play!-8de4a71f-x86_64.AppImage

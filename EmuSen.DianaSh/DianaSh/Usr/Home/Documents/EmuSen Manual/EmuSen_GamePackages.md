@@ -2,7 +2,8 @@
 
 *Revised 2026-10-25, a sixth time: a patched game keeps its own saves (§16), as the tester decided §15.9's Q35. A game
 opened with its patch list applied has battery saves, save media and states of its own, named by the list's save key,
-in both runtimes; the platform interface 27.*
+in both runtimes; the platform interface 27. And §14.8's Q34 decided otherwise than recommended (§17): a claimed file
+that is another dump now plays as a plain game by its plain path, and only its package refuses.*
 
 *Revised 2026-10-25, a fifth time: step 6 is built (§15). Soft patching: `emusen-patch` applies IPS, UPS and BPS, each
 written from its published specification, now read; `pkg patch add` and `pkg patch rm`; both runtimes hand the core the
@@ -432,6 +433,8 @@ replace" the whole-file one [R].
   hashed again and compared with `dump`:
   - a match updates `seen`;
   - a mismatch refuses the package with words that name both hashes, and offers to look for the dump in the library.
+    *Decided 2026-10-25 (§14.8 Q34, built in §17):* only the package itself is refused. The changed file opened by its
+    plain path opens as a plain game, with its plain saves, and the package is reported `changed`.
 - That search finds the file the way `games.db`'s orphan pass does: by size first, then by hash
   (`EmuSen_Settings_Reference.md` §4.37) [R]. A file found elsewhere updates `path`.
 - A missing file says the same, and the package's saves, states and art are untouched.
@@ -481,6 +484,10 @@ Mistress's scan walks `RomDirectory` for files (`RomLibrary.cs:70`) and folds a 
 
 - a folder holding a `package.json` is one entry, and its contents are never listed as games;
 - a library file that a package claims is not shown a second time.
+
+*Decided 2026-10-25 (§14.8 Q34):* a claimed file that is no longer the dump its package was made for still opens by its
+plain path, as a plain game with its plain saves; opening its package is refused with both hashes named, and `pkg ls`,
+`pkg check` and the game's *Game Package* window say the package is changed (§17).
 
 The scan's roots become `RomDirectory`, `Packages` and §4.2's `Compressed`. Hashing for the claim uses the index, not
 a read [C].
@@ -1874,7 +1881,8 @@ Built in Galaxia as §3.5 and §3.6 planned, described in `EmuSen_Galaxia.md` §
   is gone is that game moved, and the manifest names its new place; anything else opens as before.
 - **A changed dump is refused at open**, as §3.4 has it: a claimed game whose size or time moved is hashed, its time
   recorded when it is still the dump, and refused with both hashes named when it is not. The words point at `pkg check`
-  and `pkg make`.
+  and `pkg make`. *Since §17 (Q34, decided 2026-10-25) only the package opened itself is refused; the file opened by its
+  plain path opens as a plain game.*
 
 ### 14.2 Saves, states and cheats with a package root
 
@@ -2027,7 +2035,9 @@ the runtime case passed, 284.
   window. *Built so at step 6 (§15.5).*
 - **Q34 [routine]: a changed dump refuses its plain path too.** A claimed file that is another dump now is refused
   however it is opened, so that its saves are not written against another game. *Recommended:* keep it; the words name
-  both hashes and what to do.
+  both hashes and what to do. *Decided 2026-10-25 by the tester, otherwise: refuse only when the game is opened as the
+  package. By its plain path the changed file opens and plays as a plain game, with its plain saves, and the package is
+  marked changed; built in §17.*
 
 ---
 
@@ -2379,3 +2389,63 @@ requires a key that is not hex digits to be refused; the key's rule by `package.
 
 - **The cheat list stays shared** between a package patched and unpatched (§16.2). A hack's addresses may differ, so
   a cheat may misbehave, but a cheat list is not a save and writes nothing the original reads.
+
+---
+
+## 17. Built 2026-10-25: a changed dump plays by its plain path
+
+*Measured on the development desktop on 2026-10-25, over synthetic images in temporary folders.* Marks as at the top:
+what was run is [M].
+
+**The decision** [C, decided 2026-10-25 by the tester, §14.8 Q34]: a library file a package claims, whose contents
+changed since the package was made, is refused only when the game is opened as the package (its folder or its
+`package.json`), with the words naming both hashes as before. **Opened by its plain path, the changed file opens and
+plays as a plain game**, with its plain saves and states (`Saves/<console>/<stem>`, the state folder), and the
+package's are neither read nor written. The package is reported `changed` by `pkg ls` and `pkg check`, as step 5 built
+them, and its game's *Game Package* window says so.
+
+**Where** [C]: the resolution, both halves. A claimed file whose package would refuse it because its game is another
+dump resolves as a plain path with no package (`claims::resolve` in Rust through a refusal that says whether it is that
+one, `GamePackages.Managed.Resolve` in C# through an `IOException` of its own kind that the claim branch catches); a
+package opened itself, or any other refusal (a manifest that does not read, a game gone and not found), is refused as
+before. Both runtimes take the resolution at open, so both play the file plainly; every Mistress reader of
+`GamePackages.RootFor` (the resume state's name, the cheat list, the scraper's package) follows, since `RootFor` is
+the resolution. Nothing writes the manifest for a changed file: its `seen` stays the dump's, so the next open, `pkg ls`
+and `pkg check` find it changed again.
+
+**Mistress** [C]: the library list shows no package state of its own, so nothing changes there. The *Game Package*
+window, whose package `RootFor` no longer names for such a file, is given the claiming package by the index and says it
+is changed: "the game's file is not as the package recorded it (pkg check names why, most often another dump), so the
+game plays as a plain one with its plain saves, and the package refuses to open until it is checked". The library's
+*Restart* entry names the resume state by the resolution for a packaged entry, so that it agrees with the launch.
+
+**The gate** [M]:
+
+1. *A changed claimed file opens by its plain path in both runtimes and reaches the plain save*:
+   `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways`, whose last part
+   rewrites the moved game as another dump; opened by its path it names its slots in the state folder and none in the
+   package, writes `Saves/TEST/plain (moved).srm` when the pad's A raises the test core's save, and leaves the package's
+   save as it was; both runtimes' answers and files equal.
+2. *Opening the package still refuses in words*: in the same case, the package opened by its folder is refused with
+   "has SHA-1"; `GalaxiaParityTests.A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` resolves the
+   changed file plainly and refuses its package, alike in both halves; `claims.rs`' changed case does the same by the
+   folder and by `package.json`.
+3. *`pkg check` reports it changed*: `library-tool/tests/packages.rs` resolves the changed cartridge by its plain path
+   (plain, no package) and by its package (refused), and `pkg check` and `pkg ls` then still report it `changed` with
+   its hashes.
+4. *The window*: `GamePackageWindowTests.A_changed_game_resolves_as_a_plain_one_and_its_package_is_shown_changed`, a
+   package made through the window's job, its game then changed: `RootFor` names no package, the index names the
+   claimant, the package refuses, and the window says changed.
+
+**Run** [M], for §16 and this section together: `cargo test --profile test-checked` of `emusen-galaxia` (92 in all),
+`emusen-patch` (8), `emusen-crystal` (13), `emusen-platform` (40), `emusen-library-tool` (14), `emusen-library` (13) and
+`emusen-library-module` (4), all passing. WiseMan, the blast radius `blast.sh` named with `CoreAdapterTests` added for
+`CoreEngine`: 4,254 passed, 62 skipped and 6 failed, in 25 minutes. The six were `GoldenCorpusTests`, which could not
+parse `man.golden` after `man pkg`'s new paragraphs had been written into it by hand, its byte count left behind;
+recorded again through the corpus's own recording, `GoldenCorpusTests` and `ManPageTests` passed, 208.
+
+**Fault seeded**, put back:
+
+| Fault | Caught by |
+|---|---|
+| Rust's `claims::resolve` refusing a changed claimed file by its plain path, as before | `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways` (the Rust run's open refused with the hashes) and `GalaxiaParityTests.A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` (answer 16: C# plain, Rust refused) |

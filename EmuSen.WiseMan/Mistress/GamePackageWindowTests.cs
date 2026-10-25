@@ -111,6 +111,42 @@ namespace EmuSen.WiseMan.Mistress
             finally { window.Close(); }
         }, default);
 
+        // Decided 2026-10-25 (§14.8 Q34): a claimed file that is another dump now resolves as a plain game, and the window names its package changed.
+        [Fact]
+        public Task A_changed_game_resolves_as_a_plain_one_and_its_package_is_shown_changed() => Session.Dispatch(() =>
+        {
+            if (!LibraryToolJob.Available) { _out.WriteLine("skipped: " + LibraryToolJob.Report); return; }
+            string game = Path.Combine(_library, "snes", "Opal Reach (Synthetic).sfc");
+            Directory.CreateDirectory(Path.GetDirectoryName(game)!);
+            byte[] rom = SyntheticRom.BuildBlank();
+            File.WriteAllBytes(game, rom);
+            new AppSettings { RomDirectory = _library }.Save();
+            var made = new GamePackageWindow("Opal Reach (Synthetic)", game, _library, null, browse: false) { Width = 1280, Height = 800 };
+            made.Show();
+            string package;
+            try
+            {
+                Press(made, "GamePackageMake");
+                package = made.Package!;
+                Assert.Equal(package, GamePackages.RootFor(game));
+            }
+            finally { made.Close(); }
+            rom[0x200] ^= 0xFF;
+            File.WriteAllBytes(game, rom);
+            File.SetLastWriteTimeUtc(game, new DateTime(2031, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            Assert.Null(GamePackages.RootFor(game));
+            Assert.Equal(package, GamePackages.Index(PackagePlaces.Current()).Claimant(Path.GetFullPath(game))?.Folder);
+            Assert.Throws<IOException>(() => GamePackages.Resolve(package, PackagePlaces.Current()));
+            var window = new GamePackageWindow("Opal Reach (Synthetic)", game, _library, package, browse: false, refused: true) { Width = 1280, Height = 800 };
+            window.Show();
+            try
+            {
+                string shown = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "GamePackagePlace").Text ?? "";
+                Assert.Contains(", changed: the game's file is not as the package recorded it", shown);
+            }
+            finally { window.Close(); }
+        }, default);
+
         [Fact]
         public Task A_patch_made_for_another_image_is_refused_in_words_and_nothing_is_added() => Session.Dispatch(() =>
         {

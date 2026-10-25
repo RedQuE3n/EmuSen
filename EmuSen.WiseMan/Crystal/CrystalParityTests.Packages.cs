@@ -76,9 +76,22 @@ namespace EmuSen.WiseMan.Crystal
                 a.AddRange(new[] { i.Read("session_info", rt, s3), movedSlots, i.Call("close", rt, s3) });
                 Assert.Equal(SlotPaths(plainSlots), SlotPaths(movedSlots));
                 Assert.Contains("TEST/Elsewhere/plain (moved).tst", File.ReadAllText(Path.Combine(package, GamePackage.FileName)));
+                // Another dump now: by its plain path it plays as a plain game with its plain saves, and its package refuses (§14.8 Q34).
                 File.WriteAllBytes(moved, CoreAdapterTests.Image(9, 9, 9, 9));
                 File.SetLastWriteTimeUtc(moved, new DateTime(2031, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-                string refused = i.Open(rt, moved);
+                byte[] packageSaved = File.ReadAllBytes(packageSave);
+                string o4 = i.Open(rt, moved);
+                uint s4 = Id(o4);
+                Assert.True(s4 != 999, o4);
+                string changedSlots = Slots(s4);
+                Assert.DoesNotContain(package.Replace("\\", "\\\\"), changedSlots);
+                Assert.Contains(Path.Combine(DataStore.SaveStates, "plain (moved).slot2.state").Replace("\\", "\\\\"), changedSlots);
+                a.AddRange(new[] { i.Read("session_info", rt, s4), changedSlots.Replace(_root, "<root>"), i.Button(rt, s4, 0, 8, true) });
+                i.Frame(rt, s4);
+                a.AddRange(new[] { i.Button(rt, s4, 0, 8, false), i.Call("close", rt, s4) });
+                Assert.True(File.Exists(Path.Combine(DataStore.Saves, "TEST", "plain (moved).srm")), "the changed file wrote its plain save");
+                Assert.Equal(packageSaved, File.ReadAllBytes(packageSave));
+                string refused = i.Open(rt, package);
                 Assert.Contains("has SHA-1", refused);
                 a.Add(refused.Replace(_root, "<root>"));
                 return a;

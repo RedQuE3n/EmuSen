@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Galaxia
         private static string Answer(Func<PackageResolution> resolve)
         {
             try { PackageResolution r = resolve(); return $"{r.Game} | {r.Package ?? "(none)"} | {r.Moved}"; }
-            catch (IOException e) { return $"{e.GetType().Name}: {e.Message}"; }
+            catch (IOException e) { return $"IOException: {e.Message}"; }
         }
 
         [Fact]
@@ -106,12 +106,13 @@ namespace EmuSen.WiseMan.Galaxia
                 a.Add(Answer(() => resolve(Path.Combine(lib, "SNES", "Europe", "Beta (E).sfc"))));
                 File.Move(Path.Combine(lib, "SNES", "Europe", "Beta (E).sfc"), Path.Combine(lib, "SNES", "Beta.sfc"));
                 a.Add(Answer(() => resolve(Path.Combine(p.Packages, "SNES", "USA", "Beta (U).sfc"))));
-                // A touched file keeps its package and has its time recorded; another dump of the same size is refused with both hashes; a game gone and not found is refused.
+                // A touched file keeps its package and has its time recorded; another dump of the same size opens by its plain path as a plain game and its package is refused with both hashes; a game gone and not found is refused.
                 File.SetLastWriteTimeUtc(Path.Combine(lib, "SNES", "Alpha.sfc"), new DateTime(2030, 1, 2, 3, 4, 5, DateTimeKind.Utc));
                 a.Add(Answer(() => resolve(Path.Combine(lib, "SNES", "Alpha.sfc"))));
                 File.WriteAllBytes(Path.Combine(lib, "NES", "Delta.nes"), Cartridge(5, 2048));
                 File.SetLastWriteTimeUtc(Path.Combine(lib, "NES", "Delta.nes"), new DateTime(2031, 1, 1, 0, 0, 0, DateTimeKind.Utc));
                 a.Add(Answer(() => resolve(Path.Combine(lib, "NES", "Delta.nes"))));
+                a.Add(Answer(() => resolve(Path.Combine(p.Packages, "NES", "Delta.nes"))));
                 File.Delete(Path.Combine(lib, "NES", "Delta.nes"));
                 a.Add(Answer(() => resolve(Path.Combine(p.Packages, "NES", "Delta.nes"))));
                 string root = At("claims", side);
@@ -126,10 +127,11 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.EndsWith("| True", m[12]);
             Assert.EndsWith("| False", m[13]);
             Assert.StartsWith("<root>/Roms/SNES/Beta.sfc |", m[14]);
-            Assert.Contains("has SHA-1", m[16]);
-            Assert.Contains("which is gone", m[17]);
-            Assert.Contains("\"path\": \"SNES/Beta.sfc\"", m[18]);
-            Assert.Contains("\"mtime\": \"2030-01-02T03:04:05Z\"", m[18]);
+            Assert.StartsWith("<root>/Roms/NES/Delta.nes | (none) | False", m[16]);
+            Assert.Contains("has SHA-1", m[17]);
+            Assert.Contains("which is gone", m[18]);
+            Assert.Contains("\"path\": \"SNES/Beta.sfc\"", m[19]);
+            Assert.Contains("\"mtime\": \"2030-01-02T03:04:05Z\"", m[19]);
         }
 
         [Fact]

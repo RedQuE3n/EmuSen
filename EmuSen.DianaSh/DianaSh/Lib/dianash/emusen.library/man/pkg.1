@@ -130,7 +130,10 @@ ONE GAME, ONE SAVE
     its game, its companions (a sheet's tracks, an .m3u's discs) and the
     library files a converted disc was made from. A claimed game whose
     size or time changed is hashed when it is opened: still the dump, its
-    time is recorded; another dump, it is refused with both hashes named.
+    time is recorded; another dump, the package is changed. Opened by its
+    plain path such a file plays as a plain game with its plain saves,
+    and the package's are left as they were; the package opened itself
+    is refused with both hashes named, and 'ls' and 'check' say changed.
     A game that moved in the library is found again by its size and then
     its hashes when it or its package is opened, and the manifest is
     rewritten to name where it now is.

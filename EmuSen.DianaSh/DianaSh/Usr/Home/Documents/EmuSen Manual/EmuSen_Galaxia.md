@@ -391,7 +391,8 @@ Galaxia's, since it is where a game's files are (§3.8, §3.10): `EmuSen.Galaxia
   - anything else opens as it is, as before packages.
 
   A claimed game whose size or time differs from `seen` is hashed: still the dump, `seen` is rewritten; another
-  dump is refused with words naming both hashes. The hashes compared are `dump.file`, else the sheet's for a disc
+  dump is refused with words naming both hashes when the package is opened itself, and the file opened by its plain
+  path opens as it is, a plain game with its plain saves (decided 2026-10-25, `EmuSen_GamePackages.md` §17). The hashes compared are `dump.file`, else the sheet's for a disc
   game, else for a zip the archive's own in `container`; a CHD's dump is the original's, so a converted disc is not
   hashed at open (the CHD tool checks it). A package whose game is gone and not found by size and hashes in the
   library is refused with words.

@@ -179,6 +179,12 @@ fn packages_are_made_migrated_listed_and_checked_and_the_library_is_left_as_it_w
     let later = std::time::SystemTime::now() + Duration::from_secs(3600);
     std::fs::File::options().write(true).open(t.at("library/snes/Gamma.sfc")).unwrap().set_modified(later).unwrap();
     std::fs::remove_file(t.at("library/nes/Alpha.nes")).unwrap();
+    // Opened by its plain path the changed cartridge is a plain game; its package refuses, and stays changed (§14.8 Q34).
+    let roots = ctx.places();
+    let gamma = t.at("library/snes/Gamma.sfc");
+    let opened = claims::resolve(&roots.roots(), &gamma).unwrap();
+    assert_eq!((opened.game.as_str(), opened.package.as_deref()), (gamma.as_str(), None));
+    assert!(claims::resolve(&roots.roots(), &t.at("home/Packages/SNES/Gamma.sfc")).unwrap_err().contains("has SHA-1"));
     let checked = run(&ctx, r#"{"op":"pkg-check","paths":[]}"#);
     let s = summary(&checked);
     assert_eq!(state(&checked, "PlayStation/Disc/Disc.cue"), "changed", "{s}");

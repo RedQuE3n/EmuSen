@@ -248,6 +248,9 @@ namespace EmuSen.Galaxia.Media
                 catch (FormatException) { }
             }
 
+            // A package whose game is now another dump, refused when the package is opened itself and not by a claimed file's path - see EmuSen_GamePackages.md §14.8 Q34.
+            private sealed class ChangedDumpException(string message) : IOException(message);
+
             public static PackageResolution OpenPackage(PackagePlaces roots, string folder, string? opened)
             {
                 string manifest = Path.Join(folder, GamePackage.FileName);
@@ -263,7 +266,7 @@ namespace EmuSen.Galaxia.Media
                     if (unchanged || Recorded(doc) is not { } recorded) return new PackageResolution(game, folder, false);
                     RomHashes taken = Hash(game) ?? throw new IOException($"{game} could not be read to compare it with the package {folder}");
                     if (!SameDump(recorded, taken))
-                        throw new IOException($"{game} has {TakenNamed(recorded, taken)}, but the package {folder} was made for {Named(recorded)}: it is not the dump the package's saves belong to. pkg check says more; pkg make makes a package for this file once the old one is moved aside.");
+                        throw new ChangedDumpException($"{game} has {TakenNamed(recorded, taken)}, but the package {folder} was made for {Named(recorded)}: it is not the dump the package's saves belong to. pkg check says more; pkg make makes a package for this file once the old one is moved aside.");
                     ((JsonObject)doc["game"]!)["seen"] = SeenValue(now.Size, now.Mtime);
                     Write(manifest, doc);
                     return new PackageResolution(game, folder, false);
@@ -287,7 +290,11 @@ namespace EmuSen.Galaxia.Media
                 var plain = new PackageResolution(at, null, false);
                 if (!File.Exists(full)) return plain;
                 PackageIndex index = Index(roots);
-                if (index.Claimant(full) is { } claimant) return OpenPackage(roots, claimant.Folder, full);
+                if (index.Claimant(full) is { } claimant)
+                {
+                    try { return OpenPackage(roots, claimant.Folder, full); }
+                    catch (ChangedDumpException) { return plain; }
+                }
                 long size = new FileInfo(full).Length;
                 RomHashes? taken = null;
                 foreach (ClaimingPackage p in index.Packages.Where(p => !File.Exists(p.Game)))

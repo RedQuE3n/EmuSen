@@ -36,11 +36,12 @@ DESCRIPTION
         3  the table of contents (tracks, their pauses and starts, the
            lead-out and the disc type) equal to the original disc's.
 
-    Checks 2 and 3 are not run over a CHD that check 1 found damaged; the
-    disc has failed in any case. Each converted disc is given a linked
-    package in Packages/<console>/, whose package.json names the CHD and
-    records the original dump: every track's hashes, the sheet's, the
-    form, and the CHD's codecs and SHA-1s.
+    All three are run whatever check 1 finds: EmuSen's reader refuses a
+    damaged hunk in words, naming it and the sector it holds, and the
+    disc fails. Each converted disc is given a linked package in
+    Packages/<console>/, whose package.json names the CHD and records the
+    original dump: every track's hashes, the sheet's, the form, and the
+    CHD's codecs and SHA-1s.
 
     A disc already converted, whose package names a CHD still at the size
     and time recorded and whose originals have not changed, is skipped,

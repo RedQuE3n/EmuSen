@@ -325,10 +325,10 @@ fn a_chd_of_another_layout_fails_check_three() {
     assert_eq!(check_word(&event, "tracks"), "failed: not run, since the table of contents differs");
 }
 
-/// Bytes changed at a stored hunk's start: chdman's verify fails it, and EmuSen's reader, which `chd` 0.3.4 can stop
-/// on such a hunk, is not run over it, so the check ends with the disc failed and the program still running.
+/// Bytes changed at a stored hunk's start, where `chd` 0.3.4 would panic: chdman's verify fails it, the table of
+/// contents still equals the original's, and EmuSen's reader refuses the hunk in words, the program still running.
 #[test]
-fn a_damaged_chd_fails_check_one_and_is_not_read() {
+fn a_damaged_chd_fails_checks_one_and_two_and_the_reader_names_the_hunk() {
     let Some(chdman) = chdman() else { return };
     let temp = Temp::new("damaged");
     library(&temp.at("library"));
@@ -343,7 +343,9 @@ fn a_damaged_chd_fails_check_one_and_is_not_read() {
     let event = check_event(&ctx, "psx/Two", "psx/Two/Two.cue");
     assert_eq!(event.get("state").and_then(Value::as_str), Some("failed"));
     assert!(check_word(&event, "chdman").starts_with("failed: chdman verify failed"), "{}", check_word(&event, "chdman"));
-    assert_eq!(check_word(&event, "tracks"), "failed: not run, since chdman found the CHD damaged");
+    assert_eq!(check_word(&event, "toc"), "passed");
+    let tracks = check_word(&event, "tracks");
+    assert!(tracks.starts_with("failed: track 1 could not be rebuilt from the CHD: sector 150: hunk 0 of the CHD is damaged: its sector stream is said to be"), "{tracks}");
 }
 
 #[test]

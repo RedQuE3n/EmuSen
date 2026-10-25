@@ -205,13 +205,9 @@ fn word(r: &Result<(), String>) -> Value {
     }
 }
 
-/// Checks 3 and 2, in that order, through EmuSen's reader; neither is run over a CHD that check 1 found damaged, since
-/// `chd` 0.3.4 stops the program on some damaged hunks (§12.2), and the disc has failed in any case.
-fn reader_checks(check1: &Result<(), String>, at: &str, toc: &Toc, sheet: &str, expected: &[Hashes], stop: &dyn Fn() -> bool) -> (Result<(), String>, Result<(), String>) {
-    if check1.as_ref().is_err_and(|w| w != "stopped") {
-        let words = "not run, since chdman found the CHD damaged".to_string();
-        return (Err(words.clone()), Err(words));
-    }
+/// Checks 3 and 2, in that order, through EmuSen's reader, whatever check 1 found: the reader refuses a damaged hunk in
+/// words rather than stopping the program (EmuSen_Disc.md §13, EmuSen_GamePackages.md §12.6).
+fn reader_checks(at: &str, toc: &Toc, sheet: &str, expected: &[Hashes], stop: &dyn Fn() -> bool) -> (Result<(), String>, Result<(), String>) {
     match checks::chd(at) {
         Err(w) => (Err(w.clone()), Err(w)),
         Ok(mut disc) => {
@@ -276,7 +272,7 @@ fn convert_in(ctx: &Context, chdman: &Chdman, item: &Item, placed: &Placed, scra
     }
     let check1 = chdman.verify(&partial, stop);
     let expected: Vec<Hashes> = tracks.iter().map(|t| t.hashes.clone()).collect();
-    let (check3, check2) = reader_checks(&check1, &partial, &original_toc, &prepared.sheet, &expected, stop);
+    let (check3, check2) = reader_checks(&partial, &original_toc, &prepared.sheet, &expected, stop);
     if stop() || [&check1, &check2, &check3].iter().any(|c| c.as_ref().is_err_and(|w| w == "stopped")) {
         remove();
         return Outcome::new("stopped");
@@ -438,7 +434,7 @@ pub fn check(ctx: &Context, chdman: &Chdman, item: &Item, stop: &dyn Fn() -> boo
     };
     let (Some(toc), Some(sheet), Some(expected)) = (toc, sheet, expected) else { return Outcome::said("failed", "the package does not record the table of contents, the sheet and every track's hashes") };
     let verified = chdman.verify(&at, stop);
-    let (check3, check2) = reader_checks(&verified, &at, &toc, sheet, &expected, stop);
+    let (check3, check2) = reader_checks(&at, &toc, sheet, &expected, stop);
     let check1 = verified.and_then(|()| match chdman.info(&at) {
         Ok(info) if Some(info.sha1.as_str()) == container.get("sha1").and_then(Value::as_str) => Ok(()),
         Ok(info) => Err(format!("the CHD's SHA-1 is {} and the package records {}", info.sha1, container.get("sha1").and_then(Value::as_str).unwrap_or(""))),

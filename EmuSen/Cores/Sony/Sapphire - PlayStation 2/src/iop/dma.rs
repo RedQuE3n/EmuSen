@@ -4,7 +4,7 @@
 //! units (a burst, a chopped window, a block, a list node, a chain tag with its data), each holding the bus for a cycle
 //! a word; the processor waits while it does. OTC (channel 6) works end to end; the others reach their peripherals
 //! through `Peripherals`, which the stages that build them implement (SIF on 2, 9 and 10 at S22, CDVD on 3 at S23,
-//! SPU2 on 4 and 7 at S26, SIO2 on 11 and 12 at S25). Times are IOP cycles. Sapphire_Native.md §22.5.
+//! SPU2 on 4 and 7 at S26, SIO2 on 11 and 12 since S25). Times are IOP cycles. Sapphire_Native.md §22.5.
 
 pub const CHANNELS: usize = 13;
 pub const MDEC_IN: usize = 0;

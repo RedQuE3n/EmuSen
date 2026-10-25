@@ -7,6 +7,7 @@ use emusen_native::core::*;
 use crate::bios;
 use crate::machine::{AUDIO_RATE, BIOS_BYTES, BIOS_ID, Machine, Market, PAL_HEIGHT, RAM_ID, WIDTH};
 use crate::media::{Media, Refusal};
+use crate::sio2::card::CARD_BYTES;
 use crate::state::STATE_VERSION;
 
 /// An image that is neither an ELF nor an ISO 9660 volume.
@@ -58,6 +59,13 @@ fn controllers() -> Vec<Controller> {
         Controller { id: DIGITAL.into(), label: "Digital Controller".into(), ports: vec![0, 1], buttons: buttons(14), axes: Vec::new() },
     ]
 }
+
+/// The memory cards' battery files, file 0 the card in slot 1 and file 1 in slot 2, their medium and the slots' words
+/// in core info (Sapphire_Plan.md §4.4; EmuSen_SaveMedia.md §3.2; Sapphire_Native.md §30.7).
+pub const CARD_FILES: [u32; 2] = [0, 1];
+pub const CARD_SUFFIXES: [&str; 2] = [".ps2", ".2.ps2"];
+pub const CARD_MEDIUM: &str = "ps2.card";
+pub const CARD_LABELS: [&str; 2] = ["Slot 1", "Slot 2"];
 
 /// File numbers of the BIOS by market, above the sixteen kept for the cards and the console's own memory
 /// (Sapphire_Native.md §2.5).
@@ -132,7 +140,7 @@ pub fn market_of(setting: Option<&str>) -> Market {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = 0;
+    const CAPABILITIES: u64 = caps::AXES;
 
     fn info() -> Info {
         Info {
@@ -159,6 +167,11 @@ impl Core for Machine {
 
     fn settings_schema() -> Vec<Setting> {
         schema()
+    }
+
+    /// Both cards' files: each removable, a card the player carries, a slot of the medium `ps2.card` (EmuSen_SaveMedia.md §3.2).
+    fn battery_files(system: &str) -> Option<Vec<Battery>> {
+        (system == "ps2").then(|| (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n]).medium(CARD_MEDIUM).label(CARD_LABELS[n])).collect())
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
@@ -200,19 +213,26 @@ impl Core for Machine {
                 return Err(STATUS_NO_BOOT2);
             }
         };
-        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which)) {
+        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which)) {
             detail(&format!("file {} is not one Sapphire names", f.which));
             return Err(status::BAD_FILE);
         }
-        if let Some(f) = request.files.iter().find(|f| f.data.len() != BIOS_BYTES) {
+        if let Some(f) = request.files.iter().find(|f| (BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && f.data.len() != BIOS_BYTES) {
             detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && f.data.len() != CARD_BYTES) {
+            detail(&format!("file {} is {} bytes; a PlayStation 2 memory card is {CARD_BYTES}, every page of 512 bytes followed by its 16 spare bytes", f.which, f.data.len()));
             return Err(status::BAD_FILE);
         }
         let s = &request.settings;
         let market = market_of(s.get(REGION_KEY));
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
         let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
-        m.firmware = request.files.iter().map(|f| f.which).collect();
+        m.firmware = request.files.iter().map(|f| f.which).filter(|w| !CARD_FILES.contains(w)).collect();
+        for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which)) {
+            m.cards[f.which as usize].image.copy_from_slice(f.data);
+        }
         if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
             m.memory_mut(BIOS_ID).expect("the BIOS").bytes.copy_from_slice(file.data);
         }
@@ -231,7 +251,7 @@ impl Core for Machine {
             ports: (0..2).map(|p| Port { port: p, controller: self.ports[p as usize].map(str::to_string) }).collect(),
             spaces: self.memories.iter().map(|m| Space { read_only: m.read_only, cheats: m.id == RAM_ID, ..Space::new(m.id, m.name) }).collect(),
             processors: vec![processor(0, "R5900", 32), processor(1, "IOP", 32), processor(2, "VU0", 12), processor(3, "VU1", 14)],
-            battery: Vec::new(),
+            battery: (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).collect(),
             state: StateFormat { format: "SPH2".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: None,
@@ -312,12 +332,28 @@ impl Core for Machine {
         Ok(())
     }
 
-    fn battery(&self, _which: u32) -> Result<(&[u8], u32), i32> {
-        Err(status::BAD_FILE)
+    fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
+        let c = CARD_FILES.iter().position(|&w| w == which).map(|n| &self.cards[n]).ok_or(status::BAD_FILE)?;
+        Ok((&c.image, flags::BATTERY_TRACKED | if c.dirty { flags::BATTERY_CHANGED } else { 0 }))
+    }
+
+    fn battery_saved(&mut self, which: u32) -> Result<(), i32> {
+        let n = CARD_FILES.iter().position(|&w| w == which).ok_or(status::BAD_FILE)?;
+        self.cards[n].dirty = false;
+        Ok(())
+    }
+
+    fn set_axis(&mut self, port: u32, axis: u32, value: f64) -> Result<(), i32> {
+        let sticks = self.sticks.get_mut(port as usize).ok_or(status::NO_SUCH_PORT)?;
+        // The descriptor's axes 0-3 are left X, left Y, right X, right Y; the pad reports right X, right Y, left X, left Y.
+        if let Some(&at) = [2usize, 3, 0, 1].get(axis as usize) {
+            sticks[at] = crate::sio2::pad::stick(value);
+        }
+        Ok(())
     }
 }
 
-emusen_native::core_exports!(Machine;);
+emusen_native::core_exports!(Machine; axes);
 
 #[cfg(test)]
 mod tests {
@@ -430,5 +466,27 @@ mod tests {
         assert!(all.iter().all(|m| m.len() == 32 && m.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())));
         assert_eq!(all.iter().collect::<std::collections::HashSet<_>>().len(), all.len(), "no image in two markets or twice in one");
         assert_eq!(Machine::firmware_for(&cd())[0].md5, lists[1]);
+    }
+
+    #[test]
+    fn the_two_cards_are_slots_of_ps2_card_and_a_card_file_of_the_wrong_size_is_refused() {
+        let slots: Vec<_> = Machine::battery_files("ps2").unwrap().into_iter().map(|b| (b.which, b.kind, b.medium, b.label)).collect();
+        assert_eq!(
+            slots,
+            [(0, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 1".into())), (1, BatteryKind::Removable, Some("ps2.card".into()), Some("Slot 2".into()))],
+            "Sapphire_Plan.md §4.4"
+        );
+        let file = |which, data| emusen_native::abi::File { which, data };
+        assert_eq!(create_with(&elf(), &[], vec![file(0, &[0u8; 1000][..])]).err(), Some(status::BAD_FILE));
+        let mut card = vec![0xFFu8; CARD_BYTES];
+        card[0] = 0x53;
+        let mut m = create_with(&elf(), &[], vec![file(1, &card[..])]).unwrap();
+        assert_eq!(m.battery(1).unwrap(), (&card[..], flags::BATTERY_TRACKED));
+        assert!(m.battery(0).unwrap().0.iter().all(|&b| b == 0xFF), "slot 1 holds an erased card");
+        assert_eq!(m.machine_info().battery.len(), 2);
+        assert!(m.firmware.is_empty(), "a card is not firmware");
+        m.set_axis(0, 2, 1.0).unwrap();
+        m.set_axis(0, 1, -1.0).unwrap();
+        assert_eq!(m.sticks[0], [0xFF, 0x80, 0x80, 0x00], "right X full right, left Y full up");
     }
 }

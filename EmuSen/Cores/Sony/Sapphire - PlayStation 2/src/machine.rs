@@ -11,6 +11,8 @@ pub struct Memory {
     pub read_only: bool,
 }
 
+use crate::sio2::card::MemoryCard;
+
 pub const RAM_ID: u32 = 1;
 pub const BIOS_ID: u32 = 10;
 
@@ -66,6 +68,10 @@ pub struct Machine {
     /// Silent stereo frames made and not yet drained, and the bound on them in samples.
     pub silence: usize,
     pub audio_limit: usize,
+    /// The memory cards in the two slots, the medium `ps2.card`: the player's files 0 and 1, or erased cards (S25).
+    pub cards: [MemoryCard; 2],
+    /// The sticks the frontend set, by port, in the pad's order: right X, right Y, left X, left Y (S25).
+    pub sticks: [[u8; 4]; 2],
 }
 
 impl Machine {
@@ -84,6 +90,8 @@ impl Machine {
             firmware: Vec::new(),
             silence: 0,
             audio_limit: usize::MAX,
+            cards: [MemoryCard::erased(), MemoryCard::erased()],
+            sticks: [[0x80; 4]; 2],
         }
     }
 

@@ -4318,10 +4318,11 @@ cross-check with a referee's formatted card waits for part B, when the player's 
 | F1 | the pressure bytes' order with Right and Left swapped | `pressure_reads_ffh_for_a_pressed_button_and_00h_for_a_released_one`, `the_pressure_bytes_follow_the_buttons_held_in_the_documented_order` |
 | F2 | a page write keeping only the 512 data bytes, its spare bytes skipped | `a_write_clears_bits_and_an_erase_sets_its_whole_block`, `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes` |
 | F3 | the card's erase finishing at once | `a_queue_ends_after_its_bytes_and_a_busy_card_holds_the_next_command`, `the_card_probes_reads_writes_and_erases_pages_with_their_spare_bytes` (the timed command after each erase) |
+| F4 | `emusen-ps2-card` writing a page's data without its error correction, the code bytes left erased | `a_formatted_card_has_the_standard_layout_and_8000_clusters_free`, `damaged_cards_are_refused_in_words_never_a_panic` |
 
 F3 was first missed: both tests compared the busy time with the constant they tested, so an erase of no time passed.
 They now hold the documents' figure, 589,824 EE cycles and 73,728 IOP cycles, and catch it. Each fault was applied, the
-lib's `sio2` tests and `tests/sio2.rs` run, and the source restored [M].
+lib's `sio2` tests and `tests/sio2.rs` run (F4: the crate's tests), and the source restored [M].
 
 ### 30.11 The blast radius (measured 2026-10-25)
 

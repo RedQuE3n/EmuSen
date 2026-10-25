@@ -331,7 +331,7 @@ impl Dmac {
         }
     }
 
-    /// Drain `c` held by stall control: Dd_MADR.ADDR + 8 qwords > D_STADR.ADDR (§5.3.2).
+    /// Drain `c` held by stall control: Dd_MADR.ADDR + 8 qwords > D_STADR.ADDR (§5.3.2, Sapphire_Disputes.md D-34).
     fn stalled(&self, c: usize) -> bool {
         let ch = &self.ch[c];
         self.std() == Some(c) && ch.stall && (ch.madr & ADDR) + 8 * 16 > self.stadr & ADDR
@@ -402,7 +402,7 @@ impl Dmac {
     }
 
     /// Chooses the next unit: group A, then B, then C by round robin, among channels the DMAC may run (§5.3.1, §5.8:
-    /// DMAE, PCE and CDEn, STR; D_ENABLEW's CPND holding all).
+    /// DMAE, PCE and CDEn (D-41), STR; D_ENABLEW's CPND holding all).
     fn arbitrate(&mut self, dev: &mut dyn Peripherals) -> Option<(usize, Work)> {
         if self.ctrl & ctrl::DMAE == 0 || self.enable & CPND != 0 {
             return None;
@@ -563,7 +563,7 @@ impl Dmac {
     }
 
     /// Reads a DMAtag: from TADR in a source chain, from the peripheral (fromSPR: the scratchpad at SADR) in a
-    /// destination chain, and acts on its ID (§5.2.3, §5.2.4, §5.6).
+    /// destination chain, and acts on its ID (§5.2.3, §5.2.4, §5.6); an undefined one ends the transfer (D-37).
     fn read_tag(&mut self, c: usize, mem: &mut dyn Memory, spr: &mut [u8], dev: &mut dyn Peripherals) {
         let source = self.mode(c) == Mode::SourceChain;
         let q = if source {

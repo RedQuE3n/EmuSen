@@ -476,7 +476,7 @@ pub fn chain() -> Program {
     rec_spr(p, 0x310, Some(alt(6)));
     rec_spr(p, 0x320, Some(alt(5)));
     clear_cis(p);
-    // TTE on toSPR: each tag's quadword is written to the scratchpad before its packet [A, Sapphire_Disputes.md D-36].
+    // TTE on toSPR: each tag's quadword is written to the scratchpad before its packet (Sapphire_Disputes.md D-36).
     mem_quad(p, T + 0x200, [0x7000_0001, 0x1111_1111, 0x2222_2222, 0x3333_3333]);
     mem_quad(p, T + 0x210, alt(3));
     poke(p, tadr(TO_SPR), T + 0x200);
@@ -487,7 +487,7 @@ pub fn chain() -> Program {
     rec_spr(p, 0x410, Some(alt(3)));
     clear_cis(p);
     // call on toSPR, which has no address stack (§5.2.3: "Effective only on the VIF0, VIF1, and GIF channels"): read
-    // as an undefined tag, the transfer ended with TADR at the tag [A, D-37].
+    // as an undefined tag, the transfer ended with TADR at the tag (D-37).
     mem_quad(p, T + 0x300, tag(5, 1, T + 0x400, false, 0));
     poke(p, tadr(TO_SPR), T + 0x300);
     poke(p, sadr(TO_SPR), 0x500);
@@ -533,7 +533,7 @@ pub fn chain() -> Program {
     rec_mem(p, M + 0x100, Some(alt(2)));
     rec_mem(p, M + 0x200, Some(alt(3)));
     rec_mem(p, M + 0x210, Some(CC));
-    // An undefined destination tag (ID 3): the transfer ends, CHCR keeping the tag's bits (§5.4).
+    // An undefined destination tag (ID 3): the transfer ends, CHCR keeping the tag's bits (§5.4, D-37).
     spr_quad(p, 0x700, tag(3, 1, M + 0x280, false, 0));
     poke(p, sadr(FROM_SPR), 0x700);
     kick_wait(p, FROM_SPR, CHAIN);
@@ -673,7 +673,7 @@ pub fn interleave() -> Program {
 
 /// `s11-stall`: stall control with fromSPR as the source and VIF1 as the drain, both in normal mode (§5.3.2): the drain
 /// held while fewer than eight qwords lie between its MADR and D_STADR, SIS set, resumed as fromSPR moves D_STADR on,
-/// and released by STD cleared.
+/// and released by STD cleared (Sapphire_Disputes.md D-34).
 pub fn stall() -> Program {
     let mut p = Program::kernel("s11-stall");
     let p = &mut p;
@@ -1021,7 +1021,7 @@ pub fn timers() -> Program {
     read(p, 0, "a1");
     p.emit("subu t2, a1, a0");
     p.record("t2", Some(0));
-    // COUNT's write, and MODE's write leaving COUNT as it is [A, Sapphire_Disputes.md D-39].
+    // COUNT's write, and MODE's write leaving COUNT as it is (Sapphire_Disputes.md D-38).
     poke(p, t_count(0), 0x1_1234);
     rec(p, t_count(0), Some(0x1234));
     poke(p, t_mode(0), 0x80);
@@ -1128,7 +1128,7 @@ pub fn timers() -> Program {
     p.emit("sltiu t2, t2, 2");
     p.emit("xori t2, t2, 1");
     rec_bool(p, 1);
-    // Mode 1: counting before the first edge [A, D-38], reset at V-blank's rising edge.
+    // Mode 1: counting before the first edge (D-38), reset at V-blank's rising edge.
     poke(p, t_mode(3), 0);
     poke(p, t_count(3), 0);
     poke(p, t_mode(3), 0x80 | 0x10 | 0x8 | 0x4 | 2);

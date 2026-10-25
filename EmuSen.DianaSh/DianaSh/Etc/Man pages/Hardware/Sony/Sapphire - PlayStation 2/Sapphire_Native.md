@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18) and S9 (§19) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19) and S11 (§20) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -1674,3 +1674,283 @@ firmware.
 - COP2 (S12): still halting. The VUs' own flags (MAC, status, clipping) and their FMAC's agreement with `float`: S12, S13.
 - COP1 in the recompiler: S38, graded against this interpreter; C3's host path: S39–S41.
 - The state format's new contents (the FPRs, ACC, FCR31): `SPH2` gains them with the rest of the EE (S10, S30).
+
+## 20. Stage S11, the DMAC, the INTC and the EE timers (2026-10-25)
+
+### 20.1 In one paragraph
+
+The plan's §7 row S11, on the tester's go of 2026-10-25, built before S10 by the tester's decision of the same day
+(recorded in its own commit, `Sapphire_Plan.md` §7). The crate gains the EE's peripherals around its core, written from
+the *EE User's Manual* (EEUM) chapters 2 to 5 and ps2tek where the manual is silent: **`dmac`**, the ten channels in
+normal, chain and interleave modes with source and destination tags, tag interrupts, the address stack, stall
+control, the MFIFO, the priority control, the release cycle, D_ENABLEW's hold, INT1 and CPCOND0; **`intc`**, I_STAT and
+I_MASK and INT0; **`timer`**, the four timers on BUSCLK, its dividers and H-blank, with their gates, compare and
+overflow flags; **`blank`**, a stand-in for the H-blank and V-blank signals until the PCRTC (S20); **`clock`**, the one
+clock of EE cycles they share (D-0's figures in one place); and **`board`**, which holds them with the physical map and,
+as `System`, runs the core one instruction at a time and brings the units to its time, driving the core's Int0, Int1
+and CPCOND0, the inputs S7 left open. Units are brought forward only at the events they schedule or when the core
+touches them. The channels whose peripheral comes later end at `dmac::Peripherals`, an interface S13 to S27 implement;
+the scratchpad channels work end to end. Eight bare programs of the project's, 1,230 graded record words, are equal on
+the interpreter to the records the manual's rules give, the interleave arithmetic also to ps2autotests' console text.
+On PCSX2 and Play!, run as black boxes, neither lineage models stall control or the priority control, and PCSX2 takes
+an interrupt only when its request rises; the disagreements are disputes D-34 to D-42, D-15 is closed. The seven
+ps2autotests programs of the stage's gate need the BIOS's kernel, so Sapphire runs them with S10; **PCSX2 reproduces all
+seven console texts.** No emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 20.2 What was built
+
+- **`clock.rs`**: the EE's 294.912 MHz, BUSCLK at two EE cycles, the NTSC and PAL lines and fields (§20.3), and the
+  stand-in's H-blank width.
+- **`intc.rs`**: the fifteen sources by bit (EEUM §3.1's table), I_STAT latching a request, I_STAT's bits cleared by
+  writing 1 and I_MASK's reversed by writing 1 (§3.2), INT0 = I_STAT AND I_MASK not zero.
+- **`timer.rs`**: a timer is a count valid at a time, advanced in closed form over the ticks since; its next flag's
+  tick is the only event it schedules, and a settled timer (no enabled flag left to rise) schedules none.
+- **`blank.rs`**: H-blank and V-blank as functions of time, and their next edge, H-blank's only when a timer counts or
+  gates on it.
+- **`dmac.rs`**: the registers of EEUM §5.8 and §5.9, and the engine. A transfer runs in *units*: a slice (up to 8
+  qwords, ending at an 8-qword boundary of memory, §5.2.2) on the slice channels; on the burst channels (fromSPR, toSPR)
+  a whole packet, or with RELE a part to the next 128-byte boundary, or an interleave block; and a tag. A unit costs
+  its qwords at one a bus cycle and takes effect at its last cycle; between units the channels are arbitrated, group A
+  (VIF0), then B (SIF2), then C by round robin (§5.3.1), each channel's zero-time steps (a packet's end, a finished
+  transfer) taken at once. The DMAC is woken only by a unit's end, a release period's end, a register write or a
+  peripheral's `Dmac::wake`.
+- **The interfaces** [C]: `dmac::Peripherals` (DREQ for up to *n* qwords, a qword handed to the peripheral with a flag
+  for a TTE tag, a qword taken from it, a destination chain's tags among them) and `dmac::Memory` (a qword by physical
+  address, `None` for a bus error). `board::StandIns` implements `Peripherals` for channels 0 to 7 until their stages:
+  it takes every qword (keeping them for tests on request) and gives a queue, holding its channel when empty.
+- **`board.rs`**: `Board` (the map, the units, the stand-ins, the time) answers the EE's registers at 10000000h to
+  1000FFFFh through `Bus`, the timers, the DMAC (with D_ENABLER and D_ENABLEW at 1000F520h and 1000F590h) and the INTC,
+  other registers reading zero; `System` steps the core, runs the board to `Timing::cycles()` and sets the core's lines.
+- No new cross-component dependency: `sapphire` still depends on `emusen-native` and `emusen-mips` alone. The scheduler
+  is the crate's own, in Diamond's form (each unit's next event, the board taking the earliest).
+
+### 20.3 The timings: the documents' and the argued
+
+**The documents'** [R]: the EE at 294.912 MHz (ps2tek "EE Architecture"; D-0); BUSCLK at 147.456 MHz, half of it (EEUM
+§2.1.2, Tn_MODE.CLKS); the timers' clocks BUSCLK, BUSCLK/16 and BUSCLK/256 (§4.2); RCYC's release of 8 to 256 bus
+cycles (§5.8); the slice of 8 qwords ending at an 8-qword boundary and the burst's release at each 128-byte boundary
+with RELE (§5.2.1, §5.2.2); a qword a bus cycle ("It can transfer one quadword (16 bytes) at bus speed", ps2tek "DMA
+Controller"); the NTSC line of 9,370 bus cycles, 262 lines with V-blank on 22, and PAL's 9,436, 312 and 26 (ps2tek "EE
+Timers").
+
+**Argued or chosen**, each a named loss and a dispute candidate if an oracle measures it:
+
+1. A tag read costs one qword's bus cycle, and a TTE tag is moved in the same cycle [A].
+2. A unit has no set-up cost, and its effects (the data, MADR, QWC, SADR, D_STADR) become visible at its last bus
+   cycle [A].
+3. With RELE the release of RCYC bus cycles follows every unit, as if the core always asked for the bus (§5.2.1 makes
+   it conditional on the core's request, which the core's model does not raise) [A].
+4. The core is never stalled by the DMAC's use of the bus [A]: with RELE clear §5.3.1 makes the core's request the
+   lowest, which would delay its uncached and refilling accesses while a burst runs.
+5. The core reads and writes the units as of the cycle its instruction begins, and the units' lines reach it before
+   the next instruction (instruction granularity, §5.2 of the plan) [A].
+6. The dividers run freely from time 0, so BUSCLK/16 ticks at multiples of 32 EE cycles whenever a timer starts [A].
+7. The stand-in's field starts at time 0, H-blank is high for 1,600 bus cycles at each line's start, a timer clocked by
+   H-blank counts on its rising edge, and V-blank's edges fall on line starts [C].
+
+**Measured** [M, `tests/dmac.rs`]: 64 qwords on toSPR take 128 EE cycles in one burst; with RELE and RCYC 64 they take
+eight units of 8 qwords with seven releases of 64 bus cycles between them; 20 qwords on GIF from the third qword of a
+slice move as 5, 8 and 7; a channel whose peripheral asserts no DREQ schedules nothing until woken.
+
+### 20.4 The readings the manual leaves open (the DMAC and the INTC)
+
+[R EEUM chapters 3 and 5; ps2tek "DMA Controller", "EE Interrupt Controller"; A]:
+
+- **Registers.** CHCR keeps DIR, MOD, ASP, TTE, TIE, STR and TAG, bits 1 and 9 to 15 reading 0; while STR is set a
+  write changes STR alone (§5.9: "The fields other than the STR can be written only while DMA is stopped"). MADR, TADR and
+  the ASRs keep bits 31..4, MADR's bit 31 fixed at 0 on fromSPR and toSPR (§5.9; ps2autotests' `dma/spr/normal` text,
+  "did not accept MADR: 80000000"). SADR keeps bits 13..4 and wraps the scratchpad at 16 KiB. QWC keeps 16 bits; D_SQWC
+  every bit (D-40); the offsets §5.9's table gives a channel no register for are reserved, indeterminate on a read.
+- **A chain's start.** STR set with QWC above zero moves that packet from MADR first and then acts on CHCR.TAG as the
+  last tag read (§5.2.3's first paragraph; ps2tek "DMA Resuming"): refe and end stop after it; any other reads the next
+  tag at TADR. With QWC zero the first tag is read at once.
+- **Source tags** (§5.2.3, §5.6): MADR and TADR as the table gives them; cnt's TADR takes the address after its data
+  when the packet ends ("updates Dn_TADR following the transfer"); end, and ret with nothing pushed, leave TADR at the tag
+  (D-35); call pushes the address after its packet into ASR0 or ASR1 by ASP, ret pops it. refs is under stall control on
+  VIF1, GIF and SIF1 and is ref elsewhere. call and ret on a channel without an address stack, and call with ASP at 2,
+  end the transfer with CIS set, CHCR keeping the tag's bits, TADR at the tag and nothing moved (§5.4; D-37). A tag's
+  PCE of 10 or 11 clears or sets D_PCR.PCE (§5.3.3; D-41).
+- **TTE** sends the tag's whole quadword before its packet: to the scratchpad on toSPR (D-36), to the peripheral
+  marked as a tag elsewhere, whose stage decides what of it the peripheral takes.
+- **Destination tags** (§5.2.4) come from the peripheral, on fromSPR from the scratchpad at SADR: cnt, cnts (under stall
+  control as a source) and end; MADR takes ADDR (its SPR bit ignored on fromSPR); any other ID ends the transfer (D-37).
+- **Tag interrupts**: a tag with IRQ under TIE stops the chain when its packet ends, CIS set, TADR at the next tag
+  (§5.4). IRQ without TIE does nothing (ps2autotests' `dma/dmac/tagintr` text).
+- **Interleave** (§5.2.5): TQWC qwords moved, SQWC skipped on the memory side, until QWC is spent; the skip after the
+  last block is taken, so MADR ends at QWC/TQWC × (TQWC + SQWC) qwords from its start, and each field is its low eight
+  bits, as all thirteen of the console text's MADR lines show (`the_interleave_rule_gives_the_console_texts_madr_lines`).
+  A TQWC of 0 is taken as 1 [A].
+- **Stall control** (§5.3.2; D-34): the drain (STD) holds a normal-mode or refs packet while Dd_MADR + 8 qwords >
+  D_STADR, the "8" read as qwords from Figure 5-7; every held request sets SIS, so SIS clears only once the stall is
+  gone; the source (STS) copies its MADR to D_STADR after each unit of a normal-mode or cnts packet.
+- **MFIFO** (§5.5): with MFD set, fromSPR's addresses and the drain's TADR and the data of its cnt, next, call, ret and
+  end packets wrap into the ring (D_RBOR | address AND D_RBSR); the drain holds while its TADR equals fromSPR's MADR,
+  setting MEIS when that happens at a tag read, not during a packet's data (the manual's restriction against ending a
+  packet with ref). The ring's free space is the program's to check (§5.5's "After checking that there is a space") [A].
+- **Holds**: DMAE clear, D_ENABLEW's CPND, and D_PCR.PCE with a channel's CDEn clear, each stop the arbitration of what
+  they cover (§5.8's formula); a transfer held is resumed, not lost.
+- **INT1** is §5.8's formula, BEIS unmasked; **CPCOND0** is §5.8's, true with no CPCn set (ps2autotests' `cpcond` text,
+  "initial value: 1"). D_STAT's CIS, SIS, MEIS and BEIS clear by writing 1, its masks reverse by writing 1.
+- **A bus error** (§5.4): a DMA address in the map's bus-error regions ends the transfer with BEIS and CIS.
+- **INT0 and INT1 are levels** sampled before each instruction (§3.1: "if any bit is 1, an INT0 interrupt is
+  asserted"); a request latched while masked is taken once unmasked (D-39). Int0 is Cause.IP2 and Int1 IP3 (D-15,
+  measured).
+- **Normal or interleave mode with QWC zero** ("will result in unsuccessful transfer", §5.10) ends at once with CIS [A];
+  a chain mode on a channel without one, and interleave off the scratchpad channels, run as normal [A].
+
+### 20.5 The timers and the blanking stand-in
+
+**The timers** [R EEUM chapter 4; ps2tek "EE Timers"; A]:
+
+- COUNT, COMP and HOLD keep 16 bits; MODE keeps bits 9..0, EQUF and OVFF clearing by writing 1. Writing MODE leaves
+  COUNT as it is (D-38). HOLD exists on timers 0 and 1 and is plain storage until the SBUS interrupt drives it (S22).
+- EQUF is set only with CMPE, at the tick the count reaches COMP; OVFF only with OVFE, at the tick it wraps from FFFFh
+  ("set to 1 when a compare-interrupt occurs"). A flag's rise, not its level, latches the timer's bit in I_STAT, so a
+  flag left set gives no further request (ps2tek: "an interrupt will only be sent to the EE if either interrupt flag
+  goes from 0 to 1").
+- **ZRET**: the tick that brings the count to COMP gives 0 and sets EQUF with CMPE, so COMP is never read and the period
+  is COMP ticks (D-38, measured on PCSX2). With COMP below the count the counter runs to FFFFh and wraps first.
+- **The gate**: GATS selects H-blank or V-blank, H-blank ignored while it is also the clock. GATM 0 holds the count
+  while the gate is high; GATM 1, 2 and 3 count throughout and reset to 0 at the rising, falling or either edge (ps2tek:
+  "Reset counter when gate goes from low to high"; the manual's "Resets and starts counting" read the same way, both
+  referees counting before the first edge, D-38).
+- **H-blank as the clock** (CLKS 3): one tick at each rising edge.
+
+**The stand-in** (`blank.rs`), named so S20 can replace it: NTSC by default, a field of 262 lines of 9,370 bus cycles
+from time 0, V-blank high on lines 240 to 261, H-blank high for the first 1,600 bus cycles of each line [C]; VB_ON at
+V-blank's rise and VB_OFF at its fall (§3.1's edge column). Interlace and the half line are not modelled. The referees
+disagree with each other on the field (D-42).
+
+### 20.6 What is not modelled
+
+Each a named loss, and a dispute candidate if an oracle ever measures it [A]:
+
+- The DMAC's use of the bus does not stall the core (§20.3, 4), and the core's bus requests do not shape the release
+  (§20.3, 3); RDRAM's latency is S7's loss, not charged to the DMAC either.
+- The MFIFO's source never waits for space in the ring; D_RBOR and D_RBSR changed mid-transfer act at once (the manual
+  calls it unstable).
+- §5.10's restriction (VIF1 with TTE beside toSPR without it, which the manual says may stall) is not modelled.
+- STR cleared during a unit drops the unit's effect, and D_ENABLEW is honoured at the next arbitration; the manual says
+  a transfer "may not stop properly", which is not modelled further.
+- SIF2 runs in normal mode only; the SFIFO, SBUS and the GS's interrupt sources are not driven (S16, S22); HOLD is not
+  latched; the VU0 watchdog is S12's.
+- The blanking stand-in (§20.5); the timers' count of H-blank therefore stands until S20.
+
+### 20.7 The gate: the programs (measured 2026-10-25)
+
+`tests/s11/` generates eight bare programs as `emusen-mips` assembly, in S7's form (entered at 00100000h, running from
+kseg0, constants, buffers and record through kseg1, so neither cache holds what the DMAC moves), with the record from
+00200000h and 5A99D00Eh at 001FFFF0h. Each starts by clearing the DMAC's channels, D_PCR, D_ENABLEW, D_STAT, the INTC and
+the timers and enabling DMAE. Waits are bounded loops polling a register, so a referee that never sets a bit still ends
+its record. Every expected word is derived in the generator from the manual's rules, written apart from `src/`.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s11-spr` | 156 | toSPR and fromSPR in normal mode; SADR's dropped bits and its wrap at 16 KiB; MADR's fixed SPR bit; D_STAT's clearing and reversing writes; the holds by D_ENABLEW, DMAE and PCE with CDEn; CPCOND0 through BC0T in the six states ps2autotests' `cpcond` prints; QWC's and D_SQWC's widths |
+| `s11-chain` | 294 | toSPR's source chain walked tag by tag by tag interrupts (cnt, next, ref, refs, cnt setting PCE, refe clearing it); IRQ without TIE; a start with QWC left under end and ref; TTE; call on toSPR; fromSPR's destination chain (cnt with IRQ, cnts moving D_STADR, end) and an undefined tag |
+| `s11-callret` | 72 | VIF0's chain: two calls filling ASR0 and ASR1, a third refused at ASP 2, two rets, a ret ending the chain |
+| `s11-interleave` | 480 | eight of the console text's upload cases (TQWC 257 and SQWC 256 among them) and two downloads, MADR, SADR and every qword moved or skipped |
+| `s11-stall` | 38 | fromSPR as the source and VIF1 as the drain: held at once, released by 8 qwords at a time as D_STADR moves, finished, SIS cleared once free, and released by STD cleared |
+| `s11-mfifo` | 62 | a 64-qword ring: VIF1 held with MEIS while empty, fromSPR wrapping, a cnt packet's data across the wrap, the chain's end |
+| `s11-intc` | 74 | I_MASK's and I_STAT's writes; a timer's compare taken at its edge (IP2); a request latched while masked, taken once unmasked; the DMAC's end of transfer through CIM (IP3); both lines at once; V-blank's start and end and the span between them |
+| `s11-timers` | 54 | the three dividers' ratios; CUE; COUNT's and MODE's writes; EQUF with and without CMPE and its edge, none for a flag left set; ZRET; OVFF with and without OVFE; MODE's, HOLD's and COMP's widths; the V-blank gate in modes 0 and 1; H-blank as the clock over a field |
+
+**Tests** [M, `cargo test --release`]: `tests/dmac.rs` **17 of 17** — the eight programs, each equal to its record word
+for word (VIF0's stand-in receiving the three packets' zeros and no tag; VIF1's the 70 qwords of the ring's cnt packets;
+V-blank lasting 22 lines; 262 H-blank ticks a field; the dividers within a tick of 16:1); the console text's thirteen
+MADR lines; on the units directly, the burst's and the release's cycles, the slice's division, a channel without DREQ
+scheduling nothing until woken, group A before group C, a bus error with BEIS unmasked, a timer's flag at its tick and
+nothing scheduled once settled, ZRET's sequence, and the board scheduling no H-blank edge until a timer asks for one.
+The crate's other tests unchanged: lib **18 of 18**, `cop0` **19 of 19**, `fpu` **9 of 9**, `interpreter` **23 of 23**,
+`mmi` **13 of 13**, `programs` **3 of 3**; `dmac` and lib also under `test-checked`; clippy clean.
+
+### 20.8 On the referees (measured 2026-10-25)
+
+**The project's programs.** `examples/s11.rs` writes each as an ELF with its expected record; `ps2referee.py ram …
+--until 1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one
+process at a time. Only the records were read.
+
+| Program (graded words) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s11-spr` (156) | 1 | 15 | neither holds a channel for PCE with CDEn clear (D-41); Play! loses the transfer held by D_ENABLEW and by DMAE and keeps 17 bits of QWC |
+| `s11-chain` (294) | 17 | 14 | neither sets D_PCR.PCE from a tag (D-41); call on toSPR: PCSX2 moves its packet and ends with TADR at the tag, Play! performs the call (D-37); PCSX2 copies MADR to D_STADR after every destination packet, not only cnts (D-34), and does not end on an undefined destination tag (D-37); Play! ignores TIE in the destination chain; TTE's tag quadword equal on both (D-36) |
+| `s11-callret` (72) | 1 | — | PCSX2 moves the call's packet at ASP 2 (D-37); Play! never wrote its done word |
+| `s11-interleave` (480) | 0 | 0 | both lineages equal the manual's rule and the console text |
+| `s11-stall` (38) | 10 | 12 | neither holds the drain; Play! does not move D_STADR (D-34) |
+| `s11-mfifo` (62) | 0 | 8 | PCSX2 equal, MEIS, the wrap and TADR left at the end tag (D-35) among them; Play! sets no MEIS and holds no drain |
+| `s11-intc` (74) | 17 | — | PCSX2 takes INT0 at its edge with IP2 and INT1 with IP3 (D-15), but no request latched while masked and unmasked later, and none pending when IE is set (D-39); Play! never wrote its done word, its BIOS taking no interrupt through the vector (§16.6) |
+| `s11-timers` (54) | 1 | 4 | PCSX2 counts 525 H-blanks between two V-blank starts (D-42); Play! has no ZRET, sets EQUF without CMPE and does not wrap the count at 16 bits; both count in gate mode 1 before the first edge and keep COUNT across MODE's write (D-38) |
+
+**ps2autotests on PCSX2.** The seven programs of the stage's gate call the BIOS's kernel, so Sapphire runs them with
+S10. Run now through `ps2referee.py tty pcsx2 … --channel iop` (Americas BIOS) and compared with their expected texts,
+the consoles' outputs, after line ends are normalised [M `diff`]:
+
+| Program (lines) | PCSX2 |
+|---|---|
+| `dma/dmac/cpcond` (8), `dma/dmac/tagintr` (10) | equal |
+| `dma/spr/chain` (25), `dma/spr/interleave` (629), `dma/spr/normal` (36) | equal |
+| `kernel/ee/interrupt/dmac_order` (9), `kernel/ee/interrupt/intc_order` (10) | equal |
+
+So **PCSX2's lineage reproduces every console text on the DMAC's scratchpad channels, its tag interrupt and CPCOND0, and
+the kernel's interrupt handler order**, unlike the FPU (§19.6): it can be trusted on what those texts exercise, and it
+supplies the readings D-35 and D-38 where the manual is silent. Its gaps are what no text exercises: stall control, the
+priority control, undefined tags and the interrupt lines' levels. The kernel tests exercise the BIOS's handler lists
+over the INTC and the DMAC, which on Sapphire waits for S10 and S24's BIOS.
+
+### 20.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | a chain tag's ADDR taken from its first word instead of bits 62..32 | `source_and_destination_chains_walk_their_tags_as_chapter_5_says`, `call_and_ret_push_and_pop_the_address_stack` |
+| F2 | the stall source never copying its MADR to D_STADR, so a held drain never resumes | `stall_control_holds_and_releases_the_drain`, `source_and_destination_chains_walk_their_tags_as_chapter_5_says` |
+| F3 | BUSCLK/16 counted at BUSCLK/8 | `the_timers_count_compare_overflow_and_gate_as_chapter_4_says`, `a_timer_is_evaluated_at_its_flag_and_not_before` |
+
+Each was applied, `tests/dmac.rs` run, and the source restored [M].
+
+### 20.10 What the plan got wrong, or left open
+
+- **The brief's and §5.1's "S1's scheduler"**: S1 built none (§16.11 said so); the scheduler is built here, each unit
+  reporting its next event and the board taking the earliest, as Diamond's bus does, with D-0's ratio in `clock.rs`.
+- **§3.2's row for the DMAC, INTC and timers** names the referees as the secondary oracle: PCSX2 is one for what the
+  console texts exercise (§20.8) and for nothing else here; Play! is one for interleave alone.
+- **S11's gate** names three folders of ps2autotests that need the BIOS's kernel: they are met on PCSX2 against their
+  texts and wait for S10 on Sapphire, as `ee_simd` and `ee_fpu` did at S8 and S9.
+- **The H-blank and V-blank** belong to the PCRTC (S20) but S11's timers and INTC need them: the stand-in (§20.5) is the
+  plan's gap made explicit, and the referees disagree on it (D-42).
+
+### 20.11 Questions this stage leaves
+
+1. **Q1 [routine], the stall condition's "8" (D-34).** *Recommended*: keep it as 8 qwords, Figure 5-7's reading, since
+   neither lineage models stall control; look again if a game at S28 stalls a drain.
+2. **Q2 [routine], the interrupt lines as levels (D-39).** *Recommended*: keep the manual's level semantics, which
+   PCSX2 departs from; the kernel tests at S10 exercise the handlers over these lines on the player's BIOS and will show
+   any program that depends on the difference.
+3. **Q3 [routine], undefined tags (D-37).** *Recommended*: keep §5.4's reading (the transfer ends, nothing moved), the
+   two lineages disagreeing with each other and with it.
+4. **Q4 [routine], the blanking stand-in (D-42).** *Recommended*: keep ps2tek's 262 lines and 22 of V-blank, which Play!
+   agrees with, until S20 builds the PCRTC; PCSX2's 525 H-blanks between V-blank starts is the first thing S20 should
+   explain.
+5. **Q5 [routine], the DMAC's cost to the core (§20.3, 3 and 4).** *Recommended*: leave the core unstalled by the DMAC
+   until S32's bench shows a game whose timing depends on it; modelling the core's bus requests is a cost at every
+   uncached access.
+
+### 20.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.1 (the DMAC, INTC and timers row), §2, §3.2, §5.1, §5.2, §7 and §11; this page's §16 to §19;
+`Sapphire_Disputes.md` D-0 to D-33; `Sapphire_References.md` §1.1 and §3; Diamond's `bus.rs` scheduling (the project's own
+code, for the event form); `ps2referee.py`'s usage. Sony's *EE User's Manual* chapters 2, 3, 4 and 5 whole; the *GS
+User's Manual* searched for the blanking's timing (none given). ps2tek at `1c91660`: "EE Timers", "DMA Controller" with
+its I/O, chain mode, MFIFO and interrupt sections, "EE Interrupt Controller" (its D_ENABLEW line 1680, excluded for
+replacement writers, was passed over by this writer, who writes no open BIOS). ps2autotests' `dma/dmac/*.expected`,
+`dma/spr/*.expected` and `kernel/ee/interrupt/*.expected` (the consoles' texts, not the programs' source). No emulator,
+SDK, loader or ps2autotests source and no firmware.
+
+### 20.13 What this stage does not cover
+
+- The machine running programs, and ps2autotests on Sapphire: S10. The machine (`machine.rs`) does not yet hold a
+  `System`; the programs run through the tests.
+- The peripherals behind channels 0 to 7: VIF0 and VIF1 (S14), the GIF (S15), the IPU (S27), the SIF (S22), each
+  implementing `dmac::Peripherals`; the VU memories the scratchpad channels can reach in burst mode (S12, S13).
+- The PCRTC's own H-blank and V-blank (S20); the SBUS interrupt and the timers' HOLD (S22); the GS's interrupt (S16).
+- The state format's new contents (the DMAC's, INTC's and timers' registers, the board's time): `SPH2` gains them with
+  the rest of the EE (S10, S30).

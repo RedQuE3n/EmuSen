@@ -143,7 +143,7 @@ impl Board {
         self.now = self.now.max(t);
     }
 
-    /// INT0, INT1 and CPCOND0 as the core sees them now.
+    /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
     pub fn lines(&self) -> (bool, bool, bool) {
         (self.intc.int0(), self.dmac.int1(), self.dmac.cpcond0())
     }

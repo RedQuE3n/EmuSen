@@ -1,7 +1,7 @@
 //! The H-blank and V-blank stand-in (Sapphire_Native.md §20.5): the two signals the EE timers count and gate on and the
 //! INTC's V-blank sources take, generated from a television standard's line and field until the PCRTC (S20) drives
 //! them. A field starts at time 0 with line 0; H-blank is high for the first `clock::HBLANK` bus cycles of each line,
-//! V-blank from line `active` to the field's end.
+//! V-blank from line `active` to the field's end. The referees' fields differ (Sapphire_Disputes.md D-42).
 
 use crate::clock::{self, BUS, Standard};
 

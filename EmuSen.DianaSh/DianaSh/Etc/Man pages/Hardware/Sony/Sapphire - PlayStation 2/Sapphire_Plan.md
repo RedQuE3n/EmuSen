@@ -532,6 +532,9 @@ D-0. The progressive and 1080i modes some games offer need the profile's answer 
   privileged register read, a local-to-host transfer, SIGNAL, FINISH and LABEL; the IOP at SIF registers and SIF DMA.
   Exact where the observation is the only coupling [A], which the project's programs test at each stage, and the
   basis for running those units on threads later without losing exactness (§5.12).
+- *Built 2026-10-25 at S11* (`Sapphire_Native.md` §20.2, §20.3): the scheduler did not exist before S11; each unit now
+  reports its next event (a DMA unit's end, a timer's flag, a blanking edge) and the board takes the earliest, as
+  Diamond's bus does, nothing polled cycle by cycle; the clock's figures are `clock.rs`'s, D-0's one place.
 
 ### 5.2 The EE's timing model
 
@@ -911,7 +914,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S11** | DMAC (ten channels, chain and interleave modes, tags, the scratchpad channels, stall control), INTC, EE timers *(decided 2026-10-25 by the tester: built before S10, directly after S9)* | `dma/dmac/*`, `dma/spr/*`, `kernel/ee/interrupt/*`, which need the BIOS's kernel: on the referees against their console texts at S11, on Sapphire with S10; the project's bare programs on each mechanism meanwhile |
+| **S11** | DMAC (ten channels, chain and interleave modes, tags, the scratchpad channels, stall control), INTC, EE timers *(decided 2026-10-25 by the tester: built before S10, directly after S9)* | `dma/dmac/*`, `dma/spr/*`, `kernel/ee/interrupt/*`, which need the BIOS's kernel: on the referees against their console texts at S11, on Sapphire with S10; the project's bare programs on each mechanism meanwhile *Built 2026-10-25, `Sapphire_Native.md` §20: met on the interpreter, eight programs and 1,230 graded words equal to the EE User's Manual's chapters 3 to 5, the interleave arithmetic also to the console text; the seven console texts reproduced by PCSX2; neither referee models stall control or the priority control, and PCSX2 takes an interrupt only as its request rises; the channels whose peripheral comes later end at `dmac::Peripherals`, the H-blank and V-blank a stand-in until S20; D-34 to D-42, D-15 closed.* |
 | **S12** | VU0 macro mode, the VU float | `cpu/vu0_macro/*` |
 | **S13** | VU micro mode, both units: the pipelines, flags, Q and P, EFU, branches, XGKICK, E/D/T | `vu/lower/*`, `vu/upper/clip`, `vu/games/triace` |
 | **S14** | VIF0 and VIF1 | `dma/vif/basic`, `intstall`, `stcycl`, `stmod`, `unpack` |

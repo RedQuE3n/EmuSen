@@ -374,7 +374,7 @@ oracle at all: its exactness can be graded only by documents, by the project's o
 | R5900 integer, branches, delays | ps2autotests `cpu/ee/*` | the project's programs; referees' RAM | dual issue |
 | MMI | `cpu/ee_simd/*` | the project's programs over every encoding against the TX79 manual's definitions *(built at S8 against the EE Core Instruction Set Manual's chapter 3 instead, `Sapphire_Native.md` §18.5)* | — |
 | COP0, TLB, caches | `cpu/ee_cop0/performance`, `memory/ee/default` | the project's programs; referees | timing |
-| FPU | `cpu/ee_fpu/*` | referees | the last bit |
+| FPU | `cpu/ee_fpu/*` | referees *(neither lineage models exponent 255 or the multiplier; the texts carried S9, `Sapphire_Native.md` §19.6)* | the last bit |
 | VU0 macro, VU micro | `cpu/vu0_macro/*`, `vu/lower/*`, `vu/upper/clip`, `vu/games/triace` | the project's microprograms; referees | flag delays |
 | VIF, GIF, DMAC, INTC, timers | `dma/*`, `kernel/ee/interrupt/*` | referees | arbitration |
 | GS | `gs/label`, `gs/signal` | **referees' pictures** of the project's programs; the documents | every rasterisation rule |
@@ -551,7 +551,9 @@ measured separately against that pair.
 §2.12), which equal the TX79's on every integer row and differ on the floating-point ones; the caches wait for S7.
 *Built 2026-10-25 at S7* (§17.5 there): the caches modelled with the documented refill burst as their cost, RDRAM's
 latency still the named loss. *Built 2026-10-25 at S8* (§18.4 there): the multimedia instructions in Wide Operate, the
-multimedia multiply and divide on both multipliers; PLZCW's and QFSRV's untabulated latencies named losses.
+multimedia multiply and divide on both multipliers; PLZCW's and QFSRV's untabulated latencies named losses. *Built
+2026-10-25 at S9* (§19.5 there): the floating-point rows with the FPRs, ACC and FCR31 scoreboarded and one divider for
+DIV.S, SQRT.S and RSQRT.S, the rows §2.12 omits named losses.
 
 ### 5.3 Floating point, exact
 
@@ -567,6 +569,12 @@ the largest single cost of exactness in the VU recompiler and is priced in §5.1
 with clamping on input classes **not** proven equal become a candidate for the default path, compromise C3 of §5.13,
 decided on the classes' measured differences in `ee_fpu/*`, `vu/*` and the bench's anchors against the VU1
 recompiler's measured gain.
+
+*Built 2026-10-25 at S9* (`Sapphire_Native.md` §19): `sapphire::float`, used by the FPU and owed to the VUs. "Rounding
+towards zero" holds of an inexact intermediate, not of the exact result: the adder aligns without a sticky bit, the
+multiplier loses its lowest Booth column, and DIV.S and SQRT.S round to the nearest, as the console texts show
+(`Sapphire_Disputes.md` D-25 to D-28); C3's classes now include every product, every sum that loses bits to
+alignment, and every quotient and root (§19.8 there).
 
 ### 5.4 The GS: an exact software reference, then the device
 
@@ -892,7 +900,7 @@ the enhancements (E) are separate tracks.
 | **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned *Built 2026-10-24, `Sapphire_Native.md` §16: met; 128 mnemonics through `r5900.rs`, seventeen programs equal to the EE Core manual's record, the results equal on PCSX2 and Play! but where D-6 to D-11 record otherwise; neither referee raises address-error, overflow, reserved or unusable exceptions, so those rest on the manual until S10; the EE Core User's Manual's §2.12 and Tables 1-1 to 1-3 pinned.* |
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters *Built 2026-10-25, `Sapphire_Native.md` §17: met on the interpreter, seven programs and 400 graded words equal to the manuals' records, the breakpoints built beside the counters; neither referee maps a program's own TLB entries, models the caches, counts events or takes the TLB, counter, debug or bus error exceptions, so those rules rest on the manuals; D-12 to D-19.* |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 *Built 2026-10-25, `Sapphire_Native.md` §18: met; 91 instructions through `r5900.rs`, nine programs and 20,712 record words equal to the EE Core Instruction Set Manual's chapter 3 on the interpreter and on PCSX2; Play! does not execute eight of them; the six `ee_simd` programs equal their console texts on PCSX2, which decided D-21 and D-22; D-20 to D-23, D-9 closed.* |
-| **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |
+| **S9** | COP1 in software floats (§5.3) | The project's programs on every input class *Built 2026-10-25, `Sapphire_Native.md` §19: met; 34 instructions through `r5900.rs` on `sapphire::float`, the format's one owner, six programs and 48,648 record words equal to chapter 5 on the interpreter; the last bit decided where the console texts of `ee_fpu/*` decide it (no sticky bit in the adder, a Booth multiplier on ft that is not commutative, DIV.S and SQRT.S to the nearest), 900 of their 901 result lines reproduced; neither referee models exponent 255 or the multiplier, PCSX2 reproducing 721 of the texts' 1,068 lines; D-24 to D-33.* |
 | **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not; **the IOP's console kept in a `tty` space**, caught at the IOP's module interface with the output export resolved at run time through the export tables, never at an address in the image *(decided 2026-10-24)* | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
 
 **Phase C — the EE's peripherals**

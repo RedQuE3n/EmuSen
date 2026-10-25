@@ -1,7 +1,8 @@
 //! The EE core's timing model at instruction granularity (Sapphire_Plan.md §5.2, Q14): the issue and latency table
 //! of the EE Core User's Manual, pinned as data, the in-order two-way issue it describes, and from S7 the caches'
-//! refills and the bus's transfers, from S8 the multimedia rows on both multipliers. Sapphire_Native.md §16.4, §17.5
-//! and §18.4 record each rule's source and the losses named.
+//! refills and the bus's transfers, from S8 the multimedia rows on both multipliers, from S9 the floating-point rows
+//! with the FPU's registers, its accumulator, FCR31 and its divider. Sapphire_Native.md §16.4, §17.5, §18.4 and §19.5
+//! record each rule's source and the losses named.
 
 /// A physical pipe of Table 1-1 (EE Core User's Manual §1.3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,7 +112,7 @@ pub const INTEGER: [Row; 15] = [
     row("Multimedia Divide", &[Pipe::I0, Pipe::I1], 37, 37),
 ];
 
-/// §2.12's "Floating-Point Instructions", in its order, pinned now and used from S9.
+/// §2.12's "Floating-Point Instructions", in its order, used from S9 as rows `rows::FLOAT` onward.
 pub const FLOAT: [Row; 11] = [
     row("MTC1", &[Pipe::C1, Pipe::Ls], 2, 1),
     row("Add / Sub / Abs / Neg / C.cond", &[Pipe::C1], 4, 1),
@@ -143,13 +144,34 @@ pub mod rows {
     pub const STORE: usize = 12;
     pub const MMULT: usize = 13;
     pub const MMDIV: usize = 14;
+    /// The floating-point rows follow the integer ones, in `FLOAT`'s order.
+    pub const FLOAT: usize = 15;
+    pub const MTC1: usize = FLOAT;
+    pub const FADD: usize = FLOAT + 1;
+    pub const CVT: usize = FLOAT + 2;
+    pub const FMUL: usize = FLOAT + 3;
+    pub const MFC1: usize = FLOAT + 4;
+    pub const FMOVE: usize = FLOAT + 5;
+    pub const FDIV: usize = FLOAT + 6;
+    pub const FSQRT: usize = FLOAT + 7;
+    pub const FRSQRT: usize = FLOAT + 8;
+    pub const FMADD: usize = FLOAT + 9;
+    pub const LWC1: usize = FLOAT + 10;
 }
 
-/// The resources the scoreboard tracks: the 32 GPRs, then HI/LO, HI1/LO1 and SA.
+/// A row of either table by its index (`rows`).
+pub fn row_of(i: usize) -> &'static Row {
+    if i < rows::FLOAT { &INTEGER[i] } else { &FLOAT[i - rows::FLOAT] }
+}
+
+/// The resources the scoreboard tracks: the 32 GPRs, then HI/LO, HI1/LO1 and SA, the 32 FPRs, ACC and FCR31.
 pub const HILO0: usize = 32;
 pub const HILO1: usize = 33;
 pub const SA: usize = 34;
-const RESOURCES: usize = 35;
+pub const FPR0: usize = 35;
+pub const ACC: usize = FPR0 + 32;
+pub const FCR31: usize = ACC + 1;
+const RESOURCES: usize = FCR31 + 1;
 
 /// A cache line's refill: "a burst of 4 bus cycles (8 CPU cycles)" (EE Core User's Manual §6.3.3), the minimum.
 pub const REFILL: u64 = 8;
@@ -166,9 +188,9 @@ pub struct Issue {
     pub category: Category,
     pub row: usize,
     /// Resources read, as a bit per resource index.
-    pub reads: u64,
+    pub reads: u128,
     /// Resources written.
-    pub writes: u64,
+    pub writes: u128,
     /// A control transfer that is taken ends the issue group after its delay slot.
     pub taken: bool,
     /// Cycles its fetch waited for the instruction cache's refill or an uncached fetch.
@@ -194,11 +216,13 @@ pub struct Timing {
     ready: [u64; RESOURCES],
     mac0_free: u64,
     mac1_free: u64,
+    /// The cycle the FPU's divider, which DIV.S, SQRT.S and RSQRT.S share, takes its next operation [A].
+    fdiv_free: u64,
     /// The cycle the last instruction issued in, its category and pipe, its writes, and whether it may take a partner.
     last: u64,
     last_category: Option<Category>,
     last_pipe: u8,
-    last_writes: u64,
+    last_writes: u128,
     open: bool,
     /// The earliest cycle the next instruction may issue in (a Y pair's stall, a group's end).
     floor: u64,
@@ -216,6 +240,7 @@ impl Default for Timing {
             ready: [0; RESOURCES],
             mac0_free: 0,
             mac1_free: 0,
+            fdiv_free: 0,
             last: 0,
             last_category: None,
             last_pipe: 0,
@@ -243,7 +268,7 @@ impl Timing {
 
     /// Charges one instruction and returns the cycle it issued in.
     pub fn issue(&mut self, i: Issue) -> u64 {
-        let row = &INTEGER[i.row];
+        let row = row_of(i.row);
         let next = if self.instructions == 0 { 0 } else { self.last + 1 };
         let mut earliest = if i.fetch > 0 { next.max(self.floor) + i.fetch } else { 0 };
         if i.data > 0 {
@@ -261,6 +286,10 @@ impl Timing {
         }
         if uses_mac1 {
             earliest = earliest.max(self.mac1_free);
+        }
+        let uses_fdiv = matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT);
+        if uses_fdiv {
+            earliest = earliest.max(self.fdiv_free);
         }
         let (p0, p1) = logical(i.category);
         let mut stall = 0;
@@ -297,6 +326,9 @@ impl Timing {
         }
         if uses_mac1 {
             self.mac1_free = at + u64::from(row.throughput);
+        }
+        if uses_fdiv {
+            self.fdiv_free = at + u64::from(row.throughput);
         }
         self.open = !paired;
         self.last = at;

@@ -226,6 +226,11 @@ class TtyTests(unittest.TestCase):
         self.assertEqual({c: (v["EnableEEConsole"], v["EnableIOPConsole"]) for c, v in ps2referee.TTY_CHANNELS.items()},
                          {"ee": ("true", "false"), "iop": ("false", "true"), "none": ("false", "false")})
 
+    def test_the_ee_recompiler_is_written_every_run_so_an_interpreter_run_does_not_persist(self):
+        self.assertEqual(ps2referee.PCSX2_SETTINGS["EmuCore/CPU/Recompiler"], {"EnableEE": "true"})
+        kept = ps2referee.ini_merge("[EmuCore/CPU/Recompiler]\nEnableEE = false\nEnableIOP = true\n", {"EmuCore/CPU/Recompiler": {"EnableEE": "true"}})
+        self.assertEqual(kept, "[EmuCore/CPU/Recompiler]\nEnableEE = true\nEnableIOP = true\n\n")
+
 
 if __name__ == "__main__":
     unittest.main()

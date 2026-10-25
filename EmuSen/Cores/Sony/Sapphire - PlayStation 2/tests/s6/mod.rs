@@ -518,7 +518,7 @@ pub fn handler() -> String {
 pub const VECTOR: u32 = 0x8000_0180;
 
 /// What the handler records for an exception of `code` from `epc`; CE is defined for the unusable exception alone.
-fn taken(p: &mut Program, code: u32, epc: u32, bd: bool, ce: u32, badvaddr: Option<u64>, status: u32) {
+pub fn taken(p: &mut Program, code: u32, epc: u32, bd: bool, ce: u32, badvaddr: Option<u64>, status: u32) {
     let cause = code << 2 | (bd as u32) << 31;
     p.expected.push(Some(cause as i32 as i64 as u64));
     p.expected.push(if code == 11 { Some(ce as u64) } else { None });

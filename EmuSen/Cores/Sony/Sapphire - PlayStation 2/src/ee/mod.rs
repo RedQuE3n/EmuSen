@@ -1,12 +1,13 @@
-//! The EE core (R5900) interpreter (Sapphire_Plan.md §7, S6 to S8): 128-bit GPRs, the MIPS III subset, the second
-//! multiplier, branch-likely, LQ and SQ, the multimedia instructions; COP0 in full with the TLB, the caches and the
+//! The EE core (R5900) interpreter (Sapphire_Plan.md §7, S6 to S9): 128-bit GPRs, the MIPS III subset, the second
+//! multiplier, branch-likely, LQ and SQ, the multimedia instructions; COP1, the FPU, on `crate::float`; COP0 in full with the TLB, the caches and the
 //! scratchpad, the counters and the breakpoints; each instruction decoded by `emusen_mips::r5900` and executed as the EE Core Instruction Set
-//! Manual's Operation sections write it, and charged to the timing model (`timing`). Sapphire_Native.md §16 to §18
+//! Manual's Operation sections write it, and charged to the timing model (`timing`). Sapphire_Native.md §16 to §19
 //! are the record; the interpreter is the reference later speed work is graded against.
 
 pub mod bus;
 pub mod cache;
 pub mod cop0;
+pub mod fpu;
 pub mod map;
 mod memory;
 mod mmi;
@@ -40,6 +41,7 @@ pub mod status {
     pub const BEV: u32 = 1 << 22;
     pub const DEV: u32 = 1 << 23;
     pub const CU0: u32 = 1 << 28;
+    pub const CU1: u32 = 1 << 29;
 }
 
 /// A level 1 exception, with what its code in Cause.ExcCode needs (EE Core User's Manual Table 4-3).
@@ -102,7 +104,7 @@ pub enum Level2 {
     Debug,
 }
 
-/// Why the interpreter stopped: an instruction a later stage implements (COP1, COP2).
+/// Why the interpreter stopped: an instruction a later stage implements (COP2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Halt {
     Unimplemented { pc: u32, word: u32 },
@@ -118,6 +120,10 @@ pub struct Ee {
     pub hi: u128,
     pub lo: u128,
     pub sa: u64,
+    /// The FPU's 32 registers, its accumulator and its control and status register (EE Core User's Manual §8.2, §8.3).
+    pub fpr: [u32; 32],
+    pub acc: u32,
+    pub fcr31: u32,
     pub pc: u32,
     next_pc: u32,
     /// Whether the instruction at `pc` is in a delay slot.
@@ -168,6 +174,9 @@ impl Ee {
             hi: 0,
             lo: 0,
             sa: 0,
+            fpr: [0; 32],
+            acc: 0,
+            fcr31: fpu::FCR31_FIXED,
             pc,
             next_pc: pc.wrapping_add(4),
             delay: false,

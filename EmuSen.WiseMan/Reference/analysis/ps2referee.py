@@ -5,9 +5,9 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] ADDRESS:WORDS ...
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
-    ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE]
+    ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -16,7 +16,8 @@ BIOS folder; Play! takes none. --for is wall seconds for the standalone referees
 names the done word: a standalone run reads RAM as soon as the word at ADDRESS reads VALUE (hexadecimal both), and a
 probe run is refused unless it holds it at frame N. --again reads the same words S seconds later, with the CPU time the
 referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
-speed instead of unlimited. ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
+speed instead of unlimited; --interpreter runs PCSX2's EE on its interpreter instead of its recompiler, the default, so
+the two can be weighed apart (Sapphire_Native.md §19.6). ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
 console's speed and prints only what PINE says of it (its title, serial and status) and the CPU time it took, never
 the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5). `tty` runs a
 program that prints (ps2autotests') on PCSX2 with one of its log channels on, the EE's console, the IOP's or neither,
@@ -67,6 +68,7 @@ PCSX2_SETTINGS = {
     "EmuCore/GS": {"Renderer": "13"},
     "SPU2/Output": {"Backend": "Null", "OutputMuted": "true"},
     "Logging": {"EnableFileLogging": "true"},
+    "EmuCore/CPU/Recompiler": {"EnableEE": "true"},
 }
 
 # The console channels PCSX2's log can carry, one switched on at a time to learn which a program prints on (P2).
@@ -428,7 +430,7 @@ def run_inner(job, name, seconds):
         return out, text
 
 
-def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None):
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
     settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
     data = CACHE / "pcsx2-data"
@@ -439,7 +441,8 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
         ini.parent.mkdir(parents=True, exist_ok=True)
         wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
                   "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
-                  "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]}}
+                  "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]},
+                  "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
         root = CACHE / "pcsx2/squashfs-root"
         job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui"] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
@@ -574,6 +577,11 @@ def main(argv):
     throttled = "--throttled" in rest
     if throttled:
         rest.remove("--throttled")
+    interpreter = "--interpreter" in rest
+    if interpreter:
+        if referee != "pcsx2":
+            die("--interpreter is PCSX2's", 2)
+        rest.remove("--interpreter")
     until = option("--until")
     until = tuple(int(x, 16) for x in until.split("=")) if until else None
     dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
@@ -581,7 +589,7 @@ def main(argv):
         if referee != "pcsx2" or expected is None or channel not in TTY_CHANNELS:
             die("tty runs on pcsx2 with an expected text, --channel ee, iop or none", 2)
         marks = [line.rstrip() for line in expected.replace("\r", "").split("\n") if line.strip()]
-        out = run_pcsx2(target, market, count, None, [], 0, True, channel, marks[-1] if marks else None)
+        out = run_pcsx2(target, market, count, None, [], 0, True, channel, marks[-1] if marks else None, interpreter)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         region, found, total = program_text(out.pop("log", ""), expected)
@@ -601,7 +609,7 @@ def main(argv):
     if until is None and referee in STANDALONE:
         die("--until names the done word, which a standalone run waits for", 2)
     if referee == "pcsx2":
-        out = run_pcsx2(target, market, count, until, dumps, again, not throttled)
+        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
     elif referee == "play":

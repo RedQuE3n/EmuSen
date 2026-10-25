@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 and S8 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -27,7 +27,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   project's programs against the manuals, with what each referee models and does not; and stage S8 (2026-10-25): the
   multimedia instructions, PLZCW and QFSRV from the EE Core Instruction Set Manual's chapter 3, their timing on both
   multipliers, the project's programs over every encoding equal on the interpreter and on PCSX2, and ps2autotests'
-  `ee_simd` console texts reproduced by PCSX2.
+  `ee_simd` console texts reproduced by PCSX2; and stage S9 (2026-10-25): COP1 on `sapphire::float`, the PlayStation 2's
+  single-precision format in software, its last bit decided by ps2autotests' `ee_fpu` console texts (900 of 901 lines),
+  the project's programs over every input class, and neither referee a witness for the FPU's arithmetic.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -41,7 +43,8 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   manual and ps2tek differ over the R5900's map and where the documents leave the vector units' layout open, all five
   documented by Sony's manuals at S6; D-6 to D-11 since S6, the integer interpreter's readings against the referees; D-12 to D-19 since S7, where the EE
   Core User's Manual contradicts itself on COP0 and where the referees answered against it; D-20 to D-23 since S8, where
-  the multimedia pages contradict themselves or leave results undefined and the console's record decides.
+  the multimedia pages contradict themselves or leave results undefined and the console's record decides; D-24 to D-33
+  since S9, SQRT.S's operand, the FPU's last bit, its zeros, flags and control registers.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

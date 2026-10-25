@@ -150,14 +150,12 @@ fn eret_returns_through_errorepc_when_erl_is_set() {
 
 #[test]
 fn a_later_stages_instruction_halts_with_its_word_and_a_usable_coprocessor() {
-    let (mut ee, mut ram) = machine("nop\nmfc1 t0, f1");
-    ee.cop0[cop0::STATUS] = 1 << 29;
-    steps(&mut ee, &mut ram, 1);
-    assert_eq!(ee.step(&mut ram), Err(Halt::Unimplemented { pc: ORIGIN + 4, word: 0x4408_0800 }));
-    assert_eq!(ee.pc, ORIGIN + 4, "the machine is left before the instruction");
-    let (mut ee, mut ram) = machine("qmfc2 t0, vf1");
+    let (mut ee, mut ram) = machine("nop\nqmfc2 t0, vf1");
     ee.cop0[cop0::STATUS] = 1 << 30;
-    assert!(matches!(ee.step(&mut ram), Err(Halt::Unimplemented { .. })), "COP2 is S12's");
+    steps(&mut ee, &mut ram, 1);
+    let word = emusen_mips::assemble("qmfc2 t0, vf1", 0, &emusen_mips::Dialect::R5900).expect("assembles")[0];
+    assert_eq!(ee.step(&mut ram), Err(Halt::Unimplemented { pc: ORIGIN + 4, word }), "COP2 is S12's");
+    assert_eq!(ee.pc, ORIGIN + 4, "the machine is left before the instruction");
 }
 
 // The timing model (EE Core User's Manual §1.3.5, §1.3.6, §2.12).

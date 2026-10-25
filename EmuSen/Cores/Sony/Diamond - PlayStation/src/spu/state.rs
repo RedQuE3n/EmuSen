@@ -22,7 +22,7 @@ impl Spu {
     pub fn write_state(&self, w: &mut StateWriter) {
         let v = &self.voices;
         w.u16s("Registers", &self.regs);
-        w.u16s("VoiceRegisters", &v.iter().flat_map(|v| [v.volume[0], v.volume[1], v.pitch, v.start, v.adsr[0], v.adsr[1], v.repeat]).collect::<Vec<_>>());
+        w.u16s("VoiceRegisters", &v.iter().flat_map(|v| [v.volume[0], v.volume[1], v.pitch, v.start as u16, v.adsr[0], v.adsr[1], v.repeat as u16]).collect::<Vec<_>>());
         w.u32s("VoiceAddresses", &v.iter().map(|v| v.address).collect::<Vec<_>>());
         w.u32s("VoiceCounters", &v.iter().map(|v| v.counter).collect::<Vec<_>>());
         w.bytes("VoiceDecoded", &v.iter().map(|v| v.decoded).collect::<Vec<_>>());
@@ -66,7 +66,7 @@ impl Spu {
         r.u16s(&mut out)?;
         for (n, v) in self.voices.iter_mut().enumerate() {
             let g = &regs[7 * n..7 * n + 7];
-            (v.volume, v.pitch, v.start, v.adsr, v.repeat) = ([g[0], g[1]], g[2], g[3], [g[4], g[5]], g[6]);
+            (v.volume, v.pitch, v.start, v.adsr, v.repeat) = ([g[0], g[1]], g[2], g[3] as u32, [g[4], g[5]], g[6] as u32);
             v.address = addresses[n] & 0x7FFFF;
             v.counter = counters[n] % (super::voice::BLOCK_SAMPLES << 12);
             v.decoded = decoded[n].min(28) & !3;

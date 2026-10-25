@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18 and S15 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15 and S26 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -75,7 +75,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   stores through a FIFO of 16 qwords), the PACKED, REGLIST and IMAGE formats with one owner, the arbitration at packet
   ends, PATH3's masks and the intermittent mode, GIF_CTRL's reset and pause and GIF_STAT, S16's, S17's and S18's programs run
   whole through PATH3 and VIF1, PCSX2 a witness for the formats and the masks and Play! for a held PATH2, and S14's
-  second DIRECT found a PCSX2 defect.
+  second DIRECT found a PCSX2 defect;
+  and stage S26 (2026-10-25, §32): the SPU2, its voice moved first into `blackmoon-spu` with Diamond's goldens unchanged,
+  two cores on the IOP's bus and DMA channels 4 and 7, the mix, effects areas, AutoDMA, core 0 into core 1 and the IRQ
+  addresses, at 48,000 Hz exactly, its sound graded through the output areas PCSX2 also writes and its captured output.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -112,8 +115,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the blend between levels;
   D-280 to D-291 since S15, a packet holding the GIF, descriptors 0Ch and 0Dh, GIF_STAT's fields, TTE on channel 2, RST
   and MSKPATH3, the intermittent mode's slices, the GIF's timing, BUSDIR, PATH1's wrap, the masks at the arbitration,
-  PCSX2's second DIRECT and Q.
+  PCSX2's second DIRECT and Q; D-260 to D-270 since S26, the SPU2's key on, output
+  areas, mix, transfers, effects area, IRQ addresses, read-backs, AutoDMA, a voice's start, the voice's rules where PCSX2
+  departs, and the output's level.
 
-The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
+The shared Sony hardware Sapphire uses (the IOP's R3000A, the SPU2's voices) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this
 documentation set is organised.

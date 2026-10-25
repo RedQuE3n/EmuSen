@@ -2,18 +2,21 @@
 //! the reverb unit, the capture buffers, the IRQ address, the transfer FIFO that DMA4 and the CPU fill and empty, CD
 //! audio in, and the mix at one sample every 768 system cycles. It is brought to the present at each access and each
 //! frame's end, sample by sample. Diamond_SPU.md is its record: what each rule is written from, and what was chosen.
+//! The voices, the envelopes, the noise and the reverb's algorithm are `blackmoon-spu`'s (BlackMoon_SPU.md); the
+//! registers, the mix, the transfer, the capture buffers, CD audio and the clock are Diamond's.
 
-pub mod envelope;
 pub mod reverb;
 pub mod state;
-pub mod tables;
 pub mod voice;
+
+pub use blackmoon_spu::{envelope, tables};
 
 #[cfg(test)]
 mod tests;
 
 use emusen_native::samples::SampleQueue;
 
+use blackmoon_spu::noise::Noise;
 use envelope::Envelope;
 use reverb::Reverb;
 use voice::{Voice, Watch, sweep};
@@ -148,11 +151,11 @@ impl Spu {
                     0 => v.volume[0],
                     1 => v.volume[1],
                     2 => v.pitch,
-                    3 => v.start,
+                    3 => v.start as u16,
                     4 => v.adsr[0],
                     5 => v.adsr[1],
                     6 => v.envelope.level as u16,
-                    _ => v.repeat,
+                    _ => v.repeat as u16,
                 }
             }
             reg::ENDX => self.endx as u16,
@@ -186,11 +189,11 @@ impl Spu {
                     0 => v.volume[0] = value,
                     1 => v.volume[1] = value,
                     2 => v.pitch = value,
-                    3 => v.start = value,
+                    3 => v.start = value as u32,
                     4 => v.adsr[0] = value,
                     5 => v.adsr[1] = value,
                     6 => v.envelope.level = value as i16,
-                    _ => v.repeat = value,
+                    _ => v.repeat = value as u32,
                 }
                 return;
             }
@@ -398,12 +401,7 @@ impl Spu {
         let mut previous = 0i16;
         for n in 0..VOICES {
             let v = &mut self.voices[n];
-            let mut step = v.pitch as u32;
-            if n > 0 && pmon & 1 << n != 0 {
-                let factor = previous as i32 + 0x8000;
-                step = ((step as i16 as i64 * factor as i64) >> 15) as u32 & 0xFFFF;
-            }
-            let step = step.min(0x4000);
+            let step = voice::step(v.pitch, (n > 0 && pmon & 1 << n != 0).then_some(previous));
             let noise = (non & 1 << n != 0).then_some(self.noise);
             if v.tick(&self.ram, step, noise, &mut watch) {
                 self.endx |= 1 << n;
@@ -456,17 +454,8 @@ impl Spu {
 
     /// The noise generator's cycle (psx-spx "SPU Noise Generator"), at ATTR's shift and step.
     fn step_noise(&mut self, a: u16) {
-        let step = (a >> 8 & 3) as i32 + 4;
-        let shift = (a >> 10 & 0xF) as i32;
-        self.noise_timer -= step;
-        let n = self.noise as u16;
-        let parity = (n >> 15 ^ n >> 12 ^ n >> 11 ^ n >> 10 ^ 1) & 1;
-        if self.noise_timer < 0 {
-            self.noise = (n << 1 | parity) as i16;
-            self.noise_timer += 0x2_0000 >> shift;
-            if self.noise_timer < 0 {
-                self.noise_timer += 0x2_0000 >> shift;
-            }
-        }
+        let mut n = Noise { level: self.noise, timer: self.noise_timer };
+        n.tick(a >> 10, a >> 8);
+        (self.noise, self.noise_timer) = (n.level, n.timer);
     }
 }

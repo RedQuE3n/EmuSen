@@ -14,6 +14,8 @@ crate-type = ["rlib"]
 emusen-native = { path = "../../Shared/emusen-native" }
 blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-gte = { path = "../BlackMoon-HW/blackmoon-gte" }
+# The SPU's voices, envelopes, noise and reverb algorithm, shared with Sapphire's SPU2 (Sapphire_Plan.md §9.3, BlackMoon_SPU.md).
+blackmoon-spu = { path = "../BlackMoon-HW/blackmoon-spu" }
 emusen-disc = { path = "../../Shared/emusen-disc" }
 emusen-mips = { path = "../../Shared/emusen-mips" }
 

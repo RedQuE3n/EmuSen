@@ -260,6 +260,17 @@ its pads, cards and multitap with no input given, so a pressed button cannot be 
 IOP program. PCSX2 makes a new card with every byte FFh and formats none without a BIOS, so a referee's formatted card
 waits for a BIOS (part B).
 
+### 4.6 The SPU2's sound (2026-10-25, stage S26)
+
+PCSX2's SPU2 can be heard two ways (`Sapphire_Native.md` §32.8). **The output areas**: PCSX2 writes each sample into
+sound RAM's first 2000h halfwords (each core's voices 1 and 3, core 0's output, every voice sum), which an IOP program
+reads through its DMA channel into its record; these are exact samples, compared under rotation with `examples/s26.rs`'s
+`grade` and `diff` (`Sapphire_Disputes.md` D-261). **The captured sound**: `ps2referee.py ram … --throttled --wave DIR`
+gives PCSX2 its SDL backend with SDL 3's disk driver, which writes the output as 32-bit float stereo at 48 kHz to
+`DIR/pcsx2.raw`; that output has passed PCSX2's own output stage (a high-pass, about half the level, D-270), so it shows
+routing and level and not samples. The settings return to the null backend on the next run without `--wave`. Play!
+reaches no IOP program (§4.3), so the SPU2 has one lineage.
+
 ## 5. Exposure, and a retail disc
 
 - **This stage's writer is exposed** (`Sapphire_Plan.md` §1.4): while finding why PCSX2 failed to draw, the writer read

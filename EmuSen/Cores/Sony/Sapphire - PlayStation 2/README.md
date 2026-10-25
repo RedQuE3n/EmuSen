@@ -34,5 +34,9 @@ grades them by `tests/s18/`'s programs and S17's model extended by `tests/s18/ma
 the GIFtag's formats (`gif::packing`, their one owner); `tests/gif.rs` grades it by `tests/s15/`'s programs and runs
 S16's, S17's and S18's programs whole through PATH3 and VIF1, and `cargo run --release --example s15 -- <folder>` writes the
 programs for the referees.
+`src/spu2/` is the SPU2 (stage S26, `Sapphire_Native.md` §32): two cores of `blackmoon-spu`'s voices on the IOP's
+bus; `tests/spu2.rs` grades it by `tests/s26/gate.rs`'s programs, and `cargo run --release --example s26 -- <folder>`
+writes them and the stage's measurement programs for the referees, `s26 grade <name> <run>` and `s26 diff <name> <run>`
+grading and comparing a run's record.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

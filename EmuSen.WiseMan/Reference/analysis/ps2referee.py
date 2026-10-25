@@ -5,7 +5,7 @@ See Sapphire_Referees.md §2 for what each referee is, how it is driven and why,
 weighed. Nothing here reads a referee's source, and the BIOS is only ever passed to a referee, never read.
 
     ps2referee.py fetch
-    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--screen FILE] [--cards A,B] [--multitap] ADDRESS:WORDS ...
+    ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--wave DIR] [--screen FILE] [--cards A,B] [--multitap] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
 
@@ -21,6 +21,8 @@ the two can be weighed apart (Sapphire_Native.md §19.6); --cards A,B puts the c
 PCSX2's memory card folder, in its two slots for the run, and --multitap plugs a multitap into its first port, both put
 back as they were afterwards (Sapphire_Native.md §30); --disc puts a synthetic disc image in PCSX2's drive while the
 program runs in place of the disc's own (`-elf`), so that the program can read the drive (Sapphire_Native.md §25).
+--wave DIR captures the run's sound: PCSX2's SDL output, unstretched, written by SDL's disk driver to DIR/pcsx2.raw, so
+that a program's sound can be compared sample for sample (Sapphire_Native.md §32.8).
 --screen keeps a probe run's picture at frame N, the core's screen as the probe dumps it, in FILE with its manifest's
 screen line beside it as FILE.json: the project's display programs are graded on PCEE2's software pictures
 (Sapphire_Native.md §29.8); the picture is the program's, taken after the firmware has handed over.
@@ -73,12 +75,17 @@ PCSX2_SETTINGS = {
     "EmuCore": {"EnablePINE": "true", "EnableFastBoot": "true", "EnableDiscordPresence": "false", "EnablePatches": "false",
                 "WarnAboutUnsafeSettings": "false"},
     "EmuCore/GS": {"Renderer": "13"},
-    "SPU2/Output": {"Backend": "Null", "OutputMuted": "true"},
+    "SPU2/Output": {"Backend": "Null", "OutputMuted": "true", "DriverName": "", "SyncMode": "TimeStretch"},
     "Logging": {"EnableFileLogging": "true"},
     "EmuCore/CPU/Recompiler": {"EnableEE": "true"},
 }
 
 # The console channels PCSX2's log can carry, one switched on at a time to learn which a program prints on (P2).
+# The sound a run makes, captured (Sapphire_Native.md §32.8): PCSX2's SDL output with no stretching, which SDL's disk
+# driver writes to a file instead of a device; the environment that chooses the driver is set per run.
+SOUND_CAPTURE = {"Backend": "SDL", "DriverName": "disk", "OutputMuted": "false", "SyncMode": "Disabled", "ExpansionMode": "Disabled",
+                 "StandardVolume": "100", "FastForwardVolume": "100"}
+
 TTY_CHANNELS = {"ee": {"EnableEEConsole": "true", "EnableIOPConsole": "false"},
                 "iop": {"EnableEEConsole": "false", "EnableIOPConsole": "true"},
                 "none": {"EnableEEConsole": "false", "EnableIOPConsole": "false"}}
@@ -442,7 +449,7 @@ PCSX2_CARDS = {"MemoryCards": {"Slot1_Enable": "true", "Slot1_Filename": "Mcd001
                "Pad": {"MultitapPort1": "false"}}
 
 
-def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None, cards=None, multitap=False):
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None, cards=None, multitap=False, wave=None):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
     settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
     data = CACHE / "pcsx2-data"
@@ -456,7 +463,8 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
                   "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]},
                   "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"},
                   "MemoryCards": {**PCSX2_CARDS["MemoryCards"], **({"Slot1_Filename": cards[0], "Slot2_Filename": cards[1]} if cards else {})},
-                  "Pad": {"MultitapPort1": "true" if multitap else "false"}}
+                  "Pad": {"MultitapPort1": "true" if multitap else "false"},
+                  "SPU2/Output": {**PCSX2_SETTINGS["SPU2/Output"], **(SOUND_CAPTURE if wave else {})}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
         root = CACHE / "pcsx2/squashfs-root"
         job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui"] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
@@ -467,12 +475,18 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
             job["cmd"][-2:] = ["-elf", str(target), "--", str(disc)]
         if stop_text:
             job["stop_text"] = stop_text
+        if wave:
+            Path(wave).mkdir(parents=True, exist_ok=True)
+            job["env"].update({"SDL_AUDIO_DRIVER": "disk", "SDL_AUDIO_DISK_OUTPUT_FILE": str(Path(wave) / "pcsx2.raw")})
         try:
             out, text = run_inner(job, "pcsx2", seconds)
         finally:
             if cards or multitap:
                 ini.write_text(ini_merge(ini.read_text(), PCSX2_CARDS))
         out["bios_loaded"] = bios_loaded(text, market)
+        if wave:
+            f = Path(wave) / "pcsx2.raw"
+            out["sound_bytes"] = f.stat().st_size if f.exists() else 0
         if channel:
             out["log"] = text
         return out
@@ -618,6 +632,9 @@ def main(argv):
             die("--multitap is PCSX2's", 2)
         rest.remove("--multitap")
     disc = option("--disc")
+    wave = option("--wave")
+    if wave and (referee != "pcsx2" or mode != "ram"):
+        die("--wave is for ram runs on pcsx2", 2)
     screen = option("--screen")
     if screen and referee not in LIBRETRO:
         die("--screen is for the probe's cores", 2)
@@ -650,7 +667,8 @@ def main(argv):
     if until is None and referee in STANDALONE:
         die("--until names the done word, which a standalone run waits for", 2)
     if referee == "pcsx2":
-        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter, disc=Path(disc).resolve() if disc else None, cards=cards, multitap=multitap)
+        out = run_pcsx2(target, market, count, until, dumps, again, not throttled, interpreter=interpreter, disc=Path(disc).resolve() if disc else None, cards=cards, multitap=multitap,
+                        wave=Path(wave).resolve() if wave else None)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
     elif referee == "play":

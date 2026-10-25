@@ -26,7 +26,7 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    /// One 44,100 Hz cycle at `rate`: the counter advances, and when its bit 15 sets the level takes a step and the
+    /// One sample at `rate`: the counter advances, and when its bit 15 sets the level takes a step and the
     /// counter starts again (the reset is Diamond_SPU.md §4's choice).
     pub fn tick(&mut self, rate: Rate) {
         let shift = rate.shift as i32;
@@ -72,6 +72,7 @@ impl Envelope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::vec::Vec;
 
     fn rate(shift: u8, step: u8, decreasing: bool, exponential: bool) -> Rate {
         Rate { shift, step, decreasing, exponential, negative: false }

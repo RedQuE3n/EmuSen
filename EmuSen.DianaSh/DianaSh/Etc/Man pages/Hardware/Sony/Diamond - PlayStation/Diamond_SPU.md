@@ -5,7 +5,9 @@ interpolation, ADSR, the sweeps, noise, pitch modulation, the reverb, the captur
 CD audio in, with the tester's go of 2026-10-11. The SPU is `src/spu/` (the registers, the transfer, the mix and the
 clock in `mod.rs`, a voice in `voice.rs`, the envelope step in `envelope.rs`, the reverb in `reverb.rs`, the two tables
 in `tables.rs`, the state in `state.rs`, its rules' tests in `tests.rs`); the bus's part is in `bus.rs` (`sync_spu`,
-`run_spu`, `spu_event`, DMA4's piece). Its gate's programs are `programs/spu-voices.s`, `spu-capture.s` and
+`run_spu`, `spu_event`, DMA4's piece). *Since 2026-10-25 the voice, the envelope, the noise step, the reverb's
+algorithm and the tables are `blackmoon-spu`'s, shared with the PlayStation 2's SPU2; `voice.rs` and `reverb.rs` keep
+Diamond's IRQ comparison and reverb register layout (§16).* Its gate's programs are `programs/spu-voices.s`, `spu-capture.s` and
 `spu-dma.s`.
 
 The marks are the plan's: **[M]** measured on 2026-10-11 on the desktop (Ryzen 7 7700X, Fedora 44), the tool named;
@@ -384,3 +386,21 @@ there was not disassembled or traced, and only the game's own code, at RA, was d
 decompression routine. (3) The game's SPU register traffic from its entry, and the MDEC words three games wrote, were
 printed by temporary code removed after; the last game-code addresses before the stop were recorded by a filter that
 kept only addresses of the game's range.
+
+## 16. The voice moved into `blackmoon-spu` (2026-10-25)
+
+At Sapphire's stage S26 the voice became a crate of BlackMoon Hardware, so that both cores of the PlayStation 2's SPU2
+run the same rules (`Sapphire_Plan.md` §9.3, the tester's Q10 of 2026-10-24); its record is
+`../BlackMoon-HW/BlackMoon_SPU.md`. **Moved**: §3's decoding, interpolation, loop flags and key on and off, §4's
+envelope and sweeps, §3.6's noise step, §3.3's pitch step with modulation, §5's reverb formula and filter, and the
+tables. **Kept here**: §2's registers and clock, §6's transfers, §7's IRQ comparison (as the crate's `Touch`), §8's
+capture, CD audio and mix, §9's state, the reverb registers' layout (turned into the crate's byte offsets each sample),
+and D-37's restart of the noise timer on a write of ATTR. A voice's SSA and LSAX are now 32-bit values in the same
+8-byte units, written to the state as halfwords as before.
+
+**Nothing Diamond plays changed** [M, 2026-10-25, before any Sapphire code used the crate]: `programs.txt`,
+`ps1-tests.txt` and the eight discs' `discs.txt` unchanged with their sound digests, the crate's 176 lib, 84 program and
+10 shell tests passing with `src/spu/tests.rs` untouched, and `bench` on Spyro the Dragon within its spread with
+identical digests (`BlackMoon_SPU.md` §3). The new cross-component dependency is `diamond` on `blackmoon-spu`, which
+depends on nothing.
+

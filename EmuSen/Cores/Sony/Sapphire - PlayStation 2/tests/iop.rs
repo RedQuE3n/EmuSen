@@ -82,19 +82,23 @@ fn otc_and_the_dmac_registers_equal_the_documents() {
     grade(s21::dma(), |_| {});
 }
 
+/// Since S26 channels 4 and 7 reach the SPU2's cores in place of their stand-ins, each writing at its own transfer address.
 #[test]
 fn each_dma_mode_reaches_its_stand_in() {
     let b = grade(s21::dma_modes(), |b| {
-        for p in [dma::SPU2, dma::SPU] {
-            b.iop.bus.ports.ports[p].keep = true;
-        }
         for w in s21::sif1_queue() {
             b.iop.bus.sif.fifo[sif::SIF1].push(w);
         }
     });
-    let ports = &b.iop.bus.ports.ports;
     let fifo = |f: usize| b.iop.bus.sif.fifo[f].words().copied().collect::<Vec<_>>();
-    assert_eq!(ports[dma::SPU2].taken, (0..12).map(|i| 0x7000_0000 | i).collect::<Vec<_>>(), "slice: three blocks of four");
+    let spu2 = &b.iop.bus.spu2;
+    let words = |n: usize| (0..n).map(|i| u32::from_le_bytes(spu2.ram[4 * i..4 * i + 4].try_into().unwrap())).collect::<Vec<_>>();
+    let w = |i: u32| 0x7000_0000 | i;
+    assert_eq!(spu2.cores[1].tsa, 24, "slice: three blocks of four into core 1, a halfword each step of its address");
+    let mut want: Vec<u32> = (0..5).map(w).collect();
+    assert_eq!(&words(5), &want[..], "the requested burst of five into core 0, over the slice's first words");
+    want.extend((0..12).map(w));
+    assert_eq!(words(17)[5..], want[5..], "the chopped burst's first words after it");
     assert_eq!(fifo(sif::SIF2), [0x2000_0000, 0x2000_0001, 0x2000_0002], "the list's words, no headers, in SIF2's FIFO");
     assert_eq!(
         fifo(sif::SIF0),
@@ -102,7 +106,7 @@ fn each_dma_mode_reaches_its_stand_in() {
         "each tag's two words before its data, in SIF0's FIFO"
     );
     assert!(b.iop.bus.sif.fifo[sif::SIF1].is_empty(), "the tag and its words taken from SIF1's FIFO");
-    assert_eq!(ports[dma::SPU].taken.len(), 5 + 32, "the requested burst and the chopped one");
+    assert_eq!(spu2.cores[0].tsa, 2 * (5 + 32), "the requested burst and the chopped one");
 }
 
 #[test]

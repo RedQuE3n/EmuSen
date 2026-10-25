@@ -198,11 +198,12 @@ impl Texturing {
             out = function(regs[0x06 + ctx], t, c);
         }
         if bitsof(attrs, 5, 1) == 1 {
+            // §3.5 as a blend towards FOGCOL, exact at F = 0 as FOG's page says (D-248): FOGCOL + (C - FOGCOL) × F / 256.
             let col = regs[0x3D];
             let f = frag_fog(frag);
             for i in 0..3 {
                 let fc = bitsof(col, 8 * i as u32, 8) as i128;
-                out[i] = ((f * out[i]) >> 8) + (((0xFF - f) * fc) >> 8);
+                out[i] = fc + ((out[i] - fc) * f).div_euclid(256);
             }
         }
         out
@@ -225,8 +226,8 @@ impl Texturing {
         let lod = if bitsof(t1, 0, 1) == 1 {
             k
         } else {
-            let lg = if uv { log16([frag.last.q, 0, 0], [1, 0, 0]) } else { log16(frag.q, frag.wu) };
-            lg.map_or(1 << 30, |g| (g << l) + k)
+            let lg = if uv { log_scaled([frag.last.q, 0, 0], [1, 0, 0], l + 4) } else { log_scaled(frag.q, frag.wu, l + 4) };
+            lg.map_or(1 << 30, |g| g + k)
         };
         let mxl = bitsof(t1, 2, 3).min(6) as u32;
         let mmin = bitsof(t1, 6, 3);
@@ -267,13 +268,8 @@ impl Texturing {
                 0 => c.rem_euclid(size),
                 1 => c.max(0).min(size - 1),
                 2 => {
-                    if c < lo {
-                        lo
-                    } else if c > hi {
-                        hi
-                    } else {
-                        c
-                    }
+                    let c = if c < lo { lo } else { c };
+                    if c > hi { hi } else { c }
                 }
                 _ => (c & lo) | hi,
             }) as u32
@@ -311,8 +307,8 @@ fn ratio(num: [u32; 3], q: [u32; 3], w: [i128; 3], scale: u32) -> i128 {
     n.checked_mul(1 << scale).expect("in range").div_euclid(d)
 }
 
-/// floor(16 log2(1/|Q|)) for Q = Σ q w / Σ w, or None for Q = 0.
-fn log16(q: [u32; 3], w: [i128; 3]) -> Option<i128> {
+/// floor(2^bits log2(1/|Q|)) for Q = Σ q w / Σ w, or None for Q = 0.
+fn log_scaled(q: [u32; 3], w: [i128; 3], bits: u32) -> Option<i128> {
     let d: Vec<(i128, i32)> = q.iter().map(|&b| decode(b)).collect();
     let low = d.iter().filter(|(m, _)| *m != 0).map(|(_, e)| *e).min().unwrap_or(0);
     let den: i128 = (0..3).map(|i| (d[i].0 << (d[i].1 - low)) * w[i]).sum::<i128>().abs();
@@ -323,10 +319,10 @@ fn log16(q: [u32; 3], w: [i128; 3]) -> Option<i128> {
     // An exact power of two when the odd parts agree.
     let (tz_n, tz_d) = (tot.trailing_zeros(), den.trailing_zeros());
     if tot >> tz_n == den >> tz_d {
-        return Some(16 * (i128::from(tz_n) - i128::from(tz_d) - i128::from(low)));
+        return Some((i128::from(tz_n) - i128::from(tz_d) - i128::from(low)) << bits);
     }
-    let x = 16.0 * ((tot as f64).log2() - (den as f64).log2() - f64::from(low));
-    assert!((x - x.round()).abs() > 1e-6, "log2 too near a sixteenth to decide in double precision: {x}");
+    let x = f64::from(1u32 << bits) * ((tot as f64).log2() - (den as f64).log2() - f64::from(low));
+    assert!((x - x.round()).abs() > 1e-9, "log2 too near a sixteenth to decide in double precision: {x}");
     Some(x.floor() as i128)
 }
 

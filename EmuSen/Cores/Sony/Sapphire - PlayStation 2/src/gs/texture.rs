@@ -125,24 +125,16 @@ struct Wrap {
 }
 
 impl Wrap {
-    /// §3.4.5 on a whole texel at level `n`: REPEAT modulo the level's size, CLAMP to it, REGION_CLAMP to MIN and MAX,
-    /// REGION_REPEAT by MSK and FIX; the region's bounds and masks shifted right by the level [A for REGION_REPEAT,
-    /// D-245].
+    /// §3.4.5 on a whole texel at level `n`: REPEAT modulo the level's size, CLAMP to it, REGION_CLAMP to MIN and then
+    /// to MAX, the formulas in their order (so MAX wins when MIN exceeds it), REGION_REPEAT by MSK and FIX; the region's
+    /// bounds and masks shifted right by the level (Sapphire_Disputes.md D-245).
     fn apply(&self, i: i64, n: u32) -> u32 {
         let size = (1i64 << self.log2.saturating_sub(n)).max(1);
         let (min, max) = (i64::from(self.min >> n), i64::from(self.max >> n));
         (match self.mode {
             0 => i & (size - 1),
             1 => i.clamp(0, size - 1),
-            2 => {
-                if i < min {
-                    min
-                } else if i > max {
-                    max
-                } else {
-                    i
-                }
-            }
+            2 => i.max(min).min(max),
             _ => (i & min) | max,
         }) as u32
     }
@@ -306,9 +298,10 @@ impl Sampler {
     }
 }
 
-/// Fog (§3.5): each colour F * C + (FFh - F) * FOGCOL, A * B being (A × B) >> 8 for each product; alpha kept.
+/// Fog (§3.5, FOG's page): each colour (F × C + (100h - F) × FOGCOL) >> 8, so that F 0 gives FOGCOL itself, as FOG's
+/// page says, which §3.5's two products shifted apart do not (Sapphire_Disputes.md D-248); alpha kept.
 pub fn fog(c: [u32; 4], f: u32, col: [u32; 3]) -> [u32; 4] {
-    let mix = |v: u32, k: u32| ((f * v) >> 8) + (((255 - f) * k) >> 8);
+    let mix = |v: u32, k: u32| (f * v + (256 - f) * k) >> 8;
     [mix(c[0], col[0]), mix(c[1], col[1]), mix(c[2], col[2]), c[3]]
 }
 
@@ -337,10 +330,10 @@ pub struct Setup {
     k: i32,
 }
 
-/// The LOD from log2(1/|Q|) in sixteenths: (log2(1/|Q|) << L) + K (TEX1's page), log2 floored to K's four fractional
-/// bits before the shift (D-242); a Q of 0 is taken as the farthest level [A].
-fn lod_of(log: Option<i64>, l: u32, k: i32) -> i32 {
-    log.map_or(i32::MAX >> 1, |g| ((g << l) + i64::from(k)).clamp(i64::from(i32::MIN >> 1), i64::from(i32::MAX >> 1)) as i32)
+/// The LOD in K's fixed point (int1:7:4) from floor(2^(L + 4) × log2(1/|Q|)): (log2(1/|Q|) << L) + K (TEX1's page),
+/// exact and then floored to sixteenths (Sapphire_Disputes.md D-242); a Q of 0 is taken as the farthest level [A].
+fn lod_of(log: Option<i64>, k: i32) -> i32 {
+    log.map_or(i32::MAX >> 1, |g| (g + i64::from(k)).clamp(i64::from(i32::MIN >> 1), i64::from(i32::MAX >> 1)) as i32)
 }
 
 impl Setup {
@@ -354,7 +347,7 @@ impl Setup {
             Lod::Fixed(sampler.k)
         } else if sampler.uv {
             let fq = Float::from_bits((last.rgbaq >> 32) as u32);
-            Lod::Fixed(lod_of(exact::log2_16(1, &Sum::of(&[fq; 3], [1, 0, 0])), sampler.l, sampler.k))
+            Lod::Fixed(lod_of(exact::log2_scaled(1, &Sum::of(&[fq; 3], [1, 0, 0]), sampler.l + 4), sampler.k))
         } else {
             Lod::PerPixel
         };
@@ -384,7 +377,7 @@ impl Setup {
         };
         let lod = match self.lod {
             Lod::Fixed(l) => l,
-            Lod::PerPixel => lod_of(exact::log2_16(total(wu) as u64, &Sum::of(&self.q, wu)), self.l, self.k),
+            Lod::PerPixel => lod_of(exact::log2_scaled(total(wu) as u64, &Sum::of(&self.q, wu), self.l + 4), self.k),
         };
         (u, v, lod)
     }

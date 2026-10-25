@@ -45,6 +45,37 @@ impl Big {
         r
     }
 
+    fn shr(&self, n: u32) -> Big {
+        let (limbs, bits) = ((n / 64) as usize, n % 64);
+        let mut r = Big::ZERO;
+        for i in 0..LIMBS - limbs {
+            let lo = self.0[i + limbs] >> bits;
+            let above = if bits != 0 && i + limbs + 1 < LIMBS { self.0[i + limbs + 1] << (64 - bits) } else { 0 };
+            r.0[i] = lo | above;
+        }
+        r
+    }
+
+    /// The square of a number of at most 384 bits.
+    fn square(&self) -> Big {
+        let mut r = [0u128; LIMBS + 1];
+        let n = LIMBS / 2;
+        for i in 0..n {
+            let mut carry = 0u128;
+            for j in 0..n {
+                let t = u128::from(self.0[i]) * u128::from(self.0[j]) + (r[i + j] & u128::from(u64::MAX)) + carry;
+                r[i + j] = t & u128::from(u64::MAX);
+                carry = t >> 64;
+            }
+            r[i + n] += carry;
+        }
+        let mut out = Big::ZERO;
+        for i in 0..LIMBS {
+            out.0[i] = r[i] as u64;
+        }
+        out
+    }
+
     fn shr1(&mut self) {
         for i in 0..LIMBS {
             let above = if i + 1 < LIMBS { self.0[i + 1] << 63 } else { 0 };
@@ -188,44 +219,32 @@ pub fn quotient(num: &Sum, den: &Sum, scale: i32) -> i64 {
     }
 }
 
-/// ceil(2^(255 + j/16)) for j = 1 to 15, little-endian limbs: the thresholds of floor(16 log2) within an octave,
-/// irrational, so a significand of 256 bits is never equal to one (the table's derivation is in Sapphire_Native.md §31.3).
-const OCTAVE: [[u64; 4]; 15] = [
-    [0x5D42B362AF1EE85A, 0x148A0459E7585151, 0xC5C95B8C2154C1B2, 0x85AAC367CC487B14],
-    [0x91E135EE84A3F734, 0x1AA84FFBEBAC349F, 0xFBE4628758A53C90, 0x8B95C1E3EA8BD6E6],
-    [0xF1203CAF65BFB9BA, 0x1942B34816FB4F26, 0x0FD6D8E0AE5AC9D8, 0x91C3D373AB11C336],
-    [0xD78B65CBEFA7BB70, 0x5E139A1B14FA8178, 0x46AD23182E42F6F6, 0x9837F0518DB8A96F],
-    [0x21F977FE7C7FA118, 0x65C15C122133E2A2, 0xA0911F09EBB9FDD1, 0x9EF5326091A111AD],
-    [0x2589C98A8290D3F1, 0x1DD170ACE2BCFC17, 0x1CBD7F621710701B, 0xA5FED6A9B15138EA],
-    [0xB165F141833A67DB, 0x6BE409407034FDED, 0x4980A8C8F59A2EC4, 0xAD583EEA42A14AC6],
-    [0xED17AC8583339916, 0x1D6F60BA893BA84C, 0x597D89B3754ABE9F, 0xB504F333F9DE6484],
-    [0x0D9A4BE023ECE032, 0x15B34BBCB0298F41, 0xA8811FB66D0FAF7A, 0xBD08A39F580C36BE],
-    [0xC7686006E4E6C093, 0x6B0F939998251A36, 0x3E2AD0C964DD9F37, 0xC5672A115506DADD],
-    [0x2BBD398AF35C07A0, 0x6F28610B8C36485A, 0xE235838F95F2C6ED, 0xCE248C151F8480E3],
-    [0xB5C13ADA0E77829A, 0x1D733AF522058B16, 0x39A68BB9902D3FDE, 0xD744FCCAD69D6AF4],
-    [0x1CB99D3F1FF298A3, 0x224B251B33092002, 0x065895048DD333CA, 0xE0CCDEEC2A94E111],
-    [0x17D8D1E8CA31880B, 0xC4FAACE043B7F91C, 0xD02D75B3706E54FA, 0xEAC0C6E7DD24392E],
-    [0xBDD80329364AA2A0, 0x6F510308677709F5, 0x7B9D0C7AED980FC3, 0xF5257D152486CC2C],
-];
-
-/// floor(16 × log2(w / |den|)) for a positive weight total `w`: the LOD's log2(1/|Q|) in K's fixed point, Q being
-/// den / w; `None` when den is 0.
-pub fn log2_16(w: u64, den: &Sum) -> Option<i64> {
+/// floor(2^bits × log2(w / |den|)) for a positive weight total `w` and `bits` up to 7: the LOD's log2(1/|Q|), Q being
+/// den / w; `None` when den is 0. The ratio's significand is taken to 256 bits and squared once a bit, each square's
+/// excess over 2 giving the next bit (Sapphire_Native.md §31.3); every step truncates below 2^-250 of the value, so the
+/// result is the exact floor unless the ratio's 2^bits-th power lies that near a power of two.
+pub fn log2_scaled(w: u64, den: &Sum, bits: u32) -> Option<i64> {
     if den.is_zero() || w == 0 {
         return None;
     }
     let (n, d) = (Big::from_u128(u128::from(w)), den.mag);
-    // e = floor(log2(n / d)), then the significand of n / d to 256 bits, in [2^255, 2^256).
+    // e = floor(log2(n / d)), then the significand m = n / d / 2^e as floor(m × 2^255), in [2^255, 2^256).
     let s = i64::from(n.bits()) - i64::from(d.bits());
     let at = |e: i64| if e >= 0 { (n, d.shl(e as u32)) } else { (n.shl((-e) as u32), d) };
     let (a, b) = at(s);
     let e = if a.cmp(&b) == std::cmp::Ordering::Less { s - 1 } else { s };
     let (a, b) = at(e - 255);
-    let (m, _) = Big::div(&a, &b);
-    let top = [m.0[0], m.0[1], m.0[2], m.0[3]];
-    let ge = |t: &[u64; 4]| (0..4).rev().map(|i| top[i].cmp(&t[i])).find(|o| o.is_ne()).is_none_or(|o| o.is_gt());
-    let j = OCTAVE.iter().take_while(|t| ge(t)).count() as i64;
-    Some(16 * (e - i64::from(den.exp)) + j)
+    let (mut m, _) = Big::div(&a, &b);
+    let mut frac = 0i64;
+    for _ in 0..bits {
+        m = m.square().shr(255);
+        frac <<= 1;
+        if m.bits() > 256 {
+            frac |= 1;
+            m.shr1();
+        }
+    }
+    Some(((e - i64::from(den.exp)) << bits) + frac)
 }
 
 #[cfg(test)]
@@ -253,12 +272,18 @@ mod tests {
     }
 
     #[test]
-    fn log2_in_sixteenths_is_floored() {
+    fn log2_is_floored_at_every_scale() {
         for (q, want) in [(1.0f32, 0), (0.5, 16), (2.0, -16), (0.7071068, 7), (0.70710677, 8), (0.25, 32), (3.0, -26)] {
             let d = Sum::of(&[f(q), f(0.0), f(0.0)], [1, 0, 0]);
-            assert_eq!(log2_16(1, &d), Some(want), "{q}");
+            assert_eq!(log2_scaled(1, &d, 4), Some(want), "{q}");
         }
-        let d = Sum::of(&[f(0.5), f(0.25), f(1.0)], [1, 1, 2]);
-        assert_eq!(log2_16(4, &d), Some((16.0 * (4.0f64 / 2.75).log2()).floor() as i64));
+        for bits in 0..8 {
+            for (w, q) in [(4u64, [0.5f32, 0.25, 1.0]), (7, [0.3, 0.3, 0.3]), (1000, [0.001, 2.0, 0.01]), (3, [100.0, 0.5, 7.0])] {
+                let d = Sum::of(&q.map(f), [1, 1, 2]);
+                let exact = (q[0] as f64 + q[1] as f64 + 2.0 * q[2] as f64) / w as f64;
+                let want = (-(exact.log2()) * f64::from(1 << bits)).floor() as i64;
+                assert_eq!(log2_scaled(w, &d, bits), Some(want), "{w} {q:?} {bits}");
+            }
+        }
     }
 }

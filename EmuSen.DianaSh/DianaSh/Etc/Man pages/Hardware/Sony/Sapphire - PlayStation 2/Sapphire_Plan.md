@@ -540,6 +540,8 @@ measured separately against that pair.
 
 *Built 2026-10-24 at S6* (`Sapphire_Native.md` §16.4): the tables are the *EE Core User's Manual*'s own (§1.3.5, §1.3.6,
 §2.12), which equal the TX79's on every integer row and differ on the floating-point ones; the caches wait for S7.
+*Built 2026-10-25 at S7* (§17.5 there): the caches modelled with the documented refill burst as their cost, RDRAM's
+latency still the named loss.
 
 ### 5.3 Floating point, exact
 
@@ -878,7 +880,7 @@ the enhancements (E) are separate tracks.
 |---|---|---|
 | **S5** | `emusen-mips`: the R5900's decode and disassembly as a table of its own (§9.1), MMI, COP0, COP1 and COP2's macro forms, the VU micro tables; the assembler for both | Every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same word; the R3000 and VR4300 goldens unchanged *Built 2026-10-24, `Sapphire_Native.md` §15: met for the 723 cells where the EE agrees with the TX79, the other 83 decoded as ps2tek reads them under disputes D-1 to D-3; ps2tek's two VU tables read back in both modes; the VU micro-only lower instructions in no allowed document (§15.6 Q1); the other processors' text unchanged.* |
 | **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned *Built 2026-10-24, `Sapphire_Native.md` §16: met; 128 mnemonics through `r5900.rs`, seventeen programs equal to the EE Core manual's record, the results equal on PCSX2 and Play! but where D-6 to D-11 record otherwise; neither referee raises address-error, overflow, reserved or unusable exceptions, so those rest on the manual until S10; the EE Core User's Manual's §2.12 and Tables 1-1 to 1-3 pinned.* |
-| **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
+| **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters *Built 2026-10-25, `Sapphire_Native.md` §17: met on the interpreter, seven programs and 400 graded words equal to the manuals' records, the breakpoints built beside the counters; neither referee maps a program's own TLB entries, models the caches, counts events or takes the TLB, counter, debug or bus error exceptions, so those rules rest on the manuals; D-12 to D-19.* |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |
 | **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not; **the IOP's console kept in a `tty` space**, caught at the IOP's module interface with the output export resolved at run time through the export tables, never at an address in the image *(decided 2026-10-24)* | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |

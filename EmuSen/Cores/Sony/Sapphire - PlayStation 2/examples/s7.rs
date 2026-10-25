@@ -1,5 +1,5 @@
 //! Writes stage S7's programs for the referees: `s7 <folder>` makes `<name>.elf` and `<name>.expected` (one record
-//! word a line in hexadecimal, `-` where any value is expected) for each (Sapphire_Native.md §17.9).
+//! word a line in hexadecimal, `-` where any value is expected) for each; `s7 <folder> probes` writes the prologue's probes instead (Sapphire_Native.md §17.9).
 
 #[path = "../tests/s6/mod.rs"]
 mod s6;

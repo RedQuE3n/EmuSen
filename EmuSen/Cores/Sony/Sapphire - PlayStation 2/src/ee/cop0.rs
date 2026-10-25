@@ -1,6 +1,6 @@
 //! COP0's registers (EE Core User's Manual §3.2, Table 3-1): their numbers, the bits MTC0 may change, the fields the
 //! core reads; the debug registers behind register 24 (chapter 9) and the performance counters behind 25 (chapter 7).
-//! Sapphire_Native.md §17.1 has the readings the manual leaves open.
+//! Sapphire_Native.md §17.3 has the readings the manual leaves open.
 
 pub const INDEX: usize = 0;
 pub const RANDOM: usize = 1;

@@ -1,6 +1,6 @@
 //! The TLB: 48 fully associative entries of even and odd page pairs, seven page sizes, the ASID and its G bit, and
 //! the S bit that maps the scratchpad (EE Core User's Manual §5.2; EE Core Instruction Set Manual, TLBP, TLBR,
-//! TLBWI, TLBWR). Each entry is held as the manual's 128 bits in four words; Sapphire_Native.md §17.2 has the readings.
+//! TLBWI, TLBWR). Each entry is held as the manual's 128 bits in four words; Sapphire_Native.md §17.3 has the readings.
 
 pub const ENTRIES: usize = 48;
 

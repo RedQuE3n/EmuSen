@@ -145,8 +145,7 @@ fn refill_handler() -> String {
             "tlbwi".into(),
             "sync.p".into(),
             "eret".into(),
-        ]
-        .into_iter(),
+        ],
     );
     h.join("\n")
 }

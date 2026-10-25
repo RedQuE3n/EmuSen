@@ -1,7 +1,7 @@
 //! How the EE core reaches memory (EE Core User's Manual chapters 5 and 6): the operating mode's segments, the TLB,
 //! the scratchpad, the data cache with write-back and write-allocate, the instruction cache, the uncached accelerated
 //! buffer, the bus with its errors, and the CACHE instruction. Each access charges its wait to the instruction's
-//! timing and counts its events. Sapphire_Native.md §17.2 to §17.5 have the readings.
+//! timing and counts its events. Sapphire_Native.md §17.3 and §17.5 have the readings.
 
 use super::cache::{DCache, ICache};
 use super::cop0::{self, config, event};

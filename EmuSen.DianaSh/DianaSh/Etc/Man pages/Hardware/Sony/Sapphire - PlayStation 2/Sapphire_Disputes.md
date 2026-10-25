@@ -284,3 +284,134 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `ee/ops.rs`'s `eidi`; S11's interrupts.
 - **Pinned by:** `exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says` (the `exc-eidi` class).
 - **Implemented in:** stage S6's commit.
+
+### D-12. R5900, COP0: the debug exception's code in Cause.EXC2 is 3
+
+- **Opened:** 2026-10-25, at stage S7: the *EE Core User's Manual* is not consistent with itself. The Cause register's
+  table (§3.2) gives EXC2 "011 (3) : Dbg (Debug)" and §4.2.4 "Cause.EXC2 = 3"; Table 4-3 gives the debug exception
+  EXC2 4, a value the Cause table lists as reserved ("1xx (4-7): (Reserved)").
+- **Documents read:** the manual's §3.2 (Cause), §4.1.3, §4.2.4 and Table 4-3; ps2tek at `1c91660`, "EE COP0 Exception
+  Handling": "03h=Debug".
+- **Test program:** `s7-debug` (`tests/s7/mod.rs`): an instruction address breakpoint and two data breakpoints through
+  a handler at 80000100h recording Cause's EXC2 and BD2, ErrorEPC and BPC.
+- **Referee:** PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, measured 2026-10-25: neither raises the debug exception (the instruction under each breakpoint ran and no handler record was written, `Sapphire_Native.md` §17.9); not witnesses. The rule rests on the manual alone.
+- **Conclusion:** 3, implemented; two statements of the manual and ps2tek against one table cell that names a reserved
+  value; **argued**.
+- **Depends on it:** `Level2::Debug`'s code; every debug handler that dispatches on EXC2.
+- **Pinned by:** `the_breakpoints_raise_the_debug_exception_as_chapter_9_says`, `level_2_exceptions_use_errorepc_bd2_and_the_dev_vectors`.
+- **Implemented in:** stage S7's commit.
+
+### D-13. R5900, COP0: the performance counter exception is taken when ERL is clear, CTE set and an OVFL bit set
+
+- **Opened:** 2026-10-25, at stage S7: §7.2.4 writes the condition "STATUS.ERL && PCCR.CTE && (PCR0.OVFL ||
+  PCR1.OVFL)", with ERL set; §7.2.1 says the counters do not count while "level 2 exception handlers are being
+  executed", §4.1.3 that a level 2 handler holds the counter exception until it finishes, and §7.2.6's example sets
+  ERL "to inhibit counting" before arming the counters and clears it by ERET to start them.
+- **Documents read:** the *EE Core User's Manual* §4.1.3, §4.2.3, §7.2.1, §7.2.4, §7.2.6, §7.2.8.
+- **Test program:** `s7-counters`' last part: PCR0 set to 7FFFFFF0h counting completed instructions in kernel mode with
+  ERL clear, then forty NOPs; the handler at 80000080h records EXC2, Status.ERL and OVFL.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72, measured 2026-10-25: neither takes the counter exception; PCSX2's counters advance by the same amount whatever event and mode are selected, Play!'s do not advance; not witnesses. The rule rests on the manual alone.
+- **Conclusion:** ERL clear, by three passages and the example against the expression's missing negation; **argued**.
+  The exception is taken at the boundary before the next instruction; the manual allows it "a few instructions
+  after the counter overflows" (§7.2.8), which the model does not reproduce (a named loss).
+- **Depends on it:** `Ee::counter_pending`.
+- **Pinned by:** `count_compare_and_the_performance_counters_equal_chapter_7`.
+- **Implemented in:** stage S7's commit.
+
+### D-14. R5900, COP0: BPC.BED set suppresses the debug exception
+
+- **Opened:** 2026-10-25, at stage S7: the *EE Core User's Manual* names bit 15 "BED, Breakpoint Exception Disable"
+  (§3.2's BPC table) and says "When the bit is 1, a debug exception does not occur even though the breakpoint
+  conditions are met" (§9.2.1); the three sample programs of §9.3.2 to §9.3.4 set it with the comment "BED = 1:
+  debugging exception occurs", and Figures 9-3 and 9-4 read the same way in the extracted text.
+- **Documents read:** the manual's §3.2 (BPC), §9.2.1, §9.2.5, §9.3.2 to §9.3.4.
+- **Test program:** `s7-debug`: an instruction breakpoint with BED clear (taken) and with BED set (not taken, the IAB
+  flag set).
+- **Referee:** PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, measured 2026-10-25: neither raises the debug exception (the instruction under each breakpoint ran and no handler record was written, `Sapphire_Native.md` §17.9); not witnesses. The rule rests on the manual alone.
+- **Conclusion:** set suppresses, by the register's name and its definition; **argued**. The samples are the weaker
+  witnesses: §9.3.2's also labels bit 20 "IUE = 1: enabled in supervisor mode", which is DSE, so they carry errors of
+  their own.
+- **Depends on it:** `Ee::instruction_break`, `Ee::data_break`.
+- **Pinned by:** `the_breakpoints_raise_the_debug_exception_as_chapter_9_says`.
+- **Implemented in:** stage S7's commit.
+
+### D-15. R5900, COP0: Int0 drives Cause.IP2 and Status.IM2, Int1 drives IP3 and IM3
+
+- **Opened:** 2026-10-25, at stage S7: the *EE Core User's Manual*'s Status text says "IM[7] (bit 15) and IM[3:2] (bit
+  11:10) correspond to the internal timer interrupt and Int[1:0] signals, respectively" (IM3 to Int1, IM2 to Int0),
+  while its Cause table reads "IP[3] 11 Set when the Int[0] interrupt is pending" and "IP[2] 10 … Int[1]".
+- **Documents read:** the manual's §3.2 (Status, Cause), §4.2.5; ps2tek at `1c91660`, "EE COP0 Exception Handling":
+  Status bit 10 "INT0 enable (INTC)", bit 11 "INT1 enable (DMAC)", Cause bit 10 "INTC interrupt pending", bit 11
+  "DMAC interrupt pending".
+- **Test program:** none can tell them apart until S11 connects the INTC and the DMAC to the lines.
+- **Referee:** not consulted.
+- **Conclusion:** Int0 on bit 10 and Int1 on bit 11 in both registers, the Status text and ps2tek against the Cause
+  table's line; **argued**; open until S11's programs raise each line.
+- **Depends on it:** `cop0::cause::IP2` and `IP3`; S11's INTC and DMAC.
+- **Pinned by:** `an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h` (Int0 on IP2).
+- **Implemented in:** stage S7's commit.
+
+### D-16. R5900, data cache: a refill takes the LRF way even when the other way is invalid
+
+- **Opened:** 2026-10-25, at stage S7: the *EE Core User's Manual* §6.3.1 gives Table 6-4 (the refill way is the XOR of
+  the two LRF bits, and the refill flips that way's bit) and makes an exception for the instruction cache alone ("when
+  one of the ways is Invalid in the Instruction Cache, regardless of the state of the LRF bits, the data is refilled
+  into the Invalidated way"); ps2tek's "EE COP0 Caches" puts the invalid way first for both caches.
+- **Documents read:** the manual's §6.3.1, §6.3.7; ps2tek at `1c91660`, "EE COP0 Caches".
+- **Test program:** `s7-dcache`: after DHIN invalidates way 0 of set 0 with its LRF bit at 1, and way 1 is invalid with
+  LRF 0, the next miss refills way 1 (1 XOR 0); later refills follow the table, read back by CACHE DXLTG.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72, measured 2026-10-25: neither models the data cache (PCSX2 with its default settings; CACHE DXLTG leaves TagLo as written on both), and accesses through the program's own TLB entries do not reach the mapped memory on either; not witnesses. The rule rests on the manual alone.
+- **Conclusion:** the manual's rule, the invalid-way exception for the instruction cache only; **argued**, Sony's
+  manual over a source of unstated origin (P6).
+- **Depends on it:** `DCache::victim`, `ICache::victim`.
+- **Pinned by:** `the_data_cache_writes_back_replaces_and_locks_as_chapter_6_says`.
+- **Implemented in:** stage S7's commit.
+
+### D-17. R5900, COP0: writing Compare clears Cause.IP7
+
+- **Opened:** 2026-10-25, at stage S7, by `s7-counters` on the referees.
+- **Documents read:** the *EE Core User's Manual* §3.2, Compare: "As a side effect, writing to the Compare register
+  clears the timer interrupt"; ps2tek at `1c91660`, "EE COP0 Timer": "Writing to Compare acknowledges and clears the
+  pending interrupt".
+- **Test program:** `s7-counters`: Compare set 400 cycles ahead with IE, EIE and IM7 set; the handler at 80000200h
+  records Cause's IP7 and ExcCode, writes Compare, and records IP7 again.
+- **Referee:** PCSX2 2.8.2, measured 2026-10-25: the interrupt taken with IP7 set and ExcCode 0, as the manual says, and
+  IP7 still set after Compare is written. Play! 0.72 never took the interrupt in the program's 1,048,576 turns of its
+  loop; not a witness.
+- **Conclusion:** cleared, two documents against one lineage; **argued**.
+- **Depends on it:** `Ee::write_cop0`; every timer handler that returns with IE set.
+- **Pinned by:** `count_compare_and_the_performance_counters_equal_chapter_7`.
+- **Implemented in:** stage S7's commit.
+
+### D-18. R5900, COP0: PCCR keeps only its defined fields; the bits the manual draws as 0 read 0
+
+- **Opened:** 2026-10-25, at stage S7, by `s7-counters` on the referees.
+- **Documents read:** the *EE Core User's Manual* §3.2 (PCCR) and §7.1.1: CTE at 31, EVENT1 at 19..15, U1, S1, K1 and
+  EXL1 at 14..11, EVENT0 at 9..5, U0, S0, K0 and EXL0 at 4..1, the rest drawn 0; ps2autotests' `cpu/ee_cop0/performance`
+  writes 000FFBFEh, every defined bit but CTE (its console record does not print a read-back).
+- **Test program:** `s7-counters`: MTPS of 7FFFFFFFh, MFPS.
+- **Referee:** Play! 0.72 reads back 000FFBFEh, as the manual's fields give; PCSX2 2.8.2 reads back 7FFFFFFFh. Both
+  agree that MTPS with a reg field other than 0 writes nothing and that MFPC and MTPC take an even field as PCR0 and an
+  odd one as PCR1, as the console record says.
+- **Conclusion:** the defined fields alone (800FFBFEh writable), the manual and one lineage against the other;
+  **argued**.
+- **Depends on it:** `cop0::perf::WRITABLE`.
+- **Pinned by:** `count_compare_and_the_performance_counters_equal_chapter_7`.
+- **Implemented in:** stage S7's commit.
+
+### D-19. R5900, TLB: TLBR of a scratchpad entry returns S and reads both C fields as 2
+
+- **Opened:** 2026-10-25, at stage S7, by `s7-spr` on the referees.
+- **Documents read:** the *EE Core User's Manual* §5.2.5 ("The PFN and C field values are disregarded. (When read, the
+  C field value is 2, which indicates uncached mode.)"), §3.2's PageMask ("When reading the TLB entry that corresponds
+  to scratchpad RAM … the values of the PageMask register are undefined"); the *EE Core Instruction Set Manual*'s TLBR
+  Operation (EntryLo0 ← TLB[63..33] || G, which carries S at bit 31).
+- **Test program:** `s7-spr`: an S entry written with C 3 and read back by TLBR.
+- **Referee:** PCSX2 2.8.2 returns EntryLo0 C01Fh, without S and with C 3 as written, and EntryLo1 1Fh; Play! 0.72
+  returns another entry's words for the index (its TLBR differs throughout `s7-tlb`, where PCSX2's equals the manual on
+  every other field). Neither maps the scratchpad through the program's entries.
+- **Conclusion:** S returned and C read as 2 in both halves, the manual alone; **argued**; open. PageMask is returned as
+  written, the manual leaving it undefined.
+- **Depends on it:** `Tlb::read`.
+- **Pinned by:** `the_scratchpad_is_reached_through_s_entries_alone`.
+- **Implemented in:** stage S7's commit.

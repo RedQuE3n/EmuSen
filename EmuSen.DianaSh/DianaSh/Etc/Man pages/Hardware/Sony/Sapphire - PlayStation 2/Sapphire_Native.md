@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14) and S5 (§15) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -737,3 +737,199 @@ source, no Sony manual and no firmware.
 - Execution of any kind: the interpreter is S6, COP1 S9, VU0 macro mode S12, micro mode S13.
 - The VU micro-only lower instructions and the `Raw` operations' operand layouts (§15.3, Q1).
 - A debugger surface: the processors' disassembly through the platform library waits on S31.
+
+## 16. Stage S6, the R5900 interpreter, integer (2026-10-24)
+
+### 16.1 In one paragraph
+
+The plan's §7 row S6, on the tester's go of 2026-10-24, preceded by its own commit: Sony's Linux-kit manuals, accepted
+by the tester the same day as the lawful source §11 Q1 asks for, found as the kit's own Release 1.0 Disc 1 kept by the
+Internet Archive, each title page checked (Version 5.0, October 2001, no confidentiality marking) and pinned
+(`Sapphire_References.md` §1.1). The crate gains `src/ee/`: the EE core's integer interpreter, which decodes every word
+through `emusen-mips`'s `r5900` table and executes it as the *EE Core Instruction Set Manual*'s Operation sections
+write it, with 128-bit general registers, HI and LO of both pipelines, SA, the exceptions an integer instruction
+raises, and the timing model of §5.2 with the *EE Core User's Manual*'s issue and latency tables pinned as data.
+`sapphire` now depends on `emusen-mips` (a dependency the plan's §9.1 names; it was a development dependency since
+S3). Seventeen programs of the project's own, generated as assembly over every integer encoding with the record the
+manual's definitions give, run on the interpreter equal to that record, and on PCSX2 and Play! as black boxes: the
+arithmetic, logic, shifts, both multipliers, both dividers, the loads and stores, LQ and SQ, every branch and jump and
+the links made in kseg0 equal on both lineages; where they are not, the disagreement is a dispute (D-6 to D-11). The
+interpreter is not yet run by the machine; the ELF loader is S10's. No emulator, SDK or loader source and no firmware
+was read.
+
+### 16.2 What was built, and the readings the manual leaves open
+
+- **`ee/mod.rs`**: `Ee` (32 × 128-bit GPRs, HI and LO as 128-bit registers whose bits 63..0 are pipeline 0's and
+  127..64 pipeline 1's, SA, the PC with its delay-slot state, COP0's 32 words), `step` and `run`, the level 1 exception
+  sequence of the EE Core User's Manual §4.1.2 (EPC and Cause.BD left alone when Status.EXL is set; the vector by Status.BEV),
+  the operating modes of §3.2's table and the address errors a mode raises (§4.2.9). An instruction a later stage
+  executes stops the interpreter with `Halt::Unimplemented` and its word, never a made-up result; a coprocessor
+  instruction whose coprocessor is unusable raises the unusable exception first, as §4.2.14 says.
+- **`ee/ops.rs`**: one function a mnemonic, 128 mnemonics, looked up by the decoder's own name, so that the crate holds
+  no encoding; a memo of 4,096 words keeps the lookup off the string table (the decode is a pure function of the word).
+- **`ee/bus.rs`**: the `Bus` the core reads through (naturally aligned accesses by physical address), and `Ram`, RDRAM
+  alone, for the tests.
+- **`ee/timing.rs`**: §5.2's model, below.
+
+**Readings** [R the *EE Core Instruction Set Manual* (INST) and *EE Core User's Manual* (CORE), Version 5.0; A]:
+
+- **Bits 127..64.** Every Operation section but LQ's writes `GPR[rd]63..0` alone, so a 64-bit or narrower instruction
+  leaves the upper half as it was; CORE §1.4.1 says the upper half is "only used by" the 128-bit instructions. Both
+  referees agree (the program `upper`).
+- **Links are zero-extended.** JAL and JALR write `zero_extend(PC + 8)`, the branch-and-link forms `PC + 8`, a 32-bit
+  value; a link made at 8010xxxxh therefore reads 00000000_8010xxxxh. Both referees agree (`branches`'s kseg0 part).
+- **An unusable restriction is not a trap.** A word instruction given an input that is not a word value, or a divide
+  by zero, has an undefined result (each Restrictions section); the interpreter computes on bits 31..0 and gives a zero
+  divisor the result D-6 records. MULT, MULTU, MADD and MADDU write rd as their Operation sections do, though MULTU's
+  and MADD1's Descriptions name other registers (the Operation section is taken where the two differ).
+- **MADD's accumulator** is HI31..0 || LO31..0 of its pipeline (INST, MADD), read through the multiplier's own
+  forwarding: the timing model does not wait for HI and LO before a MADD, since §2.12 gives MADD a repeat rate of 2.
+- **LQ and SQ** mask the address's four low bits and raise no alignment error (INST, LQ, SQ).
+- **Cause.CE** is written by the unusable exception alone (§4.2.14 lists it there and for no other exception); the
+  register table calls it undefined otherwise, and the programs leave it ungraded there.
+- **COP0 at this stage**: MFC0, MTC0, ERET, EI and DI; Status's writable bits per §3.2's table, Cause, BadVAddr and PRId
+  read-only, PRId's implementation number 2Eh with the revision, which the manual does not give, zero. The TLB, the
+  caches and CACHE, Count and Compare and the performance counters are S7's; their registers hold what is written.
+- **Memory at this stage**: kseg0 and kseg1 lose their top three bits (CORE §5.1.6); the mapped segments are taken the
+  same way until S7's TLB, a stand-in named here, not a reading of the manual.
+
+### 16.3 The documents' answers to S5's disputes
+
+The EE Core manuals settle D-1 to D-3 and the VU User's Manual D-4 and D-5, each as S5 implemented it
+(`Sapphire_Disputes.md`): INST §7.4's COP1 tables hold only S and W with the EE's own operations (D-1), §7.4.2 gives
+BC1FL and BC1TL (D-2), §7.1.1 places COP2 at 12h and LQC2 and SQC2 at 36h and 3Eh (D-3); the VU manual's chapters 4.2
+and 4.3 place ABS, FTOI, ITOF and NOP among the upper instructions and MOVE, MR32, MTIR, MFIR and WAITQ among the
+lower (D-4), and its §4.1.3 puts x at bit 24 of a lower word and bit 56 of a pair (D-5). The gaps S5 named and the
+sections that fill them at S12 and S13 are `Sapphire_References.md` §1.1's table; none is filled at this stage.
+
+### 16.4 The timing model (§5.2, Q14)
+
+Pinned as data and by test [R CORE §1.3.5, §1.3.6, §2.12]: §2.12's integer and floating-point latency tables row by row
+(the TX79 manual's Table 3-21 agrees on every integer row; its floating-point rows are its own derivative's and are
+not used); Table 1-1's categories and physical pipes; Table 1-2's logical pipes; Table 1-3's pairing cells, two X and
+five Y. The rules:
+
+1. Instructions issue in order, at most two a cycle, the second beside the first when Table 1-2 gives them different
+   logical pipes, Table 1-3 allows the pair, and the second neither reads nor writes what the first writes.
+2. An instruction issues no earlier than the cycle each register it reads is ready: the producer's issue cycle plus its
+   §2.12 latency. A load's latency is 1, so the dependent instruction loses only the pairing; CORE §2.3.2's
+   "hardware interlocks insert additional clock cycles" is read as that pair lost.
+3. MAC0 and MAC1 each take a multiply or multiply-add every 2 cycles and a divide every 37 (§2.12's repeat rate);
+   other instructions run beside a divide.
+4. A Y cell issues the pair and stalls one cycle in A (Table 1-3's note).
+5. A taken branch or jump pairs with its delay slot; its target starts a new cycle.
+
+**Named losses, each a dispute candidate if an oracle ever measures it** [A]: no branch-prediction cost (CORE names the
+BTAC and BHT but gives no misprediction penalty); no fetch alignment of the instruction pairs; no cache (S7), so every
+load is §2.12's hit; COP0 moves, SYNC and ERET charged one cycle, since §2.12 tabulates no kernel instruction; an
+exception charged as the instruction that raised it, its entry cost not documented; the short-loop defect the kit's
+*Restriction* (1) describes ("may end after executing once or twice, under special conditions") not modelled, its
+conditions unknown. No suite measures the EE's cycles but `ee_cop0/performance`, which S10 runs.
+
+### 16.5 The gate: the programs (measured 2026-10-24)
+
+`tests/s6/` generates seventeen bare programs as `emusen-mips` assembly (the R5900 dialect), each loaded and entered
+at 00100000h, writing its record from 00200000h and 5A99D00Eh at 001FFFF0h as `record.s` does. Each case loads its
+operands from constants, sets the destination to a sentinel, runs the instruction, and stores what the instruction
+writes. The expected record comes from `tests/s6/manual.rs`, the Operation sections transcribed as functions on bit
+strings (bit slices, `sign_extend`, `zero_extend`, 128-bit arithmetic), written apart from `ops.rs`. The operands:
+eleven word values and six 64-bit values that are not words, seven immediates, five shift amounts; a word instruction
+is given only the inputs its Restrictions section defines.
+
+| Program | Cases | What it covers |
+|---|---|---|
+| `three` | 5,281 | every three-register operation over every pair of operands it may take; SYNC, SYNC.P, PREF |
+| `immediates` | 1,769 | the immediate forms over every immediate, the shift-amount forms over every amount |
+| `muldiv` | 1,408 | MULT, MULTU, MADD, MADDU, DIV, DIVU in both pipelines, HI and LO of both preset and read back after each |
+| `sa` | 205 | MTSAB, MTSAH, MFSA, MTSA |
+| `memory` | 374 records | every load and store at every byte of a quadword its alignment allows; LQ and SQ at every byte |
+| `branches` | 886 records | every branch over operands whose 64-bit and 32-bit readings differ, taken and not, likely and not; J, JAL, JR, JALR; links made in kseg0 |
+| `exc-*` (nine) | 894 records | address errors, overflow, traps true and false, SYSCALL and BREAK, reserved encodings, COP1 and COP2 unusable, an exception in a delay slot, EI and DI, user mode's refusals; through a handler at 80000180h that records Cause, CE, EPC, BadVAddr and Status and returns past the instruction |
+| `upper` | 22 records | bits 127..64 kept by eleven narrower writes |
+| `undefined` | 92 records | a zero divisor, word instructions on values that are not words, MTSA of an arbitrary value |
+
+**Tests** [M, `cargo test --release`, `tests/interpreter.rs`]: **23 of 23** — the programs, each equal to the manual's
+record word for word; `the_programs_execute_every_integer_encoding_the_interpreter_has` (all 128, counted from the
+assembled words through the decoder); `record_s_gives_the_twelve_words_the_referees_gave`; a fetch from an unaligned
+target, BEV's vector, an exception inside a handler keeping EPC, ERET through ErrorEPC, a later stage's instruction
+halting; the latency and pairing tables cell for cell; and the issue rules on sequences whose cycles follow from the
+manual by hand (two independent ALU instructions 1 cycle, dependent 2; two loads 2; MULT to MFLO 5; DIV to MFLO 38;
+MULT beside MULT1 1; MADD after MADD 3; a Y pair 2). The crate's other tests: lib **14 of 14**, `programs` **3 of 3**;
+clippy clean.
+
+### 16.6 On the referees (measured 2026-10-24)
+
+`examples/s6.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until 1FFFF0=5A99D00E`
+read each record from PCSX2 (Americas BIOS, fast boot) and from Play!. Words differing from the manual's record:
+
+| Program (record words) | PCSX2 | Play! | Reading |
+|---|---|---|---|
+| `three` (10,562), `immediates` (3,538), `muldiv` (14,080), `branches` (1,772) | 0 | 0 | both lineages equal the manual |
+| `sa` (410) | 0 | 0 | after D-9's ruling; 150 each against the manual's bit count |
+| `undefined` (184) | 0 | 0 | D-6: both lineages give the interpreter's reading |
+| `memory` (748), `upper` (44) | 12, 1 | 12, 1 | LWR at a byte other than 0: PCSX2 clears bits 63..32, Play! sign-extends, the manual keeps them (D-10) |
+| `exc-trap` (1,344), `exc-call` (40) | 0, 0 | 455, 12 | PCSX2 takes traps, SYSCALL and BREAK exactly; Play!'s high-level BIOS takes none through the vector |
+| `exc-eidi` (4) | 1 | 0 | DI left EIE set on PCSX2 (D-11) |
+| `exc-address` (96), `exc-overflow` (144), `exc-reserved` (70), `exc-unusable` (20), `exc-delay` (40), `exc-user` (30) | 47, 65, 21, 8, 16, 15 | the same | neither referee raises an address error, an overflow, a reserved instruction or an unusable coprocessor exception; those rest on the manual alone until S10's console texts |
+
+**A defect of the project's ELF builder, found by these runs.** `media::program` placed the segment at byte 84 with an
+alignment of 16, which the ELF format forbids (an offset must equal the address modulo the alignment). Small programs
+loaded; a 160 KiB one read its constants 12 bytes astray on PCSX2 [M: a probe program of three cases equal at its own
+size and wrong with 40,000 NOPs before its constants, then equal with the segment at byte 60h]. The segment now starts
+at `SEGMENT_OFFSET`, 60h; WiseMan's `SyntheticPs2Elf` keeps the old layout (§16.9 Q3).
+
+**Exposure**: the referees were run on the project's own programs only; nothing of either's log was read.
+
+### 16.7 Seeded faults (2026-10-24)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | MADD1 accumulating from pipeline 0's HI and LO | `both_multipliers_and_dividers_equal_the_manual` |
+| F2 | LWR sign-extending at every byte (Play!'s reading) | `every_load_and_store_at_every_byte_equals_the_manual`, `bits_127_to_64_survive_every_narrower_write` |
+| F3 | BNEL not nullifying its slot | `branches_jumps_and_links_equal_the_manual` |
+| F4 | EPC the slot's address for an exception in a delay slot | `exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says` |
+| F5 | MAC0's repeat rate ignored | `the_multipliers_are_four_cycles_to_their_result_and_two_between_issues` |
+| F6 | SLTIU comparing with the zero-extended immediate | `immediate_and_shift_forms_equal_the_manual` |
+
+### 16.8 What the plan got wrong, or left open
+
+- **§5.2 says "the issue and latency the TX79 manual gives"**: the EE Core User's Manual now gives them for the EE
+  itself; its integer rows equal the TX79's, its floating-point rows do not (4 cycles for ADD.S against the TX79's 6,
+  DIV.S 8 against 21), so S9 uses the EE's.
+- **S6's gate, "the project's programs over every integer encoding against the manual's definitions"**, holds for the
+  results; for exceptions the referees give no evidence beyond traps, SYSCALL and BREAK (§16.6), so the exception rules
+  are graded against the manual alone until S10's console texts.
+- **The manual is not consistent with itself in four places**, each a dispute: Trap's code (D-7), Status.CU's polarity
+  (D-8), what SA holds (D-9), and MADD1's and MULTU's Descriptions against their Operation sections (§16.2).
+- **S5's Q2** (fields fixed at zero are ignored) stands: no program here set one. The kit's *Restriction* (16) and (17)
+  show that some undefined COP0 and COP1 patterns are not cleanly decoded by the silicon (no exception, a destroyed TLB
+  entry or data cache line); the programs avoid those patterns and the decoder still reports them reserved.
+
+### 16.9 Questions this stage leaves
+
+1. **Q1 [routine], D-10 (LWR's upper word).** *Recommended*: keep the documents' reading (the EE Core manual's
+   Description, Operation and table, and the TX79's, agree), since the two referee lineages disagree with each other;
+   look again when S10 runs `cpu/ee/*`, whose console texts may exercise LWR.
+2. **Q2 [routine], exceptions without a referee.** *Recommended*: accept the manual as the only witness for address
+   errors, overflow, reserved instructions and unusable coprocessors until S10, and run `exc-*` again on any referee
+   that later models them.
+3. **Q3 [routine], WiseMan's `SyntheticPs2Elf`.** It writes the same misaligned segment offset (84 with an alignment of
+   16). *Recommended*: give it the Rust builder's 60h at S10, when the C# runners first build programs large enough to
+   meet the defect; no program it writes today is.
+
+### 16.10 What was read for this stage
+
+`Sapphire_Plan.md` §1, §2, §5, §5.12, §7, §9.1 and §11; this page's §1 and §14–§15; `Sapphire_Disputes.md`;
+`Sapphire_References.md`; `EmuSen_Mips.md` §8; `emusen-mips`'s `r5900.rs`; `ps2referee.py`'s usage. Sony's *EE Core
+Instruction Set Manual* §1, chapter 2's pages for every integer instruction, chapter 3's pages but the 128-bit MMI
+ones, chapter 4's pages for DI, EI, ERET and MFC0, §7; *EE Core User's Manual* §1.3, §1.4, §2.2–§2.12, §3.2's Status,
+Cause, EPC and PRId, chapter 4; *VU User's Manual*'s contents, §3.6.1, §4.1; the kit's *Restriction*; the title pages
+of the other manuals. Toshiba's *TX79* manual, Table 3-21 and LWR's page. ps2tek's text searched for the divide and
+PRId. No emulator, SDK or loader source and no firmware.
+
+### 16.11 What this stage does not cover
+
+- The machine running programs: the ELF loader and the machine's EE are S10's; the S6 programs run through the tests.
+- COP0 beyond the exception registers, the TLB, the caches and CACHE, the scratchpad and the memory map (S7); MMI and
+  PLZCW (S8); COP1 (S9); COP2 (S12); interrupts (S11).
+- D-0's clocks: the scheduler that would pin them does not exist yet; the interpreter counts cycles alone.

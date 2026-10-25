@@ -9,4 +9,9 @@ and recorded in `Sapphire_Native.md` beside the plan. `cargo test --release` run
 `cargo run --release --example elf -- programs/record.s record.elf` assembles one with `emusen-mips` into an ELF, and
 `EmuSen.WiseMan/Reference/analysis/ps2referee.py` runs it on a referee and reads its record.
 
+`src/ee/` is the EE core's integer interpreter and timing model (stage S6, `Sapphire_Native.md` §16), not yet run by
+the machine. `tests/s6/` generates the stage's programs over every integer encoding with the record the EE Core
+manual's definitions give, and `tests/interpreter.rs` grades the interpreter by them; `cargo run --release --example s6
+-- <folder>` writes them as ELFs with their expected records for the referees.
+
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

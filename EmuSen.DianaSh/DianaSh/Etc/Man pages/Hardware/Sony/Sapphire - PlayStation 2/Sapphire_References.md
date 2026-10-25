@@ -34,8 +34,50 @@ In `docs/`, each file's SHA-256 in `docs/SHA256SUMS` [M `sha256sum`]:
 **Read, not kept** [R]: Microprocessor Report, K. Diefendorff, "Sony's Emotionally Charged Chip", vol. 13 no. 5,
 1999-04-19, through a course's copy (`docencia.ac.upc.edu`; the copy Wikipedia cites did not answer); a magazine's
 article, cited by page. **Not fetched**: the IEEE Micro and IEEE JSSC papers (behind paywalls; the Hot Chips slides
-stand in for the first); Sony's Linux-kit manuals (Q1 allows only the tester's own or a lawful copy, and none was found
-on Sony's hosting; each is sought when a stage first needs it); psdevwiki's pages (HTTP 403).
+stand in for the first); Sony's Linux-kit manuals (Q1 allowed only the tester's own or a lawful copy, and none was found
+on Sony's hosting; fetched at S6, §1.1); psdevwiki's pages (HTTP 403).
+
+### 1.1 Sony's Linux-kit manuals (fetched 2026-10-24, stage S6)
+
+*Decided 2026-10-24 by the tester* (`Sapphire_Plan.md` §2.2, §11 Q1): archived online copies of the manuals Sony shipped
+with the Linux for PlayStation 2 kit may be read, the kit's edition only. In `docs/sony-linux-kit/`, each file's SHA-256
+in `docs/SHA256SUMS` and its source in `docs/DOCS.txt` §C [M `sha256sum`].
+
+**Source.** The kit's own Release 1.0 Disc 1 ("Runtime Environment"; `SYSTEM.CNF` names `PBPX_955.09`, `VMODE = PAL`),
+as the Internet Archive keeps it in the item `linux-disc-2` (`Linux Disc 1.iso`, 1,089,437,696 bytes, MD5
+`8558a446…`), from whose folder `SM_PDF/ENGLISH/` each PDF was taken alone through the archive's in-image file service;
+the image itself was not downloaded and no other file of it was opened. **Second witness**: the same disc in the item
+`linux-for-playstation-2` ("Release 1.0 (Europe) (Disc 1)", MD5 `872da2c4…`) gives the EE Core manuals byte for byte
+(the same SHA-256). That item's Beta Release 1 disc holds the same `SM_PDF` folders, the six titles everyeye.it listed
+for the kit in 2001 (`Sapphire_Plan.md` §2.2) [M, the archive's listings].
+
+**Edition check**, on each title page and the page after it, before anything else was read: every file reads "Copyright
+© 2001 Sony Computer Entertainment Inc.", "Version 5.0", "Publication date: October 2001", with Sony's notice against
+reproduction; **none carries a confidentiality marking**, the word occurring nowhere in any of the seven texts [M
+`pdftotext | grep -ci confidential`: 0 each]. None was refused, and none had to be substituted.
+
+| File | Title, edition | Pages | SHA-256 |
+|---|---|---|---|
+| `COREUM_E.PDF` | *EE Core User's Manual*, Version 5.0, October 2001 | 178 | `794e24e51582…` |
+| `INST_E.PDF` | *EE Core Instruction Set Manual*, Version 5.0, October 2001 | 406 | `2bf3c0d4fb52…` |
+| `EEUSER_E.PDF` | *EE User's Manual*, Version 5.0, October 2001 | 220 | `1f64f952dc74…` |
+| `VU_E.PDF` | *VU User's Manual*, Version 5.0, October 2001 | 366 | `28eae0d67646…` |
+| `GSUSER_E.PDF` | *GS User's Manual*, Version 5.0, October 2001 | 176 | `c6ef3e6129b5…` |
+| `EEOVER_E.PDF` | *EE Overview*, Version 5.0, October 2001, on the kit's list | 64 | `a1793513d692…` |
+| `RESTRI_E.PDF` | *Restriction*, 2001: the kit's list of the EE's and the GS's hardware restrictions, shipped beside the others | 8 | `4951b4d4009b…` |
+
+**What they answer that S5 left open** (`Sapphire_Native.md` §15.3). They supersede the "not in any allowed source"
+gaps; the gaps are filled at the stages named, not now:
+
+| S5's gap | Where the kit's manuals answer it | Filled at |
+|---|---|---|
+| The VU micro-only lower instructions' encodings (the LQ and SQ kind, integer immediates, branches, flag instructions, EFU, XGKICK, XTOP, XITOP, MFP, WAITP) | *VU User's Manual* §4.1.2 (the lower word's types 1–9), §4.3 (each lower instruction's page, its operation code) | S13 |
+| The operand layouts written `Raw` (ITOF, FTOI, ABS, CLIP, MOVE, MR32, the loads and stores, DIV, SQRT, RSQRT, MTIR, MFIR, ILWR, ISWR, the random unit, the integer ALU, CALLMS) | *VU User's Manual* §4.1.1–§4.1.3 (the fields), §4.2 and §4.3 (each instruction), §6.1 and §6.2 (the macro forms) | S12 (macro), S13 (micro) |
+| COP2's interlock bit (QMTC2.I, CTC2.I) | *VU User's Manual* §6.2's pages for QMFC2, QMTC2, CFC2 and CTC2; §5.4.4 (transfers with the EE core) | S12 |
+| VU0's control registers' numbers | *VU User's Manual* §5.1.3 (control registers), §5.5.5 (VU1's as VU0 sees them) | S12 |
+
+S5's disputes D-1 to D-5 are read against the EE Core Instruction Set Manual §7 and the VU User's Manual §4.1 at S6
+(`Sapphire_Disputes.md`).
 
 ## 2. ps2autotests
 

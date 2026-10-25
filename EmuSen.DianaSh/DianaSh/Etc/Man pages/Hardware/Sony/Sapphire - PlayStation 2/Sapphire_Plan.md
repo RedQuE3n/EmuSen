@@ -253,6 +253,16 @@ under a developer's agreement, but they are Sony's copyright and their online co
 covers on the EE side. **What they would not**: the IOP, the SPU2, the CDVD and the SIO2. Whether writers may read them
 is the tester's choice (§11 Q1); Wikipedia already cites the GS user's manual for its fill rate [R].
 
+*Decided 2026-10-24 by the tester, for Q1: archived online copies of the manuals Sony shipped with the kit may be
+read*, Q1's "lawful source" being taken to include them. Only the kit's own edition is read; a licensee SDK edition, or
+any copy marked confidential for licensees, is refused at its title page. *Fetched 2026-10-24 at S6*
+(`Sapphire_References.md` §1.1): the EE Core User's Manual, the EE Core Instruction Set Manual, the EE User's Manual,
+the VU User's Manual and the GS User's Manual, with the EE Overview and the kit's list of restrictions beside them, each
+"Version 5.0", "Publication date: October 2001", none marked confidential, taken file by file from the kit's own
+Release 1.0 Disc 1 as the Internet Archive keeps it and checked against a second archived copy of the same disc. They
+are kept in the probe's cache and never committed. Like ps2tek's BIOS chapter, they are screened for replacement
+writers before one reads them (§1.4).
+
 **ps2tek's BIOS chapter, screened for replacement writers** [C, set 2026-10-23]. The chapter's sections are "BIOS File
 Structure", "BIOS Boot Process", "BIOS EE Threading", "BIOS EE Syscalls", "BIOS EE Patches", "BIOS PlayStation
 Compatibility", "BIOS IOP Module Linking", "BIOS List of IOP Modules" and one section per IOP module [R the table of
@@ -527,6 +537,9 @@ events and cycle counts bit for bit (§5.12).
 cost an instruction or a block in its place, is compromise C1 of §5.13, decided by measurement at S32 and S36. The
 recompiler's bit-for-bit claim is made against the interpreter with every compromise off; each compromise is then
 measured separately against that pair.
+
+*Built 2026-10-24 at S6* (`Sapphire_Native.md` §16.4): the tables are the *EE Core User's Manual*'s own (§1.3.5, §1.3.6,
+§2.12), which equal the TX79's on every integer row and differ on the floating-point ones; the caches wait for S7.
 
 ### 5.3 Floating point, exact
 
@@ -864,7 +877,7 @@ the enhancements (E) are separate tracks.
 | Stage | What it covers | Its gate |
 |---|---|---|
 | **S5** | `emusen-mips`: the R5900's decode and disassembly as a table of its own (§9.1), MMI, COP0, COP1 and COP2's macro forms, the VU micro tables; the assembler for both | Every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same word; the R3000 and VR4300 goldens unchanged *Built 2026-10-24, `Sapphire_Native.md` §15: met for the 723 cells where the EE agrees with the TX79, the other 83 decoded as ps2tek reads them under disputes D-1 to D-3; ps2tek's two VU tables read back in both modes; the VU micro-only lower instructions in no allowed document (§15.6 Q1); the other processors' text unchanged.* |
-| **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned |
+| **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned *Built 2026-10-24, `Sapphire_Native.md` §16: met; 128 mnemonics through `r5900.rs`, seventeen programs equal to the EE Core manual's record, the results equal on PCSX2 and Play! but where D-6 to D-11 record otherwise; neither referee raises address-error, overflow, reserved or unusable exceptions, so those rest on the manual until S10; the EE Core User's Manual's §2.12 and Tables 1-1 to 1-3 pinned.* |
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |
@@ -1142,7 +1155,10 @@ needs Q11.
 1. **Q1 [decision], Sony's Linux-kit manuals** (§2.2). *Decided 2026-10-24 by the tester: as recommended.* May writers read the EE, VU, DMAC, IPU and GS manuals Sony
    shipped with the Linux for PlayStation 2 kit? *Recommended:* yes, each use cited by document and section, as
    Diamond's Q1 allowed Sony's documents, with ps2tek's screening (§2.2) applied to them for replacement writers; copies
-   only from the tester's own or a lawful source, kept in the probe's cache, never committed.
+   only from the tester's own or a lawful source, kept in the probe's cache, never committed. *Decided 2026-10-24 by the
+   tester: archived online copies of the manuals Sony shipped with the kit count as that source*, the kit's own edition
+   only, a licensee edition or a copy marked confidential refused at its title page. Fetched at S6 (§2.2,
+   `Sapphire_References.md` §1.1).
 2. **Q2 [routine], ps2tek's revision and status.** *Decided 2026-10-23 (routine): as recommended.* *Recommended:* pinned at `1c91660` (2022-01-27, its last push), cited
    as a document of unstated sources written by an emulator's author, its BIOS chapter screened and partly excluded for
    replacement writers (§2.2).

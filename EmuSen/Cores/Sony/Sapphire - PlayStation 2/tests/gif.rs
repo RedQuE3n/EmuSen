@@ -54,3 +54,28 @@ fn s17s_programs_draw_through_path3() {
         grade(s17::program(&script));
     }
 }
+
+#[test]
+fn packed_mode_writes_each_descriptor_as_section_7_3_draws_it() {
+    grade(s15::packed());
+}
+
+#[test]
+fn reglist_and_image_modes_follow_sections_7_4_and_7_5() {
+    grade(s15::reglist());
+}
+
+#[test]
+fn every_path_carries_the_same_packets_to_the_gs() {
+    grade(s15::paths());
+}
+
+#[test]
+fn the_paths_are_arbitrated_at_packet_ends_and_path3_masked_and_interrupted_as_section_7_1_says() {
+    grade(s15::arbitration());
+}
+
+#[test]
+fn the_gif_registers_pause_reset_and_report_as_section_7_6_says() {
+    grade(s15::regs());
+}

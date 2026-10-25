@@ -189,7 +189,9 @@ impl Gif {
         }
     }
 
-    fn interrupt(&mut self) {
+    /// PATH3's IMAGE data gives way at a slice's end to a request seen at `at`.
+    fn interrupt(&mut self, at: u64) {
+        self.time = self.time.max(at);
         self.ip3 = true;
         self.p3cnt = u32::from(self.packet[2].loops);
         self.owner = None;
@@ -244,8 +246,9 @@ impl Gif {
                     self.step(Path::One, w, self.time, gs);
                 }
                 Some(Path::Three) => {
-                    if self.at_slice() && (!self.kicks.is_empty() || self.p2.is_some_and(|r| !r.1)) {
-                        self.interrupt();
+                    let asks = self.kicks.front().map(|k| k.1).or(self.p2.filter(|r| !r.1).map(|r| r.0));
+                    if let Some(at) = asks.filter(|_| self.at_slice()) {
+                        self.interrupt(at);
                         continue;
                     }
                     let Some(&(w, arrived)) = self.fifo.front() else { return };
@@ -297,7 +300,7 @@ impl Gif {
                 _ => return None,
             },
             Some(Path::Three) if !hl && self.at_slice() => {
-                self.interrupt();
+                self.interrupt(at);
                 self.grant(Path::Two, self.time.max(at));
             }
             _ => return None,

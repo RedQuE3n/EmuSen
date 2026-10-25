@@ -228,7 +228,12 @@ fn generated_sheets_round_trip_through_all_three_checks_and_the_library_is_uncha
     assert_eq!(doc.get("dump").and_then(|d| d.get("form")).and_then(Value::as_str), Some("cue-bin"));
     assert!(temp.at("home/Packages/PlayStation/Two/Two.chd/Two.cue").is_file());
     assert!(temp.at("home/Packages/Sega CD/Disc.chd/package.json").is_file());
+    let log = got.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("start")).and_then(|e| e.get("log")).and_then(Value::as_str).unwrap().to_string();
+    assert!(std::fs::read_to_string(&log).unwrap().lines().filter(|l| l.contains("\tconvert\t")).count() >= SOURCES.len(), "{log}");
     let listed = run(&ctx, r#"{"op": "ls"}"#);
+    let two = listed.iter().find(|e| e.get("source").and_then(Value::as_str) == Some("psx/Two/Two.cue")).unwrap();
+    let whole = ["psx/Two/Two.cue", "psx/Two/Two (Track 1).bin", "psx/Two/Two (Track 2).bin"].iter().map(|f| std::fs::metadata(temp.at("library").join(f)).unwrap().len()).sum::<u64>();
+    assert_eq!(two.get("size").and_then(|s| if let Value::Number(n) = s { n.parse::<u64>().ok() } else { None }), Some(whole), "ls gives a sheet's disc its whole size");
     let checked = run(&ctx, r#"{"op": "check"}"#);
     for source in SOURCES {
         assert_eq!(state_of(&listed, source), "converted", "{source}");

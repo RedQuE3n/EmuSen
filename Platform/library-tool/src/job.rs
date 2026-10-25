@@ -167,6 +167,10 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     if let Some(c) = &chdman {
         start.push(("chdman", Value::string(&c.version)));
     }
+    let log_at = log_path(ctx, std::time::SystemTime::now());
+    if req.op != Op::List {
+        start.push(("log", Value::string(&log_at)));
+    }
     if req.op == Op::Convert {
         start.push(("codecs", Value::string(if req.options.fast { convert::FAST_CODECS } else { "cdlz,cdzl,cdfl" })));
         start.push(("threads", Value::number(threads)));
@@ -209,25 +213,30 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
         members.extend(outcome.facts);
         let event = Value::Object(members);
         if req.op != Op::List {
-            log(ctx, &req.op, item, &event, begun.elapsed());
+            log(&log_at, &req.op, item, &event, begun.elapsed());
         }
         emit(queue, event);
     }
     end(queue, &req.op, &counts, started, None);
 }
 
-/// One line per disc in `Logs/chd_<day>.log` (§4.6): when, what, the disc and its event.
-fn log(ctx: &Context, op: &Op, item: &Item, event: &Value, took: Duration) {
-    let now = std::time::SystemTime::now();
-    let stamp = convert::utc(now);
-    let day = &stamp[..10];
-    let at = path::combine(Style::HOST, &ctx.logs(), &format!("chd_{day}.log"));
+/// The batch's log, `Logs/chd_<day>.log` by the day it started, so that one batch keeps to one file (§4.6).
+fn log_path(ctx: &Context, started: std::time::SystemTime) -> String {
+    let stamp = convert::utc(started);
+    path::combine(Style::HOST, &ctx.logs(), &format!("chd_{}.log", &stamp[..10]))
+}
+
+/// One line per disc in the batch's log: when, what, the disc and its event.
+fn log(at: &str, op: &Op, item: &Item, event: &Value, took: Duration) {
+    let stamp = convert::utc(std::time::SystemTime::now());
     let mut line = String::new();
     json::write_compact(&mut line, event);
     let text = format!("{stamp}\t{}\t{}\t{:.1}s\t{line}\n", op_word(op), item.rel, took.as_secs_f64());
-    let _ = std::fs::create_dir_all(ctx.logs());
+    if let Some(dir) = std::path::Path::new(at).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&at) {
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(at) {
         let _ = f.write_all(text.as_bytes());
     }
 }

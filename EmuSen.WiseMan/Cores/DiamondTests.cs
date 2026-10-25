@@ -184,16 +184,6 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // A program that prints through the DEV8 DUART, as the open kernel's TTY will.
-        private static byte[] Printing(string text)
-        {
-            var words = new List<uint> { 0x3C08_1F80, 0x3508_2023 };
-            foreach (char c in text) words.AddRange(new[] { 0x2409_0000u | c, 0xA109_0000u });
-            uint loop = SyntheticPsExe.Origin + 4 * (uint)words.Count;
-            words.AddRange(new[] { 0x0800_0000u | ((loop >> 2) & 0x03FF_FFFF), 0u });
-            return SyntheticPsExe.Build(SyntheticPsExe.Words(words.ToArray()));
-        }
-
         // The TTY reader of Diamond_Plan.md §3.3: the text in the tty space, graded by a ps1-tests protocol as data.
         [Fact]
         public void The_tty_reader_grades_pass_and_fail_lines_a_program_prints()
@@ -203,14 +193,14 @@ namespace EmuSen.WiseMan.Cores
             var grader = new TestRomGrader(new[] { Ps1Tests.Protocol(cop, _ => null) });
             foreach (var (text, outcome) in new[] { ("boot\ncpu/cop\npass - a\npass - b\nDone.\n", RomOutcome.Passed), ("cpu/cop\npass - a\nfail - b:1\nDone.\n", RomOutcome.Failed), ("cpu/cop\npass - a\n", RomOutcome.Incomplete) })
             {
-                string path = Write(Path.Combine("cpu", "cop", "cop.exe").Replace(Path.DirectorySeparatorChar, '_'), Printing(text));
+                string path = Write(Path.Combine("cpu", "cop", "cop.exe").Replace(Path.DirectorySeparatorChar, '_'), SyntheticPsExe.Printing(text));
                 var run = engine.Run(path, new[] { 2 });
                 Assert.Equal(text, TtyReader.Text(run.At(2)!));
                 var verdict = Ps1Tests.Grade(cop, run, _ => null);
                 Assert.Equal(outcome, verdict.Outcome);
                 _output.WriteLine($"{outcome}: {verdict.Detail}");
             }
-            Assert.Equal(RomOutcome.Visual, grader.Grade("other.exe", engine.Run(Write("other.exe", Printing("x")), new[] { 1 })).Outcome);
+            Assert.Equal(RomOutcome.Visual, grader.Grade("other.exe", engine.Run(Write("other.exe", SyntheticPsExe.Printing("x")), new[] { 1 })).Outcome);
         }
 
         // The timers rule grades the sync tables by the log's shape, so a count credited from before its mode write fails - see Diamond_Native.md §11.12.
@@ -223,7 +213,7 @@ namespace EmuSen.WiseMan.Cores
                 + $"0 = Pause counter during Hblanks      {first},    {first + 123},\n3 = Pause until Hblank occurs once      0,    87,\nDone.\n";
             foreach (var (first, outcome) in new[] { (260, RomOutcome.Passed), (35_314, RomOutcome.Failed) })
             {
-                var run = engine.Run(Write($"timers_{first}.exe", Printing(Text(first))), new[] { 4 });
+                var run = engine.Run(Write($"timers_{first}.exe", SyntheticPsExe.Printing(Text(first))), new[] { 4 });
                 var verdict = Ps1Tests.Grade(timers, run, _ => Text(260));
                 _output.WriteLine($"{first}: {verdict.Outcome} {verdict.Detail}");
                 Assert.Equal(outcome, verdict.Outcome);
@@ -250,7 +240,7 @@ namespace EmuSen.WiseMan.Cores
                 ("hblanks", Settled, 261, RomOutcome.Failed),
             })
             {
-                var run = engine.Run(Write($"timers_{name}.exe", Printing(Text(delay, hblanks))), new[] { 4 });
+                var run = engine.Run(Write($"timers_{name}.exe", SyntheticPsExe.Printing(Text(delay, hblanks))), new[] { 4 });
                 var verdict = Ps1Tests.Grade(timers, run, _ => log);
                 _output.WriteLine($"{name}: {verdict.Outcome} {verdict.Detail}");
                 Assert.Equal(outcome, verdict.Outcome);

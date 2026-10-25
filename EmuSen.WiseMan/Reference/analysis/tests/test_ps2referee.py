@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ps2referee's parts that need no referee: PINE's framing, the scan of a process's RAM, the BIOS folder of links, the
-settings file and the probe's command line - see Sapphire_Referees.md §2."""
+settings file, the probe's command line and the tty mode's cut of a log - see Sapphire_Referees.md §2 and Sapphire_Native.md §14."""
 import os
 import socket
 import struct
@@ -196,6 +196,35 @@ class ProbeTests(unittest.TestCase):
         dump = bytearray(ps2referee.EE_RAM)
         struct.pack_into("<2I", dump, 0x200000, 0x80000000, 0xF8000000)
         self.assertEqual(ps2referee.record_words(bytes(dump), [(0x00200000, 2), (0x20200004, 1)]), {str(0x00200000): [0x80000000, 0xF8000000], str(0x20200004): [0xF8000000]})
+
+
+class TtyTests(unittest.TestCase):
+    EXPECTED = "-- TEST BEGIN\r\naddu:\r\n  addu 0, 0: 00000000\r\n\r\n-- TEST END\r\n"
+
+    def test_only_the_programs_lines_are_returned_and_the_log_around_them_never(self):
+        log = "boot line one\nkernel says hello\n-- TEST BEGIN\naddu:\n  addu 0, 0: 00000000\n\n-- TEST END\nafter the test\n"
+        region, found, total = ps2referee.program_text(log, self.EXPECTED)
+        self.assertEqual(region, ["-- TEST BEGIN", "addu:", "  addu 0, 0: 00000000", "", "-- TEST END"])
+        self.assertEqual((found, total), (4, 4))
+        self.assertFalse(any("boot" in line or "kernel" in line or "after" in line for line in region))
+
+    def test_a_fixed_prefix_on_every_line_is_cut_by_the_first_lines(self):
+        log = "[ 1.0] -- TEST BEGIN\n[ 1.1] addu:\n[ 1.2]   addu 0, 0: 00000000\n[ 1.3] \n[ 1.4] -- TEST END\n"
+        region, found, total = ps2referee.program_text(log, self.EXPECTED)
+        self.assertEqual((region[1], found, total), ("addu:", 4, 4))
+
+    def test_a_log_without_the_program_returns_nothing(self):
+        self.assertEqual(ps2referee.program_text("only the bios\n", self.EXPECTED), ([], 0, 4))
+        self.assertEqual(ps2referee.program_text("-- TEST END\n-- TEST BEGIN\n", self.EXPECTED), ([], 0, 4))
+
+    def test_a_wrong_line_is_kept_in_the_region_and_not_counted(self):
+        log = "-- TEST BEGIN\naddu:\n  addu 0, 0: 00000001\n\n-- TEST END\n"
+        region, found, total = ps2referee.program_text(log, self.EXPECTED)
+        self.assertEqual((len(region), found, total), (5, 3, 4))
+
+    def test_each_channel_switches_one_console_on(self):
+        self.assertEqual({c: (v["EnableEEConsole"], v["EnableIOPConsole"]) for c, v in ps2referee.TTY_CHANNELS.items()},
+                         {"ee": ("true", "false"), "iop": ("false", "true"), "none": ("false", "false")})
 
 
 if __name__ == "__main__":

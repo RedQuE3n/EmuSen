@@ -24,6 +24,16 @@ namespace EmuSen.WiseMan.Fixtures
             return exe;
         }
 
+        // A program that prints through the DEV8 DUART, 1F802023h, a byte at a time, as the open kernel's TTY will, and stops.
+        public static byte[] Printing(string text)
+        {
+            var words = new List<uint> { 0x3C08_1F80, 0x3508_2023 };
+            foreach (char c in text) words.AddRange(new[] { 0x2409_0000u | c, 0xA109_0000u });
+            uint loop = Origin + 4 * (uint)words.Count;
+            words.AddRange(new[] { 0x0800_0000u | ((loop >> 2) & 0x03FF_FFFF), 0u });
+            return Build(Words(words.ToArray()));
+        }
+
         public static byte[] Words(params uint[] words) => words.SelectMany(BitConverter.GetBytes).ToArray();
 
         private static void Put(byte[] b, int at, uint v) => BitConverter.TryWriteBytes(b.AsSpan(at, 4), v);

@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.Fixtures
     public static class SyntheticPsxDisc
     {
         public const string ExeName = "EMUS_000.01", ConfigName = "SYSTEM.CNF";
-        public const int PrimaryVolume = 16, PathTableL = 18, PathTableM = 19, RootDirectory = 20, FirstFile = 21;
+        public const int RootDirectory = 20, FirstFile = 21;
 
         // The licence's two lines for each market (psx-spx "System Area").
         public static string LicenceLine2(string market) => market switch
@@ -37,25 +37,13 @@ namespace EmuSen.WiseMan.Fixtures
         {
             exe ??= SyntheticPsExe.Build(market: market == "Americas" ? "North America" : market);
             byte[] config = Encoding.ASCII.GetBytes(SystemCnf);
-            int exeAt = FirstFile + Sectors(config.Length);
-            int total = exeAt + Sectors(exe.Length);
+            int exeAt = FirstFile + Iso9660Image.Sectors(config.Length);
+            int total = exeAt + Iso9660Image.Sectors(exe.Length);
             var user = new byte[total * CdSector.User];
 
             byte[] licence = Encoding.ASCII.GetBytes("          Licensed  by          " + LicenceLine2(market));
             licence.CopyTo(user, 4 * CdSector.User);
-            PrimaryVolumeDescriptor(user.AsSpan(PrimaryVolume * CdSector.User, CdSector.User), total);
-            user[17 * CdSector.User] = 0xFF;
-            Encoding.ASCII.GetBytes("CD001").CopyTo(user, 17 * CdSector.User + 1);
-            user[17 * CdSector.User + 6] = 1;
-            PathTable(user.AsSpan(PathTableL * CdSector.User), littleEndian: true);
-            PathTable(user.AsSpan(PathTableM * CdSector.User), littleEndian: false);
-            var root = user.AsSpan(RootDirectory * CdSector.User, CdSector.User);
-            int at = Record(root, 0, "\0", RootDirectory, CdSector.User, directory: true);
-            at += Record(root, at, "\u0001", RootDirectory, CdSector.User, directory: true);
-            at += Record(root, at, ExeName + ";1", exeAt, exe.Length, directory: false);
-            Record(root, at, ConfigName + ";1", FirstFile, config.Length, directory: false);
-            config.CopyTo(user, FirstFile * CdSector.User);
-            exe.CopyTo(user, exeAt * CdSector.User);
+            Iso9660Image.Write(user, RootDirectory, new[] { new IsoFile(ExeName, exeAt, exe), new IsoFile(ConfigName, FirstFile, config) });
 
             var ends = new HashSet<int> { 17, RootDirectory, exeAt - 1, total - 1 };
             var data = new byte[total * CdSector.Raw];
@@ -85,84 +73,6 @@ namespace EmuSen.WiseMan.Fixtures
                 BitConverter.TryWriteBytes(audio.AsSpan(pregap + i + 2, 2), (short)-left);
             }
             return audio;
-        }
-
-        public static int Sectors(int bytes) => Math.Max(1, (bytes + CdSector.User - 1) / CdSector.User);
-
-        private static void PrimaryVolumeDescriptor(Span<byte> d, int blocks)
-        {
-            d.Fill(0);
-            d[0] = 1;
-            Text(d, 1, "CD001", 5);
-            d[6] = 1;
-            Text(d, 8, "PLAYSTATION", 32);
-            Text(d, 40, "EMUSEN_SYNTHETIC", 32);
-            Both32(d, 80, (uint)blocks);
-            Both16(d, 120, 1);
-            Both16(d, 124, 1);
-            Both16(d, 128, CdSector.User);
-            Both32(d, 132, 10);
-            BitConverter.TryWriteBytes(d.Slice(140, 4), (uint)PathTableL);
-            Big32(d, 148, PathTableM);
-            Record(d, 156, "\0", RootDirectory, CdSector.User, directory: true);
-            Text(d, 190, "", 128);
-            Text(d, 318, "EMUSEN", 128);
-            Text(d, 446, "", 128);
-            Text(d, 574, "PLAYSTATION", 128);
-            Text(d, 702, "", 37);
-            Text(d, 739, "", 37);
-            Text(d, 776, "", 37);
-            foreach (int at in new[] { 813, 830, 847, 864 }) Text(d, at, at == 813 ? "2026101100000000" : "0000000000000000", 16);
-            d[881] = 1;
-        }
-
-        private static void PathTable(Span<byte> t, bool littleEndian)
-        {
-            t[0] = 1;
-            if (littleEndian) BitConverter.TryWriteBytes(t.Slice(2, 4), (uint)RootDirectory);
-            else Big32(t, 2, RootDirectory);
-            t[littleEndian ? 6 : 7] = 1;
-        }
-
-        // A directory record of ECMA-119 §9.1, padded to an even length; the length it took.
-        private static int Record(Span<byte> d, int at, string name, int extent, int length, bool directory)
-        {
-            int size = 33 + name.Length + (name.Length % 2 == 0 ? 1 : 0);
-            var r = d.Slice(at, size);
-            r[0] = (byte)size;
-            Both32(r, 2, (uint)extent);
-            Both32(r, 10, (uint)length);
-            (r[18], r[19], r[20]) = ((byte)126, (byte)10, (byte)11);
-            r[25] = (byte)(directory ? 2 : 0);
-            Both16(r, 28, 1);
-            r[32] = (byte)name.Length;
-            Encoding.ASCII.GetBytes(name).CopyTo(r[33..]);
-            return size;
-        }
-
-        private static void Text(Span<byte> d, int at, string text, int width) => Encoding.ASCII.GetBytes(text.PadRight(width)[..width]).CopyTo(d[at..]);
-
-        private static void Both16(Span<byte> d, int at, ushort v)
-        {
-            BitConverter.TryWriteBytes(d.Slice(at, 2), v);
-            d[at + 2] = (byte)(v >> 8);
-            d[at + 3] = (byte)v;
-        }
-
-        private static void Both32(Span<byte> d, int at, uint v)
-        {
-            BitConverter.TryWriteBytes(d.Slice(at, 4), v);
-            Big32(d, at + 4, v);
-        }
-
-        private static void Big32(Span<byte> d, int at, int v) => Big32(d, at, (uint)v);
-
-        private static void Big32(Span<byte> d, int at, uint v)
-        {
-            d[at] = (byte)(v >> 24);
-            d[at + 1] = (byte)(v >> 16);
-            d[at + 2] = (byte)(v >> 8);
-            d[at + 3] = (byte)v;
         }
     }
 }

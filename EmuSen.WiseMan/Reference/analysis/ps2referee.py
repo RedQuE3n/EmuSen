@@ -7,6 +7,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py fetch
     ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
+    ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -17,7 +18,10 @@ probe run is refused unless it holds it at frame N. --again reads the same words
 referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
 speed instead of unlimited. ADDRESS is hexadecimal, WORDS decimal. `boot` runs a disc on PCSX2 for N seconds at the
 console's speed and prints only what PINE says of it (its title, serial and status) and the CPU time it took, never
-the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5).
+the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5). `tty` runs a
+program that prints (ps2autotests') on PCSX2 with one of its log channels on, the EE's console, the IOP's or neither,
+and returns only the program's own text: the lines from the first that ends with the expected text's first line to the
+last that ends with its last; the rest of the log is never printed or kept (Sapphire_Native.md §14).
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
 private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
@@ -64,6 +68,11 @@ PCSX2_SETTINGS = {
     "SPU2/Output": {"Backend": "Null", "OutputMuted": "true"},
     "Logging": {"EnableFileLogging": "true"},
 }
+
+# The console channels PCSX2's log can carry, one switched on at a time to learn which a program prints on (P2).
+TTY_CHANNELS = {"ee": {"EnableEEConsole": "true", "EnableIOPConsole": "false"},
+                "iop": {"EnableEEConsole": "false", "EnableIOPConsole": "true"},
+                "none": {"EnableEEConsole": "false", "EnableIOPConsole": "false"}}
 
 
 def die(message, code=1):
@@ -336,6 +345,16 @@ def inner_main(job):
                     break
                 time.sleep(0.05)
             out["drawing"] = since()
+            # A printing program has no done word: the run ends when its expected last line reaches the log.
+            while job.get("stop_text") and since() < job["seconds"] and p.poll() is None:
+                text = open(job["emulog"], errors="replace").read() if os.path.exists(job["emulog"]) else ""
+                if job["stop_text"] in text:
+                    out["until"] = since()
+                    time.sleep(0.5)
+                    break
+                time.sleep(0.1)
+            if job.get("stop_text"):
+                job["seconds"] = 0
             while since() < job["seconds"] and p.poll() is None:
                 try:
                     if reader is None:
@@ -409,9 +428,9 @@ def run_inner(job, name, seconds):
         return out, text
 
 
-def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True):
+def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
-    settings file is shared."""
+    settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
     data = CACHE / "pcsx2-data"
     with open(CACHE / "pcsx2.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -419,16 +438,47 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True):
         ini = data / "PCSX2/inis/PCSX2.ini"
         ini.parent.mkdir(parents=True, exist_ok=True)
         wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
-                  "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]}}
+                  "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
+                  "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
         root = CACHE / "pcsx2/squashfs-root"
         job = {"cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui"] + (["-unlimited"] if unlimited else []) + ["--", str(target)],
                "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "until": list(until) if until else None, "dumps": dumps, "again": again, "ask": [Pine.TITLE, Pine.ID],
                "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
         job["cmd"][-2:-2] = ["-logfile", "@EMULOG@"]
+        if stop_text:
+            job["stop_text"] = stop_text
         out, text = run_inner(job, "pcsx2", seconds)
         out["bios_loaded"] = bios_loaded(text, market)
+        if channel:
+            out["log"] = text
         return out
+
+
+def program_text(log, expected):
+    """A program's own lines in a log, and how many of the expected text's lines they hold: from the first line ending
+    with the expected text's first line to the last ending with its last, each with the first line's prefix cut. The rest
+    of the log, which holds the BIOS's output, is never returned."""
+    want = [line.rstrip() for line in expected.replace("\r", "").split("\n")]
+    marks = [w for w in want if w]
+    if not marks:
+        return [], 0, 0
+    lines = [line.rstrip() for line in log.replace("\r", "").split("\n")]
+    first = next((i for i, line in enumerate(lines) if line.endswith(marks[0])), None)
+    last = next((i for i in range(len(lines) - 1, -1, -1) if lines[i].endswith(marks[-1])), None)
+    if first is None or last is None or last < first:
+        return [], 0, len(marks)
+    cut = len(lines[first]) - len(marks[0])
+    region = [line[cut:] if len(line) >= cut else line for line in lines[first:last + 1]]
+    pool = {}
+    for line in region:
+        pool[line] = pool.get(line, 0) + 1
+    found = 0
+    for w in marks:
+        if pool.get(w, 0) > 0:
+            pool[w] -= 1
+            found += 1
+    return region, found, len(marks)
 
 
 def run_play(target, seconds, until, dumps, again=0):
@@ -500,7 +550,7 @@ def bios_loaded(log, market):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "boot"):
+    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty"):
         die(__doc__, 2)
     mode, referee, target = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -513,6 +563,9 @@ def main(argv):
             return value
         return default
 
+    expected = Path(rest.pop(0)).read_text(errors="replace") if mode == "tty" and rest else None
+    channel = option("--channel", "ee")
+    out_file = option("--out")
     market = option("--bios", "americas")
     if market not in MARKETS:
         die(f"--bios is one of {', '.join(MARKETS)}", 2)
@@ -524,6 +577,19 @@ def main(argv):
     until = option("--until")
     until = tuple(int(x, 16) for x in until.split("=")) if until else None
     dumps = [(int(a, 16), int(n)) for a, n in (d.split(":") for d in rest)]
+    if mode == "tty":
+        if referee != "pcsx2" or expected is None or channel not in TTY_CHANNELS:
+            die("tty runs on pcsx2 with an expected text, --channel ee, iop or none", 2)
+        marks = [line.rstrip() for line in expected.replace("\r", "").split("\n") if line.strip()]
+        out = run_pcsx2(target, market, count, None, [], 0, True, channel, marks[-1] if marks else None)
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+        region, found, total = program_text(out.pop("log", ""), expected)
+        if out_file:
+            Path(out_file).write_text("\n".join(region) + ("\n" if region else ""))
+        print(json.dumps({"channel": channel, "expected_lines": total, "found": found, "region_lines": len(region),
+                          **{k: v for k, v in out.items() if k in ("until", "wall", "exit", "error", "bios_loaded")}}))
+        return
     if mode == "boot":
         if referee != "pcsx2":
             die("boot runs on pcsx2 only", 2)

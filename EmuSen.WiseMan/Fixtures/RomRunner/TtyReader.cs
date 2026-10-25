@@ -4,14 +4,14 @@ using System.Text.RegularExpressions;
 
 namespace EmuSen.WiseMan.Fixtures.RomRunner
 {
-    // A program's TTY as text, from the `tty` space a core keeps it in, up to its first NUL - see Diamond_Native.md §11.12.
+    // A program's TTY as text, from the space a core keeps it in (`tty` unless a console names another), up to its first NUL - see Diamond_Native.md §11.12.
     public static class TtyReader
     {
         public const string Space = "tty";
 
-        public static string? Text(RomSnapshot snapshot)
+        public static string? Text(RomSnapshot snapshot, string space = Space)
         {
-            if (!snapshot.Spaces.TryGetValue(Space, out var bytes)) return null;
+            if (!snapshot.Spaces.TryGetValue(space, out var bytes)) return null;
             int end = Array.IndexOf(bytes, (byte)0);
             return Encoding.ASCII.GetString(bytes, 0, end < 0 ? bytes.Length : end).Replace("\r", "");
         }

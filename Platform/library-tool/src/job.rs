@@ -25,11 +25,14 @@ pub enum Op {
     PkgList,
     PkgCheck,
     PkgMigrate,
+    /// `pkg patch add` and `pkg patch rm` (EmuSen_GamePackages.md §15), since 1.2.
+    PkgPatchAdd,
+    PkgPatchRm,
 }
 
 impl Op {
     fn packages(&self) -> bool {
-        matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate)
+        matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate | Op::PkgPatchAdd | Op::PkgPatchRm)
     }
 }
 
@@ -40,10 +43,14 @@ pub struct Request {
     pub options: Options,
     /// `pkg ls`'s console, none for every package.
     pub console: Option<String>,
+    /// `pkg patch add`'s patch file, a full path; `pkg patch rm`'s patch, from 1.
+    pub patch: Option<String>,
+    pub index: usize,
 }
 
 /// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
-/// `{"op": "pkg-make" | "pkg-ls" | "pkg-check" | "pkg-migrate", "paths": [...], "console": null}`.
+/// `{"op": "pkg-make" | "pkg-ls" | "pkg-check" | "pkg-migrate", "paths": [...], "console": null}`, or since 1.2
+/// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -54,7 +61,9 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some("pkg-ls") => Op::PkgList,
         Some("pkg-check") => Op::PkgCheck,
         Some("pkg-migrate") => Op::PkgMigrate,
-        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check or pkg-migrate".into()),
+        Some("pkg-patch-add") => Op::PkgPatchAdd,
+        Some("pkg-patch-rm") => Op::PkgPatchRm,
+        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add or pkg-patch-rm".into()),
     };
     let paths = match doc.get("paths") {
         None | Some(Value::Null) => Vec::new(),
@@ -66,7 +75,18 @@ pub fn request(text: &str) -> Result<Request, String> {
         _ => 0,
     };
     let console = doc.get("console").and_then(Value::as_str).map(str::to_string);
-    Ok(Request { op, paths, options: Options { fast: doc.get("fast").and_then(Value::as_bool).unwrap_or(false), threads }, console })
+    let patch = doc.get("patch").and_then(Value::as_str).map(str::to_string);
+    let index = match doc.get("index") {
+        Some(Value::Number(t)) => t.parse::<usize>().map_err(|_| "the request's index is not a whole number")?,
+        _ => 0,
+    };
+    if op == Op::PkgPatchAdd && patch.as_deref().is_none_or(str::is_empty) {
+        return Err("pkg-patch-add names its patch file in \"patch\"".into());
+    }
+    if matches!(op, Op::PkgPatchAdd | Op::PkgPatchRm) && paths.len() != 1 {
+        return Err("a patch is added to or removed from one package, named in \"paths\"".into());
+    }
+    Ok(Request { op, paths, options: Options { fast: doc.get("fast").and_then(Value::as_bool).unwrap_or(false), threads }, console, patch, index })
 }
 
 struct Queue {
@@ -152,6 +172,8 @@ fn op_word(op: &Op) -> &'static str {
         Op::PkgList => "pkg-ls",
         Op::PkgCheck => "pkg-check",
         Op::PkgMigrate => "pkg-migrate",
+        Op::PkgPatchAdd => "pkg-patch-add",
+        Op::PkgPatchRm => "pkg-patch-rm",
     }
 }
 
@@ -259,6 +281,15 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             (g, Vec::new(), r)
         }
         Op::PkgList if req.console.is_some() => (Vec::new(), packages::of_console(ctx, req.console.as_deref().unwrap_or("")), Vec::new()),
+        Op::PkgPatchAdd | Op::PkgPatchRm => {
+            let (f, mut r) = packages::named(ctx, &req.paths);
+            if f.len() > 1 {
+                r.push(format!("{}: names {} packages, and a patch belongs to one", req.paths[0], f.len()));
+                (Vec::new(), Vec::new(), r)
+            } else {
+                (Vec::new(), f, r)
+            }
+        }
         _ => {
             let (f, r) = packages::named(ctx, &req.paths);
             (Vec::new(), f, r)
@@ -284,6 +315,8 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             (Op::PkgMake, Some(g), _) => packages::make(ctx, &mut index, g, stop),
             (Op::PkgList, _, Some(f)) => packages::list(ctx, f),
             (Op::PkgCheck, _, Some(f)) => packages::check(ctx, f, stop),
+            (Op::PkgPatchAdd, _, Some(f)) => crate::patches::add(ctx, f, req.patch.as_deref().unwrap_or("")),
+            (Op::PkgPatchRm, _, Some(f)) => crate::patches::remove(ctx, f, req.index),
             (_, _, Some(f)) => packages::migrate(ctx, f),
             _ => continue,
         };

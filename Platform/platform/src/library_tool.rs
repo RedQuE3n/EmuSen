@@ -25,7 +25,7 @@ pub struct LibraryToolV1 {
 
 pub const SERVICE: &str = "emusen.library";
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 1;
+pub const MINOR: u32 = 2;
 
 /// The service's one table, for every shell.
 pub static TABLE: LibraryToolV1 = LibraryToolV1 {

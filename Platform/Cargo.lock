@@ -455,6 +455,7 @@ dependencies = [
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
+ "emusen-patch",
  "emusen-systems",
  "libc",
  "sha2",

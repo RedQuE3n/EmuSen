@@ -19,6 +19,8 @@ emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
 # The routing of a library file to its system, whose one owner is the library's scan.
 emusen-library = { path = "../library" }
 emusen-systems = { path = "../systems" }
+# The soft patches a package lists, checked and applied as the runtimes apply them (pkg patch, pkg check).
+emusen-patch = { path = "../patch" }
 emusen-dotnet = { path = "../dotnet" }
 # The pin's SHA-256; the workspace's, from Galaxia.
 sha2 = "0.11"

@@ -34,7 +34,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     (
         "pkg",
         false,
-        "  pkg make <path>...            a linked package for each game under each path (relative to the library)\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)\n  pkg migrate <package>...      the game's saves, states and cheats copied into its package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
+        "  pkg make <path>...            a linked package for each game under each path (relative to the library)\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages)\n  pkg migrate <package>...      the game's saves, states and cheats copied into its package\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
     ),
 ];
 
@@ -44,7 +44,7 @@ pub static MODULE: LibraryCommands = LibraryCommands;
 
 const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
 
-const PKG_USAGE: &str = "Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
+const PKG_USAGE: &str = "Usage: pkg make <path>... | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
@@ -52,8 +52,25 @@ fn compact(members: Vec<(&str, Value)>) -> String {
     out
 }
 
-/// The request a `pkg` command line makes, or the usage; self-contained and zipped packages are a later step's.
-pub fn pkg_request(args: &[String]) -> Result<String, String> {
+/// `pkg patch add <package> <file>` and `pkg patch rm <package> <n>`: the patch file is a shell path, resolved here.
+fn patch_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, String>) -> Result<String, String> {
+    let words: Vec<&str> = args.iter().skip(2).map(String::as_str).collect();
+    match words.as_slice() {
+        ["add", package, file] => {
+            let real = resolve(file).map_err(|w| format!("pkg patch add: {w}"))?;
+            Ok(compact(vec![("op", Value::string("pkg-patch-add")), ("paths", Value::Array(vec![Value::string(*package)])), ("patch", Value::string(&real))]))
+        }
+        ["rm", package, n] => {
+            let n: u64 = n.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("pkg patch rm: {n} is not a patch's number; pkg ls numbers them from 1\n{PKG_USAGE}"))?;
+            Ok(compact(vec![("op", Value::string("pkg-patch-rm")), ("paths", Value::Array(vec![Value::string(*package)])), ("index", Value::number(n))]))
+        }
+        _ => Err(format!("pkg patch: add <package> <file> or rm <package> <n>\n{PKG_USAGE}")),
+    }
+}
+
+/// The request a `pkg` command line makes, or the usage; `resolve` turns a shell path into a real one. Self-contained
+/// and zipped packages are a later step's.
+pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, String>) -> Result<String, String> {
     let mut words = args.iter().skip(1);
     let sub = words.next().map(String::as_str).unwrap_or("");
     let op = match sub {
@@ -61,7 +78,7 @@ pub fn pkg_request(args: &[String]) -> Result<String, String> {
         "ls" => "pkg-ls",
         "check" => "pkg-check",
         "migrate" => "pkg-migrate",
-        "patch" => return Err("pkg patch: soft patches are not in this build yet; packages are made, listed, checked and migrated".into()),
+        "patch" => return patch_request(args, resolve),
         _ => return Err(PKG_USAGE.into()),
     };
     let mut paths = Vec::new();
@@ -204,6 +221,14 @@ pub fn package_line(e: &Value) -> String {
     let named = if e.get("source").is_some() { text(e, "source") } else { text(e, "package") };
     match text(e, "state") {
         "made" | "already" => format!("[{}/{}] {named}: {}, Packages/{}", token(e, "index"), token(e, "of"), text(e, "state"), text(e, "package")),
+        "added" | "removed" => {
+            let rule = if e.get("retroarch") == Some(&Value::Bool(true)) { "named as RetroArch finds it" } else { "RetroArch will not apply this list, whose files keep their own names" };
+            let n = match e.get("patches") {
+                Some(Value::Array(p)) => p.len(),
+                _ => 0,
+            };
+            format!("{named}: {} {}, {n} patch(es) now; {rule}", text(e, "state"), text(e, "patch"))
+        }
         "migrated" | "nothing" => {
             let copied = match e.get("copied") {
                 Some(Value::Array(c)) => c.len(),
@@ -223,7 +248,11 @@ pub fn listing_line(e: &Value) -> String {
     let words = text(e, "words");
     let to = text(e, "to");
     let why = if !to.is_empty() { format!("  now {to}") } else if words.is_empty() { String::new() } else { format!("  {words}") };
-    format!("{:<9}{}  ({}, {}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
+    let patched = match e.get("patches") {
+        Some(Value::Array(p)) if !p.is_empty() => format!(", {} patch(es){}", p.len(), if text(e, "identity") == "patched" { ", scraped as patched" } else { "" }),
+        _ => String::new(),
+    };
+    format!("{:<9}{}  ({}, {}{patched}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
 }
 
 /// One job this shell started: its number, what it does, the tool's handle, and how far it has got.
@@ -383,7 +412,7 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
 
 fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     let args = call.args();
-    let request = match if prefix == "pkg" { pkg_request(&args) } else { request(&args) } {
+    let request = match if prefix == "pkg" { pkg_request(&args, &|p| call.resolve(p)) } else { request(&args) } {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
@@ -418,7 +447,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 1, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 2, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
@@ -468,6 +497,10 @@ impl Module for LibraryCommands {
 mod tests {
     use super::*;
 
+    fn pkg_request_plain(a: &[String]) -> Result<String, String> {
+        pkg_request(a, &|p| Ok(format!("/real{p}")))
+    }
+
     fn args(line: &str) -> Vec<String> {
         line.split_whitespace().map(str::to_string).collect()
     }
@@ -509,16 +542,19 @@ mod tests {
 
     #[test]
     fn a_pkg_command_line_is_a_request_or_the_usage() {
-        assert_eq!(pkg_request(&args("pkg make SNES nes/a.nes")).unwrap(), r#"{"op":"pkg-make","paths":["SNES","nes/a.nes"]}"#);
-        assert_eq!(pkg_request(&args("pkg ls")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":null}"#);
-        assert_eq!(pkg_request(&args("pkg ls SNES")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":"SNES"}"#);
-        assert_eq!(pkg_request(&args("pkg check")).unwrap(), r#"{"op":"pkg-check","paths":[]}"#);
-        assert_eq!(pkg_request(&args("pkg migrate SNES/a.sfc")).unwrap(), r#"{"op":"pkg-migrate","paths":["SNES/a.sfc"]}"#);
-        assert!(pkg_request(&args("pkg make")).unwrap_err().contains("name what to make"));
-        assert!(pkg_request(&args("pkg make a.nes --self-contained")).unwrap_err().contains("not in this build yet"));
-        assert!(pkg_request(&args("pkg patch add a b")).unwrap_err().starts_with("pkg patch:"));
-        assert!(pkg_request(&args("pkg ls a b")).unwrap_err().contains("one console"));
-        assert!(pkg_request(&args("pkg")).unwrap_err().starts_with("Usage: pkg"));
+        assert_eq!(pkg_request_plain(&args("pkg make SNES nes/a.nes")).unwrap(), r#"{"op":"pkg-make","paths":["SNES","nes/a.nes"]}"#);
+        assert_eq!(pkg_request_plain(&args("pkg ls")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":null}"#);
+        assert_eq!(pkg_request_plain(&args("pkg ls SNES")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":"SNES"}"#);
+        assert_eq!(pkg_request_plain(&args("pkg check")).unwrap(), r#"{"op":"pkg-check","paths":[]}"#);
+        assert_eq!(pkg_request_plain(&args("pkg migrate SNES/a.sfc")).unwrap(), r#"{"op":"pkg-migrate","paths":["SNES/a.sfc"]}"#);
+        assert!(pkg_request_plain(&args("pkg make")).unwrap_err().contains("name what to make"));
+        assert!(pkg_request_plain(&args("pkg make a.nes --self-contained")).unwrap_err().contains("not in this build yet"));
+        assert_eq!(pkg_request_plain(&args("pkg patch add SNES/a.sfc /x.bps")).unwrap(), r#"{"op":"pkg-patch-add","paths":["SNES/a.sfc"],"patch":"/real/x.bps"}"#);
+        assert_eq!(pkg_request_plain(&args("pkg patch rm SNES/a.sfc 2")).unwrap(), r#"{"op":"pkg-patch-rm","paths":["SNES/a.sfc"],"index":2}"#);
+        assert!(pkg_request_plain(&args("pkg patch rm a 0")).unwrap_err().contains("not a patch's number"));
+        assert!(pkg_request_plain(&args("pkg patch add a")).unwrap_err().starts_with("pkg patch:"));
+        assert!(pkg_request_plain(&args("pkg ls a b")).unwrap_err().contains("one console"));
+        assert!(pkg_request_plain(&args("pkg")).unwrap_err().starts_with("Usage: pkg"));
         let e = |t: &str| json::parse(t).unwrap();
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":2,"source":"SNES/a.sfc","state":"made","package":"SNES/a.sfc"}"#)), "[1/2] SNES/a.sfc: made, Packages/SNES/a.sfc");
         assert_eq!(package_line(&e(r#"{"event":"package","index":2,"of":2,"package":"NES/b.nes","state":"changed","words":"b.nes has SHA-1 1"}"#)), "[2/2] NES/b.nes: changed: b.nes has SHA-1 1");

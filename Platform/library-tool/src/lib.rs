@@ -9,6 +9,7 @@ pub mod convert;
 pub mod discs;
 pub mod job;
 pub mod packages;
+pub mod patches;
 pub mod pin;
 
 use emusen_galaxia::dotnet_path::{self as path, Style};

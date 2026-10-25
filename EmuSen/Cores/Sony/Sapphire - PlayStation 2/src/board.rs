@@ -1,14 +1,14 @@
 //! The EE's side of the console around its core (Sapphire_Native.md §20.1): the physical map, the DMAC, the INTC, the
-//! four timers and the blanking stand-in, on one clock of EE cycles (`clock`), and `System`, which runs the core and
+//! four timers and the PCRTC's video timing, on one clock of EE cycles (`clock`), and `System`, which runs the core and
 //! brings these units to the core's time after each instruction. A unit is brought forward only at the events it
-//! schedules (a DMA unit's end, a timer's flag, a blanking edge) or when the core reads or writes it; nothing is
+//! schedules (a DMA unit's end, a timer's flag, a blanking edge, a line the PCRTC reads) or when the core reads or writes it; nothing is
 //! polled cycle by cycle. The core reaches the registers through `Bus`; the units drive its Int0, Int1 and CPCOND0.
 //! From S16 the GS sits on the board too: its privileged registers at 12000000h, its interrupt latched by the INTC at
-//! its rising edge, and HSINT and VSINT from the blanking stand-in (Sapphire_Native.md §24.5).
+//! its rising edge. From S20 the PCRTC (`pcrtc`) gives H-blank, V-blank, V-sync and the field in place of S11's
+//! stand-in, and reads each displayed line from the GS's memory at its time (Sapphire_Native.md §29.4).
 
 use std::collections::VecDeque;
 
-use crate::blank::Blank;
 use crate::clock::{self, Standard};
 use crate::dmac::{self, Dmac, Peripherals};
 use crate::ee::map::{self, Map, Region};
@@ -16,6 +16,8 @@ use crate::ee::{Bus, Ee, Halt};
 use crate::gs::{self, Gs};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
+use crate::pcrtc::Pcrtc;
+use crate::pcrtc::timing::Mode;
 use crate::sif::{self, EePorts};
 use crate::timer::{self, Timer};
 use crate::vu::Vpu;
@@ -75,7 +77,8 @@ pub struct Board {
     pub dmac: Dmac,
     pub intc: Intc,
     pub timers: [Timer; 4],
-    pub blank: Blank,
+    /// The PCRTC: the video timing the timers, the INTC, the GS and the IOP follow, and the picture (from S20).
+    pub pcrtc: Pcrtc,
     pub ports: StandIns,
     /// VU0 and VU1, which the core reaches through COP2 and the map at 11000000h (from S12).
     pub vpu: Vpu,
@@ -86,6 +89,9 @@ pub struct Board {
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
+    /// The time whose blanking edges were last taken, so an event rescheduled at that time does not take them again;
+    /// the timing's start at 0 is no edge.
+    edges_taken: Option<u64>,
 }
 
 impl Board {
@@ -95,13 +101,14 @@ impl Board {
             dmac: Dmac::default(),
             intc: Intc::default(),
             timers: Default::default(),
-            blank: Blank::new(standard),
+            pcrtc: Pcrtc::new(standard),
             ports: StandIns::default(),
             vpu: Vpu::new(),
-            iop: Iop::new(Blank::new(standard)),
+            iop: Iop::new(Pcrtc::new(standard).timing),
             gs: Gs::new(),
             now: 0,
             next: 0,
+            edges_taken: Some(0),
         };
         b.reschedule();
         b
@@ -119,9 +126,18 @@ impl Board {
         }
     }
 
+    /// The video mode from the next field (the kernel's mode setting, `Pcrtc::set_mode`), the IOP's copy of the timing
+    /// told too.
+    pub fn set_mode(&mut self, mode: Mode) {
+        if self.pcrtc.set_mode(self.now, mode) {
+            self.iop.bus.blank = self.pcrtc.timing;
+        }
+        self.reschedule();
+    }
+
     /// The next time any unit needs attention.
     fn reschedule(&mut self) {
-        let mut next = self.blank.next_edge(self.now, self.wants_h()).min(self.dmac.next_event());
+        let mut next = self.pcrtc.next_event(self.now, self.wants_h()).min(self.dmac.next_event());
         for t in &self.timers {
             next = next.min(t.next_event());
         }
@@ -142,9 +158,10 @@ impl Board {
             for n in 0..4 {
                 self.sync_timer(n, at);
             }
-            let e = self.blank.edges(at);
-            if e.h_rise || e.h_fall || e.v_rise || e.v_fall {
-                let (h, v) = (self.blank.h(at), self.blank.v(at));
+            let e = if self.edges_taken == Some(at) { Default::default() } else { self.pcrtc.edges(at) };
+            if e.any() {
+                self.edges_taken = Some(at);
+                let (h, v) = (self.pcrtc.timing.h(at), self.pcrtc.timing.v(at));
                 for n in 0..4 {
                     if self.timers[n].edges(e.h_rise, e.h_fall, e.v_rise, e.v_fall, h, v) != 0 {
                         self.intc.raise(intc::source::TIMER0 + n as u32);
@@ -155,13 +172,17 @@ impl Board {
                 }
                 if e.v_rise {
                     self.intc.raise(intc::source::VB_ON);
-                    self.gs.vsync();
+                    self.pcrtc.begin_field(at, &self.gs);
+                }
+                if e.vsync {
+                    self.gs.vsync(self.pcrtc.odd());
                 }
                 self.sync_gs();
                 if e.v_fall {
                     self.intc.raise(intc::source::VB_OFF);
                 }
             }
+            self.pcrtc.read_due(at, &self.gs);
             if self.dmac.next_event() <= at {
                 self.iop.run_to(at);
                 self.step_dmac(at, spram);
@@ -219,7 +240,7 @@ impl Board {
     fn write_register(&mut self, paddr: u32, v: u32) {
         if let Some((n, reg)) = timer::decode(paddr) {
             self.sync_timer(n, self.now);
-            let (h, v_) = (self.blank.h(self.now), self.blank.v(self.now));
+            let (h, v_) = (self.pcrtc.timing.h(self.now), self.pcrtc.timing.v(self.now));
             self.timers[n].write(reg, v, h, v_);
         } else if let Some(offset) = sif::ee_register(paddr) {
             self.iop.bus.sif_write_from_ee(offset, v);
@@ -279,6 +300,9 @@ impl Bus for Board {
         }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
             self.gs.write_privileged(paddr, bytes, value as u64);
+            if self.pcrtc.written(self.now, &self.gs) {
+                self.iop.bus.blank = self.pcrtc.timing;
+            }
             self.sync_gs();
             self.reschedule();
             return;

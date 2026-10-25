@@ -91,6 +91,10 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
   count BUSCLK and its dividers on it (`Sapphire_Native.md` §20.3). Pinned by `a_burst_moves_a_qword_a_bus_cycle_and_cycle_stealing_releases_every_128_bytes`
   and `a_timer_is_evaluated_at_its_flag_and_not_before`. The referees' timers keep the dividers' ratios exactly
   (`s11-timers`), which says nothing of the clocks' absolute rates; the conclusion stays open.
+- **Addendum, 2026-10-25 (stage S20):** the PCRTC runs on its own video clock (the *GS User's Manual*'s Figure 5-1), VCK
+  at 54 MHz, held as the exact fraction 375/2048 of the EE's 294.912 MHz in `clock.rs` (D-200); a ruling on the EE's rate
+  changes that fraction and nothing in `pcrtc`. Both referees make the NTSC field exactly 4,915,200 EE cycles, 1/60 s of
+  294.912 MHz, which says only that each counts its field in its own EE cycles; the conclusion stays open.
 
 ### D-1. R5900, COP1: the EE's FPU has the single format alone with Sony's own operations, not the TX79's MIPS III FPU
 
@@ -864,6 +868,10 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Pinned by:** `the_timers_count_compare_overflow_and_gate_as_chapter_4_says`, `the_intc_latches_masks_and_drives_int0_and_the_dmac_int1`,
   `the_board_holds_no_h_blank_event_unless_a_timer_needs_it`.
 - **Implemented in:** stage S11's commit.
+- **Addendum, 2026-10-25 (stage S20):** the stand-in is replaced by the PCRTC's timing (D-200 to D-202). PCSX2's 525 is
+  measured: it raises H-blank and HSINT every 4,681 BUSCLK, twice NTSC's line rate, so a 1/60 s field holds a frame's 525
+  of them (D-201). Sapphire's field is now 263 lines non-interlaced, 262.5 interlaced, of 3,432 VCK; V-blank stays 22
+  lines. **Closed.**
 
 ### D-43. VU float: the vector units' FMAC and divider compute as the FPU does, the adder without a sticky bit and one bit kept, the multiplier on a Booth recoding of the second operand, quotients and roots to the nearest
 
@@ -1909,3 +1917,132 @@ through the reset too.
 - **Depends on it:** `gs::raster::line`.
 - **Pinned by:** `lines_draw_the_diamonds_they_pass_through_but_their_end`.
 - **Implemented in:** stage S17's commit.
+
+### D-200. The PCRTC's NTSC and PAL timing: a line of 858 and 864 pixels of 13.5 MHz (3,432 and 3,456 VCK of 54 MHz); 525 and 625 lines a frame interlaced, a field half of it; 263 and 314 lines a non-interlaced field; the video clock its own, not BUSCLK's
+
+- **Opened:** 2026-10-25, at stage S20, by D-42 and by the referees' fields (`s20-timing`).
+- **Documents read:** *GS User's Manual* §5.1.1 (Figure 5-1: the sync generator fed by its own "Clock NTSC/PAL" through a
+  PLL), §5.1.2's table (NTSC 59.940 Hz interlaced and "(59.82)" non-interlaced at 15.734 kHz; PAL 50.000 and "(49.76)" at
+  15.625 kHz; DTV 480p 59.94 Hz at 31.469 kHz, 1080i 60.00 Hz at 33.750 kHz), §5.2.1 ("the standard video clock VCK which
+  defines the PCRTC operation timing", "set by the kernel service"), §5.2.2's MAGH table (640 pixels at ×4, 512 at ×5,
+  320 at ×8, 256 at ×10: 2,560 VCK across); ps2tek "EE Timers" (262 lines of 9,370 BUSCLK, PAL 312 of 9,436) and "IOP
+  Timers" (timer 0's 13.5 MHz pixel clock "regardless of screen mode").
+- **Arithmetic** [A]: 858 pixels of 13.5 MHz make NTSC's 15,734.27 Hz line; 262.5 lines give 59.940 Hz and 263 give
+  59.826 Hz, the table's two figures to their printed digits; PAL's 864 pixels make 15,625 Hz exactly, 312.5 lines
+  50.000 Hz and 314 lines 49.761 Hz. VCK at four pixels, 54 MHz, puts the MAGH table's 2,560 VCK at 47.4 µs of a
+  52.6 µs active line, and 294.912 MHz × 375 / 2048 = 54 MHz exactly, so every edge falls at a fixed fraction of the EE's
+  clock. 480p at 1,716 VCK and 525 lines, and 1080i at 2,200 VCK of 74.25 MHz and 1,125 lines, reproduce their rows too.
+  ps2tek's 262 × 9,370 BUSCLK is a 60.065 Hz field, matching neither row.
+- **Test program:** `s20-timing`, in four settings of SMODE2 (as the firmware left it, INT 0, INT 1 with FFMD 0 and 1):
+  the fields' lengths by COP0 Count, timer 0 on H-blank, timers 1 and 2 on BUSCLK/256, the second gated off during
+  H-blank, the H-syncs by CSR's HSINT, CSR's FIELD at each edge.
+- **Referee:** PCSX2 2.8.2 (Americas BIOS): every field 4,915,200 EE cycles, exactly 1/60 s, in all four settings, so
+  SMODE2's INT changes nothing; Play! 0.72: every field 4,915,200 ± 5 likewise. The two lineages agree with each other
+  and with no document.
+- **Conclusion:** the documents' table read at 13.5 MHz, as the title; **argued**. The referees' agreement on a round
+  1/60 s, unchanged by INT, is the two emulators' own figure where Sony's table gives another, so it does not rule (the
+  order of recourse puts the documents first). The figures the table does not give are choices, each named in
+  `Sapphire_Native.md` §29.3: a non-interlaced field's extra half line, the 4× of VCK, 1080i's 74.25 MHz.
+- **Depends on it:** `pcrtc::timing`'s modes and `clock::VCK_54`, `VCK_74`; every timer on H-blank, the INTC's V-blank
+  sources, the IOP's timers; the machine's frame rate (60,000/1,001 interlaced, as S1 chose); the CRT filter's timing
+  (`Sapphire_Plan.md` §4.6).
+- **Pinned by:** `the_four_rates_of_the_manuals_table_follow_from_13_5_mhz`, `the_timing_program_sees_the_documents_fields`.
+- **Implemented in:** stage S20's commit.
+
+### D-201. H-blank reaches the timers once a line; its width is the line less BT.601's 720 pixels, 552 VCK in NTSC and 576 in PAL
+
+- **Opened:** 2026-10-25, at stage S20, by D-42's question: PCSX2 counts 525 H-blanks between two V-blank starts.
+- **Documents read:** ps2tek "EE Timers" ("9370 BUSCLK cycles per scanline", H-blank a clock and a gate of the timers);
+  the *GS User's Manual* (no width given); ITU-R BT.601's 720 active pixels of 858 and 864, the 13.5 MHz family's own
+  (general knowledge of the standard, [A]).
+- **Test program:** `s20-timing`'s H-blank ticks a field, H-syncs a field, the Count at six successive H-syncs and six
+  successive H-blank ticks, and timer 2's share of BUSCLK/256 with H-blank gating it off.
+- **Referee:** **PCSX2** raises both H-blank and HSINT every 9,362–9,364 EE cycles (4,681 BUSCLK), twice NTSC's line
+  rate, 525 of them in its 1/60 s field, in every setting of SMODE2; its H-blank is high for 16.3 % of that period. So its
+  525 is a frame's lines counted in one field: H-blank at 31.47 kHz, not a line counted twice by the timer. **Play!**
+  raises them every 19,200 EE cycles with irregular gaps, 262 or 263 ticks a field, and does not gate the timer on
+  H-blank at all.
+- **Conclusion:** one H-blank a line, as ps2tek's "per scanline" and Play! have it, at the documents' line (D-200), so a
+  field counts 263, or 262 and 263 alternately when interlaced; its width BT.601's blanking, 16.1 % of the line, a choice
+  [C] within 0.2 % of PCSX2's share. **Argued**; D-42's 525 is explained as measured.
+- **Depends on it:** `pcrtc::timing`'s `hblank` and the edges; the EE and IOP timers clocked or gated by H-blank.
+- **Pinned by:** `the_timing_program_sees_the_documents_fields`, `edges_fall_once_each_and_a_change_waits_for_the_field`.
+- **Implemented in:** stage S20's commit.
+
+### D-202. V-blank is high for 22 lines (NTSC) or 26 (PAL) from a field's start; the V-sync, which raises VSINT and changes CSR's FIELD, falls 4 lines in
+
+- **Opened:** 2026-10-25, at stage S20.
+- **Documents read:** ps2tek "EE Timers" ("VBOFF: 240 | VBON: 22", PAL "286 | 26"); *GS User's Manual* §7.2 (VSINT,
+  "Vsync interrupt"; NFIELD "updated by sampling at VSync"; FIELD "Field Displayed Currently"); *EE User's Manual* §3.1
+  (VB_ON and VB_OFF at V-blank's start and end). No document places the V-sync inside V-blank.
+- **Test program:** `s20-timing`: Count from VB_ON to VB_OFF, and one polling pass from VB_ON timing VSINT and FIELD's
+  change.
+- **Referee:** PCSX2: V-blank 430,665 EE cycles (23 NTSC lines); VSINT and FIELD both 74,894 cycles, 4.0 lines, after
+  VB_ON. Play!: V-blank 489,600 cycles (26.1 lines); VSINT at VB_ON; FIELD after VB_OFF. Both change FIELD inside each
+  field's V-blank, not at its start.
+- **Conclusion:** ps2tek's 22 and 26 lines; the V-sync 4 lines into the field, PCSX2 the stronger single witness (its
+  timing is modelled to the half line where Play!'s moves in steps of 4,800 cycles); FIELD changes at the V-sync and
+  VB_ON is the field's start [C]. **Argued**, the V-sync's place **measured** on one lineage.
+- **Depends on it:** `pcrtc::timing::Mode`'s `vblank`, `vsync`; the board's VB_ON, VB_OFF, VSINT and CSR's FIELD.
+- **Pinned by:** `hsint_and_vsint_follow_the_pcrtcs_timing`, `the_timing_program_sees_the_documents_fields`.
+- **Implemented in:** stage S20's commit.
+
+### D-203. The merge circuit rounds to the nearest: OUT1 = (Rs·A + Rd·(FFh − A) + 7Fh) / FFh
+
+- **Opened:** 2026-10-25, at stage S20.
+- **Documents read:** *GS User's Manual* §5.2.3: "Ro = Rs x A + Rd x (0xff – A) … The above results are multiplied by
+  256(0x100) / 255(0xff)", with no rounding stated.
+- **Test program:** `s20-alp` (ALP 60h over BGCOLOR) and `s20-alpha` (circuit 1's alpha doubled over PSMCT16S).
+- **Referee:** PCEE2 (PCSX2's lineage, its software renderer's picture through the probe): of `s20-alp`'s 1,535
+  colours, 1,448 are produced from the program's own pixels by rounding to the nearest (in each of several equivalent forms),
+  217 by truncating the quotient and 204 by the ×257 approximation; the other 87 by no blend of one pixel, PCEE2 having
+  scaled that picture to 48 × 64 (§29.8). Play!'s picture cannot be taken (S3's decision).
+- **Conclusion:** to the nearest, PCSX2's lineage the single witness; the manual's sentence read as a scale, not a
+  truncation. **Measured** on one lineage.
+- **Depends on it:** `pcrtc::merge`.
+- **Pinned by:** `the_display_programs_pictures_equal_the_manuals` (`s20-alpha`, `s20-alp`).
+- **Implemented in:** stage S20's commit.
+
+### D-204. CSR's NFIELD reads 0; FIELD reads the field begun at the last V-sync, 0 even, alternating in both scan modes
+
+- **Opened:** 2026-10-25, at stage S20.
+- **Documents read:** *GS User's Manual* §7.2: NFIELD "Output Value of NFIELD Output (Output value is updated by
+  sampling at VSync.)"; FIELD 0 EVEN, 1 ODD, "(In Non-Interlace Mode) 0 Equivalent to EVEN 1 Equivalent to ODD".
+- **Test program:** `s20-timing`'s CSR bits 12 and 13 at every V-blank start and end in the four settings.
+- **Referee:** PCSX2 and Play! both read NFIELD 0 throughout, and FIELD alternating field by field in every setting.
+- **Conclusion:** NFIELD 0, the two lineages agreeing where the document gives no value (an active-low copy of the
+  field signal would be another reading, untested); FIELD alternating with each field in both modes, the even field
+  the one whose lines start on the frame's H-syncs and fill the even rasters [C]. **Measured** for NFIELD and FIELD's
+  alternation, argued for which field is even.
+- **Depends on it:** `gs::Gs::csr`, `Gs::vsync`, `pcrtc::timing::Timing::raster`.
+- **Pinned by:** `the_even_field_by_csr_reads_the_even_rasters`, `the_timing_program_sees_the_documents_fields`.
+- **Implemented in:** stage S20's commit.
+
+### D-205. The read circuits read each raster at its line's time, so a register changed in the middle of a field shows from the next line
+
+- **Opened:** 2026-10-25, at stage S20.
+- **Documents read:** *GS User's Manual* §5.2.2: the circuit "reads the specified rectangular area in the frame buffer
+  adjusting to CRT scanning"; `Sapphire_Plan.md` §5.4.
+- **Test program:** `s20-midframe`: DISPFB1 set to buffer A at each V-sync and to buffer B forty H-syncs later.
+- **Referee:** PCEE2 shows buffer B on every row: PCSX2's lineage reads the display once a frame with the registers as
+  they then stand.
+- **Conclusion:** at each line's start, as the manual's sentence and the plan have it; the one lineage that can show it
+  departs. Within a line the change takes effect from the next line (a named loss, §29.6). **Argued**.
+- **Depends on it:** `pcrtc::Pcrtc::read_due`, the board's line events.
+- **Pinned by:** `a_register_changed_mid_field_shows_from_the_next_line`.
+- **Implemented in:** stage S20's commit.
+
+### D-206. Where circuit 1 gives nothing (outside its rectangle, or EN1 clear), OUT1 is what it would blend over: OUT2, or BGCOLOR with SLBG
+
+- **Opened:** 2026-10-25, at stage S20.
+- **Documents read:** *GS User's Manual* §5.2.3: OUT2 is circuit 2 inside its rectangle and BGCOLOR outside it or with
+  the circuit off; nothing is said of circuit 1 outside its rectangle.
+- **Test program:** `s20-pair` (the circuits side by side), `s20-ct32` (BGCOLOR around circuit 1).
+- **Referee:** PCEE2's `s20-pair` picture holds exactly the 5,017 colours Sapphire's does, circuit 2's pixels among them
+  where circuit 1 is absent; its picture is framed differently (138 × 104 against 154 × 56), so only the colours are
+  compared.
+- **Conclusion:** as the title, circuit 1's alpha taken as 0 there [A], PCSX2's lineage agreeing. **Measured** on one
+  lineage.
+- **Depends on it:** `pcrtc::merge`.
+- **Pinned by:** `the_display_programs_pictures_equal_the_manuals`.
+- **Implemented in:** stage S20's commit.

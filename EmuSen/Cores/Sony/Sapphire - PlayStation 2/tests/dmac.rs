@@ -6,7 +6,7 @@ mod s6;
 mod s11;
 
 use sapphire::board::{Board, System};
-use sapphire::clock::{self, BUS};
+use sapphire::clock::{self, BUS, NTSC};
 use sapphire::dmac::{self, Dmac, Peripherals};
 use sapphire::ee::Bus;
 use sapphire::ee::map::Map;
@@ -112,8 +112,7 @@ fn the_mfifo_drain_holds_while_empty_and_wraps_with_the_ring() {
 fn the_intc_latches_masks_and_drives_int0_and_the_dmac_int1() {
     let mut sys = grade_system(s11::intc());
     let span = u64::from(record_word(&mut sys, s11_intc_vblank_record()));
-    let lines = clock::NTSC.lines - clock::NTSC.active;
-    let want = lines * clock::NTSC.line * BUS;
+    let want = NTSC.cycles(NTSC.vblank * NTSC.line);
     assert!(span.abs_diff(want) < 200, "V-blank lasted {span} cycles, {want} expected");
 }
 
@@ -129,7 +128,7 @@ fn the_timers_count_compare_overflow_and_gate_as_chapter_4_says() {
     assert!((t0 / 16).abs_diff(t1) <= 1 && (t1 / 16).abs_diff(t2) <= 1, "{t0} {t1} {t2}");
     let p = s11::timers();
     let lines = record_word(&mut sys, p.expected.len() - 2);
-    assert_eq!(lines, clock::NTSC.lines as u32, "H-blank edges between two V-blank starts");
+    assert_eq!(lines, NTSC.rasters(false), "H-blank edges between two V-blank starts: a non-interlaced field's 263");
 }
 
 /// A memory for the units' own tests: RDRAM alone.
@@ -297,11 +296,24 @@ fn zret_returns_to_zero_at_the_tick_that_reaches_comp() {
 fn the_board_holds_no_h_blank_event_unless_a_timer_needs_it() {
     let mut b = Board::new(clock::NTSC);
     let mut spr = vec![0u8; 16 << 10];
-    b.run_to(10 * clock::NTSC.line * BUS, &mut spr);
+    b.run_to(NTSC.cycles(10 * NTSC.line), &mut spr);
     assert_eq!(b.intc.stat, 0, "no V-blank edge in ten lines");
     b.write(sapphire::timer::BASE + 0x1810, 4, 0x83);
-    b.run_to(20 * clock::NTSC.line * BUS, &mut spr);
+    b.run_to(NTSC.cycles(20 * NTSC.line), &mut spr);
     assert_eq!(b.timers[3].count, 10, "H-blank as a clock: one tick a line");
-    b.run_to(clock::NTSC.lines * clock::NTSC.line * BUS, &mut spr);
-    assert_eq!(b.intc.stat, 0b1100, "VB_ON at line 240 and VB_OFF at the field's end");
+    b.run_to(NTSC.cycles(NTSC.field(false)), &mut spr);
+    assert_eq!(b.intc.stat, 0b1100, "VB_OFF at line 22 and VB_ON at the next field's start");
+}
+
+#[test]
+fn a_register_write_on_a_blanking_edge_does_not_take_the_edge_again() {
+    let mut b = Board::new(clock::NTSC);
+    let mut spr = vec![0u8; 16 << 10];
+    b.write(sapphire::timer::BASE + 0x1810, 4, 0x83);
+    let edge = NTSC.cycles(10 * NTSC.line);
+    b.run_to(edge, &mut spr);
+    let before = b.timers[3].count;
+    b.write(0x1000_E000, 4, 1);
+    b.run_to(edge + 1, &mut spr);
+    assert_eq!(b.timers[3].count, before, "the H-blank edge at the write's time was taken once, before it");
 }

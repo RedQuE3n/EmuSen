@@ -10,7 +10,7 @@ use super::dma::{self, Dmac, StandIns};
 use super::icache::{self, ICache, Lookup};
 use super::intc::{self, Intc, source};
 use super::timer::{self, Timer};
-use crate::blank::Blank;
+use crate::pcrtc::timing::Timing;
 use crate::clock::IOP;
 use crate::sif::{self, IopPorts, Sif};
 
@@ -118,7 +118,7 @@ pub struct IopBus {
     pub ports: StandIns,
     /// The SIF, its registers here at 1D000000h and at the EE's 1000F200h, its FIFOs behind channels 2, 9 and 10 (S22).
     pub sif: Sif,
-    pub blank: Blank,
+    pub blank: Timing,
     /// The bus's clock, in IOP cycles.
     pub now: u64,
     /// The EE cycle up to which the units have been brought, and the next at which one needs attention.
@@ -130,7 +130,7 @@ pub struct IopBus {
 }
 
 impl IopBus {
-    pub fn new(blank: Blank) -> IopBus {
+    pub fn new(blank: Timing) -> IopBus {
         let mut b = IopBus {
             ram: vec![0; RAM],
             scratch: [0; SCRATCH],

@@ -68,16 +68,16 @@ pub fn window(ring: &[i16], model: &[i16]) -> Option<usize> {
     let v = |x: i16| x as u16 as u64 + 1;
     let mut rot = std::collections::HashMap::new();
     let mut h = 0u64;
-    for j in 0..n {
-        h = h.wrapping_mul(BASE).wrapping_add(v(ring[j]));
+    for &x in ring {
+        h = h.wrapping_mul(BASE).wrapping_add(v(x));
     }
-    for r in 0..n {
+    for (r, &x) in ring.iter().enumerate() {
         rot.entry(h).or_insert(r);
-        h = h.wrapping_sub(v(ring[r]).wrapping_mul(pow)).wrapping_mul(BASE).wrapping_add(v(ring[r]));
+        h = h.wrapping_sub(v(x).wrapping_mul(pow)).wrapping_mul(BASE).wrapping_add(v(x));
     }
     let mut h = 0u64;
-    for j in 0..n {
-        h = h.wrapping_mul(BASE).wrapping_add(v(model[j]));
+    for &x in &model[..n] {
+        h = h.wrapping_mul(BASE).wrapping_add(v(x));
     }
     for o in 0..=model.len() - n {
         if let Some(&r) = rot.get(&h)
@@ -249,15 +249,16 @@ pub fn voices() -> Gate {
     g.upload(0x5000, &super::square());
     g.upload(0x5010, &constant(4));
     let quiet = Set::new(0, adsr, 0x5010);
+    g.voice_scene("a key on's first samples", &[quiet, Set::new(0x1000, adsr, 0x5000)], 0, SHORT);
     for (k, (name, _)) in streams.iter().enumerate() {
-        g.voice_scene(name, &[quiet, Set::new(0x1000, adsr, starts[k])], 0, SHORT);
+        g.voice_scene(name, &[quiet, Set::new(0x1000, adsr, starts[k])], 0, LONG);
     }
     for pitch in [0x0400u16, 0x0C00, 0x1555, 0x2FFF, 0x4000, 0x7FFF] {
-        g.voice_scene(&format!("pitch {pitch:04X}"), &[quiet, Set::new(pitch, adsr, starts[0])], 0, SHORT);
+        g.voice_scene(&format!("pitch {pitch:04X}"), &[quiet, Set::new(pitch, adsr, starts[0])], 0, LONG);
     }
-    g.voice_scene("pitch modulation by a constant voice", &[Set::new(0x1000, adsr, 0x5010), Set::new(0x0800, adsr, starts[1])], 2, SHORT);
-    g.voice_scene("pitch modulation by a square voice", &[Set::new(0x0700, adsr, 0x5000), Set::new(0x1000, adsr, starts[0])], 2, SHORT);
-    g.voice_scene("no modulation without PMON", &[Set::new(0x1000, adsr, 0x5010), Set::new(0x0800, adsr, starts[1])], 0, SHORT);
+    g.voice_scene("pitch modulation by a constant voice", &[Set::new(0x1000, adsr, 0x5010), Set::new(0x0800, adsr, starts[1])], 2, LONG);
+    g.voice_scene("pitch modulation by a square voice", &[Set::new(0x0700, adsr, 0x5000), Set::new(0x1000, adsr, starts[0])], 2, LONG);
+    g.voice_scene("no modulation without PMON", &[Set::new(0x1000, adsr, 0x5010), Set::new(0x0800, adsr, starts[1])], 0, LONG);
     g
 }
 
@@ -328,7 +329,7 @@ pub fn noise() -> Gate {
             let mut n = Noise { level: 0, timer: t };
             model.extend((0..(0x1_0000 + 2 * RING) * hold).map(|_| {
                 n.tick(shift, step);
-                (n.level as i32 * level >> 15) as i16
+                ((n.level as i32 * level) >> 15) as i16
             }));
         }
         g.check(format!("noise shift {shift} step {step}"), 0x400, What::Window(model));
@@ -353,8 +354,8 @@ fn mix_model(g: &Gate, s: Set, masks: [bool; 4], mmix: u32, mvol: [u16; 2], n: u
         let dry = [if masks[0] { lr[0] } else { 0 }, if masks[1] { lr[1] } else { 0 }];
         let wet = [if masks[2] { lr[0] } else { 0 }, if masks[3] { lr[1] } else { 0 }];
         for s in 0..2 {
-            let gated = if mmix >> (11 - s) & 1 != 0 { dry[s] } else { 0 };
-            out[s].push((gated.clamp(-0x8000, 0x7FFF) * level(mvol[s]) >> 15).clamp(-0x8000, 0x7FFF) as i16);
+            let gated = if (mmix >> (11 - s)) & 1 != 0 { dry[s] } else { 0 };
+            out[s].push(((gated.clamp(-0x8000, 0x7FFF) * level(mvol[s])) >> 15).clamp(-0x8000, 0x7FFF) as i16);
             out[2 + s].push(dry[s].clamp(-0x8000, 0x7FFF) as i16);
             out[4 + s].push(wet[s].clamp(-0x8000, 0x7FFF) as i16);
         }
@@ -385,8 +386,8 @@ pub fn mixing() -> Gate {
         sh(&mut g.program, vol(0, 0), mvol[0] as u32);
         sh(&mut g.program, vol(0, 1), mvol[1] as u32);
         sh(&mut g.program, reg(0, r::KON), 1);
-        g.program.delay(SHORT);
-        let models = mix_model(&g, base, masks, mmix, mvol, SHORT as usize * 4 / 768 * 4 + 4 * RING);
+        g.program.delay(LONG);
+        let models = mix_model(&g, base, masks, mmix, mvol, LONG as usize * 4 / 768 * 4 + 4 * RING);
         for (k, m) in models.into_iter().enumerate() {
             g.check(format!("{name}: {}", names[k]), [0x800, 0xA00, 0x1000, 0x1200, 0x1400, 0x1600][k], What::Window(m));
         }
@@ -400,8 +401,8 @@ pub fn mixing() -> Gate {
         sh(&mut g.program, reg(1, o), v);
     }
     sh(&mut g.program, reg(1, r::KON), 3);
-    g.program.delay(SHORT);
-    let n = SHORT as usize * 4 / 768 * 4 + 4 * RING;
+    g.program.delay(LONG);
+    let n = LONG as usize * 4 / 768 * 4 + 4 * RING;
     let models = mix_model(&g, base, [true, false, false, true], 0, [0, 0], n);
     let [_, _, dry_l, dry_r, wet_l, wet_r] = models;
     g.check("core 1: dry L", 0x1800, What::Window(dry_l));
@@ -498,12 +499,14 @@ pub fn reverb() -> Gate {
     g
 }
 
-/// `s26-adma`: two AutoDMA blocks on core 0 into MEMIN as ps2tek lays it out, then the sound data input through MMIX's
-/// dry gates and BVOL into core 0's output, read cyclically from MEMIN.
+/// `s26-adma`: four AutoDMA blocks streamed on core 0, each written while the core plays the other buffer, its sound
+/// data input through MMIX's dry gates and BVOL into core 0's output, which must have played the first three in order
+/// and not yet the fourth when the transfer ends; then MEMIN as ps2tek lays it out, holding the last two.
 pub fn adma() -> Gate {
     let mut g = Gate::new("s26-adma");
+    let blocks = 4u32;
     let pcm = |b: u32, side: u32, i: u32| -> u16 { (0x1000 * (b + 1) + 0x4000 * side + 3 * i) as u16 ^ if side == 1 { 0x8000 } else { 0 } };
-    for b in 0..2u32 {
+    for b in 0..blocks {
         for side in 0..2u32 {
             for i in 0..128u32 {
                 let at = s21::K1 | (s21::AREA + 0x1000 + 0x400 * b + 0x200 * side + 4 * i);
@@ -516,40 +519,39 @@ pub fn adma() -> Gate {
     sh(&mut g.program, vol(0, 6), 0x3FFF);
     sh(&mut g.program, vol(0, 7), 0x2000);
     sh(&mut g.program, reg(0, r::ADMA), 1);
-    dma(&mut g.program, 0, s21::AREA + 0x1000, 16, 32, true);
+    dma(&mut g.program, 0, s21::AREA + 0x1000, 16, 16 * blocks, true);
+    g.program.delay(16_000);
+    let gains = [(0x3FFFu16 << 1) as i16 as i32, (0x2000u16 << 1) as i16 as i32];
+    for (s, (name, at)) in [("the blocks in order, left, through BVOLL", 0x800u32), ("the blocks in order, right, through BVOLR", 0xA00)].into_iter().enumerate() {
+        // The last block is written as the one before it begins, so it has not yet sounded when the transfer ends.
+        let mut m = vec![0i16; 2 * RING];
+        for b in 0..blocks - 1 {
+            m.extend((0..256).map(|i| ((((pcm(b, s as u32, i) as i16 as i32 * gains[s]) >> 15) * 0x7FFE) >> 15) as i16));
+        }
+        g.check(name, at, What::Window(m));
+    }
     rec_h(&mut g.program, reg(0, r::ADMA), Some(1));
     sh(&mut g.program, reg(0, r::ADMA), 0);
-    g.program.delay(LONG);
-    // MEMIN: the left buffers then the right, each block's halves in its buffer (ps2tek "SPU2 AutoDMA").
-    let mut memin = vec![0i16; 0x400];
-    for side in 0..2usize {
-        for i in 0..0x200usize {
-            let (b, k) = (i / 0x100, i % 0x100);
-            memin[0x200 * side + i] = pcm(b as u32, side as u32, k as u32) as i16;
-        }
-    }
-    for (k, name) in ["MEMIN left", "MEMIN right"].iter().enumerate() {
-        let i = g.program.expected.len();
-        dump(&mut g.program, 0x2000 + 0x200 * k as u32, RING as u32);
-        let m = memin[0x200 * k..0x200 * k + 0x200].to_vec();
+    for (side, name) in ["MEMIN left", "MEMIN right"].iter().enumerate() {
+        let m: Vec<i16> = (blocks - 2..blocks).flat_map(|b| (0..256).map(move |i| pcm(b, side as u32, i) as i16)).collect();
         let doubled = [m.clone(), m].concat();
-        g.checks.push(Check { name: name.to_string(), at: i, halves: RING, what: What::Window(doubled) });
-    }
-    for (s, (name, at, v)) in [("output L through BVOLL", 0x800u32, 0x3FFFu16), ("output R through BVOLR", 0xA00, 0x2000)].into_iter().enumerate() {
-        let level = (v << 1) as i16 as i32;
-        let m: Vec<i16> = memin[0x200 * s..0x200 * s + 0x200].iter().map(|&x| ((x as i32 * level >> 15) * 0x7FFE >> 15) as i16).collect();
-        let doubled = [m.clone(), m].concat();
-        g.check(name, at, What::Window(doubled));
+        g.check(*name, 0x2000 + 0x200 * side as u32, What::Window(doubled));
     }
     g
 }
 
 /// `s26-irq`: the IRQ address met by a voice's header and its sample words, by a transfer's halfword and not its
-/// neighbour, by core 0's voice on core 1's address, and not by the output areas' writes; the flags in 7C2h, IRQ 9 in
-/// I_STAT, and ATTR's enable clearing a flag (Sapphire_Disputes.md D-265).
+/// neighbour, by core 0's voice on core 1's address, by every output area's writes and by a reverb's reads; the flags
+/// in 7C2h, IRQ 9 in I_STAT, and ATTR's enable clearing a flag (Sapphire_Disputes.md D-265).
 pub fn irq() -> Gate {
     let mut g = Gate::new("s26-irq");
     g.upload(0x5000, &super::square());
+    // Both reverbs' areas out of the way at 70000h-7FFFFh, since their reads are watched too.
+    for c in 0..2 {
+        sh(&mut g.program, reg(c, r::ESAH), 7);
+        sh(&mut g.program, reg(c, r::ESAL), 0);
+        sh(&mut g.program, reg(c, r::EEA), 7);
+    }
     g.silence();
     g.set(0, 0, Set::new(0x1000, [0x000F, 0x1FC0], 0x5000));
     sh(&mut g.program, reg(0, r::KON), 1);
@@ -563,9 +565,9 @@ pub fn irq() -> Gate {
         sh(p, reg(c, r::IRQAL), at & 0xFFFF);
         sh(p, reg(c, r::ATTR), 0x0040);
     };
-    for (at, hit) in [(0x5000u32, true), (0x5005, true), (0x5008, false), (0x0410, false), (0x1010, false), (0x0810, false)] {
+    for (at, hit) in [(0x5000u32, true), (0x5005, true), (0x5008, false), (0x0410, true), (0x0C10, true), (0x1010, true), (0x1C10, true), (0x0810, true), (0x0A10, true)] {
         arm(p, 0, at);
-        p.delay(20_000);
+        p.delay(200_000);
         p.rec_masked(s21::reg::I_STAT, 0x200, if hit { 0x200 } else { 0 });
         rec_h(p, super::SPU2 + 0x7C2, Some(if hit { 4 } else { 0 }));
     }
@@ -581,6 +583,19 @@ pub fn irq() -> Gate {
         p.rec_masked(s21::reg::I_STAT, 0x200, if hit { 0x200 } else { 0 });
         rec_h(p, super::SPU2 + 0x7C2, Some(if hit { 4 } else { 0 }));
     }
+    // A reverb's reads: core 0's area shrunk to 7FF00h-7FFFFh, whose every halfword its buffer address passes.
+    arm(p, 0, 0x7FF80);
+    sh(p, reg(0, r::ESAH), 7);
+    sh(p, reg(0, r::ESAL), 0xFF00);
+    p.delay(200_000);
+    p.rec_masked(s21::reg::I_STAT, 0x200, 0x200);
+    rec_h(p, super::SPU2 + 0x7C2, Some(4));
+    arm(p, 0, 0x7FF80);
+    sh(p, reg(0, r::ATTR), 0x00C0);
+    p.delay(200_000);
+    p.rec_masked(s21::reg::I_STAT, 0x200, 0x200);
+    rec_h(p, super::SPU2 + 0x7C2, Some(4));
+    sh(p, reg(0, r::ESAL), 0);
     // Core 1's address met by core 0's voice; ATTR's enable written clear clears the flag.
     arm(p, 1, 0x5003);
     p.delay(20_000);

@@ -68,7 +68,7 @@ impl Adma {
         let (b, i) = (self.playing(), self.play % BUFFER);
         let at = (left(core, b) + i, right(core, b) + i);
         self.play = (self.play + 1) % (2 * BUFFER);
-        if self.play % BUFFER == 0 {
+        if self.play.is_multiple_of(BUFFER) {
             self.filled[b as usize] = false;
         }
         at

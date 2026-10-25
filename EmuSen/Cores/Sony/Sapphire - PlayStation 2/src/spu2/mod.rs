@@ -213,8 +213,12 @@ impl Spu2 {
         let [c0, c1] = cores;
         let first = c0.tick(ram, &mut w, [0, 0]);
         let out = c1.tick(ram, &mut w, first);
+        // The output areas (D-261), each write watched for the IRQ addresses (D-265).
         let i = self.area as usize;
-        let mut put = |at: usize, v: i32| ram[2 * (at + i)..2 * (at + i) + 2].copy_from_slice(&(v as i16).to_le_bytes());
+        let mut put = |at: usize, v: i32| {
+            ram[2 * (at + i)..2 * (at + i) + 2].copy_from_slice(&(v as i16).to_le_bytes());
+            blackmoon_spu::Touch::touch(&mut w, 2 * (at + i) as u32);
+        };
         for (c, core) in [&*c0, &*c1].into_iter().enumerate() {
             put(0x400 + 0x800 * c, core.voices[1].out as i32);
             put(0x600 + 0x800 * c, core.voices[3].out as i32);
@@ -226,7 +230,7 @@ impl Spu2 {
         put(0xA00, first[1]);
         self.area = (self.area + 1) & 0x1FF;
         self.out.push_pair(out[0] as i16, out[1] as i16);
-        self.wake |= self.cores.iter().any(|c| c.adma_on() && c.adma.play % adma::BUFFER == 0);
+        self.wake |= self.cores.iter().any(|c| c.adma_on() && c.adma.play.is_multiple_of(adma::BUFFER));
         self.hit(w)
     }
 

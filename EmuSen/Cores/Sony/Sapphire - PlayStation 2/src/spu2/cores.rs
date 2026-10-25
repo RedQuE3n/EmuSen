@@ -119,7 +119,7 @@ impl Core {
                 1 => v.repeat * 4,
                 _ => v.address / 2 + 1 + (v.counter >> 12).min(voice::BLOCK_SAMPLES - 1) / 4,
             };
-            return if k % 4 == 0 { (hw >> 16) as u16 } else { hw as u16 };
+            return if k.is_multiple_of(4) { (hw >> 16) as u16 } else { hw as u16 };
         }
         match r {
             regs::ENDX => self.endx as u16,
@@ -154,7 +154,7 @@ impl Core {
             let k = r - regs::ADDRESSES;
             let n = k as usize / 12;
             let v = &mut self.voices[n];
-            let high = k % 4 == 0;
+            let high = k.is_multiple_of(4);
             let set = |hw: u32| if high { (value as u32 & 0xF) << 16 | (hw & 0xFFFF) } else { (hw & 0xF_0000) | value as u32 };
             match k % 12 / 4 {
                 0 => {
@@ -290,7 +290,7 @@ impl Core {
         for (k, (x, at)) in [(ext, vol::AVOL), (input, vol::BVOL)].into_iter().enumerate() {
             for s in 0..2 {
                 sweep(&mut self.inputs[2 * k + s], self.vol[at + s]);
-                through[k][s] = x[s] * self.inputs[2 * k + s].level as i32 >> 15;
+                through[k][s] = (x[s] * self.inputs[2 * k + s].level as i32) >> 15;
             }
         }
         // MMIX's gates, a right then a left bit each: the external input wet (0-1) and dry (2-3), the sound data input
@@ -311,7 +311,7 @@ impl Core {
             let m = (out[s] + rev[s]).clamp(-0x8000, 0x7FFF);
             sweep(&mut self.main[s], self.vol[vol::MVOL + s]);
             self.vol[vol::MVOLX + s] = self.main[s].level as u16;
-            self.out[s] = (m * self.main[s].level as i32 >> 15).clamp(-0x8000, 0x7FFF);
+            self.out[s] = ((m * self.main[s].level as i32) >> 15).clamp(-0x8000, 0x7FFF);
         }
         self.out
     }

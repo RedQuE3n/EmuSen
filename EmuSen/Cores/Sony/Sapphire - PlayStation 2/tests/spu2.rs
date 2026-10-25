@@ -141,6 +141,6 @@ fn core_0s_output_reaches_the_output_through_core_1() {
     let first = s.cores[0].out;
     let lr = step(&mut s, 2);
     assert_ne!(first[0], 0);
-    let through = |x: i32| (x * 0x7FFE >> 15) * 0x7FFE >> 15;
+    let through = |x: i32| (((x * 0x7FFE) >> 15) * 0x7FFE) >> 15;
     assert_eq!(lr, [through(s.cores[0].out[0]) as i16, 0], "the left external dry gate alone, AVOLL full");
 }

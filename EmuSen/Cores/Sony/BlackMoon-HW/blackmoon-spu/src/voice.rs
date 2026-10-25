@@ -213,3 +213,29 @@ pub fn sweep(current: &mut Envelope, reg: u16) {
         current.tick(Rate::sweep(reg));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each filter's prediction is the two samples before, weighted by psx-spx's "Pos/neg Tables" over 64, each product
+    /// shifted apart (Diamond's D-34): a block whose first nibble is 7 and the rest 0 decays by the filter's own weights.
+    #[test]
+    fn each_filter_predicts_from_psx_spx_weights() {
+        let weights = [(0, 0), (60, 0), (115, -52), (98, -55), (122, -60)];
+        for (f, (w0, w1)) in weights.into_iter().enumerate() {
+            let mut ram = [0u8; 64];
+            ram[0] = (f as u8) << 4 | 2;
+            ram[2] = 7;
+            let mut v = Voice::default();
+            v.key_on(&ram);
+            v.decode_word(&ram, 0);
+            let first = (7i32 << 28 >> 16) >> 2;
+            let mut want = [first, 0, 0, 0];
+            want[1] = first * w0 >> 6;
+            want[2] = (want[1] * w0 >> 6) + (first * w1 >> 6);
+            want[3] = (want[2] * w0 >> 6) + (want[1] * w1 >> 6);
+            assert_eq!(v.samples[3..7].iter().map(|&s| s as i32).collect::<std::vec::Vec<_>>(), want, "filter {f}");
+        }
+    }
+}

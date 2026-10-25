@@ -261,7 +261,7 @@ impl Pcrtc {
         self.picture.odd = self.field.odd;
         let at = (row * g.width * 4) as usize;
         let out = &mut self.picture.rgba[at..at + (g.width * 4) as usize];
-        for (x, px) in out.chunks_exact_mut(4).enumerate() {
+        for (x, px) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let v = g.x0 + x as u64 * g.pitch;
             let read = |n: usize| {
                 let c = &circuits[n];

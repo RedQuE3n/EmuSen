@@ -369,8 +369,8 @@ mod tests {
         }
         assert_eq!((h, v, s), (263, 1, 1), "lines 1 to 262 and the next field's first");
         t.change(100, NTSC, true);
-        assert_eq!(t.mode(field - 1).1, false);
-        assert_eq!(t.mode(field + NTSC.field(false)).1, true);
+        assert!(!t.mode(field - 1).1);
+        assert!(t.mode(field + NTSC.field(false)).1);
         assert_eq!(t.next_edge(field - 10, false), field);
         assert_eq!((t.field(field + 1).start, t.field(field + 1).number), (field, 0), "the new timing's first field");
     }

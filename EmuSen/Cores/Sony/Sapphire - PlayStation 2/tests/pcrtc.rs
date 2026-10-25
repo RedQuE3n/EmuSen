@@ -163,7 +163,7 @@ fn the_even_field_by_csr_reads_the_even_rasters() {
     let row = (g.width * 4) as usize;
     for r in 0..g.height as usize {
         let got = &b.pcrtc.picture.rgba[r * row..(r + 1) * row];
-        if (g.y0 as usize + r) % 2 == 0 {
+        if (g.y0 as usize + r).is_multiple_of(2) {
             assert!(got.chunks(4).all(|p| p == [0, 0, 0, 255]), "raster {}: the even field shows the empty buffer", g.y0 as usize + r);
         } else {
             assert_eq!(got, &before[r * row..(r + 1) * row], "raster {}: the odd field's rows kept", g.y0 as usize + r);

@@ -1,5 +1,5 @@
 //! The clocks (Sapphire_Plan.md §5.1, Sapphire_Disputes.md D-0): one master, the EE core's cycle, and every other unit
-//! an exact integer of it, so nothing drifts. The figures are ps2tek's family, the one place a ruling on D-0 changes.
+//! an exact integer or fixed fraction of it (the PCRTC's video clock, Sapphire_Native.md §29.3), so nothing drifts. The figures are ps2tek's family, the one place a ruling on D-0 changes.
 //! Sapphire_Native.md §20.3 records which timings are the documents' and which are argued.
 
 /// The EE core's clock, 294.912 MHz [R ps2tek "EE Architecture"]: the scheduler's unit.

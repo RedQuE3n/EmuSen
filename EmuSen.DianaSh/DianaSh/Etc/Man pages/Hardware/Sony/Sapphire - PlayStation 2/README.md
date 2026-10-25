@@ -54,7 +54,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and stage S17 (2026-10-25, §27): the GS's drawing kick, every primitive with flat and Gouraud shading, exact
   coverage and interpolation, scissoring, SCANMSK, FBMSK and the depth test in every format, the pixel pipeline's order
   with the places of texturing and the other pixel operations, PCSX2 a witness for coverage and depth but not for
-  interpolation's last step, and Play! no witness for drawing.
+  interpolation's last step, and Play! no witness for drawing;
+  and stage S20 (2026-10-25, §29): the PCRTC, its video timing on its own clock from the GS manual's table in place of
+  S11's stand-in (D-42 closed: PCSX2 raises H-blank at twice the line rate), the two read circuits and the merge, each
+  raster read at its line's time, the picture for the frontend, and PCEE2's own pictures equal to Sapphire's where it
+  shows a circuit at its own size.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

@@ -260,9 +260,12 @@ pub fn hsyncs(ops: &mut Vec<Op>, n: usize) {
     }
 }
 
+/// An image to upload: its format, base pointer and width, size, and the generator's seed.
+type Image = (u32, (u32, u32), (u32, u32), u32);
+
 /// A display program: SMODE2 and PMODE off first, the images uploaded, the circuits set, three V-syncs waited for,
 /// and the images read back so that a referee's memory can be compared (S3's form).
-fn show(name: &'static str, smode2: u64, images: &[(u32, (u32, u32), (u32, u32), u32)], regs: [(u32, u64); 6]) -> Script {
+fn show(name: &'static str, smode2: u64, images: &[Image], regs: [(u32, u64); 6]) -> Script {
     let mut ops = vec![Op::Priv(ga::PMODE, 0), Op::Priv(ga::SMODE2, smode2), Op::Priv(ga::CSR, 0x1F)];
     for &(psm, place, (w, h), seed) in images {
         upload(&mut ops, psm, place, (0, 0, w, h), seed);

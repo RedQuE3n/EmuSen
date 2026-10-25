@@ -3610,3 +3610,232 @@ Optimizations". No emulator, SDK or loader source, no ps2autotests source and no
 - Texturing (S18), the other pixel operations (S19), the PCRTC (S20).
 - The GIF (S15): until then nothing on the EE's side draws on Sapphire; the tests drive the host interface.
 - The state format's new contents (the vertex queue): `SPH2` gains them with the rest (S10, S30).
+
+## 29. Stage S20, the PCRTC: video output and timing (2026-10-25)
+
+*Numbered §29 and its disputes from D-200, since S14, S17 and S22 are built beside it (§26 to §28).*
+
+### 29.1 In one paragraph
+
+The plan's §7 row S20, on the tester's go of 2026-10-25. The crate gains **`pcrtc`**: the video timing (`pcrtc::timing`)
+in place of S11's blanking stand-in, on the PCRTC's own clock VCK, which the *GS User's Manual*'s Figure 5-1 feeds from a
+video clock of its own; the two read circuits (DISPFB1/2, DISPLAY1/2 with their offsets and magnifications, every
+displayable format through `gs::local`) and the merge circuit (PMODE's EN1, EN2, MMOD, AMOD, SLBG and ALP, BGCOLOR), each
+raster read at its line's start with the registers as they then stand; NTSC, PAL, 480p and 1080i, interlace in FIELD and
+FRAME modes, CSR's FIELD; H-blank, V-blank and the V-sync to the EE's timers, the INTC, HSINT, VSINT and the IOP's
+timers. The documents' table read at 13.5 MHz fixes the line and the field (D-200): 59.94 Hz interlaced, 59.83 Hz
+non-interlaced, where both referees run exactly 60 Hz whatever SMODE2 says. **D-42 is closed**: PCSX2 raises H-blank at
+twice NTSC's line rate, 525 in its field (D-201). Seven display programs of the project's are equal on Sapphire to the
+pictures a model transcribed from chapter 5 gives; the memory they read back is equal on PCSX2 and on Play! (but Play!'s
+PSMCT16S, as at S16), and **PCEE2's own software pictures equal Sapphire's pixel for pixel** for circuit 1 magnified and
+for both interlace modes; it rounds the merge to the nearest (D-203), reads the display once a frame (D-205) and frames
+two-circuit pictures its own way. A defect S22 suspected in S11's board was proven and fixed first (§29.9). EXTBUF's
+feedback write is a named loss (§29.6). No emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 29.2 What was built
+
+- **`src/pcrtc/timing.rs`**: `Mode` (a video mode's VCK as a fraction of the EE's clock, its line in VCK, its lines, how
+  it scans, V-blank, H-blank, the V-sync, the picture with no circuit on, the aspect), the four modes `NTSC`, `PAL`,
+  `DTV480P`, `DTV1080I`; `Timing`, the signals as functions of EE time, a change of mode or INT taking effect at the next
+  field's start; `Edges` (H-blank's and V-blank's rise and fall, the V-sync); fields, their lines and rasters.
+- **`src/pcrtc/mod.rs`**: `Circuit` and `Pmode` decoded from the registers; `merge`; `geometry`, the picture's rectangle;
+  `Picture` with `frame_info`, the core ABI's description of it; `Pcrtc`, which begins each field, reads each due raster
+  and turns SMODE2's INT and a mode set by `set_mode` into the timing.
+- **`clock.rs`**: `VCK_54` (375/2048 of the EE's clock, 54 MHz exactly) and `VCK_74` (12375/49152, 74.25 MHz); the old
+  `Standard`, `NTSC` and `PAL` names now the PCRTC's modes, `HBLANK` gone. `blank.rs` is deleted.
+- **`board.rs`**: the PCRTC in the stand-in's place, its line reads among the board's events; VB_ON and the field's
+  picture geometry at V-blank's rise, VSINT and FIELD at the V-sync; a privileged write passing SMODE2 to the timing and a
+  changed timing to the IOP's copy; `Board::set_mode`. **`gs/mod.rs`**: CSR's FIELD; `vsync` takes the field.
+  **`iop/`**: the IOP's timers follow a copy of the same `Timing`.
+- **`tests/s20/`** and **`tests/pcrtc.rs`**, **`examples/s20.rs`** (§29.7); `ps2referee.py --screen` (§29.8).
+- **No new cross-component dependency**; no surface outside Sapphire changed (§29.5).
+
+### 29.3 The timing: the documents' and the chosen
+
+**The documents'** [R *GS User's Manual* §5.1.2's table, §5.2.1, §5.2.2; ps2tek "EE Timers", "IOP Timers"; D-200]:
+NTSC's 15.734 kHz line, 59.940 Hz interlaced and 59.82 Hz non-interlaced; PAL's 15.625 kHz, 50.000 and 49.76 Hz; 480p at
+31.469 kHz and 59.94 Hz; 1080i at 33.750 kHz and 60.00 Hz; V-blank 22 lines in NTSC and 26 in PAL; the 13.5 MHz pixel
+clock. Read at 13.5 MHz they are 858 and 864 pixels a line, 525 and 625 lines a frame, 263 and 314 lines a non-interlaced
+field, every figure of the table to its printed digits (`the_four_rates_of_the_manuals_table_follow_from_13_5_mhz`).
+
+**Chosen**, each a named loss and a dispute candidate if an oracle measures it:
+
+1. VCK is four pixels, 54 MHz, in NTSC, PAL and 480p (the MAGH table's 2,560 VCK across a 640-pixel picture), and
+   74.25 MHz in 1080i (1,920 pixels at MAGH ×1 in a 2,200-VCK line) [A].
+2. A field starts at V-blank's rise (VB_ON); the V-sync, VSINT and FIELD's change, 4 lines in (D-202); V-blank ends 22
+   or 26 lines in. 480p's V-blank is 45 lines and 1080i's 22 a field [A].
+3. H-blank is high for the first 552 VCK of each NTSC line, 576 in PAL (BT.601's blanking), 276 in 480p and 280 in
+   1080i, every line including those in V-blank; HSINT at its rise (D-201).
+4. An interlaced odd field starts half a line in, its lines on the frame's H-syncs; the even field fills the even
+   rasters (D-204). A non-interlaced field's FIELD alternates too.
+5. A change of INT or of mode takes effect at the next field's start, as a new field 0 (even) [C]. After a reset SMODE2
+   reads 0, so a program that sets nothing sees a non-interlaced field.
+6. **SMODE1, SYNCH1, SYNCH2, SYNCV and SRFSH change nothing.** They have no fields in the *GS User's Manual*, ps2tek or
+   the *EE User's Manual* (§24.11), and the kernel's mode setting writes them (§5.2.1, ps2tek's SetGsCrt) with values no
+   permitted source gives. The mode is the board's (`Board::new`'s standard, `Board::set_mode`) and INT is SMODE2's; the
+   brief's "from SMODE1/SYNCH/SYNCV as written" waits on a source for their fields (§29.11 Q1). VESA's modes, which only
+   those registers select, are not modelled.
+
+The figures live in `pcrtc::timing`'s four modes, and VCK's ratio to the EE's clock in `clock.rs`, D-0's one place.
+
+### 29.4 The read and merge circuits
+
+[R *GS User's Manual* §5.2.2, §5.2.3, §7.2; A where marked]:
+
+- **A raster** is read at its line's start, every pixel at once, from memory and registers as they are then; a register
+  written within a line shows from the next line (D-205).
+- **A circuit** shows at VCK *v* and raster *r* when its EN bit is set and DX ≤ *v* ≤ DX + DW, DY ≤ *r* ≤ DY + DH. It
+  reads pixel DBX + (*v* − DX) / (MAGH + 1) of buffer line DBY + *s* / (MAGV + 1), where *s* = *r* − DY, or (*r* − DY) / 2
+  in FRAME mode when interlaced (§5.2.2's Interlace Read: FIELD mode "+0, +2, +4 / +1, +3, +5", FRAME "+0, +1, +2"),
+  coordinates wrapping at 2048 as a transfer's do (D-106).
+- **Formats**: PSMCT32 with its alpha, PSMCT24 with 80h, PSMCT16 and 16S with 80h or 0 by bit 15 and each 5-bit
+  component shifted up three (§5.2.3); PS-GPU24 on circuit 1, three bytes a pixel along a PSMCT16 line, DBX in 16-bit
+  pixels [A]; circuit 2 with PS-GPU24, and a texture format, read black with alpha 0 [A]; a depth format reads as the
+  colour format of its width through its own layout [A].
+- **The merge**: OUT2 is circuit 2's colour inside its rectangle and BGCOLOR elsewhere; OUT1 blends circuit 1 over OUT2,
+  or over BGCOLOR with SLBG, by ALP with MMOD or by circuit 1's alpha doubled and clamped at FFh, rounded to the nearest
+  (D-203); where circuit 1 gives nothing OUT1 is what it would blend over (D-206). AMOD selects OUT1's alpha, which only
+  the feedback write would use.
+
+### 29.5 The picture handed to the frontend
+
+- **What it is** [C]: RGBA rows covering the union of the switched-on circuits' rectangles, clipped to the line and the
+  frame's rasters, one row a raster (both fields' rasters woven when interlaced, each field writing its own), a pixel the
+  finest circuit's VCK (at most 1,920 pixels across); with no circuit on, the mode's picture (640 × 448 NTSC, 640 × 512
+  PAL, 640 × 480, 1920 × 1080), BGCOLOR throughout. The geometry is fixed at each field's start, a new one starting black,
+  as Diamond's is (`Diamond_GPU.md` §7). Its aspect is 4:3, 16:9 in 1080i. `Picture::frame_info` gives the core ABI's
+  `frame_info` (§6.6): size, stride, aspect.
+- **What a television shows that it leaves out**: BGCOLOR beyond the circuits' rectangles (the border), and the field
+  in flight (the picture is the woven frame). Both are the frontend's to add if a filter wants them: the CRT filter
+  needs the active picture in microseconds (`Sapphire_Plan.md` §4.6), which is now 53.33 µs of a 63.56 µs NTSC line and
+  53.33 of 64 µs PAL at BT.601's 720 pixels, the circuits' rectangles inside it.
+- **Surfaces**: no ABI change, no change outside Sapphire. The machine (`machine.rs`, `v1.rs`) still hands S1's black
+  picture, since it holds no board until S10; there `frame_info` and `frame` become the board's picture, machine info's
+  `max_width` and `max_height` become `MAX_WIDTH` × `MAX_HEIGHT` (1,920 × 1,125, a value, not a field), and the frame
+  rate the timing's (60,000/1,001 interlaced, which S1's constant already is; 59.83 Hz non-interlaced). The core ABI has
+  no field indicator; a CRT filter that draws interlace by field would need one, a minor proposed in §29.11 Q2, not
+  built.
+
+### 29.6 What is not modelled
+
+Each a named loss, and a dispute candidate if an oracle measures it [A]:
+
+- **The feedback write** (EXTBUF, EXTDATA, EXTWRITE, EDWINT; §5.3): the registers are stored and nothing is written.
+  The manual leaves it short of an implementation: its YCbCr matrix is given in real numbers with no fixed point or
+  rounding, Cb and Cr are labelled crosswise ("Cr = (E0h) x Ecb"), and neither when EDWINT is raised nor which field a
+  WRITE of 1 captures in each WFFMD is said.
+- **SMODE1 and the synchronisation registers' fields**, VESA's modes, DPMS (§29.3, 6).
+- **A change within a line**: a raster is read whole at its line's start.
+- **The border and the field in flight** in the picture (§29.5).
+- **The PCRTC's memory bandwidth**: reading costs the GS's drawing nothing.
+
+### 29.7 The gate: the programs (measured 2026-10-25)
+
+`tests/s20/` writes `s20-timing` as an EE program (records ungraded; Sapphire's run is graded in the test) and seven
+display programs as S16's scripts: images uploaded through the GIF's channel, the PCRTC's registers set, three V-syncs
+waited for, the images read back through VIF1's into the record, then an idle loop; `s20-midframe` goes on switching
+every field after its done word. On Sapphire the tests drive the board's GS with the same scripts and compare its picture
+with `tests/s20/manual.rs`, chapter 5 transcribed apart from `src/pcrtc/` over S16's model of the memory.
+
+| Program | What it shows |
+|---|---|
+| `s20-timing` | fields, V-blank, H-blank and H-syncs, the V-sync and FIELD, in four settings of SMODE2 |
+| `s20-ct32` | circuit 1 alone in PSMCT32, ×4 across and ×2 down, from (8, 4) in its buffer, BGCOLOR around it |
+| `s20-pair` | circuit 1 in PSMCT24 and circuit 2 in PSMCT16 (×5) side by side, OUT2 where circuit 1 is not |
+| `s20-alpha` | circuit 1's alpha, doubled, blending it over circuit 2 in PSMCT16S where they overlap |
+| `s20-alp` | ALP 60h over BGCOLOR (SLBG), circuit 2 on and not shown |
+| `s20-field`, `s20-frame` | interlace in FIELD mode (64 buffer lines) and FRAME mode (32 lines over 64 rasters) |
+| `s20-midframe` | DISPFB1 switched forty H-syncs past each V-sync |
+
+**Tests** [M, `cargo test --release`]: `tests/pcrtc.rs` **5 of 5**: `the_display_programs_pictures_equal_the_manuals`
+(six pictures, rectangle and every pixel, and their memory read back), `a_register_changed_mid_field_shows_from_the_next_line`
+(the switch at raster 45, the line after the fortieth H-sync past the V-sync), `the_even_field_by_csr_reads_the_even_rasters`,
+`the_picture_is_described_to_the_frontend_with_its_size_and_shape`, `the_timing_program_sees_the_documents_fields`
+(`s20-timing` on the interpreter, 40 s); lib **44 of 44** with `pcrtc::timing`'s three. The crate's other tests on the tree
+with S22 beneath, updated where they named the stand-in's figures: `cop0` 19, `dmac` **18** (one new, §29.9), `fpu` 9,
+`gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3, `sif` 5, `vu0` 14, `vu_micro` 24, all passing;
+lib, `pcrtc`, `gs` and `dmac` also under `test-checked`; clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`)
+**5 of 5**.
+
+### 29.8 On the referees (measured 2026-10-25)
+
+`examples/s20.rs` writes each program as an ELF with its expected record, and each display program's picture as the
+model gives it. `ps2referee.py ram …` read the records from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one
+process at a time; `ps2referee.py ram pcee2 … --for 300 --screen FILE` kept PCEE2's software picture at frame 300 (the
+probe's screen dump, which S3 found it hands; the option is new and keeps nothing else).
+
+**The timing** (`s20-timing`): D-200 to D-202 and D-204. Both lineages run a field of exactly 4,915,200 EE cycles in every
+setting; PCSX2 raises H-blank and HSINT every 4,681 BUSCLK (525 a field), holds V-blank 23 lines and puts the V-sync 4
+lines in; Play! steps its lines by 19,200 cycles, does not gate the timers on H-blank and raises VSINT at VB_ON. Both
+change FIELD inside V-blank and never set NFIELD.
+
+**The display programs**:
+
+| Program | Memory read back: PCSX2, Play! (words differing) | PCEE2's picture against Sapphire's |
+|---|---|---|
+| `s20-ct32` (2,048) | 0, 0 | 48 × 48 both, **every pixel equal** |
+| `s20-pair` (3,584) | 0, 0 | framed 138 × 104 against 154 × 56; the same 5,017 colours (D-206) |
+| `s20-alpha` (4,096) | 0, 2,048 (Play!'s PSMCT16S reads back as zeros, §24.7) | framed 96 × 112 against 96 × 64; 91 % of its pixels' colours Sapphire's, the rest off by one in a component |
+| `s20-alp` (4,096) | 0, 0 | 48 × 64 against 64 × 32; rounding to the nearest produces 1,448 of its 1,535 colours (D-203) |
+| `s20-field` (4,096) | 0, 0 | 64 × 64 both, **every pixel equal** |
+| `s20-frame` (2,048) | 0, 0 | 64 × 64 both, **every pixel equal** |
+| `s20-midframe` (4,096) | 0, 0 | buffer B on every row, each line twice (D-205) |
+
+So by S3's decision the referees' pictures, taken as their memory with the registers the programs wrote, equal
+Sapphire's wherever their memory does; and the one lineage whose own pictures can be taken agrees pixel for pixel where it
+shows a circuit at its own size, in both interlace modes, which also confirms the FRAME reading of §29.4 and the woven
+fields. Its framing of a picture of two circuits, or of a non-interlaced one at MAGV ×1 (each line twice), is its
+presentation, not the PCRTC's, and is not graded.
+
+### 29.9 A defect in S11's board, found by S22 and proven here
+
+S22 suspected that a register write waking the DMAC at the board's time, when that time held a blanking edge, made
+`Board::run_to` take the edge a second time. **Proven** on the tree before this stage's changes
+(`a_register_write_on_a_blanking_edge_does_not_take_the_edge_again`: a timer clocked by H-blank counted 11 for 10 lines)
+and fixed in its own commit: the board remembers the time whose edges it last took. The test now runs on the PCRTC's
+timing; the timing's start at 0 is not an edge.
+
+### 29.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the interlace field order swapped (`Timing::raster`) | `the_even_field_by_csr_reads_the_even_rasters` |
+| F2 | DISPLAY's MAGH read one too large | `the_display_programs_pictures_equal_the_manuals`, `a_register_changed_mid_field_…`, `the_picture_is_described_…` |
+| F3 | VSINT a line late (NTSC's V-sync at 5 lines) | `hsint_and_vsint_follow_the_pcrtcs_timing`, `the_timing_program_sees_the_documents_fields` |
+
+Each was applied, the tests run and the source restored [M]. F1 is invisible in a still woven picture, since both fields
+read each raster's own line; the field-parity test switches the buffer at an even V-sync to show it.
+
+### 29.11 Questions this stage leaves
+
+1. **Q1 [decision], SMODE1 and the synchronisation registers.** No permitted source gives their fields, so the timing
+   follows the board's mode and SMODE2 alone (§29.3, 6), and with the player's BIOS (S24) Sapphire cannot tell 480p or
+   PAL from what the kernel writes. *Recommended*: a dispute step at S24 writing chosen values to SMODE1 on PCSX2 and
+   measuring the field it gives, outputs only, PCSX2 the single witness; until then a game's mode comes from the disc's
+   region.
+2. **Q2 [decision], the field in the core ABI.** *Recommended*: a minor giving `frame_info.flags` a bit for "the picture's
+   last field was odd" (and one for interlaced), so a CRT filter can draw interlace field by field; offered to every core
+   with interlaced modes (Diamond's 480i too), weighed in `EmuSen_CoreAPI_Extensions.md` first. Not built.
+3. **Q3 [routine], the merge's rounding (D-203).** *Recommended*: keep PCSX2's lineage's rounding to the nearest.
+4. **Q4 [routine], the referees' 60 Hz (D-200).** *Recommended*: keep the documents' 59.94 Hz; a game timing itself by
+   V-blank runs 0.1 % slower than on either referee, as on a console by the table.
+5. **Q5 [routine], the feedback write.** *Recommended*: build it when a game is found that uses it (S28's bench), with
+   the YCbCr rounding then a dispute.
+
+### 29.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.1, §1.4, §1.6, §2, §3, §4.2 to §4.7, §5.1, §5.4, §7, §8, §10 and §11; this page's §20 and §24;
+`Sapphire_Disputes.md`'s rules, D-0 and D-42; `Sapphire_Referees.md` §1, §2, §4 and §6; `EmuSen_CoreAPI.md` §6.5, §6.6,
+§6.30 and §6.35; Diamond's `gpu/display.rs` and `v1.rs` picture code (the project's own); the crate's `board.rs`,
+`blank.rs`, `clock.rs`, `gs/`, `iop/`, `machine.rs`, `v1.rs` and `tests/s6`, `s11`, `s16`. Sony's *GS User's Manual*
+(Version 5.0) chapter 5 whole and §7.2's register pages; ps2tek at `1c91660`: "EE Timers", the GS's register lists, "IOP
+Timers", the syscall SetGsCrt's and SetVSyncFlag's entries (interfaces, cleared). No emulator, SDK, loader or
+ps2autotests source and no firmware; the BIOS was only passed to PCSX2 and PCEE2 by path, and nothing of its output was
+kept.
+
+### 29.13 What this stage does not cover
+
+- The machine handing the picture through the ABI and running fields (S10); the CRT profile (S29, §4.6).
+- Drawing (S17 to S19): the programs fill the memory by transfers.
+- The state format's new contents (the timing, the field, the picture's geometry): `SPH2` gains them with the rest (S30).
+- The picture on the device (S46).

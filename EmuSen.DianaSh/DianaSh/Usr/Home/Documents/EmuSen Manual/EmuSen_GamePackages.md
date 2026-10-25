@@ -1564,7 +1564,8 @@ the desktop: every disc of the two folders passed all three checks, twice.
 - **Step 4**, Mistress's window over the four calls of §12.3, waits for the tester's go.
 - **Q20 [routine]: the handheld's thread default.** Q9 gives the handheld half its threads, and the tool, which does not
   know the device, uses every thread unless asked. *Recommended:* step 4's window and the handheld's run pass half
-  (`-j 8` there); the tool keeps no device rule of its own.
+  (`-j 8` there); the tool keeps no device rule of its own. **Accepted 2026-10-25 as recommended**; step 4's window
+  defaults to half (§13).
 - **Q21 [decision]: a damaged CHD can stop the program that reads it.** `chd` 0.3.4 panicked on 10 of 66 damaged
   hunks measured (first written 67), and the cores and the platform library abort on a panic. *Recommended:* a step of
   its own for `emusen-disc`, measured with the same corruptions. **Decided 2026-10-25 by the tester as recommended,
@@ -1579,15 +1580,22 @@ the desktop: every disc of the two folders passed all three checks, twice.
   panic's message, take a release that fixes it when one comes, and measure it with the same sweep; until then accept
   it: the map is tens of bytes at a CHD's end, and the tool keeps its reader from any CHD chdman's verify fails (§12.2),
   so the risk is a player's launch of a CHD whose map is damaged. The departure of §12.2 is removed when it is fixed.
+  **Decided 2026-10-25 by the tester:** accepted as it stands and not reported upstream for now; §12.2's departure stays.
+  A core given a damaged hunk keeps receiving empty sectors, as for sectors an image does not hold (decided the same day,
+  as recommended). The 42 CHDs of §12.5 were read whole through the new reader on 2026-10-25: none refused, none panicked.
 - **Q22 [routine]: chdman's copyright line.** `licenses/chdman-BSD-3-Clause.txt` says "Copyright (c) Aaron Giles", as
   the tester read chdman's file header; its exact line, with any years, was not read here, since MAME's source is not.
-  *Recommended:* the tester copies the header's line into that file.
+  *Recommended:* the tester copies the header's line into that file. **Answered 2026-10-25:** at tag `mame0289` the
+  header reads `// license:BSD-3-Clause` and `// copyright-holders:Aaron Giles`, with no years, so the file's line
+  stands; the file now quotes both lines (read at the tester's request, those lines alone).
 - **Q23 [decision]: chdman needs `libSDL2-2.0.so.0` on the player's machine.** MAME's tools link its SDL layer; both
   the desktop and SteamOS have the library, but a Linux system without SDL2 would refuse to start chdman, and the tool
   would say so and convert nothing. *Recommended:* accept it for Linux now (SDL2 is in every desktop distribution's
   base and in SteamOS) and look again when Windows and macOS resume, where a build will be needed in any case.
+  **Decided 2026-10-25 by the tester as recommended.**
 - **Q24 [routine]: `chd wait`**, a fourth subcommand, exists because a batch outlives DianaSh's ten-second line
-  budget (§12.3). *Recommended:* keep it; the window of step 4 polls the job and needs nothing of it.
+  budget (§12.3). *Recommended:* keep it; the window of step 4 polls the job and needs nothing of it. **Accepted
+  2026-10-25 as recommended.**
 
 ## 13. Built 2026-10-25: step 4
 
@@ -1800,13 +1808,15 @@ holds each phrase of the tool to a sentence of the window's own.
 - **The handheld's run** of §12.7 is still left; this step did not touch it.
 - **Q26 [decision]: the window in a game's Game Settings.** Memory Cards is there, and this window is not, because a
   batch holds half the machine's threads while the game plays. The desktop's *Settings* menu reaches it during a game
-  all the same. *Recommended:* leave it out of *Game Settings*, and keep the desktop menu as it is.
+  all the same. *Recommended:* leave it out of *Game Settings*, and keep the desktop menu as it is. **Decided
+  2026-10-25 by the tester as recommended.**
 - **Q27 [decision]: closing the window stops a batch.** A batch of the tester's two folders took 17 minutes on the
   desktop (§12.5). The window owns its job, and closing it frees the job. Because the file system is the record,
   converting again does only what is left, and the window says so. *Recommended:* keep it. A batch that outlives its
   window would need a job owned by the main window, with a status a player can find again, as the scraper's has.
+  **Decided 2026-10-25 by the tester as recommended.**
 - **Q28 [routine]: a disc's progress is its state, not a percentage.** The tool runs chdman with its output read
   only at the end, and reports a disc when it is done. *Recommended:* keep it. A disc takes 12 to 40 seconds on the
-  desktop (§12.5), and the overall bar moves at each.
+  desktop (§12.5), and the overall bar moves at each. **Accepted 2026-10-25 as recommended.**
 - **Q29 [routine]: the faster codecs (`--fast`, §4.8) are not offered in the window.** *Recommended:* leave them to
-  `chd convert --fast` until the handheld's run measures what they buy.
+  `chd convert --fast` until the handheld's run measures what they buy. **Accepted 2026-10-25 as recommended.**

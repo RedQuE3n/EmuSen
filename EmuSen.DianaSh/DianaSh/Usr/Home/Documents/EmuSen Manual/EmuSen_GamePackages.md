@@ -1607,7 +1607,7 @@ with no wait, at most 256 a tick. With no job, nothing runs.
 - In big picture the window is framed as a sheet (`MainWindow.FramedWindows`), so it is used by the controller grammar
   alone.
 - It is not in a game's *Game Settings*, where Memory Cards is: a batch holds half the machine's threads for minutes
-  while the game plays. Q25 asks the tester.
+  while the game plays. Q26 asks the tester.
 
 **What it shows**, from the top:
 
@@ -1621,7 +1621,7 @@ with no wait, at most 256 a tick. With no job, nothing runs.
    working.
    - The log's path, from the start event's `log` (§13.4).
    - A disc's own progress is its state (waiting, converting and checking, then its result with its seconds). The tool
-     does not report chdman's progress within a disc (Q27).
+     does not report chdman's progress within a disc (Q28).
 4. **Discs from.** *Every folder*, or each of the library's top folders that holds a disc, with its count and its
    console: "psx: 37 PlayStation discs".
 5. **Threads.** "*n* of *total*". The default is half the machine's threads, at least one, as §12.7's Q20
@@ -1779,15 +1779,15 @@ holds each phrase of the tool to a sentence of the window's own.
 ### 13.6 Left, and for the tester
 
 - **The handheld's run** of §12.7 is still left; this step did not touch it.
-- **Q25 [decision]: the window in a game's Game Settings.** Memory Cards is there, and this window is not, because a
+- **Q26 [decision]: the window in a game's Game Settings.** Memory Cards is there, and this window is not, because a
   batch holds half the machine's threads while the game plays. The desktop's *Settings* menu reaches it during a game
   all the same. *Recommended:* leave it out of *Game Settings*, and keep the desktop menu as it is.
-- **Q26 [decision]: closing the window stops a batch.** A batch of the tester's two folders took 17 minutes on the
+- **Q27 [decision]: closing the window stops a batch.** A batch of the tester's two folders took 17 minutes on the
   desktop (§12.5). The window owns its job, and closing it frees the job. Because the file system is the record,
   converting again does only what is left, and the window says so. *Recommended:* keep it. A batch that outlives its
   window would need a job owned by the main window, with a status a player can find again, as the scraper's has.
-- **Q27 [routine]: a disc's progress is its state, not a percentage.** The tool runs chdman with its output read
+- **Q28 [routine]: a disc's progress is its state, not a percentage.** The tool runs chdman with its output read
   only at the end, and reports a disc when it is done. *Recommended:* keep it. A disc takes 12 to 40 seconds on the
   desktop (§12.5), and the overall bar moves at each.
-- **Q28 [routine]: the faster codecs (`--fast`, §4.8) are not offered in the window.** *Recommended:* leave them to
+- **Q29 [routine]: the faster codecs (`--fast`, §4.8) are not offered in the window.** *Recommended:* leave them to
   `chd convert --fast` until the handheld's run measures what they buy.

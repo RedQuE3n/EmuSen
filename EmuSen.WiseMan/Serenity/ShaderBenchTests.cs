@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using EmuSen.Serenity.Slang;
 using Xunit.Abstractions;
 
@@ -22,6 +23,25 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Contains("chain.gpu.passes=", line);
             Assert.Contains("render.host.copy=", line);
             Assert.Contains("pictures=", line);
+            Assert.Null(SlangProbe.Current);
+        }
+
+        // The device path's stand-in draws what the readback draws where the picture's corner is a whole pixel - see EmuSen_Serenity.md §13.1.
+        [Fact]
+        public void A_short_device_path_case_reports_the_present_s_stages_and_draws_the_readback_s_pictures()
+        {
+            if (Environment.GetEnvironmentVariable(BenchVariable) != "1" || string.IsNullOrEmpty(Environment.GetEnvironmentVariable(GlVariable))) return;
+            string[] common = { "kind=filter", "shader=CRT", "console=SNES", "set=quality:1", "src=256x224", "window=1920x1080", "frames=20", "warmup=5", "pace=0" };
+            string present = ShaderBench.Run(ShaderBench.Parse(common.Append("path=present")), output.WriteLine);
+            string readback = ShaderBench.Run(ShaderBench.Parse(common), output.WriteLine);
+            output.WriteLine(present);
+            output.WriteLine(readback);
+            Assert.Contains("present.passes.gpu=", present);
+            Assert.Contains("present.copy.gpu=", present);
+            Assert.Contains("consumer.gl.gpu=", present);
+            Assert.Contains("chain.gpu.passes=", readback);
+            static string Pictures(string line) => line[(line.IndexOf("pictures=", StringComparison.Ordinal) + 9)..];
+            Assert.Equal(Pictures(readback), Pictures(present));
             Assert.Null(SlangProbe.Current);
         }
     }

@@ -1621,7 +1621,8 @@ no test writes to the player's `home/Shaders/`.
   Avalonia's own GL context in a window. If a window's context behaves differently, the held flag is what keeps a
   deferred upload safe.
 - **Levers 3 and 4** (interop, and two frames in flight) were not built; they were not approved. Most of a light
-  preset's remaining 1.8 ms at 1080p is what interop would remove.
+  preset's remaining 1.8 ms at 1080p is what interop would remove. *(2026-10-24: both are built, in effect, as
+  the device path of `EmuSen_DevicePicture.md` §13; §13 here measures what is left.)*
 - ~~**The chain's own synchronisation hazard is not fixed** (§9.7).~~ *Retired 2026-09-24: fixed in §10, with the
   picture comparison this bullet asked for (every bench case byte-identical, §10.5).* `SlangChain`'s render passes had
   no subpass dependency that made a pass's output visible to the next pass's fragment shader, and the layer reported
@@ -2066,3 +2067,320 @@ chain's image (§4 there).
 where the device path is off, and every filter, built-in or RetroArch, is the chain of §7, handed to the compositor
 or read back (§9.1). The built-ins' text is Vulkan GLSL. `EmuSen_DevicePicture.md` §19 to §22 are the record, with what
 it costs and how the pictures were held to those of before.
+
+## 13. The display path after the device picture, measured, and the levers left (2026-10-24)
+
+A research pass, as §8 was, on the path as it stands after `EmuSen_DevicePicture.md`: everything between a core's
+finished frame and the screen, which is now one Vulkan device (the *slang device*, `SlangRunner.SharedDevice`, the
+platform library's `emusen-serenity` device) running every picture through §7's chain and handing it to Avalonia's
+compositor (the *device path*), with the readback of §9.1 where that is refused. No code in the product changed: the
+bench gained a stand-in for the device path (§13.1), and the levers were bounded by measurement or by probes outside
+the repository. "The shader device" is no name in the code or the manuals; it is read here as the slang device and
+the path around it. Raw results, case lists, probes and scripts: `~/.cache/emusen/probe/shaders/opt/`.
+
+### 13.1 The bench's device path, and what it stands in for
+
+§8.1's bench drove only the readback, which since §12 is the fallback. `ShaderBench` now takes `path=present`: the
+chain is built as `GameFrameControl.BuiltInFor` builds it (the preset written by `BuiltInPreset.Write`, the values
+`GiveValues` gives, the rows once for a filter that counts lines), presented with `SlangChain.Present` into three
+exported images made as `DevicePresenter` makes them (linear, rows padded to 64 pixels), and consumed by the bench's
+GL context on the same card **standing in for Avalonia's compositor**: each image's memory and its two semaphores
+imported once (`GL_EXT_memory_object_fd`, `GL_EXT_semaphore_fd`, not dedicated, as Avalonia imports them), and for
+each update a wait on *ready*, a copy into a texture made for the update (Avalonia's `CopyToNewTexture`, §1.2 there),
+a signal of *free*, and Skia drawing the copy into the window's rectangle. `consumer=kept` copies into one kept
+texture instead, and `consumer=direct` draws the imported image itself, as the GL-context import of §8.5.1 would.
+
+**The stages.** On the UI thread: *advance* (the raw frame's lookup image and the frame into the staging buffer),
+*present bind* (sizes, uniforms, descriptors) and *present record and submit*, from the library's own phases. On the
+GPU, from the library's timestamps: each pass, the passes' sum, and the *copy* of the last pass into the shown image
+with its transitions; a submission's timestamps are read when the next frame settles it, so each frame's GPU figures
+are taken from the frame after. For the compositor's part: its CPU time and a `GL_TIME_ELAPSED` query around the
+wait, the copy and the draw. Also: the build, the three images made and imported (`import.ms`), the first present of
+a chain (its targets made) and its first consumption, and the bytes the product's calls allocate on the calling
+thread (`GC.GetAllocatedBytesForCurrentThread`, so the bench's own rows are not counted). The readback path now hears
+a built-in's chain as it hears a preset's.
+
+**Held to the readback.** Where the picture's corner falls on a whole pixel (1920 × 1080), every case drew the same
+three hashed pictures on both paths, in every round: the stand-in shows what the chain rendered.
+`ShaderBenchTests.A_short_device_path_case_reports_the_present_s_stages_and_draws_the_readback_s_pictures` keeps that
+(gated, as the first case is, on `EMUSEN_SHADER_BENCH=1` and a GL device). At 1280 × 800 the paths differ by design:
+the device path snaps the rectangle to whole pixels (`PresentOnDevice`), the readback draws at 106.67.
+
+**What it does not measure.** Avalonia's own compositor thread, its scene and the swap: the stand-in's copy and draw
+are of the same kind as Avalonia's, not Avalonia's code. The window system and vsync. The core's own GPU work, which
+on the handheld shares the GPU with the passes. A lent picture (§17 there), whose device-side copy replaces the
+upload measured here.
+
+**The protocol** is §8.1's: paced at 60 Hz, 60 frames of warm-up and 300 measured, each case its own process, three
+interleaved rounds, the median over rounds of each run's median. Desktop: the RX 6800 (RADV and radeonsi, Mesa's
+caches warm), load averages 0.3 to 1.6. Handheld: the Legion Go S, SteamOS on kernel 7.2.7-valve2, glibc 2.43,
+platform profile `custom`, **on the charger** (`ACAD` online, battery full, before and after each run), from
+`~/emusen-bench/shader-opt/` under `systemd-run --user`, with EmuSen not running. **No battery run was made**: the
+handheld stayed on its charger, so §13.10 asks for one.
+
+### 13.2 The predictions for the handheld
+
+Written to `PREDICTIONS.md` before any run there, with the desktop's first readings in hand:
+
+| | Prediction | Verdict |
+|---|---|---|
+| H1 | UI thread 0.3 to 0.8 ms a frame on the device path; the passes the larger part of every filtered case | **Refuted low** in its first half: 0.12 to 0.25 ms (0.33 to 0.36 with the NES's raw frame). Held in its second |
+| H2 | The tiers' passes at 1280 × 800: Performance 1.5 to 3, Balanced 3 to 5, Accurate 8 to 13 ms | **Refuted low** for all three: 0.89, 2.01 and 7.86 ms |
+| H3 | At 1920 × 1200 Accurate exceeds 16.7 ms; Balanced stays under 8 | **Refuted** in its first half (8.17 ms), held in its second (3.47) |
+| H4 | The chain's copy and the compositor's together 0.1 to 0.3 ms at 1280 × 800 | **Refuted high**: 0.16 + 0.29 = 0.45 ms under Balanced |
+| H5 | The NES's raw frame costs the UI thread at least 0.3 ms | **Refuted**: 0.19 to 0.20 ms over the same case without it |
+| H6 | A chain's first present 5 to 15 ms | Held in part: 3.6 to 6.9 ms |
+| H7 | On battery no faster than on the charger; the GPU at its 800 MHz floor | Untested on battery. On the charger the clock read 800 to 840 MHz while the passes ran, the GPU 40 to 70% busy |
+
+The tiers came in under H2 because the paced desktop figures it scaled were themselves the low clock's (§11.10), and
+the handheld's integrated GPU loses less to its floor than that ratio assumed. Accurate's signal passes are a fixed
+cost the window does not scale (§13.4), which is why 1920 × 1200 is only 4% dearer than 1280 × 800.
+
+### 13.3 The desktop
+
+UI and render-thread figures in ms; GPU figures in ms of GPU time; SNES 256 × 224 unless marked, Game Boy Color
+160 × 144, Game Boy Advance 240 × 160, N64 640 × 240 with its rows twice, NES 256 × 240 with its `nes.ppu` frame:
+
+| Case | Window | UI thread | of it: record + submit | Passes | Copy | Compositor CPU | Compositor GPU | Readback path: render thread |
+|---|---|---|---|---|---|---|---|---|
+| plain | 1280 × 800 | 0.31 | 0.29 | 0.06 | 0.08 | 0.11 | 0.05 | 0.07 (Skia) |
+| CRT, Performance | 1280 × 800 | 0.31 | 0.30 | 0.41 | 0.03 | 0.12 | 0.02 | 1.23 |
+| CRT, Balanced | 1280 × 800 | 0.33 | 0.31 | 0.64 | 0.03 | 0.12 | 0.02 | 1.44 |
+| CRT, Accurate | 1280 × 800 | 0.34 | 0.32 | 1.66 | 0.03 | 0.12 | 0.02 | 2.42 |
+| CRT (Lottes) | 1280 × 800 | 0.31 | 0.29 | 0.52 | 0.03 | 0.12 | 0.02 | |
+| Game Boy Color LCD | 1280 × 800 | 0.31 | 0.30 | 0.10 | 0.07 | 0.12 | 0.06 | |
+| N64, CRT Balanced | 1280 × 800 | 0.34 | 0.31 | 0.73 | 0.03 | 0.12 | 0.02 | |
+| NES raw, CRT Balanced | 1280 × 800 | **0.48** | 0.06 (advance 0.41) | 0.60 | 0.03 | 0.12 | 0.02 | 1.66 |
+| `crt-royale` | 1280 × 800 | 0.37 | 0.10 (bind 0.26) | 0.58 | 0.02 | 0.12 | 0.02 | |
+| plain | 1920 × 1080 | 0.30 | 0.29 | 0.08 | 0.13 | 0.11 | 0.08 | 0.08 (Skia) |
+| CRT, Performance | 1920 × 1080 | 0.31 | 0.30 | 0.60 | 0.04 | 0.13 | 0.03 | 1.48 |
+| CRT, Balanced | 1920 × 1080 | 0.33 | 0.31 | 0.78 | 0.05 | 0.13 | 0.03 | 1.84 |
+| CRT, Accurate | 1920 × 1080 | 0.34 | 0.32 | 1.80 | 0.05 | 0.12 | 0.03 | 2.89 |
+| CRT (Lottes) | 1920 × 1080 | 0.31 | 0.29 | 0.74 | 0.04 | 0.12 | 0.03 | |
+| Game Boy Advance LCD | 1920 × 1080 | 0.31 | 0.30 | 0.16 | 0.16 | 0.12 | 0.09 | |
+| NES raw, CRT Balanced | 1920 × 1080 | **0.48** | 0.06 (advance 0.41) | 0.78 | 0.05 | 0.12 | 0.03 | 1.98 |
+| `crt-royale` | 1920 × 1080 | 0.38 | 0.10 (bind 0.26) | 0.65 | 0.04 | 0.12 | 0.03 | |
+
+**What it says.**
+
+- **Nothing here is near a frame.** The UI thread's whole cost is 0.3 to 0.5 ms and waits for nothing; the GPU's
+  0.2 to 1.9 ms. The tiers' passes are §12.5's (Performance 0.60, Balanced 0.78, Accurate 1.80 at 1080p).
+- **The UI thread's 0.3 ms is mostly a fixed cost of the first device call after the frame's idle gap**, not the
+  chain's work. Flat out (`pace=0`) the same cases cost 0.06 to 0.08 ms, record and submit 0.05; paced, about
+  0.25 ms more lands in whichever call first reaches the device: the submission for most cases, the descriptor
+  writes of `crt-royale`'s bind (0.26 ms paced, 0.013 flat out), the raw frame's upload for the NES. That it is
+  the card's or its link's waking from idle is a reading of these figures, not established. On the handheld, with
+  no PCIe link, the same calls cost 0.09 to 0.14 ms.
+- **The NES's raw frame is the one case with a wait on the UI thread**: its lookup image is uploaded by a
+  submission of its own, waited for (`Chain::load_lut` through `Device::upload`), before the frame's. Advance is
+  0.41 ms where it is 0.01 for every other picture.
+- **The compositor's part is small and fixed**: 0.11 to 0.14 ms of its thread and 0.02 to 0.09 ms of GPU. With one
+  kept texture its CPU falls to 0.09 (the texture made each update costs about 0.03 ms), and drawing the imported
+  image directly to 0.08 ms and 0.02 of GPU.
+- **The copy into the shown image is 0.03 to 0.05 ms** under the CRT; under the plain picture and the LCDs 0.07 to
+  0.16, because a light frame leaves the card at a lower clock.
+- **The frame's upload is 0.02 ms (SNES) and 0.04 ms (N64) of GPU time**, read as the difference between a pass 0
+  that uploads and one that redraws (`EMUSEN_BENCH_EVERY=2`).
+- **Nothing is compiled at the first draw.** With Mesa's shader cache off, a CRT build took 89 to 91 ms against 72
+  to 73 (the pipelines are made on the build's thread, §9.5), and the first present 4.8 to 5.0 ms against 4.0 to
+  4.4. §3.10's one-compile stall belonged to Skia's GL programs; it went with them (§12).
+- **A chain's first present takes 3.0 to 4.7 ms** on the UI thread: the passes' targets are made then
+  (`Chain::size_passes`). Its first consumption takes 7.5 to 10 ms in the stand-in, the imported memory's first use.
+
+### 13.4 The handheld
+
+On the charger, the same cases, 1280 × 800 and the panel's 1920 × 1200:
+
+| Case | Window | UI thread | Passes | Copy | Compositor CPU | Compositor GPU | Readback: render thread |
+|---|---|---|---|---|---|---|---|
+| plain | 1280 × 800 | 0.15 | 0.10 | 0.12 | 0.20 | 0.12 | 0.13 (Skia) |
+| CRT, Performance | 1280 × 800 | 0.14 | **0.89** | 0.16 | 0.23 | 0.29 | |
+| CRT, Balanced | 1280 × 800 | 0.20 | **2.01** | 0.16 | 0.33 | 0.29 | 2.91 |
+| CRT, Accurate | 1280 × 800 | 0.19 | **7.86** | 0.14 | 0.21 | 0.16 | |
+| CRT (Lottes) | 1280 × 800 | 0.14 | 1.56 | 0.12 | 0.19 | 0.14 | |
+| Game Boy Color LCD | 1280 × 800 | 0.12 | 0.13 | 0.12 | 0.18 | 0.15 | |
+| Game Boy Advance LCD | 1280 × 800 | 0.13 | 0.18 | 0.17 | 0.21 | 0.35 | |
+| N64, CRT Balanced | 1280 × 800 | 0.17 | 2.15 | 0.14 | 0.20 | 0.16 | |
+| NES raw, CRT Balanced | 1280 × 800 | **0.36** | 2.49 | 0.14 | 0.21 | 0.16 | |
+| `crt-royale` | 1280 × 800 | 0.24 | 1.63 | 0.12 | 0.20 | 0.14 | |
+| plain | 1920 × 1200 | 0.12 | 0.18 | 0.27 | 0.20 | 0.36 | 0.14 (Skia) |
+| CRT, Performance | 1920 × 1200 | 0.15 | **1.70** | 0.34 | 0.24 | 0.64 | |
+| CRT, Balanced | 1920 × 1200 | 0.19 | **3.47** | 0.31 | 0.28 | 0.36 | 4.45 |
+| CRT, Accurate | 1920 × 1200 | 0.17 | **8.17** | 0.24 | 0.21 | 0.35 | |
+| CRT (Lottes) | 1920 × 1200 | 0.13 | 3.43 | 0.27 | 0.22 | 0.31 | |
+| Game Boy Advance LCD | 1920 × 1200 | 0.14 | 0.29 | 0.35 | 0.20 | 0.43 | |
+| NES raw, CRT Balanced | 1920 × 1200 | **0.33** | 3.94 | 0.31 | 0.21 | 0.36 | |
+| `crt-royale` | 1920 × 1200 | 0.25 | 2.61 | 0.27 | 0.19 | 0.31 | |
+
+The CRT's passes, GPU ms, 1280 × 800 (1920 × 1200 in brackets where it differs):
+
+| Tier | Signal passes, at the signal's size | Glare | Face, at the window's size |
+|---|---|---|---|
+| Performance | gun 0.21, plus the frame's upload | — | 0.68 (1.49) |
+| Balanced | encode 0.21, separate 0.23, drive 0.10, state 0.11 | 0.17 | 1.20 (2.65) |
+| Accurate | encode 0.52, separate 1.62, drive 0.21, state 0.13, **beam 1.62, spot 1.65** | 0.19 | 1.92 (3.27) |
+
+**What it says.**
+
+- **Every picture fits the frame on the GPU**, Accurate at 1920 × 1200 with 8.5 ms to spare. But on this device the
+  passes share the GPU with the core: Accurate takes half the GPU's frame, Balanced 12 to 21%.
+- **Accurate is mostly signal passes that do not scale with the window**: 5.7 ms of its 7.9, beam and spot 3.3 ms of
+  it. The two run the same loop over the same samples, the beam writing the light and the spot its light-weighted
+  variance (`CrtFilter.Beam(r, spot: false)` and `spot: true`).
+- **The GPU stays at its floor.** Paced, Balanced's passes take 2.01 ms; flat out, 0.69 ms. The clock read 800 to
+  840 MHz during the runs with the GPU 40 to 70% busy (`pp_dpm_sclk`, `gpu_busy_percent`): the governor does not
+  raise it for a load this light, as `Mars_Performance.md` §42 found for Mars.
+- **The copies are a larger share than on the desktop.** The chain's copy into the shown image is 0.12 to 0.17 ms
+  at 1280 × 800 and 0.24 to 0.35 at 1920 × 1200; the compositor's copy and draw 0.14 to 0.35 and 0.31 to 0.64. Under
+  the plain picture and the LCDs they are most of the GPU's work for the picture. Drawing the imported image directly
+  (`consumer=direct`) took the compositor's GPU time from 0.17 to 0.11 ms (plain) and its CPU from 0.22 to 0.14.
+- **The UI thread's cost is 0.12 to 0.25 ms**, the NES's raw frame adding 0.19 to 0.20 ms of waited upload.
+- **The readback, where the device path is off, costs the render thread 2.9 ms (1280 × 800) and 4.5 ms
+  (1920 × 1200) under Balanced**, a synchronous wait on the passes.
+- **A chain's first present takes 3.6 to 6.9 ms**, and the images made and imported for a new size 0.7 ms.
+
+### 13.5 The probes: the receiver's loop, and taps under the approximation's error
+
+Two changes to the CRT's text were bounded on copies of its written presets (`proto/` beside the results), run as
+slang presets with their written values, never in the product:
+
+- **The receiver's carrier by rotation** (`tools/recurrence.py`): the separate pass evaluates, for each of its taps
+  (23 at Balanced, 61 at Accurate), a sine and a cosine of the carrier's phase and a cosine of the window. The phase
+  advances by a constant from one tap to the next, so each pair can be the last one turned by a fixed angle: two
+  multiply-adds instead of three transcendental functions. The pictures differ from the product's by one level in
+  0.04 to 0.05% of the channels (rounding, nothing else).
+- **Beam and spot taps whose weight is below the error function's own error**: a tap more than 5.5 of the widest
+  gun's σ away is skipped (its weight is under 4·10⁻⁸, the approximation of `erf1` is good to 1.5·10⁻⁷). The pictures
+  are the same as without the skip, to the byte, on the frames compared.
+
+| | Separate | Beam | Spot | All passes |
+|---|---|---|---|---|
+| Handheld, Accurate, as built | 1.627 | 1.618 | 1.650 | 7.583 |
+| with the rotation | 1.452 | 1.618 | 1.649 | 7.407 |
+| with the rotation and the skip | 1.452 | 1.499 | 1.522 | **7.168** |
+| Handheld, Balanced, as built → with the rotation | 0.223 → 0.211 | | | 1.747 → 1.734 |
+| Desktop, Accurate 1080p, as built → both | 0.30–0.42 → 0.31–0.44 | 0.254 → 0.237 | 0.267 → 0.250 | 1.73–1.85 → 1.70–1.82 |
+
+On the handheld the two together take 0.41 ms (5%) off Accurate and nothing measurable off Balanced; on the desktop
+they are inside the rounds' spread.
+
+### 13.6 The levers, ranked
+
+Ranked by what they give the handheld, the full-speed target. Every saving below is GPU time unless it says the UI
+thread. None trades accuracy; where pictures change, it is said by how much.
+
+**1. Accurate's beam and spot computed in one pass.** The spot pass repeats the beam pass's loop to the instruction
+and keeps a different sum. A pass with two outputs (the beam's light and the spot's variance, two colour attachments
+of one render pass) removes one of them: **−1.62 to −1.65 ms on the handheld at 1280 × 800, −1.27 at 1920 × 1200,
+−0.27 on the desktop**, bounded by the spot pass's own time; the face pass reads the two images as now, so the
+pictures are the same to the byte. Cost: a capability the chain does not have, a built-in pass with a second output,
+in `BuiltInPreset` and the library's chain (render pass, framebuffer, a second target per pass, the name the face pass
+samples it by); RetroArch presets are untouched, since slang has no such thing. Moderate: about 150 lines and a test
+that the merged pass draws what the two did. **Recommended. [decision]**: it extends the built-in filters' pass
+surface.
+
+**2. The last pass drawn straight into the shown image.** The chain's copy of its last pass into the exported image
+costs **0.12 to 0.17 ms on the handheld at 1280 × 800 and 0.24 to 0.35 ms at 1920 × 1200, every frame, under every
+picture**, the plain one included (0.03 to 0.16 ms on the desktop). The last pass could render into the shown image
+instead: RADV offers `R8G8B8A8_UNORM` with linear tiling as a colour attachment (`vulkaninfo`). The copy stays where
+the driver does not offer it and where the last pass is read back as feedback or sampled by an alias. Exact: the
+same pass writes the same values into another image of the same format. Risks: rendering into linear memory can be
+slower than the copy saves on another GPU (to be measured where it is offered), and the external queue-family
+transitions move onto the render pass. Small to moderate, in the library's chain (`present`). **Recommended.
+[routine]**.
+
+**3. The NES's raw frame uploaded inside the frame's submission.** `Chain::load_lut` writes a same-sized lookup image
+through `Device::upload`, a submission of its own waited for on the UI thread, every frame a raw picture arrives.
+Recorded into the next render's or present's submission as the frame itself is (`upload_pending`), it takes **0.19 to
+0.20 ms of the handheld's UI thread and up to 0.35 ms of the desktop's** (the desktop's share of §13.3's idle-gap cost
+then moves to the frame's submission). Same pictures. Small: a pending flag beside `upload_pending` and the copy
+recorded with it. The raw frame's conversion to RGBA on the processor (`RawEncodings.ToImage`, about 0.08 ms for
+256 × 240 on the desktop, the difference between the two paths' source stages) could later move to the colours pass;
+that changes the lookup image's format and is not part of this lever. **Recommended. [routine]**.
+
+**4. The receiver's carrier by rotation, and beam and spot taps under the approximation's error.** §13.5: **−0.41 ms
+for Accurate on the handheld**, nothing measurable for Balanced or on the desktop. The skip leaves every picture
+compared unchanged; the rotation changes one level in 0.05% of the channels, so `BuiltInGoldenTests`' hashes for the
+composite and S-Video variants would be recorded again. Small: two text changes in `CrtFilter`. **Recommended after
+lever 1, the skip as [routine], the rotation as [decision]** (it changes recorded pictures, though not by any
+quantity the model describes).
+
+**5. A new chain's targets made on its build thread.** A chain's first present makes its targets on the UI thread:
+**3.0 to 4.7 ms on the desktop, 3.6 to 6.9 ms on the handheld**, once each time a filter is chosen, a structural
+value changes (Quality and Signal in the Shaders window) or the window changes size, which drops a frame on the
+handheld. The build could make them for the size last presented, which the presenter knows; a resize would still
+make them on the UI thread. Small. Same pictures. **Recommended. [routine]**.
+
+**6. The compositor's copy of each update.** Avalonia copies every imported image into a texture it makes for the
+update (§1.2 there): measured by the stand-in at **0.06 ms of GPU and 0.08 ms of the compositor's thread on the
+handheld** over drawing the import directly, 0.01 to 0.04 and 0.03 to 0.05 on the desktop. Only leaving Avalonia's interop removes it:
+the GL-context import that §4.1 there rejected for reaching past a surface, Avalonia's Vulkan renderer on Serenity's
+device (Q1 there), or a change to Avalonia itself. **Not recommended now. [decision]**: each form changes what the
+frontends rest on, for a tenth of a millisecond.
+
+**7. The plain picture through Skia when no filter and no lend is in force.** On the handheld the device path's plain
+picture costs 0.15 ms of the UI thread, 0.20 of the compositor's, and 0.10 + 0.12 + 0.12 ms of GPU (pass, copy,
+compositor), where Skia's draw costs its render thread 0.13 ms and 0.07 ms of GL. A saving of about 0.2 ms of CPU and
+0.3 of GPU, for two paths instead of the one §4.5 there decided, a switch of path when a filter is turned on or off,
+and no lent picture without the device. **Not recommended. [decision]**.
+
+**8. The readback with two frames in flight** (§8.8's fourth lever, for the fallback alone). The device path already
+never waits on the processor: a frame waits only for the submission before it, which has long finished, so §8.8's
+third and fourth levers are, on Linux, built. Where the device path is refused the render thread still waits for the
+passes: 1.2 to 2.9 ms on the desktop and 2.9 to 4.5 on the handheld under the CRT. Two frames in flight would take that
+wait off the thread for a frame of latency. It matters only on Windows, macOS, Avalonia's EGL mode and a compositor on
+another card; Windows and macOS were paused on 2026-10-17. **Not recommended now. [decision]**.
+
+**Measured, and worth nothing measurable** (recorded so that they are not proposed again):
+
+- **`bind` each frame.** The library's chain binds a CRT tier in 0.004 to 0.007 ms and `crt-royale` in 0.013 ms
+  flat out; its three small vectors a pass a frame are the Rust heap's, not the collector's. §9.8's 15 to 118 KB a
+  frame were the C# chain's lists. The product's calls allocate 24 bytes of managed memory a frame on the device path;
+  `GameFrameControl`'s key for a built-in's chain (`BuiltInFor`) about 0.9 KB a frame more on the readback path (1,152
+  against 256 bytes for the plain picture): one gen0 collection in minutes. **[routine]**, only if the code is touched
+  for another reason.
+- **The frame's upload**: 0.02 to 0.04 ms of GPU time.
+- **The compile at the first draw**: none is left (§13.3).
+- **The UI thread's paced cost of about 0.25 ms on the desktop** is the device's waking from the idle gap, not the
+  chain's work; no change to the chain moves it.
+- **The handheld's GPU clock** sits at its floor because the load is light; making it rise is the governor's, and
+  §42 of `Mars_Performance.md` rejected keeping the GPU awake.
+
+### 13.7 The order of work
+
+Levers 3 and 5 are small, exact and need no decision; lever 2 is the one every picture on the handheld pays for and
+needs only a measurement on a second driver before it is relied on there. Lever 1 is the one that changes what
+Accurate costs on the handheld (from 7.9 to about 6.2 ms), and with lever 4 to about 5.9 ms; it waits for the
+tester's decision because it extends the built-ins' pass surface. Levers 6 to 8 are recorded, not proposed.
+
+### 13.8 The tests
+
+`ShaderBenchTests`, both cases, on the RX 6800 with `EMUSEN_SHADER_BENCH=1` (run 2026-10-24): 2 of 2. Seeded faults
+in the bench, each against the new case:
+
+| Fault | Caught |
+|---|---|
+| The device path's picture corner one pixel to the right | yes: its pictures differ from the readback's |
+| The probe never attached on the device path | yes: no pass timings |
+| The stand-in copies the image without waiting on *ready* | **survived**: on this card the chain has finished before the copy runs, so no picture shows the missing wait, as §9.7's host-read barrier did not |
+
+### 13.9 What this does not cover
+
+- **The handheld on battery** (asked for in §13.10), and under Game Mode's gamescope; and the laptop of
+  `EmuSen_CRT.md` §12.7, which needs the tester's leave.
+- **Avalonia's own compositor**: the stand-in does what Avalonia's interop does with GL, but its timings are the
+  bench's.
+- **A lent picture** (a GPU core's frame staying on the device) was not benched; its device-side copy replaces the
+  0.02 to 0.04 ms upload.
+- **Mars at internal resolutions above one under the CRT**: the bench passes no `lines`, so the reducing pass of
+  `EmuSen_CRT.md` §16 was not run.
+- **Other vendors' drivers**: RADV and radeonsi only, on two AMD GPUs.
+
+### 13.10 Questions for the tester
+
+1. **Lever 1**, Accurate's beam and spot in one pass with two outputs: build it? Recommended yes. **[decision]**
+2. **Lever 4's rotation**, which re-records the composite and S-Video goldens by one level in 0.05% of channels:
+   build it with lever 1? Recommended yes, after lever 1. **[decision]**
+3. **Levers 6 to 8**: recorded and not proposed. Recommended: leave them. **[decision]**
+4. **The battery run**: the handheld unplugged, then `systemd-run --user bash ~/emusen-bench/shader-opt/run.sh 3
+   battery` (about 25 minutes), and `results-battery.txt` with `machine-battery.txt` sent back. **[routine]**

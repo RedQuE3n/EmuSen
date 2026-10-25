@@ -59,6 +59,11 @@ Every claim carries one of five marks:
   the player's BIOS to OSDSYS; S25, the card and its crate; O12, the menu without a disc on the open BIOS) and promised
   neither to the player. **G10, start without a disc**, and **G11, the Memory Cards window for the PlayStation 2**,
   are therefore gates of §8, placed at S25 and offered with the system at S29 (§7); neither is built before then.
+- *Decided 2026-10-24 by the tester, both as S3 recommended (`Sapphire_Referees.md` §6, §7):* **the probe gets no
+  hardware render context now**; the referees' pictures come from Play!, taken as RAM, the project's GS programs
+  reading the GS's memory back to the EE, and a headless EGL context stays in reserve for the first GS dispute that
+  needs it (§1.6, §10). **DobieStation is not built now**; it is built user-locally only if a dispute needs a third
+  lineage that ps2tek does not decide (§1.6).
 
 ---
 
@@ -181,7 +186,10 @@ libretro Vulkan interface) is a feature of its own, evaluated at S3 against PCSX
 needs no probe change (§11 Q4). *Measured 2026-10-24 at S3 (`Sapphire_Referees.md` §2.3, §6): the first finding holds
 for `play_libretro` only, which asks for OpenGL core 3.2 and runs nothing without it; LRPS2 and PCEE2 fall back to their
 software renderers, give the whole RAM, and PCEE2 hands the frontend pictures. PCEE2 reports version 2.9.138 and runs an
-ELF with no `resources` folder. The hardware context is evaluated there and not built.*
+ELF with no `resources` folder. The hardware context is evaluated there and not built.* *Decided 2026-10-24 by the
+tester: no hardware context now; Play!'s pictures taken as RAM through the project's GS programs, a headless EGL context
+in reserve for the first GS dispute that needs it. DobieStation is not built now, and is built user-locally only if a
+dispute needs a third lineage that ps2tek does not decide.*
 
 **Lineage** [A]: PCSX2, LRPS2 and PCEE2 are one family and count as one witness where they agree; Play! is an
 independent lineage; DobieStation is a third but tied to ps2tek. **Firmware for the referees**: the player's BIOS, as
@@ -1098,7 +1106,9 @@ is built, as Diamond's were.
 - **A console medium** for the drive's EEPROM, under `EmuSen_SaveMedia.md`'s `console` kind, which exists.
 - **The probe's hardware render**, if S3 finds PCSX2's standalone form with PINE insufficient: a headless OpenGL or
   Vulkan context for libretro cores that ask for one. *Evaluated 2026-10-24 at S3 (`Sapphire_Referees.md` §6): not needed by
-  the PCSX2 family's cores; recommended not built, Play!'s pictures to be taken as RAM by the project's GS programs.*
+  the PCSX2 family's cores; recommended not built, Play!'s pictures to be taken as RAM by the project's GS programs.
+  Decided 2026-10-24 by the tester as recommended: not built now, headless EGL kept in reserve for the first GS dispute
+  that needs it.*
 
 ---
 

@@ -70,6 +70,10 @@ Every claim carries one of five marks:
   export is resolved at run time through the export tables ps2tek lists (cleared for every writer,
   `Sapphire_References.md` §3.4), never at an address inside the BIOS image, and the text is kept in a `tty` space.
   The player's BIOS capture is built at S10, whose gate needs it, and the open BIOS's port with its I/O at O8 (§7).
+- *Decided 2026-10-25 by the tester: S11 is built before S10.* S10's gate runs on the player's BIOS by fast boot, which
+  §7 places after S24 under Q6 as decided, so S10 is taken once S24's BIOS boots; S11 follows S9 directly. The EE's
+  peripherals (S11 to S15) are graded by the project's own bare programs until then, as the EE's stages were, and the
+  kernel tests among their gates run on the referees now and on Sapphire with S10 (§7).
 
 ---
 
@@ -528,6 +532,9 @@ D-0. The progressive and 1080i modes some games offer need the profile's answer 
   privileged register read, a local-to-host transfer, SIGNAL, FINISH and LABEL; the IOP at SIF registers and SIF DMA.
   Exact where the observation is the only coupling [A], which the project's programs test at each stage, and the
   basis for running those units on threads later without losing exactness (§5.12).
+- *Built 2026-10-25 at S11* (`Sapphire_Native.md` §20.2, §20.3): the scheduler did not exist before S11; each unit now
+  reports its next event (a DMA unit's end, a timer's flag, a blanking edge) and the board takes the earliest, as
+  Diamond's bus does, nothing polled cycle by cycle; the clock's figures are `clock.rs`'s, D-0's one place.
 
 ### 5.2 The EE's timing model
 
@@ -901,13 +908,13 @@ the enhancements (E) are separate tracks.
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters *Built 2026-10-25, `Sapphire_Native.md` §17: met on the interpreter, seven programs and 400 graded words equal to the manuals' records, the breakpoints built beside the counters; neither referee maps a program's own TLB entries, models the caches, counts events or takes the TLB, counter, debug or bus error exceptions, so those rules rest on the manuals; D-12 to D-19.* |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 *Built 2026-10-25, `Sapphire_Native.md` §18: met; 91 instructions through `r5900.rs`, nine programs and 20,712 record words equal to the EE Core Instruction Set Manual's chapter 3 on the interpreter and on PCSX2; Play! does not execute eight of them; the six `ee_simd` programs equal their console texts on PCSX2, which decided D-21 and D-22; D-20 to D-23, D-9 closed.* |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class *Built 2026-10-25, `Sapphire_Native.md` §19: met; 34 instructions through `r5900.rs` on `sapphire::float`, the format's one owner, six programs and 48,648 record words equal to chapter 5 on the interpreter; the last bit decided where the console texts of `ee_fpu/*` decide it (no sticky bit in the adder, a Booth multiplier on ft that is not commutative, DIV.S and SQRT.S to the nearest), 900 of their 901 result lines reproduced; neither referee models exponent 255 or the multiplier, PCSX2 reproducing 721 of the texts' 1,068 lines; D-24 to D-33.* |
-| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not; **the IOP's console kept in a `tty` space**, caught at the IOP's module interface with the output export resolved at run time through the export tables, never at an address in the image *(decided 2026-10-24)* | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
+| **S10** | **The EE's ps2autotests**: the ELF loader and whatever the tests need to run — on the player's BIOS by fast boot, so taken after S24 if §11 Q6 is answered as recommended, or earlier on the open EE kernel's first phase if it is not *(Q6 decided as recommended; decided 2026-10-25 by the tester: S10 is taken once S24's BIOS boots, after S11)*; **the IOP's console kept in a `tty` space**, caught at the IOP's module interface with the output export resolved at run time through the export tables, never at an address in the image *(decided 2026-10-24)* | `cpu/ee/*`, `ee_cop0/performance`, `ee_fpu/*`, `ee_simd/*`, `memory/ee/default` equal their expected texts, each miss a dispute |
 
 **Phase C — the EE's peripherals**
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S11** | DMAC (ten channels, chain and interleave modes, tags, the scratchpad channels, stall control), INTC, EE timers | `dma/dmac/*`, `dma/spr/*`, `kernel/ee/interrupt/*` |
+| **S11** | DMAC (ten channels, chain and interleave modes, tags, the scratchpad channels, stall control), INTC, EE timers *(decided 2026-10-25 by the tester: built before S10, directly after S9)* | `dma/dmac/*`, `dma/spr/*`, `kernel/ee/interrupt/*`, which need the BIOS's kernel: on the referees against their console texts at S11, on Sapphire with S10; the project's bare programs on each mechanism meanwhile *Built 2026-10-25, `Sapphire_Native.md` §20: met on the interpreter, eight programs and 1,230 graded words equal to the EE User's Manual's chapters 3 to 5, the interleave arithmetic also to the console text; the seven console texts reproduced by PCSX2; neither referee models stall control or the priority control, and PCSX2 takes an interrupt only as its request rises; the channels whose peripheral comes later end at `dmac::Peripherals`, the H-blank and V-blank a stand-in until S20; D-34 to D-42, D-15 closed.* |
 | **S12** | VU0 macro mode, the VU float | `cpu/vu0_macro/*` |
 | **S13** | VU micro mode, both units: the pipelines, flags, Q and P, EFU, branches, XGKICK, E/D/T | `vu/lower/*`, `vu/upper/clip`, `vu/games/triace` |
 | **S14** | VIF0 and VIF1 | `dma/vif/basic`, `intstall`, `stcycl`, `stmod`, `unpack` |

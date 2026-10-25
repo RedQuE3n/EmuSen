@@ -86,6 +86,11 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
     pre-release article, so the design family again (150 and 37.5 = 150 / 4), against ps2tek's 147.456 and 36.864.
     copetti.org's article (read 2026-10-24) gives the IOP at 37.5 MHz, citing its own sources.
   - The conclusion stays open; the evidence still to take is the project's own counting program on the referees (S4).
+- **Addendum, 2026-10-25 (stage S11):** the scheduler exists. `clock.rs` holds the EE's 294.912 MHz, BUSCLK at two EE
+  cycles and the television standards, the one place a ruling changes; the DMAC moves a qword a bus cycle and the timers
+  count BUSCLK and its dividers on it (`Sapphire_Native.md` §20.3). Pinned by `a_burst_moves_a_qword_a_bus_cycle_and_cycle_stealing_releases_every_128_bytes`
+  and `a_timer_is_evaluated_at_its_flag_and_not_before`. The referees' timers keep the dividers' ratios exactly
+  (`s11-timers`), which says nothing of the clocks' absolute rates; the conclusion stays open.
 
 ### D-1. R5900, COP1: the EE's FPU has the single format alone with Sony's own operations, not the TX79's MIPS III FPU
 
@@ -355,6 +360,10 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `cop0::cause::IP2` and `IP3`; S11's INTC and DMAC.
 - **Pinned by:** `an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h` (Int0 on IP2).
 - **Implemented in:** stage S7's commit.
+- **Addendum, 2026-10-25 (stage S11).** `s11-intc` raises each line through the INTC and the DMAC: its handler logs
+  Cause. PCSX2 2.8.2 sets bit 10 (IP2) for a timer's compare through the INTC and bit 11 (IP3) for the DMAC's end of
+  transfer, equal to the interpreter; Play! 0.72 takes no interrupt through the vector. **Conclusion: measured** (one
+  lineage, agreeing with the Status text and ps2tek); closed. Pinned also by `the_intc_latches_masks_and_drives_int0_and_the_dmac_int1`.
 
 ### D-16. R5900, data cache: a refill takes the LRF way even when the other way is invalid
 
@@ -704,3 +713,154 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `ee/fpu.rs`'s `FCR0`, `FCR31_FIXED`, `FCR31_WRITABLE`, `cfc1`, `ctc1`.
 - **Pinned by:** `moves_conversions_picks_compares_loads_stores_and_branches_equal_the_manual`.
 - **Implemented in:** stage S9's commit.
+
+### D-34. DMAC, stall control: the drain holds a normal-mode or refs packet while Dd_MADR + 8 qwords > D_STADR, every held request setting SIS; the source copies its MADR to D_STADR after normal-mode data and cnts packets only
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** *EE User's Manual* (EEUM) §5.3.2: "the values of Ds_MADR are copied to D_STADR in succession
+  after the end of transfer. The packets targeted for stall control in the source channel are the transfer data in the
+  Normal Mode and the packet data of ID=cnts in the Destination Chain Mode"; the condition "Dd_MADR.ADDR + 8 >
+  D_STADR.ADDR", whose unit the text does not give and Figure 5-7 labels "8 qwords or more"; §5.4, SIS "Set to 1 when
+  stall condition is met. (DMA does not stop.)"; the "Normal to Normal" example, in which STD is cleared by the
+  source's end-of-transfer handler. ps2tek gives no stall rule.
+- **Test program:** `s11-stall` (fromSPR the source, VIF1 the drain, both normal): held at once; released 8 qwords as
+  D_STADR moves 12 on; finished; released by STD cleared. `s11-chain`: D_STADR after a destination cnt (unchanged) and
+  cnts (moved).
+- **Referee:** PCSX2 2.8.2 never holds the drain and copies MADR to D_STADR after every destination packet, cnt and end
+  included; Play! 0.72 neither holds nor moves D_STADR.
+- **Conclusion:** the title; the "8" as qwords by Figure 5-7; that a held drain sets SIS at each request, so a write
+  clearing SIS while the stall lasts is undone at the next arbitration, is **argued**; the rest the manual's words.
+  Neither lineage is a witness. Open for a console text or a game that stalls a drain.
+- **Depends on it:** `dmac.rs`'s `stalled` and the STADR copy in `run`.
+- **Pinned by:** `stall_control_holds_and_releases_the_drain`, `source_and_destination_chains_walk_their_tags_as_chapter_5_says`.
+- **Implemented in:** stage S11's commit.
+
+### D-35. DMAC, source chain: after a cnt packet TADR takes the address after its data; an end tag, and a ret with nothing pushed, leave TADR at the tag
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §5.2.3: for cnt "updates Dn_TADR following the transfer"; the tables give end and refe "Next
+  tag address (None)" and ret with nothing pushed ends the chain; ps2tek "DMAC Chain Mode" lists TADR for each ID and
+  none for end.
+- **Test program:** `s11-callret` (a ret ending the chain), `s11-mfifo` (an end tag at ring offset F0h).
+  ps2autotests' `dma/dmac/tagintr` console text ("TADR offset: 00000020" after a chain ending in end) agrees with either
+  reading, depending on where its end tag lies, which only its source would say.
+- **Referee:** PCSX2 2.8.2 leaves TADR at the end and the ret tags, and reproduces `tagintr`'s console text whole
+  (`Sapphire_Native.md` §20.8); Play! 0.72 gives a TADR of neither reading on the ring and never ends `s11-callret`.
+- **Conclusion:** the title. ~~TADR past the end or ret tag, as after cnt, read by analogy with cnt~~ (S11's first
+  implementation), retired the same day on PCSX2's evidence, the manual being silent. **Measured** (one lineage,
+  the lineage that reproduces every console text of the stage).
+- **Depends on it:** `dmac.rs`'s `tadr_follows`.
+- **Pinned by:** `call_and_ret_push_and_pop_the_address_stack`, `the_mfifo_drain_holds_while_empty_and_wraps_with_the_ring`.
+- **Implemented in:** stage S11's commit.
+
+### D-36. DMAC, TTE on toSPR: the tag's whole quadword is written to the scratchpad before its packet
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §5.2.3: "Whether to transfer the tag itself with the data or not can be specified by the
+  TTE flag … The tag itself is transferred before the DMA transfer activated by the tag"; §5.9, TTE "Transfers
+  DMAtag"; ps2tek: "When Dn_CHCR.TTE is on, bits 64-127 are transferred BEFORE QWC" (what a VIF takes, read here as the
+  VIF's concern).
+- **Test program:** `s11-chain`: an end tag with its upper words 11111111h, 22222222h, 33333333h and one data qword,
+  toSPR with TTE.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 both write the tag's four words at SADR and the data after, SADR moving 20h.
+- **Conclusion:** the title; on the other channels the whole quadword is handed to the peripheral marked as a tag, its
+  stage deciding what the peripheral takes. **Measured** (two lineages).
+- **Depends on it:** `dmac.rs`'s `read_tag`; S14's VIF.
+- **Pinned by:** `source_and_destination_chains_walk_their_tags_as_chapter_5_says`.
+- **Implemented in:** stage S11's commit.
+
+### D-37. DMAC, undefined tags: call and ret on a channel without an address stack, call with two addresses pushed, and a destination tag ID other than cnt, cnts and end end the transfer with CIS, CHCR keeping the tag's bits, TADR at the tag and nothing moved
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §5.2.3 and §5.6, call and ret "Effective only on the VIF0, VIF1, and GIF channels"; §5.4,
+  "Overflow with call stack … Transfer processing ends without transferring the call packet, and the address of the call
+  tag is maintained in Dn_TADR", and "Undefined tag … In Source Chain Mode, the read tag address is maintained in
+  Dn_TADR"; §5.9, ASR0 and ASR1 on channels 0 to 2 alone.
+- **Test program:** `s11-chain` (call on toSPR; destination ID 3 on fromSPR), `s11-callret` (call at ASP 2 on VIF0).
+- **Referee:** PCSX2 2.8.2 moves the call's packet on toSPR and then ends with TADR at the tag and CHCR keeping it; at
+  ASP 2 it moves the call's packet too (MADR advanced); on an undefined destination tag it does not end but runs on
+  through the scratchpad as tags. Play! 0.72 performs the call on toSPR (ASP 1, TADR at the called tag's successor) and
+  mishandles the destination tag.
+- **Conclusion:** the title, "effective only" read as undefined on the other channels and §5.4's words for the rest;
+  **argued**; the lineages disagree with each other and with it. Open.
+- **Depends on it:** `dmac.rs`'s `read_tag`.
+- **Pinned by:** `source_and_destination_chains_walk_their_tags_as_chapter_5_says`, `call_and_ret_push_and_pop_the_address_stack`.
+- **Implemented in:** stage S11's commit.
+
+### D-38. EE timers: ZRET returns the count to 0 at the tick that reaches COMP; gate modes 1 to 3 count before their first edge; writing MODE leaves COUNT
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §4.2, ZRET "The counter is cleared to 0 when the counter value is equal to the reference
+  value"; GATM "Resets and starts counting at the gate signal's rising edge" (and falling, and both); ps2tek "EE Timers":
+  "Clear counter when it reaches compare value", "Reset counter when gate goes from low to high".
+- **Test program:** `s11-timers`: COUNT sampled 600 times on BUSCLK/16 with COMP 8 and ZRET, its largest value
+  recorded; gate mode 1 on V-blank read twice before its first edge; COUNT read just after MODE's write.
+- **Referee:** PCSX2 2.8.2: the largest value 7, counting before the first edge, COUNT kept. Play! 0.72: no ZRET (the
+  count reached 8Dh), counting before the first edge, COUNT kept.
+- **Conclusion:** the title. ~~COMP read for one tick before 0~~ (S11's first implementation), retired the same day on
+  PCSX2's evidence and the manual's literal "cleared … when … equal". **Measured**: ZRET on one lineage, the other two
+  readings on both.
+- **Depends on it:** `timer.rs`'s `advance` and `next_event`.
+- **Pinned by:** `the_timers_count_compare_overflow_and_gate_as_chapter_4_says`, `zret_returns_to_zero_at_the_tick_that_reaches_comp`.
+- **Implemented in:** stage S11's commit.
+
+### D-39. INTC and DMAC: INT0 and INT1 are levels, so a request latched while masked is taken once unmasked, and one pending while Status.IE is clear is taken when IE is set
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §3.1: "the AND between the I_STAT register and the I_MASK register is obtained per bit; if any
+  bit is 1, an INT0 interrupt is asserted"; §5.8, INT1's formula; *EE Core User's Manual* §3.2 and §4.2.5 (an interrupt
+  taken while IP AND IM and IE and EIE, EXL and ERL clear).
+- **Test program:** `s11-intc`: a timer's compare latched with its I_MASK bit clear, then unmasked; both lines raised
+  with IE clear, then IE set.
+- **Referee:** PCSX2 2.8.2 takes an interrupt only when the request rises with its mask and IE already set: neither the
+  unmasked request nor the pending pair is taken. Play! 0.72 takes none through the vector.
+- **Conclusion:** the title, the manual's level formulas; **argued**; PCSX2 departs. Open; the kernel tests at S10 run
+  the BIOS's handlers over these lines.
+- **Depends on it:** `board.rs`'s `lines`, `ee/mod.rs`'s `interrupt_pending`.
+- **Pinned by:** `the_intc_latches_masks_and_drives_int0_and_the_dmac_int1`.
+- **Implemented in:** stage S11's commit.
+
+### D-40. DMAC, register widths: D_SQWC keeps every bit written and a transfer uses TQWC's and SQWC's low eight bits; QWC keeps 16 bits
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §5.8, D_SQWC drawn with SQWC at bits 7..0, TQWC at 23..16 and the rest "−"; §5.9, QWC at
+  15..0.
+- **Test program:** `s11-spr` (D_SQWC written with all ones and read back; QWC with 12345h); `s11-interleave` (TQWC
+  written as 257 and SQWC as 256). ps2autotests' `dma/spr/interleave` console text: "transfer 257" moves blocks of 1 and
+  "skip 256" skips none.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 both read D_SQWC back as written; PCSX2 keeps 16 bits of QWC, Play! 17.
+- **Conclusion:** the title; **measured** (D_SQWC on two lineages and the console text, QWC on PCSX2 and the manual).
+- **Depends on it:** `dmac.rs`'s `write`.
+- **Pinned by:** `the_scratchpad_channels_and_the_common_registers_equal_chapter_5`, `interleave_moves_blocks_and_skips_as_the_console_text_records`.
+- **Implemented in:** stage S11's commit.
+
+### D-41. DMAC, priority control: D_PCR.PCE with a channel's CDEn clear holds the channel, and a tag's PCE field of 10 or 11 clears or sets D_PCR.PCE
+
+- **Opened:** 2026-10-25, at stage S11.
+- **Documents read:** EEUM §5.3.3; §5.6 (PCE 10 "Priority setting disabled (D_PCR.PCE = 0)", 11 "enabled"); §5.8, the
+  condition "D_CTRL.DMAE && (!D_PCR.PCE || D_PCR.CDEn) && Dn_CHCR.STR".
+- **Test program:** `s11-spr` (toSPR held with PCE and CDE9 clear, released with CDE9 set); `s11-chain` (a cnt tag with
+  PCE 11, a refe with 10, D_PCR read after each).
+- **Referee:** neither PCSX2 2.8.2 nor Play! 0.72 holds the channel or changes D_PCR from a tag.
+- **Conclusion:** the title, the manual's formula; **argued**; neither lineage is a witness.
+- **Depends on it:** `dmac.rs`'s `arbitrate` and `read_tag`.
+- **Pinned by:** `the_scratchpad_channels_and_the_common_registers_equal_chapter_5`, `source_and_destination_chains_walk_their_tags_as_chapter_5_says`.
+- **Implemented in:** stage S11's commit.
+
+### D-42. The blanking signals until the PCRTC: a field of 262 lines of 9,370 bus cycles with V-blank on 22, H-blank at each line's start (NTSC)
+
+- **Opened:** 2026-10-25, at stage S11, whose timers and INTC need H-blank and V-blank before S20 builds them.
+- **Documents read:** ps2tek "EE Timers": "NTSC: 262 scanlines per frame (VBOFF: 240 | VBON: 22)", "9370 BUSCLK cycles
+  per scanline", PAL 312 (286 | 26) and 9436. No document gives H-blank's width (the *GS User's Manual* searched).
+- **Test program:** `s11-timers` (a timer on H-blank counted between two V-blank starts), `s11-intc` (the cycles from
+  VB_ON to VB_OFF).
+- **Referee:** Play! 0.72 counts 262 H-blanks; PCSX2 2.8.2 counts 525 between two V-blank starts and holds V-blank
+  for 430,658 EE cycles, about 23 lines, against the stand-in's 22 (412,280 cycles).
+- **Conclusion:** ps2tek's figures, with Play!; the H-blank's width of 1,600 bus cycles a choice; **open** until S20,
+  where the PCRTC's programmed timing replaces the stand-in and PCSX2's 525 is to be explained (interlace's two fields,
+  or an H-blank counted twice a line).
+- **Depends on it:** `clock.rs`'s standards and `HBLANK`, `blank.rs`; the timers on H-blank and their gates; the INTC's
+  V-blank sources.
+- **Pinned by:** `the_timers_count_compare_overflow_and_gate_as_chapter_4_says`, `the_intc_latches_masks_and_drives_int0_and_the_dmac_int1`,
+  `the_board_holds_no_h_blank_event_unless_a_timer_needs_it`.
+- **Implemented in:** stage S11's commit.

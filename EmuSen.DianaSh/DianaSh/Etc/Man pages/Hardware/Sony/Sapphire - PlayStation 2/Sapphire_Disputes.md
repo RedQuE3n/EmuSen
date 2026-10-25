@@ -77,3 +77,11 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
   video clock beside it; whether a model setting must carry a clock.
 - **Pinned by:** to be written at S6, when the scheduler exists.
 - **Implemented in:** —
+- **Addendum, 2026-10-24 (stage S2)** [R, `Sapphire_References.md` §5.3]:
+  - ps2autotests' `cpu/ee_cop0/performance.expected`, the console's output, tests the counters' register mapping and
+    which modes count; it records no count against a time base and gives nothing for this entry.
+  - K. Diefendorff, "Sony's Emotionally Charged Chip", Microprocessor Report 13(5), 1999-04-19, its Table 1 ("Source:
+    SCE"): the GS at 150 MHz, the IOP at "33.8 MHz or 37.5 MHz selectable", the IOP-to-EE bus at 150 MB/s. A
+    pre-release article, so the design family again (150 and 37.5 = 150 / 4), against ps2tek's 147.456 and 36.864.
+    copetti.org's article (read 2026-10-24) gives the IOP at 37.5 MHz, citing its own sources.
+  - The conclusion stays open; the evidence still to take is the project's own counting program on the referees (S4).

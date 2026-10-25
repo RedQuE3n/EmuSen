@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stage S2 the same day (§12).* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -85,7 +85,8 @@ and `SapphireTests`. It wrote no emulation rule, and read no emulator source and
 ### 2.5 Firmware
 
 Each entry `required: false`, 4,194,304 bytes, `replacement: none` with the cost "No PlayStation 2 program runs yet,
-with this file or without it", as Diamond's stage 1 declared its BIOS; no MD5s until S2 (the plan's Q9).
+with this file or without it", as Diamond's stage 1 declared its BIOS; no MD5s until S2 (the plan's Q9). *Revised
+2026-10-24 at S2 (§12.3): Japan's entry is `ps2-0230j-20080220.bin`, and each entry lists its market's MD5s.*
 
 | File | Name | Market |
 |---|---|---|
@@ -250,7 +251,7 @@ Each made in place, its tests run, the file restored from a copy:
 ## 9. Decisions, questions and what the plan got wrong
 
 - **The market of an image** is the Americas until S29 reads the disc's [C]; one line to change.
-- **The Japanese BIOS name is provisional** until S2 (§2.5).
+- **The Japanese BIOS name is provisional** until S2 (§2.5). *Settled 2026-10-24 at S2: `ps2-0230j-20080220.bin` (§12.3).*
 - **The BIOS file numbers start at 16** (§2.5).
 - **The PlayStation's recogniser is not broadened** to `BOOT`-only discs without the licence text (§3.2).
 - **The plan's §4.1 rule 2** (a DVD-sized image with `BOOT2` is the PlayStation 2's) needs no code: rule 1 decides every
@@ -275,3 +276,108 @@ stage's writer is not excluded from the open BIOS by it.
 - The references, documents and test programs (S2), the referees (S3) and the runners (S4).
 - The disc forms in core info, and reading a disc through `emusen-disc` with the DVD medium (S23).
 - The serial's market, `VMODE`, the shelf, the CRT row and the drawing (S29).
+
+---
+
+## 12. Stage S2, the references (2026-10-24)
+
+### 12.1 In one paragraph
+
+The plan's §7 row S2, on the tester's go of 2026-10-24. The documents of the plan's §2.1 are fetched and pinned in the
+probe's cache with `DOCS.txt` and `SHA256SUMS`, and ps2autotests at `97469ff` with `PROVENANCE.txt`; ps2tek's BIOS
+chapter is screened, its exclusions written by section and line; the BIOS entries cite Redump's datfile, each listing
+its market's retail MD5s, and the Japanese entry is renamed; the IOP's cache facts and the SPU2's voice count are read.
+The whole record is `Sapphire_References.md`; this section keeps what the build changed and what it measured. No
+emulation rule was written; no emulator, SDK or loader source and no firmware was read.
+
+### 12.2 The references
+
+- **Fetched** (`Sapphire_References.md` §1–§2): ps2tek at `1c91660`, the two Toshiba TX79 manuals, GCC's MIPS options,
+  the Hot Chips 11 slides on the VUs, ECMA-119 and ECMA-267, ITU-T H.262 (02/2000), Wikipedia's specification page,
+  Batocera's page, Redump's datfile; ps2autotests, 78 programs with expected texts as the plan counted. Not fetched:
+  the paywalled IEEE papers and Sony's Linux-kit manuals (no lawful copy found).
+- **Screened** (`Sapphire_References.md` §3): S2's writer read ps2tek's whole BIOS chapter and is a non-replacement
+  writer. Excluded for replacement writers: 21 passages, among them the boot process, the EE patches, the kernel's
+  internal structures and scheduler, IOPBOOT, a ROMDIR hex dump, the boot banner and three traces of the BIOS's I/O
+  outside the chapter. Excluded for every writer: **two passages of emulators' code** outside the chapter (the RDRAM
+  initialisation's register model, lines 701–753, and the "IOP Console" hook, 4182–4208), read by the screening reader
+  while finding their extent; and five files of ps2autotests' `common/` that are ps2dev's or ps2sdk's. Four lines of
+  ps2tek name an emulator's choice and are marked as such.
+
+### 12.3 The BIOS entries: Redump's names and MD5s
+
+- **The database** [C]: Redump's *Sony – PlayStation 2 – BIOS Images (115) (2022-12-12)*, in the probe's
+  `docs/redump/`, named by `bios.rs`'s header and `Sapphire_References.md` §4.
+- **Renamed** [R]: `ps2-0210j-20040917.bin` is the DESR video recorders' image, not a console's; the newest Japanese
+  retail console version is **`ps2-0230j-20080220.bin`** (SCPH-90000). The core's `bios()`, its descriptor test, the
+  C# pack's `Ps2System.Bios` and these pages moved together. The Americas' and Europe's names stand.
+- **`src/bios.rs`**, new: three arrays, Japan 27, the Americas 15, Europe 16, written by a script from the datfile
+  (never typed), each line with its image's name; the canonical image first, the rest newest first. **Retail** means
+  the consumer models (SCPH, DESR, KDL); the 19 DTL images are left out. **The market** is the description's letter, the
+  Asian, Korean and Chinese images Japan's and the Russian Europe's. `bios()` gives each entry its list, so core info
+  and `firmware_for` carry them under the core ABI's 1.12, and a player's dump is found by its content whatever its
+  name (`EmuSen_Firmware.md` §7.4).
+- **The gates' Japanese image**: the tester holds no `0230j` [M, names only]. The plan's Q9 named 0210j for the gates;
+  it is a recorder's BIOS, so a console's image takes its place (§12.7, a question).
+- **No dependency or surface changed**: the field existed since 1.12; Diamond's lists remain owed (`EmuSen_Firmware.md`
+  §7.8), untouched here.
+
+### 12.4 Facts read
+
+- **The SPU2: 2 × 24 voices, confirmed** by ps2tek's register map (24 voices a core, the byte counts agreeing),
+  Microprocessor Report's table of 1999 ("48-channel") and Wikipedia (`Sapphire_References.md` §5.2).
+- **The IOP's caches: no public document gives their sizes.** Sony said in 1999 that the IOP's core is the
+  PlayStation's "except for some minor enhancements to the cache" (Microprocessor Report); ps2tek gives only the cache
+  control at FFFE0000h. S21 starts from the PlayStation's 4 KiB and 1 KiB, marked [A], with the enhancement a dispute
+  candidate (§5.1 there).
+- **D-0**: `cpu/ee_cop0/performance`'s expected text holds no count against a time base; Microprocessor Report adds
+  the IOP at "33.8 MHz or 37.5 MHz selectable" (`Sapphire_Disputes.md` D-0, the addendum).
+- **No PlayStation 2 FPGA core** [M, GitHub's API, 2026-10-24]: MiSTer-devel's 415 repositories include `PSX_MiSTer`
+  and nothing for the PlayStation 2, and a search of GitHub's repositories finds none. The plan's §12 [A] is confirmed.
+
+### 12.5 Tests (2026-10-24)
+
+| Item | Result [M] |
+|---|---|
+| The crate's tests (`cargo test --release`) | **14 of 14**, one new: `each_market_lists_its_retail_images_with_the_canonical_one_first` (the counts, the first of each list, the form of every MD5, none twice, `firmware_for`'s list) |
+| WiseMan, `blast.sh`'s filter (`ContractShapeTests`, `CrystalDebugParity`, `CrystalParityTests`, `DebugCodeParity`, `SapphireTests`, `SystemCodeParity`, `SystemTableParity`) plus `FirmwareOverview` | **86 of 86** |
+
+**Seeded faults**, each made in place, its tests run, the file restored from a copy:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | The core's Japanese entry left as `ps2-0210j-20040917.bin` | `the_descriptors_are_the_consoles` |
+| F2 | Europe's entry given the Americas' list | `each_market_lists_its_retail_images_with_the_canonical_one_first` |
+| F3 | The C# pack's Japanese name left as `ps2-0210j-20040917.bin` | `SapphireTests.The_library_is_on_the_core_abi_and_its_system_is_the_pack` (the pack's names against the library's) |
+
+### 12.6 What the plan got wrong, or left open
+
+- **§5.9 and Q9**: the newest Japanese retail image is `0230j`, not `0210j`, which is a recorder's; the plan's text
+  guessed from the tester's folder. Amended there with a dated note.
+- **§3.1's size**: ps2autotests' 1,850 KB is its compressed history; the files are 10.5 MB. The count of 78 stands.
+- **§1.1's IOP row** asked for cache sizes "to be read at S2": none is published (§12.4).
+- **The predictions**: none is retired or amended at S2; P2 (the output channel) waits for S4's first run.
+- **§2.2** expected the interface sections to be cleared or excluded; most are cleared, with sentence-level exclusions
+  in the syscalls and whole-section ones for IOPBOOT and the PlayStation compatibility.
+
+### 12.7 Questions this stage leaves
+
+- **The gates' Japanese image** [routine]: the tester holds no `0230j`. *Recommended:* `ps2-0200j-20040614.bin`
+  (SCPH-70000), the newest Japanese console image the tester holds whose name carries `j`; `ps2-0220h-20060905.bin` is
+  newer but an Asian console's. Either is recognised by its content through Japan's list.
+- **DESR and KDL in the lists** [routine]: the recorders' and the television's images are consumer products and boot
+  their market's games, so they are listed. *Recommended:* keep them; a list without them would refuse a player's
+  recorder dump for no gain.
+
+### 12.8 What was read for this stage
+
+`Sapphire_Plan.md` §1 (the decisions), §2, §3.1, §5.5, §5.9, §7, §11–§14; this page; `Sapphire_Disputes.md`;
+`EmuSen_Firmware.md` §0 and §7.4–§7.8; the code of `bios()`, `Ps2System.Bios` and Endou's MD5 lists; and the sources
+`Sapphire_References.md` §6 lists. No emulator, SDK or loader source; no firmware. Listed, never opened: the names of
+the tester's Japanese PlayStation 2 BIOS images.
+
+### 12.9 What this stage does not cover
+
+- Running anything of ps2autotests (S4), the referees (S3), and every emulation rule.
+- Diamond's MD5 lists (`EmuSen_Firmware.md` §7.8), owed by Diamond, not by this stage.
+

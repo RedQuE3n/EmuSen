@@ -85,8 +85,8 @@ speed allows, every departure deliberate and recorded*.
 | **IPU** | Its commands (BCLR, IDEC, BDEC, VDEC, FDEC, SETIQ, SETVQ, CSC, PACK, SETTH); MPEG-2 variable-length decoding, inverse quantisation, the IDCT, colour conversion, dithering [R ps2tek "IPU"]; its FIFOs and DMA | Exact output against the MPEG-2 standard's arithmetic where the IPU follows it; the IDCT's rounding a likely dispute |
 | **DMAC, INTC, timers** | Ten DMA channels (VIF0, VIF1, GIF, IPU from and to, SIF0, SIF1, SIF2, scratchpad from and to) with normal, chain and interleave modes, source and destination tags, the stall control, priorities; INTC's sources and masks; four EE timers on the bus clock, H-blank and their gates [R ps2tek "DMAC", "INTC", "EE Timers"] | Exact; transfer timing where `dma/*` measures it |
 | **SIF** | The mailbox registers (MSCOM, SMCOM, MSFLG, SMFLG, CTRL, BD6) and the three SIF DMA channels between EE and IOP [R ps2tek "SIF Registers", "SIF DMA"] | Exact |
-| **IOP** | An R3000A-family processor at about 36.864 MHz [R ps2tek "CDVD Reads and Seeks": "IOP_CLOCK is ~36,864,000 Hz"], 2 MiB of RAM, its caches and scratchpad (to be read at S2; the PlayStation's were 4 KiB and 1 KiB, `Diamond_Plan.md` §1.1), its interrupt controller, its DMA (channels 0–12, among them SPU2 on 7, SIO2 in and out on 11 and 12), six timers, three of 16 bits and three of 32 [R ps2tek "IOP DMA", "IOP Timers"] | Instructions exact through `blackmoon-r3000` (§9.2); timing to the bus access as Diamond's |
-| **SPU2** | Two cores of 24 voices each [R Wikipedia, PS2 technical specifications, uncited there; to be confirmed at S2], 2 MiB of sound RAM [R ps2tek], 48,000 Hz output, ADPCM voices with the PlayStation's interpolation and envelopes, AutoDMA streaming of PCM to the memory-in area [R ps2tek "SPU2 AutoDMA"], the effects (reverb) area per core, the IRQ addresses, the core mixing and the external input | **Exact** to the sample, every voice and the reverb |
+| **IOP** | An R3000A-family processor at about 36.864 MHz [R ps2tek "CDVD Reads and Seeks": "IOP_CLOCK is ~36,864,000 Hz"], 2 MiB of RAM, its caches and scratchpad (to be read at S2; the PlayStation's were 4 KiB and 1 KiB, `Diamond_Plan.md` §1.1; *read 2026-10-24 at S2: no public document gives the sizes; Sony said in 1999 the core is the PlayStation's "except for some minor enhancements to the cache" [R Microprocessor Report, 1999-04-19], so S21 starts from 4 KiB and 1 KiB [A], the enhancement a dispute candidate, `Sapphire_References.md` §5.1*), its interrupt controller, its DMA (channels 0–12, among them SPU2 on 7, SIO2 in and out on 11 and 12), six timers, three of 16 bits and three of 32 [R ps2tek "IOP DMA", "IOP Timers"] | Instructions exact through `blackmoon-r3000` (§9.2); timing to the bus access as Diamond's |
+| **SPU2** | Two cores of 24 voices each [R Wikipedia, PS2 technical specifications, uncited there; to be confirmed at S2; *confirmed 2026-10-24 at S2 by ps2tek's register map, "Core0 Voice 0-23", and Microprocessor Report's "48-channel", `Sapphire_References.md` §5.2*], 2 MiB of sound RAM [R ps2tek], 48,000 Hz output, ADPCM voices with the PlayStation's interpolation and envelopes, AutoDMA streaming of PCM to the memory-in area [R ps2tek "SPU2 AutoDMA"], the effects (reverb) area per core, the IRQ addresses, the core mixing and the external input | **Exact** to the sample, every voice and the reverb |
 | **CDVD** | The drive's N and S command sets, reads and seeks with their timing ("block_timing = (IOP_CLOCK * block_size) / read_speed", R ps2tek "CDVD Reads and Seeks"), CD-ROM modes and CD-DA, DVD-ROM single and dual layer with the layer break, the drive's status, the real-time clock, the console's EEPROM through the drive (§5.9), the tray; the drive controller (the "Mechacon") is a microcontroller running Sony's firmware [R ps2tek "CDVD Drive"], so it is modelled at its command interface as Diamond's HC05 is (§5.6) | Results exact; timing to the documented formula and to distributions measured on referees, the open item where documents are thinnest |
 | **SIO2** | The port and its registers, "having no documentation whatsoever" by ps2tek's own words [R ps2tek "SIO2"]; the DualShock 2 with its configuration mode and **pressure-sensitive buttons** (00h–FFh per button, R ps2tek "SIO2 Standard Controllers"); the 8 MiB memory card (512-byte pages with 16 spare bytes each for error correction, 16 pages an erase block, the superblock "Sony PS2 Memory Card Format", R ps2tek "SIO2 PS2 Memcards", "SIO2 PS2 Memcard Filesystem"); the multitap; the card's authentication commands, whose purpose ps2tek calls unknown (§2.3, Q7) | Protocol exact; byte timing where a game measures it |
 | **Regions and models** | NTSC and PAL timing; the console's region is the BIOS's; models as the player's BIOS versions distinguish them | Exact clocks, after D-0 |
@@ -204,7 +204,9 @@ post of 2002 on the Linux kit's manuals. Listed, never opened: the names and siz
 ### 2.1 The public documents
 
 To be fetched at S2 into `~/.cache/emusen/probe/sapphire/docs/`, each file with its SHA-256 in `SHA256SUMS` and its
-source, date and status in `DOCS.txt`, as Diamond's were.
+source, date and status in `DOCS.txt`, as Diamond's were. *Fetched 2026-10-24 at S2, `Sapphire_References.md` §1: every
+row below but Sony's papers, of which the Hot Chips slides were fetched and the IEEE papers are behind paywalls;
+Redump's BIOS datfile was added as the database of §5.9.*
 
 | Source | Where, revision | Status | What it covers | Thin on |
 |---|---|---|---|---|
@@ -239,6 +241,14 @@ write the replacement, and either cleared or added to the exclusions in `DOCS.tx
 per-module sections, which read as interface descriptions (names, numbers, arguments, export lists) but may mix in
 behaviour learned from disassembly. ps2tek states no sources at all (§2.1), so its interface sections carry the same
 caution psx-spx's did for Diamond, more strongly: its author also wrote an emulator.
+
+*Screened 2026-10-24 at S2* by S2's writer, who is therefore a non-replacement writer. The exclusions by section and
+line are `Sapphire_References.md` §3 (and `DOCS.txt` §X): beyond the three set above, the kernel's internal structures,
+scheduler and call graph inside the threading and syscall sections, IOPBOOT whole, the PlayStation compatibility but
+two lines, SYSMEM's and LOADCORE's internals, the boot banner, the reboot's internal sequence, and three traces of the
+BIOS's I/O outside the chapter. The interface sections are otherwise cleared. **Found outside the chapter: two passages
+of emulators' code** (the RDRAM initialisation's register model and the "IOP Console" hook), excluded for every writer,
+and four lines quoting an emulator's choice.
 
 ### 2.3 Where the documents are thin
 
@@ -291,7 +301,10 @@ any step** [C, §11 Q3]; this page read only their READMEs, licences and directo
 ### 3.1 What exists, and how each reports
 
 To be fetched at S2 into `~/.cache/emusen/probe/sapphire/`, never committed, each file listed in `PROVENANCE.txt`. The
-downloads are small (ps2autotests is 1,850 KB [R GitHub API]); nothing large is fetched at this stage.
+downloads are small (ps2autotests is 1,850 KB [R GitHub API]); nothing large is fetched at this stage. *Fetched
+2026-10-24 at S2: the 78 programs counted below are there, 55 `.elf` and 23 `.irx`, each with its expected text; the
+1,850 KB was the compressed history, the files being 10.5 MB [M]. Five files of its `common/` are ps2dev's or ps2sdk's
+and excluded for every writer (`Sapphire_References.md` §2).*
 
 | Oracle | Source, version | Licence | Covers | How it reports |
 |---|---|---|---|---|
@@ -588,7 +601,10 @@ separate files" indexed by a ROMDIR [R ps2tek "BIOS"].
   item 4 and §7.8), so a player's file is found by its content whatever its name; Batocera's page already gives one,
   `21038400dc633070a78ad53090c53017` for `ps2-0230a-20080220.bin` [R], and the rest are cited at S2. Asia (`h`), China
   (`c`) and Russia (`r`) versions in the tester's set are recognised as alternates of the market whose games they boot,
-  per the database's description, never by reading them.
+  per the database's description, never by reading them. *Done 2026-10-24 at S2 (`Sapphire_Native.md` §12.3): the
+  database is Redump's PS2 BIOS datfile (115, 2022-12-12); the newest Japanese retail version is
+  **`ps2-0230j-20080220.bin`**, so the Japanese entry carries that name; the lists hold 27, 15 and 16 retail MD5s,
+  development consoles left out, Korea (`k`) joining Asia and China as Japan's.*
 - **The tester's images** [M, a listing of names and sizes only]: 42 in `~/Documents/BIOS/PS2/` and 11 in its `Misc BIOS/`,
   every one 4,194,304 bytes, named `ps2-VVVVr-YYYYMMDD.bin` from version 0100 (2000-01-17) to 0230 (2008-02-20), with
   region letters `j`, `a`, `e`, `h`, `c` and `r`; the folder `Misc BIOS/` adds names with a second letter `d` and one
@@ -809,7 +825,7 @@ the enhancements (E) are separate tracks.
 |---|---|---|
 | **0** | This plan (2026-10-23) | The tester's go for S1 |
 | **S1** | The crate `sapphire` on the core ABI v1 as a stub with the `InDevelopment` mark: an ELF recognised and refused with words; the system pack `ps2` (§4.1) with the recogniser's `BOOT2` rule and Diamond's `BOOT` rule beside it; the three firmware entries (§5.9); the `SPH2` header | The kit's C1–C15 on a synthetic ELF and a synthetic ISO; a synthetic PS1 disc routed to Diamond, a PS2 CD and DVD to Sapphire, by test *Built 2026-10-24, `Sapphire_Native.md`: met; the CRT row recorded as owed (its §6).* |
-| **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation |
+| **S2** | References: the documents of §2.1 fetched and pinned with `DOCS.txt` and `SHA256SUMS`; ps2tek's BIOS chapter screened by a non-replacement writer and the exclusions written; ps2autotests at `97469ff` with `PROVENANCE.txt`; the MD5 lists of §5.9 cited from a public database; the IOP's cache facts and the SPU2's voice count read | Each file pinned; the exclusions listed by section and line; every MD5 with its citation *Built 2026-10-24, `Sapphire_Native.md` §12, `Sapphire_References.md`: met; the Japanese entry renamed to `0230j`.* |
 | **S3** | Referees: PCSX2 standalone headless (a private compositor, the software renderer, PINE for RAM), Play! standalone and its libretro form, the probe on LRPS2 and PCEE2 to measure the hardware-render refusal; their costs and the RAM each exposes | One project program's RAM record read from each referee that runs it; the referees' table of `Sapphire_Referees.md` written |
 | **S4** | The runners (§3.3): `SyntheticPs2Elf`, the synthetic disc builder for ISO 9660 CDs and single- and dual-layer DVDs, the expected-text grader, the RAM-record reader; **one ps2autotests program run on PCSX2 with the player's BIOS** to learn its output channel by observation | A positive and a negative control for each runner; the channel ps2autotests prints on recorded (P2) |
 
@@ -1099,7 +1115,8 @@ needs Q11.
    `ps2-0230a-20080220.bin` and `ps2-0230e-20080220.bin` for the Americas and Europe and the newest Japanese retail
    version for Japan, each listing every retail version's MD5 cited from a public database at S2; the gates run the
    Americas and Europe images the tester holds of version 0230 and the newest Japanese one the tester holds
-   (`ps2-0210j-20040917.bin` by its name); the images stay in `~/Documents/BIOS/PS2/`, read only, reached by the
+   (`ps2-0210j-20040917.bin` by its name; *found at S2 to be the DESR recorders' image, so a console's takes its place,
+   `Sapphire_Native.md` §12.7*); the images stay in `~/Documents/BIOS/PS2/`, read only, reached by the
    firmware folder setting and `--sysdir`, never read by the project's tools.
 10. **Q10 [decision], the shared crates.** *Decided 2026-10-24 by the tester: as recommended.* *Recommended:* `emusen-mips` gains `r5900.rs` and `vu.rs` (§9.1);
     `blackmoon-r3000` serves the IOP unchanged (§9.2); Diamond's SPU voice moves into `blackmoon-spu` (§9.3), Diamond's
@@ -1126,7 +1143,11 @@ needs Q11.
 
 ## 12. Negative results
 
-- No public PlayStation 2 FPGA core [A, to be confirmed at S2]; no console measurements by decision.
+- No public PlayStation 2 FPGA core [A, to be confirmed at S2]; no console measurements by decision. *Confirmed
+  2026-10-24 at S2 [M, GitHub's API]: MiSTer-devel's 415 repositories hold `PSX_MiSTer` and nothing for the PlayStation
+  2; a repository search finds none.*
+- *Added 2026-10-24 at S2:* no public document of the IOP's cache sizes [R, `Sapphire_References.md` §5.1]; ps2autotests'
+  `ee_cop0/performance` records no count against a time base, so it gives D-0 nothing [R].
 - No R5900 single-step suite (SingleStepTests' repositories, listed 2026-10-23) [M]; no AccuracyCoin-like suite; no GS
   picture oracle from consoles; ps2autotests' GS coverage is two signal programs [M].
 - The probe answers no hardware-render request, so no PlayStation 2 libretro core draws through it as it stands [M];
@@ -1208,3 +1229,10 @@ are added:
 - chdman's DVD form: <https://docs.libretro.com/guides/disc-images/>; <https://ravener.is-a.dev/posts/compressing-games-to-chd/>.
 - GitHub's API for licences, commits and directory names: ps2sdk, ps2toolchain, Open-PS2-Loader, ps2link, PCSX2,
   DobieStation, Play!, SingleStepTests.
+- *Read 2026-10-24, at S2:* Redump, PlayStation 2 BIOS datfile (115, 2022-12-12): <http://redump.org/datfile/ps2-bios/>;
+  ECMA-267, 3rd edition: <https://ecma-international.org/wp-content/uploads/ECMA-267_3rd_edition_april_2001.pdf>;
+  ITU-T H.262 (02/2000): <https://www.itu.int/rec/T-REC-H.262-200002-S/en>; K. Diefendorff, "Sony's Emotionally
+  Charged Chip", Microprocessor Report 13(5), 1999-04-19, a course's copy at
+  <https://docencia.ac.upc.edu/ETSETB/SEGPAR/microprocessors/emotionengine%20(mpr).pdf>; copetti.org, "PlayStation 2
+  Architecture": <https://www.copetti.org/writings/consoles/playstation-2/>; GitHub's API for MiSTer-devel's
+  repositories. The rest are in `Sapphire_References.md` §1.

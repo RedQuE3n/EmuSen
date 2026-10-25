@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Galaxia
         private static string Answer(Func<PackageResolution> resolve)
         {
             try { PackageResolution r = resolve(); return $"{r.Game} | {r.Package ?? "(none)"} | {r.Moved}"; }
-            catch (IOException e) { return $"{e.GetType().Name}: {e.Message}"; }
+            catch (IOException e) { return $"IOException: {e.Message}"; }
         }
 
         [Fact]
@@ -106,12 +106,13 @@ namespace EmuSen.WiseMan.Galaxia
                 a.Add(Answer(() => resolve(Path.Combine(lib, "SNES", "Europe", "Beta (E).sfc"))));
                 File.Move(Path.Combine(lib, "SNES", "Europe", "Beta (E).sfc"), Path.Combine(lib, "SNES", "Beta.sfc"));
                 a.Add(Answer(() => resolve(Path.Combine(p.Packages, "SNES", "USA", "Beta (U).sfc"))));
-                // A touched file keeps its package and has its time recorded; another dump of the same size is refused with both hashes; a game gone and not found is refused.
+                // A touched file keeps its package and has its time recorded; another dump of the same size opens by its plain path as a plain game and its package is refused with both hashes; a game gone and not found is refused.
                 File.SetLastWriteTimeUtc(Path.Combine(lib, "SNES", "Alpha.sfc"), new DateTime(2030, 1, 2, 3, 4, 5, DateTimeKind.Utc));
                 a.Add(Answer(() => resolve(Path.Combine(lib, "SNES", "Alpha.sfc"))));
                 File.WriteAllBytes(Path.Combine(lib, "NES", "Delta.nes"), Cartridge(5, 2048));
                 File.SetLastWriteTimeUtc(Path.Combine(lib, "NES", "Delta.nes"), new DateTime(2031, 1, 1, 0, 0, 0, DateTimeKind.Utc));
                 a.Add(Answer(() => resolve(Path.Combine(lib, "NES", "Delta.nes"))));
+                a.Add(Answer(() => resolve(Path.Combine(p.Packages, "NES", "Delta.nes"))));
                 File.Delete(Path.Combine(lib, "NES", "Delta.nes"));
                 a.Add(Answer(() => resolve(Path.Combine(p.Packages, "NES", "Delta.nes"))));
                 string root = At("claims", side);
@@ -126,10 +127,11 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.EndsWith("| True", m[12]);
             Assert.EndsWith("| False", m[13]);
             Assert.StartsWith("<root>/Roms/SNES/Beta.sfc |", m[14]);
-            Assert.Contains("has SHA-1", m[16]);
-            Assert.Contains("which is gone", m[17]);
-            Assert.Contains("\"path\": \"SNES/Beta.sfc\"", m[18]);
-            Assert.Contains("\"mtime\": \"2030-01-02T03:04:05Z\"", m[18]);
+            Assert.StartsWith("<root>/Roms/NES/Delta.nes | (none) | False", m[16]);
+            Assert.Contains("has SHA-1", m[17]);
+            Assert.Contains("which is gone", m[18]);
+            Assert.Contains("\"path\": \"SNES/Beta.sfc\"", m[19]);
+            Assert.Contains("\"mtime\": \"2030-01-02T03:04:05Z\"", m[19]);
         }
 
         [Fact]
@@ -137,12 +139,16 @@ namespace EmuSen.WiseMan.Galaxia
         {
             string[] roots = { At("Packages", "SNES", "Zelda (U).sfc"), At("p.q") + Path.DirectorySeparatorChar, "relative/pkg", At("Packages", "PlayStation", "a.b.chd") };
             foreach (string root in roots)
-            {
-                Assert.Equal(SaveLibrary.Managed.PackageSramPathFor(root), GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root));
-                Assert.Equal(SaveLibrary.Managed.PackageResumeStatePathFor(root), GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root));
-                foreach (int slot in new[] { 1, 2, 0, -1, int.MaxValue })
-                    Assert.Equal(SaveLibrary.Managed.PackageStatePathFor(root, slot), GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, null, slot));
-            }
+                foreach (string? key in new[] { null, "", "0a1b2c3d" })
+                {
+                    Assert.Equal(SaveLibrary.Managed.PackageSramPathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root, key));
+                    Assert.Equal(SaveLibrary.Managed.PackageResumeStatePathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root, key));
+                    foreach (int slot in new[] { 1, 2, 0, -1, int.MaxValue })
+                        Assert.Equal(SaveLibrary.Managed.PackageStatePathFor(root, slot, key), GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, key, slot));
+                }
+            Assert.Equal(Path.Combine(roots[0], "saves", "Zelda (U).patched-0a1b2c3d.srm"), SaveLibrary.SramPathFor("/roms/x.sfc", "SNES", roots[0], "0a1b2c3d"));
+            Assert.Equal(Path.Combine(roots[3], "states", "a.b.patched-0a1b2c3d.slot3.state"), SaveLibrary.StatePathFor("/roms/psx/a.b.cue", 3, null, roots[3], "0a1b2c3d"));
+            Assert.Throws<ArgumentException>(() => GalaxiaNative.SavePath(GalaxiaSave.PackageSram, roots[0], "../../x"));
             Assert.Equal(Path.Combine(roots[0], "saves", "Zelda (U).srm"), SaveLibrary.SramPathFor("/roms/SNES/USA/Zelda (moved).sfc", "SNES", roots[0]));
             Assert.Equal(Path.Combine(roots[3], "states", "a.b.slot3.state"), SaveLibrary.StatePathFor("/roms/psx/a.b.cue", 3, At("ignored"), roots[3]));
             Assert.Equal(Path.Combine(roots[1], "states", "p.resume.state"), SaveLibrary.ResumeStatePathFor("x.sfc", null, roots[1]));

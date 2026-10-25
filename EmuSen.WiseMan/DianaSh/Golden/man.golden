@@ -5354,7 +5354,7 @@ case the page for pkg
 target none
 covers 1
 $ man pkg
-out 8283
+out 9012
 NAME
     pkg - make game packages, list them, check them, copy a game's saves,
     states and cheats into its package, and give it soft patches
@@ -5470,6 +5470,15 @@ SOFT PATCHES AT LOAD
     manifest's "identity" is "patched", when it sends the patched image's
     first and the dump's after a miss.
 
+    A patched game keeps its own battery save, save media and states,
+    apart from the original's: in the package's saves and states folders
+    as <name>.patched-<key>, <key> being eight hexadecimal digits of the
+    hash of the list, each patch's format and SHA-1 in order. Each list
+    reaches its own saves, the same list always the same ones, and with
+    every patch removed the game returns to the original's. A patched
+    game starts its save empty: the original's is never read or written
+    by it.
+
 ONE GAME, ONE SAVE
     Once a package claims a game, opening the game by its plain path, from
     'core', the library or a recent list, opens it as the package: its
@@ -5478,7 +5487,10 @@ ONE GAME, ONE SAVE
     its game, its companions (a sheet's tracks, an .m3u's discs) and the
     library files a converted disc was made from. A claimed game whose
     size or time changed is hashed when it is opened: still the dump, its
-    time is recorded; another dump, it is refused with both hashes named.
+    time is recorded; another dump, the package is changed. Opened by its
+    plain path such a file plays as a plain game with its plain saves,
+    and the package's are left as they were; the package opened itself
+    is refused with both hashes named, and 'ls' and 'check' say changed.
     A game that moved in the library is found again by its size and then
     its hashes when it or its package is opened, and the manifest is
     rewritten to name where it now is.

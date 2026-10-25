@@ -54,20 +54,29 @@ pub fn package_stem(root: &str) -> &str {
     path::file_name_without_extension(STYLE, path::trim_ending_separator(STYLE, root))
 }
 
+/// The name a package's files go by: its own, and for a game opened with its patch list applied, `.patched-<key>` after
+/// it, `key` being `package::save_key`'s, so that a hack never reaches the original's saves (EmuSen_GamePackages.md §5.5).
+pub fn package_name(root: &str, key: Option<&str>) -> String {
+    match key.filter(|k| !k.is_empty()) {
+        Some(key) => format!("{}.patched-{key}", package_stem(root)),
+        None => package_stem(root).to_string(),
+    }
+}
+
 /// `<package>/saves/<name>.srm`: a packaged game's battery save, whatever its console or the file it opened from.
-pub fn package_sram_path(root: &str) -> String {
-    path::combine_all(STYLE, &[root, crate::package::SAVES_FOLDER, &format!("{}{SRAM_EXTENSION}", package_stem(root))])
+pub fn package_sram_path(root: &str, key: Option<&str>) -> String {
+    path::combine_all(STYLE, &[root, crate::package::SAVES_FOLDER, &format!("{}{SRAM_EXTENSION}", package_name(root, key))])
 }
 
 /// `<package>/states/<name>.state` for slot 1 and `.slotN.state` for the rest; the state folder setting gives way to it.
-pub fn package_state_path(root: &str, slot: i32) -> String {
+pub fn package_state_path(root: &str, slot: i32, key: Option<&str>) -> String {
     let suffix = if slot == DEFAULT_STATE_SLOT { String::new() } else { format!(".slot{slot}") };
-    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}{suffix}{STATE_EXTENSION}", package_stem(root))])
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}{suffix}{STATE_EXTENSION}", package_name(root, key))])
 }
 
 /// `<package>/states/<name>.resume.state`.
-pub fn package_resume_state_path(root: &str) -> String {
-    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}.resume{STATE_EXTENSION}", package_stem(root))])
+pub fn package_resume_state_path(root: &str, key: Option<&str>) -> String {
+    path::combine_all(STYLE, &[root, crate::package::STATES_FOLDER, &format!("{}.resume{STATE_EXTENSION}", package_name(root, key))])
 }
 
 /// The picture beside a state: the same name with `.png`.
@@ -108,10 +117,18 @@ mod tests {
 
     #[test]
     fn a_packaged_game_keeps_its_saves_and_states_in_its_package_by_its_own_name() {
-        assert_eq!(package_sram_path("/p/SNES/Zelda (U).sfc"), "/p/SNES/Zelda (U).sfc/saves/Zelda (U).srm");
-        assert_eq!(package_state_path("/p/a.b.nes/", 1), "/p/a.b.nes/states/a.b.state");
-        assert_eq!(package_state_path("/p/a.b.nes", 3), "/p/a.b.nes/states/a.b.slot3.state");
-        assert_eq!(package_resume_state_path("/p/g.nes"), "/p/g.nes/states/g.resume.state");
+        assert_eq!(package_sram_path("/p/SNES/Zelda (U).sfc", None), "/p/SNES/Zelda (U).sfc/saves/Zelda (U).srm");
+        assert_eq!(package_state_path("/p/a.b.nes/", 1, None), "/p/a.b.nes/states/a.b.state");
+        assert_eq!(package_state_path("/p/a.b.nes", 3, Some("")), "/p/a.b.nes/states/a.b.slot3.state");
+        assert_eq!(package_resume_state_path("/p/g.nes", None), "/p/g.nes/states/g.resume.state");
+    }
+
+    #[test]
+    fn a_patched_game_keeps_its_saves_and_states_apart_by_its_lists_key() {
+        assert_eq!(package_sram_path("/p/SNES/Zelda (U).sfc", Some("0a1b2c3d")), "/p/SNES/Zelda (U).sfc/saves/Zelda (U).patched-0a1b2c3d.srm");
+        assert_eq!(package_state_path("/p/a.b.nes", 1, Some("0a1b2c3d")), "/p/a.b.nes/states/a.b.patched-0a1b2c3d.state");
+        assert_eq!(package_state_path("/p/a.b.nes", 3, Some("0a1b2c3d")), "/p/a.b.nes/states/a.b.patched-0a1b2c3d.slot3.state");
+        assert_eq!(package_resume_state_path("/p/g.nes", Some("0a1b2c3d")), "/p/g.nes/states/g.patched-0a1b2c3d.resume.state");
     }
 
     #[test]

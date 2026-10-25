@@ -145,6 +145,8 @@ pub struct Engine {
     pub media_choices: Vec<(String, Choice)>,
     /// The package the game opened as, whose folder keeps its saves (EmuSen_GamePackages.md §3.5); none for a plain file.
     pub package: Option<String>,
+    /// The patch list's save key, resolved with the package at open, naming a patched game's battery files apart; none unpatched.
+    pub save_key: Option<String>,
     located: Vec<Located>,
     pub shape: FrameInfo,
     pub audio_rate: i32,
@@ -221,6 +223,7 @@ impl Engine {
             options,
             media_choices: Vec::new(),
             package: None,
+            save_key: None,
             located: Vec::new(),
             shape: FrameInfo::default(),
             audio_rate: 44100,
@@ -397,12 +400,13 @@ impl Engine {
         let stem = path::file_name_without_extension(Style::HOST, at).to_string();
         let disabled = self.options.battery_disabled;
         let package = self.package.clone();
-        let own = |b: &BatteryFile| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref());
+        let key = self.save_key.clone();
+        let own = |b: &BatteryFile| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref(), key.as_deref());
         let placement = media::place(tree, &console, system.as_ref(), &self.media_choices, &stem, &own, disabled);
-        let save_for = |b: &BatteryFile| placement.file(b.which).cloned().unwrap_or_else(|| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref()));
+        let save_for = |b: &BatteryFile| placement.file(b.which).cloned().unwrap_or_else(|| BatterySave::open(tree, at, &console, disabled, &b.suffix, package.as_deref(), key.as_deref()));
         let saves: Vec<(u32, BatterySave)> = match system.as_ref().and_then(|s| s.battery.as_ref()) {
             Some(listed) => listed.iter().map(|b| (b.which, save_for(b))).collect(),
-            None => vec![(0, BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION, package.as_deref()))],
+            None => vec![(0, BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION, package.as_deref(), key.as_deref()))],
         };
         // The system the file was routed to goes beside the image, so a core of two systems makes that one (EmuSen_CoreAPI.md §6.40).
         let routed = system.as_ref().map(|s| s.id.clone());

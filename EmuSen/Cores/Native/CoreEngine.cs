@@ -409,7 +409,7 @@ namespace EmuSen.Cores.Native
         protected virtual void AttachDebugger(CoreMachine machine) => Debug.Attach(machine);
 
         // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
-        protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, disabled: Options.BatteryRamDisabled, extension: suffix, packageRoot: Options.PackageRoot);
+        protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, disabled: Options.BatteryRamDisabled, extension: suffix, packageRoot: Options.PackageRoot, saveKey: Options.SaveKey);
 
         // Lets go of the locks on the game's save media, which a frontend calls when it leaves the game; a load takes them again - see EmuSen_SaveMedia.md §3.5.
         public void ReleaseMedia()

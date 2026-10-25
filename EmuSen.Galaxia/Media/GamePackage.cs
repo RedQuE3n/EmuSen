@@ -67,6 +67,34 @@ namespace EmuSen.Galaxia.Media
         // Whether the scraper sends the patched image's hashes first: patches, and "identity" set to "patched".
         public bool ScrapesAsPatched => (string?)Document["identity"] == "patched" && Patched is not null;
 
+        // The key a patched game's saves and states are named apart by: eight hex digits of the list's patches_sha1 rule, an entry with no SHA-1 keyed by its file's name; null with no patches - see EmuSen_GamePackages.md §5.5.
+        public string? SaveKey
+        {
+            get
+            {
+                if (Document["patches"] is not JsonArray { Count: > 0 } list) return null;
+                var lines = new StringBuilder();
+                foreach (JsonNode? entry in list)
+                {
+                    string format = entry is JsonObject e && e["format"] is JsonValue f && f.TryGetValue(out string? fs) ? fs : "";
+                    string sha = entry is JsonObject o && o["sha1"] is JsonValue h && h.TryGetValue(out string? hs) ? hs.ToLowerInvariant()
+                        : entry is JsonObject n && n["file"] is JsonValue file && file.TryGetValue(out string? name) ? name : "";
+                    lines.Append(format).Append(' ').Append(sha).Append('\n');
+                }
+                return Convert.ToHexString(global::System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(lines.ToString())))[..SaveKeyDigits].ToLowerInvariant();
+            }
+        }
+
+        public const int SaveKeyDigits = 8;
+
+        // The save key of the package at root as its manifest reads now; null where it lists no patches or does not read.
+        public static string? SaveKeyAt(string? root)
+        {
+            if (string.IsNullOrEmpty(root)) return null;
+            try { return Read(global::System.IO.Path.Combine(root, FileName)).SaveKey; }
+            catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException) { return null; }
+        }
+
         private static string? Text(JsonObject o, string name) => o[name] is JsonValue v && v.TryGetValue(out string? s) ? s.ToLowerInvariant() : null;
 
         // A new manifest in the schema's order, with the fields later steps fill left empty.

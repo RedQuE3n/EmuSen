@@ -79,6 +79,9 @@ namespace EmuSen.Crystal.Managed
         // The package the game opened as, whose folder keeps its states; null for a plain file - see EmuSen_GamePackages.md §3.5.
         public string? PackageRoot { get; init; }
 
+        // The patch list's save key the game opened with, naming its states apart; null unpatched - see EmuSen_GamePackages.md §5.5.
+        public string? SaveKey { get; init; }
+
         public string Console { get; }
 
         // The console a session started empty was asked for, its states named as Hotaru names them.

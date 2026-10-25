@@ -150,8 +150,10 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     };
     let path = resolved.as_ref().map(|r| r.game.as_str());
     let package = resolved.as_ref().and_then(|r| r.package.clone());
+    // A patched game's saves and states are named by its list's key, read once here as the package is (EmuSen_GamePackages.md §5.5).
+    let save_key = package.as_deref().and_then(emusen_galaxia::package::save_key_at);
     let (engine, console_asked) = match path {
-        Some(at) => (open_game(rt, &catalog, &discovery, &tree, &ctx, &stored, at, asked.engine, options, package.clone())?, None),
+        Some(at) => (open_game(rt, &catalog, &discovery, &tree, &ctx, &stored, at, asked.engine, options, package.clone(), save_key.clone())?, None),
         None => {
             let (e, console) = start_console(rt, &catalog, &discovery, &tree, &folders, &stored, asked.console.unwrap_or(""), asked.engine, options)?;
             (e, Some(console))
@@ -171,6 +173,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
         *session.identity.lock().unwrap_or_else(|p| p.into_inner()) = (Some(md5), bytes as i64);
     }
     session.package = package;
+    session.save_key = save_key;
     let session = Arc::new(session);
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());
@@ -217,6 +220,7 @@ fn open_game(
     engine: Option<&str>,
     options: Options,
     package: Option<String>,
+    save_key: Option<String>,
 ) -> Result<Engine, Refused> {
     if !emusen_galaxia::dotnet_files::file_exists(at) {
         return Err((crate::abi::status::IO, format!("{at} does not exist")));
@@ -250,6 +254,7 @@ fn open_game(
         .unwrap_or_else(|| core.sidecar.info.id.clone());
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
     e.package = package;
+    e.save_key = save_key;
     e.load_rom(ctx.tree, at, system, console, ctx.is_image, ctx.folders).map_err(|r| (r.status, r.words))?;
     Ok(e)
 }

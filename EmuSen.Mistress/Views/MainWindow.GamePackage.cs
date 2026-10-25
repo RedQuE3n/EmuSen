@@ -14,7 +14,9 @@ namespace EmuSen.Mistress.Views
         {
             if (_gamePackage is not null) return;
             string? package = EmuSen.Galaxia.Media.GamePackages.RootFor(path);
-            var window = _gamePackage = new GamePackageWindow(title, path, _appSettings.RomDirectory, package, browse: !_bigScreen);
+            // A claimed file its package will not open with plays as a plain game, and the window says the package is changed - see EmuSen_GamePackages.md §14.8 Q34.
+            string? claimant = package is null && File.Exists(path) ? EmuSen.Galaxia.Media.GamePackages.Index(EmuSen.Galaxia.Media.PackagePlaces.Current()).Claimant(Path.GetFullPath(path))?.Folder : null;
+            var window = _gamePackage = new GamePackageWindow(title, path, _appSettings.RomDirectory, package ?? claimant, browse: !_bigScreen, refused: claimant is not null);
             window.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_gamePackage, window)) _gamePackage = null;

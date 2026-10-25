@@ -319,11 +319,27 @@ pub struct Resolution {
 /// one that is gone is looked for in the library by size and then hashes, and the manifest names where it was found.
 /// `opened` is a claimed file the player opened, played with the package's stores where the package's own game is gone.
 pub fn open_package(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, String> {
+    opening(roots, folder, opened).map_err(|r| r.words)
+}
+
+/// Why a package did not open, and whether it was because its game is now another dump (§14.8 Q34).
+struct NotOpened {
+    words: String,
+    changed: bool,
+}
+
+impl From<String> for NotOpened {
+    fn from(words: String) -> Self {
+        NotOpened { words, changed: false }
+    }
+}
+
+fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, NotOpened> {
     let manifest = dotnet_files::join(folder, package::FILE_NAME);
     let mut doc = match package::read(&manifest) {
         Ok(Ok(doc)) => doc,
-        Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words())),
-        Err(e) => return Err(format!("{manifest}: {}", emusen_dotnet::file::io_message(&e, &manifest))),
+        Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words()).into()),
+        Err(e) => return Err(format!("{manifest}: {}", emusen_dotnet::file::io_message(&e, &manifest)).into()),
     };
     let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{manifest}: its game's library is not set (AppSettings.RomDirectory)"))?;
     let resolution = |game: String, moved: bool| Resolution { game, package: Some(folder.to_string()), moved };
@@ -336,11 +352,12 @@ pub fn open_package(roots: &Roots, folder: &str, opened: Option<&str>) -> Result
         let Some(recorded) = recorded(&doc).cloned() else { return Ok(resolution(game, false)) };
         let taken = hash(&game).ok_or_else(|| format!("{game} could not be read to compare it with the package {folder}"))?;
         if !same_dump(&recorded, &taken) {
-            return Err(format!(
+            let words = format!(
                 "{game} has {}, but the package {folder} was made for {}: it is not the dump the package's saves belong to. pkg check says more; pkg make makes a package for this file once the old one is moved aside.",
                 taken_named(&recorded, &taken),
                 named(&recorded)
-            ));
+            );
+            return Err(NotOpened { words, changed: true });
         }
         if let Some(g) = member_mut(&mut doc, "game") {
             set(g, "seen", seen_value(size, &mtime));
@@ -358,13 +375,15 @@ pub fn open_package(roots: &Roots, folder: &str, opened: Option<&str>) -> Result
     }
     match opened {
         Some(at) if dotnet_files::file_exists(at) => Ok(resolution(at.to_string(), false)),
-        _ => Err(format!("The package {folder} names {game}, which is gone, and no file of its size and hashes was found in the library.")),
+        _ => Err(format!("The package {folder} names {game}, which is gone, and no file of its size and hashes was found in the library.").into()),
     }
 }
 
 /// What `at` opens as (§3.5, "one game, one save"): a package's folder or manifest opens its game; a file a package
-/// claims opens that package's game with its stores; a file no package claims, whose size and hashes are those of a
-/// package's game that is gone, is that game moved, and the manifest is rewritten; anything else opens as it is.
+/// claims opens that package's game with its stores, unless the package's game is now another dump, when the file opens
+/// as it is, a plain game with its plain saves (decided 2026-10-25, §14.8 Q34), the package refusing only when it is
+/// opened itself; a file no package claims, whose size and hashes are those of a package's game that is gone, is that
+/// game moved, and the manifest is rewritten; anything else opens as it is.
 pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     let full = path::full_path(at);
     if dotnet_files::directory_exists(&full) && dotnet_files::file_exists(&dotnet_files::join(&full, package::FILE_NAME)) {
@@ -379,7 +398,10 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     }
     let index = index(roots);
     if let Some(p) = index.claimant(&full) {
-        return open_package(roots, &p.folder.clone(), Some(&full));
+        return match opening(roots, &p.folder.clone(), Some(&full)) {
+            Err(NotOpened { changed: true, .. }) => plain(),
+            other => other.map_err(|r| r.words),
+        };
     }
     let Some(size) = std::fs::metadata(&full).ok().map(|m| m.len()) else { return plain() };
     let mut taken: Option<Hashes> = None;
@@ -477,8 +499,11 @@ mod tests {
         let doc = package::read(&format!("{folder}/package.json")).unwrap().unwrap();
         assert_eq!(doc.get("game").unwrap().get("seen").unwrap().get("mtime").unwrap().as_str(), Some(mtime_text(later).as_str()));
         std::fs::write(&game, b"sixteen bytes?!!").unwrap();
-        let words = resolve(&roots, &game).unwrap_err();
+        let words = resolve(&roots, &folder).unwrap_err();
         assert!(words.contains("has SHA-1") && words.contains("was made for SHA-1"), "{words}");
+        let r = resolve(&roots, &game).unwrap();
+        assert_eq!((r.game.as_str(), r.package.as_deref(), r.moved), (game.as_str(), None, false), "by its plain path the changed file opens as it is");
+        assert!(resolve(&roots, &format!("{folder}/package.json")).unwrap_err().contains("has SHA-1"));
         std::fs::remove_file(&game).unwrap();
         assert!(resolve(&roots, &folder).unwrap_err().contains("which is gone"));
     }

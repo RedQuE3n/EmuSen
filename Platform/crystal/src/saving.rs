@@ -34,14 +34,14 @@ fn check_slot(slot: u32) -> Result<i32, Refused> {
 impl Session {
     pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_state_path(root, slot),
+            Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()),
             None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()),
         }
     }
 
     pub fn resume_path(&self, tree: &Tree) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_resume_state_path(root),
+            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()),
             None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()),
         }
     }

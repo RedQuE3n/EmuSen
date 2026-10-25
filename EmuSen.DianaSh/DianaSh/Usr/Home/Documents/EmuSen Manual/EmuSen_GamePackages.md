@@ -1,5 +1,10 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, a sixth time: a patched game keeps its own saves (§16), as the tester decided §15.9's Q35. A game
+opened with its patch list applied has battery saves, save media and states of its own, named by the list's save key,
+in both runtimes; the platform interface 27. And §14.8's Q34 decided otherwise than recommended (§17): a claimed file
+that is another dump now plays as a plain game by its plain path, and only its package refuses.*
+
 *Revised 2026-10-25, a fifth time: step 6 is built (§15). Soft patching: `emusen-patch` applies IPS, UPS and BPS, each
 written from its published specification, now read; `pkg patch add` and `pkg patch rm`; both runtimes hand the core the
 patched image and never write the game; the `patched` identity for a state's record and the scraper; *Game Package* in
@@ -428,6 +433,8 @@ replace" the whole-file one [R].
   hashed again and compared with `dump`:
   - a match updates `seen`;
   - a mismatch refuses the package with words that name both hashes, and offers to look for the dump in the library.
+    *Decided 2026-10-25 (§14.8 Q34, built in §17):* only the package itself is refused. The changed file opened by its
+    plain path opens as a plain game, with its plain saves, and the package is reported `changed`.
 - That search finds the file the way `games.db`'s orphan pass does: by size first, then by hash
   (`EmuSen_Settings_Reference.md` §4.37) [R]. A file found elsewhere updates `path`.
 - A missing file says the same, and the package's saves, states and art are untouched.
@@ -477,6 +484,10 @@ Mistress's scan walks `RomDirectory` for files (`RomLibrary.cs:70`) and folds a 
 
 - a folder holding a `package.json` is one entry, and its contents are never listed as games;
 - a library file that a package claims is not shown a second time.
+
+*Decided 2026-10-25 (§14.8 Q34):* a claimed file that is no longer the dump its package was made for still opens by its
+plain path, as a plain game with its plain saves; opening its package is refused with both hashes named, and `pkg ls`,
+`pkg check` and the game's *Game Package* window say the package is changed (§17).
 
 The scan's roots become `RomDirectory`, `Packages` and §4.2's `Compressed`. Hashing for the claim uses the index, not
 a read [C].
@@ -908,7 +919,12 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 | RetroAchievements (when built: `EmuSen_CoreAPI.md` §6.22 keeps the door open) | the console's form, from `dump` | the hash RetroAchievements lists for the patched game, taken from `patched` in the console's form. The hardcore policy is the runtime's (§6.22 there) |
 | `StateRecord`'s ROM hash | `dump.file` | `patched`'s MD5, since a state is made on the bytes the core ran. A state made on another patch list is then "a different copy", which is asked about (`EmuSen_Settings_Reference.md` §4.37) [R] |
 | `games.db`'s identity | `dump.file` | `dump.file`, so that adding a patch keeps the game's record |
+| Battery saves, the game's own save media, states | `<package>/saves/<name>…`, `<package>/states/<name>…` (§14.2) | the same folders as `<name>.patched-<key>…`, `<key>` the list's save key (§16) |
 
+- **A patched game keeps its saves apart** [C, decided 2026-10-25 by the tester, §9 Q35 in §15.9]. A game opened with
+  its patch list applied reaches battery saves, its own save media and save states of its own, never the original's,
+  so that a hack can never write the original game's save. Each list has its own, the same list always the same ones,
+  and a package whose every patch is removed returns to the original's. The names are §16's.
 - **Disc identity is independent of the container** [R]. RetroAchievements' disc hashes are computed from sector
   contents, so they come out the same from a cue/bin and from its CHD whenever they are computed through
   `emusen-disc`'s sectors:
@@ -1865,7 +1881,8 @@ Built in Galaxia as §3.5 and §3.6 planned, described in `EmuSen_Galaxia.md` §
   is gone is that game moved, and the manifest names its new place; anything else opens as before.
 - **A changed dump is refused at open**, as §3.4 has it: a claimed game whose size or time moved is hashed, its time
   recorded when it is still the dump, and refused with both hashes named when it is not. The words point at `pkg check`
-  and `pkg make`.
+  and `pkg make`. *Since §17 (Q34, decided 2026-10-25) only the package opened itself is refused; the file opened by its
+  plain path opens as a plain game.*
 
 ### 14.2 Saves, states and cheats with a package root
 
@@ -2018,7 +2035,9 @@ the runtime case passed, 284.
   window. *Built so at step 6 (§15.5).*
 - **Q34 [routine]: a changed dump refuses its plain path too.** A claimed file that is another dump now is refused
   however it is opened, so that its saves are not written against another game. *Recommended:* keep it; the words name
-  both hashes and what to do.
+  both hashes and what to do. *Decided 2026-10-25 by the tester, otherwise: refuse only when the game is opened as the
+  package. By its plain path the changed file opens and plays as a plain game, with its plain saves, and the package is
+  marked changed; built in §17.*
 
 ---
 
@@ -2148,8 +2167,10 @@ As §5.5's table has it:
 - **A state's record** names the patched image's MD5 and size, in both runtimes, so that a state made on one list
   is "a different copy" to another (`EmuSen_Settings_Reference.md` §4.37); Mistress compares against the same MD5.
 - **`games.db`** keeps the dump's identity, so adding a patch keeps the game's favourites, play time and edits.
-- **Saves.** §5.5 keeps them apart only through the state's record; the battery save is the package's, patched or not
-  (Q35).
+- **Saves.** ~~§5.5 keeps them apart only through the state's record; the battery save is the package's, patched or
+  not (Q35).~~ *Decided 2026-10-25 (Q35): no sharing.* A patched game's battery saves, own save media and states are
+  its own, named by the list's save key, in both runtimes; the original's are never read or written by it (§5.5,
+  built in §16).
 
 ### 15.5 *Make Package* and *Add Patch* in Mistress
 
@@ -2244,7 +2265,9 @@ whose list had gained *Game Package…*; recorded again, the specification's cla
 - **Q35 [decision]: a package's battery save is shared by the game patched and unpatched.** One file is claimed by one
   package, so a patch added to a package that has been played runs the hack on the original's save; §5.5 keeps them
   apart only in the state's record. *Recommended:* keep it for linked packages, and say so in the window and `man
-  pkg`; at step 7 a hack becomes a self-contained package of its own, with its own saves.
+  pkg`; at step 7 a hack becomes a self-contained package of its own, with its own saves. *Decided 2026-10-25 by the
+  tester: no sharing. A patched game keeps its battery saves, save media and states apart from the original's; built
+  in §16.*
 - **Q36 [decision]: a patch made for the headerless form is refused, not applied to that form.** *Recommended:* keep
   the refusal; applying it would hand the core an image other than the dump, which is a choice per console for a later
   page.
@@ -2253,3 +2276,176 @@ whose list had gained *Game Package…*; recorded again, the specification's cla
 - **Q38 [routine]: the checksummed formats' cost is RomHash's CRC-32**, a byte-at-a-time table at about 0.6 GB/s, two
   passes over a 64 MiB image at load. *Recommended:* leave it; a slicing CRC in `RomHash` is a measured change of its
   own if a 64 MiB patched game's launch is ever seen to lag.
+
+---
+
+## 16. Built 2026-10-25: a patched game's own saves
+
+*Measured on the development desktop on 2026-10-25. Every test made its images in a temporary folder (the test core's
+images and IPS patches written in the test); nothing was read from or written to the ROM library.* Marks as at the
+top: what was run is [M].
+
+**The decision** [C, decided 2026-10-25 by the tester, §15.9 Q35]: a package's battery save is not shared by the game
+patched and unpatched. A game opened with its patch list applied keeps its battery saves, its own save media (the
+*Per game* rule, `EmuSen_SaveMedia.md` §3.3) and its save states apart from the same package opened unpatched, so that a
+hack can never write the original game's save. §5.5 and §15.4 state it as the rule.
+
+### 16.1 The names
+
+A patched game's files are in the package's own folders, by the package's name (§14.2) with `.patched-<key>` after it:
+
+| File | Unpatched | Patched |
+|---|---|---|
+| Battery save, and each battery file by its suffix | `saves/<name>.srm` | `saves/<name>.patched-<key>.srm` |
+| A *Per game* medium | `saves/<name><suffix>` | `saves/<name>.patched-<key><suffix>` |
+| State, slot *n*, resume state, pictures | `states/<name>[.slotN].state`, `.resume.state`, `.png` | `states/<name>.patched-<key>[.slotN].state`, … |
+
+**`<key>` is the list's save key**: the first eight hexadecimal digits of §15.2's `patches_sha1` rule (the SHA-1 of one
+line a patch, in order, of its format, a space and its file's SHA-1, each ended by a line feed), taken over the list as
+its entries record it. An entry with no recorded SHA-1, which only a hand-written manifest can have since `pkg patch add`
+always records one, is keyed by its file's name in its place. An empty list has no key, and its game is the original.
+
+**Why this scheme** [C]:
+
+1. *Stable across rename and move*, step 5's rule (§14.2): the key is made of the patches' contents and order only,
+   never a path or a file name, and the package's name already does not change when its game moves. The list's own
+   file names were rejected for that reason: §15.2 renames the copies to keep RetroArch's convention as the list
+   changes.
+2. *Each list its own, and the same list always the same*: another file, another order or another patch gives another
+   key; adding a patch and removing it again returns to the first list's saves; removing every patch returns to the
+   original's.
+3. *Cheapest to know at open*: it is read from the manifest with no image hashed, where the patched image's own SHA-1
+   would need the list applied first (the runtimes apply it after the battery files are named) or a `patched` block
+   that a hand edit may have left stale; and it is recomputed from the entries, not read from `patches_sha1`, for the
+   same reason.
+4. *Eight digits* keep the name readable; two lists of one package share a key with odds of 2^-32 a pair.
+
+**Resolved once at open**, as the package root is (§14.2): `ManagedRuntime.Open` and Crystal's `open` read the key
+beside the package and pass it to the engine's battery files (`CoreOptions.SaveKey`, `Engine::save_key`) and to the
+session's states (`ManagedSession.SaveKey`, `Session::save_key`), so that a list changed while the game runs (from the
+*Game Package* window) never moves a running game's files; the next open takes the new list. Mistress names a resume
+state before opening by the same rule (`GamePackage.SaveKeyAt`).
+
+### 16.2 What a patched game reads first
+
+**Nothing.** §14.2's rule, the plain save read until the first write copies it in, holds for the unpatched game only:
+a patched game whose file is absent starts its save empty, and reads neither the package's original save, nor the
+plain `Saves/<console>/` one, nor their earlier homes. A hack's save layout is the hack's, and the decision is that the
+two never meet.
+
+**A save left under the shared name by step 6's build.** Between step 6 and this change a patched game wrote
+`saves/<name>.srm`, the name the unpatched game uses. No such file is in the tester's data, since no package with
+patches had been played, but one is possible in principle. It is left exactly where it is and becomes, again, the
+unpatched game's save; the patched game starts its own beside it. Nothing is moved, renamed or deleted, and which game
+last wrote the file cannot be known from the file; a player who wants a hack's progress from that build copies the
+file to `<name>.patched-<key>.srm` by hand.
+
+**Not moved**: the cheat list (`cheats.json`) stays one a package, and `pkg migrate` copies plain saves to the
+unpatched names only, since a plain save in the library is the original game's.
+
+### 16.3 Both runtimes, and the surfaces
+
+| Surface | Change |
+|---|---|
+| The platform interface | 26 → **27**: `emusen_galaxia_save_path`'s package kinds (5–7) take the save key as `extra`, eight hex digits, null or empty for the unpatched game; any other text is `EMUSEN_PLATFORM_BAD_ARGUMENT`, so a key can never name a place outside the package |
+| Galaxia, Rust | `package::{patches_key, save_key, save_key_at, is_save_key, SAVE_KEY_DIGITS}`; `saves::package_name`, and a `key` on `package_sram_path`, `package_state_path`, `package_resume_state_path` |
+| Galaxia, C# | `GamePackage.SaveKey`, `SaveKeyAt`, `SaveKeyDigits`; a `saveKey` on `SaveLibrary`'s three game paths; `SaveLibrary.Managed.PackageName` |
+| `emusen-patch` | `package::key` now composes Galaxia's `patches_key`, the rule's one owner in Rust |
+| The runtimes | `CoreOptions.SaveKey`, `BatterySave.Open`'s `saveKey`, `ManagedSession.SaveKey`; Crystal's `Engine::save_key`, `Session::save_key`, `BatterySave::open`'s `key` |
+| Mistress | the resume state's name before opening |
+
+The key's rule has two halves, `GamePackage.SaveKey` in C# and `package::save_key` in Rust, as `PatchedIdentity` and
+`package::patched` are; the parity case below holds them to one answer through the names and files both runtimes
+leave. The core ABI is unchanged.
+
+### 16.4 The gate, the tests, and the faults seeded
+
+**The gate** [M], `CrystalParityTests.A_patched_game_keeps_its_own_battery_save_and_states_apart_from_the_original_s_both_ways`,
+the test core in both runtimes, the package holding an original save and the library a plain one:
+
+1. *The patched and unpatched game reach different battery saves and states*: the package opened with an IPS list
+   names its slots `hack.patched-<key>…`, the key worked out in the test from §15.2's rule, and writes
+   `saves/hack.patched-<key>.srm` (the pad's A raises the test core's save byte); with every patch removed the same
+   package names `hack.slot2.state` and no `.patched-`.
+2. *Two lists reach different saves*: the list replaced by another IPS patch names another key, no slot path in common
+   with the first, and writes another file.
+3. *The unpatched game's save is untouched by the patched one*: the original save's bytes and time, the plain save's
+   bytes and the game file's bytes are as planted after both lists played.
+4. Both runtimes' answers and the trees they leave in `Saves`, `Packages` and the library are equal.
+
+The names' two halves are held alike for the three package kinds, with and without a key, by
+`GalaxiaParityTests.A_packaged_game_s_saves_and_states_are_named_alike_both_ways_by_the_package_s_own_name`, which also
+requires a key that is not hex digits to be refused; the key's rule by `package.rs`' save-key case, and the names by
+`saves.rs`' patched case.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| The patched name ignoring the patch list: C#'s `GamePackage.SaveKey` hashing the list's length instead of its entries | the parity case: the C# run's slots did not name `hack.patched-<key>` for the key of the list |
+| Crystal's Rust battery file sharing the original's: `BatterySave::open` naming `package_sram_path(root, None)` for a patched game | the parity case, in the Rust run: "the patched game wrote its own save", no `hack.patched-<key>.srm` written |
+
+### 16.5 Left, and for the tester
+
+- **The cheat list stays shared** between a package patched and unpatched (§16.2). A hack's addresses may differ, so
+  a cheat may misbehave, but a cheat list is not a save and writes nothing the original reads.
+
+---
+
+## 17. Built 2026-10-25: a changed dump plays by its plain path
+
+*Measured on the development desktop on 2026-10-25, over synthetic images in temporary folders.* Marks as at the top:
+what was run is [M].
+
+**The decision** [C, decided 2026-10-25 by the tester, §14.8 Q34]: a library file a package claims, whose contents
+changed since the package was made, is refused only when the game is opened as the package (its folder or its
+`package.json`), with the words naming both hashes as before. **Opened by its plain path, the changed file opens and
+plays as a plain game**, with its plain saves and states (`Saves/<console>/<stem>`, the state folder), and the
+package's are neither read nor written. The package is reported `changed` by `pkg ls` and `pkg check`, as step 5 built
+them, and its game's *Game Package* window says so.
+
+**Where** [C]: the resolution, both halves. A claimed file whose package would refuse it because its game is another
+dump resolves as a plain path with no package (`claims::resolve` in Rust through a refusal that says whether it is that
+one, `GamePackages.Managed.Resolve` in C# through an `IOException` of its own kind that the claim branch catches); a
+package opened itself, or any other refusal (a manifest that does not read, a game gone and not found), is refused as
+before. Both runtimes take the resolution at open, so both play the file plainly; every Mistress reader of
+`GamePackages.RootFor` (the resume state's name, the cheat list, the scraper's package) follows, since `RootFor` is
+the resolution. Nothing writes the manifest for a changed file: its `seen` stays the dump's, so the next open, `pkg ls`
+and `pkg check` find it changed again.
+
+**Mistress** [C]: the library list shows no package state of its own, so nothing changes there. The *Game Package*
+window, whose package `RootFor` no longer names for such a file, is given the claiming package by the index and says it
+is changed: "the game's file is not as the package recorded it (pkg check names why, most often another dump), so the
+game plays as a plain one with its plain saves, and the package refuses to open until it is checked". The library's
+*Restart* entry names the resume state by the resolution for a packaged entry, so that it agrees with the launch.
+
+**The gate** [M]:
+
+1. *A changed claimed file opens by its plain path in both runtimes and reaches the plain save*:
+   `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways`, whose last part
+   rewrites the moved game as another dump; opened by its path it names its slots in the state folder and none in the
+   package, writes `Saves/TEST/plain (moved).srm` when the pad's A raises the test core's save, and leaves the package's
+   save as it was; both runtimes' answers and files equal.
+2. *Opening the package still refuses in words*: in the same case, the package opened by its folder is refused with
+   "has SHA-1"; `GalaxiaParityTests.A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` resolves the
+   changed file plainly and refuses its package, alike in both halves; `claims.rs`' changed case does the same by the
+   folder and by `package.json`.
+3. *`pkg check` reports it changed*: `library-tool/tests/packages.rs` resolves the changed cartridge by its plain path
+   (plain, no package) and by its package (refused), and `pkg check` and `pkg ls` then still report it `changed` with
+   its hashes.
+4. *The window*: `GamePackageWindowTests.A_changed_game_resolves_as_a_plain_one_and_its_package_is_shown_changed`, a
+   package made through the window's job, its game then changed: `RootFor` names no package, the index names the
+   claimant, the package refuses, and the window says changed.
+
+**Run** [M], for §16 and this section together: `cargo test --profile test-checked` of `emusen-galaxia` (92 in all),
+`emusen-patch` (8), `emusen-crystal` (13), `emusen-platform` (40), `emusen-library-tool` (14), `emusen-library` (13) and
+`emusen-library-module` (4), all passing. WiseMan, the blast radius `blast.sh` named with `CoreAdapterTests` added for
+`CoreEngine`: 4,254 passed, 62 skipped and 6 failed, in 25 minutes. The six were `GoldenCorpusTests`, which could not
+parse `man.golden` after `man pkg`'s new paragraphs had been written into it by hand, its byte count left behind;
+recorded again through the corpus's own recording, `GoldenCorpusTests` and `ManPageTests` passed, 208.
+
+**Fault seeded**, put back:
+
+| Fault | Caught by |
+|---|---|
+| Rust's `claims::resolve` refusing a changed claimed file by its plain path, as before | `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways` (the Rust run's open refused with the hashes) and `GalaxiaParityTests.A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` (answer 16: C# plain, Rust refused) |

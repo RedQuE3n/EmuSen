@@ -288,7 +288,7 @@ namespace EmuSen.Mistress.Views
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
                 play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = otherArt.IsEnabled = package.IsEnabled = any;
-                restart.IsEnabled = any && File.Exists(ResumeStatePath(entry!.FullPath, entry.Package));
+                restart.IsEnabled = any && File.Exists(entry!.Package is null ? ResumeStatePath(entry.FullPath, null) : ResumeStatePath(entry.FullPath));
                 favourite.Text = any && _records.IsFavourite(entry!.FullPath) ? "Remove from _Favourites" : "Add to _Favourites";
                 removeArt.IsEnabled = any && OwnCoverPath(entry!) is not null;
             };

@@ -47,8 +47,10 @@ namespace EmuSen.Mistress.Views
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public GamePackageWindow() : this("", "", null, null, browse: true) { }
 
-        public GamePackageWindow(string title, string game, string? library, string? package, bool browse)
+        // refused: the package claims the game but will not open with the file as it is now, most often another dump, so the game plays as a plain one - see EmuSen_GamePackages.md §14.8 Q34.
+        public GamePackageWindow(string title, string game, string? library, string? package, bool browse, bool refused = false)
         {
+            Refused = refused;
             Title = "Game Package";
             Width = 640;
             Height = 560;
@@ -95,6 +97,8 @@ namespace EmuSen.Mistress.Views
 
         // The package's folder, null until there is one.
         public string? Package { get; private set; }
+
+        public bool Refused { get; }
 
         // Whether a package was made or its patches changed since the window opened, so the library is scanned again.
         public bool Changed { get; private set; }
@@ -238,7 +242,9 @@ namespace EmuSen.Mistress.Views
         private void Render()
         {
             bool running = _job is not null, tool = ToolAvailable();
-            _packageText.Text = Package is null ? "Not a package yet." : $"Packages/{PackagePath()}, linked to the game where it is in the library.";
+            _packageText.Text = Package is null ? "Not a package yet."
+                : Refused ? $"Packages/{PackagePath()}, changed: the game's file is not as the package recorded it (pkg check names why, most often another dump), so the game plays as a plain one with its plain saves, and the package refuses to open until it is checked."
+                : $"Packages/{PackagePath()}, linked to the game where it is in the library.";
             _make.IsVisible = Package is null;
             _make.IsEnabled = tool && !running && LibraryPath() is not null;
 

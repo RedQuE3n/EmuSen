@@ -33,7 +33,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 26;
+pub const ABI_VERSION: u32 = 27;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {

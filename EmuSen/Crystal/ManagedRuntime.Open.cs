@@ -36,9 +36,12 @@ namespace EmuSen.Crystal.Managed
                 catch (IOException refused) { throw new CrystalException(CrystalNumbers.Io, refused.Message); }
                 path = resolved.Game;
             }
+            // A patched game's saves and states are named by its list's key, read once here as the package is - see EmuSen_GamePackages.md §5.5.
+            string? saveKey = Galaxia.Media.GamePackage.SaveKeyAt(resolved?.Package);
             var options = new CoreOptions
             {
                 PackageRoot = resolved?.Package,
+                SaveKey = saveKey,
                 BatteryRamDisabled = (with.Flags & CrystalNumbers.OpenNoBattery) != 0,
                 AudioBufferMaxSamples = with.AudioBufferMaxSamples > 0 ? (int)Math.Min(with.AudioBufferMaxSamples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
             };
@@ -46,7 +49,7 @@ namespace EmuSen.Crystal.Managed
             Func<IDeviceLend?>? lender = with.Device == 0 ? null : () => PlatformLend.Make(with.Device, refusals.Note);
             CoreBundle bundle = path is not null ? OpenGame(path, engine, options, lender) : StartConsole(console!, engine, options, lender, out console);
             string name = (bundle.Core as Cores.Native.CoreEngine)?.Console is { Length: > 0 } running ? running : console ?? CoreCatalog.ConsoleForRom(path!) ?? bundle.Core.CoreName;
-            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, with) { PackageRoot = resolved?.Package };
+            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, with) { PackageRoot = resolved?.Package, SaveKey = saveKey };
             session.ApplyStored(key => GetSettingOf(session, key));
             Add(session);
             return session;

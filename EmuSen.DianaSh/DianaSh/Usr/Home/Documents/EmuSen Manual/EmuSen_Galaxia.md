@@ -391,7 +391,8 @@ Galaxia's, since it is where a game's files are (§3.8, §3.10): `EmuSen.Galaxia
   - anything else opens as it is, as before packages.
 
   A claimed game whose size or time differs from `seen` is hashed: still the dump, `seen` is rewritten; another
-  dump is refused with words naming both hashes. The hashes compared are `dump.file`, else the sheet's for a disc
+  dump is refused with words naming both hashes when the package is opened itself, and the file opened by its plain
+  path opens as it is, a plain game with its plain saves (decided 2026-10-25, `EmuSen_GamePackages.md` §17). The hashes compared are `dump.file`, else the sheet's for a disc
   game, else for a zip the archive's own in `container`; a CHD's dump is the original's, so a converted disc is not
   hashed at open (the CHD tool checks it). A package whose game is gone and not found by size and hashes in the
   library is refused with words.
@@ -539,6 +540,9 @@ GameCheats.For(console, romPath, packageRoot)                      // <package>/
   the plain `Saves/<console>/<stem>` save (then its earlier homes) as the one to read, as it already did for a save of
   2026-09-28's move, and `Settle` copies it in; `GameCheats` reads the console's list until the package has its own.
   Nothing is removed. `pkg migrate` copies them all at once (`man pkg`).
+- **A patched game's are its own** (decided 2026-10-25, `EmuSen_GamePackages.md` §16): with a save key, the
+  package's patch list's, each name is `<name>.patched-<key>`, and nothing kept before is read for it. The key is a
+  parameter beside the package root (`saveKey`), resolved once at open as the root is.
 - **Both halves**: `SaveLibrary.Managed`'s three `Package…PathFor` and `saves.rs`' `package_sram_path`,
   `package_state_path` and `package_resume_state_path`, held alike by the parity class; `GameCheats`' package file is
   its C# alone, since only Mistress keeps a cheat list.

@@ -3495,3 +3495,12 @@ over generated trees; the runtimes pass the tree's `Packages` and `Compressed` a
 
 **Tested**: `cargo test --profile test-checked` of `emusen-galaxia`, `emusen-platform`, `emusen-crystal`,
 `emusen-library`, `emusen-library-tool` and `emusen-library-module`; the parity cases of `EmuSen_Galaxia.md` §3.11.
+
+## 41. Interface 27, 2026-10-25: a patched game's own saves
+
+Interface 26, `emusen_patch_package_image`, is recorded in `EmuSen_GamePackages.md` §15.6. Interface 27 adds no
+function: `emusen_galaxia_save_path`'s package kinds (5–7) take the patch list's save key as `extra`, eight hex digits,
+and name a patched game's files `<name>.patched-<key>`; null or empty is the unpatched game, as before, and anything
+else is `EMUSEN_PLATFORM_BAD_ARGUMENT`. A host of 26 would pass no key and share the original's save, which is why the
+number moved, in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. Recorded in
+`EmuSen_GamePackages.md` §16.

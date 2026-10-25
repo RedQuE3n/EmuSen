@@ -88,6 +88,8 @@ pub struct Session {
     pub game_path: Option<String>,
     /// The package the game opened as, whose folder keeps its states (EmuSen_GamePackages.md §3.5).
     pub package: Option<String>,
+    /// The patch list's save key the game opened with, naming its states apart (EmuSen_GamePackages.md §5.5).
+    pub save_key: Option<String>,
     pub console: String,
     /// The console a session started empty was asked for.
     pub empty_console: Option<String>,
@@ -140,6 +142,7 @@ impl Session {
             engine: Mutex::new(engine),
             game_path,
             package: None,
+            save_key: None,
             console,
             empty_console,
             opened,

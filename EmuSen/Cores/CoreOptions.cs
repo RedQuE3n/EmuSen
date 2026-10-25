@@ -12,6 +12,9 @@ namespace EmuSen.Cores
         // The package the game opened as, whose folder keeps its battery saves; null for a plain file - see EmuSen_GamePackages.md §3.5.
         public string? PackageRoot { get; init; }
 
+        // The patch list's save key, naming a patched game's battery files apart from the original's; null unpatched - see EmuSen_GamePackages.md §5.5.
+        public string? SaveKey { get; init; }
+
         public static CoreOptions Default { get; } = new();
 
         // What audio.json asks of the cores, as the frontends read it at start.

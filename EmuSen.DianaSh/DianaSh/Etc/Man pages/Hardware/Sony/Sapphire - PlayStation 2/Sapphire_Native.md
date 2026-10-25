@@ -3102,11 +3102,27 @@ left**: `hh.sh guard` found no route to the handheld on 2026-10-25.
 
 ### 25.8 The blast radius (measured 2026-10-25)
 
-BLAST_TABLE
+`blast.sh WiseMan sapphire-s23`'s crates, `cargo test --release`, `EMUSEN_DISC_CHDMAN` named, and its WiseMan filter, one
+run at a time at CPU weight 20:
+
+| Where | Result |
+|---|---|
+| `emusen-disc` | **42 of 42**: 18 unit, 3 damage, 13 disc, 8 DVD |
+| Sapphire | lib **32 of 32** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `interpreter` 23, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14; `cdvd` also under `test-checked`; clippy clean |
+| Diamond, Diamond's `v1` | **306 of 306**, **5 of 5**: the crate's first user, unchanged |
+| Nephrite | **194 of 194**: its second, unchanged |
+| `emusen-core-conform`, `Platform/galaxia`, `library`, `library-tool`, `platform` | 36, 87, 11, 9 and 40, every one passing |
+| WiseMan (`Diamond`, `Galaxia`, `GameRecords`, `Library`, `NephriteTests`, `SapphireRunnerTests`, `SapphireTests`) | **562 passed, 0 failed, 11 skipped**: eight `SettingPathsOpenTests` and three big-picture tools, skipped by their own conditions, none near the disc |
 
 ### 25.9 Seeded faults (2026-10-25)
 
-FAULT_TABLE
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the layer break placed one sector late (`find_layer_break` answering V + 1) | `emusen-disc`'s `a_dual_layer_images_second_volume_places_the_layer_break` and `whole_data_frames_are_read_as_stored_and_told_by_their_first_id`; the drive's `a_dvd_reads_sector_for_sector_with_the_layer_break_placed`, `break_ends_a_read_and_get_toc_reports_the_disc` and `an_image_opens_as_the_playstation_2s_disc_kinds` |
+| F2 | a DVD sector header's layer bit left clear (`sector_information` dropping b24) | `ecma267`'s `the_sector_information_and_numbers_are_section_16_and_25s`, `a_dual_layer_images_second_volume_places_the_layer_break`, the drive's `a_dvd_reads_sector_for_sector_with_the_layer_break_placed` |
+| F3 | a seek timed from the wrong layer (`radius` giving layer 1's sectors their logical place) | `a_dual_layer_seek_is_measured_across_the_radius`, `a_dual_layer_seek_is_timed_across_the_radius` |
+
+Each was applied, `emusen-disc`'s unit and DVD tests and the drive's module run, and the file restored from git [M].
 
 ### 25.10 What the plan got wrong, or left open
 

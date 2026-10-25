@@ -42,12 +42,12 @@ pub enum Target {
     Ram(u32),
     Scratch(u32),
     /// The I/O registers at 1F400000h-1F4FFFFFh (CDVD), 1F801000h-1F80FFFFh and the SPU2's 1F900000h-1F9007FFh, the rest
-    /// of 1F900000h-1F90FFFFh reading zero as D-61's I/O gaps do (the BIOS writes 1F900B60h; Sapphire_Disputes.md D-326).
+    /// of 1F900000h-1F90FFFFh reading zero as D-61's I/O gaps do (the BIOS writes 1F900B60h; Sapphire_Disputes.md D-346).
     Io(u32),
     /// The SIF's registers at 1D000000h, S22's.
     Sif(u32),
     /// 1E000000h-1EFFFFFFh, the place of the DVD player's ROMs, whose images are not taken (Sapphire_Plan.md §5.9): on the
-    /// bus, reading zero, taking writes without effect (Sapphire_Disputes.md D-326).
+    /// bus, reading zero, taking writes without effect (Sapphire_Disputes.md D-346).
     Absent,
     Rom(u32),
     CacheControl,
@@ -304,7 +304,7 @@ impl IopBus {
         self.horizon = self.horizon.min(self.next);
     }
 
-    /// The IOP's own units at the processor's reset (Sapphire_Native.md §35.2, D-320): the INTC, the DMAC, the six
+    /// The IOP's own units at the processor's reset (Sapphire_Native.md §35.2, D-340): the INTC, the DMAC, the six
     /// timers and the cache control; RAM, the SIF and the devices beside the IOP keep their state.
     pub fn reset_units(&mut self) {
         let t = self.now * IOP;
@@ -357,7 +357,7 @@ impl IopBus {
     }
 
     /// The EE's write to a SIF register at `offset`, which may raise the IOP's interrupt (Sapphire_Disputes.md D-141);
-    /// the IOP's reset line when the write changes it, CTRL's bit 19 asserting it while set (D-320).
+    /// the IOP's reset line when the write changes it, CTRL's bit 19 asserting it while set (D-340).
     pub fn sif_write_from_ee(&mut self, offset: u32, v: u32) -> Option<bool> {
         if self.sif.ee_write(offset, v) {
             self.intc.raise(sif::IOP_SOURCE);
@@ -410,7 +410,7 @@ impl IopBus {
 
     /// An I/O register's write, the units brought to the clock first; a run of instructions stops after it, since it
     /// may change what is scheduled. A halfword or byte written to a DMA channel's register changes only its own lanes
-    /// (the BIOS writes BCR's upper half alone; Sapphire_Disputes.md D-327).
+    /// (the BIOS writes BCR's upper half alone; Sapphire_Disputes.md D-347).
     fn write_io(&mut self, p: u32, v: u32) {
         let t = self.now * IOP;
         self.run_units(t);

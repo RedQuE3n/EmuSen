@@ -28,7 +28,7 @@ fn run(p: &s22::Pair) -> System {
 
 /// `s24-sif1-slice` on PCSX2 2.8.2 (measured 2026-10-25): the IOP's SIF1 started with mode 1 and bit 8 reads its tags
 /// from the FIFO as a chain does, `d0` untouched, each packet at its tag's address, the channel stopped at the end tag
-/// (D-323). DICR2's flag is the one word kept apart: PCSX2 sets it with the channel's mask clear, where ps2tek's "IOP
+/// (D-343). DICR2's flag is the one word kept apart: PCSX2 sets it with the channel's mask clear, where ps2tek's "IOP
 /// DMA" says a flag is raised only under its mask, which S21 follows.
 #[test]
 fn sif1_with_mode_1_and_bit_8_reads_the_ees_tags_as_a_chain() {
@@ -48,7 +48,7 @@ fn sif1_with_mode_1_and_bit_8_reads_the_ees_tags_as_a_chain() {
 
 /// `s24-sif0-odd` on PCSX2 2.8.2 (measured 2026-10-25): a six-word IOP packet under an EE tag of two quadwords fills both,
 /// and the next packet lands at its own tag's address; the IOP's MADR moves by the six alone. The two words after the six
-/// are zeros here and two earlier words of the packet on PCSX2, the one difference (D-325).
+/// are zeros here and two earlier words of the packet on PCSX2, the one difference (D-345).
 #[test]
 fn a_sif0_packet_short_of_its_quadwords_is_padded_and_the_next_stays_aligned() {
     let p = s24::sif0_odd();
@@ -66,7 +66,7 @@ fn a_sif0_packet_short_of_its_quadwords_is_padded_and_the_next_stays_aligned() {
 
 /// The EE's CTRL bit 19 holds the IOP in reset while set and releases it at its reset vector when cleared, its own
 /// units reset and its RAM kept (ps2tek "BIOS PS Compatibility": "Bit 19 is set in SIF_CTRL ... to assert the reset line
-/// on the IOP ... then unsets bit 19 ... allowing the IOP to run"; D-320).
+/// on the IOP ... then unsets bit 19 ... allowing the IOP to run"; D-340).
 #[test]
 fn ctrl_bit_19_holds_the_iop_in_reset_until_it_clears() {
     use sapphire::ee::Bus;
@@ -86,8 +86,8 @@ fn ctrl_bit_19_holds_the_iop_in_reset_until_it_clears() {
 }
 
 /// Power-on values the player's BIOS relies on without writing them: D_ENABLER 1201h, as ps2tek says the BIOS expects
-/// (D-321), and DMACINTEN with channel interrupts on (D-324); the memory controller answers the RDRAMs' identity reads
-/// (D-322).
+/// (D-341), and DMACINTEN with channel interrupts on (D-344); the memory controller answers the RDRAMs' identity reads
+/// (D-342).
 #[test]
 fn the_power_on_values_the_bios_relies_on() {
     use sapphire::ee::Bus;
@@ -103,8 +103,8 @@ fn the_power_on_values_the_bios_relies_on() {
 }
 
 /// A halfword written to a DMA channel's register changes its own half alone: BCR's block count written after its block
-/// size (D-327); the DVD player's ROMs' place and the SPU2's window past its registers read zero without a bus error
-/// (D-326).
+/// size (D-347); the DVD player's ROMs' place and the SPU2's window past its registers read zero without a bus error
+/// (D-346).
 #[test]
 fn halfword_dma_writes_merge_and_the_absent_places_read_zero() {
     use blackmoon_r3000::{Bus as IopBus, Size};

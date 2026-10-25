@@ -1,6 +1,6 @@
 //! The project's S24 programs (Sapphire_Native.md §35): measurement programs for what the player's BIOS showed the
 //! board lacked, in S22's paired form (`tests/s22`). `s24-sif1-slice` asks how the IOP's SIF1 channel reads the EE's
-//! packets when its CHCR has bit 8 and transfer mode 1, the value the BIOS was seen to write (D-323); its record is a
+//! packets when its CHCR has bit 8 and transfer mode 1, the value the BIOS was seen to write (D-343); its record is a
 //! measurement, every word ungraded.
 
 #![allow(dead_code)]
@@ -54,7 +54,7 @@ pub fn sif1_slice() -> Pair {
 /// `s24-sif0-odd`: an IOP chain of two four-word tags with bit 8, the first IOP tag of six words carrying an EE cnt tag
 /// of two quadwords, the second of four words carrying an EE end tag of one; the IOP's first data area holds eight
 /// distinct words, so the record shows whether the six are padded to the quadwords the EE expects, and from where. The
-/// EE records its two areas, its channel's MADR, QWC and CHCR; the IOP its channel's MADR, TADR and CHCR (D-325).
+/// EE records its two areas, its channel's MADR, QWC and CHCR; the IOP its channel's MADR, TADR and CHCR (D-345).
 pub fn sif0_odd() -> Pair {
     use ee::*;
     use s21::reg::{chcr as ichcr, madr as imadr, tadr as itadr};
@@ -98,7 +98,7 @@ pub fn sif0_odd() -> Pair {
 }
 
 /// `s24-statx`, an IOP program: each core's STATX read after ATTR is written with each transfer mode (bits 5-4) and
-/// with low bits set, then after a sixteen-word DMA write to core 1 on channel 7; every word recorded, ungraded (D-329).
+/// with low bits set, then after a sixteen-word DMA write to core 1 on channel 7; every word recorded, ungraded (D-349).
 pub fn statx() -> s21::Program {
     use s21::reg::{DPCR2, bcr, chcr, madr};
     let mut p = s21::Program::new("s24-statx");

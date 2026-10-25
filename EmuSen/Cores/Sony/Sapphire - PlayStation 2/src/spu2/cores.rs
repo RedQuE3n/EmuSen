@@ -133,7 +133,7 @@ impl Core {
 
     /// STATX as psx-spx gives the PlayStation SPU's ("SPUSTAT"): ATTR's bits 5-0 (applied at once [C]), the IRQ flag in
     /// bit 6 and ATTR's bit 5 again in bit 7; the transfers being immediate, the busy and request bits read 0. The
-    /// player's BIOS waits on it after a transfer; PCSX2 reads it as 0 throughout (Sapphire_Disputes.md D-266, D-329).
+    /// player's BIOS waits on it after a transfer; PCSX2 reads it as 0 throughout (Sapphire_Disputes.md D-266, D-349).
     pub fn status(&self) -> u16 {
         let a = self.attr();
         a & 0x3F | u16::from(self.irq) << 6 | (a >> 5 & 1) << 7

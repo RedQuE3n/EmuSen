@@ -1,4 +1,4 @@
-# The S commands the player's BIOS was seen to send, with its parameters (Sapphire_Native.md §35.3, D-328): a table at
+# The S commands the player's BIOS was seen to send, with its parameters (Sapphire_Native.md §35.3, D-348): a table at
 # `cmds` of entries of five words, the command, the parameter count and up to three words holding the parameter bytes
 # low first; each sent after the result FIFO is drained, then the S status, the count of result bytes (at most 16)
 # and the bytes read until the status says none is left. 20 words an entry from 00200000h, then the done word.

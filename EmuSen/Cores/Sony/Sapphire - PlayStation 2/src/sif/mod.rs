@@ -37,7 +37,7 @@ pub const CTRL_IOP: u32 = 0xF000_0002;
 /// The bit of the EE's write to CTRL that raises the IOP's interrupt 1, the one witness's reading (D-141).
 pub const CTRL_IOP_INTERRUPT: u32 = 1 << 18;
 /// The bit of the EE's write to CTRL that resets the IOP, the referee's behaviour (D-141), taken with the IOP's boot path
-/// as decided 2026-10-25 by the tester (Sapphire_Disputes.md D-320).
+/// as decided 2026-10-25 by the tester (Sapphire_Disputes.md D-340).
 pub const CTRL_IOP_RESET: u32 = 1 << 19;
 /// The IOP's interrupt source the EE's CTRL write raises: ps2tek's IRQ1, "GPU (used in PSX mode)" (D-141).
 pub const IOP_SOURCE: u32 = 1;
@@ -95,7 +95,7 @@ pub struct Sif {
     pub msflg: u32,
     pub smflg: u32,
     pub bd6: u32,
-    /// The IOP's reset line as the EE's CTRL bit 19 last set it (D-320).
+    /// The IOP's reset line as the EE's CTRL bit 19 last set it (D-340).
     pub reset_line: bool,
     /// SIF0's, SIF1's and SIF2's FIFOs.
     pub fifo: [Fifo; 3],

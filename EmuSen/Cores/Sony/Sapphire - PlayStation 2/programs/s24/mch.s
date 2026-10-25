@@ -1,4 +1,4 @@
-# The memory controller's serial interface to the RDRAMs (Sapphire_Native.md §35.3, D-322): a table of commands at
+# The memory controller's serial interface to the RDRAMs (Sapphire_Native.md §35.3, D-342): a table of commands at
 # `cmds`, each a pair of words, the value for MCH_DRD (1000F440h) and then for MCH_RICM (1000F430h, bit 31 the start);
 # after each, MCH_RICM read until bit 31 clears (at most 1000 reads), then both registers read. Four words a command
 # from 00200000h: the RICM written, the polls left, RICM read, DRD read. A pair of zero words ends the table; then the

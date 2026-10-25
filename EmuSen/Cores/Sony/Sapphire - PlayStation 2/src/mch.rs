@@ -1,4 +1,4 @@
-//! The memory controller's serial interface to the RDRAMs (Sapphire_Native.md §35.3; Sapphire_Disputes.md D-322): the
+//! The memory controller's serial interface to the RDRAMs (Sapphire_Native.md §35.3; Sapphire_Disputes.md D-342): the
 //! BIOS sends a serial command through MCH_RICM (1000F430h; the serial address in bits 16-27, the serial operation in
 //! bits 6-9, the device in bits 0-4, bit 31 the start) and reads the answer at MCH_DRD (1000F440h), which it also
 //! writes with the data of a serial write [R ps2tek "EE RDRAM initialization", the registers' names and fields]. The
@@ -12,7 +12,7 @@ pub const DRD: u32 = 0x1000_F440;
 
 /// The RDRAMs on the serial chain: two of 128 Mbit for 32 MiB [A, ps2tek "Memory Map"; M PCSX2].
 pub const DEVICES: u8 = 2;
-/// The device-identity answer, and the two configuration registers' values [M PCSX2, D-322].
+/// The device-identity answer, and the two configuration registers' values [M PCSX2, D-342].
 pub const IDENTITY: u32 = 0x1F;
 pub const CONFIG_A: u32 = 0x0D0D;
 pub const CONFIG_B: u32 = 0x0090;

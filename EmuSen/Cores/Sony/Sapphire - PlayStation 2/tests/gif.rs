@@ -220,7 +220,7 @@ fn the_fifo_holds_sixteen_qwords_and_the_gif_paces_the_dma() {
 
 /// PATH1's port tells VU1 its packet's end from the packet in VU1's memory (an arbitration cycle, a cycle a GIFtag and
 /// a PACKED qword), a second kick starting behind it; a packet with no EOP in the memory yet is told one pass over it,
-/// since the VU may complete it while PATH1 reads (D-288, D-331).
+/// since the VU may complete it while PATH1 reads (D-288, D-351).
 #[test]
 fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     use sapphire::clock::BUS;
@@ -297,7 +297,7 @@ fn the_mskpath3_console_text_follows_from_gif_stat() {
 
 /// A GIFtag with NLOOP 0 outputs nothing (§7.2.1), so PATH3 holding the GIF with only such tags behind it gives it up
 /// when its data stops, and a kick waiting meanwhile is granted; once PATH3 has sent data the rule of D-280 holds and
-/// it keeps the GIF (D-330).
+/// it keeps the GIF (D-350).
 #[test]
 fn a_path3_packet_that_has_output_nothing_does_not_hold_the_gif() {
     use sapphire::gif::Gif;

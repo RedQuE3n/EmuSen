@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(m.frames, 2);
     }
 
-    /// The drive answers the region query with the console's own market (D-328).
+    /// The drive answers the region query with the console's own market (D-348).
     #[test]
     fn the_drive_reports_the_consoles_market() {
         let want = [(Market::Japan, crate::cdvd::REGION_JAPAN), (Market::Americas, crate::cdvd::REGION_AMERICAS), (Market::Europe, crate::cdvd::REGION_EUROPE)];

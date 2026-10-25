@@ -52,7 +52,7 @@ impl Iop {
         self.held = false;
     }
 
-    /// The processor's reset (Sapphire_Disputes.md D-320): at the reset vector BFC00000h with SR's BEV set, as Diamond's
+    /// The processor's reset (Sapphire_Disputes.md D-340): at the reset vector BFC00000h with SR's BEV set, as Diamond's
     /// R3000A starts, its own units reset with it; held while the boot ROM is empty, and by the board while the EE holds
     /// the reset line through the SIF's CTRL bit 19, released when it clears the bit.
     pub fn reset(&mut self) {

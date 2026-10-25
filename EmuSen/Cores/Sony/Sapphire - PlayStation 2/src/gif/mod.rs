@@ -254,7 +254,7 @@ impl Gif {
                         continue;
                     }
                     let Some(&(w, arrived)) = self.fifo.front() else {
-                        // A packet that has output nothing does not hold the GIF while PATH3's data stops (D-330).
+                        // A packet that has output nothing does not hold the GIF while PATH3's data stops (D-350).
                         if !self.output && !self.packet[Path::Three as usize].open {
                             self.owner = None;
                             continue;
@@ -497,7 +497,7 @@ impl Path1 for Path1Port {
             u128::from_le_bytes(data[a..a + 16].try_into().unwrap())
         };
         // A packet whose EOP is not yet in VU1's memory is completed as PATH1 reads it (D-288); the VU is told one pass
-        // over the memory, never a time that cannot come (Sapphire_Disputes.md D-331).
+        // over the memory, never a time that cannot come (Sapphire_Disputes.md D-351).
         let end = start + BUS * (1 + packing::cycles(read, u32::from(addr), qwords).unwrap_or(u64::from(qwords)));
         self.kicks.push_back((addr, at, end));
         self.free = end;

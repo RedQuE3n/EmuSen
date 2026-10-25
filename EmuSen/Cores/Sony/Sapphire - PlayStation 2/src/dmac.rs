@@ -33,7 +33,7 @@ pub const D_STADR: u32 = 0x1000_E060;
 pub const D_ENABLER: u32 = 0x1000_F520;
 /// D_ENABLE's value at power-on: CPND clear, as the EE User's Manual gives it, and the bits it leaves undefined as ps2tek
 /// says the BIOS expects them, 1201h ("SCPH-39001 (and other BIOSes?) seems to expect D_ENABLER to be set to 1201h upon
-/// boot"); with zero the player's BIOS stops before its memory controller (Sapphire_Disputes.md D-321).
+/// boot"); with zero the player's BIOS stops before its memory controller (Sapphire_Disputes.md D-341).
 pub const ENABLE_AT_RESET: u32 = 0x1201;
 pub const D_ENABLEW: u32 = 0x1000_F590;
 

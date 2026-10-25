@@ -5392,13 +5392,13 @@ streams.
 - The state format's new contents: S30.
 ## 35. Stage S24, the player's BIOS to its menu (2026-10-25)
 
-*Numbered §35 and its disputes from D-320, since S27 (§34, from D-300) is built beside it.*
+*Numbered §35 and its disputes from D-340, since S27 (§34) was built beside it and took D-300 to D-326.*
 
 ### 35.1 In one paragraph
 
 The plan's §7 row S24, its first half, on the tester's go of 2026-10-25. **`machine` now holds the board**
 (`board::System`, the EE core and every unit of S6 to S26), the player's BIOS in the boot ROM at 1FC00000h for the EE and
-the IOP alike, both processors started at their reset vectors, the IOP's reset line on the SIF's CTRL bit 19 (D-320), the
+the IOP alike, both processors started at their reset vectors, the IOP's reset line on the SIF's CTRL bit 19 (D-340), the
 drive of S23 joined to the IOP's bus (its registers at 1F402000h, channel 3, IRQ 2), the pads and cards of S25 on SIO2,
 and the console's market taken from the BIOS entry the player's file came in. The EEPROM is the console medium `ps2.nvm`,
 one file per console model, blank (all zeros) until the BIOS writes it, read and written through S23's S commands.
@@ -5408,7 +5408,7 @@ OSDSYS's first screen, the initial setup's "Select language", 11.5 seconds of co
 at 12.0), through the Sony Computer Entertainment animation and both logos; **the picture equals PCSX2's on the same BIOS
 but for the date and time OSDSYS draws in the top corners on Sapphire** (§35.8), and **the menu answers the pad** (§35.9).
 Fourteen behaviours of the board were missing or wrong on the way, each found from the reports, built from a document or
-measured on PCSX2, and recorded (D-320 to D-331); five exact speed changes made a boot of about ten minutes possible
+measured on PCSX2, and recorded (D-340 to D-351); five exact speed changes made a boot of about ten minutes possible
 (§35.7). S10 (the EE's ps2autotests by fast boot) is next and attaches where §35.11 says. No emulator, SDK, loader or
 ps2autotests source was read; the BIOS image was handed to the machine and to PCSX2 by path, never opened, hashed or
 analysed, and no program counter, instruction or memory holding BIOS code or data was logged or read.
@@ -5431,7 +5431,7 @@ analysed, and no program counter, instruction or memory holding BIOS code or dat
   the drive's interrupt's rise, its events among the bus's); a held IOP's units still run, so the SPU2 makes its sound
   and the timers count with no BIOS.
 - **`src/cdvd/mod.rs`**: `cdvd::Ports`, channel 3 taking the buffered sector four bytes a word; the region answer and the
-  boot commands (D-328); counts of the S and N commands received and each S command's last parameters, the drive's own
+  boot commands (D-348); counts of the S and N commands received and each S command's last parameters, the drive's own
   report.
 - **`src/v1.rs`**: the market from the setting, else from the BIOS entry given (`console_market`: the Americas', then
   Europe's, then Japan's); the BIOS loaded when the market's entry is given, so a setting naming another market starts
@@ -5439,7 +5439,7 @@ analysed, and no program counter, instruction or memory holding BIOS code or dat
   and sticks handed to the pad in their port (`Machine::sync_pad`); the cards in SIO2's slots; the EEPROM's files
   (§35.5); the description's words now say the console starts to its menu.
 - **`src/reports.rs`**, the hardware's reports (§35.4); **`src/mch.rs`**, the memory controller's serial interface
-  (D-322).
+  (D-342).
 - **No new cross-component dependency.** `blackmoon-r3000` was already a dependency; the tests reach its `Bus` trait.
 
 ### 35.3 Firmware, the market and the drive
@@ -5447,13 +5447,14 @@ analysed, and no program counter, instruction or memory holding BIOS code or dat
 The three entries of §5.9 are unchanged (S1, S2): 4,194,304 bytes, `required: false`, each with its market's retail MD5s,
 by which the host finds a player's file whatever its name; the core never reads an image for anything but running it.
 The console's market is the entry's: on *Automatic* a European file makes a European console, PAL. The drive answers the
-region query (S command 36h) with that market's parameters, measured on PCSX2 with each gate image (D-328), and reports
+region query (S command 36h) with that market's parameters, measured on PCSX2 with each gate image (D-348), and reports
 every disc as authenticated as §5.6 says; no disc is put in the drive at this stage, an image's disc being S29's (and
 G10's) work, so the BIOS boots to its menu with the tray closed and empty.
 
 ### 35.4 What the boot was allowed to show, and what it showed
 
-`Sapphire_Plan.md` §1.4 and the brief allow the emulated hardware's own reports and nothing of the BIOS's code. The board
+`Sapphire_Plan.md` §1.4 and the tester's rules for this stage allow the emulated hardware's own reports and nothing of
+the BIOS's code. The board
 keeps (`reports::Reports`): every access to a register no unit answers or an address no device holds, by processor,
 address and direction, with its count, first and last cycle and last value written, KPUTCHAR's values never kept (they
 are the BIOS's text); on request, the same counts for the registers the units do answer; the EE's and the IOP's
@@ -5464,17 +5465,17 @@ the pictures and prints these reports and registers; nothing else. The boot, run
 
 | Where it stopped | What the reports showed | The cause, and the rule built |
 |---|---|---|
-| The EE, 2.3 ms after power-on | uncached fetches from the boot ROM alone, no RAM access, no register after reading D_ENABLER | D_ENABLE 0 at reset (D-321) |
-| The EE, at the memory controller | MCH_RICM written, MCH_DRD read once, then nothing | no answer from the RDRAMs (D-322) |
-| The IOP and the EE, at the first SIF packet | SIF1 started with CHCR 41000300h; the EE's packet never reached the IOP's memory | SIF1 run in slice mode (D-323); then no IRQ 3, DMACINTEN 0 (D-324) |
-| The EE, at the IOP's reply | SIF0's FIFO left two words short of the EE's quadword | the packet's padding (D-325) |
-| The IOP, rebooted | a bus error at BE000000h; later 1F900B60h | the DVD player's ROMs' place, the SPU2's window (D-326) |
-| The IOP, at the sound's setup | SPU2 channel 4's BCR written by halfwords, a transfer of 65,536-word blocks | the halfword lanes (D-327) |
-| The IOP, at the drive | S command 36h, then 22h, then 24h retried without end | the boot S commands (D-328) |
-| The IOP, after a SPU2 transfer | core 1's STATX polled 22 million times with interrupts off | STATX's bits (D-329) |
-| The EE, at the first picture | D1_CHCR polled 203 million times; VU1 running, VIF1 waiting on it; GIF_STAT APATH 3, TAG0-3 zero | PATH3 held by a zero tag (D-330), then VU1's XGKICK waiting "never" (D-331) |
+| The EE, 2.3 ms after power-on | uncached fetches from the boot ROM alone, no RAM access, no register after reading D_ENABLER | D_ENABLE 0 at reset (D-341) |
+| The EE, at the memory controller | MCH_RICM written, MCH_DRD read once, then nothing | no answer from the RDRAMs (D-342) |
+| The IOP and the EE, at the first SIF packet | SIF1 started with CHCR 41000300h; the EE's packet never reached the IOP's memory | SIF1 run in slice mode (D-343); then no IRQ 3, DMACINTEN 0 (D-344) |
+| The EE, at the IOP's reply | SIF0's FIFO left two words short of the EE's quadword | the packet's padding (D-345) |
+| The IOP, rebooted | a bus error at BE000000h; later 1F900B60h | the DVD player's ROMs' place, the SPU2's window (D-346) |
+| The IOP, at the sound's setup | SPU2 channel 4's BCR written by halfwords, a transfer of 65,536-word blocks | the halfword lanes (D-347) |
+| The IOP, at the drive | S command 36h, then 22h, then 24h retried without end | the boot S commands (D-348) |
+| The IOP, after a SPU2 transfer | core 1's STATX polled 22 million times with interrupts off | STATX's bits (D-349) |
+| The EE, at the first picture | D1_CHCR polled 203 million times; VU1 running, VIF1 waiting on it; GIF_STAT APATH 3, TAG0-3 zero | PATH3 held by a zero tag (D-350), then VU1's XGKICK waiting "never" (D-351) |
 
-The EE's CTRL bit 19 was never written on the way (D-320 rests on its test). The BIOS read the EEPROM's area 1, two
+The EE's CTRL bit 19 was never written on the way (D-340 rests on its test). The BIOS read the EEPROM's area 1, two
 blocks, and wrote nothing to it on the way to the menu.
 
 ### 35.5 The EEPROM and the pads
@@ -5587,8 +5588,8 @@ by §35.6's rule after failing on a first run that kept the memories alone.
 | F2 | a European console answering the region query with the Americas' parameters; then given the Americas' EEPROM file | `the_drive_reports_the_consoles_market`; `the_eeprom_is_the_markets_console_file` |
 | F3 | the pad's port swapped, port 1's buttons handed to port 2 | `the_buttons_and_sticks_reach_the_pad_in_their_port` |
 
-Each was applied, the tests named run, and the source restored [M]. The brief's "EEPROM's checksum wrong" has no checksum
-to break (§35.5); F2's second half stands in for it.
+Each was applied, the tests named run, and the source restored [M]. A wrong EEPROM checksum, the fault first planned,
+has no checksum to break (§35.5); F2's second half stands in for it.
 
 ### 35.11 Where S10 attaches, and what this stage does not cover
 
@@ -5610,7 +5611,7 @@ to break (§35.5); F2's second half stands in for it.
 
 ### 35.12 Questions this stage leaves
 
-1. **Q1 [decision], the S commands taken from the referee (D-328).** The BIOS needs answers to eight S commands no
+1. **Q1 [decision], the S commands taken from the referee (D-348).** The BIOS needs answers to eight S commands no
    document describes; Sapphire gives PCSX2's. *Recommended*: keep them, each measured and its parameters recorded, and
    add others only when a boot or a game shows the need, as this stage did.
 2. **Q2 [decision], the EEPROM's layout.** No permitted document gives it; the blank of zeros is the one PCSX2 accepts in

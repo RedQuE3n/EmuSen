@@ -353,7 +353,7 @@ fn an_image_opens_as_the_playstation_2s_disc_kinds() {
     assert!(kind(vec![0xA5; 5000], vec![]).is_err());
 }
 
-/// The S commands the player's BIOS sends at boot answer as PCSX2 does (D-328): 36h the console's region parameters,
+/// The S commands the player's BIOS sends at boot answer as PCSX2 does (D-348): 36h the console's region parameters,
 /// absent without a market; 1Ah with the BIOS's parameters 01h; 22h ten zeros; 24h and the others PCSX2 acknowledges
 /// 00h; a MagicGate command still absent (§5.6).
 #[test]

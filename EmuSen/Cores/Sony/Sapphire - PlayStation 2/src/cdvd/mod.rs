@@ -99,15 +99,15 @@ pub mod scmd {
     pub const READ_CONFIG: u8 = 0x41;
     pub const WRITE_CONFIG: u8 = 0x42;
     pub const CLOSE_CONFIG: u8 = 0x43;
-    /// The console's region parameters [M PCSX2, Sapphire_Disputes.md D-328].
+    /// The console's region parameters [M PCSX2, Sapphire_Disputes.md D-348].
     pub const REGION: u8 = 0x36;
-    /// Two the player's BIOS sends at boot, whose purpose no document gives [M PCSX2, D-328].
+    /// Two the player's BIOS sends at boot, whose purpose no document gives [M PCSX2, D-348].
     pub const BOOT_1A: u8 = 0x1A;
     pub const BOOT_22: u8 = 0x22;
     pub const BOOT_17: u8 = 0x17;
     pub const BOOT_1E: u8 = 0x1E;
     /// Those below 40h that PCSX2 answers with the one byte 00h, the player's BIOS sending 24h at boot and retrying it on
-    /// 80h; no document gives their purpose [M PCSX2, D-328].
+    /// 80h; no document gives their purpose [M PCSX2, D-348].
     pub const ACKNOWLEDGED: [u8; 12] = [0x0B, 0x13, 0x14, 0x16, 0x18, 0x1B, 0x1C, 0x24, 0x29, 0x31, 0x38, 0x3E];
 }
 

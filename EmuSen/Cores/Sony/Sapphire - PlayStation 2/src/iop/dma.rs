@@ -29,7 +29,7 @@ pub const DMACEN: u32 = 0x1F80_1578;
 pub const DMACINTEN: u32 = 0x1F80_157C;
 /// DMACINTEN at power-on: channel interrupts on and IRQ 3 passed to the INTC. No document gives it; the player's BIOS
 /// never writes the register and waits on SIF1's completion interrupt, so its bit 0 is set at reset [A, observed at S24;
-/// Sapphire_Disputes.md D-324].
+/// Sapphire_Disputes.md D-344].
 pub const DMACINTEN_AT_RESET: u32 = 1;
 
 /// Channel `n`'s register block: MADR, BCR, CHCR and TADR at +0, +4, +8 and +C.
@@ -117,7 +117,7 @@ impl Channel {
 
     /// The mode channel `n` runs in: SIF0 and SIF1 always in chain mode, which they "use exclusively" (ps2tek "IOP
     /// DMA"), whatever CHCR's field says; the BIOS starts SIF1 with mode 1 and bit 8, and PCSX2 then reads its tags from
-    /// the FIFO as a chain's (Sapphire_Disputes.md D-323).
+    /// the FIFO as a chain's (Sapphire_Disputes.md D-343).
     pub fn mode_of(&self, n: usize) -> u32 {
         if n == SIF0 || n == SIF1 { 3 } else { self.mode() }
     }
@@ -524,7 +524,7 @@ fn chain_tag_words(c: &Channel) -> u32 {
 
 /// The zero words SIF0 adds after a packet of `words` so that its data fills whole quadwords, which the EE's channel
 /// takes as its own tag counts them (EE Overview §2.6, §3.1.2): the BIOS sends packets of six words for two quadwords.
-/// PCSX2 fills them with earlier words of the packet; MADR moves by the words read alone (Sapphire_Disputes.md D-325).
+/// PCSX2 fills them with earlier words of the packet; MADR moves by the words read alone (Sapphire_Disputes.md D-345).
 fn sif0_padding(words: u32) -> u32 {
     words.next_multiple_of(4) - words
 }

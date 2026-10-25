@@ -16,6 +16,10 @@ own record is beside this page.
   through Diamond; the registers, the commands and the readings `test-all` forced where psx-spx is silent, the division,
   the cycles and the interlock, the fuzz against the witnesses, the observer seam, its disputes (D-13 to D-16) and the
   reading log are on that page; amidog's test waits on the pad.
+- [`BlackMoon_SPU.md`](BlackMoon_SPU.md) — `blackmoon-spu`, the SPU's voice: ADPCM, the interpolation, the envelope,
+  noise, pitch modulation and the reverb's algorithm, with sound RAM lent by the core and the IRQ address its own
+  through `Touch`. **Moved out of Diamond at Sapphire's stage S26 (2026-10-25)**, Diamond's goldens unchanged by the
+  move, sample for sample; used by Diamond's SPU and both cores of Sapphire's SPU2.
 
 ## The interface every processor keeps
 

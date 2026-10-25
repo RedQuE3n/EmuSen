@@ -2622,6 +2622,200 @@ through the reset too.
 - **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
 - **Implemented in:** stage S18's commit.
 
+### D-260. SPU2, key on and key off: KON is the pair of halfwords at 1A0h and KOFF at 1A4h of each core's block, not ps2tek's 190h and 194h, which are the voice mixes' registers
+
+- **Opened:** 2026-10-25, at stage S26, by ps2tek's I/O map against the referee.
+- **Documents read:** *ps2tek* at `1c91660`, "I/O Maps", Sound Processing Unit (SPU2): "1F900190h 4h Key ON 0/1",
+  "1F900194h 4h Key OFF 0/1", and no row for pitch modulation, noise or the voice mixes; nothing else in any permitted
+  document places them.
+- **Test program:** `s26-probe` and `s26-registers` key a voice with a looping block on at 190h, then at 1A0h, reading
+  ENVX after each.
+- **Referee:** PCSX2: ENVX 0 after the write to 190h and 3FFFh after the write to 1A0h, in both programs; `s26-mmix` and
+  `s26-mix` show 188h, 18Ch, 190h and 194h acting as the voices' dry and wet masks by side (D-262).
+- **Conclusion:** KON at 1A0h, KOFF at 1A4h, each a low halfword for voices 0–15 and a high one for 16–23; 180h PMON,
+  184h NON, 188h VMIXL, 18Ch VMIXEL, 190h VMIXR, 194h VMIXER, 198h MMIX, the PlayStation's order of these registers with
+  the mixes split by side. **Measured** on one lineage; the placements ps2tek gives that the referee confirms (19Ah
+  ATTR, 19Ch IRQA, 1A8h TSA, 1ACh the data port, 1B0h AutoDMA, 1C0h the voice addresses, 340h ENDX, 344h STATX, 760h
+  the volumes) are kept as read. The player's BIOS at S24 is the second witness: its sound driver keys voices on.
+- **Depends on it:** `spu2::regs`.
+- **Pinned by:** `the_registers_read_back_as_the_rulings_say` (`s26-registers`).
+- **Implemented in:** stage S26's commit.
+
+### D-261. SPU2, the output areas: each sample, the voices 1 and 3 of each core, core 0's output and each core's dry and wet voice sums are written into sound RAM's first 2000h halfwords, rings of 200h samples at one write position
+
+- **Opened:** 2026-10-25, at stage S26, by a census of sound RAM on the referee while voices played.
+- **Documents read:** no permitted document mentions them. *psx-spx* "SPU Memory layout" gives the PlayStation's four
+  capture buffers (CD audio left and right, voices 1 and 3) as rings of 200h halfwords at the start of sound RAM.
+- **Test program:** `s26-outputs`, `s26-rings`, `s26-mmix` (measurement programs): voices on known settings in each core,
+  then sound RAM 0–1FFFh read through core 0's DMA channel; then the gate's `s26-mix`.
+- **Referee:** PCSX2 writes, by halfword address: 400h and 600h core 0's voices 1 and 3 after their envelopes (14,279
+  at sustain 3FFFh); 800h and A00h core 0's output after MMIX's gates and its master volume (D-262), which is core 1's
+  external input; C00h and E00h core 1's voices 1 and 3; 1000h, 1200h, 1400h and 1600h core 0's dry left and right and
+  wet left and right voice sums, before MMIX; 1800h to 1E00h core 1's. Nothing at 0–3FFh in any run. In `s26-mix` 28 of
+  its 30 copies equal Sapphire's record exactly, sample for sample under rotation; one differs by one sample at the
+  ring's seam, the other by D-269's rounding.
+- **Conclusion:** Sapphire writes the same areas at one position for all, advancing a sample a sample; the sums are
+  clamped to 16 bits [C]; 0–3FFh is not written. **Measured** on one lineage, by analogy with the PlayStation's capture
+  buffers [A]; whether the console writes them is S28's to see.
+- **Depends on it:** `spu2::Spu2::tick`; every gate program, which reads its sound there.
+- **Pinned by:** `the_masks_mmix_and_master_volume_mix_as_recorded_in_the_output_areas`.
+- **Implemented in:** stage S26's commit.
+
+### D-262. SPU2, the mix: MMIX gates the external input, the sound data input and the voices, wet and dry, right and left, from bit 0; AVOL is the external input's volume and BVOL the sound data input's, both volume registers; ATTR's bits 15 and 14 gate nothing
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** *ps2tek* "I/O Maps": "1F900768h Core1 External Input Volume Left", "...76Ah ... Right", nothing on
+  MMIX or BVOL; "SPU2 AutoDMA": ADMA streams "bypassing almost all SPU2 processing". *psx-spx* "ATTR": bit 15 "SPU
+  Enable", bit 14 "Mute SPU", for the PlayStation.
+- **Test program:** `s26-mmix` (each MMIX bit alone on both cores, the input volumes halved, ATTR's top bits cleared,
+  read in the output areas), `s26-out` (the same on the final output through the captured sound, §32.8),
+  `s26-adma-sound`, and the gate's `s26-mix` and `s26-adma`.
+- **Referee:** PCSX2: core 0's bit 11 passes the voices' dry left into its output and bit 10 the right; core 1's bit 3
+  passes the external input's left and bit 2 its right; with AutoDMA, bits 7 and 6 set together pass the sound data
+  input's two sides through BVOL into core 0's output, equal to Sapphire's record in `s26-adma`; AVOL at 1000h quarters the external
+  input against 3FFFh, so 3FFFh is unity, the volume registers' direct form [R psx-spx "Sweep Volume Mode"]; BVOL leaves
+  the external input alone; ATTR 0000h, 4000h and 8000h on either core change nothing in any area or in the output.
+  Bits 0, 1, 4, 5, 8 and 9 (the wet gates) were not seen alone, the reverb being what shows them.
+- **Conclusion:** MMIX from bit 0: external wet R, L; external dry R, L; sound data wet R, L; sound data dry R, L; voices
+  wet R, L; voices dry R, L; the wet gates, and which of 6 and 7 is which side, by the pattern of the measured ones [A]. The wet sums of the three sources
+  go to the reverb, the dry sums and the reverb's output through MVOL to the core's output. AVOL and BVOL are volume
+  registers. ATTR's bits 15 and 14 do nothing. **Measured** on one lineage, the wet gates argued.
+- **Depends on it:** `spu2::cores::Core::tick`, `spu2::regs`.
+- **Pinned by:** the `s26-mix` and `s26-adma` checks; `core_0s_output_reaches_the_output_through_core_1`.
+- **Implemented in:** stage S26's commit.
+
+### D-263. SPU2, the transfer: the data port writes at TSA and steps it by a halfword; DMA channels 4 and 7 read and write at their core's TSA; no FIFO is modelled and a read of the data port gives nothing
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** *ps2tek* "I/O Maps": "1F9001A8h 4h DMA transfer address H/L", "1F9001ACh 2h Internal transfer
+  FIFO"; "IOP DMA": channel 4 SPU2 core 0, channel 7 core 1. *psx-spx* "SPU Memory Access" for the PlayStation's FIFO.
+- **Test program:** `s26-probe`, `s26-rings`: eight and sixteen halfwords through the port, TSA read back, the port read,
+  the area read by DMA at TSA and eight halfwords on.
+- **Referee:** PCSX2: TSA steps by one a halfword written (5000h to 5008h); the halfwords are where DMA reads them; the
+  port reads 0000h; DMA reads move TSA likewise.
+- **Conclusion:** as the title; a read of the port returns zero [C]; the transfer's own timing is the IOP DMAC's, a word
+  a cycle (`Sapphire_Native.md` §22.5), and ATTR's transfer mode is not consulted. **Measured** on one lineage; a FIFO's
+  depth and timing, which no test reached, are a named loss.
+- **Depends on it:** `spu2::Spu2::{store, load, dma_put, dma_get}`.
+- **Pinned by:** `s26-registers`' TSA words; `s26-irq`'s transfer scenes.
+- **Implemented in:** stage S26's commit.
+
+### D-264. SPU2, the effects area: from ESA to the end of EEA's 64 Ki halfwords, the reverb's offsets in halfwords from the buffer address in psx-spx's order, enabled by ATTR's bit 7; the referee's settled value departs by 6 in 16,309
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** none places the reverb's registers; *psx-spx* "SPU Reverb Registers" and "SPU Reverb Formula" for
+  the PlayStation's.
+- **Test program:** `s26-explore` (the area 10000h–1FFFFh censused before and after ATTR's bit 7), `s26-reverb` (an area
+  of 1000h halfwords settled under a constant input, and an area with the reverb off).
+- **Referee:** PCSX2 writes inside the area only with bit 7 set, at the offset 100h given to mLSAME and mRSAME; with
+  bit 7 clear the area stays zero (equal); settled, every halfword of the area reads 16,315 where the shared reverb run
+  on the same registers gives 16,309.
+- **Conclusion:** ESA a 20-bit halfword address in two halfwords (high first), EEA a high halfword closing the area at
+  its FFFFh; the 22 offsets as pairs from 2E4h, the ten coefficients in the volume block after MVOLX, all in psx-spx's
+  order [A]; the shared reverb's arithmetic kept (`BlackMoon_SPU.md`), the referee's last bits departing as in D-269.
+  **Measured** on one lineage for the area and the enable; argued for the order of the registers inside it, which a
+  settled constant cannot separate.
+- **Depends on it:** `spu2::cores::Core::{reverb_params, area}`.
+- **Pinned by:** `the_reverb_settles_in_its_area_and_writes_nothing_when_off`.
+- **Implemented in:** stage S26's commit.
+
+### D-265. SPU2, the IRQ addresses: each core's is a halfword address compared with every access of either core's voices and transfers and with the output areas' writes; its flag shows in 7C2h (core 0 bit 2, core 1 bit 3) and raises IOP interrupt 9; ATTR's bit 6 written clear clears it; a reverb that is off reads nothing on the referee
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** *ps2tek* "I/O Maps": "1F90019Ch 4h Interrupt address H/L"; "IOP Interrupts": 9 SPU2. *psx-spx*
+  "SPU Interrupt" for the PlayStation's.
+- **Test program:** `s26-probe`, `s26-explore`, then `s26-irq`: the address at a block's header and sample word and
+  past it, at four output areas, at a transfer's last halfword and the next, at core 1's address hit by core 0's voice,
+  inside a reverb's area with the reverb off and on, with the reverbs moved away from the rest.
+- **Referee:** PCSX2: every scene as the title, 28 of the 30 graded words; STATX reads 0 throughout; the two that
+  differ are the reverb off, which hits on Sapphire and not on PCSX2. An earlier run had the reverbs' areas over the
+  output areas and hit at addresses the areas alone did not explain; moving the areas away made every output area hit.
+- **Conclusion:** as the title; Sapphire's reverb reads its area with the writes off, psx-spx's "writes become reads"
+  in the shared reverb, so its accesses are watched; the referee's reverb does nothing while off. **Measured** on one
+  lineage; the reverb's off case argued from the shared reverb.
+- **Depends on it:** `spu2::Watch`, `spu2::Spu2::{hit, read16}`.
+- **Pinned by:** `the_irq_address_is_met_by_voices_and_transfers_on_either_core`.
+- **Implemented in:** stage S26's commit.
+
+### D-266. SPU2, read-backs: STATX reads 0; a voice's VOLX is its current volume level; SSA and LSAX keep 4 bits in their high halfword; NAX reads the halfword the voice reads next
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** *ps2tek* "I/O Maps" names the registers only.
+- **Test program:** `s26-probe`, `s26-registers`.
+- **Referee:** PCSX2: STATX 0 at rest, with an IRQ flag up and with AutoDMA running; VOLXL 2000h and VOLXR 4000h for
+  volumes 1000h and 2000h; SSAH FFFFh reads 000Fh; NAX 5001h to 5007h while a voice plays the block at 5000h, 2801h to
+  2807h for the voices the BIOS left on its block at 2800h.
+- **Conclusion:** as the title, NAX as the block's address plus one and the counter's word [A, fitting both runs].
+  **Measured** on one lineage.
+- **Depends on it:** `spu2::cores::Core::read`.
+- **Pinned by:** `s26-registers`.
+- **Implemented in:** stage S26's commit.
+
+### D-267. SPU2, AutoDMA: a block goes into MEMIN in RAM as ps2tek lays it out, into the buffer the core is not playing, the next only when the core leaves the other; the referee keeps no MEMIN in RAM and plays the same stream
+
+- **Opened:** 2026-10-25, at stage S26.
+- **Documents read:** *ps2tek* "SPU2 AutoDMA": the control register's bits, MEMIN at 2000h–27FFh, "A full ADMA block is
+  1024 bytes, where the first 512 bytes are left channel samples, and the other half is the right channel. MEMIN is
+  double-buffered, allowing the mixer hardware to read from one buffer while ADMA writes to another free buffer."
+- **Test program:** `s26-adma-probe`, `s26-adma-sound`, then `s26-adma`: four distinct blocks streamed, core 0's output
+  read after the transfer, then MEMIN.
+- **Referee:** PCSX2 plays the three first blocks in order and not yet the fourth when the transfer ends, through BVOL,
+  equal to Sapphire's record; MEMIN reads zero throughout, and TSA does not move.
+- **Conclusion:** ps2tek's layout in RAM, read by the core as its sound data input at one sample a sample, buffer 0 then
+  1; at the start of AutoDMA the buffer being played is busy and the other free [C]; a buffer the core leaves is free
+  and wakes the channel. The referee's not writing RAM is its own; the document rules. **Measured** for the stream on one
+  lineage, the RAM layout the document's.
+- **Depends on it:** `spu2::adma`, `spu2::Spu2::{dma_room, dma_put}`.
+- **Pinned by:** `autodma_fills_memin_as_ps2tek_lays_it_out_and_feeds_the_sound_data_input`.
+- **Implemented in:** stage S26's commit.
+
+### D-268. SPU2, a voice's start: SSA reads back as written, and the voice starts at it with its two low bits dropped
+
+- **Opened:** 2026-10-25, at stage S26, by the shared voice's units (`BlackMoon_SPU.md` §2).
+- **Documents read:** *psx-spx* "SPU Voice Registers" (the PlayStation's SSA in 8-byte units); nothing for the SPU2.
+- **Test program:** none reaches a start address that is not a block's.
+- **Referee:** not consulted.
+- **Conclusion:** as the title; LSAX reads back as the voice holds it, in the same units. **Argued**; open until a
+  program or a game starts a voice off a block.
+- **Depends on it:** `spu2::cores::Core::write`.
+- **Pinned by:** —
+- **Implemented in:** stage S26's commit.
+
+### D-269. SPU2, the voice: the shared voice's rules are kept where the referee departs from them, in a key on's first samples, the interpolation's and the prediction's rounding, the exponential attack, rate 7Fh and the slow noise clock
+
+- **Opened:** 2026-10-25, at stage S26, by the gate's voice and envelope programs on PCSX2.
+- **Documents read:** *psx-spx* "SPU ADPCM Samples", "4-Point Gaussian Interpolation", "Envelope Operation depending on
+  Shift/Step/Mode/Direction", "SPU Noise Generator"; `Diamond_SPU.md` §3–§4 and `Diamond_Disputes.md` D-34 to D-37, where
+  three PlayStation lineages decided the same rules.
+- **Test program:** `s26-voices`, `s26-envelope`, `s26-noise`, compared under rotation with `s26 diff`.
+- **Referee:** PCSX2, against the shared voice's record: a key on sounds two samples later, without the interpolation's
+  ramp from silence and with the envelope's first step already applied (D-36's reading reversed); a voice at sustain
+  3FFFh reads 14,278 where the record has 14,279, and the envelopes run one lower throughout (D-35, each product
+  shifted); decoded streams depart by up to 111 and further through the filters (D-34); the exponential attack above
+  6000h steps every fourth sample instead of a quarter step each sample; rate 7Fh steps once in 32,768 samples (seen as
+  a +4 in `s26-mmix`'s later scenes); at shift 12 step 1 a noise bit every four or five samples instead of 6.4. At the
+  fastest noise clock the referee's ring is a window of the shared generator's sequence exactly, so the shift register
+  and its taps are the same; the voice without modulation departs by at most 4.
+- **Conclusion:** the shared voice is kept as Diamond's referees decided it; the SPU2's voices are the PlayStation's
+  (`Sapphire_Plan.md` §9.3 [A]) and the one SPU2 lineage is not weighed above three PlayStation ones. **Argued**; the
+  player's BIOS and games at S24 and S28 are the next evidence, by ear and by the output areas.
+- **Depends on it:** `blackmoon-spu`.
+- **Pinned by:** Diamond's goldens and SPU tests; `s26-voices`, `s26-envelope`, `s26-noise` on Sapphire.
+- **Implemented in:** stage S26's commits.
+
+### D-270. SPU2, the output: core 1's output is the SPU2's, unscaled; the referee's captured sound is about half of it and passes a high-pass filter
+
+- **Opened:** 2026-10-25, at stage S26, by the captured sound (`Sapphire_Native.md` §32.8).
+- **Documents read:** none gives the output stage.
+- **Test program:** `s26-out`, `s26-adma-sound`.
+- **Referee:** PCSX2's sound through SDL's disk driver: a constant level decays by about 0.5 % a sample (a high-pass of
+  the host's output stage, not the SPU2's), and a voice at unity through both cores comes out at about half its level.
+- **Conclusion:** Sapphire hands core 1's output to the host as it is [C]; the referee's output stage is not the
+  console's to copy, and its halving is unexplained. **Open**.
+- **Depends on it:** `spu2::Spu2::tick`.
+- **Pinned by:** `the_output_is_48000_hz_exactly`.
+- **Implemented in:** stage S26's commit.
+
 ### D-280. GIF: a path holds the GIF from its packet's first GIFtag to its EOP primitive's end, though its data stops meanwhile; the other paths wait
 
 - **Opened:** 2026-10-25, at stage S15: §7.1.2 checks the other paths "whenever transfer of a GS packet in a path ends",

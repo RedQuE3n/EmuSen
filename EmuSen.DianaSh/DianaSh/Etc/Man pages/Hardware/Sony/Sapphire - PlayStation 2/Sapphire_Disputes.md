@@ -1262,3 +1262,139 @@ through the reset too.
 - **Pinned by:** `each_dma_mode_reaches_its_stand_in`, `a_burst_holds_the_bus_and_chopping_opens_windows`,
   `priorities_order_the_channels_and_a_channel_without_dreq_waits`.
 - **Implemented in:** stage S21's commit.
+
+*D-100 on are stage S16's, built beside S21 and S13 (whose entries begin at D-80).*
+
+### D-100. GS privileged registers: a read of a write-only or reserved address returns CSR
+
+- **Opened:** 2026-10-25, at stage S16 (numbered from D-100 beside S21's and S13's entries): the *GS User's Manual*
+  marks every privileged register but CSR and SIGLBLID "(w)" and says nothing of a read.
+- **Documents read:** *GS User's Manual* §7.2 (each register's "(w)" or "(r/w)"); *EE User's Manual* §2.2.3 (the map,
+  its "(Reserved) GS-dependent" ranges); ps2tek "I/O Maps" and "GS Register List" (no read rule).
+- **Test program:** `s16-regs`: SMODE1, SMODE2, SRFSH, SYNCH1, SYNCH2 and SYNCV read; PMODE, DISPFB1, DISPLAY1,
+  DISPFB2, DISPLAY2, EXTBUF, EXTDATA and BGCOLOR written 0123456789ABCDEFh and read; IMR and BUSDIR written and read;
+  GS addresses 0Fh, 3Fh, 42h, 43h, 45h, 49h and 7Fh read.
+- **Referee:** PCSX2 2.8.2: every one reads CSR's value (551B6000h at the time: ID 55h, REV 1Bh, FIFO empty, FIELD set).
+  Play! 0.72: CCCCCCCCCCCCCCCCh from every register and 0 from 49h and 7Fh, a fill rather than any register's value.
+- **Conclusion:** CSR; **measured**, PCSX2 the only witness that returns a register (Play!'s fill is no reading of
+  hardware).
+- **Depends on it:** `gs::Gs::read_privileged`; a program polling a write-only register.
+- **Pinned by:** `the_registers_csr_imr_and_the_signals_behave_as_chapters_6_and_7_say`,
+  `the_privileged_registers_answer_their_images_and_above_them_a_bus_error`.
+- **Implemented in:** stage S16's commit.
+
+### D-101. CSR's REV and ID read 1Bh and 55h
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *GS User's Manual* §7.2: REV (bits 23..16) "Revision No. of the GS" and ID (bits 31..24) "ID of the
+  GS", no values; ps2tek gives none.
+- **Test program:** `s16-regs` records CSR's bits 31..16, ungraded.
+- **Referee:** PCSX2 2.8.2: ID 55h, REV 1Bh. Play! 0.72: ID 00h, REV 07h.
+- **Conclusion:** PCSX2's; **argued**, the lineage whose CSR models the manual's other fields (the events, FIFO, the
+  reset) against one that models none of them (D-100's table); open until a console text prints CSR.
+- **Depends on it:** `gs::csr::REV`, `gs::csr::ID`; a program that identifies its GS.
+- **Pinned by:** `the_privileged_registers_answer_their_images_and_above_them_a_bus_error`.
+- **Implemented in:** stage S16's commit.
+
+### D-102. GS privileged registers: EE addresses that differ in bits 10 and 11, and in bits 13 to 15, reach the same register for reads and writes; 12010000h to 13FFFFFFh is a bus error
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *EE User's Manual* §2.2.3: "addresses [12] and [9:4] of the CPU bus are output to GA[6:0]"; its
+  table's "Image of 0x1200_0000 - 0x1200_03f0" for 12000400h to 120007F0h and "Image of 0x1200_0000 - 0x1200_07f0" for
+  12000800h to 12000FF0h, the same for the 12001000h bank; 12002000h to 1200FFF0h "(Reserved)"; 12010000h to 13FFFFF0h
+  "(Reserved) Bus error".
+- **Test program:** `s16-regs`: SIGLBLID written at 12001080h and read at 12001480h, 12001880h, 12001C80h, 12003080h
+  and 1200F080h; written at 12001880h and read at 12001080h; CSR read at 12001400h.
+- **Referee:** PCSX2 2.8.2 writes SIGLBLID through 12001880h but reads CSR at every image (D-100's rule at an address it
+  does not take for SIGLBLID). Play! 0.72 neither writes nor reads through an image (reads 0).
+- **Conclusion:** images for reads and writes. The images of bits 10 and 11 by the manual's table, **documented**, against
+  both lineages; those of bits 13 to 15 by the sentence on GA[6:0], **argued**, the table calling the range reserved; the
+  bus error as the table gives it.
+- **Depends on it:** `gs::privileged::ga`, `Board::error`.
+- **Pinned by:** `the_privileged_registers_answer_their_images_and_above_them_a_bus_error`,
+  `the_registers_csr_imr_and_the_signals_behave_as_chapters_6_and_7_say`.
+- **Implemented in:** stage S16's commit.
+
+### D-103. The GS's interrupt is one line, any event whose IMR bit is clear, which the INTC latches at its rise: an event while it is high gives no request, and a stalled SIGNAL taken when the first's flag is cleared gives none until IMR's mask is set and cleared
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *GS User's Manual* §6.1 ("it asserts interrupt signals to the host when signals are generated, it
+  can control them individually with the Interrupt Mask Register"); §6.2.1's note: "the interrupt to the host
+  corresponding to the write operation to the second SIGNAL register does not occur. The interrupt corresponding to the
+  second SIGNAL occurs by clearing the SIGNAL flag corresponding to the first SIGNAL, and setting the SIGMSK flag of the
+  IMR register to 1 and then to 0"; the kit's *Restriction*, "Restrictions on GS (2) GS Interrupt Handler": "while the
+  interrupt handler is in the process for the interrupt from the GS, if additional interrupt from the GS occurs, the EE
+  may not be able to detect it"; *EE User's Manual* §3.1 (I_STAT takes a request at its edge).
+- **Test program:** `s16-regs`: SIGNAL masked then unmasked; a second SIGNAL with a LABEL and a FINISH behind it; the
+  first's flag cleared; SIGMSK set and cleared; FINISH unmasked and raised while SIGNAL holds the line; each followed by
+  I_STAT's bit 0, read and cleared.
+- **Referee:** PCSX2 2.8.2 stalls the second SIGNAL and holds the LABEL and FINISH behind it as §6.2.1 says, but raises
+  the INTC's request at every unmasked event and every mask cleared over a set flag: the stalled SIGNAL taken at the clear,
+  FINISH unmasked under SIGNAL and FINISH raised under SIGNAL each give one (three entries). Play! 0.72 models neither
+  the stall nor SIGNAL's mask, so is no witness.
+- **Conclusion:** the documents' line; **argued**, two passages against one lineage.
+- **Depends on it:** `Gs::line`, `Gs::take_rise`, `Board::sync_gs`; a game whose GS handler leaves IMR unmasked.
+- **Pinned by:** `the_gs_interrupt_is_one_line_the_intc_latches_at_its_rise`,
+  `the_registers_csr_imr_and_the_signals_behave_as_chapters_6_and_7_say`.
+- **Implemented in:** stage S16's commit.
+
+### D-104. A PSMT8 or PSMT4 buffer an odd number of units wide: the pages across are its width over the page's, rounded down
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *GS User's Manual* §2.6 (a texture buffer's width "must be a multiple of 128 texels when PSMT8 or
+  PSMT4 is specified"), §8.2 (pages in order along the buffer's rows), §7.1's TBW and MIPTBP notes ("It is set to 1 if
+  the width is less than 64"). No rule for an odd width.
+- **Test program:** `s16-places`: PSMT8 16×128 written at base 200h with width 1, then the raw words of pages 10h and
+  11h read back, each filled first; under this reading rows 64 to 127 fall on page 10h again and page 11h is untouched.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 both equal the reading.
+- **Conclusion:** rounded down; **measured**, both lineages.
+- **Depends on it:** `gs::local::address`; S18's textures one unit wide in PSMT8 or PSMT4.
+- **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`.
+- **Implemented in:** stage S16's commit.
+
+### D-105. A depth format from a base pointer inside a page: its blocks follow the page-start order counted on from the base, as for the colour formats
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *GS User's Manual* §8.5: "The block arrangement order conforms to the one obtained when the start
+  of a page is pointed to. The block pointed to and the ones following configure a one-page rectangle", with two PSMCT32
+  examples; §8.3's depth figures, each its colour figure with block bits 3 and 4 inverted (block XOR 18h).
+- **Test program:** `s16-formats-z`: PSMZ32 and PSMZ16 written from block 40h (a page's start) and read raw as PSMCT32;
+  then each depth format written as one page-rectangle from block 1, read raw and in its own format.
+- **Referee:** PCSX2 2.8.2: from a page's start equal; from block 1 the depth formats' blocks 7, 15, 23 and 31 land
+  elsewhere and blocks 24 and 32 keep their old contents, as if the inversion were applied after the base is added
+  ((base + colour block) XOR 18h); its round trips equal, so the difference shows only to another format. Play! 0.72
+  moves no depth format through the transfers, so is no witness.
+- **Conclusion:** §8.5's order; **argued**, one lineage dissenting where the inversion and the carry from the base meet.
+  A game that draws a depth buffer, or textures from one, at a base inside a page would decide it.
+- **Depends on it:** `gs::psm::block_number`, `gs::local::address` for PSMZ32, PSMZ24, PSMZ16 and PSMZ16S; S17's depth
+  buffers (ZBP is page-aligned, so drawing cannot reach the case), S18's textures from a depth buffer.
+- **Pinned by:** `every_format_round_trips_and_lies_in_memory_as_the_manual_says`, `every_formats_page_falls_as_chapter_8s_figures_show`.
+- **Implemented in:** stage S16's commit.
+
+### D-106. A transfer's coordinates wrap at 2048 in X and in Y, both directions
+
+- **Opened:** 2026-10-25, at stage S16.
+- **Documents read:** *GS User's Manual* §4.1.3: "X = (SAX + RRX) % 2048, Y = (SAY + RRY) % 2048"; ps2tek "GS
+  Transfers" the same.
+- **Test program:** `s16-places`: PSMCT32 16×4 written from (2040, 2046), read back from there and at (0, 0).
+- **Referee:** Play! 0.72: equal. PCSX2 2.8.2: Y wraps, X does not; host to local writes the wrapped pixels elsewhere and
+  local to host reads them as 0.
+- **Conclusion:** the manual's; **measured**, with Play!.
+- **Depends on it:** `gs::transfer`.
+- **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`.
+- **Implemented in:** stage S16's commit.
+
+### D-107. A local-to-local transfer whose rectangles overlap copies pixel by pixel in TRXPOS's order
+
+- **Opened:** 2026-10-25, at stage S16, for S19, whose gate names "local-to-local overlap".
+- **Documents read:** *GS User's Manual* §4.1.2 and figure 4-1 (the four orders, "enabled only when transmitting from
+  local buffer to local buffer"); nothing on overlap.
+- **Test program:** `s16-places`: PSMCT32 8×2 copied one pixel to the right in order 0 (left to right, top to bottom).
+- **Referee:** PCSX2 2.8.2 copies as if the source were read whole first (a shift by one); Play! 0.72 performs no
+  local-to-local transfer.
+- **Conclusion:** pixel by pixel in the order, so order 0 smears the first pixel along the row; **argued**: an order the
+  program chooses can matter only if the copy runs in it, and order 2 is the one that shifts right. **Open** for S19,
+  whose programs copy in each order at several overlaps.
+- **Depends on it:** `gs::transfer::copy`.
+- **Pinned by:** `transfers_take_their_places_wrap_restart_and_copy_as_chapter_4_says`.
+- **Implemented in:** stage S16's commit.

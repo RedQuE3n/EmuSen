@@ -282,7 +282,7 @@ impl Gs {
                     let v = self.get(spsm, sbp, sbw, x, y);
                     stream.extend((0..bits(spsm)).map(|i| v >> i & 1 == 1));
                 }
-                while stream.len() % 64 != 0 {
+                while !stream.len().is_multiple_of(64) {
                     stream.push(false);
                 }
                 self.outgoing = stream.chunks(64).map(|c| c.iter().enumerate().fold(0u64, |a, (i, &b)| a | u64::from(b) << i)).rev().collect();
@@ -307,8 +307,7 @@ impl Gs {
             return;
         }
         self.bits_in.extend((0..64).map(|i| v >> i & 1 == 1));
-        loop {
-            let Some(&(psm, bp, bw, x, y)) = self.incoming.last() else { break };
+        while let Some(&(psm, bp, bw, x, y)) = self.incoming.last() {
             let n = bits(psm) as usize;
             if self.bits_in.len() < n {
                 break;

@@ -16,6 +16,9 @@ manual's definitions give, and `tests/interpreter.rs` grades the interpreter by 
 same for stage S7's programs, written by `cargo run --release --example s7 -- <folder>`. `src/iop/` is the IOP (stage
 S21, `Sapphire_Native.md` §22): `blackmoon-r3000` on Sapphire's own IOP bus with its cache, INTC, DMAC and timers;
 `tests/s21/` generates the stage's bare IOP programs, `tests/iop.rs` grades them, and `cargo run --release --example s21
--- <folder>` writes each inside an EE program that places it in IOP RAM for the referees.
+-- <folder>` writes each inside an EE program that places it in IOP RAM for the referees. `src/gs/` is the GS (stage
+S16, `Sapphire_Native.md` §24): its registers, its local memory in every format's page and block layout (`gs::local`,
+the layout's one owner) and the three transfers; `tests/gs.rs` grades it by `tests/s16/`'s programs, which
+`cargo run --release --example s16 -- <folder>` writes for the referees.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

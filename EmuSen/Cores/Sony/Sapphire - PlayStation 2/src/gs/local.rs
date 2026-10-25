@@ -46,7 +46,7 @@ const fn entry(shape: Shape, order: Blocks, x: u32, y: u32) -> u16 {
             (column_word(xc, yc & 1), (xb >> 3) * 2 + (yc >> 1))
         }
     };
-    (block * 64 + column * 16 + word | sub << 11) as u16
+    ((block * 64 + column * 16 + word) | (sub << 11)) as u16
 }
 
 const fn table<const N: usize>(shape: Shape, order: Blocks) -> [u16; N] {

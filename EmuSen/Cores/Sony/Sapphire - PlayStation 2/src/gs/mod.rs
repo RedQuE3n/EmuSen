@@ -209,6 +209,11 @@ impl Gs {
         self.siglblid
     }
 
+    /// A privileged register as last written, by GS address: the PCRTC's settings (S20) are read here.
+    pub fn privileged_register(&self, ga: u32) -> u64 {
+        self.privileged[(ga & 0x7F) as usize]
+    }
+
     /// CSR as the EE reads it (§7.2): the events, FIFO's status, REV and ID; FLUSH, RESET, NFIELD and FIELD read 0
     /// until the PCRTC (S20) drives the fields.
     pub fn csr(&self) -> u64 {

@@ -929,7 +929,7 @@ the enhancements (E) are separate tracks.
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S16** | Registers, privileged registers, CSR and IMR, SIGNAL, FINISH, LABEL; the eDRAM's page and block layout of every format; the three transfer directions | `gs/label`, `gs/signal`; transfers round-trip through every format as the documents lay them out; referees' pictures of a transfer program |
+| **S16** | Registers, privileged registers, CSR and IMR, SIGNAL, FINISH, LABEL; the eDRAM's page and block layout of every format; the three transfer directions | `gs/label`, `gs/signal`; transfers round-trip through every format as the documents lay them out; referees' pictures of a transfer program *Built 2026-10-25, `Sapphire_Native.md` §24: met on Sapphire, five programs and 51,268 graded record words equal to the GS User's Manual's chapters 4, 6, 7 and 8, the GS driven through the interface the GIF (S15) will use; PCSX2 equal on every format's layout at a page's start and on `gs/label`'s and `gs/signal`'s console texts, which Sapphire runs with S10; Play!'s local-to-host transfer reads the colour formats back, so the referees' pictures come as RAM as S3 decided; D-100 to D-107.* |
 | **S17** | Points, lines, triangles, strips, fans, sprites; flat and Gouraud; scissor; depth formats and tests | The project's primitive programs, each picture equal to the referees' (or a dispute) |
 | **S18** | Texturing: formats, CLUTs (both storage modes), TEX0/1/2, LOD and mipmaps, filtering, wrap and clamp, fog | The same, per feature |
 | **S19** | Alpha test, destination alpha, blending, PABE, FBA, colour clamp, dithering, masks, local-to-local overlap | The same |

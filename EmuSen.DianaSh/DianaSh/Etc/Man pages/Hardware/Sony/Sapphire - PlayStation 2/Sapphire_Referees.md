@@ -149,6 +149,14 @@ texts exercise, for COP2's transfers, the VU's integer and random units, CLIP, M
 weighed first for every FPU and VU dispute. Play!'s kernel output is excluded from every ruling about the BIOS (`Sapphire_Plan.md` §11
 Q5).
 
+*Added 2026-10-25 at S16* (`Sapphire_Native.md` §24.7): **PCSX2 is a witness for the GS's local memory** (every format's
+layout at a page's start, the transfers' offsets, restart and end, local to local without overlap) **and its registers**
+(CSR, SIGNAL's stall, LABEL's and SIGNAL's masks, the reset), departing at a depth format based inside a page (D-105),
+X's wrap (D-106), an overlapping copy (D-107) and the interrupt's edges (D-103). Play! is one for the colour and texture
+formats' layouts and their local-to-host transfer, which carries §6's form C, and for the wrap; it moves no depth format,
+performs no local-to-local transfer, and of the registers keeps CSR's events and SIGLBLID but neither IDMSK, the stall nor
+the reset.
+
 ## 4. The project's programs
 
 ### 4.1 The gate: `programs/record.s`

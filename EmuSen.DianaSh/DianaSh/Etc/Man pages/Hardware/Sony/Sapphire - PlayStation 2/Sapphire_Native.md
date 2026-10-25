@@ -3611,6 +3611,268 @@ Optimizations". No emulator, SDK or loader source, no ps2autotests source and no
 - The GIF (S15): until then nothing on the EE's side draws on Sapphire; the tests drive the host interface.
 - The state format's new contents (the vertex queue): `SPH2` gains them with the rest (S10, S30).
 
+## 28. Stage S14, VIF0 and VIF1 (2026-10-25)
+
+*Numbered §28 and its disputes from D-180, since S22 (§26, from D-140), S17 (§27, from D-160) and S20 (§29, from D-200)
+are built beside it.*
+
+### 28.1 In one paragraph
+
+The plan's §7 row S14, on the tester's go of 2026-10-25. The crate gains **`vif`**, VIF0 and VIF1 written from the *EE
+User's Manual* (EEUM) chapter 6, with ps2tek's "Vector Interface (VIF)" beside it: each VIF takes a stream of words
+through its FIFO (8 qwords on VIF0, 16 on VIF1), from the DMAC's channel 0 or 1 or from the EE's stores, and runs every
+VIFcode in it: the registers it sets, MPG into micro memory, UNPACK into data memory in all thirteen formats with sign
+and zero extension, the write mask, the addition modes and CL and WL's skipping and filling writes (`vif::unpack`), the
+MSCAL family starting the VU through S13's `Vpu::start` with VIF1's double buffer and the TOP and ITOP that XTOP and
+XITOP read, the FLUSH family's and MPG's waits for the VU, DIRECT, DIRECTHL and MSKPATH3 ending at **`vif::Gif`**, the
+interface the GIF (S15) implements, the i bit's interrupt and stall, FBRST and ERR's masks; and VIF1, reversed by FDR,
+carries the GS's local-to-host data to the DMAC through S16's host interface. S11's stand-ins at channels 0 and 1 are
+gone. Seven bare programs of the project's, 4,190 graded record words, are equal on the interpreter to what
+`tests/s14/manual.rs` gives from chapter 6; four of ps2autotests' five `dma/vif` texts of the stage's gate are reproduced
+on the VIF directly in the shape their lines show (`stcycl`'s 171 cases a VIF, `stmod`'s 8, `unpack`'s 24, `intstall`'s
+3), and the consoles' texts decide or bound seven readings the manual leaves open (D-180 to D-182, D-185 to D-187,
+D-189). On PCSX2 the five texts run against their consoles' outputs: `basic` and `stmod` equal,
+`unpack` but one line, `stcycl` but 26 of 508, `intstall` differing; on the programs PCSX2 is a witness for UNPACK, the
+mask, the modes, the double buffer and the MSCAL family's waits, not for the stalls, FBRST or the errors; Play! for
+little. Disputes D-180 to D-194. No emulator, SDK, loader or ps2autotests source and no firmware was read.
+
+### 28.2 What was built
+
+- **`src/vif/unpack.rs`**: `Format` (CMD's low four bits, §6.3.4's table), `decode` (a vector's four fields from its
+  bits), `Cycle` (§6.3.5: the write's address, whether it takes a vector, its cycle), `write` (§6.3.6 and §6.3.7: each
+  field's specifier, MODE's addition and the Row it keeps), `Unpack` (one UNPACK in progress: the data's bits held as a
+  little-endian stream across words, qwords and DMA packets, its writes in order).
+- **`src/vif/mod.rs`**: `Vif`, one unit: its registers (EEUM §6.5 and §2.2.1's addresses), the FIFO with the qword
+  being taken apart beside it, the command in progress, its own clock; `Gif` and `Path2StandIn`; `Reach` (the VPU and
+  the GIF, what a VIF touches while it runs).
+- **`src/vu/`**: `Micro::last` (the last pair's T stage, read without running), `Vpu::run_unit`, `Vpu::ready` (neither
+  running nor stopped, VU User's Manual §1.3.3: "From the point of view of the VIF, there is no difference between the
+  Run state and the Stop state") and `Vpu::last`; additive, with `Micro::last` defaulting to none so `tests/vu0.rs`'s
+  scripted stand-in is unchanged.
+- **`src/board.rs`**: the two VIFs and PATH2's stand-in on the board; `Ports`, the DMAC's peripherals with the VIFs on
+  channels 0 and 1 and S11's stand-ins on the rest; `GifStandIn`, PATH2's stand-in with the GS's host interface for the
+  reversed FIFO; the VIF's registers at 10003800h and 10003C00h and the FIFOs at 10004000h (mirrored to 10004FF0h) and
+  10005000h; VIF0 and VIF1 brought to time before the DMAC looks at their FIFOs, before the EE reaches them or the VUs'
+  memories, and at the end of each instruction before the VUs; INT_VIF0 and INT_VIF1 raised at the INTC.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native`, `emusen-mips`,
+  `blackmoon-r3000` and `emusen-disc` alone.
+
+### 28.3 The readings the manual leaves open
+
+[R EEUM §6.3, §6.4, §6.5, §3.1; VU User's Manual §1.3; ps2tek "Vector Interface (VIF)"; M the console texts of §28.7;
+A where marked]:
+
+| Rule | Source | Implemented |
+|---|---|---|
+| The stream is words; a DMAtag sent by TTE gives only its upper 64 bits | §6.3.1's figures | D-193 |
+| NUM 0 is 256 (UNPACK, MPG); IMMEDIATE 0 is 65,536 (DIRECT) | §6.3.2, the pages | `Unpack::new`, `Vif::fetch` |
+| An UNPACK's data is a bit stream, its last word padded; a vector's elements in order from bit 0 | §6.3.4's figures, the length formula | `Unpack::take`, `next` |
+| V2's Z and W repeat X and Y; V3's W is 0 | D-180 | `decode` |
+| V4-5: R, G, B shifted up 3, A up 7 | §6.3.4's figure; the console's `f8 f8 f8 80` | `decode` |
+| CL >= WL skips, CL < WL fills; WL 0 is a block that never ends | §6.3.5; D-181 | `Cycle` |
+| A filling write decompresses at the stream's pointer without taking | D-183 | `Unpack::next`, `Vif::peek` |
+| The write cycle picks MASK's row and Col, the fourth from cycle 4 on | §6.3.6's matrix | `Cycle::row` |
+| MODE 3 writes unadded and keeps the input in Row | D-182 | `write` |
+| Addresses wrap at the VU's memory, 256 or 1,024 qwords | the console's `stcycl` lines (`cl 253, wl 4` writes 4 into qword 0 on VIF0 and not on VIF1) | `Vif::store` |
+| ADDR keeps 10 bits on both VIFs; FLG adds TOPS on VIF1 and is ignored on VIF0 | the UNPACK page | `Unpack::new` |
+| MPG and DIRECT take their data where it falls; §6.3.3's alignment is the program's | §6.3.3 [A] | `Cmd::Mpg`, `Cmd::Direct` |
+| MPG's instructions wrap at the micro memory's size | [A] | `Cmd::Mpg` |
+| OFFSET sets TOPS = BASE and clears DBF; the MSCAL family TOP = TOPS, DBF reversed, TOPS the buffer DBF names | D-184 | `fetch`, `wait` |
+| The MSCAL family copies ITOPS to ITOP; ITOP and ITOPS keep 10 bits | ITOP's pages; D-192 | `wait` |
+| MSCNT starts at TPC | MSCNT's page; D-82 (TPC in doublewords) | `wait` |
+| MPG, the MSCAL family and FLUSHE wait for the VU ready, neither running nor stopped; FLUSH, FLUSHA and MSCALF also for the GIF's paths | the pages; VU User's Manual §1.3.3 | `wait`, `Vpu::ready` |
+| UNPACK does not wait for the VU | §6.3.8 (double buffering writes while the VU runs) | — |
+| The i bit; MARK's does not stall | D-189 | `complete`, `fetch` |
+| Undefined codes; VIF1's codes on VIF0; UNPACK 63h, 67h, 6Bh | D-188 | `fetch` |
+| FBK at once, STP at the next VIFcode, STC clears VSS, VFS, VIS, INT, ER0, ER1 | FBRST's pages; D-190 | `fbrst` |
+| RST | D-187 | `fbrst` |
+| VPS and FQC | D-186 | `status` |
+| NUM: VIF0 8 bits, VIF1 16 | D-185 | `num_bits` |
+| MARK keeps 16 bits; the EE's write clears MRK | MARK's page; D-191 | `write` |
+| The registers but MARK, ERR, FBRST and VIF1_STAT's FDR are read-only | §6.5 | `write` |
+| The EE's register reads are answered at any time | §6.5 says "accessible only when the VIF is stopped" [A] | `read` |
+| VIF1 reversed: the FIFO filled from the GS's host interface while FDR is set and D1_CHCR.DIR is clear; the VIF decodes nothing meanwhile; either direction alone moves nothing | EEUM chapter 5's channel table, VIF1_STAT's FDR; GS User's Manual §4.2.2 [A for the mismatch] | `request`, `get`, `run_to` |
+| An EE store into a full FIFO is taken all the same; FIFO stores narrower than a qword are lost | §2.2.1 ("only qword-accessible") [A] | `Board::write` |
+
+### 28.4 The timings: the documents' and the argued
+
+No document times the VIF. **Argued**, each a named loss (D-194): the VIF runs at BUSCLK, one bus cycle a VIFcode and
+one a write (an UNPACK qword, filled or read; an MPG instruction; a DIRECT qword, or the cycle PATH2 takes it), the words
+of STMASK, STROW and STCOL inside their VIFcode's cycle; a microprogram the MSCAL family starts issues its first pair
+`pipe::START` (3) EE cycles after the VIFcode's cycle, as VCALLMS's (§5.4.5's figures, D-85's argument); a wait on the VU
+ends at the cycle after its last pair's T stage; the GS's local-to-host data fills the reversed FIFO at once. **Measured**
+[M, `the_dmac_waits_on_a_full_fifo`]: an S-32 UNPACK of 256 words, 65 qwords into VIF1's FIFO, ends its DMA at 402 EE
+cycles, the VIF's pace (392 for the 49 qwords it must take before the last 16 fit) and not the DMAC's 130.
+
+**How a VIF keeps time** [A]. A VIF runs on its own clock and is brought forward like the VUs: by the board before the
+DMAC arbitrates (so DREQ is the FIFO's room as of that cycle), by an EE access to its registers, FIFO or VU's memories,
+and after each instruction, before the VUs, so that a VU never runs past a VIF write it should see. It schedules an
+event with the board only while the DMAC waits on its FIFO and it can free a slot, so a transfer the FIFO paces is
+exact without an event per word otherwise. A wait on the VU is noticed when the board next brings the VIF forward (an
+event or the next instruction) and is then timed from the VU's last pair.
+
+### 28.5 The interfaces and the board
+
+- **`dmac::Peripherals`** on channels 0 and 1: `request` answers the FIFO's room (forward) or its data (reversed), and a
+  zero holds the channel until the VIF frees a slot and the board wakes the DMAC at that cycle; `put` takes a qword
+  (a DMAtag marked); `get` gives the reversed FIFO's qword.
+- **`vif::Gif`** (S15 implements it): `path2(q, hl, at)` gives a DIRECT or DIRECTHL qword to PATH2 and answers the cycle
+  it is taken or none while PATH2 cannot have the GIF (VGW set); `idle_at(path3, at)` the cycle PATH1 and PATH2 (and with
+  `path3`, PATH3's requests) are idle for FLUSH, FLUSHA and MSCALF; `mask_path3(masked, at)` MSKPATH3; `host_read()` the
+  GS's local-to-host qwords. Until S15 `Path2StandIn` takes every qword at once and records the mask, and the board's
+  adapter reads the host interface of S16's `gs`.
+- **The VPU** (S12, S13): `Vpu::start` for the MSCAL family, `Vpu::ready` and `Vpu::last` for the waits, the units'
+  memories for MPG and UNPACK, and `Link`'s `top` and `itop`, set as the MSCAL family runs, for XTOP and XITOP.
+- **The INTC**: INT_VIF0 and INT_VIF1 (bits 4 and 5) at an i bit's VIFcode's end or an undefined VIFcode.
+
+### 28.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s14/` generates seven bare programs in S11's form (kseg0 code; constants, packets, the VUs' memories at
+11000000h, the registers and the record through kseg1), each starting with COP2 usable, the DMAC as S11's start leaves
+it, the INTC cleared, both VUs reset by FBRST and both VIFs reset with ERR's ME0 and ME1 set (§6.5's advice). Packets are
+built in RAM and sent by normal-mode DMA, or stored into the FIFOs; the programs wait for the channel and for the VIF's
+VPS and FQC to clear, bounded, and read back what the EE can see. Every expected word comes from `tests/s14/manual.rs`,
+chapter 6 transcribed apart from `src/vif`.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s14-unpack` | 1,164 | the 21 format and USN cases of the console's text, three vectors each over a memory filled first, on both VIFs; a write wrapping at each memory's end; an ADDR beyond VU0's 256 qwords; NUM, CODE, CYCLE after; the console's three dataless UNPACKs (VPS, CODE, NUM) |
+| `s14-mask` | 1,112 | the console's eight `stmod` cases; every specifier in every write cycle in normal and difference modes, with Row and Col after; the m bit clear ignoring MASK; V2-16 in difference mode with Z and W from Col (§6.3.7's example 4); V3-8 in offset mode with W masked |
+| `s14-cycle` | 1,064 | skipping (CL 4 WL 2, CL 3 WL 1, CL 5 WL 2), filling from Col and with only 0 specifiers (D-183), CL 0, the console's CL 253 WL 4, a VIF1 UNPACK wrapping at 1,024, WL 0 with CL 1 and 0; a MARK after each UNPACK, so a wrong count of data words shows |
+| `s14-micro` | 352 | on both units MPG read back from micro memory; ITOP, ITOPS and XITOP (and XTOP on VU1); MSCAL arriving while a 300-pass microprogram runs, which waits; MPG arriving while it runs, which waits; FLUSHE before an UNPACK into the qword the microprogram writes last; MSCNT at TPC |
+| `s14-dbuf` | 164 | VIF1's BASE and OFFSET, MSCAL, MSCAL, MSCNT and OFFSET again, each microprogram storing XTOP and XITOP at the qword TOP names, UNPACKs with FLG between, BASE + OFFSET past 10 bits; every double-buffer register and DBF after each step |
+| `s14-regs` | 312 | MARK by VIFcode and by the EE; the console's `intstall` shapes with STAT, MASK and I_STAT, then STC; the stall holding a packet's later qwords in the FIFO with the DMA ended; FBK and STP with STC; RST and every register after; MII; ER1 and its interrupt, ME1; OFFSET on VIF0 and 63h; STROW through the FIFO; a chain with TTE |
+| `s14-direct` | 22 | VIF1's DIRECT with NUM and CODE after; MSKPATH3; FLUSH, FLUSHA and MSCALF with a microprogram; DIRECTHL last; the GS's SIGLBLID the packets write by LABEL, graded on the referees only (6 words) |
+
+**Tests** [M, `cargo test --release`]: `tests/vif.rs` **12 of 12** — the seven programs, each equal to its record word
+for word (`s14-direct`'s also checking PATH2's six qwords in order and the PATH3 mask set and cleared); the console texts
+of §28.7; the DMAC waiting on a full FIFO (§28.4); VIF1 reversed carrying a 64-pixel local-to-host transfer to memory.
+`tests/dmac.rs` **17 of 17** on the real VIFs, S11's assertions on its stand-ins at channels 0 and 1 moved to the VIFs
+(VIF0 receiving three qwords of NOPs, VIF1 seventy). The crate's other tests unchanged: lib **39 of 39**, `cop0` 19,
+`fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `micro` 12, `mmi` 13, `programs` 3, `vu0` 14, `vu_micro` 24; lib, `vif`,
+`dmac`, `micro` and `vu0` also under `test-checked`; clippy clean.
+
+### 28.7 The console texts: `dma/vif/*` on the VIF directly, and on PCSX2 (measured 2026-10-25)
+
+Each of the five needs the BIOS's kernel, so Sapphire runs them whole at S10. Their lines are transcribed in
+`tests/s14/console.rs` (the texts only; the programs' sources are not read) and reproduced on a board driven through
+the EE's map, in the shape each line shows:
+
+| Text | Reproduced | The shape |
+|---|---|---|
+| `unpack` (54 lines) | the 21 "Simple UNPACK" lines and the three "No data" lines on both VIFs; "Set 4096 bytes" not (its shape is not in its line) | each format's elements 88h, 99h, AAh, BBh widened, one vector; the dataless UNPACK the last word of its qword |
+| `stmod` (116) | all eight cases on both VIFs | Row 1000h, MODE 0 to 3, V4-32 of 0 to 15, CL = WL = 4, without the m bit and with the diagonal mask |
+| `stcycl` (508) | all 171 "normal" cases on both VIFs, the "truncated" ones identical in the text | Col 1 to 4, every specifier 2, an S-32 UNPACK with the m bit and NUM 8 under each CL and WL over 64 cleared qwords |
+| `intstall` (16) | the three status lines on both VIFs, in `s14-regs` | one-qword packets: NOP, MARK or STMASK with the i bit, then an STMASK |
+| `basic` (10) | not reproduced (its lines do not show their packets) | — |
+
+Run on PCSX2 2.8.2 through `ps2referee.py tty pcsx2 … --channel iop` (Americas BIOS) against the expected texts, the
+consoles' outputs, after line ends are normalised and PCSX2's own `recVifUnpk` log lines dropped [M `diff`]:
+
+| Text | PCSX2 |
+|---|---|
+| `basic` | equal |
+| `stmod` | equal |
+| `unpack` | one line: VIF0's NUM after a dataless UNPACK of 256 reads 256, the console's 0 (D-185) |
+| `stcycl` | 26 lines: with CL 251 to 255 and WL 1 to 6 PCSX2 writes nothing where the console wraps the address at VU0's 256 qwords and goes on at VIF1's |
+| `intstall` | five of six status lines: FQC counting the qword in hand, MRK kept across the reset, VIF1's MARK and STMASK cases not run; five DMA time-outs the console does not print (D-189) |
+
+So **PCSX2's lineage reproduces the console on UNPACK's formats, the mask, the modes and the write cycles but for the
+wrap**, and departs from it on the FIFO's count and the stalls.
+
+### 28.8 On the referees (measured 2026-10-25)
+
+`examples/s14.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until 1FFFF0=5A99D00E
+200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one process at a time; `s14
+explain` lists the records that differ.
+
+| Program (records) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s14-unpack` (582) | 20 | 61 | PCSX2: V3's W, the next element in some alignments (D-180), VIF0's NUM 256 (D-185), VIF1's dataless UNPACK through the FIFO at VPS 3 (D-186); Play!: V2's Z and W 0, against the console (D-180), VIF1's NUM |
+| `s14-mask` (556) | **0** | 38 | Play!: MODE 3 as no addition with Row unchanged (D-182), Col in some fields |
+| `s14-cycle` (532) | 104 | 112 | PCSX2: V3's W; VIF0's CL 253 case, which it writes elsewhere (as in the console's lines it misses); WL 0, where it takes more words, the MARK after them among them, and the rest of the program is out of step (D-181); Play!: filling writes 0 (D-183), V2's Z and W, WL 0 |
+| `s14-micro` (176) | 2 | 6 | PCSX2: VIF0's ITOP and XITOP 8 bits (D-192); Play!: ITOPS and ITOP read 0, MPG not waiting for the running microprogram |
+| `s14-dbuf` (82) | 1 | 33 | PCSX2: TOPS 410h unwrapped (D-184); Play!: no double-buffer register |
+| `s14-regs` (156) | 36 | 60 | both: MARK's write kept whole (D-191), FBK and STP not stopping (D-190), no stall at an undefined VIFcode (D-188); PCSX2: no ER1, FQC with the qword in hand and the DMA held (D-186, D-189), MRK kept across RST (D-187); Play!: no interrupt for the i bit and nothing resumed by STC, ER1 never cleared, RST keeping ERR |
+| `s14-direct` (14) | 6 | 2 | PCSX2: a second DIRECT waits for the GIF without end (VGW), so MSKPATH3, the FLUSH family and MSCALF never run (a GIF matter, S15's); Play!: CODE without IMMEDIATE |
+
+So **PCSX2 is a witness for UNPACK, the mask and modes, the write cycles but WL 0 and the wrap, the double buffer, ITOP
+and the MSCAL family's waits, MPG's wait and TTE** (D-182, D-183, D-184, D-193 rest on it beside the console), and not
+for the stalls, FBRST, the errors or the FIFO's count, where the console's `intstall` text and the manual stand against
+it; Play! is a witness for little beyond TTE and the formats' common fields.
+
+### 28.9 Named losses
+
+- **The VIF's timing** (§28.4, D-194): argued throughout; a wait on the VU noticed at the next event or instruction.
+- **ER0** (DMAtag mismatch) is never raised; the manual itself says its detection fails and asks programs to mask it.
+- **V3-16 with ME1 clear**: the manual asks ME1 set for V3-16, implying a false VIFcode error in hardware; not modelled.
+- **A filling write's peek** (D-183) reads 0 for words not yet in the FIFO; what the hardware reads there is unknown.
+- **A store into a full FIFO** is taken; the EE would wait.
+- **Reading the registers while the VIF runs** answers the present value; §6.5 makes it undefined.
+- **VCALLMS beside a VIF's start** ("indeterminate", VU User's Manual §3.5.1) is not checked.
+- **VIF1 reversed** takes the GS's data without timing, and the FIFO's direction is FDR's; a DMA direction that
+  disagrees moves nothing.
+
+### 28.10 The blast radius (measured 2026-10-25)
+
+`blast.sh WiseMan sapphire-s14` names the Sapphire crate and WiseMan's `SapphireTests`: the crate as §28.6 gives it,
+and WiseMan's filter **5 of 5**, run once at CPU weight 20, `LunaP.props` pointed at the sibling LunaP checkout by a
+local change that is not committed.
+
+### 28.11 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | V4-16 sign-extending when USN asks zero extension (`decode` ignoring USN for vn 3 at 16 bits) | `the_unpack_console_text_holds`, `every_unpack_format_equals_section_6_3_4` |
+| F2 | difference mode adding Row twice | `the_stmod_console_text_holds`, `the_mask_and_the_addition_modes_equal_sections_6_3_6_and_6_3_7` |
+| F3 | MSCAL starting the VU without waiting for the running microprogram | `mpg_and_the_mscal_family_start_and_wait_for_the_vus` |
+
+Each was applied to `src/vif/unpack.rs` or `src/vif/mod.rs`, `tests/vif.rs` run, and the file restored [M].
+
+### 28.12 What the plan got wrong, or left open
+
+- **VIF1's reverse direction** is the GS's local-to-host data through VIF1's FIFO (EEUM chapter 5's channel table: "VIF1
+  channel (ID=1) can switch directions of transfer"; VIF1_STAT's FDR; the GS User's Manual §4.2.2), as §24.4 planned,
+  not VU1's memory read back: VU1's memory reaches the EE through the map at 1100C000h (EEUM §6.2.3). Built so.
+- **§1.1's VIF row** ("the stall behaviour as ps2autotests' `dma/vif/*` records it"): `intstall` records it in three
+  lines a VIF whose packets their lines leave open; read as one-qword packets (D-189), the reading PCSX2's FIFO count does
+  not share.
+- **§3.2's row** names the referees as the secondary oracle: PCSX2 is one for the data path (§28.8) and not for the
+  control path; the console texts carried the readings the manual leaves open.
+- **S14's gate** names five folders of ps2autotests that need the BIOS's kernel: met on PCSX2 against their texts
+  (§28.7) and, but `basic` and one `unpack` line, reproduced on the VIF in the shape their lines show; whole on Sapphire
+  at S10.
+
+### 28.13 Questions this stage leaves
+
+1. **Q1 [routine], V3's W and the filling peek (D-180, D-183).** *Recommended*: keep W 0 and the peek, the console's
+   single vector and PCSX2's fills; S28's games, whose V3 unpacks with masks set are common, would show a difference.
+2. **Q2 [routine], WL 0 (D-181).** *Recommended*: keep the endless block, the reading both console texts fit; look again
+   if a game sends WL 0.
+3. **Q3 [routine], RST (D-187).** *Recommended*: keep what both lineages keep and clear MRK as the console's text shows;
+   S10 runs `intstall` whole and settles whether the program resets between its cases.
+4. **Q4 [routine], the stalls and errors (D-188 to D-190).** *Recommended*: keep the manual's FBK, STP, ER1 and i-bit
+   stalls; neither lineage models them, and S10's `intstall` and S24's BIOS, which masks errors through ERR, exercise
+   them.
+5. **Q5 [routine], the VIF's timing (D-194).** *Recommended*: keep a bus cycle a VIFcode and a write until S32's bench
+   shows a game whose timing depends on it.
+
+### 28.14 What was read for this stage
+
+`Sapphire_Plan.md` §1.1's VIF and GIF rows, §2, §3.2's VIF line, §5.1, §7's S14 and S15 rows and §11; this page's §20,
+§21, §23 and §24.4; `Sapphire_Disputes.md`. Sony's *EE User's Manual* (Version 5.0) chapter 6 whole, §2.2.1's register
+map, §3.1's interrupt table, chapter 5's channel table, §5.2.3's Figure 5-3, §5.10; the *VU User's Manual* §1.3, §1.4,
+§3.5.1 and XTOP's and XITOP's pages; the *GS User's Manual* §4.2.2. ps2tek at `1c91660`: "Vector Interface (VIF)" (its
+registers, commands and UNPACK). ps2autotests' `dma/vif/*.expected` (the consoles' texts) and the `.elf` files run as
+black boxes on PCSX2. No emulator, SDK, loader or ps2autotests source and no firmware; no referee's log beyond the
+programs' own lines.
+
+### 28.15 What this stage does not cover
+
+- The `dma/vif` texts on Sapphire: S10 (the kernel); `mskpath3` is S15's.
+- The GIF behind PATH2 and MSKPATH3, and PATH1's busy time for FLUSH: S15 implements `vif::Gif` and `vu::Path1`.
+- The VIFs' state in `SPH2` with the rest (S10, S30).
+
 ## 29. Stage S20, the PCRTC: video output and timing (2026-10-25)
 
 *Numbered §29 and its disputes from D-200, since S14, S17 and S22 are built beside it (§26 to §28).*

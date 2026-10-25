@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22 and S17 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20 and S14 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -58,7 +58,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and stage S20 (2026-10-25, §29): the PCRTC, its video timing on its own clock from the GS manual's table in place of
   S11's stand-in (D-42 closed: PCSX2 raises H-blank at twice the line rate), the two read circuits and the merge, each
   raster read at its line's time, the picture for the frontend, and PCEE2's own pictures equal to Sapphire's where it
-  shows a circuit at its own size.
+  shows a circuit at its own size;
+  and stage S14 (2026-10-25, §28): VIF0 and VIF1 on the DMAC's channels, every VIFcode, UNPACK in every format, mask,
+  mode and write cycle, VIF1's double buffer and its reversed FIFO, the MSCAL family starting micro mode, PATH2 at an
+  interface the GIF will implement, four of the five `dma/vif` console texts reproduced on the VIF, and PCSX2 a witness
+  for the data path but not the stalls.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -87,7 +91,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   S22, the SIF's FIFOs, its registers and the EE's CTRL interrupt, SIF0's and SIF1's tags, the IOP's IRQ tag and SIF2,
   with D-68 amended;
   D-160 to D-165 since S17, Gouraud colour's and Z's precision, line ends on a diamond's edge, XYOFFSET at the drawing
-  kick, Z beyond its format's range and a line's colour past its ends.
+  kick, Z beyond its format's range and a line's colour past its ends;
+  D-180 to D-194 since S14, UNPACK's indeterminate fields, WL 0, MODE 3, the filling write's data, the double buffer,
+  NUM's width, VPS and FQC, RST, undefined VIFcodes, the i bit, FBK and STP, MARK's and ITOP's widths, TTE and the
+  VIF's timing.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

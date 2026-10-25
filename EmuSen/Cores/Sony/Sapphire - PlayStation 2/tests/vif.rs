@@ -248,13 +248,14 @@ fn the_stcycl_console_text_holds() {
 /// The qwords past the 64 the text prints that a wrapped line writes, cleared too.
 const QWORDS_TAIL: [std::ops::Range<u32>; 2] = [192..256, 960..1024];
 
-/// The DMAC waits on a full FIFO and goes on as the VIF frees it: 64 qwords of a V4-32 UNPACK through VIF1's 16-qword
-/// FIFO take the VIF's time, a qword written a bus cycle, and arrive whole.
+/// The DMAC waits on a full FIFO and goes on as the VIF frees it: an S-32 UNPACK of 256 words through VIF1's 16-qword
+/// FIFO, which the VIF empties a qword every four writes (D-194: a bus cycle a write) while the DMAC fills it a qword
+/// a bus cycle, ends when the VIF has taken all but the last 16 qwords, and every word arrives.
 #[test]
 fn the_dmac_waits_on_a_full_fifo() {
     let mut rig = Rig::new();
     rig.reset(1);
-    let mut words = vec![0x01 << 24 | 0x0101, 0x6C << 24 | 64 << 16];
+    let mut words = vec![0x01 << 24 | 0x0101, 0x60 << 24];
     words.extend(0..256u32);
     while words.len() % 4 != 0 {
         words.push(0);
@@ -263,7 +264,7 @@ fn the_dmac_waits_on_a_full_fifo() {
         let q = (0..4).rev().fold(0u128, |a, j| a << 32 | u128::from(c[j]));
         rig.board.map.write(0x0010_0000 + 16 * i as u32, 16, q);
     }
-    let qwc = words.len() as u32 / 4;
+    let qwc = words.len() as u64 / 4;
     rig.board.write(0x1000_E000, 4, 1);
     rig.board.write(0x1000_9010, 4, 0x0010_0000);
     rig.board.write(0x1000_9020, 4, u128::from(qwc));
@@ -272,15 +273,16 @@ fn the_dmac_waits_on_a_full_fifo() {
     let mut end = None;
     for _ in 0..20_000 {
         rig.run(1);
-        if rig.board.read(0x1000_9000, 4) as u32 & 0x100 == 0 && end.is_none() {
+        if end.is_none() && rig.board.read(0x1000_9000, 4) as u32 & 0x100 == 0 {
             end = Some(rig.t - start);
         }
     }
     let end = end.expect("the transfer ends");
-    assert!(end > 64 * clock::BUS, "held by the VIF: {end} cycles");
-    assert!(end < 64 * clock::BUS + 200, "the VIF's rate, not slower: {end} cycles");
-    for a in 0..64u32 {
-        assert_eq!(rig.qword(1, a), core::array::from_fn(|f| 4 * a + f as u32), "qword {a}");
+    let taken = (qwc - vif::DEPTH[1] as u64) * 4 * clock::BUS;
+    assert!(end > qwc * clock::BUS + 100, "held by the full FIFO: {end} cycles");
+    assert!(end.abs_diff(taken) <= 16, "the VIF's pace, {taken} cycles: {end}");
+    for a in 0..256u32 {
+        assert_eq!(rig.qword(1, a), [a; 4], "qword {a}");
     }
 }
 

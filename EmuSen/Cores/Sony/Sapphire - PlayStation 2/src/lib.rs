@@ -5,10 +5,12 @@
 //! program; the machine (`machine`) holds the memories, a frame counter, a black picture and silence, and nothing is
 //! emulated. `state` is the format SPH2, and `v1` the core ABI's glue. Stage S6: `ee`, the EE core's integer
 //! interpreter and its timing model; S7: COP0, the TLB, the caches, the physical memory map, the counters and the
-//! breakpoints; run by the project's programs and not yet by the machine (S10 loads programs).
+//! breakpoints; S8: the multimedia instructions; S9: COP1, on `float`, the PlayStation 2's single-precision format in
+//! software; run by the project's programs and not yet by the machine (S10 loads programs).
 
 pub mod bios;
 pub mod ee;
+pub mod float;
 pub mod machine;
 pub mod media;
 pub mod state;

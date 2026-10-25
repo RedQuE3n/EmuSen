@@ -63,6 +63,8 @@ pub enum Form {
     RtPerf,
     FdFsFt,
     FdFs,
+    /// `fd, ft`: SQRT.S, whose operand is in the ft field (Sapphire_Disputes.md D-24).
+    FdFt,
     FsFt,
     /// `rt, fs`
     RtFs,
@@ -338,12 +340,13 @@ static BC1: Table = Table {
     ],
 };
 
-/// ps2tek's "FPU.S" (D-1). The accumulator forms write fs and ft, the others the TX79's computational layout.
+/// ps2tek's "FPU.S" (D-1). The accumulator forms write fs and ft, SQRT.S fd and ft (D-24), the others the TX79's
+/// computational layout.
 static FPU_S: Table = Table {
     at: 0,
     width: 6,
     slots: &[
-        o("add.s", FdFsFt), o("sub.s", FdFsFt), o("mul.s", FdFsFt), o("div.s", FdFsFt), o("sqrt.s", FdFs), o("abs.s", FdFs), o("mov.s", FdFs), o("neg.s", FdFs),
+        o("add.s", FdFsFt), o("sub.s", FdFsFt), o("mul.s", FdFsFt), o("div.s", FdFsFt), o("sqrt.s", FdFt), o("abs.s", FdFs), o("mov.s", FdFs), o("neg.s", FdFs),
         N, N, N, N, N, N, N, N,
         N, N, N, N, N, N, o("rsqrt.s", FdFsFt), N,
         o("adda.s", FsFt), o("suba.s", FsFt), o("mula.s", FsFt), N, o("madd.s", FdFsFt), o("msub.s", FdFsFt), o("madda.s", FsFt), o("msuba.s", FsFt),
@@ -468,6 +471,7 @@ fn operands(form: Form, w: u32, pc: u32) -> (String, Option<(Reference, u32)>) {
         RtPerf => plain(format!("{t}, {}", w >> 1 & 31)),
         FdFsFt => plain(format!("f{}, f{}, f{}", sa(w), rd(w), rt(w))),
         FdFs => plain(format!("f{}, f{}", sa(w), rd(w))),
+        FdFt => plain(format!("f{}, f{}", sa(w), rt(w))),
         FsFt => plain(format!("f{}, f{}", rd(w), rt(w))),
         RtFs => plain(format!("{t}, f{}", rd(w))),
         RtFcr => plain(format!("{t}, fcr{}", rd(w))),
@@ -637,6 +641,7 @@ pub(crate) fn encode(text: &str, pc: u32, labels: &dyn Fn(&str) -> Option<u32>) 
         RtPerf => count(2).and_then(|_| Ok(gpr(ops[0])? << t | ranged(ops[1], 0, 31)? << 1))?,
         FdFsFt => count(3).and_then(|_| Ok(register(ops[0], "f")? << 6 | register(ops[1], "f")? << d | register(ops[2], "f")? << t))?,
         FdFs => count(2).and_then(|_| Ok(register(ops[0], "f")? << 6 | register(ops[1], "f")? << d))?,
+        FdFt => count(2).and_then(|_| Ok(register(ops[0], "f")? << 6 | register(ops[1], "f")? << t))?,
         FsFt => count(2).and_then(|_| Ok(register(ops[0], "f")? << d | register(ops[1], "f")? << t))?,
         RtFs => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "f")? << d))?,
         RtFcr => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "fcr")? << d))?,

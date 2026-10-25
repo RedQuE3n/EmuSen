@@ -234,6 +234,7 @@ pub(crate) fn operand_bits(op: Op, seed: &mut u64) -> u32 {
                 RtPerf => rt | 31 << 1,
                 FdFsFt => sa | rd | rt,
                 FdFs => sa | rd,
+                FdFt => sa | rt,
                 FsFt => rd | rt,
             };
             if form == Cop0 && (bits >> 11 & 31) >> 1 == 12 { bits & !(1 << 14) } else { bits }

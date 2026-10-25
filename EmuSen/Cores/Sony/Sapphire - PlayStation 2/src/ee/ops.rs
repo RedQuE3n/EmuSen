@@ -24,7 +24,7 @@ impl From<Exception> for Stop {
     }
 }
 
-type Run = fn(&mut Ee, &mut dyn Bus, u32, u32) -> Result<(), Stop>;
+pub(super) type Run = fn(&mut Ee, &mut dyn Bus, u32, u32) -> Result<(), Stop>;
 
 /// The registers an instruction reads or writes, by the field naming them.
 pub(super) mod uses {
@@ -45,6 +45,8 @@ pub(super) struct Op {
     pub row: usize,
     pub reads: u8,
     pub writes: u8,
+    /// A COP1 instruction, whose `reads` and `writes` name the FPU's fields (`super::fpu::uses`).
+    pub fpu: bool,
 }
 
 pub(super) fn rs(w: u32) -> usize {
@@ -59,7 +61,7 @@ pub(super) fn rd(w: u32) -> usize {
 pub(super) fn sa(w: u32) -> u32 {
     w >> 6 & 31
 }
-fn simm(w: u32) -> u64 {
+pub(super) fn simm(w: u32) -> u64 {
     w as u16 as i16 as i64 as u64
 }
 fn uimm(w: u32) -> u64 {
@@ -436,14 +438,14 @@ fn mtsah(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 fn target(pc: u32, w: u32) -> u32 {
     pc.wrapping_add(4).wrapping_add((simm(w) as u32) << 2)
 }
-fn cond(e: &mut Ee, w: u32, pc: u32, taken: bool) -> R {
+pub(super) fn cond(e: &mut Ee, w: u32, pc: u32, taken: bool) -> R {
     e.delay_slot();
     if taken {
         e.branch(target(pc, w));
     }
     Ok(())
 }
-fn likely(e: &mut Ee, w: u32, pc: u32, taken: bool) -> R {
+pub(super) fn likely(e: &mut Ee, w: u32, pc: u32, taken: bool) -> R {
     if taken {
         e.delay_slot();
         e.branch(target(pc, w));
@@ -611,22 +613,26 @@ fn pref(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 fn address(e: &Ee, w: u32) -> u32 {
     e.get(rs(w)).wrapping_add(simm(w)) as u32
 }
-fn aligned(v: u32, align: u32, store: bool) -> R {
+pub(super) fn aligned(v: u32, align: u32, store: bool) -> R {
     if v & (align - 1) != 0 {
         return Err(Stop::Exception(if store { Exception::AddressStore(v) } else { Exception::AddressLoad(v) }));
     }
     Ok(())
 }
 /// The effective address of a load, after its data breakpoint.
-fn load_address(e: &mut Ee, w: u32) -> Result<u32, Stop> {
+pub(super) fn load_address(e: &mut Ee, w: u32) -> Result<u32, Stop> {
     let v = address(e, w);
     e.data_break(v, false, None)?;
     Ok(v)
 }
 /// The effective address of a store, after its data breakpoint on the register's low 32 bits (§9.2.4).
 fn store_address(e: &mut Ee, w: u32) -> Result<u32, Stop> {
-    let v = address(e, w);
     let value = e.get(rt(w)) as u32;
+    store_address_of(e, w, value)
+}
+/// The effective address of a store of `value`, after its data breakpoint.
+pub(super) fn store_address_of(e: &mut Ee, w: u32, value: u32) -> Result<u32, Stop> {
+    let v = address(e, w);
     e.data_break(v, true, Some(value))?;
     Ok(v)
 }
@@ -918,7 +924,6 @@ fn reserved(_: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
 fn later(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let n = match w >> 26 {
         0x10 => 0,
-        0x11 | 0x31 | 0x39 => 1,
         0x12 | 0x36 | 0x3E => 2,
         _ => return Err(Stop::Halt),
     };
@@ -927,7 +932,7 @@ fn later(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 }
 
 pub(super) const fn op(name: &'static str, run: Run, category: Category, row: usize, reads: u8, writes: u8) -> Op {
-    Op { name, run, category, row, reads, writes }
+    Op { name, run, category, row, reads, writes, fpu: false }
 }
 
 use Category::{Alu, Branch, Cop0, Eret as EretC, LoadStore, Mac0, Mac1, SaOperate, Sync};
@@ -1103,21 +1108,26 @@ pub(super) fn predicted_branch(o: &Op) -> bool {
 }
 
 pub(super) fn is_load(o: &Op) -> bool {
-    o.category == LoadStore && o.writes & RT != 0
+    o.category == LoadStore && o.writes & RT != 0 || o.name == "lwc1"
 }
 
 pub(super) fn is_store(o: &Op) -> bool {
-    o.category == LoadStore && o.name.starts_with('s')
+    o.category == LoadStore && o.name.starts_with('s') || o.name == "swc1"
 }
 
-/// The names the interpreter executes, the decoder's spelling: S6's and S7's, then S8's multimedia instructions.
+/// Every instruction the interpreter has, in one index space: S6's and S7's, S8's multimedia instructions, S9's COP1.
+fn all() -> impl Iterator<Item = &'static Op> {
+    TABLE.iter().chain(super::mmi::TABLE).chain(super::fpu::TABLE)
+}
+
+/// The names the interpreter executes, the decoder's spelling.
 pub fn names() -> impl Iterator<Item = &'static str> {
-    TABLE[2..].iter().chain(super::mmi::TABLE).map(|o| o.name)
+    all().skip(2).map(|o| o.name)
 }
 
 fn by_name() -> &'static HashMap<&'static str, u16> {
     static MAP: OnceLock<HashMap<&'static str, u16>> = OnceLock::new();
-    MAP.get_or_init(|| TABLE.iter().chain(super::mmi::TABLE).enumerate().skip(2).map(|(i, o)| (o.name, i as u16)).collect())
+    MAP.get_or_init(|| all().enumerate().skip(2).map(|(i, o)| (o.name, i as u16)).collect())
 }
 
 /// The table's index for a word, through the decoder alone.
@@ -1131,13 +1141,23 @@ pub(super) fn index(w: u32) -> u16 {
 
 pub(super) fn get(i: u16) -> &'static Op {
     let i = i as usize;
-    if i < TABLE.len() { &TABLE[i] } else { &super::mmi::TABLE[i - TABLE.len()] }
+    let mmi = TABLE.len() + super::mmi::TABLE.len();
+    if i < TABLE.len() {
+        &TABLE[i]
+    } else if i < mmi {
+        &super::mmi::TABLE[i - TABLE.len()]
+    } else {
+        &super::fpu::TABLE[i - mmi]
+    }
 }
 
 /// What the timing model is told of `op` at `w`: the resources by register number.
 pub(super) fn issue(op: &Op, w: u32) -> Issue {
-    let bits = |u: u8| -> u64 {
-        let mut m = 0u64;
+    if op.fpu {
+        return super::fpu::issue(op, w);
+    }
+    let bits = |u: u8| -> u128 {
+        let mut m = 0u128;
         if u & RS != 0 {
             m |= 1 << rs(w);
         }

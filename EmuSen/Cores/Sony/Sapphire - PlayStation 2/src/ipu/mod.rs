@@ -5,7 +5,8 @@
 //! saturation and mismatch control of §7.4, and Annex A's reference IDCT (`idct`); CSC, PACK and IDEC's output go
 //! through §8.6's post-processing (`csc`). A command runs symbol by symbol as its bits arrive, each symbol waiting for
 //! the 32 bits the manual asks to be present, and its output waits for room in the output FIFO; the decoding itself
-//! takes no time (a named loss, Sapphire_Native.md §34.8). Sapphire_Native.md §34.
+//! takes no time (a named loss, Sapphire_Disputes.md D-324). An error code inside a macroblock ends the command with
+//! nothing of that macroblock output (D-323). Sapphire_Native.md §34.
 
 pub mod bits;
 pub mod csc;
@@ -306,6 +307,8 @@ impl Ipu {
         }
     }
 
+    /// IPU_CTRL's write: the fields §8.3 marks r/w kept (D-316); RST ends any command (raising INT_IPU if one ran,
+    /// ps2tek), empties both FIFOs and clears the pointer, ECD, SCD and CBP (D-315).
     pub fn write_ctrl(&mut self, v: u32) {
         if v & ctrl::RST != 0 {
             if self.busy {
@@ -455,7 +458,7 @@ impl Ipu {
         self.pending_len = q.len();
     }
 
-    /// An error code: ECD, the pointer left at the code (§8.4).
+    /// An error code: ECD, the pointer left at the code (§8.4); inside IDEC, an increment other than 1 is one (D-318).
     fn error(&mut self) -> Step {
         self.ctrl |= ctrl::ECD;
         Step::End
@@ -595,6 +598,8 @@ impl Ipu {
                 self.phase = Phase::MbType;
                 Step::Go
             }
+            // MPEG-1's macroblock stuffing is passed over here (H.262 §D.9.2); a D-picture's macroblocks end with
+            // end_of_macroblock (§D.9.6, D-326).
             Phase::Next => {
                 if self.input.available() < SYMBOL {
                     return Step::Wait;
@@ -713,6 +718,7 @@ impl Ipu {
             }
             s[256..320].copy_from_slice(&self.mb.out[4]);
             s[320..].copy_from_slice(&self.mb.out[5]);
+            // RAW16 holds the IDCT's samples as they are, intra or not, sign-extended (§8.2.5, D-301).
             for (k, w) in q.iter_mut().take(48).enumerate() {
                 *w = (0..8).rev().fold(0u128, |a, j| a << 16 | u128::from(s[8 * k + j] as u16));
             }
@@ -785,6 +791,7 @@ impl Ipu {
                 let s = bits << len >> 31;
                 (u32::from(r), if s == 1 { -i32::from(l) } else { i32::from(l) }, u32::from(len) + 1)
             }
+            // Table B.16's level 0 (forbidden) and −2048 (reserved) are taken as values (D-322).
             Coef::Escape => {
                 let rest = bits << len;
                 let run = rest >> 26;
@@ -820,6 +827,8 @@ impl Ipu {
 
     /// The block's inverse scan, inverse quantisation, saturation and mismatch control (H.262 §7.3, §7.4; MPEG-1's
     /// oddification with MP1, §D.9.1, D-307) and IDCT (Annex A).
+    /// The weights pair with the coefficients by place, W[v][u] with QF[v][u], under either scan (§7.4.2.1, D-303);
+    /// quantiser_scale is Table 7-6's by IPU_CTRL.QST (D-304); IDP 3 is the standard's 11 bits (D-317).
     fn reconstruct(&mut self) {
         let alt = usize::from(self.ctrl & ctrl::AS != 0);
         let mpeg1 = self.mpeg1();

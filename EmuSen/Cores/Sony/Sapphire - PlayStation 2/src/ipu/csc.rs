@@ -11,7 +11,8 @@ pub fn rgb32(r: u8, g: u8, b: u8, a: u8) -> u32 {
     u32::from(r) | u32::from(g) << 8 | u32::from(b) << 16 | u32::from(a) << 24
 }
 
-/// §8.6.1, steps 1 to 10: Y, Cb and Cr to RGBA with the alpha of thresholds `th0` and `th1`.
+/// §8.6.1, steps 1 to 10: Y, Cb and Cr to RGBA with the alpha of thresholds `th0` and `th1`; the products floored to
+/// halves, Y less 16 in step 5, the halves rounded up (Sapphire_Disputes.md D-319).
 pub fn convert(y: u8, cb: u8, cr: u8, th0: u32, th1: u32) -> u32 {
     let cr1 = i32::from(cr) - 128;
     let cb1 = i32::from(cb) - 128;
@@ -30,12 +31,13 @@ pub fn convert(y: u8, cb: u8, cr: u8, th0: u32, th1: u32) -> u32 {
     }
 }
 
-/// §8.6.1, step 11: IDEC's SGN, each colour's highest bit reversed.
+/// §8.6.1, step 11: IDEC's SGN, each colour's highest bit reversed, before any dither (D-321).
 pub fn signed(rgba: u32) -> u32 {
     rgba ^ 0x0080_8080
 }
 
-/// §8.6.2: RGB32 to RGB16 at pixel (x, y) of its macroblock, dithered or truncated; A1 is A8 = 40h.
+/// §8.6.2: RGB32 to RGB16 at pixel (x, y) of its macroblock, dithered or truncated, the dithered value floored before
+/// clipping; A1 is A8 = 40h (D-320).
 pub fn rgb16(rgba: u32, x: usize, y: usize, dither: bool) -> u16 {
     let d = if dither { DITHER[y & 3][x & 3] } else { 0 };
     let five = |c: u32| -> u16 { (((2 * (c & 0xFF) as i32 + d) >> 1).clamp(0, 255) >> 3) as u16 };
@@ -43,7 +45,8 @@ pub fn rgb16(rgba: u32, x: usize, y: usize, dither: bool) -> u16 {
     five(rgba) | five(rgba >> 8) << 5 | five(rgba >> 16) << 10 | a << 15
 }
 
-/// §8.6.3: the index of the CLUT entry nearest an RGB16 pixel by the sum of squared differences, the first such.
+/// §8.6.3: the index of the CLUT entry nearest an RGB16 pixel by the sum of squared differences, the first such
+/// (D-320).
 pub fn vq(p: u16, clut: &[u16; 16]) -> u8 {
     let c = |v: u16, s: u32| i32::from(v >> s & 0x1F);
     let mut best = (i32::MAX, 0u8);
@@ -60,7 +63,7 @@ pub fn vq(p: u16, clut: &[u16; 16]) -> u8 {
 pub type Pixels = [u32; 256];
 
 /// RAW8's macroblock (§8.2.4, 384 bytes: Y's 16 rows, then Cb and Cr 8 × 8) converted pixel by pixel, each chroma
-/// sample serving the 2 × 2 luminance samples it lies on.
+/// sample serving the 2 × 2 luminance samples it lies on (D-319).
 pub fn convert_raw8(raw: &[u8; 384], th0: u32, th1: u32, out: &mut Pixels) {
     for y in 0..16 {
         for x in 0..16 {

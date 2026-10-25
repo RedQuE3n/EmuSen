@@ -238,7 +238,7 @@ impl Sampler {
 
     /// One level's colour at (`u`, `v`) in sixteenths of a level-0 texel (§3.4.8): point sampling takes the texel the
     /// coordinates fall in, bilinear the four about (u - 0.5, v - 0.5) weighted by its fractions in sixteenths, the sum
-    /// rounded down.
+    /// rounded down once (Sapphire_Disputes.md D-249).
     fn level(&self, local: &Local, clut: &Clut, n: u32, u: i64, v: i64, linear: bool) -> [u32; 4] {
         let (u, v) = (u >> n, v >> n);
         if !linear {
@@ -253,7 +253,7 @@ impl Sampler {
 
     /// The texture's colour for a pixel (§3.4.8, §3.4.12): the LOD, in sixteenths, chooses MMAG at level 0 when it is
     /// 0 or less (D-241) and MMIN otherwise; the mipmapping modes take level m or m + 1 by rounding, or both blended by
-    /// the LOD's fraction in sixteenths, every level held to MXL.
+    /// the LOD's fraction in sixteenths, rounded down once (D-250), every level held to MXL.
     pub fn sample(&self, local: &Local, clut: &Clut, u: i64, v: i64, lod: i32) -> [u32; 4] {
         if lod <= 0 {
             return self.level(local, clut, 0, u, v, self.mmag);

@@ -4102,3 +4102,232 @@ kept.
 - Drawing (S17 to S19): the programs fill the memory by transfers.
 - The state format's new contents (the timing, the field, the picture's geometry): `SPH2` gains them with the rest (S30).
 - The picture on the device (S46).
+
+## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
+
+*Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
+are built beside it.*
+
+### 31.1 In one paragraph
+
+The plan's §7 row S18, on the tester's go of 2026-10-25. The GS textures: **`gs::texture`** keeps the CLUT's temporary
+buffer as the GS's own state, loaded from local memory when TEX0 or TEX2 is written as CLD says, reads the context's
+TEX0, TEX1, CLAMP, MIPTBP1, MIPTBP2 and TEXA at the drawing kick, samples every texture format S16's layout holds
+(nearest, bilinear and the four mipmapping modes, at a LOD from Q or from K), wraps or clamps on whole texels, expands
+16- and 24-bit alpha by TEXA, applies the texture function and then fog, in the place S17's pipeline left for them;
+**`gs::exact`** interpolates S, T and Q, or U and V, at each pixel without rounding and takes the result to sixteenths
+of a texel, the texel coordinate system's own fixed point (§2.6.2), and computes the LOD's log2 the same way. Nine
+programs of the project's, 196,608 graded record words, are equal on Sapphire to the record of S17's model extended by a
+model of chapter 3.4 written apart from `src/gs/`, which also draws 720 generated textured primitives as the source
+does. **PCSX2 equals four programs word for word** (every texture format, every CLUT case, every TEXA case, and the
+twelve flat pages of the texture functions) and departs in five places, each a dispute: bilinear filtering rounded
+after each of its two stages (D-249), the LOD held to eight fractional bits and Q ignored with UV (D-242), MMAG at a LOD
+of 1/16 (D-241), a blend between mip levels that leaves blue and alpha unblended in two pixel columns of every four
+(D-250), and texel boundaries crossed within 2^-22 of a texel (D-247); fog's arithmetic was measured on it and follows
+FOG's page against §3.5's formula (D-248). Disputes D-240 to D-250. No emulator, SDK or loader source, no ps2autotests
+source and no firmware was read.
+
+### 31.2 What was built
+
+- **`src/gs/texture.rs`**: `Clut`, the 512 sixteen-bit places of the temporary buffer (a PSMCT32 entry's low half at
+  place k and its high half at 256 + k, as §3.4.7's CSA tables draw them) and CBP0, CBP1, loaded by `Clut::load` in
+  CSM1's 8×2 and 16×16 arrangements or CSM2's row at TEXCLUT's offset (§2.7.3); `auto_miptbp1`, MTBA's calculation;
+  `Sampler`, the context's registers at the drawing kick, with `sample` (LOD, level and filter), `function` (TFX and
+  TCC) and the texel's conversion (CLUT, RGBA16's expansion, TEXA); `fog`; `Setup`, a primitive's texture coordinates
+  ready to interpolate.
+- **`src/gs/exact.rs`**: single-precision values as exact numbers (`Float`), their sums weighted by a pixel's integer
+  barycentric weights (`Sum`, in fixed 768-bit integers), `quotient` (floor(2^scale × ΣSw / ΣQw)), and `log2_scaled`
+  (floor(2^bits × log2 of a ratio)). Nothing allocates.
+- **`src/gs/raster.rs`**: each primitive interpolates texture coordinates and the fog coefficient by the weights it
+  already uses for colour and Z, only for a pixel that has passed scissoring and only when the primitive is textured or
+  fogged. **`src/gs/pixel.rs`**: texture mapping, then fog, after scissoring and SCANMSK and before the depth test.
+  **`src/gs/draw.rs`**: `Environment` carries the `Sampler` when TME is set and FOGCOL when FGE is. **`src/gs/mod.rs`**:
+  TEX0 written runs MTBA's calculation and the CLUT's load; TEX2 written replaces TEX0's PSM, CBP, CPSM, CSM, CSA and
+  CLD and loads (TEX2's page); the GS owns the `Clut`.
+- **No new cross-component dependency**; `gs::local` is unchanged, and every texel is read through it.
+
+### 31.3 The readings the documents leave open
+
+[R *GS User's Manual* §2.6, §2.7, §3.1, §3.4 whole, §3.5, and chapter 7's pages for TEX0, TEX1, TEX2, CLAMP, TEXA,
+TEXCLUT, TEXFLUSH, MIPTBP1, MIPTBP2, ST, UV, RGBAQ, FOG and FOGCOL; ps2tek "GS Textures", "GS Fog", "GS Primitives",
+"GS Vertex Attributes"; A]:
+
+- **Texture coordinates** (D-247). §3.4.10: "After linear-interpolating S, T, and Q, the GS calculates the
+  normalization texel coordinate values from s = S/Q and t = T/Q"; §2.6.2: texel coordinates are fixed point with four
+  fractional bits, a texel's centre at .5. The reading: S, T and Q are the exact numbers their single-precision bits
+  denote (a zero exponent field is zero and the largest an ordinary exponent [A], as the EE's floats are taken at S9),
+  interpolated by the pixel's exact barycentric weights, divided exactly, multiplied by USIZE or VSIZE, and floored to
+  sixteenths of a texel: u16 = floor(2^(TW + 4) × ΣS_i w_i / ΣQ_i w_i). The weighted sums are held in 768-bit integers,
+  enough for any exponents and weights the registers allow, so no input rounds. UV (int 0:10:4) is interpolated by the
+  same weights and floored. A coordinate beyond ±2^40 sixteenths is kept as a stand-in beyond every clamp's bound on
+  its side and equal to it in its low 24 bits, all that REPEAT or a region's mask reads. ΣQw of 0 gives 0 [A]. A sprite
+  takes S and U along x from its first vertex to its second, T and V along y, and the second vertex's Q and fog
+  coefficient (§3.2.8 gives a sprite's Z and fog from the second vertex; Q is taken with them [A]); a point its
+  vertex's; a line by its major axis, continued past its ends as S17's colour is (D-165), the fog coefficient held to
+  0 to 255. Texture coordinates and fog are interpolated whatever IIP says.
+- **The LOD** (D-241, D-242). TEX1's page: LOD = (log2(1/|Q|) << L) + K with LCM 0, LOD = K with LCM 1, K being int1:7:4.
+  The LOD is held in K's fixed point: floor(2^(L + 4) × log2(1/|Q|)) + K sixteenths, the logarithm exact. It is
+  computed by `log2_scaled`: the ratio's exponent exactly, then its significand to 256 bits squared once a bit, so the
+  result is the exact floor unless a power of the ratio lies within 2^-250 of a power of two. With STQ Q is the pixel's
+  interpolated Q ("MIPMAP (Q Linear Interpolation): Possible", §3.4.4); with UV it is not interpolated ("Impossible")
+  and §3.4.12 says "LOD is calculated from the Q value even if the texture coordinates are given by UV", so the Q of
+  the vertex of the drawing kick is used [A], as flat colour is. Q of 0 is the farthest level [A]. A LOD of 0 or less
+  takes MMAG at level 0, above 0 MMIN (§3.4.12; TEX1's page says "LOD < 0" and "LOD >= 0", D-241). MMIN 2 and 4 take
+  level m or m + 1 by rounding a half up, 3 and 5 blend levels m and m + 1 by the LOD's fraction in sixteenths, every
+  level held to MXL (7 taken as 6 [A]); MMIN 6 and 7, undefined, act as 0 and 1 [A].
+- **Filters** (D-249). Point sampling: the texel the coordinates fall in, at level n the coordinates divided by 2^n
+  (§3.4.8, §3.4.11). Bilinear: §3.4.8's formula with α and β the fractions of (u − 0.5, v − 0.5) in sixteenths, the four
+  products summed and the sum rounded down once. Levels are blended the same way (D-250). A level's size is the
+  texture's halved n times, at least 1.
+- **Wrap modes** (D-245). §3.4.5 on whole texels, each of a bilinear filter's four separately: REPEAT modulo the size,
+  CLAMP to 0 and the size less one, REGION_CLAMP to MIN and then to MAX, as the formulas stand in order, REGION_REPEAT
+  (u & UMSK) | UFIX; at level n the region's bounds and masks are shifted right by n (stated for REGION_CLAMP, taken for
+  REGION_REPEAT [A]). TW and TH above 10 are 10 (ps2tek's "min(2^value, 1024)", [A]).
+- **Formats and TEXA** (§2.6.3, §3.4.6). Every PSM TEX0's page lists, through `gs::local`; a Z format reads as its
+  colour twin in its own layout [A]; PSMCT24 alpha TA0, or 0 for black with AEM; RGBA16 each colour EDCBA000, alpha TA1
+  for A 1, TA0 for A 0, or 0 for black with AEM; the same for a 16-bit CLUT entry.
+- **The CLUT** (D-243, D-244). §3.4.7's load "when the TEX0 or TEX2 register is accessed", under CLD's six codes against
+  CBP0 and CBP1, codes 6 and 7 loading nothing [A]; only an indexed PSM loads, 16 or 256 entries, the count its PSM
+  gives; entries at CSA × 16 wrapping in the buffer (256 places of 32 bits, 512 of 16); CSA applies in CSM2 too; a CPSM
+  the page does not list reads as PSMCT32 [A]. The CPSM at drawing decides how the buffer is read, so a CLUT loaded in
+  one format and read in another, or overwritten in part, shows what the buffer holds.
+- **TEX2 and MTBA** (D-246). TEX2 replaces TEX0's bits 20 to 25 and 37 to 63 (TEX2's page: "subsets of the TEX0
+  register"). MTBA's calculation, run when TEX0 is written with TEX1's MTBA set, writes MIPTBP1: each of levels 1 to 3
+  after the one before, a level taking its texels' bits rounded up to whole 64-word blocks, its width the level's texels
+  over 64, at least 1; §3.4.11's PSMCT16 512×512 example comes out as printed.
+- **The texture function** (D-240). §3.4.9's table, A * B = (A × B) >> 7, every result held to 0 to FFh; with TCC RGB
+  the fragment's alpha is kept in every function, DECAL included, although the table prints At there.
+- **Fog** (D-248). (F × C + (100h − F) × FOGCOL) >> 8, so that F 0 gives FOGCOL itself, as FOG's page says; §3.5's two
+  products each shifted by 8 give FOGCOL less one at F 0.
+- **TEXFLUSH** is accepted and does nothing: every texel is read from local memory as it is when its pixel is drawn
+  (§31.9).
+
+### 31.4 The interfaces: where the later stages attach
+
+- **S19** takes the textured and fogged colour in `pixel::draw` where S17 marked the alpha tests, blending, dithering,
+  COLCLAMP and FBA; antialiasing (AA1) replaces alpha after fog, before the tests.
+- **The state format** (S10, S30) gains the `Clut` (512 entries and CBP0, CBP1) with the GS's registers and memory.
+- **The device path** (S44 to S46) is graded against this sampler; `exact`'s arithmetic is the measure of any faster
+  form (§5.13's C5).
+
+### 31.5 Cost
+
+Not measured for speed. A textured pixel with STQ costs two exact quotients of fixed 768-bit integers and, with LCM 0,
+an exact logarithm; with UV, a 128-bit division. Nothing allocates. The project's nine programs and the generated
+primitives run in 1.4 s on the desktop in release.
+
+### 31.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s18/` writes each program as an S16 script, every texture, CLUT and frame filled first with generated data
+through IMAGE and TEXFLUSH written after (§3.4.13's step 4), every frame page read back raw as PSMCT32; its expected
+record comes from S17's model (`tests/s17/manual.rs`), which hands each pixel's weights to `tests/s18/manual.rs`, written
+apart from `src/gs/`: the CSM1 arrangement transcribed from §2.7.3's figure, the buffer as figure 3-12's places, S, T
+and Q aligned to one exponent in 128-bit integers, log2 in double precision asserted to be at least 10^-9 from a
+boundary unless the ratio is a power of two, and each formula in its document's order.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s18-formats` | 26,624 | every PSM TEX0 names, 13 textures of 64×32 read 1:1 at texel centres from memory written raw, the indexed ones through a PSMCT32 CLUT, DECAL with TCC RGBA, TEXA's TA0 and TA1 |
+| `s18-clut` | 49,152 | CSM1 in PSMCT32, PSMCT16 and PSMCT16S for PSMT8 and PSMT4 with CSA 0, 5, 20 and 31; CSM2 at two TEXCLUT offsets; CLD 2, 0, 4, 4, 3, 5, 5 and 4 with the CLUT's memory rewritten between draws; TEX2; a 16-bit CLUT at CSA 20 over a 32-bit one's upper halves; PSMCT32 with CLD 1; CLD 6; CSA past 256 and past 512 entries; CSA in CSM2; CPSM 1 |
+| `s18-tfx` | 26,624 | MODULATE, DECAL, HIGHLIGHT and HIGHLIGHT2 with TCC RGB and RGBA over 32 flat fragment colours, 0, 7Fh to 81h and FFh among them; PSMCT24 and PSMCT16 under TEXA; a Gouraud triangle under MODULATE |
+| `s18-uv` | 8,192 | UV on an affine quad, on sprites magnified, minified, reversed, on and a sixteenth off texel boundaries, past 1,000 texels; lines, points, a strip and a fan |
+| `s18-stq` | 8,192 | ST with Q 1 at texel centres, past 1.0 and below 0; a quad in perspective (Q 0.25 to 2); Q negative at every vertex; S, T and Q near 10^-3 and 10^3; lines and points |
+| `s18-filter` | 26,624 | bilinear magnification through every sixteenth with REPEAT and CLAMP; bilinear over PSMCT16 and PSMT8; LODs of 0 and ±1/16; LODs between 0 and 1; every level by K and past MXL; MMIN 2 to 5; LCM 0 with Q per quarter and with L; LCM 0 per pixel in perspective; LCM 0 with UV; MTBA on 64×64 PSMCT32 with TBW 1 and 4 and on 32×32 PSMT8, then MTBA 0 |
+| `s18-clamp` | 28,672 | a 16×16 texture read from 24 texels before it to 40 past it in every wrap mode and pairs of them, point sampled and bilinear; MINU above MAXU; REGION_REPEAT reaching past the texture; both region modes at level 1 |
+| `s18-texa` | 14,336 | AEM 0 and 1 with PSMCT16, PSMCT24 and a PSMT4 texture's PSMCT16 CLUT, their black texels and entries (A 0 and A 1) drawn by the GS into them first |
+| `s18-fog` | 8,192 | F 0, 1, 40h, 7Fh, 80h, FEh, FFh and 33h by FOG and by XYZF2's field, a sprite's first vertex's F ignored; F over Gouraud and flat triangles, lines and points; fog after MODULATE |
+
+**Tests** [M, `cargo test --release`]: `tests/texture.rs` **11 of 11** — the nine programs, each equal to its record word
+for word; `generated_textured_primitives_draw_as_the_model_draws_them` (six rounds of 120 textured primitives of every
+kind over 16 pages of generated memory, each with random TEX0 in every PSM and CLUT mode, TEX1, CLAMP, MIPTBP1 and 2,
+TEXA, TEXCLUT and FOGCOL, UV or STQ with Q of either sign, fog and shading at random: every pixel equal between the
+source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`. Lib **43 of 43** (two new, on
+`exact`'s quotient and logarithm against direct computation). The crate's other tests unchanged, on the tree with S17
+beneath: `cop0` **19 of 19**, `dmac` **17 of 17**, `draw` **13 of 13**, `fpu` **9 of 9**, `gs` **12 of 12**,
+`interpreter` **23 of 23**, `iop` **13 of 13**, `micro` **12 of 12**, `mmi` **13 of 13**, `programs` **3 of 3**, `sif`
+**5 of 5**, `vu0` **14 of 14**, `vu_micro` **24 of 24**; lib, `gs`, `draw` and `texture` also under `test-checked`;
+clippy clean. WiseMan with `blast.sh`'s filter (`SapphireTests`) **5 of 5**.
+
+### 31.7 On the referees (measured 2026-10-25)
+
+`examples/s18.rs` writes each program as an ELF with its expected record and a background record (S17's form);
+`ps2referee.py ram pcsx2 … --until 1FFFF0=5A99D00E 200000:<words>` read each from PCSX2 2.8.2 (Americas BIOS, fast
+boot, software renderer), one process at a time. Only the records were read. Play! was not run: it shows no drawing
+through its local memory (§27.7).
+
+| Program (words changed by drawing) | PCSX2: words differing | What they are |
+|---|---|---|
+| `s18-formats` (26,624) | 0 | — every PSM, the CLUT, TEXA |
+| `s18-clut` (49,152) | 0 | — every CSM, CPSM, CSA, CLD and CBP0/CBP1 case, TEX2, the shared buffer, D-243, D-244 |
+| `s18-tfx` (25,632) | 971 | all on the Gouraud page; the twelve flat pages equal (D-240). in each channel 107 to 134 of them are values no 8-bit fragment colour gives under MODULATE, so PCSX2 modulates by a Gouraud colour carried with more bits (D-160's precision) |
+| `s18-uv` (5,164) | 5 | a line's end on a diamond's lower-left edge, whose pixel PCSX2 leaves undrawn (D-161, amended); four pixels of the strip whose U lies exactly on a whole texel, where PCSX2 takes the texel below (D-247) |
+| `s18-stq` (5,874) | 112 | every one a coordinate a little above a whole texel, by 1.5 × 10^-8 to 3.6 × 10^-7 of a texel, where PCSX2 takes the texel below (D-247) |
+| `s18-filter` (26,127) | 9,936 | bilinear rounded after each stage on the magnification pages, reproduced at every pixel (D-249); MMAG at LOD 1/16 (D-241); the blend's columns (D-250); LOD at eight fractional bits, and per pixel computed otherwise (D-242); Q ignored with UV (D-242); level choice by K, MXL, rounding and MTBA all equal |
+| `s18-clamp` (28,672) | 1,959 | only the four bilinear pages, reproduced at every pixel by two-stage rounding (D-249); every wrap mode, MIN above MAX, level-1 regions equal (D-245) |
+| `s18-texa` (14,336) | 0 | — AEM, TA0, TA1, 24- and 16-bit, the CLUT |
+| `s18-fog` (5,208) | 1,249 | none on the flat sprites, whose 16 values measured D-248; one step of colour on the triangles, lines and points, where F and colour are interpolated (D-160's precision) |
+
+So **PCSX2 is a witness for texel addressing in every format, the CLUT buffer and every CLD, CSA and CSM case, TEXA,
+the texture functions with TCC, the wrap modes and their regions at levels, MTBA, level selection by a fixed LOD, and
+fog's formula**; not for bilinear rounding, the LOD's precision or Q with UV, nor for the blend between levels, where
+its departures are its arithmetic's or its renderer's, not a rule a document states. Its blend's departure was checked
+by reproducing it: blending by the LOD's fraction with two-stage bilinear and leaving blue and alpha at level m in
+columns 2 and 3 of every four reproduces every word of the five constant-LOD mipmap quarters it was tried on.
+
+### 31.8 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | PSMT4HL's texel read from bits 31..28, PSMT4HH's nibble, in `Sampler::texel` | `every_texture_format_is_read_…`, `generated_textured_primitives_…` |
+| F2 | Bilinear weights rounded after each stage, horizontal then vertical, in `Sampler::level` | `bilinear_lod_and_the_mipmap_filters_…`, `every_wrap_mode_acts_…`, `generated_textured_primitives_…` |
+| F3 | CSM2's CLUT read in CSM1's arrangement, in `Clut::load` | `the_clut_buffer_loads_…`, `generated_textured_primitives_…` |
+
+Each was applied, `tests/texture.rs` run, and the source restored [M]. F2 is PCSX2's arithmetic (D-249).
+
+### 31.9 What is not modelled
+
+- **The texture page buffer and TEXFLUSH** (§3.4.7, TEXFLUSH's page; ps2tek "Recursive Drawing"): every texel is read
+  from local memory when its pixel is drawn, so a program that omits TEXFLUSH sees what a console shows after one, and a
+  primitive whose texture is its own frame reads pixels it has already drawn. The page buffer's size (8 KB, §1.1.2),
+  fill and replacement are not documented; a named loss, a dispute candidate when a game at S28 reads its own frame.
+- **Drawing time**: the CLUT's load and every texture read take no time.
+- **FIX** (PRIM bit 10) is carried and has no effect; antialiasing is S19's.
+- **The size limits of TEX0's page and §3.4.12** for bilinear and trilinear filters ("8 x 8 texels or more", "four or
+  less ... correct images cannot be obtained"): smaller textures filter by the same arithmetic.
+
+### 31.10 What the plan got wrong, or left open
+
+- **§2.3** names "the fixed point of texture coordinates and LOD" and "the filtering's weights" as thin. The texel
+  coordinate system's four fractional bits (§2.6.2) and K's format give the fixed point; the precision of the division,
+  the logarithm and the filters' sums is not given, so the exact reading is the reference (D-242, D-247, D-249).
+- **§3.4.12 and TEX1's page disagree at a LOD of 0, §3.4.9's table and §3.4.3 at DECAL with TCC RGB, §3.5's formula and
+  FOG's page at F 0** — inconsistencies within the manual, settled by D-241, D-240 and D-248.
+- **The gate's "each picture equal to the referees'"**: as at S17, PCSX2 alone, and its arithmetic departs from any exact
+  reading in the filters and the LOD.
+
+### 31.11 Questions this stage leaves
+
+1. **Q1 [routine], bilinear rounding and the LOD's precision (D-249, D-242).** *Recommended*: keep one rounding of the
+   weighted sum and the LOD in K's fixed point; PCSX2's two stages and eight bits are one emulator's arithmetic. Revisit
+   with a second lineage.
+2. **Q2 [routine], the texture page buffer (§31.9).** *Recommended*: keep reading memory directly until a game at S28
+   draws from its own frame; then measure on PCSX2 with a program that omits TEXFLUSH and one that draws its own
+   texture, before modelling a buffer whose size and policy no document gives.
+3. **Q3 [routine], Q with UV (D-242).** *Recommended*: keep the manual's sentence (Q used with UV, the drawing kick's
+   vertex's), against PCSX2's LOD = K.
+4. The second picture lineage stays S17's Q1 [decision], unbuilt.
+
+### 31.12 What was read for this stage
+
+`Sapphire_Plan.md` §2, §5.4, §7 (S16 to S20), §8, §10 and §11; this page's §24 and §27; `Sapphire_Referees.md` §2.1, §3
+and §6; `Sapphire_Disputes.md` D-100 to D-107 and D-160 to D-165. Sony's *GS User's Manual* (Version 5.0) §1.1, §2.6 and
+§2.7 whole, §3.1, §3.2.2, §3.2.3, §3.2.8, §3.4 whole, §3.5, and chapter 7's pages for CLAMP, FOG, FOGCOL, MIPTBP1,
+MIPTBP2, RGBAQ, ST, TEX0, TEX1, TEX2, TEXA, TEXCLUT, TEXFLUSH and UV; the kit's *Restriction* document's "Texture Width".
+ps2tek at `1c91660`: "GS Primitives", "GS Vertex Attributes", "GS Textures", "GS Fog", "GS Special Effects and
+Optimizations". No emulator, SDK or loader source, no ps2autotests source and no firmware.
+
+### 31.13 What this stage does not cover
+
+- The alpha test, destination alpha, blending, PABE, FBA, colour clamp, dithering and antialiasing (S19); the PCRTC (S20).
+- The GIF (S15): until then nothing on the EE's side textures on Sapphire; the tests drive the host interface.
+- The state format's new contents (the CLUT buffer): `SPH2` gains them with the rest (S10, S30).

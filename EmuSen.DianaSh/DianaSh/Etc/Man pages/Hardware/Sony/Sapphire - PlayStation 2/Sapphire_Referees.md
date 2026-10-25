@@ -170,6 +170,14 @@ its local-to-host transfer, which reads transferred data exactly, reads every dr
 drawing; form C (§6) therefore carries transfers and not drawing, and a second lineage for S17 to S19 needs form A, the
 reserve kept at S3.
 
+*Added 2026-10-25 at S18* (`Sapphire_Native.md` §31.7): **PCSX2 is a witness for texturing's addressing and tables**:
+every texture format, the CLUT buffer under every CLD, CSA, CSM and CPSM case, TEXA, the texture functions with TCC
+(D-240), the wrap modes and their regions at levels (D-245), MTBA (D-246), level choice by a fixed LOD, and fog's formula
+(D-248); **not for the filters' and the LOD's arithmetic**: it rounds bilinear filtering after each stage (D-249), holds
+the LOD to eight fractional bits and ignores Q with UV (D-242), takes MMAG at a LOD of 1/16 (D-241), leaves blue and
+alpha unblended between mip levels in two pixel columns of every four (D-250), and crosses texel boundaries within
+single precision's reach (D-247).
+
 ## 4. The project's programs
 
 ### 4.1 The gate: `programs/record.s`

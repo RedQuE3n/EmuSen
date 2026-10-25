@@ -127,7 +127,7 @@ const RECORD5: [&str; 14] = [
     "daddiu s1, s1, 40",
 ];
 
-/// 80000000h: records, then maps the faulting pair as two uncached 4 KiB pages at REFILL_PAGE by TLBWR and retries.
+/// 80000000h: records, then maps the faulting pair as two uncached 4 KiB pages at REFILL_PAGE in entry 7 and retries.
 fn refill_handler() -> String {
     let mut h: Vec<String> = RECORD5.iter().map(|s| s.to_string()).collect();
     let even = lo(REFILL_PAGE >> 12, 2, true, true, true);
@@ -135,12 +135,14 @@ fn refill_handler() -> String {
     h.extend(
         [
             "mtc0 zero, PageMask".to_string(),
+            "ori k0, zero, 7".into(),
+            "mtc0 k0, Index".into(),
             format!("ori k0, zero, 0x{even:x}"),
             "mtc0 k0, EntryLo0".into(),
             format!("ori k0, zero, 0x{odd:x}"),
             "mtc0 k0, EntryLo1".into(),
             "sync.p".into(),
-            "tlbwr".into(),
+            "tlbwi".into(),
             "sync.p".into(),
             "eret".into(),
         ]
@@ -250,12 +252,21 @@ pub fn handlers() -> Vec<(u32, Vec<u32>)> {
 }
 
 /// The machine made the program's own: interrupts off, the handlers written through kseg1, both caches on,
-/// every data cache line written back and its tag cleared, every instruction cache line invalidated, every TLB
-/// entry cleared (Wired 8, ASID 0, Context's PTEBase 1FFh).
+/// every data cache line written back and its tag cleared, every instruction cache line invalidated, TLB entries 0 to
+/// 7, the programs' own, cleared to invalid pairs in kseg3 (ASID 0, Context's PTEBase 1FFh). The entries above 7 are
+/// left to whatever kernel entered the program: PCSX2 stops once they are rewritten (Sapphire_Native.md §17.9).
 fn prologue(p: &mut Program) {
+    prologue_to(p, 6);
+}
+
+/// The prologue's first `steps` parts, for finding the part a referee does not take.
+fn prologue_to(p: &mut Program, steps: u32) {
     p.emit("di");
     p.emit("mtc0 zero, Status");
     p.emit("sync.p");
+    if steps < 2 {
+        return;
+    }
     li(p, "t9", 0xA000_0000);
     for (at, words) in handlers() {
         for (i, w) in words.iter().enumerate() {
@@ -263,12 +274,18 @@ fn prologue(p: &mut Program) {
             p.emit(format!("sw t3, 0x{:x}(t9)", (at & 0xFFFF) as usize + 4 * i));
         }
     }
+    if steps < 3 {
+        return;
+    }
     p.emit("mfc0 t0, Config");
     p.emit("lui t1, 0x3");
     p.emit("or t0, t0, t1");
     p.emit("sync");
     p.emit("mtc0 t0, Config");
     p.emit("sync.p");
+    if steps < 4 {
+        return;
+    }
     let d = p.label();
     p.emit("lui t0, 0x8000");
     p.emit("ori t1, zero, 64");
@@ -281,6 +298,9 @@ fn prologue(p: &mut Program) {
     p.emit("addiu t1, t1, -1");
     p.emit(format!("bne t1, zero, {d}"));
     p.emit("addiu t0, t0, 64");
+    if steps < 5 {
+        return;
+    }
     let i = p.label();
     p.emit("ori t0, zero, 0");
     p.emit("ori t1, zero, 128");
@@ -291,12 +311,20 @@ fn prologue(p: &mut Program) {
     p.emit("addiu t1, t1, -1");
     p.emit(format!("bne t1, zero, {i}"));
     p.emit("addiu t0, t0, 64");
+    if steps < 6 {
+        return;
+    }
     let t = p.label();
     p.emit("mtc0 zero, PageMask");
     p.emit("mtc0 zero, EntryLo0");
     p.emit("mtc0 zero, EntryLo1");
-    p.emit("lui t0, 0x8000");
-    p.emit("ori t1, zero, 0");
+    let (first, end) = match steps {
+        8 => (8, 48),
+        9 => (47, 48),
+        _ => (0, 8),
+    };
+    p.emit("lui t0, 0xe000");
+    p.emit(format!("ori t1, zero, {first}"));
     p.place(&t);
     p.emit("mtc0 t1, Index");
     p.emit("mtc0 t0, EntryHi");
@@ -304,11 +332,9 @@ fn prologue(p: &mut Program) {
     p.emit("tlbwi");
     p.emit("sync.p");
     p.emit("addiu t1, t1, 1");
-    p.emit("slti t2, t1, 48");
+    p.emit(format!("slti t2, t1, {end}"));
     p.emit(format!("bne t2, zero, {t}"));
     p.emit("addiu t0, t0, 0x2000");
-    p.emit("ori t1, zero, 8");
-    p.emit("mtc0 t1, Wired");
     p.emit("mtc0 zero, EntryHi");
     p.emit("lui t1, 0xff80");
     p.emit("mtc0 t1, Context");
@@ -471,15 +497,15 @@ pub fn scratchpad() -> Program {
     let s = 0x8000_0000u32;
     let lo0 = s | lo(REFILL_PAGE >> 12, 3, true, true, true);
     let lo1 = lo(0, 3, true, true, true);
-    map(&mut p, 4, 0, 0x7000_0000, lo0, lo1);
-    map(&mut p, 5, 0, 0x5000_4000, lo0, lo1);
+    map(&mut p, 3, 0, 0x7100_0000, lo0, lo1);
+    map(&mut p, 4, 0, 0x5000_4000, lo0, lo1);
     poke(&mut p, REFILL_PAGE, 0x3000);
     poke(&mut p, REFILL_PAGE + 0x2000, 0x3200);
-    store(&mut p, 0x7000_0000, 0xA0A0);
-    store(&mut p, 0x7000_2000, 0xB0B0);
+    store(&mut p, 0x7100_0000, 0xA0A0);
+    store(&mut p, 0x7100_2000, 0xB0B0);
     let q: u128 = 0x0F1E_2D3C_4B5A_6978_8796_A5B4_C3D2_E1F0;
     p.quad("t3", q);
-    li(&mut p, "t6", 0x7000_3FF0);
+    li(&mut p, "t6", 0x7100_3FF0);
     p.emit("sq t3, 0(t6)");
     load(&mut p, 0x5000_4000, sx(0xA0A0));
     load(&mut p, 0x5000_6000, sx(0xB0B0));
@@ -494,7 +520,7 @@ pub fn scratchpad() -> Program {
     p.expected.push(Some(q as u64));
     memory(&mut p, REFILL_PAGE, 0x3000);
     memory(&mut p, REFILL_PAGE + 0x2000, 0x3200);
-    p.emit("ori t0, zero, 4");
+    p.emit("ori t0, zero, 3");
     p.emit("mtc0 t0, Index");
     p.emit("sync.p");
     p.emit("tlbr");
@@ -502,18 +528,18 @@ pub fn scratchpad() -> Program {
     let c2 = |l: u32| l & !(7 << 3) | 2 << 3;
     cop0(&mut p, "EntryLo0", sx(c2(lo0)));
     cop0(&mut p, "EntryLo1", sx(c2(lo1)));
-    cop0(&mut p, "EntryHi", sx(0x7000_0000));
+    cop0(&mut p, "EntryHi", sx(0x7100_0000));
     // A clean S entry reads the scratchpad and refuses a store; an invalid one refuses a load.
-    map(&mut p, 6, 0, 0x7000_4000, s | lo(0, 3, false, true, true), lo(0, 3, false, true, true));
-    map(&mut p, 7, 0, 0x7000_8000, s | lo(0, 3, false, false, true), lo(0, 3, false, false, true));
-    load(&mut p, 0x7000_4000, sx(0xA0A0));
-    let va = 0x7000_4010;
+    map(&mut p, 5, 0, 0x7100_4000, s | lo(0, 3, false, true, true), lo(0, 3, false, true, true));
+    map(&mut p, 6, 0, 0x7100_8000, s | lo(0, 3, false, false, true), lo(0, 3, false, false, true));
+    load(&mut p, 0x7100_4000, sx(0xA0A0));
+    let va = 0x7100_4010;
     let at = store(&mut p, va, 3);
-    taken(&mut p, 1, at, false, Some(va), Some(context(va)), Some(0x7000_4000));
-    let va = 0x7000_8020;
+    taken(&mut p, 1, at, false, Some(va), Some(context(va)), Some(0x7100_4000));
+    let va = 0x7100_8020;
     let at = load(&mut p, va, None);
     p.expected.pop();
-    taken(&mut p, 2, at, false, Some(va), Some(context(va)), Some(0x7000_8000));
+    taken(&mut p, 2, at, false, Some(va), Some(context(va)), Some(0x7100_8000));
     p.expected.push(Some(SENTINEL));
     p
 }
@@ -890,4 +916,13 @@ pub fn bus_errors() -> Program {
 /// Every program, in the order the referees run them.
 pub fn all() -> Vec<Program> {
     vec![tlb(), scratchpad(), data_cache(), instruction_cache(), counters(), breakpoints(), bus_errors()]
+}
+
+/// A program of the prologue's first `steps` parts and one record word, to find where a referee stops.
+pub fn probe(steps: u32) -> Program {
+    let mut p = Program::kernel(["s7-probe0", "s7-probe1", "s7-probe2", "s7-probe3", "s7-probe4", "s7-probe5", "s7-probe6", "s7-probe7", "s7-probe8", "s7-probe9"][steps as usize]);
+    prologue_to(&mut p, steps);
+    p.emit("ori t2, zero, 0x1234");
+    p.record("t2", Some(0x1234));
+    p
 }

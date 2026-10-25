@@ -9,7 +9,9 @@ mod s7;
 fn main() {
     let dir = std::path::PathBuf::from(std::env::args().nth(1).expect("a folder"));
     std::fs::create_dir_all(&dir).expect("the folder");
-    for p in s7::all() {
+    let probes = std::env::args().nth(2).is_some_and(|a| a == "probes");
+    let all = if probes { (0..10).map(s7::probe).collect() } else { s7::all() };
+    for p in all {
         let name = p.name;
         let (source, expected) = p.finish();
         let words = emusen_mips::assemble(&source, s6::ORIGIN, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{name}: {e:?}"));

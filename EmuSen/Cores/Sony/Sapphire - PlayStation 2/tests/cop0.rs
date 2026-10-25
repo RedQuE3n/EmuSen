@@ -85,7 +85,7 @@ fn the_programs_execute_every_instruction_s7_adds() {
     let s7: Vec<_> = ee::names().skip(128).collect();
     assert_eq!(s7.len(), 27, "the TLB, debug, performance, BC0 and CACHE instructions");
     let unexecuted: Vec<_> = s7.iter().filter(|n| !seen.contains(**n)).collect();
-    let by_unit = ["mfiab", "mfiabm", "mfdab", "mfdabm", "mfdvb", "mfdvbm", "bc0f", "bc0t", "bc0fl", "bc0tl"];
+    let by_unit = ["tlbwr", "mfiab", "mfiabm", "mfdab", "mfdabm", "mfdvb", "mfdvbm", "bc0f", "bc0t", "bc0fl", "bc0tl"];
     assert!(unexecuted.iter().all(|n| by_unit.contains(n)), "never executed: {unexecuted:?}");
 }
 
@@ -131,6 +131,17 @@ fn random_decrements_once_an_issue_cycle_between_wired_and_47() {
     e.cop0[cop0::RANDOM] = 20;
     steps(&mut e, &mut bus, 2);
     assert_eq!(e.cop0[cop0::RANDOM], 47, "writing Wired sets Random to 47");
+}
+
+#[test]
+fn tlbwr_writes_the_entry_random_names() {
+    let (mut e, mut bus) = machine("lui t0, 0x1234\nmtc0 t0, EntryHi\nori t0, zero, 0x1f\nmtc0 t0, EntryLo0\nmtc0 t0, EntryLo1\ntlbwr");
+    steps(&mut e, &mut bus, 5);
+    let r = e.cop0[cop0::RANDOM] as usize;
+    steps(&mut e, &mut bus, 1);
+    assert!((19..48).contains(&r), "Random between Wired and 47: {r}");
+    assert_eq!(e.tlb.entries[r].hi, 0x1234_0000 | 1 << 12, "VPN2 and G");
+    assert_eq!(e.tlb.lookup(0x1234_0010, 0).map(|h| h.index), Some(r));
 }
 
 #[test]

@@ -190,3 +190,22 @@ fn xtop_and_xitop_read_the_link() {
     assert_eq!((u.vu0.vi(1), u.vu0.vi(2)), (0, 0x33), "VU0: no XTOP; XITOP reads VIF0's ITOP");
     assert_eq!((u.vu1.vi(1), u.vu1.vi(2)), (0x222, 0x144));
 }
+
+/// A D or T bit reaches the INTC as the unit's interrupt (§7.3.1: "an interrupt signal is sent to the host processor";
+/// INTC's VU0 and VU1 sources, EE User's Manual §3.1).
+#[test]
+fn a_t_bit_raises_vu1_s_interrupt() {
+    let micro = emusen_mips::vu::assemble("nop | move vf0, vf0\n[t] nop | move vf0, vf0\nnop | move vf0, vf0").unwrap();
+    let mut sys = System::new(ORIGIN);
+    sys.board.map.load(ORIGIN, &assemble("addiu t0, zero, 0x800\nctc2 t0, vi28\nctc2 zero, vi31\nnop\nnop\nnop\nnop\nnop\nnop\nnop", ORIGIN));
+    for (i, p) in micro.iter().enumerate() {
+        sys.board.vpu.units.vu1.micro[i * 8..i * 8 + 8].copy_from_slice(&p.to_le_bytes());
+    }
+    sys.ee.cop0[sapphire::ee::cop0::STATUS] |= sapphire::ee::status::CU2;
+    for _ in 0..10 {
+        sys.step().unwrap();
+    }
+    assert_eq!(sys.board.intc.stat >> sapphire::intc::source::VU1 & 1, 1);
+    assert_eq!(sys.board.vpu.vpu_stat(sys.ee.timing.cycles()) >> 8 & 0x7, 0x4, "VTS1, VU1 not busy");
+    assert_eq!(sys.board.vpu.units.vu1.tpc, 2);
+}

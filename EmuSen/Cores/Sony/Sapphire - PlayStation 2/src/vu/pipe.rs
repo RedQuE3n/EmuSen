@@ -426,7 +426,7 @@ impl Pipe {
         let mut up_out = Deferred::default();
         let mut up_write = None;
         if let Some((o, e)) = up {
-            let mut c = Ctx::micro(vu, window.as_deref_mut());
+            let mut c = Ctx::micro(vu, window);
             (e.run)(&mut c, upper);
             up_out = c.out;
             up_write = upper_access(o, upper).vf_write;
@@ -607,6 +607,6 @@ impl Micro for Pipe {
     fn stat(&self) -> u32 {
         let run = self.state == State::Run;
         let gw = if run && self.kick_wait > self.now { vpu_stat::VGW } else { 0 };
-        u32::from(run) * vpu_stat::VBS | self.stopped_by | gw
+        (u32::from(run) * vpu_stat::VBS) | self.stopped_by | gw
     }
 }

@@ -42,10 +42,6 @@ fn times(tr: &[(u16, u64)]) -> Vec<u64> {
     tr.iter().map(|&(_, t)| t).collect()
 }
 
-fn vu(u: &mut Units, unit: usize) -> &mut Vu {
-    if unit == 0 { &mut u.vu0 } else { &mut u.vu1 }
-}
-
 const END: &str = "[e] nop | move vf0, vf0\nnop | move vf0, vf0";
 
 /// Figure 3-3: an FMAC result used four pairs on, with no stall.
@@ -427,4 +423,51 @@ fn force_break_and_reset() {
     assert_eq!(p.stat(), vpu_stat::VFS);
     p.reset();
     assert_eq!(p.stat(), 0);
+}
+
+/// ps2autotests' `vu/lower/fdivdelay` text, a console's output: "DIV single delayed" prints VF01 to VF14 with 1.00
+/// six times and then 0.25, "SQRT single delayed" 1.00 six times and then 2.00, "RSQRT single delayed" 1.00 twelve
+/// times and then 0.50. Read as a divide followed by one pair a register, each adding Q (the test's source is not
+/// read; the lines' shape is the inference), the quotient reaches the seventh pair and the thirteenth (D-51's micro
+/// form).
+#[test]
+fn the_fdivdelay_console_text_s_single_delayed_lines_hold() {
+    for (op, a, b, new, old_count) in [("div q, vf1w, vf2w", ONE, FOUR, 0x3E80_0000, 6), ("sqrt q, vf2w", 0, FOUR, TWO, 6), ("rsqrt q, vf1w, vf2w", ONE, FOUR, HALF, 12)] {
+        let mut u = units();
+        u.vu0.set_vf(1, [0, 0, 0, a]);
+        u.vu0.set_vf(2, [0, 0, 0, b]);
+        u.vu0.q = ONE;
+        let reads: String = (1..=14).map(|n| format!("addq.w vf{}, vf0, q | move vf0, vf0\n", n + 2)).collect();
+        let src = format!("nop | {op}\n{reads}{END}");
+        run_on(&mut u, 0, &src);
+        let ws: Vec<u32> = (1..=14).map(|n| u.vu0.vf(n + 2)[3]).collect();
+        let want: Vec<u32> = (1..=14).map(|n| if n <= old_count { vf00_w_plus(ONE) } else { vf00_w_plus(new) }).collect();
+        assert_eq!(ws, want, "{op}");
+    }
+}
+
+/// VF00's w (1.0) plus `q`, as ADDq.w forms it.
+fn vf00_w_plus(q: u32) -> u32 {
+    sapphire::float::add(ONE, q).bits
+}
+
+/// ps2autotests' `vu/upper/clip` text, a console's output: its "Multi test" prints 0000 four times, then 0015, 056a,
+/// 0a99 and 0666 three times. Read as four CLIPs in four pairs (judgements 15h, 2Ah, 19h and 26h, the "Basic test"
+/// lines' FULL POS, FULL NEG, HALF POS and HALF NEG against 1), each beside an FCGET, then six FCGETs, the flag is seen
+/// four cycles after its CLIP.
+#[test]
+fn the_clip_console_text_s_multi_test_holds() {
+    let mut u = units();
+    let h = 0x4000_0000;
+    let (n, m) = (h | 0x8000_0000, ONE);
+    for (r, v) in [(1, [h, h, h, m]), (2, [n, n, n, m]), (3, [h, n, h, m]), (4, [n, h, n, m])] {
+        u.vu0.set_vf(r, v);
+    }
+    let src = format!(
+        "clipw.xyz vf1, vf1 | fcget vi1\nclipw.xyz vf2, vf2 | fcget vi2\nclipw.xyz vf3, vf3 | fcget vi3\nclipw.xyz vf4, vf4 | fcget vi4\n\
+         nop | fcget vi5\nnop | fcget vi6\nnop | fcget vi7\nnop | fcget vi8\nnop | fcget vi9\nnop | fcget vi10\n{END}"
+    );
+    run_on(&mut u, 0, &src);
+    let got: Vec<u16> = (1..=10).map(|r| u.vu0.vi(r)).collect();
+    assert_eq!(got, [0, 0, 0, 0, 0x015, 0x56A, 0xA99, 0x666, 0x666, 0x666]);
 }

@@ -78,10 +78,9 @@ fn arctan(num: u32, den: u32) -> u32 {
     let t2 = m(t, t);
     let mut acc = m(T[0], t);
     let mut odd = m(t2, t);
-    let mut next;
-    for k in 1..7 {
-        next = m(odd, t2);
-        acc = ma(acc, odd, T[k]);
+    for term in &T[1..7] {
+        let next = m(odd, t2);
+        acc = ma(acc, odd, *term);
         odd = next;
     }
     let acc = ma(acc, ONE, PI_4);

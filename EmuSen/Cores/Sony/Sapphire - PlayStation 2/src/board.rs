@@ -13,6 +13,7 @@ use crate::ee::map::{self, Map, Region};
 use crate::ee::{Bus, Ee, Halt};
 use crate::intc::{self, Intc};
 use crate::timer::{self, Timer};
+use crate::vu::Vpu;
 
 /// A stand-in for a peripheral the DMAC reaches before its stage exists (VIF0, VIF1, GIF, IPU, SIF): it takes every
 /// qword offered, keeping them when `keep` is set, and gives the qwords queued in `give`, holding its channel when it
@@ -71,6 +72,8 @@ pub struct Board {
     pub timers: [Timer; 4],
     pub blank: Blank,
     pub ports: StandIns,
+    /// VU0 and VU1, which the core reaches through COP2 and the map at 11000000h (from S12).
+    pub vpu: Vpu,
     /// The time every unit has been brought to, in EE cycles.
     pub now: u64,
     next: u64,
@@ -85,6 +88,7 @@ impl Board {
             timers: Default::default(),
             blank: Blank::new(standard),
             ports: StandIns::default(),
+            vpu: Vpu::new(),
             now: 0,
             next: 0,
         };
@@ -141,6 +145,7 @@ impl Board {
             debug_assert!(self.next > at, "an event at {at} asked for its own time again");
         }
         self.now = self.now.max(t);
+        self.vpu.run_to(t);
     }
 
     /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
@@ -179,8 +184,14 @@ fn is_unit_register(paddr: u32) -> bool {
     paddr < 0x1000_2000 || (0x1000_8000..0x1000_F000).contains(&paddr) || (0x1000_F000..0x1000_F600).contains(&paddr)
 }
 
+/// The VU memories in the EE's map (EE User's Manual §2.1).
+const VU_MEMORY: std::ops::Range<u32> = 0x1100_0000..0x1101_0000;
+
 impl Bus for Board {
     fn read(&mut self, paddr: u32, bytes: usize) -> u128 {
+        if VU_MEMORY.contains(&paddr) {
+            return self.vpu.read(paddr, bytes);
+        }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) {
                 let w = self.read_register(paddr & !0xF);
@@ -192,6 +203,9 @@ impl Bus for Board {
     }
 
     fn write(&mut self, paddr: u32, bytes: usize, value: u128) {
+        if VU_MEMORY.contains(&paddr) {
+            return self.vpu.write(paddr, bytes, value);
+        }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
             if is_unit_register(paddr & !0xF) && bytes >= 4 {
                 self.write_register(paddr & !0xF, value as u32);
@@ -203,6 +217,10 @@ impl Bus for Board {
 
     fn error(&mut self, paddr: u32) -> bool {
         self.map.error(paddr)
+    }
+
+    fn vpu(&mut self) -> Option<&mut Vpu> {
+        Some(&mut self.vpu)
     }
 }
 

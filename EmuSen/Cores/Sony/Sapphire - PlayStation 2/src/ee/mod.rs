@@ -7,6 +7,7 @@
 pub mod bus;
 pub mod cache;
 pub mod cop0;
+mod cop2;
 pub mod fpu;
 pub mod map;
 mod memory;
@@ -42,6 +43,7 @@ pub mod status {
     pub const DEV: u32 = 1 << 23;
     pub const CU0: u32 = 1 << 28;
     pub const CU1: u32 = 1 << 29;
+    pub const CU2: u32 = 1 << 30;
 }
 
 /// A level 1 exception, with what its code in Cause.ExcCode needs (EE Core User's Manual Table 4-3).
@@ -160,6 +162,10 @@ pub struct Ee {
     /// Instructions in the current issue cycle, and the cycles already given to Count and the counters.
     group: u8,
     cycles_seen: u64,
+    /// The instruction table's entry being executed, and the cycle before which it may not issue (a COP2 interlock).
+    current: u16,
+    current_word: u32,
+    stall_until: u64,
 }
 
 const MEMO: usize = 4096;
@@ -203,6 +209,9 @@ impl Ee {
             wired_written: false,
             group: 0,
             cycles_seen: 0,
+            current: 0,
+            current_word: 0,
+            stall_until: 0,
         }
     }
 
@@ -490,6 +499,9 @@ impl Ee {
         };
         let entry = self.entry(word);
         let op = ops::get(entry);
+        self.current = entry;
+        self.current_word = word;
+        self.stall_until = 0;
         self.pc = self.next_pc;
         self.next_pc = self.pc.wrapping_add(4);
         let mut issue = ops::issue(op, word);
@@ -528,17 +540,37 @@ impl Ee {
         if self.delay {
             issue.taken = self.next_pc != pc.wrapping_add(8);
         }
-        let c = self.cop0[cop0::CONFIG];
-        issue.fetch = self.stall_fetch;
         issue.data = self.stall_data;
-        issue.blocking = c & config::NBE == 0;
-        issue.single = c & config::DIE == 0;
+        let issue = self.completed_issue(issue);
         self.timing.issue(issue);
         if self.pccr & perf::CTE != 0 {
             self.completion_events(bus, op, pc, completed);
         }
         self.advance();
         Ok(())
+    }
+
+    /// An instruction's timing request with what the step has learned: its fetch's wait, the configuration, an
+    /// interlock's earliest cycle.
+    fn completed_issue(&self, mut issue: timing::Issue) -> timing::Issue {
+        let c = self.cop0[cop0::CONFIG];
+        issue.fetch = self.stall_fetch;
+        issue.blocking = c & config::NBE == 0;
+        issue.single = c & config::DIE == 0;
+        issue.earliest = self.stall_until;
+        issue
+    }
+
+    /// The cycle the instruction being executed would issue in, as far as it is known now (a COP2 instruction's
+    /// interlocks and Q read by it).
+    pub(crate) fn planned(&self) -> u64 {
+        let issue = ops::issue(ops::get(self.current), self.current_word);
+        self.timing.would_issue(self.completed_issue(issue))
+    }
+
+    /// The instruction being executed may not issue before cycle `t`.
+    pub(crate) fn wait(&mut self, t: u64) {
+        self.stall_until = self.stall_until.max(t);
     }
 
     /// The events of Table 7-1 an instruction gives by its kind: branches issued, completions, loads and stores.
@@ -553,6 +585,9 @@ impl Ee {
             e.event(event::COMPLETED, 1);
             if o.category != timing::Category::Branch {
                 e.event(event::NON_BDS, 1);
+            }
+            if o.kind == ops::Kind::Cop2 {
+                e.event(event::COP2_COMPLETED, 1);
             }
             if ops::is_load(o) {
                 e.event(event::LOAD_COMPLETED, 1);

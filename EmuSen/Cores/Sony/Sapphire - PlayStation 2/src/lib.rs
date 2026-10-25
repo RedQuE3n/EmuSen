@@ -8,7 +8,7 @@
 //! breakpoints; S8: the multimedia instructions; S9: COP1, on `float`, the PlayStation 2's single-precision format in
 //! software; run by the project's programs and not yet by the machine (S10 loads programs). S11: the DMAC (`dmac`),
 //! the INTC (`intc`), the EE timers (`timer`) and the blanking stand-in (`blank`) on one clock (`clock`), with the
-//! core in `board::System`.
+//! core in `board::System`. S12: the vector units (`vu`), VU0 in macro mode through COP2, micro mode an interface for S13.
 
 pub mod bios;
 pub mod blank;
@@ -22,4 +22,5 @@ pub mod machine;
 pub mod media;
 pub mod state;
 pub mod timer;
+pub mod vu;
 pub mod v1;

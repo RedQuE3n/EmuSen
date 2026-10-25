@@ -583,6 +583,11 @@ multiplier loses its lowest Booth column, and DIV.S and SQRT.S round to the near
 (`Sapphire_Disputes.md` D-25 to D-28); C3's classes now include every product, every sum that loses bits to
 alignment, and every quotient and root (§19.8 there).
 
+*Built 2026-10-25 at S12* (`Sapphire_Native.md` §21.3): the VUs compute on the same module, every rule of the arithmetic
+shared and only the flags their own; that the VU's adder, multiplier and divider are the FPU's console-decided ones is
+argued from the manuals (`Sapphire_Disputes.md` D-43), and both referees compute the VU on IEEE 754's rounding towards
+zero, so S13's console texts are to decide it.
+
 ### 5.4 The GS: an exact software reference, then the device
 
 - **The software rasteriser is the reference** and owns the machine's eDRAM: every primitive drawn whole into the 4 MiB
@@ -915,7 +920,7 @@ the enhancements (E) are separate tracks.
 | Stage | What it covers | Its gate |
 |---|---|---|
 | **S11** | DMAC (ten channels, chain and interleave modes, tags, the scratchpad channels, stall control), INTC, EE timers *(decided 2026-10-25 by the tester: built before S10, directly after S9)* | `dma/dmac/*`, `dma/spr/*`, `kernel/ee/interrupt/*`, which need the BIOS's kernel: on the referees against their console texts at S11, on Sapphire with S10; the project's bare programs on each mechanism meanwhile *Built 2026-10-25, `Sapphire_Native.md` §20: met on the interpreter, eight programs and 1,230 graded words equal to the EE User's Manual's chapters 3 to 5, the interleave arithmetic also to the console text; the seven console texts reproduced by PCSX2; neither referee models stall control or the priority control, and PCSX2 takes an interrupt only as its request rises; the channels whose peripheral comes later end at `dmac::Peripherals`, the H-blank and V-blank a stand-in until S20; D-34 to D-42, D-15 closed.* |
-| **S12** | VU0 macro mode, the VU float | `cpu/vu0_macro/*` |
+| **S12** | VU0 macro mode, the VU float | `cpu/vu0_macro/*` *Built 2026-10-25, `Sapphire_Native.md` §21: met on the interpreter, seven programs and 26,102 graded words equal to the VU User's Manual's pages; the VU shares `sapphire::float`'s arithmetic and has its own flags; micro mode's start an interface S13 fills; `cpu/vu0_macro/integer`'s console text reproduced by PCSX2 and `transfer`'s but eight lines, whose values the project's model gives; neither referee models the VU's arithmetic (IEEE 754 towards zero), its U and O flags or Q's delay; D-43 to D-54.* |
 | **S13** | VU micro mode, both units: the pipelines, flags, Q and P, EFU, branches, XGKICK, E/D/T | `vu/lower/*`, `vu/upper/clip`, `vu/games/triace` |
 | **S14** | VIF0 and VIF1 | `dma/vif/basic`, `intstall`, `stcycl`, `stmod`, `unpack` |
 | **S15** | GIF, its three paths and their arbitration | `dma/vif/mskpath3`; the project's programs on path interleaving against referees |

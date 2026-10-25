@@ -70,9 +70,10 @@ pub enum Form {
     RtFs,
     /// `rt, fcrN`
     RtFcr,
-    /// `rt, vfN`, the vector register in the rd field.
+    /// `rt, vfN`, the vector register in the rd field; `.i` after the name when bit 0, the interlock, is set (VU User's
+    /// Manual §6.1.1, type 11).
     RtVf,
-    /// `rt, $N`, VU0's control register in the rd field.
+    /// `rt, viN`, VU0's integer or control register in the rd field, the interlock as `RtVf`'s (§5.1.2, §5.1.3).
     RtVc,
 }
 
@@ -476,7 +477,7 @@ fn operands(form: Form, w: u32, pc: u32) -> (String, Option<(Reference, u32)>) {
         RtFs => plain(format!("{t}, f{}", rd(w))),
         RtFcr => plain(format!("{t}, fcr{}", rd(w))),
         RtVf => plain(format!("{t}, vf{}", rd(w))),
-        RtVc => plain(format!("{t}, ${}", rd(w))),
+        RtVc => plain(format!("{t}, vi{}", rd(w))),
     }
 }
 
@@ -488,7 +489,8 @@ pub fn decode(w: u32, pc: u32) -> Instruction {
         Option::None => text(".word".into(), format!("0x{w:08x}"), Option::None),
         Some(Op::Cpu(name, form)) => {
             let (ops, reference) = operands(form, w, pc);
-            text(name.into(), ops, reference)
+            let interlock = matches!(form, RtVf | RtVc) && w & 1 == 1;
+            text(if interlock { format!("{name}.i") } else { name.into() }, ops, reference)
         }
         Some(Op::Vu0(o)) => {
             let full = vu::text(o, w, true);
@@ -540,6 +542,16 @@ pub(crate) fn encode(text: &str, pc: u32, labels: &dyn Fn(&str) -> Option<u32>) 
     let (mnemonic, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
     let mnemonic = mnemonic.to_ascii_lowercase();
     let ops = split_operands(rest);
+    let mut mnemonic = mnemonic;
+    let mut interlock = 0;
+    let written = mnemonic.clone();
+    if let Some((base, suffix)) = written.rsplit_once('.')
+        && matches!(base, "qmfc2" | "qmtc2" | "cfc2" | "ctc2")
+        && matches!(suffix, "i" | "ni")
+    {
+        interlock = u32::from(suffix == "i");
+        mnemonic = base.to_string();
+    }
     match mnemonic.as_str() {
         "nop" if ops.is_empty() => return Ok(0),
         ".word" => {
@@ -645,8 +657,8 @@ pub(crate) fn encode(text: &str, pc: u32, labels: &dyn Fn(&str) -> Option<u32>) 
         FsFt => count(2).and_then(|_| Ok(register(ops[0], "f")? << d | register(ops[1], "f")? << t))?,
         RtFs => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "f")? << d))?,
         RtFcr => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "fcr")? << d))?,
-        RtVf => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "vf")? << d))?,
-        RtVc => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "$")? << d))?,
+        RtVf => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "vf")? << d | interlock))?,
+        RtVc => count(2).and_then(|_| Ok(gpr(ops[0])? << t | register(ops[1], "vi")? << d | interlock))?,
     };
     let word = canonical | fields;
     match operation(word) {

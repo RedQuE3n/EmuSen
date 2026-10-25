@@ -202,15 +202,7 @@ pub(crate) fn operand_bits(op: Op, seed: &mut u64) -> u32 {
     let r = mix(seed);
     match op {
         Op::Vu0(o) => {
-            let dest = 0xF << 21;
-            r & match o.form {
-                vu::Form::Raw => 0,
-                vu::Form::TIs => dest | rt | 0xF << 11,
-                vu::Form::FmacQ | vu::Form::FmacI => dest | rd | sa,
-                vu::Form::Acc => dest | rt | rd,
-                vu::Form::AccQ | vu::Form::AccI => dest | rd,
-                vu::Form::Fmac => dest | rt | rd | sa,
-            }
+            r & vu::operand_mask(o.form)
         }
         Op::Cpu(_, form) => {
             let bits = r & match form {
@@ -230,7 +222,8 @@ pub(crate) fn operand_bits(op: Op, seed: &mut u64) -> u32 {
                 Jump => 0x03FF_FFFF,
                 Code => 0xF_FFFF << 6,
                 Trap => rs | rt | 0x3FF << 6,
-                Cop0 | RtFs | RtFcr | RtVf | RtVc => rt | rd,
+                Cop0 | RtFs | RtFcr => rt | rd,
+                RtVf | RtVc => rt | rd | 1,
                 RtPerf => rt | 31 << 1,
                 FdFsFt => sa | rd | rt,
                 FdFs => sa | rd,
@@ -460,6 +453,9 @@ fn the_spelling_is_appendix_a_s() {
     assert_eq!(t(0x4600_1018, 0), "adda.s f2, f0");
     assert_eq!(t(0x4602_0034, 0), "c.lt.s f0, f2");
     assert_eq!(t(0x4822_0800, 0), "qmfc2 v0, vf1");
+    assert_eq!(t(0x48C2_8001, 0), "ctc2.i v0, vi16", "type 11's I bit (VU User's Manual §6.1.1), CCR[2,16] the status flag");
+    assert_eq!(encode("cfc2.ni t0, vi1", 0, &|_| Option::None), Ok(0x4848_0800));
+    assert_eq!(encode("qmtc2.i a0, vf2", 0, &|_| Option::None), Ok(0x48A4_1001));
     assert_eq!(t(0xD841_0010, 0), "lqc2 vf1, 0x10(v0)");
     assert_eq!(t(0x4BE3_1088, 0), "vmaddx.xyzw vf2, vf2, vf3");
     assert_eq!(t(0x1000_FFFF, 0x8001_0000), "beq zero, zero, 0x80010000");

@@ -1,9 +1,10 @@
 //! The PlayStation 2's single-precision format and its arithmetic, in software on integers, so that every host and
-//! every tier computes the same bits (Sapphire_Plan.md §5.3). The one owner of the format: the EE's FPU (`ee::fpu`) uses
-//! it now and the vector units will from S12. A number is IEEE 754's single layout read without NaN, infinity or
+//! every tier computes the same bits (Sapphire_Plan.md §5.3). The one owner of the format: the EE's FPU (`ee::fpu`) and
+//! the vector units (`vu`) both compute with it. A number is IEEE 754's single layout read without NaN, infinity or
 //! denormal: an exponent field of 255 is an ordinary exponent, and a field of 0 is zero whatever its fraction holds
-//! (EE Core User's Manual §8.1.1). Each function returns its result with the exponent overflow and underflow it met;
-//! which FCR31 or MAC flags those become is the instruction's business, not this module's.
+//! (EE Core User's Manual §8.1.1; VU User's Manual §2.1.1). Each function returns its result with the exponent overflow
+//! and underflow it met; which FCR31, MAC or status flags those become is the instruction's business, not this
+//! module's. Which rules the two units share and where they part is Sapphire_Native.md §21.3.
 //!
 //! The rounding is the console's, as ps2autotests' `cpu/ee_fpu` console texts decide it where the manuals stop
 //! (Sapphire_Native.md §19.3, Sapphire_Disputes.md D-25 to D-28): an addition aligns the smaller operand to the larger's
@@ -38,12 +39,13 @@ pub struct Quotient {
     pub divide: bool,
 }
 
-/// A multiply-add's result: the sum's flags, and whether the product alone underflowed (the manual's "multiply
-/// underflow occurred", which sets SU but not U).
+/// A multiply-add's result: the sum and its flags, and the product as it was added (negated for a subtraction) with
+/// the product's own overflow and underflow, which the FPU's SU and the VU's sticky flags take (the FPU manual's
+/// "multiply underflow occurred"; VU User's Manual §3.3.2).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Fused {
     pub value: Outcome,
-    pub product_underflow: bool,
+    pub product: Outcome,
 }
 
 const fn sign(x: u32) -> u32 {
@@ -235,7 +237,7 @@ pub fn fused(acc: u32, a: u32, b: u32, subtract: bool) -> Fused {
     } else {
         add(acc, term)
     };
-    Fused { value, product_underflow: product.underflow }
+    Fused { value, product: Outcome { bits: term, ..product } }
 }
 
 /// The order the compares use: zeros (the would-be denormals among them) equal, otherwise sign and magnitude.
@@ -276,6 +278,25 @@ pub fn to_word(x: u32) -> u32 {
     let shift = e - 127 - 23;
     let v = if shift >= 0 { significand(x) << shift } else { significand(x) >> -shift } as u32;
     if sign(x) == 1 { v.wrapping_neg() } else { v }
+}
+
+/// A float to a fixed-point word with `fraction` bits below the point (0, 4, 12 or 15), truncated towards zero and
+/// clamped as `to_word` clamps (VU User's Manual §2.1.2, §2.2, §2.3: FTOI0 to FTOI15, "Conversion overflow +MAX/-MAX").
+pub fn to_fixed(x: u32, fraction: u32) -> u32 {
+    if is_zero(x) {
+        return 0;
+    }
+    let e = exponent(x) + fraction as i32;
+    if e > 0x9D {
+        return if sign(x) == 1 { 0x8000_0000 } else { 0x7FFF_FFFF };
+    }
+    to_word(x & !(0xFF << 23) | (e as u32) << 23)
+}
+
+/// A fixed-point word with `fraction` bits below the point to a float, truncated towards zero (ITOF0 to ITOF15, §2.2).
+pub fn from_fixed(w: u32, fraction: u32) -> u32 {
+    let f = from_word(w);
+    if is_zero(f) { f } else { f - (fraction << 23) }
 }
 
 /// A 32-bit integer to a float, truncated towards zero (VU User's Manual §2.2, the conversion's rule).

@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19) and S11 (§20) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20) and S12 (§21) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -1954,3 +1954,229 @@ SDK, loader or ps2autotests source and no firmware.
 - The PCRTC's own H-blank and V-blank (S20); the SBUS interrupt and the timers' HOLD (S22); the GS's interrupt (S16).
 - The state format's new contents (the DMAC's, INTC's and timers' registers, the board's time): `SPH2` gains them with
   the rest of the EE (S10, S30).
+
+## 21. Stage S12, VU0 in macro mode and the VU float (2026-10-25)
+
+### 21.1 In one paragraph
+
+The plan's §7 row S12, on the tester's go of 2026-10-25. The crate gains **`vu`**, the vector units: one `Vu` per unit
+(32 vector registers, 16 integer registers, ACC, I, Q, P, R, the MAC, status and clipping flags, TPC, its data and micro
+memories), the operations both units execute (`vu::ops`, 120, each decoded by `emusen-mips`'s VU table alone and
+computed on `sapphire::float`), and `Vpu`, VU0 and VU1 with VU0's sixteen control registers, VU0's divider under macro
+instructions, VU0's window onto VU1's registers, and each unit's micro mode behind **`vu::micro::Micro`**, the interface
+S13 implements. The EE gains **COP2** (`ee/cop2.rs`): QMFC2, QMTC2, CFC2 and CTC2 with their interlock bit, LQC2, SQC2,
+BC2F, BC2T and the likely forms, every VU operation as a macro instruction, VCALLMS and VCALLMSR, with the interlocks of
+the *VU User's Manual*'s §5.4 charged to the timing model. `sapphire::float` stays the one owner of the format: the VU
+adds no arithmetic of its own, only the fixed-point conversions and a multiply-add's product as it was added; its flags
+are the VU's. `emusen-mips`'s VU table takes the manual's operand forms in place of `Raw`. Seven bare programs of the
+project's, 26,102 graded record words over every macro instruction and transfer, are equal on the interpreter to the
+manual's pages as `tests/s12/manual.rs` transcribes them. PCSX2 and Play!, run as black boxes, compute the VU on IEEE 754's
+rounding towards zero on every in-range lane, raise no U or O, and land a quotient in Q at once; PCSX2 reproduces
+`cpu/vu0_macro/integer`'s console text whole and `transfer`'s but eight lines, which the project's model reproduces.
+Disputes D-43 to D-54. No emulator, SDK or loader source, no ps2autotests source and no firmware was read.
+
+### 21.2 What was built
+
+- **`emusen-mips`** (`vu.rs`, `r5900.rs`): the forms of §4.1 and §6.1, each operation's mnemonic line of §4.2, §4.3 and
+  §6.2 (`EmuSen_Mips.md` §9.3, §9.4); the transfers' I bit as `.i` (§6.1.1, type 11); VU0's registers in CFC2 and CTC2
+  as `viN`.
+- **`src/float.rs`**: `to_fixed` and `from_fixed` (FTOI0–15, ITOF0–15, §2.1.2, §2.2, §2.3); `Fused::product`, the term as
+  added with its own overflow and underflow, which the FPU's SU takes as before and the VU's sticky flags take whole.
+- **`src/vu/`**: `mod.rs` (`Vu`, `Units`, `Vpu`, the control registers, the EE's map of the four memories at 11000000h),
+  `ops.rs` (the operations and their pipelines), `micro.rs` (`Micro`, `Unbuilt`).
+- **`src/ee/cop2.rs`**: COP2's instructions and what the timing model is told of each; `ee/timing.rs`: COP2's six rows,
+  VU0's registers 1 to 31 as scoreboard resources, VU0's divider, the stall after a transfer to VU0, an instruction's
+  earliest cycle (an interlock) and an instruction nothing pairs with (VWAITQ); `Ee::planned`, the cycle the instruction
+  being executed would issue in, which COP2 needs for the interlocks and for Q.
+- **`Bus::vpu`** (default none, which halts a COP2 instruction, as before S12); `Board` owns the `Vpu`, maps its
+  memories and brings micro mode to its time with the other units.
+- **No new cross-component dependency**: `sapphire` still depends on `emusen-native` and `emusen-mips` alone.
+
+### 21.3 The VU float: what it shares with the FPU, and where it parts
+
+[R *VU User's Manual* §2, §3.3, §4.2, §4.3, §6.2; *EE Core User's Manual* chapter 8; A]:
+
+| Rule | VU | FPU | Shared? |
+|---|---|---|---|
+| The format: no NaN, infinity or denormal; exponent 255 an ordinary exponent; exponent 0 zero | §2.1.1's table, "x 2(+128)" | CORE §8.1.1 | **shared**, `float`'s numbers |
+| Overflow ±MAX, underflow ±0 | §2.3 | Table 8-4 | **shared**, `float::finish` |
+| The adder: no sticky bit, one bit kept | §2.2's words, the FPU's | D-25 (console) | **shared**, argued (D-43) |
+| The multiplier: ft recoded as Booth digits, lowest column lost | every multiply page's Remarks: "By using VF[fs] as a multiplicand, the results of multiplication with 1 are guaranteed" | D-26 (console) | **shared**, the VU manual corroborating D-26 (D-43) |
+| DIV and SQRT to the nearest; RSQRT over the rounded root, truncated | §2.2 says truncation, as CORE did | D-27, D-28 (console) | **shared**, argued (D-43) |
+| The multiply-adds' values: product overflow wins, an ACC of exponent 255 kept | §3.3.6's MADD and MSUB tables | D-30 | **shared**, `float::fused` |
+| MAX and MINI on sign and magnitude | their pages | D-31 | **shared** (D-47) |
+| The flags an FMAC result sets | MAC per lane Z, S, U, O; status collecting them; sticky; a multiply-add's product into the sticky flags (§3.3) | FCR31's O, U and sticky; SU from the product | **differ**: the VU's in `vu/ops.rs` (D-44) |
+| DIV's, SQRT's flags | I for 0/0, D otherwise; SQRT clears D | the same (D-32) | shared in effect |
+| RSQRT's flags | 0/√0 raises neither (§3.3.2's "except 0/0") | D for any zero ft (its page) | **differ** (D-46) |
+| Conversions | FTOI and ITOF with 0, 4, 12, 15 fraction bits; FTOI clamps to ±MAX with no flag | CVT.W.S, CVT.S.W | **shared**, `to_word`'s clamp and `from_word`'s truncation, scaled |
+| The compares | CLIP: values, every zero equal (D-49) | C.cond.S: the same order | **shared**, `float::order` |
+
+So the units share every rule of the arithmetic and part only in the flags; the sharing of the
+adder, the multiplier's column and the divider's rounding with the FPU's measured behaviour is the open question (D-43),
+one constant or function in `float.rs` each, as at S9.
+
+**Readings of the instructions** [R the pages; A]: VF00 and VI00 keep their constants against every write; an integer
+field naming 16 to 31 reads zero and writes nothing; OPMULA and OPMSUB work on x, y and z whatever the mask; ILWR with
+more than one field takes the lowest; ISWR zero-extends; MFIR sign-extends; MTIR takes the low 16 bits; RGET and RNEXT
+write 0 01111111 then R; LQI and SQI post-increment and LQD and SQD pre-decrement the index register, wrapping at 16 bits.
+
+### 21.4 The gate: the programs (measured 2026-10-25)
+
+`tests/s12/` generates seven programs in S6's form (entered at 00100000h, the record from 00200000h, the done word at
+001FFFF0h). Each sets Status.CU2, clears the divider's flags with VSQRT of +0, sets known FMAC flags by an addition into
+VF00, and clears the sticky flags; each case loads vf1, vf2 (and ACC by VADDA with −0, I and Q by CTC2) from constants by
+LQ and QMTC2, puts a sentinel in vf3, clears the sticky flags, runs the instruction, and records vf3 or ACC by QMFC2
+(ACC read by VMADDx with a product of −0) and the status and MAC flags by CFC2. One lane carries one input case. The
+expected record comes from `tests/s12/manual.rs`, the VU pages transcribed apart from `src/vu`, `src/ee/cop2.rs` and
+`src/float.rs`, a lane's arithmetic being S9's transcription of chapter 5 (`s9::manual`), the flags the VU's.
+
+| Program | Record words | What it covers |
+|---|---|---|
+| `s12-add` | 8,704 | VADD, VSUB, VADDA, VSUBA over every ordered pair of S9's 32 classes; their broadcast, I and Q forms with field masks; VADD under each of the sixteen masks |
+| `s12-mul` | 4,288 | VMUL and VMULA over every ordered pair (both orders of the multiplier); the variants |
+| `s12-fused` | 2,688 | VMADD, VMSUB, VMADDA, VMSUBA over eight accumulators and every pair of S9's twelve; the variants; VOPMULA then VOPMSUB over vectors of the classes |
+| `s12-misc` | 650 | VABS, the eight conversions, VMOVE and VMR32 under masks, VMAX and VMINI with their forms, VNOP, VMFIR, VMTIR, CLIP's judgements, the flags read after each group, unchanged |
+| `s12-fdiv` | 8,340 | VDIV and VRSQRT over every pair in fields chosen by fsf and ftf, VSQRT of every class, Q and the status flag after VWAITQ; Q read 0, 1, 5, 6 and 7 VNOPs after VDIV |
+| `s12-int` | 1,144 | VIADD, VISUB, VIAND, VIOR over ten values, VIADDI over its immediates; VLQI, VLQD, VSQI, VSQD, VILWR, VISWR on VU0's memory written and read by the EE at B1004000h; the mirror past 4 KiB; VU1's VF05 and VI03 through the window; RINIT, RGET, RXOR, RNEXT |
+| `s12-transfer` | 312 | QMFC2 and QMTC2 with and without the interlock, VF00 and GPR 0; CFC2's sign extension; CTC2 and CFC2 of every control register but TPC and CMSAR1, all ones then zero; LQC2 and SQC2 at three offsets; the four branches with VU1 idle; COP2 unusable for seven instructions and BC2T, CE 2; LQC2's and SQC2's address errors |
+
+**Tests** [M, `cargo test --release`]: `tests/vu0.rs` **14 of 14** — the seven programs, each equal to its record word for
+word; `the_programs_execute_every_macro_instruction` (the 120 operations and the 10 transfers and branches, VCALLMS and
+VCALLMSR excepted, from the assembled words through the decoder); `the_manual_s_examples_and_the_console_lines_hold` (the
+FTOI and ITOF Remarks' tables, `vu/lower/random`'s RNEXT steps and RXOR's line); `vcallms_starts_micro_mode_and_the_ee_waits`
+and `micro_mode_unbuilt_halts_the_interpreter_at_its_start` (§21.6); `the_macro_timing_follows_section_5_4` (§21.5);
+`the_board_maps_the_vu_memories_at_11000000h`; `vpu_stat_shows_the_macro_divide_busy`. The crate's other tests unchanged:
+lib **18 of 18**, `cop0` **19 of 19**, `dmac` **17 of 17**, `fpu` **9 of 9** (its count of COP1 bounded to 34),
+`interpreter` **23 of 23**, `mmi` **13 of 13**, `programs` **3 of 3**; `vu0` and lib also under `test-checked`; clippy
+clean. `emusen-mips` **19 of 19**, one new (`the_manual_s_macro_pages_read_back`). `blast.sh`'s crates: `blackmoon-gte` **10 of 10**,
+`blackmoon-r3000` **38 of 38**, Diamond **306 of 306**, its `precision` **8 of 8** and `v1` **5 of 5**, `Platform/systems`
+**39 of 39**; WiseMan with `blast.sh`'s filter (`CheatCodec`, `DebugCodeParity`, `Diamond`, `SapphireTests`,
+`SystemCodeParity`, `SystemTableParity`) **116 of 116**.
+
+### 21.5 The timing model (§5.2, Q14)
+
+[R *VU User's Manual* §5.4.1 to §5.4.7, §7.4; *EE Core User's Manual* Tables 1-1 to 1-3; A]:
+
+1. **Categories.** QMFC2, QMTC2, CFC2, CTC2, LQC2 and SQC2 are COP2 Move (pipe 1), every VU operation COP2 Operate (pipe
+   0), the BC2 forms branches; a COP2 Move beside a COP2 Operate is Table 1-3's Y cell.
+2. **Hazards by register number** (§5.4.2): VF *n* and VI or CCR *n* are one resource; VF00 and VI00 none; ACC, I, Q and R
+   none. An FMAC result reaches a macro instruction four cycles on and a transfer from VU0 five (§5.4.3, §5.4.4: the
+   reader's T stage is one later for a macro instruction than for a transfer); an integer result the next cycle; a
+   transfer to VU0 two cycles on for a macro instruction and three for a transfer from VU0 (§5.4.4's "stalls for two
+   cycles"), and the macro instruction after it always one cycle late. The flags are written at the S stage, so CFC2 of
+   CCR[2,16] after an FMAC instruction waits five cycles.
+3. **The divider** (§5.4.2): VDIV and VSQRT take it 7 cycles, VRSQRT 13; the quotient reaches a macro instruction issued
+   7 or 13 cycles after the divide (D-51); VWAITQ issues then, alone.
+4. **The interlocks** (§1.3.2, §5.4.5, §5.4.6): a macro instruction, VCALLMS and VCALLMSR, QMFC2.I and CFC2.I wait for a
+   running microprogram's end; QMTC2.I and CTC2.I for its first pair with M set (D-54); QMFC2.NI, the other forms without
+   the bit, LQC2 and SQC2 do not wait.
+
+**Pinned** [M, `the_macro_timing_follows_section_5_4`], each a figure's count: dependent FMAC 4; FMAC to QMFC2 5; a hazard
+by number across fields 4; VF01 to VI01 4; integer 1; QMTC2 to an independent macro instruction 2; QMTC2 to QMFC2 of the
+same register 3, of another 1; VDIV to VDIV 7; VRSQRT to VSQRT 13; VDIV to VWAITQ 7 and to the reader 8; FMAC to CFC2 of
+the status flag 5.
+
+**Named losses** [A]: §5.4.4's figures of CFC2 and CTC2 on the status flag show one stall more than the S stage gives;
+VCALLMS's one-cycle stall after a macro instruction (§5.4.5) is not charged; BC2's "2/2" of §7.4 is charged as the EE's
+branch row; LQC2's cache miss stalls as an ordinary load's, not as the always-blocking COP2 load CORE §6.3.2 describes;
+the micro instruction overlap with the next macro instruction's T stage is S13's, through `Micro::finish`.
+
+### 21.6 The micro-mode interface
+
+`vu::micro::Micro` (S12 defines it, S13 implements it): `start(units, addr, at)` begins a microprogram at a doubleword
+address at an EE cycle and answers whether micro mode exists; `run_to(units, t)` catches it up; `busy()`; `finish(units,
+at)` runs it to its end and gives the cycle; `release(units, at)` the cycle of its first pair with M set; `force_break`,
+`reset` and `stat` (VPU-STAT's bits) for FBRST and CCR[2,29]. The EE calls `finish` or `release` with the cycle its
+instruction would issue in and waits until the cycle returned; the board calls `run_to` after every instruction, as for
+the other units. `Unbuilt`, until S13, never runs and refuses a start, so VCALLMS, VCALLMSR and a write of CMSAR1 halt the
+interpreter with the word, as an instruction of a later stage did before S12. The tests drive a scripted stand-in: QMFC2.NI
+reads before the microprogram's end and QMFC2.I after it; a macro instruction and CFC2.I wait for the end; QMTC2.I and
+CTC2.I for the M bit, QMTC2.NI not at all; VCALLMSR starts at CMSAR0; a second VCALLMS waits for the first.
+
+### 21.7 On the referees (measured 2026-10-25)
+
+`examples/s12.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until 1FFFF0=5A99D00E
+200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and Play! 0.72, one process at a time.
+`s12 explain` sorts the lanes that differ by the class of their inputs and the flags by bit. Only the records were read.
+
+| Program (graded words) | PCSX2 | Play! | What the differences are |
+|---|---|---|---|
+| `s12-add` (8,704) | 1,577 | 1,668 | exponent 255 (host NaNs and clamps); sums and differences in IEEE 754's rounding towards zero (D-43); no U or O (D-44) |
+| `s12-mul` (4,288) | 1,156 | 1,106 | exponent 255; exact commutative products (D-43); no U or O |
+| `s12-fused` (2,688) | 816 | 901 | the same through the multiply-adds; no product into the sticky flags (D-44) |
+| `s12-misc` (650) | 4 | 44 | PCSX2: VMR32 with the empty mask writes every lane (D-53). Play!: FTOI's positive overflow 80000000h, CLIP's sign and width (D-49), one maximum (D-47) |
+| `s12-fdiv` (8,340) | 2,787 | 1,855 | exponent 255; quotients and roots truncated (D-43); the divider's flags (D-46); Q landing at once (D-51) |
+| `s12-int` (1,144) | 4 | 5 | PCSX2 keeps 128 bits in VU1's VI03 through the window; Play! maps no window (D-50) |
+| `s12-transfer` (288) | 66 | 57 | the control registers' widths (D-45); the flags through FBRST's reset (D-52); neither raises COP2 unusable or LQC2's and SQC2's address errors, as at S6; Play!'s BC2FL and BC2TL do not nullify their slots |
+
+Across `s12-add`, `s12-mul` and `s12-fdiv`, on every lane whose operands have exponent fields 1 to 253 and whose result is
+in range (2,677 lanes), both lineages equal IEEE 754's rounding towards zero and nothing else [M]; 730 of those lanes
+separate it from the module. So **neither lineage is a witness for the VU's arithmetic or its U and O flags**, as neither
+was for the FPU's (§19.6); PCSX2 is one for the transfers, the integer unit, the random unit, CLIP, MAX and MINI, the
+branches and the memories, Play! for the integer and random units.
+
+### 21.8 ps2autotests' `cpu/vu0_macro` on PCSX2, and what the `vu/*` texts decide (measured 2026-10-25)
+
+Both programs call the BIOS's kernel, so Sapphire runs them at S10. Run now through `ps2referee.py tty pcsx2 …
+--channel iop` (Americas BIOS) and compared with their expected texts, the consoles' outputs, after line ends are
+normalised [M `diff`]: **`integer` (118 lines) equal**; **`transfer` (36 lines) differs in eight**: `vi18`, `vi19`,
+`vi23`, `vi24`, `vi25` and `vi27` read FFFFFFFFh, `vi28` 00000C0Ch and `vi31` 0 where the console reads the values D-45
+gives, which `s12-transfer` reproduces on the interpreter; its TPC line and its other lines equal. PCSX2's own log lines
+in the channel were not kept.
+
+The VU micro tests' console texts are S13's; read now for the shared rules: `vu/lower/random` decides RNEXT's series
+(D-48); `vu/lower/fdivdelay` divides only powers of two, so it decides nothing of the divider's rounding; `vu/upper/clip`
+prints judgements of named vectors whose values a run must show before it can grade D-49; `vu/games/triace` prints a
+game microprogram's twelve results, the first VU arithmetic a console records, which S13 can grade D-43 with.
+
+### 21.9 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | an overflow left at exponent 255 (7F800000h, IEEE 754's infinity) instead of clamped to ±MAX, in `float::finish` | `add_and_subtract_…`, `multiply_…`, `the_multiply_adds_…`, `divide_square_root_…` |
+| F2 | the MAC flags' S bit left clear for a negative result in lane w | `add_and_subtract_…`, `multiply_…`, `the_multiply_adds_…` |
+| F3 | QMFC2.I not waiting for a running microprogram | `vcallms_starts_micro_mode_and_the_ee_waits` |
+
+Each was applied, `tests/vu0.rs` run, and the source restored [M]. Found while building, not seeded: CFC2 of Q issued
+beside VWAITQ read the old quotient, which `s12-fdiv` exposed and §5.4.7's figure settles (VWAITQ alone, D-51).
+
+### 21.10 What the plan got wrong, or left open
+
+- **§1.1's VU row and §5.3** speak of the FPU and the VUs together; the arithmetic is shared, but the sharing of the
+  FPU's console-decided last bit is argued (D-43), and the flags part (D-44, D-46).
+- **§3.2's VU row** names the referees as the secondary oracle: for the arithmetic and U and O they are not (§21.7); for the
+  transfers and the integer and random units PCSX2 is.
+- **S12's gate**, `cpu/vu0_macro/*`, needs the BIOS's kernel: met on PCSX2 against the console texts, Sapphire's at S10;
+  `transfer`'s console text gave the control registers' widths that no document gives (D-45).
+- **§15.6 Q1** (the micro-only encodings): Sony's *VU User's Manual*, fetched at S6, gives every macro operand form; S12
+  used them; the micro-only lower instructions' encodings (§4.3) are S13's, as `Sapphire_References.md` §1.1 says.
+
+### 21.11 Questions this stage leaves
+
+1. **Q1 [routine], the VU's arithmetic (D-43).** *Recommended*: keep the FPU's console-decided readings for the VU, one
+   owner, until S13 grades `vu/games/triace`; the referees' IEEE 754 towards zero is their host's and stays the
+   alternative, three constants away.
+2. **Q2 [routine], RSQRT's 0/√0 (D-46).** *Recommended*: keep §3.3.2's words (neither flag), the three lineages and
+   readings disagreeing.
+3. **Q3 [routine], Q's delay (D-51).** *Recommended*: keep the figures' delay; S13's `fdivdelay` console text measures
+   the micro form of the same rule.
+4. **Q4 [routine], C3 (§5.13).** *Recommended*: when C3 is weighed, count the VU lanes per class where a host's rounding
+   towards zero differs from `float` (730 of 2,677 in-range lanes of these programs, §21.7) against VU1's speed.
+
+### 21.12 What was read for this stage
+
+`Sapphire_Plan.md` §1.1, §2, §3.2, §5.3, §5.13's C3, §7 and §11; this page's §15, §19 and §20; `Sapphire_Disputes.md`
+D-0 to D-42; `Sapphire_References.md` §1.1; `EmuSen_Mips.md` §8 and §9. Sony's *VU User's Manual* (Version 5.0) chapters
+1, 2, 3 (§3.1 to §3.4.5), 5 and 6 whole, §4.1, §4.2 and §4.3's pages of the operations macro mode takes, §7.4; *EE Core
+User's Manual* §1.3.4, §2.10.2, §2.10.3, §6.3.2 and Table 7-1's COP2 event; the *EE User's Manual*'s memory map. ps2autotests'
+`cpu/vu0_macro/*.expected` and `vu/*/*.expected` (the consoles' texts, not the programs' source). No emulator, SDK or
+loader source, no ps2autotests source and no firmware.
+
+### 21.13 What this stage does not cover
+
+- VU micro mode, both units: S13 (the micro-only encodings, the pipelines, XGKICK, E, D and T, the EFU); VCALLMS,
+  VCALLMSR and CMSAR1 halt until then.
+- `cpu/vu0_macro/*` on Sapphire: S10.
+- The DMAC's and VIF0's reach into VU0's memories (S14); the scratchpad channels' burst to them.
+- COP2 in the recompiler: S38–S39; C3's host path: S39–S41.
+- The state format's new contents (both units, the control registers): `SPH2` gains them with the rest (S10, S30).

@@ -9,6 +9,10 @@ pub trait Bus {
     fn error(&mut self, _paddr: u32) -> bool {
         false
     }
+    /// The vector units COP2 reaches, where the bus has them (from S12); none halts a COP2 instruction.
+    fn vpu(&mut self) -> Option<&mut crate::vu::Vpu> {
+        None
+    }
 }
 
 /// RDRAM alone, 32 MiB from physical 0, for the interpreter's tests and the project's programs; elsewhere reads 0.

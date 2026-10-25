@@ -32,7 +32,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the project's programs over every input class, and neither referee a witness for the FPU's arithmetic; and stage S11
   (2026-10-25, built before S10 by the tester's decision): the DMAC's ten channels with their chains, interleave,
   stall control and MFIFO, the INTC, the four EE timers and a blanking stand-in on one clock, the core run beside them,
-  the later peripherals' channels ending at a defined interface, and PCSX2 reproducing the stage's seven console texts.
+  the later peripherals' channels ending at a defined interface, and PCSX2 reproducing the stage's seven console texts;
+  and stage S12 (2026-10-25): VU0 in macro mode, the vector units' state and operations on `sapphire::float` with the
+  VU's own flags, COP2's transfers and interlocks, the macro timing, micro mode's interface for S13, and neither referee
+  a witness for the VU's arithmetic.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -49,7 +52,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the multimedia pages contradict themselves or leave results undefined and the console's record decides; D-24 to D-33
   since S9, SQRT.S's operand, the FPU's last bit, its zeros, flags and control registers; D-34 to D-42 since S11, the
   DMAC's stall control, TADR after an end, TTE, undefined tags, register widths and priority control, the timers'
-  ZRET and gates, the interrupt lines' levels and the blanking stand-in, with D-15 closed.
+  ZRET and gates, the interrupt lines' levels and the blanking stand-in, with D-15 closed; D-43 to D-54 since S12, the
+  VU float's sharing of the FPU's readings, the VU's flags, VU0's control registers, the divider's flags, MAX, the random
+  unit's series, CLIP, VU0's data addresses, Q's delay, FBRST's reset, the empty field mask and the M bit.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

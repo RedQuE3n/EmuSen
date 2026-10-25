@@ -222,12 +222,15 @@ the R5900's own:
   C790's Format line; the assembler also takes the two-operand MIPS form, rd zero.
 - `sync` and `sync.p`; `pmfhl.lw`, `.uw`, `.slw`, `.lh`, `.sh`; `pmthl.lw`; `mfps rt, reg` with the counter's number.
 - COP0's registers by name, a reserved one `$n`; the FPU's `fN` and `fcrN`; the vector registers in COP2's moves and
-  loads as `vfN`; VU0's control registers in CFC2 and CTC2 as `$n`, since no source read here numbers them.
+  loads as `vfN`; VU0's integer and control registers in CFC2 and CTC2 as `viN`, the *VU User's Manual*'s own spelling
+  for CCR[2,0] to CCR[2,31] (§5.1.2, §5.1.3; its examples write `cfc2 t0, vi1` and `CFC2 r0, VI16`) (*changed
+  2026-10-25 at S12*, from `$n`).
 - CACHE's operation and PREF's hint as numbers, as the VR4300's spelling writes CACHE's; Table C-1's names are not used.
 
-**Left out**: ps2tek names "QMTC2.I/CTC2.I" (the interlocking forms, "VU Instruction Format") without giving the bit
-that selects them, so QMFC2, QMTC2, CFC2 and CTC2 are decoded without it, and a word with any of their low eleven bits
-set reads as the plain move.
+**The interlock** (*read 2026-10-25 at S12*, *VU User's Manual* §6.1.1, MacroOP field type 11): bit 0 of QMFC2,
+QMTC2, CFC2 and CTC2 is the I bit, written as `.i` after the name when set (`ctc2.i v0, vi16`); the assembler also
+takes the manual's `.ni` for the clear bit. Bits 10–1, which the manual draws as zero, are still ignored by the decode
+(§8.2). Before S12, ps2tek's naming of "QMTC2.I/CTC2.I" without the bit left the moves decoded without it.
 
 ### 8.5 The assembler
 
@@ -247,7 +250,7 @@ named in the test. `the_ee_s_cells_by_ps2tek`: ps2tek's own primary rows 6 and 7
 tables cell for cell, and every VU0 operation under each of COP2's sixteen rs values reading back. `the_spelling_is_appendix_a_s`:
 words built by hand from the manuals' encoding pictures, one or two of each kind of operand, and two refusals.
 
-## 9. The vector units (2026-10-24)
+## 9. The vector units (2026-10-24; operand forms 2026-10-25)
 
 *Built at the same stage.* `src/vu.rs`: the operations VU0 and VU1 share, read in micro mode as a 64-bit pair and in
 macro mode as the EE's COP2 word.
@@ -287,18 +290,23 @@ each), ABS and NOP upper, and MOVE, MR32, MTIR, MFIR and WAITQ lower. `Sapphire_
   class, which ps2tek's pipeline section and VIF chapter name (WAITP, XITOP, the EFU's ESADD to EATAN) and which the
   slides' lower list implies (loads and stores of the LQ and SQ kind, branches, integer immediates): no source read
   here gives their encodings, so such a lower word is written `.word`. S13 (VU micro mode) needs them.
-- **Operand layouts** beyond the slides' two: an operation whose fields are the slides' upper layout with an fd, fs and
-  ft (the FMAC family, and its accumulator and q and i forms) is written with them; every other operation is written
-  `Raw`, its name alone when its 25 bits are its canonical ones, otherwise its name and the 25 bits in hexadecimal, as
-  §3 writes a coprocessor command (`div 0x0102bbc`). This makes no claim about which field an undocumented operation
-  reads, and reads back exactly.
+- ~~**Operand layouts** beyond the slides' two … written `Raw`~~ *Superseded 2026-10-25 at S12*: every operation of the
+  shared table now has the *VU User's Manual*'s own operand form, read from its §4.1 (the field types), §4.2 and §4.3
+  (each micro instruction's operation code and mnemonic line) and §6.2 (each macro instruction's); `Raw` is gone. A
+  word whose bits outside its form's fields differ from the documented ones (a field the page draws as zero, set) is
+  written as its name and its 25 bits in hexadecimal (`vnop 0x00102ff`), which reads back exactly and claims nothing.
 - **VU1's own operations** (the EFU, XGKICK): undocumented encodings, as above; the one table serves both units.
 
 ### 9.4 The spelling and the assembler
 
 A pair is written `upper | lower`: the upper's set flags first in brackets, in the order I, E, M, D, T (`[e] nop |
-move`); with the I bit, the lower is the constant in hexadecimal (`[i] addi vf0, vf0, i | 0x3f800000`); an operation
-`name.dest vfD, vfS, vfT` (`maddx.xyzw vf1, vf2, vf3`), the accumulator `acc`, the q and i registers `q` and `i`; an
+move vf0, vf0`); with the I bit, the lower is the constant in hexadecimal (`[i] addi vf0, vf0, i | 0x3f800000`); an
+operation `name.dest vfD, vfS, vfT` (`maddx.xyzw vf1, vf2, vf3`), the accumulator `acc`, the q, i and r registers `q`,
+`i` and `r`; the forms of the pages' mnemonic lines (S12): `vftoi4.xyzw vf3, vf1` (ft, fs), `vclipw.xyz vf1, vf2`,
+`vdiv q, vf10x, vf20y` (a register with its fsf or ftf field), `vsqrt q, vf10x`, `vmtir vi12, vf10y`, `vmfir.y vf10,
+vi12`, `viadd vi4, vi5, vi6`, `viaddi vi4, vi5, -1`, `vlqi.xyzw vf10, (vi4++)`, `vsqd.xyzw vf10, (--vi4)`, `vilwr.y vi10,
+(vi4)`, `vrinit r, vf10x`, `vrget.x vf10, r`, `vcallms 0x40` (the address divided by 8), `vcallmsr vi27`, and `nop`,
+`waitq` bare; an
 upper word that is no upper operation, or has bits 26–25 set, is `.word` whole, flags included; a lower word that is not
 in the `1000000` class or not a lower operation is `.word`. `vu::assemble_pair` and `vu::assemble` read that text back
 (a program one pair to a line, `#` and `;` comments, no labels while no branch is decodable); `vu::encode` reads one
@@ -311,3 +319,9 @@ cell for cell (60 cells of Special1 below its four 1111 cells, all 128 of Specia
 to its name and reads back 64 times with random fields and flags, in macro mode and in micro mode in its own half; each
 empty cell decodes to nothing. `the_hot_chips_examples_and_the_flags`: the slides' VMADDx and LQI words, the flags, the
 I bit's constant, and the refusals (an integer add in the upper half, a field mask out of order).
+
+[M, 2026-10-25, stage S12.] The random fields now cover each form's own operand bits (`vu::operand_mask`), so every
+documented form reads back in both modes; `the_manual_s_macro_pages_read_back`: sixteen words built from §6.2's
+operation-code pictures, each disassembled to its page's mnemonic line and reassembled to the same bits, and a VNOP with
+a field the page fixes at zero written whole. `the_spelling_is_appendix_a_s` adds the transfers' interlock bit
+(`ctc2.i v0, vi16`, `cfc2.ni`, `qmtc2.i`). LQI's text follows the manual's `(vi5++)` in the slides' word.

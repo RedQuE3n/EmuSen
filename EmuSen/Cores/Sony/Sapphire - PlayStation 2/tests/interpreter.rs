@@ -154,7 +154,7 @@ fn a_later_stages_instruction_halts_with_its_word_and_a_usable_coprocessor() {
     ee.cop0[cop0::STATUS] = 1 << 30;
     steps(&mut ee, &mut ram, 1);
     let word = emusen_mips::assemble("qmfc2 t0, vf1", 0, &emusen_mips::Dialect::R5900).expect("assembles")[0];
-    assert_eq!(ee.step(&mut ram), Err(Halt::Unimplemented { pc: ORIGIN + 4, word }), "COP2 is S12's");
+    assert_eq!(ee.step(&mut ram), Err(Halt::Unimplemented { pc: ORIGIN + 4, word }), "RDRAM alone has no vector units, so COP2 halts");
     assert_eq!(ee.pc, ORIGIN + 4, "the machine is left before the instruction");
 }
 

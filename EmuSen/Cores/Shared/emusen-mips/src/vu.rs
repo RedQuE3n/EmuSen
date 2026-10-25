@@ -1,8 +1,9 @@
 //! The PlayStation 2's vector units as instructions: one table of the operations both units share, read in two ways.
 //! In micro mode an instruction is a 64-bit pair, an upper word with five flag bits over an operation and a lower word
 //! that is an operation or, with the I bit, a constant; in macro mode the EE issues the same operation as a COP2 word
-//! to VU0 (Kunimatsu et al., Hot Chips 11, "Instruction opcode to support 2 modes"). Its own spelling: the micro names
-//! bare, the macro names with a `v`, the field mask after a dot. A pure decode; nothing executes (EmuSen_Mips.md §9).
+//! to VU0 (Kunimatsu et al., Hot Chips 11, "Instruction opcode to support 2 modes"; VU User's Manual §4.1, §6.1). Its own
+//! spelling: the micro names bare, the macro names with a `v`, the field mask after a dot. A pure decode; nothing
+//! executes (EmuSen_Mips.md §9).
 
 use crate::asm::{AsmError, err, number, ranged, split_operands, strip_comment};
 
@@ -14,11 +15,11 @@ pub enum Unit {
     Macro,
 }
 
-/// How an operation's operands are written. `Raw` writes the operation's 25 bits whole, for an operation whose fields
-/// no source read so far lays out (EmuSen_Mips.md §9.3).
+/// How an operation's operands are written, each the VU User's Manual's mnemonic line for it (§4.2, §4.3, §6.2). A word
+/// whose bits outside its form's fields are not the documented ones is written as its name and its 25 bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
-    /// `vfD, vfS, vfT`
+    /// `vfD, vfS, vfT`, the broadcast forms with their field in bits 1-0.
     Fmac,
     /// `vfD, vfS, q`
     FmacQ,
@@ -30,9 +31,42 @@ pub enum Form {
     AccQ,
     /// `acc, vfS, i`
     AccI,
-    /// `vfT, viS`, the layout the Hot Chips slides draw for LQI.
-    TIs,
-    Raw,
+    /// `vfT, vfS`: ABS, the conversions, MOVE, MR32.
+    FtFs,
+    /// `vfS, vfT`: CLIPw, whose x, y and z of fs are judged against w of ft.
+    Clip,
+    /// `q, vfSf, vfTf`: DIV and RSQRT, the fields fsf (bits 22-21) and ftf (bits 24-23).
+    Fdiv,
+    /// `q, vfTf`: SQRT.
+    Sqrt,
+    /// No operands: NOP, WAITQ.
+    Bare,
+    /// `viT, vfSf`: MTIR.
+    Mtir,
+    /// `vfT, viS`: MFIR.
+    Mfir,
+    /// `viD, viS, viT`: the integer ALU.
+    Int3,
+    /// `viT, viS, imm`: IADDI, a signed 5-bit immediate in bits 10-6.
+    Imm5,
+    /// `vfT, (viS++)`: LQI.
+    LoadInc,
+    /// `vfT, (--viS)`: LQD.
+    LoadDec,
+    /// `vfS, (viT++)`: SQI.
+    StoreInc,
+    /// `vfS, (--viT)`: SQD.
+    StoreDec,
+    /// `viT, (viS)`: ILWR and ISWR.
+    IntMem,
+    /// `r, vfSf`: RINIT and RXOR.
+    RFs,
+    /// `vfT, r`: RGET and RNEXT.
+    FtR,
+    /// `imm15`, the microprogram's address divided by 8 in bits 20-6: CALLMS.
+    Callms,
+    /// `vi27`, fs fixed at 27: CALLMSR, which starts at CMSAR0.
+    Callmsr,
 }
 
 /// One operation: its micro-mode name, where it runs, and how its operands are written.
@@ -66,9 +100,9 @@ pub static SPECIAL1: [Option<Operation>; 64] = [
     op("subq", Upper, FmacQ), op("msubq", Upper, FmacQ), op("subi", Upper, FmacI), op("msubi", Upper, FmacI),
     op("add", Upper, Fmac), op("madd", Upper, Fmac), op("mul", Upper, Fmac), op("max", Upper, Fmac),
     op("sub", Upper, Fmac), op("msub", Upper, Fmac), op("opmsub", Upper, Fmac), op("mini", Upper, Fmac),
-    op("iadd", Lower, Raw), op("isub", Lower, Raw), op("iaddi", Lower, Raw), N,
-    op("iand", Lower, Raw), op("ior", Lower, Raw), N, N,
-    op("callms", Macro, Raw), op("callmsr", Macro, Raw), N, N,
+    op("iadd", Lower, Int3), op("isub", Lower, Int3), op("iaddi", Lower, Imm5), N,
+    op("iand", Lower, Int3), op("ior", Lower, Int3), N, N,
+    op("callms", Macro, Callms), op("callmsr", Macro, Callmsr), N, N,
     N, N, N, N,
 ];
 
@@ -80,19 +114,19 @@ pub static SPECIAL2: [Option<Operation>; 128] = {
          op("subax", Upper, Acc), op("subay", Upper, Acc), op("subaz", Upper, Acc), op("subaw", Upper, Acc)],
         [op("maddax", Upper, Acc), op("madday", Upper, Acc), op("maddaz", Upper, Acc), op("maddaw", Upper, Acc),
          op("msubax", Upper, Acc), op("msubay", Upper, Acc), op("msubaz", Upper, Acc), op("msubaw", Upper, Acc)],
-        [op("itof0", Upper, Raw), op("itof4", Upper, Raw), op("itof12", Upper, Raw), op("itof15", Upper, Raw),
-         op("ftoi0", Upper, Raw), op("ftoi4", Upper, Raw), op("ftoi12", Upper, Raw), op("ftoi15", Upper, Raw)],
+        [op("itof0", Upper, FtFs), op("itof4", Upper, FtFs), op("itof12", Upper, FtFs), op("itof15", Upper, FtFs),
+         op("ftoi0", Upper, FtFs), op("ftoi4", Upper, FtFs), op("ftoi12", Upper, FtFs), op("ftoi15", Upper, FtFs)],
         [op("mulax", Upper, Acc), op("mulay", Upper, Acc), op("mulaz", Upper, Acc), op("mulaw", Upper, Acc),
-         op("mulaq", Upper, AccQ), op("abs", Upper, Raw), op("mulai", Upper, AccI), op("clipw", Upper, Raw)],
+         op("mulaq", Upper, AccQ), op("abs", Upper, FtFs), op("mulai", Upper, AccI), op("clipw", Upper, Clip)],
         [op("addaq", Upper, AccQ), op("maddaq", Upper, AccQ), op("addai", Upper, AccI), op("maddai", Upper, AccI),
          op("subaq", Upper, AccQ), op("msubaq", Upper, AccQ), op("subai", Upper, AccI), op("msubai", Upper, AccI)],
         [op("adda", Upper, Acc), op("madda", Upper, Acc), op("mula", Upper, Acc), N,
-         op("suba", Upper, Acc), op("msuba", Upper, Acc), op("opmula", Upper, Acc), op("nop", Upper, Raw)],
-        [op("move", Lower, Raw), op("mr32", Lower, Raw), N, N,
-         op("lqi", Lower, TIs), op("sqi", Lower, Raw), op("lqd", Lower, Raw), op("sqd", Lower, Raw)],
-        [op("div", Lower, Raw), op("sqrt", Lower, Raw), op("rsqrt", Lower, Raw), op("waitq", Lower, Raw),
-         op("mtir", Lower, Raw), op("mfir", Lower, Raw), op("ilwr", Lower, Raw), op("iswr", Lower, Raw)],
-        [op("rnext", Lower, Raw), op("rget", Lower, Raw), op("rinit", Lower, Raw), op("rxor", Lower, Raw), N, N, N, N],
+         op("suba", Upper, Acc), op("msuba", Upper, Acc), op("opmula", Upper, Acc), op("nop", Upper, Bare)],
+        [op("move", Lower, FtFs), op("mr32", Lower, FtFs), N, N,
+         op("lqi", Lower, LoadInc), op("sqi", Lower, StoreInc), op("lqd", Lower, LoadDec), op("sqd", Lower, StoreDec)],
+        [op("div", Lower, Fdiv), op("sqrt", Lower, Sqrt), op("rsqrt", Lower, Fdiv), op("waitq", Lower, Bare),
+         op("mtir", Lower, Mtir), op("mfir", Lower, Mfir), op("ilwr", Lower, IntMem), op("iswr", Lower, IntMem)],
+        [op("rnext", Lower, FtR), op("rget", Lower, FtR), op("rinit", Lower, RFs), op("rxor", Lower, RFs), N, N, N, N],
     ];
     let mut r = 0;
     while r < rows.len() {
@@ -108,6 +142,44 @@ pub static SPECIAL2: [Option<Operation>; 128] = {
 
 /// The 25 bits below an operation's top bits: the field mask, the three register fields and the function.
 pub const BITS: u32 = 0x01FF_FFFF;
+
+/// The fields, by the VU User's Manual's §4.1.3 and §6.1.2: dest (or ftf and fsf), ft (it), fs (is), fd (id, imm5).
+pub mod field {
+    pub const DEST: u32 = 0xF << 21;
+    pub const FTF: u32 = 3 << 23;
+    pub const FSF: u32 = 3 << 21;
+    pub const FT: u32 = 31 << 16;
+    pub const FS: u32 = 31 << 11;
+    pub const FD: u32 = 31 << 6;
+    /// CALLMS's address, bits 20-6.
+    pub const IMM15: u32 = 0x7FFF << 6;
+}
+
+/// The bits a form's operands occupy; every other bit of the 25 is the operation's own or fixed.
+pub const fn operand_mask(form: Form) -> u32 {
+    use field::*;
+    match form {
+        Fmac => DEST | FT | FS | FD,
+        Int3 | Imm5 => FT | FS | FD,
+        FmacQ | FmacI => DEST | FS | FD,
+        Acc | FtFs | Clip | Fdiv | Mfir | LoadInc | LoadDec | StoreInc | StoreDec | IntMem => DEST | FT | FS,
+        AccQ | AccI => DEST | FS,
+        Sqrt => FTF | FT,
+        Bare | Callmsr => 0,
+        Mtir => FSF | FT | FS,
+        RFs => FSF | FS,
+        FtR => DEST | FT,
+        Callms => IMM15,
+    }
+}
+
+/// The bits a form fixes beyond the operation's selector: CALLMSR's fs of 27 (§6.2).
+const fn fixed(form: Form) -> u32 {
+    match form {
+        Callmsr => 27 << 11,
+        _ => 0,
+    }
+}
 
 /// The operation in the low 25 bits of a COP2 word, an upper word or a lower word.
 pub fn operation(w: u32) -> Option<&'static Operation> {
@@ -126,7 +198,7 @@ fn selector(name: &str) -> Option<(u32, &'static Operation)> {
 
 const DEST: [char; 4] = ['x', 'y', 'z', 'w'];
 
-/// Bit 24 is x and bit 21 is w, as the MAC flags put x highest (EmuSen_Mips.md §9.2).
+/// Bit 24 is x and bit 21 is w (VU User's Manual §4.1.3, "dest field").
 fn dest(w: u32) -> String {
     let m = w >> 21 & 0xF;
     if m == 0 { String::new() } else { format!(".{}", (0..4).filter(|i| m & 8 >> i != 0).map(|i| DEST[i]).collect::<String>()) }
@@ -136,38 +208,86 @@ fn reg(prefix: &str, n: u32) -> String {
     format!("{prefix}{n}")
 }
 
+/// A register with one field: `vf3w`, the field 00 x to 11 w (§4.1.3, "fsf/ftf field").
+fn reg_field(n: u32, f: u32) -> String {
+    format!("vf{n}{}", DEST[f as usize])
+}
+
+/// Whether `w`'s bits outside the form's operands are the operation's documented ones.
+fn canonical(o: &Operation, w: u32) -> bool {
+    let sel = selector(o.name).map_or(0, |(s, _)| s);
+    w & BITS & !operand_mask(o.form) == sel | fixed(o.form)
+}
+
 /// An operation with its operands, the name given a `v` in macro mode.
 pub fn text(o: &Operation, w: u32, macro_mode: bool) -> String {
     let name = if macro_mode { format!("v{}", o.name) } else { o.name.to_string() };
+    if !canonical(o, w) {
+        return format!("{name} 0x{:07x}", w & BITS);
+    }
     let (ft, fs, fd) = (w >> 16 & 0x1F, w >> 11 & 0x1F, w >> 6 & 0x1F);
-    let ops = match o.form {
-        Fmac => format!("{}, {}, {}", reg("vf", fd), reg("vf", fs), reg("vf", ft)),
-        FmacQ => format!("{}, {}, q", reg("vf", fd), reg("vf", fs)),
-        FmacI => format!("{}, {}, i", reg("vf", fd), reg("vf", fs)),
-        Acc => format!("acc, {}, {}", reg("vf", fs), reg("vf", ft)),
-        AccQ => format!("acc, {}, q", reg("vf", fs)),
-        AccI => format!("acc, {}, i", reg("vf", fs)),
-        TIs if fs < 16 => format!("{}, {}", reg("vf", ft), reg("vi", fs)),
-        TIs | Raw => {
-            let canonical = selector(o.name).map_or(0, |(s, _)| s);
-            return if w & BITS == canonical { name } else { format!("{name} 0x{:07x}", w & BITS) };
-        }
+    let (ftf, fsf) = (w >> 23 & 3, w >> 21 & 3);
+    let (ops, masked) = match o.form {
+        Fmac => (format!("{}, {}, {}", reg("vf", fd), reg("vf", fs), reg("vf", ft)), true),
+        FmacQ => (format!("{}, {}, q", reg("vf", fd), reg("vf", fs)), true),
+        FmacI => (format!("{}, {}, i", reg("vf", fd), reg("vf", fs)), true),
+        Acc => (format!("acc, {}, {}", reg("vf", fs), reg("vf", ft)), true),
+        AccQ => (format!("acc, {}, q", reg("vf", fs)), true),
+        AccI => (format!("acc, {}, i", reg("vf", fs)), true),
+        FtFs => (format!("{}, {}", reg("vf", ft), reg("vf", fs)), true),
+        Clip => (format!("{}, {}", reg("vf", fs), reg("vf", ft)), true),
+        Fdiv => (format!("q, {}, {}", reg_field(fs, fsf), reg_field(ft, ftf)), false),
+        Sqrt => (format!("q, {}", reg_field(ft, ftf)), false),
+        Bare => return name,
+        Mtir => (format!("{}, {}", reg("vi", ft), reg_field(fs, fsf)), false),
+        Mfir => (format!("{}, {}", reg("vf", ft), reg("vi", fs)), true),
+        Int3 => (format!("{}, {}, {}", reg("vi", fd), reg("vi", fs), reg("vi", ft)), false),
+        Imm5 => (format!("{}, {}, {}", reg("vi", ft), reg("vi", fs), ((fd << 27) as i32) >> 27), false),
+        LoadInc => (format!("{}, ({}++)", reg("vf", ft), reg("vi", fs)), true),
+        LoadDec => (format!("{}, (--{})", reg("vf", ft), reg("vi", fs)), true),
+        StoreInc => (format!("{}, ({}++)", reg("vf", fs), reg("vi", ft)), true),
+        StoreDec => (format!("{}, (--{})", reg("vf", fs), reg("vi", ft)), true),
+        IntMem => (format!("{}, ({})", reg("vi", ft), reg("vi", fs)), true),
+        RFs => (format!("r, {}", reg_field(fs, fsf)), false),
+        FtR => (format!("{}, r", reg("vf", ft)), true),
+        Callms => (format!("0x{:x}", w >> 6 & 0x7FFF), false),
+        Callmsr => ("vi27".to_string(), false),
     };
-    format!("{name}{} {ops}", dest(w))
+    format!("{name}{} {ops}", if masked { dest(w) } else { String::new() })
+}
+
+/// A register number of a five-bit field, `prefix` then 0 to 31.
+fn numbered(s: &str, prefix: &str) -> Result<u32, AsmError> {
+    match s.strip_prefix(prefix).map(str::parse::<u32>) {
+        Some(Ok(n)) if n < 32 => Ok(n),
+        _ => err(format!("not a {prefix} register: {s}")),
+    }
 }
 
 fn vf(s: &str) -> Result<u32, AsmError> {
-    match s.strip_prefix("vf").map(str::parse::<u32>) {
-        Some(Ok(n)) if n < 32 => Ok(n),
-        _ => err(format!("not a vector register: {s}")),
-    }
+    numbered(s, "vf")
 }
 
 fn vi(s: &str) -> Result<u32, AsmError> {
-    match s.strip_prefix("vi").map(str::parse::<u32>) {
-        Some(Ok(n)) if n < 16 => Ok(n),
-        _ => err(format!("not an integer register: {s}")),
-    }
+    numbered(s, "vi")
+}
+
+/// `vf3w` as (register, field).
+fn vf_field(s: &str) -> Result<(u32, u32), AsmError> {
+    let Some(c) = s.chars().last() else { return err("an empty operand") };
+    let Some(f) = DEST.iter().position(|d| *d == c) else { return err(format!("not a register with a field: {s}")) };
+    Ok((vf(&s[..s.len() - 1])?, f as u32))
+}
+
+/// `(viS++)`, `(--viS)` or `(viS)`: the register and the form written.
+fn address(s: &str, form: Form) -> Result<u32, AsmError> {
+    let inner = s.strip_prefix('(').and_then(|t| t.strip_suffix(')')).ok_or_else(|| AsmError { line: 0, message: format!("not an address: {s}") })?;
+    let r = match form {
+        LoadInc | StoreInc => inner.strip_suffix("++"),
+        LoadDec | StoreDec => inner.strip_prefix("--"),
+        _ => Some(inner),
+    };
+    vi(r.ok_or_else(|| AsmError { line: 0, message: format!("not this form's address: {s}") })?)
 }
 
 fn word_of(s: &str, want: &str) -> Result<(), AsmError> {
@@ -187,19 +307,13 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
     };
     let Some((selector, o)) = selector(name) else { return err(format!("unknown mnemonic: {mnemonic}")) };
     let operands = split_operands(rest);
-    let whole = matches!(operands.as_slice(), [v] if number(v).is_some());
-    if o.form == Raw || whole {
+    let whole = matches!(operands.as_slice(), [v] if number(v).is_some_and(|n| o.form != Callms || n > 0x7FFF));
+    if whole {
         if !mask.is_empty() {
             return err(format!("{head} takes no field mask"));
         }
-        return match operands.as_slice() {
-            [] if o.form == Raw => Ok((selector, o)),
-            [v] => {
-                let bits = ranged(v, 0, BITS as i64)?;
-                if operation(bits) != Some(o) { err(format!("0x{bits:07x} is not {head}")) } else { Ok((bits, o)) }
-            }
-            _ => err(format!("{head} takes at most one operand")),
-        };
+        let bits = ranged(operands[0], 0, BITS as i64)?;
+        return if operation(bits) != Some(o) { err(format!("0x{bits:07x} is not {head}")) } else { Ok((bits, o)) };
     }
     let mut m = 0;
     let mut last = None;
@@ -211,9 +325,15 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
         last = Some(i);
         m |= 8 >> i;
     }
+    let masked = matches!(o.form, Fmac | FmacQ | FmacI | Acc | AccQ | AccI | FtFs | Clip | Mfir | LoadInc | LoadDec | StoreInc | StoreDec | IntMem | FtR);
+    if m != 0 && !masked {
+        return err(format!("{head} takes no field mask"));
+    }
     let want = match o.form {
-        TIs => 2,
-        _ => 3,
+        Bare => 0,
+        Callms | Callmsr => 1,
+        Fmac | FmacQ | FmacI | Acc | AccQ | AccI | Fdiv | Int3 | Imm5 => 3,
+        _ => 2,
     };
     if operands.len() != want {
         return err(format!("{head} takes {want} operands"));
@@ -226,8 +346,37 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
         Acc => word_of(o3(0), "acc").map(|_| 0)? | vf(o3(1))? << 11 | vf(o3(2))? << 16,
         AccQ => word_of(o3(0), "acc").map(|_| 0)? | vf(o3(1))? << 11 | word_of(o3(2), "q").map(|_| 0)?,
         AccI => word_of(o3(0), "acc").map(|_| 0)? | vf(o3(1))? << 11 | word_of(o3(2), "i").map(|_| 0)?,
-        TIs => vf(o3(0))? << 16 | vi(o3(1))? << 11,
-        Raw => unreachable!(),
+        FtFs => vf(o3(0))? << 16 | vf(o3(1))? << 11,
+        Clip => vf(o3(0))? << 11 | vf(o3(1))? << 16,
+        Fdiv => {
+            word_of(o3(0), "q")?;
+            let ((s, sf), (t, tf)) = (vf_field(o3(1))?, vf_field(o3(2))?);
+            s << 11 | sf << 21 | t << 16 | tf << 23
+        }
+        Sqrt => {
+            word_of(o3(0), "q")?;
+            let (t, tf) = vf_field(o3(1))?;
+            t << 16 | tf << 23
+        }
+        Bare => 0,
+        Mtir => {
+            let (s, sf) = vf_field(o3(1))?;
+            vi(o3(0))? << 16 | s << 11 | sf << 21
+        }
+        Mfir => vf(o3(0))? << 16 | vi(o3(1))? << 11,
+        Int3 => vi(o3(0))? << 6 | vi(o3(1))? << 11 | vi(o3(2))? << 16,
+        Imm5 => vi(o3(0))? << 16 | vi(o3(1))? << 11 | (ranged(o3(2), -16, 15)? & 31) << 6,
+        LoadInc | LoadDec => vf(o3(0))? << 16 | address(o3(1), o.form)? << 11,
+        StoreInc | StoreDec => vf(o3(0))? << 11 | address(o3(1), o.form)? << 16,
+        IntMem => vi(o3(0))? << 16 | address(o3(1), IntMem)? << 11,
+        RFs => {
+            word_of(o3(0), "r")?;
+            let (s, sf) = vf_field(o3(1))?;
+            s << 11 | sf << 21
+        }
+        FtR => vf(o3(0))? << 16 | word_of(o3(1), "r").map(|_| 0)?,
+        Callms => ranged(o3(0), 0, 0x7FFF)? << 6,
+        Callmsr => word_of(o3(0), "vi27").map(|_| fixed(Callmsr))?,
     };
     Ok((selector | m << 21 | fields, o))
 }
@@ -333,6 +482,8 @@ mod tests {
 
     /// NOP in the upper half: Special2's row 0101, column 7.
     const NOP: u32 = 11 << 6 | 0x3C | 3;
+    /// MOVE with every field zero, `move vf0, vf0`, the manual's lower no-operation (§3.2.2).
+    const MOVE: u32 = 0x33C;
 
     /// ps2tek's "COP2 Special1" table as printed, `---` for an empty cell; the V of each name is the macro form's.
     const PS2TEK_SPECIAL1: [&str; 64] = [
@@ -377,14 +528,7 @@ mod tests {
     }
 
     fn random_fields(o: &Operation, seed: &mut u64) -> u32 {
-        match o.form {
-            Raw => 0,
-            TIs => mix(seed) & (0xF << 21 | 0x1F << 16 | 0xF << 11),
-            FmacQ | FmacI => mix(seed) & (0xF << 21 | 0x1F << 11 | 0x1F << 6),
-            Acc => mix(seed) & (0xF << 21 | 0x1F << 16 | 0x1F << 11),
-            AccQ | AccI => mix(seed) & (0xF << 21 | 0x1F << 11),
-            Fmac => mix(seed) & (0xF << 21 | 0x1F << 16 | 0x1F << 11 | 0x1F << 6),
-        }
+        mix(seed) & operand_mask(o.form)
     }
 
     /// Every cell of ps2tek's two tables: a named one decodes to its name in macro mode, its text reads back to the same
@@ -407,7 +551,7 @@ mod tests {
                 let (back, _) = encode(&t, true).unwrap_or_else(|e| panic!("\"{t}\": {e}"));
                 assert_eq!(back, w, "\"{t}\"");
                 let pair = match o.unit {
-                    Upper => ((mix(&mut seed) & 0xF8 << 24 & !I_BIT | w) as u64) << 32 | (LOWER_OP | 0x33C) as u64,
+                    Upper => ((mix(&mut seed) & 0xF8 << 24 & !I_BIT | w) as u64) << 32 | (LOWER_OP | MOVE) as u64,
                     Lower => (NOP as u64) << 32 | (LOWER_OP | w) as u64,
                     Macro => continue,
                 };
@@ -423,17 +567,51 @@ mod tests {
         let maddx = 0x08 | 1 << 6 | 2 << 11 | 3 << 16 | 0xF << 21;
         assert_eq!(text(operation(maddx).unwrap(), maddx, true), "vmaddx.xyzw vf1, vf2, vf3");
         let lqi = 0b01101 << 6 | 0x3C | 5 << 11 | 4 << 16 | 0x8 << 21;
-        assert_eq!(text(operation(lqi).unwrap(), lqi, false), "lqi.x vf4, vi5");
-        assert_eq!(disassemble(0x0000_02FF_8104_2B7C), "nop | lqi.x vf4, vi5", "the slides' bits: 1000000, dest, ft, is, 01101 1111 00");
-        assert_eq!(assemble_pair("[e] nop | move"), Ok(0x4000_02FF_8000_033C));
-        let pair = ((1u64 << 30 | NOP as u64) << 32) | (LOWER_OP | 0x33C) as u64;
-        assert_eq!(disassemble(pair), "[e] nop | move");
+        assert_eq!(text(operation(lqi).unwrap(), lqi, false), "lqi.x vf4, (vi5++)");
+        assert_eq!(disassemble(0x0000_02FF_8104_2B7C), "nop | lqi.x vf4, (vi5++)", "the slides' bits: 1000000, dest, ft, is, 01101 1111 00");
+        assert_eq!(assemble_pair("[e] nop | move vf0, vf0"), Ok(0x4000_02FF_8000_033C));
+        let pair = ((1u64 << 30 | NOP as u64) << 32) | (LOWER_OP | MOVE) as u64;
+        assert_eq!(disassemble(pair), "[e] nop | move vf0, vf0");
         let constant = ((I_BIT | 0x22) as u64) << 32 | 0x3F80_0000;
         assert_eq!(disassemble(constant), "[i] addi vf0, vf0, i | 0x3f800000");
         assert_eq!(assemble_pair("[i] addi vf0, vf0, i | 0x3f800000"), Ok(constant));
         assert_eq!(disassemble(0x0000_0030_0000_0000), ".word 0x00000030 | .word 0x00000000", "an integer add is no upper instruction");
         assert!(assemble_pair("iadd | nop").is_err());
-        assert!(assemble_pair("add.yx vf1, vf2, vf3 | move").is_err());
-        assert_eq!(assemble("# a program\n[e] nop | move\n\n nop | move ; again\n").map(|v| v.len()), Ok(2));
+        assert!(assemble_pair("add.yx vf1, vf2, vf3 | move vf0, vf0").is_err());
+        assert_eq!(assemble("# a program\n[e] nop | move vf0, vf0\n\n nop | move vf0, vf0 ; again\n").map(|v| v.len()), Ok(2));
+    }
+
+    /// The VU User's Manual's own words for the macro instructions (§6.2's operation codes, its mnemonic lines and
+    /// examples): each word's bits as the page draws them, and its text as the page writes it.
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)] // the opcodes grouped as the pages draw them, 5, 4 and 2 bits
+    fn the_manual_s_macro_pages_read_back() {
+        let cop2 = |w: u32| 0x12 << 26 | 1 << 25 | w;
+        let cases: [(u32, &str); 16] = [
+            (0xE << 21 | 10 << 16 | 10 << 11 | 0b00111_1111_11, "vclipw.xyz vf10, vf10"),
+            (1 << 23 | 20 << 16 | 10 << 11 | 0b01110_1111_00, "vdiv q, vf10x, vf20y"),
+            (10 << 16 | 0b01110_1111_01, "vsqrt q, vf10x"),
+            (3 << 23 | 2 << 21 | 4 << 16 | 3 << 11 | 0b01110_1111_10, "vrsqrt q, vf3z, vf4w"),
+            (12 << 16 | 10 << 11 | 1 << 21 | 0b01111_1111_00, "vmtir vi12, vf10y"),
+            (4 << 21 | 10 << 16 | 12 << 11 | 0b01111_1111_01, "vmfir.y vf10, vi12"),
+            (4 << 16 | 5 << 11 | 31 << 6 | 0b110010, "viaddi vi4, vi5, -1"),
+            (6 << 16 | 5 << 11 | 4 << 6 | 0b110000, "viadd vi4, vi5, vi6"),
+            (0xF << 21 | 10 << 16 | 4 << 11 | 0b01101_1111_00, "vlqi.xyzw vf10, (vi4++)"),
+            (0xF << 21 | 4 << 16 | 10 << 11 | 0b01101_1111_11, "vsqd.xyzw vf10, (--vi4)"),
+            (4 << 21 | 10 << 16 | 4 << 11 | 0b01111_1111_10, "vilwr.y vi10, (vi4)"),
+            (10 << 11 | 0b10000_1111_10, "vrinit r, vf10x"),
+            (8 << 21 | 10 << 16 | 0b10000_1111_01, "vrget.x vf10, r"),
+            (0x40 << 6 | 0b111000, "vcallms 0x40"),
+            (27 << 11 | 0b111001, "vcallmsr vi27"),
+            (0b01011_1111_11, "vnop"),
+        ];
+        for (bits, want) in cases {
+            let o = operation(bits).unwrap_or_else(|| panic!("{bits:07x}"));
+            assert_eq!(text(o, cop2(bits), true), want);
+            assert_eq!(encode(want, true).map(|(b, _)| b), Ok(bits), "{want}");
+        }
+        let odd = 1 << 16 | 0b01011_1111_11;
+        assert_eq!(text(operation(odd).unwrap(), odd, true), "vnop 0x00102ff", "a field the page fixes at zero, set");
+        assert_eq!(encode("vnop 0x00102ff", true).map(|(b, _)| b), Ok(odd));
     }
 }

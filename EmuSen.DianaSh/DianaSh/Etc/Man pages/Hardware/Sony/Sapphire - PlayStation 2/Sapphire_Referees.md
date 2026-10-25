@@ -139,7 +139,14 @@ RAM, so neither can produce a record without the firmware.
 | DobieStation | not run (§7) | would be a third, tied to ps2tek |
 
 A ruling needs agreement between lineages, or else names the strongest single witness as such, as `Diamond_Referees.md`
-§3 rules [C, carried over]. Play!'s kernel output is excluded from every ruling about the BIOS (`Sapphire_Plan.md` §11
+§3 rules [C, carried over].
+
+*Added 2026-10-25 at S12*, the weights found per unit since S6 (`Sapphire_Native.md` §19.6, §20.8, §21.7): **neither
+lineage is a witness for the FPU's or the VUs' arithmetic** (both read exponent 255 as IEEE 754's and clamp it, raise no U
+or O, and compute the VU on IEEE 754's rounding towards zero, PCSX2's FPU alone modelling the console's division), nor
+for the exceptions the referees never raise; PCSX2 is a witness for the integer, multimedia and DMAC units the console
+texts exercise, for COP2's transfers, the VU's integer and random units, CLIP, MAX and MINI. The console texts are
+weighed first for every FPU and VU dispute. Play!'s kernel output is excluded from every ruling about the BIOS (`Sapphire_Plan.md` §11
 Q5).
 
 ## 4. The project's programs

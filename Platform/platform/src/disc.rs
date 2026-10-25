@@ -44,6 +44,30 @@ pub unsafe extern "C" fn emusen_disc_sbi_beside(image: *const u8, image_len: usi
     }
 }
 
+/// Each track of a sheet as a byte range of its file, as a JSON array of `{"track","file","offset","length"}`, `file`
+/// the FILE line's position and `length` null to the file's end; `PARSE` with words for a sheet that is not one, or a
+/// WAVE file naming several tracks.
+///
+/// # Safety
+/// As `emusen_disc_companions`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_disc_track_spans(sheet: *const u8, sheet_len: usize, out: *mut u8, len: usize) -> i64 {
+    let sheet = match unsafe { required(sheet, sheet_len) } {
+        Ok(text) => text,
+        Err(status) => return status as i64,
+    };
+    match set::track_spans(sheet) {
+        Ok(spans) => {
+            let items: Vec<String> = spans
+                .iter()
+                .map(|s| format!(r#"{{"track":{},"file":{},"offset":{},"length":{}}}"#, s.number, s.file, s.offset, s.length.map_or("null".to_string(), |l| l.to_string())))
+                .collect();
+            unsafe { put(format!("[{}]", items.join(",")).as_bytes(), out, len) }
+        }
+        Err(e) => fail(status::PARSE, e) as i64,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,6 +89,9 @@ mod tests {
         assert_eq!(call(emusen_disc_playlist, "#EXTM3U\nA (Disc 1).cue\n\nA (Disc 2).cue\n").unwrap(), "A (Disc 1).cue\0A (Disc 2).cue\0");
         assert_eq!(call(emusen_disc_sbi_beside, "/r/Game (Europe).cue").unwrap(), "/r/Game (Europe).sbi");
         assert_eq!(call(emusen_disc_companions, "TRACK 01 AUDIO\n"), Err(status::PARSE as i64));
+        let one = "FILE a.bin BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nINDEX 01 00:00:10\n";
+        assert_eq!(call(emusen_disc_track_spans, one).unwrap(), r#"[{"track":1,"file":0,"offset":0,"length":20480},{"track":2,"file":0,"offset":20480,"length":null}]"#);
+        assert_eq!(call(emusen_disc_track_spans, "TRACK 01 AUDIO\n"), Err(status::PARSE as i64));
         assert_eq!(unsafe { emusen_disc_playlist(std::ptr::null(), 0, std::ptr::null_mut(), 0) }, status::NULL as i64);
     }
 }

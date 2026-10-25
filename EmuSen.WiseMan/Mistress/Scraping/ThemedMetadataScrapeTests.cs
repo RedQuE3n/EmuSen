@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             NoNetwork.ScrapeClock.SetValue(null, clock);
             NoNetwork.DeveloperSource.SetValue(null, (Func<DeveloperCredentials?>)(() => FakeScreenScraper.Developer));
             ConfirmField.SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, _) => Task.FromResult(true)));
-            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHashes.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = Scraped });
+            _server.Games.Add(new FakeGame(9, "Aurora Drift", RomHash.Of(SyntheticRom.BuildBlank()).Md5) { Synopsis = Scraped });
         }
 
         public void Dispose()

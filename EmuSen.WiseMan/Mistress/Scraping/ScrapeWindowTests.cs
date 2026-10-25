@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private string Md5 => RomHashes.Of(_rom).Md5;
+        private string Md5 => RomHash.Of(_rom).Md5;
         private string ScrapedCover => Path.Combine(DataStore.Media, "snes", "covers", "F-Zero (USA).png");
         private string OpenEmuCover => Path.Combine(DataStore.Media, "openemu", "SNES", "F-Zero (USA).png");
 

@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Cores;
 using EmuSen.Mistress.Scraping;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -90,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Each_new_kind_is_fetched_when_turned_on_into_es_de_s_folder_with_its_own_file_type_and_each_is_one_request()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = FakeGame.AllMedia });
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5) { Media = FakeGame.AllMedia });
 
             ScrapeResult result = Run(rom, AllOn);
 
@@ -106,14 +107,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Contains(_server.MediaAsked, u => u.Contains("media=manuel(us)"));
             Assert.Contains(_server.MediaAsked, u => u.Contains("media=video-normalized()"));
             Assert.Equal(new[] { "3dbox", "backcover", "cover", "fanart", "manual", "marquee", "miximage", "physicalmedia", "screenshot", "titlescreen", "video" },
-                _store.Media(RomHashes.Of(rom).Md5, 4096).Select(m => m.Type).Order(StringComparer.Ordinal));
+                _store.Media(RomHash.Of(rom).Md5, 4096).Select(m => m.Type).Order(StringComparer.Ordinal));
         }
 
         [Fact]
         public void With_the_new_kinds_off_as_they_are_by_default_a_game_costs_what_it_did()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = FakeGame.AllMedia });
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5) { Media = FakeGame.AllMedia });
 
             Run(rom);
 
@@ -121,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(4, _server.MediaAsked.Count());
             foreach (string folder in (string[])["backcovers", "3dboxes", "physicalmedia", "fanart", "manuals", "videos", "titlescreens"])
                 Assert.False(Directory.Exists(Stored("snes", folder)), folder);
-            ScrapedRecord kept = _store.Game(RomHashes.Of(rom).Md5, 4096)!;
+            ScrapedRecord kept = _store.Game(RomHash.Of(rom).Md5, 4096)!;
             // The answer's offer is recorded for every kind, so turning one on later knows whether to ask.
             Assert.Contains("manual", kept.Offered!.Split(','));
             Assert.Equal(string.Join(",", ScrapeRules.AllKinds.Select(k => k.EsdeType)), kept.KindsKnown);
@@ -131,14 +132,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_kind_turned_on_later_asks_again_only_a_game_that_may_have_it()
         {
             string offers = Rom("Offers (USA).sfc", 1), lacks = Rom("Lacks (USA).sfc", 2), older = Rom("Older (USA).sfc", 3);
-            _server.Games.Add(new FakeGame(1, "Offers", RomHashes.Of(offers).Md5) { Media = FakeGame.AllMedia });
-            _server.Games.Add(new FakeGame(2, "Lacks", RomHashes.Of(lacks).Md5) { Media = [("box-2D", "us", "png")] });
-            _server.Games.Add(new FakeGame(3, "Older", RomHashes.Of(older).Md5) { Media = FakeGame.AllMedia });
+            _server.Games.Add(new FakeGame(1, "Offers", RomHash.Of(offers).Md5) { Media = FakeGame.AllMedia });
+            _server.Games.Add(new FakeGame(2, "Lacks", RomHash.Of(lacks).Md5) { Media = [("box-2D", "us", "png")] });
+            _server.Games.Add(new FakeGame(3, "Older", RomHash.Of(older).Md5) { Media = FakeGame.AllMedia });
             Run(offers);
             Run(lacks);
             // An answer kept before Pass 8 listed only the first five kinds and has no record of the rest.
             Run(older);
-            ScrapedRecord old = _store.Game(RomHashes.Of(older).Md5, 4096)!;
+            ScrapedRecord old = _store.Game(RomHash.Of(older).Md5, 4096)!;
             _store.Record(old with { Offered = "cover,screenshot,marquee,miximage,titlescreen", KindsKnown = null });
             int before = Requests;
 
@@ -210,7 +211,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Refreshing_unchanged_files_costs_one_lookup_and_no_byte()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Run(rom);
             int before = Requests;
             long bytes = _server.BytesSent;
@@ -231,7 +232,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Without_refresh_a_found_game_costs_nothing()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Run(rom);
             int before = Requests;
             _server.MediaRevision["box-2D"] = 1;
@@ -243,7 +244,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Refresh_fetches_a_changed_file_over_the_kept_one_and_only_that_one()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Run(rom);
             string cover = Stored("snes", "covers", "F-Zero (USA).png"), shot = Stored("snes", "screenshots", "F-Zero (USA).png");
             string oldCover = Sha1(cover), oldShot = Sha1(shot);
@@ -257,7 +258,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(3, refreshed.Unchanged);
             Assert.NotEqual(oldCover, Sha1(cover));
             Assert.Equal(oldShot, Sha1(shot));
-            Assert.Equal(Sha1(cover), _store.Media(RomHashes.Of(rom).Md5, 4096).Single(m => m.Type == "cover").Sha1);
+            Assert.Equal(Sha1(cover), _store.Media(RomHash.Of(rom).Md5, 4096).Single(m => m.Type == "cover").Sha1);
             Assert.Empty(Directory.EnumerateFiles(Media, "*.part", SearchOption.AllDirectories));
         }
 
@@ -265,7 +266,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Where_an_answer_states_no_checksum_the_kept_file_s_is_sent_and_SHA1OK_costs_a_request_and_no_byte()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Run(rom);
             _server.StateChecksums = false;
             int before = Requests;
@@ -285,15 +286,15 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_game_no_longer_listed_keeps_what_was_found_when_refreshed()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
             Run(rom);
             _server.Games.Clear();
 
             ScrapeResult refreshed = Run(rom, new ScrapeChoices { Refresh = true });
 
             Assert.Equal(ScrapeOutcome.Found, refreshed.Outcome);
-            Assert.Equal(ScrapeState.Found, _store.Game(RomHashes.Of(rom).Md5, 4096)!.State);
-            Assert.Equal("F-Zero (US title)", _store.Game(RomHashes.Of(rom).Md5, 4096)!.Name);
+            Assert.Equal(ScrapeState.Found, _store.Game(RomHash.Of(rom).Md5, 4096)!.State);
+            Assert.Equal("F-Zero (US title)", _store.Game(RomHash.Of(rom).Md5, 4096)!.Name);
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero (USA).png")));
         }
 
@@ -313,7 +314,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal("name", result.MatchedBy);
             Assert.Empty(_server.JeuInfos);
             Assert.Equal(before + 4, Requests);
-            ScrapedRecord kept = _store.Game(RomHashes.Of(rom).Md5, 4096)!;
+            ScrapedRecord kept = _store.Game(RomHash.Of(rom).Md5, 4096)!;
             Assert.Equal((ScrapeState.Found, 900L, "name"), (kept.State, kept.GameId!.Value, kept.MatchedBy));
             Assert.True(File.Exists(Stored("snes", "covers", "SMW Hack (USA).png")));
         }
@@ -333,7 +334,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Games.Clear();
             ScrapeResult later = Run(rom, new ScrapeChoices { Refresh = true });
             Assert.Equal(ScrapeOutcome.Found, later.Outcome);
-            Assert.Equal("name", _store.Game(RomHashes.Of(rom).Md5, 4096)!.MatchedBy);
+            Assert.Equal("name", _store.Game(RomHash.Of(rom).Md5, 4096)!.MatchedBy);
         }
 
         private SearchAnswer Search(string text) =>
@@ -376,7 +377,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             _server.User = FakeScreenScraper.Quota(maxThreads: 1, perMinute: 6, perDay: 20000, koPerDay: 2000, today: 10, koToday: 1);
             string rom = Rom("F-Zero (USA).sfc", 1);
-            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = FakeGame.AllMedia });
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5) { Media = FakeGame.AllMedia });
             DateTimeOffset start = _clock.Now;
 
             Run(rom, AllOn);

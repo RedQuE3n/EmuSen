@@ -1,6 +1,6 @@
 # EmuSen.Galaxia — the librarian
 
-*This revision: on macOS the tree lives in `~/Library/Application Support/EmuSen`, outside the app bundle, and the bundle's manual is seeded into it (§3.4, 2026-09-27). Previously: the DianaSh shell was rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaShSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
+*This revision (2026-10-25): a dump's identity, whole, ranged, transformed and per track (§5.4), and a game package's manifest with the two directories packages and converted discs live in (§3.10), both in C# and Rust. Previously: on macOS the tree lives in `~/Library/Application Support/EmuSen`, outside the app bundle, and the bundle's manual is seeded into it (§3.4, 2026-09-27). Previously: the DianaSh shell was rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaShSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
 
 ---
 
@@ -303,6 +303,50 @@ taken the next, and a refused disc leaves the earlier in place.
   `mapped.rs`'s `advice_is_taken_inside_the_file_and_changes_no_byte` and `tests/advise.rs`, which reads the page cache
   with `mincore`.
 
+### 3.10 Game packages: the manifest, and where packages and converted discs live (2026-10-25)
+
+*Built at step 2 of `EmuSen_GamePackages.md` §7, whose §3 is the design and §11 the record of what was built.* A
+package is a folder per game holding `package.json`, the manifest; where a game's files are, and how that file is read
+and written, are Galaxia's, as a disc's files are (§3.8). What the fields mean to a launch, a conversion or a patch is
+their callers'.
+
+**The directories.** `DataStore.Packages` is `<home>/Packages` and `DataStore.Compressed` is `<home>/Compressed`,
+`EMUSEN_GALAXIA_DIR_PACKAGES` (22) and `EMUSEN_GALAXIA_DIR_COMPRESSED` (23) in `emusen_platform.h` and
+`Directory::Packages` and `Directory::Compressed` in `tree.rs`; `GalaxiaParityTests` holds the two halves to one path.
+Neither is made by the skeleton: the step that first writes into each makes it. Neither may lie inside
+`AppSettings.RomDirectory`; the settings that move them come with the steps that use them.
+
+**The manifest** (`EmuSen.Galaxia/Media/GamePackage.cs`, `Platform/galaxia/src/package.rs`):
+
+- **The document is the model.** A manifest is held whole, as `JsonObject` in C# and as an ordered `Value` in Rust,
+  so that a field this build does not know, at any depth, is written back in its place with its value. A number keeps
+  its token (`1.50` stays `1.50`). Typed accessors read the fields the steps use (`Version`, `Title`, `System`, `Mode`,
+  `Game`); a caller edits the document, and every write checks it again.
+- **Reading** is as a person's file is read: `File.ReadAllText`'s decoding (a byte-order mark honoured), comments and a
+  trailing comma allowed, 64 levels deep, as the config files are (`EmuSen_RustPlatform.md` §11.3).
+- **The checks**, in one order in both halves: the document is an object with no member written twice and no text
+  that is not valid Unicode; `format` is `emusen-package`; `version` is two numbers; **a major other than 1 is refused
+  at once**, a newer one as such (`PackageRefusedException.Newer`, `EMUSEN_PLATFORM_NEWER_FILE`) before any field it may
+  have changed is looked at; then each known field in the schema's order (`EmuSen_GamePackages.md` §3.3 and §11.2).
+  Each refusal names the field by its path (`game.path must be an absolute path`), and the two halves word every
+  refusal alike, but for a text that is not JSON, which each reader describes in its own words.
+- **Writing** is `AtomicFile`'s (§4): the whole file to `<path>.tmp`, renamed over the live one; a document the checks
+  refuse is never written, and a write that fails reports and returns false. The bytes are System.Text.Json's indented
+  layout: two spaces, its default encoder's escapes (text outside ASCII as `\uXXXX`, as every config file is written),
+  the platform's line ending, and one at the end of the file. **Comments in a manifest written by hand are not kept**
+  when the program writes it again, as for the config files.
+- **Both halves.** The C# rule is `GamePackage.Managed`; the library's are `emusen_galaxia_package_read`, `_write` and
+  `_format` (interface 23). `GalaxiaParityTests` holds them to the same bytes for every manifest of its corpus, the
+  same refusals with the same words, and the same files on disk.
+
+**Tests**: `GamePackageTests` (a manifest written by hand in an editor, with comments, tabs, a trailing comma, CRLF and
+a byte-order mark, loads; a round trip through the file keeps unknown fields in their places; a newer major is refused
+and a refused document leaves the file as it was; an unwritable place reports), run in both states of the switch; the
+parity cases `A_manifest_is_taken_and_laid_out_to_the_same_bytes_both_ways`,
+`A_manifest_is_refused_alike_both_ways_with_the_same_words` and
+`A_manifest_is_written_and_read_back_to_the_same_bytes_both_ways`; in Rust, `package.rs`'s five cases and the C
+layer's.
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.
@@ -395,6 +439,16 @@ pre-change VenusRT record read by C# Venus is called a newer build's.
 
 ### 5.4 A ROM's identity (2026-09-21)
 
+*Extended 2026-10-25 (`EmuSen_GamePackages.md` §2.2, §11.1): `RomHash` is the one owner of a dump's hashes.*
+`RomHash.Of` takes CRC-32, MD5 and SHA-1 in one read, of a whole file, of a byte range, or of bytes held in memory,
+as the record `RomHashes`; `RomHash.Transformed` hashes the comparable form a system pack's transform makes, and knows
+no console; `RomHash.Tracks` hashes each track of a cue sheet over the bytes `emusen-disc` places it in
+(`EmuSen_Disc.md` §12). Mistress's own `Scraping/RomHashes.cs` and its `Crc32` were folded into it, so the scraper,
+the library's identity and a package's manifest take their hashes from one rule. The library's halves are
+`emusen_galaxia_rom_hashes`, `_rom_hashes_of` and `_rom_tracks` (interface 23); a hash's stop is a flag the host sets,
+read before each 64 KiB. `RomHash.Tracks`' C# half reads and hashes in C#, but asks where each track lies of the
+platform library, as `ImageSets` asks what a sheet names (§3.8), since that is `emusen-disc`'s alone.
+
 `RomHash.Md5` is the MD5 of every byte of the file, header included. That is a choice with a stated cost. The No-Intro and screenscraper conventions hash some consoles without their copier header, and OpenEmu hashes the whole file at import and the headerless file at lookup, which the library plan's §2 calls a trap. Here the hash has one job, to recognise the same file after a rename, and for that job the whole file is the right thing to hash: two files differing only in a header are different files to the core that loads them. A lookup against an external database would need the headerless hash as well, and would add it rather than replace this one.
 
 ---
@@ -447,6 +501,11 @@ In `EmuSen.WiseMan/Galaxia/`:
 
 - **`DataStoreTests`** — every directory's location, that the shell forwards all six, and both override-separation properties.
 - **`AtomicFileTests`** — directory creation, replacement, no temp left behind, an abandoned temp never read, round-trip, and that an unwritable path reports and returns false instead of throwing.
+- **`GalaxiaParityTests`**, the identity cases (2026-10-25) — the three hashes of files from empty to 3 MB, whole,
+  ranged and held, equal to .NET's own algorithms in both halves; the same exceptions; a stop as a cancellation; a
+  transform hashed only where it changes the bytes; each track of generated sheets (one file a track, one file of
+  three tracks in two modes, a WAVE track) equal to the generated bytes' hashes; a sheet refused alike.
+- **`GamePackageTests`** and the manifest's parity cases (§3.10).
 - **`SaveLibraryTests`** — both names, slot 1's unsuffixed form, blank-override fallback, and that the ROM's own folder never leaks into the answer.
 
 And, unchanged and still green, `DianaSh/HierTests.cs` and `DianaSh/DianaShSandboxTests.cs` — see §2 for why their staying untouched is the point.

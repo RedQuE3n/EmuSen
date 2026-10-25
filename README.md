@@ -607,6 +607,16 @@ with [`VenusRT_DspHle.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Ninte
 [`EmuSen_CRT.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter; and
 [`EmuSen_LunaP_Kit.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_LunaP_Kit.md) §12 for the toolkit survey behind the LunaP kit.
 
+### Disc images: CHD and chdman
+
+- [MAME](https://www.mamedev.org/)'s CHD (Compressed Hunks of Data) format, read through the `chd` crate (Ronny Chan,
+  BSD-3-Clause), whose code is not read. Its CD layout was measured from the output of MAME's chdman 0.289; chdman's
+  source file is BSD-3-Clause (copyright Aaron Giles), and MAME as a whole is GPL-2.0-or-later
+  ([The MAME License](https://docs.mamedev.org/license.html)). chdman is documented in MAME's own
+  [chdman page](https://docs.mamedev.org/tools/chdman.html) (MAME Documentation 0.289). It is not part of a build
+  today; when EmuSen ships it, as decided on 2026-10-25, it is listed in `THIRD_PARTY_NOTICES.md` with its licence texts
+  and a written offer of its source (`EmuSen_GamePackages.md` §4.9).
+
 ### Screen filters
 
 The built-in filters are EmuSen's own shaders; the values they use came from these:

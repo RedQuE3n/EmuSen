@@ -13,6 +13,7 @@ using EmuSen.Cores;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
 using Xunit.Abstractions;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -136,7 +137,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 string? tag = ScrapeRules.RegionOfFileName(Path.GetFileName(r.Path));
                 if (tag is not ("us" or "eu" or "jp")) continue;
-                string md5 = RomHashes.Of(r.Path).Md5;
+                string md5 = RomHash.Of(r.Path).Md5;
                 StoredMedia? cover = store.Media(md5, new FileInfo(r.Path).Length).FirstOrDefault(m => m.Type == "cover");
                 if (cover is null) continue;
                 regionTagged++;

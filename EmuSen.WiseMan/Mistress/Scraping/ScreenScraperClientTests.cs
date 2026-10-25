@@ -148,13 +148,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string file = Path.Combine(_root, "check.bin");
             File.WriteAllBytes(file, Encoding.ASCII.GetBytes("123456789"));
-            RomHashes h = RomHashes.Of(file);
+            RomHashes h = RomHash.Of(file);
             Assert.Equal("cbf43926", h.Crc32);
             Assert.Equal("25f9e794323b453885f5181f1b624d0b", h.Md5);
             Assert.Equal("f7c3bc1d808e04732adf679965ccc34ca7ae3441", h.Sha1);
             Assert.Equal(9, h.Size);
             Assert.Equal(RomHash.Md5(file), h.Md5);
-            Assert.Equal(h, RomHashes.Of(File.ReadAllBytes(file)));
+            Assert.Equal(h, RomHash.Of(File.ReadAllBytes(file)));
         }
 
         private static HttpResponseMessage Png(int bytes)

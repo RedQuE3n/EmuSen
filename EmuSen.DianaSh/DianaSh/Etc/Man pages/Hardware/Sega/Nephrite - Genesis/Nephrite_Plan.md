@@ -220,6 +220,15 @@ and its source, date and status in `DOCS.txt`.
 | **Ricoh RF5C68A datasheet** | Console5 | A manufacturer's datasheet, for the RF5C164's predecessor | The PCM's registers and operation | **No RF5C164 datasheet exists publicly**; the differences come from Sega's PCM manual (§2.2) and tests |
 | **Sanyo LC8951 and LC7883 datasheets** | Sega Retro; the MegaCD MiSTer checkout's `docs/` | Manufacturers' datasheets | The CDC's registers and transfer; the CD-DA DAC | The Sega CD's wiring of them |
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
 ### 2.2 Sega's confidential documents
 
 Sega's developer documents, hosted on Sega Retro and in the 32XDK release with no licence or provenance statement:

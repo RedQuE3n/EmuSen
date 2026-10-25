@@ -270,6 +270,15 @@ layout, as the project's builders already implement them; ScreenScraper's system
 opened: the names and sizes of the tester's PlayStation 2 BIOS images. ps2tek's BIOS chapter was **not** read, so this
 stage's writer is not excluded from the open BIOS by it.
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
 ## 11. What this stage does not cover
 
 - No emulation: every picture is black and every sample silent.

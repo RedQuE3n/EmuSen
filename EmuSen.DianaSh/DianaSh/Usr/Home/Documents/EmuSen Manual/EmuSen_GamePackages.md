@@ -1,5 +1,9 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25: the tester answered §9 (§9.0). Q1 and Q4–Q17 as recommended; Q2, no removal of originals for
+now, so step 8 is deferred; Q3 changed, so that EmuSen ships chdman (§4.1, §4.9). Every citation of MAME and chdman
+now names its licence and the documentation's version (§10).*
+
 *Written 2026-10-16. A proposal: nothing in it is built. It answers the tester's request of the same day for a way to
 store games compactly and keep everything that belongs to one game together, and asks the tester to choose before any
 code is written. Claims about the code were read on `WiseMan` at `227dc34a`. The measurements were taken on the
@@ -44,7 +48,7 @@ every new rule below sits in the host, in Galaxia or in a tool [A].
 | 3.3 | A dump's identity: CRC32, MD5 and SHA-1, whole, transformed and per track | an **extension** of Galaxia's `RomHash` | Galaxia for the arithmetic; the system pack for the transform; `emusen-disc` for where a track lies | `RomHash` gains three hashes and per-track hashing; Mistress's `RomHashes` folds into it |
 | 5.4 | Applying IPS, BPS and UPS patches | a **component of its own**: the crate `emusen-patch`, pure functions | `emusen-patch` | new, reached through the platform library |
 | 5.4 | Patching at load | **inside the runtime** | the host's `CoreEngine` (`EmuSen/Cores/Native/CoreEngine.cs`) | none at the ABI |
-| 4 | Converting to CHD and verifying it | a **module**: the DianaSh command module `emusen.library`, over a tool library shared with Mistress's window | the tool library; chdman writes the file; `emusen-disc` reads it back | a new module, a new window, and chdman as a stated external dependency |
+| 4 | Converting to CHD and verifying it | a **module**: the DianaSh command module `emusen.library`, over a tool library shared with Mistress's window | the tool library; chdman writes the file; `emusen-disc` reads it back | a new module, a new window, and chdman shipped as a pinned third-party program (§4.9) |
 | 3.6 | A package as one entry in the library | an **extension** of the scan's existing rule | Galaxia (`ImageSets.Shelved`) | a folder with a `package.json` is one entry |
 
 The decisions the page asks for are in §9: four standing rules, each as its own question, then thirteen design choices,
@@ -264,9 +268,10 @@ firmware already is (`EmuSen_CoreAPI.md` §6.2) [A].
 
 ### 3.1 Where packages live
 
-**Never in the ROM library** [C]. Packages live in a new directory, `DataStore.Packages`, at `<home>/Packages/`: the
-twenty-second directory of the tree, with a constant in `emusen_platform.h` and in `tree.rs` as `Unpacked` has
-(`EmuSen_Galaxia.md` §3.7).
+**Never in the ROM library** [C]. Packages live in a new directory, `DataStore.Packages`, at `<home>/Packages/`: ~~the
+twenty-second directory of the tree~~ the twenty-third, since `Cores` took the twenty-second on 2026-10-20, numbered 22
+(`EMUSEN_GALAXIA_DIR_PACKAGES`), with a constant in `emusen_platform.h` and in `tree.rs` as `Unpacked` has
+(`EmuSen_Galaxia.md` §3.7, §3.10; built 2026-10-25, §11.2).
 
 **A player-chosen folder** may replace it, as `AppSettings.PackageDirectory`, so that a player can point ES-DE at it
 (§6.1). That setting refuses any folder inside `AppSettings.RomDirectory`, since a package is written to, and the
@@ -508,10 +513,19 @@ pkg migrate <package>                           the game's existing stores copie
 - `createcd`'s default codecs `cdlz,cdzl,cdfl`, and a default hunk of "eight sectors per hunk (19,584 bytes)";
 - `-np` to limit compression threads.
 
-**Where chdman comes from.** The tool finds chdman on `PATH` or at `AppSettings.ChdmanPath`. It runs `chdman` with no
+**Where chdman comes from.** ~~The tool finds chdman on `PATH` or at `AppSettings.ChdmanPath`. It runs `chdman` with no
 arguments and records its version line, as 0.289 printed [M]. It neither ships nor fetches it in the first stages
 [C, §9 Q3]. With none found, the command says so, says where chdman is obtained (MAME's own releases, and a
-distribution's package such as Fedora's `mame-tools`), and converts nothing.
+distribution's package such as Fedora's `mame-tools`), and converts nothing.~~ *Decided 2026-10-25 by the tester
+(§9 Q3): EmuSen ships chdman.* The published tree carries one pinned chdman beside the platform library, and the tool
+runs that copy, after checking its SHA-256 against the pin, and records its version line, as 0.289 printed [M]. How
+and where it is built or obtained for each platform is settled at step 3; §4.9 records the plan and its obligations.
+
+**Credit.** CHD (Compressed Hunks of Data) is MAME's format, and chdman is MAME's tool for it. chdman's source file is
+under the BSD-3-Clause licence, copyright Aaron Giles; MAME as a whole is distributed under the GNU General Public
+License, version 2 or later, and most of its files under BSD-3-Clause [R, "The MAME License", MAME Documentation
+0.289]. Both are compatible with EmuSen's GPL-3.0. What chdman does is read from MAME's own documentation, "chdman –
+CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289 (§10); MAME's source is not read.
 
 ### 4.2 What it converts, and where to
 
@@ -531,7 +545,8 @@ distribution's package such as Fedora's `mame-tools`), and converts nothing.
 
 **Where the output goes** [C]: by default `<home>/Compressed/<the library-relative path, with .chd>`.
 
-- This is `DataStore.Compressed`, the twenty-third directory.
+- This is `DataStore.Compressed`, ~~the twenty-third directory~~ the twenty-fourth, numbered 23
+  (`EMUSEN_GALAXIA_DIR_COMPRESSED`; built 2026-10-25, §11.2).
 - Keeping the library's relative path keeps the console folder's name, which is how a CHD is routed today (§1.4). It
   also lets a player see which CHD came from which original.
 - A player-chosen folder may replace it. That setting refuses any folder inside `RomDirectory`, unless the player has
@@ -576,6 +591,10 @@ A converted disc gets a linked package whose `game` is the CHD and whose `dump` 
 - A player who chooses self-contained conversions gets the CHD inside the package instead of in `Compressed`.
 
 ### 4.5 The originals: never removed by default
+
+*Decided 2026-10-25 by the tester (§9 Q2): no removal for now. CHDs stay in `Compressed` beside the originals, and
+step 8 is deferred until the tester revisits it after seeing the tool verify their discs. This section stays as the
+design for that day; nothing in it is built.*
 
 **The default leaves the library exactly as it was.** The CHD goes to `Compressed`, and nothing under `RomDirectory`
 is written, renamed or removed [C]. Stage 3's gate checks this with a listing of the library before and after: every
@@ -687,6 +706,35 @@ each CHD and each original.
   in any case.
 
 **DVD systems and the GD-ROM** wait for a core that reads them.
+
+### 4.9 Shipping chdman: the plan (decided 2026-10-25, built at step 3)
+
+*Decided 2026-10-25 by the tester (§9 Q3), in place of the recommendation that the player supply chdman. Recorded
+here as a plan; nothing is built or fetched before step 3's go.*
+
+**Licences** [R, "The MAME License", MAME Documentation 0.289, read 2026-10-25; the tester's reading of chdman's file
+header, 2026-10-25]. chdman's source file is BSD-3-Clause, copyright Aaron Giles. MAME as a whole is GPL-2.0-or-later.
+EmuSen is GPL-3.0, with which both are compatible, so a chdman binary may be shipped beside EmuSen's own when the
+obligations below are met.
+
+**What shipping means**, each an item of step 3's gate:
+
+1. **The licence texts**: a row for chdman in `THIRD_PARTY_NOTICES.md`, naming MAME, chdman, the release, both
+   licences and the copyright holders, and the texts themselves in `licenses/` (BSD-3-Clause with Aaron Giles's
+   notice, and GPL-2.0), as each shipped crate's are today.
+2. **A written source offer** naming the exact MAME release tag the binary was built from (for 0.289 that tag is
+   `mame0289` in MAME's public repository), as GPL-2.0's section 3 asks of a binary distributed without its source.
+3. **The README's credits**: MAME and chdman under "Credits and references", with the licences and a link to MAME's
+   documentation page for chdman.
+4. **A pinned version, checked by SHA-256.** The release and the binary's SHA-256 for each platform are recorded in one
+   place; the tool refuses a chdman whose hash differs, with words naming both hashes, and converts nothing.
+5. **Built or obtained as a black box.** MAME's source is never read, not even to build it. A build follows MAME's
+   documented build instructions only ("Compiling MAME", MAME Documentation, of the pinned release), and an obtained
+   binary comes from MAME's own release or a distribution's package, chosen at step 3.
+
+**Settled at step 3, not now**: which platforms get which binary (the desktop, the handheld's SteamOS, and later
+Windows and macOS when they resume), whether it is built in CI or obtained, and where it sits in the published tree.
+Each comes back to the tester as part of step 3's go.
 
 ---
 
@@ -869,20 +917,21 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 
 ## 7. Phasing
 
-Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. Every test uses
+Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
+steps 1 and 2 are built and their gates passed (§11); step 3 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
 | Step | What | Gate |
 |---|---|---|
-| **1** | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
-| **2** | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
-| **3** | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded |
+| **1** *(built 2026-10-25, §11.1)* | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
+| **2** *(built 2026-10-25, §11.2)* | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
+| **3** | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
 | **4** | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
 | **6** | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
 | **7** | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
-| **8** | *Only if §9 Q2 is answered yes:* **replacing originals** (§4.5) | Removal goes to the trash and is refused without a terminal, for a failed check, and for a changed source. A shared track is kept. The library after replacement holds exactly the CHDs, at their checked hashes |
+| **8** | *Deferred 2026-10-25 (§9 Q2): not built until the tester revisits it.* **Replacing originals** (§4.5) | Removal goes to the trash and is refused without a terminal, for a failed check, and for a changed source. A shared track is kept. The library after replacement holds exactly the CHDs, at their checked hashes |
 | **9** | *If wanted:* `pkg export esde` (media, and optionally a `gamelist.xml`) | ES-DE shows the exported art for the packaged games |
 
 ---
@@ -927,11 +976,31 @@ them. No commercial image is committed.
 The standing rules this page touches are asked first, each on its own. The design choices follow, each with a
 recommendation.
 
+### 9.0 The answers, decided 2026-10-25
+
+Decided 2026-10-25 by the tester:
+
+- **Q1 and Q4–Q17: as recommended.** Each question below carries its answer.
+- **Q2: no removal for now.** The CHDs stay in `Compressed` beside the originals. Step 8 is deferred until the tester
+  revisits it after seeing the tool verify their discs. §4.5 stays as the design for that day.
+- **Q3, changed by the tester: EmuSen ships chdman.** chdman's source file is BSD-3-Clause (copyright Aaron Giles) and
+  MAME as a whole GPL-2.0-or-later, both compatible with EmuSen's GPL-3.0. Shipping means the licence texts in
+  `THIRD_PARTY_NOTICES.md` and `licenses/`, a written source offer naming the exact MAME release tag, the README's
+  credits, and a pinned version checked by SHA-256; the binary is built or obtained as a black box, and MAME's source
+  is never read, not even to build it. How and where it is built for each platform is settled at step 3; §4.9 records
+  the plan.
+- **The documentation's references.** The tester asked on 2026-10-25 that the documentation follow appropriate
+  references. Every page that mentions chdman or CHD credits MAME and chdman with their licences, and cites MAME's own
+  chdman documentation by URL and version in its sources; `THIRD_PARTY_NOTICES.md` and the README credit chdman as
+  §4.9 lists when it ships. The same standard holds for everything this work cites.
+
 ### 9.1 Standing rules
 
 1. **Q1, the ROM library rule: linked packages.** *Recommended:* linked packages read the library and never write to
    it. That covers sidecars, links and renames, and the save states that `StateDirectory` puts in the ROM folder on
    this machine, which are copied into a package and never removed (§3.4, §3.5).
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 2. **Q2, the ROM library rule: removing originals after a CHD conversion.** Is this exception permitted at all?
    *Recommended:* yes, but only as §4.5 specifies:
    - off by default, and chosen per batch;
@@ -942,6 +1011,8 @@ recommendation.
 
    *The alternative, equally coherent:* no removal at all. The CHDs stay in `Compressed`, and a player who wants space
    back removes originals by hand.
+
+   *Decided 2026-10-25 by the tester: no removal for now; step 8 is deferred until the tester revisits it (§9.0).*
 3. **Q3, dependencies: chdman as an external program.** It is a third-party binary the project neither ships nor
    builds, and the project's rule asks that every new dependency be stated. *Recommended:* use the player's own
    chdman, found on `PATH` or at a set path, recorded by version, and neither shipped nor fetched. How the handheld
@@ -950,8 +1021,12 @@ recommendation.
 
    *Why no writer of the project's own:* CHD v5 is defined only by MAME's source, which the house rule forbids
    reading (§4.1).
+
+   *Decided 2026-10-25 by the tester, otherwise than recommended: EmuSen ships chdman, pinned and checked by SHA-256, built or obtained as a black box (§4.9, §9.0).*
 4. **Q4, the firmware policy and packages.** *Recommended:* no package ever holds firmware, self-contained or not.
    Firmware stays in `home/Firmware` under `EmuSen_Firmware.md` §0: never shipped, fetched or prompted for.
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 5. **Q5, the no-new-binary-format rule, applied to archives.** *Recommended:* the formats are:
    - CHD for discs;
    - zip, read through `ArchiveImages`, for cartridges;
@@ -959,38 +1034,64 @@ recommendation.
 
    7z is not read: it needs a new dependency and decoded 4.6 times slower in the measurement (§5.2).
 
+   *Decided 2026-10-25 by the tester: as recommended.*
+
 ### 9.2 Design choices
 
 6. **Q6, when packages are made.** *Recommended:* on request: *Make Package*, `pkg make`, a batch, or a conversion.
    Not at scan, which would write some 9,000 folders and hash the whole library unasked (§3.6).
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 7. **Q7, the CHD codecs.** *Recommended:* chdman's defaults (`cdlz,cdzl,cdfl`) for every CD system, with `cdzs,cdfl`
    offered as *Faster to decode* and recorded per file (§4.8).
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 8. **Q8, zip for self-contained cartridges.** *Recommended:* a choice per package, off by default. Reading goes through
    the existing unpack cache, so the borrow survives from the second launch on, and no in-memory path is added (§5.2).
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 9. **Q9, threads for a batch.** *Recommended:*
    - on the desktop, all threads, since a batch is something the player starts and waits for;
    - on the handheld, half the threads by default, with a notice when on battery;
    - a setting either way.
+
+   *Decided 2026-10-25 by the tester: as recommended.*
 10. **Q10, where patch files sit.** *Recommended:* in the package's root, named as RetroArch finds them, whenever the
     list fits that convention. Otherwise their own names, with the package saying that RetroArch will not patch it
     (§5.4).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 11. **Q11, the scraper's identity for a patched package.** *Recommended:* the original's by default, with `patched`
     chosen per package for hacks that ScreenScraper lists in their own right (§5.5).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 12. **Q12, per-game settings.** *Recommended:* the game's crop and engine move from `games.db` into the package's
     `settings.json`, since the player authors them, and Galaxia's §7.2 keeps such files JSON. Favourites, play time,
     collections and edits stay in `games.db` (§3.5).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 13. **Q13, art.** *Recommended:* a packaged game's art lives in its `media/<type>/`, under ES-DE's type names, and the
     media store reads it there. `media.db` stays the scraper's cache (§3.5).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 14. **Q14, one game, one save.** *Recommended:* a library file that a package links opens as that package from every
     route, the shell's included, through Galaxia's claim index (§3.5).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 15. **Q15, disc patches.** *Recommended:* deferred to a page of their own. PPF and xdelta over a CHD need an overlay of
     patched sectors, which `emusen-disc`, a reader, does not have (§5.4).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 16. **Q16, linked packages in ES-DE.** *Recommended:* an opt-in symbolic link inside the package on Linux and macOS,
     none on Windows, and *Make Self-Contained* for anything else (§6.1).
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 17. **Q17, the order.** *Recommended:* §7's steps in order, each behind its gate, with the CHD tool (step 3) as the
     first player-visible result, and step 8 only if Q2 is answered yes.
 
 ---
+
+    *Decided 2026-10-25 by the tester: as recommended.*
 
 ## 10. Sources
 
@@ -1006,10 +1107,15 @@ recommendation.
   source);
 - the pages listed at the top.
 
-**External** (read 2026-10-16):
+**External** (read 2026-10-16 unless dated otherwise):
 
-- docs.mamedev.org, `tools/chdman.html`, the chdman page: the commands, codecs, `createcd`'s defaults,
-  `-np` and `verify`.
+- MAME and chdman. CHD is MAME's format and chdman MAME's tool. chdman's source file is BSD-3-Clause, copyright Aaron
+  Giles; MAME as a whole is GPL-2.0-or-later. "The MAME License", MAME Documentation 0.289,
+  <https://docs.mamedev.org/license.html>, read 2026-10-25.
+- "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+  <https://docs.mamedev.org/tools/chdman.html>, read 2026-10-16 and again 2026-10-25: the commands, codecs,
+  `createcd`'s defaults ("eight sectors per hunk (19,584 bytes)", `cdlz,cdzl,cdfl`), `-np` and `verify`. The
+  measurements of §4 were made with chdman 0.289, the same release.
 - ES-DE, `USERGUIDE.md` on GitLab (`es-de/emulationstation-de`, branch `master`): "Multiple game files installation",
   "Directories interpreted as files", "RetroArch ROM hacks", "Scraping process", and the scraper options "Search using
   file hashes" and "Hash searches max file size".
@@ -1026,5 +1132,114 @@ recommendation.
 - The No-Intro header question: the libretro forum threads "NES playlist creation bug" and "For library scanning how do
   the games need to be named?", and igir's discussion #347. They conflict, which is why §3.3.1 keeps both forms.
 - ScreenScraper's API, as `EmuSen_BigPicture.md` §5.1 cites it.
+- For §11.1, read 2026-10-25 as a search engine's summaries only: datoso's documentation, "DATs and ROMs"
+  (<https://www.mintlify.com/laromicas/datoso/concepts/dats-and-roms>), and the libretro forum thread "Redump DAT
+  parsing bug? (Libretro-DATs/libretro-db)" (<https://forums.libretro.com/t/redump-dat-parsing-bug-libretro-dats-libretro-db/21440>).
 
 **Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code.
+
+---
+
+## 11. Built 2026-10-25: steps 1 and 2
+
+*Measured on the development desktop on 2026-10-25. The ROM library was only read; nothing under
+`AppSettings.RomDirectory` was written.* Marks as at the top: what was run is [M].
+
+### 11.1 Step 1: the dump identity
+
+**What was already there.** The Rust half of `RomHash` had gained CRC-32, SHA-1 and ranges for the library and the
+scraper in Rust (`EmuSen_Backend.md` §28.2, §30.4), with Mistress's `Scraping/RomHashes.cs` named as its C# twin until
+state 3. So step 1 built the rest:
+
+- **`RomHash` in C#** gains `Of` (CRC-32, MD5 and SHA-1 in one read, of a whole file, a range or bytes held, as the
+  record `RomHashes`), `Transformed` (the system pack's transform as a parameter: the hashes of its form, or null where
+  it changes nothing) and `Tracks` (§3.3's `dump.tracks`). Each forwards to the library while the switch has chosen
+  it, with `RomHash.Managed` as the C# rule (`EmuSen_Galaxia.md` §5.4). The Rust half gains `transformed` and `tracks`,
+  and the scraper in Rust calls `transformed` in place of its own comparison.
+- **Mistress's `RomHashes` folded in.** `Scraping/RomHashes.cs`, with its `Crc32`, is deleted; the record and the CRC
+  moved into Galaxia, and the scraper, its client and their tests call `RomHash`. One owner of a dump's hashes remains.
+- **Per-track hashing via `emusen-disc`.** Where a track lies is `set::track_spans`' alone (`EmuSen_Disc.md` §12): from
+  its first INDEX, 00 where given, to the next track's in the same file; a WAVE file's one track is the whole file.
+  The C# half reads and hashes in C# and asks the platform library where each track lies, as `ImageSets` asks what a
+  sheet names; so with `EMUSEN_GALAXIA_NATIVE=0` the tracks still need the library, which is the state of every
+  sheet rule since 2026-10-12.
+- **A stop flag** crosses the interface for the first time (`EmuSen_RustPlatform.md` §39).
+
+**The gate** [M]:
+
+1. *The parity class*: `GalaxiaParityTests`' identity cases pass, both halves equal to .NET's own MD5 and SHA-1 and a
+   CRC-32 written in the test, for files from 0 bytes to 3 MB, nine ranges each, bytes held, a transform, and the
+   tracks of three generated sheets; refusals alike.
+2. *The scraper's hashes unchanged on the tester's library*: 231 files sampled with a fixed seed, up to 25 from each of
+   the ten console folders (6,834 MB in all: cartridges, zips, `.7z`, lone tracks, sheets), hashed by the deleted
+   `RomHashes` before the change, and after it by `RomHash.Of` through the library and through the C#. The three
+   listings were byte-identical, and all three equal to Python's `hashlib` and `zlib`.
+3. *Per-track hashes reproduce generated sheets' files*: the parity case and `rom_hash.rs`'s test build each track's
+   bytes, write them as a file per track or joined in one file, and require each track's hashes to equal its bytes'.
+   Beyond the gate, the 167 tracks of the tester's eight cue sheets (all of one file per track) were hashed by both
+   halves and each equalled its file's hashes.
+
+**Redump's fields**, which §3.3.1 left to be read again at this gate: Redump's own wiki page was still not reached on
+2026-10-25. Secondary descriptions agree that its datfiles are Logiqx XML, one `<rom>` per track file with its name,
+size, CRC-32, MD5 and SHA-1, the sheet listed beside them [R, a search engine's summaries of datoso's documentation,
+"DATs and ROMs", and of the libretro forum thread "Redump DAT parsing bug?", 2026-10-25; §10], which `dump.tracks` and
+`dump.sheet` hold. The primary source is still owed.
+
+### 11.2 Step 2: the manifest v1
+
+Built in Galaxia as §2.1 planned, described in `EmuSen_Galaxia.md` §3.10: `GamePackage` and `GamePackage.Managed` in
+C#, `package.rs` in Rust, `emusen_galaxia_package_read`, `_write` and `_format` between them, and `DataStore.Packages`
+and `DataStore.Compressed`.
+
+**The schema as built** [C], beside §3.3's fields:
+
+- *Required*: `format` (`emusen-package`), `version` (two numbers), `system` (not empty), `mode` (`linked` or
+  `self-contained`), `game` with `role` (not empty), `where` (§3.3's four) and `path`.
+- *A path* under `library`, `package` or `compressed` is relative, with no `..` part, either slash; under `absolute`
+  it begins with a slash or a drive and a slash.
+- *Optional, each null or absent*: `title`; `size` and `seen` (`size`, `mtime`); `dump` with `file`, `transformed`,
+  `tracks` (each with `file`), `sheet` (with `file`) and `form` (`cue-bin`, `lone-track`, `iso`); `companions`;
+  `patches` (each with `file` and `format`, `ips`, `bps` or `ups`); `patched`; `identity` (`original` or `patched`,
+  not null); `container`, an object whose fields step 3 defines.
+- *Hashes* are 8, 32 or 40 hexadecimal digits, either case; a whole number is an integer token of 0 or more.
+- *A member written twice, or text that is not valid Unicode*, anywhere, is refused, since System.Text.Json's
+  `JsonObject` cannot hold the one and cannot write the other.
+- *Unknown fields*, at any depth, are kept in their places and not checked; that is what lets a minor version add
+  fields an older build passes through.
+- *A newer major* is refused before any other field is checked, since it may change any of them.
+
+**Otherwise than §3.3 said**: nothing in the fields. Two consequences are recorded rather than hidden. Text outside
+ASCII is written as `\uXXXX`, the escapes every config file has (`EmuSen_RustPlatform.md` §11.3); it reads back the
+same, and a person may write it unescaped. And comments in a manifest written by hand are lost when the program writes
+it again (§11.4, Q18).
+
+**The gate** [M]: `GamePackageTests` pass in both states of the switch, a round trip through the file keeping unknown
+fields in their places and tokens as written; a newer major is refused with words and a refused document leaves the
+file as it was. The manifest written by hand (`EmuSen.WiseMan/Galaxia/HandWrittenPackage.json`: comments, tabs, a
+trailing comma, CRLF, a byte-order mark, upper-case hex, a field of the player's own) loads. The parity class holds the
+two halves to the same bytes for nine manifests, the same refusals with the same words for 72 texts, and the same files
+on disk.
+
+### 11.3 Tests, and the faults seeded
+
+Run: `cargo test --profile test-checked` of `emusen-galaxia` (86), `emusen-platform` (33 and its integration tests)
+and `emusen-scrape`; `emusen-disc` (14 and 13); WiseMan's Galaxia classes, `GamePackageTests` and `DataStoreTests` (86
+with the library, and the two facade classes, 19, with `EMUSEN_GALAXIA_NATIVE=0`); and the blast radius of
+`blast.sh`: every class of `EmuSen.WiseMan.Mistress`, the scraping classes, Galaxia's, Diamond's and Nephrite's, with
+`DianaShSandboxTests` and `HierTests`, 2,647 passed, 62 skipped (the picture and bench tools) and none failed, in 20
+minutes. Four faults were seeded, each caught and put back:
+
+| Fault | Caught by |
+|---|---|
+| a track's start counted at its own sector size, not the size of the track before it in the file | `set.rs`'s span test; the parity track case |
+| the C# range hash reading past its length | the parity range cases (5) and the track case |
+| the Rust checks naming a malformed `game` before a newer major | `package.rs`'s newer-major test; the parity refusal case |
+| the C# path check splitting at `/` alone, letting `a\..\b` through | the parity refusal case |
+
+### 11.4 Left, and for the tester
+
+- **Step 3**, the CHD tool and shipping chdman (§4.9), waits for the tester's go.
+- **Q18 [routine]: comments in a hand-written manifest are dropped when the program rewrites it**, as the config files'
+  are. *Recommended:* keep it so; a person's notes belong in an unknown field (`"my notes": ...`), which is kept.
+- **Q19 [routine]: Redump's own description of its datfile fields** is still unread (§11.1). *Recommended:* read it
+  when step 3 compares a converted disc against a datfile, which is the first use of the fields.

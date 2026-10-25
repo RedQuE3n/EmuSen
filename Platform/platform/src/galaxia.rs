@@ -5,7 +5,7 @@ use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
-use emusen_galaxia::{atomic, rom_hash, saves};
+use emusen_galaxia::{atomic, package, rom_hash, saves};
 
 /// What `emusen_galaxia_save_path` names.
 pub mod save {
@@ -305,6 +305,124 @@ pub unsafe extern "C" fn emusen_galaxia_rom_md5(file: *const u8, file_len: usize
     answer(result(), out, len)
 }
 
+/// A dump's hashes as the JSON object `{"crc32","md5","sha1","size"}`.
+fn hashes_json(h: &rom_hash::Hashes) -> String {
+    format!(r#"{{"crc32":"{}","md5":"{}","sha1":"{}","size":{}}}"#, h.crc32, h.md5, h.sha1.as_deref().unwrap_or(""), h.size)
+}
+
+/// A stop flag the host may set from any thread while a hash reads: nonzero stops it before its next 64 KiB.
+fn stopped(stop: *const i32) -> impl Fn() -> bool {
+    move || !stop.is_null() && unsafe { std::ptr::read_volatile(stop) } != 0
+}
+
+/// A hashing failure's status: a stop or a read is `IO`, a missing file `NOT_FOUND`, a sheet that is not one `PARSE`.
+fn fail_hash(error: &std::io::Error) -> i32 {
+    match error.kind() {
+        std::io::ErrorKind::InvalidData => fail(status::PARSE, error.to_string()),
+        std::io::ErrorKind::Interrupted => fail(status::IO, "stopped"),
+        _ => fail_io(error),
+    }
+}
+
+/// A file's CRC-32, MD5 and SHA-1 in one read, of `length` bytes from `offset` (`UINT64_MAX` to its end), as JSON.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null; `stop`, when not null, must stay valid for the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_rom_hashes(file: *const u8, file_len: usize, offset: u64, length: u64, stop: *const i32, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let path = unsafe { required(file, file_len) }?;
+        let range = (offset != 0 || length != u64::MAX).then_some((offset, length));
+        rom_hash::hashes_with(path, range, true, &stopped(stop)).map(|h| hashes_json(&h)).map_err(|e| fail_hash(&e))
+    };
+    answer(result(), out, len)
+}
+
+/// The three hashes of bytes the host holds, as JSON: a system pack's comparable form of a dump.
+///
+/// # Safety
+/// `data` must be valid for `data_len` bytes, or null with no length; `out` for `len`, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_rom_hashes_of(data: *const u8, data_len: usize, out: *mut u8, len: usize) -> i64 {
+    answer(unsafe { crate::bytes(data, data_len) }.map(|b| hashes_json(&rom_hash::hashes_of(b))), out, len)
+}
+
+/// Each track of a cue sheet hashed where `emusen-disc` places it, as a JSON array of
+/// `{"track","file","offset","crc32","md5","sha1","size"}`.
+///
+/// # Safety
+/// As `emusen_galaxia_rom_hashes`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_rom_tracks(sheet: *const u8, sheet_len: usize, stop: *const i32, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let path = unsafe { required(sheet, sheet_len) }?;
+        let tracks = rom_hash::tracks(path, &stopped(stop)).map_err(|e| fail_hash(&e))?;
+        let items: Vec<String> = tracks
+            .iter()
+            .map(|t| {
+                let h = hashes_json(&t.hashes);
+                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, emusen_galaxia::json::quoted(&t.file), t.offset, &h[1..])
+            })
+            .collect();
+        Ok(format!("[{}]", items.join(",")))
+    };
+    answer(result(), out, len)
+}
+
+/// A manifest's refusal as its status: `NEWER_FILE` for a newer major, `PARSE` for the rest, with the words.
+fn fail_package(refusal: &package::Refusal) -> i32 {
+    match refusal {
+        package::Refusal::Newer(words) => fail(status::NEWER_FILE, words.clone()),
+        other => fail(status::PARSE, other.words()),
+    }
+}
+
+/// The manifest at `file`, checked, as compact JSON.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_read(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let doc = package::read(unsafe { required(file, file_len) }?).map_err(|e| fail_io(&e))?.map_err(|r| fail_package(&r))?;
+        Ok(emusen_galaxia::model::transport(&doc))
+    };
+    answer(result(), out, len)
+}
+
+/// A manifest checked and written atomically; a refused one is not written, and a failed write queues its diagnostic.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_write(file: *const u8, file_len: usize, manifest: *const u8, manifest_len: usize) -> i32 {
+    let result = || -> Result<(), i32> {
+        let path = unsafe { required(file, file_len) }?;
+        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+        match package::write(path, &doc).map_err(|r| fail_package(&r))? {
+            Ok(()) => Ok(()),
+            Err(diagnostic) => {
+                report(diagnostic.clone());
+                Err(fail(status::IO, diagnostic))
+            }
+        }
+    };
+    result().map_or_else(|status| status, |()| 0)
+}
+
+/// A manifest checked and laid out as it is written.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, manifest_len: usize, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+        Ok(package::format(&doc))
+    };
+    answer(result(), out, len)
+}
+
 /// Maps the file whole and read-only, its handle in `mapped`; the bytes stay in place until `emusen_galaxia_unmap`.
 ///
 /// # Safety
@@ -475,6 +593,52 @@ mod tests {
     }
 
     #[test]
+    fn a_dumps_hashes_and_tracks_cross_as_json_and_a_set_flag_stops_them() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-hashes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let rom = dir.join("rom.bin").to_string_lossy().into_owned();
+        std::fs::write(&rom, b"123456789").unwrap();
+        let hashes = |offset: u64, length: u64, stop: *const i32| ask(|out, len| unsafe { emusen_galaxia_rom_hashes(rom.as_ptr(), rom.len(), offset, length, stop, out, len) });
+        let whole = hashes(0, u64::MAX, std::ptr::null()).unwrap();
+        assert!(whole.starts_with(r#"{"crc32":"cbf43926","md5":"25f9e794323b453885f5181f1b624d0b","sha1":"f7c3bc1d808e04732adf679965ccc34ca7ae3441","size":9}"#), "{whole}");
+        assert!(hashes(6, 100, std::ptr::null()).unwrap().contains(r#""md5":"68053af2923e00204c3ca7c6a3150cf7""#));
+        let flag = 1i32;
+        assert_eq!(hashes(0, u64::MAX, &flag), Err(status::IO as i64));
+        let mut words = [0u8; 64];
+        let length = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) } as usize;
+        assert_eq!(&words[..length], b"stopped");
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_rom_hashes_of(b"123456789".as_ptr(), 9, out, len) }).unwrap(), whole);
+        let sheet = dir.join("g.cue").to_string_lossy().into_owned();
+        std::fs::write(&sheet, "FILE \"rom.bin\" BINARY\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n").unwrap();
+        let tracks = ask(|out, len| unsafe { emusen_galaxia_rom_tracks(sheet.as_ptr(), sheet.len(), std::ptr::null(), out, len) }).unwrap();
+        assert_eq!(tracks, format!(r#"[{{"track":1,"file":"rom.bin","offset":0,{}]"#, &whole[1..]));
+        std::fs::write(&sheet, "TRACK 01 AUDIO\n").unwrap();
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_rom_tracks(sheet.as_ptr(), sheet.len(), std::ptr::null(), out, len) }), Err(status::PARSE as i64));
+        let absent = dir.join("absent.bin").to_string_lossy().into_owned();
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_rom_hashes(absent.as_ptr(), absent.len(), 0, u64::MAX, std::ptr::null(), out, len) }), Err(status::NOT_FOUND as i64));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_manifest_is_read_written_and_laid_out_through_the_c_layer() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-package-{}", std::process::id()));
+        let file = dir.join("g.nes").join("package.json").to_string_lossy().into_owned();
+        let text = r#"{"format":"emusen-package","version":"1.3","system":"nes","mode":"linked","game":{"role":"image","where":"library","path":"NES/g.nes"},"x-kept":[1.0]}"#;
+        assert_eq!(unsafe { emusen_galaxia_package_write(file.as_ptr(), file.len(), text.as_ptr(), text.len()) }, 0);
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_read(file.as_ptr(), file.len(), out, len) }), Ok(text.to_string()));
+        let laid = ask(|out, len| unsafe { emusen_galaxia_package_format(text.as_ptr(), text.len(), out, len) }).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), laid);
+        let newer = r#"{"format":"emusen-package","version":"2.0"}"#;
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_format(newer.as_ptr(), newer.len(), out, len) }), Err(status::NEWER_FILE as i64));
+        assert_eq!(unsafe { emusen_galaxia_package_write(file.as_ptr(), file.len(), newer.as_ptr(), newer.len()) }, status::NEWER_FILE);
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_format(b"{".as_ptr(), 1, out, len) }), Err(status::PARSE as i64));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), laid, "a refused manifest is not written");
+        let absent = dir.join("absent.json").to_string_lossy().into_owned();
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_read(absent.as_ptr(), absent.len(), out, len) }), Err(status::NOT_FOUND as i64));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn a_null_text_is_told_from_an_empty_one() {
         let blank = |a: Option<&str>| unsafe { emusen_galaxia_dotnet_test(test_op::IS_BLANK, a.map_or(std::ptr::null(), str::as_ptr), a.map_or(0, str::len), std::ptr::null(), 0) };
         assert_eq!(blank(None), 1);
@@ -527,10 +691,12 @@ mod tests {
             ("LOG_DEFAULT", Directory::LogDefault),
             ("UNPACKED", Directory::Unpacked),
             ("CORES", Directory::Cores),
+            ("PACKAGES", Directory::Packages),
+            ("COMPRESSED", Directory::Compressed),
         ] {
             defines(&format!("EMUSEN_GALAXIA_DIR_{name}"), which as u32);
         }
-        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..22).collect::<Vec<_>>());
+        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..24).collect::<Vec<_>>());
         defines("EMUSEN_GALAXIA_OVERRIDE_CONFIG", Override::Config as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_DATA", Override::Data as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_LEGACY", Override::Legacy as u32);

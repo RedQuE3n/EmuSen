@@ -31,6 +31,8 @@ namespace EmuSen.WiseMan.Galaxia
         [InlineData("Cheats")]
         [InlineData("Games")]
         [InlineData("Themes")]
+        [InlineData("Packages")]
+        [InlineData("Compressed")]
         public void Each_directory_sits_directly_under_UsrHome(string name)
         {
             string actual = name switch
@@ -40,6 +42,8 @@ namespace EmuSen.WiseMan.Galaxia
                 "Firmware" => DataStore.Firmware,
                 "Games" => DataStore.Games,
                 "Themes" => DataStore.Themes,
+                "Packages" => DataStore.Packages,
+                "Compressed" => DataStore.Compressed,
                 _ => DataStore.Cheats,
             };
 

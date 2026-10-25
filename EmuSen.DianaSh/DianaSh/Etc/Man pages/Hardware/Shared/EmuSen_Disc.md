@@ -183,6 +183,15 @@ Format", "CDROM Subchannels", "CDROM Sector Encoding" (its `encode_sector`'s hea
 items and their doc comments, not its source); chdman's own `info` output. Not read: the `chd` crate's source, libchdr,
 MAME, or any emulator's disc code.
 
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read.
+
 ## 9. Backings, and opening an image with its companions (2026-10-12)
 
 *Decided 2026-10-12, with the core ABI's minor 1.3 (`EmuSen_CoreAPI_Extensions.md` §10.2.3): this crate owns what a disc
@@ -329,3 +338,27 @@ Sega CD build ships its two audio tracks so, and the crate refused it before.
   `a_wave_files_track_reads_as_the_raw_track_it_holds`: the two-file dump of §6 with its audio as a WAVE file reads
   sector for sector, Q for Q and TOC for TOC as with the raw file, every audio sector placed 44 bytes further in.
   Diamond's crates, the crate's other user, pass unchanged (167 unit, 81 program and the rest).
+
+## 12. Where a track lies in its file, for a dump's hashes (2026-10-25)
+
+*Added at step 1 of `EmuSen_GamePackages.md` §7, for the per-track hashes a dump's identity records (§3.3 there).*
+`set::track_spans(sheet)` answers each track of a sheet as a byte range of its file: the file's position among the
+FILE lines, the first byte, and the length, or none for a range that runs to the file's end. It reads no file, and it
+is the one place the rule is written; Galaxia's `rom_hash::tracks` and its C# twin both ask it (`EmuSen_Galaxia.md`
+§5.4), the C# through `emusen_disc_track_spans`.
+
+**The rule** [C]. A track begins at its first INDEX in its file, 00 where the sheet gives one, so that a pause stored
+in the file belongs to the track it precedes, as a file per track holds it; it ends where the next track in the same
+file begins, and the last track of a file at the file's end. Positions are counted as `Disc::from_sheet` counts them
+(§3.1): each stretch at the sector size of the track it belongs to, so a file whose tracks differ in mode is measured
+correctly. A sheet of one file per track (Redump's form) therefore gives each track its whole file. A WAVE file's one
+track is the whole file, header and all, since that is the file as it was dumped; a WAVE file naming several tracks
+has no byte ranges of its own and is refused with words. Bytes before the first track's first INDEX, which a sheet
+may leave, belong to no track.
+
+**Tests**: `set.rs`'s `a_tracks_span_is_its_first_index_to_the_next_tracks_in_its_file` (a file per track, one file of
+three tracks in two modes, a late first index, a WAVE track, and the refusals); in Galaxia, `rom_hash.rs`'s
+`each_tracks_hashes_are_its_files_or_its_range_of_one`, where a single file of two tracks gives each track the hashes
+of the two files it was joined from; and `GalaxiaParityTests`' track cases. On 2026-10-25 the 167 tracks of the
+tester's eight cue sheets were hashed by both halves, read-only, and each equalled its file's own hashes as Python's
+`hashlib` and `zlib` took them [M].

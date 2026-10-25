@@ -211,7 +211,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string Found(string relative, int seed, long id)
             {
                 string rom = Rom(relative, Filled(2048 + seed, seed));
-                _server.Games.Add(new FakeGame(id, Path.GetFileNameWithoutExtension(rom), RomHashes.Of(rom).Md5));
+                _server.Games.Add(new FakeGame(id, Path.GetFileNameWithoutExtension(rom), RomHash.Of(rom).Md5));
                 return rom;
             }
             games.Add((Found("snes/F-Zero (USA).sfc", 1, 77), "snes"));
@@ -220,13 +220,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             games.Add((Rom("snes/Nobody Knows (USA).sfc", Filled(1500, 4)), "snes"));
             byte[] nes = SyntheticNesRom.Build(patches: (0x10, [1, 2, 3]));
             string headered = Rom("nes/Headered (USA).nes", nes);
-            _server.Games.Add(new FakeGame(90, "Headered", RomHashes.Of(nes[16..]).Md5));
+            _server.Games.Add(new FakeGame(90, "Headered", RomHash.Of(nes[16..]).Md5));
             games.Add((headered, "nes"));
             string broken = Rom("snes/Broken Answer.sfc", Filled(900, 5));
-            _server.StatusByMd5[RomHashes.Of(broken).Md5] = (200, "<html>not json</html>");
+            _server.StatusByMd5[RomHash.Of(broken).Md5] = (200, "<html>not json</html>");
             games.Add((broken, "snes"));
             string refused = Rom("snes/Refused.sfc", Filled(901, 6));
-            _server.StatusByMd5[RomHashes.Of(refused).Md5] = (400, "Erreur : bad request");
+            _server.StatusByMd5[RomHash.Of(refused).Md5] = (400, "Erreur : bad request");
             games.Add((refused, "snes"));
             Both("mixed", games, new ScrapeChoices());
         }
@@ -238,7 +238,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             for (int i = 0; i < 3; i++)
             {
                 string rom = Rom($"snes/Kinds {i} ({(i == 0 ? "Japan" : i == 1 ? "USA" : "Germany")}).sfc", Filled(1024 + i, 20 + i));
-                _server.Games.Add(new FakeGame(200 + i, $"Kinds {i}", RomHashes.Of(rom).Md5) { Media = FakeGame.AllMedia });
+                _server.Games.Add(new FakeGame(200 + i, $"Kinds {i}", RomHash.Of(rom).Md5) { Media = FakeGame.AllMedia });
                 games.Add((rom, "snes"));
             }
             var choices = new ScrapeChoices
@@ -254,8 +254,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void A_second_run_refreshes_skips_and_follows_a_rename_alike()
         {
             string a = Rom("snes/Again (USA).sfc", Filled(3000, 40)), b = Rom("snes/Moved (USA).sfc", Filled(3001, 41));
-            _server.Games.Add(new FakeGame(300, "Again", RomHashes.Of(a).Md5));
-            _server.Games.Add(new FakeGame(301, "Moved", RomHashes.Of(b).Md5));
+            _server.Games.Add(new FakeGame(300, "Again", RomHash.Of(a).Md5));
+            _server.Games.Add(new FakeGame(301, "Moved", RomHash.Of(b).Md5));
             string seed = Path.Combine(_root, "seed");
             var games = new List<(string, string)> { (a, "snes"), (b, "snes") };
             CSharp(seed, games, new ScrapeChoices(), ScrapePriority.Library);
@@ -278,10 +278,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             for (int i = 0; i < 3; i++)
             {
                 string rom = Rom($"snes/Status {code} {i}.sfc", Filled(700 + i, 60 + i));
-                _server.Games.Add(new FakeGame(400 + i, $"Status {i}", RomHashes.Of(rom).Md5));
+                _server.Games.Add(new FakeGame(400 + i, $"Status {i}", RomHash.Of(rom).Md5));
                 games.Add((rom, "snes"));
             }
-            string md5 = RomHashes.Of(games[1].Item1).Md5;
+            string md5 = RomHash.Of(games[1].Item1).Md5;
             if (code is 429 or 401)
             {
                 _once[md5] = code;

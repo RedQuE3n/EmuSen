@@ -99,3 +99,14 @@ here.
 Every core folder above — started or not — has at least a placeholder `README.md`, so `Man pages/Hardware/` always mirrors `EmuSen/Cores/` folder-for-folder, manufacturer subfolder included, ahead of a core actually starting. Real pages (`<CoreCodename>_CPU.md`, `_PPU.md`, etc.) get added the same way `Venus - SNES/`'s were, once there's a core to document.
 
 (Folder names drop apostrophes the same way the corresponding `EmuSen/Cores/` folder does — e.g. `Hawks Eye`, not `Hawk's Eye` — for the same filesystem-portability reasons. See each stub's own `README.md` for the fully-punctuated display name.)
+
+---
+
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).

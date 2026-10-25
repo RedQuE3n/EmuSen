@@ -61,3 +61,14 @@ for sample to the referee, Nuked-OPLL); `Sega/Jadeite - Game Gear/` holds `Jadei
 ## The "This revision / Previous revision" convention
 
 Several docs above (notably `EmuSen_Debugging_Tools_Reference_v5.md` and `EmuSen_Frontend_Driver.md`) open with an italicized paragraph chaining "This revision: ... Previous revision: ... " notes - a lightweight, inline changelog covering what's changed recently, kept short enough to skim before reading the rest of the doc. Not every doc uses this (`EmuSen_Core_Gameplan.md`, `Commands.txt`, and others don't) - it's a convention available when a doc's own history is worth surfacing inline, not a requirement. When one of these preambles grows long enough to stop being skimmable, trim the older entries down to a short summary line each and point to `git log` for full detail, rather than letting it grow unbounded - full reasoning/diffs for anything old enough to be compressed already lives in commit history.
+
+---
+
+**CHD and chdman, credited (2026-10-25).** CHD (Compressed Hunks of Data) is MAME's image format, and chdman is MAME's
+tool for making, checking and extracting it. chdman's source file is under the BSD-3-Clause licence, copyright Aaron
+Giles; MAME as a whole is distributed under the GNU General Public License, version 2 or later ("The MAME License",
+MAME Documentation 0.289, <https://docs.mamedev.org/license.html>). chdman's commands, codecs and defaults are
+documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289,
+<https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
+0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
+not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).

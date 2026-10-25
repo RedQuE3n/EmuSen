@@ -10,8 +10,12 @@ namespace EmuSen.Galaxia.Media
     // Where the files a disc image brings beside it are: a sheet's tracks, an .m3u's discs, an .sbi; what each list means is emusen-disc's set module, asked through the platform library - see EmuSen_Galaxia.md §3.8.
     public static unsafe class ImageSets
     {
-        private static readonly Lazy<(nint Companions, nint Playlist, nint SbiBeside)> Exports = new(() =>
-            (PlatformLibrary.Export("emusen_disc_companions"), PlatformLibrary.Export("emusen_disc_playlist"), PlatformLibrary.Export("emusen_disc_sbi_beside")));
+        private static readonly Lazy<(nint Companions, nint Playlist, nint SbiBeside, nint TrackSpans)> Exports = new(() =>
+            (PlatformLibrary.Export("emusen_disc_companions"), PlatformLibrary.Export("emusen_disc_playlist"), PlatformLibrary.Export("emusen_disc_sbi_beside"),
+             PlatformLibrary.Export("emusen_disc_track_spans")));
+
+        // One track as a byte range of the sheet's file numbered File; a null Length runs to the file's end - see EmuSen_Disc.md §12.
+        public readonly record struct TrackSpan(int Track, int File, long Offset, long? Length);
 
         public static bool IsSheet(string path) => path.EndsWith(".cue", StringComparison.OrdinalIgnoreCase);
 
@@ -46,6 +50,14 @@ namespace EmuSen.Galaxia.Media
 
         // The names a sheet's FILE lines give, in its order.
         public static IReadOnlyList<string> CompanionNames(string sheet, string sheetName) => Call(Exports.Value.Companions, sheet, $"The cue sheet {sheetName}");
+
+        // Each track of a sheet where its file holds it, as emusen-disc places it.
+        public static IReadOnlyList<TrackSpan> TrackSpans(string sheet, string sheetName)
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(Call(Exports.Value.TrackSpans, sheet, $"The cue sheet {sheetName}").Single());
+            return doc.RootElement.EnumerateArray().Select(t => new TrackSpan(t.GetProperty("track").GetInt32(), t.GetProperty("file").GetInt32(), t.GetProperty("offset").GetInt64(),
+                t.GetProperty("length").ValueKind == System.Text.Json.JsonValueKind.Null ? null : t.GetProperty("length").GetInt64())).ToArray();
+        }
 
         // The files a sheet's FILE lines name, in its order, as paths beside the sheet.
         public static IReadOnlyList<string> Companions(string sheetPath)

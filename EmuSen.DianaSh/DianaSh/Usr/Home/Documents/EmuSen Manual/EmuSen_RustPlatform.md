@@ -3452,3 +3452,28 @@ read such a request, ignore `md5` and answer by name alone, so that it and its C
 the number therefore went from 17 to 18 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion`
 together, and an older library is refused, its services left on the C#. B2, running beside this step, takes no number
 of this interface.
+
+## 39. Interface 23, 2026-10-25: a dump's identity and a package's manifest
+
+Steps 1 and 2 of `EmuSen_GamePackages.md` §7 (its §11 records them; `EmuSen_Galaxia.md` §3.10 and §5.4 describe the
+rules). The number went from 22 to 23 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion`
+together, since the facade resolves every export it declares and refuses a library that lacks one (§3.1).
+
+| Added | What |
+|---|---|
+| `emusen_galaxia_rom_hashes`, `_rom_hashes_of`, `_rom_tracks` | CRC-32, MD5 and SHA-1 of a file, a range, bytes held, or each track of a sheet, as JSON |
+| `emusen_disc_track_spans` | where each track of a sheet lies in its file (`EmuSen_Disc.md` §12), for the C# half of the tracks |
+| `emusen_galaxia_package_read`, `_write`, `_format` | a package's manifest read, written atomically, and laid out |
+| `EMUSEN_GALAXIA_DIR_PACKAGES` (22), `_COMPRESSED` (23) | `DataStore.Packages` and `DataStore.Compressed` |
+| `EMUSEN_PLATFORM_NEWER_FILE` (−1027) | the number §3.5 kept for a file of a newer build, now given: a manifest of a newer major |
+
+**One new kind of argument: a stop flag.** A hash of a whole disc image reads hundreds of megabytes, and the C#
+scraper cancels a hash within 64 KiB. §3.7 rules out a callback, so the hashing exports take `const int32_t *stop`,
+which the library reads before each 64 KiB and the host sets from any thread; the C# facade allocates the flag in
+native memory, sets it from the token's registration, and frees it only after the registration is disposed, so the
+library never reads freed memory. A stopped call is `EMUSEN_PLATFORM_IO` with the words `stopped`, which the facade
+turns into the token's `OperationCanceledException`. The flag is the caller's for the call, as every buffer is (§3.3).
+
+**Tested**: `cargo test --profile test-checked` of `emusen-galaxia`, `emusen-platform` and `emusen-scrape`; the
+header's export list against the facade's (`The_library_has_every_export_the_facade_calls_and_no_other`); and the
+parity cases of `EmuSen_Galaxia.md` §5.4 and §3.10.

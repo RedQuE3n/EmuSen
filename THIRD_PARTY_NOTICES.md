@@ -68,7 +68,7 @@ Apache-2.0, The Rust Project Developers). The crates under `EmuSen/Cores/Shared/
 
 The others use the crates below, as `cargo tree` gave each library's normal and build dependencies for every target on
 2026-10-15. MarsRT's are for its Cranelift recompiler and its Vulkan path. Nephrite's, Diamond's and the platform
-library's shared set is `emusen-disc`'s, which reads CHD images through the `chd` crate. The platform library also
+library's shared set is `emusen-disc`'s, which reads CHD images through the `chd` crate. CHD is MAME's format; no part of MAME is in a build today. chdman (MAME's tool, its source file BSD-3-Clause, copyright Aaron Giles; MAME as a whole GPL-2.0-or-later, "The MAME License", MAME Documentation 0.289) will be listed here with its licence texts and a written offer of its source when a build ships it (`EmuSen_GamePackages.md` §4.9). The platform library also
 uses the MD5 crates for the hash by which a ROM file is recognised after a rename, `libloading` (with `windows-link`
 on Windows) to call the SDL3, the Shaderc and the SQLite the program ships, `sha2` (with `cpufeatures`, and on some
 processors `libc`) for the keys of the compiled-shader cache, `ash`, without its own loader, for Vulkan's

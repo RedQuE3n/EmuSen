@@ -442,7 +442,7 @@ impl emusen_native::State for Gs {
         w.structure("Transfer", &self.transfer);
         let q = &self.queue;
         w.u32("QueueLength", q.n as u32);
-        w.i32s("QueueXy", &q.v.map(|v| [v.x, v.y]).as_flattened());
+        w.i32s("QueueXy", q.v.map(|v| [v.x, v.y]).as_flattened());
         w.u32s("QueueZ", &q.v.map(|v| v.z));
         w.u64s("QueueRgbaqStUv", q.v.map(|v| [v.rgbaq, v.st, v.uv]).as_flattened());
         w.bytes("QueueF", &q.v.map(|v| v.f));

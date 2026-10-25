@@ -229,7 +229,7 @@ impl emusen_native::State for Btac {
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         let mut words = [0u32; 128];
         r.u32s(&mut words)?;
-        for (e, s) in self.entries.iter_mut().zip(words.chunks_exact(2)) {
+        for (e, s) in self.entries.iter_mut().zip(words.as_chunks::<2>().0) {
             *e = (s[0], s[1]);
         }
         Ok(())

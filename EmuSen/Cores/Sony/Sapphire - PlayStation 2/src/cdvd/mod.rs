@@ -775,8 +775,8 @@ impl emusen_native::State for Cdvd {
 
     fn write_state(&self, w: &mut emusen_native::StateWriter) {
         let fifos = [&self.n_params, &self.s_params, &self.s_result];
-        w.bytes("FifoBytes", &[fifos[0].bytes, fifos[1].bytes, fifos[2].bytes].as_flattened());
-        w.u32s("FifoAt", &fifos.map(|f| [f.len as u32, f.pos as u32]).as_flattened());
+        w.bytes("FifoBytes", [fifos[0].bytes, fifos[1].bytes, fifos[2].bytes].as_flattened());
+        w.u32s("FifoAt", fifos.map(|f| [f.len as u32, f.pos as u32]).as_flattened());
         w.bytes("Registers", &[self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command]);
         w.bools("Flags", &[self.tray_open, self.busy, self.spinning]);
         w.u32("Position", self.position);

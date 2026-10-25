@@ -3039,9 +3039,9 @@ No referee's log was read: the driver reads it inside the run for the BIOS line 
   one sector has been read, the CDVD DMA channel can store the data in memory and allow the CDVD drive to continue"];
   the read ends, with I_STAT bits 0 and 1 (ps2tek: "both bits 1 AND 0"), when its last block has been taken [A: so that
   the data is in memory when the interrupt comes]. A count of zero ends after the seek. ReadCd's blocks are its 2,048
-  bytes of user data, the sector from its subheader (2,328) or from its header (2,340) [A from ECMA-130's layout]; CD-DA's the
-  raw 2,352 bytes; ReadDvd's the Data Frame (D-121, D-122). ReadCd of a DVD gives its Main Data, the rest of a larger
-  block zero [A]. LBA 0 is 00:02:00 on a CD.
+  bytes of user data, the sector from its subheader (2,328) or from its header (2,340) [A from ECMA-130's layout];
+  CD-DA's the raw 2,352 bytes; ReadDvd's the Data Frame (D-121, D-122). ReadCd of a DVD gives its Main Data, the
+  rest of a larger block zero [A]. LBA 0 is 00:02:00 on a CD.
 - **GetToc** (09h, "a block size of 2064 bytes"): a DVD's physical format information (ECMA-267 §26.5.1: version 1,
   120 mm at 10.08 Mbit/s, the structure byte with OTP and Type C for a dual-layer disc, the Data Zone's first and last
   sectors and layer 0's last) and, for a CD, the lead-in's items A0h, A1h, A2h and each track's, ten bytes of Q each [C,
@@ -3108,7 +3108,7 @@ run at a time at CPU weight 20:
 | Where | Result |
 |---|---|
 | `emusen-disc` | **42 of 42**: 18 unit, 3 damage, 13 disc, 8 DVD |
-| Sapphire | lib **32 of 32** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `interpreter` 23, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14; `cdvd` also under `test-checked`; clippy clean |
+| Sapphire, after the branch was rebased onto S21's and S16's merges | lib **38 of 38** (14 the drive's), `cop0` 19, `dmac` 17, `fpu` 9, `gs` 12, `interpreter` 23, `iop` 13, `mmi` 13, `programs` 3 (now reading `programs/s23/`), `vu0` 14; `cdvd` also under `test-checked`; clippy clean |
 | Diamond, Diamond's `v1` | **306 of 306**, **5 of 5**: the crate's first user, unchanged |
 | Nephrite | **194 of 194**: its second, unchanged |
 | `emusen-core-conform`, `Platform/galaxia`, `library`, `library-tool`, `platform` | 36, 87, 11, 9 and 40, every one passing |

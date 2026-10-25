@@ -17,9 +17,15 @@ pub const UNIT: usize = 2448;
 /// The CD-ROM track metadata tags, CHT2 and the older CHTR.
 const CHT2: u32 = u32::from_be_bytes(*b"CHT2");
 const CHTR: u32 = u32::from_be_bytes(*b"CHTR");
+/// A DVD's metadata tag, as chdman 0.289's `createdvd` writes it (EmuSen_Disc.md §14.4).
+const DVD: u32 = u32::from_be_bytes(*b"DVD ");
+/// A DVD CHD's unit: one 2,048-byte sector.
+pub const DVD_UNIT: usize = 2048;
 
 pub struct ChdImage<B: AsRef<[u8]>> {
     chd: chd::Chd<Cursor<B>>,
+    /// The bytes of a unit: a compact disc's sector and subcode, or a DVD's 2,048.
+    unit: usize,
     /// The hunk decompressed last, by number, and the compressed bytes' scratch.
     hunk: Vec<u8>,
     at: Option<u32>,
@@ -72,22 +78,47 @@ fn entry(text: &str) -> Option<Entry> {
     })
 }
 
+/// A CHD's metadata entries, each a tag and its value.
+type Metadata = Vec<(u32, Vec<u8>)>;
+
+/// A CHD opened as the medium its units and metadata make it: a compact disc's tracks and lead-out, or a DVD's sector
+/// count.
+pub enum Opened<B: AsRef<[u8]>> {
+    Cd(ChdImage<B>, Vec<Track>, u32),
+    Dvd(ChdImage<B>, u32),
+}
+
 impl<B: AsRef<[u8]>> ChdImage<B> {
     /// The image, its tracks on the disc's time line and its lead-out; the header, the map and the metadata are read
     /// here, and a hunk only when a sector in it is.
     pub fn open(bytes: B) -> Result<(ChdImage<B>, Vec<Track>, u32), String> {
-        let len = bytes.as_ref().len() as u64;
-        let mut chd = chd::Chd::open(Cursor::new(bytes), None).map_err(|e| format!("the CHD could not be opened: {e}"))?;
-        let hunk_size = chd.header().hunk_size() as usize;
-        if chd.header().unit_bytes() as usize != UNIT || hunk_size % UNIT != 0 {
-            return Err(format!("the CHD's units are {} bytes, not a compact disc's {UNIT}", chd.header().unit_bytes()));
+        let (image, metadata) = ChdImage::load(bytes, Some(UNIT), "a compact disc's")?;
+        image.cd(metadata)
+    }
+
+    /// A DVD CHD (`createdvd`): its 2,048-byte units are the disc's logical sectors in order, and its metadata holds a
+    /// `DVD ` entry and no track. Answers the image and its sector count; only the header, the map and the metadata are
+    /// read.
+    pub fn open_dvd(bytes: B) -> Result<(ChdImage<B>, u32), String> {
+        let (image, metadata) = ChdImage::load(bytes, Some(DVD_UNIT), "a DVD's")?;
+        image.dvd(metadata)
+    }
+
+    /// A CHD of either medium, told by its unit: 2,448 bytes a compact disc, 2,048 a DVD (EmuSen_Disc.md §14.4).
+    pub fn open_either(bytes: B) -> Result<Opened<B>, String> {
+        let (image, metadata) = ChdImage::load(bytes, None, "")?;
+        match image.unit {
+            UNIT => image.cd(metadata).map(|(i, t, l)| Opened::Cd(i, t, l)),
+            DVD_UNIT => image.dvd(metadata).map(|(i, n)| Opened::Dvd(i, n)),
+            other => Err(format!("the CHD's units are {other} bytes, neither a compact disc's {UNIT} nor a DVD's {DVD_UNIT}")),
         }
-        let refs: Vec<_> = chd.metadata_refs().collect();
+    }
+
+    fn cd(self, metadata: Metadata) -> Result<(ChdImage<B>, Vec<Track>, u32), String> {
         let mut entries = Vec::new();
-        for r in refs {
-            let m = r.read(chd.inner()).map_err(|e| format!("the CHD's metadata could not be read: {e}"))?;
-            if m.metatag == CHT2 || m.metatag == CHTR {
-                let text = String::from_utf8_lossy(&m.value).into_owned();
+        for (tag, value) in metadata {
+            if tag == CHT2 || tag == CHTR {
+                let text = String::from_utf8_lossy(&value).into_owned();
                 entries.push(entry(&text).ok_or_else(|| format!("the CHD's track entry is not understood: {}", text.trim_end_matches('\0')))?);
             }
         }
@@ -107,11 +138,39 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
             unit += e.frames.div_ceil(4) as u64 * 4;
             cursor = end;
         }
+        Ok((self, tracks, cursor))
+    }
+
+    fn dvd(self, metadata: Metadata) -> Result<(ChdImage<B>, u32), String> {
+        if !metadata.iter().any(|(tag, _)| *tag == DVD) {
+            return Err("the CHD holds no DVD metadata: not a DVD".into());
+        }
+        let units = self.chd.header().logical_bytes() / DVD_UNIT as u64;
+        let sectors = u32::try_from(units).map_err(|_| format!("the CHD's {units} sectors are more than a DVD holds"))?;
+        Ok((self, sectors))
+    }
+
+    /// The header checked for `unit`-byte units (the header's own where none is named), and the metadata entries as
+    /// tags and values.
+    fn load(bytes: B, unit: Option<usize>, what: &str) -> Result<(ChdImage<B>, Metadata), String> {
+        let len = bytes.as_ref().len() as u64;
+        let mut chd = chd::Chd::open(Cursor::new(bytes), None).map_err(|e| format!("the CHD could not be opened: {e}"))?;
+        let (hunk_size, has) = (chd.header().hunk_size() as usize, chd.header().unit_bytes() as usize);
+        let unit = unit.unwrap_or(has);
+        if has != unit || unit == 0 || hunk_size % unit != 0 {
+            return Err(format!("the CHD's units are {has} bytes, not {what} {unit}"));
+        }
+        let refs: Vec<_> = chd.metadata_refs().collect();
+        let mut metadata = Vec::new();
+        for r in refs {
+            let m = r.read(chd.inner()).map_err(|e| format!("the CHD's metadata could not be read: {e}"))?;
+            metadata.push((m.metatag, m.value));
+        }
         let framed = match chd.header() {
             chd::header::Header::V5Header(v) => v.compression.map(|c| FRAMED.contains(&&c.to_be_bytes())),
             _ => [false; 4],
         };
-        Ok((ChdImage { hunk: vec![0; hunk_size], at: None, scratch: Vec::new(), units_per_hunk: (hunk_size / UNIT) as u64, len, framed, chd }, tracks, cursor))
+        Ok((ChdImage { hunk: vec![0; hunk_size], at: None, scratch: Vec::new(), units_per_hunk: (hunk_size / unit) as u64, unit, len, framed, chd }, metadata))
     }
 
     /// The byte of the file where the hunk holding unit `n` is stored, compressed or not, by the hunk map (`chd`'s
@@ -129,7 +188,7 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
         }
     }
 
-    /// Unit `n`'s 2,448 bytes, or the words for the damaged hunk that holds it.
+    /// Unit `n`'s bytes (2,448 on a compact disc, 2,048 on a DVD), or the words for the damaged hunk that holds it.
     pub fn unit(&mut self, n: u64) -> Result<&[u8], String> {
         let h = (n / self.units_per_hunk) as u32;
         if self.at != Some(h) {
@@ -145,8 +204,8 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
             }
             self.at = Some(h);
         }
-        let o = (n % self.units_per_hunk) as usize * UNIT;
-        Ok(&self.hunk[o..o + UNIT])
+        let o = (n % self.units_per_hunk) as usize * self.unit;
+        Ok(&self.hunk[o..o + self.unit])
     }
 
     /// Hunk `h` checked before it is decoded: the stored block it decodes (its own, or the one its self-references
@@ -185,7 +244,7 @@ impl<B: AsRef<[u8]>> ChdImage<B> {
             let end = offset.checked_add(size).filter(|&end| end <= self.len).ok_or_else(|| format!("its block is bytes {offset} to {offset}+{size} of a {}-byte file", self.len))?;
             if codec.is_some_and(|k| self.framed[k]) {
                 let block = &self.chd.inner().get_ref().as_ref()[offset as usize..end as usize];
-                let (flags, width) = ((hunk_bytes / UNIT).div_ceil(8), if hunk_bytes < 0x1_0000 { 2 } else { 3 });
+                let (flags, width) = ((hunk_bytes / self.unit).div_ceil(8), if hunk_bytes < 0x1_0000 { 2 } else { 3 });
                 let rest = block.len().checked_sub(flags + width).ok_or_else(|| format!("its block of {} bytes is shorter than its codec's header", block.len()))?;
                 let stream = block[flags..flags + width].iter().fold(0usize, |a, &b| a << 8 | b as usize);
                 if stream > rest {

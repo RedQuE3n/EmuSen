@@ -2,8 +2,12 @@
 //! tracks, a lone raw track, an `.iso`, user sectors with no volume descriptor, or a CHD, and an `.sbi` among the
 //! companions. The console's own signature, its market and its refusals stay with the console.
 
+use crate::chd::{ChdImage, Opened};
 use crate::cue::Sheet;
-use crate::disc::{Disc, IsoForm};
+use crate::disc::{CHD_MAGIC, Disc, IsoForm};
+use crate::dvd::{CD_LIMIT, Dvd};
+use crate::ecma130;
+use crate::medium::{Kind, Medium};
 
 /// What a lone image is taken for where it is no sheet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +72,32 @@ pub fn open<B: AsRef<[u8]>>(image: B, mut companions: Vec<B>, iso: IsoForm, lone
         disc.apply_sbi(sbi.as_ref()).map_err(|e| Refusal::Sbi(e.to_string()))?;
     }
     Ok(disc)
+}
+
+/// The medium `image` and its `companions` make (EmuSen_Disc.md §14.1): a sheet, a raw track and a compact disc's CHD
+/// are compact discs; whole Data Frames and a DVD CHD are DVDs; 2,048-byte sectors (an `.iso`, or `Lone::User`'s) are
+/// what the console names in `user`, and a DVD wherever they are more than a compact disc can hold (`CD_LIMIT`).
+pub fn open_medium<B: AsRef<[u8]>>(image: B, companions: Vec<B>, iso: IsoForm, lone: Lone, user: Kind) -> Result<Medium<B>, Refusal> {
+    let head = image.as_ref();
+    if is_sheet(head) || head.starts_with(&ecma130::SYNC) {
+        return open(image, companions, iso, lone).map(Medium::Cd);
+    }
+    if head.starts_with(CHD_MAGIC) {
+        return match ChdImage::open_either(image).map_err(Refusal::Image)? {
+            Opened::Cd(i, t, l) => Ok(Medium::Cd(Disc::from_chd(i, t, l, iso))),
+            Opened::Dvd(i, n) => Ok(Medium::Dvd(Dvd::from_chd(i, n))),
+        };
+    }
+    let frames = crate::dvd::is_frames(head);
+    let dvd = frames || user == Kind::Dvd || head.len() / ecma130::USER > CD_LIMIT as usize;
+    if !dvd {
+        return open(image, companions, iso, lone).map(Medium::Cd);
+    }
+    let opened = match lone {
+        Lone::User if !frames => Dvd::from_user_image(image),
+        _ => Dvd::from_image(image),
+    };
+    opened.map(Medium::Dvd).map_err(|e| Refusal::Image(e.to_string()))
 }
 
 #[cfg(test)]

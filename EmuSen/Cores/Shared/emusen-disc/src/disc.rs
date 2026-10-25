@@ -215,7 +215,7 @@ impl<B: AsRef<[u8]>> Disc<B> {
         let head = bytes.as_ref();
         if head.starts_with(CHD_MAGIC) {
             let (image, tracks, lead_out) = ChdImage::open(bytes).map_err(DiscError::Chd)?;
-            return Ok(Disc { lone: true, ..Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso) });
+            return Ok(Disc::from_chd(image, tracks, lead_out, iso));
         }
         let iso_volume = head.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001");
         let mode = if head.starts_with(&ecma130::SYNC) && head.len() >= RAW {
@@ -229,6 +229,11 @@ impl<B: AsRef<[u8]>> Disc<B> {
         };
         let sheet = Sheet::parse(&format!("FILE \"image\" BINARY\nTRACK 01 {mode}\nINDEX 01 00:00:00\n"))?;
         Ok(Disc { lone: true, ..Disc::from_sheet(&sheet, vec![bytes], iso)? })
+    }
+
+    /// A CD CHD already opened, the image itself.
+    pub(crate) fn from_chd(image: ChdImage<B>, tracks: Vec<Track>, lead_out: u32, iso: IsoForm) -> Disc<B> {
+        Disc { lone: true, ..Disc::new(tracks, lead_out, vec![Source::Chd(Box::new(image))], iso) }
     }
 
     /// An image of 2,048-byte user sectors read as one data track, for a caller that knows it is one though it holds

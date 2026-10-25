@@ -156,3 +156,34 @@ fn every_table_is_prefix_free_and_as_complete_as_the_standard() {
         assert_eq!(left, want, "{name}: unused code space");
     }
 }
+
+#[test]
+fn the_corpus_values_near_a_half_are_few_and_decided_exactly() {
+    use sapphire::ipu::idct;
+    let (mut near, mut ties, mut values, mut nearest) = (0usize, 0usize, 0usize, f64::MAX);
+    let streams: Vec<Vec<u8>> = s27::corpus().iter().map(|s| s.complete()).chain([s27::encode::odd_mpeg2(), s27::encode::odd_mpeg1()]).collect();
+    for bytes in streams {
+        for e in standard::decode(&bytes).events {
+            let standard::Event::Slice(s) = e else { continue };
+            for mb in s.mbs {
+                for b in mb.coefs {
+                    let f: [i32; 64] = core::array::from_fn(|k| b[k / 8][k % 8]);
+                    let mut out = [0.0; 64];
+                    idct::real(&f, &mut out);
+                    for (k, v) in out.into_iter().enumerate() {
+                        values += 1;
+                        let d = (v.abs().fract() - 0.5).abs();
+                        nearest = nearest.min(d);
+                        if d <= idct::NEAR {
+                            near += 1;
+                            let n = idct::combination(&f, k % 8, k / 8);
+                            ties += usize::from(n[1..].iter().all(|&c| c == 0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!("{values} values, {near} within 2^-20 of a half and decided exactly, {ties} of them halves, the nearest {nearest:e} from one");
+    assert!(values > 100_000);
+}

@@ -262,6 +262,8 @@ pub struct Mb {
     pub dc_reset: bool,
     /// The six blocks f[y][x] the IDCT gives, saturated to [−256, 255]; zeros for blocks not coded.
     pub blocks: [[i16; 64]; 6],
+    /// The six blocks' reconstructed coefficients F[v][u], the IDCT's input.
+    pub coefs: [[[i32; 8]; 8]; 6],
     /// What follows the macroblock: a start code's prefix, if one does.
     pub next_start_code: Option<usize>,
 }
@@ -338,10 +340,53 @@ pub struct Decoded {
     pub mpeg2: bool,
 }
 
-/// round() of Annex A, halves away from zero, a value within 2^-20 of a half taken as one.
-fn round(f: f64) -> i32 {
-    let near_half = (f.abs().fract() - 0.5).abs() <= 1.0 / 1_048_576.0;
-    if near_half { (f.abs().trunc() as i32 + 1) * f.signum() as i32 } else { f.round() as i32 }
+/// round() of Annex A, halves away from zero, for f(x, y) of `f` given its double-precision value `d`: within 2^-20 of
+/// a half, decided exactly. 8f is Σ F(u,v)·2·C(u)C(v)cos((2x+1)uπ/16)cos((2y+1)vπ/16), and each product of cosines is
+/// half the sum of the cosines of the sum and difference of the angles, so 8f gathers into integer multiples of
+/// cos(kπ/16) for k = 0 to 7 (with C(0) taken as cos(4π/16)); those being independent over the rationals, f is a half
+/// only if all but the first vanish, and otherwise its side of the half is found with the cosines to 100 bits.
+fn round(f: &[[i32; 8]; 8], x: usize, y: usize, d: f64) -> i32 {
+    if ((d.abs() - d.abs().floor()) - 0.5).abs() > 1.0 / 1_048_576.0 {
+        return d.round() as i32;
+    }
+    let mut n = [0i128; 17];
+    for v in 0..8 {
+        for u in 0..8 {
+            if f[v][u] == 0 {
+                continue;
+            }
+            let ang_u = if u == 0 { 4 } else { (2 * x + 1) * u };
+            let ang_v = if v == 0 { 4 } else { (2 * y + 1) * v };
+            for m in [ang_u + ang_v, ang_u.abs_diff(ang_v)] {
+                let m = m % 32;
+                let (m, sign) = match m {
+                    0..=8 => (m, 1),
+                    9..=16 => (16 - m, -1),
+                    17..=24 => (m - 16, -1),
+                    _ => (32 - m, 1),
+                };
+                n[m] += sign * i128::from(f[v][u]);
+            }
+        }
+    }
+    if n[1..8].iter().all(|&c| c == 0) {
+        let q = (n[0].abs() + 4) / 8;
+        return (q * n[0].signum()) as i32;
+    }
+    // cos(kπ/16) × 2^100, rounded.
+    const COS: [i128; 8] = [
+        1267650600228229401496703205376,
+        1243293049398167358316279903776,
+        1171156443926508635938050024219,
+        1054012953106854663288574085998,
+        896364335596578238699711011639,
+        704268939356236033728032079564,
+        485108882735005078916833875245,
+        247306363802463555846379077689,
+    ];
+    let v: i128 = (0..8).map(|k| n[k] * COS[k]).sum();
+    let q = (v.abs() + (1 << 102)) >> 103;
+    (q * v.signum()) as i32
 }
 
 /// The saturated mathematical integer-number IDCT of Annex A, as its double sum.
@@ -359,7 +404,7 @@ pub fn idct(f: &[[i32; 8]; 8]) -> [i16; 64] {
                     }
                 }
             }
-            out[8 * y + x] = round(s / 4.0).clamp(-256, 255) as i16;
+            out[8 * y + x] = round(f, x, y, s / 4.0).clamp(-256, 255) as i16;
         }
     }
     out
@@ -606,8 +651,8 @@ fn reconstruct_mb(s: &mut State, addr: usize, intra: bool, dirs: [bool; 2], mv: 
     }
 }
 
-/// One block's coefficients, inverse quantised and transformed (§7.2 to §7.5).
-fn decode_block(b: &mut Bits, s: &State, i: usize, intra: bool, qsc: u32, dc_pred: &mut [i32; 3]) -> [i16; 64] {
+/// One block's coefficients, inverse quantised and transformed (§7.2 to §7.5): F and f.
+fn decode_block(b: &mut Bits, s: &State, i: usize, intra: bool, qsc: u32, dc_pred: &mut [i32; 3]) -> ([[i32; 8]; 8], [i16; 64]) {
     let mut qfs = [0i32; 64];
     let mut n = 0;
     let cc = if i < 4 { 0 } else { i - 3 };
@@ -682,7 +727,7 @@ fn decode_block(b: &mut Bits, s: &State, i: usize, intra: bool, qsc: u32, dc_pre
     if s.mpeg2 && sum % 2 == 0 {
         f[7][7] = if f[7][7] % 2 != 0 { f[7][7] - 1 } else { f[7][7] + 1 };
     }
-    idct(&f)
+    (f, idct(&f))
 }
 
 /// One motion vector's component (§7.6.3.1), updating its predictor.
@@ -808,10 +853,11 @@ fn decode_slice(b: &mut Bits, s: &mut State, at: usize, vertical: u32) -> Slice 
             dc_reset = true;
         }
         let mut blocks = [[0i16; 64]; 6];
+        let mut coefs = [[[0i32; 8]; 8]; 6];
         let this_reset = dc_reset;
         for i in 0..6 {
             if cbp >> (5 - i) & 1 == 1 {
-                blocks[i] = decode_block(b, s, i, intra, qsc, &mut dc_pred);
+                (coefs[i], blocks[i]) = decode_block(b, s, i, intra, qsc, &mut dc_pred);
             }
         }
         if kind == 4 {
@@ -854,6 +900,7 @@ fn decode_slice(b: &mut Bits, s: &mut State, at: usize, vertical: u32) -> Slice 
             pos_end,
             dc_reset: this_reset,
             blocks,
+            coefs,
             next_start_code,
         });
         if at_end {

@@ -2627,3 +2627,35 @@ The core ABI is unchanged.
    `WindowFitAuditTests.The_library_with_packages_lists_each_game_once_and_nothing_is_cut_off` at 1280 × 800 and
    1920 × 1200, its packaged game's cover now in its package and found there; the crop window and the big-picture
    views run in the blast radius below.
+
+**Run** [M]: `cargo test --profile test-checked` of `emusen-crystal`, `emusen-galaxia`, `emusen-library`,
+`emusen-library-tool`, `emusen-platform`, `emusen-scrape`, `emusen-sqlite` and `emusen-library-module`: 195 passed, none
+failed. WiseMan, the blast radius `blast.sh` named with `GoldenCorpusTests`, `ManPageTests` and `CoreAdapterTests`
+added: 3,149 passed, 62 skipped (the picture and bench tools) and 2 failed, in 23 minutes. The two were step 5's and step
+6's parity cases, whose tree of `Packages` now held the slot's record with each run's own moment; given this section's
+tree, which hides the moment and the build as `Timeless` does, both passed. The golden corpus's `pkg`, `help` and `man`
+were given `pkg migrate`'s new line and page, the help listing's pattern edited in place so that it still takes either
+shell; `GoldenCorpusTests` and `ManPageTests` passed, 210. The new parity case once compared two manifests whose `seen`
+times fell in different seconds; its game is now given one time for both runs.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| Crystal's Rust `states::read` not looking beside a packaged state, reading `states.db` alone | `CrystalParityTests.A_packaged_game_s_state_records_and_own_settings_are_its_package_s_by_either_path_and_kept_when_it_moves_both_ways`: the Rust run found no record of the moved package's slot, the C# one did |
+| C#'s `GameSettings.ReadPath` ignoring a package's `settings.json` | the same parity case (answer 3: the C# read the plain file's values after the package had its own) and `PackageCropTests`, both halves (the package's crop not read; the row's answered) |
+| The scraper in Rust looking in the media store before the package | `ScrapeMediaParityTests`: a packaged game's 3D box from the store in Rust and from its package in C# |
+
+### 18.8 Left, and for the tester
+
+- **Step 7**, self-contained packages and zip per package, waits for the tester's go. A record is stamped with its
+  state's modification time, so a package copied to another machine keeps its records only where the copy keeps the
+  times (`cp -p`, `rsync -a`, a zip); step 7's copy should keep them, and a copy that does not loses the records, never
+  the states.
+- **Q39 [routine]: a state's record in the package is a JSON file beside the state** (§18.1), not a row of a database in
+  the package. *Recommended:* keep it; it is read with no SQLite and travels with the state.
+- **Q40 [routine]: the route answer's engine stays the plain file's** for a packaged game (§18.2). *Recommended:* keep
+  it; the open and every settings call follow the package, and resolving each library file on each route would walk
+  the claim index thousands of times.
+- **Q41 [routine]: Clear leaves a packaged game's art** (§18.3), as it leaves everything outside the media store.
+  *Recommended:* keep it until a player asks Clear of a packaged game; deleting in a package is then its own change.

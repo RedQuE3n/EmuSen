@@ -174,6 +174,24 @@ pub struct Environment {
     pub texture: Option<Sampler>,
     /// FOGCOL's colour when FGE is set (S18).
     pub fog: Option<[u32; 3]>,
+    /// ABE, antialiasing, PABE and the context's ALPHA (S19).
+    pub blend: Blend,
+    /// DIMX when DTHE is set (§3.9.1).
+    pub dither: Option<u64>,
+    /// COLCLAMP: clamp to 0 to FFh, or keep the low eight bits (§3.9.2).
+    pub colclamp: bool,
+    /// The context's FBA (§3.9.3).
+    pub fba: bool,
+}
+
+/// What alpha blending takes (§3.6.1, §3.8): ABE; whether the primitive is antialiased, AA1 on a line or a triangle,
+/// which blends whatever ABE says; PABE; and the context's ALPHA.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Blend {
+    pub abe: bool,
+    pub antialias: bool,
+    pub pabe: bool,
+    pub alpha: u64,
 }
 
 impl Environment {
@@ -203,6 +221,15 @@ impl Environment {
                 let f = gs.regs[reg::FOGCOL as usize];
                 [f as u32 & 0xFF, (f >> 8) as u32 & 0xFF, (f >> 16) as u32 & 0xFF]
             }),
+            blend: Blend {
+                abe: attributes.blended(),
+                antialias: attributes.antialiased(),
+                pabe: gs.regs[reg::PABE as usize] & 1 != 0,
+                alpha: gs.regs[(reg::ALPHA_1 + c) as usize],
+            },
+            dither: (gs.regs[reg::DTHE as usize] & 1 != 0).then(|| gs.regs[reg::DIMX as usize]),
+            colclamp: gs.regs[reg::COLCLAMP as usize] & 1 != 0,
+            fba: gs.regs[(reg::FBA_1 + c) as usize] & 1 != 0,
         }
     }
 }
@@ -240,7 +267,9 @@ impl Gs {
         }
         if matches!(r, reg::XYZ2 | reg::XYZF2) {
             // XYOFFSET of the drawing's context, at the drawing kick (Sapphire_Disputes.md D-162).
-            let env = Environment::read(self, self.attributes());
+            let mut env = Environment::read(self, self.attributes());
+            // Antialiasing is for lines and triangles only (§3.6; §3.2.2: points and sprites "Antialiasing Off").
+            env.blend.antialias &= !matches!(kind, Kind::Point | Kind::Sprite);
             let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
             let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
             let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });

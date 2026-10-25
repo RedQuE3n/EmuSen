@@ -55,7 +55,7 @@ fn shade(tex: &Option<Setup>, wu: [i64; 3], wv: [i64; 3], f: u32) -> Shade {
 
 pub fn point(env: &Environment, local: &mut Local, clut: &Clut, v: &Vertex) {
     let tex = setup(env, [v; 3], [q(v); 3], v);
-    pixel::draw(env, local, clut, nearest(v.x), nearest(v.y), v.z, v.rgba(), || shade(&tex, [1, 0, 0], [1, 0, 0], u32::from(v.f)));
+    pixel::draw(env, local, clut, nearest(v.x), nearest(v.y), v.z, v.rgba(), pixel::FULL, || shade(&tex, [1, 0, 0], [1, 0, 0], u32::from(v.f)));
 }
 
 pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex) {
@@ -71,7 +71,7 @@ pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: 
     };
     for y in y0..=y1 {
         for x in x0..=x1 {
-            pixel::draw(env, local, clut, x, y, b.z, c, || shade(&tex, along(x, a.x, b.x), along(y, a.y, b.y), u32::from(b.f)));
+            pixel::draw(env, local, clut, x, y, b.z, c, pixel::FULL, || shade(&tex, along(x, a.x, b.x), along(y, a.y, b.y), u32::from(b.f)));
         }
     }
 }
@@ -111,6 +111,7 @@ pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &V
     let (ca, cb) = (a.rgba(), b.rgba());
     let gouraud = env.attributes.gouraud();
     let tex = setup(env, [a, b, b], [q(a), q(b), q(b)], b);
+    let antialias = env.blend.antialias;
     let mut c = first;
     while (last - c) * s >= 0 {
         let t = i64::from(16 * c - au) * i64::from(s);
@@ -120,9 +121,43 @@ pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &V
         let rgba = if gouraud { std::array::from_fn(|i| lerp(ca[i], cb[i]).clamp(0, 255) as u32) } else { cb };
         let (x, y) = if xmajor { (c, r) } else { (r, c) };
         let w = [du - t, t, 0];
-        pixel::draw(env, local, clut, x, y, z, rgba, || shade(&tex, w, w, lerp(u32::from(a.f), u32::from(b.f)).clamp(0, 255) as u32));
+        let cov = if antialias { line_coverage(i64::from(av) * du + i64::from(16 * c - au) * dv - 16 * i64::from(r) * du, du) } else { pixel::FULL };
+        pixel::draw(env, local, clut, x, y, z, rgba, cov, || shade(&tex, w, w, lerp(u32::from(a.f), u32::from(b.f)).clamp(0, 255) as u32));
         c += s;
     }
+}
+
+/// A line pixel's coverage under AA1 (Sapphire_Disputes.md D-406): 80h × (1 - |e|), e the line's distance from the pixel's
+/// centre along the minor axis at the centre's column, `e_du` being 16 e × du; held below 80h, as §3.6.2 says a line's
+/// always is.
+fn line_coverage(e_du: i64, du: i64) -> u32 {
+    ((16 * du - e_du.abs()) * 8).div_euclid(du).clamp(0, 0x7F) as u32
+}
+
+/// A triangle pixel's coverage under AA1 (D-406): the points of a 16 × 16 grid at the centres of the pixel's sixteenths
+/// that the triangle holds, by its drawing rule, halved, so 80h for the whole pixel; the counter-clockwise edges b→c,
+/// c→a, a→b with `bias` their top-left ties.
+fn coverage([a, b, c]: [&Vertex; 3], bias: [i64; 3], x: i32, y: i32) -> u32 {
+    // In doubled sixteenths, so that the grid's points are whole: 2 (16x - 8 + k) + 1 for k from 0 to 15.
+    let edges = [(b, c), (c, a), (a, b)];
+    let at = |i: usize, px: i64, py: i64| {
+        let (p, q) = edges[i];
+        let (qx, qy, ox, oy) = (i64::from(q.x - p.x), i64::from(q.y - p.y), i64::from(p.x), i64::from(p.y));
+        qx * (py - 2 * oy) - qy * (px - 2 * ox)
+    };
+    let (x0, y0) = (2 * (16 * i64::from(x) - 8), 2 * (16 * i64::from(y) - 8));
+    let corners = [(x0, y0), (x0 + 32, y0), (x0, y0 + 32), (x0 + 32, y0 + 32)];
+    if corners.iter().all(|&(px, py)| (0..3).all(|i| at(i, px, py) > 0)) {
+        return pixel::FULL;
+    }
+    let mut n = 0;
+    for j in 0..16 {
+        for k in 0..16 {
+            let (px, py) = (x0 + 2 * k + 1, y0 + 2 * j + 1);
+            n += u32::from((0..3).all(|i| at(i, px, py) + bias[i] > 0));
+        }
+    }
+    n / 2
 }
 
 /// The edge function of p→q at (x, y): positive on one side, zero on the line, in sixteenths squared.
@@ -162,7 +197,8 @@ pub fn triangle(env: &Environment, local: &mut Local, clut: &Clut, [a, b, c]: [&
             }
             let z = ((i128::from(a.z) * i128::from(w[0]) + i128::from(b.z) * i128::from(w[1]) + i128::from(c.z) * i128::from(w[2])) / i128::from(area)) as u32;
             let rgba = if gouraud { std::array::from_fn(|i| ((i64::from(ca[i]) * w[0] + i64::from(cb[i]) * w[1] + i64::from(cc[i]) * w[2]) / area) as u32) } else { last.rgba() };
-            pixel::draw(env, local, clut, x, y, z, rgba, || shade(&tex, w, w, ((fog[0] * w[0] + fog[1] * w[1] + fog[2] * w[2]) / area) as u32));
+            let cov = if env.blend.antialias { coverage([a, b, c], bias, x, y) } else { pixel::FULL };
+            pixel::draw(env, local, clut, x, y, z, rgba, cov, || shade(&tex, w, w, ((fog[0] * w[0] + fog[1] * w[1] + fog[2] * w[2]) / area) as u32));
         }
     }
 }

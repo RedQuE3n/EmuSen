@@ -71,42 +71,42 @@ impl Timer {
         (self.mode & mode::CMPE == 0 || self.mode & mode::EQUF != 0) && (self.mode & mode::OVFE == 0 || self.mode & mode::OVFF != 0)
     }
 
-    /// Advances `n` ticks: the compare flag when the count becomes COMP with CMPE, the overflow flag when it wraps
-    /// from FFFFh with OVFE, and with ZRET the tick after a match returning it to 0 instead of counting on.
+    /// Advances `n` ticks: the compare flag when the count reaches COMP with CMPE, the overflow flag when it wraps from
+    /// FFFFh with OVFE; with ZRET the tick that reaches COMP gives 0 instead (Sapphire_Disputes.md D-38).
     fn advance(&mut self, mut n: u64) -> u32 {
         let mut rose = 0;
         let zret = self.mode & mode::ZRET != 0;
+        let comp = u64::from(self.comp);
         while n > 0 {
+            let count = u64::from(self.count);
             if self.settled() {
-                self.count = if zret && self.count <= self.comp {
-                    ((u64::from(self.count) + n) % (u64::from(self.comp) + 1)) as u16
+                self.count = if zret && count < comp {
+                    ((count + n) % comp) as u16
+                } else if zret && comp > 0 {
+                    let to_zero = 0x1_0000 - count;
+                    if n < to_zero { (count + n) as u16 } else { ((n - to_zero) % comp) as u16 }
                 } else if zret {
-                    let to_zero = 0x1_0000 - u64::from(self.count);
-                    if n < to_zero { (u64::from(self.count) + n) as u16 } else { ((n - to_zero) % (u64::from(self.comp) + 1)) as u16 }
+                    0
                 } else {
-                    (u64::from(self.count) + n) as u16
+                    (count + n) as u16
                 };
                 return rose;
             }
-            if zret && self.count == self.comp {
-                self.count = 0;
-                n -= 1;
-                continue;
-            }
-            let to_match = if self.comp == self.count { 0x1_0000 } else { u64::from(self.comp.wrapping_sub(self.count)) };
-            let to_wrap = 0x1_0000 - u64::from(self.count);
+            let to_match = if comp > count { comp - count } else { 0x1_0000 - count + comp };
+            let to_wrap = 0x1_0000 - count;
             let step = to_match.min(to_wrap);
             if n < step {
-                self.count = (u64::from(self.count) + n) as u16;
+                self.count = (count + n) as u16;
                 return rose;
             }
-            self.count = (u64::from(self.count) + step) as u16;
             n -= step;
-            if self.count == self.comp && self.mode & mode::CMPE != 0 && self.mode & mode::EQUF == 0 {
+            let matched = step == to_match;
+            self.count = if matched && zret { 0 } else { (count + step) as u16 };
+            if matched && self.mode & mode::CMPE != 0 && self.mode & mode::EQUF == 0 {
                 self.mode |= mode::EQUF;
                 rose |= ROSE_EQUF;
             }
-            if step == to_wrap && self.mode & mode::OVFE != 0 && self.mode & mode::OVFF == 0 {
+            if step == to_wrap && !(matched && zret) && self.mode & mode::OVFE != 0 && self.mode & mode::OVFF == 0 {
                 self.mode |= mode::OVFF;
                 rose |= ROSE_OVFF;
             }
@@ -134,16 +134,15 @@ impl Timer {
             return u64::MAX;
         }
         let zret = self.mode & mode::ZRET != 0;
+        let (count, comp) = (u64::from(self.count), u64::from(self.comp));
+        let to_match = if comp > count { comp - count } else { 0x1_0000 - count + comp };
+        let to_wrap = 0x1_0000 - count;
         let mut k = u64::MAX;
         if self.mode & mode::CMPE != 0 && self.mode & mode::EQUF == 0 {
-            k = if self.count == self.comp {
-                if zret { u64::from(self.comp) + 1 } else { 0x1_0000 }
-            } else {
-                u64::from(self.comp.wrapping_sub(self.count))
-            };
+            k = to_match;
         }
-        if self.mode & mode::OVFE != 0 && self.mode & mode::OVFF == 0 && !(zret && self.count <= self.comp) {
-            k = k.min(0x1_0000 - u64::from(self.count));
+        if self.mode & mode::OVFE != 0 && self.mode & mode::OVFF == 0 && !(zret && to_match <= to_wrap) {
+            k = k.min(to_wrap);
         }
         if k == u64::MAX { u64::MAX } else { (self.synced / p + k) * p }
     }

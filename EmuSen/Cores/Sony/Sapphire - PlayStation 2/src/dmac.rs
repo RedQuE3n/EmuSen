@@ -104,7 +104,7 @@ pub struct Channel {
     ends: bool,
     /// The packet in progress is under stall control: normal mode, refs on a drain, cnts on a source (§5.3.2).
     stall: bool,
-    /// After the packet, TADR takes the address after its data (cnt, end, ret with nothing pushed).
+    /// After the packet, TADR takes the address after its data (cnt alone; Sapphire_Disputes.md D-35).
     tadr_follows: bool,
     /// The packet's data lies in the MFIFO's ring (cnt, next, call, ret, end on the drain).
     in_ring: bool,
@@ -149,6 +149,7 @@ pub struct Dmac {
     pub ctrl: u32,
     pub stat: u32,
     pub pcr: u32,
+    /// D_SQWC as written; a transfer uses its fields SQWC (7..0) and TQWC (23..16) (D-40).
     pub sqwc: u32,
     pub rbsr: u32,
     pub rbor: u32,
@@ -325,7 +326,7 @@ impl Dmac {
             ch.open = true;
             ch.ends = if mode == Mode::SourceChain { tag == id::REFE || tag == id::END } else { tag == id::END };
             ch.stall = if mode == Mode::SourceChain { tag == id::REFS } else { tag == id::CNTS };
-            ch.tadr_follows = mode == Mode::SourceChain && matches!(tag, id::CNT | id::END);
+            ch.tadr_follows = mode == Mode::SourceChain && tag == id::CNT;
             ch.in_ring = mode == Mode::SourceChain && matches!(tag, id::CNT | id::NEXT | id::CALL | id::RET | id::END);
         }
     }
@@ -654,13 +655,11 @@ impl Dmac {
                     ch.tadr = ch.asr[n as usize - 1];
                 } else {
                     ch.ends = true;
-                    ch.tadr_follows = true;
                 }
             }
             _ => {
                 ch.madr = after;
                 ch.ends = true;
-                ch.tadr_follows = true;
             }
         }
         self.end_packet(c);
@@ -701,7 +700,7 @@ impl Dmac {
             D_CTRL => self.ctrl = v & 0x7FF,
             D_STAT => self.stat = (self.stat & !(v & stat::CLEARED)) ^ (v & stat::MASKS),
             D_PCR => self.pcr = v & (0x3FF | 0x3FF << 16 | PCE),
-            D_SQWC => self.sqwc = v & 0x00FF_00FF,
+            D_SQWC => self.sqwc = v,
             D_RBSR => self.rbsr = v & ADDR,
             D_RBOR => self.rbor = v & ADDR,
             D_STADR => self.stadr = v & ADDR,

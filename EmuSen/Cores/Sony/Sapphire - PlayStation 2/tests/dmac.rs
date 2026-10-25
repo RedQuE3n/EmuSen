@@ -283,12 +283,14 @@ fn a_timer_is_evaluated_at_its_flag_and_not_before() {
 }
 
 #[test]
-fn zret_returns_to_zero_the_tick_after_the_match() {
+fn zret_returns_to_zero_at_the_tick_that_reaches_comp() {
     let mut t = Timer::default();
     t.write(0x20, 3, false, false);
     t.write(0x10, 0xC0, false, false);
     let seen: Vec<u32> = (1..=9).map(|k| { t.sync(k * BUS); t.read(0) }).collect();
-    assert_eq!(seen, vec![1, 2, 3, 0, 1, 2, 3, 0, 1]);
+    assert_eq!(seen, vec![1, 2, 0, 1, 2, 0, 1, 2, 0], "the tick that reaches COMP gives 0 (D-38)");
+    t.write(0x10, 0x1C0, false, false);
+    assert_eq!(t.next_event(), 12 * BUS, "EQUF at the tick that would reach COMP");
 }
 
 #[test]

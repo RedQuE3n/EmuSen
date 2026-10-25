@@ -373,15 +373,17 @@ pub fn spr() -> Program {
     poke(p, qwc(TO_SPR), 0x0001_2345);
     rec(p, qwc(TO_SPR), Some(0x2345));
     poke(p, qwc(TO_SPR), 0);
+    // D_SQWC keeps every bit written, both lineages agreeing (Sapphire_Disputes.md D-40); the reserved offsets read
+    // indeterminate values (§2.2), recorded ungraded.
     poke(p, D_SQWC, 0xFFFF_FFFF);
-    rec(p, D_SQWC, Some(0x00FF_00FF));
+    rec(p, D_SQWC, Some(0xFFFF_FFFF));
     poke(p, D_SQWC, 0);
     poke(p, chcr(3) + 0x30, 0x1234_5670);
-    rec(p, chcr(3) + 0x30, Some(0));
+    rec(p, chcr(3) + 0x30, None);
     poke(p, chcr(FROM_SPR) + 0x30, 0x1234_5670);
-    rec(p, chcr(FROM_SPR) + 0x30, Some(0));
+    rec(p, chcr(FROM_SPR) + 0x30, None);
     poke(p, sadr(VIF0), 0x1230);
-    rec(p, sadr(VIF0), Some(0));
+    rec(p, sadr(VIF0), None);
     p.emit("nop");
     std::mem::replace(p, Program::new("s11-spr"))
 }
@@ -545,7 +547,8 @@ pub fn chain() -> Program {
 }
 
 /// `s11-callret`: VIF0's source chain with call and ret, walked by tag interrupts: two calls filling ASR0 and ASR1,
-/// a third refused with the stack full, two rets popping them, and a ret with nothing pushed ending the chain. VIF0
+/// a third refused with the stack full, two rets popping them, and a ret with nothing pushed ending the chain with
+/// TADR left at it (Sapphire_Disputes.md D-35). VIF0
 /// receives only zeros, VIFcode NOPs.
 pub fn callret() -> Program {
     let mut p = Program::kernel("s11-callret");
@@ -588,7 +591,7 @@ pub fn callret() -> Program {
     let stops: [(u32, u32, u32); 3] = [
         (0xE000 << 16 | 1 << 4 | base, T + 0x2030, T + 0x1010),
         (0xE000 << 16 | base, T + 0x1020, T + 0x20),
-        (0x6000 << 16 | base, T + 0x40, T + 0x40),
+        (0x6000 << 16 | base, T + 0x40, T + 0x20),
     ];
     for (c, m, t) in stops {
         restart(p, VIF0);
@@ -788,7 +791,7 @@ pub fn mfifo() -> Program {
     rec(p, madr(FROM_SPR), Some(RING + 0x100));
     wait(p, chcr(VIF1), STR, false, 20_000);
     rec(p, chcr(VIF1), Some(0x7000 << 16 | CHAIN | 1));
-    rec(p, tadr(VIF1), Some(RING + 0x100));
+    rec(p, tadr(VIF1), Some(RING + 0xF0));
     rec(p, madr(VIF1), Some(RING + 0x100));
     poke(p, D_STAT, 0x4000);
     rec_masked(p, D_STAT, 0x4000, 0);
@@ -893,6 +896,20 @@ pub fn intc() -> Program {
     li(p, "t0", IE_EIE_IM23);
     p.emit("mtc0 t0, Status");
     p.emit("sync.p");
+    // Timer 0's compare with I_MASK's bit set: INT0 at the edge, Cause.IP2.
+    poke(p, I_MASK, 0x200);
+    poke(p, t_count(0), 0);
+    poke(p, t_comp(0), 0x200);
+    poke(p, t_mode(0), 0x180);
+    wait(p, t_mode(0), 0x400, true, 20_000);
+    p.emit("nop");
+    p.emit("nop");
+    rec_log(p, &[(0x400, 0x200, 0)], 0x7FF3, 0x63FF_E3FF);
+    rec(p, I_MASK, Some(0));
+    poke(p, I_STAT, 0x200);
+    poke(p, t_mode(0), 0xC00);
+    li(p, "t6", K1 | LOG);
+    p.emit("or s3, t6, zero");
     // Timer 0's compare, latched in I_STAT and held while I_MASK's bit is clear.
     poke(p, t_count(0), 0);
     poke(p, t_comp(0), 0x200);
@@ -901,7 +918,7 @@ pub fn intc() -> Program {
     rec_masked(p, I_STAT, 0x200, 0x200);
     rec_masked(p, t_mode(0), 0xC00, 0x400);
     rec_log(p, &[], 0x7FF3, 0);
-    // Unmasked: INT0, Cause.IP2.
+    // Unmasked: INT0 is I_STAT AND I_MASK (§3.1), so the latched request is taken now (D-39).
     poke(p, I_MASK, 0x200);
     p.emit("nop");
     p.emit("nop");
@@ -1045,7 +1062,7 @@ pub fn timers() -> Program {
     poke(p, t_mode(1), 0x80);
     delay(p, 200);
     rec(p, t_mode(1), Some(0x80));
-    // ZRET: on BUSCLK/16 with COMP 8, the count reaches 8 and returns to 0 [A, D-38: COMP is visible for a tick].
+    // ZRET: on BUSCLK/16 with COMP 8, the tick that reaches 8 gives 0, so the count never reads 8 (D-38).
     poke(p, t_mode(1), 0);
     poke(p, t_count(1), 0);
     poke(p, t_comp(1), 8);
@@ -1065,7 +1082,7 @@ pub fn timers() -> Program {
     p.emit("addiu t5, t5, -1");
     p.emit(format!("bne t5, zero, {l}"));
     p.emit("nop");
-    p.record("a1", Some(8));
+    p.record("a1", Some(7));
     poke(p, t_mode(1), 0);
     // OVFF with OVFE and its edge; none without OVFE.
     poke(p, I_STAT, 0x7FFF);

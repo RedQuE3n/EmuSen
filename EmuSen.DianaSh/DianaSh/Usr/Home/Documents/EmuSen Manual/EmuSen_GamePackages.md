@@ -1225,8 +1225,9 @@ on disk.
 Run: `cargo test --profile test-checked` of `emusen-galaxia` (86), `emusen-platform` (33 and its integration tests)
 and `emusen-scrape`; `emusen-disc` (14 and 13); WiseMan's Galaxia classes, `GamePackageTests` and `DataStoreTests` (86
 with the library, and the two facade classes, 19, with `EMUSEN_GALAXIA_NATIVE=0`); and the blast radius of
-`blast.sh`: every class of `EmuSen.WiseMan.Mistress`, the scraping classes, Diamond's and Nephrite's (§11.4 has the
-counts). Four faults were seeded, each caught and put back:
+`blast.sh`: every class of `EmuSen.WiseMan.Mistress`, the scraping classes, Galaxia's, Diamond's and Nephrite's, with
+`DianaShSandboxTests` and `HierTests`, 2,647 passed, 62 skipped (the picture and bench tools) and none failed, in 20
+minutes. Four faults were seeded, each caught and put back:
 
 | Fault | Caught by |
 |---|---|

@@ -16,6 +16,7 @@ use crate::ee::{Bus, Ee, Halt};
 use crate::gs::{self, Gs};
 use crate::intc::{self, Intc};
 use crate::iop::Iop;
+use crate::sif::{self, EePorts};
 use crate::timer::{self, Timer};
 use crate::vu::Vpu;
 
@@ -162,7 +163,8 @@ impl Board {
                 }
             }
             if self.dmac.next_event() <= at {
-                self.dmac.step(at, &mut self.map, spram, &mut self.ports);
+                self.iop.run_to(at);
+                self.step_dmac(at, spram);
             }
             self.reschedule();
             debug_assert!(self.next > at, "an event at {at} asked for its own time again");
@@ -176,6 +178,23 @@ impl Board {
             }
         }
         self.iop.run_to(self.now);
+        if self.iop.bus.sif.take_wake_ee() {
+            self.dmac.wake(self.now);
+            if self.dmac.next_event() <= self.now {
+                self.step_dmac(self.now, spram);
+            }
+            self.reschedule();
+        }
+    }
+
+    /// The DMAC at `at`, woken first if the IOP's side has changed a SIF FIFO; SIF0, SIF1 and SIF2 reach the SIF.
+    fn step_dmac(&mut self, at: u64, spram: &mut [u8]) {
+        if self.iop.bus.sif.take_wake_ee() {
+            self.dmac.wake(at);
+        }
+        let sif2_from_memory = self.dmac.ch[dmac::SIF2].chcr & dmac::chcr::DIR != 0;
+        let mut ports = EePorts { others: &mut self.ports, sif: &mut self.iop.bus.sif, sif2_from_memory };
+        self.dmac.step(at, &mut self.map, spram, &mut ports);
     }
 
     /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
@@ -188,6 +207,9 @@ impl Board {
             self.sync_timer(n, self.now);
             return self.timers[n].read(reg);
         }
+        if let Some(offset) = sif::ee_register(paddr) {
+            return self.iop.bus.sif.ee_read(offset);
+        }
         match paddr {
             intc::I_STAT | intc::I_MASK => self.intc.read(paddr),
             _ => self.dmac.read(paddr),
@@ -199,6 +221,8 @@ impl Board {
             self.sync_timer(n, self.now);
             let (h, v_) = (self.blank.h(self.now), self.blank.v(self.now));
             self.timers[n].write(reg, v, h, v_);
+        } else if let Some(offset) = sif::ee_register(paddr) {
+            self.iop.bus.sif_write_from_ee(offset, v);
         } else {
             match paddr {
                 intc::I_STAT | intc::I_MASK => self.intc.write(paddr, v),

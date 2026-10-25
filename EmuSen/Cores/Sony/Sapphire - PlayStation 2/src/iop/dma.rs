@@ -99,6 +99,9 @@ pub struct Channel {
     begun: bool,
     addr: u32,
     left: u32,
+    /// In chain mode: a tag has been read and its words are still moving (`addr`, `left`), and its first word.
+    in_packet: bool,
+    tag: u32,
 }
 
 impl Channel {
@@ -170,6 +173,14 @@ impl Dmac {
         self.idle = false;
     }
 
+    /// A peripheral's request changed at cycle `now`: arbitrate again, not before it.
+    pub fn wake_from(&mut self, now: u64) {
+        if self.idle {
+            self.free = self.free.max(now);
+        }
+        self.idle = false;
+    }
+
     /// The master flag (psx-spx's formula with DICR2's flags, ps2tek): a bus error, or the master enable with any flag,
     /// the flags counting only while DMACINTEN's bit 0 is set.
     fn master_now(&self) -> bool {
@@ -205,7 +216,11 @@ impl Dmac {
         if c.mode() == 0 && c.chcr & (chcr::TRIGGER | chcr::PAUSE) == chcr::TRIGGER | chcr::PAUSE {
             return false;
         }
-        let need = if c.mode() == 1 { block(c.bcr) } else { 1 };
+        let need = match c.mode() {
+            1 => block(c.bcr),
+            3 if !(c.begun && c.in_packet) => chain_tag_words(c).max(1),
+            _ => 1,
+        };
         c.chcr & chcr::TRIGGER != 0 || (n != OTC && dev.request(n, need, c.chcr & chcr::DIR == 0) >= need)
     }
 
@@ -286,6 +301,7 @@ impl Dmac {
             c.chcr &= !chcr::TRIGGER;
             c.addr = c.madr;
             c.left = block(c.bcr);
+            c.in_packet = false;
         }
         let step = c.step(n);
         let device = n != OTC && c.chcr & chcr::TRIGGER == 0;
@@ -357,39 +373,65 @@ impl Dmac {
                 self.ch[n] = c;
                 let from_memory = c.chcr & chcr::DIR != 0;
                 let extra = if c.chcr & chcr::CHOP != 0 { 2 } else { 0 };
-                let mut tag = [0u32; 4];
-                let t = c.tadr & 0x00FF_FFFC;
-                for (i, w) in tag.iter_mut().enumerate().take(2 + extra) {
-                    *w = if from_memory {
-                        let a = t + 4 * i as u32;
-                        match (a < LIMIT).then(|| mem.load(a)).flatten() {
-                            Some(v) => v,
-                            None => return self.bus_error(n),
-                        }
-                    } else {
-                        dev.get(n)
-                    };
-                }
-                if from_memory {
-                    for &w in &tag[2..2 + extra] {
-                        dev.put(n, w);
+                let mut cost = 0;
+                if !c.in_packet {
+                    let need = chain_tag_words(&c);
+                    if need > 0 && dev.request(n, need, !from_memory) < need {
+                        self.idle = true;
+                        return irq;
                     }
-                    c.tadr = (t + 4 * (2 + extra) as u32) & 0x00FF_FFFF;
+                    let words = if from_memory { 2 + extra } else { 4 };
+                    let mut tag = [0u32; 4];
+                    let t = c.tadr & 0x00FF_FFFC;
+                    for (i, w) in tag.iter_mut().enumerate().take(words) {
+                        *w = if from_memory {
+                            let a = t + 4 * i as u32;
+                            match (a < LIMIT).then(|| mem.load(a)).flatten() {
+                                Some(v) => v,
+                                None => return self.bus_error(n),
+                            }
+                        } else {
+                            dev.get(n)
+                        };
+                    }
+                    if from_memory {
+                        for &w in &tag[2..2 + extra] {
+                            dev.put(n, w);
+                        }
+                        c.tadr = (t + 4 * (2 + extra) as u32) & 0x00FF_FFFF;
+                    }
+                    c.in_packet = true;
+                    c.tag = tag[0];
+                    c.addr = tag[0] & 0x00FF_FFFC;
+                    c.left = tag[1] & 0x00FF_FFFF;
+                    c.madr = c.addr;
+                    cost += words as u64;
                 }
-                let (addr, words) = (tag[0] & 0x00FF_FFFC, tag[1] & 0x00FF_FFFF);
+                let words = if c.left == 0 { 0 } else { dev.request(n, c.left, !from_memory) };
                 self.ch[n] = c;
                 for i in 0..words {
-                    if !self.word(n, addr.wrapping_add(4 * i), false, mem, dev) {
+                    if !self.word(n, c.addr.wrapping_add(4 * i), false, mem, dev) {
                         return self.bus_error(n);
                     }
                 }
-                c.madr = addr.wrapping_add(4 * words) & 0x00FF_FFFF;
-                let end = self.hold_for(now, u64::from(words) + 2 + extra as u64, GAP);
-                if tag[0] & 1 << 30 != 0 && self.dicr2 & 1 << n != 0 {
-                    irq |= self.flag(n, true);
+                c.addr = c.addr.wrapping_add(4 * words) & 0x00FF_FFFF;
+                c.left -= words;
+                c.madr = c.addr;
+                cost += u64::from(words);
+                if cost == 0 {
+                    self.ch[n] = c;
+                    self.idle = true;
+                    return irq;
                 }
-                if tag[0] & 1 << 31 != 0 {
-                    self.finish = Some((n, end));
+                let end = self.hold_for(now, cost, GAP);
+                if c.left == 0 {
+                    c.in_packet = false;
+                    if c.tag & 1 << 30 != 0 && self.dicr2 & 1 << n != 0 {
+                        irq |= self.flag(n, true);
+                    }
+                    if c.tag & 1 << 31 != 0 {
+                        self.finish = Some((n, end));
+                    }
                 }
             }
         }
@@ -442,6 +484,7 @@ impl Dmac {
                     c.chcr = if n == OTC { v & chcr::OTC_BITS | chcr::BACK } else { v & chcr::BITS };
                     if c.chcr & chcr::STR == 0 {
                         c.begun = false;
+                        c.in_packet = false;
                     }
                 }
                 Some((n, _)) => self.ch[n].tadr = v & 0x00FF_FFFF,
@@ -450,6 +493,14 @@ impl Dmac {
         }
         false
     }
+}
+
+/// The words a chain's tag takes from or gives to the peripheral: to memory a whole quadword of four, its first two
+/// the tag, whatever CHCR's bit 8; from memory the two after the tag with bit 8 (ps2tek "IOP DMA"; Sapphire_Disputes.md
+/// D-68, D-143).
+fn chain_tag_words(c: &Channel) -> u32 {
+    let extra = if c.chcr & chcr::CHOP != 0 { 2 } else { 0 };
+    if c.chcr & chcr::DIR != 0 { extra } else { 4 }
 }
 
 /// A burst's words or a slice's block: BCR's low half, 0 meaning 10000h (psx-spx).

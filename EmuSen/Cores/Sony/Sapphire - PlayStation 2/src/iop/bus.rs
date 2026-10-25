@@ -12,6 +12,7 @@ use super::intc::{self, Intc, source};
 use super::timer::{self, Timer};
 use crate::blank::Blank;
 use crate::clock::IOP;
+use crate::sif::{self, IopPorts, Sif};
 
 pub const RAM: usize = 2 << 20;
 /// RAM's window: 2 MiB mirrored through the first 8 MiB, as the PlayStation's default [A: psx-spx "Memory Mirrors",
@@ -115,6 +116,8 @@ pub struct IopBus {
     pub timers: [Timer; 6],
     /// The peripherals' stand-ins behind the DMAC's channels until their stages.
     pub ports: StandIns,
+    /// The SIF, its registers here at 1D000000h and at the EE's 1000F200h, its FIFOs behind channels 2, 9 and 10 (S22).
+    pub sif: Sif,
     pub blank: Blank,
     /// The bus's clock, in IOP cycles.
     pub now: u64,
@@ -137,6 +140,7 @@ impl IopBus {
             dmac: Dmac::default(),
             timers: core::array::from_fn(Timer::new),
             ports: StandIns::default(),
+            sif: Sif::default(),
             blank,
             now: 0,
             synced: 0,
@@ -173,6 +177,10 @@ impl IopBus {
     /// Brings every unit to EE cycle `t`, taking the events due on the way in time order: blanking edges, timer
     /// requests and the DMAC's units, whose cycles hold the processor.
     pub fn run_units(&mut self, t: u64) {
+        if self.sif.take_wake_iop() {
+            self.dmac.wake_from(self.synced.max(t).div_ceil(IOP));
+            self.reschedule();
+        }
         while self.next <= t {
             let at = self.next;
             let edge = self.blank.next_edge(self.synced, self.wants_h());
@@ -197,8 +205,8 @@ impl IopBus {
                 }
             }
             if self.dmac.next_event().saturating_mul(IOP) <= at {
-                let IopBus { dmac, ram, ports, .. } = self;
-                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), ports) {
+                let IopBus { dmac, ram, ports, sif, .. } = self;
+                if dmac.step(at.div_ceil(IOP), &mut RamPort(ram), &mut IopPorts { others: ports, sif }) {
                     self.intc.raise(source::DMA);
                 }
             }
@@ -217,6 +225,13 @@ impl IopBus {
                 return;
             }
             self.now = self.dmac.hold;
+        }
+    }
+
+    /// The EE's write to a SIF register at `offset`, which may raise the IOP's interrupt (Sapphire_Disputes.md D-141).
+    pub fn sif_write_from_ee(&mut self, offset: u32, v: u32) {
+        if self.sif.ee_write(offset, v) {
+            self.intc.raise(sif::IOP_SOURCE);
         }
     }
 
@@ -287,7 +302,11 @@ impl IopBus {
                 let w = self.read_io(p & !3);
                 w >> (8 * (p & 3))
             }
-            Target::Sif(_) | Target::Control => {
+            Target::Sif(p) => {
+                self.now += IO_STALL;
+                self.sif.iop_read(p & 0xF0) >> (8 * (p & 3))
+            }
+            Target::Control => {
                 self.now += IO_STALL;
                 0
             }
@@ -352,7 +371,8 @@ impl Bus for IopBus {
             Target::Ram(a) => put(&mut self.ram, a as usize, size, value),
             Target::Scratch(a) => put(&mut self.scratch, a as usize, size, value),
             Target::Io(p) => self.write_io(p & !3, value << (8 * (p & 3))),
-            Target::Sif(_) | Target::Rom(_) | Target::Control => {}
+            Target::Sif(p) => self.sif.iop_write(p & 0xF0, value << (8 * (p & 3))),
+            Target::Rom(_) | Target::Control => {}
             Target::CacheControl => self.icache.bcc = value & icache::bcc::WRITABLE,
             Target::None => self.fault = true,
         }

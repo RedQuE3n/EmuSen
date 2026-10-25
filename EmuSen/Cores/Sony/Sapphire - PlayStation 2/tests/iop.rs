@@ -8,6 +8,7 @@ use sapphire::board::{Board, System};
 use sapphire::clock::{self, IOP};
 use sapphire::iop::dma::{self, Dmac, Memory, Peripherals, StandIns};
 use sapphire::iop::{self, icache};
+use sapphire::sif;
 
 /// Runs an IOP program in a board until its done word, `setup` given the board first; the board and the expected record.
 fn run(p: s21::Program, setup: impl FnOnce(&mut Board)) -> (Board, Vec<Option<u32>>) {
@@ -84,20 +85,23 @@ fn otc_and_the_dmac_registers_equal_the_documents() {
 #[test]
 fn each_dma_mode_reaches_its_stand_in() {
     let b = grade(s21::dma_modes(), |b| {
-        for p in [dma::SPU2, dma::SIF2, dma::SIF0, dma::SPU] {
+        for p in [dma::SPU2, dma::SPU] {
             b.iop.bus.ports.ports[p].keep = true;
         }
-        b.iop.bus.ports.ports[dma::SIF1].give.extend(s21::sif1_queue());
+        for w in s21::sif1_queue() {
+            b.iop.bus.sif.fifo[sif::SIF1].push(w);
+        }
     });
     let ports = &b.iop.bus.ports.ports;
+    let fifo = |f: usize| b.iop.bus.sif.fifo[f].words().copied().collect::<Vec<_>>();
     assert_eq!(ports[dma::SPU2].taken, (0..12).map(|i| 0x7000_0000 | i).collect::<Vec<_>>(), "slice: three blocks of four");
-    assert_eq!(ports[dma::SIF2].taken, [0x2000_0000, 0x2000_0001, 0x2000_0002], "the list's words, no headers");
+    assert_eq!(fifo(sif::SIF2), [0x2000_0000, 0x2000_0001, 0x2000_0002], "the list's words, no headers, in SIF2's FIFO");
     assert_eq!(
-        ports[dma::SIF0].taken,
+        fifo(sif::SIF0),
         [0x9000_0000, 0x9000_0001, 0x9100_0000, 0x9100_0001, 0x9000_0002, 0x9000_0003, 0x9200_0000, 0x9200_0001, 0x9200_0002],
-        "each tag's two words before its data"
+        "each tag's two words before its data, in SIF0's FIFO"
     );
-    assert!(ports[dma::SIF1].give.is_empty(), "the tag and its words taken");
+    assert!(b.iop.bus.sif.fifo[sif::SIF1].is_empty(), "the tag and its words taken from SIF1's FIFO");
     assert_eq!(ports[dma::SPU].taken.len(), 5 + 32, "the requested burst and the chopped one");
 }
 

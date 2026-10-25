@@ -538,6 +538,9 @@ cost an instruction or a block in its place, is compromise C1 of §5.13, decided
 recompiler's bit-for-bit claim is made against the interpreter with every compromise off; each compromise is then
 measured separately against that pair.
 
+*Built 2026-10-24 at S6* (`Sapphire_Native.md` §16.4): the tables are the *EE Core User's Manual*'s own (§1.3.5, §1.3.6,
+§2.12), which equal the TX79's on every integer row and differ on the floating-point ones; the caches wait for S7.
+
 ### 5.3 Floating point, exact
 
 The FPU and the VUs follow the PlayStation 2's own format: no NaN, no infinity, no denormals, rounding towards zero,
@@ -874,7 +877,7 @@ the enhancements (E) are separate tracks.
 | Stage | What it covers | Its gate |
 |---|---|---|
 | **S5** | `emusen-mips`: the R5900's decode and disassembly as a table of its own (§9.1), MMI, COP0, COP1 and COP2's macro forms, the VU micro tables; the assembler for both | Every encoding of the TX79 manual's opcode tables decoded, disassembled and reassembled to the same word; the R3000 and VR4300 goldens unchanged *Built 2026-10-24, `Sapphire_Native.md` §15: met for the 723 cells where the EE agrees with the TX79, the other 83 decoded as ps2tek reads them under disputes D-1 to D-3; ps2tek's two VU tables read back in both modes; the VU micro-only lower instructions in no allowed document (§15.6 Q1); the other processors' text unchanged.* |
-| **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned |
+| **S6** | The R5900 interpreter, integer: 128-bit registers, the MIPS III subset, the R5900's multiply forms and pipelines, branch-likely, LQ/SQ, exceptions; the timing model's issue and latency table | The project's programs over every integer encoding against the manual's definitions; the timing model's table pinned *Built 2026-10-24, `Sapphire_Native.md` §16: met; 128 mnemonics through `r5900.rs`, seventeen programs equal to the EE Core manual's record, the results equal on PCSX2 and Play! but where D-6 to D-11 record otherwise; neither referee raises address-error, overflow, reserved or unusable exceptions, so those rest on the manual until S10; the EE Core User's Manual's §2.12 and Tables 1-1 to 1-3 pinned.* |
 | **S7** | COP0, the TLB with the scratchpad mapping, the caches and CACHE, the memory map, Count/Compare and the performance counters | The project's programs on TLB refills, cache write-back and the counters |
 | **S8** | MMI | The project's programs; `ee_simd/*` waits on S10 |
 | **S9** | COP1 in software floats (§5.3) | The project's programs on every input class |

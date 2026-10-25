@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S5 built 2026-10-24. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -19,7 +19,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   runners (the synthetic program and discs, dual-layer DVDs among them, the expected-text grader, the RAM-record reader
   shared in form with Diamond's) and ps2autotests' output channel found by observation, the IOP's console; and stage
   S5 (2026-10-24): the R5900's and the vector units' instruction tables in `emusen-mips`, read against the TX79 manual's
-  opcode tables and ps2tek's, with what the documents do not give.
+  opcode tables and ps2tek's, with what the documents do not give; and stage S6 (2026-10-24): the EE core's integer
+  interpreter decoding through `emusen-mips`, its timing model on the EE Core User's Manual's tables, the project's
+  programs over every integer encoding against the manual and on both referee lineages, and an ELF layout defect found
+  and fixed.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -30,7 +33,8 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   lineages; the gate's program `record.s` read equal from every referee that runs it; the writer's exposure; a hardware
   context for the probe evaluated and not built; DobieStation evaluated.
 - **`Sapphire_Disputes.md`** — the disputes log, opened with D-0, the system clocks; D-1 to D-5 since S5, where the TX79
-  manual and ps2tek differ over the R5900's map and where the documents leave the vector units' layout open.
+  manual and ps2tek differ over the R5900's map and where the documents leave the vector units' layout open, all five
+  documented by Sony's manuals at S6; D-6 to D-11 since S6, the integer interpreter's readings against the referees.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

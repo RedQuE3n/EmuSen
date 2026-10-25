@@ -75,7 +75,8 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** the scheduler's ratios (`Sapphire_Plan.md` §5.1); the EE timers' rate on the bus clock; the
   frame's length in EE cycles and every speed figure of §5.12; the CRT filter's timing (§4.6), with the PCRTC's own
   video clock beside it; whether a model setting must carry a clock.
-- **Pinned by:** to be written at S6, when the scheduler exists.
+- **Pinned by:** to be written when the scheduler exists; S6 built the EE's interpreter, which counts its own cycles
+  and holds no clock ratio (`Sapphire_Native.md` §16.11).
 - **Implemented in:** —
 - **Addendum, 2026-10-24 (stage S2)** [R, `Sapphire_References.md` §5.3]:
   - ps2autotests' `cpu/ee_cop0/performance.expected`, the console's output, tests the counters' register mapping and
@@ -117,6 +118,11 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Pinned by:** `emusen-mips`'s `every_encoding_of_the_tx79_tables_decodes_disassembles_and_reassembles` (its
   differences list names D-1 for each cell) and `the_ee_s_cells_by_ps2tek`.
 - **Implemented in:** stage S5's commit.
+- **Addendum, 2026-10-24 (stage S6)** [R Sony, *EE Core Instruction Set Manual*, Version 5.0, October 2001, §7.1.1,
+  §7.4.1, §7.4.3, §7.4.4; *EE Core User's Manual* §2.10.1]: Sony's own tables give COP1's rs as MFC1, CFC1, MTC1, CTC1,
+  BC1, S and W only; the S table holds ADD to NEG, RSQRT, ADDA, SUBA, MULA, MADD, MSUB, MADDA, MSUBA, CVTW, MAX, MIN,
+  C.F, C.EQ, C.LT and C.LE at the cells ps2tek gives; the W table CVTS alone; the OpCode table marks 35h and 3Dh
+  "unsupported". **Conclusion: documented**, as implemented; the compares are named C.LT and C.LE.
 
 ### D-2. R5900, BC1: the EE has the likely forms BC1FL and BC1TL, which the TX79 reserves
 
@@ -131,6 +137,8 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** the decode; S9.
 - **Pinned by:** the gate test's differences (D-2) and `the_ee_s_cells_by_ps2tek`.
 - **Implemented in:** stage S5's commit.
+- **Addendum, 2026-10-24 (stage S6)** [R *EE Core Instruction Set Manual* §7.4.2, and its pages for BC1FL and BC1TL]:
+  BC1's rt table gives BC1F, BC1T, BC1FL and BC1TL at 0 to 3. **Conclusion: documented**, as implemented.
 
 ### D-3. R5900: OpCode 12h is COP2, VU0's macro mode, and 36h and 3Eh are LQC2 and SQC2, which the TX79 reserves
 
@@ -146,6 +154,10 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** the decode; S12 (VU0 macro mode).
 - **Pinned by:** the gate test's differences (D-3) and `the_ee_s_cells_by_ps2tek`.
 - **Implemented in:** stage S5's commit.
+- **Addendum, 2026-10-24 (stage S6)** [R *EE Core Instruction Set Manual* §7.1.1; *EE Core User's Manual* §2.10.2]:
+  the OpCode table places COP2 at 12h and LQC2 and SQC2 ("COP2 Instructions") at 36h and 3Eh. **Conclusion:
+  documented**, as implemented. The interlock bit of QMTC2.I and CTC2.I is read at S12 from the *VU User's Manual*
+  §6.2 (`Sapphire_References.md` §1.1).
 
 ### D-4. VU: which half of a micro instruction runs ITOF, FTOI, ABS, NOP, MOVE, MR32, MTIR, MFIR and WAITQ
 
@@ -164,6 +176,10 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** the micro decode and disassembly; S13.
 - **Pinned by:** `vu.rs`'s `every_encoding_of_the_documented_tables_reads_back_in_both_modes`.
 - **Implemented in:** stage S5's commit.
+- **Addendum, 2026-10-24 (stage S6)** [R *VU User's Manual*, Version 5.0, the contents of §4.2 "Upper Instruction
+  Reference" and §4.3 "Lower Instruction Reference", and §4.1.2]: ABS, FTOI0–15, ITOF0–15 and NOP are upper
+  instructions; MOVE (the example of the lower word's type 3), MR32, MTIR, MFIR and WAITQ lower. **Conclusion:
+  documented**, as the rows' rule placed them. The micro words' own encodings are read at S13.
 
 ### D-5. VU: the field mask's bit order, x at bit 24 and w at bit 21
 
@@ -175,3 +191,96 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** the text of every masked VU operation; S12 and S13.
 - **Pinned by:** `the_hot_chips_examples_and_the_flags` (`lqi.x`, a mask of bit 24 alone).
 - **Implemented in:** stage S5's commit.
+- **Addendum, 2026-10-24 (stage S6)** [R *VU User's Manual* §4.1.3, "dest field"]: "bits 56 through 53 for Upper
+  instructions and bits 24 through 21 for Lower", bit 56 and bit 24 the x field, then y, z, w. **Conclusion:
+  documented**, as implemented.
+
+### D-6. R5900: a word divide by zero leaves LO = −1 (or +1 for a negative dividend, signed) and HI = the dividend, and a word instruction given an input that is not a word value computes on bits 31..0
+
+- **Opened:** 2026-10-24, at stage S6, by the *EE Core Instruction Set Manual*'s Restrictions sections, which call
+  both results undefined (DIV, DIVU, DIV1, DIVU1; ADD, ADDU, SUB, SUBU, the word shifts, MULT and the like).
+- **Documents read:** the manual's pages above; the TX79 manual's DIV page ("No arithmetic exception occurs under any
+  circumstances", the result left to software). Neither gives a value.
+- **Test program:** `undefined` (`tests/s6/mod.rs`): DIV, DIVU, DIV1 and DIVU1 by zero over seven dividends, with LO
+  and HI (LO1 and HI1) read back; ADDU, SUBU, SLL, SRA, SRLV and MULT with HI on four pairs that are not word values.
+- **Referee:** PCSX2 2.8.2 (Americas BIOS) and Play! 0.72, measured 2026-10-24: all 168 such words equal on both, and
+  equal to the reading above.
+- **Conclusion:** the reading above, implemented; **measured**, two lineages agreeing. A program relying on it relies on
+  undefined behaviour, which no console log yet confirms.
+- **Depends on it:** `ee/ops.rs`'s `quotient_signed` and `quotient_unsigned`; the word instructions' use of bits 31..0.
+- **Pinned by:** `the_undefined_inputs_give_the_interpreters_recorded_reading`.
+- **Implemented in:** stage S6's commit.
+
+### D-7. R5900: a trap's Cause.ExcCode is 13
+
+- **Opened:** 2026-10-24, at stage S6: the *EE Core User's Manual* is not consistent with itself. Table 4-3 gives Trap
+  13, as does the Cause register's table (§3.2, "01101 (13): Tr (Trap)"); §4.2.15's operation list says "Cause.ExcCode :
+  12", the overflow's code.
+- **Documents read:** the manual's §3.2, Table 4-3 and §4.2.15; the MIPS convention the TX79 manual follows (Tr = 13).
+- **Test program:** `exc-trap`: every trap, register and immediate forms, true and false over operands whose signed and
+  unsigned readings differ, through a handler recording Cause, EPC and Status.
+- **Referee:** PCSX2 took every true trap and no false one, Cause.ExcCode 13, EPC the trap's, Status.EXL set: all 1,344
+  words equal. Play! takes no trap through the vector (its high-level BIOS); not a witness.
+- **Conclusion:** 13, implemented; the manual's two tables and PCSX2 against one line of §4.2.15; **argued**, one
+  lineage (a strong witness here: it is exact on the whole program).
+- **Depends on it:** `Exception::Trap`'s code; every handler that dispatches on Cause.
+- **Pinned by:** `exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says`.
+- **Implemented in:** stage S6's commit.
+
+### D-8. R5900: Status.CU*n* set to 1 makes coprocessor *n* usable
+
+- **Opened:** 2026-10-24, at stage S6: the *EE Core User's Manual*'s Status table reads "CU … 0 Usable, 1 Unusable",
+  while §4.2.14 says the exception occurs "when … the CUx bit of the Status register is 0 (unusable)" and §2.9 that
+  COP0 instructions are enabled "when bit 28 (CU[0]) is set".
+- **Test program:** `exc-unusable` (Status written zero, then MFC1 and QMFC2).
+- **Referee:** neither PCSX2 nor Play! raises the unusable exception at all (8 of 20 words each differ, the same way);
+  no witness.
+- **Conclusion:** 1 = usable, §4.2.14 and §2.9 against the table's line; **argued**, documents only; open.
+- **Depends on it:** the unusable checks in `ee/ops.rs`; S9 and S12 (COP1, COP2).
+- **Pinned by:** `exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says` (the `exc-unusable` class).
+- **Implemented in:** stage S6's commit.
+
+### D-9. R5900, SA: the register holds the byte count of the funnel shift, 0–15; MTSAB writes (rs ⊕ imm) mod 16, MTSAH twice (rs ⊕ imm) mod 8, MTSA rs mod 16, and MFSA reads the count
+
+- **Opened:** 2026-10-24, at stage S6, by the `sa` program on the referees.
+- **Documents read:** the *EE Core Instruction Set Manual*'s MTSAB ("SA ← (GPR[rs]3..0 XOR immediate3..0) × 8"),
+  MTSAH (× 16), MTSA ("SA ← GPR[rs]63..0", undefined unless the value came from MFSA) and MFSA ("Since the value of the
+  SA register is encoded in a special manner, the software cannot use the resulting value"). The manual writes a bit
+  count, and declares what MFSA returns opaque.
+- **Test program:** `sa`: MTSAB and MTSAH over 17 operands and six immediates, each read back by MFSA; MTSA of MFSA's
+  value; `undefined`: MTSA of eight arbitrary values read back.
+- **Referee:** PCSX2 and Play! agree on all 426 words: MFSA after MTSAB returns the byte count (MTSAB 1 → 1, not 8),
+  after MTSAH twice the halfword count (MTSAH 1 → 2), MTSA of MFSA's value round-trips, and MTSA of an arbitrary value
+  reads back modulo 16 (1Fh → Fh, 13h → 3, 10h → 0).
+- **Conclusion:** the rule in the title, implemented; **measured**, two lineages agreeing, on what the manual leaves
+  opaque. QFSRV's use of SA (a byte or a bit count) is S8's to grade against `ee_simd/*`.
+- **Depends on it:** `ee/ops.rs`'s SA instructions; S8's QFSRV.
+- **Pinned by:** `the_shift_amount_register_reads_back_as_written`, `the_undefined_inputs_give_the_interpreters_recorded_reading`.
+- **Implemented in:** stage S6's commit.
+
+### D-10. R5900, LWR: at a byte other than 0, bits 63..32 of the destination are kept
+
+- **Opened:** 2026-10-24, at stage S6, by the `memory` and `upper` programs on the referees.
+- **Documents read:** the *EE Core Instruction Set Manual*'s LWR page: its Description ("Bytes of GPR[rt] that are not
+  loaded are not changed. But if the sign bit (bit 31) is loaded, they are sign-extended"), its Operation section
+  ("utemp ← GPR[rt]63..32 /* Otherwise, the high-order 4 bytes are not changed */") and its byte table; the TX79
+  manual's LWR page, the same rule. Three statements in two documents agree.
+- **Test program:** `memory` (LWR at every byte into a sentinel), `upper`.
+- **Referee:** the two lineages disagree with each other and with the documents: PCSX2 clears bits 63..32, Play!
+  sign-extends from bit 31 of the merged word (12 words of `memory` and 1 of `upper` each).
+- **Conclusion:** the documents' rule, implemented; **argued**; open, no ruling by referees (they disagree).
+- **Depends on it:** `ee/ops.rs`'s `lwr`; any 64-bit use of an LWR result.
+- **Pinned by:** `every_load_and_store_at_every_byte_equals_the_manual`, `bits_127_to_64_survive_every_narrower_write`.
+- **Implemented in:** stage S6's commit.
+
+### D-11. R5900: DI in kernel mode clears Status.EIE
+
+- **Opened:** 2026-10-24, at stage S6, by `exc-eidi` on the referees.
+- **Documents read:** the *EE Core Instruction Set Manual*'s DI page (EIE ← 0 when EDI, EXL or ERL is set or KSU is
+  00); the kit's *Restriction* (10) on DI, which concerns an interrupt arriving right after it.
+- **Test program:** `exc-eidi`: Status written zero (kernel mode), EI, MFC0, DI, MFC0.
+- **Referee:** Play! equal to the manual (EIE 1 after EI, 0 after DI); PCSX2 reads EIE still set after DI.
+- **Conclusion:** the manual's rule, implemented; **argued**, documents and one lineage; open.
+- **Depends on it:** `ee/ops.rs`'s `eidi`; S11's interrupts.
+- **Pinned by:** `exceptions_record_cause_epc_badvaddr_and_status_as_chapter_4_says` (the `exc-eidi` class).
+- **Implemented in:** stage S6's commit.

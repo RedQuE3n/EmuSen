@@ -2048,7 +2048,10 @@ and `micro_mode_unbuilt_halts_the_interpreter_at_its_start` (§21.6); `the_macro
 `the_board_maps_the_vu_memories_at_11000000h`; `vpu_stat_shows_the_macro_divide_busy`. The crate's other tests unchanged:
 lib **18 of 18**, `cop0` **19 of 19**, `dmac` **17 of 17**, `fpu` **9 of 9** (its count of COP1 bounded to 34),
 `interpreter` **23 of 23**, `mmi` **13 of 13**, `programs` **3 of 3**; `vu0` and lib also under `test-checked`; clippy
-clean. `emusen-mips` **19 of 19**, one new (`the_manual_s_macro_pages_read_back`).
+clean. `emusen-mips` **19 of 19**, one new (`the_manual_s_macro_pages_read_back`). `blast.sh`'s crates: `blackmoon-gte` **10 of 10**,
+`blackmoon-r3000` **38 of 38**, Diamond **306 of 306**, its `precision` **8 of 8** and `v1` **5 of 5**, `Platform/systems`
+**39 of 39**; WiseMan with `blast.sh`'s filter (`CheatCodec`, `DebugCodeParity`, `Diamond`, `SapphireTests`,
+`SystemCodeParity`, `SystemTableParity`) **116 of 116**.
 
 ### 21.5 The timing model (§5.2, Q14)
 

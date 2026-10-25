@@ -308,7 +308,8 @@ impl Vpu {
         self.micro0.stat() | div | self.micro1.stat() << vpu_stat::VU1
     }
 
-    /// CTC2's write of CCR[2,n] at cycle `t`; false where it would start micro mode that is not built (S13).
+    /// CTC2's write of CCR[2,n] at cycle `t`; false where it would start micro mode that is not built (S13). A write of
+    /// CMSAR1 while VU1 runs is ignored (§5.1.3).
     pub fn set_ccr(&mut self, n: usize, v: u32, t: u64) -> bool {
         let vu = &mut self.units.vu0;
         match n {
@@ -324,11 +325,9 @@ impl Vpu {
             24 => self.ccr24 = v & 0x0C0C,
             ccr::CMSAR0 => self.cmsar0 = v as u16,
             ccr::FBRST => self.write_fbrst(v, t),
-            ccr::CMSAR1 => {
+            ccr::CMSAR1 if !self.vu1_busy(t) => {
                 self.cmsar1 = v as u16;
-                if !self.vu1_busy(t) {
-                    return self.micro1.start(&mut self.units, v as u16 >> 3, t);
-                }
+                return self.micro1.start(&mut self.units, v as u16 >> 3, t);
             }
             _ => {}
         }

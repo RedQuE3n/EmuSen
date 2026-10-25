@@ -8,22 +8,16 @@ pub const EE_HZ: u64 = 294_912_000;
 /// EE cycles in one cycle of BUSCLK, 147.456 MHz [R EE User's Manual §2.1.2, §4.2 (Tn_MODE.CLKS)].
 pub const BUS: u64 = 2;
 
-/// A television standard's line and field, in bus cycles and lines [R ps2tek "EE Timers": "NTSC: 9370 BUSCLK cycles per
-/// scanline", "262 scanlines per frame (VBOFF: 240 | VBON: 22)"; PAL 9436, 312, 286 | 26].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Standard {
-    pub line: u64,
-    pub lines: u64,
-    /// Lines with V-blank low, from the field's start; the rest have it high.
-    pub active: u64,
-}
+/// The television standards by their old names, now the PCRTC's video modes (Sapphire_Native.md §29.3), which own the
+/// lines and fields; the board is made with one.
+pub use crate::pcrtc::timing::{Mode as Standard, NTSC, PAL};
 
-pub const NTSC: Standard = Standard { line: 9370, lines: 262, active: 240 };
-pub const PAL: Standard = Standard { line: 9436, lines: 312, active: 286 };
+/// The PCRTC's video clock VCK in NTSC, PAL and 480p, 54 MHz (four of the 13.5 MHz pixel clock), as VCK ticks per EE
+/// cycle: 294.912 MHz × 375 / 2048 = 54 MHz exactly [A, Sapphire_Native.md §29.3].
+pub const VCK_54: (u64, u64) = (375, 2048);
 
-/// The bus cycles at each line's start during which the stand-in holds H-blank high: a choice [C], about a sixth of
-/// the line as an analogue picture's blanking is, until the PCRTC's own timing replaces it at S20.
-pub const HBLANK: u64 = 1600;
+/// VCK in 1080i, 74.25 MHz: 294.912 MHz × 12375 / 49152 [A, §29.3].
+pub const VCK_74: (u64, u64) = (12375, 49152);
 
 /// EE cycles in one IOP cycle: the IOP at 36.864 MHz, an eighth of the EE's [R ps2tek "CDVD Reads and Seeks":
 /// "IOP_CLOCK is ~36,864,000 Hz"; D-0's family]. Sapphire_Native.md §22.

@@ -12,7 +12,7 @@ pub mod timer;
 
 use blackmoon_r3000::R3000;
 
-use crate::blank::Blank;
+use crate::pcrtc::timing::Timing;
 use crate::clock::IOP;
 use bus::IopBus;
 
@@ -29,7 +29,7 @@ pub struct Iop {
 }
 
 impl Iop {
-    pub fn new(blank: Blank) -> Iop {
+    pub fn new(blank: Timing) -> Iop {
         let mut cpu = R3000::new();
         cpu.prid = PRID;
         cpu.processor = 1;

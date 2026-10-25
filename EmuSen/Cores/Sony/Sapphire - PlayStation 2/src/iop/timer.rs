@@ -5,7 +5,7 @@
 //! blanking edge it uses or at the tick its next interrupt is due. Times are EE cycles (`clock`). Sapphire_Native.md
 //! §22.6 has the readings.
 
-use crate::blank::Edges;
+use crate::pcrtc::timing::Edges;
 use crate::clock::{IOP, PIXEL};
 
 pub mod mode {

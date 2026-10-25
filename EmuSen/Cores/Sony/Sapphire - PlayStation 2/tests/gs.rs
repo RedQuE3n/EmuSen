@@ -7,7 +7,7 @@ mod s11;
 mod s16;
 
 use sapphire::board::Board;
-use sapphire::clock::{self, BUS};
+use sapphire::clock::{self, NTSC};
 use sapphire::ee::Bus;
 use sapphire::gs::local::{self, Address};
 use sapphire::gs::psm::{ALL, Psm};
@@ -144,7 +144,7 @@ fn run(script: &Script) -> Vec<u64> {
                 b.write(at(*g), 8, 0);
             }
             Op::Wait(g, mask) => {
-                let limit = b.now + 2 * clock::NTSC.lines * clock::NTSC.line * BUS;
+                let limit = b.now + 2 * NTSC.cycles(NTSC.field(false));
                 while b.read(at(*g), 8) as u64 & mask == 0 {
                     assert!(b.now < limit, "{}: waited two fields for {mask:x}", script.name);
                     let t = b.now + 1000;
@@ -251,19 +251,19 @@ fn the_gs_interrupt_is_one_line_the_intc_latches_at_its_rise() {
 }
 
 #[test]
-fn hsint_and_vsint_follow_the_blanking_stand_in() {
+fn hsint_and_vsint_follow_the_pcrtcs_timing() {
     let mut b = Board::new(clock::NTSC);
     let mut spr = vec![0u8; SPR];
     let csr_at = privileged::address(privileged::CSR);
-    let line = clock::NTSC.line * BUS;
+    let line = NTSC.cycles(NTSC.line);
     b.write(csr_at, 8, 0xC);
     b.run_to(line - 1, &mut spr);
     assert_eq!(b.read(csr_at, 8) & 0xC, 0);
     b.run_to(line, &mut spr);
     assert_eq!(b.read(csr_at, 8) & 0xC, 4, "HSINT at the next line");
     b.write(csr_at, 8, 4);
-    b.run_to(clock::NTSC.active * line, &mut spr);
-    assert_eq!(b.read(csr_at, 8) & 0xC, 0xC, "VSINT at V-blank's start, HSINT again with the line");
+    b.run_to(NTSC.cycles(NTSC.vsync * NTSC.line), &mut spr);
+    assert_eq!(b.read(csr_at, 8) & 0xC, 0xC, "VSINT at the V-sync four lines in, HSINT again with the line");
     b.write(privileged::address(privileged::IMR), 8, 0x7700);
     assert_eq!(b.intc.stat & 1, 1, "VSINT unmasked reaches the INTC");
 }

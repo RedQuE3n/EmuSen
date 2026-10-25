@@ -127,6 +127,8 @@ pub mod csr {
     pub const HSINT: u32 = 1 << 2;
     pub const VSINT: u32 = 1 << 3;
     pub const EDWINT: u32 = 1 << 4;
+    /// The field shown: 0 even, 1 odd (§7.2).
+    pub const FIELD: u32 = 1 << 13;
     /// The five events, each cleared by writing 1 and masked by IMR's bit eight places up.
     pub const EVENTS: u32 = 0x1F;
     pub const FLUSH: u32 = 1 << 8;
@@ -172,6 +174,8 @@ pub struct Gs {
     held: VecDeque<(u8, u64)>,
     line: bool,
     rose: bool,
+    /// CSR's FIELD (bit 13), set by the PCRTC at each V-sync (Sapphire_Native.md §29.3).
+    field: u32,
 }
 
 impl Default for Gs {
@@ -204,6 +208,7 @@ impl Gs {
             held: VecDeque::new(),
             line: false,
             rose: false,
+            field: 0,
         }
     }
 
@@ -221,11 +226,11 @@ impl Gs {
         self.privileged[(ga & 0x7F) as usize]
     }
 
-    /// CSR as the EE reads it (§7.2): the events, FIFO's status, REV and ID; FLUSH, RESET, NFIELD and FIELD read 0
-    /// until the PCRTC (S20) drives the fields.
+    /// CSR as the EE reads it (§7.2): the events, FIELD, FIFO's status, REV and ID; FLUSH, RESET and NFIELD read 0
+    /// (Sapphire_Disputes.md D-204).
     pub fn csr(&self) -> u64 {
         let fifo = if self.held.is_empty() && self.pending.is_none() { csr::FIFO_EMPTY } else { 0 };
-        u64::from(self.events | fifo | csr::REV << 16 | csr::ID << 24)
+        u64::from(self.events | self.field | fifo | csr::REV << 16 | csr::ID << 24)
     }
 
     /// The interrupt to the INTC: a level, any event whose IMR bit is clear (§6.1; the Restriction's "GS Interrupt
@@ -343,14 +348,15 @@ impl Gs {
         self.update_line();
     }
 
-    /// H-sync, from the blanking stand-in until the PCRTC (S20): HSINT.
+    /// H-sync, from the PCRTC: HSINT.
     pub fn hsync(&mut self) {
         self.events |= csr::HSINT;
         self.update_line();
     }
 
-    /// V-sync, likewise: VSINT.
-    pub fn vsync(&mut self) {
+    /// V-sync, from the PCRTC: VSINT, and FIELD for the field now shown.
+    pub fn vsync(&mut self, odd: bool) {
+        self.field = if odd { csr::FIELD } else { 0 };
         self.events |= csr::VSINT;
         self.update_line();
     }

@@ -13,11 +13,11 @@
 //!
 //! Colour is the last vertex's when flat (§3.2.8) and, when Gouraud, the vertices' colours interpolated linearly at the
 //! pixel's centre and rounded down; along a line that is by the major axis, continued past an end whose pixel's centre
-//! lies beyond it and held to the channel's range (D-161). Z is interpolated so whatever the shading, and a sprite takes
-//! its second vertex's (§3.2.8). The documents give the rule but not the DDA's fixed
-//! point; the interpolation is therefore exact, a reading recorded as Sapphire_Disputes.md D-160. The loops of sprites
-//! and triangles run over the primitive's bounding box within the scissoring area, whose test (`pixel`) the pixels
-//! outside it would fail first. Sapphire_Native.md §27.
+//! lies beyond it and held to the channel's range (D-165). Z is interpolated so whatever the shading, and a sprite takes
+//! its second vertex's (§3.2.8). The documents give the rule but not the DDA's fixed point; the interpolation is
+//! therefore exact, a reading recorded as Sapphire_Disputes.md D-160 and D-164. The loops of sprites and triangles run
+//! over the primitive's bounding box within the scissoring area, whose test (`pixel`) the pixels outside it would fail
+//! first. Sapphire_Native.md §27.
 
 use super::draw::{Environment, Vertex};
 use super::local::Local;

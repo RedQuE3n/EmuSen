@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23 and S22 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22 and S17 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -50,7 +50,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   where ps2tek is silent read from PCSX2's lineage, and P13's mapped open;
   and stage S22 (2026-10-25, §26): the SIF, its mailbox registers on both sides and a FIFO of 128 bytes for each of
   SIF0, SIF1 and SIF2 joining the two DMACs' channels, the stand-ins replaced, paired EE and IOP programs passing
-  messages both ways, and PCSX2 a witness for the registers and the tags but not for the FIFOs' depth or SIF2.
+  messages both ways, and PCSX2 a witness for the registers and the tags but not for the FIFOs' depth or SIF2;
+  and stage S17 (2026-10-25, §27): the GS's drawing kick, every primitive with flat and Gouraud shading, exact
+  coverage and interpolation, scissoring, SCANMSK, FBMSK and the depth test in every format, the pixel pipeline's order
+  with the places of texturing and the other pixel operations, PCSX2 a witness for coverage and depth but not for
+  interpolation's last step, and Play! no witness for drawing.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database
@@ -77,7 +81,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   to D-128 since S23, the CDVD's seeks, ReadDvd's block and its b29, dual-layer seeks, the version bytes, the S
   commands' answers, CD-DA's command, the layer break in an image and the registers at rest; D-140 to D-145 since
   S22, the SIF's FIFOs, its registers and the EE's CTRL interrupt, SIF0's and SIF1's tags, the IOP's IRQ tag and SIF2,
-  with D-68 amended.
+  with D-68 amended;
+  D-160 to D-165 since S17, Gouraud colour's and Z's precision, line ends on a diamond's edge, XYOFFSET at the drawing
+  kick, Z beyond its format's range and a line's colour past its ends.
 
 The shared Sony hardware Sapphire uses (the IOP's R3000A) is in `../BlackMoon-HW/`; the shared crates it extends
 (`emusen-mips`, `emusen-disc`, `emusen-gpu`) are in `../../Shared/`. See `Man pages/Hardware/README.md` for how this

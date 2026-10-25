@@ -3390,3 +3390,222 @@ registers as its firmware left them, were not used.
 - The IOP's reset and boot (S24), the CDVD (S23), SIO2 (S25) and the SPU2 (S26) on the IOP's other channels.
 - The machine running the two processors (S10, S24), the SIF's state in `SPH2` (S30), its debugger view (S31) and the
   cost of the IOP's catch-up at each EE DMAC event (S32).
+
+## 27. Stage S17, the GS's primitives, shading, scissoring and depth (2026-10-25)
+
+*Numbered §27 and its disputes from D-160, since S13 (§23), S23 (§25) and S22 (§26) are built beside it.*
+
+### 27.1 In one paragraph
+
+The plan's §7 row S17, on the tester's go of 2026-10-25. The GS draws: **`gs::draw`** keeps the vertex queue that the XYZ
+registers advance, takes the attributes from PRIM or PRMODE as PRMODECONT says, and at the drawing kick reads the
+environment of the primitive's context; **`gs::raster`** decides which pixels each of the seven primitive kinds covers
+and the colour and Z each takes, flat or Gouraud, exactly in integers; **`gs::pixel`** runs each pixel through the
+pipeline in the documented order (scissoring and SCANMSK, the places of texturing, fog and the alpha tests, the depth
+test, the places of blending, dithering and clamping, then format conversion, FBMSK and ZMSK), writing through
+`gs::local`, the layout's one owner, in every colour and Z format FRAME and ZBUF may name. Eleven programs of the
+project's, 225,280 graded record words, each read back raw as PSMCT32 by S16's route, are equal on Sapphire to the record
+of a model written from the manual apart from `src/gs/`, which also draws 2,400 generated primitives as the source does.
+**PCSX2 equals four programs word for word** (points, sprites, scissoring with SCANMSK, Z beyond its range) and agrees
+with every other picture on which pixels are drawn and which pass the depth test, save four line ends on a diamond's
+edge (D-161); it departs only in the last step of Gouraud colour (D-160) and the low bits of interpolated Z (D-164).
+Play! draws through its own GPU renderer and its local memory never sees the drawing, so it is no witness for this stage
+(§27.7). Disputes D-160 to D-165. No emulator, SDK or loader source, no ps2autotests source and no firmware was read.
+
+### 27.2 What was built
+
+- **`src/gs/draw.rs`**: `Vertex` (coordinates in sixteenths, Z, RGBAQ, ST, UV, the fog coefficient as they stood at the
+  vertex kick); `Kind`, PRIM's seven types and the prohibited eighth; `Attributes`, bits 3 to 10 of PRIM or PRMODE;
+  `Queue`, emptied by PRIM, which a strip leaves holding its last two vertices, a fan its first and last, a line strip
+  its last, the rest nothing, whether the queue filled by a drawing kick (XYZ2, XYZF2) or without one (XYZ3, XYZF3,
+  §3.2.5); `Environment`, the context's FRAME, ZBUF, SCISSOR and TEST and SCANMSK, read at the drawing kick, with
+  XYOFFSET subtracted then (D-162). XYZF2 and XYZF3 take a 24-bit Z and write their fog field into FOG (ps2tek "GS Vertex
+  Attributes").
+- **`src/gs/raster.rs`**: the coverage of §27.3 and the interpolation, edge functions in 64-bit integers, Z through
+  128-bit products; loops over the bounding box within the scissoring area; no allocation on any path.
+- **`src/gs/pixel.rs`**: the pipeline; `pack16`, RGBA32 to RGBA16 and FBMSK's corresponding bits (§3.9.4, §3.9.5);
+  `z_max`, each Z format's range (D-163).
+- **`src/gs/mod.rs`**: PRIM empties the queue and the four XYZ registers kick it, in the order the host interface
+  delivers writes, so a stalled SIGNAL holds drawing behind it as it holds everything else.
+- **No new cross-component dependency**; `gs::local` is unchanged.
+
+### 27.3 The readings the documents leave open
+
+[R *GS User's Manual* §2.3 to §2.5, §3.1 to §3.3, §3.7, §3.9, chapter 7's pages for PRIM, PRMODE, PRMODECONT, RGBAQ,
+XYZ2, XYZ3, XYZF2, XYZF3, XYOFFSET, SCISSOR, SCANMSK, TEST, FRAME and ZBUF; the *Restriction*'s "Depth Test"; ps2tek "GS
+Primitives", "GS Vertex Attributes", "GS Frame and Z Buffers", "GS Tests and Pixel Control"; A]:
+
+- **Pixel centres** are where window coordinates are whole (§2.4.4); a vertex's coordinates are 12.4 fixed point less
+  XYOFFSET, so signed.
+- **Point**: "the pixel closest to the specified XY coordinates"; a half rounds up [A; PCSX2 agrees at all 128 points of
+  `s17-points`, among them every tie].
+- **Sprite**: centres in [x0, x1) × [y0, y1), figure 3-8's top and left in, bottom and right out; the corners in either
+  order [A]; colour and Z the second vertex's (§3.2.8).
+- **Triangle**: centres inside, or on a left or top side but not a right or bottom one (figure 3-6), by the edge
+  function's sign and its inward normal; a triangle of no area draws nothing [A].
+- **Line**: figure 3-5's diamonds, |dx| + |dy| < 1/2 about each centre, whose pixels a line passes through are drawn, the
+  start's included and the end's not. In the source this is a DDA, one pixel in each column of the major axis (x for
+  |dx| ≥ |dy|): the one whose diamond holds the line's crossing of that column, a crossing exactly at a corner shared by
+  two going to the lower (x-major) or right (y-major) one; the columns run from the start's pixel when the start lies in
+  a diamond, else from the first column crossed, to the column before the end's pixel when the end lies in one, else to
+  the last column crossed. An end on a diamond's edge lies in none (D-161). The model draws instead every pixel whose
+  diamond the segment meets, by the exact minimum of |dx| + |dy| along it; the two agree on every program and every
+  generated line, so the DDA is the area reading and not a second rule. A line of no length draws nothing [A].
+- **Colour**: the last vertex's when flat ("the vertex color information set immediately before each drawing kick",
+  §3.2.8); when Gouraud, the vertices' colours interpolated linearly at the centre, exactly, rounded down (D-160), along
+  a line by the major axis, continued past an end and held to 0 to 255 (D-165). Points and sprites are flat whatever IIP
+  says (§3.2.2).
+- **Z**: interpolated so whatever the shading, exactly and rounded down (D-164); a sprite's is its second vertex's.
+  Beyond the Z buffer's format it is clamped to the format's largest value, for the test and the write (D-163).
+- **XYOFFSET** at the drawing kick, by the drawing's context (D-162); the attributes, CTXT included, at the drawing kick
+  from PRIM or PRMODE as PRMODECONT stands then (§3.2.6). PRMODECONT is 0 after the GS's reset, so PRMODE's attributes
+  are used until it is written [A]: every program writes it first.
+- **SCISSOR** inclusive (§3.7.1); **SCANMSK** 10 draws odd rows only, 11 even only, 01 (reserved) as 00 [A; PCSX2
+  agrees].
+- **The depth test** (§3.7.4): NEVER, ALWAYS, GEQUAL and GREATER against the Z buffer's value in its format; ZMSK keeps
+  the buffer; ZTE 0 neither tests nor writes, which the *Restriction*'s "Depth Test" equates with ZTE 1, ALWAYS and ZMSK 1
+  [PCSX2 agrees in every Z format]. ZBUF's four PSM bits are the Z codes' low bits; an undefined one reads and writes no
+  Z [A]. The frame is written before the Z buffer [A: they meet only when the buffers overlap].
+- **FRAME** may name a Z format (FRAME's page lists them); its pixel then takes the colour twin's bits (PSMZ32 as
+  PSMCT32, PSMZ24 as PSMCT24, PSMZ16 and PSMZ16S as the 16-bit packing) in the Z layout [PCSX2 agrees in all four]; a
+  reserved texture code draws nothing [A]. FBP and ZBP count 2,048 words, 32 blocks; the Z buffer's width is FRAME's.
+- **Format conversion and FBMSK** (§3.9.4, §3.9.5): RGBA16 keeps bits 7..3 of each colour and bit 7 of alpha, and FBMSK
+  is packed the same way, a 1 keeping the frame's bit; PSMCT24 and PSMZ24 write 24 bits, the upper byte kept.
+
+### 27.4 The interfaces: where the later stages attach
+
+- **Texturing (S18)** reads `Vertex::st`, `uv`, `rgbaq`'s Q and the context's TEX registers; it is interpolated in
+  `raster` beside colour and slots into `pixel::draw` before the tests, where the pipeline's comment places it. Fog (S18)
+  takes `Vertex::f`.
+- **The other pixel operations (S19)**: the alpha test, the destination alpha test with AFAIL, blending with PABE,
+  dithering (DTHE, DIMX), COLCLAMP, FBA and antialiasing's coverage and Z rule take the places `pixel::draw` marks;
+  `Environment` carries TEST whole, and the attributes carry ABE, AA1 and FIX.
+- **The GIF (S15)** drives the drawing registers through `HostInterface::write` as it does the others.
+- **The device path (S44 to S46)** is graded against this rasteriser, whose interpolation is exact (§5.13's C5 is the
+  measure of any departure).
+
+### 27.5 Cost
+
+Not measured for speed; the hot path allocates nothing, decides coverage by integer edge functions per pixel of the
+bounding box, and reads memory through `gs::local` per pixel. S43 to S46 own the GS's speed.
+
+### 27.6 The gate: the programs (measured 2026-10-25)
+
+`tests/s17/` writes each program as an S16 script: the registers every program sets first (PRMODECONT 1, no SCANMSK,
+dithering, PABE, FBA or blending, no depth test or Z write), its buffers filled with data from S16's generator through
+IMAGE so that every pixel written shows, its drawing through A+D, and every page drawn read back local to host raw as
+PSMCT32; `s16::program_for` renders it as a bare EE program with the record `tests/s17/manual.rs` gives, written apart
+from `src/gs/` on S16's model of memory. A pixel drawn twice is shown, where it matters, by drawing with GREATER over Z
+already written at the primitive's own Z, so that the first primitive to reach a pixel keeps it.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s17-points` | 4,096 | 128 points at every fractional X and eight fractional Ys, the halves among them, under a scissoring area one or two pixels in; points about window 0, −0.5 rounding to 0 and −0.5625 to −1 |
+| `s17-sprites` | 4,096 | 32 sprites with sides on, just before, just past and between centres, half given with the second vertex at the top left; one with no centre, one of no width, two across the scissoring area |
+| `s17-lines` | 12,288 | 32 lines in 16×16 cells, Gouraud and flat by turns: level, upright and diagonal on centres and on halves, every octant both ways, slopes of a half, a diagonal through diamonds' corners, ends at a corner, a line inside one diamond, one of no length; a self-crossing line strip and lines meeting end to start, drawn twice-proof, with their Z |
+| `s17-triangles` | 8,192 | 32 triangles in pairs, twice-proof: right triangles on centres both ways round, quads split on either diagonal on and off centres in both orders, level and upright sides through centres on both sides, slivers, a degenerate triangle, one with no centre; a strip, a fan, a strip with a triangle skipped by XYZ3, a strip whose shading PRMODE changes; Gouraud triangles; large triangles across a narrowed scissoring area |
+| `s17-gouraud` | 12,288 | a Gouraud triangle over a whole page from colours at both ends of their range; a quad with Z from 10000000h to F0000000h, its PSMZ32 buffer read back; 24 Gouraud lines radiating; the triangle into PSMCT24 and PSMCT16 |
+| `s17-formats` | 16,384 | every format FRAME may name (four colour, four Z) as a page, a Gouraud triangle and sprites under FBMSK 0, 0F3CA5F0h, the alpha bit, every bit, and all but the alpha bit |
+| `s17-depth-32` | 73,728 | PSMZ32 and PSMZ24 under PSMCT32, PSMZ24 under PSMCT24, each with NEVER, ALWAYS, GEQUAL, GREATER (Z written), GEQUAL with ZMSK, and ZTE 0: a Gouraud-Z triangle spanning the format's range over generated Z, a sprite writing Z = M, then sprites at M and M − 1 under the test; frame and Z read back |
+| `s17-depth-16` | 73,728 | the same for PSMZ16S under PSMCT32 and PSMCT16S, PSMZ16 under PSMCT16 (both groups of §2.5.4) |
+| `s17-zrange` | 8,192 | Z = 01234567h into PSMZ24 and PSMZ16, a triangle with Z to FFFFFFFFh, a GREATER sprite at 00FFFFFFh |
+| `s17-scissor` | 6,144 | SCISSOR's four bounds under a sprite larger than the page; SCANMSK 10, 11 and 01; SCAX0 above SCAX1; a triangle across the area; a sprite 128 pixels wide into a buffer one unit wide, its right half on the page below (§8.2) |
+| `s17-kick` | 6,144 | PRIM between a triangle's vertices; XYZ3 completing a triangle; XYZF2's 24-bit Z and fog field; RGBAQ after the last vertex; PRMODECONT 0 with PRIM's attributes ignored; context 2 by PRIM's CTXT (FRAME, SCISSOR, XYOFFSET, TEST, ZBUF), and by PRMODE in a strip (§3.3.2); type 7; a line strip begun again by PRIM; a point through XYZ3 |
+
+**Tests** [M, `cargo test --release`]: `tests/draw.rs` **13 of 13** — the eleven programs, each equal to its record word
+for word; `generated_primitives_draw_as_the_model_draws_them` (six rounds of 400 primitives of every kind and both
+shadings, vertices anywhere about a page and a little outside it, in odd rounds on halves and whole pixels only, where
+the ties fall, Z over its whole range, drawn with GEQUAL into PSMZ32 over generated data, every pixel and every Z equal
+between the source and the model); `the_programs_assemble_and_their_records_end_in_the_done_word`. The crate's other
+tests unchanged: lib **24 of 24**, `cop0` **19 of 19**, `dmac` **17 of 17**, `fpu` **9 of 9**, `gs` **12 of 12**,
+`interpreter` **23 of 23**, `iop` **13 of 13**, `mmi` **13 of 13**, `programs` **3 of 3**, `vu0` **14 of 14**; `draw`
+and `gs` also under `test-checked`; clippy clean.
+
+### 27.7 On the referees (measured 2026-10-25)
+
+`examples/s17.rs` writes each program as an ELF with its expected record and a background record (the same script with
+no vertex kicked), so that a difference reads as a pixel the referee did not draw, drew where the reading does not, or
+drew otherwise; `ps2referee.py ram … --until 1FFFF0=5A99D00E 200000:<words>` read each from PCSX2 2.8.2 (Americas BIOS,
+fast boot, software renderer) and Play! 0.72, one process at a time. Only the records were read.
+
+| Program (words changed by drawing) | PCSX2: words differing | What they are |
+|---|---|---|
+| `s17-points` (117) | 0 | — |
+| `s17-sprites` (712) | 0 | — |
+| `s17-lines` (2,725) | 27 | 4 ends on a diamond's upper-right edge (D-161), 23 one-step Gouraud values (D-160) |
+| `s17-triangles` (2,586) | 62 | one-step Gouraud values; every pixel's coverage equal |
+| `s17-gouraud` (7,284) | 1,310 | one-step colour values, in PSMCT16 one step of a 5-bit channel (D-160); 1,037 PSMZ32 words by one or two (D-164) |
+| `s17-formats` (9,912) | 118 | one-step Gouraud values; every format and mask equal |
+| `s17-depth-32` (47,135) | 1,815 | one-step colours; 869 PSMZ32 words by up to 203, PSMZ24 by one (D-164); every depth decision equal |
+| `s17-depth-16` (47,022) | 59 | one-step colours and Z |
+| `s17-zrange` (6,032) | 0 | — (D-163) |
+| `s17-scissor` (1,780) | 0 | — |
+| `s17-kick` (2,332) | 67 | one-step Gouraud values; XYOFFSET at the drawing kick (D-162) |
+
+So **PCSX2 is a witness for every coverage rule** (points' ties, sprites', triangles' sides, lines' interiors and the
+corners their columns cross), the vertex queue and its kicks, the contexts, scissoring, SCANMSK, every frame and Z
+format and FBMSK, every depth test with ZMSK and ZTE 0, and Z's clamp; **not for interpolation's last step**, where its
+arithmetic departs by one either way near whole values, nor for line ends on an edge.
+
+**Play! 0.72 shows no drawing at all**: every program's pictures read back from it as their background, while its
+local-to-host transfer reads the data the programs wrote by IMAGE exactly, as at S16. Its GS draws through a GPU
+renderer (its home folder holds Mesa's shader caches) that does not write the drawing back to the local memory the
+transfer reads [A: inferred from the outputs; its source not read]. The S3 decision's form C therefore gives no Play!
+picture of drawing, and the second lineage for S17 to S19 needs the reserve the tester kept at S3, the probe's headless
+OpenGL context for `play_libretro` (`Sapphire_Plan.md` §10, `Sapphire_Referees.md` §6's form A), whose pictures would be
+a GPU's rasterisation (§27.10 Q1).
+
+### 27.8 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | A triangle's right sides drawn (`top_left` true for every slanted side) | `triangles_draw_left_and_top_sides_…`, `the_vertex_queue_prmode_…`, `generated_primitives_…` |
+| F2 | Gouraud weights stepped in 8 fractional bits instead of exactly | `gouraud_colour_and_z_…`, `triangles_…`, `every_frame_format_…`, both depth tests, `the_vertex_queue_…`, `generated_primitives_…` |
+| F3 | GEQUAL tested as GREATER | `every_depth_test_holds_in_psmz32_and_psmz24`, `every_depth_test_holds_in_psmz16_and_psmz16s` |
+
+Each was applied, `tests/draw.rs` run, and the source restored [M]. The generated primitives do not see F3, as expected:
+their Z, random over 32 bits, never equals the buffer's; the depth programs' sprites at M are there for it.
+
+### 27.9 What is not modelled
+
+- **Drawing time**: a primitive is drawn whole at its drawing kick; FINISH is set at once as before. S43 owns threads.
+- **Texturing, fog, the alpha tests, blending, dithering, colour clamp, FBA, antialiasing** (S18, S19): their places in
+  `pixel::draw` are marked; AA1's rule that lines and partly covered pixels write no Z is S19's.
+- **FIX** (fragment value control) and **FST** are carried in the attributes for S18.
+
+### 27.10 What the plan got wrong, or left open
+
+- **§5.4 and the gate's "each picture equal to the referees'"**: the documents give the coverage rules but no precision
+  for the DDA, so no exact referee exists for Gouraud's last step or Z's low bits; the exact reading is the reference and
+  PCSX2's departures are logged (D-160, D-164).
+- **S3's form C for Play!** holds for transfers (S16) and not for drawing (§27.7): the plan's G3 asks for agreeing
+  lineages, which S17 to S19 cannot have without the reserved context.
+- **§3.2's GS row** names "every rasterisation rule" as thin: the manual's figures give them all but the edges of a
+  line's diamonds (D-161) and the arithmetic's precision.
+
+### 27.11 Questions this stage leaves
+
+1. **Q1 [decision], a second lineage for the GS's pictures.** Play! standalone shows no drawing through its local memory.
+   *Recommended*: build the probe's headless OpenGL context for `play_libretro` (the S3 reserve, form A, 300–400 lines,
+   one GPU test at a time on the RX 6800 only) before S19, and grade S17's programs on it then; until then PCSX2 stands
+   alone, named as such. It is GPU work, so only after the tester judges the desktop safe for it.
+2. **Q2 [routine], interpolation's precision (D-160, D-164).** *Recommended*: keep it exact; revisit with the second
+   lineage, and at S44–S46 measure the device path against the exact reference as C5 asks.
+3. **Q3 [routine], line ends on a diamond's edge (D-161).** *Recommended*: keep the edges in no diamond; PCSX2's
+   upper-right edge is one emulator's choice, and four line ends in 2,725 drawn words the whole of its evidence.
+
+### 27.12 What was read for this stage
+
+`Sapphire_Plan.md` §2, §3.2, §5.4, §5.12, §5.13 (C5, C6), §7 (S16 to S20), §8, §10 and §11; this page's §24;
+`Sapphire_Referees.md` §2, §3 and §6; `Sapphire_Disputes.md` D-100 to D-107. Sony's *GS User's Manual* (Version 5.0)
+§2.3 to §2.5, chapter 3's §3.1 to §3.3 whole, §3.6 to §3.9, and chapter 7's pages for PRIM, PRMODE, PRMODECONT, RGBAQ,
+SCANMSK, SCISSOR, TEST, XYOFFSET, XYZ2, XYZ3, XYZF2, XYZF3, FRAME, ZBUF and FOG, figures 3-3 to 3-8 as pictures; the
+kit's *Restriction* document whole. ps2tek at `1c91660`: "GS Register List", "GS Primitives", "GS Vertex Attributes",
+"GS Frame and Z Buffers", "GS Fog", "GS Alpha Blending", "GS Tests and Pixel Control", "GS Special Effects and
+Optimizations". No emulator, SDK or loader source, no ps2autotests source and no firmware.
+
+### 27.13 What this stage does not cover
+
+- Texturing (S18), the other pixel operations (S19), the PCRTC (S20).
+- The GIF (S15): until then nothing on the EE's side draws on Sapphire; the tests drive the host interface.
+- The state format's new contents (the vertex queue): `SPH2` gains them with the rest (S10, S30).

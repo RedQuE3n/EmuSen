@@ -31,6 +31,8 @@ namespace EmuSen.Galaxia.Native
         LogDefault,
         Unpacked,
         Cores,
+        Packages,
+        Compressed,
     }
 
     // The redirects a test moves, as EMUSEN_GALAXIA_OVERRIDE_*.
@@ -158,6 +160,7 @@ namespace EmuSen.Galaxia.Native
         public const string Variable = "EMUSEN_GALAXIA_NATIVE";
 
         private const int Parse = -1025;
+        private const int NewerFile = -1027;
         private const int Absent = -1030;
         private const int NotFound = -1031;
         private const int Access = -1032;
@@ -240,6 +243,9 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, ulong, ulong, int*, byte*, nuint, long> _romHashes;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _romHashesOf;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, int*, byte*, nuint, long> _romTracks;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _packageRead;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _packageWrite;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _packageFormat;
 
         // Every export this class calls; a name the library lacks refuses the library - see EmuSen_RustPlatform.md §3.1.
         internal static readonly string[] Exports =
@@ -258,6 +264,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap", "emusen_galaxia_mapped_advise",
             "emusen_galaxia_medium_lock_take", "emusen_galaxia_medium_lock_release", "emusen_galaxia_medium_lock_holder",
             "emusen_galaxia_rom_hashes", "emusen_galaxia_rom_hashes_of", "emusen_galaxia_rom_tracks",
+            "emusen_galaxia_package_read", "emusen_galaxia_package_write", "emusen_galaxia_package_format",
         };
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.
@@ -321,6 +328,9 @@ namespace EmuSen.Galaxia.Native
             _romHashes = (delegate* unmanaged[Cdecl]<byte*, nuint, ulong, ulong, int*, byte*, nuint, long>)found[next++];
             _romHashesOf = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _romTracks = (delegate* unmanaged[Cdecl]<byte*, nuint, int*, byte*, nuint, long>)found[next++];
+            _packageRead = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
+            _packageWrite = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
+            _packageFormat = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
 
             // The program's directory and .NET's own application-data folder are passed, not found - see EmuSen_RustPlatform.md §5.5.
             Utf8 home = new(AppContext.BaseDirectory), data = new(ConfigRoot.ApplicationData);
@@ -429,6 +439,7 @@ namespace EmuSen.Galaxia.Native
             {
                 NotFound => new FileNotFoundException(words),
                 Parse => new FormatException(words),
+                NewerFile => new Media.PackageRefusedException(words, newer: true),
                 Access => new UnauthorizedAccessException(words),
                 -1 or -5 or -1033 => new ArgumentException(words),
                 _ => new IOException(words),
@@ -591,6 +602,43 @@ namespace EmuSen.Galaxia.Native
                 return Stoppable(stop, flag => Document((o, n) => { fixed (byte* p = file.Bytes) return _romTracks(p, file.Length, (int*)flag, o, n); })!, sheet);
             }
             catch (FormatException bad) { throw new InvalidDataException(bad.Message); }
+        }
+
+        // A package's manifest checked and returned as compact JSON; a refusal is PackageRefusedException - see EmuSen_GamePackages.md §3.3.
+        public static string PackageRead(string path)
+        {
+            Utf8 file = new(path);
+            try
+            {
+                return Refusable(() => Document((o, n) => { fixed (byte* p = file.Bytes) return _packageRead(p, file.Length, o, n); })!);
+            }
+            catch (FileNotFoundException missing) when (!System.IO.Directory.Exists(Path.GetDirectoryName(Path.GetFullPath(path))))
+            {
+                throw new DirectoryNotFoundException(missing.Message);
+            }
+        }
+
+        // False when the write failed, reported as AtomicFile reports; a refused manifest throws and is not written.
+        public static bool PackageWrite(string path, string manifest)
+        {
+            Utf8 file = new(path), text = new(manifest);
+            int status;
+            fixed (byte* p = file.Bytes, m = text.Bytes) status = _packageWrite(p, file.Length, m, text.Length);
+            Drain();
+            if (status == Parse || status == NewerFile) Refusable(() => throw Fault(status));
+            return status >= 0;
+        }
+
+        public static string PackageFormat(string manifest)
+        {
+            Utf8 text = new(manifest);
+            return Refusable(() => Document((o, n) => { fixed (byte* m = text.Bytes) return _packageFormat(m, text.Length, o, n); })!);
+        }
+
+        private static string Refusable(Func<string> call)
+        {
+            try { return call(); }
+            catch (FormatException bad) when (bad is not Media.PackageRefusedException) { throw new Media.PackageRefusedException(bad.Message, newer: false); }
         }
 
         // A call handed a flag the token sets, read by the library before each read; a stopped call is the token's exception.

@@ -152,10 +152,14 @@ pub enum Directory {
     Unpacked = 20,
     /// `DataStore.Cores`: the player's own core libraries, `/Cores` (EmuSen_Backend.md §29.40.4).
     Cores = 21,
+    /// `DataStore.Packages`: game packages, a folder per game (EmuSen_GamePackages.md §3.1).
+    Packages = 22,
+    /// `DataStore.Compressed`: CHDs converted from the library, never inside it (EmuSen_GamePackages.md §4.2).
+    Compressed = 23,
 }
 
 impl Directory {
-    pub const ALL: [Directory; 22] = [
+    pub const ALL: [Directory; 24] = [
         Directory::Root,
         Directory::Seed,
         Directory::Config,
@@ -178,6 +182,8 @@ impl Directory {
         Directory::LogDefault,
         Directory::Unpacked,
         Directory::Cores,
+        Directory::Packages,
+        Directory::Compressed,
     ];
 
     pub fn from_u32(value: u32) -> Option<Directory> {
@@ -286,6 +292,8 @@ impl Tree {
             Directory::LogDefault => path::combine_all(Self::STYLE, &[&self.application_data, PROGRAM_DIR_NAME, "Logs"]),
             Directory::Unpacked => self.under(&home(), "Unpacked"),
             Directory::Cores => self.under(&home(), "Cores"),
+            Directory::Packages => self.under(&home(), "Packages"),
+            Directory::Compressed => self.under(&home(), "Compressed"),
         })
     }
 

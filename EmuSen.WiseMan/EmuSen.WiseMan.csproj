@@ -96,6 +96,11 @@
           Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- A game package's manifest as a person writes one in an editor - see EmuSen_GamePackages.md §3.3. -->
+  <ItemGroup>
+    <None Include="Galaxia\HandWrittenPackage.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Every answer the engine registration gives, which a later build must reproduce - see EmuSen_CoreAPI.md §25. -->
   <ItemGroup>
     <None Include="Cores\CoreRegistrationGolden.txt" CopyToOutputDirectory="PreserveNewest" />

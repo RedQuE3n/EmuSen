@@ -5,7 +5,7 @@ use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
-use emusen_galaxia::{atomic, rom_hash, saves};
+use emusen_galaxia::{atomic, package, rom_hash, saves};
 
 /// What `emusen_galaxia_save_path` names.
 pub mod save {
@@ -369,6 +369,60 @@ pub unsafe extern "C" fn emusen_galaxia_rom_tracks(sheet: *const u8, sheet_len: 
     answer(result(), out, len)
 }
 
+/// A manifest's refusal as its status: `NEWER_FILE` for a newer major, `PARSE` for the rest, with the words.
+fn fail_package(refusal: &package::Refusal) -> i32 {
+    match refusal {
+        package::Refusal::Newer(words) => fail(status::NEWER_FILE, words.clone()),
+        other => fail(status::PARSE, other.words()),
+    }
+}
+
+/// The manifest at `file`, checked, as compact JSON.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_read(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let doc = package::read(unsafe { required(file, file_len) }?).map_err(|e| fail_io(&e))?.map_err(|r| fail_package(&r))?;
+        Ok(emusen_galaxia::model::transport(&doc))
+    };
+    answer(result(), out, len)
+}
+
+/// A manifest checked and written atomically; a refused one is not written, and a failed write queues its diagnostic.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_write(file: *const u8, file_len: usize, manifest: *const u8, manifest_len: usize) -> i32 {
+    let result = || -> Result<(), i32> {
+        let path = unsafe { required(file, file_len) }?;
+        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+        match package::write(path, &doc).map_err(|r| fail_package(&r))? {
+            Ok(()) => Ok(()),
+            Err(diagnostic) => {
+                report(diagnostic.clone());
+                Err(fail(status::IO, diagnostic))
+            }
+        }
+    };
+    result().map_or_else(|status| status, |()| 0)
+}
+
+/// A manifest checked and laid out as it is written.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, manifest_len: usize, out: *mut u8, len: usize) -> i64 {
+    let result = || -> Result<String, i32> {
+        let doc = package::parse(unsafe { required(manifest, manifest_len) }?).map_err(|r| fail_package(&r))?;
+        Ok(package::format(&doc))
+    };
+    answer(result(), out, len)
+}
+
 /// Maps the file whole and read-only, its handle in `mapped`; the bytes stay in place until `emusen_galaxia_unmap`.
 ///
 /// # Safety
@@ -566,6 +620,25 @@ mod tests {
     }
 
     #[test]
+    fn a_manifest_is_read_written_and_laid_out_through_the_c_layer() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-package-{}", std::process::id()));
+        let file = dir.join("g.nes").join("package.json").to_string_lossy().into_owned();
+        let text = r#"{"format":"emusen-package","version":"1.3","system":"nes","mode":"linked","game":{"role":"image","where":"library","path":"NES/g.nes"},"x-kept":[1.0]}"#;
+        assert_eq!(unsafe { emusen_galaxia_package_write(file.as_ptr(), file.len(), text.as_ptr(), text.len()) }, 0);
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_read(file.as_ptr(), file.len(), out, len) }), Ok(text.to_string()));
+        let laid = ask(|out, len| unsafe { emusen_galaxia_package_format(text.as_ptr(), text.len(), out, len) }).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), laid);
+        let newer = r#"{"format":"emusen-package","version":"2.0"}"#;
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_format(newer.as_ptr(), newer.len(), out, len) }), Err(status::NEWER_FILE as i64));
+        assert_eq!(unsafe { emusen_galaxia_package_write(file.as_ptr(), file.len(), newer.as_ptr(), newer.len()) }, status::NEWER_FILE);
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_format(b"{".as_ptr(), 1, out, len) }), Err(status::PARSE as i64));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), laid, "a refused manifest is not written");
+        let absent = dir.join("absent.json").to_string_lossy().into_owned();
+        assert_eq!(ask(|out, len| unsafe { emusen_galaxia_package_read(absent.as_ptr(), absent.len(), out, len) }), Err(status::NOT_FOUND as i64));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn a_null_text_is_told_from_an_empty_one() {
         let blank = |a: Option<&str>| unsafe { emusen_galaxia_dotnet_test(test_op::IS_BLANK, a.map_or(std::ptr::null(), str::as_ptr), a.map_or(0, str::len), std::ptr::null(), 0) };
         assert_eq!(blank(None), 1);
@@ -618,10 +691,12 @@ mod tests {
             ("LOG_DEFAULT", Directory::LogDefault),
             ("UNPACKED", Directory::Unpacked),
             ("CORES", Directory::Cores),
+            ("PACKAGES", Directory::Packages),
+            ("COMPRESSED", Directory::Compressed),
         ] {
             defines(&format!("EMUSEN_GALAXIA_DIR_{name}"), which as u32);
         }
-        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..22).collect::<Vec<_>>());
+        assert_eq!(Directory::ALL.iter().map(|d| *d as u32).collect::<Vec<_>>(), (0..24).collect::<Vec<_>>());
         defines("EMUSEN_GALAXIA_OVERRIDE_CONFIG", Override::Config as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_DATA", Override::Data as u32);
         defines("EMUSEN_GALAXIA_OVERRIDE_LEGACY", Override::Legacy as u32);

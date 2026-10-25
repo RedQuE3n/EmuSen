@@ -268,6 +268,7 @@ namespace EmuSen.WiseMan.Galaxia
             (GalaxiaDirectory.Media, "Media"), (GalaxiaDirectory.Firmware, "Firmware"), (GalaxiaDirectory.Shaders, "Shaders"),
             (GalaxiaDirectory.Themes, "Themes"), (GalaxiaDirectory.Cheats, "Cheats"), (GalaxiaDirectory.Games, "Games"),
             (GalaxiaDirectory.Unpacked, "Unpacked"), (GalaxiaDirectory.Cores, "Cores"),
+            (GalaxiaDirectory.Packages, "Packages"), (GalaxiaDirectory.Compressed, "Compressed"),
         };
 
         private static void AssertTheTreeAgrees()

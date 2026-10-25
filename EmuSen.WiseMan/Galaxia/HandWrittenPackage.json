@@ -1,0 +1,21 @@
+﻿// Written by hand in a text editor, as a player might: comments, tabs, a trailing comma,
+// CRLF line endings, a byte-order mark, upper-case hex, a field of the player's own, and no title.
+{
+	"format" : "emusen-package",
+	"version": "1.0",
+	"system": "psx",
+	"mode": "linked",   /* the disc stays where it is in the library */
+	"game": {
+		"role": "image", "where": "library",
+		"path": "psx/Coral Gate (USA).cue",
+	},
+	"dump": {
+		"form": "cue-bin",
+		"sheet": { "file": "Coral Gate (USA).cue", "crc32": "0A1B2C3D" },
+		"tracks": [
+			{ "file": "Coral Gate (USA) (Track 1).bin", "size": 94080, "md5": "00112233445566778899AABBCCDDEEFF" },
+			{ "file": "Coral Gate (USA) (Track 2).bin", "size": 70560 },
+		],
+	},
+	"my notes": "bought at a car boot sale, 1999",
+}

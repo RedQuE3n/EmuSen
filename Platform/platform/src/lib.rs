@@ -44,6 +44,8 @@ pub mod status {
     pub const IO: i32 = -1024;
     /// Text that is not the document it should be: not JSON as .NET reads it, or not what its model allows.
     pub const PARSE: i32 = -1025;
+    /// A file written by a newer build, in a version this one does not read.
+    pub const NEWER_FILE: i32 = -1027;
     /// There is no Vulkan device, or one refused a call.
     pub const DEVICE: i32 = -1028;
     /// What was asked for does not exist, where that is an answer and not a failure.

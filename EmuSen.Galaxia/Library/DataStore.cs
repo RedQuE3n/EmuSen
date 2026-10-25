@@ -69,6 +69,12 @@ namespace EmuSen.Galaxia.Library
         // The player's own core libraries, approved before they load - see EmuSen_Backend.md §29.40.4.
         public static string Cores => At(GalaxiaDirectory.Cores, "Cores");
 
+        // Game packages, a folder per game with its manifest, never inside the ROM library - see EmuSen_GamePackages.md §3.1.
+        public static string Packages => At(GalaxiaDirectory.Packages, "Packages");
+
+        // Disc images converted to CHD from the library, by its relative paths, never inside it - see EmuSen_GamePackages.md §4.2.
+        public static string Compressed => At(GalaxiaDirectory.Compressed, "Compressed");
+
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {

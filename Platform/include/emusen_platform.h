@@ -44,7 +44,8 @@ extern "C" {
 #define EMUSEN_PLATFORM_NOT_SUPPORTED (-256) /* an operation this build does not have */
 #define EMUSEN_PLATFORM_IO (-1024)           /* reading or writing failed */
 #define EMUSEN_PLATFORM_PARSE (-1025)        /* text that is not JSON as .NET reads it, or not what its model allows */
-/* -1026, -1027 and -1029 are kept for newer-file and compile failures of later components. */
+#define EMUSEN_PLATFORM_NEWER_FILE (-1027)   /* a file of a newer build, in a version this one does not read; since 23 */
+/* -1026 and -1029 are kept for later components. */
 #define EMUSEN_PLATFORM_DEVICE (-1028)       /* there is no Vulkan device, or one refused a call */
 #define EMUSEN_PLATFORM_ABSENT (-1030)       /* what was asked for does not exist; an answer, not a failure */
 #define EMUSEN_PLATFORM_NOT_FOUND (-1031)    /* a file or directory that had to exist does not */
@@ -95,6 +96,8 @@ int64_t emusen_platform_diagnostics(uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_DIR_LOG_DEFAULT 19u    /* ErrorLog.DefaultRoot */
 #define EMUSEN_GALAXIA_DIR_UNPACKED 20u       /* DataStore.Unpacked: archives unpacked for play */
 #define EMUSEN_GALAXIA_DIR_CORES 21u          /* DataStore.Cores: the player's core libraries, since 22 */
+#define EMUSEN_GALAXIA_DIR_PACKAGES 22u       /* DataStore.Packages: game packages, a folder per game, since 23 */
+#define EMUSEN_GALAXIA_DIR_COMPRESSED 23u     /* DataStore.Compressed: CHDs converted from the library, since 23 */
 
 /* The redirects a test moves. */
 #define EMUSEN_GALAXIA_OVERRIDE_CONFIG 0u /* ConfigStore.OverrideDirectory */
@@ -185,6 +188,23 @@ int64_t emusen_galaxia_rom_hashes_of(const uint8_t *data, size_t data_len, uint8
  * names it. EMUSEN_PLATFORM_PARSE with words for a sheet that is not one.
  */
 int64_t emusen_galaxia_rom_tracks(const uint8_t *sheet, size_t sheet_len, const int32_t *stop, uint8_t *out, size_t len);
+
+/* ---- Galaxia: game packages (EmuSen_GamePackages.md, section 3.3; EmuSen_Galaxia.md, section 3.10; since 23) ---- */
+
+/*
+ * A package's manifest, package.json, version 1. A manifest crosses as compact JSON, every member in its place,
+ * fields this build does not know included. A text that is not JSON, or JSON the schema refuses, is
+ * EMUSEN_PLATFORM_PARSE; a newer major version is EMUSEN_PLATFORM_NEWER_FILE; each with words naming the field.
+ */
+
+/* The manifest at `file`, decoded as File.ReadAllText decodes, checked; NOT_FOUND, ACCESS or IO for a file that will not read. */
+int64_t emusen_galaxia_package_read(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/* A manifest checked and written at `file` as the bytes emusen_galaxia_package_format gives, atomically; a refused one is not written. */
+int32_t emusen_galaxia_package_write(const uint8_t *file, size_t file_len, const uint8_t *manifest, size_t manifest_len);
+
+/* A manifest checked and laid out as it is written: indented by two, System.Text.Json's escapes, numbers as their tokens, a final line ending. */
+int64_t emusen_galaxia_package_format(const uint8_t *manifest, size_t manifest_len, uint8_t *out, size_t len);
 
 /* ---- Galaxia: mapped files (EmuSen_Galaxia.md, section 3.8) ---- */
 

@@ -67,6 +67,13 @@ fn explain(dir: &std::path::Path, referee: &str) {
             let (value_at, status_at, mac_at) = if is_div { (0, 2, None) } else if acc_case { (4, 0, Some(2)) } else { (0, 4, Some(6)) };
             cases += 1;
             for &(lane, a, y, acc) in &n.lanes {
+                if let (Some(gv), Some(wv)) = w(value_at + if is_div { 0 } else { lane })
+                    && let Ok(path) = std::env::var("S12_DUMP")
+                {
+                    use std::io::Write;
+                    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).expect("the dump");
+                    writeln!(f, "{}\t{lane}\t{a:08x}\t{y:08x}\t{acc:08x}\t{wv:08x}\t{gv:08x}", n.what).expect("written");
+                }
                 if let (Some(gv), Some(wv)) = w(value_at + if is_div { 0 } else { lane }) && gv != wv {
                     let c = class(a, y, acc, fused, wv, gv);
                     let op = n.what.split(['.', ' ']).next().unwrap().to_string();

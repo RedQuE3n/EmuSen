@@ -864,3 +864,224 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Pinned by:** `the_timers_count_compare_overflow_and_gate_as_chapter_4_says`, `the_intc_latches_masks_and_drives_int0_and_the_dmac_int1`,
   `the_board_holds_no_h_blank_event_unless_a_timer_needs_it`.
 - **Implemented in:** stage S11's commit.
+
+### D-43. VU float: the vector units' FMAC and divider compute as the FPU does, the adder without a sticky bit and one bit kept, the multiplier on a Booth recoding of the second operand, quotients and roots to the nearest
+
+- **Opened:** 2026-10-25, at stage S12, by the question S9 left (`Sapphire_Native.md` §19.9 Q2, Q3): whether the VU's
+  arithmetic shares the FPU's measured adder, multiplier and divider (D-25 to D-28).
+- **Documents read:** *VU User's Manual* §2.2: "A 24-bit calculation including hidden bits is performed, and the result
+  is truncated. The rounding-off operation in IEEE 754 is performed in the 0 direction, so the values for the least
+  significant bit may vary", the same words the *EE Core User's Manual* §8.7 and §8.8 use for the FPU, whose console
+  texts then showed no sticky bit in the adder and rounding to the nearest in DIV.S and SQRT.S (D-25, D-27); §2.4, the
+  same differences from IEEE 754 as CORE §8.8; every multiply page's Remarks (§4.2: MUL, MULA, MADD, MSUB, OPMULA and
+  their forms): "There is an operation error of 1 bit in multiplication, so the value multiplied by 1 may not be the same
+  as the original value. By using VF[fs] as a multiplicand, the results of multiplication with 1 are guaranteed to be
+  accurate", which is D-26's multiplier, fs × ft exact when ft is 1.0 and not when fs is, from the VU's own manual.
+- **Test program:** `s12-add`, `s12-mul`, `s12-fused` and `s12-fdiv` (`Sapphire_Native.md` §21.4), every ordered pair of
+  S9's 32 classes in four lanes. No console text of ps2autotests prints a VU sum, product or quotient that separates the
+  readings: `vu/lower/fdivdelay` divides exact powers of two, `vu/lower/random` and `cpu/vu0_macro/*` print none.
+- **Referee:** measured 2026-10-25, PCSX2 2.8.2 (Americas BIOS) and Play! 0.72: on every lane whose operands have
+  exponent fields 1 to 253 and whose result is in range, 834 sums, 766 differences, 718 products, 342 quotients and 17
+  roots, **both equal IEEE 754's rounding towards zero**, with a sticky bit, an exact commutative product and truncated
+  quotients and roots, and neither differs from it anywhere [M, `examples/s12.rs explain` and a model of IEEE 754 towards
+  zero on exact rationals]. That is what a host's floating point in that mode gives [A]; PCSX2's FPU, by contrast, rounds
+  DIV.S to the nearest as the console does (D-27), so its VU path is not modelled on the console's.
+- **Conclusion:** the VU shares `sapphire::float`'s adder, multiplier, divider and root, D-25 to D-28's readings, with
+  the FPU; **argued**, the two manuals' identical words and the VU manual's own statement of the uneven multiplier
+  against two lineages that both show their host's arithmetic. 562 sums and differences, 76 products, 89 quotients and 3
+  roots of the programs separate the readings, so a console text of VU arithmetic decides it: S13's `vu/games/triace`
+  (a game's microprogram, its twelve results printed on a console) is the first candidate.
+- **Depends on it:** every VU FMAC and divider result; C3's classes (`Sapphire_Plan.md` §5.13) for the VU1 recompiler.
+- **Pinned by:** `add_and_subtract_over_every_pair_of_input_classes_equal_the_manual`,
+  `multiply_over_every_pair_of_input_classes_equals_the_manual`, `the_multiply_adds_and_the_outer_product_equal_the_manual`,
+  `divide_square_root_and_reciprocal_root_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-44. VU flags: each lane in the field mask sets Z for a zero result, S for its sign bit (a clamped −0 or −MAX included), U and O for the exponent's underflow and overflow; a lane out of the mask clears its four; the status flag collects them; a multiply-add's sticky flags also take its product's
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §3.3.1 ("The flags of ALUs which do not operate are cleared to 0"; "When an
+  overflow or underflow occurs, the Z and S flags are set according to the clamped results (+MAX/-MAX/+0/-0)"), whose
+  S definition ("set to 0 when the calculation results are positive or 0") leaves −0 open; §3.3.6's table, an underflow's
+  S column "X", read with the sentence before as S from the clamped −0's sign; §2.3 (overflow ±MAX with O, underflow ±0
+  with U and Z); §3.3.2 ("Addition and subtraction results are reflected in the Z/ZS/S/SS/U/US/O/OS flags, and
+  multiplication results are reflected only in the ZS/SS/US/OS flags") against §3.3.6's MADD and MSUB tables, whose
+  rows with the accumulator at ±MAX or an overflowing sum write the product into ZS and SS ("b", "c") and whose first
+  row writes "X" for ZS: taken as §3.3.2's general rule, the product's Z, S, U and O into the sticky flags; the MSUB
+  table's "b" in rows where the result is positive read as the product's sign as it is subtracted.
+- **Test program:** every FMAC case of `s12-add`, `s12-mul` and `s12-fused` records the status flag and the MAC flags;
+  `s12-add`'s sixteen field masks, the empty one among them.
+- **Referee:** measured 2026-10-25: on lanes with no exponent field of 0 or 255 among the operands, PCSX2 2.8.2 and Play!
+  0.72 agree with the module on Z and S everywhere, and **neither ever raises U or O**, in the MAC flags or the status
+  flag, for a lane that overflows or underflows (44 cases with an underflow, 9 with an overflow, 4 with a product's US);
+  the FPU's referees omitted O and U the same way (D-30).
+- **Conclusion:** the title; **argued** from the manual, neither lineage a witness for U, O or the sticky product.
+- **Depends on it:** `vu/ops.rs`'s `mac_bits` and `set_flags`; `float::Fused::product`.
+- **Pinned by:** the four arithmetic program tests.
+- **Implemented in:** stage S12's commit.
+
+### D-45. VU0's control registers: CCR[2,18] keeps 24 bits, CCR[2,19] reads 00002E30h, CCR[2,23], 25 and 30 read 0, CCR[2,24] keeps 0C0Ch, CCR[2,27] and 31 keep 16 bits, FBRST keeps its enables but a reset clears them; CFC2 writes bits 63..0 and keeps 127..64
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §5.1.3's register pictures and table: the status flag's twelve bits, writes to
+  the low six ignored; the MAC flags read-only; the clipping flag's 24 bits; R's 23; CCR[2,19], 23, 24, 25 and 30
+  "reserved"; TPC read-only; CMSAR0's 16 bits; FBRST's FB, RS, DE and TE per unit, FB and RS reading 0 and DE and TE
+  "Current setting"; VPU-STAT read-only; CMSAR1 written only ("-/w"); the reset initialising the control registers
+  (§1.3.1, "all 0" in the table). CFC2's page: "the sign-extended 32-bit data of CCR[2,id]".
+- **Test program:** ps2autotests' `cpu/vu0_macro/transfer` console text (a console's output, read alone): `ctc2 -> vi16:
+  00000fc0`, `vi17: 00000000`, `vi18: 00ffffff`, `vi19: 00002e30`, `vi20: 007fffff`, `vi21` and `vi22: ffffffff`, `vi23:
+  00000000`, `vi24: 00000c0c`, `vi25: 00000000`, `vi27: 0000ffff`, `vi28: 00000000`, `vi29: 00000000`, `vi31: 0000ffff`,
+  and `cfc2: 12345678 12345678 ffffffff ffffffff`. The test's source is not read, so what each line wrote is inferred:
+  PCSX2 2.8.2 reads back FFFFFFFFh for every register it stores whole (vi18, 19, 23, 24, 25, 27) on the same program
+  [M, `ps2referee.py tty`], so **each line writes all ones and reads the register back**. Read so, the console's lines
+  give each register's kept bits; 0C0Ch is FBRST's D and T enables' positions, and FBRST itself reads 0 after all ones
+  because its RS bits reset both units. The CFC2 line prints a 128-bit register, w first: bits 127..64 kept, bits 63..0
+  the sign-extended −1. `s12-transfer` writes all ones and then zero to every register but TPC (read-only) and CMSAR1
+  (whose write starts VU1, S13).
+- **Referee:** PCSX2 2.8.2 reproduces the console text but the eight lines vi18, 19, 23, 24, 25, 27, 28 (0C0Ch, its
+  enables kept through the reset) and 31 (0); `s12-transfer` the same, and PCSX2 keeps VU0's flags through FBRST's reset
+  (D-52). Play! 0.72 reads CCR[2,19], 24 and 27 as 0, keeps 00C1h of the status flag's all ones, and keeps the flags
+through the reset too.
+- **Conclusion:** the title, CCR[2,19] read-only, CCR[2,24] a register of its own keeping 0C0Ch, CMSAR1 readable;
+  **measured**, the console's text, the reading of what it wrote confirmed by PCSX2's read-back.
+- **Depends on it:** `vu/mod.rs`'s `Vpu::ccr` and `set_ccr`, `CCR19`; `ee/cop2.rs`'s `cfc2`.
+- **Pinned by:** `the_transfers_branches_and_exceptions_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-46. VU divider flags: DIV writes I for 0/0 and D for another zero divisor; SQRT writes I for a negative value and clears D; RSQRT writes I for a negative value and D for a zero root under a non-zero dividend, so 0/√0 raises neither; −0 is not negative
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §3.3.2: I "when a 0/0 calculation is executed by the DIV instruction or a root
+  calculation of negative number is executed by the SQRT/RSQRT instruction", D "when 0 division (except 0/0) is performed
+  by the DIV/RSQRT instruction, and set to 0 when the SQRT instruction is executed regardless of the results"; §3.3.5's
+  table, whose SQRT row ("-X----" under the status flag, "0X----" under the sticky flags) reads as §3.3.2 says only with
+  its two groups of columns exchanged; SQRT's page (DS, IS, D and I all "X"); §2.3 ("Note: D flag is not set for 0/0").
+  The FPU's RSQRT.S page raises D for any zero ft (D-28), so the units part on 0/√0.
+- **Test program:** `s12-fdiv`: VDIV and VRSQRT over every ordered pair of the classes, VSQRT of every class, the status
+  flag after each.
+- **Referee:** measured 2026-10-25. PCSX2 2.8.2 clears the status flag's Z on every divide (514 VDIV and 1,024 VRSQRT
+  cases where the module keeps it), raises I for VRSQRT of 0/√0 and for VSQRT of −0 (the sign bit, as its FPU did, D-29).
+  Play! 0.72 raises D and not I for VDIV's 0/0, never sets DS, raises D for 0/√0, and raises no I for a negative root
+  (69 cases).
+- **Conclusion:** the title, §3.3.2's words; **argued**, the three answers for 0/√0 (none, I, D) disagreeing.
+- **Depends on it:** `vu/ops.rs`'s `div`, `sqrt`, `rsqrt`, `divide_flags`.
+- **Pinned by:** `divide_square_root_and_reciprocal_root_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-47. VU MAX and MINI compare as MAX.S and MIN.S do, the bits as sign and magnitude
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** MAX's and MINI's pages: `if (VF[fs]x > VF[ft]x) then VF[fd]x = VF[fs]x else VF[fd]x = VF[ft]x`,
+  no flag changed; the FPU's MAX.S reads `>=` and keeps fs on a tie, which on sign-and-magnitude order can differ only
+  for identical bits.
+- **Test program:** `s12-misc`, VMAX and VMINI with their broadcast and I forms over every pair of S9's twelve.
+- **Referee:** PCSX2 2.8.2 equal on all; Play! 0.72 gives 80000000h in one lane where the module gives +0.
+- **Conclusion:** D-31's order shared; **measured**, PCSX2 a witness here and Play! not.
+- **Depends on it:** `float::max`, `float::min` through `vu/ops.rs`'s `pick`.
+- **Pinned by:** `the_flagless_instructions_and_clip_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-48. The random unit: RNEXT shifts R left one place, bit 22 XOR bit 4 entering at bit 0, the M series of x²³ + x⁵ + 1
+
+- **Opened:** 2026-10-25, at stage S12: RNEXT's page says "Random numbers are generated in M series" and §1.1.2 that the
+  unit's mantissa comes from an M series of a chosen type, and no document gives the series.
+- **Documents read:** RINIT, RGET, RNEXT and RXOR's pages (§4.3): R's 23 bits, RGET's value 0 01111111 then R.
+- **Test program:** ps2autotests' `vu/lower/random` console text (a console's output): RINIT and RXOR print R as the
+  low 23 bits of 01234567h, 89ABCDEFh, FEDCBA98h and 76543210h and their XORs; RNEXT prints four steps from each of
+  eight seeds. Every step shifts R left with one new bit at bit 0, so only the feedback is open. Over the seventeen steps
+  whose R is known (two all-ones seeds' steps, a zero seed, the twelve steps after the first) the feedback is the XOR of
+  bits (4, 22), (8, 22), (4, 6), (6, 8) or (18, 20) among the pairs [M, a search over every set of up to four taps], and
+  only (4, 22) and (8, 22) involve bit 22, as a 23-bit maximal series must. The four first steps, whose seeds the text
+  names only as `CVF_GARBAGE`, are each one of the four RINIT values above if those are the seeds [A: the same lanes,
+  and each first step equals its value shifted]; with them, (8, 22) fails 01234567h's step and (4, 22) holds on all
+  twenty-one. x²³ + x⁵ + 1 is a primitive trinomial, so the series is maximal [A].
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 equal the module on every RINIT, RGET, RXOR and RNEXT word of `s12-int`.
+- **Conclusion:** the title; **measured**, the console's text with two lineages agreeing, the last step of the inference
+  argued.
+- **Depends on it:** `vu/ops.rs`'s `next_r`.
+- **Pinned by:** `the_manual_s_examples_and_the_console_lines_hold`, `the_integer_unit_memory_window_and_random_unit_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-49. VU CLIP compares as the FPU's compares do, every zero equal and exponent 255 a number, and the flag keeps 24 bits
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** CLIP's page: `CF = CF << 6`, then `VF[fs]x > +|VF[ft]w|` and `VF[fs]x < -|VF[ft]w|` for x, y and z;
+  its example's before and after pictures, whose oldest judgement leaves at bit 24; §5.1.3's 24-bit register.
+- **Test program:** `s12-misc`, CLIP over vectors of the classes against w of the classes, the flag read after each
+  second judgement.
+- **Referee:** PCSX2 2.8.2 equal on every judgement; Play! 0.72 keeps more than 24 bits and sets +x where −x is due.
+- **Conclusion:** the title; **measured** against PCSX2 alone; `vu/upper/clip`'s console text (S13) is to be read against
+  it once its constants are known from a run.
+- **Depends on it:** `vu/ops.rs`'s `clip`.
+- **Pinned by:** `the_flagless_instructions_and_clip_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-50. VU0's data addresses: a qword index with bit 10 set (4000h on) reaches VU1's registers, each at its own width; below it VU0's 4 KiB repeat
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §1.1.5 ("VU1 registers are mapped to addresses 0x4000 to 0x43ff in VU0");
+  §5.5.3 to §5.5.5, each register's qword and its width ("all 0" above VI's 16 bits, the flags' and R's widths, MAC and
+  TPC read-only); the *EE User's Manual*'s map, VU0's memories each imaged over 16 KiB. Nothing says what VU0's own
+  instructions reach from 1000h to 3FFFh.
+- **Test program:** `s12-int`: VLQI at qword 105h, VSQI and VLQI of VU1's VF05 at 405h and of VI03 at 423h.
+- **Referee:** both lineages read 105h as qword 5. PCSX2 2.8.2 keeps all 128 bits written to VI03's qword; Play! 0.72
+  reads the window as zeros.
+- **Conclusion:** the title; **argued** for the mirror (both lineages agree) and from §5.5 for the widths, which neither
+  models.
+- **Depends on it:** `vu/ops.rs`'s `load_q`, `store_q`; `Vu::window_read`, `window_write`, `mem_q`.
+- **Pinned by:** `the_integer_unit_memory_window_and_random_unit_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-51. Q in macro mode: a divide's quotient reaches a macro instruction issued 7 cycles after VDIV or VSQRT and 13 after VRSQRT, and a transfer one cycle later; before that the instruction reads the old Q
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §5.4.1 (VDIV: `I Q R A T D1 … D6 F`; a macro instruction reads at T, a transfer
+  at the A slot); §5.4.7 ("The VWAITQ instruction stalls until the VDIV/VSQRT/VRSQRT instruction executed most recently
+  completes"; "if the Q register is referred to following an instruction such as VDIV, calculation results are not
+  guaranteed"); §3.4.5's Figure 3-8 ("data dependency is not checked regarding the Q register, so the Q register value
+  previously obtained is used here") and Figure 3-7 (a reader whose T meets F sees the quotient).
+- **Test program:** `s12-fdiv`'s last five cases: Q set to 1.0, VDIV of 3/2, then 0, 1, 5, 6 or 7 VNOPs and VADDq.x.
+- **Referee:** PCSX2 2.8.2 and Play! 0.72 give 1.5 after every count: the quotient lands at once in both.
+- **Conclusion:** the title, VWAITQ issuing as the quotient lands with nothing beside it; **argued** from the figures;
+  neither lineage models the delay.
+- **Depends on it:** `Vpu::q_pending` and `settle_q`; `ee/cop2.rs`'s `vu_op`; the timing model's `alone`.
+- **Pinned by:** `divide_square_root_and_reciprocal_root_equal_the_manual`, `the_macro_timing_follows_section_5_4`.
+- **Implemented in:** stage S12's commit.
+
+### D-52. FBRST's reset clears the unit's status, MAC and clipping flags
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** *VU User's Manual* §1.3.1 ("On reset, the control register is initialized"), §5.1.3's initial
+  values (the three flags "all 0").
+- **Test program:** `s12-transfer`, the flags read after FBRST is written with all ones.
+- **Referee:** PCSX2 2.8.2 keeps the status flag's Z and the MAC flags through the reset; Play! 0.72 not separable (it
+  stores the register whole).
+- **Conclusion:** the title; **argued**.
+- **Depends on it:** `Vpu::write_fbrst`.
+- **Pinned by:** `the_transfers_branches_and_exceptions_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-53. A field mask of zero writes no lane, and an FMAC instruction with it clears the MAC flags
+
+- **Opened:** 2026-10-25, at stage S12.
+- **Documents read:** every page's Operation (`if (x ⊆ dest) then …`); §3.3.1, the flags of ALUs that do not operate
+  cleared.
+- **Test program:** `s12-add` (VADD with each of the sixteen masks), `s12-misc` (VMOVE and VMR32 with the empty mask).
+- **Referee:** PCSX2 2.8.2 writes all four lanes for VMR32 with the empty mask, and agrees elsewhere; Play! 0.72 agrees.
+- **Conclusion:** the title; **argued**, one lineage agreeing.
+- **Depends on it:** `vu/ops.rs`'s lane loops.
+- **Pinned by:** `add_and_subtract_over_every_pair_of_input_classes_equal_the_manual`, `the_flagless_instructions_and_clip_equal_the_manual`.
+- **Implemented in:** stage S12's commit.
+
+### D-54. QMTC2.I and CTC2.I proceed once the microprogram reaches a pair with the M bit set
+
+- **Opened:** 2026-10-25, at stage S12, for S13.
+- **Documents read:** *VU User's Manual* §4.1.3 ("The QMTC2 / CTC2 instruction is executed without interlocking when the
+  M bit is set to 1"); §5.4.6 ("stalls occur and continue until a microinstruction, which sets the M bit to 1, is
+  executed"); CTC2's page in §6.2: "until a micro instruction with the M bit set to 0 is executed".
+- **Test program:** none yet; S13's microprograms with QMTC2.I against pairs with M clear and set.
+- **Referee:** not consulted.
+- **Conclusion:** M set releases, two passages against one; **argued**. The interface (`Micro::release`) carries it.
+- **Depends on it:** `vu/micro.rs`'s `release`; S13.
+- **Pinned by:** `vcallms_starts_micro_mode_and_the_ee_waits` (on the stand-in).
+- **Implemented in:** stage S12's commit.

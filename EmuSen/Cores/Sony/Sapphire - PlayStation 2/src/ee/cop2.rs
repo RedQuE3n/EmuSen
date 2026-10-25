@@ -5,7 +5,7 @@
 //! instruction may issue in. Sapphire_Native.md §21 records every reading.
 
 use crate::vu::ops::{self as vops, Class, Ctx};
-use crate::vu::{Vpu, ccr};
+use crate::vu::{Landing, Vpu, ccr, pipe};
 use emusen_mips::vu::Form;
 
 use super::ops::{Kind, Op, R, Stop, aligned, cond, likely, load_address, rd, rs, rt, sext32, store_address_of};
@@ -27,13 +27,27 @@ fn interlocked(w: u32) -> bool {
     w & 1 == 1
 }
 
+/// How far behind the T stage of a microprogram's last pair an instruction that waits for its end issues (§5.4.5,
+/// §5.4.6): a macro instruction's T stage meets that pair's S stage, so it issues 3 cycles on; QMFC2.I and CFC2.I read
+/// as they issue, 4 on; another VCALLMS's first pair follows the last by `pipe::START` (the second VCALLMS's D stage
+/// stalls), so it issues at once.
+const MACRO: u64 = 3;
+const TRANSFER: u64 = pipe::FMAC;
+const CALL: u64 = 0;
+
+/// Waits for VU0's microprogram to end, `behind` cycles after its last pair's T stage.
+fn wait_end(e: &mut Ee, vpu: &mut Vpu, behind: u64) {
+    if let Some(last) = vpu.finish0(e.planned()) {
+        e.wait(last + behind);
+    }
+}
+
 /// QMFC2: GPR[rt] ← VF[fd], all 128 bits; with the interlock, once VU0's microprogram has ended (§6.2).
 fn qmfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
     let vpu = vpu(b)?;
     if interlocked(w) {
-        let end = vpu.finish0(e.planned());
-        e.wait(end);
+        wait_end(e, vpu, TRANSFER);
     }
     e.set_quad(rt(w), vpu.units.vu0.vf_quad(rd(w)));
     Ok(())
@@ -55,8 +69,7 @@ fn cfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
     let vpu = vpu(b)?;
     if interlocked(w) {
-        let end = vpu.finish0(e.planned());
-        e.wait(end);
+        wait_end(e, vpu, TRANSFER);
     }
     let v = vpu.ccr(rd(w), e.planned());
     e.set(rt(w), sext32(v));
@@ -120,30 +133,40 @@ fn vu_op(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
     let vpu = vpu(b)?;
     let Some((o, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
-    let end = vpu.finish0(e.planned());
-    e.wait(end);
     match entry.class {
         Class::Callms => {
+            wait_end(e, vpu, CALL);
+            // A VCALLMS after a macro instruction stalls one cycle (§5.4.5).
+            if vpu.last_macro.is_some_and(|m| m + 1 >= e.planned()) {
+                e.wait(e.planned() + 1);
+            }
             let addr = if o.form == Form::Callms { (w >> 6 & 0x7FFF) as u16 } else { vpu.cmsar0 };
-            let t = e.planned();
-            if !vpu.micro0.start(&mut vpu.units, addr, t) {
+            if !vpu.start(0, addr, e.planned() + pipe::START) {
                 return Err(Stop::Halt);
             }
         }
         Class::WaitQ => {
-            if let Some((at, _)) = vpu.q_pending {
-                e.wait(at);
+            wait_end(e, vpu, MACRO);
+            if let Some(l) = vpu.units.vu0.q_next {
+                e.wait(l.at - 1);
             }
         }
         _ => {
+            wait_end(e, vpu, MACRO);
+            // The divider may still be busy with a microprogram's divide (§3.4.1, "DIV resource hazards").
+            if matches!(entry.class, Class::Div(_)) {
+                e.wait(vpu.units.vu0.div_free.saturating_sub(1));
+            }
             let t = e.planned();
             vpu.settle_q(t);
+            vpu.last_macro = Some(t);
             let units = &mut vpu.units;
-            let mut c = Ctx { vu: &mut units.vu0, window: Some(&mut units.vu1), q_out: None };
+            let mut c = Ctx::new(&mut units.vu0, Some(&mut units.vu1));
             (entry.run)(&mut c, w);
             if let (Class::Div(latency), Some(q)) = (entry.class, c.q_out) {
-                vpu.q_pending = Some((t + u64::from(latency), q));
-                vpu.div_free = t + u64::from(latency);
+                let at = t + 1 + u64::from(latency);
+                units.vu0.q_next = Some(Landing { at, value: q, flags: None });
+                units.vu0.div_free = at;
             }
         }
     }
@@ -198,7 +221,7 @@ pub(super) fn issue(op: &Op, w: u32) -> Issue {
                 Class::Fmac => rows::VFMAC,
                 Class::Div(13) => rows::VRSQRT,
                 Class::Div(_) => rows::VDIV,
-                Class::Ialu | Class::WaitQ | Class::Callms => rows::VIALU,
+                _ => rows::VIALU,
             };
             i.alone = entry.class == Class::WaitQ;
             let flags = if entry.flags { vr(ccr::STATUS) | vr(ccr::MAC) } else { 0 };
@@ -222,7 +245,8 @@ pub(super) fn issue(op: &Op, w: u32) -> Issue {
                 Form::RFs => (vr(s), 0),
                 Form::FtR => (0, vr(t)),
                 Form::Callmsr => (vr(ccr::CMSAR0), 0),
-                Form::Bare | Form::Callms => (0, 0),
+                // The micro-only forms never reach COP2: the decoder leaves them out.
+                _ => (0, 0),
             }
         }
         _ => (0, 0),

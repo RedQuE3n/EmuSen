@@ -3,14 +3,16 @@
 //! `crate::float`. The flags are §3.3's: each FMAC lane in the field mask sets its MAC bits from its result (the sign
 //! bit, a zero, an exponent's overflow or underflow), the others clear; the status flag's Z, S, U and O collect the MAC
 //! groups and their sticky flags take them and, for a multiply-add, the product's own (§3.3.2). Sapphire_Native.md §21.3
-//! records every reading. Nothing here decodes beyond the fields; timing is the caller's.
+//! records every reading; the micro-only lower operations (S13) are §23 there. Nothing here decodes beyond the fields;
+//! timing is the caller's: in micro mode (`Ctx::micro`) the flags an operation sets are handed back in `Deferred` for
+//! the pipeline to write at the S stage, and the branches, the external units and the waits are the pipeline's own.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use emusen_mips::vu::{self as table, Operation};
 
-use super::{Vu, status};
+use super::{Vu, efu, status};
 use crate::float::{self, Outcome};
 
 /// What an operation works on: its unit, and for VU0 the window onto VU1's registers (§1.1.5); a divide's quotient is
@@ -19,6 +21,35 @@ pub struct Ctx<'a> {
     pub vu: &'a mut Vu,
     pub window: Option<&'a mut Vu>,
     pub q_out: Option<u32>,
+    /// Micro mode: the flags are not written but handed back in `out` (§3.4.4: "set at the S stage").
+    pub defer: bool,
+    pub out: Deferred,
+}
+
+/// What an operation in micro mode leaves for the pipeline to write later: the FMAC's MAC flags with the status flag's
+/// Z, S, U, O and the sticky bits they add; CLIP's judgement; FSSET's sticky flags and FCSET's clipping flag; a divide's
+/// I and D (with their sticky bits); the EFU's result for P.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Deferred {
+    pub mac: Option<u32>,
+    pub zsuo: u32,
+    pub sticky: u32,
+    pub clip_shift: Option<u32>,
+    pub clip_set: Option<u32>,
+    pub sticky_set: Option<u32>,
+    pub divide: Option<u32>,
+    pub p: Option<u32>,
+}
+
+impl<'a> Ctx<'a> {
+    /// Macro mode: every flag written as the operation runs.
+    pub fn new(vu: &'a mut Vu, window: Option<&'a mut Vu>) -> Ctx<'a> {
+        Ctx { vu, window, q_out: None, defer: false, out: Deferred::default() }
+    }
+    /// Micro mode: the flags deferred to the pipeline.
+    pub fn micro(vu: &'a mut Vu, window: Option<&'a mut Vu>) -> Ctx<'a> {
+        Ctx { defer: true, ..Ctx::new(vu, window) }
+    }
 }
 
 /// An operation's pipeline, for the timing (§3.4, §7.4).
@@ -33,6 +64,17 @@ pub enum Class {
     WaitQ,
     /// CALLMS and CALLMSR, which macro mode carries out itself.
     Callms,
+    /// The flag instructions that read a flag into VI, whose result a branch may read at once (§3.4.8).
+    Fcheck,
+    /// FSSET and FCSET, which write their flag at the S stage (their pages).
+    FlagSet,
+    /// The EFU (VU1 only): its latency; another EFU operation may start a cycle before it lands (§3.4.6).
+    Efu(u8),
+    WaitP,
+    /// B, BAL, JR, JALR and the conditional branches, which the pipeline carries out.
+    Branch,
+    /// XGKICK, XTOP and XITOP, which reach units outside the VU.
+    External,
 }
 
 pub struct Entry {
@@ -98,11 +140,22 @@ fn collect(mac: u32) -> u32 {
 }
 
 /// Writes the MAC flags and the status flag's Z, S, U, O from them; the sticky flags take those and `extra` (a
-/// multiply-add's product, as Z, S, U, O).
-fn set_flags(vu: &mut Vu, mac: u32, extra: u32) {
-    vu.mac = mac;
+/// multiply-add's product, as Z, S, U, O). In micro mode they are handed back for the S stage.
+fn set_flags(c: &mut Ctx, mac: u32, extra: u32) {
     let f = collect(mac);
-    vu.status = vu.status & !0xF | f | (f | extra) << status::STICKY;
+    if c.defer {
+        c.out.mac = Some(mac);
+        c.out.zsuo = f;
+        c.out.sticky = f | extra;
+    } else {
+        apply_fmac_flags(c.vu, mac, f, f | extra);
+    }
+}
+
+/// The FMAC's flags as the S stage writes them: MAC replaced, Z, S, U and O replaced, the sticky bits added.
+pub fn apply_fmac_flags(vu: &mut Vu, mac: u32, zsuo: u32, sticky: u32) {
+    vu.mac = mac;
+    vu.status = vu.status & !0xF | zsuo | sticky << status::STICKY;
 }
 
 /// The lanes' results of `f`, written to VF[fd] (or ACC) where the mask allows, and the flags set from them.
@@ -126,7 +179,7 @@ fn lanes(c: &mut Ctx, w: u32, to_acc: bool, f: impl Fn(&Vu, usize) -> (Outcome, 
     } else {
         vu.set_vf(fd(w), out);
     }
-    set_flags(vu, mac, extra);
+    set_flags(c, mac, extra);
 }
 
 fn arith<const B: u8, const A: bool>(c: &mut Ctx, w: u32, f: fn(u32, u32) -> Outcome) {
@@ -237,24 +290,42 @@ fn clip(c: &mut Ctx, w: u32) {
         let o = float::order(x);
         j |= u32::from(o > hi) << (2 * lane) | u32::from(o < lo) << (2 * lane + 1);
     }
-    vu.clip = (vu.clip << 6 | j) & 0xFF_FFFF;
+    if c.defer {
+        c.out.clip_shift = Some(j);
+    } else {
+        vu.clip = shift_clip(vu.clip, j);
+    }
 }
 
-/// D and I written, IS and DS set where they are.
-fn divide_flags(vu: &mut Vu, invalid: bool, divide: bool) {
+/// The clipping flag with a new judgement shifted in (§3.3.3).
+pub fn shift_clip(clip: u32, j: u32) -> u32 {
+    (clip << 6 | j) & 0xFF_FFFF
+}
+
+/// D and I written, IS and DS set where they are; in micro mode handed back for the divider's F stage.
+fn divide_flags(c: &mut Ctx, invalid: bool, divide: bool) {
     let f = (u32::from(invalid) * status::I) | (u32::from(divide) * status::D);
+    if c.defer {
+        c.out.divide = Some(f);
+    } else {
+        apply_divide_flags(c.vu, f);
+    }
+}
+
+/// A divide's I and D as they land: written, and added to IS and DS.
+pub fn apply_divide_flags(vu: &mut Vu, f: u32) {
     vu.status = vu.status & !(status::I | status::D) | f | f << status::STICKY;
 }
 /// DIV: Q ← fsf of VF[fs] over ftf of VF[ft], rounded as DIV.S; I for 0/0, D for another zero divisor (§3.3.2).
 fn div(c: &mut Ctx, w: u32) {
     let q = float::div(c.vu.vf(fs(w))[fsf(w)], c.vu.vf(ft(w))[ftf(w)]);
-    divide_flags(c.vu, q.invalid, q.divide);
+    divide_flags(c, q.invalid, q.divide);
     c.q_out = Some(q.value.bits);
 }
 /// SQRT: Q ← the root of |ftf of VF[ft]|; I for a negative value, D cleared (§3.3.2, D-46).
 fn sqrt(c: &mut Ctx, w: u32) {
     let x = c.vu.vf(ft(w))[ftf(w)];
-    divide_flags(c.vu, x >> 31 == 1 && !float::is_zero(x), false);
+    divide_flags(c, x >> 31 == 1 && !float::is_zero(x), false);
     c.q_out = Some(float::sqrt(x).bits);
 }
 /// RSQRT: Q ← fsf of VF[fs] over the root of |ftf of VF[ft]|; D for a zero root under a non-zero dividend, I for a
@@ -262,7 +333,7 @@ fn sqrt(c: &mut Ctx, w: u32) {
 fn rsqrt(c: &mut Ctx, w: u32) {
     let (a, b) = (c.vu.vf(fs(w))[fsf(w)], c.vu.vf(ft(w))[ftf(w)]);
     let q = float::rsqrt(a, b);
-    divide_flags(c.vu, q.invalid, q.divide && !float::is_zero(a));
+    divide_flags(c, q.invalid, q.divide && !float::is_zero(a));
     c.q_out = Some(q.value.bits);
 }
 
@@ -407,7 +478,143 @@ fn rnext(c: &mut Ctx, w: u32) {
 
 fn nothing(_: &mut Ctx, _: u32) {}
 
-use Class::{Callms, Div, Fmac, Ialu, WaitQ};
+// The micro-only lower operations (§4.3), each from its page; Imm11 and the 16-bit address arithmetic wrap.
+fn offset(c: &Ctx, w: u32) -> u16 {
+    c.vu.vi(fs(w)).wrapping_add(table::imm11(w) as u16)
+}
+/// LQ: VF[ft]'s masked fields ← the qword at Imm11 + VI[is].
+fn lq(c: &mut Ctx, w: u32) {
+    let a = offset(c, w);
+    load_into(c, w, a);
+}
+/// SQ: the qword at Imm11 + VI[it] ← VF[fs]'s masked fields.
+fn sq(c: &mut Ctx, w: u32) {
+    let a = c.vu.vi(ft(w)).wrapping_add(table::imm11(w) as u16);
+    store_from(c, w, a);
+}
+/// ILW: VI[it] ← the low 16 bits of the field dest names, the lowest where it names more (as ILWR).
+fn ilw(c: &mut Ctx, w: u32) {
+    let m = lanes_of(load_q(c, offset(c, w)));
+    if let Some(lane) = (0..4).find(|&l| lane_on(w, l)) {
+        c.vu.set_vi(ft(w), m[lane] as u16);
+    }
+}
+/// ISW: each masked field ← VI[it] zero-extended.
+fn isw(c: &mut Ctx, w: u32) {
+    let a = offset(c, w);
+    let mut m = lanes_of(load_q(c, a));
+    let v = c.vu.vi(ft(w)) as u32;
+    for (lane, f) in m.iter_mut().enumerate() {
+        if lane_on(w, lane) {
+            *f = v;
+        }
+    }
+    store_q(c, a, quad_of(m));
+}
+fn iaddiu(c: &mut Ctx, w: u32) {
+    let v = c.vu.vi(fs(w)).wrapping_add(table::imm15(w) as u16);
+    c.vu.set_vi(ft(w), v);
+}
+fn isubiu(c: &mut Ctx, w: u32) {
+    let v = c.vu.vi(fs(w)).wrapping_sub(table::imm15(w) as u16);
+    c.vu.set_vi(ft(w), v);
+}
+/// FCAND: VI01 ← 1 when the clipping flag AND Imm24 has a bit set.
+fn fcand(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(1, u16::from(c.vu.clip & w & 0xFF_FFFF != 0));
+}
+/// FCEQ: VI01 ← 1 when the clipping flag equals Imm24.
+fn fceq(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(1, u16::from(c.vu.clip == w & 0xFF_FFFF));
+}
+/// FCOR: VI01 ← 1 when the clipping flag OR Imm24 is all ones.
+fn fcor(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(1, u16::from((c.vu.clip | w) & 0xFF_FFFF == 0xFF_FFFF));
+}
+/// FCGET: VI[it] ← the clipping flag's low 12 bits.
+fn fcget(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), (c.vu.clip & 0xFFF) as u16);
+}
+/// FCSET: the clipping flag ← Imm24, at the S stage.
+fn fcset(c: &mut Ctx, w: u32) {
+    if c.defer { c.out.clip_set = Some(w & 0xFF_FFFF) } else { c.vu.clip = w & 0xFF_FFFF }
+}
+fn fmand(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), c.vu.mac as u16 & c.vu.vi(fs(w)));
+}
+fn fmeq(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), u16::from(c.vu.mac as u16 == c.vu.vi(fs(w))));
+}
+fn fmor(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), c.vu.mac as u16 | c.vu.vi(fs(w)));
+}
+fn fsand(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), (c.vu.status & table::imm12(w)) as u16);
+}
+fn fseq(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), u16::from(c.vu.status == table::imm12(w)));
+}
+fn fsor(c: &mut Ctx, w: u32) {
+    c.vu.set_vi(ft(w), (c.vu.status | table::imm12(w)) as u16);
+}
+/// FSSET: the sticky flags ← Imm12's upper six bits, at the S stage; the lower six ignored.
+fn fsset(c: &mut Ctx, w: u32) {
+    let v = table::imm12(w) >> status::STICKY;
+    if c.defer { c.out.sticky_set = Some(v) } else { c.vu.status = c.vu.status & 0x3F | v << status::STICKY }
+}
+/// MFP: VF[ft]'s masked fields ← P.
+fn mfp(c: &mut Ctx, w: u32) {
+    let v = c.vu.p;
+    unary(c, w & !(31 << 11), |_| v);
+}
+/// The EFU's vector operations take VF[fs] whole, the scalar ones its fsf field; the result is handed back for P.
+fn efu_vector(c: &mut Ctx, w: u32, f: fn([u32; 4]) -> u32) {
+    c.out.p = Some(f(c.vu.vf(fs(w))));
+}
+fn efu_scalar(c: &mut Ctx, w: u32, f: fn(u32) -> u32) {
+    c.out.p = Some(f(c.vu.vf(fs(w))[fsf(w)]));
+}
+fn esadd(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::esadd);
+}
+fn ersadd(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::ersadd);
+}
+fn eleng(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::eleng);
+}
+fn erleng(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::erleng);
+}
+fn eatanxy(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::eatanxy);
+}
+fn eatanxz(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::eatanxz);
+}
+fn esum(c: &mut Ctx, w: u32) {
+    efu_vector(c, w, efu::esum);
+}
+fn esqrt(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::esqrt);
+}
+fn ersqrt(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::ersqrt);
+}
+fn ercpr(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::ercpr);
+}
+fn esin(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::esin);
+}
+fn eatan(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::eatan);
+}
+fn eexp(c: &mut Ctx, w: u32) {
+    efu_scalar(c, w, efu::eexp);
+}
+
+use Class::{Branch, Callms, Div, Efu, External, Fcheck, FlagSet, Fmac, Ialu, WaitP, WaitQ};
 
 /// Every operation of the shared table by its micro name, with its pipeline and whether it sets the MAC flags.
 pub static TABLE: &[Entry] = &[
@@ -442,6 +649,22 @@ pub static TABLE: &[Entry] = &[
     e("div", div, Div(7), false), e("sqrt", sqrt, Div(7), false), e("rsqrt", rsqrt, Div(13), false), e("waitq", nothing, WaitQ, false),
     e("mtir", mtir, Ialu, false), e("mfir", mfir, Fmac, false), e("ilwr", ilwr, Fmac, false), e("iswr", iswr, Fmac, false),
     e("rnext", rnext, Fmac, false), e("rget", rget, Fmac, false), e("rinit", rinit, Ialu, false), e("rxor", rxor, Ialu, false),
+    // Micro mode alone (§4.3), with the latencies of §7.4.
+    e("lq", lq, Fmac, false), e("sq", sq, Fmac, false), e("ilw", ilw, Fmac, false), e("isw", isw, Fmac, false),
+    e("iaddiu", iaddiu, Ialu, false), e("isubiu", isubiu, Ialu, false),
+    e("fcand", fcand, Fcheck, false), e("fceq", fceq, Fcheck, false), e("fcor", fcor, Fcheck, false), e("fcget", fcget, Fcheck, false),
+    e("fmand", fmand, Fcheck, false), e("fmeq", fmeq, Fcheck, false), e("fmor", fmor, Fcheck, false),
+    e("fsand", fsand, Fcheck, false), e("fseq", fseq, Fcheck, false), e("fsor", fsor, Fcheck, false),
+    e("fcset", fcset, FlagSet, false), e("fsset", fsset, FlagSet, false),
+    e("b", nothing, Branch, false), e("bal", nothing, Branch, false), e("jr", nothing, Branch, false), e("jalr", nothing, Branch, false),
+    e("ibeq", nothing, Branch, false), e("ibne", nothing, Branch, false), e("ibltz", nothing, Branch, false),
+    e("ibgtz", nothing, Branch, false), e("iblez", nothing, Branch, false), e("ibgez", nothing, Branch, false),
+    e("mfp", mfp, Fmac, false), e("waitp", nothing, WaitP, false),
+    e("esadd", esadd, Efu(11), false), e("ersadd", ersadd, Efu(18), false), e("eleng", eleng, Efu(18), false), e("erleng", erleng, Efu(24), false),
+    e("eatanxy", eatanxy, Efu(54), false), e("eatanxz", eatanxz, Efu(54), false), e("esum", esum, Efu(12), false),
+    e("esqrt", esqrt, Efu(12), false), e("ersqrt", ersqrt, Efu(18), false), e("ercpr", ercpr, Efu(12), false),
+    e("esin", esin, Efu(29), false), e("eatan", eatan, Efu(54), false), e("eexp", eexp, Efu(44), false),
+    e("xgkick", nothing, External, false), e("xtop", nothing, External, false), e("xitop", nothing, External, false),
 ];
 
 fn by_name() -> &'static HashMap<&'static str, usize> {
@@ -457,4 +680,9 @@ pub fn entry(o: &Operation) -> &'static Entry {
 /// The entry for the operation in a word's low 25 bits, through the decoder alone.
 pub fn of_word(w: u32) -> Option<(&'static Operation, &'static Entry)> {
     table::operation(w).map(|o| (o, entry(o)))
+}
+
+/// The entry for a lower word in micro mode, the micro-only operations included.
+pub fn of_lower(w: u32) -> Option<(&'static Operation, &'static Entry)> {
+    table::lower(w).map(|o| (o, entry(o)))
 }

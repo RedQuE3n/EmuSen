@@ -7,12 +7,15 @@
 
 use crate::asm::{AsmError, err, number, ranged, split_operands, strip_comment};
 
-/// Where an operation runs: the upper or the lower half of a micro instruction, or only as the EE's COP2 word.
+/// Where an operation runs: the upper or the lower half of a micro instruction, only as the EE's COP2 word, or only as
+/// a lower instruction in micro mode (VU User's Manual §1.2's table: the EFU, the external units, the flag instructions,
+/// the branches and the offset loads and stores have no macro form).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unit {
     Upper,
     Lower,
     Macro,
+    Micro,
 }
 
 /// How an operation's operands are written, each the VU User's Manual's mnemonic line for it (§4.2, §4.3, §6.2). A word
@@ -67,18 +70,65 @@ pub enum Form {
     Callms,
     /// `vi27`, fs fixed at 27: CALLMSR, which starts at CMSAR0.
     Callmsr,
+    /// `vfT, imm(viS)`: LQ, the signed offset in quadwords in bits 10-0 (§4.1.2, type 7).
+    LoadOff,
+    /// `vfS, imm(viT)`: SQ.
+    StoreOff,
+    /// `viT, imm(viS)`: ILW and ISW.
+    IntOff,
+    /// `viT, viS, imm15`: IADDIU and ISUBIU, the unsigned immediate's bits 14-11 in bits 24-21 (type 8).
+    Imm15,
+    /// `vi1, imm24`: FCAND, FCEQ, FCOR (type 9).
+    Fc,
+    /// `imm24`: FCSET.
+    FcSet,
+    /// `viT, imm12`: FSAND, FSEQ, FSOR, the immediate's bit 11 in bit 21.
+    Fs,
+    /// `imm12`: FSSET, its low six bits fixed at zero.
+    FsSet,
+    /// `viT, viS`: FMAND, FMEQ, FMOR, JALR.
+    ItIs,
+    /// `viT`: FCGET, XTOP, XITOP.
+    It,
+    /// `viS`: JR, XGKICK.
+    Is,
+    /// `imm11`: B, the signed offset in instructions from the delay slot.
+    B,
+    /// `viT, imm11`: BAL.
+    Bal,
+    /// `viT, viS, imm11`: IBEQ, IBNE.
+    Branch2,
+    /// `viS, imm11`: IBLTZ, IBGTZ, IBLEZ, IBGEZ.
+    Branch1,
+    /// `p, vfS`: the EFU's vector operations, whose field mask the page fixes.
+    Efu,
+    /// `p, vfSf`: the EFU's scalar operations.
+    EfuF,
+    /// `vfT, p`: MFP.
+    Mfp,
 }
 
-/// One operation: its micro-mode name, where it runs, and how its operands are written.
+/// One operation: its micro-mode name, where it runs, how its operands are written, the bits its page fixes beyond
+/// its selector, and whether a lower word's bits 31-25 select it (`LOWER`) rather than its low bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Operation {
     pub name: &'static str,
     pub unit: Unit,
     pub form: Form,
+    pub fixed: u32,
+    pub wide: bool,
 }
 
 const fn op(name: &'static str, unit: Unit, form: Form) -> Option<Operation> {
-    Some(Operation { name, unit, form })
+    opx(name, unit, form, fixed(form))
+}
+
+const fn opx(name: &'static str, unit: Unit, form: Form, fixed: u32) -> Option<Operation> {
+    Some(Operation { name, unit, form, fixed, wide: false })
+}
+
+const fn wide(name: &'static str, form: Form) -> Option<Operation> {
+    Some(Operation { name, unit: Unit::Micro, form, fixed: 0, wide: true })
 }
 
 use Form::*;
@@ -137,6 +187,73 @@ pub static SPECIAL2: [Option<Operation>; 128] = {
         }
         r += 1;
     }
+    // The micro-only lower operations of the 1000000 class, by bits 10-6 and 1-0 as each page of §4.3 draws them.
+    let micro: [(usize, Option<Operation>); 18] = [
+        (0b11001 * 4, op("mfp", Micro, Mfp)),
+        (0b11010 * 4, op("xtop", Micro, It)),
+        (0b11010 * 4 + 1, op("xitop", Micro, It)),
+        (0b11011 * 4, op("xgkick", Micro, Is)),
+        (0b11100 * 4, opx("esadd", Micro, Efu, 0b1110 << 21)),
+        (0b11100 * 4 + 1, opx("ersadd", Micro, Efu, 0b1110 << 21)),
+        (0b11100 * 4 + 2, opx("eleng", Micro, Efu, 0b1110 << 21)),
+        (0b11100 * 4 + 3, opx("erleng", Micro, Efu, 0b1110 << 21)),
+        (0b11101 * 4, opx("eatanxy", Micro, Efu, 0b1100 << 21)),
+        (0b11101 * 4 + 1, opx("eatanxz", Micro, Efu, 0b1100 << 21)),
+        (0b11101 * 4 + 2, opx("esum", Micro, Efu, 0b1111 << 21)),
+        (0b11110 * 4, op("esqrt", Micro, EfuF)),
+        (0b11110 * 4 + 1, op("ersqrt", Micro, EfuF)),
+        (0b11110 * 4 + 2, op("ercpr", Micro, EfuF)),
+        (0b11110 * 4 + 3, op("waitp", Micro, Bare)),
+        (0b11111 * 4, op("esin", Micro, EfuF)),
+        (0b11111 * 4 + 1, op("eatan", Micro, EfuF)),
+        (0b11111 * 4 + 2, op("eexp", Micro, EfuF)),
+    ];
+    let mut i = 0;
+    while i < micro.len() {
+        t[micro[i].0] = micro[i].1;
+        i += 1;
+    }
+    t
+};
+
+/// The lower instructions a word's bits 31-25 select, every class but 1000000 (§4.3's operation-code pictures).
+pub static LOWER: [Option<Operation>; 128] = {
+    let mut t = [N; 128];
+    let cells: [(usize, Option<Operation>); 28] = [
+        (0b0000000, wide("lq", LoadOff)),
+        (0b0000001, wide("sq", StoreOff)),
+        (0b0000100, wide("ilw", IntOff)),
+        (0b0000101, wide("isw", IntOff)),
+        (0b0001000, wide("iaddiu", Imm15)),
+        (0b0001001, wide("isubiu", Imm15)),
+        (0b0010000, wide("fceq", Fc)),
+        (0b0010001, wide("fcset", FcSet)),
+        (0b0010010, wide("fcand", Fc)),
+        (0b0010011, wide("fcor", Fc)),
+        (0b0010100, wide("fseq", Fs)),
+        (0b0010101, wide("fsset", FsSet)),
+        (0b0010110, wide("fsand", Fs)),
+        (0b0010111, wide("fsor", Fs)),
+        (0b0011000, wide("fmeq", ItIs)),
+        (0b0011010, wide("fmand", ItIs)),
+        (0b0011011, wide("fmor", ItIs)),
+        (0b0011100, wide("fcget", It)),
+        (0b0100000, wide("b", B)),
+        (0b0100001, wide("bal", Bal)),
+        (0b0100100, wide("jr", Is)),
+        (0b0100101, wide("jalr", ItIs)),
+        (0b0101000, wide("ibeq", Branch2)),
+        (0b0101001, wide("ibne", Branch2)),
+        (0b0101100, wide("ibltz", Branch1)),
+        (0b0101101, wide("ibgtz", Branch1)),
+        (0b0101110, wide("iblez", Branch1)),
+        (0b0101111, wide("ibgez", Branch1)),
+    ];
+    let mut i = 0;
+    while i < cells.len() {
+        t[cells[i].0] = cells[i].1;
+        i += 1;
+    }
     t
 };
 
@@ -153,9 +270,14 @@ pub mod field {
     pub const FD: u32 = 31 << 6;
     /// CALLMS's address, bits 20-6.
     pub const IMM15: u32 = 0x7FFF << 6;
+    /// A wide lower word's offset or immediate, bits 10-0.
+    pub const IMM11: u32 = 0x7FF;
+    /// The clipping flag's immediate, bits 23-0.
+    pub const IMM24: u32 = 0xFF_FFFF;
 }
 
-/// The bits a form's operands occupy; every other bit of the 25 is the operation's own or fixed.
+/// The bits a form's operands occupy; every other bit of the 25 is the operation's own or fixed (for a `wide`
+/// operation, every other bit of the word).
 pub const fn operand_mask(form: Form) -> u32 {
     use field::*;
     match form {
@@ -168,8 +290,21 @@ pub const fn operand_mask(form: Form) -> u32 {
         Bare | Callmsr => 0,
         Mtir => FSF | FT | FS,
         RFs => FSF | FS,
-        FtR => DEST | FT,
+        FtR | Mfp => DEST | FT,
         Callms => IMM15,
+        LoadOff | StoreOff | IntOff => DEST | FT | FS | IMM11,
+        Imm15 => DEST | FT | FS | IMM11,
+        Fc | FcSet => IMM24,
+        Fs => FT | 1 << 21 | IMM11,
+        FsSet => 1 << 21 | 0x7C0,
+        ItIs => FT | FS,
+        It => FT,
+        Is | Efu => FS,
+        B => IMM11,
+        Bal => FT | IMM11,
+        Branch2 => FT | FS | IMM11,
+        Branch1 => FS | IMM11,
+        EfuF => FSF | FS,
     }
 }
 
@@ -181,19 +316,31 @@ const fn fixed(form: Form) -> u32 {
     }
 }
 
-/// The operation in the low 25 bits of a COP2 word, an upper word or a lower word.
+/// The operation in the low 25 bits of a COP2 word or an upper word: the shared table, the micro-only lower
+/// operations left out.
 pub fn operation(w: u32) -> Option<&'static Operation> {
+    shared(w).filter(|o| o.unit != Micro)
+}
+
+fn shared(w: u32) -> Option<&'static Operation> {
     let f = w & 0x3F;
     let slot = if f >> 2 == 0xF { &SPECIAL2[((w >> 6 & 0x1F) * 4 + (w & 3)) as usize] } else { &SPECIAL1[f as usize] };
     slot.as_ref()
 }
 
-/// The operation's selecting bits with every field zero.
+/// The operation of a lower word in micro mode (the I bit aside): by its low bits in the 1000000 class, a lower or
+/// micro-only operation, and by bits 31-25 otherwise (§4.1.2).
+pub fn lower(w: u32) -> Option<&'static Operation> {
+    if w & !BITS == LOWER_OP { shared(w).filter(|o| matches!(o.unit, Lower | Micro)) } else { LOWER[(w >> 25) as usize].as_ref() }
+}
+
+/// The operation's selecting bits with every field zero: for a `wide` operation the whole word's.
 fn selector(name: &str) -> Option<(u32, &'static Operation)> {
     let one = SPECIAL1.iter().enumerate().take(0x3C).find_map(|(i, o)| o.as_ref().filter(|o| o.name == name).map(|o| (i as u32, o)));
     one.or_else(|| {
         SPECIAL2.iter().enumerate().find_map(|(i, o)| o.as_ref().filter(|o| o.name == name).map(|o| ((i as u32 / 4) << 6 | 0x3C | i as u32 & 3, o)))
     })
+    .or_else(|| LOWER.iter().enumerate().find_map(|(i, o)| o.as_ref().filter(|o| o.name == name).map(|o| ((i as u32) << 25, o))))
 }
 
 const DEST: [char; 4] = ['x', 'y', 'z', 'w'];
@@ -213,20 +360,42 @@ fn reg_field(n: u32, f: u32) -> String {
     format!("vf{n}{}", DEST[f as usize])
 }
 
+/// A signed field as Appendix A's spelling writes an offset.
+fn signed(v: i32) -> String {
+    if v < 0 { format!("-0x{:x}", v.unsigned_abs()) } else { format!("0x{v:x}") }
+}
+
+/// Imm11, bits 10-0, signed.
+pub fn imm11(w: u32) -> i32 {
+    ((w << 21) as i32) >> 21
+}
+
+/// IADDIU's and ISUBIU's Imm15: bits 24-21 above bits 10-0 (§4.1.2, type 8).
+pub fn imm15(w: u32) -> u32 {
+    (w >> 21 & 0xF) << 11 | w & 0x7FF
+}
+
+/// FSAND's, FSEQ's, FSOR's and FSSET's Imm12: bit 21 above bits 10-0.
+pub fn imm12(w: u32) -> u32 {
+    (w >> 21 & 1) << 11 | w & 0x7FF
+}
+
 /// Whether `w`'s bits outside the form's operands are the operation's documented ones.
 fn canonical(o: &Operation, w: u32) -> bool {
     let sel = selector(o.name).map_or(0, |(s, _)| s);
-    w & BITS & !operand_mask(o.form) == sel | fixed(o.form)
+    let word = if o.wide { u32::MAX } else { BITS };
+    w & word & !operand_mask(o.form) == sel | o.fixed
 }
 
 /// An operation with its operands, the name given a `v` in macro mode.
 pub fn text(o: &Operation, w: u32, macro_mode: bool) -> String {
     let name = if macro_mode { format!("v{}", o.name) } else { o.name.to_string() };
     if !canonical(o, w) {
-        return format!("{name} 0x{:07x}", w & BITS);
+        return if o.wide { format!("{name} 0x{w:08x}") } else { format!("{name} 0x{:07x}", w & BITS) };
     }
     let (ft, fs, fd) = (w >> 16 & 0x1F, w >> 11 & 0x1F, w >> 6 & 0x1F);
     let (ftf, fsf) = (w >> 23 & 3, w >> 21 & 3);
+    let off = signed(imm11(w));
     let (ops, masked) = match o.form {
         Fmac => (format!("{}, {}, {}", reg("vf", fd), reg("vf", fs), reg("vf", ft)), true),
         FmacQ => (format!("{}, {}, q", reg("vf", fd), reg("vf", fs)), true),
@@ -252,6 +421,24 @@ pub fn text(o: &Operation, w: u32, macro_mode: bool) -> String {
         FtR => (format!("{}, r", reg("vf", ft)), true),
         Callms => (format!("0x{:x}", w >> 6 & 0x7FFF), false),
         Callmsr => ("vi27".to_string(), false),
+        LoadOff => (format!("{}, {off}({})", reg("vf", ft), reg("vi", fs)), true),
+        StoreOff => (format!("{}, {off}({})", reg("vf", fs), reg("vi", ft)), true),
+        IntOff => (format!("{}, {off}({})", reg("vi", ft), reg("vi", fs)), true),
+        Imm15 => (format!("{}, {}, 0x{:x}", reg("vi", ft), reg("vi", fs), imm15(w)), false),
+        Fc => (format!("vi1, 0x{:06x}", w & 0xFF_FFFF), false),
+        FcSet => (format!("0x{:06x}", w & 0xFF_FFFF), false),
+        Fs => (format!("{}, 0x{:x}", reg("vi", ft), imm12(w)), false),
+        FsSet => (format!("0x{:x}", imm12(w)), false),
+        ItIs => (format!("{}, {}", reg("vi", ft), reg("vi", fs)), false),
+        It => (reg("vi", ft), false),
+        Is => (reg("vi", fs), false),
+        B => (off, false),
+        Bal => (format!("{}, {off}", reg("vi", ft)), false),
+        Branch2 => (format!("{}, {}, {off}", reg("vi", ft), reg("vi", fs)), false),
+        Branch1 => (format!("{}, {off}", reg("vi", fs)), false),
+        Efu => (format!("p, {}", reg("vf", fs)), false),
+        EfuF => (format!("p, {}", reg_field(fs, fsf)), false),
+        Mfp => (format!("{}, p", reg("vf", ft)), true),
     };
     format!("{name}{} {ops}", if masked { dest(w) } else { String::new() })
 }
@@ -290,12 +477,39 @@ fn address(s: &str, form: Form) -> Result<u32, AsmError> {
     vi(r.ok_or_else(|| AsmError { line: 0, message: format!("not this form's address: {s}") })?)
 }
 
+/// `imm(viN)`: the signed offset's eleven bits and the register.
+fn offset_address(s: &str) -> Result<(u32, u32), AsmError> {
+    let (imm, rest) = s.split_once('(').ok_or_else(|| AsmError { line: 0, message: format!("not an offset address: {s}") })?;
+    let r = rest.strip_suffix(')').ok_or_else(|| AsmError { line: 0, message: format!("not an offset address: {s}") })?;
+    Ok((ranged(imm.trim(), -1024, 1023)? & 0x7FF, vi(r.trim())?))
+}
+
 fn word_of(s: &str, want: &str) -> Result<(), AsmError> {
     if s == want { Ok(()) } else { err(format!("expected {want}: {s}")) }
 }
 
-/// An operation as `text` writes it, to its 25 bits; `macro_mode` asks for the `v` names.
+/// A branch's Imm11: a signed number, or a label of the microprogram resolved from the pair at `pc` (the offset counts
+/// from the delay slot, §4.3's IBEQ: "added to the address of the instruction following the branch").
+fn branch_offset(s: &str, pc: Option<usize>, labels: &dyn Fn(&str) -> Option<usize>) -> Result<u32, AsmError> {
+    if number(s).is_some() {
+        return Ok(ranged(s, -1024, 1023)? & 0x7FF);
+    }
+    match (labels(s), pc) {
+        (Some(at), Some(pc)) => {
+            let d = at as i64 - pc as i64 - 1;
+            if (-1024..=1023).contains(&d) { Ok(d as u32 & 0x7FF) } else { err(format!("{s} is out of a branch's reach")) }
+        }
+        _ => err(format!("not an offset or a label: {s}")),
+    }
+}
+
+/// An operation as `text` writes it, to its 25 bits (a `wide` operation's whole word); `macro_mode` asks for the `v`
+/// names and refuses the micro-only operations.
 pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation), AsmError> {
+    encode_at(text, macro_mode, None, &|_| None)
+}
+
+fn encode_at(text: &str, macro_mode: bool, pc: Option<usize>, labels: &dyn Fn(&str) -> Option<usize>) -> Result<(u32, &'static Operation), AsmError> {
     let text = text.trim();
     let (mnemonic, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
     let mnemonic = mnemonic.to_ascii_lowercase();
@@ -305,15 +519,24 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
     } else {
         head
     };
-    let Some((selector, o)) = selector(name) else { return err(format!("unknown mnemonic: {mnemonic}")) };
+    let Some((selector, o)) = selector(name).filter(|(_, o)| !(macro_mode && o.unit == Micro)) else { return err(format!("unknown mnemonic: {mnemonic}")) };
     let operands = split_operands(rest);
-    let whole = matches!(operands.as_slice(), [v] if number(v).is_some_and(|n| o.form != Callms || n > 0x7FFF));
+    // A lone number past what the form's own single operand takes is the word written whole.
+    let limit = match o.form {
+        Callms => 0x7FFF,
+        B => 0x3FF,
+        FcSet => 0xFF_FFFF,
+        FsSet => 0xFFF,
+        _ => -1,
+    };
+    let whole = matches!(operands.as_slice(), [v] if number(v).is_some_and(|n| n > limit));
     if whole {
         if !mask.is_empty() {
             return err(format!("{head} takes no field mask"));
         }
-        let bits = ranged(operands[0], 0, BITS as i64)?;
-        return if operation(bits) != Some(o) { err(format!("0x{bits:07x} is not {head}")) } else { Ok((bits, o)) };
+        let bits = ranged(operands[0], 0, if o.wide { u32::MAX as i64 } else { BITS as i64 })?;
+        let back = if o.wide { lower(bits) } else { shared(bits) };
+        return if back != Some(o) { err(format!("0x{bits:07x} is not {head}")) } else { Ok((bits, o)) };
     }
     let mut m = 0;
     let mut last = None;
@@ -325,14 +548,14 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
         last = Some(i);
         m |= 8 >> i;
     }
-    let masked = matches!(o.form, Fmac | FmacQ | FmacI | Acc | AccQ | AccI | FtFs | Clip | Mfir | LoadInc | LoadDec | StoreInc | StoreDec | IntMem | FtR);
+    let masked = matches!(o.form, Fmac | FmacQ | FmacI | Acc | AccQ | AccI | FtFs | Clip | Mfir | LoadInc | LoadDec | StoreInc | StoreDec | IntMem | FtR | LoadOff | StoreOff | IntOff | Mfp);
     if m != 0 && !masked {
         return err(format!("{head} takes no field mask"));
     }
     let want = match o.form {
         Bare => 0,
-        Callms | Callmsr => 1,
-        Fmac | FmacQ | FmacI | Acc | AccQ | AccI | Fdiv | Int3 | Imm5 => 3,
+        Callms | Callmsr | FcSet | FsSet | It | Is | B => 1,
+        Fmac | FmacQ | FmacI | Acc | AccQ | AccI | Fdiv | Int3 | Imm5 | Imm15 | Branch2 => 3,
         _ => 2,
     };
     if operands.len() != want {
@@ -377,8 +600,51 @@ pub fn encode(text: &str, macro_mode: bool) -> Result<(u32, &'static Operation),
         FtR => vf(o3(0))? << 16 | word_of(o3(1), "r").map(|_| 0)?,
         Callms => ranged(o3(0), 0, 0x7FFF)? << 6,
         Callmsr => word_of(o3(0), "vi27").map(|_| fixed(Callmsr))?,
+        LoadOff => {
+            let (imm, r) = offset_address(o3(1))?;
+            vf(o3(0))? << 16 | r << 11 | imm
+        }
+        StoreOff => {
+            let (imm, r) = offset_address(o3(1))?;
+            vf(o3(0))? << 11 | r << 16 | imm
+        }
+        IntOff => {
+            let (imm, r) = offset_address(o3(1))?;
+            vi(o3(0))? << 16 | r << 11 | imm
+        }
+        Imm15 => {
+            let v = ranged(o3(2), 0, 0x7FFF)?;
+            vi(o3(0))? << 16 | vi(o3(1))? << 11 | (v >> 11) << 21 | v & 0x7FF
+        }
+        Fc => word_of(o3(0), "vi1").map(|_| 0)? | ranged(o3(1), 0, 0xFF_FFFF)?,
+        FcSet => ranged(o3(0), 0, 0xFF_FFFF)?,
+        Fs => {
+            let v = ranged(o3(1), 0, 0xFFF)?;
+            vi(o3(0))? << 16 | (v >> 11) << 21 | v & 0x7FF
+        }
+        FsSet => {
+            let v = ranged(o3(0), 0, 0xFFF)?;
+            if v & 0x3F != 0 {
+                return err(format!("{head}'s low six bits are zero: {}", o3(0)));
+            }
+            (v >> 11) << 21 | v & 0x7FF
+        }
+        ItIs => vi(o3(0))? << 16 | vi(o3(1))? << 11,
+        It => vi(o3(0))? << 16,
+        Is => vi(o3(0))? << 11,
+        B => branch_offset(o3(0), pc, labels)?,
+        Bal => vi(o3(0))? << 16 | branch_offset(o3(1), pc, labels)?,
+        Branch2 => vi(o3(0))? << 16 | vi(o3(1))? << 11 | branch_offset(o3(2), pc, labels)?,
+        Branch1 => vi(o3(0))? << 11 | branch_offset(o3(1), pc, labels)?,
+        Efu => word_of(o3(0), "p").map(|_| 0)? | vf(o3(1))? << 11,
+        EfuF => {
+            word_of(o3(0), "p")?;
+            let (s, sf) = vf_field(o3(1))?;
+            s << 11 | sf << 21
+        }
+        Mfp => vf(o3(0))? << 16 | word_of(o3(1), "p").map(|_| 0)?,
     };
-    Ok((selector | m << 21 | fields, o))
+    Ok((selector | o.fixed | m << 21 | fields, o))
 }
 
 /// The upper word's flags, bits 31-27 (ps2tek, "Upper Instructions").
@@ -405,7 +671,7 @@ fn lower_text(w: u32, constant: bool) -> String {
     if constant {
         return format!("0x{w:08x}");
     }
-    match operation(w).filter(|o| o.unit == Lower && w & !BITS == LOWER_OP) {
+    match lower(w) {
         None => format!(".word 0x{w:08x}"),
         Some(o) => text(o, w, false),
     }
@@ -423,6 +689,10 @@ fn raw_word(s: &str) -> Option<Result<u32, AsmError>> {
 
 /// One micro instruction as `disassemble` writes it.
 pub fn assemble_pair(text: &str) -> Result<u64, AsmError> {
+    assemble_pair_at(text, None, &|_| None)
+}
+
+fn assemble_pair_at(text: &str, pc: Option<usize>, labels: &dyn Fn(&str) -> Option<usize>) -> Result<u64, AsmError> {
     let Some((up, low)) = text.split_once('|') else { return err("a micro instruction is upper | lower") };
     let (up, low) = (up.trim(), low.trim());
     let upper = match raw_word(up) {
@@ -453,26 +723,36 @@ pub fn assemble_pair(text: &str) -> Result<u64, AsmError> {
         match raw_word(low) {
             Some(w) => w?,
             None => {
-                let (w, o) = encode(low, false)?;
-                if o.unit != Lower {
+                let (w, o) = encode_at(low, false, pc, labels)?;
+                if !matches!(o.unit, Lower | Micro) {
                     return err(format!("{} is not a lower instruction", o.name));
                 }
-                LOWER_OP | w
+                if o.wide { w } else { LOWER_OP | w }
             }
         }
     };
     Ok((upper as u64) << 32 | lower as u64)
 }
 
-/// A microprogram, one pair to a line, `#` and `;` beginning comments.
+/// A microprogram, one pair to a line, `#` and `;` beginning comments; a line may begin with `label:`, which a branch
+/// names as its target.
 pub fn assemble(source: &str) -> Result<Vec<u64>, AsmError> {
-    source
-        .lines()
-        .enumerate()
-        .map(|(n, l)| (n + 1, strip_comment(l)))
-        .filter(|(_, l)| !l.is_empty())
-        .map(|(n, l)| assemble_pair(l).map_err(|e| AsmError { line: n, ..e }))
-        .collect()
+    let mut labels = std::collections::HashMap::new();
+    let mut lines = Vec::new();
+    for (n, l) in source.lines().enumerate() {
+        let mut l = strip_comment(l);
+        while let Some((name, rest)) = l.split_once(':').filter(|(name, _)| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
+            if labels.insert(name.to_string(), lines.len()).is_some() {
+                return Err(AsmError { line: n + 1, message: format!("label {name} placed twice") });
+            }
+            l = rest.trim();
+        }
+        if !l.is_empty() {
+            lines.push((n + 1, l));
+        }
+    }
+    let find = |s: &str| labels.get(s).copied();
+    lines.iter().enumerate().map(|(pc, (n, l))| assemble_pair_at(l, Some(pc), &find).map_err(|e| AsmError { line: *n, ..e })).collect()
 }
 
 #[cfg(test)]
@@ -553,7 +833,7 @@ mod tests {
                 let pair = match o.unit {
                     Upper => ((mix(&mut seed) & 0xF8 << 24 & !I_BIT | w) as u64) << 32 | (LOWER_OP | MOVE) as u64,
                     Lower => (NOP as u64) << 32 | (LOWER_OP | w) as u64,
-                    Macro => continue,
+                    Macro | Micro => continue,
                 };
                 let t = disassemble(pair);
                 assert_eq!(assemble_pair(&t), Ok(pair), "\"{t}\"");
@@ -575,10 +855,88 @@ mod tests {
         let constant = ((I_BIT | 0x22) as u64) << 32 | 0x3F80_0000;
         assert_eq!(disassemble(constant), "[i] addi vf0, vf0, i | 0x3f800000");
         assert_eq!(assemble_pair("[i] addi vf0, vf0, i | 0x3f800000"), Ok(constant));
-        assert_eq!(disassemble(0x0000_0030_0000_0000), ".word 0x00000030 | .word 0x00000000", "an integer add is no upper instruction");
+        assert_eq!(disassemble(0x0000_0030_0000_0000), ".word 0x00000030 | lq vf0, 0x0(vi0)", "an integer add is no upper instruction; the zero lower word is LQ");
         assert!(assemble_pair("iadd | nop").is_err());
         assert!(assemble_pair("add.yx vf1, vf2, vf3 | move vf0, vf0").is_err());
         assert_eq!(assemble("# a program\n[e] nop | move vf0, vf0\n\n nop | move vf0, vf0 ; again\n").map(|v| v.len()), Ok(2));
+    }
+
+    /// Every micro-only lower operation (§4.3's pages; ps2tek's tables have none of them): each decodes from its
+    /// selector in a lower word, not as a COP2 word, and reads back 64 times with random operands; a 1000000-class
+    /// word or a bits 31-25 class no page draws decodes to nothing.
+    #[test]
+    fn every_micro_only_lower_operation_reads_back() {
+        let mut seed = 0x5A99_D00E_0000_0013;
+        let mut named = Vec::new();
+        for (i, o) in SPECIAL2.iter().enumerate() {
+            let Some(o) = o.filter(|o| o.unit == Micro) else { continue };
+            let bits = (i as u32 / 4) << 6 | 0x3C | i as u32 & 3 | o.fixed;
+            assert_eq!(operation(bits), None, "{} is no macro instruction", o.name);
+            assert!(encode(&format!("v{} p, vf1", o.name), true).is_err());
+            named.push((LOWER_OP | bits, o));
+        }
+        for (i, o) in LOWER.iter().enumerate() {
+            if let Some(o) = o {
+                named.push(((i as u32) << 25, *o));
+            } else if i != 0x40 {
+                assert_eq!(lower((i as u32) << 25), None, "class {i:07b}");
+            }
+        }
+        assert_eq!(named.len(), 18 + 28, "the micro-only operations");
+        for (bits, o) in named {
+            assert_eq!(lower(bits), Some(&o), "{}", o.name);
+            for _ in 0..64 {
+                let w = bits | mix(&mut seed) & operand_mask(o.form) & if o.form == FsSet { !0x3F } else { u32::MAX };
+                let pair = (NOP as u64) << 32 | w as u64;
+                let t = disassemble(pair);
+                assert_eq!(assemble_pair(&t), Ok(pair), "\"{t}\"");
+            }
+        }
+        assert_eq!(lower(LOWER_OP | 0b11000 << 6 | 0x3C), None, "an empty cell of the 1000000 class");
+    }
+
+    /// §4.3's operation-code pictures and mnemonic lines for the micro-only lower instructions, each word built from
+    /// its page's bits and written as its page writes it; a branch's label resolved from the delay slot.
+    #[test]
+    #[allow(clippy::unusual_byte_groupings, clippy::identity_op)] // the opcodes grouped and written as the pages draw them
+    fn the_manual_s_micro_pages_read_back() {
+        let cases: [(u32, &str); 22] = [
+            (0b0000000 << 25 | 0xF << 21 | 10 << 16 | 4 << 11 | 0x7FE, "lq.xyzw vf10, -0x2(vi4)"),
+            (0b0000001 << 25 | 0xF << 21 | 4 << 16 | 10 << 11 | 3, "sq.xyzw vf10, 0x3(vi4)"),
+            (0b0000100 << 25 | 4 << 21 | 10 << 16 | 4 << 11 | 5, "ilw.y vi10, 0x5(vi4)"),
+            (0b0000101 << 25 | 4 << 21 | 10 << 16 | 4 << 11, "isw.y vi10, 0x0(vi4)"),
+            (0b0001000 << 25 | 4 << 16 | 5 << 11 | 1, "iaddiu vi4, vi5, 0x1"),
+            (0b0001001 << 25 | 0xF << 21 | 4 << 16 | 5 << 11 | 0x7FF, "isubiu vi4, vi5, 0x7fff"),
+            (0b0010010 << 25 | 0x04_1041, "fcand vi1, 0x041041"),
+            (0b0010011 << 25 | 0xFF_DF7D, "fcor vi1, 0xffdf7d"),
+            (0b0010001 << 25, "fcset 0x000000"),
+            (0b0011100 << 25 | 1 << 16, "fcget vi1"),
+            (0b0011010 << 25 | 1 << 16 | 10 << 11, "fmand vi1, vi10"),
+            (0b0010110 << 25 | 1 << 16 | 0x200, "fsand vi1, 0x200"),
+            (0b0010101 << 25 | 1 << 21 | 0x7C0, "fsset 0xfc0"),
+            (0b0100001 << 25 | 15 << 16 | 0x7FF, "bal vi15, -0x1"),
+            (0b0100101 << 25 | 15 << 16 | 4 << 11, "jalr vi15, vi4"),
+            (0b0101001 << 25 | 4 << 16 | 5 << 11 | 2, "ibne vi4, vi5, 0x2"),
+            (0b0101111 << 25 | 4 << 11 | 0x7FC, "ibgez vi4, -0x4"),
+            (LOWER_OP | 0b1110 << 21 | 10 << 11 | 0b11100_1111_00, "esadd p, vf10"),
+            (LOWER_OP | 10 << 11 | 0b11111_1111_00, "esin p, vf10x"),
+            (LOWER_OP | 8 << 21 | 10 << 16 | 0b11001_1111_00, "mfp.x vf10, p"),
+            (LOWER_OP | 10 << 11 | 0b11011_1111_00, "xgkick vi10"),
+            (LOWER_OP | 0b11110_1111_11, "waitp"),
+        ];
+        for (w, want) in cases {
+            let o = lower(w).unwrap_or_else(|| panic!("{w:08x}"));
+            assert_eq!(text(o, w, false), want);
+            let (bits, _) = encode(want, false).unwrap_or_else(|e| panic!("{want}: {e}"));
+            assert_eq!(if o.wide { bits } else { LOWER_OP | bits }, w, "{want}");
+        }
+        let odd = 0b0100000 << 25 | 1 << 16 | 3;
+        assert_eq!(text(lower(odd).unwrap(), odd, false), "b 0x40010003", "a field the page fixes at zero, set");
+        assert_eq!(encode("b 0x40010003", false).map(|(b, _)| b), Ok(odd));
+        let prog = assemble("top: nop | iaddiu vi1, vi0, 0x3\nloop: nop | isubiu vi1, vi1, 0x1\nnop | ibne vi1, vi0, loop\nnop | b top\n[e] nop | move vf0, vf0").unwrap();
+        assert_eq!(prog[2] as u32 & 0x7FF, 0x7FE, "IBNE from pair 2 to pair 1: the delay slot is pair 3, so -2");
+        assert_eq!(prog[3] as u32 & 0x7FF, 0x7FC, "B from pair 3 to pair 0: -4 from the delay slot, pair 4");
+        assert!(assemble("x: nop | b y").is_err(), "an unknown label");
     }
 
     /// The VU User's Manual's own words for the macro instructions (§6.2's operation codes, its mnemonic lines and

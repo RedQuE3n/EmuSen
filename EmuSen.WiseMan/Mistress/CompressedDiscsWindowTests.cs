@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress
                 long amber = new[] { "Amber.cue", "Amber (Track 1).bin", "Amber (Track 2).bin" }.Sum(f => new FileInfo(Path.Combine(_library, "psx", "Amber", f)).Length);
                 Assert.Equal(amber, Disc(window, "Amber").Size);
                 Assert.StartsWith(CompressedDiscsWords.Size(amber) + "  ·  Not converted", Row(window, "Amber"));
-                Assert.Contains("nothing in " + _library + " is changed, moved or removed", Find<TextBlock>(window, "CompressedDiscsAbout").Text);
+                Assert.Contains("The library is left untouched: nothing in " + _library + " is changed, moved or removed", Find<TextBlock>(window, "CompressedDiscsAbout").Text);
                 Assert.Equal($"{Math.Max(1, Environment.ProcessorCount / 2)} of {Environment.ProcessorCount}", Find<Dropdown>(window, "CompressedDiscsThreads").SelectedItem);
 
                 Press(window, "CompressedDiscsConvert");
@@ -179,6 +179,45 @@ namespace EmuSen.WiseMan.Mistress
             finally { window.Close(); }
             Assert.Equal(before, Listing());
         }, default);
+
+        // Every refusal and failure the tool words, as Platform/library-tool writes them, has the window's own words.
+        [Theory]
+        [InlineData("AppSettings.RomDirectory is not set: there is no library to convert.", true)]
+        [InlineData("The library /media/roms is not a folder.", true)]
+        [InlineData("The tree names no Compressed folder.", true)]
+        [InlineData("Compressed (/a/Compressed) and the library (/a) overlap: the library is never written, so nothing was done.", true)]
+        [InlineData("chdman was not found at /opt/emusen/chdman (No such file or directory (os error 2)): nothing was converted.", true)]
+        [InlineData("chdman at /opt/emusen/chdman has SHA-256 00ff, but this build is pinned to 55ab (MAME 0.289, linux-x64): it was not run, and nothing was converted.", true)]
+        [InlineData("chdman.pin has no chdman for linux-arm64: nothing was converted.", true)]
+        [InlineData("chdman at /opt/emusen/chdman could not be run: Permission denied (os error 13)", true)]
+        [InlineData("chdman at /opt/emusen/chdman printed no version line: no output", true)]
+        [InlineData("psx/Gone: no such file or folder in the library", true)]
+        [InlineData("a check failed", false)]
+        [InlineData("1048576 bytes are free at /c/psx, and the disc needs 627108864 with the margin", false)]
+        [InlineData("the original changed during the conversion, so the result was discarded", false)]
+        [InlineData("the original could not be hashed: Permission denied (os error 13)", false)]
+        [InlineData("the original does not read as a disc: track 1 is shorter than its pregap", false)]
+        [InlineData("chdman createcd failed: Error: file not found", false)]
+        [InlineData("chdman info failed: Error: unsupported CHD", false)]
+        [InlineData("chdman could not be run: Permission denied (os error 13)", false)]
+        [InlineData("Dusk.zip holds 2 track files and no sheet, so its tracks' order and gaps are unknown", false)]
+        [InlineData("the sheet names a WAVE file, whose header a CHD does not keep: not converted by this step", false)]
+        [InlineData("an .m3u is not converted by this step: name each of its discs, and the list is left as it is", false)]
+        [InlineData("the sheet names /roms/psx/Gone (Track 1).bin, which is not there", false)]
+        [InlineData("the sheet names ../Gone.bin, which is not a file beside it", false)]
+        [InlineData("Gone.bin is neither a raw data track nor an ISO 9660 image", false)]
+        [InlineData("Gone.bin is not a whole number of 2,352-byte sectors", false)]
+        [InlineData("the CHD could not be put in place: Permission denied (os error 13)", false)]
+        [InlineData("the CHD psx/Gone.chd is not there", false)]
+        [InlineData("the package names no container", false)]
+        [InlineData("the package does not record the table of contents, the sheet and every track's hashes", false)]
+        [InlineData("/c/psx could not be made: Permission denied (os error 13)", false)]
+        public void Every_word_of_the_tool_has_the_window_s_own(string tool, bool refusal)
+        {
+            string said = refusal ? CompressedDiscsWords.Refusal(tool) : CompressedDiscsWords.Reason(tool);
+            Assert.NotEqual(tool, said);
+            Assert.DoesNotContain("Nothing was done: ", said);
+        }
 
         // What the tool refuses before reading anything is said in the window's words: no library set, and a library holding EmuSen's own folders.
         [Fact]

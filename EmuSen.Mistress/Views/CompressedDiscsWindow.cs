@@ -54,6 +54,7 @@ namespace EmuSen.Mistress.Views
         private readonly EmptyState _empty = new() { Name = "CompressedDiscsEmpty" };
         private readonly ContentControl _listHost = new();
         private readonly DispatcherTimer _timer;
+        private readonly FieldRow _folderRow, _threadsRow;
         private readonly List<CompressedDisc> _discs = new();
         private readonly Dictionary<string, (CheckBox Box, HintText State, HintText Checks)> _rows = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _counts = new(StringComparer.Ordinal);
@@ -88,17 +89,19 @@ namespace EmuSen.Mistress.Views
             _folder.Chose += _ => { if (!_filling) ShowFolder(); };
 
             string where = string.IsNullOrWhiteSpace(library) ? "the library" : library;
-            Control about = Ui.Hint($"Makes a CHD file of each PlayStation and Sega CD disc in the library, about half its size, and keeps it only when three checks pass: chdman's own, every track read back and compared with the original, and the table of contents. The library is left untouched: nothing in {where} is changed, moved or removed, and the originals stay where they are. The CHDs go to {DataStore.Compressed}, each with its record in {DataStore.Packages}. Closing this window stops a batch; converting again later does only what is left.");
+            Control about = Ui.Hint($"A CHD of each PlayStation and Sega CD disc, about half its size. The library is left untouched: nothing in {where} is changed, moved or removed. The CHDs go to {DataStore.Compressed}.");
             about.Name = "CompressedDiscsAbout";
             var actions = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
             foreach (Button b in new[] { _convert, _check, _stop, _resume }) actions.Children.Add(b);
             _listHost.Content = _list;
+            _folderRow = new FieldRow { Label = "Discs from", Hint = "A folder of the library, or every folder.", Content = _folder };
+            _threadsRow = new FieldRow { Label = "Threads", Hint = "How many of this machine's threads chdman uses; half, the default, leaves the rest free.", Content = _threads };
             var body = Ui.Stack(16,
                 about,
-                new FieldRow { Label = "Discs from", Hint = "A folder of the library, or every folder.", Content = _folder },
-                new FieldRow { Label = "Threads", Hint = "How many of this machine's threads chdman uses; half, the default, leaves the rest for everything else.", Content = _threads },
-                new FieldRow { Label = "Convert or check", Hint = "The discs chosen below, or with none chosen every disc shown. Check Converted runs the three checks again on discs already converted.", Content = actions },
+                new FieldRow { Label = "Convert or check", Hint = "The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left.", Content = actions },
                 new FieldRow { Label = "Progress", Content = Ui.Stack(6, _bar, _progress, _log) },
+                _folderRow,
+                _threadsRow,
                 new FieldRow { Label = "Discs", Hint = "Each disc's size and state; choose discs to convert or check only those.", Content = _listHost });
             body.Margin = new Thickness(0, 0, 4, 0);
 
@@ -375,8 +378,8 @@ namespace EmuSen.Mistress.Views
             _convert.Content = chosen > 0 ? $"Convert {chosen} Chosen" : shown == _discs.Count ? "Convert Every Disc" : $"Convert All {shown}";
             _check.Content = chosen > 0 ? $"Check {chosen} Chosen" : "Check Converted";
             _convert.IsEnabled = _check.IsEnabled = any && !running;
-            _folder.IsEnabled = _threads.IsEnabled = !running && any;
-            foreach (var row in _rows.Values) row.Box.IsEnabled = !running;
+            // Hidden rather than disabled while a batch runs, so the choice cannot change under it.
+            _folderRow.IsVisible = _threadsRow.IsVisible = !running && any;
             _stop.IsEnabled = batch && !_stopping;
             _resume.IsEnabled = !running && _lastConvert is not null && _counts.TryGetValue("stopped", out long stopped) && stopped > 0;
 

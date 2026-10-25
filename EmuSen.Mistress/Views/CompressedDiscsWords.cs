@@ -46,6 +46,8 @@ namespace EmuSen.Mistress.Views
             (new(@"^the CHD could not be put in place: (.+)$"), m => $"the finished CHD could not be put in place ({m.Groups[1].Value})"),
             (new(@"^the CHD (.+) is not there$"), m => $"its CHD, {m.Groups[1].Value}, is not there"),
             (new(@"^not converted$"), _ => "it is not converted"),
+            (new(@"^the package names no container$"), _ => "its record names no CHD"),
+            (new(@"^the package does not record"), _ => "its record lacks what the checks compare with: the table of contents, the cue sheet and every track's hashes"),
             (new(@"^(.+) could not be made: (.+)$"), m => $"the folder {m.Groups[1].Value} could not be made ({m.Groups[2].Value})"),
         ];
 
@@ -63,7 +65,7 @@ namespace EmuSen.Mistress.Views
         // A disc's state line: what it is, its size, and why where the tool said why.
         public static string State(CompressedDisc d, string op)
         {
-            string shrunk = d.Original > 0 && d.Chd > 0 ? $": {Size(d.Chd)}, {d.Chd * 100.0 / d.Original:F0}% of {Size(d.Original)}" : "";
+            string shrunk = d.Original > 0 && d.Chd > 0 ? $": {Size(d.Chd)}, {(d.Chd * 100.0 / d.Original).ToString("F0", CultureInfo.InvariantCulture)}% of the original" : "";
             string why = d.Words is { Length: > 0 } w ? $": {Reason(w)}" : "";
             return d.State switch
             {

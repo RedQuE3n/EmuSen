@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17) on 2026-10-25.* `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -933,3 +933,300 @@ PRId. No emulator, SDK or loader source and no firmware.
 - COP0 beyond the exception registers, the TLB, the caches and CACHE, the scratchpad and the memory map (S7); MMI and
   PLZCW (S8); COP1 (S9); COP2 (S12); interrupts (S11).
 - D-0's clocks: the scheduler that would pin them does not exist yet; the interpreter counts cycles alone.
+
+## 17. Stage S7, COP0, the TLB, the caches, the memory map and the counters (2026-10-25)
+
+### 17.1 In one paragraph
+
+The plan's §7 row S7, on the tester's go of 2026-10-24. The interpreter of §16 gains COP0 in full: the TLB of 48 page
+pairs with its seven page sizes, the ASID and G, and the S bit that maps the scratchpad; the 8 KiB data cache with
+write-back, write-allocate, the LRF replacement and line locking, the 16 KiB instruction cache, the uncached
+accelerated buffer, and the CACHE instruction's twenty operations; the EE's physical memory map with its bus
+errors; Count and Compare with the timer interrupt; the two performance counters with every event the interpreter
+can know and the overflow's level 2 exception; and the hardware breakpoints with the debug exception. Every access
+now goes through the operating mode's segments, the TLB and the caches, and charges its refill, write-back or bus
+transfer to the timing model, closing S6's named loss "no cache". The core is written from the *EE Core User's
+Manual* (CORE) chapters 3 to 7 and 9, the *EE Core Instruction Set Manual* (INST) chapter 4, the *EE User's Manual*
+§2.1 and the kit's *Restriction*; ps2tek where they are silent. Seven bare programs of the project's, each owning the
+machine, are equal on the interpreter to the records the manuals' rules give (400 graded words). On PCSX2 and Play!, run as black boxes, they show where each referee stops modelling: neither maps memory through a program's own TLB entries, takes a TLB, counter, debug or bus error exception, or models the caches, so those rules rest on the manuals alone; where the referees do answer (TLBR, Count, Compare's interrupt, the counters' moves, kuseg at ERL) the disagreements are disputes D-17 to D-19. No
+emulator, SDK or loader source and no firmware was read.
+
+### 17.2 What was built
+
+- **`ee/cop0.rs`**: the register numbers, the bits MTC0 may change in each (§3.2's r/w columns), Cause's and
+  Config's fields, the debug registers behind register 24 and the performance counter control behind 25, and the
+  events of Table 7-1 by the EVENT value each counter selects them with.
+- **`ee/tlb.rs`**: the entries as Figure 5-8's 128 bits; TLBWI's, TLBR's and TLBP's Operation sections; the lookup.
+- **`ee/cache.rs`**: the tags of §6.2.3, the data, the LRF rule, the UCAB, and the BTAC as storage.
+- **`ee/memory.rs`**: translation, fetch, load, store (with the byte merge SWL, SWR, SDL and SDR need), PREF, the bus
+  errors, CACHE, and `peek`, the bytes at a physical address as the core sees them.
+- **`ee/map.rs`**: the physical map (§17.4).
+- **`ee/mod.rs`**: the level 1 sequence extended to the TLB exceptions (BadVAddr, Context's BadVPN2, EntryHi's VPN2)
+  and the refill and interrupt vectors; the level 2 sequence (§4.1.3); the interrupt, counter and breakpoint checks
+  before each instruction; Count, Random and the counters advanced by the cycles each instruction takes.
+- **`ee/ops.rs`**: TLBR, TLBWI, TLBWR, TLBP, the fourteen debug moves, MFPS, MFPC, MTPS, MTPC, BC0F, BC0T, BC0FL,
+  BC0TL and CACHE (155 mnemonics in all); loads and stores through `memory`; SYNC.L disabling the UCAB.
+- **`ee/timing.rs`**: an instruction's fetch wait and data wait, blocking or not by Config.NBE (§6.3.2), and single
+  issue when Config.DIE is clear.
+
+### 17.3 The readings the manuals leave open
+
+[R CORE, INST, Version 5.0; A]:
+
+- **The segments** (CORE §5.1.3 to §5.1.6): kseg0 and kseg1 subtract their bases; kseg0's cache mode is Config.K0,
+  kseg1 is uncached; kuseg is unmapped and uncached while ERL is set; the rest goes through the TLB. User mode reaches
+  kuseg alone, supervisor mode kuseg and sseg, and any other address raises the address error (§4.2.9), before the
+  TLB is consulted (Table 4-2's order). K0 0, "cached without writeback and write allocate", is taken as its words
+  say: loads cached, stores written through and not allocating; the TLB's C 0 is reserved and taken as uncached, as
+  are the other reserved values.
+- **The TLB** (§5.2, INST TLBWI, TLBR, TLBP): an entry matches where VPN2 equals the address above the page pair under
+  its mask, with G or the ASID; the odd page is chosen by the bit above the page offset; several matches are undefined
+  and the lowest index is taken. TLBWI and TLBWR store G as the AND of both G bits and VPN2 masked by PageMask, as
+  the Operation sections write; TLBR returns G in both EntryLo registers. TLBP on a miss sets P and leaves the index
+  bits, which the manual calls undefined, as they were. An Index or Random above 47 writes nothing.
+- **An S entry** (§5.2.5, §6.4.1, §6.4.3): it covers the 16 KiB its address names above bit 14 ("the upper 18 bits of
+  the virtual address are used to access the TLB"), whatever VPN2's bit 13 holds, with V and D taken from EntryLo0
+  (the manual requires both halves equal); its PFN and C are ignored and TLBR reads C as 2 in both halves (§5.2.5's
+  "When read, the C field value is 2"). Two S entries at different addresses reach the same scratchpad (§5.2.5: "It
+  can also be allocated to SPRAM using another TLB entry"). A fetch from the scratchpad reads it; no document says.
+- **The TLB exceptions** (§4.2.6 to §4.2.8): BadVAddr, Context's BadVPN2 (address bits 31..13 into bits 22..4) and
+  EntryHi's VPN2 are written, EntryHi's ASID kept; a refill vectors to 80000000h unless EXL is set, when it takes the
+  common vector and leaves EPC and BD (§4.1.2). The interrupt vectors to 80000200h. Every exception disables the UCAB
+  ("Some exception", §6.5.1, read as every one).
+- **The data cache** (§6.2, §6.3): indexed by virtual address bits 11..6, tagged by physical bits 31..12, so the index
+  lies inside every page's offset; a miss writes a dirty victim back, then refills the whole line and flips the
+  refilled way's LRF bit (Table 6-4, D-16); a locked way is never the victim, and a store to a locked line stays in
+  the cache and does not set D (§6.3.7). ps2tek's figure of the data cache's address (an index at bits 12..6) contradicts
+  its own text ("the dcache index is 6-bit") and the manual; the manual is followed.
+- **The instruction cache**: indexed by virtual address bits 12..6, tagged by physical bits 31..12; a miss refills an
+  invalid way if exactly one is invalid, else the LRF way (§6.3.1). Stores never reach it: replaced code runs until
+  CACHE IHIN, IXIN or IXSTG invalidates its line (§6.3.6), which `s7-icache` shows.
+- **The CACHE instruction** (INST pages 292 to 311): the index operations name the line by bits 11..6 or 12..6 and the
+  way by bit 0 and translate nothing; the hit operations, DXSTG and IFL translate and may raise the TLB exceptions and
+  the address error their pages list, as loads. DHIN and DHWBIN write Status.CH (§3.2 names those two); DHWOIN does not.
+  DXSTG's Operation writes "tag.Dirty ← TagLO[6] & TagLO[6]", taken as TagLo[6] AND TagLo[5], since Table 6-3 says D
+  is never set without V. IFL takes the LRF way, as its page says. IXSDT keeps TagHi's steering bits and BHT beside the
+  word. The BTAC is storage CACHE reads and writes, indexed by address bits 5..0; BFH clears every V bit, BHINBT the
+  entries whose fetch address matches bits 31..3, IHIN those matching bits 31..6, IXSDT and a write to EntryHi all of
+  them. The other rt values do nothing, though the kit's *Restriction* (17b) says some destroy the data cache.
+- **PREF** (INST, PREF): the line is read into the data cache where the page is cached and the address translates; no
+  exception is taken and no wait charged ("It does not affect the meaning of the program"). The manual allows that
+  the prefetch "may not take place"; it always does here.
+- **The UCAB** (§6.5): one line of 128 bytes tagged by physical bits 31..7; an accelerated load that misses refills
+  it; any store, SYNC.L and every exception disable it. Accelerated stores go to the bus at once (the write-back
+  buffer's merging has no effect a program can see until a second bus master exists, S11).
+- **Bus errors** (EE User's Manual §2.1.2; CORE §3.2, BEM and BadPAddr): an access to 20000000h–3FFFFFFFh or 80000000h
+  and above raises the instruction or data bus error (codes 6 and 7) and writes BadPAddr's bits 31..4 and sets BEM;
+  with BEM set the access is dropped silently, a load reading zero. BadVAddr is left alone ("bus errors are not
+  addressing errors"). A refill's bus error is taken before the victim is written back.
+- **Count and Compare** (§3.2): Count advances by the cycles each instruction takes in the timing model, so a read
+  sees the cycles of the instructions before it; IP7 is set when Count passes Compare and cleared by writing Compare.
+- **Random** (§3.2): decremented once a cycle in which an instruction issues, from 47 down to Wired and round again;
+  writing Wired sets it to 47, and that write is the cycle's last word.
+- **The interrupt** (§3.2, §4.2.5): taken before an instruction when IE and EIE are set, EXL and ERL clear, and IP7, IP3
+  or IP2 is set with its mask bit; IP2 and IP3 follow the lines Int0 and Int1 (D-15).
+- **The performance counters** (chapter 7): MFPS reads PCCR whatever its reg field; MTPS writes it only for reg 0; an
+  even reg names PCR0 and an odd one PCR1, as ps2autotests' console record says (`Sapphire_References.md` §5.3). A
+  counter adds its events when CTE is set and the instruction's mode (U, S, K outside the handler, EXL) has its bit,
+  never at level 2 (§7.2.1); VALUE is 31 bits and its carry sets OVFL. The events: processor cycles; single and dual
+  issue, counted when an issue cycle closes; branches issued (conditional branches, J and JAL, BC0 to BC2, likely or
+  not) and those at an even word address; TLB misses (refills); instruction cache misses; data cache misses (a cached
+  miss, a cached load with DCE clear, an uncached load, an accelerated load that misses); DTLB accesses, read as the
+  loads and stores to a cached page; non-blocking loads (a load's miss, an uncached load, a UCAB miss); instructions
+  completed and non-BDS instructions completed (SYSCALL, BREAK and a taken trap complete; a nullified slot completes
+  as the kind it is); loads and stores completed. The overflow's exception is D-13's.
+- **The breakpoints** (chapter 9): judged on the virtual address, the mode by Figure 9-2 (none at level 2); an
+  instruction breakpoint before the instruction and before its fetch's own exceptions (Table 4-2); a data breakpoint
+  on the effective address before alignment is checked; a data value breakpoint compares the register's low 32 bits
+  for a store and the loaded register's low 32 bits for a load (§9.2.4's four cases), and a load that meets it is
+  cancelled, its register restored. BED's polarity is D-14, EXC2 D-12.
+- **COP0's other registers**: Config's DIE, ICE, DCE, NBE, BPE and K0 writable, IC and DC read 16 KiB and 8 KiB, EC
+  zero; BadPAddr's bits 31..4 writable; the reserved numbers 7, 17 to 22, 26, 27 and 31 read zero and ignore writes,
+  the manual calling them undefined. MTC0 to EntryHi flushes the BTAC (INST, MTC0's note).
+
+### 17.4 The physical memory map
+
+[R EE User's Manual §2.1.1, its Figure, §2.1.2; ps2tek "Memory Map"]: 00000000h, 32 MiB of RDRAM; to 0FFFFFFFh the
+main memory's window past what a retail console fits (read as zero); 10000000h–13FFFFFFh the EE's registers, the VU
+memories and the GS's registers, which S11 to S16 fill and which read as zero now; to 1FBFFFFFh reserved; 1FC00000h
+the 4 MiB boot ROM, empty at this stage (no firmware is read); 20000000h–3FFFFFFFh and 80000000h and above, bus
+errors; 40000000h–7FFFFFFFh "Extend Main Memory", absent (zero). ps2tek's virtual map (RAM at 00000000h cached,
+20000000h uncached, 30100000h accelerated, the scratchpad at 70000000h) is the TLB a kernel sets, not hardware, and
+is §17.7's. The map is `ee::map::Map`; tests and the interpreter use it or RDRAM alone (`bus::Ram`).
+
+### 17.5 The timing model's memory costs
+
+[R CORE §6.3.3; A]: a line's refill costs 8 cycles, "a burst of 4 bus cycles (8 CPU cycles)", which the manual
+itself calls a minimum ("Actual transfer time can be more due to bus arbitration"); a dirty victim's write-back the
+same burst before it; an uncached transfer one bus cycle, 2 cycles [A]; the UCAB's refill of 128 bytes eight bus
+cycles, 16 [A]; the scratchpad and a hit cost nothing beyond §2.12's table. A fetch that waits delays its
+instruction's issue and ends the pair. A data wait delays the result; with Config.NBE clear (blocking loads, the
+reset state) it also stalls the pipe, and with NBE set a second miss waits for the first (§6.3.2). S6's named loss
+"no cache, so every load is §2.12's hit" is closed. The S6 tests of the issue rules now run their code once to warm
+both caches first, as §2.12's "Load and store assume a cache hit" says.
+
+### 17.6 What is not modelled
+
+Each a dispute candidate if an oracle ever measures it [A]:
+
+- RDRAM's latency and page behaviour (§5.2's loss, still named): every miss costs the documented minimum burst.
+  ps2tek's "~40 EE cycles is closer to reality" is not a documented figure.
+- The ITLB (2 entries) and DTLB (4): their replacement is undocumented, so their misses cost nothing and their
+  counters (events 5 on PCR0 and PCR1) never count.
+- The BTAC, the BHT and branch prediction: no misprediction cost and no counting of BTAC misses or mispredictions.
+- The write-back buffer: no merging, no stall when full; its four counter events never count; the bus-busy events
+  (11) neither.
+- The counter exception's lateness (§7.2.7, §7.2.8) and the data value breakpoint's imprecision for loads, SWC1 and
+  SQC2 (§9.1): both taken exactly at their instruction.
+- Interrupts are taken before an instruction ahead of its fetch's exceptions, which Table 4-2 orders the other way;
+  the manual itself says that order "has little meaning".
+- CACHE operations, TLB writes and exception entries cost one cycle beyond any refill or write-back they do; the
+  manual tabulates none.
+- The kit's *Restriction* (2), (13), (14), (16) and (17): code and data that alias CACHE patterns, IFL on a cached
+  address, TLBR near a branch or a page end, and the undefined COP0 patterns that destroy TLB entries are not
+  modelled; programs that break them are outside the documents.
+
+### 17.7 The state a program is entered in
+
+`Ee::new(pc)` is the core as the project's programs and the referees' fast boot enter a program, the state a
+kernel's loader leaves, not a reset: kernel mode, BEV clear, interrupts off; Config with both caches, dual issue,
+non-blocking loads and branch prediction on and kseg0 cached (K0 3); the caches empty; and the TLB holding ps2tek's
+virtual map as wired entries 0 to 18 (Wired 19): a 16 MiB pair at 00000000h onto RDRAM cached, the same at
+20000000h uncached, sixteen 1 MiB pairs from 30000000h giving 30100000h–31FFFFFFh onto 00100000h–01FFFFFFh
+accelerated, and an S entry at 70000000h. The page sizes and the indices are chosen here [A]; what a program can see
+of them is the map ps2tek lists. `Ee::reset()` is §4.2.1's state: PC BFC00000h, ERL and BEV set, BEM clear, caches off
+and invalid, Random 47, Wired 0, CTE and BPC's enables clear, K0 2 (the manual leaves it undefined). The S6 programs
+run in `new`'s state unchanged and are graded through `Ee::peek`, which reads a valid data cache line over memory, so
+a record still in the cache counts as written, as on a console.
+
+### 17.8 The gate: the programs (measured 2026-10-25)
+
+`tests/s7/` generates seven bare programs as `emusen-mips` assembly, entered at 00100000h like S6's. Each owns the
+machine first: it writes handlers at the five vectors through kseg1 (refill at 80000000h, counter at 80000080h, debug
+at 80000100h, common at 80000180h, interrupt at 80000200h), turns both caches on, writes back every data cache line
+and clears its tag (CACHE DXWBIN, DXSTG), invalidates every instruction cache line (IXIN, with addresses below
+80000000h as the kit's *Restriction* (12) asks), and clears TLB entries 0 to 7; it then runs from kseg0 and reads its
+constants and writes its record and done word through kseg1, so that its record is in RAM and its own data never
+enters the data cache it is testing. The refill handler records Cause, EPC, BadVAddr, Context and EntryHi and maps the
+faulting pair onto a scratch page in entry 7, then retries; the common handler records the same and returns past the
+instruction. Every expected word is derived in `tests/s7/mod.rs` from the manuals' rules, the LRF way of each refill
+worked by hand from Table 6-4 beside its line.
+
+| Program | Graded words | What it covers |
+|---|---|---|
+| `s7-tlb` | 176 | refills on loads and stores, even and odd pages, a pair already mapped; every page size's even page, odd page and last word; past a 16 MiB pair; TLBR's masked VPN2 and ANDed G; TLBP's hit and P; the ASID and G; TLB Invalid on a load and a store, TLB Modified; a refill at EXL to the common vector with EPC kept; kuseg unmapped at ERL; ksseg mapped |
+| `s7-spr` | 44 | the scratchpad through two S entries at once, at bit 13's half and the last quadword, LQ and SQ; RAM under the ignored PFN untouched; TLBR's C of 2; a clean S entry refusing a store, an invalid one a load |
+| `s7-dcache` | 68 | a store kept from memory until written back; DHWOIN; DHIN on a hit and a miss and Status.CH; dirty data discarded by DHIN; three lines of one set replaced by the LRF rule with the dirty victim written back; DXWBIN by index; DXLTG's tags after each; a locked line, its store kept from memory and from D, refills taking the other way; unlocking and DHWBIN; write-allocate; accelerated pages |
+| `s7-icache` | 10 | a routine replaced in memory runs as cached until IHIN, replaced again until IXIN of both ways |
+| `s7-counters` | 36 | Count across 100 instructions; Compare's interrupt, IP7 and its acknowledgement; MTPS's writable bits and its reg field, MFPC's and MTPC's even and odd specifiers; instructions completed, loads completed and stores completed by difference over two bodies; the EXL and K mode bits; the overflow's level 2 exception |
+| `s7-debug` | 40 | an instruction breakpoint taken (EXC2, ErrorEPC, BPC's flag), suppressed by BED, filtered by mode; a data read breakpoint cancelling its load; a data value breakpoint passing a store whose value differs and stopping one that matches |
+| `s7-buserror` | 26 | a load and a store mapped past 20000000h: ExcCode 7, BadPAddr, BEM set; a masked load passing |
+
+**Tests** [M, `cargo test --release`]: `tests/cop0.rs` **19 of 19** — the seven programs, each equal to its record word
+for word; `the_programs_execute_every_instruction_s7_adds` (the 27 new mnemonics, those no program reaches named:
+TLBWR, the debug moves for IAB to DVBM that the programs only write, BC0, each with its own test); and, on the
+interpreter directly, the reset state, Random's range and its reload by Wired, TLBWR at Random, BC0 on CPCOND0 and
+BC0FL's nullified slot, the debug moves' fixed bits, the CACHE index operations' round trips (IXSDT and IXLDT, IXSTG
+and IXLTG, BXSBT and BXLBT, BFH), an instruction bus error, the physical map's regions, an interrupt held by its masks
+and taken at 80000200h with Int0 on IP2, the level 2 sequence with DEV, and a miss's refill and a dirty victim's
+write-back in cycles. `tests/interpreter.rs` (S6) **23 of 23** unchanged in what it grades: its programs run in §17.7's
+state and are graded through `peek`; its issue-rule tests run their code warm. The crate's other tests: lib
+**16 of 16**, `programs` **3 of 3**; clippy clean.
+
+### 17.9 On the referees (measured 2026-10-25)
+
+`examples/s7.rs` writes each program as an ELF with its expected record; `ps2referee.py ram … --until
+1FFFF0=5A99D00E 200000:<words>` read each record from PCSX2 2.8.2 (Americas BIOS, fast boot) and from Play! 0.72, one
+process at a time. Only the programs' records were read; nothing of either's log.
+
+**A finding about the programs' form, by bisection.** The first runs on PCSX2 never wrote their done word. Ten probe
+programs (`s7::probe`, `cargo run --example s7 -- <folder> probes`), each the prologue's first *n* parts or its TLB clearing
+over a range of entries, and one record word, located it: the handlers, the caches' loops and clearing TLB entries 0 to 7 run, and clearing entries 8 to 47
+stops PCSX2, with the program running from kseg0 and writing through kseg1 and whether the cleared entries' VPN2s lie
+in kseg0 or kseg3 [M]. On the EE nothing the program does afterwards depends on those entries [R CORE §5.1.6], so the
+cause is the referee's (its kernel's mappings are presumably kept there). The programs therefore own entries 0 to 7
+only, leave Wired as they find it, and the refill handler writes entry 7 by TLBWI; TLBWR is graded on the interpreter.
+
+**What each referee showed** [M, records aligned by hand where a missing exception shortens them]:
+
+| Rule | PCSX2 | Play! | Reading |
+|---|---|---|---|
+| TLB refill, invalid and modified exceptions | none taken; the load reads 0, the store is lost | none taken | the manual alone |
+| Accesses through the program's own entries (every page size, the ASID, the scratchpad's S entries) | read 0, stores lost | translated as if the address were masked (a load at 40000000h read the refill handler's first word at physical 0); only 16 MiB pages reached their frames | the manual alone |
+| TLBR's masked VPN2, ANDed G, PageMask | equal to the manual | another entry's words | PCSX2 a witness for TLBWI and TLBR |
+| TLBP | P set where the manual matches | — | the manual alone |
+| TLBR of an S entry | S dropped, C as written | — | D-19 |
+| kuseg unmapped at ERL | equal | equal | both lineages agree |
+| The data cache (write-back, CACHE, the tags) | not modelled; DXLTG leaves TagLo as written | not modelled; same | the manual alone |
+| The instruction cache | the replaced code runs at once | the program never wrote its done word | the manual alone |
+| Count across 100 instructions | within 50 to 1,000 cycles | under 50 | the timing model's; D-0's clocks |
+| Compare's interrupt: IP7, ExcCode 0 | equal | never taken | PCSX2 a witness |
+| Writing Compare clears IP7 | IP7 stays set | — | D-17 |
+| PCCR's writable bits | every bit kept | equal to the manual | D-18 |
+| MTPS with reg ≠ 0; MFPC and MTPC by the field's parity | equal | equal | both lineages agree with ps2autotests' console record |
+| Events by EVENT and mode | the same count whatever is selected | never count | the manual alone |
+| The counter, debug and bus error exceptions | none taken | none taken | the manual alone (D-12, D-13, D-14) |
+
+As at S6 (§16.6), neither referee raises the exceptions an emulator need not raise to run games; S10's console texts
+(`cpu/ee_cop0/performance`, `memory/ee/default`) are the next evidence for the counters and the memory map.
+
+### 17.10 Seeded faults (2026-10-25)
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | a TLB entry's page mask read one bit low (the page offset `mask \| 0xFFF` for `mask >> 1 \| 0xFFF`) | `tlb_refills_pages_and_their_exceptions_equal_the_manual` |
+| F2 | a store hitting a cached line leaving its dirty bit clear | `the_data_cache_writes_back_replaces_and_locks_as_chapter_6_says`, `a_miss_costs_its_refill_and_a_dirty_victim_its_write_back` |
+| F3 | Compare's match never setting IP7 | `count_compare_and_the_performance_counters_equal_chapter_7`, `an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h` |
+
+Each was applied, `tests/cop0.rs` and `tests/interpreter.rs` run, and the source restored [M]. A second fault found
+while building, not seeded: the counters' mode bits were first indexed in the wrong order (U, S, K, EXL against
+PCCR's EXL, K, S, U at bits 1 to 4), which `s7-counters`' EXL and K differences exposed before the first commit.
+
+### 17.11 What the plan got wrong, or left open
+
+- **§1.1's COP0 row puts "the debug registers" beside the counters**, and S7's row omits the breakpoints; they were
+  built here, with the debug exception, since chapter 9 describes them fully and COP0 "in full" includes them.
+- **§5.2's "a cache miss its refill from RDRAM at the documented cost"**: the only documented cost is the minimum
+  burst (§17.5); RDRAM's latency stays the named loss §5.2 already lists.
+- **§13's C2 (caches' coherency without their timing)** is measurable now: the tags are on every access; S32 measures
+  their cost against the bench.
+- **S7's gate assumed the referees would answer for some of the TLB and the caches**; neither does (§17.9), so the gate
+  rests on the manuals, as for S6's exceptions. The programs had to be reshaped to run on PCSX2 at all (§17.9).
+- **The memory map** of §1.1 lists ps2tek's virtual addresses beside the physical ones; the virtual ones are a kernel's
+  TLB, not hardware, and are kept as §17.7's entry state.
+
+### 17.12 Questions this stage leaves
+
+1. **Q1 [routine], `Ee::new`'s TLB.** The project's bare programs are entered with ps2tek's virtual map in entries 0
+   to 18 (§17.7), a kernel's choice standing in until S10 enters programs through the player's BIOS. *Recommended*:
+   keep it for the bare programs, and have S10 enter ps2autotests through the BIOS's own loader, so that no kernel's
+   mappings are assumed by the core itself.
+2. **Q2 [routine], the timing model's memory costs.** Refills cost the documented minimum of 8 cycles, uncached
+   transfers 2 and the UCAB's refill 16 [A] (§17.5). *Recommended*: keep them as named losses until S32's bench or a
+   counting program on the referees gives evidence; ps2tek's "~40 EE cycles" is not documented.
+3. **Q3 [routine], the referees' reach.** Neither models the TLB's mapping of a program's entries, the caches, the
+   counter events, breakpoints or bus errors (§17.9). *Recommended*: rest those rules on the manuals, as S6 did for
+   its exceptions, and look again at S10 with `cpu/ee_cop0/performance` and `memory/ee/default`'s console texts.
+4. **Q4 [routine], D-17 to D-19.** *Recommended*: keep the manual's readings (Compare's write clears IP7; PCCR keeps
+   its defined fields, as Play! agrees; TLBR returns S with C 2), each against one lineage.
+
+### 17.13 What was read for this stage
+
+`Sapphire_Plan.md` §2, §5 (§5.1 to §5.3, §5.12, §5.13's C1 and C2), §7, §11; this page's §16; `Sapphire_Disputes.md`;
+`Sapphire_References.md` §1.1 and §5.3; `emusen-mips`'s `r5900.rs` (COP0's tables and the assembler's forms);
+`ps2referee.py`'s usage. Sony's *EE Core User's Manual* §1.3.5, §1.3.6, §1.5 to §1.9, §2.12, §3.2 whole, chapter 4,
+chapter 5, chapter 6, chapter 7 and chapter 9; *EE Core Instruction Set Manual* chapter 4 whole and PREF's page; *EE
+User's Manual* §2.1 and §2.2's opening; *EE Overview* §2.2.2; the kit's *Restriction* whole. ps2tek at `1c91660`:
+"Memory Map", "EE COP0 Registers", "EE COP0 Exception Handling", "EE COP0 Memory Management", "EE COP0 Caches", "EE
+COP0 Timer". ps2autotests' `cpu/ee_cop0/performance.expected` (the console's text, not the program's source). No
+emulator, SDK or loader source and no firmware.
+
+### 17.14 What this stage does not cover
+
+- The machine running programs: the EE is still run by the tests; S10 loads programs.
+- The DMAC's CPCOND0 and the INTC's and DMAC's interrupt lines, which the core takes as inputs (S11); the scratchpad's
+  DMA (S11); the VU memories, the EE's and GS's registers behind the physical map (S11 to S16).
+- MMI (S8), COP1 (S9), COP2 (S12): still halting.
+- The ITLB, DTLB, BTAC prediction and the write-back buffer's timing (§17.6).
+- The state format's new contents (the TLB, the caches, the counters): `SPH2` gains them when the machine runs the EE
+  (S10, S30).

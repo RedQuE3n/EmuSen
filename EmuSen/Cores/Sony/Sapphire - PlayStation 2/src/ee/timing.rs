@@ -1,6 +1,6 @@
 //! The EE core's timing model at instruction granularity (Sapphire_Plan.md §5.2, Q14): the issue and latency table
-//! of the EE Core User's Manual, pinned as data, and the in-order two-way issue it describes. Sapphire_Native.md §16.4
-//! records each rule's source and the losses the model names.
+//! of the EE Core User's Manual, pinned as data, the in-order two-way issue it describes, and from S7 the caches'
+//! refills and the bus's transfers. Sapphire_Native.md §16.4 and §17.5 record each rule's source and the losses named.
 
 /// A physical pipe of Table 1-1 (EE Core User's Manual §1.3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -148,6 +148,15 @@ pub const HILO1: usize = 33;
 pub const SA: usize = 34;
 const RESOURCES: usize = 35;
 
+/// A cache line's refill: "a burst of 4 bus cycles (8 CPU cycles)" (EE Core User's Manual §6.3.3), the minimum.
+pub const REFILL: u64 = 8;
+/// A dirty line written back before its refill (§6.3.4), taken as the same burst [A].
+pub const WRITEBACK: u64 = 8;
+/// One uncached transfer: one cycle of the bus at half the core's clock (Config.EC) [A].
+pub const UNCACHED: u64 = 2;
+/// The uncached accelerated buffer's refill of 128 bytes, eight bus cycles [A].
+pub const UCAB_REFILL: u64 = 16;
+
 /// What one instruction asks of the model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Issue {
@@ -159,6 +168,20 @@ pub struct Issue {
     pub writes: u64,
     /// A control transfer that is taken ends the issue group after its delay slot.
     pub taken: bool,
+    /// Cycles its fetch waited for the instruction cache's refill or an uncached fetch.
+    pub fetch: u64,
+    /// Cycles its data access waited for memory: a refill, a write-back, an uncached or UCAB transfer.
+    pub data: u64,
+    /// Config.NBE clear: a data wait stalls the pipe rather than only the result (§6.3.2).
+    pub blocking: bool,
+    /// Config.DIE clear: one instruction a cycle (§3.2, "Config Register").
+    pub single: bool,
+}
+
+impl Issue {
+    pub fn new(category: Category, row: usize) -> Issue {
+        Issue { category, row, reads: 0, writes: 0, taken: false, fetch: 0, data: 0, blocking: false, single: false }
+    }
 }
 
 /// The in-order two-way issue of §1.3.6: each instruction issues in the cycle its operands are ready and its unit is
@@ -177,6 +200,10 @@ pub struct Timing {
     /// The earliest cycle the next instruction may issue in (a Y pair's stall, a group's end).
     floor: u64,
     group_ends: u8,
+    /// Whether the last instruction issued beside the one before it.
+    paired: bool,
+    /// The cycle the bus is free of an earlier miss (§6.3.2: a second miss waits for the first).
+    mem_free: u64,
     pub instructions: u64,
 }
 
@@ -193,6 +220,8 @@ impl Default for Timing {
             open: false,
             floor: 0,
             group_ends: 0,
+            paired: false,
+            mem_free: 0,
             instructions: 0,
         }
     }
@@ -204,10 +233,19 @@ impl Timing {
         if self.instructions == 0 { 0 } else { self.last + 1 }
     }
 
+    /// Whether the last instruction charged issued beside the one before it.
+    pub fn paired(&self) -> bool {
+        self.paired
+    }
+
     /// Charges one instruction and returns the cycle it issued in.
     pub fn issue(&mut self, i: Issue) -> u64 {
         let row = &INTEGER[i.row];
-        let mut earliest = 0;
+        let next = if self.instructions == 0 { 0 } else { self.last + 1 };
+        let mut earliest = if i.fetch > 0 { next.max(self.floor) + i.fetch } else { 0 };
+        if i.data > 0 {
+            earliest = earliest.max(self.mem_free);
+        }
         for r in 0..RESOURCES {
             if i.reads >> r & 1 == 1 {
                 earliest = earliest.max(self.ready[r]);
@@ -225,6 +263,8 @@ impl Timing {
         let mut stall = 0;
         let paired = self.instructions > 0
             && self.open
+            && i.fetch == 0
+            && !i.single
             && earliest <= self.last
             && i.writes & self.last_writes == 0
             && i.reads & self.last_writes == 0
@@ -236,11 +276,14 @@ impl Timing {
                 }
                 None => false,
             };
-        let at = if paired { self.last } else { earliest.max(self.floor).max(if self.instructions == 0 { 0 } else { self.last + 1 }) };
+        let at = if paired { self.last } else { earliest.max(self.floor).max(next) };
         if !paired {
             self.last_pipe = if p0 { 0 } else { 1 };
         }
-        let done = at + stall + u64::from(row.latency.max(1));
+        let done = at + stall + u64::from(row.latency.max(1)) + i.data;
+        if i.data > 0 {
+            self.mem_free = at + 1 + i.data;
+        }
         for r in 0..RESOURCES {
             if i.writes >> r & 1 == 1 {
                 self.ready[r] = done;
@@ -256,7 +299,8 @@ impl Timing {
         self.last = at;
         self.last_category = Some(i.category);
         self.last_writes = if paired { self.last_writes | i.writes } else { i.writes };
-        self.floor = at + 1 + stall;
+        self.floor = at + 1 + stall + if i.blocking { i.data } else { 0 };
+        self.paired = paired;
         if self.group_ends > 0 {
             self.group_ends -= 1;
             if self.group_ends == 0 {

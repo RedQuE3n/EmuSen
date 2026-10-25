@@ -43,15 +43,31 @@ pub struct Program {
     data: Vec<u64>,
     data_base: u32,
     labels: u32,
+    /// S7's form: constants and the record through kseg1, the code run from kseg0 (`kernel`).
+    kseg1: bool,
     pub expected: Vec<Option<u64>>,
 }
 
 impl Program {
     pub fn new(name: &'static str) -> Program {
-        let mut p = Program { name, lines: Vec::new(), count: 0, data: Vec::new(), data_base: 0, labels: 0, expected: Vec::new() };
+        let mut p = Program { name, lines: Vec::new(), count: 0, data: Vec::new(), data_base: 0, labels: 0, kseg1: false, expected: Vec::new() };
         p.emit("lui s0, 0");
         p.emit("ori s0, s0, 0");
         p.emit("lui s1, 0x20");
+        p
+    }
+
+    /// A program that owns the TLB and the caches: it reads its constants and writes its record and done word
+    /// through kseg1, uncached and unmapped, and runs from kseg0 once its first jump is taken.
+    pub fn kernel(name: &'static str) -> Program {
+        let mut p = Program::new(name);
+        p.kseg1 = true;
+        p.lines[2] = "lui s1, 0xa020".into();
+        let target = (p.here() + 16) | 0x8000_0000;
+        p.emit(format!("lui t9, 0x{:x}", target >> 16));
+        p.emit(format!("ori t9, t9, 0x{:x}", target & 0xFFFF));
+        p.emit("jr t9");
+        p.emit("nop");
         p
     }
 
@@ -112,7 +128,7 @@ impl Program {
     pub fn finish(mut self) -> (String, Vec<Option<u32>>) {
         self.emit("lui t0, 0x5a99");
         self.emit("ori t0, t0, 0xd00e");
-        self.emit("lui t1, 0x1f");
+        self.emit(if self.kseg1 { "lui t1, 0xa01f" } else { "lui t1, 0x1f" });
         self.emit("ori t1, t1, 0xfff0");
         self.emit("sw t0, 0(t1)");
         self.place("end");
@@ -121,7 +137,7 @@ impl Program {
         while !self.here().is_multiple_of(16) {
             self.emit("nop");
         }
-        let base = self.here();
+        let base = self.here() | if self.kseg1 { 0xA000_0000 } else { 0 };
         self.lines[0] = format!("lui s0, 0x{:x}", base >> 16);
         self.lines[1] = format!("ori s0, s0, 0x{:x}", base & 0xFFFF);
         let mut text = self.lines.join("\n");

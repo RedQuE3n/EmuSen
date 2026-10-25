@@ -268,9 +268,10 @@ firmware already is (`EmuSen_CoreAPI.md` §6.2) [A].
 
 ### 3.1 Where packages live
 
-**Never in the ROM library** [C]. Packages live in a new directory, `DataStore.Packages`, at `<home>/Packages/`: the
-twenty-second directory of the tree, with a constant in `emusen_platform.h` and in `tree.rs` as `Unpacked` has
-(`EmuSen_Galaxia.md` §3.7).
+**Never in the ROM library** [C]. Packages live in a new directory, `DataStore.Packages`, at `<home>/Packages/`: ~~the
+twenty-second directory of the tree~~ the twenty-third, since `Cores` took the twenty-second on 2026-10-20, numbered 22
+(`EMUSEN_GALAXIA_DIR_PACKAGES`), with a constant in `emusen_platform.h` and in `tree.rs` as `Unpacked` has
+(`EmuSen_Galaxia.md` §3.7, §3.10; built 2026-10-25, §11.2).
 
 **A player-chosen folder** may replace it, as `AppSettings.PackageDirectory`, so that a player can point ES-DE at it
 (§6.1). That setting refuses any folder inside `AppSettings.RomDirectory`, since a package is written to, and the
@@ -544,7 +545,8 @@ CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289 (§10); M
 
 **Where the output goes** [C]: by default `<home>/Compressed/<the library-relative path, with .chd>`.
 
-- This is `DataStore.Compressed`, the twenty-third directory.
+- This is `DataStore.Compressed`, ~~the twenty-third directory~~ the twenty-fourth, numbered 23
+  (`EMUSEN_GALAXIA_DIR_COMPRESSED`; built 2026-10-25, §11.2).
 - Keeping the library's relative path keeps the console folder's name, which is how a CHD is routed today (§1.4). It
   also lets a player see which CHD came from which original.
 - A player-chosen folder may replace it. That setting refuses any folder inside `RomDirectory`, unless the player has
@@ -915,14 +917,15 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 
 ## 7. Phasing
 
-Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. Every test uses
+Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
+steps 1 and 2 are built and their gates passed (§11); step 3 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
 | Step | What | Gate |
 |---|---|---|
-| **1** | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
-| **2** | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
+| **1** *(built 2026-10-25, §11.1)* | **The dump identity.** `RomHash` gains CRC32, SHA-1, ranges and the transform parameter; per-track hashing via `emusen-disc`; Mistress's `RomHashes` moves onto it | The parity class holds C# and Rust to one answer. The scraper's hashes are unchanged on a sample of the library, taken before and after. Per-track hashes reproduce the hashes of generated sheets' files |
+| **2** *(built 2026-10-25, §11.2)* | **The manifest v1** in Galaxia: schema, read, atomic write, unknown fields kept, a newer major refused; `DataStore.Packages` and `Compressed` | Round-trip and refusal tests. A manifest written by hand in an editor loads |
 | **3** | **The CHD tool**: `emusen.library` with `chd convert`, `chd check` and `chd ls`, and the man page `chd.1`; output to `Compressed`; a linked package per disc (§4.4); no removal | Generated sheets round-trip through all three checks; a corrupted CHD fails check 2. Then the tester's PlayStation and Sega CD folders run on the desktop, and then on the handheld (P1–P4): every disc verified, the library's before and after listings identical, and the handheld's batch time, drain and temperature recorded. *Since 2026-10-25:* the shipped chdman's obligations of §4.9 met, with its pin checked |
 | **4** | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
@@ -1129,5 +1132,113 @@ Decided 2026-10-25 by the tester:
 - The No-Intro header question: the libretro forum threads "NES playlist creation bug" and "For library scanning how do
   the games need to be named?", and igir's discussion #347. They conflict, which is why §3.3.1 keeps both forms.
 - ScreenScraper's API, as `EmuSen_BigPicture.md` §5.1 cites it.
+- For §11.1, read 2026-10-25 as a search engine's summaries only: datoso's documentation, "DATs and ROMs"
+  (<https://www.mintlify.com/laromicas/datoso/concepts/dats-and-roms>), and the libretro forum thread "Redump DAT
+  parsing bug? (Libretro-DATs/libretro-db)" (<https://forums.libretro.com/t/redump-dat-parsing-bug-libretro-dats-libretro-db/21440>).
 
 **Not read**: MAME's source, libchdr, chd-rs's source, RetroArch's patching source, or any emulator's code.
+
+---
+
+## 11. Built 2026-10-25: steps 1 and 2
+
+*Measured on the development desktop on 2026-10-25. The ROM library was only read; nothing under
+`AppSettings.RomDirectory` was written.* Marks as at the top: what was run is [M].
+
+### 11.1 Step 1: the dump identity
+
+**What was already there.** The Rust half of `RomHash` had gained CRC-32, SHA-1 and ranges for the library and the
+scraper in Rust (`EmuSen_Backend.md` §28.2, §30.4), with Mistress's `Scraping/RomHashes.cs` named as its C# twin until
+state 3. So step 1 built the rest:
+
+- **`RomHash` in C#** gains `Of` (CRC-32, MD5 and SHA-1 in one read, of a whole file, a range or bytes held, as the
+  record `RomHashes`), `Transformed` (the system pack's transform as a parameter: the hashes of its form, or null where
+  it changes nothing) and `Tracks` (§3.3's `dump.tracks`). Each forwards to the library while the switch has chosen
+  it, with `RomHash.Managed` as the C# rule (`EmuSen_Galaxia.md` §5.4). The Rust half gains `transformed` and `tracks`,
+  and the scraper in Rust calls `transformed` in place of its own comparison.
+- **Mistress's `RomHashes` folded in.** `Scraping/RomHashes.cs`, with its `Crc32`, is deleted; the record and the CRC
+  moved into Galaxia, and the scraper, its client and their tests call `RomHash`. One owner of a dump's hashes remains.
+- **Per-track hashing via `emusen-disc`.** Where a track lies is `set::track_spans`' alone (`EmuSen_Disc.md` §12): from
+  its first INDEX, 00 where given, to the next track's in the same file; a WAVE file's one track is the whole file.
+  The C# half reads and hashes in C# and asks the platform library where each track lies, as `ImageSets` asks what a
+  sheet names; so with `EMUSEN_GALAXIA_NATIVE=0` the tracks still need the library, which is the state of every
+  sheet rule since 2026-10-12.
+- **A stop flag** crosses the interface for the first time (`EmuSen_RustPlatform.md` §39).
+
+**The gate** [M]:
+
+1. *The parity class*: `GalaxiaParityTests`' identity cases pass, both halves equal to .NET's own MD5 and SHA-1 and a
+   CRC-32 written in the test, for files from 0 bytes to 3 MB, nine ranges each, bytes held, a transform, and the
+   tracks of three generated sheets; refusals alike.
+2. *The scraper's hashes unchanged on the tester's library*: 231 files sampled with a fixed seed, up to 25 from each of
+   the ten console folders (6,834 MB in all: cartridges, zips, `.7z`, lone tracks, sheets), hashed by the deleted
+   `RomHashes` before the change, and after it by `RomHash.Of` through the library and through the C#. The three
+   listings were byte-identical, and all three equal to Python's `hashlib` and `zlib`.
+3. *Per-track hashes reproduce generated sheets' files*: the parity case and `rom_hash.rs`'s test build each track's
+   bytes, write them as a file per track or joined in one file, and require each track's hashes to equal its bytes'.
+   Beyond the gate, the 167 tracks of the tester's eight cue sheets (all of one file per track) were hashed by both
+   halves and each equalled its file's hashes.
+
+**Redump's fields**, which §3.3.1 left to be read again at this gate: Redump's own wiki page was still not reached on
+2026-10-25. Secondary descriptions agree that its datfiles are Logiqx XML, one `<rom>` per track file with its name,
+size, CRC-32, MD5 and SHA-1, the sheet listed beside them [R, a search engine's summaries of datoso's documentation,
+"DATs and ROMs", and of the libretro forum thread "Redump DAT parsing bug?", 2026-10-25; §10], which `dump.tracks` and
+`dump.sheet` hold. The primary source is still owed.
+
+### 11.2 Step 2: the manifest v1
+
+Built in Galaxia as §2.1 planned, described in `EmuSen_Galaxia.md` §3.10: `GamePackage` and `GamePackage.Managed` in
+C#, `package.rs` in Rust, `emusen_galaxia_package_read`, `_write` and `_format` between them, and `DataStore.Packages`
+and `DataStore.Compressed`.
+
+**The schema as built** [C], beside §3.3's fields:
+
+- *Required*: `format` (`emusen-package`), `version` (two numbers), `system` (not empty), `mode` (`linked` or
+  `self-contained`), `game` with `role` (not empty), `where` (§3.3's four) and `path`.
+- *A path* under `library`, `package` or `compressed` is relative, with no `..` part, either slash; under `absolute`
+  it begins with a slash or a drive and a slash.
+- *Optional, each null or absent*: `title`; `size` and `seen` (`size`, `mtime`); `dump` with `file`, `transformed`,
+  `tracks` (each with `file`), `sheet` (with `file`) and `form` (`cue-bin`, `lone-track`, `iso`); `companions`;
+  `patches` (each with `file` and `format`, `ips`, `bps` or `ups`); `patched`; `identity` (`original` or `patched`,
+  not null); `container`, an object whose fields step 3 defines.
+- *Hashes* are 8, 32 or 40 hexadecimal digits, either case; a whole number is an integer token of 0 or more.
+- *A member written twice, or text that is not valid Unicode*, anywhere, is refused, since System.Text.Json's
+  `JsonObject` cannot hold the one and cannot write the other.
+- *Unknown fields*, at any depth, are kept in their places and not checked; that is what lets a minor version add
+  fields an older build passes through.
+- *A newer major* is refused before any other field is checked, since it may change any of them.
+
+**Otherwise than §3.3 said**: nothing in the fields. Two consequences are recorded rather than hidden. Text outside
+ASCII is written as `\uXXXX`, the escapes every config file has (`EmuSen_RustPlatform.md` §11.3); it reads back the
+same, and a person may write it unescaped. And comments in a manifest written by hand are lost when the program writes
+it again (§11.4, Q18).
+
+**The gate** [M]: `GamePackageTests` pass in both states of the switch, a round trip through the file keeping unknown
+fields in their places and tokens as written; a newer major is refused with words and a refused document leaves the
+file as it was. The manifest written by hand (`EmuSen.WiseMan/Galaxia/HandWrittenPackage.json`: comments, tabs, a
+trailing comma, CRLF, a byte-order mark, upper-case hex, a field of the player's own) loads. The parity class holds the
+two halves to the same bytes for nine manifests, the same refusals with the same words for 72 texts, and the same files
+on disk.
+
+### 11.3 Tests, and the faults seeded
+
+Run: `cargo test --profile test-checked` of `emusen-galaxia` (86), `emusen-platform` (33 and its integration tests)
+and `emusen-scrape`; `emusen-disc` (14 and 13); WiseMan's Galaxia classes, `GamePackageTests` and `DataStoreTests` (86
+with the library, and the two facade classes, 19, with `EMUSEN_GALAXIA_NATIVE=0`); and the blast radius of
+`blast.sh`: every class of `EmuSen.WiseMan.Mistress`, the scraping classes, Diamond's and Nephrite's (§11.4 has the
+counts). Four faults were seeded, each caught and put back:
+
+| Fault | Caught by |
+|---|---|
+| a track's start counted at its own sector size, not the size of the track before it in the file | `set.rs`'s span test; the parity track case |
+| the C# range hash reading past its length | the parity range cases (5) and the track case |
+| the Rust checks naming a malformed `game` before a newer major | `package.rs`'s newer-major test; the parity refusal case |
+| the C# path check splitting at `/` alone, letting `a\..\b` through | the parity refusal case |
+
+### 11.4 Left, and for the tester
+
+- **Step 3**, the CHD tool and shipping chdman (§4.9), waits for the tester's go.
+- **Q18 [routine]: comments in a hand-written manifest are dropped when the program rewrites it**, as the config files'
+  are. *Recommended:* keep it so; a person's notes belong in an unknown field (`"my notes": ...`), which is kept.
+- **Q19 [routine]: Redump's own description of its datfile fields** is still unread (§11.1). *Recommended:* read it
+  when step 3 compares a converted disc against a datfile, which is the first use of the fields.

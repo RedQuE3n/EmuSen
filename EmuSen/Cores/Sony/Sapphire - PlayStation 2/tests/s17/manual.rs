@@ -3,11 +3,16 @@
 //! weights, and the pixel test, format conversion and masks of §3.7 and §3.9, on S16's model of local memory (whose
 //! layout is the transcription of chapter 8). Where the documents leave a choice the model takes the reading
 //! Sapphire_Native.md §27.3 records; it decides each by a different formulation from the source's, so that the two
-//! agreeing says the reading is implemented, not merely repeated.
+//! agreeing says the reading is implemented, not merely repeated. Texture mapping and fog (S18) are `texture`'s, to
+//! which each pixel's weights are handed (Sapphire_Native.md §31).
 
 #![allow(dead_code)]
 
+#[path = "../s18/manual.rs"]
+pub mod texture;
+
 use crate::s16::manual::{self as m16, bits};
+use texture::{Frag, Tv};
 
 /// A vertex in primitive coordinates (sixteenths) while queued, in window coordinates when drawn, with Z and colour.
 #[derive(Clone, Copy, Debug)]
@@ -16,18 +21,25 @@ struct V {
     y: i128,
     z: i128,
     c: [i128; 4],
+    t: Tv,
 }
 
 pub struct Model {
     pub mem: m16::Gs,
     regs: Vec<u64>,
     queue: Vec<V>,
+    tex: texture::Texturing,
 }
 
 impl Default for Model {
     fn default() -> Model {
-        Model { mem: m16::Gs::default(), regs: vec![0; 0x63], queue: Vec::new() }
+        Model { mem: m16::Gs::default(), regs: vec![0; 0x63], queue: Vec::new(), tex: texture::Texturing::default() }
     }
+}
+
+/// The fragment of a pixel whose vertices `v` have weights `wu` along U and `wv` along V, Q from `q`.
+fn frag(v: [V; 3], wu: [i128; 3], wv: [i128; 3], q: [u32; 3], last: V) -> Frag {
+    Frag { v: v.map(|v| v.t), wu, wv, q, last: last.t }
 }
 
 fn bitsof(v: u64, lo: u32, n: u32) -> u64 {
@@ -67,6 +79,7 @@ impl Model {
         if (reg as usize) < self.regs.len() {
             self.regs[reg as usize] = v;
         }
+        self.tex.write(&mut self.regs, reg, v, &self.mem);
         match reg {
             0x00 => self.queue.clear(),
             0x04 | 0x05 | 0x0C | 0x0D => self.vertex(reg, v),
@@ -87,11 +100,16 @@ impl Model {
         let with_fog = reg == 0x04 || reg == 0x0C;
         let rgba = self.regs[0x01];
         let z = if with_fog { bitsof(v, 32, 24) } else { bitsof(v, 32, 32) };
+        if with_fog {
+            // XYZF2 and XYZF3 carry F into FOG (ps2tek "GS Vertex Attributes").
+            self.regs[0x0A] = v & 0xFF00_0000_0000_0000;
+        }
         self.queue.push(V {
             x: bitsof(v, 0, 16) as i128,
             y: bitsof(v, 16, 16) as i128,
             z: z as i128,
             c: [0, 8, 16, 24].map(|s| bitsof(rgba, s, 8) as i128),
+            t: Tv { st: self.regs[0x02], q: (rgba >> 32) as u32, uv: self.regs[0x03], f: bitsof(self.regs[0x0A], 56, 8) as i128 },
         });
         let kind = bitsof(self.regs[0x00], 0, 3);
         let needed = match kind {
@@ -151,7 +169,7 @@ impl Model {
     fn point(&mut self, a: V) {
         for (x, y) in self.candidates(&[a.x], &[a.y]) {
             if 16 * x - 8 <= a.x && a.x < 16 * x + 8 && 16 * y - 8 <= a.y && a.y < 16 * y + 8 {
-                self.pixel(x, y, a.z, a.c);
+                self.pixel(x, y, a.z, a.c, &frag([a; 3], [1, 0, 0], [1, 0, 0], [a.t.q; 3], a));
             }
         }
     }
@@ -163,7 +181,10 @@ impl Model {
         let (y0, y1) = (a.y.min(b.y), a.y.max(b.y));
         for (x, y) in self.candidates(&[a.x, b.x], &[a.y, b.y]) {
             if x0 <= 16 * x && 16 * x < x1 && y0 <= 16 * y && 16 * y < y1 {
-                self.pixel(x, y, b.z, b.c);
+                // S and U run from a to b along x, T and V along y; Q and F are b's (§3.2.8; Native §31.3).
+                let lin = |p: i128, pa: i128, pb: i128| if pb > pa { [pb - p, p - pa, 0] } else { [p - pb, pa - p, 0] };
+                let bf = V { t: Tv { f: b.t.f, ..a.t }, ..a };
+                self.pixel(x, y, b.z, b.c, &frag([bf, b, b], lin(16 * x, a.x, b.x), lin(16 * y, a.y, b.y), [b.t.q; 3], b));
             }
         }
     }
@@ -204,7 +225,8 @@ impl Model {
             let lerp = |p: i128, q: i128| (p * (d - t) + q * t).div_euclid(d);
             let z = lerp(a.z, b.z).clamp(0, u32::MAX as i128);
             let c = if self.gouraud() { [0, 1, 2, 3].map(|i| lerp(a.c[i], b.c[i]).clamp(0, 255)) } else { b.c };
-            self.pixel(x, y, z, c);
+            let w = [d - t, t, 0];
+            self.pixel(x, y, z, c, &frag([a, b, b], w, w, [a.t.q, b.t.q, b.t.q], b));
         }
     }
 
@@ -245,13 +267,13 @@ impl Model {
             let mix = |va: i128, vb: i128, vc: i128| (va * weights[0] + vb * weights[1] + vc * weights[2]).div_euclid(total);
             let z = mix(a.z, b.z, c.z);
             let col = if self.gouraud() { [0, 1, 2, 3].map(|i| mix(a.c[i], b.c[i], c.c[i])) } else { last.c };
-            self.pixel(x, y, z, col);
+            self.pixel(x, y, z, col, &frag([a, b, c], weights, weights, [a.t.q, b.t.q, c.t.q], last));
         }
     }
 
     /// §3.7's tests in order (scissoring, then the depth test; the alpha tests are S19's and off in every program) and
     /// §3.9's format conversion and masks.
-    fn pixel(&mut self, x: i128, y: i128, z: i128, c: [i128; 4]) {
+    fn pixel(&mut self, x: i128, y: i128, z: i128, c: [i128; 4], frag: &Frag) {
         let ctx = self.ctxt();
         let (sx0, sx1, sy0, sy1) = self.scissor();
         if x < sx0 || x > sx1 || y < sy0 || y > sy1 {
@@ -261,6 +283,8 @@ impl Model {
         if (msk == 2 && y % 2 == 0) || (msk == 3 && y % 2 == 1) {
             return;
         }
+        // §3.4 and §3.5: texture mapping and fog before the tests (figure 3-1).
+        let c = self.tex.shade(&self.regs, self.attrs(), &self.mem, frag, c);
         let frame = self.regs[0x4C + ctx];
         let zbuf = self.regs[0x4E + ctx];
         let test = self.regs[0x47 + ctx];

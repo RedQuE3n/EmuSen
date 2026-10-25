@@ -1854,6 +1854,9 @@ through the reset too.
 - **Depends on it:** `gs::raster::line`'s end test; nothing else.
 - **Pinned by:** `lines_draw_the_diamonds_they_pass_through_but_their_end`, `generated_primitives_draw_as_the_model_draws_them`.
 - **Implemented in:** stage S17's commit.
+- **Amended 2026-10-25, at stage S18:** `s18-uv`'s textured line from (2.5, 0.5) to (3.75, 31.25) ends at (−1/4, +1/4)
+  from pixel (4, 31)'s centre, on its diamond's lower-left edge; PCSX2 2.8.2 leaves that pixel undrawn, giving the edge to
+  the diamond, where the reading draws the end's row. A second edge PCSX2 gives to its diamond; the conclusion stands.
 
 ### D-162. GS, XYOFFSET: it is subtracted at the drawing kick, the offset of the drawing's context, from every vertex of the primitive
 
@@ -2263,3 +2266,175 @@ through the reset too.
 - **Depends on it:** `pcrtc::merge`.
 - **Pinned by:** `the_display_programs_pictures_equal_the_manuals`.
 - **Implemented in:** stage S20's commit.
+
+### D-240. GS, the texture function: with TCC RGB every function keeps the fragment's alpha, DECAL included
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** *GS User's Manual* §3.4.9's table, whose DECAL row gives "Av = At" under TCC=RGB as under RGBA;
+  §3.4.3: "The TCC field determines whether to use the A value of the texture during the texture function execution";
+  TEX0's page (TCC 0 "RGB", 1 "RGBA"); ps2tek "GS Textures": DECAL with RGB "Av = Av", the fragment's.
+- **Test program:** `s18-tfx`: each of the four functions with TCC 0 and 1 over a PSMCT32 texture of generated alpha
+  and 32 flat fragment colours whose alpha runs from 0 to FFh.
+- **Referee:** PCSX2 2.8.2: every word of all eight pages equal to the reading, DECAL with TCC RGB keeping the
+  fragment's alpha.
+- **Conclusion:** the fragment's alpha; **measured**, one lineage, with §3.4.3's definition of TCC and ps2tek, against
+  the table's DECAL entry, which would make TCC mean nothing for DECAL.
+- **Depends on it:** `gs::texture::Sampler::function`.
+- **Pinned by:** `every_texture_function_with_tcc_follows_the_table_of_3_4_9`.
+- **Implemented in:** stage S18's commit.
+
+### D-241. GS, the LOD: a LOD of 0 or less takes MMAG at level 0, above 0 MMIN
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** *GS User's Manual* §3.4.12: "When the calculated LOD value is 0.0 or less, the level 0 texture is
+  used, and the filter specified in the MMAG field ... When the LOD value is more than 0.0 ... MMIN"; TEX1's page: MMAG
+  "Filter when Texture is Expanded (LOD < 0)", MMIN "when Texture is Reduced (LOD >= 0)". The two disagree at 0.
+- **Test program:** `s18-filter`'s fourth page: an 8×8 texture magnified with LCM 1 and K = 0, −1/16 and +1/16, MMAG
+  nearest and MMIN linear, and K = 0 with MMAG linear; its fifth page: LODs of 7/16, 8/16, 15/16 and 1 with mipmapping.
+- **Referee:** PCSX2 2.8.2 takes MMAG at 0, as §3.4.12 says; it also takes MMAG at +1/16, where both documents say MMIN;
+  at 7/16 it blends levels 0 and 1 (MMIN 3).
+- **Conclusion:** MMAG at 0 or less; **measured** at 0, one lineage with §3.4.12. PCSX2's MMAG at 1/16 departs from both
+  documents and is taken as its own threshold [A].
+- **Depends on it:** `gs::texture::Sampler::sample`.
+- **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
+- **Implemented in:** stage S18's commit.
+
+### D-242. GS, the LOD's arithmetic: (log2(1/|Q|) × 2^L + K) exact, floored to sixteenths; with STQ the pixel's interpolated Q, with UV the drawing kick's vertex's; levels blended by the fraction in sixteenths
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** TEX1's page: LOD = (log2(1/|Q|) << L) + K, K int1:7:4; §3.4.12; §3.4.4's table ("MIPMAP (Q Linear
+  Interpolation)": possible with STQ, impossible with UV); §3.4.12: "When LCM is set to 0, LOD is calculated from the Q
+  value even if the texture coordinates are given by UV". No precision is given for the logarithm or the blend.
+- **Test program:** `s18-filter`: four quarters of constant Q (1, 0.5, 0.3, and 0.3 with L = 2 and K = −2) under MMIN 2
+  and 3; a quad in perspective, Q from 1 to 1/8, under MMIN 3 and 5; a UV sprite with Q 0.25 and a UV triangle whose
+  last vertex has Q 1 and the others 0.25.
+- **Referee:** PCSX2 2.8.2: equal where the LOD is a whole level; with Q 0.3 its blends fit a LOD of 1 + 188/256 and,
+  with L = 2, 4 + 242/256, the exact values held to eight fractional bits, where the reading holds four (27/16 and 79/16);
+  per pixel in perspective it departs in 2,021 of 2,048 words, and eight-bit logarithms of the exactly interpolated Q
+  reproduce only 294 of them, so its per-pixel Q or LOD is computed otherwise [A]; with UV it draws level 0 for the
+  sprite whose Q gives level 2, LOD = K, against the manual's sentence, and equals the reading on the triangle, where the
+  last vertex's Q gives LOD 0.
+- **Conclusion:** the LOD exact, floored to K's fixed point; Q per pixel with STQ, the drawing kick's vertex's with UV;
+  **argued**: K's format is the one fixed point the documents give the LOD, and §3.4.12 says Q is used with UV. PCSX2's
+  eight bits are its arithmetic's.
+- **Depends on it:** `gs::texture::Setup`, `gs::texture::lod_of`, `gs::exact::log2_scaled`.
+- **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`, `generated_textured_primitives_draw_as_the_model_draws_them`.
+- **Implemented in:** stage S18's commit.
+
+### D-243. GS, the CLUT's load: only a TEX0 or TEX2 whose PSM is indexed loads, 16 or 256 entries, under CLD's codes against CBP0 and CBP1; codes 6 and 7 load nothing
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.7's "Load Operation" ("CLUT data is loaded ... when the TEX0 or TEX2 register is accessed"),
+  its CLD table and TEX0's and TEX2's pages; §2.7.1 (16 entries for IDTEX4, 256 for IDTEX8). Nothing says what a
+  non-indexed PSM loads, nor what CLD 6 and 7 do.
+- **Test program:** `s18-clut`: a PSMCT32 TEX0 with CLD 1 and another CBP between a load and a draw with CLD 0; CLD 6;
+  CLD 2, 0, 4, 4, 3, 5, 5 and 4 with the CLUT's memory rewritten between draws.
+- **Referee:** PCSX2 2.8.2: every word equal; the PSMCT32 TEX0 loads nothing, CLD 6 loads nothing, and CBP0 and CBP1
+  are kept apart.
+- **Conclusion:** as stated; **measured**, one lineage.
+- **Depends on it:** `gs::texture::Clut::load`.
+- **Pinned by:** `the_clut_buffer_loads_as_cld_says_and_keeps_what_it_loaded`.
+- **Implemented in:** stage S18's commit.
+
+### D-244. GS, the CLUT buffer's addressing: entries at CSA × 16 wrap within 256 places of 32 bits or 512 of 16; CSA applies in CSM2; a CPSM TEX0's page does not list reads as PSMCT32
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.7's tables (CSA 0 to 15 for PSMCT32, 0 to 31 for the 16-bit formats; a 32-bit entry's halves
+  at k and 256 + k), TEX0's page ("In CSM2 mode, CSA=0 must be set"; CPSM 0000, 0010, 1010), §2.7.4.
+- **Test program:** `s18-clut`: PSMT4 with a PSMCT32 CLUT at CSA 20, PSMT8 with a PSMCT16 CLUT at CSA 24, CSM2 with CSA
+  3, CPSM 0001; a PSMCT16 CLUT at CSA 20 over a PSMCT32 one read afterwards.
+- **Referee:** PCSX2 2.8.2: every word equal.
+- **Conclusion:** as stated; **measured**, one lineage.
+- **Depends on it:** `gs::texture::Clut`, `gs::texture::clut_format`.
+- **Pinned by:** `the_clut_buffer_loads_as_cld_says_and_keeps_what_it_loaded`.
+- **Implemented in:** stage S18's commit.
+
+### D-245. GS, wrap modes: REGION_CLAMP takes MIN and then MAX, so MAX wins when MIN exceeds it; at level n both region modes shift their parameters right by n
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.5's formulas ("u < MINU: u' = MINU ... u > MAXU: u' = MAXU") and its sentence on levels for
+  REGION_CLAMP ("MINU >>n, MINV >>n, MAXU >>n, and MAXV >>n"); nothing for REGION_REPEAT at levels or for MIN above MAX.
+- **Test program:** `s18-clamp`: REGION_CLAMP with MINU 9, MAXU 5, MINV 12, MAXV 6; REGION_CLAMP and REGION_REPEAT at
+  level 1.
+- **Referee:** PCSX2 2.8.2: every word equal to MIN then MAX (2,048 of 2,048, where MIN-first-and-stop gives 372), and to
+  the shifted parameters at level 1 in both modes.
+- **Conclusion:** as stated; **measured**, one lineage, the formulas applied in their order.
+- **Depends on it:** `gs::texture::Wrap::apply`.
+- **Pinned by:** `every_wrap_mode_acts_on_whole_texels_at_each_level`.
+- **Implemented in:** stage S18's commit.
+
+### D-246. GS, MTBA: levels 1 to 3 follow each other, each the level's texels' bits rounded up to whole blocks, its width the level's texels over 64 and at least 1, written into MIPTBP1
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.11's "Automatic Calculation of Base Pointer" and its PSMCT16 512×512 example (7200, 9248,
+  9760, 9888, widths 8, 4, 2, 1); TEX1's page (MTBA "Base address of TBP1 - TBP3 is automatically set"). No formula, and
+  nothing for a buffer wider than the texture or a level smaller than a block.
+- **Test program:** `s18-filter`'s last two pages: 64×64 PSMCT32 with TBW 1, levels 1 to 3 by K, then MTBA cleared and
+  level 1 read through MIPTBP1; the same with TBW 4; 32×32 PSMT8, whose level 3 is a quarter of a block.
+- **Referee:** PCSX2 2.8.2: every word equal.
+- **Conclusion:** as stated; **measured**, one lineage, and the manual's example.
+- **Depends on it:** `gs::texture::auto_miptbp1`.
+- **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
+- **Implemented in:** stage S18's commit.
+
+### D-247. GS, texture coordinates: S, T and Q exact, interpolated exactly, divided exactly and floored to sixteenths of a texel; UV interpolated exactly and floored
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.10 (S, T and Q interpolated, then s = S/Q), §2.6.2 (texel coordinates in sixteenths, a texel's
+  centre at .5), ST's and RGBAQ's pages (float 32), UV's (int 0:10:4); ps2tek "GS Textures": S and T's "lower 8 bits are
+  rounded down to zero", a statement with no source. No precision is given for the interpolation or the division.
+- **Test program:** `s18-stq` and `s18-uv`, and every textured primitive of the other programs.
+- **Referee:** PCSX2 2.8.2: equal but at 112 words of `s18-stq` and 4 of `s18-uv`, every one a coordinate exactly on a
+  whole texel or above it by 1.5 × 10^-8 to 3.6 × 10^-7 of a texel, where it takes the texel below.
+- **Conclusion:** exact; **argued**, as D-160: the documents give the arithmetic, not its precision, and PCSX2's
+  departures lie within single precision's reach of a boundary. Zero exponent fields as zero and the largest as an
+  ordinary exponent [A]; ps2tek's dropped bits are not followed, having no source.
+- **Depends on it:** `gs::exact`, `gs::texture::Setup`.
+- **Pinned by:** `st_and_q_divide_exactly_after_interpolation`, `uv_coordinates_are_interpolated_exactly_on_every_primitive`.
+- **Implemented in:** stage S18's commit.
+
+### D-248. GS, fog: each colour (F × C + (100h − F) × FOGCOL) >> 8, so that F 0 gives FOGCOL itself
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.5: "R = F * Rv + ( 0xff – F )* Rfc ... However, A*B = ( A x B) >> 8"; FOG's page: "When the fog
+  value is 0, the fog effect is at the maximum (the drawing color becomes the same as the distant color)"; ps2tek "GS
+  Fog": the same two products, and "a value of 0xFF results in no change", which its own formula does not give.
+- **Test program:** `s18-fog`'s first page: sixteen flat sprites at F 0, 1, 40h, 7Fh, 80h, FEh, FFh and 33h.
+- **Referee:** PCSX2 2.8.2: all sixteen equal to (F × C + (100h − F) × FOGCOL) >> 8, none to §3.5's two products, nine to
+  division by FFh.
+- **Conclusion:** as stated; **measured**, one lineage with FOG's page; it is the alpha blend's form with FOGCOL as the
+  destination, as ps2tek observes of fog.
+- **Depends on it:** `gs::texture::fog`.
+- **Pinned by:** `fog_blends_fogcol_by_the_interpolated_coefficient`.
+- **Implemented in:** stage S18's commit.
+
+### D-249. GS, bilinear filtering: the four texels weighted by α and β in sixteenths and the sum rounded down once
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.8's formula, R = (1 − α)(1 − β)Ra + α(1 − β)Rb + (1 − α)βRc + αβRd, α and β "the decimal parts"
+  of s × USIZE − 0.5 and t × VSIZE − 0.5; §2.6.2's sixteenths. No rounding is given.
+- **Test program:** `s18-filter`'s magnification pages (every sixteenth across, REPEAT and CLAMP, PSMCT16 and PSMT8),
+  `s18-clamp`'s bilinear pages.
+- **Referee:** PCSX2 2.8.2 departs by one step in 1,462, 435, 1,068 and 344 words of the filter's pages and 869, 167, 53
+  and 870 of the clamp's; interpolating across, flooring, then down, flooring again, reproduces every word of the six
+  pages decomposed (12,288 of 12,288), where the single rounding agrees with 586 to 1,995 of each page's 2,048.
+- **Conclusion:** the formula with one rounding; **argued**, as D-160: PCSX2's two stages are its arithmetic; the
+  documents' formula has none between its terms.
+- **Depends on it:** `gs::texture::Sampler::level`.
+- **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`, `every_wrap_mode_acts_on_whole_texels_at_each_level`.
+- **Implemented in:** stage S18's commit.
+
+### D-250. GS, blending between mip levels: every channel of levels m and m + 1 mixed by the LOD's fraction and rounded down once
+
+- **Opened:** 2026-10-25, at stage S18.
+- **Documents read:** §3.4.12's MMIN table ("Linear interpolation by LOD" for MMIN 3, trilinear for 5). No precision.
+- **Test program:** `s18-filter`: MMIN 3 at K = 1.25 and 1.9375 and 7/16, MMIN 5 at 2.625 and 15/16, over a 64×64
+  mipmap of seven levels of generated texels.
+- **Referee:** PCSX2 2.8.2 blends red and green by the reading's weights; in pixel columns 2 and 3 of every four it
+  leaves blue and alpha at level m, unblended. Blending by the fraction, its two-stage bilinear (D-249), and that column
+  pattern reproduce every word of the five quarters tried (2,560 of 2,560).
+- **Conclusion:** every channel blended; **argued**: no document makes a channel or a column's blend depend on the
+  pixel's place, so the pattern is taken as a defect of the referee's renderer.
+- **Depends on it:** `gs::texture::Sampler::sample`.
+- **Pinned by:** `bilinear_lod_and_the_mipmap_filters_work_in_sixteenths`.
+- **Implemented in:** stage S18's commit.

@@ -26,5 +26,9 @@ Since stage S17 (§27) the GS draws: the vertex queue and drawing kick (`gs::dra
 interpolation (`gs::raster`) and the pixel pipeline (`gs::pixel`); `tests/draw.rs` grades it by `tests/s17/`'s programs
 and their model, which `cargo run --release --example s17 -- <folder>` writes for the referees with a background record
 each.
+Since stage S18 (§31) it textures and fogs: `gs::texture` (the CLUT buffer, the context's texture registers, the
+filters and the texture function) and `gs::exact` (texture coordinates and the LOD without rounding); `tests/texture.rs`
+grades them by `tests/s18/`'s programs and S17's model extended by `tests/s18/manual.rs`, which
+`cargo run --release --example s18 -- <folder>` writes for the referees.
 
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

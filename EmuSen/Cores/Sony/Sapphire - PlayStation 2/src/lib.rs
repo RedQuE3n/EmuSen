@@ -18,6 +18,7 @@
 //! S22: the SIF (`sif`), its registers and the FIFOs joining the two DMACs' SIF channels.
 //! S17: the GS draws every primitive, flat and Gouraud, with scissoring, FBMSK and the depth test.
 //! S14: VIF0 and VIF1 (`vif`) on the DMAC's channels 0 and 1, writing the VUs' memories and starting micro mode.
+//! S18: texture mapping (`gs::texture`: the CLUT buffer, LOD, mipmaps, filters, wrap modes, TEXA) and fog.
 
 pub mod bios;
 pub mod board;

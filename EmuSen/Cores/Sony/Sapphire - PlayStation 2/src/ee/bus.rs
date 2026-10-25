@@ -1,16 +1,14 @@
-//! What the EE core sees of memory at S6: a bus of naturally aligned accesses by physical address, and the stand-in
-//! for address translation until S7 builds the TLB (Sapphire_Native.md §16.3).
+//! What the EE core sees past its caches: a bus of naturally aligned accesses by physical address. `map` is the EE's
+//! physical memory map; `Ram` is RDRAM alone, for the tests.
 
 /// Naturally aligned reads and writes of 1, 2, 4, 8 or 16 bytes at a physical address, little-endian in the low bytes.
 pub trait Bus {
     fn read(&mut self, paddr: u32, bytes: usize) -> u128;
     fn write(&mut self, paddr: u32, bytes: usize, value: u128);
-}
-
-/// kseg0 and kseg1 drop their top three bits (EE Core User's Manual §5.1.6); the mapped segments are taken the same
-/// way until S7's TLB, a named stand-in.
-pub fn physical(vaddr: u32) -> u32 {
-    vaddr & 0x1FFF_FFFF
+    /// Whether an access at `paddr` asserts a bus error (EE User's Manual §2.1.2).
+    fn error(&mut self, _paddr: u32) -> bool {
+        false
+    }
 }
 
 /// RDRAM alone, 32 MiB from physical 0, for the interpreter's tests and the project's programs; elsewhere reads 0.

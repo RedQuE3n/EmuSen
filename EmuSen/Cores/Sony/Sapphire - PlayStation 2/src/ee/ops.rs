@@ -7,12 +7,21 @@ use std::sync::OnceLock;
 
 use emusen_mips::r5900::{self, Op as Decoded};
 
+use super::cop0::{self, debug, perf};
 use super::timing::{Category, HILO0, HILO1, Issue, SA, rows};
-use super::{Bus, Ee, Exception, cop0, status};
+use super::{Bus, Ee, Exception, status};
 
 pub(super) enum Stop {
     Exception(Exception),
+    /// A data breakpoint asked for the debug exception (EE Core User's Manual §9.2.5).
+    Debug,
     Halt,
+}
+
+impl From<Exception> for Stop {
+    fn from(e: Exception) -> Stop {
+        Stop::Exception(e)
+    }
 }
 
 type Run = fn(&mut Ee, &mut dyn Bus, u32, u32) -> Result<(), Stop>;
@@ -586,20 +595,45 @@ fn tnei(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 fn nothing(_: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
     Ok(())
 }
+/// SYNC.L also disables the uncached accelerated buffer (EE Core User's Manual §6.5.1).
+fn sync_l(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
+    e.ucab.valid = false;
+    Ok(())
+}
+fn pref(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
+    let v = address(e, w);
+    e.prefetch(b, v);
+    Ok(())
+}
 
-// Loads and stores. The address is bits 31..0 of base + offset; a misaligned natural access raises an address error.
+// Loads and stores. The address is bits 31..0 of base + offset; the data breakpoint is judged on it first, then a
+// misaligned natural access raises an address error (Table 4-2's order).
 fn address(e: &Ee, w: u32) -> u32 {
     e.get(rs(w)).wrapping_add(simm(w)) as u32
 }
-fn physical(e: &Ee, v: u32, align: u32, store: bool) -> Result<u32, Stop> {
+fn aligned(v: u32, align: u32, store: bool) -> R {
     if v & (align - 1) != 0 {
         return Err(Stop::Exception(if store { Exception::AddressStore(v) } else { Exception::AddressLoad(v) }));
     }
-    e.translate(v, store).map_err(Stop::Exception)
+    Ok(())
+}
+/// The effective address of a load, after its data breakpoint.
+fn load_address(e: &mut Ee, w: u32) -> Result<u32, Stop> {
+    let v = address(e, w);
+    e.data_break(v, false, None)?;
+    Ok(v)
+}
+/// The effective address of a store, after its data breakpoint on the register's low 32 bits (§9.2.4).
+fn store_address(e: &mut Ee, w: u32) -> Result<u32, Stop> {
+    let v = address(e, w);
+    let value = e.get(rt(w)) as u32;
+    e.data_break(v, true, Some(value))?;
+    Ok(v)
 }
 fn load(e: &mut Ee, b: &mut dyn Bus, w: u32, bytes: u32, signed: bool) -> R {
-    let p = physical(e, address(e, w), bytes, false)?;
-    let v = b.read(p, bytes as usize) as u64;
+    let a = load_address(e, w)?;
+    aligned(a, bytes, false)?;
+    let v = e.read(b, a, bytes as usize)? as u64;
     let bits = bytes * 8;
     let v = if bits == 64 {
         v
@@ -633,16 +667,18 @@ fn ld(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     load(e, b, w, 8, false)
 }
 fn lq(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let p = physical(e, address(e, w) & !15, 16, false)?;
-    let v = b.read(p, 16);
+    let a = load_address(e, w)?;
+    let v = e.read(b, a & !15, 16)?;
     if rt(w) != 0 {
         e.gpr[rt(w)] = v;
     }
     Ok(())
 }
 fn store(e: &mut Ee, b: &mut dyn Bus, w: u32, bytes: u32) -> R {
-    let p = physical(e, address(e, w), bytes, true)?;
-    b.write(p, bytes as usize, e.get(rt(w)) as u128);
+    let a = store_address(e, w)?;
+    aligned(a, bytes, true)?;
+    let v = e.get(rt(w)) as u128;
+    e.write(b, a, bytes as usize, v)?;
     Ok(())
 }
 fn sb(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
@@ -658,23 +694,31 @@ fn sd(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     store(e, b, w, 8)
 }
 fn sq(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let p = physical(e, address(e, w) & !15, 16, true)?;
-    b.write(p, 16, e.gpr[rt(w)]);
+    let a = store_address(e, w)?;
+    let v = e.gpr[rt(w)];
+    e.write(b, a & !15, 16, v)?;
     Ok(())
 }
 
 /// The unaligned forms: the aligned unit of `n` bytes holding the address, merged with the register as the manual's
 /// byte tables show (little-endian: LWL/LDL fill from the high end, LWR/LDR from the low end).
-fn unit(e: &Ee, b: &mut dyn Bus, w: u32, n: u32, store: bool) -> Result<(u32, u32, u64), Stop> {
-    let v = address(e, w);
-    let p = physical(e, v & !(n - 1), n, store)?;
-    Ok((p, v & (n - 1), b.read(p, n as usize) as u64))
+fn unit(e: &mut Ee, b: &mut dyn Bus, w: u32, n: u32) -> Result<(u32, u32, u64), Stop> {
+    let v = load_address(e, w)?;
+    let m = e.read(b, v & !(n - 1), n as usize)? as u64;
+    Ok((v & !(n - 1), v & (n - 1), m))
+}
+/// A store into the aligned unit of `n` bytes: the register's bytes `value`, memory's kept under `keep`.
+fn store_unit(e: &mut Ee, b: &mut dyn Bus, w: u32, n: u32, value: impl Fn(u32) -> (u64, u64)) -> R {
+    let v = store_address(e, w)?;
+    let (bits, keep) = value(v & (n - 1));
+    e.write_merge(b, v & !(n - 1), n as usize, bits as u128, keep as u128)?;
+    Ok(())
 }
 fn mask(bytes: u32) -> u64 {
     if bytes >= 8 { u64::MAX } else { (1u64 << (bytes * 8)) - 1 }
 }
 fn lwl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (_, k, m) = unit(e, b, w, 4, false)?;
+    let (_, k, m) = unit(e, b, w, 4)?;
     let shift = (3 - k) * 8;
     let reg = e.get(rt(w)) as u32;
     let v = (m as u32) << shift | reg & mask(shift / 8) as u32;
@@ -682,7 +726,7 @@ fn lwl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 fn lwr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (_, k, m) = unit(e, b, w, 4, false)?;
+    let (_, k, m) = unit(e, b, w, 4)?;
     let shift = k * 8;
     let reg = e.get(rt(w));
     let low = (m as u32) >> shift | (reg as u32) & !(mask(4 - k) as u32);
@@ -691,61 +735,46 @@ fn lwr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 fn ldl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (_, k, m) = unit(e, b, w, 8, false)?;
+    let (_, k, m) = unit(e, b, w, 8)?;
     let shift = (7 - k) * 8;
     let v = m << shift | e.get(rt(w)) & mask(shift / 8);
     e.set(rt(w), v);
     Ok(())
 }
 fn ldr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (_, k, m) = unit(e, b, w, 8, false)?;
+    let (_, k, m) = unit(e, b, w, 8)?;
     let shift = k * 8;
     let v = m >> shift | e.get(rt(w)) & !mask(8 - k);
     e.set(rt(w), v);
     Ok(())
 }
 fn swl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (p, k, m) = unit(e, b, w, 4, true)?;
-    let shift = (3 - k) * 8;
-    let keep = !(mask(4) as u32 >> shift);
-    let v = (m as u32) & keep | (e.get(rt(w)) as u32) >> shift;
-    b.write(p, 4, v as u128);
-    Ok(())
+    let r = e.get(rt(w)) as u32;
+    store_unit(e, b, w, 4, |k| {
+        let shift = (3 - k) * 8;
+        (u64::from(r >> shift), u64::from(!(mask(4) as u32 >> shift)))
+    })
 }
 fn swr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (p, k, m) = unit(e, b, w, 4, true)?;
-    let shift = k * 8;
-    let keep = mask(k) as u32;
-    let v = (m as u32) & keep | (e.get(rt(w)) as u32) << shift;
-    b.write(p, 4, v as u128);
-    Ok(())
+    let r = e.get(rt(w)) as u32;
+    store_unit(e, b, w, 4, |k| (u64::from(r << (k * 8)), mask(k)))
 }
 fn sdl(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (p, k, m) = unit(e, b, w, 8, true)?;
-    let shift = (7 - k) * 8;
-    let v = m & !(u64::MAX >> shift) | e.get(rt(w)) >> shift;
-    b.write(p, 8, v as u128);
-    Ok(())
+    let r = e.get(rt(w));
+    store_unit(e, b, w, 8, |k| {
+        let shift = (7 - k) * 8;
+        (r >> shift, !(u64::MAX >> shift))
+    })
 }
 fn sdr(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
-    let (p, k, m) = unit(e, b, w, 8, true)?;
-    let shift = k * 8;
-    let v = m & mask(k) | e.get(rt(w)) << shift;
-    b.write(p, 8, v as u128);
-    Ok(())
+    let r = e.get(rt(w));
+    store_unit(e, b, w, 8, |k| (r << (k * 8), mask(k)))
 }
 
-// COP0, as far as exceptions need it: the moves, ERET, EI and DI; the rest is S7's.
+// COP0: the moves (cop0::writable has each register's r/w bits), ERET, EI and DI, the TLB instructions, the debug
+// and performance moves, BC0 and CACHE (EE Core Instruction Set Manual chapter 4).
 fn cop0_usable(e: &Ee) -> R {
     if e.kernel() || e.status() & status::CU0 != 0 { Ok(()) } else { exc(Exception::Unusable(0)) }
-}
-/// The bits MTC0 may change: Status's r/w fields (§3.2's table); Cause, BadVAddr and PRId are read-only.
-fn writable(r: usize) -> u32 {
-    match r {
-        cop0::STATUS => 0xF0C7_9C1F,
-        cop0::CAUSE | cop0::BADVADDR | cop0::PRID => 0,
-        _ => u32::MAX,
-    }
 }
 fn mfc0(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     cop0_usable(e)?;
@@ -754,8 +783,106 @@ fn mfc0(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
 }
 fn mtc0(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     cop0_usable(e)?;
-    let (r, m) = (rd(w), writable(rd(w)));
-    e.cop0[r] = e.cop0[r] & !m | e.get(rt(w)) as u32 & m;
+    let v = e.get(rt(w)) as u32;
+    e.write_cop0(rd(w), v);
+    Ok(())
+}
+/// MFBPC and the like: the debug register numbered by bits 2..0 (the decoder gives only 0 and 2 to 7).
+fn mfdebug(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    e.set(rt(w), sext32(e.debug[(w & 7) as usize]));
+    Ok(())
+}
+fn mtdebug(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    let n = (w & 7) as usize;
+    e.debug[n] = e.get(rt(w)) as u32 & debug::writable(n);
+    Ok(())
+}
+/// MFPS reads PCCR whatever its reg field; MTPS writes it only for reg 0 (ps2autotests' `ee_cop0/performance`).
+fn mfps(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    e.set(rt(w), sext32(e.pccr));
+    Ok(())
+}
+fn mtps(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    if w >> 1 & 31 == 0 {
+        e.pccr = e.get(rt(w)) as u32 & perf::WRITABLE;
+    }
+    Ok(())
+}
+/// MFPC and MTPC: an even reg field names PCR0, an odd one PCR1 (the same test's console record).
+fn mfpc(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    e.set(rt(w), sext32(e.pcr[(w >> 1 & 1) as usize]));
+    Ok(())
+}
+fn mtpc(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    e.pcr[(w >> 1 & 1) as usize] = e.get(rt(w)) as u32;
+    Ok(())
+}
+fn tlbr(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    let i = (e.cop0[cop0::INDEX] & 63) as usize;
+    if i < super::tlb::ENTRIES {
+        let (pm, hi, lo0, lo1) = e.tlb.read(i);
+        e.cop0[cop0::PAGEMASK] = pm;
+        e.cop0[cop0::ENTRYHI] = hi;
+        e.cop0[cop0::ENTRYLO0] = lo0;
+        e.cop0[cop0::ENTRYLO1] = lo1;
+    }
+    Ok(())
+}
+fn tlb_write(e: &mut Ee, i: usize) {
+    if i < super::tlb::ENTRIES {
+        let c = &e.cop0;
+        e.tlb.write(i, c[cop0::PAGEMASK], c[cop0::ENTRYHI], c[cop0::ENTRYLO0], c[cop0::ENTRYLO1]);
+    }
+}
+fn tlbwi(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    tlb_write(e, (e.cop0[cop0::INDEX] & 63) as usize);
+    Ok(())
+}
+fn tlbwr(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    tlb_write(e, (e.cop0[cop0::RANDOM] & 63) as usize);
+    Ok(())
+}
+/// TLBP: the matching index, or P set with the index bits left as they were (the manual: undefined).
+fn tlbp(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    let found = e.tlb.probe(e.cop0[cop0::ENTRYHI]);
+    let i = &mut e.cop0[cop0::INDEX];
+    *i = match found {
+        Some(n) => n as u32,
+        None => 1 << 31 | *i & 63,
+    };
+    Ok(())
+}
+fn bc0(e: &mut Ee, w: u32, pc: u32, on_true: bool, is_likely: bool) -> R {
+    cop0_usable(e)?;
+    let t = e.cpcond0 == on_true;
+    if is_likely { likely(e, w, pc, t) } else { cond(e, w, pc, t) }
+}
+fn bc0f(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
+    bc0(e, w, pc, false, false)
+}
+fn bc0t(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
+    bc0(e, w, pc, true, false)
+}
+fn bc0fl(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
+    bc0(e, w, pc, false, true)
+}
+fn bc0tl(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
+    bc0(e, w, pc, true, true)
+}
+fn cache(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
+    cop0_usable(e)?;
+    let v = address(e, w);
+    e.cache_op(b, rt(w) as u32, v)?;
     Ok(())
 }
 fn eret(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
@@ -792,7 +919,7 @@ fn reserved(_: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
 /// An instruction a later stage executes; a coprocessor's raises its unusable exception first, as §4.2.14 says.
 fn later(e: &mut Ee, _: &mut dyn Bus, w: u32, _: u32) -> R {
     let n = match w >> 26 {
-        0x10 | 0x2F => 0,
+        0x10 => 0,
         0x11 | 0x31 | 0x39 => 1,
         0x12 | 0x36 | 0x3E => 2,
         _ => return Err(Stop::Halt),
@@ -911,9 +1038,9 @@ static TABLE: &[Op] = &[
     op("tltiu", tltiu, Alu, ALU, RS, 0),
     op("teqi", teqi, Alu, ALU, RS, 0),
     op("tnei", tnei, Alu, ALU, RS, 0),
-    op("sync", nothing, Sync, ALU, 0, 0),
+    op("sync", sync_l, Sync, ALU, 0, 0),
     op("sync.p", nothing, Sync, ALU, 0, 0),
-    op("pref", nothing, LoadStore, LOAD, RS, 0),
+    op("pref", pref, LoadStore, LOAD, RS, 0),
     op("lb", lb, LoadStore, LOAD, RS, RT),
     op("lbu", lbu, LoadStore, LOAD, RS, RT),
     op("lh", lh, LoadStore, LOAD, RS, RT),
@@ -940,10 +1067,50 @@ static TABLE: &[Op] = &[
     op("eret", eret, EretC, ALU, 0, 0),
     op("ei", ei, Cop0, ALU, 0, 0),
     op("di", di, Cop0, ALU, 0, 0),
+    op("tlbr", tlbr, Cop0, ALU, 0, 0),
+    op("tlbwi", tlbwi, Cop0, ALU, 0, 0),
+    op("tlbwr", tlbwr, Cop0, ALU, 0, 0),
+    op("tlbp", tlbp, Cop0, ALU, 0, 0),
+    op("mfbpc", mfdebug, Cop0, ALU, 0, RT),
+    op("mfiab", mfdebug, Cop0, ALU, 0, RT),
+    op("mfiabm", mfdebug, Cop0, ALU, 0, RT),
+    op("mfdab", mfdebug, Cop0, ALU, 0, RT),
+    op("mfdabm", mfdebug, Cop0, ALU, 0, RT),
+    op("mfdvb", mfdebug, Cop0, ALU, 0, RT),
+    op("mfdvbm", mfdebug, Cop0, ALU, 0, RT),
+    op("mtbpc", mtdebug, Cop0, ALU, RT, 0),
+    op("mtiab", mtdebug, Cop0, ALU, RT, 0),
+    op("mtiabm", mtdebug, Cop0, ALU, RT, 0),
+    op("mtdab", mtdebug, Cop0, ALU, RT, 0),
+    op("mtdabm", mtdebug, Cop0, ALU, RT, 0),
+    op("mtdvb", mtdebug, Cop0, ALU, RT, 0),
+    op("mtdvbm", mtdebug, Cop0, ALU, RT, 0),
+    op("mfps", mfps, Cop0, ALU, 0, RT),
+    op("mfpc", mfpc, Cop0, ALU, 0, RT),
+    op("mtps", mtps, Cop0, ALU, RT, 0),
+    op("mtpc", mtpc, Cop0, ALU, RT, 0),
+    op("bc0f", bc0f, Branch, BRANCH, 0, 0),
+    op("bc0t", bc0t, Branch, BRANCH, 0, 0),
+    op("bc0fl", bc0fl, Branch, BRANCH, 0, 0),
+    op("bc0tl", bc0tl, Branch, BRANCH, 0, 0),
+    op("cache", cache, LoadStore, LOAD, RS, 0),
 ];
 
 pub(super) const RESERVED: u16 = 0;
 pub(super) const LATER: u16 = 1;
+
+/// A branch Table 7-1's "branch issued" counts: conditional branches, J and JAL, not JR or JALR (§7.2.3).
+pub(super) fn predicted_branch(o: &Op) -> bool {
+    o.category == Branch && !matches!(o.name, "jr" | "jalr")
+}
+
+pub(super) fn is_load(o: &Op) -> bool {
+    o.category == LoadStore && o.writes & RT != 0
+}
+
+pub(super) fn is_store(o: &Op) -> bool {
+    o.category == LoadStore && o.name.starts_with('s')
+}
 
 /// The names this stage executes, the decoder's spelling.
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -995,5 +1162,5 @@ pub(super) fn issue(op: &Op, w: u32) -> Issue {
         }
         m & !1
     };
-    Issue { category: op.category, row: op.row, reads: bits(op.reads), writes: bits(op.writes), taken: false }
+    Issue { reads: bits(op.reads), writes: bits(op.writes), ..Issue::new(op.category, op.row) }
 }

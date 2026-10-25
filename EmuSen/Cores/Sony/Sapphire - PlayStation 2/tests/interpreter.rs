@@ -17,7 +17,7 @@ fn run(source: &str, limit: u64) -> (Ee, Ram) {
     let mut ram = Ram::new();
     ram.load(ORIGIN, &assemble(source, ORIGIN));
     let mut ee = Ee::new(ORIGIN);
-    let n = ee.run(&mut ram, limit, &mut |b| b.read(DONE_AT, 4) as u32 == DONE).unwrap_or_else(|h| panic!("{h:?}"));
+    let n = ee.run(&mut ram, limit, &mut |e, b| e.peek(b, DONE_AT, 4) as u32 == DONE).unwrap_or_else(|h| panic!("{h:?}"));
     assert!(n < limit, "no done word in {limit} instructions, pc {:08x}", ee.pc);
     (ee, ram)
 }
@@ -25,10 +25,10 @@ fn run(source: &str, limit: u64) -> (Ee, Ram) {
 fn grade(p: Program) {
     let name = p.name;
     let (source, expected) = p.finish();
-    let (_, ram) = run(&source, 20_000_000);
+    let (ee, mut ram) = run(&source, 20_000_000);
     let mut wrong = Vec::new();
     for (i, want) in expected.iter().enumerate() {
-        let got = ram.word(RECORD + 4 * i as u32);
+        let got = ee.peek(&mut ram, RECORD + 4 * i as u32, 4) as u32;
         if let Some(w) = want
             && *w != got
         {
@@ -89,16 +89,16 @@ fn the_undefined_inputs_give_the_interpreters_recorded_reading() {
 fn the_programs_execute_every_integer_encoding_the_interpreter_has() {
     let mut seen: std::collections::BTreeSet<String> = s6::all().into_iter().flat_map(|p| s6::covered(&p.finish().0)).collect();
     seen.extend(assemble(&s6::handler(), s6::VECTOR).iter().filter_map(|&w| emusen_mips::r5900::operation(w)).map(|o| o.mnemonic()));
-    let missing: Vec<_> = ee::names().filter(|n| !seen.contains(*n)).collect();
+    let missing: Vec<_> = ee::names().take(128).filter(|n| !seen.contains(*n)).collect();
     assert!(missing.is_empty(), "never executed: {missing:?}");
-    assert_eq!(ee::names().count(), 128, "the S6 set");
+    assert_eq!(ee::names().nth(127), Some("di"), "the S6 set is the table's first 128");
 }
 
 #[test]
 fn record_s_gives_the_twelve_words_the_referees_gave() {
     let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/programs/record.s")).unwrap();
-    let (ee, ram) = run(&source, 100_000);
-    let words: Vec<u32> = (0..12).map(|i| ram.word(RECORD + 4 * i)).collect();
+    let (ee, mut ram) = run(&source, 100_000);
+    let words: Vec<u32> = (0..12).map(|i| ee.peek(&mut ram, RECORD + 4 * i, 4) as u32).collect();
     assert_eq!(words, [0x8000_0000, 0xF800_0000, 0x0800_0000, 1, 0, 1, 0x3FFF_FFFF, 0xFFFF_FFFD, 0xFFFF_FFFF, 0x13BA, 1, 0xEEDD_BB80]);
     assert!(ee.timing.cycles() > 0 && ee.timing.cycles() < 2 * ee.timing.instructions);
 }
@@ -213,8 +213,13 @@ fn cycles(code: &str) -> u64 {
     cycles_of(code, code.lines().filter(|l| !l.trim().is_empty()).count())
 }
 
+/// The cycles `n` instructions take with both caches warm, as the latency table assumes: the code runs once first.
 fn cycles_of(code: &str, n: usize) -> u64 {
-    let (mut ee, mut ram) = machine(code);
+    let (mut warm, mut ram) = machine(code);
+    steps(&mut warm, &mut ram, n);
+    let mut ee = Ee::new(ORIGIN);
+    std::mem::swap(&mut ee.dcache, &mut warm.dcache);
+    std::mem::swap(&mut ee.icache, &mut warm.icache);
     steps(&mut ee, &mut ram, n);
     ee.timing.cycles()
 }
@@ -257,7 +262,7 @@ fn a_taken_branch_pairs_with_its_slot_and_the_target_starts_a_new_cycle() {
 #[test]
 fn a_y_pair_issues_together_and_costs_a_cycle() {
     let mut t = Timing::default();
-    let i = |category, row| Issue { category, row, reads: 0, writes: 0, taken: false };
+    let i = Issue::new;
     assert_eq!(t.issue(i(Category::WideOperate, timing::rows::ALU)), 0);
     assert_eq!(t.issue(i(Category::Alu, timing::rows::ALU)), 0);
     assert_eq!(t.issue(i(Category::Alu, timing::rows::ALU)), 2);

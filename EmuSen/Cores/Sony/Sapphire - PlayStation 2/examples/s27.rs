@@ -3,8 +3,12 @@
 //! <referee>` reads `<referee>-<name>.txt`, `ps2referee.py ram`'s output for each, and lists by command where the
 //! referee's record differs, with the EE cycles each command took there.
 
+#[path = "../tests/s11/mod.rs"]
+mod s11;
 #[path = "../tests/s27/mod.rs"]
 mod s27;
+#[path = "../tests/s6/mod.rs"]
+mod s6;
 
 fn words_of(text: &str) -> Vec<u32> {
     let Some((_, rest)) = text.split_once("== RAM") else { return Vec::new() };
@@ -183,4 +187,13 @@ fn main() {
         let graded = p.expected.iter().filter(|w| w.is_some()).count();
         println!("{}: {} commands, {} words of image, {} record words, {graded} graded", p.name, p.commands, p.image.len(), p.expected.len());
     }
+    let r = s27::registers::registers();
+    let name = r.name;
+    let (source, expected) = r.finish();
+    let words = emusen_mips::assemble(&source, s6::ORIGIN, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+    std::fs::write(dir.join(format!("{name}.elf")), sapphire::media::program(&words, s6::ORIGIN)).expect("written");
+    let text: String = expected.iter().map(|w| w.map_or("-\n".to_string(), |w| format!("{w:08x}\n"))).collect();
+    std::fs::write(dir.join(format!("{name}.expected")), text).expect("written");
+    std::fs::write(dir.join(format!("{name}.s")), &source).expect("written");
+    println!("{name}: {} words of code and data, {} record words", words.len(), expected.len());
 }

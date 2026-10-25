@@ -10,6 +10,7 @@ pub mod driver;
 pub mod encode;
 pub mod manual;
 pub mod program;
+pub mod registers;
 pub mod standard;
 
 /// A stream of the corpus: its name, its bytes, ffmpeg's decoding (yuv420p frames in display order).

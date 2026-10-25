@@ -162,7 +162,7 @@ pub struct Ipu {
     phase: Phase,
     /// FB's bits still to skip before the command proper.
     skip: u32,
-    /// IPU_CMD's DATA, and whether a command has been issued since the reset (ps2tek's quirk, D-311).
+    /// IPU_CMD's DATA, and whether VDEC or FDEC has given it since the last reset or BCLR (ps2tek's quirk, D-311).
     data: u32,
     issued: bool,
     th: (u32, u32),
@@ -265,16 +265,18 @@ impl Ipu {
         self.input.bp() | (self.input.ifc() as u32) << 8 | (self.input.fp() as u32) << 16
     }
 
-    /// IPU_CMD as read: DATA, VDEC's or FDEC's result, and BUSY; before any command, the stream's next 32 bits.
-    pub fn read_cmd(&self) -> u64 {
+    /// IPU_CMD as read: DATA, VDEC's or FDEC's result, and BUSY; after a reset or BCLR and before VDEC or FDEC, the
+    /// stream's next 32 bits (ps2tek, D-311).
+    pub fn read_cmd(&mut self) -> u64 {
         let data = if self.issued { self.data } else { self.input.peek32() };
         u64::from(data) | u64::from(self.busy) << 63
     }
 
-    /// IPU_TOP as read: the stream's next 32 bits, BUSY while a command runs or fewer than 32 bits are in the IPU.
+    /// IPU_TOP as read: the stream's next 32 bits, BUSY while a command runs or fewer than 32 bits are in the IPU
+    /// (ps2tek). It only looks; IPU_CMD's quirk reads, taking the first qword in (D-302).
     pub fn read_top(&self) -> u64 {
         let busy = self.busy || self.input.available() < SYMBOL;
-        u64::from(self.input.peek32()) | u64::from(busy) << 63
+        u64::from(self.input.look32()) | u64::from(busy) << 63
     }
 
     /// The register window and the FIFOs, as the EE reads them.
@@ -329,13 +331,18 @@ impl Ipu {
         self.ctrl & ctrl::MP1 != 0
     }
 
-    /// IPU_CMD's write: a command begins, ECD and SCD cleared; ignored while one runs.
+    /// IPU_CMD's write: a command begins, ECD and SCD cleared. While one runs, BCLR ends it and acts, and any other
+    /// command is ignored (D-314).
     pub fn command(&mut self, v: u32) {
         if self.busy {
-            return;
+            if v >> 28 != code::BCLR {
+                return;
+            }
+            self.pending_len = 0;
+            self.busy = false;
         }
         self.cmd = v;
-        self.issued = true;
+        self.issued |= matches!(v >> 28, code::VDEC | code::FDEC);
         self.ctrl &= !(ctrl::ECD | ctrl::SCD);
         self.busy = true;
         self.skip = 0;
@@ -344,6 +351,7 @@ impl Ipu {
         self.job = match v >> 28 {
             code::BCLR => {
                 self.input.clear(v & 0x7F);
+                self.issued = false;
                 Job::Ending
             }
             code::IDEC => {
@@ -484,7 +492,8 @@ impl Ipu {
         }
     }
 
-    /// VDEC (§8.4, §8.5.3): one code of the table TBL names, as its length in bits 31..16 and its value in 15..0.
+    /// VDEC (§8.4, §8.5.3): one code of the table TBL names, as its length in bits 31..16 and its value in 15..0;
+    /// bits no code begins, a start code among them, give 0 and ECD, the pointer unmoved (D-306).
     fn vdec(&mut self) -> Step {
         if self.input.available() < SYMBOL {
             return Step::Wait;
@@ -508,7 +517,7 @@ impl Ipu {
             }
             None => {
                 self.data = 0;
-                if self.input.zeros(SYMBOL) >= 8 { self.start_code() } else { self.error() }
+                self.error()
             }
         }
     }

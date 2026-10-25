@@ -1,6 +1,7 @@
 //! The IPU's input (EE User's Manual §8.3, IPU_BP): IPU_in_FIFO's eight qwords behind an internal buffer of up to two,
-//! read as one bit stream from the bit pointer BP in the first qword of the buffer. A qword entering the IPU fills the
-//! internal buffer first (Sapphire_Disputes.md D-302), so FP counts the qwords before the FIFO and IFC the FIFO's. The
+//! read as one bit stream from the bit pointer BP in the first qword of the buffer. A qword stays in the FIFO until a
+//! command reads its bits, which takes it into the internal buffer (Sapphire_Disputes.md D-302): FP counts the qwords a
+//! command's reads have reached, at most two, and IFC the rest. The
 //! stream's bits are taken in memory order, each byte's highest bit first, as an MPEG-2 bit stream is written
 //! (H.262 §6.2, "bslbf"). Sapphire_Native.md §34.4.
 
@@ -16,11 +17,13 @@ pub struct Input {
     /// bit 127.
     q: VecDeque<u128>,
     bp: u32,
+    /// The qwords at the head of `q` in the internal buffer.
+    fp: usize,
 }
 
 impl Default for Input {
     fn default() -> Self {
-        Input { q: VecDeque::with_capacity(FIFO_QWORDS + INTERNAL_QWORDS), bp: 0 }
+        Input { q: VecDeque::with_capacity(FIFO_QWORDS + INTERNAL_QWORDS), bp: 0, fp: 0 }
     }
 }
 
@@ -28,6 +31,7 @@ impl Input {
     /// BCLR (§8.4): every qword dropped, the next to enter read from bit `bp`.
     pub fn clear(&mut self, bp: u32) {
         self.q.clear();
+        self.fp = 0;
         self.bp = bp & 0x7F;
     }
 
@@ -37,7 +41,7 @@ impl Input {
 
     /// IPU_BP.FP: the qwords in the internal buffer.
     pub fn fp(&self) -> usize {
-        self.q.len().min(INTERNAL_QWORDS)
+        self.fp
     }
 
     /// IPU_BP.IFC and IPU_CTRL.IFC: the qwords in IPU_in_FIFO.
@@ -64,7 +68,14 @@ impl Input {
         (self.q.len() as u32 * 128).saturating_sub(self.bp)
     }
 
-    /// The 32 bits `offset` bits after BP, the first highest; bits past the last qword read 0.
+    /// A command reading the `n` bits after BP: the qwords they lie in enter the internal buffer.
+    fn pull(&mut self, n: u32) {
+        let reach = (self.bp + n).div_ceil(128) as usize;
+        self.fp = self.fp.max(reach.min(INTERNAL_QWORDS)).min(self.q.len());
+    }
+
+    /// The 32 bits `offset` bits after BP, the first highest; bits past the last qword read 0. Looking takes nothing
+    /// into the internal buffer.
     pub fn bits_at(&self, offset: u32) -> u32 {
         let p = self.bp + offset;
         let (i, s) = ((p / 128) as usize, p % 128);
@@ -73,14 +84,21 @@ impl Input {
         (w >> 96) as u32
     }
 
-    /// The next 32 bits.
-    pub fn peek32(&self) -> u32 {
+    /// The next 32 bits, looked at without taking them in.
+    pub fn look32(&self) -> u32 {
         self.bits_at(0)
     }
 
-    /// The next `n` bits (1 to 32) as a number.
-    pub fn peek(&self, n: u32) -> u32 {
-        self.peek32() >> (32 - n)
+    /// The next 32 bits, read by a command.
+    pub fn peek32(&mut self) -> u32 {
+        self.pull(32);
+        self.bits_at(0)
+    }
+
+    /// The next `n` bits (1 to 32) as a number, read by a command.
+    pub fn peek(&mut self, n: u32) -> u32 {
+        self.pull(n);
+        self.bits_at(0) >> (32 - n)
     }
 
     /// Takes `n` bits; a qword wholly read leaves the IPU and the FIFO's next enters the internal buffer.
@@ -88,6 +106,7 @@ impl Input {
         self.bp += n;
         while self.bp >= 128 && !self.q.is_empty() {
             self.q.pop_front();
+            self.fp = self.fp.saturating_sub(1);
             self.bp -= 128;
         }
     }
@@ -103,8 +122,9 @@ impl Input {
     }
 
     /// The zero bits from BP up to the first one, counted no further than `limit` or the bits in the IPU.
-    pub fn zeros(&self, limit: u32) -> u32 {
+    pub fn zeros(&mut self, limit: u32) -> u32 {
         let limit = limit.min(self.available());
+        self.pull(limit.min(32));
         let mut z = 0;
         while z < limit {
             let lz = self.bits_at(z).leading_zeros();
@@ -131,7 +151,10 @@ mod tests {
         let mut i = Input::default();
         i.push(u128::from_le_bytes(core::array::from_fn(|k| k as u8)));
         i.push(u128::from_le_bytes(core::array::from_fn(|k| 0x10 + k as u8)));
+        assert_eq!(i.look32(), 0x0001_0203);
+        assert_eq!((i.fp(), i.ifc()), (0, 2), "looking takes nothing in");
         assert_eq!(i.peek32(), 0x0001_0203);
+        assert_eq!((i.fp(), i.ifc()), (1, 1));
         i.skip(124);
         assert_eq!(i.peek32(), 0xF101_1121, "the last nibble of the first qword, then the second's bytes");
         i.skip(4);
@@ -140,15 +163,19 @@ mod tests {
     }
 
     #[test]
-    fn the_internal_buffer_fills_before_the_fifo() {
+    fn qwords_enter_the_internal_buffer_as_a_command_reads_them() {
         let mut i = Input::default();
-        for n in 0..10 {
+        for n in 0..8 {
             assert!(i.push(n));
         }
-        assert!(!i.push(10), "eight in the FIFO and two before it");
-        assert_eq!((i.fp(), i.ifc(), i.room()), (2, 8, 0));
-        i.skip(128);
-        assert_eq!((i.fp(), i.ifc(), i.room()), (2, 7, 1));
+        assert!(!i.push(8), "eight in the FIFO, none taken yet");
+        assert_eq!((i.fp(), i.ifc(), i.room()), (0, 8, 0));
+        i.skip(100);
+        i.peek32();
+        assert_eq!((i.fp(), i.ifc(), i.room()), (2, 6, 2), "bits 100 to 131 lie in two qwords");
+        assert!(i.push(8) && i.push(9));
+        i.skip(28);
+        assert_eq!((i.fp(), i.ifc()), (1, 8));
         assert_eq!(i.zeros(1000), 7, "the qword 1's first byte");
     }
 }

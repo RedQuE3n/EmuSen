@@ -1,6 +1,8 @@
 //! Stage S27's gate (Sapphire_Native.md §34): the IPU.
 
+mod s11;
 mod s27;
+mod s6;
 
 use s27::driver::{self, Options};
 use s27::{program, standard};
@@ -74,4 +76,27 @@ fn the_programs_replay_their_logs_through_the_dmac_on_the_board() {
 #[test]
 fn csc_and_pack_follow_the_manuals_post_processing() {
     s27::post().unwrap();
+}
+
+#[test]
+fn the_registers_and_fifos_answer_the_ee_as_chapter_8_says() {
+    let p = s27::registers::registers();
+    let name = p.name;
+    let (source, expected) = p.finish();
+    let words = emusen_mips::assemble(&source, s6::ORIGIN, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut sys = System::new(s6::ORIGIN);
+    sys.board.map.load(s6::ORIGIN, &words);
+    let limit = 50_000_000;
+    let n = sys.run(limit, &mut |s| s.peek(s6::DONE_AT, 4) as u32 == s6::DONE).unwrap_or_else(|h| panic!("{h:?}"));
+    assert!(n < limit, "{name}: no done word, pc {:08x}", sys.ee.pc);
+    let mut wrong = Vec::new();
+    for (i, want) in expected.iter().enumerate() {
+        let got = sys.peek(s6::RECORD + 4 * i as u32, 4) as u32;
+        if let Some(w) = want
+            && *w != got
+        {
+            wrong.push(format!("word {i} (record {}): {got:08x}, expected {w:08x}", i / 2));
+        }
+    }
+    assert!(wrong.is_empty(), "{name}: {} of {} words differ: {:?}", wrong.len(), expected.len(), &wrong[..wrong.len().min(10)]);
 }

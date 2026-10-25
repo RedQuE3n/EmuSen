@@ -1909,8 +1909,8 @@ Each was applied, `tests/dmac.rs` run, and the source restored [M].
 
 ### 20.10 What the plan got wrong, or left open
 
-- **The brief's and §5.1's "S1's scheduler"**: S1 built none (§16.11 said so); the scheduler is built here, each unit
-  reporting its next event and the board taking the earliest, as Diamond's bus does, with D-0's ratio in `clock.rs`.
+- **§5.1's scheduler**, taken as S1's: S1 built none (§16.11 said so); the scheduler is built here, each unit reporting
+  its next event and the board taking the earliest, as Diamond's bus does, with D-0's ratio in `clock.rs`.
 - **§3.2's row for the DMAC, INTC and timers** names the referees as the secondary oracle: PCSX2 is one for what the
   console texts exercise (§20.8) and for nothing else here; Play! is one for interleave alone.
 - **S11's gate** names three folders of ps2autotests that need the BIOS's kernel: they are met on PCSX2 against their

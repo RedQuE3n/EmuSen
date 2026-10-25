@@ -1,5 +1,10 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, a seventh time: the stores step 5 left are built (§18), as the tester decided §14.8's Q30. A
+packaged game's state records sit beside its states, its crop and engine in its `settings.json`, its art in its
+`media/`; both runtimes, the media store and both scrapers read and write them there, a moved package keeps them, and
+`pkg migrate` copies them in. Step 7 waits for the tester's go.*
+
 *Revised 2026-10-25, a sixth time: a patched game keeps its own saves (§16), as the tester decided §15.9's Q35. A game
 opened with its patch list applied has battery saves, save media and states of its own, named by the list's save key,
 in both runtimes; the platform interface 27. And §14.8's Q34 decided otherwise than recommended (§17): a claimed file
@@ -464,13 +469,13 @@ The rule is **migration, not duplication** [C]. Each fact keeps exactly one owne
 | A game's own save media (per-game cards, the `.brm`) | the runtime's *Per game* rule (`EmuSen_SaveMedia.md` §3.3) | `saves/` | `SaveLibrary` |
 | Shared and named cards, console memory | `Saves/<console>/Cards`, `Console` | **not moved**: they are the console's, shared between games (`EmuSen_SaveMedia.md` §3.3) | unchanged |
 | Save states and pictures | `StateDirectory`; on the author's machine that is the ROM folder itself (`EmuSen_Galaxia.md` §5.2), and its root holds 123 states, pictures and records [M, `ls`] | `states/` | `SaveLibrary.StatePathFor`, with the same parameter. **The copies in the library are read and never removed** |
-| A state's record | `records.db`, keyed by the state's full path (`EmuSen_Galaxia.md` §5.3a) | a row for the new path, copied from the old one | `records.db` (Mistress) |
+| A state's record | ~~`records.db`~~ `states.db` since D8, keyed by the state's full path (`EmuSen_Galaxia.md` §5.3a) | ~~a row for the new path, copied from the old one~~ beside the state, its name with `.json` (§18.1) | the runtimes' `StateRecords` |
 | The cheat list | `GameCheats.For`, `etc/EmuSen/cheats/<console>/<game>.json` (`EmuSen_Config_Reference.md` §3.4b) | `cheats.json` | `GameCheats`, which gains the same parameter |
-| The game's crop | `games.db`, `crop_*` columns (`EmuSen_Settings_Reference.md` §4.100) | `settings.json` | the package (§9 Q12) |
-| The game's engine | `games.db`, `game_edit` field `altemulator` (§4.66.5 there) | `settings.json` | the package (§9 Q12) |
+| The game's crop | `games.db`, `crop_*` columns (`EmuSen_Settings_Reference.md` §4.100) | `settings.json`'s `Crop` (§18.2) | the package (§9 Q12), read by `GameRecords` |
+| The game's engine | ~~`games.db`, `game_edit` field `altemulator` (§4.66.5 there)~~ since SR10 the runtime's `/etc/EmuSen/games/<system>/<stem>.json` | `settings.json`, that file moved whole (§18.2) | the package (§9 Q12), read by both runtimes |
 | Favourite, play time, collections, edits | `games.db` (§4.32, §4.38 there) | **not moved**: these are the player's library, not the game | `games.db`, keyed by the package's path and its hash |
 | Scraped metadata | `media.db` (`EmuSen_BigPicture.md` §17.5) | **not moved**: a cache keyed by hash | `media.db` |
-| Art | `home/Media/<system>/<type>/<stem>` (`EmuSen_BigPicture.md` §5.6) | `media/<type>/<stem>` | the media store, which reads a package's folder for a packaged game (§9 Q13) |
+| Art | `home/Media/<system>/<type>/<stem>` (`EmuSen_BigPicture.md` §5.6) | `media/<type>/<package's name>` (§18.3) | the media store, which reads a package's folder for a packaged game (§9 Q13) |
 | Firmware | `home/Firmware` (`EmuSen_Firmware.md` §0) | **never in a package** (§9 Q4) | unchanged |
 
 **One game, one save.** Once a package links a file, opening that file by its plain path, from DianaSh's `core`
@@ -981,7 +986,8 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 Smallest useful step first, each with a gate that must pass before the next begins [C, §9 Q17]. *Status, 2026-10-25:*
 steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
 run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 is built
-and its gate passed (§14); step 6 is built and its gate passed (§15); step 7 waits for the tester's go. Every test uses
+and its gate passed (§14); step 6 is built and its gate passed (§15); the stores step 5 left are built and their gate
+passed (§18); step 7 waits for the tester's go. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -1967,7 +1973,7 @@ The core ABI is unchanged, as §0 said it would be.
   cartridge's bytes within that second.
 - **Left by this step**: the state records of `records.db`, the crop and engine §9 Q12 moves to `settings.json`, and
   the art §9 Q13 moves to `media/` are not migrated, and nothing reads them from a package yet (Q30). A state without
-  its record loads as before (`EmuSen_Galaxia.md` §5.3a).
+  its record loads as before (`EmuSen_Galaxia.md` §5.3a). *Built 2026-10-25 (§18).*
 
 ### 14.7 The gate, the tests, and the faults seeded
 
@@ -2022,7 +2028,8 @@ the runtime case passed, 284.
 - **Q30 [decision]: the stores this step did not move.** State records, the crop and engine (§9 Q12) and art (§9 Q13)
   stay where they are, and nothing reads them from a package. *Recommended:* a step of their own before step 7, since a
   self-contained package is what would carry them to another machine, and each needs its reader changed with it
-  (`records.db`'s key, Mistress's crop and engine, the media store).
+  (`records.db`'s key, Mistress's crop and engine, the media store). *Decided 2026-10-25 by the tester: as
+  recommended; built in §18.*
 - **Q31 [decision]: opening a converted disc's original opens its CHD.** The package claims the sheet it was made
   from, so the library lists the disc once and both routes reach one save, but the original files are then played only
   where the CHD is gone. *Recommended:* keep it; a player who wants the original played makes no package of it, or
@@ -2449,3 +2456,174 @@ recorded again through the corpus's own recording, `GoldenCorpusTests` and `ManP
 | Fault | Caught by |
 |---|---|
 | Rust's `claims::resolve` refusing a changed claimed file by its plain path, as before | `CrystalParityTests.A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways` (the Rust run's open refused with the hashes) and `GalaxiaParityTests.A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike` (answer 16: C# plain, Rust refused) |
+
+---
+
+## 18. Built 2026-10-25: the stores
+
+*Measured on the development desktop on 2026-10-25. Every test made its library, packages, `states.db`, `games.db`,
+settings and media store in a temporary folder; nothing was read from or written to the ROM library, and `pkg migrate`
+was never run on it.* Marks as at the top: what was run is [M].
+
+**The decision** [C, decided 2026-10-25 by the tester, as recommended for §14.8 Q30]: the three stores step 5 left,
+a state's record, the crop and engine (§9 Q12) and art (§9 Q13), get a step of their own before step 7, each moved
+together with its reader. Each follows step 5's two rules: a packaged game's store is named so that the package moved or
+renamed keeps it, and what was kept before is read until the package holds its own (§14.2), and `pkg migrate` copies it
+in once, overwriting nothing and removing nothing (§3.5).
+
+### 18.1 A state's record
+
+**Where** [C]: beside the state in the package, the state's name with `.json`, as the picture is the state's name with
+`.png` (`EmuSen_Galaxia.md` §5.2): `states/<name>.slot2.json` for `states/<name>.slot2.state`. One line of JSON holds the
+record's members, as `StateRecord` names them, and the state's size and modification time:
+
+```
+{"Console":"TEST","Core":"V1TestCore (test)","StateVersion":1,"Build":"…","SavedAt":"…","RomFile":"plain.tst","RomMd5":"…","RomBytes":40,"StateBytes":4106,"StateModified":639…}
+```
+
+- **Keyed by its place, not by a full path.** `states.db` keys a record by the state's full path
+  (`EmuSen_Galaxia.md` §5.3a), which a package moved or renamed would lose. A file beside the state moves with it.
+- **Stamped as `states.db` stamps it.** The record is answered only while the state is the file it was written for,
+  the same size and time in .NET's ticks; a state rewritten by anything else has no record, and a state with no
+  record loads as before. This keeps §5.3a's rule that a record fails towards "no record", never towards a wrong one.
+- **Why not a row in a package's own database.** The record would then need SQLite wherever a package is read, and the
+  Rust shell lends none to its runtime (`with_records` is `None` there, `EmuSen_Backend.md` §14.12); a file beside the
+  state is read by every program. §5.3a removed the sidecars because the state folder on the author's machine is the
+  ROM library, which is never written; a package's `states/` is EmuSen's own folder, so that reason does not hold
+  there.
+- **A patched game's states keep their own records** (§16): their names carry `.patched-<key>`, so their records do.
+
+**The readers and writers, both runtimes** [M]: a state is a package's when its folder is named `states` and the folder
+above holds `package.json` (`SaveLibrary.PackageRecordPathFor`, `saves::package_record_path`). For such a state the
+record is written beside it and never to `states.db`; it is read there first, and only where no file is there is
+`states.db`'s row read (a state saved into a package by step 5's or 6's build, recorded by its full path then). Forgetting
+removes both. The C# runtime's `StateRecords` routes in its `Read`, `Write` and `Forget`; Crystal's Rust routes through
+`states::read`, `write` and `forget`, which take `states.db` as an option, so that a packaged state's record is kept and
+answered with no SQLite lent at all (`state_record` and `state_forget` no longer refuse for such a state). Mistress
+reads a record only through the runtime's `state_record`, so it follows.
+
+### 18.2 The crop and engine: the package's `settings.json`
+
+**One file, the game's own settings** [C]. Since SR10 the engine a game chooses is not `games.db`'s `altemulator`
+(§3.5's table said so before that move) but the runtime's file of the game's own settings,
+`/etc/EmuSen/games/<system>/<stem>.json`, a map of strings (`EmuSen_Backend.md` §14.7). A packaged game's
+`settings.json` **is** that file, moved into the package, with the same format, so that the runtime reads one more place
+and no second schema exists. The crop joins it as one more string, `"Crop": "<left> <right> <top> <bottom>"`, the four
+percentages in .NET's invariant shortest form, or `""` for a game that has none of its own and takes its console's.
+A string, because the runtime reads the file as a map of strings and reads as none a file that holds anything else.
+
+- **The switch is the file** for the runtime's settings: with no `settings.json` the plain file is read, and the first
+  change writes the package's, the plain values copied in by that read and the plain file left as it was
+  (`GameSettings.ReadPath` and `WritePath` in Galaxia, `settings::read_place` and `write_place` in Crystal's Rust).
+- **The switch is the key** for the crop: where `settings.json` holds no `Crop`, `games.db`'s row is read; `ClearCrop`
+  writes `""`, so that a cleared crop stays cleared while the row is kept. `games.db` is never written for a packaged
+  game.
+- **Either path reads the same.** Every reader resolves the path it is given first (`GamePackages.OpenedAs`,
+  `claims::opened_as`), so a package's folder reads its game's settings and crop, the plain file's included, before
+  the package has its own.
+- **Readers** [M]: the runtimes' session settings (`GetSettingOf`, `setting_of`, `apply_stored`) and the engine chosen
+  at open take the session's package root, resolved once at open as the saves' is; the calls with no session,
+  `game_setting_get` and `game_setting_set`, and firmware asked before a load resolve the path. Mistress's crop is
+  `GameRecords.Crop`, `SetCrop` and `ClearCrop`, which route before either half of `games.db`, so the C# and Rust
+  records agree trivially and `LibraryRecordsParityTests` holds as before.
+- **Not followed** [C]: the engine a route answer names (`emusen_crystal_route`) is the plain file's, since a route is
+  asked of every library file and resolving each would walk the claim index thousands of times. Nothing opens a game
+  by it; the open names its own engine.
+
+### 18.3 Art: the package's `media/`
+
+**Where** [C]: `<package>/media/<type folder>/<package's name><extension>`, ES-DE's type folders (`covers`,
+`screenshots`, `marquees`, …) as the media store uses them (`EmuSen_BigPicture.md` §5.6), named by the package's own
+name as its saves are (§14.2), so that the game renamed or moved keeps its art (`GamePackage.MediaPathFor`,
+`package::media_path`).
+
+- **Reading** [M]: a picture is looked for in a packaged game's package after the cover the player chose from another
+  game and what the player placed, and before the media store, an ES-DE folder and OpenEmu's failover
+  (`MediaSources.Locate`, `media.rs`' `locate`); its source is `package`. The store's picture is therefore read until
+  the package has its own of that type. The variant triggers count a package's types (`Present`), and the stamp that
+  tells the library to draw again includes each package's `media` folders.
+- **Which games are packages** is the library scan's answer (`RomEntry.Package`), handed to both halves as a map of
+  game file to package: to the C# `MediaSources` directly, and to the scraper in Rust as its settings' `packages`
+  (a minor extension of that request; absent, no package is consulted). A picture lookup is asked for every tile
+  drawn, so no lookup walks the claim index.
+- **Writing** [M]: both scrapers (`Scraper.KeepAsync`, `run.rs`' `keep`) write a packaged game's art into its package,
+  resolving the game as they already did for the patched identity (§15.4), and `media.db` names the file by its full
+  path, which the store's relative paths never are. A file the store kept before is never removed for a packaged game,
+  and the rename follower passes over a full path.
+- **Not moved**: `media.db`'s scraped text stays the scraper's cache (§9 Q13); Clear (`MediaStore.Forget`) still
+  deletes only below the store's own folder, so a package's art is left by it.
+
+### 18.4 `pkg migrate`
+
+Beside step 5's saves, states, pictures and cheat list (§14.4), `pkg migrate` now copies [M]:
+
+| Store | From | Into the package | Rule |
+|---|---|---|---|
+| A state's record | `states.db`'s row for each state copied, else `records.db`'s, read only and stamped against the original state | `states/<name>…json`, stamped against the copy | only where the package has none; a state already there takes its record only while its bytes are the original's |
+| The game's own settings | `/etc/EmuSen/games/<system>/<stem>.json`, copied byte for byte | `settings.json` | only where the package has none |
+| The crop | `games.db`'s `crop_*`, read only | `settings.json`'s `Crop` | added where `settings.json` holds no `Crop` |
+| Art | the media store, `home/Media/<system>/<type>/<game's folder>/<stem>.<ext>` | `media/<type>/<package's name>.<ext>` | each type the package has no file of |
+
+**SQLite for the tool** [C]. The records and the crop are in databases, and the library tool had no SQLite. It takes
+the process's own: the e_sqlite3 a .NET host already loaded, found by its file name without loading a second copy
+(`emusen_sqlite::Sqlite::of_process`, `RTLD_NOLOAD` on Linux and macOS, `open_already_loaded` on Windows), else the file
+the program ships beside the platform library. The rule that a process holds one SQLite (`EmuSen_Backend.md` §28.3)
+holds, and no interface changed. Where neither is there, as in the Rust shell alone, migrate copies the files and says
+"the states' records were not copied: this program has no SQLite loaded to read states.db with"; run again where there
+is one, it copies them. The outcome gains `records` (how many) and `records_words`; the shell prints both.
+
+**The library tool's new dependencies**, said as the code design asks: `emusen-crystal`, for a record's place, format and
+`states.db`'s read, and a game's own settings file, each read through its owner rather than copied; `emusen-scrape`, for
+the media store's layout and kinds; `emusen-sqlite`. All three were already linked into the platform library.
+
+### 18.5 The surfaces
+
+| Surface | Change |
+|---|---|
+| The platform interface | unchanged, 27 |
+| The frontend API | unchanged; `state_record` and `state_forget` answer a packaged state with no SQLite lent |
+| The scraper's settings | `packages`, an optional map of game file to package folder; the media answer's `source` gains `package` |
+| The service `emusen.library` | unchanged, 1.2; the `package` event of `pkg-migrate` gains `records` and `records_words` |
+| Galaxia, C# | `GameSettings` (moved from the runtime: `PlainPath`, `PackagePath`, `ReadPath`, `WritePath`, `Read`, `Write`, `CropKey`, `CropText`, `ParseCrop`); `SaveLibrary.PackageRecordPathFor`; `GamePackage.SettingsFile`, `MediaFolder`, `NameOf`, `MediaPathFor`; `GamePackages.OpenedAs` |
+| Galaxia, Rust | `saves::package_record_path`; `package::SETTINGS_FILE`, `MEDIA_FOLDER`, `media_path`; `claims::root_for`, `opened_as` |
+| `emusen-sqlite` | `Sqlite::of_process`, `SHIPPED_NAME`; `Debug` |
+| The runtimes | the packaged record in `StateRecords` and `states::{read, write, forget, read_packaged, package_record_text, kept_record, write_package_copy}`; the game's own values with a package root in both |
+| Mistress | `GameRecords.OpenedAs`, `SystemOf`; `MediaSources`' `packages`, `MediaSource.Package`; `EsdeMediaFolder.FindInPackage`, `PackageStamp`; the window's `PackagesByGame`, sent to the scraper in Rust after each scan |
+
+The core ABI is unchanged.
+
+### 18.6 Otherwise than the plan, and found on the way
+
+- **§3.5's table named `games.db`'s `altemulator` as the engine's owner**; it has been the runtime's file since SR10, so
+  that file is what moves, whole.
+- **§3.5's table had the record copied as "a row for the new path"**; a row keyed by a path is what a moved package would
+  lose (§18.1).
+- **The library tool needs SQLite** for two of the four stores, which §3.5 did not foresee (§18.4).
+
+### 18.7 The gate, the tests, and the faults seeded
+
+**The gate** [M]:
+
+1. *For each store, a packaged game opened by its plain path and by its package reads the same record, crop/engine and
+   art*: `CrystalParityTests.A_packaged_game_s_state_records_and_own_settings_are_its_package_s_by_either_path_and_kept_when_it_moves_both_ways`,
+   both runtimes, the session-less settings by the game file and by the package's folder, the session's by each route,
+   the slot's record by each; `PackageCropTests` through both halves of `games.db`'s records; the art by its game file,
+   the key both routes share (§14.6), in `ScrapeMediaParityTests`, `GamePackageGateTests` and the fit audit's library.
+2. *`pkg migrate` copies them in and leaves the originals byte-identical*:
+   `GamePackageGateTests.Migrating_copies_the_state_records_settings_crop_and_art_in_and_leaves_their_originals_as_they_were`,
+   through the platform library as Mistress reaches it: `states.db`, `games.db`, the settings file, two store pictures
+   and the state hashed with SHA-256 before and after, equal; a second migrate copies nothing. In Rust,
+   `library-tool/tests/packages.rs` copies the settings and the art and says why the records were not copied.
+3. *A moved package keeps them*: the parity case moves the package's folder and reads the record and the settings by the
+   plain path; the gate case moves it and reads the record, the engine and the cover; `PackageCropTests` moves it and
+   reads the crop.
+4. *The library tree is unchanged*: the gate case's listing of every library file's path, size, time and MD5, before
+   and after making, migrating and moving; the parity case's tree of the library.
+5. *Both runtimes and both languages alike*: the parity case's answers and the trees it leaves in `Packages`, the
+   library and the settings folder (the records' moments and builds hidden); `ScrapeMediaParityTests` over three seeds
+   with packaged games, every game asked every type and the shelves' present types and the packages' stamp compared;
+   `ScrapeReplayParityTests.A_packaged_game_s_art_is_written_into_its_package_alike`, each half's package compared.
+6. *The fit audit for the windows that show art or crop*:
+   `WindowFitAuditTests.The_library_with_packages_lists_each_game_once_and_nothing_is_cut_off` at 1280 × 800 and
+   1920 × 1200, its packaged game's cover now in its package and found there; the crop window and the big-picture
+   views run in the blast radius below.

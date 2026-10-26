@@ -11075,3 +11075,295 @@ replacement** (recorded in §35).
 5. **Q5 [routine], CHD for PlayStation 2 discs.** *Recommended*: a later step adds `ps2` to the CD tool with `createdvd`
    for DVD images, once `emusen-disc`'s DVD CHD reading is graded on a converted disc of the tester's.
 
+## 50. Stage S43, the GS's software rasteriser on worker threads (2026-10-26)
+
+### 50.1 In one paragraph
+
+`Sapphire_Plan.md` §7's row S43, lever 3 of §5.12 for the GS, decided 2026-10-26 by the tester as the next speed step.
+The GS's thread (the emulation thread) still takes every register write, every drawing kick and every transfer in the
+order the one-thread path does; what it no longer does is draw. Each primitive, with its context's environment as it
+stood at the drawing kick, and each host-to-local transfer's data, 32 units at a time, is published as a **job** to a
+ring that every worker reads in order. A primitive is shared by bands of 32 or 64 rows, worker `w` of `n` drawing the
+bands whose number modulo `n` is `w`; a primitive whose stores would meet between workers, or whose reads meet what it
+changes, and every transfer job, go whole to one worker. **The local memory is owned by page lanes**, the low 24 bits
+and the high 8 of each 8 KiB page's words: for each lane the GS's thread records the worker and job that last changed it
+and the last job that read it, and hands each job, for each worker running it, the earlier jobs of other workers it
+must see finished first. The workers wait for those among themselves; **the GS's thread waits only where it reads**:
+a local-to-host transfer, a local-to-local one, a CLUT's load, the PCRTC's line, a state, the debugger, each waiting
+for the lanes it touches. So each lane of each word sees its reads and changes in the one-thread order whatever the
+worker count and the host's scheduling (§50.3), and the memory at every point the machine can observe is the
+one-thread path's: **the local memory after every frame, the picture, the sound and the state are equal at 1, 2 and
+4 workers on both EE tiers over Jak and Daxter's 900 frames and the boot's 760** (§50.6). The setting `gs_workers`
+(automatic, one thread, two to four workers; `effect: exact`) chooses; one thread is the reference path, unchanged.
+Measured at CPU weight 100 beside other work, on WiseMan with S33's idle skipping on (§50.7): **the boot's language
+screen from 137.9 to 49.3 ms a frame at four workers (7.25 to 20.3 frames a second, 2.80 times), its intro from 202.6 to
+94.0 (2.16 times), Jak and Daxter's memory card screen from 103.5 to 72.1 (1.44 times)**, the one-thread path level with
+the tree before the stage. Nothing was made inexact, so no compromise is proposed and no dispute was opened.
+
+### 50.2 What was built
+
+| Module | What | Lines |
+| --- | --- | --- |
+| `gs/workers.rs` (new) | the workers, the ring of 4,096 jobs, the sixteen CLUT slots, the GS's thread's record of page lanes and the dependencies it hands each job, the waits of its own accesses (`Mem`), a transfer's batches, the counts, and the hold the tests use | 669 |
+| `gs/local.rs` | the memory as one allocation reached a word at a time as relaxed atomic words (§50.3.4); `Units`, the sets of page lanes, and `cells`/`units`, the page cells a rectangle covers; `Memory`, what a transfer reads and writes through | +206 −9 |
+| `gs/raster.rs` | `Rows`, the rows a drawing pass covers, in every primitive's loops; `primitive`, the one dispatch the drawing kick and the workers share; `bounds`, a rectangle holding every pixel a primitive can write | +73 −7 |
+| `gs/texture.rs` | `Sampler::units`, the page lanes every texel a sampler can read lies in; the CLUT's load through the waiting accessor | +26 −5 |
+| `gs/transfer.rs` | the transfers over `Memory`; `destination`; `Dry`, the memory that keeps nothing | +24 −5 |
+| `gs/mod.rs`, `gs/draw.rs` | the workers in the GS: `set_workers`, `local()` and `join()`, `settle` and `peek` for the PCRTC, `set_word` and `write_pixel` for tools, the state joining first | +139 −17 |
+| `pcrtc/mod.rs`, `machine.rs` | each line's pages waited for before it is read; GSMEM through `local()` | small |
+| `v1.rs` | the setting `gs_workers` and `SAPPHIRE_GS_WORKERS`, and its test | +24 |
+| `examples/bench.rs` | `--blocks` (as S37 adds it), `--idle` (S33's skipping on), `--gs-workers N`, `--edram` (the memory's digest after every frame), and the workers' counts | +43 −3 |
+| `tests/threads.rs` (new) | generated streams at 1, 2, 3, 4 and 8 workers; a state saved with jobs in flight; the wait sites held open | 423 |
+| WiseMan `SapphireTests` | the settings' keys with `gs_workers` | 1 |
+
+### 50.3 Why the memory is the one-thread path's
+
+#### 50.3.1 The jobs, and who runs them
+
+A job is a primitive (its kind, its three vertices with XYOFFSET subtracted, and the `Environment` read at its drawing
+kick, which holds every register the drawing reads, so a later register write needs no barrier) or a host-to-local
+transfer's batch (the transfer as it stood before the batch's first unit, and up to 32 units). Every worker takes every
+job in order and stores its count after each with Release. Of a primitive it draws its own rows (`Rows`): the band of a
+row is its number shifted right by 5 or 6, the larger page height of the frame's format and of Z's (32 for the 32- and
+24-bit formats, 64 for the 16-bit ones, §8.1); so every page row of either buffer lies in one band, and the pages a band
+covers are the band's alone **unless** the buffer's width wraps a row into the next page row (pixels past FBW × 64), or
+Z and the frame share a page across bands. The GS's thread therefore computes, for each worker, the page lanes its rows
+change (`local::cells` over the primitive's bounding rectangle within the scissoring area, one cell a page: every pixel
+of a page-aligned cell lies in one page, two when the base pointer lies inside a page, as a texture's may), and a
+primitive goes whole to one worker when:
+
+- two workers' stores would meet in a page (a store is of a whole word, §50.3.4), or
+- what it reads (its texture's lanes, §50.3.3, and Z's under ZMSK) meets what it changes: a texture drawn from its own
+  frame, whose order between rows is the primitive's own.
+
+The worker chosen is the one still changing a lane the job touches, else the next in turn; which worker draws decides
+nothing but the time. A transfer's batch goes whole to one worker, which changes the lanes of the transfer's whole
+destination rectangle (the whole of an axis on which it wraps at 2048).
+
+#### 50.3.2 The dependencies
+
+For each page lane `u` the GS's thread keeps the worker and job that last changed it (`owner[u]`, `wseq[u]`) and the
+last job that read it (`rseq[u]`). Before publishing job `s` it gives each running worker `w` the count each other
+worker `o` must reach first:
+
+- **before a store** to a page: the last changer of each of the page's two lanes (a write after a write, and the read
+  of the other lane a store of the whole word makes), and the last readers of the lanes it changes (a write after a
+  read);
+- **before a read** of a lane: its last changer (a read after a write).
+
+A dependency the GS's thread has already seen met (an Acquire load of that worker's count at or past it) is dropped,
+since its Acquire and the publication's Release order it before the worker. Each worker waits for its dependencies
+before running its part of the job, and only for **earlier** jobs, so no wait closes a cycle and the workers cannot
+deadlock; a worker held by a test holds only those that depend on it. Then each word's lanes see, from the workers,
+their changes and reads in job order: a change by `w` of lane `u` follows every earlier change of `u` or of the other
+lane of its word (the dependency, or `w`'s own order) and every earlier read of `u`; a read follows the last change.
+Within one job the rows are disjoint in the pages they store to, and within one worker the order is the primitive's
+own. That is the one-thread path's order for every access that can change a value, so every value read and stored is
+the one-thread path's.
+
+#### 50.3.3 The texture's lanes, and why lanes at all
+
+`Sampler::units` takes every level the sampler can choose (0 to MXL under a mipmapping MMIN, 0 otherwise) over every
+coordinate its wrap modes can give: [0, size) for REPEAT and CLAMP, [0, MAX] for REGION_CLAMP, [0, MIN | MAX] for
+REGION_REPEAT, each shifted right by the level, read off `Wrap::apply` (S18, §31). The lanes are the format's: PSMCT24
+and PSMZ24 the low 24 bits, PSMT8H, PSMT4HL and PSMT4HH the high 8, the rest both. **Pages alone were not enough**: the
+first build owned whole pages, and on Jak and Daxter's memory card screen 311,326 of 404,206 primitives went to one
+worker each, every one because its texture met what it changed. A diagnostic print (not kept) showed why: the game keeps
+PSMT4HL textures in the top byte of its PSMZ24 buffer's words (the texture at block 14,720, inside the Z buffer at
+14,336), the trick the PSMT4HL and PSMT8H formats exist for (§2.6.3). With lanes, every primitive of that screen is
+shared (§50.6).
+
+#### 50.3.4 The words as atomics
+
+A worker that changes a PSMZ24 pixel stores the whole word with its top byte unchanged, while another may be reading
+that top byte as a texel. The value read is right either way, but two unordered accesses to one word, one a store, are
+a data race in Rust's model and so undefined, whatever value the read finds (`Mars_Native.md` §5.6.1 met the same rule).
+Every access to the local memory is therefore a relaxed atomic load or store of the word (`AtomicU32::from_ptr`), which
+on x86-64 and AArch64 is the plain load and store; a pixel's write is a load and a store, not an atomic read-modify-write,
+which is exact because no two workers store to one page in one job and every earlier store is a dependency. The memory
+is one allocation reached a word at a time while workers run, never through a slice; `Local::words` forms the slice
+only after a join. A worker's view of the memory (`Local::view`) frees nothing, and the workers are dropped, and
+joined, before the memory they draw into.
+
+#### 50.3.5 The GS's thread's accesses: the observation points
+
+| Access | What waits |
+| --- | --- |
+| a host-to-local transfer's data (HWREG) | nothing: the batch is a job, and the GS's thread follows the transfer's place with `Dry` |
+| a local-to-host transfer's reads, a local-to-local transfer, a CLUT's load | each pixel's word, through `workers::Mem`: its lanes' changers, and for a store both lanes' changers and the changed lanes' readers |
+| the PCRTC's line | the lanes of the buffer row it reads, before the line (`Gs::settle`, then `Gs::peek`, which a debug build checks) |
+| a state, `local()`, `set_word`, `write_pixel`, the debugger's GSMEM, the bench's digest | every worker (`join`) |
+| a transfer's start or end (TRXDIR, CSR's reset), a primitive, any of the above | the pending batch published first, so the ring's order is the GS's |
+
+CSR, SIGLBLID, IMR and the events SIGNAL, FINISH and LABEL raise are the GS's thread's own, set as the one-thread path
+sets them; the drawing changes none of them, so they need no barrier (the plan's S43 row named FINISH, SIGNAL and LABEL
+as barriers; what an EE that sees FINISH then reads is the memory, through the waits above). Register writes need no
+barrier either, since each job carries the environment it was kicked with.
+
+#### 50.3.6 The CLUT
+
+The CLUT's buffer is the GS's thread's state, loaded at TEX0 and TEX2 as before through the waiting accessor. When a
+primitive uses it after a load that changed it, it is copied into the next of sixteen slots, once every primitive that
+read that slot is drawn (`clut_use`), and the job names its slot. Jak and Daxter's 900 frames copied it 2,839 times
+and never waited for a slot; the boot copied it once.
+
+### 50.4 The worker count, and the setting
+
+`gs_workers`: **Automatic** (the default), **One thread** (the reference: the GS draws on the emulation thread as before
+this stage, no worker exists), or two, three or four workers; `effect: exact`; `SAPPHIRE_GS_WORKERS` overrides it for
+measurement and is read by `Gs::new` too, so any test can run its GS on workers. **Automatic is a quarter of the host's
+threads, at least one and at most four**, chosen as MarsRT's was (`Mars_Native.md` §5.6.8, §6.16.6), by the desktop's
+series (§50.7): four is the fastest on the boot's windows (the language screen 49.3 ms against 58.2 at three and 78.3 at
+two) and no slower anywhere; Jak and Daxter's windows are level from two to four, its emulation thread being the bound.
+The cap at four is also the brief's for measuring beside other work. On this desktop (16 threads) Automatic is four;
+on the handheld (the Legion Go S, 8 cores, 16 threads) it is four as well, **and its runs are owed** (§50.10): there,
+as MarsRT found (§6.16.8), four workers share a power budget with the thread that is the bound. An idle worker spins
+2,000 rounds before it parks; the spin was not tuned.
+
+### 50.5 Tests and seeded faults (2026-10-26)
+
+`tests/threads.rs`, nine tests, each at one thread and on workers:
+
+| Test | What it holds |
+| --- | --- |
+| `generated_streams_leave_the_memory_and_every_read_back_as_one_thread_does_at_every_worker_count` | sixteen streams of 700 steps over twelve pages, so that frames, Z buffers, textures, CLUTs and transfers meet: every context register with random values (every frame and Z format, TEST whole, the scissor, ALPHA, FBA, PABE, DTHE, COLCLAMP, SCANMSK, XYOFFSET, PRMODECONT, TEX0 to TEX2 with every texture format and CLD, CLAMP, MIPTBP, TEXA, TEXCLUT), primitives of every kind with every attribute and XYZ2, XYZF2, XYZ3 and XYZF3, host-to-local transfers in every format (a quarter cut short by the next TRXDIR), local-to-local and local-to-host transfers; every value read back and the memory's digest at 1 in 20 steps, equal at 2, 3, 4 and 8 workers to one thread's; both kinds of primitive drawn (over 1,000 shared, over 100 alone) |
+| `a_state_saved_with_primitives_in_flight_loads_and_continues_as_one_thread_does` | two of four workers held while 300 steps and then primitives are published, a state saved with jobs in flight (asserted), loaded into three workers, the stream continued: equal to one thread's throughout |
+| the wait sites: `a_local_to_host_transfer_waits…`, `a_host_to_local_transfer_is_written_after…`, `a_clut_load_from_a_page_being_drawn_waits…`, `a_pcrtc_line_waits…`, `a_state_and_the_debugger_wait…` | every worker held for 150 ms with a sprite pending, the access made on the GS's thread, the workers released from another thread: the access waited the whole hold and saw what one thread leaves (MarsRT's site tests, §5.6.3) |
+| `a_primitive_textured_from_rows_another_worker_draws_waits_for_them` | worker 1 held while page 0 is filled and then a sprite textured from page 0 upside down, so that worker 0's rows read worker 1's: equal to one thread's |
+| `a_clut_loaded_while_primitives_still_read_the_last_does_not_change_what_they_draw` | worker 1 held while two PSMT4 sprites are drawn, each after its own CLUT's load: two slots taken, equal to one thread's |
+
+`v1.rs` gains `the_gs_workers_setting_defaults_to_automatic_and_chooses_one_thread_or_workers`. **The GS's programs and
+ps2autotests' GS texts as before, at one thread and on four workers** (`SAPPHIRE_GS_WORKERS=4`): `tests/draw.rs` 13,
+`pixel.rs` 13, `texture.rs` 11, `gs.rs` 12 (ps2autotests' `gs/label` and `gs/signal` among them), `gif.rs` 16 (S16 to
+S19's programs through PATH3 and VIF1), `pcrtc.rs` 6, `vif.rs` 14, `state.rs` 11 and the crate's unit tests, on the stage's
+base and again on each rebased tree. `threads.rs` and `pcrtc.rs` on four workers also pass in a debug build, where
+every PCRTC read checks that its lanes were waited for (`Gs::peek`).
+
+**ThreadSanitizer**, as MarsRT's RDP was checked (§5.6.7): the crate built with `-Zsanitizer=thread` on the stable
+compiler (`RUSTC_BOOTSTRAP=1`, clang's `libclang_rt.tsan`, `--target x86_64-unknown-linux-gnu` so that the proc-macros
+build without it), `tests/threads.rs` run three times: **no report** in any, the only reports met being libtest's own
+result channel (std is not instrumented), suppressed as MarsRT suppressed it. The positive control, the publication's
+count stored Relaxed instead of Release, gave 2,723 reports in the same tests. What TSan does not see here: the memory's
+words are atomic (§50.3.4), so a word stored by two workers is not a race to it; the equality tests are that check.
+
+**Seeded faults**, each alone, `tests/threads.rs` in release, the source restored after each:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | two workers writing one pixel: a band's first row drawn by the previous band's worker as well | the generated streams, the state in flight |
+| F2 | a CLUT load's barrier missed: the new CLUT copied into the slot primitives still read | the CLUT test, the generated streams |
+| F3 | a transfer not waited for before a read: a local-to-host transfer reading without waiting | both transfer sites, the generated streams, the state in flight |
+| F4 | a transfer's batch not published before the next primitive | the generated streams, the state in flight |
+| F5 | a texture read's dependency on its last changer dropped | the texture test (the generated streams did not, the reason the test exists) |
+
+F2 and F5 first survived the dedicated tests as written for the first design, where the GS's thread waited at a
+hazard and so ordered the workers itself; both tests were rewritten to hold one worker from the start, so that only the
+dependencies order the other, and then caught them.
+
+### 50.6 The gate: equal after every frame (measured 2026-10-26)
+
+`examples/bench.rs --edram` digests the whole local memory after every frame, beside S32's digests of every frame's
+picture, of the sound and of the final state. Jak and Daxter's program (900 frames, its image read in place from the
+probe's folder) and the OSDSYS boot (760), on WiseMan `9b0f2b1c5` with this stage, at one thread and on two and four
+workers, at CPU weight 20 beside other work:
+
+| Run | Tier | Picture | Sound | State | Local memory after every frame |
+| --- | --- | --- | --- | --- | --- |
+| Jak and Daxter, 1, 2 and 4 workers | recompiler | `7EEC08D4D07DB621` | `20BB66B5E91347C9` | `BEC07CDF932EDE1A` | `E12833C68C336EF7` |
+| the same | interpreter | the same | the same | the same | the same |
+| The boot, 1, 2 and 4 workers | recompiler | `50F06A02F1B76860` | `2EE7B3D10DF3C401` | `ECEAB6AFF3DA4760` | `CE24095AB6939D1D` |
+| the same | interpreter | the same | the same | the same | the same |
+
+The pictures and sounds are §46's; the states are §46's on today's tree. **Twelve runs, one set of digests per
+workload.** The timed series of §50.7 ran on WiseMan `26888b88e` (S33 merged, idle skipping on) and gave the same
+picture, sound and state digests in every one of its 30 runs: the base tree, one thread and 2, 3 and 4 workers.
+
+### 50.7 Speed (measured 2026-10-26)
+
+**The method**: S32's bench with `--blocks --idle` (the recompiler tier and S33's idle skipping, as players get them),
+each frame's `advance` timed; the windows' means from each run's times; three rounds, the order of the five
+configurations rotated between rounds (base, 1, 2, 3, 4; 4, 3, 2, 1, base; 2, base, 4, 1, 3); each run alone among this
+stage's jobs, in a capped scope at CPU weight 100, other stages building and running beside it (one-minute loads 4.4 to
+11.2, recorded before and after each run). **Base** is WiseMan `26888b88e` with only the bench's `--blocks` and
+`--idle` added; the others are this stage on the same tree.
+
+| Mean ms a frame, median of three (rounds) | Base | One thread | 2 workers | 3 workers | **4 workers** | Base to 4 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Jak and Daxter, frames 400–900, the memory card screen | 103.5 (109.0, 103.5, 101.9) | 109.4 (109.4, 103.5, 111.2) | 72.1 | 73.4 | **72.1** (72.1, 72.0, 75.5) | **1.44×**; 9.66 → 13.87 fps |
+| frames 8–400, its start and loading | 70.1 | 70.0 | 68.2 | 66.5 | 67.7 | 1.04× |
+| frames 0–900 | 89.9 | 94.3 | 72.1 | 71.8 | 71.8 | 1.25×; 11.1 → 13.9 fps |
+| The boot, frames 0–690, the intro | 202.6 (206.6, 199.3, 202.6) | 199.9 | 107.6 | 98.8 | **94.0** (93.4, 94.2, 94.0) | **2.16×**; 4.94 → 10.64 fps |
+| the intro's frames 40–90 | 285.0 | 277.0 | 153.0 | 156.2 | 153.0 | 1.86× |
+| frames 690–760, the language screen | 137.9 (143.8, 137.9, 135.5) | 136.0 | 78.3 | 58.2 | **49.3** (49.3, 51.5, 47.3) | **2.80×**; 7.25 → 20.3 fps |
+| frames 0–760 | 196.4 | 194.0 | 104.9 | 95.1 | 89.7 | 2.19× |
+
+The spreads are 1 to 8 % but for two workers on the boot (33 to 38 %: one round of three at 146.1 and 98.1 ms, its
+workers waiting twice as long, under a load of 9). **The one-thread path** is level with the base within the rounds'
+spread on every window (Jak's card screen 109.4 against 103.5, the rounds overlapping: 103.5 in both; the boot 199.9
+against 202.6), as `Local`'s raw words and the rows' test cost nothing measurable.
+
+**Where the time goes at four workers** (the bench's counts over each whole run, all three rounds alike):
+
+- *Jak and Daxter*: 404,206 primitives, every one shared, 491,310 drawing nothing; 137,156 transfer jobs; the emulation
+  thread **never waited**; each worker busy 3.3 to 9.1 ms a frame, stalled on another under 0.3. The screen is bound by
+  the emulation thread's own work (S33's §47.11, §46.9): the GS was 13.6 % of it and is now gone from it.
+- *The boot*: 618,137 primitives shared and 1,554 alone (a texture read from the frame's own pages); 113,387 transfer
+  jobs; the emulation thread waited only at the PCRTC's lines, 12.1 to 13.5 s over the 760 frames, the workers busy 37.6 to
+  47.6 ms a frame and stalled 1.4 to 18.9 within that. The intro and the language screen are still bound by the drawing at
+  four workers, which is why a fourth worker still pays there.
+
+**What the first design measured**, kept as the negative result that shaped the second (WiseMan `2332ed4cd` before S33,
+the recompiler tier, CPU weight 20, single runs): with pages owned whole and the GS's thread waiting at every hazard
+before publishing, Jak's card screen went from 236.4 to 207.4 and 204.1 ms at two and four workers, 311,326 of its
+404,206 primitives drawn alone (§50.3.3) and the GS's thread waiting 5.7 to 9.1 s; the language screen from 228.3 to
+178.1 and 168.2, the GS's thread waiting 26 to 34 s on hazards. Moving the waits into the workers took the hazard waits
+off the emulation thread; on the boot they then reappeared at the uploads (21.9 s), which became jobs; lanes made Jak's
+primitives shared.
+
+### 50.8 Exposure, and what was observed
+
+Running the player's BIOS on Sapphire, for the boot and for Jak and Daxter's program by the fast boot, makes this writer
+a writer of a player's-BIOS stage (§1.4): **exposed, and never a replacement writer**. The BIOS image was handed to the
+machine by the link the stage was given (`referees/system/pcsx2/bios/`, market americas); it was never opened, hashed,
+diffed, listed, disassembled or dumped, and no firmware folder's names were listed. Nothing printed held a guest
+address, an instruction or memory: the bench's digests and times, the workers' counts, and one diagnostic print of the
+GS's own registers at a drawing kick (frame and Z buffers, the sampler's fields, page numbers), which are the GS's state,
+not the BIOS's or the game's code. Jak and Daxter's image was read in place from the probe's folder. No emulator's or
+GS plugin's source was read, and no article.
+
+### 50.9 Where the plan was wrong, or left open
+
+- **The S43 row named state changes, CLUT loads, transfers and FINISH, SIGNAL and LABEL as barriers.** None is a
+  barrier here: a job carries its environment; a CLUT load is a copy into a slot; a host-to-local transfer is a job; the
+  reads (local-to-host, local-to-local, the CLUT's load, the PCRTC) wait only for the lanes they read; the registers are
+  the GS's thread's. A barrier at each would have made the emulation thread wait for the drawing at every texture change,
+  which the first design showed to cost most of the gain (§50.7).
+- **§5.12's estimate**, "0.5–5 ms of waiting with workers": at four workers the emulation thread waits nothing on Jak and
+  Daxter and 16 to 18 ms a frame on the boot's drawing-bound screens, where the drawing itself (38 to 48 ms a frame a
+  worker) is the bound.
+- **The plan's expectation of ×1.2 to ×1.9 on drawing frames** (S32's ranking, §43.8): 1.44 on Jak's card screen, 2.16 on
+  the intro and 2.80 on the language screen, with idle skipping on.
+- **Pages were assumed to be the unit**: games keep textures in a Z buffer's spare byte, so the unit is a page's lane.
+
+### 50.10 Questions this stage leaves
+
+1. **[routine] The handheld.** Recommended: run the same series there (8 cores, 16 threads, Automatic gives four) under
+   `systemd-run --user`, charger and battery, with two and three workers beside four, before the default is judged for
+   it; the spin before parking measured there too.
+2. **[routine] The language screen is still drawing-bound at four workers.** Recommended: S44 to S46's device path is
+   the plan's next GS lever; on the CPU, the bands' balance (worker 3 busy 38 ms against 46 to 48 for the others) and a
+   primitive's set-up repeated by every worker are the next costs to look at, not measured apart here.
+3. **[routine] Automatic's default** is a quarter of the threads, at most four. Recommended: keep it; it is exact, and
+   the series shows no configuration slower than one thread.
+
+### 50.11 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §5.4, §5.12, §5.13 with its amendment, §7's S43 row; this page's §24.2, §27.2 and §27.4, §31.2
+to §31.4, §37's local-to-local overlap, §43.5 to §43.8, §46 and §47.11; `Mars_Native.md` §5.6 (threads), §6.14 and
+§6.16.6 to §6.16.8; the GS's sources in the crate. No article, no emulator or GS plugin source, and no firmware.
+
+### 50.12 What this stage does not cover
+
+- The handheld: no run was made there.
+- The GS on the device (S44 to S46), and the other units on threads (S42).
+- PCRTC reads of a frame drawn and shown at once still wait for its pages: exact, and the remaining wait on the boot.

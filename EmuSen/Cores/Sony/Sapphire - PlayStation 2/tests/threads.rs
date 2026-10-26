@@ -292,7 +292,7 @@ fn a_local_to_host_transfer_waits_for_the_primitives_drawing_its_pixels() {
 }
 
 #[test]
-fn a_host_to_local_transfer_waits_for_the_primitives_drawing_the_pixels_it_overwrites() {
+fn a_host_to_local_transfer_is_written_after_the_primitives_drawing_the_pixels_it_overwrites() {
     let (want, got, waited) = held_site(
         |gs| {
             gs.write(reg::BITBLTBUF, 1 << 48);

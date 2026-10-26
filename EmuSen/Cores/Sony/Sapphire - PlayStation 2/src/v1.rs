@@ -26,7 +26,7 @@ pub const STATUS_PLAYSTATION_DISC: i32 = -12;
 pub const STATUS_NO_BOOT2: i32 = -13;
 /// A program put in the drive, which takes only discs.
 pub const STATUS_NOT_A_DISC: i32 = -16;
-/// A disc image whose sheet, tracks or container do not open.
+/// A disc image whose sheet, tracks or container do not open, or one cut short of its volume.
 pub const STATUS_BAD_DISC: i32 = -17;
 
 /// The DVD drive, the console's one, in machine info's `drives` (G10).
@@ -283,7 +283,7 @@ impl Core for Machine {
             STATUS_OTHER_BIOS => Some("the state was made on a console with another BIOS than this one's, or with a BIOS where this console has none, or with none where it has one".into()),
             STATUS_QUEUE_PAST_STATE => Some("a queue inside the console holds more than the state has room for at this instant; the state can be saved a moment later".into()),
             STATUS_NOT_A_DISC => Some("a program is no disc and goes in no drive".into()),
-            STATUS_BAD_DISC => Some("the disc image does not open: its sheet, its tracks or its container are not as a disc's".into()),
+            STATUS_BAD_DISC => Some("the disc image does not open: its sheet, its tracks or its container are not as a disc's, or it holds fewer sectors than its volume says".into()),
             _ => None,
         }
     }
@@ -557,6 +557,10 @@ fn refused(r: Refusal, bytes: usize) -> i32 {
             detail(&format!("the disc holds an ISO 9660 volume, but {what}"));
             STATUS_NO_BOOT2
         }
+        Refusal::ShortDisc { has, needs } => {
+            detail(&format!("the disc image holds {has} sectors where its volume says {needs}: the image was cut short"));
+            STATUS_BAD_DISC
+        }
     }
 }
 
@@ -818,6 +822,14 @@ mod tests {
         assert!(!create(&elf(), &[(IDLE_KEY, "off")]).unwrap().idle.on);
     }
 
+    /// A disc image whose volume claims more sectors than it holds, a dump cut short (ECMA-119 §8.4.8).
+    fn short() -> Vec<u8> {
+        let mut d = dvd();
+        let claimed = (d.len() / crate::media::USER + 1) as u32;
+        d[16 * crate::media::USER + 80..16 * crate::media::USER + 84].copy_from_slice(&claimed.to_le_bytes());
+        d
+    }
+
     #[test]
     fn other_images_and_files_are_refused_with_words() {
         let mut irx = elf();
@@ -830,6 +842,7 @@ mod tests {
             (e[..e.len() - 1].to_vec(), STATUS_ELF_TRUNCATED),
             (volume(20, "BOOT = cdrom:\\SLUS_007.70;1\r\n", true), STATUS_PLAYSTATION_DISC),
             (volume(20, "VMODE = NTSC\r\n", false), STATUS_NO_BOOT2),
+            (short(), STATUS_BAD_DISC),
         ] {
             assert_eq!(create(&image, &[]).err(), Some(code));
             assert!(Machine::status_text(code).is_some());

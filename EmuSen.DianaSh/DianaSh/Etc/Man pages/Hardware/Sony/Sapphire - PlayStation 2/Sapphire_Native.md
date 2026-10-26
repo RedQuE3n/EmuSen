@@ -10741,6 +10741,16 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
   and big picture's carousel with `ps2`, each at 1280 × 800 and 1920 × 1200; the Memory Cards cases of S25 now run as a
   player's build has them. Every per-console window gained the PlayStation 2's tab, so the interface specification was
   recorded again (§49.8).
+- **An eleventh console tab** [M, the fit audit's first run]: with the PlayStation 2's tab the console strip of Controller
+  Bindings (General and ten consoles) wrapped to a second row at both sizes, which took 48 design pixels from the
+  drawing, whose labels fell 0.05 px under the toolkit's reading floor on every tab; and in Shader Settings, whose menu
+  look sets *Close* at the right of the strip's row, the last tab ran under *Close*. Both were faults of the audit, 32 of
+  its cases. **Built** [C]: `TabStripFit.OneRow` (Mistress), which keeps a console tab strip to one row by setting every
+  header's text smaller together when the headers at the theme's size would not fit beside what the window draws at
+  the strip's right, never below 20 px; the recordings hold 26.5 px in Controller Bindings and 27 in Shader Settings, of the
+  theme's 30. It is a
+  window's own layout and changes no LunaP control; a strip in the toolkit that fits itself is put to the tester
+  (§49.11 Q3). Graphics Settings, whose strip has a column of its own and wraps, passed the audit unchanged.
 - **DianaSh**: `core sapphire --console` and `core sapphire <disc>` (the registry names the engine
   `sapphire`; the platform runtime also takes the system's id, `ps2`), and `memcard` on `.ps2` cards, already reached the PlayStation 2 through core info and the medium's
   extension; their pages now say so (`core.1`, `memcard.1`).
@@ -10749,3 +10759,38 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
   console is; big picture shows the `ps2` system once its shelf exists. The CHD conversion stays the compact-disc
   consoles' (`CD_SYSTEMS`): a PlayStation 2 DVD needs chdman's `createdvd`, which `EmuSen_GamePackages.md` §4.2 leaves for
   a DVD core's step (§49.10).
+
+### 49.8 Tests, seeded faults and the blast radius (2026-10-26)
+
+**Tests** [M]:
+
+- **Sapphire**, `cargo test --release`, on the tree rebased onto WiseMan `8bd9b8427` (S40's VU1 recompiler, the GS's fast
+  paths and D-465's fix beneath): **435 passed, 0 failed** (2 ignored, as before) in 30 test binaries. New in `v1`:
+  `a_discs_own_market_is_the_consoles_on_automatic`, `a_disc_given_at_create_is_in_the_drive_at_power_on` (a CD, a raw
+  track, a DVD and a sheet judged by its track), `a_state_keeps_to_the_disc_in_the_drive`; `the_descriptors_are_the_consoles`
+  holds the extensions, the mark's absence, the gates in the description and the eleven lines of notes, and
+  `firmware_for` by market. Clippy adds no warning in what the stage changed (its two errors on the rebased tree are in
+  `gs/exact.rs`, the fast-path step's).
+- **`emusen-systems`** 42 of 42 (one new, `the_market_is_the_serials_region_letter_else_vmodes_pal`) and **`emusen-crystal`**
+  13 of 13, both before the rebase; clippy adds nothing in `ps2/disc.rs` or `engine.rs`.
+- **WiseMan**, before the rebase: `blast.sh`'s filter without the fit audit and the GPU renders, with `DiamondPlayersTests`,
+  `DiamondShellTests`, `DiamondTests`, `MemoryCardsOfferTests`, `ConsoleStartTests`, `RuntimeCatalogTests`,
+  `CoreDiscoveryTests`, `CoreCommandTests`, `PadMenuTests`, `Ps2CardFormatTests`, `SapphireRewindTests`,
+  `SapphireRunnerTests`, `CoreAdapterTests`, `NephriteTests`, `EndouTests` and the save-media classes added: 3,583 tests,
+  19 failing on the first run, every one a list of consoles or a recording that now names the PlayStation 2, a test
+  that opened a game with no BIOS (given a stand-in of zeros, as `SapphireConsoleTests` already did), or
+  `LaunchScreenTests`' card colour, which passed alone and is not this stage's; the lists and the recordings corrected
+  (the registration golden, `core.golden`, `man.golden`), those classes again **430 of 430**. The fit audit, recorded and
+  then verified with the pad, themed-host, bindings, shader and player classes: **847 of 847**. The CRT's compile test
+  over every variant for every console and the chain tests: **13 of 13** on the RX 6800.
+- **WiseMan, after the rebase**: every `Sapphire` class, `CrystalParityTests`, the registration, firmware page, routing,
+  system parity, screen rule and golden classes and the whole fit audit: **884 of 884**, the PlayStation 2's Graphics
+  Settings tab recorded again with S40's *VU1* row.
+
+**Seeded faults** (each applied, the named tests run, the source restored):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | On *Automatic* the disc's market ignored, the console taking the BIOS file's | `a_discs_own_market_is_the_consoles_on_automatic` |
+| F2 | The state naming the created image whatever the drive holds, as before this stage | `a_state_keeps_to_the_disc_in_the_drive` (and, on a disc image, the kit's C16, which needs the emptied drive to refuse the state) |
+| F3 | `CoreEngine.LoadRom`'s refusal removed, so a game with no BIOS opens black | `SapphireConsoleTests.With_no_bios_a_game_is_refused_in_the_cores_words` and the parity case `The_playstation_2_started_empty_or_with_a_game_is_refused_without_its_bios_and_lists_its_cards_the_same` |

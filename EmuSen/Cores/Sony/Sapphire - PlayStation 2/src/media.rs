@@ -89,6 +89,8 @@ pub enum Refusal {
     PlayStation,
     /// An ISO 9660 volume whose root names no BOOT2 program: what was found.
     NoBoot2(&'static str),
+    /// A PlayStation 2 disc image holding fewer sectors than its volume says it has: a dump cut short.
+    ShortDisc { has: u64, needs: u64 },
 }
 
 fn u16_at(b: &[u8], at: usize) -> u16 {
@@ -105,7 +107,13 @@ impl Media {
             return read_elf(image).map(Media::Elf);
         }
         let sectors = Sectors::new(image);
-        Media::read_by(&mut |n| sectors.sector(n).to_vec(), sectors.count(), sectors.raw)
+        let media = Media::read_by(&mut |n| sectors.sector(n).to_vec(), sectors.count(), sectors.raw)?;
+        // The primary volume descriptor's volume space size (ECMA-119 §8.4.8), the sectors the volume claims.
+        let needs = u64::from(u32_at(sectors.sector(16), 80));
+        if needs > sectors.count() {
+            return Err(Refusal::ShortDisc { has: sectors.count(), needs });
+        }
+        Ok(media)
     }
 
     /// A disc already opened, its 2,048-byte sectors given by `sector`, as a CHD's are (Sapphire_Native.md §49.2).

@@ -5,7 +5,8 @@ a CD as a raw mode 2 track with its sheet. Never real game data.
 
 ps2discs.py files OUT.iso NAME=FILE ...: a DVD image of 2,048-byte sectors whose root holds SYSTEM.CNF naming the first
 file as BOOT2, then each file given under its name, with both path tables (Sapphire_Native.md §40): the discs that carry
-the project's loader and an IOP module for the IOP to open from cdrom0:."""
+the project's loader and an IOP module for the IOP to open from cdrom0:. OUT.bin writes the same volume as a CD's raw
+data track of mode 2 form 1 sectors."""
 import os, struct, sys
 
 U = 2048
@@ -60,6 +61,21 @@ def files_volume(files):
     image[20 * U:20 * U + len(root)] = root
     return bytes(image)
 
+def bcd(v): return (v // 10) << 4 | v % 10
+
+def raw_track(vol):
+    """A volume as a CD's data track of mode 2 form 1 sectors (2,352 bytes), its header's time from 00:02:00; the
+    EDC and ECC are left zero, as the referees and Sapphire read the user data alone."""
+    sync = bytes([0] + [255] * 10 + [0])
+    raw = bytearray()
+    for n in range(len(vol) // U):
+        a = n + 150
+        s = bytearray(2352); s[:12] = sync; s[12:15] = bytes([bcd(a // 4500), bcd(a // 75 % 60), bcd(a % 75)]); s[15] = 2
+        s[18] = s[22] = 8
+        s[24:24 + U] = vol[n * U:(n + 1) * U]
+        raw += s
+    return bytes(raw)
+
 def write_sparse(path, chunks, total):
     with open(path, "wb") as f:
         for at, data in chunks:
@@ -69,14 +85,14 @@ def write_sparse(path, chunks, total):
 def main(argv):
     if argv[:1] == ["files"]:
         files = [(n.upper(), open(f, "rb").read()) for n, f in (a.split("=", 1) for a in argv[2:])]
-        open(argv[1], "wb").write(files_volume(files))
+        vol = files_volume(files)
+        open(argv[1], "wb").write(raw_track(vol) if argv[1].endswith(".bin") else vol)
         return
     out = argv[0]
     write_sparse(f"{out}/dvd.iso", [(0, volume(1_000_000, 1_000_000))], 1_000_000 * U)
     l0, total = 600_000, 1_100_000
     write_sparse(f"{out}/dual.iso", [(0, volume(total, l0)), ((l0 + 16) * U, pvd(total - l0)), ((l0 + 17) * U, b"\xffCD001\x01")], total * U)
     sync = bytes([0] + [255] * 10 + [0])
-    def bcd(v): return (v // 10) << 4 | v % 10
     raw = bytearray()
     vol = volume(30000, 30000)
     for n in range(30000):

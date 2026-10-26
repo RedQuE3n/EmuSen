@@ -1,10 +1,10 @@
 //! The project's EE loader for IOP modules (Sapphire_Native.md §40): an EE program, entered as a program is on the
 //! player's BIOS, that speaks the SIF's RPC to the IOP's module loader (LOADFILE, server 80000006h) in the layouts
 //! ps2tek's "SIF RPC Structs and Definitions" and "SIF RPC Commands" give, and asks it to load and start modules, each
-//! call's argument block given here as bytes. Its packets cross on the SIF's DMA channels as S22 models them: the EE's
-//! channel 6 in normal mode, each block led by the IOP's chain tag in its first quadword (D-143), and the IOP's replies
-//! received by the EE's channel 5 in chain mode, armed by the kernel's SifSetDChain (ps2tek "BIOS EE Syscalls", 78h).
-//! It keeps a record of 32-bit words from `RECORD`, every packet received from `LOG`, and writes `DONE_WORD` at
+//! call's argument block given here as bytes (D-480). Its packets go to the IOP by the kernel's SifSetDma, a command
+//! packet with the IOP tag's IRQ and end and a payload with neither (§40.2), and SifDmaStat says when they have gone;
+//! the IOP's replies arrive on the EE's channel 5 in chain mode, armed by SifSetDChain (ps2tek "BIOS EE Syscalls", 76h
+//! to 78h). It keeps a record of 32-bit words from `RECORD`, every packet received from `LOG`, and writes `DONE_WORD` at
 //! `DONE_AT` when its calls have ended, for a referee's RAM or Sapphire's.
 
 #![allow(dead_code)]
@@ -13,8 +13,11 @@
 pub const ORIGIN: u32 = 0x0010_0000;
 /// The EE's receive buffer for the IOP's command packets, given to the IOP by SIFCMD's init packet.
 pub const RECV: u32 = 0x0018_0000;
-/// Where each SIF1 transfer is laid out, its tags and packets.
+/// Where each SIF1 transfer's packet is laid out, a call's argument block at `PAYLOAD` past it, and the transfers
+/// SifSetDma is given.
 pub const STAGE: u32 = 0x0018_1000;
+pub const PAYLOAD: u32 = 0x200;
+pub const XFERS: u32 = 0x0018_1F00;
 /// The client's place, a word the packets name and the IOP echoes.
 pub const CLIENT: u32 = 0x0018_0800;
 /// Each call's reply buffer, `REPLY_STRIDE` bytes apart, filled with `FILL` before the call.
@@ -40,6 +43,9 @@ pub mod at {
     pub const PACKETS: u32 = 0x10;
     /// Binds sent before the server answered.
     pub const BINDS: u32 = 0x14;
+    /// The last transfer's id and the spins left waiting for it.
+    pub const DMA_ID: u32 = 0x1C;
+    pub const DMA_SPIN: u32 = 0x3C;
     /// Calls made, and each call's outcome (`OUTCOME_*`) from `CALL_OUTCOMES`, a word each, at most `MAX_CALLS`.
     pub const CALLS: u32 = 0x18;
     pub const CALL_OUTCOMES: u32 = 0x3F00;
@@ -68,13 +74,13 @@ pub mod step {
 pub const OUTCOME_ENDED: u32 = 1;
 pub const OUTCOME_TIMEOUT: u32 = 2;
 
-/// The SIF's registers (ps2tek "SIF Registers"), through the EE's user mapping, and the DMAC's (EE User's Manual §2.2.1).
+/// The SIF's registers (ps2tek "SIF Registers") and channel 5's CHCR (EE User's Manual §2.2.1), through the EE's user
+/// mapping; a program's store to channel 6's registers takes a TLB modification exception on the player's BIOS, so the
+/// transfers go by SifSetDma (§40.2).
 const SIF: u32 = 0x1000_F200;
 const SMCOM: i32 = 0x10;
 const SMFLG: i32 = 0x30;
 const CH5: u32 = 0x1000_C000;
-const CH6: u32 = 0x1000_C400;
-const D_STAT: u32 = 0x1000_E010;
 /// The uncached view of RAM a program's buffers are reached through, so that what the DMAC moves is what is read.
 const UNCACHED: u32 = 0x2000_0000;
 
@@ -90,11 +96,17 @@ pub const CMD_CALL: u32 = 0x8000_000A;
 pub const LOADFILE: u32 = 0x8000_0006;
 pub const LOAD_MODULE: u32 = 0;
 
-/// The IOP's chain tag's bits (ps2tek "IOP DMA"): interrupt when the packet has moved, and the chain's end.
-const TAG_IRQ: u32 = 1 << 30;
-const TAG_END: u32 = 1 << 31;
+/// SifSetDma's attribute bits as the IOP's chain tag shows them on the SIF link (§40.2, measured): 04h sets the tag's
+/// IRQ, 40h its end, 20h takes the data's first quadword as the tag; a command packet carries IRQ and end, a payload
+/// before it neither.
+pub const ATTR_IRQ: u32 = 0x04;
+pub const ATTR_END: u32 = 0x40;
+pub const ATTR_CMD: u32 = ATTR_IRQ | ATTR_END;
+pub const ATTR_DATA: u32 = 0;
 
-/// SifSetDChain's number (ps2tek "BIOS EE Syscalls").
+/// SifDmaStat's, SifSetDma's and SifSetDChain's numbers (ps2tek "BIOS EE Syscalls").
+const SIF_DMA_STAT: u32 = 0x76;
+const SIF_SET_DMA: u32 = 0x77;
 const SIF_SET_DCHAIN: u32 = 0x78;
 
 /// Spins of a wait: SMFLG's flags, a bind's answer, a call's answer (which runs the module to its end).
@@ -196,18 +208,17 @@ impl Asm {
         self.op("nop");
         self.label(&done);
     }
-    /// One block of a SIF1 transfer at `STAGE + offset`: the IOP's tag quadword (its address in t-register `dest`,
-    /// ORed with `flags`), then the words given by `body`, which writes them from `STAGE + offset + 16`; the offset past
-    /// the block.
-    fn tag(&mut self, offset: u32, dest: &str, flags: u32, words: u32) {
-        self.li("t1", flags);
-        self.op(format!("or t1, t1, {dest}"));
-        self.li("t2", UNCACHED | (STAGE + offset));
+    /// Entry `slot` of the transfers SifSetDma is given (ps2tek "BIOS EE Syscalls", 77h): from `STAGE + offset`, to
+    /// the IOP address in register `dest`, `bytes` long, with `attr`.
+    fn xfer(&mut self, slot: u32, offset: u32, dest: &str, bytes: u32, attr: u32) {
+        self.li("t2", UNCACHED | (XFERS + 16 * slot));
+        self.li("t1", STAGE + offset);
         self.op("sw t1, 0(t2)");
-        self.li("t1", words.next_multiple_of(4));
-        self.op("sw t1, 4(t2)");
-        self.op("sw zero, 8(t2)");
-        self.op("sw zero, 12(t2)");
+        self.op(format!("sw {dest}, 4(t2)"));
+        self.li("t1", bytes);
+        self.op("sw t1, 8(t2)");
+        self.li("t1", attr);
+        self.op("sw t1, 12(t2)");
     }
     /// A packet's words written from `STAGE + offset`, each a value or a register.
     fn packet(&mut self, offset: u32, words: &[Word]) {
@@ -222,10 +233,10 @@ impl Asm {
             }
         }
     }
-    /// The transfer laid out at `STAGE`, `qwords` quadwords, sent on channel 6 and waited for.
-    fn send(&mut self, qwords: u32) {
-        self.li("a0", STAGE);
-        self.li("a1", qwords);
+    /// The first `count` transfers of `XFERS` queued by SifSetDma and waited for by SifDmaStat.
+    fn send(&mut self, count: u32) {
+        self.li("a0", UNCACHED | XFERS);
+        self.li("a1", count);
         self.op("jal send");
         self.op("nop");
     }
@@ -279,7 +290,6 @@ fn body(calls: &[Call], data: u32) -> Asm {
     a.li("s7", UNCACHED | RECORD);
     a.li("s6", SIF);
     a.li("s5", CH5);
-    a.li("s4", CH6);
     a.li("s3", UNCACHED | LOG);
     a.fill(UNCACHED | RECORD, 0x2000, 0);
     a.fill(UNCACHED | LOG, LOG_BYTES / 4, 0);
@@ -298,25 +308,25 @@ fn body(calls: &[Call], data: u32) -> Asm {
     a.op("nop");
     a.li("t0", SIFCMD_UP);
     a.op(format!("sw t0, {SMFLG}(s6)"));
-    a.tag(0, "s2", TAG_IRQ | TAG_END, 8);
-    a.packet(16, &[Word::V(0x14), Word::V(0), Word::V(CMD_INIT), Word::V(0), Word::V(RECV), Word::V(0), Word::V(0), Word::V(0)]);
-    a.send(3);
+    a.xfer(0, 0, "s2", 32, ATTR_CMD);
+    a.packet(0, &[Word::V(0x14), Word::V(0), Word::V(CMD_INIT), Word::V(0), Word::V(RECV), Word::V(0), Word::V(0), Word::V(0)]);
+    a.send(1);
     a.wait_flag(SIFCMD_UP, SPIN_FLAG);
     a.op(format!("lw t0, {SMFLG}(s6)"));
     a.record("t0", at::SMFLG_INIT);
     a.record_value(step::INIT_ANSWERED, at::STEP);
-    a.tag(0, "s2", TAG_IRQ | TAG_END, 4);
-    a.packet(16, &[Word::V(0x10), Word::V(0), Word::V(CMD_INIT), Word::V(1)]);
-    a.send(2);
+    a.xfer(0, 0, "s2", 16, ATTR_CMD);
+    a.packet(0, &[Word::V(0x10), Word::V(0), Word::V(CMD_INIT), Word::V(1)]);
+    a.send(1);
     // Bound to LOADFILE: binds sent until the end packet names a server.
     let (bind, bound, fail) = (a.fresh("bind"), a.fresh("bound"), a.fresh("unbound"));
     a.op("addiu s1, zero, 0");
     a.label(&bind);
     a.op("addiu s1, s1, 1");
     a.record("s1", at::BINDS);
-    a.tag(0, "s2", TAG_IRQ | TAG_END, 16);
+    a.xfer(0, 0, "s2", 64, ATTR_CMD);
     a.packet(
-        16,
+        0,
         &[
             Word::V(0x40),
             Word::V(0),
@@ -336,7 +346,7 @@ fn body(calls: &[Call], data: u32) -> Asm {
             Word::V(0),
         ],
     );
-    a.send(5);
+    a.send(1);
     a.wait_end(CMD_BIND, SPIN_BIND);
     a.op(format!("lw s0, {}(s7)", at::LAST + 4 * 9));
     a.op(format!("bne s0, zero, {bound}"));
@@ -363,12 +373,11 @@ fn body(calls: &[Call], data: u32) -> Asm {
         let words = args.len() as u32 / 4;
         let reply = REPLY + i as u32 * REPLY_STRIDE;
         a.fill(UNCACHED | reply, REPLY_STRIDE / 4, FILL);
-        a.tag(0, "s1", 0, words);
-        a.copy(data_at, UNCACHED | (STAGE + 16), words);
-        let p = 16 + 4 * words;
-        a.tag(p, "s2", TAG_IRQ | TAG_END, 16);
+        a.xfer(0, PAYLOAD, "s1", 4 * words, ATTR_DATA);
+        a.copy(data_at, UNCACHED | (STAGE + PAYLOAD), words);
+        a.xfer(1, 0, "s2", 64, ATTR_CMD);
         a.packet(
-            p + 16,
+            0,
             &[
                 Word::V(0x40 | (4 * words) << 8),
                 Word::R("s1"),
@@ -388,7 +397,7 @@ fn body(calls: &[Call], data: u32) -> Asm {
                 Word::V(0),
             ],
         );
-        a.send(1 + words / 4 + 1 + 4);
+        a.send(2);
         a.wait_end(CMD_CALL, SPIN_CALL);
         let (ended, next) = (a.fresh("ended"), a.fresh("next"));
         a.op(format!("bne v0, zero, {ended}"));
@@ -420,25 +429,31 @@ fn body(calls: &[Call], data: u32) -> Asm {
 /// `send` (a0 the transfer's address, a1 its quadwords) and `wait` (a0 the command field wanted in an end packet, a1
 /// the spins).
 fn subroutines(a: &mut Asm) {
-    // SIF1 in normal mode from memory (EE User's Manual §5.6: DIR 1, MOD 0, STR).
+    // SifSetDma queues the transfers and gives their id, SifDmaStat says when they have ended (negative).
     a.label("send");
-    a.op("sw a0, 16(s4)");
-    a.op("sw a1, 32(s4)");
-    a.op("addiu t0, zero, 0x101");
-    a.op("sw t0, 0(s4)");
+    a.op(format!("addiu v1, zero, 0x{SIF_SET_DMA:x}"));
+    a.op("syscall 0");
+    a.op("nop");
+    a.op(format!("sw v0, {}(s7)", at::DMA_ID));
     a.li("t9", SPIN_FLAG);
+    a.op(format!("sw t9, {}(s7)", at::DMA_SPIN));
     a.label("send_wait");
-    a.op("lw t0, 0(s4)");
-    a.op("andi t0, t0, 0x100");
-    a.op("beq t0, zero, send_done");
+    a.op(format!("lw a0, {}(s7)", at::DMA_ID));
+    a.op(format!("addiu v1, zero, 0x{SIF_DMA_STAT:x}"));
+    a.op("syscall 0");
+    a.op("nop");
+    a.op("bltz v0, send_done");
+    a.op("nop");
+    a.op(format!("lw t9, {}(s7)", at::DMA_SPIN));
     a.op("addiu t9, t9, -1");
+    a.op(format!("sw t9, {}(s7)", at::DMA_SPIN));
     a.op("bne t9, zero, send_wait");
     a.op("nop");
     a.label("send_done");
     a.op("jr ra");
     a.op("nop");
     // A packet is in when the receive buffer's command field is set; the channel has stopped at the packet's tag
-    // interrupt (TIE), so the packet is copied out, the buffer cleared, CIS5 acknowledged and the channel armed again.
+    // interrupt (TIE), so the packet is copied out, the buffer cleared and the channel armed again.
     a.label("wait");
     a.op("sll fp, a0, 0");
     a.op("sll gp, ra, 0");
@@ -482,9 +497,6 @@ fn subroutines(a: &mut Asm) {
     a.op(format!("lw t0, {}(s7)", at::PACKETS));
     a.op("addiu t0, t0, 1");
     a.op(format!("sw t0, {}(s7)", at::PACKETS));
-    a.li("t1", D_STAT);
-    a.op("addiu t0, zero, 0x20");
-    a.op("sw t0, 0(t1)");
     a.op("lw t0, 0(s5)");
     a.op("andi t0, t0, 0x100");
     a.op("bne t0, zero, wait_check");

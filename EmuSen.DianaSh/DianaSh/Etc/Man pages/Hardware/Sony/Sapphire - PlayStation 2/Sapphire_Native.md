@@ -8364,7 +8364,9 @@ movie the IPU decoded, equal to the referee's within the scaling's rounding.
 `stuffing_longer_than_the_ipu_holds_is_passed_to_the_start_code` (the driver through `stuffing()`) and
 `the_programs_replay_their_logs_through_the_dmac_on_the_board` now over **33** programs, `d840-stuffing` among them
 (68 commands on the interpreter with the board); the lib's `ipu` tests **7 of 7**. The change is inside the IPU's
-start-code search; nothing else calls it.
+start-code search; nothing else calls it. The blast radius's crate whole, `cargo test --release`: **433 passed, 0 failed**
+(2 ignored, as before) in 30 test binaries; WiseMan's filter `SapphireTests` **5 of 5**; clippy adds no warning in the
+files the step changed.
 
 **Seeded faults** (each applied to `src/ipu/mod.rs`, the stuffing test run, the source restored):
 

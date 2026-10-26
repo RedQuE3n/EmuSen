@@ -467,17 +467,17 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
         quick = false;
         counts.replayed += 1;
         counts.busy += u64::from(!sys.board.quiet());
-        let mut ended = None;
+        let mut end_at = None;
         for (i, &o) in offsets.iter().enumerate() {
             let at = t + o;
             let System { ee, board } = &mut *sys;
             board.run_to(at, &mut ee.spram[..]);
             if ended(board, lines, fields) {
-                ended = Some((i + 1, at));
+                end_at = Some((i + 1, at));
                 break;
             }
         }
-        if let Some((i, at)) = ended {
+        if let Some((i, at)) = end_at {
             stop = Some((i, at, false));
             break;
         }

@@ -349,7 +349,7 @@ fn machine(c: &Case, idle: bool, tier: Tier) -> Machine {
     if let Some(src) = &c.iop {
         let iw = emusen_mips::assemble(src, IOP_ORIGIN, &blackmoon_r3000::dialect(None)).unwrap_or_else(|e| panic!("{}: {e:?}", c.name));
         sys.board.iop.bus.load(IOP_ORIGIN & 0x1F_FFFF, &iw);
-        let tag = [IOP_CHAIN + 0x10 | 1 << 31, 64, 16 | 7 << 28, SIF_DEST];
+        let tag = [(IOP_CHAIN + 0x10) | (1 << 31), 64, 16 | (7 << 28), SIF_DEST];
         sys.board.iop.bus.load(IOP_CHAIN, &tag);
         sys.board.iop.bus.load(IOP_CHAIN + 0x10, &(0..64).map(|k| 0x6400_0000 + k).collect::<Vec<u32>>());
         sys.board.iop.enter(IOP_ORIGIN);

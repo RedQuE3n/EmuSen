@@ -93,7 +93,7 @@ impl Ee {
                     0x1000_0000..0x1000_2000 => Refusal::Timer,
                     0x1000_2000..0x1000_8000 => Refusal::Unit,
                     0x1000_F200..0x1000_F300 => Refusal::Sif,
-                    0x1000_0000..0x1100_0000 => Refusal::Device,
+                    p if (0x1000_0000..0x1100_0000).contains(&p) => Refusal::Device,
                     0x1100_0000..0x1200_0000 => Refusal::Vu,
                     0x1200_0000..0x1400_0000 => Refusal::Gs,
                     0x1C00_0000..0x1C20_0000 => Refusal::Window,

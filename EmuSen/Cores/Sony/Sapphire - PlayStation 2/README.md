@@ -71,4 +71,11 @@ on the player's BIOS (the boot to OSDSYS with slot 1 empty, an EE program, or a 
 each frame's `advance` alone and prints Diamond's bench line with the frames a second, the digests of the pictures, the
 sound and the final state, and the units' own counts a frame.
 
+Since stage S33 (`Sapphire_Native.md` §47) `src/idle.rs` and `src/ee/idle.rs` are idle skipping, the setting `idle_skip`
+(on by default): the EE's waiting loops proven by stepping a turn and their further turns passed exactly, the IOP's own
+waits passed between the board's calls. `tests/idle.rs` holds the project's programs on every event kind, and
+`cargo run --release --example s33 -- <equal|time|verify|state> <boot|elf|disc> <bios> <market> [image] <frames> ...`
+compares a machine with it on against one with it off on the player's BIOS, times windows of frames, steps the
+interpreter through every skipped turn, and loads states saved mid-wait, printing counts and equality only.
+
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

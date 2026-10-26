@@ -10290,3 +10290,318 @@ no firmware.
 - A logarithm near a fraction of a whole number keeps the 256-bit steps (none occurred on these workloads).
 - UV interpolation's 128-bit signed division (4.4 % of the language screen) and the sampler and local memory: S43's.
 - The GS on worker threads (S43) and on the device (S44 to S46).
+
+## 47. Stage S33, idle skipping on the EE, the IOP and the VU waits (2026-10-26)
+
+*Numbered §47 and its disputes from D-680, the stages beside it (S28, S32's close, S40, the GS's fast path and a platform
+step) taking the numbers between. The stage raised no dispute: it reads nothing of the hardware the interpreter does not
+already implement, and every claim below is the interpreter's own behaviour, passed at once.*
+
+### 47.1 In one paragraph
+
+The plan's §7 row S33, lever 1 of §5.12, taken on the tester's decision of 2026-10-26 that speed comes first, with S32's
+ranking giving it the largest bound of every lever (§43.8, #2). **A loop of the EE is proven by stepping one turn of it**
+(§47.3): every instruction of the turn one that reads only what nothing but the board's events can change (memory, I_STAT,
+I_MASK and the DMAC's registers, the DMAC's condition line), the turn coming back to its head with every register as it
+was and the issue model the turn before's shifted in time, the DMAC's writes to what the turn reads watched throughout.
+**Its further turns are then passed at once** (§47.4): the issue model, Count, Random and every count moved as those
+turns would move them, and the board brought through each of their instructions' times as `System::step` brings it — the
+IOP alone while `run_to` would take its quick path, `run_to` itself across an event or while a VIF, the GIF or a VU runs —
+the skip ending at the first time a line or the field changes, the DMAC writes what the turn reads, or the IOP's side wakes
+the DMAC. **Loops that count** in registers or in a cached word of memory, at 32 or 64 bits, are passed too (§47.5): a
+second turn is stepped with each count's values tracked, kept out of the path's addresses and of every effect but the
+counts, and compared only with values that do not move, the turns bounded by the first at which a comparison would change
+its answer. **The IOP's own waits** are passed between the board's calls (§47.6), and the EE's waits on the vector units
+and their paths are passed by `run_to` at each time (§47.7). Detection is the core's, at run time, from what it executes;
+nothing names an address. **The gate is met** (§47.10): the project's twenty programs on every event kind, equal with
+skipping off and on, on both tiers, under the verifier and from saved states; ps2autotests 52 of 55 EE and 23 of 23 IOP,
+all 78 texts and verdict lines byte for byte those with skipping off; the OSDSYS boot (760 frames) and Jak and Daxter (900)
+equal frame by frame in picture, sound and state on both tiers and from states saved mid-wait. **Speed** (§47.11), the
+medians of three rounds on the recompiled tier: Jak and Daxter's loading window from 261.5 to 72.4 ms a frame (3.8 to 13.8
+frames a second, 3.6 times), OSDSYS's language screen from 242.6 to 144.7 (1.7 times), the GS-bound windows 1.1 and 1.4
+times. On by default, a setting away (§47.9). The S31 item folded in, the IOP polling the SIF while the EE's DMA
+sends to it, is in the debugger's gate (§47.8); the seeded fault it was written for still survives, and why is recorded.
+
+### 47.2 What was built
+
+| Module | What it holds | Lines |
+| --- | --- | --- |
+| `src/idle.rs` | the machine's side: heads and their back-off, the proof's turns, the skip's segments, the IOP brought through the turns' times and its own waits passed, the counts | 669 |
+| `src/ee/idle.rs` | the core's side: which instructions a turn may hold, the mark and the comparison of two marks, the turns passed (Count, Random, the counts by mode), the inductions' tracking, their widths, steps and the bound their comparisons set | 621 |
+| `src/ee/timing.rs` | the issue model's period (`period_from`) and the turns passed (`pass`) | +41 |
+| `src/board.rs` | the quick path's wake factored out and counted (`quick_wake`, `wakes`), `quiet`, `next_event`, `pure_register` | +62 |
+| `src/dmac.rs` | the DMAC's count of quadwords written to memory and its watch of the bytes a waiting loop reads, each write noted with the value it replaced | +38 |
+| `src/iop/bus.rs`, `src/iop/tty.rs` | the IOP's counts of its writes, its accesses past memory and its I-cache's refills; the console hook's pending call | +20 |
+| `src/machine.rs`, `src/state.rs`, `src/v1.rs`, `src/debugger.rs` | the frame's arrivals and its batches, the heads forgotten at a load, the setting, the counts as registers | +71 |
+| `tests/idle.rs`, `tests/s33/mod.rs` | the project's twenty programs and their tests; the IOP polling the SIF for the debugger's gate | 606 |
+| `examples/s33.rs`, `examples/s10.rs` | the runner (`equal`, `time`, `verify`, `state`); S10's runner following the setting | 269 |
+
+No new dependency. Nothing of the state changed: `SPH2`'s layout listing (`tests/sph2/version-2.layout`) is unchanged,
+since every count, the heads and the watch are the skipper's and not the machine's.
+
+### 47.3 The proof: one turn, stepped
+
+**Where.** `Machine::advance` notes an *arrival* when a step or a block leaves the core outside a delay slot at an address
+at or below the one it left, within 1 KiB (a loop's back edge; a block that branches to itself is one). A table of 1,024
+heads by address keeps, for each, its arrivals and a back-off; at a head's third arrival its turn is proven, and a proof
+refused for what does not pass with time doubles the arrivals the head waits before its next, up to 4,095 (Diamond's rule,
+`Diamond_Speed.md` §4.3). No arrival is taken once the frame's field has begun, since the frame then ends at its batch's
+end, which no skip may pass; the debugger's frame never skips.
+
+**What a turn may hold** (`Ee::idle_admits`, read before each step from the word the fetch would read): no COP0 move, ERET,
+system call, trap, CACHE or unimplemented instruction; no COP2 instruction; a load only from RDRAM, the scratchpad or the
+boot ROM, which nothing but the DMAC changes between the board's events, or from I_STAT, I_MASK or one of the DMAC's
+registers, whose reads change nothing and which only the board's events, the IOP side's wake and the EE's own writes
+change (`Board::pure_register`); a store only to RDRAM or the scratchpad. A load from a timer, a VIF's, the GIF's or the
+IPU's registers, the SIF's, a VU's memory, the GS's registers or IOP RAM through the EE's window is refused, each counted
+by its kind. BC0F and BC0T read the DMAC's condition line, which `run_to` sets.
+
+**Stepping the turn** (`prove`): the core takes each step through `System::step` (through the dispatcher's interpreter on
+the recompiled tier, so its verifier follows), and after each the lines, the field and the registers read are checked
+unchanged, no exception taken, and the DMAC's watch (`dmac::Watch`) consulted: every reach of the turn is added to it as
+first met, so that a write the DMAC makes to bytes the turn has already read is seen. A store records the bytes it found
+and the turn must leave them as found. The turn ends at the head, outside a delay slot, within 256 instructions.
+
+**The comparison** (`Ee::period_from`): every register, HI and LO, SA, the FPU's registers, the PC and the delay, the debug
+and counter registers, the lines, COP0 but for Count and Random, and the exception counts equal at both marks; no line
+refilled into either cache or the UCAB (`Ee::fills`), so the caches, which a hit does not change, are as they were; Count
+and the cycles it saw moved by the turn's cycles; Random moved as each step's advance moves it by the turn's issue cycles
+that did not pair (`random_after`, checked against the advance's own rule over every Wired and value); and the issue
+model the earlier one shifted in time (`Timing::period_from`).
+
+**Why a shifted model repeats.** Every rule of the issue model compares times or adds a constant to one (§16.4). A time
+field the turn wrote moved by exactly the turn's cycles; one it did not write must not exceed the last issue's cycle at
+the first mark, so that for every later instruction it is a past time, dominated in each `max` with the next cycle and
+never reaching `last` in the pairing's test. The fields that are not times (the last category and pipe, the last writes,
+the group's state) are equal. A model shifted in this way meets each instruction of the next turn exactly as the last turn
+met it, a span later; the turn is therefore periodic for as long as what it reads is unchanged, which the skip keeps
+watching.
+
+### 47.4 The skip
+
+**The turns' bound** (`skip`): until Count would reach Compare and raise IP7 (unless Cause already holds it), at most
+2^32 turns, and the inductions' bound (§47.5).
+
+**Segments.** While `run_to` at every time before the board's next event would take its quick path (`Board::quiet`: the
+GIF, the VIFs and the VUs idle, no wake pending), the turns before that event form a *quick segment*: the quick path does
+nothing at each time but move the board's clock, bring the IOP to the time and take a wake, and the clocks' moves are
+`max`es, so only the IOP is driven (`drive_iop`). A call at a time the IOP has already reached does nothing, so the IOP is
+called only at each time beyond its own clock — the next instruction time of the turns after the IOP's, found by
+arithmetic — which is exactly the plain run's sequence of calls with the empty ones left out (every call while the IOP is
+held, which moves its units at each). The first such call after which the IOP's side has a wake pending ends the skip
+before the wake is taken. A turn that cannot be in a quick segment — it crosses the board's next event, or a unit runs —
+is *replayed*: `run_to` at each of its instructions' times, as many calls as the plain run makes, the EE's instructions
+not run; the skip ends at the first call after which the lines or the field differ or the watch has a hit. A turn that
+reads a register is passed only in quick segments, since a register's change cannot be shown to the turn as it was.
+
+**The end.** The core is moved on by the whole turns passed (`Ee::pass`: the issue model, Count, the cycles it saw, Random,
+the steps by mode; the counts past the caches likewise), and the inductions by theirs. Where the skip ended inside a turn
+at its instruction *i*, the plain run had run instructions 1 to *i* before the board reached that time, so they run now on
+the core alone (`Ee::step_alone`), shown the watched memory as it was: each quadword the DMAC wrote at that time is put
+back as it was, the instructions run, and the DMAC's values put back after (`undo`, `redo`); a wake the quick segment
+stopped before is then taken as `run_to` takes it (`Board::quick_wake`), and the core's lines set from the board's. The
+steps passed are counted into the frame's batch of 1,024 (`batch_left`): a skip crosses a batch's end only where the plain
+run's check of the field would find none begun, no event falling inside a quick segment and a replayed turn ending the
+skip at the field's change.
+
+**Why the order is exact.** In the plain run each EE instruction runs and then the board is brought to its time. A passed
+turn's instructions read only memory (watched), the lines (constant until the skip ends) and pure registers (constant in a
+quick segment), so running them before or after the board's calls gives the same values, but for the instructions of the
+turn in which the skip ends, which are run against memory as it was before that time's writes. The board's calls are the
+plain run's own, in the same order with the same times.
+
+### 47.5 Loops that count
+
+A turn whose registers or stored words differ at its head a turn later is not refused at once: if every store it changed
+is four or eight aligned bytes of RDRAM in a valid, written-back data cache line (where no unit sees the word while the
+line stays, `Ee::idle_word`), a second turn is stepped with the moved registers and words as **inductions**
+(`Ee::idle_taint`). Each register holding a value taken from an induction is tracked with its induction and its width:
+32 for values a sign extension of their low word moved by ADDIU, ADDU and SUBU (and loaded by LW), 64 for those moved by
+DADDIU, DADDU and DSUBU (loaded by LD); OR and DADDU with `zero` move a value, ADDU with `zero` a 32-bit one. Such a value is
+always its induction plus a constant, modulo 2^32 or 2^64, so that a turn moves it by its induction's step. It may be
+stored only whole into an induction word (SW, SD); used as an address, in any other operation, or stored elsewhere it
+refuses the turn (`InductionAddress`, `InductionOp`, `InductionStore`). A branch or a SLT, SLTU, SLTI or SLTIU on it,
+against a value that does not move, is kept as a **comparison** with the value it makes now; its answer is then constant
+for as many turns as the induction takes to cross the bound (equality: to reach it; less-than: to cross it, signed or not)
+or to leave its width's range, where its order would wrap, and the turns passed are bounded by the least of them
+(`Taint::turns`). At the second turn's end every moved register must still hold an induction's value of the width it was
+read at, each step must equal the first turn's, and the period is checked with the inductions left out. The turns passed
+move each register and word by its step times the turns, at its width, the words written into their cache lines.
+
+### 47.6 The IOP's own waits
+
+The IOP is brought along only by the board's calls, so its waits can be passed only inside the EE's quick segments, where
+those calls are the skipper's (`drive_iop`). Between two calls, an IOP that comes back to an address outside a delay slot
+with its registers (the branch and load delays and the interrupt view among them) as they were, nothing written, nothing
+read past memory, no line refilled into its I-cache, no exception, the console hook's calls and bytes unchanged, its bus's
+next event unchanged, and its multiplier's ready cycle moved by the turn or already past, has made a pure turn (`IopMark`).
+Its further turns are passed (`pass_iop`) while their instructions all begin before its bus's next event, leaving at least
+one of the board's calls before the EE's last time: that call then brings it the rest of the way as the plain run does, so
+that what each call keeps of its own (the units' sync time, the run's horizon) is that call's, and the SPU2, brought
+sample by sample to whatever time it is given, is unchanged by the calls left out.
+
+### 47.7 The VU waits
+
+**The EE waiting on a VU or a path** — a loop polling memory, the DMAC's registers or its condition line while VU1 runs a
+microprogram or VIF1 and the GIF move a packet — is passed by replayed turns (§47.4): the units run exactly as in the plain
+run, by `run_to` at each instruction time, and only the EE's instructions are not executed; `idle.busy` counts those turns.
+A loop that reads a VU's state directly, by CFC2 or BC2F/BC2T or VU memory, is refused (`Coprocessor`, `Vu`): its reads
+run VU1 to their own times inside the instruction, which a replay at the instructions' ends would not reproduce.
+
+**VIF waiting on a VU** is the board's own work (`Vif::run_to` holding a FLUSH or MSCAL until the VU ends) and has no EE turns
+to pass; it is reached only through the EE's turns replayed beside it. Making the board's calls themselves cheaper while
+units wait is §47.12's next step.
+
+### 47.8 The S31 item: the IOP polling the SIF
+
+`tests/s33/mod.rs` is a paired program: the EE sends eight packets by SIF1, each once the one before has gone and a
+delay has passed, and the IOP re-arms its SIF1 channel for each and counts its polls of the channel's CHCR until the packet
+has landed, keeping the eight counts in its RAM. `the_iop_polling_the_sif_while_the_ees_dma_sends_is_unchanged_by_the_debugger`
+runs it plain, with every table armed and with every processor stepped (§41.7's harness), equal in picture, sound and state
+after every frame. **Seeded again with §41.9's fault 5** (the IOP's probe stopping it anywhere), it still passes, as did a
+first form with one packet and two counts. The reason, read from the board: the IOP is brought to an event's time inside
+the DMAC's loop (`Iop::run_to(at)`) only from the EE instruction's previous time, at most one IOP instruction earlier, so
+the lag the fault introduces is at most one IOP instruction across one DMA unit, and the IOP's DMAC, woken by the EE side's
+FIFO change at its next unit service, lands the packet at the same poll in almost every alignment. Showing the lag needs a
+poll whose answer changes inside one IOP instruction of a DMA unit, which flow control does not give here (§47.14 Q2).
+
+### 47.9 The setting, and the counts
+
+`idle_skip` in Sapphire's settings, "Idle skipping", `on` (the default) or `off`, `effect: exact`, under Performance, read
+at create; `EMUSEN_SAPPHIRE_IDLE=off` chooses it off for measurement, which `examples/s10.rs` and the core honour.
+`Machine::new` alone still builds the plain machine, so the Rust tests' oracle stays the interpreter without skipping.
+**The counts** are the core's own (`idle::Counts`): skips, EE cycles and steps passed, IOP skips, cycles and instructions
+passed, turns replayed and beside a running unit, skips ended by a wake or by the DMAC's write, proofs, attempts, the
+refusals by kind and the arrivals waiting after each. **Through the debugger's interface** (§41.3) they are read-only
+registers after each processor's: the R5900's `idle.skips`, `idle.cycles`, `idle.steps` and `idle.busy` (156 registers),
+the IOP's `idle.cycles` and `idle.instructions` (47). Counts and cycles only: no address of a loop is kept or shown.
+
+### 47.10 The gate (measured 2026-10-26)
+
+On the desktop at CPU weight 20 beside other stages' work; the player's Americas BIOS `ps2-0230a-20080220.bin` executed,
+never read; Jak and Daxter read in place from `~/.cache/emusen/probe/sapphire/discs/`; ps2autotests from
+`~/.cache/emusen/probe/sapphire/ps2autotests/`.
+
+| Oracle | Run | Result |
+| --- | --- | --- |
+| The project's programs, off against on | `every_wait_leaves_the_plain_runs_machine_on_the_interpreter` and `…_on_the_recompiler`: twenty programs, the picture and the whole state after every frame | equal on both tiers; skips made by the seventeen that wait on an event, each of the three others refused by its kind |
+| The verifier through every skipped turn | `the_verifier_steps_through_every_skipped_turn`: the recompiled tier's verifier steps the interpreter after every block and through every turn a skip passes, compared after each skip and whole at the end | held on all twenty |
+| The records | `the_records_count_on_from_wait_to_wait`: Count recorded after each wait, rising | held |
+| States mid-wait | `a_state_saved_in_a_wait_loads_and_runs_on_alike` (V-blank, timer and SIF0 programs) | equal |
+| The wake, the IOP's wait, the units, the watch | `the_iop_sides_wake_ends_a_skip_and_the_iops_own_wait_is_passed`, `turns_are_passed_while_a_unit_runs_and_end_where_the_dmac_writes_what_they_read` | held |
+| ps2autotests | `examples/s10.rs` on the 55 EE programs and the 23 IOP programs as CDs (§40.4), one process at a time, on and off | **52 of 55 and 23 of 23**, the same three as §36.5 failing; all 78 texts and verdict lines (frames, console seconds, TTY bytes, calls, IOP resets) byte for byte those with skipping off |
+| The boot and Jak, frame by frame | `s33 equal`, the picture and the sound after every frame, the state every 60 and at the end | the OSDSYS boot, 760 frames: 0, 0, 0 of 13 on both tiers; Jak and Daxter, 900 frames: 0, 0, 0 of 15 on both tiers |
+| States saved mid-wait | `s33 state`: a skipping machine's state at frame *n* loaded into a second, both run on beside a plain one (recompiled tier) | the boot, state at frame 400, 100 frames on: 0 pictures, 0 sound, 0 states differing, loaded and carried; Jak and Daxter, frame 300, 100 on: 0, 0, 0 |
+| The verifier on the BIOS | `s33 verify`, quiet: the interpreter stepped after every block and through every skipped turn, 30 frames | held: the boot 220,863,488 steps compared (3,371 skips), Jak and Daxter from its entry 231,997,440 (485 skips, 44.9 % of the EE's cycles), the whole states equal at the end |
+
+**What was skipped** over the gate's runs: on the boot, 77.9 % of the EE's cycles in 20,528 skips and 334.9 million IOP
+cycles (71.7 % of the IOP's); on Jak and Daxter, 84.4 % in 521,176 skips and 188.7 million IOP cycles (34.1 %). Both tiers
+made exactly the same skips, as an exact lever must.
+
+**The programs**, each recording Count and timer 0's count after each wait: V-blank; timer 0's compare; Count's
+Compare; a fromSPR transfer waited for in memory, by BC0F, in the channel's CHCR, and with no line changed by its end; the
+IOP's SIF0 transfer waited for in memory, the IOP running a program of its own and then waiting in its loop; a timeout
+counted down that never expires and one that does; a count meeting a bound by equality; a 64-bit count in memory with an
+SLT bound; a wait through a call; a store of what memory holds; counts in memory and in a register; a count compared with
+zero; timer 0's waits while VU1 runs a long microprogram. Refused: a wait reading IOP RAM through the window, a timer
+polled, a count doubled.
+
+### 47.11 Speed (measured 2026-10-26)
+
+**The method**: `examples/s33.rs time`, each frame's `advance` timed and the windows' means taken from one run, three
+rounds, each running both workloads with skipping on and off, the order alternated between rounds; every run alone among
+this stage's jobs in a capped scope at CPU weight 100 while other stages' work went on beside it, the load average (one
+minute) read before and after each run. The recompiled tier, the core's default; the same binary throughout.
+
+| Window | Off, rounds 1–3 | median (spread) | On, rounds 1–3 | median (spread) | Ratio | Frames a second |
+| --- | --- | --- | --- | --- | --- | --- |
+| The OSDSYS boot, frames 0–690 (the animation and the logos) | 453.5, 440.8, 512.9 | 453.5 (16.3 %) | 357.0, 413.5, 410.3 | 410.3 (15.8 %) | **1.11×** | 2.2 → 2.4 |
+| Its language screen, frames 690–760 | 242.6, 237.9, 250.7 | 242.6 (5.4 %) | 139.9, 190.2, 144.7 | 144.7 (36.0 %) | **1.68×** | 4.1 → 6.9 |
+| Jak and Daxter loading, frames 8–400 | 282.5, 222.8, 261.5 | 261.5 (26.8 %) | 68.7, 72.4, 76.7 | 72.4 (11.6 %) | **3.61×** | 3.8 → 13.8 |
+| Its memory card screen, frames 400–900 | 856.9, 717.1, 1,008.9 | 856.9 (40.7 %) | 573.9, 609.6, 597.9 | 597.9 (6.2 %) | **1.43×** | 1.17 → 1.67 |
+
+The loads ran from 5 to 13; the widest spreads are rounds with a compiler beside them, and the ratio holds within every
+round (1.27, 1.07, 1.25 on the animation; 1.73, 1.25, 1.73 on the language screen; 4.11, 3.08, 3.41 on loading; 1.49,
+1.18, 1.69 on the card screen). The medians of the frames, which the drawing frames do not dominate, move further: Jak's
+loading window from 266.5 to 29.0 ms (27.7, 29.0, 40.9 against 283.4, 257.9, 266.5).
+
+**What was skipped**, the same in every round as an exact lever's must be: the animation 76.5 % of the EE's cycles and 70.0
+% of the IOP's, the language screen 92.0 % and 88.0 %, Jak's loading 77.1 % and 35.7 % (with 30,834 turns passed beside a
+running VIF, GIF or VU), its memory card screen 91.3 % and 33.2 %. **Where the frame now goes**: the animation and the card
+screen are the GS's exact arithmetic (§43.8 #1, 56 to 61 % of their samples before this stage), which no EE lever touches;
+on Jak's loading window, sampled with skipping on (§47.12), the EE's interpreted steps of the code that does not wait take
+about 40 % and the board brought along after them about 21 %. Against §43.8's bound for this lever on Jak's loading
+(11.9 times if every EE and scheduler sample went), 3.6 times was taken; the rest is work, not waiting.
+
+### 47.12 The board at events (the brief's item 2)
+
+What falls out of the skip is taken: inside a quick segment the board is not called at each EE time but the IOP at each
+time beyond its own clock, and the IOP's own waits are passed between those calls; that removes the board's
+per-instruction work from every skipped turn. **What remains is a separate piece of work** and is measured, not built: in
+the instructions the skip does not pass, `System::step` still brings the board to every instruction's time. Sampled on
+Jak and Daxter's loading window with skipping on (frames 8 to 400 at 2 ms, the same `rtsample.py` as §43.4), the board's
+calls and the IOP brought along take about 21 % of the frame (`Board::run_to` 3.8 %, the VUs' idle checks 4.9 %,
+`idle_through` 1.4 %, the IOP's run, fetch and units 7.8 %, the block replay 5.1 %, the lines 0.5 %), against 40 % in the
+EE's interpreted steps (step, translation, the TLB, loads and the timing model), which S37's loads and stores in blocks
+address. The next step is to compute each unit's next event once and take the quick path's checks at events rather than
+at every time, exactly, as S32's row #9 describes.
+
+### 47.13 Seeded faults (2026-10-26)
+
+Each made alone, `tests/idle.rs` (or the debugger's test) run whole, the source restored from its copy:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | the issue model's moved times passed one turn short | all 7 of `tests/idle.rs` |
+| F2 | Count passed one turn short | all 7 |
+| F3 | the IOP side's wake ignored in a quick segment | 5: both tiers' equality, the verifier, the states, the wake test |
+| F4 | Random moved one issue cycle too many | all 7 |
+| F5 | an induction word moved one step too many | 3: both tiers' equality, the verifier |
+| F6 | a comparison by equality answered one turn late | 3, after `count-to` was written for it (a first run, before that program, let it survive) |
+| F7 | a comparison's bound one turn too many | 3: both tiers' equality, the verifier |
+| F8 | the watch ignored in replayed turns | 4, after `dma-silent` was written for it: `dma-memory`'s end also changed CPCOND0, which ended the skip first |
+| F9 | the IOP's passed turns allowed to reach two cycles past the EE's last time | **survived**: the IOP's position at the window's end is the plain run's in every alignment met, and what differs (the units' sync time, the run's horizon) is rewritten by the next call before any frame ends; kept as a rule of §47.6 on its argument |
+| F10 | §41.9's fault 5, the IOP's probe stopping it anywhere | **survived**, §47.8 |
+
+### 47.14 Exposure, and what was observed
+
+Running the player's BIOS on Sapphire makes this writer a writer of a player's-BIOS stage (§1.4): **exposed, and never a
+replacement writer**. The BIOS image was executed by the machine, handed by path, and never opened, hashed, diffed,
+disassembled or dumped by any tool of this stage; its folder's file names were not listed (the path was tested for
+existence by its name from `v1.rs`). The skipper proved and passed BIOS loops as it does any guest code, at run time; no
+head, program counter, instruction or memory of BIOS or game code was printed, logged or looked at. What was printed of
+BIOS and game runs: counts (skips, cycles, steps, proofs, refusals by kind, arrivals waiting by kind), equality of
+pictures, sound and states, times, and samples of Sapphire's own host functions (§47.12), named by the binary's symbols. No
+emulator, SDK or loader source was read, and no article.
+
+### 47.15 Where the plan was wrong, or left open
+
+- **§5.12 priced idle skipping as Diamond's lever** for both processors. On the EE it reaches further than Diamond's: the
+  PlayStation 2's waits are seldom pure polls; most count in memory or registers and compare their counts, which Diamond's
+  proof took for one induction in a register or a word with equality tests, and which here are tracked over a second turn
+  with any number of inductions at two widths and order comparisons (§47.5).
+- **"The VU waits" are the EE's waits beside running units** (§47.7): their saving is the EE's instructions alone, the board
+  being run at every time as before; the VUs themselves are never skipped, being never idle-looping in micro mode.
+- **C11** (§5.13), waits skipped by pattern without exact accounting, has nothing left to take on these workloads that
+  §47.5 does not take exactly; it is not proposed.
+
+### 47.16 Questions this stage leaves
+
+1. **Q1 [routine], the board's calls at events** (§47.12). *Recommended*: the next speed step after S37, exact, measured
+   at about a fifth of Jak's loading frame.
+2. **Q2 [routine], fault 5 of §41.9.** The SIF poll program is in the gate and the fault survives it (§47.8).
+   *Recommended*: keep the rule on §41.4's argument; a program that shows the lag would need a device the IOP polls that a
+   DMA unit changes within one IOP instruction, which the SIF does not offer.
+
+### 47.17 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §5.1, §5.12, §5.13 and its amendment of 2026-10-26, §7's S33 row; `Diamond_Speed.md` §4; this
+page's §16.4, §20, §22, §23, §36, §41, §43 and §44; the core's `board.rs`, `machine.rs`, `blocks.rs`, `ee/*.rs`,
+`iop/*.rs`, `dmac.rs`, `sif`, `spu2::run`, `vif`, `vu` and `gif`'s idle predicates, and `blackmoon-r3000`'s run loop; Diamond's
+`src/idle.rs`, the project's own. No emulator, SDK or loader source, no article, and no firmware.
+
+### 47.18 What this stage does not cover
+
+- The board's calls at events (§47.12); loops that read a VU's state directly or poll a timer; counts used as addresses
+  (the largest refusal left on Jak and Daxter, by arrivals waiting).
+- The handheld: no measurement was made there.

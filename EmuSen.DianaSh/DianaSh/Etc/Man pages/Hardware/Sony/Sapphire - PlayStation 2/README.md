@@ -144,7 +144,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   ReadKey's key bytes (D-461), Jak and Daxter and Kingdom Hearts at four anchors each against PCSX2 in picture and RAM,
   VIF1's refused DIRECT (D-462) and the DualShock 2's 4Fh and 40h replies (D-463) corrected, Kingdom Hearts' logo
   (D-464) and Dark Cloud 2's return to OSDSYS (D-465) open, P8 as the games show it, the reference path's speed and
-  rewind's reach on a game.
+  rewind's reach on a game; and stage S33 (2026-10-26, §47): idle skipping, exact, on by default: the EE's waits proven by stepping
+  a turn and passed with the board brought through each of their times, loops that count in registers or cached memory
+  passed with their counts and bounded by their comparisons, the IOP's waits passed between the board's calls; every
+  golden, ps2autotests' 78 texts and the boot and Jak and Daxter frame by frame equal with it off and on, Jak's loading
+  3.6 times faster and OSDSYS's language screen 1.7 times.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

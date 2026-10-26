@@ -251,6 +251,11 @@ fn log2_exact(w: u64, den: &Sum, bits: u32) -> Option<i64> {
     let at = |e: i64| if e >= 0 { (n, d.shl(e as u32)) } else { (n.shl((-e) as u32), d) };
     let (a, b) = at(s);
     let e = if a.cmp(&b) == std::cmp::Ordering::Less { s - 1 } else { s };
+    // A ratio that is a power of two has the significand 1, whose squares give no fraction bit: the steps' own result.
+    let (p, q) = at(e);
+    if p.cmp(&q) == std::cmp::Ordering::Equal {
+        return Some((e - i64::from(den.exp)) << bits);
+    }
     let (a, b) = at(e - 255);
     let (mut m, _) = Big::div(&a, &b);
     let mut frac = 0i64;

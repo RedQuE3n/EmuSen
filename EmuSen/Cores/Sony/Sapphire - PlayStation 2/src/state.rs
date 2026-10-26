@@ -14,12 +14,12 @@ use crate::machine::{Machine, Market, Stop};
 use crate::pcrtc::Picture;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"SPH2");
-/// Version 3, of S10: version 2's with the fast boot's entry, the EE's BC1 slot and the IOP's console capture
-/// (Sapphire_Native.md §36.10). Version 2 (S30, every unit's state) and version 1 (S24, the memories alone) were never a
-/// player's, the console being offered to none, so neither is read (§38.4).
-pub const STATE_VERSION: i32 = 3;
+/// Version 4, of S28: version 3's (S10: the fast boot's entry, the EE's BC1 slot and the IOP's console capture,
+/// Sapphire_Native.md §36.10) with the drive's register 38h (§39). Versions 3, 2 (S30, every unit's state) and 1 (S24,
+/// the memories alone) were never a player's, the console being offered to none, so none is read (§38.4).
+pub const STATE_VERSION: i32 = 4;
 /// The oldest version a state may have and still load.
-pub const OLDEST_STATE_VERSION: i32 = 3;
+pub const OLDEST_STATE_VERSION: i32 = 4;
 
 /// A state made on a console with another BIOS entry, or with one where this console has none, or the reverse.
 pub const STATUS_OTHER_BIOS: i32 = -14;
@@ -246,11 +246,11 @@ mod tests {
         s
     }
 
-    /// The listing of version 3 is the file beside the tests, line for line: a change to any block is a new version.
+    /// The listing of version 4 is the file beside the tests, line for line: a change to any block is a new version.
     #[test]
-    fn the_version_3_layout_is_pinned() {
+    fn the_version_4_layout_is_pinned() {
         let m = machine(Market::Americas);
-        let pinned = include_str!("../tests/sph2/version-3.layout");
+        let pinned = include_str!("../tests/sph2/version-4.layout");
         let layout = m.layout();
         for (n, (got, want)) in layout.lines().zip(pinned.lines()).enumerate() {
             assert_eq!(got, want, "line {}", n + 1);

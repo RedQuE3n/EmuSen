@@ -147,10 +147,20 @@ fn read_elf(image: &[u8]) -> Result<Elf, Refusal> {
     Ok(Elf { entry, segments, gp })
 }
 
+/// A line of SYSTEM.CNF's text by its key, its value trimmed.
+fn config_line(config: Option<&[u8]>, key: &str) -> Option<String> {
+    let text = String::from_utf8_lossy(config?).into_owned();
+    text.split('\n').find_map(|l| l.split_once('=').filter(|(k, _)| k.trim().eq_ignore_ascii_case(key)).map(|(_, v)| v.trim().to_string()))
+}
+
+/// The program a disc's SYSTEM.CNF names as BOOT2, its sectors' user data given by `sector` (the drive's reader).
+pub fn boot2_by(sector: &mut dyn FnMut(u64) -> Vec<u8>) -> Option<String> {
+    config_line(root_file_by(sector, "SYSTEM.CNF").as_deref(), "BOOT2")
+}
+
 fn read_disc(sectors: &Sectors) -> Result<Disc, Refusal> {
     let config = sectors.root_file("SYSTEM.CNF");
-    let text = config.as_deref().map(|c| String::from_utf8_lossy(c).into_owned());
-    let line = |key: &str| text.as_deref().and_then(|t| t.split('\n').find_map(|l| l.split_once('=').filter(|(k, _)| k.trim().eq_ignore_ascii_case(key)).map(|(_, v)| v.trim().to_string())));
+    let line = |key: &str| config_line(config.as_deref(), key);
     if let Some(program) = line("BOOT2") {
         return Ok(Disc { raw: sectors.raw, sectors: sectors.count(), serial: serial_of(&program), program });
     }
@@ -197,43 +207,53 @@ impl<'a> Sectors<'a> {
 
     /// The primary volume descriptor's root directory, its extent and size (ECMA-119 §8.4), where sector 16 holds one.
     pub fn volume(&self) -> Option<(u64, u64)> {
-        let pvd = self.sector(16);
-        (pvd.len() >= 190 && pvd[0] == 1 && &pvd[1..6] == b"CD001").then(|| (u32_at(pvd, 158) as u64, u32_at(pvd, 166) as u64))
+        volume_by(&mut |n| self.sector(n).to_vec())
     }
 
     /// A file of the root directory by its name without the version (ECMA-119 §9.1), where the image holds it whole.
     pub fn root_file(&self, name: &str) -> Option<Vec<u8>> {
-        let (extent, size) = self.volume()?;
-        for block in 0..size.div_ceil(USER as u64) {
-            let dir = self.sector(extent + block);
-            let mut at = 0;
-            while at + 33 < dir.len() && dir[at] != 0 {
-                let length = dir[at + 32] as usize;
-                if at + 33 + length > dir.len() {
-                    break;
-                }
-                let entry = &dir[at + 33..at + 33 + length];
-                let stem = entry.split(|&c| c == b';').next().unwrap_or(&[]);
-                if stem.eq_ignore_ascii_case(name.as_bytes()) {
-                    let (start, bytes) = (u32_at(dir, at + 2) as u64, u32_at(dir, at + 10) as usize);
-                    let mut file = Vec::with_capacity(bytes.min(1 << 20));
-                    for s in 0..bytes.div_ceil(USER) as u64 {
-                        let part = self.sector(start + s);
-                        if part.is_empty() {
-                            return None;
-                        }
-                        file.extend_from_slice(&part[..USER.min(bytes - file.len())]);
-                    }
-                    return Some(file);
-                }
-                at += dir[at] as usize;
-            }
-            if dir.is_empty() {
-                return None;
-            }
-        }
-        None
+        root_file_by(&mut |n| self.sector(n).to_vec(), name)
     }
+}
+
+/// The root directory's extent and size from the primary volume descriptor, sectors given by `sector`.
+fn volume_by(sector: &mut dyn FnMut(u64) -> Vec<u8>) -> Option<(u64, u64)> {
+    let pvd = sector(16);
+    (pvd.len() >= 190 && pvd[0] == 1 && &pvd[1..6] == b"CD001").then(|| (u32_at(&pvd, 158) as u64, u32_at(&pvd, 166) as u64))
+}
+
+/// A root directory's file by its name without the version, sectors given by `sector`, empty past the disc's end.
+fn root_file_by(sector: &mut dyn FnMut(u64) -> Vec<u8>, name: &str) -> Option<Vec<u8>> {
+    let (extent, size) = volume_by(sector)?;
+    for block in 0..size.div_ceil(USER as u64) {
+        let dir = sector(extent + block);
+        let mut at = 0;
+        while at + 33 < dir.len() && dir[at] != 0 {
+            let length = dir[at + 32] as usize;
+            if at + 33 + length > dir.len() {
+                break;
+            }
+            let entry = &dir[at + 33..at + 33 + length];
+            let stem = entry.split(|&c| c == b';').next().unwrap_or(&[]);
+            if stem.eq_ignore_ascii_case(name.as_bytes()) {
+                let (start, bytes) = (u32_at(&dir, at + 2) as u64, u32_at(&dir, at + 10) as usize);
+                let mut file = Vec::with_capacity(bytes.min(1 << 20));
+                for s in 0..bytes.div_ceil(USER) as u64 {
+                    let part = sector(start + s);
+                    if part.is_empty() {
+                        return None;
+                    }
+                    file.extend_from_slice(&part[..USER.min(bytes - file.len())]);
+                }
+                return Some(file);
+            }
+            at += dir[at] as usize;
+        }
+        if dir.is_empty() {
+            return None;
+        }
+    }
+    None
 }
 
 /// Where the project's programs are loaded and entered.

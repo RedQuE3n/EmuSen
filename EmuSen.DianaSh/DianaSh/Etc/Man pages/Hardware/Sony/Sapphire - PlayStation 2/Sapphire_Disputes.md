@@ -4258,3 +4258,163 @@ it.*
 - **Depends on it:** `cdvd::open`; how a referee run's synthetic `.iso` is classed (a small one is a CD on PCSX2).
 - **Pinned by:** `an_image_opens_as_the_playstation_2s_disc_kinds` (Sapphire's rule).
 - **Implemented in:** nothing changed; recorded at §40.14.
+
+  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read.
+  As a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
+  runs.
+- **Referee:** not yet consulted for this; PCSX2 read the `.iso` form in D-480's runs, how it classed the image unknown.
+- **Conclusion:** **open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or the
+  BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.
+- **Depends on it:** `cdvd::open`'s choice of medium, `Cdvd::fill` for ReadCd on a DVD.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.
+
+### D-460. The EE reaches the CDVD drive's registers at 1F402000h-1F40203Fh as the IOP does, reads and writes alike
+
+- **Opened:** 2026-10-25, at stage S28: with a game's disc in the drive and an EEPROM configured through the initial
+  setup, the player's BIOS on Sapphire went from its intro to OSDSYS's main menu without booting the disc; the
+  hardware's reports showed no N command sent to the drive and 574 reads by the EE of 1F40200Fh, the disk type, which no
+  unit of the EE's bus answered and which read zero, "no disc" (`Sapphire_Native.md` §39.3).
+- **Documents read:** ps2tek at `1c91660`, "Memory Map" (the EE's map lists no window at 1F400000h; the drive is in the
+  IOP's map at 1F402004h-1F402018h) and "CDVD I/O Ports"; Israelson's edition, the same.
+- **Test program:** S23's `reach.s` (`Sapphire_Native.md` §25.3), which reads the drive's registers from the EE at
+  BF402000h and sends S command 03h.
+- **Referee:** PCSX2 2.8.2, LRPS2 and PCEE2 (one lineage) answer `reach.s` from the EE as the drive answers the IOP
+  (measured at S23); Play! 0.72 answers CCh at every register, its high-level BIOS never relying on them. The player's
+  BIOS, a console program, reads the disk type from the EE before it boots a disc, which is the stronger witness that
+  the window exists on the console.
+- **Conclusion:** the drive's 64 byte registers answer the EE at 1F402000h-1F40203Fh (and through KSEG1 at
+  BF402000h) exactly as they answer the IOP, a wider access taking its bytes in order as on the IOP's bus, and a write
+  reaching the drive (an N or S command sent from the EE runs). With it the BIOS sent N command 0Ch and went on to the
+  disc (D-461). **Measured** on one lineage and argued from the BIOS's own traffic.
+- **Depends on it:** `board::Board`'s `Bus` (`drive_size`), `IopBus::cdvd_read`, `IopBus::cdvd_write`.
+- **Pinned by:** `the_ee_reads_and_writes_the_drives_registers` (`tests/boot.rs`).
+- **Implemented in:** stage S28's commit.
+
+### D-461. CDVD N command 0Ch (ReadKey): with a disc ready it leaves the disc's five key bytes at 20h-24h, bit fields of the boot program's name, and 01h at 38h, or with a fourth parameter of 4Bh 05h at 38h and a sixth byte at 34h; the player's BIOS reads them before it boots a disc
+
+- **Opened:** 2026-10-25, at stage S28: with D-460 in place the BIOS sent N command 0Ch and drew "Please insert a
+  PlayStation or PlayStation 2 format disc." over its disc animation; the drive answered 0Ch as an unknown command. The
+  drive's register trace (`examples/s28.rs trace`, the drive's own report of each access in order) showed two ReadKeys,
+  the first with the seven parameter bytes 00h 00h 00h 4Bh 00h 00h 00h and the second with 00h 00h 00h 03h 0Ch 00h 00h,
+  each followed by reads of the error register, 38h, then 20h to 24h each with 39h between (`Sapphire_Native.md` §39.3).
+- **Documents read:** ps2tek at `1c91660`, "CDVD N Commands" (00h-06h, 08h, 09h; nothing at 0Ch) and "CDVD I/O Ports"
+  (nothing past 18h); Israelson's edition, "CDVDMAN": the exports `sceCdReadKey(char unk1, char unk2, uint cmd, void
+  *key)` and `sceCdDecSet(char unk1, char unk2, char shift)`, and "SECRMAN": "The bulk of this work is handled by the
+  CDVD Drive, which contains the actual MagicGate keys"; `Sapphire_Plan.md` §5.6 ("The model reports every disc as
+  authenticated").
+- **Test program:** `programs/s28/readkey.s` (from the EE: the disk type, drive status, N status and 38h; ReadKey with
+  each of the BIOS's two parameter sets, each followed by the N status, error, I_STAT and every byte of 00h-3Fh; then a
+  Seek, a NOP and a Stop, each followed by 38h) and `programs/s28/keyargs.s` (ReadKey under 21 parameter sets, 20h-3Fh
+  after each), on synthetic discs from `ps2discs.py files` whose BOOT2 programs carry eleven names, and on the Jak and
+  Daxter disc.
+- **Referee:** PCSX2 2.8.2. 38h is 00h before ReadKey; after it 05h where the fourth parameter is 4Bh and 01h for every
+  other value tried (00h-04h, 08h, 09h, 0Bh, 40h, 41h, 43h, 48h, 4Ah, and the fifth to seventh bytes varied), kept
+  through a Seek, a NOP and a Stop; the five bytes at 20h-24h are the same under every parameter and depend on the
+  boot program's name alone: for `SCUS_971.24` DEh 69h 75h 38h 25h (the Jak and Daxter disc and the synthetic disc of that
+  name alike), for `EMUS_000.02` 80h 69h B5h 59h 14h; 34h is 00h except after 4Bh; 28h-2Ch and 30h-33h zero; the unused
+  offsets FFh; no error; I_STAT 01h. Over the eleven names the five bytes and 34h are the letters' codes l1-l4 and the
+  number n of the five digits laid out as (l4 & 1) << 7 | n >> 10, (l3 & 3) << 6 | l4 >> 1, (l2 & 7) << 5 | l3 >> 2,
+  (l1 & 15) << 4 | l2 >> 3, (n & 31) << 3 | l1 >> 4 and, at 34h, (n >> 5 & 31) << 3 | 4, every name predicted before it
+  was measured; a name of another form (`MAIN.ELF`) gives zeros and 04h. Play! reaches no drive register from the EE.
+- **Conclusion:** ReadKey needs a disc ready (else error 01h, as the other disc commands, [C]); it completes at once and
+  leaves 38h 05h after a fourth parameter of 4Bh, 01h otherwise, which a later command keeps and the tray's opening
+  clears [A]; 20h-24h read the five bytes and 34h the sixth after 4Bh, from the BOOT2 program the drive reads in the disc's
+  SYSTEM.CNF when the disc is loaded. Its completion raises I_STAT bit 1 as ps2tek gives for every N command, not the
+  referee's bit 0, the document before the single lineage. The bytes are a layout of the name that the referee shows,
+  not a secret of the drive (no key material enters them), which is how §5.6's "every disc authenticated" is answered;
+  where they come from on a console is in no document. With them the BIOS boots Jak and Daxter, Kingdom Hearts and Dark
+  Cloud 2. **Measured** on one lineage; the layout argued from eleven names.
+- **Depends on it:** `cdvd::ncmd::READ_KEY`, `cdvd::reg::{KEY, KEY_EXTRA, KEY_STATUS}`, `cdvd::read_key`,
+  `media::boot2_by`; the drive's state (`SPH2` version 4).
+- **Pinned by:** `read_key_reports_the_disc_authenticated_at_38h`, `read_keys_bytes_are_the_measured_fields_of_the_boot_name`;
+  the layout listing `tests/sph2/version-4.layout`.
+- **Implemented in:** stage S28's commit.
+
+### D-462. VIF1: a DIRECT whose data the GIF refuses (VGW) asks the board for no event, even while the DMAC waits on a full FIFO
+
+- **Opened:** 2026-10-25, at stage S28: Jak and Daxter, a frame after the Cross that leaves its memory card message,
+  stopped on Sapphire with the EE never reaching the next field. The board's own state at the stop (printed by a
+  temporary counter in `Board::run_to`): the next event at the current cycle again and again, asked by VIF1 alone; VIF1's
+  STAT 1000008Bh (VPS 3, VGW, DBF, a full FIFO of 16 quadwords), channel 1 running with QWC 7Ch, GIF_STAT 680h (PATH1
+  active, PATH2 queued), the GIF and every other unit asking for no event.
+- **Documents read:** the EE User's Manual §6.3.2 (VGW: "Waiting for the GIF"), §6.4 (DIRECT and DIRECTHL through PATH2),
+  §7.4 (path arbitration); `Sapphire_Native.md` §28.5 and §33.5 (the VIF's and the GIF's interfaces to the board).
+- **Test program:** none on a referee: no referee shows the board's scheduling, which is the model's own; the unit test
+  below drives VIF1 with a GIF that refuses PATH2.
+- **Referee:** not consulted.
+- **Conclusion:** VIF1's `next_event` named its own time while the DMAC waited on its full FIFO and it had a word, which
+  holds a VIF that can take a word; a DIRECT refused by the GIF takes none, so the board asked for the same cycle without
+  end (a livelock, not a reading of the hardware). A VIF in a DIRECT with VGW set asks for no event; the GIF's progress,
+  which the board brings along at every step, lets the DIRECT go on. **Argued**; no timing changes for a DIRECT the GIF
+  takes.
+- **Depends on it:** `vif::Vif::next_event`.
+- **Pinned by:** `a_direct_refused_by_the_gif_asks_for_no_event` (`tests/vif.rs`).
+- **Implemented in:** stage S28's commit.
+### D-463. The DualShock 2, 4Fh: the reply's last byte (byte 8, counted from 0) is 5Ah
+
+- **Opened:** 2026-10-26, at stage S28: Kingdom Hearts on Sapphire drew "DUALSHOCK®2 analog controller is not inserted in
+  controller port 1." after its copyright screen and never left it. The pad's own report of its exchanges
+  (`examples/s28.rs padtrace`): the game entered configuration mode, asked 45h, 46h, 47h, 4Ch, set analogue mode locked
+  with 44h, set 4Dh's map, asked 41h, then sent 4Fh (enable bytes FFh FFh 03h) ten times and polled 42h with the pad
+  still in configuration mode (mode F3h); it never sent 43h with 00h.
+- **Documents read:** psx-spx, "Config Mode - Command 4Fh" and its note "Some Dualshock2 Config Mode commands do
+  occasionally send 00h, 5Ah, or FFh as last (9th) reply byte"; ps2tek "Controller commands", which gives no reply
+  bytes for 4Fh; D-224, which left byte 8 of 4Fh's and 40h's reply ungraded.
+- **Test program:** S25's `s25-pad` (byte 8 ungraded); the game, a program written for the console, as the witness.
+- **Referee:** PCSX2 2.8.2 answers 5Ah there (D-224's measurement of 2026-10-25).
+- **Conclusion:** 4Fh's reply ends with 5Ah: the referee answers so and a console game retries 4Fh until it does, then
+  leaves configuration mode. 40h's ninth byte stays ungraded (00h), no program having shown it. **Measured** on one
+  lineage with the game's behaviour beside it; with it Kingdom Hearts leaves configuration mode and polls the pad in
+  mode 79h.
+- **Depends on it:** `sio2::pad::DualShock2::exchange`.
+- **Pinned by:** `the_4fh_reply_ends_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode` (`src/sio2/tests.rs`).
+- **Implemented in:** stage S28's commit.
+
+### D-464. GS, Kingdom Hearts' "PlayStation 2" logo: Sapphire draws a grey box with dark outlines where PCSX2 shows white letters on black
+
+- **Opened:** 2026-10-26, at stage S28: Kingdom Hearts' own logo, its first screen, about 7 to 13 seconds into the game.
+- **Documents read:** the GS User's Manual §3.4 (TEX0, TFX, TCC), §3.6 to §3.9 (alpha test, blending), chapter 5 (the
+  PCRTC's merge, PMODE).
+- **Test program:** none yet. The GS's own report of the game's register writes (`examples/s28.rs gstrace`, frames 420
+  to 452) replayed into a GS made fresh by `examples/gsreplay.rs` draws the same grey box, so the box comes from the
+  writes and not from the PCRTC (PMODE 66h, circuit 2 alone, DISPFB2 at FBP A0h). The texture, 384 × 64 PSMCT32 at
+  TBP 3C00h, is uploaded at frame 426 from the game's own program image (EE RAM 001A5AA0h, inside its ELF's segment),
+  byte for byte, so the referee is given the same data; its texels have R = G = B = A (95h for the ground, other
+  values on the letters' edges). Each frame then draws it as a textured strip in context 2 (TFX 0, TCC 0, vertex
+  colour 80h, alpha 40h, no blending), then black antialiased line strips and dark Gouraud strips under additive
+  blending, then a sprite blending the buffer at FBP 0 back in with alpha 07h. Replayed draw by draw, the strip alone
+  makes the box and nothing after it changes it visibly: the lines' and the Gouraud strips' colours are 00h to 0Ah in
+  every channel, which additive blending leaves near black, so white letters would need colours the game did not write.
+  The texture's letters are not filled (their insides equal the ground), so no reading of the texture alone gives filled
+  white letters either.
+- **Referee:** PCSX2 2.8.2 shows white letters on black at 13.7 and 16.2 seconds and no glowing phase before them;
+  Sapphire shows a blue glow forming the letters (frames 430 to 440), then the grey box until frame 780.
+- **Conclusion:** **open**. The writes as traced give the grey box by the manual's rules as Sapphire reads them, and the
+  colours the game wrote are near black, so the difference most likely lies upstream of the GS, in what the game
+  computed (its logo's brightness, the strip's presence), which the EE, the VUs or the timing feed; a rule of the GS the
+  draws depend on is not excluded. The next steps, not reached at this stage: the game's vertex data in EE RAM read on
+  both machines at the same frame, and a program of the project's replaying the strip and the lines on PCSX2.
+- **Depends on it:** the GS's texturing and pixel pipeline, or the units feeding the game's choices.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.
+### D-465. Dark Cloud 2: the game starts, loads its IOP modules from the disc and then has the IOP rebooted into OSDSYS, which shows its browser with the disc
+
+- **Opened:** 2026-10-26, at stage S28: Dark Cloud 2 (SCUS-97213, v2.00) on Sapphire with the configured EEPROM.
+- **Documents read:** ps2tek "CDVD N Commands" (ReadDvd's block: "0 1 Volume number + 0x20"); D-121, D-122.
+- **Test program:** none. The hardware's own reports: the drive's commands in order show the BIOS reading the volume,
+  SYSTEM.CNF, sectors 0 to 11 and the program through ReadCd and ReadDvd after both ReadKeys (D-461), then reads with
+  another mode that the game's own loading makes; the IOP's console (§36.3's capture) shows the game's program loaded,
+  the IOP rebooted for it and its ten modules loaded from `cdrom0:\MODULES\` (SIO2MAN, PADMAN, MCMAN, MCSERV, LIBSD,
+  SDRDRV, MODMIDI, MODHSYN, EZMIDI, EZBGM), each returning, then a second reboot request from the EE and OSDSYS loaded
+  again, about seven seconds after the game began. With slot 1 empty the same happens. ReadDvd's byte 0 given ps2tek's
+  20h on a single-layer disc, against D-122's ECMA-267 reading, changed nothing.
+- **Referee:** PCSX2 2.8.2 runs the game to its memory card message ("No memory card (PS2) detected ...") 28 s after it
+  begins to draw.
+- **Conclusion:** **open**. What the game's program decides before it returns to OSDSYS is not shown by the reports;
+  the game's code could show it, but OSDSYS is loaded at the addresses the game's program occupies (Dark Cloud 2's ELF
+  spans 00100000h-01F64E00h), so an EE address alone cannot tell the game's code from the BIOS's, and §1.4 forbids
+  observing the latter (`Sapphire_Native.md` §39.11, §39.12 Q2).
+- **Depends on it:** unknown.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.

@@ -7313,6 +7313,281 @@ and is a writer of a player's-BIOS stage; **this writer is exposed and will neve
 - S10's ELF loading and S25's part B, beside it: their units' fields are those of this stage's blocks; a field they add is
   a new version.
 
+## 39. Stage S28, games on the player's BIOS: Jak and Daxter, Kingdom Hearts and Dark Cloud 2 (2026-10-25 to 2026-10-26)
+
+*Numbered §39 and its disputes from D-460, S10 (§36), the D-383 step (§30, D-440) and the IOP programs (§40, D-480) beside
+it. On the tester's go of 2026-10-25.*
+
+### 39.1 In one paragraph
+
+The plan's §7 row S28, on the tester's go of 2026-10-25. The tester's three target games were run on the player's
+Americas BIOS from their `.iso` images, each with a disc in the drive at power-on and an EEPROM its own BIOS configured
+through the initial setup, observed only through the hardware's own reports, the pictures, the sound, the IOP's console
+and the game's RAM above 00100000h. **The disc boot needed three things of the drive no document gives**: the EE reaches
+its registers (D-460), and ReadKey (N command 0Ch) leaves 38h set and the disc's key bytes, a layout of the boot
+program's name learned from the referee over eleven names, at 20h-24h and 34h (D-461). **Jak and Daxter** then runs from
+its legal screen through the Naughty Dog logo, its title and menu to a new game's opening scene, reached by Cross,
+Start, Cross and Cross; its legal screen equals PCSX2's to the pixel, its memory card message within 21 pixels, its
+title's and opening scene's memory 92 % equal word for word while the camera moves. One unit defect stopped it, VIF1's
+DIRECT refused by the GIF holding the board in a loop (D-462). **Kingdom Hearts** runs from its logos through its title
+to its attract movie on the IPU; its "Published by" screen, copyright screen and title equal PCSX2's within the scaling's
+rounding (0, 0 and 0 pixels by more than 32) with its RAM equal but for about 120 of 8.1 million words, and its movie's
+frames equal where they meet PCSX2's; it needed the DualShock 2's 4Fh and 40h replies to end with 5Ah (D-463), and its
+own "PlayStation 2" logo differs, open (D-464). **Dark Cloud 2** boots and loads its modules, then returns to OSDSYS after
+seven seconds, the cause open (D-465) and its finding put to the tester since the game's code shares its addresses with
+OSDSYS's. The memory card is not seen by the games (P8, §39.7). The reference path runs a game at 0.4 to 2.7 frames a
+second on the desktop (§39.8); one exact change, the GS's log2 for powers of two, bought 17 %. A game changes 0.02 % to
+4.3 % of its state in four frames, so rewind's default budget holds seconds where a game moves (§39.9). "Into play" is
+not reached: Jak's first controllable moment lies five minutes of opening scene past the last anchor, hours of wall
+time at this speed (§39.12 Q4). No emulator, SDK, loader or game source was read and no firmware image opened; §39.11
+records what was observed past the rules' intent, a log that printed OSDSYS's addresses, deleted when seen.
+
+### 39.2 What was built to run a game and to see it
+
+- **A disc in the drive at power-on** (`Machine::disc_at_power_on`, `Cdvd::in_at_power_on`): the drive spun up and paused
+  with the disc, its tray never having moved, as `Cdvd::new` already made a drive with a disc (D-128); no eject is
+  reported. A host's create with a disc image still leaves the drive empty (S29's work); the runner puts the disc in.
+- **`examples/s28.rs`**, the runner: the console started empty through the core ABI with the player's BIOS by path and
+  an EEPROM file, the disc in at power-on, driven by a control file written while it runs (presses, pictures, states,
+  RAM, traces). What it prints and writes is the hardware's own: pictures, the sound, states, the EEPROM it writes, the
+  drive's command counts and parameters, a trace of the drive's register accesses in order (`trace`), the pad's
+  exchanges (`padtrace`), the GS's general register writes of a frame (`gstrace`), the board's display registers, and the
+  game's RAM from 00100000h read through the data cache (`ram`). An EE program counter or instruction is printed only
+  inside the game's own program as its disc's ELF places it, never inside the BIOS's ROM or the kernel's memory, and
+  nothing of the IOP's is printed.
+- **`examples/gsreplay.rs`**: a GS trace replayed into a GS made fresh, a buffer written as a picture after each file or
+  at a mark, to narrow a drawing defect to the writes that make it (§39.6).
+- **`ps2referee.py game`**: PCSX2 booting the disc through the BIOS (fast boot off) at the console's speed with a card
+  file or none and an EEPROM file, a script of key presses, pictures from states saved through PINE, and the game's RAM
+  from 00100000h read through PINE in batch messages of 4,096 reads (31 MiB in under a second); `--keep-nvm` copies the
+  EEPROM a run left. **`ps2anchor.py`** counts the pictures' and the RAM's differences and the states' change for rewind.
+- **The console's EEPROM**: a blank EEPROM sends the BIOS to its initial setup before any disc boots, on both machines.
+  Each machine's EEPROM was configured by its own BIOS through the same choices (English, the setup's defaults) and kept:
+  Sapphire's at frame 1,384 of a run through the setup, PCSX2's by `--keep-nvm`. The two files hold the same 16-byte
+  configuration block at different offsets, and neither machine reads the other's (Sapphire's on PCSX2 and PCSX2's on
+  Sapphire both send the BIOS to the setup): each emulator's file layout is its own, and no permitted source gives the
+  EEPROM's (§35.5, Q2 there).
+
+### 39.3 The disc boot: what the BIOS waited for
+
+Each stop was found from the hardware's reports alone (the unanswered accesses, the drive's command counts and
+parameters, then the drive's trace), as §1.4 allows.
+
+| Where the boot stopped | What the reports showed | The rule built |
+|---|---|---|
+| OSDSYS's main menu with the disc in, no disc boot | no N command at all; 574 EE reads of 1F40200Fh, the disk type, which no unit of the EE's bus answered | the EE reaches the drive's registers (D-460) |
+| "Please insert a PlayStation or PlayStation 2 format disc." | N command 0Ch twice, then reads of 38h, which read zero | ReadKey sets 38h (D-461) |
+| The same | after 38h, reads of 20h-24h with 39h between, which read zero | ReadKey's key bytes from the boot program's name (D-461) |
+| The same | two ReadKeys, the first with fourth parameter 4Bh, then reads of 30h-34h | 38h 05h and the sixth byte at 34h after 4Bh (D-461) |
+
+With these the BIOS boots all three games from their `.iso` images (Dark Cloud 2 then returns to OSDSYS, §39.6). D-483 (the
+path table at sector 257) never stopped these discs, whose tables lie there.
+
+### 39.4 Jak and Daxter (SCUS-97124, Rev 1)
+
+**The run** (Americas BIOS, Sapphire's configured EEPROM, the erased card a console holds in slot 1, frames counted from
+power-on at 59.94 Hz): the BIOS's intro to frame 300, the game's legal screen from about 780, the memory card message at
+1,000, Cross at 1,100, the Naughty Dog logo with Daxter and Jak (1,140 to 2,100), the title's zoom (2,200), the title
+screen with PRESS START (about 2,450), Start at 2,700, the menu, Cross on NEW GAME at 2,820, the memory card message again,
+Cross at 2,960, and the new game's opening scene, its credits drawn in the engine (3,300 on), followed to frame 3,790.
+Every picture was compared by eye with PCSX2's at the same step of the same script; nothing was missing or misdrawn. The
+referee's runs used PCSX2's configured EEPROM and slot 1 empty, which shows the game the same "no memory card" as
+Sapphire's card does (§39.8).
+
+| Anchor | Sapphire | PCSX2 | Picture: pixels of 307,200 differing by more than 8 / 32 / 64 | The game's RAM from 00100000h |
+|---|---|---|---|---|
+| A1, the legal screen ("Sony Computer Entertainment America presents") | frame 850 | 19.6 s after it began to draw | **0 / 0 / 0** | the program's segment (00100000h-0013FD18h): 65,269 of 65,350 words equal |
+| A2, the memory card message ("No memory card (PS2) inserted in memory card slot 1!"), reached without a press | frame 1,080 | 30.6 s | **683 / 21 / 0** (the green orb turns) | 79.2 % of the words, 5,735 of 7,936 pages; the program's segment 65,232 words |
+| A3a, the title screen, reached by Cross | frame 2,690 | 73.8 s | moving camera: no frame within 0.5 s matches (52,045 / 31,143 at the least) | **92.6 %** of the words, 7,069 pages; the program 65,238 words |
+| A3b, the opening scene's first credit, reached by Cross, Start, Cross, Cross | frames 3,300-3,600 | 99.8-105.3 s | the credit's text, the box (25,185)-(615,290): 960 of 61,950 by more than 64 at the least, the nebula behind it moving | **91.6 %** of the words, 6,915 pages; the program 65,250 words |
+
+The pictures are scaled bilinearly from Sapphire's 512 × 448 to PCSX2's state screenshot of 640 × 480 (§35.8's method).
+The RAM is the game's memory only (the kernel's, below 00100000h, is in neither dump), read on Sapphire through the data
+cache and on PCSX2 through PINE while it runs. At A2, 1,861 of 2,048 pages are equal in 00100000h-008FFFFFh, 3,579 of 3,584 in
+00900000h-016FFFFFh, 246 of 512 in 01700000h-018FFFFFh, and 49 of 1,792 in 01900000h-01FFFFFFh, which Sapphire leaves zero
+and PCSX2 holds filled;
+by the title that region is equal on both, so it is filled later by the game (its contents were not examined: before the
+game first writes it, it may hold what the BIOS left). At the title and the opening scene what differs is the heap of
+moving objects (00300000h-005FFFFFh), which no two runs at different instants share.
+
+**What the game forced, beside the disc boot**: VIF1's DIRECT refused by the GIF held the board in a loop at the first
+frame after the memory card message (D-462).
+
+
+### 39.5 Kingdom Hearts (SLUS-20370)
+
+**The run** (as Jak's): the BIOS's intro, the game's own "PlayStation 2" logo (frames 420 to 780, D-464), "Published by
+Square Electronic Arts L.L.C." (840 to 1,100), the Disney Interactive and Squaresoft logos, the copyright screen (1,800
+to 2,050), the title with NEW GAME and LOAD from frame 2,340, left untouched so that the game runs its attract movie
+(from about 5,000), followed to frame 6,400. No press is needed: the game reads the pad from the start, and without its
+DualShock 2 in analogue mode it stopped at "DUALSHOCK®2 analog controller is not inserted in controller port 1." after
+the copyright screen until the pad answered 4Fh and 40h as the referee does (D-463).
+
+| Anchor | Sapphire | PCSX2 | Picture: pixels differing by more than 8 / 32 / 64 | The game's RAM from 00100000h |
+|---|---|---|---|---|
+| A1, "Published by Square Electronic Arts L.L.C." | frame 960 | 22.5 s | **0 / 0 / 0** | **8,126,337 of 8,126,464 words** (99.998 %), 7,917 of 7,936 pages; the program (00100000h-0066CE98h) 1,422,124 of 1,422,246 words |
+| A2, the copyright screen | frame 1,920 | 37.5 s | **164 / 0 / 0** | 8,126,342 words, 7,915 pages; the program 1,422,145 words |
+| A3, the title with NEW GAME and LOAD | frame 2,940 | 51.5 s | **44 / 0 / 0** | 8,126,350 words, 7,916 pages; the program 1,422,140 words |
+| A4, the attract sequence's text, the title left alone | frames 5,520 and 5,850 (5,190 on) | 95.7 s and 110.7 s | **428 / 0 / 0** and **1,915 / 0 / 0** at the frames that match; at 101.5 s, the text being written, 4,078 / 2,590 at the least | 96.9 % of the words (7,877,123), 7,642 pages at frame 5,676 against 100.7 s; the program 1,422,112 words |
+
+Every static screen of the game is equal to the referee's to the pixel within the scaling's rounding, and its memory is
+the referee's but for about 120 words, which hold counters and the like at different instants. The game's own
+"PlayStation 2" logo differs (D-464, open): Sapphire draws a grey box with dark outlines where PCSX2 shows white letters,
+after a blue glow PCSX2 does not show; replaying the GS's traced writes shows the box is what the game wrote, its colours
+near black, so the cause most likely lies upstream of the GS.
+
+
+### 39.6 Dark Cloud 2 (SCUS-97213, v2.00)
+
+The BIOS boots it as it boots the other two (the volume, SYSTEM.CNF, sectors 0 to 11 and the program read, both
+ReadKeys answered, D-461); the game's program runs, the IOP is rebooted for it and its ten modules load from the disc
+(the IOP's console, §36.3's capture), and about seven seconds later the EE has the IOP rebooted into OSDSYS, which shows
+its browser with the disc ("PlayStation®2 DISC"). PCSX2 shows the game's memory card message 28 s after it begins to draw.
+The same happens with slot 1 empty, and with ps2tek's 20h in ReadDvd's byte 0 on this single-layer disc (against
+D-122), so neither the card nor that byte is the cause. What the game decides before returning is not shown by the
+hardware's reports, and its code cannot be told from OSDSYS's by address (§39.11): **D-465, open**, put to the tester
+(§39.12, Q2). No anchor of the game's own screens was reached; its boot is recorded here as the drive's and the IOP's
+reports show it.
+
+
+### 39.7 The memory card as the games see it (P8)
+
+Sapphire's console holds an erased card in slot 1, its authentication unanswered (`Sapphire_Plan.md` §11 Q7(b), §30.2).
+**Jak and Daxter reports "No memory card (PS2) inserted in memory card slot 1!"** at its start and again at a new game,
+where PCSX2 with an erased card file in slot 1 asks "Memory card (PS2) in memory card slot 1 is unformatted ... Format?
+Yes No", and with slot 1 empty shows Sapphire's message; Kingdom Hearts says nothing of the card before its title; Dark
+Cloud 2 returns to OSDSYS with the card or without it (D-465). So P8, as the player's BIOS path shows it in a game: the
+console's card is not seen at all, the game going on as if no card were inserted; no save is possible on this path,
+which Q7(b) leaves to the open BIOS. Every comparison with the referee in this stage used slot 1 empty for that reason.
+
+### 39.8 Speed (measured 2026-10-26)
+
+Each anchor's state was loaded alone and run 121 frames, no picture taken until the last (`bench.sh` in the stage's
+scratch, `examples/s28.rs` with `load=`), on the desktop with other work beside it (load average 4 to 6), the
+interpreter tier, before S36's recompiler joined the tree:
+
+| Game, anchor | Frames per second | Of the console's 59.94 |
+|---|---|---|
+| Jak and Daxter, the legal screen (900) | 2.66 | 4.4 % |
+| Jak and Daxter, the memory card message (1,080) | 1.66 | 2.8 % |
+| Jak and Daxter, the title's flight (2,690) | 0.38 | 0.6 % |
+| Jak and Daxter, the opening scene (3,450) | 0.54 | 0.9 % |
+| Kingdom Hearts, its logos (900) | 2.35 | 3.9 % |
+| Kingdom Hearts, the copyright screen (2,100) | 2.11 | 3.5 % |
+| Kingdom Hearts, the title (2,940) | 2.02 | 3.4 % |
+| Kingdom Hearts, the attract movie (5,676) | 2.31 | 3.9 % |
+
+So a 3D scene runs at about one hundredth of the console's speed on the reference path and a still screen at one
+twentieth to one fortieth; the stage's runs took 25 to 80 minutes from power-on to each game's third anchor. That is the
+bench S32 replaces with measurements and the levers of S33 on address (`Sapphire_Plan.md` §5.12). **One exact change**
+was made because the first profile of a game named it: the GS's LOD log2 (§35.7's fifth change) took the exact 256-bit
+steps whenever the double-precision estimate lay near an integer, which every power-of-two ratio does, and Jak's
+textured draws are full of them (63 of 120 samples in `log2_exact`); a ratio that is a power of two now returns its
+integer at once, the steps' own result (their significand is exactly 1, whose squares give no fraction bit). Jak from
+frame 900 to 1,020: 46 s before, 38 s after, every picture equal; `log2_is_floored_at_every_scale` holds it. After the
+rebase onto S36, Kingdom Hearts' attract movie from frame 4,800 ran on the recompiler tier, the default, at 1.9 to 2.2
+frames a second with every register access counted, its pictures at frames 5,520 and 5,850 equal to the interpreter's
+byte for byte.
+
+### 39.9 Rewind's reach on a game (P14's deferred half, S30's §38.11 Q1 and Q4)
+
+The share of the state (43,003,492 bytes for a 512 × 448 picture) whose 64-byte runs differ between two states four
+frames apart, the measure §38.7 prices the chain's deltas by, at each anchor of §39.8's runs:
+
+| Game, anchor | Changed in four frames | Delta, by §38.7's table | History in the 96 MiB default |
+|---|---|---|---|
+| Jak, the legal screen | 0.02 % | about 10 KB | minutes |
+| Jak, the memory card message | 1.13 % | about 0.5 MB | about 13 s |
+| Jak, the title's flight | 0.04 % | about 20 KB | minutes |
+| Jak, the opening scene | 4.34 % | about 1.9 MB | about 3.5 s |
+| Kingdom Hearts, its logos | 0.05 % | about 25 KB | minutes |
+| Kingdom Hearts, the copyright screen's fade | 4.12 % | about 1.8 MB | about 3.7 s |
+| Kingdom Hearts, the title | 0.21 % | about 0.1 MB | over a minute |
+| Kingdom Hearts, the attract movie | 1.01 % | about 0.45 MB | about 15 s |
+
+The title's flight changes so little because the camera's motion lives in a few matrices while the frame and depth
+buffers, which change every frame, are drawn over the same places; a scene with moving characters (Jak's opening)
+changes over 4 %. **Verdict on P14's second half, on a game**: the default budget holds seconds where the game moves
+and minutes where it stands still, so S30's Q4 stands: a per-system budget of 512 MiB would hold about 17 s of
+Jak's opening scene. No delta was measured on the BIOS's boot (§38.11 Q1).
+
+### 39.10 Tests and seeded faults (2026-10-26)
+
+**Tests** [M, on the tree rebased onto WiseMan `ffb4e001f`, S36's recompiler beneath]: the crate whole, `cargo test
+--release`, **403 of 403** in 28 test binaries, the lib 95 among them; clippy clean on every target. New:
+`read_key_reports_the_disc_authenticated_at_38h` and `read_keys_bytes_are_the_measured_fields_of_the_boot_name` (the
+drive's lib tests, D-461, the second with a synthetic DVD whose SYSTEM.CNF names `SLUS_203.70`),
+`the_ee_reads_and_writes_the_drives_registers` (`tests/boot.rs`, D-460), `a_direct_refused_by_the_gif_asks_for_no_event`
+(`tests/vif.rs`, D-462), `the_4fh_and_40h_replies_end_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode`
+(SIO2's lib tests, D-463); `the_version_4_layout_is_pinned` against the new `tests/sph2/version-4.layout` (the drive's
+registers one byte longer). WiseMan: `SapphireTests` (the blast radius's filter: the kit's C1 to C15, C16 and C22 on
+`SPH2` version 4) **5 of 5**, `SapphireConsoleTests` and `SapphireRewindTests` **5 of 5**.
+
+**Seeded faults** (each applied, the named test run, the source restored):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | VIF1's `next_event` asking for its own time under VGW again | `a_direct_refused_by_the_gif_asks_for_no_event` (its first form, which let the VIF empty its FIFO before the check, did not catch it and was strengthened) |
+| F2 | the key's fourth byte with the first letter shifted by 3 instead of 4 | `read_keys_bytes_are_the_measured_fields_of_the_boot_name` |
+| F3 | the EE's window onto the drive reading zero | `the_ee_reads_and_writes_the_drives_registers` |
+| F4 | 4Fh's last byte 00h again | `the_4fh_and_40h_replies_end_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode` |
+| F5 | the log2's power-of-two return one above the steps' result | `log2_is_floored_at_every_scale` |
+
+
+### 39.11 What was observed, and an exposure
+
+The pictures, the sound, the game's RAM above 00100000h, the drive's register accesses and commands, the pad's
+exchanges, the GS's register writes, the display registers and the IOP's console text, all the hardware's own reports
+or a game's own data, as §1.4 and the tester's rules for this stage allow. Two things went past that and are recorded so
+that they can be weighed: the IOP's console text, which §36.3 keeps and the rules allow, holds the BIOS's own module
+banners and OSDSYS's file traffic as well as the games'; and **while finding why Dark Cloud 2 returns to OSDSYS, a log of
+the SYSCALL instructions executed inside the game's ELF's address range printed numbers and addresses that, after the
+game's return, belonged to OSDSYS**, which the BIOS loads into the same range (00100000h on), so that an address alone
+cannot tell the game's code from the BIOS's. The log was deleted once that was seen and its contents were not used; the
+same reasoning applies to the runner's earlier prints of the EE's address "inside the game's program", which were
+removed. The runner now prints no program counter of either processor. **This writer is exposed** (§1.4): a writer of a
+player's-BIOS stage, who ran the player's BIOS on Sapphire and on a referee, read the IOP's console with the BIOS's
+banners, and saw program counters of OSDSYS; this writer will never write the open replacement.
+
+### 39.12 Questions this stage leaves
+
+1. **Q1 [decision], ReadKey's bytes (D-461).** The key bytes the BIOS checks are a layout of the boot program's name,
+   learned from the referee's answers over eleven names, no document giving them. *Recommended*: keep them as the drive's
+   "every disc authenticated" (§5.6); they hold no secret, and without them no game boots on the player's BIOS.
+2. **Q2 [decision], Dark Cloud 2 (D-465).** Finding what the game decides before returning to OSDSYS needs its code,
+   which shares its addresses with OSDSYS's. *Recommended*: allow a writer to read the game's program counters and code
+   only after the IOP's console shows the game's own program loaded and before it shows OSDSYS loaded again, a boundary
+   the capture of §36.3 gives; or, failing that, leave the game until the open BIOS can run it.
+3. **Q3 [routine], Kingdom Hearts' logo (D-464).** *Recommended*: the game's vertex data in EE RAM read on both machines
+   at the same step, then a program of the project's replaying the strip on PCSX2, as the next GS step.
+4. **Q4 [routine], into play.** At Sapphire's speed (§39.8) the first controllable moment of each game (Jak's after its
+   opening scene of about five minutes, Kingdom Hearts' after its first scenes) lies hours of wall time away; the third
+   anchors here are the title (and for Jak the opening scene reached by pad input). *Recommended*: take play with S32's
+   bench, once the exact levers make the hours minutes.
+5. **Q5 [routine], the EEPROM's file layout.** Neither Sapphire nor PCSX2 reads the other's configured EEPROM.
+   *Recommended*: keep Sapphire's own layout until a permitted source gives the console's (§35.12 Q2).
+6. **Q6 [routine], a disc in the drive at create.** The runner puts the disc in at power-on; a host's create with a disc
+   image still leaves the drive empty. *Recommended*: S29 calls `Machine::disc_at_power_on` from create.
+
+### 39.13 What was read for this stage
+
+`Sapphire_Plan.md` §1.3, §1.4, §3, §5.6, §5.12, §5.13, §7 (S28, S29), §11 Q8, §12; this page's §25, §29, §30, §34 to
+§38 and §40; `Sapphire_Disputes.md` (D-120 to D-128, D-220 to D-230, D-348, D-383, D-481 to D-483); `Sapphire_Referees.md`
+§2, §5. ps2tek at `1c91660`: "Memory Map", "CDVD I/O Ports", "CDVD N Commands", "CDVD S Commands", "CDVD Reads and
+Seeks"; Israelson's edition: "CDVDMAN" (the exports `sceCdReadKey`, `sceCdDecSet`) and "SECRMAN"; psx-spx "Config Mode -
+Command 4Fh", "40h" and its note on the ninth reply byte; the GS User's Manual §3.4 to §3.9 and chapter 5; the EE User's
+Manual §6.3.2, §6.4, §7.4. PCSX2 2.8.2 run as a black box, its outputs only: pictures from states it saved, the game's
+RAM through PINE, and the drive's registers read by the project's programs `readkey.s` and `keyargs.s`. No emulator,
+SDK, loader or game source, and no firmware image: the BIOS images were handed by path to Sapphire and to PCSX2 and never
+opened by any tool. §39.11 records what was observed beyond the rules' intent.
+
+### 39.14 What this stage does not cover
+
+- Play: each game's first controllable moment (§39.12 Q4).
+- Dark Cloud 2's own screens (D-465) and Kingdom Hearts' logo (D-464).
+- The S29 work: the disc at create, the system offered to players, its CRT profile and audits.
+- Saving: the card is not seen on the player's BIOS path (P8, §39.7).
+
 ## 40. The 23 IOP programs of ps2autotests on the player's BIOS, loaded from a synthetic disc (2026-10-26)
 
 *Numbered §40 and its disputes from D-480, S28 writing §39 (from D-460) and D-383's step §30 (from D-440) beside it.

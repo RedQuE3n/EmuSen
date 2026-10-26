@@ -11,6 +11,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
     ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N]
     ps2referee.py picture pcsx2 ELF PNG [--bios MARKET] [--for N] [--deinterlace N]
+    ps2referee.py game pcsx2 OUTDIR SCRIPT --disc DISC [--card CARD|none] [--blank-nvm | --nvm FILE] [--keep-nvm FILE] [--bios MARKET] [--for N]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -50,6 +51,13 @@ compositor's Xwayland, and `SECONDS shot NAME`, a state saved through PINE whose
 card's file as PCSX2 left it is copied to OUTDIR/card.ps2 afterwards, an output of the black box, and the console's
 EEPROM, which a script through the initial setup changes, is put back as it was (Sapphire_Native.md §30.18). The keys are PCSX2's own defaults for its first pad: Up, Down, Left, Right, K Cross, L Circle, I Triangle, J
 Square, Return Start.
+`game` boots a game's disc on PCSX2 through the BIOS's own disc boot (fast boot off) at the console's speed, with the
+card CARD in slot 1 or none, and plays SCRIPT as `pads` does, with a third kind of line, `SECONDS ram NAME [BYTES]`: the
+EE's RAM from 00100000h to its end, or its first BYTES, read through PINE into OUTDIR/NAME.ram, the game's memory, never
+the kernel's below it
+(Sapphire_Native.md §39). --blank-nvm gives the console an EEPROM of zeros for the run, as Sapphire's blank one, and
+--nvm FILE the EEPROM in FILE, PCSX2's own put back afterwards; --keep-nvm FILE copies the EEPROM as the run left it
+to FILE first, so that a run stepping through the initial setup gives the next its configured console.
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
 private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
@@ -86,6 +94,8 @@ MARKETS = {"americas": "ps2-0230a-20080220.bin", "europe": "ps2-0230e-20080220.b
 LIBRETRO = {"lrps2": "pcsx2", "pcee2": "pcee2", "play_libretro": "play"}
 STANDALONE = ("pcsx2", "play")
 EE_RAM = 32 << 20
+# Where a game's memory begins: the EE kernel's lies below it and is never read (Sapphire_Native.md §39).
+GAME_RAM = 0x0010_0000
 
 # PCSX2's settings for a headless black-box run (Sapphire_Referees.md §2.1): no wizard, no prompts, the software
 # renderer, no audio device, PINE on, fast boot so an ELF is entered without the BIOS's menu.
@@ -202,7 +212,7 @@ class PineFail(Exception):
 class Pine:
     """A PINE client on a Unix socket: each message a little-endian u32 size counting itself, then an opcode and its
     arguments; each answer the size, a result code (0 OK, FFh FAIL) and its value (Sapphire_Referees.md §2.1)."""
-    READ32, VERSION, SAVE_STATE, TITLE, ID, STATUS = 2, 8, 9, 11, 12, 15
+    READ32, READ64, VERSION, SAVE_STATE, TITLE, ID, STATUS = 2, 3, 8, 9, 11, 12, 15
 
     def __init__(self, path, timeout=5.0):
         self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -241,6 +251,21 @@ class Pine:
 
     def words(self, address, count):
         return [self.read32(address + 4 * i) for i in range(count)]
+
+    def block(self, address, size, batch=4096):
+        """`size` bytes from `address` by Read64, `batch` reads in one message, which PINE answers in one reply: its size,
+        one result code, and each read's value in turn."""
+        out = bytearray()
+        for at in range(address, address + size, 8 * batch):
+            n = min(batch, (address + size - at) // 8)
+            body = b"".join(struct.pack("<BI", self.READ64, at + 8 * i) for i in range(n))
+            self.s.sendall(struct.pack("<I", 4 + len(body)) + body)
+            head = self._exactly(4)
+            rest = self._exactly(struct.unpack("<I", head)[0] - 4)
+            if rest[0] != 0 or len(rest) != 1 + 8 * n:
+                raise PineFail(f"PINE answered a batch of {n} reads with {len(rest)} bytes, result {rest[0]}")
+            out += rest[1:]
+        return bytes(out)
 
     def text(self, opcode):
         """An answer that is a string: its u32 length, then the bytes, a NUL ending them."""
@@ -666,6 +691,17 @@ def inner_pads(job):
                     time.sleep(hold)
                     key(arg, False)
                     out["keys"] += 1
+                elif what == "ram":
+                    while reader is None and p.poll() is None:
+                        try:
+                            reader = Pine(job["socket"], timeout=60)
+                        except OSError:
+                            time.sleep(0.1)
+                    began = since()
+                    reader.s.settimeout(120)
+                    size = int(hold) if hold > 1 else EE_RAM - GAME_RAM
+                    Path(job["outdir"], f"{arg}.ram").write_bytes(reader.block(GAME_RAM, size))
+                    out.setdefault("rams", []).append([arg, began, since()])
                 elif what == "shot":
                     while reader is None and p.poll() is None:
                         try:
@@ -740,6 +776,65 @@ def run_pcsx2_pads(market, seconds, outdir, script, card):
         finally:
             (cards / name).unlink(missing_ok=True)
             ini.write_text(ini_merge(ini.read_text(), PCSX2_CARDS))
+            if kept is None:
+                nvm.unlink(missing_ok=True)
+            else:
+                nvm.write_bytes(kept)
+        return out
+
+
+def run_pcsx2_game(market, seconds, outdir, script, card, disc, blank_nvm=False, nvm_file=None, keep_nvm=None):
+    """PCSX2 booting a game's disc through the BIOS (fast boot off) with the card in slot 1 or none, driven by the script
+    as `run_pcsx2_pads` drives the menu; pictures from states, the game's RAM through PINE (Sapphire_Native.md §39)."""
+    data = CACHE / "pcsx2-data"
+    states, cards = data / "PCSX2/sstates", data / "PCSX2/memcards"
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    name = "sapphire-s28-game.ps2"
+    nvm = bios_folder() / MARKETS[market].replace(".bin", ".nvm")
+    kept = nvm.read_bytes() if nvm.exists() else None
+    with open(CACHE / "pcsx2.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for f in states.glob("*.p2s*"):
+            f.unlink()
+        if card is not None:
+            shutil.copyfile(card, cards / name)
+        if blank_nvm:
+            nvm.write_bytes(bytes(1024))
+        if nvm_file:
+            nvm.write_bytes(Path(nvm_file).read_bytes())
+        ini = data / "PCSX2/inis/PCSX2.ini"
+        try:
+            slot = free_slot()
+            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot), "EnableFastBoot": "false"},
+                      "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
+                      "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]},
+                      "MemoryCards": {**PCSX2_CARDS["MemoryCards"], "Slot1_Filename": name, "Slot1_Enable": "false" if card is None else "true", "Slot2_Enable": "false"}, "Pad": PCSX2_CARDS["Pad"],
+                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": "3"}}
+            ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
+            root = CACHE / "pcsx2/squashfs-root"
+            job = {"entry": "inner_pads", "cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "--", str(disc)],
+                   "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "script": script, "states": str(states), "outdir": str(outdir),
+                   "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
+            out, text = run_inner(job, "pcsx2", seconds)
+            out["bios_loaded"] = bios_loaded(text, market)
+            for shot, _, _ in out.get("shots", []):
+                saved = states / f"{shot}.shot"
+                if saved.exists():
+                    with zipfile.ZipFile(saved) as z:
+                        pngs = [m for m in z.namelist() if m.lower().endswith(".png")]
+                        if pngs:
+                            (outdir / f"{shot}.png").write_bytes(z.read(pngs[0]))
+                    saved.unlink()
+            for f in list(states.glob("*.p2s*")) + list(states.glob("*.shot")):
+                f.unlink()
+            if card is not None:
+                shutil.copyfile(cards / name, outdir / "card.ps2")
+        finally:
+            (cards / name).unlink(missing_ok=True)
+            ini.write_text(ini_merge(ini.read_text(), {**PCSX2_CARDS, "EmuCore": {"EnableFastBoot": "true"}}))
+            if keep_nvm and nvm.exists():
+                shutil.copyfile(nvm, keep_nvm)
             if kept is None:
                 nvm.unlink(missing_ok=True)
             else:
@@ -848,7 +943,7 @@ def bios_loaded(log, market):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu", "pads", "picture"):
+    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu", "pads", "picture", "game"):
         die(__doc__, 2)
     mode, referee, target = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -861,7 +956,7 @@ def main(argv):
             return value
         return default
 
-    expected = Path(rest.pop(0)).read_text(errors="replace") if mode in ("tty", "pads") and rest else None
+    expected = Path(rest.pop(0)).read_text(errors="replace") if mode in ("tty", "pads", "game") and rest else None
     png = Path(rest.pop(0)).resolve() if mode == "picture" and rest else None
     channel = option("--channel", "ee")
     out_file = option("--out")
@@ -895,13 +990,17 @@ def main(argv):
     screen = option("--screen")
     if screen and referee not in LIBRETRO:
         die("--screen is for the probe's cores", 2)
-    if disc and (referee != "pcsx2" or mode not in ("ram", "tty")):
-        die("--disc is for ram and tty runs on pcsx2", 2)
+    if disc and (referee != "pcsx2" or mode not in ("ram", "tty", "game")):
+        die("--disc is for ram, tty and game runs on pcsx2", 2)
     deinterlace = option("--deinterlace", "3")
     blank = "--blank-nvm" in rest
+    nvm_file = option("--nvm")
+    keep_nvm = option("--keep-nvm")
+    if nvm_file and mode != "game":
+        die("--nvm is for game runs", 2)
     if blank:
-        if mode != "menu":
-            die("--blank-nvm is for menu runs", 2)
+        if mode not in ("menu", "game"):
+            die("--blank-nvm is for menu and game runs", 2)
         rest.remove("--blank-nvm")
     until = option("--until")
     until = tuple(int(x, 16) for x in until.split("=")) if until else None
@@ -939,6 +1038,19 @@ def main(argv):
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         print(json.dumps({k: v for k, v in out.items() if k != "words"}))
+        return
+    if mode == "game":
+        if referee != "pcsx2" or expected is None or not disc:
+            die("game runs on pcsx2 with a script and --disc", 2)
+        script = []
+        for line in expected.splitlines():
+            w = line.split()
+            if len(w) >= 3 and w[1] in ("key", "shot", "ram"):
+                script.append([float(w[0]), w[1], w[2], float(w[3]) if len(w) > 3 else 0.15])
+        out = run_pcsx2_game(market, count, target, script, None if card in (None, "none") else Path(card).resolve(), Path(disc).resolve(), blank, nvm_file, keep_nvm)
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+        print(json.dumps(out))
         return
     if mode == "menu":
         if referee != "pcsx2":

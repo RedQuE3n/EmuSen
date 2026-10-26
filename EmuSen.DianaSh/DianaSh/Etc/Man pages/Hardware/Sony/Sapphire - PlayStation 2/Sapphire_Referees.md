@@ -92,6 +92,13 @@ RAM, so neither can produce a record without the firmware.
   CPU; at the console's speed, 600 frames in 10 s for 2.66 s of CPU. Start-up: the GS draws 0.50–0.60 s after launch and
   the record is in RAM 0.20–0.25 s later. These are an idle program's costs; a game's are §5's.
 
+- **A game through the BIOS** (*added 2026-10-26 at S28*, `Sapphire_Native.md` §39.2): `ps2referee.py game pcsx2 OUTDIR
+  SCRIPT --disc DISC` boots the disc with fast boot off at the console's speed, a card file or none in slot 1 and an
+  EEPROM file (`--nvm`, `--keep-nvm` to keep the one a run through the initial setup leaves), plays a script of key
+  presses, pictures from states and the game's RAM from 00100000h (`SECONDS ram NAME`), read through PINE in batch
+  messages, one message of 4,096 Read64 commands answered by one reply (31 MiB in under a second; separate messages sent
+  back to back are not all answered). The kernel's memory below 00100000h is never read.
+
 ### 2.2 Play!, standalone
 
 - **Run** in the same private KWin, `Play --elf <elf>` [R README], on `xcb` (its only bundled platform), with `HOME` and

@@ -67,6 +67,9 @@ pub const ANALOG_MASK: u32 = 0x3F;
 /// The mode byte in configuration mode.
 pub const CONFIG: u8 = 0xF3;
 
+/// One exchange of the pad's trace: the command's bytes, the reply's, and how many times the pair came in a row.
+pub type Exchange = (Vec<u8>, Vec<u8>, u32);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DualShock2 {
     pub input: Input,
@@ -85,6 +88,9 @@ pub struct DualShock2 {
     pub large: u8,
     /// Configuration mode has been entered: the one-motor method of the first analogue pads stops working.
     pub configured: bool,
+    /// When set, each exchange's command and reply bytes, a run of equal exchanges kept once with its count: the pad's own
+    /// report of what it was asked (Sapphire_Native.md §39).
+    pub trace: Option<Vec<Exchange>>,
 }
 
 impl Default for DualShock2 {
@@ -100,6 +106,7 @@ impl Default for DualShock2 {
             small: 0,
             large: 0,
             configured: false,
+            trace: None,
         }
     }
 }
@@ -176,12 +183,14 @@ impl DualShock2 {
         let (mode, n) = if self.config {
             let mut six = [0u8; 6];
             match c {
+                // Its last byte 5Ah too, which Kingdom Hearts waits for after 4Fh's (D-463).
                 0x40 => {
                     let i = arg(3) as usize;
                     six[2] = self.attributes.get(i).copied().unwrap_or(0xFF);
                     if i < 12 {
                         self.attributes[i] = arg(4) & 3;
                     }
+                    six[5] = 0x5A;
                 }
                 // The reply bytes 4Fh can enable, a constant (psx-spx), in analogue mode only, its last byte 5Ah
                 // (ps2tek; Sapphire_Disputes.md D-225).
@@ -232,11 +241,13 @@ impl DualShock2 {
                         self.rumble[i] = arg(3 + i);
                     }
                 }
+                // Its last byte 5Ah, which Kingdom Hearts waits for before it goes on (D-463).
                 0x4F => {
                     let v = (0..6).fold(0u64, |v, i| v | u64::from(arg(3 + i)) << (8 * i));
                     if v >> 18 & 0x3F_FFFF == 0 {
                         self.mask = (v as u32) & ALL;
                     }
+                    six[5] = 0x5A;
                 }
                 _ => {}
             }
@@ -262,6 +273,7 @@ impl DualShock2 {
                 }
                 _ => {
                     reply.fill(0xFF);
+                    self.note(cmd, reply);
                     return;
                 }
             }
@@ -269,6 +281,16 @@ impl DualShock2 {
         let header = [0xFF, mode, 0x5A];
         for (i, r) in reply.iter_mut().enumerate() {
             *r = if i < 3 { header[i] } else if i - 3 < n { body[i - 3] } else { 0 };
+        }
+        self.note(cmd, reply);
+    }
+
+    fn note(&mut self, cmd: &[u8], reply: &[u8]) {
+        let Some(t) = self.trace.as_mut() else { return };
+        if let Some(e) = t.last_mut().filter(|e| e.0 == cmd && e.1 == reply) {
+            e.2 += 1;
+        } else if t.len() < 100_000 {
+            t.push((cmd.to_vec(), reply.to_vec(), 1));
         }
     }
 }

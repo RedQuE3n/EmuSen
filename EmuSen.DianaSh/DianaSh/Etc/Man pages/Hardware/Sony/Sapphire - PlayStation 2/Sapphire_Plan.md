@@ -777,17 +777,17 @@ cycles and 615,000 IOP cycles [A, arithmetic]. Diamond's interpreter costs about
 the desktop (`Diamond_Speed.md` §7.2) and MarsRT's, at 93.75 MHz, keeps up only with its levers (`Mars_Native.md`
 §5.8.8). Priced [A]:
 
-| Unit | Work a frame (NTSC) | Interpreted, desktop | With its levers, desktop |
-|---|---|---|---|
-| EE (R5900, timing at instruction granularity) | 1.6–3.3 million instructions, at an assumed 1.5–3 cycles each including stalls | 6–33 ms at 4–10 ns | 0.8–5 ms recompiled at 0.5–1.5 ns, less where idle skipping removes waits |
-| VU1 micro mode | 1–3 million instruction pairs at 20–60 % occupancy | 8–60 ms at 8–20 ns a pair with software floats on four lanes | 1.5–12 ms recompiled at 1.5–4 ns, the floats' exactness the main cost (§5.3) |
-| VU0 (macro and micro) | 0–1 million | 0–15 ms | 0–3 ms |
-| IOP (R3000A) | 615,000 cycles, mostly waiting | 1–2.5 ms | 0.3–1 ms with idle skipping and Diamond's decoded cache |
-| GS, software | 1–6 million pixels with overdraw and multipass effects | 3–30 ms at 3–5 ns, one thread | 0.5–5 ms of waiting with workers, or 1–3 ms of GPU time on the device path |
-| VIF unpacks, GIF, DMAC | 1–4 MB moved | 1–4 ms | 0.5–2 ms |
-| SPU2 | 38,400 voice-samples and two reverbs | 0.4–0.9 ms | the same |
-| IPU (FMV only) | about 1,100 macroblocks | 1–3 ms | the same |
-| **Total** | | **20–150 ms: 1.2 to 9 times too slow** | **4–25 ms** |
+| Unit | Work a frame (NTSC) | Interpreted, desktop | With its levers, desktop | *Measured 2026-10-26 at S32, interpreted, desktop: OSDSYS's language screen / Jak and Daxter loading / its memory card screen (`Sapphire_Native.md` §43.6)* |
+|---|---|---|---|---|
+| EE (R5900, timing at instruction granularity) | 1.6–3.3 million instructions, at an assumed 1.5–3 cycles each including stalls | 6–33 ms at 4–10 ns | 0.8–5 ms recompiled at 0.5–1.5 ns, less where idle skipping removes waits | 9.45 / 6.42 / 5.58 million instructions at 0.52 / 0.77 / 0.88 cycles; 252 / 244 / 198 ms, and 73 / 55 / 49 ms bringing the board along after each: 34–47 ns an instruction |
+| VU1 micro mode | 1–3 million instruction pairs at 20–60 % occupancy | 8–60 ms at 8–20 ns a pair with software floats on four lanes | 1.5–12 ms recompiled at 1.5–4 ns, the floats' exactness the main cost (§5.3) | 0 / 320 / 24,604 pairs; with VU0's, 10.2 ms on the memory card screen, 153 ns a pair; no workload with play yet |
+| VU0 (macro and micro) | 0–1 million | 0–15 ms | 0–3 ms | 0 / 2,636 / 41,886 pairs, in VU1's figure |
+| IOP (R3000A) | 615,000 cycles, mostly waiting | 1–2.5 ms | 0.3–1 ms with idle skipping and Diamond's decoded cache | 570,140 / 381,114 / 348,298 instructions; 10 / 8.5 / 8 ms, and 10 / 8 / 7.5 ms of catch-up after each EE instruction |
+| GS, software | 1–6 million pixels with overdraw and multipass effects | 3–30 ms at 3–5 ns, one thread | 0.5–5 ms of waiting with workers, or 1–3 ms of GPU time on the device path | 110 / 3 / 535 ms, 509 ms of the last in the exact perspective arithmetic (`gs::exact`) |
+| VIF unpacks, GIF, DMAC | 1–4 MB moved | 1–4 ms | 0.5–2 ms | 11 / 9 / 17 ms |
+| SPU2 | 38,400 voice-samples and two reverbs | 0.4–0.9 ms | the same | 1.4 / 1.6 / 1.7 ms |
+| IPU (FMV only) | about 1,100 macroblocks | 1–3 ms | the same | not exercised |
+| **Total** | | **20–150 ms: 1.2 to 9 times too slow** | **4–25 ms** | **463 / 326 / 832 ms: 20 to 50 times too slow** (the handheld's column owed, §43.9) |
 
 **The levers, in order** (each bit-identical to the plain path, `effect: exact`):
 
@@ -877,6 +877,30 @@ weighed, cheapest in accuracy first [A].
 **Not candidates** [A]: the SPU2 and the IPU, which §5.12 prices at under 1 ms and about 1–3 ms of the frame and
 which a player hears and sees directly; and the instruction results of every processor, which no compromise may
 change but C3's named float classes.
+
+*Decided 2026-10-26 by the tester: for the PlayStation 2 and later consoles, cycle accuracy where it is realistic; where
+it is not, byte accuracy is the floor.* Byte accuracy means that every value a game can read back, and every pixel and
+sample the player receives, equals the console's; timing is modelled only as finely as that needs. The candidates above
+are therefore of two kinds:
+
+- **Timing-only** (C1, C7, C8, C11, and C2's timing part, the caches' miss times without their coherency): each changes
+  when something happens and none of the bytes a game reads or the player receives where the game does not depend on
+  that timing. Each is taken where `Sapphire_Native.md` §43's measurements show its gain, named and switchable, without
+  waiting for a separate acceptance.
+- **Byte-changing** (C3, C4, C5, C6, C2's coherency part, and any other candidate that changes a value a game reads or a
+  pixel or sample the player receives): each needs a proof that it keeps the bytes on the classes it is used for, or the
+  tester's acceptance of the bytes it changes, measured as the table above says. C9 changes no byte of a frame but a
+  loading screen's length, and stays with the tester as before.
+
+Three conditions hold for every candidate taken:
+
+1. **Results stay deterministic**: the same input gives the same bytes, run after run and on every host, and units on
+   threads synchronise at fixed points of the emulated time, never at points chosen by the host's scheduling.
+2. **A game whose results depend on timing gets finer timing for the part involved**: where a timing-only candidate
+   changes a bench game's bytes, that candidate is narrowed or turned off for the unit or game involved, and the case
+   recorded, rather than the bytes accepted.
+3. **The exact path stays the reference**: every candidate's other value is the reference's behaviour, the recompilers
+   are graded against the interpreter with every candidate off, and the goldens are taken on that path.
 
 ---
 
@@ -991,7 +1015,7 @@ menu at the pad's presses, and its browser, entered with a card in slot 1, never
 
 | Stage | What it covers | Its gate |
 |---|---|---|
-| **S32** | The bench and the profile, before any lever | The per-unit costs of §5.12's table replaced by measurements on the desktop and the handheld |
+| **S32** | The bench and the profile, before any lever | The per-unit costs of §5.12's table replaced by measurements on the desktop and the handheld *Built 2026-10-26, `Sapphire_Native.md` §43: met on the desktop, the handheld's columns owed (§43.9); `examples/bench.rs`; OSDSYS's boot 1.65 frames a second and its language screen 2.16, Jak and Daxter's program 3.07 loading and 1.20 on its memory card screen; the GS's exact perspective arithmetic 61 % of Jak's drawing frames, the EE 34-47 ns an instruction; every lever and compromise ranked and marked exact, timing-only or byte-changing.* |
 | **S33** | Idle skipping on the EE, the IOP and the VU waits | Every golden equal; the bench before and after |
 | **S34** | The decoded caches (EE and IOP) | The same |
 | **S35** | `emusen-jit`, the shared JIT crate extracted from MarsRT (§9.6) | MarsRT's block tests, corpus and game runs identical at every tier, and its speed unchanged within its noise; the crate's own tests *Built 2026-10-25, `Sapphire_Native.md` §42: met; `EmuSen/Cores/Shared/emusen-jit` (`EmuSen_Jit.md`) holds the thread and its queue, the slots, the module with its W^X batches and budget, the counters and the verifier's shape, generic over a `Lowering` trait; MarsRT keeps its emitter, shapes and dispatcher (`marsrt -> emusen-jit`); the 21 block tests, the corpus's 1,722 lines and the games (Super Mario 64 and Ocarina of Time, 300 frames) identical at all three tiers; its speed unchanged within its noise (Super Mario 64 3.633 against 3.581 ms a frame, Ocarina of Time 4.726 against 4.573, medians of five interleaved rounds whose ranges overlap); the crate's ten tests on a toy processor, ThreadSanitizer finding the publication made Relaxed; no dispute.* |

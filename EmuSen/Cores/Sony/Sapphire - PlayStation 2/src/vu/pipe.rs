@@ -71,6 +71,8 @@ pub struct Pipe {
     pub trace: Option<Vec<(u16, u64)>>,
     /// The debugger's probe, asked before each pair runs (Sapphire_Native.md §41).
     pub probe: Option<Box<crate::debugger::Probe>>,
+    /// Pairs run since the unit was made, kept across FBRST's reset: the bench's count.
+    run: u64,
 }
 
 /// What a pair reads and writes, for the hazards and the write priority.
@@ -268,6 +270,7 @@ impl Pipe {
             now: 0,
             trace: None,
             probe: None,
+            run: 0,
         }
     }
 
@@ -352,6 +355,7 @@ impl Pipe {
             return false;
         }
         self.execute(units, upper, lower, t);
+        self.run += 1;
         true
     }
 
@@ -593,6 +597,10 @@ impl Micro for Pipe {
         self.land(units, t);
     }
 
+    fn pairs_run(&self) -> u64 {
+        self.run
+    }
+
     fn busy(&self) -> bool {
         self.state == State::Run
     }
@@ -636,7 +644,7 @@ impl Micro for Pipe {
     }
 
     fn reset(&mut self) {
-        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), probe: self.probe.take(), ..Pipe::new(self.unit) };
+        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), probe: self.probe.take(), run: self.run, ..Pipe::new(self.unit) };
     }
 
     fn last(&self) -> Option<u64> {

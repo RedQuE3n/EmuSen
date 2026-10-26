@@ -2858,11 +2858,12 @@ made; the golden corpus records the new command lines and page.
 `library_abi` 6, `routing` 2), `emusen-library-tool` (4, the gate's 8 with `EMUSEN_CHDMAN` naming the pinned chdman,
 `packages` 2, `patches` 1, `self_contained` 1), `emusen-library-module` (4), `emusen-platform` (33, `dianash_abi` 4,
 `library_tool` 3), and for the readers of the zip reader and the claim index `emusen-cheats` (9), `emusen-crystal` (6,
-`crystal_abi` 6, `frame_alloc` 1) and `emusen-scrape` (3 and its integration tests 15): all passing. WiseMan, the
-blast radius `blast.sh` named: 4,016 passed, 62 skipped (the picture and bench tools) and 1 failed, in 26 minutes;
-the one was `ScraperTests.Never_more_requests_at_once_than_maxthreads`, known to fail under load and untouched by this
-step (it failed again alone, one case of three, with the machine's other work running). The step 5 parity case §18.8
-warned of passed, unmasked. The golden corpus's `pkg`, `help` and `man` were given the new command lines and page,
+`crystal_abi` 6, `frame_alloc` 1) and `emusen-scrape` (3 and its integration tests 15): all passing, 209, again on
+the tree rebased onto WiseMan. WiseMan, the blast radius `blast.sh` named: 4,016 passed, 62 skipped (the picture and
+bench tools) and 1 failed, in 26 minutes; the one was `ScraperTests.Never_more_requests_at_once_than_maxthreads`, known
+to fail under load and untouched by this step. Rebased onto WiseMan at `01dabfeed` (Sapphire's S30 and S25 part B
+beneath), the same radius: 4,030 passed, 62 skipped and none failed, in 27 minutes. The step 5 parity case §18.8 warned
+of passed, unmasked. The golden corpus's `pkg`, `help` and `man` were given the new command lines and page,
 `help`'s patterns edited in place so that they still take either shell; `GoldenCorpusTests`, `ManPageTests` and
 `NativeSwitchTests` passed, 211.
 

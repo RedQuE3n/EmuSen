@@ -3,6 +3,7 @@
 //! after every instruction and after every block; random programs of integer instructions and branches, seeded and
 //! compared; and the mechanisms one at a time. Every program here is the project's own, assembled for the purpose.
 
+mod d780;
 mod s6;
 
 use sapphire::blocks::{self, Blocks, Verify};
@@ -134,6 +135,16 @@ const LOOP: &str = "
     end: beq zero, zero, end
     nop
 ";
+
+/// D-780's program (Sapphire_Native.md §39.18): byte and halfword stores to five units' registers, compiled, leave the
+/// interpreter's machine; the record itself is graded in tests/dmac.rs.
+#[test]
+fn narrower_stores_to_registers_run_compiled_as_interpreted() {
+    let (source, _) = d780::width_bare().finish();
+    let words = assemble(&source, ORIGIN);
+    let s = twin(&words, 6000, 250, &mut eager());
+    assert!(s.compiled_steps > 1000, "the program ran compiled: {s:?}");
+}
 
 #[test]
 fn a_hot_loop_runs_compiled_and_leaves_the_interpreters_machine() {

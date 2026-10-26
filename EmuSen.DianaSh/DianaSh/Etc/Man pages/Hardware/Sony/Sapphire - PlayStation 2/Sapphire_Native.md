@@ -7996,7 +7996,13 @@ shows the same at that step was not measured (§39.21 Q4).
 
 ### 39.20 Tests, seeded faults and the blast radius (2026-10-26)
 
-TESTS_RESULT
+**Tests** [M, on the tree rebased onto WiseMan `2332ed4cd`]: `Board::write` is crossed by every test binary, so the
+crate whole, `cargo test --release`: **432 passed, 0 failed** (2 ignored, as before) in 30 test binaries; clippy adds no
+warning in the files the step changed. New: `narrower_stores_to_a_channels_registers_write_their_own_lanes`
+(`tests/dmac.rs`, D-780's program bare on the interpreter, 98 words) and
+`narrower_stores_to_registers_run_compiled_as_interpreted` (`tests/blocks.rs`, the same program on S36's recompiler
+beside the interpreter, the two machines equal every 250 steps and whole at the end). WiseMan, the blast radius's
+filter `SapphireTests`: **5 of 5**.
 
 **Seeded faults** (each applied to `board.rs`, `narrower_stores_to_a_channels_registers_write_their_own_lanes` run, the
 source restored):

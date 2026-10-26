@@ -155,6 +155,7 @@ BIOS (§5.9); a **dispute step** is a supervised step whose only product is a di
 | ps2sdk, Open-PS2-Loader, ps2link and other SDK or loader **source** (§2.4) | **no** | **no** | **no** | Run only as the binaries a test suite ships, per §11 Q3 |
 | Any emulator's **source**: PCSX2 with its GS and SPU2 code and plugins (GSdx among them), LRPS2, PCEE2, Play!, DobieStation, hpsx64, and every other | **no** | **no** | **no** | §6.1 repeats it for the enhancements |
 | Any FPGA RTL | **no** | **no** | **no** | No PlayStation 2 FPGA core is known [A]; the rule stands if one appears |
+| The SIF link's traffic while the player's BIOS runs: the SIF DMA tags and the SIF RPC packets, read in ps2tek's documented layouts (`SifCmdHeader`, the `SifRpc*` packets, the IOP's chain tags) | a writer of a player's-BIOS stage only, never committed, each time recorded as exposure | **no** | as a writer | *Decided 2026-10-26 by the tester* (`Sapphire_Native.md` §36.14 Q4); never BIOS code, a program counter inside the BIOS or memory holding BIOS code or data |
 | Firmware: the boot ROM, the DVD player's ROMs, the drive controller's program, the DualShock 2's and the memory card's; any listing, disassembly, dump analysis or trace of them | **no** | **no** | **no** | §5.9; the player's images are executed by Sapphire and by referees, never read |
 
 **The exposure rule carries over from Diamond** [C]: anyone exposed to BIOS code, to BIOS boot banners or BIOS output in
@@ -164,6 +165,15 @@ the writers of the player's-BIOS stages and the replacement writers are therefor
 S24 [C]. The three rules of `Nephrite_Plan.md` §1.3 hold unchanged: the order of recourse is documents, then a test
 program written for the purpose, then the black-box referees, never an emulator's source; nothing read in a dispute
 step is typed into code in that step; the code carries no emulator's identifiers, which G8's clone check tests.
+
+*Decided 2026-10-26 by the tester, as `Sapphire_Native.md` §36.14 Q4 recommended:* a writer of a player's-BIOS stage
+may trace the SIF link while the player's BIOS runs, narrowly: the SIF DMA tags crossing SIF0 and SIF1 and the SIF RPC
+packets they carry, read in ps2tek's documented layouts and no further. The trace is an interface's traffic, but the
+packets are data the BIOS's modules made, so it is an exposure of the same kind as running the BIOS: never BIOS code,
+never a program counter inside the boot ROM or inside BIOS code in RAM, never memory holding BIOS code or data beyond
+the packets themselves; the tracing code and its output are never committed, and each stage that traces records it in
+its exposure section with what was looked at. A replacement writer never traces the link while a BIOS runs. Anything
+beyond this, such as what the BIOS executes where it stops, remains the tester's decision, put as a question.
 
 ### 1.5 The disputes log, and why there is no hardware rung
 

@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use emusen_disc::set;
 use emusen_native::core::flags::FILE_MEDIA;
 
+use crate::bytes::Bytes;
+
 /// Whether `path` names a sheet by its extension.
 fn is(path: &Path, extension: &str) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case(extension))
@@ -51,13 +53,20 @@ pub fn on_disk(path: &Path) -> Result<OnDisk, String> {
     Ok(OnDisk { image, files })
 }
 
-/// The bytes `create` receives for the image at `path`, and its companions numbered from `FILE_MEDIA`.
-pub fn open(path: &Path) -> Result<(Vec<u8>, Vec<(u32, Vec<u8>)>), String> {
+/// The bytes `create` receives for the image at `path`, and its companions numbered from `FILE_MEDIA`: mapped where
+/// `map` is set, for a core the kit lends them to (EmuSen_CoreAPI.md §28.20), else read.
+pub fn open(path: &Path, map: bool) -> Result<(Bytes, Vec<(u32, Bytes)>), String> {
     let disk = on_disk(path)?;
-    let image = std::fs::read(&disk.image).map_err(|e| format!("{}: {e}", disk.image.display()))?;
+    let hold = |file: &Path| -> Result<Bytes, String> {
+        match map {
+            true => Bytes::map(file),
+            false => std::fs::read(file).map(Bytes::from).map_err(|e| format!("{}: {e}", file.display())),
+        }
+    };
+    let image = hold(&disk.image)?;
     let mut files = Vec::new();
     for (which, file) in disk.files {
-        files.push((which, std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?));
+        files.push((which, hold(&file)?));
     }
     Ok((image, files))
 }
@@ -82,15 +91,18 @@ mod tests {
         std::fs::write(dir.join("a.sbi"), b"SBI\0").unwrap();
         std::fs::write(dir.join("a.cue"), "FILE \"a (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"a (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n").unwrap();
         std::fs::write(dir.join("a.m3u"), "#EXTM3U\na.cue\nb.cue\n").unwrap();
-        let (image, files) = open(&dir.join("a.m3u")).unwrap();
-        assert!(image.starts_with(b"FILE"));
-        assert_eq!(files.iter().map(|(w, d)| (*w, d.len())).collect::<Vec<_>>(), [(FILE_MEDIA, 4), (FILE_MEDIA + 1, 6), (FILE_MEDIA + 2, 4)]);
+        for map in [false, true] {
+            let (image, files) = open(&dir.join("a.m3u"), map).unwrap();
+            assert!(image.starts_with(b"FILE") && image.is_mapped() == map);
+            assert_eq!(files.iter().map(|(w, d)| (*w, d.len(), d.is_mapped())).collect::<Vec<_>>(), [(FILE_MEDIA, 4, map), (FILE_MEDIA + 1, 6, map), (FILE_MEDIA + 2, 4, map)]);
+        }
         assert_eq!(size(&dir.join("a.cue")), std::fs::metadata(dir.join("a.cue")).unwrap().len() + 14);
         let disk = on_disk(&dir.join("a.m3u")).unwrap();
         assert_eq!((disk.image, disk.files.len(), &disk.files[2]), (dir.join("a.cue"), 3, &(FILE_MEDIA + 2, dir.join("a.sbi"))));
-        assert!(open(&dir.join("a (Track 1).bin")).unwrap().1.is_empty());
+        assert!(open(&dir.join("a (Track 1).bin"), true).unwrap().1.is_empty());
         std::fs::remove_file(dir.join("a (Track 2).bin")).unwrap();
-        assert!(open(&dir.join("a.cue")).unwrap_err().contains("a (Track 2).bin"));
+        assert!(open(&dir.join("a.cue"), false).err().unwrap().contains("a (Track 2).bin"));
+        assert!(open(&dir.join("a.cue"), true).err().unwrap().contains("a (Track 2).bin"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

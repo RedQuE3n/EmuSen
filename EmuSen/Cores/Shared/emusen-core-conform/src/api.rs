@@ -33,8 +33,8 @@ fn broken(buf: &[u8], from: usize) -> usize {
 }
 
 /// Files as the slices a call passes.
-pub fn slices(files: &[(u32, Vec<u8>)]) -> Vec<(u32, &[u8])> {
-    files.iter().map(|(w, d)| (*w, &d[..])).collect()
+pub fn slices<B: AsRef<[u8]>>(files: &[(u32, B)]) -> Vec<(u32, &[u8])> {
+    files.iter().map(|(w, d)| (*w, d.as_ref())).collect()
 }
 
 impl Lib {
@@ -85,7 +85,7 @@ impl Lib {
     }
 
     /// A machine, or the refusal's status and its error text.
-    pub fn create(&self, image: &[u8], settings: &str, files: &[(u32, Vec<u8>)], pixel_formats: u64) -> Result<Machine<'_>, (i32, String)> {
+    pub fn create<B: AsRef<[u8]>>(&self, image: &[u8], settings: &str, files: &[(u32, B)], pixel_formats: u64) -> Result<Machine<'_>, (i32, String)> {
         self.create_from(image, settings, &slices(files), pixel_formats, 0)
     }
 
@@ -108,8 +108,8 @@ impl Lib {
     }
 
     /// A machine of `system`, the system a host routed `image` to (since 1.15), passed by a host of 1.15 or later.
-    pub fn create_as(&self, system: &std::ffi::CStr, image: &[u8], settings: &str, files: &[(u32, Vec<u8>)]) -> Result<Machine<'_>, (i32, String)> {
-        self.create_full(image, settings, &slices(files), 1, 0, std::ptr::null(), Some(system))
+    pub fn create_as<B: AsRef<[u8]>>(&self, system: &std::ffi::CStr, image: &[u8], settings: &str, files: &[(u32, B)], flags: u32) -> Result<Machine<'_>, (i32, String)> {
+        self.create_full(image, settings, &slices(files), 1, flags, std::ptr::null(), Some(system))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -121,6 +121,8 @@ impl Lib {
             Some(_) => minor.max(15),
             None => minor,
         };
+        // A host that lends knows 1.3, where the flags field begins (EmuSen_CoreAPI.md §6.24).
+        let minor = if flags & emusen_native::core::flags::CREATE_LENT != 0 { minor.max(3) } else { minor };
         let known = if minor >= 11 {
             std::mem::size_of::<CreateParams>()
         } else if minor >= 9 {
@@ -418,7 +420,7 @@ impl<'a> Machine<'a> {
     }
 
     /// MEDIA's insert of `image` with its files, or of nothing for `None`.
-    pub fn media_insert(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, Vec<u8>)], flags: u32) -> i32 {
+    pub fn media_insert<B: AsRef<[u8]>>(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, B)], flags: u32) -> i32 {
         self.media_insert_from(drive, image, &slices(files), flags)
     }
 

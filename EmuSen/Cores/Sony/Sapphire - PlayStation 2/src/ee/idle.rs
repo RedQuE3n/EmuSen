@@ -5,6 +5,7 @@
 use super::cop0::{self, debug, perf};
 use super::map::{self, Region};
 use super::timing::Timing;
+use super::observe::Reach;
 use super::{Bus, Ee, Place, ops};
 use crate::idle::Refusal;
 
@@ -55,34 +56,42 @@ pub(crate) fn random_after(r: u32, wired: u32, n: u64) -> u32 {
 }
 
 impl Ee {
-    /// Whether a turn may hold the instruction `word` at the PC: no store, no coprocessor 0 or 2 move, no exception of
-    /// its own, and a load only from RDRAM, the scratchpad or the boot ROM, which nothing but the DMAC changes between
-    /// the board's events. Read before the step, with nothing changed but the decode memo.
-    pub(crate) fn idle_admits(&mut self, word: u32) -> Result<(), Refusal> {
+    /// Whether a turn may hold the instruction `word` at the PC: no coprocessor 0 or 2 move, no exception of its own, a
+    /// load only from RDRAM, the scratchpad or the boot ROM, which nothing but the DMAC changes between the board's
+    /// events, and a store only to RDRAM or the scratchpad; an access's reach is given, so that the DMAC's writes there
+    /// can be watched and a store seen to leave the bytes as it found them. Read before the step, with nothing changed but the decode memo.
+    pub(crate) fn idle_admits(&mut self, word: u32) -> Result<Option<Reach>, Refusal> {
         let op = ops::get(self.entry(word));
         match op.kind {
             ops::Kind::Cop2 => return Err(Refusal::Coprocessor),
-            ops::Kind::Fpu if !ops::is_load(op) && !ops::is_store(op) => return Ok(()),
+            ops::Kind::Fpu if !ops::is_load(op) && !ops::is_store(op) => return Ok(None),
             _ => {}
         }
-        if ops::is_store(op) {
-            return Err(Refusal::Store);
-        }
         if op.name == "pref" {
-            return Ok(());
+            return Ok(None);
         }
-        if ops::is_load(op) {
+        if ops::is_load(op) || ops::is_store(op) {
             let reach = self.reach(word).ok_or(Refusal::Control)?;
-            return match self.place(reach.vaddr) {
-                Some(Place::Scratchpad(_)) => Ok(()),
-                Some(Place::Physical(p, _)) if matches!(map::region(p), Region::Rdram | Region::BootRom) => Ok(()),
-                _ => Err(Refusal::Device),
+            let memory = match self.place(reach.vaddr) {
+                Some(Place::Scratchpad(_)) => true,
+                Some(Place::Physical(p, _)) => map::region(p) == Region::Rdram || (!reach.store && map::region(p) == Region::BootRom),
+                None => false,
             };
+            return if memory { Ok(Some(reach)) } else { Err(Refusal::Device) };
         }
         let control = matches!(op.category, super::timing::Category::Cop0 | super::timing::Category::Eret)
             || matches!(op.name, "syscall" | "break" | "cache" | "reserved" | "later")
             || (op.name.starts_with('t') && op.category == super::timing::Category::Alu);
-        if control { Err(Refusal::Control) } else { Ok(()) }
+        if control { Err(Refusal::Control) } else { Ok(None) }
+    }
+
+    /// The bytes a store's reach covers as the core sees them, a valid data cache line over RDRAM, the scratchpad.
+    pub(crate) fn seen(&self, rdram: &[u8], reach: Reach) -> [u8; 16] {
+        let mut v = [0; 16];
+        for (i, b) in v.iter_mut().enumerate().take(reach.bytes as usize) {
+            *b = self.place(reach.vaddr.wrapping_add(i as u32)).and_then(|p| self.peek_byte(rdram, &[], p)).unwrap_or(0);
+        }
+        v
     }
 
     /// Whether the core may be at a loop's head whose turns are passed: outside a delay slot, the counters and the

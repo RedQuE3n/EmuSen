@@ -155,6 +155,21 @@ struct Unit {
     end: u64,
 }
 
+/// What idle skipping watches of the DMAC's writes (Sapphire_Native.md §47.4): the bytes of memory, or of the
+/// scratchpad, that a waiting loop reaches, and each quadword the DMAC wrote there with the value it held before.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Watch {
+    /// Ranges from their first byte to past their last: physical memory, or the scratchpad where the flag is set.
+    pub ranges: Vec<(bool, u32, u32)>,
+    pub hits: Vec<(bool, u32, u128)>,
+}
+
+impl Watch {
+    fn covers(&self, spr: bool, a: u32) -> bool {
+        self.ranges.iter().any(|&(s, b, e)| s == spr && a < e && a + 16 > b)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dmac {
     pub ch: [Channel; CHANNELS],
@@ -175,6 +190,10 @@ pub struct Dmac {
     wake: u64,
     /// The group C channel served last, for the round robin (§5.3.1).
     last_c: usize,
+    /// Quadwords written to memory or the scratchpad: the DMAC's own count, which idle skipping reads; and its watch.
+    /// Neither is in the state.
+    pub writes: u64,
+    pub watch: Option<Box<Watch>>,
 }
 
 impl Default for Dmac {
@@ -193,6 +212,8 @@ impl Default for Dmac {
             release_until: 0,
             wake: u64::MAX,
             last_c: TO_SPR,
+            writes: 0,
+            watch: None,
         }
     }
 }
@@ -483,13 +504,26 @@ impl Dmac {
         }
     }
 
-    fn write_mem(&self, addr: u32, q: u128, mem: &mut dyn Memory, spr: &mut [u8]) -> bool {
+    fn write_mem(&mut self, addr: u32, q: u128, mem: &mut dyn Memory, spr: &mut [u8]) -> bool {
+        self.writes += 1;
         if addr & SPR_BIT != 0 {
             let a = (addr & 0x3FF0) as usize;
+            self.watched_spr(a, spr);
             spr[a..a + 16].copy_from_slice(&q.to_le_bytes());
             true
         } else {
+            if let Some(w) = self.watch.as_mut().filter(|w| w.covers(false, addr & ADDR)) {
+                let old = mem.read_q(addr & ADDR).unwrap_or(0);
+                w.hits.push((false, addr & ADDR, old));
+            }
             mem.write_q(addr & ADDR, q)
+        }
+    }
+
+    /// The scratchpad's quadword at `a` noted with its value before, when the watch covers it.
+    fn watched_spr(&mut self, a: usize, spr: &[u8]) {
+        if let Some(w) = self.watch.as_mut().filter(|w| w.covers(true, a as u32)) {
+            w.hits.push((true, a as u32, u128::from_le_bytes(spr[a..a + 16].try_into().unwrap())));
         }
     }
 
@@ -502,6 +536,8 @@ impl Dmac {
     fn spr_write(&mut self, c: usize, q: u128, spr: &mut [u8]) {
         let a = (self.ch[c].sadr & 0x3FF0) as usize;
         self.ch[c].sadr = (self.ch[c].sadr + 16) & 0x3FF0;
+        self.writes += 1;
+        self.watched_spr(a, spr);
         spr[a..a + 16].copy_from_slice(&q.to_le_bytes());
     }
 

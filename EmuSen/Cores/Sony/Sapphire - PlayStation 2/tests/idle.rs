@@ -242,8 +242,50 @@ fn window() -> Case {
     Case { name: "window", ee: program(&setup, 4, wait), iop: None, frames: 2, skips: false, refusal: Some(Refusal::Device) }
 }
 
+/// A wait whose turn stores a value the memory already holds, through the cache and past it: passed.
+fn constant_store() -> Case {
+    let setup = format!("ori s7, zero, 0x77
+{}
+{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)
+loop: sw s7, 0x1100(s1)
+sw s7, 0x1104(s0)
+lw t0, 0x1010(s0)
+beq t0, s2, loop
+nop";
+    Case { name: "constant-store", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: true, refusal: None }
+}
+
+/// A wait that counts its turns in memory: each turn changes the word, and none is passed.
+fn counter() -> Case {
+    let setup = format!("{}
+{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)
+loop: lw t1, 0x1108(s1)
+addiu t1, t1, 1
+sw t1, 0x1108(s1)
+lw t0, 0x1010(s0)
+beq t0, s2, loop
+nop";
+    Case { name: "counter", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: false, refusal: Some(Refusal::Store) }
+}
+
+/// Timer 0's waits while VU1 runs a long microprogram started by CMSAR1: the board is never in its quick path, so every
+/// passed turn brings it through each of its times with `run_to`.
+fn vu1_busy() -> Case {
+    let setup = format!(
+        "lui t0, 0x4000\nmtc0 t0, Status\nsync.p\nctc2 zero, vi31\nlui t0, 0xb000\nori t1, zero, 20000\nsw t1, 0x20(t0)\nori t1, zero, 0x1c0\nsw t1, 0x10(t0)\n{}\n{}",
+        intc_mask(9),
+        interrupts(0x400, 0xA000_0000)
+    );
+    Case { name: "vu1-busy", ee: program(&setup, 6, &flag_wait("s0")), iop: None, frames: 2, skips: true, refusal: None }
+}
+
+/// VU1's microprogram for `vu1_busy`: about 32,767 turns of a three-pair loop, then its end.
+const VU1_LOOP: &str = "nop | iaddiu vi1, vi0, 0x7fff\ntop: nop | iaddi vi1, vi1, -1\nnop | ibne vi1, vi0, top\nnop | move vf0, vf0\n[e] nop | move vf0, vf0\nnop | move vf0, vf0";
+
 fn cases() -> Vec<Case> {
-    vec![vblank(), timer(), count(), dma(false), dma(true), sif0(), timeout(), call(), window()]
+    vec![vu1_busy(), vblank(), timer(), count(), dma(false), dma(true), sif0(), timeout(), call(), window(), constant_store(), counter()]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -266,6 +308,12 @@ fn machine(c: &Case, idle: bool, tier: Tier) -> Machine {
         sys.board.iop.bus.load(IOP_CHAIN, &tag);
         sys.board.iop.bus.load(IOP_CHAIN + 0x10, &(0..64).map(|k| 0x6400_0000 + k).collect::<Vec<u32>>());
         sys.board.iop.enter(IOP_ORIGIN);
+    }
+    if c.name == "vu1-busy" {
+        let prog = emusen_mips::vu::assemble(VU1_LOOP).expect("the microprogram assembles");
+        for (i, pair) in prog.iter().enumerate() {
+            sys.board.vpu.units.vu1.micro[i * 8..i * 8 + 8].copy_from_slice(&pair.to_le_bytes());
+        }
     }
     m.sys = Box::new(sys);
     m.booted = true;
@@ -380,4 +428,16 @@ fn the_iop_sides_wake_ends_a_skip_and_the_iops_own_wait_is_passed() {
         assert!(k.woken > 0, "{tier:?}: no skip ended at the wake: {k:?}");
         assert!(k.iop_skips > 0 && k.iop_instructions > 0, "{tier:?}: the IOP's wait was not passed: {k:?}");
     }
+}
+
+/// Turns passed while a unit runs and across events are `run_to`'s at each time; a DMA transfer that writes what a wait
+/// reads ends the skip there.
+#[test]
+fn turns_are_passed_while_a_unit_runs_and_end_where_the_dmac_writes_what_they_read() {
+    let m = equal(&vu1_busy(), Tier::Interpreter);
+    let k = &m.idle.counts;
+    assert!(k.replayed > 0 && k.ee_skips > 0, "VU1 running: {k:?}");
+    assert!(m.sys.board.vpu.pairs_run()[1] > 50_000, "VU1 ran its microprogram beside the waits");
+    let m = equal(&dma(false), Tier::Interpreter);
+    assert!(m.idle.counts.written > 0, "the transfer's last quadword: {:?}", m.idle.counts);
 }

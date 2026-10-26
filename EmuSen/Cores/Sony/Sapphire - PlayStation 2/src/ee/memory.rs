@@ -93,7 +93,7 @@ impl Ee {
     }
 
     /// Config.DCE clear makes a cached page's data accesses uncached (§3.2).
-    fn data_mode(&self, m: Mode) -> Mode {
+    pub(super) fn data_mode(&self, m: Mode) -> Mode {
         match m {
             Mode::Cached | Mode::Through if self.cop0[cop0::CONFIG] & config::DCE == 0 => Mode::Uncached,
             m => m,

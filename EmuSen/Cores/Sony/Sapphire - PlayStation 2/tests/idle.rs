@@ -227,12 +227,27 @@ fn sif0() -> Case {
     Case { name: "sif0", ee: program(setup, 1, wait), iop: Some(iop), frames: 2, skips: true, refusal: None }
 }
 
-/// A wait with a timeout counted down in a register: each turn differs, and none is passed.
-fn timeout() -> Case {
+/// A wait with a timeout counted down in a register and tested by BGTZ, timer 0's interrupt every 40,000 cycles: with
+/// `turns` turns allowed the timeout never expires first, and the turns are passed up to the event; with a few hundred it
+/// expires inside each wait, and the turns are passed up to the turn before it does.
+fn timeout(turns: u32) -> Case {
     let setup = format!("{}\n{}", intc_mask(9), interrupts(0x400, 0xA000_0000));
     let setup = format!("lui t0, 0xb000\nori t1, zero, 20000\nsw t1, 0x20(t0)\nori t1, zero, 0x1c0\nsw t1, 0x10(t0)\n{setup}");
-    let wait = "lw s2, 0x1010(s0)\nlui t7, 0x10\nloop: lw t0, 0x1010(s0)\nbne t0, s2, out\nnop\naddiu t7, t7, -1\nbgtz t7, loop\nnop\nout:";
-    Case { name: "timeout", ee: program(&setup, 6, wait), iop: None, frames: 2, skips: false, refusal: Some(Refusal::Changed) }
+    let wait = format!(
+        "lw s2, 0x1010(s0)\nlui t7, 0x{:x}\nori t7, t7, 0x{:x}\nloop: lw t0, 0x1010(s0)\nbne t0, s2, out\nnop\naddiu t7, t7, -1\nbgtz t7, loop\nnop\nout:",
+        turns >> 16,
+        turns & 0xFFFF
+    );
+    let name = if turns > 100_000 { "timeout-long" } else { "timeout-short" };
+    Case { name, ee: program(&setup, 6, &wait), iop: None, frames: 2, skips: true, refusal: None }
+}
+
+/// A 64-bit count in memory and a register counting up by five, which an SLT compares with a bound the wait reaches in
+/// some thousands of turns, ending it early: the turns passed stop where the comparison would change its answer.
+fn counter64() -> Case {
+    let setup = format!("{}\n{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)\nor t8, zero, zero\nori s4, zero, 40000\nloop: ld t1, 0x1110(s1)\ndaddiu t1, t1, 1\nsd t1, 0x1110(s1)\ndaddiu t8, t8, 5\nslt t2, t8, s4\nbeq t2, zero, out\nnop\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop\nout:";
+    Case { name: "counter64", ee: program(&setup, 3, wait), iop: None, frames: 3, skips: true, refusal: None }
 }
 
 /// A wait through a call: the flag read by a routine the loop calls, the return address the same each turn.
@@ -254,30 +269,31 @@ fn window() -> Case {
 
 /// A wait whose turn stores a value the memory already holds, through the cache and past it: passed.
 fn constant_store() -> Case {
-    let setup = format!("ori s7, zero, 0x77
-{}
-{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
-    let wait = "lw s2, 0x1010(s0)
-loop: sw s7, 0x1100(s1)
-sw s7, 0x1104(s0)
-lw t0, 0x1010(s0)
-beq t0, s2, loop
-nop";
+    let setup = format!("ori s7, zero, 0x77\n{}\n{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)\nloop: sw s7, 0x1100(s1)\nsw s7, 0x1104(s0)\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop";
     Case { name: "constant-store", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: true, refusal: None }
 }
 
-/// A wait that counts its turns in memory: each turn changes the word, and none is passed.
+/// A wait that counts its turns in memory, in a cached line, and in a register, neither count read by the loop's path:
+/// passed, each count moved on by its turns.
 fn counter() -> Case {
-    let setup = format!("{}
-{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
-    let wait = "lw s2, 0x1010(s0)
-loop: lw t1, 0x1108(s1)
-addiu t1, t1, 1
-sw t1, 0x1108(s1)
-lw t0, 0x1010(s0)
-beq t0, s2, loop
-nop";
-    Case { name: "counter", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: false, refusal: Some(Refusal::Store) }
+    let setup = format!("{}\n{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)\nloop: lw t1, 0x1108(s1)\naddiu t1, t1, 1\nsw t1, 0x1108(s1)\naddiu t7, t7, 3\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop";
+    Case { name: "counter", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: true, refusal: None }
+}
+
+/// A count in memory the loop's path compares with zero: passed, up to the turn before the count would reach it.
+fn counted() -> Case {
+    let setup = format!("{}\n{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)\nloop: lw t1, 0x110c(s1)\naddiu t1, t1, 1\nsw t1, 0x110c(s1)\nbeq t1, zero, out\nnop\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop\nout:";
+    Case { name: "counted", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: true, refusal: None }
+}
+
+/// A count doubled each turn, which is not a step: refused.
+fn doubled() -> Case {
+    let setup = format!("{}\n{}", intc_mask(2), interrupts(0x400, 0xA000_0000));
+    let wait = "lw s2, 0x1010(s0)\nori t7, zero, 1\nloop: sll t7, t7, 1\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop";
+    Case { name: "doubled", ee: program(&setup, 2, wait), iop: None, frames: 3, skips: false, refusal: Some(Refusal::InductionOp) }
 }
 
 /// Timer 0's waits while VU1 runs a long microprogram started by CMSAR1: the board is never in its quick path, so every
@@ -302,7 +318,7 @@ fn timer_poll() -> Case {
 }
 
 fn cases() -> Vec<Case> {
-    vec![vu1_busy(), dma("chcr"), timer_poll(), vblank(), timer(), count(), dma("memory"), dma("bc0f"), sif0(), timeout(), call(), window(), constant_store(), counter()]
+    vec![vu1_busy(), dma("chcr"), timer_poll(), vblank(), timer(), count(), dma("memory"), dma("bc0f"), sif0(), timeout(1 << 20), timeout(700), counter64(), call(), window(), constant_store(), counter(), counted(), doubled()]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

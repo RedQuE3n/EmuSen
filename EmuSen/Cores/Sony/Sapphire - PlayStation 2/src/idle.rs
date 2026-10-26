@@ -11,7 +11,7 @@ use crate::board::System;
 use crate::clock::IOP;
 use crate::dmac::Watch;
 use crate::ee::Place;
-use crate::ee::idle::{Access, Mark, Period};
+use crate::ee::idle::{Access, MAX_WORDS, Mark, Period, Taint};
 use crate::ee::observe::Reach;
 
 /// The farthest a backward jump may reach to make a loop's head, and the longest turn proven, in instructions.
@@ -51,6 +51,14 @@ pub enum Refusal {
     Control,
     /// A register different at the head a turn later.
     Changed,
+    /// A value that moves from turn to turn (an induction) read by a branch, used as an address, taken through an
+    /// operation other than a move, an addition or a subtraction of what does not move, or stored anywhere but its own
+    /// word; or its step not the same from turn to turn.
+    InductionBranch,
+    InductionAddress,
+    InductionOp,
+    InductionStore,
+    InductionStep,
     /// A line refilled into a cache during the turn.
     Cache,
     /// The issue model, Count or Random not the turn before's shifted in time.
@@ -69,7 +77,7 @@ pub enum Refusal {
     Budget,
 }
 
-pub const REFUSALS: usize = 20;
+pub const REFUSALS: usize = 25;
 
 impl Refusal {
     /// Whether the head waits longer before its next proof: not for what passes with time.
@@ -191,7 +199,8 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
 
 /// The proof's turn stepped, then the skip; the steps taken and why nothing was passed. The DMAC's writes to what the
 /// turn reaches are watched from the instruction that first reaches it, so that a turn that read memory the DMAC then
-/// changed is not taken for one that repeats.
+/// changed is not taken for one that repeats. A turn that moves registers or words of memory is stepped a second time
+/// with its inductions tracked (`Ee::idle_taint`), and passed with each moved on by its step.
 fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts: &mut Counts, spare: &mut Box<Watch>) -> (u64, Result<(), Refusal>) {
     if let Err(e) = sys.ee.idle_eligible() {
         return (0, Err(e));
@@ -199,31 +208,29 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
     if sys.board.iop.probe.is_some() {
         return (0, Err(Refusal::Probe));
     }
-    let a = sys.ee.mark();
     let mut watch = std::mem::take(spare);
     watch.ranges.clear();
     watch.hits.clear();
     sys.board.dmac.watch = Some(watch);
     let mut offsets = [0u64; MAX_TURN];
-    let turn = prove(sys, blocks, left, &mut offsets);
-    let watch = sys.board.dmac.watch.take().expect("the watch stays while the turn is stepped");
-    let (steps, unpaired, traffic, registers) = match turn {
-        Ok(t) => t,
+    let r = prove_inductions(sys, blocks, left, &mut offsets);
+    let mut watch = sys.board.dmac.watch.take().expect("the watch stays while the turns are stepped");
+    let (steps, proven) = match r {
+        Ok(x) => x,
         Err((steps, e)) => {
             *spare = watch;
             return (steps, Err(e));
         }
     };
-    let offsets = &offsets[..steps as usize];
-    let p = match sys.ee.period_from(&a, unpaired) {
-        Ok(p) => p,
-        Err(e) => {
-            *spare = watch;
-            return (steps, Err(e));
-        }
-    };
+    let Proven { a, p, turn, moved, widths, d, words, nwords, bound } = proven;
     counts.proofs += 1;
-    let passed = skip(sys, &a, &p, offsets, traffic, !registers, watch, spare, counts);
+    watch.hits.clear();
+    let offsets = &offsets[..turn.steps as usize];
+    let passed = skip(sys, &a, &p, offsets, turn.traffic, !turn.registers, bound, watch, spare, counts, &|ee: &mut crate::ee::Ee, k| {
+        if moved != 0 || nwords > 0 {
+            ee.pass_inductions(moved, &widths, &d, &words[..nwords], k);
+        }
+    });
     if passed > 0
         && let Some(b) = blocks
     {
@@ -232,11 +239,102 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
     (steps + passed, Ok(()))
 }
 
-/// One turn from the head stepped and checked: every instruction one a turn may hold, the lines, the field and the
-/// watched memory and the registers read unchanged after each step, no exception, and every store leaving its bytes as
-/// it found them. The steps, each step's cycles from the head, the issue cycles that did not pair, the turn's traffic past
-/// the caches and whether it reads a register; or the steps taken and the refusal.
-fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets: &mut [u64; MAX_TURN]) -> Result<(u64, u64, [u64; 3], bool), (u64, Refusal)> {
+/// A turn proven to repeat: the mark a turn before the head the core stands at, the period, what the last turn stepped
+/// read and moved, and the inductions with their steps (registers, and words as virtual and physical address and step).
+struct Proven {
+    a: Mark,
+    p: Period,
+    turn: Turn,
+    moved: u32,
+    widths: [u8; 32],
+    d: [u64; 32],
+    words: [(u32, u32, u8, u64); MAX_WORDS],
+    nwords: usize,
+    /// The most turns the inductions' comparisons allow.
+    bound: u64,
+}
+
+/// One turn, or two when the first moves registers or memory; the steps taken in all and the proof, or the refusal.
+fn prove_inductions(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets: &mut [u64; MAX_TURN]) -> Result<(u64, Proven), (u64, Refusal)> {
+    let a1 = sys.ee.mark();
+    let first = prove(sys, blocks, left, offsets, None)?;
+    let moved = sys.ee.moved_from(&a1).ok_or((first.steps, Refusal::InductionStep))?;
+    if moved == 0 && first.changed == 0 {
+        let p = sys.ee.period_from(&a1, first.unpaired, 0).map_err(|e| (first.steps, e))?;
+        return Ok((first.steps, Proven { a: a1, p, turn: first, moved: 0, widths: [0; 32], d: [0; 32], words: [(0, 0, 0, 0); MAX_WORDS], nwords: 0, bound: u64::MAX }));
+    }
+    let refuse = |e| (first.steps, e);
+    let mut taint = Taint::new(moved);
+    // Each word that moved: its reach, physical address, width, and its values a turn ago and now.
+    let mut words = [(Reach { vaddr: 0, bytes: 0, store: true }, 0u32, 0u8, 0u64, 0u64); MAX_WORDS];
+    let mut nw = 0;
+    let value = |b: [u8; 16], bytes: u32| if bytes == 4 { u64::from(u32::from_le_bytes(b[..4].try_into().unwrap())) } else { u64::from_le_bytes(b[..8].try_into().unwrap()) };
+    for &(r, was) in first.stores() {
+        let now = sys.ee.seen(&sys.board.map.rdram, r);
+        if now == was {
+            continue;
+        }
+        let paddr = sys.ee.idle_word(r).ok_or(refuse(Refusal::Store))?;
+        let bits = (r.bytes * 8) as u8;
+        if !taint.add_word(r.vaddr, paddr, bits) {
+            return Err(refuse(Refusal::Store));
+        }
+        words[nw] = (r, paddr, bits, value(was, r.bytes), value(now, r.bytes));
+        nw += 1;
+    }
+    let words = &words[..nw];
+    let a2 = sys.ee.mark();
+    let second = prove(sys, blocks, left - first.steps, offsets, Some(&mut taint)).map_err(|(s, e)| (first.steps + s, e))?;
+    let steps = first.steps + second.steps;
+    let refuse = |e| (steps, e);
+    if sys.ee.moved_from(&a2) != Some(moved) || second.steps != first.steps {
+        return Err(refuse(Refusal::InductionStep));
+    }
+    let widths = taint.widths(moved).ok_or(refuse(Refusal::InductionStep))?;
+    let d = sys.ee.steps_from(&a1, &a2, moved, &widths).ok_or(refuse(Refusal::InductionStep))?;
+    let mut all = [0u64; 32 + MAX_WORDS];
+    all[..32].copy_from_slice(&d);
+    let mut stepped = [(0u32, 0u32, 0u8, 0u64); MAX_WORDS];
+    for (i, &(r, paddr, bits, w1, w2)) in words.iter().enumerate() {
+        let w3 = sys.ee.idle_word_value(r.vaddr, paddr, bits);
+        let (step, again) = if bits == 32 { (u64::from((w3 as u32).wrapping_sub(w2 as u32)), u64::from((w2 as u32).wrapping_sub(w1 as u32))) } else { (w3.wrapping_sub(w2), w2.wrapping_sub(w1)) };
+        if step != again {
+            return Err(refuse(Refusal::InductionStep));
+        }
+        stepped[i] = (r.vaddr, paddr, bits, step);
+        all[32 + i] = step;
+    }
+    if second.stores().iter().any(|&(r, was)| sys.ee.seen(&sys.board.map.rdram, r) != was && !words.iter().any(|w| w.0 == r)) {
+        return Err(refuse(Refusal::Store));
+    }
+    let p = sys.ee.period_from(&a2, second.unpaired, moved).map_err(refuse)?;
+    let bound = taint.turns(&all, &widths);
+    Ok((steps, Proven { a: a2, p, turn: second, moved, widths, d, words: stepped, nwords: nw, bound }))
+}
+
+/// What a stepped turn gives: its steps, the issue cycles that did not pair, its traffic past the caches, whether it reads
+/// a register, and each store's reach with the bytes it found there.
+struct Turn {
+    steps: u64,
+    unpaired: u64,
+    traffic: [u64; 3],
+    registers: bool,
+    stores: [(Reach, [u8; 16]); MAX_STORES],
+    stored: usize,
+    /// The stores whose bytes the turn changed, counted against the memory at its end.
+    changed: usize,
+}
+
+impl Turn {
+    fn stores(&self) -> &[(Reach, [u8; 16])] {
+        &self.stores[..self.stored]
+    }
+}
+
+/// One turn from the head stepped and checked: every instruction one a turn may hold (and, with `taint`, one that keeps
+/// the inductions out of the path), the lines, the field, the watched memory and the registers read unchanged after each
+/// step, no exception. Each step's cycles from the head go to `offsets`.
+fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets: &mut [u64; MAX_TURN], mut taint: Option<&mut Taint>) -> Result<Turn, (u64, Refusal)> {
     let head = sys.ee.pc;
     let b = &sys.board;
     let (traffic, lines, fields) = (b.traffic, b.lines(), b.pcrtc.fields);
@@ -254,6 +352,9 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
         }
         let pc = sys.ee.pc;
         let Some(word) = sys.ee.peek_fetch(&mut sys.board, pc) else { return Err((steps, Refusal::Device)) };
+        if let Some(t) = taint.as_deref_mut() {
+            sys.ee.idle_taint(word, t).map_err(|e| (steps, e))?;
+        }
         let System { ee, board } = &mut *sys;
         match ee.idle_admits(word, &|p| board.pure_register(p).is_some()) {
             Err(e) => return Err((steps, e)),
@@ -271,11 +372,11 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
                     if stored == MAX_STORES {
                         return Err((steps, Refusal::Long));
                     }
-                    stores[stored] = (r, sys.ee.seen(&sys.board.map.rdram, r));
+                    stores[stored] = (r, ee.seen(&board.map.rdram, r));
                     stored += 1;
                 }
-                if let Some(range) = range_of(&sys.ee, r) {
-                    let w = sys.board.dmac.watch.as_mut().expect("the watch is set");
+                if let Some(range) = range_of(ee, r) {
+                    let w = board.dmac.watch.as_mut().expect("the watch is set");
                     if !w.ranges.contains(&range) {
                         w.ranges.push(range);
                     }
@@ -304,12 +405,9 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
             break;
         }
     }
-    let steps = n as u64;
-    if stores[..stored].iter().any(|&(r, was)| sys.ee.seen(&sys.board.map.rdram, r) != was) {
-        return Err((steps, Refusal::Store));
-    }
+    let changed = stores[..stored].iter().filter(|&&(r, was)| sys.ee.seen(&sys.board.map.rdram, r) != was).count();
     let traffic = std::array::from_fn(|i| sys.board.traffic[i] - traffic[i]);
-    Ok((steps, unpaired, traffic, read > 0))
+    Ok(Turn { steps: n as u64, unpaired, traffic, registers: read > 0, stores, stored, changed })
 }
 
 /// Where an access lands as the DMAC addresses it: physical memory, or the scratchpad.
@@ -329,9 +427,9 @@ fn range_of(ee: &crate::ee::Ee, r: Reach) -> Option<(bool, u32, u32)> {
 /// and the wake is taken as `run_to` takes it. A turn that reads a register is passed only while the quick path holds,
 /// since a register's change cannot be shown to the turn's instructions as it was (`replay` false).
 #[allow(clippy::too_many_arguments)]
-fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 3], replay: bool, mut watch: Box<Watch>, spare: &mut Box<Watch>, counts: &mut Counts) -> u64 {
+fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 3], replay: bool, bound: u64, mut watch: Box<Watch>, spare: &mut Box<Watch>, counts: &mut Counts, induce: &dyn Fn(&mut crate::ee::Ee, u64)) -> u64 {
     let t2 = sys.ee.timing.cycles();
-    let turns = sys.ee.turns_before_compare(p.span).min(MAX_TURNS);
+    let turns = sys.ee.turns_before_compare(p.span).min(MAX_TURNS).min(bound);
     if turns == 0 {
         *spare = watch;
         return 0;
@@ -377,6 +475,7 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
     }
     let watch = sys.board.dmac.watch.take().expect("the watch stays while the turns are passed");
     sys.ee.pass(a, p, k);
+    induce(&mut sys.ee, k);
     for (n, d) in sys.board.traffic.iter_mut().zip(traffic) {
         *n += k * d;
     }

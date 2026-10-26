@@ -39,6 +39,8 @@ pub struct Disc {
 pub enum Media {
     Elf(Elf),
     Disc(Disc),
+    /// No image: the console started with nothing in it, its tray closed and empty (Sapphire_Plan.md §8, G10).
+    Empty,
 }
 
 /// Why an image is refused, each with the words `v1` gives it.
@@ -79,7 +81,7 @@ impl Media {
     pub fn serial(&self) -> Option<&str> {
         match self {
             Media::Disc(d) => d.serial.as_deref(),
-            Media::Elf(_) => None,
+            Media::Elf(_) | Media::Empty => None,
         }
     }
 }
@@ -283,6 +285,7 @@ impl Media {
                 eat(&[0]);
                 eat(d.serial.as_deref().unwrap_or("").as_bytes());
             }
+            Media::Empty => eat(b"EMPTY"),
         }
         h.max(1)
     }

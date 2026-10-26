@@ -482,7 +482,8 @@ at each call (`Nephrite_OpenBios.md` §14). The Genesis's cartridge SRAM (`.srm`
 Each joins by its core's battery declarations and its system pack's entry, and a format module when its file system is
 read: the Saturn's internal memory (`console`) and backup cartridge (`removable`), the Dreamcast's VMUs (`removable`,
 two per port), the PC Engine CD's backup RAM (`console`), the Neo Geo's card, the GameCube's and the PS2's cards.
-Nothing of the runtime, Galaxia, the manager or the window changes for any of them.
+Nothing of the runtime, Galaxia, the manager or the window changes for any of them. *The PlayStation 2's card joined
+2026-10-25* (§11.9).
 
 ## 8. The migration
 
@@ -634,6 +635,23 @@ own; the PlayStation's and the Sega CD's answers are unchanged. *Since 2026-10-1
 **The default.** With the module and the import, the N64's paks are *Shared* by default (§9), and Mistress offers the
 import once before an N64 game starts where per-game `.mpk` files exist and `Pak 1` does not; nothing of that was
 written for the N64, since every piece is the generic one.
+
+### 11.9 The PlayStation 2's card (2026-10-25)
+
+[M] Sapphire declares two removable slots of `ps2.card`, files 0 and 1, `.ps2` and `.2.ps2`, "Slot 1" and "Slot 2"
+(`Sapphire_Native.md` §30.7). Its **module** is `emusen-systems`' `ps2::card` over the crate `emusen-ps2-card`
+(`Hardware/Shared/EmuSen_MediumFormats.md` §6): a save is a directory at the card's top level, its id the directory's
+name, its title from its `icon.sys` (gothi's layout, Shift-JIS read as the PlayStation's titles are), its game the
+serial its name carries, its size **in kilobytes**, a cluster each, its directory and every file with it, as the
+console's browser shows it; the card's free space the browser's figure, 7,998 kilobytes on a formatted card, which is
+the module's capacity (`Sapphire_Disputes.md` D-381). The C# `Ps2CardFormat` forwards to the library and has no C# twin,
+so under `EMUSEN_SYSTEMS_NATIVE=0` the medium offers no save operation. The pack entry is "Memory Card (PS2)", noun
+"Card", extension `.ps2`. The **window** lists, after the shelves' consoles, those an engine runs that no shelf shows,
+so a console offered in development has its tab where development cores are shown (`Sapphire_Native.md` §30.21 Q3);
+`CoreCatalog.EngineSystem` and the Rust runtime's `Catalog::engine_system` read such a console's media from its engine. `Ps2CardFormatTests` (four),
+`MemoryCardsPlayStation2` and `MemoryCardsPlayStation2Held` in the fit audit at both sizes, and `memcard.golden`'s list
+of known media, which gained `.ps2 (Memory Card (PS2))`, hold it; the round trip with the player's BIOS on a referee is
+`Sapphire_Native.md` §30.18.
 
 ## 12. Reading log
 

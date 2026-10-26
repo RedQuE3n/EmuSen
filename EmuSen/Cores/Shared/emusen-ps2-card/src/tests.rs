@@ -22,7 +22,7 @@ fn a_formatted_card_has_the_standard_layout_and_8000_clusters_free() {
     let sb = card.sb;
     assert_eq!((sb.alloc_offset, sb.alloc_end, sb.backup_block1, sb.backup_block2, sb.ifc_list[0]), (41, 8135, 1023, 1022, 8), "Ridge's defaults");
     assert_eq!((sb.card_type, sb.card_flags), (2, 0x52));
-    assert_eq!(card.free_clusters().unwrap(), 7999, "Ridge: rounded down to the thousand, the root's cluster in use");
+    assert_eq!(card.free_clusters().unwrap(), 7998, "Ridge: rounded down to the thousand, the root's cluster in use, one kept back as the browser shows");
     let root = card.root().unwrap();
     assert_eq!(root.entries, 2);
     assert_eq!(card.entry(root, 0).unwrap().name(), b".");
@@ -32,7 +32,7 @@ fn a_formatted_card_has_the_standard_layout_and_8000_clusters_free() {
         let mut d = [0u8; PAGE];
         d.copy_from_slice(page(&c, p));
         assert_eq!(&spare(&c, p)[..12], &ecc::page(&d), "page {p}'s code");
-        assert_eq!(&spare(&c, p)[12..], &[0xFF; 4]);
+        assert_eq!(&spare(&c, p)[12..], &[0; 4]);
     }
     assert!(erased(&c, 1) && erased(&c, 82 + 2) && erased(&c, 1022 * 16), "the rest erased");
 }
@@ -90,16 +90,16 @@ fn saves_made_read_back_listed_and_deleted() {
     assert_eq!(&back[..10], &data[4096..4106]);
     // 5 clusters of data, 1 of icon.sys, 5 of the f files, the directory's 5.
     assert_eq!(card.clusters_of(&save).unwrap(), 5 + 1 + 5 + 5);
-    assert_eq!(card.free_clusters().unwrap(), 7999 - 1 - 16, "the root grown by a cluster for its third entry");
+    assert_eq!(card.free_clusters().unwrap(), 7998 - 1 - 16, "the root grown by a cluster for its third entry");
     assert_eq!(mkdir(&mut c, b"", b"BASLUS-20000GAME", T), Err(Refusal::Exists));
     assert_eq!(create(&mut c, b"BASLUS-20000GAME", b"a/b", &[], T), Err(Refusal::Name));
     assert_eq!(create(&mut c, b"NOPE", b"x", &[], T), Err(Refusal::Missing));
     assert_eq!(create(&mut c, b"BASLUS-20000GAME/data", b"x", &[], T), Err(Refusal::Kind));
     delete(&mut c, b"BASLUS-20000GAME/data").unwrap();
-    assert_eq!(Card::open(&c).unwrap().free_clusters().unwrap(), 7999 - 1 - 11);
+    assert_eq!(Card::open(&c).unwrap().free_clusters().unwrap(), 7998 - 1 - 11);
     delete(&mut c, b"BASLUS-20000GAME").unwrap();
     let card = Card::open(&c).unwrap();
-    assert_eq!(card.free_clusters().unwrap(), 7998, "the root keeps its second cluster");
+    assert_eq!(card.free_clusters().unwrap(), 7997, "the root keeps its second cluster");
     assert_eq!(saves(&card).count(), 0);
 }
 

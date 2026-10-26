@@ -14,6 +14,6 @@
   "attached_to": null,
   "screenscraper_system": 58,
   "cheat_space": null,
-  "media": [],
+  "media": [{ "id": "ps2.card", "title": "Memory Card (PS2)", "noun": "Card" }],
   "byte_order": "little"
 }

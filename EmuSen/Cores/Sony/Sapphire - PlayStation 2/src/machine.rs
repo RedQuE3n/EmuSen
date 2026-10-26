@@ -115,6 +115,17 @@ impl Machine {
         self.booted = true;
     }
 
+    /// The drive's tray opened or closed by the player's hand, now (G10, the core ABI's `MEDIA`).
+    pub fn set_tray(&mut self, open: bool) {
+        let b = &mut self.sys.board;
+        b.iop.bus.tray(open, b.now);
+    }
+
+    /// A disc, or none, put in the drive; refused while the tray is closed, as a hand cannot.
+    pub fn insert_disc(&mut self, disc: Option<crate::cdvd::Disc>) -> bool {
+        self.sys.board.iop.bus.cdvd.insert(disc)
+    }
+
     pub fn pal(&self) -> bool {
         self.market == Market::Europe
     }

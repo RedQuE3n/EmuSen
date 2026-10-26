@@ -5,6 +5,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using EmuSen.Crystal.Systems.N64;
+using EmuSen.Crystal.Systems.Ps2;
 using EmuSen.Crystal.Systems.Psx;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -67,6 +68,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
             Assert.Contains(shown, c => c.Name == (empty ? "InsertDiscAbout" : "InsertDisc1") && c.IsEffectivelyVisible);
             Assert.DoesNotContain(shown, c => c.Name == "InsertDiscBrowse");
+        }
+
+        // The PlayStation 2's tab, behind the development mark: a shared card with two saves, one with a long title, a game's own beside it, and the card held by a running game - see Sapphire_Plan.md §8 (G11), Sapphire_Native.md §30.16.
+        internal static void ShowMemoryCardsPs2(MainWindow window, bool held)
+        {
+            var graphics = ConsolesConfig.Load();
+            graphics.SetValue("PlayStation 2", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Shared);
+            graphics.Save();
+            string card = SaveLibrary.CardPathFor("PlayStation 2", "Card 1", ".ps2");
+            Directory.CreateDirectory(Path.GetDirectoryName(card)!);
+            File.WriteAllBytes(card, Ps2CardFormatTests.WithSave(Ps2CardFormatTests.WithSave(Ps2CardFormat.Instance.Format()!, "BASLUS-20001AMBER", "Amber Saga", 40, 1),
+                "BESLES-50002BASALT", "Basalt Run Chapter Two, the Long Road North Through the Mountains", 300, 2));
+            File.WriteAllBytes(Path.Combine(DataStore.Saves, "PlayStation 2", "Amber Saga.ps2"), Ps2CardFormat.Instance.Format()!);
+            if (held && MediumLock.TryTake(card, "Amber Saga", shared: true) is { } taken) window.Closed += (_, _) => taken.Dispose();
+            EmuSen.Mistress.Library.RuntimeCatalog.Forget();
+            Call(window, "ShowMemoryCards");
+            SelectTab(window, "PlayStation 2");
+            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
+            Assert.Contains(shown, c => c.Name == "PlayStation 2.ps2.card.Save.1" && c.IsEffectivelyVisible);
+            var about = shown.OfType<TextBlock>().First(t => t.Name == "PlayStation 2.ps2.card.About");
+            Assert.Equal(held, about.Text!.Contains("In use by Amber Saga"));
+            Assert.StartsWith("Shared: Card 1 in Slot 1, Card 2 in Slot 2.", about.Text);
+            Assert.Contains(shown.OfType<TextBlock>(), t => t.Text?.Contains("7651 of 7998 kilobytes free") == true);
         }
 
         // The N64's tab: four Controller Paks, a shared pak with two notes, one with a long name, and a game's own beside it - see EmuSen_SaveMedia.md §7.2.

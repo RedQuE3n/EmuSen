@@ -48,11 +48,12 @@ pub struct Module {
 }
 
 /// Every medium a module reads, by the id the systems table gives it.
-pub const MODULES: [Module; 4] = [
+pub const MODULES: [Module; 5] = [
     Module { id: "psx.card", length: emusen_psx_card::CARD_LENGTH, capacity: emusen_psx_card::BLOCKS, unit: "block" },
     Module { id: "n64.pak", length: emusen_n64_pak::PAK_LENGTH, capacity: emusen_n64_pak::DATA_PAGES, unit: "page" },
     Module { id: "mcd.ramcart", length: 0x2_0000, capacity: 0x2_0000 / 64 - 3, unit: "block" },
     Module { id: "mcd.backup", length: 0x2000, capacity: 0x2000 / 64 - 3, unit: "block" },
+    Module { id: "ps2.card", length: emusen_ps2_card::CARD_LENGTH, capacity: crate::ps2::card::CAPACITY, unit: "kilobyte" },
 ];
 
 pub fn module(id: &str) -> Option<&'static Module> {
@@ -69,6 +70,7 @@ pub fn read(id: &str, image: &[u8]) -> Option<Result<Listing, Fault>> {
     Some(match module(id)?.id {
         "psx.card" => Ok(crate::psx::card::read(image)),
         "n64.pak" => Ok(crate::n64::pak::read(image)),
+        "ps2.card" => Ok(crate::ps2::card::read(image)),
         _ => crate::genesis::bram::read(image),
     })
 }
@@ -78,6 +80,7 @@ pub fn copy(id: &str, from: &[u8], save: &str, to: &[u8]) -> Option<Result<Vec<u
     Some(match module(id)?.id {
         "psx.card" => crate::psx::card::copy(from, save, to),
         "n64.pak" => crate::n64::pak::copy(from, save, to),
+        "ps2.card" => crate::ps2::card::copy(from, save, to),
         _ => crate::genesis::bram::copy(from, save, to),
     })
 }
@@ -87,6 +90,7 @@ pub fn delete(id: &str, image: &[u8], save: &str) -> Option<Result<Vec<u8>, Faul
     Some(match module(id)?.id {
         "psx.card" => crate::psx::card::delete(image, save),
         "n64.pak" => crate::n64::pak::delete(image, save),
+        "ps2.card" => crate::ps2::card::delete(image, save),
         _ => crate::genesis::bram::delete(image, save),
     })
 }
@@ -98,6 +102,7 @@ pub fn format(id: &str) -> Option<Vec<u8>> {
     match m.id {
         "psx.card" => emusen_psx_card::format(&mut image),
         "n64.pak" => emusen_n64_pak::format(&mut image),
+        "ps2.card" => crate::ps2::card::format(&mut image),
         _ => emusen_mcd_bram::format(&mut image),
     }
     Some(image)

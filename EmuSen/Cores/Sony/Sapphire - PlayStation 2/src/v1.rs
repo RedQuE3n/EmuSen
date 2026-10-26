@@ -23,6 +23,13 @@ pub const STATUS_ELF_TRUNCATED: i32 = -11;
 pub const STATUS_PLAYSTATION_DISC: i32 = -12;
 /// An ISO 9660 volume whose root names no BOOT2 program.
 pub const STATUS_NO_BOOT2: i32 = -13;
+/// A program put in the drive, which takes only discs.
+pub const STATUS_NOT_A_DISC: i32 = -16;
+/// A disc image whose sheet, tracks or container do not open.
+pub const STATUS_BAD_DISC: i32 = -17;
+
+/// The DVD drive, the console's one, in machine info's `drives` (G10).
+pub const DRIVE: u32 = 0;
 
 /// The pad report's bits in the PlayStation's order, which the DualShock 2's digital report keeps [A, read at S25], each
 /// with Diamond's canonical control so that bindings carry between the two (Sapphire_Plan.md §4.2).
@@ -95,7 +102,8 @@ pub const BIOS_JAPAN: u32 = 16;
 pub const BIOS_AMERICAS: u32 = 17;
 pub const BIOS_EUROPE: u32 = 18;
 
-const BIOS_COST: &str = "Without a BIOS of the console's market nothing runs: the console starts at its menu with the player's own BIOS (S24), and Sapphire's own open BIOS takes its place later, as a separate track (Sapphire_Plan.md §5.9).";
+/// The words a host shows when the BIOS is absent, and refuses an empty start with (Sapphire_Native.md §30.15).
+pub const BIOS_COST: &str = "Without a BIOS of the console's market the PlayStation 2 runs nothing: it starts to its menu with the player's own BIOS in the firmware folder. Sapphire's own open BIOS, which is to take its place, is not written yet.";
 
 /// The three markets' BIOS by their Redump names, each the market's newest retail console version, with every retail
 /// version's MD5 so that a player's file is found by its content (Sapphire_Native.md §12.3).
@@ -172,7 +180,7 @@ pub fn console_market(setting: Option<&str>, files: &[u32]) -> Market {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES;
+    const CAPABILITIES: u64 = caps::AXES | caps::MEDIA;
 
     fn info() -> Info {
         Info {
@@ -223,69 +231,26 @@ impl Core for Machine {
             STATUS_NO_BOOT2 => Some("the disc's SYSTEM.CNF names no PlayStation 2 program (no BOOT2 line)".into()),
             STATUS_OTHER_BIOS => Some("the state was made on a console with another BIOS than this one's, or with a BIOS where this console has none, or with none where it has one".into()),
             STATUS_QUEUE_PAST_STATE => Some("a queue inside the console holds more than the state has room for at this instant; the state can be saved a moment later".into()),
+            STATUS_NOT_A_DISC => Some("a program is no disc and goes in no drive".into()),
+            STATUS_BAD_DISC => Some("the disc image does not open: its sheet, its tracks or its container are not as a disc's".into()),
             _ => None,
         }
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let media = match Media::read(request.image) {
-            Ok(m) => m,
-            Err(Refusal::Unknown) => {
-                detail(&format!("the {}-byte image is neither an ELF nor an ISO 9660 disc image", request.image.len()));
-                return Err(STATUS_NOT_PS2);
-            }
-            Err(Refusal::NotEe(what)) => {
-                detail(&format!("the image is {what}; Sapphire runs programs of the EE"));
-                return Err(STATUS_ELF_NOT_EE);
-            }
-            Err(Refusal::Truncated { needs, has }) => {
-                detail(&format!("the ELF is {has} bytes; its headers and segments take {needs}"));
-                return Err(STATUS_ELF_TRUNCATED);
-            }
-            Err(Refusal::PlayStation) => {
-                detail("the disc is a PlayStation game (its SYSTEM.CNF names a BOOT program, or it has no SYSTEM.CNF and carries Sony's licence text or PSX.EXE); open it on Diamond");
-                return Err(STATUS_PLAYSTATION_DISC);
-            }
-            Err(Refusal::NoBoot2(what)) => {
-                detail(&format!("the disc holds an ISO 9660 volume, but {what}"));
-                return Err(STATUS_NO_BOOT2);
-            }
-        };
-        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which) && !NVM_FILES.contains(&f.which)) {
-            detail(&format!("file {} is not one Sapphire names", f.which));
-            return Err(status::BAD_FILE);
-        }
-        if let Some(f) = request.files.iter().find(|f| (BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && f.data.len() != BIOS_BYTES) {
-            detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
-            return Err(status::BAD_FILE);
-        }
-        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
-            detail(&format!("file {} is {} bytes; a PlayStation 2 memory card is {CARD_BYTES}, every page of 512 bytes followed by its 16 spare bytes", f.which, f.data.len()));
-            return Err(status::BAD_FILE);
-        }
-        if let Some(f) = request.files.iter().find(|f| NVM_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != nvm::BYTES) {
-            detail(&format!("file {} is {} bytes; the console's EEPROM is {}", f.which, f.data.len(), nvm::BYTES));
-            return Err(status::BAD_FILE);
-        }
-        let s = &request.settings;
-        let firmware: Vec<u32> = request.files.iter().map(|f| f.which).filter(|w| (BIOS_JAPAN..=BIOS_EUROPE).contains(w)).collect();
-        let market = console_market(s.get(REGION_KEY), &firmware);
-        let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
-        let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
-        m.firmware = firmware;
-        // An empty file is a card not yet saved: the slot keeps its erased card.
-        for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
-            *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");
-        }
-        // An empty or absent file is a console whose EEPROM is not yet saved: it starts blank (Sapphire_Native.md §35.5).
-        let nvm_file = NVM_FILES[market_index(market)];
-        if let Some(f) = request.files.iter().find(|f| f.which == nvm_file && !f.data.is_empty()) {
-            m.nvm_mut().bytes.copy_from_slice(f.data);
-        }
-        if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
-            m.insert_bios(file.data);
-        }
-        Ok(m)
+        Machine::make(request, recognise(request.image)?)
+    }
+
+    /// The console with its tray closed and empty powers on to its BIOS's menu (Sapphire_Plan.md §8, G10).
+    fn starts_empty(system: &str) -> bool {
+        system == "ps2"
+    }
+
+    /// With no disc to name the market, the player's BIOS given names it, as `console_market` reads the files. A start
+    /// with no BIOS of the market makes a console that runs nothing, which a host refuses by the firmware entry's
+    /// replacement, none (Sapphire_Native.md §30.15).
+    fn create_empty(_system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        Machine::make(request, Media::Empty)
     }
 
     fn machine_info(&self) -> MachineInfo {
@@ -411,9 +376,132 @@ impl Core for Machine {
         self.sync_pad(port as usize);
         Ok(())
     }
+
+    fn drives(&self) -> Vec<Drive> {
+        let c = &self.sys.board.iop.bus.cdvd;
+        vec![Drive { drive: DRIVE, label: "DVD drive".into(), kind: "dvd".into(), lid_open: c.tray_open(), loaded: c.disc().is_some() }]
+    }
+
+    fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
+        if drive != DRIVE {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        self.set_tray(open);
+        Ok(())
+    }
+
+    /// A disc goes in through the open tray, judged by the recogniser as an image is at create, then opened as the
+    /// drive's medium; nothing, an empty drive (EmuSen_CoreAPI.md §6.23).
+    fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
+        if drive != DRIVE {
+            return Err(status::NO_SUCH_DRIVE);
+        }
+        let open = self.sys.board.iop.bus.cdvd.tray_open();
+        if !open && !insert.restore {
+            detail("the DVD drive's tray is closed; open it before changing the disc");
+            return Err(status::LID_CLOSED);
+        }
+        let disc = match insert.image {
+            None => None,
+            Some(image) => Some(open_disc(image, &insert.files)?),
+        };
+        // A restore with the tray closed is the host setting the drive for a state, through the tray as a hand would.
+        self.set_tray(true);
+        self.insert_disc(disc);
+        self.set_tray(open);
+        Ok(())
+    }
 }
 
-emusen_native::core_exports!(Machine; axes);
+/// What an image is by the recogniser, or the status and words it is refused with.
+fn recognise(image: &[u8]) -> Result<Media, i32> {
+    match Media::read(image) {
+        Ok(m) => Ok(m),
+        Err(Refusal::Unknown) => {
+            detail(&format!("the {}-byte image is neither an ELF nor an ISO 9660 disc image", image.len()));
+            Err(STATUS_NOT_PS2)
+        }
+        Err(Refusal::NotEe(what)) => {
+            detail(&format!("the image is {what}; Sapphire runs programs of the EE"));
+            Err(STATUS_ELF_NOT_EE)
+        }
+        Err(Refusal::Truncated { needs, has }) => {
+            detail(&format!("the ELF is {has} bytes; its headers and segments take {needs}"));
+            Err(STATUS_ELF_TRUNCATED)
+        }
+        Err(Refusal::PlayStation) => {
+            detail("the disc is a PlayStation game (its SYSTEM.CNF names a BOOT program, or it has no SYSTEM.CNF and carries Sony's licence text or PSX.EXE); open it on Diamond");
+            Err(STATUS_PLAYSTATION_DISC)
+        }
+        Err(Refusal::NoBoot2(what)) => {
+            detail(&format!("the disc holds an ISO 9660 volume, but {what}"));
+            Err(STATUS_NO_BOOT2)
+        }
+    }
+}
+
+/// A disc for the drive: recognised by its image, a sheet by its first track's file, a CHD on opening alone (its
+/// sectors are the container's); then opened from its kept bytes and companions (Sapphire_Native.md §25.2).
+fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<crate::cdvd::Disc, i32> {
+    let mut companions: Vec<(u32, &[u8])> = files.iter().filter(|f| f.which >= flags::FILE_MEDIA).map(|f| (f.which, f.data)).collect();
+    companions.sort_by_key(|c| c.0);
+    let sheet = emusen_disc::is_sheet(image);
+    let probe = if sheet { companions.first().map_or(&[][..], |c| c.1) } else { image };
+    if !image.starts_with(b"MComprHD") && matches!(recognise(probe)?, Media::Elf(_)) {
+        detail("the image is an EE program; a program is opened as a game, not put in the drive");
+        return Err(STATUS_NOT_A_DISC);
+    }
+    // A sheet's text is parsed and dropped, so only a lone image or a track's file is kept.
+    let kept = if sheet { Kept::from(image.to_vec()) } else { keep(image) };
+    crate::cdvd::open(kept, companions.into_iter().map(|c| keep(c.1)).collect()).map_err(|e| {
+        detail(&format!("the disc does not open: {e:?}"));
+        STATUS_BAD_DISC
+    })
+}
+
+impl Machine {
+    /// The machine for `media`: the files checked, the settings read, the market chosen from the setting or the BIOS
+    /// given, the cards, the EEPROM and the BIOS placed.
+    fn make(request: &Create<'_>, media: Media) -> Result<Machine, i32> {
+        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which) && !NVM_FILES.contains(&f.which)) {
+            detail(&format!("file {} is not one Sapphire names", f.which));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request.files.iter().find(|f| (BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && f.data.len() != BIOS_BYTES) {
+            detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request.files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
+            detail(&format!("file {} is {} bytes; a PlayStation 2 memory card is {CARD_BYTES}, every page of 512 bytes followed by its 16 spare bytes", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request.files.iter().find(|f| NVM_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != nvm::BYTES) {
+            detail(&format!("file {} is {} bytes; the console's EEPROM is {}", f.which, f.data.len(), nvm::BYTES));
+            return Err(status::BAD_FILE);
+        }
+        let s = &request.settings;
+        let firmware: Vec<u32> = request.files.iter().map(|f| f.which).filter(|w| (BIOS_JAPAN..=BIOS_EUROPE).contains(w)).collect();
+        let market = console_market(s.get(REGION_KEY), &firmware);
+        let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
+        let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
+        m.firmware = firmware;
+        // An empty file is a card not yet saved: the slot keeps its erased card.
+        for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
+            *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");
+        }
+        // An empty or absent file is a console whose EEPROM is not yet saved: it starts blank (Sapphire_Native.md §35.5).
+        let nvm_file = NVM_FILES[market_index(market)];
+        if let Some(f) = request.files.iter().find(|f| f.which == nvm_file && !f.data.is_empty()) {
+            m.nvm_mut().bytes.copy_from_slice(f.data);
+        }
+        if let Some(file) = request.files.iter().find(|f| f.which == bios(market).which) {
+            m.insert_bios(file.data);
+        }
+        Ok(m)
+    }
+}
+
+emusen_native::core_exports!(Machine; axes, media);
 
 #[cfg(test)]
 mod tests {
@@ -589,5 +677,63 @@ mod tests {
         m.set_axis(0, 2, 1.0).unwrap();
         m.set_axis(0, 1, -1.0).unwrap();
         assert_eq!(m.sticks[0], [0xFF, 0x80, 0x80, 0x00], "right X full right, left Y full up");
+    }
+
+    fn empty(files: Vec<emusen_native::abi::File<'_>>) -> Machine {
+        let request = Create { image: &[], settings: Settings::from_pairs(Vec::new()), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
+        Machine::create_empty("ps2", &request).unwrap()
+    }
+
+    fn insert(m: &mut Machine, image: Option<&[u8]>) -> Result<(), i32> {
+        m.media_insert(DRIVE, &Insert { image, files: Vec::new(), restore: false })
+    }
+
+    /// G10 (Sapphire_Plan.md §8): the console started with nothing in it, its tray closed and empty and its market the
+    /// BIOS's; with no BIOS it runs nothing and says so in machine info, which a host refuses by the entry's replacement.
+    #[test]
+    fn the_console_starts_empty_with_the_tray_closed_and_the_bios_given_naming_the_market() {
+        assert!(Machine::starts_empty("ps2") && !Machine::starts_empty("psx"));
+        const { assert!(Machine::CAPABILITIES & caps::MEDIA != 0) };
+        let m = empty(Vec::new());
+        assert_eq!((m.media.clone(), m.booted), (Media::Empty, false));
+        assert_eq!(m.drives(), [Drive { drive: DRIVE, label: "DVD drive".into(), kind: "dvd".into(), lid_open: false, loaded: false }]);
+        assert_eq!(m.machine_info().firmware, [(BIOS_AMERICAS, FirmwareSource::Absent)], "nothing runs");
+        assert_eq!(bios(Market::Americas).replacement, Some(Replacement::None { cost: BIOS_COST.into() }), "the words a host refuses the start with");
+        let bios = vec![0u8; BIOS_BYTES];
+        let eu = empty(vec![emusen_native::abi::File { which: BIOS_EUROPE, data: &bios }]);
+        assert_eq!((eu.market, eu.booted, eu.machine_info().firmware), (Market::Europe, true, vec![(BIOS_EUROPE, FirmwareSource::File)]));
+    }
+
+    /// G10: a disc goes in only through the open tray, judged by the recogniser, and reaches the drive, which detects it
+    /// as a PlayStation 2 DVD once the tray closes; Eject empties it; a state's load keeps the drive (EmuSen_CoreAPI.md §6.23).
+    #[test]
+    fn a_disc_goes_in_through_the_tray_and_reaches_the_drive() {
+        let mut m = empty(Vec::new());
+        let disc = dvd();
+        assert_eq!(insert(&mut m, Some(&disc)), Err(status::LID_CLOSED));
+        m.media_lid(DRIVE, true).unwrap();
+        assert!(m.drives()[0].lid_open);
+        assert_eq!(insert(&mut m, Some(&elf())), Err(STATUS_NOT_A_DISC));
+        assert_eq!(insert(&mut m, Some(&volume(20, "BOOT = cdrom:\\SLUS_007.70;1\r\n", true))), Err(STATUS_PLAYSTATION_DISC));
+        assert_eq!(insert(&mut m, Some(&[7u8; 9000])), Err(STATUS_NOT_PS2));
+        assert!(m.drives()[0].lid_open && !m.drives()[0].loaded, "a refused disc changes nothing");
+        insert(&mut m, Some(&disc)).unwrap();
+        m.media_lid(DRIVE, false).unwrap();
+        for _ in 0..90 {
+            Core::advance(&mut m, &mut 0).unwrap();
+        }
+        let drive = |m: &mut Machine| m.sys.board.iop.bus.cdvd.read8(crate::cdvd::reg::DISK_TYPE);
+        assert_eq!((m.drives()[0].loaded, drive(&mut m)), (true, crate::cdvd::disk_type::PS2_DVD), "spun up and detected");
+        let mut state = vec![0u8; m.state_size()];
+        m.save_state(&mut state).unwrap();
+        m.load_state(&state).unwrap();
+        assert!(m.drives()[0].loaded && !m.drives()[0].lid_open, "the drive kept through the replay");
+        m.media_lid(DRIVE, true).unwrap();
+        insert(&mut m, None).unwrap();
+        m.media_lid(DRIVE, false).unwrap();
+        assert_eq!((m.drives()[0].loaded, drive(&mut m)), (false, crate::cdvd::disk_type::NONE));
+        assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
+        m.media_insert(DRIVE, &Insert { image: Some(&disc), files: Vec::new(), restore: true }).unwrap();
+        assert!(m.drives()[0].loaded && !m.drives()[0].lid_open, "a restore sets the drive with its tray closed");
     }
 }

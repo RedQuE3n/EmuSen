@@ -93,7 +93,12 @@ namespace EmuSen.Cores
             var system = library.Info.Systems.First(s => s.Id == start.SystemId);
             var media = MemoryCards.Stored(MemoryCards.MediaOf(console, system), key => config.Value(console, key));
             var engineCore = new Native.CoreEngine(library, settings) { Media = media, DeviceLender = lender, Options = options ?? CoreOptions.Default };
-            engineCore.StartConsole(start.SystemId);
+            try { engineCore.StartConsole(start.SystemId); }
+            catch
+            {
+                engineCore.Dispose();
+                throw;
+            }
             return engineCore;
         }
 

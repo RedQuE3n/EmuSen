@@ -354,7 +354,22 @@ namespace EmuSen.Cores.Native
                 placement.Dispose();
                 throw;
             }
+            if (RunsNothing(machine, system.Firmware) is { } refused)
+            {
+                machine.Dispose();
+                placement.Dispose();
+                throw new ConsoleFirmwareException($"{console} cannot start with nothing in it: {refused}");
+            }
             Adopt(machine, placement, system.Firmware, saves, null, "", console, systemId);
+        }
+
+        // Why a console started empty would run nothing: the firmware its machine chose is absent and the core offers no replacement for it, in the entry's own words; null otherwise - see Sapphire_Native.md §30.15.
+        public static string? RunsNothing(CoreMachine machine, IReadOnlyList<CoreFirmware> asked)
+        {
+            foreach (CoreFirmwareSource used in machine.Info.Firmware)
+                if (used.Source == "absent" && asked.FirstOrDefault(f => f.Which == used.Which) is { Replacement: { Effect: "none" } r } f)
+                    return $"{f.Label} ({f.Name}) is not in the firmware folder. {r.Cost}".TrimEnd();
+            return null;
         }
 
         // The system a console session was started as, or null for a game's - see Diamond_Shell.md §1.5.

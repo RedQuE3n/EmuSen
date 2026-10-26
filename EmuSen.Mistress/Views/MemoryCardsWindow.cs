@@ -79,7 +79,7 @@ namespace EmuSen.Mistress.Views
             MinHeight = 420;
             CanResize = true;
 
-            var media = RuntimeCatalog.ConsoleNames.Select(c => (Console: c, Media: CardMedium.Of(_runtime, c))).Where(c => c.Media.Count > 0).ToList();
+            var media = RuntimeCatalog.ConsoleNames.Concat(RuntimeCatalog.UnshelvedConsoles).Select(c => (Console: c, Media: CardMedium.Of(_runtime, c))).Where(c => c.Media.Count > 0).ToList();
             Consoles = media.Select(c => c.Console).ToList();
             foreach (var (console, list) in media) _tabs.Add(console, new ScrollViewer { Content = BuildConsole(list) });
             int selected = selectedConsole is null ? -1 : Consoles.ToList().IndexOf(selectedConsole);

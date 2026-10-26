@@ -63,6 +63,8 @@ pub mod mode {
     pub const EXISTS: u16 = 0x8000;
     /// What this crate writes for a new directory and a new file [C].
     pub const NEW_DIRECTORY: u16 = EXISTS | CREATED | DIRECTORY | EXECUTE | WRITE | READ;
+    /// The root's ".." as the player's BIOS formats it, hidden and without READ [M: Sapphire_Native.md §30.17].
+    pub const ROOT_PARENT: u16 = EXISTS | HIDDEN | CREATED | DIRECTORY | EXECUTE | WRITE;
     pub const NEW_FILE: u16 = EXISTS | CREATED | FILE | EXECUTE | WRITE | READ;
 }
 
@@ -158,13 +160,13 @@ pub fn spare(image: &[u8], n: usize) -> &[u8] {
     &image[n * RAW_PAGE + PAGE..(n + 1) * RAW_PAGE]
 }
 
-/// Writes page `n`'s data and its error correction in the spare bytes' first twelve, the last four left erased (Ridge
-/// "Error Correction Code").
+/// Writes page `n`'s data and its error correction in the spare bytes' first twelve (Ridge "Error Correction Code"), the
+/// last four zero, as the player's BIOS writes them [M: a card it formatted on PCSX2, Sapphire_Native.md §30.17].
 pub fn write_page(image: &mut [u8], n: usize, data: &[u8; PAGE]) {
     let raw = &mut image[n * RAW_PAGE..(n + 1) * RAW_PAGE];
     raw[..PAGE].copy_from_slice(data);
     raw[PAGE..PAGE + 12].copy_from_slice(&ecc::page(data));
-    raw[PAGE + 12..].fill(0xFF);
+    raw[PAGE + 12..].fill(0);
 }
 
 /// Whether page `n` is erased: every byte, data and spare, FFh.
@@ -608,9 +610,10 @@ impl<'a> Card<'a> {
         Ok(n)
     }
 
-    /// The clusters a player can still use: Sony's drivers round the allocatable clusters down to a thousand (Ridge
-    /// "Reserved Clusters"), so a new card, its root directory taking one, has 7,999 of its 8,135 [A: Ridge's rule read
-    /// as a limit on the clusters in use; Hardware/Shared/EmuSen_MediumFormats.md §6.2].
+    /// The clusters a player can still use, the kilobytes the console's browser shows free: Sony's drivers round the
+    /// allocatable clusters down to a thousand (Ridge "Reserved Clusters"), and the browser shows one fewer than the
+    /// thousands leave beside the clusters in use, so a new card, its root directory taking one, has 7,998 [M: the player's
+    /// BIOS on PCSX2, a new card and one of two saves; Hardware/Shared/EmuSen_MediumFormats.md §6.2].
     pub fn free_clusters(&self) -> Result<usize, Damage> {
         let mut free = 0usize;
         scan_fat(self.image, &self.sb, |n, e| {
@@ -621,7 +624,7 @@ impl<'a> Card<'a> {
         })?;
         let usable = (self.sb.alloc_end as usize / 1000) * 1000;
         let used = self.sb.alloc_end as usize - free;
-        Ok(usable.saturating_sub(used))
+        Ok(usable.saturating_sub(used + 1))
     }
 }
 
@@ -695,13 +698,14 @@ pub fn format(image: &mut [u8], time: Time) -> Result<(), Damage> {
         let mut f = [0u8; CLUSTER];
         for w in 0..WORDS_PER_CLUSTER {
             let n = i as usize * WORDS_PER_CLUSTER + w;
-            put32(&mut f, 4 * w, if n == 0 { FAT_END } else { FAT_FREE });
+            // The entries past the allocatable clusters ending no chain, as the player's BIOS writes them [M].
+            put32(&mut f, 4 * w, if n == 0 || n >= alloc_end as usize { FAT_END } else { FAT_FREE });
         }
         write_cluster(image, IFC + 1 + i, &f);
     }
     let mut d = [0u8; CLUSTER];
     Entry::new(mode::NEW_DIRECTORY, b".", 0, 2, time).write(&mut d[..ENTRY]);
-    Entry::new(mode::NEW_DIRECTORY | mode::HIDDEN, b"..", 0, 0, time).write(&mut d[ENTRY..]);
+    Entry::new(mode::ROOT_PARENT, b"..", 0, 0, time).write(&mut d[ENTRY..]);
     write_cluster(image, ALLOC_OFFSET, &d);
     Ok(())
 }

@@ -268,7 +268,16 @@ afterwards, so that no other run meets them. The project's cards there are its o
 `Mcd001.ps2` and `Mcd002.ps2`, which every other run keeps in its slots, are never written. **PCSX2** answers through
 its pads, cards and multitap with no input given, so a pressed button cannot be graded there; **Play!** cannot run an
 IOP program. PCSX2 makes a new card with every byte FFh and formats none without a BIOS, so a referee's formatted card
-waits for a BIOS (part B).
+waits for a BIOS (part B). *Part B, 2026-10-25* (`Sapphire_Native.md` §30.18): `ps2referee.py pads pcsx2 OUTDIR SCRIPT
+--card CARD` boots the BIOS with no disc at the console's speed with a copy of CARD in slot 1 (`--card none` leaves the
+slot empty) and plays SCRIPT, keys of PCSX2's keyboard pad at set seconds after it begins to draw and pictures from
+states saved through PINE, each kept as a PNG and the state removed; the card file as PCSX2 left it is copied out, the
+black box's output, and the console's EEPROM, which a script through the initial setup changes, is put back as it was
+(the first runs, before that, left it set up; it was removed on 2026-10-25 so that PCSX2 made its default again, and a
+run then showed the language screen as before). XTEST's events sent to the private compositor's Xwayland never reached PCSX2 (measured 2026-10-25);
+key events sent with `XSendEvent` to its largest window, given the input focus first, do. Only pictures and the card
+were kept; the log, which holds the BIOS's output, is read only for the BIOS line. With it the player's BIOS formatted
+a card in its browser and read the crate's edits back.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

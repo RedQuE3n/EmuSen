@@ -9,6 +9,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
     ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
+    ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N]
 
 REFEREE is `pcsx2` (PCSX2's standalone release, RAM through PINE), `play` (Play!'s standalone release), or a libretro
 core the reference probe drives: `lrps2` (pcsx2_libretro), `pcee2` (pcee2_libretro) or `play_libretro`. MARKET is
@@ -38,6 +39,13 @@ and keeps only the state's picture in PNG, its one member read, the state remove
 an EEPROM of zeros for the run, as Sapphire's blank one, and puts PCSX2's own back afterwards; --deinterlace is PCSX2's
 deinterlacing setting, 3 (weave, the bottom field first) by default, which shows the woven frame as Sapphire's PCRTC
 hands it on (Sapphire_Native.md §35).
+`pads` boots the BIOS with no disc at the console's speed with the card file CARD in slot 1, a copy of it placed in
+PCSX2's memory card folder (`--card none` leaves slot 1 empty), and plays SCRIPT: lines `SECONDS key NAME [HOLD]`, a key of PCSX2's keyboard pad pressed
+SECONDS after PCSX2 begins to draw and held HOLD seconds (0.15 by default), sent to PCSX2's window on the private
+compositor's Xwayland, and `SECONDS shot NAME`, a state saved through PINE whose picture alone is kept as OUTDIR/NAME.png; the
+card's file as PCSX2 left it is copied to OUTDIR/card.ps2 afterwards, an output of the black box, and the console's
+EEPROM, which a script through the initial setup changes, is put back as it was (Sapphire_Native.md §30.18). The keys are PCSX2's own defaults for its first pad: Up, Down, Left, Right, K Cross, L Circle, I Triangle, J
+Square, Return Start.
 
 Every run lives in a user scope of its own, stopped when it returns, and the standalone referees draw only to a
 private virtual KWin (Sapphire_Referees.md §2.1). `fetch` downloads the standalone releases pinned in
@@ -448,7 +456,8 @@ def run_inner(job, name, seconds):
             job["emulog"] = str(Path(tmp) / "emulog.txt")
             job["cmd"] = [job["emulog"] if c == "@EMULOG@" else c for c in job["cmd"]]
         inner = Path(tmp) / "inner.py"
-        inner.write_text(f"import json, sys\nsys.path.insert(0, {str(HERE)!r})\nimport ps2referee\nps2referee.inner_main(json.loads({json.dumps(job)!r}))\n")
+        entry = job.get("entry", "inner_main")
+        inner.write_text(f"import json, sys\nsys.path.insert(0, {str(HERE)!r})\nimport ps2referee\nps2referee.{entry}(json.loads({json.dumps(job)!r}))\n")
         began = time.monotonic()
         in_private_kwin(inner, seconds, name, job["result"])
         out = json.loads(Path(job["result"]).read_text()) if Path(job["result"]).exists() else {"words": {}}
@@ -546,6 +555,181 @@ def run_pcsx2_menu(market, seconds, png, blank_nvm=False, deinterlace=3):
                 f.unlink()
         finally:
             if kept is not None:
+                nvm.write_bytes(kept)
+        return out
+
+
+def fake_keys():
+    """Key events for PCSX2's window on the private compositor's Xwayland, through Xlib by ctypes: a function pressing or
+    releasing a key by its name, sent to the largest viewable window, which it gives the input focus first. XTEST's events
+    never reached PCSX2 there (measured 2026-10-25); events sent to the window do."""
+    import ctypes
+    x11 = ctypes.CDLL("libX11.so.6")
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XStringToKeysym.restype = ctypes.c_ulong
+    x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    dpy = x11.XOpenDisplay(None)
+    if not dpy:
+        raise OSError("no X display in the private compositor")
+
+    class Attributes(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_int), ("y", ctypes.c_int), ("width", ctypes.c_int), ("height", ctypes.c_int), ("border_width", ctypes.c_int),
+                    ("depth", ctypes.c_int), ("visual", ctypes.c_void_p), ("root", ctypes.c_ulong), ("c_class", ctypes.c_int),
+                    ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong),
+                    ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong), ("map_installed", ctypes.c_int),
+                    ("map_state", ctypes.c_int), ("all_event_masks", ctypes.c_long), ("your_event_mask", ctypes.c_long),
+                    ("do_not_propagate_mask", ctypes.c_long), ("override_redirect", ctypes.c_int), ("screen", ctypes.c_void_p)]
+
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XQueryTree.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong),
+                               ctypes.POINTER(ctypes.POINTER(ctypes.c_ulong)), ctypes.POINTER(ctypes.c_uint)]
+    x11.XGetWindowAttributes.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(Attributes)]
+    x11.XSetInputFocus.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+
+    def focus():
+        """The largest viewable window under the root, PCSX2's display, given the X input focus."""
+        best, area, stack = 0, 0, [x11.XDefaultRootWindow(dpy)]
+        while stack:
+            w = stack.pop()
+            r, parent, children, n = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.POINTER(ctypes.c_ulong)(), ctypes.c_uint()
+            if x11.XQueryTree(dpy, w, ctypes.byref(r), ctypes.byref(parent), ctypes.byref(children), ctypes.byref(n)):
+                for i in range(n.value):
+                    c, a = children[i], Attributes()
+                    if x11.XGetWindowAttributes(dpy, c, ctypes.byref(a)) and a.map_state == 2 and a.width * a.height > area and a.c_class == 1:
+                        best, area = c, a.width * a.height
+                    stack.append(c)
+        if best:
+            x11.XSetInputFocus(dpy, best, 2, 0)
+            x11.XFlush(dpy)
+        return best
+
+    class KeyEvent(ctypes.Structure):
+        _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+                    ("window", ctypes.c_ulong), ("root", ctypes.c_ulong), ("subwindow", ctypes.c_ulong), ("time", ctypes.c_ulong),
+                    ("x", ctypes.c_int), ("y", ctypes.c_int), ("x_root", ctypes.c_int), ("y_root", ctypes.c_int), ("state", ctypes.c_uint),
+                    ("keycode", ctypes.c_uint), ("same_screen", ctypes.c_int), ("pad", ctypes.c_long * 24)]
+
+    x11.XSendEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_long, ctypes.POINTER(KeyEvent)]
+    target = [0]
+
+    def key(name, down):
+        if name == "@focus":
+            target[0] = focus()
+            return target[0]
+        code = x11.XKeysymToKeycode(dpy, x11.XStringToKeysym(name.encode()))
+        if target[0]:
+            e = KeyEvent(type=2 if down else 3, display=dpy, window=target[0], root=x11.XDefaultRootWindow(dpy), time=0, x=1, y=1, x_root=1, y_root=1,
+                         keycode=code, same_screen=1)
+            x11.XSendEvent(dpy, target[0], 1, 1 if down else 2, ctypes.byref(e))
+        x11.XFlush(dpy)
+    return key
+
+
+def inner_pads(job):
+    """Inside the private compositor: PCSX2 started, its script of keys and pictures played from when it begins to
+    draw, each picture a state saved through PINE; the result file written before PCSX2 is ended."""
+    env = dict(os.environ, **job.get("env", {}))
+    start = time.monotonic()
+    out = {"shots": [], "keys": 0}
+    since = lambda: round(time.monotonic() - start, 3)
+    with open(job["log"], "w") as log:
+        p = subprocess.Popen(job["cmd"], cwd=job["cwd"], env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            while since() < job["seconds"] and p.poll() is None:
+                text = open(job["emulog"], errors="replace").read() if os.path.exists(job["emulog"]) else ""
+                if "swap chain" in text or "GS failed to open" in text:
+                    break
+                time.sleep(0.05)
+            drawing = out["drawing"] = since()
+            key, reader, slot = fake_keys(), None, 1
+            out["focus"] = key("@focus", True)
+            for at, what, arg, hold in job["script"]:
+                while since() < drawing + at and p.poll() is None:
+                    time.sleep(0.02)
+                if what == "key":
+                    key(arg, True)
+                    time.sleep(hold)
+                    key(arg, False)
+                    out["keys"] += 1
+                elif what == "shot":
+                    while reader is None and p.poll() is None:
+                        try:
+                            reader = Pine(job["socket"])
+                        except OSError:
+                            time.sleep(0.1)
+                    reader._ask(Pine.SAVE_STATE, bytes([slot]))
+                    out["shots"].append([arg, slot, since()])
+                    time.sleep(2.5)
+                    # Each state kept under its shot's name at once, so that the slot can be used again.
+                    for f in Path(job["states"]).glob(f"*.{slot:02d}.p2s"):
+                        f.rename(Path(job["states"]) / f"{arg}.shot")
+                    slot = slot % 9 + 1
+        except (OSError, EOFError, ValueError, PineFail) as e:
+            out["error"] = str(e)
+        finally:
+            out["ended"], out["exit"] = since(), p.poll()
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                p.kill()
+            with open(job["result"] + ".part", "w") as f:
+                json.dump(out, f)
+            os.rename(job["result"] + ".part", job["result"])
+
+
+def run_pcsx2_pads(market, seconds, outdir, script, card):
+    """PCSX2 booted to its BIOS's menu with the card in slot 1 and driven through its keyboard pad by the script; the
+    pictures of states kept, each state removed once its picture is read, and the card's file copied out afterwards."""
+    data = CACHE / "pcsx2-data"
+    states, cards = data / "PCSX2/sstates", data / "PCSX2/memcards"
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    name = "sapphire-s25b-pads.ps2"
+    # The console's EEPROM, which a script stepping through the initial setup changes, put back afterwards.
+    nvm = bios_folder() / MARKETS[market].replace(".bin", ".nvm")
+    kept = nvm.read_bytes() if nvm.exists() else None
+    with open(CACHE / "pcsx2.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for f in states.glob("*.p2s*"):
+            f.unlink()
+        if card is not None:
+            shutil.copyfile(card, cards / name)
+        try:
+            slot = free_slot()
+            ini = data / "PCSX2/inis/PCSX2.ini"
+            wanted = {**PCSX2_SETTINGS, "EmuCore": {**PCSX2_SETTINGS["EmuCore"], "PINESlot": str(slot)},
+                      "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
+                      "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]},
+                      "MemoryCards": {**PCSX2_CARDS["MemoryCards"], "Slot1_Filename": name, "Slot1_Enable": "false" if card is None else "true", "Slot2_Enable": "false"}, "Pad": PCSX2_CARDS["Pad"],
+                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": "3"}}
+            ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
+            root = CACHE / "pcsx2/squashfs-root"
+            job = {"entry": "inner_pads", "cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "-bios"],
+                   "cwd": str(root), "env": {"QT_QPA_PLATFORM": "xcb"}, "emulog": "", "script": script, "states": str(states),
+                   "socket": str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / f"pcsx2.sock.{slot}")}
+            out, text = run_inner(job, "pcsx2", seconds)
+            out["bios_loaded"] = bios_loaded(text, market)
+            for shot, _, _ in out.get("shots", []):
+                saved = states / f"{shot}.shot"
+                if saved.exists():
+                    with zipfile.ZipFile(saved) as z:
+                        pngs = [m for m in z.namelist() if m.lower().endswith(".png")]
+                        if pngs:
+                            (outdir / f"{shot}.png").write_bytes(z.read(pngs[0]))
+                    saved.unlink()
+            for f in list(states.glob("*.p2s*")) + list(states.glob("*.shot")):
+                f.unlink()
+            if card is not None:
+                shutil.copyfile(cards / name, outdir / "card.ps2")
+        finally:
+            (cards / name).unlink(missing_ok=True)
+            ini.write_text(ini_merge(ini.read_text(), PCSX2_CARDS))
+            if kept is None:
+                nvm.unlink(missing_ok=True)
+            else:
                 nvm.write_bytes(kept)
         return out
 
@@ -651,7 +835,7 @@ def bios_loaded(log, market):
 def main(argv):
     if argv[:1] == ["fetch"]:
         return fetch()
-    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu"):
+    if len(argv) < 3 or argv[0] not in ("ram", "boot", "tty", "menu", "pads"):
         die(__doc__, 2)
     mode, referee, target = argv[0], argv[1], Path(argv[2]).resolve()
     rest = argv[3:]
@@ -664,7 +848,7 @@ def main(argv):
             return value
         return default
 
-    expected = Path(rest.pop(0)).read_text(errors="replace") if mode == "tty" and rest else None
+    expected = Path(rest.pop(0)).read_text(errors="replace") if mode in ("tty", "pads") and rest else None
     channel = option("--channel", "ee")
     out_file = option("--out")
     market = option("--bios", "americas")
@@ -681,6 +865,7 @@ def main(argv):
             die("--interpreter is PCSX2's", 2)
         rest.remove("--interpreter")
     cards = option("--cards")
+    card = option("--card")
     cards = cards.split(",") if cards else None
     if cards and (referee != "pcsx2" or mode != "ram" or len(cards) != 2 or any("/" in c or c.startswith(".") for c in cards)):
         die("--cards A,B names two cards in PCSX2's memory card folder, for ram runs on pcsx2", 2)
@@ -719,6 +904,19 @@ def main(argv):
             Path(out_file).write_text("\n".join(region) + ("\n" if region else ""))
         print(json.dumps({"channel": channel, "expected_lines": total, "found": found, "region_lines": len(region),
                           **{k: v for k, v in out.items() if k in ("until", "wall", "exit", "error", "bios_loaded")}}))
+        return
+    if mode == "pads":
+        if referee != "pcsx2" or expected is None or not card:
+            die("pads runs on pcsx2 with a script and --card", 2)
+        script = []
+        for line in expected.splitlines():
+            w = line.split()
+            if len(w) >= 3 and w[1] in ("key", "shot"):
+                script.append([float(w[0]), w[1], w[2], float(w[3]) if len(w) > 3 else 0.15])
+        out = run_pcsx2_pads(market, count, target, script, None if card == "none" else Path(card).resolve())
+        if not out["bios_loaded"]:
+            die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
+        print(json.dumps(out))
         return
     if mode == "menu":
         if referee != "pcsx2":

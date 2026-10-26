@@ -3528,6 +3528,83 @@ through the reset too.
 - **Pinned by:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
 - **Implemented in:** stage S24's commit.
 
+### D-380. The memory card's file system as the player's BIOS formats it: card flags 2Bh, the root's ".." mode A426h, every FAT entry past the allocatable clusters FFFFFFFFh, each page's last four spare bytes 00h, the superblock's bytes past Ridge's 340 written; the crate takes the last three and keeps Ridge's 52h
+
+- **Opened:** 2026-10-25, at stage S25 part B: the first card formatted by a BIOS (the player's Americas image on PCSX2
+  2.8.2, through its browser's "Format now?", §30.18), compared field by field with the crate's own format.
+- **Documents read:** Ross Ridge, "PlayStation 2 Memory Card File System" (the superblock of 340 bytes, card flags 52h by
+  default, the directory entry's modes, the FAT's free entries needing only the top bit clear, the error correction in
+  the spare's first twelve bytes); ps2tek "SIO2 PS2 Memcard Filesystem" (the same fields).
+- **Test program:** none; the two cards compared page by page [M]: the superblock's documented fields equal but for the
+  flags (2Bh against 52h); bytes 154h-173h of page 0, which Ridge does not describe, written by the BIOS (zeros and
+  small numbers) and left FFh by the crate; the root's ".." mode A426h (no READ bit) against A427h; the FAT's entries
+  8,135 to 8,191, past `alloc_end`, FFFFFFFFh against 7FFFFFFFh; the spare's bytes 12-15 00h against FFh on every page
+  written; erase blocks 0, 5 (its pages 84-95) and 1,023, the first backup block, programmed with FFh data and its code
+  where the crate leaves them erased; the root's times the console's clock.
+- **Referee:** PCSX2 running the player's BIOS, a black box; its card file is the output. The crate's formatted card was
+  then accepted by the same BIOS ("There is no data.", "7,998 KB Free").
+- **Conclusion:** the crate's format writes the root's ".." as A426h, the FAT's entries past the allocatable clusters as
+  FFFFFFFFh and the spare's last four bytes as 00h, as measured; it keeps card flags 52h, Ridge's documented value,
+  since the BIOS writes what the card reports of itself and PCSX2's card is one lineage's answer; it leaves the
+  undocumented superblock bytes FFh and the unused pages erased, which the BIOS reads without complaint. **Measured**,
+  one lineage.
+- **Depends on it:** `emusen_ps2_card::format`, `write_page`, `mode::ROOT_PARENT`.
+- **Pinned by:** `a_formatted_card_has_the_standard_layout_and_8000_clusters_free` (the spare's zeros); the BIOS's card
+  read by `ps2::card` in §30.18's runs.
+- **Implemented in:** stage S25 part B's commit.
+
+### D-381. The memory card's free space as the browser shows it: the allocatable clusters rounded down to a thousand, less the clusters in use, less one
+
+- **Opened:** 2026-10-25, at stage S25 part B: the browser showed "7,998 KB Free" on the card it had formatted, where the
+  crate counted 7,999 by Ridge's rule (§30.18).
+- **Documents read:** Ridge, "Reserved Clusters" (Sony's drivers round the allocatable clusters down to a thousand).
+- **Test program:** none; three cards measured on the referee's browser against the crate's count of clusters in use:
+  a new card, one cluster in use, 7,998 shown; two saves of 42 and 58 clusters with the root grown to two, 102 in use,
+  7,897; one save of 58, 60 in use, 7,939. Each is 7,999 less the clusters in use [M]; a save's size shows as its
+  clusters, its directory and every file with it ("42 KB").
+- **Referee:** PCSX2 running the player's BIOS, its browser's pictures.
+- **Conclusion:** `Card::free_clusters` is the browser's figure, and the medium's unit the kilobyte, a cluster; whether
+  the cluster held back is a driver's reserve for a directory's growth or the browser's own arithmetic is not shown.
+  The crate's copy is refused one cluster sooner than before, which errs on the safe side. **Measured.**
+- **Depends on it:** `emusen_ps2_card::Card::free_clusters`, `count_free`; `ps2::card::CAPACITY` (7,998).
+- **Pinned by:** `a_formatted_card_has_the_standard_layout_and_8000_clusters_free`, `ps2::card`'s listing test,
+  `Ps2CardFormatTests.A_formatted_card_is_read_with_the_browsers_free_kilobytes`.
+- **Implemented in:** stage S25 part B's commit.
+
+### D-382. The memory card, a save deleted by the browser: its entry's EXISTS bit cleared, its clusters' FAT entries with the top bit cleared and the chain kept
+
+- **Opened:** 2026-10-25, at stage S25 part B: a save deleted in the referee's browser read back by the crate (§30.18).
+- **Documents read:** Ridge, "File Allocation Table" (a free entry needs only the top bit clear), "Directory Entry Mode
+  Flags".
+- **Test program:** none; the card after the browser's *Delete*: the save's root entry mode 0427h (8427h less EXISTS),
+  its 42 clusters' entries the old chain with the top bit clear [M]; the crate frees an entry as 7FFFFFFFh.
+- **Referee:** PCSX2 running the player's BIOS.
+- **Conclusion:** both forms are free entries by Ridge's rule, and the crate reads the BIOS's (one save, 7,939 free, the
+  browser's figure); the crate keeps writing 7FFFFFFFh, a choice no reader distinguishes. **Measured**, the difference
+  recorded.
+- **Depends on it:** `emusen_ps2_card::free_chain`.
+- **Pinned by:** none beyond the measurement; the crate's reading of free entries by the top bit alone.
+- **Implemented in:** stage S25 part B's commit (recorded, nothing changed).
+
+### D-383. SIO2, a console with no card in slot 1: the initial setup's language screen took none of the pad's presses
+
+- **Opened:** 2026-10-25, at stage S25 part B: the control run of §30.19, the same nine presses of Cross as the run with a
+  card, left the language screen drawn and unchanged for 2,300 frames; with the card in slot 1 the first press stepped
+  the setup on.
+- **Documents read:** ps2tek "SIO2_RECV1" ("If (RECV1 & F000h) == 1000h after a memory card command, the memory card is
+  connected"; "If (RECV1 & 2000h) == 0 after a pad command, the pad is connected"; 1D100h disconnected, 1100h connected);
+  D-221.
+- **Test program:** none yet. D-221 sets RECV1 for the whole queue from its last unanswered peripheral; a missing card
+  gives 1D100h, whose bit 13 is clear, so a pad read in the same queue still reads as connected by ps2tek's rule, and
+  the cause is not shown by the documents.
+- **Referee:** PCSX2 with slot 1 empty reaches its browser ("There is no data.") at the same presses.
+- **Conclusion:** **open**; a program in S25's form is to send a pad read with the card port empty, in one queue and in
+  two, and read RECV1 and the replies on Sapphire and PCSX2 (§30.21 Q2). Until then a console with slot 1 empty is
+  known not to take the pad at the language screen.
+- **Depends on it:** `sio2::Sio2::start`'s RECV1; the P8 control of §30.19.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.
+
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 
 - **Opened:** 2026-10-25, at stage S19.

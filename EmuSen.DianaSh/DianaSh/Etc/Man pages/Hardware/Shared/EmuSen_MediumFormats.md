@@ -127,16 +127,21 @@ of entries; every cluster number relative to the first allocatable cluster.
   EXISTS bit cleared, clusters freed), `copy_save` (a top-level save to another card, its modes and times kept). A
   refusal leaves the image as it was: room and names are checked first, and `copy_save` reads every cluster of the save
   before it writes one.
-- **The free count** [A]: Ridge says Sony's drivers round the allocatable clusters down to a thousand, so that cards
-  with different numbers of bad blocks show the same free space. The crate reads that as a limit on the clusters in
-  use: a new card has 7,999 of its 8,000 free, the root taking one. What OSDSYS shows on a new card is to be compared at
-  Sapphire's part B, when the player's BIOS formats one.
+- **The free count** [M]: Ridge says Sony's drivers round the allocatable clusters down to a thousand, so that cards
+  with different numbers of bad blocks show the same free space. The console's browser shows 7,999 less the clusters in
+  use, one fewer than that rule leaves (`Sapphire_Disputes.md` D-381, measured 2026-10-25 on three cards), and
+  `free_clusters` counts as it shows: a new card has 7,998, the root taking one. The host's unit for the medium is the
+  kilobyte, one cluster (`EmuSen_SaveMedia.md` §7.4).
 - **Format** [C, Ridge's "Standard Memory Card Layout"]: the superblock (magic, version 1.2.0.0, 512-byte pages, two
   a cluster, sixteen an erase block, 8,192 clusters, the first allocatable 41, its end 8,135, the backups blocks 1,023
   and 1,022, the indirect cluster 8, no bad blocks, type 2, flags 52h); the FAT in clusters 9 to 40, every entry
   7FFFFFFFh (Ridge requires only the top bit clear) but the root's, which ends its chain; the root at cluster 41 with
-  "." (mode 8427h) and ".." (mode A427h, hidden); every other page erased. The modes and the free entry's value are
-  choices to be compared with a BIOS-formatted card at part B.
+  "." (mode 8427h) and ".." (mode A426h, hidden, as the player's BIOS writes it); every other page erased; the FAT's
+  entries past the allocatable clusters FFFFFFFFh and each page's last four spare bytes 00h, as the BIOS writes them.
+  *Compared 2026-10-25 with a card the player's BIOS formatted (`Sapphire_Disputes.md` D-380)*: the crate keeps Ridge's
+  card flags 52h where the BIOS wrote 2Bh, leaves Ridge's undocumented superblock bytes past 340 and the unused pages
+  as they are, and frees an entry as 7FFFFFFFh where the BIOS keeps the chain with the top bit clear (D-382); the BIOS
+  accepts the crate's card and the crate reads the BIOS's.
 - **Error correction** [R Ridge; M one lineage, `Sapphire_Disputes.md` D-226]: a 20-bit Hamming code for each 128-byte
   chunk in three bytes, the column parities' even groups in the first byte's low nibble and the odd in its high, the
   line parities' even and odd groups in the second and third, each parity stored complemented with the unused bits
@@ -162,7 +167,10 @@ PCSX2 2.8.2 makes a new card with every byte FFh (its `Mcd001.ps2` and `Mcd002.p
 914e26ce1e2661e14d39d87310d3cdd3, measured 2026-10-25), and formats it only through a BIOS; its folder card, read
 through SIO2 from an IOP program, shows an empty folder as unformatted too. The crate reads such a card as
 `Unformatted`. **A card formatted by a referee therefore needs a BIOS**, and the cross-check with one, both ways, waits
-for Sapphire's part B (`Sapphire_Plan.md` §7, S25), as G11's test does.
+for Sapphire's part B (`Sapphire_Plan.md` §7, S25), as G11's test does. *Done 2026-10-25* (`Sapphire_Native.md`
+§30.18): the player's BIOS on PCSX2 formatted an erased card in its browser; the crate read it, copied two saves onto it,
+deleted one and imported both through the card manager, and the BIOS showed each result; a delete the BIOS made was read
+back by the crate.
 
 ### 6.5 Tests (measured 2026-10-25)
 

@@ -4101,11 +4101,11 @@ kept.
 - The state format's new contents (the timing, the field, the picture's geometry): `SPH2` gains them with the rest (S30).
 - The picture on the device (S46).
 
-## 30. Stage S25, part A: SIO2, the DualShock 2, the memory card and `emusen-ps2-card` (2026-10-25)
+## 30. Stage S25: SIO2, the DualShock 2, the memory card and `emusen-ps2-card` (part A), the start without a disc and the Memory Cards tab (part B) (2026-10-25)
 
 *§27 to §29 are stages S17, S14 and S20's, built beside this one and merged before it; SIO2 needs nothing of them.
-Part B, after S24 and on the tester's go, adds what needs the player's BIOS: the pad driving OSDSYS, a card formatted by
-the BIOS read both ways, G10 and G11.*
+Part B, after S24 and on the tester's go of 2026-10-25, adds what needs the player's BIOS: the pad driving OSDSYS, a card
+formatted by the BIOS read both ways, G10 and G11; it is §30.15 to §30.24, its disputes D-380 to D-383.*
 
 ### 30.1 In one paragraph
 
@@ -4380,6 +4380,275 @@ passed to PCSX2 by path.
 - The machine running SIO2 with the frontend's input and the cards' files (S24 joins the S1 machine and the board);
   SIO2's state in `SPH2` (S30); its debugger view (S31); rumble out to the frontend (an ABI minor); the infrared
   receiver (61h) and other peripherals.
+
+### 30.15 Part B in one paragraph (2026-10-25)
+
+*Part A's sections end at §30.14; part B, on the tester's go of 2026-10-25, continues the stage here.* Three pieces were
+built. **G10, the start without a disc** (§30.16): the `ps2` system says `starts_empty` in core info, `create` with a
+null image makes the console with its tray closed and empty and its market the player's BIOS's, the core claims `MEDIA`
+with one DVD drive whose tray takes a disc judged by the recogniser, and the host refuses a start whose machine would run
+nothing, in the firmware entry's own words; Mistress, Hotaru and DianaSh offer it from core info alone, to a developer
+only while the core carries the `InDevelopment` mark. **G11, the PlayStation 2's tab of the Memory Cards window**
+(§30.17): `emusen-ps2-card` behind the card manager's format surface as the module `ps2.card`, its unit the kilobyte
+the console's browser shows. **The card both ways on the referee** (§30.18): PCSX2, driven through its keyboard pad by a
+new mode of `ps2referee.py`, ran the player's BIOS to its browser, formatted an erased card there, and showed the saves
+the crate's copy and import wrote onto it, while a delete made in its browser was read back by the crate; the BIOS's
+card set three of the crate's choices right (D-380) and its free space was the browser's (D-381). **OSDSYS on Sapphire**
+(§30.19), started through the empty start with an empty tray, stepped through its initial setup to the main menu at the
+pad's presses; its browser, entered with a formatted card in slot 1, never drew and took no press after it, which is
+what is recorded for P8, with why the pictures cannot say more. No emulator, SDK, loader or ps2autotests source was
+read; the BIOS image was handed by path to Sapphire and to PCSX2 and never opened, and no instruction, program counter,
+memory holding BIOS code or data, or the BIOS's traffic to the card was looked at.
+
+### 30.16 G10: the console started with nothing in it
+
+**The core** (`src/v1.rs`, `src/machine.rs`, `src/media.rs`; `Sapphire_Plan.md` §8 G10, `Diamond_Shell.md` §1.1 and
+§1.2):
+
+- `starts_empty("ps2")`; `create_empty` makes the machine of `Media::Empty`, the new variant for no image, through the
+  same `Machine::make` a game's create now uses, so the files are checked and placed alike. The market is
+  `console_market`'s: the setting's, else the market of the BIOS entry the player's file came in, the Americas' first.
+- **`MEDIA`** (core ABI 1.1; `EmuSen_CoreAPI.md` §6.23): one drive, number 0, "DVD drive", kind `dvd`, its lid the tray.
+  `media_lid` is the player's hand on the tray (`IopBus::tray`, the units brought to the board's time first, then the
+  drive's own `tray`, S23's, which ends an N command, stops the disc and, on closing over one, detects it in two
+  stages); `media_insert` takes a disc only with the tray open, unless the host is setting the drive for a state
+  (`MEDIA_RESTORE`), which goes through the tray as a hand would. A disc is judged by the recogniser first, as an image
+  is at create (a sheet by its first track's file, a CHD on opening alone): an EE program is refused as no disc
+  (`STATUS_NOT_A_DISC`, −16, S30 having taken −14 and −15), a PlayStation disc, an image of neither kind or a volume with no BOOT2 with create's own
+  statuses, a disc image that does not open as `STATUS_BAD_DISC` (−17); then `cdvd::open` makes the drive's medium from
+  the kept bytes, as S23's tests do. Nothing else of the drive changed.
+- **States** are S30's (§38), merged beneath part B: a state names the image the console was created with, an empty
+  start's `Media::Empty` by the word "EMPTY", and holds no disc, so a disc put in afterwards stays in the drive through a
+  load; the state does not name that disc, and `WRONG_MEDIA` does not yet refuse a state made over another one
+  (§30.21 Q7). Part B's first build kept the drive through S24's replay of a console with no BIOS, which S30 retired.
+- **Create with a disc image** is unchanged: the drive stays empty, a disc in the drive at power-on being S29's work.
+
+**The host's refusal** (`EmuSen/Cores/Native/CoreEngine.cs` and the runtime in Rust, `Platform/crystal`'s
+`Engine::start_console`, which Mistress runs by default; both alike): the plan asks that with no BIOS the start be refused in
+the core's words, never with a black screen. The core cannot refuse the create itself, since the kit's C22 creates
+every console that starts empty with the session's files and none holds a BIOS; a refused create fails it. The rule is
+therefore the host's and generic: `CoreEngine.StartConsole` refuses, with `ConsoleFirmwareException`, a machine whose
+machine info reports its firmware `absent` where the core's entry offers no replacement (`effect: "none"`), in the
+entry's label, name and cost, which `ManagedRuntime` turns into `CrystalNumbers.Firmware`, a game's refusal for missing
+firmware; the Rust runtime's `runs_nothing` refuses the same machine with the same status and words, the engine with
+its machine and its cards' locks dropped with the refusal. The words, measured 2026-10-25: "PlayStation 2 cannot start with nothing in it: PlayStation 2 BIOS (Americas)
+(ps2-0230a-20080220.bin) is not in the firmware folder. Without a BIOS of the console's market the PlayStation 2 runs
+nothing: it starts to its menu with the player's own BIOS in the firmware folder. Sapphire's own open BIOS, which is to
+take its place, is not written yet." The cost text (`v1::BIOS_COST`) was rewritten for a player for this. The rule
+touches no other console: Diamond's and Nephrite's entries offer replacements.
+
+**The frontends**, unchanged in code, as `Diamond_Shell.md` §11.2 built them: `CoreCatalog.ConsolesThatStartEmpty`
+reads the engines' info, so *File → Start Console ▸ Start PlayStation 2*, the library's *Start PlayStation 2*, the pad
+menu's *Start a Console* row, big picture's *Start PlayStation 2 With No Disc*, *Insert Disc…* and *Eject Disc* in the
+session, and DianaSh's `core sapphire --console` all appear for the PlayStation 2 where the engine is discovered.
+**Behind the `InDevelopment` mark**: discovery leaves a development core out unless development cores are asked for
+(`CoreDiscovery.UseDevelopment`), so a player's build offers none of them until S29; `SapphireConsoleTests` holds both
+sides.
+
+### 30.17 G11: the PlayStation 2's card in the card manager
+
+- **The module** (`Platform/systems/src/ps2/card.rs`, a family module of `emusen-systems` over `emusen-ps2-card`, a new
+  dependency of `emusen-systems` named in its manifest; `EmuSen_SaveMedia.md` §6.2): a save is a directory at the card's
+  top level, its id the directory's name; its **title** from the save's `icon.sys`, the Shift-JIS title at byte 192, 68
+  bytes, its second line beginning at the offset the half-word at byte 6 gives [R gothi, "icon.sys format",
+  ps2savetools.com, published 2013-01-19, read 2026-10-25, its page kept with SHA-256 619e4b62… under
+  `~/.cache/emusen/probe/sapphire/docs/iconsys/`], read through the PlayStation module's code page 932 and NFKC
+  (`psx::shift_jis`, one owner) with its two lines joined by a space; its **game** from the name by the PlayStation's
+  rule (`psx::card::game_of`: `BASLUS-20431…` gives `SLUS-20431`), since the PlayStation 2 names its saves the same
+  way; copy (`copy_save`), delete (the directory and everything in it) and format through the crate, each refusal in
+  words.
+- **The unit** [M, §30.18]: **the kilobyte**, one cluster of 1,024 bytes, which is what the console's browser counts:
+  a save of 42 clusters shows "42 KB", and a card's free space is the crate's `free_clusters`, now the browser's figure
+  (D-381). The medium's capacity is a formatted card's free space, **7,998 kilobytes**; the module is `ps2.card`, length
+  8,650,752, capacity 7,998, unit `kilobyte`, so that the window and `memcard` write "7651 of 7998 kilobytes free" and
+  "603 kilobyte(s)".
+- **The C# side**: `Ps2CardFormat` forwards to the library's module and has **no C# twin**: the PlayStation 2's file
+  system with its error correction is written once, in the crate, as the backend's state 3 intends for every module
+  (`EmuSen_Backend.md` §13.6). Under `EMUSEN_SYSTEMS_NATIVE=0` its reads say the module is switched off and its writes
+  are refused, so the medium offers no save operations there. `Ps2System` names the medium (`CardLiteral`, title
+  "Memory Card (PS2)" as the browser calls it, noun "Card", extension `.ps2`), the systems table's `ps2.json` gives it
+  its words, and `SystemPacks.MediumLiterals` lists it, so the parity class holds the table and the literal together.
+- **The window and `memcard`** needed nothing of the PlayStation 2's own (`EmuSen_SaveMedia.md` §6.5), and one thing
+  of every console offered in development: the window built its tabs from the library's shelves, and a console gets a
+  shelf only once its engine says its games run (`EmuSen_CoreAPI.md` §27.4), so no console in development could have a
+  tab. It now lists, after the shelves' consoles, those an engine runs that no shelf shows
+  (`RuntimeCatalog.UnshelvedConsoles`), and `CoreCatalog.EngineSystem`, with its twin `Catalog::engine_system` in the
+  Rust runtime, reads such a pack console's media from the engine discovery offers; with development cores hidden, which is a player's build, neither adds anything, so the tab sits
+  behind the same development mark as G10 (§30.21 Q3). `memcard` reads a `.ps2` file as the medium by its extension.
+  WiseMan's fit audit gains `MemoryCardsPlayStation2` and `MemoryCardsPlayStation2Held`, each at 1280 × 800 and 1920 ×
+  1200, a shared card with two saves (one with a long title) and a game's own card beside it, the held case saying the
+  card is in use and its writes refused as the lock refuses them, all recorded in the interface specification and
+  walked by the pad as every case is, beside the PlayStation's cases.
+
+### 30.18 The card both ways on the referee (measured 2026-10-25)
+
+`ps2referee.py pads` (`Sapphire_Referees.md` §2.1) boots the BIOS with no disc at the console's speed with a card file
+in slot 1 and plays a script of key presses on PCSX2's keyboard pad, its own default bindings, and pictures taken from
+states saved through PINE. XTEST's events, sent to the private compositor's Xwayland, never reached PCSX2; events sent
+to its window with `XSendEvent`, the window given the input focus first, do. Only the pictures and the card file, the
+black box's outputs, were kept.
+
+| Run | What the browser showed | The card file afterwards |
+|---|---|---|
+| An erased card (every byte FFh) | "Memory Card (PS2)/1 Unformatted"; Cross: "Unformatted. Format now? Yes **No**"; Left, Cross: "Formatting completed.", "7,998 KB Free" | formatted by the BIOS; the crate opens it, no saves, 7,998 free |
+| The crate's own formatted blank | "There is no data.", "7,998 KB Free" | unchanged |
+| The BIOS's card with one synthetic save copied on by the module (`rt1`) and a second (`rt2`) | two saves, each icon drawn; the first "2026/10/25 7:30:00, 42 KB"; "7,897 KB Free"; the copy menu "No destination available for copying to." | unchanged |
+| `rt2` with the first save deleted by the module (`rt3`) | one save, "7,939 KB Free" | unchanged |
+| The BIOS's card with both saves imported by the card manager (`rt4`), then *Delete*, *Yes* in the browser | "Delete completed." | the crate reads one save, 7,939 free; the remaining save's three files equal their sources byte for byte |
+
+The synthetic saves are the project's: an `icon.sys` laid out as gothi's page gives it, a one-triangle icon laid out as
+Martin Åkesson's *PS2 Icon Format v0.5* (2003, the ps2savetools.com copy, read 2026-10-25) gives it, and a data file;
+the time 12:00 of 2026-10-25 written as Japan's shows as 7:30 in the console's time zone (GMT +4:30), which says the
+card's times are Japan's as Ridge writes. So **the crate's copy, delete and import were round-tripped on a card the
+player's BIOS formatted, and read back by PCSX2 running that BIOS, and a delete made by that BIOS was read back by the
+crate**. The titles are not on the screens the script reached; the browser's own copy and its title view were not
+driven. What the BIOS's card showed of the format is D-380 and D-381, and its delete D-382.
+
+### 30.19 OSDSYS on Sapphire, the empty tray, and P8 (measured 2026-10-25)
+
+`examples/s25b.rs` starts the console through the core ABI's empty start (`create_empty` with the BIOS file and a card
+file), plays presses from a control file written while it runs, and keeps pictures, the card's file and the hardware's
+reports (§35.4's rules: no program counter, instruction or memory contents). On the Americas image, with the crate's
+formatted card in slot 1, Cross pressed every 120 frames from frame 770:
+
+| Frames | The picture |
+|---|---|
+| 690-720 | the initial setup's language screen, as at S24: **not black** (20,600 lit pixels) |
+| 770-1600 | each press **steps the setup on**: User Preferences: Language, Time Zone (GMT +4:30 Kabul), Daylight Savings Time, and on to "Settings completed. Settings can be adjusted later in System Configuration." |
+| 1720 | the main menu, "Browser" and "System Configuration" (without the light trails PCSX2 draws, §35.12 Q4) |
+| 1730 | Cross on "Browser" |
+| 1850-2700 | the screen black but for the date and clock in its corners; **the clock stops at 19:30:30** and no picture changes again, through Cross presses and a Circle at 2510 |
+
+The EE and the IOP went on running (exceptions counted, no stop, the IOP not held), no unmapped access appeared that the
+boot had not shown, the drive's commands were S24's, and **the card was never written**. PCSX2 at the same step shows
+the browser's grey ground with the card's icon (with an erased card) or "There is no data." (with slot 1 empty).
+
+So **G10's local check holds**: OSDSYS's picture with an empty tray is not black and changes at a press. **For P8**, what
+the player's BIOS shows on Sapphire with a card in slot 1 is a browser that never draws and no longer answers the pad;
+it does not show the card refused in words. Whether the card's unanswered authentication (Q7(b), §30.2) is the cause
+cannot be told from the pictures: the control, a console with slot 1 empty, did not take the pad's presses at the
+language screen at all (2,300 frames, the same nine presses; the run's reports as the other's), which is a second
+question, D-383. Going further needs knowing where the BIOS waits, which §1.4 forbids looking for; both are put to the
+tester (§30.21).
+
+### 30.20 Tests and seeded faults (2026-10-25)
+
+**Tests** [M]: Sapphire's lib, `cargo test --release`: `v1` **11 of 11**, two new
+(`the_console_starts_empty_with_the_tray_closed_and_the_bios_given_naming_the_market`,
+`a_disc_goes_in_through_the_tray_and_reaches_the_drive`: the tray refusing a closed insert, a program, a PlayStation
+disc and noise refused, a DVD detected as a PlayStation 2 DVD 90 frames after the tray closes, the drive kept through a
+state's save and load, Eject, a restore); `emusen-ps2-card` **5 of 5** with its format's measured fields and the browser's free
+count; `emusen-systems` **41 of 41**, among them `ps2::card`'s two (a save listed with its two-line Shift-JIS title,
+size and game; a copy carrying every byte, the last cluster's with it; the refusals) and the media table's.
+WiseMan: `SapphireTests`, `SapphireConsoleTests` (three: offered from core info to a developer only; refused with no
+BIOS in the core's words, no card held; a stand-in boot ROM of zeros made by the test, a synthetic DVD put in and
+detected, a program refused, Eject), `Ps2CardFormatTests` (four, on cards whose saves the test writes into Ridge's
+layout itself: the facts, the listing, copy, move, delete and the lock, the import all or none with its words), the
+fit audit's and the specification's new cases, and `CrystalParityTests.A_console_in_development_started_empty_is_refused_without_its_bios_and_lists_its_cards_the_same`
+(the two runtimes with development cores shown: the refusal's status and words, the card medium's listing, the start
+with the stand-in, its session and save media, alike); counts in §30.22.
+
+**Seeded faults:**
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the host's refusal removed, so the empty start with no BIOS makes the black console | in the C# runtime `SapphireConsoleTests.With_no_bios_the_start_is_refused_in_the_cores_words`; in the Rust runtime the parity case above (the C# refusal against the Rust session) |
+| F2 | `copy_file` stopping a cluster short, so a copied save loses its last cluster | `ps2::card`'s `a_save_copies_whole_deletes_and_refuses_in_words`; the crate's `a_save_copied_to_another_card_reads_the_same_and_a_full_or_clashing_copy_is_refused` |
+| F3 | the module's free space counted in pages, the card's 512-byte unit, not kilobytes | `media::tests::a_formatted_blank_reads_as_formatted_with_its_capacity_free` and both `ps2::card` tests; all four `Ps2CardFormatTests` |
+
+Each was applied, the tests named run, and the source restored.
+
+### 30.21 Questions part B leaves
+
+1. **Q1 [decision], P8 and the browser that never draws.** With a card in slot 1 the player's BIOS on Sapphire stalls
+   on entering its browser (§30.19); the pictures cannot say whether the card's unanswered authentication is the cause.
+   *Recommended*: prove D-383 first (Q2), then run the browser with slot 1 empty; if it draws there and stalls with a
+   card, record P8 as "the browser stalls on a card the console cannot authenticate" and keep Q7(b) (cards on the
+   player's BIOS path wait; saving is the open BIOS path's); anything past that needs where the BIOS waits, which
+   §1.4 leaves to the tester.
+2. **Q2 [routine], D-383, the language screen deaf with slot 1 empty.** *Recommended*: a program in S25's form sending
+   a pad read with the card port empty, in one queue and in two, its RECV1 and replies read on Sapphire and PCSX2, then
+   the rule fixed and the control run again.
+3. **Q3 [decision], the Memory Cards tab of a console offered in development.** The window listed shelved consoles
+   only, and `EmuSen_CoreAPI.md` §27.4 gives a console its tab and shelf once its games run, so the PlayStation 2's tab
+   could not appear before S29. It now also lists the consoles an engine runs that no shelf shows
+   (`RuntimeCatalog.UnshelvedConsoles`), with their media read through `CoreCatalog.EngineSystem`'s new fallback, which
+   with development cores hidden adds none. *Recommended*: keep it; it is G10's rule for the empty start, a developer
+   seeing the console's tools while its games do not yet run, and the Graphics Settings tab and the shelf keep §27.4's.
+4. **Q4 [routine], `ps2.card` with no C# twin.** *Recommended*: keep it so; the file system is written once, in the
+   crate, and the medium offers nothing under `EMUSEN_SYSTEMS_NATIVE=0`.
+5. **Q5 [routine], the host's refusal.** *Recommended*: keep the generic rule (a console started empty whose machine
+   runs its firmware absent with no replacement is refused in the entry's words): it is how "never a black screen"
+   holds while the kit's C22 runs the console with no BIOS.
+6. **Q6 [routine], the card flags.** The BIOS on PCSX2 wrote 2Bh, Ridge's default is 52h (D-380). *Recommended*: keep
+   52h until a second lineage or a document decides; the BIOS reads either.
+7. **Q7 [routine], a state over a disc put in later.** S30's state names the image of the create, and after an empty
+   start that is no disc, so a state made with a disc in the drive loads over an empty drive or another disc. *Recommended*:
+   at S29, when a disc goes in at create, name the drive's disc in the state beside the image, so `WRONG_MEDIA` judges
+   the drive as Diamond's does.
+
+### 30.22 The blast radius (measured 2026-10-25)
+
+`blast.sh WiseMan sapphire-s25b` lists Sapphire's crate, `emusen-ps2-card`, `emusen-systems` and a WiseMan filter of
+21 classes (`BatterySaveTests`, `CheatCodec`, `ConsoleScreenRuleTests`, `ContractShapeTests`, `CoreRegistration`,
+`CrystalDebugParity`, `CrystalParityTests`, `DebugCodeParity`, `GamePackageGateTests`, `GenesisBatteryTests`,
+`ManagedCrystal`, `PadSettingsWindowTests`, `Ps2CardFormatTests`, `SapphireConsoleTests`, `SapphireTests`,
+`SessionServiceParity`, `SystemCodeParity`, `SystemTableParity`, `ThemedLibraryHostTests`, `WindowFitAuditTests`), to
+which the classes the change reaches were added: `DiamondShellTests`, `SaveMediaManagerTests`, `SaveMediaTests`,
+`SaveMediaParityTests`, `MemoryCardsOfferTests`, `N64PakFormatTests`, `SegaCdBramFormatTests`, `NephriteMediaTests`,
+`ConsoleStartTests`, `RuntimeCatalogTests`, `CoreCommandTests`, `PadMenuTests` and `GoldenCorpusTests`.
+
+- Sapphire, `cargo test --release`: **321 of 321** (the lib 68, every test file as §35.10 lists it with its counts
+  unchanged); the lib under `test-checked` 68; clippy clean on every target.
+- `emusen-ps2-card` 5 of 5 under both profiles, clippy clean; `emusen-systems` 41 of 41, `emusen-platform` 33 and its
+  two test files 4 and 3, `emusen-savemedia` 3, clippy clean on what part B wrote.
+- WiseMan: the blast filter's classes but `WindowFitAuditTests` and `SapphireTests`, with the added ones, 453 tests, 451
+  passing on the first run: `memcard.golden`'s list of known media, which now names `.ps2 (Memory Card (PS2))`, was
+  recorded again (its one line and byte count), after which `GoldenCorpusTests` pass 102 of 102; and
+  `CrystalParityTests.A_patched_package_s_core_is_handed_the_patched_image_and_the_file_is_never_written_both_ways`,
+  a game package's patch, failed once and passed on the next run with nothing of part B between (the package code is
+  untouched here). `WindowFitAuditTests` whole, with `RuntimeCatalogTests`, `SapphireConsoleTests` and
+  `CrystalParityTests`, 745 tests, every one passing but the golden file then re-recorded; the four new
+  specification files were recorded with `EMUSEN_INTERFACE_SPEC=record` and then hold. `SapphireTests` 5 of 5, the
+  kit's C1-C15 passing on the program and both discs, with C16 (`MEDIA`, the drive empty for every image) and C22 (the
+  console started empty, two machines alike over 120 frames, a state carried to a third, the drive empty and `MEDIA`
+  claimed) now run on Sapphire and passing.
+- **After the rebase onto WiseMan** (S19 and the game packages' patched saves and stores beneath): Sapphire 334 of 334;
+  `emusen-ps2-card` 5, `emusen-systems` 41, `emusen-platform` 33, 4 and 3, `emusen-savemedia` 3; WiseMan, every class
+  above with `SapphireTests` and every `MemoryCards` case of the fit audit and the specification, **501 of 501**; with
+  the Rust runtime's twin of the refusal and of the media lookup added after the second rebase, `emusen-crystal`'s tests
+  pass (13) and the runtime classes again (`CrystalParityTests` with the new case, `SessionServiceParity`,
+  `ManagedCrystal`, the card and console classes above and every `MemoryCards` case), **285 of 285**.
+- **After the third rebase** (S30 beneath, its states of every unit, which took statuses −14 and −15 and retired S24's
+  replay): Sapphire **347 of 347**, the lib 70 under `test-checked`, clippy clean; WiseMan's `SapphireTests` (the kit with
+  C16 and C22 on S30's states), `SapphireConsoleTests`, the parity case and `Ps2CardFormatTests`, **13 of 13**. The
+  OSDSYS and referee runs of §30.18 and §30.19 were made on the tree before the rebase, S24's with part B.
+
+### 30.23 What was read for part B
+
+`Sapphire_Plan.md` §1.4, §4.4, §5.8, §5.9, §7 (S25, S29), §8 (G10, G11), §9.5, §11 Q7, §12, §13 (P8); this page's §30.1
+to §30.14 and §35; `Diamond_Shell.md` §0, §1.1, §1.2, §1.5, §4.3 to §4.5, §11.2; `EmuSen_SaveMedia.md` §6 and §7,
+§11; `Hardware/Shared/EmuSen_MediumFormats.md` §6; `EmuSen_Backend.md` §13; `Sapphire_Referees.md` §2.1, §4.5;
+`Sapphire_Disputes.md` (the rules, D-220 to D-230, D-340 to D-351); the project's own code named above. Ross Ridge,
+"PlayStation 2 Memory Card File System" (the cached copy of §30.13); gothi, "icon.sys format" (ps2savetools.com,
+published 2013-01-19, read 2026-10-25, SHA-256 619e4b62f0d14bb12c9187655b183fd78cc7293600ee69dd3d7b08301cf6e408); Martin
+Åkesson, *PS2 Icon Format v0.5* (2003, the ps2savetools.com copy, read 2026-10-25, SHA-256
+a4cfe862b0bb8b95f6fee02de2693e03910752bf86e1b4010558d93d99802068), both under `~/.cache/emusen/probe/sapphire/docs/`;
+ps2tek at `1c91660`, "SIO2_RECV1". PCSX2 2.8.2 run as a black box, its pictures and its card file only. No emulator,
+SDK, loader, ps2autotests or card-emulator source and no firmware: the BIOS image was handed by path to Sapphire and to
+PCSX2 and never opened by any tool; no program counter, instruction, memory holding BIOS code or data, or traffic
+between the BIOS and the card was printed, logged or read; PCSX2's log was read only for the line naming the BIOS.
+
+**Exposure** (§1.4): the writer of part B ran the player's BIOS on Sapphire and on a referee and looked at its pictures,
+as S24's writer did; **this writer is exposed and will never write the open replacement**.
+
+### 30.24 What part B does not cover
+
+- G10 and G11 offered to players: S29, with the system (`Sapphire_Plan.md` §7).
+- A disc in the drive at create (S29), and a state naming a disc put in after an empty start (§30.21 Q7).
+- The card's authentication (Q7(b) holds; §30.21 Q1), the browser's own copy and title views, and the cause of D-383.
+- `memcard`'s page names no PlayStation 2 card example and still calls the N64's pak unread: the medium joins it by its
+  extension like every other, and only the golden corpus's list of known media changed.
 
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 

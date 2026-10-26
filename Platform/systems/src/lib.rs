@@ -443,7 +443,8 @@ mod tests {
         let ps2 = find("ps2").unwrap();
         assert_eq!((ps2.console.as_str(), ps2.esde_system.as_str(), ps2.esde_full_name.as_str(), ps2.screenscraper_system, ps2.release_year), ("PlayStation 2", "ps2", "Sony PlayStation 2", Some(58), 2000));
         assert_eq!(ps2.extensions, [".elf", ".iso", ".chd", ".cue", ".bin", ".m3u"]);
-        assert!(ps2.cheat_systems.is_empty() && ps2.openvgdb_systems.is_empty() && ps2.media.is_empty() && ps2.cheat_space.is_none());
+        assert!(ps2.cheat_systems.is_empty() && ps2.openvgdb_systems.is_empty() && ps2.cheat_space.is_none());
+        assert_eq!(ps2.media.iter().map(|m| (m.id.as_str(), m.title.as_str(), m.noun.as_str())).collect::<Vec<_>>(), [("ps2.card", "Memory Card (PS2)", "Card")], "Sapphire_Native.md §30.16");
         assert!(crate::probe::recognises("ps2") && crate::cheats::PAIRS.iter().all(|p| p.0 != "ps2"));
         assert_eq!(refused("nes", &nes().replace("\"cheat_systems\": [", "\"cheat_systems\": [\"A\", \"A\", ")), "cheat_systems names one twice");
     }

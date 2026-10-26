@@ -224,9 +224,10 @@ namespace EmuSen.Cores
         public static Native.CoreSystem? DiscoveredSystem(string console) =>
             DiscoveredFor(console) is { } core && PackOf(console) is { } pack ? core.Info.Systems.FirstOrDefault(s => s.Id == pack.Id) : null;
 
-        // The system entry a console's v1 engine gives, a discovered console's or a catalog console's own engine's, for its save media - see EmuSen_SaveMedia.md §7.2.
+        // The system entry a console's v1 engine gives, a discovered console's or a catalog console's own engine's, else a pack console's engine offered in development where development cores are shown, for its save media - see EmuSen_SaveMedia.md §7.2, Sapphire_Native.md §30.17.
         public static Native.CoreSystem? EngineSystem(string console) =>
-            DiscoveredSystem(console) ?? SystemIdsFor(console).SelectMany(id => Native.CoreDiscovery.ForSystem(id).Select(c => c.Info.Systems.FirstOrDefault(s => s.Id == id))).FirstOrDefault(s => s is not null);
+            DiscoveredSystem(console) ?? SystemIdsFor(console).SelectMany(id => Native.CoreDiscovery.ForSystem(id).Select(c => c.Info.Systems.FirstOrDefault(s => s.Id == id))).FirstOrDefault(s => s is not null)
+            ?? (PackOf(console) is { } pack ? Native.CoreDiscovery.ForSystem(pack.Id).Select(c => c.Info.Systems.FirstOrDefault(s => s.Id == pack.Id)).FirstOrDefault(s => s is not null) : null);
 
         // The axes a console's engine's controllers read, a discovered console's or a catalog console's sole engine's; none for any other - see EmuSen_Input.md §7.
         public static IReadOnlyList<Galaxia.Input.PadAxis> AxesFor(string console) =>

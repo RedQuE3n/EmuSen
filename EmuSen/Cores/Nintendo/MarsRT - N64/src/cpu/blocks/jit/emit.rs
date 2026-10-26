@@ -3,7 +3,6 @@
 
 use std::mem::offset_of;
 
-use cranelift_codegen::Context;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::types::{I8, I16, I32, I64};
 use cranelift_codegen::ir::{self, AbiParam, InstBuilder, MemFlagsData, Value};
@@ -15,7 +14,6 @@ use super::{Context_, DONE, FINISH, Options, RAISED};
 use crate::cpu::Cpu;
 use crate::cpu::blocks::ops::{self, Handler};
 use crate::cpu::blocks::shape::{self, Class};
-use crate::cpu::blocks::verify;
 use crate::cpu::interp::THROUGH_BUS;
 use crate::memory::bus::MemoryBus;
 
@@ -891,16 +889,15 @@ unsafe extern "C" fn hook(cpu: *mut Cpu, bus: *mut MemoryBus, x: *mut Context_, 
     let (cpu, bus, x) = unsafe { (&mut *cpu, &mut *bus, &mut *x) };
     cpu.last_count = bus.count();
     if let Some(shadow) = unsafe { x.shadow.as_mut() } {
-        verify::Shadow::follow(shadow, cpu, bus, "a compiled instruction");
+        shadow.follow((cpu, bus), "a compiled instruction");
     }
 }
 
-/// Emits and defines one block; returns its function and the bytes of its code.
-pub fn compile(module: &mut JITModule, context: &mut Context, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options, name: &str) -> Result<(cranelift_module::FuncId, usize), String> {
-    module.clear_context(context);
+/// Emits one block into `func`, which `emusen-jit` has cleared and then declares and defines.
+pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) -> Result<(), String> {
     let ptr = module.target_config().pointer_type();
-    context.func.signature.params.extend([AbiParam::new(ptr), AbiParam::new(ptr), AbiParam::new(ptr)]);
-    context.func.signature.returns.push(AbiParam::new(I32));
+    func.signature.params.extend([AbiParam::new(ptr), AbiParam::new(ptr), AbiParam::new(ptr)]);
+    func.signature.returns.push(AbiParam::new(I32));
     let mut handler = module.make_signature();
     handler.params.extend([AbiParam::new(ptr), AbiParam::new(ptr), AbiParam::new(I32)]);
     handler.returns.push(AbiParam::new(I64));
@@ -910,7 +907,7 @@ pub fn compile(module: &mut JITModule, context: &mut Context, functions: &mut Fu
     step.returns.push(AbiParam::new(I32));
 
     {
-        let mut b = FunctionBuilder::new(&mut context.func, functions);
+        let mut b = FunctionBuilder::new(func, functions);
         let head = b.create_block();
         b.append_block_params_for_function_params(head);
         b.switch_to_block(head);
@@ -1022,10 +1019,7 @@ pub fn compile(module: &mut JITModule, context: &mut Context, functions: &mut Fu
         b.finalize(module.target_config());
     }
 
-    let id = super::declare(module, name, context)?;
-    module.define_function(id, context).map_err(|e| format!("{e:?}"))?;
-    let bytes = context.compiled_code().map_or(0, |c| c.code_info().total_size as usize);
-    Ok((id, bytes))
+    Ok(())
 }
 
 /// Whether the block's branch returns to its own first word, which a pass loops on rather than leaving; the idle loop is the frame loop's.

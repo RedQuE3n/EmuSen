@@ -7368,3 +7368,115 @@ states, and is a writer of a player's-BIOS stage; **this writer is exposed and w
   later step.
 - DianaSh's commands over Sapphire on the player's BIOS, which WiseMan cannot run without one; the kit's checks of the
   debug exports run on the synthetic program (`SapphireTests`).
+
+## 42. Stage S35, `emusen-jit`: the shared JIT crate extracted from MarsRT (2026-10-25)
+
+*Numbered §42, after S31's §41. The stage raised no dispute: it moves
+code between two of the project's crates and reads nothing of the hardware.*
+
+### 42.1 In one paragraph
+
+The plan's §7 row S35 and §9.6, with the tester's leave of §11 Q10 (decided 2026-10-24, as recommended), placed by
+the order decided 2026-10-26 as the first speed stage that needs no Sapphire bench. **A new crate,
+`EmuSen/Cores/Shared/emusen-jit`** (`Hardware/Shared/EmuSen_Jit.md`), holds what §9.6 lists and nothing more: the
+compiler's thread and its queue, the publication slots (one word, stored with Release and read with Acquire), the
+Cranelift module with its W^X batches and its code budget, the counters, and the shape of the verifier that steps an
+interpreter beside the blocks; it is generic over a `Lowering` trait that turns a block's words into Cranelift IR and
+names its exits. **MarsRT keeps its emitter, its block shapes and its dispatcher** and now uses the crate, the new
+cross-component dependency `marsrt -> emusen-jit`. The crate's ten tests run a toy processor's lowering through the
+thread, publication, the W^X batches, the budget and the verifier; ThreadSanitizer finds the publication made Relaxed.
+**The gate is met**: MarsRT's block tests, its corpus and its game runs identical at every tier, and its speed
+unchanged within its noise (§42.4). No Sapphire emitter is written here; that is S36 on.
+
+### 42.2 What moved, and what stayed
+
+| From MarsRT | To | Lines |
+| --- | --- | --- |
+| `cpu/blocks/jit/mod.rs`: `Slot`, `FAILED`, `Counters`, the queue, `Compiler`, the thread's loop, the module's flags | `emusen-jit/src/lib.rs`, generic over `L: Lowering` | 239 → 87 left in MarsRT; 287 in the crate |
+| `cpu/blocks/mod.rs`: the code's bound and its check at a run's start | `Jit::budget`, `Jit::over_budget`, `Jit::flushes` | |
+| `cpu/blocks/jit/emit.rs`: the clearing, declaring and defining around one block | the crate's `compile`; `emit::compile` became `emit::lower` | 1,076 → 1,070 |
+| `cpu/blocks/verify.rs`: the step count, `follow`, `check`, `check_all` and their panics | `emusen-jit/src/verify.rs`, over a `Reference` trait | 77 → 81 (the machine and its comparison); 48 in the crate |
+
+What stays in MarsRT is the VR4300's: the compiled block's signature, `Context_`, the exits `DONE`, `RAISED` and
+`FINISH`, the three tiers' options, the shapes, the cache, the decoded tier, the dispatcher with its guard, and the
+interpreter the verifier compares with. The interface is `EmuSen_Jit.md` §2, version 1.0.0.
+
+### 42.3 The gate (measured 2026-10-25)
+
+On the desktop at CPU weight 20; the corpus from `TestRoms/n64/n64-systemtest.z64`, the games from read-only copies of
+the library under `~/.cache/emusen/pgo/games/measure/`, Super Mario 64 and Ocarina of Time only, as the Mars probe
+grades them. MarsRT's GPU tests were not run.
+
+| Suite | Result |
+| --- | --- |
+| MarsRT's block tests, every tier (`tests::blocks`) | 21 of 21 |
+| the corpus at every tier | 1,722 lines identical to the interpreter's at each, "Failed 46 of 4637 tests" |
+| the games at tier 1, 2 and 3: the recompiled machine against the interpreted one, unthreaded and on four workers deferred, and the run that carries its blocks against one loaded from its state; both games from power-on and from their states, 300 frames | 3 of 3 at each tier, identical after every frame |
+| the tests that read the recompiler's switch or counters (`ffi::host`, `ffi::v1`, `tests::debug`, `machine`, `tests::rsp_blocks`) | 41 of 41 |
+| WiseMan, the blast radius's filter `MarsRt`, the device cases left out | 257 of 257 (16 min 30 s), with `EMUSEN_MARSRT_STATES` holding the two games |
+| `emusen-jit`'s own tests | 10 of 10 |
+| ThreadSanitizer: the crate's tests; MarsRT's block tests | no report outside the blind spots `Mars_Native.md` §5.8.5 names (17 and 51 reports, every one an `Arc`'s last drop, `region`'s page-size `Once` or a std `OnceLock`) |
+
+### 42.4 Speed (measured 2026-10-25)
+
+**Speed** (measured 2026-10-25 and 2026-10-26, `Mars_Native.md` §5.8.8's method on MarsRT's own example): `examples/threads … split 4
+blocks`, 600 frames from the gameplay states, the build before the move (WiseMan 9ac67498a) and after it, both
+`release` and unguided, interleaved with their order alternated between rounds; every run under the shared timing lock
+and, inside it, the quiet gate of `Mars_Native.md` §6.16.1 (the rest of the machine under 1.2 busy processors for a second; the gate read
+1.00 to 1.10, other work running on one processor). Five rounds, ms a frame:
+
+| game | before, median (range) | after, median (range) | paired, median | overlap |
+| --- | --- | --- | ---: | --- |
+| Super Mario 64 | 3.633 (3.524–3.723) | 3.581 (3.515–3.723) | −0.9% | yes |
+| Ocarina of Time | 4.726 (4.589–4.881) | 4.573 (4.531–4.697) | −1.5% | yes |
+
+Every run of both builds ended on one state hash a game (`C1D7EE67AFB92361` and `61F15559C5A23119`). The ranges overlap
+on both games, so by `Mars_Performance.md` §6's rule **the speed is unchanged within its noise**; the small lead of the
+new build is two disturbed rounds of the old one on Ocarina of Time (4.881 and 4.842), not a gain anyone should expect
+from code that was moved. Nothing on the emulation thread's path changed: the dispatcher reads a slot with one Acquire
+load as before, and the generic code is monomorphised into the library with LTO.
+
+### 42.5 Tests and seeded faults (2026-10-25)
+
+**The crate's tests** are `EmuSen_Jit.md` §5's ten, on a toy processor. **Seeded faults**, each made alone, the suites
+named run, the source restored; the first in place, the others on a copy of the tree built apart [M]:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the slot's store Relaxed rather than Release (`Slot::publish`) | ThreadSanitizer alone: the test's read of the code's bytes against `cranelift-jit`'s copy on the compiler's thread, in `code_is_seen_whole_by_the_thread_that_reads_its_slot`; the ten tests pass with it, the store being one instruction either way on x86-64 |
+| F2 | the code budget never enforced (`Jit::over_budget` always false) | the crate's `past_its_budget_the_module_goes_whole_and_compiling_starts_again` and `a_dispatcher_that_checks_its_budget_each_run_starts_no_run_past_it`; MarsRT's `dropping_every_block_at_the_codes_bound_changes_nothing` |
+| F3 | the verifier skipping every compiled block (MarsRT's dispatcher handing compiled code no verifier) | MarsRT's `the_verifier_steps_beside_every_instruction_and_finds_nothing`, the interpreter left behind by eight steps |
+| F4 | the verifier stepping without comparing (`Verifier::follow`) | the crate's `the_verifier_finds_a_miscompiled_instruction_at_that_instruction` and `the_verifier_finds_a_block_it_did_not_follow` |
+
+### 42.6 PGO
+
+MarsRT's profile has been void since d84b3bc1 (`Mars_Native.md` §6.17) and stays void: the moved functions are renamed
+again, and the source digest, which follows path dependencies, now covers `emusen-jit`. A retrain covers the shared
+crate as it does `emusen-native`; this stage adds nothing to what it owes.
+
+### 42.7 Where the plan was wrong, or left open
+
+- **§9.6 counted 239 lines to move**; what moved is most of them and the verifier's shape from a second file
+  (`verify.rs`), and the code budget's check from the dispatcher, all three named in §9.6's list.
+- **"Names its exits"** became a list of names a lowering gives (`Lowering::EXITS`); what an exit means stays with the
+  dispatcher that handles it.
+
+### 42.8 Questions this stage leaves
+
+1. **Q1 [routine], the `Arc` hand-off.** *Recommended*: leave it until a stage that changes the compiler's behaviour;
+   a slot index into storage the crate owns would let ThreadSanitizer see the hand-off, and S36 is the place to weigh
+   it if Sapphire's dispatcher wants a different slot store.
+2. **Q2 [routine], Diamond.** *Recommended*: no change; Diamond adopts the crate when its own recompiler is wanted
+   (`Diamond_Speed.md` §7.2).
+
+### 42.9 What was read for this stage
+
+`Sapphire_Plan.md` §7 (S35), §9.6, §11 Q10; `Mars_Native.md` §5.6.7 (the ThreadSanitizer recipe), §5.8 whole,
+§6.17.5 (the method of measurement); `Diamond_Speed.md` §7.2; MarsRT's `cpu/blocks/` and `cpu/blocks/jit/`; the
+`cranelift-module` 0.136.0 crate's `Module` trait, for the methods a lowering may call on a module it does not own.
+No emulator source, and no firmware.
+
+### 42.10 What this stage does not cover
+
+- Any emitter for the EE or the VUs (S36 to S41).
+- MarsRT's GPU tests, which need the RX 6800 alone.

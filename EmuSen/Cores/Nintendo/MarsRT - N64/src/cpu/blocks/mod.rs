@@ -17,7 +17,7 @@ use crate::memory::bus::MemoryBus;
 use crate::memory::dp_threads::site;
 use crate::memory::ram::Ram;
 use std::sync::Arc;
-use std::sync::atomic::Ordering::{Acquire, Relaxed};
+use std::sync::atomic::Ordering::Relaxed;
 use cache::Cache;
 use decoded::Op;
 use shape::MAX_WORDS;
@@ -67,7 +67,7 @@ impl Tier {
 /// Entries a block runs before it is handed to the compiler (Mars_Recompiler.md §7's sweep chose 64 for C#).
 pub const THRESHOLD: u32 = 64;
 
-/// Bytes of compiled code past which every block is dropped and compiled again as it runs.
+/// Bytes of compiled code past which every block is dropped and compiled again as it runs: `emusen-jit`'s budget.
 pub const CODE_BOUND: u64 = 256 << 20;
 
 /// A run of consecutive words, the bytes it was shaped from, and what it runs as.
@@ -96,7 +96,7 @@ pub struct Compiled {
 
 impl Compiled {
     /// The code, compiling it once the entries reach the threshold; the dispatcher waits for it when asked to.
-    fn want(&mut self, words: &[Op], start: u32, threshold: u32, options: jit::Options, synchronous: bool, compiler: &mut Option<jit::Compiler>) -> Option<jit::Code> {
+    fn want(&mut self, words: &[Op], start: u32, threshold: u32, options: jit::Options, synchronous: bool, compiler: &mut jit::Jit) -> Option<jit::Code> {
         if self.code.is_some() {
             return self.code;
         }
@@ -104,13 +104,10 @@ impl Compiled {
         match &self.slot {
             Some(slot) => self.code = jit::published(slot),
             None if self.runs >= threshold => {
-                let slot = Arc::new(jit::Slot::default());
                 let words: Box<[u32]> = words.iter().map(|op| op.word).collect();
-                compiler.get_or_insert_with(jit::Compiler::new).enqueue(words, start, options, slot.clone());
+                let slot = compiler.enqueue(words, start, options);
                 if synchronous {
-                    while slot.code.load(Acquire) == 0 {
-                        std::thread::yield_now();
-                    }
+                    slot.wait();
                     self.code = jit::published(&slot);
                 }
                 self.slot = Some(slot);
@@ -170,8 +167,6 @@ pub struct Stats {
     /// Compiled entries beside a running signal processor, and entries with code that ran decoded, the stop within reach.
     pub compiled_beside: u64,
     pub refused_near_stop: u64,
-    /// Times the code's bound dropped every block.
-    pub flushes: u64,
 }
 
 /// The last page a mapped fetch was translated through, trusted while the translation's generation stands (Mars_Recompiler.md §17).
@@ -203,9 +198,8 @@ pub struct Blocks {
     pub synchronous: bool,
     /// Compile a variant for a block entered while the signal processor runs; measured and not kept (Mars_Native.md §5.8).
     pub beside_variant: bool,
-    /// Bytes of compiled code past which every block is dropped and the compiler's memory with it.
-    pub code_bound: u64,
-    compiler: Option<jit::Compiler>,
+    /// The compiler, its code's bound (`CODE_BOUND`), and the times the bound dropped every block.
+    pub jit: jit::Jit,
 }
 
 impl Default for Blocks {
@@ -222,8 +216,7 @@ impl Default for Blocks {
             threshold: std::env::var("EMUSEN_MARSRT_THRESHOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(THRESHOLD),
             synchronous: false,
             beside_variant: std::env::var("EMUSEN_MARSRT_BESIDE").is_ok_and(|v| v == "1"),
-            code_bound: CODE_BOUND,
-            compiler: None,
+            jit: jit::jit(CODE_BOUND),
         }
     }
 }
@@ -239,7 +232,7 @@ impl Clone for Blocks {
             threshold: self.threshold,
             synchronous: self.synchronous,
             beside_variant: self.beside_variant,
-            code_bound: self.code_bound,
+            jit: self.jit.clone(),
             ..Blocks::default()
         }
     }
@@ -262,8 +255,7 @@ impl Blocks {
     /// and blocks Cranelift refused, which run decoded.
     pub fn counters(&self) -> [i64; COUNTERS] {
         let s = &self.stats;
-        let (compiled, nanos, bytes, failed) = self.compiler.as_ref().map_or((0, 0, 0, 0), |c| {
-            let c = c.counters();
+        let (compiled, nanos, bytes, failed) = self.jit.counters().map_or((0, 0, 0, 0), |c| {
             (c.compiled.load(Relaxed), c.nanos.load(Relaxed), c.bytes.load(Relaxed), c.failed.load(Relaxed))
         });
         [
@@ -293,7 +285,7 @@ impl Blocks {
     pub fn configure(&mut self, tier: Tier, verify: bool) {
         if tier != self.tier || verify != self.verify {
             self.clear();
-            self.compiler = None;
+            self.jit.reset();
         }
         self.tier = tier;
         self.verify = verify;
@@ -351,7 +343,7 @@ impl Blocks {
         let tier = self.tier;
         let verify = self.verify;
         let (threshold, synchronous, beside_variant) = (self.threshold, self.synchronous, self.beside_variant);
-        let Blocks { cache, stats, shadow, compiler, .. } = self;
+        let Blocks { cache, stats, shadow, jit: compiler, .. } = self;
         let block = match cache.get_mut(physical) {
             Some(b) if b.matches(&bus.rdram) => b,
             found => {
@@ -373,7 +365,7 @@ impl Blocks {
             cpu.enter_exception();
             bus.tick(1);
             if let Some(s) = shadow.as_deref_mut() {
-                s.follow(cpu, bus, "an interrupt at a block's entry");
+                s.follow((cpu, bus), "an interrupt at a block's entry");
             }
             return;
         }
@@ -414,9 +406,7 @@ impl Blocks {
 
     /// Waits for every block queued to be compiled; for tests that count what compiled code did.
     pub fn settle_compiler(&self) {
-        if let Some(c) = &self.compiler {
-            c.drain();
-        }
+        self.jit.drain();
     }
 
     #[inline(always)]
@@ -424,7 +414,7 @@ impl Blocks {
         self.stats.stepped += 1;
         cpu.step(bus);
         if let Some(s) = self.shadow.as_deref_mut() {
-            s.follow(cpu, bus, "an interpreter step");
+            s.follow((cpu, bus), "an interpreter step");
         }
     }
 
@@ -435,8 +425,8 @@ impl Blocks {
         while bus.vi.fields == fields && bus.cycles < cap_at {
             if idle_skip && cpu.pc == cpu.run.idle_at && cpu.try_idle(bus, cap_at, rsp_whole) {
                 if let Some(s) = self.shadow.as_deref_mut() {
-                    assert!(s.idle(cap_at, rsp_whole), "the interpreter's machine was not at the idle loop the blocks' was");
-                    s.check(cpu, bus, "the idle loop");
+                    assert!(s.reference.idle(cap_at, rsp_whole), "the interpreter's machine was not at the idle loop the blocks' was");
+                    s.check((cpu, bus), "the idle loop");
                 }
                 continue;
             }
@@ -458,18 +448,16 @@ impl Blocks {
     }
 
     fn begin(&mut self, cpu: &Cpu, bus: &MemoryBus) {
-        self.shadow = (self.verify && bus.dp.threads.is_none()).then(|| Shadow::of(cpu, bus));
-        // Code is never freed one block at a time; past the bound every block goes, and the compiler's memory with it.
-        if self.compiler.as_ref().is_some_and(|c| c.counters().bytes.load(Relaxed) > self.code_bound) {
+        self.shadow = (self.verify && bus.dp.threads.is_none()).then(|| verify::of(cpu, bus));
+        // Code is never freed one block at a time; past the bound the compiler's memory goes whole, and every block with it.
+        if self.jit.over_budget() {
             self.clear();
-            self.compiler = None;
-            self.stats.flushes += 1;
         }
     }
 
     fn end(&mut self, cpu: &Cpu, bus: &MemoryBus) {
         if let Some(s) = self.shadow.take() {
-            s.check_all(cpu, bus);
+            s.check_all((cpu, bus));
         }
     }
 }
@@ -502,7 +490,7 @@ fn compiled(cpu: &mut Cpu, bus: &mut MemoryBus, code: jit::Code, entry: u64, sto
             cpu.enter_exception();
             bus.tick(1);
             if let Some(s) = shadow {
-                s.follow(cpu, bus, "a raise in compiled code");
+                s.follow((cpu, bus), "a raise in compiled code");
             }
         }
         _ => {
@@ -514,7 +502,7 @@ fn compiled(cpu: &mut Cpu, bus: &mut MemoryBus, code: jit::Code, entry: u64, sto
             }
             cpu.last_count = bus.count();
             if let Some(s) = shadow {
-                s.follow(cpu, bus, "an exit after a store or an ender in compiled code");
+                s.follow((cpu, bus), "an exit after a store or an ender in compiled code");
             }
         }
     }

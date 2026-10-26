@@ -1,0 +1,27 @@
+[package]
+name = "emusen-jit"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+# A recompiler's shared machinery: the compiler's thread and its queue, code published through one word, Cranelift's module with
+# its W^X batches and code budget, the counters, and the shape of the verifier. Generic over a processor's lowering; no processor.
+# See Hardware/Shared/EmuSen_Jit.md.
+[lib]
+name = "emusen_jit"
+
+[dependencies]
+# The code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. The version MarsRT measured (Mars_Native.md §5.8.4).
+cranelift-codegen = "0.136.0"
+cranelift-frontend = "0.136.0"
+cranelift-jit = "0.136.0"
+cranelift-module = "0.136.0"
+cranelift-native = "0.136.0"
+
+[profile.release]
+opt-level = 3
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

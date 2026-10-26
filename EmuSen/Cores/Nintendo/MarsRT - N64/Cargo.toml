@@ -13,12 +13,13 @@ crate-type = ["cdylib", "rlib"]
 emusen-native = { path = "../../Shared/emusen-native" }
 # The device path's Vulkan compute device, `ash` behind it with the loader found at run time. See Hardware/Shared/EmuSen_Gpu.md.
 emusen-gpu = { path = "../../Shared/emusen-gpu" }
-# The recompiler's code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.
+# The recompiler's thread, publication, module, code budget and verifier, shared with the PlayStation 2's recompilers. See Hardware/Shared/EmuSen_Jit.md.
+emusen-jit = { path = "../../Shared/emusen-jit" }
+# The recompiler's code generator, which the emitter writes IR for; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"
 cranelift-jit = "0.136.0"
 cranelift-module = "0.136.0"
-cranelift-native = "0.136.0"
 
 [profile.release]
 panic = "abort"

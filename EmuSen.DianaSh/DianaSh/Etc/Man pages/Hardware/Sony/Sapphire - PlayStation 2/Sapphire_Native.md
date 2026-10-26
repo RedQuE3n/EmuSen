@@ -5556,6 +5556,230 @@ traced Status.EIE's changes during one ExecPS2 on Sapphire, saw PCSX2's OSDSYS t
 the records of the project's programs that call the kernel; **this writer is exposed and will never write the open
 replacement**.
 
+### 30.68 Dispute D-800: the browser's thread polls V-blank's start in I_STAT (2026-10-26)
+
+*A dispute step on the tester's decision of 2026-10-26 (§30.66 Q1, option (a)), extended the same day by a second
+decision (§30.71); its product is `Sapphire_Disputes.md` D-800.* The decided trace of the EE kernel's system calls from
+field 1700 to 2200, slot 1 empty, names **no call that fails or never returns** (§30.69). What it shows is a cycle of
+semaphores between the browser's drawing thread, an interrupt handler and a third thread, which stops at field 1862: the
+drawing thread, woken from WaitSema, never calls the kernel again. D-465's change to narrower stores, merged during the
+step, changes nothing here (§30.70). The register counts and the units' registers at the stall show the thread reading
+I_STAT about 817,000 times a field while every unit is idle (§30.71). Experiments on a state saved at field 1850 then
+showed what it waits for (§30.72). **The browser draws "There is no data." as PCSX2 does when Sapphire takes the
+interrupt two or more instructions after the INTC asserts INT0, and does not when only V-blank's end or SBUS is
+delayed.** So the thread polls V-blank's start (VBON) in I_STAT with interrupts enabled. On Sapphire the kernel's handler
+is always entered and clears the bit before any later instruction can read it. The project's programs then found PCSX2's
+two EE tiers parting on the same question (§30.73): on its interpreter a tight poll sees VBON before every interrupt; on
+its recompiler it never does, as on Sapphire. The documents give no delay (§30.74). Neither agreement the step's rule
+needs exists, so **no unit was changed**, and the delay to model is put to the tester (§30.76 Q1). P8 stands as observed.
+
+### 30.69 The system calls (measured 2026-10-26)
+
+A build of its own, not committed, recorded at each SYSCALL exception the call's number (v1). At the first level-1 ERET
+after a SYSCALL taken from a thread (Status.EXL clear at the exception's entry) it recorded the result (v0), and it
+recorded the field of each. A level-1 exception from a thread that came between them was marked as cutting the pair. A
+call that blocks and so switches threads therefore shows the v0 of the thread switched to, not its own result; that
+caveat was accepted with the pairing. No call was taken with EXL set and no pair was cut. The runner
+started the console empty with the Americas image, slot 1 empty, and played part B's script (Cross every 120 fields from
+770, the ninth on "Browser" at 1730):
+
+| Fields | Calls a field | What runs |
+|---|---|---|
+| 1700-1729 (the menu) | 101 | FlushCache (64h) 73 a field; WaitSema (44h) 9, SignalSema (42h) 7, PollSema (45h) 2; and the negative calls ps2tek gives to interrupt handlers, -48h (not in ps2tek's list), -43h (iSignalSema), -05h (_ExceptionEpilogue) and -46h (iPollSema), 2 to 3 each |
+| 1730-1861 (the fade) | 59 | the same cycle, FlushCache 31 a field; once a second CreateSema (40h), SifSetDma (77h), -78h from a handler, DeleteSema (41h) and ReferThreadStatus (30h), the S-command server's call (§30.39) |
+| 1862-2200 (black from 1920) | 20 | FlushCache 2, WaitSema 5, SignalSema 4; the handlers' calls; the S-command server's calls once a second as before |
+
+Read through the semaphore ids the results give, which these calls return on success, the cycle to field 1861 is as
+follows. The drawing thread is woken from WaitSema(9), calls FlushCache about thirty times, SignalSema(7), WaitSema(c),
+then WaitSema(4) and SignalSema(4). A handler polls sema 7 with iPollSema and, when it is taken, signals 8; it also
+signals a and c. The thread woken on 8 signals 9. At field 1862 the drawing thread is woken from WaitSema(9) as before and
+**makes no system call again**. Every interrupt from then on returns to a context whose v0 is 0, iPollSema(7) fails, and
+sema 8 and so 9 are never signalled again. The semaphores, the SIF calls and the handlers go on as before. The kernel
+answers every call it is given, and the wait is outside it.
+
+### 30.70 D-780's narrower stores and the browser (measured 2026-10-26)
+
+D-465's change (`Sapphire_Disputes.md` D-780: a store narrower than a word writes its own lanes of an EE register) was
+being merged during this step. Its change to `board` was applied to this step's tree uncommitted, and the run of §30.69
+was repeated with the narrower stores to EE registers counted by address and width. **The pictures and the system-call
+trace are byte for byte the first run's.** From power-on to field 2200 the only narrower store to an address in the
+units' range was KPUTCHAR's, 1,333 byte stores. The step was rebased onto the merge (8bd9b8427) before its last runs.
+
+### 30.71 Where the thread waits: register counts and the units at the stall (measured 2026-10-26)
+
+The run of §30.70 also counted, from field 1800, every EE access the units answer, by address, as the board's reports
+count them for finding which device a processor waits on (§35.4): counts only, no values. These counts went beyond the
+decided trace and were stopped there. The tester then allowed, the same day, the units' registers listed below at each
+field end from 1850 to 1900 and one Sapphire state saved at field 1850. The state was kept in scratch, only ever loaded,
+never opened, read or diffed, and was deleted when this was written.
+
+| Register, accesses a field | Fields 1800-1861 | Fields 1870-2200 |
+|---|---|---|
+| I_STAT read | 2 | **817,034** |
+| D1_CHCR, D2_CHCR read | 658, 340 | 0 |
+| DMA channels 1 and 2 written (CHCR, MADR, QWC, TADR) | 118 to 265 each | 0 |
+| GS privileged registers written (PMODE, SMODE2, DISPFB2, DISPLAY2, BGCOLOR), CSR read | 1 each | 0 |
+| I_STAT written, I_MASK read | 2, 2 | 2, 2 |
+
+The units at each field end, 1850 to 1900, unchanged across the stall: I_MASK 100Eh (SBUS, VBON, VBOF, TIM3); I_STAT 0
+but at one field end (4, VBON pending); the GS's CSR 551B400Ch or 551B600Ch (HSINT and VSINT set, never cleared; FIELD
+alternating; FIFO empty) with IMR FF00h (every GS event masked, so the GS's INTC line never rises); D_CTRL 1, D_STAT
+00A00046h, D_PCR 0, D1_CHCR 70000045h and D2_CHCR 1 (both stopped); VIF1_STAT and GIF_STAT 0; timers 0 and 1 stopped, timer
+2 counting BUSCLK with no interrupt enabled. So from field 1862 the drawing thread reads I_STAT in a loop and nothing
+it could be waiting for runs: no DMA, no GS event unmasked, no timer interrupt armed. Of the sources that rise, SBUS,
+VBON and VBOF are all in I_MASK, so the kernel takes each as an interrupt and clears its bit.
+
+### 30.72 Experiments from the state (measured 2026-10-26)
+
+Each experiment loaded the state at field 1850 on the interpreter, which the recompiler equals frame for frame (§44),
+ran to field 2000, and kept the pictures alone. The control, unchanged, is black from 1920 as every run since §30.19.
+
+| Change, build-only and never committed | Picture at 1920 and 1980 |
+|---|---|
+| none | black |
+| INT0's rise taken by the EE only after 1 more instruction | black |
+| the same after **2, 4, 8 or 16** more instructions | **the browser: grey ground, "There is no data.", "Back"** (215,999 and 216,005 pixels lit), as PCSX2 draws it (§30.63) |
+| the delay of 4 applied only when VBON rises | **the browser**, the same pixels |
+| the delay of 4 applied only when SBUS or only when VBOF rises | black |
+| bits a write clears from I_STAT left visible to EE reads for 1, 4 or 16 more instructions, INT0 unchanged | black |
+
+So the thread waits for **VBON**, polling I_STAT while interrupts are enabled. On Sapphire an interrupt is taken before the
+first instruction after the step in which the INTC latched its source (`Ee::step` tests the lines before it executes,
+`System::step` sets them after the board has run). The kernel's handler then clears VBON before any later instruction
+of the thread runs. A poll can see the bit only if the exception comes some instructions after the line rises. A late
+clear alone does not let it through.
+
+### 30.73 The project's programs on Sapphire and PCSX2's two tiers (measured 2026-10-26)
+
+`tests/d800/mod.rs` builds four programs and `examples/d800.rs` writes them and runs each by the fast boot. The kernel is
+used only through ps2tek's "BIOS EE Syscalls": AddIntcHandler (10h), _EnableIntc (14h), RemoveIntcHandler (11h) and
+FlushCache (64h). Each enables interrupts with EI, the main thread starting with Status.EIE clear on Sapphire
+(D-701, D-760). The programs:
+
+- `d800-poll` polls I_STAT in a loop of eight instructions while VBON is served by a handler the program adds. For each
+  arrival it keeps the loop's count at the first sighting of the bit, the count when the handler ran, and the number of
+  sightings.
+- `d800-poll-tim` does the same with timer 0's compare (BUSCLK/256, compare 800h, its flag cleared by the handler).
+- `d800-tight` polls in a loop of seven instructions. At a sighting it keeps the polls since the last arrival and waits
+  for the handler.
+- `d800-ei` waits with DI until VBON is latched, then executes EI and sixteen single-instruction stores. The handler
+  counts the stores that ran before it, six rounds.
+
+| Program | Sapphire | PCSX2 recompiler | PCSX2 interpreter |
+|---|---|---|---|
+| `d800-tight`: arrivals with a sighting before the interrupt | **0 of 8** | **0 of 8** | **8 of 8**, each about a field's polls after the last arrival (462,568) |
+| `d800-poll`: sightings, all right after a handler returned | 0 of 8 | 0 of 8 | 3 of 8 |
+| `d800-poll-tim`: the same | 0 of 8 | 0 of 8 | 8 of 8 |
+| `d800-ei`: stores before the handler, by round | 0, then 16, 16, 16, 16, 16 | **the same** | **no handler ran** before the program ended, VBON left latched and every round passing at once |
+
+So PCSX2's recompiler answers every program as Sapphire does, and draws the browser all the same (§30.63). Its
+interpreter departs from both in two ways. It lets a polling thread see VBON before the interrupt every time. It also
+leaves a pending interrupt untaken across at least sixteen stores and a SYNC.P after EI, which reads more like an
+emulator testing interrupts at a coarser grain than like a pipeline's few stages. With a build-only delay, Sapphire's
+records move towards the interpreter's: sightings right after a handler returns, 1 to 7 of 8 by the delay's length
+from 2 to 8 instructions. No pre-interrupt sighting appears in `d800-tight` at a delay of 2. In that loop the expensive
+uncached read of I_STAT is the step in which the latch is usually taken, and it is seven instructions before the next
+read.
+
+### 30.74 The documents, and why the EE is unchanged
+
+The *EE Core User's Manual* §4.2.5 says the interrupt exception "occurs if one of the three interrupt signals is
+asserted", masked by IE, EIE, EXL and ERL. It says Cause.IP may not reflect a signal "asserted and deasserted in a very
+short time". It also says that "because of buffering, the instruction to the external device occurs after other
+instructions finish", so a handler must SYNC before ERET. **Nowhere does it say how many instructions may complete
+between the signal's assertion and the exception.** §3.1 of the *EE User's Manual* latches I_STAT at the source's edge
+and asserts INT0 while I_STAT AND I_MASK is non-zero, again with no time. The kit's *Restriction* (10) is the one
+document that implies a delay: "when an interrupt occurs immediately after the DI instruction, the EIE bit becomes 0 …
+in the interrupt handler". There an interrupt is taken after a DI that cleared EIE, so it was decided at least one
+instruction before it was taken. That is a delay of at least one instruction, which D-760 left unmodelled; the
+browser needs two.
+
+The step's rule is to change the EE where the documents and the measured referee agree. Here the documents give a
+direction and no size, and the referee's two tiers disagree: the recompiler shows no delay, and the interpreter shows
+one larger than any pipeline's. So the EE is unchanged, and the experiments' delay was built only for the runs above.
+The browser runs on both of PCSX2's tiers. On the recompiler, which equals Sapphire on every program here, it must
+reach VBON by some way these programs do not exercise. That is a second reason not to take the interpreter's reading
+as the console's.
+
+### 30.75 Tests, seeded faults and the blast radius (2026-10-26)
+
+`tests/dmac.rs` gains `the_d800_programs_assemble`: each program is assembled and its code ends below its log and
+record. **21 of 21** [M, `cargo test --release --test dmac`]. `tests/d700/mod.rs` makes its helpers for lines,
+stores, system calls, Status and the done word public for `d800`. Seeded faults, each reverted: the log placed inside
+the program's code (caught by the test's bound), and an unknown mnemonic in a handler (caught by the assembler in the
+same test). No unit changed, so neither `tests/blocks.rs`, `tests/cop0.rs` nor the interpreter's tests were run. Every
+target type-checks (`cargo check --all-targets`). The browser with slot 1 empty is §30.69's and §30.70's runs, on the
+tree before and after D-780 (black from field 1920). The formatted card's run and Jak and Daxter's card screen were not
+repeated: no unit changed, so they stand as §30.49 and §39.7 record them.
+
+### 30.76 Questions the step leaves
+
+1. **Q1 [decision], an interrupt's delay.**
+   - **The documents:** none gives how many instructions complete between INT0's assertion and the exception. *Restriction*
+     (10) implies at least one (§30.74).
+   - **PCSX2's tiers** (§30.73): the recompiler takes the interrupt at once, as Sapphire does. The interpreter lets a
+     tight poll see VBON before every interrupt, and leaves one pending across sixteen instructions after EI.
+   - **What the browser needs** (§30.72): a delay of two or more instructions, on VBON alone.
+
+   *Recommended*: (a) build the delay as *Restriction* (10) describes it, for **every source of INT0 and INT1**,
+   counted in **instructions**:
+   - **The rule:** an interrupt the EE recognises (its line high, IE and EIE set, EXL and ERL clear) is taken after the
+     next **two** instructions have completed, whatever they do to EIE. A DI among them therefore gives the handler
+     EIE clear, as the kit warns.
+   - **Why instructions:** the delay is the pipeline's, an interrupt decided at one stage and taken at a later one, and
+     the documents count it in instructions.
+   - **Why every source:** it is a property of the core, not of V-blank.
+   - **Why two:** it is the least that draws the browser, and one is the least the documents imply.
+
+   Its costs:
+   - **The state:** a pending recognition is kept in it (a new `SPH2` version).
+   - **The recompiler:** it may not start a block while a recognition is pending, one block exit at each rise of INT0,
+     about four a field in OSDSYS.
+   - **S33's idle skipping:** its quick path may not skip past a pending recognition, so a rise ends the skip two
+     instructions late. Nothing is lost in a field.
+   - **What may move:** interrupt timing moves by two instructions, so `tests/cop0.rs`, `tests/blocks.rs` and the
+     interpreter's tests, S10's ps2autotests on the BIOS (their `intc` and timer programs above all), the bench's
+     digests and S28's anchors may move. Each moved golden would be recorded again with its cause, as the plan's
+     §8 requires.
+
+   (b) Leave the EE as it is and the browser black until a console's record of a polling loop exists, recording the
+   delay as a named loss. (c) Sample a device register at the end of the load's bus access rather than at its start, a
+   separate timing question (`timing::UNCACHED` is 2 cycles [A]); it does not by itself let a poll see a bit the kernel
+   clears.
+2. **Q2 [routine], the referee's tiers.** As with D-760, PCSX2's interpreter and recompiler disagree on a timing the
+   documents leave open. *Recommended*: record both and rule by documents only, as §30.66 Q2 decided.
+
+### 30.77 What was read, the traces, and exposure (2026-10-26)
+
+**Read**:
+- `Sapphire_Plan.md` §1.4 (with the decisions of 2026-10-26) and §12 (P8).
+- This page's §30.19, §30.38 to §30.41 and §30.52 to §30.67, §35 and §36.
+- `Sapphire_Disputes.md` D-700, D-701, D-760 and D-780.
+- ps2tek at `1c91660`: "BIOS EE Threading" and "BIOS EE Syscalls" (lines 4600-5003). Their parts excluded for replacement
+  writers (§2.2's list) were read too, by a writer already exposed.
+- Sony's *EE Core User's Manual* 5.0 §2.12, §3.2 (Status) and §4.2.5 (the interrupt exception), and the *EE User's
+  Manual* §3.1 to §3.3 (the INTC) and §4 (timers).
+- The kit's *Restriction* items (6), (10) and "GS Interrupt Handler".
+- PCSX2 2.8.2 run as a black box, both EE tiers: the project's programs' records in RAM through PINE.
+
+No emulator, SDK or loader source, and no firmware: the Americas image was handed by path to Sapphire and to PCSX2 and
+never opened.
+
+**The traces** (§30.69 to §30.72):
+- **As the tester decided:** each system call's number and result, by field, from 1700 to 2200, the result paired by
+  the first level-1 ERET after a thread's SYSCALL, Status.EXL being read internally for the pairing and never recorded.
+- **On the second decision:** the units' registers listed in §30.71 at each field end from 1850 to 1900, and one state
+  at field 1850, only loaded.
+- **Beyond both, before the second decision:** the count by address of the EE's accesses to the units from field 1800
+  (no values), and of narrower stores to them from power-on.
+
+No program counter, instruction word, memory or general register was recorded. Everything stayed in scratch and was
+never committed. The traces and the state were deleted when this was written.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2,
+read the traces above and the records of the project's programs that call the kernel, and loaded a Sapphire state of
+OSDSYS without opening it; **this writer is exposed and will never write the open replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -6868,6 +7092,15 @@ SYSCALL numbers and register stores inside the window the tester allowed that da
 the argument registers of the game's first system calls whole, some of which held addresses of the kernel's memory and
 of the BIOS's loader left in registers (§39.22); **that writer is exposed too and will never write the open
 replacement**.
+
+*Added 2026-10-26 at the D-800 step (§30.68 to §30.77):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2. On Sapphire it traced the EE kernel's system calls, number and result by field from 1700 to 2200, as the tester
+decided, Status.EXL read internally to pair them. It counted the EE's accesses to the units by address from field 1800,
+and narrower stores to them from power-on, before the tester's second decision of the day. On that decision it read the
+listed units' registers at each field end from 1850 to 1900, and saved, loaded and never opened one state of OSDSYS at
+field 1850. It also read the records of the project's programs that call the kernel. It recorded no program counter,
+instruction, general register or memory holding BIOS code or data. **That writer is exposed too and will never write
+the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

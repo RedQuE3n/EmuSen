@@ -219,12 +219,20 @@ fn main() {
             let mut twin = machine(workload, bios, market_name, image);
             twin.load_state(&state(&fast)).expect("the twin loads the state");
             let quiet = workload != "cost";
-            let reference = std::mem::replace(&mut twin.sys, Box::new(sapphire::board::System::new(0)));
+            let mut reference = std::mem::replace(&mut twin.sys, Box::new(sapphire::board::System::new(0)));
+            // What a state does not carry and a frame keeps: the exception counts (the hardware's reports) and the IOP's
+            // console hook, whose answers to the program's writes are part of the run.
+            (reference.ee.exceptions, reference.ee.exceptions2) = (fast.sys.ee.exceptions, fast.sys.ee.exceptions2);
+            reference.board.iop.tty.device = fast.sys.board.iop.tty.device;
+            reference.board.iop.resolve_tty();
             fast.blocks.as_mut().unwrap().verify(Verify::Blocks, reference, quiet);
             let start = fast.frames;
             let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 while fast.frames < start + frames as i64 {
                     fast.advance();
+                    if let Some(r) = fast.blocks.as_mut().unwrap().reference_mut() {
+                        r.board.iop.resolve_tty();
+                    }
                 }
                 fast.blocks.as_ref().unwrap().check_all(&fast.sys);
             }));

@@ -128,6 +128,11 @@ impl Blocks {
         self.forget();
     }
 
+    /// The verifier's machine, for what a frame does beside the steps (the IOP's console hook resolved at its end).
+    pub fn reference_mut(&mut self) -> Option<&mut System> {
+        self.verify.as_mut().map(|(_, v)| &mut *v.reference.sys)
+    }
+
     /// Steps the reference took, when a verifier is attached.
     pub fn verified(&self) -> Option<u64> {
         self.verify.as_ref().map(|(_, v)| v.steps)

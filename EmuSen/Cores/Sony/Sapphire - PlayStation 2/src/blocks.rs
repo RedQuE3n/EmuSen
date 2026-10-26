@@ -78,6 +78,8 @@ pub struct Stats {
     pub generations: u64,
     /// Loads and stores that left their blocks, by `Context::left`'s reasons.
     pub left: [u64; 5],
+    /// Entries that ran only to the first line the instruction cache did not hold.
+    pub to_line: u64,
 }
 
 /// A hash of a word address, for the map of blocks.
@@ -141,6 +143,7 @@ impl Blocks {
             times: [0; shape::MAX],
             lines: [0; shape::MAX],
             steps: 0,
+            limit: 0,
             replay,
             hook,
             owner: std::ptr::null_mut(),
@@ -350,14 +353,9 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let paddr = sys.ee.block_entry()?;
     let pc = sys.ee.pc;
     let options = blocks.options(sys);
-    let held = blocks.map.get(&pc).map(|b| if b.paddr == paddr && b.options == options { sys.ee.holds(pc, paddr, &b.words) } else { Some(false) });
-    if held == Some(None) {
-        // A line of the block is not in the cache: the interpreter's fetch refills it, and the block stands.
-        blocks.stats.refills += 1;
-        return None;
-    }
-    if held != Some(Some(true)) {
-        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX);
+    let held = blocks.map.get(&pc).and_then(|b| if b.paddr == paddr && b.options == options { sys.ee.held_words(pc, paddr, &b.words) } else { None });
+    if held.is_none() {
+        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX, &sys.board.map.rdram);
         let (shaped, short) = shape::shape(&words, options.memory);
         if short && missed && blocks.wait_lines {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.
@@ -375,6 +373,15 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     let wait = blocks.wait;
     let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+    // The instructions before the first line the cache does not hold, to the last line the block can leave at.
+    let held = held.unwrap_or_else(|| sys.ee.held_words(pc, paddr, &b.words).unwrap_or(0));
+    let b_len = b.words.len();
+    let limit = if held == b_len { held } else { leaving_point(pc, &b.words, held) };
+    if limit == 0 {
+        // The block's first line is not in the cache: the interpreter's fetch refills it, and the block stands.
+        blocks.stats.refills += 1;
+        return None;
+    }
     let code = match &b.state {
         State::Ready(code) => *code,
         State::Refused(_) => return None,
@@ -407,8 +414,10 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     blocks.translation(sys);
     let mut run = Run { sys, verify: &mut blocks.verify, failed: None, tail: None, guarded: false, fills: 0 };
+    blocks.stats.to_line += u64::from(limit < b_len);
     let ctx = &mut *blocks.ctx;
     ctx.owner = (&mut run as *mut Run).cast();
+    ctx.limit = limit as u32;
     ctx.horizon = sys.board.next_event();
     (ctx.uncached, ctx.uncached_loads, ctx.guard, ctx.base, ctx.logged) = (0, 0, 0, 0, 0);
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
@@ -498,6 +507,15 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             (steps > 0).then_some(steps as u64)
         }
     }
+}
+
+/// The last instruction at most `held` into the block where it can leave for a line the cache does not hold: a line's
+/// first instruction that is not a delay slot (`emit::lower`'s check); 0 when there is none.
+fn leaving_point(pc: u32, words: &[u32], held: usize) -> usize {
+    (1..=held.min(words.len().saturating_sub(1)))
+        .rev()
+        .find(|&i| pc.wrapping_add(4 * i as u32) & 63 == 0 && shape::class(words[i - 1]) != shape::Class::Branch)
+        .unwrap_or(0)
 }
 
 /// The block's stores undone, last first, from the context's log.

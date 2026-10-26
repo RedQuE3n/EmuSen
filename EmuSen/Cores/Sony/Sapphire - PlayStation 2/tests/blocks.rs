@@ -472,6 +472,7 @@ fn random_twins(seeds: std::ops::Range<u64>, steps: u64, stride: u64, timer: boo
         total.kept_past += s.kept_past;
         total.fills += s.fills;
         total.generations += s.generations;
+        total.to_line += s.to_line;
         for k in 0..5 {
             total.left[k] += s.left[k];
         }
@@ -1041,4 +1042,27 @@ fn a_store_into_a_clean_line_dirties_it_and_reaches_memory_when_it_is_replaced()
     let s = twin(&words, 6000, 100, &mut eager());
     println!("stores into clean lines: {s:?}");
     assert!(s.compiled_steps > 2000, "{s:?}");
+}
+
+/// A loop of 50 instructions over four lines of the instruction cache, at 00100100h, whose third line it invalidates at
+/// every pass: its block runs to that line, the interpreter refills it, and the rest runs as a block of its own.
+fn lines_program() -> Vec<u32> {
+    let mut words = assemble("lui s0, 0x0010\nori s0, s0, 0x100\nori t9, zero, 200\nj 0x100100\nnop", ORIGIN);
+    words.resize(0x100 / 4, 0);
+    let mut l = vec!["top: addiu t9, t9, -1".to_string()];
+    for k in 0..46 {
+        l.push(format!("addu t{}, t{}, t9", k % 8, (k + 3) % 8 + 2));
+    }
+    l.push("cache 0x0b, 0x80(s0)".into());
+    l.extend(["bgtz t9, top".into(), "nop".into(), "end: beq zero, zero, end".into(), "nop".into()]);
+    words.extend(assemble(&l.join("\n"), ORIGIN + 0x100));
+    words
+}
+
+#[test]
+fn a_block_runs_to_the_first_line_the_cache_does_not_hold() {
+    let words = lines_program();
+    let s = twin(&words, 12_000, 300, &mut eager());
+    println!("to the first line not held: {s:?}");
+    assert!(s.to_line > 50 && s.compiled_steps > 5000, "{s:?}");
 }

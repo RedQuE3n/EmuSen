@@ -37,6 +37,7 @@ const UCAB_VALID: i32 = offset_of!(Ee, ucab.valid) as i32;
 const TIMING: i32 = offset_of!(Ee, timing) as i32;
 const X_TIMES: i32 = offset_of!(Context, times) as i32;
 const X_STEPS: i32 = offset_of!(Context, steps) as i32;
+const X_LIMIT: i32 = offset_of!(Context, limit) as i32;
 const X_REPLAY: i32 = offset_of!(Context, replay) as i32;
 const X_HOOK: i32 = offset_of!(Context, hook) as i32;
 const X_SPILL: i32 = offset_of!(Context, spill) as i32;
@@ -1801,6 +1802,15 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         if i == words.len() {
             e.exit(At::Line(pc));
             break;
+        }
+        if i > 0 && pc & 63 == 0 {
+            // A new line of the instruction cache: the block leaves here when the cache does not hold it
+            // (`Context::limit`).
+            let ctx = e.ctx;
+            let limit = e.b.ins().load(I32, trusted(), ctx, X_LIMIT);
+            let short = e.b.ins().icmp_imm_s(IntCC::UnsignedLessThanOrEqual, limit, i as i64);
+            let short = e.b.ins().uextend(I64, short);
+            e.exit_if(D(short), At::Line(pc));
         }
         match shape::class(words[i]) {
             Class::Plain | Class::Memory => {

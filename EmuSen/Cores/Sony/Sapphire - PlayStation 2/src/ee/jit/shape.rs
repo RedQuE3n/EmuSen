@@ -45,7 +45,24 @@ pub fn name(word: u32) -> &'static str {
     ops::get(ops::index(word)).name
 }
 
+/// A word's class through a memo of the words seen on this thread: the decode and the name's lookup are a pure function
+/// of the word, and the dispatcher shapes a block at every entry that waits for a line (Sapphire_Native.md §48.8).
 pub fn class(word: u32) -> Class {
+    const SLOTS: usize = 4096;
+    thread_local! {
+        static MEMO: std::cell::RefCell<Box<[(u32, Class)]>> = std::cell::RefCell::new(vec![(0, decode(0)); SLOTS].into_boxed_slice());
+    }
+    MEMO.with(|m| {
+        let mut m = m.borrow_mut();
+        let slot = &mut m[(word ^ word >> 12 ^ word >> 24) as usize % SLOTS];
+        if slot.0 != word {
+            *slot = (word, decode(word));
+        }
+        slot.1
+    })
+}
+
+fn decode(word: u32) -> Class {
     let n = name(word);
     if PLAIN.contains(&n) {
         Class::Plain

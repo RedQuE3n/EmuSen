@@ -73,6 +73,9 @@ pub struct Context {
     pub lines: [u8; shape::MAX],
     /// The steps that stand, on either exit.
     pub steps: u32,
+    /// The block's instructions that may run: all of them, or those before the first line the cache does not hold; the
+    /// block leaves at that line's first instruction.
+    pub limit: u32,
     /// The board brought to each instruction's cycles in turn: the steps that stand, all of them unless an interrupt
     /// would be taken first.
     pub replay: Helper,
@@ -183,15 +186,22 @@ impl Ee {
     }
 
     /// The words the instruction cache holds from `vaddr` (physical `paddr`) on, to the end of its 4 KiB page or `n`
-    /// words, stopping at the first line it does not hold; and whether it stopped there.
-    pub(crate) fn cached_words(&self, vaddr: u32, paddr: u32, n: usize) -> (Vec<u32>, bool) {
+    /// words, a line it does not hold read from RDRAM (`rdram`), as its refill would read it now; stopping at the first
+    /// line it neither holds nor can read so, and whether it stopped there. A block shaped past a line the cache does not
+    /// hold runs only to that line until the cache holds it (`held_words`, Sapphire_Native.md §48.8).
+    pub(crate) fn cached_words(&self, vaddr: u32, paddr: u32, n: usize, rdram: &[u8]) -> (Vec<u32>, bool) {
         let mut out = Vec::with_capacity(n);
         let mut at = 0u32;
         while out.len() < n {
             let (v, p) = (vaddr + at, paddr + at);
             let set = super::cache::ICache::set(v);
-            let Some(way) = self.icache.hit(set, p) else { return (out, true) };
-            out.push(self.icache.data[set][way][(p >> 2) as usize & 15]);
+            match self.icache.hit(set, p) {
+                Some(way) => out.push(self.icache.data[set][way][(p >> 2) as usize & 15]),
+                None => match rdram.get(p as usize..p as usize + 4) {
+                    Some(b) => out.push(u32::from_le_bytes(b.try_into().expect("four bytes"))),
+                    None => return (out, true),
+                },
+            }
             at += 4;
             if (vaddr + at) & 0xFFF == 0 {
                 break;
@@ -200,22 +210,23 @@ impl Ee {
         (out, false)
     }
 
-    /// Whether the instruction cache holds exactly `words` from `vaddr` (physical `paddr`) on, what the fetches of the
-    /// block's instructions would read, each a hit; none when a line is missing, which the interpreter's fetch refills.
-    pub(crate) fn holds(&self, vaddr: u32, paddr: u32, words: &[u32]) -> Option<bool> {
+    /// How many of `words`, from `vaddr` (physical `paddr`) on, the instruction cache holds exactly, what the fetches of
+    /// the block's instructions would read, each a hit: all of them, or those before the first line it does not hold,
+    /// which the interpreter's fetch refills; none when a line it holds differs from the block.
+    pub(crate) fn held_words(&self, vaddr: u32, paddr: u32, words: &[u32]) -> Option<usize> {
         let mut k = 0;
         while k < words.len() {
             let (v, p) = (vaddr + 4 * k as u32, paddr + 4 * k as u32);
             let set = super::cache::ICache::set(v);
-            let way = self.icache.hit(set, p)?;
+            let Some(way) = self.icache.hit(set, p) else { return Some(k) };
             let first = (p >> 2) as usize & 15;
             let take = (16 - first).min(words.len() - k);
             if self.icache.data[set][way][first..first + take] != words[k..k + take] {
-                return Some(false);
+                return None;
             }
             k += take;
         }
-        Some(true)
+        Some(k)
     }
 
     /// The cycles Count last saw, which each step's advance moves to the issue model's count.

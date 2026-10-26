@@ -202,6 +202,9 @@ fn main() {
                 );
             }
             println!("whole run: {}", skipped(&m, m.sys.board.now));
+            if let Some(b) = &m.blocks {
+                println!("blocks: {:?}; compiled {:?}", b.stats, b.compiled());
+            }
         }
         "verify" => {
             let mut fast = machine(workload, bios, market_name, image, "recompiler", true);

@@ -46,7 +46,7 @@ fn the_iop_counts_the_instructions_it_runs() {
 
 #[test]
 fn each_vu_counts_its_pairs_and_keeps_the_count_across_a_reset() {
-    let mut u = Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default() };
+    let mut u = Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default(), halts: false };
     let prog = emusen_mips::vu::assemble("nop | iaddiu vi1, vi0, 1\nnop | iaddiu vi2, vi0, 2\n[e] nop | iaddiu vi3, vi0, 3\nnop | iaddiu vi4, vi0, 4").unwrap();
     for (i, pair) in prog.iter().enumerate() {
         u.vu1.micro[i * 8..i * 8 + 8].copy_from_slice(&pair.to_le_bytes());

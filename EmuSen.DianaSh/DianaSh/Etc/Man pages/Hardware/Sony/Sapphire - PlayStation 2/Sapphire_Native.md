@@ -8020,6 +8020,12 @@ and C8 address almost nothing on these workloads**, but none of them is a game's
 the interpreter. The VU1 recompiler's rank must be measured again on the first workload with play, which S28's merge
 brings; until then it is ranked by these numbers and marked as such.
 
+**After these measurements, S36 (§44) was merged**: the EE's recompiler for the integer instructions and the branches,
+now the default tier, which also brings the board along at a block's exit rather than after each instruction; it takes
+part of rows #6 and #9 and measured 1.49 times on Jak and Daxter and 1.20 on the boot (§44.8). The bench makes its
+machine with `Machine::new`, whose tier is the interpreter, so every number of this section is the reference path's,
+before any lever, as the stage asks; the ranking's shares are of that path, and S37 onward re-measure on theirs.
+
 ### 43.9 The handheld (owed)
 
 Not run in this stage: the tester has said handheld runs come later. The bench is ready for it with one command; on the
@@ -8089,12 +8095,14 @@ and none of their bytes is in a commit. No emulator, SDK or loader source was re
 1. **Q1 [decision], the order of phase G.** §7 puts idle skipping (S33) and the decoded caches (S34) first. *Recommended*:
    take #1, the GS's exact arithmetic on a fast path, first, as a half-stage of its own before S33 (exact, gated by the
    goldens and by random cases against the 256-bit steps, as §35.7 did), then S33 as planned; and take #9 (the board at
-   events) into S33, whose skipping needs the same next-event computation.
+   events, which S36 began for compiled blocks) into S33, whose skipping needs the same next-event computation.
 2. **Q2 [routine], the bench's workloads.** *Recommended*: add a workload with play as soon as S28's merge gives one
    (Jak's first level), and re-rank the VU rows on it before S40.
 3. **Q3 [routine], C10.** *Recommended*: leave the numbering as it is and say in §5.13 that C10 was never assigned, so no
    later reader looks for it.
-4. **Q4 [routine], the handheld columns.** *Recommended*: run §43.9's command when the tester next allows handheld runs,
+4. **Q4 [routine], the bench's tier.** *Recommended*: add a `--blocks` switch choosing S36's recompiled tier, so the
+   bench times the default path beside the reference path; left out here, the stage measuring before any lever.
+5. **Q5 [routine], the handheld columns.** *Recommended*: run §43.9's command when the tester next allows handheld runs,
    before S33's lever is measured there.
 
 ### 43.15 What was read for this stage

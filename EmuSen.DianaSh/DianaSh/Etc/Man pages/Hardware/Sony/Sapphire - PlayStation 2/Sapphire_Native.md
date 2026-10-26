@@ -10514,7 +10514,9 @@ polled, a count doubled.
 **The method**: `examples/s33.rs time`, each frame's `advance` timed and the windows' means taken from one run, three
 rounds, each running both workloads with skipping on and off, the order alternated between rounds; every run alone among
 this stage's jobs in a capped scope at CPU weight 100 while other stages' work went on beside it, the load average (one
-minute) read before and after each run. The recompiled tier, the core's default; the same binary throughout.
+minute) read before and after each run. The recompiled tier, the core's default; the same binary throughout, built on
+the stage's starting tree (WiseMan `86b6a565d`), before S40's VU1 recompiler and §46's fast paths for the GS, which were
+merged after the series and shorten the GS-bound windows further on their own.
 
 | Window | Off, rounds 1–3 | median (spread) | On, rounds 1–3 | median (spread) | Ratio | Frames a second |
 | --- | --- | --- | --- | --- | --- | --- |

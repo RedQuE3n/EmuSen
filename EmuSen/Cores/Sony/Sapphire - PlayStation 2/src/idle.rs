@@ -1,9 +1,10 @@
 //! Idle skipping (stage S33, Sapphire_Plan.md §5.12 lever 1, Sapphire_Native.md §47): a loop of the EE whose turn is
-//! seen, instruction by instruction, to read only what nothing changes before the board's next event and to come back
-//! to its head with every register as it was and the timing shifted by the turn's cycles has its further turns up to
-//! that event passed at once: the issue model, Count, Random and the counts moved as those turns would move them, and
-//! the board brought through each of their instructions' times as `System::step` brings it, the IOP run at each and the
-//! skip ended at the first time the IOP's side wakes the DMAC. Detection is the core's, at run time, from what it
+//! seen, instruction by instruction, to read only what only the board's events change and to come back to its head with
+//! every register as it was (or each count moved by its step) and the timing shifted by the turn's cycles has its further
+//! turns passed at once: the issue model, Count, Random, the counts and the loop's own counts moved as those turns would
+//! move them, and the board brought through each of their instructions' times as `System::step` brings it, the skip
+//! ended at the first time a line or the field changes, the DMAC writes what the turn reads, or the IOP's side wakes the
+//! DMAC. The IOP's own waits are passed between the board's calls. Detection is the core's, at run time, from what it
 //! executes; nothing names an address.
 
 use crate::blocks::Blocks;
@@ -86,7 +87,7 @@ impl Refusal {
     }
 }
 
-/// What idle skipping did: the core's own counts, cycles and counts only, never an address (Sapphire_Native.md §47.6).
+/// What idle skipping did: the core's own counts, cycles and counts only, never an address (Sapphire_Native.md §47.9).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
     /// Skips of the EE's waits, and the EE cycles and steps they passed.
@@ -163,9 +164,9 @@ fn step(sys: &mut System, blocks: &mut Option<&mut Blocks>) {
     };
 }
 
-/// At an arrival at a head (`Idle::backward`): after `ARRIVALS` in a row, its turn proven by stepping it, and if it
-/// repeats, the turns before the board's next event passed. The steps taken: at most `left` stepped, so that a frame's
-/// batch ends where the plain run's does, and any number passed, none of which crosses an event.
+/// At an arrival at a head (`Idle::backward`): from its `ARRIVALS`-th, unless it waits after a refusal, its turn proven by
+/// stepping it, and if it repeats, its further turns passed. The steps taken: at most `left` stepped, so that a frame's
+/// batch ends where the plain run's does, and any number passed, none of them past the field's beginning.
 pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>, left: u64) -> u64 {
     let head = sys.ee.pc;
     let at = (head as usize >> 2) & (HEADS - 1);
@@ -396,9 +397,7 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
             return Err((steps, Refusal::Exception));
         }
         let b = &sys.board;
-        if b.lines() != lines
-            || b.pcrtc.fields != fields
-            || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty())
+        if ended(b, lines, fields)
             || registers[..read].iter().any(|&(p, v)| b.pure_register(p) != Some(v))
         {
             return Err((steps, Refusal::Event));
@@ -410,6 +409,14 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
     let changed = stores[..stored].iter().filter(|&&(r, was)| sys.ee.seen(&sys.board.map.rdram, r) != was).count();
     let traffic = std::array::from_fn(|i| sys.board.traffic[i] - traffic[i]);
     Ok(Turn { steps: n as u64, unpaired, traffic, registers: read > 0, stores, stored, changed })
+}
+
+/// Whether the board has done, since a turn began with `lines` and field `fields`, what a turn being proven or passed
+/// must stop at: a line the core samples changed, the field begun (the frame's end), or the DMAC written what the turn
+/// reaches. The one place a skip's end is decided, so that a condition added later (an interrupt recognised and not yet
+/// taken) is added once.
+fn ended(b: &crate::board::Board, lines: (bool, bool, bool), fields: u64) -> bool {
+    b.lines() != lines || b.pcrtc.fields != fields || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty())
 }
 
 /// Where an access lands as the DMAC addresses it: physical memory, or the scratchpad.
@@ -465,7 +472,7 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
             let at = t + o;
             let System { ee, board } = &mut *sys;
             board.run_to(at, &mut ee.spram[..]);
-            if board.lines() != lines || board.pcrtc.fields != fields || board.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty()) {
+            if ended(board, lines, fields) {
                 ended = Some((i + 1, at));
                 break;
             }

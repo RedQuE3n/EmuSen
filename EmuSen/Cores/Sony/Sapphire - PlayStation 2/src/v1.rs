@@ -681,7 +681,7 @@ mod tests {
         assert!(create(&elf(), &[(EE_TIER_KEY, "interpreter")]).unwrap().blocks.is_none());
     }
 
-    /// Idle skipping is exact, so it is on by default and one setting away (S33, Sapphire_Native.md §47.7).
+    /// Idle skipping is exact, so it is on by default and one setting away (S33, Sapphire_Native.md §47.9).
     #[test]
     fn idle_skipping_is_on_by_default_and_a_setting_turns_it_off() {
         let s = schema().into_iter().find(|s| s.key == IDLE_KEY).expect("idle skipping is a setting");

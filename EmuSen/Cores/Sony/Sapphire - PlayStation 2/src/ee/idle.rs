@@ -153,9 +153,8 @@ impl Ee {
     }
 
     /// The turn from mark `a` to now, if it repeats: every register as it was but the inductions `moved`, nothing refilled
-    /// into a cache, the issue
-    /// model `a`'s a turn later shifted in time, Count and the cycles it saw moved by the turn's cycles and Random by its
-    /// issue cycles; Cause unchanged, so that no interrupt was asked for on the way.
+    /// into a cache, the issue model `a`'s a turn later shifted in time, Count and the cycles it saw moved by the turn's
+    /// cycles and Random by its issue cycles; Cause unchanged, so that no interrupt was asked for on the way.
     pub(crate) fn period_from(&self, a: &Mark, unpaired: u64, moved: u32) -> Result<Period, Refusal> {
         let b = self.mark();
         let kept = |m: &Mark| std::array::from_fn::<u128, 32, _>(|r| if moved >> r & 1 == 1 { 0 } else { m.gpr[r] });
@@ -210,7 +209,7 @@ impl Ee {
     }
 }
 
-/// The inductions of a turn being checked (Sapphire_Native.md §47.3): the registers that move from turn to turn, the
+/// The inductions of a turn being checked (Sapphire_Native.md §47.5): the registers that move from turn to turn, the
 /// words of memory that do, and for each register holding a value taken from one of them at this point of the turn, the
 /// induction it was taken from and its width. A value of width 32 is a sign extension of its low word, moved by 32-bit
 /// additions; one of width 64 by 64-bit additions; each is its induction plus a constant, so that a turn moves it by its

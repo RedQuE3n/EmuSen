@@ -137,7 +137,7 @@ pub fn ee_registers() -> Vec<(String, u32)> {
     v
 }
 
-/// Idle skipping's counts, read-only, after each processor's registers (Sapphire_Native.md §47.6): the EE's skips, the
+/// Idle skipping's counts, read-only, after each processor's registers (Sapphire_Native.md §47.9): the EE's skips, the
 /// cycles and steps they passed and the turns passed while a VIF, the GIF or a VU ran; the IOP's cycles and instructions
 /// passed. Counts only, never an address.
 pub const IDLE_EE: [&str; 4] = ["idle.skips", "idle.cycles", "idle.steps", "idle.busy"];

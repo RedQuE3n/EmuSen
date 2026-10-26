@@ -100,7 +100,7 @@ impl Ee {
             return None;
         }
         let pc = self.pc;
-        if pc & 3 != 0 || self.cop0[super::cop0::CONFIG] & config::ICE == 0 || self.interrupt_pending() {
+        if pc & 3 != 0 || self.cop0[super::cop0::CONFIG] & config::ICE == 0 || self.interrupt_pending() || self.interrupt_after != 0 {
             return None;
         }
         match self.translate(pc, Access::Fetch).ok()? {

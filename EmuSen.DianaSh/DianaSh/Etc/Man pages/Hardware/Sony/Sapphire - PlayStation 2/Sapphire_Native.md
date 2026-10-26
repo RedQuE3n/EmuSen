@@ -5780,6 +5780,183 @@ never committed. The traces and the state were deleted when this was written.
 read the traces above and the records of the project's programs that call the kernel, and loaded a Sapphire state of
 OSDSYS without opening it; **this writer is exposed and will never write the open replacement**.
 
+### 30.78 D-860: an interrupt on Int0 or Int1 taken two instructions after its recognition (2026-10-26)
+
+*Built on the tester's decision of 2026-10-26 (§30.76 Q1, option (a)); its record is `Sapphire_Disputes.md` D-860.* The
+EE now recognises an interrupt on Int0 or Int1 at a step's interrupt check, as before, but takes it only once the next
+**two** instructions have completed, whatever they do to EIE. A DI among them therefore leaves the handler EIE clear,
+as the kit's *Restriction* (10) warns. Count's interrupt (IP7) is still taken at the check that sees it. An exception
+taken among the two drops the recognition, and the lines are tested again after its return. Both EE tiers do exactly
+this: the interpreter in its step, the recompiler by starting no block while a recognition waits. The state carries
+the recognition (`SPH2` version 5), and a version 4 state loads with none. **OSDSYS's browser now draws** "There is no
+data." with slot 1 empty and with the formatted card alike (§30.81), as PCSX2 does with slot 1 empty, the card not
+being seen (P8). Every ps2autotests program gives what it gave before (52 of 55 EE, 23 of 23 IOP), and the S28
+anchors measured are §30.82's. One of the project's programs does not answer as the referee's interpreter does (§30.80).
+
+### 30.79 What was built
+
+- **`ee::INTERRUPT_DELAY`** (`ee/mod.rs`), 2: the one place the count is kept.
+- **`Ee::interrupt_after`**: a recognition not yet taken. It is set to the delay at the check that first finds the
+  interrupt due, counted down by each later check, and taken by the check that brings it to 0. It is zeroed by
+  `Ee::raise` and `Ee::raise2`, so that any exception's entry drops it.
+- **`Ee::interrupt_now`**, the step's interrupt check in place of the direct test. IP7 is taken at once; otherwise the
+  recognition counts down, or begins when an interrupt is due. Cause.IP2 and IP3 are written from the lines at each
+  check as before, so the exception's Cause shows the lines as they are when it is taken.
+- **The recompiler**: `Ee::block_entry` refuses while `interrupt_after` is not 0, beside its existing refusal when an
+  interrupt is due. The replay's stop before a step at which an interrupt is due is unchanged. That step is where the
+  recognition is made, and it is always the interpreter's, so the two tiers count the same instructions. `blocks::compare`
+  compares `interrupt_after` too.
+- **The state**: the EE's block gains `InterruptAfter`, one byte after `Lines`. `STATE_VERSION` is 5 and
+  `OLDEST_STATE_VERSION` stays 4. A version 4 state is read with the recognition 0, its length checked as version 4's
+  (`state::ADDED_IN_5`). The listing of version 5 is pinned by `tests/sph2/version-5.layout`.
+
+### 30.80 The project's programs, tests and seeded faults (measured 2026-10-26)
+
+The D-800 programs (§30.73), fast-booted on the Americas image, on both of Sapphire's tiers:
+
+| Program | Before | Now, the interpreter and the recompiler alike | PCSX2's interpreter, PCSX2's recompiler (§30.73) |
+|---|---|---|---|
+| `d800-ei`: stores before the handler, six rounds | 0, 16, 16, 16, 16, 16 | **2**, 16, 16, 16, 16, 16 | no handler; 0, 16, 16, 16, 16, 16 |
+| `d800-poll`: sightings, all right after a handler returned | 0 of 8 | 1 of 8 (arrival 7) | 3 of 8; 0 of 8 |
+| `d800-poll-tim`: the same | 0 of 8 | 2 of 7 (arrivals 3 and 6) | 8 of 8; 0 of 8 |
+| `d800-tight`: sightings before the interrupt | 0 of 8 | **0 of 8** | 8 of 8; 0 of 8 |
+
+`d800-ei` shows the rule exactly: with V-blank's start pending at EI, two stores complete before the handler.
+**`d800-tight` still sees no V-blank before its interrupt**, where PCSX2's interpreter sees it at every arrival.
+Under the rule a poll sees the bit only when its read of I_STAT is one of the two instructions after the step in which
+the board latched the source. Where the latch falls was measured with a build-only test of the same loop, bare on the
+interpreter, timer 0's compare as the source and the project's handler, 2,000,000 steps. **The latch was found after
+the read of I_STAT (249 of 499) or after the AND that follows it (249), once after the branch, never after the loop's
+other four instructions.** The board is brought to the core's time after each step, and in this loop the clock moves
+almost only at the uncached read, whose bus wait (`timing::UNCACHED`, 2 cycles [A]) the other instructions issue
+beside. The read samples I_STAT at the start of its access, so a latch during its own wait is found right after it.
+The two instructions that then complete are the AND and the branch, and the interrupt is taken before the next read.
+With one, two or three NOPs added after the branch's slot, the latch falls after other instructions too, and the reads
+see it at 2, 0 and 67 of 437, 444 and 399 arrivals. The browser's loop, which was not traced, is evidently one in which a
+read falls within two instructions of a latch. A read that took I_STAT at the end of its access would see a latch
+during its own wait, which is §30.84 Q2. Whether the console's read sees a source latched during its own bus access is
+§30.84 Q2. The browser's own loop sees the bit under the rule as built (§30.81).
+
+**Tests** [M, `cargo test --release`, one file a run]:
+- **`cop0`, 21 of 21.** It gains `an_interrupt_on_int0_or_int1_is_taken_after_two_more_instructions_whatever_they_do_to_eie`:
+  Int0 and Int1 each taken after two instructions, EPC the second's successor; DI as the first leaving the handler EIE
+  clear; IP7 taken at once; a SYSCALL among them dropping the recognition. `an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h`
+  now takes Int0 after three steps.
+- **`blocks`, 16 of 16.** It gains `no_block_starts_while_a_recognised_interrupt_waits`: a hot loop compiled, a
+  recognition set on both machines, each dispatch one interpreted instruction, the two machines equal and the
+  interrupt taken at the second check. The random programs with timer 0's and Count's interrupts leave the
+  interpreter's machine as before, with rollbacks.
+- **`interpreter`, 23 of 23.**
+- **The lib, 102 of 102** (2 ignored). It gains `a_recognised_interrupt_is_state_and_a_version_4_state_loads_with_none`,
+  and `the_version_5_layout_is_pinned` replaces version 4's.
+- **Every target type-checks.** On the tree rebased onto D-840: `ipu` 12 of 12, the lib, `cop0` and `blocks` again,
+  and WiseMan's `SapphireTests` **5 of 5**, the filter `blast.sh` gives. On the tree rebased onto S33 (§30.83): the lib
+  **105 of 105**, with `a_recognised_interrupt_keeps_a_wait_from_being_passed` (`ee::idle`); `idle` 7 of 7, `blocks`
+  16 of 16, `cop0` 21 of 21, `interpreter` 23 of 23 and `debugger` 6 of 6. On the tree rebased onto S29: the lib 108 of 108, `cop0`, `blocks` and
+  `idle` as above, and `SapphireTests` 5 of 5.
+
+**Seeded faults**, each reverted:
+- The delay 0: no interrupt on Int0 is ever taken; caught by both `cop0` interrupt tests.
+- The delay 1: caught by both.
+- `block_entry` without the refusal: caught by the blocks test, a block of three instructions run while the
+  recognition waited.
+- `Ee::idle_eligible` without its refusal: caught by the `ee::idle` unit test.
+
+### 30.81 OSDSYS's browser, and P8 (measured 2026-10-26)
+
+`examples/s25b.rs`, the Americas image, part B's script (Cross every 120 fields from 770, the ninth on "Browser" at
+1730), a picture every 60 fields to field 2200, the recompiler. Two runs: slot 1 empty, and slot 1 holding the crate's
+formatted card (`emusen_ps2_card::format`). PCSX2 with the same card (§30.18, measured 2026-10-25) lists "Memory Card
+(PS2)/1, 7,998 KB Free" and, entered, "There is no data.".
+
+| Fields | Slot 1 empty | The formatted card in slot 1 |
+|---|---|---|
+| 770-1610 | the setup stepped on at each press | the same |
+| 1680 | the main menu | the same |
+| 1740-1860 | the menu fading out | the same |
+| **1920-2160** | **the browser: the grey ground, its moving light, "There is no data." and "Back"** (215,999 to 216,005 pixels lit) | **the same**, the 36 pictures equal byte for byte to the empty slot's |
+
+Run again with slot 1 empty on the tree with S33's idle skipping, on as the core's default: the 36 pictures equal
+byte for byte, the run in 326 s of wall time where the first took 711.
+
+So the browser runs, and with the formatted card it shows what PCSX2 shows with slot 1 empty, not the card PCSX2
+lists. The card was not written. **P8 as now observed**: the player's BIOS does not see the card at all, its
+authentication unanswered (Q7(b), `Sapphire_Plan.md` §11), and the browser treats slot 1 as empty. That is what Jak and
+Daxter shows in play (§39.7). It is the refusal Q7(b) decided, not a defect of this step's.
+
+### 30.82 Goldens (measured 2026-10-26)
+
+- **ps2autotests on the player's BIOS** (S10's runner, the Americas image, one program at a time):
+  - **EE, 52 of 55.** The same three as §36.5: `sqrt`'s 1/√25 (D-28), `efu`'s last places (S13) and `intstall`'s FQC
+    (D-363). Every interrupt and thread program equal, `kernel/ee/interrupt/intc_order` and `dmac_order` among them.
+  - **IOP, 23 of 23** (§40's loader and discs).
+
+  No text moved, and none on the tree with S33's idle skipping on either (52 of 55, 23 of 23).
+- **The S28 anchors**, Jak and Daxter and Kingdom Hearts from power-on (S28's runner and EEPROM, `ps2anchor.py`
+  against the referee's pictures and RAM of §39):
+
+  | Anchor (§39.4, §39.5) | Picture: pixels differing by more than 8 / 32 / 64 | The game's RAM: words equal; pages; the program's words | Against §39 |
+  |---|---|---|---|
+  | Jak A1, the legal screen, frame 850 | 0 / 0 / 0 | the program's segment 65,269 of 65,350 | unchanged |
+  | Jak A2, **the memory card screen**, frame 1,080 | 683 / 21 / 0 | 79.18 %, 5,735 of 7,936 pages; 65,232 | unchanged |
+  | KH A1, "Published by …", frame 960 | 0 / 0 / 0 | 8,126,337; 7,917; 1,422,124 | unchanged |
+  | KH A2, the copyright screen, frame 1,920 | 164 / 0 / 0 | **8,126,341**; 7,915; **1,422,144** | **one word fewer** equal in each count (8,126,342 and 1,422,145 before) |
+  | KH A3, the title, frame 2,940 | 44 / 0 / 0 | 8,126,350; 7,916; 1,422,140 | unchanged |
+
+  Jak and Daxter's memory card screen reads "No memory card (PS2) inserted in memory card slot 1 … Continue? OK", as
+  §39.7 records. Run again on the tree with S33's idle skipping on, both of Jak's anchors give the same counts and the
+  card screen the same picture byte for byte. Kingdom Hearts' copyright screen moved by one word of its program's memory, at 002B6228h. It read 0 before and
+  on the referee, and reads 1 now. At A1 the referee holds 1 there and Sapphire 0, before and now; at A3 all three hold
+  0. So it is a flag the game sets and clears within its frames, and the dump at frame 1,920 now catches it set: the
+  interrupts land two instructions later, so the instant at which the frame ends falls at another point of the game's
+  own cycle. It is a word of phase, not of state, and it is re-recorded as A2's golden with that cause. Its other word
+  that departs from the referee, at 0066BA3Ch, departs before and now alike (a count, 0129A742h and 0129A747h, the
+  referee 0). Jak's title and
+  opening scene (A3a, A3b) and Kingdom Hearts' attract sequence (A4) were not run: each is a moving picture that §39
+  matches only by its least different frame, and the static anchors before them are unchanged.
+
+### 30.83 S33's idle skipping, and what S37 needs
+
+- **S33 (idle skipping)**, merged before this step and joined to it here, in three places of its own:
+  - `Ee::idle_eligible` refuses to prove a turn while a recognition waits (`Refusal::Event`, not penalised).
+  - The turn's mark carries `interrupt_after`, so a turn in which one is recognised does not repeat (`Ee::period_from`).
+  - `idle::ended`, the one place a skip's end is decided, now takes the machine and also ends a skip at a recognition.
+
+  A recognised interrupt is taken two instructions on, never after passed turns. A rise of the lines already ends a
+  skip, and the recognition is then made by the interpreter's step that follows.
+- **S37 (loads and stores in blocks).** Nothing beyond the rebase: `block_entry` refuses while a recognition waits, and
+  its replay's stop for an interrupt due stays the recognition's point. A block exit it adds must keep leaving the
+  recognition to the interpreter's step, as every exit does now.
+
+S37 rebases onto one constant, one field, one check (`Ee::interrupt_now`), one condition in `block_entry`, the state's
+added byte, and the three lines above in idle skipping.
+
+### 30.84 Questions the step leaves
+
+1. **Q1 [routine], the goldens.** No autotest moved, and the anchors are as §30.82 gives them. *Recommended*: record
+   them as the new goldens.
+2. **Q2 [decision], when a device register is read.** `d800-tight` shows that under the decided rule a loop reading
+   I_STAT sees a source only when the latch falls within two instructions before the read. Sapphire samples a register
+   at the start of the load's access, so a latch during the load's own wait is missed (§30.80). PCSX2's interpreter
+   sees it at every arrival, its recompiler never. On the console an uncached load takes its data at the end of its bus
+   access, though no document times the access. *Recommended*: leave it until a game or a program needs it, and record
+   it as a named loss; the browser, the autotests and the anchors do not need it.
+
+### 30.85 What was read, and exposure (2026-10-26)
+
+**Read**:
+- This page's §30.68 to §30.77, §36.4 to §36.7, §39.2 to §39.7, §40.4 and §40.5.
+- `Sapphire_Disputes.md` D-800.
+- Sony's *EE Core User's Manual* §4.2.5 and the kit's *Restriction* (10), as at D-800.
+- The S33 and S37 branches' changes to the interrupt's paths, for §30.83.
+
+No emulator, SDK or loader source and no firmware: the Americas image was handed by path to Sapphire and never opened.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire for
+OSDSYS's pictures, the ps2autotests' texts and two games' anchors, and read the records of the project's programs that
+call the kernel. No trace was taken beyond pictures, texts, RAM counts and the runners' reports. **This writer is
+exposed and will never write the open replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -7111,6 +7288,11 @@ replacement**.
 tester's discs, the image handed to the kit by path and executed, never opened, hashed, listed or disassembled, and
 looked only at the kit's verdicts and its own measures; **that writer is exposed too and will never write the open
 replacement**.
+
+*Added 2026-10-26 at the interrupt delay's step (§30.78 to §30.85):* that step's writer ran the player's BIOS on
+Sapphire for OSDSYS's pictures, ps2autotests' texts and two games' anchors, and ran the project's programs that call the
+kernel; no trace beyond pictures, texts, RAM counts and the runners' reports; **that writer is exposed too and will never
+write the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

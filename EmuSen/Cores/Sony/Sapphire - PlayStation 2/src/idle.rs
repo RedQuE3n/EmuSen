@@ -397,7 +397,7 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
             return Err((steps, Refusal::Exception));
         }
         let b = &sys.board;
-        if ended(b, lines, fields)
+        if ended(sys, lines, fields)
             || registers[..read].iter().any(|&(p, v)| b.pure_register(p) != Some(v))
         {
             return Err((steps, Refusal::Event));
@@ -411,12 +411,13 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
     Ok(Turn { steps: n as u64, unpaired, traffic, registers: read > 0, stores, stored, changed })
 }
 
-/// Whether the board has done, since a turn began with `lines` and field `fields`, what a turn being proven or passed
-/// must stop at: a line the core samples changed, the field begun (the frame's end), or the DMAC written what the turn
-/// reaches. The one place a skip's end is decided, so that a condition added later (an interrupt recognised and not yet
-/// taken) is added once.
-fn ended(b: &crate::board::Board, lines: (bool, bool, bool), fields: u64) -> bool {
-    b.lines() != lines || b.pcrtc.fields != fields || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty())
+/// Whether the machine has done, since a turn began with `lines` and field `fields`, what a turn being proven or passed
+/// must stop at: a line the core samples changed, the field begun (the frame's end), the DMAC written what the turn
+/// reaches, or an interrupt recognised and not yet taken (Sapphire_Disputes.md D-860). The one place a skip's end is
+/// decided; no turn is proven while a recognition waits either (`Ee::idle_eligible`, `Ee::period_from`).
+fn ended(sys: &System, lines: (bool, bool, bool), fields: u64) -> bool {
+    let b = &sys.board;
+    b.lines() != lines || b.pcrtc.fields != fields || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty()) || sys.ee.interrupt_after != 0
 }
 
 /// Where an access lands as the DMAC addresses it: physical memory, or the scratchpad.
@@ -472,7 +473,7 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
             let at = t + o;
             let System { ee, board } = &mut *sys;
             board.run_to(at, &mut ee.spram[..]);
-            if ended(board, lines, fields) {
+            if ended(sys, lines, fields) {
                 end_at = Some((i + 1, at));
                 break;
             }

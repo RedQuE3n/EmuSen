@@ -196,6 +196,13 @@ impl Mag {
         }
     }
 
+    fn bits(&self) -> u32 {
+        match self {
+            Mag::Small(v) => bits128(*v),
+            Mag::Wide(b) => b.bits(),
+        }
+    }
+
     fn log2(&self) -> f64 {
         match *self {
             Mag::Small(v) => {
@@ -332,7 +339,31 @@ pub fn log2_scaled(w: u64, den: &Sum, bits: u32) -> Option<i64> {
     if est - floor > CLEAR && floor + 1.0 - est > CLEAR {
         return Some(floor as i64);
     }
+    // Near a whole logarithm t, the floor is t × 2^bits when w / |den| ≥ 2^t and one less otherwise, as the exact steps
+    // give; one comparison decides it (Sapphire_Native.md §46.5).
+    let near = est.round() as i64;
+    if (est - est.round()).abs() <= CLEAR && near & ((1 << bits) - 1) == 0 {
+        return Some(if covers(w, &den.mag, i64::from(den.exp) + (near >> bits)) { near } else { near - 1 });
+    }
     log2_exact(w, den, bits)
+}
+
+/// Whether w ≥ mag × 2^shift, exactly; `w` and `mag` non-zero.
+fn covers(w: u64, mag: &Mag, shift: i64) -> bool {
+    let (wb, mb) = (i64::from(64 - w.leading_zeros()), i64::from(mag.bits()));
+    if shift >= 0 && mb + shift > wb {
+        return false;
+    }
+    if shift < 0 && wb - shift > mb {
+        return true;
+    }
+    // Either side now fits in the other's width: mag × 2^shift in 64 bits, or w × 2^-shift in mag's.
+    match mag {
+        Mag::Small(m) if shift >= 0 => u128::from(w) >= m << shift,
+        Mag::Small(m) => u128::from(w) << -shift >= *m,
+        Mag::Wide(b) if shift >= 0 => Big::from_u128(u128::from(w)).cmp(&b.shl(shift as u32)) != std::cmp::Ordering::Less,
+        Mag::Wide(b) => Big::from_u128(u128::from(w)).shl((-shift) as u32).cmp(b) != std::cmp::Ordering::Less,
+    }
 }
 
 /// `log2_scaled` by the exact steps alone.
@@ -590,5 +621,65 @@ mod tests {
             assert_eq!(matches!(a.mag, Mag::Small(_)), narrow, "{gap}");
             assert!(same_sum(&a, &b), "{gap}");
         }
+    }
+
+    /// Whether `log2_scaled` decides this case by `covers`.
+    fn by_comparison(w: u64, den: &Sum, bits: u32) -> bool {
+        let est = ((w as f64).log2() - den.mag.log2() - f64::from(den.exp)) * f64::from(1u32 << bits);
+        let (floor, near) = (est.floor(), est.round());
+        !(est - floor > CLEAR && floor + 1.0 - est > CLEAR) && (est - near).abs() <= CLEAR && (near as i64) & ((1 << bits) - 1) == 0
+    }
+
+    /// `cases` LODs whose logarithm lies on or near a whole number, and random ones: one Q at every vertex (a power of
+    /// two, its single-precision neighbours, or any value), the weights' total as w or any w, sums of every class, at
+    /// each depth; `log2_scaled` against the exact steps alone. Returns how many `covers` decided.
+    fn logs_equal_the_exact_steps(seed: u64, cases: u64) -> u64 {
+        let mut r = Rng(seed);
+        let mut compared = 0;
+        for _ in 0..cases {
+            let exp = r.below(256) as u32;
+            let one = match r.below(4) {
+                0 => Float::from_bits(exp << 23),
+                1 => Float::from_bits((exp << 23).wrapping_add(1) & 0x7FFF_FFFF),
+                2 => Float::from_bits((exp << 23).wrapping_sub(1) & 0x7FFF_FFFF),
+                _ => float(&mut r, 127, 30),
+            };
+            let spread = [0, 2, 40, 255][r.below(4) as usize];
+            let q = if r.below(4) == 0 { std::array::from_fn(|_| float(&mut r, i64::from(exp), spread)) } else { [one; 3] };
+            let wts: [i64; 3] = std::array::from_fn(|_| if r.below(8) == 0 { weight(&mut r) } else { r.below(1 << 36) as i64 });
+            let total = wts.iter().map(|w| w.unsigned_abs()).fold(0u64, u64::wrapping_add);
+            let w = if r.below(4) == 0 || total == 0 { r.below(1 << 40) + 1 } else { total };
+            let den = Sum::of(&q, wts);
+            let bits = r.below(8) as u32;
+            if den.is_zero() {
+                assert_eq!(log2_scaled(w, &den, bits), None);
+                continue;
+            }
+            compared += u64::from(by_comparison(w, &den, bits));
+            assert_eq!(log2_scaled(w, &den, bits), log2_exact(w, &den, bits), "{w} {q:?} {wts:?} {bits}");
+        }
+        compared
+    }
+
+    #[test]
+    fn logs_on_a_whole_number_are_decided_as_the_exact_steps_decide_them() {
+        let n = logs_equal_the_exact_steps(0x5851_F42D_4C95_7F2D, 100_000);
+        assert!(n > 10_000, "{n} decided by the comparison");
+        // One Q of 1.0, 2.0 and 0.5, and the neighbours of 1.0 either side, at every depth.
+        for bits in 0..8 {
+            for (qb, want) in [(0x3F80_0000u32, 0i64), (0x4000_0000, -1 << bits), (0x3F00_0000, 1 << bits), (0x3F80_0001, -1), (0x3F7F_FFFF, 0)] {
+                let den = Sum::of(&[Float::from_bits(qb); 3], [5, 7, 11]);
+                assert_eq!(log2_scaled(23, &den, bits), Some(want), "{qb:08X} {bits}");
+                assert_eq!(log2_exact(23, &den, bits), Some(want), "{qb:08X} {bits}");
+            }
+        }
+    }
+
+    /// The same over 10 million cases: `cargo test --release -- --ignored ten_million_logs` (Sapphire_Native.md §46.5).
+    #[test]
+    #[ignore]
+    fn ten_million_logs_equal() {
+        let n = logs_equal_the_exact_steps(0x1405_7B7E_F767_814F, 10_000_000);
+        println!("10,000,000 logarithms, {n} decided by the comparison");
     }
 }

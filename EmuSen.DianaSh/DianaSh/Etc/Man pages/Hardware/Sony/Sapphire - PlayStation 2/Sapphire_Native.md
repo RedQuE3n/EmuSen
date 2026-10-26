@@ -7630,7 +7630,7 @@ recompiler the default now that its gate is met, the interpreter a switch away, 
 
 ### 44.7 The gate (measured 2026-10-26)
 
-On the desktop at CPU weight 20 beside other agents' work; the player's Americas BIOS `ps2-0230a-20080220.bin` executed,
+On the desktop at CPU weight 20 beside other work; the player's Americas BIOS `ps2-0230a-20080220.bin` executed,
 never read; ps2autotests from `~/.cache/emusen/probe/sapphire/ps2autotests/`, Jak and Daxter read in place from
 `~/.cache/emusen/probe/sapphire/discs/`.
 

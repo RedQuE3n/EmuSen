@@ -7780,6 +7780,324 @@ No emulator source, and no firmware.
 - Any emitter for the EE or the VUs (S36 to S41).
 - MarsRT's GPU tests, which need the RX 6800 alone.
 
+## 43. Stage S32, the bench and the profile, before any lever (2026-10-26)
+
+*Numbered §43 and its disputes from D-560, the stages and steps beside it (S28, S31, S35 and the SIO2 DMA's dispute
+step) taking the numbers before it. The stage raised no dispute: it measures the core and reads nothing of the hardware.*
+
+### 43.1 In one paragraph
+
+The plan's §7 row S32, first of phase G, taken directly after S29 on the tester's decision of 2026-10-26 (Sapphire runs
+at 1 to 3 frames a second, which cannot be tested). **It takes no lever and no compromise; it produces the numbers that
+decide them.** `examples/bench.rs` runs one workload headless on the player's BIOS for a fixed count of frames, times
+each frame's `advance` alone and prints Diamond's bench line (mean, median, 95th percentile and worst milliseconds a
+frame, the frames a second) with the digests of every picture, the sound and the final state, and the units' own counts
+a frame (§43.2, §43.3). A ptrace sampler of the emulation thread's instruction pointer, named through `addr2line`'s
+inline chains, attributes the frame to Sapphire's host functions and so to its units (§43.4). Measured on the desktop
+(§43.5, §43.6): **OSDSYS's boot runs at 1.44 frames a second and its language screen at 1.36; Jak and Daxter's own
+program, entered by the fast boot, at 2.64 while it loads and 1.16 on its memory card screen; the ps2autotests programs
+at 1.0 to 3.1.** Where the frame goes differs by workload, and two findings dominate the ranking (§43.8): **the GS's
+exact perspective arithmetic, 256-bit division by shift and subtract for every textured pixel, is 61 % of Jak's drawing
+frames**, a cost §5.12 did not foresee; and **the EE costs 46 to 55 ns an instruction with the board brought along after
+each, against §5.12's 4 to 10 ns**, while the workloads run 5.6 to 9.8 million EE instructions a frame at 0.50 to 0.88
+cycles an instruction, the dual issue of long loops. Kingdom Hearts and Dark Cloud 2 read no sector by the fast boot on
+this tree and are left to S28's merge. The handheld's columns are owed (§43.9). The plan's amendment of 2026-10-26
+(`Sapphire_Plan.md` §5.13: cycle accuracy where realistic, byte accuracy the floor) is written there, and every lever and
+compromise below carries its kind: exact, timing-only or byte-changing.
+
+### 43.2 The bench
+
+`cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
+[--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card]`
+
+- **`boot`**: the console started empty (G10's start, no disc), the BIOS booting to OSDSYS; **slot 1 empty** unless
+  `--card`, as D-383's step left the setup.
+- **`elf <program.elf>`**: an EE program entered by S10's fast boot (§36.2), a ps2autotests program.
+- **`disc <image>`**: a disc put in the drive of a console started empty and the program its SYSTEM.CNF names entered by
+  the fast boot (§40.4): a synthetic disc of an IOP program, or a game's own program. The image is read into memory once
+  and handed to the drive as `Kept` without a second copy.
+
+It prints, over the frames from `--from` (default 0): one line in Diamond's form (`Diamond_Speed.md` §2) with the frames
+a second and the window's wall time; then the EE's instructions, cycles, cycles an instruction and steps by mode, the
+IOP's instructions and each VU's pairs, all a frame; and the drive's command counts, the frame the program was entered at
+and whether the EE stopped. `--times` writes each frame's milliseconds, `--every` pictures, `--press` holds pad buttons
+for six frames, and `--registers` counts every register access the units answer (S24's reports, which slow the run, so
+its times are not the bench's). The digests are taken outside the timed span; the bench changes no golden and no test's
+input. **The digests repeat**: the boot's three timed rounds, its sampled run and its run with `--registers` gave the same
+picture, sound and state digests (`50F06A02F1B76860`, `2EE7B3D10DF3C401`, `27EE1FC15C589B8C` at 760 frames), Jak's three
+rounds and its sampled run the same three, so the bench is the instrument S33 onward compares before and after.
+
+Diamond's `bench.rs` and MarsRT's are each their core's example, sharing no crate; Sapphire's follows Diamond's line format
+so the probe's tools read all three, and adds no dependency.
+
+### 43.3 The counts the core keeps for it
+
+Three counts, none in the state (the layout listing `tests/sph2/version-2.layout` unchanged): **`Ee::modes`**, the steps
+by the processor's mode (user, supervisor, kernel, level 1, level 2: the mode the counter already computes for PCCR);
+**`Iop::instructions`**, from the count `blackmoon-r3000`'s `run` returns; and **each VU's pairs in micro mode**
+(`Micro::pairs_run`, kept across FBRST's reset). Each is one addition on a path that already does far more; the EE's
+issued instructions and its cycles were already the timing model's and the board's. The mode is a hardware state, not an
+address: it says whether the EE ran user code, the kernel or an exception handler, never where.
+
+### 43.4 The profile's method
+
+`ipsample.py`, the speed tooling's sampler, names samples through the .NET runtime's perf map and cannot name a Rust
+core's functions, and `perf` is not installed on the desktop. The sampler used is **`rtsample.py`**
+(`~/.cache/emusen/probe/diamond/speed2/`, the ptrace sampler of `Diamond_Speed.md` §3 and `VenusRT_Native.md` §41.18),
+which stops the emulation thread every 2 ms, reads its instruction pointer and names it through the binary's symbols and
+`eu-addr2line`'s inline chains; a sample inside a library is named by the return address on the stack. A copy kept each
+inline frame's source file and began sampling at a frame's progress line, so a window of one workload could be profiled
+alone. A sample's unit is the innermost frame in a project source file: `src/ee/*` the EE (split by file and function
+into step and dispatch, fetch through the I-cache model, address translation, data access through the D-cache model, the
+caches' model, the timing model, COP0 and its counters, decode, instruction semantics), `src/gs/*` the GS (`exact.rs`
+apart), `src/vu/*` VU micro mode, `src/iop/*` and `blackmoon-r3000` the IOP, and so on; **the board's `run_to`, its
+units' idle checks after each EE instruction (`idle_to`, `quiet`), `System::step`, `Machine::advance` and the IOP's
+catch-up loop are "scheduler and synchronisation"**. Standard-library frames are passed over to their project caller.
+Samples in the bench's own digests (0.1 to 0.3 %) are left out. The bench is built with the crate's release profile
+(fat LTO, line tables only); nothing was rebuilt with frame pointers. The sampler's copy and the classifier are scratch
+tools in the probe's folder, not committed; their rules are this paragraph.
+
+**Attributed to Sapphire's own functions only** (§43.11): no sample was named by a guest address, the BIOS's or a game's.
+
+### 43.5 The workloads and their speed (measured 2026-10-26)
+
+The desktop, a Ryzen 7 7700X, every run under `systemd-run --user --scope -p CPUWeight=20` beside four other agents'
+work (another core's game runs, a referee, Release builds at times). **Each timed number is the median of three rounds
+with the spread of the three**; the load averages before and after the rounds are given (five-minute for the boot and
+Jak, one-minute for the short programs), since wall times do not survive load and shares do.
+
+| Workload | Window | Mean ms a frame | Frames a second | 95th percentile ms | Loads beside the rounds |
+|---|---|---|---|---|---|
+| OSDSYS's boot, Americas `0230a`, slot 1 empty | frames 0-760 | **693** (670-710) | **1.44** (1.41-1.49) | 1,032 | 5.6-10.1 |
+| | 0-690: the Sony animation and both logos | 692 (662-708) | 1.44 | 1,033 | |
+| | 690-760: the language screen | **735** (699-748) | **1.36** (1.34-1.43) | 907 | |
+| Jak and Daxter, its program by the fast boot, slot 1 empty | frames 0-900 | **649** (635-679) | **1.54** (1.47-1.58) | 1,055 | 7.9-10.1 |
+| | 8-400: its start, loading and the publisher's screen | 379 (321-464) | **2.64** (2.16-3.12) | 606 | |
+| | 400-900: its memory card screen ("No memory card (PS2) inserted") | **864** (850-887) | **1.16** (1.13-1.18) | 1,474 | |
+| ps2autotests `cpu/ee/alu` | 8-40 | 395 (352-400) | 2.53 | | 7.1-9.6 |
+| `cpu/ee_fpu/arithmetic` | 8-40 | 399 (374-599) | 2.51 | | 7.6-12.8 |
+| `cpu/ee_simd/arithmetic` | 8-40 | 411 (355-635) | 2.43 | | 7.6-12.8 |
+| `cpu/vu0_macro/integer` | 8-40 | 349 (315-512) | 2.87 | | 8.1-19.8 |
+| `dma/vif/unpack` | 8-40 | 1,003 (848-1,569) | 1.00 | | 7.9-21.4 |
+| `kernel/ee/thread/sleep` | 8-40 | 441 (378-649) | 2.27 | | 7.8-23.8 |
+| `vu/games/triace` | 8-40 | 356 (320-531) | 2.81 | | 7.6-24.6 |
+| `vu/lower/random` | 8-40 | 411 (403-683) | 2.44 | | 7.9-24.4 |
+| IOP `cpu/iop/alu`, from a synthetic DVD (§40.14) | 8-40 | 356 (310-461) | 2.81 | | 7.8-25.1 |
+| IOP `kernel/iop/thread/create` | 8-40 | 345 (300-494) | 2.90 | | 8.0-24.8 |
+| IOP `kernel/iop/messagebox/receive` | 8-40 | 318 (300-492) | 3.14 | | 8.1-24.5 |
+
+The NTSC frame is 16.68 ms: the boot's language screen is **44 times** too slow, Jak's memory card screen **52 times**,
+its loading **23 times**. The micro-workloads' programs finish within a few frames of their entry, so their windows are
+mostly the machine idling after them; they measure the floor of a frame in which the GS draws nothing: 300 to 440 ms, but
+`dma/vif/unpack`'s 1,000. Kingdom Hearts and Dark Cloud 2, run the same way for 600 frames (2.22 and 2.26 frames a
+second), issued **no drive command** after the fast boot entered their programs and drew the same picture; they do not run
+far enough on this tree and are left to S28's merge. Jak's memory card screen answers Cross (the text clears), after
+which its frames stop arriving (the PCRTC begins no field; the EE was not stopped by an unimplemented instruction): that
+is S28's, and the workload stays on the screen. Each window's profile, from a separate sampled run:
+
+| Unit (share of the frame's samples) | Language screen (18,987 samples) | Jak loading, 100-380 (80,431) | Jak memory card screen (309,318) |
+|---|---|---|---|
+| **EE** | **54.4 %** | **74.8 %** | 23.8 % |
+| **Scheduler and synchronisation** | **15.8 %** | **16.8 %** | 5.9 % |
+| **GS** | **21.9 %** (texture 10.1, local memory 6.8, pixel 2.5, formats 2.1), and 1.9 % in 128-bit division helpers it calls | 0.9 % | **64.3 %**, of which **`gs::exact` 61.2 %** |
+| IOP | 2.2 % | 2.6 % | 1.0 % |
+| DMAC | 1.9 % | 2.1 % | 0.8 % |
+| VIF, GIF | 0.5 % | 0.7 % | 1.2 % |
+| VU micro, VU0 macro | 0.0 % | 0.1 % | 1.3 % |
+| SPU2 | 0.3 % | 0.5 % | 0.2 % |
+| EE timers and INTC, PCRTC, SIF, CDVD | 0.6 % | 1.0 % | 0.6 % |
+| Other (hash lookups, library calls) | 2.4 % | 0.6 % | 0.9 % |
+
+Inside the EE and the scheduler (shares of the whole frame):
+
+| Part | Language screen | Jak loading | Jak memory card screen |
+|---|---|---|---|
+| Timing model (`ee::timing`, `ops::issue`) | 17.3 % | 18.7 % | 7.0 % |
+| Step and dispatch (`Ee::step`, the interrupt and break checks) | 10.6 % | 12.0 % | 4.2 % |
+| Address translation (`translate`, `tlb`) | 8.1 % | **21.3 %** | 4.8 % |
+| Fetch through the I-cache model | 7.9 % | 6.7 % | 2.5 % |
+| Instruction semantics (`ops`, MMI, FPU) | 3.6 % | 4.7 % | 1.8 % |
+| Decode memo, decode and the name lookup behind a memo miss | 4.1 % | 4.0 % | 1.8 % |
+| COP0, Count and the counters | 2.2 % | 2.6 % | 0.9 % |
+| Data access through the D-cache model, the caches' model | 0.8 % | 4.6 % | 0.8 % |
+| The units' idle checks after each instruction | 9.6 % | 9.9 % | 3.4 % |
+| The board's `run_to`, `System::step`, `advance` | 4.1 % | 4.4 % | 1.6 % |
+| The IOP brought to the EE's time after each instruction | 2.2 % | 2.5 % | 0.9 % |
+
+### 43.6 The units' costs against §5.12's estimates
+
+Each unit's share times the window's median frame, the desktop, the reference path (no lever, no compromise):
+
+| Unit | §5.12's estimate, interpreted | Language screen (735 ms) | Jak loading (379 ms) | Jak memory card screen (864 ms) |
+|---|---|---|---|---|
+| EE | 6-33 ms, at 4-10 ns an instruction | **400 ms**, and 116 ms bringing the board along | **283 ms**, and 64 | **206 ms**, and 51 |
+| EE work a frame | 1.6-3.3 million instructions at 1.5-3 cycles each | **9.45 million at 0.52 cycles**; 98.8 % user mode | **6.42 million at 0.77**; 99.9 % user | **5.58 million at 0.88**; 99.5 % user |
+| The EE's cost an instruction, with the board | 4-10 ns | **55 ns** | **54 ns** | **46 ns** |
+| VU0 and VU1 | 0-15 and 8-60 ms | 0 pairs | 2,956 pairs, 0.5 ms | **66,490 pairs (41,886 and 24,604), 10.5 ms: 158 ns a pair** against 8-20 |
+| IOP | 1-2.5 ms | 16 ms, and 16 of catch-up; 570,140 instructions | 10 ms, and 9; 381,114 | 8 ms, and 8; 348,298 |
+| GS, software | 3-30 ms | 175 ms | 3 ms | **555 ms**, 529 of it `gs::exact` |
+| VIF, GIF, DMAC | 1-4 ms | 17 ms | 10 ms | 18 ms |
+| SPU2 | 0.4-0.9 ms | 2.3 ms | 1.9 ms | 1.9 ms |
+| IPU | 1-3 ms in FMV | not exercised | not exercised | not exercised |
+
+Three things the estimates did not see. **The EE's instructions are many and cheap on the console**: the workloads issue
+more than one instruction a cycle (0.50 to 0.88 cycles each, the dual issue §5.2 models), and in user mode almost
+throughout, which is the shape of a program waiting in a loop of its own for an interrupt to change a flag; the
+micro-workloads' idle tails sit at exactly 0.50. **Each of those costs 46 to 55 ns** on the interpreter: the timing model,
+the per-instruction translation and fetch through the caches' models and the board's catch-up after every instruction
+together are more than the instructions' semantics (3.6 to 4.7 %). And **the GS's exact arithmetic**: S18's texture
+coordinates and LOD are computed without rounding (`gs::exact`, §31.3), the quotient S/Q and T/Q of every textured pixel
+by `Big::div`, a 256-bit shift-and-subtract loop of up to 256 steps; on Jak's memory card screen, a full-screen
+perspective-textured picture, that is 61 % of the frame. S24's shortcut (§35.7, the LOD's log2 from double precision
+where provably clear) covered the LOD alone.
+
+The register accesses do not show a polling loop: over the boot's 760 frames the most frequent register read was
+1000F230h at 4,698 a frame, against 9 million instructions a frame. The EE's waiting is in memory, inside its caches.
+
+### 43.7 How the numbers were checked
+
+- The counts were proven by test (§43.10), and the digests repeated across seven runs (§43.2).
+- Each window was profiled once, by a sampled run of its own; the sampled runs' frame times differ from the timed rounds'
+  (up to 50 % slower under the sampler and the load), so only their shares are used, and each share is multiplied by the
+  timed rounds' median. The order of the EE's parts (the timing model, translation, step and dispatch, fetch, then the
+  rest) was the same in all five sampled runs of this stage, whole runs and windows, at loads of 4 to 22.
+
+### 43.8 The levers and compromises, ranked
+
+For each, the share of the frame it can address in the three windows (language screen / Jak loading / Jak memory card
+screen), **the bound** (the speed if that share vanished, 1 / (1 − s)), **the expectation** under a stated assumption, the
+work in stages of the plan's size, and its kind under the plan's amendment of 2026-10-26 (`Sapphire_Plan.md` §5.13):
+**exact** (no byte or cycle differs), **timing-only** (when, never what, where the game does not depend on it), or
+**byte-changing**. Ordered by the expectation's gain per stage of work. Two levers the profile adds to §5.12's list are
+marked *new*.
+
+| # | Lever or compromise | Kind | Share addressed (%) | Bound | Expected (assumption) | Work | Gain a stage |
+|---|---|---|---|---|---|---|---|
+| 1 | *New:* **the GS's exact arithmetic on a fast path** — the quotient and the LOD computed in 128-bit or double precision wherever the operands provably fit, the 256-bit steps kept for the rest, as S24 did for the log2 | exact | 0 / 0 / 61.2 | 1.00 / 1.00 / 2.58 | 1.00 / 1.00 / **2.23** (the part to a tenth) | 0.5 | 2.45 |
+| 2 | **Idle skipping** on the EE (lever 1, S33), the IOP and the VU waits | exact | at most the EE's and the scheduler's: 70.2 / 91.6 / 29.7 | 3.36 / **11.9** / 1.42 | not estimable without the program counter; S33's own counts measure it | 1 | — |
+| 3 | **The GS on worker threads** (lever 3, S43) | exact | 21.9 / 0.9 / 64.3 | 1.28 / 1.01 / 2.80 | 1.20 / 1.01 / 1.93 (four workers); after #1, 1.18 on the memory card screen | 1 | 0.93 |
+| 4 | **The GS on the device** (lever 5, S44-S46) | exact (C5, C6 apart) | as #3 | 1.28 / 1.01 / 2.80 | 1.26 / 1.01 / 2.57 (the part to a twentieth); after #1, 1.24 | 3 | 0.52 |
+| 5 | **C1**, the EE charged a fixed cost an instruction | timing-only | the timing model and the counters' cycle events: 19.5 / 21.3 / 7.9 | 1.24 / 1.27 / 1.09 | 1.18 / **1.21** / 1.07 (four fifths gone) | 0.5 | 0.41 |
+| 6 | **The EE recompiler** (lever 4, S35-S39) | exact | the EE's: 54.4 / 74.8 / 23.8 | 2.19 / 3.97 / 1.31 | 1.77 / **2.49** / 1.24 (five times faster, P15) | 5 | 0.30 |
+| 7 | **C7**, bounded slack in the synchronisation | timing-only | the scheduler's: 15.8 / 16.8 / 5.9 | 1.19 / 1.20 / 1.06 | 1.13 / 1.14 / 1.05 (three quarters gone) | 0.5 | 0.29; but #9 takes the same samples exactly on one thread |
+| 8 | **Decoded caches** (lever 2, S34): fetch, translation, decode and the memo by physical address | exact | 20.1 / 32.0 / 9.4 | 1.25 / 1.47 / 1.10 | 1.11 / **1.19** / 1.05 (half gone; the I-cache model's timing kept) | 1 | 0.19 |
+| 9 | *New:* **the board brought along at events and accesses**, not after every EE instruction: the units' next event computed once, the idle checks and the IOP's catch-up run when it falls due or the EE touches a device | exact | the scheduler's: 15.8 / 16.8 / 5.9 | 1.19 / 1.20 / 1.06 | 1.13 / 1.14 / 1.05 | 1 | 0.14 |
+| 10 | **C2**, its timing part: the caches' tags kept for coherency, their miss times not charged | timing-only | the I- and D-cache models: 8.7 / 11.3 / 3.3 | 1.10 / 1.13 / 1.03 | 1.05 / 1.06 / 1.02 | 0.75 | 0.08 |
+| 11 | **The VU1 and IOP on threads** (lever 3, S42) | exact | 4.4 / 5.1 / 3.1 (the IOP with its catch-up, the VUs) | 1.05 / 1.05 / 1.03 | the same | 1 | 0.05 |
+| 12 | **C8**, the IOP a fixed cost an instruction | timing-only | the IOP's bus timing and I-cache: 0.6 / 0.9 / 0.3 | 1.01 | 1.00 | 0.5 | 0.02 |
+| 13 | **C4**, the VUs' flags without cycle-exact visibility | byte-changing | within the VUs': 0.0 / 0.1 / 1.2 | 1.01 | 1.01 | with S40 | 0.01 |
+| 14 | **The VU recompilers** (lever 4, S40-S41) | exact | the VUs': 0.0 / 0.1 / 1.2 | 1.01 | 1.01 | 2 | 0.01, on these workloads (below) |
+| 15 | **C3**, the floats on the host's arithmetic | byte-changing | the software floats: 0.3 / 0.3 / 0.4 | 1.00 | 1.00 | 1.5 | 0.00 |
+| — | **C11**, waits skipped by pattern | timing-only | as #2 | as #2 | taken only where S33's exact skipping leaves waits | 0.5 | — |
+| — | **C5**, the host's graphics pipeline | byte-changing | within #4's share | — | measurable only on the device path (S44) | — | — |
+| — | **C6**, render targets kept on the device | byte-changing | 0 on the software path | — | measurable only at S44 | — | — |
+| — | **C9**, the drive's times shortened | changes no frame's bytes or time, only a loading screen's length | 0 of frame time | — | Jak reads 11,406 sectors in its first 20 s of console time (§40.14) | 0.25 | — |
+
+**C10 is not in §5.13's table** (its numbering runs C1 to C9 and C11), so nothing is ranked under it.
+
+What the ranking says, in order. **First, the GS's exact arithmetic** (#1): exact, half a stage, and it more than doubles
+the speed of every perspective-textured frame; nothing else is as cheap for as much. **Second, idle skipping** (#2):
+its bound is the largest of all, because the workloads spend their instructions in user-mode loops at half a cycle each,
+but how much of the EE is waiting cannot be read without the program counter, which this stage does not look at in BIOS
+code; S33 counts what it skips. **Then the GS's threads and device path** (#3, #4) on drawing frames, which #1 shrinks
+from 64 to about 21 % of the memory card screen, and **C1** (#5), the cheapest of the EE's large items. **After #1, every
+workload here is EE-bound**: at 46 to 55 ns an instruction and 5.6 to 9.5 million instructions a frame, a frame of 13.4 ms
+on the handheld (§5.12's target), about 9.9 ms on the desktop at its assumed 1.35 times the speed, leaves about 1 to
+1.8 ns an instruction with everything else included; only idle skipping, the EE
+recompiler and C1 together reach that order, which is what P15 and P17 predicted. **The VUs, the IOP, the SPU2 and C3, C4
+and C8 address almost nothing on these workloads**, but none of them is a game's play: Jak's memory card screen runs
+66,490 VU pairs a frame at 158 ns each, so a game's 1 to 3 million pairs (§5.12) would cost 160 to 470 ms a frame on
+the interpreter. The VU1 recompiler's rank must be measured again on the first workload with play, which S28's merge
+brings; until then it is ranked by these numbers and marked as such.
+
+### 43.9 The handheld (owed)
+
+Not run in this stage: the tester has said handheld runs come later. The bench is ready for it with one command; on the
+Legion Go S (`Sapphire_Plan.md` §5.12's full-speed target), with the binary built on the desktop by
+`cargo build --release --example bench` and copied to `~/.cache/emusen/s32/` there with the player's BIOS and the disc:
+
+    systemd-run --user --scope -q ~/.cache/emusen/s32/bench disc <bios> americas <Jak's image> 900 --from 400 --times jak.times
+
+and `boot <bios> americas 760 --from 690` likewise, three rounds each, on charger and on battery, with no frontend
+running. **Owed columns**: the handheld's milliseconds and frames a second for every row of §43.5, its shares for the three
+windows of §43.5's second table, and the desktop-to-handheld ratio §5.12 assumed at 1.3-1.4 (`Nephrite_Plan.md` §5.5).
+
+### 43.10 Tests and seeded faults (2026-10-26)
+
+**Tests** [M, `cargo test --release`, the crate whole]: **364 of 364** before the new file; `tests/bench.rs` **3 of 3**,
+new: `the_ee_counts_its_steps_by_the_mode_each_ran_in` (600 instructions that each add one, run in kernel, user and level 1
+mode, counted 300, 200, 100, and equal to the timing model's count), `the_iop_counts_the_instructions_it_runs` (the IOP's
+count equal to a register each of its instructions increments) and
+`each_vu_counts_its_pairs_and_keeps_the_count_across_a_reset`. `tests/state.rs` and the layout listing unchanged and
+passing, the counts being outside the state. The blast radius's dotnet filter, `SapphireTests`, is run below.
+
+**Seeded faults**, each made in place, the tests named run, the source restored [M]:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | every step counted as kernel mode (`Ee::step`) | `the_ee_counts_its_steps_by_the_mode_each_ran_in` |
+| F2 | the IOP's batch path not counting (`Iop::run_to`) | `the_iop_counts_the_instructions_it_runs` |
+| F3 | FBRST's reset clearing the pairs' count (`Pipe::reset`) | `each_vu_counts_its_pairs_and_keeps_the_count_across_a_reset` |
+
+### 43.11 Exposure, and what was observed
+
+**Exposure** (`Sapphire_Plan.md` §1.4): this writer ran the player's BIOS on Sapphire, as the writer of a player's-BIOS
+stage; **this writer is exposed and will never write the open replacement.** Observed: the bench's frame times and
+digests; the core's counts (the EE's steps by mode, its instructions and cycles, the IOP's instructions, the VUs' pairs);
+the drive's command counts; the counts of register accesses by register (S24's reports); pictures of Jak and Daxter's
+screens and of Kingdom Hearts' and Dark Cloud 2's; and the host's instruction pointer in Sapphire's own code, named by its
+functions, with a few host stacks of the bench (`eu-stack`) when Jak's frames stopped. No program counter of the EE or the
+IOP, no instruction and no memory of the BIOS or of a game was printed, logged or read; no BIOS image was opened, hashed or
+listed, the image being handed to the machine by its path; the BIOS folder was not listed. The digests are of the machine's
+whole state for equality alone, as S30's comparisons are. The discs were read in place from the probe folder, chmod 444,
+and none of their bytes is in a commit. No emulator, SDK or loader source was read.
+
+### 43.12 Named limits of the measurement
+
+- **No workload with play.** The boot, Jak's start and its memory card screen, and the test programs: no game's 3D play,
+  no FMV, little VU1. The ranking's VU, SPU2 and IPU rows are therefore low by construction (§43.8).
+- **Load.** Four other agents' work ran throughout, at five-minute loads of 4 to 25; the spreads in §43.5 carry it. The
+  fastest round of each window, not the median, is the better estimate of an unloaded desktop.
+- **The sampler's naming**: a non-inlined function's callers are not seen (no frame pointers), so `Big::div`'s share is
+  attributed to `gs::exact` by its file and to the perspective quotient by reading its two callers, not by stacks; the
+  128-bit division helpers (1 to 2 %) are left under "other", though most come from the GS's interpolation.
+- **Idle**: how much of the EE's time is waiting is bounded, not measured (§43.8 #2).
+
+### 43.13 Where the plan was wrong, or left open
+
+- **§5.12's table** priced the EE at 4 to 10 ns an instruction and 1.6 to 3.3 million instructions a frame; measured, 46 to
+  55 ns and 5.6 to 9.8 million (§43.6). The table now carries the measured column beside its estimates.
+- **The GS's exact arithmetic** was priced into "3 to 5 ns a pixel"; on a perspective-textured screen it is most of the
+  frame. Not in §5.12's levers; added here as #1, exact.
+- **The board's catch-up after every EE instruction**, 6 to 17 % of the frame, is not one of §5.12's levers either; #9.
+- **§5.13** has no C10.
+- **P19** (no compromise needed on the desktop) and **P12** look less likely on these numbers than when written; they are
+  retired at S47 by their own measurements, not here.
+
+### 43.14 Questions this stage leaves
+
+1. **Q1 [decision], the order of phase G.** §7 puts idle skipping (S33) and the decoded caches (S34) first. *Recommended*:
+   take #1, the GS's exact arithmetic on a fast path, first, as a half-stage of its own before S33 (exact, gated by the
+   goldens and by random cases against the 256-bit steps, as §35.7 did), then S33 as planned; and take #9 (the board at
+   events) into S33, whose skipping needs the same next-event computation.
+2. **Q2 [routine], the bench's workloads.** *Recommended*: add a workload with play as soon as S28's merge gives one
+   (Jak's first level), and re-rank the VU rows on it before S40.
+3. **Q3 [routine], C10.** *Recommended*: leave the numbering as it is and say in §5.13 that C10 was never assigned, so no
+   later reader looks for it.
+4. **Q4 [routine], the handheld columns.** *Recommended*: run §43.9's command when the tester next allows handheld runs,
+   before S33's lever is measured there.
+
+### 43.15 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §3, §5.12, §5.13, §7 (Phase G and the amendment of 2026-10-24), §13 (P11-P19); this page's §31.3,
+§35 (S24's boot and its speed changes), §36.2, §38, §40 and §40.14; `Diamond_Speed.md` §2-§3 and Diamond's
+`examples/bench.rs`; `VenusRT_Native.md` §41.18 (the sampler); the memory note on the sampler's safepoint bias. PCSX2's
+community documentation of its speed settings, as context for C1, C4, C7, C9 and C11: the official configuration guide
+for 0.9.7 (<https://forums.pcsx2.net/Thread-Guia-Oficial-de-Configura%C3%A7%C3%A3o-do-PCSX2-v0-9-7-Portugu%C3%AAs-Brasil>)
+and the forum's descriptions of INTC spin detection, wait loop detection, the EE cycle rate, VU cycle stealing and MTVU
+(<https://forums.pcsx2.net/archive/index.php/thread-32750.html>), read 2026-10-26: INTC spin and wait loop detection are
+described as large, safe gains in many games, which agrees with #2's bound. No emulator, SDK or loader source.
+
 ## 44. Stage S36, the EE recompiler: the integer instructions and the branches (2026-10-26)
 
 *Numbered §44, after S35's §42, §43 being S32's; its disputes would be numbered from D-580, and it raised none: every

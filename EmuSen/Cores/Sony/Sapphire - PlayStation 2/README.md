@@ -65,4 +65,10 @@ block written beside the unit and composed in `src/board.rs`; `tests/sph2/versio
 <americas|europe|japan> <span> <frame>...` saves and loads states on the player's BIOS, printing only whether pictures,
 sound and states are equal. `tests/state.rs` cuts the project's programs mid-run.
 
+Since stage S32 (`Sapphire_Native.md` §43) `examples/bench.rs` is the speed bench: `cargo run --release --example bench
+-- <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE]` runs one workload headless
+on the player's BIOS (the boot to OSDSYS with slot 1 empty, an EE program, or a disc's program by the fast boot), times
+each frame's `advance` alone and prints Diamond's bench line with the frames a second, the digests of the pictures, the
+sound and the final state, and the units' own counts a frame.
+
 Black Moon Clan codename (Prince Diamond's younger brother, Saphir) — see `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme.

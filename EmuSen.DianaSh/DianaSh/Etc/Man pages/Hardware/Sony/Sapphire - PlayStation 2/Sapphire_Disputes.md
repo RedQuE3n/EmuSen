@@ -3941,3 +3941,19 @@ through the reset too.
 - **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents` (`s21-map`'s load at 00800000h now
   zero); `kernel/iop/messagebox/{poll,receive,send}` on the player's BIOS (§40.5).
 - **Implemented in:** the memory map's commit of §40.
+
+### D-483. CDVD, a synthetic volume as a DVD: the BIOS's file system reads sector 16, then asks for sector 257 and fails the open, where the same volume as a CD is read
+
+- **Opened:** 2026-10-26, at §40.4: the IOP programs' disc as an `.iso` of 2,048-byte sectors, which `cdvd::open` takes for
+  a DVD (disk type 14h), 56 sectors long.
+- **Documents read:** ps2tek "CDVD I/O Ports", "CDVD N Commands", "CDVD Reads and Seeks".
+- **Test program:** the §40 loader with `cpu/iop/alu`: the drive's report of its N commands shows two ReadCd commands
+  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read.
+  As a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
+  runs.
+- **Referee:** not yet consulted for this; PCSX2 read the `.iso` form in D-480's runs, how it classed the image unknown.
+- **Conclusion:** **open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or the
+  BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.
+- **Depends on it:** `cdvd::open`'s choice of medium, `Cdvd::fill` for ReadCd on a DVD.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.

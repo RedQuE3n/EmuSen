@@ -65,7 +65,7 @@ def bcd(v): return (v // 10) << 4 | v % 10
 
 def raw_track(vol):
     """A volume as a CD's data track of mode 2 form 1 sectors (2,352 bytes), its header's time from 00:02:00; the
-    EDC and ECC are left zero, as the referees and Sapphire read the user data alone."""
+    EDC and ECC are left zero, as the referees and Sapphire read the sectors' data alone."""
     sync = bytes([0] + [255] * 10 + [0])
     raw = bytearray()
     for n in range(len(vol) // U):

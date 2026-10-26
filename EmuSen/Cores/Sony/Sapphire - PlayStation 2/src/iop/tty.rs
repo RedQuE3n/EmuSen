@@ -121,6 +121,22 @@ impl Tty {
     pub fn armed(&self) -> bool {
         self.hook.is_some()
     }
+
+    /// The capture's part of the IOP's block of `SPH2` (version 3): the device and the hook.
+    pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        w.bool("Device", self.device);
+        crate::state::opt_u32(w, "HookTable", self.hook.map(|h| h.0 as u32));
+        w.u32("HookFunction", self.hook.map_or(0, |h| h.1));
+    }
+
+    pub fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.device = r.bool()?;
+        let table = crate::state::read_opt_u32(r)?;
+        let function = r.u32()?;
+        self.hook = table.map(|t| (t as usize, function));
+        self.pending = None;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -125,18 +125,31 @@ impl Iop {
 
 impl Iop {
     /// The IOP's block of `SPH2` (Sapphire_Native.md §38.2): the R3000A's registers (its crate's block), whether it is
-    /// held in reset, and its bus's own part. The exception counts are the hardware's reports.
+    /// held in reset, and its bus's own part; since version 3 the console's capture (S10, §36.3): the device, the hook
+    /// and the export tables the bus noted, the text being an output, not state. The exception counts are the hardware's
+    /// reports.
     pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
         use emusen_native::State;
         w.group("Cpu", |w| self.cpu.write_state(w));
         w.bool("Held", self.held);
         w.group("Bus", |w| self.bus.write_own(w));
+        w.group("Tty", |w| {
+            self.tty.write_state(w);
+            w.u32("Tables", self.bus.export_tables.len() as u32);
+            w.u32s("TableSlots", &crate::state::slots::<u32, { tty::TABLES }>(&self.bus.export_tables.iter().copied().collect()));
+        });
     }
 
     pub fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         use emusen_native::State;
         self.cpu.read_state(r)?;
         self.held = r.bool()?;
-        self.bus.read_own(r)
+        self.bus.read_own(r)?;
+        self.tty.read_state(r)?;
+        let n = r.u32()? as usize;
+        let mut slots = [0u32; tty::TABLES];
+        r.u32s(&mut slots)?;
+        self.bus.export_tables = slots[..n.min(tty::TABLES)].to_vec();
+        Ok(())
     }
 }

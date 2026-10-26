@@ -6102,6 +6102,15 @@ table and followed, a call kept whole once its first instruction ran, the device
 passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5** (17 minutes, most of it the
 kit's runs of the core's debug build). The ps2autotests runs of §36.5 need the player's BIOS and are not in CI.
 
+**`SPH2` version 3** (rebased onto S30, §38): the stage's state joins the format. The header gains `Entered` (the frame the
+fast boot entered its program, absent while it waits), the EE's block `Bc1Taken` (D-362's slot, kept between two
+instructions), and the IOP's block `Tty`: the device, the hook (the table's place and the function's address) and the
+export tables the bus noted (a count and 256 slots); the console's text is an output and is not state. A state made after
+the entry loads into a console still waiting and does not enter the program again, one made before it waits again
+(`the_fast_boots_entry_and_the_consoles_capture_are_state`); the machine keeps the program's image for that. The listing,
+534 lines, is pinned against `tests/sph2/version-3.layout`; version 2, never a player's, is not read. The crate on the tree
+with S19 and S30 beneath: **356 of 356**.
+
 **Seeded faults**, each made in place, the tests named run, and the source restored [M]:
 
 | # | Fault | Caught by |
@@ -6469,6 +6478,7 @@ only whether pictures, sound and states were equal was kept.
   length (the raster's bytes and the blocks' fixed length, `Machine::blocks_len`), and refuses a shorter state as
   truncated and a longer one as foreign **before it changes anything**; past that check nothing can fail, so a load is
   read in place, with no copy of the machine. The kit's C7 holds a refused load to changing nothing (§38.8).
+- *Version 3 since S10 (§36.10): the fast boot's entry in the header, the EE's BC1 slot, the IOP's console capture.*
 - **The blocks**, each written by its unit beside the unit (`impl emusen_native::State` in each module, the board's
   composition in `board.rs`): every register and every place a unit keeps between two of the board's steps. What one
   instruction's execution keeps for itself and sets again before the next (the EE's stalls, entry, word and counting

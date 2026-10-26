@@ -14,11 +14,12 @@ use crate::machine::{Machine, Market, Stop};
 use crate::pcrtc::Picture;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"SPH2");
-/// Version 2, of S30: every unit's state. Version 1 (S24) held the memories alone and was never a player's, the console
-/// being offered to none, so it is not read (Sapphire_Native.md §38.4).
-pub const STATE_VERSION: i32 = 2;
+/// Version 3, of S10: version 2's with the fast boot's entry, the EE's BC1 slot and the IOP's console capture
+/// (Sapphire_Native.md §36.10). Version 2 (S30, every unit's state) and version 1 (S24, the memories alone) were never a
+/// player's, the console being offered to none, so neither is read (§38.4).
+pub const STATE_VERSION: i32 = 3;
 /// The oldest version a state may have and still load.
-pub const OLDEST_STATE_VERSION: i32 = 2;
+pub const OLDEST_STATE_VERSION: i32 = 3;
 
 /// A state made on a console with another BIOS entry, or with one where this console has none, or the reverse.
 pub const STATUS_OTHER_BIOS: i32 = -14;
@@ -129,6 +130,7 @@ impl Machine {
         w.u32("Bios", self.bios_entry());
         w.u64("Image", self.media.identity());
         w.u8("Stop", u8::from(self.stop.is_some()));
+        opt_u64(w, "Entered", self.entered.map(|f| f as u64));
     }
 
     fn write(&self, w: &mut StateWriter) {
@@ -177,6 +179,7 @@ impl StateMachine for Machine {
             return Err(StateError::WrongMedia { state: image, here: self.media.identity() });
         }
         let stop = r.u8()? != 0;
+        let entered = read_opt_u64(&mut r)?.map(|f| f as i64);
         let (geometry, aspect, odd, raster) = Picture::read_shape(&mut r)?;
         let wanted = r.position() + raster + self.blocks_len();
         if data.len() < wanted {
@@ -194,6 +197,7 @@ impl StateMachine for Machine {
         debug_assert_eq!(r.position(), data.len(), "a state read to its end");
         self.frames = frames;
         self.stop = stop.then_some(Stop::Unimplemented);
+        self.entered = entered;
         self.sys.board.iop.bus.spu2.out.clear();
         Ok(())
     }
@@ -241,11 +245,11 @@ mod tests {
         s
     }
 
-    /// The listing of version 2 is the file beside the tests, line for line: a change to any block is a new version.
+    /// The listing of version 3 is the file beside the tests, line for line: a change to any block is a new version.
     #[test]
-    fn the_version_2_layout_is_pinned() {
+    fn the_version_3_layout_is_pinned() {
         let m = machine(Market::Americas);
-        let pinned = include_str!("../tests/sph2/version-2.layout");
+        let pinned = include_str!("../tests/sph2/version-3.layout");
         let layout = m.layout();
         for (n, (got, want)) in layout.lines().zip(pinned.lines()).enumerate() {
             assert_eq!(got, want, "line {}", n + 1);
@@ -317,6 +321,34 @@ mod tests {
         }
         assert_eq!(saved(&b), saved(&a), "the loaded console continues as the one that saved it");
         assert_eq!(b.sys.board.pcrtc.picture.rgba, a.sys.board.pcrtc.picture.rgba);
+    }
+
+    /// The fast boot's entry is state (version 3): a state made after it loads into a console still waiting and does not
+    /// enter the program again, one made before it waits again on a console that has entered; the console's capture,
+    /// its device and its hook, come with it (Sapphire_Native.md §36.10).
+    #[test]
+    fn the_fast_boots_entry_and_the_consoles_capture_are_state() {
+        let make = || {
+            let mut m = machine(Market::Americas);
+            m.insert_bios(&vec![0; BIOS_BYTES]);
+            m.program = Some(elf());
+            m
+        };
+        let before = saved(&make());
+        let mut a = make();
+        a.sys.board.iop.bus.sif.smflg = crate::machine::IOP_BOOTED;
+        a.sys.ee.cop0[crate::ee::cop0::STATUS] = 0x10;
+        a.sys.board.iop.bus.export_tables = vec![0x1000, 0x2000];
+        a.advance();
+        assert!(a.entered.is_some() && a.sys.board.iop.tty.device);
+        let after = saved(&a);
+        let mut b = make();
+        b.load_state(&after).unwrap();
+        assert!(!b.waiting() && b.entered == a.entered && b.sys.board.iop.tty.device, "entered once, the device attached");
+        assert_eq!(b.sys.board.iop.bus.export_tables, [0x1000, 0x2000]);
+        assert_eq!(saved(&b), after);
+        b.load_state(&before).unwrap();
+        assert!(b.waiting() && !b.sys.board.iop.tty.device, "a state from before the entry waits for it again");
     }
 
     #[test]

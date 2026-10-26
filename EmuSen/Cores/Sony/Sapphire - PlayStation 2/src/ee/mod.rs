@@ -690,6 +690,7 @@ impl emusen_native::State for Ee {
         w.u32("Pc", self.pc);
         w.u32("NextPc", self.next_pc);
         w.bool("Delay", self.delay);
+        w.bool("Bc1Taken", self.bc1_taken);
         w.u32s("Cop0", &self.cop0);
         w.u32s("Debug", &self.debug);
         w.u32("Pccr", self.pccr);
@@ -716,6 +717,7 @@ impl emusen_native::State for Ee {
         self.pc = r.u32()?;
         self.next_pc = r.u32()?;
         self.delay = r.bool()?;
+        self.bc1_taken = r.bool()?;
         r.u32s(&mut self.cop0)?;
         r.u32s(&mut self.debug)?;
         self.pccr = r.u32()?;

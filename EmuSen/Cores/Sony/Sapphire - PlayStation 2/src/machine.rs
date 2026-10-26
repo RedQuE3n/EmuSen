@@ -88,9 +88,10 @@ pub struct Machine {
     /// A BIOS is in the boot ROM and the processors run from reset.
     pub booted: bool,
     pub stop: Option<Stop>,
-    /// The EE program the fast boot enters once the BIOS is up, until it is entered (S10).
+    /// The EE program the fast boot enters once the BIOS is up (S10), kept so that a state made before its entry still
+    /// enters it.
     pub program: Option<Vec<u8>>,
-    /// The frame at whose run the program was entered.
+    /// The frame at whose run the program was entered; none while it waits.
     pub entered: Option<i64>,
 }
 
@@ -239,7 +240,18 @@ impl Machine {
     /// state and starts the program as its main thread.
     pub fn enter_program(&mut self) {
         let Some(image) = self.program.take() else { return };
-        let Ok(crate::media::Media::Elf(elf)) = crate::media::Media::read(&image) else { return };
+        self.entered = Some(self.frames + 1);
+        self.enter(&image);
+        self.program = Some(image);
+    }
+
+    /// Whether the fast boot still waits to enter its program.
+    pub fn waiting(&self) -> bool {
+        self.program.is_some() && self.entered.is_none()
+    }
+
+    fn enter(&mut self, image: &[u8]) {
+        let Ok(crate::media::Media::Elf(elf)) = crate::media::Media::read(image) else { return };
         let System { ee, board } = &mut *self.sys;
         ee.flush_caches(board);
         for &(address, offset, file, memory) in &elf.segments {
@@ -261,13 +273,12 @@ impl Machine {
         let pc = ee.pc;
         ee.raise(crate::ee::Exception::Syscall, pc, false);
         board.iop.tty.device = true;
-        self.entered = Some(self.frames + 1);
     }
     /// One frame: the console run until the PCRTC begins its next field, which is when V-blank rises.
     pub fn advance(&mut self) {
         let target = self.sys.board.pcrtc.fields + 1;
         while self.sys.board.pcrtc.fields < target {
-            if self.booted && self.stop.is_none() && self.program.is_some() {
+            if self.booted && self.stop.is_none() && self.waiting() {
                 if self.at_entry() {
                     self.enter_program();
                 } else if self.sys.step().is_err() {
@@ -379,6 +390,6 @@ mod tests {
         assert_eq!(&ram[argv0..argv0 + PROGRAM_NAME.len()], PROGRAM_NAME);
         assert_eq!(u32::from_le_bytes(ram[ARGS + 4..ARGS + 8].try_into().unwrap()), 0, "argv ends after the name");
         assert_eq!((m.sys.ee.cop0[CAUSE] >> 2 & 31, m.sys.ee.cop0[EPC], m.sys.ee.pc), (8, pc, 0x8000_0180), "SYSCALL taken at the next instruction");
-        assert!(m.program.is_none() && m.entered == Some(1));
+        assert!(!m.waiting() && m.entered == Some(1));
     }
 }

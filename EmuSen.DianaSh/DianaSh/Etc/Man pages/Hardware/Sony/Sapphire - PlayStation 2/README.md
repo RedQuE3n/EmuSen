@@ -107,7 +107,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   browser never drawing with a card in slot 1 (P8 as observed, D-383 open); and the 23 IOP programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's
-  region past 8 MiB (D-482) corrected, a DVD's file system left open (D-483).
+  region past 8 MiB (D-482) corrected, a DVD's file system left open (D-483); and D-483 closed (2026-10-26, §40.14):
+  the player's BIOS reads a DVD's path table at sector 257 whatever its descriptor names, the synthetic DVDs now place
+  theirs there, the 23 print their texts from DVDs too, and Jak and Daxter's start reads its files on Sapphire;
+  PCSX2's boundary between a CD and a DVD image recorded (D-520).
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

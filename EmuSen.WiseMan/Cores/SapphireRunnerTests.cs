@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
@@ -76,7 +77,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Every form read back by the host's ISO 9660 reader and taken by Sapphire; a dual-layer image's file past the break read whole, layer 0's descriptor naming its sectors and layer 1's at its sector 16.
+        // Every form read back by the host's ISO 9660 reader and taken by Sapphire; a DVD's path tables at 257 and 259 where the player's BIOS reads them, a CD's at 18 and 19; a dual-layer image's file past the break read whole, layer 0's descriptor naming its sectors and layer 1's at its sector 16.
         [Fact]
         public void Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it()
         {
@@ -90,6 +91,13 @@ namespace EmuSen.WiseMan.Cores
                 using var machine = new CoreMachine(library, image, "", NoFiles);
                 Assert.Equal("ps2", machine.Info.System);
                 _output.WriteLine($"{label}: {image.Length} bytes");
+            }
+            foreach (var (label, iso, l, m, root) in new[] { ("cd", SyntheticPs2Disc.Cd().Iso, 18, 19, SyntheticPs2Disc.CdRoot), ("dvd", SyntheticPs2Disc.Dvd().Iso, 257, 259, SyntheticPs2Disc.DvdRoot), ("dual-layer dvd", dual.Iso, 257, 259, SyntheticPs2Disc.DvdRoot) })
+            {
+                var disc = new DiscSectors(iso);
+                byte[] pvd = disc.Sector(16).ToArray(), tableL = disc.Sector(l).ToArray(), tableM = disc.Sector(m).ToArray();
+                Assert.True((BitConverter.ToInt32(pvd, 140), BinaryPrimitives.ReadInt32BigEndian(pvd.AsSpan(148)), BitConverter.ToInt32(pvd, 158)) == (l, m, root), $"{label}: the descriptor names its path tables and root");
+                Assert.True((tableL[0], BitConverter.ToInt32(tableL, 2), tableM[0], BinaryPrimitives.ReadInt32BigEndian(tableM.AsSpan(2))) == (1, root, 1, root), $"{label}: each path table names the root");
             }
             Assert.Equal(1024, dual.LayerBreak);
             Assert.Equal(SyntheticPs2Disc.Layer1Pattern(3 * CdSector.User + 100), new DiscSectors(dual.Iso).RootFile(SyntheticPs2Disc.Layer1File));

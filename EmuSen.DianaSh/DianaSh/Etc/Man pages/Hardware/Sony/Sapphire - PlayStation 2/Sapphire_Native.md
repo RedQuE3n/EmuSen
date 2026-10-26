@@ -7281,7 +7281,7 @@ and returns; `DEBUG_STACK` pushes the host's registry down as the shared hooks t
 | Every table armed gives the plain run's digests | `tests/debugger.rs`: fourteen programs (`s11-chain`, the first IPU program, `s13-integer`, the second S13 program, `s14`'s microprogram and unpack, `s15-paths`, `s17`'s triangles, `s20-timing`, `s26`'s voices on the IOP, `s22-sif1`, `-sif0`, `-sif2` with the IOP released at a frame's start), 3 or 4 frames each, every table armed (calls, stores, loads, interrupts, the profile, four processors' coverage, a breakpoint on each processor at no step's address, watches over RAM and the scratchpad, data and read data breakpoints) | picture, sound and state equal after every frame |
 | … and every processor stopped at every step | the same programs but the IPU's, `EACH` on the EE and a breakpoint over every address on the IOP, VU0 and VU1, each stop resumed | equal after every frame, over 100,000 stops each |
 
-The crate's whole suite passed with the stage (375 tests in 26 binaries, measured 2026-10-25), `blackmoon-r3000`'s suite and
+The crate's whole suite passed with the stage (375 tests in 26 binaries, measured 2026-10-25; 381 in 27 on the tree rebased onto D-383's step and §40, 2026-10-26), `blackmoon-r3000`'s suite and
 Diamond's debugger tests with the static reference moved (§41.10), and WiseMan's `SapphireTests`, `SapphireConsoleTests`,
 `SapphireRewindTests`, `SapphireRunnerTests` and `DiamondDebugTests` (30 tests), the kit's C1 to C24 among them.
 
@@ -7294,6 +7294,7 @@ cleared unread. Only equality and times are printed.
 | Image | Frames | Attached, unarmed | Every table armed |
 |---|---|---|---|
 | Americas `0230a` | 760 (past the language screen at 690) | pictures 0 of 760 differing, sound 0, states 0 of 13 | pictures 0, sound 0, states 0 of 13 |
+| The same, on the tree rebased onto D-383's step and §40 (2026-10-26) | 760 | pictures 0, sound 0, states 0 of 13 | pictures 0, sound 0, states 0 of 13; 625.9, 720.2 (+15.1 %) and 891.8 ms (+42.5 %) a frame |
 
 | Workload | Plain frame | Attached, unarmed | Every table armed |
 |---|---|---|---|

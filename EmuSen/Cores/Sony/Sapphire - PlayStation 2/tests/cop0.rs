@@ -281,3 +281,33 @@ fn a_miss_costs_its_refill_and_a_dirty_victim_its_write_back() {
     let clean = run(&three("lw zero, 0(s0)"), 7, false);
     assert_eq!(dirty, clean + timing::WRITEBACK, "the third line of set 0 evicts the first, dirty or clean");
 }
+
+/// D-760: an MFC0 straight after EI or DI reads the EIE they wrote, as the Operation sections write them and PCSX2's
+/// interpreter reads it; its recompiler reads the old one, and the documents leave the case to SYNC.P
+/// (Sapphire_Native.md §30.60). An MTC0 to Status is read at once on both tiers.
+#[test]
+fn an_mfc0_straight_after_ei_or_di_reads_their_eie() {
+    let mut p = Program::new("d760-eie");
+    p.emit("lui t6, 0x1");
+    p.emit("or t5, zero, zero");
+    let read = |p: &mut Program, before: &[&str], want: u64| {
+        for &line in before {
+            p.emit(line);
+        }
+        p.emit("mfc0 t2, Status");
+        p.emit("sync.p");
+        p.emit("srl t2, t2, 16");
+        p.emit("andi t2, t2, 1");
+        p.record("t2", Some(want));
+    };
+    for (set, op, now) in [("ei", "di", 0), ("di", "ei", 1)] {
+        read(&mut p, &[set, "sync.p", op], now);
+        read(&mut p, &[set, "sync.p", op, "nop"], now);
+        read(&mut p, &[set, "sync.p", op, "sync.p"], now);
+    }
+    read(&mut p, &["mtc0 t6, Status", "sync.p", "mtc0 t5, Status"], 0);
+    read(&mut p, &["mtc0 t5, Status", "sync.p", "mtc0 t6, Status"], 1);
+    read(&mut p, &["ei", "sync.p", "di", "ei"], 1);
+    read(&mut p, &["di", "sync.p", "ei", "di"], 0);
+    grade(p);
+}

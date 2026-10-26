@@ -9,7 +9,8 @@
 //! thread the kernel creates, in a main thread ExecPS2 starts, and inside a kernel-mode routine. Registers are read at
 //! their kuseg addresses and timer 3's written through kseg1 by a routine installed with SetSyscall (74h), since the
 //! kernel maps timer 3's page read-only to its threads; the record is cached memory written back by FlushCache (64h).
-//! Expected words are the manual's; whatever depends on the kernel is ungraded.
+//! `d760-kdi` and `d760-hazard` (D-760, Sapphire_Native.md §30.60 to §30.67) read Status straight after EI, DI and
+//! MTC0 in a kernel-mode routine. Expected words are the manual's; whatever depends on the kernel is ungraded.
 
 #![allow(dead_code)]
 
@@ -466,6 +467,128 @@ pub fn kmode() -> Program {
     p
 }
 
+/// `d760-kdi` (D-760): a routine installed as syscall 5Ah executes DI, or EI, in kernel mode and returns without
+/// undoing it; it records Status before the operation, straight after it with no SYNC.P between, and after a SYNC.P.
+/// The main thread calls the DI routine after EI and the EI routine after DI, and records Status before each call and
+/// on its return, so that the record shows what the kernel's return from a system call leaves of a change made inside.
+pub fn kdi() -> Program {
+    let mut p = Program::new("d760-kdi");
+    let main = p.label();
+    p.emit(format!("beq zero, zero, {main}"));
+    p.emit("nop");
+    let mut routines = Vec::new();
+    for op in ["di", "ei"] {
+        routines.push(p.here());
+        li(&mut p, "t0", LOG);
+        p.emit("lw t1, 0x7c(t0)");
+        p.emit("addu t0, t0, t1");
+        p.emit("mfc0 t2, Status");
+        p.emit("sync.p");
+        p.emit("sw t2, 0(t0)");
+        p.emit(op);
+        p.emit("mfc0 t2, Status");
+        p.emit("sync.p");
+        p.emit("sw t2, 4(t0)");
+        p.emit("mfc0 t2, Status");
+        p.emit("sw t2, 8(t0)");
+        p.emit("jr ra");
+        p.emit("nop");
+    }
+    p.place(&main);
+    for i in 0..32 {
+        store(&mut p, LOG + 4 * i, 0);
+    }
+    for (k, (first, routine)) in [("ei", routines[0]), ("di", routines[1])].into_iter().enumerate() {
+        p.emit(format!("addiu a0, zero, 0x{KSTORE:x}"));
+        li(&mut p, "a1", routine);
+        syscall(&mut p, 0x74);
+        store(&mut p, LOG + 0x7C, 0x20 * k as u32);
+        p.emit(first);
+        p.emit("sync.p");
+        status(&mut p);
+        syscall(&mut p, KSTORE);
+        status(&mut p);
+        for i in 0..3 {
+            rec(&mut p, LOG + 0x20 * k as u32 + 4 * i, None);
+        }
+    }
+    done(&mut p);
+    p
+}
+
+/// `d760-hazard` (D-760): in a kernel-mode routine installed as syscall 5Ah, Status read by MFC0 after DI, after EI
+/// and after an MTC0 clearing or setting EIE, with none to three NOPs between and none after a SYNC.P; each operation
+/// starts from EIE in the other state, settled by a SYNC.P; then an MTC0 straight after DI or EI, and DI and EI back to
+/// back, each read one instruction later. The routine puts Status back as it found it.
+pub fn hazard() -> Program {
+    let mut p = Program::new("d760-hazard");
+    let main = p.label();
+    p.emit(format!("beq zero, zero, {main}"));
+    p.emit("nop");
+    let routine = p.here();
+    li(&mut p, "t0", LOG);
+    p.emit("mfc0 t3, Status");
+    p.emit("sync.p");
+    li(&mut p, "t4", !(1u32 << 16));
+    p.emit("and t5, t3, t4");
+    li(&mut p, "t4", 1u32 << 16);
+    p.emit("or t6, t3, t4");
+    let mut at = 0;
+    for (set, op) in [("ei", "di"), ("di", "ei"), ("mtc0 t6, Status", "mtc0 t5, Status"), ("mtc0 t5, Status", "mtc0 t6, Status")] {
+        for gap in 0..5 {
+            p.emit(set);
+            p.emit("sync.p");
+            p.emit(op);
+            if gap == 4 {
+                p.emit("sync.p");
+            } else {
+                for _ in 0..gap {
+                    p.emit("nop");
+                }
+            }
+            p.emit("mfc0 t2, Status");
+            p.emit("sync.p");
+            p.emit(format!("sw t2, {at}(t0)"));
+            at += 4;
+        }
+    }
+    let seqs: [&[&str]; 4] = [
+        &["ei", "sync.p", "di", "mtc0 t6, Status", "sync.p"],
+        &["di", "sync.p", "ei", "mtc0 t5, Status", "sync.p"],
+        &["ei", "sync.p", "di", "ei"],
+        &["di", "sync.p", "ei", "di"],
+    ];
+    for seq in seqs {
+        for &line in seq {
+            p.emit(line);
+        }
+        p.emit("mfc0 t2, Status");
+        p.emit("sync.p");
+        p.emit(format!("sw t2, {at}(t0)"));
+        at += 4;
+    }
+    p.emit("mtc0 t3, Status");
+    p.emit("sync.p");
+    p.emit("jr ra");
+    p.emit("nop");
+    p.place(&main);
+    for i in 0..32 {
+        store(&mut p, LOG + 4 * i, 0);
+    }
+    p.emit(format!("addiu a0, zero, 0x{KSTORE:x}"));
+    li(&mut p, "a1", routine);
+    syscall(&mut p, 0x74);
+    p.emit("ei");
+    p.emit("sync.p");
+    syscall(&mut p, KSTORE);
+    status(&mut p);
+    for i in 0..24 {
+        rec(&mut p, LOG + 4 * i, None);
+    }
+    done(&mut p);
+    p
+}
+
 pub fn all() -> Vec<Program> {
     vec![
         timer(),
@@ -476,5 +599,7 @@ pub fn all() -> Vec<Program> {
         exec(),
         exec_with("d700-exec-clear", true),
         kmode(),
+        kdi(),
+        hazard(),
     ]
 }

@@ -9,7 +9,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
     ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter] [--disc DISC]
     ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
-    ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N]
+    ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N] [--interpreter]
     ps2referee.py picture pcsx2 ELF PNG [--bios MARKET] [--for N] [--deinterlace N]
     ps2referee.py game pcsx2 OUTDIR SCRIPT --disc DISC [--card CARD|none] [--blank-nvm | --nvm FILE] [--keep-nvm FILE] [--bios MARKET] [--for N]
 
@@ -729,7 +729,7 @@ def inner_pads(job):
             os.rename(job["result"] + ".part", job["result"])
 
 
-def run_pcsx2_pads(market, seconds, outdir, script, card):
+def run_pcsx2_pads(market, seconds, outdir, script, card, interpreter=False):
     """PCSX2 booted to its BIOS's menu with the card in slot 1 and driven through its keyboard pad by the script; the
     pictures of states kept, each state removed once its picture is read, and the card's file copied out afterwards."""
     data = CACHE / "pcsx2-data"
@@ -753,7 +753,8 @@ def run_pcsx2_pads(market, seconds, outdir, script, card):
                       "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
                       "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS["none"]},
                       "MemoryCards": {**PCSX2_CARDS["MemoryCards"], "Slot1_Filename": name, "Slot1_Enable": "false" if card is None else "true", "Slot2_Enable": "false"}, "Pad": PCSX2_CARDS["Pad"],
-                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": "3"}}
+                      "EmuCore/GS": {**PCSX2_SETTINGS["EmuCore/GS"], "deinterlace_mode": "3"},
+                      "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"}}
             ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))
             root = CACHE / "pcsx2/squashfs-root"
             job = {"entry": "inner_pads", "cmd": [str(root / "usr/bin/pcsx2-qt"), "-datapath", str(data), "-batch", "-nogui", "-logfile", "@EMULOG@", "-bios"],
@@ -1026,7 +1027,7 @@ def main(argv):
             w = line.split()
             if len(w) >= 3 and w[1] in ("key", "shot"):
                 script.append([float(w[0]), w[1], w[2], float(w[3]) if len(w) > 3 else 0.15])
-        out = run_pcsx2_pads(market, count, target, script, None if card == "none" else Path(card).resolve())
+        out = run_pcsx2_pads(market, count, target, script, None if card == "none" else Path(card).resolve(), interpreter)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         print(json.dumps(out))

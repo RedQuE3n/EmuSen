@@ -1924,9 +1924,9 @@ rules, blocks behind the TLB held to their page, and compiling on another thread
 | `cpu/blocks/ops.rs` | each instruction's handler behind a C ABI, chosen once when the block is shaped | 179 |
 | `cpu/blocks/decoded.rs` | tier 1: the block's instructions as the interpreter's steps, less the fetch and the interrupt check | 75 |
 | `cpu/blocks/cache.rs` | blocks by physical word address, in pages allocated where code runs | 47 |
-| `cpu/blocks/verify.rs` | the interpreter run beside the blocks and compared after every instruction | 77 |
-| `cpu/blocks/jit/mod.rs` | the compiler's thread, its queue, the slots code is published in, and its counters | 239 |
-| `cpu/blocks/jit/emit.rs` | the Cranelift IR for one block | 1,076 |
+| `cpu/blocks/verify.rs` | the interpreter run beside the blocks and compared after every instruction; *since 2026-10-25 the machine and its comparison, the verifier's shape `emusen-jit`'s (§5.8.10)* | 77, *81* |
+| `cpu/blocks/jit/mod.rs` | the compiler's thread, its queue, the slots code is published in, and its counters; *since 2026-10-25 the compiled block's signature, context and exits, and the VR4300's lowering for `emusen-jit`, which holds the rest (§5.8.10)* | 239, *87* |
+| `cpu/blocks/jit/emit.rs` | the Cranelift IR for one block | 1,076, *1,070* |
 | `ffi/blocks.rs`, `Shim/MarsRtCore.cs` | the switch and the counters; `UseBlocks`, `BlockTier`, `VerifyBlocks` and a `Recompiler` setting | 33, +60 |
 | `tests/blocks.rs` | the random programs and the twenty-one mechanisms, at every tier | 791 |
 
@@ -2012,6 +2012,10 @@ of two or more memory-free instructions in the blocks GoldenEye enters beside a 
 two per cent of the Dam's frame, for a run-ahead whose exactness rests on that disjointness. Not built.
 
 #### 5.8.4 Cranelift, and the thread it runs on
+
+*Since 2026-10-25 the thread, its queue, the slots, the module with its W^X batches and the code's bound are the shared
+crate `emusen-jit`'s (`Hardware/Shared/EmuSen_Jit.md`), MarsRT supplying its lowering; what this section says of them
+holds there unchanged, and §5.8.10 records the move.*
 
 **The dependency.** `cranelift-codegen`, `cranelift-frontend`, `cranelift-jit`, `cranelift-module` and
 `cranelift-native`, 0.136.0, from crates.io, with `regalloc2`, `cranelift-entity`, `cranelift-bforest`,

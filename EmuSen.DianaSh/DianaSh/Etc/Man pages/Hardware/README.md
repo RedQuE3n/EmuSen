@@ -76,6 +76,12 @@ here.
   a GPU: the device chosen by rank or by name (`EMUSEN_GPU_DEVICE`), storage buffers, compute programs, submissions
   waited for, pending or ahead; no shader and no console. Moved 2026-10-13 out of MarsRT, whose `rdp/gpu/device.rs` it
   was, for Diamond's enhanced renderer; the seam for the kit's lent device, and what Diamond's renderer will need.
+- [`Shared/EmuSen_Jit.md`](Shared/EmuSen_Jit.md) — `emusen-jit`, a recompiler's shared machinery, generic over a
+  processor's lowering: the compiler's thread and its queue, code published through one word stored with Release and
+  read with Acquire, Cranelift's module with its W^X batches and code budget, the counters, and the verifier's shape;
+  no instruction set. Moved 2026-10-25 out of MarsRT, whose `cpu/blocks/jit/mod.rs` it was, at Sapphire's stage S35
+  for the PlayStation 2's recompilers; a toy processor's tests, ThreadSanitizer with its positive control, and
+  MarsRT's tests and speed as the gate.
 - [`Shared/EmuSen_MediumFormats.md`](Shared/EmuSen_MediumFormats.md) — `emusen-psx-card`, `emusen-n64-pak` and
   `emusen-mcd-bram`, the PlayStation memory card's, the Controller Pak's and the Sega CD backup RAM's file systems as
   crates with no standard library and no allocation, for a host's card tool and an open firmware alike (the backend's

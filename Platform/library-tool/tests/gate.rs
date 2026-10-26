@@ -428,3 +428,33 @@ fn a_library_that_holds_the_output_is_refused_before_anything_is_written() {
     assert!(!temp.at("home/Compressed").exists());
 }
 
+
+/// Step 7 (EmuSen_GamePackages.md §19): a converted disc's package made self-contained holds its CHD, copied from
+/// Compressed and claimed there still; the CHD tool finds it done there and checks it there; its zip stores the CHD.
+#[test]
+fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("contained");
+    library(&temp.at("library"));
+    let before = listing(&temp.at("library"));
+    let ctx = context(&temp, &chdman, None);
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"], "threads": 2}"#);
+    assert_eq!(state_of(&got, "psx/Two/Two.cue"), "converted", "{}", summary(&got));
+    let made = run(&ctx, r#"{"op": "pkg-make", "paths": ["psx/Two"], "self_contained": true, "zip": true}"#);
+    let s = summary(&made);
+    assert!(s.contains(r#""state":"contained""#), "{s}");
+    let package = temp.at("home/Packages/PlayStation/Two/Two.chd");
+    let compressed = temp.at("home/Compressed/psx/Two/Two.chd");
+    assert_eq!(std::fs::read(package.join("Two.chd")).unwrap(), std::fs::read(&compressed).unwrap(), "the CHD is copied in, and Compressed keeps its own");
+    let doc = emusen_galaxia::package::parse(&std::fs::read_to_string(package.join("package.json")).unwrap()).unwrap();
+    assert_eq!(doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str), Some("package"));
+    let index = emusen_galaxia::claims::index(&ctx.places().roots());
+    let claimant = index.claimant(&compressed.to_string_lossy()).map(|p| p.folder.clone());
+    assert_eq!(claimant.as_deref(), Some(package.to_string_lossy().as_ref()), "the CHD in Compressed is the package's source");
+    let entries = emusen_galaxia::archive::entries_of(&temp.at("home/Packages/PlayStation/Two/Two.chd.zip").to_string_lossy()).unwrap();
+    assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.method), Some(0), "a CHD is stored, never compressed again");
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "ls", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "converted");
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "already");
+    assert_eq!(listing(&temp.at("library")), before, "the library changed");
+}

@@ -386,7 +386,12 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
         Some(Value::Array(items)) => items.clone(),
         _ => Vec::new(),
     };
-    let mut plan: Vec<(Value, String, String)> = vec![(doc.get("game").cloned().unwrap_or(Value::Null), game.clone(), path::file_name(Style::HOST, &game).to_string())];
+    // The copy is named as the package's folder where their kinds agree, so that ES-DE, given the folder, finds the
+    // file of its name, and RetroArch the patches named by the package's own name beside it (§6, §19).
+    let folder_name = path::file_name(Style::HOST, folder).to_string();
+    let same_kind = equals_ignore_case(path::extension(Style::HOST, &folder_name), path::extension(Style::HOST, &game));
+    let copy_name = if same_kind && companions.is_empty() { folder_name } else { path::file_name(Style::HOST, &game).to_string() };
+    let mut plan: Vec<(Value, String, String)> = vec![(doc.get("game").cloned().unwrap_or(Value::Null), game.clone(), copy_name)];
     for c in &companions {
         let at = claims::place(&roots, folder, c).ok_or("a companion's library is not set")?;
         plan.push((c.clone(), at.clone(), within(&at)?));

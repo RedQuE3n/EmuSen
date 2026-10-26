@@ -2,7 +2,7 @@
 //! package, each with its modification time to the tick, a CHD and what is already compressed stored and the rest
 //! deflated. A package's zip is opened by unpacking it once into `Packages`, never over a folder that is there, its
 //! times kept so that a state's record still names its state; the zip itself is only read. See
-//! EmuSen_GamePackages.md §3.4 and §19, and EmuSen_Galaxia.md §3.12.
+//! EmuSen_GamePackages.md §3.4 and §19, and EmuSen_Galaxia.md §3.13.
 
 use crate::archive::{self, ZipEntry, ZipWriter};
 use crate::dotnet_files;

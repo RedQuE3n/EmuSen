@@ -5622,7 +5622,7 @@ SEE ALSO
     chd (converted discs, each given a package), EmuSen_GamePackages.md
     (sections 3, 5.4, 5.5, 6, 14, 15 and 19: the package, its manifest,
     the stores it takes, soft patches, other frontends, and what each step
-    built), EmuSen_Galaxia.md (sections 3.10, 3.11 and 3.12: the
+    built), EmuSen_Galaxia.md (sections 3.10, 3.11 and 3.13: the
     manifest, the claim index and a package's zip)
 status 0
 action none

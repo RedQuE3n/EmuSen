@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19, S30, S10 and S31 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19, S30, S10 and S31 on 2026-10-25, and S28 on 2026-10-26. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -131,7 +131,13 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   (`examples/bench.rs`) and the profile before any lever, OSDSYS's boot at 1.65 frames a second and Jak and Daxter's
   program at 1.20 to 3.07 on the desktop, the GS's exact perspective arithmetic 61 % of a drawing frame and the EE 34 to
   47 ns an instruction, every lever and compromise ranked and marked exact, timing-only or byte-changing, the handheld's
-  columns owed.
+  columns owed;
+  and stage S28 (2026-10-26, §39): the tester's three
+  games on the player's BIOS from their `.iso` images, the disc boot through the EE's window onto the drive (D-460) and
+  ReadKey's key bytes (D-461), Jak and Daxter and Kingdom Hearts at four anchors each against PCSX2 in picture and RAM,
+  VIF1's refused DIRECT (D-462) and the DualShock 2's 4Fh and 40h replies (D-463) corrected, Kingdom Hearts' logo
+  (D-464) and Dark Cloud 2's return to OSDSYS (D-465) open, P8 as the games show it, the reference path's speed and
+  rewind's reach on a game.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

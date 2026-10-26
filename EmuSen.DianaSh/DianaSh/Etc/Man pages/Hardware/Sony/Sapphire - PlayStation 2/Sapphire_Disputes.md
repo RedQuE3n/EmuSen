@@ -4414,7 +4414,7 @@ it.*
 - **Conclusion:** **open**. What the game's program decides before it returns to OSDSYS is not shown by the reports;
   the game's code could show it, but OSDSYS is loaded at the addresses the game's program occupies (Dark Cloud 2's ELF
   spans 00100000h-01F64E00h), so an EE address alone cannot tell the game's code from the BIOS's, and §1.4 forbids
-  observing the latter (`Sapphire_Native.md` §39.11, Q).
+  observing the latter (`Sapphire_Native.md` §39.11, §39.12 Q2).
 - **Depends on it:** unknown.
 - **Pinned by:** nothing yet.
 - **Implemented in:** none.

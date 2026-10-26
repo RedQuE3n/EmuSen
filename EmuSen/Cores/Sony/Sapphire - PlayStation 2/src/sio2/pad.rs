@@ -67,6 +67,9 @@ pub const ANALOG_MASK: u32 = 0x3F;
 /// The mode byte in configuration mode.
 pub const CONFIG: u8 = 0xF3;
 
+/// One exchange of the pad's trace: the command's bytes, the reply's, and how many times the pair came in a row.
+pub type Exchange = (Vec<u8>, Vec<u8>, u32);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DualShock2 {
     pub input: Input,
@@ -87,7 +90,7 @@ pub struct DualShock2 {
     pub configured: bool,
     /// When set, each exchange's command and reply bytes, a run of equal exchanges kept once with its count: the pad's own
     /// report of what it was asked (Sapphire_Native.md §39).
-    pub trace: Option<Vec<(Vec<u8>, Vec<u8>, u32)>>,
+    pub trace: Option<Vec<Exchange>>,
 }
 
 impl Default for DualShock2 {

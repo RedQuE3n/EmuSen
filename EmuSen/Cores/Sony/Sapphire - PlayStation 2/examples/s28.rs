@@ -166,7 +166,7 @@ fn main() {
         if c.gstraces.contains(&next) {
             m.sys.board.gs.trace = Some((Vec::new(), 0));
         }
-        advance(&mut m);
+        m.advance();
         if let Some((t, images)) = m.sys.board.gs.trace.take() {
             let text: String = t.iter().map(|(r, d)| format!("{r:02X} {d:016X}\n")).collect();
             std::fs::write(out.join(format!("gstrace-{}.txt", m.frames)), format!("{text}HWREG writes {images}\n")).unwrap();
@@ -210,37 +210,6 @@ fn main() {
         }
     }
     print_reports(&mut m, &out);
-}
-
-fn advance(m: &mut Machine) {
-    let target = m.sys.board.pcrtc.fields + 1;
-    let (mut steps, mut warned) = (0u64, 0u32);
-    while m.sys.board.pcrtc.fields < target {
-        steps += 1;
-        if steps % 200_000 == 0 && warned < 20 {
-            warned += 1;
-            let gs = &m.sys.board.gs;
-            let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE1, SMODE2, SYNCH1, SYNCH2, SYNCV, DISPLAY1, DISPLAY2, CSR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
-            println!("frame {}: no field after {} steps; board at {} cycles; PMODE SMODE1 SMODE2 SYNCH1 SYNCH2 SYNCV DISPLAY1 DISPLAY2 CSR {}", m.frames, steps * 1024, m.sys.board.now, r.join(" "));
-        }
-        if m.booted && m.stop.is_none() {
-            for _ in 0..1024 {
-                if m.sys.step().is_err() {
-                    m.stop = Some(sapphire::machine::Stop::Unimplemented);
-                    println!("frame {}: the EE stopped on an instruction the interpreter lacks", m.frames);
-                    break;
-                }
-            }
-        } else {
-            let t = m.sys.board.now + 16_384;
-            let sapphire::board::System { ee, board } = &mut *m.sys;
-            board.run_to(t, &mut ee.spram[..]);
-        }
-    }
-    if m.booted {
-        m.sys.board.iop.resolve_tty();
-    }
-    m.frames += 1;
 }
 
 fn print_reports(m: &mut Machine, out: &Path) {

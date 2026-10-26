@@ -153,7 +153,7 @@ fn pressure_reads_ffh_for_a_pressed_button_and_00h_for_a_released_one() {
 #[test]
 fn the_4fh_and_40h_replies_end_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode() {
     let mut p = super::pad::DualShock2::default();
-    let mut ex = |p: &mut super::pad::DualShock2, cmd: &[u8]| {
+    let ex = |p: &mut super::pad::DualShock2, cmd: &[u8]| {
         let mut r = vec![0u8; cmd.len()];
         p.exchange(cmd, &mut r);
         r

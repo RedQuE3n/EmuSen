@@ -3981,6 +3981,66 @@ it.*
 - **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented` (each reply).
 - **Implemented in:** none.
 
+### D-700. EE timer 3 while the player's BIOS runs: the kernel sets it to count H-blanks freely, no interrupt enabled, before field 13, and Sapphire's never writes it again; programmed by a program it counts, compares and latches TIM3 as the manual says
+
+*Numbered from D-700 at the timer 3 step (2026-10-26), other stages being built beside it.*
+
+- **Opened:** 2026-10-26, at the timer 3 step (`Sapphire_Native.md` §30.52), decided by the tester as §30.50 Q1(a): the
+  pad server's call every 64 fields on PCSX2 looks like a kernel alarm, and ps2tek reserves timer 3 for alarms.
+- **Documents read:** Sony's *EE User's Manual* chapter 4 (§20.5's readings); ps2tek at `1c91660`, "EE Timers" ("T3 is
+  reserved by the BIOS for alarm functions"; timer interrupts on a flag's rise), "BIOS EE Syscalls" (AddIntcHandler,
+  _EnableIntc, RemoveIntcHandler, SetSyscall, FlushCache) and "BIOS EE Patches" (syscalls FCh to FFh named SetAlarm,
+  iSetAlarm, ReleaseAlarm and iReleaseAlarm, with no arguments given).
+- **Test program:** `d700-timer` and `d700-alarm` (`tests/d700/mod.rs`, written by `examples/d700.rs`), fast-booted on the
+  Americas image: timer 3 and the INTC at entry; timer 3's ticks against timer 0's 1000h on BUSCLK/256; timer 3
+  programmed through a kernel-mode routine the program installs with SetSyscall (BUSCLK/256, ZRET, CUE, CMPE, COMP
+  1000h) with a handler added for cause 12; SetAlarm and ReleaseAlarm called with the arguments treated as unknown, as
+  the tester decided on 2026-10-26. **On Sapphire**: MODE 083h, COMP FFFFh and I_MASK 1002h at entry; 111 ticks in
+  1,048,576 BUSCLK (111.9 lines); a store to timer 3 from the thread takes a TLB Modified exception at 10001810h, the
+  kernel mapping the page read-only; programmed from kernel mode, timer 3 sets EQUF (MODE 5C2h) and latches TIM3 in
+  I_STAT (100Ch) with TIM3 unmasked, and no interrupt is taken, the thread's Status.EIE being clear (D-701); SetAlarm
+  never returns. **Through OSDSYS** (a runner reading the registers at each field end, not committed): COUNT 0, MODE
+  C83h and COMP FFFFh written at fields 4, 11 and 13 and never again to field 2200; the count rises 262 or 263 a field.
+- **Referee:** PCSX2 2.8.2. PINE answers 0 for every I/O register (`Sapphire_Referees.md` §2.1), so its timer 3 in the
+  menu is unknown. The programs: the same MODE, COMP and I_MASK at entry; 224 ticks in 1,048,576 BUSCLK, two a line,
+  as D-42 recorded; the program stops once timer 3 is armed, its handler never called (its thread's EIE is set, so the
+  interrupt is taken, by the kernel's own handling of cause 12); SetAlarm never returns.
+- **Conclusion:** the title, **measured**. Timer 3 and the INTC answer the manual on Sapphire; the consoles part not at
+  timer 3 but at the interrupt enable of the kernel's threads (D-701), which leaves a latched TIM3 untaken on Sapphire.
+- **Depends on it:** nothing.
+- **Pinned by:** `the_d700_programs_assemble` (the programs); `the_timers_count_compare_overflow_and_gate_as_chapter_4_says` (the timer, D-38).
+- **Implemented in:** none.
+
+### D-701. The kernel's ExecPS2 starts its main thread with Status.EIE clear on Sapphire, whatever its caller's; PCSX2 starts it with the caller's; a user-mode context with that Status appears in OSDSYS as the browser is entered
+
+- **Opened:** 2026-10-26, at the timer 3 step (`Sapphire_Native.md` §30.55), when `d700-timer`'s latched and unmasked
+  TIM3 was not taken on Sapphire.
+- **Documents read:** Sony's *EE Core User's Manual* §3.2 (EIE and IE both set, EXL and ERL clear, for an interrupt;
+  EDI letting EI and DI act in user mode) and *EE Core Instruction Set Manual* (DI, EI: "Exceptions: None", EIE set or
+  cleared when EDI, EXL or ERL is set or in kernel mode; ERET clears EXL or ERL alone); ps2tek "BIOS EE Syscalls"
+  (ExecPS2: "Clears all of the internal kernel state and creates a thread with priority 0 (main thread)"; CreateThread,
+  StartThread) and "BIOS EE Threading" (ThreadParam). No document says what Status a new thread receives.
+- **Test program:** `d700-thread`, `-ei`, `-di`, `d700-exec`, `d700-exec-clear` and `d700-kmode` (`tests/d700/mod.rs`),
+  fast-booted, recording COP0 Status: at entry; in a thread CreateThread made, with the creator's EIE set or cleared
+  first; as each main thread begins after the program calls ExecPS2 on itself following EI and following DI, with the
+  INTC's, the DMAC's and the SIF's registers beside it; and inside a kernel-mode routine installed with SetSyscall,
+  after DI, EI and MTC0. **On Sapphire**: 70020C11h at entry; the created thread takes its creator's EIE; ExecPS2's
+  main thread 70020C11h after EI and after DI, and with SMFLG's bit 18 cleared first; EI, DI and MTC0 act on EIE as the
+  manuals say. **Through OSDSYS** (Status at each field end, a runner not committed): every user-mode sample had EIE set
+  until field 1866; from 1867, as the menu fades into the browser, 42 of the 68 user-mode samples are 70020C11h.
+- **Referee:** PCSX2 2.8.2: 70030C11h at entry; the created thread takes its creator's EIE; ExecPS2's main thread
+  70030C11h after EI and 70020C11h after DI; `d700-kmode` equal to Sapphire's word for word. The two consoles' registers
+  at entry differ only by their fast boots' traces (SIF1's CHCR and CIS6, SMFLG's bit 18), which `d700-exec-clear`
+  rules out for SMFLG.
+- **Conclusion:** **open**. The kernel's ExecPS2 on Sapphire leaves its main thread's EIE clear where PCSX2's keeps the
+  caller's, with every EE operation on EIE a program can reach equal on both; a thread with EIE clear takes no interrupt
+  and passes the state to every thread it creates, and a context with exactly that Status runs in OSDSYS from the
+  browser's entry, where it stalls. Which operation inside ExecPS2 makes the difference is in what the kernel executes,
+  beyond §1.4's allowance; put to the tester (`Sapphire_Native.md` §30.58 Q1). One lineage only: PCSX2's.
+- **Depends on it:** P8's stall, if the context of §30.56 is the browser's.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.
+
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 
 - **Opened:** 2026-10-25, at stage S19.

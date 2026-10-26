@@ -2262,6 +2262,62 @@ is a property of what it is doing, and one state is not a sample.
 - **Code is not freed a block at a time.** §5.8.4's bound drops everything at once, and no game has reached it.
 - **The verifier runs on one thread.** It needs the display processor unthreaded, since it clones the machine.
 
+#### 5.8.10 The thread, publication, module and verifier moved into `emusen-jit` (2026-10-25)
+
+*Sapphire's stage S35, decided 2026-10-24 by the tester (`Sapphire_Plan.md` §9.6, §11 Q10).* The parts of the
+recompiler that are not the VR4300's left this crate for `EmuSen/Cores/Shared/emusen-jit` (`Hardware/Shared/EmuSen_Jit.md`),
+so that the PlayStation 2's recompilers share them: the compiler's thread and its queue, the slots, the Cranelift module
+with its W^X batches, the code's bound and the counters, from `jit/mod.rs`; and the verifier's shape (a reference
+stepped and compared, its step count, the panics and their wording), from `verify.rs`. **The new cross-component
+dependency is `marsrt -> emusen-jit`**, a path dependency; `cranelift-native` is now the shared crate's alone.
+
+**What stays here**: `jit/emit.rs`, now `lower` (the function's signature and body, which the shared crate declares
+and defines), the compiled block's signature, its context `Context_` and the exits `DONE`, `RAISED` and `FINISH` (named
+to the crate as "done", "raised" and "finish"), the options of the three tiers, the block shapes, the cache, the decoded
+tier, the dispatcher with its guard, and `verify.rs`'s `Interpreter` (the machine, what a step compares, and the idle
+loop's mirror). `Blocks` holds a `jit::Jit` where it held an `Option<jit::Compiler>` and its own `code_bound`; the bound
+is the crate's budget (`CODE_BOUND`, 256 MiB, unchanged), the count of its drops moved from `Stats::flushes` to
+`Jit::flushes`, and `EMUSEN_MARSRT_PERFMAP` still turns the perf map on. Nothing a block computes changed: the moved code
+was moved, not rewritten, and the one ordering that matters, the slot's Release store after the batch is executable
+and its Acquire load, is the same two instructions.
+
+**The gate** (measured 2026-10-25, on the desktop at CPU weight 20 beside other work; the corpus from
+`TestRoms/n64/`, the games from read-only copies of the library, Super Mario 64 and Ocarina of Time only):
+
+- the 21 block tests at every tier — the random programs (160 seeds), the verifier's pass and the mechanisms: 21 of 21;
+- the corpus at every tier: 1,722 lines identical to the interpreter's at each, "Failed 46 of 4637 tests";
+- the games at each tier set by `EMUSEN_MARSRT_TIER` (1, 2, 3): `a_recompiled_machine_is_the_interpreted_machine`,
+  its four-workers-deferred twin and `a_run_that_carries_its_blocks_and_one_loaded_from_its_state_agree`, each over both
+  games from power-on and from their states, 300 frames, state, picture and sound identical after every frame: 3 of 3
+  at each tier;
+- the tests that read the recompiler's counters or switch (`ffi::host`, `ffi::v1`, `tests::debug`, `machine`,
+  `tests::rsp_blocks`): 41 of 41;
+- ThreadSanitizer over the 21 block tests, the variant beside a running processor on: 51 reports, 49 an `Arc`'s last
+  drop and 2 a std `OnceLock` read by the signal processor's settings, every one in §5.8.5's blind spots; none in the
+  moved code's own accesses.
+
+**Speed** (measured 2026-10-25 and 2026-10-26, §5.8.8's method on MarsRT's own example): `examples/threads … split 4
+blocks`, 600 frames from the gameplay states, the build before the move (WiseMan 9ac67498a) and after it, both
+`release` and unguided, interleaved with their order alternated between rounds; every run under the shared timing lock
+and, inside it, the quiet gate of §6.16.1 (the rest of the machine under 1.2 busy processors for a second; the gate read
+1.00 to 1.10, other work running on one processor). Five rounds, ms a frame:
+
+| game | before, median (range) | after, median (range) | paired, median | overlap |
+| --- | --- | --- | ---: | --- |
+| Super Mario 64 | 3.633 (3.524–3.723) | 3.581 (3.515–3.723) | −0.9% | yes |
+| Ocarina of Time | 4.726 (4.589–4.881) | 4.573 (4.531–4.697) | −1.5% | yes |
+
+Every run of both builds ended on one state hash a game (`C1D7EE67AFB92361` and `61F15559C5A23119`). The ranges overlap
+on both games, so by `Mars_Performance.md` §6's rule **the speed is unchanged within its noise**; the small lead of the
+new build is two disturbed rounds of the old one on Ocarina of Time (4.881 and 4.842), not a gain anyone should expect
+from code that was moved. Nothing on the emulation thread's path changed: the dispatcher reads a slot with one Acquire
+load as before, and the generic code is monomorphised into the library with LTO.
+
+**PGO.** The profile has been void since d84b3bc1 (§6.17); this move renames the moved functions again (their paths
+are now `emusen_jit::…`), so it stays void, and the source digest of `build.rs`, which follows path dependencies, now
+covers `emusen-jit` too. A retrain covers the shared crate as it covers `emusen-native`, since the profile flags reach
+every crate of the build; the move adds nothing to what the retrain owes.
+
 ## 6. Finishing the port (planned 2026-09-22)
 
 §5's six stages are five done and one open, and what the port set out to do is measured (§5.8.8): on this desktop,

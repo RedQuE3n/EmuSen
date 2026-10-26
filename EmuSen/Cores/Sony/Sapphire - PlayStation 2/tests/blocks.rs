@@ -14,7 +14,7 @@ fn assemble(source: &str, origin: u32) -> Vec<u32> {
     emusen_mips::assemble(source, origin, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{e:?}\n{source}"))
 }
 
-/// The handler at 80000180h for the random programs: an interrupt from Count (IP7) moves Compare on by `PERIOD` cycles,
+/// The handler at 80000180h and 80000200h for the random programs: an interrupt from Count (IP7) moves Compare on by `PERIOD` cycles,
 /// one from the INTC (IP2) acknowledges timer 0; any other exception returns past its instruction, or past the branch and
 /// its slot.
 const PERIOD: u32 = 1500;
@@ -59,6 +59,8 @@ fn system(words: &[u32]) -> System {
     let mut sys = System::new(ORIGIN);
     sys.board.map.load(ORIGIN, words);
     sys.board.map.load(0x180, &assemble(&handler(), 0x8000_0180));
+    // The interrupt vector, 80000200h, takes the same handler.
+    sys.board.map.load(0x200, &assemble(&handler(), 0x8000_0200));
     sys
 }
 
@@ -215,6 +217,18 @@ fn plain(r: &mut Rng) -> String {
     }
 }
 
+/// A random instruction that raises nothing, for the slots of the calls and returns: the handler's return past a branch
+/// and its slot would skip a return and run the program into memory it never wrote.
+fn quiet(r: &mut Rng) -> String {
+    loop {
+        let i = plain(r);
+        let name = i.split_whitespace().next().unwrap_or("");
+        if !matches!(name, "add" | "sub" | "dadd" | "dsub" | "addi" | "daddi") && !name.starts_with('t') {
+            return i;
+        }
+    }
+}
+
 /// An instruction the blocks leave to the interpreter: a load or store in the scratch area.
 fn other(r: &mut Rng) -> String {
     let (d, off) = (*r.pick(&POOL), 8 * r.below(256));
@@ -303,7 +317,7 @@ fn random_program(seed: u64, timer: bool) -> (Vec<u32>, Vec<u32>) {
             }
             7 => {
                 l.push(if r.below(2) == 0 { "jalr fp".into() } else { "jalr ra, fp".into() });
-                l.push(plain(&mut r));
+                l.push(quiet(&mut r));
             }
             8 => {
                 label += 1;
@@ -330,7 +344,7 @@ fn random_program(seed: u64, timer: bool) -> (Vec<u32>, Vec<u32>) {
         sub.push(plain(&mut r));
     }
     sub.push("jr ra".into());
-    sub.push(plain(&mut r));
+    sub.push(quiet(&mut r));
     (assemble(&l.join("\n"), ORIGIN), assemble(&sub.join("\n"), SUB))
 }
 
@@ -368,13 +382,15 @@ fn random_twins(seeds: std::ops::Range<u64>, steps: u64, stride: u64, timer: boo
         total.rerun_steps += s.rerun_steps;
         total.interpreted += s.interpreted;
         total.reshaped += s.reshaped;
+        total.refills += s.refills;
+        total.waits += s.waits;
     }
     total
 }
 
 #[test]
 fn random_programs_leave_the_interpreters_machine() {
-    let s = random_twins(0..120, 20_000, 400, false);
+    let s = random_twins(0..160, 24_000, 400, false);
     println!("random programs, Count's interrupt: {s:?}");
     assert!(s.compiled_steps > s.interpreted, "most steps ran compiled: {s:?}");
     assert!(s.rollbacks > 0, "an interrupt fell inside a block at least once: {s:?}");
@@ -382,7 +398,7 @@ fn random_programs_leave_the_interpreters_machine() {
 
 #[test]
 fn random_programs_with_timer_interrupts_through_the_board_leave_the_interpreters_machine() {
-    let s = random_twins(1000..1060, 20_000, 400, true);
+    let s = random_twins(1000..1080, 24_000, 400, true);
     println!("random programs, timer 0 and Count: {s:?}");
     assert!(s.rollbacks > 0, "{s:?}");
 }
@@ -607,3 +623,4 @@ fn the_fixed_cost_compromise_changes_the_cycles_and_not_the_results() {
     println!("the loop's 4000 steps: {exact} cycles in the issue model, {fixed} at one cycle an instruction");
     assert_ne!(exact, fixed, "the compromise changes the time the program takes");
 }
+

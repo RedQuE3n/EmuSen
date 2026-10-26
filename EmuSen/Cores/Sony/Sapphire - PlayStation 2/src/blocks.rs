@@ -56,6 +56,9 @@ pub struct Stats {
     pub interpreted: u64,
     /// Blocks shaped again because the cache no longer held their words or their page moved.
     pub reshaped: u64,
+    /// Entries left to the interpreter because a line of the block was not in the cache, or a new block ran into one.
+    pub refills: u64,
+    pub waits: u64,
 }
 
 /// A hash of a word address, for the map of blocks.
@@ -206,6 +209,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let held = blocks.map.get(&pc).map(|b| if b.paddr == paddr && b.options == options { sys.ee.holds(pc, paddr, &b.words) } else { Some(false) });
     if held == Some(None) {
         // A line of the block is not in the cache: the interpreter's fetch refills it, and the block stands.
+        blocks.stats.refills += 1;
         return None;
     }
     if held != Some(Some(true)) {
@@ -213,6 +217,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         let (shaped, short) = shape::shape(&words);
         if short && missed {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.
+            blocks.stats.waits += 1;
             return None;
         }
         let state = if shaped.is_some() { State::Counting(0) } else { State::Refused };

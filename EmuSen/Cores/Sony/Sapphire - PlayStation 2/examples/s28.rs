@@ -1,8 +1,9 @@
 //! Stage S28's runner (Sapphire_Native.md §39): a game's disc in the drive at power-on, the player's BIOS given by path,
 //! driven by a control file a person writes while it runs. The BIOS image is handed to the machine and never read here.
-//! What is written is pictures, the sound, states, timings and the hardware's own reports; an EE program counter or
-//! instruction is printed only when it lies inside the game's own program as its disc's ELF places it, never inside
-//! the BIOS's ROM or the kernel's memory, and nothing of the IOP's is printed (Sapphire_Plan.md §1.4).
+//! What is written is pictures, the sound, states, timings and the hardware's own reports; no program counter or
+//! instruction of either processor is printed, since the BIOS's OSDSYS runs from the same addresses a game's program is
+//! loaded at, so an address alone cannot tell the game's code from the BIOS's (Sapphire_Plan.md §1.4, Sapphire_Native.md
+//! §39.11).
 //!
 //! `cargo run --release --example s28 -- <bios> <americas|europe|japan> <disc.iso> <out-dir> [nvm=<file>]
 //! [card=<file>|none] [load=<state>] [sound] [registers]`
@@ -18,7 +19,8 @@
 //! whenever the console changes it, and the sound, with `sound`, to `<out-dir>/sound.raw` (48,000 Hz, stereo s16).
 //! With `registers` every register access the units answer is counted from power-on, for the reports; with `trace` the
 //! drive's register accesses are kept in order and written with the reports to `<out-dir>/trace.txt`; with `padtrace`
-//! port 1's pad exchanges, to `<out-dir>/padtrace.txt`.
+//! port 1's pad exchanges, to `<out-dir>/padtrace.txt`. The IOP's console, caught at IOMAN as §36.3 does, is written
+//! with the reports to `<out-dir>/tty.txt`.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -29,7 +31,7 @@ use emusen_native::abi::File;
 use emusen_native::core::{Core, Create, Kept, Settings};
 use emusen_native::ffi::StateMachine;
 use sapphire::machine::{Machine, Market};
-use sapphire::media::{Media, Sectors};
+use sapphire::media::Media;
 
 #[derive(Default)]
 struct Control {
@@ -72,16 +74,6 @@ fn control(out: &Path) -> Control {
 /// Where the game's memory begins in RDRAM: the EE kernel's lies below it and is never written out.
 const GAME_RAM: usize = 0x0010_0000;
 
-/// The game's own program as its disc's ELF places it: (from, to) of each loaded segment.
-fn program_ranges(image: &[u8], program: &str) -> Vec<(u32, u32)> {
-    let name = program.rsplit(['\\', ':', '/']).next().unwrap_or(program).trim_end_matches(";1");
-    let Some(elf) = Sectors::new(image).root_file(name) else { return Vec::new() };
-    match Media::read(&elf) {
-        Ok(Media::Elf(e)) => e.segments.iter().map(|s| (s.0, s.0 + s.3)).collect(),
-        _ => Vec::new(),
-    }
-}
-
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let bios = std::fs::read(&a[1]).expect("the BIOS");
@@ -99,8 +91,7 @@ fn main() {
     let trace = a[5..].iter().any(|o| o == "trace");
     let padtrace = a[5..].iter().any(|o| o == "padtrace");
     let Ok(Media::Disc(disc)) = Media::read(&image) else { panic!("not a PlayStation 2 disc") };
-    let game = program_ranges(&image, &disc.program);
-    println!("disc: {} sectors, program {}, serial {:?}; the program's segments {:X?}", disc.sectors, disc.program, disc.serial, game);
+    println!("disc: {} sectors, program {}, serial {:?}", disc.sectors, disc.program, disc.serial);
     let nvm = opt("nvm").map(|p| std::fs::read(p).expect("the EEPROM"));
     let card = opt("card").filter(|p| p != "none").map(|p| std::fs::read(p).expect("the card"));
     let which = sapphire::v1::bios(market).which;
@@ -175,7 +166,7 @@ fn main() {
         if c.gstraces.contains(&next) {
             m.sys.board.gs.trace = Some((Vec::new(), 0));
         }
-        advance(&mut m, &game);
+        advance(&mut m);
         if let Some((t, images)) = m.sys.board.gs.trace.take() {
             let text: String = t.iter().map(|(r, d)| format!("{r:02X} {d:016X}\n")).collect();
             std::fs::write(out.join(format!("gstrace-{}.txt", m.frames)), format!("{text}HWREG writes {images}\n")).unwrap();
@@ -209,28 +200,19 @@ fn main() {
             let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE2, DISPFB1, DISPLAY1, DISPFB2, DISPLAY2, BGCOLOR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
             println!("frame {}: PMODE SMODE2 DISPFB1 DISPLAY1 DISPFB2 DISPLAY2 BGCOLOR {}", m.frames, r.join(" "));
             println!(
-                "frame {} at {:.0} s wall ({fps:.2} frames/s since the last): picture {:?}, lit {lit}; stop {:?}; IOP held {}; {}",
+                "frame {} at {:.0} s wall ({fps:.2} frames/s since the last): picture {:?}, lit {lit}; stop {:?}; IOP held {}",
                 m.frames,
                 started.elapsed().as_secs_f64(),
                 m.sys.board.pcrtc.picture.geometry,
                 m.stop,
-                m.sys.board.iop.held,
-                where_ee(&m, &game)
+                m.sys.board.iop.held
             );
         }
     }
     print_reports(&mut m, &out);
 }
 
-/// Where the EE is: its program counter only inside the game's own program, else only that it is outside it.
-fn where_ee(m: &Machine, game: &[(u32, u32)]) -> String {
-    let pc = m.sys.ee.pc & 0x1FFF_FFFF;
-    if game.iter().any(|&(f, t)| pc >= f && pc < t) { format!("EE in the game's program at {pc:08X}") } else { "EE outside the game's program".into() }
-}
-
-/// One frame as `Machine::advance` runs it, the EE's stop kept with its address and word when they lie in the game's
-/// own program.
-fn advance(m: &mut Machine, game: &[(u32, u32)]) {
+fn advance(m: &mut Machine) {
     let target = m.sys.board.pcrtc.fields + 1;
     let (mut steps, mut warned) = (0u64, 0u32);
     while m.sys.board.pcrtc.fields < target {
@@ -239,18 +221,13 @@ fn advance(m: &mut Machine, game: &[(u32, u32)]) {
             warned += 1;
             let gs = &m.sys.board.gs;
             let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE1, SMODE2, SYNCH1, SYNCH2, SYNCV, DISPLAY1, DISPLAY2, CSR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
-            println!("frame {}: no field after {} steps; board at {} cycles; PMODE SMODE1 SMODE2 SYNCH1 SYNCH2 SYNCV DISPLAY1 DISPLAY2 CSR {}; {}", m.frames, steps * 1024, m.sys.board.now, r.join(" "), where_ee(m, game));
+            println!("frame {}: no field after {} steps; board at {} cycles; PMODE SMODE1 SMODE2 SYNCH1 SYNCH2 SYNCV DISPLAY1 DISPLAY2 CSR {}", m.frames, steps * 1024, m.sys.board.now, r.join(" "));
         }
         if m.booted && m.stop.is_none() {
             for _ in 0..1024 {
-                if let Err(sapphire::ee::Halt::Unimplemented { pc, word }) = m.sys.step() {
+                if m.sys.step().is_err() {
                     m.stop = Some(sapphire::machine::Stop::Unimplemented);
-                    let p = pc & 0x1FFF_FFFF;
-                    if game.iter().any(|&(f, t)| p >= f && p < t) {
-                        println!("frame {}: the EE stopped on {word:08X} at {pc:08X}, in the game's program", m.frames);
-                    } else {
-                        println!("frame {}: the EE stopped on an instruction outside the game's program", m.frames);
-                    }
+                    println!("frame {}: the EE stopped on an instruction the interpreter lacks", m.frames);
                     break;
                 }
             }
@@ -259,6 +236,9 @@ fn advance(m: &mut Machine, game: &[(u32, u32)]) {
             let sapphire::board::System { ee, board } = &mut *m.sys;
             board.run_to(t, &mut ee.spram[..]);
         }
+    }
+    if m.booted {
+        m.sys.board.iop.resolve_tty();
     }
     m.frames += 1;
 }
@@ -281,6 +261,9 @@ fn print_reports(m: &mut Machine, out: &Path) {
         let text: String = t.iter().map(|(c, r, k)| format!("{c:02X?} -> {r:02X?} x{k}\n")).collect();
         std::fs::write(out.join("padtrace.txt"), text).unwrap();
     }
+    let tty = &m.sys.board.iop.tty;
+    std::fs::write(out.join("tty.txt"), &tty.text[..tty.len.min(tty.text.len())]).unwrap();
+    println!("the IOP's console: {} bytes in tty.txt", tty.len);
     let regs: Vec<u8> = (0x20..0x40).map(|r| m.sys.board.iop.bus.cdvd.read8(r)).collect();
     println!("CDVD registers 20h-3Fh {regs:02X?}");
     let cd = &m.sys.board.iop.bus.cdvd;

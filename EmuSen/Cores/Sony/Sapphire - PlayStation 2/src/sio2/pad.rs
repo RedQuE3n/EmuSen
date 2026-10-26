@@ -180,12 +180,14 @@ impl DualShock2 {
         let (mode, n) = if self.config {
             let mut six = [0u8; 6];
             match c {
+                // Its last byte 5Ah too, which Kingdom Hearts waits for after 4Fh's (D-463).
                 0x40 => {
                     let i = arg(3) as usize;
                     six[2] = self.attributes.get(i).copied().unwrap_or(0xFF);
                     if i < 12 {
                         self.attributes[i] = arg(4) & 3;
                     }
+                    six[5] = 0x5A;
                 }
                 // The reply bytes 4Fh can enable, a constant (psx-spx), in analogue mode only, its last byte 5Ah
                 // (ps2tek; Sapphire_Disputes.md D-225).
@@ -236,7 +238,7 @@ impl DualShock2 {
                         self.rumble[i] = arg(3 + i);
                     }
                 }
-                // Its last byte 5Ah, which Kingdom Hearts waits for before it leaves configuration mode (D-463).
+                // Its last byte 5Ah, which Kingdom Hearts waits for before it goes on (D-463).
                 0x4F => {
                     let v = (0..6).fold(0u64, |v, i| v | u64::from(arg(3 + i)) << (8 * i));
                     if v >> 18 & 0x3F_FFFF == 0 {

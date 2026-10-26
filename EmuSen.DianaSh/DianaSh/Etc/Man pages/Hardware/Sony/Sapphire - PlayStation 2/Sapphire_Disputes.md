@@ -4351,3 +4351,50 @@ it.*
 - **Depends on it:** `vif::Vif::next_event`.
 - **Pinned by:** `a_direct_refused_by_the_gif_asks_for_no_event` (`tests/vif.rs`).
 - **Implemented in:** stage S28's commit.
+### D-463. The DualShock 2, 4Fh: the reply's last byte (byte 8, counted from 0) is 5Ah
+
+- **Opened:** 2026-10-26, at stage S28: Kingdom Hearts on Sapphire drew "DUALSHOCK®2 analog controller is not inserted in
+  controller port 1." after its copyright screen and never left it. The pad's own report of its exchanges
+  (`examples/s28.rs padtrace`): the game entered configuration mode, asked 45h, 46h, 47h, 4Ch, set analogue mode locked
+  with 44h, set 4Dh's map, asked 41h, then sent 4Fh (enable bytes FFh FFh 03h) ten times and polled 42h with the pad
+  still in configuration mode (mode F3h); it never sent 43h with 00h.
+- **Documents read:** psx-spx, "Config Mode - Command 4Fh" and its note "Some Dualshock2 Config Mode commands do
+  occasionally send 00h, 5Ah, or FFh as last (9th) reply byte"; ps2tek "Controller commands", which gives no reply
+  bytes for 4Fh; D-224, which left byte 8 of 4Fh's and 40h's reply ungraded.
+- **Test program:** S25's `s25-pad` (byte 8 ungraded); the game, a program written for the console, as the witness.
+- **Referee:** PCSX2 2.8.2 answers 5Ah there (D-224's measurement of 2026-10-25).
+- **Conclusion:** 4Fh's reply ends with 5Ah: the referee answers so and a console game retries 4Fh until it does, then
+  leaves configuration mode. 40h's ninth byte stays ungraded (00h), no program having shown it. **Measured** on one
+  lineage with the game's behaviour beside it; with it Kingdom Hearts leaves configuration mode and polls the pad in
+  mode 79h.
+- **Depends on it:** `sio2::pad::DualShock2::exchange`.
+- **Pinned by:** `the_4fh_reply_ends_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode` (`src/sio2/tests.rs`).
+- **Implemented in:** stage S28's commit.
+
+### D-464. GS, Kingdom Hearts' "PlayStation 2" logo: Sapphire draws a grey box with dark outlines where PCSX2 shows white letters on black
+
+- **Opened:** 2026-10-26, at stage S28: Kingdom Hearts' own logo, its first screen, about 7 to 13 seconds into the game.
+- **Documents read:** the GS User's Manual §3.4 (TEX0, TFX, TCC), §3.6 to §3.9 (alpha test, blending), chapter 5 (the
+  PCRTC's merge, PMODE).
+- **Test program:** none yet. The GS's own report of the game's register writes (`examples/s28.rs gstrace`, frames 420
+  to 452) replayed into a GS made fresh by `examples/gsreplay.rs` draws the same grey box, so the box comes from the
+  writes and not from the PCRTC (PMODE 66h, circuit 2 alone, DISPFB2 at FBP A0h). The texture, 384 × 64 PSMCT32 at
+  TBP 3C00h, is uploaded at frame 426 from the game's own program image (EE RAM 001A5AA0h, inside its ELF's segment),
+  byte for byte, so the referee is given the same data; its texels have R = G = B = A (95h for the ground, other
+  values on the letters' edges). Each frame then draws it as a textured strip in context 2 (TFX 0, TCC 0, vertex
+  colour 80h, alpha 40h, no blending), then black antialiased line strips and dark Gouraud strips under additive
+  blending, then a sprite blending the buffer at FBP 0 back in with alpha 07h. Replayed draw by draw, the strip alone
+  makes the box and nothing after it changes it visibly: the lines' and the Gouraud strips' colours are 00h to 0Ah in
+  every channel, which additive blending leaves near black, so white letters would need colours the game did not write.
+  The texture's letters are not filled (their insides equal the ground), so no reading of the texture alone gives filled
+  white letters either.
+- **Referee:** PCSX2 2.8.2 shows white letters on black at 13.7 and 16.2 seconds and no glowing phase before them;
+  Sapphire shows a blue glow forming the letters (frames 430 to 440), then the grey box until frame 780.
+- **Conclusion:** **open**. The writes as traced give the grey box by the manual's rules as Sapphire reads them, and the
+  colours the game wrote are near black, so the difference most likely lies upstream of the GS, in what the game
+  computed (its logo's brightness, the strip's presence), which the EE, the VUs or the timing feed; a rule of the GS the
+  draws depend on is not excluded. The next steps, not reached at this stage: the game's vertex data in EE RAM read on
+  both machines at the same frame, and a program of the project's replaying the strip and the lines on PCSX2.
+- **Depends on it:** the GS's texturing and pixel pipeline, or the units feeding the game's choices.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.

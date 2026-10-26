@@ -10495,7 +10495,10 @@ never read; Jak and Daxter read in place from `~/.cache/emusen/probe/sapphire/di
 | The verifier on the BIOS | `s33 verify`, quiet: the interpreter stepped after every block and through every skipped turn, 30 frames | held: the boot 220,863,488 steps compared (3,371 skips), Jak and Daxter from its entry 231,997,440 (485 skips, 44.9 % of the EE's cycles), the whole states equal at the end |
 
 **The blast radius** (`blast.sh`): the crate's whole suite, 411 tests in 30 binaries, passed, and WiseMan's `SapphireTests`, 5
-of 5, the schema's settings now ending with `idle_skip`.
+of 5, the schema's settings now ending with `idle_skip`. **On the tree rebased onto WiseMan `9b0f2b1c5`** (S28, S40's VU1
+recompiler as the default tier, §46's GS fast paths, D-465, D-780 and D-840 beneath): the crate's 444 tests in 31 binaries
+and `SapphireTests` 5 of 5 passed, and the boot (760 frames) and Jak and Daxter (900) were again equal frame by frame on
+the recompiled tier, 0 pictures, 0 sound, 0 of 13 and 0 of 15 states differing, with the same skips as before.
 
 **What was skipped** over the gate's runs: on the boot, 77.9 % of the EE's cycles in 20,528 skips and 334.9 million IOP
 cycles (71.7 % of the IOP's); on Jak and Daxter, 84.4 % in 521,176 skips and 188.7 million IOP cycles (34.1 %). Both tiers

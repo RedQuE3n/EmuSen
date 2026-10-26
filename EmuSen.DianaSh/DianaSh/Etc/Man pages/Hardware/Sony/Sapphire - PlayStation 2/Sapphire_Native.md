@@ -4570,7 +4570,9 @@ Each was applied, the tests named run, and the source restored.
    §1.4 leaves to the tester.
 2. **Q2 [routine], D-383, the language screen deaf with slot 1 empty.** *Recommended*: a program in S25's form sending
    a pad read with the card port empty, in one queue and in two, its RECV1 and replies read on Sapphire and PCSX2, then
-   the rule fixed and the control run again.
+   the rule fixed and the control run again. *Done 2026-10-26 on the tester's go (§30.25 to §30.30): a command no device
+   acknowledges ends at its peripheral byte; the browser then stalls with slot 1 empty as with a card (§30.28), which
+   answers Q1's condition in the negative.*
 3. **Q3 [decision], the Memory Cards tab of a console offered in development.** The window listed shelved consoles
    only, and `EmuSen_CoreAPI.md` §27.4 gives a console its tab and shelf once its games run, so the PlayStation 2's tab
    could not appear before S29. It now also lists the consoles an engine runs that no shelf shows
@@ -4648,7 +4650,8 @@ as S24's writer did; **this writer is exposed and will never write the open repl
 
 - G10 and G11 offered to players: S29, with the system (`Sapphire_Plan.md` §7).
 - A disc in the drive at create (S29), and a state naming a disc put in after an empty start (§30.21 Q7).
-- The card's authentication (Q7(b) holds; §30.21 Q1), the browser's own copy and title views, and the cause of D-383.
+- The card's authentication (Q7(b) holds; §30.21 Q1), the browser's own copy and title views, and the cause of D-383
+  (*found 2026-10-26, §30.25*).
 - `memcard`'s page names no PlayStation 2 card example and still calls the N64's pak unread: the medium joins it by its
   extension like every other, and only the golden corpus's list of known media changed.
 
@@ -4726,7 +4729,7 @@ authentication's F0h, F3h and F7h) keeps the whole length. No new dependency.
 multitap one byte each, a read after the empty slot's probe six bytes in all with its reply at byte 4, a card's refused
 command its whole length) and `tests/sio2.rs`'s test of the same name running `s25-empty-port` (29 graded words: each
 queue's time within 400 cycles above its bytes' worth, RECV1, the replies), both also under `test-checked`; clippy clean
-on every target. WiseMan's blast filter, `SapphireTests`: §30.29.
+on every target. WiseMan's blast filter, `SapphireTests`: §30.30.
 
 | # | Fault | Caught by |
 |---|---|---|
@@ -4735,6 +4738,71 @@ on every target. WiseMan's blast filter, `SapphireTests`: §30.29.
 | F3 | a card that refuses a command treated as absent, its command cut to one byte | the lib's test (the program has no card) |
 
 Each was applied, the tests run, and the source restored.
+
+### 30.28 OSDSYS's browser again, and P8 (measured 2026-10-26)
+
+`examples/s25b.rs` on the tree with the rule, the Americas image, part B's script (Cross every 120 frames from frame 770,
+the ninth on "Browser" at 1730, Circle at 2510), two runs: slot 1 empty, and slot 1 holding the crate's formatted card
+(`emusen_ps2_card::format`, no saves); slot 2 the erased card the machine makes, in both.
+
+| Frames | Slot 1 empty | The formatted card in slot 1 |
+|---|---|---|
+| 770-1610 | each press steps the setup on: Language, Time Zone, Daylight Savings Time, "Settings completed." | the same |
+| 1680 | the main menu, "Browser" and "System Configuration", now with its ring of lights | the same |
+| 1790-1860 | the menu fading out on Cross | the same |
+| 1920-2700 | **black, every pixel zero**, through the Circle at 2510 | the same |
+
+The 54 pictures of the two runs are equal byte for byte; the card was never written (its file equal to the crate's);
+SIO2's counts after frame 1680 are equal in the two runs, about 1.1 queues a frame and nothing more, so entering the
+browser sent the card in slot 1 nothing at all; the reports name no unmapped access part B's runs did not, and the EE's
+exception counts are equal in the two runs. PCSX2 at the same step draws "There is no data." with slot 1 empty (§30.19).
+
+So **for P8**: with D-383 fixed, the browser now stalls on Sapphire with slot 1 empty exactly as with a card, the
+console never reaching the card in slot 1; the stall is not the card's unanswered authentication (Q7(b), §30.2), and P8
+cannot be recorded as "the BIOS refuses the card": what the player's BIOS shows on Sapphire is a browser that never
+draws, card or none. The clock part B saw in the corners of the menu and the browser is not drawn on this tree, in
+either run. Going further needs where the BIOS waits, which is not looked for (`Sapphire_Plan.md` §1.4): it is put to
+the tester (§30.29 Q1). The one unit the counts show waiting is channel 12 (§30.26), in every run since frame 50,
+including those whose setup took the pad.
+
+### 30.29 Questions the D-383 step leaves
+
+1. **Q1 [decision], the browser that never draws, with or without a card.** *Recommended*: record P8 as observed ("the
+   browser stalls on entry on Sapphire whatever is in slot 1; the card's refusal is not reached"), keep Q7(b), and
+   choose between (a) a dispute step on SIO2out (Q3), the one unit the hardware's counts show waiting, which needs no
+   look at the BIOS, and (b) leaving the browser until S10's fast-booted programs exercise the card's driver path
+   through the project's own programs. (a) first: it is cheap and may be the cause.
+2. **Q2 [routine], the ports' clocks (D-440).** *Recommended*: a step of its own that sets the controllers' bytes at 500
+   kHz and the cards' at 2 MHz, if SEND1 and SEND2 can be read as the rates by a program of the project's own, and runs
+   the boot, the setup and the browser again; until then 4 µs a byte everywhere.
+3. **Q3 [routine], SIO2out's slice that never ends.** Channel 12 starts a 36-word slice about frame 50 of every boot and
+   no queue after it leaves 144 bytes in FIFOOUT. *Recommended*: an IOP program in S25's form that starts SIO2in and
+   SIO2out for a queue shorter than their blocks, and longer, read on Sapphire and PCSX2 (whose channel 12 moved nothing
+   at part A, §30.9), to rule what a slice gets when a queue's replies are fewer than its block.
+4. **Q4 [routine], D-441.** *Recommended*: keep D-221's RECV1 and the command's length; revisit if a second lineage or a
+   document appears.
+
+### 30.30 What was read, the blast radius, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4, §5.8, §5.9, §11 Q7, §13 (P8); this page's §30 (parts A and B) and §35;
+`Sapphire_Disputes.md` (its rules, D-220 to D-230, D-380 to D-383); `Sapphire_Referees.md` §2.1, §4.3, §4.5. ps2tek at
+`1c91660`: "SIO2 Registers" (with "SIO2_RECV1" and the transfer's flow), "SIO2 Command Sequence", "IOP DMA", and in the
+BIOS chapter "BIOS IOP SIO2MAN" (its export list only), as a writer of a player's-BIOS stage may; the later edition
+(Israelson) "SIO2 Registers" and "SIO2 Controller Commands"; psx-spx at `6d7d1bc` (2026-10-08), "Controllers and Memory
+Cards" (overview, device addressing, /ACK, signals, PS2 multitap, MX4SIO); Wikipedia, "PlayStation 2 technical
+specifications" (the copy of S2). PCSX2 2.8.2 run as a black box, its RAM through PINE only. No emulator, SDK, loader,
+ps2autotests or card-emulator source and no firmware: the BIOS image was handed by path to Sapphire and to PCSX2 and
+never opened; no program counter, instruction, memory holding BIOS code or data, or command byte past a peripheral byte
+was printed, logged or read; of SIO2's traffic only counts were kept, as §30.26 says.
+
+**Blast radius** (`blast.sh WiseMan sapphire-d383`: Sapphire's crate, WiseMan's `SapphireTests`): Sapphire **349 of
+349**; the lib and `tests/sio2.rs` under `test-checked`, 71 and 6; clippy clean on every target; WiseMan `SapphireTests`
+**5 of 5** (the kit on Sapphire), and `SapphireConsoleTests` **3 of 3**, added since the change is
+Sapphire's core.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and looked at
+its pictures and the hardware's counts, and read the BIOS chapter's SIO2MAN entry; **this writer is exposed and will
+never write the open replacement**.
 
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
@@ -6002,6 +6070,10 @@ never kept.
 **Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures with a referee's,
 read ps2tek's BIOS chapter and saw BIOS boot banners quoted there; **this writer is exposed and will never write the open
 replacement**.
+
+*Added 2026-10-26 at D-383's step (§30.25 to §30.30):* that step's writer ran the player's BIOS on Sapphire, observing its
+pictures and the hardware's own counts, and read ps2tek's BIOS chapter entry for SIO2MAN; **that writer is exposed too
+and will never write the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

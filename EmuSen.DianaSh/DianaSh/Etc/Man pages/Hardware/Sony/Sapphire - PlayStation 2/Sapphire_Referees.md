@@ -277,7 +277,9 @@ black box's output, and the console's EEPROM, which a script through the initial
 run then showed the language screen as before). XTEST's events sent to the private compositor's Xwayland never reached PCSX2 (measured 2026-10-25);
 key events sent with `XSendEvent` to its largest window, given the input focus first, do. Only pictures and the card
 were kept; the log, which holds the BIOS's output, is read only for the BIOS line. With it the player's BIOS formatted
-a card in its browser and read the crate's edits back.
+a card in its browser and read the crate's edits back. *2026-10-26, D-383* (`Sapphire_Native.md` §30.25): `--cards`
+takes `none` for a slot left empty, its `Slot<n>_Enable` set false for the run and put back afterwards; with it PCSX2
+showed that every queue ends 25 IOP cycles after its start, so it is no witness for SIO2's time.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

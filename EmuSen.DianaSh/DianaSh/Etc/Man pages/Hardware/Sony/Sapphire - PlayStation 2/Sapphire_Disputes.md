@@ -3760,7 +3760,7 @@ through the reset too.
   in §30.25.
 - **Pinned by:** ~~nothing yet.~~ `sio2::tests::a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (the lib) and
   `a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (`tests/sio2.rs`, `s25-empty-port`).
-- **Implemented in:** ~~none.~~ 3c9bbf29e, the D-383 step's commit (`Sapphire_Native.md` §30.25 to §30.27).
+- **Implemented in:** ~~none.~~ fe4fcffba, the D-383 step's commit (`Sapphire_Native.md` §30.25 to §30.27).
 
 ### D-440. SIO2's clocks: 500 kHz on the controller ports and up to 2 MHz on the card slots, where Sapphire clocks a byte every 4 µs on every port
 

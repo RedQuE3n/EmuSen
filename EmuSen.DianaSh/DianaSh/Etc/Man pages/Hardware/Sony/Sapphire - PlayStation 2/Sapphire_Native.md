@@ -4725,7 +4725,7 @@ that is not takes one byte. Its reply and RECV1 are unchanged, and a card that r
 authentication's F0h, F3h and F7h) keeps the whole length. No new dependency.
 
 **Tests** [M, `cargo test --release`]: the crate **349 of 349** (part B's 347 and two new), **360 of 360** after the
-rebase onto WiseMan with S10 beneath; the lib's
+rebase onto WiseMan with S10 beneath and **364 of 364** with §40's IOP programs beneath too; the lib's
 `sio2::tests::a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (an empty slot's probe and a missing
 multitap one byte each, a read after the empty slot's probe six bytes in all with its reply at byte 4, a card's refused
 command its whole length) and `tests/sio2.rs`'s test of the same name running `s25-empty-port` (29 graded words: each
@@ -4757,9 +4757,10 @@ The 54 pictures of the two runs are equal byte for byte; the card was never writ
 SIO2's counts after frame 1680 are equal in the two runs, about 1.1 queues a frame and nothing more, so entering the
 browser sent the card in slot 1 nothing at all; the reports name no unmapped access part B's runs did not, and the EE's
 exception counts are equal in the two runs. PCSX2 at the same step draws "There is no data." with slot 1 empty (§30.19).
-Both runs were made again on the tree rebased onto WiseMan, S10's IOP DMAC fixes beneath: the setup took the pad with
-slot 1 empty, and the browser stalled alike, the 54 pictures of the two runs again equal, every pixel zero at frame 2700,
-the card unwritten, channel 12's slice still unended, the reports' list unchanged.
+Both runs were made again on the tree rebased onto WiseMan, S10's IOP DMAC fixes beneath, and again with §40's drive
+interrupt (D-481) and IOP region (D-482) beneath too: each time the setup took the pad with slot 1 empty, and the browser
+stalled alike, the 54 pictures of the two runs equal, every pixel zero at frame 2700, the card unwritten, channel 12's
+slice still unended, the reports' list unchanged.
 
 So **for P8**: with D-383 fixed, the browser now stalls on Sapphire with slot 1 empty exactly as with a card, the
 console never reaching the card in slot 1; the stall is not the card's unanswered authentication (Q7(b), §30.2), and P8
@@ -4804,6 +4805,8 @@ was printed, logged or read; of SIO2's traffic only counts were kept, as §30.26
 **5 of 5** (the kit on Sapphire), and `SapphireConsoleTests` **3 of 3**, added since the change is Sapphire's core.
 **After the rebase onto WiseMan** (S10 and the game packages' step 7 beneath): Sapphire **360 of 360**, the lib and
 `tests/sio2.rs` under `test-checked` 76 and 6, clippy clean; `SapphireTests` and `SapphireConsoleTests` **8 of 8**.
+**After the second rebase** (§40's IOP programs beneath, with the drive's interrupt of D-481 and the IOP's region of
+D-482): Sapphire **364 of 364**, under `test-checked` 78 and 6, clippy clean; the two WiseMan classes **8 of 8**.
 
 **Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and looked at
 its pictures and the hardware's counts, and read the BIOS chapter's SIO2MAN entry; **this writer is exposed and will

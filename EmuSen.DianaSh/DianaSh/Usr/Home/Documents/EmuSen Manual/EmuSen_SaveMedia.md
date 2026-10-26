@@ -648,7 +648,7 @@ the module's capacity (`Sapphire_Disputes.md` D-381). The C# `Ps2CardFormat` for
 so under `EMUSEN_SYSTEMS_NATIVE=0` the medium offers no save operation. The pack entry is "Memory Card (PS2)", noun
 "Card", extension `.ps2`. The **window** lists, after the shelves' consoles, those an engine runs that no shelf shows,
 so a console offered in development has its tab where development cores are shown (`Sapphire_Native.md` §30.21 Q3);
-`CoreCatalog.EngineSystem` reads such a console's media from its engine. `Ps2CardFormatTests` (four),
+`CoreCatalog.EngineSystem` and the Rust runtime's `Catalog::engine_system` read such a console's media from its engine. `Ps2CardFormatTests` (four),
 `MemoryCardsPlayStation2` and `MemoryCardsPlayStation2Held` in the fit audit at both sizes, and `memcard.golden`'s list
 of known media, which gained `.ps2 (Memory Card (PS2))`, hold it; the round trip with the player's BIOS on a referee is
 `Sapphire_Native.md` §30.18.

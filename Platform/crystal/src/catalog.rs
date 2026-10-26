@@ -225,12 +225,18 @@ impl<'d> Catalog<'d> {
     /// The system a console's v1 engine gives, a discovered console's or a hand console's first engine's, for its
     /// save media, `EngineSystem`.
     pub fn engine_system(&self, console: &str) -> Option<SystemDetail> {
-        self.discovered_system(console).or_else(|| {
-            system_ids_for(console)
-                .into_iter()
-                .flat_map(|id| self.discovery.for_system(id).filter_map(move |c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)))
-                .next()
-        })
+        self.discovered_system(console)
+            .or_else(|| {
+                system_ids_for(console)
+                    .into_iter()
+                    .flat_map(|id| self.discovery.for_system(id).filter_map(move |c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)))
+                    .next()
+            })
+            .or_else(|| {
+                // A pack console's engine offered in development where development cores are shown (Sapphire_Native.md §30.17).
+                let id = pack_of(console)?.id.as_str();
+                self.discovery.for_system(id).filter_map(|c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)).next()
+            })
     }
 
     /// The console's pad from its engine's info, or every button for a console no engine serves (§18.10.12).

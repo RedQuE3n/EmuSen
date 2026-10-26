@@ -471,9 +471,27 @@ impl Engine {
         let saves: Vec<(u32, BatterySave)> = system.battery.iter().flatten().map(|b| (b.which, placement.file(b.which).cloned().unwrap_or(BatterySave::NONE))).collect();
         let empty = DiscFiles::empty();
         let machine = self.create(&empty, &firmware, &saves, &placement, Some(system_id))?;
-        self.adopt(tree, machine, placement, &wanted_fw, saves, None, "", console, Some(system_id.to_string()), None);
+        self.adopt(tree, machine, placement, &wanted_fw, saves, None, "", console.clone(), Some(system_id.to_string()), None);
+        // The engine, its machine and its media's locks go with the refusal (Sapphire_Native.md §30.15).
+        if let Some(why) = self.runs_nothing(&wanted_fw) {
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{console} cannot start with nothing in it: {why}") });
+        }
         self.made = Made::Console(system_id.to_string());
         Ok(())
+    }
+
+    /// Why a console started empty would run nothing: the firmware its machine chose absent and the core offering no
+    /// replacement for it, in the entry's own words, `CoreEngine.RunsNothing` (Sapphire_Native.md §30.15).
+    fn runs_nothing(&self, wanted: &[Firmware]) -> Option<String> {
+        self.mi.firmware.iter().find_map(|(which, source)| {
+            let f = wanted.iter().find(|f| f.which == *which)?;
+            match (&f.replacement, source.as_str()) {
+                (Some((effect, cost)), "absent") if effect == "none" => {
+                    Some(format!("{} ({}) is not in the firmware folder. {}", f.label, f.name, cost.as_deref().unwrap_or("")).trim_end().to_string())
+                }
+                _ => None,
+            }
+        })
     }
 
     /// The new machine in place of the last, `CoreEngine.Adopt`.

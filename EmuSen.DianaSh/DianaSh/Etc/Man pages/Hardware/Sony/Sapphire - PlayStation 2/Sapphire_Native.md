@@ -4423,13 +4423,15 @@ memory holding BIOS code or data, or the BIOS's traffic to the card was looked a
   a console running a BIOS refuses every load, as before.
 - **Create with a disc image** is unchanged: the drive stays empty, a disc in the drive at power-on being S29's work.
 
-**The host's refusal** (`EmuSen/Cores/Native/CoreEngine.cs`): the plan asks that with no BIOS the start be refused in
+**The host's refusal** (`EmuSen/Cores/Native/CoreEngine.cs` and the runtime in Rust, `Platform/crystal`'s
+`Engine::start_console`, which Mistress runs by default; both alike): the plan asks that with no BIOS the start be refused in
 the core's words, never with a black screen. The core cannot refuse the create itself, since the kit's C22 creates
 every console that starts empty with the session's files and none holds a BIOS; a refused create fails it. The rule is
 therefore the host's and generic: `CoreEngine.StartConsole` refuses, with `ConsoleFirmwareException`, a machine whose
 machine info reports its firmware `absent` where the core's entry offers no replacement (`effect: "none"`), in the
 entry's label, name and cost, which `ManagedRuntime` turns into `CrystalNumbers.Firmware`, a game's refusal for missing
-firmware. The words, measured 2026-10-25: "PlayStation 2 cannot start with nothing in it: PlayStation 2 BIOS (Americas)
+firmware; the Rust runtime's `runs_nothing` refuses the same machine with the same status and words, the engine with
+its machine and its cards' locks dropped with the refusal. The words, measured 2026-10-25: "PlayStation 2 cannot start with nothing in it: PlayStation 2 BIOS (Americas)
 (ps2-0230a-20080220.bin) is not in the firmware folder. Without a BIOS of the console's market the PlayStation 2 runs
 nothing: it starts to its menu with the player's own BIOS in the firmware folder. Sapphire's own open BIOS, which is to
 take its place, is not written yet." The cost text (`v1::BIOS_COST`) was rewritten for a player for this. The rule
@@ -4470,8 +4472,8 @@ sides.
   of every console offered in development: the window built its tabs from the library's shelves, and a console gets a
   shelf only once its engine says its games run (`EmuSen_CoreAPI.md` §27.4), so no console in development could have a
   tab. It now lists, after the shelves' consoles, those an engine runs that no shelf shows
-  (`RuntimeCatalog.UnshelvedConsoles`), and `CoreCatalog.EngineSystem` reads such a pack console's media from the engine
-  discovery offers; with development cores hidden, which is a player's build, neither adds anything, so the tab sits
+  (`RuntimeCatalog.UnshelvedConsoles`), and `CoreCatalog.EngineSystem`, with its twin `Catalog::engine_system` in the
+  Rust runtime, reads such a pack console's media from the engine discovery offers; with development cores hidden, which is a player's build, neither adds anything, so the tab sits
   behind the same development mark as G10 (§30.21 Q3). `memcard` reads a `.ps2` file as the medium by its extension.
   WiseMan's fit audit gains `MemoryCardsPlayStation2` and `MemoryCardsPlayStation2Held`, each at 1280 × 800 and 1920 ×
   1200, a shared card with two saves (one with a long title) and a game's own card beside it, the held case saying the
@@ -4542,13 +4544,15 @@ WiseMan: `SapphireTests`, `SapphireConsoleTests` (three: offered from core info 
 BIOS in the core's words, no card held; a stand-in boot ROM of zeros made by the test, a synthetic DVD put in and
 detected, a program refused, Eject), `Ps2CardFormatTests` (four, on cards whose saves the test writes into Ridge's
 layout itself: the facts, the listing, copy, move, delete and the lock, the import all or none with its words), the
-fit audit's and the specification's new cases; counts in §30.22.
+fit audit's and the specification's new cases, and `CrystalParityTests.A_console_in_development_started_empty_is_refused_without_its_bios_and_lists_its_cards_the_same`
+(the two runtimes with development cores shown: the refusal's status and words, the card medium's listing, the start
+with the stand-in, its session and save media, alike); counts in §30.22.
 
 **Seeded faults:**
 
 | # | Fault | Caught by |
 |---|---|---|
-| F1 | the host's refusal removed, so the empty start with no BIOS makes the black console | `SapphireConsoleTests.With_no_bios_the_start_is_refused_in_the_cores_words` |
+| F1 | the host's refusal removed, so the empty start with no BIOS makes the black console | in the C# runtime `SapphireConsoleTests.With_no_bios_the_start_is_refused_in_the_cores_words`; in the Rust runtime the parity case above (the C# refusal against the Rust session) |
 | F2 | `copy_file` stopping a cluster short, so a copied save loses its last cluster | `ps2::card`'s `a_save_copies_whole_deletes_and_refuses_in_words`; the crate's `a_save_copied_to_another_card_reads_the_same_and_a_full_or_clashing_copy_is_refused` |
 | F3 | the module's free space counted in pages, the card's 512-byte unit, not kilobytes | `media::tests::a_formatted_blank_reads_as_formatted_with_its_capacity_free` and both `ps2::card` tests; all four `Ps2CardFormatTests` |
 
@@ -4605,9 +4609,12 @@ which the classes the change reaches were added: `DiamondShellTests`, `SaveMedia
   kit's C1-C15 passing on the program and both discs, with C16 (`MEDIA`, the drive empty for every image) and C22 (the
   console started empty, two machines alike over 120 frames, a state carried to a third, the drive empty and `MEDIA`
   claimed) now run on Sapphire and passing.
-- **After the rebase onto WiseMan** (S19 and the game packages' patched saves beneath): Sapphire 334 of 334;
+- **After the rebase onto WiseMan** (S19 and the game packages' patched saves and stores beneath): Sapphire 334 of 334;
   `emusen-ps2-card` 5, `emusen-systems` 41, `emusen-platform` 33, 4 and 3, `emusen-savemedia` 3; WiseMan, every class
-  above with `SapphireTests` and every `MemoryCards` case of the fit audit and the specification, **501 of 501**. The
+  above with `SapphireTests` and every `MemoryCards` case of the fit audit and the specification, **501 of 501**; with
+  the Rust runtime's twin of the refusal and of the media lookup added after the second rebase, `emusen-crystal`'s tests
+  pass (13) and the runtime classes again (`CrystalParityTests` with the new case, `SessionServiceParity`,
+  `ManagedCrystal`, the card and console classes above and every `MemoryCards` case), **285 of 285**. The
   OSDSYS and referee runs of §30.18 and §30.19 were made on the tree before the rebase, S24's with part B.
 
 ### 30.23 What was read for part B

@@ -4,7 +4,8 @@
 //! (`transfer`). The GS acts at once on each write: nothing of its timing is modelled yet. Drawing (S17): the vertex
 //! queue and the drawing kick (`draw`), the primitives' coverage and interpolation (`raster`) and the pixel pipeline
 //! (`pixel`), into which texturing and fog (S18: `texture`, the CLUT's buffer, `exact`) and the other pixel operations
-//! (S19) slot; the PCRTC (S20) attaches at the privileged registers and `hsync`/`vsync`. Sapphire_Native.md §24, §27, §31.
+//! (S19) slot; the PCRTC (S20) attaches at the privileged registers and `hsync`/`vsync`. The drawing may run on worker
+//! threads (`workers`, S43), exact at every count. Sapphire_Native.md §24, §27, §31, §50.
 
 pub mod draw;
 pub mod exact;
@@ -14,11 +15,15 @@ pub mod psm;
 pub mod raster;
 pub mod texture;
 pub mod transfer;
+pub mod workers;
 
 use std::collections::VecDeque;
 
 use local::Local;
+use psm::Psm;
 use transfer::{Direction, Transfer};
+use workers::{Cause, Mem, Workers};
+use transfer::Dry;
 
 /// The general registers by address (§7.3).
 pub mod reg {
@@ -160,7 +165,9 @@ pub trait HostInterface {
 }
 
 pub struct Gs {
-    pub local: Local,
+    /// The drawing's workers, when the GS runs any (S43); dropped before the memory they draw into.
+    workers: Option<Box<Workers>>,
+    local: Local,
     regs: [u64; 0x63],
     /// The privileged registers as written, by GS address.
     privileged: [u64; 128],
@@ -202,7 +209,8 @@ impl Gs {
     pub fn new() -> Gs {
         let mut privileged = [0; 128];
         privileged[privileged::IMR as usize] = IMR_RESET;
-        Gs {
+        let mut gs = Gs {
+            workers: None,
             local: Local::default(),
             regs: [0; 0x63],
             privileged,
@@ -218,6 +226,103 @@ impl Gs {
             rose: false,
             field: 0,
             trace: None,
+        };
+        if let Some(n) = std::env::var("SAPPHIRE_GS_WORKERS").ok().as_deref().and_then(workers::parse) {
+            gs.set_workers(n);
+        }
+        gs
+    }
+
+    /// The drawing's workers: 1 draws on the GS's own thread, the reference; 2 to `workers::MAX` on that many threads.
+    /// The memory is the same either way at every point the machine can observe (Sapphire_Native.md §50).
+    pub fn set_workers(&mut self, n: usize) {
+        if let Some(w) = self.workers.take() {
+            w.join();
+        }
+        if n >= 2 {
+            self.workers = Some(Box::new(Workers::new(n.min(workers::MAX), &self.local, &self.clut)));
+        }
+    }
+
+    /// The workers running: 1 when the GS draws on its own thread.
+    pub fn worker_count(&self) -> usize {
+        self.workers.as_ref().map_or(1, |w| w.count())
+    }
+
+    /// The workers' counts, when there are workers.
+    pub fn worker_counts(&self) -> Option<workers::Counts> {
+        self.workers.as_ref().map(|w| w.counts())
+    }
+
+    /// A handle holding the workers before their next primitive, for the tests; none on one thread.
+    pub fn hold(&self) -> Option<workers::Hold> {
+        self.workers.as_ref().map(|w| w.hold())
+    }
+
+    /// Primitives published that some worker has not yet drawn; 0 on one thread.
+    pub fn pending(&self) -> u64 {
+        self.workers.as_ref().map_or(0, |w| w.pending())
+    }
+
+    /// Every primitive drawn: the memory is then the GS's thread's until the next drawing kick.
+    pub fn join(&self) {
+        if let Some(w) = &self.workers {
+            w.join();
+        }
+    }
+
+    /// The local memory, every primitive drawn first.
+    pub fn local(&self) -> &Local {
+        self.join();
+        &self.local
+    }
+
+    /// Word `i` of the local memory written, every primitive drawn first; false past its end.
+    pub fn set_word(&mut self, i: usize, v: u32) -> bool {
+        self.join();
+        if i >= local::WORDS {
+            return false;
+        }
+        self.local.set_word(i, v);
+        true
+    }
+
+    /// A pixel written into local memory from outside the GS (a test or a tool), every primitive drawn first.
+    pub fn write_pixel(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
+        self.join();
+        self.local.write(psm, bp, bw, x, y, v);
+    }
+
+    /// Before the GS's thread reads the pixels from (`x0`, `y0`) to (`x1`, `y1`) of a buffer: the workers that write
+    /// their pages are waited for.
+    pub fn settle(&self, psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) {
+        if let Some(w) = &self.workers {
+            w.settle_reads(&local::units(psm, bp, bw, xs, ys));
+        }
+    }
+
+    /// A pixel read by the GS's thread from a page `settle` has waited for; checked in debug builds.
+    #[inline]
+    pub fn peek(&self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32 {
+        #[cfg(debug_assertions)]
+        if let Some(w) = &self.workers {
+            assert!(w.settled(local::address(psm, bp, bw, x, y).word, local::lanes(psm)), "a read of a page a worker may still write");
+        }
+        self.local.read(psm, bp, bw, x, y)
+    }
+
+    /// The memory as the GS's own thread reaches it, each access waiting for the workers touching its page.
+    fn mem(&mut self, cause: Cause) -> (Mem<'_>, &mut Transfer, &mut texture::Clut) {
+        (Mem { local: &mut self.local, workers: self.workers.as_deref(), cause }, &mut self.transfer, &mut self.clut)
+    }
+
+    fn load_clut(&mut self, tex0: u64) {
+        let texclut = self.regs[reg::TEXCLUT as usize];
+        let (mut mem, _, clut) = self.mem(Cause::ClutLoad);
+        if clut.load(tex0, texclut, &mut mem)
+            && let Some(w) = self.workers.as_deref()
+        {
+            w.clut_changed();
         }
     }
 
@@ -279,10 +384,22 @@ impl Gs {
             }
             reg::TRXDIR => {
                 self.regs[r as usize] = data;
+                if let Some(w) = &self.workers {
+                    w.flush();
+                }
                 let (b, p, s) = (self.regs[reg::BITBLTBUF as usize], self.regs[reg::TRXPOS as usize], self.regs[reg::TRXREG as usize]);
-                self.transfer.start(data as u32 & 3, b, p, s, &mut self.local);
+                let (mut mem, transfer, _) = self.mem(Cause::Copy);
+                transfer.start(data as u32 & 3, b, p, s, &mut mem);
             }
-            reg::HWREG => self.transfer.hwreg(data, &mut self.local),
+            reg::HWREG => match self.workers.as_deref() {
+                // A worker writes the pixels, in the ring's order; the GS's thread follows the transfer's place.
+                Some(w) if self.transfer.active == Some(Direction::HostToLocal) => {
+                    w.upload(&self.transfer, data);
+                    self.transfer.hwreg(data, &mut Dry);
+                }
+                Some(_) => {}
+                None => self.transfer.hwreg(data, &mut self.local),
+            },
             reg::PRIM => {
                 self.regs[r as usize] = data;
                 self.queue.reset();
@@ -293,13 +410,13 @@ impl Gs {
                 if self.regs[(reg::TEX1_1 + c) as usize] >> 9 & 1 != 0 {
                     self.regs[(reg::MIPTBP1_1 + c) as usize] = texture::auto_miptbp1(data);
                 }
-                self.clut.load(data, self.regs[reg::TEXCLUT as usize], &self.local);
+                self.load_clut(data);
             }
             reg::TEX2_1 | reg::TEX2_2 => {
                 self.regs[r as usize] = data;
                 let t = (reg::TEX0_1 + r - reg::TEX2_1) as usize;
                 self.regs[t] = (self.regs[t] & !texture::TEX2_BITS) | (data & texture::TEX2_BITS);
-                self.clut.load(self.regs[t], self.regs[reg::TEXCLUT as usize], &self.local);
+                self.load_clut(self.regs[t]);
             }
             reg::XYZ2 | reg::XYZF2 | reg::XYZ3 | reg::XYZF3 => {
                 self.regs[r as usize] = data;
@@ -321,6 +438,9 @@ impl Gs {
     /// CSR's reset (§7.2, "GS System Reset"): the events, the stalled SIGNAL and the held writes go, a transfer ends
     /// and IMR masks everything (§7.2's IMR); the registers and the memory stay [A].
     fn reset(&mut self) {
+        if let Some(w) = &self.workers {
+            w.flush();
+        }
         self.events = 0;
         self.pending = None;
         self.held.clear();
@@ -418,7 +538,8 @@ impl HostInterface for Gs {
         if !self.reversed() {
             return None;
         }
-        self.transfer.read(&self.local)
+        let (mut mem, transfer, _) = self.mem(Cause::Download);
+        transfer.read(&mut mem)
     }
 
     fn stalled(&self) -> bool {
@@ -447,6 +568,7 @@ impl emusen_native::State for Gs {
     type Error = emusen_native::Truncated;
 
     fn write_state(&self, w: &mut emusen_native::StateWriter) {
+        self.join();
         w.u64s("Registers", &self.regs);
         w.u64s("Privileged", &self.privileged);
         w.u32s("Events", &[self.events, self.field]);
@@ -466,10 +588,14 @@ impl emusen_native::State for Gs {
         w.bytes("HeldRegisters", &h.map(|e| e.0));
         w.u64s("HeldData", &h.map(|e| e.1));
         w.bools("Line", &[self.line, self.rose]);
-        w.u32s("Local", &self.local.words);
+        w.u32s("Local", self.local.words());
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.join();
+        if let Some(w) = self.workers.as_deref() {
+            w.clut_changed();
+        }
         r.u64s(&mut self.regs)?;
         r.u64s(&mut self.privileged)?;
         let mut e = [0u32; 2];
@@ -502,7 +628,7 @@ impl emusen_native::State for Gs {
         let mut l = [false; 2];
         r.bools(&mut l)?;
         [self.line, self.rose] = l;
-        r.u32s(&mut self.local.words)
+        r.u32s(self.local.words_mut())
     }
 }
 

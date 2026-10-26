@@ -59,6 +59,14 @@ impl Circuit {
         Some(self.dby + scan / self.magv)
     }
 
+    /// Before line `y` of the buffer is read: the drawing's workers that write any of its pages are waited for.
+    fn settle(&self, gs: &Gs, y: u32) {
+        let psm = if self.psm == PS_GPU24 { Some(Psm::Ct16) } else { Psm::from_code(self.psm) };
+        if let Some(p) = psm {
+            gs.settle(p, self.fbp * 32, self.fbw, (0, 0x7FF), (y & 0x7FF, y & 0x7FF));
+        }
+    }
+
     /// The colour and alpha of the buffer's pixel `x` of line `y` (§5.2.2's Read Format, §5.2.3's alpha and 16-bit
     /// colour); a format outside DISPFB's table that is not a depth format of the same width reads black with alpha 0.
     fn pixel(&self, gs: &Gs, x: u32, y: u32, second: bool) -> ([u8; 3], u8) {
@@ -70,17 +78,17 @@ impl Circuit {
             if second {
                 return ([0; 3], 0);
             }
-            let byte = |k: u32| (gs.local.read(Psm::Ct16, bp, bw, (self.dbx + k / 2) & 0x7FF, y) >> (8 * (k & 1))) as u8;
+            let byte = |k: u32| (gs.peek(Psm::Ct16, bp, bw, (self.dbx + k / 2) & 0x7FF, y) >> (8 * (k & 1))) as u8;
             let k = 3 * (x.wrapping_sub(self.dbx) & 0x7FF);
             return ([byte(k), byte(k + 1), byte(k + 2)], 0x80);
         }
         match Psm::from_code(self.psm) {
             Some(p @ (Psm::Ct32 | Psm::Z32)) => {
-                let v = gs.local.read(p, bp, bw, x, y);
+                let v = gs.peek(p, bp, bw, x, y);
                 (rgb(v), (v >> 24) as u8)
             }
-            Some(p @ (Psm::Ct24 | Psm::Z24)) => (rgb(gs.local.read(p, bp, bw, x, y)), 0x80),
-            Some(p @ (Psm::Ct16 | Psm::Ct16s | Psm::Z16 | Psm::Z16s)) => half(gs.local.read(p, bp, bw, x, y)),
+            Some(p @ (Psm::Ct24 | Psm::Z24)) => (rgb(gs.peek(p, bp, bw, x, y)), 0x80),
+            Some(p @ (Psm::Ct16 | Psm::Ct16s | Psm::Z16 | Psm::Z16s)) => half(gs.peek(p, bp, bw, x, y)),
             _ => ([0; 3], 0),
         }
     }
@@ -258,6 +266,11 @@ impl Pcrtc {
         let bg = [bgv as u8, (bgv >> 8) as u8, (bgv >> 16) as u8];
         let circuits = Self::circuits(gs);
         let lines = [circuits[0].line(r, frame).filter(|_| pm.en1), circuits[1].line(r, frame).filter(|_| pm.en2)];
+        for (c, y) in circuits.iter().zip(lines) {
+            if let Some(y) = y {
+                c.settle(gs, y);
+            }
+        }
         self.picture.odd = self.field.odd;
         let at = (row * g.width * 4) as usize;
         let out = &mut self.picture.rgba[at..at + (g.width * 4) as usize];

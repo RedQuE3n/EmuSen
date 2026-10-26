@@ -7,8 +7,9 @@
 
 use super::draw::Vertex;
 use super::exact::{self, Float, Sum};
-use super::local::Local;
+use super::local::{self, Local, Memory, Units};
 use super::psm::Psm;
+use super::workers::Mem;
 
 const fn field(v: u64, lo: u32, n: u32) -> u32 {
     ((v >> lo) & ((1u64 << n) - 1)) as u32
@@ -44,12 +45,12 @@ impl Default for Clut {
 impl Clut {
     /// TEX0, as written or as TEX2 has changed it, takes effect (§3.4.7's "Load Operation"): CLD decides whether the
     /// CLUT is loaded from CBP, in CSM1's arrangement at the buffer's start or CSM2's row at TEXCLUT's offset. Only an
-    /// indexed PSM has a CLUT of a known size to load [A, D-243].
-    pub fn load(&mut self, tex0: u64, texclut: u64, local: &Local) {
+    /// indexed PSM has a CLUT of a known size to load [A, D-243]. Whether it was loaded.
+    pub fn load(&mut self, tex0: u64, texclut: u64, local: &mut Mem<'_>) -> bool {
         let n = match Psm::from_code(field(tex0, 20, 6)) {
             Some(Psm::T8 | Psm::T8h) => 256,
             Some(Psm::T4 | Psm::T4hl | Psm::T4hh) => 16,
-            _ => return,
+            _ => return false,
         };
         let cbp = field(tex0, 37, 14);
         let slot = match field(tex0, 61, 3) {
@@ -58,7 +59,7 @@ impl Clut {
             3 => Some(1),
             4 if self.cbp[0] != cbp => Some(0),
             5 if self.cbp[1] != cbp => Some(1),
-            _ => return,
+            _ => return false,
         };
         if let Some(s) = slot {
             self.cbp[s] = cbp;
@@ -86,6 +87,7 @@ impl Clut {
                 self.entries[((csa + i) & 511) as usize] = v as u16;
             }
         }
+        true
     }
 
     /// The entry an index selects, in the CPSM in force at the drawing.
@@ -295,6 +297,25 @@ impl Sampler {
 
     pub fn uv(&self) -> bool {
         self.uv
+    }
+
+    /// The page lanes every texel the sampler can read lies in (Sapphire_Native.md §50): each level it can choose, 0 to
+    /// MXL under a mipmapping MMIN and 0 otherwise, over the coordinates its wrap modes can give, [0, size) for REPEAT
+    /// and CLAMP, [0, MAX] for REGION_CLAMP and [0, MIN | MAX] for REGION_REPEAT, each shifted right by the level.
+    pub fn units(&self) -> Units {
+        let Some(psm) = self.psm else { return Units::default() };
+        let top = if (2..=5).contains(&self.mmin) { self.mxl } else { 0 };
+        let mut s = Units::default();
+        for n in 0..=top {
+            let extent = |w: &Wrap| match w.mode {
+                0 | 1 => (1u32 << w.log2.saturating_sub(n)).max(1) - 1,
+                2 => w.max >> n,
+                _ => (w.min >> n) | (w.max >> n),
+            };
+            let (bp, bw) = self.base[n as usize];
+            s.or(&local::units(psm, bp, bw, (0, extent(&self.wrap[0])), (0, extent(&self.wrap[1]))));
+        }
+        s
     }
 }
 

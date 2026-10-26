@@ -273,13 +273,9 @@ impl Gs {
             let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
             let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
             let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
-            let (local, clut) = (&mut self.local, &self.clut);
-            match kind {
-                Kind::Point => raster::point(&env, local, clut, &v[0]),
-                Kind::Line | Kind::LineStrip => raster::line(&env, local, clut, &v[0], &v[1]),
-                Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => raster::triangle(&env, local, clut, [&v[0], &v[1], &v[2]]),
-                Kind::Sprite => raster::sprite(&env, local, clut, &v[0], &v[1]),
-                Kind::Prohibited => {}
+            match self.workers.as_deref() {
+                Some(w) => w.draw(kind, env, v, &self.clut),
+                None => raster::primitive(kind, &env, &mut self.local, &self.clut, &v, raster::Rows::ALL),
             }
         }
         self.queue.advance(kind);

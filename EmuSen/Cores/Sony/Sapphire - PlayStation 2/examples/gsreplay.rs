@@ -38,12 +38,12 @@ fn main() {
         for line in text.lines() {
             let mut f = line.split_whitespace();
             match (f.next(), f.next()) {
-                (Some("--"), Some(name)) => picture(&gs.local, psm, bp, bw, w, h, &out.join(format!("{name}.ppm"))),
+                (Some("--"), Some(name)) => picture(gs.local(), psm, bp, bw, w, h, &out.join(format!("{name}.ppm"))),
                 (Some(r), Some(d)) if r.len() == 2 => gs.write(u8::from_str_radix(r, 16).unwrap(), u64::from_str_radix(d, 16).unwrap()),
                 _ => {}
             }
         }
         let name = std::path::Path::new(file).file_stem().unwrap().to_string_lossy().into_owned();
-        picture(&gs.local, psm, bp, bw, w, h, &out.join(format!("{name}.ppm")));
+        picture(gs.local(), psm, bp, bw, w, h, &out.join(format!("{name}.ppm")));
     }
 }

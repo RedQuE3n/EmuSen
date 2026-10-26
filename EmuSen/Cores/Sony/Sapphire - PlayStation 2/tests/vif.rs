@@ -308,7 +308,7 @@ fn vif1_reversed_carries_local_to_host_data() {
     let mut rig = Rig::new();
     let gs = &mut rig.board.gs;
     for i in 0..64u32 {
-        gs.local.write(Psm::Ct32, 0, 1, i % 8, i / 8, 0xC000_0000 | i);
+        gs.write_pixel(Psm::Ct32, 0, 1, i % 8, i / 8, 0xC000_0000 | i);
     }
     gs.write(gs_reg::BITBLTBUF, 0x0001_0000);
     gs.write(gs_reg::TRXPOS, 0);

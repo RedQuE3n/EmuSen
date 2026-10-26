@@ -121,7 +121,7 @@ fn slot(sys: &mut System, n: u32) -> Option<&mut Option<Box<Probe>>> {
 /// the PC, HI and LO with pipeline 1's HI1 and LO1, SA; COP0 by the TX79 manual's names; the debug registers; the
 /// performance counters; COP1's registers, its accumulator and FCR31.
 pub fn ee_registers() -> Vec<(String, u32)> {
-    let mut v = Vec::with_capacity(152);
+    let mut v = Vec::with_capacity(156);
     for n in emusen_mips::GPR_NAMES {
         v.push((n.to_string(), 64));
         v.push((format!("{n}.hi"), 64));
@@ -133,8 +133,15 @@ pub fn ee_registers() -> Vec<(String, u32)> {
     v.extend(["BPC", "IAB", "IABM", "DAB", "DABM", "DVB", "DVBM", "PCCR", "PCR0", "PCR1"].map(|n| (n.to_string(), 32)));
     v.extend((0..32).map(|i| (format!("f{i}"), 32)));
     v.extend([("ACC", 32), ("FCR31", 32)].map(|(n, b)| (n.to_string(), b)));
+    v.extend(IDLE_EE.map(|n| (n.to_string(), 64)));
     v
 }
+
+/// Idle skipping's counts, read-only, after each processor's registers (Sapphire_Native.md §47.6): the EE's skips, the
+/// cycles and steps they passed and the turns passed while a VIF, the GIF or a VU ran; the IOP's cycles and instructions
+/// passed. Counts only, never an address.
+pub const IDLE_EE: [&str; 4] = ["idle.skips", "idle.cycles", "idle.steps", "idle.busy"];
+pub const IDLE_IOP: [&str; 2] = ["idle.cycles", "idle.instructions"];
 
 /// A VU's registers: each vector register's four fields x to w, ACC's, the integer registers, I, Q, P, R, the status,
 /// MAC and clipping flags, TPC and the PC, each at its width (VU User's Manual §3.1, §3.3).
@@ -149,7 +156,9 @@ pub fn vu_registers(unit: usize) -> Vec<(String, u32)> {
 
 /// The IOP's registers, `blackmoon-r3000`'s list, each 32 bits.
 pub fn iop_registers() -> Vec<(String, u32)> {
-    blackmoon_r3000::DEBUG_REGISTERS.iter().map(|&n| (n.to_string(), 32)).collect()
+    let mut v: Vec<(String, u32)> = blackmoon_r3000::DEBUG_REGISTERS.iter().map(|&n| (n.to_string(), 32)).collect();
+    v.extend(IDLE_IOP.map(|n| (n.to_string(), 64)));
+    v
 }
 
 /// Where code in a memory runs, for a listing's branch and jump targets: the EE's programs in kuseg, where the project's
@@ -497,12 +506,16 @@ impl Machine {
                 v.extend([e.pccr, e.pcr[0], e.pcr[1]].map(|x| x as i64));
                 v.extend(e.fpr.iter().map(|&x| x as i64));
                 v.extend([e.acc, e.fcr31].map(|x| x as i64));
+                let k = &self.idle.counts;
+                v.extend([k.ee_skips, k.ee_cycles, k.ee_steps, k.busy].map(|x| x as i64));
                 Some(v)
             }
             IOP => {
                 let r = &b.iop.cpu.regs;
                 let mut v: Vec<i64> = r.r.iter().map(|&x| x as i64).collect();
                 v.extend([r.hi, r.lo, r.pc, r.sr, r.cause, r.epc, r.bad_vaddr, r.tar, r.dcic, r.bpc, r.bda, r.bpcm, r.bdam].map(|x| x as i64));
+                let k = &self.idle.counts;
+                v.extend([k.iop_cycles, k.iop_instructions].map(|x| x as i64));
                 Some(v)
             }
             VU0 | VU1 => {
@@ -695,7 +708,13 @@ routine: lw t1, 0(s0)\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x10(s1)\nlq t2, 0x
 
         m.sys.board.iop.cpu.regs.r[9] = 0xCAFE_F00D;
         let (v, n) = (m.debug_registers(IOP).unwrap(), iop_registers());
-        assert_eq!((v.len(), named(&n, &v, "t1"), named(&n, &v, "pc")), (45, 0xCAFE_F00D, 0x8001_0000));
+        assert_eq!((v.len(), named(&n, &v, "t1"), named(&n, &v, "pc")), (47, 0xCAFE_F00D, 0x8001_0000));
+        m.idle.counts.ee_cycles = 1234;
+        m.idle.counts.iop_instructions = 56;
+        let (v, n) = (m.debug_registers(EE).unwrap(), ee_registers());
+        assert_eq!(named(&n, &v, "idle.cycles"), 1234, "idle skipping's counts after the EE's registers");
+        let (v, n) = (m.debug_registers(IOP).unwrap(), iop_registers());
+        assert_eq!(named(&n, &v, "idle.instructions"), 56);
 
         let u = &mut m.sys.board.vpu.units.vu1;
         u.set_vf(7, [1, 2, 3, 0x4080_0000]);

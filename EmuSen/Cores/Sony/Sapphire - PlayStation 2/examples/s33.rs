@@ -8,9 +8,10 @@
 //! - `s33 equal <workload> <bios> <market> [image] <frames> <interpreter|recompiler>`: a machine with idle skipping off
 //!   and one with it on, on the tier named, frame by frame: the picture and the sound after every frame and the state
 //!   every 60 and at the end, compared; prints the counts of differing frames and what was skipped.
-//! - `s33 time <workload> <bios> <market> [image] <frames> <interpreter|recompiler> <on|off> [from]`: one machine, each
-//!   frame's `advance` timed; prints the mean and median milliseconds a frame from frame `from`, the frames a second, the
-//!   load average around, and the share of the EE's cycles skipped.
+//! - `s33 time <workload> <bios> <market> [image] <frames> <interpreter|recompiler> <on|off> [from...]`: one machine,
+//!   each frame's `advance` timed; prints for each window, from each frame named to the next or the end (from 0 when none
+//!   is named), the mean, median and 95th percentile milliseconds a frame, the frames a second, the shares of the EE's and
+//!   the IOP's cycles skipped and the turns passed beside a running unit, with the load average around the run.
 //! - `s33 verify <workload> <bios> <market> [image] <frames>`: the recompiled machine with idle skipping on and the
 //!   interpreter stepped beside it after every block and through every skipped turn (`Verify::Blocks`, quiet).
 //! - `s33 state <workload> <bios> <market> [image] <frames> <more>`: a machine with idle skipping on runs `frames`, its
@@ -161,43 +162,45 @@ fn main() {
         "time" => {
             let tier = rest[1].as_str();
             let on = rest[2] == "on";
-            let from: usize = rest.get(3).map_or(0, |f| f.parse().expect("a frame"));
+            let mut bounds: Vec<usize> = rest[3..].iter().map(|f| f.parse().expect("a frame")).collect();
+            if bounds.is_empty() {
+                bounds.push(0);
+            }
+            bounds.push(frames);
             let mut m = machine(workload, bios, market_name, image, tier, on);
             let before = load();
             let mut times = Vec::with_capacity(frames);
-            let (mut at, mut counts) = (0, m.idle.counts);
+            let mut marks = Vec::new();
             for f in 0..frames {
-                if f == from {
-                    (at, counts) = (m.sys.board.now, m.idle.counts);
+                if bounds.contains(&f) {
+                    marks.push((m.sys.board.now, m.idle.counts));
                 }
                 let t = Instant::now();
                 m.advance();
                 times.push(t.elapsed().as_secs_f64() * 1e3);
                 let _ = sound(&mut m, &mut buf);
             }
-            let window = &times[from.min(times.len())..];
-            let mean = window.iter().sum::<f64>() / window.len().max(1) as f64;
-            let mut sorted = window.to_vec();
-            sorted.sort_by(|x, y| x.partial_cmp(y).unwrap());
-            println!(
-                "{workload} {tier} idle {}: frames {from}-{frames}, mean {mean:.3} ms, median {:.3} ms, fps {:.3}; load {before} before, {} after",
-                rest[2],
-                sorted.get(sorted.len() / 2).copied().unwrap_or(0.0),
-                1e3 / mean,
-                load()
-            );
-            let k = &m.idle.counts;
-            let cycles = m.sys.board.now - at;
-            println!(
-                "window: EE cycles skipped {} of {cycles} ({:.1} %), skips {}, IOP cycles skipped {}, proofs {} of {} attempts, woken {}",
-                k.ee_cycles - counts.ee_cycles,
-                100.0 * (k.ee_cycles - counts.ee_cycles) as f64 / cycles.max(1) as f64,
-                k.ee_skips - counts.ee_skips,
-                k.iop_cycles - counts.iop_cycles,
-                k.proofs - counts.proofs,
-                k.attempts - counts.attempts,
-                k.woken - counts.woken
-            );
+            marks.push((m.sys.board.now, m.idle.counts));
+            let after = load();
+            for (w, pair) in bounds.windows(2).enumerate() {
+                let (from, to) = (pair[0], pair[1]);
+                let window = &times[from..to];
+                let mean = window.iter().sum::<f64>() / window.len().max(1) as f64;
+                let mut sorted = window.to_vec();
+                sorted.sort_by(|x, y| x.partial_cmp(y).unwrap());
+                let ((t0, k0), (t1, k1)) = (marks[w], marks[w + 1]);
+                let cycles = (t1 - t0).max(1);
+                println!(
+                    "{workload} {tier} idle {}: frames {from}-{to}, mean {mean:.3} ms, median {:.3} ms, p95 {:.3} ms, fps {:.3}; EE cycles skipped {:.1} %, IOP cycles skipped {:.1} %, turns passed beside a running unit {}; load {before} before, {after} after",
+                    rest[2],
+                    sorted[sorted.len() / 2],
+                    sorted[(sorted.len() * 95 / 100).min(sorted.len() - 1)],
+                    1e3 / mean,
+                    100.0 * (k1.ee_cycles - k0.ee_cycles) as f64 / cycles as f64,
+                    100.0 * (k1.iop_cycles - k0.iop_cycles) as f64 * 8.0 / cycles as f64,
+                    k1.busy - k0.busy
+                );
+            }
             println!("whole run: {}", skipped(&m, m.sys.board.now));
         }
         "verify" => {

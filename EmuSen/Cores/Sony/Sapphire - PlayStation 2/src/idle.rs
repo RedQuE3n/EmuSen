@@ -106,6 +106,8 @@ pub struct Counts {
     pub replayed: u64,
     /// Skips ended because the DMAC wrote memory the turn reaches.
     pub written: u64,
+    /// Turns passed while a VIF, the GIF or a VU ran: the EE's waits on the vector units and their paths.
+    pub busy: u64,
     /// The refusals, by `Refusal`'s order, and the arrivals at heads waiting after each kind, about a turn run each.
     pub refused: [u64; REFUSALS],
     pub waited: [u64; REFUSALS],
@@ -457,6 +459,7 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
         }
         quick = false;
         counts.replayed += 1;
+        counts.busy += u64::from(!sys.board.quiet());
         let mut ended = None;
         for (i, &o) in offsets.iter().enumerate() {
             let at = t + o;

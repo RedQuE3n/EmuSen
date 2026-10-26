@@ -1,6 +1,6 @@
 //! Stage S33's paired program for the debugger's gate (Sapphire_Native.md §47.8, §41.10 Q3): the IOP polls the SIF while
-//! the EE's DMA sends it a packet at a known instant, counting its polls of its SIF1 channel until the packet has landed
-//! and of MSFLG until the EE sets it, and keeps both counts in its RAM. Each count is a measure of the IOP's time against
+//! the EE's DMA sends it eight packets, each at a known instant, counting its polls of its SIF1 channel until each packet
+//! has landed, and keeps the counts in its RAM. Each count is a measure of the IOP's time against
 //! the EE's, so a run that let the IOP lag behind the board (the debugger's probe stopping it where the board does not
 //! bring it to time) leaves different counts in the state. Every register and field is ps2tek's "SIF Registers", "SIF DMA"
 //! and "IOP DMA" and the EE User's Manual's chapter 5, as the S22 programs use them.
@@ -11,53 +11,60 @@ use sapphire::board::System;
 
 pub const EE_ORIGIN: u32 = 0x8010_0000;
 pub const IOP_ORIGIN: u32 = 0xA010_0000;
-/// Where the IOP keeps its two counts, and where the packet lands in IOP RAM.
+/// Where the IOP keeps its counts, and where the packets land in IOP RAM.
 pub const COUNTS: u32 = 0x001D_0000;
 pub const LANDS: u32 = 0x001C_0000;
 
-/// The EE: the packet (the IOP's tag, then 64 words) written at 00300000h, a delay, SIF1 started in normal mode toward
-/// the IOP, a second delay and MSFLG's bit 0 set; then an idle loop.
+/// The EE: eight packets (each the IOP's tag, then four words) written from 00300000h; then each sent in turn by SIF1
+/// in normal mode once the one before has gone and a short delay has passed, and an idle loop.
 const EE: &str = "
     lui t0, 0xa030
+    ori t2, zero, 8
     lui t1, 0x801c
-    sw t1, 0(t0)
-    ori t1, zero, 64
-    sw t1, 4(t0)
+    lui t3, 0x5300
+    fill: sw t1, 0(t0)
+    ori t4, zero, 4
+    sw t4, 4(t0)
     sw zero, 8(t0)
     sw zero, 12(t0)
-    ori t2, zero, 64
-    lui t1, 0x5300
-    fill: sw t1, 16(t0)
-    addiu t1, t1, 1
-    addiu t0, t0, 4
+    sw t3, 16(t0)
+    sw t3, 20(t0)
+    sw t3, 24(t0)
+    sw t3, 28(t0)
+    addiu t3, t3, 1
+    addiu t1, t1, 0x10
+    addiu t0, t0, 32
     addiu t2, t2, -1
     bne t2, zero, fill
     nop
     lui t0, 0xb001
     ori t1, zero, 1
     sw t1, -0x2000(t0)
-    ori t2, zero, 3000
+    lui s1, 0x30
+    ori s2, zero, 8
+    send: lw t1, -0x3c00(t0)
+    andi t1, t1, 0x100
+    bne t1, zero, send
+    nop
+    ori t2, zero, 4000
     delay: addiu t2, t2, -1
     bne t2, zero, delay
     nop
-    lui t1, 0x30
-    sw t1, -0x3bf0(t0)
-    ori t1, zero, 17
+    sw s1, -0x3bf0(t0)
+    ori t1, zero, 2
     sw t1, -0x3be0(t0)
     ori t1, zero, 0x101
     sw t1, -0x3c00(t0)
-    ori t2, zero, 2000
-    again: addiu t2, t2, -1
-    bne t2, zero, again
+    addiu s1, s1, 32
+    addiu s2, s2, -1
+    bne s2, zero, send
     nop
-    ori t1, zero, 1
-    sw t1, -0xde0(t0)
     end: beq zero, zero, end
     nop
 ";
 
-/// The IOP: its SIF channels enabled, SIF1 started to receive in chain mode, then SIF1's CHCR polled and counted until
-/// its STR clears, then MSFLG polled and counted until set; both counts kept at `COUNTS`.
+/// The IOP: its SIF channels enabled; for each of the eight packets, SIF1 started to receive in chain mode and its CHCR
+/// polled and counted until its STR clears, each count kept at `COUNTS` in turn.
 const IOP: &str = "
     lui t0, 0xbf80
     ori t1, zero, 0x800
@@ -70,11 +77,11 @@ const IOP: &str = "
     sw t1, 0x1574(t0)
     ori t1, zero, 1
     sw t1, 0x1578(t0)
-    lui t1, 0x0100
+    lui t6, 0xa01d
+    ori s0, zero, 8
+    next: lui t1, 0x0100
     ori t1, t1, 0x0600
     sw t1, 0x1538(t0)
-    lui t4, 0xbd00
-    lui t6, 0xa01d
     or t3, zero, zero
     landed: lw t5, 0x1538(t0)
     addiu t3, t3, 1
@@ -83,12 +90,10 @@ const IOP: &str = "
     bne t5, zero, landed
     nop
     sw t3, 0(t6)
-    or t3, zero, zero
-    flag: lw t5, 0x20(t4)
-    addiu t3, t3, 1
-    beq t5, zero, flag
+    addiu t6, t6, 4
+    addiu s0, s0, -1
+    bne s0, zero, next
     nop
-    sw t3, 4(t6)
     end: j end
     nop
 ";
@@ -104,8 +109,8 @@ pub fn system() -> System {
     sys
 }
 
-/// The IOP's two counts, and the packet's first and last words where it landed.
-pub fn record(sys: &System) -> [u32; 4] {
+/// The IOP's eight counts, and each packet's first word where it landed.
+pub fn record(sys: &System) -> ([u32; 8], [u32; 8]) {
     let w = |a: u32| sys.board.iop.bus.word(a);
-    [w(COUNTS), w(COUNTS + 4), w(LANDS), w(LANDS + 252)]
+    (std::array::from_fn(|i| w(COUNTS + 4 * i as u32)), std::array::from_fn(|i| w(LANDS + 16 * i as u32)))
 }

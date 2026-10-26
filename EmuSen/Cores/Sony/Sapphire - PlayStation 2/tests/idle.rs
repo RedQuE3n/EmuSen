@@ -154,6 +154,8 @@ fn dma(by: &'static str) -> Case {
         sw t1, -0x1fe0(t0)
         lui s3, 0x0004
     ";
+    // Without CPC8 in D_PCR the transfer's end changes no line, so only the watch on what the wait reads ends a skip.
+    let setup = if by == "silent" { setup.replace("ori t1, zero, 0x100\n        sw t1, -0x1fe0(t0)", "") } else { setup.to_string() };
     let start = "
         lui t0, 0xb001
         ori t1, zero, 0x100
@@ -172,10 +174,11 @@ fn dma(by: &'static str) -> Case {
         "chcr" => "loop: lw t1, -0x3000(t0)\nandi t1, t1, 0x100\nbne t1, zero, loop\nnop",
         _ => "loop: lw t0, 0x3fc(t9)\nbeq t0, zero, loop\nnop",
     };
-    let ee = program(setup, 4, &format!("{start}\n{wait}\nlui t8, 0x0001\naddu s3, s3, t8"));
+    let ee = program(&setup, 4, &format!("{start}\n{wait}\nlui t8, 0x0001\naddu s3, s3, t8"));
     let name = match by {
         "bc0f" => "dma-bc0f",
         "chcr" => "dma-chcr",
+        "silent" => "dma-silent",
         _ => "dma-memory",
     };
     Case { name, ee, iop: None, frames: 2, skips: true, refusal: None }
@@ -240,6 +243,15 @@ fn timeout(turns: u32) -> Case {
     );
     let name = if turns > 100_000 { "timeout-long" } else { "timeout-short" };
     Case { name, ee: program(&setup, 6, &wait), iop: None, frames: 2, skips: true, refusal: None }
+}
+
+/// A wait counting up in a register to a bound it meets by BEQ in a few hundred turns, before the event: passed up to
+/// the turn before the count equals the bound.
+fn count_to() -> Case {
+    let setup = format!("{}\n{}", intc_mask(9), interrupts(0x400, 0xA000_0000));
+    let setup = format!("lui t0, 0xb000\nori t1, zero, 20000\nsw t1, 0x20(t0)\nori t1, zero, 0x1c0\nsw t1, 0x10(t0)\n{setup}");
+    let wait = "lw s2, 0x1010(s0)\nor t7, zero, zero\nori s4, zero, 333\nloop: addiu t7, t7, 1\nbeq t7, s4, out\nnop\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop\nout:";
+    Case { name: "count-to", ee: program(&setup, 6, wait), iop: None, frames: 2, skips: true, refusal: None }
 }
 
 /// A 64-bit count in memory and a register counting up by five, which an SLT compares with a bound the wait reaches in
@@ -318,7 +330,7 @@ fn timer_poll() -> Case {
 }
 
 fn cases() -> Vec<Case> {
-    vec![vu1_busy(), dma("chcr"), timer_poll(), vblank(), timer(), count(), dma("memory"), dma("bc0f"), sif0(), timeout(1 << 20), timeout(700), counter64(), call(), window(), constant_store(), counter(), counted(), doubled()]
+    vec![vu1_busy(), dma("chcr"), timer_poll(), vblank(), timer(), count(), dma("memory"), dma("bc0f"), sif0(), timeout(1 << 20), timeout(700), count_to(), counter64(), dma("silent"), call(), window(), constant_store(), counter(), counted(), doubled()]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -473,4 +485,6 @@ fn turns_are_passed_while_a_unit_runs_and_end_where_the_dmac_writes_what_they_re
     assert!(m.sys.board.vpu.pairs_run()[1] > 50_000, "VU1 ran its microprogram beside the waits");
     let m = equal(&dma("memory"), Tier::Interpreter);
     assert!(m.idle.counts.written > 0, "the transfer's last quadword: {:?}", m.idle.counts);
+    let m = equal(&dma("silent"), Tier::Interpreter);
+    assert!(m.idle.counts.written > 0, "with no line to end it, the watch: {:?}", m.idle.counts);
 }

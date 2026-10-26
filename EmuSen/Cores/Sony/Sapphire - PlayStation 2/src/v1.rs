@@ -681,6 +681,15 @@ mod tests {
         assert!(create(&elf(), &[(EE_TIER_KEY, "interpreter")]).unwrap().blocks.is_none());
     }
 
+    /// Idle skipping is exact, so it is on by default and one setting away (S33, Sapphire_Native.md §47.7).
+    #[test]
+    fn idle_skipping_is_on_by_default_and_a_setting_turns_it_off() {
+        let s = schema().into_iter().find(|s| s.key == IDLE_KEY).expect("idle skipping is a setting");
+        assert!(s.default == "on" && matches!(s.effect, Effect::Exact) && s.check().is_ok());
+        assert!(create(&elf(), &[]).unwrap().idle.on);
+        assert!(!create(&elf(), &[(IDLE_KEY, "off")]).unwrap().idle.on);
+    }
+
     #[test]
     fn other_images_and_files_are_refused_with_words() {
         let mut irx = elf();

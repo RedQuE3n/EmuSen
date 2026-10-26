@@ -228,8 +228,8 @@ fn the_iop_polling_the_sif_while_the_ees_dma_sends_is_unchanged_by_the_debugger(
     for _ in 0..2 {
         m.advance();
     }
-    let [landed, flag, first, last] = s33::record(&m.sys);
-    assert!(landed > 10 && flag > 10, "the IOP counted its polls: {landed} and {flag}");
-    assert_eq!((first, last), (0x5300_0000, 0x5300_003F), "the packet landed whole");
+    let (counts, words) = s33::record(&m.sys);
+    assert!(counts.iter().all(|&c| c > 5), "the IOP counted its polls of each packet: {counts:?}");
+    assert_eq!(words, std::array::from_fn(|i| 0x5300_0000 + i as u32), "each packet landed");
     the_debugger_changes_nothing("s33-sif-poll", &s33::system, 3, true, |_| {});
 }

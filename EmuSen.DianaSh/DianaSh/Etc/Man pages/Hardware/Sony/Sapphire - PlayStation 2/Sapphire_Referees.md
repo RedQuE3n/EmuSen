@@ -279,7 +279,10 @@ key events sent with `XSendEvent` to its largest window, given the input focus f
 were kept; the log, which holds the BIOS's output, is read only for the BIOS line. With it the player's BIOS formatted
 a card in its browser and read the crate's edits back. *2026-10-26, D-383* (`Sapphire_Native.md` §30.25): `--cards`
 takes `none` for a slot left empty, its `Slot<n>_Enable` set false for the run and put back afterwards; with it PCSX2
-showed that every queue ends 25 IOP cycles after its start, so it is no witness for SIO2's time.
+showed that every queue ends 25 IOP cycles after its start, so it is no witness for SIO2's time. *2026-10-26, D-540*
+(`Sapphire_Native.md` §30.33): PCSX2 ends SIO2out after every queue whatever its blocks, and is a witness for that end,
+its flag and the reply's place, not for the bytes past the replies, since it clocks the whole of FIFOIN; it raises
+SIO2's interrupt again only once the flag at 1F808280h was written back (D-541), so the project's probes acknowledge it.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

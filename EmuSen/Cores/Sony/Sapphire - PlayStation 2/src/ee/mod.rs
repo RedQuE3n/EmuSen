@@ -9,6 +9,7 @@ pub mod cache;
 pub mod cop0;
 mod cop2;
 pub mod fpu;
+pub(crate) mod idle;
 pub(crate) mod jit;
 pub mod map;
 mod memory;
@@ -176,6 +177,8 @@ pub struct Ee {
     pub exceptions2: [u64; 4],
     /// Steps by the processor's mode, user, supervisor, kernel, level 1 and level 2: the core's own count, for the bench.
     pub modes: [u64; 5],
+    /// Lines refilled into either cache or the UCAB: the core's own count, which idle skipping reads (Sapphire_Native.md §47).
+    pub fills: u64,
 }
 
 const MEMO: usize = 4096;
@@ -227,6 +230,7 @@ impl Ee {
             exceptions: [0; 16],
             exceptions2: [0; 4],
             modes: [0; 5],
+            fills: 0,
         }
     }
 

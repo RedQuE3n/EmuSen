@@ -186,6 +186,9 @@ pub struct Board {
     pub traffic: [u64; 3],
     /// Accesses no unit answers on the EE's side, for the hardware's reports (S24).
     pub reports: Reports,
+    /// The IOP side's wakes of the DMAC taken by `run_to`'s quick path: the board's own count, which idle skipping reads
+    /// (Sapphire_Native.md §47).
+    pub wakes: u64,
     next: u64,
     /// The PCRTC's next event as last computed, with the H-blank wish it was asked with: still the next while `now` is
     /// before it and nothing has changed the timing (a pure function of both, cached; Sapphire_Native.md §35.7).
@@ -215,6 +218,7 @@ impl Board {
             iop_resets: 0,
             traffic: [0; 3],
             reports: Reports::default(),
+            wakes: 0,
             next: 0,
             edges_taken: Some(0),
             pcrtc_next: None,
@@ -281,14 +285,7 @@ impl Board {
         if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
             self.now = self.now.max(t);
             self.iop.catch_up(self.now);
-            if self.iop.bus.sif.take_wake_ee() {
-                self.dmac.wake(self.now);
-                if self.dmac.next_event() <= self.now {
-                    self.step_dmac(self.now, spram);
-                    self.sync_ipu(self.now);
-                }
-                self.reschedule();
-            }
+            self.quick_wake(spram);
             return;
         }
         while self.next <= t {
@@ -390,14 +387,7 @@ impl Board {
             // The wake at `times[from]`, taken as the quick path of `run_to` takes it.
             let t = times[from];
             self.idle_through(t);
-            if self.iop.bus.sif.take_wake_ee() {
-                self.dmac.wake(self.now);
-                if self.dmac.next_event() <= self.now {
-                    self.step_dmac(self.now, spram);
-                    self.sync_ipu(self.now);
-                }
-                self.reschedule();
-            }
+            self.quick_wake(spram);
             from += 1;
             if !each(from - 1, self.lines()) {
                 return from;
@@ -414,9 +404,47 @@ impl Board {
     }
 
     /// The clocks' moves `run_to`'s quick path makes at `t` once it has found the units idle.
-    fn idle_through(&mut self, t: u64) {
+    pub(crate) fn idle_through(&mut self, t: u64) {
         let idle = self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t);
         debug_assert!(idle, "the units were idle when the run began");
+    }
+
+    /// The quick path's end at `now`: the IOP side's wake of the DMAC taken, the DMAC run if a transfer is then due.
+    pub(crate) fn quick_wake(&mut self, spram: &mut [u8]) {
+        if self.iop.bus.sif.take_wake_ee() {
+            self.wakes += 1;
+            self.dmac.wake(self.now);
+            if self.dmac.next_event() <= self.now {
+                self.step_dmac(self.now, spram);
+                self.sync_ipu(self.now);
+            }
+            self.reschedule();
+        }
+    }
+
+    /// Whether `run_to` at any time before the next event would take its quick path: the GIF, the VIFs and the VUs idle,
+    /// no wake pending; and that event's time.
+    pub(crate) fn quiet(&self) -> bool {
+        self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending()
+    }
+
+    pub(crate) fn next_event(&self) -> u64 {
+        self.next
+    }
+
+    /// A register whose read changes nothing and whose value only the board's events, the IOP side's wake and the EE's
+    /// own writes change: I_STAT, I_MASK and the DMAC's (EE User's Manual §3.2, chapter 5); its word, none for any other,
+    /// or while the reports count every access.
+    pub(crate) fn pure_register(&self, paddr: u32) -> Option<u32> {
+        let p = paddr & !0xF;
+        if self.reports.all || !(0x1000_0000..0x1001_0000).contains(&paddr) || timer::decode(p).is_some() || sif::ee_register(p).is_some() {
+            return None;
+        }
+        match p {
+            intc::I_STAT | intc::I_MASK => Some(self.intc.read(p)),
+            _ if Dmac::answers(p) => Some(self.dmac.read(p)),
+            _ => None,
+        }
     }
 
     /// The DMAC at `at`, woken first if the IOP's side has changed a SIF FIFO; SIF0, SIF1 and SIF2 reach the SIF.

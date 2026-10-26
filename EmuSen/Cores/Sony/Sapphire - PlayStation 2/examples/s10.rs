@@ -8,7 +8,8 @@
 //! frames run out, and prints PASS, FAIL with the first line that differs, or INCOMPLETE, with the frames and the wall
 //! time. `S10_STATE` adds the DMACs', the SIF's and the INTCs' registers at the end, `S10_ALL` the registers answered,
 //! `S10_REPORTS` the accesses no unit answers. A disc (§40) is put in the drive of a console started empty and the program
-//! its SYSTEM.CNF names is entered. The EE runs recompiled, the core's default, unless `EMUSEN_SAPPHIRE_TIER=interpreter` (S36).
+//! its SYSTEM.CNF names is entered. The EE runs recompiled, the core's default, unless `EMUSEN_SAPPHIRE_TIER=interpreter` (S36),
+//! with idle skipping, the core's default, unless `EMUSEN_SAPPHIRE_IDLE=off` (S33).
 
 use std::time::Instant;
 
@@ -41,6 +42,8 @@ fn main() {
     if sapphire::v1::recompiler_chosen(None) {
         m.blocks = Some(Box::new(sapphire::blocks::Blocks::from_env()));
     }
+    // Idle skipping as the core chooses it, on unless `EMUSEN_SAPPHIRE_IDLE=off` (S33, Sapphire_Native.md §47).
+    m.idle.on = sapphire::v1::idle_chosen(None);
     let all = std::env::var_os("S10_ALL").is_some();
     m.sys.board.reports.all = all;
     m.sys.board.iop.bus.reports.all = all;

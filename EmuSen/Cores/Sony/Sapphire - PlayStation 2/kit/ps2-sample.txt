@@ -7,4 +7,4 @@
 #
 Jak and Daxter - The Precursor Legacy (USA) (En,Fr,De,Es,It) (Rev 1).iso  # a single-layer DVD of 1.46 GB
 Kingdom Hearts (USA).iso  # a single-layer DVD of 3.04 GB; reads the pad from its start
-Dark Cloud 2 (USA) (v2.00).iso  # a single-layer DVD of 4.44 GB; returns to the menu (D-465)
+Dark Cloud 2 (USA) (v2.00).iso  # a single-layer DVD of 4.44 GB; owed at S29, its four copies taking about 18 GB (§49.7)

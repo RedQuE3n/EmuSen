@@ -10677,11 +10677,11 @@ path (§49.9).
 | G2, the self-reporting programs | **met**: 75 of the 78 print their texts whole on the player's BIOS, the three disputes D-28, D-363 and S13's `efu` | §36.5, §40.5 |
 | G3, the pictures | **not yet**: the GS programs equal PCSX2's pictures or are disputes; the second referee lineage's agreement the gate asks for is owed | §27.7, §31, §37 |
 | G4, the frontend | **met** at this stage: the kit on the tester's discs (Dark Cloud 2 owed), the fit audit, the CRT profile; cards round-trip at S25 | §49.7, §49.8, §30.18 |
-| G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2 at none (D-465) | §39 |
+| G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2, which since D-465's fix no longer returns to OSDSYS, at one, its memory card message | §39, §39.19 |
 | G6, speed | **not yet**: 0.4 to 5 frames a second on the desktop against the console's 59.94; the speed stages under way | §39.8, §43, §44 |
 | G7, the debugger | **met** | §41 |
 | G8, the clean room | **not yet**: the clone check and the disputes read end to end by another, at S48 | plan §7 |
-| G9, firmware | **not yet**: Dark Cloud 2 returns to OSDSYS on the player's BIOS (D-465); the open BIOS is not written, so the system runs nothing with no firmware folder, and says so | §39.6, §49.5 |
+| G9, firmware | **not yet**: the open BIOS is not written, so the system runs nothing with no firmware folder, and says so; on the player's BIOS the three bench games run, Dark Cloud 2 since D-465's fix, though past its memory card message it shows a grey shape not yet compared with the referee (§39.21 Q4) | §39.19, §49.5 |
 | G10, start without a disc | **met** and offered | §30.16, §30.19 |
 | G11, the Memory Cards tab | **met** and offered | §30.17 |
 | GE, the enhancements | nothing to grade: none offered | |

@@ -1067,9 +1067,9 @@ then states that the open replacement is owed, as the policy requires before the
 removed, although it runs at about 0.4 to 5 frames a second and the speed stages are under way.* The offer therefore
 precedes the gates rather than following them. What was met and what was not on that day is listed in the core's info
 (its description and its accuracy record's notes, one line a gate) and in `Sapphire_Native.md` §49.3: **met** G1, G2,
-G4, G7, G10 and G11; **not yet met** G3 (one referee lineage for the pictures), G5 (the goldens: Dark Cloud 2 at no
-anchor), G6 (speed), G8 (the clone check, S48) and G9 (Dark Cloud 2 returning to OSDSYS, D-465, and the open BIOS not
-written); GE has nothing to grade, no enhancement being offered. *Decided the same day:* ReadKey's learned key layout
+G4, G7, G10 and G11; **not yet met** G3 (one referee lineage for the pictures), G5 (the goldens: Dark Cloud 2 at one
+anchor of three), G6 (speed), G8 (the clone check, S48) and G9 (the open BIOS not written; Dark Cloud 2 runs on the
+player's BIOS since D-465's fix of the same day); GE has nothing to grade, no enhancement being offered. *Decided the same day:* ReadKey's learned key layout
 (D-461) is kept, since without it no game boots on the player's BIOS.
 
 - **G1, the processors.** ps2autotests' `cpu/*` all equal their expected texts, but entries named in a disputes entry;

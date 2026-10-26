@@ -7298,6 +7298,11 @@ tester's discs, the image handed to the kit by path and executed, never opened, 
 looked only at the kit's verdicts and its own measures; **that writer is exposed too and will never write the open
 replacement**.
 
+*Added 2026-10-26 at the kit's lending step (§49.12 to §49.18):* that step's writer ran the player's Americas BIOS
+through the conformance kit on Jak and Daxter, Kingdom Hearts and Dark Cloud 2, the image handed by its link and executed,
+never opened, hashed, listed or disassembled, and looked only at the kit's verdicts and its own measures; **that writer
+is exposed too and will never write the open replacement**.
+
 *Added 2026-10-26 at the interrupt delay's step (§30.78 to §30.85):* that step's writer ran the player's BIOS on
 Sapphire for OSDSYS's pictures, ps2autotests' texts and two games' anchors, and ran the project's programs that call the
 kernel; no trace beyond pictures, texts, RAM counts and the runners' reports; **that writer is exposed too and will never
@@ -10985,7 +10990,7 @@ play, which at the reference path's speed would take hours a case.
   would need about 31 GB by Jak's ratio. A core that claims `BORROW`, as Sapphire now does, would take a mapped image
   lent at no copy, which C17 already exercises; lending it to every case is the kit's change, not made here (decided
   2026-10-26 by the tester: recorded, not fixed at this stage; §49.11 Q1). **Kingdom Hearts and Dark Cloud 2 are owed**
-  to the kit until then.
+  to the kit until then. *Lent and run 2026-10-26, §49.12 to §49.15.*
 
 ### 49.8 Tests, seeded faults and the blast radius (2026-10-26)
 
@@ -11074,6 +11079,201 @@ replacement** (recorded in §35).
    `FirmwarePane`), which changes what the player reads.
 5. **Q5 [routine], CHD for PlayStation 2 discs.** *Recommended*: a later step adds `ps2` to the CD tool with `createdvd`
    for DVD images, once `emusen-disc`'s DVD CHD reading is graded on a converted disc of the tester's.
+
+### 49.12 §49 continued: S29's follow-ups, in one paragraph (2026-10-26)
+
+*Decided 2026-10-26 by the tester: Q1 and Q4 of §49.11. Disputes, had any been found, numbered from D-880; none was.*
+**The conformance kit lends a mapped image to every case of a core that claims `BORROW`** (Q1) instead of copying it
+per case: one read-only mapping shared by the cases, lent with `EMUSEN_CREATE_LENT` and `EMUSEN_MEDIA_LENT`, its
+lifetime the session's, which covers every machine made from it; a core without `BORROW` is read and scheduled as
+before (`EmuSen_CoreAPI.md` §28.20). C12's host of 1.0 and C17 keep their copies, since copying is what they test.
+On Jak and Daxter, run alike before and after, the scope's peak fell from **12.05 GB to 7.47 GB**, and the full
+300-frame run, 10.6 GiB resident at S29, peaked at 4.78 GB (§49.14). **The kit
+then ran on Kingdom Hearts and Dark Cloud 2** in S29's corpus form on the player's Americas BIOS: **every case passes on both**, as on Jak, the core's cases and the
+image's, with no dispute; Dark Cloud 2's 4.44 GB image peaked at 14.9 GB for the scope, inside 16 GiB (§49.15).
+**The firmware page's words** (Q4): an entry with no open version of a console that starts empty reads "Every game
+needs your own file."; the chip's words stay where the firmware is an optional chip (§49.16). No emulator source and no
+firmware was read; the BIOS was executed by its link (§49.18).
+
+### 49.13 The kit's copies of an image, and the loan
+
+**The census** [C, `emusen-core-conform` at `4bfd76232`]. In the corpus form of one disc, the core's cases and the
+image's ran at once on two threads, and every copy below was alive as its case ran:
+
+| Copy | Whose | Where |
+|---|---|---|
+| The reference image, read whole | the kit's | `run_corpus`, for the core's cases |
+| The same image, read whole again | the kit's | `one_image`, for the image's cases |
+| One for every machine made | the core's, at create | `Session::machine` and each case's own creates: C7 holds two at once, C8 three, C12 reruns C6 to C8 twice |
+| The half image | the kit's, and the core's where accepted | C4 |
+| The inserted disc | the core's | C16's three inserts of the same disc |
+| The overwritten leg's image, and at the swap a second | the kit's and the core's | C17 |
+| `opts.image.clone()` | the kit's | C13, C16, C23, C24 |
+
+That is S29's "about seven" (Jak's 1.46 GB peaking at 10.6 GiB, §49.7).
+
+**The loan** [C]: for a library that claims `BORROW` the runner maps the image and its companions once through
+Galaxia's `Mapped` (the kit's `Bytes`, shared by count) and every case's create passes `EMUSEN_CREATE_LENT` from a host of
+1.3 or later, the first whose struct carries the flag; C16's inserts pass `EMUSEN_MEDIA_LENT`; C4's half image is a view
+of the same mapping. The mapping outlives every machine of the session; the thread C4 leaves to an accepted malformed
+image holds its own count of the bytes it lent. Sapphire claims `BORROW` and keeps every disc byte through `keep`
+(§49.2), so it reads the kit's mapping in place.
+
+**What still copies, and why** (each tests copying itself):
+
+- **C12's host of 1.0.** Its create params are 1.0's 88 bytes, which end before the flags field, so that host cannot
+  lend, and a core must copy for it (`EmuSen_CoreAPI.md` §6.24, "Older and newer peers"). The case is that older host,
+  so its reruns of C6 to C8 copy; at most two machines at once since C8 now holds one at a time. Its host of minor 99
+  lends.
+- **C17, the image's life.** Its copied leg is the run every other is held to, a core copying the kit's bytes; its
+  overwritten leg hands the core a copy of the kit's and overwrites it after create and after the insert, which needs a
+  copy to overwrite and is how a pointer kept without a loan is caught; its lent leg maps the files again, its own
+  mapping, so that unmapping them when the loan ends shows a core still reading. The overwritten leg now frees its first
+  copy before taking the second at the swap, nothing having been lent to it.
+- **C18** maps the files itself for its advice: a mapping, no copy.
+
+**The estimate** [C]: an image lent counts three copies (C17's, the core's copy of it, and the core's copy of the
+inserted disc until the insert returns) where it counted four, and the core's cases, which ran outside the budget, are
+admitted at two copies of the reference (C12's host of 1.0 with C7's two machines). On a DVD of 4.44 GB the two do not
+fit together under 16 GiB, so the kit runs them one after the other; on Jak and Kingdom Hearts they ran at once.
+
+### 49.14 Peak memory on Jak and Daxter, before and after (measured 2026-10-26)
+
+The same scope for each run (`systemd-run --scope`, `MemoryMax=16G`), the same Sapphire library (WiseMan `4bfd76232`,
+release), the player's Americas BIOS as file 17, `--jobs 1`; the kit before is the base's, after this branch's. Peak
+figures: the scope's `memory.peak` (every page the runs charged, the page cache of the disc's reads included), the
+process's `VmHWM` (the kit's `peak_resident`, which counts a mapped file's pages once for each mapping), and the largest
+anonymous resident size sampled every 2 s.
+
+| Run | Wall time | Scope peak | `VmHWM` | Anonymous, sampled | Verdict |
+|---|---|---|---|---|---|
+| S29, 300 frames, the kit before (§49.7) | 51 min 13 s | | 10.0 to 10.6 GiB | | all pass |
+| 30 frames, the kit before | 4 min 13 s | 12.05 GB | 12.02 GB | 11.10 GB | all pass |
+| 30 frames, the kit after | 5 min 7 s | 7.47 GB | 10.37 GB | 6.17 GB | all pass |
+| 300 frames, the kit after | 36 min 54 s | **4.78 GB** | 6.23 GB | 3.47 GB | **all pass** |
+
+- The copies set the peak whatever the frames, so the 30-frame pair is the like-for-like comparison: **12.05 GB to
+  7.47 GB** for the scope, **11.10 GB to 6.17 GB** of anonymous memory. The after run's `VmHWM` stays high because the
+  core's cases and the image's each map the disc, and the core's copies (C12's, C17's) read every page of a mapping.
+- The 300-frame run's lower peak is the schedule: its core's cases and image cases, admitted together, reached their
+  copying cases at different times, where at 30 frames they overlapped.
+- Every case passes, as at S29. Since S29 the tree gained S33's idle skipping and S43's GS workers, the main part of the
+  wall time's fall from 51 to 37 minutes; the lending itself changes no frame.
+
+### 49.15 The kit on Kingdom Hearts and Dark Cloud 2 (measured 2026-10-26)
+
+As §49.7 for Jak: `kit/ps2-sample.txt`'s discs in the probe's cache, read in place, one disc a run (a list of one
+name), the player's Americas BIOS by its link as file 17, `--frames 300 --jobs 1`, the lending kit, in the 16 GiB scope
+started with at least the peak plus 3 GB free.
+
+| Disc | Core cases (C1-C5, C9-C13, C15, C22, C23) | Image cases (C4, C6-C8, C14, C16-C21, C24) | Wall time | Scope peak | `VmHWM` |
+|---|---|---|---|---|---|
+| Jak and Daxter (1.46 GB) | all pass | all pass | 36 min 54 s | 4.78 GB | 6.23 GB |
+| Kingdom Hearts (3.04 GB) | **all pass** | **all pass**, C4's half image refused as cut short (742,464 sectors of 1,484,928) | 31 min 30 s | 12.54 GB | 12.51 GB |
+| Dark Cloud 2 (4.44 GB) | **all pass** | **all pass**, C4's half image refused as cut short (1,083,440 sectors of 2,166,880) | 37 min 56 s, the image's cases 11 min 56 s of it | 14.85 GB | 17.51 GB |
+
+- **The image cases' words** on Kingdom Hearts: C6 and C8 the BIOS intro's 300 frames, whose picture and sound digests
+  equal Jak's (24B7936319D860D0, 2F5E8725FE2ED69C over 480,482 samples) since at frame 300 the BIOS has read the disc
+  and drawn nothing of the game (§49.7); the states differ by the disc (C8's ends 82FE82EBB15CEC99 against Jak's
+  5647D4E2EBF669ED); C16 swapped the disc through the lid and kept a state to it over 240 frames; C17 lent 3,041,132,544
+  bytes mapped, every frame equal to a copy's; C18 saw no `MEDIA_SEEK` (the core raises none); C19 kept the two 8 MiB cards
+  and the 1,024-byte console file apart; C20 and C21 are not claimed.
+  Dark Cloud 2's words are the same case for case: the intro's digests again, C8's state F3EA07936DA0B220, C17 lent
+  4,437,770,240 bytes mapped.
+- **Kingdom Hearts' peak** includes the page cache of the disc's reads and both mappings: the core's and the image's
+  cases ran at once (their estimates, 6.3 and 9.4 GB, fit the 17.2 GB allowance), and C12's and C17's copies, 3.04 GB
+  each, read every page.
+- **Dark Cloud 2's** two estimates, 9.1 and 13.6 GB, did not fit together, so the kit ran the image's cases alone
+  (`largest_admitted` 13.58 GB) and the core's after them. Its scope peaked at 14.85 GB, of which about 9.7 GB was
+  anonymous (sampled): C17's copy and the core's two, with the machines. `VmHWM`, 17.51 GB, is above the scope's peak
+  because it counts the disc's pages once for each of the two mappings that read them; the scope's figure is the
+  memory the run took. S29's form, about seven copies, would have needed about 31 GB (§49.7).
+- **No case failed**, so no dispute was opened; D-880 is unused.
+
+### 49.16 The firmware page's words (decided 2026-10-26)
+
+- **The words** [C]: `FirmwareRow.Change` gives an entry with no open version "Every game needs your own file." where its
+  console starts empty, and "Games that need this chip need your own file." elsewhere; the player's own file ("Runs as on
+  the console.") and an open version's cost read as before. The PlayStation 2's three BIOS rows now say the first; the
+  SNES chips of VenusRT and Nephrite's entries keep the second.
+- **One owner** for the rule: the console's `starts_empty`, core info's fact as the runtime's systems answer carries it
+  (`RuntimeCatalog.StartsEmpty`, which the empty start already reads). The firmware overview names its rows by their
+  shelves' ES-DE names, so `FirmwareView.StartsEmpty` finds a row's console through the shelves it names (or a
+  discovered system's own name); no per-console string, and no new key in `firmware_overview`, whose shape is the
+  frontend API's (a key would be a minor, §49.18 Q2). Diamond's PlayStation starts empty too, but its entries have open
+  versions, so its rows quote their costs as before.
+- **The decision's reading**: an entry of a console that starts empty, with no open version, runs nothing without the
+  file, as §49.5's refusal already says in the core's words.
+- **Tests**: `FirmwareOverviewTests` (8 of 8): the PlayStation 2's rows read the new words, and a new case holds every
+  row with no open version to its console's fact (the PlayStation 2's the new words; the Super Nintendo's, the Genesis's
+  and the Sega CD's the chip's), the fact itself for five rows, and the player's file and a cost unchanged under it. The
+  fit audit's firmware page, desktop and big screen, at 1280 × 800 and 1920 × 1200, passes with the new words, each row's
+  text found on the page; `FirmwarePageTests`, `FirmwareFolderTests` and `EsdeSettingsMenusTests` pass.
+  `EmuSen_Settings_Reference.md` §4.89's fixed words record the rule.
+
+### 49.17 Tests, seeded faults, the other cores and the blast radius (2026-10-26)
+
+**Tests** [M]:
+
+- **The kit**, `cargo test --release`: **9, 0 and 29 passed**, new `a_clone_and_a_prefix_are_the_same_bytes_at_the_same_addresses`
+  and `every_case_lends_the_image_where_borrow_is_claimed`, and the faulty core's expectations as `EmuSen_CoreAPI.md`
+  §28.20 gives them. Clippy adds no warning in what changed.
+- **WiseMan**, after a build of the branch: the firmware and kit classes (`FirmwareOverviewTests`, `FirmwareFolderTests`,
+  `FirmwarePageTests`, `EsdeSettingsMenusTests`, `SapphireTests` with the kit on the synthetic ELF, CD and DVD,
+  `DiamondTests`, `EndouTests`, `CoreDiscoveryTests`, `MarsRtCoreAbiTests` and the fit audit's firmware page):
+  **119 of 119**. `blast.sh`'s filter (every `Diamond` class, the `EmuSen.WiseMan.Mistress` namespace and
+  `FirmwareOverviewTests`) with those classes added: **2,603 passed, 2 failed, 54 skipped** of 2,659. The two failures
+  are `WindowFitAuditTests`' recordings of the PlayStation 2's Graphics Settings tab at both sizes, whose scrolled
+  content is 189 and 283.5 design pixels taller than recorded: the recording was made at S29 (`e37925a3c`) and S43 then
+  added the *GS workers* row to Sapphire's schema without recording it again. Not this step's, which changes no setting,
+  and left to the GS stage's owner (Q3). The Diamond crate, which the radius names through its tests' use of the kit's
+  digest module, checks with its tests (`cargo check --tests`); that module is unchanged.
+- **The other cores that claim `BORROW`**: Diamond and Nephrite (and Sapphire); Endou, VenusRT, MoonRT, MercuryRT do
+  not, and MarsRT is not on the ABI. Each sample run with the base's kit and this branch's, release libraries of the
+  base:
+
+| Core, sample | Before | After | Reports |
+|---|---|---|---|
+| Diamond, `kit/psx-sample.txt` (9 discs from the probe's cache, 1,800 frames, 9 at a time) | 9 of 9 pass, 273.6 s, scope peak 11.98 GB | 9 of 9 pass, 277.2 s, scope peak 9.44 GB | the 9 image reports identical, digests included; the core's cases differ only in C13's count of rounds |
+| Nephrite, `kit/genesis-sample.txt` (64 cartridges read in place from the ROM library, 600 frames, 16 at a time) | 64 of 64 pass, 177.9 s, 394 MB | 64 of 64 pass, 121.7 s, 225 MB | the 64 image reports identical; C13's rounds alone differ |
+
+**Seeded faults** (each applied, the named tests run, the source restored):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | `Session::machine` lends nothing | `every_case_lends_the_image_where_borrow_is_claimed`, and the three tests of the faulty core's sets |
+| F2 | C12's host of 1.0 told to lend, so it plays 1.3 | `each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`, which holds that host's leg to passing under the fault that refuses every newer host |
+| F3 | The lent estimate taken as the copying one | `the_budget_admits_two_images_of_half_the_allowance_and_runs_a_larger_one_alone` |
+| F4 | The page's rule ignoring the console's fact | `FirmwareOverviewTests`: the rows case and the new case |
+| F5 | The new words for every entry of a console that starts empty, an open version's cost included | `FirmwareOverviewTests`' new case |
+
+### 49.18 What was read, exposure, what this does not cover, and questions
+
+**Read**: this page's §49 and §35's exposure record; `EmuSen_CoreAPI.md` §6.24, §12.1, §28 (to §28.19);
+`EmuSen_Galaxia.md`'s `Mapped` through its source; `EmuSen_Settings_Reference.md` §4.89; the kit's source, the firmware
+page's and the runtime's overview (C# and Rust). No emulator source, no article. **Firmware**: the player's Americas
+BIOS was handed to the kit by its link, `ps2-0230a-20080220.bin` under the referees' folder, read by the kit into memory
+to pass to the core as file 17 and executed; it was never opened, hashed, diffed, listed or disassembled by any tool of
+this step, and no folder holding firmware was listed. The discs were read in place from the probe's cache; of their
+bytes only the sector counts the kit's words print were seen. **Exposure** (§1.4): this writer ran the player's BIOS
+through the kit on three discs and looked at the kit's verdicts and its own measures only; **this writer is exposed and
+will never write the open replacement** (recorded in §35).
+
+**Not covered**: the handheld; a frontend API minor to carry `starts_empty` in `firmware_overview` (Q2); C17's and
+C12's copies, which are what those cases test.
+
+**Questions**:
+
+1. **Q1 [routine], the kit's 300 frames on a DVD.** The three discs' 300 frames are the BIOS intro, the disc read and
+   nothing of the game drawn (C6's digests are equal on all three). *Recommended*: keep 300 for the kit's runs on the
+   player's BIOS, the cases being about the core's conduct, and let the goldens (G5) carry the games' own frames.
+2. **Q2 [decision], `starts_empty` in `firmware_overview`.** The page finds a row's console through the shelves its
+   name joins; carrying the fact as a key of each system row would make the overview say it without a cross-reference,
+   and is a frontend API minor (keys in JSON). *Recommended*: add it in the next frontend API minor, with the parity
+   case, and keep the cross-reference until then.
+3. **Q3 [routine], the PlayStation 2's Graphics Settings recordings.** They predate S43's *GS workers* row (§49.17).
+   *Recommended*: record them again at S43's follow-up or the next stage that touches the tab, as each stage that adds a
+   row does.
 
 ## 50. Stage S43, the GS's software rasteriser on worker threads (2026-10-26)
 

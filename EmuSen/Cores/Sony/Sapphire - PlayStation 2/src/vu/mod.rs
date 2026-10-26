@@ -6,6 +6,7 @@
 //! Written from the VU User's Manual; the record is Sapphire_Native.md §21 (S12) and §23 (S13).
 
 pub mod efu;
+pub mod jit;
 pub mod micro;
 pub mod ops;
 pub mod pipe;
@@ -62,13 +63,52 @@ pub struct Vu {
     pub clip: u32,
     pub tpc: u16,
     pub data: Box<[u8]>,
-    pub micro: Box<[u8]>,
+    pub micro: MicroMemory,
     pub q_next: Option<Landing>,
     pub div_free: u64,
     pub p_next: Option<Landing>,
     /// A second EFU result, which can start a cycle before the first lands (§3.4.6).
     pub p_later: Option<Landing>,
     pub efu_free: u64,
+}
+
+/// A unit's micro memory: its bytes, read and written as a slice, and the count of the times it was lent for writing, which
+/// a compiled microprogram is validated against (Sapphire_Native.md §45.4).
+#[derive(Clone)]
+pub struct MicroMemory {
+    bytes: Box<[u8]>,
+    lent: u64,
+}
+
+impl MicroMemory {
+    pub fn new(len: usize) -> MicroMemory {
+        MicroMemory { bytes: vec![0; len].into_boxed_slice(), lent: 0 }
+    }
+
+    /// How many times the bytes were lent for writing: a count that has not moved since a check means they are unchanged.
+    pub fn lent(&self) -> u64 {
+        self.lent
+    }
+
+    /// Bytes written without the count moving: what a cache that missed a write would run, which only the recompiler's
+    /// tests make, to show that its verifier finds stale code (Sapphire_Native.md §45.5).
+    pub fn write_unseen(&mut self, at: usize, bytes: &[u8]) {
+        self.bytes[at..at + bytes.len()].copy_from_slice(bytes);
+    }
+}
+
+impl std::ops::Deref for MicroMemory {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+impl std::ops::DerefMut for MicroMemory {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        self.lent += 1;
+        &mut self.bytes
+    }
 }
 
 /// VF00's fixed value: 0.0, 0.0, 0.0, 1.0 (§3.1.1).
@@ -91,7 +131,7 @@ impl Vu {
             clip: 0,
             tpc: 0,
             data: vec![0; mem].into_boxed_slice(),
-            micro: vec![0; mem].into_boxed_slice(),
+            micro: MicroMemory::new(mem),
             q_next: None,
             div_free: 0,
             p_next: None,
@@ -384,6 +424,16 @@ impl Vpu {
         self.run_unit(unit, t);
         let m = if unit == 0 { &self.micro0 } else { &self.micro1 };
         m.stat() & (vpu_stat::VBS | vpu_stat::VDS | vpu_stat::VTS | vpu_stat::VFS) == 0
+    }
+
+    /// A unit's tier: the interpreter (none) or the recompiler (Sapphire_Native.md §45.6).
+    pub fn set_tier(&mut self, unit: usize, tier: Option<jit::Settings>) {
+        if unit == 0 { self.micro0.set_tier(tier) } else { self.micro1.set_tier(tier) }
+    }
+
+    /// A unit's recompiler counts, none on the interpreter.
+    pub fn jit_counts(&self, unit: usize) -> Option<jit::Counts> {
+        if unit == 0 { self.micro0.jit_counts() } else { self.micro1.jit_counts() }
     }
 
     /// The T stage of a unit's last pair since a reset.

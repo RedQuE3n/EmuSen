@@ -133,6 +133,8 @@ pub const REGION_KEY: &str = "region";
 /// The EE's tier: the interpreter, or the recompiler of S36 (Sapphire_Native.md §44).
 pub const EE_TIER_KEY: &str = "ee_tier";
 pub const TIERS: [(&str, &str); 2] = [("interpreter", "Interpreter"), ("recompiler", "Recompiler")];
+/// VU1's tier (Sapphire_Native.md §45.6): the interpreter, or the recompiler, which is exact.
+pub const VU1_KEY: &str = "vu1";
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 pub const REGIONS: [(&str, &str, Market); 3] = [("ps2.jp", "Japan (NTSC)", Market::Japan), ("ps2.us", "Americas (NTSC)", Market::Americas), ("ps2.eu", "Europe (PAL)", Market::Europe)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK2, "DualShock 2"), (DIGITAL, "Digital Controller"), ("none", "Nothing")];
@@ -169,7 +171,17 @@ fn schema() -> Vec<Setting> {
             effect: Effect::Exact,
             ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter, which is the other choice, slower. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
         },
+        Setting {
+            effect: Effect::Exact,
+            ..setting(VU1_KEY, "VU1", "How the vector unit that transforms most of a game's geometry runs its microprograms: interpreted, or compiled whole to the host's machine code on a thread of its own, each checked against the unit's memory before it runs. Exact: the recompiler leaves the console as the interpreter does at every point the rest of the machine can see. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
+        },
     ]
+}
+
+/// Whether the settings, or `SAPPHIRE_VU1` for measurement, choose VU1's recompiler, the default since S40's gate was
+/// met (decided 2026-10-26 by the tester, Sapphire_Native.md §45.6).
+pub fn vu1_recompiler_chosen(setting: Option<&str>) -> bool {
+    std::env::var("SAPPHIRE_VU1").ok().as_deref().or(setting) != Some("interpreter")
 }
 
 /// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler, the default since S36's gate
@@ -552,6 +564,11 @@ impl Machine {
         if recompiler_chosen(s.get(EE_TIER_KEY)) {
             m.blocks = Some(Box::new(crate::blocks::Blocks::from_env()));
         }
+        if vu1_recompiler_chosen(s.get(VU1_KEY)) {
+            m.sys.board.vpu.set_tier(1, Some(crate::vu::jit::Settings::default()));
+        } else {
+            m.sys.board.vpu.set_tier(1, None);
+        }
         // An empty file is a card not yet saved: the slot keeps its erased card.
         for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
             *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");
@@ -612,6 +629,22 @@ mod tests {
             assert!((total as i64 - want).abs() <= 32, "{total} samples for {want}");
             assert!(m.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && m.frame().len() == 640 * 448 * 4);
         }
+    }
+
+    #[test]
+    fn the_vu1_setting_chooses_its_tier_and_the_recompiler_is_the_default() {
+        if std::env::var_os("SAPPHIRE_VU1").is_none() {
+            let interpreted = create(&elf(), &[(VU1_KEY, "interpreter")]).unwrap();
+            assert!(interpreted.sys.board.vpu.jit_counts(1).is_none());
+            assert!(create(&elf(), &[]).unwrap().sys.board.vpu.jit_counts(1).is_some(), "the recompiler without a setting");
+        }
+        let compiled = create(&elf(), &[(VU1_KEY, "recompiler")]).unwrap();
+        assert!(compiled.sys.board.vpu.jit_counts(1).is_some());
+        if std::env::var_os("SAPPHIRE_VU0").is_none() {
+            assert!(compiled.sys.board.vpu.jit_counts(0).is_none(), "VU0 stays on the interpreter");
+        }
+        let s = schema().into_iter().find(|s| s.key == VU1_KEY).unwrap();
+        assert!(s.default == "recompiler" && matches!(s.effect, Effect::Exact));
     }
 
     #[test]

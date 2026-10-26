@@ -9038,3 +9038,310 @@ loader source, no article, and no firmware.
 - Chaining blocks, loops inside a block (MarsRT's loop back), a decoded tier, and freeing code a block at a time.
 - The VUs' recompilers (S40, S41) and the units on threads (S42).
 - The handheld: no measurement was made there.
+
+## 45. Stage S40, the VU1 recompiler: micro mode, whole microprograms (2026-10-26)
+
+*Numbered §45, after the sections the stages built beside it write; disputes would start at D-600, and the stage raised
+none: it reads nothing of the hardware that §23's interpreter has not already read, and every value it produces is
+graded against that interpreter.*
+
+### 45.1 In one paragraph
+
+The plan's §7 row S40, started 2026-10-26 by the tester's decision beside S32 and S36, with the rule decided the same day:
+cycle accuracy where realistic, byte accuracy the floor, and this stage exact. **VU micro mode gains a compiled tier,
+`vu::jit`**, a `Lowering` for `emusen-jit` (`EmuSen_Jit.md`) that compiles a **whole microprogram** (every pair reachable
+from the address the unit was started at) into one Cranelift function entered through a table by the unit's PC. A
+compiled microprogram runs pair by pair exactly as `vu::pipe::Pipe` runs them and stops where the interpreter's loop
+stops, so that the unit's registers, flags, Q and P, its memories, what it hands PATH1, and the cycle at which each is
+visible are the interpreter's at every point the EE, the VIF or the GIF can look. The pipelines' timing (the plan of each
+pair's T stage from its hazards), the flow (the M, E, D and T bits, branches and their delay slots, D-80's rule), the
+write priority, the integer unit, the moves, VU1's loads and stores, the flag checks and the flagless upper operations are
+compiled; the operations on the format's floats are the interpreter's own functions, called, so the arithmetic is
+`sapphire::float`'s by construction (§5.3). Microprograms are cached by their start and validated against micro memory
+through a count of the times the memory was lent for writing, so that an MPG, an EE store or a state load over a compiled
+program is seen before it runs again. A setting, `vu1`, chooses VU1's tier, the recompiler by default since the tester's decision of the same day; VU0 stays
+interpreted (S41), its compiled form built and graded by the same tests. **The gate is met** (§45.5): the interpreter
+stepped beside every compiled pair, 320 random microprograms over both pipelines and every float class of S9's set, the
+mechanisms one at a time compared after every cycle, the crate's whole suite under the recompiler, ps2autotests' `vu/*`
+as they pass today, the bench workloads equal frame by frame, and states loaded into an empty cache. **What it buys is
+small at this stage of the core** (§45.7): VU1 is 0.85 per cent of Jak and Daxter's opening frame interpreted and 0.41
+compiled, and nothing to speak of in OSDSYS's, the EE's interpreter the rest; per pair, the recompiler takes 580 ticks
+where the interpreter takes 1,224 in the game, and 2 to 2.8 times less time on a transform written for the purpose.
+
+### 45.2 What was built
+
+| Module | What it holds | Lines |
+| --- | --- | --- |
+| `src/vu/jit/mod.rs` | the tier (`Tier`), its settings and counts; the cache of microprograms by start, their discovery and validation; the dispatcher (`Pipe::run_pairs` on the recompiler); the frame compiled code reads; the helpers it calls; the verifier's reference | 711 |
+| `src/vu/jit/emit.rs` | the lowering: one microprogram as Cranelift IR | 1,034 |
+| `src/vu/pipe.rs` | the hot state in plain numbers where it held `Option`s (§45.3), `run_pairs` choosing the tier, the clock the bench reads, `copy_from` and `differs` for the verifier | +216 |
+| `src/vu/mod.rs` | `MicroMemory`, the micro memory with its lending count; `Vpu::set_tier` and `jit_counts` | +60 |
+| `src/vu/micro.rs` | `Micro::set_tier`, `jit_counts`, `set_clock`, `clock`, each with a default | +15 |
+| `src/v1.rs` | the setting `vu1` | +20 |
+| `tests/vu_jit.rs` | the random programs, every operation, the mechanisms, the verifier's positive control, C4 | 720 |
+| `examples/s40.rs`, `examples/s40kernel.rs` | the runner for the bench workloads, and VU1 alone on a transform written for the purpose | 180, 152 |
+
+**The new cross-component dependency is `sapphire -> emusen-jit`**, a path dependency, with `cranelift-codegen`,
+`cranelift-frontend`, `cranelift-jit` and `cranelift-module` 0.136.0 pinned in `Cargo.lock` to the version MarsRT and
+`emusen-jit` carry; S36 added the same dependency for the EE, and the two share its lines. **`emusen-jit` is unchanged**: a
+microprogram goes to the crate as words in triples (the pair's address, its upper word, its lower word), which its
+interface already allowed (`EmuSen_Jit.md` §6's "words are 32 bits").
+
+### 45.3 The design: what is compiled, what is called, and why it is exact
+
+**The claim is MarsRT's** (`Mars_Native.md` §5.8): compiled code leaves the machine as the interpreter would at every
+point another unit can observe it. For a VU those points are the end of every `Micro` call: `run_to` after each EE
+instruction, `finish` and `release` for the EE's interlocks, VIF's `ready`, CFC2 and VPU-STAT's reads, FBRST, a state.
+The interpreter brings VU1 forward to the EE's cycle after every EE instruction (§23.6), so a run is short: measured on
+Jak and Daxter's opening, 221,914 calls a frame for 24,820 pairs, nine calls a pair. Compiling whole microprograms
+therefore cannot mean running one to its E bit in a call: the code must stop at the caller's cycle and resume at any pair, which is why its entry is a table by
+PC and every pair checks, as `Pipe::step` does, whether it would issue past the limit.
+
+**One pair, compiled** (`Emitter::pair`), in the interpreter's order:
+
+1. The loop's checks: under `release`, a pair with M already run ends the call; the pair budget (finish's 2²⁴) spent ends it.
+2. The plan: the T stage is the maximum of the next pair's cycle, PATH1's wait, and the ready cycle of every register field
+   and integer register the pair reads, with the divider and the EFU for those classes. Which fields are read is known
+   when the pair is compiled, so the plan is a handful of loads and maximums, where the interpreter decodes both words
+   through the table and a map by name on every step.
+3. The stop: past the limit, nothing of the pair has run and the call returns; the debugger's probe is asked next.
+4. What lands by T (Q, P, the flag writes), through a helper only when the earliest landing is due, that cycle held in a
+   variable across the call.
+5. The lower operation, its vector write held back; the upper operation; the I register; the held write unless the upper
+   wrote that register (§3.4.3); the flag write queued for the S stage.
+6. The flow: the M bit; the next PC from a jump left by the previous pair's branch; the D and T bits under FBRST's
+   enables; the E bit and its delay slot; on a stop, TPC and the interrupt.
+
+**Compiled inline**: the plan, the flow, D-80's branch read, the integer unit (IADD, ISUB, IAND, IOR, IADDI, IADDIU,
+ISUBIU, MTIR), MOVE, MR32 and MFIR, VU1's LQ, LQI, LQD, SQ, SQI, SQD, ILW, ILWR, ISW and ISWR (VU1's data memory has no
+window and wraps at 16 KiB, so an address is a mask and a shift), the twelve flag checks, and the flagless upper
+operations NOP, ABS, MAX and MINI in their forms (`float::max` and `float::min` on the raw order, a sign-magnitude key in
+32 bits). A 128-bit register is two 64-bit halves and a field mask two constants. **Called**: every operation on the
+format's floats (the FMAC's add, multiply and multiply-add families with their flags, the conversions, CLIP, DIV, SQRT,
+RSQRT, the EFU), RGET, RNEXT, RINIT, RXOR, FCSET and FSSET's capture, XGKICK, XTOP and XITOP, and VU0's memory
+operations, which reach VU1 through the window. A call is to the interpreter's own function from `ops::TABLE`, through a
+helper that builds the same `Ctx::micro` the interpreter builds; the arithmetic is therefore `sapphire::float`'s in every
+lane by construction, on every class (§5.3), and the plan's §5.12 "lanes as Cranelift vector operations where they keep
+the console's float results" reduces to the moves: no vector instruction of the host computes the console's floats.
+
+**The hot state in plain numbers.** The interpreter kept the jump, the halt in progress, the last T stage, the release
+cycle and each integer register's last write as `Option`s, whose layout compiled code cannot address. They are now a
+sentinel each (`NONE`, `NO_JUMP`, 0), one meaning per field, and the state's bytes are unchanged: `SPH2` still writes them
+as present-and-value (§38.2), which `tests/sph2/version-2.layout` and the state tests hold.
+
+**What runs no pair is not looked at twice.** Of the calls VU1 receives, most run nothing: the next pair's T stage is in
+the future (a hazard, PATH1 busy, WAITQ). The dispatcher answers at once when the pair's earliest possible cycle (the next
+pair's, or PATH1's wait) is past the limit, and remembers the planned T stage of a pair that compiled code found past it:
+the next call runs nothing until its limit reaches that cycle, provided the PC and the micro memory's lending count are
+those it was planned with. This is exact because the plan is a function of state only the unit's own pairs change: a
+start, a state load and a reset clear the memory, a replaced pair moves the lending count, and the landings at the end of
+`run_to` only remove terms below the limit, which cannot have been the planned cycle. It is VU1's alone: VU0's Q can land early through CTC2's `settle_q`, which no
+argument above covers.
+
+**Not taken: skipping intermediate states.** §5.12 allowed the emitter to skip a flag or Q state no reader can see.
+Every call ends at a pair boundary where a state may be saved and the EE may read, and a call into code runs 1.25 pairs
+on Jak and Daxter's opening (24,737 compiled pairs in 19,828 calls a frame), so there is no span inside which a state is
+invisible; the analysis would buy nothing measurable.
+
+### 45.4 The cache: keyed by the start, validated against micro memory
+
+A microprogram is **discovered** from its start: the next pair, a branch's target, the pair after a BAL's or JALR's delay
+slot (where the subroutine returns), each followed until an E bit's delay slot; a JR's target is not known, and when the
+code reaches a pair it does not cover it returns, and the dispatcher looks for a microprogram starting there, counting it
+as an entry. The set decides only which pairs have code: the flow inside the code is the interpreter's, at run time, so
+a set too small costs a return and one too large costs compile time, never a difference.
+
+**Keyed by the start**, the address `Micro::start` was given (VIF's MSCAL, MSCALF and MSCNT, CMSAR1, VCALLMS for VU0);
+compiled at the entry the threshold names (the second by default), on `emusen-jit`'s thread, the unit interpreted until
+the code is published. A state loaded while the unit runs counts its PC as an entry.
+
+**Validated against memory.** The micro memory is a `MicroMemory`, a slice that counts every time it is lent for writing
+(`DerefMut`): VIF's MPG, the EE's stores at 11008000h, a state's load, the debugger's and the tests' writes all borrow
+it mutably and so move the count; no writer can be missed, since the bytes are reachable mutably only that way. A
+microprogram remembers the count at which its words were last found equal to memory; at every entry into its code an
+unchanged count is enough, and a moved count compares its pairs' words with memory. **Up to eight are kept for a start**:
+a start whose memory no longer matches the running program's words looks among the others for one that matches before it
+compiles another, the oldest dropped past eight. Jak and Daxter uploads its microprograms in turn, and kept one a start
+the cache compiled 329 programs in 300 frames where with eight it compiles five (§45.7). A read through the EE's mutable
+view moves the count without a change; that costs one comparison.
+
+### 45.5 The gate (measured 2026-10-26)
+
+On the desktop, at CPU weight 20 with other stages' builds beside, in Release.
+
+| Oracle | What ran | Result |
+| --- | --- | --- |
+| 1. The interpreter beside every compiled pair (`Settings::verify`) | a copy of both units and the micro mode synchronised at every call into code, stepped once for each pair the code runs and compared after it (every register, flag, landing, ready cycle, both memories, the link, and PATH1's kicks replayed in order) | on in every test below and in the bench workloads' verifier runs; no difference |
+| 2. Random microprograms | 240 on VU1 and 80 on VU0, 8 to 47 pairs each, both pipelines' operations drawn from the decoder with small register sets so that pairs meet hazards, the M, D, T and I bits, branches forward and, in half, backward and through registers; registers, ACC, I, Q and the data memory full of S9's 32 classes; 600 calls each in a random schedule of `run_to`, `finish`, `release`, replaced pairs, states saved and loaded into an empty cache, and force breaks; compared after every call, every fifth also under oracle 1 | all equal; on VU1, 17,389 pairs compiled in 5,304 calls (the rest of the 144,000 calls stopped before entering code, §45.3) and none interpreted, 599 programs, 256 found changed |
+| 3. The mechanisms one at a time | every operation the decoder knows (164, both units), each in a program compared after every cycle; the flags' four cycles and their readers; Q and P at their latency, WAITQ, WAITP, the EFU; branches, delay slots, BAL and JR; the E, D, T and M bits under every FBRST enable; XGKICK against PATH1 busy 0, 1, 5 and 40 cycles; an upload over a compiled program; a store into a running one; a state saved at every cycle of a running microprogram continued from an empty cache; the debugger's breakpoint and coverage inside code; finish's bound; the trace | 16 of 16 |
+| 4. ps2autotests `vu/*` and the project's VU programs | the crate's whole suite with both units compiled, threshold 1, the code waited for, the verifier on: §23's `micro` and `vu_micro`, `vu0`, `vif`, `gif`, `state`, `debugger` and the rest; the seven `vu/*` programs by `examples/s10.rs` on the Americas 0230 BIOS, interpreted and with both units compiled under the verifier | the suite: every test binary as on the interpreter, 398 tests, the one exception an assertion of the default that the environment overrides (since made conditional); `vu/*`: the same verdicts on both tiers, six equal to their console texts and `efu` parting at its line 18 as §23.9's named loss says, the captured texts byte for byte equal between the tiers (the runner prints no counts, so how many of their pairs ran compiled is not recorded) |
+| 5. The bench workloads frame by frame | OSDSYS's boot from power-on, 600 frames, threshold 1; Jak and Daxter's opening, 300 frames from its state at frame 1,200; each on each tier, the picture, the sound and the whole state digested after every frame; each again recompiled under the verifier with the code waited for | every frame's three digests equal (600 and 300); the verifier clean over the boot's microprograms and over 7.4 million compiled pairs of Jak and Daxter's |
+| 6. A state loaded into an empty cache | oracle 2's reloads, oracle 3's cut at every cycle, and the bench workloads started from a state | equal |
+
+**The verifier's positive control**: a pair written behind the lending count (`MicroMemory::write_unseen`, which only this
+test calls) leaves the code running the old word while the interpreter fetches the new one; the verifier reports it
+after six pairs. A panic cannot cross the C ABI, so the verifier keeps the first difference and the dispatcher raises it
+when the code returns. Its message is a count of pairs alone unless `SAPPHIRE_VU_VERIFY_DETAIL=1`: a player's
+microprogram is never described (§45.10).
+
+### 45.6 The switch, and what is recommended
+
+`vu1` in Sapphire's settings (*Speed*, `effect: exact`, a choice of `interpreter` and `recompiler`, read when a game is
+loaded), the recompiler by default (below); `Vpu::set_tier(unit, …)` underneath, with VU0 left on the interpreter by the core.
+For measurement and tests the environment names the tier when no setting does: `SAPPHIRE_VU1=recompiler`
+(`SAPPHIRE_VU0` for VU0), `SAPPHIRE_VU_THRESHOLD`, `SAPPHIRE_VU_WAIT=1`, `SAPPHIRE_VU_VERIFY=1`, `SAPPHIRE_VU_C4=1`.
+
+**Decided 2026-10-26 by the tester: the recompiler is VU1's default**, the interpreter one setting away, as recommended
+and as MarsRT's was made on the day its stage landed (`Mars_Native.md` §5.8.7), on the strength of the six oracles rather
+than of hours of play: it is exact, it halves VU1's cost a pair, and what it costs is a compiler thread and a few
+megabytes of code (2.2 MB over Jak and Daxter's 300 frames). Its gain in the frame today is within the runs' noise
+(§45.7); the case is the next stages'. Without a setting the core chooses the recompiler (`v1::vu1_recompiler_chosen`),
+and `SAPPHIRE_VU1=interpreter` chooses the interpreter for measurement; a machine made directly (`Machine::new`, the
+tests) stays on the tier the environment names, the interpreter unless it names the recompiler.
+
+### 45.7 Speed and VU1's share of the frame (measured 2026-10-26)
+
+**The method.** S32's bench had not merged, so `examples/s40.rs` (§45.2) times each frame's `advance` and nothing else,
+Diamond's method (`Diamond_Speed.md` §2) without its pinned cores; the workloads start from states saved at frame 1,200
+by the same runner (`--save-at`), so that a run measures the workload and not its boot, and a state's load into an empty
+cache is exercised by every recompiled run. **VU1's share** is read by the clock in `Pipe::run_pairs`: the time-stamp
+counter's ticks inside VU1's runs against the frames', in runs apart from the timed ones (the clock's two reads a call
+cost time of their own).
+
+**VU1 in the bench workloads**, the Americas 0230 BIOS:
+
+| | OSDSYS's boot (no input, to the language screen) | Jak and Daxter's opening (300 frames from frame 1,200) |
+| --- | --- | --- |
+| VU1's pairs a frame | 2 (998 pairs in its first 100 frames, none after) | 24,820 |
+| calls into VU1 a frame | 30,923 | 221,914 |
+| VU1's share of the frame, interpreted | 0.03 % (the clock's own reads) | 0.85 % (1,224 ticks a pair) |
+| VU1's share of the frame, compiled | 0.03 % | 0.41 % (580 ticks a pair) |
+| compiled pairs a frame, interpreted ones, calls into code | 0, 2, 0: each program had ended before its code arrived (with the code waited for, all 2 compiled) | 24,737, 83, 19,828 |
+| microprograms compiled, found changed, code, compiling time | 3, 0, 1.4 MB, 0.77 s (threshold 1) | 5, 2, 2.2 MB, 0.55 s |
+
+**The frame**, three rounds a tier interleaved, CPU weight 100 with other stages' builds running, the load beside each:
+
+| workload, 300 frames | tier | round 1: median ms (load) | round 2 | round 3 | median of medians | spread |
+| --- | --- | --- | --- | --- | --- | --- |
+| Jak and Daxter's opening | interpreter | 802.7 (7.8) | 803.2 (12.5) | 787.9 (6.7) | 802.7 | 2 % |
+| Jak and Daxter's opening | recompiler | 1,219.5 (10.2) | 1,194.6 (15.8) | 794.7 (4.4) | 1,194.6 | 53 % |
+| OSDSYS, the language screen | interpreter | 481.2 (6.4) | 790.0 (5.5) | 503.0 (10.7) | 503.0 | 64 % |
+| OSDSYS, the language screen | recompiler | 482.3 (6.2) | 486.3 (5.0) | 516.9 (10.8) | 486.3 | 7 % |
+
+Every run's three digests were equal to its tier's twin. The spreads are the machine's, not the tiers': the other stages'
+Release builds ran beside every round, the tester's standing policy for this phase being throughput before quiet
+timings, and the rounds at the lowest load agree: 787.9 against 794.7 ms on Jak and Daxter (load 6.7 and 4.4), 481.2
+against 482.3 on OSDSYS (6.4 and 6.2). **The frame is equal on both tiers within its noise, as it must be**: VU1 is 0.85
+per cent of Jak and Daxter's frame interpreted and 0.03 of OSDSYS's, so halving it moves the frame by some 3.5 ms in 800
+on the game and by nothing on the menu. The digest and clock runs, at CPU weight 20 beside the same builds, read the same
+way (790.1 against 775.0 ms means on the game). VU1's real test is a game in play whose geometry it carries, which the
+core reaches with S28's work (Jak and Daxter's opening scene, Kingdom Hearts' attract movie), merged after this stage was
+measured; a timed run of Kingdom Hearts' movie did not fit, its boot to the movie being longer than the time left.
+
+**VU1 alone** (`examples/s40kernel.rs`), nanoseconds a pair, the unit brought forward a cycle at a time as the board brings
+it, then in one call; three rounds, the middle one shown, the machine at a load of 3 to 4:
+
+| kernel | step | interpreter | recompiler | ratio |
+| --- | --- | --- | --- | --- |
+| empty: the loop's integer count and moves | 1 | 119.8 | 60.7 | 1.97 |
+| FMAC: four FMAC pairs, a load and a store a pass | 1 | 134.7 | 66.5 | 2.03 |
+| transform: a matrix, a divide, a conversion, a store | 1 | 151.8 | 63.6 | 2.39 |
+| transform | whole program in one call | 87.2 | 30.8 | 2.84 |
+
+**What the numbers say.** At the board's granularity a pair's cost is mostly the call that reaches it: the empty kernel,
+which has no FMAC work, costs 61 ns a pair compiled and the transform 64, so the arithmetic the recompiler still calls is
+a tenth of its time; run in one call the transform falls to 31 ns. In the game VU1 is under one per cent of the frame
+either way: the EE's interpreter, not VU1, bounds Sapphire's frame today, and the recompiler's gain in the frame is
+within the runs' spread. §5.12's case for this stage, VU1 at 8 to 60 ms a frame, is a game in play beside S36's EE
+recompiler and S42's threads; neither exists yet, and the per-pair ratio is what carries over.
+
+**The cache, measured.** Jak and Daxter uploads its microprograms in turn; with one compiled program a start, 314 of 329
+programs were found changed and compiled again over 300 frames (25 MB of code, 6 s of the compiler's thread, 1,174 pairs a
+frame interpreted while it worked); with eight kept a start, 5 programs, 2.2 MB and 0.55 s, 83 pairs a frame
+interpreted.
+
+### 45.8 Seeded faults (2026-10-26)
+
+Each applied alone to the source, `tests/vu_jit.rs` run in Release, the source restored [M]:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | the plan ignores every register read but the first | both random-program tests |
+| F2 | a branch reads an integer written in the pair just before as it now is (D-80 dropped) | `branches_and_their_delay_slots_alike`, `a_state_saved_while_vu1_runs_continues_from_an_empty_cache`, VU1's random programs |
+| F3 | the lower write kept against the upper's to the same register (§3.4.3) | both random-program tests |
+| F4 | what lands at T itself left for the next pair | seven: every operation, the flags, Q and P, the trace, the state cut, both random-program tests |
+| F5 | a compiled microprogram never compared with memory | the upload, the store into a running program, both random-program tests |
+| F6 | LQ's offset not added | VU1's random programs |
+
+The verifier's positive control (§45.5) is a permanent test.
+
+### 45.9 The compromises C3 and C4
+
+**C4 is built as a switch, off, and refused** (decided 2026-10-26 by the tester, as §45.12 Q2 recommended): `Settings::c4` (`SAPPHIRE_VU_C4=1`) makes the emitter write a pair's flags at its own
+cycle instead of queueing them for the S stage four cycles on. Its effect, measured: on the transform kernel 3 to 5 per
+cent less time a pair (63.5 against 60.6 ns at the board's granularity) and no state byte different, the kernel reading
+no flag within four pairs; on Jak and Daxter's opening, 300 frames from its state, every picture equal to the
+interpreter's but 46 of the 300 frames' sound and 299 of the 300 states different. Taking it changes bytes a microprogram
+reads (a flag check within four pairs sees the new flags, `c4_writes_the_flags_early_and_parts_from_the_interpreter`): 46
+of 300 frames' sound and 299 states for 3 to 5 per cent of VU1's 0.41 per cent of the frame. The switch stays, off, so
+that the measurement can be repeated.
+
+**C3 is not built, and priced**: the float operations it would replace are a tenth of a compiled pair's time at the
+board's granularity (the transform kernel against the empty one, §45.7), and VU1 is 0.41 % of Jak and Daxter's frame
+compiled; host floats could buy at most some 0.04 % of that frame today, against §21.7's 730 of 2,677 in-range lanes that
+differ from the console in the last bit. It is to be weighed when S42 lets VU1 run long, where the arithmetic's share
+grows (the transform in one call: 31 ns a pair, most of it the calls into `sapphire::float`).
+
+### 45.10 Exposure
+
+Running the player's BIOS (OSDSYS's boot, the `vu/*` programs, Jak and Daxter's program by fast boot) makes the writer of
+this stage a writer of a player's-BIOS stage, exposed as §1.4 says and never a replacement writer. The BIOS images were
+executed, never read: the folder `~/Documents/BIOS/PS2` was listed once, by name, to find the 0230 images' paths, before
+§1.4's word against listing was noticed; nothing was opened, hashed or compared. The microprograms the BIOS and the game
+uploaded were compiled like any other guest code and never printed, dumped or inspected; the bench prints counts, times
+and digests, and the verifier counts. The SIF link was not traced.
+
+### 45.11 Where the plan was wrong, or left open
+
+- **§5.12's estimate of VU1's work** (1 to 3 million pairs a frame at 20 to 60 % occupancy) is a game's in play; what the
+  core reaches today is 24,820 pairs a frame on Jak and Daxter's opening and none to speak of in OSDSYS.
+- **§5.12's "whole microprograms … run often and are entered at known addresses"** holds for the entry, not for the run:
+  the interpreter's synchronisation brings VU1 forward a pair or two at a time (§45.3), so a compiled microprogram is
+  entered 19,828 times a frame for 24,737 pairs. Until S42 lets VU1 run ahead to its observation points, a call's own cost bounds
+  the gain.
+- **"The four lanes as Cranelift vector operations where they keep the console's float results"**: none do but the moves
+  (§45.3).
+
+### 45.12 Questions this stage leaves
+
+*Decided 2026-10-26 by the tester: Q1 and Q2 as recommended (the recompiler the default, C4 refused); Q3 and Q5
+accepted as recommended.*
+
+1. **[decision] VU1's default tier.** *Recommended*: the recompiler, the interpreter one setting away (§45.6); every oracle
+   equal, VU1's cost a pair halved, its effect on today's frame within noise.
+2. **[decision] C4.** *Recommended*: refuse it. It changed 46 of 300 frames' sound and 299 states on Jak and Daxter's
+   opening for 3 to 5 per cent of VU1's 0.41 % of the frame (§45.9); a player hears the difference and the gain is not
+   measurable in the frame.
+3. **[routine] C3.** *Recommended*: leave it unbuilt until S42 lets VU1 run long, when the arithmetic's share of a
+   compiled pair is worth pricing again (§45.9).
+4. **[routine] S32's count of pairs** (§43.3) was kept in `Pipe::step`, which on the recompiler most pairs never reach;
+   on the tree rebased onto S32 it is counted in `Pipe::run_pairs`, which both tiers pass through and which returns the
+   pairs run. *Recommended*: keep it there.
+5. **[routine] The interpreter's decode.** The interpreter decodes both words of a pair through the table and a map by
+   name on every step, the plan and the execution each; it is most of its 1,224 ticks a pair. *Recommended*: leave it,
+   the interpreter being the reference the recompiler is graded against; a decoded interpreter would be a lever of its own
+   to measure, not this stage's.
+
+### 45.13 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §5.3, §5.12 with its 2026-10-24 amendment, §5.13, §7's S40 and S41 rows and the amendment under
+them, §9.6; `EmuSen_Jit.md`; `Mars_Native.md` §5.8; this page's §21, §23 and §42; the code of `vu::pipe`, `vu::ops`,
+`vu::mod`, `float`, `emusen-jit` and MarsRT's `cpu/blocks/jit/`; `cranelift-codegen`, `cranelift-frontend` and
+`cranelift-module` 0.136.0's sources for the builder's methods (the immediate forms, jump tables, `finalize`). No
+emulator, SDK or loader source, no article on VU recompilation, and no firmware.
+
+### 45.14 What this stage does not cover
+
+- VU0's micro mode on the recompiler in the core (S41): built and graded here, not switched on.
+- Running VU1 ahead of the EE to its observation points (S42), which is what would let a compiled microprogram run long.
+- C3; the FMAC's arithmetic inline.

@@ -237,12 +237,53 @@ fn an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h() {
     let pc = e.pc;
     steps(&mut e, &mut bus, 1);
     assert_eq!((e.pc, e.cop0[cop0::EPC], e.cop0[cop0::CAUSE] >> 2 & 31), (0x8000_0200, pc, 0));
+    let (mut e, mut bus) = machine(&"nop\n".repeat(8));
     e.int0 = true;
     e.cop0[cop0::STATUS] = status::IE | status::EIE | status::IM2;
-    e.cop0[cop0::CAUSE] &= !cop0::cause::IP7;
-    e.pc = ORIGIN;
+    steps(&mut e, &mut bus, 3);
+    assert_eq!((e.pc, e.cop0[cop0::CAUSE] & cop0::cause::IP2), (0x8000_0200, cop0::cause::IP2), "Int0 on IP2 (D-15), after D-860's two instructions");
+}
+
+/// D-860 (Sapphire_Native.md §30.78): an interrupt on Int0 or Int1 is recognised at a step's check and taken once the
+/// next `INTERRUPT_DELAY` instructions have completed, whatever they do to EIE, so a DI among them leaves the handler
+/// EIE clear, as the kit's Restriction (10) warns; Count's interrupt (IP7) is taken at once; an exception taken among
+/// them drops the recognition, the line being tested again after its return.
+#[test]
+fn an_interrupt_on_int0_or_int1_is_taken_after_two_more_instructions_whatever_they_do_to_eie() {
+    assert_eq!(ee::INTERRUPT_DELAY, 2);
+    for (line, ip) in [(0, cop0::cause::IP2), (1, cop0::cause::IP3)] {
+        let (mut e, mut bus) = machine(&"nop\n".repeat(16));
+        e.cop0[cop0::STATUS] = status::IE | status::EIE | status::IM2 | status::IM3;
+        if line == 0 { e.int0 = true } else { e.int1 = true }
+        let mut at = Vec::new();
+        for _ in 0..3 {
+            steps(&mut e, &mut bus, 1);
+            at.push(e.pc);
+        }
+        assert_eq!(at, [ORIGIN + 4, ORIGIN + 8, 0x8000_0200], "Int{line}: two instructions, then the vector");
+        assert_eq!((e.cop0[cop0::EPC], e.cop0[cop0::CAUSE] & ip), (ORIGIN + 8, ip));
+    }
+    let (mut e, mut bus) = machine("di\nnop\nnop\nnop");
+    e.cop0[cop0::STATUS] = status::IE | status::EIE | status::IM2;
+    e.int0 = true;
+    steps(&mut e, &mut bus, 3);
+    assert_eq!((e.pc, e.cop0[cop0::EPC]), (0x8000_0200, ORIGIN + 8), "taken after the DI and one more");
+    assert_eq!(e.cop0[cop0::STATUS] & status::EIE, 0, "the handler sees the DI's EIE (Restriction (10))");
+    let (mut e, mut bus) = machine(&"nop\n".repeat(64));
+    e.cop0[cop0::COMPARE] = 10;
+    e.cop0[cop0::STATUS] = status::IE | status::EIE | status::IM7;
+    let mut n = 0;
+    while e.pc < 0x8000_0000 {
+        steps(&mut e, &mut bus, 1);
+        n += 1;
+        assert!(n < 64, "Count's interrupt never taken");
+    }
+    assert_eq!(e.cop0[cop0::EPC] + 4, ORIGIN + 4 * n as u32, "IP7 taken at the step that sees it, with no delay");
+    let (mut e, mut bus) = machine("syscall\nnop\nnop\nnop");
+    e.cop0[cop0::STATUS] = status::IE | status::EIE | status::IM2;
+    e.int0 = true;
     steps(&mut e, &mut bus, 1);
-    assert_eq!((e.pc, e.cop0[cop0::CAUSE] & cop0::cause::IP2), (0x8000_0200, cop0::cause::IP2), "Int0 on IP2 (D-15)");
+    assert_eq!((e.pc, e.cop0[cop0::CAUSE] >> 2 & 31, e.interrupt_after), (0x8000_0180, 8, 0), "the system call's exception drops the recognition");
 }
 
 #[test]

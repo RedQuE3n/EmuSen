@@ -4591,7 +4591,8 @@ it.*
     after the last. `d800-poll` and `d800-poll-tim` see the bit right after a handler returns, at 3 and 8 arrivals of 8.
     In `d800-ei` no handler runs before the program ends.
   - The browser draws on both tiers (`Sapphire_Native.md` §30.63).
-- **Conclusion:** **measured, the referee split, and open**. The case is one the documents leave without a size: a
+- **Conclusion:** *Decided 2026-10-26 by the tester and built as D-860: the delay of two instructions, every source of Int0
+  and Int1; the browser draws (`Sapphire_Native.md` §30.78).* **Measured, the referee split** at this step. The case is one the documents leave without a size: a
   delay of at least one instruction is implied by *Restriction* (10). PCSX2's two tiers disagree: the recompiler shows
   none, as Sapphire, and the interpreter shows one longer than sixteen instructions after EI.
   - **Not changed:** the EE takes an interrupt at the first instruction boundary after the board has latched its
@@ -4643,3 +4644,39 @@ it.*
 - **Pinned by:** `stuffing_longer_than_the_ipu_holds_is_passed_to_the_start_code` and
   `the_programs_replay_their_logs_through_the_dmac_on_the_board` (`tests/ipu.rs`, the program on the board).
 - **Implemented in:** the step's commit.
+
+### D-860. The EE takes an interrupt on Int0 or Int1 once the two instructions after its recognition have completed, whatever they do to EIE; Count's interrupt at once
+
+*Numbered from D-860 at the interrupt delay's step (2026-10-26), other steps being recorded beside it.*
+
+- **Opened:** 2026-10-26, as the tester's decision on D-800 (`Sapphire_Native.md` §30.76 Q1, option (a)).
+- **Documents read:**
+  - Those of D-800: *EE Core User's Manual* 5.0 §4.2.5, the *EE User's Manual* §3.1 to §3.3, and the kit's
+    *Restriction* (10).
+  - *Restriction* (10) is the one that implies a delay: "when an interrupt occurs immediately after the DI
+    instruction, the EIE bit becomes 0 … in the interrupt handler". There an interrupt decided before a DI completed is
+    taken after it.
+  - No document gives the delay's size.
+- **Test program:** D-800's programs on Sapphire's two tiers (`Sapphire_Native.md` §30.80). In `d800-ei` two stores
+  complete before the handler when V-blank's start is pending at EI. `d800-poll` and `d800-poll-tim` see the bit right
+  after a handler returns at 1 and 2 arrivals. `d800-tight` sees it before an interrupt at none.
+- **Referee:** as D-800. PCSX2's recompiler shows no delay; its interpreter shows a poll seeing V-blank's start before
+  each interrupt, and no interrupt within sixteen instructions after EI. The browser draws on both, and on Sapphire with
+  this rule.
+- **Conclusion:** **decided** by the tester on the documents' direction, the size being the least that draws OSDSYS's
+  browser. Every source of Int0 and Int1 alike; counted in instructions, the pipeline's measure; IP7 unchanged. An
+  exception taken among the two instructions drops the recognition. One lineage only, and split: a console's record of
+  a polling loop would decide the size. *Decided 2026-10-26 by the tester, with it:* a device register's read takes its value at the start of
+  the load's bus access, so a source latched during the access is missed by that read (`d800-tight`); a **named loss**,
+  revisited if a game or a program needs it (`Sapphire_Native.md` §30.84 Q2, §30.85). The goldens of §30.82 accepted.
+- **Depends on it:** D-800 (the browser), P8 as observed; S33's idle skipping and S37's blocks (`Sapphire_Native.md`
+  §30.83).
+- **Pinned by:**
+  - `an_interrupt_on_int0_or_int1_is_taken_after_two_more_instructions_whatever_they_do_to_eie` and
+    `an_interrupt_waits_for_ie_eie_and_im7_and_vectors_to_200h` (`tests/cop0.rs`).
+  - `no_block_starts_while_a_recognised_interrupt_waits` (`tests/blocks.rs`).
+  - `a_recognised_interrupt_is_state_and_a_version_4_state_loads_with_none` and `the_version_5_layout_is_pinned`
+    (`state`).
+  - `a_recognised_interrupt_keeps_a_wait_from_being_passed` (`ee::idle`).
+- **Implemented in:** `ee::INTERRUPT_DELAY`, `Ee::interrupt_now`, `Ee::raise`, `Ee::raise2` and `Ee::block_entry`;
+  `Ee::idle_eligible`, the turn's mark and `idle::ended` for idle skipping; `SPH2` version 5.

@@ -24,6 +24,10 @@ pub use memory::{Mode, Place};
 use cop0::{cause, config, debug, event, perf};
 use timing::Timing;
 
+/// The instructions that complete between the recognition of an interrupt on Int0 or Int1 and its exception, the kit's
+/// Restriction (10) as decided 2026-10-26 (Sapphire_Disputes.md D-860).
+pub const INTERRUPT_DELAY: u8 = 2;
+
 /// The mnemonics this stage executes, in the decoder's spelling.
 pub fn names() -> impl Iterator<Item = &'static str> {
     ops::names()
@@ -149,6 +153,9 @@ pub struct Ee {
     /// The interrupt lines Int0 and Int1, Cause.IP2 and IP3 (driven from S11; Sapphire_Disputes.md D-15).
     pub int0: bool,
     pub int1: bool,
+    /// An interrupt on Int0 or Int1 recognised and not yet taken, counted down by each step's check, which takes it at 0;
+    /// 0 when none is (Sapphire_Disputes.md D-860).
+    pub interrupt_after: u8,
     pub timing: Timing,
     memo: Box<[(u32, u16)]>,
     /// This instruction's waits for memory, for the timing model.
@@ -212,6 +219,7 @@ impl Ee {
             cpcond0: false,
             int0: false,
             int1: false,
+            interrupt_after: 0,
             timing: Timing::default(),
             memo: vec![(1, u16::MAX); MEMO].into_boxed_slice(),
             stall_fetch: 0,
@@ -374,6 +382,7 @@ impl Ee {
     /// Takes a level 1 exception from the instruction at `pc` (EE Core User's Manual §4.1.2's pseudo-code).
     pub fn raise(&mut self, e: Exception, pc: u32, in_delay: bool) {
         let s = self.cop0[cop0::STATUS];
+        self.interrupt_after = 0;
         self.exceptions[e.code() as usize] += 1;
         let mut c = self.cop0[cop0::CAUSE] & !(0x1F << 2) | e.code() << 2;
         if let Some(v) = e.vaddr() {
@@ -414,6 +423,7 @@ impl Ee {
 
     /// Takes a level 2 exception (§4.1.3's pseudo-code): Cause.EXC2 and BD2, ErrorEPC, ERL, the vector by DEV.
     pub fn raise2(&mut self, kind: Level2, pc: u32, in_delay: bool) {
+        self.interrupt_after = 0;
         let (code, vector) = match kind {
             Level2::Counter => (2, 0x80),
             Level2::Debug => (3, 0x100),
@@ -437,6 +447,23 @@ impl Ee {
         let s = self.cop0[cop0::STATUS];
         let on = status::IE | status::EIE;
         s & on == on && s & (status::EXL | status::ERL) == 0 && self.cop0[cop0::CAUSE] & s & cause::IP != 0
+    }
+
+    /// The step's interrupt check: Count's interrupt (IP7) taken at once; one on Int0 or Int1 recognised here and taken
+    /// once `INTERRUPT_DELAY` instructions have completed, whatever they do to EIE (Sapphire_Disputes.md D-860).
+    fn interrupt_now(&mut self) -> bool {
+        let due = self.interrupt_pending();
+        if due && self.cop0[cop0::CAUSE] & self.cop0[cop0::STATUS] & cause::IP7 != 0 {
+            return true;
+        }
+        if self.interrupt_after > 0 {
+            self.interrupt_after -= 1;
+            return self.interrupt_after == 0;
+        }
+        if due {
+            self.interrupt_after = INTERRUPT_DELAY;
+        }
+        false
     }
 
     /// The performance counter exception's condition (§7.2.4), with ERL clear (Sapphire_Disputes.md D-13).
@@ -505,7 +532,7 @@ impl Ee {
             self.raise2(Level2::Counter, pc, in_delay);
             return Ok(());
         }
-        if self.interrupt_pending() {
+        if self.interrupt_now() {
             self.raise(Exception::Interrupt, pc, in_delay);
             return Ok(());
         }
@@ -706,6 +733,7 @@ impl emusen_native::State for Ee {
         w.u32("Pccr", self.pccr);
         w.u32s("Pcr", &self.pcr);
         w.bools("Lines", &[self.cpcond0, self.int0, self.int1]);
+        w.u8("InterruptAfter", self.interrupt_after);
         w.u8("Group", self.group);
         w.u64("CyclesSeen", self.cycles_seen);
         w.structure("Timing", &self.timing);
@@ -735,6 +763,7 @@ impl emusen_native::State for Ee {
         let mut lines = [false; 3];
         r.bools(&mut lines)?;
         [self.cpcond0, self.int0, self.int1] = lines;
+        self.interrupt_after = if r.before(5) { 0 } else { r.u8()? };
         self.group = r.u8()?;
         self.cycles_seen = r.u64()?;
         self.timing.read_state(r)?;

@@ -26,6 +26,7 @@ pub(crate) struct Mark {
     pccr: u32,
     pcr: [u32; 2],
     lines: (bool, bool, bool),
+    interrupt_after: u8,
     group: u8,
     cycles_seen: u64,
     timing: Timing,
@@ -124,6 +125,10 @@ impl Ee {
         if self.delay || self.pccr & perf::CTE != 0 || bpc & (debug::IAE | debug::DRE | debug::DWE) != 0 || self.timing.instructions == 0 {
             return Err(Refusal::Counters);
         }
+        if self.interrupt_after != 0 {
+            // A recognised interrupt is taken two instructions on, never after passed turns (Sapphire_Disputes.md D-860).
+            return Err(Refusal::Event);
+        }
         Ok(())
     }
 
@@ -143,6 +148,7 @@ impl Ee {
             pccr: self.pccr,
             pcr: self.pcr,
             lines: (self.int0, self.int1, self.cpcond0),
+            interrupt_after: self.interrupt_after,
             group: self.group,
             cycles_seen: self.cycles_seen,
             timing: self.timing.clone(),
@@ -161,7 +167,7 @@ impl Ee {
         if (kept(&b), b.hi, b.lo, b.sa, b.fpr, b.acc, b.fcr31) != (kept(a), a.hi, a.lo, a.sa, a.fpr, a.acc, a.fcr31) {
             return Err(Refusal::Changed);
         }
-        if (b.pc, b.next_pc, b.debug, b.pccr, b.pcr, b.lines, b.group, b.exceptions) != (a.pc, a.next_pc, a.debug, a.pccr, a.pcr, a.lines, a.group, a.exceptions) {
+        if (b.pc, b.next_pc, b.debug, b.pccr, b.pcr, b.lines, b.interrupt_after, b.group, b.exceptions) != (a.pc, a.next_pc, a.debug, a.pccr, a.pcr, a.lines, a.interrupt_after, a.group, a.exceptions) {
             return Err(Refusal::Changed);
         }
         if b.fills != a.fills {
@@ -616,5 +622,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// D-860: no turn is proven while a recognised interrupt waits, and a turn in which one is recognised does not repeat.
+    #[test]
+    fn a_recognised_interrupt_keeps_a_wait_from_being_passed() {
+        use super::super::Ee;
+        use crate::idle::Refusal;
+        let mut e = Ee::new(0x8010_0000);
+        e.timing.instructions = 1;
+        assert_eq!(e.idle_eligible(), Ok(()));
+        let a = e.mark();
+        e.interrupt_after = 2;
+        assert_eq!(e.idle_eligible(), Err(Refusal::Event));
+        assert_eq!(e.period_from(&a, 0, 0).err(), Some(Refusal::Changed));
     }
 }

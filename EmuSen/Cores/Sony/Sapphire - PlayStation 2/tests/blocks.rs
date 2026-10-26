@@ -146,6 +146,37 @@ fn narrower_stores_to_registers_run_compiled_as_interpreted() {
     assert!(s.compiled_steps > 1000, "the program ran compiled: {s:?}");
 }
 
+/// D-860 (Sapphire_Native.md §30.78): while a recognised interrupt waits for its two instructions no block starts, so the
+/// blocks' machine takes it where the interpreter does, a hot loop's block already compiled.
+#[test]
+fn no_block_starts_while_a_recognised_interrupt_waits() {
+    let words = assemble(LOOP, ORIGIN);
+    let mut b = eager();
+    let mut plain = system(&words);
+    let mut fast = system(&words);
+    for _ in 0..600 {
+        plain.step().unwrap();
+    }
+    run_steps(&mut fast, &mut b, 600);
+    assert!(b.stats.entered > 0, "the loop runs compiled: {:?}", b.stats);
+    for m in [&mut plain, &mut fast] {
+        m.ee.cop0[sapphire::ee::cop0::STATUS] |= sapphire::ee::status::IE | sapphire::ee::status::EIE | sapphire::ee::status::IM2;
+        m.ee.interrupt_after = 2;
+    }
+    if let Some(d) = blocks::compare(&plain, &fast, false) {
+        panic!("before: {d}");
+    }
+    let entered = b.stats.entered;
+    for k in 1..=2 {
+        plain.step().unwrap();
+        assert_eq!(blocks::run(&mut fast, &mut b, 64).unwrap(), 1, "step {k}: one instruction, interpreted");
+        if let Some(d) = blocks::compare(&plain, &fast, false) {
+            panic!("after {k} steps: {d}");
+        }
+    }
+    assert_eq!((fast.ee.pc, b.stats.entered), (0x8000_0200, entered), "taken at the second check, no block entered");
+}
+
 #[test]
 fn a_hot_loop_runs_compiled_and_leaves_the_interpreters_machine() {
     let words = assemble(LOOP, ORIGIN);

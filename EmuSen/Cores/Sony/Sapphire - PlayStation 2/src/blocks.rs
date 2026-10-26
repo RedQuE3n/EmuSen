@@ -460,6 +460,7 @@ pub fn compare(a: &System, b: &System, quiet: bool) -> Option<String> {
     same!(pcr);
     same!(int0);
     same!(int1);
+    same!(interrupt_after);
     same!(cpcond0);
     same!(ucab.valid);
     same!(exceptions);

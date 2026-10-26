@@ -14,10 +14,12 @@ use crate::machine::{Machine, Market, Stop};
 use crate::pcrtc::Picture;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"SPH2");
-/// Version 4, of S28: version 3's (S10: the fast boot's entry, the EE's BC1 slot and the IOP's console capture,
-/// Sapphire_Native.md §36.10) with the drive's register 38h (§39). Versions 3, 2 (S30, every unit's state) and 1 (S24,
-/// the memories alone) were never a player's, the console being offered to none, so none is read (§38.4).
-pub const STATE_VERSION: i32 = 4;
+/// Version 5, of D-860: version 4's (S28: the drive's register 38h, §39) with the EE's recognised interrupt not yet
+/// taken (Sapphire_Native.md §30.78); a version 4 state loads with none. Versions 3 (S10), 2 (S30, every unit's state)
+/// and 1 (S24, the memories alone) were never a player's, the console being offered to none, so none is read (§38.4).
+pub const STATE_VERSION: i32 = 5;
+/// The bytes version 5 added to the blocks: the EE's `InterruptAfter`.
+const ADDED_IN_5: usize = 1;
 /// The oldest version a state may have and still load.
 pub const OLDEST_STATE_VERSION: i32 = 4;
 
@@ -181,7 +183,7 @@ impl StateMachine for Machine {
         let stop = r.u8()? != 0;
         let entered = read_opt_u64(&mut r)?.map(|f| f as i64);
         let (geometry, aspect, odd, raster) = Picture::read_shape(&mut r)?;
-        let wanted = r.position() + raster + self.blocks_len();
+        let wanted = r.position() + raster + self.blocks_len() - if version < 5 { ADDED_IN_5 } else { 0 };
         if data.len() < wanted {
             return Err(StateError::Truncated { at: data.len(), wanted: wanted - data.len() });
         }
@@ -247,11 +249,11 @@ mod tests {
         s
     }
 
-    /// The listing of version 4 is the file beside the tests, line for line: a change to any block is a new version.
+    /// The listing of version 5 is the file beside the tests, line for line: a change to any block is a new version.
     #[test]
-    fn the_version_4_layout_is_pinned() {
+    fn the_version_5_layout_is_pinned() {
         let m = machine(Market::Americas);
-        let pinned = include_str!("../tests/sph2/version-4.layout");
+        let pinned = include_str!("../tests/sph2/version-5.layout");
         let layout = m.layout();
         for (n, (got, want)) in layout.lines().zip(pinned.lines()).enumerate() {
             assert_eq!(got, want, "line {}", n + 1);
@@ -299,6 +301,31 @@ mod tests {
         d.insert_bios(&vec![0; BIOS_BYTES]);
         let e = d.load_state(&s).unwrap_err();
         assert_eq!((e.clone(), e.status()), (StateError::Bios { state: 0, here: crate::v1::BIOS_AMERICAS }, STATUS_OTHER_BIOS), "a state of a console with no BIOS");
+    }
+
+    /// The EE's recognised interrupt is in the state (version 5), and a version 4 state, which has no place for it, loads
+    /// with none recognised and everything else as it was (Sapphire_Disputes.md D-860).
+    #[test]
+    fn a_recognised_interrupt_is_state_and_a_version_4_state_loads_with_none() {
+        let mut a = machine(Market::Americas);
+        a.advance();
+        a.sys.ee.interrupt_after = 1;
+        let s = saved(&a);
+        let mut b = machine(Market::Americas);
+        b.load_state(&s).unwrap();
+        assert_eq!((b.sys.ee.interrupt_after, saved(&b)), (1, s.clone()), "save, load, save");
+        let at = a.layout().lines().find(|l| l.ends_with(" Ee.InterruptAfter")).and_then(|l| l.split(' ').next()?.parse::<usize>().ok()).unwrap();
+        let mut v4 = s.clone();
+        v4.remove(at);
+        v4[4..8].copy_from_slice(&4i32.to_le_bytes());
+        let mut c = machine(Market::Americas);
+        c.sys.ee.interrupt_after = 2;
+        c.load_state(&v4).unwrap();
+        a.sys.ee.interrupt_after = 0;
+        assert_eq!((c.sys.ee.interrupt_after, saved(&c)), (0, saved(&a)), "a version 4 state: none recognised, the rest as saved");
+        let mut short = v4.clone();
+        short.pop();
+        assert_eq!(c.load_state(&short).unwrap_err().status(), status::TRUNCATED);
     }
 
     /// A console running a boot ROM loads a state made at any instruction and continues as the machine that made it.

@@ -174,7 +174,7 @@ fn the_ee_waits_for_micro_mode_as_section_5_4_draws_it() {
 fn xtop_and_xitop_read_the_link() {
     use sapphire::vu::micro::Micro;
     use sapphire::vu::{Link, Units, VU0_MEM, VU1_MEM, Vu};
-    let mut u = Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default() };
+    let mut u = Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default(), halts: false };
     u.link.top = [0x11, 0x222];
     u.link.itop = [0x33, 0x144];
     let prog = emusen_mips::vu::assemble("nop | xtop vi1\nnop | xitop vi2\n[e] nop | move vf0, vf0\nnop | move vf0, vf0").unwrap();

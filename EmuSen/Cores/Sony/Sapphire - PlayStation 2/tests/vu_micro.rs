@@ -16,7 +16,7 @@ const HALF: u32 = 0x3F00_0000;
 const FIRST: u64 = 100;
 
 fn units() -> Units {
-    Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default() }
+    Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default(), halts: false }
 }
 
 fn load(units: &mut Units, unit: usize, src: &str) {

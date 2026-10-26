@@ -46,6 +46,15 @@ pub trait Micro {
     fn fits(&self) -> bool {
         true
     }
+    /// The pair the unit stands at, in doublewords: the next to run, or where it stopped (the debugger, S31).
+    fn pc(&self) -> u16 {
+        0
+    }
+    /// The debugger's probe slot, which a pair passes before it runs; none for a micro mode the debugger cannot watch
+    /// (Sapphire_Native.md §41).
+    fn probe(&mut self) -> Option<&mut Option<Box<crate::debugger::Probe>>> {
+        None
+    }
 }
 
 /// Micro mode not built: never running, and refusing a start, which halts the interpreter with the starting word; kept

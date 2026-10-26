@@ -93,12 +93,14 @@ pub struct Machine {
     pub program: Option<Vec<u8>>,
     /// The frame at whose run the program was entered; none while it waits.
     pub entered: Option<i64>,
+    /// The debugger's hooks and its open frame (S31, Sapphire_Native.md §41).
+    pub debug: crate::debugger::Debugger,
 }
 
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let sys = Machine::console(market, ports);
-        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None };
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new() };
         for slot in &mut m.sys.board.iop.bus.sio2.slots {
             slot.cards[0] = Some(MemoryCard::erased());
         }

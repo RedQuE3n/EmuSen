@@ -232,6 +232,23 @@ impl R3000 {
     }
 }
 
+/// The reference an instruction's bytes alone give, its target as the processor would reach it from `pc`: a JAL's or
+/// BxxZAL's target as a call, a load or store based on `zero` as a read or a write (Diamond_Debugger.md; the IOP's
+/// listing in Sapphire_Native.md §41 shares it).
+pub fn reference(word: u32, pc: u32) -> Option<(emusen_native::core::Reference, u32)> {
+    use emusen_mips::{Op, Word, decode};
+    use emusen_native::core::Reference;
+    let w = Word(word);
+    let next = pc.wrapping_add(4);
+    match decode(word) {
+        Op::Jal => Some((Reference::Call, next & 0xF000_0000 | w.target() << 2)),
+        Op::Bltzal | Op::Bgezal => Some((Reference::Call, next.wrapping_add(w.simm() << 2))),
+        Op::Lb | Op::Lbu | Op::Lh | Op::Lhu | Op::Lw | Op::Lwl | Op::Lwr | Op::Lwc(_) if w.rs() == 0 => Some((Reference::Read, w.simm())),
+        Op::Sb | Op::Sh | Op::Sw | Op::Swl | Op::Swr | Op::Swc(_) if w.rs() == 0 => Some((Reference::Write, w.simm())),
+        _ => None,
+    }
+}
+
 /// The R3000A's instructions as `emusen-mips` writes and reads them: coprocessor 0 by this processor's names, and
 /// coprocessor 2 by the table its core gives (the GTE's on the PlayStation).
 pub fn dialect(cop2: Option<&'static emusen_mips::Coprocessor>) -> emusen_mips::Dialect {

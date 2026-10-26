@@ -69,6 +69,8 @@ pub struct Pipe {
     now: u64,
     /// Each pair's address and T stage, when a test asks.
     pub trace: Option<Vec<(u16, u64)>>,
+    /// The debugger's probe, asked before each pair runs (Sapphire_Native.md §41).
+    pub probe: Option<Box<crate::debugger::Probe>>,
 }
 
 /// What a pair reads and writes, for the hazards and the write priority.
@@ -265,6 +267,7 @@ impl Pipe {
             stopped_by: 0,
             now: 0,
             trace: None,
+            probe: None,
         }
     }
 
@@ -341,6 +344,11 @@ impl Pipe {
         let (upper, lower) = self.fetch(units);
         let t = self.plan(units, upper, lower);
         if t > limit {
+            return false;
+        }
+        if let Some(p) = &mut self.probe
+            && !p.admit(self.pc as u32 * 8, units.halts)
+        {
             return false;
         }
         self.execute(units, upper, lower, t);
@@ -624,11 +632,19 @@ impl Micro for Pipe {
     }
 
     fn reset(&mut self) {
-        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), ..Pipe::new(self.unit) };
+        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), probe: self.probe.take(), ..Pipe::new(self.unit) };
     }
 
     fn last(&self) -> Option<u64> {
         self.last_t
+    }
+
+    fn pc(&self) -> u16 {
+        self.pc
+    }
+
+    fn probe(&mut self) -> Option<&mut Option<Box<crate::debugger::Probe>>> {
+        Some(&mut self.probe)
     }
 
     fn stat(&self) -> u32 {

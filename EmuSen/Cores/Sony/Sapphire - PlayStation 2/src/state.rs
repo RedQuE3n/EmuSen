@@ -199,6 +199,7 @@ impl StateMachine for Machine {
         self.stop = stop.then_some(Stop::Unimplemented);
         self.entered = entered;
         self.sys.board.iop.bus.spu2.out.clear();
+        self.forget_stop();
         Ok(())
     }
 

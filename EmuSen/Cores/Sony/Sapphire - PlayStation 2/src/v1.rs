@@ -6,6 +6,7 @@ use emusen_native::abi::Region;
 use emusen_native::core::*;
 
 use crate::bios;
+use crate::debugger;
 use crate::cdvd::nvm;
 use crate::machine::{AUDIO_RATE, BIOS_BYTES, MEMORIES, Machine, Market, RAM_ID};
 use crate::pcrtc::{MAX_HEIGHT, MAX_WIDTH};
@@ -180,7 +181,7 @@ pub fn console_market(setting: Option<&str>, files: &[u32]) -> Market {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::MEDIA;
+    const CAPABILITIES: u64 = caps::AXES | caps::MEDIA | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS;
 
     fn info() -> Info {
         Info {
@@ -256,7 +257,7 @@ impl Core for Machine {
     fn machine_info(&self) -> MachineInfo {
         let which = bios(self.market).which;
         let (_, width, height) = (if self.pal() { crate::clock::PAL } else { crate::clock::NTSC }).picture;
-        let processor = |id: u32, name: &str, pc_bits: u32| Processor { id, name: name.into(), pc_bits, registers: Vec::new(), code_space: None };
+        let processor = |id: u32, name: &str, pc_bits: u32, registers, space| Processor { id, name: name.into(), pc_bits, registers, code_space: Some(space) };
         MachineInfo {
             system: "ps2".into(),
             region: Some(if self.pal() { Region::Pal } else { Region::Ntsc }),
@@ -264,8 +265,19 @@ impl Core for Machine {
             video: Video { base_width: width, base_height: height, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p, controller: self.ports[p as usize].map(str::to_string) }).collect(),
-            spaces: MEMORIES.iter().map(|&(id, name, _, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
-            processors: vec![processor(0, "R5900", 32), processor(1, "IOP", 32), processor(2, "VU0", 12), processor(3, "VU1", 14)],
+            spaces: MEMORIES
+                .iter()
+                .map(|&(id, name, _, read_only)| {
+                    let watched = id == RAM_ID || id == debugger::SCRATCH_ID;
+                    Space { read_only, cheats: id == RAM_ID, reports_stores: watched, reports_loads: watched, ..Space::new(id, name) }
+                })
+                .collect(),
+            processors: vec![
+                processor(debugger::EE, "R5900", 32, debugger::ee_registers(), RAM_ID),
+                processor(debugger::IOP, "IOP", 32, debugger::iop_registers(), debugger::IOPRAM_ID),
+                processor(debugger::VU0, "VU0", 12, debugger::vu_registers(0), debugger::VU0MICRO_ID),
+                processor(debugger::VU1, "VU1", 14, debugger::vu_registers(1), debugger::VU1MICRO_ID),
+            ],
             battery: (0..2).map(|n| Battery::removable(CARD_FILES[n], CARD_SUFFIXES[n])).chain(std::iter::once(nvm_battery(market_index(self.market)))).collect(),
             state: StateFormat { format: "SPH2".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_STATE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
@@ -279,11 +291,50 @@ impl Core for Machine {
     /// picture's own size (Sapphire_Native.md §38.2).
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         let before = self.sys.board.pcrtc.picture.rgba.len();
+        self.disarm();
         Machine::advance(self);
         if self.sys.board.pcrtc.picture.rgba.len() != before {
             emit(event::STATE_SIZE, emusen_native::ffi::StateMachine::state_size(self) as i64, 0);
         }
         Ok(())
+    }
+
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.debug.hooks)
+    }
+
+    /// The EE's breakpoints are the shared hooks'; the IOP's and the VUs' go to the probes beside them.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        if Machine::debug_breakpoints(self, processor, pairs) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
+    }
+
+    /// A frame through the observed loop; at its end, the state's length told when the picture's size changed.
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        let before = self.sys.board.pcrtc.picture.rgba.len();
+        let why = self.run_frame_debug(flags);
+        if why == 0 && self.sys.board.pcrtc.picture.rgba.len() != before {
+            emit(event::STATE_SIZE, emusen_native::ffi::StateMachine::state_size(self) as i64, 0);
+        }
+        Ok(why)
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug.stopped
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        Machine::debug_pc(self, processor)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
+    }
+
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor > debugger::VU1 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn set_options(&mut self, flags: u32) {
@@ -505,7 +556,7 @@ impl Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; axes, media);
+emusen_native::core_exports!(Machine; axes, media, debug, debug_stack, debug_registers, debug_disassemble, debug_reads);
 
 #[cfg(test)]
 mod tests {

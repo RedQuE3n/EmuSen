@@ -1,6 +1,6 @@
 # Sapphire (Sony PlayStation 2)
 
-The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19, S30 and S10 on 2026-10-25. The core will live
+The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19, S30, S10 and S31 on 2026-10-25. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
 - **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
@@ -99,6 +99,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and the EEPROM's contents kept apart, the listing pinned against its file; loading on a running console, mid-frame;
   states equal at five frames of the OSDSYS boot on both 0230 images and at four instants of 30 of the project's programs;
   P14 measured, a capture 6.5 ms and a restore 4.3 ms, the default rewind budget holding seconds;
+  and stage S31 (2026-10-25, §41): the debugger over the core ABI's debug interface with four processors, the R5900's
+  128-bit registers as their halves, listings from `emusen-mips`'s R5900, R3000A and VU tables, the EE observed around
+  its untouched step and the IOP and the VUs stopped by probes only where the board brings them to time, every stop
+  resuming exactly; every table armed, and every processor stopped at every step, equal to the plain run on fourteen of
+  the project's programs and on the OSDSYS boot, digests only;
   and stage S25, part B (2026-10-25, §30.15-§30.24): the start without a disc (G10), the console with its tray closed and
   empty through the core ABI's empty start and `MEDIA`, refused by the host in the firmware entry's words with no BIOS;
   the Memory Cards tab (G11) with `ps2.card` read by `emusen-ps2-card` in the kilobytes the browser shows; the player's

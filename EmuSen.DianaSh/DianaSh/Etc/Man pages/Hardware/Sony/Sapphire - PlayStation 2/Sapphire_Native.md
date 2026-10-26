@@ -6085,6 +6085,10 @@ replacement**.
 pictures and the hardware's own counts, and read ps2tek's BIOS chapter entry for SIO2MAN; **that writer is exposed too
 and will never write the open replacement**.
 
+*Added 2026-10-25 at S31 (§41.11):* the writer of S31, the debugger, ran the player's BIOS on Sapphire to compare its
+digests with the debugger armed and is a writer of a player's-BIOS stage; that writer is likewise exposed and will never
+write the open replacement.
+
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 
 *Numbered §36 and its disputes from D-360, S25's part B writing in §30 from D-380 beside it.*
@@ -7142,3 +7146,225 @@ named for the dispute (the disk type, ReadDvd's block, sector addressing past th
 `EmuSen_Disc.md` §14; `Sapphire_Disputes.md` D-120 to D-128 and D-480 to D-483. ps2tek at `1c91660`: "CDVD I/O Ports",
 "CDVD N Commands", "CDVD Reads and Seeks". ECMA-119 §8.4 and §9.4. PCSX2 2.8.2 run as a black box. No emulator, SDK or
 loader source; no firmware opened, hashed, listed or traced.
+
+## 41. Stage S31, the debugger (2026-10-25)
+
+*Numbered §41 and its disputes from D-500, since S28 (§39, from D-460), the IOP-tests step (§40, from D-480) and the
+D-383 step (§30, from D-440) were begun beside it. The stage raised no dispute: a debugger reads the machine and is the
+project's own design, and nothing in it is a reading of the hardware.*
+
+### 41.1 In one paragraph
+
+The plan's §7 row S31, on the tester's go of 2026-10-25. **Sapphire claims `DEBUG`, `DEBUG_STACK`, `DEBUG_REGISTERS`,
+`DEBUG_DISASSEMBLE` and `DEBUG_READS`** (`EmuSen_CoreAPI.md` §6.14), with the plan's four processors (§4.7): the R5900
+(processor 0), the IOP (1), VU0 (2) and VU1 (3). Machine info lists every register at its width, a 128-bit general
+register as its two 64-bit halves, since the core ABI's register value is 64 bits (§41.3); each processor names the
+space its code is listed from. Listings come from `emusen-mips`'s tables: the R5900's, the R3000A's, and the VUs' upper and
+lower tables in micro mode. The EE is observed by a frame of its own (`debugger.rs`) around its interpreter's step, which
+is untouched: the shared hooks are asked before each instruction, and what the instruction did (its stores and loads,
+a call, a return, an exception) is read after it (`ee/observe.rs`). The IOP and the VUs carry a probe beside their units
+while the debugger fits one, and the probe stops its processor in front of a breakpoint only where the board brings it
+to time at an EE instruction's end, which makes every stop and resume exact (§41.4). **The gate is met**: each claim a
+test (§41.7); every table armed, and every processor stopped in front of each of its steps and resumed, give the plain
+run's picture, sound and state after every frame on fourteen of the project's programs; and on the OSDSYS boot of the
+Americas 0230 image every table armed and the debugger attached unarmed gave the plain run's pictures and sound over 760
+frames and its state at all 13 comparisons, digests only (§41.8). Attached and unarmed, the debugger's frame costs 16 per
+cent over the plain frame on the boot and 26 per cent on a dense EE loop; the plain frame itself is unchanged (§41.8).
+
+### 41.2 The four processors
+
+| Id | Processor | `pc_bits` | Code space | Registers | Breakpoints and stops |
+|---|---|---|---|---|---|
+| 0 | `R5900` | 32 | `RAM` | 152 (§41.3) | the shared hooks: execution, `EACH`, the depth targets, data and read data breakpoints, interrupts |
+| 1 | `IOP` | 32 | `IOPRAM` | 45, `blackmoon-r3000`'s `DEBUG_REGISTERS` | its probe: execution |
+| 2 | `VU0` | 12 | `VU0MICRO` | 157 (§41.3) | its probe: execution, by byte address in micro memory |
+| 3 | `VU1` | 14 | `VU1MICRO` | 157 | the same |
+
+A VU's address is its pair's byte address in its micro memory (the pair index times eight), so that a breakpoint, a
+coverage bit and a listing all name the same number and the host's `code_space` lists from it. VU0 in macro mode is the
+EE's COP2 instructions and belongs to processor 0; processor 2 is VU0's micro mode. Coverage is kept over 24 bits of
+address for the EE and the IOP, the host registry's width (`CoverageRegistry`), so that kseg0's, kseg1's and kuseg's
+mirrors share a bit as on Diamond (`Diamond_Debugger.md`), and over 12 and 14 bits for the VUs, their memories' sizes.
+
+### 41.3 Registers at their widths, and the 128-bit general registers
+
+The core ABI carries each register as one `int64_t` (`emusen_core_debug_registers`), and the host takes one value for
+each register machine info lists (`CoreDebugTarget`). The plan's §4.3 and §10 left open whether a 128-bit value fits;
+read at this stage, it does not. Three forms were weighed:
+
+1. **The halves, as registers of their own** (built): `at` is bits 63..0 and `at.hi` bits 127..64, for each of the 32
+   general registers; HI and LO the same, their upper halves being pipeline 1's registers and named as the manual names
+   them, `hi1` and `lo1`. Every value is at most 64 bits, so every host and the kit read it unchanged.
+2. **A minor of the ABI** in which a register whose `bits` exceeds 64 takes ⌈bits/64⌉ consecutive values, low first, with
+   the host told by `host_abi_version` (a core lists halves to an older host). It would show `at` as one row of 128 bits,
+   at the cost of a change to the header, `emusen-native`, the C# host, the baseline and the kit (§41.10 Q1).
+3. **The words** (four 32-bit rows a register): the MMI's lanes, but four times the rows, and not the register's width.
+
+The EE's list, in order: the 32 registers each with its `.hi`, then `pc`, `hi`, `hi1`, `lo`, `lo1`, `sa`; COP0's 32
+registers by `emusen-mips`' `r5900::COP0_NAMES` (a reserved one `$n`); the debug registers BPC, IAB, IABM, DAB, DABM,
+DVB and DVBM; PCCR, PCR0 and PCR1; COP1's `f0` to `f31`, its accumulator `ACC` and `FCR31`: 152. A VU's, in order: each
+vector register's four fields `vfN.x` to `vfN.w` at 32 bits (a field is the VU's own unit of a register, VU User's Manual
+§3.1.1), `acc.x` to `acc.w`, `vi0` to `vi15` at 16 bits, `I`, `Q`, `P` at 32, `R` at 23, `status` at 12, `mac` at 16,
+`clip` at 24, `TPC` at 16 and `PC` at the memory's width: 157. Reading changes nothing.
+
+### 41.4 The frame, breakpoints and stepping
+
+**The EE.** `Machine::run_frame_debug` runs the frame as `Machine::advance` runs it, step for step: the fast boot's check
+and entry while a program waits, then the EE in batches of 1,024 instructions between checks of the PCRTC's field, the
+batch's position kept across a stop, since the plain frame ends only at a batch's end. Before each instruction the shared
+hooks are asked (`Hooks::stop_before`), and with read data breakpoints armed the bytes the instruction would load are
+found from the word and the base register (`Ee::reach`) and offered to `note_read_ahead`; a stop leaves the instruction
+unrun and the frame open, and `run::UNCHECKED` runs it unasked. After the step, the exception counts the core keeps for
+the hardware's reports tell whether an exception or an interrupt was taken in the instruction's place (noted as a call
+of kind `IRQ`, `BRK` for SYSCALL and BREAK, `NMI` for a level 2 exception, abandoning a call whose delay slot it
+interrupted); otherwise JAL, JALR and a taken BLTZAL or BGEZAL (and their likely forms) are calls, `jr ra` a return once
+its delay slot has run, ERET a return. Nothing of the interpreter changes: what it did is read from what it left.
+
+**The IOP and the VUs.** Each carries a `debugger::Probe` while the debugger fits one (at a frame's start, for a
+processor with breakpoints or coverage; the plain frame removes them): the processor's breakpoints and coverage, where
+it stopped, and whether that step is to run unasked. The IOP's is asked through `blackmoon-r3000`'s observer
+(`step_observed`), one instruction at a time while fitted; a VU's by `Pipe::step` before a pair runs, after its timing
+has said the pair is due. **A probe stops its processor only where the board brings it to time at an EE instruction's
+end** (`Iop::catch_up`, `Vpu::catch_up`, called from `Board::run_to`'s tail), and nowhere else. Elsewhere — an EE
+instruction that waits on VU0 (a macro instruction after VCALLMS), reads a unit (CFC2, BC2F) or a VIF that waits for a
+unit, or the IOP brought to a DMA event — the processor is needed now, so it runs on, and a breakpoint met there is noted
+as passed: the frame stops after that EE instruction with the processor named, standing past the address. A stopped
+processor is behind the board; when resumed, the board is brought again to its own time (`Board::run_to` at `now`), which
+replays the tail of the EE instruction's run in the board's own order, and the EE's lines are set from it as
+`System::step` sets them. A run the IOP's probe stopped resumes straight to the horizon it had, without the unit service
+the plain run did not make there (the first form, which serviced the units again on every resume, left IOP RAM and every
+register equal and the bus's sync time eight cycles later, found by the gate, §41.7).
+
+**Why only there.** The first form stopped the VUs and the IOP anywhere. Stepped through VU0 on `s13-integer`, the frame
+went on with the EE's VNOP after VCALLMS finding VU0 held at its first pair, where the plain run had run the whole
+microprogram inside that instruction: the EE's timing, VU0's registers and every clock after differed (§41.9, fault 4).
+A stop inside an EE instruction cannot be resumed as though the instruction had not been interrupted, so the probe does
+not stop there.
+
+**A held EE.** With no BIOS, or once the interpreter has stopped at an instruction it does not implement, the EE runs
+nothing and the board steps alone (`Machine::advance`'s idle step). The frame then shows the EE standing in front of its
+instruction: the hooks are asked before each step of the board, so a breakpoint at the reset vector stops there and
+`EACH` stops before each step, which moves the board's time and nothing of the EE. The kit's C15, which runs Sapphire on
+its synthetic program without a BIOS, holds the core to this (§41.7).
+
+**Stepping.** The EE steps by `EACH` and by the depth targets (step over, step out). Another processor steps by a
+breakpoint over every address: each `UNCHECKED` call runs one instruction or pair and stops in front of the next, until
+that processor reaches the board's time, and the EE then runs on.
+
+### 41.5 Stores, loads and the watches
+
+The EE's loads and stores are the accesses the watches see (as on Diamond, not DMA's, a VU's or the IOP's): each byte, in
+`RAM` or `SCRATCH` at the offset it lands at, by the EE's own placing with no exception raised and no event counted
+(`Ee::place`), with the value as the core sees it, a valid data cache line over RDRAM (`Ee::peek_byte`); LQ and SQ as
+sixteen bytes at the quadword below, LWL, LWR, LDL, LDR and their stores as the bytes of the unit they reach, LQC2,
+SQC2, LWC1 and SWC1 included, CACHE and PREF not. A store is logged after it lands, a load after it reads; a read data
+breakpoint stops in front of the load with nothing of it run. Machine info flags `RAM` and `SCRATCH` with
+`reports_stores` and `reports_loads`. A load that faults may stop and then not read, as on Diamond.
+
+### 41.6 Coverage, the profile and the call stack
+
+Coverage marks each address a processor ran, the EE's through the hooks before its step, the others' through their probes
+after the EE's step; the profile charges the EE's instructions to the innermost call. The call stack follows §41.4's calls
+and returns; `DEBUG_STACK` pushes the host's registry down as the shared hooks take it.
+
+### 41.7 The gate (measured 2026-10-25)
+
+| Claim | Test | Result |
+|---|---|---|
+| Registers read back as set, at their widths | `debugger::tests::the_registers_read_back_as_set`: both halves of a 128-bit register, HI1 and LO1, SA, COP0, the debug registers, COP1 and ACC; the IOP's; a VU's fields, integers and specials | passes |
+| Each processor's listing against its table | `each_processors_listing_is_its_table`: every word of an EE program against `r5900::decode` and by hand, a JAL's reference; the IOP's by hand; VU pairs as `upper \| lower` by hand, a BAL's reference; a space a processor runs nothing from refused | passes |
+| Each breakpoint kind at its address and only there | `an_ee_breakpoint_fires_at_its_address_and_only_there` (in front, nothing run, asked again the same stop, one never reached never stops); `the_watches_see_the_ees_stores_and_loads` (watches in RAM and the scratchpad, SQ's sixteen bytes, LQ's reads, a data breakpoint after the SB, a read data breakpoint in front of the LW); `the_iop_and_vu1_stop_at_their_breakpoints_and_step` | pass |
+| Single steps | `each_steps_the_ee_one_instruction_at_a_time` (through a JAL, its slot and the routine); `the_call_stack_follows_jal_and_jr` (the depth target steps over); the IOP and VU1 by a breakpoint over every address | pass |
+| Coverage counts on a known program | `coverage_records_what_each_processor_ran`: the bits of the EE's loop and routine, the IOP's loop and VU1's three pairs, and the steps counted equal to the passes each processor's counter made, within one pass | passes |
+| A state loaded at a stop | `a_state_loaded_at_a_stop_starts_a_whole_frame` | passes |
+| A held EE | `a_held_ee_stands_in_front_of_its_reset_vector`; the kit's C15 through `SapphireTests` (a breakpoint at the next instruction, eight steps under `EACH`, the read range kinds, every table armed against the plain run) | pass |
+| Every table armed gives the plain run's digests | `tests/debugger.rs`: fourteen programs (`s11-chain`, the first IPU program, `s13-integer`, the second S13 program, `s14`'s microprogram and unpack, `s15-paths`, `s17`'s triangles, `s20-timing`, `s26`'s voices on the IOP, `s22-sif1`, `-sif0`, `-sif2` with the IOP released at a frame's start), 3 or 4 frames each, every table armed (calls, stores, loads, interrupts, the profile, four processors' coverage, a breakpoint on each processor at no step's address, watches over RAM and the scratchpad, data and read data breakpoints) | picture, sound and state equal after every frame |
+| … and every processor stopped at every step | the same programs but the IPU's, `EACH` on the EE and a breakpoint over every address on the IOP, VU0 and VU1, each stop resumed | equal after every frame, over 100,000 stops each |
+
+The crate's whole suite passed with the stage (375 tests in 26 binaries, measured 2026-10-25; 381 in 27 on the tree rebased onto D-383's step and §40, 2026-10-26), `blackmoon-r3000`'s suite and
+Diamond's debugger tests with the static reference moved (§41.10), and WiseMan's `SapphireTests`, `SapphireConsoleTests`,
+`SapphireRewindTests`, `SapphireRunnerTests` and `DiamondDebugTests` (30 tests), the kit's C1 to C24 among them.
+
+### 41.8 The OSDSYS boot, digests only, and the cost (measured 2026-10-25)
+
+`examples/s31.rs bios` starts three consoles on the player's BIOS, handed by path: one plain, one through the debugger's
+frame with nothing armed, one with every table armed as in §41.7, each stop resumed at once and every log and coverage map
+cleared unread. Only equality and times are printed.
+
+| Image | Frames | Attached, unarmed | Every table armed |
+|---|---|---|---|
+| Americas `0230a` | 760 (past the language screen at 690) | pictures 0 of 760 differing, sound 0, states 0 of 13 | pictures 0, sound 0, states 0 of 13 |
+| The same, on the tree rebased onto D-383's step and §40 (2026-10-26) | 760 | pictures 0, sound 0, states 0 of 13 | pictures 0, sound 0, states 0 of 13; 625.9, 720.2 (+15.1 %) and 891.8 ms (+42.5 %) a frame |
+
+| Workload | Plain frame | Attached, unarmed | Every table armed |
+|---|---|---|---|
+| The OSDSYS boot, 760 frames, the three consoles interleaved frame by frame | 705.9 ms | 820.3 ms (+16.2 %) | 1,005.6 ms (+42.5 %) |
+| A dense EE loop of loads, stores and calls (`s31 cost`), 120 frames | 397.7 ms | 499.0 ms (+25.5 %) | 945.9 ms (+137.9 %) |
+
+The boot's frames were timed while the crate's tests ran beside them, so the absolute times are high; the three consoles
+share the load frame by frame, so the ratios stand. The unarmed cost is the frame's own loop (a check of the hooks and
+the probes after every EE instruction, the board's catch-up flags); a host runs the plain frame while nothing is armed,
+so a player pays it only with a table armed. **The plain frame**: S31 adds to it a test of the IOP's probe in each run of
+the IOP, a test of a VU's probe before each pair, and the catch-up flags. Measured against the commit S31 began from
+(`67435c5d8`, built apart under `~/.cache/emusen/` and removed after), plain frames alone, the two builds run in turn twice
+on a quiet machine:
+
+| Plain frames | Before S31 | With S31 |
+|---|---|---|
+| The OSDSYS boot's first 300 frames | 905.2 and 890.7 ms (mean 898.0) | 876.0 and 889.6 ms (mean 882.8) |
+| The dense EE loop, 30 frames | 320.6 and 335.8 ms (mean 328.2) | 317.4 and 324.3 ms (mean 320.8) |
+
+The plain frame is unchanged within the runs' spread.
+
+### 41.9 Seeded faults (2026-10-25)
+
+| Fault | Caught by |
+|---|---|
+| 1. A 128-bit register's high half dropped (`.hi` read as zero) | `the_registers_read_back_as_set` |
+| 2. An EE breakpoint firing one instruction late (the stop taken after the instruction ran) | `an_ee_breakpoint_fires_at_its_address_and_only_there` |
+| 3. VU lower words listed from the upper table | `each_processors_listing_is_its_table` |
+| 4. A VU's probe stopping it anywhere, not only at the board's catch-up | `vu_microprograms_and_vif_are_unchanged_by_the_debugger` (`s13-integer`, stepped: the EE's timing, VU0's registers and every clock after differ) |
+| 5. The IOP's probe stopping it anywhere | **survived**: on every program of the gate the IOP's lag never reaches the EE's side, the SIF's traffic waiting on its FIFOs' flow control. The rule stands on the argument of §41.4; a program that makes the IOP's lag visible at a DMA event is owed (§41.10 Q3) |
+
+### 41.10 Shared code, and questions for the tester
+
+- **`blackmoon_r3000::reference`**: the static reference of an R3000A word (a JAL's or BxxZAL's target as a call, a load
+  or store based on `zero` as a read or a write), moved from Diamond's `debugger.rs`, which now re-exports it, so that the
+  IOP's listing and Diamond's share one owner. No new dependency: both cores already depend on the crate.
+- **The probe hooks** are additive: `Micro::pc` and `Micro::probe` with defaults, a probe field beside `Pipe` and `Iop`,
+  `Vpu::catch_up` and `Iop::catch_up` in `Board::run_to`'s tail, a debugger field in `Machine`, and the frame closed when a
+  state loads. S30's state is untouched: no probe, flag or debugger field is in `SPH2`.
+
+1. **Q1 [decision], 128-bit registers in `DEBUG_REGISTERS`.** *Recommended*: keep the halves (§41.3, form 1), which every
+   host reads today; propose the minor (form 2) only when a view needs a register of 128 bits in one row.
+2. **Q2 [decision], breakpoints of the IOP and the VUs met where they cannot stop.** Such a stop comes after the EE
+   instruction, the processor past the address (§41.4). *Recommended*: keep it, since it keeps every stop exact; the
+   alternative, stopping in place, would let a resumed run differ from the plain one.
+3. **Q3 [routine], a program for fault 5.** *Recommended*: an IOP program polling a SIF register while the EE's DMA sends it
+   packets at a known instant, added to the gate at the IOP-tests step.
+4. **Q4 [routine], the watches.** The EE's loads and stores only. *Recommended*: keep; the IOP's, in `IOPRAM`, are an
+   extension for when a game's IOP module is debugged (S28 on).
+
+### 41.11 What was read for this stage
+
+`Sapphire_Plan.md` §1.4, §4.3, §4.7, §5.9, §7 (S31), §10; this page's §2.6, §35, §36 and §38; `EmuSen_CoreAPI.md` §6.14,
+§6.14.1, §6.33, §6.38; `emusen-native`'s `debug.rs` and `core/exports.rs`; the project's own debuggers: Diamond's
+`debugger.rs`, VenusRT's `debugger.rs` (its probes), MarsRT's hooks; `EmuSen_Mips.md` for the R5900, R3000 and VU tables
+and `emusen-mips`' `r5900.rs` and `vu.rs`; `blackmoon-r3000`'s observer; the C# host's `CoreDebugTarget` and
+`CoverageRegistry` for the register value's width and coverage's. No hardware document beyond the VU User's Manual §3.1
+for the registers' widths. No emulator, SDK or loader source and no ps2autotests source. The BIOS image was handed by path
+to Sapphire alone, never opened, hashed, listed or analysed; on its boot the debugger's tables were armed and cleared
+unread, and only equality and times were printed, never an address, a value, a program counter or an instruction. Every
+test that shows, steps or lists code runs the project's own programs.
+
+**Exposure** (§1.4): the writer of this stage ran the player's BIOS on Sapphire and compared its pictures, sound and
+states, and is a writer of a player's-BIOS stage; **this writer is exposed and will never write the open replacement**.
+
+### 41.12 What this stage does not cover
+
+- The console-shaped views (the GS's registers, the DMAC's channels, the VIFs) as `units` (`EmuSen_CoreAPI.md` §6.33): an
+  extension, owed to the frontends with S29.
+- `DEBUG_TRANSLATE`: the host lists the EE's code from `RAM` at kuseg's offsets; a translation through the TLB is a
+  later step.
+- DianaSh's commands over Sapphire on the player's BIOS, which WiseMan cannot run without one; the kit's checks of the
+  debug exports run on the synthetic program (`SapphireTests`).

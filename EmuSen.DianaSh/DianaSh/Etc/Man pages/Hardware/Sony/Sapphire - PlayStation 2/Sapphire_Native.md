@@ -8894,7 +8894,7 @@ write priority, the integer unit, the moves, VU1's loads and stores, the flag ch
 compiled; the operations on the format's floats are the interpreter's own functions, called, so the arithmetic is
 `sapphire::float`'s by construction (§5.3). Microprograms are cached by their start and validated against micro memory
 through a count of the times the memory was lent for writing, so that an MPG, an EE store or a state load over a compiled
-program is seen before it runs again. A setting, `vu1`, chooses VU1's tier, the interpreter by default; VU0 stays
+program is seen before it runs again. A setting, `vu1`, chooses VU1's tier, the recompiler by default since the tester's decision of the same day; VU0 stays
 interpreted (S41), its compiled form built and graded by the same tests. **The gate is met** (§45.5): the interpreter
 stepped beside every compiled pair, 320 random microprograms over both pipelines and every float class of S9's set, the
 mechanisms one at a time compared after every cycle, the crate's whole suite under the recompiler, ps2autotests' `vu/*`
@@ -9022,15 +9022,17 @@ microprogram is never described (§45.10).
 ### 45.6 The switch, and what is recommended
 
 `vu1` in Sapphire's settings (*Speed*, `effect: exact`, a choice of `interpreter` and `recompiler`, read when a game is
-loaded), the interpreter by default; `Vpu::set_tier(unit, …)` underneath, with VU0 left on the interpreter by the core.
+loaded), the recompiler by default (below); `Vpu::set_tier(unit, …)` underneath, with VU0 left on the interpreter by the core.
 For measurement and tests the environment names the tier when no setting does: `SAPPHIRE_VU1=recompiler`
 (`SAPPHIRE_VU0` for VU0), `SAPPHIRE_VU_THRESHOLD`, `SAPPHIRE_VU_WAIT=1`, `SAPPHIRE_VU_VERIFY=1`, `SAPPHIRE_VU_C4=1`.
 
-**Recommendation: the recompiler as VU1's default**, as MarsRT's was made on the day its stage landed
-(`Mars_Native.md` §5.8.7), on the strength of the six oracles rather than of hours of play: it is exact, it halves VU1's
-cost a pair, and what it costs is a compiler thread and a few megabytes of code (2.2 MB over Jak and Daxter's 300 frames).
-Its gain in the frame today is within the runs' noise (§45.7), so the case is the next stages', not this one's, and the
-default stays the interpreter until the tester decides (§45.12 Q1).
+**Decided 2026-10-26 by the tester: the recompiler is VU1's default**, the interpreter one setting away, as recommended
+and as MarsRT's was made on the day its stage landed (`Mars_Native.md` §5.8.7), on the strength of the six oracles rather
+than of hours of play: it is exact, it halves VU1's cost a pair, and what it costs is a compiler thread and a few
+megabytes of code (2.2 MB over Jak and Daxter's 300 frames). Its gain in the frame today is within the runs' noise
+(§45.7); the case is the next stages'. Without a setting the core chooses the recompiler (`v1::vu1_recompiler_chosen`),
+and `SAPPHIRE_VU1=interpreter` chooses the interpreter for measurement; a machine made directly (`Machine::new`, the
+tests) stays on the tier the environment names, the interpreter unless it names the recompiler.
 
 ### 45.7 Speed and VU1's share of the frame (measured 2026-10-26)
 
@@ -9110,13 +9112,14 @@ The verifier's positive control (§45.5) is a permanent test.
 
 ### 45.9 The compromises C3 and C4
 
-**C4 is built as a switch, off**: `Settings::c4` (`SAPPHIRE_VU_C4=1`) makes the emitter write a pair's flags at its own
+**C4 is built as a switch, off, and refused** (decided 2026-10-26 by the tester, as §45.12 Q2 recommended): `Settings::c4` (`SAPPHIRE_VU_C4=1`) makes the emitter write a pair's flags at its own
 cycle instead of queueing them for the S stage four cycles on. Its effect, measured: on the transform kernel 3 to 5 per
 cent less time a pair (63.5 against 60.6 ns at the board's granularity) and no state byte different, the kernel reading
 no flag within four pairs; on Jak and Daxter's opening, 300 frames from its state, every picture equal to the
 interpreter's but 46 of the 300 frames' sound and 299 of the 300 states different. Taking it changes bytes a microprogram
-reads (a flag check within four pairs sees the new flags, `c4_writes_the_flags_early_and_parts_from_the_interpreter`), so
-it is the tester's to accept or refuse.
+reads (a flag check within four pairs sees the new flags, `c4_writes_the_flags_early_and_parts_from_the_interpreter`): 46
+of 300 frames' sound and 299 states for 3 to 5 per cent of VU1's 0.41 per cent of the frame. The switch stays, off, so
+that the measurement can be repeated.
 
 **C3 is not built, and priced**: the float operations it would replace are a tenth of a compiled pair's time at the
 board's granularity (the transform kernel against the empty one, §45.7), and VU1 is 0.41 % of Jak and Daxter's frame
@@ -9145,6 +9148,9 @@ and digests, and the verifier counts. The SIF link was not traced.
   (§45.3).
 
 ### 45.12 Questions this stage leaves
+
+*Decided 2026-10-26 by the tester: Q1 and Q2 as recommended (the recompiler the default, C4 refused); Q3 and Q5
+accepted as recommended.*
 
 1. **[decision] VU1's default tier.** *Recommended*: the recompiler, the interpreter one setting away (§45.6); every oracle
    equal, VU1's cost a pair halved, its effect on today's frame within noise.

@@ -4,6 +4,7 @@
 //! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders, §6.40 C24.
 
 pub mod api;
+pub mod bytes;
 mod lender;
 pub mod corpus;
 pub mod digest;
@@ -15,6 +16,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use api::{Lib, Machine};
+use bytes::Bytes;
 use digest::Digests;
 use emusen_galaxia::mapped::Mapped;
 use emusen_native::core::flags::{self, FILE_MEDIA};
@@ -28,10 +30,11 @@ pub struct Options {
     /// The system pack declares the image format self-delimiting: it records its own length or a checksum the core
     /// must verify, so a malformed image must be refused (§12.1, C4).
     pub self_delimiting: bool,
-    pub image: Vec<u8>,
+    /// The image and the files, held once for every case: for a core that claims `BORROW` each machine is lent them (§28.20).
+    pub image: Bytes,
     pub frames: u64,
     pub settings: String,
-    pub files: Vec<(u32, Vec<u8>)>,
+    pub files: Vec<(u32, Bytes)>,
     pub script: Option<Script>,
     /// Where the image and its media files are on disk, where they came from files: C17 maps them as a host does.
     pub on_disk: Option<media::OnDisk>,
@@ -251,11 +254,23 @@ struct Session<'a> {
     settles: u64,
     /// C7's machine that never loads, and its state's size when made, watched after every frame until a STATE_SIZE event.
     size_watch: Option<(api::M, i64)>,
+    /// The core claims `BORROW`, so the session lends its image and media files to each machine it makes (§28.20); C12's host of 1.0 cannot.
+    lends: bool,
 }
 
 impl<'a> Session<'a> {
+    /// `create`'s flags for the session's image: lent where the session lends.
+    fn lent(&self) -> u32 {
+        if self.lends { flags::CREATE_LENT } else { 0 }
+    }
+
+    /// `media_insert`'s flags for the session's image: lent where the session lends.
+    fn media_lent(&self) -> u32 {
+        if self.lends { flags::MEDIA_LENT } else { 0 }
+    }
+
     fn machine(&mut self, settings: &str) -> Result<Machine<'a>, String> {
-        match self.lib.create(&self.opts.image, settings, &self.opts.files, 1) {
+        match self.lib.create_from(&self.opts.image, settings, &api::slices(&self.opts.files), 1, self.lent()) {
             Ok(m) => {
                 self.settles = picture_settles(&m);
                 Ok(m)
@@ -447,7 +462,7 @@ fn session<'a>(lib: &'a Lib, opts: &'a Options) -> Session<'a> {
         .filter_map(|b| b.get("bit").and_then(Value::as_i64).map(|v| v as u32))
         .collect();
     let script = opts.script.clone().unwrap_or_else(|| Script::default_for(&bits));
-    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None }
+    Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None, lends: lib.claims(caps::BORROW) }
 }
 
 /// Runs every case on the library at `path`.
@@ -680,12 +695,13 @@ fn defaults(lib: &Lib) -> String {
 pub const MALFORMED_DEADLINE_SECONDS: u64 = 60;
 
 /// A malformed image the core accepted, run on a thread of its own against a deadline, so a hang is reported and not waited on.
-fn run_accepted(path: &Path, image: Vec<u8>, files: Vec<(u32, Vec<u8>)>, frames: u64) -> Result<Outcome, String> {
+fn run_accepted(path: &Path, image: Bytes, files: Vec<(u32, Bytes)>, frames: u64, flags: u32) -> Result<Outcome, String> {
     // Leaked on purpose: a hung machine's thread keeps the library, which a host never unloads anyway (§6.16).
     let lib: &'static Lib = Box::leak(Box::new(Lib::open(path)?));
     let (tx, rx) = std::sync::mpsc::channel();
+    // The thread holds the bytes it lends, so a hung machine's loan never ends before the machine.
     std::thread::spawn(move || {
-        let outcome = match lib.create(&image, "", &files, 1) {
+        let outcome = match lib.create_from(&image, "", &api::slices(&files), 1, flags) {
             Err((status, text)) => Outcome::Refused { status, text },
             Ok(m) => {
                 let mut stopped = None;
@@ -724,9 +740,9 @@ fn firmware_optional(s: &mut Session<'_>, c: &mut Check) {
         }
     }
     // An image set's companions are the image's, not firmware, so they stay (EmuSen_CoreAPI.md §6.23).
-    let companions: Vec<(u32, Vec<u8>)> = s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect();
+    let companions: Vec<(u32, Bytes)> = s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect();
     if list.iter().all(|f| matches!(f.get("required"), Some(Value::Bool(false)))) {
-        match s.lib.create(&image, "", &companions, 1) {
+        match s.lib.create_from(&image, "", &api::slices(&companions), 1, s.lent()) {
             Ok(_) => c.note(format!("every firmware entry optional ({}): created with no firmware files", list.len())),
             Err((status, text)) => c.that(false, || format!("every firmware entry is optional, yet create with no firmware files refused: {status}, {text:?}")),
         }
@@ -762,15 +778,16 @@ fn c4(s: &mut Session<'_>, path: &Path, parts: C4) -> Case {
         x ^= x << 5;
         *b = x as u8;
     }
-    let half = s.opts.image[..s.opts.image.len() / 2].to_vec();
+    // The half image is a view of the session's bytes, lent as they are, not a copy (§28.20).
+    let half = s.opts.image.prefix(s.opts.image.len() / 2);
     let frames = s.opts.frames.min(300);
-    let malformed = [(parts.empty_and_garbage, "an empty image", Vec::new()), (parts.empty_and_garbage, "a garbage image", garbage), (parts.half, "the image truncated to half", half)];
+    let malformed = [(parts.empty_and_garbage, "an empty image", Bytes::default()), (parts.empty_and_garbage, "a garbage image", garbage.into()), (parts.half, "the image truncated to half", half)];
     for (_, what, image) in malformed.into_iter().filter(|m| m.0) {
-        let outcome = match s.lib.create(&image, "", &s.opts.files, 1) {
+        let outcome = match s.lib.create_from(&image, "", &api::slices(&s.opts.files), 1, s.lent()) {
             Err((status, text)) => Outcome::Refused { status, text },
             Ok(m) => {
                 drop(m);
-                match run_accepted(path, image, s.opts.files.clone(), frames) {
+                match run_accepted(path, image, s.opts.files.clone(), frames, s.lent()) {
                     Ok(o) => o,
                     Err(e) => {
                         c.that(false, || format!("{what}: {e}"));
@@ -889,7 +906,7 @@ fn c5(s: &mut Session<'_>) -> Case {
     {
         c.that(false, || e);
     }
-    match s.lib.create(&s.opts.image, &s.opts.settings, &s.opts.files, 1 | 1 << 40) {
+    match s.lib.create_from(&s.opts.image, &s.opts.settings, &api::slices(&s.opts.files), 1 | 1 << 40, s.lent()) {
         Ok(m) => c.that(m.frame_info().map(|fi| fi.format == 0).unwrap_or(false), || "with an unknown pixel format offered, the picture is not RGBA8888".to_owned()),
         Err((code, _)) => c.that(false, || format!("create refused an unknown pixel-format bit with {code}")),
     }
@@ -1051,11 +1068,14 @@ fn c8(s: &mut Session<'_>) -> Case {
         let b1 = s.play(&b, 0, half, false)?.digests;
         let b2 = s.play(&b, half, n - half, false)?.digests;
         c.that((a1, a2, end) == (b1, b2, s.state_digest(&b)?), || format!("two machines fed alike differ: {a1:?} {a2:?} against {b1:?} {b2:?}"));
+        // One machine at a time from here, so that a host that cannot lend holds one copy of the image, not three.
+        drop(b);
         let d = s.machine(&settings)?;
         c.that(d.load(&mid) == 0, || "the state at the middle does not load".to_owned());
         let settled = settle_bound(s, n - half, c);
         let d2 = s.play(&d, half, n - half, false)?.settled;
         c.that(d2 == a2_settled && s.state_digest(&d)? == end, || format!("across a save and load at frame {half} the run differs: {d2:?} against {a2_settled:?}"));
+        drop(d);
         let neutral = info.and_then(|t| parse(&t)).and_then(|v| v.get("skip_rendering_state_neutral").cloned()) == Some(Value::Bool(true));
         if neutral {
             let e = s.machine(&settings)?;
@@ -1087,13 +1107,13 @@ fn c10(s: &mut Session<'_>) -> Case {
             return c.done("C10", "isolation");
         }
     };
-    let (lib, opts, script) = (s.lib, s.opts, s.script.clone());
+    let (lib, opts, script, lends) = (s.lib, s.opts, s.script.clone(), s.lends);
     let results: Vec<Result<(Digests, u64), String>> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..2)
             .map(|i| {
                 let (settings, script) = (settings.clone(), script.clone());
                 scope.spawn(move || -> Result<(Digests, u64), String> {
-                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None };
+                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false, first: None, settles: 0, size_watch: None, lends };
                     let m = own.machine(&settings)?;
                     let t = own.play(&m, 0, n, false)?;
                     let d = own.state_digest(&m)?;
@@ -1266,8 +1286,11 @@ fn c9(s: &mut Session<'_>) -> Case {
 
 fn c12(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
+    let lends = s.lends;
     for (minor, pad, what) in [(0u32, 0usize, "a host of minor 0 with version 1.0's struct sizes, its create params 88 bytes"), (99, 32, "a host of minor 99 whose structs are 32 bytes longer")] {
         s.lib.set_host(minor, pad);
+        // A host of 1.0 has no flags to lend with, so its machines copy the image as such a host's do.
+        s.lends = lends && minor >= 3;
         let before = s.lib.canaries_broken.load(std::sync::atomic::Ordering::Relaxed);
         let cases = [c6(s), c7(s), c8(s)];
         let damaged = s.lib.canaries_broken.load(std::sync::atomic::Ordering::Relaxed) - before;
@@ -1280,6 +1303,7 @@ fn c12(s: &mut Session<'_>) -> Case {
         }
     }
     s.lib.set_host(0, 0);
+    s.lends = lends;
     c.done("C12", "skew")
 }
 
@@ -1417,7 +1441,7 @@ fn c14(s: &mut Session<'_>) -> Case {
             c.that(listed.iter().all(|l| l.0 != which || l.2 == kind), || format!("the machine's battery file {which} is of kind {kind:?}, and core info's list for system {system} gives it another"));
         }
         let every: Vec<(u32, &[u8])> = s.opts.files.iter().filter(|f| !listed.iter().any(|l| l.0 == f.0)).map(|f| (f.0, &f.1[..])).chain(listed.iter().map(|l| (l.0, &[][..]))).collect();
-        if let Err((code, text)) = s.lib.create_from(&s.opts.image, &s.opts.settings, &every, 1, 0) {
+        if let Err((code, text)) = s.lib.create_from(&s.opts.image, &s.opts.settings, &every, 1, s.lent()) {
             s.statuses.insert(code);
             c.that(false, || format!("every battery file core info lists, passed empty at create, was refused: status {code} ({text})"));
         }
@@ -1665,48 +1689,49 @@ fn arm(m: &Machine<'_>) {
 fn c16(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let settings = s.opts.settings.clone();
-    let (image, media): (Vec<u8>, Vec<(u32, Vec<u8>)>) = (s.opts.image.clone(), s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect());
+    let (image, media): (Bytes, Vec<(u32, Bytes)>) = (s.opts.image.clone(), s.opts.files.iter().filter(|f| f.0 >= emusen_native::core::flags::FILE_MEDIA).cloned().collect());
+    let lent = s.media_lent();
     let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
         let m = s.machine(&settings)?;
         let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
         let listed = drives(&m);
         if listed.is_empty() {
-            return c16_no_drive(s, c, &m, &image, &media);
+            return c16_no_drive(s, c, &m, &image, &media, lent);
         }
         let drive = listed.first().and_then(|d| d.get("drive")).and_then(Value::as_i64).unwrap_or(0) as u32;
         let lid = |m: &Machine<'_>| drives(m).iter().find(|d| d.get("drive").and_then(Value::as_i64) == Some(drive as i64)).and_then(|d| d.get("lid").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
         let loaded = listed.first().and_then(|d| d.get("loaded")) == Some(&Value::Bool(true));
         s.play(&m, 0, 30, false)?;
         if !loaded {
-            let r = m.media_insert(drive, None, &[], 0);
+            let r = m.media_insert_from(drive, None, &[], 0);
             c.that(r == status::LID_CLOSED, || format!("an insert with the lid closed answered {r}, not EMUSEN_LID_CLOSED"));
             c.that(m.media_lid(drive, true) == 0 && lid(&m) == "open", || "the lid did not open".to_owned());
-            c.that(m.media_insert(drive, None, &[], 0) == 0, || "the empty drive was not emptied again".to_owned());
+            c.that(m.media_insert_from(drive, None, &[], 0) == 0, || "the empty drive was not emptied again".to_owned());
             c.that(m.media_lid(drive, false) == 0 && lid(&m) == "closed", || "the lid did not close".to_owned());
             s.play(&m, 30, 60, false)?;
             c.note(format!("drive {drive} is empty for this image, which is no disc: the lid and an empty insert only"));
             return Ok(());
         }
-        let r = m.media_insert(drive, Some(&image), &media, 0);
+        let r = m.media_insert(drive, Some(&image), &media, lent);
         c.that(r == status::LID_CLOSED, || format!("an insert with the lid closed answered {r}, not EMUSEN_LID_CLOSED"));
         let r = m.media_lid(drive, true);
         c.that(r == 0 && lid(&m) == "open", || format!("opening the lid answered {r}, machine info's lid {:?}", lid(&m)));
         s.play(&m, 30, 30, false)?;
-        let r = m.media_insert(drive, Some(&image), &media, 0);
+        let r = m.media_insert(drive, Some(&image), &media, lent);
         c.that(r == 0, || format!("the same disc inserted with the lid open answered {r} ({})", m.last_error()));
         let r = m.media_lid(drive, false);
         c.that(r == 0 && lid(&m) == "closed", || format!("closing the lid answered {r}, machine info's lid {:?}", lid(&m)));
         s.play(&m, 60, 120, false)?;
         let state = m.save(0).map_err(|e| format!("state_save after the swap failed with {e}"))?;
         m.media_lid(drive, true);
-        let r = m.media_insert(drive, None, &[], 0);
+        let r = m.media_insert_from(drive, None, &[], 0);
         c.that(r == 0, || format!("emptying the drive answered {r}"));
         m.media_lid(drive, false);
         let before = s.state_digest(&m)?;
         let r = m.load(&state);
         c.that(r == status::WRONG_MEDIA, || format!("the state made over the disc loaded over an empty drive with {r}, not EMUSEN_WRONG_MEDIA"));
         c.that(s.state_digest(&m)? == before, || "a refused load changed the machine".to_owned());
-        let r = m.media_insert(drive, Some(&image), &media, emusen_native::core::flags::MEDIA_RESTORE);
+        let r = m.media_insert(drive, Some(&image), &media, emusen_native::core::flags::MEDIA_RESTORE | lent);
         c.that(r == 0, || format!("RESTORE with the lid closed answered {r}"));
         let r = m.load(&state);
         c.that(r == 0, || format!("the state over its own disc again answered {r}"));
@@ -1724,15 +1749,15 @@ fn c16(s: &mut Session<'_>) -> Case {
 
 /// C16 on a machine that lists no drive (since 1.6, EmuSen_CoreAPI.md §6.26): each media call, on drive 0 and on the
 /// last drive number, answers `EMUSEN_NO_SUCH_DRIVE`; none changes the state or machine info; the machine runs on.
-fn c16_no_drive(s: &mut Session<'_>, c: &mut Check, m: &Machine<'_>, image: &[u8], media: &[(u32, Vec<u8>)]) -> Result<(), String> {
+fn c16_no_drive(s: &mut Session<'_>, c: &mut Check, m: &Machine<'_>, image: &[u8], media: &[(u32, Bytes)], lent: u32) -> Result<(), String> {
     s.play(m, 0, 30, false)?;
     let (state, info) = (s.state_digest(m)?, m.machine_info().ok());
     for drive in [0, u32::MAX] {
         let calls = [
             ("open", m.media_lid(drive, true)),
-            ("a disc", m.media_insert(drive, Some(image), media, 0)),
-            ("an empty drive", m.media_insert(drive, None, &[], 0)),
-            ("a restore", m.media_insert(drive, Some(image), media, emusen_native::core::flags::MEDIA_RESTORE)),
+            ("a disc", m.media_insert(drive, Some(image), media, lent)),
+            ("an empty drive", m.media_insert_from(drive, None, &[], 0)),
+            ("a restore", m.media_insert(drive, Some(image), media, emusen_native::core::flags::MEDIA_RESTORE | lent)),
             ("close", m.media_lid(drive, false)),
         ];
         for (what, r) in calls {
@@ -1751,7 +1776,8 @@ fn c16_no_drive(s: &mut Session<'_>, c: &mut Check, m: &Machine<'_>, image: &[u8
 enum Held<'a> {
     /// The session's own bytes, left as they are.
     Own(&'a [u8], Vec<(u32, &'a [u8])>),
-    /// Copies of the kit's, to overwrite once the core may no longer read them.
+    /// Copies of the kit's, to overwrite once the core may no longer read them: the copies C17 must make, the one case
+    /// that holds its own (§28.20).
     Copied(Vec<u8>, Vec<(u32, Vec<u8>)>),
     /// The files mapped through Galaxia, as a host lends them.
     Mapped(Mapped, Vec<(u32, Mapped)>),
@@ -1763,7 +1789,7 @@ impl<'a> Held<'a> {
     }
 
     fn copied(opts: &Options) -> Held<'static> {
-        Held::Copied(opts.image.clone(), opts.files.iter().filter(|f| f.0 >= FILE_MEDIA).cloned().collect())
+        Held::Copied(opts.image.to_vec(), opts.files.iter().filter(|f| f.0 >= FILE_MEDIA).map(|f| (f.0, f.1.to_vec())).collect())
     }
 
     /// The image's files mapped where it came from files, else copies kept in place.
@@ -1883,6 +1909,13 @@ fn leg(s: &mut Session<'_>, how: Leg) -> Result<(Steps, bool, String), String> {
         first.release();
         return Ok((steps, false, described));
     };
+    // Nothing was lent in the overwritten leg, so its first copy is the host's since create and goes before the second is made.
+    let mut first = Some(first);
+    if how == Leg::Overwritten
+        && let Some(copy) = first.take()
+    {
+        copy.release();
+    }
     let mut second = Held::held(opts, how)?;
     let r = m.media_lid(drive, true);
     if r != 0 {
@@ -1893,7 +1926,9 @@ fn leg(s: &mut Session<'_>, how: Leg) -> Result<(Steps, bool, String), String> {
         return Err(format!("the same disc inserted with the lid open answered {r} ({})", m.last_error()));
     }
     // The insert returned success, so the core has let the first disc go (§6.24): its bytes are the host's again.
-    first.release();
+    if let Some(held) = first.take() {
+        held.release();
+    }
     if how == Leg::Overwritten {
         second.overwrite();
     }
@@ -2072,11 +2107,11 @@ fn battery_of(m: &Machine<'_>, which: u32) -> (Vec<u8>, u32) {
 
 /// A machine of the session's image over `files`, made with `SHARED_REMOVABLE` and `SHARED_CONSOLE` by a host of 1.8,
 /// for C19.
-fn created_apart<'a>(s: &mut Session<'a>, settings: &str, files: &[(u32, Vec<u8>)]) -> Result<Machine<'a>, String> {
+fn created_apart<'a>(s: &mut Session<'a>, settings: &str, files: &[(u32, Bytes)]) -> Result<Machine<'a>, String> {
     let lib: &'a Lib = s.lib;
     let was = lib.host();
     lib.set_host(8, 0);
-    let made = lib.create_from(&s.opts.image, settings, &api::slices(files), 1, flags::CREATE_SHARED_REMOVABLE | flags::CREATE_SHARED_CONSOLE);
+    let made = lib.create_from(&s.opts.image, settings, &api::slices(files), 1, flags::CREATE_SHARED_REMOVABLE | flags::CREATE_SHARED_CONSOLE | s.lent());
     lib.set_host(was.0, was.1);
     made.map_err(|(code, text)| {
         s.statuses.insert(code);
@@ -2109,7 +2144,7 @@ fn c19(s: &mut Session<'_>) -> Case {
             return Ok(());
         }
         let pattern = |seed: u8, len: usize| -> Vec<u8> { (0..len).map(|i| (i as u8).wrapping_mul(37) ^ (i >> 8) as u8 ^ seed).collect() };
-        let files = |seed: u8| -> Vec<(u32, Vec<u8>)> { s.opts.files.iter().filter(|f| !apart.iter().any(|r| r.0 == f.0)).cloned().chain(apart.iter().map(|(w, len, _)| (*w, pattern(seed, *len)))).collect() };
+        let files = |seed: u8| -> Vec<(u32, Bytes)> { s.opts.files.iter().filter(|f| !apart.iter().any(|r| r.0 == f.0)).cloned().chain(apart.iter().map(|(w, len, _)| (*w, pattern(seed, *len).into()))).collect() };
         let (first, second) = (files(0x5A), files(0xA5));
         let a = created_apart(s, &settings, &first)?;
         let frames = s.opts.frames.min(KEPT_APART_FRAMES);
@@ -2176,7 +2211,7 @@ fn c20(s: &mut Session<'_>) -> Case {
         let opts = s.opts;
         let short = emusen_native::core::sys::DeviceLend { size: 32, api_version: 0, get_instance_proc_addr: None, instance: 1, physical_device: 1, device: 1, queue_family: 0, queue_index: 0, host_queue_family: 0, reserved: 0, done: 1 };
         let files = api::slices(&opts.files);
-        match s.lib.create_lending(&opts.image, &settings, &files, 1, 0, &short) {
+        match s.lib.create_lending(&opts.image, &settings, &files, 1, s.lent(), &short) {
             Err((code, _)) => c.that(code == status::BAD_STRUCT, || format!("a lend of 32 bytes was refused with {code}, not BAD_STRUCT")),
             Ok(m) => {
                 if let Some(d) = step(&m)? {
@@ -2193,7 +2228,7 @@ fn c20(s: &mut Session<'_>) -> Case {
             }
         };
         let lend = lender.lend();
-        let lent = s.lib.create_lending(&opts.image, &settings, &files, 1, 0, &lend).map_err(|(code, text)| format!("create with a device lent refused the image: status {code} ({text})"))?;
+        let lent = s.lib.create_lending(&opts.image, &settings, &files, 1, s.lent(), &lend).map_err(|(code, text)| format!("create with a device lent refused the image: status {code} ({text})"))?;
         let plain = s.machine(&settings)?;
         let digest = |bytes: &[u8]| {
             use std::hash::{Hash, Hasher};
@@ -2284,8 +2319,8 @@ fn c22(s: &mut Session<'_>) -> Case {
         .iter()
         .map(|v| (v.get("id").and_then(Value::as_str).unwrap_or("").to_owned(), v.get("starts_empty") == Some(&Value::Bool(true))))
         .collect();
-    let files: Vec<(u32, Vec<u8>)> = s.opts.files.iter().filter(|f| f.0 < FILE_MEDIA).cloned().collect();
-    let files: Vec<(u32, &[u8])> = files.iter().map(|(w, d)| (*w, d.as_slice())).collect();
+    let files: Vec<(u32, Bytes)> = s.opts.files.iter().filter(|f| f.0 < FILE_MEDIA).cloned().collect();
+    let files: Vec<(u32, &[u8])> = api::slices(&files);
     let settings = s.opts.settings.clone();
     let refused = |s: &mut Session<'_>, id: &str| -> Option<i32> {
         let name = std::ffi::CString::new(id).ok()?;
@@ -2416,7 +2451,7 @@ fn c24(s: &mut Session<'_>) -> Case {
         let mut notes = Vec::new();
         for id in systems.iter().chain(std::iter::once(&"x-no-such-system".to_owned())) {
             let name = std::ffi::CString::new(id.as_str()).map_err(|_| format!("{id} holds a NUL"))?;
-            let made = s.lib.create_as(&name, &image, &settings, &files);
+            let made = s.lib.create_as(&name, &image, &settings, &files, s.lent());
             if let Err((code, _)) = &made {
                 s.statuses.insert(*code);
             }
@@ -2731,7 +2766,7 @@ mod tests {
         let mut image = b"V1TC".to_vec();
         image.extend_from_slice(&5u16.to_le_bytes());
         image.extend_from_slice(&[1, 2, 3, 0x20, 0x41]);
-        Options { self_delimiting: true, image, frames, settings: String::new(), files: Vec::new(), script: None, on_disk: None }
+        Options { self_delimiting: true, image: image.into(), frames, settings: String::new(), files: Vec::new(), script: None, on_disk: None }
     }
 
     // C8 with C6's run for its first machine says what C8 says with a machine of its own, to the digest on a core that passes and by its findings on one that fails; EmuSen_CoreAPI.md §28.3.

@@ -28,10 +28,24 @@ pub const JOB_MEMORY: u64 = 256 << 20;
 /// The machines an image's cases hold at once: C8's three (`b`, `d` and `e`), each with its copy of the image.
 pub const MACHINES_AT_ONCE: u64 = 3;
 
+/// The copies of an image its cases still hold at once where the image is lent (§28.20): C17's own, which it
+/// overwrites, the core's copy of it, and the core's copy of the disc inserted beside it until the insert returns.
+pub const LENT_COPIES: u64 = 3;
+
+/// The copies of the reference image the core's cases hold at once where the image is lent: C12's host of 1.0, which
+/// cannot lend, with C7's two machines.
+pub const CORE_LENT_COPIES: u64 = 2;
+
 /// What one image's cases are estimated to take: the base, the kit's own copy of the image and each machine's, or
-/// `factor` copies in all where the author names one for a core that expands its image.
-pub fn estimate(len: u64, factor: Option<u64>) -> u64 {
-    JOB_MEMORY + factor.unwrap_or(MACHINES_AT_ONCE + 1) * len
+/// `factor` copies in all where the author names one for a core that expands its image. An image lent is mapped, and
+/// only the copies the cases must make count (`LENT_COPIES`).
+pub fn estimate(len: u64, factor: Option<u64>, lends: bool) -> u64 {
+    JOB_MEMORY + factor.unwrap_or(if lends { LENT_COPIES } else { MACHINES_AT_ONCE + 1 }) * len
+}
+
+/// Whether the library at `path` claims `BORROW`, so that the kit maps its images and lends them to every case.
+pub fn lends(path: &Path) -> bool {
+    Lib::open(path).is_ok_and(|lib| lib.claims(emusen_native::core::sys::caps::BORROW))
 }
 
 /// The images admitted at once by their estimates: an image waits until its estimate fits beside the running ones, and
@@ -218,7 +232,7 @@ fn one_image(library: &Path, base: &Options, name: &str, file: &Path, heading: &
             return (ImageResult { name: name.to_owned(), report, seconds: started.elapsed().as_secs_f64() }, BTreeSet::new());
         }
     };
-    let statuses = match crate::media::open(file) {
+    let statuses = match crate::media::open(file, lib.claims(emusen_native::core::sys::caps::BORROW)) {
         Ok((image, companions)) => {
             let mut files = base.files.clone();
             files.extend(companions);
@@ -253,10 +267,23 @@ pub fn run(library: &Path, opts: &Options, reference: &str, images: &[(String, P
 pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str, images: &[(String, PathBuf)], jobs: usize, memory: u64, factor: Option<u64>, deadline: Duration, progress: &mut dyn FnMut(&ImageResult)) -> Corpus {
     let started = Instant::now();
     let jobs = jobs.max(1);
-    let budget = Arc::new(Budget::new(memory.saturating_sub(JOB_MEMORY)));
+    // Where images are lent, the core's cases are admitted by their own estimate, the copies C12's host of 1.0 makes;
+    // elsewhere they are counted as one job, as before.
+    let lent = lends(library);
+    let budget = Arc::new(Budget::new(if lent { memory } else { memory.saturating_sub(JOB_MEMORY) }));
     let core_thread = {
-        let (library, opts) = (library.to_owned(), opts.clone());
-        std::thread::spawn(move || core_cases(&library, &opts))
+        let (library, opts, budget) = (library.to_owned(), opts.clone(), budget.clone());
+        std::thread::spawn(move || {
+            let need = if lent { JOB_MEMORY + CORE_LENT_COPIES * (opts.image.len() as u64) } else { 0 };
+            if lent {
+                budget.admit(need);
+            }
+            let cases = core_cases(&library, &opts);
+            if lent {
+                budget.release(need);
+            }
+            cases
+        })
     };
     // Leaked on purpose, as C4's is: it keeps the library loaded under each image's own Lib, as a host does (§6.16).
     let shared: Option<&'static Lib> = Lib::open(library).ok().map(|l| &*Box::leak(Box::new(l)));
@@ -266,14 +293,14 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
     if let Some(lib) = shared {
         let queue = Arc::new(Mutex::new((0..images.len()).collect::<VecDeque<usize>>()));
         let images: Arc<Vec<(String, PathBuf)>> = Arc::new(images.to_vec());
-        let base = Arc::new(Options { image: Vec::new(), ..base.clone() });
+        let base = Arc::new(Options { image: Default::default(), ..base.clone() });
         let (tx, rx) = mpsc::channel();
         let worker = || {
             let (queue, images, base, heading, tx, library, budget) = (queue.clone(), images.clone(), base.clone(), heading.clone(), tx.clone(), library.to_owned(), budget.clone());
             std::thread::spawn(move || {
                 loop {
                     let Some(i) = queue.lock().ok().and_then(|mut q| q.pop_front()) else { break };
-                    let need = estimate(crate::media::size(&images[i].1), factor);
+                    let need = estimate(crate::media::size(&images[i].1), factor, lent);
                     if budget.admit(need) {
                         eprintln!("{}: its estimate, {} MiB, is more than the {} MiB allowed, so it runs alone", images[i].0, need >> 20, budget.allowed >> 20);
                     }
@@ -357,8 +384,10 @@ mod tests {
 
     #[test]
     fn the_budget_admits_two_images_of_half_the_allowance_and_runs_a_larger_one_alone() {
-        assert_eq!(estimate(700 << 20, None), (256 << 20) + 4 * (700 << 20));
-        assert_eq!(estimate(10, Some(9)), (256 << 20) + 90);
+        assert_eq!(estimate(700 << 20, None, false), (256 << 20) + 4 * (700 << 20));
+        assert_eq!(estimate(700 << 20, None, true), (256 << 20) + 3 * (700 << 20));
+        assert_eq!(estimate(10, Some(9), false), (256 << 20) + 90);
+        assert_eq!(estimate(10, Some(9), true), (256 << 20) + 90);
         let b = std::sync::Arc::new(Budget::new(1000));
         assert!(!b.admit(500) && !b.admit(500));
         let waiting = {

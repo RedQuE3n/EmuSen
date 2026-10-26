@@ -53,7 +53,7 @@ fn run_corpus(core: &Path, opts: Options, reference: Option<PathBuf>, images: &P
         Some(p) => (p.display().to_string(), p),
         None => list[0].clone(),
     };
-    let (image, companions) = match emusen_core_conform::media::open(&reference_path) {
+    let (image, companions) = match emusen_core_conform::media::open(&reference_path, corpus::lends(core)) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("error: {e}");
@@ -172,7 +172,7 @@ fn main() -> ExitCode {
             "--file" => {
                 let Some((which, path)) = v.split_once('=') else { return usage() };
                 let (Ok(which), Ok(data)) = (which.parse::<u32>(), std::fs::read(path)) else { return usage() };
-                files.push((which, data));
+                files.push((which, data.into()));
             }
             "--report" => report = Some(PathBuf::from(v)),
             "--images" => images = Some(PathBuf::from(v)),
@@ -191,12 +191,12 @@ fn main() -> ExitCode {
         i += 2;
     }
     if let (Some(core), Some(images)) = (&core, &images) {
-        let opts = Options { self_delimiting, image: Vec::new(), frames, settings, files, script, on_disk: None };
+        let opts = Options { self_delimiting, image: Default::default(), frames, settings, files, script, on_disk: None };
         return run_corpus(core, opts, image, images, from.as_deref(), jobs, factor, report.as_deref(), report_dir.as_deref());
     }
     let (Some(core), Some(image)) = (core, image) else { return usage() };
     let on_disk = emusen_core_conform::media::on_disk(&image).ok();
-    let image = match emusen_core_conform::media::open(&image) {
+    let image = match emusen_core_conform::media::open(&image, corpus::lends(&core)) {
         Ok((b, companions)) => {
             files.extend(companions);
             b

@@ -42,8 +42,8 @@ tree
           26 TextBlock at=591.5,397,198,54 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=573.5,388,234,72 owner=25 paints=#86868AFF role=text size=30 text=PLAYSTATION
         27 TabItem at=807.5,388,261,72 by=clip drawn focus heard="PLAYSTATION 2" limit=410,316,1101,588 op paints=#EEEEF0FF role=tabitem sideways text="PlayStation 2"
           28 TextBlock at=825.5,397,225,54 box=150,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=149.97,36 limit=807.5,388,261,72 owner=27 paints=#EEEEF0FF role=text size=30 text="PLAYSTATION 2"
-        29 ScrollViewer at=428,463,1065,441 by=clip fades=b limit=410,463,1101,441 overflow=2100 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=428,463,1065,441
-          30 StackPanel at=428,475,1065,2529 by=scroll in=29 limit=428,463,1065,441 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=428,475,1065,429
+        29 ScrollViewer at=428,463,1065,441 by=clip fades=b limit=410,463,1101,441 overflow=2383.5 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=428,463,1065,441
+          30 StackPanel at=428,475,1065,2812.5 by=scroll in=29 limit=428,463,1065,441 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=428,475,1065,429
             31 FieldRow at=428,475,1065,193.5 by=scroll heard="Shader and shape" in=29 limit=428,463,1065,441 paints=#9C9CA0FF role=group
               32 TextBlock at=428,475,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=29 layout=145.94,28.8 limit=428,475,1065,193.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
               33 HintText at=428,524.5,1065,72 box=710,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=29 layout=699.98,48 limit=428,475,1065,193.5 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
@@ -66,9 +66,9 @@ tree
 focus 35
 edge 4 up 27
 edge 4 down same
-edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0
+edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0
 edge 4 right 6
-edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0
+edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0
 edge 6 down same
 edge 6 left 4
 edge 6 right same
@@ -93,7 +93,9 @@ edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/13/0/2/0 down path:0/3/0/0/2
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/14/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/13/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/14/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/14/0/2/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 down 4
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0 down 4
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 up 45
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0

@@ -1229,7 +1229,8 @@ The design and its record are there, §10.2.4; this section is the normative tex
   claims the bit, so a newer host lends it nothing and releases the mapping after create.
 - **The kit** checks it as C17 (§12): the image overwritten after a create that lent nothing, its run unchanged; and,
   where `BORROW` is claimed, the image mapped and lent, its run equal to a copied one's frame for frame, sample for
-  sample and state for state, across a disc swap where there is a disc.
+  sample and state for state, across a disc swap where there is a disc. *Since 2026-10-26* it lends the image to every
+  case's machines where `BORROW` is claimed, mapped and shared, not copied per case (§28.20).
 
 ---
 
@@ -4084,6 +4085,92 @@ unlisted one refused; 60 frames compared". `kit_two_system_core`, the test core 
 single-image form and in the corpus form, and passes with `KEEPS_ITS_RULE` too ("test2 kept as test").
 `FAULT_ROUTED_HALF_KEPT` (named `test2`, the machine reports `test` and runs otherwise), `FAULT_ROUTED_RUNS_OTHERWISE`
 (named `test`, it runs otherwise) and `FAULT_ROUTED_OWN_REFUSED` (named `test`, it is refused) each fail C24 alone.
+
+### 28.20 The image lent to every case where `BORROW` is claimed (2026-10-26)
+
+*Decided 2026-10-26 by the tester (`Sapphire_Native.md` §49.11, Q1): the kit lends mapped images to every case for a
+core that claims `BORROW`, instead of copying the image per case. Recorded with the PlayStation 2's discs in
+`Sapphire_Native.md` §49.12 to §49.18.*
+
+**The defect** (`Sapphire_Native.md` §49.7). The kit held an image as bytes it had read and handed each machine those
+bytes to copy. The copies alive in a corpus run of one disc, the core's cases and the image's running at once on their
+two threads:
+
+| Who holds it | Copies |
+|---|---|
+| The runner, for the core's cases on the reference | 1, the kit's |
+| The image's own cases (`one_image`), reading the same file again | 1, the kit's |
+| Every machine the cases make, each copying at create | 1 a machine: C7 holds two at once, C8 three (`b`, `d`, `e`), C12 reruns C6 to C8 twice |
+| C4's half image | half, the kit's, and half again where the core accepts it |
+| C16's inserts of the same disc | 1 a machine, the core's |
+| C17's overwritten leg | the kit's copy and the core's; at the disc swap a second of each before the first goes |
+| C13, C16, C23 and C24, `opts.image.clone()` | 1 each while the case runs, the kit's |
+
+Jak and Daxter's 1.46 GB image peaked at 10.6 GiB resident at S29 (`Sapphire_Native.md` §49.7), about seven copies,
+and Kingdom Hearts' 3.04 GB was killed at a 14 GiB cap.
+
+**Built** [C]:
+
+- **`Bytes`** (`bytes.rs`): an image or a media file held once for a session, read into memory or mapped through
+  Galaxia's `Mapped`, and shared by count; a clone is a count, a prefix a view of the same bytes at the same addresses.
+  `Options.image` and `Options.files` are `Bytes`.
+- **Mapped where lent.** For a library that claims `BORROW` the runner maps the image and its companions
+  (`media::open(path, true)`), in both forms; a library that does not has its images read as before.
+- **Lent to every case.** A session whose library claims `BORROW` passes `EMUSEN_CREATE_LENT` on every create of its
+  image and `EMUSEN_MEDIA_LENT` on C16's inserts. A create that lends plays a host of at least 1.3, the first whose
+  struct has the flags field (`api.rs`), as C17's and C18's creates already did. §6.24's promise holds by construction:
+  the session's `Bytes` outlive every machine of the session, and the thread C4 leaves running for an accepted malformed
+  image holds its own count of the bytes it lent, so a machine that hangs never outlives its loan. C4's half image is a
+  prefix of the session's bytes, lent, not a copy.
+- **The cases that still copy, each because copying is what it tests:**
+  - **C12's host of 1.0** passes 1.0's 88-byte create params, which have no flags field. Such a host cannot lend, and
+    §6.24 says its core copies ("Older and newer peers"), so its reruns of C6 to C8 copy: that is the older host the
+    case plays. Its host of minor 99 lends.
+  - **C17**, the image's life, holds three legs and keeps them: the copied leg, the core copying from the kit's bytes,
+    is the run the others are held to; the overwritten leg gives the core the kit's own copy and overwrites it after
+    create, which needs a copy of the kit's to overwrite and catches a pointer kept without a loan; the lent leg maps
+    the files again, its own mapping, so that it can unmap them when the loan ends and see a core still reading. The
+    overwritten leg now frees its first copy before taking the second at the disc swap, since nothing was lent to the
+    first.
+  - **C18** maps the files itself to advise the system around each named place: a mapping, not a copy.
+- **C8 one machine at a time** after its first: `b` is dropped before `d` is made and `d` before `e`, so a host that
+  cannot lend holds one copy there, not three. Its verdicts and words are unchanged.
+- **The estimate.** An image lent is estimated at `JOB_MEMORY + 3 × len` (`LENT_COPIES`: C17's copy, the core's copy of
+  it, and the core's copy of the disc inserted beside it until the insert returns). The core's cases, which ran outside
+  the budget as one job, are admitted by it at `JOB_MEMORY + 2 × len` of the reference (`CORE_LENT_COPIES`: C12's host
+  of 1.0 and C7's two machines), so that on a DVD they run apart from the image's cases where both do not fit. A library
+  that does not claim `BORROW` is estimated and scheduled as before. `--image-memory` still names the copies an image
+  takes.
+
+**A seeded fault's reach.** `kit_faulty_full_core` claims `BORROW`, and its `FAULT_ONLY_HOST_1_0` refuses every host
+but 1.0. Every case now plays a host of 1.3 to lend, so the fault fails every case that makes a machine, where it failed
+C12, C17, C18, C20 and C22, the cases that played newer hosts, before. A core that claims `BORROW` and refuses every host
+able to lend is broken for any host that lends, so the verdict is the true one. The kit's tests now hold the faults
+together without it to their earlier set, through the runner with `EMUSEN_TEST_CORE_FAULTS` naming every fault but
+that one, and hold C12's host of 1.0 to passing under the fault alone, which shows that host still copies.
+
+**Tests** [M, 2026-10-26]: the kit's own, release, **9, 0 and 29 passed**: new,
+`a_clone_and_a_prefix_are_the_same_bytes_at_the_same_addresses`, `every_case_lends_the_image_where_borrow_is_claimed`
+(a core that reads a lent image otherwise than its copy ends C8 in another state than without the fault, which it could
+not if C8's machines copied), the media module's test in both forms and the estimate's lent figure. Seeded faults, each
+applied and the source restored: `Session::machine` lending nothing (caught by `every_case_lends...` and three fault
+tests), C12's host of 1.0 told to lend (caught by the fault-16 assertion that its leg passes), and the lent estimate
+taken as the copying one (caught by the budget's test).
+
+**Measured** [M, 2026-10-26, the development desktop, each run in a scope of 16 GiB, peaks the scope's `memory.peak`]:
+
+| Run | Before | After |
+|---|---|---|
+| Sapphire, Jak and Daxter (1.46 GB), the player's BIOS, 30 frames | 12.05 GB, every case passing | **7.47 GB**, every case passing |
+| Sapphire, Jak and Daxter, 300 frames | 10.6 GiB resident at S29 | **4.78 GB**, every case passing |
+| Sapphire, Kingdom Hearts (3.04 GB), 300 frames | killed at 14.6 GB at S29 | **12.54 GB**, every case passing |
+| Sapphire, Dark Cloud 2 (4.44 GB), 300 frames | not run (about 31 GB) | **14.85 GB**, every case passing, the core's and the image's cases run apart |
+| Diamond, `kit/psx-sample.txt`, 9 discs at once, 1,800 frames | 11.98 GB | 9.44 GB; the 9 image reports identical |
+| Nephrite, `kit/genesis-sample.txt`, 64 cartridges, 600 frames | 394 MB | 225 MB; the 64 image reports identical |
+
+The other cores that claim `BORROW` are Diamond and Nephrite; their reports are identical before and after to the
+digest, the core's cases differing only in C13's count of rounds. Details: `Sapphire_Native.md` §49.14, §49.15 and
+§49.17.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -8027,8 +8027,10 @@ One row for each firmware file a system's engine can use:
 | A note, when it applies | "The file here is not 64 bytes, so it is not used." | a file of the entry's name whose length is not the entry's size (`EmuSen_Firmware.md` §2.1) |
 
 - **The fixed words.** An `exact` replacement reads "Exact: games run the same either way." An entry with no
-  replacement, or one whose effect is `none`, reads "Games that need this chip need your own file." With the player's
-  file in use the line reads "Runs as on the console."
+  replacement, or one whose effect is `none`, reads "Games that need this chip need your own file.", unless its console
+  starts empty (core info's `starts_empty`, which the runtime's systems answer carries): such a console runs nothing
+  without the file, and the line reads "Every game needs your own file." (decided 2026-10-26; the PlayStation 2's BIOS
+  today, `Sapphire_Native.md` §49.12). With the player's file in use the line reads "Runs as on the console."
 - **The whole cost** the core states is the row's tooltip on the desktop. The big-screen menu shows the first sentence
   only, since its footer holds two lines.
 - **A system with no firmware** is listed with "Needs no firmware files.", so a player sees that it was not forgotten.

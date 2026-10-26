@@ -6862,6 +6862,13 @@ before and after, as the tester decided, and saw PCSX2's OSDSYS through its setu
 instruction or memory holding BIOS code or data; **that writer is exposed too and will never write the open
 replacement**.
 
+*Added 2026-10-26 at the D-465 step (§39.15 to §39.22):* that step's writer ran the player's BIOS on Sapphire and a
+project program on PCSX2, read the IOP's console with the BIOS's banners, and traced Dark Cloud 2's program counters,
+SYSCALL numbers and register stores inside the window the tester allowed that day; the trace's first version printed
+the argument registers of the game's first system calls whole, some of which held addresses of the kernel's memory and
+of the BIOS's loader left in registers (§39.22); **that writer is exposed too and will never write the open
+replacement**.
+
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 
 *Numbered §36 and its disputes from D-360, S25's part B writing in §30 from D-380 beside it.*
@@ -7752,7 +7759,8 @@ The same happens with slot 1 empty, and with ps2tek's 20h in ReadDvd's byte 0 on
 D-122), so neither the card nor that byte is the cause. What the game decides before returning is not shown by the
 hardware's reports, and its code cannot be told from OSDSYS's by address (§39.11): **D-465, open**, put to the tester
 (§39.12, Q2). No anchor of the game's own screens was reached; its boot is recorded here as the drive's and the IOP's
-reports show it.
+reports show it. *Closed 2026-10-26 by the D-465 step (§39.15 to §39.22): the game's byte store to D1_CHCR was lost
+(D-780); with it taken the game reaches its legal screen and its memory card message.*
 
 
 ### 39.7 The memory card as the games see it (P8)
@@ -7892,6 +7900,148 @@ opened by any tool. §39.11 records what was observed beyond the rules' intent.
 - Dark Cloud 2's own screens (D-465) and Kingdom Hearts' logo (D-464).
 - The S29 work: the disc at create, the system offered to players, its CRT profile and audits.
 - Saving: the card is not seen on the player's BIOS path (P8, §39.7).
+
+### 39.15 Dispute step D-465: why Dark Cloud 2 returned to OSDSYS (2026-10-26)
+
+*A dispute step on the tester's decision of 2026-10-26 (§39.12 Q2, as recommended); its products are
+`Sapphire_Disputes.md` D-465 closed and D-780, and the fix D-780 proves.* The tester allowed a writer to read the game's
+own program counters and code between the IOP's console showing the game's program loaded and OSDSYS loaded again,
+recording nothing outside that window and nothing of the BIOS. Read so, **the game leaves by calling Exit itself**
+(syscall 04h, argument −1), seven seconds in, when its own wait for DMA channel 1 to end gives up after 16,777,216
+reads of D1_CHCR. The channel never ended because VIF1 stalled on an i bit inside a VU1 microprogram: the game sets
+D1_CHCR.TTE with a byte store, which Sapphire dropped, so the chain's DMAtag, whose upper half carries the MPG that
+should have taken the microprogram, never reached the VIF, which then read the microprogram's words as VIFcodes. A
+project program measured on PCSX2 what a narrower store does to the EE's registers across five units (D-780): it
+writes its own byte lanes and leaves the register's other bits as they were. Sapphire now does the same, equal to
+PCSX2 on all 98 of the program's words bare and on the player's BIOS, and **Dark Cloud 2 no longer leaves** (§39.19).
+The cause is not D-701's: the game sets Status.EIE itself as it starts.
+
+### 39.16 The window, and how it was bounded
+
+A runner of the step's own, not committed, started the console as §39.2's does (the Americas image, Sapphire's
+configured EEPROM, the erased card in slot 1, the disc in at power-on) and ran the recompiler until the window opened;
+inside it each EE instruction ran on the interpreter and was classified before it ran:
+
+- **Opening**: the IOP's console (§36.3's capture) showing `Loaded, cdrom0:\SCUS_972.13;1`, and the first 256 KiB of the
+  ELF's file image present in RAM at its addresses, a yes or no; at frame 658 on that run.
+- **Recorded**: an instruction at an address inside the ELF's segment whose word equals the ELF's word there; or inside
+  a block the game itself copied from its ELF (through a kernel-mode copy routine it installs as syscall 5Ah) whose word
+  equals the ELF's source word: three such blocks, two in kernel memory, which the game patches with its own routines,
+  and one of ten words at 00082000h. Recorded per instruction: the address in a ring of the last 400,000, the SYSCALL
+  number with its argument registers (a value printed only if it lay in the game's memory or under 10000h), any
+  exception's code and BadVAddr, Status at each change, and the game's stores to the DMAC's, VIF1's and GIF's
+  registers with their values (§39.17's run).
+- **Not recorded**: every kernel-mode instruction outside those blocks (counted only), and user-mode code that is not
+  the game's (the kernel's own threads while the game's wait; counted only). On the first return to the game's code
+  after such code the ELF's image was checked present again, and the window closed if it was not.
+- **Closing**: at once, on the game's SYSCALL 04h, 06h, 07h or 7Bh (Exit, LoadExecPS2, ExecPS2, ExecOSD, ps2tek "BIOS
+  EE Syscalls"), on an instruction in the ELF's file range that differs from the ELF, on the console showing a reboot
+  after the game's ten modules, or at the run's end. Each run with these rules that reached it closed at the game's
+  Exit at frame 791, before the IOP was rebooted. Runs from states saved inside the window opened it at once, the
+  state's own run having recorded its frame as inside.
+
+The first version closed instead on any user-mode instruction outside the game's code; it closed at frame 659, the
+first time an interrupt was taken after the game enabled them, and was changed to the counting above. §39.22 records
+what that version printed beyond the rule's intent.
+
+### 39.17 What the game did before it left (measured 2026-10-26)
+
+- **Its start.** The main thread begins with Status 70020C11h (EIE clear, as D-701 records for ExecPS2 on Sapphire);
+  the game sets up its thread and heap, installs its kernel patches and copy routines through SetSyscall, and sets
+  Status.EIE itself with EI early in its start, before it adds any interrupt handler, so D-701's difference does not reach it.
+- **Its exit.** The game calls Exit (04h) with −1 at frame 791 from a routine that prints two diagnostic lines (a row of
+  asterisks and the DMA's base and current address) and exits when its wait for the drawing paths to finish returns an
+  error. The wait reads D1_CHCR until STR clears, at most 16,777,216 times, then VIF1's and the GIF's paths; it gave up
+  at D1_CHCR, after 53,698 rounds of its loop seen in the ring's last part alone. The lines are printed through the
+  EE's console, which Sapphire does not keep.
+- **The channel.** From frame 732 on, the hardware's registers (read at each field end): D1_CHCR 60000105h (STR, chain,
+  from memory, the last tag a ret), QWC 2F2h of the tag's 303h left, VIF1_STAT 10000C02h (VIS and INT set, the FIFO full
+  with 16 quadwords), VIF1_CODE 000002FFh. The chain's tag at TADR's last value holds 4A000064h in its upper word, an
+  MPG of 256 instructions to 64h, and the data after it are VU microinstructions, the lower NOP 8000033Ch beside the
+  upper NOP 000002FFh. VIF1 had decoded 8000033Ch as a VIFcode, a NOP with the i bit set, raised INT and stalled at the
+  next, 000002FFh, which no handler of the game cancels.
+- **The store.** The game's stores to channel 1's registers at frame 731, recorded in order: a byte store of 40h to
+  D1_CHCR (TTE alone), then for each of three chains TADR, QWC 0 and D1_CHCR written as what the register read with MOD
+  cleared and 105h set. On Sapphire the byte store was lost, so CHCR read 0, TTE stayed clear and the tags' upper halves
+  never reached VIF1; the third chain's tag carried the MPG.
+
+### 39.18 D-780: stores narrower than a word to the EE's registers
+
+The EE User's Manual calls the EE's registers "only word-accessible" (§2.2.1) and says nothing of a narrower access;
+Sapphire took a load's lanes but dropped every narrower store to the timers, the INTC, the DMAC, the SIF's registers,
+the memory controller's, the VIF's and the GIF's. `d780-width` (D-780) stores bytes and halfwords into ten registers of
+five units and reads each back; on PCSX2 2.8.2 every one writes its own lanes and leaves the register's other bits as
+they were, and on I_MASK, whose writes reverse bits, only the bits stored as 1 reverse. `Board`'s `Bus::write` now
+takes such a store as the word its register would be given: the store's lanes, and the other lanes as the register's
+own value for its plain bits and 0 for the bits that act when written as 1 (`narrow`, `plain_bits`; read through
+`register_value`, which a narrow store does not count as a read in the hardware's reports). Sapphire before the change:
+33 of the 98 words differ; after it, none, bare (`narrower_stores_to_a_channels_registers_write_their_own_lanes`) and by
+the fast boot on the Americas image (`examples/d780.rs run`, frame 9).
+
+### 39.19 Dark Cloud 2 again (measured 2026-10-26)
+
+From the state at frame 650 of the run of §39.16 (before the byte store), with the change, the recompiler tier, no
+trace: the channel ends, the game does not call Exit, and it goes on to its own screens. **"Sony Computer Entertainment
+America Presents"** from about frame 960, then the memory card message, its box drawn from frame 1,200 and **"No memory
+card (PS2) detected. A memory card (PS2) with at least 502kb of free space is required to save game data. Continue
+without saving? Yes No"** from frame 1,260, which PCSX2 2.8.2 shows from 28 s after it begins to draw (S28's run with
+slot 1 empty). The card Sapphire's console holds is not seen, as P8 records for the other two games (§39.7). Against
+PCSX2's picture at 34 s, Sapphire's frame 1,500 (512 × 415, scaled to 640 × 480 and aligned, the best of every vertical
+offset) differs in 20,855 pixels by more than 8, 4,507 by more than 32 and 738 by more than 64 of 307,200: the same
+box and text, the differences on the glyphs' and the frame's edges where the 415 lines are stretched to 480. The legal
+screen falls between PCSX2's pictures at 16 s and 22 s, so it has no referee picture. **Cross on "Yes"** (frame
+1,260, from the state at frame 1,200) closes the message; from frame 1,320 to 2,400, the run's end, the picture holds
+only a grey shape at its lower left, unchanged, the game still running and OSDSYS never loaded again. Whether PCSX2
+shows the same at that step was not measured (§39.21 Q4).
+
+### 39.20 Tests, seeded faults and the blast radius (2026-10-26)
+
+TESTS_RESULT
+
+**Seeded faults** (each applied to `board.rs`, `narrower_stores_to_a_channels_registers_write_their_own_lanes` run, the
+source restored):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F0 | `board.rs` as before the step (every narrower store lost) | the test, 33 of 98 words |
+| F1 | I_MASK's other lanes repeated like a plain register's | the test, 2 words (its first form, bare with I_MASK zero, did not catch it, and the bare form now sets mask bits in both lanes first) |
+| F2 | the store's lane taken from address bit 0 alone | the test, 16 words |
+| F3 | VIF registers' narrower stores dropped again | the test, 4 words |
+
+### 39.21 Questions the step leaves
+
+1. **Q1 [routine], GIF_CTRL.** A store to its lanes 1 to 3 writes PSE as 0, the register reading 0 (D-780's named
+   loss). *Recommended*: leave it until a program shows such a store.
+2. **Q2 [routine], the EE's console.** The game prints its diagnostic through the EE's console before it exits, which
+   Sapphire does not keep and §1.4 has not decided for a game. *Recommended*: keep it out; the window's trace named the
+   cause without it.
+3. **Q3 [routine], D-701's reach.** This game does not depend on it, since it sets EIE itself; OSDSYS's browser may.
+   *Recommended*: leave D-701 with its own step.
+4. **Q4 [routine], past the memory card message.** After Cross on "Yes" Sapphire holds a still grey shape for at least
+   1,080 frames. *Recommended*: the same press on PCSX2 with pictures every few seconds, then, if they part, a dispute
+   step inside the same window.
+
+### 39.22 What was read, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 with the decisions of 2026-10-26; this page's §25, §30.52 to §30.59, §39 and §40.14;
+`Sapphire_Disputes.md` D-460 to D-465, D-700, D-701; `Sapphire_Referees.md` §2.1. ps2tek at `1c91660`: "BIOS EE
+Threading" and "BIOS EE Syscalls" (the list, cleared for writers); Sony's *EE User's Manual* §2.2.1, chapter 4, §5.7,
+§5.9, §6.5, §7.6. The game's own ELF from its disc, its words disassembled by `emusen-mips` only at addresses the
+window recorded and at the data the game copied or printed; its strings at two addresses. PCSX2 2.8.2 run as a black
+box: `d780-width`'s record through PINE, and S28's pictures of the game. No emulator, SDK, loader or game source and no
+firmware: the BIOS image was handed by path to Sapphire and to PCSX2 and never opened.
+
+**What the trace showed beyond the rule's intent.** The trace's first version printed the game's first SYSCALLs with
+their argument registers whole; at the game's entry some of those registers still held values the BIOS's loader and the
+kernel left (a return address into the loader, addresses in the kernel's memory), so a few BIOS addresses were
+printed. They were seen, masked in the log and in every later run (a value printed only inside the game's memory or
+under 10000h), and not used. No BIOS program counter, instruction or memory content was recorded: the window recorded
+an instruction only where its word equals the game's ELF. The runner, its logs, the states and the game's extracted
+files were deleted once this was written.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and a
+project program on PCSX2, read the IOP's console with the BIOS's banners, traced the game inside the window, and saw the
+register values above; **that writer is exposed and will never write the open replacement**.
 
 ## 40. The 23 IOP programs of ps2autotests on the player's BIOS, loaded from a synthetic disc (2026-10-26)
 

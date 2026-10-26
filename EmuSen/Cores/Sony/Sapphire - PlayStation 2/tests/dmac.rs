@@ -3,6 +3,7 @@
 //! interfaces no program can show a referee, checked on the units directly.
 
 mod d700;
+mod d780;
 mod s6;
 mod s11;
 
@@ -317,6 +318,13 @@ fn a_register_write_on_a_blanking_edge_does_not_take_the_edge_again() {
     b.write(0x1000_E000, 4, 1);
     b.run_to(edge + 1, &mut spr);
     assert_eq!(b.timers[3].count, before, "the H-blank edge at the write's time was taken once, before it");
+}
+
+/// D-780's program (Sapphire_Native.md §39.15): bytes and halfwords stored into DMA channel 1's registers write their
+/// own lanes and keep the others, as PCSX2 answers; Dark Cloud 2 sets D1_CHCR.TTE so.
+#[test]
+fn narrower_stores_to_a_channels_registers_write_their_own_lanes() {
+    grade_system(d780::width_bare());
 }
 
 /// D-700's programs (Sapphire_Native.md §30.52) need the player's BIOS, so `examples/d700.rs` runs them; here they are

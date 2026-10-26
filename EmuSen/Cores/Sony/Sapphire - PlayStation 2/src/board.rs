@@ -486,6 +486,11 @@ impl Board {
 
     fn read_register(&mut self, paddr: u32) -> u32 {
         self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
+        self.register_value(paddr)
+    }
+
+    /// A unit register's value as the EE reads it, not counted as a read.
+    fn register_value(&mut self, paddr: u32) -> u32 {
         if let Some((n, reg)) = timer::decode(paddr) {
             self.sync_timer(n, self.now);
             return self.timers[n].read(reg);
@@ -536,6 +541,25 @@ impl Board {
 /// The EE's registers the units answer at (§2.2.1): the timers, the DMAC and the INTC; other registers read zero.
 fn is_unit_register(paddr: u32) -> bool {
     paddr < 0x1000_2000 || (0x1000_8000..0x1000_F000).contains(&paddr) || (0x1000_F000..0x1000_F600).contains(&paddr)
+}
+
+/// A store of `bytes` < 4 at `paddr` as the word its register takes: the store's own lanes, and the register's other
+/// bits left as they are, the `plain` ones by repeating `old` and the rest, which act when written as 1, by 0 (D-780).
+fn narrow(old: u32, plain: u32, paddr: u32, bytes: usize, value: u128) -> u32 {
+    let shift = 8 * (paddr & 3);
+    let lanes = (((1u64 << (8 * bytes)) - 1) as u32) << shift;
+    old & plain & !lanes | ((value as u32) << shift & lanes)
+}
+
+/// The bits of a unit register a word store leaves as they are by repeating them: none of the INTC's, D_STAT's, the
+/// memory controller's or the SIF's flags and control, all of a timer's MODE but its two flags, all of the others.
+fn plain_bits(reg: u32) -> u32 {
+    match reg {
+        intc::I_STAT | intc::I_MASK | dmac::D_STAT | mch::RICM | mch::DRD => 0,
+        _ if sif::ee_register(reg).is_some_and(|o| o != sif::reg::MSCOM) => 0,
+        _ if timer::decode(reg).is_some_and(|(_, r)| r == 0x10) => !0xC00,
+        _ => u32::MAX,
+    }
 }
 
 /// An EE access's width at the drive's byte registers, which the EE reaches as the IOP does (D-460); past a word, the
@@ -635,8 +659,12 @@ impl Bus for Board {
         if (vif::REGS[0]..vif::FIFO_END).contains(&paddr) {
             self.run_vifs(self.now);
             if paddr < vif::FIFO[0] {
+                let (v, off) = (&mut self.vif[((paddr - vif::REGS[0]) >> 10) as usize], paddr & 0x3F0);
                 if bytes >= 4 {
-                    self.vif[((paddr - vif::REGS[0]) >> 10) as usize].write(paddr & 0x3F0, value as u32);
+                    v.write(off, value as u32);
+                } else {
+                    let plain = if off == vif::reg::FBRST { 0 } else { u32::MAX };
+                    v.write(off, narrow(v.read(off), plain, paddr, bytes, value));
                 }
             } else if bytes == 16 {
                 self.vif[usize::from(paddr >= vif::FIFO[1])].put(value, false);
@@ -669,6 +697,9 @@ impl Bus for Board {
                 }
             } else if bytes >= 4 {
                 self.gif.write(paddr & 0xF0, value as u32);
+            } else {
+                let old = self.gif.read(paddr & 0xF0, self.now, self.gs.reversed());
+                self.gif.write(paddr & 0xF0, narrow(old, u32::MAX, paddr, bytes, value));
             }
             self.run_gif(self.now);
             self.reschedule();
@@ -687,8 +718,12 @@ impl Bus for Board {
             return;
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
-            if is_unit_register(paddr & !0xF) && bytes >= 4 {
-                self.write_register(paddr & !0xF, value as u32);
+            let reg = paddr & !0xF;
+            if is_unit_register(reg) && bytes >= 4 {
+                self.write_register(reg, value as u32);
+            } else if is_unit_register(reg) {
+                let old = self.register_value(if reg == dmac::D_ENABLEW { dmac::D_ENABLER } else { reg });
+                self.write_register(reg, narrow(old, plain_bits(reg), paddr, bytes, value));
             } else {
                 self.reports.note(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             }

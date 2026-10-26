@@ -1,6 +1,6 @@
 # Sapphire_Native — the build record
 
-*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30), S24 (§35), S19 (§37) and S10 (§36) on 2026-10-25.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
+*Started 2026-10-24, at stage S1; stages S2 (§12), S3 (§13), S4 (§14), S5 (§15) and S6 (§16) the same day; S7 (§17), S8 (§18), S9 (§19), S11 (§20), S12 (§21), S21 (§22), S13 (§23), S16 (§24), S23 (§25), S22 (§26), S25's part A (§30), S24 (§35), S19 (§37) and S10 (§36) on 2026-10-25; S29 (§49) on 2026-10-26.* *Decided 2026-10-25 by the tester: S11 is built before S10*, whose gate runs on the player's BIOS once S24 boots it (`Sapphire_Plan.md` §7); the stages are recorded here in the order they are built. `Sapphire_Plan.md` says what Sapphire is to be and how it is graded; this page records
 what was built, stage by stage, what was measured, and where the plan turned out to be wrong. The plan's marks are
 kept: **[M]** measured on 2026-10-24 unless another date is given, on the desktop (Ryzen 7 7700X, Fedora 44, .NET 10),
 with the tool named beside it; **[R]** read from a source, named; **[A]** argued; **[C]** a choice, a rule set here or a
@@ -7107,8 +7107,8 @@ PCSX2 with Dark Cloud 2, and read the IOP's console text and the hardware's regi
 instruction was traced, the window of §39.16 left unopened; **that writer is exposed too and will never write the open
 replacement**.
 
-*Added 2026-10-26 at S29 (§49):* that stage's writer ran the player's Americas BIOS through the conformance kit on two of
-the tester's discs, the image handed to the kit by path and executed, never opened, hashed, listed or disassembled, and
+*Added 2026-10-26 at S29 (§49):* that stage's writer ran the player's Americas BIOS through the conformance kit on the
+tester's discs, the image handed to the kit by path and executed, never opened, hashed, listed or disassembled, and
 looked only at the kit's verdicts and its own measures; **that writer is exposed too and will never write the open
 replacement**.
 
@@ -10636,8 +10636,9 @@ PlayStation 2* with an empty tray (G10). **The core opens discs**: `.iso`, `.chd
 disc in the drive when the console is switched on (`Machine::disc_at_power_on`, S28's routine item), the console's market
 on *Automatic* the disc's own, read from its serial's region letter, else from `VMODE`. **With no BIOS of its market a
 game is refused in the core's words, as the empty start already was**, never a black screen. **A state names the disc in
-the drive**, so an `.m3u`'s *Change Disc* keeps each state to its own disc as the PlayStation's do. The kit's C1 to C15
-pass on Jak and Daxter and Kingdom Hearts in the corpus form on the player's BIOS; Dark Cloud 2 is owed. Decided the same
+the drive**, so an `.m3u`'s *Change Disc* keeps each state to its own disc as the PlayStation's do. The kit's cases
+pass on Jak and Daxter in the corpus form on the player's BIOS; Kingdom Hearts and Dark Cloud 2 are owed, the kit
+holding about seven copies of a DVD image, a named defect of the kit (§49.7). Decided the same
 day: ReadKey's learned key layout (D-461) is kept. No emulator source and no firmware was read; the BIOS was executed by
 path (§49.9).
 
@@ -10652,6 +10653,10 @@ path (§49.9).
   any other image by its bytes; an EE program waits for the fast boot as before, and a disc is opened from the kept bytes
   and put in the drive by `disc_at_power_on`: spun up and paused with its type set, the tray never having moved. `make`
   accepts the companions (`FILE_MEDIA` and up) beside the BIOS, cards and EEPROM.
+- **A disc cut short** [C]: a PlayStation 2 image holding fewer sectors than its primary volume descriptor's volume space
+  size (ECMA-119 §8.4.8) is refused with `STATUS_BAD_DISC` and words saying so, as a dump that would fail deep into a
+  game. Measured on the tester's three discs: each image holds exactly the sectors its volume claims (713,040, 1,484,928
+  and 2,166,880). It also lets the kit's C4 refuse its half-length image (§49.7).
 - **`BORROW`** (`EmuSen_CoreAPI.md` §6.24) is claimed: every byte of a disc the machine keeps goes through `keep`, so a
   host that maps a DVD lends it rather than copying 1.5 to 8.5 GB at create; an EE program is still copied whole.
 - **The market** [A, the format's common knowledge, confirmed on the tester's three discs, all SCUS or SLUS and NTSC]:
@@ -10676,7 +10681,7 @@ path (§49.9).
 | G1, the processors | **met**: ps2autotests' `cpu` programs equal their texts but D-28's named line; the IOP's crate passes the r3000 suite | §22.8, §36.5 |
 | G2, the self-reporting programs | **met**: 75 of the 78 print their texts whole on the player's BIOS, the three disputes D-28, D-363 and S13's `efu` | §36.5, §40.5 |
 | G3, the pictures | **not yet**: the GS programs equal PCSX2's pictures or are disputes; the second referee lineage's agreement the gate asks for is owed | §27.7, §31, §37 |
-| G4, the frontend | **met** at this stage: the kit on the tester's discs (Dark Cloud 2 owed), the fit audit, the CRT profile; cards round-trip at S25 | §49.7, §49.8, §30.18 |
+| G4, the frontend | **met** at this stage: the kit on Jak and Daxter (Kingdom Hearts and Dark Cloud 2 owed to the kit's lending), the fit audit, the CRT profile; cards round-trip at S25 | §49.7, §49.8, §30.18 |
 | G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2, which since D-465's fix no longer returns to OSDSYS, at one, its memory card message | §39, §39.19 |
 | G6, speed | **not yet**: 0.4 to 5 frames a second on the desktop against the console's 59.94; the speed stages under way | §39.8, §43, §44 |
 | G7, the debugger | **met** | §41 |
@@ -10760,6 +10765,37 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
   consoles' (`CD_SYSTEMS`): a PlayStation 2 DVD needs chdman's `createdvd`, which `EmuSen_GamePackages.md` §4.2 leaves for
   a DVD core's step (§49.10).
 
+### 49.7 The kit on the tester's discs (measured 2026-10-26)
+
+`kit/ps2-sample.txt` names the three discs of S28 in the probe's cache, read in place; the player's Americas BIOS is
+handed to the kit by path as file 17 (§49.9). `emusen-core-conform --images kit/ps2-sample.txt --from
+~/.cache/emusen/probe/sapphire/discs --file 17=<the BIOS> --frames 300 --jobs 1`, one disc a run, each in a scope capped at
+14 GiB and started only with 16 GiB free, as the shared desktop allowed that day. 300 frames is the BIOS's intro with the
+disc detected in the drive and read by the BIOS; the game's own program starts later (Jak's legal screen near frame 780,
+§39.4), so the image cases carry a console reading a disc through states, media calls and lent images, not a game in
+play, which at the reference path's speed would take hours a case.
+
+| Disc | Core cases (C1-C5, C9-C13, C15, C22, C23) | Image cases (C4, C6-C8, C14, C16-C21, C24) | Wall time | Peak resident |
+|---|---|---|---|---|
+| Jak and Daxter, first run | all pass | all pass but C4: its half-length image was accepted and did not run 300 frames in the kit's 60 s | 48 min 16 s | 10.6 GiB |
+| Jak and Daxter, with the cut-short refusal (§49.2) | all pass | **all pass**, C4's half-length image refused as cut short | 51 min 13 s | 10.0 GiB |
+| Kingdom Hearts | not run: killed at the 14 GiB cap 72 s in, 14.6 GB resident | | | |
+| Dark Cloud 2 | owed | | | |
+
+- **C4 and the speed.** C4 runs an accepted malformed image for up to 300 frames within 60 s. Without a BIOS (CI's
+  synthetic images) Sapphire's units alone run far faster; on the player's BIOS a disc cut to half its length booted
+  as a disc and ran at the reference path's few frames a second. The image is in truth a dump cut short, which the core
+  now refuses (§49.2), so the case is answered by the refusal, as C4 allows; the speed itself is G6's.
+- **The kit's copies of an image, a named efficiency defect of `emusen-core-conform`** (`Sapphire_Plan.md` §3.4 and §10
+  foresaw it). The corpus form reads each image whole into the kit's memory and hands it to every machine to copy,
+  and it holds the reference image beside the image under test; its estimate is four copies (`corpus::estimate`). On a
+  DVD that is gigabytes per copy: Jak and Daxter's 1.46 GB image peaked at **10.6 GiB** resident, about seven copies,
+  and Kingdom Hearts' 3.04 GB was **killed at 14.6 GB** inside the 14 GiB cap 72 s into its run; Dark Cloud 2's 4.44 GB
+  would need about 31 GB by Jak's ratio. A core that claims `BORROW`, as Sapphire now does, would take a mapped image
+  lent at no copy, which C17 already exercises; lending it to every case is the kit's change, not made here (decided
+  2026-10-26 by the tester: recorded, not fixed at this stage; §49.11 Q1). **Kingdom Hearts and Dark Cloud 2 are owed**
+  to the kit until then.
+
 ### 49.8 Tests, seeded faults and the blast radius (2026-10-26)
 
 **Tests** [M]:
@@ -10794,3 +10830,47 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
 | F1 | On *Automatic* the disc's market ignored, the console taking the BIOS file's | `a_discs_own_market_is_the_consoles_on_automatic` |
 | F2 | The state naming the created image whatever the drive holds, as before this stage | `a_state_keeps_to_the_disc_in_the_drive` (and, on a disc image, the kit's C16, which needs the emptied drive to refuse the state) |
 | F3 | `CoreEngine.LoadRom`'s refusal removed, so a game with no BIOS opens black | `SapphireConsoleTests.With_no_bios_a_game_is_refused_in_the_cores_words` and the parity case `The_playstation_2_started_empty_or_with_a_game_is_refused_without_its_bios_and_lists_its_cards_the_same` |
+
+### 49.9 What was read for this stage, and exposure
+
+`Sapphire_Plan.md` §3.4, §4, §5.9, §7 (S29), §8, §10; this page's §1 to §11, §30, §38 and §39 with D-465's step;
+`EmuSen_CoreAPI.md` §6.3, §6.23, §6.24, §12.4, §27, §28; `Diamond_Native.md` §20, `Diamond_Players.md` §1 to §11 and
+`Diamond_Shell.md` §1; `EmuSen_CRT.md` §3.2, §20.6, §23, §28, §31; `EmuSen_GamePackages.md` §4.2, §4.8, §6.1; the
+project's code named above. ECMA-119 §8.4 (the volume space size), as the project's builders already implement it. No
+emulator, SDK or loader source, and no firmware: the player's Americas image was handed by path to the kit, which read it
+into memory to pass to the core as file 17 and executed it; it was never opened, hashed, listed or disassembled by any
+tool of this stage, and the folder was not listed (one `ls` of its known path, its output discarded, checked that the path
+exists). The discs were read in place; of their bytes only the volume space size and the sector counts above were
+printed. **Exposure** (§1.4): this writer ran the player's BIOS through the kit and looked at the kit's verdicts and the
+fit audit's pictures, never the BIOS's own output beyond them; **this writer is exposed and will never write the open
+replacement** (recorded in §35).
+
+### 49.10 What this stage does not cover
+
+- The kit on Kingdom Hearts and Dark Cloud 2, owed to the kit's lending (§49.7, Q1).
+- Cheats: the PlayStation 2 has no codec and no database folder (plan §4.5); its Active Cheats tab offers the generic
+  RAM writes only.
+- CHD conversion of PlayStation 2 discs: the CD tool's systems stay `psx` and `mcd`; a DVD needs chdman's `createdvd`
+  (`EmuSen_GamePackages.md` §4.2), a step of its own (Q5).
+- The handheld: no install or run there; the handheld install is later.
+- The speed levers' settings, which join the Graphics Settings tab with their stages (S33 on).
+- A drawing of the DualShock 2 of its own (Q2) and a tab strip in the toolkit that fits itself (Q3).
+
+### 49.11 Questions this stage leaves
+
+1. **Q1 [decision], the kit's copies of an image.** The corpus form holds about seven copies of a DVD image (§49.7), so
+   Kingdom Hearts and Dark Cloud 2 cannot run beside other work. *Recommended*: let the kit lend each image mapped to
+   every case where the core claims `BORROW`, and count a mapped image as mapped in its estimate, as the plan's §10
+   proposed; then run the two discs.
+2. **Q2 [routine], the DualShock 2's drawing.** Drawn as the DualShock, its controls being the same (§49.6).
+   *Recommended*: a `DualShock2` layout in LunaP when the toolkit is next touched: the black pad and a screen reader's
+   "DualShock 2 controller", the regions unchanged.
+3. **Q3 [routine], `TabStripFit`.** *Recommended*: keep it in Mistress now; move the behaviour into LunaP's `Tabs` for the
+   menu look when the toolkit is next touched, so every console strip fits itself.
+4. **Q4 [decision], the firmware page's words for a BIOS.** The page says "Games that need this chip need your own
+   file." of every entry with no replacement; for the PlayStation 2's BIOS every game needs the file and it is no chip.
+   *Recommended*: for an entry of a console that starts empty, the words "Every game needs your own file." (one line in
+   `FirmwarePane`), which changes what the player reads.
+5. **Q5 [routine], CHD for PlayStation 2 discs.** *Recommended*: a later step adds `ps2` to the CD tool with `createdvd`
+   for DVD images, once `emusen-disc`'s DVD CHD reading is graded on a converted disc of the tester's.
+

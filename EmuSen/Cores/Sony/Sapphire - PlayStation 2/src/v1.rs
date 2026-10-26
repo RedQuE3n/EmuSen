@@ -130,6 +130,9 @@ pub fn bios(market: Market) -> Firmware {
 pub const EXTENSIONS: [&str; 1] = [".elf"];
 
 pub const REGION_KEY: &str = "region";
+/// The EE's tier: the interpreter, or the recompiler of S36 (Sapphire_Native.md §44).
+pub const EE_TIER_KEY: &str = "ee_tier";
+pub const TIERS: [(&str, &str); 2] = [("interpreter", "Interpreter"), ("recompiler", "Recompiler")];
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 pub const REGIONS: [(&str, &str, Market); 3] = [("ps2.jp", "Japan (NTSC)", Market::Japan), ("ps2.us", "Americas (NTSC)", Market::Americas), ("ps2.eu", "Europe (PAL)", Market::Europe)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK2, "DualShock 2"), (DIGITAL, "Digital Controller"), ("none", "Nothing")];
@@ -162,7 +165,16 @@ fn schema() -> Vec<Setting> {
         setting(REGION_KEY, "Region", "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL, and which BIOS the console has. Automatic runs an American console until the disc's own market is read. Takes effect when a game is next loaded.", regions, "auto", "Console"),
         setting(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock 2, or a controller with buttons alone. Takes effect when a game is next loaded.", pads(0), DUALSHOCK2, "Controllers"),
         setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock 2, a controller with buttons alone, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK2, "Controllers"),
+        Setting {
+            effect: Effect::Exact,
+            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "interpreter", "Speed")
+        },
     ]
+}
+
+/// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler.
+pub fn recompiler_chosen(setting: Option<&str>) -> bool {
+    std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) == Some("recompiler")
 }
 
 /// The market a machine runs as: the setting's, else the Americas' until the disc's own is read at S29.
@@ -536,6 +548,9 @@ impl Machine {
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
         let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
         m.firmware = firmware;
+        if recompiler_chosen(s.get(EE_TIER_KEY)) {
+            m.blocks = Some(Box::new(crate::blocks::Blocks::from_env()));
+        }
         // An empty file is a card not yet saved: the slot keeps its erased card.
         for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
             *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");

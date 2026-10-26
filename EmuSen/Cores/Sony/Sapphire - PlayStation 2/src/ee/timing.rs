@@ -16,8 +16,10 @@ pub enum Pipe {
     C2,
 }
 
-/// An instruction category of Table 1-1, which decides the logical pipes it may issue to (Table 1-2).
+/// An instruction category of Table 1-1, which decides the logical pipes it may issue to (Table 1-2); its code is its
+/// place in Table 1-1's order (`CATEGORIES`), which the state and the recompiler's code read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Category {
     LoadStore,
     Sync,
@@ -35,6 +37,9 @@ pub enum Category {
     Branch,
     WideOperate,
 }
+
+/// The last category's code before any instruction has issued.
+pub const NO_CATEGORY: u8 = 0xFF;
 
 /// The logical pipes a category may issue to, Table 1-2: (pipe 0, pipe 1).
 pub const fn logical(c: Category) -> (bool, bool) {
@@ -270,7 +275,8 @@ pub struct Timing {
     cop2_floor: u64,
     /// The cycle the last instruction issued in, its category and pipe, its writes, and whether it may take a partner.
     last: u64,
-    last_category: Option<Category>,
+    /// The last category's code (`Category as u8`), `NO_CATEGORY` before the first.
+    last_category: u8,
     last_pipe: u8,
     last_writes: u128,
     open: bool,
@@ -294,7 +300,7 @@ impl Default for Timing {
             vdiv_free: 0,
             cop2_floor: 0,
             last: 0,
-            last_category: None,
+            last_category: NO_CATEGORY,
             last_pipe: 0,
             last_writes: 0,
             open: false,
@@ -416,7 +422,7 @@ impl Timing {
         let paired = p.paired;
         self.open = !paired && !i.alone;
         self.last = at;
-        self.last_category = Some(i.category);
+        self.last_category = i.category as u8;
         self.last_writes = if paired { self.last_writes | i.writes } else { i.writes };
         self.floor = at + 1 + stall + if i.blocking { i.data } else { 0 };
         self.paired = paired;
@@ -435,29 +441,55 @@ impl Timing {
 
     /// The pipe this instruction would take beside the last, and Table 1-3's cell, if the two may issue together.
     fn partner(&self, c: Category, p0: bool, p1: bool) -> Option<(u8, Pair)> {
-        let last = self.last_category?;
-        let (l0, l1) = logical(last);
-        let mut best: Option<(u8, Pair)> = None;
-        for (mine, theirs) in [(0u8, 1u8), (1, 0)] {
-            let fits_me = if mine == 0 { p0 } else { p1 };
-            let fits_them = if theirs == 0 { l0 } else { l1 };
-            let same_pipe_as_issued = (l0 && l1) || theirs == self.last_pipe;
-            if !(fits_me && fits_them && same_pipe_as_issued) {
-                continue;
-            }
-            let cell = if mine == 1 { pair(c, last) } else { pair(last, c) };
-            match cell {
-                Some(Pair::O) => return Some((mine, Pair::O)),
-                Some(Pair::Y) => best = best.or(Some((mine, Pair::Y))),
-                _ => {}
-            }
-        }
-        best
+        let last = *CATEGORIES.get(usize::from(self.last_category))?;
+        partner_of(c, p0, p1, last, self.last_pipe)
     }
 }
 
+/// The pipe a category `c` (with logical pipes `p0`, `p1`) would take beside `last`, issued in pipe `last_pipe`, and
+/// Table 1-3's cell, if the two may issue together.
+pub fn partner_of(c: Category, p0: bool, p1: bool, last: Category, last_pipe: u8) -> Option<(u8, Pair)> {
+    let (l0, l1) = logical(last);
+    let mut best: Option<(u8, Pair)> = None;
+    for (mine, theirs) in [(0u8, 1u8), (1, 0)] {
+        let fits_me = if mine == 0 { p0 } else { p1 };
+        let fits_them = if theirs == 0 { l0 } else { l1 };
+        let same_pipe_as_issued = (l0 && l1) || theirs == last_pipe;
+        if !(fits_me && fits_them && same_pipe_as_issued) {
+            continue;
+        }
+        let cell = if mine == 1 { pair(c, last) } else { pair(last, c) };
+        match cell {
+            Some(Pair::O) => return Some((mine, Pair::O)),
+            Some(Pair::Y) => best = best.or(Some((mine, Pair::Y))),
+            _ => {}
+        }
+    }
+    best
+}
+
+/// Where the issue model's fields lie, for the recompiler's code, which reads and writes them as the model does
+/// (Sapphire_Native.md §44).
+pub(crate) mod layout {
+    use super::Timing;
+    use std::mem::offset_of;
+
+    pub const READY: i32 = offset_of!(Timing, ready) as i32;
+    pub const MAC0_FREE: i32 = offset_of!(Timing, mac0_free) as i32;
+    pub const MAC1_FREE: i32 = offset_of!(Timing, mac1_free) as i32;
+    pub const LAST: i32 = offset_of!(Timing, last) as i32;
+    pub const LAST_CATEGORY: i32 = offset_of!(Timing, last_category) as i32;
+    pub const LAST_PIPE: i32 = offset_of!(Timing, last_pipe) as i32;
+    pub const LAST_WRITES: i32 = offset_of!(Timing, last_writes) as i32;
+    pub const OPEN: i32 = offset_of!(Timing, open) as i32;
+    pub const FLOOR: i32 = offset_of!(Timing, floor) as i32;
+    pub const GROUP_ENDS: i32 = offset_of!(Timing, group_ends) as i32;
+    pub const PAIRED: i32 = offset_of!(Timing, paired) as i32;
+    pub const INSTRUCTIONS: i32 = offset_of!(Timing, instructions) as i32;
+}
+
 /// The categories in Table 1-1's order, a category's code in `SPH2` its place here.
-const CATEGORIES: [Category; 15] = {
+pub const CATEGORIES: [Category; 15] = {
     use Category::*;
     [LoadStore, Sync, Lzc, Eret, SaOperate, Cop0, Cop1Move, Cop2Move, Cop1Operate, Cop2Operate, Alu, Mac0, Mac1, Branch, WideOperate]
 };
@@ -469,7 +501,7 @@ impl emusen_native::State for Timing {
     fn write_state(&self, w: &mut emusen_native::StateWriter) {
         w.u64s("Ready", &self.ready);
         w.u64s("Free", &[self.mac0_free, self.mac1_free, self.fdiv_free, self.vdiv_free, self.cop2_floor, self.last, self.floor, self.mem_free, self.instructions]);
-        w.u8("LastCategory", self.last_category.map_or(0xFF, |c| CATEGORIES.iter().position(|&k| k == c).unwrap_or(0) as u8));
+        w.u8("LastCategory", self.last_category);
         w.u8("LastPipe", self.last_pipe);
         w.u128("LastWrites", self.last_writes);
         w.bools("Open", &[self.open, self.paired]);
@@ -481,7 +513,8 @@ impl emusen_native::State for Timing {
         let mut f = [0u64; 9];
         r.u64s(&mut f)?;
         [self.mac0_free, self.mac1_free, self.fdiv_free, self.vdiv_free, self.cop2_floor, self.last, self.floor, self.mem_free, self.instructions] = f;
-        self.last_category = CATEGORIES.get(usize::from(r.u8()?)).copied();
+        let c = r.u8()?;
+        self.last_category = if usize::from(c) < CATEGORIES.len() { c } else { NO_CATEGORY };
         self.last_pipe = r.u8()?;
         self.last_writes = r.u128()?;
         let mut b = [false; 2];

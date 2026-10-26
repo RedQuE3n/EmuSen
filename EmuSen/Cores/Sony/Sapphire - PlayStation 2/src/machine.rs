@@ -95,12 +95,14 @@ pub struct Machine {
     pub entered: Option<i64>,
     /// The debugger's hooks and its open frame (S31, Sapphire_Native.md §41).
     pub debug: crate::debugger::Debugger,
+    /// The EE's recompiled tier, when chosen (S36, Sapphire_Native.md §44); the interpreter alone without it.
+    pub blocks: Option<Box<crate::blocks::Blocks>>,
 }
 
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let sys = Machine::console(market, ports);
-        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new() };
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new(), blocks: None };
         for slot in &mut m.sys.board.iop.bus.sio2.slots {
             slot.cards[0] = Some(MemoryCard::erased());
         }
@@ -276,6 +278,14 @@ impl Machine {
         ee.raise(crate::ee::Exception::Syscall, pc, false);
         board.iop.tty.device = true;
     }
+    /// One interpreter step, which the verifier follows when one is attached.
+    fn step(&mut self) -> Result<(), crate::ee::Halt> {
+        match self.blocks.as_deref_mut() {
+            Some(b) => crate::blocks::interpret(&mut self.sys, b).map(|_| ()),
+            None => self.sys.step(),
+        }
+    }
+
     /// One frame: the console run until the PCRTC begins its next field, which is when V-blank rises.
     pub fn advance(&mut self) {
         let target = self.sys.board.pcrtc.fields + 1;
@@ -283,14 +293,22 @@ impl Machine {
             if self.booted && self.stop.is_none() && self.waiting() {
                 if self.at_entry() {
                     self.enter_program();
-                } else if self.sys.step().is_err() {
+                } else if self.step().is_err() {
                     self.stop = Some(Stop::Unimplemented);
                 }
             } else if self.booted && self.stop.is_none() {
-                for _ in 0..1024 {
-                    if self.sys.step().is_err() {
-                        self.stop = Some(Stop::Unimplemented);
-                        break;
+                let mut left = 1024;
+                while left > 0 {
+                    let ran = match self.blocks.as_deref_mut() {
+                        Some(b) => crate::blocks::run(&mut self.sys, b, left),
+                        None => self.sys.step().map(|()| 1),
+                    };
+                    match ran {
+                        Ok(n) => left -= n,
+                        Err(_) => {
+                            self.stop = Some(Stop::Unimplemented);
+                            break;
+                        }
                     }
                 }
             } else {

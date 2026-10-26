@@ -3707,23 +3707,102 @@ through the reset too.
 - **Pinned by:** none beyond the measurement; the crate's reading of free entries by the top bit alone.
 - **Implemented in:** stage S25 part B's commit (recorded, nothing changed).
 
-### D-383. SIO2, a console with no card in slot 1: the initial setup's language screen took none of the pad's presses
+### D-383. SIO2, a console with no card in slot 1: the initial setup's language screen took none of the pad's presses; a command whose peripheral byte no device acknowledges ends at that byte
 
 - **Opened:** 2026-10-25, at stage S25 part B: the control run of §30.19, the same nine presses of Cross as the run with a
   card, left the language screen drawn and unchanged for 2,300 frames; with the card in slot 1 the first press stepped
   the setup on.
 - **Documents read:** ps2tek "SIO2_RECV1" ("If (RECV1 & F000h) == 1000h after a memory card command, the memory card is
   connected"; "If (RECV1 & 2000h) == 0 after a pad command, the pad is connected"; 1D100h disconnected, 1100h connected);
-  D-221.
-- **Test program:** none yet. D-221 sets RECV1 for the whole queue from its last unanswered peripheral; a missing card
+  D-221. *Added 2026-10-26 at the dispute step (`Sapphire_Native.md` §30.25):* ps2tek "SIO2 Registers" (its rates:
+  none given; SEND1 and SEND2 "Unknown purpose"; the transfer's flow); psx-spx "Controllers and Memory Cards" at
+  `6d7d1bc` (2026-10-08), "Device addressing" ("the first byte sent by the console after asserting /CSn is the address of
+  the device that shall reply [...] Once the address is sent, the device that was addressed shall pull /ACK low to
+  signal its presence and start exchanging bytes"), "DSR (/ACK)" (no interrupt "if the peripheral fails to send an
+  /ACK, or if there's no peripheral connected at all") and "Controller and Memory Card Signals" (the PlayStation's
+  kernel driver times out 100 µs after the last clock with no /ACK); Wikipedia, "PlayStation 2 technical
+  specifications" (the ports' clocks, D-440).
+- **Test program:** ~~none yet. D-221 sets RECV1 for the whole queue from its last unanswered peripheral; a missing card
   gives 1D100h, whose bit 13 is clear, so a pad read in the same queue still reads as connected by ps2tek's rule, and
-  the cause is not shown by the documents.
-- **Referee:** PCSX2 with slot 1 empty reaches its browser ("There is no data.") at the same presses.
-- **Conclusion:** **open**; a program in S25's form is to send a pad read with the card port empty, in one queue and in
+  the cause is not shown by the documents.~~ *2026-10-26:* `s25-empty` and `s25-empty-len`, probes for the referee
+  (eleven queues: a controller read alone, beside the empty slot's probe in one queue in either order, after it, beside
+  slot 2's card, after the multitap's byte on the empty slot, with the empty controller port, all four ports in one
+  queue; then a command of each length from 2 to 20 bytes to the empty slot before a controller read; each queue timed
+  on the IOP's timer 3, RECV1 to RECV3 and the flags read, the replies read with eight bytes more). On Sapphire with its
+  part A rule every reply to an empty port was HiZ and RECV1 D-221's, and a command to an empty port took its whole
+  length at 4 µs a byte. Then the player's BIOS on Sapphire, observed by the hardware's own counts (§30.25): with slot 1
+  empty the IOP's queues from frame 300 on were nearly all a single command no device answered, about one a frame (the
+  multitap's peripheral byte on card port 2, counted by port and peripheral byte as an unmapped access is counted), and
+  barely any queue was answered (3 in frames 360-420, against 56 with the card); the controller was not being read.
+  Changing only how long such a command takes decided it (table in §30.25): ended at its peripheral byte, the screen
+  took the press at frame 770 exactly as with the card; ended at the peripheral byte and 100 µs more (the PlayStation
+  kernel's timeout), or at its whole length (part A), it did not; every byte four times faster also cured it, and so did
+  a multitap in slot 1, which answers that byte. Finally `s25-empty-port`, graded (29 words): the rule below.
+- **Referee:** PCSX2 with slot 1 empty reaches its browser ("There is no data.") at the same presses. *2026-10-26:*
+  PCSX2 2.8.2 ran the three programs with slot 1 empty (`ps2referee.py ram --cards none,…`) and with both cards: every
+  reply to a single command and its RECV1 equal to Sapphire's; every queue, of any length, ended 25 IOP cycles after
+  its start, so PCSX2 is no witness for the time (as §30.9 found); a command to the empty card slot left six bytes in
+  FIFOOUT whatever its length, and an answered controller's read after another command read RECV1 100h above that
+  command's value (D-441). On `s25-empty-port` it differs in the six times and in those two effects, 10 of 29 words.
+- **Conclusion:** ~~**open**; a program in S25's form is to send a pad read with the card port empty, in one queue and in
   two, and read RECV1 and the replies on Sapphire and PCSX2 (§30.21 Q2). Until then a console with slot 1 empty is
-  known not to take the pad at the language screen.
-- **Depends on it:** `sio2::Sio2::start`'s RECV1; the P8 control of §30.19.
-- **Pinned by:** nothing yet.
+  known not to take the pad at the language screen.~~ *2026-10-26:* the screen was deaf because Sapphire made a command
+  to an empty port last its whole length. **The rule**: a command whose peripheral byte no device on its port
+  acknowledges ends at that byte, and the queue's next command starts one byte's time after it began; its reply is HiZ
+  for the command's whole length and RECV1 is D-221's. A device that is there and acknowledges its address but refuses
+  the command (the card's authentication commands, §11 Q7(b)) keeps the command's whole length, since it did answer its
+  peripheral byte. **Argued** from psx-spx's addressing, a device showing itself by its /ACK after the address byte,
+  which SIO2 sequences in hardware; **measured** on Sapphire as the cause, through the BIOS's pictures and the
+  hardware's counts. No document gives SIO2's wait for an /ACK; none is modelled past the byte [C], and the 100 µs of
+  the PlayStation kernel's software wait, tried, left the screen deaf. RECV1's rule for a queue of several commands,
+  and PCSX2's six bytes, are D-441's.
+- **Depends on it:** `sio2::Sio2::start`'s time for a command nothing acknowledges; the P8 control of §30.19, run again
+  in §30.25.
+- **Pinned by:** ~~nothing yet.~~ `sio2::tests::a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (the lib) and
+  `a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (`tests/sio2.rs`, `s25-empty-port`).
+- **Implemented in:** ~~none.~~ the D-383 step's commit (`Sapphire_Native.md` §30.25).
+
+### D-440. SIO2's clocks: 500 kHz on the controller ports and up to 2 MHz on the card slots, where Sapphire clocks a byte every 4 µs on every port
+
+*D-440 and D-441 were opened at the D-383 step (2026-10-26), numbered from D-440 as the step was told, S10, S28 and the
+game packages being built beside it.*
+
+- **Opened:** 2026-10-26, at the D-383 step, by the document set's Wikipedia page giving the ports' clocks, where
+  `Sapphire_Native.md` §30.3 had said no document gives SIO2's rates.
+- **Documents read:** Wikipedia, "PlayStation 2 technical specifications" (the copy of S2, `docs/wikipedia/`): "2
+  proprietary PlayStation controller ports (250 kHz clock for PS1 and 500 kHz for PS2 controllers)", "2 proprietary
+  Memory Card slots [...] (250 kHz for PS1 cards. Up to 2 MHz for PS2 cards with an average sequential read speed of
+  130 KB/s)"; psx-spx "Controller and Memory Card Signals" (eight clocks a byte, the device's /ACK after each byte but
+  the last); ps2tek "SIO2 Registers" (SEND1 and SEND2, "Port1/2 Control?", of unknown purpose, one of each per port).
+- **Test program:** none. A rate of a port cannot be read from outside the console's own timing, and the referee runs
+  every queue in 25 IOP cycles.
+- **Referee:** not a witness (D-383).
+- **Conclusion:** **open**. At 500 kHz a controller's byte takes 16 µs and its /ACK gap; Sapphire's 4 µs a byte, a guess
+  of S25 [C], is four times faster on the controller ports and matches the cards' fastest clock. The ports' rates are
+  presumably what SEND1 and SEND2 hold, written by the BIOS per port; until a document gives their fields the rate stays
+  one constant. Slowing the controllers reaches the BIOS's polling and P8's runs, so it is a step of its own (§30.25's
+  questions).
+- **Depends on it:** `sio2::BYTE`.
+- **Pinned by:** `a_queue_ends_after_its_bytes_and_a_busy_card_holds_the_next_command`.
+- **Implemented in:** none.
+
+### D-441. SIO2, two effects of PCSX2 not taken: an answered controller's read after another command reads RECV1 100h above that command's value, and a command to the empty card slot leaves six bytes in FIFOOUT whatever its length
+
+- **Opened:** 2026-10-26, at the D-383 step, by `s25-empty` and `s25-empty-len` on PCSX2 2.8.2 (§30.25).
+- **Documents read:** ps2tek "SIO2_RECV1" (one value for a transfer: "Set after a transfer, indicating if the peripheral
+  is connected"); psx-spx "Controller and Memory Card Signals" (a byte clocked for each byte sent).
+- **Test program:** `s25-empty` and `s25-empty-len`, with both cards and with slot 1 empty.
+- **Referee:** PCSX2: a card's probe then a controller's read, 1200h; the empty slot's probe then the read, 1D200h; the
+  multitap's byte on the empty slot then the read, 1D200h; a controller read then the empty slot's probe, 1D100h; four
+  commands ending with an answered card's probe, 1100h whatever came before. A command of 2 to 20 bytes to the empty
+  card slot moved the next command's reply to byte 6 of the queue's replies; the empty controller port kept its length.
+  With both slots disabled a controller's read after the empty controller port began one byte late.
+- **Conclusion:** **open**, Sapphire keeping D-221's RECV1 (the last unanswered peripheral's value, 1100h if all
+  answered) and a reply of the command's length. One lineage and no document; each effect reads as the referee's own
+  arithmetic rather than a port's behaviour: a reply of fixed size from an empty slot would leave FIFOOUT out of step
+  with the bytes clocked, which psx-spx's byte-for-byte exchange does not allow.
+- **Depends on it:** `sio2::Sio2::start`'s RECV1 and replies.
+- **Pinned by:** `s25-empty-port`'s mixed queues (`tests/sio2.rs`).
 - **Implemented in:** none.
 
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha

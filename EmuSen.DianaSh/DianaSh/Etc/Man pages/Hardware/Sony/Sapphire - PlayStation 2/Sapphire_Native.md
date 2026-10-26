@@ -4166,7 +4166,9 @@ would mean forging the drive's verdict, which is the tester's to weigh (§30.12 
 - **The ports** (D-220): 0 and 1 the controller connectors, 2 and 3 the card slots; the peripheral byte picks the device
   (01h a controller, 81h a card, 21h a multitap); one nobody answers reads HiZ.
 - **Timing** [C]: a byte at 250,000 a second, 147 IOP cycles, on every port: no document gives SIO2's rates or says
-  what SEND1 and SEND2 set. A queue ends after its bytes, each card command started no sooner than its card is ready
+  what SEND1 and SEND2 set. *Amended 2026-10-26: Wikipedia's specifications page gives the ports' clocks, 500 kHz for
+  the controllers and up to 2 MHz for the cards (D-440, open); a command no device acknowledges ends at its peripheral
+  byte (D-383, §30.25).* A queue ends after its bytes, each card command started no sooner than its card is ready
   (§30.5). The IOP's interrupt 17 is raised at the end [R ps2tek "IOP Interrupts"]; no CTRL bit is read as masking it
   [C].
 - **DMA**: channel 11 (SIO2in) puts each word's four bytes into FIFOIN, lowest first, always ready; channel 12 (SIO2out)
@@ -4649,6 +4651,90 @@ as S24's writer did; **this writer is exposed and will never write the open repl
 - The card's authentication (Q7(b) holds; §30.21 Q1), the browser's own copy and title views, and the cause of D-383.
 - `memcard`'s page names no PlayStation 2 card example and still calls the N64's pak unread: the medium joins it by its
   extension like every other, and only the golden corpus's list of known media changed.
+
+### 30.25 Dispute D-383: the pad with card slot 1 empty (2026-10-26)
+
+*A dispute step on the tester's go of 2026-10-26 (§30.21 Q2, accepted as recommended); its product is
+`Sapphire_Disputes.md` D-383 and the fix it proves, with D-440 and D-441 opened on the way.* **The cause**: Sapphire made
+a command to a port where no device answers its peripheral byte last the command's whole length, 4 µs a byte; ended at
+that byte instead, as a device's absence shows by the /ACK that never follows the address byte (psx-spx "Device
+addressing"), the language screen takes the pad with slot 1 empty exactly as with a card. Nothing else of SIO2 changed:
+the reply to an empty port is HiZ for the command's whole length and RECV1 is D-221's.
+
+**The programs** (`tests/s25/`): `s25-empty` and `s25-empty-len`, probes for the referee, and `s25-empty-port`, graded,
+whose rule `tests/sio2.rs` holds. Each queue is timed on the IOP's timer 3 from just before CTRL's start to after the
+interrupt. `examples/s25.rs run <name> <cards>` runs any S25 program on Sapphire's board and prints its record as a
+referee's is read, `<cards>` two letters for the slots (`c` a card, `-` none); `ps2referee.py ram --cards` takes `none`
+for a slot left empty.
+
+| On PCSX2 2.8.2, slot 1 empty (measured 2026-10-26) | Sapphire | PCSX2 |
+|---|---|---|
+| a controller's read, alone, or before the empty slot's probe | HiZ 41h 5Ah FFh FFh; 1100h alone, 1D100h with the probe after | equal |
+| the empty slot's probe alone; the empty controller port | HiZ throughout; 1D100h, 2D100h | equal |
+| the empty slot's probe, then the read, in one queue | the read's reply at byte 4; 1D100h | at byte 6; 1D200h |
+| a command of 2 to 20 bytes to the empty slot, then the read | the read's reply after the command's length | at byte 6 whatever the length |
+| a queue's time, any queue | its bytes at 4 µs each (part A's rule) | 25 IOP cycles |
+| with both cards: a card's probe, then the read | 1100h | 1200h |
+
+So the referee agrees on every single command's reply and status, gives no evidence on time, and its two other effects,
+a fixed six bytes from an empty slot and RECV1 counting up after an answered controller, are not taken (D-441).
+
+### 30.26 The cause, found from the pictures and the hardware's counts (measured 2026-10-26)
+
+`examples/s25b.rs` with `S25B_UNITS` set prints, at each picture, SIO2's own counts (CTRL writes, FIFOOUT and RECV1
+reads) and the IOP DMA channels 11 and 12, and writes the count of every register access the IOP's units answered,
+values left out; `S25B_TAP` plugs a multitap into slot 1. For the step a count of each queue's outcome (every command
+answered, none, or some) and of the commands no device acknowledged, by port and peripheral byte, was kept in a build of
+its own, not committed: the SIO2 counterpart of the reports' unmapped accesses (§35.4). No program counter, instruction,
+memory content or command byte past the peripheral byte was printed. The Americas image, the crate's formatted card in
+slot 1 or none, an erased card in slot 2 as the machine makes it, Cross at frame 770:
+
+| Run | A command no device acknowledges takes | Queues to frame 360: none answered / all answered | The language screen after Cross |
+|---|---|---|---|
+| card in slot 1 | its whole length, 4 µs a byte | 338 / 81 | stepped on by frame 790 |
+| slot 1 empty | its whole length | 415 / 22 | unchanged to frame 900 |
+| slot 1 empty, a multitap in it | its whole length | 82 / 234 (and 511 of both) | stepped on by 790 |
+| slot 1 empty | its peripheral byte | 98 / 310 | stepped on by 790 |
+| slot 1 empty | its peripheral byte and 100 µs (the PlayStation kernel's wait, psx-spx) | 415 / 22 | unchanged |
+| slot 1 empty, every byte at 1 µs | its whole length, at that rate | 98 / 310 | stepped on by 790 |
+
+With slot 1 empty, from frame 300 on, nearly every queue was a single command no device acknowledged, the multitap's
+peripheral byte 21h on card port 2, about one a frame (frames 360-420: 65 of them, 3 queues answered), where with the
+card such commands stopped at frame 300 and the answered queues ran at about one a frame; so the controller was not
+being read, while the IOP and its SIO2 traffic went on. Every reply in those runs was the same in the two cases, HiZ and
+1D100h; only the time of the unanswered command decided whether the controller came to be read. With the rule the
+language screen's text fades from frame 780 and the transition's lights are drawn at frame 900 as in the card run
+(17,472 lit pixels at 780 in both); the three runs that took the press have equal counts at every picture. Why the BIOS
+needs the answer sooner than the whole command is where it waits, which is not looked for (`Sapphire_Plan.md` §1.4); the
+rule rests on the documents and the referee's replies, the measurement only showing that it is the one at fault.
+
+**On the way**, a hardware state the counts show in every run, card or none: IOP DMA channel 12 (SIO2out) started in
+slice mode for a block of 24h words about frame 50 and never ended (CHCR 41000200h, BCR 00010024h), since no queue
+after it leaves 144 bytes in FIFOOUT at once; the controller is read through FIFOOUT, and the BIOS reaches its menu, so
+it is recorded and not followed here (§30.29 Q3).
+
+### 30.27 The rule built, tests and seeded faults (2026-10-26)
+
+`sio2::Sio2::start` (`src/sio2/mod.rs`): a command is *addressed* when a device on its port takes its peripheral byte, a
+pad for 01h on a controller port, a card for 81h on a card port, a multitap for 21h on either port of its slot (behind a
+multitap, the pad or card of the slot it selects); an addressed command takes its length in bytes, as before, and one
+that is not takes one byte. Its reply and RECV1 are unchanged, and a card that refuses a command it was addressed by (the
+authentication's F0h, F3h and F7h) keeps the whole length. No new dependency.
+
+**Tests** [M, `cargo test --release`]: the crate **349 of 349** (part B's 347 and two new); the lib's
+`sio2::tests::a_command_nothing_acknowledges_ends_at_its_peripheral_byte` (an empty slot's probe and a missing
+multitap one byte each, a read after the empty slot's probe six bytes in all with its reply at byte 4, a card's refused
+command its whole length) and `tests/sio2.rs`'s test of the same name running `s25-empty-port` (29 graded words: each
+queue's time within 400 cycles above its bytes' worth, RECV1, the replies), both also under `test-checked`; clippy clean
+on every target. WiseMan's blast filter, `SapphireTests`: §30.29.
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the empty port's command taking its whole length again (part A's rule) | both tests named above |
+| F2 | the empty port's command taking no time at all | both tests |
+| F3 | a card that refuses a command treated as absent, its command cut to one byte | the lib's test (the program has no card) |
+
+Each was applied, the tests run, and the source restored.
 
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 

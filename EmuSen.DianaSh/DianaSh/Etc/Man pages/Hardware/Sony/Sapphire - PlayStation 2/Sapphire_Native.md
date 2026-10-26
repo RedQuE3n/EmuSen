@@ -11215,7 +11215,7 @@ measurement and is read by `Gs::new` too, so any test can run its GS on workers.
 threads, at least one and at most four**, chosen as MarsRT's was (`Mars_Native.md` §5.6.8, §6.16.6), by the desktop's
 series (§50.7): four is the fastest on the boot's windows (the language screen 49.3 ms against 58.2 at three and 78.3 at
 two) and no slower anywhere; Jak and Daxter's windows are level from two to four, its emulation thread being the bound.
-The cap at four is also the brief's for measuring beside other work. On this desktop (16 threads) Automatic is four;
+The cap at four also keeps the measurements beside other stages' work fair. On this desktop (16 threads) Automatic is four;
 on the handheld (the Legion Go S, 8 cores, 16 threads) it is four as well, **and its runs are owed** (§50.10): there,
 as MarsRT found (§6.16.8), four workers share a power budget with the thread that is the bound. An idle worker spins
 2,000 rounds before it parks; the spin was not tuned.
@@ -11237,7 +11237,10 @@ ps2autotests' GS texts as before, at one thread and on four workers** (`SAPPHIRE
 `pixel.rs` 13, `texture.rs` 11, `gs.rs` 12 (ps2autotests' `gs/label` and `gs/signal` among them), `gif.rs` 16 (S16 to
 S19's programs through PATH3 and VIF1), `pcrtc.rs` 6, `vif.rs` 14, `state.rs` 11 and the crate's unit tests, on the stage's
 base and again on each rebased tree. `threads.rs` and `pcrtc.rs` on four workers also pass in a debug build, where
-every PCRTC read checks that its lanes were waited for (`Gs::peek`).
+every PCRTC read checks that its lanes were waited for (`Gs::peek`). **The blast radius** (`blast.sh`) on the tree that
+merges (WiseMan `63f380138`, after S29 and D-860, neither touching the GS): the crate's whole suite, 461 tests in 32
+binaries, passed; the GS's files above on four workers, 105 in 9, passed; WiseMan's `SapphireTests`, 5 of 5, its list of
+the settings' keys gaining `gs_workers`.
 
 **ThreadSanitizer**, as MarsRT's RDP was checked (§5.6.7): the crate built with `-Zsanitizer=thread` on the stable
 compiler (`RUSTC_BOOTSTRAP=1`, clang's `libclang_rt.tsan`, `--target x86_64-unknown-linux-gnu` so that the proc-macros

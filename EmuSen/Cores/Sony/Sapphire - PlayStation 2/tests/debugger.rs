@@ -18,6 +18,7 @@ mod s22;
 mod s25;
 mod s26;
 mod s27;
+mod s33;
 
 use emusen_native::core::Core;
 use emusen_native::debug::{flag, range, run, stop};
@@ -217,4 +218,18 @@ fn the_sifs_messages_between_the_ee_and_the_iop_are_unchanged_by_the_debugger() 
         };
         the_debugger_changes_nothing(p.name, &make, 4, true, enter_the_iop);
     }
+}
+
+/// The IOP polling the SIF while the EE's DMA sends it a packet (S33, Sapphire_Native.md §47.8): its counts of polls
+/// measure its time against the EE's, so a probe that let it lag behind the board would change the state.
+#[test]
+fn the_iop_polling_the_sif_while_the_ees_dma_sends_is_unchanged_by_the_debugger() {
+    let mut m = machine(&s33::system);
+    for _ in 0..2 {
+        m.advance();
+    }
+    let [landed, flag, first, last] = s33::record(&m.sys);
+    assert!(landed > 10 && flag > 10, "the IOP counted its polls: {landed} and {flag}");
+    assert_eq!((first, last), (0x5300_0000, 0x5300_003F), "the packet landed whole");
+    the_debugger_changes_nothing("s33-sif-poll", &s33::system, 3, true, |_| {});
 }

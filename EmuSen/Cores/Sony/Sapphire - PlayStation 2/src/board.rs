@@ -432,6 +432,21 @@ impl Board {
         self.next
     }
 
+    /// A register whose read changes nothing and whose value only the board's events, the IOP side's wake and the EE's
+    /// own writes change: I_STAT, I_MASK and the DMAC's (EE User's Manual §3.2, chapter 5); its word, none for any other,
+    /// or while the reports count every access.
+    pub(crate) fn pure_register(&self, paddr: u32) -> Option<u32> {
+        let p = paddr & !0xF;
+        if self.reports.all || !(0x1000_0000..0x1001_0000).contains(&paddr) || timer::decode(p).is_some() || sif::ee_register(p).is_some() {
+            return None;
+        }
+        match p {
+            intc::I_STAT | intc::I_MASK => Some(self.intc.read(p)),
+            _ if Dmac::answers(p) => Some(self.dmac.read(p)),
+            _ => None,
+        }
+    }
+
     /// The DMAC at `at`, woken first if the IOP's side has changed a SIF FIFO; SIF0, SIF1 and SIF2 reach the SIF.
     fn step_dmac(&mut self, at: u64, spram: &mut [u8]) {
         if self.iop.bus.sif.take_wake_ee() {

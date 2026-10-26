@@ -135,8 +135,9 @@ fn count() -> Case {
     Case { name: "count", ee: program(&setup, 10, &flag_wait("s0")), iop: None, frames: 2, skips: true, refusal: None }
 }
 
-/// fromSPR: 64 quadwords from the scratchpad to RAM at s3, the last word waited for in memory or by BC0F.
-fn dma(bc0: bool) -> Case {
+/// fromSPR: 64 quadwords from the scratchpad to RAM at s3, the last word waited for in memory, by BC0F, or in the
+/// channel's CHCR, a register only the DMAC changes.
+fn dma(by: &'static str) -> Case {
     let setup = "
         lui t0, 0x7000
         ori t1, zero, 256
@@ -166,9 +167,18 @@ fn dma(bc0: bool) -> Case {
         lui t9, 0xa000
         or t9, t9, s3
     ";
-    let wait = if bc0 { "loop: bc0f loop\nnop".to_string() } else { "loop: lw t0, 0x3fc(t9)\nbeq t0, zero, loop\nnop".to_string() };
+    let wait = match by {
+        "bc0f" => "loop: bc0f loop\nnop",
+        "chcr" => "loop: lw t1, -0x3000(t0)\nandi t1, t1, 0x100\nbne t1, zero, loop\nnop",
+        _ => "loop: lw t0, 0x3fc(t9)\nbeq t0, zero, loop\nnop",
+    };
     let ee = program(setup, 4, &format!("{start}\n{wait}\nlui t8, 0x0001\naddu s3, s3, t8"));
-    Case { name: if bc0 { "dma-bc0f" } else { "dma-memory" }, ee, iop: None, frames: 2, skips: true, refusal: None }
+    let name = match by {
+        "bc0f" => "dma-bc0f",
+        "chcr" => "dma-chcr",
+        _ => "dma-memory",
+    };
+    Case { name, ee, iop: None, frames: 2, skips: true, refusal: None }
 }
 
 /// The IOP's SIF0 transfer of 64 words to the EE, made by an IOP program after a delay, and then the IOP waiting in a
@@ -239,7 +249,7 @@ fn window() -> Case {
         interrupts(0x8000, 0xA000_0000)
     );
     let wait = "lw s2, 0x1010(s0)\nlui t8, 0xbc00\nloop: lw t1, 0(t8)\nlw t0, 0x1010(s0)\nbeq t0, s2, loop\nnop";
-    Case { name: "window", ee: program(&setup, 4, wait), iop: None, frames: 2, skips: false, refusal: Some(Refusal::Device) }
+    Case { name: "window", ee: program(&setup, 4, wait), iop: None, frames: 2, skips: false, refusal: Some(Refusal::Window) }
 }
 
 /// A wait whose turn stores a value the memory already holds, through the cache and past it: passed.
@@ -284,8 +294,15 @@ fn vu1_busy() -> Case {
 /// VU1's microprogram for `vu1_busy`: about 32,767 turns of a three-pair loop, then its end.
 const VU1_LOOP: &str = "nop | iaddiu vi1, vi0, 0x7fff\ntop: nop | iaddi vi1, vi1, -1\nnop | ibne vi1, vi0, top\nnop | move vf0, vf0\n[e] nop | move vf0, vf0\nnop | move vf0, vf0";
 
+/// A wait on timer 0's count, which changes with time: refused.
+fn timer_poll() -> Case {
+    let setup = "lui t0, 0xb000\nori t1, zero, 0x80\nsw t1, 0x10(t0)";
+    let wait = "lui t0, 0xb000\nsw zero, 0(t0)\nloop: lw t1, 0(t0)\nandi t1, t1, 0x8000\nbeq t1, zero, loop\nnop";
+    Case { name: "timer-poll", ee: program(setup, 3, wait), iop: None, frames: 2, skips: false, refusal: Some(Refusal::Timer) }
+}
+
 fn cases() -> Vec<Case> {
-    vec![vu1_busy(), vblank(), timer(), count(), dma(false), dma(true), sif0(), timeout(), call(), window(), constant_store(), counter()]
+    vec![vu1_busy(), dma("chcr"), timer_poll(), vblank(), timer(), count(), dma("memory"), dma("bc0f"), sif0(), timeout(), call(), window(), constant_store(), counter()]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -375,7 +392,7 @@ fn every_wait_leaves_the_plain_runs_machine_on_the_recompiler() {
 /// The records' values: each wait ends after its event, Count and the timer moving on between waits.
 #[test]
 fn the_records_count_on_from_wait_to_wait() {
-    for c in [vblank(), timer(), count(), dma(false), dma(true)] {
+    for c in [vblank(), timer(), count(), dma("memory"), dma("bc0f")] {
         let m = equal(&c, Tier::Interpreter);
         let counts: Vec<u32> = (0..3).map(|i| word(&m, RECORD + 8 * i)).collect();
         assert!(counts.iter().all(|&v| v != 0), "{}: {counts:x?}", c.name);
@@ -438,6 +455,6 @@ fn turns_are_passed_while_a_unit_runs_and_end_where_the_dmac_writes_what_they_re
     let k = &m.idle.counts;
     assert!(k.replayed > 0 && k.ee_skips > 0, "VU1 running: {k:?}");
     assert!(m.sys.board.vpu.pairs_run()[1] > 50_000, "VU1 ran its microprogram beside the waits");
-    let m = equal(&dma(false), Tier::Interpreter);
+    let m = equal(&dma("memory"), Tier::Interpreter);
     assert!(m.idle.counts.written > 0, "the transfer's last quadword: {:?}", m.idle.counts);
 }

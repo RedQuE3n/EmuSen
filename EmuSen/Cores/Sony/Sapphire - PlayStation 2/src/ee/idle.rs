@@ -34,6 +34,13 @@ pub(crate) struct Mark {
     fills: u64,
 }
 
+/// What a turn's load or store reaches: memory, or a register whose reads change nothing (`Board::pure_register`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Access {
+    Memory(Reach),
+    Register(u32),
+}
+
 /// A turn proven to repeat: its cycles, its instructions, and the issue cycles that did not pair, which move Random.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Period {
@@ -58,9 +65,11 @@ pub(crate) fn random_after(r: u32, wired: u32, n: u64) -> u32 {
 impl Ee {
     /// Whether a turn may hold the instruction `word` at the PC: no coprocessor 0 or 2 move, no exception of its own, a
     /// load only from RDRAM, the scratchpad or the boot ROM, which nothing but the DMAC changes between the board's
-    /// events, and a store only to RDRAM or the scratchpad; an access's reach is given, so that the DMAC's writes there
-    /// can be watched and a store seen to leave the bytes as it found them. Read before the step, with nothing changed but the decode memo.
-    pub(crate) fn idle_admits(&mut self, word: u32) -> Result<Option<Reach>, Refusal> {
+    /// events, or from a register `pure` names, and a store only to RDRAM or the scratchpad. A memory access's reach is
+    /// given, so that the DMAC's writes there can be watched and a store seen to leave the bytes as it found them, and a
+    /// register's address, so that its value can be seen not to change. Read before the step, with nothing changed but
+    /// the decode memo.
+    pub(crate) fn idle_admits(&mut self, word: u32, pure: &dyn Fn(u32) -> bool) -> Result<Option<Access>, Refusal> {
         let op = ops::get(self.entry(word));
         match op.kind {
             ops::Kind::Cop2 => return Err(Refusal::Coprocessor),
@@ -77,7 +86,21 @@ impl Ee {
                 Some(Place::Physical(p, _)) => map::region(p) == Region::Rdram || (!reach.store && map::region(p) == Region::BootRom),
                 None => false,
             };
-            return if memory { Ok(Some(reach)) } else { Err(Refusal::Device) };
+            return match self.place(reach.vaddr) {
+                _ if memory => Ok(Some(Access::Memory(reach))),
+                Some(Place::Physical(p, _)) if !reach.store && reach.bytes <= 4 && pure(p) => Ok(Some(Access::Register(p))),
+                Some(Place::Physical(p, _)) => Err(match p {
+                    0x1000_0000..0x1000_2000 => Refusal::Timer,
+                    0x1000_2000..0x1000_8000 => Refusal::Unit,
+                    0x1000_F200..0x1000_F300 => Refusal::Sif,
+                    0x1000_0000..0x1100_0000 => Refusal::Device,
+                    0x1100_0000..0x1200_0000 => Refusal::Vu,
+                    0x1200_0000..0x1400_0000 => Refusal::Gs,
+                    0x1C00_0000..0x1C20_0000 => Refusal::Window,
+                    _ => Refusal::Elsewhere,
+                }),
+                _ => Err(Refusal::Elsewhere),
+            };
         }
         let control = matches!(op.category, super::timing::Category::Cop0 | super::timing::Category::Eret)
             || matches!(op.name, "syscall" | "break" | "cache" | "reserved" | "later")

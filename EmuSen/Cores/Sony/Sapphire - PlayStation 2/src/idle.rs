@@ -11,14 +11,14 @@ use crate::board::System;
 use crate::clock::IOP;
 use crate::dmac::Watch;
 use crate::ee::Place;
-use crate::ee::idle::{Mark, Period};
+use crate::ee::idle::{Access, Mark, Period};
 use crate::ee::observe::Reach;
 
 /// The farthest a backward jump may reach to make a loop's head, and the longest turn proven, in instructions.
 pub const SPAN: u32 = 0x400;
-pub const MAX_TURN: usize = 64;
+pub const MAX_TURN: usize = 256;
 /// The most distinct stores a proven turn makes.
-const MAX_STORES: usize = 8;
+const MAX_STORES: usize = 16;
 /// Heads tracked, and the arrivals at one head before its turn is first proven.
 const HEADS: usize = 1024;
 const ARRIVALS: u8 = 3;
@@ -33,8 +33,18 @@ const MAX_TURNS: u64 = 1 << 32;
 pub enum Refusal {
     /// A store that changed the memory it reached.
     Store,
-    /// A load from a device or a memory another unit writes between events (IOP RAM, the registers).
+    /// A load from a device or a memory another unit writes between events: the units' registers at 10000000h, the VUs'
+    /// memories, the GS's registers, IOP RAM through the EE's window, or anywhere else but memory.
     Device,
+    Vu,
+    Gs,
+    Window,
+    Elsewhere,
+    /// A read of a timer, which counts with time; of the VIFs', the GIF's or the IPU's registers or FIFOs; of the SIF's
+    /// registers, which the IOP writes at any time.
+    Timer,
+    Unit,
+    Sif,
     /// A COP2 instruction: VU0's macro mode, or a read of a VU's state.
     Coprocessor,
     /// A COP0 move, ERET, a system call, a trap, CACHE, an instruction not implemented.
@@ -59,7 +69,7 @@ pub enum Refusal {
     Budget,
 }
 
-pub const REFUSALS: usize = 13;
+pub const REFUSALS: usize = 20;
 
 impl Refusal {
     /// Whether the head waits longer before its next proof: not for what passes with time.
@@ -88,8 +98,9 @@ pub struct Counts {
     pub replayed: u64,
     /// Skips ended because the DMAC wrote memory the turn reaches.
     pub written: u64,
-    /// The refusals, by `Refusal`'s order.
+    /// The refusals, by `Refusal`'s order, and the arrivals at heads waiting after each kind, about a turn run each.
     pub refused: [u64; REFUSALS],
+    pub waited: [u64; REFUSALS],
 }
 
 #[derive(Clone, Copy, Default)]
@@ -98,6 +109,7 @@ struct Head {
     seen: u8,
     wait: u16,
     backoff: u8,
+    why: u8,
 }
 
 /// The skipper: whether it is on, the heads it has met, and its counts. None of it is the machine's state.
@@ -149,7 +161,7 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
     let at = (head as usize >> 2) & (HEADS - 1);
     let slot = &mut idle.heads[at];
     if slot.pc != head {
-        *slot = Head { pc: head, seen: 0, wait: 0, backoff: 0 };
+        *slot = Head { pc: head, seen: 0, wait: 0, backoff: 0, why: 0 };
     }
     if slot.seen < ARRIVALS {
         slot.seen += 1;
@@ -157,6 +169,7 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
     }
     if slot.wait > 0 {
         slot.wait -= 1;
+        idle.counts.waited[usize::from(slot.why)] += 1;
         return 0;
     }
     idle.counts.attempts += 1;
@@ -166,6 +179,7 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
         Ok(()) => slot.backoff = 0,
         Err(e) => {
             idle.counts.refused[e as usize] += 1;
+            slot.why = e as u8;
             if e.penalised() {
                 slot.backoff = (slot.backoff + 1).min(MAX_BACKOFF);
                 slot.wait = (1u16 << slot.backoff) - 1;
@@ -193,7 +207,7 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
     let mut offsets = [0u64; MAX_TURN];
     let turn = prove(sys, blocks, left, &mut offsets);
     let watch = sys.board.dmac.watch.take().expect("the watch stays while the turn is stepped");
-    let (steps, unpaired, traffic) = match turn {
+    let (steps, unpaired, traffic, registers) = match turn {
         Ok(t) => t,
         Err((steps, e)) => {
             *spare = watch;
@@ -209,7 +223,7 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
         }
     };
     counts.proofs += 1;
-    let passed = skip(sys, &a, &p, offsets, traffic, watch, spare, counts);
+    let passed = skip(sys, &a, &p, offsets, traffic, !registers, watch, spare, counts);
     if passed > 0
         && let Some(b) = blocks
     {
@@ -219,16 +233,17 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
 }
 
 /// One turn from the head stepped and checked: every instruction one a turn may hold, the lines, the field and the
-/// watched memory unchanged after each step, no exception, and every store leaving its bytes as it found them. The steps,
-/// each step's cycles from the head, the issue cycles that did not pair, and the turn's traffic past the caches; or the
-/// steps taken and the refusal.
-fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets: &mut [u64; MAX_TURN]) -> Result<(u64, u64, [u64; 3]), (u64, Refusal)> {
+/// watched memory and the registers read unchanged after each step, no exception, and every store leaving its bytes as
+/// it found them. The steps, each step's cycles from the head, the issue cycles that did not pair, the turn's traffic past
+/// the caches and whether it reads a register; or the steps taken and the refusal.
+fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets: &mut [u64; MAX_TURN]) -> Result<(u64, u64, [u64; 3], bool), (u64, Refusal)> {
     let head = sys.ee.pc;
     let b = &sys.board;
     let (traffic, lines, fields) = (b.traffic, b.lines(), b.pcrtc.fields);
     let t1 = sys.ee.timing.cycles();
     let mut stores = [(Reach { vaddr: 0, bytes: 0, store: true }, [0u8; 16]); MAX_STORES];
-    let (mut n, mut stored, mut unpaired) = (0usize, 0usize, 0u64);
+    let mut registers = [(0u32, 0u32); MAX_STORES];
+    let (mut n, mut stored, mut read, mut unpaired) = (0usize, 0usize, 0usize, 0u64);
     loop {
         let steps = n as u64;
         if steps == left {
@@ -239,9 +254,19 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
         }
         let pc = sys.ee.pc;
         let Some(word) = sys.ee.peek_fetch(&mut sys.board, pc) else { return Err((steps, Refusal::Device)) };
-        match sys.ee.idle_admits(word) {
+        let System { ee, board } = &mut *sys;
+        match ee.idle_admits(word, &|p| board.pure_register(p).is_some()) {
             Err(e) => return Err((steps, e)),
-            Ok(Some(r)) => {
+            Ok(Some(Access::Register(p))) => {
+                if !registers[..read].iter().any(|r| r.0 == p) {
+                    if read == MAX_STORES {
+                        return Err((steps, Refusal::Long));
+                    }
+                    registers[read] = (p, board.pure_register(p).expect("a pure register"));
+                    read += 1;
+                }
+            }
+            Ok(Some(Access::Memory(r))) => {
                 if r.store && !stores[..stored].iter().any(|s| s.0 == r) {
                     if stored == MAX_STORES {
                         return Err((steps, Refusal::Long));
@@ -268,7 +293,11 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
             return Err((steps, Refusal::Exception));
         }
         let b = &sys.board;
-        if b.lines() != lines || b.pcrtc.fields != fields || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty()) {
+        if b.lines() != lines
+            || b.pcrtc.fields != fields
+            || b.dmac.watch.as_ref().is_some_and(|w| !w.hits.is_empty())
+            || registers[..read].iter().any(|&(p, v)| b.pure_register(p) != Some(v))
+        {
             return Err((steps, Refusal::Event));
         }
         if sys.ee.pc == head && !sys.ee.in_delay_slot() {
@@ -280,7 +309,7 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
         return Err((steps, Refusal::Store));
     }
     let traffic = std::array::from_fn(|i| sys.board.traffic[i] - traffic[i]);
-    Ok((steps, unpaired, traffic))
+    Ok((steps, unpaired, traffic, read > 0))
 }
 
 /// Where an access lands as the DMAC addresses it: physical memory, or the scratchpad.
@@ -297,9 +326,10 @@ fn range_of(ee: &crate::ee::Ee, r: Reach) -> Option<(bool, u32, u32)> {
 /// while a unit runs, is `run_to` at each time. The skip ends at the first time the lines or the field change, the DMAC
 /// writes what the turn reaches, or (in the quick path, before it is taken) the IOP side wakes the DMAC: the turn's
 /// instructions up to that time then run on the core alone, shown the watched memory as it was before that time's write,
-/// and the wake is taken as `run_to` takes it. The steps passed.
+/// and the wake is taken as `run_to` takes it. A turn that reads a register is passed only while the quick path holds,
+/// since a register's change cannot be shown to the turn's instructions as it was (`replay` false).
 #[allow(clippy::too_many_arguments)]
-fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 3], mut watch: Box<Watch>, spare: &mut Box<Watch>, counts: &mut Counts) -> u64 {
+fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 3], replay: bool, mut watch: Box<Watch>, spare: &mut Box<Watch>, counts: &mut Counts) -> u64 {
     let t2 = sys.ee.timing.cycles();
     let turns = sys.ee.turns_before_compare(p.span).min(MAX_TURNS);
     if turns == 0 {
@@ -323,6 +353,9 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
                 break;
             }
             continue;
+        }
+        if !replay {
+            break;
         }
         quick = false;
         counts.replayed += 1;

@@ -101,7 +101,7 @@ fn load() -> String {
 fn skipped(m: &Machine, cycles: u64) -> String {
     let k = &m.idle.counts;
     format!(
-        "skips {}, EE cycles skipped {} of {} ({:.1} %), steps skipped {}, IOP cycles skipped {} in {} skips, proofs {} of {} attempts, woken {}, refused {:?}",
+        "skips {}, EE cycles skipped {} of {} ({:.1} %), steps skipped {}, IOP cycles skipped {} in {} skips, proofs {} of {} attempts, woken {}, replayed turns {}, ended by the DMAC {}, refused {:?}, arrivals waiting after each {:?}",
         k.ee_skips,
         k.ee_cycles,
         cycles,
@@ -112,7 +112,10 @@ fn skipped(m: &Machine, cycles: u64) -> String {
         k.proofs,
         k.attempts,
         k.woken,
-        k.refused
+        k.replayed,
+        k.written,
+        k.refused,
+        k.waited
     )
 }
 

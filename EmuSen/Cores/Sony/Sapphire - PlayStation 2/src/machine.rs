@@ -99,6 +99,9 @@ pub struct Machine {
     pub blocks: Option<Box<crate::blocks::Blocks>>,
     /// Idle skipping (S33, Sapphire_Native.md §47): off unless chosen, so that a machine made here is the plain run.
     pub idle: crate::idle::Idle,
+    /// The identity of the disc the host put in the drive, at create or through `MEDIA`; none for an empty drive or one
+    /// a runner filled itself (Sapphire_Native.md §49.4).
+    pub drive_disc: Option<u64>,
 }
 
 /// What is left of a frame's batch of 1,024 steps after `n` more, when `n` may run past its end: a skip crosses a
@@ -116,7 +119,7 @@ fn batch_left(left: u64, n: u64) -> u64 {
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let sys = Machine::console(market, ports);
-        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new(), blocks: None, idle: crate::idle::Idle::new(false) };
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new(), blocks: None, idle: crate::idle::Idle::new(false), drive_disc: None };
         for slot in &mut m.sys.board.iop.bus.sio2.slots {
             slot.cards[0] = Some(MemoryCard::erased());
         }
@@ -167,6 +170,23 @@ impl Machine {
     /// as a console started with a game in it (Sapphire_Native.md §39.2).
     pub fn disc_at_power_on(&mut self, disc: crate::cdvd::Disc) {
         self.sys.board.iop.bus.cdvd.in_at_power_on(disc);
+    }
+
+    /// What a state names the console's media by: the image's identity while the drive holds what it was created with
+    /// (the image's disc, or nothing for a program or an empty start), so that every earlier state keeps its name; else
+    /// the image's and the drive's disc's together, 0 for an empty drive, so that a state loads only over its own disc
+    /// (Sapphire_Native.md §49.4).
+    pub fn media_identity(&self) -> u64 {
+        let image = self.media.identity();
+        let created = if matches!(self.media, Media::Disc(_)) { Some(image) } else { None };
+        if self.drive_disc == created {
+            return image;
+        }
+        let mut h = image;
+        for b in self.drive_disc.unwrap_or(0).to_le_bytes() {
+            h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01B3);
+        }
+        h
     }
 
     pub fn pal(&self) -> bool {

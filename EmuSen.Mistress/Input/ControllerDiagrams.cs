@@ -14,6 +14,9 @@ namespace EmuSen.Mistress.Input
         // The PlayStation's digital pad in its engine's info; any other pad of the console is drawn as the DualShock.
         public const string PlayStationDigital = "psx.pad";
 
+        // The PlayStation 2's digital pad in its engine's info; the DualShock 2, whose controls are the DualShock's button for button, is drawn as it - see Sapphire_Native.md §49.6.
+        public const string PlayStation2Digital = "ps2.digital";
+
         // <controller> is the pad the port is set to where the window can tell, by its id in the engine's info - see EmuSen_Settings_Reference.md §4.93.
         public static ControllerLayout LayoutFor(string console, string? controller = null) => console.ToUpperInvariant() switch
         {
@@ -25,6 +28,7 @@ namespace EmuSen.Mistress.Input
             "SG-1000" => ControllerLayout.Sg1000,
             _ when IsGenesis(console) => controller == GenesisThreeButton ? ControllerLayout.Genesis : ControllerLayout.GenesisSixButton,
             "PLAYSTATION" => controller == PlayStationDigital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
+            "PLAYSTATION 2" => controller == PlayStation2Digital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
             _ => ControllerLayout.Gamepad,
         };
 
@@ -45,7 +49,7 @@ namespace EmuSen.Mistress.Input
             [PadControl.Select] = "Mode",
         };
 
-        // The PlayStation's buttons by the RetroPad controls the core gives them, position for position: Triangle on X, Circle on A, Cross on B, Square on Y - see Diamond_Plan.md §4.2.
+        // The PlayStation's and the PlayStation 2's buttons by the RetroPad controls the cores give them, position for position: Triangle on X, Circle on A, Cross on B, Square on Y - see Diamond_Plan.md §4.2 and Sapphire_Plan.md §4.2.
         private static readonly Dictionary<PadControl, string> PlayStation = new()
         {
             [PadControl.X] = "Triangle",
@@ -82,7 +86,7 @@ namespace EmuSen.Mistress.Input
         public static string RegionFor(string console, PadControl control) =>
             LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region
             : IsGenesis(console) && Genesis.TryGetValue(control, out string? button) ? button
-            : string.Equals(console, "PlayStation", StringComparison.OrdinalIgnoreCase) && PlayStation.TryGetValue(control, out string? face) ? face
+            : LayoutFor(console) is ControllerLayout.PlayStation or ControllerLayout.DualShock && PlayStation.TryGetValue(control, out string? face) ? face
             : LayoutFor(console) is ControllerLayout.MasterSystem or ControllerLayout.Sg1000 && MasterSystem.TryGetValue(control, out string? sega) ? sega
             : control.ToString();
 

@@ -70,6 +70,7 @@ namespace EmuSen.Crystal.Managed
             if (EmulatorSession.MissingFirmwareFor(path, chosen) is { Count: > 0 } missing)
                 throw new CrystalException(CrystalNumbers.Firmware, $"{Path.GetFileName(path)} needs firmware the library does not hold: {string.Join("; ", missing.Select(m => m.Describe()))}");
             try { return CoreFactory.Load(path, headless: true, new CheatRegistry(), chosen, lender, options); }
+            catch (Cores.Native.ConsoleFirmwareException e) { throw new CrystalException(CrystalNumbers.Firmware, e.Message); }
             catch (Cores.Native.CoreNotApprovedException e) { throw new CrystalException(CrystalNumbers.NotApproved, e.Message); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
             catch (IOException e) when (options.PackageRoot is not null) { throw new CrystalException(CrystalNumbers.Io, e.Message); }

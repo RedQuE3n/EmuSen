@@ -3,7 +3,9 @@
 The PlayStation 2 core, in Rust on the core ABI v1. Planned 2026-10-23
 (`EmuSen.DianaSh/DianaSh/Etc/Man pages/Hardware/Sony/Sapphire - PlayStation 2/Sapphire_Plan.md`); stage S1, a stub
 marked in development that recognises an EE program or a PlayStation 2 disc and emulates nothing, built 2026-10-24
-and recorded in `Sapphire_Native.md` beside the plan. `cargo test --release` runs its tests.
+and recorded in `Sapphire_Native.md` beside the plan; offered to players on 2026-10-26 at stage S29 (§49 there), on
+the player's own BIOS. `cargo test --release` runs its tests; `kit/ps2-sample.txt` names the tester's discs for the
+conformance kit's corpus form.
 
 `programs/` holds the project's bare EE programs for the referees (`Sapphire_Referees.md` §4, from stage S3):
 `cargo run --release --example elf -- programs/record.s record.elf` assembles one with `emusen-mips` into an ELF, and

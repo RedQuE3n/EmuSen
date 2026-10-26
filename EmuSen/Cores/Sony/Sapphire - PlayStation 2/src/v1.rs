@@ -10,7 +10,7 @@ use crate::debugger;
 use crate::cdvd::nvm;
 use crate::machine::{AUDIO_RATE, BIOS_BYTES, MEMORIES, Machine, Market, RAM_ID};
 use crate::pcrtc::{MAX_HEIGHT, MAX_WIDTH};
-use crate::media::{Media, Refusal};
+use crate::media::{DiscMarket, Media, Refusal};
 use crate::sio2::card::{CARD_BYTES, MemoryCard};
 use crate::state::{OLDEST_STATE_VERSION, STATE_VERSION, STATUS_OTHER_BIOS, STATUS_QUEUE_PAST_STATE};
 
@@ -126,8 +126,15 @@ pub fn bios(market: Market) -> Firmware {
     }
 }
 
-/// The extensions the core opens at S1, the system pack's checked subset (Sapphire_Plan.md §11 Q16).
-pub const EXTENSIONS: [&str; 1] = [".elf"];
+/// The extensions the core opens, the system pack's checked subset, `.m3u` being the host's (Sapphire_Native.md §49.2).
+pub const EXTENSIONS: [&str; 5] = [".elf", ".iso", ".chd", ".cue", ".bin"];
+
+/// What a player reads of the core: what runs, what does not, and the gates of Sapphire_Plan.md §8 met and not yet met
+/// when it was offered (decided 2026-10-26 by the tester, Sapphire_Native.md §49.1).
+/// The gates as the accuracy record's notes, one line each (Sapphire_Native.md §49.3).
+pub const GATES: &str = "G1 met: ps2autotests' cpu programs equal their texts but D-28's line; the IOP's crate passes the r3000 suite.\nG2 met: 75 of the 78 ps2autotests print their texts whole on the player's BIOS, the three disputes D-28, D-363 and S13's efu.\nG3 not yet: the GS programs equal PCSX2's pictures or are disputes, a second referee lineage owed.\nG4 met: the kit on the tester's discs, the fit audit, the CRT profile (Sapphire_Native.md §49).\nG5 not yet: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2 at none (D-465).\nG6 not yet: 0.4 to 5 frames a second on the desktop against the console's 59.94.\nG7 met: each debugger claim a test (Sapphire_Native.md §41).\nG8 not yet: the clone check and the disputes read by another, at S48.\nG9 not yet: Dark Cloud 2 returns to the menu on the player's BIOS (D-465); the open BIOS is not written.\nG10 met: the console starts to its menu with an empty tray.\nG11 met: the memory card manager's PlayStation 2 tab.";
+
+pub const DESCRIPTION: &str = "The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. Offered to players on 2026-10-26 before it is fast: it needs the player's own BIOS, runs games at about 0.4 to 5 frames a second on a desktop, and a game on the player's BIOS sees no memory card. Gates met: G1 and G2 (the test programs, their failures disputes), G4 (the frontend), G7 (the debugger), G10 (the start with no disc) and G11 (the memory card manager). Not yet met: G3 (pictures graded against one referee), G5 (the goldens: two of the three bench games at their anchors), G6 (speed), G8 (the clean-room check, at S48) and G9 (Dark Cloud 2 returns to the menu, D-465; the open BIOS not written).";
 
 pub const REGION_KEY: &str = "region";
 /// The EE's tier: the interpreter, or the recompiler of S36 (Sapphire_Native.md §44).
@@ -203,23 +210,19 @@ pub fn recompiler_chosen(setting: Option<&str>) -> bool {
     std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) != Some("interpreter")
 }
 
-/// The market a machine runs as: the setting's, else the Americas' until the disc's own is read at S29.
-pub fn market_of(setting: Option<&str>) -> Market {
-    REGIONS.iter().find(|r| Some(r.0) == setting).map_or(Market::Americas, |r| r.2)
-}
-
-/// The market of the console: the setting's when it names one; on Automatic, that of the BIOS entry the player's file
-/// came in, the Americas' first, so that the BIOS's own market decides the region (Sapphire_Plan.md §5.9); with none, the
-/// Americas'.
-pub fn console_market(setting: Option<&str>, files: &[u32]) -> Market {
+/// The market of the console: the setting's when it names one; on Automatic, the disc's own market where its serial or
+/// VMODE names one, since a console boots only its market's discs (Sapphire_Native.md §49.2); else that of the BIOS
+/// entry the player's file came in, the Americas' first, so that the BIOS's own market decides the region
+/// (Sapphire_Plan.md §5.9); with none, the Americas'.
+pub fn console_market(setting: Option<&str>, disc: Option<Market>, files: &[u32]) -> Market {
     if let Some(r) = REGIONS.iter().find(|r| Some(r.0) == setting) {
         return r.2;
     }
-    [Market::Americas, Market::Europe, Market::Japan].into_iter().find(|&m| files.contains(&bios(m).which)).unwrap_or(Market::Americas)
+    disc.or_else(|| [Market::Americas, Market::Europe, Market::Japan].into_iter().find(|&m| files.contains(&bios(m).which))).unwrap_or(Market::Americas)
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::MEDIA | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS;
+    const CAPABILITIES: u64 = caps::AXES | caps::MEDIA | caps::BORROW | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS;
 
     fn info() -> Info {
         Info {
@@ -229,7 +232,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sony PlayStation 2 in Rust, written from hardware documents and graded by test programs. In development: with the player's own BIOS the console starts to its menu, and an EE program is started in the menu's place by fast boot; discs are recognised but not yet started.".into()),
+            description: Some(DESCRIPTION.into()),
             systems: vec![emusen_native::core::System {
                 id: "ps2".into(),
                 name: "Sony PlayStation 2".into(),
@@ -237,9 +240,10 @@ impl Core for Machine {
                 regions: vec![Region::Ntsc, Region::Pal],
                 controllers: controllers(),
                 firmware: vec![bios(Market::Japan), bios(Market::Americas), bios(Market::Europe)],
-                development: true,
+                development: false,
             }],
             deterministic: true,
+            accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "ps2autotests on the player's BIOS, the project's programs against the referees, and the conformance kit".into(), notes: GATES.into() }),
             ..Info::default()
         }
     }
@@ -257,8 +261,16 @@ impl Core for Machine {
         })
     }
 
+    /// A disc of a known market asks for that market's BIOS; a program, a disc of no known market, and a sheet or CHD
+    /// whose disc this call cannot open ask for every market's, the console taking its own (Sapphire_Native.md §49.2).
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
-        Media::read(image).map(|_| vec![bios(market_of(None))]).unwrap_or_default()
+        let every = || [Market::Americas, Market::Europe, Market::Japan].map(bios).to_vec();
+        match Media::read(image) {
+            Ok(Media::Disc(d)) => d.market().map_or_else(every, |m| vec![bios(market_from(m))]),
+            Ok(_) => every(),
+            Err(_) if emusen_disc::is_sheet(image) || image.starts_with(CHD_MAGIC) => every(),
+            Err(_) => Vec::new(),
+        }
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -276,8 +288,16 @@ impl Core for Machine {
         }
     }
 
+    /// A program waits for the fast boot; a disc is in the drive when the console is switched on (Sapphire_Native.md §49.2).
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        Machine::make(request, recognise(request.image)?)
+        let (media, disc) = judge(request.image, &request.files)?;
+        let identity = media.identity();
+        let mut m = Machine::make(request, media)?;
+        if let Some(d) = disc {
+            m.disc_at_power_on(d);
+            m.drive_disc = Some(identity);
+        }
+        Ok(m)
     }
 
     /// The console with its tray closed and empty powers on to its BIOS's menu (Sapphire_Plan.md §8, G10).
@@ -492,11 +512,18 @@ impl Core for Machine {
         }
         let disc = match insert.image {
             None => None,
-            Some(image) => Some(open_disc(image, &insert.files)?),
+            Some(image) => match judge(image, &insert.files)? {
+                (media, Some(d)) => Some((media.identity(), d)),
+                (_, None) => {
+                    detail("the image is an EE program; a program is opened as a game, not put in the drive");
+                    return Err(STATUS_NOT_A_DISC);
+                }
+            },
         };
         // A restore with the tray closed is the host setting the drive for a state, through the tray as a hand would.
         self.set_tray(true);
-        self.insert_disc(disc);
+        self.drive_disc = disc.as_ref().map(|d| d.0);
+        self.insert_disc(disc.map(|d| d.1));
         self.set_tray(open);
         Ok(())
     }
@@ -504,55 +531,90 @@ impl Core for Machine {
 
 /// What an image is by the recogniser, or the status and words it is refused with.
 fn recognise(image: &[u8]) -> Result<Media, i32> {
-    match Media::read(image) {
-        Ok(m) => Ok(m),
-        Err(Refusal::Unknown) => {
-            detail(&format!("the {}-byte image is neither an ELF nor an ISO 9660 disc image", image.len()));
-            Err(STATUS_NOT_PS2)
+    Media::read(image).map_err(|r| refused(r, image.len()))
+}
+
+/// A refusal's status, its words given as the call's detail.
+fn refused(r: Refusal, bytes: usize) -> i32 {
+    match r {
+        Refusal::Unknown => {
+            detail(&format!("the {bytes}-byte image is neither an ELF nor an ISO 9660 disc image"));
+            STATUS_NOT_PS2
         }
-        Err(Refusal::NotEe(what)) => {
+        Refusal::NotEe(what) => {
             detail(&format!("the image is {what}; Sapphire runs programs of the EE"));
-            Err(STATUS_ELF_NOT_EE)
+            STATUS_ELF_NOT_EE
         }
-        Err(Refusal::Truncated { needs, has }) => {
+        Refusal::Truncated { needs, has } => {
             detail(&format!("the ELF is {has} bytes; its headers and segments take {needs}"));
-            Err(STATUS_ELF_TRUNCATED)
+            STATUS_ELF_TRUNCATED
         }
-        Err(Refusal::PlayStation) => {
+        Refusal::PlayStation => {
             detail("the disc is a PlayStation game (its SYSTEM.CNF names a BOOT program, or it has no SYSTEM.CNF and carries Sony's licence text or PSX.EXE); open it on Diamond");
-            Err(STATUS_PLAYSTATION_DISC)
+            STATUS_PLAYSTATION_DISC
         }
-        Err(Refusal::NoBoot2(what)) => {
+        Refusal::NoBoot2(what) => {
             detail(&format!("the disc holds an ISO 9660 volume, but {what}"));
-            Err(STATUS_NO_BOOT2)
+            STATUS_NO_BOOT2
         }
     }
 }
 
-/// A disc for the drive: recognised by its image, a sheet by its first track's file, a CHD on opening alone (its
-/// sectors are the container's); then opened from its kept bytes and companions (Sapphire_Native.md §25.2).
-fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<crate::cdvd::Disc, i32> {
+/// A CHD's magic, the container's first eight bytes.
+const CHD_MAGIC: &[u8] = b"MComprHD";
+
+/// The market a disc names, as the console's.
+fn market_from(m: DiscMarket) -> Market {
+    match m {
+        DiscMarket::Japan => Market::Japan,
+        DiscMarket::Americas => Market::Americas,
+        DiscMarket::Europe => Market::Europe,
+    }
+}
+
+/// What an image is and, for a disc, the drive's medium it makes: a sheet judged by its first track's file, a CHD by the
+/// volume on the disc it opens to, any other image by its own bytes; the disc opened from the kept bytes and companions
+/// (Sapphire_Native.md §25.2, §49.2). A program makes no disc.
+fn judge(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(Media, Option<crate::cdvd::Disc>), i32> {
     let mut companions: Vec<(u32, &[u8])> = files.iter().filter(|f| f.which >= flags::FILE_MEDIA).map(|f| (f.which, f.data)).collect();
     companions.sort_by_key(|c| c.0);
-    let sheet = emusen_disc::is_sheet(image);
-    let probe = if sheet { companions.first().map_or(&[][..], |c| c.1) } else { image };
-    if !image.starts_with(b"MComprHD") && matches!(recognise(probe)?, Media::Elf(_)) {
-        detail("the image is an EE program; a program is opened as a game, not put in the drive");
-        return Err(STATUS_NOT_A_DISC);
-    }
+    let (sheet, chd) = (emusen_disc::is_sheet(image), image.starts_with(CHD_MAGIC));
+    let media = if chd {
+        None
+    } else {
+        let media = recognise(if sheet { companions.first().map_or(&[][..], |c| c.1) } else { image })?;
+        if matches!(media, Media::Elf(_)) {
+            return Ok((media, None));
+        }
+        Some(media)
+    };
     // A sheet's text is parsed and dropped, so only a lone image or a track's file is kept.
     let kept = if sheet { Kept::from(image.to_vec()) } else { keep(image) };
-    crate::cdvd::open(kept, companions.into_iter().map(|c| keep(c.1)).collect()).map_err(|e| {
+    let mut disc = crate::cdvd::open(kept, companions.into_iter().map(|c| keep(c.1)).collect()).map_err(|e| {
         detail(&format!("the disc does not open: {e:?}"));
         STATUS_BAD_DISC
-    })
+    })?;
+    let media = match media {
+        Some(m) => m,
+        None => {
+            let count = match &disc {
+                crate::cdvd::Disc::Dvd(d) => u64::from(d.sectors()),
+                _ => 0,
+            };
+            Media::read_by(&mut |n| crate::cdvd::user_sector(&mut disc, n), count, false).map_err(|r| refused(r, image.len()))?
+        }
+    };
+    if matches!(media, Media::Elf(_)) {
+        return Ok((media, None));
+    }
+    Ok((media, Some(disc)))
 }
 
 impl Machine {
     /// The machine for `media`: the files checked, the settings read, the market chosen from the setting or the BIOS
     /// given, the cards, the EEPROM and the BIOS placed.
     fn make(request: &Create<'_>, media: Media) -> Result<Machine, i32> {
-        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which) && !NVM_FILES.contains(&f.which)) {
+        if let Some(f) = request.files.iter().find(|f| !(BIOS_JAPAN..=BIOS_EUROPE).contains(&f.which) && !CARD_FILES.contains(&f.which) && !NVM_FILES.contains(&f.which) && f.which < flags::FILE_MEDIA) {
             detail(&format!("file {} is not one Sapphire names", f.which));
             return Err(status::BAD_FILE);
         }
@@ -570,7 +632,11 @@ impl Machine {
         }
         let s = &request.settings;
         let firmware: Vec<u32> = request.files.iter().map(|f| f.which).filter(|w| (BIOS_JAPAN..=BIOS_EUROPE).contains(w)).collect();
-        let market = console_market(s.get(REGION_KEY), &firmware);
+        let disc_market = match &media {
+            Media::Disc(d) => d.market().map(market_from),
+            _ => None,
+        };
+        let market = console_market(s.get(REGION_KEY), disc_market, &firmware);
         let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK2) && p.0 != "none").map(|p| p.0);
         let mut m = Machine::new(media, market, [port(PAD_KEYS[0]), port(PAD_KEYS[1])]);
         m.firmware = firmware;
@@ -673,6 +739,68 @@ mod tests {
         }
     }
 
+    /// On Automatic a disc's serial, else its VMODE, names the console's market, and the setting overrides it
+    /// (Sapphire_Native.md §49.2).
+    #[test]
+    fn a_discs_own_market_is_the_consoles_on_automatic() {
+        let disc = |cnf: &str| volume(20, cnf, false);
+        for (cnf, setting, market) in [
+            ("BOOT2 = cdrom0:\\SLES_512.34;1\r\nVMODE = PAL\r\n", "auto", Market::Europe),
+            ("BOOT2 = cdrom0:\\SCES_500.00;1\r\nVMODE = NTSC\r\n", "auto", Market::Europe),
+            ("BOOT2 = cdrom0:\\SLPM_650.01;1\r\n", "auto", Market::Japan),
+            ("BOOT2 = cdrom0:\\SCKA_200.01;1\r\n", "auto", Market::Japan),
+            ("BOOT2 = cdrom0:\\SCUS_971.24;1\r\n", "auto", Market::Americas),
+            ("BOOT2 = cdrom0:\\GAME.ELF;1\r\nVMODE = PAL\r\n", "auto", Market::Europe),
+            ("BOOT2 = cdrom0:\\GAME.ELF;1\r\n", "auto", Market::Americas),
+            ("BOOT2 = cdrom0:\\SLES_512.34;1\r\nVMODE = PAL\r\n", "ps2.us", Market::Americas),
+        ] {
+            assert_eq!(create(&disc(cnf), &[(REGION_KEY, setting)]).unwrap().market, market, "{cnf} on {setting}");
+        }
+        let bios = vec![0u8; BIOS_BYTES];
+        let m = create_with(&disc("BOOT2 = cdrom0:\\SLES_512.34;1\r\n"), &[], vec![emusen_native::abi::File { which: BIOS_AMERICAS, data: &bios }]).unwrap();
+        assert_eq!((m.market, m.booted, m.machine_info().firmware), (Market::Europe, false, vec![(BIOS_EUROPE, FirmwareSource::Absent)]), "a European disc wants the European BIOS, which a host refuses the game without");
+    }
+
+    /// A disc image given at create is in the drive when the console is switched on, its tray closed, as a console
+    /// started with a game in it; a program leaves the drive empty (Sapphire_Native.md §49.2).
+    #[test]
+    fn a_disc_given_at_create_is_in_the_drive_at_power_on() {
+        for image in [cd(), raw(&cd()), dvd()] {
+            let mut m = create(&image, &[]).unwrap();
+            let drive = m.drives()[0].clone();
+            assert!(drive.loaded && !drive.lid_open);
+            let kind = m.sys.board.iop.bus.cdvd.read8(crate::cdvd::reg::DISK_TYPE);
+            assert!(matches!(kind, crate::cdvd::disk_type::PS2_CD | crate::cdvd::disk_type::PS2_DVD), "{kind:#04x}");
+        }
+        assert!(!create(&elf(), &[]).unwrap().drives()[0].loaded);
+        let sheet = b"FILE \"track.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
+        let track = raw(&cd());
+        let file = emusen_native::abi::File { which: flags::FILE_MEDIA, data: &track };
+        let m = create_with(sheet, &[], vec![file]).unwrap();
+        assert!(matches!(&m.media, Media::Disc(d) if d.serial.as_deref() == Some("SLUS-20999")) && m.drives()[0].loaded, "a sheet, judged by its track");
+    }
+
+    /// A state names the drive's disc: a state made with the created disc loads over it, and over an emptied or another
+    /// drive it is refused as another disc's until the host restores the disc (Sapphire_Native.md §49.4).
+    #[test]
+    fn a_state_keeps_to_the_disc_in_the_drive() {
+        let mut m = create(&dvd(), &[]).unwrap();
+        let identity = m.media.identity();
+        assert_eq!(m.media_identity(), identity, "the created disc in the drive: the image's own name, as every earlier state");
+        let mut state = vec![0u8; m.state_size()];
+        m.save_state(&mut state).unwrap();
+        m.media_lid(DRIVE, true).unwrap();
+        insert(&mut m, None).unwrap();
+        m.media_lid(DRIVE, false).unwrap();
+        assert!(matches!(m.load_state(&state), Err(crate::state::StateError::WrongMedia { .. })), "an empty drive");
+        m.media_lid(DRIVE, true).unwrap();
+        insert(&mut m, Some(&cd())).unwrap();
+        assert!(matches!(m.load_state(&state), Err(crate::state::StateError::WrongMedia { .. })), "another disc");
+        m.media_insert(DRIVE, &Insert { image: Some(&dvd()), files: Vec::new(), restore: true }).unwrap();
+        m.load_state(&state).unwrap();
+        assert_eq!(empty(Vec::new()).media_identity(), Media::Empty.identity(), "an empty start: the name it always had");
+    }
+
     #[test]
     fn the_ee_tier_setting_defaults_to_the_recompiler_and_chooses_the_interpreter() {
         let s = schema().into_iter().find(|s| s.key == EE_TIER_KEY).expect("the tier is a setting");
@@ -738,15 +866,22 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let ps2 = &info.systems[0];
-        assert_eq!((ps2.id.as_str(), ps2.extensions.as_slice(), ps2.development), ("ps2", &[".elf".to_string()][..], true));
+        assert_eq!((ps2.id.as_str(), ps2.extensions.iter().map(String::as_str).collect::<Vec<_>>(), ps2.development), ("ps2", vec![".elf", ".iso", ".chd", ".cue", ".bin"], false));
+        assert!(info.description.as_deref().is_some_and(|d| d.contains("G6 (speed)") && d.contains("D-465")), "the gates not met are named");
+        assert_eq!(info.accuracy.as_ref().map(|a| a.notes.lines().count()), Some(11), "one line for each gate, G1 to G11");
         assert_eq!(ps2.firmware.iter().map(|f| (f.which, f.name.as_str(), f.size, f.required)).collect::<Vec<_>>(), [
             (16, "ps2-0230j-20080220.bin", 4 << 20, false),
             (17, "ps2-0230a-20080220.bin", 4 << 20, false),
             (18, "ps2-0230e-20080220.bin", 4 << 20, false),
         ]);
         assert_eq!(ps2.controllers.iter().map(|c| (c.id.as_str(), c.buttons.len(), c.axes.len())).collect::<Vec<_>>(), [(DUALSHOCK2, 16, 4), (DIGITAL, 14, 0)]);
-        assert_eq!(Machine::firmware_for(&cd()).iter().map(|f| f.which).collect::<Vec<_>>(), [BIOS_AMERICAS]);
-        assert!(Machine::firmware_for(&[1, 2, 3]).is_empty());
+        let asked = |image: &[u8]| Machine::firmware_for(image).iter().map(|f| f.which).collect::<Vec<_>>();
+        assert_eq!(asked(&cd()), [BIOS_AMERICAS], "a disc asks for its own market's BIOS");
+        assert_eq!(asked(&volume(20, "BOOT2 = cdrom0:\\SLES_512.34;1\r\nVMODE = PAL\r\n", false)), [BIOS_EUROPE]);
+        assert_eq!(asked(&volume(20, "BOOT2 = cdrom0:\\SLPM_650.01;1\r\n", false)), [BIOS_JAPAN]);
+        let every = [BIOS_AMERICAS, BIOS_EUROPE, BIOS_JAPAN];
+        assert_eq!((asked(&elf()), asked(b"FILE \"game.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n")), (every.to_vec(), every.to_vec()), "a program, and a sheet this call cannot follow, ask for every market's");
+        assert!(asked(&[1, 2, 3]).is_empty());
     }
 
     #[test]

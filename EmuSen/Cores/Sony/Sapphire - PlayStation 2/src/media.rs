@@ -31,13 +31,41 @@ pub struct Elf {
     pub gp: u32,
 }
 
-/// A PlayStation 2 disc: whether its sectors are raw, how many there are, the program BOOT2 names and its serial.
+/// A PlayStation 2 disc: whether its sectors are raw, how many there are, the program BOOT2 names, its serial, and
+/// whether SYSTEM.CNF's VMODE line says PAL.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Disc {
     pub raw: bool,
     pub sectors: u64,
     pub program: String,
     pub serial: Option<String>,
+    pub pal: bool,
+}
+
+/// The market a disc was made for, by its serial's third letter, Sony's region letter (SLUS, SCES, SLPM), else by VMODE
+/// where it says PAL; none for a serial of no known letter on an NTSC disc (Sapphire_Native.md §49.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiscMarket {
+    Japan,
+    Americas,
+    Europe,
+}
+
+impl Disc {
+    pub fn market(&self) -> Option<DiscMarket> {
+        market_of(self.serial.as_deref(), self.pal)
+    }
+}
+
+/// U is the Americas, E Europe, and P, A, K and C Japan and the markets whose discs its consoles boot (Asia, Korea, China),
+/// as the BIOS entries group them (Sapphire_Native.md §12.3); a PAL disc of another letter is Europe's.
+pub fn market_of(serial: Option<&str>, pal: bool) -> Option<DiscMarket> {
+    match serial.and_then(|s| s.as_bytes().get(2)).map(u8::to_ascii_uppercase) {
+        Some(b'U') => Some(DiscMarket::Americas),
+        Some(b'E') => Some(DiscMarket::Europe),
+        Some(b'P' | b'A' | b'K' | b'C') => Some(DiscMarket::Japan),
+        _ => pal.then_some(DiscMarket::Europe),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,10 +105,15 @@ impl Media {
             return read_elf(image).map(Media::Elf);
         }
         let sectors = Sectors::new(image);
-        if sectors.volume().is_none() {
+        Media::read_by(&mut |n| sectors.sector(n).to_vec(), sectors.count(), sectors.raw)
+    }
+
+    /// A disc already opened, its 2,048-byte sectors given by `sector`, as a CHD's are (Sapphire_Native.md §49.2).
+    pub fn read_by(sector: &mut dyn FnMut(u64) -> Vec<u8>, count: u64, raw: bool) -> Result<Media, Refusal> {
+        if volume_by(sector).is_none() {
             return Err(Refusal::Unknown);
         }
-        read_disc(&sectors).map(Media::Disc)
+        read_disc(sector, count, raw).map(Media::Disc)
     }
 
     pub fn serial(&self) -> Option<&str> {
@@ -158,13 +191,14 @@ pub fn boot2_by(sector: &mut dyn FnMut(u64) -> Vec<u8>) -> Option<String> {
     config_line(root_file_by(sector, "SYSTEM.CNF").as_deref(), "BOOT2")
 }
 
-fn read_disc(sectors: &Sectors) -> Result<Disc, Refusal> {
-    let config = sectors.root_file("SYSTEM.CNF");
+fn read_disc(sector: &mut dyn FnMut(u64) -> Vec<u8>, count: u64, raw: bool) -> Result<Disc, Refusal> {
+    let config = root_file_by(sector, "SYSTEM.CNF");
     let line = |key: &str| config_line(config.as_deref(), key);
     if let Some(program) = line("BOOT2") {
-        return Ok(Disc { raw: sectors.raw, sectors: sectors.count(), serial: serial_of(&program), program });
+        let pal = line("VMODE").is_some_and(|v| v.eq_ignore_ascii_case("PAL"));
+        return Ok(Disc { raw, sectors: count, serial: serial_of(&program), program, pal });
     }
-    if line("BOOT").is_some() || (config.is_none() && sectors.root_file("PSX.EXE").is_some()) || sectors.sector(4).starts_with(LICENCE) {
+    if line("BOOT").is_some() || (config.is_none() && root_file_by(sector, "PSX.EXE").is_some()) || sector(4).starts_with(LICENCE) {
         return Err(Refusal::PlayStation);
     }
     Err(Refusal::NoBoot2(if config.is_some() { "its SYSTEM.CNF has no BOOT2 line" } else { "its root holds no readable SYSTEM.CNF" }))

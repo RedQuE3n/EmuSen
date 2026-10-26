@@ -3667,3 +3667,32 @@ row beside a screen row, one with an undated note, and one naming a console the 
 (`An_owed_row_holds_only_for_a_console_offered_to_no_player`). This keeps §31's two properties for a console in
 development: the gap is decided and visible in the same table, and it cannot reach a player unnoticed. The row is
 Sapphire's S29 (`Sapphire_Plan.md` §4.6).
+
+*Amended 2026-10-26: the PlayStation 2's owed row is replaced by its own (§31.9), and `OwedRows` is empty.* The rule and
+its test stay for the next console offered in development; `An_owed_row_holds_only_for_a_console_offered_to_no_player`
+now exercises them on a console of the test's own.
+
+### 31.9 The PlayStation 2's row (2026-10-26)
+
+Made at Sapphire's stage S29, when the console reached players (`Sapphire_Native.md` §49.6). `ConsoleScreens.All` gains
+`new("PlayStation 2", Kind.Television, "PlayStation 2")` and `CrtFilter.ConsoleTiming["PlayStation 2"]` the row, from the
+PCRTC as Sapphire models it (`Sapphire_Native.md` §29.3) [R the *GS User's Manual* §5.1.2's table, read there; A where marked]:
+
+- **The clock.** VCK is 54 MHz in NTSC and PAL, four pixels of BT.601's 13.5 MHz, so a line is 858 × 4 = 3,432 VCK in
+  NTSC and 864 × 4 = 3,456 in PAL, 63.56 µs and 64 µs, the standards' own lines. The display circuits' width a game
+  sets for a 640- or a 512-pixel picture is 2,560 VCK (the MAGH table), so **the active picture is 2,560 / 54 =
+  47.41 µs** on both standards, every width filling the same span, as the PlayStation's 2,560 video clocks do (§20.6).
+- **The subcarrier** [A]. The console's encoder is fed from BT.601's lines, whose subcarrier stands to them as the
+  standards define it: 227½ cycles a line in NTSC (3.579545 MHz is 227.5 × 13.5 MHz / 858) and 283.7516 in PAL. So NTSC
+  has 2,560 × 227.5 / 3,432 = **169.70 cycles across** the picture, half a cycle a line, and on a 263-line field half a
+  cycle a frame; PAL has **210.19 cycles across**, 0.7516 a line, and on a 314-line field 314 × 283.7516 = 89,098.0024
+  cycles, so 0.0024 a frame of crawl and no turn of the V switch between frames (314 is even). The encoder chip and its
+  filters were not looked for; the standard's limits stand in, as for the SNES and the PlayStation.
+- **What the row cannot say.** The BIOS sets interlaced output, 262½ and 312½ lines a field; as §28 records for the
+  PlayStation's 480i, `ConsoleTiming` holds one line per standard, and the filter draws the woven frame as two fields of
+  one timing, so the half line is not drawn. Progressive and 1080i output, which some games offer, are
+  `EmuSen_CRT.md`'s question for a 31 kHz picture (`Sapphire_Plan.md` §4.6), not this row's.
+
+**Coverage**: `ConsoleScreenRuleTests` (the rule on every system, the tubes offered for the PlayStation 2, its line's
+figures in `The_playstation_2s_line_is_its_pcrtc_clock_against_the_standards_subcarrier`); the overscan row and both tubes
+follow from the row through `CrtFilter.TelevisionConsoles`.

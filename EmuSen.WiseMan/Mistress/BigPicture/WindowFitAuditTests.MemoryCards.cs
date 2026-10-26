@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.DoesNotContain(shown, c => c.Name == "InsertDiscBrowse");
         }
 
-        // The PlayStation 2's tab, behind the development mark: a shared card with two saves, one with a long title, a game's own beside it, and the card held by a running game - see Sapphire_Plan.md §8 (G11), Sapphire_Native.md §30.16.
+        // The PlayStation 2's tab, offered with the system: a shared card with two saves, one with a long title, a game's own beside it, and the card held by a running game - see Sapphire_Plan.md §8 (G11), Sapphire_Native.md §30.16 and §49.1.
         internal static void ShowMemoryCardsPs2(MainWindow window, bool held)
         {
             var graphics = ConsolesConfig.Load();

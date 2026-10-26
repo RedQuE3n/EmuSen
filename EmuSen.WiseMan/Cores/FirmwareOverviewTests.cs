@@ -52,9 +52,12 @@ namespace EmuSen.WiseMan.Cores
         public void The_rows_are_what_the_engine_in_use_declares_and_every_shipped_system_is_listed()
         {
             var systems = FirmwareOverview.Build(new ConsolesConfig());
-            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Master System / Mark III", "Sega SG-1000", "Sega Genesis / Mega Drive", "Sega CD / Mega-CD"], systems.Select(s => s.Name));
-            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation" or "Sega CD / Mega-CD" or "Sega Master System / Mark III")), s => Assert.Empty(s.Items));
+            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Master System / Mark III", "Sega SG-1000", "Sega Genesis / Mega Drive", "Sega CD / Mega-CD", "Sony PlayStation 2"], systems.Select(s => s.Name));
+            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation" or "Sega CD / Mega-CD" or "Sega Master System / Mark III" or "Sony PlayStation 2")), s => Assert.Empty(s.Items));
             Assert.Equal(3, systems.Single(s => s.Name == "Sega Master System / Mark III").Items.Count);
+            // The PlayStation 2's three BIOS entries, the player's own, with no open version yet - see Sapphire_Native.md §49.5.
+            Assert.Equal(["ps2-0230j-20080220.bin", "ps2-0230a-20080220.bin", "ps2-0230e-20080220.bin"], systems.Single(s => s.Name == "Sony PlayStation 2").Items.Select(i => i.FileName));
+            Assert.All(systems.Single(s => s.Name == "Sony PlayStation 2").Items, i => Assert.Equal(("none", FirmwareRow.NoVersion), (i.Effect, i.InUse)));
 
             Worded snes = Snes();
             CoreSystem declared = VenusRt.Info.Systems.Single(s => s.Id == "snes");

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems;
@@ -9,7 +10,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Sapphire's stage S1 stub through the v1 adapter, discovery, routing and the conformance kit, on the synthetic program and discs - see Sapphire_Native.md §2-§6.
+    // Sapphire through the v1 adapter, discovery, routing and the conformance kit, on the synthetic program and discs, as a player's build offers it - see Sapphire_Native.md §2-§6 and §49.
     [Collection(TestCollections.ProcessGlobals)]
     public class SapphireTests : IDisposable
     {
@@ -21,11 +22,16 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            // A stand-in of the American BIOS's name and size, every byte zero, made here: a game with no BIOS is refused (§49.5), and no firmware is read or shipped.
+            FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
+            Directory.CreateDirectory(FirmwareLibrary.Directory);
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, Ps2System.Bios[1].Name), new byte[Ps2System.Bios[1].Size]);
+            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
+            FirmwareLibrary.Directory = null;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -47,16 +53,16 @@ namespace EmuSen.WiseMan.Cores
         {
             var library = CoreLibrary.Open(LibraryPath);
             Assert.True(library.Available, library.Report);
-            Assert.Equal(("sapphire", "Sapphire", CoreInterface.CapAxes | CoreInterface.CapMedia | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble | CoreInterface.CapDebugReads), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
+            Assert.Equal(("sapphire", "Sapphire", CoreInterface.CapAxes | CoreInterface.CapMedia | CoreInterface.CapBorrow | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble | CoreInterface.CapDebugReads), (library.Info.Id, library.Info.DisplayName, library.Capabilities));
             var system = library.Info.Systems.Single();
-            Assert.Equal((Ps2System.Id, true), (system.Id, system.Development));
+            Assert.Equal((Ps2System.Id, false), (system.Id, system.Development));
             Assert.Equal(Ps2System.CoreExtensions, system.Extensions);
             Assert.All(system.Extensions, e => Assert.Contains(e, Ps2System.Entry.Extensions));
             Assert.Equal(Ps2System.Bios.Select(b => (b.Name, b.Size)), system.Firmware.Select(f => (f.Name, f.Size)));
             Assert.All(system.Firmware, f => Assert.False(f.Required));
             Assert.Equal(new[] { ("ps2.dualshock2", 16, 4), ("ps2.digital", 14, 0) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
             Assert.Equal(new[] { "region", "pad1", "pad2", "ee_tier", "vu1", "idle_skip" }, library.Settings.Select(s => s.Key));
-            Assert.Equal("ps2-0230a-20080220.bin", library.FirmwareFor(SyntheticPs2Elf.Build()).Single().Name);
+            Assert.Equal(new[] { "ps2-0230a-20080220.bin", "ps2-0230e-20080220.bin", "ps2-0230j-20080220.bin" }, library.FirmwareFor(SyntheticPs2Elf.Build()).Select(f => f.Name));
             Assert.Equal("ps2-0230a-20080220.bin", library.FirmwareFor(SyntheticPs2Disc.Dvd().Iso).Single().Name);
             Assert.Empty(library.FirmwareFor(new byte[4096]));
             Assert.Same(Ps2System.Entry, SystemPacks.For("ps2")!.Entry);
@@ -133,27 +139,27 @@ namespace EmuSen.WiseMan.Cores
             public byte[] Read(int length) => bytes.Length <= length ? bytes : bytes[..length];
         }
 
-        // A developer asking for development cores opens a program on Sapphire; a player is offered nothing - see EmuSen_CoreAPI.md §27.
+        // A player's build offers the PlayStation 2 with no development cores asked for: discovered, its shelf, a program and a disc opening on Sapphire, the disc in the drive at power-on - see Sapphire_Native.md §49.1 and EmuSen_CoreAPI.md §27.
         [Fact]
-        public void A_program_opens_on_the_engine_only_when_development_cores_are_asked_for()
+        public void A_player_is_offered_the_playstation_2()
         {
+            Assert.False(CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!.Development);
             Assert.Contains(CoreDiscovery.Found, c => c.Info.Id == "sapphire");
-            string path = Write("program.elf", SyntheticPs2Elf.Build());
-            Assert.True(CoreFactory.IsSupported(path));
-            var bundle = CoreFactory.Load(path);
-            var core = Assert.IsType<CoreEngine>(bundle.Core);
-            Assert.Equal(("sapphire", "ps2"), (core.Info.Id, core.Machine.Info.System));
-            core.RunFrame();
-            Assert.Equal((640, 448), (core.ScreenWidth, core.ScreenHeight));
-            (core as IDisposable)?.Dispose();
-
-            Assert.True(CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!.Development);
-            CoreDiscovery.UseDevelopment(false);
-            Assert.DoesNotContain(CoreDiscovery.Found, c => c.Info.Id == "sapphire");
-            Assert.False(CoreFactory.IsSupported(path));
-            Assert.False(CoreCatalog.IsRomExtension(".elf"));
-            Assert.DoesNotContain("PlayStation 2", CoreCatalog.DiscoveredConsoles);
-            Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.System == "ps2");
+            Assert.Contains("PlayStation 2", CoreCatalog.DiscoveredConsoles);
+            Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.System == "ps2");
+            Assert.All(Ps2System.Entry.Extensions, e => Assert.True(CoreCatalog.IsRomExtension(e), e));
+            foreach (var (name, image, loaded) in new[] { ("program.elf", SyntheticPs2Elf.Build(), false), ("Basalt Run.iso", SyntheticPs2Disc.Dvd().Iso, true) })
+            {
+                string path = Write(name, image);
+                Assert.True(CoreFactory.IsSupported(path), name);
+                var bundle = CoreFactory.Load(path);
+                var core = Assert.IsType<CoreEngine>(bundle.Core);
+                Assert.Equal(("sapphire", "ps2", "PlayStation 2"), (core.Info.Id, core.Machine.Info.System, core.Console));
+                Assert.Equal(loaded, core.Machine.Info.Drives.Single().Loaded);
+                core.RunFrame();
+                Assert.Equal((640, 448), (core.ScreenWidth, core.ScreenHeight));
+                (core as IDisposable)?.Dispose();
+            }
         }
 
         // The gate of Sapphire_Plan.md §7's S1: the kit's C1-C15 on a synthetic program and synthetic CD and DVD images, nothing failing.

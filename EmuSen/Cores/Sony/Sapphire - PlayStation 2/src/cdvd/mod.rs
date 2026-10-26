@@ -283,7 +283,7 @@ pub fn read_key(program: &str) -> [u8; 6] {
 }
 
 /// Sector `lba`'s 2,048 bytes of user data, empty past the disc's end.
-fn user_sector(disc: &mut Disc, lba: u64) -> Vec<u8> {
+pub(crate) fn user_sector(disc: &mut Disc, lba: u64) -> Vec<u8> {
     let Ok(lba) = u32::try_from(lba) else { return Vec::new() };
     match disc {
         Disc::Dvd(d) if lba < d.sectors() => {

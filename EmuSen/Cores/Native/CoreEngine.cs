@@ -313,6 +313,13 @@ namespace EmuSen.Cores.Native
                 // A core that copies has its copy by now; one that borrows holds the files through its machine.
                 if (!kept) disc.Dispose();
             }
+            // A game of a console that starts empty is run by its firmware; absent with no replacement, it would run nothing - see Sapphire_Native.md §49.5.
+            if (system is { StartsEmpty: true } && RunsNothing(machine, asked) is { } refused)
+            {
+                machine.Dispose();
+                placement!.Dispose();
+                throw new ConsoleFirmwareException($"{System.IO.Path.GetFileName(path)} cannot start: {refused}");
+            }
             Adopt(machine, placement!, asked, wanted, set, path, console, null);
         }
 
@@ -363,7 +370,7 @@ namespace EmuSen.Cores.Native
             Adopt(machine, placement, system.Firmware, saves, null, "", console, systemId);
         }
 
-        // Why a console started empty would run nothing: the firmware its machine chose is absent and the core offers no replacement for it, in the entry's own words; null otherwise - see Sapphire_Native.md §30.15.
+        // Why a console started empty, or a game of one, would run nothing: the firmware its machine chose is absent and the core offers no replacement for it, in the entry's own words; null otherwise - see Sapphire_Native.md §30.15 and §49.5.
         public static string? RunsNothing(CoreMachine machine, IReadOnlyList<CoreFirmware> asked)
         {
             foreach (CoreFirmwareSource used in machine.Info.Firmware)

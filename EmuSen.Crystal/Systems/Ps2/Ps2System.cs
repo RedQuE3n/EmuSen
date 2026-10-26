@@ -31,29 +31,43 @@ namespace EmuSen.Crystal.Systems.Ps2
 
         public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
 
-        // What the core's own info lists at S1: the ELF alone, the discs following at S23 - see Sapphire_Plan.md §11 Q16.
-        public static readonly IReadOnlyList<string> CoreExtensions = new[] { ".elf" };
+        // What the core's own info lists: the pack's forms but .m3u, which the host reads - see Sapphire_Native.md §49.2.
+        public static readonly IReadOnlyList<string> CoreExtensions = new[] { ".elf", ".iso", ".chd", ".cue", ".bin" };
 
         // The bytes read first: sector 16 in either an .iso's 2,048-byte sectors or a raw track's 2,352-byte ones.
         public const int First = 40 * 1024;
 
-        // The program SYSTEM.CNF's BOOT2 line names, as written after its '='; null where no line's key is BOOT2.
-        public static string? Boot2(byte[]? config)
+        // The value of SYSTEM.CNF's line whose key is key, as written after its '='; null where no line has that key.
+        public static string? Value(byte[]? config, string key)
         {
             if (config is null) return null;
             foreach (string line in Encoding.ASCII.GetString(config).Split('\n'))
             {
                 int eq = line.IndexOf('=');
-                if (eq >= 0 && string.Equals(line[..eq].Trim(), "BOOT2", StringComparison.OrdinalIgnoreCase)) return line[(eq + 1)..].Trim();
+                if (eq >= 0 && string.Equals(line[..eq].Trim(), key, StringComparison.OrdinalIgnoreCase)) return line[(eq + 1)..].Trim();
             }
             return null;
         }
 
-        // A disc, CD or DVD, whose root's SYSTEM.CNF names a BOOT2 program, with that program as its serial; null otherwise - see Sapphire_Plan.md §4.1.
+        // The program SYSTEM.CNF's BOOT2 line names; null where no line's key is BOOT2.
+        public static string? Boot2(byte[]? config) => Value(config, "BOOT2");
+
+        // The disc's market: its serial's third letter, Sony's region letter, else Europe where VMODE says PAL - see Sapphire_Native.md §49.2.
+        public static string? Region(string? serial, byte[]? config) => (serial is { Length: > 2 } ? char.ToUpperInvariant(serial[2]) : '\0') switch
+        {
+            'U' => "Americas",
+            'E' => "Europe",
+            'P' or 'A' or 'K' or 'C' => "Japan",
+            _ => string.Equals(Value(config, "VMODE"), "PAL", StringComparison.OrdinalIgnoreCase) ? "Europe" : null,
+        };
+
+        // A disc, CD or DVD, whose root's SYSTEM.CNF names a BOOT2 program, with that program as its serial and its market; null otherwise - see Sapphire_Plan.md §4.1.
         public static Recognition? Recognise(IMediaProbe probe)
         {
             byte[]? config = DiscSectors.RootFileThrough(probe, First, probe.Read(First), "SYSTEM.CNF", DiscSectors.RootFileLimit);
-            return Boot2(config) is { } program ? new Recognition(Id, Psx.PsxSystem.SerialOfFile(program), null) : null;
+            if (Boot2(config) is not { } program) return null;
+            string? serial = Psx.PsxSystem.SerialOfFile(program);
+            return new Recognition(Id, serial, Region(serial, config));
         }
 
         // The BIOS of each market by its Redump name, each optional - see Sapphire_Plan.md §5.9, Sapphire_Native.md §2.5 and §12.3.

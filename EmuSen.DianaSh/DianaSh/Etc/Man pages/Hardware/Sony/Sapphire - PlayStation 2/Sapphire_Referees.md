@@ -306,6 +306,11 @@ state a driver leaves the pad in and when, not for the exchange. With trace logg
 the start-up lines and the rest goes to the default log under `logs/`, which also carries the IOP modules'
 registrations and recompiler messages: a reader keeps the `Pad: ` lines only. The referee's settings have no pad in
 port 2; a run with one there drew the browser as before.
+*2026-10-26, D-760* (`Sapphire_Native.md` §30.62): PCSX2's two EE tiers part on an MFC0 straight after EI or DI, the
+recompiler reading the Status from before it, the interpreter the Status after it; `d700-exec`'s ExecPS2 follows the
+same split. A program whose record touches COP0 or the pipeline is run on both tiers (`--interpreter`, which `pads`
+also takes since this step), and a split is a dispute, not a grade. The interpreter runs OSDSYS below the console's
+speed, so a `pads` script for it allows the setup more time.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

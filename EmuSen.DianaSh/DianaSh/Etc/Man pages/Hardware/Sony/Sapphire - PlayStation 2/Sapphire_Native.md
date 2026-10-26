@@ -5422,6 +5422,140 @@ project's programs that call the kernel; a search engine's result list quoted ps
 another alarm call at 18h) and summarised a forum thread's account of the kernel's alarm table, none of it used;
 **this writer is exposed and will never write the open replacement**.
 
+### 30.60 Disputes D-701 and D-760: what ExecPS2 does to EIE, and an MFC0 straight after EI or DI (2026-10-26)
+
+*A dispute step on the tester's decision of 2026-10-26 (§30.58 Q1, option (a)); its products are
+`Sapphire_Disputes.md` D-760 and D-701's conclusion.* The decided trace of one ExecPS2 called by `d700-exec` after EI
+recorded three changes of Status.EIE: the program's EI, **a DI in kernel mode** (Status 70030C00h to 70020C00h), and the
+ERET that starts the main thread with EIE clear; nothing set EIE again in between (§30.61). DI in that very state acts
+alike on both consoles (`d700-kmode`), so the project's programs looked at what an instruction close after DI sees, and
+found **PCSX2's two EE tiers parting**: on its recompiler an MFC0 straight after DI or EI reads the Status from before
+it, on its interpreter the Status after it, as Sapphire reads it (§30.62). **On PCSX2's interpreter `d700-exec`'s main
+threads begin with 70020C11h, after EI as after DI, exactly as on Sapphire** (§30.63), so D-701's difference is this
+one. The documents leave a read before SYNC.P unguaranteed (§30.64), and **PCSX2's interpreter draws the browser** with
+the same outcome of ExecPS2 as Sapphire's, so the EIE of ExecPS2's thread is not why Sapphire's browser stays black.
+No unit was changed; the alternative reading was built, matched the recompiler and was set aside (§30.64). P8 stands as
+observed.
+
+### 30.61 The trace (measured 2026-10-26)
+
+As decided (`Sapphire_Plan.md` §1.4's decision of 2026-10-26 for this step): code added to the interpreter for the run
+only, never committed, recorded each change of Status.EIE with the kind of event that made it and Status before and
+after, from the program's EI in user mode to the first ERET into user mode after it, during the ExecPS2 `d700-exec`
+calls following EI on the Americas image (the program entered by the fast boot, the interpreter):
+
+| Event | Status before | Status after |
+|---|---|---|
+| EI (the program's, user mode) | 70020C11h | 70030C11h |
+| DI (kernel mode: KSU 00, EXL, ERL and IE clear) | 70030C00h | 70020C00h |
+| ERET into user mode (the main thread begins) | 70020C13h | 70020C11h |
+
+No exception's entry, MTC0 or EI changed EIE between the DI and the ERET; the ERET's Status, the caller's with EXL set
+and EIE clear, was written there by an operation that left EIE as it was. Nothing else was recorded: no program counter,
+instruction word, memory or register but Status. The trace's output was deleted when this was written.
+
+### 30.62 The project's programs on Sapphire and PCSX2's two tiers (measured 2026-10-26)
+
+Two programs in `tests/d700/mod.rs`, written by `examples/d700.rs` and fast-booted, read Status in a routine installed
+as syscall 5Ah (kernel mode, Status 70030C00h or 70020C00h on entry, IE clear, so no interrupt intervenes):
+
+| Program: what precedes the MFC0 | Sapphire | PCSX2 recompiler | PCSX2 interpreter |
+|---|---|---|---|
+| `d760-hazard`: DI directly (EIE set before) | 70020C00h | **70030C00h** (old) | 70020C00h |
+| DI, then one, two or three NOPs, or SYNC.P | 70020C00h | 70020C00h | 70020C00h |
+| EI directly (EIE clear before) | 70030C00h | **70020C00h** (old) | 70030C00h |
+| EI, then one to three NOPs, or SYNC.P | 70030C00h | 70030C00h | 70030C00h |
+| an MTC0 clearing or setting EIE, directly or later | the new value | the new value | the new value |
+| EI, SYNC.P, DI, then an MTC0 setting EIE, SYNC.P | set | set | set |
+| DI, SYNC.P, EI, then an MTC0 clearing EIE, SYNC.P | clear | clear | clear |
+| EI, SYNC.P, DI, EI, directly | set | **clear** (DI's) | set |
+| DI, SYNC.P, EI, DI, directly | clear | **set** (EI's) | clear |
+| `d760-kdi`: DI in the routine, read directly / after SYNC.P; the thread's Status on return | 70020C00h / 70020C00h; 70020C11h | **70030C00h** / 70020C00h; 70020C11h | not run |
+| EI in the routine, the same | 70030C00h / 70030C00h; 70030C11h | **70020C00h** / 70030C00h; 70030C11h | not run |
+
+So on PCSX2's recompiler the EIE an EI or DI writes reaches an MFC0 one instruction later, an MTC0's at once; on its
+interpreter, as on Sapphire, at once. The kernel's return from a system call keeps a routine's DI or EI on all three.
+
+### 30.63 ExecPS2 and the browser on PCSX2's interpreter (measured 2026-10-26)
+
+`d700-exec` on PCSX2's interpreter (`ps2referee.py ram pcsx2 … --interpreter`): **70020C11h at entry, after ExecPS2
+following EI and following DI**, Sapphire's three words; on the recompiler again 70030C11h, 70030C11h, 70020C11h, as
+§30.55 recorded. Then OSDSYS's browser on PCSX2 with slot 1 empty, `ps2referee.py pads`, which gained `--interpreter`
+for this step: through the initial setup by Cross every 2.5 s from 14 s after PCSX2 began to draw and a Cross on
+"Browser", pictures from states:
+
+| Tier | The browser |
+|---|---|
+| Recompiler | "There is no data." with "Back", the grey ground and its moving light, from 36 s to 60 s |
+| Interpreter (slower: the setup took the nine presses, a tenth at 39 s entered the browser) | **the same, from 44 s to 74 s** |
+
+So the browser runs on a console whose ExecPS2 leaves EIE clear as Sapphire's does. If the context of §30.56 (70020C11h
+from field 1867) is one ExecPS2 started, PCSX2's interpreter runs one like it and draws the browser all the same:
+**the browser's stall on Sapphire has another cause**, and D-701 is no longer the lead §30.58 took it for.
+
+### 30.64 The documents, and why the EE is unchanged
+
+The *EE Core Instruction Set Manual*'s EI and DI write EIE in their Operation sections with nothing said of when a later
+instruction sees it; its MTC0 says a SYNC.P is needed "to guarantee COP0 register update"; the kit's *Restriction* (10)
+says an interrupt may come "immediately after the DI instruction" and have its handler see EIE clear, and gives a loop
+of DI, SYNC.P and MFC0 for code that must know EIE is clear. So an MFC0 straight after EI or DI is a read the documents
+do not guarantee, and the referee's two tiers answer it differently. The rule of this step (fix where the documents and
+the referee agree) is not met, and Sapphire keeps the Operation sections' reading, which PCSX2's interpreter shares.
+
+*The alternative, built and set aside:* EI's and DI's write of EIE held back until the instruction after them has
+executed (or an exception is taken first, the handler seeing it landed, which is the kit's Restriction (10)), an MTC0
+to Status in that instruction overriding it, the recompiled tier declining to start a block while a write is pending,
+and the pending write kept in the state (`SPH2` version 5). It reproduced every word of the recompiler's records above.
+It was not kept because nothing shows the console reads that way, it changes the state format, and the browser it was
+meant to unblock runs on the reading Sapphire has. If a console's record of such a read ever appears (a test program run
+on hardware by someone who has one), this is the change to make.
+
+### 30.65 Tests, seeded faults and the blast radius (2026-10-26)
+
+`tests/cop0.rs` gains `an_mfc0_straight_after_ei_or_di_reads_their_eie`, the reading kept, graded on the interpreter:
+DI and EI read directly, after a NOP and after SYNC.P, MTC0 both ways, DI and EI back to back: **20 of 20**
+[M, `cargo test --release --test cop0`]. `tests/dmac.rs`'s `the_d700_programs_assemble` covers the two new programs:
+**19 of 19** [M, `--test dmac`]. Seeded faults, each reverted: the alternative of §30.64 applied (the new test fails);
+Status's writable mask without EIE (the new test and `count_compare_and_the_performance_counters_equal_chapter_7` fail);
+DI setting EIE (the new test fails). No unit changed, so neither `tests/blocks.rs` nor the interpreter's own tests were
+run, and `blast.sh WiseMan sapphire-d701` lists no WiseMan test. The browser runs with slot 1 empty and with the
+formatted card, and Jak and Daxter's card screen, were not repeated on Sapphire: with no unit changed they are §30.57's
+and §39.7's (black from field 1920; "No memory card (PS2) inserted in memory card slot 1!").
+
+### 30.66 Questions the step leaves
+
+1. **Q1 [decision], the next look at the browser.** Ruled out so far: the card's authentication (D-383), SIO2's ends
+   (D-540), the SIF RPC calls' answers (D-620), the pad's traffic (D-640), timer 3 (D-700) and now the EIE of the
+   kernel's threads (D-701, D-760). What is known: on PCSX2 an EE thread calls the pad server every 64 fields, which on
+   Sapphire stops after its third call, and the browser's polling of the card server never begins (§30.38 to §30.41).
+   *Recommended*: (a) a narrow trace of the EE kernel's system calls on Sapphire from field 1700 to 2200: the call's
+   number (v1 at the SYSCALL exception, the kernel's ABI as ps2tek's "BIOS EE Syscalls" lists it) and its result (v0
+   on the ERET back to the caller), nothing else; a stall that waits for a semaphore, a sleeping thread or an alarm
+   names itself by its call, and the project's programs then test that call on both consoles as `d700-thread` does.
+   Its clean-room cost is that of this step (the BIOS run, a kernel interface's traffic, exposure recorded), with no
+   program counter or memory. (b) Park the browser until S29's disc boot and S10's programs drive the card's driver
+   from a game, where the card can be judged without OSDSYS (Jak and Daxter already reaches its card check, §39.7).
+2. **Q2 [routine], the referee's tiers.** *Recommended*: run a project program on both of PCSX2's tiers whenever the
+   records touch COP0 or the pipeline, as §19.6 does for the FPU, and record a split as D-760 does.
+
+### 30.67 What was read, the trace, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 (with the decisions of 2026-10-26), §12 (P8); this page's §17 (§17.3), §30.19,
+§30.28, §30.49, §30.52 to §30.59, §36.2 and §39.4 to §39.7; `Sapphire_Disputes.md` D-700 and D-701. Sony's *EE Core
+Instruction Set Manual* 5.0 (DI, EI, ERET, MTC0, SYNC), *EE Core User's Manual* §2.9 and §3.2 (Status), and the kit's
+*Restriction* items (6) and (10). PCSX2 2.8.2 run as a black box, both EE tiers: the project's programs' records in RAM
+through PINE, and pictures from states in its browser. No emulator, SDK or loader source and no firmware: the Americas
+image was handed by path to Sapphire and to PCSX2 and never opened.
+
+**The trace** (§30.61), as the tester decided: each change of Status.EIE during one ExecPS2 called by `d700-exec` on
+Sapphire, with the kind of event and Status before and after; no program counter, instruction word, memory or other
+register. It stayed in scratch, was never committed, and was deleted when this was written.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2,
+traced Status.EIE's changes during one ExecPS2 on Sapphire, saw PCSX2's OSDSYS through its setup and browser, and read
+the records of the project's programs that call the kernel; **this writer is exposed and will never write the open
+replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -6721,6 +6855,12 @@ PINE's answers at hardware addresses, and ran the project's programs that call t
 counter, instruction or memory holding BIOS code or data; a search engine's result list quoted ps2sdk's syscall numbers
 and summarised a forum thread's account of the kernel's alarm table, unused; **that writer is exposed too and will never
 write the open replacement**.
+
+*Added 2026-10-26 at the D-701 step (§30.60 to §30.67):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2's two EE tiers, traced on Sapphire each change of Status.EIE during one ExecPS2 with its kind of event and Status
+before and after, as the tester decided, and saw PCSX2's OSDSYS through its setup and browser; never a program counter,
+instruction or memory holding BIOS code or data; **that writer is exposed too and will never write the open
+replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

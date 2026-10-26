@@ -123,7 +123,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   bytes ruled out, the next look put to the tester (D-640); the timer 3 step (2026-10-26, §30.52-§30.59): PINE found
   blind to the EE's registers, the project's programs reading timer 3, the INTC and COP0 Status on both consoles, timer 3
   as the manual says (D-700) and the kernel's ExecPS2 starting its main thread with Status.EIE clear on Sapphire alone,
-  a context so started running from the browser's entry, its cause put to the tester (D-701 open); and the
+  a context so started running from the browser's entry, its cause put to the tester (D-701 open); the D-701 step
+  (2026-10-26, §30.60-§30.67): one ExecPS2 traced for Status.EIE's changes, a kernel-mode DI the last, PCSX2's
+  recompiler shown to let an MFC0 straight after EI or DI read the old Status and its interpreter not, its interpreter
+  starting ExecPS2's thread as Sapphire does and still drawing the browser, so D-701 is that split and not the browser's
+  cause, the EE unchanged (D-760); and the
   23 IOP programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's

@@ -4032,14 +4032,52 @@ it.*
   70030C11h after EI and 70020C11h after DI; `d700-kmode` equal to Sapphire's word for word. The two consoles' registers
   at entry differ only by their fast boots' traces (SIF1's CHCR and CIS6, SMFLG's bit 18), which `d700-exec-clear`
   rules out for SMFLG.
-- **Conclusion:** **open**. The kernel's ExecPS2 on Sapphire leaves its main thread's EIE clear where PCSX2's keeps the
-  caller's, with every EE operation on EIE a program can reach equal on both; a thread with EIE clear takes no interrupt
-  and passes the state to every thread it creates, and a context with exactly that Status runs in OSDSYS from the
-  browser's entry, where it stalls. Which operation inside ExecPS2 makes the difference is in what the kernel executes,
-  beyond §1.4's allowance; put to the tester (`Sapphire_Native.md` §30.58 Q1). One lineage only: PCSX2's.
-- **Depends on it:** P8's stall, if the context of §30.56 is the browser's.
-- **Pinned by:** nothing yet.
+- **Conclusion:** **open** at the timer 3 step; **explained 2026-10-26 by D-760** (`Sapphire_Native.md` §30.60 to
+  §30.67): the kernel executes DI in kernel mode during ExecPS2, after which no EI, MTC0 or exception's entry sets EIE
+  again on Sapphire (the decided trace, §30.61); PCSX2's recompiler lets an MFC0 straight after DI read the Status from
+  before it, its interpreter the Status after it, and on its interpreter `d700-exec`'s three main threads begin with
+  70020C11h, as on Sapphire. The two consoles part where PCSX2's two EE tiers part, a read the documents leave to
+  SYNC.P. **Not the browser's cause**: PCSX2's interpreter draws the browser ("There is no data.") with the same
+  outcome of ExecPS2 as Sapphire. No unit changed. One lineage only: PCSX2's, in two tiers.
+- **Depends on it:** nothing; P8's stall lies elsewhere (§30.63).
+- **Pinned by:** `an_mfc0_straight_after_ei_or_di_reads_their_eie` (D-760).
 - **Implemented in:** none.
+
+### D-760. An MFC0 of Status straight after EI or DI reads the EIE they wrote on Sapphire and on PCSX2's interpreter, the EIE before them on PCSX2's recompiler; an MTC0 is read at once on both
+
+*Numbered from D-760 at the D-701 step (2026-10-26), other stages being built beside it.*
+
+- **Opened:** 2026-10-26, at the D-701 step (`Sapphire_Native.md` §30.60), when the decided trace of one ExecPS2 named a
+  kernel-mode DI as the last change of EIE before the main thread began.
+- **Documents read:** Sony's *EE Core Instruction Set Manual* 5.0, EI and DI (Operation: EIE set or cleared when EDI,
+  EXL or ERL is set or KSU is 00; "Exceptions: None"), MTC0 ("To guarantee COP0 register update, it is necessary to
+  place a SYNC.P instruction after the MTC0 instruction"), SYNC ("SYNC.P ... waits until the preceding instruction is
+  completed"), ERET; *EE Core User's Manual* §2.9 (COP0's instructions, EI and DI among them, usable in kernel mode or
+  with CU0) and §3.2 (Status, EIE); the kit's *Restriction* items (6) and (10) (DI: "when an interrupt occurs
+  immediately after the DI instruction, the EIE bit becomes 0 ... in the interrupt handler", the kit's DI loop of DI,
+  SYNC.P and MFC0 until EIE reads clear). No document says what an MFC0 straight after EI or DI reads; the MTC0 note and
+  the kit's loop leave a read before SYNC.P unguaranteed.
+- **Test program:** `d760-kdi` (a routine installed as syscall 5Ah executes DI, or EI, reads Status at once, after a
+  SYNC.P, and returns without undoing it; the thread reads Status before the call and on its return) and `d760-hazard`
+  (in such a routine: MFC0 after DI, EI, an MTC0 clearing EIE and one setting it, with none to three NOPs or a SYNC.P
+  between; an MTC0 straight after DI or EI; DI and EI back to back), `tests/d700/mod.rs`, fast-booted.
+  **On Sapphire**: every read after DI or EI is the new EIE, with or without anything between; MTC0 read at once; the
+  routine's DI or EI outlasts the kernel's return to the thread.
+- **Referee:** PCSX2 2.8.2. **Recompiler**: an MFC0 straight after DI or EI reads the EIE before it, after one NOP or
+  more or a SYNC.P the new one; an MTC0's value is read at once and outlasts a DI or EI just before it; after DI then
+  EI an MFC0 reads DI's EIE. **Interpreter**: every read is the new EIE, word for word Sapphire's record. The kernel's
+  return keeps the routine's change on both tiers and on Sapphire.
+- **Conclusion:** **measured, the referee split**: the case is the one the documents leave unguaranteed without
+  SYNC.P, and PCSX2's two tiers answer it differently; Sapphire keeps the Operation sections' reading (EIE written as
+  EI or DI executes, read by the next instruction), which its interpreter shares. **Not changed**: neither the documents
+  nor a measurement that agrees across the referee's tiers shows the console's answer, and the browser, which this
+  case was suspected of stopping, runs on the tier that reads as Sapphire does. The alternative, EI's and DI's write
+  landing one instruction later (with an interrupt still taken before the instruction after DI, as the kit's
+  Restriction (10) describes), was built, matched the recompiler's records and was not kept (`Sapphire_Native.md`
+  §30.64). One lineage only: PCSX2's.
+- **Depends on it:** D-701 (the ExecPS2 split is this one).
+- **Pinned by:** `an_mfc0_straight_after_ei_or_di_reads_their_eie` (`tests/cop0.rs`), the interpreter's records.
+- **Implemented in:** `ee::ops` (EI, DI and MTC0), unchanged.
 
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 

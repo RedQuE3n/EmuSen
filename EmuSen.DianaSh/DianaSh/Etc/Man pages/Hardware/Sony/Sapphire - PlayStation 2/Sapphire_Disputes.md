@@ -4509,10 +4509,48 @@ it.*
   20h on a single-layer disc, against D-122's ECMA-267 reading, changed nothing.
 - **Referee:** PCSX2 2.8.2 runs the game to its memory card message ("No memory card (PS2) detected ...") 28 s after it
   begins to draw.
-- **Conclusion:** **open**. What the game's program decides before it returns to OSDSYS is not shown by the reports;
+- **Conclusion:** ~~**open**. What the game's program decides before it returns to OSDSYS is not shown by the reports;
   the game's code could show it, but OSDSYS is loaded at the addresses the game's program occupies (Dark Cloud 2's ELF
   spans 00100000h-01F64E00h), so an EE address alone cannot tell the game's code from the BIOS's, and §1.4 forbids
-  observing the latter (`Sapphire_Native.md` §39.11, §39.12 Q2).
-- **Depends on it:** unknown.
-- **Pinned by:** nothing yet.
-- **Implemented in:** none.
+  observing the latter (`Sapphire_Native.md` §39.11, §39.12 Q2).~~
+  *Closed 2026-10-26 at the D-465 step* (`Sapphire_Native.md` §39.15 to §39.22), the game's program counters and code
+  read inside the window the tester allowed that day: **the game leaves by calling Exit itself** (syscall 04h, its
+  argument −1), after its own wait for DMA channel 1 to end gives up (16,777,216 reads of D1_CHCR with STR set). The
+  channel never ended because VIF1 stalled: the game had set D1_CHCR.TTE with a byte store, which Sapphire dropped, so
+  the DMAtag's upper half carrying MPG was not sent and VIF1 took the microprogram's words as VIFcodes, stopping at the
+  i bit of the first. A store narrower than a word now writes its own lanes of a register (D-780); with it the game
+  runs past the point it left (§39.19). **Measured.** Not D-701's cause: the game sets Status.EIE itself as it starts.
+- **Depends on it:** D-780.
+- **Pinned by:** D-780's test.
+- **Implemented in:** the D-465 step's commit.
+
+### D-780. EE registers: a byte or halfword store writes its own byte lanes of the register and leaves its other bits as they are; a byte or halfword load reads its lanes
+
+*Numbered from D-780 at the D-465 step (2026-10-26), other steps being recorded beside it.*
+
+- **Opened:** 2026-10-26, at the D-465 step (`Sapphire_Native.md` §39.17): Dark Cloud 2 sets D1_CHCR.TTE by a byte
+  store of 40h to D1_CHCR, then reads the register back and starts the channel with what it read and 105h; Sapphire
+  dropped every store narrower than a word to the EE's unit registers, the VIF's and the GIF's, so TTE stayed clear.
+- **Documents read:** Sony's *EE User's Manual* §2.2.1 ("The registers listed in the following table are 32-bit long
+  and only word-accessible, unless specified otherwise"), §5.9 (Dn_CHCR), §6.5 (the VIF's registers), §7.6 (the GIF's),
+  chapter 4 (the timers' MODE, EQUF and OVFF cleared by writing 1) and the INTC's I_MASK (reversed by writing 1); no
+  document says what a narrower access does.
+- **Test program:** `d780-width` (`tests/d780/mod.rs`, written by `examples/d780.rs`): byte and halfword stores at
+  every lane of D1_CHCR, at lanes of D1_MADR, D1_QWC, D1_TADR, VIF1_MARK, VIF1_ERR, GIF_MODE (read through GIF_STAT),
+  T1_COMP, T1_MODE and I_MASK (its change recorded, since the kernel sets it), each register read back by LW, and LBU,
+  LHU and LB of some; on the player's BIOS through a kernel-mode routine the program installs with SetSyscall (74h),
+  bare through kseg1. 98 record words.
+- **Referee:** PCSX2 2.8.2, the program fast-booted: every narrower store wrote its own lanes and left the register's
+  other bits as they were (D1_CHCR ABCD0000h with 40h stored at lane 0 reads ABCD0040h, then 12h at lane 2 AB120040h;
+  VIF1_MARK 1234h with 56h at lane 1 reads 5634h; T1_COMP likewise), and on I_MASK a byte at lane 0 or 1 or a halfword
+  reversed only the bits it wrote as 1 (changes 10h, 4000h, 100h), the other lanes' bits unreversed; the narrow loads
+  read their lanes. Sapphire before the change: every narrower store lost, 33 of the 98 words differing.
+- **Conclusion:** a store narrower than a word to an EE register is taken as a word whose own lanes are the store's and
+  whose other bits leave the register as it was: a plain bit by repeating what the register holds, a bit that acts
+  when written as 1 (I_STAT, I_MASK, D_STAT, the SIF's flags and control, the memory controller's, a timer's EQUF and
+  OVFF, VIF FBRST) by 0. **Measured** on one lineage for the registers listed, with the game as a console program's
+  witness for D1_CHCR; **argued** for the units' other registers by the same rule. GIF_CTRL is write-only and reads 0,
+  so a store to its lanes 1 to 3, which hold none of its bits, writes PSE as 0: a named loss no program has shown.
+- **Depends on it:** `board::Board`'s `Bus::write` (`narrow`, `plain_bits`, `register_value`).
+- **Pinned by:** `narrower_stores_to_a_channels_registers_write_their_own_lanes` (`tests/dmac.rs`).
+- **Implemented in:** the D-465 step's commit.

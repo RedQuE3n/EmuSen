@@ -10536,7 +10536,7 @@ on Jak's loading window, sampled with skipping on (§47.12), the EE's interprete
 about 40 % and the board brought along after them about 21 %. Against §43.8's bound for this lever on Jak's loading
 (11.9 times if every EE and scheduler sample went), 3.6 times was taken; the rest is work, not waiting.
 
-### 47.12 The board at events (the brief's item 2)
+### 47.12 The board at events
 
 What falls out of the skip is taken: inside a quick segment the board is not called at each EE time but the IOP at each
 time beyond its own clock, and the IOP's own waits are passed between those calls; that removes the board's

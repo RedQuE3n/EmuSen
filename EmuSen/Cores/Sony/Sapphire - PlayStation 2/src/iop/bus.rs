@@ -235,8 +235,6 @@ impl IopBus {
             }
             if self.sio2.complete(at) {
                 self.intc.raise(sio2::SOURCE);
-            }
-            if self.sio2.take_wake() {
                 self.dmac.wake_from(at.div_ceil(IOP));
             }
             self.sync_spu2(at);

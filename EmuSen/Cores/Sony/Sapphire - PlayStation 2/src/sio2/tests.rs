@@ -1,9 +1,10 @@
 //! What no program can show a referee, checked on the units directly: the card's busy times, the reply of a command to a
-//! busy card held, the motors, and the pressure rule.
+//! busy card held, the motors, the pressure rule, and SIO2out's request.
 
 use super::card::{self, MemoryCard, timing};
 use super::pad::{DualShock2, Input, bit};
 use super::*;
+use crate::iop::dma::Peripherals;
 
 fn queue(s: &mut Sio2, port: u32, bytes: &[u8], t: u64) {
     s.write(CTRL, CTRL_RESET, t);
@@ -68,6 +69,28 @@ fn a_command_nothing_acknowledges_ends_at_its_peripheral_byte() {
     s.slots[0].cards[0] = Some(MemoryCard::erased());
     queue(&mut s, 2, &[0x81, 0xF3, 0, 0, 0], 4000);
     assert_eq!(s.next_event(), 4000 + 5 * BYTE * IOP);
+}
+
+#[test]
+fn sio2out_is_requested_from_a_queues_end_until_a_reset_or_the_next_queue() {
+    let mut s = Sio2::default();
+    let mut others = iop_dma::StandIns::default();
+    let request = |s: &mut Sio2, others: &mut iop_dma::StandIns| Ports { others, sio2: s }.request(iop_dma::SIO2_OUT, 36, true);
+    s.slots[0].cards[0] = Some(MemoryCard::erased());
+    queue(&mut s, 2, &[0x81, 0x11, 0, 0], 1000);
+    assert_eq!(request(&mut s, &mut others), 0, "nothing while the queue runs");
+    assert!(s.complete(s.next_event()));
+    assert_eq!(request(&mut s, &mut others), 36, "a whole block of 36 words for four reply bytes");
+    let words: Vec<u32> = (0..3).map(|_| Ports { others: &mut others, sio2: &mut s }.get(iop_dma::SIO2_OUT)).collect();
+    assert_eq!(words, [u32::from_le_bytes([0xFF, 0xFF, card::ACK, card::TERMINATOR]), 0xFFFF_FFFF, 0xFFFF_FFFF], "FFh past FIFOOUT's bytes");
+    assert_eq!(request(&mut s, &mut others), 36, "still requested with FIFOOUT empty");
+    s.write(CTRL, CTRL_RESET, 2000);
+    assert_eq!(request(&mut s, &mut others), 0, "a reset ends the request");
+    queue(&mut s, 2, &[0x81, 0x11, 0, 0], 3000);
+    assert!(s.complete(s.next_event()));
+    s.write(SEND3, 2 | 4 << 18, 4000);
+    s.write(CTRL, CTRL_START, 4000);
+    assert_eq!(request(&mut s, &mut others), 0, "so does the next queue's start");
 }
 
 #[test]

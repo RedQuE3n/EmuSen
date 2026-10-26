@@ -101,3 +101,10 @@ fn a_command_nothing_acknowledges_ends_at_its_peripheral_byte() {
     });
     assert!(b.iop.bus.sio2.slots[1].pads[0].is_none(), "controller port 2 empty");
 }
+
+#[test]
+fn sio2out_moves_its_whole_transfer_once_a_queue_has_ended() {
+    grade(s25::sio2out_program(), |b| {
+        b.iop.bus.sio2.slots[0].cards[0] = Some(MemoryCard::erased());
+    });
+}

@@ -101,7 +101,8 @@ pub struct Sio2 {
     pending_recv1: u32,
     done_at: Option<u64>,
     pub slots: [Slot; 2],
-    /// A queue has ended since the IOP's DMAC last looked: it is woken for SIO2out.
+    /// SIO2out's request: a queue has ended since the FIFOs were last emptied or a queue started, so channel 12 takes
+    /// whole blocks, FFh past FIFOOUT's bytes (Sapphire_Disputes.md D-540).
     wake: bool,
 }
 
@@ -137,10 +138,6 @@ impl Sio2 {
         self.done_at.unwrap_or(u64::MAX)
     }
 
-    pub fn take_wake(&mut self) -> bool {
-        std::mem::take(&mut self.wake)
-    }
-
     pub fn read(&mut self, paddr: u32) -> u32 {
         match paddr {
             SEND3..SEND12 => self.send3[((paddr - SEND3) / 4) as usize],
@@ -164,9 +161,11 @@ impl Sio2 {
                 if v & CTRL_RESET != 0 {
                     self.fifo_in.clear();
                     self.fifo_out.clear();
+                    self.wake = false;
                 }
                 self.ctrl = v & !(CTRL_START | CTRL_RESET);
                 if v & CTRL_START != 0 && self.done_at.is_none() {
+                    self.wake = false;
                     self.start(t);
                 }
             }
@@ -232,8 +231,8 @@ impl Sio2 {
         self.done_at = Some(at.max(t + IOP));
     }
 
-    /// Ends the running queue if it is due by EE cycle `t`: its replies in FIFOOUT, RECV1 set, the flag; whether the
-    /// IOP's interrupt is raised.
+    /// Ends the running queue if it is due by EE cycle `t`: its replies in FIFOOUT, RECV1 set, the flag, SIO2out
+    /// requested; whether the IOP's interrupt is raised, the DMAC then to be woken.
     pub fn complete(&mut self, t: u64) -> bool {
         match self.done_at {
             Some(d) if d <= t => {
@@ -260,7 +259,8 @@ impl Sio2 {
 }
 
 /// The IOP DMAC's peripherals with SIO2's two channels answered from its FIFOs: channel 11 takes words into FIFOIN, a
-/// word's bytes from its lowest, and channel 12 gives FIFOOUT's bytes four to a word, the others going to `others`.
+/// word's bytes from its lowest, and channel 12, once a queue has ended, gives FIFOOUT's bytes four to a word for every
+/// block asked, FFh past them as a read of an empty FIFOOUT (Sapphire_Disputes.md D-540); the others go to `others`.
 pub struct Ports<'a, P: iop_dma::Peripherals> {
     pub others: &'a mut P,
     pub sio2: &'a mut Sio2,
@@ -270,7 +270,7 @@ impl<P: iop_dma::Peripherals> iop_dma::Peripherals for Ports<'_, P> {
     fn request(&mut self, ch: usize, want: u32, to_memory: bool) -> u32 {
         match ch {
             iop_dma::SIO2_IN => want,
-            iop_dma::SIO2_OUT => want.min((self.sio2.fifo_out.len() / 4) as u32),
+            iop_dma::SIO2_OUT => if self.sio2.wake { want } else { 0 },
             _ => self.others.request(ch, want, to_memory),
         }
     }

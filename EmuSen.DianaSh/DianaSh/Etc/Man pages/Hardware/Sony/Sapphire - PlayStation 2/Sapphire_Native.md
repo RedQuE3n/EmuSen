@@ -6099,7 +6099,7 @@ table and followed, a call kept whole once its first instruction ran, the device
 `a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it`, `tests/vif.rs`'s `the_unpack_set_line_holds`,
 `tests/vu_micro.rs`'s `jalr_reads_its_target_written_just_before_as_it_now_is`, `tests/pcrtc.rs`'s
 `the_fieldmark_program_weaves_the_even_field_on_the_even_rasters`; every S21, S22, S25 and S26 program on the IOP's DMAC
-passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5**, on the final tree with S19 and S30 beneath (1 min 54 s;
+passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5**, on the final tree with S19, S30 and S25's part B beneath (1 min 54 s;
 17 min on the tree before S30). The ps2autotests runs of §36.5 need the player's BIOS and are not in CI.
 
 **`SPH2` version 3** (rebased onto S30, §38): the stage's state joins the format. The header gains `Entered` (the frame the
@@ -6109,7 +6109,7 @@ export tables the bus noted (a count and 256 slots); the console's text is an ou
 the entry loads into a console still waiting and does not enter the program again, one made before it waits again
 (`the_fast_boots_entry_and_the_consoles_capture_are_state`); the machine keeps the program's image for that. The listing,
 534 lines, is pinned against `tests/sph2/version-3.layout`; version 2, never a player's, is not read. The crate on the tree
-with S19 and S30 beneath: **356 of 356**.
+with S19, S30 and S25's part B beneath: **358 of 358**.
 
 **Seeded faults**, each made in place, the tests named run, and the source restored [M]:
 

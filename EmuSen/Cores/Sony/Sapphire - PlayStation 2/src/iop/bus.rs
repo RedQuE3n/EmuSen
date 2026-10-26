@@ -147,6 +147,8 @@ pub struct IopBus {
     /// Where a run of instructions stops: the earlier of `next` and the run's end, in EE cycles.
     horizon: u64,
     fault: bool,
+    /// Where a processor store completed an export table's magic word in RAM, newest last (S10, `tty`).
+    pub export_tables: Vec<u32>,
 }
 
 impl IopBus {
@@ -172,6 +174,7 @@ impl IopBus {
             next: 0,
             horizon: 0,
             fault: false,
+            export_tables: Vec::new(),
         };
         b.reschedule();
         b
@@ -427,6 +430,8 @@ impl IopBus {
             let (h, vb) = (self.blank.h(t), self.blank.v(t));
             self.timers[n].write(reg, v, h, vb);
         } else if dma::is_register(p) {
+            // A channel started on an idle DMAC begins at this write, not at the last transfer's end (D-361).
+            self.dmac.wake_from(self.now);
             if self.dmac.write(p, v) {
                 self.intc.raise(source::DMA);
             }
@@ -548,7 +553,17 @@ impl Bus for IopBus {
             self.reports.touch(Side::Iop, p, Access::Write, Some(value), self.now * IOP);
         }
         match target {
-            Target::Ram(a) => put(&mut self.ram, a as usize, size, value),
+            Target::Ram(a) => {
+                put(&mut self.ram, a as usize, size, value);
+                let at = a & !3;
+                if get(&self.ram, at as usize, Size::Word) == super::tty::EXPORT_MAGIC && self.export_tables.last() != Some(&at) {
+                    self.export_tables.retain(|&t| t != at);
+                    if self.export_tables.len() == super::tty::TABLES {
+                        self.export_tables.remove(0);
+                    }
+                    self.export_tables.push(at);
+                }
+            }
             Target::Scratch(a) => put(&mut self.scratch, a as usize, size, value),
             Target::Io(p) if (spu2::BASE..spu2::END).contains(&p) => self.spu2_write(p, size, value),
             Target::Io(p) if (cdvd::BASE..cdvd::END).contains(&p) => self.cdvd_write(p, size, value),

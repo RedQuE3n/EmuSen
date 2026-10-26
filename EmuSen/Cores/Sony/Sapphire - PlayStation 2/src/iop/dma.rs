@@ -209,11 +209,11 @@ impl Dmac {
         rose && self.dmacinten & 2 == 0
     }
 
-    /// Channel `n`'s flag, set only with its mask and the master enable, or by a tag (`forced`).
+    /// Channel `n`'s flag, set with its mask whatever DICR's master enable (D-360), or by a tag (`forced`).
     fn flag(&mut self, n: usize, forced: bool) -> bool {
         let (mask, flag) = if n < 7 { (1 << (16 + n), 1 << (24 + n)) } else { (1 << (16 + n - 7), 1 << (24 + n - 7)) };
         let reg = if n < 7 { self.dicr } else { self.dicr2 };
-        if (forced || reg & mask != 0) && self.dicr & dicr::MASTER_ENABLE != 0 {
+        if forced || reg & mask != 0 {
             if n < 7 { self.dicr |= flag } else { self.dicr2 |= flag }
         }
         self.update()

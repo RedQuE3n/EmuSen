@@ -190,6 +190,26 @@ fn the_unpack_console_text_holds() {
     }
 }
 
+/// `dma/vif/unpack`'s "Set 4096 bytes" line on both VIFs, its packet as the program's source builds it (read at S10):
+/// Col FFEEDDCCh, BBAA9988h, 77665544h, 33221100h, MASK AAAAAAAAh (every field from Col), CL 1 WL 0, and an S-8 UNPACK
+/// with the m bit and NUM 256 in a packet of four qwords. WL 0 counts as 256, so the cycle fills: 256 qwords are written
+/// from one element, the first from Col 0 and the 256th, in the fourth cycle, from Col 3 (Sapphire_Disputes.md D-181).
+#[test]
+fn the_unpack_set_line_holds() {
+    for n in 0..2 {
+        let mut rig = Rig::new();
+        rig.reset(n);
+        for a in 0..256 {
+            rig.fill(n, a, 0xFFFF_FFFF);
+        }
+        let mut w = vec![0x31 << 24, 0xFFEE_DDCC, 0xBBAA_9988, 0x7766_5544, 0x3322_1100, 0x20 << 24, 0xAAAA_AAAA, 0x01 << 24 | 1, 0x72 << 24];
+        w.resize(16, 0);
+        rig.send(n, &w);
+        let (first, last) = (rig.qword(n, 0), rig.qword(n, 255));
+        assert_eq!([first[0], first[1], last[2], last[3]], [0xFFEE_DDCC, 0xFFEE_DDCC, 0x3322_1100, 0x3322_1100], "VIF{n}");
+    }
+}
+
 /// `dma/vif/stmod`'s eight cases on both VIFs: Row 1000h, MODE 0 to 3, V4-32 of 0 to 15 with CL = WL = 4, without the
 /// m bit and with the diagonal mask.
 #[test]

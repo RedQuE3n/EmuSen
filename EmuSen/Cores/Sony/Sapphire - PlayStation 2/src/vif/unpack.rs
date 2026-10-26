@@ -66,18 +66,24 @@ impl Cycle {
         Cycle { cl: reg & 0xFF, wl: reg >> 8 & 0xFF }
     }
 
+    /// WL as the write cycles count it: 0 counts as 256, so a CYCLE with WL 0 fills (Sapphire_Disputes.md D-181,
+    /// amended at S10 by `dma/vif/unpack`'s console text).
+    fn wl(self) -> u32 {
+        if self.wl == 0 { 256 } else { self.wl }
+    }
+
     pub fn filling(self) -> bool {
-        self.cl < self.wl
+        self.cl < self.wl()
     }
 
     /// The `k`th write's place in its block.
     fn place(self, k: u32) -> u32 {
-        if self.wl == 0 { k } else { k % self.wl }
+        k % self.wl()
     }
 
     /// The `k`th write's qword offset from the UNPACK's address.
     pub fn offset(self, k: u32) -> u32 {
-        if self.filling() || self.wl == 0 { k } else { self.cl * (k / self.wl) + k % self.wl }
+        if self.filling() { k } else { self.cl * (k / self.wl()) + k % self.wl() }
     }
 
     /// Whether the `k`th write takes a vector from the packet: always when skipping, the first CL of each WL when

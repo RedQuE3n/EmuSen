@@ -302,6 +302,26 @@ impl Ee {
         Ok(())
     }
 
+    /// Every dirty data cache line written back, then both caches, the UCAB and the BTAC emptied, as a program's loader
+    /// leaves them before it writes code into memory past the caches (the fast boot, Sapphire_Native.md §36.2).
+    pub fn flush_caches(&mut self, bus: &mut dyn Bus) {
+        let saved = self.stall_data;
+        for set in 0..self.dcache.tags.len() {
+            for way in 0..2 {
+                self.write_back(bus, set, way);
+                self.invalidate_d(set, way);
+            }
+        }
+        self.stall_data = saved;
+        for set in self.icache.tags.iter_mut() {
+            for t in set.iter_mut() {
+                t.valid = false;
+            }
+        }
+        self.ucab.valid = false;
+        self.btac.flush();
+    }
+
     /// PREF: the line read into the data cache where the page is cached and the address translates; no exception
     /// and no wait (EE Core Instruction Set Manual, PREF).
     pub(crate) fn prefetch(&mut self, bus: &mut dyn Bus, vaddr: u32) {

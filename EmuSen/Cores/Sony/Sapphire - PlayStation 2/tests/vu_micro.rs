@@ -209,6 +209,27 @@ fn a_branch_reads_an_integer_written_just_before_as_it_was() {
     assert!(taken("fsand vi1, 0x8", 0), "after FSAND, the result at once (8)");
 }
 
+/// JALR right after the integer write of its target jumps to the new value, and links after its delay slot, the target
+/// read before the link where both are one register: `vu/lower/branch`'s console text, whose program sets VI01 to 6 in
+/// the pair before `JALR VI01, VI01` (Sapphire_Disputes.md D-80, amended at S10).
+#[test]
+fn jalr_reads_its_target_written_just_before_as_it_now_is() {
+    for link in [2, 1] {
+        let mut u = units();
+        u.vu0.set_vi(1, 0);
+        let src = format!("nop | iaddiu vi1, vi0, 6
+nop | jalr vi{link}, vi1
+nop | move vf0, vf0
+{END}
+nop | move vf0, vf0
+nop | move vf0, vf0
+nop | iaddiu vi9, vi0, 1
+{END}");
+        run_on(&mut u, 0, &src);
+        assert_eq!((u.vu0.vi(9), u.vu0.vi(link)), (1, 3), "VI{link} the link");
+    }
+}
+
 /// Figures 3-16 and 3-17: the status flag an instruction writes at its S stage is what FSAND reads four cycles on;
 /// with stalls, the flag of the instruction whose S stage has passed.
 #[test]

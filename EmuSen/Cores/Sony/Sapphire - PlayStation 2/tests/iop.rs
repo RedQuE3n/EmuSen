@@ -246,3 +246,50 @@ fn the_peripherals_interface_is_the_stand_ins() {
     fn takes(_: &mut dyn Peripherals) {}
     takes(&mut StandIns::default());
 }
+
+/// A completion under its channel's mask sets the flag while DICR's master enable is clear, and the master flag rises,
+/// raising IRQ 3, when the enable is set again (ps2tek "IOP DMA"; Sapphire_Disputes.md D-360): the BIOS's interrupt
+/// handler clears the enable while it dispatches, and a SIF packet completing then is not lost.
+#[test]
+fn a_flag_under_its_mask_survives_the_master_enable_clear_and_raises_irq3_when_set() {
+    let mut mem = Flat(vec![0; 0x1000]);
+    let mut dev = StandIns::default();
+    let mut d = Dmac::default();
+    d.write(dma::DMACEN, 1);
+    d.write(dma::DPCR, 0x0F00_0000);
+    d.write(dma::DICR, 1 << (16 + dma::OTC));
+    d.write(dma::base(dma::OTC), 0x100);
+    d.write(dma::base(dma::OTC) + 4, 4);
+    assert!(!d.write(dma::base(dma::OTC) + 8, 0x1100_0002));
+    let mut irq = false;
+    let mut now = 0;
+    while now < 100 {
+        irq |= d.step(now, &mut mem, &mut dev);
+        now = d.next_event().max(now + 1);
+    }
+    assert!(!irq, "no master enable, no IRQ 3");
+    assert_eq!(d.read(dma::DICR) & 0xFF00_0000, 1 << (24 + dma::OTC), "the flag is kept, the master flag low");
+    assert!(d.write(dma::DICR, 0x0080_0000 | 1 << (16 + dma::OTC)), "the master flag rises with the enable: IRQ 3");
+    assert_eq!(d.read(dma::DICR) >> 31, 1);
+}
+
+/// A channel started on an idle DMAC begins at its CHCR write, holding the processor from then, not from the end of the
+/// transfer before it (Sapphire_Disputes.md D-361).
+#[test]
+fn a_channel_started_on_an_idle_dmac_begins_at_its_write() {
+    use blackmoon_r3000::{Bus, Size};
+    let mut board = Board::new(clock::NTSC);
+    let bus = &mut board.iop.bus;
+    let base = 0xBF80_0000 | dma::base(dma::OTC);
+    bus.write(0xBF80_0000 | dma::DMACEN, Size::Word, 1);
+    bus.write(0xBF80_0000 | dma::DPCR, Size::Word, 0x0F00_0000);
+    for start in [100, 5000] {
+        bus.now = bus.now.max(start);
+        bus.write(base, Size::Word, 0x1000);
+        bus.write(base + 4, Size::Word, 64);
+        bus.write(base + 8, Size::Word, 0x1100_0002);
+        let at = bus.now;
+        bus.service();
+        assert!(bus.now >= at + 64 * dma::WORD, "a burst of 64 words from cycle {at} held the processor only to {}", bus.now);
+    }
+}

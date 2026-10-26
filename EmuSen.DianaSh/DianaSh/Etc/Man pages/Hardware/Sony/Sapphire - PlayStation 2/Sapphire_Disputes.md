@@ -620,6 +620,8 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Depends on it:** `float::rsqrt`, `ee/fpu.rs`'s `rsqrt_s`.
 - **Pinned by:** `square_root_and_reciprocal_square_root_equal_the_manual`, `the_format_reproduces_the_console_lines_that_decide_its_readings`.
 - **Implemented in:** stage S9's commit.
+- **Revisited 2026-10-25, at stage S10** (`Sapphire_Native.md` §36.5): `cpu/ee_fpu/sqrt` whole on Sapphire on the player's
+  BIOS differs from the console in that one line alone, as predicted; the named loss stands.
 
 ### D-29. EE FPU, SQRT.S of −0 gives +0
 
@@ -910,6 +912,9 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
   multiplier and divider gives the console's last bit where IEEE 754 towards zero does not (EATAN of 1.0, 3F490FDAh;
   ERCPR of 3FFFFFFFh, 3F000001h), evidence from the EFU's datapath beside the argument. The conclusion stands,
   **argued**; `triace` on Sapphire at S10 decides it.
+- **Settled 2026-10-25, at stage S10** (`Sapphire_Native.md` §36.6): `vu/games/triace`, run whole on Sapphire on the
+  player's BIOS, prints its twelve values equal to the console's text, where PCSX2 on IEEE 754 towards zero misses one.
+  The conclusion is **measured**: the VU shares the FPU's adder, multiplier and divider; no constant changes.
 
 ### D-44. VU flags: each lane in the field mask sets Z for a zero result, S for its sign bit (a clamped −0 or −MAX included), U and O for the exponent's underflow and overflow; a lane out of the mask clears its four; the status flag collects them; a multiply-add's sticky flags also take its product's
 
@@ -1289,6 +1294,9 @@ through the reset too.
 - **Built 2026-10-25, at stage S13:** `Micro::release` answers the cycle after the first pair with M set, §5.4.6's
   figure's; pinned by `the_m_bit_releases_the_interlocked_transfers` and `the_ee_waits_for_micro_mode_as_section_5_4_draws_it`.
   The referees are not compared (the programs' records cannot show a transfer's cycle).
+- **Amended 2026-10-25, at stage S10:** a completion sets its flag under its mask whatever DICR's master enable (D-360),
+  ~~only with its mask and the master enable~~; a channel started on an idle DMAC begins at the write that starts it
+  (D-361).
 
 ### D-80. VU micro mode: a conditional branch, JR or JALR reads an integer register written by the integer unit in the pair just before as it was before the write; one pair between, or a flag check as the writer, gives the new value
 
@@ -1307,6 +1315,11 @@ through the reset too.
 - **Depends on it:** `vu/pipe.rs`'s `branch_vi` and `vi_last`.
 - **Pinned by:** `a_branch_reads_an_integer_written_just_before_as_it_was`, `what_each_pair_sees_equals_the_manual_s_pipeline`.
 - **Implemented in:** stage S13's commit.
+- **Amended 2026-10-25, at stage S10** (`Sapphire_Native.md` §36.5): `vu/lower/branch`'s console text, its program read:
+  `IADDI VI01, VI00, 6` then at once `JALR VI02, VI01` and, in its second case, `JALR VI01, VI01`; the console jumps to
+  6 in both and links 4. **JR and JALR read their target as it now is**, the write in the pair just before included,
+  ~~as the conditional branches do~~; the conditional branches keep the value before the write, as both referees showed.
+  Pinned by `jalr_reads_its_target_written_just_before_as_it_now_is`.
 
 ### D-81. VU micro mode: the I bit writes I at its pair's T stage for the next pair; its own pair's upper instruction reads I as it was
 
@@ -1962,6 +1975,14 @@ through the reset too.
 - **Depends on it:** `vif::unpack::Cycle`.
 - **Pinned by:** `the_stcycl_console_text_holds`, `skipping_and_filling_writes_equal_section_6_3_5`.
 - **Implemented in:** stage S14's commit.
+- **Amended 2026-10-25, at stage S10** (`Sapphire_Native.md` §36.5): ~~one block that never ends, every write reading~~.
+  `dma/vif/unpack`'s "Set 4096 bytes" line, its packet now read from the program's source (Col FFEEDDCCh to 33221100h,
+  MASK AAAAAAAAh, CL 1 WL 0, an S-8 UNPACK of NUM 256 in a packet of four qwords, 28 bytes of data), writes the 256th
+  qword from Col 3, which a write that takes a vector each time cannot reach with the data sent. **WL 0 counts as 256**:
+  the cycle fills, CL vectors read in each 256 writes, the cycles counting 1 to 4 and staying at 4, the addresses
+  consecutive, so `stcycl`'s text holds as before; S14's objection, that the "No data" UNPACK would complete at once
+  after a reset, falls with that program's source, which sets CL 4 WL 4. **Measured** (two console texts). Pinned by
+  `the_unpack_set_line_holds`.
 
 ### D-182. MODE 3: the input written unadded and kept in Row
 
@@ -2035,6 +2056,7 @@ through the reset too.
 - **Depends on it:** `Vif::status`.
 - **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`, `the_unpack_console_text_holds`.
 - **Implemented in:** stage S14's commit.
+- **Revisited 2026-10-25, at stage S10:** FQC through an i-bit stall with later qwords sent is D-363, open.
 
 ### D-187. FBRST.RST empties the FIFO, drops the VIFcode in progress and clears STAT (but DBF and FDR), NUM, CODE and ERR; CYCLE, MODE, MASK, Row, Col, ITOPS, ITOP, MARK and the double buffer's registers are kept
 
@@ -2082,6 +2104,8 @@ through the reset too.
 - **Depends on it:** `Vif::complete`, `Vif::fetch`.
 - **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks`.
 - **Implemented in:** stage S14's commit.
+- **Revisited 2026-10-25, at stage S10:** `intstall`'s packets are three qwords each (its source read at S10); the
+  console's FQC of 0 with the DMA ended is D-363, open; the stall itself (MASK and VIS) holds whole.
 
 ### D-190. FBRST.FBK stalls at once and FBRST.STP after the VIFcode in process (at once when none is), each holding the FIFO's data until STC
 
@@ -3527,6 +3551,102 @@ through the reset too.
 - **Depends on it:** `gif::Path1Port::kick`, `Gif::run_to`'s estimate.
 - **Pinned by:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it`.
 - **Implemented in:** stage S24's commit.
+
+### D-360. IOP DMAC: a completion under its channel's mask sets the channel's flag whatever DICR's master enable; the master flag, the enable with any flag, rises when the enable is set again and raises IRQ 3
+
+- **Opened:** 2026-10-25, at stage S10: ps2autotests' EE programs on the player's BIOS stopped after a few hundred
+  lines, `cpu/ee/muldiv` after 14, the EE waiting in its idle thread and the IOP's SIF1 channel never started again
+  (`examples/s10.rs`, `S10_STATE`). The hardware's own record of the last exchange [M]: the IOP's DMA interrupt handler
+  wrote DICR 00000000h and, 72 IOP cycles later, 00800000h; the EE's next call packet completed on channel 10 between
+  the two writes, its IRQ tag's flag was not set with the master enable clear (D-68's reading, from psx-spx), no IRQ 3
+  followed, and the SIF RPC call was never answered.
+- **Documents read:** ps2tek "IOP DMA", DICR: "24-30 Channel 0-6 interrupt flags ... IMPORTANT: The flag only gets
+  raised if the interrupt is enabled! INTRMAN relies on this behavior", the interrupt being bits 16-22's "interrupt
+  mask"; "DICR.31 = DICR.15 | (DICR.23 && (DICR.24-30 || DICR2.24-29))", which gates the master flag, not the flags, by
+  bit 23; DICR2's flags "Works same as DICR interrupt flags, including being masked by DICR.23". psx-spx "DMA Channels"
+  (the PlayStation): the flags "set ONLY if BOTH bit (16+n) AND bit 23 are enabled".
+- **Test program:** the 55 EE programs of ps2autotests on the player's BIOS (§36.5): with D-68's reading the RPC was
+  lost within 14 to 400 calls, the place moving with the EE's timing (the data cache bypassed, 337 to 399 lines); with
+  ps2tek's, every program but the four recorded ran to its end. `a_flag_under_its_mask_survives_the_master_enable_clear_and_raises_irq3_when_set`.
+- **Referee:** not consulted (the IOP's DMA flags are not visible to an EE program on PCSX2 without an IOP program).
+- **Conclusion:** ps2tek's reading, the PlayStation 2's own document, over psx-spx's for the PlayStation: a flag needs
+  its mask (or a chain's IRQ tag, D-144) and not bit 23; bit 23 gates only the master flag. **Measured**, the BIOS's own
+  handler and the consoles' texts, which a console prints whole. D-68's flag rule amended.
+- **Depends on it:** `iop::dma::Dmac::flag`.
+- **Pinned by:** `a_flag_under_its_mask_survives_the_master_enable_clear_and_raises_irq3_when_set`; the S10 gate.
+- **Implemented in:** stage S10's commit.
+
+### D-361. IOP DMAC: a channel started on an idle DMAC begins at the write that starts it
+
+- **Opened:** 2026-10-25, at stage S10, by the same record as D-360: a SIF0 transfer the IOP started was run from the
+  DMAC's last free cycle, 3,260 IOP cycles before the write to CHCR, so the reply reached the EE as the write was made
+  and the IOP held the bus for none of its words.
+- **Documents read:** none needed: a transfer cannot begin before it is started. D-68's timing (a word a cycle, the
+  processor held through a unit) stands.
+- **Test program:** `a_channel_started_on_an_idle_dmac_begins_at_its_write`: OTC's burst of 64 words started at cycle
+  5,000 holds the processor to 5,064 at least.
+- **Referee:** not consulted.
+- **Conclusion:** the register write wakes the DMAC from its own time; a defect of S21's, **measured**.
+- **Depends on it:** `iop::bus::IopBus::write_io`; every IOP channel's timing.
+- **Pinned by:** `a_channel_started_on_an_idle_dmac_begins_at_its_write`.
+- **Implemented in:** stage S10's commit.
+
+### D-362. R5900, COP1 branches: a taken BC1F or BC1T in the delay slot of a taken BC1F or BC1T supersedes it, the instruction after it its own delay slot; BC1FL and BC1TL do not
+
+- **Opened:** 2026-10-25, at stage S10: `cpu/ee_fpu/branchdelay` printed `bc1t: delay branch: 00000002` on Sapphire,
+  `00000004` on the console.
+- **Documents read:** *EE Core Instruction Set Manual*, the branch pages: a branch in a branch's delay slot is not
+  defined. The test's source (`branchdelay.cpp`, read at S10): four taken BC1Ts in a row, each in the last one's slot,
+  then four targets each setting the result to its number; the integer form (`cpu/ee/branchdelay`, BEQ) prints 2 on the
+  console and on Sapphire.
+- **Test program:** the console's text: BC1T's chain reaches the fourth target (4), BC1TL's the second (2), BEQ's the
+  second (2). `a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it`.
+- **Referee:** PCSX2 stops on the program (S9, §19.6); Play! not run.
+- **Conclusion:** the title, the reading that gives the console's three numbers [A]; the outer branch of another kind is
+  not covered by any text and keeps the ordinary rule. **Measured** for the three chains, argued for the rest.
+- **Depends on it:** `ee::fpu::bc1`, `Ee::in_bc1_slot`.
+- **Pinned by:** `a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it`.
+- **Implemented in:** stage S10's commit.
+
+### D-363. VIF, STAT.FQC after an i-bit stall: the console reads 0 with two qwords of the packet past the stalled VIFcode and the DMA ended; Sapphire reads 2 (1 in the STMASK case)
+
+- **Opened:** 2026-10-25, at stage S10: `dma/vif/intstall` whole on Sapphire, four lines of sixteen differ, each only in
+  FQC (02000C02h and 01000C02h for 00000C02h).
+- **Documents read:** VIFn_STAT's FQC ("effective data count in the FIFO"); §6.3.2; D-186, D-189. The test's source,
+  read at S10: each case sends one packet of three qwords (STMASK, the code with the i bit, STMASK, two NOPs, STMASK,
+  padding) by `SendSimple`, which prints "DMA transfer timed out" when the channel does not end and a warning when
+  MADR has not reached the packet's end; the console prints neither.
+- **Test program:** the console's text, so the DMA ended and MADR reached the end on the console: the packet's later
+  qwords left memory, and FQC still reads 0. S14 took the text's packets as one qword each (their source was not read
+  then), and FQC 0 fitted.
+- **Referee:** PCSX2 holds the DMA (it times out) and counts the qword in hand (01000C02h), D-189.
+- **Conclusion:** **open**. No document says where the VIF keeps the qwords it takes while stalled, or that FQC does not
+  count them; Sapphire keeps D-186's reading (the FIFO's qwords, the one being taken apart left out). A reading that FQC
+  reads 0 while the VIF is stalled would fit this text alone; a program of the project's that reads FQC through a stall
+  with the packet's length varied, on a console-faithful referee, would decide it, and none is.
+- **Depends on it:** `Vif::status`.
+- **Pinned by:** `the_registers_the_interrupt_stall_fbrst_and_the_error_masks` (D-186's reading).
+- **Implemented in:** not changed.
+
+### D-364. The console's TTY: on a fast-booted program, IOMAN's `write` to standard output is answered by the console's TTY with its size, as a console with ps2link or a development TTY answers
+
+- **Opened:** 2026-10-25, at stage S10: with the capture only observing IOMAN's `write`, `cpu/ee/lsu`'s lines were cut to
+  their first eight bytes (`  lb +0:` then `0000133a`). The SIF RPC packets, whose layout ps2tek's "SIF RPC Commands"
+  gives, showed why [M]: FILEIO's call carries a misaligned head of the EE's buffer in its arguments, and after writing
+  the head the server fetches the rest from the EE (command 8000000Ch, "Get other data") only when the write before
+  succeeded; the retail BIOS's TTY driver is a stub ("On retail BIOSes, the TTY functions are all stubbed", ps2tek "BIOS
+  IOP IOMAN") that returned 0, so the rest was never fetched.
+- **Documents read:** ps2tek "BIOS IOP IOMAN", "SIF RPC Commands", "BIOS IOP FILEIO"; ps2autotests' README (the texts
+  recorded through ps2link, whose host TTY takes the bytes).
+- **Test program:** the 55 programs: with the answer, `lsu` and `performance` print whole, and every other text is
+  unchanged where it was whole.
+- **Referee:** PCSX2's IOP console prints the texts whole (S4, §14.5), by a means not read.
+- **Conclusion:** a fast-booted program runs on a console with a TTY attached: the capture keeps the bytes and returns
+  their count, the BIOS's stub not run; a disc's game runs on the retail console, the capture only observing [C].
+  **Argued**: the expected texts are those of a console with a working TTY.
+- **Depends on it:** `iop::tty::Tty::answer`, `Machine::enter_program`.
+- **Pinned by:** `a_call_to_standard_output_is_answered_by_the_device_with_its_size` and the S10 gate.
+- **Implemented in:** stage S10's commit.
 
 ### D-380. The memory card's file system as the player's BIOS formats it: card flags 2Bh, the root's ".." mode A426h, every FAT entry past the allocatable clusters FFFFFFFFh, each page's last four spare bytes 00h, the superblock's bytes past Ridge's 340 written; the crate takes the last three and keeps Ridge's 52h
 

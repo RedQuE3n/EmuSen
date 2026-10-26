@@ -55,6 +55,7 @@ pub fn vector(cmd: u32, data: &[u32], j: u32, usn: bool) -> [u32; 4] {
 /// The data words an UNPACK takes (§6.4's length formula, less the VIFcode).
 pub fn data_words(cmd: u32, num: u32, cl: u32, wl: u32) -> u32 {
     let (vn, vl) = (cmd >> 2 & 3, cmd & 3);
+    let wl = if wl == 0 { 256 } else { wl };
     let n = if wl <= cl { num } else { cl * (num / wl) + (num % wl).min(cl) };
     (((32 >> vl) * (vn + 1)) * n).div_ceil(32)
 }
@@ -64,15 +65,13 @@ pub fn data_words(cmd: u32, num: u32, cl: u32, wl: u32) -> u32 {
 /// word to the end of what has arrived, which a filling write decompresses from without taking (D-183).
 pub fn unpack(r: &mut Regs, cmd: u32, num: u32, addr: u32, usn: bool, data: &[u32]) -> Vec<(u32, [Option<u32>; 4])> {
     let masked = cmd & 0x10 != 0;
-    let (cl, wl) = (r.cl, r.wl);
+    // WL 0 counts as 256, a filling cycle (D-181 as amended at S10).
+    let (cl, wl) = (r.cl, if r.wl == 0 { 256 } else { r.wl });
     let mut out = Vec::new();
     let mut read = 0;
     for k in 0..num {
-        // WL 0: one block that never ends, every write reading (D-181).
-        let cycle = if wl == 0 { k } else { k % wl };
-        let (at, input) = if wl == 0 {
-            (addr + k, true)
-        } else if cl >= wl {
+        let cycle = k % wl;
+        let (at, input) = if cl >= wl {
             (addr + cl * (k / wl) + cycle, true)
         } else {
             (addr + k, cycle < cl)

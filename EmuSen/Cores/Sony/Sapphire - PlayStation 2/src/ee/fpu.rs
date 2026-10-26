@@ -270,11 +270,18 @@ fn swc1(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 
-// BC1F, BC1T and their likely forms test C (FCR31 bit 23).
+// BC1F, BC1T and their likely forms test C (FCR31 bit 23); a taken BC1F or BC1T in a taken one's slot supersedes it (D-362).
 fn bc1(e: &mut Ee, w: u32, pc: u32, on_true: bool, is_likely: bool) -> R {
     usable(e)?;
     let t = (e.fcr31 & flag::C != 0) == on_true;
-    if is_likely { likely(e, w, pc, t) } else { cond(e, w, pc, t) }
+    if is_likely {
+        return likely(e, w, pc, t);
+    }
+    if t && e.in_bc1_slot {
+        e.jump_now(pc.wrapping_add(4));
+    }
+    e.bc1_taken = t;
+    cond(e, w, pc, t)
 }
 fn bc1f(e: &mut Ee, _: &mut dyn Bus, w: u32, pc: u32) -> R {
     bc1(e, w, pc, false, false)

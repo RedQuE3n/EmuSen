@@ -180,6 +180,9 @@ pub struct Gs {
     rose: bool,
     /// CSR's FIELD (bit 13), set by the PCRTC at each V-sync (Sapphire_Native.md §29.3).
     field: u32,
+    /// When set, every general register written, in order, with HWREG's writes counted: the GS's own report of what it
+    /// was given (Sapphire_Native.md §39).
+    pub trace: Option<(Vec<(u8, u64)>, u64)>,
 }
 
 impl Default for Gs {
@@ -214,6 +217,7 @@ impl Gs {
             line: false,
             rose: false,
             field: 0,
+            trace: None,
         }
     }
 
@@ -390,6 +394,14 @@ impl HostInterface for Gs {
     /// A general register written (§7.1): while the bus is reversed the general port cannot be reached and the write
     /// is lost [A]; while a SIGNAL is stalled it is held behind it.
     fn write(&mut self, reg: u8, data: u64) {
+        if let Some((t, images)) = self.trace.as_mut() {
+            if reg == reg::HWREG {
+                *images += 1;
+            }
+            if t.len() < 1 << 22 {
+                t.push((reg, data));
+            }
+        }
         if self.reversed() {
             return;
         }

@@ -85,6 +85,9 @@ pub struct DualShock2 {
     pub large: u8,
     /// Configuration mode has been entered: the one-motor method of the first analogue pads stops working.
     pub configured: bool,
+    /// When set, each exchange's command and reply bytes, a run of equal exchanges kept once with its count: the pad's own
+    /// report of what it was asked (Sapphire_Native.md §39).
+    pub trace: Option<Vec<(Vec<u8>, Vec<u8>, u32)>>,
 }
 
 impl Default for DualShock2 {
@@ -100,6 +103,7 @@ impl Default for DualShock2 {
             small: 0,
             large: 0,
             configured: false,
+            trace: None,
         }
     }
 }
@@ -232,11 +236,13 @@ impl DualShock2 {
                         self.rumble[i] = arg(3 + i);
                     }
                 }
+                // Its last byte 5Ah, which Kingdom Hearts waits for before it leaves configuration mode (D-463).
                 0x4F => {
                     let v = (0..6).fold(0u64, |v, i| v | u64::from(arg(3 + i)) << (8 * i));
                     if v >> 18 & 0x3F_FFFF == 0 {
                         self.mask = (v as u32) & ALL;
                     }
+                    six[5] = 0x5A;
                 }
                 _ => {}
             }
@@ -262,6 +268,7 @@ impl DualShock2 {
                 }
                 _ => {
                     reply.fill(0xFF);
+                    self.note(cmd, reply);
                     return;
                 }
             }
@@ -269,6 +276,16 @@ impl DualShock2 {
         let header = [0xFF, mode, 0x5A];
         for (i, r) in reply.iter_mut().enumerate() {
             *r = if i < 3 { header[i] } else if i - 3 < n { body[i - 3] } else { 0 };
+        }
+        self.note(cmd, reply);
+    }
+
+    fn note(&mut self, cmd: &[u8], reply: &[u8]) {
+        let Some(t) = self.trace.as_mut() else { return };
+        if let Some(e) = t.last_mut().filter(|e| e.0 == cmd && e.1 == reply) {
+            e.2 += 1;
+        } else if t.len() < 100_000 {
+            t.push((cmd.to_vec(), reply.to_vec(), 1));
         }
     }
 }

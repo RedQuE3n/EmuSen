@@ -147,3 +147,22 @@ fn pressure_reads_ffh_for_a_pressed_button_and_00h_for_a_released_one() {
     let i = Input::from_digital(bit::CROSS | bit::RIGHT | bit::R2, [0x80; 4]);
     assert_eq!(i.pressure, [0xFF, 0, 0, 0, 0, 0, 0xFF, 0, 0, 0, 0, 0xFF]);
 }
+
+/// 4Fh's reply ends with 5Ah, which Kingdom Hearts waits for before it leaves configuration mode, retrying 4Fh otherwise
+/// and polling a pad left in mode F3h (D-463); KH's own sequence, from the pad's report.
+#[test]
+fn the_4fh_reply_ends_with_5ah_and_kingdom_hearts_sequence_leaves_configuration_mode() {
+    let mut p = super::pad::DualShock2::default();
+    let mut ex = |p: &mut super::pad::DualShock2, cmd: &[u8]| {
+        let mut r = vec![0u8; cmd.len()];
+        p.exchange(cmd, &mut r);
+        r
+    };
+    ex(&mut p, &[0x01, 0x43, 0x00, 0x01, 0x00]);
+    ex(&mut p, &[0x01, 0x44, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00]);
+    let r = ex(&mut p, &[0x01, 0x4F, 0x00, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00]);
+    assert_eq!(r, [0xFF, 0xF3, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5A]);
+    ex(&mut p, &[0x01, 0x43, 0x00, 0x00, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A]);
+    let r = ex(&mut p, &[0x01, 0x42, 0x00, 0x00, 0x00]);
+    assert_eq!(r[1], 0x79, "analogue with the pressures 4Fh enabled");
+}

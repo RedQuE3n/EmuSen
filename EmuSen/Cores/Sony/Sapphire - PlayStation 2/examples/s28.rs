@@ -11,12 +11,14 @@
 //! <bits> [frames]` (the core's button bits, `+`-joined, held six frames by default), `shot <frame>`, `every <k>`
 //! (a picture every k frames), `save <frame>` (the state at that frame to `<out-dir>/state-<n>.sph2`), `ram <frame>`
 //! (RDRAM from 00100000h as the EE sees it through its data cache, the game's memory and never the kernel's, to
-//! `<out-dir>/ram-<n>.bin`), `reports` (the
+//! `<out-dir>/ram-<n>.bin`), `gstrace <frame>` (every GS general register the game writes in that frame, in order, to
+//! `<out-dir>/gstrace-<n>.txt`), `reports` (the
 //! reports printed at the next limit, counting every register access from then on) and `quit`. Pictures are
 //! `<out-dir>/frame-<n>.ppm`; `<out-dir>/status` is the frame reached; the EEPROM is written to `<out-dir>/nvm.bin`
 //! whenever the console changes it, and the sound, with `sound`, to `<out-dir>/sound.raw` (48,000 Hz, stereo s16).
 //! With `registers` every register access the units answer is counted from power-on, for the reports; with `trace` the
-//! drive's register accesses are kept in order and written with the reports to `<out-dir>/trace.txt`.
+//! drive's register accesses are kept in order and written with the reports to `<out-dir>/trace.txt`; with `padtrace`
+//! port 1's pad exchanges, to `<out-dir>/padtrace.txt`.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -36,6 +38,7 @@ struct Control {
     shots: Vec<i64>,
     saves: Vec<i64>,
     rams: Vec<i64>,
+    gstraces: Vec<i64>,
     every: i64,
     reports: bool,
     quit: bool,
@@ -56,6 +59,7 @@ fn control(out: &Path) -> Control {
             ["shot", f] => c.shots.extend(f.parse::<i64>().ok()),
             ["save", f] => c.saves.extend(f.parse::<i64>().ok()),
             ["ram", f] => c.rams.extend(f.parse::<i64>().ok()),
+            ["gstrace", f] => c.gstraces.extend(f.parse::<i64>().ok()),
             ["every", k] => c.every = k.parse().unwrap_or(0),
             ["reports"] => c.reports = true,
             ["quit"] => c.quit = true,
@@ -93,6 +97,7 @@ fn main() {
     let sound = a[5..].iter().any(|o| o == "sound");
     let all = a[5..].iter().any(|o| o == "registers");
     let trace = a[5..].iter().any(|o| o == "trace");
+    let padtrace = a[5..].iter().any(|o| o == "padtrace");
     let Ok(Media::Disc(disc)) = Media::read(&image) else { panic!("not a PlayStation 2 disc") };
     let game = program_ranges(&image, &disc.program);
     println!("disc: {} sectors, program {}, serial {:?}; the program's segments {:X?}", disc.sectors, disc.program, disc.serial, game);
@@ -132,6 +137,9 @@ fn main() {
         println!("loaded {s} at frame {}", m.frames);
     }
     m.sys.board.iop.bus.cdvd.trace = trace.then(Vec::new);
+    if let Some(p) = m.sys.board.iop.bus.sio2.pad_mut(0, 0) {
+        p.trace = padtrace.then(Vec::new);
+    }
     m.sys.board.reports.all = all;
     m.sys.board.iop.bus.reports.all = all;
     let mut sound_file = sound.then(|| std::io::BufWriter::new(std::fs::OpenOptions::new().create(true).append(true).open(out.join("sound.raw")).unwrap()));
@@ -164,7 +172,14 @@ fn main() {
         }
         let mask = held.filter(|h| next < h.1).map_or(0, |h| h.0);
         Core::set_buttons(&mut m, 0, mask, 0xFFFF).unwrap();
+        if c.gstraces.contains(&next) {
+            m.sys.board.gs.trace = Some((Vec::new(), 0));
+        }
         advance(&mut m, &game);
+        if let Some((t, images)) = m.sys.board.gs.trace.take() {
+            let text: String = t.iter().map(|(r, d)| format!("{r:02X} {d:016X}\n")).collect();
+            std::fs::write(out.join(format!("gstrace-{}.txt", m.frames)), format!("{text}HWREG writes {images}\n")).unwrap();
+        }
         let n = m.drain_audio(&mut chunk, usize::MAX);
         if let Some(f) = sound_file.as_mut() {
             for s in &chunk[..2 * n] {
@@ -190,6 +205,9 @@ fn main() {
             let lit = m.sys.board.pcrtc.picture.rgba.chunks(4).filter(|px| px[..3] != [0, 0, 0]).count();
             let fps = (m.frames - mark_frame) as f64 / mark_wall.elapsed().as_secs_f64();
             (mark_wall, mark_frame) = (Instant::now(), m.frames);
+            let gs = &m.sys.board.gs;
+            let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE2, DISPFB1, DISPLAY1, DISPFB2, DISPLAY2, BGCOLOR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
+            println!("frame {}: PMODE SMODE2 DISPFB1 DISPLAY1 DISPFB2 DISPLAY2 BGCOLOR {}", m.frames, r.join(" "));
             println!(
                 "frame {} at {:.0} s wall ({fps:.2} frames/s since the last): picture {:?}, lit {lit}; stop {:?}; IOP held {}; {}",
                 m.frames,
@@ -258,6 +276,10 @@ fn print_reports(m: &mut Machine, out: &Path) {
         let text: String = runs.iter().map(|(o, w, v, k)| format!("{} {o:02X}h {v:02X}h x{k}\n", if *w { "W" } else { "R" })).collect();
         std::fs::write(out.join("trace.txt"), text).unwrap();
         println!("-- the drive's register accesses in order, repeats counted, {} runs in trace.txt", runs.len());
+    }
+    if let Some(t) = m.sys.board.iop.bus.sio2.pad_mut(0, 0).and_then(|p| p.trace.take()) {
+        let text: String = t.iter().map(|(c, r, k)| format!("{c:02X?} -> {r:02X?} x{k}\n")).collect();
+        std::fs::write(out.join("padtrace.txt"), text).unwrap();
     }
     let regs: Vec<u8> = (0x20..0x40).map(|r| m.sys.board.iop.bus.cdvd.read8(r)).collect();
     println!("CDVD registers 20h-3Fh {regs:02X?}");

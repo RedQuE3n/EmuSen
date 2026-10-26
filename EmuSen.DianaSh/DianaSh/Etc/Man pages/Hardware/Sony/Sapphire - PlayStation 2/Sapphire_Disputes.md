@@ -4291,31 +4291,63 @@ it.*
 - **Pinned by:** `the_ee_reads_and_writes_the_drives_registers` (`tests/boot.rs`).
 - **Implemented in:** stage S28's commit.
 
-### D-461. CDVD N command 0Ch (ReadKey) sets register 38h to 01h on a disc that is ready, which the player's BIOS reads before it boots the disc; the key bytes at 20h-24h are not modelled
+### D-461. CDVD N command 0Ch (ReadKey): with a disc ready it leaves the disc's five key bytes at 20h-24h, bit fields of the boot program's name, and 01h at 38h, or with a fourth parameter of 4Bh 05h at 38h and a sixth byte at 34h; the player's BIOS reads them before it boots a disc
 
-- **Opened:** 2026-10-25, at stage S28: with D-460 in place the BIOS sent N command 0Ch twice with the seven parameter
-  bytes 00h 00h 00h 03h 0Ch 00h 00h, read the error register and then 1F402038h, and drew "Please insert a PlayStation
-  or PlayStation 2 format disc." over its disc animation; Sapphire answered 0Ch as an unknown command and read zero at
-  38h (the hardware's reports, `Sapphire_Native.md` §39.3).
+- **Opened:** 2026-10-25, at stage S28: with D-460 in place the BIOS sent N command 0Ch and drew "Please insert a
+  PlayStation or PlayStation 2 format disc." over its disc animation; the drive answered 0Ch as an unknown command. The
+  drive's register trace (`examples/s28.rs trace`, the drive's own report of each access in order) showed two ReadKeys,
+  the first with the seven parameter bytes 00h 00h 00h 4Bh 00h 00h 00h and the second with 00h 00h 00h 03h 0Ch 00h 00h,
+  each followed by reads of the error register, 38h, then 20h to 24h each with 39h between (`Sapphire_Native.md` §39.3).
 - **Documents read:** ps2tek at `1c91660`, "CDVD N Commands" (00h-06h, 08h, 09h; nothing at 0Ch) and "CDVD I/O Ports"
   (nothing past 18h); Israelson's edition, "CDVDMAN": the exports `sceCdReadKey(char unk1, char unk2, uint cmd, void
   *key)` and `sceCdDecSet(char unk1, char unk2, char shift)`, and "SECRMAN": "The bulk of this work is handled by the
   CDVD Drive, which contains the actual MagicGate keys"; `Sapphire_Plan.md` §5.6 ("The model reports every disc as
   authenticated").
-- **Test program:** `programs/s28/readkey.s`: the disk type, drive status, N status and 38h read from the EE; N command
-  0Ch sent twice with the BIOS's parameters, each followed by the N status, error and I_STAT and every byte of 00h-3Fh;
-  then a Seek, a NOP and a Stop, each followed by the N status, error and 38h.
-- **Referee:** PCSX2 2.8.2 with the Jak and Daxter disc: 38h 00h before the command and 01h after it, kept through the
-  Seek, the NOP and the Stop; no error; I_STAT 01h; 20h-24h five bytes (DEh 69h 75h 38h 25h), 28h-2Ch and 30h-34h zero,
-  the unused offsets FFh. With the synthetic single- and dual-layer DVDs of `ps2discs.py`, whose program is named
-  `EMUS_000.02`, 38h 01h and 20h-24h other bytes (80h 69h B5h 59h 14h), so the five bytes are a function of the disc and
-  38h is not. Play! reaches no drive register from the EE.
+- **Test program:** `programs/s28/readkey.s` (from the EE: the disk type, drive status, N status and 38h; ReadKey with
+  each of the BIOS's two parameter sets, each followed by the N status, error, I_STAT and every byte of 00h-3Fh; then a
+  Seek, a NOP and a Stop, each followed by 38h) and `programs/s28/keyargs.s` (ReadKey under 21 parameter sets, 20h-3Fh
+  after each), on synthetic discs from `ps2discs.py files` whose BOOT2 programs carry eleven names, and on the Jak and
+  Daxter disc.
+- **Referee:** PCSX2 2.8.2. 38h is 00h before ReadKey; after it 05h where the fourth parameter is 4Bh and 01h for every
+  other value tried (00h-04h, 08h, 09h, 0Bh, 40h, 41h, 43h, 48h, 4Ah, and the fifth to seventh bytes varied), kept
+  through a Seek, a NOP and a Stop; the five bytes at 20h-24h are the same under every parameter and depend on the
+  boot program's name alone: for `SCUS_971.24` DEh 69h 75h 38h 25h (the Jak and Daxter disc and the synthetic disc of that
+  name alike), for `EMUS_000.02` 80h 69h B5h 59h 14h; 34h is 00h except after 4Bh; 28h-2Ch and 30h-33h zero; the unused
+  offsets FFh; no error; I_STAT 01h. Over the eleven names the five bytes and 34h are the letters' codes l1-l4 and the
+  number n of the five digits laid out as (l4 & 1) << 7 | n >> 10, (l3 & 3) << 6 | l4 >> 1, (l2 & 7) << 5 | l3 >> 2,
+  (l1 & 15) << 4 | l2 >> 3, (n & 31) << 3 | l1 >> 4 and, at 34h, (n >> 5 & 31) << 3 | 4, every name predicted before it
+  was measured; a name of another form (`MAIN.ELF`) gives zeros and 04h. Play! reaches no drive register from the EE.
 - **Conclusion:** ReadKey needs a disc ready (else error 01h, as the other disc commands, [C]); it completes at once and
-  leaves 01h at 38h, which a later command keeps and the tray's opening clears [A]. Its completion raises I_STAT bit 1 as
-  ps2tek gives for every N command, not the referee's bit 0, the document before the single lineage. The five key bytes
-  are not modelled and read zero: the BIOS's boot reads 38h alone, no document gives their derivation, and a rule taken
-  from the referee's values would be its model of the drive's secret, which `Sapphire_Plan.md` §5.6 leaves alone (a
-  named loss, `Sapphire_Native.md` §39.9). **Measured** on one lineage for 38h; argued for the rest.
-- **Depends on it:** `cdvd::ncmd::READ_KEY`, `cdvd::reg::KEY_STATUS`, the drive's state (`SPH2` version 3).
-- **Pinned by:** `read_key_reports_the_disc_authenticated_at_38h`; the layout listing `tests/sph2/version-3.layout`.
+  leaves 38h 05h after a fourth parameter of 4Bh, 01h otherwise, which a later command keeps and the tray's opening
+  clears [A]; 20h-24h read the five bytes and 34h the sixth after 4Bh, from the BOOT2 program the drive reads in the disc's
+  SYSTEM.CNF when the disc is loaded. Its completion raises I_STAT bit 1 as ps2tek gives for every N command, not the
+  referee's bit 0, the document before the single lineage. The bytes are a layout of the name that the referee shows,
+  not a secret of the drive (no key material enters them), which is how §5.6's "every disc authenticated" is answered;
+  where they come from on a console is in no document. With them the BIOS boots Jak and Daxter, Kingdom Hearts and Dark
+  Cloud 2. **Measured** on one lineage; the layout argued from eleven names.
+- **Depends on it:** `cdvd::ncmd::READ_KEY`, `cdvd::reg::{KEY, KEY_EXTRA, KEY_STATUS}`, `cdvd::read_key`,
+  `media::boot2_by`; the drive's state (`SPH2` version 4).
+- **Pinned by:** `read_key_reports_the_disc_authenticated_at_38h`, `read_keys_bytes_are_the_measured_fields_of_the_boot_name`;
+  the layout listing `tests/sph2/version-4.layout`.
+- **Implemented in:** stage S28's commit.
+
+### D-462. VIF1: a DIRECT whose data the GIF refuses (VGW) asks the board for no event, even while the DMAC waits on a full FIFO
+
+- **Opened:** 2026-10-25, at stage S28: Jak and Daxter, a frame after the Cross that leaves its memory card message,
+  stopped on Sapphire with the EE never reaching the next field. The board's own state at the stop (printed by a
+  temporary counter in `Board::run_to`): the next event at the current cycle again and again, asked by VIF1 alone; VIF1's
+  STAT 1000008Bh (VPS 3, VGW, DBF, a full FIFO of 16 quadwords), channel 1 running with QWC 7Ch, GIF_STAT 680h (PATH1
+  active, PATH2 queued), the GIF and every other unit asking for no event.
+- **Documents read:** the EE User's Manual §6.3.2 (VGW: "Waiting for the GIF"), §6.4 (DIRECT and DIRECTHL through PATH2),
+  §7.4 (path arbitration); `Sapphire_Native.md` §28.5 and §33.5 (the VIF's and the GIF's interfaces to the board).
+- **Test program:** none on a referee: no referee shows the board's scheduling, which is the model's own; the unit test
+  below drives VIF1 with a GIF that refuses PATH2.
+- **Referee:** not consulted.
+- **Conclusion:** VIF1's `next_event` named its own time while the DMAC waited on its full FIFO and it had a word, which
+  holds a VIF that can take a word; a DIRECT refused by the GIF takes none, so the board asked for the same cycle without
+  end (a livelock, not a reading of the hardware). A VIF in a DIRECT with VGW set asks for no event; the GIF's progress,
+  which the board brings along at every step, lets the DIRECT go on. **Argued**; no timing changes for a DIRECT the GIF
+  takes.
+- **Depends on it:** `vif::Vif::next_event`.
+- **Pinned by:** `a_direct_refused_by_the_gif_asks_for_no_event` (`tests/vif.rs`).
 - **Implemented in:** stage S28's commit.

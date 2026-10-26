@@ -342,61 +342,82 @@ fn a_state_and_the_debugger_wait_for_every_primitive() {
     assert_eq!((got, waited >= HELD - Duration::from_millis(5)), (want, true), "waited {waited:?}");
 }
 
-#[test]
-fn a_primitive_textured_from_pages_another_worker_draws_waits_for_them() {
-    // The sprite at page 0 drawn split while held; then a sprite into page 8 textured from page 0 (PSMCT32, 64 × 64).
-    let (want, got, waited) = held_site(
-        |gs| {
-            gs.write(reg::FRAME_1, 8 | 1 << 16);
-            gs.write(reg::TEX0_1, 1 << 14 | 6 << 26 | 6 << 30 | 1 << 35);
-            gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
-            gs.write(reg::UV, 0);
-            gs.write(reg::XYZ2, 0);
-            gs.write(reg::UV, 64 * 16 | 64 * 16 << 16);
-            gs.write(reg::XYZ2, 64 * 16 | 64 * 16 << 16);
-            u64::from(gs.local().words()[8 * 2048 + 100])
-        },
-        |_| {},
-    );
-    assert_eq!((want, got), (0x8040_2010, 0x8040_2010));
-    assert!(waited >= HELD - Duration::from_millis(5), "waited {waited:?}");
-}
-
-#[test]
-fn a_clut_loaded_while_primitives_still_read_the_last_does_not_change_what_they_draw() {
-    // Two PSMT4 sprites, each after its own CLUT, the first drawn while every worker is held.
-    let program = |gs: &mut Gs| {
-        for (k, colour) in [0x1111_1111u64, 0x2222_2222].into_iter().enumerate() {
-            gs.write(reg::BITBLTBUF, 64 << 32 | 1 << 48);
-            gs.write(reg::TRXPOS, 0);
-            gs.write(reg::TRXREG, 8 | 2 << 32);
-            gs.write(reg::TRXDIR, 0);
-            (0..8).for_each(|_| gs.image(colour | colour << 32));
-            gs.write(reg::TEX0_1, 128 | 1 << 14 | 0x14 << 20 | 4 << 26 | 4 << 30 | 1 << 35 | 64 << 37 | 1 << 61);
-            gs.write(reg::FRAME_1, (8 + k as u64) | 1 << 16);
-            gs.write(reg::SCISSOR_1, 63 << 16 | 63 << 48);
-            gs.write(reg::PRMODECONT, 1);
-            gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
-            gs.write(reg::UV, 0);
-            gs.write(reg::XYZ2, 0);
-            gs.write(reg::UV, 16 * 16 | 16 * 16 << 16);
-            gs.write(reg::XYZ2, 16 * 16 | 16 * 16 << 16);
-        }
-    };
+/// `program` run on one thread and on two workers with worker 1 held for HELD from the start: the memory equal.
+fn with_worker_1_held(program: impl Fn(&mut Gs)) -> (Gs, Gs) {
     let mut one = Gs::new();
     one.set_workers(1);
     program(&mut one);
-    let want = one.local().clone();
+    one.join();
     let mut gs = threaded(2);
     let hold = gs.hold().expect("workers");
-    hold.set(0b11);
+    hold.set(0b10);
     let releaser = std::thread::spawn(move || {
         std::thread::sleep(HELD);
         hold.set(0);
     });
     program(&mut gs);
     releaser.join().unwrap();
-    assert!(*gs.local() == want, "the memory after both sprites");
-    assert_eq!(want.words()[8 * 2048] & 0xFF, 0x11);
-    assert_eq!(want.words()[9 * 2048] & 0xFF, 0x22);
+    assert!(*gs.local() == *one.local(), "the memory after the program");
+    (one, gs)
+}
+
+/// A 64 × 64 PSMCT32 sprite of one colour at page 0: rows 0 to 31 worker 0's, 32 to 63 worker 1's.
+fn fill_page_0(gs: &mut Gs) {
+    gs.write(reg::FRAME_1, 1 << 16);
+    gs.write(reg::SCISSOR_1, 63 << 16 | 63 << 48);
+    gs.write(reg::TEST_1, 0);
+    gs.write(reg::PRMODECONT, 1);
+    gs.write(reg::PRIM, 6);
+    gs.write(reg::RGBAQ, 0x8040_2010);
+    gs.write(reg::XYZ2, 0);
+    gs.write(reg::XYZ2, 64 * 16 | 64 * 16 << 16);
+}
+
+#[test]
+fn a_primitive_textured_from_rows_another_worker_draws_waits_for_them() {
+    // Page 0 filled while worker 1 is held, then a sprite into page 8 textured from page 0 upside down, so that
+    // worker 0's rows read the rows worker 1 has still to draw.
+    let (one, _) = with_worker_1_held(|gs| {
+        fill_page_0(gs);
+        gs.write(reg::FRAME_1, 8 | 1 << 16);
+        gs.write(reg::TEX0_1, 1 << 14 | 6 << 26 | 6 << 30 | 1 << 35);
+        gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
+        gs.write(reg::UV, 64 * 16 << 16);
+        gs.write(reg::XYZ2, 0);
+        gs.write(reg::UV, 64 * 16);
+        gs.write(reg::XYZ2, 64 * 16 | 64 * 16 << 16);
+    });
+    assert!(one.local().words()[8 * 2048..9 * 2048].iter().all(|&w| w == 0x8040_2010));
+}
+
+#[test]
+fn a_clut_loaded_while_primitives_still_read_the_last_does_not_change_what_they_draw() {
+    // Two CLUTs (PSMCT32, CSM1) uploaded and drawn in, then two PSMT4 sprites, each after loading its CLUT, the first
+    // still being drawn by the held worker when the second is loaded.
+    let program = |gs: &mut Gs| {
+        for (cbp, colour) in [(64u64, 0x1111_1111u64), (96, 0x2222_2222)] {
+            gs.write(reg::BITBLTBUF, cbp << 32 | 1 << 48);
+            gs.write(reg::TRXPOS, 0);
+            gs.write(reg::TRXREG, 8 | 2 << 32);
+            gs.write(reg::TRXDIR, 0);
+            (0..8).for_each(|_| gs.image(colour | colour << 32));
+        }
+        gs.join();
+        gs.write(reg::SCISSOR_1, 63 << 16 | 63 << 48);
+        gs.write(reg::TEST_1, 0);
+        gs.write(reg::PRMODECONT, 1);
+        for (k, cbp) in [64u64, 96].into_iter().enumerate() {
+            gs.write(reg::TEX0_1, 128 | 1 << 14 | 0x14 << 20 | 6 << 26 | 6 << 30 | 1 << 35 | cbp << 37 | 1 << 61);
+            gs.write(reg::FRAME_1, (8 + k as u64) | 1 << 16);
+            gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
+            gs.write(reg::UV, 0);
+            gs.write(reg::XYZ2, 0);
+            gs.write(reg::UV, 64 * 16 | 64 * 16 << 16);
+            gs.write(reg::XYZ2, 64 * 16 | 64 * 16 << 16);
+        }
+    };
+    let (one, gs) = with_worker_1_held(program);
+    assert_eq!(one.local().words()[8 * 2048 + 2047] & 0xFF, 0x11);
+    assert_eq!(one.local().words()[9 * 2048 + 2047] & 0xFF, 0x22);
+    assert_eq!(gs.worker_counts().expect("workers").clut_copies, 2);
 }

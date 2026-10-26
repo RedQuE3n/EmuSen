@@ -25,6 +25,8 @@ namespace EmuSen.WiseMan.Serenity
                 ["Genesis"] = (53.203424, 10, 3420, 12, 313, 0, 256),
                 ["N64"] = (49.65653, 4, 3178, 11.2, 313, (6 + 5 + 6 + 5 + 6) / 5.0 / 11.2, 640),
                 ["PlayStation"] = (53.203425, 1, 3405, 12, 314, 0, 2560),
+                // The PlayStation 2's PCRTC clock VCK, 54 MHz, against its encoder's subcarrier: 864 pixels of 13.5 MHz a line, 2,560 VCK across, 314 lines a field - see EmuSen_CRT.md §31.9.
+                ["PlayStation 2"] = (54.0, 1, 864 * 4, 54.0 / fsc, 314, 0, 2560),
                 ["Master System"] = (53.203424, 10, 3420, 12, 313, 0, 256),
                 // The TMS9929A's own 10.738635 MHz crystal and a PAL encoder's of 4.43361875: a cycle is the master clock over the subcarrier, a ratio of two crystals.
                 ["SG-1000"] = (10.738635, 2, 342 * 2, 10.738635 / fsc, 313, 0, 256),

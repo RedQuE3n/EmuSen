@@ -135,7 +135,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_crt_suits_the_consoles_that_had_a_television_draws_a_4_to_3_tube_and_counts_scanlines()
         {
-            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "Master System", "SG-1000" }, CrtFilter.Filter.Consoles);
+            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "PlayStation 2", "Master System", "SG-1000" }, CrtFilter.Filter.Consoles);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.Contains(CrtFilter.Name, ScreenFilters.NamesFor(console));
             Assert.DoesNotContain(CrtFilter.Name, ScreenFilters.NamesFor("GB"));
             Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("Genesis")[0]);

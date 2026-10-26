@@ -36,6 +36,7 @@ const X_TIMES: i32 = offset_of!(Context, times) as i32;
 const X_STEPS: i32 = offset_of!(Context, steps) as i32;
 const X_REPLAY: i32 = offset_of!(Context, replay) as i32;
 const X_HOOK: i32 = offset_of!(Context, hook) as i32;
+const X_SPILL: i32 = offset_of!(Context, spill) as i32;
 
 const fn cop0_at(r: usize) -> i32 {
     COP0 + 4 * r as i32
@@ -654,6 +655,20 @@ impl Emitter<'_, '_> {
 
     /// After a step: with the verifier, everything written back and its call made, leaving if an interrupt is due.
     fn after(&mut self, at: At, last: bool) {
+        if self.options.spill {
+            let h = self.held;
+            let ctx = self.ctx;
+            for r in 1..32 {
+                if h.dirty >> r & 1 == 1 {
+                    self.b.ins().store(trusted(), h.regs[r].expect("held"), ctx, X_SPILL + 8 * r as i32);
+                }
+            }
+            for i in 0..4 {
+                if h.hilo_dirty >> i & 1 == 1 {
+                    self.b.ins().store(trusted(), h.hilo[i].expect("held"), ctx, X_SPILL + 8 * (32 + i as i32));
+                }
+            }
+        }
         if !self.options.verify {
             return;
         }

@@ -54,22 +54,31 @@ pub fn compiled() -> impl Iterator<Item = &'static str> {
 
 /// The block's words from the run `words` holds (consecutive instructions from the block's start, as far as they are
 /// known): compiled instructions up to the first other, a branch only with its delay slot when the slot is a plain
-/// instruction, at most `MAX`; none if the first instruction is not compiled.
-pub fn shape(words: &[u32]) -> Option<Vec<u32>> {
+/// instruction, at most `MAX`; none if the first instruction is not compiled. With it, whether the run ended before the
+/// block did, so that more words could have made it longer.
+pub fn shape(words: &[u32]) -> (Option<Vec<u32>>, bool) {
     let mut out = Vec::new();
     let mut i = 0;
+    let mut short = true;
     while i < words.len() && out.len() < MAX {
         match class(words[i]) {
             Class::Plain => out.push(words[i]),
             Class::Branch => {
-                if i + 1 < words.len() && out.len() + 2 <= MAX && class(words[i + 1]) == Class::Plain {
+                short = i + 1 >= words.len();
+                if !short && out.len() + 2 <= MAX && class(words[i + 1]) == Class::Plain {
                     out.extend_from_slice(&words[i..i + 2]);
                 }
+                return ((!out.is_empty()).then_some(out), short);
+            }
+            Class::Other => {
+                short = false;
                 break;
             }
-            Class::Other => break,
         }
         i += 1;
     }
-    (!out.is_empty()).then_some(out)
+    if out.len() == MAX {
+        short = false;
+    }
+    ((!out.is_empty()).then_some(out), short)
 }

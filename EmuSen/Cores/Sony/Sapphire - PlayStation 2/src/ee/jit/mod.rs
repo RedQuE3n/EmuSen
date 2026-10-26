@@ -43,6 +43,8 @@ pub struct Context {
     pub hook: Helper,
     /// The dispatcher's own state, for the helpers.
     pub owner: *mut std::ffi::c_void,
+    /// Where the measurement of held registers (`Options::spill`) writes them after each instruction.
+    pub spill: [u64; 36],
 }
 
 /// How a block is compiled.
@@ -55,6 +57,9 @@ pub struct Options {
     /// Compromise C1 (Sapphire_Plan.md §5.13): a fixed cycle an instruction in place of the issue model. Off by default;
     /// `effect: accuracy`.
     pub fixed_cost: bool,
+    /// For measurement only: every register the block has written stored to `Context::spill` after each instruction,
+    /// as a block that kept them in memory would (Sapphire_Native.md §44.8). Exact; it changes no value.
+    pub spill: bool,
 }
 
 /// The R5900's lowering, `emit.rs`, for `emusen-jit`.
@@ -110,39 +115,39 @@ impl Ee {
     }
 
     /// The words the instruction cache holds from `vaddr` (physical `paddr`) on, to the end of its 4 KiB page or `n`
-    /// words, stopping at the first line it does not hold.
-    pub(crate) fn cached_words(&self, vaddr: u32, paddr: u32, n: usize) -> Vec<u32> {
+    /// words, stopping at the first line it does not hold; and whether it stopped there.
+    pub(crate) fn cached_words(&self, vaddr: u32, paddr: u32, n: usize) -> (Vec<u32>, bool) {
         let mut out = Vec::with_capacity(n);
         let mut at = 0u32;
-        while out.len() < n && (vaddr + at) & 0xFFF >= vaddr & 0xFFF {
+        while out.len() < n {
             let (v, p) = (vaddr + at, paddr + at);
             let set = super::cache::ICache::set(v);
-            let Some(way) = self.icache.hit(set, p) else { break };
+            let Some(way) = self.icache.hit(set, p) else { return (out, true) };
             out.push(self.icache.data[set][way][(p >> 2) as usize & 15]);
             at += 4;
             if (vaddr + at) & 0xFFF == 0 {
                 break;
             }
         }
-        out
+        (out, false)
     }
 
-    /// Whether the instruction cache holds exactly `words` from `vaddr` (physical `paddr`) on: what the fetches of the
-    /// block's instructions would read, each a hit.
-    pub(crate) fn holds(&self, vaddr: u32, paddr: u32, words: &[u32]) -> bool {
+    /// Whether the instruction cache holds exactly `words` from `vaddr` (physical `paddr`) on, what the fetches of the
+    /// block's instructions would read, each a hit; none when a line is missing, which the interpreter's fetch refills.
+    pub(crate) fn holds(&self, vaddr: u32, paddr: u32, words: &[u32]) -> Option<bool> {
         let mut k = 0;
         while k < words.len() {
             let (v, p) = (vaddr + 4 * k as u32, paddr + 4 * k as u32);
             let set = super::cache::ICache::set(v);
-            let Some(way) = self.icache.hit(set, p) else { return false };
+            let way = self.icache.hit(set, p)?;
             let first = (p >> 2) as usize & 15;
             let take = (16 - first).min(words.len() - k);
             if self.icache.data[set][way][first..first + take] != words[k..k + take] {
-                return false;
+                return Some(false);
             }
             k += take;
         }
-        true
+        Some(true)
     }
 
     /// The cycles Count last saw, which each step's advance moves to the issue model's count.

@@ -84,6 +84,8 @@ pub struct Blocks {
     pub wait: bool,
     /// Compromise C1 in the code compiled from now on (off by default; `effect: accuracy`).
     pub fixed_cost: bool,
+    /// The registers written out after each instruction, for measuring what holding them buys.
+    pub spill: bool,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     pub stats: Stats,
     ctx: Box<Context>,
@@ -97,19 +99,21 @@ impl Default for Blocks {
 
 impl Blocks {
     pub fn new() -> Blocks {
-        let ctx = Box::new(Context { times: [0; shape::MAX], lines: [0; shape::MAX], steps: 0, replay, hook, owner: std::ptr::null_mut() });
+        let ctx = Box::new(Context { times: [0; shape::MAX], lines: [0; shape::MAX], steps: 0, replay, hook, owner: std::ptr::null_mut(), spill: [0; 36] });
         let mut jit = Jit::new(jit::R5900, BUDGET);
         jit.perf_map = std::env::var("EMUSEN_SAPPHIRE_PERFMAP").is_ok_and(|v| v == "1");
-        Blocks { map: HashMap::default(), jit, threshold: THRESHOLD, wait: false, fixed_cost: false, verify: None, stats: Stats::default(), ctx }
+        Blocks { map: HashMap::default(), jit, threshold: THRESHOLD, wait: false, fixed_cost: false, spill: false, verify: None, stats: Stats::default(), ctx }
     }
 
-    /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`.
+    /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`,
+    /// `EMUSEN_SAPPHIRE_SPILL=1`.
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
             b.threshold = t;
         }
         b.fixed_cost = std::env::var("EMUSEN_SAPPHIRE_C1").is_ok_and(|v| v == "1");
+        b.spill = std::env::var("EMUSEN_SAPPHIRE_SPILL").is_ok_and(|v| v == "1");
         b
     }
 
@@ -162,7 +166,7 @@ impl Blocks {
     }
 
     fn options(&self, sys: &System) -> Options {
-        Options { single: sys.ee.single_issue(), verify: matches!(self.verify, Some((Verify::Steps, _))), fixed_cost: self.fixed_cost }
+        Options { single: sys.ee.single_issue(), verify: matches!(self.verify, Some((Verify::Steps, _))), fixed_cost: self.fixed_cost, spill: self.spill }
     }
 }
 
@@ -199,10 +203,18 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let paddr = sys.ee.block_entry()?;
     let pc = sys.ee.pc;
     let options = blocks.options(sys);
-    let valid = blocks.map.get(&pc).is_some_and(|b| b.paddr == paddr && b.options == options && sys.ee.holds(pc, paddr, &b.words));
-    if !valid {
-        let words = sys.ee.cached_words(pc, paddr, shape::MAX);
-        let shaped = shape::shape(&words);
+    let held = blocks.map.get(&pc).map(|b| if b.paddr == paddr && b.options == options { sys.ee.holds(pc, paddr, &b.words) } else { Some(false) });
+    if held == Some(None) {
+        // A line of the block is not in the cache: the interpreter's fetch refills it, and the block stands.
+        return None;
+    }
+    if held != Some(Some(true)) {
+        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX);
+        let (shaped, short) = shape::shape(&words);
+        if short && missed {
+            // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.
+            return None;
+        }
         let state = if shaped.is_some() { State::Counting(0) } else { State::Refused };
         let words = shaped.unwrap_or_else(|| words.get(..1).map_or_else(Vec::new, <[u32]>::to_vec));
         if words.is_empty() {

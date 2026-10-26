@@ -1,4 +1,4 @@
-//! Stages S36's and S37's gates (Sapphire_Native.md §44, §48): the EE recompiler graded against the interpreter by the
+//! Stages S36's and S37's gates (Sapphire_Native.md §44, Sapphire_Recompiler.md §48): the EE recompiler graded against the interpreter by the
 //! oracles of Mars_Native.md §5.8.5 that run on the project's own programs: the interpreter stepped beside the blocks and
 //! compared after every instruction and after every block; random programs of integer instructions, branches, loads and
 //! stores, seeded and compared; and the mechanisms one at a time. Every program here is the project's own, assembled for

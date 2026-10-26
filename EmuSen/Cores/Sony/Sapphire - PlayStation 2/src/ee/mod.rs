@@ -187,7 +187,7 @@ pub struct Ee {
     /// Lines refilled into either cache or the UCAB: the core's own count, which idle skipping reads (Sapphire_Native.md §47).
     pub fills: u64,
     /// A mark unique to the TLB's contents, new at every write and load: the recompiler's translation cache is keyed by it
-    /// (Sapphire_Native.md §48.3).
+    /// (Sapphire_Recompiler.md §48.3).
     pub(crate) tlb_stamp: u64,
 }
 

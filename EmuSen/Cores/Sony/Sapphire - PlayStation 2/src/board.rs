@@ -157,7 +157,7 @@ impl dmac::Memory for Map {
 }
 
 /// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for, after the quick path's
-/// clock moves on the run's quiet path (Sapphire_Native.md §48.5).
+/// clock moves on the run's quiet path (Sapphire_Recompiler.md §48.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tail {
     Quiet(u64),
@@ -300,7 +300,7 @@ impl Board {
     }
 
     /// `run_to` up to its last act, the DMAC woken if the IOP's side has changed a SIF FIFO, which is left pending; whether
-    /// the quick path ran (Sapphire_Native.md §48.5).
+    /// the quick path ran (Sapphire_Recompiler.md §48.5).
     fn run_to_held(&mut self, t: u64, spram: &mut [u8]) -> bool {
         if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
             self.now = self.now.max(t);
@@ -388,7 +388,7 @@ impl Board {
     /// idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's DMAC, so the checks
     /// are made once and the clocks' moves once at the end; from a wake on, each time is `run_to` itself
     /// (Sapphire_Native.md §44.5). The DMAC is the only unit that reads or writes memory or the scratchpad, and it may not
-    /// run within the first `guard` times (§48.5): the run stops before an event falls due there, or before a wake is
+    /// run within the first `guard` times (Sapphire_Recompiler.md §48.5): the run stops before an event falls due there, or before a wake is
     /// taken there. The steps that stand (the times run, a held one with its `Tail` included) and the tail.
     pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, each: &mut dyn FnMut(usize, (bool, bool, bool)) -> bool) -> (usize, Option<Tail>) {
         let Some(&last) = times.last() else { return (0, None) };

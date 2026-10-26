@@ -3,7 +3,7 @@
 //! shape. A compiled block keeps the guest registers and the issue model's fields in host registers from its entry to its
 //! exit, computes each instruction's issue cycle as `timing` does, reaches RDRAM, the scratchpad and the data cache's lines
 //! directly through a translation cache, and at its exit hands the cycles to the dispatcher's replay of the board, which
-//! decides how many of its instructions stand. Sapphire_Native.md §44 and §48 are the record.
+//! decides how many of its instructions stand. Sapphire_Native.md §44 and Sapphire_Recompiler.md §48 are the record.
 
 mod emit;
 pub mod shape;
@@ -24,7 +24,7 @@ pub const DONE: u32 = 0;
 /// The replay found an interrupt the interpreter would take before the block's end, or the DMAC due between its loads
 /// and stores: the interpreter runs the `Context::steps` instructions that stand. When they reach past the last load or
 /// store (`Context::base`), the core holds the state after it; otherwise nothing was written but the stores
-/// `Context::log` undoes (Sapphire_Native.md §48.5).
+/// `Context::log` undoes (Sapphire_Recompiler.md §48.5).
 pub const ROLLBACK: u32 = 1;
 
 /// The entries of the translation cache, by virtual page.
@@ -188,7 +188,7 @@ impl Ee {
     /// The words the instruction cache holds from `vaddr` (physical `paddr`) on, to the end of its 4 KiB page or `n`
     /// words, a line it does not hold read from RDRAM (`rdram`), as its refill would read it now; stopping at the first
     /// line it neither holds nor can read so, and whether it stopped there. A block shaped past a line the cache does not
-    /// hold runs only to that line until the cache holds it (`held_words`, Sapphire_Native.md §48.8).
+    /// hold runs only to that line until the cache holds it (`held_words`, Sapphire_Recompiler.md §48.4).
     pub(crate) fn cached_words(&self, vaddr: u32, paddr: u32, n: usize, rdram: &[u8]) -> (Vec<u32>, bool) {
         let mut out = Vec::with_capacity(n);
         let mut at = 0u32;

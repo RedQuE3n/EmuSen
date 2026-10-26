@@ -3,7 +3,7 @@
 //! between the interpreter's steps. A compiled block leaves the board behind it; its exit brings the board through each
 //! of its instructions' cycles in turn, as `System::step` would have, and keeps the instructions before the first
 //! interrupt the interpreter would take, or before the DMAC would run between two of its accesses to memory.
-//! Sapphire_Native.md §44 and §48 are the record.
+//! Sapphire_Native.md §44 and Sapphire_Recompiler.md §48 are the record.
 
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
@@ -44,7 +44,7 @@ struct Block {
     options: Options,
     state: State,
     /// Entries in a row whose first instruction, a load or store, left at once; and the entries left to the
-    /// interpreter after enough of them, as a refused block's are (Sapphire_Native.md §48.8).
+    /// interpreter after enough of them, as a refused block's are (Sapphire_Recompiler.md §48.4).
     idle: u8,
     rest: u8,
 }
@@ -70,7 +70,7 @@ pub struct Stats {
     pub refills: u64,
     pub waits: u64,
     /// Rollbacks for the DMAC due between a block's loads and stores, and rollbacks that kept the state after its last
-    /// one (Sapphire_Native.md §48.5).
+    /// one (Sapphire_Recompiler.md §48.5).
     pub dmac_stops: u64,
     pub kept_past: u64,
     /// Pages the translation cache filled, and the generations it made.
@@ -109,7 +109,7 @@ pub struct Blocks {
     /// A new block that would run on into a line neither the cache nor RDRAM holds waits for the interpreter's fetch, and
     /// one past a line the cache does not hold is shaped from RDRAM (true, the default); false shapes it from the lines
     /// the cache holds, so that code run once is compiled in short blocks, as a test of each instruction wants
-    /// (Sapphire_Native.md §48.4, §48.7).
+    /// (Sapphire_Recompiler.md §48.4, §48.7).
     pub wait_lines: bool,
     /// Compromise C1 in the code compiled from now on (off by default; `effect: accuracy`).
     pub fixed_cost: bool,
@@ -474,7 +474,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             // the DMAC due before the block's last access: the interpreter runs those instructions with the lines each
             // step would have seen, then the wake the replay held. Past the last access the core holds the state after it
             // and the instructions from there run again; short of it the stores are undone and every instruction runs
-            // again (§48.5).
+            // again (Sapphire_Recompiler.md §48.5).
             let (steps, base) = (steps as usize, ctx.base as usize);
             let kept_past = base > 0 && steps >= base;
             let start = if kept_past { base } else { 0 };
@@ -551,7 +551,7 @@ fn set_cause_lines(sys: &mut System, l: u8) {
 }
 
 /// The translation cache's fill: the page of `vaddr` as a data access in the current mode would place it, cached
-/// whatever it is, so that a page the code cannot serve is not asked for again (Sapphire_Native.md §48.3).
+/// whatever it is, so that a page the code cannot serve is not asked for again (Sapphire_Recompiler.md §48.3).
 extern "C" fn fill(ctx: *mut Context, vaddr: u32) -> u32 {
     use crate::ee::{Mode, Place};
     // SAFETY: called by compiled code during `block`, whose `Run` and context are alive and borrowed by nothing else.

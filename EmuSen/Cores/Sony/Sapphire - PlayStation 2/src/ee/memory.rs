@@ -94,7 +94,7 @@ impl Ee {
 
     /// Where a data access to the 4 KiB page of `vaddr` lands in the current mode, as `translate` and `data_mode` would
     /// place it, with no effect on any state; none where the access would raise. With it, whether a store may be made
-    /// there (the TLB's D bit). The recompiler's translation cache (Sapphire_Native.md §48.3).
+    /// there (the TLB's D bit). The recompiler's translation cache (Sapphire_Recompiler.md §48.3).
     pub(crate) fn data_page(&self, vaddr: u32) -> Option<(Place, bool)> {
         let allowed = self.kernel() || vaddr < 0x8000_0000 || (self.supervisor() && (0xC000_0000..0xE000_0000).contains(&vaddr));
         if !allowed {

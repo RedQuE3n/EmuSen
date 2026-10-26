@@ -3,7 +3,7 @@
 //! `Timing::commit` with the instruction's category, row, reads and writes made constants, and folded where the
 //! block's own earlier instructions fix a value. A load or store reaches the scratchpad, RDRAM or the data cache's line
 //! through the translation cache, or leaves the block before it. Each exit hands the cycles to the replay, then writes
-//! everything back. Sapphire_Native.md §44.4 and §48.4 record what is computed where.
+//! everything back. Sapphire_Native.md §44.4 and Sapphire_Recompiler.md §48.4 record what is computed where.
 
 use std::mem::offset_of;
 
@@ -807,7 +807,7 @@ impl Emitter<'_, '_> {
             return;
         }
         // The last load or store before this exit: the DMAC may not run within its index's times, and a rollback that
-        // keeps it writes back the state after it (Sapphire_Native.md §48.5).
+        // keeps it writes back the state after it (Sapphire_Recompiler.md §48.5).
         let snap = self.held.snap;
         let base = snap.map_or(0, |i| self.snaps[i].held.steps);
         if self.memory.is_some() {
@@ -1257,7 +1257,7 @@ impl Emitter<'_, '_> {
     }
 
     /// The host address of the 4 KiB page of `a` and its translation cache's meaning, the fill called for a page not
-    /// found; to `slow` where the fill cannot (Sapphire_Native.md §48.3).
+    /// found; to `slow` where the fill cannot (Sapphire_Recompiler.md §48.3).
     fn page(&mut self, a: Value, slow: ir::Block) -> (Value, Value) {
         let m = self.memory.expect("a block with loads or stores");
         // `jit::page_index`.
@@ -1294,7 +1294,7 @@ impl Emitter<'_, '_> {
     /// A load, store or PREF at `pc`, `slot` as in `plain`: its address translated through the translation cache, the
     /// scratchpad and RDRAM reached directly and a cached page through the data cache's tags, hits only; everything
     /// else (a misaligned address, a page the cache cannot serve, a miss, the board's next event reached) leaves the
-    /// block before it, to the interpreter (Sapphire_Native.md §48.4).
+    /// block before it, to the interpreter (Sapphire_Recompiler.md §48.4).
     fn memory(&mut self, w: u32, pc: u32, slot: Option<Tv>) {
         let name = shape::name(w);
         let op = ops::get(ops::index(w));

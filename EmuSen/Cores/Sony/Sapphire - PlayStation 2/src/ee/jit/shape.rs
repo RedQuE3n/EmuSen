@@ -1,7 +1,7 @@
 //! What a block of EE code may hold, and where it ends: the integer instructions, the multipliers and dividers of both
 //! pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot (S36); the loads and stores of
 //! every width and PREF (S37). Everything else ends the block before it and is the interpreter's (Sapphire_Native.md
-//! §44.3, §48.2).
+//! §44.3, Sapphire_Recompiler.md §48.2).
 
 use super::super::ops;
 
@@ -46,7 +46,7 @@ pub fn name(word: u32) -> &'static str {
 }
 
 /// A word's class through a memo of the words seen on this thread: the decode and the name's lookup are a pure function
-/// of the word, and the dispatcher shapes a block at every entry that waits for a line (Sapphire_Native.md §48.8).
+/// of the word, and the dispatcher shapes a block at every entry that waits for a line (Sapphire_Recompiler.md §48.4).
 pub fn class(word: u32) -> Class {
     const SLOTS: usize = 4096;
     thread_local! {

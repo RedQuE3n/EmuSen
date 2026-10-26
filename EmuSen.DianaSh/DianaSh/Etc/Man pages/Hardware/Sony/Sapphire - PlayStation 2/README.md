@@ -117,7 +117,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   ends (D-540, D-541 opened); the browser still stalls alike, card or none (P8 as observed); the SIF link step
   (2026-10-26, §30.38-§30.43): the SIF DMA tags and SIF RPC packets traced on Sapphire and PCSX2's receive buffer read,
   every documented call answered, the browser's polling of the card and multitap servers never begun on Sapphire and
-  the pad server's call every 64 fields stopped after its third, the next look put to the tester (D-620 open); and the
+  the pad server's call every 64 fields stopped after its third, the next look put to the tester (D-620 open); the
+  pad's SIO2 step (2026-10-26, §30.44-§30.51): SIO2's traffic to the DualShock 2 traced on Sapphire and PCSX2's pad log
+  read, every exchange the documented protocol's and the pad configured as PCSX2's, the second pad and 43h's button
+  bytes ruled out, the next look put to the tester (D-640); and the
   23 IOP programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's

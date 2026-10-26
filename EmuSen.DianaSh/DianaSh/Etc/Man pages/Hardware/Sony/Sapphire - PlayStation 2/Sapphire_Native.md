@@ -5102,6 +5102,168 @@ traced the SIF link's tags and documented RPC packets on Sapphire (with, in one 
 module buffers, §30.39) and read PCSX2's receive buffer, and looked at the EE's and the IOP's units' registers and
 counts; **this writer is exposed and will never write the open replacement**.
 
+### 30.44 Dispute D-640: the pad's SIO2 traffic around field 75 (2026-10-26)
+
+*A dispute step on the tester's go of 2026-10-26 (§30.42 Q1, narrowed by the tester to the pad's command and reply bytes
+on SIO2 around field 75), under `Sapphire_Plan.md` §1.4's two allowances of that day; its product is
+`Sapphire_Disputes.md` D-640.* SIO2's registers and every byte exchanged with the emulated DualShock 2s and cards were
+traced on Sapphire from power-on to field 130, with the crate's formatted card in slot 1 and with slot 1 empty, and each
+controller exchange was checked against the documented DualShock 2 protocol. **No exchange is one a driver would
+reject**: from field 56 the IOP's pad driver identifies each pad and configures it in the documented sequence, one
+command a field, every reply as psx-spx and ps2tek give it, and from field 68 reads it with 42h every field without a
+break; nothing on SIO2 changes at field 75, where the EE's calls to the pad server stop. PCSX2's own pad log, allowed
+for this step, shows its pad configured to the same state as Sapphire's (digital, the Analog button usable, both motors
+unmapped, the digital reply bytes). Two differences between the two consoles' conditions were tried and ruled out: the
+second DualShock 2, which Sapphire's settings plug into port 2 by default and the referee's do not (§30.47), and the one
+reply byte in the sequence that Sapphire gives otherwise than PCSX2, 43h's buttons when configuration mode is entered
+(D-223, §30.48). The pad and SIO2 are therefore not where the EE's pad loop stops; no code was changed, since no defect
+was found for a program to prove.
+
+### 30.45 What SIO2 carried on Sapphire (measured 2026-10-26)
+
+A build of its own, not committed, printed with the field each SEND3 entry of every queue (port, length), the command's
+bytes and the device's reply (a card's to its twelfth byte), whether a device took the peripheral byte, each write to
+CTRL, SEND1, SEND2 and the flags with FIFOIN's and FIFOOUT's fill, and each queue's end with RECV1: emulated hardware
+traffic, as the tester allowed on 2026-10-26; no program counter, instruction or memory content. The runner was
+`examples/s25b.rs` with the Americas image and no presses, to field 130. The trace was kept in scratch and deleted once
+this section was written.
+
+| Fields | Port 1's pad (port 0) | Port 2's pad (port 1) |
+|---|---|---|
+| 25 | a 7-byte command with the peripheral byte 61h (psx-spx: the DVD remote's receiver), unaddressed, HiZ | the same |
+| 40, 56, 57 | 42h, 5 bytes: FFh 41h 5Ah FFh FFh, digital, nothing pressed | none |
+| 58 | 43h with 01h (enter configuration): FFh 41h 5Ah FFh FFh | none |
+| 59 to 67 | 45h, 46h index 0, 46h index 1, 47h, 4Ch index 0, 4Ch index 1, 4Dh with six FFh, 41h, 43h with 00h (exit), 9 bytes each, the unused bytes 5Ah | none |
+| 68 on | 42h, 5 bytes, every field | 42h at fields 72 and 77 |
+| 78 to 87 | 42h every field | 43h with 01h, then the same nine commands as port 1's at fields 59-67 |
+| 88 on | 42h every field | 42h every field |
+
+Each reply against the documents (psx-spx "Controllers - Configuration Commands", "Vibration/Rumble Control", "Analog
+Buttons (Dualshock2)"; ps2tek, Israelson's edition, "SIO2 Controller Commands"):
+
+| Command | Sapphire's reply | Documents | PCSX2 (`s25-pad`, §30.9) |
+|---|---|---|---|
+| 42h, digital | FFh 41h 5Ah FFh FFh | the mode 41h, 5Ah, the buttons (1 released) | equal |
+| 43h 01h from normal mode | FFh 41h 5Ah FFh FFh, then configuration mode | as 42h (D-223) | 00h 00h for the buttons |
+| 45h | FFh F3h 5Ah 03h 02h 00h 02h 01h 00h | 03h a DualShock 2, 00h the LED off | equal |
+| 46h 0, 46h 1 | 00h 00h 01h 02h 00h 0Ah; 00h 00h 01h 01h 01h 14h | the same | equal |
+| 47h | 00h 00h 02h 00h 01h 00h | the same | equal |
+| 4Ch 0, 4Ch 1 | 00h 00h 00h 04h 00h 00h; 00h 00h 00h 07h 00h 00h | the same | equal |
+| 4Dh FFh × 6 | the old map, FFh × 6 | the old map; FFh × 6 "disable motor control" | equal |
+| 41h, digital | six 00h | ps2tek: zeros in digital mode (D-225) | equal |
+| 43h 00h in configuration mode | six 00h, normal mode again | the same | equal |
+
+The two traces, card and none, are the same command for command and byte for byte at every controller port; they
+differ only at the card ports (fields 52 and 53). Every queue was preceded by CTRL's FIFO reset and the SEND1 and SEND2
+words of its ports, and followed by the flag at 1F808280h written back; a controller's 5-byte queue took 20 µs and a
+9-byte one 36 µs (§30.3's 4 µs a byte, D-440). From field 77 the two ports' commands go in one queue. Field 75 carries
+port 1's 42h read and nothing else, as fields 68 to 76 each do; port 2's pad is first read at field 72, three fields
+before.
+
+### 30.46 PCSX2's pad, by its own log (measured 2026-10-26)
+
+*Decided 2026-10-26 by the tester, for this step:* PCSX2's pad trace log may be read for the emulated controller's
+command and reply bytes and their timing only, with no IOP program counter, BIOS address or module data, lines of that
+kind filtered out before reading; the log stays in scratch, is never committed, and is deleted when the step is
+recorded. A scratch copy of `ps2referee.py`, not committed, ran its `pads` mode with PCSX2's trace log on for the IOP's
+pad (`EmuCore/TraceLog`, `IOP.pad`) and kept only the lines beginning `Pad: `. PCSX2 2.8.2's release build logs no
+command or reply byte: it prints one line when a pad's configuration finishes, giving the port, the LED, whether the
+Analog button is usable, each motor's state and the reply bytes' set. With slot 1 empty:
+
+| PCSX2 | Its line | Sapphire at the same point |
+|---|---|---|
+| one pad (the referee's setting) | port 1: LED off, Analog button usable, both motors disabled, reply bytes digital | after field 67: digital, unlocked, the map FFh × 6, the mask 03h |
+| a second pad in port 2 | the same for port 2, 0.334 s (20.0 fields) after port 1's | port 2's sequence ends at field 87, 20 fields after port 1's |
+
+So PCSX2 configures each pad to the state Sapphire's reaches, and the second 20 fields after the first, as Sapphire
+does; it is a witness for the result of the sequence and its spacing, not for each command, which its log does not show.
+With trace logging on, the `-logfile` copy of PCSX2's log stops after its start-up lines and the rest goes to its
+default log, so the scratch tool read the `Pad: ` lines from there (§30.51 says what that first cost).
+
+### 30.47 The second pad (measured 2026-10-26)
+
+Sapphire's "Port 2 controller" setting (`pad2`, `v1.rs`) plugs a DualShock 2 into port 2 by default, and every
+browser run since part B had one, while the referee's settings have none in port 2 ([Pad2] Type None) and §30.40's
+PCSX2 runs were made so. Port 2's pad is first read three fields before the pad server's last call, so both were run
+the other way:
+
+| Run | Fields 1920-2700 |
+|---|---|
+| Sapphire, port 2 empty, the formatted card in slot 1 | black, every pixel zero |
+| Sapphire, port 2 empty, slot 1 empty | black, every pixel zero; the 45 pictures equal to the card run's byte for byte |
+| PCSX2, a DualShock 2 in port 2, slot 1 empty, the sixth Cross entering the browser | "There is no data." |
+
+The two Sapphire runs step through the setup to the menu as every run since D-383 has (17,472 lit pixels at field
+780, as in §30.26); the EE's system calls were 1,158,276 in each (1,157,984 and 1,157,988 with two pads, §30.35); SIO2
+carried about 1.1 queues a field after the menu, as with two pads. The second pad is not the cause.
+
+### 30.48 D-223's byte, tried (measured 2026-10-26)
+
+In the whole sequence of §30.45 one reply differs between Sapphire and the referee: 43h's two button bytes when it
+enters configuration mode, the buttons as both documents give them on Sapphire (FFh FFh, nothing pressed) and 00h 00h on
+PCSX2 (D-223, §30.9). The tracing build was run once more answering PCSX2's zeros there, an experiment not committed,
+with slot 1 empty, two pads, the trace on from field 50 to 100 and part B's script to field 2700. The trace showed the
+driver's commands at both ports unchanged, command for command, with only those two bytes different at fields 58 and
+78; the browser was black from field 1920 to 2700, every pixel zero, the 45 pictures equal byte for byte to the port 2
+empty run's of §30.47, and the EE's system calls 1,157,988, §30.35's for the same run with the documents' bytes. So the
+referee's zeros change nothing a picture or the counts show, and D-223's documented reading stands.
+
+### 30.49 OSDSYS's browser again, and P8 (measured 2026-10-26)
+
+No unit was changed, so the browser runs of §30.41 stand for the tree as it is (two pads, card or none: black from field
+1920, the card never written). The runs of this step add those with port 2 empty (§30.47), part B's script (Cross every
+120 fields from 770, the ninth on "Browser" at 1730, Circle at 2510) to field 2700:
+
+| Fields | Slot 1 empty | The formatted card in slot 1 |
+|---|---|---|
+| 770-1610 | each press steps the setup on: Language, Time Zone, Daylight Savings Time, "Settings completed." | the same |
+| 1680 | the main menu, "Browser" and "System Configuration", with its ring of lights | the same |
+| 1740-1860 | the menu fading out on Cross | the same |
+| 1920-2700 | **black, every pixel zero**, through the Circle at 2510 | the same |
+
+The card was never written (its file equal to the crate's). **P8 stands as observed**: card or none, one pad or two,
+the browser stalls before it asks for any card, and the card's refusal (Q7(b)) is not reached.
+
+### 30.50 Questions the pad step leaves
+
+1. **Q1 [decision], the next look at the browser.** The pad's traffic, SIO2 and the SIF link all answer as documented
+   and as the referee does; what stops is an EE thread that on PCSX2 calls the pad server every 64 fields. A cadence of
+   64 fields is the kind a kernel alarm keeps, and ps2tek's "EE Timers" says the BIOS reserves timer 3 for alarms, which
+   Sapphire's EE never writes after field 13 (§30.39). *Recommended*: (a) read EE timer 3's four registers on PCSX2
+   through PINE, once a second while its menu runs, if PINE reaches the EE's I/O registers; they are hardware registers,
+   not BIOS data, and whether the referee's BIOS arms timer 3 where Sapphire's never does names a unit (the EE's timer,
+   its interrupt, or the INTC) without reading the BIOS; then a program of the project's own on that unit. (b) §30.42
+   Q1(b), the EE kernel's system calls traced narrowly, if (a) shows nothing. (c) leave the browser until S29's disc and
+   S10's fast-booted programs drive the card's driver.
+2. **Q2 [routine], the second pad in the referee's runs.** *Recommended*: keep the referee's port 2 empty, as it was for
+   every recorded run, and Sapphire's default of two pads, since the browser was shown to behave alike with either.
+3. **Q3 [routine], D-223.** *Recommended*: keep the documents' reading, the buttons, as §30.48 ruled the referee's zeros
+   out as the browser's cause; revisit if a second lineage disagrees.
+
+### 30.51 What was read, the blast radius, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 (with the decisions of 2026-10-26), §5.8, §11 Q7, §13 (P8); this page's §30 from part
+B on (the D-383, D-540 and D-620 steps), §35 and §36; `Sapphire_Disputes.md` D-223 to D-225, D-383, D-440, D-441, D-540,
+D-541, D-620. psx-spx at `6d7d1bc`, "Controllers - Communication Sequence", "Configuration Commands", "Vibration/Rumble
+Control", "Analog Buttons (Dualshock2)" and the controller IDs; ps2tek, Israelson's edition (revision `295bc61`), "SIO2
+Controller Commands" and "SIO2 Command Sequence". PCSX2 2.8.2 run as a black box: its pictures from saved states and the
+`Pad: ` lines of its log, three runs. No emulator, SDK, loader or ps2autotests source and no firmware: the BIOS image was
+handed by path to Sapphire and to PCSX2 and never opened; no program counter, instruction, or memory holding BIOS code or
+data was printed or read. The tracing build, the scratch copy of the referee tool, every trace and every PCSX2 log were
+deleted once this was written.
+
+**Blast radius**: the step commits documents only (`blast.sh WiseMan sapphire-padtrace` lists no test); nothing was run
+beyond the traces and the runs above.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2,
+traced SIO2's registers and the bytes the emulated pads and cards exchanged on Sapphire, and read PCSX2's pad log. The
+first PCSX2 run with trace logging on wrote its log to PCSX2's default file instead of the tool's, and to find the pad's
+lines in it the shape of every line was printed once with its numbers and hexadecimal values masked, before any filter:
+besides PCSX2's own start-up text, that showed lines of PCSX2's recompiler messages carrying instruction mnemonics
+(operands masked), the IOP modules' library registrations by name and version, and the BIOS's name as PCSX2 reports it;
+no address, operand or value was read, and the later runs kept only the `Pad: ` lines. **This writer is exposed and will
+never write the open replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -6387,6 +6549,13 @@ PCSX2, traced on Sapphire the SIF DMA tags and the SIF RPC packets' documented h
 allows since 2026-10-26, read PCSX2's EE receive buffer through PINE for the same fields, and observed the EE's and the
 IOP's units' registers and counts, never a program counter, instruction, payload or memory holding BIOS code; **that
 writer is exposed too and will never write the open replacement**.
+
+*Added 2026-10-26 at the pad's SIO2 step (§30.44 to §30.51):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2, traced on Sapphire SIO2's registers and the bytes exchanged with the emulated pads and cards, and read PCSX2's pad
+trace log, both as the tester decided on 2026-10-26 (`Sapphire_Plan.md` §1.4); once, before the log's filter, the shape
+of every line of PCSX2's default log was printed with its values masked, showing recompiler messages with instruction
+mnemonics and the IOP modules' registrations by name (§30.51); **that writer is exposed too and will never write the open
+replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

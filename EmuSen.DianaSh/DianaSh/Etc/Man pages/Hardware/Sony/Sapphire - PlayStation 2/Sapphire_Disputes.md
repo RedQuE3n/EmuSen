@@ -3944,6 +3944,43 @@ it.*
 - **Pinned by:** nothing.
 - **Implemented in:** none.
 
+### D-640. The DualShock 2 on SIO2 while the player's BIOS boots: every exchange from the pad's identification to its reads every field is the documented protocol's, and nothing on SIO2 changes at field 75, where the EE stops calling the pad server
+
+*Numbered from D-640 at the pad's SIO2 step (2026-10-26), other stages being built beside it.*
+
+- **Opened:** 2026-10-26, at the pad's SIO2 step (`Sapphire_Native.md` §30.44), decided by the tester as the next look
+  after D-620: the pad's command and reply bytes on SIO2 around field 75, checked against the documented protocol.
+- **Documents read:** psx-spx at `6d7d1bc`, "Controllers - Communication Sequence" (the ID halfword, 5A41h a digital
+  pad, 5AF3h configuration mode), "Configuration Commands" (42h, 43h, 44h to 4Ch and their replies), "Vibration/Rumble
+  Control" (4Dh, FFh × 6 disabling motor control), "Analog Buttons (Dualshock2)" (40h, 41h, 4Fh); ps2tek, Israelson's
+  edition (revision `295bc61`), "SIO2 Controller Commands" (41h zeros in digital mode; 45h's model byte 03h for a
+  DualShock 2; "46h 46h 47h 4Ch 4Ch" as the sequence) and "SIO2 Command Sequence". No document describes a driver's
+  sequence beyond that.
+- **Test program:** none of the project's: no defect was found for one to prove; `s25-pad` (stage S25) already grades
+  each reply the trace shows. **The trace on Sapphire** (a build of its own, not committed, deleted when the step was
+  recorded): every SEND3 entry, command and reply byte at every port, CTRL, SEND1, SEND2 and the flags with the FIFOs'
+  fill, each queue's end and RECV1, from power-on to field 130, with the crate's formatted card in slot 1 and with slot
+  1 empty. At each controller port the driver reads the pad with 42h (digital, FFh 41h 5Ah FFh FFh), enters
+  configuration mode with 43h, sends 45h, 46h 0, 46h 1, 47h, 4Ch 0, 4Ch 1, 4Dh with six FFh, 41h and 43h 00h, one a
+  field (port 1 at fields 58 to 67, port 2 at 78 to 87), and then reads with 42h every field; every reply is the
+  documents', and equal to PCSX2's measured replies (§30.9) but 43h's two button bytes on entering configuration mode
+  (D-223). The two traces are the same at every controller port; field 75 carries one 42h read of port 1, as fields 68
+  to 76 do.
+- **Referee:** PCSX2 2.8.2. Its pad trace log, allowed by the tester for this step (the controller's bytes and timing
+  only, lines with program counters, BIOS addresses or module data filtered out before reading, never committed,
+  deleted), gives in its release build one line when a pad's configuration finishes: port 1 with the LED off, the Analog
+  button usable, both motors disabled and the digital reply bytes, the state Sapphire's pad reaches at field 67; with a
+  second pad, port 2 the same 20.0 fields later, as on Sapphire. Two conditions were tried both ways: PCSX2 with a
+  second DualShock 2 in port 2 still draws "There is no data." in its browser, and Sapphire with port 2 empty still
+  stalls black from field 1920, card or none; and Sapphire answering 43h's buttons with PCSX2's zeros, an uncommitted
+  experiment, left the driver's commands, the pictures and the EE's system calls as they were, so D-223 stands.
+- **Conclusion:** the title, **measured**: SIO2's traffic to the DualShock 2 and the pad's state are the documented
+  protocol's and the referee's, so neither the pad, SIO2, nor the second pad is where the EE's pad loop stops (D-620).
+  The next look is put to the tester (`Sapphire_Native.md` §30.50 Q1). P8 stands as observed.
+- **Depends on it:** nothing.
+- **Pinned by:** `the_dualshock_2_answers_identification_configuration_and_modes_as_documented` (each reply).
+- **Implemented in:** none.
+
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 
 - **Opened:** 2026-10-25, at stage S19.

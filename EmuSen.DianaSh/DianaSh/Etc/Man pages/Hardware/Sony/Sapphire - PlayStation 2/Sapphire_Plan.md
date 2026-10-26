@@ -175,6 +175,14 @@ the packets themselves; the tracing code and its output are never committed, and
 its exposure section with what was looked at. A replacement writer never traces the link while a BIOS runs. Anything
 beyond this, such as what the BIOS executes where it stops, remains the tester's decision, put as a question.
 
+*Decided 2026-10-26 by the tester, for the pad's SIO2 step (`Sapphire_Native.md` §30.44):* SIO2's register traffic and
+the bytes exchanged with the emulated DualShock 2 and memory card on Sapphire are emulated hardware traffic and may be
+traced by a writer of a player's-BIOS stage, like the drive's registers: never committed, deleted when the step is
+recorded, recorded as exposure. PCSX2's pad trace log may be read in the same step for the emulated controller's
+command and reply bytes and their timing only: no IOP program counter, BIOS address or module data, any line of that
+kind filtered out before the log is read; the log stays in scratch, is never committed, is deleted when the step is
+recorded, and is recorded as exposure.
+
 ### 1.5 The disputes log, and why there is no hardware rung
 
 `Sapphire_Disputes.md`, created with this page because a first disagreement between sources is already known: D-0, the
@@ -966,7 +974,7 @@ development mark; G11, `ps2.card` read by `emusen-ps2-card` behind the card mana
 kilobyte the browser shows, the Memory Cards tab in the fit audit at both sizes, held and not; on PCSX2 the player's
 BIOS formatted a card that the crate's copy, delete and import edited and the BIOS read back, and a delete made by the
 BIOS was read by the crate (D-380 to D-382); on Sapphire OSDSYS with an empty tray stepped through its setup to the main
-menu at the pad's presses, and its browser, entered with a card in slot 1, never drew (P8 as observed; D-383 open).* *D-383 resolved 2026-10-26 (`Sapphire_Native.md` §30.25): a command no device acknowledges ends at its peripheral byte; the browser stalls with slot 1 empty as with a card.* *The SIO2out step, 2026-10-26 (`Sapphire_Native.md` §30.31): a queue's end requests channel 12 until SIO2's FIFOs are reset, so the BIOS's slices end (D-540); the browser still stalls alike, card or none.* *The SIF link step, 2026-10-26 (`Sapphire_Native.md` §30.38): every SIF RPC call answered; the browser's card and multitap polling never begins on Sapphire (D-620).* |
+menu at the pad's presses, and its browser, entered with a card in slot 1, never drew (P8 as observed; D-383 open).* *D-383 resolved 2026-10-26 (`Sapphire_Native.md` §30.25): a command no device acknowledges ends at its peripheral byte; the browser stalls with slot 1 empty as with a card.* *The SIO2out step, 2026-10-26 (`Sapphire_Native.md` §30.31): a queue's end requests channel 12 until SIO2's FIFOs are reset, so the BIOS's slices end (D-540); the browser still stalls alike, card or none.* *The SIF link step, 2026-10-26 (`Sapphire_Native.md` §30.38): every SIF RPC call answered; the browser's card and multitap polling never begins on Sapphire (D-620).* *The pad's SIO2 step, 2026-10-26 (`Sapphire_Native.md` §30.44): every exchange with the DualShock 2 as documented and the pad configured as PCSX2's is; neither the second pad nor 43h's button bytes is the browser's cause (D-640).* |
 | **S26** | The SPU2 on the shared voice crate (§9.3) | The project's voice programs against the referees' sound; Diamond's SPU goldens unchanged by the crate's extraction *Built 2026-10-25, `Sapphire_Native.md` §32: met; the voice moved into `blackmoon-spu` with Diamond's goldens and tests unchanged first; two cores on the IOP's bus and channels 4 and 7, 48,000 Hz exactly; eight programs graded on Sapphire, their sound read from the output areas PCSX2 also writes, the mix 28 of 30 copies equal on PCSX2, AutoDMA's stream, the registers and the IRQ scenes equal but where PCSX2's voice reads psx-spx otherwise than Diamond's referees, which keep the shared voice; key on at 1A0h, not ps2tek's 190h; D-260 to D-270.* |
 | **S27** | The IPU | The project's MPEG-2 streams decoded equal to the standard's arithmetic, each difference a dispute *Built 2026-10-25, `Sapphire_Native.md` §34: met; the ten commands, the registers, both FIFOs and channels 3 and 4, MPEG-2 and MPEG-1 decoding from H.262 with Annex A's reference IDCT decided exactly near every half, §8.6's colour conversion; twelve ffmpeg streams and two written symbol by symbol decoded by Sapphire's IPU equal to a model of the standard written apart, which ffmpeg's own decoding matches within one step; 32 replay programs and a register program, 163,964 graded words, equal on the board; PCSX2 a witness for the register behaviour, the stream's handling, non-intra decoding and PACK, its IDCT one step off (P7), its intra range, alternate-scan weighting, IDEC scale and CSC departing by rules reproduced exactly; Play! a witness for VDEC and IPU_TOP; the decoding untimed, the referees disagreeing by a factor of four; D-300 to D-326.* |
 | **S28** | Games on the player's BIOS to their title screens and into play (needs §11 Q8) | The bench discs at three anchors each against the referees in picture and RAM, or dispute-logged |
@@ -1348,7 +1356,9 @@ needs Q11.
   ending (D-540) the browser still stalls on entry, card or none, the card never written; P8 stands as observed.* *The SIF
   link step, 2026-10-26 (`Sapphire_Native.md` §30.38 to §30.43, D-620): every documented call is answered while the
   browser is entered; the EE never begins the browser's polling of the card server that PCSX2 begins two seconds after
-  Cross, so the card is not reached and P8 stands as observed.*
+  Cross, so the card is not reached and P8 stands as observed.* *The pad's SIO2 step, 2026-10-26 (`Sapphire_Native.md`
+  §30.44 to §30.51, D-640): the pad's traffic is the documented protocol's and the referee's; with one pad or two the
+  browser stalls before it asks for a card, so P8 stands as observed.*
 - **P9.** All 78 ps2autotests pass on the player's BIOS within three steps of S24, but for entries named in disputes.
 - **P10.** The open BIOS takes 25–40 steps and at least one bench game needs an IOP kernel behaviour no document
   describes.

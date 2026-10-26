@@ -288,6 +288,13 @@ through PINE at the EE's SIF receive address showed the SIF RPC calls the BIOS m
 fields; the buffer is overwritten by each packet, so PCSX2 is a witness for which servers are called and roughly how
 often, not for every call. The reading code was a scratch copy of the tool, never committed, as `Sapphire_Plan.md` §1.4
 asks of a trace.
+*2026-10-26, D-640* (`Sapphire_Native.md` §30.46): PCSX2's pad trace log (`EmuCore/TraceLog`, `IOP.pad`), allowed by the
+tester for that step, prints in the 2.8.2 release build no command or reply byte, only one line as each pad's
+configuration finishes (the LED, the Analog button, the motors, the reply bytes' set), so PCSX2 is a witness for the
+state a driver leaves the pad in and when, not for the exchange. With trace logging on, its `-logfile` copy stops after
+the start-up lines and the rest goes to the default log under `logs/`, which also carries the IOP modules'
+registrations and recompiler messages: a reader keeps the `Pad: ` lines only. The referee's settings have no pad in
+port 2; a run with one there drew the browser as before.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

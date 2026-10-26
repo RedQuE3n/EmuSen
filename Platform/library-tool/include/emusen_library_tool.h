@@ -7,7 +7,8 @@
  * platform library's, and the words for a failure are read with last_error on the same thread. Requests and events
  * are EmuSen_GamePackages.md, section 12.3's; since 1.1 the table is unchanged and a request may also be a pkg one,
  * whose ops and package events are section 14's; since 1.2 also pkg-patch-add and pkg-patch-rm, section 15's; since
- * 1.3 pkg-make's self_contained and zip, a package's zip among pkg-check's paths, and pkg-identity, section 19's.
+ * 1.3 pkg-make's self_contained and zip, a package's zip among pkg-check's paths, pkg-identity and pkg-zip, section
+ * 19's.
  */
 #ifndef EMUSEN_LIBRARY_TOOL_H
 #define EMUSEN_LIBRARY_TOOL_H

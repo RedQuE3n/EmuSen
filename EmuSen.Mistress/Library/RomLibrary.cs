@@ -154,8 +154,17 @@ namespace EmuSen.Mistress.Library
                     }
                     // Nothing inside a package is a game of its own, a claimed file is the package's, and each package is one entry - see EmuSen_GamePackages.md §3.6.
                     var index = EmuSen.Galaxia.Media.GamePackages.Index(new EmuSen.Galaxia.Media.PackagePlaces(packages, romDirectory, compressed));
-                    found.RemoveAll(f => { string full = Path.GetFullPath(f); return index.InsidePackage(full) || index.Claimant(full) is not null; });
+                    var zips = index.Folders.Select(EmuSen.Galaxia.Media.GamePackages.ZipBeside).ToHashSet(StringComparer.Ordinal);
+                    found.RemoveAll(f => { string full = Path.GetFullPath(f); return index.InsidePackage(full) || index.Claimant(full) is not null || zips.Contains(full); });
                     packaged.AddRange(index.Packages.Where(p => File.Exists(p.Game)).Select(p => new RomEntry(p.Game) { KnownShelf = ShelfNamed(p.System) ?? RuntimeCatalog.ShelfFor(p.Game) ?? "Unknown", Package = p.Folder }));
+                    // A package's zip whose folder is not there is one entry, shelved by its manifest's system - see EmuSen_GamePackages.md §19.
+                    string packagesRoot = Path.GetFullPath(packages);
+                    foreach (string zip in found.Where(f => EmuSen.Galaxia.Media.ArchiveImages.IsArchive(f) && EmuSen.Galaxia.Media.GamePackages.Within(Path.GetFullPath(f), packagesRoot)).ToList())
+                    {
+                        if (EmuSen.Galaxia.Media.GamePackages.ZipManifest(zip) is not { } held) continue;
+                        found.Remove(zip);
+                        packaged.Add(new RomEntry(zip) { KnownShelf = ShelfNamed((string?)held.Doc["system"] ?? "") ?? "Unknown" });
+                    }
                 }
                 entries = found.Select(f => new RomEntry(f))
                     .Concat(packaged)

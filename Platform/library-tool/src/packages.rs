@@ -289,6 +289,12 @@ fn further(ctx: &Context, index: &mut Index, folder: &str, how: Making, found: &
     outcome
 }
 
+/// `pkg zip`: a self-contained package written as one zip beside its folder, as it now is, its saves and states with
+/// it; `zipped`, or `failed` for a linked package or a zip already there (§19).
+pub fn zip(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
+    further(ctx, &mut Index::default(), folder, Making { self_contained: false, zip: true }, "already", stop)
+}
+
 /// A file copied into the package as `rel`, its time kept, and checked: the copy's SHA-1 is the SHA-1 of the bytes read
 /// from the original in the same run. A copy already there of the same bytes is kept, any other file there refuses it.
 /// The original is only read. Its SHA-1 and size.

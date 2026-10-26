@@ -10,6 +10,7 @@ SYNOPSIS
     pkg migrate <package>...
     pkg patch add <package> <file>
     pkg patch rm <package> <n>
+    pkg zip <package>...
     pkg identity <package> original|patched
     pkg wait [pkg<n>]
 
@@ -59,6 +60,12 @@ DESCRIPTION
     as described below; a package already self-contained is only zipped
     ('zipped'). A zip already there is left as it is, and the make says
     so: move it aside to write it again.
+
+    'zip' writes each self-contained <package>, relative to Packages, as
+    one zip beside its folder, as it now is, with every save and state
+    it holds: the way to carry a package on from a machine whose library
+    does not hold its game, as when it came there as a zip. A linked
+    package is refused, since its zip would hold no game.
 
     'ls' lists the packages, or one console's (by its name, its system's
     ES-DE name, or its folder under Packages), with their mode and state:
@@ -245,6 +252,7 @@ EXAMPLES
     pkg make "snes/Super Metroid (USA).sfc"
     pkg make --self-contained --zip "snes/Super Metroid (USA).sfc"
     pkg check "SNES/Super Metroid (USA).sfc.zip"
+    pkg zip "SNES/Super Metroid (USA).sfc"
     pkg ls NES
     pkg check NES
     pkg migrate "SNES/Super Metroid (USA).sfc"

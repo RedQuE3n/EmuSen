@@ -34,7 +34,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     (
         "pkg",
         false,
-        "  pkg make <path>... [--self-contained] [--zip]\n                                a package for each game under each path (relative to the library), linked\n                                unless the game is to be copied in; --zip also writes the package as one zip\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg identity <package> original|patched\n                                which identity the scraper sends for a patched package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
+        "  pkg make <path>... [--self-contained] [--zip]\n                                a package for each game under each path (relative to the library), linked\n                                unless the game is to be copied in; --zip also writes the package as one zip\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg zip <package>...          a self-contained package written as one zip beside it, saves and all\n  pkg identity <package> original|patched\n                                which identity the scraper sends for a patched package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
     ),
 ];
 
@@ -44,7 +44,7 @@ pub static MODULE: LibraryCommands = LibraryCommands;
 
 const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
 
-const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
+const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
@@ -86,6 +86,7 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
         "ls" => "pkg-ls",
         "check" => "pkg-check",
         "migrate" => "pkg-migrate",
+        "zip" => "pkg-zip",
         "patch" => return patch_request(args, resolve),
         "identity" => return identity_request(args),
         _ => return Err(PKG_USAGE.into()),
@@ -100,7 +101,7 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
             p => paths.push(Value::string(p)),
         }
     }
-    if matches!(op, "pkg-make" | "pkg-migrate") && paths.is_empty() {
+    if matches!(op, "pkg-make" | "pkg-migrate" | "pkg-zip") && paths.is_empty() {
         return Err(format!("pkg {sub}: name what to {sub}, or / for all of it\n{PKG_USAGE}"));
     }
     if op == "pkg-ls" {
@@ -392,6 +393,7 @@ fn start_line(e: &Value) -> Option<String> {
         "pkg-make" => Some(format!("Making packages for {n} game(s) in Packages, each linked to its game where it is.")),
         "pkg-check" => Some(format!("Checking {n} package(s) against their manifests.")),
         "pkg-migrate" => Some(format!("Copying the saves, states, records, settings, art and cheats of {n} package(s) into them.")),
+        "pkg-zip" => Some(format!("Writing {n} package(s) each as one zip beside its folder.")),
         _ => None,
     }
 }
@@ -581,6 +583,7 @@ mod tests {
         assert_eq!(pkg_request_plain(&args("pkg make a.nes --self-contained")).unwrap(), r#"{"op":"pkg-make","paths":["a.nes"],"self_contained":true,"zip":false}"#);
         assert_eq!(pkg_request_plain(&args("pkg make --zip a.nes")).unwrap(), r#"{"op":"pkg-make","paths":["a.nes"],"self_contained":true,"zip":true}"#);
         assert!(pkg_request_plain(&args("pkg check --zip")).unwrap_err().contains("not an option of pkg check"));
+        assert_eq!(pkg_request_plain(&args("pkg zip SNES/a.sfc")).unwrap(), r#"{"op":"pkg-zip","paths":["SNES/a.sfc"]}"#);
         assert_eq!(pkg_request_plain(&args("pkg identity SNES/a.sfc patched")).unwrap(), r#"{"op":"pkg-identity","paths":["SNES/a.sfc"],"identity":"patched"}"#);
         assert!(pkg_request_plain(&args("pkg identity SNES/a.sfc hacked")).unwrap_err().starts_with("pkg identity:"));
         assert_eq!(pkg_request_plain(&args("pkg patch add SNES/a.sfc /x.bps")).unwrap(), r#"{"op":"pkg-patch-add","paths":["SNES/a.sfc"],"patch":"/real/x.bps"}"#);

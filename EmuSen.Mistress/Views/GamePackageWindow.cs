@@ -19,7 +19,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // One game's package: Make Package, and its soft patches added and removed, through the library tool's pkg jobs; the library is only read - see EmuSen_GamePackages.md §15.
+    // One game's package: Make Package, its soft patches added and removed, and the identity the scraper sends, through the library tool's pkg jobs; the library is only read - see EmuSen_GamePackages.md §15 and §19.
     public sealed class GamePackageWindow : ToolWindow
     {
         // How a job is started and a patch file chosen on the desktop, which a test replaces.
@@ -39,7 +39,9 @@ namespace EmuSen.Mistress.Views
         private readonly WrapPanel _adds = new() { Name = "GamePackageAdds", Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
         private readonly HintText _patchHint = new() { Name = "GamePackagePatchHint" };
         private readonly HintText _status = new() { Name = "GamePackageStatus" };
-        private readonly FieldRow _patchRow, _addRow;
+        private readonly TextBlock _identityText = new() { Name = "GamePackageIdentity", TextWrapping = TextWrapping.Wrap };
+        private readonly Button _identity;
+        private readonly FieldRow _patchRow, _addRow, _identityRow;
         private readonly DispatcherTimer _timer;
         private IToolJob? _job;
         private string _op = "";
@@ -66,11 +68,15 @@ namespace EmuSen.Mistress.Views
             about.Name = "GamePackageAbout";
             _patchRow = new FieldRow { Label = "Soft patches", Hint = "Applied in order each time the game is loaded; the game's file keeps every byte, so its hashes still name the original.", Content = Ui.Stack(6, _patches, _patchHint) };
             _addRow = new FieldRow { Label = "Add a patch", Hint = "An IPS, UPS or BPS file, checked against the game before it is copied into the package.", Content = _adds };
+            _identity = Ui.Button("Scrape as Patched", ToggleIdentity);
+            _identity.Name = "GamePackageIdentitySwitch";
+            _identityRow = new FieldRow { Label = "Scraped as", Hint = "Which hashes the scraper sends: the dump's, or the patched game's first for a hack ScreenScraper lists in its own right. The saves stay the patch list's either way.", Content = Ui.Stack(8, _identityText, Ui.Buttons(_identity)) };
             var body = Ui.Stack(16,
                 about,
                 new FieldRow { Label = "Package", Content = Ui.Stack(8, _packageText, Ui.Buttons(_make)) },
                 _patchRow,
-                _addRow);
+                _addRow,
+                _identityRow);
             body.Margin = new Thickness(0, 0, 4, 0);
 
             Button close = Ui.Button("Close", Close);
@@ -120,10 +126,31 @@ namespace EmuSen.Mistress.Views
         // A disc game takes no soft patch here (§9 Q15).
         private bool IsDisc => ImageSets.IsSheet(_game) || ImageSets.IsPlaylist(_game) || _game.EndsWith(".chd", StringComparison.OrdinalIgnoreCase);
 
+        // The manifest as it now stands, null where there is none or it does not read.
+        private JsonObject? Manifest()
+        {
+            if (Package is null) return null;
+            try { return GamePackage.Read(Path.Combine(Package, GamePackage.FileName)).Document; }
+            catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException) { return null; }
+        }
+
+        public bool SelfContained => (string?)Manifest()?["mode"] == "self-contained";
+
+        public string Identity => (string?)Manifest()?["identity"] ?? "original";
+
+        // Where patch files are looked for: beside the game in the library, or for a game kept in its package beside the library file it was copied from.
+        private string? PatchFolder()
+        {
+            if (Package is null || !GamePackages.Within(Path.GetFullPath(_game), Path.GetFullPath(Package))) return Path.GetDirectoryName(_game);
+            if (_library is null || Manifest()?["sources"] is not JsonArray sources) return null;
+            string? rel = sources.OfType<JsonObject>().Where(e => (string?)e["where"] == "library").Select(e => (string?)e["path"]).FirstOrDefault();
+            return rel is null ? null : Path.GetDirectoryName(Path.Combine(_library, rel.Replace('/', Path.DirectorySeparatorChar)));
+        }
+
         // The patch files beside the game in the library, as RetroArch and ES-DE keep a hack beside its game.
         public IReadOnlyList<string> Beside()
         {
-            string? folder = Path.GetDirectoryName(_game);
+            string? folder = PatchFolder();
             if (folder is null || !Directory.Exists(folder)) return [];
             try
             {
@@ -147,6 +174,10 @@ namespace EmuSen.Mistress.Views
 
         public void Remove(int n) => Run("remove", JsonSerializer.Serialize(new { op = "pkg-patch-rm", paths = new[] { PackagePath() }, index = n }));
 
+        public void SetIdentity(string identity) => Run("identity", JsonSerializer.Serialize(new { op = "pkg-identity", paths = new[] { PackagePath() }, identity }));
+
+        private void ToggleIdentity() => SetIdentity(Identity == "patched" ? "original" : "patched");
+
         private async Task BrowseAsync()
         {
             if (await PickPatch(this) is { } file) Add(file);
@@ -163,7 +194,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             _op = op;
-            _status.Text = op switch { "make" => "Making the package. The game stays where it is.", "add" => "Checking the patch against the game.", _ => "Taking the patch out." };
+            _status.Text = op switch { "make" => "Making the package. The game stays where it is.", "add" => "Checking the patch against the game.", "identity" => "Setting what the scraper sends.", _ => "Taking the patch out." };
             _timer.Start();
             Render();
         }
@@ -209,9 +240,10 @@ namespace EmuSen.Mistress.Views
                     string state = Text(e, "state") ?? "";
                     string? words = Text(e, "words");
                     if (state is "made" or "already" && Text(e, "package") is { } rel) Package = Path.Combine(DataStore.Packages, rel.Replace('/', Path.DirectorySeparatorChar));
-                    if (state is "made" or "added" or "removed") Changed = true;
+                    if (state is "made" or "added" or "removed" or "set") Changed = true;
                     _status.Text = state switch
                     {
+                        "set" or "already" when _op == "identity" => Text(e, "identity") == "patched" ? "The scraper now sends the patched game's hashes first, then the dump's." : "The scraper now sends the dump's hashes.",
                         "made" => "The package was made, linked to the game where it is.",
                         "already" => "The game already has a package.",
                         "added" => $"Added {Text(e, "patch")}. " + (e.TryGetProperty("retroarch", out JsonElement ra) && ra.ValueKind == JsonValueKind.True ? "It is named as RetroArch finds it." : "RetroArch will not apply this list, whose files keep their own names."),
@@ -244,6 +276,7 @@ namespace EmuSen.Mistress.Views
             bool running = _job is not null, tool = ToolAvailable();
             _packageText.Text = Package is null ? "Not a package yet."
                 : Refused ? $"Packages/{PackagePath()}, changed: the game's file is not as the package recorded it (pkg check names why, most often another dump), so the game plays as a plain one with its plain saves, and the package refuses to open until it is checked."
+                : SelfContained ? $"Packages/{PackagePath()}, self-contained: the game is kept in the package, copied from the library, which is only read. The folder alone is the whole game."
                 : $"Packages/{PackagePath()}, linked to the game where it is in the library.";
             _make.IsVisible = Package is null;
             _make.IsEnabled = tool && !running && LibraryPath() is not null;
@@ -288,6 +321,12 @@ namespace EmuSen.Mistress.Views
                 _adds.Children.Add(browse);
             }
             _addRow.IsVisible = Package is not null && !IsDisc && _adds.Children.Count > 0;
+
+            bool patched = Identity == "patched";
+            _identityRow.IsVisible = Package is not null && !Refused && patches.Count > 0;
+            _identityText.Text = patched ? "The patched game: its hashes first, then the dump's." : "The original dump.";
+            _identity.Content = patched ? "Scrape as Original" : "Scrape as Patched";
+            _identity.IsEnabled = tool && !running;
         }
     }
 }

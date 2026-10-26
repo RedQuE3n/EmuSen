@@ -10682,11 +10682,11 @@ path (§49.9).
 | G2, the self-reporting programs | **met**: 75 of the 78 print their texts whole on the player's BIOS, the three disputes D-28, D-363 and S13's `efu` | §36.5, §40.5 |
 | G3, the pictures | **not yet**: the GS programs equal PCSX2's pictures or are disputes; the second referee lineage's agreement the gate asks for is owed | §27.7, §31, §37 |
 | G4, the frontend | **met** at this stage: the kit on Jak and Daxter (Kingdom Hearts and Dark Cloud 2 owed to the kit's lending), the fit audit, the CRT profile; cards round-trip at S25 | §49.7, §49.8, §30.18 |
-| G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2, which since D-465's fix no longer returns to OSDSYS, at one, its memory card message | §39, §39.19 |
+| G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2, which since D-465's and D-840's fixes reaches its menu, at one, its memory card message | §39, §39.19, §39.23 |
 | G6, speed | **not yet**: 0.4 to 5 frames a second on the desktop against the console's 59.94; the speed stages under way | §39.8, §43, §44 |
 | G7, the debugger | **met** | §41 |
 | G8, the clean room | **not yet**: the clone check and the disputes read end to end by another, at S48 | plan §7 |
-| G9, firmware | **not yet**: the open BIOS is not written, so the system runs nothing with no firmware folder, and says so; on the player's BIOS the three bench games run, Dark Cloud 2 since D-465's fix, though past its memory card message it shows a grey shape not yet compared with the referee (§39.21 Q4) | §39.19, §49.5 |
+| G9, firmware | **not yet**: the open BIOS is not written, so the system runs nothing with no firmware folder, and says so; on the player's BIOS the three bench games run, Dark Cloud 2 to its title and menu since the fixes of D-465 and D-840 | §39.19, §39.23, §49.5 |
 | G10, start without a disc | **met** and offered | §30.16, §30.19 |
 | G11, the Memory Cards tab | **met** and offered | §30.17 |
 | GE, the enhancements | nothing to grade: none offered | |
@@ -10801,7 +10801,9 @@ play, which at the reference path's speed would take hours a case.
 **Tests** [M]:
 
 - **Sapphire**, `cargo test --release`, on the tree rebased onto WiseMan `8bd9b8427` (S40's VU1 recompiler, the GS's fast
-  paths and D-465's fix beneath): **435 passed, 0 failed** (2 ignored, as before) in 30 test binaries. New in `v1`:
+  paths and D-465's fix beneath): **435 passed, 0 failed** (2 ignored, as before) in 30 test binaries; rebased again onto
+  `26888b88e` (S33's idle skipping, D-800 and D-840 beneath), with the cut-short refusal: **447 passed, 0 failed** (2
+  ignored) in 31. New in `v1`:
   `a_discs_own_market_is_the_consoles_on_automatic`, `a_disc_given_at_create_is_in_the_drive_at_power_on` (a CD, a raw
   track, a DVD and a sheet judged by its track), `a_state_keeps_to_the_disc_in_the_drive`; `the_descriptors_are_the_consoles`
   holds the extensions, the mark's absence, the gates in the description and the eleven lines of notes, and
@@ -10819,9 +10821,11 @@ play, which at the reference path's speed would take hours a case.
   (the registration golden, `core.golden`, `man.golden`), those classes again **430 of 430**. The fit audit, recorded and
   then verified with the pad, themed-host, bindings, shader and player classes: **847 of 847**. The CRT's compile test
   over every variant for every console and the chain tests: **13 of 13** on the RX 6800.
-- **WiseMan, after the rebase**: every `Sapphire` class, `CrystalParityTests`, the registration, firmware page, routing,
-  system parity, screen rule and golden classes and the whole fit audit: **884 of 884**, the PlayStation 2's Graphics
-  Settings tab recorded again with S40's *VU1* row.
+- **WiseMan, after each rebase**: every `Sapphire` class, `CrystalParityTests`, the registration, firmware page, routing,
+  system parity, screen rule and golden classes and the whole fit audit: **884 of 884** both times, the PlayStation 2's
+  Graphics Settings tab recorded again with S40's *VU1* row and then S33's idle skipping.
+- **The kit on Jak and Daxter** (§49.7) ran on the tree of the first rebase with the cut-short refusal; S33's idle
+  skipping, D-800 and D-840 came beneath it afterwards.
 
 **Seeded faults** (each applied, the named tests run, the source restored):
 

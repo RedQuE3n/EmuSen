@@ -40,12 +40,12 @@ pub const KSTORE: u32 = 0x5A;
 /// The one value SetAlarm is given in a0 in part C, its meaning unknown.
 pub const C_TICKS: u32 = 0x100;
 
-fn li(p: &mut Program, reg: &str, v: u32) {
+pub fn li(p: &mut Program, reg: &str, v: u32) {
     p.emit(format!("lui {reg}, 0x{:x}", v >> 16));
     p.emit(format!("ori {reg}, {reg}, 0x{:x}", v & 0xFFFF));
 }
 
-fn store(p: &mut Program, addr: u32, v: u32) {
+pub fn store(p: &mut Program, addr: u32, v: u32) {
     li(p, "t6", addr);
     li(p, "t7", v);
     p.emit("sw t7, 0(t6)");
@@ -70,13 +70,13 @@ fn rec(p: &mut Program, addr: u32, v: Option<u64>) {
 }
 
 /// Records COP0 Status, which the thread may read while the kernel leaves CU0 set.
-fn status(p: &mut Program) {
+pub fn status(p: &mut Program) {
     p.emit("mfc0 t2, Status");
     p.emit("sync.p");
     p.record("t2", None);
 }
 
-fn syscall(p: &mut Program, n: u32) {
+pub fn syscall(p: &mut Program, n: u32) {
     p.emit(format!("addiu v1, zero, 0x{n:x}"));
     p.emit("syscall 0");
     p.emit("nop");
@@ -151,7 +151,7 @@ fn start(name: &'static str) -> (Program, u32) {
 }
 
 /// The done word written and the data cache written back, as the kernel's FlushCache(0) does.
-fn done(p: &mut Program) {
+pub fn done(p: &mut Program) {
     store(p, 0x001F_FFF0, 0x5A99_D00E);
     p.emit("or a0, zero, zero");
     syscall(p, 0x64);

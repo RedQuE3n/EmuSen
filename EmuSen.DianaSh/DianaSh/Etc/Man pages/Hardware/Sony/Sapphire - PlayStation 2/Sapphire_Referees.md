@@ -311,6 +311,11 @@ recompiler reading the Status from before it, the interpreter the Status after i
 same split. A program whose record touches COP0 or the pipeline is run on both tiers (`--interpreter`, which `pads`
 also takes since this step), and a split is a dispute, not a grade. The interpreter runs OSDSYS below the console's
 speed, so a `pads` script for it allows the setup more time.
+*2026-10-26, D-800* (`Sapphire_Native.md` §30.73): the two tiers part again, on when a pending interrupt is taken. A
+tight loop polling I_STAT sees V-blank's start before the interrupt at every arrival on the interpreter and at none on
+the recompiler. On the interpreter, a pending interrupt is not taken within sixteen instructions after EI, which
+reads as PCSX2's grain of testing interrupts rather than a console's delay. Neither tier is a witness for the delay's
+size.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

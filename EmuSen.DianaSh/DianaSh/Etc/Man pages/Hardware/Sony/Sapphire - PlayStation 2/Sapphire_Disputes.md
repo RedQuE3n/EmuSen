@@ -4554,3 +4554,54 @@ it.*
 - **Depends on it:** `board::Board`'s `Bus::write` (`narrow`, `plain_bits`, `register_value`).
 - **Pinned by:** `narrower_stores_to_a_channels_registers_write_their_own_lanes` (`tests/dmac.rs`).
 - **Implemented in:** the D-465 step's commit.
+
+### D-800. An interrupt is taken by Sapphire's EE before the first instruction after its source is latched, so a thread polling I_STAT with interrupts enabled never sees a bit the kernel's handler clears; OSDSYS's browser polls V-blank's start so and stays black
+
+*Numbered from D-800 at the system-call step (2026-10-26), other stages being built beside it.*
+
+- **Opened:** 2026-10-26, at the system-call step (`Sapphire_Native.md` §30.68), when the decided trace of the EE
+  kernel's system calls showed the browser's drawing thread making no call from field 1862. The units' counts and
+  registers showed it reading I_STAT about 817,000 times a field with every unit idle. Experiments from a state saved
+  at field 1850 showed the browser drawing once the interrupt for V-blank's start was taken two or more instructions
+  after its rise (§30.72).
+- **Documents read:**
+  - Sony's *EE Core User's Manual* 5.0 §4.2.5: the interrupt exception "occurs if one of the three interrupt signals
+    is asserted"; Cause.IP and a signal "asserted and deasserted in a very short time"; stores to a device landing
+    "after other instructions finish", so SYNC before ERET.
+  - *EE User's Manual* §3.1 to §3.3: I_STAT latched at the source's edge, INT0 while I_STAT AND I_MASK is non-zero.
+  - The kit's *Restriction* (10): "when an interrupt occurs immediately after the DI instruction, the EIE bit becomes
+    0 … in the interrupt handler".
+  - ps2tek "BIOS EE Syscalls" for the calls the programs use.
+
+  No document gives how many instructions complete between an interrupt's assertion and its exception. *Restriction*
+  (10) implies at least one.
+- **Test program:** `tests/d800/mod.rs`, written by `examples/d800.rs` and fast-booted on the player's BIOS:
+  - `d800-poll` and `d800-poll-tim` poll I_STAT in a loop of eight instructions while V-blank's start, or timer 0's
+    compare, is served by a handler the program adds. They keep each arrival's first sighting, the handler's count and
+    the sightings.
+  - `d800-tight` polls in a loop of seven instructions and keeps the polls before each sighting.
+  - `d800-ei` executes EI with V-blank's start latched and counts the single-instruction stores that complete before
+    the handler.
+
+  **On Sapphire**: no sighting in any program, and in `d800-ei` 0 stores in the first round, 16 in the others.
+- **Referee:** PCSX2 2.8.2.
+  - **Recompiler**: every record equal to Sapphire's.
+  - **Interpreter**: `d800-tight` sees V-blank's start before the interrupt at all 8 arrivals, about a field's polls
+    after the last. `d800-poll` and `d800-poll-tim` see the bit right after a handler returns, at 3 and 8 arrivals of 8.
+    In `d800-ei` no handler runs before the program ends.
+  - The browser draws on both tiers (`Sapphire_Native.md` §30.63).
+- **Conclusion:** **measured, the referee split, and open**. The case is one the documents leave without a size: a
+  delay of at least one instruction is implied by *Restriction* (10). PCSX2's two tiers disagree: the recompiler shows
+  none, as Sapphire, and the interpreter shows one longer than sixteen instructions after EI.
+  - **Not changed:** the EE takes an interrupt at the first instruction boundary after the board has latched its
+    source.
+  - **Shown on Sapphire alone, by build-only experiments from the state:** a delay of two or more instructions draws the
+    browser as PCSX2 does, and the delay on V-blank's start alone suffices.
+  - **Put to the tester** (`Sapphire_Native.md` §30.76 Q1): the delay to model, in instructions or cycles, and for
+    which sources.
+
+  One lineage only: PCSX2's.
+- **Depends on it:** P8 (`Sapphire_Plan.md` §13), OSDSYS's browser; any program that polls a source the kernel serves.
+- **Pinned by:** `the_d800_programs_assemble` (`tests/dmac.rs`), the programs' assembly only; their records are the
+  referees' measurements.
+- **Implemented in:** `ee::Ee::step` and `board::System::step` (the interrupt's test and the lines' update), unchanged.

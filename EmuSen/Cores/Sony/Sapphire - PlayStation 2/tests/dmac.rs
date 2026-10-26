@@ -4,6 +4,7 @@
 
 mod d700;
 mod d780;
+mod d800;
 mod s6;
 mod s11;
 
@@ -325,6 +326,18 @@ fn a_register_write_on_a_blanking_edge_does_not_take_the_edge_again() {
 #[test]
 fn narrower_stores_to_a_channels_registers_write_their_own_lanes() {
     grade_system(d780::width_bare());
+}
+
+/// D-800's programs (Sapphire_Native.md §30.68) need the player's BIOS, so `examples/d800.rs` runs them; here they are
+/// only assembled, each within the program area below its log and record.
+#[test]
+fn the_d800_programs_assemble() {
+    for p in d800::all() {
+        let name = p.name;
+        let (source, _) = p.finish();
+        let words = emusen_mips::assemble(&source, ORIGIN, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        assert!(ORIGIN + 4 * words.len() as u32 <= d800::LOG.min(RECORD), "{name}: {} words", words.len());
+    }
 }
 
 /// D-700's programs (Sapphire_Native.md §30.52) need the player's BIOS, so `examples/d700.rs` runs them; here they are

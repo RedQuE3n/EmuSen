@@ -3116,7 +3116,8 @@ through the reset too.
   short on `bdec-intra-q2`'s first slice.
 - **Conclusion:** as stated; **measured**, one lineage with the manual's notes (FDEC after IDEC reads the whole code only
   from the prefix).
-- **Depends on it:** `Ipu::start_code`.
+- **Depends on it:** `Ipu::start_code`. *Extended 2026-10-26 by D-840:* stuffing longer than the IPU holds is passed
+  byte by byte, the pointer still left at the prefix.
 - **Pinned by:** `error_and_start_codes_end_idec_and_bdec_where_section_8_4_says`, `bdec_gives_…`, `idec_gives_…`.
 - **Implemented in:** stage S27's commit.
 
@@ -4605,3 +4606,40 @@ it.*
 - **Pinned by:** `the_d800_programs_assemble` (`tests/dmac.rs`), the programs' assembly only; their records are the
   referees' measurements.
 - **Implemented in:** `ee::Ee::step` and `board::System::step` (the interrupt's test and the lines' update), unchanged.
+
+### D-840. IPU, zero stuffing before a start code: a zero byte with 16 zero bits after it leaves the IPU as it is passed, however long the run, so a command reaches a start code behind more zeros than the IPU holds
+
+*Numbered from D-840 at the step on Dark Cloud 2's still grey shape (2026-10-26), other steps being recorded beside it.*
+
+- **Opened:** 2026-10-26, at that step (`Sapphire_Native.md` §39.23 to §39.29): after Cross on "Continue without saving?"
+  Dark Cloud 2 plays its Level-5 logo, an MPEG-2 movie whose video stream holds runs of 8 to 21 KB of zero bytes before
+  a slice's start code; BDEC ended its macroblock at the first such run and, looking for the start code, waited for a one
+  with its FIFO and internal buffer full of zeros (IFC 8, FP 1, BUSY), so channel 4 could not give more and the game
+  waited on channel 4 for ever. Sapphire's IPU (D-305) kept every zero before the code in the IPU until the one arrived.
+- **Documents read:** EEUM §8.4 (BDEC's cases a to c: "more than 7 zero bits" after the last EOB forecast a start code;
+  the pointer is left at its beginning; IDEC's note that the pointer after decoding points to the beginning of the
+  detected start code), §8.3 (the FIFO's eight qwords and IPU_BP); H.262 §5.2 and §6.2.1 (`next_start_code()`: any
+  number of zero stuffing bytes may precede a start code). No document says how the IPU passes a run longer than it holds.
+- **Test program:** `d840-stuffing` (`tests/s27/mod.rs` `stuffing()`, written by `examples/s27.rs`): BDEC after an intra
+  macroblock followed by 16, 26, 137 to 140, 152, 154 to 156, 170, 300, 1,001 and 2,048 zero bytes and a slice start
+  code, eight of those leaving the code split over two quadwords and nine longer than the IPU's ten quadwords; IDEC
+  after 2,048 zero bytes and a sequence header code; BDEC after 2,048 zero bytes and a one that ends no byte. toIPU
+  carries the image in normal mode, as S27's programs do (§34.10). 68 commands, 3,680 record words.
+- **Referee:** PCSX2 2.8.2, the program fast-booted: every start code reached with SCD and the pointer at the code, the
+  output equal; after the long run and a one that ends no byte, ECD with the pointer 16 bits before the one. Equal to
+  Sapphire after the change in **all 3,680 words**. A first form of the change, which passed zeros only while the
+  input was full and kept 23 of them, matched every start code but left that pointer 56 bits before the one, which the
+  referee's 16 corrected. Before the change Sapphire's BDEC never ends on the first long run.
+- **Conclusion:** while a command looks for a start code (BDEC after a macroblock, IDEC where an increment would
+  begin), each whole zero byte with at least 16 zero bits after it is passed and leaves the IPU, its qword leaving the
+  FIFO when wholly read, so channel 4 can give the next; the start code is then found as D-305 says, the pointer at
+  its prefix; a one that ends no byte gives ECD with the pointer at the last two zero bytes before it. **Measured** on
+  one lineage with the game as a console program's witness (it plays on PCSX2 and stops on Sapphire without the rule);
+  **argued** for the rule's form, which no document gives. *Open:* an error code after only one or two zero bytes
+  following a macroblock that ends mid-byte: in a probe of the program's first form PCSX2 left the pointer at the next
+  byte boundary (4 bits on) where `s27-errors`' case 4 had measured it at the zeros' start; Sapphire keeps D-305's, and
+  the program grades neither.
+- **Depends on it:** `Ipu::start_code`; Dark Cloud 2's Level-5 movie and every movie whose stream stuffs a start code.
+- **Pinned by:** `stuffing_longer_than_the_ipu_holds_is_passed_to_the_start_code` and
+  `the_programs_replay_their_logs_through_the_dmac_on_the_board` (`tests/ipu.rs`, the program on the board).
+- **Implemented in:** the step's commit.

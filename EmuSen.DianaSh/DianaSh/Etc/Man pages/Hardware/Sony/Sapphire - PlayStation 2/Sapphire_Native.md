@@ -7102,6 +7102,11 @@ field 1850. It also read the records of the project's programs that call the ker
 instruction, general register or memory holding BIOS code or data. **That writer is exposed too and will never write
 the open replacement**.
 
+*Added 2026-10-26 at the D-840 step (§39.23 to §39.29):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2 with Dark Cloud 2, and read the IOP's console text and the hardware's register state; no program counter or
+instruction was traced, the window of §39.16 left unopened; **that writer is exposed too and will never write the open
+replacement**.
+
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 
 *Numbered §36 and its disputes from D-360, S25's part B writing in §30 from D-380 beside it.*
@@ -8258,7 +8263,8 @@ source restored):
    *Recommended*: leave D-701 with its own step.
 4. **Q4 [routine], past the memory card message.** After Cross on "Yes" Sapphire holds a still grey shape for at least
    1,080 frames. *Recommended*: the same press on PCSX2 with pictures every few seconds, then, if they part, a dispute
-   step inside the same window.
+   step inside the same window. *Answered 2026-10-26 by the D-840 step (§39.23 to §39.29): they parted; the IPU stopped in
+   the logo movie's zero stuffing.*
 
 ### 39.22 What was read, and exposure (2026-10-26)
 
@@ -8281,6 +8287,109 @@ files were deleted once this was written.
 **Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and a
 project program on PCSX2, read the IOP's console with the BIOS's banners, traced the game inside the window, and saw the
 register values above; **that writer is exposed and will never write the open replacement**.
+
+### 39.23 Dispute step D-840: Dark Cloud 2's still grey shape after "Continue without saving?" (2026-10-26)
+
+*A dispute step on §39.21 Q4, as recommended; its products are `Sapphire_Disputes.md` D-840 and the fix it proves.*
+**The press first, on the referee**: PCSX2 2.8.2, the game booted through the Americas BIOS with slot 1 empty and Cross
+on "Yes" at 36 s, shows the Level-5 logo from about 40 s, its "LEVEL-5 HIGH QUALITY GAMES" frame on a brushed-metal
+ground at 43 s, the title's scenery at 46 s and the title with "Push START button" from about 50 s, which cycles through
+a black frame and the scenery alone; Start then gives the menu (New Game, Continue, Extras, Options). Sapphire held a
+grey shape at the lower left from frame 1,320. **The grey shape was the first macroblocks of the logo movie
+(`MOVIE/L5LOGO.PSS`), and the IPU had stopped in BDEC** waiting for a start code behind a run of zero bytes longer than
+it holds. With the change of D-840 **Dark Cloud 2 plays its Level-5 movie, reaches its title and, on Start, its
+menu** (§39.27). No program counter or instruction of either processor was read: the hardware's registers named the
+unit, the game's own memory and disc named the data, and the window the tester allowed was not needed.
+
+### 39.24 Where the game waited (measured 2026-10-26)
+
+From a state at frame 1,320 (after the press, the shape on screen), counting every register access the units answer for
+120 frames (`s28`'s `registers`): the EE wrote D4_CHCR (toIPU) 600 times and read it 300, read D4_MADR 300 and
+toggled D_ENABLEW 1,452 times; channel 3 (fromIPU) was idle; the drive took no N command at all and the IOP read only its
+disk type. The units' own state at that frame: IPU_CTRL 83603C08h (BUSY, IFC 8, OFC 0, CBP 3Ch), IPU_BP 00010805h (BP 5,
+IFC 8, FP 1), IPU_TOP's BUSY set; the command BDEC (IPU_CMD 20010000h), its 48 qwords of output already taken by channel 3
+to the scratchpad, the IPU looking at the bits after the macroblock; D4_CHCR 30000105h (chain, STR) with 5Bh qwords left
+of a REF tag at 010E52E0h. The nine qwords in the IPU were zero after BP. So the game waited for channel 4, which waited
+for room in the FIFO, which waited for the IPU.
+
+### 39.25 Where the zeros came from: the movie's own stuffing
+
+The data was not lost upstream. The game's RAM from 00100000h at that frame, against the movie file read from the disc
+(LBA 16699Ah to 16730Bh, 2,417 sectors) and its MPEG-2 program stream walked into packets (921 video, 284 private
+stream 1): the toIPU chain's REF tags (010E5040h on, 128 qwords each) cover a 512 KiB ring at 01065040h that holds the
+video elementary stream at its offset modulo 512 KiB, and every byte the movie had delivered there equals the stream's.
+The drive had read the file in order, 39 ReadCd (N command 06h) of 16 sectors from its first sector, none skipped. **The video stream itself holds zero stuffing**: 110 runs of 64 bytes or more, the first twelve from
+8.5 to 20.6 KB long, each followed by a slice's start code; the ring's position BDEC had reached, stream offset 84,560,
+lies inside the run from 84,417 to 100,551 (16,134 zero bytes) before `00 00 01 5B`. On PCSX2 the ring's region read
+through PINE at 37.7 s equals Sapphire's at frame 1,320 word for word from 01064000h to 01078000h (what the game left
+there before the movie), and by 40.7 s it holds the movie's later stream with no holes: the referee passes the runs.
+
+### 39.26 The rule, and its program (D-840)
+
+The EE User's Manual says when a command looks for a start code and where it leaves the pointer, not how it passes
+more zeros than the IPU holds (eight FIFO qwords, two inside); H.262 lets any number of zero bytes precede a start code.
+`d840-stuffing`, a program of the project's in S27's form, gives BDEC 14 runs of 16 to 2,048 zero bytes before a slice
+start code, eight of them leaving the code split over two quadwords and nine longer than the IPU holds, IDEC 2,048
+zero bytes before a sequence header code, and BDEC 2,048 zero bytes then a one that ends no byte. On PCSX2 every start
+code is reached with SCD and the pointer at the code, and the error code's pointer is 16 bits before the one. The rule
+that gives all 3,680 words (`Ipu::start_code`): a whole zero byte with at least 16 zero bits after it is passed and
+leaves the IPU, so a qword wholly read leaves the FIFO and channel 4 refills it; the start code and D-305's pointer are
+then found as before. Before the change the first long run held BDEC for ever; a first form that passed zeros only
+while the input was full and kept 23 of them reached every start code, but left the error code's pointer 56 bits
+before the one, and was corrected by the referee's record. What the rule leaves open is D-840's note: an error code
+after one or two zero bytes behind a macroblock that ends mid-byte.
+
+### 39.27 Dark Cloud 2 again (measured 2026-10-26)
+
+From the state at frame 1,255 (the message on screen), the recompiler tier, Cross at 1,260: the Level-5 movie from frame
+1,320 (its letters turning in, then the logo), **"LEVEL-5 HIGH QUALITY GAMES" from about 1,500**, the title's scenery
+from 1,680, the title fading in at 1,920 and **"Push START button" from about 2,160**, then the same cycle through a black
+frame (2,580) and the scenery as PCSX2's; from the state at 2,100, Start at 2,200 gives **the menu, New Game, Continue,
+Extras and Options**, from frame 2,220 to the run's end at 2,640. The run took 630 s of wall time for 1,445 frames
+(2.0 to 2.7 frames a second).
+
+| Anchor | Sapphire | PCSX2 | Pixels of 307,200 by more than 8 / 32 / 64 | Picture's SHA-256 (first 16 digits) |
+|---|---|---|---|---|
+| B1, the movie's "LEVEL-5 HIGH QUALITY GAMES" | frame 1,560 | 43 s (shot at 44.0 s) | **4,984 / 81 / 0** (frame 1,530: 5,188 / 98 / 0) | `9e8c6c5afad01acd` |
+| B2, the title fading in | frame 1,980 | 50 s | 36,299 / 1,253 / 50 | |
+| B3, the title with "Push START button" | frame 2,400 | 80 s | the same by eye; the scenery behind is a camera's slow pan at another phase (63,085 by more than 32) | `52390bd4f9b81be4` |
+| B4, the menu after Start | frame 2,640 | 90 s (Start at 82 s) | the same four buttons and cursor by eye; inside the buttons' box 7,932 of 70,225 by more than 32, the pan again | `301570f1fa0f6a86` |
+
+The pictures are Sapphire's 512 × 415 scaled to 640 × 480 and aligned (§39.19's method); B1 is a frame of the
+movie the IPU decoded, equal to the referee's within the scaling's rounding.
+
+### 39.28 Tests, seeded faults and the blast radius (2026-10-26)
+
+**Tests** [M]: `tests/ipu.rs` **12 of 12** (`cargo test --release`), new
+`stuffing_longer_than_the_ipu_holds_is_passed_to_the_start_code` (the driver through `stuffing()`) and
+`the_programs_replay_their_logs_through_the_dmac_on_the_board` now over **33** programs, `d840-stuffing` among them
+(68 commands on the interpreter with the board); the lib's `ipu` tests **7 of 7**. The change is inside the IPU's
+start-code search; nothing else calls it.
+
+**Seeded faults** (each applied to `src/ipu/mod.rs`, the stuffing test run, the source restored):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | `start_code` as before the step (no zero passed) | the test: BDEC 2C010000h never ends |
+| F2 | 23 zero bits kept instead of 16 | the test: the error code's pointer at 16,392, expected 16,400 |
+| F3 | zeros passed only while the FIFO is full (the first form) | the test: the pointer at 16,112, expected 16,400 |
+| F4 | a pass of exactly one byte not taken | not caught: on every case a one-byte pass is equivalent to the start-code skip that follows it, so the program cannot tell it apart |
+
+### 39.29 What was read, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 with its decisions of 2026-10-26; this page's §34 and §39; `Sapphire_Disputes.md`
+D-305, D-324, D-325, D-465, D-780; `Sapphire_Referees.md` §2.1. Sony's *EE User's Manual* §8.3 and §8.4; ITU-T H.262
+(02/2000) §6.2.1; ps2tek at `1c91660`: "CDVD N Commands". The game's movie file and its directory entry, read from the
+disc's image, and the game's RAM above 00100000h on both machines; the IPU's and the DMAC's register state on
+Sapphire; the drive's register accesses and N commands; the IOP's console's last lines, which were the game's modules'.
+PCSX2 2.8.2 run as a black box: pictures from states it saved, the game's RAM through PINE, and `d840-stuffing`'s record.
+No emulator, SDK, loader or game source and no firmware: the BIOS image was handed by path to Sapphire and to PCSX2 and
+never opened. **No program counter, instruction or trace of either processor** was recorded: the window of §39.16 was
+not opened. The states, RAM files, traces and the movie file were deleted once this was written.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2
+with the game, and read the IOP's console text, whose earlier lines hold the BIOS's banners; **that writer is exposed
+and will never write the open replacement**.
 
 ## 40. The 23 IOP programs of ps2autotests on the player's BIOS, loaded from a synthetic disc (2026-10-26)
 

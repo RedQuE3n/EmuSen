@@ -257,9 +257,11 @@ impl Vif {
         std::mem::take(&mut self.wake)
     }
 
-    /// The cycle the VIF next needs the board: only while the DMAC waits on its FIFO and the VIF can take from it.
+    /// The cycle the VIF next needs the board: only while the DMAC waits on its FIFO and the VIF can take from it, which
+    /// it cannot while the GIF refuses its DIRECT data (VGW), the GIF's own progress waking it (D-462).
     pub fn next_event(&self) -> u64 {
-        let runs = !self.stalled() && !self.reversed() && self.has_word() && !matches!(self.cmd, Cmd::Wait { .. }) && self.held.is_none();
+        let refused = matches!(self.cmd, Cmd::Direct { .. }) && self.stat & stat::VGW != 0;
+        let runs = !self.stalled() && !self.reversed() && self.has_word() && !matches!(self.cmd, Cmd::Wait { .. }) && self.held.is_none() && !refused;
         if self.dmac_waiting && runs { self.time } else { u64::MAX }
     }
 

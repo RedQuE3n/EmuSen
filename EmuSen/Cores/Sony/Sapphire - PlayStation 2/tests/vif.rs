@@ -326,3 +326,49 @@ fn vif1_reversed_carries_local_to_host_data() {
         assert_eq!(rig.board.map.read(0x0020_0000 + 4 * i, 4) as u32, 0xC000_0000 | i, "word {i}");
     }
 }
+
+/// The GIF as VIF1 reaches it, refusing PATH2 until opened (D-462).
+struct Refusing {
+    open: bool,
+    taken: usize,
+}
+
+impl vif::Gif for Refusing {
+    fn path2(&mut self, _q: u128, _hl: bool, at: u64) -> Option<u64> {
+        self.open.then(|| {
+            self.taken += 1;
+            at
+        })
+    }
+    fn idle_at(&mut self, _path3: bool, at: u64) -> Option<u64> {
+        Some(at)
+    }
+    fn mask_path3(&mut self, _masked: bool, _at: u64) {}
+    fn host_read(&mut self) -> Option<u128> {
+        None
+    }
+}
+
+/// A DIRECT whose data the GIF refuses asks the board for no event while the DMAC waits on the full FIFO, since the VIF
+/// can take nothing until the GIF moves; before, it asked for its own time again and again and the board never left it
+/// (Jak and Daxter's Naughty Dog logo, D-462). Once the GIF takes PATH2 the data goes on and VGW clears.
+#[test]
+fn a_direct_refused_by_the_gif_asks_for_no_event() {
+    let mut v = vif::Vif::new(1);
+    let mut vpu = sapphire::vu::Vpu::new();
+    let mut gif = Refusing { open: false, taken: 0 };
+    v.put(u128::from(0x50u32 << 24 | 20) << 96, false);
+    for i in 0..15u128 {
+        v.put(i, false);
+    }
+    assert_eq!(v.request(1, false, &mut gif), 0, "the FIFO is full");
+    v.run_to(1_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    assert_ne!(v.read(reg::STAT) & 0x8, 0, "VGW: waiting for the GIF");
+    v.put(15, false);
+    v.put(16, false);
+    assert_eq!(v.request(1, false, &mut gif), 0, "the DMAC has filled the FIFO again and waits on it");
+    assert_eq!(v.next_event(), u64::MAX, "nothing the board can run");
+    gif.open = true;
+    v.run_to(2_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    assert_eq!((gif.taken, v.read(reg::STAT) & 0x8), (17, 0), "the data taken once the GIF has PATH2");
+}

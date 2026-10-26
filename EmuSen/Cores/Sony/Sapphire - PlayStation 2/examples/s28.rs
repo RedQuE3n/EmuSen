@@ -214,7 +214,15 @@ fn where_ee(m: &Machine, game: &[(u32, u32)]) -> String {
 /// own program.
 fn advance(m: &mut Machine, game: &[(u32, u32)]) {
     let target = m.sys.board.pcrtc.fields + 1;
+    let (mut steps, mut warned) = (0u64, 0u32);
     while m.sys.board.pcrtc.fields < target {
+        steps += 1;
+        if steps % 200_000 == 0 && warned < 20 {
+            warned += 1;
+            let gs = &m.sys.board.gs;
+            let r: Vec<String> = { use sapphire::gs::privileged::*; [PMODE, SMODE1, SMODE2, SYNCH1, SYNCH2, SYNCV, DISPLAY1, DISPLAY2, CSR] }.iter().map(|&a| format!("{:X}", gs.privileged_register(a))).collect();
+            println!("frame {}: no field after {} steps; board at {} cycles; PMODE SMODE1 SMODE2 SYNCH1 SYNCH2 SYNCV DISPLAY1 DISPLAY2 CSR {}; {}", m.frames, steps * 1024, m.sys.board.now, r.join(" "), where_ee(m, game));
+        }
         if m.booted && m.stop.is_none() {
             for _ in 0..1024 {
                 if let Err(sapphire::ee::Halt::Unimplemented { pc, word }) = m.sys.step() {

@@ -3856,3 +3856,42 @@ through the reset too.
 - **Pinned by:** `antialiasing_replaces_alpha_by_coverage_and_writes_no_z_below_it`,
   `generated_primitives_under_generated_pixel_operations_draw_as_the_model_draws_them`.
 - **Implemented in:** stage S19's commit.
+
+### D-480. LOADFILE's SifLoadModule (server 80000006h, function 00h): the module's path is read from byte 8 of the argument block; the block's first two words are not needed for a load without arguments; the reply's first word is the module's id, or a negative error (−203 for a file the disc lacks), its second 0 for a module whose start returns 0
+
+- **Opened:** 2026-10-26, as the tester decided `Sapphire_Native.md` §36.14 Q1 (as recommended): ps2tek's "BIOS IOP
+  LOADFILE" names the server and its functions (00h `SifLoadModule`) and gives no argument layout ("Newer LOADFILE
+  modules seem to have a different interface. Needs more research"), so a dispute step learns the layout on a referee
+  with a program of the project's, outputs only, before a writer types it into the loader of §40.
+- **Documents read:** ps2tek "BIOS IOP LOADFILE", "SIF Registers", "SIF DMA", "SIF RPC Basics", "SIF RPC Structs and
+  Definitions", "SIF RPC Commands", "SIF RPC System Servers", "IOP DMA" (the chain tag's IRQ and end bits), "BIOS EE
+  Syscalls" 76h to 78h; the SIF's model as S22 built it (D-142, D-143). Which bits an EE command packet's IOP tag carries
+  is in no document; the SIF link's tags, traced on Sapphire while a ps2autotests EE program ran on the player's BIOS
+  (the plan's §1.4, decided 2026-10-26), carry IRQ and end on a command packet to the IOP's receive buffer and neither on
+  the payload sent before it, and the loader's packets are sent so.
+- **Test program:** the loader of `tests/irx` (§40.2), which speaks ps2tek's packet layouts: SIFCMD's init packets
+  naming its receive buffer, a bind to 80000006h, then calls to function 0, each with an argument block of 512 bytes and
+  512 bytes asked back into a buffer filled with A5h, each reply kept in its record. `examples/irx.rs probe`: the path
+  `cdrom0:\TEST.IRX;1` alone in a block of zeros, at offsets 0 to 64 in steps of 4, then 128, 252 and 256. `probe2`: the
+  path at 8; a path naming no file of the disc; then the path at 8 with the block's word 0 set to 16 (and a string of 15
+  characters at offset 260), to all ones and to 512, and the same three for word 1. The disc (`ps2discs.py files`) holds
+  SYSTEM.CNF, the probe and ps2autotests' `cpu/iop/alu.irx` as TEST.IRX.
+- **Referee:** PCSX2 2.8.2 with the player's Americas BIOS, the probe entered by its fast boot (`-elf`) with the disc in
+  its drive (`ps2referee.py ram … --disc`), RAM read through PINE once the done word appeared (1.4 s each); its log, which
+  holds the BIOS's text, was not read. Both runs bound at the first bind (server 0001CA68h, its receive buffer 0001CAB0h
+  in the second) and every call ended. The first run: **only the path at offset 8 loaded the module** (reply word 0
+  00000019h, a module's id), every other offset −203 (FFFFFF35h); each end packet's size field 200h, the reply's 512
+  bytes, of which words 1 to 20 were 0 and the rest the server's buffer as it was. The second run: the path at 8 loaded
+  again (1Ah onwards, one id higher at each load), the missing file gave −203, and every value of word 0 or word 1 left the
+  load unchanged, word 1 of the reply 0 each time. SMFLG read 30000h when the probe began, the IOP's booted flag
+  (40000h) not yet set at PCSX2's fast boot; the bit 20000h, cleared by the probe before its first init packet, was not
+  set again in the time allowed, yet the IOP's packets came to the receive buffer that packet named.
+- **Conclusion:** the module's path is a NUL-terminated string from byte 8 of the argument block; a module is loaded and
+  started with the block's first two words zero; the reply is 512 bytes whose first word is the module's id (positive)
+  or a negative error, −203 for a path naming no file, and whose second word was 0 for `alu`, whose start returns 0. Not
+  learned, since no test module needs them: where a module's arguments go, what words 0 and 1 carry, the path's longest
+  length, and whether word 1 of the reply is the module's own result. **Measured**, one lineage: PCSX2 is the only
+  referee that runs the player's BIOS's IOP modules from the EE (S3, S21).
+- **Depends on it:** `tests/irx`'s `module_load` and the 23 IOP programs of §40.
+- **Pinned by:** the 23 IOP programs on the player's BIOS (§40.5); `tests/irx`'s `the_module_load_puts_the_path_at_byte_8`.
+- **Implemented in:** the loader's commit of §40, after this entry's.

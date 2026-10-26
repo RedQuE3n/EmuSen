@@ -1,5 +1,12 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-25, an eighth time: step 7 is built (§19). `pkg make --self-contained` copies a game into its package,
+the library's file kept as its source and never moved; `--zip` and `pkg zip` write a package as one zip, which EmuSen
+opens by unpacking it once into `Packages`, every file's time kept to the tick; `pkg identity` and the *Game Package*
+window's switch set what the scraper sends; a package carried to a stand-in machine, as its folder or its zip, opens
+there in both runtimes with its saves, states and records, settings, art and patches. What ES-DE and RetroArch see of
+one is written down in §6, and the tester's checks of both are left (§19.8). Step 8 stays deferred (§9 Q2).*
+
 *Revised 2026-10-25, a seventh time: the stores step 5 left are built (§18), as the tester decided §14.8's Q30. A
 packaged game's state records sit beside its states, its crop and engine in its `settings.json`, its art in its
 `media/`; both runtimes, the media store and both scrapers read and write them there, a moved package keeps them, and
@@ -447,11 +454,18 @@ replace" the whole-file one [R].
 **Self-contained, opt-in.**
 
 - The game is copied into the package, read from the library and never moved. The copy is checked against `dump`
-  before the manifest's `game.where` changes to `package`.
-- The library keeps its file. Removing it is the player's own business outside EmuSen, as it is today.
+  before the manifest's `game.where` changes to `package`. *Built 2026-10-25 (§19.1):* the game is first held to
+  `dump` as an opening would hold it, then each file is copied with its time and the copy held to the SHA-1 of the
+  bytes read from its original in the same run; the entries it was copied from stay in the manifest as `sources`.
+- The library keeps its file. Removing it is the player's own business outside EmuSen, as it is today. *Since step 7
+  (§19.2)* the library file stays claimed by the package while it is still the file copied, so that the game is listed
+  once and has one save.
 - **Zip is a choice per package** (§9 Q8). The game may be stored as a zip of the one ROM.
   - It is read through `ArchiveImages`, unpacked once into `Unpacked`, mapped, and lent where the core borrows (§5.2).
   - Its hashes stay those of the ROM inside, `dump.file`; the archive's go under `container`.
+  - *Built otherwise at step 7 (§19.3, Q43):* the zip is of the whole package, one file that carries the game with its
+    saves, states, settings, art and patches, unpacked once into `Packages` when it is opened; a game the library holds
+    as a zip is copied in as that zip and read as above.
 
 ### 3.5 How a package relates to EmuSen's existing per-game stores
 
@@ -509,8 +523,8 @@ cost nobody asked for at scan time. A package is made:
 ### 3.7 The `pkg` command
 
 Added to `emusen.library` in stage 5 (§7), with its page at `Lib/dianash/emusen.library/man/pkg.1`. *Built
-2026-10-25 (§14.4)* but for `--self-contained` and `--zip`, which are step 7's; `pkg patch` *built at step 6 (§15.2)*; `pkg wait`
-joins it as `chd wait` joined `chd`:
+2026-10-25 (§14.4)*; `pkg patch` *built at step 6 (§15.2)*; `--self-contained`, `--zip`, `pkg zip` and `pkg identity`
+*built at step 7 (§19.4)*; `pkg wait` joins it as `chd wait` joined `chd`:
 
 ```
 pkg make <game>... [--self-contained] [--zip]   a package for each game, linked unless asked
@@ -519,6 +533,8 @@ pkg check <package>...                          the game and every file hashed a
 pkg patch add <package> <file>                  a patch file copied in and appended to the list
 pkg patch rm <package> <n>
 pkg migrate <package>                           the game's existing stores copied in (§3.5)
+pkg zip <package>...                            a self-contained package written as one zip beside it (§19)
+pkg identity <package> original|patched         which identity the scraper sends (§5.5, §19)
 ```
 
 ---
@@ -959,6 +975,20 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 - **Media.** ES-DE reads its `downloaded_media/<system>/<type>/` tree, not a package's folder. A later `pkg export
   esde` could copy a package's `media/` there, since the type names are already ES-DE's (§3.2). It is not proposed for
   the first stages.
+- **What ES-DE is shown of a self-contained package, as built at step 7 (§19.5)** [A, from the USERGUIDE sections
+  cited above; not run]:
+  - The folder `Packages/<console>/<name>.<ext>/` holds the file it is named after: a cartridge's copy is named as the
+    folder (§19.1), a disc's sheet and a converted disc's CHD give the folder its name. So a folder ES-DE takes as one
+    game is passed to the emulator as that file, the sheet with its tracks beside it, the CHD with the original sheet
+    beside it under its own name, which ES-DE is not given.
+  - Everything else in the folder (`package.json`, `saves/`, `states/`, `media/`, `settings.json`, `cheats.json`) is
+    inside a folder ES-DE does not list.
+  - The console folders under `Packages` are named by EmuSen's consoles (`SNES`, `PlayStation`), not ES-DE's system
+    names (`snes`, `psx`), so a player points an ES-DE system at `Packages/<console>` rather than at `Packages` as a
+    ROM directory.
+  - A package's zip is a file of EmuSen's for carrying a package; ES-DE would take it as a game's zip holding many
+    files, and it is not offered to ES-DE.
+  - *Left for the tester (§19.8):* ES-DE launching a self-contained package.
 
 ### 6.2 RetroArch
 
@@ -968,6 +998,12 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
   compatible with libchdr [R, docs.rs `chd`], the reader libretro cores commonly use.
 - Saves are not shared: RetroArch keeps its own save folder. A package's `.srm` is a plain battery file that a player
   can copy across.
+- **What RetroArch is shown of a self-contained package, as built at step 7 (§19.5)** [A, from docs.libretro.com
+  "Softpatching" as cited; not run]: the game file in the folder, named as the folder, and beside it the package's
+  patches under the package's own name (`<name>.bps`, `<name>.ips`, `.ips1`, …), which is the game file's stem, so that
+  RetroArch's `<stem>.<ext>` rule finds them for a core that loads from memory. A list that does not fit the
+  convention keeps its own names and says so (§15.2). A patched game's saves are EmuSen's, named by the list's key
+  (§16), and RetroArch keeps its own. *Left for the tester (§19.8):* RetroArch applying a package's patch.
 
 ### 6.3 What a player has if they leave EmuSen
 
@@ -975,7 +1011,7 @@ need an overlay of patched sectors inside `emusen-disc`, which is a reader. They
 |---|---|
 | The ROM library | **exactly as it was**: linked packages never touched it, and the CHD tool wrote nothing there unless the player chose replacement (§4.5) |
 | Converted discs | standard CHD files. `chdman extractcd --splitbin` gives back byte-identical tracks (§4.3, measured), and `dump` lists the hashes to check them against |
-| Self-contained games | the ROM as a plain file, or a zip of it |
+| Self-contained games | the ROM as a plain file in its package's folder, named as the folder; or the whole package as one zip, whose top folder any unzip gives back (§19.3) |
 | Patches, saves, art, cheats, settings | ordinary IPS/BPS/UPS files, `.srm` files, PNG and JPEG, and JSON |
 | Save states | EmuSen's own format, readable only by the engine that wrote it (`EmuSen_Save_States.md`, `EmuSen_RustState.md`). That is true today and is not changed here |
 
@@ -987,7 +1023,7 @@ Smallest useful step first, each with a gate that must pass before the next begi
 steps 1 and 2 are built and their gates passed (§11); step 3 is built, its synthetic gate passed and the desktop's
 run done (§12), and its handheld run is left (§12.7); step 4 is built and its gate passed (§13); step 5 is built
 and its gate passed (§14); step 6 is built and its gate passed (§15); the stores step 5 left are built and their gate
-passed (§18); step 7 waits for the tester's go. Every test uses
+passed (§18); step 7 is built and its gate passed (§19), the tester's checks in ES-DE and RetroArch left. Every test uses
 synthetic images: SyntheticRom for cartridges, and generated sheets for discs, as `emusen-disc`'s own CHD test makes
 them. No commercial image is committed.
 
@@ -999,7 +1035,7 @@ them. No commercial image is committed.
 | **4** *(built 2026-10-25, §13)* | **The Mistress window** for the tool, a LunaP `ToolWindow` reached from Settings, the pad menu and big picture, as Memory Cards is (`EmuSen_SaveMedia.md` §6.5) | The fit audit at 1280 × 800 and 1920 × 1200 with nothing cut off or overlapping; every control reached by the pad |
 | **5** *(built 2026-10-25, §14)* | **Linked packages for every console**: the scan rules (§3.6), the claim index, `SaveLibrary` and `GameCheats` with a package root, `pkg make`, `pkg ls`, `pkg check` and `pkg migrate` | WiseMan: the library tree is unchanged after making and migrating packages. A game opened by its plain path and by its package reaches one save. A moved library file is found again by hash |
 | **6** *(built 2026-10-25, §15)* | **Soft patching**: `emusen-patch`, the patch list, `pkg patch`, the `patched` identity | Each format applied to synthetic images reproduces targets made independently in the test. Mismatched sources are refused with words. The scraper sends `dump` for a patched package under `identity: original` |
-| **7** | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
+| **7** *(built 2026-10-25, §19; the tester's ES-DE and RetroArch checks left)* | **Self-contained packages and zip per package** | A package copied to another machine opens there. The tester checks that ES-DE launches a self-contained package and RetroArch applies its patch |
 | **8** | *Deferred 2026-10-25 (§9 Q2): not built until the tester revisits it.* **Replacing originals** (§4.5) | Removal goes to the trash and is refused without a terminal, for a failed check, and for a changed source. A shared track is kept. The library after replacement holds exactly the CHDs, at their checked hashes |
 | **9** | *If wanted:* `pkg export esde` (media, and optionally a `gamelist.xml`) | ES-DE shows the exported art for the packaged games |
 
@@ -1043,7 +1079,9 @@ them. No commercial image is committed.
 - **P7.** No step of §7 writes, renames or removes anything under `RomDirectory`, except step 8 when chosen. Checked by
   the before and after listings. *Holds for step 5 (§14.7): the listings before and after making and migrating
   packages, in Rust and in WiseMan, were the same file for file.* *Holds for step 6 (§15.8): the listings before and after
-  adding and removing patches were the same, and both runtimes left the patched game's file as it was.*
+  adding and removing patches were the same, and both runtimes left the patched game's file as it was.* *Holds for step 7
+  (§19.6): the listings before and after making packages self-contained, zipping and checking them were the same, in
+  Rust and in WiseMan, a converted disc's included.*
 
 ---
 
@@ -2648,7 +2686,8 @@ times fell in different seconds; its game is now given one time for both runs.
 
 ### 18.8 Left, and for the tester
 
-- **Step 7**, self-contained packages and zip per package, waits for the tester's go. A record is stamped with its
+- ~~**Step 7**, self-contained packages and zip per package, waits for the tester's go.~~ Built 2026-10-25 (§19), its
+  own copy and zip keeping every time to the tick. A record is stamped with its
   state's modification time, so a package copied to another machine keeps its records only where the copy keeps the
   times (`cp -p`, `rsync -a`, a zip); step 7's copy should keep them, and a copy that does not loses the records, never
   the states.
@@ -2659,3 +2698,224 @@ times fell in different seconds; its game is now given one time for both runs.
   the claim index thousands of times.
 - **Q41 [routine]: Clear leaves a packaged game's art** (§18.3), as it leaves everything outside the media store.
   *Recommended:* keep it until a player asks Clear of a packaged game; deleting in a package is then its own change.
+
+---
+
+## 19. Built 2026-10-25: step 7
+
+*Measured on the development desktop on 2026-10-25. Every test made its library, packages and stand-in machines in
+temporary folders (SyntheticRom, the test core's images, generated sheets, IPS patches written in the test); nothing
+was read from or written to the ROM library, and `pkg make` was never run on it. No emulator's or archiver's source was
+read: the zip writer is written from PKWARE's APPNOTE.TXT, the format the project's zip reader already follows
+(`EmuSen_Galaxia.md` §3.7).* Marks as at the top: what was run is [M].
+
+### 19.1 Self-contained packages: `pkg make --self-contained`
+
+**What it does** [M]: for a game no package claims, the linked package is made as before (§14.4), then made
+self-contained; for a game a linked package claims, that package is made self-contained in place (`contained`), its
+saves, states, settings and art staying where they are. A converted disc's package is made self-contained by naming
+the disc's original sheet, which it claims, and its CHD is copied from `Compressed`.
+
+1. The game is held to `dump` as an opening holds it (§3.4, `claims::open_package`): a changed game is refused with
+   both hashes named, a gone one is said gone, and nothing is copied.
+2. The game and every companion (a sheet's tracks and `.sbi`, a list's discs and theirs) are copied into the package's
+   folder at the places relative to the game's folder that the sheet or the list names them by. A companion outside
+   the game's folder, or a file whose place would be one of the package's own (`package.json`, `saves`, `states`,
+   `media`, `cheats.json`, `settings.json`), refuses the copy with words.
+3. Each copy is written under a hidden name, given its original's modification time, flushed, and held to the SHA-1 of
+   the bytes read from the original in the same run, then renamed into place. A copy already there of the same bytes
+   is kept, so a stopped `make` run again finishes; any other file there refuses it.
+4. **The copy of a cartridge is named as the package's folder** where their extensions agree, which they do unless
+   the library's file was renamed after a linked package was made: ES-DE, given the folder, passes the file of the
+   folder's name, and RetroArch finds patches by the game file's stem, which `pkg patch` names by the package's own
+   name (§15.2). A sheet keeps its name, since its tracks are named by it and the folder by it.
+5. The manifest then names the copies (`game.where` and each companion's `where` are `package`, with `size` and
+   `seen`), says `"mode": "self-contained"`, and keeps the entries the copies came from as a top-level `sources`, each
+   with its `size`, `seen` and `sha1`.
+
+**Cost** [M, a 64 MiB image of a semi-compressible pattern, `cargo run --release`, WiseMan's blast radius running
+beside it, so upper bounds]: making the linked package 230 ms, making it self-contained 263 ms (one read, one write and
+one read of the copy), `pkg check` of the folder 203 ms.
+
+### 19.2 The library file a package was copied from
+
+**Decided here, and asked as Q42** [C]: a self-contained package claims the files its game was copied from (its
+`sources`) as well as its own copy. So:
+
+- the library lists the game once, as the package's copy, as it lists a linked or converted game once (§3.6, §14.3);
+- opening the library file by its plain path opens the package's copy with the package's saves, states and settings:
+  one game, one save (§3.5, §9 Q14), as opening a converted disc's original opens its CHD (§14.8 Q31);
+- the library file's `games.db` rows follow the package's game by the orphan pass's hash rule, as §14.8's Q32
+  foresaw, since the claimed file is no longer listed [A; the reclaim itself is unchanged and was not run here].
+
+**Only while it is that file.** Such a claim holds while the library file's size and time are those `sources` records,
+or else while its SHA-1 is the one recorded; changed, it opens as a plain game with its plain saves, as a changed
+claimed game does (§17). Touched but unchanged, it still opens the package. Gone, nothing changes: the package needs no
+library. A self-contained package whose own copy is gone is said missing by `pkg ls` and `pkg check`, and **is never
+linked to a library file again unasked**: the search for a moved game (§14.1) now runs only for a game linked in the
+library or elsewhere.
+
+### 19.3 A package's zip: `--zip` and `pkg zip`
+
+**What is written** [M] (`EmuSen_Galaxia.md` §3.13): `Packages/<console>/<name>.zip` beside the folder, holding every
+file of the folder under one top folder named as the package, the manifest first, hidden files and links passed over.
+
+- **Stored or deflated, as §5.2 decided for cartridges, and discs as their CHDs**: a CHD and what is already compressed
+  (`.chd`, `.zip`, `.7z`, pictures, video, `.pdf`) is stored and never passed to the compressor; everything else is
+  deflated at level 6, the level §5.2 measured, or stored where deflating would not make it smaller.
+- **Every file keeps its time to the tick.** The NTFS extra field (0x000A) carries the modification time as a FILETIME,
+  in units of 100 ns, which is .NET's tick: a state's record is stamped with its state's time in ticks (§18.1), so a
+  zip that kept seconds would drop every record it carried. The extended timestamp (0x5455) and the DOS fields carry it
+  to the second and to two seconds for other readers.
+- **No Zip64**, which the reader does not read either: 65,534 files and 4 GiB at most, refused with words beyond.
+- Written under a hidden name and renamed into place whole; **a zip already there is never replaced** (Q46).
+- `--zip` implies `--self-contained`, since a linked package's zip would hold no game. `pkg zip <package>...` zips a
+  package that is already self-contained, as it now is with its saves: the way to carry a package on from a machine
+  whose library does not hold its game, as when it came there as a zip (Q45).
+
+**Opening it** [M]: a zip that holds a package, opened by any route (§3.5's resolution, so both runtimes, the shell's
+`core` and the library), is unpacked once into `Packages`: beside itself where it lies under `Packages`, straight under
+`Packages` where it lies anywhere else, never beside a zip in the library. Every entry is checked against its CRC-32
+and given its time, into a hidden folder first, renamed into place whole. From then on the folder is the package: a zip
+whose folder is there and holds the same game opens the folder and is not read beyond its manifest, and **a zip is
+never unpacked over a folder** (Q44). A zip whose entries climb out of its top folder is refused before anything is
+written. The library lists a zip beside its own folder once, as the folder, and a zip without its folder as one entry
+shelved by its manifest's `system`.
+
+**`pkg check` of a zip** unpacks it into a hidden folder of `Packages`, checks the package there as a folder is checked,
+and removes the folder; the zip is only read.
+
+**Cost** [M, the same 64 MiB package]: writing the zip 748 ms, to 44,145,689 bytes (65.8%); `pkg check` of the zip 447
+ms; opening it on a fresh tree, unpacking included, 242 ms, and again, once its folder is there, 0.1 ms. P5 (a zipped
+64 MiB cartridge's first launch on the handheld under 1.5 s) is not retired by this: it is the desktop, and a package's
+zip, not a game's.
+
+### 19.4 `pkg identity`, and the window's switch
+
+`pkg identity <package> original|patched` (the request op `pkg-identity`) sets the manifest's `identity` (§5.5, §15.4),
+as §15.9's Q37 recommended and the tester accepted; `patched` is refused for a package with no soft patches. The *Game
+Package* window gains a *Scraped as* row, shown where the package lists patches, with *Scrape as Patched* or *Scrape as
+Original* running the same job, and says self-contained packages are such, offering the patch files beside the library
+file a self-contained game was copied from.
+
+**What the switch does not change** [C]: which saves a patched game uses. §16 names a patched game's saves by its patch
+list's key, and the identity only chooses which hashes the scraper sends; the window's hint says the saves stay the
+patch list's either way (Q47).
+
+### 19.5 The surfaces
+
+| Surface | Change |
+|---|---|
+| The service `emusen.library` | 1.2 → **1.3**: `pkg-make`'s `self_contained` and `zip`, a package's zip among `pkg-check`'s paths, `pkg-identity` (`identity`), `pkg-zip`; the `package` event's `mode`, `zip` (`path`, `bytes`), `copied`; the states `contained`, `zipped`, `set`; the table unchanged |
+| The module `emusen.library` | `pkg make --self-contained --zip`, `pkg zip`, `pkg identity`; asks for the service at 1.3; `man pkg` |
+| The manifest | stays **1.0**: a top-level `sources` (each with `role`, `where`, `path`, `size`, `seen`, `sha1`), a field the schema already allows, as `patches[].name` was at step 6 (Q48) |
+| Galaxia, Rust | `package_zip` (`zip_beside`, `files_of`, `write`, `manifest_in`, `target`, `unpack`, `same_game`, `opened`); `archive::{ZipWriter, copy_entry, STORED_EXTENSIONS, MAX_ENTRIES, MAX_OFFSET}`, `ZipEntry`'s `crc32` and `modified`; `claims::source_holds`, `resolve` opening a package's zip |
+| Galaxia, C# | `GamePackages.ZipBeside`, `ZipManifest`, `Managed.SourceHolds`; the managed resolution refusing a package's zip with words |
+| The library's scan | a zip beside its package's folder passed over; a package's zip without its folder shelved by its manifest (`scan.rs`, `RomLibrary.ScanManaged`) |
+| The library tool | `Making`, `further`, `contain`, `copy_in`, `zip`, `identity`, `check_zip`, `named_or_zipped`; the CHD tool finds a converted disc made self-contained done in its package and checks its CHD there (`convert::chd_of`) |
+| Mistress | `GamePackageWindow`'s *Scraped as* row, `SelfContained`, `Identity`, `SetIdentity` |
+
+The platform interface stays **27** and the core ABI is unchanged.
+
+### 19.6 The gate, the tests, and the faults seeded
+
+**The gate** [M]:
+
+1. *A package copied to another folder opens there with its saves, states, settings, art and patches*:
+   `CrystalParityTests.A_self_contained_package_carried_to_another_machine_as_its_folder_or_its_zip_opens_there_with_its_saves_states_settings_art_and_patches_both_ways`.
+   A self-contained package with an IPS patch is played on the first machine by the Rust runtime (the battery save
+   written, slot 2 saved with its record, a setting of the game's own), given a cover, and zipped by the tool. Then a
+   stand-in machine, a fresh data root and settings in a temporary folder with a library that lacks the game, is given
+   the folder copied with its times; in each runtime the package opens, its patch applied, its slot listed under the
+   patched key and its record naming the patched image, the slot loading, the setting read and the battery save the
+   first machine's; the two runtimes' answers and the trees they leave are equal; the scan lists the game once and the
+   media store finds its cover in the package.
+2. *A zip opens the same*: on a third machine the zip alone is put in `Packages`, listed by the scan as one entry, and
+   opened by its path in each runtime, which unpacks it beside itself and answers as the folder did; the slot's and
+   its record's times came through to the tick. System.IO.Compression, a reader of its own, reads every file of the
+   tool's zip back byte for byte. In Rust, `self_contained.rs` carries a package by `cp -p` and by its zip to two more
+   trees, every file and its time to the tick alike, and a zip opened again after play never unpacks over its folder.
+3. *A copy that lost the times*: on a fourth machine the folder is copied with every time lost: the state's record
+   drops out and the state still loads, in both runtimes, as §18.8 said.
+4. *The library tree is unchanged after making self-contained packages and zips*: `self_contained.rs` (cartridges, a
+   disc's sheet and tracks, a linked package contained, zips written and refused, checks run), the chdman gate's new
+   case (a converted disc made self-contained), `GamePackageWindowTests` and the runtimes' case each hold the library's
+   every path, size, time and MD5 to its first listing. **P7 holds for step 7.**
+5. *`pkg check` passes on both forms*: `self_contained.rs` checks the folder, its zip, a contained cartridge and a
+   disc, all `verified`, and the carried copies on the other trees.
+6. *The fit audit*: `WindowFitAuditTests` at 1280 × 800 and 1920 × 1200 for the new `GamePackageSelfContained` state (a
+   long-named self-contained package scraped as patched) and the `GamePackageLongTitle` state, whose patched package now
+   shows the *Scraped as* row, both recorded again in the interface specification; every control reached by the pad.
+
+**Besides the gate**: `GalaxiaParityTests` holds the two halves of the claim index to one answer for a self-contained
+package and its source, touched, changed and gone, and holds a zip another archiver wrote to the platform library's
+unpacking and the C# half's refusal; `package_zip.rs` refuses a damaged entry and an entry climbing out, and leaves
+nothing; `scan.rs` lists a self-contained package once and a zip only where its folder is not; `GamePackageWindowTests`
+switches the identity through the job and back, and opens a self-contained package's window over a package the tool
+made; the golden corpus records the new command lines and page.
+
+**Run** [M] `cargo test --profile test-checked` of `emusen-galaxia` (94 and 1), `emusen-library` (3, `library` 3,
+`library_abi` 6, `routing` 2), `emusen-library-tool` (4, the gate's 8 with `EMUSEN_CHDMAN` naming the pinned chdman,
+`packages` 2, `patches` 1, `self_contained` 1), `emusen-library-module` (4), `emusen-platform` (33, `dianash_abi` 4,
+`library_tool` 3), and for the readers of the zip reader and the claim index `emusen-cheats` (9), `emusen-crystal` (6,
+`crystal_abi` 6, `frame_alloc` 1) and `emusen-scrape` (3 and its integration tests 15): all passing. WiseMan, the
+blast radius `blast.sh` named: 4,016 passed, 62 skipped (the picture and bench tools) and 1 failed, in 26 minutes;
+the one was `ScraperTests.Never_more_requests_at_once_than_maxthreads`, known to fail under load and untouched by this
+step (it failed again alone, one case of three, with the machine's other work running). The step 5 parity case §18.8
+warned of passed, unmasked. The golden corpus's `pkg`, `help` and `man` were given the new command lines and page,
+`help`'s patterns edited in place so that they still take either shell; `GoldenCorpusTests`, `ManPageTests` and
+`NativeSwitchTests` passed, 211.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| `claims::source_holds` holding every source, changed or not | `claims.rs`' sources case: the changed library file still opened the package's copy |
+| The zip writer's NTFS time rounded down to the second | `package_zip.rs`' round trip and `self_contained.rs`: the times out of the zip were not the ticks that went in (a record stamped in ticks would have dropped out) |
+| The C# scan listing a zip beside its package's folder | `CrystalParityTests.A_self_contained_package_carried_to_another_machine_…`: on the third machine, after the zip was opened, the library held two entries for the one game |
+
+### 19.7 Otherwise than the plan, and found on the way
+
+- **The zip is of the whole package** (§3.4, Q43), not of the game alone inside the folder, since a package carried to
+  another machine is step 7's gate and §6.3's promise; the game stays as dumped inside the folder, so the borrow and
+  the unpack cache are untouched.
+- **A zip is unpacked into `Packages`**, not into `Unpacked` as §5.2 has a game's zip: a package's saves and states are
+  written where it lies, and `Unpacked` is a cache whose 4 GiB budget evicts.
+- **`File.Copy` keeps a file's time in .NET, on Linux as on Windows**, which the first draft of the test's "copy that
+  loses the times" relied on not doing; the test sets the time itself.
+- **`pkg zip`** is a subcommand beyond §3.7's (Q45), for the round trip back from a machine whose library lacks the
+  game.
+- **A copy is named as its package's folder** (§19.1), so that ES-DE and RetroArch agree with the folder and the patches
+  even after a library file was renamed.
+- **The CHD tool and self-contained packages**: `chd ls`, `chd check` and `chd convert` would have taken a converted
+  disc made self-contained for one changed, and converted it again over its package; they now find its CHD in the
+  package (`convert::chd_of`).
+
+### 19.8 Left, and for the tester
+
+- **The tester's checks, by hand, not claimed here**: that ES-DE launches a self-contained package (point an ES-DE
+  system at `Packages/<console>`, §6.1), and that RetroArch applies a self-contained package's patch, loading the game
+  file in its folder with a core that loads from memory (§6.2).
+- **Step 8** stays deferred (§9 Q2); **step 9**, `pkg export esde`, is optional and needs the tester.
+- **The handheld's runs** of §12.7 are still left; nothing here touched them.
+- **Q42 [decision]: the library file a self-contained package was copied from stays claimed** while it is still that
+  file (§19.2): listed once, opening the package's copy and saves. *Recommended:* keep it, for one save per game (Q14)
+  and as a converted disc's original is (Q31); a player who wants the library file played on its own removes the
+  package, or the file changes and plays plainly.
+- **Q43 [decision]: `--zip` zips the whole package, not the game inside the folder** (§19.7). *Recommended:* keep it;
+  storing the game zipped inside the folder to save space would cost each first launch an inflate and fill `Unpacked`
+  (§8), and is a choice of its own if storage ever asks for it.
+- **Q44 [decision]: a zip is never unpacked over its folder.** A zip brought back from another machine with newer saves
+  does not replace the folder still here; the player moves the folder aside, and opening the zip then unpacks it.
+  *Recommended:* keep it; choosing the newer of two copies, or merging them, is a step of its own.
+- **Q45 [routine]: `pkg zip <package>`**, beyond §3.7. *Recommended:* keep it; `pkg make --zip` names a library game,
+  and a package that came as a zip has none here.
+- **Q46 [routine]: a zip already there is never replaced** by `--zip` or `pkg zip`. *Recommended:* keep it; the words say
+  to move it aside.
+- **Q47 [routine]: the identity switch changes the scraper's identity only**; a patched game's saves follow its patch
+  list (§16). *Recommended:* keep it.
+- **Q48 [routine]: the manifest stays 1.0** with `sources`, a field the schema allows. *Recommended:* keep it, as for
+  `patches[].name`.
+- **Q49 [routine]: no *Make Self-Contained* or *Make Zip* in Mistress yet**; the window shows a self-contained package
+  and switches the identity. *Recommended:* add both buttons to the *Game Package* window when a player is to carry a
+  package without the shell.

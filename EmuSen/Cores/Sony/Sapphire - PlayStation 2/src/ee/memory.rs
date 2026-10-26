@@ -92,6 +92,36 @@ impl Ee {
         })
     }
 
+    /// Where a data access to the 4 KiB page of `vaddr` lands in the current mode, as `translate` and `data_mode` would
+    /// place it, with no effect on any state; none where the access would raise. With it, whether a store may be made
+    /// there (the TLB's D bit). The recompiler's translation cache (Sapphire_Native.md §48.3).
+    pub(crate) fn data_page(&self, vaddr: u32) -> Option<(Place, bool)> {
+        let allowed = self.kernel() || vaddr < 0x8000_0000 || (self.supervisor() && (0xC000_0000..0xE000_0000).contains(&vaddr));
+        if !allowed {
+            return None;
+        }
+        let (place, writable) = match vaddr >> 29 {
+            4 => (Place::Physical(vaddr - 0x8000_0000, k0_mode(self.cop0[cop0::CONFIG] & config::K0)), true),
+            5 => (Place::Physical(vaddr - 0xA000_0000, Mode::Uncached), true),
+            0..=3 if self.status() & status::ERL != 0 => (Place::Physical(vaddr, Mode::Uncached), true),
+            _ => {
+                let hit = self.tlb.lookup(vaddr, self.cop0[cop0::ENTRYHI] & 0xFF)?;
+                if !hit.valid {
+                    return None;
+                }
+                let place = match hit.target {
+                    Target::Scratchpad(o) => Place::Scratchpad(o),
+                    Target::Physical { paddr, c } => Place::Physical(paddr, tlb_mode(c)),
+                };
+                (place, hit.dirty)
+            }
+        };
+        Some(match place {
+            Place::Physical(p, m) => (Place::Physical(p, self.data_mode(m)), writable),
+            s => (s, writable),
+        })
+    }
+
     /// Config.DCE clear makes a cached page's data accesses uncached (§3.2).
     pub(super) fn data_mode(&self, m: Mode) -> Mode {
         match m {

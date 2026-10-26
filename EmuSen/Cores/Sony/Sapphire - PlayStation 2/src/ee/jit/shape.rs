@@ -1,6 +1,7 @@
-//! What a block of EE code may hold at S36, and where it ends: the integer instructions, the multipliers and dividers of
-//! both pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot. Everything else ends the
-//! block before it and is the interpreter's (Sapphire_Native.md §44.3).
+//! What a block of EE code may hold, and where it ends: the integer instructions, the multipliers and dividers of both
+//! pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot (S36); the loads and stores of
+//! every width and PREF (S37). Everything else ends the block before it and is the interpreter's (Sapphire_Native.md
+//! §44.3, §48.2).
 
 use super::super::ops;
 
@@ -14,7 +15,10 @@ pub enum Class {
     Plain,
     /// A branch or jump: compiled with its delay slot, and the block ends after the slot.
     Branch,
-    /// Not compiled at S36: the block ends before it.
+    /// A load, a store or PREF (S37): compiled like a plain instruction, leaving the block before it at run time where
+    /// its access is not one a block makes.
+    Memory,
+    /// Not compiled: the block ends before it.
     Other,
 }
 
@@ -24,6 +28,11 @@ const PLAIN: &[&str] = &[
     "dsra", "dsll32", "dsrl32", "dsra32", "dsllv", "dsrlv", "dsrav", "mfhi", "mflo", "mthi", "mtlo", "mfhi1", "mflo1", "mthi1", "mtlo1",
     "mult", "multu", "mult1", "multu1", "madd", "maddu", "madd1", "maddu1", "div", "divu", "div1", "divu1", "mfsa", "mtsa", "mtsab",
     "mtsah", "tge", "tgeu", "tlt", "tltu", "teq", "tne", "tgei", "tgeiu", "tlti", "tltiu", "teqi", "tnei", "sync", "sync.p",
+];
+
+const MEMORY: &[&str] = &[
+    "lb", "lbu", "lh", "lhu", "lw", "lwu", "ld", "lq", "lwl", "lwr", "ldl", "ldr", "sb", "sh", "sw", "sd", "sq", "swl", "swr", "sdl", "sdr",
+    "pref",
 ];
 
 const BRANCH: &[&str] = &[
@@ -42,6 +51,8 @@ pub fn class(word: u32) -> Class {
         Class::Plain
     } else if BRANCH.contains(&n) {
         Class::Branch
+    } else if MEMORY.contains(&n) {
+        Class::Memory
     } else {
         Class::Other
     }
@@ -49,23 +60,36 @@ pub fn class(word: u32) -> Class {
 
 /// Every mnemonic a block compiles, for the tests that cover each one.
 pub fn compiled() -> impl Iterator<Item = &'static str> {
-    PLAIN.iter().chain(BRANCH).copied()
+    PLAIN.iter().chain(BRANCH).chain(MEMORY).copied()
+}
+
+/// The class a block gives a word: a load or store is another instruction where `memory` is off (S36's blocks).
+pub fn class_in(word: u32, memory: bool) -> Class {
+    match class(word) {
+        Class::Memory if !memory => Class::Other,
+        c => c,
+    }
+}
+
+/// Whether a class is compiled where it stands, the block going on after it.
+fn straight(c: Class) -> bool {
+    matches!(c, Class::Plain | Class::Memory)
 }
 
 /// The block's words from the run `words` holds (consecutive instructions from the block's start, as far as they are
-/// known): compiled instructions up to the first other, a branch only with its delay slot when the slot is a plain
-/// instruction, at most `MAX`; none if the first instruction is not compiled. With it, whether the run ended before the
-/// block did, so that more words could have made it longer.
-pub fn shape(words: &[u32]) -> (Option<Vec<u32>>, bool) {
+/// known): compiled instructions up to the first other, a branch only with its delay slot when the slot is a plain or
+/// memory instruction, at most `MAX`; none if the first instruction is not compiled. With it, whether the run ended
+/// before the block did, so that more words could have made it longer. `memory` as in `class_in`.
+pub fn shape(words: &[u32], memory: bool) -> (Option<Vec<u32>>, bool) {
     let mut out = Vec::new();
     let mut i = 0;
     let mut short = true;
     while i < words.len() && out.len() < MAX {
-        match class(words[i]) {
-            Class::Plain => out.push(words[i]),
+        match class_in(words[i], memory) {
+            Class::Plain | Class::Memory => out.push(words[i]),
             Class::Branch => {
                 short = i + 1 >= words.len();
-                if !short && out.len() + 2 <= MAX && class(words[i + 1]) == Class::Plain {
+                if !short && out.len() + 2 <= MAX && straight(class_in(words[i + 1], memory)) {
                     out.extend_from_slice(&words[i..i + 2]);
                 }
                 return ((!out.is_empty()).then_some(out), short);

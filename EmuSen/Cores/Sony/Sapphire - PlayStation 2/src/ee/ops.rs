@@ -849,9 +849,11 @@ fn tlbr(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {
     Ok(())
 }
 fn tlb_write(e: &mut Ee, i: usize) {
+    use super::stamp;
     if i < super::tlb::ENTRIES {
         let c = &e.cop0;
         e.tlb.write(i, c[cop0::PAGEMASK], c[cop0::ENTRYHI], c[cop0::ENTRYLO0], c[cop0::ENTRYLO1]);
+        e.tlb_stamp = stamp();
     }
 }
 fn tlbwi(e: &mut Ee, _: &mut dyn Bus, _: u32, _: u32) -> R {

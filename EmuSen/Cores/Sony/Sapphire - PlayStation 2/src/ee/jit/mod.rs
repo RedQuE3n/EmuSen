@@ -1,8 +1,9 @@
-//! The EE recompiler's lowering (Sapphire_Plan.md §7, S36): a block of integer instructions and branches as Cranelift IR,
-//! for `emusen-jit`, which owns the compiler's thread, publication, the module and the verifier's shape. A compiled block
-//! keeps the guest registers and the issue model's fields in host registers from its entry to its exit, computes each
-//! instruction's issue cycle as `timing` does, and at its exit hands the cycles to the dispatcher's replay of the board,
-//! which decides how many of its instructions stand. Sapphire_Native.md §44 is the record.
+//! The EE recompiler's lowering (Sapphire_Plan.md §7, S36 and S37): a block of integer instructions, branches, loads and
+//! stores as Cranelift IR, for `emusen-jit`, which owns the compiler's thread, publication, the module and the verifier's
+//! shape. A compiled block keeps the guest registers and the issue model's fields in host registers from its entry to its
+//! exit, computes each instruction's issue cycle as `timing` does, reaches RDRAM, the scratchpad and the data cache's lines
+//! directly through a translation cache, and at its exit hands the cycles to the dispatcher's replay of the board, which
+//! decides how many of its instructions stand. Sapphire_Native.md §44 and §48 are the record.
 
 mod emit;
 pub mod shape;
@@ -20,9 +21,45 @@ pub type Code = unsafe extern "C" fn(*mut Ee, *mut Context) -> u32;
 
 /// The block ran `Context::steps` instructions and left the core as the interpreter would after them.
 pub const DONE: u32 = 0;
-/// The replay found an interrupt the interpreter would take before the block's end: nothing was written, and the
-/// interpreter runs the `Context::steps` instructions that stand.
+/// The replay found an interrupt the interpreter would take before the block's end, or the DMAC due between its loads
+/// and stores: the interpreter runs the `Context::steps` instructions that stand. When they reach past the last load or
+/// store (`Context::base`), the core holds the state after it; otherwise nothing was written but the stores
+/// `Context::log` undoes (Sapphire_Native.md §48.5).
 pub const ROLLBACK: u32 = 1;
+
+/// The entries of the translation cache, by virtual page.
+pub const PAGES: usize = 4096;
+
+/// The entry a virtual page takes: its number's low twelve bits mixed with its top eight, so that the windows onto the
+/// same memory (kuseg, kseg0, kseg1, the TLB's uncached and accelerated pages) do not take one entry in turn.
+pub fn page_index(vaddr: u32) -> usize {
+    ((vaddr >> 12 ^ vaddr >> 24) as usize) & (PAGES - 1)
+}
+/// What a page of the translation cache reaches: nothing fast (the interpreter's path), the scratchpad, the data cache
+/// (`Page::meta`'s bits 51..32 the physical page), or RDRAM uncached, for stores.
+pub mod kind {
+    pub const NONE: u64 = 0;
+    pub const SCRATCHPAD: u64 = 1;
+    pub const CACHED: u64 = 2;
+    pub const UNCACHED: u64 = 3;
+    /// With `UNCACHED`: the accelerated pages, whose loads go through the UCAB.
+    pub const ACCELERATED: u64 = 8;
+    /// A store may be made (the TLB's D bit).
+    pub const WRITABLE: u64 = 4;
+}
+/// An undo entry of 8 bytes, not 16, has this bit set in its address.
+pub const SHORT: u64 = 1 << 63;
+
+/// One entry of the translation cache: valid while `tag` is the context's generation with the page's address
+/// (`Context::gen1 | vaddr & !0xFFF`); `host` the page's first byte for the scratchpad and RDRAM.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Page {
+    pub tag: u64,
+    pub host: u64,
+    pub meta: u64,
+    pub pad: u64,
+}
 
 /// A helper compiled code calls: `(context, steps) -> answer`.
 pub type Helper = extern "C" fn(*mut Context, u32) -> u32;
@@ -45,6 +82,28 @@ pub struct Context {
     pub owner: *mut std::ffi::c_void,
     /// Where the measurement of held registers (`Options::spill`) writes them after each instruction.
     pub spill: [u64; 36],
+    /// The translation cache's fill for a page the code did not find: `(context, vaddr) -> 1`.
+    pub fill: Helper,
+    /// The translation cache (`PAGES` entries), and its generation shifted to bits 63..32 with bit 0 set.
+    pub pages: *mut Page,
+    pub gen1: u64,
+    /// The board's next event at the entry: no load or store runs after an instruction whose cycles reach it.
+    pub horizon: u64,
+    /// Set by an exit before the replay: the times within which the DMAC may not run (the last load or store's
+    /// index), the steps after it (`base`), and the undo entries written.
+    pub guard: u32,
+    pub base: u32,
+    pub logged: u32,
+    /// Stores and loads made to RDRAM past the caches, for the board's traffic counts.
+    pub uncached: u64,
+    pub uncached_loads: u64,
+    /// A tag no line has, for the stores that reach no cache line.
+    pub dummy: [u64; 2],
+    /// Each store's undo: the address of the 16 bytes it changes (or 8, with `SHORT`) and their bytes before it.
+    pub log: [[u64; 3]; 2 * shape::MAX],
+    /// The loads and stores that left their blocks: at the board's next event, misaligned, on a page the code does not
+    /// serve (a register, the boot ROM, a fault), missing the data cache, and a load of an accelerated page (the UCAB).
+    pub left: [u64; 5],
 }
 
 /// How a block is compiled.
@@ -60,6 +119,10 @@ pub struct Options {
     /// For measurement only: every register the block has written stored to `Context::spill` after each instruction,
     /// as a block that kept them in memory would (Sapphire_Native.md §44.8). Exact; it changes no value.
     pub spill: bool,
+    /// Loads and stores in blocks (S37); without, every one ends its block as at S36, for measurement.
+    pub memory: bool,
+    /// Config.NBE clear: a data wait stalls the pipe as well as the result (an uncached load's).
+    pub blocking: bool,
 }
 
 /// The R5900's lowering, `emit.rs`, for `emusen-jit`.
@@ -96,7 +159,7 @@ impl Ee {
     pub(crate) fn block_entry(&mut self) -> Option<u32> {
         use super::cop0::{config, debug, perf};
         use super::memory::{Access, Mode, Place};
-        if self.delay || self.pccr & perf::CTE != 0 || self.debug[debug::BPC] & debug::IAE != 0 || self.timing.instructions == 0 {
+        if self.delay || self.pccr & perf::CTE != 0 || self.debug[debug::BPC] & (debug::IAE | debug::DRE | debug::DWE) != 0 || self.timing.instructions == 0 {
             return None;
         }
         let pc = self.pc;
@@ -107,6 +170,11 @@ impl Ee {
             Place::Physical(paddr, Mode::Cached | Mode::Through) => Some(paddr),
             _ => None,
         }
+    }
+
+    /// Config.NBE clear: blocking loads.
+    pub(crate) fn blocking_loads(&self) -> bool {
+        self.cop0[super::cop0::CONFIG] & super::cop0::config::NBE == 0
     }
 
     /// Config.DIE clear: one instruction an issue cycle.
@@ -174,5 +242,28 @@ impl Ee {
     /// The interrupt check's write of Cause.IP2 and IP3 and its answer, as a step makes them first.
     pub(crate) fn check_interrupt(&mut self) -> bool {
         self.interrupt_pending()
+    }
+
+    /// What the translation cache keys its pages by besides the TLB's stamp: the ASID, the operating mode as a data
+    /// access sees it (user, supervisor, kernel, or kernel at level 2, where kuseg is unmapped), and kseg0's and the data
+    /// cache's configuration.
+    pub(crate) fn translation_key(&self) -> [u64; 2] {
+        use super::cop0::{CONFIG, ENTRYHI, config};
+        use super::status;
+        let mode = if self.status() & status::ERL != 0 {
+            3
+        } else if self.kernel() {
+            2
+        } else {
+            u32::from(self.supervisor())
+        };
+        let cfg = self.cop0[CONFIG] & (config::K0 | config::DCE);
+        [self.tlb_stamp, u64::from(self.cop0[ENTRYHI] & 0xFF) | u64::from(mode) << 8 | u64::from(cfg) << 32]
+    }
+
+    /// `n` steps counted in the current mode's count (`modes`), as each step counts itself.
+    pub(crate) fn count_steps(&mut self, n: u64) {
+        let m = self.mode_index().map_or(4, |m| m as usize);
+        self.modes[m] += n;
     }
 }

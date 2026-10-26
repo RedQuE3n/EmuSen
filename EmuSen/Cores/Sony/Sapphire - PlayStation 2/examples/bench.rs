@@ -237,6 +237,14 @@ fn main() {
             busy.join(" ")
         );
     }
+    if let Some(b) = m.blocks.as_deref() {
+        let s = b.stats;
+        let (compiled, refused, bytes) = b.compiled();
+        println!(
+            "blocks\tmemory {}\tentered {}\tcompiled steps {}\tinterpreted {}\trollbacks {}\trun again {}\tkept past {}\tDMAC stops {}\tpages filled {}\tgenerations {}\tleft at the event/misaligned/page/miss/accelerated load {:?}\tcompiled {compiled}\trefused {refused}\tbytes {bytes}",
+            b.memory, s.entered, s.compiled_steps, s.interpreted, s.rollbacks, s.rerun_steps, s.kept_past, s.dmac_stops, s.fills, s.generations, s.left
+        );
+    }
     let cd = &m.sys.board.iop.bus.cdvd;
     println!(
         "machine\tentered at frame {:?}\tstopped {:?}\tdrive N commands {}\tS commands {}",

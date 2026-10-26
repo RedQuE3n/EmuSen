@@ -527,6 +527,7 @@ pub(crate) mod layout {
     pub const GROUP_ENDS: i32 = offset_of!(Timing, group_ends) as i32;
     pub const PAIRED: i32 = offset_of!(Timing, paired) as i32;
     pub const INSTRUCTIONS: i32 = offset_of!(Timing, instructions) as i32;
+    pub const MEM_FREE: i32 = offset_of!(Timing, mem_free) as i32;
 }
 
 /// The categories in Table 1-1's order, a category's code in `SPH2` its place here.

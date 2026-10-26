@@ -392,3 +392,25 @@ fn each_reason_raises_the_interrupt_while_an_earlier_one_is_pending() {
     finish(&mut c, SPIN_UP + 2 * PROMPT);
     assert!(c.take_raised(), "and at the next command's end");
 }
+
+/// ReadKey (0Ch) with the BIOS's seven parameter bytes leaves 01h at register 38h, which reads 00h before it and keeps it
+/// through later commands; it needs a disc, and opening the tray clears it (D-461).
+#[test]
+fn read_key_reports_the_disc_authenticated_at_38h() {
+    let mut c = Cdvd::new(Some(dvd(300, None)));
+    assert_eq!(c.read8(reg::KEY_STATUS), 0);
+    n(&mut c, ncmd::READ_KEY, &[0, 0, 0, 3, 0x0C, 0, 0], 0);
+    finish(&mut c, 1_000_000);
+    assert_eq!((c.read8(reg::KEY_STATUS), c.read8(reg::ERROR)), (1, 0));
+    seek(&mut c, 16, 2_000_000);
+    finish(&mut c, 100_000_000);
+    n(&mut c, ncmd::STOP, &[], 200_000_000);
+    finish(&mut c, 400_000_000);
+    assert_eq!(c.read8(reg::KEY_STATUS), 1, "kept through a seek and a stop, as the referee shows");
+    c.tray(true, 500_000_000);
+    assert_eq!(c.read8(reg::KEY_STATUS), 0);
+    let mut none = Cdvd::new(None);
+    n(&mut none, ncmd::READ_KEY, &[0, 0, 0, 3, 0x0C, 0, 0], 0);
+    finish(&mut none, 1_000_000);
+    assert_eq!((none.read8(reg::KEY_STATUS), none.read8(reg::ERROR)), (0, NO_DISC));
+}

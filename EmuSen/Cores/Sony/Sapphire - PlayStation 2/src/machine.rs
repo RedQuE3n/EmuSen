@@ -149,6 +149,12 @@ impl Machine {
         self.sys.board.iop.bus.cdvd.insert(disc)
     }
 
+    /// A disc in the drive when the console is switched on, before its first instruction: the drive spun up with it,
+    /// as a console started with a game in it (Sapphire_Native.md §39.2).
+    pub fn disc_at_power_on(&mut self, disc: crate::cdvd::Disc) {
+        self.sys.board.iop.bus.cdvd.in_at_power_on(disc);
+    }
+
     pub fn pal(&self) -> bool {
         self.market == Market::Europe
     }

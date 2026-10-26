@@ -538,6 +538,16 @@ fn is_unit_register(paddr: u32) -> bool {
     paddr < 0x1000_2000 || (0x1000_8000..0x1000_F000).contains(&paddr) || (0x1000_F000..0x1000_F600).contains(&paddr)
 }
 
+/// An EE access's width at the drive's byte registers, which the EE reaches as the IOP does (D-460); past a word, the
+/// low word's bytes.
+fn drive_size(bytes: usize) -> blackmoon_r3000::Size {
+    match bytes {
+        1 => blackmoon_r3000::Size::Byte,
+        2 => blackmoon_r3000::Size::Half,
+        _ => blackmoon_r3000::Size::Word,
+    }
+}
+
 /// The VU memories in the EE's map (EE User's Manual §2.1).
 const VU_MEMORY: std::ops::Range<u32> = 0x1100_0000..0x1101_0000;
 
@@ -601,6 +611,13 @@ impl Bus for Board {
             }
             self.reports.note(Side::Ee, paddr, Access::Read, None, self.now);
             return 0;
+        }
+        if (crate::cdvd::BASE..crate::cdvd::END).contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
+            self.iop.run_to(self.now);
+            let v = self.iop.bus.cdvd_read(paddr, drive_size(bytes));
+            self.reschedule();
+            return u128::from(v);
         }
         match map::region(paddr) {
             Region::Rdram => self.traffic[0] += 1,
@@ -675,6 +692,13 @@ impl Bus for Board {
             } else {
                 self.reports.note(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             }
+            return;
+        }
+        if (crate::cdvd::BASE..crate::cdvd::END).contains(&paddr) {
+            self.reports.touch(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
+            self.iop.run_to(self.now);
+            self.iop.bus.cdvd_write(paddr, drive_size(bytes), value as u32);
+            self.reschedule();
             return;
         }
         if map::region(paddr) != Region::Rdram {

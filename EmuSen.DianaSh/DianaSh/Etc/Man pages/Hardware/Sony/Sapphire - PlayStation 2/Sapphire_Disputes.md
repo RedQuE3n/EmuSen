@@ -4258,3 +4258,64 @@ it.*
 - **Depends on it:** `cdvd::open`; how a referee run's synthetic `.iso` is classed (a small one is a CD on PCSX2).
 - **Pinned by:** `an_image_opens_as_the_playstation_2s_disc_kinds` (Sapphire's rule).
 - **Implemented in:** nothing changed; recorded at §40.14.
+
+  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read.
+  As a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
+  runs.
+- **Referee:** not yet consulted for this; PCSX2 read the `.iso` form in D-480's runs, how it classed the image unknown.
+- **Conclusion:** **open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or the
+  BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.
+- **Depends on it:** `cdvd::open`'s choice of medium, `Cdvd::fill` for ReadCd on a DVD.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.
+
+### D-460. The EE reaches the CDVD drive's registers at 1F402000h-1F40203Fh as the IOP does, reads and writes alike
+
+- **Opened:** 2026-10-25, at stage S28: with a game's disc in the drive and an EEPROM configured through the initial
+  setup, the player's BIOS on Sapphire went from its intro to OSDSYS's main menu without booting the disc; the
+  hardware's reports showed no N command sent to the drive and 574 reads by the EE of 1F40200Fh, the disk type, which no
+  unit of the EE's bus answered and which read zero, "no disc" (`Sapphire_Native.md` §39.3).
+- **Documents read:** ps2tek at `1c91660`, "Memory Map" (the EE's map lists no window at 1F400000h; the drive is in the
+  IOP's map at 1F402004h-1F402018h) and "CDVD I/O Ports"; Israelson's edition, the same.
+- **Test program:** S23's `reach.s` (`Sapphire_Native.md` §25.3), which reads the drive's registers from the EE at
+  BF402000h and sends S command 03h.
+- **Referee:** PCSX2 2.8.2, LRPS2 and PCEE2 (one lineage) answer `reach.s` from the EE as the drive answers the IOP
+  (measured at S23); Play! 0.72 answers CCh at every register, its high-level BIOS never relying on them. The player's
+  BIOS, a console program, reads the disk type from the EE before it boots a disc, which is the stronger witness that
+  the window exists on the console.
+- **Conclusion:** the drive's 64 byte registers answer the EE at 1F402000h-1F40203Fh (and through KSEG1 at
+  BF402000h) exactly as they answer the IOP, a wider access taking its bytes in order as on the IOP's bus, and a write
+  reaching the drive (an N or S command sent from the EE runs). With it the BIOS sent N command 0Ch and went on to the
+  disc (D-461). **Measured** on one lineage and argued from the BIOS's own traffic.
+- **Depends on it:** `board::Board`'s `Bus` (`drive_size`), `IopBus::cdvd_read`, `IopBus::cdvd_write`.
+- **Pinned by:** `the_ee_reads_and_writes_the_drives_registers` (`tests/boot.rs`).
+- **Implemented in:** stage S28's commit.
+
+### D-461. CDVD N command 0Ch (ReadKey) sets register 38h to 01h on a disc that is ready, which the player's BIOS reads before it boots the disc; the key bytes at 20h-24h are not modelled
+
+- **Opened:** 2026-10-25, at stage S28: with D-460 in place the BIOS sent N command 0Ch twice with the seven parameter
+  bytes 00h 00h 00h 03h 0Ch 00h 00h, read the error register and then 1F402038h, and drew "Please insert a PlayStation
+  or PlayStation 2 format disc." over its disc animation; Sapphire answered 0Ch as an unknown command and read zero at
+  38h (the hardware's reports, `Sapphire_Native.md` §39.3).
+- **Documents read:** ps2tek at `1c91660`, "CDVD N Commands" (00h-06h, 08h, 09h; nothing at 0Ch) and "CDVD I/O Ports"
+  (nothing past 18h); Israelson's edition, "CDVDMAN": the exports `sceCdReadKey(char unk1, char unk2, uint cmd, void
+  *key)` and `sceCdDecSet(char unk1, char unk2, char shift)`, and "SECRMAN": "The bulk of this work is handled by the
+  CDVD Drive, which contains the actual MagicGate keys"; `Sapphire_Plan.md` §5.6 ("The model reports every disc as
+  authenticated").
+- **Test program:** `programs/s28/readkey.s`: the disk type, drive status, N status and 38h read from the EE; N command
+  0Ch sent twice with the BIOS's parameters, each followed by the N status, error and I_STAT and every byte of 00h-3Fh;
+  then a Seek, a NOP and a Stop, each followed by the N status, error and 38h.
+- **Referee:** PCSX2 2.8.2 with the Jak and Daxter disc: 38h 00h before the command and 01h after it, kept through the
+  Seek, the NOP and the Stop; no error; I_STAT 01h; 20h-24h five bytes (DEh 69h 75h 38h 25h), 28h-2Ch and 30h-34h zero,
+  the unused offsets FFh. With the synthetic single- and dual-layer DVDs of `ps2discs.py`, whose program is named
+  `EMUS_000.02`, 38h 01h and 20h-24h other bytes (80h 69h B5h 59h 14h), so the five bytes are a function of the disc and
+  38h is not. Play! reaches no drive register from the EE.
+- **Conclusion:** ReadKey needs a disc ready (else error 01h, as the other disc commands, [C]); it completes at once and
+  leaves 01h at 38h, which a later command keeps and the tray's opening clears [A]. Its completion raises I_STAT bit 1 as
+  ps2tek gives for every N command, not the referee's bit 0, the document before the single lineage. The five key bytes
+  are not modelled and read zero: the BIOS's boot reads 38h alone, no document gives their derivation, and a rule taken
+  from the referee's values would be its model of the drive's secret, which `Sapphire_Plan.md` §5.6 leaves alone (a
+  named loss, `Sapphire_Native.md` §39.9). **Measured** on one lineage for 38h; argued for the rest.
+- **Depends on it:** `cdvd::ncmd::READ_KEY`, `cdvd::reg::KEY_STATUS`, the drive's state (`SPH2` version 3).
+- **Pinned by:** `read_key_reports_the_disc_authenticated_at_38h`; the layout listing `tests/sph2/version-3.layout`.
+- **Implemented in:** stage S28's commit.

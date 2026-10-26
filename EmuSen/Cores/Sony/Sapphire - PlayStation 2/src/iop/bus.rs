@@ -296,14 +296,14 @@ impl IopBus {
     }
 
     /// A read of the drive's byte registers at `p`, a wider access taking the bytes in order [C].
-    fn cdvd_read(&mut self, p: u32, size: Size) -> u32 {
+    pub(crate) fn cdvd_read(&mut self, p: u32, size: Size) -> u32 {
         self.run_units(self.now * IOP);
         let v = (0..size.bytes()).fold(0u32, |v, k| v | u32::from(self.cdvd.read8(p - cdvd::BASE + k)) << (8 * k));
         self.reschedule();
         v
     }
 
-    fn cdvd_write(&mut self, p: u32, size: Size, value: u32) {
+    pub(crate) fn cdvd_write(&mut self, p: u32, size: Size, value: u32) {
         self.run_units(self.now * IOP);
         for k in 0..size.bytes() {
             self.cdvd.write8(p - cdvd::BASE + k, (value >> (8 * k)) as u8, self.now);

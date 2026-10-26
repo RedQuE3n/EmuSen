@@ -40,6 +40,8 @@ pub mod reg {
     /// The S status when read, a parameter when written.
     pub const S_STATUS: u32 = 0x17;
     pub const S_RESULT: u32 = 0x18;
+    /// The disc's authentication after ReadKey: 01h once it has run on a disc, 00h before (D-461).
+    pub const KEY_STATUS: u32 = 0x38;
 }
 
 /// I_STAT's bits [R ps2tek].
@@ -84,6 +86,9 @@ pub mod ncmd {
     pub const READ_CDDA: u8 = 0x07;
     pub const READ_DVD: u8 = 0x08;
     pub const GET_TOC: u8 = 0x09;
+    /// ReadKey, which the player's BIOS sends before it boots a disc, its result at register 38h [R the export
+    /// `sceCdReadKey`, Israelson's ps2tek "CDVDMAN"; the number M PCSX2's drive and the BIOS's own traffic, D-461].
+    pub const READ_KEY: u8 = 0x0C;
 }
 
 /// The S commands [R ps2tek "CDVD S Commands"; TRAY's number, its parameter and WRITE_CONFIG's M PCSX2, §25.3].
@@ -211,6 +216,8 @@ pub struct Cdvd {
     drive: u8,
     sticky: u8,
     disk_type: u8,
+    /// Register 38h, ReadKey's result: every disc authenticated (Sapphire_Plan.md §5.6, D-461).
+    key: u8,
     s_command: u8,
     s_params: Fifo,
     s_result: Fifo,
@@ -235,6 +242,8 @@ pub struct Cdvd {
     pub n_count: [u32; 256],
     /// Each S command's last parameters and their count, for the same report.
     pub s_last: Box<[([u8; 16], usize); 256]>,
+    /// Each N command's last parameters and their count, the same report for the N commands (S28).
+    pub n_last: Box<[([u8; 16], usize); 256]>,
 }
 
 /// The disk type a disc settles at: a CD with audio tracks beside its data is the CDDA kind, one of audio alone music.
@@ -271,6 +280,7 @@ impl Cdvd {
             drive: 0,
             sticky: 0,
             disk_type: disk_type::NONE,
+            key: 0,
             s_command: 0,
             s_params: Fifo::default(),
             s_result: Fifo::default(),
@@ -289,14 +299,21 @@ impl Cdvd {
             s_count: [0; 256],
             n_count: [0; 256],
             s_last: Box::new([([0; 16], 0); 256]),
+            n_last: Box::new([([0; 16], 0); 256]),
         };
         if let Some(d) = disc {
-            c.load(d);
-            c.disk_type = kind_of(c.disc.as_mut().unwrap());
-            c.spinning = true;
-            c.set_drive(drive::SPINNING | drive::PAUSED);
+            c.in_at_power_on(d);
         }
         c
+    }
+
+    /// A disc that was in the drive when the console was switched on: spun up and paused at sector 0, the tray never
+    /// having moved, so no eject is reported (Sapphire_Native.md §39.2).
+    pub fn in_at_power_on(&mut self, d: Disc) {
+        self.load(d);
+        self.disk_type = kind_of(self.disc.as_mut().unwrap());
+        self.spinning = true;
+        self.set_drive(drive::SPINNING | drive::PAUSED);
     }
 
     /// A disc is numbered, as the drive reports a DVD's sectors, from (030000) on each layer (D-121).
@@ -360,6 +377,7 @@ impl Cdvd {
             reg::S_COMMAND => self.s_command,
             reg::S_STATUS => if self.s_result.pos < self.s_result.len { 0x00 } else { 0x40 },
             reg::S_RESULT => self.s_result.pop().unwrap_or(0),
+            reg::KEY_STATUS => self.key,
             _ => 0,
         }
     }
@@ -399,14 +417,16 @@ impl Cdvd {
 
     fn start(&mut self, cmd: u8, now: u64) {
         self.n_count[cmd as usize] += 1;
+        let given = self.n_params.len;
         let p = self.n_params.take();
+        self.n_last[cmd as usize] = (p, given);
         let word = |at: usize| u32::from_le_bytes([p[at], p[at + 1], p[at + 2], p[at + 3]]);
         self.n_command = cmd;
         self.error = 0;
         self.busy = true;
         let dvd = matches!(self.disc, Some(Disc::Dvd(_)));
         let speed = if dvd { DVD_SPEED } else { CD_SPEED };
-        let disc_command = matches!(cmd, ncmd::STANDBY | ncmd::SEEK | ncmd::READ_CD | ncmd::READ_CDDA | ncmd::READ_DVD | ncmd::GET_TOC);
+        let disc_command = matches!(cmd, ncmd::STANDBY | ncmd::SEEK | ncmd::READ_CD | ncmd::READ_CDDA | ncmd::READ_DVD | ncmd::GET_TOC | ncmd::READ_KEY);
         if disc_command && !self.ready() {
             return self.fail(NO_DISC, now);
         }
@@ -425,6 +445,10 @@ impl Cdvd {
             ncmd::PAUSE => {
                 let after = if self.spinning { drive::SPINNING | drive::PAUSED } else { self.drive };
                 self.pending = Some((now + PROMPT, Event::Complete(after)));
+            }
+            ncmd::READ_KEY => {
+                self.key = 1;
+                self.pending = Some((now + PROMPT, Event::Complete(self.drive)));
             }
             ncmd::READ_CD | ncmd::READ_CDDA | ncmd::READ_DVD | ncmd::GET_TOC => {
                 let form = match cmd {
@@ -663,6 +687,7 @@ impl Cdvd {
         self.tray_open = open;
         self.spinning = false;
         self.detect = None;
+        self.key = 0;
         if open {
             if self.busy {
                 self.brk();
@@ -796,7 +821,7 @@ impl emusen_native::State for Cdvd {
         let fifos = [&self.n_params, &self.s_params, &self.s_result];
         w.bytes("FifoBytes", [fifos[0].bytes, fifos[1].bytes, fifos[2].bytes].as_flattened());
         w.u32s("FifoAt", fifos.map(|f| [f.len as u32, f.pos as u32]).as_flattened());
-        w.bytes("Registers", &[self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command]);
+        w.bytes("Registers", &[self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command, self.key]);
         w.bools("Flags", &[self.tray_open, self.busy, self.spinning]);
         w.u32("Position", self.position);
         let (at, event) = self.pending.unwrap_or((0, Event::Sector));
@@ -834,9 +859,9 @@ impl emusen_native::State for Cdvd {
             f.len = (at[2 * k] as usize).min(16);
             f.pos = (at[2 * k + 1] as usize).min(f.len);
         }
-        let mut g = [0u8; 7];
+        let mut g = [0u8; 8];
         r.bytes(&mut g)?;
-        [self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command] = g;
+        [self.n_command, self.error, self.istat, self.drive, self.sticky, self.disk_type, self.s_command, self.key] = g;
         let mut f = [false; 3];
         r.bools(&mut f)?;
         [self.tray_open, self.busy, self.spinning] = f;

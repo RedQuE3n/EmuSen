@@ -118,3 +118,21 @@ fn halfword_dma_writes_merge_and_the_absent_places_read_zero() {
         assert!(!bus.bus_error(), "{a:08x}");
     }
 }
+
+/// The EE reaches the drive's registers at 1F402000h as the IOP does (D-460): OSDSYS reads the disk type there before it
+/// boots a disc; a byte written there reaches the drive.
+#[test]
+fn the_ee_reads_and_writes_the_drives_registers() {
+    use sapphire::ee::Bus;
+    let mut sys = System::new(s22::EE_ORIGIN);
+    let b = &mut sys.board;
+    assert_eq!(b.read(0x1F40_200F, 1) as u8, 0, "no disc");
+    let image: Vec<u8> = (0..300u32).flat_map(|s| if s == 16 { let mut d = [0u8; 2048]; d[..6].copy_from_slice(b"\x01CD001"); d[80..84].copy_from_slice(&300u32.to_le_bytes()); d } else { [0u8; 2048] }).collect();
+    let disc = sapphire::cdvd::open(emusen_native::core::Kept::from(image), Vec::new()).unwrap();
+    b.iop.bus.cdvd.in_at_power_on(disc);
+    assert_eq!(b.read(0x1F40_200F, 1) as u8, 0x14, "a PlayStation 2 DVD");
+    assert_eq!(b.read(0x1F40_200A, 1) as u8, 0x0A);
+    b.write(0x1F40_2016, 1, 0x15);
+    assert_eq!((b.read(0x1F40_2017, 1) as u8, b.read(0x1F40_2018, 1) as u8), (0x00, 0x05), "ForbidDVD sent from the EE answers as from the IOP");
+    assert!(b.reports.entries.keys().all(|k| !(0x1F40_2000..0x1F40_2040).contains(&k.1)), "no longer an unanswered access");
+}

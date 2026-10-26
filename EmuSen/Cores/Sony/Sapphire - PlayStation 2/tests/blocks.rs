@@ -542,6 +542,8 @@ fn the_stage_s6_programs_over_every_integer_encoding_leave_the_interpreters_mach
             if let Some(d) = blocks::compare(&plain, &fast, false) {
                 panic!("{name}, after {done} steps: {d}");
             }
+            // The blocks compiled so far, before the code's budget can drop them.
+            names.extend(b.compiled_mnemonics());
         }
         assert!(blocks::state_of(&plain) == blocks::state_of(&fast), "{name}: the whole states differ");
         for (i, want) in expected.iter().enumerate() {
@@ -553,7 +555,7 @@ fn the_stage_s6_programs_over_every_integer_encoding_leave_the_interpreters_mach
     }
     // PREF is the memory programs' of S37 (`every_load_and_store_runs_compiled_on_every_region`).
     let missing: Vec<_> = blocks::mnemonics().filter(|m| !names.contains(m) && *m != "pref").collect();
-    println!("compiled by the programs: {} of {} mnemonics; {:?}", names.len(), blocks::mnemonics().count(), b.stats);
+    println!("compiled by the programs: {} of {} mnemonics; {:?}; the budget dropped the blocks {} times", names.len(), blocks::mnemonics().count(), b.stats, b.flushes());
     assert!(missing.is_empty(), "never compiled by the programs: {missing:?}");
 }
 

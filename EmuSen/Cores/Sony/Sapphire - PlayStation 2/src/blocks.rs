@@ -106,9 +106,10 @@ pub struct Blocks {
     pub threshold: u32,
     /// Wait for each block's code when it is handed over, as the tests do.
     pub wait: bool,
-    /// A new block that would run on into a line the cache does not hold waits for the interpreter's fetch (true, the
-    /// default); false shapes it from the lines held, so that code run once is compiled, as a test of each instruction
-    /// wants (Sapphire_Native.md §48.7).
+    /// A new block that would run on into a line neither the cache nor RDRAM holds waits for the interpreter's fetch, and
+    /// one past a line the cache does not hold is shaped from RDRAM (true, the default); false shapes it from the lines
+    /// the cache holds, so that code run once is compiled in short blocks, as a test of each instruction wants
+    /// (Sapphire_Native.md §48.4, §48.7).
     pub wait_lines: bool,
     /// Compromise C1 in the code compiled from now on (off by default; `effect: accuracy`).
     pub fixed_cost: bool,
@@ -355,7 +356,10 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let options = blocks.options(sys);
     let held = blocks.map.get(&pc).and_then(|b| if b.paddr == paddr && b.options == options { sys.ee.held_words(pc, paddr, &b.words) } else { None });
     if held.is_none() {
-        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX, &sys.board.map.rdram);
+        // Past a line the cache does not hold, the words RDRAM holds; only the lines held when the dispatcher does not
+        // wait for lines (a test's code run once).
+        let rdram: &[u8] = if blocks.wait_lines { &sys.board.map.rdram } else { &[] };
+        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX, rdram);
         let (shaped, short) = shape::shape(&words, options.memory);
         if short && missed && blocks.wait_lines {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.

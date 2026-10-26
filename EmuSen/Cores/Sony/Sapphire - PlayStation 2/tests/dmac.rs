@@ -2,6 +2,7 @@
 //! interpreter with the board and graded by the records the EE User's Manual's rules give; and the timings and
 //! interfaces no program can show a referee, checked on the units directly.
 
+mod d700;
 mod s6;
 mod s11;
 
@@ -316,4 +317,16 @@ fn a_register_write_on_a_blanking_edge_does_not_take_the_edge_again() {
     b.write(0x1000_E000, 4, 1);
     b.run_to(edge + 1, &mut spr);
     assert_eq!(b.timers[3].count, before, "the H-blank edge at the write's time was taken once, before it");
+}
+
+/// D-700's programs (Sapphire_Native.md §30.52) need the player's BIOS, so `examples/d700.rs` runs them; here they are
+/// only assembled, each within the program area below its record.
+#[test]
+fn the_d700_programs_assemble() {
+    for p in d700::all() {
+        let name = p.name;
+        let (source, _) = p.finish();
+        let words = assemble(&source, ORIGIN);
+        assert!(ORIGIN + 4 * words.len() as u32 <= d700::LOG.min(RECORD), "{name}: {} words", words.len());
+    }
 }

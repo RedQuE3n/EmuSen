@@ -70,7 +70,11 @@ RAM, so neither can produce a record without the firmware.
   answer the size, a result byte (0 OK, FFh FAIL) and the value. Read32 is opcode 2, the version 8. **The draft's
   numbering past opcode 10 is off by one** [M]: PCSX2 answers the title at 11, the serial at 12, the CRC at 13, the
   game's version at 14 and the status at 15 (0, running). Addresses are the EE's: 00200000h reads RAM. PINE answers
-  FAIL until the machine runs; the driver treats that as "not yet".
+  FAIL until the machine runs; the driver treats that as "not yet". **PINE does not reach the EE's I/O registers**
+  [M 2026-10-26, `Sapphire_Native.md` §30.53]: Read32 at timer 0's, timer 1's and timer 3's registers and at I_STAT and
+  I_MASK (10000000h to 1000F010h) answered OK with 0 in each of 2,358 reads over 55 s of the BIOS's menu, I_MASK among
+  them, which the kernel has set by then; so PINE is no witness for a register, and a register is read on the referee
+  by a program of the project's that reads it itself.
 - **A defect of the run, not of the machine** [M]: a PINE client that connects before PCSX2's GS has opened makes it
   fail to acquire its render window ("Failed to acquire render window", then "Failed to initialize GS"), with or
   without `-batch` and `-nogui`. The driver therefore waits until the log reports the swap chain before it connects;

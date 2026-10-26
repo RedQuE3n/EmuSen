@@ -120,7 +120,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the pad server's call every 64 fields stopped after its third, the next look put to the tester (D-620 open); the
   pad's SIO2 step (2026-10-26, §30.44-§30.51): SIO2's traffic to the DualShock 2 traced on Sapphire and PCSX2's pad log
   read, every exchange the documented protocol's and the pad configured as PCSX2's, the second pad and 43h's button
-  bytes ruled out, the next look put to the tester (D-640); and the
+  bytes ruled out, the next look put to the tester (D-640); the timer 3 step (2026-10-26, §30.52-§30.59): PINE found
+  blind to the EE's registers, the project's programs reading timer 3, the INTC and COP0 Status on both consoles, timer 3
+  as the manual says (D-700) and the kernel's ExecPS2 starting its main thread with Status.EIE clear on Sapphire alone,
+  a context so started running from the browser's entry, its cause put to the tester (D-701 open); and the
   23 IOP programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's

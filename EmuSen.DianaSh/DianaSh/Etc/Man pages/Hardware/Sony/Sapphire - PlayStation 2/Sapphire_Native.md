@@ -5264,6 +5264,164 @@ besides PCSX2's own start-up text, that showed lines of PCSX2's recompiler messa
 no address, operand or value was read, and the later runs kept only the `Pad: ` lines. **This writer is exposed and will
 never write the open replacement**.
 
+### 30.52 Disputes D-700 and D-701: EE timer 3, and the interrupt enable of the kernel's threads (2026-10-26)
+
+*A dispute step on the tester's decision of 2026-10-26 (§30.50 Q1, option (a)); its products are
+`Sapphire_Disputes.md` D-700 and D-701.* Timer 3's registers and the INTC were to be read on PCSX2 through PINE while
+its menu ran and compared with Sapphire's. **PINE does not reach the EE's I/O registers** (§30.53), so, on the tester's
+second decision of the same day, the comparison was made by the project's own programs, fast-booted on both consoles,
+which read the registers themselves (§30.55). **Timer 3 is not where the consoles part** (D-700): the kernel sets it to
+count H-blanks freely three times before field 13 and Sapphire never sees it written again (§30.54); programmed by a
+program it counts, compares and latches TIM3 in I_STAT as the manual says. **What the programs found instead is the
+interrupt enable of the kernel's threads** (D-701): the main thread the kernel's ExecPS2 starts has Status.EIE clear on
+Sapphire whatever its caller's, and the caller's on PCSX2; a thread made by CreateThread takes its creator's on both. On
+Sapphire's OSDSYS, user-mode code with exactly that Status (70020C11h, EIE clear) appears for the first time at field
+1867, as the browser is entered, and never before (§30.56). Why ExecPS2 leaves EIE clear on Sapphire lies in what the
+kernel executes, which §1.4 does not let the step read, so the question is put to the tester (§30.58 Q1). No unit was
+changed and P8 stands as observed (§30.57).
+
+### 30.53 PINE and the hardware registers (measured 2026-10-26)
+
+A scratch copy of `ps2referee.py`, not committed, ran its `pads` mode with slot 1 empty and read through PINE's Read32,
+about every 20 ms from when PCSX2 began to draw, the addresses of T3_COUNT, T3_MODE, T3_COMP, I_STAT and I_MASK, and of
+T0_COUNT and T1_COUNT as a control (10000000h to 1000F010h). **All 2,358 reads over 55 s answered OK with 0**, I_MASK
+among them, which the kernel has set long before the menu (1002h at Sapphire's field 4, 100Eh from field 54, §30.54).
+The answers are not RAM read in place of the registers: 10000000h folded into RAM is physical address 0, where the
+kernel's exception code lies, and it read 0 too. So PINE is no witness for a register (recorded in
+`Sapphire_Referees.md` §2.1), and the step stopped there for direction, as its instructions required.
+
+### 30.54 Timer 3 on Sapphire through OSDSYS (measured 2026-10-26)
+
+A runner of its own, not committed, started the console empty with the Americas image and slot 1 empty, played part B's
+script (Cross every 120 fields from 770, the ninth on "Browser" at 1730) to field 2200 and printed at each field end
+timer 3's COUNT (brought to the moment), MODE and COMP, I_STAT and I_MASK, the counts of the EE's writes to timer 3's
+registers with the last value written (the board's register counts, §35.4), and the EE's interrupts:
+
+| Fields | Timer 3 | The INTC |
+|---|---|---|
+| 4, 11, 13 | COUNT written 0, MODE C83h (H-blank as the clock, CUE, both flags cleared by their 1s), COMP FFFFh: three writes to each register in all | I_MASK 1002h (SBUS, TIM3) |
+| 13-2200 | **never written again**; MODE reads 083h and COMP FFFFh; COUNT rises 262 or 263 a field (103 and 92 fields), wrapping without a flag, CMPE and OVFE being clear | I_MASK 100Ah from field 53, 100Eh from 54; I_STAT's bit 12 never seen |
+
+So the kernel keeps timer 3 as a free-running count of lines with no interrupt enabled, and nothing on Sapphire arms it
+between the boot and the black browser; whether the referee's kernel arms it in its menu cannot be read (§30.53).
+
+### 30.55 The project's programs, on Sapphire and PCSX2 (measured 2026-10-26)
+
+`tests/d700/mod.rs` builds eight programs, `examples/d700.rs` writes them and runs each on Sapphire by the fast boot
+(the interpreter), and the scratch copy of `ps2referee.py` ran each on PCSX2 2.8.2 (`ram`, fast boot), reading the
+record even when the done word never came. They use the kernel only through ps2tek's "BIOS EE Syscalls": FlushCache
+(64h) to write the record back, SetSyscall (74h) to install a routine of the program's own that stores to timer 3
+through kseg1 in kernel mode, AddIntcHandler (10h), _EnableIntc (14h), RemoveIntcHandler (11h), CreateThread (20h),
+StartThread (22h), SleepThread (32h), WakeupThread (33h), ExitThread (23h), GetThreadId (2Fh) and ExecPS2 (07h); and
+SetAlarm (FCh) and ReleaseAlarm (FEh) as §30.58 says.
+
+| Program | Sapphire | PCSX2 |
+|---|---|---|
+| `d700-timer`, part A: timer 3 and the INTC at entry | MODE 083h, COMP FFFFh, I_MASK 1002h, I_STAT 0 | the same |
+| part A: timer 3's ticks while timer 0 counts 1000h on BUSCLK/256 (1,048,576 BUSCLK, 111.9 lines of 9,370) | 6Fh, 111 | E0h, 224: two a line (D-42's 525 a field) |
+| part A, the first version: timer 3's MODE stored from the thread | a TLB Modified exception, BadVAddr 10001810h: the kernel maps timer 3's page read-only to its threads | not run |
+| part B: timer 3 programmed by the installed routine (BUSCLK/256, ZRET, CUE, CMPE, COMP 1000h), the handler added for cause 12 | AddIntcHandler 1, _EnableIntc 0 (already set); after the first wait MODE 5C2h (EQUF set), I_STAT 100Ch (TIM3 latched, unmasked), **no interrupt taken and the handler never called**, Status 70020C11h throughout | AddIntcHandler 1, _EnableIntc 0; **the program stops once timer 3 is armed**, its handler never called and nothing more recorded |
+| `d700-alarm`: SetAlarm with 100h in a0, zeros in a1 and a2 | no return: two TLB Refill exceptions at address 0, the program stopped | no return within 30 s |
+| `d700-thread`: Status at entry; in a thread CreateThread made, as it begins | 70020C11h; 70020C11h | **70030C11h**; 70030C11h |
+| `d700-thread-ei`, `-di`: the same after the main thread's EI or DI | after EI 70030C11h, the thread 70030C11h; after DI both 70020C11h | after EI both 70030C11h; after DI both 70020C11h |
+| `d700-exec`: Status as each main thread begins: at entry, after ExecPS2 called following EI, after ExecPS2 following DI | **70020C11h, 70020C11h, 70020C11h** | **70030C11h, 70030C11h, 70020C11h** |
+| `d700-exec-clear`: the same with SMFLG's bit 18 cleared by the EE before each call | 70020C11h each time | (SMFLG's bit 18 already clear at entry) |
+| `d700-kmode`: Status inside a routine installed as syscall 5Ah, then after DI, EI, an MTC0 clearing EIE and an MTC0 putting it back; called after EI and after DI | 70030C00h, 70020C00h, 70030C00h, 70020C00h, 70030C00h; then 70020C00h, 70020C00h, 70030C00h, 70020C00h, 70020C00h | **equal word for word** |
+
+At each `d700-exec` pass the program also kept the INTC's, the DMAC's and the SIF's registers: equal on both consoles
+but D_STAT's CIS6 (SIF1's end, set on PCSX2), SIF1's CHCR (84h on PCSX2, 0 on Sapphire) and SMFLG's bit 18 (set on
+Sapphire): the traces of the two fast boots, PCSX2's entering through the BIOS's own loading of a program over SIF1 and
+Sapphire's through ExecPS2 called as soon as the IOP reports it has booted (§36.2). `d700-exec-clear` rules SMFLG out.
+
+What the programs show:
+
+1. Timer 3, programmed as the manual says, counts, matches its compare and latches TIM3 in I_STAT on Sapphire (part B);
+   PCSX2 counts H-blank twice a line, as D-42 and D-201 already record. No defect of `timer` or `intc` was shown.
+2. On both consoles the kernel gives a new thread its creator's Status.EIE (`d700-thread-ei`, `-di`), and EI, DI and
+   MTC0 act on EIE alike in user mode and in a kernel-mode routine (`d700-kmode`).
+3. **ExecPS2 differs**: on PCSX2 its main thread begins with its caller's EIE; on Sapphire with EIE clear, after EI as
+   after DI, and so does the program the fast boot starts. With EIE clear the thread takes no interrupt (part B: TIM3
+   latched and unmasked, IE set, no interrupt), and every thread it creates inherits that.
+
+### 30.56 Status.EIE through OSDSYS's browser (measured 2026-10-26)
+
+The runner of §30.54 was run again with COP0 Status printed at each field end (a processor register, not a program
+counter), the same script, slot 1 empty, to field 2200:
+
+| Status at the field end | Fields 1-1866 | Fields 1867-2200 |
+|---|---|---|
+| user mode, EIE set (70030C10h, 70030C11h) | 214 | 26 |
+| **user mode, EIE clear (70020C11h)** | **0** | **42**, 2 to 21 fields apart |
+| kernel mode, EIE set (70030C00h, 70030C12h, 70030C13h) | 1,648 | 266 |
+| kernel mode, EIE clear (70400000h, the boot's first fields) | 4 | 0 |
+
+**A user-mode context with EIE clear, Status 70020C11h, the value ExecPS2's main thread has on Sapphire, runs from field
+1867**, as the menu fades on entering the browser, and never before. The EE still takes VBON and VBOF at two interrupts a
+field (3,881 at field 1867, 4,552 at 2200), in the contexts with EIE set. Which context it is, and whether the kernel
+started it with ExecPS2, cannot be told without reading what the BIOS executes; the coincidence of the value and the
+moment is the evidence, and it is put to the tester with D-701 (§30.58 Q1).
+
+### 30.57 OSDSYS's browser again, and P8 (measured 2026-10-26)
+
+No unit was changed. The two runs of §30.54 and §30.56 are this step's runs of the browser with slot 1 empty (part B's
+script to field 2200, a picture every 60 fields): the setup stepped on at each press, the main menu at 1680, the fade
+from 1740 and **black, every pixel zero, from field 1920**, as in §30.41 and §30.49; the formatted card's run of §30.49
+stands for the unchanged tree. **P8 stands as observed**: the browser stalls before it asks for any card, and the
+card's refusal (Q7(b)) is not reached.
+
+### 30.58 Questions the step leaves
+
+1. **Q1 [decision], the cause of D-701.** Sapphire's EE acts on EIE as PCSX2's does wherever a program can test it
+   (§30.55, 2), yet the kernel's ExecPS2 leaves its main thread's EIE clear on Sapphire and as the caller's on PCSX2,
+   and such a context appears as the browser is entered. What clears it, or fails to set it, is in what the kernel
+   executes during ExecPS2. *Recommended*: (a) allow a narrow trace of COP0 Status during one ExecPS2 called by
+   `d700-exec` on Sapphire: each change of Status.EIE with the kind of event that made it (EI, DI, MTC0, ERET or an
+   exception's entry) and Status before and after, never a program counter, an instruction word or memory; that names
+   the operation without reading the BIOS's code, and a program of the project's then tests that operation on both
+   consoles as `d700-kmode` does. (b) Compare further black-box behaviour only (other kernel calls around ExecPS2), which
+   has not named the operation so far. (c) Leave the browser until S29's disc and S10's programs reach the card's driver.
+2. **Q2 [routine], `d700-timer` part B on PCSX2.** The program stops on PCSX2 once timer 3 is armed, its handler never
+   called; on PCSX2 the thread's EIE is set, so the interrupt is taken, and what the kernel does with cause 12 when no
+   alarm is set is the kernel's (ps2tek: timer 3 "is reserved by the BIOS for alarm functions"). *Recommended*: record
+   it and use timer 0 or 1 for any later program that needs a timer's interrupt through the kernel.
+3. **Q3 [routine], timer 3's page.** On Sapphire the kernel's TLB makes timer 3's registers read-only to its threads
+   (BadVAddr 10001810h); the first version was not run on PCSX2. *Recommended*: record as observed; it is the kernel's mapping on
+   Sapphire's TLB, which S7 graded, and needs no change.
+
+*Decided 2026-10-26 by the tester, for this step:* SetAlarm and ReleaseAlarm are called only to record their raw results
+and timer 3's registers, with the arguments treated as unknown (one value in a0, zeros otherwise), and nothing is
+inferred beyond what the registers show. The sources searched for their arguments, and why each was out of bounds:
+ps2tek at `1c91660` and Israelson's edition, local and online ("BIOS EE Syscalls", which lists no alarm call; "BIOS EE
+Patches", which gives the numbers FCh to FFh and no arguments); psdevwiki's "Syscalls" and gamehacking.org's library
+page 90 (HTTP 403 both); ps2sdk's `syscallnr.h` documentation pages and `alarm.c`, an SDK's source (§1.4); and two
+psx-place threads on the kernel's alarm functions and patch locations, written from the kernel's disassembly, which
+§1.4 forbids to every writer. None was opened beyond a search engine's result list.
+
+### 30.59 What was read, the blast radius, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 (with the decisions of 2026-10-26), §12 and §13 (P8); this page's §20, §30 from the
+D-620 step on, §35 and §36; `Sapphire_Disputes.md` D-38, D-39, D-42, D-620 and D-640; `Sapphire_Referees.md` §2.1.
+ps2tek at `1c91660`: "EE Timers", "SIF Registers", "BIOS EE Syscalls" (the list), "BIOS EE Threading" (its structures,
+lines 4646-4684, cleared for writers), "BIOS EE Patches" (lines 5049-5066, excluded for replacement writers only);
+Israelson's edition's "BIOS EE Syscalls" online (no alarm entries). Sony's *EE Core User's Manual* §3.2 (Status, its
+EIE, EDI and interrupt conditions) and *EE Core Instruction Set Manual* (DI, EI, ERET). The web searches of §30.58.
+PCSX2 2.8.2 run as a black box: PINE's answers at hardware addresses, the project's programs' records in RAM, two
+pictures. No emulator, SDK, loader or ps2autotests source and no firmware: the BIOS image was handed by path to Sapphire
+and to PCSX2 and never opened; no program counter, instruction, or memory holding BIOS code or data was printed or read;
+of the processor, COP0 Status at field ends and in the programs, and BadVAddr, a data address. The runner, the scratch
+copy of the referee tool and every trace were deleted once this was written.
+
+**Blast radius**: `blast.sh WiseMan sapphire-timer3` lists no WiseMan test; the crate's `tests/dmac.rs` builds the
+programs' module and gains `the_d700_programs_assemble`: **19 of 19** [M, `cargo test --release --test dmac`]. Seeded
+faults: the handler's log placed inside the program's code (caught by the test's bound) and an unknown register in the
+installed routine (caught by the assembler in the same test); each reverted.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2,
+read timer 3's and the INTC's registers and COP0 Status on Sapphire while OSDSYS ran, and read the records of the
+project's programs that call the kernel; a search engine's result list quoted ps2sdk's syscall numbers (SetAlarm at FCh,
+another alarm call at 18h) and summarised a forum thread's account of the kernel's alarm table, none of it used;
+**this writer is exposed and will never write the open replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -6556,6 +6714,13 @@ trace log, both as the tester decided on 2026-10-26 (`Sapphire_Plan.md` §1.4); 
 of every line of PCSX2's default log was printed with its values masked, showing recompiler messages with instruction
 mnemonics and the IOP modules' registrations by name (§30.51); **that writer is exposed too and will never write the open
 replacement**.
+
+*Added 2026-10-26 at the timer 3 step (§30.52 to §30.59):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2, read timer 3's and the INTC's registers and COP0 Status at each field end on Sapphire while OSDSYS ran, read
+PINE's answers at hardware addresses, and ran the project's programs that call the kernel on both, never a program
+counter, instruction or memory holding BIOS code or data; a search engine's result list quoted ps2sdk's syscall numbers
+and summarised a forum thread's account of the kernel's alarm table, unused; **that writer is exposed too and will never
+write the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

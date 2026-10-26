@@ -543,6 +543,23 @@ impl Bus for IopBus {
         }
     }
 
+    /// A cached hit answered from the word decoded at its refill (Sapphire_Native.md §53); every other fetch as `fetch`.
+    #[inline(always)]
+    fn fetch_decoded(&mut self, address: u32) -> (u32, emusen_mips::Op) {
+        let p = address & 0x1FFF_FFFF;
+        let segment = address < 0x2000_0000 || (0x8000_0000..0xA000_0000).contains(&address);
+        if segment
+            && (p < RAM_WINDOW || p >= ROM_BASE)
+            && self.icache.enabled()
+            && let Some(hit) = self.icache.hit(p)
+        {
+            self.now += 1;
+            return hit;
+        }
+        let w = self.fetch(address);
+        (w, emusen_mips::decode(w))
+    }
+
     fn read(&mut self, address: u32, size: Size) -> u32 {
         let target = decode(address);
         if !matches!(target, Target::Ram(_) | Target::Scratch(_) | Target::Rom(_)) {
@@ -664,6 +681,7 @@ impl IopBus {
         self.icache.bcc = r.u32()?;
         r.u32s(&mut self.icache.tags)?;
         r.u32s(&mut self.icache.words)?;
+        self.icache.redecode();
         r.bytes(&mut self.scratch)?;
         let mut i = [0u32; 3];
         r.u32s(&mut i)?;

@@ -4398,3 +4398,23 @@ it.*
 - **Depends on it:** the GS's texturing and pixel pipeline, or the units feeding the game's choices.
 - **Pinned by:** nothing yet.
 - **Implemented in:** none.
+### D-465. Dark Cloud 2: the game starts, loads its IOP modules from the disc and then has the IOP rebooted into OSDSYS, which shows its browser with the disc
+
+- **Opened:** 2026-10-26, at stage S28: Dark Cloud 2 (SCUS-97213, v2.00) on Sapphire with the configured EEPROM.
+- **Documents read:** ps2tek "CDVD N Commands" (ReadDvd's block: "0 1 Volume number + 0x20"); D-121, D-122.
+- **Test program:** none. The hardware's own reports: the drive's commands in order show the BIOS reading the volume,
+  SYSTEM.CNF, sectors 0 to 11 and the program through ReadCd and ReadDvd after both ReadKeys (D-461), then reads with
+  another mode that the game's own loading makes; the IOP's console (§36.3's capture) shows the game's program loaded,
+  the IOP rebooted for it and its ten modules loaded from `cdrom0:\MODULES\` (SIO2MAN, PADMAN, MCMAN, MCSERV, LIBSD,
+  SDRDRV, MODMIDI, MODHSYN, EZMIDI, EZBGM), each returning, then a second reboot request from the EE and OSDSYS loaded
+  again, about seven seconds after the game began. With slot 1 empty the same happens. ReadDvd's byte 0 given ps2tek's
+  20h on a single-layer disc, against D-122's ECMA-267 reading, changed nothing.
+- **Referee:** PCSX2 2.8.2 runs the game to its memory card message ("No memory card (PS2) detected ...") 28 s after it
+  begins to draw.
+- **Conclusion:** **open**. What the game's program decides before it returns to OSDSYS is not shown by the reports;
+  the game's code could show it, but OSDSYS is loaded at the addresses the game's program occupies (Dark Cloud 2's ELF
+  spans 00100000h-01F64E00h), so an EE address alone cannot tell the game's code from the BIOS's, and §1.4 forbids
+  observing the latter (`Sapphire_Native.md` §39.11, Q).
+- **Depends on it:** unknown.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.

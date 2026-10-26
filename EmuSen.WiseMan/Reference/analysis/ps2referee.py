@@ -52,8 +52,9 @@ card's file as PCSX2 left it is copied to OUTDIR/card.ps2 afterwards, an output 
 EEPROM, which a script through the initial setup changes, is put back as it was (Sapphire_Native.md §30.18). The keys are PCSX2's own defaults for its first pad: Up, Down, Left, Right, K Cross, L Circle, I Triangle, J
 Square, Return Start.
 `game` boots a game's disc on PCSX2 through the BIOS's own disc boot (fast boot off) at the console's speed, with the
-card CARD in slot 1 or none, and plays SCRIPT as `pads` does, with a third kind of line, `SECONDS ram NAME`: the EE's
-RAM from 00100000h to its end read through PINE into OUTDIR/NAME.ram, the game's memory, never the kernel's below it
+card CARD in slot 1 or none, and plays SCRIPT as `pads` does, with a third kind of line, `SECONDS ram NAME [BYTES]`: the
+EE's RAM from 00100000h to its end, or its first BYTES, read through PINE into OUTDIR/NAME.ram, the game's memory, never
+the kernel's below it
 (Sapphire_Native.md §39). --blank-nvm gives the console an EEPROM of zeros for the run, as Sapphire's blank one, and
 --nvm FILE the EEPROM in FILE, PCSX2's own put back afterwards; --keep-nvm FILE copies the EEPROM as the run left it
 to FILE first, so that a run stepping through the initial setup gives the next its configured console.
@@ -252,17 +253,18 @@ class Pine:
         return [self.read32(address + 4 * i) for i in range(count)]
 
     def block(self, address, size, batch=4096):
-        """`size` bytes from `address` by Read64, `batch` requests sent before their answers are read."""
+        """`size` bytes from `address` by Read64, `batch` reads in one message, which PINE answers in one reply: its size,
+        one result code, and each read's value in turn."""
         out = bytearray()
         for at in range(address, address + size, 8 * batch):
             n = min(batch, (address + size - at) // 8)
-            self.s.sendall(b"".join(struct.pack("<IBI", 9, self.READ64, at + 8 * i) for i in range(n)))
-            for _ in range(n):
-                head = self._exactly(4)
-                rest = self._exactly(struct.unpack("<I", head)[0] - 4)
-                if rest[0] != 0 or len(rest) != 9:
-                    raise PineFail("PINE answered FAIL to Read64")
-                out += rest[1:]
+            body = b"".join(struct.pack("<BI", self.READ64, at + 8 * i) for i in range(n))
+            self.s.sendall(struct.pack("<I", 4 + len(body)) + body)
+            head = self._exactly(4)
+            rest = self._exactly(struct.unpack("<I", head)[0] - 4)
+            if rest[0] != 0 or len(rest) != 1 + 8 * n:
+                raise PineFail(f"PINE answered a batch of {n} reads with {len(rest)} bytes, result {rest[0]}")
+            out += rest[1:]
         return bytes(out)
 
     def text(self, opcode):
@@ -696,7 +698,9 @@ def inner_pads(job):
                         except OSError:
                             time.sleep(0.1)
                     began = since()
-                    Path(job["outdir"], f"{arg}.ram").write_bytes(reader.block(GAME_RAM, EE_RAM - GAME_RAM))
+                    reader.s.settimeout(120)
+                    size = int(hold) if hold > 1 else EE_RAM - GAME_RAM
+                    Path(job["outdir"], f"{arg}.ram").write_bytes(reader.block(GAME_RAM, size))
                     out.setdefault("rams", []).append([arg, began, since()])
                 elif what == "shot":
                     while reader is None and p.poll() is None:

@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName",
-            "GamePackageNew", "GamePackageLongTitle"];
+            "GamePackageNew", "GamePackageLongTitle", "GamePackageSelfContained"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
             ["FindByNameLongTitle"] = typeof(FindByNameWindow), ["CoverPickerLongTitle"] = typeof(CoverPickerWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
-            ["GamePackageNew"] = typeof(GamePackageWindow), ["GamePackageLongTitle"] = typeof(GamePackageWindow),
+            ["GamePackageNew"] = typeof(GamePackageWindow), ["GamePackageLongTitle"] = typeof(GamePackageWindow), ["GamePackageSelfContained"] = typeof(GamePackageWindow),
         };
 
         // A window is framed as a menu only once the audit opens it at both sizes, and every case opens a window that is framed.
@@ -570,6 +570,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GamePackageNew":
                 case "GamePackageLongTitle":
+                case "GamePackageSelfContained":
                     ShowGamePackage(s.Window, s.RomDirectory, which);
                     break;
                 case "FindByName":

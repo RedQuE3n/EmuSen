@@ -167,14 +167,15 @@ fn schema() -> Vec<Setting> {
         setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock 2, a controller with buttons alone, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK2, "Controllers"),
         Setting {
             effect: Effect::Exact,
-            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "interpreter", "Performance")
+            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter, which is the other choice, slower. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
         },
     ]
 }
 
-/// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler.
+/// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler, the default since S36's gate
+/// was met (decided 2026-10-26 by the tester, Sapphire_Native.md §44.6).
 pub fn recompiler_chosen(setting: Option<&str>) -> bool {
-    std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) == Some("recompiler")
+    std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) != Some("interpreter")
 }
 
 /// The market a machine runs as: the setting's, else the Americas' until the disc's own is read at S29.
@@ -626,11 +627,11 @@ mod tests {
     }
 
     #[test]
-    fn the_ee_tier_setting_defaults_to_the_interpreter_and_chooses_the_recompiler() {
+    fn the_ee_tier_setting_defaults_to_the_recompiler_and_chooses_the_interpreter() {
         let s = schema().into_iter().find(|s| s.key == EE_TIER_KEY).expect("the tier is a setting");
-        assert!(s.default == "interpreter" && matches!(s.effect, Effect::Exact) && s.check().is_ok());
-        assert!(create(&elf(), &[]).unwrap().blocks.is_none());
-        assert!(create(&elf(), &[(EE_TIER_KEY, "recompiler")]).unwrap().blocks.is_some());
+        assert!(s.default == "recompiler" && matches!(s.effect, Effect::Exact) && s.check().is_ok());
+        assert!(create(&elf(), &[]).unwrap().blocks.is_some());
+        assert!(create(&elf(), &[(EE_TIER_KEY, "interpreter")]).unwrap().blocks.is_none());
     }
 
     #[test]

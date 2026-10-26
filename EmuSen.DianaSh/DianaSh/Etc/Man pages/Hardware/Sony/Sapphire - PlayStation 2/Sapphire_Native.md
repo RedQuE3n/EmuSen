@@ -7504,7 +7504,9 @@ the blocks after every instruction and after every block; 240 random programs, c
 end; fourteen mechanism tests, the S6 programs among them over all 99 mnemonics a block compiles; the 55 EE ps2autotests,
 52 equal to the console's texts on both tiers and all 55 texts byte for byte the same; and the OSDSYS boot, Jak and
 Daxter's own program and the project's integer loop, picture, sound and state equal frame by frame, and from a state
-loaded into an empty cache. The recompiler is a setting, the interpreter its default (§44.6). The stage raised no dispute.
+loaded into an empty cache. Faster on every workload measured (2.63 times on the project's loop, 1.49 on Jak and
+Daxter, 1.20 on the GS-bound boot, §44.8), the recompiler is the default tier, decided by the tester, the interpreter a
+switch away (§44.6). The stage raised no dispute.
 
 ### 44.2 What was built
 
@@ -7625,8 +7627,11 @@ create; `Machine::blocks` holds the dispatcher when it is chosen. For measuremen
 `EMUSEN_SAPPHIRE_C1=1`, `EMUSEN_SAPPHIRE_SPILL=1` (§44.8) and `EMUSEN_SAPPHIRE_PERFMAP=1`. The verifier is
 `Blocks::verify` with `Verify::Steps` (the code calls it after every instruction, everything written back, and the board
 replayed by those calls) or `Verify::Blocks` (the dispatcher steps the interpreter after each block, the code unchanged).
-The debugger's frame (§41) runs the interpreter, as MarsRT's observed frame does. **Recommended** (§44.13 Q1): make the
-recompiler the default now that its gate is met, the interpreter a switch away, as MarsRT's was on the day its gate was met.
+The debugger's frame (§41) runs the interpreter, as MarsRT's observed frame does. **Decided 2026-10-26 by the tester**
+(§44.13 Q1): the recompiler is the default once the speed rounds showed it faster on every workload (§44.8), the interpreter
+a switch away. The setting's default is `recompiler`; `Machine::new` alone still builds the plain interpreter, so the Rust
+tests' oracle stays the interpreter, and `EMUSEN_SAPPHIRE_TIER=interpreter` chooses it for measurement (`examples/s10.rs`
+follows the core's default).
 
 ### 44.7 The gate (measured 2026-10-26)
 
@@ -7638,12 +7643,12 @@ never read; ps2autotests from `~/.cache/emusen/probe/sapphire/ps2autotests/`, Ja
 | --- | --- | --- |
 | 1. The interpreter stepped beside the blocks, compared after every instruction | `the_verifier_steps_beside_every_compiled_instruction_and_finds_nothing` and `random_programs_under_the_verifier_find_nothing` (20 random programs, half with timer 0), each with `Verify::Steps` and with `Verify::Blocks`, 10,000 steps each; the whole machine compared at the end | held |
 | | `s36 verify cost`, 20 frames, values named | held, 99,685,376 steps compared |
-| | `s36 verify boot`, VERIFY_BOOT_FRAMES frames of the player's BIOS, quiet (pass and count only) | VERIFY_BOOT |
+| | `s36 verify boot` and `s36 verify disc` (Jak and Daxter, attached after the fast boot's entry), 30 frames each, quiet (pass and count only) | held: 220,863,488 and 231,997,440 steps compared, and the whole states equal at the end |
 | 2. Random programs, seeded | `random_programs_leave_the_interpreters_machine`: seeds 0 to 159, 24,000 steps; `…with_timer_interrupts…`: seeds 1000 to 1079, timer 0 through the INTC on IM2 beside Count on IM7; the core, COP0, the issue model, the lines, the board's time and INTC compared every 400 steps, the whole state at the end | equal at every comparison and whole: 3,750,756 of the 3,836,815 steps compiled; 1,478 exits found an interrupt inside their block and had 3,185 instructions run again by the interpreter; with timer 0, 1,868,787 of 1,918,580 compiled, 734 such exits and 1,420 instructions |
 | 3. The mechanisms one at a time | fourteen tests, below | 14 of 14 |
 | 4. ps2autotests' 55 EE programs | `s10` on each tier | 52 of 55 on both, the same three as §36.5 (`cpu/ee_fpu/sqrt`, `dma/vif/intstall`, `vu/lower/efu`); all 55 texts identical byte for byte between the tiers, and every verdict line equal in its frames, console seconds, TTY bytes, calls and IOP resets |
-| 5. The bench workloads, frame by frame | `s36 equal`: the picture and the sound after every frame, the state every 60 | BENCH_EQUAL |
-| 6. A state loaded into an empty cache | `a_state_saved_between_blocks_loads_into_an_empty_cache_and_runs_alike` (three random programs, saved at step 7,777, 10,000 steps on, against the interpreter); `s36 state` | STATE_RESULT |
+| 5. The bench workloads, frame by frame | `s36 equal`: the picture and the sound after every frame, the state every 60 | the OSDSYS boot, 760 frames (past the language screen at 690): 0 pictures, 0 sound, 0 of 13 states differing, 6,536,792,276 of 6,906,097,754 steps compiled; Jak and Daxter, entered at frame 8, 600 frames: 0, 0, 0 of 10, 3,018,382,015 of 3,899,591,997; the project's loop, 60 frames: 0, 0, 0 of 1 |
+| 6. A state loaded into an empty cache | `a_state_saved_between_blocks_loads_into_an_empty_cache_and_runs_alike` (three random programs, saved at step 7,777, 10,000 steps on, against the interpreter); `s36 state` on the boot (state at frame 400, 100 frames on), Jak and Daxter (300, 100) and the loop (20, 20) | equal throughout; the boot's carried machine held 9,588 blocks, the loaded one compiled 5,327 afresh |
 
 The sixth oracle of MarsRT's list, a C# core through the shim, has no counterpart: Sapphire has no other core; S32's bench
 is not merged on this branch, so the workloads ran through `examples/s36.rs`, built on the same definitions (`boot`,
@@ -7675,7 +7680,27 @@ ran once. Measured on the 160 seeds at 20,000 steps: 232,120 steps compiled with
 
 ### 44.8 Speed (measured 2026-10-26)
 
-SPEED_SECTION
+**The method**: `examples/s36.rs time`, each frame's `advance` timed, the mean over the run; three rounds, each running every
+workload on both tiers back to back, the order of the tiers alternated between rounds; every run alone, in a capped scope at
+CPU weight 100 while other work built beside it at weight 20, the load average (1, 5, 15 minutes) read before and after each
+run. The workloads are the project's integer loop (120 frames, no BIOS), the OSDSYS boot's first 300 frames and Jak and
+Daxter's program for its first 400 frames (entered at frame 8). The C1 and spill runs followed in three more rounds.
+
+| Mean ms a frame | Interpreter, rounds 1–3 | median (spread) | Recompiler, rounds 1–3 | median (spread) | Ratio of medians |
+| --- | --- | --- | --- | --- | --- |
+| The project's loop | 236.2, 221.3, 214.3 | 221.3 (9.9 %) | 87.9, 84.3, 82.7 | 84.3 (6.2 %) | **2.63×** |
+| The OSDSYS boot, frames 0–300 | 898.7, 871.0, 847.1 | 871.0 (5.9 %) | 726.0, 727.7, 665.6 | 726.0 (8.6 %) | **1.20×** |
+| Jak and Daxter, frames 0–400 | 343.7, 319.6, 313.0 | 319.6 (9.6 %) | 217.6, 215.2, 205.6 | 215.2 (5.6 %) | **1.49×** |
+
+The load averages fell from about 7 in the first round to about 2 in the third, which is the steady fall within each
+column; the rounds' order alternated, so the ratio holds within every round (2.69, 2.62, 2.59 on the loop; 1.24, 1.20,
+1.27 on the boot; 1.58, 1.49, 1.52 on Jak and Daxter). The spreads are under 10 % on every workload. In frames a second the
+loop goes from 4.5 to 11.9, the boot from 1.15 to 1.38, Jak and Daxter from 3.1 to 4.6: the machine as a whole stays 20 to
+60 times short of an NTSC frame, and the EE recompiler alone does not change that order (§44.12).
+
+**What the blocks covered** (the equality runs of §44.7): 95 % of the boot's steps, 77 % of Jak and Daxter's and 98.7 % of
+the loop's ran compiled; blocks averaged 6.8, 3.6 and 6.2 instructions; the boot compiled 9,802 blocks into 14.9 MB of code
+over 760 frames and Jak and Daxter 15,549 into 21.1 MB over 600, far under the 256 MiB budget.
 
 **Where the time goes**, by an interrupt sampler (`ipsample.py`, the sampler `Mars_Native.md` §6.3 uses, with symbols
 from the binary) on the recompiled integer loop: the compiled code 24 %, the replay and its per-step check 25 %, the IOP's
@@ -7683,11 +7708,21 @@ catch-up at each time (its units and the SPU2, the IOP being held without a BIOS
 translation, comparison with the cache) about 12 %. On the OSDSYS boot the EE is a small part of the frame: the GS's exact
 arithmetic (`gs::exact`) took 56 % of the samples over frames 40 to 90, which no EE tier changes. **Holding the registers
 pays little where there is no call to force a write-back**: `EMUSEN_SAPPHIRE_SPILL=1` stores every written register to the
-context after each instruction, as a block keeping them in memory would; SPILL_RESULT.
+context after each instruction, as a block keeping them in memory would; measured in the same rounds on the loop, 81.6 ms a frame (81.6, 81.0, 81.8) against 80.6 (80.7, 80.3, 80.6): 1.3 %, about
+the rounds' own spread. On this loop the stores are cheap beside the replay and the entry, so holding registers is
+worth keeping (it costs nothing) and not worth more work at S36; it will matter more when S37 removes the block ends at
+loads and stores and blocks grow.
 
 ### 44.9 C1, measured and not taken
 
-C1_SECTION
+`EMUSEN_SAPPHIRE_C1=1`, three rounds after the speed rounds: the loop at 70.4 ms a frame (70.5, 70.3, 70.4) against the exact
+recompiler's 80.6 in the same rounds, **12.6 % less time a frame**; Jak and Daxter at 163.2 ms (163.5, 163.2, 162.5) against the exact
+recompiler's 205.6 to 217.6 in the speed rounds, about 21 % faster, though not interleaved with them and at a lower load, so
+an upper bound. What it gives up is visible at once: on the hot loop of `the_fixed_cost_compromise_changes_the_cycles_and_not
+_the_results` the issue model's 3,818 cycles for 4,000 instructions become 4,016 (the model pairs instructions, so one cycle
+an instruction is *slower* in guest time there), and every count, timer and interrupt a game reads moves with them; a C1 run
+of Jak and Daxter is not the exact run, and its frames were not compared. By §5.13's rule C1 is a candidate whose measurement
+is now recorded; decided 2026-10-26 by the tester, it stays off and is not taken.
 
 ### 44.10 Seeded faults (2026-10-26)
 
@@ -7723,7 +7758,8 @@ traced. No emulator, SDK or loader source was read.
 ### 44.12 Where the plan was wrong, or left open
 
 - **§5.12 priced the interpreter at 1.2 to 9 times too slow.** Measured on this branch it is far slower: the OSDSYS boot
-  at about 500 ms a frame and the project's integer loop at about 240 ms, 15 to 30 times an NTSC frame. S32 measures it.
+  at about 870 ms a frame over its first 300 frames, Jak and Daxter at 320 and the project's integer loop at 220 (§44.8),
+  13 to 52 times an NTSC frame. S32 measures where that time goes.
 - **§5.12's EE recompiler "inlines nearly every instruction"**; at S36 the loads and stores (S37), MMI (S38) and the
   coprocessors (S39) end a block, so blocks average two to six instructions in real code (§44.8's counts).
 - **The board's catch-up after every EE instruction is the reference's** and is not the recompiler's to change: the DMAC's
@@ -7735,15 +7771,12 @@ traced. No emulator, SDK or loader source was read.
 
 ### 44.13 Questions this stage leaves
 
-1. **Q1 [decision], the default tier.** *Recommended*: the recompiler the default from S36, as MarsRT's became on the day
-   its gate was met (`Mars_Native.md` §5.8.7): exact by every oracle here, faster on every workload measured, and the
-   interpreter a switch away; the Rust tests' oracle stays the plain machine, as MarsRT's does.
-2. **Q2 [routine], C1.** *Recommended*: leave it off and do not take it; its guest-cycle effect is visible (§44.9) and its
-   host-time effect is inside the noise while the board's catch-up and the blocks' entry cost more than the timing model.
-3. **Q3 [routine], the `Arc` hand-off** (§42.8 Q1). *Recommended*: unchanged; Sapphire's dispatcher holds its slots as
-   MarsRT's does and needed no other store.
-4. **Q4 [routine], the board's catch-up granularity.** *Recommended*: S32's ranking decides whether S33 (idle skipping) or
-   a measured compromise on the DMAC's wake time comes first; S36 records its share (§44.8).
+1. ~~**Q1 [decision], the default tier.**~~ *Decided 2026-10-26 by the tester: the recompiler becomes the default once the
+   speed rounds confirm it faster, the interpreter a switch away; they did (§44.8), and §44.6 records the change.*
+2. ~~**Q2 [routine], C1.**~~ *Accepted 2026-10-26: C1 stays off and untaken (§44.9).*
+3. ~~**Q3 [routine], the `Arc` hand-off** (§42.8 Q1).~~ *Accepted 2026-10-26: unchanged.*
+4. ~~**Q4 [routine], the board's catch-up granularity.**~~ *Accepted 2026-10-26: S32's ranking decides between S33's idle
+   skipping and a measured compromise on the DMAC's wake time.*
 
 ### 44.14 What was read for this stage
 

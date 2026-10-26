@@ -8,7 +8,7 @@
 //! frames run out, and prints PASS, FAIL with the first line that differs, or INCOMPLETE, with the frames and the wall
 //! time. `S10_STATE` adds the DMACs', the SIF's and the INTCs' registers at the end, `S10_ALL` the registers answered,
 //! `S10_REPORTS` the accesses no unit answers. A disc (§40) is put in the drive of a console started empty and the program
-//! its SYSTEM.CNF names is entered. `EMUSEN_SAPPHIRE_TIER=recompiler` runs the EE's recompiler (S36).
+//! its SYSTEM.CNF names is entered. The EE runs recompiled, the core's default, unless `EMUSEN_SAPPHIRE_TIER=interpreter` (S36).
 
 use std::time::Instant;
 
@@ -37,7 +37,7 @@ fn main() {
             m
         }
     };
-    // `EMUSEN_SAPPHIRE_TIER=recompiler` runs the EE's recompiled tier (S36, Sapphire_Native.md §44).
+    // The EE's tier as the core chooses it, the recompiler unless `EMUSEN_SAPPHIRE_TIER=interpreter` (S36, Sapphire_Native.md §44).
     if sapphire::v1::recompiler_chosen(None) {
         m.blocks = Some(Box::new(sapphire::blocks::Blocks::from_env()));
     }

@@ -220,13 +220,16 @@ fn main() {
     if let Some(c) = gs.worker_counts() {
         let n = gs.worker_count();
         let waits: Vec<String> = c.waits.iter().map(|&(k, ns)| format!("{k}/{:.1}ms", ns as f64 / 1e6)).collect();
-        let busy: Vec<String> = c.busy[..n].iter().map(|&ns| format!("{:.1}", ns as f64 / 1e6 / frames as f64)).collect();
+        let busy: Vec<String> = (0..n).map(|w| format!("{:.1}/{:.1}", c.busy[w] as f64 / 1e6 / frames as f64, c.stalled[w] as f64 / 1e6 / frames as f64)).collect();
         println!(
-            "gs\t{n} workers\tprimitives {} split {} alone {} empty {}\tclut copies {}\twaits draw/ring/clut/access/join {}\tbusy ms a frame {}",
+            "gs\t{n} workers\tprimitives {} split {} alone {} (pages met {}, texture met {}) empty {}\tuploads {}\tclut copies {}\twaits ring/clut/download/copy/clutload/join/display {}\tbusy/stalled ms a frame {}",
             c.primitives,
             c.split,
             c.alone,
+            c.alone_why[0],
+            c.alone_why[1],
             c.empty,
+            c.uploads,
             c.clut_copies,
             waits.join(" "),
             busy.join(" ")

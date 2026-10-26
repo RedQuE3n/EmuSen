@@ -112,7 +112,9 @@ fn stream(seed: u64, n: usize) -> Vec<Step> {
                     (reg::TRXREG, w | h << 32),
                     (reg::TRXDIR, 0),
                 ]));
+                // A quarter of the transfers are cut short, so that the next TRXDIR ends them.
                 let units = (w * h * bits).div_ceil(64);
+                let units = if r.chance(4) { r.below(units) } else { units };
                 out.push(Step::Image((0..units).map(|_| r.next() << 16 ^ r.next()).collect()));
             }
             17 => {

@@ -22,7 +22,8 @@ use std::collections::VecDeque;
 use local::Local;
 use psm::Psm;
 use transfer::{Direction, Transfer};
-use workers::{Mem, Workers};
+use workers::{Cause, Mem, Workers};
+use transfer::Dry;
 
 /// The general registers by address (§7.3).
 pub mod reg {
@@ -296,7 +297,7 @@ impl Gs {
     /// their pages are waited for.
     pub fn settle(&self, psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) {
         if let Some(w) = &self.workers {
-            w.settle_pages(&local::pages(psm, bp, bw, xs, ys), false);
+            w.settle_reads(&local::units(psm, bp, bw, xs, ys));
         }
     }
 
@@ -305,23 +306,23 @@ impl Gs {
     pub fn peek(&self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32 {
         #[cfg(debug_assertions)]
         if let Some(w) = &self.workers {
-            assert!(w.settled(local::address(psm, bp, bw, x, y).word, false), "a read of a page a worker may still write");
+            assert!(w.settled(local::address(psm, bp, bw, x, y).word, local::lanes(psm)), "a read of a page a worker may still write");
         }
         self.local.read(psm, bp, bw, x, y)
     }
 
     /// The memory as the GS's own thread reaches it, each access waiting for the workers touching its page.
-    fn mem(&mut self) -> (Mem<'_>, &mut Transfer, &mut texture::Clut) {
-        (Mem { local: &mut self.local, workers: self.workers.as_deref() }, &mut self.transfer, &mut self.clut)
+    fn mem(&mut self, cause: Cause) -> (Mem<'_>, &mut Transfer, &mut texture::Clut) {
+        (Mem { local: &mut self.local, workers: self.workers.as_deref(), cause }, &mut self.transfer, &mut self.clut)
     }
 
     fn load_clut(&mut self, tex0: u64) {
         let texclut = self.regs[reg::TEXCLUT as usize];
-        let (mut mem, _, clut) = self.mem();
+        let (mut mem, _, clut) = self.mem(Cause::ClutLoad);
         if clut.load(tex0, texclut, &mut mem)
-            && let Some(w) = self.workers.as_deref_mut()
+            && let Some(w) = self.workers.as_deref()
         {
-            w.clut_dirty = true;
+            w.clut_changed();
         }
     }
 
@@ -383,14 +384,22 @@ impl Gs {
             }
             reg::TRXDIR => {
                 self.regs[r as usize] = data;
+                if let Some(w) = &self.workers {
+                    w.flush();
+                }
                 let (b, p, s) = (self.regs[reg::BITBLTBUF as usize], self.regs[reg::TRXPOS as usize], self.regs[reg::TRXREG as usize]);
-                let (mut mem, transfer, _) = self.mem();
+                let (mut mem, transfer, _) = self.mem(Cause::Copy);
                 transfer.start(data as u32 & 3, b, p, s, &mut mem);
             }
-            reg::HWREG => {
-                let (mut mem, transfer, _) = self.mem();
-                transfer.hwreg(data, &mut mem);
-            }
+            reg::HWREG => match self.workers.as_deref() {
+                // A worker writes the pixels, in the ring's order; the GS's thread follows the transfer's place.
+                Some(w) if self.transfer.active == Some(Direction::HostToLocal) => {
+                    w.upload(&self.transfer, data);
+                    self.transfer.hwreg(data, &mut Dry);
+                }
+                Some(_) => {}
+                None => self.transfer.hwreg(data, &mut self.local),
+            },
             reg::PRIM => {
                 self.regs[r as usize] = data;
                 self.queue.reset();
@@ -429,6 +438,9 @@ impl Gs {
     /// CSR's reset (§7.2, "GS System Reset"): the events, the stalled SIGNAL and the held writes go, a transfer ends
     /// and IMR masks everything (§7.2's IMR); the registers and the memory stay [A].
     fn reset(&mut self) {
+        if let Some(w) = &self.workers {
+            w.flush();
+        }
         self.events = 0;
         self.pending = None;
         self.held.clear();
@@ -526,7 +538,7 @@ impl HostInterface for Gs {
         if !self.reversed() {
             return None;
         }
-        let (mut mem, transfer, _) = self.mem();
+        let (mut mem, transfer, _) = self.mem(Cause::Download);
         transfer.read(&mut mem)
     }
 
@@ -581,8 +593,8 @@ impl emusen_native::State for Gs {
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         self.join();
-        if let Some(w) = self.workers.as_deref_mut() {
-            w.clut_dirty = true;
+        if let Some(w) = self.workers.as_deref() {
+            w.clut_changed();
         }
         r.u64s(&mut self.regs)?;
         r.u64s(&mut self.privileged)?;

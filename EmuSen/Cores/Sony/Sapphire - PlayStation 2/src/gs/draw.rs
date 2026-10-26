@@ -273,7 +273,7 @@ impl Gs {
             let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
             let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
             let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
-            match self.workers.as_deref_mut() {
+            match self.workers.as_deref() {
                 Some(w) => w.draw(kind, env, v, &self.clut),
                 None => raster::primitive(kind, &env, &mut self.local, &self.clut, &v, raster::Rows::ALL),
             }

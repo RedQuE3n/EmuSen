@@ -101,35 +101,73 @@ pub fn address(psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> Address {
     Address { word, shift }
 }
 
+/// What a transfer reads and writes pixels through: the memory itself (a worker's view, or the one-thread path),
+/// the GS's thread's accessor that waits for the workers first (`workers::Mem`), or nothing (`transfer::Dry`).
+pub trait Memory {
+    fn read(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32;
+    fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32);
+}
+
+impl Memory for Local {
+    fn read(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32 {
+        Local::read(self, psm, bp, bw, x, y)
+    }
+
+    fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
+        Local::write(self, psm, bp, bw, x, y, v)
+    }
+}
+
 const fn mask(bits: u32) -> u32 {
     if bits >= 32 { u32::MAX } else { (1 << bits) - 1 }
 }
 
-/// The memory's size in pages of 2,048 words (§8.1), the unit the drawing's workers own (Sapphire_Native.md §50).
+/// The memory's size in pages of 2,048 words (§8.1).
 pub const PAGES: usize = WORDS >> 11;
+/// Each page's two lanes, the unit the drawing's workers own (Sapphire_Native.md §50): bits 0 to 23 of its words (lane
+/// 0) and bits 24 to 31 (lane 1), which PSMCT24 and PSMZ24 leave and PSMT8H, PSMT4HL and PSMT4HH use.
+pub const UNITS: usize = PAGES * 2;
 
-/// A set of the memory's physical pages.
+/// The lanes a format's pixels take, as a mask: 1 the low 24 bits, 2 the high 8, 3 both.
+pub const fn lanes(psm: Psm) -> u32 {
+    match psm {
+        Psm::Ct24 | Psm::Z24 => 1,
+        Psm::T8h | Psm::T4hl | Psm::T4hh => 2,
+        _ => 3,
+    }
+}
+
+/// A set of page lanes, unit `2 × page + lane`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Pages(pub [u64; PAGES / 64]);
+pub struct Units(pub [u64; UNITS / 64]);
 
-impl Pages {
-    pub const ALL: Pages = Pages([u64::MAX; PAGES / 64]);
+impl Units {
+    pub const ALL: Units = Units([u64::MAX; UNITS / 64]);
 
-    pub fn add(&mut self, p: usize) {
-        self.0[p >> 6] |= 1 << (p & 63);
+    pub fn add(&mut self, u: usize) {
+        self.0[u >> 6] |= 1 << (u & 63);
     }
 
-    pub fn has(&self, p: usize) -> bool {
-        self.0[p >> 6] >> (p & 63) & 1 != 0
+    /// The lanes of `lanes` of page `p`.
+    pub fn add_page(&mut self, p: usize, lanes: u32) {
+        for l in 0..2 {
+            if lanes >> l & 1 != 0 {
+                self.add(2 * p + l);
+            }
+        }
     }
 
-    pub fn or(&mut self, o: &Pages) {
+    pub fn has(&self, u: usize) -> bool {
+        self.0[u >> 6] >> (u & 63) & 1 != 0
+    }
+
+    pub fn or(&mut self, o: &Units) {
         for (a, b) in self.0.iter_mut().zip(o.0) {
             *a |= b;
         }
     }
 
-    pub fn meets(&self, o: &Pages) -> bool {
+    pub fn meets(&self, o: &Units) -> bool {
         self.0.iter().zip(o.0).any(|(a, b)| a & b != 0)
     }
 
@@ -137,7 +175,16 @@ impl Pages {
         self.0.iter().all(|&w| w == 0)
     }
 
-    /// Each page in the set, in order.
+    /// Both lanes of every page the set touches.
+    pub fn pages(&self) -> Units {
+        const LOW: u64 = 0x5555_5555_5555_5555;
+        Units(self.0.map(|w| {
+            let p = (w | w >> 1) & LOW;
+            p | p << 1
+        }))
+    }
+
+    /// Each unit in the set, in order.
     pub fn each(&self) -> impl Iterator<Item = usize> + '_ {
         self.0.iter().enumerate().flat_map(|(i, &w)| {
             let mut w = w;
@@ -169,20 +216,23 @@ pub fn cells(psm: Psm, bp: u32, bw: u32, (x0, x1): (u32, u32), (y0, y1): (u32, u
     }
 }
 
-/// The pages a rectangle's pixels lie in; a rectangle of more than 1,024 cells is taken as the whole memory.
-pub fn pages(psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) -> Pages {
+/// The page lanes a rectangle's pixels lie in, in the format's lanes; a rectangle of more than 1,024 cells is taken as
+/// the whole memory.
+pub fn units(psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) -> Units {
     let (pw, ph) = psm.shape().page();
     if u64::from(xs.1 / pw - xs.0 / pw + 1) * u64::from(ys.1 / ph - ys.0 / ph + 1) > 1024 {
-        return Pages::ALL;
+        return Units::ALL;
     }
-    let mut s = Pages::default();
-    cells(psm, bp, bw, xs, ys, |_, p| s.add(p));
+    let mut s = Units::default();
+    cells(psm, bp, bw, xs, ys, |_, p| s.add_page(p, lanes(psm)));
     s
 }
 
 /// The 4 MiB, one allocation reached a word at a time: while the drawing's workers run, each word is touched only
-/// through a raw pointer, never through a reference to the whole memory (Sapphire_Native.md §50). A view shares the
-/// owner's allocation and frees nothing.
+/// through a raw pointer, never through a reference to the whole memory, and as an atomic word, since one worker may
+/// read a word's high lane while another stores the word with only its low lane changed (Sapphire_Native.md §50);
+/// relaxed atomic loads and stores of a word are the plain ones on x86-64 and AArch64. A view shares the owner's
+/// allocation and frees nothing.
 pub struct Local {
     ptr: std::ptr::NonNull<u32>,
     owned: bool,
@@ -231,39 +281,41 @@ impl Local {
         Local { ptr: self.ptr, owned: false }
     }
 
+    #[inline]
+    fn at(&self, i: usize) -> &std::sync::atomic::AtomicU32 {
+        debug_assert!(i < WORDS);
+        // SAFETY: below WORDS (every caller masks or checks it), aligned, and every access to the word is atomic.
+        unsafe { std::sync::atomic::AtomicU32::from_ptr(self.ptr.as_ptr().add(i)) }
+    }
+
     /// Word `i`, which must be below WORDS.
     #[inline]
     pub fn word(&self, i: usize) -> u32 {
         assert!(i < WORDS);
-        // SAFETY: in bounds; one word, read through the raw pointer.
-        unsafe { self.ptr.as_ptr().add(i).read() }
+        self.at(i).load(std::sync::atomic::Ordering::Relaxed)
     }
 
     #[inline]
     pub fn set_word(&mut self, i: usize, v: u32) {
         assert!(i < WORDS);
-        // SAFETY: in bounds; one word, written through the raw pointer.
-        unsafe { self.ptr.as_ptr().add(i).write(v) }
+        self.at(i).store(v, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// The pixel's value, its format's bits.
     #[inline]
     pub fn read(&self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32 {
         let a = address(psm, bp, bw, x, y);
-        // SAFETY: `address` masks the word below WORDS.
-        (unsafe { self.ptr.as_ptr().add(a.word as usize).read() } >> a.shift) & mask(psm.bits())
+        (self.at(a.word as usize).load(std::sync::atomic::Ordering::Relaxed) >> a.shift) & mask(psm.bits())
     }
 
     /// Writes the pixel's bits, leaving the rest of its word (PSMCT24's upper byte, the other half, byte or nibble).
     #[inline]
     pub fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
+        use std::sync::atomic::Ordering::Relaxed;
         let a = address(psm, bp, bw, x, y);
         let m = mask(psm.bits()) << a.shift;
-        // SAFETY: `address` masks the word below WORDS.
-        unsafe {
-            let w = self.ptr.as_ptr().add(a.word as usize);
-            w.write((w.read() & !m) | ((v << a.shift) & m));
-        }
+        let w = self.at(a.word as usize);
+        w.store((w.load(Relaxed) & !m) | ((v << a.shift) & m), Relaxed);
     }
 
     /// The whole memory, for a state, a debugger or a test: only while no worker draws (`Gs::local` joins them first).

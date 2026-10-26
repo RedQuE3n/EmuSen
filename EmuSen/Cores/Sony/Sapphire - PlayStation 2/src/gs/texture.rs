@@ -7,7 +7,7 @@
 
 use super::draw::Vertex;
 use super::exact::{self, Float, Sum};
-use super::local::{self, Local, Pages};
+use super::local::{self, Local, Memory, Units};
 use super::psm::Psm;
 use super::workers::Mem;
 
@@ -299,13 +299,13 @@ impl Sampler {
         self.uv
     }
 
-    /// The pages every texel the sampler can read lies in (Sapphire_Native.md §50): each level it can choose, 0 to MXL
-    /// under a mipmapping MMIN and 0 otherwise, over the coordinates its wrap modes can give, [0, size) for REPEAT and
-    /// CLAMP, [0, MAX] for REGION_CLAMP and [0, MIN | MAX] for REGION_REPEAT, each shifted right by the level.
-    pub fn pages(&self) -> Pages {
-        let Some(psm) = self.psm else { return Pages::default() };
+    /// The page lanes every texel the sampler can read lies in (Sapphire_Native.md §50): each level it can choose, 0 to
+    /// MXL under a mipmapping MMIN and 0 otherwise, over the coordinates its wrap modes can give, [0, size) for REPEAT
+    /// and CLAMP, [0, MAX] for REGION_CLAMP and [0, MIN | MAX] for REGION_REPEAT, each shifted right by the level.
+    pub fn units(&self) -> Units {
+        let Some(psm) = self.psm else { return Units::default() };
         let top = if (2..=5).contains(&self.mmin) { self.mxl } else { 0 };
-        let mut s = Pages::default();
+        let mut s = Units::default();
         for n in 0..=top {
             let extent = |w: &Wrap| match w.mode {
                 0 | 1 => (1u32 << w.log2.saturating_sub(n)).max(1) - 1,
@@ -313,7 +313,7 @@ impl Sampler {
                 _ => (w.min >> n) | (w.max >> n),
             };
             let (bp, bw) = self.base[n as usize];
-            s.or(&local::pages(psm, bp, bw, (0, extent(&self.wrap[0])), (0, extent(&self.wrap[1]))));
+            s.or(&local::units(psm, bp, bw, (0, extent(&self.wrap[0])), (0, extent(&self.wrap[1]))));
         }
         s
     }

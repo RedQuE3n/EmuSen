@@ -626,6 +626,14 @@ mod tests {
     }
 
     #[test]
+    fn the_ee_tier_setting_defaults_to_the_interpreter_and_chooses_the_recompiler() {
+        let s = schema().into_iter().find(|s| s.key == EE_TIER_KEY).expect("the tier is a setting");
+        assert!(s.default == "interpreter" && matches!(s.effect, Effect::Exact) && s.check().is_ok());
+        assert!(create(&elf(), &[]).unwrap().blocks.is_none());
+        assert!(create(&elf(), &[(EE_TIER_KEY, "recompiler")]).unwrap().blocks.is_some());
+    }
+
+    #[test]
     fn other_images_and_files_are_refused_with_words() {
         let mut irx = elf();
         irx[16..18].copy_from_slice(&crate::media::ET_IRX.to_le_bytes());

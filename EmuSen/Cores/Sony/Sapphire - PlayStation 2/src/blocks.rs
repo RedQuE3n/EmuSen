@@ -148,6 +148,19 @@ impl Blocks {
         self.jit.drain();
     }
 
+    /// The code budget, and the times it dropped every block.
+    pub fn set_budget(&mut self, bytes: u64) {
+        self.jit.budget = bytes;
+    }
+    pub fn flushes(&self) -> u64 {
+        self.jit.flushes
+    }
+
+    /// The mnemonics in the blocks that hold code now.
+    pub fn compiled_mnemonics(&self) -> std::collections::BTreeSet<&'static str> {
+        self.map.values().filter(|b| matches!(b.state, State::Ready(_))).flat_map(|b| b.words.iter().map(|&w| shape::name(w))).collect()
+    }
+
     fn options(&self, sys: &System) -> Options {
         Options { single: sys.ee.single_issue(), verify: matches!(self.verify, Some((Verify::Steps, _))), fixed_cost: self.fixed_cost }
     }
@@ -302,34 +315,30 @@ fn set_lines(sys: &mut System, l: u8) {
     sys.ee.cpcond0 = l & 4 != 0;
 }
 
-/// Whether Count passes Compare within the cycles from the block's entry to `t`, as the steps' advances would find it.
-fn passes(sys: &System, count0: u32, compare: u32, seen0: u64, t: u64) -> bool {
-    let _ = sys;
-    u64::from(compare.wrapping_sub(count0).wrapping_sub(1)) < t.wrapping_sub(seen0)
-}
-
 /// The replay: the board brought to each instruction's cycles in turn, as `System::step` brings it after each, until the
 /// lines or Count would have the interpreter take an interrupt before the next instruction. The steps that stand; when
 /// all do, the core's lines and Cause.IP2 and IP3 are set as the last step leaves them.
 extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
-    use crate::ee::cop0::{CAUSE, COMPARE, COUNT, cause};
+    use crate::ee::cop0::{CAUSE, COMPARE, COUNT, STATUS, cause};
     // SAFETY: called by compiled code during `block`, whose `Run` and context are alive and borrowed by nothing else.
     let ctx = unsafe { &mut *ctx };
     let run = unsafe { &mut *ctx.owner.cast::<Run>() };
     let sys = unsafe { &mut *run.sys };
     let (count0, compare, seen0) = (sys.ee.cop0[COUNT], sys.ee.cop0[COMPARE], sys.ee.cycles_seen());
-    let ip7 = sys.ee.cop0[CAUSE] & cause::IP7 != 0;
+    let (status, cause_now) = (sys.ee.cop0[STATUS], sys.ee.cop0[CAUSE]);
+    let ip7 = cause_now & cause::IP7 != 0;
     let m = steps as usize;
-    for j in 0..m {
-        let t = ctx.times[j];
-        let System { ee, board } = sys;
-        board.run_to(t, &mut ee.spram[..]);
-        let lines = board.lines();
-        ctx.lines[j] = pack(lines);
-        if j + 1 < m && sys.ee.interrupt_due(lines.0, lines.1, ip7 || passes(sys, count0, compare, seen0, t)) {
-            ctx.steps = j as u32 + 1;
-            return ctx.steps;
-        }
+    let System { ee, board } = sys;
+    let times = &ctx.times[..m];
+    let lines_out = &mut ctx.lines;
+    let ran = board.run_through(times, &mut ee.spram[..], &mut |j, lines| {
+        lines_out[j] = pack(lines);
+        let ip7 = ip7 || u64::from(compare.wrapping_sub(count0).wrapping_sub(1)) < times[j].wrapping_sub(seen0);
+        !(j + 1 < m && crate::ee::Ee::interrupt_due(status, cause_now, lines.0, lines.1, ip7))
+    });
+    if ran < m {
+        ctx.steps = ran as u32;
+        return ctx.steps;
     }
     set_lines(sys, ctx.lines[m - 1]);
     if m >= 2 {

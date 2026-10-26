@@ -150,17 +150,16 @@ impl Ee {
         self.cycles_seen
     }
 
-    /// Whether the interrupt check before the next step would take an interrupt, with the lines and IP7 given, Cause
-    /// unchanged.
-    pub(crate) fn interrupt_due(&self, int0: bool, int1: bool, ip7: bool) -> bool {
-        use super::cop0::{CAUSE, STATUS, cause};
+    /// Whether the interrupt check before the next step would take an interrupt with Status and Cause as given, the
+    /// lines and IP7 replacing Cause's.
+    pub(crate) fn interrupt_due(s: u32, cause_now: u32, int0: bool, int1: bool, ip7: bool) -> bool {
+        use super::cop0::cause;
         use super::status;
-        let s = self.cop0[STATUS];
         let on = status::IE | status::EIE;
         if s & on != on || s & (status::EXL | status::ERL) != 0 {
             return false;
         }
-        let c = self.cop0[CAUSE] & !(cause::IP2 | cause::IP3 | cause::IP7)
+        let c = cause_now & !(cause::IP2 | cause::IP3 | cause::IP7)
             | if int0 { cause::IP2 } else { 0 }
             | if int1 { cause::IP3 } else { 0 }
             | if ip7 { cause::IP7 } else { 0 };

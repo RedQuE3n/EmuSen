@@ -8,7 +8,7 @@ mod s6;
 use sapphire::blocks::{self, Blocks, Verify};
 use sapphire::board::System;
 
-use s6::{DONE, DONE_AT, ORIGIN, Program};
+use s6::{DONE, DONE_AT, ORIGIN};
 
 fn assemble(source: &str, origin: u32) -> Vec<u32> {
     emusen_mips::assemble(source, origin, &emusen_mips::Dialect::R5900).unwrap_or_else(|e| panic!("{e:?}\n{source}"))
@@ -400,4 +400,210 @@ fn random_programs_under_the_verifier_find_nothing() {
             b.check_all(&fast);
         }
     }
+}
+
+/// The steps the interpreter takes to a program's done word.
+fn steps_to_done(words: &[u32]) -> u64 {
+    let mut sys = system(words);
+    sys.run(50_000_000, &mut |s| s.peek(DONE_AT, 4) as u32 == DONE).unwrap_or_else(|h| panic!("{h:?}"))
+}
+
+#[test]
+fn the_stage_s6_programs_over_every_integer_encoding_leave_the_interpreters_machine() {
+    let mut b = eager();
+    let mut names = std::collections::BTreeSet::new();
+    for p in s6::all() {
+        let name = p.name;
+        let (source, expected) = p.finish();
+        let words = assemble(&source, ORIGIN);
+        let n = steps_to_done(&words);
+        let mut plain = system(&words);
+        let mut fast = system(&words);
+        b.forget();
+        let mut done = 0;
+        while done < n {
+            let k = 500.min(n - done);
+            for _ in 0..k {
+                plain.step().unwrap();
+            }
+            run_steps(&mut fast, &mut b, k);
+            done += k;
+            if let Some(d) = blocks::compare(&plain, &fast, false) {
+                panic!("{name}, after {done} steps: {d}");
+            }
+        }
+        assert!(blocks::state_of(&plain) == blocks::state_of(&fast), "{name}: the whole states differ");
+        for (i, want) in expected.iter().enumerate() {
+            if let Some(w) = want {
+                assert_eq!(fast.peek(s6::RECORD + 4 * i as u32, 4) as u32, *w, "{name}: record word {i} against the manual");
+            }
+        }
+        names.extend(b.compiled_mnemonics());
+    }
+    let missing: Vec<_> = blocks::mnemonics().filter(|m| !names.contains(m)).collect();
+    println!("compiled by the programs: {} of {} mnemonics; {:?}", names.len(), blocks::mnemonics().count(), b.stats);
+    assert!(missing.is_empty(), "never compiled by the programs: {missing:?}");
+}
+
+/// A loop whose ADD overflows and whose delay-slot TEQ traps on some passes, through the handler.
+const RAISING: &str = "
+    lui s0, 0x7fff
+    ori s0, s0, 0xfff0
+    ori s1, zero, 40
+    ori s2, zero, 0
+    top: addiu s2, s2, 1
+    andi t0, s2, 7
+    add t1, s0, s2
+    xor t2, t1, s2
+    sll t3, t0, 2
+    bne s1, zero, next
+    teq t0, zero
+    next: addiu s1, s1, -1
+    bgtz s1, top
+    sub t4, t2, s0
+    end: beq zero, zero, end
+    nop
+";
+
+#[test]
+fn a_block_leaves_before_an_instruction_that_raises_in_a_line_and_in_a_delay_slot() {
+    let words = assemble(RAISING, ORIGIN);
+    let mut b = eager();
+    let s = twin(&words, 3000, 300, &mut b);
+    let mut fast = system(&words);
+    run_steps(&mut fast, &mut eager(), 3000);
+    let (overflow, trap) = (fast.ee.exceptions[12], fast.ee.exceptions[13]);
+    assert!(overflow > 10 && trap > 3 && s.compiled_steps > 1000, "overflows {overflow}, traps {trap}, {s:?}");
+}
+
+/// A routine called in a loop, its first word replaced in memory after 30 passes and its line invalidated after 60.
+const REPLACED: &str = "
+    ori s1, zero, 90
+    lui t5, 0x2442
+    ori t5, t5, 0x0002
+    top: jal 0x100200
+    nop
+    addiu s1, s1, -1
+    ori t0, zero, 60
+    bne s1, t0, keep
+    nop
+    lui t1, 0xa010
+    sw t5, 0x200(t1)
+    keep: ori t0, zero, 30
+    bne s1, t0, go
+    nop
+    lui t2, 0x0010
+    cache 0x0b, 0x200(t2)
+    sync.p
+    go: bgtz s1, top
+    nop
+    end: beq zero, zero, end
+    nop
+";
+
+#[test]
+fn code_replaced_runs_old_until_its_line_is_invalidated_and_the_block_is_shaped_again() {
+    let mut words = assemble(REPLACED, ORIGIN);
+    words.resize(0x200 / 4, 0);
+    words.extend(assemble("addiu v0, v0, 1\naddu v1, v1, v0\njr ra\nxor a0, a0, v1", ORIGIN + 0x200));
+    let mut b = eager();
+    let s = twin(&words, 4000, 250, &mut b);
+    let mut fast = system(&words);
+    let mut fb = eager();
+    run_steps(&mut fast, &mut fb, 4000);
+    assert_eq!(fast.ee.gpr[2] as u64, 60 + 2 * 30, "the old word ran until the line was invalidated, then the new");
+    assert!(fb.stats.reshaped >= 1 && s.compiled_steps > 1000, "{:?}", fb.stats);
+}
+
+#[test]
+fn a_state_saved_between_blocks_loads_into_an_empty_cache_and_runs_alike() {
+    for seed in [3, 8, 13] {
+        let p = random_program(seed, seed == 8);
+        let (mut carried, mut carried_blocks) = (random_system(&p), eager());
+        let mut plain = random_system(&p);
+        run_steps(&mut carried, &mut carried_blocks, 7_777);
+        for _ in 0..7_777 {
+            plain.step().unwrap();
+        }
+        let state = blocks::state_of(&carried);
+        let mut loaded = System::new(ORIGIN);
+        loaded.read_state(&mut emusen_native::StateReader::new(&state)).expect("the state loads");
+        // The exception counts are the hardware's reports, not the machine's state.
+        (loaded.ee.exceptions, loaded.ee.exceptions2) = (carried.ee.exceptions, carried.ee.exceptions2);
+        let mut loaded_blocks = eager();
+        for _ in 0..20 {
+            for _ in 0..500 {
+                plain.step().unwrap();
+            }
+            run_steps(&mut carried, &mut carried_blocks, 500);
+            run_steps(&mut loaded, &mut loaded_blocks, 500);
+            assert_eq!(blocks::compare(&plain, &carried, false), None, "seed {seed}: the machine that carried its blocks");
+            assert_eq!(blocks::compare(&plain, &loaded, false), None, "seed {seed}: the machine loaded into an empty cache");
+        }
+        assert!(blocks::state_of(&carried) == blocks::state_of(&loaded), "seed {seed}");
+        assert!(loaded_blocks.stats.compiled_steps > 0, "seed {seed}");
+    }
+}
+
+#[test]
+fn blocks_refused_at_a_small_step_budget_leave_the_machine_exact() {
+    let words = assemble(LOOP, ORIGIN);
+    for stride in [1, 3, 7, 11] {
+        let s = twin(&words, 1500, stride, &mut eager());
+        assert!(stride < 11 || s.compiled_steps > 0, "{s:?}");
+    }
+}
+
+#[test]
+fn single_issue_blocks_leave_the_interpreters_machine() {
+    let source = format!("mfc0 t0, Config\nlui t1, 0xfffb\nori t1, t1, 0xffff\nand t0, t0, t1\nmtc0 t0, Config\nsync.p\n{LOOP}");
+    let words = assemble(&source, ORIGIN);
+    let s = twin(&words, 4000, 500, &mut eager());
+    assert!(s.compiled_steps > 2500, "{s:?}");
+}
+
+#[test]
+fn dropping_every_block_at_the_codes_budget_changes_nothing() {
+    for seed in 40..44 {
+        let p = random_program(seed, false);
+        let mut b = eager();
+        b.set_budget(16 << 10);
+        let mut plain = random_system(&p);
+        let mut fast = random_system(&p);
+        for _ in 0..40 {
+            for _ in 0..500 {
+                plain.step().unwrap();
+            }
+            run_steps(&mut fast, &mut b, 500);
+            assert_eq!(blocks::compare(&plain, &fast, false), None, "seed {seed}");
+        }
+        assert!(b.flushes() > 0, "seed {seed}: the budget dropped the blocks");
+    }
+}
+
+#[test]
+fn a_block_ends_at_its_pages_end() {
+    let jump = assemble(&format!("j 0x{:x}\nnop", ORIGIN + 0xFD0), ORIGIN);
+    let mut words = jump;
+    words.resize(0xFD0 / 4, 0);
+    words.extend(assemble(LOOP, ORIGIN + 0xFD0));
+    let s = twin(&words, 4000, 500, &mut eager());
+    assert!(s.compiled_steps > 2000, "{s:?}");
+}
+
+#[test]
+fn the_fixed_cost_compromise_changes_the_cycles_and_not_the_results() {
+    let words = assemble(LOOP, ORIGIN);
+    let mut plain = system(&words);
+    let mut fast = system(&words);
+    let mut b = eager();
+    b.fixed_cost = true;
+    for _ in 0..4000 {
+        plain.step().unwrap();
+    }
+    run_steps(&mut fast, &mut b, 4000);
+    assert_eq!(plain.ee.gpr, fast.ee.gpr, "a program that reads no time computes the same");
+    let (exact, fixed) = (plain.ee.timing.cycles(), fast.ee.timing.cycles());
+    println!("the loop's 4000 steps: {exact} cycles in the issue model, {fixed} at one cycle an instruction");
+    assert_ne!(exact, fixed, "the compromise changes the time the program takes");
 }

@@ -7861,8 +7861,8 @@ tools in the probe's folder, not committed; their rules are this paragraph.
 
 ### 43.5 The workloads and their speed (measured 2026-10-26)
 
-The desktop, a Ryzen 7 7700X, every run under `systemd-run --user --scope -p CPUWeight=20` beside four other agents'
-work (another core's game runs, a referee, Release builds at times). **Each timed number is the median of three rounds
+The desktop, a Ryzen 7 7700X, every run under `systemd-run --user --scope -p CPUWeight=20` beside other work on the
+machine (other stages' game runs, a referee, Release builds at times). **Each timed number is the median of three rounds
 with the spread of the three**; the load averages before and after the rounds are given (five-minute for the boot and
 Jak, one-minute for the short programs), since wall times do not survive load and shares do.
 
@@ -8056,7 +8056,7 @@ and none of their bytes is in a commit. No emulator, SDK or loader source was re
 
 - **No workload with play.** The boot, Jak's start and its memory card screen, and the test programs: no game's 3D play,
   no FMV, little VU1. The ranking's VU, SPU2 and IPU rows are therefore low by construction (§43.8).
-- **Load.** Four other agents' work ran throughout, at five-minute loads of 4 to 25; the spreads in §43.5 carry it. The
+- **Load.** Other stages' work ran throughout, at five-minute loads of 4 to 25; the spreads in §43.5 carry it. The
   fastest round of each window, not the median, is the better estimate of an unloaded desktop.
 - **The sampler's naming**: a non-inlined function's callers are not seen (no frame pointers), so `Big::div`'s share is
   attributed to `gs::exact` by its file and to the perspective quotient by reading its two callers, not by stacks; the

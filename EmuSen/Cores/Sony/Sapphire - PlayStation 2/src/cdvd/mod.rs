@@ -223,6 +223,9 @@ pub struct Cdvd {
     read: Option<Read>,
     buffer: Vec<u8>,
     taken: usize,
+    /// A reason was set in I_STAT since the bus last looked, which raises the IOP's IRQ 2 (D-481); taken at once, so
+    /// never part of a state.
+    raised: bool,
     pub rtc: Rtc,
     pub nvm: Nvm,
     /// The console's answer to S command 36h, set by the machine from its market; absent (80h) without one.
@@ -279,6 +282,7 @@ impl Cdvd {
             read: None,
             buffer: Vec::with_capacity(2352),
             taken: 0,
+            raised: false,
             rtc: Rtc::default(),
             nvm: Nvm::default(),
             region: None,
@@ -331,6 +335,17 @@ impl Cdvd {
     /// The interrupt line to the IOP's INTC (IRQ2): any I_STAT bit set.
     pub fn irq(&self) -> bool {
         self.istat != 0
+    }
+
+    /// A reason set in I_STAT, which raises IRQ 2 whatever reasons are still pending (D-481).
+    fn reason(&mut self, bit: u8) {
+        self.istat |= bit;
+        self.raised = true;
+    }
+
+    /// Whether a reason was set since the last call.
+    pub fn take_raised(&mut self) -> bool {
+        std::mem::take(&mut self.raised)
     }
 
     pub fn read8(&mut self, offset: u32) -> u8 {
@@ -450,7 +465,7 @@ impl Cdvd {
         self.read = None;
         self.buffer.clear();
         self.busy = false;
-        self.istat |= istat::COMPLETE;
+        self.reason(istat::COMPLETE);
         let after = if self.spinning { drive::SPINNING | drive::PAUSED } else { self.drive };
         self.set_drive(after);
     }
@@ -477,7 +492,7 @@ impl Cdvd {
 
     fn complete(&mut self, after: u8) {
         self.busy = false;
-        self.istat |= istat::COMPLETE;
+        self.reason(istat::COMPLETE);
         if after & drive::SPINNING == 0 && after & drive::TRAY_OPEN == 0 {
             self.spinning = false;
         }
@@ -562,7 +577,7 @@ impl Cdvd {
                 } else if r.left == 0 {
                     self.read = None;
                     self.pending = None;
-                    self.istat |= istat::DATA_READY;
+                    self.reason(istat::DATA_READY);
                     self.complete(drive::SPINNING | drive::PAUSED);
                 }
             }
@@ -652,7 +667,7 @@ impl Cdvd {
             if self.busy {
                 self.brk();
             }
-            self.istat |= istat::EJECTED;
+            self.reason(istat::EJECTED);
             self.disk_type = disk_type::NONE;
             self.set_drive(drive::TRAY_OPEN);
             return;

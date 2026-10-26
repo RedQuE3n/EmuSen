@@ -478,9 +478,8 @@ pub fn map() -> Program {
     }
     p.poke(K1 | (a + 0x60_0004), 0x5566_7788);
     p.rec(K1 | (a + 4), Some(0x5566_7788));
-    // Past the 8 MiB window: a bus error on the load.
-    p.guarded(|p| p.peek(K1 | 0x0080_0000));
-    p.rec_log(1, Some(7), None);
+    // Past the 8 MiB window: zero, no bus error, as the console's texts read 08000004h (D-482).
+    p.rec(K1 | 0x0080_0000, Some(0));
     // The scratchpad: KUSEG and KSEG0, 1 KiB.
     p.poke(0x1F80_0000, 0x0BAD_F00D);
     p.poke(0x9F80_03FC, 0xFEED_FACE);

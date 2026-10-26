@@ -1149,7 +1149,8 @@ through the reset too.
   loads; on the fetch from the scratchpad it stops altogether (no done word from the EE either), so `s21-fetch` runs on
   Sapphire only.
 - **Conclusion:** psx-spx's PlayStation rules, which ps2tek's "same as on PSX" points to; the mirrors **measured**, the
-  bus errors **argued**, PCSX2 not a witness for them. Which I/O addresses within 1F801000h-1F80FFFFh meet no device on
+  bus errors **argued**, PCSX2 not a witness for them. ~~A load past 8 MiB a bus error.~~ *Amended 2026-10-26 by D-482:
+  the region past 8 MiB below the SIF reads zero without a bus error, as three console texts require.* Which I/O addresses within 1F801000h-1F80FFFFh meet no device on
   the IOP is unknown; they read zero rather than fault [C], so that S22 to S26 add their devices without moving a
   fault.
 - **Depends on it:** `iop::bus::decode`.
@@ -3895,3 +3896,48 @@ through the reset too.
 - **Depends on it:** `tests/irx`'s `module_load` and the 23 IOP programs of §40.
 - **Pinned by:** the 23 IOP programs on the player's BIOS (§40.5); `tests/irx`'s `the_module_load_puts_the_path_at_byte_8`.
 - **Implemented in:** the loader's commit of §40, after this entry's.
+
+### D-481. CDVD, the drive's interrupt: IRQ 2 is raised at each reason the drive sets in its I_STAT, whatever reasons are still pending, not at the rise of their OR
+
+- **Opened:** 2026-10-26, at §40: the console started empty and a disc put in through the tray (G10's `MEDIA`), the BIOS's
+  LOADFILE printed "loadmodule: fname cdrom0:\TEST.IRX;1" and waited for ever. The hardware's own report: the drive's
+  read had ended (not busy, I_STAT 0Bh: data ready, command complete and the tray's opening), channel 3 had moved its
+  sector, the IOP's I_STAT bit 2 was clear and the BIOS had written I_STAT once, 02h. The opening's bit 3, set before
+  the BIOS ran and never acknowledged, held S23's line (the OR of I_STAT's bits) high, so no later reason made a rise
+  and IRQ 2 never came again.
+- **Documents read:** ps2tek "CDVD I/O Ports" ("When a CDVD IRQ is raised on I_STAT, this register shows the reason for
+  the interrupt"; bit 3 "Disk ejected"; "Acknowledge = Write I_STAT (1=Clear bit)"), "IOP Interrupts" (IRQ 2, CDVD).
+- **Test program:** the §40 loader on the player's Americas BIOS with `cpu/iop/alu` on a CD: under the line's rise the
+  module was never read; with IRQ 2 raised at each reason, the drive's reads went on, the module was opened, loaded and
+  ran, and its text equals the console's.
+- **Referee:** not consulted: no referee lets a program open the tray before the BIOS runs and read I_STAT's line.
+- **Conclusion:** the register names the reasons for an interrupt, and an interrupt comes with each reason the drive
+  raises; a reason the BIOS never acknowledges (the opening of a tray before it ran) does not silence the drive. The
+  line's level (`Cdvd::irq`) is kept in the state as before. **Argued** from ps2tek's wording and the BIOS's behaviour
+  through a documented interface; the other reading needs the BIOS to acknowledge a reason raised before it started,
+  which it does not, and whether a console's power-on clears the drive's I_STAT is in no document.
+- **Depends on it:** `cdvd::Cdvd::reason`, `take_raised`; `iop::bus::IopBus::sync_cdvd`.
+- **Pinned by:** `each_reason_raises_the_interrupt_while_an_earlier_one_is_pending`,
+  `the_drives_command_end_reaches_the_intc_with_the_opening_unacknowledged`; the 23 IOP programs (§40.5).
+- **Implemented in:** the drive's commit of §40.
+
+### D-482. IOP memory map: a load past RAM's 8 MiB, below the SIF's 1D000000h, reads zero without a bus error
+
+- **Opened:** 2026-10-26, at §40: `kernel/iop/messagebox/poll`, `receive` and `send` stopped at their line "invalid
+  params:". Each then calls the kernel with the message box id ~0 (the tests' own sources, `PollMbx(NULL, ~0)` and the
+  like), and the console's texts print −410, the kernel's refusal of an unknown id. The hardware's report on Sapphire:
+  one IOP load at physical 08000004h, a data bus error under D-61, after which the IOP never printed again.
+- **Documents read:** ps2tek "Memory Map" (nothing between the IOP's RAM and the SIF's registers, and no word on
+  errors); psx-spx "Memory Exceptions" and "Memory Mirrors", the PlayStation's rules D-61 took.
+- **Test program:** the three programs on the player's Americas BIOS through the §40 loader: with the region reading
+  zero, each prints its −410 and its whole text.
+- **Referee:** PCSX2 2.8.2 raises no bus error at 00800000h (D-61's `s21-map`); the console's texts are the stronger
+  witness, that a load in the region does not fault.
+- **Conclusion:** the IOP's region from 00800000h to 1CFFFFFFh is on the bus as 1E000000h is (D-346): zero on a load,
+  writes without effect; the extent is the region no document places a device in [C], the fault's absence **measured**
+  at one address by the console's texts. The other bus errors of D-61 (KSEG1's scratchpad, the gap after it, KUSEG past
+  512 MiB) stand, argued.
+- **Depends on it:** `iop::bus::decode`, `Target::Absent`.
+- **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents` (`s21-map`'s load at 00800000h now
+  zero); `kernel/iop/messagebox/{poll,receive,send}` on the player's BIOS (§40.5).
+- **Implemented in:** the memory map's commit of §40.

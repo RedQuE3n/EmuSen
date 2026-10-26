@@ -6099,8 +6099,8 @@ table and followed, a call kept whole once its first instruction ran, the device
 `a_taken_bc1t_in_a_taken_bc1ts_delay_slot_supersedes_it`, `tests/vif.rs`'s `the_unpack_set_line_holds`,
 `tests/vu_micro.rs`'s `jalr_reads_its_target_written_just_before_as_it_now_is`, `tests/pcrtc.rs`'s
 `the_fieldmark_program_weaves_the_even_field_on_the_even_rasters`; every S21, S22, S25 and S26 program on the IOP's DMAC
-passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5** (17 minutes, most of it the
-kit's runs of the core's debug build). The ps2autotests runs of §36.5 need the player's BIOS and are not in CI.
+passing with D-360 and D-361. WiseMan's `SapphireTests` (the blast radius's filter) **5 of 5**, on the final tree with S19 and S30 beneath (1 min 54 s;
+17 min on the tree before S30). The ps2autotests runs of §36.5 need the player's BIOS and are not in CI.
 
 **`SPH2` version 3** (rebased onto S30, §38): the stage's state joins the format. The header gains `Entered` (the frame the
 fast boot entered its program, absent while it waits), the EE's block `Bc1Taken` (D-362's slot, kept between two

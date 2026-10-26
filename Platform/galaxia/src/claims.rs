@@ -133,12 +133,14 @@ fn entries(doc: &Value, name: &str) -> Vec<Value> {
     }
 }
 
-/// The package a manifest describes, with its claims in the order game, companions, the container's sources.
+/// The package a manifest describes, with its claims in the order game, companions, the container's sources, then the
+/// files a self-contained package's game was copied from (`sources`, EmuSen_GamePackages.md §19).
 pub fn package_of(roots: &Roots, folder: &str, doc: &Value) -> Option<Package> {
     let game = place(roots, folder, doc.get("game")?)?;
     let mut claims = vec![game.clone()];
     let sources = doc.get("container").map(|c| entries(c, "sources")).unwrap_or_default();
-    for entry in entries(doc, "companions").iter().chain(sources.iter()) {
+    let copied = entries(doc, "sources");
+    for entry in entries(doc, "companions").iter().chain(sources.iter()).chain(copied.iter()) {
         if let Some(at) = place(roots, folder, entry).filter(|at| !claims.contains(at)) {
             claims.push(at);
         }
@@ -379,6 +381,24 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
     }
 }
 
+/// Whether a claimed file still opens as its package: always, unless it is one a self-contained package's game was
+/// copied from (`sources`) and is no longer that file: its size and time are not those recorded and its SHA-1 is not
+/// the one recorded. Such a file opens as a plain game, as a changed dump does (EmuSen_GamePackages.md §19).
+pub fn source_holds(roots: &Roots, folder: &str, full: &str) -> bool {
+    let Ok(Ok(doc)) = package::read(&dotnet_files::join(folder, package::FILE_NAME)) else { return true };
+    let Some(entry) = entries(&doc, "sources").into_iter().find(|e| place(roots, folder, e).as_deref() == Some(full)) else { return true };
+    let seen = entry.get("seen");
+    let now = seen_of(full);
+    let same = |n: &(u64, String)| number(seen.and_then(|s| s.get("size"))) == Some(n.0) && seen.and_then(|s| s.get("mtime")).and_then(Value::as_str) == Some(n.1.as_str());
+    if seen.is_none() || now.as_ref().is_some_and(same) {
+        return true;
+    }
+    match entry.get("sha1").and_then(Value::as_str) {
+        None => true,
+        Some(want) => rom_hash::sha1(full).is_ok_and(|got| got.eq_ignore_ascii_case(want)),
+    }
+}
+
 /// The package a game file opens with under `tree`, or none; a refusal is no package here, and is said where the game
 /// is opened, `GamePackages.RootFor`.
 pub fn root_for(tree: &crate::tree::Tree, at: &str) -> Option<String> {
@@ -408,6 +428,11 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     if dotnet_files::directory_exists(&full) && dotnet_files::file_exists(&dotnet_files::join(&full, package::FILE_NAME)) {
         return open_package(roots, &full, None);
     }
+    if crate::archive::is_archive(&full) && dotnet_files::file_exists(&full)
+        && let Some(folder) = crate::package_zip::opened(roots.packages, &full)?
+    {
+        return open_package(roots, &folder, None);
+    }
     if path::file_name(STYLE, &full) == package::FILE_NAME && dotnet_files::file_exists(&full) {
         return open_package(roots, &path::directory_name(STYLE, &full).unwrap_or_default(), None);
     }
@@ -417,6 +442,9 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     }
     let index = index(roots);
     if let Some(p) = index.claimant(&full) {
+        if !source_holds(roots, &p.folder, &full) {
+            return plain();
+        }
         return match opening(roots, &p.folder.clone(), Some(&full)) {
             Err(NotOpened { changed: true, .. }) => plain(),
             other => other.map_err(|r| r.words),
@@ -526,4 +554,42 @@ mod tests {
         std::fs::remove_file(&game).unwrap();
         assert!(resolve(&roots, &folder).unwrap_err().contains("which is gone"));
     }
+
+    #[test]
+    fn a_self_contained_package_claims_the_file_it_was_copied_from_only_while_it_is_that_file() {
+        let t = TempDir::new("claims-sources");
+        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
+        let bytes = b"sixteen bytes!!!";
+        let game = t.join("Roms/NES/G.nes");
+        put(&game, bytes);
+        let folder = t.join("Packages/NES/G.nes");
+        put(&format!("{folder}/G.nes"), bytes);
+        let h = rom_hash::hashes_of(bytes);
+        let (size, mtime) = seen_of(&game).unwrap();
+        let (csize, cmtime) = seen_of(&format!("{folder}/G.nes")).unwrap();
+        let text = format!(
+            r#"{{"format":"emusen-package","version":"1.0","system":"nes","mode":"self-contained","game":{{"role":"image","where":"package","path":"G.nes","size":{csize},"seen":{{"size":{csize},"mtime":"{cmtime}"}}}},"dump":{{"file":{{"crc32":"{}","md5":"{}","sha1":"{}"}}}},"sources":[{{"role":"image","where":"library","path":"NES/G.nes","size":{size},"seen":{{"size":{size},"mtime":"{mtime}"}},"sha1":"{}"}}]}}"#,
+            h.crc32,
+            h.md5,
+            h.sha1.clone().unwrap(),
+            h.sha1.clone().unwrap()
+        );
+        put(&format!("{folder}/package.json"), text.as_bytes());
+        let idx = index(&roots);
+        assert_eq!(idx.packages[0].claims, vec![format!("{folder}/G.nes"), game.clone()]);
+        let r = resolve(&roots, &game).unwrap();
+        assert_eq!((r.game.as_str(), r.package.as_deref()), (format!("{folder}/G.nes").as_str(), Some(folder.as_str())), "the library file opens the package's copy");
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
+        std::fs::File::options().write(true).open(&game).unwrap().set_modified(later).unwrap();
+        assert_eq!(resolve(&roots, &game).unwrap().package.as_deref(), Some(folder.as_str()), "touched, it is still the file it was copied from");
+        std::fs::write(&game, b"another sixteen!").unwrap();
+        std::fs::File::options().write(true).open(&game).unwrap().set_modified(later + std::time::Duration::from_secs(60)).unwrap();
+        let r = resolve(&roots, &game).unwrap();
+        assert_eq!((r.game.as_str(), r.package.as_deref()), (game.as_str(), None), "changed, it plays as a plain game");
+        assert_eq!(resolve(&roots, &folder).unwrap().game, format!("{folder}/G.nes"));
+        std::fs::remove_file(&game).unwrap();
+        assert_eq!(resolve(&roots, &folder).unwrap().game, format!("{folder}/G.nes"), "the package needs no library file");
+    }
+
 }

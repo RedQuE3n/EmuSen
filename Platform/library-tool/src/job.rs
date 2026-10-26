@@ -28,11 +28,13 @@ pub enum Op {
     /// `pkg patch add` and `pkg patch rm` (EmuSen_GamePackages.md §15), since 1.2.
     PkgPatchAdd,
     PkgPatchRm,
+    /// `pkg identity` (EmuSen_GamePackages.md §19), since 1.3.
+    PkgIdentity,
 }
 
 impl Op {
     fn packages(&self) -> bool {
-        matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate | Op::PkgPatchAdd | Op::PkgPatchRm)
+        matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate | Op::PkgPatchAdd | Op::PkgPatchRm | Op::PkgIdentity)
     }
 }
 
@@ -46,11 +48,17 @@ pub struct Request {
     /// `pkg patch add`'s patch file, a full path; `pkg patch rm`'s patch, from 1.
     pub patch: Option<String>,
     pub index: usize,
+    /// `pkg make --self-contained` and `--zip` (since 1.3).
+    pub making: packages::Making,
+    /// `pkg identity`'s `original` or `patched` (since 1.3).
+    pub identity: Option<String>,
 }
 
 /// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
 /// `{"op": "pkg-make" | "pkg-ls" | "pkg-check" | "pkg-migrate", "paths": [...], "console": null}`, or since 1.2
-/// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`.
+/// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`,
+/// or since 1.3 `pkg-make`'s `"self_contained": true` and `"zip": true`, a package's zip among `pkg-check`'s paths, and
+/// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}`.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -63,7 +71,8 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some("pkg-migrate") => Op::PkgMigrate,
         Some("pkg-patch-add") => Op::PkgPatchAdd,
         Some("pkg-patch-rm") => Op::PkgPatchRm,
-        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add or pkg-patch-rm".into()),
+        Some("pkg-identity") => Op::PkgIdentity,
+        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add, pkg-patch-rm or pkg-identity".into()),
     };
     let paths = match doc.get("paths") {
         None | Some(Value::Null) => Vec::new(),
@@ -86,7 +95,13 @@ pub fn request(text: &str) -> Result<Request, String> {
     if matches!(op, Op::PkgPatchAdd | Op::PkgPatchRm) && paths.len() != 1 {
         return Err("a patch is added to or removed from one package, named in \"paths\"".into());
     }
-    Ok(Request { op, paths, options: Options { fast: doc.get("fast").and_then(Value::as_bool).unwrap_or(false), threads }, console, patch, index })
+    let identity = doc.get("identity").and_then(Value::as_str).map(str::to_string);
+    if op == Op::PkgIdentity && !matches!(identity.as_deref(), Some("original" | "patched")) {
+        return Err("pkg-identity names \"identity\": \"original\" or \"patched\"".into());
+    }
+    let flag = |name: &str| doc.get(name).and_then(Value::as_bool).unwrap_or(false);
+    let making = packages::Making { self_contained: flag("self_contained") || flag("zip"), zip: flag("zip") };
+    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity })
 }
 
 struct Queue {
@@ -174,6 +189,7 @@ fn op_word(op: &Op) -> &'static str {
         Op::PkgMigrate => "pkg-migrate",
         Op::PkgPatchAdd => "pkg-patch-add",
         Op::PkgPatchRm => "pkg-patch-rm",
+        Op::PkgIdentity => "pkg-identity",
     }
 }
 
@@ -291,7 +307,7 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             }
         }
         _ => {
-            let (f, r) = packages::named(ctx, &req.paths);
+            let (f, r) = packages::named_or_zipped(ctx, &req.paths, req.op == Op::PkgCheck);
             (Vec::new(), f, r)
         }
     };
@@ -300,6 +316,10 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
     let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("packages", Value::number(total))];
     if req.op != Op::PkgList {
         start.push(("log", Value::string(&log_at)));
+    }
+    if req.op == Op::PkgMake {
+        start.push(("mode", Value::string(if req.making.self_contained { "self-contained" } else { "linked" })));
+        start.push(("zip", Value::Bool(req.making.zip)));
     }
     start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
     emit(queue, obj(start));
@@ -312,9 +332,11 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
         }
         let begun = Instant::now();
         let outcome = match (&req.op, game, folder) {
-            (Op::PkgMake, Some(g), _) => packages::make(ctx, &mut index, g, stop),
+            (Op::PkgMake, Some(g), _) => packages::make(ctx, &mut index, g, req.making, stop),
             (Op::PkgList, _, Some(f)) => packages::list(ctx, f),
+            (Op::PkgCheck, _, Some(f)) if packages::is_zip(f) => packages::check_zip(ctx, f, stop),
             (Op::PkgCheck, _, Some(f)) => packages::check(ctx, f, stop),
+            (Op::PkgIdentity, _, Some(f)) => packages::identity(f, req.identity.as_deref().unwrap_or("original")),
             (Op::PkgPatchAdd, _, Some(f)) => crate::patches::add(ctx, f, req.patch.as_deref().unwrap_or("")),
             (Op::PkgPatchRm, _, Some(f)) => crate::patches::remove(ctx, f, req.index),
             (_, _, Some(f)) => packages::migrate(ctx, f),

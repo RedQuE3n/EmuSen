@@ -1,6 +1,8 @@
 //! Game packages made, listed, checked and given the stores a game already had: `pkg make`, `pkg ls`, `pkg check` and
-//! `pkg migrate` (EmuSen_GamePackages.md §3.4–§3.7, §14). Linked packages only: the library is read and never
-//! written, a package is made only when asked, and migrating copies and never overwrites or removes anything.
+//! `pkg migrate` (EmuSen_GamePackages.md §3.4–§3.7, §14), and since step 7 self-contained packages, a package's zip
+//! and `pkg identity` (§19). The library is read and never written, a package is made only when asked, making one
+//! self-contained copies its game in and never moves or removes the library's, and migrating copies and never
+//! overwrites or removes anything.
 
 use crate::convert::{obj, Outcome};
 use crate::Context;
@@ -125,13 +127,25 @@ fn transformed(system: &str, bytes: &[u8]) -> Value {
     rom_hash::transformed(bytes, |f| emusen_systems::openvgdb::bytes(system, f)).map_or(Value::Null, |h| hashes_json(&h, vec![]))
 }
 
-/// A linked package made for one library game, unless a package already claims it (§3.4, §9 Q6).
-pub fn make(ctx: &Context, index: &mut Index, game: &Game, stop: &dyn Fn() -> bool) -> Outcome {
+/// What `pkg make` is asked beyond a linked package: the game copied into it, and the package written as one zip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Making {
+    pub self_contained: bool,
+    pub zip: bool,
+}
+
+/// A package made for one library game, linked unless asked otherwise (§3.4, §9 Q6). A game a package already claims
+/// is `already`, unless the package is to be made self-contained or zipped, which is done to that package (§19).
+pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &dyn Fn() -> bool) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
     let full = path::full_path(&game.path);
     if let Some(p) = index.claimant(&full) {
-        return Outcome::new("already").with("package", text(&package_rel(ctx, &p.folder)));
+        let folder = p.folder.clone();
+        if how == Making::default() {
+            return Outcome::new("already").with("package", text(&package_rel(ctx, &folder)));
+        }
+        return further(ctx, index, &folder, how, "already", stop);
     }
     let (folder, folder_rel) = place(ctx, game);
     let manifest = dotnet_files::join(&folder, package::FILE_NAME);
@@ -210,7 +224,201 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, stop: &dyn Fn() -> bo
         index.folders.push(folder.clone());
         index.packages.push(p);
     }
-    Outcome::new("made").with("package", text(&folder_rel)).with("size", Value::number(claims::seen_of(&game.path).map_or(0, |s| s.0)))
+    if how != Making::default() {
+        return further(ctx, index, &folder, how, "made", stop);
+    }
+    Outcome::new("made").with("package", text(&folder_rel)).with("mode", text("linked")).with("size", Value::number(claims::seen_of(&game.path).map_or(0, |s| s.0)))
+}
+
+/// A package made self-contained where asked and it is not, then written as its zip where asked: `made` or `already`
+/// as it was found, `contained` for a linked package whose game was copied in now, `zipped` for one only zipped;
+/// `failed` with words where its game is not the dump, a copy is not the file it was copied from, or the zip could
+/// not be written, the package left as it was found or as far as it got (§19).
+fn further(ctx: &Context, index: &mut Index, folder: &str, how: Making, found: &'static str, stop: &dyn Fn() -> bool) -> Outcome {
+    let rel = package_rel(ctx, folder);
+    let mut doc = match read(folder) {
+        Ok(d) => d,
+        Err(words) => return Outcome::said("failed", words).with("package", text(&rel)),
+    };
+    let mut state = found;
+    let mut copied = Vec::new();
+    if how.self_contained && doc.get("mode").and_then(Value::as_str) != Some("self-contained") {
+        match contain(ctx, folder, &mut doc, stop) {
+            Ok(names) => copied = names,
+            Err(words) if words == "stopped" => return Outcome::new("stopped").with("package", text(&rel)),
+            Err(words) => {
+                let words = if found == "made" { format!("the package was made linked, and its game was not copied in: {words}") } else { words };
+                return Outcome::said("failed", words).with("package", text(&rel)).with("mode", text("linked"));
+            }
+        }
+        if found == "already" {
+            state = "contained";
+        }
+        let roots = ctx.places();
+        if let Some(p) = claims::package_of(&roots.roots(), folder, &doc) {
+            if let Some(slot) = index.packages.iter_mut().find(|q| q.folder == folder) {
+                *slot = p;
+            }
+        }
+    }
+    let mode = doc.get("mode").and_then(Value::as_str).unwrap_or("linked").to_string();
+    let mut outcome_zip = Value::Null;
+    if how.zip {
+        if mode != "self-contained" {
+            return Outcome::said("failed", "a linked package's zip would hold no game, so none was written").with("package", text(&rel)).with("mode", text(&mode));
+        }
+        let zip = emusen_galaxia::package_zip::zip_beside(folder);
+        match emusen_galaxia::package_zip::write(folder, &zip, stop) {
+            Ok((_, bytes)) => {
+                outcome_zip = obj(vec![("path", text(&package_rel(ctx, &zip))), ("bytes", Value::number(bytes))]);
+                if state == "already" {
+                    state = "zipped";
+                }
+            }
+            Err(words) if words == "stopped" => return Outcome::new("stopped").with("package", text(&rel)),
+            Err(words) => return Outcome::said("failed", format!("its zip was not written: {words}")).with("package", text(&rel)).with("mode", text(&mode)),
+        }
+    }
+    let mut outcome = Outcome::new(state).with("package", text(&rel)).with("mode", text(&mode));
+    if !copied.is_empty() {
+        outcome = outcome.with("copied", Value::Array(copied.iter().map(|c| text(c)).collect()));
+    }
+    if how.zip {
+        outcome = outcome.with("zip", outcome_zip);
+    }
+    outcome
+}
+
+/// A file copied into the package as `rel`, its time kept, and checked: the copy's SHA-1 is the SHA-1 of the bytes read
+/// from the original in the same run. A copy already there of the same bytes is kept, any other file there refuses it.
+/// The original is only read. Its SHA-1 and size.
+fn copy_in(folder: &str, from: &str, rel: &str, stop: &dyn Fn() -> bool) -> Result<(String, u64), String> {
+    use std::io::{Read, Write};
+    let target = claims::under(folder, rel);
+    let source_sha1 = || rom_hash::hashes_with(from, None, true, stop).map(|h| (h.sha1.unwrap_or_default(), h.size)).map_err(|e| if e.kind() == std::io::ErrorKind::Interrupted { "stopped".to_string() } else { format!("{from}: {e}") });
+    if std::fs::symlink_metadata(&target).is_ok() {
+        let (want, size) = source_sha1()?;
+        let there = rom_hash::sha1(&target).map_err(|e| format!("{target}: {e}"))?;
+        return if there == want { Ok((want, size)) } else { Err(format!("{rel} is already in the package and is another file, so it was left as it is")) };
+    }
+    let modified = std::fs::metadata(from).and_then(|m| m.modified()).map_err(|e| format!("{from}: {e}"))?;
+    let dir = path::directory_name(Style::HOST, &target).unwrap_or_default();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{dir}: {e}"))?;
+    let partial = path::combine(Style::HOST, &dir, &format!(".{}.partial-{}", path::file_name(Style::HOST, &target), std::process::id()));
+    let copied = (|| {
+        let mut input = std::fs::File::open(from).map_err(|e| format!("{from}: {e}"))?;
+        let mut out = std::fs::File::create(&partial).map_err(|e| format!("{partial}: {e}"))?;
+        let mut hasher = rom_hash::Hasher::new(true);
+        let mut buffer = vec![0u8; 1 << 20];
+        loop {
+            if stop() {
+                return Err("stopped".to_string());
+            }
+            let n = input.read(&mut buffer).map_err(|e| format!("{from}: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buffer[..n]);
+            out.write_all(&buffer[..n]).map_err(|e| format!("{partial}: {e}"))?;
+        }
+        out.sync_all().map_err(|e| format!("{partial}: {e}"))?;
+        out.set_modified(modified).map_err(|e| format!("{partial}: {e}"))?;
+        drop(out);
+        let read = hasher.finish();
+        let written = rom_hash::sha1(&partial).map_err(|e| format!("{partial}: {e}"))?;
+        let want = read.sha1.unwrap_or_default();
+        if written != want {
+            return Err(format!("the copy of {from} has SHA-1 {written}, and the bytes read have {want}: nothing was kept"));
+        }
+        Ok((want, read.size))
+    })();
+    match copied {
+        Ok(done) => {
+            std::fs::rename(&partial, &target).map_err(|e| {
+                let _ = std::fs::remove_file(&partial);
+                format!("{target}: {e}")
+            })?;
+            Ok(done)
+        }
+        Err(words) => {
+            let _ = std::fs::remove_file(&partial);
+            Err(words)
+        }
+    }
+}
+
+fn seen_json(at: &str) -> Value {
+    claims::seen_of(at).map_or(Value::Null, |(size, mtime)| obj(vec![("size", Value::number(size)), ("mtime", text(&mtime))]))
+}
+
+/// A package made self-contained (§3.4, §19): its game and every companion copied in beside the manifest, in the places
+/// the game's sheet or list names them, each checked; then the manifest names the copies (`where: package`), keeps the
+/// entries they were copied from as `sources` with their sizes, times and SHA-1s, and says `self-contained`. The game
+/// must still be the dump. Nothing is moved, removed or written outside the package. The names copied.
+fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool) -> Result<Vec<String>, String> {
+    let places = ctx.places();
+    let roots = places.roots();
+    let game = doc.get("game").and_then(|g| claims::place(&roots, folder, g)).ok_or("its game's library is not set (AppSettings.RomDirectory)")?;
+    if claims::seen_of(&game).is_none() {
+        return Err(format!("{} is gone; pkg check finds a moved game first", shown(&roots, &game)));
+    }
+    let resolved = claims::open_package(&roots, folder, None)?;
+    if resolved.game != game {
+        return Err(format!("{} is gone; pkg check finds a moved game first", shown(&roots, &game)));
+    }
+    let doc_now = read(folder)?;
+    *doc = doc_now;
+    let base = path::directory_name(Style::HOST, &game).unwrap_or_default();
+    let within = |at: &str| -> Result<String, String> {
+        if claims::within(at, &base) && at.len() > base.len() {
+            Ok(at[base.len()..].trim_start_matches(['/', '\\']).replace('\\', "/"))
+        } else {
+            Err(format!("{} is not in its game's folder, so the package cannot hold it where the game names it", shown(&roots, at)))
+        }
+    };
+    let companions: Vec<Value> = match doc.get("companions") {
+        Some(Value::Array(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    let mut plan: Vec<(Value, String, String)> = vec![(doc.get("game").cloned().unwrap_or(Value::Null), game.clone(), path::file_name(Style::HOST, &game).to_string())];
+    for c in &companions {
+        let at = claims::place(&roots, folder, c).ok_or("a companion's library is not set")?;
+        plan.push((c.clone(), at.clone(), within(&at)?));
+    }
+    for (_, _, rel) in &plan {
+        let first = rel.split('/').next().unwrap_or("");
+        if [package::FILE_NAME, package::SAVES_FOLDER, package::STATES_FOLDER, package::MEDIA_FOLDER, package::CHEATS_FILE, package::SETTINGS_FILE].iter().any(|r| equals_ignore_case(r, first)) {
+            return Err(format!("{rel} would take the place of the package's own {first}"));
+        }
+    }
+    let mut sources = Vec::new();
+    let mut moved_in = Vec::new();
+    let mut names = Vec::new();
+    for (entry, at, rel) in &plan {
+        let (sha1, size) = copy_in(folder, at, rel, stop)?;
+        let mut source = entry.clone();
+        claims::set(&mut source, "seen", seen_json(at));
+        claims::set(&mut source, "size", Value::number(size));
+        claims::set(&mut source, "sha1", text(&sha1));
+        sources.push(source);
+        let copy = claims::under(folder, rel);
+        let role = entry.get("role").and_then(Value::as_str).unwrap_or("image");
+        let mut e = package::file_entry(role, "package", rel, Some(size));
+        claims::set(&mut e, "seen", seen_json(&copy));
+        moved_in.push(e);
+        names.push(rel.clone());
+    }
+    let game_entry = moved_in.remove(0);
+    claims::set(doc, "mode", text("self-contained"));
+    claims::set(doc, "game", game_entry);
+    claims::set(doc, "companions", Value::Array(moved_in));
+    claims::set(doc, "sources", Value::Array(sources));
+    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    match package::write(&manifest, doc) {
+        Ok(Ok(())) => Ok(names),
+        Ok(Err(words)) => Err(words),
+        Err(refusal) => Err(refusal.words().to_string()),
+    }
 }
 
 /// The packages each path names, relative to `Packages` or full, a folder holding packages naming each of them, in
@@ -237,6 +445,76 @@ pub fn named(ctx: &Context, given: &[String]) -> (Vec<String>, Vec<String>) {
         }
     }
     (found, refused)
+}
+
+/// Whether a path a job was handed is a package's zip rather than its folder.
+pub fn is_zip(at: &str) -> bool {
+    emusen_galaxia::archive::is_archive(at) && dotnet_files::file_exists(at)
+}
+
+/// `named`, and where `zips` allows it, a package's zip named by its path, relative to `Packages` or full (§19).
+pub fn named_or_zipped(ctx: &Context, given: &[String], zips: bool) -> (Vec<String>, Vec<String>) {
+    let packages = ctx.packages();
+    let (mut zipped, mut rest) = (Vec::new(), Vec::new());
+    for g in given {
+        let rooted = path::is_rooted(Style::HOST, g);
+        let at = if rooted { path::full_path(g) } else { claims::under(&packages, &crate::discs::relative(g).unwrap_or_default()) };
+        if is_zip(&at) { zipped.push((g.clone(), at)) } else { rest.push(g.clone()) }
+    }
+    let (mut found, mut refused) = if rest.is_empty() && !zipped.is_empty() { (Vec::new(), Vec::new()) } else { named(ctx, &rest) };
+    for (g, at) in zipped {
+        match emusen_galaxia::package_zip::manifest_in(&at) {
+            Ok(Some(_)) if zips => found.push(at),
+            Ok(Some(_)) => refused.push(format!("{g}: a package's zip is checked with pkg check, and is unpacked into Packages when it is opened")),
+            Ok(None) => refused.push(format!("{g}: a zip that holds no package")),
+            Err(words) => refused.push(format!("{g}: {words}")),
+        }
+    }
+    (found, refused)
+}
+
+/// `pkg check` of a package's zip: unpacked into a hidden folder of `Packages`, every entry checked against its CRC-32
+/// and given its time, the package checked there as a folder is, and the folder removed; the zip is only read (§19).
+pub fn check_zip(ctx: &Context, zip: &str, stop: &dyn Fn() -> bool) -> Outcome {
+    let (top, _) = match emusen_galaxia::package_zip::manifest_in(zip) {
+        Ok(Some(found)) => found,
+        Ok(None) => return Outcome::said("refused", "the zip holds no package"),
+        Err(words) => return Outcome::said("refused", words),
+    };
+    let scratch = path::combine(Style::HOST, &ctx.packages(), &format!(".check-{}-{}", std::process::id(), SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+    let folder = path::combine(Style::HOST, &scratch, &top);
+    let outcome = match emusen_galaxia::package_zip::unpack(zip, &top, &folder, stop) {
+        Ok(()) => check(ctx, &folder, stop),
+        Err(words) if words == "stopped" => Outcome::new("stopped"),
+        Err(words) => Outcome::said("changed", words),
+    };
+    let _ = std::fs::remove_dir_all(&scratch);
+    outcome.with("zip", Value::Bool(true))
+}
+
+static SCRATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// `pkg identity`: which identity the scraper sends for a patched package, `original` or `patched` (§5.5, §19). The
+/// saves a patched game keeps are named by its patch list, not by this (§16), so nothing else changes. `set`,
+/// `already`, or `failed` for `patched` on a package with no soft patches.
+pub fn identity(folder: &str, want: &str) -> Outcome {
+    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let mut doc = match read(folder) {
+        Ok(d) => d,
+        Err(words) => return Outcome::said("refused", words),
+    };
+    if want == "patched" && emusen_patch::package::entries(&doc).is_empty() {
+        return head(&doc, Outcome::said("failed", "it has no soft patches, so it has no patched identity: the scraper sends its dump"));
+    }
+    if doc.get("identity").and_then(Value::as_str).unwrap_or("original") == want {
+        return head(&doc, Outcome::new("already"));
+    }
+    claims::set(&mut doc, "identity", text(want));
+    match package::write(&manifest, &doc) {
+        Ok(Ok(())) => head(&doc, Outcome::new("set")),
+        Ok(Err(words)) => head(&doc, Outcome::said("failed", words)),
+        Err(refusal) => head(&doc, Outcome::said("failed", refusal.words().to_string())),
+    }
 }
 
 /// The packages of one console, by its name, its system's id or ES-DE name, or the folder under `Packages`.
@@ -281,6 +559,12 @@ pub(crate) fn head(doc: &Value, outcome: Outcome) -> Outcome {
         .with("game", text(game.and_then(|g| g.get("path")).and_then(Value::as_str).unwrap_or("")))
 }
 
+/// Whether a manifest's game is looked for in the library when it is gone: a game linked there or anywhere else, never
+/// a game kept in its package or in `Compressed`, so that a self-contained package is never linked again unasked.
+fn linked(doc: &Value) -> bool {
+    matches!(doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str), Some("library" | "absolute"))
+}
+
 fn shown(roots: &Roots, at: &str) -> String {
     claims::entry_place(roots, at).1
 }
@@ -305,7 +589,7 @@ pub fn list(ctx: &Context, folder: &str) -> Outcome {
     };
     let Some(game) = doc.get("game").and_then(|g| claims::place(&roots, folder, g)) else { return head(&doc, Outcome::said("missing", "its game's library is not set (AppSettings.RomDirectory)")) };
     let Some(now) = claims::seen_of(&game) else {
-        let found = claims::recorded(&doc).and_then(|r| claims::recorded_size(&doc).and_then(|size| claims::find_in_library(&roots, size, r)));
+        let found = linked(&doc).then(|| claims::recorded(&doc).and_then(|r| claims::recorded_size(&doc).and_then(|size| claims::find_in_library(&roots, size, r)))).flatten();
         return head(
             &doc,
             match found {
@@ -355,7 +639,7 @@ pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
     let mut state = "verified";
     let mut words: Option<String> = None;
     if claims::seen_of(&game).is_none() {
-        let found = claims::recorded(&doc).cloned().and_then(|r| claims::recorded_size(&doc).and_then(|size| claims::find_in_library(&roots, size, &r)));
+        let found = linked(&doc).then(|| claims::recorded(&doc).cloned().and_then(|r| claims::recorded_size(&doc).and_then(|size| claims::find_in_library(&roots, size, &r)))).flatten();
         match found {
             Some(at) => {
                 claims::moved(&roots, &mut doc, &at);

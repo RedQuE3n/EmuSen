@@ -11225,8 +11225,11 @@ started with at least the peak plus 3 GB free.
   `FirmwareOverviewTests`) with those classes added: **2,603 passed, 2 failed, 54 skipped** of 2,659. The two failures
   are `WindowFitAuditTests`' recordings of the PlayStation 2's Graphics Settings tab at both sizes, whose scrolled
   content is 189 and 283.5 design pixels taller than recorded: the recording was made at S29 (`e37925a3c`) and S43 then
-  added the *GS workers* row to Sapphire's schema without recording it again. Not this step's, which changes no setting,
-  and left to the GS stage's owner (Q3). The Diamond crate, which the radius names through its tests' use of the kit's
+  added the *GS workers* row to Sapphire's schema without recording it again. The tab with the row fits: the audit's own
+  verdicts (`Nothing_in_the_window_is_cut_off_past_its_panel_or_drawn_over_anything_else`) pass at 1280 × 800 and
+  1920 × 1200, the recordings' rules pass, and the new row is the sixteenth in the scrolled list, reached by the pad
+  between the fifteenth and the tab strip; so both recordings were made again, the only differences the list's height
+  and the row's place in the pad's walk (Q3). The Diamond crate, which the radius names through its tests' use of the kit's
   digest module, checks with its tests (`cargo check --tests`); that module is unchanged.
 - **The other cores that claim `BORROW`**: Diamond and Nephrite (and Sapphire); Endou, VenusRT, MoonRT, MercuryRT do
   not, and MarsRT is not on the ABI. Each sample run with the base's kit and this branch's, release libraries of the
@@ -11271,9 +11274,8 @@ C12's copies, which are what those cases test.
    name joins; carrying the fact as a key of each system row would make the overview say it without a cross-reference,
    and is a frontend API minor (keys in JSON). *Recommended*: add it in the next frontend API minor, with the parity
    case, and keep the cross-reference until then.
-3. **Q3 [routine], the PlayStation 2's Graphics Settings recordings.** They predate S43's *GS workers* row (§49.17).
-   *Recommended*: record them again at S43's follow-up or the next stage that touches the tab, as each stage that adds a
-   row does.
+3. **Q3 [routine], the PlayStation 2's Graphics Settings recordings.** They predated S43's *GS workers* row (§49.17).
+   *Done*: recorded again on this branch, the tab fitting at both sizes.
 
 ## 50. Stage S43, the GS's software rasteriser on worker threads (2026-10-26)
 

@@ -271,6 +271,8 @@ pub struct Units {
     pub vu0: Vu,
     pub vu1: Vu,
     pub link: Link,
+    /// The run is the board's at an EE instruction's end, where the debugger's probe may stop a unit (S31).
+    pub halts: bool,
 }
 
 /// FBRST's bits (§5.1.3): force break, reset, D bit enable and T bit enable for VU0, the same eight bits up for VU1.
@@ -336,7 +338,7 @@ impl Default for Vpu {
 impl Vpu {
     pub fn new() -> Vpu {
         Vpu {
-            units: Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default() },
+            units: Units { vu0: Vu::new(VU0_MEM), vu1: Vu::new(VU1_MEM), link: Link::default(), halts: false },
             cmsar0: 0,
             cmsar1: 0,
             ccr24: 0,
@@ -398,6 +400,14 @@ impl Vpu {
     pub fn run_to(&mut self, t: u64) {
         self.micro0.run_to(&mut self.units, t);
         self.micro1.run_to(&mut self.units, t);
+    }
+
+    /// `run_to` as the board runs the units at an EE instruction's end, the one place the debugger's probe may stop one
+    /// (Sapphire_Native.md §41.4).
+    pub fn catch_up(&mut self, t: u64) {
+        self.units.halts = true;
+        self.run_to(t);
+        self.units.halts = false;
     }
 
     /// Whether `run_to(t)` would change nothing but the units' clocks, those moved if so (Sapphire_Native.md §35.7).

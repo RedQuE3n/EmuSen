@@ -4,8 +4,9 @@
 //! emusen-mips with the GTE's names. The plain frame never meets any of it. Diamond_Debugger.md records each rule.
 
 use blackmoon_r3000::{Observer, Step};
-use emusen_mips::{Op, Word, decode, disassemble};
-use emusen_native::core::{Instruction, Reference};
+pub use blackmoon_r3000::reference;
+use emusen_mips::disassemble;
+use emusen_native::core::Instruction;
 use emusen_native::debug::{Hooks, kind, run, stop};
 
 use crate::bus::{Reached, reached};
@@ -267,24 +268,12 @@ impl Machine {
     }
 }
 
-/// The reference an instruction's bytes alone give, its target as the processor would reach it from `pc`.
-pub fn reference(word: u32, pc: u32) -> Option<(Reference, u32)> {
-    let w = Word(word);
-    let next = pc.wrapping_add(4);
-    match decode(word) {
-        Op::Jal => Some((Reference::Call, next & 0xF000_0000 | w.target() << 2)),
-        Op::Bltzal | Op::Bgezal => Some((Reference::Call, next.wrapping_add(w.simm() << 2))),
-        Op::Lb | Op::Lbu | Op::Lh | Op::Lhu | Op::Lw | Op::Lwl | Op::Lwr | Op::Lwc(_) if w.rs() == 0 => Some((Reference::Read, w.simm())),
-        Op::Sb | Op::Sh | Op::Sw | Op::Swl | Op::Swr | Op::Swc(_) if w.rs() == 0 => Some((Reference::Write, w.simm())),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::machine::tests::{machine_for, program};
     use crate::media::Market;
+    use emusen_native::core::Reference;
     use emusen_native::debug::{flag, range};
     use emusen_native::ffi::StateMachine;
 

@@ -26,11 +26,14 @@
 //! SIF, the drive joined to the IOP's bus, the EEPROM a console medium, the pads, the picture and the sound handed on,
 //! and the hardware's own reports of what no unit answers (`reports`).
 //! S30: every unit's state in `state`'s format SPH2, written beside each unit and composed by `board::System`.
+//! S31: the debugger (`debugger`), four processors over the core ABI's debug interface, with probes beside the IOP and
+//! the VUs and the EE observed around its untouched step (`ee::observe`).
 
 pub mod bios;
 pub mod board;
 pub mod cdvd;
 pub mod clock;
+pub mod debugger;
 pub mod dmac;
 pub mod ee;
 pub mod float;

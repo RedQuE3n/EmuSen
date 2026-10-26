@@ -38,6 +38,19 @@ pub struct Iop {
     pub exceptions: [u64; 32],
     /// The console caught at the module interface on the player's BIOS (S10).
     pub tty: tty::Tty,
+    /// The debugger's probe, asked before each instruction while fitted (Sapphire_Native.md §41).
+    pub probe: Option<Box<crate::debugger::Probe>>,
+    /// The run is the board's at an EE instruction's end, where the probe may stop the IOP (Sapphire_Native.md §41.4).
+    pub halts: bool,
+}
+
+/// The R3000A's observer while the debugger's probe is fitted: an instruction refused stops the IOP in front of it.
+struct Probed<'a>(&'a mut crate::debugger::Probe, bool);
+
+impl blackmoon_r3000::Observer for Probed<'_> {
+    fn before(&mut self, _processor: usize, pc: u32) -> u32 {
+        if self.0.admit(pc, self.1) { 0 } else { emusen_native::debug::stop::BREAKPOINT }
+    }
 }
 
 impl Iop {
@@ -45,7 +58,7 @@ impl Iop {
         let mut cpu = R3000::new();
         cpu.prid = PRID;
         cpu.processor = 1;
-        Iop { cpu, bus: IopBus::new(blank), held: true, exceptions: [0; 32], tty: tty::Tty::default() }
+        Iop { cpu, bus: IopBus::new(blank), held: true, exceptions: [0; 32], tty: tty::Tty::default(), probe: None, halts: false }
     }
 
     /// Releases the IOP at `pc` in kernel mode with SR clear, so that its exceptions use the vectors in RAM [C].
@@ -83,14 +96,58 @@ impl Iop {
             return;
         }
         while self.bus.now * IOP < t {
-            self.bus.service();
-            if self.bus.now * IOP >= t {
-                break;
+            if self.stopped() {
+                return;
             }
-            self.bus.set_horizon(t);
-            let step = if self.tty.armed() { self.run_watched() } else { self.cpu.run(&mut self.bus, u32::MAX).1 };
+            // A run the probe stopped goes on to the horizon it had, as the plain run would have (Sapphire_Native.md §41.4).
+            if !self.probe.as_ref().is_some_and(|p| p.resume) {
+                self.bus.service();
+                if self.bus.now * IOP >= t {
+                    break;
+                }
+                self.bus.set_horizon(t);
+            }
+            let step = if self.tty.armed() {
+                self.run_watched()
+            } else if self.probe.is_some() {
+                self.run_probed()
+            } else {
+                self.cpu.run(&mut self.bus, u32::MAX).1
+            };
             if let blackmoon_r3000::Step::Exception(code) = step {
                 self.exceptions[code as usize & 31] += 1;
+            }
+        }
+    }
+
+    /// `run_to` as the board runs the IOP at an EE instruction's end, the one place the debugger's probe may stop it.
+    pub fn catch_up(&mut self, t: u64) {
+        self.halts = true;
+        self.run_to(t);
+        self.halts = false;
+    }
+
+    /// Stopped by the debugger's probe in front of an instruction, until the debugger resumes it.
+    pub fn stopped(&self) -> bool {
+        self.probe.as_ref().is_some_and(|p| p.halted.is_some() && !p.resume)
+    }
+
+    /// One instruction, through the probe while one is fitted.
+    fn step_one(&mut self) -> blackmoon_r3000::Step {
+        match &mut self.probe {
+            Some(p) => self.cpu.step_observed(&mut self.bus, &mut Probed(p, self.halts)),
+            None => self.cpu.run(&mut self.bus, 1).1,
+        }
+    }
+
+    /// The run one instruction at a time while the probe is fitted, as `R3000::run` runs: to the first step that is not
+    /// an instruction, or past the bus's horizon.
+    fn run_probed(&mut self) -> blackmoon_r3000::Step {
+        use blackmoon_r3000::{Bus, Step};
+        loop {
+            let step = self.step_one();
+            if step != Step::Instruction || !self.bus.running() {
+                return step;
             }
         }
     }
@@ -114,7 +171,7 @@ impl Iop {
                 continue;
             }
             self.tty.at(self.cpu.regs.pc, a);
-            let step = self.cpu.run(&mut self.bus, 1).1;
+            let step = self.step_one();
             self.tty.stepped(step == Step::Instruction, &self.bus.ram);
             if step != Step::Instruction || !self.bus.running() {
                 return step;

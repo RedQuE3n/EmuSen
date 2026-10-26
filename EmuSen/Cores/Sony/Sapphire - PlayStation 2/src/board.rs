@@ -280,7 +280,7 @@ impl Board {
     pub fn run_to(&mut self, t: u64, spram: &mut [u8]) {
         if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
             self.now = self.now.max(t);
-            self.iop.run_to(self.now);
+            self.iop.catch_up(self.now);
             if self.iop.bus.sif.take_wake_ee() {
                 self.dmac.wake(self.now);
                 if self.dmac.next_event() <= self.now {
@@ -340,7 +340,7 @@ impl Board {
         self.reschedule();
         let free = self.gif.path1_free(self.now);
         self.vpu.units.link.path1.set_free(free);
-        self.vpu.run_to(t);
+        self.vpu.catch_up(t);
         let irq = self.vpu.take_interrupts();
         for (unit, source) in [intc::source::VU0, intc::source::VU1].into_iter().enumerate() {
             if irq >> unit & 1 == 1 {
@@ -349,7 +349,7 @@ impl Board {
         }
         self.run_gif(t);
         self.reschedule();
-        self.iop.run_to(self.now);
+        self.iop.catch_up(self.now);
         if self.iop.bus.sif.take_wake_ee() {
             self.dmac.wake(self.now);
             if self.dmac.next_event() <= self.now {

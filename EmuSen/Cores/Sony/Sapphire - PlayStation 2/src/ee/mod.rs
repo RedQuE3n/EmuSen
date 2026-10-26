@@ -12,6 +12,7 @@ pub mod fpu;
 pub mod map;
 mod memory;
 mod mmi;
+pub mod observe;
 mod ops;
 pub mod timing;
 pub mod tlb;

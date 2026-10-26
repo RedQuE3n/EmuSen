@@ -174,6 +174,8 @@ pub struct Ee {
     /// Level 1 exceptions taken, by ExcCode, and level 2 by EXC2: the core's own count, for the hardware's reports (S24).
     pub exceptions: [u64; 16],
     pub exceptions2: [u64; 4],
+    /// Steps by the processor's mode, user, supervisor, kernel, level 1 and level 2: the core's own count, for the bench.
+    pub modes: [u64; 5],
 }
 
 const MEMO: usize = 4096;
@@ -224,6 +226,7 @@ impl Ee {
             stall_until: 0,
             exceptions: [0; 16],
             exceptions2: [0; 4],
+            modes: [0; 5],
         }
     }
 
@@ -488,6 +491,7 @@ impl Ee {
         let in_delay = self.delay;
         self.in_bc1_slot = in_delay && std::mem::take(&mut self.bc1_taken);
         self.count_mode = self.mode_index();
+        self.modes[self.count_mode.map_or(4, |m| m as usize)] += 1;
         self.stall_fetch = 0;
         self.stall_data = 0;
         self.watch_load = false;

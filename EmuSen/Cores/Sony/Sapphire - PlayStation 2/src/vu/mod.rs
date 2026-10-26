@@ -410,6 +410,11 @@ impl Vpu {
         self.units.halts = false;
     }
 
+    /// Pairs each unit has run in micro mode, VU0's then VU1's: the bench's count.
+    pub fn pairs_run(&self) -> [u64; 2] {
+        [self.micro0.pairs_run(), self.micro1.pairs_run()]
+    }
+
     /// Whether `run_to(t)` would change nothing but the units' clocks, those moved if so (Sapphire_Native.md §35.7).
     pub fn idle_to(&mut self, t: u64) -> bool {
         let Vpu { micro0, micro1, units, .. } = self;

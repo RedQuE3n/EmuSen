@@ -42,6 +42,8 @@ pub struct Iop {
     pub probe: Option<Box<crate::debugger::Probe>>,
     /// The run is the board's at an EE instruction's end, where the probe may stop the IOP (Sapphire_Native.md §41.4).
     pub halts: bool,
+    /// Instructions run: the core's own count, for the bench.
+    pub instructions: u64,
 }
 
 /// The R3000A's observer while the debugger's probe is fitted: an instruction refused stops the IOP in front of it.
@@ -58,7 +60,7 @@ impl Iop {
         let mut cpu = R3000::new();
         cpu.prid = PRID;
         cpu.processor = 1;
-        Iop { cpu, bus: IopBus::new(blank), held: true, exceptions: [0; 32], tty: tty::Tty::default(), probe: None, halts: false }
+        Iop { cpu, bus: IopBus::new(blank), held: true, exceptions: [0; 32], tty: tty::Tty::default(), probe: None, halts: false, instructions: 0 }
     }
 
     /// Releases the IOP at `pc` in kernel mode with SR clear, so that its exceptions use the vectors in RAM [C].
@@ -112,7 +114,9 @@ impl Iop {
             } else if self.probe.is_some() {
                 self.run_probed()
             } else {
-                self.cpu.run(&mut self.bus, u32::MAX).1
+                let (n, step) = self.cpu.run(&mut self.bus, u32::MAX);
+                self.instructions += u64::from(n);
+                step
             };
             if let blackmoon_r3000::Step::Exception(code) = step {
                 self.exceptions[code as usize & 31] += 1;
@@ -134,10 +138,16 @@ impl Iop {
 
     /// One instruction, through the probe while one is fitted.
     fn step_one(&mut self) -> blackmoon_r3000::Step {
-        match &mut self.probe {
+        let step = match &mut self.probe {
             Some(p) => self.cpu.step_observed(&mut self.bus, &mut Probed(p, self.halts)),
-            None => self.cpu.run(&mut self.bus, 1).1,
-        }
+            None => {
+                let (n, step) = self.cpu.run(&mut self.bus, 1);
+                self.instructions += u64::from(n);
+                return step;
+            }
+        };
+        self.instructions += u64::from(step == blackmoon_r3000::Step::Instruction);
+        step
     }
 
     /// The run one instruction at a time while the probe is fitted, as `R3000::run` runs: to the first step that is not

@@ -46,6 +46,10 @@ pub trait Micro {
     fn read_state(&mut self, _r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         Ok(())
     }
+    /// Pairs run since the unit was made: the core's own count, for the bench.
+    fn pairs_run(&self) -> u64 {
+        0
+    }
     /// Whether the micro mode's queues are within their slots in the state.
     fn fits(&self) -> bool {
         true

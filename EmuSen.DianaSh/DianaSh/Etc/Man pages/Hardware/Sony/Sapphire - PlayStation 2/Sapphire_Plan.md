@@ -870,6 +870,30 @@ weighed, cheapest in accuracy first [A].
 which a player hears and sees directly; and the instruction results of every processor, which no compromise may
 change but C3's named float classes.
 
+*Decided 2026-10-26 by the tester: for the PlayStation 2 and later consoles, cycle accuracy where it is realistic; where
+it is not, byte accuracy is the floor.* Byte accuracy means that every value a game can read back, and every pixel and
+sample the player receives, equals the console's; timing is modelled only as finely as that needs. The candidates above
+are therefore of two kinds:
+
+- **Timing-only** (C1, C7, C8, C11, and C2's timing part, the caches' miss times without their coherency): each changes
+  when something happens and none of the bytes a game reads or the player receives where the game does not depend on
+  that timing. Each is taken where `Sapphire_Native.md` §43's measurements show its gain, named and switchable, without
+  waiting for a separate acceptance.
+- **Byte-changing** (C3, C4, C5, C6, C2's coherency part, and any other candidate that changes a value a game reads or a
+  pixel or sample the player receives): each needs a proof that it keeps the bytes on the classes it is used for, or the
+  tester's acceptance of the bytes it changes, measured as the table above says. C9 changes no byte of a frame but a
+  loading screen's length, and stays with the tester as before.
+
+Three conditions hold for every candidate taken:
+
+1. **Results stay deterministic**: the same input gives the same bytes, run after run and on every host, and units on
+   threads synchronise at fixed points of the emulated time, never at points chosen by the host's scheduling.
+2. **A game whose results depend on timing gets finer timing for the part involved**: where a timing-only candidate
+   changes a bench game's bytes, that candidate is narrowed or turned off for the unit or game involved, and the case
+   recorded, rather than the bytes accepted.
+3. **The exact path stays the reference**: every candidate's other value is the reference's behaviour, the recompilers
+   are graded against the interpreter with every candidate off, and the goldens are taken on that path.
+
 ---
 
 ## 6. Enhancements

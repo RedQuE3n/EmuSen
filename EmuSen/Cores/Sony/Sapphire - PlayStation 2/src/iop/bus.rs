@@ -150,6 +150,11 @@ pub struct IopBus {
     fault: bool,
     /// Where a processor store completed an export table's magic word in RAM, newest last (S10, `tty`).
     pub export_tables: Vec<u32>,
+    /// The processor's writes, its accesses to anything but RAM, the scratchpad and the boot ROM, and the I-cache's
+    /// refills: the bus's own counts, which idle skipping reads (Sapphire_Native.md §47), none of them in the state.
+    pub writes: u64,
+    pub io: u64,
+    pub fills: u64,
 }
 
 impl IopBus {
@@ -176,6 +181,9 @@ impl IopBus {
             horizon: 0,
             fault: false,
             export_tables: Vec::new(),
+            writes: 0,
+            io: 0,
+            fills: 0,
         };
         b.reschedule();
         b
@@ -529,6 +537,7 @@ impl Bus for IopBus {
                 let per = if matches!(target, Target::Ram(_)) { 1 } else { 1 + ROM_STALL };
                 self.now += 1 + if matches!(target, Target::Ram(_)) { RAM_STALL } else { ROM_STALL } + per * u64::from(count - 1);
                 self.icache.fill(physical, first, &words[..count as usize]);
+                self.fills += 1;
                 words[((physical >> 2 & 3) - first) as usize]
             }
         }
@@ -536,6 +545,9 @@ impl Bus for IopBus {
 
     fn read(&mut self, address: u32, size: Size) -> u32 {
         let target = decode(address);
+        if !matches!(target, Target::Ram(_) | Target::Scratch(_) | Target::Rom(_)) {
+            self.io += 1;
+        }
         if target == Target::None {
             self.unmapped(address, Access::Read, None);
             return 0;
@@ -548,6 +560,7 @@ impl Bus for IopBus {
 
     fn write(&mut self, address: u32, size: Size, value: u32) {
         let target = decode(address);
+        self.writes += 1;
         if let Target::Io(p) | Target::Sif(p) = target {
             self.reports.touch(Side::Iop, p, Access::Write, Some(value), self.now * IOP);
         }
@@ -582,10 +595,12 @@ impl Bus for IopBus {
     }
 
     fn isolated_read(&mut self, address: u32, _size: Size) -> u32 {
+        self.io += 1;
         self.icache.isolated_read(address)
     }
 
     fn isolated_write(&mut self, address: u32, _size: Size, value: u32) {
+        self.writes += 1;
         self.icache.isolated_write(address, value);
     }
 

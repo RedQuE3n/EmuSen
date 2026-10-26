@@ -97,12 +97,26 @@ pub struct Machine {
     pub debug: crate::debugger::Debugger,
     /// The EE's recompiled tier, when chosen (S36, Sapphire_Native.md §44); the interpreter alone without it.
     pub blocks: Option<Box<crate::blocks::Blocks>>,
+    /// Idle skipping (S33, Sapphire_Native.md §47): off unless chosen, so that a machine made here is the plain run.
+    pub idle: crate::idle::Idle,
+}
+
+/// What is left of a frame's batch of 1,024 steps after `n` more, when `n` may run past its end: a skip crosses a
+/// batch's end only where the plain run's check of the field would find no new field, no event falling inside it.
+fn batch_left(left: u64, n: u64) -> u64 {
+    if n <= left {
+        return left - n;
+    }
+    match (n - left) % 1024 {
+        0 => 0,
+        over => 1024 - over,
+    }
 }
 
 impl Machine {
     pub fn new(media: Media, market: Market, ports: [Option<&'static str>; 2]) -> Machine {
         let sys = Machine::console(market, ports);
-        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new(), blocks: None };
+        let mut m = Machine { media, market, sys, frames: 0, skip: false, pads: [0; 2], ports, firmware: Vec::new(), sticks: [[0x80; 4]; 2], booted: false, stop: None, program: None, entered: None, debug: crate::debugger::Debugger::new(), blocks: None, idle: crate::idle::Idle::new(false) };
         for slot in &mut m.sys.board.iop.bus.sio2.slots {
             slot.cards[0] = Some(MemoryCard::erased());
         }
@@ -305,6 +319,7 @@ impl Machine {
             } else if self.booted && self.stop.is_none() {
                 let mut left = 1024;
                 while left > 0 {
+                    let from = self.sys.ee.pc;
                     let ran = match self.blocks.as_deref_mut() {
                         Some(b) => crate::blocks::run(&mut self.sys, b, left),
                         None => self.sys.step().map(|()| 1),
@@ -315,6 +330,11 @@ impl Machine {
                             self.stop = Some(Stop::Unimplemented);
                             break;
                         }
+                    }
+                    // Once the field has begun the frame ends at this batch's end, which no skip may pass.
+                    if left > 0 && self.idle.backward(from, self.sys.ee.pc, self.sys.ee.in_delay_slot()) && self.sys.board.pcrtc.fields < target {
+                        let n = crate::idle::arrive(&mut self.sys, &mut self.idle, self.blocks.as_deref_mut(), left);
+                        left = batch_left(left, n);
                     }
                 }
             } else {

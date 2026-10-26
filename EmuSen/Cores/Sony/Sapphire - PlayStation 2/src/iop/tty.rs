@@ -118,6 +118,11 @@ impl Tty {
         }
     }
 
+    /// A call met at the boundary and not yet taken.
+    pub fn pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub fn armed(&self) -> bool {
         self.hook.is_some()
     }

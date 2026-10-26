@@ -165,6 +165,7 @@ impl Ee {
             }
         }
         self.icache.side[set][way] = [0; 16];
+        self.fills += 1;
         let t = &mut self.icache.tags[set][way];
         *t = super::cache::ITag { pfn: paddr >> 12, valid: true, lrf: !t.lrf };
         way
@@ -183,6 +184,7 @@ impl Ee {
         let t = &mut self.dcache.tags[set][way];
         *t = super::cache::DTag { pfn: paddr >> 12, dirty: false, valid: true, lrf: !t.lrf, lock: false };
         self.stall_data += REFILL;
+        self.fills += 1;
         self.event(event::DCACHE_MISS, 1);
         if load {
             self.event(event::NONBLOCKING_LOAD, 1);
@@ -228,6 +230,7 @@ impl Ee {
                         self.ucab.valid = true;
                         self.ucab.tag = p >> 7;
                         self.stall_data += UCAB_REFILL;
+                        self.fills += 1;
                         self.event(event::DCACHE_MISS, 1);
                         self.event(event::NONBLOCKING_LOAD, 1);
                     }

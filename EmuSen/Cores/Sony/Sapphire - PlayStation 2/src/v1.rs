@@ -135,6 +135,9 @@ pub const EE_TIER_KEY: &str = "ee_tier";
 pub const TIERS: [(&str, &str); 2] = [("interpreter", "Interpreter"), ("recompiler", "Recompiler")];
 /// VU1's tier (Sapphire_Native.md §45.6): the interpreter, or the recompiler, which is exact.
 pub const VU1_KEY: &str = "vu1";
+/// Idle skipping (S33, Sapphire_Native.md §47): on or off.
+pub const IDLE_KEY: &str = "idle_skip";
+pub const IDLE_CHOICES: [(&str, &str); 2] = [("on", "On"), ("off", "Off")];
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 pub const REGIONS: [(&str, &str, Market); 3] = [("ps2.jp", "Japan (NTSC)", Market::Japan), ("ps2.us", "Americas (NTSC)", Market::Americas), ("ps2.eu", "Europe (PAL)", Market::Europe)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK2, "DualShock 2"), (DIGITAL, "Digital Controller"), ("none", "Nothing")];
@@ -175,6 +178,10 @@ fn schema() -> Vec<Setting> {
             effect: Effect::Exact,
             ..setting(VU1_KEY, "VU1", "How the vector unit that transforms most of a game's geometry runs its microprograms: interpreted, or compiled whole to the host's machine code on a thread of its own, each checked against the unit's memory before it runs. Exact: the recompiler leaves the console as the interpreter does at every point the rest of the machine can see. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
         },
+        Setting {
+            effect: Effect::Exact,
+            ..setting(IDLE_KEY, "Idle skipping", "Passes the time the processors spend waiting in a loop for something to happen at once, up to the moment it happens, instead of running each turn of the loop. Exact: every picture, sound and saved state is the one the console gives with it off, which is the other choice, slower. Takes effect when a game is next loaded.", IDLE_CHOICES.iter().map(|&(v, l)| choice(v, l)).collect(), "on", "Performance")
+        },
     ]
 }
 
@@ -182,6 +189,12 @@ fn schema() -> Vec<Setting> {
 /// met (decided 2026-10-26 by the tester, Sapphire_Native.md §45.6).
 pub fn vu1_recompiler_chosen(setting: Option<&str>) -> bool {
     std::env::var("SAPPHIRE_VU1").ok().as_deref().or(setting) != Some("interpreter")
+}
+
+/// Whether the settings, or `EMUSEN_SAPPHIRE_IDLE` for measurement, turn idle skipping on, the default once S33's gate
+/// was met (Sapphire_Native.md §47).
+pub fn idle_chosen(setting: Option<&str>) -> bool {
+    std::env::var("EMUSEN_SAPPHIRE_IDLE").ok().as_deref().or(setting) != Some("off")
 }
 
 /// Whether the settings, or `EMUSEN_SAPPHIRE_TIER` for measurement, choose the recompiler, the default since S36's gate
@@ -569,6 +582,7 @@ impl Machine {
         } else {
             m.sys.board.vpu.set_tier(1, None);
         }
+        m.idle.on = idle_chosen(s.get(IDLE_KEY));
         // An empty file is a card not yet saved: the slot keeps its erased card.
         for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
             *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");

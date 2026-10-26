@@ -468,6 +468,47 @@ pub fn partner_of(c: Category, p0: bool, p1: bool, last: Category, last_pipe: u8
     best
 }
 
+/// What idle skipping reads of the model (Sapphire_Native.md §47.3): a turn's period, and the turns passed at once.
+impl Timing {
+    fn times(&self) -> impl Iterator<Item = u64> + '_ {
+        self.ready.iter().copied().chain([self.mac0_free, self.mac1_free, self.fdiv_free, self.vdiv_free, self.cop2_floor, self.last, self.floor, self.mem_free])
+    }
+
+    /// Each time of this model beside the same time of `a`.
+    fn with_times(&mut self, a: &Timing, mut f: impl FnMut(&mut u64, u64)) {
+        for (t, &s) in self.ready.iter_mut().zip(&a.ready) {
+            f(t, s);
+        }
+        let Timing { mac0_free, mac1_free, fdiv_free, vdiv_free, cop2_floor, last, floor, mem_free, .. } = self;
+        for (t, s) in [mac0_free, mac1_free, fdiv_free, vdiv_free, cop2_floor, last, floor, mem_free].into_iter().zip([a.mac0_free, a.mac1_free, a.fdiv_free, a.vdiv_free, a.cop2_floor, a.last, a.floor, a.mem_free]) {
+            f(t, s);
+        }
+    }
+
+    /// The cycles from `a` to this model when this one is `a` a turn later shifted in time: every time either moved by
+    /// the span or kept and no later than `a`'s last issue, every other field equal. None otherwise.
+    pub(crate) fn period_from(&self, a: &Timing) -> Option<u64> {
+        if a.instructions == 0 || self.instructions <= a.instructions {
+            return None;
+        }
+        let span = self.cycles().checked_sub(a.cycles()).filter(|&s| s > 0)?;
+        let same = (self.last_category, self.last_pipe, self.last_writes, self.open, self.group_ends, self.paired) == (a.last_category, a.last_pipe, a.last_writes, a.open, a.group_ends, a.paired);
+        (same && self.times().zip(a.times()).all(|(t, s)| t == s.wrapping_add(span) || (t == s && s <= a.last))).then_some(span)
+    }
+
+    /// `k` more turns of the period this model is from `a` (`period_from`): the moved times on by `k` spans, the
+    /// instructions by `k` turns'.
+    pub(crate) fn pass(&mut self, a: &Timing, k: u64) {
+        let span = self.cycles() - a.cycles();
+        self.with_times(a, |t, s| {
+            if *t != s {
+                *t += k * span;
+            }
+        });
+        self.instructions += k * (self.instructions - a.instructions);
+    }
+}
+
 /// Where the issue model's fields lie, for the recompiler's code, which reads and writes them as the model does
 /// (Sapphire_Native.md §44).
 pub(crate) mod layout {

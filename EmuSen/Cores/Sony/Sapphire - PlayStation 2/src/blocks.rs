@@ -133,6 +133,18 @@ impl Blocks {
         self.verify.as_mut().map(|(_, v)| &mut *v.reference.sys)
     }
 
+    /// The verifier's machine stepped `n` times beside steps the machine passed at once (idle skipping,
+    /// Sapphire_Native.md §47), and the two compared.
+    pub fn follow(&mut self, sys: &System, n: u64, what: &str) {
+        if let Some((_, v)) = &mut self.verify {
+            for _ in 0..n {
+                v.reference.step();
+                v.steps += 1;
+            }
+            v.check(sys, what);
+        }
+    }
+
     /// Steps the reference took, when a verifier is attached.
     pub fn verified(&self) -> Option<u64> {
         self.verify.as_ref().map(|(_, v)| v.steps)

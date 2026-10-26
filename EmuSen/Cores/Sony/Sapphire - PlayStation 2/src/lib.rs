@@ -28,6 +28,7 @@
 //! S30: every unit's state in `state`'s format SPH2, written beside each unit and composed by `board::System`.
 //! S31: the debugger (`debugger`), four processors over the core ABI's debug interface, with probes beside the IOP and
 //! the VUs and the EE observed around its untouched step (`ee::observe`).
+//! S33: idle skipping (`idle`), the EE's waits passed up to the board's next event with the IOP brought along.
 
 pub mod bios;
 pub mod blocks;
@@ -40,6 +41,7 @@ pub mod ee;
 pub mod float;
 pub mod gif;
 pub mod gs;
+pub mod idle;
 pub mod intc;
 pub mod iop;
 pub mod ipu;

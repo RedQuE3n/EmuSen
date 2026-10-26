@@ -200,6 +200,7 @@ impl StateMachine for Machine {
         self.entered = entered;
         self.sys.board.iop.bus.spu2.out.clear();
         self.forget_stop();
+        self.idle.forget();
         Ok(())
     }
 

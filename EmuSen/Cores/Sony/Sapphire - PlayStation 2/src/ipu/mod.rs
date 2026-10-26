@@ -468,6 +468,13 @@ impl Ipu {
     /// its prefix, the 23 zeros and the one (H.262 §6.2.1); an error code otherwise (D-305).
     fn start_code(&mut self) -> Step {
         let z = self.input.zeros(u32::MAX);
+        let bp = self.input.bp();
+        // A zero byte with 16 zero bits after it leaves as stuffing, however long the run (D-840).
+        let pass = ((bp + z).saturating_sub(16) & !7).saturating_sub(bp);
+        if pass > 0 {
+            self.input.skip(pass);
+            return Step::Go;
+        }
         if z == self.input.available() {
             return Step::Wait;
         }

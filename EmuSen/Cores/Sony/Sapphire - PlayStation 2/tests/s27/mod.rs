@@ -77,6 +77,8 @@ pub fn programs() -> Vec<program::Program> {
     v.push(program::build("s27-post", &image, &log));
     let (image, log) = errors().unwrap_or_else(|e| panic!("errors: {e}"));
     v.push(program::build("s27-errors", &image, &log));
+    let (image, log) = stuffing().unwrap_or_else(|e| panic!("stuffing: {e}"));
+    v.push(program::build("d840-stuffing", &image, &log));
     for (name, bytes) in [("odd-mpeg2", encode::odd_mpeg2()), ("odd-mpeg1", encode::odd_mpeg1())] {
         let d = standard::decode(&bytes);
         let image = driver::image(&bytes);
@@ -319,6 +321,91 @@ pub fn errors() -> Result<(Vec<u128>, Vec<driver::Issued>), String> {
         let at = d.position() - starts[k] * 128;
         if at != c.bp {
             return Err(format!("case {k}: the pointer at {at}, expected {}", c.bp));
+        }
+    }
+    Ok((data, d.log))
+}
+
+/// Zero stuffing before a start code (Sapphire_Disputes.md D-840): after BDEC's macroblock, runs of zero bytes from
+/// one quadword to past what the IPU holds (eight in the FIFO and two inside), some leaving the start code split over two
+/// quadwords; after IDEC's, 2,048 zero bytes; each command must reach the code (SCD, the pointer at the code). Last,
+/// after BDEC's 2,048 zero bytes then a one that ends no byte (ECD, the pointer 16 bits before the one).
+pub fn stuffing() -> Result<(Vec<u128>, Vec<driver::Issued>), String> {
+    use encode::W;
+    use sapphire::ipu::{code, ctrl};
+    let dc0 = |w: &mut W| {
+        for i in 0..6 {
+            encode::dc(w, i >= 4, 0);
+            w.code("10");
+        }
+    };
+    let stuff = |w: &mut W, n: usize| {
+        while !w.bits.is_multiple_of(8) {
+            w.put(0, 1);
+        }
+        for _ in 0..n {
+            w.put(0, 8);
+        }
+    };
+    let flat = manual::raw16_qwords(&[[128; 64]; 6], false);
+    let px: Vec<[u8; 4]> = (0..256).map(|_| manual::csc(128, 128, 128, 0, 0)).collect();
+    let flat_rgb = manual::rgb32_qwords(&px);
+    let bdec = code::BDEC << 28 | 1 << 27 | 1 << 26 | 1 << 16;
+    // Each case: the stream, the command, the output, the flags, the pointer.
+    let mut cases: Vec<(W, u32, Vec<u128>, u32, usize)> = Vec::new();
+    // The macroblock ends at byte 4; a run of n bytes puts the code at byte 4 + n, split when that is 13 to 15 mod 16.
+    for n in [16, 26, 137, 138, 139, 140, 152, 154, 155, 156, 170, 300, 1001, 2048] {
+        let mut w = W::default();
+        dc0(&mut w);
+        stuff(&mut w, n);
+        let at = w.bits;
+        w.start(0x01);
+        w.put(0, 32);
+        cases.push((w, bdec, flat.clone(), ctrl::SCD, at));
+    }
+    let mut w = W::default();
+    w.code("1");
+    dc0(&mut w);
+    stuff(&mut w, 2048);
+    let at = w.bits;
+    w.start(0xB3);
+    w.put(0, 32);
+    cases.push((w, code::IDEC << 28 | 1 << 16, flat_rgb, ctrl::SCD, at));
+    let mut w = W::default();
+    dc0(&mut w);
+    stuff(&mut w, 2048);
+    let at = w.bits - 16;
+    w.put(0x80, 8);
+    w.put(0, 40);
+    w.start(0xB7);
+    w.put(0, 32);
+    cases.push((w, bdec, flat, ctrl::ECD, at));
+    let mut data = Vec::new();
+    let mut starts = Vec::new();
+    for c in &cases {
+        starts.push(data.len());
+        data.extend(registers::qwords(&c.0.bytes));
+    }
+    data.extend([0u128; 2]);
+    let mut d = driver::Driver::over(data.clone());
+    d.run(code::BCLR << 28)?;
+    d.write_ctrl(1 << 24);
+    for (k, (_, word, out, flags, bp)) in cases.iter().enumerate() {
+        let mut gap = (starts[k] * 128 - d.position()) as u32;
+        while gap > 32 {
+            d.run(code::FDEC << 28 | 32)?;
+            gap -= 32;
+        }
+        let i = d.run(word | gap)?;
+        if i.out != *out {
+            return Err(format!("case {k}: {} qwords out, expected {}", i.out.len(), out.len()));
+        }
+        if i.ctrl & (ctrl::ECD | ctrl::SCD) != *flags {
+            return Err(format!("case {k}: IPU_CTRL {:08x}, flags expected {:08x}", i.ctrl, flags));
+        }
+        let at = d.position() - starts[k] * 128;
+        if at != *bp {
+            return Err(format!("case {k}: the pointer at {at}, expected {bp}"));
         }
     }
     Ok((data, d.log))

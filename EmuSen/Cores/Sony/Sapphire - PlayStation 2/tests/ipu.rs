@@ -65,7 +65,7 @@ fn idec_gives_the_standards_pictures_through_the_manuals_csc() {
 #[test]
 fn the_programs_replay_their_logs_through_the_dmac_on_the_board() {
     let programs = s27::programs();
-    assert_eq!(programs.len(), 32);
+    assert_eq!(programs.len(), 33);
     for p in &programs {
         grade(p);
     }
@@ -112,6 +112,11 @@ fn odd_escapes_levels_and_mpeg1s_forms_decode_as_the_standard() {
 #[test]
 fn error_and_start_codes_end_idec_and_bdec_where_section_8_4_says() {
     s27::errors().unwrap();
+}
+
+#[test]
+fn stuffing_longer_than_the_ipu_holds_is_passed_to_the_start_code() {
+    s27::stuffing().unwrap();
 }
 
 #[test]

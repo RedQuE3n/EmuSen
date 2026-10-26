@@ -4969,6 +4969,139 @@ under `test-checked` 91 and 7, clippy clean; the two WiseMan classes **8 of 8**.
 its pictures and the hardware's register state, SIO2's and the DMA channels'; **this writer is exposed and will never
 write the open replacement**.
 
+### 30.38 The SIF link traced while the browser is entered (2026-10-26)
+
+*A dispute step on the tester's go of 2026-10-26 (§30.36 Q1, option (a)), under `Sapphire_Plan.md` §1.4's allowance of
+the same day; its product is `Sapphire_Disputes.md` D-620.* The SIF DMA tags and the documented SIF RPC packets were
+traced on Sapphire from power-on to field 2200, Cross on "Browser" at field 1730, with the crate's formatted card in
+slot 1 and with slot 1 empty, and PCSX2's EE RAM was read through PINE at the EE's receive address while its BIOS was
+stepped to the same place. **No documented call goes unanswered while the browser is entered**: the EE's two calls on
+entering it are answered, as every call of the boot is but one no-wait call that PCSX2 leaves unanswered too. **What
+differs is what the EE asks**: on PCSX2 the browser calls the card server (80000400h) and the multitap server's "Get
+Connection" (80000903h) about fifteen times a second each from two seconds after Cross, and an EE thread calls the pad
+server (80000100h) every 64 fields from the boot on; on Sapphire neither of the first two is ever called in the browser
+and the pad server's calls stop after the third, at field 75, while the menu goes on answering the pad. The SIF, the
+IOP's DMAC and the IOP's modules answer what they are asked; the stall is on the EE's side of the link or in a reply's
+contents, which §1.4 does not let the step read, and the next look is put to the tester (§30.42 Q1). No code was
+changed: no defect was found for a program to prove.
+
+### 30.39 What crossed the link on Sapphire (measured 2026-10-26)
+
+A build of its own, not committed, noted at the IOP's channels 9 and 10 each chain tag and, for each packet whose
+destination was a side's receive address (SMCOM's for SIF1; for SIF0 the EE's, as the EE's SIFCMD Init and Change
+SADDR packets set it, 00411940h after the IOP's reboot at field 13), the `SifCmdHeader` and the fields ps2tek gives
+BIND, CALL and END (client, server id, function number, sizes and mode), in its layouts and no further; a packet sent
+elsewhere, a call's data or a reply's, was kept as its tag alone. The runner printed them by field beside the pictures,
+the EE's and the IOP's units' registers and the hardware's counts (§35.4). The first run's first build took a packet
+for a command by its header's shape alone, and so printed the first four words of some of the pad module's buffers sent
+into EE memory and of one transfer of sound data; it was corrected to the receive address before the other runs, and
+those lines went with the trace, which was kept in scratch and deleted once this section was written.
+
+| Server (ps2tek's name) | Calls, card in slot 1 | When | After Cross at 1730 |
+|---|---|---|---|
+| 80000006h (LOADFILE) | 5 | fields 9 to 51 | none |
+| 80000001h (FILEIO) | 48 | fields 30 to 53 | none |
+| 80000592h, 80000595h (CDVD init, N commands) | 1 each | fields 30, 33 | none |
+| 80000593h (CDVD S commands) | 49 | from field 30, once a second from field 55 | 8, once a second |
+| 80000596h (not in ps2tek's list) | 1, no-wait, no reply buffer | field 30 | **never answered** (nor on PCSX2, §30.40) |
+| 80000400h (memory cards) | 3 | fields 30, 52, 53 | none |
+| 80000100h (pad) | 4 | fields 32 (twice), 55, 75 | none |
+| 80000901h (multitap "Port Open") | 4 | fields 30 to 32 | none |
+| 80000902h, 80000903h (multitap) | bound, never called | field 30 | none |
+| 80000003h, 80000C01h | 2, 3 | fields 50 to 53, 32 to 55 | none |
+| 80000601h (not in ps2tek's list) | 116 | from field 50, function 5200h at every press | 2: 5200h at 1733, 5015h at 1735 |
+
+**With slot 1 empty the trace is the same call for call**, the card server's three calls among them, and so are the
+pictures and the EE's system-call count. Once the screen is black (field 1920 on) the link carries the S-command
+server's call once a second and the pad's buffers that the IOP's module sends into EE memory every field, as before
+Cross. The EE's units at the stall, read as registers at each picture: every EE DMA channel stopped (VIF1's CHCR
+70000045h, GIF's 00000001h, D_STAT 00A00046h), GIF_STAT and both VIF_STATs zero; the GS's PMODE, DISPFB2 and DISPLAY2 as
+in the menu (circuit 2, the frame at FBP 0, 640 wide); I_STAT zero, I_MASK 0000100Eh (SBUS, VBON, VBOF, TIM3); no EE
+timer register written after field 13, T3 left at mode C83h with its interrupts off, so no kernel alarm was ever armed;
+of the INTC's sources only VBON and VBOF raised; the EE's system calls about 100 a field in the menu, 58 during the fade
+and 20 once black, its interrupts two a field. The EE reads the drive's disc type at 1F40200Fh about once a field from
+field 54 on, a register Sapphire's EE map does not answer and which reads 0, "No disc", which an empty tray reports
+anyway (§30.42 Q3).
+
+### 30.40 What PCSX2's receive buffer showed (measured 2026-10-26)
+
+PCSX2 2.8.2 was run as §30.18's `pads` mode runs it, with a copy of `ps2referee.py` in scratch, not committed, that
+also read, about once a millisecond, the four header words at the EE's receive address 00411940h (the address the
+packets name on both consoles) and, where the command was END, its eight documented fields, and kept each change with its
+time from when PCSX2 began to draw. The buffer is overwritten by each packet, so packets that follow one another within
+a poll are missed, and the counts below are what was caught, not every call. Seven runs with the reads and one taking a
+picture at each step, slot 1 empty, PCSX2's own EEPROM showing the initial setup, Cross pressed every 3.5 seconds from 18
+seconds in the later ones, the sixth press entering the browser:
+
+| PCSX2 | What the buffer held |
+|---|---|
+| boot, 0.4 to 1.4 s | the same servers bound and called as on Sapphire to field 55: FILEIO, the CDVD servers, the card server, the multitap's "Port Open", 80000C01h, the sound server; no reply to 80000596h's call, in 30 s |
+| the pad server | answered at 0.43, 1.01 and 1.35 s (Sapphire's fields 32, 55 and 75), **then every 1.07 s, 64 fields, without end**, through the setup, the menu and the browser |
+| the S-command server | once a second, as on Sapphire |
+| each press | the sound server's call, as on Sapphire |
+| the setup and the menu | nothing else |
+| from 2 s after Cross on "Browser" | **the card server and 80000903h, each about fifteen times a second**, the browser drawing "There is no data." |
+
+So the two consoles agree on every call both make, and differ in two the EE makes on PCSX2 alone: the pad server's
+fourth call onwards, and the browser's polling. The pad server's reply at field 75 (128 bytes into EE memory) is the
+last exchange before the two consoles' traffic parts; its contents are a module's data, which the step did not read.
+
+### 30.41 OSDSYS's browser again, and P8 (measured 2026-10-26)
+
+The two traced runs are this step's runs of the browser (the tracing build changes no unit's behaviour; part B's
+script, Cross every 120 fields from 770, the ninth on "Browser" at 1730, run to field 2200 with a picture every 60):
+
+| Fields | Slot 1 empty | The formatted card in slot 1 |
+|---|---|---|
+| 770-1610 | the setup stepped on at each press | the same |
+| 1680 | the main menu with its ring of lights | the same |
+| 1740-1860 | the menu fading out | the same |
+| 1920-2160 | **black, every pixel zero** | the same |
+
+The 36 pictures of the two runs are equal byte for byte, and equal byte for byte to §30.35's at the same fields; the card
+was never written; nothing reached slot 1 on entering the browser (no call to the card server after field 53). **P8
+stands as observed**: card or none, the browser stalls before it asks for any card, and the card's refusal (Q7(b)) is not
+reached.
+
+### 30.42 Questions the SIF link step leaves
+
+1. **Q1 [decision], the next look at the browser.** The link shows the EE no longer asking, not an answer missing.
+   *Recommended*: (a) read the pad server's reply at field 75, the 128 bytes the END packet names, on Sapphire and on
+   PCSX2 at the same address, compared word for word and never committed, the first exchange after which the consoles
+   part; if they differ, trace SIO2's command bytes to the DualShock 2 against its documented protocol (ps2tek's and
+   psx-spx's command lists) to find the command Sapphire's pad answers otherwise, then prove it with a program; if they
+   are equal, (b) trace the EE kernel's system calls narrowly (number, the arguments ps2tek's "BIOS EE Syscalls" gives,
+   the thread), never an instruction or a program counter, to see what the browser's thread and the pad loop wait on.
+   Both read data the BIOS made, as the SIF trace did, so both need the tester's allowance under §1.4. (c) leave the
+   browser until S29's disc and S10's fast-booted programs exercise the card's driver through the project's own programs.
+2. **Q2 [routine], INT_SBUS.** It is unmasked while the browser is black and Sapphire never raises it (D-141).
+   *Recommended*: keep it undriven until a document or a step names its source; nothing in the trace waits on it visibly.
+3. **Q3 [routine], the EE's reads of 1F40200Fh.** *Recommended*: a program of the project's that reads the drive's
+   registers from the EE on PCSX2 with a disc and without, at S29, before a disc's type can matter; with the tray empty
+   the 0 read is the drive's own answer.
+
+### 30.43 What was read, the blast radius, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4 (with the decision of 2026-10-26), §5.8, §11 Q7, §12, §13 (P8); this page's §26, §30
+from part B on, §35 and §36; `Sapphire_Disputes.md` D-360, D-383, D-440, D-540, D-541; `Sapphire_References.md` §3.
+ps2tek at `1c91660`: "Subsystem Interface (SIF)" whole (lines 4209-4560: the registers, SIF DMA, "SIF RPC Basics",
+"SIF RPC Structs and Definitions", "SIF RPC Commands", "SIF RPC System Servers"), the EE and IOP I/O maps (lines
+140-270), "CDVD I/O Ports" and "CDVD S Commands", "EE Timers"' first lines, a search's hits for "alarm" (lines 1185,
+5052-5058, 5736-5742) and "PADMAN" (its section, "(todo)"); Sony's *EE User's Manual* §3.1. PCSX2 2.8.2 run as a black
+box, its EE RAM through PINE at the receive buffer only, and its pictures. No emulator, SDK, loader or ps2autotests
+source and no firmware: the BIOS image was handed by path to Sapphire and to PCSX2 and never opened; no program counter,
+instruction, or memory holding BIOS code was printed or read; of the BIOS's data only the SIF packets' documented
+header fields, and the units' registers. The tracing build, the scratch copy of the referee tool and every trace were
+deleted once this was written.
+
+**Blast radius**: the step commits documents only (`blast.sh WiseMan sapphire-browser` lists no test); nothing was run
+beyond the traces.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and on PCSX2,
+traced the SIF link's tags and documented RPC packets on Sapphire (with, in one run, the first four words of some
+module buffers, §30.39) and read PCSX2's receive buffer, and looked at the EE's and the IOP's units' registers and
+counts; **this writer is exposed and will never write the open replacement**.
+
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
 *Numbered §31 and its disputes from D-240, since S14 (§28, from D-180), S20 (§29, from D-200) and S25 (§30, from D-220)
@@ -6248,6 +6381,12 @@ write the open replacement.
 observing its pictures and the register state of SIO2 and of the IOP's DMA channels 11 and 12 at their writes and at each
 queue's start and end, never a program counter, instruction, memory content or command byte; **that writer is exposed
 too and will never write the open replacement**.
+
+*Added 2026-10-26 at the SIF link step (§30.38 to §30.43):* that step's writer ran the player's BIOS on Sapphire and on
+PCSX2, traced on Sapphire the SIF DMA tags and the SIF RPC packets' documented header fields as `Sapphire_Plan.md` §1.4
+allows since 2026-10-26, read PCSX2's EE receive buffer through PINE for the same fields, and observed the EE's and the
+IOP's units' registers and counts, never a program counter, instruction, payload or memory holding BIOS code; **that
+writer is exposed too and will never write the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

@@ -283,6 +283,11 @@ showed that every queue ends 25 IOP cycles after its start, so it is no witness 
 (`Sapphire_Native.md` §30.33): PCSX2 ends SIO2out after every queue whatever its blocks, and is a witness for that end,
 its flag and the reply's place, not for the bytes past the replies, since it clocks the whole of FIFOIN; it raises
 SIO2's interrupt again only once the flag at 1F808280h was written back (D-541), so the project's probes acknowledge it.
+*2026-10-26, D-620* (`Sapphire_Native.md` §30.40): with the player's BIOS stepped to its browser, PCSX2's EE RAM read
+through PINE at the EE's SIF receive address showed the SIF RPC calls the BIOS makes there, each END packet's documented
+fields; the buffer is overwritten by each packet, so PCSX2 is a witness for which servers are called and roughly how
+often, not for every call. The reading code was a scratch copy of the tool, never committed, as `Sapphire_Plan.md` §1.4
+asks of a trace.
 
 ### 4.6 The SPU2's sound (2026-10-25, stage S26)
 

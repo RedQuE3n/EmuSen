@@ -3891,6 +3891,59 @@ it.*
 - **Pinned by:** nothing.
 - **Implemented in:** none.
 
+### D-620. The SIF link while OSDSYS's browser is entered: every documented SIF RPC call is answered; the browser's polling of the card server and the multitap server, which PCSX2 begins two seconds after Cross, never begins on Sapphire, and the pad server's call every 64 fields stops after its third
+
+*Numbered from D-620 at the step that traced the SIF link (2026-10-26), other stages being built beside it.*
+
+- **Opened:** 2026-10-26, at the SIF link step (`Sapphire_Native.md` §30.38), decided by the tester as §30.36 Q1(a): with
+  D-383 and D-540 fixed, OSDSYS's browser stays black from field 1920, card or none, and no unit the hardware's reports
+  cover is seen waiting.
+- **Documents read:** ps2tek at `1c91660`, "Subsystem Interface (SIF)" whole: "SIF Registers" (MSCOM and SMCOM as each
+  side's receive address), "SIF DMA", "SIF RPC Basics" (BIND answered by an END packet carrying the server, CALL by an END
+  packet once the server's function returns), "SIF RPC Structs and Definitions" (`SifCmdHeader`, `SifRpcPktHeader`),
+  "SIF RPC Commands" (80000000h to 8000000Ch with their packets' fields) and "SIF RPC System Servers" (the ids, among them
+  80000100h Pad, 80000400h Memory cards, 80000593h CDVD S commands, 80000903h MTAP Get Connection); "CDVD I/O Ports"
+  (1F40200Fh, the disc type) and the S commands' list; "EE Timers" (T3 reserved by the BIOS for alarms); ps2tek's
+  "BIOS IOP PADMAN" (a heading only, "(todo)"). Sony's *EE User's Manual* §3.1 (INT_SBUS, "detection of an interrupt
+  from a peripheral on SBUS", set in I_MASK while the browser is black and never raised by Sapphire, D-141). No
+  document names what the browser waits for.
+- **Test program:** none of the project's: no defect was found for one to prove. **The trace on Sapphire** (a build of
+  its own, not committed, the trace kept in scratch and deleted when the step was recorded): every SIF0 and SIF1 DMA tag
+  the IOP's channels 9 and 10 moved, and for each packet sent to a side's receive address (SMCOM's, or the EE's as SIFCMD
+  Init and Change SADDR set it) the `SifCmdHeader` and the documented fields of BIND, CALL and END (client, server id,
+  function number, sizes, mode), no payload (but for one run's first build, `Sapphire_Native.md` §30.39); from
+  power-on to field 2200, Cross on "Browser" at 1730, once with the crate's formatted card in slot 1 and once with slot 1
+  empty. The two traces are the same call for call: twelve servers
+  bound and every call answered but one, a no-wait call (mode 1, no reply buffer) to server 80000596h made at field 30,
+  which PCSX2 does not answer within 30 seconds either; on entering the browser two calls to server 80000601h (function
+  5200h, also called at every press, and 5015h), both answered, and after them only the call to 80000593h made once a
+  second since field 30; the pad server 80000100h called at fields 32 (twice), 55 and 75 and never again; the card
+  server 80000400h at fields 30, 52 and 53 only, and 80000902h and 80000903h bound and never called. With the link
+  quiet the EE's other units were idle: every EE DMA channel stopped, the GIF and both VIFs idle, the GS's display
+  registers unchanged, no timer register written after field 13 and T3's interrupts never enabled, I_STAT empty with
+  only VBON and VBOF raised; the EE's system calls fall from about 100 a field before Cross to about 20 once the screen
+  is black.
+- **Referee:** PCSX2 2.8.2, its EE RAM read through PINE at the EE's receive address, 00411940h, the address both
+  consoles' packets name, about once a millisecond; only END packets' documented fields were kept (`Sapphire_Native.md`
+  §30.40). Packets that follow one another within a poll are missed, so it counts no call exactly. With slot 1 empty,
+  stepped through the same setup: the pad server answered at 0.43, 1.01 and 1.35 seconds after PCSX2 begins to draw, as
+  Sapphire's at fields 32, 55 and 75, and then every 1.07 seconds (64 fields) throughout the setup, the menu and the
+  browser; the S-command server once a second, as on Sapphire; at Cross the sound server's call, as on Sapphire; and
+  **about two seconds after Cross on "Browser", calls to the card server 80000400h and to 80000903h, each about fifteen
+  times a second**, which went on while the browser showed "There is no data."; neither server was called during the
+  setup or the menu.
+- **Conclusion:** **open**. No documented call goes unanswered or is answered late on Sapphire while the browser is
+  entered, so the SIF, the IOP's DMAC and the IOP's modules answer what the EE asks; the EE never asks what the
+  browser asks on PCSX2 two seconds after Cross, and an EE thread that calls the pad server every 64 fields on PCSX2
+  stops after its third call on Sapphire, 27 seconds of console time before the browser is entered and with the menu
+  still answering the pad. The stall is therefore on the EE's side of the link, or in an answer's contents (the pad
+  server's reply at field 75 being the first candidate), neither of which the step may read: finding it needs either
+  what the EE's threads wait on or a reply's payload, both beyond §1.4's allowance and put to the tester
+  (`Sapphire_Native.md` §30.42 Q1). The card is never reached, so P8 stands as observed.
+- **Depends on it:** nothing yet.
+- **Pinned by:** nothing.
+- **Implemented in:** none.
+
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 
 - **Opened:** 2026-10-25, at stage S19.

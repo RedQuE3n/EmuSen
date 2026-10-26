@@ -156,6 +156,14 @@ impl dmac::Memory for Map {
     }
 }
 
+/// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for, after the quick path's
+/// clock moves on the run's quiet path (Sapphire_Recompiler.md §48.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tail {
+    Quiet(u64),
+    Held(bool),
+}
+
 pub struct Board {
     pub map: Map,
     pub dmac: Dmac,
@@ -282,11 +290,22 @@ impl Board {
     /// due and the GIF, the VIFs and the VUs idle, only the clocks move and the IOP is brought along, which is what the
     /// whole path would do (Sapphire_Native.md §35.7).
     pub fn run_to(&mut self, t: u64, spram: &mut [u8]) {
+        let quick = self.run_to_held(t, spram);
+        self.take_wake(quick, spram);
+    }
+
+    /// The next time any unit needs attention: `run_to` runs no event before it.
+    pub fn next_event(&self) -> u64 {
+        self.next
+    }
+
+    /// `run_to` up to its last act, the DMAC woken if the IOP's side has changed a SIF FIFO, which is left pending; whether
+    /// the quick path ran (Sapphire_Recompiler.md §48.5).
+    fn run_to_held(&mut self, t: u64, spram: &mut [u8]) -> bool {
         if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
             self.now = self.now.max(t);
             self.iop.catch_up(self.now);
-            self.quick_wake(spram);
-            return;
+            return true;
         }
         while self.next <= t {
             let at = self.next;
@@ -347,7 +366,15 @@ impl Board {
         self.run_gif(t);
         self.reschedule();
         self.iop.catch_up(self.now);
-        if self.iop.bus.sif.take_wake_ee() {
+        false
+    }
+
+    /// `run_to`'s last act: the DMAC woken at the board's time if the IOP's side has changed a SIF FIFO, and run if due;
+    /// on the quick path the IPU's lines after it.
+    fn take_wake(&mut self, quick: bool, spram: &mut [u8]) {
+        if quick {
+            self.quick_wake(spram);
+        } else if self.iop.bus.sif.take_wake_ee() {
             self.dmac.wake(self.now);
             if self.dmac.next_event() <= self.now {
                 self.step_dmac(self.now, spram);
@@ -357,12 +384,14 @@ impl Board {
     }
 
     /// `run_to` through each of `times` in turn, as that many calls make it, `each` shown the lines after each time and
-    /// stopping the run by returning false; the times run. While no event falls by the last time and the GIF, the VIFs
-    /// and the VUs are idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's
-    /// DMAC, so the checks are made once and the clocks' moves once at the end; from a wake on, each time is `run_to`
-    /// itself (Sapphire_Native.md §44.5).
-    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], each: &mut dyn FnMut(usize, (bool, bool, bool)) -> bool) -> usize {
-        let Some(&last) = times.last() else { return 0 };
+    /// stopping the run by returning false. While no event falls by the last time and the GIF, the VIFs and the VUs are
+    /// idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's DMAC, so the checks
+    /// are made once and the clocks' moves once at the end; from a wake on, each time is `run_to` itself
+    /// (Sapphire_Native.md §44.5). The DMAC is the only unit that reads or writes memory or the scratchpad, and it may not
+    /// run within the first `guard` times (Sapphire_Recompiler.md §48.5): the run stops before an event falls due there, or before a wake is
+    /// taken there. The steps that stand (the times run, a held one with its `Tail` included) and the tail.
+    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, each: &mut dyn FnMut(usize, (bool, bool, bool)) -> bool) -> (usize, Option<Tail>) {
+        let Some(&last) = times.last() else { return (0, None) };
         let quiet = self.next > last && self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending();
         let mut from = 0;
         if quiet {
@@ -377,30 +406,52 @@ impl Board {
                 from += 1;
                 if !each(from - 1, lines) {
                     self.idle_through(t);
-                    return from;
+                    return (from, None);
                 }
             }
             if from == times.len() {
                 self.idle_through(last);
-                return from;
+                return (from, None);
             }
             // The wake at `times[from]`, taken as the quick path of `run_to` takes it.
             let t = times[from];
+            if from < guard {
+                return (from + 1, Some(Tail::Quiet(t)));
+            }
             self.idle_through(t);
-            self.quick_wake(spram);
+            self.take_wake(true, spram);
             from += 1;
             if !each(from - 1, self.lines()) {
-                return from;
+                return (from, None);
             }
         }
         while from < times.len() {
-            self.run_to(times[from], spram);
+            let t = times[from];
+            if from < guard && self.next <= t {
+                return (from, None);
+            }
+            let quick = self.run_to_held(t, spram);
+            if from < guard && self.iop.bus.sif.wake_ee_pending() {
+                return (from + 1, Some(Tail::Held(quick)));
+            }
+            self.take_wake(quick, spram);
             from += 1;
             if !each(from - 1, self.lines()) {
-                return from;
+                return (from, None);
             }
         }
-        from
+        (from, None)
+    }
+
+    /// The rest of the time a guarded `run_through` stopped inside.
+    pub fn finish(&mut self, tail: Tail, spram: &mut [u8]) {
+        match tail {
+            Tail::Quiet(t) => {
+                self.idle_through(t);
+                self.take_wake(true, spram);
+            }
+            Tail::Held(quick) => self.take_wake(quick, spram),
+        }
     }
 
     /// The clocks' moves `run_to`'s quick path makes at `t` once it has found the units idle.
@@ -426,10 +477,6 @@ impl Board {
     /// no wake pending; and that event's time.
     pub(crate) fn quiet(&self) -> bool {
         self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending()
-    }
-
-    pub(crate) fn next_event(&self) -> u64 {
-        self.next
     }
 
     /// A register whose read changes nothing and whose value only the board's events, the IOP side's wake and the EE's

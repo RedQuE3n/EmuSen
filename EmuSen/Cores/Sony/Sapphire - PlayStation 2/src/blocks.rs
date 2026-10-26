@@ -1,16 +1,17 @@
-//! The EE's recompiled tier as the machine runs it (Sapphire_Plan.md §7, S36): the blocks by virtual address, each
+//! The EE's recompiled tier as the machine runs it (Sapphire_Plan.md §7, S36 and S37): the blocks by virtual address, each
 //! checked against the instruction cache on entry, handed to `emusen-jit`'s compiler at its `threshold`-th entry, and run
 //! between the interpreter's steps. A compiled block leaves the board behind it; its exit brings the board through each
 //! of its instructions' cycles in turn, as `System::step` would have, and keeps the instructions before the first
-//! interrupt the interpreter would take. Sapphire_Native.md §44 is the record.
+//! interrupt the interpreter would take, or before the DMAC would run between two of its accesses to memory.
+//! Sapphire_Native.md §44 and Sapphire_Recompiler.md §48 are the record.
 
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
-use crate::board::System;
+use crate::board::{System, Tail};
 use crate::ee::Halt;
-use crate::ee::jit::{self, Code, Context, FINAL, Jit, Options, Slot, shape};
+use crate::ee::jit::{self, Code, Context, FINAL, Jit, Options, PAGES, Page, SHORT, Slot, kind, shape};
 use emusen_jit::verify::Reference;
 
 /// Bytes of code past which every block is dropped and compiled again as it runs (`EmuSen_Jit.md` §3.4).
@@ -42,7 +43,15 @@ struct Block {
     words: Box<[u32]>,
     options: Options,
     state: State,
+    /// Entries in a row whose first instruction, a load or store, left at once; and the entries left to the
+    /// interpreter after enough of them, as a refused block's are (Sapphire_Recompiler.md §48.4).
+    idle: u8,
+    rest: u8,
 }
+
+/// Entries in a row that run nothing before a block is rested, and the entries it rests for.
+const IDLE: u8 = 4;
+const REST: u8 = 64;
 
 /// What the dispatcher counted.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -60,6 +69,17 @@ pub struct Stats {
     /// Entries left to the interpreter because a line of the block was not in the cache, or a new block ran into one.
     pub refills: u64,
     pub waits: u64,
+    /// Rollbacks for the DMAC due between a block's loads and stores, and rollbacks that kept the state after its last
+    /// one (Sapphire_Recompiler.md §48.5).
+    pub dmac_stops: u64,
+    pub kept_past: u64,
+    /// Pages the translation cache filled, and the generations it made.
+    pub fills: u64,
+    pub generations: u64,
+    /// Loads and stores that left their blocks, by `Context::left`'s reasons.
+    pub left: [u64; 5],
+    /// Entries that ran only to the first line the instruction cache did not hold.
+    pub to_line: u64,
 }
 
 /// A hash of a word address, for the map of blocks.
@@ -86,13 +106,31 @@ pub struct Blocks {
     pub threshold: u32,
     /// Wait for each block's code when it is handed over, as the tests do.
     pub wait: bool,
+    /// A new block that would run on into a line neither the cache nor RDRAM holds waits for the interpreter's fetch, and
+    /// one past a line the cache does not hold is shaped from RDRAM (true, the default); false shapes it from the lines
+    /// the cache holds, so that code run once is compiled in short blocks, as a test of each instruction wants
+    /// (Sapphire_Recompiler.md §48.4, §48.7).
+    pub wait_lines: bool,
     /// Compromise C1 in the code compiled from now on (off by default; `effect: accuracy`).
     pub fixed_cost: bool,
     /// The registers written out after each instruction, for measuring what holding them buys.
     pub spill: bool,
+    /// Loads and stores compiled into blocks (S37); without, each ends its block as at S36.
+    pub memory: bool,
+    /// The most instructions a block is shaped with, at most `shape::MAX`.
+    pub longest: usize,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     pub stats: Stats,
     ctx: Box<Context>,
+    /// The translation cache the context points at, and what its generation was made for: the TLB's stamp, the mode,
+    /// ASID and configuration, and RDRAM's place.
+    pages: Box<[Page]>,
+    key: [u64; 3],
+    generation: u64,
+    /// The last keys seen with their generations: a page filled under one stays valid while its key does, so a return
+    /// to a key (the kernel's handler and back to the program) finds its pages again.
+    recent: [([u64; 3], u64); 4],
+    turn: usize,
 }
 
 impl Default for Blocks {
@@ -103,14 +141,55 @@ impl Default for Blocks {
 
 impl Blocks {
     pub fn new() -> Blocks {
-        let ctx = Box::new(Context { times: [0; shape::MAX], lines: [0; shape::MAX], steps: 0, replay, hook, owner: std::ptr::null_mut(), spill: [0; 36] });
+        let mut pages = vec![Page::default(); PAGES].into_boxed_slice();
+        let ctx = Box::new(Context {
+            times: [0; shape::MAX],
+            lines: [0; shape::MAX],
+            steps: 0,
+            limit: 0,
+            replay,
+            hook,
+            owner: std::ptr::null_mut(),
+            spill: [0; 36],
+            fill,
+            pages: pages.as_mut_ptr(),
+            gen1: 1 << 32 | 1,
+            horizon: 0,
+            guard: 0,
+            base: 0,
+            logged: 0,
+            uncached: 0,
+            uncached_loads: 0,
+            dummy: [0; 2],
+            log: [[0; 3]; 2 * shape::MAX],
+            left: [0; 5],
+        });
         let mut jit = Jit::new(jit::R5900, BUDGET);
         jit.perf_map = std::env::var("EMUSEN_SAPPHIRE_PERFMAP").is_ok_and(|v| v == "1");
-        Blocks { map: HashMap::default(), jit, threshold: THRESHOLD, wait: false, fixed_cost: false, spill: false, verify: None, stats: Stats::default(), ctx }
+        Blocks {
+            map: HashMap::default(),
+            jit,
+            threshold: THRESHOLD,
+            wait: false,
+            wait_lines: true,
+            fixed_cost: false,
+            spill: false,
+            memory: true,
+            longest: shape::MAX,
+            verify: None,
+            stats: Stats::default(),
+            ctx,
+            pages,
+            key: [0; 3],
+            generation: 1,
+            recent: [([0; 3], 0); 4],
+            turn: 0,
+        }
     }
 
     /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`,
-    /// `EMUSEN_SAPPHIRE_SPILL=1`.
+    /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
+    /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -118,6 +197,10 @@ impl Blocks {
         }
         b.fixed_cost = std::env::var("EMUSEN_SAPPHIRE_C1").is_ok_and(|v| v == "1");
         b.spill = std::env::var("EMUSEN_SAPPHIRE_SPILL").is_ok_and(|v| v == "1");
+        b.memory = !std::env::var("EMUSEN_SAPPHIRE_MEMORY").is_ok_and(|v| v == "0");
+        if let Some(n) = std::env::var("EMUSEN_SAPPHIRE_LONGEST").ok().and_then(|v| v.parse::<usize>().ok()) {
+            b.longest = n.clamp(2, shape::MAX);
+        }
         b
     }
 
@@ -157,9 +240,37 @@ impl Blocks {
         }
     }
 
-    /// Every block forgotten, its code kept until the budget drops the module.
+    /// Every block forgotten, its code kept until the budget drops the module; the translation cache emptied.
     pub fn forget(&mut self) {
         self.map.clear();
+        self.key = [0; 3];
+        self.recent = [([0; 3], 0); 4];
+    }
+
+    /// The translation cache made valid for the machine as it stands: a new generation when anything a page's meaning
+    /// depends on has changed since the last entry.
+    fn translation(&mut self, sys: &System) {
+        let [stamp, mode] = sys.ee.translation_key();
+        let key = [stamp, mode, sys.board.map.rdram.as_ptr() as u64];
+        if key != self.key {
+            self.key = key;
+            let generation = match self.recent.iter().find(|(k, _)| *k == key) {
+                Some(&(_, g)) => g,
+                None => {
+                    self.generation += 1;
+                    if self.generation > u64::from(u32::MAX) {
+                        self.pages.fill(Page::default());
+                        self.recent = [([0; 3], 0); 4];
+                        self.generation = 1;
+                    }
+                    self.recent[self.turn] = (key, self.generation);
+                    self.turn = (self.turn + 1) % self.recent.len();
+                    self.stats.generations += 1;
+                    self.generation
+                }
+            };
+            self.ctx.gen1 = generation << 32 | 1;
+        }
     }
 
     /// The compiler's counters: blocks compiled, refused, and bytes of code.
@@ -187,7 +298,7 @@ impl Blocks {
     }
 
     fn options(&self, sys: &System) -> Options {
-        Options { single: sys.ee.single_issue(), verify: matches!(self.verify, Some((Verify::Steps, _))), fixed_cost: self.fixed_cost, spill: self.spill }
+        Options { single: sys.ee.single_issue(), verify: matches!(self.verify, Some((Verify::Steps, _))), fixed_cost: self.fixed_cost, spill: self.spill, memory: self.memory, blocking: sys.ee.blocking_loads() }
     }
 }
 
@@ -215,6 +326,11 @@ struct Run {
     verify: *mut Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     /// The verifier's finding inside a helper, raised once the code has returned (a panic cannot cross compiled code).
     failed: Option<String>,
+    /// What is left of the time the replay stopped inside, when it stopped before a wake of the DMAC.
+    tail: Option<Tail>,
+    /// The replay stopped for the DMAC, not for an interrupt.
+    guarded: bool,
+    fills: u64,
 }
 
 fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
@@ -223,6 +339,12 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     // A block not compiled yet is counted, and one refused passed over, without the entry's checks: neither runs code.
     let threshold = blocks.threshold;
+    if let Some(b) = blocks.map.get_mut(&sys.ee.pc)
+        && b.rest > 0
+    {
+        b.rest -= 1;
+        return None;
+    }
     match blocks.map.get_mut(&sys.ee.pc).map(|b| &mut b.state) {
         Some(State::Refused(n)) => {
             *n = n.wrapping_add(1);
@@ -239,16 +361,14 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let paddr = sys.ee.block_entry()?;
     let pc = sys.ee.pc;
     let options = blocks.options(sys);
-    let held = blocks.map.get(&pc).map(|b| if b.paddr == paddr && b.options == options { sys.ee.holds(pc, paddr, &b.words) } else { Some(false) });
-    if held == Some(None) {
-        // A line of the block is not in the cache: the interpreter's fetch refills it, and the block stands.
-        blocks.stats.refills += 1;
-        return None;
-    }
-    if held != Some(Some(true)) {
-        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX);
-        let (shaped, short) = shape::shape(&words);
-        if short && missed {
+    let held = blocks.map.get(&pc).and_then(|b| if b.paddr == paddr && b.options == options { sys.ee.held_words(pc, paddr, &b.words) } else { None });
+    if held.is_none() {
+        // Past a line the cache does not hold, the words RDRAM holds; only the lines held when the dispatcher does not
+        // wait for lines (a test's code run once).
+        let rdram: &[u8] = if blocks.wait_lines { &sys.board.map.rdram } else { &[] };
+        let (words, missed) = sys.ee.cached_words(pc, paddr, blocks.longest, rdram);
+        let (shaped, short) = shape::shape(&words, options.memory);
+        if short && missed && blocks.wait_lines {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.
             blocks.stats.waits += 1;
             return None;
@@ -258,12 +378,21 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         if words.is_empty() {
             return None;
         }
-        if blocks.map.insert(pc, Block { paddr, words: words.into_boxed_slice(), options, state }).is_some() {
+        if blocks.map.insert(pc, Block { paddr, words: words.into_boxed_slice(), options, state, idle: 0, rest: 0 }).is_some() {
             blocks.stats.reshaped += 1;
         }
     }
     let wait = blocks.wait;
     let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+    // The instructions before the first line the cache does not hold, to the last line the block can leave at.
+    let held = held.unwrap_or_else(|| sys.ee.held_words(pc, paddr, &b.words).unwrap_or(0));
+    let b_len = b.words.len();
+    let limit = if held == b_len { held } else { leaving_point(pc, &b.words, held) };
+    if limit == 0 {
+        // The block's first line is not in the cache: the interpreter's fetch refills it, and the block stands.
+        blocks.stats.refills += 1;
+        return None;
+    }
     let code = match &b.state {
         State::Ready(code) => *code,
         State::Refused(_) => return None,
@@ -294,9 +423,14 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     if b.words.len() as u64 > left {
         return None;
     }
-    let mut run = Run { sys, verify: &mut blocks.verify, failed: None };
+    blocks.translation(sys);
+    let mut run = Run { sys, verify: &mut blocks.verify, failed: None, tail: None, guarded: false, fills: 0 };
+    blocks.stats.to_line += u64::from(limit < b_len);
     let ctx = &mut *blocks.ctx;
     ctx.owner = (&mut run as *mut Run).cast();
+    ctx.limit = limit as u32;
+    ctx.horizon = sys.board.next_event();
+    (ctx.uncached, ctx.uncached_loads, ctx.guard, ctx.base, ctx.logged) = (0, 0, 0, 0, 0);
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
     // borrows the machine while the code and its helpers run through these pointers.
     let exit = unsafe { code(&raw mut (*run.sys).ee, ctx) };
@@ -304,11 +438,26 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         panic!("{f}");
     }
     let steps = ctx.steps;
+    blocks.stats.fills += run.fills;
+    for (total, n) in blocks.stats.left.iter_mut().zip(ctx.left.iter_mut()) {
+        *total += std::mem::take(n);
+    }
     match exit {
         jit::DONE => {
+            let b = blocks.map.get_mut(&pc).expect("the block is in the map");
             if steps == 0 {
+                // Its first instruction's access left at once (a register polled, a miss): after a few in a row the
+                // interpreter takes the next entries without the entry's checks.
+                b.idle += 1;
+                if b.idle >= IDLE {
+                    (b.idle, b.rest) = (0, REST);
+                }
                 return None;
             }
+            b.idle = 0;
+            sys.board.traffic[0] += ctx.uncached_loads;
+            sys.board.traffic[1] += ctx.uncached;
+            sys.ee.count_steps(u64::from(steps));
             blocks.stats.entered += 1;
             blocks.stats.compiled_steps += u64::from(steps);
             if let Some((Verify::Blocks, v)) = &mut blocks.verify {
@@ -321,27 +470,115 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             Some(u64::from(steps))
         }
         _ => {
-            // The replay brought the board through `steps` instructions' cycles and found an interrupt due after them:
-            // the interpreter runs those instructions on the untouched core, with the lines each step would have seen.
+            // The replay brought the board through `steps` instructions' cycles and found an interrupt due after them, or
+            // the DMAC due before the block's last access: the interpreter runs those instructions with the lines each
+            // step would have seen, then the wake the replay held. Past the last access the core holds the state after it
+            // and the instructions from there run again; short of it the stores are undone and every instruction runs
+            // again (Sapphire_Recompiler.md §48.5).
+            let (steps, base) = (steps as usize, ctx.base as usize);
+            let kept_past = base > 0 && steps >= base;
+            let start = if kept_past { base } else { 0 };
+            if kept_past {
+                sys.board.traffic[0] += ctx.uncached_loads;
+                sys.board.traffic[1] += ctx.uncached;
+                sys.ee.count_steps(base as u64);
+                blocks.stats.kept_past += 1;
+            } else {
+                undo(ctx);
+            }
+            blocks.stats.dmac_stops += u64::from(run.guarded);
             blocks.stats.rollbacks += 1;
-            blocks.stats.rerun_steps += u64::from(steps);
-            for j in 0..steps as usize {
+            blocks.stats.rerun_steps += (steps - start) as u64;
+            for j in start..steps {
                 if j > 0 {
                     set_lines(sys, ctx.lines[j - 1]);
                 }
                 sys.ee.step(&mut sys.board).expect("a block's instruction is the interpreter's");
-                if let Some((_, v)) = &mut blocks.verify {
+            }
+            match run.tail {
+                Some(tail) => {
+                    let System { ee, board } = &mut *sys;
+                    board.finish(tail, &mut ee.spram[..]);
+                    set_lines(sys, pack(sys.board.lines()));
+                }
+                None if steps > 0 => set_lines(sys, ctx.lines[steps - 1]),
+                None => {}
+            }
+            if kept_past && steps == base && base >= 2 {
+                // No step ran again to make the interrupt check's write of IP2 and IP3 that the last kept one made.
+                set_cause_lines(sys, ctx.lines[base - 2]);
+            }
+            if let Some((_, v)) = &mut blocks.verify {
+                for _ in 0..steps {
                     v.reference.step();
                     v.steps += 1;
                 }
+                v.check(sys, "a block's instructions run again before an interrupt or the DMAC");
             }
-            set_lines(sys, ctx.lines[steps as usize - 1]);
-            if let Some((_, v)) = &blocks.verify {
-                v.check(sys, "a block's instructions run again before an interrupt");
-            }
-            Some(u64::from(steps))
+            (steps > 0).then_some(steps as u64)
         }
     }
+}
+
+/// The last instruction at most `held` into the block where it can leave for a line the cache does not hold: a line's
+/// first instruction that is not a delay slot (`emit::lower`'s check); 0 when there is none.
+fn leaving_point(pc: u32, words: &[u32], held: usize) -> usize {
+    (1..=held.min(words.len().saturating_sub(1)))
+        .rev()
+        .find(|&i| pc.wrapping_add(4 * i as u32) & 63 == 0 && shape::class(words[i - 1]) != shape::Class::Branch)
+        .unwrap_or(0)
+}
+
+/// The block's stores undone, last first, from the context's log.
+fn undo(ctx: &Context) {
+    for &[addr, lo, hi] in ctx.log[..ctx.logged as usize].iter().rev() {
+        let p = (addr & !SHORT) as *mut u8;
+        // SAFETY: each address is one the block's code read 8 or 16 bytes at and stored into during this call, inside
+        // the core, the scratchpad, RDRAM or the context, all alive and borrowed by nothing else now.
+        unsafe {
+            std::ptr::write_unaligned(p.cast::<u64>(), lo);
+            if addr & SHORT == 0 {
+                std::ptr::write_unaligned(p.add(8).cast::<u64>(), hi);
+            }
+        }
+    }
+}
+
+fn set_cause_lines(sys: &mut System, l: u8) {
+    use crate::ee::cop0::{CAUSE, cause};
+    let c = &mut sys.ee.cop0[CAUSE];
+    *c = *c & !(cause::IP2 | cause::IP3) | if l & 1 != 0 { cause::IP2 } else { 0 } | if l & 2 != 0 { cause::IP3 } else { 0 };
+}
+
+/// The translation cache's fill: the page of `vaddr` as a data access in the current mode would place it, cached
+/// whatever it is, so that a page the code cannot serve is not asked for again (Sapphire_Recompiler.md §48.3).
+extern "C" fn fill(ctx: *mut Context, vaddr: u32) -> u32 {
+    use crate::ee::{Mode, Place};
+    // SAFETY: called by compiled code during `block`, whose `Run` and context are alive and borrowed by nothing else.
+    let ctx = unsafe { &mut *ctx };
+    let run = unsafe { &mut *ctx.owner.cast::<Run>() };
+    let sys = unsafe { &mut *run.sys };
+    run.fills += 1;
+    let (meta, host) = match sys.ee.data_page(vaddr) {
+        None => (kind::NONE, 0),
+        Some((place, writable)) => {
+            let w = if writable { kind::WRITABLE } else { 0 };
+            match place {
+                Place::Scratchpad(o) => (kind::SCRATCHPAD | w, sys.ee.spram.as_ptr() as u64 + u64::from(o & !0xFFF)),
+                Place::Physical(p, Mode::Cached) => (kind::CACHED | w | u64::from(p >> 12) << 32, 0),
+                Place::Physical(p, m @ (Mode::Uncached | Mode::Accelerated)) if (p as usize) < sys.board.map.rdram.len() => {
+                    let accel = if m == Mode::Accelerated { kind::ACCELERATED } else { 0 };
+                    (kind::UNCACHED | accel | w, sys.board.map.rdram.as_ptr() as u64 + u64::from(p & !0xFFF))
+                }
+                Place::Physical(..) => (kind::NONE, 0),
+            }
+        }
+    };
+    let i = jit::page_index(vaddr);
+    // SAFETY: the pages the context points at are `Blocks::pages`, alive for the call.
+    let page = unsafe { &mut *ctx.pages.add(i) };
+    *page = Page { tag: ctx.gen1 | u64::from(vaddr & !0xFFF), host, meta, pad: 0 };
+    1
 }
 
 fn settle(slot: Arc<Slot>) -> Option<State> {
@@ -380,11 +617,15 @@ extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
     let System { ee, board } = sys;
     let times = &ctx.times[..m];
     let lines_out = &mut ctx.lines;
-    let ran = board.run_through(times, &mut ee.spram[..], &mut |j, lines| {
+    let mut interrupted = false;
+    let (ran, tail) = board.run_through(times, &mut ee.spram[..], ctx.guard as usize, &mut |j, lines| {
         lines_out[j] = pack(lines);
         let ip7 = ip7 || u64::from(compare.wrapping_sub(count0).wrapping_sub(1)) < times[j].wrapping_sub(seen0);
-        !(j + 1 < m && crate::ee::Ee::interrupt_due(status, cause_now, lines.0, lines.1, ip7))
+        interrupted = j + 1 < m && crate::ee::Ee::interrupt_due(status, cause_now, lines.0, lines.1, ip7);
+        !interrupted
     });
+    run.tail = tail;
+    run.guarded = ran < m && !interrupted;
     if ran < m {
         ctx.steps = ran as u32;
         return ctx.steps;
@@ -464,6 +705,13 @@ pub fn compare(a: &System, b: &System, quiet: bool) -> Option<String> {
     same!(cpcond0);
     same!(ucab.valid);
     same!(exceptions);
+    // What a block's loads and stores reach besides RDRAM, which the whole state compares.
+    if let Some(i) = (0..x.dcache.tags.len()).find(|&i| x.dcache.tags[i] != y.dcache.tags[i] || x.dcache.data[i] != y.dcache.data[i]) {
+        return named(&format!("the data cache's set {i}"), &x.dcache.tags[i], &y.dcache.tags[i]);
+    }
+    if let Some(i) = (0..x.spram.len()).find(|&i| x.spram[i] != y.spram[i]) {
+        return named(&format!("the scratchpad's byte {i:x}"), &x.spram[i], &y.spram[i]);
+    }
     if x.timing != y.timing {
         return named("the issue model", &x.timing, &y.timing);
     }

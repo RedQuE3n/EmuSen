@@ -186,6 +186,15 @@ pub struct Ee {
     pub modes: [u64; 5],
     /// Lines refilled into either cache or the UCAB: the core's own count, which idle skipping reads (Sapphire_Native.md §47).
     pub fills: u64,
+    /// A mark unique to the TLB's contents, new at every write and load: the recompiler's translation cache is keyed by it
+    /// (Sapphire_Recompiler.md §48.3).
+    pub(crate) tlb_stamp: u64,
+}
+
+/// A mark no TLB has had before.
+pub(crate) fn stamp() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 const MEMO: usize = 4096;
@@ -239,6 +248,7 @@ impl Ee {
             exceptions2: [0; 4],
             modes: [0; 5],
             fills: 0,
+            tlb_stamp: stamp(),
         }
     }
 
@@ -768,6 +778,7 @@ impl emusen_native::State for Ee {
         self.cycles_seen = r.u64()?;
         self.timing.read_state(r)?;
         self.tlb.read_state(r)?;
+        self.tlb_stamp = stamp();
         self.dcache.read_state(r)?;
         self.icache.read_state(r)?;
         self.ucab.read_state(r)?;

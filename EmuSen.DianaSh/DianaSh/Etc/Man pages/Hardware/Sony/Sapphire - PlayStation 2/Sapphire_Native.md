@@ -10815,6 +10815,17 @@ page's §16.4, §20, §22, §23, §36, §41, §43 and §44; the core's `board.rs
   (the largest refusal left on Jak and Daxter, by arrivals waiting).
 - The handheld: no measurement was made there.
 
+## 48. Stage S37, the EE recompiler: loads and stores, with the RDRAM, scratchpad and data cache fast paths (2026-10-26)
+
+*Recorded in `Sapphire_Recompiler.md` §48, a page of its own because this one reached the size a page in the tree may
+have; that page keeps this one's numbering.* The EE recompiler's blocks hold the loads and stores of every width and PREF:
+the scratchpad and RDRAM reached directly, a cached page through the data cache's own lines on a hit, an uncached load
+with its bus wait, everything else left to the interpreter before the instruction; a translation cache keyed by the TLB's
+stamp and the mode; the board's replay keeping the DMAC out of a block's times before its last access, with rollbacks
+that undo a block's stores; a block running to the first line the instruction cache does not hold. Every oracle equal to
+the interpreter on each base; Jak and Daxter's loading 1.4 to 2 times S36's, its memory card screen 0.94 with the cause
+named; no dispute.
+
 ## 49. Stage S29, the PlayStation 2 to players (2026-10-26)
 
 *Numbered §49 and its disputes from D-740, S33, S37, S40 and the GS's fast path beside it. On the tester's decision of

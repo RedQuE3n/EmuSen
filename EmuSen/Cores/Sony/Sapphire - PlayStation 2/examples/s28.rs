@@ -15,7 +15,8 @@
 //! reports printed at the next limit, counting every register access from then on) and `quit`. Pictures are
 //! `<out-dir>/frame-<n>.ppm`; `<out-dir>/status` is the frame reached; the EEPROM is written to `<out-dir>/nvm.bin`
 //! whenever the console changes it, and the sound, with `sound`, to `<out-dir>/sound.raw` (48,000 Hz, stereo s16).
-//! With `registers` every register access the units answer is counted from power-on, for the reports.
+//! With `registers` every register access the units answer is counted from power-on, for the reports; with `trace` the
+//! drive's register accesses are kept in order and written with the reports to `<out-dir>/trace.txt`.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -91,6 +92,7 @@ fn main() {
     let opt = |k: &str| a[5..].iter().find_map(|o| o.strip_prefix(&format!("{k}=")).map(str::to_owned));
     let sound = a[5..].iter().any(|o| o == "sound");
     let all = a[5..].iter().any(|o| o == "registers");
+    let trace = a[5..].iter().any(|o| o == "trace");
     let Ok(Media::Disc(disc)) = Media::read(&image) else { panic!("not a PlayStation 2 disc") };
     let game = program_ranges(&image, &disc.program);
     println!("disc: {} sectors, program {}, serial {:?}; the program's segments {:X?}", disc.sectors, disc.program, disc.serial, game);
@@ -129,6 +131,7 @@ fn main() {
         m.load_state(&std::fs::read(&s).expect("the state")).expect("the state loads");
         println!("loaded {s} at frame {}", m.frames);
     }
+    m.sys.board.iop.bus.cdvd.trace = trace.then(Vec::new);
     m.sys.board.reports.all = all;
     m.sys.board.iop.bus.reports.all = all;
     let mut sound_file = sound.then(|| std::io::BufWriter::new(std::fs::OpenOptions::new().create(true).append(true).open(out.join("sound.raw")).unwrap()));
@@ -147,7 +150,7 @@ fn main() {
             std::fs::write(out.join("status"), format!("{}\n", m.frames)).unwrap();
             if c.reports && !reported {
                 reported = true;
-                print_reports(&m);
+                print_reports(&mut m, &out);
             }
             if c.quit {
                 break;
@@ -198,7 +201,7 @@ fn main() {
             );
         }
     }
-    print_reports(&m);
+    print_reports(&mut m, &out);
 }
 
 /// Where the EE is: its program counter only inside the game's own program, else only that it is outside it.
@@ -234,8 +237,22 @@ fn advance(m: &mut Machine, game: &[(u32, u32)]) {
     m.frames += 1;
 }
 
-fn print_reports(m: &Machine) {
+fn print_reports(m: &mut Machine, out: &Path) {
     println!("frame {}; stop {:?}; EE exceptions {:?} level 2 {:?}; IOP exceptions {:?}", m.frames, m.stop, m.sys.ee.exceptions, m.sys.ee.exceptions2, m.sys.board.iop.exceptions);
+    if let Some(t) = m.sys.board.iop.bus.cdvd.trace.take() {
+        let mut runs: Vec<(u32, bool, u8, usize)> = Vec::new();
+        for (o, w, v) in t {
+            match runs.last_mut() {
+                Some(r) if (r.0, r.1, r.2) == (o, w, v) => r.3 += 1,
+                _ => runs.push((o, w, v, 1)),
+            }
+        }
+        let text: String = runs.iter().map(|(o, w, v, k)| format!("{} {o:02X}h {v:02X}h x{k}\n", if *w { "W" } else { "R" })).collect();
+        std::fs::write(out.join("trace.txt"), text).unwrap();
+        println!("-- the drive's register accesses in order, repeats counted, {} runs in trace.txt", runs.len());
+    }
+    let regs: Vec<u8> = (0x20..0x40).map(|r| m.sys.board.iop.bus.cdvd.read8(r)).collect();
+    println!("CDVD registers 20h-3Fh {regs:02X?}");
     let cd = &m.sys.board.iop.bus.cdvd;
     let counts = |c: &[u32; 256]| c.iter().enumerate().filter(|p| *p.1 > 0).map(|(n, k)| format!("{n:02X}h x{k}")).collect::<Vec<_>>().join(", ");
     println!("CDVD S commands: {}; N commands: {}", counts(&cd.s_count), counts(&cd.n_count));

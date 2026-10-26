@@ -419,22 +419,23 @@ fn read_key_reports_the_disc_authenticated_at_38h() {
 /// of another form gives zeros; they read at 20h-24h only once ReadKey has run.
 #[test]
 fn read_keys_bytes_are_the_measured_fields_of_the_boot_name() {
-    for (name, key) in [
-        ("cdrom0:\\SCUS_971.24;1", [0xDE, 0x69, 0x75, 0x38, 0x25]),
-        ("cdrom0:\\EMUS_000.02;1", [0x80, 0x69, 0xB5, 0x59, 0x14]),
-        ("SCUS_981.24", [0xDF, 0x69, 0x75, 0x38, 0x65]),
-        ("SCUS_071.24", [0x86, 0x69, 0x75, 0x38, 0xA5]),
-        ("SLUS_971.24", [0xDE, 0x69, 0x95, 0x39, 0x25]),
-        ("SCES_971.24", [0xDE, 0x69, 0x71, 0x38, 0x25]),
-        ("SCUS_971.56", [0xDE, 0x69, 0x75, 0x38, 0x25]),
-        ("SCUS_999.99", [0xE1, 0x69, 0x75, 0x38, 0xFD]),
-        ("AAAA_000.00", [0x80, 0x60, 0x30, 0x18, 0x04]),
-        ("ZZZZ_123.45", [0x0C, 0xAD, 0x56, 0xAB, 0xCD]),
-        ("SLUS_203.70", [0x93, 0x69, 0x95, 0x39, 0x95]),
-        ("SLPM_650.51", [0xBF, 0x26, 0x94, 0x39, 0xDD]),
-        ("cdrom0:\\MAIN.ELF;1", [0; 5]),
-    ] {
-        assert_eq!(read_key(name), key, "{name}");
+    let measured: [(&str, &[u8]); 13] = [
+        ("cdrom0:\\SCUS_971.24;1", &[0xDE, 0x69, 0x75, 0x38, 0x25, 0xDC]),
+        ("cdrom0:\\EMUS_000.02;1", &[0x80, 0x69, 0xB5, 0x59, 0x14, 0x04]),
+        ("SCUS_981.24", &[0xDF, 0x69, 0x75, 0x38, 0x65, 0xD4]),
+        ("SCUS_071.24", &[0x86, 0x69, 0x75, 0x38, 0xA5]),
+        ("SLUS_971.24", &[0xDE, 0x69, 0x95, 0x39, 0x25, 0xDC]),
+        ("SCES_971.24", &[0xDE, 0x69, 0x71, 0x38, 0x25]),
+        ("SCUS_971.56", &[0xDE, 0x69, 0x75, 0x38, 0x25]),
+        ("SCUS_999.99", &[0xE1, 0x69, 0x75, 0x38, 0xFD, 0xA4]),
+        ("AAAA_000.00", &[0x80, 0x60, 0x30, 0x18, 0x04, 0x04]),
+        ("ZZZZ_123.45", &[0x0C, 0xAD, 0x56, 0xAB, 0xCD, 0x0C]),
+        ("SLUS_203.70", &[0x93, 0x69, 0x95, 0x39, 0x95, 0xE4]),
+        ("SLPM_650.51", &[0xBF, 0x26, 0x94, 0x39, 0xDD, 0x84]),
+        ("cdrom0:\\MAIN.ELF;1", &[0, 0, 0, 0, 0, 0x04]),
+    ];
+    for (name, key) in measured {
+        assert_eq!(&read_key(name)[..key.len()], key, "{name}");
     }
     let mut image = dvd_image(300, None);
     let cnf = b"BOOT2 = cdrom0:\\SLUS_203.70;1\r\n";
@@ -458,9 +459,12 @@ fn read_keys_bytes_are_the_measured_fields_of_the_boot_name() {
     image[21 * 2048..21 * 2048 + cnf.len()].copy_from_slice(cnf);
     let disc = open_medium(Kept::from(image), Vec::new(), IsoForm::Mode2Form1, Lone::Detect, Kind::Dvd).unwrap();
     let mut c = Cdvd::new(Some(disc));
-    let key = |c: &mut Cdvd| (0..5).map(|k| c.read8(reg::KEY + k)).collect::<Vec<_>>();
-    assert_eq!(key(&mut c), [0; 5], "nothing before ReadKey");
-    n(&mut c, ncmd::READ_KEY, &[0, 0, 0, 3, 0x0C, 0, 0], 0);
+    let key = |c: &mut Cdvd| [0x20, 0x21, 0x22, 0x23, 0x24, 0x34, 0x38].map(|r| c.read8(r));
+    assert_eq!(key(&mut c), [0; 7], "nothing before ReadKey");
+    n(&mut c, ncmd::READ_KEY, &[0, 0, 0, 0x4B, 0, 0, 0], 0);
     finish(&mut c, 1_000_000);
-    assert_eq!(key(&mut c), [0x93, 0x69, 0x95, 0x39, 0x95], "the disc's own name");
+    assert_eq!(key(&mut c), [0x93, 0x69, 0x95, 0x39, 0x95, 0xE4, 0x05], "the disc's own name, the sixth byte and 05h after 4Bh");
+    n(&mut c, ncmd::READ_KEY, &[0, 0, 0, 3, 0x0C, 0, 0], 2_000_000);
+    finish(&mut c, 3_000_000);
+    assert_eq!(key(&mut c), [0x93, 0x69, 0x95, 0x39, 0x95, 0x00, 0x01], "01h and no sixth byte after another fourth parameter");
 }

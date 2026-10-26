@@ -42,7 +42,10 @@ pub mod reg {
     pub const S_RESULT: u32 = 0x18;
     /// ReadKey's five key bytes, 20h to 24h (D-461).
     pub const KEY: u32 = 0x20;
-    /// The disc's authentication after ReadKey: 01h once it has run on a disc, 00h before (D-461).
+    /// The sixth key byte, given by a ReadKey whose fourth parameter is 4Bh (D-461).
+    pub const KEY_EXTRA: u32 = 0x34;
+    /// The disc's authentication after ReadKey: 05h after one whose fourth parameter is 4Bh, 01h after any other, 00h
+    /// before (D-461).
     pub const KEY_STATUS: u32 = 0x38;
 }
 
@@ -222,7 +225,7 @@ pub struct Cdvd {
     key: u8,
     /// The disc's five key bytes, from its boot program's name, read at 20h-24h after ReadKey: derived from the disc,
     /// which the state names, so never written in it.
-    key_bytes: [u8; 5],
+    key_bytes: [u8; 6],
     s_command: u8,
     s_params: Fifo,
     s_result: Fifo,
@@ -249,18 +252,23 @@ pub struct Cdvd {
     pub s_last: Box<[([u8; 16], usize); 256]>,
     /// Each N command's last parameters and their count, the same report for the N commands (S28).
     pub n_last: Box<[([u8; 16], usize); 256]>,
+    /// When set, every register access in order: the offset, whether written, the value; the drive's own report (S28).
+    pub trace: Option<Vec<(u32, bool, u8)>>,
 }
 
-/// ReadKey's five bytes for a boot program named in the PlayStation 2's form, four letters, an underscore, three digits,
-/// a full stop and two (`SCUS_971.24`): bit fields of the letters' codes and of the five digits' number, measured on PCSX2
-/// over eleven names (D-461); zeros for a name of any other form, as measured.
-pub fn read_key(program: &str) -> [u8; 5] {
+/// Register 38h after a ReadKey whose fourth parameter is 4Bh, which also gives the sixth byte at 34h (D-461).
+const KEY_FULL: u8 = 0x05;
+
+/// ReadKey's six bytes (20h-24h, then 34h) for a boot program named in the PlayStation 2's form, four letters, an
+/// underscore, three digits, a full stop and two (`SCUS_971.24`): bit fields of the letters' codes and of the five
+/// digits' number, measured on PCSX2 over eleven names (D-461); for a name of any other form zeros and 04h, as measured.
+pub fn read_key(program: &str) -> [u8; 6] {
     let cut = program.rfind('\\').max(program.rfind(':')).map_or(0, |i| i + 1);
     let name = program[cut..].split(';').next().unwrap_or("").as_bytes();
     let form = name.len() == 11 && name[..4].iter().all(u8::is_ascii_alphabetic) && name[4] == b'_' && name[8] == b'.';
     let digits: Vec<u8> = name.get(5..8).into_iter().chain(name.get(9..11)).flatten().copied().collect();
     if !form || !digits.iter().all(u8::is_ascii_digit) {
-        return [0; 5];
+        return [0, 0, 0, 0, 0, 0x04];
     }
     let l = &name[..4];
     let n = digits.iter().fold(0u32, |v, d| v * 10 + u32::from(d - b'0'));
@@ -270,6 +278,7 @@ pub fn read_key(program: &str) -> [u8; 5] {
         (l[1] & 7) << 5 | (l[2] >> 2) & 0x1F,
         (l[0] & 0xF) << 4 | (l[1] >> 3) & 0xF,
         ((n & 0x1F) as u8) << 3 | (l[0] >> 4) & 7,
+        ((n >> 5 & 0x1F) as u8) << 3 | 0x04,
     ]
 }
 
@@ -327,7 +336,7 @@ impl Cdvd {
             sticky: 0,
             disk_type: disk_type::NONE,
             key: 0,
-            key_bytes: [0; 5],
+            key_bytes: [0; 6],
             s_command: 0,
             s_params: Fifo::default(),
             s_result: Fifo::default(),
@@ -347,6 +356,7 @@ impl Cdvd {
             n_count: [0; 256],
             s_last: Box::new([([0; 16], 0); 256]),
             n_last: Box::new([([0; 16], 0); 256]),
+            trace: None,
         };
         if let Some(d) = disc {
             c.in_at_power_on(d);
@@ -368,7 +378,7 @@ impl Cdvd {
         if let Disc::Dvd(v) = &mut d {
             v.set_track_path(TrackPath::Parallel);
         }
-        self.key_bytes = crate::media::boot2_by(&mut |n| user_sector(&mut d, n)).map_or([0; 5], |p| read_key(&p));
+        self.key_bytes = read_key(&crate::media::boot2_by(&mut |n| user_sector(&mut d, n)).unwrap_or_default());
         self.disc = Some(d);
     }
 
@@ -414,6 +424,14 @@ impl Cdvd {
     }
 
     pub fn read8(&mut self, offset: u32) -> u8 {
+        let v = self.register(offset);
+        if let Some(t) = self.trace.as_mut().filter(|t| t.len() < 1 << 20) {
+            t.push((offset, false, v));
+        }
+        v
+    }
+
+    fn register(&mut self, offset: u32) -> u8 {
         match offset {
             reg::N_COMMAND => self.n_command,
             reg::N_STATUS => (if self.busy { 0x80 } else { 0x40 }) | (self.error != 0) as u8,
@@ -427,11 +445,15 @@ impl Cdvd {
             reg::S_RESULT => self.s_result.pop().unwrap_or(0),
             reg::KEY_STATUS => self.key,
             o if (reg::KEY..reg::KEY + 5).contains(&o) && self.key != 0 => self.key_bytes[(o - reg::KEY) as usize],
+            reg::KEY_EXTRA if self.key == KEY_FULL => self.key_bytes[5],
             _ => 0,
         }
     }
 
     pub fn write8(&mut self, offset: u32, v: u8, now: u64) {
+        if let Some(t) = self.trace.as_mut().filter(|t| t.len() < 1 << 20) {
+            t.push((offset, true, v));
+        }
         match offset {
             reg::N_COMMAND if !self.busy => self.start(v, now),
             reg::N_STATUS => self.n_params.push(v),
@@ -496,7 +518,7 @@ impl Cdvd {
                 self.pending = Some((now + PROMPT, Event::Complete(after)));
             }
             ncmd::READ_KEY => {
-                self.key = 1;
+                self.key = if p[3] == 0x4B { KEY_FULL } else { 1 };
                 self.pending = Some((now + PROMPT, Event::Complete(self.drive)));
             }
             ncmd::READ_CD | ncmd::READ_CDDA | ncmd::READ_DVD | ncmd::GET_TOC => {

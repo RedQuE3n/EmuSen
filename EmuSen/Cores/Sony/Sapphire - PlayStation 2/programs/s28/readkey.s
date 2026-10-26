@@ -1,5 +1,5 @@
-# N command 0Ch as the player's BIOS sends it before a disc boot (Sapphire_Native.md §39, D-461): its seven parameter
-# bytes, twice, each time the N status, error and I_STAT, then every byte of the drive's registers 00h-3Fh recorded;
+# N command 0Ch as the player's BIOS sends it before a disc boot (Sapphire_Native.md §39, D-461): its two sets of seven
+# parameter bytes, 00h 00h 00h 4Bh 00h 00h 00h then 00h 00h 00h 03h 0Ch 00h 00h, each time the N status, error and I_STAT, then every byte of the drive's registers 00h-3Fh recorded;
 # before them the disk type, drive status, N status and 38h; after them a Seek, a NOP and a Stop, each followed by
 # the N status, error and 38h.
         lui a0, 0x0020
@@ -37,9 +37,9 @@ r1:     nop
         sb t0, 5(s0)
         addiu t0, zero, 0
         sb t0, 5(s0)
-        addiu t0, zero, 3
+        addiu t0, zero, 75
         sb t0, 5(s0)
-        addiu t0, zero, 12
+        addiu t0, zero, 0
         sb t0, 5(s0)
         addiu t0, zero, 0
         sb t0, 5(s0)

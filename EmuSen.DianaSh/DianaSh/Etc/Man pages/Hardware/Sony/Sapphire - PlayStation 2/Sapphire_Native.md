@@ -4414,13 +4414,13 @@ memory holding BIOS code or data, or the BIOS's traffic to the card was looked a
   stages); `media_insert` takes a disc only with the tray open, unless the host is setting the drive for a state
   (`MEDIA_RESTORE`), which goes through the tray as a hand would. A disc is judged by the recogniser first, as an image
   is at create (a sheet by its first track's file, a CHD on opening alone): an EE program is refused as no disc
-  (`STATUS_NOT_A_DISC`, −14), a PlayStation disc, an image of neither kind or a volume with no BOOT2 with create's own
-  statuses, a disc image that does not open as `STATUS_BAD_DISC` (−15); then `cdvd::open` makes the drive's medium from
+  (`STATUS_NOT_A_DISC`, −16, S30 having taken −14 and −15), a PlayStation disc, an image of neither kind or a volume with no BOOT2 with create's own
+  statuses, a disc image that does not open as `STATUS_BAD_DISC` (−17); then `cdvd::open` makes the drive's medium from
   the kept bytes, as S23's tests do. Nothing else of the drive changed.
-- **States**: the state still holds the memories alone (S30 adds the rest). A console with no BIOS brought to a state's
-  frame from power-on (§35.6) now keeps its drive: the disc and the tray are carried to the new board through the tray.
-  A state's disc fingerprint, which would let `WRONG_MEDIA` refuse a state over the wrong disc, waits for S30's format;
-  a console running a BIOS refuses every load, as before.
+- **States** are S30's (§38), merged beneath part B: a state names the image the console was created with, an empty
+  start's `Media::Empty` by the word "EMPTY", and holds no disc, so a disc put in afterwards stays in the drive through a
+  load; the state does not name that disc, and `WRONG_MEDIA` does not yet refuse a state made over another one
+  (§30.21 Q7). Part B's first build kept the drive through S24's replay of a console with no BIOS, which S30 retired.
 - **Create with a disc image** is unchanged: the drive stays empty, a disc in the drive at power-on being S29's work.
 
 **The host's refusal** (`EmuSen/Cores/Native/CoreEngine.cs` and the runtime in Rust, `Platform/crystal`'s
@@ -4537,7 +4537,7 @@ tester (§30.21).
 (`the_console_starts_empty_with_the_tray_closed_and_the_bios_given_naming_the_market`,
 `a_disc_goes_in_through_the_tray_and_reaches_the_drive`: the tray refusing a closed insert, a program, a PlayStation
 disc and noise refused, a DVD detected as a PlayStation 2 DVD 90 frames after the tray closes, the drive kept through a
-state's replay, Eject, a restore); `emusen-ps2-card` **5 of 5** with its format's measured fields and the browser's free
+state's save and load, Eject, a restore); `emusen-ps2-card` **5 of 5** with its format's measured fields and the browser's free
 count; `emusen-systems` **41 of 41**, among them `ps2::card`'s two (a save listed with its two-line Shift-JIS title,
 size and game; a copy carrying every byte, the last cluster's with it; the refusals) and the media table's.
 WiseMan: `SapphireTests`, `SapphireConsoleTests` (three: offered from core info to a developer only; refused with no
@@ -4582,6 +4582,10 @@ Each was applied, the tests named run, and the source restored.
    holds while the kit's C22 runs the console with no BIOS.
 6. **Q6 [routine], the card flags.** The BIOS on PCSX2 wrote 2Bh, Ridge's default is 52h (D-380). *Recommended*: keep
    52h until a second lineage or a document decides; the BIOS reads either.
+7. **Q7 [routine], a state over a disc put in later.** S30's state names the image of the create, and after an empty
+   start that is no disc, so a state made with a disc in the drive loads over an empty drive or another disc. *Recommended*:
+   at S29, when a disc goes in at create, name the drive's disc in the state beside the image, so `WRONG_MEDIA` judges
+   the drive as Diamond's does.
 
 ### 30.22 The blast radius (measured 2026-10-25)
 
@@ -4614,7 +4618,10 @@ which the classes the change reaches were added: `DiamondShellTests`, `SaveMedia
   above with `SapphireTests` and every `MemoryCards` case of the fit audit and the specification, **501 of 501**; with
   the Rust runtime's twin of the refusal and of the media lookup added after the second rebase, `emusen-crystal`'s tests
   pass (13) and the runtime classes again (`CrystalParityTests` with the new case, `SessionServiceParity`,
-  `ManagedCrystal`, the card and console classes above and every `MemoryCards` case), **285 of 285**. The
+  `ManagedCrystal`, the card and console classes above and every `MemoryCards` case), **285 of 285**.
+- **After the third rebase** (S30 beneath, its states of every unit, which took statuses −14 and −15 and retired S24's
+  replay): Sapphire **347 of 347**, the lib 70 under `test-checked`, clippy clean; WiseMan's `SapphireTests` (the kit with
+  C16 and C22 on S30's states), `SapphireConsoleTests`, the parity case and `Ps2CardFormatTests`, **13 of 13**. The
   OSDSYS and referee runs of §30.18 and §30.19 were made on the tree before the rebase, S24's with part B.
 
 ### 30.23 What was read for part B
@@ -4638,7 +4645,7 @@ as S24's writer did; **this writer is exposed and will never write the open repl
 ### 30.24 What part B does not cover
 
 - G10 and G11 offered to players: S29, with the system (`Sapphire_Plan.md` §7).
-- A disc in the drive at create, and a state's disc fingerprint (`WRONG_MEDIA`): S29 and S30.
+- A disc in the drive at create (S29), and a state naming a disc put in after an empty start (§30.21 Q7).
 - The card's authentication (Q7(b) holds; §30.21 Q1), the browser's own copy and title views, and the cause of D-383.
 - `memcard`'s page names no PlayStation 2 card example and still calls the N64's pak unread: the medium joins it by its
   extension like every other, and only the golden corpus's list of known media changed.

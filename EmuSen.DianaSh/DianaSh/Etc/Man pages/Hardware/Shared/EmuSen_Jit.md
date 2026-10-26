@@ -38,8 +38,8 @@ compatible with the project's GPL-3.0. Nothing else: not `emusen-native`, since 
 
 **Who depends on it**: MarsRT (`marsrt -> emusen-jit`, a path dependency named in its `Cargo.toml` and in
 `Mars_Native.md` §5.8.10), the first core to; Sapphire since S36 (`sapphire -> emusen-jit`, named in its `Cargo.toml` and
-in `Sapphire_Native.md` §44), for the EE; Diamond may adopt it when its own recompiler is wanted (`Diamond_Speed.md`
-§7.2). The CI job that tests every crate under `EmuSen/Cores/Shared/` tests this one without a
+in `Sapphire_Native.md` §44), for the EE, and since S40 for VU micro mode (`Sapphire_Native.md` §45); Diamond may adopt it
+when its own recompiler is wanted (`Diamond_Speed.md` §7.2). The CI job that tests every crate under `EmuSen/Cores/Shared/` tests this one without a
 change to the workflow.
 
 ## 2. The interface, version 1.0.0
@@ -164,8 +164,10 @@ its noise, before and after on the same machine state; `Mars_Native.md` §5.8.10
   surface, and a change it needs is a minor version here.~~ *Since 2026-10-26 Sapphire's EE lowering (S36,
   `Sapphire_Native.md` §44) is the second; it needed no change to the interface, which stays 1.0.0: its lowering, its
   options, its two exits ("done", "rollback") and its own context, the thread, the slots, the budget and the verifier's
-  shape as MarsRT uses them.*
-- **Words are 32 bits.** A VU's 64-bit instruction pair goes to a lowering as two words; nothing wider was needed.
+  shape as MarsRT uses them. VU micro mode's lowering (S40, §45) is the third, again with no change.*
+- **Words are 32 bits.** ~~A VU's 64-bit instruction pair goes to a lowering as two words; nothing wider was needed.~~
+  *At S40 a whole microprogram goes as triples of words, each pair's address, upper word and lower word, since its pairs
+  are not contiguous; the start names the address the unit was entered at.*
 - **The `Arc` hand-off** stays invisible to TSan; replacing it with a slot index into storage the crate owns would make
   it visible, and was left for a stage that changes behaviour rather than one that moves it.
 - **Code is not freed a block at a time**, as before (§3.4).

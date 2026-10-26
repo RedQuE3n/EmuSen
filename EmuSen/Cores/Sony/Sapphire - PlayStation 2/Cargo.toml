@@ -19,9 +19,9 @@ blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-spu = { path = "../BlackMoon-HW/blackmoon-spu" }
 # Discs as sectors, CDs and DVDs, which the CDVD drive reads (Sapphire_Plan.md §9.4).
 emusen-disc = { path = "../../Shared/emusen-disc" }
-# The EE recompiler's thread, publication, module, code budget and verifier, shared with MarsRT (Sapphire_Plan.md §9.6, Sapphire_Native.md §44).
+# The recompilers' thread, publication, module, code budget and verifier, shared with MarsRT: the EE's lowering (Sapphire_Native.md §44) and VU micro mode's (§45); Sapphire_Plan.md §9.6.
 emusen-jit = { path = "../../Shared/emusen-jit" }
-# The code generator the EE's lowering writes IR for; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See EmuSen_Jit.md.
+# The code generator the lowerings write IR for; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See EmuSen_Jit.md.
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"
 cranelift-jit = "0.136.0"

@@ -24,65 +24,95 @@ pub const FMAC: u64 = 4;
 const BOUND: u64 = 1 << 24;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum State {
-    Ready,
-    Run,
-    Stop,
+#[repr(u8)]
+pub(super) enum State {
+    Ready = 0,
+    Run = 1,
+    Stop = 2,
 }
 
 /// What one pair leaves for its S stage.
-#[derive(Clone, Copy, Debug, Default)]
-struct FlagWrite {
-    at: u64,
-    d: Deferred,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct FlagWrite {
+    pub(super) at: u64,
+    pub(super) d: Deferred,
 }
 
-/// One unit's micro mode.
+/// A cycle not yet set: no pair run, no pair with M; and an integer register with no integer-unit write to remember.
+pub(super) const NONE: u64 = u64::MAX;
+/// No branch taken past its delay slot.
+pub(super) const NO_JUMP: u32 = u32::MAX;
+
+/// One unit's micro mode. The fields a compiled microprogram reads and writes hold plain numbers rather than `Option`s, so
+/// that the code can address them (Sapphire_Native.md §45.3); each means what the comment beside it says.
 pub struct Pipe {
-    unit: usize,
-    state: State,
-    pc: u16,
+    pub(super) unit: usize,
+    pub(super) state: State,
+    pub(super) pc: u16,
     /// The earliest T stage of the next pair.
-    next_t: u64,
-    /// The T stage of the last pair run, since a reset.
-    last_t: Option<u64>,
-    /// A taken branch's target, which the pair after its delay slot starts at.
-    jump: Option<u16>,
+    pub(super) next_t: u64,
+    /// The T stage of the last pair run since a reset, `NONE` before the first.
+    pub(super) last_t: u64,
+    /// A taken branch's target, which the pair after its delay slot starts at; `NO_JUMP` for none.
+    pub(super) jump: u32,
     /// The E bit was seen: the next pair is its delay slot, then the unit stops (§3.5.3).
-    ending: bool,
-    /// A D or T bit on a branch: the unit stops after the delay slot with this VPU-STAT bit (§7.3.1).
-    halting: Option<u32>,
+    pub(super) ending: bool,
+    /// A D or T bit on a branch: the unit stops after the delay slot with this VPU-STAT bit (§7.3.1); 0 for none.
+    pub(super) halting: u32,
     /// The cycle each register field may be read: the T stage of the FMAC write before it plus 4.
-    vf_ready: [[u64; 4]; 32],
+    pub(super) vf_ready: [[u64; 4]; 32],
     /// The cycle each integer register may be read after ILW or ILWR.
-    vi_ready: [u64; 16],
-    /// Each integer register's last integer-unit write: its T stage and the value before it.
-    vi_last: [Option<(u64, u16)>; 16],
-    flags: VecDeque<FlagWrite>,
-    path1_free: u64,
+    pub(super) vi_ready: [u64; 16],
+    /// Each integer register's last integer-unit write: its T stage (`NONE` for none) and the value before it (0 then).
+    pub(super) vi_last_at: [u64; 16],
+    pub(super) vi_last_old: [u16; 16],
+    pub(super) flags: VecDeque<FlagWrite>,
+    pub(super) path1_free: u64,
     /// The pair after an XGKICK that found PATH1 busy issues no earlier than this (§3.4.9).
-    kick_wait: u64,
-    /// The T stage of the run's first pair with M set (§5.4.6).
-    release_t: Option<u64>,
+    pub(super) kick_wait: u64,
+    /// The T stage of the run's first pair with M set (§5.4.6), `NONE` before it.
+    pub(super) release_t: u64,
     /// VDS, VTS and VFS.
-    stopped_by: u32,
-    now: u64,
+    pub(super) stopped_by: u32,
+    pub(super) now: u64,
     /// Each pair's address and T stage, when a test asks.
     pub trace: Option<Vec<(u16, u64)>>,
     /// The debugger's probe, asked before each pair runs (Sapphire_Native.md §41).
     pub probe: Option<Box<crate::debugger::Probe>>,
     /// Pairs run since the unit was made, kept across FBRST's reset: the bench's count.
     run: u64,
+    /// The recompiler, when the unit runs its microprograms compiled (Sapphire_Native.md §45); none for the interpreter.
+    pub(super) jit: Option<Box<super::jit::Tier>>,
+    /// The bench's clock: time-stamp counter ticks running pairs, calls, pairs (Sapphire_Native.md §45.7).
+    clock: Option<[u64; 3]>,
+}
+
+/// The time-stamp counter, for the bench's clock.
+fn ticks() -> u64 {
+    #[cfg(target_arch = "x86_64")]
+    // SAFETY: RDTSC has no preconditions.
+    unsafe {
+        core::arch::x86_64::_rdtsc()
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        static ORIGIN: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        ORIGIN.get_or_init(std::time::Instant::now).elapsed().as_nanos() as u64
+    }
+}
+
+fn some(v: u64) -> Option<u64> {
+    (v != NONE).then_some(v)
 }
 
 /// What a pair reads and writes, for the hazards and the write priority.
 #[derive(Clone, Copy, Debug, Default)]
-struct Access {
+pub(super) struct Access {
     /// Up to three register reads, each a register and its lanes (bit 0 x).
-    vf: [(usize, u8); 3],
-    vi: [usize; 2],
+    pub(super) vf: [(usize, u8); 3],
+    pub(super) vi: [usize; 2],
     /// The register an FMAC-pipeline write goes to, with its lanes.
-    vf_write: Option<(usize, u8)>,
+    pub(super) vf_write: Option<(usize, u8)>,
 }
 
 /// dest's lanes, bit 0 x (§4.1.3: bit 24 x).
@@ -121,7 +151,7 @@ fn broadcast(w: u32) -> Option<u32> {
     }
 }
 
-fn upper_access(o: &Operation, w: u32) -> Access {
+pub(super) fn upper_access(o: &Operation, w: u32) -> Access {
     let m = lanes(w);
     let mut a = Access::default();
     let second = |a: &mut Access| a.vf[1] = (ft(w), broadcast(w).map_or(m, lane));
@@ -148,7 +178,7 @@ fn upper_access(o: &Operation, w: u32) -> Access {
     a
 }
 
-fn lower_access(o: &Operation, w: u32) -> Access {
+pub(super) fn lower_access(o: &Operation, w: u32) -> Access {
     let m = lanes(w);
     let mut a = Access::default();
     let rotated = m >> 3 & 1 | m << 1 & 0xE;
@@ -200,13 +230,13 @@ fn lower_access(o: &Operation, w: u32) -> Access {
 /// The integer register a lower operation writes, and whether it is a load (ready 4 cycles on), a flag check (seen by a
 /// branch at once) or the integer unit's (seen by a branch a pair later).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ViWrite {
+pub(super) enum ViWrite {
     Load(usize),
     Check(usize),
     Alu(usize),
 }
 
-fn vi_write(o: &Operation, e: &Entry, w: u32) -> Option<ViWrite> {
+pub(super) fn vi_write(o: &Operation, e: &Entry, w: u32) -> Option<ViWrite> {
     let r = match o.form {
         Form::Int3 => fd(w),
         Form::Imm5 | Form::Imm15 | Form::Mtir | Form::Fs | Form::ItIs | Form::It | Form::Bal => ft(w),
@@ -220,65 +250,111 @@ fn vi_write(o: &Operation, e: &Entry, w: u32) -> Option<ViWrite> {
 }
 
 /// Lands the flags due by cycle `t`.
-fn drain(flags: &mut VecDeque<FlagWrite>, vu: &mut Vu, t: u64) {
+pub(super) fn drain(flags: &mut VecDeque<FlagWrite>, vu: &mut Vu, t: u64) {
     while let Some(f) = flags.front().copied().filter(|f| f.at <= t) {
         flags.pop_front();
-        let d = f.d;
-        // FSSET's pair writes the status flag as FSSET says, its upper instruction's effect ignored (§3.3.4).
-        match (d.sticky_set, d.mac) {
-            (Some(sticky), mac) => {
-                vu.status = vu.status & 0x3F | sticky << super::status::STICKY;
-                if let Some(mac) = mac {
-                    vu.mac = mac;
-                }
+        apply(vu, f.d);
+    }
+}
+
+/// One pair's flag write as its S stage makes it.
+pub(super) fn apply(vu: &mut Vu, d: Deferred) {
+    // FSSET's pair writes the status flag as FSSET says, its upper instruction's effect ignored (§3.3.4).
+    match (d.sticky_set, d.mac) {
+        (Some(sticky), mac) => {
+            vu.status = vu.status & 0x3F | sticky << super::status::STICKY;
+            if let Some(mac) = mac {
+                vu.mac = mac;
             }
-            (None, Some(mac)) => ops::apply_fmac_flags(vu, mac, d.zsuo, d.sticky),
-            (None, None) => {}
         }
-        match (d.clip_set, d.clip_shift) {
-            (Some(c), _) => vu.clip = c,
-            (None, Some(j)) => vu.clip = ops::shift_clip(vu.clip, j),
-            _ => {}
-        }
+        (None, Some(mac)) => ops::apply_fmac_flags(vu, mac, d.zsuo, d.sticky),
+        (None, None) => {}
+    }
+    match (d.clip_set, d.clip_shift) {
+        (Some(c), _) => vu.clip = c,
+        (None, Some(j)) => vu.clip = ops::shift_clip(vu.clip, j),
+        _ => {}
     }
 }
 
 /// The upper word's operation, none for a word no page draws (bits 26-25 set, or a lower operation's code).
-fn upper_op(w: u32) -> Option<(&'static Operation, &'static Entry)> {
+pub(super) fn upper_op(w: u32) -> Option<(&'static Operation, &'static Entry)> {
     ops::of_word(w).filter(|(o, _)| o.unit == table::Unit::Upper && w >> 25 & 3 == 0)
 }
 
 impl Pipe {
+    /// A unit's micro mode on the tier the environment names (`super::jit::Tier::from_environment`), the interpreter
+    /// unless it names the recompiler.
     pub fn new(unit: usize) -> Pipe {
+        Pipe { jit: super::jit::Tier::from_environment(unit), ..Pipe::new_interpreted(unit) }
+    }
+
+    /// A unit's micro mode on the interpreter.
+    pub fn new_interpreted(unit: usize) -> Pipe {
         Pipe {
             unit,
             state: State::Ready,
             pc: 0,
             next_t: 0,
-            last_t: None,
-            jump: None,
+            last_t: NONE,
+            jump: NO_JUMP,
             ending: false,
-            halting: None,
+            halting: 0,
             vf_ready: [[0; 4]; 32],
             vi_ready: [0; 16],
-            vi_last: [None; 16],
+            vi_last_at: [NONE; 16],
+            vi_last_old: [0; 16],
             flags: VecDeque::new(),
             path1_free: 0,
             kick_wait: 0,
-            release_t: None,
+            release_t: NONE,
             stopped_by: 0,
             now: 0,
             trace: None,
             probe: None,
             run: 0,
+            jit: None,
+            clock: None,
         }
+    }
+
+    /// Everything `step` reads and writes made equal to `other`'s, for the verifier's copy.
+    pub(super) fn copy_from(&mut self, other: &Pipe) {
+        let jit = self.jit.take();
+        *self = Pipe { trace: None, probe: None, flags: other.flags.clone(), ..Pipe::new_interpreted(other.unit) };
+        let o = other;
+        (self.state, self.pc, self.next_t, self.last_t, self.jump, self.ending, self.halting) = (o.state, o.pc, o.next_t, o.last_t, o.jump, o.ending, o.halting);
+        (self.vf_ready, self.vi_ready, self.vi_last_at, self.vi_last_old) = (o.vf_ready, o.vi_ready, o.vi_last_at, o.vi_last_old);
+        (self.path1_free, self.kick_wait, self.release_t, self.stopped_by, self.now) = (o.path1_free, o.kick_wait, o.release_t, o.stopped_by, o.now);
+        self.jit = jit;
+    }
+
+    /// The first field in which two units' micro modes differ, for the verifier.
+    pub(super) fn differs(&self, o: &Pipe) -> Option<String> {
+        let a = (self.state, self.pc, self.next_t, self.last_t, self.jump, self.ending, self.halting);
+        let b = (o.state, o.pc, o.next_t, o.last_t, o.jump, o.ending, o.halting);
+        if a != b {
+            return Some(format!("state, PC, next T, last T, jump, ending, halting {a:?} against {b:?}"));
+        }
+        if (self.vf_ready, self.vi_ready) != (o.vf_ready, o.vi_ready) {
+            return Some("the registers' ready cycles".into());
+        }
+        if (self.vi_last_at, self.vi_last_old) != (o.vi_last_at, o.vi_last_old) {
+            return Some(format!("the integer writes a branch sees {:?} against {:?}", self.vi_last_at, o.vi_last_at));
+        }
+        if self.flags != o.flags {
+            return Some(format!("the flag writes in flight {:?} against {:?}", self.flags, o.flags));
+        }
+        let c = (self.path1_free, self.kick_wait, self.release_t, self.stopped_by, self.now);
+        let d = (o.path1_free, o.kick_wait, o.release_t, o.stopped_by, o.now);
+        (c != d).then(|| format!("PATH1 free, kick wait, release, stopped by, now {c:?} against {d:?}"))
     }
 
     fn vu<'a>(&self, units: &'a mut Units) -> &'a mut Vu {
         if self.unit == 0 { &mut units.vu0 } else { &mut units.vu1 }
     }
 
-    fn pairs(&self, units: &Units) -> u16 {
+    pub(super) fn pairs(&self, units: &Units) -> u16 {
         let len = if self.unit == 0 { units.vu0.micro.len() } else { units.vu1.micro.len() };
         (len / 8) as u16
     }
@@ -294,8 +370,8 @@ impl Pipe {
     /// An integer register as a branch at `t` reads it: as it was before an integer-unit write in the pair just before
     /// (§3.4.8: "a one-instruction slot is necessary"; Sapphire_Disputes.md D-80).
     fn branch_vi(&self, vu: &Vu, r: usize, t: u64) -> u16 {
-        match self.vi_last.get(r).copied().flatten() {
-            Some((at, old)) if at + 1 == t => old,
+        match self.vi_last_at.get(r) {
+            Some(&at) if at != NONE && at + 1 == t => self.vi_last_old[r],
             _ => vu.vi(r),
         }
     }
@@ -340,7 +416,7 @@ impl Pipe {
     }
 
     /// Runs the pair at the PC if it issues by cycle `limit`.
-    fn step(&mut self, units: &mut Units, limit: u64) -> bool {
+    pub(super) fn step(&mut self, units: &mut Units, limit: u64) -> bool {
         if self.state != State::Run {
             return false;
         }
@@ -355,7 +431,6 @@ impl Pipe {
             return false;
         }
         self.execute(units, upper, lower, t);
-        self.run += 1;
         true
     }
 
@@ -415,8 +490,8 @@ impl Pipe {
                     }
                     match before {
                         Some((ViWrite::Load(r), _)) if (1..16).contains(&r) => self.vi_ready[r] = t + FMAC,
-                        Some((ViWrite::Alu(r), old)) if r < 16 => self.vi_last[r] = Some((t, old)),
-                        Some((ViWrite::Check(r), _)) if r < 16 => self.vi_last[r] = None,
+                        Some((ViWrite::Alu(r), old)) if r < 16 => (self.vi_last_at[r], self.vi_last_old[r]) = (t, old),
+                        Some((ViWrite::Check(r), _)) if r < 16 => (self.vi_last_at[r], self.vi_last_old[r]) = (NONE, 0),
                         _ => {}
                     }
                     if let (Class::Div(latency), Some(q)) = (e.class, quotient) {
@@ -477,13 +552,13 @@ impl Pipe {
 
         // The flow: the M bit; a branch taken past its delay slot; the D and T bits, which stop after the pair (after
         // the delay slot on a branch) with no delay slot of their own (§7.3.1); the E bit and its delay slot (§3.5.3).
-        if upper >> 29 & 1 == 1 && self.release_t.is_none() {
-            self.release_t = Some(t);
+        if upper >> 29 & 1 == 1 && self.release_t == NONE {
+            self.release_t = t;
         }
-        self.pc = self.jump.take().unwrap_or((pc + 1) & mask);
-        self.jump = taken;
+        self.pc = if self.jump != NO_JUMP { self.jump as u16 } else { (pc + 1) & mask };
+        self.jump = taken.map_or(NO_JUMP, u32::from);
         self.next_t = t + 1;
-        self.last_t = Some(t);
+        self.last_t = t;
         let enables = link.fbrst >> (fbrst::VU1 * unit as u32);
         let halt = if upper >> 28 & 1 == 1 && enables & fbrst::DE0 != 0 {
             Some(vpu_stat::VDS)
@@ -493,10 +568,10 @@ impl Pipe {
             None
         };
         let mut stop = None;
-        if let Some(bit) = self.halting.take() {
-            stop = Some(bit);
+        if self.halting != 0 {
+            stop = Some(std::mem::take(&mut self.halting));
         } else if let Some(bit) = halt {
-            if taken.is_some() { self.halting = Some(bit) } else { stop = Some(bit) }
+            if taken.is_some() { self.halting = bit } else { stop = Some(bit) }
         } else if self.ending {
             self.ending = false;
             self.state = State::Ready;
@@ -509,14 +584,16 @@ impl Pipe {
             link.irq |= 1 << unit;
         }
         if self.state != State::Run {
-            self.pc = self.jump.take().unwrap_or(self.pc);
+            if self.jump != NO_JUMP {
+                self.pc = std::mem::replace(&mut self.jump, NO_JUMP) as u16;
+            }
             vu.tpc = self.pc;
         }
     }
 
-    fn write_alu(&mut self, vu: &mut Vu, r: usize, v: u16, t: u64) {
+    pub(super) fn write_alu(&mut self, vu: &mut Vu, r: usize, v: u16, t: u64) {
         if r < 16 {
-            self.vi_last[r] = Some((t, vu.vi(r)));
+            (self.vi_last_at[r], self.vi_last_old[r]) = (t, vu.vi(r));
         }
         vu.set_vi(r, v);
     }
@@ -550,10 +627,24 @@ impl Pipe {
         }
     }
 
-    fn run_bounded(&mut self, units: &mut Units, until: impl Fn(&Pipe) -> bool) {
-        let mut n = 0;
-        while self.state == State::Run && !until(self) && n < BOUND && self.step(units, u64::MAX) {
-            n += 1;
+    /// Runs pairs while the unit runs and each issues by `limit`; with `release`, until a pair with M has run; at most
+    /// `bound` pairs. The interpreter's loop, or the recompiler's, which leaves the unit as this loop would.
+    fn run_pairs(&mut self, units: &mut Units, limit: u64, release: bool, bound: u64) {
+        let from = self.clock.map(|_| ticks());
+        let n = if self.jit.is_some() {
+            super::jit::run(self, units, limit, release, bound)
+        } else {
+            let mut n = 0;
+            while self.state == State::Run && !(release && self.release_t != NONE) && n < bound && self.step(units, limit) {
+                n += 1;
+            }
+            n
+        };
+        self.run += n;
+        if let (Some(c), Some(from)) = (&mut self.clock, from) {
+            c[0] += ticks() - from;
+            c[1] += 1;
+            c[2] += n;
         }
     }
 
@@ -583,16 +674,19 @@ impl Micro for Pipe {
         self.state = State::Run;
         self.pc = addr & mask;
         self.next_t = first.max(self.next_t);
-        self.jump = None;
+        self.jump = NO_JUMP;
         self.ending = false;
-        self.halting = None;
-        self.release_t = None;
+        self.halting = 0;
+        self.release_t = NONE;
         self.stopped_by = 0;
+        if let Some(j) = &mut self.jit {
+            j.entered(self.pc);
+        }
         true
     }
 
     fn run_to(&mut self, units: &mut Units, t: u64) {
-        while self.step(units, t) {}
+        self.run_pairs(units, t, false, u64::MAX);
         self.now = self.now.max(t);
         self.land(units, t);
     }
@@ -619,17 +713,17 @@ impl Micro for Pipe {
     }
 
     fn finish(&mut self, units: &mut Units, _: u64) -> Option<u64> {
-        self.run_bounded(units, |_| false);
+        self.run_pairs(units, u64::MAX, false, BOUND);
         let vu = if self.unit == 0 { &mut units.vu0 } else { &mut units.vu1 };
         drain(&mut self.flags, vu, u64::MAX);
-        self.last_t
+        some(self.last_t)
     }
 
     fn release(&mut self, units: &mut Units, _: u64) -> Option<u64> {
-        self.run_bounded(units, |p| p.release_t.is_some());
-        match self.release_t {
+        self.run_pairs(units, u64::MAX, true, BOUND);
+        match some(self.release_t) {
             Some(m) if self.state == State::Run => Some(m + 1),
-            _ => self.last_t.map(|t| t + FMAC),
+            _ => some(self.last_t).map(|t| t + FMAC),
         }
     }
 
@@ -644,11 +738,11 @@ impl Micro for Pipe {
     }
 
     fn reset(&mut self) {
-        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), probe: self.probe.take(), run: self.run, ..Pipe::new(self.unit) };
+        *self = Pipe { trace: self.trace.take().map(|_| Vec::new()), probe: self.probe.take(), jit: self.jit.take(), clock: self.clock, run: self.run, ..Pipe::new_interpreted(self.unit) };
     }
 
     fn last(&self) -> Option<u64> {
-        self.last_t
+        some(self.last_t)
     }
 
     fn pc(&self) -> u16 {
@@ -657,6 +751,22 @@ impl Micro for Pipe {
 
     fn probe(&mut self) -> Option<&mut Option<Box<crate::debugger::Probe>>> {
         Some(&mut self.probe)
+    }
+
+    fn set_tier(&mut self, tier: Option<super::jit::Settings>) {
+        self.jit = tier.map(|s| Box::new(super::jit::Tier::new(self.unit, s)));
+    }
+
+    fn jit_counts(&self) -> Option<super::jit::Counts> {
+        self.jit.as_ref().map(|j| j.counts())
+    }
+
+    fn set_clock(&mut self, on: bool) {
+        self.clock = on.then_some([0; 3]);
+    }
+
+    fn clock(&self) -> Option<[u64; 3]> {
+        self.clock
     }
 
     fn stat(&self) -> u32 {
@@ -692,15 +802,15 @@ impl Pipe {
         });
         w.u16("Pc", self.pc);
         w.u64("NextT", self.next_t);
-        crate::state::opt_u64(w, "LastT", self.last_t);
-        crate::state::opt_u32(w, "Jump", self.jump.map(u32::from));
+        crate::state::opt_u64(w, "LastT", some(self.last_t));
+        crate::state::opt_u32(w, "Jump", (self.jump != NO_JUMP).then_some(self.jump));
         w.bool("Ending", self.ending);
-        crate::state::opt_u32(w, "Halting", self.halting);
+        crate::state::opt_u32(w, "Halting", (self.halting != 0).then_some(self.halting));
         w.u64s("VfReady", self.vf_ready.as_flattened());
         w.u64s("ViReady", &self.vi_ready);
-        w.u16("ViLastSome", self.vi_last.iter().enumerate().fold(0, |b, (i, o)| b | u16::from(o.is_some()) << i));
-        w.u64s("ViLastAt", &self.vi_last.map(|o| o.map_or(0, |v| v.0)));
-        w.u16s("ViLastValue", &self.vi_last.map(|o| o.map_or(0, |v| v.1)));
+        w.u16("ViLastSome", self.vi_last_at.iter().enumerate().fold(0, |b, (i, &at)| b | u16::from(at != NONE) << i));
+        w.u64s("ViLastAt", &self.vi_last_at.map(|at| if at == NONE { 0 } else { at }));
+        w.u16s("ViLastValue", &self.vi_last_old);
         w.u32("FlagsLength", self.flags.len() as u32);
         let slots = crate::state::slots::<_, FLAG_SLOTS>(&self.flags);
         let words: [(u8, [u32; 8]); FLAG_SLOTS] = slots.map(|f| deferred_words(&f.d));
@@ -708,7 +818,7 @@ impl Pipe {
         w.bytes("FlagsSome", &words.map(|d| d.0));
         w.u32s("FlagsValues", words.map(|d| d.1).as_flattened());
         w.u64s("Times", &[self.path1_free, self.kick_wait, self.now]);
-        crate::state::opt_u64(w, "ReleaseT", self.release_t);
+        crate::state::opt_u64(w, "ReleaseT", some(self.release_t));
         w.u32("StoppedBy", self.stopped_by);
     }
 
@@ -720,10 +830,10 @@ impl Pipe {
         };
         self.pc = r.u16()?;
         self.next_t = r.u64()?;
-        self.last_t = crate::state::read_opt_u64(r)?;
-        self.jump = crate::state::read_opt_u32(r)?.map(|j| j as u16);
+        self.last_t = crate::state::read_opt_u64(r)?.unwrap_or(NONE);
+        self.jump = crate::state::read_opt_u32(r)?.unwrap_or(NO_JUMP);
         self.ending = r.bool()?;
-        self.halting = crate::state::read_opt_u32(r)?;
+        self.halting = crate::state::read_opt_u32(r)?.unwrap_or(0);
         r.u64s(self.vf_ready.as_flattened_mut())?;
         r.u64s(&mut self.vi_ready)?;
         let some = r.u16()?;
@@ -731,7 +841,8 @@ impl Pipe {
         r.u64s(&mut at)?;
         let mut value = [0u16; 16];
         r.u16s(&mut value)?;
-        self.vi_last = std::array::from_fn(|i| (some >> i & 1 != 0).then_some((at[i], value[i])));
+        self.vi_last_at = std::array::from_fn(|i| if some >> i & 1 != 0 { at[i] } else { NONE });
+        self.vi_last_old = std::array::from_fn(|i| if some >> i & 1 != 0 { value[i] } else { 0 });
         let len = r.u32()?;
         let mut at = [0u64; FLAG_SLOTS];
         let mut some = [0u8; FLAG_SLOTS];
@@ -744,8 +855,11 @@ impl Pipe {
         let mut t = [0u64; 3];
         r.u64s(&mut t)?;
         [self.path1_free, self.kick_wait, self.now] = t;
-        self.release_t = crate::state::read_opt_u64(r)?;
+        self.release_t = crate::state::read_opt_u64(r)?.unwrap_or(NONE);
         self.stopped_by = r.u32()?;
+        if let Some(j) = &mut self.jit {
+            j.loaded(self.pc, self.state == State::Run);
+        }
         Ok(())
     }
 }

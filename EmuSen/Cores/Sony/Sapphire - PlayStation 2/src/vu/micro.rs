@@ -63,6 +63,19 @@ pub trait Micro {
     fn probe(&mut self) -> Option<&mut Option<Box<crate::debugger::Probe>>> {
         None
     }
+    /// The unit's tier: the interpreter (none) or the recompiler with its settings (Sapphire_Native.md §45.6); a micro
+    /// mode with one tier ignores it.
+    fn set_tier(&mut self, _tier: Option<super::jit::Settings>) {}
+    /// The recompiler's counts, none on the interpreter.
+    fn jit_counts(&self) -> Option<super::jit::Counts> {
+        None
+    }
+    /// Starts or stops the clock the bench reads the unit's share of the frame from.
+    fn set_clock(&mut self, _on: bool) {}
+    /// The clock's time-stamp counter ticks spent running pairs, the calls that ran them and the pairs run.
+    fn clock(&self) -> Option<[u64; 3]> {
+        None
+    }
 }
 
 /// Micro mode not built: never running, and refusing a start, which halts the interpreter with the starting word; kept

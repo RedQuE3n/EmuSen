@@ -781,11 +781,11 @@ fn dropping_every_block_at_the_codes_bound_changes_nothing() {
     with_devices(&mut m);
     let mut reference = m.clone();
     let mut subject = recompiled(&m, Tier::BEST);
-    subject.blocks.code_bound = 64;
+    subject.blocks.jit.budget = 64;
     for n in 1..=8 {
         reference.run_steps(20_000);
         subject.run_steps(20_000);
         assert!(reference == subject, "the machines part after {n} runs");
     }
-    assert!(subject.blocks.stats.flushes > 2, "the bound dropped the blocks {} times", subject.blocks.stats.flushes);
+    assert!(subject.blocks.jit.flushes > 2, "the bound dropped the blocks {} times", subject.blocks.jit.flushes);
 }

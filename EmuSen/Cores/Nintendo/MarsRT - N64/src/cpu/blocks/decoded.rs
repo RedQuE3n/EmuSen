@@ -49,7 +49,7 @@ pub fn run(cpu: &mut Cpu, bus: &mut MemoryBus, block: &Block, entry: u64, cap_at
             cpu.enter_exception();
             bus.tick(1);
             if let Some(s) = shadow.as_deref_mut() {
-                s.follow(cpu, bus, "a raise in a decoded block");
+                s.follow((cpu, bus), "a raise in a decoded block");
             }
             return;
         }
@@ -66,7 +66,7 @@ pub fn run(cpu: &mut Cpu, bus: &mut MemoryBus, block: &Block, entry: u64, cap_at
         }
         cpu.last_count = bus.count();
         if let Some(s) = shadow.as_deref_mut() {
-            s.follow(cpu, bus, "a decoded instruction");
+            s.follow((cpu, bus), "a decoded instruction");
         }
         if rewrote {
             return;

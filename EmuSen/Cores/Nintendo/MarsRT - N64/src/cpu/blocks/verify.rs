@@ -1,34 +1,40 @@
-//! The verifier: an interpreter run beside the blocks, stepped after every instruction they run and compared. C#'s `VerifyBlockStep`, made stronger; see Mars_Native.md §5.8.
+//! The verifier: an interpreter run beside the blocks, stepped after every instruction they run and compared. C#'s `VerifyBlockStep`,
+//! made stronger; the verifier's shape is `emusen-jit`'s, the machine and its comparison are here. See Mars_Native.md §5.8.
+
+use emusen_jit::verify::{Reference, Verifier};
 
 use crate::cpu::Cpu;
 use crate::memory::bus::MemoryBus;
 
 /// The interpreter's machine, a step behind or level with the one the blocks run.
-pub struct Shadow {
+pub struct Interpreter {
     pub cpu: Cpu,
     pub bus: MemoryBus,
-    pub steps: u64,
 }
 
-impl Shadow {
-    pub fn of(cpu: &Cpu, bus: &MemoryBus) -> Box<Shadow> {
-        Box::new(Shadow { cpu: cpu.clone(), bus: bus.clone(), steps: 0 })
-    }
+/// The interpreter beside the blocks, and the steps it has taken.
+pub type Shadow = Verifier<Interpreter>;
 
-    /// One interpreter step, then the two compared; `what` names the path the blocks took.
-    pub fn follow(&mut self, cpu: &Cpu, bus: &MemoryBus, what: &str) {
-        self.cpu.step(&mut self.bus);
-        self.steps += 1;
-        self.check(cpu, bus, what);
-    }
+pub fn of(cpu: &Cpu, bus: &MemoryBus) -> Box<Shadow> {
+    Box::new(Verifier::new(Interpreter { cpu: cpu.clone(), bus: bus.clone() }))
+}
 
+impl Interpreter {
     /// The idle loop, which both run by the same code, from the same state.
     pub fn idle(&mut self, cap_at: i64, rsp_whole: bool) -> bool {
         self.cpu.try_idle(&mut self.bus, cap_at, rsp_whole)
     }
+}
 
-    /// Everything a step can change but RDRAM, which `check_all` compares.
-    pub fn check(&self, cpu: &Cpu, bus: &MemoryBus, what: &str) {
+impl Reference for Interpreter {
+    type Subject<'a> = (&'a Cpu, &'a MemoryBus);
+
+    fn step(&mut self) {
+        self.cpu.step(&mut self.bus);
+    }
+
+    /// Everything a step can change but RDRAM, which `differs_whole` compares.
+    fn differs(&self, (cpu, bus): (&Cpu, &MemoryBus)) -> Option<String> {
         let (a, b) = (&self.cpu, cpu);
         let run = |c: &Cpu| (c.run.mode, c.run.recheck, c.run.asserted_seen, c.run.timer_due, c.run.exceptions);
         let same = a == b
@@ -42,10 +48,9 @@ impl Shadow {
             && self.bus.pi == bus.pi
             && self.bus.vi == bus.vi
             && self.bus.ai == bus.ai;
-        if !same {
-            panic!(
-                "the recompiler parted from the interpreter after {} steps, after {what}: interpreter pc {:X} current {:X} next {:X} pending {} slot {} instructions {} cycles {} last_count {}; blocks pc {:X} current {:X} next {:X} pending {} slot {} instructions {} cycles {} last_count {}; registers {}; run {:?} vs {:?}",
-                self.steps,
+        (!same).then(|| {
+            format!(
+                "interpreter pc {:X} current {:X} next {:X} pending {} slot {} instructions {} cycles {} last_count {}; blocks pc {:X} current {:X} next {:X} pending {} slot {} instructions {} cycles {} last_count {}; registers {}; run {:?} vs {:?}",
                 a.pc,
                 a.current_pc,
                 a.next_pc,
@@ -65,13 +70,12 @@ impl Shadow {
                 (0..32).filter(|&r| a.gpr[r] != b.gpr[r]).map(|r| format!("r{r} {:X}/{:X}", a.gpr[r], b.gpr[r])).collect::<Vec<_>>().join(" "),
                 run(a),
                 run(b),
-            );
-        }
+            )
+        })
     }
 
-    /// The whole machine, RDRAM and all; made at the end of a run.
-    pub fn check_all(&self, cpu: &Cpu, bus: &MemoryBus) {
-        self.check(cpu, bus, "the end of the run");
-        assert!(self.bus == *bus, "the recompiler's machine parted from the interpreter's after {} steps, outside the processor", self.steps);
+    /// The whole machine, RDRAM and all.
+    fn differs_whole(&self, (_, bus): (&Cpu, &MemoryBus)) -> Option<String> {
+        (self.bus != *bus).then(|| "outside the processor".to_string())
     }
 }

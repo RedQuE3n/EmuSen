@@ -148,7 +148,12 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   a turn and passed with the board brought through each of their times, loops that count in registers or cached memory
   passed with their counts and bounded by their comparisons, the IOP's waits passed between the board's calls; every
   golden, ps2autotests' 78 texts and the boot and Jak and Daxter frame by frame equal with it off and on, Jak's loading
-  3.6 times faster and OSDSYS's language screen 1.7 times.
+  3.6 times faster and OSDSYS's language screen 1.7 times; and stage S37 (2026-10-26, §48): the EE recompiler's
+  loads and stores of every width in blocks, the scratchpad and RDRAM reached directly and a cached page through the data
+  cache's own lines, a translation cache keyed by the TLB's stamp and the mode, the board's replay keeping the DMAC out of
+  a block's times before its last access with rollbacks that undo a block's stores, a block running to the first line the
+  instruction cache does not hold; every oracle equal to the interpreter on each base, Jak and Daxter's loading 1.4 to 2
+  times S36's, its memory card screen 0.94 with the cause named.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

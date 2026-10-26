@@ -9485,3 +9485,308 @@ emulator, SDK or loader source, no article on VU recompilation, and no firmware.
 - VU0's micro mode on the recompiler in the core (S41): built and graded here, not switched on.
 - Running VU1 ahead of the EE to its observation points (S42), which is what would let a compiled microprogram run long.
 - C3; the FMAC's arithmetic inline.
+
+## 46. The GS's exact texture arithmetic on fast paths, bit for bit (2026-10-26)
+
+*Numbered §46 at its start, other stages being written beside it.*
+
+### 46.1 In one paragraph
+
+S32's ranking put first (§43.8, lever 1) the GS's exact perspective arithmetic (`gs::exact`, §31.3): the texture
+coordinates s × USIZE = 2^TW × ΣS_i w_i / ΣQ_i w_i and t likewise, floored to sixteenths, and the LOD's
+floor(2^(L + 4) × log2(1/|Q|)), computed in 768-bit integers with 256-bit steps, 61 % of Jak and Daxter's memory card
+screen. Decided 2026-10-26 by the tester that speed comes next, this step **computes the same integers in 128 bits
+wherever the operands provably fit, keeps the 768-bit steps for the rest, and decides a LOD whose logarithm lies on a
+whole number by one exact comparison**, as S24 did for the log2's estimate (§35.7). The profile first (§46.2): on the
+memory card screen every one of the 115.7 million textured pixels of frames 400 to 900 fitted 128 bits, and **every
+LOD logarithm, not the quotient, fell to the 256-bit steps**, because its estimate lay on a whole number. Each fast path
+carries its proof (§46.3 to §46.6) and tests that compare it with the 768-bit path bit for bit: 50 million random cases
+across every class of operand, an exhaustive sweep of small quotients, the edges of each case, and 10 million
+logarithms on and near whole numbers (§46.7). The GS's goldens, the project's GS programs and ps2autotests' GS texts
+pass unchanged, and the OSDSYS boot (760 frames) and Jak and Daxter's program (900 frames) give the same picture, sound
+and state digests, frame by frame, on both EE tiers. **Measured against today's tree, which already carries S28's
+power-of-two return in the log2 (§39.8): Jak's memory card screen from 347.6 to 234.7 ms a frame (2.88 to 4.26 frames a
+second, 1.48 times), the boot's intro from 449.7 to 305.1 (1.47 times, 1.72 over its frames 40 to 90), the language
+screen unchanged within the rounds' spread** (§46.8). Against the reference arithmetic as it stood before S28's return
+the memory card screen went from 718.7 to 229.8 ms (3.13 times). After it every workload is bound by the EE and its
+recompiler's exits (§46.9). Nothing was made inexact, so no compromise is proposed.
+
+### 46.2 The profile (measured 2026-10-26)
+
+The tree before S28's merge with S32's bench, the recompiler tier, two workloads: Jak and Daxter's program entered by the
+fast boot, the window from frame 400 to 900 (its memory card screen), and the OSDSYS boot, the window from 700 to 760 (its
+language screen). The sampler is S32's (`rtsample.py`, §43.4), every 2 ms, named through the binary's symbols and
+inline chains; **only host functions were named, never a guest address**. Counters were added to a copy of `gs::exact`
+built apart (not committed) and run on the interpreter tier over the same frames, since the counts do not depend on the
+tier.
+
+| Jak and Daxter, frames 400-900 | |
+| --- | --- |
+| Samples in `gs/exact.rs` | **68.8 %** of 177,977; the GS 72.0 %, the EE with the recompiler's exits and code about 17 % |
+| Textured pixels with STQ | 115,713,250 (231,000 a frame): 231 million quotients, 579 million sums, 116 million logarithms |
+| A sum's exponent spread (largest live exponent less the smallest) | 0 for 98.2 %, 1 to 8 for the rest |
+| The weights' width | at most 32 bits (17 to 24 bits for 51 %) |
+| A sum's magnitude | 16 to 47 bits |
+| The quotient's scale k = scale + a − b | 0 to 15 for every quotient |
+| The quotient | at most 16 bits; none negative, none with a zero sum |
+| **The LOD's logarithm** | **every one, 115,713,250, fell to the 256-bit steps**: each estimate lay within 2^-24 of a multiple of 2^bits |
+
+On the boot (the counts over its 760 frames): 468 million quotients, 3,701 with a sum of zero, 48 million negative;
+exponent spreads to 24 bits in 143,000 sums; k below zero in 164,917; quotients at most 16 bits; 234 million
+logarithms, of which 4.4 million fell to the 256-bit steps. **The language screen calls no exact arithmetic at all**: no
+sample of its window was in `gs/exact.rs`; it is drawn with UV coordinates, whose cost is the sampler (`gs/texture.rs`
+18.4 %, `gs/local.rs` 14.5 %) and 128-bit signed division helpers (4.2 %, UV's and Z's interpolation). So no speed was to be had on the
+language screen; the boot's perspective-textured frames are its intro, where S36 found `gs::exact` at 56 % of frames 40
+to 90 (§44.8).
+
+Two findings decide the design. **Every operand fits**: no sum needs more than 63 bits, and no dividend more than 78
+bits. And **the cost S32 attributed to the quotients was mostly the logarithm's**: the double-precision
+estimate of §35.7 lands exactly on a whole number whenever the ratio is a power of two (a Q of 1.0, or any power of two
+at every vertex), and then only the 256-bit steps decided. S28 had meanwhile added a return for a ratio exactly a power
+of two inside those steps (§39.8), after their 768-bit comparisons; §46.5 decides that case and its neighbours before them, by one 128-bit
+comparison.
+
+### 46.3 The sums in 128 bits, and why they are the same integers
+
+`Sum::of` forms ΣS_i w_i (or ΣT_i w_i, ΣQ_i w_i) as (−1)^neg × mag × 2^exp with exp the smallest exponent among the live
+terms (a term is live when its significand and its weight are non-zero). Each live term's magnitude is
+t_i = p_i × 2^(d_i), with p_i = m_i × |w_i| and d_i = e_i − exp ≥ 0.
+
+- **p_i is exact in 128 bits**: m_i < 2^24 (the significand with its hidden bit) and |w_i| ≤ 2^63 (an `i64`'s magnitude,
+  `i64::MIN` included), so p_i < 2^87.
+- **The shift is exact** when bits(p_i) + d_i ≤ 125 (`TERM`), the condition tested for every live term: then
+  t_i < 2^125.
+- **The signed sum cannot overflow**: at most three terms, so |Σ ±t_i| < 3 × 2^125 < 2^127, inside an `i128` at every
+  partial sum.
+- **It is the same number the 768-bit path forms.** That path adds the terms whose sign (the float's sign against the
+  weight's) is positive into `pos`, the others into `neg`, and keeps |pos − neg| with neg set when pos < neg. The `i128`
+  accumulator holds pos − neg itself, so its sign is that comparison and its magnitude that difference; a sum of zero
+  has neg clear in both. exp is computed by the same expression.
+- **If any term fails the test, the whole sum is formed by the 768-bit path** (`of_wide`, the former `of` unchanged), so
+  no sum mixes the two.
+
+A sum held in 128 bits is therefore below 2^127. Nothing in this argument depends on the weights' origin: a line's
+negative weights past its end, a sprite's two axes and a point's single weight are covered alike, as are the exponent
+field's ends (1 and the largest, 255, which the GS takes as an ordinary exponent [A, D-247]) and a zero exponent field,
+which is zero and never live.
+
+### 46.4 The quotient in 128 bits
+
+`quotient` needs, for num = n × 2^a and den = d × 2^b (both non-zero, n and d the magnitudes) and k = scale + a − b, the
+quotient q and whether a remainder r is left in A / B, where A = n × 2^k and B = d when k ≥ 0, A = n and B = d × 2^-k
+when k < 0; the 768-bit path forms exactly these and divides by shift and subtract. With n and d below 2^127 (§46.3):
+
+- **k ≥ 0 and bits(n) + k ≤ 128**: A < 2^128, so the shift is exact and the hardware's 128-bit integer division gives
+  the same q and r.
+- **k < 0 and bits(d) + |k| > bits(n)**: B ≥ 2^(bits(d) − 1 + |k|) ≥ 2^bits(n) > n = A, so q = 0 and r = n, which is not
+  zero. No shift is formed, so |k| may be any size.
+- **k < 0 otherwise**: bits(d) + |k| ≤ bits(n) ≤ 127, so B is exact in 128 bits and the division gives q and r.
+- **Anything else** (k ≥ 0 with bits(n) + k > 128, or either sum held in 768 bits) is divided by the 768-bit steps.
+
+The coordinate is then formed from q and r by one function both paths call (`place`): the sign, whether q has at most
+40 bits, q's low 64 bits and whether r is non-zero, which is everything the former code read from the 768-bit q (its
+`bits() <= 40` and its lowest limb). q below 2^40 is floored towards minus infinity exactly as before; a q of 40 bits or
+more keeps its low 24 bits in `NEAR`'s stand-in as before; that branch is reached by the 128-bit path whenever q is so
+large, and its low bits are q's low bits in either width.
+
+### 46.5 The LOD: the same estimate, and one comparison where it lies on a whole number
+
+`log2_scaled` (S24's shortcut, §35.7) takes floor(2^bits × log2(w / |ΣQw|)) from a double-precision estimate where the
+estimate lies more than 2^-24 (`CLEAR`) from an integer, and from the 256-bit exact steps (`log2_exact`) otherwise.
+
+**The estimate is the same double in both widths.** It is formed from the denominator's top 64 bits and its width
+through one function (`log2_of_top`), whichever width holds the magnitude: for a 128-bit magnitude v of b bits the top
+64 bits are v >> (b − 64) when b > 64 and v otherwise, which is what `Big::log2` reads from the same integer. The same
+integer gives the same top bits, the same double and the same decision, so S24's argument is untouched. Its premise, that
+the estimate's error is far below 2^-24 of a unit, is written out here for the record: the truncation to 64 bits and
+the conversion to a double each change the logarithm by less than 2^-52; the library's `log2` of a value below 2^64 is
+within an ulp of a result below 64, 2^-46; the sum with the width (below 800) and the exponent rounds once more, within
+2^-43 for each of the two additions; the scaling by 2^bits (bits ≤ 7) is exact. The total is below 2^-35 of a unit,
+times 2^7 at most, below 2^-28.
+
+**Where the estimate lies within 2^-24 of an integer j that is a multiple of 2^bits**, the logarithm lies within 2^-24
+(plus the estimate's error) of the whole number t = j / 2^bits, so the floor is j or j − 1. Which one is decided exactly
+by one comparison (`covers`): w ≥ |ΣQw| × 2^t, that is w ≥ mag × 2^(exp + t), done in 128 bits (or 768 for a wide sum),
+with no shift formed where the widths alone decide it (mag × 2^s ≥ 2^(bits(mag) − 1 + s) exceeds w when that exceeds
+w's width, and w × 2^s exceeds mag likewise).
+
+**The exact steps give the same.** `log2_exact` takes e = floor(log2(w / mag)) by an exact comparison, the significand
+m₀ = floor(2^255 × (w / mag) / 2^e) in [2^255, 2^256), and then each bit by m ← floor(m² / 2^255), a bit 1 and a halving
+when m reaches 2^256; the result is ((e − exp) << bits) + those bits. Let r = w / (mag × 2^exp), so log2 r lies within
+ε < 2^-23 / 2^bits of t.
+
+- *r ≥ 2^t*: then e = exp + t (log2 r < t + 1). Truncation only lowers m, so every m_k ≤ 2^255 × (r / 2^t)^(2^k)
+  ≤ 2^255 × 2^(2^bits × ε) < 2^256 for k ≤ bits; and m_k ≥ 2^255 always (a square of at least 2^510 shifted by 255).
+  Every bit is 0: the result is t << bits = j, which is what the comparison gives. S28's return inside the steps
+  (§39.8), taken when r is exactly 2^t, gives the same t << bits.
+- *r < 2^t*: then e = exp + t − 1, and m₀ ≥ 2^256 (1 − δ₀) with δ₀ < 2^bits × ε × ln 2 + 2^-255. Each step with
+  m_k ≥ 2^256 (1 − δ_k) gives m_k² / 2^255 ≥ 2^257 (1 − 2δ_k), at least 2^256, so a bit 1, and after the halving and the
+  two truncations m_(k+1) ≥ 2^256 (1 − 2δ_k − 2^-255). After at most seven steps δ < 2^7 δ₀ + 2^-247, far below the
+  1 − 1/√2 that would let a square fall under 2^256. Every bit is 1: the result is ((t − 1) << bits) + 2^bits − 1 = j − 1,
+  which is what the comparison gives.
+
+This holds however near r lies to 2^t, including r = 2^t exactly (m₀ = 2^255, every square 2^255) and r within 2^-255 of
+it on either side, where the exact steps' own caveat (a power of the ratio within 2^-250 of a power of two) does not
+apply because e is decided exactly. **Where the estimate lies near an integer that is not a multiple of 2^bits**, the
+logarithm is near a fraction with a power of two below it, and the exact steps are kept: the comparison would need
+w^(2^bits) against a power of two, which is the 256-bit steps' own work.
+
+### 46.6 ΣQw once a pixel
+
+`Setup::at` took Sum::of(Q, wu) for S/Q, Sum::of(Q, wv) for T/Q and Sum::of(Q, wu) again for the LOD. A sum is a pure
+function of the three Q and the weights, so it is taken once and reused, along V too when wv equals wu, which it does for
+every primitive but a sprite.
+
+### 46.7 The equality evidence (2026-10-26)
+
+`gs::exact`'s tests, in release:
+
+| Test | What it compares | Cases |
+| --- | --- | --- |
+| `the_128_bit_path_equals_the_768_bit_one` | the sums (sign, magnitude, exponent), the quotient at a random scale and the LOD at a random depth, `Sum::of` against `of_wide` | 400,000 a run |
+| `many_millions_of_cases_equal` (ignored; `cargo test --release -- --ignored`) | the same | **50,000,000**, of which 14,837,496 quotients took the 128-bit path and the rest the 768-bit one |
+| `small_quotients_equal_exhaustively` | every n and d below 2^7, every scale from −12 to 12, every pair of signs, the 128-bit division against the 768-bit one | 1,612,900, all |
+| `quotients_on_the_edges_of_the_fast_cases_equal` | integers of every width to 127 bits at the edges of each case of §46.4 (2^k × n at 128 bits and one past, d × 2^-k at n's width and one past), the quotient at 2^40 − 1, 2^40 and 2^40 + 1 with and without a remainder, either sign | 300,000 and 12 |
+| `a_term_of_125_bits_is_the_widest_kept_narrow` | a term of exactly 125 bits stays in 128, one of 126 goes to 768, the same number | 2 |
+| `logs_on_a_whole_number_are_decided_as_the_exact_steps_decide_them` | `log2_scaled` against `log2_exact` alone: one Q at every vertex (a power of two, its neighbours either side, or any value), the weights' total or any w, sums of every class, depths 0 to 7; and five fixed Q at every depth | 100,000 a run, 14,153 by the comparison; 40 |
+| `ten_million_logs_equal` (ignored) | the same | **10,000,000**, 1,400,387 by the comparison |
+
+The classes drawn: zero, the exponent field's 1, 254 and 255, and exponents within 0, 2, 8, 24, 38, 60, 128 or 255 of
+a centre; the significand all ones, its hidden bit alone or random; either sign; weights 0, ±1, a few bits, a triangle's
+edge functions to 2^36, a line's negative weights past its end, anything to 2^62, and `i64`'s ends; scales from −8 to
+40, and from −300 to 300 in an eighth of the cases. The earlier tests (`the_shortcut_equals_the_exact_steps`,
+`quotients_floor_exactly_and_keep_the_low_bits_far_out`, `log2_is_floored_at_every_scale`) pass unchanged.
+
+**The GS as a whole**: `tests/texture.rs` (11, S18's programs and the generated textured primitives graded against the
+model), `pixel.rs` (13), `draw.rs` (13), `gs.rs` (12, ps2autotests' `gs/label` and `gs/signal` texts among them) and
+`gif.rs` (16, S16 to S18's programs through PATH3 and VIF1): all pass, on the branch before and after its rebase onto
+S28.
+
+**The games, frame by frame**: the bench's picture digest folds every frame's picture in order, so two runs with the
+same digest drew the same pictures at every frame; the sound and the final state are digested beside it.
+
+| Run | Picture | Sound | State |
+| --- | --- | --- | --- |
+| Jak and Daxter, 900 frames, the recompiler tier: before, after (three rounds each, and the sampled runs) | `7EEC08D4D07DB621` | `20BB66B5E91347C9` | `432747A04A96554D` |
+| the same, the interpreter tier: before, after | the same | the same | the same |
+| The OSDSYS boot, 760 frames, the recompiler tier: before, after (three rounds each, and the sampled runs) | `50F06A02F1B76860` | `2EE7B3D10DF3C401` | `69D92E107601A13F` |
+| the same, the interpreter tier: before, after | the same | the same | the same |
+| On today's tree (S28 merged), the recompiler tier, three rounds each: Jak before and after | `7EEC08D4D07DB621` | `20BB66B5E91347C9` | `BEC07CDF932EDE1A` |
+| the boot before and after | `50F06A02F1B76860` | `2EE7B3D10DF3C401` | `ECEAB6AFF3DA4760` |
+
+The boot's digests are S32's of §43.2. The state digests differ between the two trees because S28 changed the state's
+contents, not because of this step. The counters' runs saw the fast paths take everything on these workloads: Jak's 347
+million sums and 231 million quotients all by 128 bits and its 116 million logarithms all by the comparison; the boot's
+702 million sums and 468 million quotients by 128 bits, its 4.4 million logarithms on a whole number by the comparison,
+none by the 256-bit steps.
+
+### 46.8 Speed (measured 2026-10-26)
+
+**The method**: S32's bench (`examples/bench.rs`) with the recompiler tier chosen, each frame's `advance` timed; the
+windows' means from each round's per-frame times; three rounds; the median and the spread. Today's tree (S28 and S32
+merged) against the same tree with this step, **both run at once in each round** at CPU weight 100 under the same load,
+other stages building and running games beside them (load averages 6.5 to 13.0, recorded before and after each round).
+
+| Mean ms a frame | Before: rounds | median | After: rounds | median | Ratio |
+| --- | --- | --- | --- | --- | --- |
+| Jak and Daxter, frames 400-900, the memory card screen | 347.6, 437.7, 331.4 | **347.6** (2.88 frames a second) | 234.7, 344.5, 225.5 | **234.7** (4.26) | **1.48** (1.48, 1.27, 1.47) |
+| Jak and Daxter, frames 8-400, its start and loading | 250.0, 323.0, 221.4 | 250.0 | 243.7, 341.8, 219.8 | 243.7 | 1.03 |
+| Jak and Daxter, frames 0-900 | 304.4, 386.4, 283.0 | 304.4 (3.29) | 238.9, 344.3, 223.4 | 238.9 (4.19) | 1.27 |
+| The OSDSYS boot, frames 0-690, the intro | 554.0, 449.7, 434.4 | **449.7** (2.22) | 398.5, 305.1, 289.3 | **305.1** (3.28) | **1.47** |
+| the intro's frames 40-90 | 791.8, 639.6, 633.4 | 639.6 | 399.8, 372.1, 338.1 | 372.1 | 1.72 |
+| The boot, frames 690-760, the language screen | 256.1, 236.6, 243.2 | **243.2** (4.11) | 263.7, 254.5, 243.8 | **254.5** (3.93) | 0.96 (0.97, 0.93, 1.00) |
+| The boot, frames 0-760 | 526.6, 430.1, 416.8 | 430.1 (2.33) | 386.1, 300.5, 285.1 | 300.5 (3.33) | 1.43 |
+
+**The language screen** runs no exact arithmetic (§46.2), so the step cannot speed it, and its 0.96 is read as the
+rounds' noise: the round at the lowest load gave 243.2 and 243.8; the sampled runs of the same window, one on each tree,
+took 22.9 and 23.2 s of wall time (1.4 % apart) with the same shares in `gs/texture.rs` (18.4 and 18.3 %) and
+`gs/local.rs` (14.5 and 14.0 %); and `Setup::at` and the functions it calls are out of line in both binaries alike. A
+slowdown of the UV path would have raised those shares.
+
+**Against the arithmetic before S28's power-of-two return** (the first tree, the rounds run one at a time and alternated,
+loads 4.2 to 15.0): the memory card screen 718.7 ms (713.2, 718.7, 743.8) against 229.8 (229.8, 226.4, 274.5), **3.13
+times**; the intro's frames 40-90 639.5 against 494.4. That is the step's whole effect on the reference arithmetic S32
+profiled; S32 expected 2.23 times there, having credited the cost to the quotients. Of the 3.13, S28's return took the
+part where the ratio is exactly a power of two, at the cost of the 768-bit comparisons that still preceded it.
+
+### 46.9 The next cost (measured 2026-10-26)
+
+The sampled runs after the step, the recompiler tier, the windows of §46.2 (S32's classifier files the recompiler's
+`blocks.rs` and its compiled code under "other"; both are the EE's here):
+
+| Share of the window's samples | Jak's memory card screen (55,855) | The language screen (11,580) |
+| --- | --- | --- |
+| **The EE**: its steps and timing model, address translation, the caches' models | 31.8 % (translation 8.8, `ee/jit` 6.9, timing 3.7, fetch 2.7, data 2.2) | 11.4 % |
+| **The recompiler's exit replay (`blocks.rs`) and its compiled code** | **19.7 %** (12.7 and 6.9) | **20.7 %** (12.7 and 8.0) |
+| Scheduler and synchronisation | 10.3 % (the IOP's catch-up 4.4, `run_through` 2.0, the idle checks 1.9) | 8.4 % |
+| **The GS** | 13.6 % (`gs::exact` 4.6, texture 4.1, local memory 2.4) and 128-bit division helpers 0.9 % | **43.4 %** (texture 18.3, local memory 14.0, formats 5.4, pixel 4.9) and the 128-bit signed division of UV and Z 4.4 % |
+| VU micro | 7.7 % | 2.6 % |
+| IOP, VIF, GIF, DMAC, SPU2 | 11.1 % | 5.4 % |
+| The standard library's hashing (`RandomState::hash_one`, SipHash) | 2.2 % | under 1 % |
+
+**After this step every drawing workload measured is bound by the EE**, about half of Jak's memory card screen with the
+recompiler's exits, which is S32's ranking's next item (idle skipping, S33) and S37's (fewer block ends, so fewer
+replays). `gs::exact` is down to 4.6 % of that screen. On the language screen the GS's sampler and local-memory
+addressing lead, the share S43's worker threads address. A hash map's lookup on a hot path costs 2.2 % on Jak; which
+one was not looked for here.
+
+### 46.10 Tests and seeded faults (2026-10-26)
+
+Seven tests in `gs::exact` (two of them ignored long runs), listed in §46.7, beside the three it had. Each fault made
+alone, the tests of `gs::exact` (or `tests/texture.rs` for F4) run in release, the source restored:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | `TERM` 126 bits (a sum of three terms may overflow 128) | `a_term_of_125_bits_is_the_widest_kept_narrow` |
+| F2 | k < 0: the quotient taken as 0 when bits(d) + \|k\| equals bits(n) | the exhaustive sweep, the random cases, the edges |
+| F3 | a term's sign from the float alone, the weight's ignored | the random cases, the 125-bit test |
+| F4 | ΣQw along U reused along V for a sprite | `tests/texture.rs`: 4 of 11 (ST and Q, the generated primitives, the wrap modes, the bilinear and mipmap filters) |
+| F5 | the comparison's two outcomes swapped | `log2_is_floored_at_every_scale`, the whole-number test |
+| F6 | the comparison's shift taken as t − exp | the same two |
+| F7 | the comparison's width shortcut at equal widths | the whole-number test |
+
+F1 has one catcher, the test written for that bound: random operands rarely bring three terms near 2^126 together.
+
+### 46.11 Exposure, and what was observed
+
+Running the player's BIOS on Sapphire, for the boot and for Jak and Daxter's program by the fast boot, makes this
+writer a writer of a player's-BIOS stage (§1.4): **exposed, and never a replacement writer**. The BIOS image was named
+by its path in S32's run scripts and handed to the machine; it was never opened, hashed, diffed, listed, disassembled or
+dumped, and the BIOS folder's names were not listed. Nothing printed held a guest address, an instruction or memory:
+the sampler named host functions only, and the counters counted the GS's operands (exponent spreads, widths, scales),
+which are the GS's arithmetic, not the BIOS's or the game's code. Jak and Daxter's image was read in place from the
+probe's folder. No emulator's or GS plugin's source was read.
+
+### 46.12 Where the plan was wrong, or left open
+
+- **S32's ranking credited the cost to the quotients' division** (§43.6, §43.8) and expected 2.23 times on the memory
+  card screen: the quotients were a small part; the LOD's logarithm, whose shortcut (§35.7) never applies when the ratio
+  is a power of two, was most of it. The ranking's estimate was low, not high (3.13 times on the arithmetic it profiled).
+- **The language screen has no perspective texturing**: the 22 % of it sometimes quoted for `gs::exact` is the GS's whole
+  share there (§43.5).
+- **§31.5's "a textured pixel with STQ costs two exact quotients ... and an exact logarithm"** is now: three sums and two
+  divisions in 128 bits and a double-precision logarithm, the 768-bit steps kept for operands that do not fit and the
+  256-bit steps for a logarithm near a fraction.
+
+### 46.13 Questions this step leaves
+
+1. **[routine] The language screen's 0.96.** Read as noise (§46.8). Recommended: accept, and let S43's rounds on that
+   screen, which address its GS share, re-measure it.
+2. **[routine] The hash map on Jak's hot path** (2.2 %, §46.9). Recommended: find it within S33 or S34, which touch the
+   per-instruction paths where such a lookup is likely.
+3. **[routine] S32's classifier** files the recompiler's exits and code under "other". Recommended: give them their own
+   unit in the scratch classifier before S33's profile, so the EE's share reads whole.
+
+### 46.14 What was read for this step
+
+`Sapphire_Plan.md` §1.4, §5.4, §5.13 with its amendment, §7's phase G; this page's §31.3 and §31.5, §35.7, §39.8, §43
+(§43.1 to §43.6 and §43.8), §44's structure and §44.8 to §44.11; `gs/exact.rs`, `gs/texture.rs`, `gs/raster.rs`; S32's
+`examples/bench.rs`, its run scripts and its sampler and classifier. No article, no emulator or GS plugin source, and
+no firmware.
+
+### 46.15 What this step does not cover
+
+- The handheld: no measurement was made there.
+- A logarithm near a fraction of a whole number keeps the 256-bit steps (none occurred on these workloads).
+- UV interpolation's 128-bit signed division (4.4 % of the language screen) and the sampler and local memory: S43's.
+- The GS on worker threads (S43) and on the device (S44 to S46).

@@ -369,16 +369,21 @@ impl Setup {
     /// and `wv` along V (the same but for a sprite), each with a positive total; every quantity exact, then floored.
     pub fn at(&self, wu: [i64; 3], wv: [i64; 3]) -> (i64, i64, i32) {
         let total = |w: [i64; 3]| w[0] + w[1] + w[2];
-        let (u, v) = if self.uv {
-            let lerp = |c: &[i64; 3], w: [i64; 3]| (i128::from(c[0]) * i128::from(w[0]) + i128::from(c[1]) * i128::from(w[1]) + i128::from(c[2]) * i128::from(w[2])).div_euclid(i128::from(total(w))) as i64;
-            (lerp(&self.u, wu), lerp(&self.v, wv))
-        } else {
-            (exact::quotient(&Sum::of(&self.s, wu), &Sum::of(&self.q, wu), self.scale.0), exact::quotient(&Sum::of(&self.t, wv), &Sum::of(&self.q, wv), self.scale.1))
-        };
-        let lod = match self.lod {
+        let lod = |q: &Sum| match self.lod {
             Lod::Fixed(l) => l,
-            Lod::PerPixel => lod_of(exact::log2_scaled(total(wu) as u64, &Sum::of(&self.q, wu), self.l + 4), self.k),
+            Lod::PerPixel => lod_of(exact::log2_scaled(total(wu) as u64, q, self.l + 4), self.k),
         };
-        (u, v, lod)
+        if self.uv {
+            let lerp = |c: &[i64; 3], w: [i64; 3]| (i128::from(c[0]) * i128::from(w[0]) + i128::from(c[1]) * i128::from(w[1]) + i128::from(c[2]) * i128::from(w[2])).div_euclid(i128::from(total(w))) as i64;
+            let l = match self.lod {
+                Lod::Fixed(l) => l,
+                Lod::PerPixel => lod(&Sum::of(&self.q, wu)),
+            };
+            return (lerp(&self.u, wu), lerp(&self.v, wv), l);
+        }
+        // ΣQw is taken once along U and reused along V and for the LOD when the weights agree, as they do but for a sprite.
+        let qu = Sum::of(&self.q, wu);
+        let qv = if wv == wu { qu } else { Sum::of(&self.q, wv) };
+        (exact::quotient(&Sum::of(&self.s, wu), &qu, self.scale.0), exact::quotient(&Sum::of(&self.t, wv), &qv, self.scale.1), lod(&qu))
     }
 }

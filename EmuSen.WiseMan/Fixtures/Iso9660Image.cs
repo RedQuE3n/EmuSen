@@ -12,13 +12,14 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static int Sectors(int bytes) => Math.Max(1, (bytes + CdSector.User - 1) / CdSector.User);
 
-        // The descriptors at 16 and 17, the path tables at 18 and 19 and the root at its sector, each file's bytes at its extent; the volume spans every sector given.
-        public static void Write(byte[] user, int root, IReadOnlyList<IsoFile> files, string system = "PLAYSTATION")
+        // The descriptors at 16 and 17, the path tables at 18 and 19 unless placed elsewhere, and the root at its sector, each file's bytes at its extent; the volume spans every sector given.
+        public static void Write(byte[] user, int root, IReadOnlyList<IsoFile> files, string system = "PLAYSTATION", (int L, int M)? pathTables = null)
         {
-            PrimaryVolumeDescriptor(user.AsSpan(PrimaryVolume * CdSector.User, CdSector.User), user.Length / CdSector.User, root, system);
+            var (l, m) = pathTables ?? (PathTableL, PathTableM);
+            PrimaryVolumeDescriptor(user.AsSpan(PrimaryVolume * CdSector.User, CdSector.User), user.Length / CdSector.User, root, system, l, m);
             TerminatorAt(user, Terminator);
-            PathTable(user.AsSpan(PathTableL * CdSector.User), root, littleEndian: true);
-            PathTable(user.AsSpan(PathTableM * CdSector.User), root, littleEndian: false);
+            PathTable(user.AsSpan(l * CdSector.User), root, littleEndian: true);
+            PathTable(user.AsSpan(m * CdSector.User), root, littleEndian: false);
             var dir = user.AsSpan(root * CdSector.User, CdSector.User);
             int at = Record(dir, 0, "\0", root, CdSector.User, directory: true);
             at += Record(dir, at, "\u0001", root, CdSector.User, directory: true);
@@ -37,7 +38,7 @@ namespace EmuSen.WiseMan.Fixtures
             user[sector * CdSector.User + 6] = 1;
         }
 
-        public static void PrimaryVolumeDescriptor(Span<byte> d, int blocks, int root, string system)
+        public static void PrimaryVolumeDescriptor(Span<byte> d, int blocks, int root, string system, int pathTableL = PathTableL, int pathTableM = PathTableM)
         {
             d.Fill(0);
             d[0] = 1;
@@ -50,8 +51,8 @@ namespace EmuSen.WiseMan.Fixtures
             Both16(d, 124, 1);
             Both16(d, 128, CdSector.User);
             Both32(d, 132, 10);
-            BitConverter.TryWriteBytes(d.Slice(140, 4), (uint)PathTableL);
-            Big32(d, 148, PathTableM);
+            BitConverter.TryWriteBytes(d.Slice(140, 4), (uint)pathTableL);
+            Big32(d, 148, (uint)pathTableM);
             Record(d, 156, "\0", root, CdSector.User, directory: true);
             Text(d, 190, "", 128);
             Text(d, 318, "EMUSEN", 128);

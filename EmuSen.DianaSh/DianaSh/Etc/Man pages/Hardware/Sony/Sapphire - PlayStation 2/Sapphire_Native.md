@@ -209,7 +209,8 @@ The plan's §4.1 rules, as built in both halves (`ps2/disc.rs` and `Ps2System.Re
   sector 20 and also writes the volume as a raw mode 2 form 1 track through `CdSector`, with ECMA-130's EDC and parity;
   the licence text in sector 4 only on request. **`Dvd()`** writes 2,048-byte sectors alone with the root at sector 300,
   past the first 600 KiB [A: where a bridge volume's ISO 9660 directory lies; the synthetic "DVD" is defined by that
-  layout and its sector size, since an image records no physical format]. Never real game data.
+  layout and its sector size, since an image records no physical format]. Never real game data. *Since §40.14 the
+  path tables at 257 and 259 and the root at 261, as the medium's discs place them and the player's BIOS reads them.*
 - The crate's own tests build the same shapes in `media::sample`.
 
 ## 6. The CRT and the audits, under the development mark
@@ -496,7 +497,8 @@ was read, and nothing of PCSX2's log but the program's own lines was seen.
   builder's output with the new, passing, then removed]. The PlayStation 2's volumes gain the path tables and the full
   descriptor they lacked at S1.
 - **`SyntheticPs2Disc`**: `Cd()` (the volume, its raw mode 2 form 1 track through `CdSector` and a one-track sheet;
-  `WriteSet` writes `.cue` and `.bin`), `Dvd()` (2,048-byte sectors, the root at sector 300; `WriteSet` writes `.iso`),
+  `WriteSet` writes `.cue` and `.bin`), `Dvd()` (2,048-byte sectors, the root at sector 300, at 261 since §40.14;
+  `WriteSet` writes `.iso`),
   and **`DualLayerDvd(layer0)`**: layer 0 of the given sectors, a file `LAYER1.BIN` placed 32 sectors past the break and
   listed in the root, and the primary descriptor and terminator again at layer 1's sectors 16 and 17. The record names
   the break (`LayerBreak`), since an image records none.
@@ -6918,7 +6920,8 @@ before the loader took the layout, as the plan's rule asks.
   report of its N commands]. **As a DVD** (the same volume as an `.iso`, which `cdvd::open` takes for a DVD, 14h) it reads
   sector 16 with the same ReadCd command, then asks for sector 257, past the volume, and the open fails ("open fail name
   \TEST.IRX;1", LOADFILE's reply −203). Which of the drive's answers on a DVD makes it ask so is not shown by the reports;
-  D-483 leaves it open and every run of §40.5 uses a CD.
+  D-483 leaves it open and every run of §40.5 uses a CD. *Closed at §40.14: the BIOS reads a DVD's path table at
+  257.*
 
 ### 40.5 The 23 programs (measured 2026-10-26)
 
@@ -6994,7 +6997,7 @@ read; the images were handed by path to Sapphire and to PCSX2.
 
 ### 40.9 Named losses
 
-- **CDs only** (D-483): the IOP programs' discs are CDs; a DVD of the same volume is not read.
+- ~~**CDs only** (D-483): the IOP programs' discs are CDs; a DVD of the same volume is not read.~~ Lifted at §40.14.
 - **The fast boot's loader**: the loader is entered by S10's fast boot from the disc's file, not by OSDSYS's boot of the
   disc (S29); argv[0] is S10's `host:program.elf`.
 - **S10's TTY device** (D-364) answers the modules' writes as it answers an EE program's.
@@ -7029,5 +7032,113 @@ listed or traced.
 
 ### 40.13 What this section does not cover
 
-- A disc's boot through OSDSYS and a DVD's file system (S29, D-483).
+- A disc's boot through OSDSYS (S29); a DVD's file system, done at §40.14 (D-483).
 - Loading a module with arguments, LOADFILE's other functions, and the IOP's reboot into a disc's module image.
+
+### 40.14 A DVD's file system: D-483 closed (2026-10-26)
+
+*The tester's request of 2026-10-26 to settle D-483, since S28's three games are DVDs; disputes from D-520. A dispute
+step and a writer's step of a player's-BIOS stage, recorded here after §40's last section.*
+
+**In one paragraph.** The player's BIOS reads a PlayStation 2 DVD's ISO 9660 file system from an L path table at the
+fixed sector 257, and a CD's from where the primary volume descriptor names it. §40's synthetic volume put its tables at
+18 and 19, as a CD's, so as a DVD the BIOS read sector 257, past the 56-sector image, found zeros and failed the open.
+The drive's answers were right throughout: the same ReadCd command and block size as on a CD, sector 16's bytes the same
+in both media, and `emusen-disc` serving sector 257 (zeros past the image, the path table on a real disc). PCSX2 runs
+the same BIOS the same way once it takes an image for a DVD; it took §40's small `.iso` for a CD, which is why D-480's
+runs read it (D-520 records its boundary). Nothing in Sapphire or `emusen-disc` changes. The synthetic discs' DVD form
+now lays its tables and root out as the medium's discs do (257, 259, 261) in `ps2discs.py files` and WiseMan's
+`SyntheticPs2Disc`; with it **all 23 IOP programs print their console texts from DVDs** on both 0230 images, and from
+CDs as before. Jak and Daxter's disc was never affected: its tables are at 257, and on Sapphire its program, entered by
+the fast boot, reads 11,406 sectors of 30 files in 20 s of console time with no drive error.
+
+**The drive's traffic on Sapphire (measured 2026-10-26).** The Americas image, the §40 loader with `cpu/iop/alu`, the
+drive's N and S commands with their parameters, the blocks it handed to channel 3 and channel 3's registers at each
+start recorded by a diagnostic not committed:
+
+| Disc | The drive was asked (ReadCd, one sector unless named) | LOADFILE's reply |
+|---|---|---|
+| §40's volume as `.bin`, a CD (12h) | 16, 18 (the L table the descriptor names), 20 (the root), then the files, the speed byte 85h | the module's id; `alu` whole |
+| the same as `.iso`, a DVD (14h) | 16, then 257; the speed byte 83h | −203 |
+| the DVD with its descriptor's L table moved to 56 (a copy there) | 16, 257 | none; the module never read |
+| the DVD grown to 600 sectors, tables at 18 | 16, 257 | none; the module never read |
+| the DVD with a copy of the L table at 257, the descriptor naming 18; and naming 257 | 16, 257, 20 (the root the table at 257 names), the files | the module's id; `alu` whole |
+| Jak and Daxter's `.iso`, the loader given `cdrom0:\DRIVERS\LIBSD.IRX;1` (a Sony library module of the disc's) | 16, 257, 262 (the directory), the module's 13 sectors | 19h, the module's id |
+| the same, `cdrom0:\SYSTEM.CNF;1`; a name the directory lacks | 16, 257, 261 and the file; 16, 257, 262 | −201, the file opened but no module; −203 |
+
+Sector 16's block was the same 2,048 bytes in both media (one FNV-1a over each), channel 3 was set alike for each read
+(16 blocks of 32 words), and no S command and no GetToc came between the first two reads: the BIOS chooses by the disk
+type alone. The three DVD images at hand, Jak and Daxter, Kingdom Hearts and Dark Cloud 2, all name the L table at 257,
+its optional copy at 258, the M table at 259 and 260 and the root at 261, with UDF's anchor at 256 [M, their descriptors
+read].
+
+**On the referee (measured 2026-10-26).** PCSX2 2.8.2, the Americas image, outputs only (RAM through PINE and the
+module's own lines of its IOP console): an EE program reading the drive's disk type register found §40's 56-sector
+`.iso` a CD (12h), like the `.bin`; bisected over images of one volume padded with zeros, every image up to 452,849
+sectors was a CD and every one from 452,850 a DVD (D-520). On a sparse DVD of 1,000,000 sectors holding §40's volume the
+loader's reply was **−203 with the tables at 18** and **19h, the module's id, with a copy of the L table at 257**, where
+`alu`'s IOP text equals its console text whole. The candidates the plan named are thereby answered: the disk type
+decides which table the BIOS reads; ReadDvd's block (D-121, D-122) is not used by the BIOS's file system, which reads a
+DVD with ReadCd; sector 257's address and bytes are served correctly; the disc was single-layer throughout.
+
+**The fix, in the synthetic discs.** `ps2discs.py files OUT.iso` writes the L and M tables at 257 and 259 and the root
+at 261, the files after it, as the medium's discs place them (`DVD_LAYOUT`); `OUT.bin` keeps 18, 19 and 20
+(`CD_LAYOUT`), its output byte for byte as before (one MD5 over the `alu` disc). WiseMan's `Iso9660Image.Write` takes
+the tables' sectors, and `SyntheticPs2Disc.Dvd()` and `DualLayerDvd()` place them at 257 and 259 with the root at 261,
+where the root had been at 300; `Cd()` is unchanged. The synthetic DVDs hold no UDF structures, which the BIOS did not
+read; that is named as a loss of the fixtures, not of the core.
+
+**Confirmation (measured 2026-10-26).** Each of the 23 IOP programs on its own disc, one process at a time, with this
+section's `ps2discs.py`: as a DVD (`.iso`, 14h) on the Americas image **23 of 23**, on the Europe image **23 of 23**; as
+a CD (`.bin`) on the Americas image **23 of 23**, as in §40.5 (177, 262 and 191 s of wall time). Jak and Daxter's own
+start, its program entered by the fast boot from its `.iso`: 605 N commands in 20 s of console time, all ended without
+error, 473 ReadCd and, once the game's program runs, 132 ReadDvd (D-121's observation), 11,406 sectors (10,501 by
+ReadCd, 905 by ReadDvd) from 30 of its files, among them its IOP image, its IOP modules and its first levels' data; what
+the game does with them is S28's.
+
+**Tests and seeded faults.** `test_ps2discs` (2 tests, new): a DVD's tables and root at 257, 259 and 261 and a CD's at
+18, 19 and 20, each table naming the root and the root naming every file at an extent holding its bytes.
+`SapphireRunnerTests.Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it` now holds the
+fixtures' descriptors and tables to the same places. Run [M]: `test_ps2discs` **2 of 2**; WiseMan's
+`SapphireRunnerTests`, `SapphireConsoleTests`, `SapphireTests` and `SystemCodeParityTests` (every class that builds a
+`SyntheticPs2Disc`) **23 of 23**. Nothing of Sapphire's or `emusen-disc`'s source changed, so their tests were not run
+again.
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | `ps2discs.py`'s DVD L table at 258 (`DVD_LAYOUT`) | `test_a_dvds_path_tables_and_root_lie_where_the_bios_reads_a_dvds`; and the player's BIOS on Sapphire, `alu` from the disc it wrote INCOMPLETE |
+| F2 | `SyntheticPs2Disc.DvdPathTables` at 18 and 19 again | `Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it` ("dvd: the descriptor names its path tables and root") |
+
+Each was made in place, the tests named run, and the file restored [M].
+
+**Exposure, and what was observed.** This writer ran the player's BIOS on Sapphire and on PCSX2 and wrote a
+player's-BIOS stage; **this writer is exposed and will never write the open replacement**, as §1.4 asks to be recorded.
+Observed, each through a diagnostic not committed: the drive's N and S commands with their parameters, its I_STAT and
+error at each command's end, the blocks it handed to channel 3 (their length and an FNV-1a, and bytes 0 to 8 and 132 to
+160 of each, the disc's own bytes), and channel 3's CHCR, MADR and BCR when each was written; the loader's record in EE
+RAM (its step and its call's reply); the hardware's reports of accesses no unit answers. On PCSX2 only RAM through PINE
+and the module's lines of its IOP console, which `ps2referee.py tty` cuts from the log unread. The SIF link was not
+traced; no `tty` text of the BIOS was read; no program counter, instruction or memory of the BIOS, and no BIOS image,
+was read. Jak and Daxter's image was read for its descriptors and directories alone (§40.14's layout facts and which
+file each read reached); none of its bytes is in a commit.
+
+**Named losses.** The synthetic DVDs hold no UDF structures and no optional path tables, which the BIOS did not read;
+the BIOS's choice by disk type is observed, not explained, and only for the first table it reads; D-520's referee
+boundary is not followed, so a small PlayStation 2 volume kept as `.iso` is a DVD on Sapphire and a CD on PCSX2.
+
+**Where the plan was wrong, or left open.** §40.11 Q1 put the DVD's dispute step at S29 and expected a difference in the
+drive's answers; the difference was the BIOS's own reading of a DVD, shown by the drive's traffic alone. The candidates
+named for the dispute (the disk type, ReadDvd's block, sector addressing past the descriptor, the layer, the read mode,
+`emusen-disc`'s sector 257) are each answered in the referee paragraph above.
+
+**Questions this section leaves.**
+1. **Q1 [routine], D-520.** *Recommended*: keep §25.2's rule (an `.iso` is a DVD) and change nothing; the referee's
+   boundary is an emulator's choice, and §25.11 Q4 already covers a CD title kept as `.iso`. A referee run that needs a
+   small synthetic `.iso` taken as a DVD on PCSX2 pads it past 452,849 sectors, sparse.
+2. **Q2 [routine], UDF in the synthetic DVDs.** *Recommended*: none until a program or a game's module is seen reading
+   UDF's descriptors through the drive; the BIOS reads the ISO 9660 side.
+
+**What was read.** `Sapphire_Plan.md` §1.3, §1.4, §5.6, §5.9, §9.4; this page's §25, §30.15 to §30.24 and §40;
+`EmuSen_Disc.md` §14; `Sapphire_Disputes.md` D-120 to D-128 and D-480 to D-483. ps2tek at `1c91660`: "CDVD I/O Ports",
+"CDVD N Commands", "CDVD Reads and Seeks". ECMA-119 §8.4 and §9.4. PCSX2 2.8.2 run as a black box. No emulator, SDK or
+loader source; no firmware opened, hashed, listed or traced.

@@ -1575,7 +1575,11 @@ through the reset too.
   number) are ECMA-267's, with the IED, CPR_MAI and EDC it defines, ps2tek's "?" being unknown rather than zero; the
   number is ps2tek's, from (030000) at each layer's start, since ps2tek describes what the drive hands on and ECMA-267
   what the disc holds; so Sapphire reads a DVD with `TrackPath::Parallel`. **Argued**; open until a program on the IOP
-  (S21, S24) reads a block.
+  (S21, S24) reads a block. *Observed at `Sapphire_Native.md` §40.14 (2026-10-26):* the player's BIOS reads a DVD's
+  file system with ReadCd, never ReadDvd; once Jak and Daxter's own program runs the drive is sent 132 ReadDvd commands:
+  sectors 16, 257 and 262, then seven IOP modules of the disc's directory at the extents it names, which load and run,
+  then the game's data; whatever read those 2,064-byte blocks took the Main Data where this entry puts it, at byte 12.
+  The header's fields are not shown by that; the entry stays argued.
 - **Depends on it:** `Cdvd::load`, ReadDvd's blocks.
 - **Pinned by:** `a_dvd_reads_sector_for_sector_with_the_layer_break_placed`.
 - **Implemented in:** stage S23's commit.
@@ -4021,18 +4025,64 @@ game packages being built beside it.*
   zero); `kernel/iop/messagebox/{poll,receive,send}` on the player's BIOS (§40.5).
 - **Implemented in:** the memory map's commit of §40.
 
-### D-483. CDVD, a synthetic volume as a DVD: the BIOS's file system reads sector 16, then asks for sector 257 and fails the open, where the same volume as a CD is read
+### D-483. CDVD, a volume on a DVD: the player's BIOS reads a DVD's L path table from sector 257 whatever its primary volume descriptor names, and a CD's from where the descriptor names it; the drive and `emusen-disc` read sector 257 correctly, and the synthetic volume, its tables at 18 and 19, was the cause
 
-- **Opened:** 2026-10-26, at §40.4: the IOP programs' disc as an `.iso` of 2,048-byte sectors, which `cdvd::open` takes for
-  a DVD (disk type 14h), 56 sectors long.
-- **Documents read:** ps2tek "CDVD I/O Ports", "CDVD N Commands", "CDVD Reads and Seeks".
+- **Opened:** 2026-10-26, at §40.4, as "a synthetic volume as a DVD: the BIOS's file system reads sector 16, then asks
+  for sector 257 and fails the open, where the same volume as a CD is read": the IOP programs' disc as an `.iso` of
+  2,048-byte sectors, which `cdvd::open` takes for a DVD (disk type 14h), 56 sectors long. **Closed** 2026-10-26 at
+  `Sapphire_Native.md` §40.14.
+- **Documents read:** ps2tek "CDVD I/O Ports", "CDVD N Commands", "CDVD Reads and Seeks"; ECMA-119 §8.4 (the primary
+  volume descriptor's path table locations, bytes 140 to 155) and §9.4 (the path table).
 - **Test program:** the §40 loader with `cpu/iop/alu`: the drive's report of its N commands shows two ReadCd commands
-  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read.
-  As a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
-  runs.
-- **Referee:** not yet consulted for this; PCSX2 read the `.iso` form in D-480's runs, how it classed the image unknown.
-- **Conclusion:** **open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or the
-  BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.
-- **Depends on it:** `cdvd::open`'s choice of medium, `Cdvd::fill` for ReadCd on a DVD.
-- **Pinned by:** nothing yet.
-- **Implemented in:** none.
+  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read. As
+  a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
+  runs. *Added at §40.14 (2026-10-26), each on Sapphire with the Americas image, the drive's commands, parameters and
+  blocks recorded by a diagnostic not committed:* sector 16's 2,048 bytes are the same in both media (one FNV-1a over
+  the block), and channel 3 is programmed alike (16 blocks of 32 words to the same address), so the BIOS chooses by the
+  disk type alone; no S command and no GetToc is sent between the two reads. The descriptor's L path table moved to
+  sector 56, and the volume grown to 600 sectors with the tables left at 18: sector 257 asked for each time. A copy of
+  the L path table put at 257 with the descriptor still naming 18, and again naming 257: the BIOS reads 257, then the
+  root at 20 which that table names, then the module's sectors, and `alu` prints its console text whole. The three DVD
+  images at hand (Jak and Daxter, Kingdom Hearts, Dark Cloud 2) all name the L path table at 257, its optional copy at
+  258, the M table at 259 and 260 and the root at 261, with UDF's anchor at 256 [M, their descriptors read].
+- **Referee:** PCSX2 2.8.2, the Americas image, RAM through PINE: an EE program reading the disk type register
+  (BF40200Fh) eight times, a delay loop of 8,388,608 turns apart, found the 56-sector `.iso` a **CD (12h)**, as `.bin`,
+  which is why D-480's runs read it; an image of up to 452,849 sectors was a CD and one of 452,850 or more a DVD (14h),
+  D-520. On a DVD of 1,000,000 sectors (sparse) holding the same volume, the §40 loader's reply was **−203 with the
+  tables at 18** and **19h, the module's id, with the L path table at 257**, whose IOP text then equals `alu`'s console
+  text whole: the same BIOS on the referee behaves as on Sapphire.
+- **Conclusion:** ~~**open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or
+  the BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.~~ *Closed
+  at §40.14, the second reading:* the BIOS reads a PlayStation 2 DVD's ISO 9660 file system from a fixed L path table at
+  sector 257, where the medium's discs place it past UDF's anchor at 256, and a CD's from the descriptor's field; the
+  drive's answers, ReadCd's 2,048-byte blocks of a DVD and `emusen-disc`'s sector 257 (zeros past a 56-sector image's
+  end, the path table on a real disc) were correct throughout. Nothing in Sapphire or `emusen-disc` changes: the
+  synthetic discs' DVD form now lays its tables out as the discs do, at 257 and 259 with the root at 261 (`ps2discs.py
+  files`, WiseMan's `SyntheticPs2Disc.Dvd` and `DualLayerDvd`), and the CD form keeps 18, 19 and 20. ReadDvd (D-121,
+  D-122) took no part: the BIOS's file system reads a DVD with ReadCd. **Measured** on Sapphire and on one referee
+  lineage, the same firmware on both.
+- **Depends on it:** the synthetic discs' DVD layout; S29's boot of a DVD through OSDSYS; nothing in `cdvd`.
+- **Pinned by:** `test_ps2discs`'s `test_a_dvds_path_tables_and_root_lie_where_the_bios_reads_a_dvds`;
+  `SapphireRunnerTests.Each_synthetic_disc_reads_back_through_the_hosts_reader_and_sapphire_takes_it`; the 23 IOP
+  programs from DVDs on the player's BIOS (§40.14), not in CI.
+- **Implemented in:** §40.14's commit.
+
+### D-520. CDVD, an image of 2,048-byte sectors: Sapphire takes every one holding a PlayStation 2 volume for a DVD; PCSX2 takes one of up to 452,849 sectors for a CD
+
+- **Opened:** 2026-10-26, at `Sapphire_Native.md` §40.14, by D-483's referee runs: the same `.iso` read as a CD on PCSX2
+  and as a DVD on Sapphire.
+- **Documents read:** ECMA-130 §22.3.3.4 (a CD's time code to 99:59:74); ECMA-267 (a DVD's capacity); ps2tek "CDVD I/O
+  Ports" (the disk types); neither tells a bare image's medium, which an image does not record.
+- **Test program:** an EE program of the project's reading the drive's disk type register eight times, a delay loop of
+  8,388,608 turns apart, entered by PCSX2's fast boot with the image in its drive.
+- **Referee:** PCSX2 2.8.2: images whose size and Volume Space Size were 56, 300, 449,850, 449,851, 452,000, 452,849
+  sectors read 12h; 452,850, 453,074, 1,000,000 sectors 14h; constant over the run, bisected to the one sector. Play!
+  reaches no drive register from the EE (§25.3). Which of the two sizes PCSX2 uses is not separated.
+- **Conclusion:** **open**, no change: Sapphire keeps its rule of §25.2 (an `.iso` is a DVD, a CD only by its sheet or
+  its bytes; a CD title kept as `.iso` is §25.11 Q4, the tester's decision), since an image holds no medium and the
+  referee's boundary, a little above a CD's largest time code, is an emulator's choice rather than a console's
+  behaviour. The two differ only for a PlayStation 2 volume of fewer than 452,850 sectors kept as `.iso`: a small
+  synthetic disc, or a CD title kept so. The synthetic DVDs are read on both since D-483.
+- **Depends on it:** `cdvd::open`; how a referee run's synthetic `.iso` is classed (a small one is a CD on PCSX2).
+- **Pinned by:** `an_image_opens_as_the_playstation_2s_disc_kinds` (Sapphire's rule).
+- **Implemented in:** nothing changed; recorded at §40.14.

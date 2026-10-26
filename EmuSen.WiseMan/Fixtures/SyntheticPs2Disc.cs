@@ -27,7 +27,10 @@ namespace EmuSen.WiseMan.Fixtures
     public static class SyntheticPs2Disc
     {
         public const string Program = "EMUS_000.02", Serial = "EMUS-00002", Layer1File = "LAYER1.BIN";
-        public const int CdRoot = 20, DvdRoot = 300, Layer1FileOffset = 32;
+        public const int CdRoot = 20, DvdRoot = 261, Layer1FileOffset = 32;
+
+        // A DVD's path tables, past sector 256 as on the PlayStation 2's DVDs, where the player's BIOS reads a DVD's whatever the descriptor names - see Sapphire_Disputes.md D-483.
+        public static readonly (int L, int M) DvdPathTables = (257, 259);
 
         public static string SystemCnf(string vmode = "NTSC") => $"BOOT2 = cdrom0:\\{Program};1\r\nVER = 1.00\r\nVMODE = {vmode}\r\n";
 
@@ -35,7 +38,7 @@ namespace EmuSen.WiseMan.Fixtures
         public static Ps2Disc Cd(string? config = null, bool licence = false, byte[]? program = null) =>
             Build(CdRoot, config ?? SystemCnf(), licence, raw: true, program, layer0: null);
 
-        // A DVD's volume, 2,048-byte sectors only, its root and files past the first 600 KiB as a bridge volume places them [A] - see Sapphire_Native.md §5.
+        // A DVD's volume, 2,048-byte sectors only, its path tables and root past sector 256 as the PlayStation 2's DVDs place them - see Sapphire_Native.md §5 and §40.14.
         public static Ps2Disc Dvd(string? config = null, byte[]? program = null) =>
             Build(DvdRoot, config ?? SystemCnf("PAL"), licence: false, raw: false, program, layer0: null);
 
@@ -64,7 +67,7 @@ namespace EmuSen.WiseMan.Fixtures
             }
             var user = new byte[total * CdSector.User];
             if (licence) Encoding.ASCII.GetBytes("          Licensed  by          Sony Computer Entertainment Amer  ica ").CopyTo(user, 4 * CdSector.User);
-            Iso9660Image.Write(user, root, files);
+            Iso9660Image.Write(user, root, files, pathTables: raw ? null : DvdPathTables);
             if (layer0 is int l1)
             {
                 Span<byte> first = user.AsSpan(Iso9660Image.PrimaryVolume * CdSector.User, CdSector.User), second = user.AsSpan((l1 + Iso9660Image.PrimaryVolume) * CdSector.User, CdSector.User);

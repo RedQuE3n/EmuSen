@@ -359,6 +359,66 @@ impl Board {
         }
     }
 
+    /// `run_to` through each of `times` in turn, as that many calls make it, `each` shown the lines after each time and
+    /// stopping the run by returning false; the times run. While no event falls by the last time and the GIF, the VIFs
+    /// and the VUs are idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's
+    /// DMAC, so the checks are made once and the clocks' moves once at the end; from a wake on, each time is `run_to`
+    /// itself (Sapphire_Native.md §44.5).
+    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], each: &mut dyn FnMut(usize, (bool, bool, bool)) -> bool) -> usize {
+        let Some(&last) = times.last() else { return 0 };
+        let quiet = self.next > last && self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending();
+        let mut from = 0;
+        if quiet {
+            let lines = self.lines();
+            while from < times.len() {
+                let t = times[from];
+                self.now = self.now.max(t);
+                self.iop.catch_up(self.now);
+                if self.iop.bus.sif.wake_ee_pending() {
+                    break;
+                }
+                from += 1;
+                if !each(from - 1, lines) {
+                    self.idle_through(t);
+                    return from;
+                }
+            }
+            if from == times.len() {
+                self.idle_through(last);
+                return from;
+            }
+            // The wake at `times[from]`, taken as the quick path of `run_to` takes it.
+            let t = times[from];
+            self.idle_through(t);
+            if self.iop.bus.sif.take_wake_ee() {
+                self.dmac.wake(self.now);
+                if self.dmac.next_event() <= self.now {
+                    self.step_dmac(self.now, spram);
+                    self.sync_ipu(self.now);
+                }
+                self.reschedule();
+            }
+            from += 1;
+            if !each(from - 1, self.lines()) {
+                return from;
+            }
+        }
+        while from < times.len() {
+            self.run_to(times[from], spram);
+            from += 1;
+            if !each(from - 1, self.lines()) {
+                return from;
+            }
+        }
+        from
+    }
+
+    /// The clocks' moves `run_to`'s quick path makes at `t` once it has found the units idle.
+    fn idle_through(&mut self, t: u64) {
+        let idle = self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t);
+        debug_assert!(idle, "the units were idle when the run began");
+    }
+
     /// The DMAC at `at`, woken first if the IOP's side has changed a SIF FIFO; SIF0, SIF1 and SIF2 reach the SIF.
     fn step_dmac(&mut self, at: u64, spram: &mut [u8]) {
         if self.iop.bus.sif.take_wake_ee() {

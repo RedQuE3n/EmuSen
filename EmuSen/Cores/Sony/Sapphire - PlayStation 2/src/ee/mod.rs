@@ -9,6 +9,7 @@ pub mod cache;
 pub mod cop0;
 mod cop2;
 pub mod fpu;
+pub(crate) mod jit;
 pub mod map;
 mod memory;
 mod mmi;

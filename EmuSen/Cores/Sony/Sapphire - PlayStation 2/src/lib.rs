@@ -30,6 +30,7 @@
 //! the VUs and the EE observed around its untouched step (`ee::observe`).
 
 pub mod bios;
+pub mod blocks;
 pub mod board;
 pub mod cdvd;
 pub mod clock;

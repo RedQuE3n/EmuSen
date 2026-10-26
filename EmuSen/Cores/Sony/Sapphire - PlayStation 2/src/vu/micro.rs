@@ -37,6 +37,10 @@ pub trait Micro {
     fn idle_to(&mut self, _units: &mut Units, _t: u64) -> bool {
         false
     }
+    /// `idle_to`'s answer without the clock's move.
+    fn idle(&self, _units: &Units) -> bool {
+        false
+    }
     /// The micro mode's block of `SPH2`; none for a micro mode that keeps nothing (Sapphire_Native.md §38.2).
     fn write_state(&self, _w: &mut emusen_native::StateWriter) {}
     fn read_state(&mut self, _r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
@@ -82,6 +86,9 @@ impl Micro for Unbuilt {
         0
     }
     fn idle_to(&mut self, _: &mut Units, _: u64) -> bool {
+        true
+    }
+    fn idle(&self, _: &Units) -> bool {
         true
     }
 }

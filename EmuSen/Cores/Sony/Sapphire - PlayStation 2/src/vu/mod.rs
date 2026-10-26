@@ -416,6 +416,11 @@ impl Vpu {
         micro0.idle_to(units, t) & micro1.idle_to(units, t)
     }
 
+    /// `idle_to`'s answer without the clocks' moves.
+    pub fn idle(&self) -> bool {
+        self.micro0.idle(&self.units) && self.micro1.idle(&self.units)
+    }
+
     /// VU1 running a microprogram: the COP2 condition signal BC2F and BC2T test (§5.5.1).
     pub fn vu1_busy(&mut self, t: u64) -> bool {
         self.micro1.run_to(&mut self.units, t);

@@ -265,8 +265,13 @@ impl Vif {
 
     /// Whether `run_to(t)` would find nothing to do, its clock moved to `t` as `run_to` would leave it if so: no
     /// command in progress, no word to take, nothing held (the board's shortcut, Sapphire_Native.md §35.7).
+    /// `idle_to`'s answer without the clock's move.
+    pub fn idle(&self) -> bool {
+        !self.reversed() && matches!(self.cmd, Cmd::Idle) && !self.stop_next && self.held.is_none() && !self.has_word()
+    }
+
     pub fn idle_to(&mut self, t: u64) -> bool {
-        let idle = !self.reversed() && matches!(self.cmd, Cmd::Idle) && !self.stop_next && self.held.is_none() && !self.has_word();
+        let idle = self.idle();
         if idle && self.time <= t {
             self.time = t;
         }

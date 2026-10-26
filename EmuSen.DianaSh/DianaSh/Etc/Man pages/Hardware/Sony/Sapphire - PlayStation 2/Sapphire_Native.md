@@ -8029,7 +8029,7 @@ new: `the_ee_counts_its_steps_by_the_mode_each_ran_in` (600 instructions that ea
 mode, counted 300, 200, 100, and equal to the timing model's count), `the_iop_counts_the_instructions_it_runs` (the IOP's
 count equal to a register each of its instructions increments) and
 `each_vu_counts_its_pairs_and_keeps_the_count_across_a_reset`. `tests/state.rs` and the layout listing unchanged and
-passing, the counts being outside the state. The blast radius's dotnet filter, `SapphireTests`, is run below.
+passing, the counts being outside the state. WiseMan's `SapphireTests`, the blast radius's filter, **5 of 5** (2 min 22 s).
 
 **Seeded faults**, each made in place, the tests named run, the source restored [M]:
 

@@ -40,6 +40,8 @@ pub mod reg {
     /// The S status when read, a parameter when written.
     pub const S_STATUS: u32 = 0x17;
     pub const S_RESULT: u32 = 0x18;
+    /// ReadKey's five key bytes, 20h to 24h (D-461).
+    pub const KEY: u32 = 0x20;
     /// The disc's authentication after ReadKey: 01h once it has run on a disc, 00h before (D-461).
     pub const KEY_STATUS: u32 = 0x38;
 }
@@ -218,6 +220,9 @@ pub struct Cdvd {
     disk_type: u8,
     /// Register 38h, ReadKey's result: every disc authenticated (Sapphire_Plan.md §5.6, D-461).
     key: u8,
+    /// The disc's five key bytes, from its boot program's name, read at 20h-24h after ReadKey: derived from the disc,
+    /// which the state names, so never written in it.
+    key_bytes: [u8; 5],
     s_command: u8,
     s_params: Fifo,
     s_result: Fifo,
@@ -244,6 +249,47 @@ pub struct Cdvd {
     pub s_last: Box<[([u8; 16], usize); 256]>,
     /// Each N command's last parameters and their count, the same report for the N commands (S28).
     pub n_last: Box<[([u8; 16], usize); 256]>,
+}
+
+/// ReadKey's five bytes for a boot program named in the PlayStation 2's form, four letters, an underscore, three digits,
+/// a full stop and two (`SCUS_971.24`): bit fields of the letters' codes and of the five digits' number, measured on PCSX2
+/// over eleven names (D-461); zeros for a name of any other form, as measured.
+pub fn read_key(program: &str) -> [u8; 5] {
+    let cut = program.rfind('\\').max(program.rfind(':')).map_or(0, |i| i + 1);
+    let name = program[cut..].split(';').next().unwrap_or("").as_bytes();
+    let form = name.len() == 11 && name[..4].iter().all(u8::is_ascii_alphabetic) && name[4] == b'_' && name[8] == b'.';
+    let digits: Vec<u8> = name.get(5..8).into_iter().chain(name.get(9..11)).flatten().copied().collect();
+    if !form || !digits.iter().all(u8::is_ascii_digit) {
+        return [0; 5];
+    }
+    let l = &name[..4];
+    let n = digits.iter().fold(0u32, |v, d| v * 10 + u32::from(d - b'0'));
+    [
+        (l[3] & 1) << 7 | (n >> 10) as u8 & 0x7F,
+        (l[2] & 3) << 6 | l[3] >> 1,
+        (l[1] & 7) << 5 | (l[2] >> 2) & 0x1F,
+        (l[0] & 0xF) << 4 | (l[1] >> 3) & 0xF,
+        ((n & 0x1F) as u8) << 3 | (l[0] >> 4) & 7,
+    ]
+}
+
+/// Sector `lba`'s 2,048 bytes of user data, empty past the disc's end.
+fn user_sector(disc: &mut Disc, lba: u64) -> Vec<u8> {
+    let Ok(lba) = u32::try_from(lba) else { return Vec::new() };
+    match disc {
+        Disc::Dvd(d) if lba < d.sectors() => {
+            let mut u = [0u8; 2048];
+            d.read_user(lba, &mut u);
+            u.to_vec()
+        }
+        Disc::Cd(d) => {
+            let mut raw = [0u8; 2352];
+            d.read(lba + emusen_disc::msf::PROGRAM_START, &mut raw);
+            let data = if raw[15] == 1 { 16 } else { 24 };
+            raw[data..data + 2048].to_vec()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// The disk type a disc settles at: a CD with audio tracks beside its data is the CDDA kind, one of audio alone music.
@@ -281,6 +327,7 @@ impl Cdvd {
             sticky: 0,
             disk_type: disk_type::NONE,
             key: 0,
+            key_bytes: [0; 5],
             s_command: 0,
             s_params: Fifo::default(),
             s_result: Fifo::default(),
@@ -321,6 +368,7 @@ impl Cdvd {
         if let Disc::Dvd(v) = &mut d {
             v.set_track_path(TrackPath::Parallel);
         }
+        self.key_bytes = crate::media::boot2_by(&mut |n| user_sector(&mut d, n)).map_or([0; 5], |p| read_key(&p));
         self.disc = Some(d);
     }
 
@@ -378,6 +426,7 @@ impl Cdvd {
             reg::S_STATUS => if self.s_result.pos < self.s_result.len { 0x00 } else { 0x40 },
             reg::S_RESULT => self.s_result.pop().unwrap_or(0),
             reg::KEY_STATUS => self.key,
+            o if (reg::KEY..reg::KEY + 5).contains(&o) && self.key != 0 => self.key_bytes[(o - reg::KEY) as usize],
             _ => 0,
         }
     }

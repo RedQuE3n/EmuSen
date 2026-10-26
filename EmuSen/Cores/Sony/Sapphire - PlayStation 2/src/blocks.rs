@@ -117,6 +117,8 @@ pub struct Blocks {
     pub spill: bool,
     /// Loads and stores compiled into blocks (S37); without, each ends its block as at S36.
     pub memory: bool,
+    /// The most instructions a block is shaped with, at most `shape::MAX`.
+    pub longest: usize,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     pub stats: Stats,
     ctx: Box<Context>,
@@ -173,6 +175,7 @@ impl Blocks {
             fixed_cost: false,
             spill: false,
             memory: true,
+            longest: shape::MAX,
             verify: None,
             stats: Stats::default(),
             ctx,
@@ -185,7 +188,8 @@ impl Blocks {
     }
 
     /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`,
-    /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter).
+    /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
+    /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -194,6 +198,9 @@ impl Blocks {
         b.fixed_cost = std::env::var("EMUSEN_SAPPHIRE_C1").is_ok_and(|v| v == "1");
         b.spill = std::env::var("EMUSEN_SAPPHIRE_SPILL").is_ok_and(|v| v == "1");
         b.memory = !std::env::var("EMUSEN_SAPPHIRE_MEMORY").is_ok_and(|v| v == "0");
+        if let Some(n) = std::env::var("EMUSEN_SAPPHIRE_LONGEST").ok().and_then(|v| v.parse::<usize>().ok()) {
+            b.longest = n.clamp(2, shape::MAX);
+        }
         b
     }
 
@@ -359,7 +366,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         // Past a line the cache does not hold, the words RDRAM holds; only the lines held when the dispatcher does not
         // wait for lines (a test's code run once).
         let rdram: &[u8] = if blocks.wait_lines { &sys.board.map.rdram } else { &[] };
-        let (words, missed) = sys.ee.cached_words(pc, paddr, shape::MAX, rdram);
+        let (words, missed) = sys.ee.cached_words(pc, paddr, blocks.longest, rdram);
         let (shaped, short) = shape::shape(&words, options.memory);
         if short && missed && blocks.wait_lines {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.

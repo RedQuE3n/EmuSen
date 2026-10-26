@@ -8034,12 +8034,12 @@ windows of §43.5's second table, and the desktop-to-handheld ratio §5.12 assum
 
 ### 43.10 Tests and seeded faults (2026-10-26)
 
-**Tests** [M, `cargo test --release`, the crate whole]: **364 of 364** before the new file; `tests/bench.rs` **3 of 3**,
+**Tests** [M, `cargo test --release`, the crate whole]: **364 of 364** before the new file, and **386 of 386** with it on the tree rebased onto WiseMan `557d2ec0b`; `tests/bench.rs` **3 of 3**,
 new: `the_ee_counts_its_steps_by_the_mode_each_ran_in` (600 instructions that each add one, run in kernel, user and level 1
 mode, counted 300, 200, 100, and equal to the timing model's count), `the_iop_counts_the_instructions_it_runs` (the IOP's
 count equal to a register each of its instructions increments) and
 `each_vu_counts_its_pairs_and_keeps_the_count_across_a_reset`. `tests/state.rs` and the layout listing unchanged and
-passing, the counts being outside the state. WiseMan's `SapphireTests`, the blast radius's filter, **5 of 5** (2 min 22 s).
+passing, the counts being outside the state. WiseMan's `SapphireTests`, the blast radius's filter, **5 of 5** (2 min 22 s), and again on the rebased tree (2 min 6 s).
 
 **Seeded faults**, each made in place, the tests named run, the source restored [M]:
 

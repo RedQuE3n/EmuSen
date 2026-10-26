@@ -3,8 +3,8 @@
 //! then. Transfer data is one stream of pixels packed from bit 0 upwards in 64-bit units (§4.3), so a row may end inside
 //! a unit and the next row continues in it; coordinates wrap at 2048 (§4.1.3). Sapphire_Native.md §24.3.
 
-use super::local::Local;
 use super::psm::Psm;
+use super::workers::Mem;
 
 /// A buffer as BITBLTBUF names one: format, base pointer in blocks, width in units of 64 pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +56,7 @@ pub struct Transfer {
 impl Transfer {
     /// TRXDIR written with `xdir` and the registers as they stand: a transfer ends and another begins (§4.1.4,
     /// §4.2.1); a local-to-local one runs to its end at once.
-    pub fn start(&mut self, xdir: u32, bitbltbuf: u64, trxpos: u64, trxreg: u64, local: &mut Local) {
+    pub fn start(&mut self, xdir: u32, bitbltbuf: u64, trxpos: u64, trxreg: u64, local: &mut Mem<'_>) {
         *self = Transfer::default();
         let (src, dst) = buffers(bitbltbuf);
         let (sx, sy, dx, dy, order) = positions(trxpos);
@@ -94,7 +94,7 @@ impl Transfer {
 
     /// 64 bits of host-to-local data (§4.2.1); outside such a transfer, nothing (HWREG's page). The bits left in the
     /// last unit after the last pixel are dropped.
-    pub fn hwreg(&mut self, data: u64, local: &mut Local) {
+    pub fn hwreg(&mut self, data: u64, local: &mut Mem<'_>) {
         if self.active != Some(Direction::HostToLocal) {
             return;
         }
@@ -117,7 +117,7 @@ impl Transfer {
 
     /// The next 64 bits of local-to-host data, the last unit filled with zeros above the last pixel [A]; none once
     /// the transfer has been read to its end or outside one.
-    pub fn read(&mut self, local: &Local) -> Option<u64> {
+    pub fn read(&mut self, local: &mut Mem<'_>) -> Option<u64> {
         if self.active != Some(Direction::LocalToHost) && self.held == 0 {
             return None;
         }
@@ -145,7 +145,7 @@ impl Transfer {
 /// A local-to-local transfer, pixel by pixel in TRXPOS's order (§4.1.2's figure 4-1: bit 0 bottom to top, bit 1 right
 /// to left), each pixel read in the source's format and written in the destination's. Overlapping rectangles are
 /// copied in that order (Sapphire_Disputes.md D-107, decided at S19, Sapphire_Native.md §37.4).
-pub fn copy(local: &mut Local, src: Buffer, (sx, sy): (u32, u32), dst: Buffer, (dx, dy): (u32, u32), (w, h): (u32, u32), order: u32) {
+pub fn copy(local: &mut Mem<'_>, src: Buffer, (sx, sy): (u32, u32), dst: Buffer, (dx, dy): (u32, u32), (w, h): (u32, u32), order: u32) {
     for j in 0..h {
         let ry = if order & 1 != 0 { h - 1 - j } else { j };
         for i in 0..w {

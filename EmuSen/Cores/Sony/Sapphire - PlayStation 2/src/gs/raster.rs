@@ -23,10 +23,69 @@
 //! triangle's barycentric ones, a line's along its major axis (continued past an end, the fog held to 0 to 255), a
 //! sprite's along x for S and U and along y for T and V with the second vertex's Q and fog, a point's its vertex's.
 
-use super::draw::{Environment, Vertex};
+use super::draw::{Environment, Kind, Vertex};
 use super::local::Local;
 use super::pixel::{self, Shade};
 use super::texture::{Clut, Setup};
+
+/// The rows a drawing pass covers: all of them, or, for worker `w` of `n`, those of the bands of 2^`shift` rows whose
+/// number modulo `n` is `w` (Sapphire_Native.md §50).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rows {
+    pub shift: u32,
+    pub n: u32,
+    pub w: u32,
+}
+
+impl Rows {
+    pub const ALL: Rows = Rows { shift: 0, n: 1, w: 0 };
+
+    #[inline]
+    pub fn owns(self, y: i32) -> bool {
+        self.n == 1 || ((y as u32) >> self.shift) % self.n == self.w
+    }
+}
+
+/// A primitive drawn over the rows given: the one dispatch the drawing kick and the workers share.
+pub fn primitive(kind: Kind, env: &Environment, local: &mut Local, clut: &Clut, v: &[Vertex; 3], rows: Rows) {
+    match kind {
+        Kind::Point => point(env, local, clut, &v[0], rows),
+        Kind::Line | Kind::LineStrip => line(env, local, clut, &v[0], &v[1], rows),
+        Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => triangle(env, local, clut, [&v[0], &v[1], &v[2]], rows),
+        Kind::Sprite => sprite(env, local, clut, &v[0], &v[1], rows),
+        Kind::Prohibited => {}
+    }
+}
+
+/// A rectangle holding every pixel the primitive can write, inclusive, within the scissoring area; none when it writes
+/// nothing. A line's pixels lie within a pixel and a half of its ends along either axis (its first and last columns
+/// within fifteen sixteenths of them, its rows rounded from the minor axis there).
+pub fn bounds(kind: Kind, env: &Environment, v: &[Vertex; 3]) -> Option<(i32, i32, i32, i32)> {
+    env.frame.psm?;
+    let (sx0, sx1, sy0, sy1) = env.scissor;
+    let (x0, x1, y0, y1) = match kind {
+        Kind::Point => (nearest(v[0].x), nearest(v[0].x), nearest(v[0].y), nearest(v[0].y)),
+        Kind::Sprite => {
+            let (a, b) = (&v[0], &v[1]);
+            let (x0, x1) = span(a.x.min(b.x), a.x.max(b.x), sx0, sx1);
+            let (y0, y1) = span(a.y.min(b.y), a.y.max(b.y), sy0, sy1);
+            (x0, x1, y0, y1)
+        }
+        Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => {
+            let (a, b, c) = (&v[0], &v[1], &v[2]);
+            let (x0, x1) = span(a.x.min(b.x).min(c.x), a.x.max(b.x).max(c.x) + 1, sx0, sx1);
+            let (y0, y1) = span(a.y.min(b.y).min(c.y), a.y.max(b.y).max(c.y) + 1, sy0, sy1);
+            (x0, x1, y0, y1)
+        }
+        Kind::Line | Kind::LineStrip => {
+            let (a, b) = (&v[0], &v[1]);
+            (a.x.min(b.x).div_euclid(16) - 2, a.x.max(b.x).div_euclid(16) + 2, a.y.min(b.y).div_euclid(16) - 2, a.y.max(b.y).div_euclid(16) + 2)
+        }
+        Kind::Prohibited => return None,
+    };
+    let (x0, x1, y0, y1) = (x0.max(sx0), x1.min(sx1), y0.max(sy0), y1.min(sy1));
+    (x0 <= x1 && y0 <= y1).then_some((x0, x1, y0, y1))
+}
 
 /// The whole pixels from `lo` to `hi` inclusive whose centres lie in [a, b) sixteenths, clipped: ceil(a) to ceil(b) - 1.
 fn span(a: i32, b: i32, lo: i32, hi: i32) -> (i32, i32) {
@@ -53,12 +112,15 @@ fn shade(tex: &Option<Setup>, wu: [i64; 3], wv: [i64; 3], f: u32) -> Shade {
     Shade { u, v, lod, f }
 }
 
-pub fn point(env: &Environment, local: &mut Local, clut: &Clut, v: &Vertex) {
+pub fn point(env: &Environment, local: &mut Local, clut: &Clut, v: &Vertex, rows: Rows) {
+    if !rows.owns(nearest(v.y)) {
+        return;
+    }
     let tex = setup(env, [v; 3], [q(v); 3], v);
     pixel::draw(env, local, clut, nearest(v.x), nearest(v.y), v.z, v.rgba(), pixel::FULL, || shade(&tex, [1, 0, 0], [1, 0, 0], u32::from(v.f)));
 }
 
-pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex) {
+pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex, rows: Rows) {
     let (sx0, sx1, sy0, sy1) = env.scissor;
     let (x0, x1) = span(a.x.min(b.x), a.x.max(b.x), sx0, sx1);
     let (y0, y1) = span(a.y.min(b.y), a.y.max(b.y), sy0, sy1);
@@ -69,7 +131,7 @@ pub fn sprite(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: 
         let s = (pb - pa).signum() as i64;
         [i64::from(pb - 16 * p) * s, i64::from(16 * p - pa) * s, 0]
     };
-    for y in y0..=y1 {
+    for y in (y0..=y1).filter(|&y| rows.owns(y)) {
         for x in x0..=x1 {
             pixel::draw(env, local, clut, x, y, b.z, c, pixel::FULL, || shade(&tex, along(x, a.x, b.x), along(y, a.y, b.y), u32::from(b.f)));
         }
@@ -84,7 +146,7 @@ fn in_diamond(u: i32, v: i32) -> bool {
     (u - cu).abs() + (v - cv).abs() < 8 || (u == cu && v == cv - 8)
 }
 
-pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex) {
+pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &Vertex, rows: Rows) {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     if dx == 0 && dy == 0 {
         return;
@@ -120,6 +182,10 @@ pub fn line(env: &Environment, local: &mut Local, clut: &Clut, a: &Vertex, b: &V
         let z = lerp(a.z, b.z).clamp(0, i64::from(u32::MAX)) as u32;
         let rgba = if gouraud { std::array::from_fn(|i| lerp(ca[i], cb[i]).clamp(0, 255) as u32) } else { cb };
         let (x, y) = if xmajor { (c, r) } else { (r, c) };
+        if !rows.owns(y) {
+            c += s;
+            continue;
+        }
         let w = [du - t, t, 0];
         let cov = if antialias { line_coverage(i64::from(av) * du + i64::from(16 * c - au) * dv - 16 * i64::from(r) * du, du) } else { pixel::FULL };
         pixel::draw(env, local, clut, x, y, z, rgba, cov, || shade(&tex, w, w, lerp(u32::from(a.f), u32::from(b.f)).clamp(0, 255) as u32));
@@ -172,7 +238,7 @@ const fn top_left(p: &Vertex, q: &Vertex) -> i64 {
     (dy < 0 || (dy == 0 && dx > 0)) as i64
 }
 
-pub fn triangle(env: &Environment, local: &mut Local, clut: &Clut, [a, b, c]: [&Vertex; 3]) {
+pub fn triangle(env: &Environment, local: &mut Local, clut: &Clut, [a, b, c]: [&Vertex; 3], rows: Rows) {
     let last = c;
     let area = edge(a, b, i64::from(c.x), i64::from(c.y));
     if area == 0 {
@@ -188,7 +254,7 @@ pub fn triangle(env: &Environment, local: &mut Local, clut: &Clut, [a, b, c]: [&
     let gouraud = env.attributes.gouraud();
     let tex = setup(env, [a, b, c], [q(a), q(b), q(c)], last);
     let fog = [a.f, b.f, c.f].map(i64::from);
-    for y in y0..=y1 {
+    for y in (y0..=y1).filter(|&y| rows.owns(y)) {
         for x in x0..=x1 {
             let (px, py) = (16 * i64::from(x), 16 * i64::from(y));
             let w = [edge(b, c, px, py), edge(c, a, px, py), edge(a, b, px, py)];

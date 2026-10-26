@@ -235,7 +235,7 @@ impl Machine {
         match id {
             RAM_ID => b.map.rdram.get(at).copied(),
             2 => self.sys.ee.spram.get(at).copied(),
-            3 => b.gs.local.words.get(at / 4).map(|w| (w >> (8 * (at % 4))) as u8),
+            3 => b.gs.local().words().get(at / 4).map(|w| (w >> (8 * (at % 4))) as u8),
             4 => vu(0).micro.get(at).copied(),
             5 => vu(0).data.get(at).copied(),
             6 => vu(1).micro.get(at).copied(),
@@ -255,10 +255,9 @@ impl Machine {
             RAM_ID => b.map.rdram.get_mut(at),
             2 => self.sys.ee.spram.get_mut(at),
             3 => {
-                let Some(w) = b.gs.local.words.get_mut(at / 4) else { return false };
+                let Some(&w) = b.gs.local().words().get(at / 4) else { return false };
                 let s = 8 * (at % 4);
-                *w = *w & !(0xFF << s) | u32::from(v) << s;
-                return true;
+                return b.gs.set_word(at / 4, w & !(0xFF << s) | u32::from(v) << s);
             }
             4 => b.vpu.units.vu0.micro.get_mut(at),
             5 => b.vpu.units.vu0.data.get_mut(at),
@@ -410,7 +409,7 @@ mod tests {
         }
         assert_eq!(m.space_byte(BIOS_ID, 0), Some(0));
         let mut m = machine(Market::Europe);
-        assert!(m.set_space_byte(3, 5, 0xA7) && m.sys.board.gs.local.words[1] == 0xA700, "GSMEM is the GS's local memory");
+        assert!(m.set_space_byte(3, 5, 0xA7) && m.sys.board.gs.local().words()[1] == 0xA700, "GSMEM is the GS's local memory");
         assert!(!m.set_space_byte(BIOS_ID, 0, 1));
         m.insert_bios(&vec![0; BIOS_BYTES]);
         assert!(m.booted && !m.sys.board.iop.held && m.sys.board.iop.cpu.regs.pc == crate::iop::RESET && m.sys.ee.pc == 0xBFC0_0000);

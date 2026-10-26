@@ -105,41 +105,186 @@ const fn mask(bits: u32) -> u32 {
     if bits >= 32 { u32::MAX } else { (1 << bits) - 1 }
 }
 
-/// The 4 MiB.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Local {
-    pub words: Vec<u32>,
+/// The memory's size in pages of 2,048 words (§8.1), the unit the drawing's workers own (Sapphire_Native.md §50).
+pub const PAGES: usize = WORDS >> 11;
+
+/// A set of the memory's physical pages.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Pages(pub [u64; PAGES / 64]);
+
+impl Pages {
+    pub const ALL: Pages = Pages([u64::MAX; PAGES / 64]);
+
+    pub fn add(&mut self, p: usize) {
+        self.0[p >> 6] |= 1 << (p & 63);
+    }
+
+    pub fn has(&self, p: usize) -> bool {
+        self.0[p >> 6] >> (p & 63) & 1 != 0
+    }
+
+    pub fn or(&mut self, o: &Pages) {
+        for (a, b) in self.0.iter_mut().zip(o.0) {
+            *a |= b;
+        }
+    }
+
+    pub fn meets(&self, o: &Pages) -> bool {
+        self.0.iter().zip(o.0).any(|(a, b)| a & b != 0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.iter().all(|&w| w == 0)
+    }
+
+    /// Each page in the set, in order.
+    pub fn each(&self) -> impl Iterator<Item = usize> + '_ {
+        self.0.iter().enumerate().flat_map(|(i, &w)| {
+            let mut w = w;
+            std::iter::from_fn(move || {
+                (w != 0).then(|| {
+                    let b = w.trailing_zeros() as usize;
+                    w &= w - 1;
+                    i * 64 + b
+                })
+            })
+        })
+    }
 }
+
+/// The page cells, by row, of the pixels from (`x0`, `y0`) to (`x1`, `y1`) inclusive in a buffer: each cell's row and the
+/// physical pages its pixels lie in, which are one, or two when the base pointer lies inside a page. Every pixel of a cell
+/// takes the same `page` in `address`, so its word lies in [start, start + 2047] with start that page's first word.
+pub fn cells(psm: Psm, bp: u32, bw: u32, (x0, x1): (u32, u32), (y0, y1): (u32, u32), mut f: impl FnMut(u32, usize)) {
+    let (pw, ph) = psm.shape().page();
+    let per_row = bw * 64 / pw;
+    for cy in y0 / ph..=y1 / ph {
+        for cx in x0 / pw..=x1 / pw {
+            let start = ((bp + (cy * per_row + cx) * 32) * 64) & (WORDS as u32 - 1);
+            f(cy, (start >> 11) as usize);
+            if bp % 32 != 0 {
+                f(cy, ((start >> 11) as usize + 1) % PAGES);
+            }
+        }
+    }
+}
+
+/// The pages a rectangle's pixels lie in; a rectangle of more than 1,024 cells is taken as the whole memory.
+pub fn pages(psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) -> Pages {
+    let (pw, ph) = psm.shape().page();
+    if u64::from(xs.1 / pw - xs.0 / pw + 1) * u64::from(ys.1 / ph - ys.0 / ph + 1) > 1024 {
+        return Pages::ALL;
+    }
+    let mut s = Pages::default();
+    cells(psm, bp, bw, xs, ys, |_, p| s.add(p));
+    s
+}
+
+/// The 4 MiB, one allocation reached a word at a time: while the drawing's workers run, each word is touched only
+/// through a raw pointer, never through a reference to the whole memory (Sapphire_Native.md §50). A view shares the
+/// owner's allocation and frees nothing.
+pub struct Local {
+    ptr: std::ptr::NonNull<u32>,
+    owned: bool,
+}
+
+// The allocation is the owner's alone; views are made only by the workers, which the owner outlives (gs::workers).
+unsafe impl Send for Local {}
 
 impl Default for Local {
     fn default() -> Local {
-        Local { words: vec![0; WORDS] }
+        let b: Box<[u32]> = vec![0; WORDS].into_boxed_slice();
+        let ptr = std::ptr::NonNull::new(Box::into_raw(b) as *mut u32).expect("an allocation");
+        Local { ptr, owned: true }
     }
 }
 
+impl Drop for Local {
+    fn drop(&mut self) {
+        if self.owned {
+            // SAFETY: made by `default` from a boxed slice of WORDS words, and freed once, by its owner.
+            drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), WORDS)) });
+        }
+    }
+}
+
+impl Clone for Local {
+    fn clone(&self) -> Local {
+        let c = Local::default();
+        // SAFETY: both allocations hold WORDS words and are distinct.
+        unsafe { std::ptr::copy_nonoverlapping(self.ptr.as_ptr(), c.ptr.as_ptr(), WORDS) };
+        c
+    }
+}
+
+impl PartialEq for Local {
+    fn eq(&self, o: &Local) -> bool {
+        self.words() == o.words()
+    }
+}
+
+impl Eq for Local {}
+
 impl Local {
+    /// A view of the same memory for a worker; the owner must outlive it.
+    pub(super) fn view(&self) -> Local {
+        Local { ptr: self.ptr, owned: false }
+    }
+
+    /// Word `i`, which must be below WORDS.
+    #[inline]
+    pub fn word(&self, i: usize) -> u32 {
+        assert!(i < WORDS);
+        // SAFETY: in bounds; one word, read through the raw pointer.
+        unsafe { self.ptr.as_ptr().add(i).read() }
+    }
+
+    #[inline]
+    pub fn set_word(&mut self, i: usize, v: u32) {
+        assert!(i < WORDS);
+        // SAFETY: in bounds; one word, written through the raw pointer.
+        unsafe { self.ptr.as_ptr().add(i).write(v) }
+    }
+
     /// The pixel's value, its format's bits.
+    #[inline]
     pub fn read(&self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> u32 {
         let a = address(psm, bp, bw, x, y);
-        (self.words[a.word as usize] >> a.shift) & mask(psm.bits())
+        // SAFETY: `address` masks the word below WORDS.
+        (unsafe { self.ptr.as_ptr().add(a.word as usize).read() } >> a.shift) & mask(psm.bits())
     }
 
     /// Writes the pixel's bits, leaving the rest of its word (PSMCT24's upper byte, the other half, byte or nibble).
+    #[inline]
     pub fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
         let a = address(psm, bp, bw, x, y);
         let m = mask(psm.bits()) << a.shift;
-        let w = &mut self.words[a.word as usize];
-        *w = (*w & !m) | ((v << a.shift) & m);
+        // SAFETY: `address` masks the word below WORDS.
+        unsafe {
+            let w = self.ptr.as_ptr().add(a.word as usize);
+            w.write((w.read() & !m) | ((v << a.shift) & m));
+        }
+    }
+
+    /// The whole memory, for a state, a debugger or a test: only while no worker draws (`Gs::local` joins them first).
+    pub fn words(&self) -> &[u32] {
+        // SAFETY: WORDS words from one allocation; the owner's callers hold no worker running.
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), WORDS) }
+    }
+
+    pub(super) fn words_mut(&mut self) -> &mut [u32] {
+        // SAFETY: as `words`, and `&mut self` is the owner's.
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), WORDS) }
     }
 
     /// The memory as bytes, little-endian, as a debugger or the state shows it.
     pub fn bytes(&self) -> Vec<u8> {
-        self.words.iter().flat_map(|w| w.to_le_bytes()).collect()
+        self.words().iter().flat_map(|w| w.to_le_bytes()).collect()
     }
 }
 
 impl std::fmt::Debug for Local {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Local({} words)", self.words.len())
+        write!(f, "Local({} words)", WORDS)
     }
 }

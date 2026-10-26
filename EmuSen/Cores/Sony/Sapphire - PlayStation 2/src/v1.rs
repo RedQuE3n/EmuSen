@@ -145,6 +145,9 @@ pub const VU1_KEY: &str = "vu1";
 /// Idle skipping (S33, Sapphire_Native.md §47): on or off.
 pub const IDLE_KEY: &str = "idle_skip";
 pub const IDLE_CHOICES: [(&str, &str); 2] = [("on", "On"), ("off", "Off")];
+/// The GS's drawing threads (Sapphire_Native.md §50): automatic, one (the reference), or a number of workers; exact.
+pub const GS_WORKERS_KEY: &str = "gs_workers";
+pub const GS_WORKERS: [(&str, &str); 5] = [("auto", "Automatic"), ("1", "One thread"), ("2", "Two workers"), ("3", "Three workers"), ("4", "Four workers")];
 pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 pub const REGIONS: [(&str, &str, Market); 3] = [("ps2.jp", "Japan (NTSC)", Market::Japan), ("ps2.us", "Americas (NTSC)", Market::Americas), ("ps2.eu", "Europe (PAL)", Market::Europe)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK2, "DualShock 2"), (DIGITAL, "Digital Controller"), ("none", "Nothing")];
@@ -189,6 +192,10 @@ fn schema() -> Vec<Setting> {
             effect: Effect::Exact,
             ..setting(IDLE_KEY, "Idle skipping", "Passes the time the processors spend waiting in a loop for something to happen at once, up to the moment it happens, instead of running each turn of the loop. Exact: every picture, sound and saved state is the one the console gives with it off, which is the other choice, slower. Takes effect when a game is next loaded.", IDLE_CHOICES.iter().map(|&(v, l)| choice(v, l)).collect(), "on", "Performance")
         },
+        Setting {
+            effect: Effect::Exact,
+            ..setting(GS_WORKERS_KEY, "GS drawing threads", "How many threads draw the graphics synthesizer's primitives: one, the emulation thread itself, or several workers each drawing its own bands of rows in the console's order. Exact: every pixel the game can read back and every picture is the one thread's. Automatic takes a quarter of this computer's threads, at most four. Takes effect when a game is next loaded.", GS_WORKERS.iter().map(|&(v, l)| choice(v, l)).collect(), "auto", "Performance")
+        },
     ]
 }
 
@@ -208,6 +215,11 @@ pub fn idle_chosen(setting: Option<&str>) -> bool {
 /// was met (decided 2026-10-26 by the tester, Sapphire_Native.md §44.6).
 pub fn recompiler_chosen(setting: Option<&str>) -> bool {
     std::env::var("EMUSEN_SAPPHIRE_TIER").ok().as_deref().or(setting) != Some("interpreter")
+}
+
+/// The GS's workers the settings, or `SAPPHIRE_GS_WORKERS` for measurement, choose: automatic by default.
+pub fn gs_workers_chosen(setting: Option<&str>) -> usize {
+    std::env::var("SAPPHIRE_GS_WORKERS").ok().as_deref().or(setting).and_then(crate::gs::workers::parse).unwrap_or_else(crate::gs::workers::automatic)
 }
 
 /// The market of the console: the setting's when it names one; on Automatic, the disc's own market where its serial or
@@ -653,6 +665,7 @@ impl Machine {
             m.sys.board.vpu.set_tier(1, None);
         }
         m.idle.on = idle_chosen(s.get(IDLE_KEY));
+        m.sys.board.gs.set_workers(gs_workers_chosen(s.get(GS_WORKERS_KEY)));
         // An empty file is a card not yet saved: the slot keeps its erased card.
         for f in request.files.iter().filter(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty()) {
             *m.card_mut(f.which as usize).expect("both slots hold a card") = MemoryCard::new(f.data.to_vec()).expect("the size was checked");
@@ -729,6 +742,17 @@ mod tests {
         }
         let s = schema().into_iter().find(|s| s.key == VU1_KEY).unwrap();
         assert!(s.default == "recompiler" && matches!(s.effect, Effect::Exact));
+    }
+
+    #[test]
+    fn the_gs_workers_setting_defaults_to_automatic_and_chooses_one_thread_or_workers() {
+        let s = schema().into_iter().find(|s| s.key == GS_WORKERS_KEY).expect("the workers are a setting");
+        assert!(s.default == "auto" && matches!(s.effect, Effect::Exact));
+        if std::env::var_os("SAPPHIRE_GS_WORKERS").is_none() {
+            assert_eq!(create(&elf(), &[]).unwrap().sys.board.gs.worker_count(), crate::gs::workers::automatic());
+            assert_eq!(create(&elf(), &[(GS_WORKERS_KEY, "1")]).unwrap().sys.board.gs.worker_count(), 1);
+            assert_eq!(create(&elf(), &[(GS_WORKERS_KEY, "3")]).unwrap().sys.board.gs.worker_count(), 3);
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 //! frames, each frame's `advance` timed and nothing else, and the units' own counts over the frames measured.
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
-//! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card]`
+//! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--gs-workers N] [--edram]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -17,6 +17,11 @@
 //! `--registers` counts every register access the units answer over the window (S24's reports, which slow the run, so
 //! its times are not the bench's) and prints the most frequent a frame, for finding which device a processor waits on.
 //! `--press F:BITS` holds the pad's buttons (the core's bit numbers, `+`-joined) in port 1 for six frames from frame F.
+//! `--blocks` runs the EE recompiled (S36, S37), with the settings the environment gives (`Blocks::from_env`), and prints
+//! the dispatcher's counts; without it the EE is interpreted, the reference.
+//! `--gs-workers N` draws on N workers (S43, Sapphire_Native.md §50; `auto` for the automatic count, 1 the GS's own
+//! thread) and prints their counts; `--edram` digests the GS's local memory after every frame, outside the timed span,
+//! which joins the workers there, so its times are not the bench's.
 //! The BIOS
 //! image is handed to the machine and never read here; nothing printed holds an address, an instruction or memory.
 
@@ -61,7 +66,7 @@ fn main() {
         let mut v = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if matches!(args[i].as_str(), "--from" | "--times" | "--press") {
+            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers") {
                 i += 2;
                 continue;
             }
@@ -76,7 +81,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card]";
+    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--gs-workers N] [--edram]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -100,6 +105,14 @@ fn main() {
     if !args.iter().any(|a| a == "--card") {
         m.sys.board.iop.bus.sio2.slots[0].cards[0] = None;
     }
+    if args.iter().any(|a| a == "--blocks") {
+        m.blocks = Some(Box::new(sapphire::blocks::Blocks::from_env()));
+    }
+    if let Some(n) = flag("--gs-workers") {
+        m.sys.board.gs.set_workers(sapphire::gs::workers::parse(&n).expect("a count of workers or auto"));
+    }
+    let edram_each = args.iter().any(|a| a == "--edram");
+    let mut edram = BASIS;
     let frames: usize = plain.get(rest).map_or(600, |f| f.parse().expect("a count of frames"));
     let from: usize = flag("--from").map_or(0, |f| f.parse().expect("a frame"));
     let every = args.iter().position(|a| a == "--every").map(|i| (args[i + 1].parse::<usize>().expect("a count of frames"), args[i + 2].clone()));
@@ -141,6 +154,9 @@ fn main() {
             wall += t;
         }
         picture = fnv(picture, &m.sys.board.pcrtc.picture.rgba);
+        if edram_each {
+            edram = m.sys.board.gs.local().words().iter().fold(edram, |h, &w| (h ^ u64::from(w)).wrapping_mul(0x0000_0100_0000_01B3));
+        }
         let n = m.drain_audio(&mut chunk, usize::MAX);
         sound = chunk[..n].iter().fold(sound, |h, &s| fnv(h, &s.to_le_bytes()));
         if let Some((k, dir)) = &every
@@ -196,6 +212,25 @@ fn main() {
         for ((side, a, acc), r) in all.into_iter().take(16) {
             println!("register\t{side:?} {a:08X}h {acc:?}\t{:.0} a frame", r.count as f64 / k);
         }
+    }
+    let gs = &m.sys.board.gs;
+    if edram_each {
+        println!("edram\t{edram:016X}\tafter every frame");
+    }
+    if let Some(c) = gs.worker_counts() {
+        let n = gs.worker_count();
+        let waits: Vec<String> = c.waits.iter().map(|&(k, ns)| format!("{k}/{:.1}ms", ns as f64 / 1e6)).collect();
+        let busy: Vec<String> = c.busy[..n].iter().map(|&ns| format!("{:.1}", ns as f64 / 1e6 / frames as f64)).collect();
+        println!(
+            "gs\t{n} workers\tprimitives {} split {} alone {} empty {}\tclut copies {}\twaits draw/ring/clut/access/join {}\tbusy ms a frame {}",
+            c.primitives,
+            c.split,
+            c.alone,
+            c.empty,
+            c.clut_copies,
+            waits.join(" "),
+            busy.join(" ")
+        );
     }
     let cd = &m.sys.board.iop.bus.cdvd;
     println!(

@@ -3809,6 +3809,88 @@ game packages being built beside it.*
 - **Pinned by:** `s25-empty-port`'s mixed queues (`tests/sio2.rs`).
 - **Implemented in:** none.
 
+### D-540. SIO2out: a queue's end requests channel 12 until SIO2's FIFOs are reset or the next queue starts; the channel then moves its whole transfer, FIFOOUT's bytes first and FFh past them, and ends with its flag
+
+*D-540 and D-541 were opened at the SIO2out step (2026-10-26), numbered from D-540, other stages being built beside
+it.*
+
+- **Opened:** 2026-10-26, at the D-383 step (`Sapphire_Native.md` §30.26): in every boot on Sapphire, card or none, IOP
+  DMA channel 12 (SIO2out) started a slice of one block of 24h words (CHCR 41000200h, BCR 00010024h) about frame 50
+  and never ended, Sapphire's SIO2 requesting it only for as many whole words as FIFOOUT held.
+- **Documents read:** ps2tek "SIO2 Registers" ("SIO2out reads from this register"; CTRL's bits 2 and 3 "reset SIO2,
+  preparing it for another transfer"; SEND3's bits other than the port and the lengths "Unknown"; SIO2MAN's flow: "start
+  SIO2in and SIO2out DMA transfers if applicable", then CTRL's bit 0 and the wait for SIO2's interrupt, then "read
+  DATAOUT if applicable"); ps2tek "IOP DMA" (slice mode "transfer in units of BCR blocks and arbitrate"; DICR2's masks
+  and flags for channels 7-12; DICR.31's formula); the later edition's "SIO2 Registers" (the same text); psx-spx "DMA
+  Channels" ("SyncMode=1 decrements BA to zero"). None says what SIO2 asks of channel 12 when a queue's replies are fewer
+  than its block.
+- **The hardware's own state while the player's BIOS runs** (the Americas image on Sapphire, a build of its own that
+  printed SIO2's and channels 11 and 12's registers at each CHCR write and at each queue's start and end, not
+  committed; no program counter, instruction, memory content or command byte): from about frame 50 the BIOS starts both
+  channels with one block of 36 words, channel 11 with CHCR 00000201h then 01000201h and channel 12 with 40000200h then
+  41000200h, for a queue of one command of four or five bytes to a card port, whose SEND3 entry carries bits 4 to 6 set
+  (70h; its other entries carry bit 6 alone); DICR2's masks for channels 11 and 12 are clear (DICR2 000D0400h), so the
+  BIOS waits for SIO2's interrupt, not the channels'; it writes channel 12's registers again for each such queue, four
+  transfers at about frame 50 with a card in slot 1, two to each card port, and more with slot 1 empty, none after
+  frame 60. SIO2in moved its 144 bytes into FIFOIN, of which the queue took four or five; SIO2out, given four or five
+  bytes, waited for 144.
+- **Test program:** `s25-dma-out-a` to `-r`, probes for the referee (`tests/s25/`), each a controller's read by FIFOIN
+  and FIFOOUT, a transfer by DMA, the read again, the transfer again and the read again, every queue's SIO2 flags
+  acknowledged as a driver does; each transfer records the wait's passes, channels 11's and 12's MADR, BCR and CHCR,
+  DICR2 and I_STAT at SIO2's interrupt and again after a delay, RECV1, eight bytes more from FIFOOUT and channel 12's
+  buffer. The cases: the BIOS's shape, a card's probe of four bytes in blocks of 36 words both ways, with SEND3's bits
+  4-6 as 70h, 40h, 00h, 50h and 60h; a controller's read; channel 12 in blocks of 1, 2, 36 × 1 and 2 × 18 words; a
+  command of 144 bytes; a controller's read and a probe in one queue; channel 11 given one word; FIFOIN padded with A5h;
+  channel 12 started after the queue's end; a block of one word for nine replies; the queue's bytes written by the
+  processor; no channel 12, FIFOOUT read whole by the processor. Each run with a card in slot 1 and with slot 1 empty.
+  Then `s25-sio2out`, graded (179 words): the rule below in five transfers.
+- **Referee:** PCSX2 2.8.2, the one lineage with an IOP window, ran every probe with both slots filled and with slot 1
+  empty (`ps2referee.py ram --cards`). In every case channel 12 **ended** by SIO2's interrupt: CHCR 40000200h, MADR moved
+  by the whole transfer (90h for 36 words, 4 for one), its DICR2 flag set and IRQ 3 raised with DICR's master enable;
+  the replies at the buffer's start, the word past the transfer untouched; SEND3's bits 4-6 changed nothing; started
+  after the queue's end it ran at once; a block shorter than the replies left the rest in FIFOOUT for the processor.
+  Past the replies PCSX2 wrote 00h where SIO2in had given FIFOIN more bytes than the queue sent (with A5h padding as
+  with zeros) and FFh where it had not, and FIFOOUT read by the processor held a byte for every byte of FIFOIN: PCSX2
+  clocks the whole of FIFOIN, not the SEND3 lengths, the arithmetic of D-441. It left BCR as written, where psx-spx's
+  slice mode, which Sapphire's DMAC keeps, decrements the block count. Channel 12 started after a reset of SIO2's FIFOs
+  with no queue since ran at once there too and moved the previous queue's reply, so PCSX2's reset does not empty
+  FIFOOUT. On `s25-sio2out` it differs in 150 of 179 words: the card's first two reply bytes (4, D-222), 00h past the
+  replies (140), the reset's wait (2) and FIFOOUT after it (1), and its controller's bytes past five (3); every end,
+  MADR, flag, IRQ, reply's place and untouched word equal.
+- **Conclusion:** **the rule**: at a queue's end SIO2 requests SIO2out, and the request holds until CTRL's bits 2 and 3
+  reset the FIFOs or bit 0 starts another queue; while it holds, channel 12 moves every block it asks for, four of
+  FIFOOUT's bytes a word, lowest first, and FFh for each byte past them, the read of an empty FIFOOUT (§30.3, part A's
+  rule, which PCSX2 reads too); the transfer then ends as any slice does, with its flag under its mask and BCR's block
+  count at zero. A block shorter than the replies leaves the rest in FIFOOUT. **Measured** on one lineage for the end,
+  the flag, the interrupt, MADR, the reply's place and the leftover; **argued** for FFh past the replies (PCSX2's 00h
+  follows from clocking FIFOIN whole, which the SEND3 lengths and psx-spx's byte-for-byte exchange do not allow, D-441)
+  and for the reset ending the request (ps2tek's "reset SIO2", which PCSX2's FIFOOUT does not honour). It is the only
+  reading under which a driver that starts SIO2out with a block of 36 words for a command of four bytes and waits for
+  SIO2's interrupt alone ever has its replies in memory. SEND3's bits 4-6 are kept as written and given no effect.
+- **Depends on it:** `sio2::Ports::request` for channel 12, `sio2::Sio2`'s request (`wake`) and `IopBus::run_units`'s
+  wake of the DMAC at a queue's end; the browser's runs of §30.35.
+- **Pinned by:** `sio2::tests::sio2out_is_requested_from_a_queues_end_until_a_reset_or_the_next_queue` (the lib) and
+  `sio2out_moves_its_whole_transfer_once_a_queue_has_ended` (`tests/sio2.rs`, `s25-sio2out`).
+- **Implemented in:** 70bb12501, the SIO2out step's commit (`Sapphire_Native.md` §30.31 to §30.34).
+
+### D-541. SIO2's interrupt: PCSX2 raises IRQ 17 at a queue's end only when SIO2's flag at 1F808280h was clear; Sapphire raises it at every queue's end
+
+- **Opened:** 2026-10-26, at the SIO2out step, by the first run of `s25-dma-out-a` and `-b` on PCSX2, whose controller
+  reads did not acknowledge SIO2's flags: after the first queue no interrupt came, the replies being there all the same.
+- **Documents read:** ps2tek "SIO2_ISTAT?" ("SIO2MAN's interrupt handler reads from this and writes to it the value
+  read. Not known what any of the bits represent"); ps2tek "SIO2_CTRL" ("An SIO2 interrupt is raised after touching this
+  bit"); "IOP Interrupts".
+- **Test program:** `s25-dma-out-a` to `-r` before and after the flags were acknowledged after each queue.
+- **Referee:** PCSX2 2.8.2: with the flag written back after each queue, IRQ 17 at every queue's end; without, only after
+  the first. One lineage.
+- **Conclusion:** **open**, Sapphire unchanged: it raises IRQ 17 at every queue's end and keeps the flag as part A set
+  it. An interrupt raised by the flag's rise is a plausible reading, and a driver that acknowledges it as ps2tek
+  describes sees no difference; S25's graded programs do not acknowledge it, and would wait out their bound on a
+  console that worked so, their replies the same.
+- **Depends on it:** `sio2::Sio2::complete`.
+- **Pinned by:** nothing.
+- **Implemented in:** none.
+
 ### D-400. GS, the alpha test: a failing pixel goes on through the later tests with only what AFAIL leaves effective; RGB_ONLY acts as FB_ONLY in every format without RGBA32's eight bits of alpha
 
 - **Opened:** 2026-10-25, at stage S19.

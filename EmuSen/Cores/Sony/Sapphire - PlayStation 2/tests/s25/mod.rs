@@ -699,6 +699,260 @@ pub fn probe_empty_len() -> Program {
     p
 }
 
+/// One case of the SIO2out probe: a queue whose entries carry `flags` in SEND3's bits 2-7, its bytes sent by SIO2in
+/// (channel 11, `bcr_in`) and its replies taken by SIO2out (channel 12, `bcr_out`), both in slice mode, each channel's
+/// completion flag enabled in DICR2 and DICR's master enable set; recorded, ungraded: the wait's passes left, both
+/// channels' registers, DICR2, I_STAT and RECV1 at the SIO2 interrupt and again after a delay, eight bytes more from
+/// FIFOOUT, and channel 12's buffer.
+fn dma_case(p: &mut Program, cmds: &[(u32, Vec<u8>)], flags: u32, bcr_in: u32, bcr_out: u32) {
+    use s21::reg::*;
+    let entries: Vec<u32> = cmds.iter().map(|(port, b)| send3(*port, b.len() as u32) | flags & 0xFC).collect();
+    let mut bytes: Vec<u8> = cmds.iter().flat_map(|c| c.1.iter().copied()).collect();
+    let sent = bytes.len();
+    let words_in = (bcr_in & 0xFFFF) * (bcr_in >> 16);
+    bytes.resize((4 * words_in as usize).max(bytes.len().next_multiple_of(4)), if flags & OPT_A5 != 0 { 0xA5 } else { 0 });
+    for (i, w) in bytes.chunks(4).enumerate() {
+        p.poke(s21::K1 | (DMA_IN + 4 * i as u32), u32::from_le_bytes([w[0], w[1], w[2], w[3]]));
+    }
+    let words_out = (bcr_out & 0xFFFF) * (bcr_out >> 16);
+    for i in 0..words_out + 2 {
+        p.poke(s21::K1 | (DMA_OUT + 4 * i), 0xDEAD_BEEF);
+    }
+    p.poke(I_STAT, !(IRQ_SIO2 | s21::irq::DMA));
+    p.poke(DPCR2, 8 << 16 | 8 << 20);
+    p.poke(DICR2, 0x3F00_0000 | 3 << 20);
+    p.poke(DICR, 0x7F00_0000 | 1 << 23);
+    p.queue(&entries);
+    if flags & OPT_CPU_IN != 0 {
+        p.fifo_in(&bytes[..sent]);
+    } else {
+        p.poke(madr(11), DMA_IN);
+        p.poke(bcr(11), bcr_in);
+        p.poke(chcr(11), 0x0000_0201);
+        p.poke(chcr(11), 0x0100_0201);
+    }
+    let out = |p: &mut Program| {
+        p.poke(madr(12), DMA_OUT);
+        p.poke(bcr(12), bcr_out);
+        p.poke(chcr(12), 0x4000_0200);
+        p.poke(chcr(12), 0x4100_0200);
+    };
+    if flags & (OPT_NO_OUT | OPT_OUT_AFTER) == 0 {
+        out(p);
+    }
+    p.li("t6", reg::CTRL);
+    p.emit("lw t2, 0(t6)");
+    p.emit("nop");
+    p.li("t7", !0xF);
+    p.emit("and t2, t2, t7");
+    p.emit("ori t3, t2, 1");
+    p.emit("sw t3, 0(t6)");
+    p.wait(I_STAT, IRQ_SIO2, true, 20_000);
+    p.record("t5", None);
+    ack_sio2(p);
+    if flags & OPT_OUT_AFTER != 0 {
+        out(p);
+        p.delay(200);
+    }
+    if flags & OPT_NO_OUT != 0 {
+        p.reply(&any(160));
+    }
+    let regs = |p: &mut Program| {
+        for a in [chcr(12), madr(12), bcr(12), chcr(11), madr(11), bcr(11), DICR2, I_STAT] {
+            p.rec(a, None);
+        }
+    };
+    regs(p);
+    p.recv1(None);
+    p.delay(2_000);
+    regs(p);
+    p.reply(&any(8));
+    let shown = words_out.min(6);
+    for i in 0..shown {
+        p.rec(s21::K1 | (DMA_OUT + 4 * i), None);
+    }
+    for i in [words_out - 1, words_out] {
+        if i >= shown {
+            p.rec(s21::K1 | (DMA_OUT + 4 * i), None);
+        }
+    }
+    p.poke(chcr(11), 0);
+    p.poke(chcr(12), 0);
+    p.poke(DICR2, 0x3F00_0000);
+    p.poke(DICR, 0x7F00_0000);
+    p.poke(I_STAT, !(IRQ_SIO2 | s21::irq::DMA));
+}
+
+/// The probe's options beside SEND3's flags: FIFOIN padded past the queue with A5h, the queue's bytes written to
+/// FIFOIN by the processor, no SIO2out (FIFOOUT read by the processor), SIO2out started after the queue's end.
+const OPT_A5: u32 = 1 << 8;
+const OPT_CPU_IN: u32 = 1 << 9;
+const OPT_NO_OUT: u32 = 1 << 10;
+const OPT_OUT_AFTER: u32 = 1 << 11;
+
+/// SIO2's flags read, recorded and written back as read, as a driver's handler acknowledges them (ps2tek "SIO2_ISTAT?").
+fn ack_sio2(p: &mut Program) {
+    p.peek(reg::ISTAT);
+    p.record("t2", None);
+    p.emit("sw t2, 0(t6)");
+}
+
+/// The cases of `s25-dma-out`: a queue, SEND3's flags, channel 11's and channel 12's BCR.
+type DmaCase = (&'static str, fn() -> Vec<(u32, Vec<u8>)>, u32, u32, u32);
+
+const ONE: u32 = 0x0001_0024;
+
+fn dma_cases() -> Vec<DmaCase> {
+    let probe = || vec![(CARD1, card_cmd(&[0x11], 4))];
+    let read = || vec![(PAD1, pad(0x42, &[], 5))];
+    vec![
+        ("s25-dma-out-a", probe, 0x70, ONE, ONE),
+        ("s25-dma-out-b", probe, 0x40, ONE, ONE),
+        ("s25-dma-out-c", probe, 0x00, ONE, ONE),
+        ("s25-dma-out-d", probe, 0x50, ONE, ONE),
+        ("s25-dma-out-e", probe, 0x60, ONE, ONE),
+        ("s25-dma-out-f", read, 0x70, ONE, ONE),
+        ("s25-dma-out-g", probe, 0x70, ONE, 0x0001_0001),
+        ("s25-dma-out-h", probe, 0x70, ONE, 0x0001_0002),
+        ("s25-dma-out-i", probe, 0x70, ONE, 0x0024_0001),
+        ("s25-dma-out-j", probe, 0x70, ONE, 0x0002_0012),
+        ("s25-dma-out-k", || vec![(CARD1, card_cmd(&[0x11], 144))], 0x70, ONE, ONE),
+        ("s25-dma-out-l", || vec![(PAD1, pad(0x42, &[], 5)), (CARD1, card_cmd(&[0x11], 4))], 0x70, ONE, ONE),
+        ("s25-dma-out-m", probe, 0x70, 0x0001_0001, ONE),
+        ("s25-dma-out-n", probe, 0x70 | OPT_A5, ONE, ONE),
+        ("s25-dma-out-o", probe, 0x70 | OPT_OUT_AFTER, ONE, ONE),
+        ("s25-dma-out-p", || vec![(PAD1, pad(0x42, &[], 5)), (CARD1, card_cmd(&[0x11], 4))], 0x70, ONE, 0x0001_0001),
+        ("s25-dma-out-q", probe, 0x70 | OPT_CPU_IN, ONE, ONE),
+        ("s25-dma-out-r", probe, 0x70 | OPT_A5 | OPT_NO_OUT, ONE, ONE),
+    ]
+}
+
+/// `s25-dma-out-<x>`, probes for the referee, ungraded: what ends a SIO2out slice whose block is longer or shorter than
+/// the queue's replies, with SEND3's bits 4-6 set as a driver sets them for a transfer by DMA and without them, for a
+/// card's probe in slot 1 (present or not), a controller's read, a queue of both, a queue filling the block exactly, and
+/// the neighbouring block shapes (ps2tek "IOP DMA", "SIO2 Registers"); each case run twice, with a controller's read by
+/// FIFOIN and FIFOOUT before, between and after, its wait's passes recorded, to show SIO2 still answering.
+pub fn probe_dma_out() -> Vec<Program> {
+    dma_cases()
+        .into_iter()
+        .map(|(name, cmds, flags, bcr_in, bcr_out)| {
+            let mut p = Program::uncached(name);
+            let check = |p: &mut Program| {
+                p.command(PAD1, &pad(0x42, &[], 5));
+                p.record("t5", None);
+                ack_sio2(p);
+                p.recv1(None);
+                p.reply(&any(5));
+            };
+            check(&mut p);
+            dma_case(&mut p, &cmds(), flags, bcr_in, bcr_out);
+            check(&mut p);
+            dma_case(&mut p, &cmds(), flags, bcr_in, bcr_out);
+            check(&mut p);
+            p
+        })
+        .collect()
+}
+
+/// When the graded program starts SIO2out: before the queue, as a driver does; after the queue's end; after the
+/// queue's end and a reset of SIO2's FIFOs, so that it waits for the next queue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Out {
+    Before,
+    After,
+    AfterReset,
+}
+
+/// One graded transfer of `s25-sio2out` (Sapphire_Disputes.md D-540): `cmds` sent by SIO2in in one block of 36 words,
+/// the replies taken by SIO2out in `bcr_out`'s blocks; at the queue's end channel 12 has moved its whole transfer, the
+/// replies first and FFh past them, its START bit clear, its flag set in DICR2 and IRQ 3 raised with DICR's master
+/// enable; the words past the transfer untouched, and the replies its blocks did not take left in FIFOOUT.
+fn out_transfer(p: &mut Program, cmds: &[(u32, Vec<u8>)], bcr_out: u32, out: Out, replies: &[u8]) {
+    use s21::reg::*;
+    let entries: Vec<u32> = cmds.iter().map(|(port, b)| send3(*port, b.len() as u32)).collect();
+    let mut bytes: Vec<u8> = cmds.iter().flat_map(|c| c.1.iter().copied()).collect();
+    assert_eq!(bytes.len(), replies.len(), "a reply byte for every byte sent");
+    bytes.resize(4 * 36, 0);
+    for (i, w) in bytes.chunks(4).enumerate() {
+        p.poke(s21::K1 | (DMA_IN + 4 * i as u32), u32::from_le_bytes([w[0], w[1], w[2], w[3]]));
+    }
+    let words = (bcr_out & 0xFFFF) * (bcr_out >> 16);
+    for i in 0..=words {
+        p.poke(s21::K1 | (DMA_OUT + 4 * i), 0xDEAD_BEEF);
+    }
+    p.poke(I_STAT, !(IRQ_SIO2 | s21::irq::DMA));
+    p.poke(DPCR2, 8 << 16 | 8 << 20);
+    p.poke(DICR2, 0x3F00_0000 | 3 << 20);
+    p.poke(DICR, 0x7F00_0000 | 1 << 23);
+    p.queue(&entries);
+    p.poke(madr(11), DMA_IN);
+    p.poke(bcr(11), ONE);
+    p.poke(chcr(11), 0x0100_0201);
+    let start_out = |p: &mut Program| {
+        p.poke(madr(12), DMA_OUT);
+        p.poke(bcr(12), bcr_out);
+        p.poke(chcr(12), 0x4100_0200);
+    };
+    if out == Out::Before {
+        start_out(p);
+    }
+    p.start();
+    ack_sio2(p);
+    match out {
+        Out::Before => {}
+        Out::After => start_out(p),
+        Out::AfterReset => {
+            p.queue(&[]);
+            start_out(p);
+            p.delay(500);
+            p.rec(chcr(12), Some(0x4100_0200));
+            p.rec(s21::K1 | DMA_OUT, Some(0xDEAD_BEEF));
+            p.queue(&entries);
+            p.fifo_in(&cmds.iter().flat_map(|c| c.1.iter().copied()).collect::<Vec<u8>>());
+            p.start();
+            ack_sio2(p);
+        }
+    }
+    p.delay(100);
+    p.rec(chcr(12), Some(0x4000_0200));
+    p.rec(madr(12), Some(DMA_OUT + 4 * words));
+    p.rec_masked(DICR2, 1 << 29, 1 << 29);
+    p.rec_masked(I_STAT, s21::irq::DMA, s21::irq::DMA);
+    let taken = (4 * words as usize).min(replies.len());
+    let mut buf = replies[..taken].to_vec();
+    buf.resize(4 * words as usize, HIZ);
+    for (i, w) in buf.chunks(4).enumerate() {
+        p.rec(s21::K1 | (DMA_OUT + 4 * i as u32), Some(u32::from_le_bytes([w[0], w[1], w[2], w[3]])));
+    }
+    p.rec(s21::K1 | (DMA_OUT + 4 * words), Some(0xDEAD_BEEF));
+    let rest = &replies[taken..];
+    let mut want = exact(rest);
+    want.extend(exact(&[HIZ; 4]));
+    p.reply(&want);
+    p.poke(chcr(11), 0);
+    p.poke(chcr(12), 0);
+    p.poke(DICR2, 0x3F00_0000);
+    p.poke(DICR, 0x7F00_0000);
+    p.poke(I_STAT, !(IRQ_SIO2 | s21::irq::DMA));
+}
+
+/// `s25-sio2out` (Sapphire_Disputes.md D-540), with a card in slot 1: a card's probe sent by SIO2in in a block of 36
+/// words and its four reply bytes taken by SIO2out in one block of 36 words, as a driver shapes them; the same in 36
+/// blocks of one word; SIO2out started after the queue's end; started after a reset, waiting for the next queue; and a
+/// block of one word taking the first four of a queue's nine replies, the rest left in FIFOOUT.
+pub fn sio2out_program() -> Program {
+    let mut p = Program::uncached("s25-sio2out");
+    let probe = || vec![(CARD1, card_cmd(&[0x11], 4))];
+    let probe_reply = [HIZ, HIZ, ACK, TERMINATOR];
+    out_transfer(&mut p, &probe(), ONE, Out::Before, &probe_reply);
+    out_transfer(&mut p, &probe(), 0x0024_0001, Out::Before, &probe_reply);
+    out_transfer(&mut p, &probe(), ONE, Out::After, &probe_reply);
+    out_transfer(&mut p, &probe(), ONE, Out::AfterReset, &probe_reply);
+    let both = vec![(PAD1, pad(0x42, &[], 5)), (CARD1, card_cmd(&[0x11], 4))];
+    out_transfer(&mut p, &both, 0x0001_0001, Out::Before, &[HIZ, 0x41, 0x5A, 0xFF, 0xFF, HIZ, HIZ, ACK, TERMINATOR]);
+    p
+}
+
 /// The gate's programs that every referee configuration runs.
 pub fn gate() -> Vec<Program> {
     vec![pad_program(), card_program(), dma_program()]
@@ -709,11 +963,18 @@ pub fn empty_slot() -> Vec<Program> {
     vec![empty_program()]
 }
 
+/// The programs of the SIO2out step (Sapphire_Disputes.md D-540).
+pub fn sio2out() -> Vec<Program> {
+    vec![sio2out_program()]
+}
+
 /// Every program the referees are given: the gate's, the tap's (run with a multitap), and the probes.
 pub fn all() -> Vec<Program> {
     let mut v = gate();
     v.push(tap_program());
     v.extend(empty_slot());
+    v.extend(sio2out());
     v.extend([probe(), probe_write(), probe_tap("s25-tap-21-0", PAD1, 0x21), probe_tap("s25-tap-21-2", CARD1, 0x21), probe_tap("s25-tap-61-0", PAD1, 0x61), probe_tap_slots(), probe_empty(), probe_empty_len()]);
+    v.extend(probe_dma_out());
     v
 }

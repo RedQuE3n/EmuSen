@@ -111,7 +111,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the reverse (D-380 to D-382); OSDSYS on Sapphire stepping through its setup to the main menu with an empty tray, and its
   browser never drawing with a card in slot 1 (P8 as observed, D-383 open); D-383's step (2026-10-26, §30.25-§30.30):
   a command no device acknowledges ends at its peripheral byte, which made the setup take the pad with slot 1 empty,
-  and the browser then stalls the same with slot 1 empty as with a card (D-440 and D-441 opened); and the 23 IOP
+  and the browser then stalls the same with slot 1 empty as with a card (D-440 and D-441 opened); the SIO2out step
+  (2026-10-26, §30.31-§30.37): a queue's end requests channel 12 until SIO2's FIFOs are reset or the next queue starts,
+  so the BIOS's slice of 36 words for a reply of four bytes ends with the replies in memory, FFh past them, as PCSX2's
+  ends (D-540, D-541 opened); the browser still stalls alike, card or none (P8 as observed); and the 23 IOP
   programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's

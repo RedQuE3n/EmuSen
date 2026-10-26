@@ -4176,7 +4176,9 @@ would mean forging the drive's verdict, which is the tester's to weigh (§30.12 
 - **DMA**: channel 11 (SIO2in) puts each word's four bytes into FIFOIN, lowest first, always ready; channel 12 (SIO2out)
   takes FIFOOUT's bytes four to a word, ready for as many whole words as FIFOOUT holds, the DMAC woken when a queue ends
   [R ps2tek "SIO2_FIFOIN": "The SIO2in DMA channel also writes to this register"; A for the byte order]. `sio2::Ports`
-  wraps the stand-ins as `sif::IopPorts` does, so the IOP's bus steps its DMAC with both.
+  wraps the stand-ins as `sif::IopPorts` does, so the IOP's bus steps its DMAC with both. *Amended 2026-10-26 (D-540,
+  §30.31): from a queue's end until SIO2's FIFOs are reset or the next queue starts, channel 12 takes every block it
+  asks for, FFh past FIFOOUT's bytes, so a block longer than the replies ends.*
 - **What changed outside the module**, small and additive: `iop/bus.rs` gains the field `sio2`, its registers in the I/O
   read and write, its end in `run_units` and `reschedule`, and the DMAC stepped through `sio2::Ports`; `lib.rs` declares
   the module. No new dependency: `sio2` uses the crate's own `clock` and `iop::dma` interfaces.
@@ -4716,7 +4718,8 @@ rule rests on the documents and the referee's replies, the measurement only show
 **On the way**, a hardware state the counts show in every run, card or none: IOP DMA channel 12 (SIO2out) started in
 slice mode for a block of 24h words about frame 50 and never ended (CHCR 41000200h, BCR 00010024h), since no queue
 after it leaves 144 bytes in FIFOOUT at once; the controller is read through FIFOOUT, and the BIOS reaches its menu, so
-it is recorded and not followed here (§30.29 Q3).
+it is recorded and not followed here (§30.29 Q3). *Followed 2026-10-26 (D-540, §30.31): SIO2out now ends at a
+queue's end, and the browser's stall is unchanged.*
 
 ### 30.27 The rule built, tests and seeded faults (2026-10-26)
 
@@ -4778,14 +4781,16 @@ including those whose setup took the pad.
    browser stalls on entry on Sapphire whatever is in slot 1; the card's refusal is not reached"), keep Q7(b), and
    choose between (a) a dispute step on SIO2out (Q3), the one unit the hardware's counts show waiting, which needs no
    look at the BIOS, and (b) leaving the browser until S10's fast-booted programs exercise the card's driver path
-   through the project's own programs. (a) first: it is cheap and may be the cause.
+   through the project's own programs. (a) first: it is cheap and may be the cause. *Decided 2026-10-26 by the tester:
+   P8 recorded as observed, Q7(b) kept, (a) taken (§30.31 to §30.37); the slice was not the cause.*
 2. **Q2 [routine], the ports' clocks (D-440).** *Recommended*: a step of its own that sets the controllers' bytes at 500
    kHz and the cards' at 2 MHz, if SEND1 and SEND2 can be read as the rates by a program of the project's own, and runs
    the boot, the setup and the browser again; until then 4 µs a byte everywhere.
 3. **Q3 [routine], SIO2out's slice that never ends.** Channel 12 starts a 36-word slice about frame 50 of every boot and
    no queue after it leaves 144 bytes in FIFOOUT. *Recommended*: an IOP program in S25's form that starts SIO2in and
    SIO2out for a queue shorter than their blocks, and longer, read on Sapphire and PCSX2 (whose channel 12 moved nothing
-   at part A, §30.9), to rule what a slice gets when a queue's replies are fewer than its block.
+   at part A, §30.9), to rule what a slice gets when a queue's replies are fewer than its block. *Done 2026-10-26
+   (D-540, §30.31): the slice takes its whole transfer at the queue's end, FFh past the replies.*
 4. **Q4 [routine], D-441.** *Recommended*: keep D-221's RECV1 and the command's length; revisit if a second lineage or a
    document appears.
 
@@ -4813,6 +4818,156 @@ D-482): Sapphire **364 of 364**, under `test-checked` 78 and 6, clippy clean; th
 **Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and looked at
 its pictures and the hardware's counts, and read the BIOS chapter's SIO2MAN entry; **this writer is exposed and will
 never write the open replacement**.
+
+### 30.31 Dispute D-540: SIO2out's slice that never ended (2026-10-26)
+
+*A dispute step on the tester's go of 2026-10-26 (§30.29 Q1 option (a) and Q3, P8 recorded as observed, Q7(b) kept); its
+product is `Sapphire_Disputes.md` D-540 and the fix it proves, with D-541 opened on the way.* **The cause**: Sapphire's
+SIO2 asked channel 12 for a block only when FIFOOUT held all of it (part A's rule, §30.3), and the player's BIOS starts
+SIO2out with one block of 36 words for a queue of one command of four or five bytes, so the slice of §30.26 waited for
+144 bytes that never came and the replies stayed in FIFOOUT until the next reset emptied it. **The rule**: a queue's end
+requests SIO2out until CTRL's bits 2 and 3 reset the FIFOs or bit 0 starts the next queue; meanwhile channel 12 moves
+every block it asks for, FIFOOUT's bytes first and FFh past them, and ends with its flag as any slice does.
+
+### 30.32 What the hardware showed while the BIOS ran (measured 2026-10-26)
+
+A build of its own, not committed, printed at each write to channel 11's or 12's registers and at each queue's start
+and end SIO2's SEND3 entries (port and lengths), CTRL, how many bytes FIFOIN, FIFOOUT and the pending replies held, and
+channels 11's and 12's BCR and CHCR, with DICR2: the hardware's own register state, as §1.4 lets a writer of a
+player's-BIOS stage observe; no program counter, instruction, memory content or command byte. On the Americas image
+with the crate's formatted card in slot 1, to frame 60:
+
+- the queues before about frame 50 are written by the processor: one command each, its SEND3 entry with bit 6 set (40h
+  beside the port), its replies read from FIFOOUT;
+- at about frame 50 four queues, two to each card port, go by DMA: channel 11 started with BCR 00010024h and CHCR
+  00000201h then 01000201h, moving 144 bytes into FIFOIN; channel 12 with BCR 00010024h and CHCR 40000200h then
+  41000200h; then CTRL's bit 0 for a queue of one command of four or five bytes, its SEND3 entry with bits 4 to 6 set
+  (70h); DICR2 000D0400h, channels 11's and 12's masks clear, so the BIOS waits for SIO2's interrupt and not for the
+  channels';
+- each such queue took four or five of FIFOIN's 144 bytes and left as many in FIFOOUT; channel 12, asking for 144, never
+  moved; the BIOS wrote its registers again for the next transfer, and after the last the slice stayed as §30.26 saw it.
+
+Before them the BIOS writes zero to both channels' CHCR four times. With slot 1 empty it makes more such transfers (20
+writes of channel 12's CHCR to frame 60, against 12), and none after frame 60 in either run.
+
+### 30.33 The programs, on Sapphire and the referee (measured 2026-10-26)
+
+`tests/s25/`: **`s25-dma-out-a` to `-r`**, probes for the referee, each a controller's read by FIFOIN and FIFOOUT, a
+transfer by DMA, the read, the transfer again and the read, every queue's SIO2 flags written back as read, as a driver
+acknowledges them; each transfer records the wait's passes, both channels' MADR, BCR and CHCR, DICR2 and I_STAT at
+SIO2's interrupt and after a delay, RECV1, eight bytes more from FIFOOUT, and channel 12's buffer with the word past it.
+The eighteen cases are D-540's list. **`s25-sio2out`**, graded, 179 words, with a card in slot 1: the BIOS's shape, a
+card's probe of four bytes by SIO2in in a block of 36 words and its replies by SIO2out in one block of 36; the same in
+36 blocks of one word; SIO2out started after the queue's end; started after a reset, still waiting 500 passes later and
+moving the next queue's replies; a block of one word for a queue of nine replies, the other five left in FIFOOUT.
+`examples/s25.rs` writes them for the referee and runs any of them on Sapphire's board.
+
+| Case (PCSX2 2.8.2, both slots filled and slot 1 empty) | Sapphire before | PCSX2 | Sapphire with the rule |
+|---|---|---|---|
+| the BIOS's shape, every SEND3 flag tried (70h, 40h, 00h, 50h, 60h) | channel 12 never ends, its buffer untouched, the replies left in FIFOOUT | ends by SIO2's interrupt: CHCR 40000200h, MADR + 90h, DICR2's flag, IRQ 3; the replies at the buffer's start | as PCSX2 |
+| blocks of 1, 2, 36 × 1 and 2 × 18 words | ends only when the replies fill whole blocks | ends after its whole transfer | as PCSX2 |
+| started after the queue's end | never ends | runs at once | as PCSX2 |
+| a block shorter than the replies | ends, the rest in FIFOOUT | the same | the same |
+| the bytes past the replies | — | 00h where SIO2in gave FIFOIN more than the queue sent, A5h padding alike; FFh where it did not | FFh, an empty FIFOOUT's read |
+| started after a reset, no queue since | waits | runs at once with the previous queue's reply: its reset leaves FIFOOUT | waits for the next queue |
+| BCR at the end | its block count at zero | as written | its block count at zero (psx-spx's slice mode) |
+| SIO2's interrupt with the flags not written back | every queue | the first queue only (D-541) | every queue |
+
+On `s25-sio2out` PCSX2 differs in 150 of the 179 words: the card's first two reply bytes (4, D-222), 00h past the
+replies (140), the reset's wait (2) and FIFOOUT after it (1), and its controller's bytes past five (3), since it clocks
+the whole of FIFOIN rather than the SEND3 lengths (D-441's arithmetic); every end, MADR, flag, interrupt, reply's
+place and untouched word past the transfer is equal. With slot 1 empty only the replies changed (HiZ, and PCSX2's six
+bytes of D-441), on both, never the channel's end.
+
+### 30.34 The rule built, tests and seeded faults (2026-10-26)
+
+`src/sio2/mod.rs`: `Sio2`'s `wake`, which a queue's end set and the bus took once to wake the DMAC, is now SIO2out's
+request, set at a queue's end and cleared by CTRL's reset bits and by a queue's start; `Ports::request` gives channel 12
+every word it asks for while it is set and none otherwise, and `get` already read FFh from an empty FIFOOUT.
+`src/iop/bus.rs` wakes the DMAC where a queue ends. The state's layout is unchanged: the flag keeps its place and name
+(`Sio2.Wake`), so version 3 stands; a state saved by an earlier build, in which the flag was always clear between steps,
+loads with SIO2out unrequested until the next queue ends, which no player can meet, the console being offered to none.
+No new dependency.
+
+**Tests** [M, `cargo test --release`]: the crate **366 of 366** (364 and two new): the lib's
+`sio2::tests::sio2out_is_requested_from_a_queues_end_until_a_reset_or_the_next_queue` (nothing while the queue runs, 36
+words for four reply bytes, FFh past them, still requested with FIFOOUT empty, cleared by a reset and by the next queue's
+start) and `tests/sio2.rs`'s `sio2out_moves_its_whole_transfer_once_a_queue_has_ended` (`s25-sio2out`); `s25-dma`'s test
+of part A passes unchanged; the lib and `tests/sio2.rs` under `test-checked`, 79 and 7; clippy clean on every target.
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | part A's rule again: channel 12 asked only for the whole words FIFOOUT holds | both tests named above |
+| F2 | the request surviving CTRL's reset | both tests |
+| F3 | 00h past FIFOOUT's bytes, PCSX2's fill | both tests |
+
+Each was applied, the tests run, and the source restored.
+
+### 30.35 OSDSYS's browser again, and P8 (measured 2026-10-26)
+
+`examples/s25b.rs` on the tree with the rule, with `S25B_UNITS`, the Americas image and part B's script as §30.28 ran it
+(Cross every 120 frames from frame 770, the ninth on "Browser" at 1730, Circle at 2510, to frame 2700), two runs: slot 1
+empty, and slot 1 holding the crate's formatted card; slot 2 the erased card the machine makes, in both.
+
+| Frames | Slot 1 empty | The formatted card in slot 1 |
+|---|---|---|
+| 770-1610 | each press steps the setup on: Language, Time Zone, Daylight Savings Time, "Settings completed." | the same |
+| 1680 | the main menu, "Browser" and "System Configuration", with its ring of lights | the same |
+| 1740-1860 | the menu fading out on Cross | the same |
+| 1920-2700 | **black, every pixel zero**, through the Circle at 2510 | the same |
+
+The 54 pictures of the two runs are equal byte for byte, and each picture's count of lit pixels is the one §30.28's runs
+recorded at the same frame; the card was never written (its file equal to the crate's); channel 12 now ends after each
+of the BIOS's transfers (CHCR 40000200h from frame 60 on, MADR past its block) and none starts after them; SIO2's counts
+grow by about 1.1 queues a frame after frame 1680 in both runs; the reports name the unmapped accesses §30.28's did, and
+the EE's and the IOP's exception counts are §30.28's runs' to the unit (the EE's system calls 1,157,984 with the card and
+1,157,988 without). PCSX2 at the same step draws "There is no data." with slot 1 empty (§30.19). Both runs were made
+again on the tree rebased onto WiseMan (S31's debugger beneath): the 54 pictures of each equal byte for byte to the runs
+before the rebase, the card unwritten, the counts and the reports the same.
+
+So **for P8**, recorded as observed as the tester decided: the player's BIOS on Sapphire, card or none, stalls on
+entering its browser with every pixel black and never sends the card in slot 1 a command; the card's refusal (Q7(b),
+§30.2) is not reached. D-540 put the BIOS's SIO2 replies in memory where the BIOS asks for them, and nothing the pictures
+or the counts show changed: the slice was a defect of SIO2out, not the browser's cause. No unit of SIO2 or of the IOP's
+DMA is now seen waiting; going further needs another look, put to the tester (§30.36 Q1).
+
+### 30.36 Questions the SIO2out step leaves
+
+1. **Q1 [decision], the browser that never draws.** With D-383 and D-540 fixed, no unit the hardware's reports cover is
+   seen waiting while the browser stays black. *Recommended*: (a) a step of its own that traces the SIF link while the
+   browser is entered, narrowly as §1.4 allows a writer of a player's-BIOS stage since 2026-10-26 (the SIF DMA tags and
+   the SIF RPC packets in ps2tek's documented layouts, never committed, recorded as exposure), to see which server call
+   the EE makes on entering the browser and whether the IOP answers it; it names a module's interface, not where the
+   BIOS waits. (b) leave the browser until S10's fast-booted programs drive the card's driver through the project's own
+   programs. (a) first: it is cheap and stays inside the decided rules.
+2. **Q2 [routine], D-541, SIO2's interrupt.** *Recommended*: keep IRQ 17 at every queue's end until a second lineage or a
+   document decides; a driver that acknowledges the flag, as ps2tek describes SIO2MAN's handler, sees the same.
+3. **Q3 [routine], SEND3's bits 4 to 6.** The BIOS sets 70h beside the port on the queues it sends by DMA and 40h on the
+   others; PCSX2 is the same with any of them. *Recommended*: keep them stored as written and given no effect.
+4. **Q4 [routine], D-440, the ports' clocks.** This step measured no rate; *recommended*: leave it open, as §30.29 Q2
+   proposes.
+
+### 30.37 What was read, the blast radius, and exposure (2026-10-26)
+
+**Read**: `Sapphire_Plan.md` §1.4, §5.8, §11 Q7, §12 (P8 is in §13); this page's §30 (parts A and B, the D-383 step) and
+§35; `Sapphire_Disputes.md` (its rules, D-220 to D-230, D-383, D-440, D-441); `Sapphire_Referees.md` §2.1, §4.3, §4.5;
+`Sapphire_References.md` §3 (the exclusions). ps2tek at `1c91660`: "PS2 Serial Port (SIO2)" and "SIO2 Registers" with
+the transfer's flow, "SIO2 PS2 Memcards" (its command list, passed through on the way), "IOP Interrupts", "IOP DMA";
+the later edition (Israelson) "SIO2 Registers" and "SIO2 Command Sequence"; psx-spx at `6d7d1bc`, "DMA Channels" (its
+slice mode's BCR). PCSX2 2.8.2 run as a black box, its RAM through PINE only. No emulator, SDK, loader, ps2autotests or
+card-emulator source and no firmware: the BIOS image was handed by path to Sapphire and never opened; no program counter,
+instruction, memory holding BIOS code or data, or command byte was printed, logged or read; of SIO2 and the DMAC only
+their registers, as §30.32 says; the SIF link was not traced.
+
+**Blast radius** (`blast.sh WiseMan sapphire-sio2dma`: Sapphire's crate, WiseMan's `SapphireTests`): Sapphire **366 of
+366**, the lib and `tests/sio2.rs` under `test-checked` 79 and 7, clippy clean; WiseMan `SapphireTests` and
+`SapphireConsoleTests`, the second added since the change is Sapphire's core, **8 of 8**. **After the rebase onto
+WiseMan** (S31's debugger, `emusen-jit` and D-483's DVDs beneath): Sapphire **383 of 383**, the lib and `tests/sio2.rs`
+under `test-checked` 91 and 7, clippy clean; the two WiseMan classes **8 of 8**.
+
+**Exposure** (§1.4, recorded in §35.13 as well): the writer of this step ran the player's BIOS on Sapphire and looked at
+its pictures and the hardware's register state, SIO2's and the DMA channels'; **this writer is exposed and will never
+write the open replacement**.
 
 ## 31. Stage S18, the GS's texture mapping, CLUTs, LOD, filtering, wrap modes and fog (2026-10-25)
 
@@ -6088,6 +6243,11 @@ and will never write the open replacement**.
 *Added 2026-10-25 at S31 (§41.11):* the writer of S31, the debugger, ran the player's BIOS on Sapphire to compare its
 digests with the debugger armed and is a writer of a player's-BIOS stage; that writer is likewise exposed and will never
 write the open replacement.
+
+*Added 2026-10-26 at the SIO2out step (§30.31 to §30.37):* that step's writer ran the player's BIOS on Sapphire,
+observing its pictures and the register state of SIO2 and of the IOP's DMA channels 11 and 12 at their writes and at each
+queue's start and end, never a program counter, instruction, memory content or command byte; **that writer is exposed
+too and will never write the open replacement**.
 
 ## 36. Stage S10, the EE's ps2autotests on the player's BIOS (2026-10-25)
 

@@ -10707,9 +10707,10 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
 - **The firmware page** lists "Sony PlayStation 2" with its three entries, each "PlayStation 2 BIOS (Japan)",
   "(Americas)" and "(Europe)" with its Redump name, recognised in the player's folder by its content through the
   platform's existing rule (Interface 18, the entries' MD5 lists of §12.3), never fetched or shipped; no new BIOS reader
-  was written. Each says there is no open version yet and gives the cost's first sentence, "Without a BIOS of the
-  console's market the PlayStation 2 runs nothing: it starts to its menu with the player's own BIOS in the firmware
-  folder.", the rest naming the open BIOS as owed (G9) (`FirmwareOverviewTests`).
+  was written. Each says "No open version yet" and "Games that need this chip need your own file.", the page's words for
+  every entry with no replacement, and the whole cost on request: "Without a BIOS of the console's market the
+  PlayStation 2 runs nothing: it starts to its menu with the player's own BIOS in the firmware folder. Sapphire's own
+  open BIOS, which is to take its place, is not written yet.", naming the open BIOS as owed (G9) (`FirmwareOverviewTests`).
 - **The refusal** (§30.15's rule, extended): the empty start was refused when its machine reports its firmware absent and
   the core offers no replacement; a game was not, and opened to a black screen. A game of a system that **starts empty**
   is now refused the same way, in the entry's words, by `CoreEngine.LoadRom` (`ConsoleFirmwareException`, which
@@ -10740,8 +10741,8 @@ so `SPH2` stays at version 4 (§38.2). The runtime's disc change then works as f
   and big picture's carousel with `ps2`, each at 1280 × 800 and 1920 × 1200; the Memory Cards cases of S25 now run as a
   player's build has them. Every per-console window gained the PlayStation 2's tab, so the interface specification was
   recorded again (§49.8).
-- **DianaSh**: `core ps2 --console` and `core sapphire <disc>` (the runtime names the system `ps2` and the engine
-  `sapphire`), and `memcard` on `.ps2` cards, already reached the PlayStation 2 through core info and the medium's
+- **DianaSh**: `core sapphire --console` and `core sapphire <disc>` (the registry names the engine
+  `sapphire`; the platform runtime also takes the system's id, `ps2`), and `memcard` on `.ps2` cards, already reached the PlayStation 2 through core info and the medium's
   extension; their pages now say so (`core.1`, `memcard.1`).
 - **Game packages and ES-DE**: the package tool routes every system of the table (`library-tool`'s `every_system`), so a
   PlayStation 2 disc is packaged under `Packages/PlayStation 2/` with the manifest's system `ps2`, ES-DE's name, as every

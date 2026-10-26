@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void TabTo(MainWindow w, PadDriver pad, string header)
         {
-            for (int i = 0; i < 8 && (Tabs(w).SelectedItem as TabItem)?.Header as string != header; i++) pad.R1();
+            for (int i = 0; i < 16 && (Tabs(w).SelectedItem as TabItem)?.Header as string != header; i++) pad.R1();
             Assert.Equal(header, (Tabs(w).SelectedItem as TabItem)?.Header);
         }
 

@@ -30,8 +30,8 @@ Usage: core <corename> <path-to-rom> | core <corename> --console
 status 1
 action none
 $ core nosuch x.sfc
-out 148
-core: unknown core 'nosuch'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sg-1000, snes, venus
+out 158
+core: unknown core 'nosuch'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sapphire, sg-1000, snes, venus
 status 1
 action none
 $ core SNES Games/a.sfc
@@ -129,13 +129,13 @@ covers 2
 file Games/a.cue 1
 x
 $ core nosuch --console
-out 148
-core: unknown core 'nosuch'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sg-1000, snes, venus
+out 158
+core: unknown core 'nosuch'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sapphire, sg-1000, snes, venus
 status 1
 action none
 $ core --console playstation
-out 151
-core: unknown core '--console'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sg-1000, snes, venus
+out 161
+core: unknown core '--console'. Supported: diamond, endou, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, sapphire, sg-1000, snes, venus
 status 1
 action none
 $ core playstation --console Games/a.cue

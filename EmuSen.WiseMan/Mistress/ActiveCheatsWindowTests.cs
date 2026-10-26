@@ -426,7 +426,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var tabs = window.GetControl<TabControl>("Tabs");
             var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
-            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, headers);
 
             var item = (TabItem)tabs.SelectedItem!;
             Assert.Equal(console, item.Header);

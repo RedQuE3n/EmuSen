@@ -2,7 +2,7 @@
 //! frames, each frame's `advance` timed and nothing else, and the units' own counts over the frames measured.
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
-//! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--gs-workers N] [--edram]`
+//! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -19,6 +19,7 @@
 //! `--press F:BITS` holds the pad's buttons (the core's bit numbers, `+`-joined) in port 1 for six frames from frame F.
 //! `--blocks` runs the EE recompiled (S36, S37), with the settings the environment gives (`Blocks::from_env`), and prints
 //! the dispatcher's counts; without it the EE is interpreted, the reference.
+//! `--idle` turns idle skipping on (S33, Sapphire_Native.md §47); without it the waits are stepped, the reference.
 //! `--gs-workers N` draws on N workers (S43, Sapphire_Native.md §50; `auto` for the automatic count, 1 the GS's own
 //! thread) and prints their counts; `--edram` digests the GS's local memory after every frame, outside the timed span,
 //! which joins the workers there, so its times are not the bench's.
@@ -81,7 +82,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--gs-workers N] [--edram]";
+    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -108,6 +109,7 @@ fn main() {
     if args.iter().any(|a| a == "--blocks") {
         m.blocks = Some(Box::new(sapphire::blocks::Blocks::from_env()));
     }
+    m.idle.on = args.iter().any(|a| a == "--idle");
     if let Some(n) = flag("--gs-workers") {
         m.sys.board.gs.set_workers(sapphire::gs::workers::parse(&n).expect("a count of workers or auto"));
     }

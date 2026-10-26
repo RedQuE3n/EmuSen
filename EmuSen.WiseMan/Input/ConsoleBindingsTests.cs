@@ -184,7 +184,7 @@ namespace EmuSen.WiseMan.Input
         {
             string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
 
-            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation" }, order);
+            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, order);
         }
 
         // The rebind window lists a console's pad with no ROM loaded, so this must

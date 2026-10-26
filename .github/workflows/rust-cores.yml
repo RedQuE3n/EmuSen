@@ -332,7 +332,7 @@ jobs:
               {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},
               {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
               {"name": "endou", "dir": "EmuSen/Cores/Sega/Endou - Master System", "symbol": "emusen_core_"},
-              {"name": "sapphire", "dir": "EmuSen/Cores/Sony/Sapphire - PlayStation 2", "symbol": "emusen_core_", "development": true},
+              {"name": "sapphire", "dir": "EmuSen/Cores/Sony/Sapphire - PlayStation 2", "symbol": "emusen_core_"},
               {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}
             ]
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; macOS is Apple Silicon only, as Intel Macs are not a target.

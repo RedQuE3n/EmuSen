@@ -20,11 +20,16 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(true);
+            // A stand-in of the American BIOS's name and size, every byte zero, made here: a game with no BIOS is refused (Sapphire_Native.md §49.5), and no firmware is read or shipped.
+            EmuSen.Common.Firmware.FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
+            Directory.CreateDirectory(EmuSen.Common.Firmware.FirmwareLibrary.Directory);
+            File.WriteAllBytes(Path.Combine(EmuSen.Common.Firmware.FirmwareLibrary.Directory, EmuSen.Crystal.Systems.Ps2.Ps2System.Bios[1].Name), new byte[EmuSen.Crystal.Systems.Ps2.Ps2System.Bios[1].Size]);
+            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
+            EmuSen.Common.Firmware.FirmwareLibrary.Directory = null;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }

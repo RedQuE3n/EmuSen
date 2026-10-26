@@ -128,7 +128,7 @@ impl Machine {
         w.i64("Frames", self.frames);
         w.u8("Market", market_byte(self.market));
         w.u32("Bios", self.bios_entry());
-        w.u64("Image", self.media.identity());
+        w.u64("Image", self.media_identity());
         w.u8("Stop", u8::from(self.stop.is_some()));
         opt_u64(w, "Entered", self.entered.map(|f| f as u64));
     }
@@ -175,8 +175,8 @@ impl StateMachine for Machine {
             return Err(StateError::Bios { state: bios, here: self.bios_entry() });
         }
         let image = r.u64()?;
-        if image != self.media.identity() {
-            return Err(StateError::WrongMedia { state: image, here: self.media.identity() });
+        if image != self.media_identity() {
+            return Err(StateError::WrongMedia { state: image, here: self.media_identity() });
         }
         let stop = r.u8()? != 0;
         let entered = read_opt_u64(&mut r)?.map(|f| f as i64);

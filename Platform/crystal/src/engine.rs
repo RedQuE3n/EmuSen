@@ -429,6 +429,13 @@ impl Engine {
         let loan = if kept { disc } else { None };
         self.made = Made::Game(system);
         self.adopt(tree, machine, placement, &asked, wanted, Some(set), at, console, None, loan);
+        // A game of a console that starts empty is run by its firmware; absent with no replacement, it would run nothing,
+        // refused as `CoreEngine.LoadRom` refuses it (Sapphire_Native.md §49.5).
+        if routed.as_deref().is_some_and(|id| info_starts_empty(&self.info, id))
+            && let Some(why) = self.runs_nothing(&asked)
+        {
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", path::file_name(Style::HOST, at)) });
+        }
         Ok(())
     }
 
@@ -480,8 +487,9 @@ impl Engine {
         Ok(())
     }
 
-    /// Why a console started empty would run nothing: the firmware its machine chose absent and the core offering no
-    /// replacement for it, in the entry's own words, `CoreEngine.RunsNothing` (Sapphire_Native.md §30.15).
+    /// Why a console started empty, or a game of one, would run nothing: the firmware its machine chose absent and the
+    /// core offering no replacement for it, in the entry's own words, `CoreEngine.RunsNothing` (Sapphire_Native.md §30.15,
+    /// §49.5).
     fn runs_nothing(&self, wanted: &[Firmware]) -> Option<String> {
         self.mi.firmware.iter().find_map(|(which, source)| {
             let f = wanted.iter().find(|f| f.which == *which)?;

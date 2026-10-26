@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_tubes_are_offered_for_the_televisions_with_rows_of_their_own_and_the_gaps_are_the_ones_on_record()
         {
-            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "Master System", "SG-1000" }, CrtFilter.TelevisionConsoles);
+            Assert.Equal(new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", "PlayStation 2", "Master System", "SG-1000" }, CrtFilter.TelevisionConsoles);
             Assert.Equal(CrtFilter.TelevisionConsoles, CrtFilter.Filter.Consoles);
             Assert.Equal(CrtFilter.TelevisionConsoles, CrtFilters.Lottes.Consoles);
             Assert.Equal(new[] { "32X", "GB", "GBC" }, ConsoleScreens.All.Where(s => s.Gap is not null).Select(s => s.Console));
@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress
         public void The_consoles_that_had_filters_keep_them_and_the_master_system_and_the_sg_1000_get_a_television_s()
         {
             string[] television = { ScreenFilters.None, CrtFilter.Name, CrtFilters.Lottes.Name, "Scanlines", "Simple CRT" };
-            foreach (string console in new[] { "NES", "SNES", "Genesis", "Sega CD", "N64", "PlayStation", "Master System", "SG-1000" })
+            foreach (string console in new[] { "NES", "SNES", "Genesis", "Sega CD", "N64", "PlayStation", "PlayStation 2", "Master System", "SG-1000" })
                 Assert.Equal(television, ShaderCatalog.BuiltIns(console).Select(e => e.Stored));
             Assert.Equal(new[] { ScreenFilters.None, "Game Boy LCD", "Game Boy Pocket LCD", "Game Boy Light LCD", "Game Boy Color LCD", "Scanlines", "Simple CRT" }, ShaderCatalog.BuiltIns("GB").Select(e => e.Stored));
             foreach (string console in new[] { "Master System", "SG-1000" }) Assert.True(GraphicsSettingsWindow.HasOverscan(console), console);
@@ -131,19 +131,32 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void An_owed_row_holds_only_for_a_console_offered_to_no_player()
         {
-            var owed = ConsoleScreens.OwedRows;
-            Assert.Equal(new[] { "PlayStation 2" }, owed.Select(o => o.Console));
-            Assert.DoesNotContain(Breaches(ConsoleScreens.All, owed, Systems, RunsUnder, _ => false), b => b.Contains("PlayStation 2"));
+            Assert.Empty(ConsoleScreens.OwedRows);
+            var systems = Systems.Append(Systems[0] with { Id = "gg", Console = "Game Gear" }).ToArray();
+            var owed = new[] { new ConsoleScreens.Owed("Game Gear", "2026-10-26: a console in development") };
+            Assert.DoesNotContain(Breaches(ConsoleScreens.All, owed, systems, RunsUnder, _ => false), b => b.Contains("Game Gear"));
             var cases = new (string What, IReadOnlyList<Screen> Screens, IReadOnlyList<ConsoleScreens.Owed> Owed, Func<SystemEntry, bool> Shelf, string Expected)[]
             {
-                ("a shelf", ConsoleScreens.All, owed, s => s.Id == "ps2", "PlayStation 2 reaches players with its screen row still owed"),
-                ("a row beside it", ConsoleScreens.All.Append(new Screen("PlayStation 2", ConsoleScreens.Kind.Television, "PlayStation")).ToArray(), owed, _ => false, "PlayStation 2 has a screen row and an owed row"),
-                ("an undated note", ConsoleScreens.All, new[] { new ConsoleScreens.Owed("PlayStation 2", "later") }, _ => false, "PlayStation 2's owed row is not a dated note"),
+                ("a shelf", ConsoleScreens.All, owed, s => s.Id == "gg", "Game Gear reaches players with its screen row still owed"),
+                ("a row beside it", ConsoleScreens.All.Append(new Screen("Game Gear", ConsoleScreens.Kind.Television, "Master System")).ToArray(), owed, _ => false, "Game Gear has a screen row and an owed row"),
+                ("an undated note", ConsoleScreens.All, new[] { new ConsoleScreens.Owed("Game Gear", "later") }, _ => false, "Game Gear's owed row is not a dated note"),
                 ("no such system", ConsoleScreens.All, owed.Append(new ConsoleScreens.Owed("Dreamcast", "2026-10-24: x")).ToArray(), _ => false, "Dreamcast has an owed row and is no system of the table"),
-                ("nothing owed", ConsoleScreens.All, Array.Empty<ConsoleScreens.Owed>(), _ => false, "ps2 (PlayStation 2) has 0 screen rows"),
+                ("nothing owed", ConsoleScreens.All, Array.Empty<ConsoleScreens.Owed>(), _ => false, "gg (Game Gear) has 0 screen rows"),
             };
             foreach (var (what, screens, o, shelf, expected) in cases)
-                Assert.True(Breaches(screens, o, Systems, RunsUnder, shelf).Any(b => b.StartsWith(expected, StringComparison.Ordinal)), $"{what}: not caught; got\n{string.Join("\n", Breaches(screens, o, Systems, RunsUnder, shelf))}");
+                Assert.True(Breaches(screens, o, systems, RunsUnder, shelf).Any(b => b.StartsWith(expected, StringComparison.Ordinal)), $"{what}: not caught; got\n{string.Join("\n", Breaches(screens, o, systems, RunsUnder, shelf))}");
+        }
+
+        // The PlayStation 2's line: 2,560 VCK of 54 MHz across the picture, BT.601's lines of 858 and 864 pixels, so the standards' phases on its 263- and 314-line fields - see EmuSen_CRT.md §31.9.
+        [Fact]
+        public void The_playstation_2s_line_is_its_pcrtc_clock_against_the_standards_subcarrier()
+        {
+            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: false), pal = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: true);
+            Assert.Equal((47.407, 169.697, 0.5, 0.5, 0.0, false), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame, ntsc.PhaseCrawl, ntsc.SwitchFrame));
+            Assert.Equal(2560 / 54.0 * CrtFilter.SubcarrierMegahertz, ntsc.CyclesAcross, 3);
+            Assert.Equal((47.407, 210.186, 0.0, false), (Math.Round(pal.ActiveMicroseconds, 3), Math.Round(pal.CyclesAcross, 3), pal.PhaseFrame, pal.SwitchFrame));
+            Assert.Equal(64 * CrtFilter.PalSubcarrierMegahertz % 1, pal.PhaseLine, 3);
+            Assert.Equal(314 * CrtFilter.PalCyclesPerLine % 1, pal.PhaseCrawl, 4);
         }
     }
 }

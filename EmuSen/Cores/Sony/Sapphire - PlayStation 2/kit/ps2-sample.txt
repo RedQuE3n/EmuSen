@@ -1,0 +1,10 @@
+# Sapphire's sample for the conformance kit's corpus form: the tester's discs by their names, no image, found in --from
+# (copies in the probe's cache, never the library itself), run on the player's own BIOS handed by path as file 17.
+# Smallest first, since the core's cases run on the first. See Sapphire_Native.md §49.7.
+#
+#   emusen-core-conform --core libsapphire.so --images kit/ps2-sample.txt --from ~/.cache/emusen/probe/sapphire/discs \
+#       --file 17=<the player's ps2-0230a-20080220.bin> --frames 300 --jobs 1
+#
+Jak and Daxter - The Precursor Legacy (USA) (En,Fr,De,Es,It) (Rev 1).iso  # a single-layer DVD of 1.46 GB
+Kingdom Hearts (USA).iso  # a single-layer DVD of 3.04 GB; reads the pad from its start
+Dark Cloud 2 (USA) (v2.00).iso  # a single-layer DVD of 4.44 GB; owed at S29, its four copies taking about 18 GB (§49.7)

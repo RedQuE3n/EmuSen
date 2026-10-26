@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName",
@@ -46,7 +46,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation2"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation2"] = typeof(ShaderSettingsWindow), ["ControllerBindingsPlayStation2"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStation2Digital"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -251,10 +251,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(shown, c => c.Name == "PlayStation.Card2.Note" && c.IsEffectivelyVisible);
         }
 
-        // The open sheet's tab headed by the console, which the window has only while its engine in development is shown.
-        // A case of a console offered to a developer only, which needs the development cores the other cases leave out - see Sapphire_Native.md §30.16.
-        internal static bool InDevelopment(string which) => which.Contains("PlayStation2", StringComparison.Ordinal);
-
+        // The open sheet's tab headed by the console.
         internal static void SelectTab(MainWindow window, string console)
         {
             Settle(window);
@@ -352,6 +349,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ActiveCheatsPlayStation":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "PlayStation");
+                    break;
+                case "GraphicsSettingsPlayStation2":
+                    ShowDiscoveredTab(window, "PlayStation 2");
+                    break;
+                case "ShaderSettingsPlayStation2":
+                    Call(window, "ShowShaderSettings");
+                    SelectTab(window, "PlayStation 2");
+                    break;
+                case "ControllerBindingsPlayStation2":
+                case "ControllerBindingsPlayStation2Digital":
+                    // The DualShock 2, and the digital pad a port can be set to, each drawn - see Sapphire_Native.md §49.6.
+                    if (which.EndsWith("Digital", StringComparison.Ordinal))
+                    {
+                        var ps2Digital = ConsolesConfig.Load();
+                        ps2Digital.SetValue("PlayStation 2", "pad1", "ps2.digital");
+                        ps2Digital.Save();
+                    }
+                    Call(window, "ShowControllerBindings");
+                    SelectTab(window, "PlayStation 2");
+                    Assert.Equal("PlayStation 2", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
                     break;
                 case "ControllerBindingsPlayStation":
                 case "ControllerBindingsPlayStationDigital":
@@ -653,7 +670,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string name = $"{which}-{width}x{height}";
             // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
-            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal) || which.StartsWith("MemoryCards", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(InDevelopment(which));
+            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal) || which.StartsWith("MemoryCards", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

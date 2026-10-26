@@ -206,6 +206,9 @@ namespace EmuSen.Serenity.Shaders
         // The TMS9929A's pixels against a PAL encoder's own crystal, the two clocks unrelated: subcarrier cycles a pixel of 10.738635 MHz over two - see EmuSen_CRT.md §31.3.
         public const double Sg1000PalCycles = PalSubcarrierMegahertz / (10.738635 / 2);
 
+        // The PlayStation 2's PCRTC clock, four of BT.601's 13.5 MHz pixels, whose 858- and 864-pixel lines are the standards' own - see EmuSen_CRT.md §31.9.
+        public const double Ps2VideoMegahertz = 54.0;
+
         // Each console's subcarrier against its pixels on both standards, derived from its clocks; the last entry is a standard line - see EmuSen_CRT.md §3.2 and §23.
         public static IReadOnlyDictionary<string, IReadOnlyDictionary<string, float>> ConsoleTiming { get; } = new Dictionary<string, IReadOnlyDictionary<string, float>>
         {
@@ -214,6 +217,7 @@ namespace EmuSen.Serenity.Shaders
             ["Genesis"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0), new(256 / 5.3203424, 256 * 5.0 / 6.0, 0, 0, 0, true)),
             ["N64"] = Timing(new(640 / 12.1704545, 640 * 4 / 13.6, 0.5, 0.5), new(640 / 12.41413250, 640 * 4 / 11.2, 0.75, 0, 0.25, true)),
             ["PlayStation"] = Timing(new(2560 / 53.693175, 2560 / 15.0, 0.5, 0.5), new(2560 / 53.203425, 2560 / 12.0, 0.75, 0, 0.5)),
+            ["PlayStation 2"] = Timing(new(2560 / Ps2VideoMegahertz, 2560 * 227.5 / 3432, 0.5, 263 * 227.5 % 1), new(2560 / Ps2VideoMegahertz, 2560 / Ps2VideoMegahertz * PalSubcarrierMegahertz, PalCyclesPerLine % 1, 0, 314 * PalCyclesPerLine % 1)),
             ["Master System"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0), new(256 / 5.3203424, 256 * 5.0 / 6.0, 0, 0, 0, true)),
             ["SG-1000"] = Timing(new(256 / 5.3693175, 256 * 2.0 / 3.0, 0, 0), new(256 / 5.3693175, 256 * Sg1000PalCycles, 342 * Sg1000PalCycles % 1, 0, 313 * 342 * Sg1000PalCycles % 1, true)),
             [ScreenFilter.AnyConsole] = Timing(new(StandardActiveMicroseconds, StandardActiveMicroseconds * SubcarrierMegahertz, 0.5, 0.5),

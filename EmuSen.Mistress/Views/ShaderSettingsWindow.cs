@@ -72,6 +72,8 @@ namespace EmuSen.Mistress.Views
 
             Control hint = Ui.Hint("Drawn over the picture as it is shown, per console. A choice and every slider are saved at once and reach a running game of that console while its shader is in use.");
             Control buttons = Ui.Buttons(Ui.Button("Close", Close));
+            // In the menu look Close shares the tabs' row, so the strip keeps its width clear.
+            TabStripFit.OneRow(_tabs, () => buttons.Parent is Grid ? buttons.Bounds.Width + 12 : 0);
             hint.Margin = new Thickness(0, 0, 0, 10);
             buttons.Margin = new Thickness(0, 10, 0, 0);
             DockPanel.SetDock(hint, Dock.Top);

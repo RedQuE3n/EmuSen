@@ -126,6 +126,7 @@ namespace EmuSen.Mistress.Views
 
             BuildHotkeyRows();
             BuildConsoleTabs();
+            TabStripFit.OneRow(Tabs, () => 0);
             SelectConsoleTab(selectedConsole);
             SetUpPlayerBar();
             RefreshConflicts();

@@ -39,15 +39,22 @@ THE CONSOLE WITH NOTHING IN IT
     no game, every drive empty, where an engine of this build says in its
     core info that the console starts empty (core ABI 1.11's
     starts_empty): the PlayStation, whose kernel then shows its screen
-    with no disc and its memory card manager. A console no engine starts
-    empty is refused with that said. At a launch prompt the console's
+    with no disc and its memory card manager, and the PlayStation 2,
+    whose own BIOS, the player's, shows its menu. A console whose BIOS is
+    absent with no open replacement, as the PlayStation 2's is until its
+    open BIOS is written, is refused in the core's own words rather than
+    started black, and so is a game of it (Sapphire_Native.md §49.5). A
+    console no engine starts empty is refused with that said. At a launch prompt the console's
     window opens; in a running session the core starts the console in
     place when it is the engine that runs it, and otherwise says to start
     it from the launch prompt. A disc goes in afterwards through the
-    frontend's Insert Disc. See Diamond_Shell.md section 1.5.
+    frontend's Insert Disc. See Diamond_Shell.md section 1.5 and
+    Sapphire_Plan.md section 8 (G10).
 
 EXAMPLES
     core playstation --console
+    core sapphire --console
+    core sapphire "/Games/Basalt Run.iso"
     core venus game2.smc
     core snes /Games/other-game.sfc
     core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)

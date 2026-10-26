@@ -75,7 +75,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(genesis, f => Assert.Equal(("Genesis", "nephrite"), Routed(f)));
         }
 
-        // A CHD's first bytes are its own compressed container's, which neither console's recogniser reads, so its folder's ES-DE name decides, and elsewhere it opens nowhere with the words saying why.
+        // A CHD's first bytes are its own compressed container's, which no console's recogniser reads, so its folder's ES-DE name decides, the PlayStation 2's among them, and elsewhere it opens nowhere with the words saying why.
         [Fact]
         public void A_chd_is_routed_by_its_folders_name()
         {
@@ -89,6 +89,7 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.Equal(("PlayStation", "diamond"), Routed(Chd("psx")));
             Assert.Equal(("Sega CD", "nephrite"), Routed(Chd("segacd")));
+            Assert.Equal(("PlayStation 2", "sapphire"), Routed(Chd("ps2")));
             Assert.Equal((null, null), Routed(Chd("SCD")));
             Assert.Contains("could be", CoreCatalog.Route(Chd("Games")).Routed?.Reason);
         }

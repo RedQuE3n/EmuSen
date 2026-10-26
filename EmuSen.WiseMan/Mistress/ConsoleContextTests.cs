@@ -124,13 +124,14 @@ namespace EmuSen.WiseMan.Mistress
             Assert.NotNull(CoreFactory.CheatCodecsFor(null).Explicit);
         }
 
-        // The console filter narrows the cheat database to that console's libretro folders.
+        // The console filter narrows the cheat database to that console's libretro folders; the PlayStation 2 alone has none, the database holding no PlayStation 2 folder - see Sapphire_Plan.md §4.1 and §4.5.
         [Fact]
         public void Each_core_claims_at_least_one_cheat_system_folder()
         {
             foreach (var core in CoreCatalog.Cores)
             {
-                Assert.NotEmpty(core.CheatSystemNames);
+                if (core.Console == "PlayStation 2") Assert.Empty(core.CheatSystemNames);
+                else Assert.NotEmpty(core.CheatSystemNames);
             }
         }
 

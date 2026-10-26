@@ -1768,7 +1768,7 @@ case the page for memcard
 target none
 covers 1
 $ man memcard
-out 3400
+out 3861
 NAME
     memcard - manage memory cards, paks and a console's save memory
 
@@ -1784,12 +1784,14 @@ SYNOPSIS
 
 DESCRIPTION
     The card manager of every console that keeps saves on a medium of its
-    own: the PlayStation's memory cards, and as their cores declare them
-    the N64's Controller Paks and the Sega CD's backup RAM. A <card> is a
-    file in the sandbox, named as 'ls' and 'cp' name it:
+    own: the PlayStation's and the PlayStation 2's memory cards, and as
+    their cores declare them the N64's Controller Paks and the Sega CD's
+    backup RAM. A <card> is a file in the sandbox, named as 'ls' and 'cp'
+    name it:
 
         Saves/PlayStation/Cards/Card 1.mcr     a shared or named card
         Saves/PlayStation/Amber Saga.mcr       a game's own card
+        Saves/PlayStation 2/Cards/Card 1.ps2   a PlayStation 2 card
         Saves/Sega CD/Console/Backup RAM 1.brm the console's own memory
 
     Its medium is known by its extension, from the console's system pack.
@@ -1801,12 +1803,13 @@ DESCRIPTION
     a save onto another card of the same medium; 'mv' copies it, reads it
     back from the second card, and only then deletes it from the first.
     'rm' deletes a save as the console's own manager does: the PlayStation
-    card's directory marks it deleted and keeps its blocks.
+    card's directory marks it deleted and keeps its blocks; a PlayStation 2
+    save is a directory, removed with every file in it.
 
     'import' copies every save of the <from> cards onto <card>, ALL OR
     NONE. It is refused whole when the saves need more than the card's
-    free space (15 blocks on a PlayStation card), with each save and the
-    blocks it needs listed, or when two of the cards hold different saves
+    free space (15 blocks on a PlayStation card, 7,998 kilobytes on a
+    formatted PlayStation 2 card), with each save and what it needs listed, or when two of the cards hold different saves
     of one name; a save already on <card> is left as it is. The <from>
     cards are read and never written, so a game's own card stays as it was
     and Per game, chosen again in Graphics Settings, finds it unchanged.
@@ -1827,7 +1830,9 @@ THE LOCK
 FORMATS
     A medium's saves are read by its format module, pure functions over
     the card's bytes: the PlayStation's (psx-spx, "Memory Card Data
-    Format") and the Sega CD's, its backup RAM and RAM cartridge alike
+    Format"), the PlayStation 2's (Ross Ridge's "PlayStation 2 Memory Card
+    File System", through emusen-ps2-card; Sapphire_Native.md §30.17) and
+    the Sega CD's, its backup RAM and RAM cartridge alike
     (Nephrite_Bram.md). A medium with no module yet (the N64's) lists
     its size, and offers only new, dup and rename.
 
@@ -1838,10 +1843,12 @@ EXAMPLES
     memcard ls "Amber Saga.mcr"
     memcard cp "Amber Saga.mcr:1" Cards/Blue.mcr
     memcard import Cards/Blue.mcr "Amber Saga.mcr" "Basalt Run.mcr"
+    memcard ls "../PlayStation 2/Cards/Card 1.ps2"
 
 SEE ALSO
     EmuSen_SaveMedia.md (the model, the modes and the lock),
-    Diamond_Cards.md (the PlayStation's cards)
+    Diamond_Cards.md (the PlayStation's cards),
+    Sapphire_Native.md §30.17 (the PlayStation 2's cards)
 status 0
 action none
 end
@@ -4030,7 +4037,7 @@ case the page for core
 target none
 covers 1
 $ man core
-out 2790
+out 3215
 NAME
     core - load or swap the running ROM, or start a console with nothing in it
 
@@ -4072,15 +4079,22 @@ THE CONSOLE WITH NOTHING IN IT
     no game, every drive empty, where an engine of this build says in its
     core info that the console starts empty (core ABI 1.11's
     starts_empty): the PlayStation, whose kernel then shows its screen
-    with no disc and its memory card manager. A console no engine starts
-    empty is refused with that said. At a launch prompt the console's
+    with no disc and its memory card manager, and the PlayStation 2,
+    whose own BIOS, the player's, shows its menu. A console whose BIOS is
+    absent with no open replacement, as the PlayStation 2's is until its
+    open BIOS is written, is refused in the core's own words rather than
+    started black, and so is a game of it (Sapphire_Native.md §49.5). A
+    console no engine starts empty is refused with that said. At a launch prompt the console's
     window opens; in a running session the core starts the console in
     place when it is the engine that runs it, and otherwise says to start
     it from the launch prompt. A disc goes in afterwards through the
-    frontend's Insert Disc. See Diamond_Shell.md section 1.5.
+    frontend's Insert Disc. See Diamond_Shell.md section 1.5 and
+    Sapphire_Plan.md section 8 (G10).
 
 EXAMPLES
     core playstation --console
+    core sapphire --console
+    core sapphire "/Games/Basalt Run.iso"
     core venus game2.smc
     core snes /Games/other-game.sfc
     core snes /home/player/Roms/SNES/other-game.sfc   (inside RomDirectory)

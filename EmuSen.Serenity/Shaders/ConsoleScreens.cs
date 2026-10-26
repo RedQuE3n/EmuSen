@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -27,6 +28,7 @@ namespace EmuSen.Serenity.Shaders
             new("32X", Kind.Television, "Genesis") { Gap = "2026-10-20: drawn on the Genesis's row; the 32X puts the mixed picture out through an output stage of its own, whose encoder no document read names (EmuSen_CRT.md §31.4)" },
             new("N64", Kind.Television, "N64"),
             new("PlayStation", Kind.Television, "PlayStation"),
+            new("PlayStation 2", Kind.Television, "PlayStation 2"),
             new("Master System", Kind.Television, "Master System"),
             new("SG-1000", Kind.Television, "SG-1000"),
             new("GB", Kind.Lcd, "Game Boy LCD") { Gap = "2026-10-20: a fit to measurements of the panel, not a model of it; to be recreated more accurately (EmuSen_CRT.md §31.7)" },
@@ -36,10 +38,7 @@ namespace EmuSen.Serenity.Shaders
         // A console of the systems table still in development, offered to no player, whose screen row is owed before it reaches one, with a dated note of why - see EmuSen_CRT.md §31.8.
         public sealed record Owed(string Console, string Note);
 
-        public static IReadOnlyList<Owed> OwedRows { get; } = new Owed[]
-        {
-            new("PlayStation 2", "2026-10-24: a television; its profile needs the PCRTC's clocks, which wait on D-0 and on stage S20, and it is made when the console reaches players at S29 (Sapphire_Plan.md §4.6)"),
-        };
+        public static IReadOnlyList<Owed> OwedRows { get; } = Array.Empty<Owed>();
 
         // The consoles whose television is drawn on a row of their own, which every filter of a tube is offered for; an attachment is offered its host's.
         public static IReadOnlyList<string> Televisions { get; } = All.Where(s => s.Kind == Kind.Television && s.Profile == s.Console).Select(s => s.Console).ToArray();

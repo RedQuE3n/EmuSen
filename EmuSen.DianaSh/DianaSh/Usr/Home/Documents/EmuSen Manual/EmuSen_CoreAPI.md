@@ -3527,6 +3527,11 @@ re-recorded with Endou's lines, and `EndouTests.A_player_is_not_offered_the_core
 console of the first system its info offers, not to the first of its consoles in release order, which for Endou is the
 SG-1000.
 
+*Amended 2026-10-26: the PlayStation 2 is offered to players* (`Sapphire_Native.md` §49), by the tester's decision ahead
+of its gates (`Sapphire_Plan.md` §8). Sapphire's row of `RustCores.props` and `rust-cores.yml` carries no mark and its
+system entry says `development: false`; `SapphireTests.A_player_is_offered_the_playstation_2` replaces the test that it
+was offered only when development cores were asked for, and the registration golden is re-recorded with Sapphire's lines.
+
 ### 27.4 A system in development, 2026-10-06
 
 A core may run one of its systems before the others: Nephrite runs the Genesis at stage 6, and its Sega CD and 32X

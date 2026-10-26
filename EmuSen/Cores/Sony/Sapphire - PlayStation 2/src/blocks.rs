@@ -32,8 +32,9 @@ enum State {
     Counting(u32),
     Queued(Arc<Slot>),
     Ready(Code),
-    /// Not compiled: the first instruction is not one a block holds, or the compiler refused it.
-    Refused,
+    /// Not compiled: the first instruction is not one a block holds, or the compiler refused it; checked against the
+    /// cache again at every 256th entry, and left to the interpreter at the others.
+    Refused(u8),
 }
 
 struct Block {
@@ -203,6 +204,21 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     if blocks.jit.over_budget() {
         blocks.forget();
     }
+    // A block not compiled yet is counted, and one refused passed over, without the entry's checks: neither runs code.
+    let threshold = blocks.threshold;
+    match blocks.map.get_mut(&sys.ee.pc).map(|b| &mut b.state) {
+        Some(State::Refused(n)) => {
+            *n = n.wrapping_add(1);
+            if *n != 0 {
+                return None;
+            }
+        }
+        Some(State::Counting(n)) if *n + 1 < threshold => {
+            *n += 1;
+            return None;
+        }
+        _ => {}
+    }
     let paddr = sys.ee.block_entry()?;
     let pc = sys.ee.pc;
     let options = blocks.options(sys);
@@ -220,7 +236,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             blocks.stats.waits += 1;
             return None;
         }
-        let state = if shaped.is_some() { State::Counting(0) } else { State::Refused };
+        let state = if shaped.is_some() { State::Counting(0) } else { State::Refused(0) };
         let words = shaped.unwrap_or_else(|| words.get(..1).map_or_else(Vec::new, <[u32]>::to_vec));
         if words.is_empty() {
             return None;
@@ -229,12 +245,11 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             blocks.stats.reshaped += 1;
         }
     }
-    let threshold = blocks.threshold;
     let wait = blocks.wait;
     let b = blocks.map.get_mut(&pc).expect("the block is in the map");
     let code = match &b.state {
         State::Ready(code) => *code,
-        State::Refused => return None,
+        State::Refused(_) => return None,
         State::Counting(n) => {
             let n = n + 1;
             if n < threshold {
@@ -316,7 +331,7 @@ fn settle(slot: Arc<Slot>) -> Option<State> {
     if let Some(code) = jit::published(&slot) {
         Some(State::Ready(code))
     } else if slot.settled() {
-        Some(State::Refused)
+        Some(State::Refused(0))
     } else {
         Some(State::Queued(slot))
     }

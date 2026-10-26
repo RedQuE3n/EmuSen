@@ -167,7 +167,7 @@ fn schema() -> Vec<Setting> {
         setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock 2, a controller with buttons alone, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK2, "Controllers"),
         Setting {
             effect: Effect::Exact,
-            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "interpreter", "Speed")
+            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "interpreter", "Performance")
         },
     ]
 }

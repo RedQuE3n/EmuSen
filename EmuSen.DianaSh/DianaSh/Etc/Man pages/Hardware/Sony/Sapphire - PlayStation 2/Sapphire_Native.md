@@ -7241,6 +7241,12 @@ microprogram inside that instruction: the EE's timing, VU0's registers and every
 A stop inside an EE instruction cannot be resumed as though the instruction had not been interrupted, so the probe does
 not stop there.
 
+**A held EE.** With no BIOS, or once the interpreter has stopped at an instruction it does not implement, the EE runs
+nothing and the board steps alone (`Machine::advance`'s idle step). The frame then shows the EE standing in front of its
+instruction: the hooks are asked before each step of the board, so a breakpoint at the reset vector stops there and
+`EACH` stops before each step, which moves the board's time and nothing of the EE. The kit's C15, which runs Sapphire on
+its synthetic program without a BIOS, holds the core to this (§41.7).
+
 **Stepping.** The EE steps by `EACH` and by the depth targets (step over, step out). Another processor steps by a
 breakpoint over every address: each `UNCHECKED` call runs one instruction or pair and stops in front of the next, until
 that processor reaches the board's time, and the EE then runs on.
@@ -7271,11 +7277,13 @@ and returns; `DEBUG_STACK` pushes the host's registry down as the shared hooks t
 | Single steps | `each_steps_the_ee_one_instruction_at_a_time` (through a JAL, its slot and the routine); `the_call_stack_follows_jal_and_jr` (the depth target steps over); the IOP and VU1 by a breakpoint over every address | pass |
 | Coverage counts on a known program | `coverage_records_what_each_processor_ran`: the bits of the EE's loop and routine, the IOP's loop and VU1's three pairs, and the steps counted equal to the passes each processor's counter made, within one pass | passes |
 | A state loaded at a stop | `a_state_loaded_at_a_stop_starts_a_whole_frame` | passes |
+| A held EE | `a_held_ee_stands_in_front_of_its_reset_vector`; the kit's C15 through `SapphireTests` (a breakpoint at the next instruction, eight steps under `EACH`, the read range kinds, every table armed against the plain run) | pass |
 | Every table armed gives the plain run's digests | `tests/debugger.rs`: fourteen programs (`s11-chain`, the first IPU program, `s13-integer`, the second S13 program, `s14`'s microprogram and unpack, `s15-paths`, `s17`'s triangles, `s20-timing`, `s26`'s voices on the IOP, `s22-sif1`, `-sif0`, `-sif2` with the IOP released at a frame's start), 3 or 4 frames each, every table armed (calls, stores, loads, interrupts, the profile, four processors' coverage, a breakpoint on each processor at no step's address, watches over RAM and the scratchpad, data and read data breakpoints) | picture, sound and state equal after every frame |
 | … and every processor stopped at every step | the same programs but the IPU's, `EACH` on the EE and a breakpoint over every address on the IOP, VU0 and VU1, each stop resumed | equal after every frame, over 100,000 stops each |
 
-The crate's whole suite passed with the stage (374 tests in 26 binaries, measured 2026-10-25), and `blackmoon-r3000`'s and
-Diamond's debugger tests with the static reference moved (§41.10).
+The crate's whole suite passed with the stage (375 tests in 26 binaries, measured 2026-10-25), `blackmoon-r3000`'s suite and
+Diamond's debugger tests with the static reference moved (§41.10), and WiseMan's `SapphireTests`, `SapphireConsoleTests`,
+`SapphireRewindTests`, `SapphireRunnerTests` and `DiamondDebugTests` (30 tests), the kit's C1 to C24 among them.
 
 ### 41.8 The OSDSYS boot, digests only, and the cost (measured 2026-10-25)
 

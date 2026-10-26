@@ -216,6 +216,14 @@ impl Machine {
                 } else if self.booted && self.stop.is_none() {
                     self.debug.batch = BATCH;
                 } else {
+                    // A held EE stands in front of its instruction; each step of the board alone is a step it waits.
+                    if !std::mem::take(&mut unchecked) {
+                        let why = self.debug.hooks.stop_before(self.sys.ee.pc);
+                        if why != stop::FRAME {
+                            self.debug.stopped = EE;
+                            return why;
+                        }
+                    }
                     let System { ee, board } = &mut *self.sys;
                     board.run_to(board.now + IDLE_STEP, &mut ee.spram[..]);
                     if let Some(n) = self.observe_others() {
@@ -888,6 +896,27 @@ routine: lw t1, 0(s0)\naddiu t1, t1, 1\nsw t1, 0(s0)\nsb t1, 0x10(s1)\nlq t2, 0x
         let mut h = h.clone();
         h.flush();
         assert_eq!(h.charged(0), h.coverage[0].as_ref().unwrap().covered, "every EE step counted once");
+    }
+
+    /// With no BIOS the EE is held at its reset vector: a breakpoint there stops in front of it and `EACH` before each
+    /// step of the board, which moves the board's time and nothing of the EE; armed with nothing to hit, the frame is
+    /// the plain one.
+    #[test]
+    fn a_held_ee_stands_in_front_of_its_reset_vector() {
+        let new = || Machine::new(Media::read(&crate::media::program(&[0], ORIGIN)).unwrap(), Market::Americas, [None, None]);
+        let (mut m, mut plain) = (new(), new());
+        m.debug.hooks.set_breakpoints(&[0xBFC0_0000u32 as i32, 0xBFC0_0000u32 as i32]);
+        assert_eq!((m.run_frame_debug(0), m.debug_pc(EE)), (stop::BREAKPOINT, Some(0xBFC0_0000)));
+        m.debug.hooks.set_breakpoints(&[]);
+        arm(&mut m, flag::EACH);
+        let now = m.sys.board.now;
+        assert_eq!((m.run_frame_debug(0), m.sys.board.now), (stop::EACH, now), "asked, nothing moves");
+        assert_eq!(m.run_frame_debug(run::UNCHECKED), stop::EACH);
+        assert!(m.sys.board.now > now && m.sys.ee.pc == 0xBFC0_0000, "a step of the board, the EE held");
+        arm(&mut m, flag::CALLS | 1 << flag::COVERAGE);
+        run_out(&mut m, run::UNCHECKED);
+        plain.advance();
+        assert_eq!(state(&m), state(&plain));
     }
 
     /// A state loaded while a frame is stopped closes it and frees a processor a probe held: the next frame is whole.

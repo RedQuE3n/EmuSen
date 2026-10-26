@@ -7,7 +7,7 @@ use crate::{Error, Progress};
 use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
-use emusen_galaxia::{archive, claims, dotnet_files, image_sets};
+use emusen_galaxia::{archive, claims, dotnet_files, image_sets, package_zip};
 use emusen_systems::probe::{self, Candidate, Recognition};
 use std::sync::atomic::Ordering;
 
@@ -198,15 +198,21 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
     if let Some(index) = &index {
         found.retain(|at| {
             let full = path::full_path(at);
-            !index.inside_package(&full) && index.claimant(&full).is_none()
+            let zip_of_folder = archive::is_archive(&full) && index.folders.iter().any(|f| package_zip::zip_beside(f) == full);
+            !index.inside_package(&full) && index.claimant(&full).is_none() && !zip_of_folder
         });
     }
+    let packages_root = beside.packages.as_deref().map(path::full_path);
     progress.phase.store(2, Ordering::Relaxed);
     for at in found {
         if progress.cancelled() {
             return Err(Error::Cancelled);
         }
-        let system = route(&at, &systems);
+        let zipped = packages_root.as_deref().filter(|p| archive::is_archive(&at) && claims::within(&path::full_path(&at), p)).and_then(|_| package_zip::manifest_in(&at).ok().flatten());
+        let system = match zipped {
+            Some((_, doc)) => doc.get("system").and_then(|v| v.as_str()).and_then(|s| system_named(s, &systems)),
+            None => route(&at, &systems),
+        };
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: at, system, package: None });
     }
@@ -300,4 +306,27 @@ mod tests {
         let plain = scan(&[t.at("roms")], &ids, &Progress::default()).unwrap();
         assert_eq!(plain.games.iter().map(|g| g.path.clone()).collect::<Vec<_>>(), [t.at("roms/nes/Claimed.nes"), t.at("roms/psx/Disc.cue"), t.at("roms/nes/Free.nes")]);
     }
+
+    #[test]
+    fn a_self_contained_package_is_one_entry_and_a_package_s_zip_is_listed_only_where_its_folder_is_not() {
+        let t = Temp::new("self-contained");
+        t.put("roms/nes/Copied.nes", b"NES\x1acopied");
+        let manifest = |game: &str, extra: &str| format!("{{\"format\":\"emusen-package\",\"version\":\"1.0\",\"system\":\"nes\",\"mode\":\"self-contained\",\"game\":{game}{extra}}}");
+        t.put("packages/NES/Copied.nes/Copied.nes", b"NES\x1acopied");
+        t.put("packages/NES/Copied.nes/package.json", manifest("{\"role\":\"image\",\"where\":\"package\",\"path\":\"Copied.nes\"}", ",\"sources\":[{\"role\":\"image\",\"where\":\"library\",\"path\":\"nes/Copied.nes\"}]").as_bytes());
+        package_zip::write(&t.at("packages/NES/Copied.nes"), &t.at("packages/NES/Copied.nes.zip"), &|| false).unwrap();
+        t.put("elsewhere/Carried.nes/Carried.nes", b"NES\x1acarried");
+        t.put("elsewhere/Carried.nes/package.json", manifest("{\"role\":\"image\",\"where\":\"package\",\"path\":\"Carried.nes\"}", "").as_bytes());
+        package_zip::write(&t.at("elsewhere/Carried.nes"), &t.at("packages/Carried.nes.zip"), &|| false).unwrap();
+        let ids: Vec<String> = ["nes", "psx"].iter().map(|s| s.to_string()).collect();
+        let beside = Beside { packages: Some(t.at("packages")), compressed: Some(t.at("compressed")) };
+        let found = scan_with(&[t.at("roms")], &beside, &ids, &Progress::default()).unwrap();
+        let shown: Vec<(String, Option<String>, Option<String>)> = found.games.iter().map(|g| (g.path.clone(), g.system.clone(), g.package.clone())).collect();
+        let expect = vec![
+            (t.at("packages/Carried.nes.zip"), Some("nes".to_string()), None),
+            (t.at("packages/NES/Copied.nes/Copied.nes"), Some("nes".to_string()), Some(t.at("packages/NES/Copied.nes"))),
+        ];
+        assert_eq!(shown, expect);
+    }
+
 }

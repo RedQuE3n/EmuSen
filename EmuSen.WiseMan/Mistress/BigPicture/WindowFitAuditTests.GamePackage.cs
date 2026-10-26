@@ -8,7 +8,7 @@ using EmuSen.Mistress.Views;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The Game Package window in its two states from the game options sheet: a game with no package, and a long-named game whose package holds two soft patches with two more beside it - see EmuSen_GamePackages.md §15.
+    // The Game Package window in its three states from the game options sheet: a game with no package, a long-named game whose package holds two soft patches with two more beside it, and a long-named self-contained package scraped as patched - see EmuSen_GamePackages.md §15 and §19.
     public partial class WindowFitAuditTests
     {
         internal const string LongPatch = "A Very Long Translation Patch Name, Version 2.1 With Every Fix Applied (English).bps";
@@ -30,8 +30,39 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return folder;
         }
 
+        // A self-contained package for game: the game copied in, its list holding one patch, scraped as patched.
+        internal static string SelfContainedWithPatch(string game, string console)
+        {
+            string folder = Path.Combine(DataStore.Packages, console, Path.GetFileName(game));
+            Directory.CreateDirectory(folder);
+            string copy = Path.Combine(folder, Path.GetFileName(game));
+            File.Copy(game, copy, overwrite: true);
+            var p = GamePackage.Create(Path.GetFileNameWithoutExtension(game), "snes", "self-contained", new PackageFile("image", "package", Path.GetFileName(game)));
+            p.Document["sources"] = new JsonArray(new JsonObject { ["role"] = "image", ["where"] = "absolute", ["path"] = Path.GetFullPath(game) });
+            string patch = Path.GetFileNameWithoutExtension(game) + ".bps";
+            File.WriteAllBytes(Path.Combine(folder, patch), "BPS1"u8.ToArray());
+            p.Document["patches"] = new JsonArray(new JsonObject { ["file"] = patch, ["format"] = "bps" });
+            p.Document["identity"] = "patched";
+            Assert.True(p.Write(Path.Combine(folder, GamePackage.FileName)));
+            return copy;
+        }
+
         private static void ShowGamePackage(MainWindow window, string romDirectory, string which)
         {
+            if (which == "GamePackageSelfContained")
+            {
+                string library = Path.Combine(romDirectory, LongTitle + " (Self-Contained).sfc");
+                if (!File.Exists(library)) File.WriteAllBytes(library, new byte[0x8000]);
+                string held = Path.Combine(DataStore.Packages, "SNES", Path.GetFileName(library));
+                if (Directory.Exists(held)) Directory.Delete(held, recursive: true);
+                string copy = SelfContainedWithPatch(library, "SNES");
+                Call(window, "ShowGamePackage", copy, LongTitle);
+                Settle(window);
+                var contained = (GamePackageWindow)Sheets(window).Current!;
+                Assert.True(contained.SelfContained && contained.Identity == "patched");
+                Settle(window);
+                return;
+            }
             bool packaged = which == "GamePackageLongTitle";
             string title = packaged ? LongTitle : "Cobalt Harbor (Synthetic)";
             string game = Path.Combine(romDirectory, title + ".sfc");

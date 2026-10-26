@@ -58,6 +58,24 @@ namespace EmuSen.Galaxia.Media
             catch (IOException) { return (path, null); }
         }
 
+        // A package's zip beside its folder, the twin of package_zip.rs' zip_beside - see EmuSen_GamePackages.md §19.
+        public static string ZipBeside(string folder) => Path.TrimEndingDirectorySeparator(folder) + ".zip";
+
+        // The package a zip holds, its top folder and manifest, read through System.IO.Compression; null for a zip that holds none or does not read.
+        public static (string Top, JsonObject Doc)? ZipManifest(string zip)
+        {
+            try
+            {
+                using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+                var tops = archive.Entries.Select(e => e.FullName).Where(n => n.EndsWith("/" + GamePackage.FileName, StringComparison.Ordinal))
+                    .Select(n => n[..^(GamePackage.FileName.Length + 1)]).Where(t => t.Length > 0 && !t.Contains('/')).ToArray();
+                if (tops.Length != 1) return null;
+                using var reader = new StreamReader(archive.GetEntry($"{tops[0]}/{GamePackage.FileName}")!.Open());
+                return (tops[0], GamePackage.Managed.Parse(reader.ReadToEnd()));
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or FormatException) { return null; }
+        }
+
         // Whether full is folder or lies under it.
         public static bool Within(string full, string folder)
         {
@@ -135,7 +153,7 @@ namespace EmuSen.Galaxia.Media
             {
                 if (Place(roots, folder, doc["game"]) is not { } game || Text(doc["system"]) is not { } system) return null;
                 var claims = new List<string> { game };
-                foreach (JsonNode? entry in Entries(doc, "companions").Concat(Entries(doc["container"], "sources")))
+                foreach (JsonNode? entry in Entries(doc, "companions").Concat(Entries(doc["container"], "sources")).Concat(Entries(doc, "sources")))
                     if (Place(roots, folder, entry) is { } at && !claims.Contains(at)) claims.Add(at);
                 return new ClaimingPackage(folder, system, game, claims);
             }
@@ -285,16 +303,31 @@ namespace EmuSen.Galaxia.Media
                 throw new IOException($"The package {folder} names {game}, which is gone, and no file of its size and hashes was found in the library.");
             }
 
+            // Whether a claimed file still opens as its package: unless it is one a self-contained package's game was copied from and its size, time and SHA-1 are no longer those recorded - see EmuSen_GamePackages.md §19.
+            public static bool SourceHolds(PackagePlaces roots, string folder, string full)
+            {
+                if (Read(Path.Join(folder, GamePackage.FileName)) is not { } doc) return true;
+                if (Entries(doc, "sources").OfType<JsonObject>().FirstOrDefault(e => Place(roots, folder, e) == full) is not { } entry) return true;
+                if (entry["seen"] is not JsonObject seen || (SeenOf(full) is { } now && Number(seen["size"]) == now.Size && Text(seen["mtime"]) == now.Mtime)) return true;
+                if (Text(entry["sha1"]) is not { } want) return true;
+                try { return string.Equals(RomHash.Managed.Of(full, 0, -1, default).Sha1, want, StringComparison.OrdinalIgnoreCase); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+            }
+
             public static PackageResolution Resolve(PackagePlaces roots, string at)
             {
                 string full = Path.GetFullPath(at);
                 if (Directory.Exists(full) && File.Exists(Path.Join(full, GamePackage.FileName))) return OpenPackage(roots, full, null);
+                // A package's zip is unpacked by the platform library alone, which keeps each file's time to the tick - see EmuSen_GamePackages.md §19.
+                if (ArchiveImages.IsArchive(full) && File.Exists(full) && ZipManifest(full) is not null)
+                    throw new IOException($"{full} holds a game package, which is unpacked into Packages by EmuSen's platform library, and it is not in use here.");
                 if (Path.GetFileName(full) == GamePackage.FileName && File.Exists(full)) return OpenPackage(roots, Path.GetDirectoryName(full) ?? "", null);
                 var plain = new PackageResolution(at, null, false);
                 if (!File.Exists(full)) return plain;
                 PackageIndex index = Index(roots);
                 if (index.Claimant(full) is { } claimant)
                 {
+                    if (!SourceHolds(roots, claimant.Folder, full)) return plain;
                     try { return OpenPackage(roots, claimant.Folder, full); }
                     catch (ChangedDumpException) { return plain; }
                 }

@@ -405,6 +405,12 @@ Galaxia's, since it is where a game's files are (§3.8, §3.10): `EmuSen.Galaxia
   1.2's `packages` and `compressed`): nothing inside a package's folder is a game of its own, no claimed file is listed,
   and each package whose game is there is one entry, its path the game's and its shelf the manifest's `system`. No
   file is read for a claim.
+- **A self-contained package's sources** (since step 7, `EmuSen_GamePackages.md` §19): a package also claims the files
+  its game was copied from, its manifest's top-level `sources`, so that the library lists the game once, as the
+  package's copy, and opening the library file opens the copy with the package's stores. Such a claim holds only while
+  the file is still the one copied: its size and time as `sources` records them, else its SHA-1; a file changed since
+  opens as a plain game, as a changed claimed game does (`claims::source_holds`, `GamePackages.Managed.SourceHolds`).
+  A self-contained package whose copy is gone is never linked to a library file again unasked.
 - **The interface, 25**: `emusen_galaxia_package_index` and `_package_resolve` (JSON answers; a refusal is
   `EMUSEN_PLATFORM_IO` with its words, `IOException` in C#), and the save kinds `EMUSEN_GALAXIA_SAVE_PACKAGE_SRAM`,
   `_STATE` and `_RESUME_STATE`.
@@ -431,6 +437,45 @@ the places and identities it already owns:
   `EmuSen_GamePackages.md` §15.2 writes them. A state's record takes the patched image's MD5 and size from them, and
   the scraper the hashes it sends first under `identity: patched`.
 - **`RomHash.sha1_of`**, the SHA-1 of bytes held, which an IPS patch is pinned to (§5.4).
+
+### 3.13 A self-contained package, and a package's zip (2026-10-25)
+
+*Built at step 7 of `EmuSen_GamePackages.md` §7; §19 there is the record.* A self-contained package holds its game
+(`game.where` is `package`, `mode` is `self-contained`), so that its folder alone is the whole game; the library tool
+copies the game in (`pkg make --self-contained`). What Galaxia adds is where such a package's files are and how one is
+carried as a single file:
+
+- **A package's zip** (`Platform/galaxia/src/package_zip.rs`): every file of the folder under one top folder named as
+  the package, hidden files and links passed over, the manifest first. A CHD and what is already compressed
+  (`archive::STORED_EXTENSIONS`) is stored, everything else deflated at level 6 or stored where that is no smaller. It
+  is written beside the folder, `<folder>.zip`, under a hidden name first and renamed into place whole, and never over a
+  file that is there.
+- **The writer** (`archive::ZipWriter`) writes the plain zip the reader of §3.7 reads, from PKWARE's APPNOTE.TXT:
+  stored and deflated entries, UTF-8 names, no Zip64 (so 65,534 files and 4 GiB at most, refused with words past
+  them), and each file's modification time three ways: the DOS fields in local time to two seconds, the extended
+  timestamp (0x5455) to the second, and the NTFS field (0x000A) to the tick. **The tick is what matters**: a state's
+  record is stamped with its state's time in .NET's ticks (§5.3c), so a zip that kept only seconds would lose every
+  record it carried. The reader (`archive::directory`) now takes each entry's CRC-32 and that time, the NTFS field's
+  before the extended timestamp's, and `archive::copy_entry` copies an entry out whole, held to its length and CRC-32.
+- **Opening a package's zip.** `claims::resolve` given a zip that holds a package (one top folder with `package.json`,
+  every entry inside it, no part `..`, `.` or empty) unpacks it once into `Packages`: beside itself where it lies
+  under `Packages`, straight under `Packages` where it lies anywhere else (never beside a zip in the library), into a
+  hidden folder first, every entry checked and given its time, then renamed into place. A folder already there that
+  holds the same game is opened and the zip left unread beyond its manifest; one that holds another game, or no
+  package, refuses the zip with words. **A zip is never unpacked over a folder**, so a zip brought back from another
+  machine does not replace the saves of a folder still here. A zip that holds no package, or that this reader does not
+  take, is a game's own zip, opened as before.
+- **The C# half** reads a zip's manifest through System.IO.Compression (`GamePackages.ZipManifest`), for the scan, and
+  leaves the unpacking to the platform library, as patching is (§3.12): `GamePackages.Managed.Resolve` refuses a
+  package's zip with words naming the platform library, so that a zip's files are given their times by one rule.
+- **The scan** passes over `<folder>.zip` beside a package's folder, and lists a package's zip whose folder is not
+  there as one entry, shelved by its manifest's `system` (`scan.rs`; `RomLibrary.ScanManaged`).
+
+**Tests**: `package_zip.rs`' two cases (every file and its time to the tick through a zip and back, the stored and
+deflated entries, a damaged entry refused and nothing left, an entry climbing out refused, a game's own zip no
+package); `claims.rs`' sources case; `GalaxiaParityTests.A_self_contained_package_claims_its_copy_and_its_source_alike_both_ways_and_a_changed_source_opens_plainly`
+and `A_package_s_zip_is_unpacked_by_the_platform_library_and_refused_with_words_by_the_C_sharp_half` (a zip another
+archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen_GamePackages.md` §19.
 
 ### 4.1 Why rename rather than write-in-place
 

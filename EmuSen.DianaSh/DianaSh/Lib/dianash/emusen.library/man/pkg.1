@@ -1,14 +1,17 @@
 NAME
-    pkg - make game packages, list them, check them, copy a game's saves,
-    states and cheats into its package, and give it soft patches
+    pkg - make game packages, linked or self-contained, list them, check
+    them, zip them, copy a game's saves, states and cheats into its
+    package, and give it soft patches
 
 SYNOPSIS
-    pkg make <path>...
+    pkg make <path>... [--self-contained] [--zip]
     pkg ls [<console>]
     pkg check [<package>...]
     pkg migrate <package>...
     pkg patch add <package> <file>
     pkg patch rm <package> <n>
+    pkg zip <package>...
+    pkg identity <package> original|patched
     pkg wait [pkg<n>]
 
 DESCRIPTION
@@ -16,14 +19,17 @@ DESCRIPTION
     a folder under Packages holding package.json, its manifest, and
     everything EmuSen keeps for that game: its battery saves in saves/,
     its states and their pictures in states/, and its cheat list in
-    cheats.json. This build makes linked packages: the manifest names the
-    game where it already is in the library, with its size, its time and
-    the dump's CRC-32, MD5 and SHA-1, and nothing is copied.
+    cheats.json. A linked package, the default, names the game where it
+    already is in the library, with its size, its time and the dump's
+    CRC-32, MD5 and SHA-1, and nothing is copied. A self-contained package
+    holds a copy of the game itself, so that the folder alone is the whole
+    game (see SELF-CONTAINED PACKAGES AND ZIPS).
 
     THE LIBRARY IS ONLY READ. Nothing under AppSettings.RomDirectory is
     written, renamed or removed: no package, no link, no sidecar. Saves
     and states an earlier build kept in the library are copied out of it
-    and left where they are.
+    and left where they are. Making a package self-contained copies the
+    game out of the library and never moves or removes the original.
 
     'make' makes a package for each game under each <path>, a file or a
     folder of the library written relative to it with / between its parts
@@ -37,6 +43,30 @@ DESCRIPTION
     game. A game a package already claims is said as 'already'. Packages
     are made only when asked, never by a scan.
 
+    With --self-contained, the game and every file it brings (a sheet's
+    tracks, an .m3u's discs) are copied into the package, at the places
+    the sheet or the list names them, each copy keeping its original's
+    time and checked against the bytes read from it; then the manifest
+    names the copies ("where": "package"), says "self-contained", and
+    keeps the files they were copied from as "sources". A game already in
+    a linked package has that package made self-contained ('contained'),
+    its saves, states and settings staying where they are. A game a
+    converted disc's package holds is copied from Compressed. A file
+    already in the package of the same bytes is kept, so a stopped make
+    can be run again; any other file there refuses the copy.
+
+    With --zip (which implies --self-contained), the package is also
+    written as one zip beside its folder, Packages/<console>/<name>.zip,
+    as described below; a package already self-contained is only zipped
+    ('zipped'). A zip already there is left as it is, and the make says
+    so: move it aside to write it again.
+
+    'zip' writes each self-contained <package>, relative to Packages, as
+    one zip beside its folder, as it now is, with every save and state
+    it holds: the way to carry a package on from a machine whose library
+    does not hold its game, as when it came there as a zip. A linked
+    package is refused, since its zip would hold no game.
+
     'ls' lists the packages, or one console's (by its name, its system's
     ES-DE name, or its folder under Packages), with their mode and state:
     ok; changed, the game is no longer the dump recorded; moved, the game
@@ -48,12 +78,17 @@ DESCRIPTION
 
     'check' hashes the game and every file of each <package>, a folder
     relative to Packages (a console's folder names each package in it;
-    none names them all), against the manifest: the whole file, or for a
+    none names them all) or a package's zip, relative to Packages or by
+    its full path, against the manifest: the whole file, or for a
     cue sheet the sheet and every track; for a zip the archive and the
     game inside it. A moved game is found again and the manifest names its
     new place; a game whose time alone changed has its time recorded. A
     converted disc's package is checked by its CHD's size and time, and
-    'chd check' runs its three checks.
+    'chd check' runs its three checks. A zip is unpacked into a hidden
+    folder of Packages, every entry held to the CRC-32 the zip records,
+    checked there as a folder is, and the folder removed; the zip itself
+    is only read. A self-contained package whose copy is gone is said
+    missing: it is never linked to a library file again unasked.
 
     'migrate' copies the game's stores into each <package> once: from
     Saves/<console>/ (and the places earlier builds kept them: the flat
@@ -118,6 +153,14 @@ DESCRIPTION
     Disc games take no patches here: disc patches are left to a page of
     their own. A patched image may be 64 MiB at most.
 
+    'identity' sets which identity the scraper sends for <package>:
+    'original', the dump's hashes, or 'patched', the patched image's
+    first and the dump's after a miss, for a hack ScreenScraper lists in
+    its own right. A package with no soft patches has no patched
+    identity, and 'patched' is refused for it. The identity changes
+    nothing else: which saves a patched game keeps is decided by its
+    patch list (below), not by what the scraper is sent.
+
 SOFT PATCHES AT LOAD
     Opening a patched package, by its folder or by its game's plain path,
     applies its list in both runtimes before the core is made: every file
@@ -140,6 +183,45 @@ SOFT PATCHES AT LOAD
     every patch removed the game returns to the original's. A patched
     game starts its save empty: the original's is never read or written
     by it.
+
+SELF-CONTAINED PACKAGES AND ZIPS
+    A self-contained package needs nothing outside its folder: its game,
+    saves, states and their records, settings, art, cheats and patches
+    are all in it. Copied whole to another machine's Packages folder,
+    with the files' times kept (cp -p, rsync -a, or the package's zip),
+    it opens there as it did here. A copy that loses the times loses the
+    states' records, which are stamped with their states' times, and
+    never the states, which load as any state without a record does; the
+    game is hashed once at its next opening and its time recorded.
+
+    A package's zip holds every file of its folder under one folder named
+    as the package, so that any unzip gives back the package's folder.
+    A CHD and what is already compressed (pictures, video, zips) are
+    stored as they are, never compressed again; everything else is
+    deflated, or stored where deflating would not make it smaller. Each
+    file keeps its time to a ten-millionth of a second (the NTFS extra
+    field), as well as to the second (the extended timestamp) and in the
+    DOS fields. A zip holds at most 65,534 files and 4 GiB, as no Zip64 is
+    written.
+
+    EmuSen opens a package's zip as the package: the first time it is
+    opened, from the library, 'core' or a recent list, it is unpacked into
+    Packages, beside itself when it lies there and straight under
+    Packages when it lies anywhere else, every entry checked and given
+    its time, and the package's folder opens. After that the folder is
+    the package and the zip is only read: a zip whose folder is there
+    opens the folder, and a zip is never unpacked over a folder, so a zip
+    brought back from another machine does not replace the saves of a
+    folder that is still here. The library lists a zip beside its own
+    folder once, as the folder.
+
+    Opening the library file a self-contained package was copied from
+    opens the package's copy with the package's saves, so that the game
+    has one save, as a linked package's game does; the library lists the
+    game once, as the package's. This holds while the library file is
+    still the one it was copied from (its size and time, else its SHA-1,
+    as recorded in "sources"); changed, it opens as a plain game with its
+    plain saves, as a changed claimed file does.
 
 ONE GAME, ONE SAVE
     Once a package claims a game, opening the game by its plain path, from
@@ -168,16 +250,20 @@ JOBS
 EXAMPLES
     pkg make nes
     pkg make "snes/Super Metroid (USA).sfc"
+    pkg make --self-contained --zip "snes/Super Metroid (USA).sfc"
+    pkg check "SNES/Super Metroid (USA).sfc.zip"
+    pkg zip "SNES/Super Metroid (USA).sfc"
     pkg ls NES
     pkg check NES
     pkg migrate "SNES/Super Metroid (USA).sfc"
     pkg patch add "SNES/Super Metroid (USA).sfc" ~/Patches/Redesign.bps
     pkg patch rm "SNES/Super Metroid (USA).sfc" 1
+    pkg identity "SNES/Super Metroid (USA).sfc" patched
     pkg wait pkg1
 
 SEE ALSO
     chd (converted discs, each given a package), EmuSen_GamePackages.md
-    (sections 3, 5.4, 5.5, 14 and 15: the package, its manifest, the
-    stores it takes, soft patches, and what each step built),
-    EmuSen_Galaxia.md (sections 3.10 and 3.11:
-    the manifest and the claim index)
+    (sections 3, 5.4, 5.5, 6, 14, 15 and 19: the package, its manifest,
+    the stores it takes, soft patches, other frontends, and what each step
+    built), EmuSen_Galaxia.md (sections 3.10, 3.11 and 3.13: the
+    manifest, the claim index and a package's zip)

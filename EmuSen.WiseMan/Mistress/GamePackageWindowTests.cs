@@ -102,10 +102,49 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.StartsWith("Added Cobalt Harbor (Synthetic).ips. It is named as RetroArch finds it.", window.Status);
                 Assert.Equal(new[] { ("Cobalt Harbor (Synthetic).ips", "IPS") }, window.Patches());
                 Assert.Equal(RomHash.Of(hacked).Md5, GamePackage.Read(Path.Combine(window.Package!, GamePackage.FileName)).PatchedIdentity?.Md5);
+                // The identity the scraper sends, switched by pkg identity and back (§19).
+                Press(window, "GamePackageIdentitySwitch");
+                Assert.Equal("The scraper now sends the patched game's hashes first, then the dump's.", window.Status);
+                Assert.True(GamePackage.Read(Path.Combine(window.Package!, GamePackage.FileName)).ScrapesAsPatched);
+                Assert.Equal("Scrape as Original", window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "GamePackageIdentitySwitch").Content);
+                Press(window, "GamePackageIdentitySwitch");
+                Assert.Equal("The scraper now sends the dump's hashes.", window.Status);
+                Assert.Equal("original", window.Identity);
                 Press(window, "GamePackagePatch.0.Remove");
                 Assert.Equal("Took out Cobalt Harbor (Synthetic).ips.", window.Status);
                 Assert.Empty(window.Patches());
                 Assert.True(window.Changed);
+                Assert.Equal(before, Listing());
+            }
+            finally { window.Close(); }
+        }, default);
+
+        // A self-contained package made by pkg make --self-contained: the window opened on its copy says so, and offers the patches beside the library file it was copied from (§19).
+        [Fact]
+        public Task A_self_contained_package_is_shown_as_one_and_offers_the_patches_beside_its_source() => Session.Dispatch(() =>
+        {
+            if (!LibraryToolJob.Available) { _out.WriteLine("skipped: " + LibraryToolJob.Report); return; }
+            string game = Path.Combine(_library, "snes", "Amber Weir (Synthetic).sfc");
+            Directory.CreateDirectory(Path.GetDirectoryName(game)!);
+            File.WriteAllBytes(game, SyntheticRom.BuildBlank());
+            File.WriteAllBytes(Path.Combine(_library, "snes", "Weir Fix.ips"), CrystalParityTests.Ips((0x100, new byte[] { 0x5A })));
+            new AppSettings { RomDirectory = _library }.Save();
+            List<string> before = Listing();
+            using (IToolJob job = LibraryToolJob.Start("{\"op\":\"pkg-make\",\"paths\":[\"snes\"],\"self_contained\":true}"))
+                while (!job.Ended) job.Next(200);
+            string package = Path.Combine(DataStore.Packages, "SNES", "Amber Weir (Synthetic).sfc"), copy = Path.Combine(package, "Amber Weir (Synthetic).sfc");
+            Assert.True(File.Exists(copy));
+            Assert.Equal(package, GamePackages.RootFor(game));
+            var window = new GamePackageWindow("Amber Weir (Synthetic)", copy, _library, GamePackages.RootFor(copy), browse: false) { Width = 1280, Height = 800 };
+            window.Show();
+            try
+            {
+                Assert.True(window.SelfContained);
+                string shown = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "GamePackagePlace").Text ?? "";
+                Assert.Contains(", self-contained: the game is kept in the package", shown);
+                Assert.Equal(new[] { Path.Combine(_library, "snes", "Weir Fix.ips") }, window.Beside());
+                Press(window, "GamePackageAdd.0");
+                Assert.StartsWith("Added Amber Weir (Synthetic).ips.", window.Status);
                 Assert.Equal(before, Listing());
             }
             finally { window.Close(); }

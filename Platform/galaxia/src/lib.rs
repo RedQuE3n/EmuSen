@@ -26,6 +26,7 @@ pub mod migration;
 pub mod model;
 pub mod models;
 pub mod package;
+pub mod package_zip;
 pub mod rom_hash;
 pub mod saves;
 pub mod setting_folders;

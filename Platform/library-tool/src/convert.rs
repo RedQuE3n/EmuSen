@@ -137,14 +137,25 @@ pub fn manifest(placed: &Placed) -> Result<Value, String> {
     }
 }
 
-/// Whether a disc is done: its package names this CHD at the size and time recorded, and the library files it was
-/// converted from still have the size and time they had.
+/// Where a disc's CHD is: in `Compressed` as converted, or in its package once the package was made self-contained,
+/// which copied it there (EmuSen_GamePackages.md §19).
+pub fn chd_of(placed: &Placed, doc: &Value) -> String {
+    let game = doc.get("game");
+    match (game.and_then(|g| g.get("where")).and_then(Value::as_str), game.and_then(|g| g.get("path")).and_then(Value::as_str)) {
+        (Some("package"), Some(rel)) => under(&placed.package, rel),
+        _ => placed.chd.clone(),
+    }
+}
+
+/// Whether a disc is done: its package names this CHD, in `Compressed` or copied into the package, at the size and time
+/// recorded, and the library files it was converted from still have the size and time they had.
 pub fn done(ctx: &Context, placed: &Placed, doc: &Value) -> bool {
     let game = doc.get("game");
     let container = doc.get("container");
-    let names_it = game.and_then(|g| g.get("path")).and_then(Value::as_str) == Some(placed.chd_rel.as_str());
+    let contained = game.and_then(|g| g.get("where")).and_then(Value::as_str) == Some("package");
+    let names_it = contained || game.and_then(|g| g.get("path")).and_then(Value::as_str) == Some(placed.chd_rel.as_str());
     let has_sha1 = container.and_then(|c| c.get("sha1")).and_then(Value::as_str).is_some();
-    let chd_same = same_seen(game.and_then(|g| g.get("seen")), &seen(&placed.chd));
+    let chd_same = same_seen(game.and_then(|g| g.get("seen")), &seen(&chd_of(placed, doc)));
     names_it && has_sha1 && chd_same && sources_same(ctx, doc)
 }
 
@@ -405,7 +416,7 @@ pub fn list(ctx: &Context, item: &Item) -> Outcome {
     let size = disc_bytes(item);
     let base = |state| Outcome::new(state).with("size", Value::number(size));
     let Ok(doc) = manifest(&placed) else { return base("not converted") };
-    let chd = seen(&placed.chd);
+    let chd = seen(&chd_of(&placed, &doc));
     let outcome = if chd.is_none() {
         base("missing")
     } else if !sources_same(ctx, &doc) {
@@ -431,7 +442,10 @@ pub fn check(ctx: &Context, chdman: &Chdman, item: &Item, stop: &dyn Fn() -> boo
         Err(words) => return Outcome::said("failed", words),
     };
     let Some(container) = doc.get("container") else { return Outcome::said("failed", "the package names no container") };
-    let at = under(&ctx.compressed(), doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).unwrap_or(""));
+    let at = match doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str) {
+        Some("package") => chd_of(&placed, &doc),
+        _ => under(&ctx.compressed(), doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).unwrap_or("")),
+    };
     if seen(&at).is_none() {
         return Outcome::said("failed", format!("the CHD {} is not there", placed.chd_rel));
     }

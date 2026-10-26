@@ -19,8 +19,8 @@ tree
         4 ButtonBar at=930,638,90,44 by=panel limit=220,124,840,574 paints=#9C9CA0FF role=toolbar
           5 Button at=930,638,90,44 by=clip drawn focus heard=CLOSE limit=930,638,90,44 name=GamePackageClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
             6 TextBlock at=947,644,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=930,638,90,44 owner=5 paints=#9C9CA0FF role=text size=26 text=CLOSE
-      7 ScrollViewer at=260,152,760,420 by=panel fades=b limit=220,124,840,574 overflow=216 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,420
-        8 StackPanel at=260,152,756,636 by=scroll in=7 limit=260,152,760,420 paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=260,152,756,420
+      7 ScrollViewer at=260,152,760,420 by=panel fades=b limit=220,124,840,574 overflow=398 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,420
+        8 StackPanel at=260,152,756,818 by=scroll in=7 limit=260,152,760,420 paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=260,152,756,420
           9 HintText name=GamePackageAbout paints=#86868AFF role=text volatile="its words name the run's own folders"
           10 FieldRow at=260,264,756,99 by=scroll heard=Package in=7 limit=260,152,760,420 paints=#9C9CA0FF role=group
             11 TextBlock at=260,264,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=7 layout=69.48,28.8 limit=260,264,756,99 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Package
@@ -40,7 +40,7 @@ tree
                     25 TextBlock at=928,541,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE in=7 layout=70.56,31.2 limit=911,535,105,44 owner=24 paints=#9C9CA0FF role=text seen=928,541,71,31 size=26 text=REMOVE
                   26 TextBlock at=260,528,651,58 box=651,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)" in=7 layout=623.18,57.6 limit=260,379,756,207 paints=#9C9CA0FF role=text seen=260,528,651,44 size=24 text="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)"
 focus 20
-edge 5 up 24
+edge 5 up item:ButtonBar/0//
 edge 5 down same
 edge 5 left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
 edge 5 right same
@@ -52,12 +52,16 @@ edge 24 up 20
 edge 24 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
 edge 24 left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
 edge 24 right same
+edge item:ButtonBar/0// up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
+edge item:ButtonBar/0// down 5
+edge item:ButtonBar/0// left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
+edge item:ButtonBar/0// right same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 up 24
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 right same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 down 5
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 down item:ButtonBar/0//
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 right 24
 press pageup focus="Button 'Remove'" title="Game Package" top=GamePackageWindow

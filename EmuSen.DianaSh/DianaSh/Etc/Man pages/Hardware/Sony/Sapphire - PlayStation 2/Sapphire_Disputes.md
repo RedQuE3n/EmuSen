@@ -1149,7 +1149,8 @@ through the reset too.
   loads; on the fetch from the scratchpad it stops altogether (no done word from the EE either), so `s21-fetch` runs on
   Sapphire only.
 - **Conclusion:** psx-spx's PlayStation rules, which ps2tek's "same as on PSX" points to; the mirrors **measured**, the
-  bus errors **argued**, PCSX2 not a witness for them. Which I/O addresses within 1F801000h-1F80FFFFh meet no device on
+  bus errors **argued**, PCSX2 not a witness for them. ~~A load past 8 MiB a bus error.~~ *Amended 2026-10-26 by D-482:
+  the region past 8 MiB below the SIF reads zero without a bus error, as three console texts require.* Which I/O addresses within 1F801000h-1F80FFFFh meet no device on
   the IOP is unknown; they read zero rather than fault [C], so that S22 to S26 add their devices without moving a
   fault.
 - **Depends on it:** `iop::bus::decode`.
@@ -3856,3 +3857,103 @@ through the reset too.
 - **Pinned by:** `antialiasing_replaces_alpha_by_coverage_and_writes_no_z_below_it`,
   `generated_primitives_under_generated_pixel_operations_draw_as_the_model_draws_them`.
 - **Implemented in:** stage S19's commit.
+
+### D-480. LOADFILE's SifLoadModule (server 80000006h, function 00h): the module's path is read from byte 8 of the argument block; the block's first two words are not needed for a load without arguments; the reply's first word is the module's id, or a negative error (−203 for a file the disc lacks), its second 0 for a module whose start returns 0
+
+- **Opened:** 2026-10-26, as the tester decided `Sapphire_Native.md` §36.14 Q1 (as recommended): ps2tek's "BIOS IOP
+  LOADFILE" names the server and its functions (00h `SifLoadModule`) and gives no argument layout ("Newer LOADFILE
+  modules seem to have a different interface. Needs more research"), so a dispute step learns the layout on a referee
+  with a program of the project's, outputs only, before a writer types it into the loader of §40.
+- **Documents read:** ps2tek "BIOS IOP LOADFILE", "SIF Registers", "SIF DMA", "SIF RPC Basics", "SIF RPC Structs and
+  Definitions", "SIF RPC Commands", "SIF RPC System Servers", "IOP DMA" (the chain tag's IRQ and end bits), "BIOS EE
+  Syscalls" 76h to 78h; the SIF's model as S22 built it (D-142, D-143). Which bits an EE command packet's IOP tag carries
+  is in no document; the SIF link's tags, traced on Sapphire while a ps2autotests EE program ran on the player's BIOS
+  (the plan's §1.4, decided 2026-10-26), carry IRQ and end on a command packet to the IOP's receive buffer and neither on
+  the payload sent before it, and the loader's packets are sent so.
+- **Test program:** the loader of `tests/irx` (§40.2), which speaks ps2tek's packet layouts: SIFCMD's init packets
+  naming its receive buffer, a bind to 80000006h, then calls to function 0, each with an argument block of 512 bytes and
+  512 bytes asked back into a buffer filled with A5h, each reply kept in its record. `examples/irx.rs probe`: the path
+  `cdrom0:\TEST.IRX;1` alone in a block of zeros, at offsets 0 to 64 in steps of 4, then 128, 252 and 256. `probe2`: the
+  path at 8; a path naming no file of the disc; then the path at 8 with the block's word 0 set to 16 (and a string of 15
+  characters at offset 260), to all ones and to 512, and the same three for word 1. The disc (`ps2discs.py files`) holds
+  SYSTEM.CNF, the probe and ps2autotests' `cpu/iop/alu.irx` as TEST.IRX.
+- **Referee:** PCSX2 2.8.2 with the player's Americas BIOS, the probe entered by its fast boot (`-elf`) with the disc in
+  its drive (`ps2referee.py ram … --disc`), RAM read through PINE once the done word appeared (1.4 s each); its log, which
+  holds the BIOS's text, was not read. Both runs bound at the first bind (server 0001CA68h, its receive buffer 0001CAB0h
+  in the second) and every call ended. The first run: **only the path at offset 8 loaded the module** (reply word 0
+  00000019h, a module's id), every other offset −203 (FFFFFF35h); each end packet's size field 200h, the reply's 512
+  bytes, of which words 1 to 20 were 0 and the rest the server's buffer as it was. The second run: the path at 8 loaded
+  again (1Ah onwards, one id higher at each load), the missing file gave −203, and every value of word 0 or word 1 left the
+  load unchanged, word 1 of the reply 0 each time. SMFLG read 30000h when the probe began, the IOP's booted flag
+  (40000h) not yet set at PCSX2's fast boot; the bit 20000h, cleared by the probe before its first init packet, was not
+  set again in the time allowed, yet the IOP's packets came to the receive buffer that packet named.
+- **Conclusion:** the module's path is a NUL-terminated string from byte 8 of the argument block; a module is loaded and
+  started with the block's first two words zero; the reply is 512 bytes whose first word is the module's id (positive)
+  or a negative error, −203 for a path naming no file, and whose second word was 0 for `alu`, whose start returns 0. Not
+  learned, since no test module needs them: where a module's arguments go, what words 0 and 1 carry, the path's longest
+  length, and whether word 1 of the reply is the module's own result. **Measured**, one lineage: PCSX2 is the only
+  referee that runs the player's BIOS's IOP modules from the EE (S3, S21).
+- **Depends on it:** `tests/irx`'s `module_load` and the 23 IOP programs of §40.
+- **Pinned by:** the 23 IOP programs on the player's BIOS (§40.5); `tests/irx`'s `the_module_load_puts_the_path_at_byte_8`.
+- **Implemented in:** the loader's commit of §40, after this entry's.
+
+### D-481. CDVD, the drive's interrupt: IRQ 2 is raised at each reason the drive sets in its I_STAT, whatever reasons are still pending, not at the rise of their OR
+
+- **Opened:** 2026-10-26, at §40: the console started empty and a disc put in through the tray (G10's `MEDIA`), the BIOS's
+  LOADFILE printed "loadmodule: fname cdrom0:\TEST.IRX;1" and waited for ever. The hardware's own report: the drive's
+  read had ended (not busy, I_STAT 0Bh: data ready, command complete and the tray's opening), channel 3 had moved its
+  sector, the IOP's I_STAT bit 2 was clear and the BIOS had written I_STAT once, 02h. The opening's bit 3, set before
+  the BIOS ran and never acknowledged, held S23's line (the OR of I_STAT's bits) high, so no later reason made a rise
+  and IRQ 2 never came again.
+- **Documents read:** ps2tek "CDVD I/O Ports" ("When a CDVD IRQ is raised on I_STAT, this register shows the reason for
+  the interrupt"; bit 3 "Disk ejected"; "Acknowledge = Write I_STAT (1=Clear bit)"), "IOP Interrupts" (IRQ 2, CDVD).
+- **Test program:** the §40 loader on the player's Americas BIOS with `cpu/iop/alu` on a CD: under the line's rise the
+  module was never read; with IRQ 2 raised at each reason, the drive's reads went on, the module was opened, loaded and
+  ran, and its text equals the console's.
+- **Referee:** not consulted: no referee lets a program open the tray before the BIOS runs and read I_STAT's line.
+- **Conclusion:** the register names the reasons for an interrupt, and an interrupt comes with each reason the drive
+  raises; a reason the BIOS never acknowledges (the opening of a tray before it ran) does not silence the drive. The
+  line's level (`Cdvd::irq`) is kept in the state as before. **Argued** from ps2tek's wording and the BIOS's behaviour
+  through a documented interface; the other reading needs the BIOS to acknowledge a reason raised before it started,
+  which it does not, and whether a console's power-on clears the drive's I_STAT is in no document.
+- **Depends on it:** `cdvd::Cdvd::reason`, `take_raised`; `iop::bus::IopBus::sync_cdvd`.
+- **Pinned by:** `each_reason_raises_the_interrupt_while_an_earlier_one_is_pending`,
+  `the_drives_command_end_reaches_the_intc_with_the_opening_unacknowledged`; the 23 IOP programs (§40.5).
+- **Implemented in:** the drive's commit of §40.
+
+### D-482. IOP memory map: a load past RAM's 8 MiB, below the SIF's 1D000000h, reads zero without a bus error
+
+- **Opened:** 2026-10-26, at §40: `kernel/iop/messagebox/poll`, `receive` and `send` stopped at their line "invalid
+  params:". Each then calls the kernel with the message box id ~0 (the tests' own sources, `PollMbx(NULL, ~0)` and the
+  like), and the console's texts print −410, the kernel's refusal of an unknown id. The hardware's report on Sapphire:
+  one IOP load at physical 08000004h, a data bus error under D-61, after which the IOP never printed again.
+- **Documents read:** ps2tek "Memory Map" (nothing between the IOP's RAM and the SIF's registers, and no word on
+  errors); psx-spx "Memory Exceptions" and "Memory Mirrors", the PlayStation's rules D-61 took.
+- **Test program:** the three programs on the player's Americas BIOS through the §40 loader: with the region reading
+  zero, each prints its −410 and its whole text.
+- **Referee:** PCSX2 2.8.2 raises no bus error at 00800000h (D-61's `s21-map`); the console's texts are the stronger
+  witness, that a load in the region does not fault.
+- **Conclusion:** the IOP's region from 00800000h to 1CFFFFFFh is on the bus as 1E000000h is (D-346): zero on a load,
+  writes without effect; the extent is the region no document places a device in [C], the fault's absence **measured**
+  at one address by the console's texts. The other bus errors of D-61 (KSEG1's scratchpad, the gap after it, KUSEG past
+  512 MiB) stand, argued.
+- **Depends on it:** `iop::bus::decode`, `Target::Absent`.
+- **Pinned by:** `the_memory_map_scratchpad_and_bus_errors_equal_the_documents` (`s21-map`'s load at 00800000h now
+  zero); `kernel/iop/messagebox/{poll,receive,send}` on the player's BIOS (§40.5).
+- **Implemented in:** the memory map's commit of §40.
+
+### D-483. CDVD, a synthetic volume as a DVD: the BIOS's file system reads sector 16, then asks for sector 257 and fails the open, where the same volume as a CD is read
+
+- **Opened:** 2026-10-26, at §40.4: the IOP programs' disc as an `.iso` of 2,048-byte sectors, which `cdvd::open` takes for
+  a DVD (disk type 14h), 56 sectors long.
+- **Documents read:** ps2tek "CDVD I/O Ports", "CDVD N Commands", "CDVD Reads and Seeks".
+- **Test program:** the §40 loader with `cpu/iop/alu`: the drive's report of its N commands shows two ReadCd commands
+  (06h), sector 10h then 101h, one sector each, the speed byte 83h; LOADFILE's reply −203 and the module never read.
+  As a CD (12h), the same volume: ReadCd at 10h, 12h, 14h, then the file's sectors, the speed byte 85h, and the module
+  runs.
+- **Referee:** not yet consulted for this; PCSX2 read the `.iso` form in D-480's runs, how it classed the image unknown.
+- **Conclusion:** **open**; Sapphire's answers to a DVD's first reads differ somewhere from what the BIOS expects, or the
+  BIOS reads a DVD's file system otherwise and the synthetic volume lacks what it looks for. §40 uses CDs.
+- **Depends on it:** `cdvd::open`'s choice of medium, `Cdvd::fill` for ReadCd on a DVD.
+- **Pinned by:** nothing yet.
+- **Implemented in:** none.

@@ -7,7 +7,7 @@ weighed. Nothing here reads a referee's source, and the BIOS is only ever passed
     ps2referee.py fetch
     ps2referee.py ram REFEREE ELF [--bios MARKET] [--for N] [--until ADDRESS=VALUE] [--again S] [--throttled] [--interpreter] [--disc DISC] [--wave DIR] [--screen FILE] [--cards A,B] [--multitap] ADDRESS:WORDS ...
     ps2referee.py boot pcsx2 DISC [--bios MARKET] [--for N]
-    ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter]
+    ps2referee.py tty pcsx2 ELF EXPECTED [--bios MARKET] [--for N] [--channel ee|iop|none] [--out FILE] [--interpreter] [--disc DISC]
     ps2referee.py menu pcsx2 PNG [--bios MARKET] [--for N] [--blank-nvm] [--deinterlace N]
     ps2referee.py pads pcsx2 OUTDIR SCRIPT --card CARD [--bios MARKET] [--for N]
     ps2referee.py picture pcsx2 ELF PNG [--bios MARKET] [--for N] [--deinterlace N]
@@ -34,7 +34,8 @@ console's speed and prints only what PINE says of it (its title, serial and stat
 the disc's bytes, a picture, or the log, which holds the BIOS's own output (Sapphire_Referees.md §5). `tty` runs a
 program that prints (ps2autotests') on PCSX2 with one of its log channels on, the EE's console, the IOP's or neither,
 and returns only the program's own text: the lines from the first that ends with the expected text's first line to the
-last that ends with its last; the rest of the log is never printed or kept (Sapphire_Native.md §14). `menu` boots the
+last that ends with its last; the rest of the log is never printed or kept (Sapphire_Native.md §14); with --disc the disc is in the drive while the
+program runs, so that a loader of IOP modules can print a module's text (Sapphire_Native.md §40). `menu` boots the
 BIOS with no disc (`-bios`) at the console's speed, saves a state through PINE N seconds after PCSX2 begins to draw,
 and keeps only the state's picture in PNG, its one member read, the state removed at once; --blank-nvm gives the console
 an EEPROM of zeros for the run, as Sapphire's blank one, and puts PCSX2's own back afterwards; --deinterlace is PCSX2's
@@ -886,8 +887,8 @@ def main(argv):
     screen = option("--screen")
     if screen and referee not in LIBRETRO:
         die("--screen is for the probe's cores", 2)
-    if disc and (referee != "pcsx2" or mode != "ram"):
-        die("--disc is for ram runs on pcsx2", 2)
+    if disc and (referee != "pcsx2" or mode not in ("ram", "tty")):
+        die("--disc is for ram and tty runs on pcsx2", 2)
     deinterlace = option("--deinterlace", "3")
     blank = "--blank-nvm" in rest
     if blank:
@@ -901,7 +902,7 @@ def main(argv):
         if referee != "pcsx2" or expected is None or channel not in TTY_CHANNELS:
             die("tty runs on pcsx2 with an expected text, --channel ee, iop or none", 2)
         marks = [line.rstrip() for line in expected.replace("\r", "").split("\n") if line.strip()]
-        out = run_pcsx2(target, market, count, None, [], 0, True, channel, marks[-1] if marks else None, interpreter)
+        out = run_pcsx2(target, market, count, None, [], 0, True, channel, marks[-1] if marks else None, interpreter, disc=Path(disc).resolve() if disc else None)
         if not out["bios_loaded"]:
             die(f"PCSX2's log shows no {MARKETS[market]} loaded: refused")
         region, found, total = program_text(out.pop("log", ""), expected)

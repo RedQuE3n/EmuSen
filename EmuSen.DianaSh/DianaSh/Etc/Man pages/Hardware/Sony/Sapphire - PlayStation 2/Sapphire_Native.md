@@ -6162,12 +6162,14 @@ committed code; the runner keeps only the register state of `S10_STATE`.
    read from a synthetic disc through the drive, the path a game's own modules take; it brings S29's disc in the drive
    forward. The alternative, the machine calling MODLOAD's exports from an IOP thread it borrows, needs no disc but
    reaches into the IOP's threads and loads modules no way a program does.
+   *Decided 2026-10-26 by the tester: as recommended; built in §40.*
 2. **Q2 [decision], the TTY device for fast-booted programs** (D-364). *Recommended*: keep it, named as a loss: the
    expected texts are a console with a TTY's, and a disc's game keeps the retail stub.
 3. **Q3 [routine], `intstall`'s FQC** (D-363). *Recommended*: leave it open, D-186's reading kept, until a program of the
    project's on a referee faithful to the stall can decide where the qwords wait.
 4. **Q4 [decision], interface traces while the BIOS runs** (§36.12). *Recommended*: allow a writer of a player's-BIOS
    stage the DMA tags and the documented SIF RPC packets, kept out of commits, the exposure recorded as here.
+   *Decided 2026-10-26 by the tester: as recommended; written into the plan's §1.4.*
 5. **Q5 [routine], the fast boot's argument**. *Recommended*: keep `host:program.elf`; give the image's own name when the
    frontend passes a path.
 
@@ -6670,3 +6672,196 @@ and is a writer of a player's-BIOS stage; **this writer is exposed and will neve
   the state.
 - S10's ELF loading and S25's part B, beside it: their units' fields are those of this stage's blocks; a field they add is
   a new version.
+
+## 40. The 23 IOP programs of ps2autotests on the player's BIOS, loaded from a synthetic disc (2026-10-26)
+
+*Numbered §40 and its disputes from D-480, S28 writing §39 (from D-460) and D-383's step §30 (from D-440) beside it.
+The work S10's §36.14 Q1 asked for, as the tester decided it on 2026-10-26 (as recommended), with §36.14 Q4 decided the
+same day and written into the plan's §1.4.*
+
+### 40.1 In one paragraph
+
+ps2autotests' 23 IOP programs (`cpu/iop/*`, `kernel/iop/*`) are IOP modules; a program on a retail console loads one
+through LOADFILE's SIF RPC from a file the IOP can open. **A dispute step learned the call's layout on PCSX2** with a
+project EE program speaking ps2tek's documented SIF RPC (D-480: the path from byte 8 of a block of 512 bytes, the reply's
+first word the module's id). **A synthetic disc** (`ps2discs.py files`) holds SYSTEM.CNF, the project's loader and the
+module as `TEST.IRX`; on Sapphire the console is started empty, the disc goes in through the tray as the core ABI's
+`MEDIA` puts it, and the loader its SYSTEM.CNF names is entered by S10's fast boot; it binds to LOADFILE and loads
+`cdrom0:\TEST.IRX;1`, the IOP reads the module through the drive, and the module prints through S10's `tty` capture.
+**All 23 print their console texts whole on both 0230 images** (§40.5). Two defects of the machine were found and
+fixed on the way: the drive's interrupt was lost behind a reason raised before the BIOS ran (D-481), and the IOP took
+a bus error on a load the console's texts show does not fault (D-482, D-61 amended). A disc of 2,048-byte sectors, which
+Sapphire takes for a DVD, is not read by the BIOS's file system as a CD of the same volume is (D-483, open). PCSX2 run
+with the same loader and discs prints 19 of the texts whole. No emulator, SDK or loader source and no firmware was read;
+§40.8 records what this writer was exposed to.
+
+### 40.2 The loader
+
+[R ps2tek "SIF Registers", "SIF DMA", "SIF RPC Basics", "SIF RPC Structs and Definitions", "SIF RPC Commands", "SIF
+RPC System Servers", "BIOS EE Syscalls" 76h-78h, "BIOS IOP LOADFILE"; M; C the choices]
+
+`tests/irx` generates an EE program for the R5900 (assembled by `emusen-mips`, entered at 00100000h), the client side of
+the SIF's RPC written from ps2tek's layouts alone:
+
+- **Its steps**: wait for SMFLG's 40000h ("IOP has finished booting"); read SMCOM, the IOP's receive address for SIF1
+  (00019600h on Sapphire and on PCSX2); arm SIF0 by SifSetDChain; clear SMFLG's 20000h and send SIFCMD's init packet
+  (80000002h, opt 0) naming its receive buffer, 00180000h; wait for 20000h; send the init packet with opt 1; bind to
+  80000006h (80000009h) until the end packet (80000008h) names a server; then for each call send the argument block to
+  the server's buffer that end packet named and the call packet (8000000Ah: function, the block's size, a reply buffer of
+  512 bytes filled with A5h, `rmode` 1) and wait for the end packet whose command field is 8000000Ah. It keeps a record
+  from 00190000h and every packet it receives from 00198000h, and writes 5A99D00Eh at 001FFFF0h, for PINE or Sapphire's
+  RAM. Every wait is bounded.
+- **How a packet leaves.** The first form programmed the EE's channel 6 itself in normal mode, each block led by its IOP
+  tag quadword as S22 models it (D-143). It ran on PCSX2 (the dispute step's runs, §40.3); on Sapphire with the player's
+  BIOS the first store to D6_MADR (1000C410h) took a TLB modification exception, EPC inside the loader [M, the hardware's
+  report]: the kernel's mapping leaves the SIF's channels read-only to a program. The loader therefore queues its packets
+  by the kernel's SifSetDma (77h) and waits for them by SifDmaStat (76h, negative once done), passing the transfer list
+  through the uncached view (a cached list was read stale by the kernel, the second transfer sent with the first's size,
+  [M]).
+- **SifSetDma's attribute** is in no document. Its bits were read on the SIF link (§1.4's decision of 2026-10-26): the
+  loader sent its init packet with each bit alone and the IOP's chain tag was read as it crossed SIF1 [M]: **04h sets the
+  tag's IRQ, 40h its end, 20h takes the data's first quadword as the tag**; 01h, 02h, 08h, 10h and 80h left the tag
+  unchanged. A command packet goes with 44h and a payload before it with 0, as the link showed a ps2autotests EE program's
+  packets carry them (IRQ and end on a command, neither on a payload). `rmode` 1 is what the same program's call packets
+  carried [M, the link]; nothing else of that traffic was taken.
+- **The calls** are given as bytes; `module_load(path)` lays one out as D-480 found (`tests/loader.rs` pins it).
+  `examples/irx.rs` writes the dispute step's two probes and the loader of one call, `loader`.
+
+### 40.3 The dispute step (D-480)
+
+Run on PCSX2 2.8.2, the Americas BIOS, the probe entered by its fast boot (`-elf`) with the disc in its drive, RAM read
+through PINE, its log not read; 1.4 s a run [M]. The first probe put the path at offsets 0 to 64 in steps of 4, then
+128, 252 and 256, of a block of zeros: only offset 8 loaded the module (reply word 0 = 19h, the module's id), every other
+offset −203. The second: the path at 8 loaded each time whatever the block's words 0 and 1 held (16, all ones, 512),
+each load one id higher, the reply's word 1 0; a path naming no file gave −203. PCSX2's SMFLG read 30000h at the
+probe's start, its fast boot entering before EESYNC's flag. The entry, `Sapphire_Disputes.md` D-480, was committed
+before the loader took the layout, as the plan's rule asks.
+
+### 40.4 The disc, and its way into the drive
+
+- **`ps2discs.py files OUT NAME=FILE …`** (S23's tool, given a mode): an ISO 9660 volume of the root alone, the
+  descriptors at 16 and 17, the L and M path tables at 18 and 19, the root at 20, SYSTEM.CNF naming the first file as
+  BOOT2, each file in sectors of its own; `OUT.bin` writes it as a CD's raw data track of mode 2 form 1 sectors, an
+  `.iso` as 2,048-byte sectors. The loader (`LOADER.ELF`) and the module (`TEST.IRX`) are the files; the program is the
+  project's and the module ps2autotests', so no commercial byte is in a disc, and none is kept.
+- **On Sapphire** (`examples/s10.rs` given a disc): a machine of `Media::Empty` with the player's BIOS, as the empty start
+  makes it; the tray opened, the disc inserted and the tray closed through `Core::media_lid` and `Core::media_insert`,
+  G10's `MEDIA`; the program SYSTEM.CNF names read from the disc's root by the runner (`media::Sectors::root_file`) and
+  entered by S10's fast boot. A disc's own boot through OSDSYS stays S29's.
+- **As a CD** (disk type 12h) the BIOS's file system reads sectors 16, 18 and 20, then the file [M, the drive's own
+  report of its N commands]. **As a DVD** (the same volume as an `.iso`, which `cdvd::open` takes for a DVD, 14h) it reads
+  sector 16 with the same ReadCd command, then asks for sector 257, past the volume, and the open fails ("open fail name
+  \TEST.IRX;1", LOADFILE's reply −203). Which of the drive's answers on a DVD makes it ask so is not shown by the reports;
+  D-483 leaves it open and every run of §40.5 uses a CD.
+
+### 40.5 The 23 programs (measured 2026-10-26)
+
+Each on its own disc as a CD, one process at a time, the build of this section's last commit [M]:
+
+| Folder | Programs | Americas `ps2-0230a-20080220.bin` | Europe `ps2-0230e-20080220.bin` | PCSX2 2.8.2, the same loader and disc |
+|---|---|---|---|---|
+| `cpu/iop` | alu, branch, branchdelay, hilodelay, lsu, lsudelay, muldiv | **7 of 7** | **7 of 7** | 6 of 7: `lsudelay` departs (below) |
+| `kernel/iop/eventflag` | delete, poll | **2 of 2** | **2 of 2** | 2 of 2 |
+| `kernel/iop/interrupt` | register, release | **2 of 2** | **2 of 2** | 2 of 2 |
+| `kernel/iop/libc` | sprintf, strtok | **2 of 2** | **2 of 2** | 2 of 2 |
+| `kernel/iop/messagebox` | poll, receive, send | **3 of 3** | **3 of 3** | 2 of 3: `receive` but its trailing spaces |
+| `kernel/iop/thread` | cancelwakeup, create, delete, releasewait, stat | **5 of 5** | **5 of 5** | 4 of 5: `create` (below) |
+| `kernel/iop/vpool` | create, pallocate | **2 of 2** | **2 of 2** | 1 of 2: `create` (below) |
+| **All** | 23 | **23**, 7.6 to 10.5 s each, 201 s in all | **23**, 5.8 to 10.2 s each, 148 s | 19 |
+
+On Sapphire each program was entered at frame 8 (Americas) or 7 (Europe), and its text was whole by frame 30 (0.5 s
+of console time), the module loaded, run and its end packet back within a few frames. **G1's `cpu/iop/*` and G2's IOP
+half are met on the player's BIOS.** PCSX2 (`ps2referee.py tty … --channel iop --disc`, the module's own lines only)
+departs where it is known to: `lsudelay`'s loads read in their delay slot see the new value (`lb 1: 00000037` where the
+console has `11223344`, `lw then branch: 1` where it has 2) and the closing line repeats; `thread/create` and
+`vpool/create` print "(0)" where the console prints "(~0)", text the test formats itself; `receive`'s lines lose their
+trailing space in its log.
+
+Before D-481 and D-482 the runs ended so: every program hung at "loadmodule: fname cdrom0:\TEST.IRX;1" (D-481);
+then 16 printed whole and seven (`messagebox/poll`, `receive`, `send`, `thread/delete`, `releasewait`, `stat`,
+`vpool/pallocate`) stopped at the line that calls the kernel with the object id ~0 (D-482).
+
+### 40.6 What the texts found
+
+1. **The drive's interrupt** (D-481). The tray opened before the BIOS ran left I_STAT's bit 3 set; S23's line, the OR
+   of I_STAT's bits, never fell, so the read's completion made no rise and IRQ 2 never came; the BIOS acknowledges only
+   what it handles (one write of 02h in the whole run). ps2tek: "When a CDVD IRQ is raised on I_STAT, this register shows
+   the reason for the interrupt". IRQ 2 is now raised at each reason the drive sets (`Cdvd::reason`, taken by the bus at
+   once in `sync_cdvd`), the line's level kept in the state as before, so `SPH2` is unchanged.
+2. **A load past 8 MiB** (D-482). The kernel's refusal of an unknown id (−407, −410, −411 in the texts) came after one
+   IOP load at physical 08000004h, a data bus error under D-61's reading of psx-spx; the console's texts show it does not
+   fault. The region from 00800000h to the SIF's 1CFFFFFFh is now on the bus as 1E000000h is (D-346): zero, writes taken
+   without effect; `s21-map`'s load at 00800000h reads zero, as PCSX2's does.
+
+### 40.7 Tests and seeded faults (2026-10-26)
+
+**Tests** [M, `cargo test --release`, the crate whole]: **362 of 362**; new: `tests/loader.rs`'s
+`the_module_load_puts_the_path_at_byte_8` and `the_loader_is_an_ee_program_carrying_its_argument_blocks`, the drive's
+`each_reason_raises_the_interrupt_while_an_earlier_one_is_pending`, the bus's
+`the_drives_command_end_reaches_the_intc_with_the_opening_unacknowledged`; `s21-map`'s record changed at one word
+(D-482). The 23 programs need the player's BIOS and are not in CI. WiseMan's `SapphireTests`, the blast radius's
+filter, **5 of 5** (2 min 10 s).
+
+**Seeded faults**, each made in place, the tests named run, the source restored [M]:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the drive raising IRQ 2 only when no reason was pending (`Cdvd::reason`), the line's rise again | `each_reason_raises_the_interrupt_while_an_earlier_one_is_pending`, `the_drives_command_end_reaches_the_intc_with_the_opening_unacknowledged` |
+| F2 | the region past 8 MiB a bus error again (`iop::bus::decode`) | `the_memory_map_scratchpad_and_bus_errors_equal_the_documents` |
+| F3 | the module's path at byte 12 (`tests/irx`'s `PATH_AT`) | `the_module_load_puts_the_path_at_byte_8` |
+
+### 40.8 Exposure, and what was observed
+
+**Exposure** (§1.4): this writer ran the player's BIOS on Sapphire and on PCSX2, wrote stages run on the player's BIOS,
+traced the SIF link as §1.4 now allows, and read the BIOS's own console text in the `tty` space while finding where a
+load stopped (the IOP kernel's and modules' banners, LOADFILE's "loadmodule: fname … args … arg", "open fail name …" and
+"loadmodule: id …, ret …"); **this writer is exposed and will never write the open replacement**, as §1.4 asks to be
+recorded.
+
+**Observed while the BIOS ran**, each through a diagnostic not committed: the SIF DMA tags crossing SIF0 and SIF1 and the
+packets they carried, in ps2tek's documented `SifCmdHeader` and `SifRpc*` layouts (a ps2autotests EE program's traffic
+once, the loader's thereafter); the EE's exceptions whose EPC lay inside the loader (code, EPC, BadVAddr); the drive's N
+commands with their parameters and its registers' state, the IOP DMAC's channel 3, the IOP's exception counts and the
+accesses no unit answers (S24's reports); the `tty` text. No program counter inside the boot ROM or inside BIOS code in
+RAM, no instruction of the BIOS, no memory holding BIOS code or data beyond the link's packets, and no BIOS image was
+read; the images were handed by path to Sapphire and to PCSX2.
+
+### 40.9 Named losses
+
+- **CDs only** (D-483): the IOP programs' discs are CDs; a DVD of the same volume is not read.
+- **The fast boot's loader**: the loader is entered by S10's fast boot from the disc's file, not by OSDSYS's boot of the
+  disc (S29); argv[0] is S10's `host:program.elf`.
+- **S10's TTY device** (D-364) answers the modules' writes as it answers an EE program's.
+- **D-481's argued rule** and **D-482's extent**, each a choice where the documents are silent.
+
+### 40.10 Where the plan was wrong, or left open
+
+- **§7's S10 row and §3.1** took the `.irx` programs as loaded "the documented way"; the layout needed D-480, the
+  attribute of SifSetDma the link, and the disc G10's `MEDIA` before S29.
+- **S23's interrupt line** (§25.4) and **D-61's bus error past 8 MiB** were readings the console's texts overturned.
+
+### 40.11 Questions this section leaves
+
+1. **Q1 [routine], the DVD (D-483).** *Recommended*: a dispute step at S29, when a disc first boots as a DVD: the drive's
+   answers to the BIOS's first reads of a single-layer DVD compared with PCSX2's on the same image (RAM and the drive's
+   registers from an EE program), before any change to `cdvd`.
+2. **Q2 [routine], D-482's extent.** *Recommended*: keep the whole region past 8 MiB below the SIF on the bus, as the
+   documents place nothing there; narrow it only if a console text shows a fault.
+3. **Q3 [routine], the 23 runs in CI.** *Recommended*: none, as for S10's 55: they need the player's BIOS; the runner
+   and `ps2discs.py` keep them repeatable.
+
+### 40.12 What was read for this section
+
+`Sapphire_Plan.md` §1.4, §3, §7 (S10, S24, S29), §11 Q6; this page's §25, §26, §30.15-§30.24, §35, §36;
+`Sapphire_Disputes.md` D-61, D-68, D-142, D-143, D-346, D-360 to D-364, D-383. ps2tek at `1c91660`: "Subsystem Interface
+(SIF)" whole, "BIOS EE Syscalls" 76h-78h, "BIOS IOP SIFCMD", "BIOS IOP REBOOT", "BIOS IOP LOADFILE", "CDVD I/O Ports".
+ps2autotests: the expected texts of the 23, `common/common-iop.c` and `.h`, and of the tests' own sources `cpu/iop/alu.c`
+(its `_start`), `kernel/iop/thread/create.c`, `delete.c`, `releasewait.c`, `stat.c`, `kernel/iop/messagebox/poll.c`,
+`receive.c` and `kernel/iop/vpool/pallocate.c` (the lines that pass ~0). PCSX2 2.8.2 run as a black box, RAM through
+PINE and the module's own lines of its IOP console. No emulator, SDK or loader source; no firmware opened, hashed,
+listed or traced.
+
+### 40.13 What this section does not cover
+
+- A disc's boot through OSDSYS and a DVD's file system (S29, D-483).
+- Loading a module with arguments, LOADFILE's other functions, and the IOP's reboot into a disc's module image.

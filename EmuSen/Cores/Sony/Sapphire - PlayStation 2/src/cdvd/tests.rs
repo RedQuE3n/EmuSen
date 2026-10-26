@@ -372,3 +372,23 @@ fn the_boot_s_commands_answer_as_measured() {
     assert_eq!(s(&mut c, 0x84, &[], 0), [ABSENT]);
     assert_eq!((c.s_count[0x24], c.s_last[0x1A]), (1, ([0x02, 0x1E, 0x41, 0x43, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4)));
 }
+
+/// D-481: each reason the drive sets raises IRQ 2, though a reason set before it is still pending, as the tray's
+/// opening is when the console starts empty and the BIOS never acknowledges it.
+#[test]
+fn each_reason_raises_the_interrupt_while_an_earlier_one_is_pending() {
+    let mut c = Cdvd::new(None);
+    c.tray(true, 0);
+    assert!(c.take_raised() && !c.take_raised(), "the opening raises it once");
+    assert!(c.insert(Some(cd(false))));
+    c.tray(false, 0);
+    c.run(SPIN_UP);
+    n(&mut c, ncmd::NOP, &[], SPIN_UP);
+    finish(&mut c, SPIN_UP + PROMPT);
+    assert_eq!(c.read8(reg::I_STAT), istat::EJECTED | istat::COMPLETE, "the opening still pending");
+    assert!(c.take_raised(), "the command's end raises it again");
+    c.write8(reg::I_STAT, istat::COMPLETE, SPIN_UP + PROMPT);
+    n(&mut c, ncmd::NOP, &[], SPIN_UP + PROMPT);
+    finish(&mut c, SPIN_UP + 2 * PROMPT);
+    assert!(c.take_raised(), "and at the next command's end");
+}

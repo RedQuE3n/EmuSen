@@ -46,8 +46,8 @@ pub enum Target {
     Io(u32),
     /// The SIF's registers at 1D000000h, S22's.
     Sif(u32),
-    /// 1E000000h-1EFFFFFFh, the place of the DVD player's ROMs, whose images are not taken (Sapphire_Plan.md §5.9): on the
-    /// bus, reading zero, taking writes without effect (Sapphire_Disputes.md D-346).
+    /// 1E000000h-1EFFFFFFh, the place of the DVD player's ROMs, whose images are not taken (Sapphire_Plan.md §5.9), and
+    /// the region past RAM's 8 MiB below the SIF: on the bus, reading zero, taking writes without effect (D-346, D-482).
     Absent,
     Rom(u32),
     CacheControl,
@@ -72,6 +72,7 @@ pub fn decode(address: u32) -> Target {
     let p = address & 0x1FFF_FFFF;
     match p {
         0..RAM_WINDOW => Target::Ram(p & (RAM as u32 - 1)),
+        RAM_WINDOW..0x1D00_0000 => Target::Absent,
         0x1D00_0000..0x1D00_0100 => Target::Sif(p),
         0x1E00_0000..0x1F00_0000 => Target::Absent,
         0x1F40_0000..0x1F50_0000 | 0x1F80_1000..0x1F81_0000 | 0x1F90_0000..0x1F91_0000 => Target::Io(p),
@@ -287,13 +288,13 @@ impl IopBus {
         self.reschedule();
     }
 
-    /// IRQ 2 raised at the rise of the drive's interrupt line (ps2tek "IOP Interrupts").
+    /// IRQ 2 raised at each reason the drive sets in its I_STAT, whatever reasons are still pending (ps2tek "IOP
+    /// Interrupts", "CDVD I/O Ports"; D-481).
     fn sync_cdvd(&mut self) {
-        let line = self.cdvd.irq();
-        if line && !self.cdvd_line {
+        if self.cdvd.take_raised() {
             self.intc.raise(source::CDVD);
         }
-        self.cdvd_line = line;
+        self.cdvd_line = self.cdvd.irq();
     }
 
     /// A read of the drive's byte registers at `p`, a wider access taking the bytes in order [C].
@@ -664,5 +665,27 @@ impl IopBus {
         r.bools(&mut l)?;
         [self.cdvd_line, self.fault] = l;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// D-481 through the bus: with the tray's opening still pending in the drive's I_STAT, a command's end sets I_STAT
+    /// bit 2 of the IOP's INTC again.
+    #[test]
+    fn the_drives_command_end_reaches_the_intc_with_the_opening_unacknowledged() {
+        let mut b = IopBus::new(crate::pcrtc::Pcrtc::new(crate::clock::NTSC).timing);
+        b.tray(true, 0);
+        assert!(b.intc.stat & 1 << source::CDVD != 0);
+        b.intc.stat = 0;
+        b.tray(false, 0);
+        let t = 4 * cdvd::timing::SPIN_UP * IOP;
+        b.run_units(t);
+        b.now = t / IOP;
+        b.cdvd_write(cdvd::BASE + 4, Size::Byte, 0);
+        b.run_units(t + 100_000 * IOP);
+        assert!(b.intc.stat & 1 << source::CDVD != 0, "IRQ 2 raised at the command's end");
     }
 }

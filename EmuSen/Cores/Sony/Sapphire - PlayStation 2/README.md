@@ -53,6 +53,11 @@ Since stage S10 (`Sapphire_Native.md` §36) an EE program given as the image is 
 (`Machine::enter_program`), and the IOP's console is kept in the `TTY` space (`src/iop/tty.rs`);
 `cargo run --release --example s10 -- <bios> <americas|europe|japan> <program.elf> <expected>` runs a ps2autotests
 program on a BIOS given by path and grades its text against the expected file.
+Since 2026-10-26 (`Sapphire_Native.md` §40) the same runner takes a disc: the console is started empty, the disc put in
+through the tray and the program its SYSTEM.CNF names entered by fast boot. `tests/irx/` is the project's EE loader of
+IOP modules through LOADFILE's SIF RPC, `cargo run --release --example irx -- loader <out.elf>` writes it, and
+`EmuSen.WiseMan/Reference/analysis/ps2discs.py files <disc.bin> LOADER.ELF=<loader> TEST.IRX=<module>` makes the disc a
+ps2autotests IOP program runs from.
 
 Since stage S30 (`Sapphire_Native.md` §38) `src/state.rs` is the whole console's state, SPH2 version 2, each unit's
 block written beside the unit and composed in `src/board.rs`; `tests/sph2/version-2.layout` is its listing, which

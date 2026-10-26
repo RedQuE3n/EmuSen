@@ -7825,7 +7825,10 @@ for six frames, and `--registers` counts every register access the units answer 
 its times are not the bench's). The digests are taken outside the timed span; the bench changes no golden and no test's
 input. **The digests repeat**: the boot's three timed rounds, its sampled run and its run with `--registers` gave the same
 picture, sound and state digests (`50F06A02F1B76860`, `2EE7B3D10DF3C401`, `27EE1FC15C589B8C` at 760 frames), Jak's three
-rounds and its sampled run the same three, so the bench is the instrument S33 onward compares before and after.
+rounds and its sampled run the same three, so the bench is the instrument S33 onward compares before and after. On the
+tree rebased onto WiseMan `557d2ec0b` the pictures and the sound are unchanged and the state's digest is
+`69D92E107601A13F` (the state now holds what S31 and D-540 added), the same in all six boot runs; Jak's three runs to
+frame 900 agree in all three digests, as do its three to frame 400.
 
 Diamond's `bench.rs` and MarsRT's are each their core's example, sharing no crate; Sapphire's follows Diamond's line format
 so the probe's tools read all three, and adds no dependency.
@@ -7963,7 +7966,7 @@ The register accesses do not show a polling loop: over the boot's 760 frames the
 
 ### 43.7 How the numbers were checked
 
-- The counts were proven by test (§43.10), and the digests repeated across seven runs (§43.2).
+- The counts were proven by test (§43.10), and the digests repeated across every run of one workload on one tree (§43.2).
 - Each window was profiled once, by a sampled run of its own; the sampled runs' frame times differ from the timed rounds'
   (up to 50 % slower under the sampler and the load), so only their shares are used, and each share is multiplied by the
   timed rounds' median. The order of the EE's parts (the timing model, translation, step and dispatch, fetch, then the

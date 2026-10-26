@@ -10494,6 +10494,9 @@ never read; Jak and Daxter read in place from `~/.cache/emusen/probe/sapphire/di
 | States saved mid-wait | `s33 state`: a skipping machine's state at frame *n* loaded into a second, both run on beside a plain one (recompiled tier) | the boot, state at frame 400, 100 frames on: 0 pictures, 0 sound, 0 states differing, loaded and carried; Jak and Daxter, frame 300, 100 on: 0, 0, 0 |
 | The verifier on the BIOS | `s33 verify`, quiet: the interpreter stepped after every block and through every skipped turn, 30 frames | held: the boot 220,863,488 steps compared (3,371 skips), Jak and Daxter from its entry 231,997,440 (485 skips, 44.9 % of the EE's cycles), the whole states equal at the end |
 
+**The blast radius** (`blast.sh`): the crate's whole suite, 411 tests in 30 binaries, passed, and WiseMan's `SapphireTests`, 5
+of 5, the schema's settings now ending with `idle_skip`.
+
 **What was skipped** over the gate's runs: on the boot, 77.9 % of the EE's cycles in 20,528 skips and 334.9 million IOP
 cycles (71.7 % of the IOP's); on Jak and Daxter, 84.4 % in 521,176 skips and 188.7 million IOP cycles (34.1 %). Both tiers
 made exactly the same skips, as an exact lever must.

@@ -12,6 +12,10 @@
 //! frames by default), `shot <frame>` (a picture at that frame), `every <k>` (a picture every k frames) and `quit`.
 //! Pictures are `<out-dir>/frame-<n>.ppm`; `<out-dir>/status` is the frame reached; on `quit` the card in slot 1 is
 //! written to `<out-dir>/card1.ps2` with whether the console wrote it, and the reports are printed.
+//!
+//! With `S25B_UNITS` set, each picture's line is followed by SIO2's and its DMA channels' own counts and registers, and
+//! `<out-dir>/regs-<n>.txt` holds the count of every register access the IOP's units answered (no values); with
+//! `S25B_TAP` set, a multitap is plugged into slot 1 (Sapphire_Disputes.md D-383).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -81,6 +85,11 @@ fn main() {
     if a.get(4).map(String::as_str) == Some("none") {
         m.sys.board.iop.bus.sio2.slots[0].cards[0] = None;
     }
+    if std::env::var_os("S25B_TAP").is_some() {
+        m.sys.board.iop.bus.sio2.slots[0].tap = true;
+    }
+    let units = std::env::var_os("S25B_UNITS").is_some();
+    m.sys.board.iop.bus.reports.all = units;
     println!("started empty: market {:?}, booted {}, drive {:?}", m.market, m.booted, m.drives().iter().map(|d| (d.lid_open, d.loaded)).collect::<Vec<_>>());
     let started = Instant::now();
     let mut held: Option<(u32, i64)> = None;
@@ -105,6 +114,11 @@ fn main() {
             write_ppm(&m, &out.join(format!("frame-{}.ppm", m.frames)));
             let lit = m.sys.board.pcrtc.picture.rgba.chunks(4).filter(|px| px[..3] != [0, 0, 0]).count();
             println!("frame {} at {:.0} s wall: picture {:?}, lit {lit}; stop {:?}; IOP held {}", m.frames, started.elapsed().as_secs_f64(), m.sys.board.pcrtc.picture.geometry, m.stop, m.sys.board.iop.held);
+            if units {
+                println!("  {}", sio2_units(&m));
+                let counts: String = m.sys.board.iop.bus.reports.registers.iter().map(|((side, a, x), r)| format!("{side:?} {a:08X} {x:?} {}\n", r.count)).collect();
+                std::fs::write(out.join(format!("regs-{}.txt", m.frames)), counts).unwrap();
+            }
         }
     }
     println!("stop {:?}; EE exceptions {:?} level 2 {:?}; IOP exceptions {:?}", m.stop, m.sys.ee.exceptions, m.sys.ee.exceptions2, m.sys.board.iop.exceptions);
@@ -127,4 +141,27 @@ fn write_ppm(m: &Machine, path: &Path) {
         v.extend_from_slice(&px[..3]);
     }
     std::fs::write(path, v).unwrap();
+}
+
+/// SIO2's and its DMA channels' own state, counts and busy bits only (S25B_UNITS): queues started, FIFOOUT and RECV1
+/// reads, channel 11's and 12's CHCR writes and their registers, whether a queue is running.
+fn sio2_units(m: &Machine) -> String {
+    use sapphire::reports::{Access, Side};
+    let bus = &m.sys.board.iop.bus;
+    let n = |a: u32, x: Access| bus.reports.registers.get(&(Side::Iop, a, x)).map_or(0, |r| r.count);
+    let ch = |c: usize| {
+        let c = &bus.dmac.ch[c];
+        format!("MADR {:08X} BCR {:08X} CHCR {:08X}", c.madr, c.bcr, c.chcr)
+    };
+    format!(
+        "SIO2: CTRL writes {}, FIFOOUT reads {}, RECV1 reads {}; ch11 CHCR writes {} {}; ch12 CHCR writes {} {}; queue running {}",
+        n(0x1F80_8268, Access::Write),
+        n(0x1F80_8264, Access::Read),
+        n(0x1F80_826C, Access::Read),
+        n(0x1F80_1548, Access::Write),
+        ch(11),
+        n(0x1F80_1558, Access::Write),
+        ch(12),
+        bus.sio2.next_event() != u64::MAX
+    )
 }

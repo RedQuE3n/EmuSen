@@ -3,16 +3,18 @@
 //! against the expected text. The BIOS image is handed to the machine and never read here; what is printed is the
 //! program's own text, the hardware's reports and the counts of the capture.
 //!
-//! `cargo run --release --example s10 -- <bios> <americas|europe|japan> <program.elf> <expected> [max-frames] [out.txt]`
+//! `cargo run --release --example s10 -- <bios> <americas|europe|japan> <program.elf|disc.iso> <expected> [max-frames] [out.txt]`
 //! runs until the text holds the expected text's last line, the text stops growing for `S10_IDLE` frames (600) or the
 //! frames run out, and prints PASS, FAIL with the first line that differs, or INCOMPLETE, with the frames and the wall
 //! time. `S10_STATE` adds the DMACs', the SIF's and the INTCs' registers at the end, `S10_ALL` the registers answered,
-//! `S10_REPORTS` the accesses no unit answers.
+//! `S10_REPORTS` the accesses no unit answers. A disc (§40) is put in the drive of a console started empty and the program
+//! its SYSTEM.CNF names is entered.
 
 use std::time::Instant;
 
 use sapphire::machine::{Machine, Market, TTY_ID};
-use sapphire::media::Media;
+use emusen_native::core::{Core, Insert};
+use sapphire::media::{Media, Sectors};
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
@@ -26,9 +28,15 @@ fn main() {
     let expected = normalise(&String::from_utf8_lossy(&std::fs::read(&a[4]).expect("the expected text")));
     let max: i64 = a.get(5).map_or(3000, |f| f.parse().unwrap());
     let out = a.get(6).cloned();
-    let mut m = Machine::new(Media::read(&program).expect("an EE program"), market, [Some("ps2.dualshock2"), None]);
-    m.insert_bios(&bios);
-    m.program = Some(program);
+    let mut m = match Media::read(&program).expect("an EE program or a disc") {
+        Media::Disc(d) => disc(&program, &d.program, market, &bios),
+        media => {
+            let mut m = Machine::new(media, market, [Some("ps2.dualshock2"), None]);
+            m.insert_bios(&bios);
+            m.program = Some(program);
+            m
+        }
+    };
     let all = std::env::var_os("S10_ALL").is_some();
     m.sys.board.reports.all = all;
     m.sys.board.iop.bus.reports.all = all;
@@ -83,6 +91,21 @@ fn main() {
     if let Some(o) = out {
         std::fs::write(o, &text).unwrap();
     }
+}
+
+/// A disc's run (Sapphire_Native.md §40): the console started empty, the disc put in through the tray as the core
+/// ABI's `MEDIA` puts it, and the program its SYSTEM.CNF names entered by the fast boot; the IOP reads the disc through
+/// the drive.
+fn disc(image: &[u8], boot2: &str, market: Market, bios: &[u8]) -> Machine {
+    let name = boot2.rsplit(['\\', ':']).next().unwrap_or("").split(';').next().unwrap_or("");
+    let program = Sectors::new(image).root_file(name).unwrap_or_else(|| panic!("the disc's root holds no {name}"));
+    let mut m = Machine::new(Media::Empty, market, [Some("ps2.dualshock2"), None]);
+    m.insert_bios(bios);
+    m.media_lid(0, true).expect("the tray opens");
+    m.media_insert(0, &Insert { image: Some(image), files: Vec::new(), restore: false }).expect("the disc goes in");
+    m.media_lid(0, false).expect("the tray closes");
+    m.program = Some(program);
+    m
 }
 
 /// Where the machine stands at the end, registers and modes only: which unit waits on which (Sapphire_Plan.md §1.4).

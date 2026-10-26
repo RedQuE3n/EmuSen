@@ -4,7 +4,8 @@
 //! `cargo run --release --example irx -- probe <out.elf>` writes the dispute step's probe (§40.3): calls to LOADFILE's
 //! function 0 with the module's path, `cdrom0:\TEST.IRX;1`, at each of a series of offsets in an argument block of
 //! 512 zero bytes, each reply kept in the record for a referee's RAM. `probe2 <out.elf>` writes its second part: the
-//! path at offset 8 with the block's first two words set in turn, and a path naming no file.
+//! path at offset 8 with the block's first two words set in turn, and a path naming no file. `loader <out.elf>` writes the
+//! loader the 23 IOP programs run by: one call loading `cdrom0:\TEST.IRX;1` as D-480 found the layout.
 
 #[path = "../tests/irx/mod.rs"]
 mod irx;
@@ -55,7 +56,8 @@ fn main() {
     let calls = match a.first().map(String::as_str) {
         Some("probe") => probe(),
         Some("probe2") => probe2(),
-        _ => panic!("irx probe <out.elf>"),
+        Some("loader") => vec![irx::module_load(MODULE)],
+        _ => panic!("irx probe|probe2|loader <out.elf>"),
     };
     let words = irx::image(&calls);
     std::fs::write(&a[1], sapphire::media::program(&words, irx::ORIGIN)).expect("written");

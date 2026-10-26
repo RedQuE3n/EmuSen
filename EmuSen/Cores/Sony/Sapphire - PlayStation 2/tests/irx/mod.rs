@@ -111,6 +111,19 @@ pub struct Call {
     pub recv: u32,
 }
 
+/// The argument block's size and the reply's, and where the module's path begins in the block (D-480).
+pub const BLOCK: usize = 512;
+pub const PATH_AT: usize = 8;
+
+/// A call that loads and starts the module at `path`: the path from byte 8 of a block of zeros, the reply's 512 bytes
+/// asked back, its first word the module's id or a negative error (D-480).
+pub fn module_load(path: &str) -> Call {
+    assert!(path.len() < BLOCK - PATH_AT, "a path of {} bytes", path.len());
+    let mut args = vec![0u8; BLOCK];
+    args[PATH_AT..PATH_AT + path.len()].copy_from_slice(path.as_bytes());
+    Call { function: LOAD_MODULE, args, recv: BLOCK as u32 }
+}
+
 struct Asm {
     lines: Vec<String>,
     labels: u32,

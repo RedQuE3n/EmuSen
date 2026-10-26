@@ -44,6 +44,33 @@ fn a_queue_ends_after_its_bytes_and_a_busy_card_holds_the_next_command() {
 }
 
 #[test]
+fn a_command_nothing_acknowledges_ends_at_its_peripheral_byte() {
+    let mut s = Sio2::default();
+    queue(&mut s, 2, &[0x81, 0x11, 0, 0], 1000);
+    assert_eq!(s.next_event(), 1000 + BYTE * IOP, "the empty slot: one byte, no /ACK");
+    assert_eq!(finish(&mut s, 4), [card::HIZ; 4]);
+    assert_eq!(s.recv1, NO_DEVICE);
+    queue(&mut s, 0, &[0x21, 0x12, 0, 0, 0, 0, 0], 2000);
+    assert_eq!(s.next_event(), 2000 + BYTE * IOP, "no multitap");
+    finish(&mut s, 7);
+    // The controller's read after the empty slot's probe in one queue: one byte and five.
+    s.write(CTRL, CTRL_RESET, 3000);
+    s.write(SEND3, 2 | 4 << 18, 3000);
+    s.write(SEND3 + 4, 5 << 18, 3000);
+    s.write(SEND3 + 8, 0, 3000);
+    for b in [0x81, 0x11, 0, 0, 0x01, 0x42, 0, 0, 0] {
+        s.write(FIFOIN, b, 3000);
+    }
+    s.write(CTRL, CTRL_START, 3000);
+    assert_eq!(s.next_event(), 3000 + 6 * BYTE * IOP);
+    assert_eq!(finish(&mut s, 9)[4..7], [card::HIZ, 0x41, 0x5A]);
+    // A card that is there but refuses a command still takes the command's whole length.
+    s.slots[0].cards[0] = Some(MemoryCard::erased());
+    queue(&mut s, 2, &[0x81, 0xF3, 0, 0, 0], 4000);
+    assert_eq!(s.next_event(), 4000 + 5 * BYTE * IOP);
+}
+
+#[test]
 fn a_write_clears_bits_and_an_erase_sets_its_whole_block() {
     let mut c = MemoryCard::erased();
     let mut reply = [0u8; 134];

@@ -7,7 +7,8 @@
 //!
 //! The ports [A, Sapphire_Disputes.md D-220]: 0 and 1 the two controller connectors, 2 and 3 the two card slots, which
 //! on the PlayStation 2 are not wired together (psx-spx "PS2 multitap"); a peripheral byte that no device on its port
-//! answers reads HiZ.
+//! answers reads HiZ, and its command ends at that byte, since a device shows itself by its /ACK after the peripheral
+//! byte (psx-spx "Device addressing"; [A, Sapphire_Disputes.md D-383]).
 
 pub mod card;
 pub mod pad;
@@ -175,7 +176,8 @@ impl Sio2 {
     }
 
     /// Runs the queue at EE cycle `t`: each entry until a zero, its bytes taken from FIFOIN (00h for any missing [C]),
-    /// answered by its port's device; the replies are held until the queue's end.
+    /// answered by its port's device; the replies are held until the queue's end. A command whose peripheral byte no
+    /// device on its port acknowledges ends at that byte, its reply HiZ for its whole length (Sapphire_Disputes.md D-383).
     fn start(&mut self, t: u64) {
         let mut at = t;
         let mut recv1 = CONNECTED;
@@ -199,7 +201,13 @@ impl Sio2 {
             {
                 at = at.max(c.busy_until);
             }
-            at += len as u64 * BYTE * IOP;
+            let addressed = match (port >= 2, peripheral) {
+                (_, tap::PERIPHERAL) => slot.tap,
+                (false, PAD) => slot.pad().is_some(),
+                (true, CARD) => slot.card().is_some(),
+                _ => false,
+            };
+            at += if addressed { len } else { len.min(1) } as u64 * BYTE * IOP;
             let answered = match (port >= 2, peripheral) {
                 (_, tap::PERIPHERAL) if slot.tap => {
                     let (ok, select) = tap::exchange(cmd, reply);

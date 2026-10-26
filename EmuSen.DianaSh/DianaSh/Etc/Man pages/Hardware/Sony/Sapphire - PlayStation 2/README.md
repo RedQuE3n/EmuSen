@@ -104,7 +104,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the Memory Cards tab (G11) with `ps2.card` read by `emusen-ps2-card` in the kilobytes the browser shows; the player's
   BIOS on PCSX2, driven through its keyboard pad, formatting a card that the crate edited and the BIOS read back, and
   the reverse (D-380 to D-382); OSDSYS on Sapphire stepping through its setup to the main menu with an empty tray, and its
-  browser never drawing with a card in slot 1 (P8 as observed, D-383 open); and the 23 IOP programs (2026-10-26, §40): the project's EE loader speaking
+  browser never drawing with a card in slot 1 (P8 as observed, D-383 open); D-383's step (2026-10-26, §30.25-§30.30):
+  a command no device acknowledges ends at its peripheral byte, which made the setup take the pad with slot 1 empty,
+  and the browser then stalls the same with slot 1 empty as with a card (D-440 and D-441 opened); and the 23 IOP
+  programs (2026-10-26, §40): the project's EE loader speaking
   LOADFILE's SIF RPC, its layout learned on PCSX2 (D-480), each module on a synthetic CD put in through `MEDIA` after an
   empty start, all 23 equal to their console texts on both 0230 images, the drive's interrupt (D-481) and the IOP's
   region past 8 MiB (D-482) corrected, a DVD's file system left open (D-483).

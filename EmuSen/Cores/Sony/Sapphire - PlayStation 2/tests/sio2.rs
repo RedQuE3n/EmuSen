@@ -93,3 +93,11 @@ fn a_multitap_answers_its_frame_and_routes_the_slot_it_selects() {
         s.pads[0] = Some(DualShock2::default());
     });
 }
+
+#[test]
+fn a_command_nothing_acknowledges_ends_at_its_peripheral_byte() {
+    let b = grade(s25::empty_program(), |b| {
+        assert!(b.iop.bus.sio2.slots.iter().all(|s| s.cards.iter().all(Option::is_none)), "both card slots empty");
+    });
+    assert!(b.iop.bus.sio2.slots[1].pads[0].is_none(), "controller port 2 empty");
+}

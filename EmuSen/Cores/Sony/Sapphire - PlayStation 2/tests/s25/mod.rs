@@ -592,15 +592,128 @@ pub fn probe_tap_slots() -> Program {
     p
 }
 
+/// The time of one byte on a port, in IOP cycles, at 250,000 bytes a second (Sapphire_Native.md §30.3), and the margin
+/// a timed queue allows for the program's own instructions between the timer's reset and its read.
+pub const BYTE_CYCLES: u32 = 147;
+pub const MARGIN: u32 = 400;
+
+/// One queue of `cmds`, timed by the IOP's timer 3 from just before CTRL's start to after the interrupt, the time graded
+/// as `bytes` bytes' worth within the margin; then RECV1 and the replies graded.
+fn timed(p: &mut Program, cmds: &[(u32, Vec<u8>)], bytes: u32, recv: u32, want: &Bytes) {
+    let entries: Vec<u32> = cmds.iter().map(|(port, b)| send3(*port, b.len() as u32)).collect();
+    let all: Vec<u8> = cmds.iter().flat_map(|c| c.1.iter().copied()).collect();
+    assert_eq!(all.len(), want.len(), "a reply byte for every byte sent");
+    p.queue(&entries);
+    p.fifo_in(&all);
+    p.poke(s21::reg::mode(3), 0);
+    p.start();
+    p.read_count(3);
+    p.record_within("t2", bytes * BYTE_CYCLES, bytes * BYTE_CYCLES + MARGIN);
+    p.recv1(Some(recv));
+    p.reply(want);
+}
+
+/// `s25-empty-port` (Sapphire_Disputes.md D-383), with nothing in card slot 1 or controller port 2: a command to a port
+/// where no device acknowledges its peripheral byte ends at that byte, its reply HiZ for its whole length, alone or in a
+/// queue beside the controller's read; a device shows itself by its /ACK after the peripheral byte (psx-spx "Device
+/// addressing", "Controller and Memory Card Signals").
+pub fn empty_program() -> Program {
+    let mut p = Program::uncached("s25-empty-port");
+    let read = || pad(0x42, &[], 5);
+    let probe = || card_cmd(&[0x11], 4);
+    let pad_ok = || pad_reply(0x41, &[0xFF, 0xFF], 0);
+    timed(&mut p, &[(PAD1, read())], 5, CONNECTED, &pad_ok());
+    timed(&mut p, &[(CARD1, probe())], 1, NO_DEVICE, &exact(&[HIZ; 4]));
+    timed(&mut p, &[(CARD1, vec![0x21, 0x12, 0, 0, 0, 0, 0])], 1, NO_DEVICE, &exact(&[HIZ; 7]));
+    timed(&mut p, &[(PAD2, read())], 1, NO_PAD, &exact(&[HIZ; 5]));
+    timed(&mut p, &[(PAD1, read()), (CARD1, probe())], 6, NO_DEVICE, &[pad_ok(), exact(&[HIZ; 4])].concat());
+    timed(&mut p, &[(CARD1, probe()), (PAD1, read())], 6, NO_DEVICE, &[exact(&[HIZ; 4]), pad_ok()].concat());
+    timed(&mut p, &[(PAD1, read())], 5, CONNECTED, &pad_ok());
+    p
+}
+
+/// One queue of `cmds` for the D-383 probe, ungraded: the queue's time on the IOP's timer 3 and the wait's passes left,
+/// RECV1 to RECV3 and SIO2's flags (written back as read, as a driver acknowledges them), then the replies and eight
+/// bytes more.
+fn empty_queue(p: &mut Program, cmds: &[(u32, Vec<u8>)]) {
+    let entries: Vec<u32> = cmds.iter().map(|(port, b)| send3(*port, b.len() as u32)).collect();
+    let bytes: Vec<u8> = cmds.iter().flat_map(|c| c.1.iter().copied()).collect();
+    p.queue(&entries);
+    p.fifo_in(&bytes);
+    p.poke(s21::reg::mode(3), 0);
+    p.start();
+    p.read_count(3);
+    p.record("t2", None);
+    p.record("t5", None);
+    p.rec(reg::RECV1, None);
+    p.rec(reg::RECV2, None);
+    p.rec(reg::RECV3, None);
+    p.peek(reg::ISTAT);
+    p.record("t2", None);
+    p.emit("sw t2, 0(t6)");
+    p.reply(&any(bytes.len() + 8));
+}
+
+/// `s25-empty`, a probe for the referee, ungraded (Sapphire_Disputes.md D-383): a controller read with card slot 1
+/// empty, alone, in one queue with the empty slot's probe in either order, and in the queue after it; beside them the
+/// same with slot 2's card, with the multitap's byte on the empty slot, with the empty controller port, and a queue
+/// polling all four ports.
+pub fn probe_empty() -> Program {
+    let mut p = Program::uncached("s25-empty");
+    let read = || pad(0x42, &[], 5);
+    let probe = || card_cmd(&[0x11], 4);
+    let cases: Vec<Vec<(u32, Vec<u8>)>> = vec![
+        vec![(PAD1, read())],
+        vec![(CARD1, probe())],
+        vec![(PAD1, read()), (CARD1, probe())],
+        vec![(CARD1, probe()), (PAD1, read())],
+        vec![(PAD1, read())],
+        vec![(PAD1, read()), (CARD2, probe())],
+        vec![(CARD1, vec![0x21, 0x12, 0, 0, 0, 0, 0]), (PAD1, read())],
+        vec![(PAD2, read()), (CARD1, probe())],
+        vec![(PAD1, read()), (CARD1, probe()), (PAD2, read()), (CARD2, probe())],
+        vec![(PAD1, pad(0x42, &[], 21)), (CARD1, probe())],
+        vec![(PAD1, read())],
+    ];
+    for c in &cases {
+        empty_queue(&mut p, c);
+    }
+    p
+}
+
+/// `s25-empty-len`, a probe for the referee, ungraded (Sapphire_Disputes.md D-383): where a controller's reply lands
+/// after a command of each length to the empty card slot, the empty controller port or the empty slot's multitap byte,
+/// and the second slot's card after the empty first.
+pub fn probe_empty_len() -> Program {
+    let mut p = Program::uncached("s25-empty-len");
+    let read = || pad(0x42, &[], 5);
+    for len in [2usize, 3, 4, 5, 6, 7, 8, 9, 13, 20] {
+        empty_queue(&mut p, &[(CARD1, card_cmd(&[0x11], len)), (PAD1, read())]);
+    }
+    for len in [3usize, 5, 9] {
+        empty_queue(&mut p, &[(PAD2, pad(0x42, &[], len)), (PAD1, read())]);
+    }
+    empty_queue(&mut p, &[(CARD1, vec![0x21, 0x12, 0, 0]), (PAD1, read())]);
+    empty_queue(&mut p, &[(CARD1, card_cmd(&[0x11], 4)), (CARD2, card_cmd(&[0x11], 4))]);
+    empty_queue(&mut p, &[(CARD1, card_cmd(&[0x11], 4)), (CARD1, card_cmd(&[0x11], 4)), (PAD1, read())]);
+    p
+}
+
 /// The gate's programs that every referee configuration runs.
 pub fn gate() -> Vec<Program> {
     vec![pad_program(), card_program(), dma_program()]
+}
+
+/// The programs run with card slot 1 empty (Sapphire_Disputes.md D-383).
+pub fn empty_slot() -> Vec<Program> {
+    vec![empty_program()]
 }
 
 /// Every program the referees are given: the gate's, the tap's (run with a multitap), and the probes.
 pub fn all() -> Vec<Program> {
     let mut v = gate();
     v.push(tap_program());
-    v.extend([probe(), probe_write(), probe_tap("s25-tap-21-0", PAD1, 0x21), probe_tap("s25-tap-21-2", CARD1, 0x21), probe_tap("s25-tap-61-0", PAD1, 0x61), probe_tap_slots()]);
+    v.extend(empty_slot());
+    v.extend([probe(), probe_write(), probe_tap("s25-tap-21-0", PAD1, 0x21), probe_tap("s25-tap-21-2", CARD1, 0x21), probe_tap("s25-tap-61-0", PAD1, 0x61), probe_tap_slots(), probe_empty(), probe_empty_len()]);
     v
 }

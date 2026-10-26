@@ -21,7 +21,7 @@ probe run is refused unless it holds it at frame N. --again reads the same words
 referee spent meanwhile, which with programs/frames.s measures a frame's cost; --throttled runs PCSX2 at the console's
 speed instead of unlimited; --interpreter runs PCSX2's EE on its interpreter instead of its recompiler, the default, so
 the two can be weighed apart (Sapphire_Native.md §19.6); --cards A,B puts the cards named A and B, files or folders in
-PCSX2's memory card folder, in its two slots for the run, and --multitap plugs a multitap into its first port, both put
+PCSX2's memory card folder, in its two slots for the run (`none` leaves a slot empty), and --multitap plugs a multitap into its first port, both put
 back as they were afterwards (Sapphire_Native.md §30); --disc puts a synthetic disc image in PCSX2's drive while the
 program runs in place of the disc's own (`-elf`), so that the program can read the drive (Sapphire_Native.md §25).
 --wave DIR captures the run's sound: PCSX2's SDL output, unstretched, written by SDL's disk driver to DIR/pcsx2.raw, so
@@ -475,6 +475,14 @@ PCSX2_CARDS = {"MemoryCards": {"Slot1_Enable": "true", "Slot1_Filename": "Mcd001
                "Pad": {"MultitapPort1": "false"}}
 
 
+def card_slots(cards):
+    """PCSX2's settings for the two slots of --cards: a card's name, or `none` for a slot left empty."""
+    out = {}
+    for n, c in enumerate(cards, 1):
+        out.update({f"Slot{n}_Enable": "false"} if c == "none" else {f"Slot{n}_Filename": c})
+    return out
+
+
 def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, channel=None, stop_text=None, interpreter=False, disc=None, cards=None, multitap=False, wave=None):
     """PCSX2 in a private KWin, its RAM read through PINE (Sapphire_Referees.md §2.1); one run at a time, since the
     settings file is shared. With a channel, that console channel alone is logged and the run waits for stop_text."""
@@ -488,7 +496,7 @@ def run_pcsx2(target, market, seconds, until, dumps, again=0, unlimited=True, ch
                   "Folders": {"Bios": str(bios_folder())}, "Filenames": {"BIOS": MARKETS[market]},
                   "Logging": {**PCSX2_SETTINGS["Logging"], "EnableTimestamps": "false", **TTY_CHANNELS[channel or "none"]},
                   "EmuCore/CPU/Recompiler": {"EnableEE": "false" if interpreter else "true"},
-                  "MemoryCards": {**PCSX2_CARDS["MemoryCards"], **({"Slot1_Filename": cards[0], "Slot2_Filename": cards[1]} if cards else {})},
+                  "MemoryCards": {**PCSX2_CARDS["MemoryCards"], **(card_slots(cards) if cards else {})},
                   "Pad": {"MultitapPort1": "true" if multitap else "false"},
                   "SPU2/Output": {**PCSX2_SETTINGS["SPU2/Output"], **(SOUND_CAPTURE if wave else {})}}
         ini.write_text(ini_merge(ini.read_text() if ini.exists() else "", wanted))

@@ -4666,7 +4666,9 @@ it.*
 - **Conclusion:** **decided** by the tester on the documents' direction, the size being the least that draws OSDSYS's
   browser. Every source of Int0 and Int1 alike; counted in instructions, the pipeline's measure; IP7 unchanged. An
   exception taken among the two instructions drops the recognition. One lineage only, and split: a console's record of
-  a polling loop would decide the size.
+  a polling loop would decide the size. *Decided 2026-10-26 by the tester, with it:* a device register's read takes its value at the start of
+  the load's bus access, so a source latched during the access is missed by that read (`d800-tight`); a **named loss**,
+  revisited if a game or a program needs it (`Sapphire_Native.md` §30.84 Q2, §30.85). The goldens of §30.82 accepted.
 - **Depends on it:** D-800 (the browser), P8 as observed; S33's idle skipping and S37's blocks (`Sapphire_Native.md`
   §30.83).
 - **Pinned by:**

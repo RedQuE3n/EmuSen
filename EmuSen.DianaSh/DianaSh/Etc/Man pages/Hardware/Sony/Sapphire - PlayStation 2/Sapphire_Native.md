@@ -5942,7 +5942,16 @@ added byte, and the three lines above in idle skipping.
    access, though no document times the access. *Recommended*: leave it until a game or a program needs it, and record
    it as a named loss; the browser, the autotests and the anchors do not need it.
 
-### 30.85 What was read, and exposure (2026-10-26)
+*Decided 2026-10-26 by the tester:* Q1 accepted, the goldens as §30.82 records them; Q2 a **named loss**: a device
+register is read at the start of the load's bus access, and a source latched during that access is not seen by it, as
+`d800-tight` shows (§30.80); to be revisited if a game or a program needs otherwise.
+
+### 30.85 What was read, named losses, and exposure (2026-10-26)
+
+**Named loss** (decided 2026-10-26 by the tester, §30.84 Q2): **a device register's read takes its value at the start of
+the load's bus access**. A source latched during the access is seen by the next read, not by that one. A loop that
+polls I_STAT can therefore miss a source the kernel serves, as `d800-tight` misses V-blank's start at every arrival
+where PCSX2's interpreter sees it. No document times the access; it is revisited if a game or a program needs it.
 
 **Read**:
 - This page's §30.68 to §30.77, §36.4 to §36.7, §39.2 to §39.7, §40.4 and §40.5.

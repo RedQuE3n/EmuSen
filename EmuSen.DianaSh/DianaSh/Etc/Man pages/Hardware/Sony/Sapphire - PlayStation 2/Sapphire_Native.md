@@ -10824,6 +10824,12 @@ play, which at the reference path's speed would take hours a case.
 - **WiseMan, after each rebase**: every `Sapphire` class, `CrystalParityTests`, the registration, firmware page, routing,
   system parity, screen rule and golden classes and the whole fit audit: **884 of 884** both times, the PlayStation 2's
   Graphics Settings tab recorded again with S40's *VU1* row and then S33's idle skipping.
+- **`ScreenFilterRenderTests`**, which the filter of these runs did not reach and the landing run found: three of its
+  tables list the consoles the CRT is offered for, and each now holds the PlayStation 2 [M, 2026-10-26, the RX 6800]: the
+  PAL arithmetic's clocks (VCK 54 MHz a pixel unit, 864 × 4 VCK a line, the cycle VCK over the subcarrier, 314 lines,
+  2,560 VCK across, which the row of §49.6 equals), the frame sizes Sapphire hands over (640 or 512 wide, 224, 448, 256
+  or 512 rows, each filling the same tube at every quality) and the consoles offered the tube. No defect of the row:
+  the class **129 of 129**, the whole `EmuSen.WiseMan.Serenity` namespace **344 of 344**.
 - **The kit on Jak and Daxter** (§49.7) ran on the tree of the first rebase with the cut-short refusal; S33's idle
   skipping, D-800 and D-840 came beneath it afterwards.
 

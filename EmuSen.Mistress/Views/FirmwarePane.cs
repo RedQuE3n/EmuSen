@@ -10,6 +10,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -18,6 +19,7 @@ namespace EmuSen.Mistress.Views
     {
         public const string OpenVersion = "Using EmuSen's open version", OwnFile = "Using your own file", NoVersion = "No open version yet";
         public const string NeedsFile = "Games that need this chip need your own file.", Exact = "Exact: games run the same either way.", AsTheConsole = "Runs as on the console.";
+        public const string EveryGameNeedsFile = "Every game needs your own file.";
         public const string EmuSensFolder = "EmuSen's folder";
 
         // Whether the engine carries an open replacement that runs the chip, exact or at a cost.
@@ -30,8 +32,11 @@ namespace EmuSen.Mistress.Views
         // The same in a word or two, for a menu row's value.
         public string InUseShort => Present ? "Your own file" : HasOpenVersion ? "Open version" : "None yet";
 
+        // Whether the file's console starts empty, so that with no open version it runs nothing and every game needs the file - see Sapphire_Native.md §49.12.
+        public bool StartsEmpty { get; init; }
+
         // What the open version changes: the first sentence of the cost the core states, or the fixed words where there is nothing to quote.
-        public string Change => Present ? AsTheConsole : Effect == "exact" ? Exact : HasOpenVersion && FirstSentence(Cost) is { } said ? said : NeedsFile;
+        public string Change => Present ? AsTheConsole : Effect == "exact" ? Exact : HasOpenVersion && FirstSentence(Cost) is { } said ? said : HasOpenVersion || !StartsEmpty ? NeedsFile : EveryGameNeedsFile;
 
         // Which folder the file in use was found in, in the runtime's words, or null when none is - see EmuSen_Firmware.md §2.3.
         public string? FoundIn { get; init; }
@@ -66,11 +71,19 @@ namespace EmuSen.Mistress.Views
             using JsonDocument overview = JsonDocument.Parse(runtime.FirmwareOverview());
             JsonElement o = overview.RootElement;
             string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-            var systems = o.GetProperty("systems").EnumerateArray().Select(s => new FirmwareSystemRow(s.GetProperty("name").GetString() ?? "", s.GetProperty("engine").GetString() ?? "",
-                s.GetProperty("items").EnumerateArray().Select(i => new FirmwareRow(i.GetProperty("label").GetString() ?? "", i.GetProperty("file").GetString() ?? "", i.GetProperty("size").GetInt32(),
+            var systems = o.GetProperty("systems").EnumerateArray().Select(s => (Name: s.GetProperty("name").GetString() ?? "", System: s)).Select(s => new FirmwareSystemRow(s.Name, s.System.GetProperty("engine").GetString() ?? "",
+                s.System.GetProperty("items").EnumerateArray().Select(i => new FirmwareRow(i.GetProperty("label").GetString() ?? "", i.GetProperty("file").GetString() ?? "", i.GetProperty("size").GetInt32(),
                     i.GetProperty("present").GetBoolean(), i.GetProperty("wrong_size").GetBoolean(), Text(i, "effect"), Text(i, "cost"))
-                { FoundIn = Text(i, "found_in"), WrongSizeIn = Text(i, "wrong_size_in") }).ToArray())).ToArray();
+                { FoundIn = Text(i, "found_in"), WrongSizeIn = Text(i, "wrong_size_in"), StartsEmpty = StartsEmpty(s.Name) }).ToArray())).ToArray();
             return new FirmwareView(o.GetProperty("folder").GetString() ?? "", o.GetProperty("folders").EnumerateArray().Select(f => f.GetString() ?? "").ToArray(), systems);
+        }
+
+        // Whether the overview's row, named by its shelves' ES-DE names joined with " and " or by a system's own name, is a console that starts empty, the runtime's systems' one fact - see Sapphire_Native.md §49.12.
+        public static bool StartsEmpty(string name)
+        {
+            string[] parts = name.Split(" and ");
+            return RuntimeCatalog.Shelves.Where(s => parts.Contains(s.EsdeFullName)).Any(s => RuntimeCatalog.StartsEmpty(s.Core.Console))
+                || RuntimeCatalog.Systems.Any(s => s.StartsEmpty && s.Name == name);
         }
     }
 

@@ -125,9 +125,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the player's BIOS reads a DVD's path table at sector 257 whatever its descriptor names, the synthetic DVDs now place
   theirs there, the 23 print their texts from DVDs too, and Jak and Daxter's start reads its files on Sapphire;
   PCSX2's boundary between a CD and a DVD image recorded (D-520); and stage S32 (2026-10-26, §43): the bench
-  (`examples/bench.rs`) and the profile before any lever, OSDSYS's boot at 1.44 frames a second and Jak and Daxter's
-  program at 1.16 to 2.64 on the desktop, the GS's exact perspective arithmetic 61 % of a drawing frame and the EE 46 to
-  55 ns an instruction, every lever and compromise ranked and marked exact, timing-only or byte-changing, the handheld's
+  (`examples/bench.rs`) and the profile before any lever, OSDSYS's boot at 1.65 frames a second and Jak and Daxter's
+  program at 1.20 to 3.07 on the desktop, the GS's exact perspective arithmetic 61 % of a drawing frame and the EE 34 to
+  47 ns an instruction, every lever and compromise ranked and marked exact, timing-only or byte-changing, the handheld's
   columns owed.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open

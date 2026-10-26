@@ -7794,11 +7794,11 @@ each frame's `advance` alone and prints Diamond's bench line (mean, median, 95th
 frame, the frames a second) with the digests of every picture, the sound and the final state, and the units' own counts
 a frame (§43.2, §43.3). A ptrace sampler of the emulation thread's instruction pointer, named through `addr2line`'s
 inline chains, attributes the frame to Sapphire's host functions and so to its units (§43.4). Measured on the desktop
-(§43.5, §43.6): **OSDSYS's boot runs at 1.44 frames a second and its language screen at 1.36; Jak and Daxter's own
-program, entered by the fast boot, at 2.64 while it loads and 1.16 on its memory card screen; the ps2autotests programs
-at 1.0 to 3.1.** Where the frame goes differs by workload, and two findings dominate the ranking (§43.8): **the GS's
+(§43.5, §43.6): **OSDSYS's boot runs at 1.65 frames a second and its language screen at 2.16; Jak and Daxter's own
+program, entered by the fast boot, at 3.07 while it loads and 1.20 on its memory card screen; the ps2autotests programs
+at 1.05 to 3.5.** Where the frame goes differs by workload, and two findings dominate the ranking (§43.8): **the GS's
 exact perspective arithmetic, 256-bit division by shift and subtract for every textured pixel, is 61 % of Jak's drawing
-frames**, a cost §5.12 did not foresee; and **the EE costs 46 to 55 ns an instruction with the board brought along after
+frames**, a cost §5.12 did not foresee; and **the EE costs 34 to 47 ns an instruction with the board brought along after
 each, against §5.12's 4 to 10 ns**, while the workloads run 5.6 to 9.8 million EE instructions a frame at 0.50 to 0.88
 cycles an instruction, the dual issue of long loops. Kingdom Hearts and Dark Cloud 2 read no sector by the fast boot on
 this tree and are left to S28's merge. The handheld's columns are owed (§43.9). The plan's amendment of 2026-10-26
@@ -7861,35 +7861,42 @@ tools in the probe's folder, not committed; their rules are this paragraph.
 
 ### 43.5 The workloads and their speed (measured 2026-10-26)
 
-The desktop, a Ryzen 7 7700X, every run under `systemd-run --user --scope -p CPUWeight=20` beside other work on the
-machine (other stages' game runs, a referee, Release builds at times). **Each timed number is the median of three rounds
-with the spread of the three**; the load averages before and after the rounds are given (five-minute for the boot and
-Jak, one-minute for the short programs), since wall times do not survive load and shares do.
+The desktop, a Ryzen 7 7700X, on the tree rebased onto WiseMan `557d2ec0b` (S31's debugger, S35 and D-540 beneath; the
+profiles of the next table were sampled on the stage's starting tree `b56321b48`, the two differing in no unit's hot path
+but the debugger's absent-probe checks). **Each timed number is the median of three rounds with the spread of the three.**
+Each run had its own scope at CPU weight 100; other stages' builds and game runs went on beside some of them at weight
+20, and the load average and what ran beside are given for each row, since wall times do not survive load and shares do.
 
-| Workload | Window | Mean ms a frame | Frames a second | 95th percentile ms | Loads beside the rounds |
+| Workload | Window | Mean ms a frame (rounds) | Frames a second | Spread | Beside the rounds (one-minute load; others' compilers) |
 |---|---|---|---|---|---|
-| OSDSYS's boot, Americas `0230a`, slot 1 empty | frames 0-760 | **693** (670-710) | **1.44** (1.41-1.49) | 1,032 | 5.6-10.1 |
-| | 0-690: the Sony animation and both logos | 692 (662-708) | 1.44 | 1,033 | |
-| | 690-760: the language screen | **735** (699-748) | **1.36** (1.34-1.43) | 907 | |
-| Jak and Daxter, its program by the fast boot, slot 1 empty | frames 0-900 | **649** (635-679) | **1.54** (1.47-1.58) | 1,055 | 7.9-10.1 |
-| | 8-400: its start, loading and the publisher's screen | 379 (321-464) | **2.64** (2.16-3.12) | 606 | |
-| | 400-900: its memory card screen ("No memory card (PS2) inserted") | **864** (850-887) | **1.16** (1.13-1.18) | 1,474 | |
-| ps2autotests `cpu/ee/alu` | 8-40 | 395 (352-400) | 2.53 | | 7.1-9.6 |
-| `cpu/ee_fpu/arithmetic` | 8-40 | 399 (374-599) | 2.51 | | 7.6-12.8 |
-| `cpu/ee_simd/arithmetic` | 8-40 | 411 (355-635) | 2.43 | | 7.6-12.8 |
-| `cpu/vu0_macro/integer` | 8-40 | 349 (315-512) | 2.87 | | 8.1-19.8 |
-| `dma/vif/unpack` | 8-40 | 1,003 (848-1,569) | 1.00 | | 7.9-21.4 |
-| `kernel/ee/thread/sleep` | 8-40 | 441 (378-649) | 2.27 | | 7.8-23.8 |
-| `vu/games/triace` | 8-40 | 356 (320-531) | 2.81 | | 7.6-24.6 |
-| `vu/lower/random` | 8-40 | 411 (403-683) | 2.44 | | 7.9-24.4 |
-| IOP `cpu/iop/alu`, from a synthetic DVD (§40.14) | 8-40 | 356 (310-461) | 2.81 | | 7.8-25.1 |
-| IOP `kernel/iop/thread/create` | 8-40 | 345 (300-494) | 2.90 | | 8.0-24.8 |
-| IOP `kernel/iop/messagebox/receive` | 8-40 | 318 (300-492) | 3.14 | | 8.1-24.5 |
+| OSDSYS's boot, Americas `0230a`, slot 1 empty | frames 0-760 | **605** (605, 604, 790) | **1.65** (1.27-1.66) | 31 % | 0.1 and 1.1, none; the third 7.6, seven `rustc` |
+| | 0-690: the Sony animation and both logos | 620 (620, 618, 818) | 1.61 | 32 % | |
+| | 690-760: the language screen | **463** (463, 463, 510) | **2.16** (1.96-2.16) | 10 % | |
+| Jak and Daxter, its program by the fast boot, slot 1 empty | frames 8-400: its start, loading and the publisher's screen | **326** (310, 326, 345) | **3.07** (2.90-3.22) | 11 % | 1.3 and 1.0, none; the third 8.8, two |
+| | frames 0-900, a second series | 617 (617, 646, 607) | 1.62 (1.55-1.65) | 6 % | 11.4, 10.9 and 6.3; seven, seven and none |
+| | 400-900: its memory card screen ("No memory card (PS2) inserted") | **832** (805, 832, 833) | **1.20** (1.20-1.24) | 3 % | as above |
+| ps2autotests `cpu/ee/alu` | 8-40 | 348 (337, 348, 357) | 2.88 | 6 % | 1.0, 5.0, 10.4; none, two, two |
+| `cpu/ee_fpu/arithmetic` | 8-40 | 349 (334, 491, 349) | 2.87 | 45 % | 1.0, 5.1, 9.7; none, three, two |
+| `cpu/ee_simd/arithmetic` | 8-40 | 349 (346, 349, 350) | 2.86 | 1 % | 5.9-11.9 |
+| `cpu/vu0_macro/integer` | 8-40 | 299 (288, 300, 299) | 3.34 | 4 % | 1.0, 6.1, 9.1; none, seven, two |
+| `dma/vif/unpack` | 8-40 | 952 (869, 952, 953) | 1.05 | 9 % | 5.7-9.7 |
+| `kernel/ee/thread/sleep` | 8-40 | 380 (372, 380, 393) | 2.63 | 6 % | 7.1-9.8 |
+| `vu/games/triace` | 8-40 | 305 (303, 305, 308) | 3.28 | 2 % | 7.0-9.7 |
+| `vu/lower/random` | 8-40 | 381 (360, 637, 381) | 2.63 | 73 % | 1.1, 6.8, 8.9; none, seven, two |
+| IOP `cpu/iop/alu`, from a synthetic DVD (§40.14) | 8-40 | 283 (279, 283, 288) | 3.53 | 3 % | 6.7-11.0 |
+| IOP `kernel/iop/thread/create` | 8-40 | 297 (296, 297, 300) | 3.37 | 1 % | 6.4-10.0 |
+| IOP `kernel/iop/messagebox/receive` | 8-40 | 299 (297, 299, 304) | 3.35 | 2 % | 6.1-9.3 |
 
-The NTSC frame is 16.68 ms: the boot's language screen is **44 times** too slow, Jak's memory card screen **52 times**,
-its loading **23 times**. The micro-workloads' programs finish within a few frames of their entry, so their windows are
-mostly the machine idling after them; they measure the floor of a frame in which the GS draws nothing: 300 to 440 ms, but
-`dma/vif/unpack`'s 1,000. Kingdom Hearts and Dark Cloud 2, run the same way for 600 frames (2.22 and 2.26 frames a
+**Where a spread exceeds 10 %, one round ran beside other stages' compilers** and the others agree: the boot's two quiet
+rounds within 0.2 %, `ee_fpu/arithmetic`'s and `vu/lower/random`'s quiet and lightly loaded rounds within 5 %, Jak's
+loading within 11 % at loads of 1 to 9. **Load costs these single-threaded runs far more than its count of busy threads
+suggests**: a first series at CPU weight 20 beside four other stages' work (loads of 4 to 25) measured the language
+screen at 735 ms and Jak's memory card screen at 864, 59 % and 4 % slower than above; those numbers are superseded.
+
+The NTSC frame is 16.68 ms: the boot's language screen is **28 times** too slow, Jak's memory card screen **50 times**,
+its loading **20 times**. The micro-workloads' programs finish within a few frames of their entry, so their windows are
+mostly the machine idling after them; they measure the floor of a frame in which the GS draws nothing: 283 to 381 ms, but
+`dma/vif/unpack`'s 952. Kingdom Hearts and Dark Cloud 2, run the same way for 600 frames (2.22 and 2.26 frames a
 second), issued **no drive command** after the fast boot entered their programs and drew the same picture; they do not run
 far enough on this tree and are left to S28's merge. Jak's memory card screen answers Cross (the text clears), after
 which its frames stop arriving (the PCRTC begins no field; the EE was not stopped by an unimplemented instruction): that
@@ -7928,22 +7935,22 @@ Inside the EE and the scheduler (shares of the whole frame):
 
 Each unit's share times the window's median frame, the desktop, the reference path (no lever, no compromise):
 
-| Unit | §5.12's estimate, interpreted | Language screen (735 ms) | Jak loading (379 ms) | Jak memory card screen (864 ms) |
+| Unit | §5.12's estimate, interpreted | Language screen (463 ms) | Jak loading (326 ms) | Jak memory card screen (832 ms) |
 |---|---|---|---|---|
-| EE | 6-33 ms, at 4-10 ns an instruction | **400 ms**, and 116 ms bringing the board along | **283 ms**, and 64 | **206 ms**, and 51 |
+| EE | 6-33 ms, at 4-10 ns an instruction | **252 ms**, and 73 ms bringing the board along | **244 ms**, and 55 | **198 ms**, and 49 |
 | EE work a frame | 1.6-3.3 million instructions at 1.5-3 cycles each | **9.45 million at 0.52 cycles**; 98.8 % user mode | **6.42 million at 0.77**; 99.9 % user | **5.58 million at 0.88**; 99.5 % user |
-| The EE's cost an instruction, with the board | 4-10 ns | **55 ns** | **54 ns** | **46 ns** |
-| VU0 and VU1 | 0-15 and 8-60 ms | 0 pairs | 2,956 pairs, 0.5 ms | **66,490 pairs (41,886 and 24,604), 10.5 ms: 158 ns a pair** against 8-20 |
-| IOP | 1-2.5 ms | 16 ms, and 16 of catch-up; 570,140 instructions | 10 ms, and 9; 381,114 | 8 ms, and 8; 348,298 |
-| GS, software | 3-30 ms | 175 ms | 3 ms | **555 ms**, 529 of it `gs::exact` |
-| VIF, GIF, DMAC | 1-4 ms | 17 ms | 10 ms | 18 ms |
-| SPU2 | 0.4-0.9 ms | 2.3 ms | 1.9 ms | 1.9 ms |
+| The EE's cost an instruction, with the board | 4-10 ns | **34 ns** | **47 ns** | **44 ns** |
+| VU0 and VU1 | 0-15 and 8-60 ms | 0 pairs | 2,956 pairs, 0.3 ms | **66,490 pairs (41,886 and 24,604), 10.2 ms: 153 ns a pair** against 8-20 |
+| IOP | 1-2.5 ms | 10 ms, and 10 of catch-up; 570,140 instructions | 8.5 ms, and 8; 381,114 | 8 ms, and 7.5; 348,298 |
+| GS, software | 3-30 ms | 110 ms (101 and 9 in the division helpers it calls) | 3 ms | **535 ms**, 509 of it `gs::exact` |
+| VIF, GIF, DMAC | 1-4 ms | 11 ms | 9 ms | 17 ms |
+| SPU2 | 0.4-0.9 ms | 1.4 ms | 1.6 ms | 1.7 ms |
 | IPU | 1-3 ms in FMV | not exercised | not exercised | not exercised |
 
 Three things the estimates did not see. **The EE's instructions are many and cheap on the console**: the workloads issue
 more than one instruction a cycle (0.50 to 0.88 cycles each, the dual issue §5.2 models), and in user mode almost
 throughout, which is the shape of a program waiting in a loop of its own for an interrupt to change a flag; the
-micro-workloads' idle tails sit at exactly 0.50. **Each of those costs 46 to 55 ns** on the interpreter: the timing model,
+micro-workloads' idle tails sit at exactly 0.50. **Each of those costs 34 to 47 ns** on the interpreter: the timing model,
 the per-instruction translation and fetch through the caches' models and the board's catch-up after every instruction
 together are more than the instructions' semantics (3.6 to 4.7 %). And **the GS's exact arithmetic**: S18's texture
 coordinates and LOD are computed without rounding (`gs::exact`, §31.3), the quotient S/Q and T/Q of every textured pixel
@@ -8001,12 +8008,12 @@ its bound is the largest of all, because the workloads spend their instructions 
 but how much of the EE is waiting cannot be read without the program counter, which this stage does not look at in BIOS
 code; S33 counts what it skips. **Then the GS's threads and device path** (#3, #4) on drawing frames, which #1 shrinks
 from 64 to about 21 % of the memory card screen, and **C1** (#5), the cheapest of the EE's large items. **After #1, every
-workload here is EE-bound**: at 46 to 55 ns an instruction and 5.6 to 9.5 million instructions a frame, a frame of 13.4 ms
+workload here is EE-bound**: at 34 to 47 ns an instruction and 5.6 to 9.5 million instructions a frame, a frame of 13.4 ms
 on the handheld (§5.12's target), about 9.9 ms on the desktop at its assumed 1.35 times the speed, leaves about 1 to
 1.8 ns an instruction with everything else included; only idle skipping, the EE
 recompiler and C1 together reach that order, which is what P15 and P17 predicted. **The VUs, the IOP, the SPU2 and C3, C4
 and C8 address almost nothing on these workloads**, but none of them is a game's play: Jak's memory card screen runs
-66,490 VU pairs a frame at 158 ns each, so a game's 1 to 3 million pairs (§5.12) would cost 160 to 470 ms a frame on
+66,490 VU pairs a frame at 153 ns each, so a game's 1 to 3 million pairs (§5.12) would cost 150 to 460 ms a frame on
 the interpreter. The VU1 recompiler's rank must be measured again on the first workload with play, which S28's merge
 brings; until then it is ranked by these numbers and marked as such.
 
@@ -8056,8 +8063,8 @@ and none of their bytes is in a commit. No emulator, SDK or loader source was re
 
 - **No workload with play.** The boot, Jak's start and its memory card screen, and the test programs: no game's 3D play,
   no FMV, little VU1. The ranking's VU, SPU2 and IPU rows are therefore low by construction (§43.8).
-- **Load.** Other stages' work ran throughout, at five-minute loads of 4 to 25; the spreads in §43.5 carry it. The
-  fastest round of each window, not the median, is the better estimate of an unloaded desktop.
+- **Load.** Other stages' work ran beside some rounds; §43.5 gives what ran beside each and flags the spreads over 10 %.
+  The fastest round of each window, not the median, is the better estimate of an unloaded desktop.
 - **The sampler's naming**: a non-inlined function's callers are not seen (no frame pointers), so `Big::div`'s share is
   attributed to `gs::exact` by its file and to the perspective quotient by reading its two callers, not by stacks; the
   128-bit division helpers (1 to 2 %) are left under "other", though most come from the GS's interpolation.
@@ -8066,7 +8073,7 @@ and none of their bytes is in a commit. No emulator, SDK or loader source was re
 ### 43.13 Where the plan was wrong, or left open
 
 - **§5.12's table** priced the EE at 4 to 10 ns an instruction and 1.6 to 3.3 million instructions a frame; measured, 46 to
-  55 ns and 5.6 to 9.8 million (§43.6). The table now carries the measured column beside its estimates.
+  47 ns and 5.6 to 9.8 million (§43.6). The table now carries the measured column beside its estimates.
 - **The GS's exact arithmetic** was priced into "3 to 5 ns a pixel"; on a perspective-textured screen it is most of the
   frame. Not in §5.12's levers; added here as #1, exact.
 - **The board's catch-up after every EE instruction**, 6 to 17 % of the frame, is not one of §5.12's levers either; #9.

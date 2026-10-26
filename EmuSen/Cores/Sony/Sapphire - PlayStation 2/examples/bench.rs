@@ -2,7 +2,7 @@
 //! frames, each frame's `advance` timed and nothing else, and the units' own counts over the frames measured.
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
-//! [--times FILE] [--every K DIR] [--registers] [--card]`
+//! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -16,6 +16,7 @@
 //! writes each frame's milliseconds, `--every K DIR` the picture every K frames as `DIR/frame-<n>.ppm`, and
 //! `--registers` counts every register access the units answer over the window (S24's reports, which slow the run, so
 //! its times are not the bench's) and prints the most frequent a frame, for finding which device a processor waits on.
+//! `--press F:BITS` holds the pad's buttons (the core's bit numbers, `+`-joined) in port 1 for six frames from frame F.
 //! The BIOS
 //! image is handed to the machine and never read here; nothing printed holds an address, an instruction or memory.
 
@@ -60,7 +61,7 @@ fn main() {
         let mut v = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if matches!(args[i].as_str(), "--from" | "--times") {
+            if matches!(args[i].as_str(), "--from" | "--times" | "--press") {
                 i += 2;
                 continue;
             }
@@ -75,7 +76,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--card]";
+    let usage = "bench <boot|elf|disc> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -106,6 +107,14 @@ fn main() {
         std::fs::create_dir_all(dir).expect("the pictures' folder");
     }
     let registers = args.iter().any(|a| a == "--registers");
+    let presses: Vec<(usize, u32)> = args
+        .windows(2)
+        .filter(|w| w[0] == "--press")
+        .map(|w| {
+            let (f, bits) = w[1].split_once(':').expect("--press F:BITS");
+            (f.parse().expect("a frame"), bits.split('+').fold(0u32, |m, b| m | 1 << b.parse::<u32>().expect("a bit")))
+        })
+        .collect();
     let (mut picture, mut sound) = (BASIS, BASIS);
     let mut chunk = vec![0i16; 1 << 16];
     let mut times = Vec::with_capacity(frames);
@@ -122,6 +131,8 @@ fn main() {
                 m.sys.board.iop.bus.reports.all = true;
             }
         }
+        let held = presses.iter().filter(|&&(at, _)| f + 1 >= at && f + 1 < at + 6).fold(0, |m, &(_, b)| m | b);
+        Core::set_buttons(&mut m, 0, held, 0xFFFF).expect("port 1");
         let start = Instant::now();
         m.advance();
         let t = start.elapsed().as_secs_f64() * 1e3;

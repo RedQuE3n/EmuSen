@@ -473,6 +473,8 @@ fn random_twins(seeds: std::ops::Range<u64>, steps: u64, stride: u64, timer: boo
         total.fills += s.fills;
         total.generations += s.generations;
         total.to_line += s.to_line;
+        total.rewinds += s.rewinds;
+        total.rewound_steps += s.rewound_steps;
         for k in 0..5 {
             total.left[k] += s.left[k];
         }
@@ -1016,6 +1018,45 @@ fn a_rollback_leaves_memory_as_the_instructions_that_stand_left_it() {
     assert!(blocks::state_of(&plain) == blocks::state_of(&fast), "the whole states differ");
     println!("stores beside interrupts: {:?}", b.stats);
     assert!(b.stats.rollbacks > 5, "interrupts fell inside the blocks: {:?}", b.stats);
+}
+
+/// Plain instructions between a block's loads and stores, then a load that leaves every time (a timer's count), one
+/// that misses now and then and one misaligned at every fourth pass: each leaves by the shared exit, which writes back the
+/// state after the access before it and has the interpreter run the steps between (Sapphire_Recompiler.md §48.15).
+const LEAVING: &str = "
+    lui gp, 0x0030
+    lui s6, 0x1000
+    top: lw t0, 0(gp)
+    addiu t0, t0, 1
+    xor t1, t0, s1
+    sw t1, 4(gp)
+    addu t2, t1, t0
+    dsll t3, t2, 4
+    lw t4, 0(s6)
+    addu s1, s1, t4
+    sltu t5, s1, t3
+    addiu s2, s2, 1
+    lw t6, 0x3000(gp)
+    andi s3, s2, 3
+    sltiu s3, s3, 1
+    addu s4, gp, s3
+    or s0, s0, t6
+    lw t7, 8(s4)
+    addu s5, s5, t7
+    sw s5, 0x2000(gp)
+    beq zero, zero, top
+    addiu a0, a0, 1
+";
+
+#[test]
+fn a_load_or_store_leaving_after_plain_instructions_leaves_the_interpreters_machine() {
+    let words = assemble(LEAVING, ORIGIN);
+    let s = twin(&words, 20_000, 100, &mut eager());
+    println!("loads and stores leaving past plain instructions: {s:?}");
+    assert!(s.rewinds > 100 && s.rewound_steps > s.rewinds, "{s:?}");
+    assert!(s.left[1] > 0 && s.left[2] > 0, "{s:?}");
+    let v = verified(&words, 20_000, Verify::Blocks);
+    assert!(v.rewinds > 100, "{v:?}");
 }
 
 /// A line refilled by a load, a block's store into it, then two lines of the same set read so that it is replaced, and

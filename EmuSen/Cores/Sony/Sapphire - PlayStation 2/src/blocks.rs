@@ -80,6 +80,12 @@ pub struct Stats {
     pub left: [u64; 5],
     /// Entries that ran only to the first line the instruction cache did not hold.
     pub to_line: u64,
+    /// Exits a load or store took through the block's shared exit with every step standing, and the steps the interpreter
+    /// then ran from the last load or store before it (Sapphire_Recompiler.md §48.15).
+    pub rewinds: u64,
+    pub rewound_steps: u64,
+    /// Entries that found their block's code still with the compiler, the interpreter taking the step.
+    pub queued: u64,
 }
 
 /// A hash of a word address, for the map of blocks.
@@ -149,6 +155,7 @@ impl Blocks {
             limit: 0,
             replay,
             hook,
+            leave,
             owner: std::ptr::null_mut(),
             spill: [0; 36],
             fill,
@@ -189,7 +196,8 @@ impl Blocks {
 
     /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`,
     /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
-    /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions).
+    /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions), `EMUSEN_SAPPHIRE_WAIT=1` (each block's code waited for
+    /// when it is handed over, so that nothing runs interpreted behind the compiler's queue).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -198,6 +206,7 @@ impl Blocks {
         b.fixed_cost = std::env::var("EMUSEN_SAPPHIRE_C1").is_ok_and(|v| v == "1");
         b.spill = std::env::var("EMUSEN_SAPPHIRE_SPILL").is_ok_and(|v| v == "1");
         b.memory = !std::env::var("EMUSEN_SAPPHIRE_MEMORY").is_ok_and(|v| v == "0");
+        b.wait = std::env::var("EMUSEN_SAPPHIRE_WAIT").is_ok_and(|v| v == "1");
         if let Some(n) = std::env::var("EMUSEN_SAPPHIRE_LONGEST").ok().and_then(|v| v.parse::<usize>().ok()) {
             b.longest = n.clamp(2, shape::MAX);
         }
@@ -279,6 +288,11 @@ impl Blocks {
         self.jit.counters().map_or((0, 0, 0), |c| (c.compiled.load(Relaxed), c.failed.load(Relaxed), c.bytes.load(Relaxed)))
     }
 
+    /// The compiler's time spent compiling, in nanoseconds.
+    pub fn compile_nanos(&self) -> u64 {
+        self.jit.counters().map_or(0, |c| c.nanos.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
     /// Waits until every block handed over is compiled or refused.
     pub fn drain(&self) {
         self.jit.drain();
@@ -330,6 +344,8 @@ struct Run {
     tail: Option<Tail>,
     /// The replay stopped for the DMAC, not for an interrupt.
     guarded: bool,
+    /// The shared exit's replay, every step standing.
+    rewound: bool,
     fills: u64,
 }
 
@@ -416,7 +432,10 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             b.state = settle(slot.clone())?;
             match b.state {
                 State::Ready(code) => code,
-                _ => return None,
+                _ => {
+                    blocks.stats.queued += 1;
+                    return None;
+                }
             }
         }
     };
@@ -424,7 +443,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         return None;
     }
     blocks.translation(sys);
-    let mut run = Run { sys, verify: &mut blocks.verify, failed: None, tail: None, guarded: false, fills: 0 };
+    let mut run = Run { sys, verify: &mut blocks.verify, failed: None, tail: None, guarded: false, rewound: false, fills: 0 };
     blocks.stats.to_line += u64::from(limit < b_len);
     let ctx = &mut *blocks.ctx;
     ctx.owner = (&mut run as *mut Run).cast();
@@ -475,6 +494,8 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             // step would have seen, then the wake the replay held. Past the last access the core holds the state after it
             // and the instructions from there run again; short of it the stores are undone and every instruction runs
             // again (Sapphire_Recompiler.md §48.5).
+            // From the shared exit with every step standing, the same: the steps from the last load or store to the
+            // access that left run here (§48.15).
             let (steps, base) = (steps as usize, ctx.base as usize);
             let kept_past = base > 0 && steps >= base;
             let start = if kept_past { base } else { 0 };
@@ -482,13 +503,22 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
                 sys.board.traffic[0] += ctx.uncached_loads;
                 sys.board.traffic[1] += ctx.uncached;
                 sys.ee.count_steps(base as u64);
-                blocks.stats.kept_past += 1;
             } else {
                 undo(ctx);
             }
-            blocks.stats.dmac_stops += u64::from(run.guarded);
-            blocks.stats.rollbacks += 1;
-            blocks.stats.rerun_steps += (steps - start) as u64;
+            if run.rewound {
+                let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+                b.idle = 0;
+                blocks.stats.entered += 1;
+                blocks.stats.compiled_steps += start as u64;
+                blocks.stats.rewinds += 1;
+                blocks.stats.rewound_steps += (steps - start) as u64;
+            } else {
+                blocks.stats.kept_past += u64::from(kept_past);
+                blocks.stats.dmac_stops += u64::from(run.guarded);
+                blocks.stats.rollbacks += 1;
+                blocks.stats.rerun_steps += (steps - start) as u64;
+            }
             for j in start..steps {
                 if j > 0 {
                     set_lines(sys, ctx.lines[j - 1]);
@@ -605,9 +635,25 @@ fn set_lines(sys: &mut System, l: u8) {
 /// lines or Count would have the interpreter take an interrupt before the next instruction. The steps that stand; when
 /// all do, the core's lines and Cause.IP2 and IP3 are set as the last step leaves them.
 extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
-    use crate::ee::cop0::{CAUSE, COMPARE, COUNT, STATUS, cause};
-    // SAFETY: called by compiled code during `block`, whose `Run` and context are alive and borrowed by nothing else.
+    // SAFETY: called by compiled code during `block`, whose context is alive and borrowed by nothing else.
+    replay_steps(unsafe { &mut *ctx }, steps, false)
+}
+
+/// A load or store's exit once its block has run a step (`jit::leave_word`): the reason counted, the guard set and the
+/// board replayed; with every step standing, the lines are left to the dispatcher, which runs the steps after the last
+/// load or store as after a rollback (Sapphire_Recompiler.md §48.15).
+extern "C" fn leave(ctx: *mut Context, word: u32) -> u32 {
+    // SAFETY: as `replay`.
     let ctx = unsafe { &mut *ctx };
+    let (steps, base, logged, why) = jit::left_by(word);
+    ctx.left[why] += 1;
+    (ctx.guard, ctx.base, ctx.logged) = (base.saturating_sub(1), base, logged);
+    replay_steps(ctx, steps, true)
+}
+
+fn replay_steps(ctx: &mut Context, steps: u32, rewind: bool) -> u32 {
+    use crate::ee::cop0::{CAUSE, COMPARE, COUNT, STATUS, cause};
+    // SAFETY: during `block`, whose `Run` is alive and borrowed by nothing else while the code and its helpers run.
     let run = unsafe { &mut *ctx.owner.cast::<Run>() };
     let sys = unsafe { &mut *run.sys };
     let (count0, compare, seen0) = (sys.ee.cop0[COUNT], sys.ee.cop0[COMPARE], sys.ee.cycles_seen());
@@ -626,7 +672,8 @@ extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
     });
     run.tail = tail;
     run.guarded = ran < m && !interrupted;
-    if ran < m {
+    if ran < m || rewind {
+        run.rewound = ran == m;
         ctx.steps = ran as u32;
         return ctx.steps;
     }

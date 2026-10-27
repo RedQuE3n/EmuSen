@@ -171,9 +171,12 @@ fn main() {
             let before = load();
             let mut times = Vec::with_capacity(frames);
             let mut marks = Vec::new();
+            let code = |m: &Machine| m.blocks.as_ref().map_or((0, 0, 0, 0, 0, 0), |b| (b.compiled().0, b.compiled().2, b.stats.interpreted, b.stats.compiled_steps, b.stats.queued, b.compile_nanos()));
+            let mut codes = Vec::new();
             for f in 0..frames {
                 if bounds.contains(&f) {
                     marks.push((m.sys.board.now, m.idle.counts));
+                    codes.push(code(&m));
                 }
                 let t = Instant::now();
                 m.advance();
@@ -181,6 +184,7 @@ fn main() {
                 let _ = sound(&mut m, &mut buf);
             }
             marks.push((m.sys.board.now, m.idle.counts));
+            codes.push(code(&m));
             let after = load();
             for (w, pair) in bounds.windows(2).enumerate() {
                 let (from, to) = (pair[0], pair[1]);
@@ -200,6 +204,8 @@ fn main() {
                     100.0 * (k1.iop_cycles - k0.iop_cycles) as f64 * 8.0 / cycles as f64,
                     k1.busy - k0.busy
                 );
+                let (c0, c1) = (codes[w], codes[w + 1]);
+                println!("  code: blocks compiled {}, bytes {}, steps interpreted {}, steps compiled {}, entries waiting for the compiler {}, compiling {:.2} s", c1.0 - c0.0, c1.1 - c0.1, c1.2 - c0.2, c1.3 - c0.3, c1.4 - c0.4, (c1.5 - c0.5) as f64 * 1e-9);
             }
             println!("whole run: {}", skipped(&m, m.sys.board.now));
             if let Some(b) = &m.blocks {

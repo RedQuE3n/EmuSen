@@ -71,10 +71,10 @@ fn cpd_program() -> PathBuf {
     }
 }
 
-/// CPD's CSV for the tracked files of one language that are not ignored.
-fn run_cpd(program: &Path, root: &Path, files: &[&str], language: &str, warn: u32) -> Result<String, String> {
+/// CPD's CSV for the tracked files of one language that are not ignored, and how many files its lexer skipped.
+fn run_cpd(program: &Path, root: &Path, files: &[&str], language: &str, warn: u32) -> Result<(String, usize), String> {
     if files.is_empty() {
-        return Ok(String::new());
+        return Ok((String::new(), 0));
     }
     let list = std::env::temp_dir().join(format!("dupes-{}-{language}.txt", std::process::id()));
     let paths: Vec<String> = files.iter().map(|f| root.join(f).display().to_string()).collect();
@@ -87,9 +87,9 @@ fn run_cpd(program: &Path, root: &Path, files: &[&str], language: &str, warn: u3
     let out = cmd.output();
     let _ = std::fs::remove_file(&list);
     let out = out.map_err(|e| format!("dupes: {}: {e}", program.display()))?;
-    // CPD exits 4 when it found duplicates.
+    // CPD exits 4 when it found duplicates and 5 when it skipped a file it could not read.
     match out.status.code() {
-        Some(0 | 4) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        Some(0 | 4 | 5) => Ok((String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).matches("Skipping file").count())),
         _ => Err(format!("dupes: CPD failed ({}): {}", out.status, String::from_utf8_lossy(&out.stderr).lines().take(5).collect::<Vec<_>>().join("\n"))),
     }
 }
@@ -116,11 +116,13 @@ pub fn dupes(o: &Options) -> Result<(String, String, i32), String> {
     let listing = git(&root, &["-c", "core.quotepath=false", "ls-files", "-z"])?;
     let tracked: Vec<&str> = std::str::from_utf8(&listing).map_err(|_| "dupes: a tracked file name is not UTF-8".to_string())?.split('\0').filter(|f| !f.is_empty() && !ignore.matches(f)).collect();
     let root_text = root.display().to_string();
-    let mut blocks: Vec<Block> = Vec::new();
+    let (mut blocks, mut skipped): (Vec<Block>, usize) = (Vec::new(), 0);
     for (wanted, ext, language) in [(o.rust, ".rs", "rust"), (o.cs, ".cs", "cs")] {
         if wanted {
             let files: Vec<&str> = tracked.iter().copied().filter(|f| f.ends_with(ext)).collect();
-            blocks.extend(parse_csv(&run_cpd(&program, &root, &files, language, o.warn)?, &root_text));
+            let (csv, lost) = run_cpd(&program, &root, &files, language, o.warn)?;
+            blocks.extend(parse_csv(&csv, &root_text));
+            skipped += lost;
         }
     }
     let report = evaluate(&blocks, added.as_ref(), &accept, o.warn, o.min);
@@ -133,7 +135,7 @@ pub fn dupes(o: &Options) -> Result<(String, String, i32), String> {
         out.push_str(&format!("warning: {}\n", f.line()));
     }
     let scope = o.base.as_deref().map_or("the whole tree".to_string(), |b| format!("the lines added since {b}"));
-    let summary = format!("dupes: {} at or over {} tokens, {} warnings from {}, in {scope}\n", report.failures.len(), o.min, report.warnings.len(), o.warn);
+    let summary = format!("dupes: {} at or over {} tokens, {} warnings from {}, in {scope}; {skipped} files CPD could not read\n", report.failures.len(), o.min, report.warnings.len(), o.warn);
     Ok((out, summary, report.status()))
 }
 

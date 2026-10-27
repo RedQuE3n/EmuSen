@@ -2609,6 +2609,33 @@ and `HostAction.LoadCore`. Answering `session_service(rt, 0, flags)` with a game
 (§13.11), would let a module's `core` open the first game too; it widens what `session_service` accepts, so it is put
 to the tester rather than built. Moving `core` into the session module, Q25's second half, is S7's.
 
+### 13.16 `emusen.dev` and `dupes`: a duplication gate (decided 2026-10-27)
+
+Every other rule the project keeps has a mechanical check before a merge; duplication had none. A read-only audit on
+2026-10-27 ran PMD's CPD over the Rust and C# files of the last twenty merges and found copies of existing code in
+the added lines.
+
+**Form.** A fifth command module, `emusen.dev` (`Platform/emusen-dev-module/`), for the project's own development
+tools, with `dupes` as its first command (`man dupes`). It is linked into the standalone `dianash` program and not into
+the platform library, since PMD is a developer's tool and is never shipped. It reads the repository directly through
+`git` and the program named by `EMUSEN_CPD`, not through the shell's root, and takes the repository from `--repo` or
+`EMUSEN_REPO` because the standalone shell moves its own directory.
+
+**Rule.** A finding is a duplicated block of at least `--warn-tokens` (75) tokens with a place overlapping a line added
+since `--base`; one of at least `--min-tokens` (100) fails the run (exit 1), a smaller one prints as a warning. What is
+not compared is `dupes.ignore` (generated tables, tests, examples, benches, the WiseMan harness, build output, the
+reference trees) and a duplicate the project keeps is recorded in `dupes.accept` with its reason, both at the
+repository root and both plain text. An accepted pair is skipped only while both places stand at the recorded lines.
+
+**Measured 2026-10-27.** CPD skips the files its lexer cannot read (20 Rust sources); the count is printed with
+every run. The whole-tree audit with the committed ignore list
+reports 132 findings at 100 tokens or more and 145 warnings, in about 45 s; `--base` on the last merge's parent
+and on `WiseMan~1` reported none.
+
+**Tests.** The crate's unit tests: the overlap with added lines, the ranking, the ignore and accept files, the options
+and the exit statuses on synthetic CSV and diff text, and the missing-PMD message. Seeded faults, each caught by one
+test: an overlap off by one line, the accept file ignored, a warning returned as a failure.
+
 ## 14. How it is tested
 
 - **The golden corpus** (§13.1), the oracle of every step.

@@ -18,6 +18,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     [Collection(TestCollections.ProcessGlobals)]
     public class ThemeDownloadsTests : IDisposable
     {
+        // A real theme repository's address as the downloads' example; no theme is suggested by it.
+        private static readonly ThemeSource ArtBookNext = new("anthonycaccese", "art-book-next-es-de", "main");
+
         public const string Sha1 = "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         public const string Sha2 = "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -55,7 +58,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public static OnlineCoverTests.FakeServer GitHub(Func<byte[]> archive, Func<string> sha)
         {
-            ThemeSource source = ThemeSource.ArtBookNext;
+            ThemeSource source = ArtBookNext;
             return new OnlineCoverTests.FakeServer
             {
                 Answer = url =>
@@ -67,7 +70,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             };
         }
 
-        private static string Installed => ThemeDownloads.DirectoryFor(ThemeSource.ArtBookNext);
+        private static string Installed => ThemeDownloads.DirectoryFor(ArtBookNext);
 
         // Everything under home/Themes but the theme folder itself: a stray .part, .old or .zip.part is a failure.
         private static string[] Strays() => Directory.Exists(ThemeDownloads.Root)
@@ -79,7 +82,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             var server = GitHub(() => Archive("one"), () => Sha1);
             using var http = new HttpClient(server);
-            ThemeStamp stamp = await ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext);
+            ThemeStamp stamp = await ThemeDownloads.FetchAsync(http, ArtBookNext);
 
             Assert.Equal(Sha1, stamp.Commit);
             Assert.Equal("one", File.ReadAllText(Path.Combine(Installed, "marker.txt")));
@@ -88,9 +91,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Null(ThemeDownloads.Validate(Installed));
             Assert.Equal(new[] { "Synthetic Book" }, ThemeDownloads.Installed().Select(t => t.Name));
             Assert.Empty(Strays());
-            Assert.Contains(ThemeSource.ArtBookNext.ArchiveAddress, server.Asked);
-            Assert.Equal("https://codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main", ThemeSource.ArtBookNext.ArchiveAddress);
-            Assert.Equal("https://api.github.com/repos/anthonycaccese/art-book-next-es-de/commits/main", ThemeSource.ArtBookNext.CommitAddress);
+            Assert.Contains(ArtBookNext.ArchiveAddress, server.Asked);
+            Assert.Equal("https://codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main", ArtBookNext.ArchiveAddress);
+            Assert.Equal("https://api.github.com/repos/anthonycaccese/art-book-next-es-de/commits/main", ArtBookNext.CommitAddress);
         }
 
         // P54: the player's theme-customizations survive an update byte for byte, over whatever the archive carried there.
@@ -100,7 +103,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string sha = Sha1, marker = "one";
             var server = GitHub(() => Archive(marker, extra: "art-book-next-es-de-main/theme-customizations/upstream.txt"), () => sha);
             using var http = new HttpClient(server);
-            await ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext);
+            await ThemeDownloads.FetchAsync(http, ArtBookNext);
             string custom = Path.Combine(Installed, ThemeDownloads.Customizations);
             Directory.Delete(custom, true);
             Directory.CreateDirectory(Path.Combine(custom, "artwork"));
@@ -109,7 +112,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.WriteAllBytes(Path.Combine(custom, "artwork", "snes.png"), colours.Reverse().ToArray());
 
             (sha, marker) = (Sha2, "two");
-            await ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext);
+            await ThemeDownloads.FetchAsync(http, ArtBookNext);
 
             Assert.Equal("two", File.ReadAllText(Path.Combine(Installed, "marker.txt")));
             Assert.Equal(Sha2, ThemeDownloads.Stamp(Installed)!.Commit);
@@ -133,12 +136,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Broken))]
         public async Task A_failed_empty_broken_or_escaping_download_leaves_the_old_theme(string why, byte[]? archive)
         {
-            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ThemeSource.ArtBookNext);
+            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ArtBookNext);
             var server = archive is null
                 ? new OnlineCoverTests.FakeServer { Answer = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError) }
                 : GitHub(() => archive, () => Sha2);
             using var http = new HttpClient(server);
-            await Assert.ThrowsAnyAsync<Exception>(() => ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext));
+            await Assert.ThrowsAnyAsync<Exception>(() => ThemeDownloads.FetchAsync(http, ArtBookNext));
             Assert.Equal("one", File.ReadAllText(Path.Combine(Installed, "marker.txt")));
             Assert.Equal(Sha1, ThemeDownloads.Stamp(Installed)!.Commit);
             Assert.Empty(Strays());
@@ -150,11 +153,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public async Task A_cancelled_download_leaves_the_old_theme_and_no_partial_file()
         {
-            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ThemeSource.ArtBookNext);
+            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ArtBookNext);
             var stall = new Stall();
             using var http = new HttpClient(stall.Server);
             using var cancel = new CancellationTokenSource();
-            Task<ThemeStamp> fetch = ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext, cancel: cancel.Token);
+            Task<ThemeStamp> fetch = ThemeDownloads.FetchAsync(http, ArtBookNext, cancel: cancel.Token);
             await stall.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(File.Exists(Installed + ".zip.part"));
             cancel.Cancel();
@@ -167,12 +170,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public async Task A_download_cancelled_while_it_unpacks_leaves_the_old_theme()
         {
-            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ThemeSource.ArtBookNext);
+            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ArtBookNext);
             using var http = new HttpClient(GitHub(() => Archive("two"), () => Sha2));
             using var cancel = new CancellationTokenSource();
             var seen = new List<(int, int)>();
             var unpacked = new Now<(int Done, int Total)>(p => { seen.Add(p); if (p.Done == 1) cancel.Cancel(); });
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext, cancel: cancel.Token, unpacked: unpacked));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ThemeDownloads.FetchAsync(http, ArtBookNext, cancel: cancel.Token, unpacked: unpacked));
             Assert.Equal(2, seen.Count);
             Assert.True(seen[0].Item2 >= 4);
             Assert.Equal("one", File.ReadAllText(Path.Combine(Installed, "marker.txt")));
@@ -193,7 +196,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             public Stall() => Server = new OnlineCoverTests.FakeServer
             {
-                Answer = url => url == ThemeSource.ArtBookNext.ArchiveAddress
+                Answer = url => url == ArtBookNext.ArchiveAddress
                     ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StallingStream(Started)) }
                     : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($"{{\"sha\":\"{Sha2}\"}}") },
             };
@@ -241,7 +244,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Throws<InvalidOperationException>(() => ThemeDownloads.Remove(lookalike));
             Assert.True(Directory.Exists(lookalike));
 
-            using (var http = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext);
+            using (var http = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(http, ArtBookNext);
             ThemeDownloads.Remove(Installed);
             Assert.False(Directory.Exists(Installed));
         }
@@ -250,7 +253,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public async Task The_attribution_is_read_from_the_theme_s_own_files()
         {
-            using (var http = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext);
+            using (var http = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(http, ArtBookNext);
             ThemeAttribution about = ThemeAttribution.Read(Installed);
             Assert.Equal("Synthetic Book", about.Name);
             Assert.Equal(new[] { "The Synthetic Licence 1.0" }, about.Licence);

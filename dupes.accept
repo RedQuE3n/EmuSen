@@ -1,0 +1,3 @@
+# Duplication the project accepts, one line each: the places as `dupes` prints them, then the reason.
+#   <file>:<first>-<last>  duplicates  <file>:<first>-<last>  <reason>
+# A pair is skipped only while both places stand at exactly these lines.

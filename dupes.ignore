@@ -1,0 +1,19 @@
+# What `dupes` does not compare: one pattern a line, matched against consecutive parts of a path (* within a part).
+# Duplication measured on 2026-10-27 (see man dupes); each entry is a table or a place where a copy is the point.
+board_chip.rs
+board_fm.rs
+tests
+examples
+benches
+EmuSen.WiseMan
+target
+_target
+bin
+obj
+out
+Reference
+TestRoms
+SourceLogs
+*.g.cs
+*.Designer.cs
+*.generated.cs

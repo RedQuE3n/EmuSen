@@ -21,6 +21,7 @@ fn main() -> ExitCode {
     let interactive = args.is_empty() && terminal::is_terminal();
     let mut shell = Shell::new(Config { interactive, ..Config::default() });
     shell.add_module(&dianash_text::MODULE).expect("the text tools' manifest");
+    shell.add_module(&emusen_dev_module::MODULE).expect("the development tools' manifest");
     let session = shell.session_new().expect("a shell with sessions");
     shell.session_attach(session, Some("main")).expect("the first session");
     terminal::on_interrupt_cancel(shell.cancel_flag());

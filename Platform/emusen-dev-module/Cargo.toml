@@ -1,0 +1,15 @@
+[package]
+name = "emusen-dev-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.dev, the project's own development tools as a command module (EmuSen_DianaSh.md §13.16): `dupes`, which runs
+# PMD's CPD and reports the duplication a change adds. A developer's tool: linked into the standalone dianash program,
+# never into the platform library, and PMD is never shipped.
+[lib]
+name = "emusen_dev_module"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }

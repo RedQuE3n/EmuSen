@@ -692,8 +692,8 @@ fn slot(o: &Operation) -> usize {
     panic!("an operation outside the decoder's tables")
 }
 
-/// The entry for a decoded operation.
-pub fn entry(o: &Operation) -> &'static Entry {
+/// The entry for an operation the decoder handed out; private, since a copy of one is in none of its tables.
+fn entry(o: &Operation) -> &'static Entry {
     &TABLE[slots()[slot(o)] as usize]
 }
 

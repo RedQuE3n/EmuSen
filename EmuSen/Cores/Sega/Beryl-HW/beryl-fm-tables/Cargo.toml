@@ -1,0 +1,14 @@
+[package]
+name = "beryl-fm-tables"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The log-sine and exponent ROMs of the Yamaha FM operator: the YM2413's (Endou) and the YM2612's (Nephrite). See Beryl_FmTables.md.
+[lib]
+name = "beryl_fm_tables"
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

@@ -1,7 +1,7 @@
 # Nephrite_OperatorTables — the YM2612 operator's log-sine and exponent ROMs
 
 *Written 2026-10-05, at stage 5, before the FM operators are built.* This page records where the two constant tables in
-`src/fm_tables.rs` come from, what fixes each bit of them, and what the documents leave open. It was written under the
+`beryl-fm-tables` come from, what fixes each bit of them, and what the documents leave open. It was written under the
 clean-room protocol of `Nephrite_Plan.md` §1.3: hardware documents and prose write-ups only, no emulator or RTL source.
 The provenance list of §6 names every page opened, including those abandoned.
 
@@ -86,7 +86,7 @@ the only assignment of a 10-bit phase's top two bits that yields the four quarte
 with all 256 values printed as Table I (0, 3, 6, 8, … 1013, 1018). The values fit in 10 bits. [S1] states how the table
 is used: it "is read at the position given by the 8 LSB's of the input. The value + 1024 (the hidden bit) is then the
 significand of the floating point output and the yet unused MSB's of the input are the exponent". **The leading one is
-therefore implicit: the ROM stores only the fraction, and 1024 is added on reading.** `EXP` in `fm_tables.rs` holds the
+therefore implicit: the ROM stores only the fraction, and 1024 is added on reading.** `EXP` in `beryl-fm-tables` holds the
 ROM's stored values, without the hidden bit.
 
 **What fixes the offset.** The ROM's own index has no offset: entry x is 2^(x/256), sampled at the step's start. Again
@@ -101,7 +101,7 @@ bitwise complement of the attenuation's fractional byte f. Then
 
 so, read through the complement, the table is 2^−x with the index offset by **one whole step**, (f + 1), and scaled to
 an 11-bit significand. The integer part of the attenuation then shifts that significand right. A test in
-`fm_tables.rs` holds this identity for every f. How many bits the OPN2's operator keeps after the shift, and where it
+`beryl-fm-tables` holds this identity for every f. How many bits the OPN2's operator keeps after the shift, and where it
 rounds, belong to the operator's own page when it is built, not to the ROM.
 
 ### 3.3 How the constants are held
@@ -121,7 +121,7 @@ First and last entries, for reference:
 
 ## 4. Does the OPN2 share the OPL's tables?
 
-**No clean source found states that it does, and none states that it does not.** The tables in `fm_tables.rs` are the
+**No clean source found states that it does, and none states that it does not.** The tables in `beryl-fm-tables` are the
 YM3812's; their use in the YM2612 is an assumption, recorded here as open rather than presented as settled.
 
 What the clean sources do say:

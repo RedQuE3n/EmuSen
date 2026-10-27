@@ -7,7 +7,6 @@ pub(crate) mod debugger;
 pub(crate) mod eeprom;
 pub mod fifo_records;
 pub(in crate::genesis) mod fm;
-pub(in crate::genesis) mod fm_tables;
 pub(crate) mod header;
 pub(crate) mod io;
 #[allow(dead_code)]

@@ -1,7 +1,7 @@
-//! The operator unit's log-sine and exponent ROMs, as Nephrite_OperatorTables.md gives their provenance.
+//! The Yamaha FM operator's log-sine and exponent ROMs, one pair for the YM2413 and the YM2612 (Beryl_FmTables.md).
 
 /// Quarter-wave attenuation in 4.8 fixed point: entry x is round(-log2(sin((x + 0.5) * pi / 512)) * 256).
-pub(in crate::genesis) const LOGSIN: [u16; 256] = [
+pub const LOGSIN: [u16; 256] = [
     2137, 1731, 1543, 1419, 1326, 1252, 1190, 1137, 1091, 1050, 1013, 979, 949, 920, 894, 869,
     846, 825, 804, 785, 767, 749, 732, 717, 701, 687, 672, 659, 646, 633, 621, 609,
     598, 587, 576, 566, 556, 546, 536, 527, 518, 509, 501, 492, 484, 476, 468, 461,
@@ -21,7 +21,7 @@ pub(in crate::genesis) const LOGSIN: [u16; 256] = [
 ];
 
 /// The ROM in ascending order: entry x is round((2^(x / 256) - 1) * 1024); the leading one (1024) is implicit.
-pub(in crate::genesis) const EXP: [u16; 256] = [
+pub const EXP: [u16; 256] = [
     0, 3, 6, 8, 11, 14, 17, 20, 22, 25, 28, 31, 34, 37, 40, 42,
     45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90,
     93, 96, 99, 102, 105, 108, 111, 114, 117, 120, 123, 126, 130, 133, 136, 139,

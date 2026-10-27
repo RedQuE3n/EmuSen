@@ -3,6 +3,7 @@
 //!
 //! - [`StateWriter`] writes a state, counts one, or lists its layout; [`StateReader`] reads one back.
 //! - [`State`] is one C# class or struct, walked in the C# ordinal order; its `Error` is the core's own.
+//! - [`shell`] is the frame round a core's state: header refusals, `state_error!`, and the size, save and layout methods.
 //! - [`naming`] is the rule that ties each Rust field to the C# name written beside it.
 //! - [`Skip`] is a field C# does not serialize; [`ffi`] is the status range and the state exports of a core's C ABI.
 //! - [`SampleQueue`] is C#'s `EmuSen.Common.SampleQueue`, a core's undrained audio with its drop-oldest limit.
@@ -26,6 +27,7 @@ pub mod ffi;
 pub mod json;
 pub mod naming;
 mod reader;
+pub mod shell;
 pub mod samples;
 mod skip;
 pub mod steps;

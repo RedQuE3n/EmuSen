@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.Views
         // One scheduler per session - see `man tmux`. ConcurrentDictionary since MainWindow's emulation thread reads it while the UI thread edits it.
         private readonly ConcurrentDictionary<DianaShSession, DianaShInterpreterScheduler> _schedulers = new();
 
-        private readonly ConsolePane _console = new() { Prompt = "DianaSh #: " };
+        private readonly ConsolePane _console = new() { Prompt = "DianaSh #: ", OutputFocusable = false };
 
         private DianaShInterpreter _shell => _sessions.Current!.Interpreter;
         private DianaShInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];

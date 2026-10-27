@@ -52,10 +52,10 @@ beneath the shell and hidden while a physical keyboard types; H1 and H2 come nex
 
 - **Rename**: `DianaShConsoleWindow` is `HotaruWindow` (`EmuSen.Mistress/Views/HotaruWindow.cs`); the interpreter, `tmux`
   sessions and `EmulationControlCommands` are unchanged. Its title is *Shell*, and it is framed as a menu in a big-screen session.
-- **Reached** from the Settings menu as *Shell...* and from the pad menu's Settings page as *Shell*, which big picture shares.
+- **Reached** from the Settings menu as *Shell...* and from the pad menu's EmuSen page as *Shell*, which big picture shares; the Settings page already fills the big-screen menu at nine rows.
   There is no Tools menu. One `WindowSlot` keeps a second choice on the open window. F4 remains the pad menu's Start key in the themed view.
 - **Toolbar** (LunaP `ToolBar` of `LunaAction`s): History Back, History Forward, Complete, Clear, Copy Output.
-  - LunaP's `ConsolePane` gained `HistoryBack()`, `HistoryForward()`, `Insert()`, `SetInput()` and `InputText`, on LunaP's `hotaru-h1` branch.
+  - LunaP's `ConsolePane` gained `HistoryBack()`, `HistoryForward()`, `Insert()`, `SetInput()`, `InputText` and `OutputFocusable` (off here, so the pad's Down from the toolbar reaches the input box), on LunaP's `hotaru-h1` branch.
   - Complete finishes the first word from `DianaShInterpreter.CommandNames`: the longest shared prefix, and a space when one command remains.
   - Copy Output puts the newest non-empty output on the clipboard.
 - **Pad** (`IPadDriven`): the shoulders step through history, a trigger completes, and B clears a typed line, then closes the window.

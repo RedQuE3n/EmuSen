@@ -35,6 +35,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
 
         public nint Handle => _handle;
 
+        // Stops the line this shell is running, from any thread.
+        public void Cancel() => CancelFn(_handle);
+
         public NativeShell(bool keepsSessions)
         {
             var config = new DianashConfig { Size = (uint)sizeof(DianashConfig), Flags = keepsSessions ? ConfigSessions : 0 };

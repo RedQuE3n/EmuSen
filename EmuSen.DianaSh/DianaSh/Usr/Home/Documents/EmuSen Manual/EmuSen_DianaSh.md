@@ -977,6 +977,16 @@ int32_t  dianash_add_commands(dianash_shell *sh, const uint8_t *manifest, size_t
   thread that may wait: Mistress's console window from a worker it already has for that, not its UI thread. A host that
   must not wait asks `dianash_is_read_only` first, as `DianaShInterpreterScheduler.SubmitFromAnyThread` does today, and
   queues the rest.
+- **`dianash_cancel` is the interrupt** (extended 2026-10-27 with no change to the surface; it is 1.0's call). It sets
+  one atomic flag per shell, from any thread. The interpreter checks it at each iteration of `for`, `while` and `until`,
+  before each statement of a list, before and after each stage of a pipeline, after a `$(...)` or a sourced line, and
+  `io->cancelled` answers it to commands that loop (`find`, `grep`, the library scan and job commands). A program the
+  line started is ended. When the line stops it prints `^C` on its own line, sets `$?` to 130 (128 and SIGINT) and
+  clears the flag; a flag set while nothing runs is cleared as the next line starts. `DianaShInterpreter.Interrupt()`
+  is the C# call over it, and the managed fallback has the same flag at the same points. The other text commands
+  (`cat`, `head`, `tail`, `wc`, `sort`, `uniq`, `sed`, `awk`, `xxd`) are one pass over a string already in memory and
+  have nothing to poll; a line of them stops at the stage after. Measured on 2026-10-27: a `while true` stops within
+  100 ms of the call (`Platform/dianash/tests/interrupt.rs`, `InterruptTests`).
 - **Shell sessions** (`tmux`) are inside one `dianash_shell`; the host learns that the current one changed from a
   request, and reads the prompt and history of whichever is current.
 - **`dianash_new`'s config** (a size-prefixed struct) gives the sandbox's root (by default Galaxia's), the account,

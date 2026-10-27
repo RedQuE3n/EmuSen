@@ -54,9 +54,9 @@ beneath the shell and hidden while a physical keyboard types; H1 and H2 come nex
   sessions and `EmulationControlCommands` are unchanged. Its title is *Shell*, and it is framed as a menu in a big-screen session.
 - **Reached** from the Settings menu as *Shell...* and from the pad menu's EmuSen page as *Shell*, which big picture shares; the Settings page already fills the big-screen menu at nine rows.
   There is no Tools menu. One `WindowSlot` keeps a second choice on the open window. F4 remains the pad menu's Start key in the themed view.
-- **Toolbar** (LunaP `ToolBar` of `LunaAction`s): History Back, History Forward, Complete, Clear, Copy Output.
+- **Toolbar** (LunaP `ToolBar` of `LunaAction`s): History Back, History Forward, Complete, Clear, Copy Output, Interrupt.
   - LunaP's `ConsolePane` gained `HistoryBack()`, `HistoryForward()`, `Insert()`, `SetInput()`, `InputText` and `OutputFocusable` (off here, so the pad's Down from the toolbar reaches the input box), on LunaP's `hotaru-h1` branch.
   - Complete finishes the first word from `DianaShInterpreter.CommandNames`: the longest shared prefix, and a space when one command remains.
   - Copy Output puts the newest non-empty output on the clipboard.
 - **Pad** (`IPadDriven`): the shoulders step through history, a trigger completes, and B clears a typed line, then closes the window.
-- **Interrupt (Ctrl+C) is not built.** Neither the Rust shell nor the managed one has a cancel path: the only stop for a runaway loop is the managed shell's fixed 10-second timeout. It waits on a cancel call in DianaSh, which the toolbar then takes as a sixth action.
+- **Interrupt** is the toolbar's sixth action, and Ctrl+C in the window does the same: `DianaShInterpreter.Interrupt()`, which stops the running line at its next check, prints `^C` and leaves `$?` at 130 (EmuSen_DianaSh.md §10.2). Ctrl+C no longer copies a selection; Copy Output is the toolbar's.

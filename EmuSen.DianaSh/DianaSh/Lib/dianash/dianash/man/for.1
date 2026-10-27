@@ -10,6 +10,7 @@ DESCRIPTION
     word. 'break' exits the loop early; 'continue' skips to the next word.
     Every iteration counts against a shared 10-second wall-clock safety
     timeout (see 'while') that aborts a runaway loop with a clear error.
+    An interrupt stops it at the next iteration, as it does 'while'.
 
 EXAMPLES
     for i in 1 2 3; do echo $i; done

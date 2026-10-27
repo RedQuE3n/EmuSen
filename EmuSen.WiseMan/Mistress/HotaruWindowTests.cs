@@ -97,6 +97,19 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
+        public Task Interrupt_stops_a_running_loop_and_the_next_line_runs() => Session.Dispatch(() =>
+        {
+            HotaruWindow w = Ready();
+            var stop = Task.Run(() => { System.Threading.Thread.Sleep(100); Toolbar(w, "Interrupt"); });
+            Submit(w, "while true; do echo x | grep x; done");
+            Assert.True(stop.Wait(TimeSpan.FromSeconds(5)));
+            Assert.EndsWith("^C", (string)typeof(HotaruWindow).GetField("_lastOutput", Hidden)!.GetValue(w)!);
+            Submit(w, "echo after");
+            Assert.Equal("after", (string)typeof(HotaruWindow).GetField("_lastOutput", Hidden)!.GetValue(w)!);
+            w.Close();
+        }, default);
+
+        [Fact]
         public Task Complete_finishes_the_first_word_to_the_one_command_it_starts() => Session.Dispatch(() =>
         {
             HotaruWindow w = Ready();

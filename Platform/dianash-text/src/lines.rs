@@ -102,7 +102,7 @@ pub fn grep(call: &Call, args: &[String], stdin: Option<String>) -> Run {
         return Ok(Answer::ok("Nothing to search - pipe a command's output in, or pass literal text: grep <pattern> <text...>"));
     };
     let regex = pattern::cached(call, regex, ignore_case)?;
-    let matches: Vec<(usize, &str)> = text.split('\n').enumerate().filter(|(_, line)| regex.is_match(line) != invert).map(|(n, line)| (n + 1, line)).collect();
+    let matches: Vec<(usize, &str)> = text.split('\n').enumerate().take_while(|_| !call.cancelled()).filter(|(_, line)| regex.is_match(line) != invert).map(|(n, line)| (n + 1, line)).collect();
     // Exit 0 on at least one match, which is what lets -q drive an if or while.
     let status = if matches.is_empty() { 1 } else { 0 };
     if quiet {

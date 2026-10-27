@@ -1020,16 +1020,17 @@ fn a_rollback_leaves_memory_as_the_instructions_that_stand_left_it() {
     assert!(b.stats.rollbacks > 5, "interrupts fell inside the blocks: {:?}", b.stats);
 }
 
-/// Plain instructions between a block's loads and stores, then a load that leaves every time (a timer's count), one
-/// that misses now and then and one misaligned at every fourth pass: each leaves by the shared exit, which writes back the
-/// state after the access before it and has the interpreter run the steps between (Sapphire_Recompiler.md §48.15).
+/// Plain instructions between a block's loads and stores, then a load that leaves every time (a timer's count) two steps
+/// after the block's second access, one that misses now and then and one misaligned at every fourth pass: the first leaves
+/// by the state after the store before it, the interpreter running the two steps again; the others, further from the
+/// access before them, by exits of their own (Sapphire_Recompiler.md §48.15).
 const LEAVING: &str = "
     lui gp, 0x0030
     lui s6, 0x1000
-    top: lw t0, 0(gp)
+    top: lw t0, 0x40(gp)
     addiu t0, t0, 1
     xor t1, t0, s1
-    sw t1, 4(gp)
+    sw t1, 0x44(gp)
     addu t2, t1, t0
     dsll t3, t2, 4
     lw t4, 0(s6)

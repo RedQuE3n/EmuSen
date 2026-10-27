@@ -11584,6 +11584,15 @@ to §31.4, §37's local-to-local overlap, §43.5 to §43.8, §46 and §47.11; `M
 - The GS on the device (S44 to S46), and the other units on threads (S42).
 - PCRTC reads of a frame drawn and shown at once still wait for its pages: exact, and the remaining wait on the boot.
 
+## 51. A gameplay workload: Jak and Daxter toward play, timed and profiled, and the levers ranked again (2026-10-26)
+
+*Recorded in `Sapphire_Speed.md` §51, a page of its own because this one reached the size a page in the tree may have;
+that page keeps this one's numbering.* Jak and Daxter does not reach play: its opening, which no button skips, draws
+whole to frame 11,700 and from about 12,900 the GS holds its writes behind a SIGNAL (D-900, open). The opening drawn in
+the game's engine is the bench's `game` windows, at 361.1, 564.1 and 1,337.4 ms a frame on the default path; the EE's
+software floats, VU micro mode, the GIF and the VIF, the CLUT reads and VU1's compiler joined at its code budget lead the
+profile, and the levers are ranked again; the handheld's columns owed.
+
 ## 53. Stage S34, the decoded caches (lever 2): the IOP's (2026-10-26)
 
 *Numbered §53, §51 and §52 being taken by the stages beside it; its disputes would be numbered from D-940, and it raised

@@ -6,10 +6,10 @@
 //! §39.11).
 //!
 //! `cargo run --release --example s28 -- <bios> <americas|europe|japan> <disc.iso> <out-dir> [nvm=<file>]
-//! [card=<file>|none] [load=<state>] [sound] [registers]`
+//! [card=<file>|none] [load=<state>] [script=<file>] [sound] [registers]`
 //!
 //! `<out-dir>/control` holds lines, read again whenever the run reaches its limit: `until <frame>`, `press <frame>
-//! <bits> [frames]` (the core's button bits, `+`-joined, held six frames by default), `shot <frame>`, `every <k>`
+//! <bits> [frames]` and `stick <frame> <axis> <value> [frames]` (the pad's input, `common/script.rs`), `shot <frame>`, `every <k>`
 //! (a picture every k frames), `save <frame>` (the state at that frame to `<out-dir>/state-<n>.sph2`), `ram <frame>`
 //! (RDRAM from 00100000h as the EE sees it through its data cache, the game's memory and never the kernel's, to
 //! `<out-dir>/ram-<n>.bin`), `gstrace <frame>` (every GS general register the game writes in that frame, in order, to
@@ -20,9 +20,9 @@
 //! With `registers` every register access the units answer is counted from power-on, for the reports; with `trace` the
 //! drive's register accesses are kept in order and written with the reports to `<out-dir>/trace.txt`; with `padtrace`
 //! port 1's pad exchanges, to `<out-dir>/padtrace.txt`. The IOP's console, caught at IOMAN as §36.3 does, is written
-//! with the reports to `<out-dir>/tty.txt`.
+//! with the reports to `<out-dir>/tty.txt`. `script=<file>` reads lines of the same form before the control file's, a
+//! game's press script kept apart from a run's pictures and states (`scripts/`, Sapphire_Speed.md §51).
 
-use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -33,10 +33,13 @@ use emusen_native::ffi::StateMachine;
 use sapphire::machine::{Machine, Market};
 use sapphire::media::Media;
 
+#[path = "common/script.rs"]
+mod script;
+
 #[derive(Default)]
 struct Control {
     until: i64,
-    presses: BTreeMap<i64, (u32, i64)>,
+    input: script::Script,
     shots: Vec<i64>,
     saves: Vec<i64>,
     rams: Vec<i64>,
@@ -46,18 +49,14 @@ struct Control {
     quit: bool,
 }
 
-fn control(out: &Path) -> Control {
+fn control(out: &Path, script: &str) -> Control {
     let mut c = Control::default();
-    let text = std::fs::read_to_string(out.join("control")).unwrap_or_default();
+    let text = script.to_owned() + &std::fs::read_to_string(out.join("control")).unwrap_or_default();
+    c.input = script::Script::parse(&text);
     for line in text.lines() {
         let w: Vec<&str> = line.split_whitespace().collect();
         match w.as_slice() {
             ["until", n] => c.until = n.parse().unwrap_or(c.until),
-            ["press", f, bits, rest @ ..] => {
-                let mask = bits.split('+').filter_map(|b| b.parse::<u32>().ok()).fold(0u32, |m, b| m | 1 << b);
-                let held = rest.first().and_then(|d| d.parse().ok()).unwrap_or(6);
-                c.presses.insert(f.parse().unwrap_or(0), (mask, held));
-            }
             ["shot", f] => c.shots.extend(f.parse::<i64>().ok()),
             ["save", f] => c.saves.extend(f.parse::<i64>().ok()),
             ["ram", f] => c.rams.extend(f.parse::<i64>().ok()),
@@ -90,6 +89,7 @@ fn main() {
     let all = a[5..].iter().any(|o| o == "registers");
     let trace = a[5..].iter().any(|o| o == "trace");
     let padtrace = a[5..].iter().any(|o| o == "padtrace");
+    let script = opt("script").map(|p| std::fs::read_to_string(p).expect("the script") + "\n").unwrap_or_default();
     let Ok(Media::Disc(disc)) = Media::read(&image) else { panic!("not a PlayStation 2 disc") };
     println!("disc: {} sectors, program {}, serial {:?}", disc.sectors, disc.program, disc.serial);
     let nvm = opt("nvm").map(|p| std::fs::read(p).expect("the EEPROM"));
@@ -136,11 +136,11 @@ fn main() {
     let mut sound_file = sound.then(|| std::io::BufWriter::new(std::fs::OpenOptions::new().create(true).append(true).open(out.join("sound.raw")).unwrap()));
     let started = Instant::now();
     let (mut mark_wall, mut mark_frame) = (Instant::now(), m.frames);
-    let mut held: Option<(u32, i64)> = None;
     let mut chunk = vec![0i16; 1 << 16];
     let mut reported = false;
+    let mut owed: Option<i64> = None;
     loop {
-        let c = control(&out);
+        let c = control(&out, &script);
         if c.reports && !reported {
             m.sys.board.reports.all = true;
             m.sys.board.iop.bus.reports.all = true;
@@ -158,11 +158,12 @@ fn main() {
             continue;
         }
         let next = m.frames + 1;
-        if let Some(&p) = c.presses.get(&next) {
-            held = Some((p.0, next + p.1));
+        Core::set_buttons(&mut m, 0, c.input.buttons(next), 0xFFFF).unwrap();
+        if c.input.has_sticks() {
+            for axis in 0..4 {
+                Core::set_axis(&mut m, 0, axis, c.input.axis(next, axis)).unwrap();
+            }
         }
-        let mask = held.filter(|h| next < h.1).map_or(0, |h| h.0);
-        Core::set_buttons(&mut m, 0, mask, 0xFFFF).unwrap();
         if c.gstraces.contains(&next) {
             m.sys.board.gs.trace = Some((Vec::new(), 0));
         }
@@ -182,10 +183,23 @@ fn main() {
             std::fs::write(out.join("nvm.bin"), &m.nvm().bytes[..]).unwrap();
             println!("frame {}: the console wrote its EEPROM", m.frames);
         }
-        if c.saves.contains(&m.frames) {
+        if c.saves.contains(&m.frames) || owed.is_some() {
+            // A queue past its slots cannot be saved at this instant (Sapphire_Native.md §38.2); the next frame is tried.
             let mut s = vec![0; m.state_size()];
-            m.save_state(&mut s).expect("the state saves");
-            std::fs::write(out.join(format!("state-{}.sph2", m.frames)), &s).unwrap();
+            match m.save_state(&mut s) {
+                Ok(n) => {
+                    std::fs::write(out.join(format!("state-{}.sph2", m.frames)), &s[..n]).unwrap();
+                    if let Some(f) = owed.take() {
+                        println!("frame {}: the state owed from frame {f} saved", m.frames);
+                    }
+                }
+                Err(e) => {
+                    let (b, io) = (&m.sys.board, &m.sys.board.iop.bus);
+                    let past: Vec<&str> = [("VU", b.vpu.fits()), ("VIF0", b.vif[0].fits()), ("VIF1", b.vif[1].fits()), ("GIF", b.gif.fits()), ("GS", b.gs.fits()), ("SIF", io.sif.fits()), ("CDVD", io.cdvd.fits()), ("SIO2", io.sio2.fits()), ("IPU", b.ipu.fits())].iter().filter(|u| !u.1).map(|u| u.0).collect();
+                    println!("frame {}: no state at this instant ({e:?}, past its slots: {past:?})", m.frames);
+                    owed = owed.or(Some(m.frames));
+                }
+            }
         }
         if c.rams.contains(&m.frames) {
             let ram: Vec<u8> = (GAME_RAM as u32..32 << 20).step_by(16).flat_map(|p| m.sys.peek(p, 16).to_le_bytes()).collect();

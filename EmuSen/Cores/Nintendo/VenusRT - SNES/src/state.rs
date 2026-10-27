@@ -1,6 +1,5 @@
 //! VenusRT's state errors over the shared codec. The format is VenusRT's own, "VNRT" (VenusRT_Plan.md §5.6).
 
-use emusen_native::ffi::status;
 pub use emusen_native::{StateReader, StateWriter, Truncated};
 
 /// "VNRT" as the bytes a state starts with.
@@ -13,30 +12,9 @@ pub const STATE_VERSION: i32 = 22;
 /// A state written under the other NEC DSP engine than the one this machine runs (VenusRT_DspHle.md §2.2).
 pub const STATUS_OTHER_DSP_ENGINE: i32 = -11;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    Foreign(u32),
-    Version(i32),
-    BufferTooSmall { needed: usize },
-    DspEngine { saved: u8, running: u8 },
-}
-
-impl emusen_native::ffi::Status for StateError {
-    fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-            StateError::DspEngine { .. } => STATUS_OTHER_DSP_ENGINE,
-        }
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    pub enum StateError {
+        DspEngine { saved: u8, running: u8 } => STATUS_OTHER_DSP_ENGINE,
     }
 }
 

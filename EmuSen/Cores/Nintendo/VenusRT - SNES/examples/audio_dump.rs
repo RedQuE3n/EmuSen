@@ -1,6 +1,8 @@
 //! The S-DSP's own 32 kHz output from a state, before any resampling, as a 16-bit stereo WAV and a per-frame index.
 //! `audio_dump <rom> <state> <frames> <out.wav>`; the index, `frame first_pair pairs`, beside it as `<out.wav>.idx`.
 
+use emusen_native::ffi::StateMachine;
+
 #[path = "common/load.rs"]
 mod load;
 

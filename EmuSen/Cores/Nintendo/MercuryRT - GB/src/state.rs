@@ -1,39 +1,11 @@
 //! MercuryRT's state: the shared codec (`emusen-native`) and the refusals only Mercury's format has. See Mercury_Native.md §3.1.
 
-use emusen_native::ffi::status;
 pub use emusen_native::{State, StateReader, StateWriter, StringError, Truncated};
 
-/// Why a state could not be read or written; each has a status code for the C ABI.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    NotAMercuryState(u32),
-    Version(i32),
-    BadStringLength { at: usize },
-    BufferTooSmall { needed: usize },
-}
-
-impl StateError {
-    pub fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::NotAMercuryState(_) => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::BadStringLength { .. } => status::BAD_STRING,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-        }
-    }
-}
-
-impl emusen_native::ffi::Status for StateError {
-    fn status(&self) -> i32 {
-        StateError::status(self)
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    /// Why a state could not be read or written; each has a status code for the C ABI.
+    pub enum StateError {
+        BadStringLength { at: usize } => emusen_native::ffi::status::BAD_STRING,
     }
 }
 

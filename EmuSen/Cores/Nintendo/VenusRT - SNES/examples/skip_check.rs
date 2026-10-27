@@ -1,6 +1,8 @@
 //! Runs a ROM twice, with the picture drawn and with it skipped, and compares the whole state after every frame.
 //! `skip_check <rom> [frames]` prints the first frame at which the two part, or that they never did.
 
+use emusen_native::ffi::StateMachine;
+
 #[path = "common/load.rs"]
 mod load;
 

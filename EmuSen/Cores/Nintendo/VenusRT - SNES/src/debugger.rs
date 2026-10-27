@@ -233,6 +233,7 @@ pub const DSP_REGISTERS: [(&str, u32); 14] = [("PC", 16), ("RP", 16), ("DP", 16)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::StateMachine;
     use emusen_native::debug::{flag, Range};
 
     /// LoROM: JSR $8010 in a loop; the routine stores $5A at $7E0020 and returns. The SPC700 waits in its boot program.

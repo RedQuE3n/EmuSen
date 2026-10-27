@@ -9,7 +9,7 @@ use emusen_native::core::{
     Region, Scope, Setting, SettingKind, Settings, Space, StateFormat, System, Video, caps, event, flags, status,
 };
 use emusen_native::debug::Hooks;
-use emusen_native::ffi::StateMachine;
+use emusen_native::ffi::{StateMachine, Status};
 
 use super::{Core, PHASES, STATUS_NOT_A_ROM, STATUS_NULL, space};
 use crate::machine::{Machine, SNAPSHOT_VERSION, STATE_VERSION};

@@ -14,6 +14,7 @@
 //! The visual error: per frame, the share of pixels that differ, and for sprites alike in tile and attributes on both
 //! machines, how far apart they are placed (VenusRT_Native.md §51). LOCKSTEP_SHOTS=f1,f2,... saves at those frames a PNG
 //! of the image's picture, the replacement's and their differing pixels side by side, to the cache's shots/ folder.
+use emusen_native::ffi::StateMachine;
 use std::fmt::Write as _;
 use std::hash::{Hash, Hasher};
 use venusrt::chips::dsporacle::{Place, Places};

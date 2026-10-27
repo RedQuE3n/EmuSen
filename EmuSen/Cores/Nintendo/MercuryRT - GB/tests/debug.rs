@@ -1,6 +1,7 @@
 //! The debugger's hooks driven through the machine alone: what an observed frame stops for, what it records, and that a frame
 //! observed, halted or refused and resumed is the frame run plain. See Mercury_Native.md §8.5.
 
+use emusen_native::ffi::StateMachine;
 use mercuryrt::debug::{Call, Range, Write, flag, stop};
 use mercuryrt::machine::{Machine, Model, RUN_CONTINUING, RUN_UNCHECKED};
 use mercuryrt::memory::cartridge::{HEADER_CHECKSUM_ADDRESS, header_checksum};

@@ -252,15 +252,7 @@ impl Machine {
         w.group("Bus", |w| self.bus.write_tail(w));
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
-        let magic = r.u32()?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::NotAMercuryState(magic));
-        }
-        let version = r.i32()?;
-        if !(OLDEST_READABLE_VERSION..=STATE_VERSION).contains(&version) {
-            return Err(StateError::Version(version));
-        }
+    fn read_state(&mut self, r: &mut StateReader, version: i32) -> StateResult {
         r.set_version(version);
         // Older states were made on the console the header chose; a state from the other console rebuilds the machine as that one.
         let cgb_hardware = if version >= CONSOLE_IN_HEADER { r.bool()? } else { self.bus.cart.is_cgb() };
@@ -285,36 +277,6 @@ impl Machine {
         *self.bus.cpu_halted = self.cpu.halted;
         Ok(())
     }
-
-    /// `MercuryCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.
-    pub fn load_state(&mut self, data: &[u8]) -> StateResult {
-        let mut next = self.clone();
-        next.read_state(&mut StateReader::new(data))?;
-        *self = next;
-        Ok(())
-    }
-
-    pub fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write_state(&mut w);
-        w.len()
-    }
-
-    pub fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        let mut w = StateWriter::new(out);
-        self.write_state(&mut w);
-        if w.overflowed() {
-            return Err(StateError::BufferTooSmall { needed: w.len() });
-        }
-        Ok(w.len())
-    }
-
-    /// One line per field, `offset length type path`, in the order the state writes them.
-    pub fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write_state(&mut w);
-        w.into_layout()
-    }
 }
 
 /// C#'s `((address % size) + size) % size`, zero for an empty space.
@@ -325,29 +287,22 @@ fn wrap(address: i32, size: usize) -> usize {
 
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
-    /// A state made on the other console changes machine info's system, which the v1 host is told (EmuSen_CoreAPI.md §6.19, §26).
+    /// A state made on the other console changes machine info's system, which the v1 host is told (EmuSen_CoreAPI.md §6.19, §26); a failed load changes nothing.
     fn load_state(&mut self, data: &[u8]) -> StateResult {
         let console = self.cgb_hardware();
-        let r = Machine::load_state(self, data);
+        let r = emusen_native::shell::load_state_into(self, data, STATE_MAGIC, |v| (OLDEST_READABLE_VERSION..=STATE_VERSION).contains(&v), Machine::read_state);
         if self.cgb_hardware() != console {
             emusen_native::core::emit(emusen_native::core::event::MACHINE_INFO, 0, 0);
         }
         r
     }
-    fn state_size(&self) -> usize {
-        Machine::state_size(self)
-    }
-    fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        Machine::save_state(self, out)
-    }
-    fn layout(&self) -> String {
-        Machine::layout(self)
-    }
+    emusen_native::state_write_methods!(write_state);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::{StateMachine, Status};
     use crate::memory::cartridge::{HEADER_CHECKSUM_ADDRESS, header_checksum};
 
     fn rom(kind: u8, ram_code: u8, cgb: u8) -> Vec<u8> {

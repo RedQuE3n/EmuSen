@@ -153,7 +153,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   cache's own lines, a translation cache keyed by the TLB's stamp and the mode, the board's replay keeping the DMAC out of
   a block's times before its last access with rollbacks that undo a block's stores, a block running to the first line the
   instruction cache does not hold; every oracle equal to the interpreter on each base, Jak and Daxter's loading 1.4 to 2
-  times S36's, its memory card screen 0.94 with the cause named.
+  times S36's, its memory card screen 0.94 with the cause named; and stage S34 (2026-10-26, §53): the IOP's decoded cache,
+  each instruction cache word decoded as it enters, exact without invalidation, every digest and ps2autotests' texts
+  equal, 1.01 to 1.04 times; the emulation thread's ten largest costs on the language screen and Jak and Daxter's loading.
 - **`Sapphire_Recompiler.md`** — the EE recompiler's record from stage S37 on (2026-10-26), continuing
   `Sapphire_Native.md`'s numbering past the size a page may have: S37's loads and stores in blocks (§48), with the
   translation cache, the data cache's lines reached in place, the board's guard of the DMAC and the rollbacks, the

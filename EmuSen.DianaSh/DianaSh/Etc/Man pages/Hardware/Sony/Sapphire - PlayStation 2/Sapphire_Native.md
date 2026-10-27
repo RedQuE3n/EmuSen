@@ -11583,3 +11583,137 @@ to §31.4, §37's local-to-local overlap, §43.5 to §43.8, §46 and §47.11; `M
 - The handheld: no run was made there.
 - The GS on the device (S44 to S46), and the other units on threads (S42).
 - PCRTC reads of a frame drawn and shown at once still wait for its pages: exact, and the remaining wait on the boot.
+
+## 53. Stage S34, the decoded caches (lever 2): the IOP's (2026-10-26)
+
+*Numbered §53, §51 and §52 being taken by the stages beside it; its disputes would be numbered from D-940, and it raised
+none. Built on WiseMan `9c754f2c4` (S33's idle skipping, S43's GS workers and S37's loads and stores beneath).*
+
+### 53.1 In one paragraph
+
+`Sapphire_Plan.md` §7's row S34, lever 2 of §5.12, the IOP first. **Each word of the IOP's instruction cache is decoded as
+it enters** (a refill, or an isolated store of a word) and again after a state load, the decode kept beside the word and
+never in the state; **a fetch that the cache would answer is answered from that word and its decode** before the memory
+map is decoded, every other fetch as before. This is Diamond's first tier (`Diamond_Speed.md` §5) on Sapphire's own IOP
+bus, through `blackmoon-r3000`'s `fetch_decoded` as its crate defines it: the crate, and so Diamond, unchanged. **Nothing a
+program can see changes**: the picture, the sound and the state of the OSDSYS boot (760 frames) and Jak and Daxter (900)
+equal before and after on both EE tiers, ps2autotests' 78 texts byte for byte S33's. **The speed gained is small, as S32's
+ranking with S33 beneath it predicted** (§43.8 row 8): one interleaved pair, 1.01 to 1.04 times (§53.5). The EE
+interpreter's decoded cache was not taken (§53.4). The emulation thread's ten largest costs on both workloads, for the
+choice of the next lever, are §53.6.
+
+### 53.2 What was built, and why it is exact
+
+| File | What |
+| --- | --- |
+| `src/iop/icache.rs` | `ops`, each word's decode; `fill` and the isolated store of a word decode what they place; `hit`, a cached fetch's word and decode or none; `redecode` |
+| `src/iop/bus.rs` | `fetch_decoded`: KUSEG's first 512 MiB or KSEG0, RAM's window or the boot ROM, BCC's IS1 set and a hit, one cycle, as `fetch`'s hit; else `fetch` and `decode`. `read_own` decodes the restored words |
+| `tests/s34.rs` | the equality of the two fetches; three programs rewriting code (below) |
+
+The IOP's cache is not written by a store, a DMA transfer or the SIF (`Sapphire_Native.md` §22.3, as the PlayStation's
+R3000A, psx-spx "i-Cache"): code written into RAM under a valid line keeps running the line's old word until the line is
+refilled. So a word decoded as it enters the line is the word that runs while the line stands, and no write to RAM can make
+its decode stale; what changes the line (a refill, an isolated store, a state) decodes again. **The plan's "invalidated on
+any write to the memo's memory" is therefore needed only for code fetched past the cache**, which is decoded at each fetch,
+as it is fetched at each fetch. A memo for that code was not built: on both workloads the samples in the IOP bus's `read_at` and `get`, uncached
+fetches and loads together, are 0.15 % of Jak and Daxter's loading frame and less on the language screen, the BIOS and
+the game running the IOP from its cache.
+
+### 53.3 The gate (measured 2026-10-26)
+
+On the desktop beside other stages' work; the player's Americas BIOS `ps2-0230a-20080220.bin` executed through the
+referees' link to it, never read; Jak and Daxter read in place from `~/.cache/emusen/probe/sapphire/discs/`.
+
+| Oracle | Result |
+| --- | --- |
+| `a_decoded_fetch_is_a_fetch_and_its_decoding`: two buses, one fetching and decoding, one by `fetch_decoded`, 200,000 random accesses on six seeds through kuseg, kseg0, kseg1, kuseg past 512 MiB and kseg2 at RAM, its mirror, the boot ROM, the scratchpad, an I/O register and no device; BCC switched off, on and to two-word refills under valid lines; isolated word and tag stores; stores to RAM past the cache; the state's words loaded over decodes of random words | the word, the operation, the fault, the clock, the refills and the cache equal after every access |
+| `code_rewritten_by_a_store_…`, `…_by_the_iops_dma_…` (channel 1's peripheral giving the words, a burst into RAM), `…_by_a_sif_transfer_…` (channel 10 taking a packet from SIF1's FIFO, its tag naming the routine): a routine run cached, rewritten with an instruction of another operation, then called cached, through kseg1, with IS1 clear, with it set again, and after its line is flushed | the old value while the line stands, the new past the cache and after the refill, in every program |
+| The crate's suite | 473 tests in 33 binaries passed; WiseMan's `SapphireTests` (§53.9) |
+| `examples/bench.rs`, the boot (760) and Jak and Daxter (900), idle skipping and four GS workers, interpreted and with `--blocks`, before and after | every picture, the sound and the final state equal: `50F06A02F1B76860`, `2EE7B3D10DF3C401`, `2051C6BB42228C53` and `7EEC08D4D07DB621`, `20BB66B5E91347C9`, `83E7D9CAFA075D14`, S37's own (`Sapphire_Recompiler.md` §48.7) |
+| `s33 state`: a state at frame 400 of the boot and 300 of Jak and Daxter loaded into a second machine, 100 frames on beside a plain one | 0 pictures, 0 sound, 0 states differing on both |
+| ps2autotests by `examples/s10.rs`, the 55 EE programs and the 23 IOP programs as CDs (§40.4) | 52 of 55 and 23 of 23, the same three failing as §36.5; all 78 texts byte for byte S33's |
+
+`blackmoon-r3000` is unchanged, so Diamond's tests and corpus are outside the change. **Seeded faults**, each alone, by
+`tests/s34.rs`: F1, a refill not decoding what it places (what a DMA write, a SIF transfer or a store followed by a refill
+would run stale): caught by all four tests; F2, kseg1 taken as cached: all four; F3, BCC's IS1 not asked: all four; F4, an
+isolated word store not decoded: the equality test; F5, a state's words not decoded: the equality test.
+
+### 53.4 What was not built
+
+**The EE interpreter's decoded cache**, decided 2026-10-26 to leave for now on its expected value: each instruction cache
+word's table entry kept beside it, decoded at the refill and at IXSDT through the existing memo, would replace the memo's
+lookup in every interpreted step. On Jak and Daxter's loading the interpreted fetch and the memo are 0.87 % and 0.43 % of the
+sampled frame (2.3 % of the frame's work, §53.6's normalisation), on the language screen 0.66 % and 0.54 %; with the
+recompiler the default tier, the expected gain is under 1 %, a ratio near 1.01. It is outside the recompiler's files.
+**The uncached memo** (§53.2): at most 0.15 %.
+
+### 53.5 Speed (measured 2026-10-26)
+
+`examples/s33.rs time … recompiler on`, the core's defaults (the recompiler, idle skipping, GS workers automatic), one
+interleaved pair per workload at CPU weight 100 beside other stages' work, loads 2.8 to 4.9 (one minute):
+
+| Window | Before, ms a frame | After | Ratio | Frames a second |
+| --- | --- | --- | --- | --- |
+| The OSDSYS boot, 0-690 | 179.8 | 177.8 | 1.01 | 5.56 → 5.62 |
+| Its language screen, 690-760 | 129.6 | 125.5 | 1.03 | 7.72 → 7.97 |
+| Jak and Daxter loading, 8-400 | 49.6 | 47.7 | 1.04 | 20.17 → 20.99 |
+| Its memory card screen, 400-900 | 110.8 | 109.9 | 1.01 | 9.03 → 9.10 |
+
+One pair cannot separate gains of this size from the runs' spread (S33's and S37's series spread 5 to 40 %): **lever 2 for
+the IOP is worth about 1 to 2 %**, against S32's expectation of 1.05 to 1.19 for the whole lever before idle skipping,
+which since passes 33 to 88 % of the IOP's cycles (§47.11). The IOP runs 381,541 instructions a frame on Jak's loading and
+570,572 on the language screen. A second run of the before binary on Jak and Daxter skipped 129 EE cycles more than the
+first, with every digest equal: on the recompiled tier the skips' counts follow where the compiler's thread lets a
+block run, not the machine (§53.8).
+
+### 53.6 Where the emulation thread's time goes (measured 2026-10-26)
+
+S32's sampler (§43.4) on the stage's starting tree, the core's defaults, frames 700-1000 of the boot (its language screen,
+10,955 samples) and 100-400 of Jak and Daxter (19,045). On Jak and Daxter 44.2 % of the samples stopped the thread in a
+futex wait; reading the thread's system call from `/proc` every 50 ms over an unsampled run found it waiting in 13 of 400
+reads (3 %), so that share is mostly the sampler's own disturbance and Jak's shares below are of the other samples.
+Unnamed code is the compiled blocks (the sampler reads the maps before they exist).
+
+| # | The language screen | % | Jak and Daxter loading | % |
+| --- | --- | --- | --- | --- |
+| 1 | waiting for the GS's workers (`Workers::wait`, yielding) and publishing to them | 56.8 | the recompiler's dispatcher (`blocks.rs`: `block` 10.0, the replay 5.5, the translation 1.7) | 18.1 |
+| 2 | the recompiler's dispatcher (`blocks.rs`) | 8.1 | compiled blocks | 14.5 |
+| 3 | compiled blocks | 7.7 | the recompiler's runtime (`ee/jit`: block entry, held lines, the interrupt check) | 6.7 |
+| 4 | the recompiler's runtime (`ee/jit`) | 2.2 | the EE interpreter's address translation | 6.2 |
+| 5 | the EE interpreter's timing model | 2.0 | VU micro mode's pipelines | 4.1 |
+| 6 | the EE interpreter's address translation | 1.7 | the IOP's R3000A (`blackmoon-r3000`) | 3.6 |
+| 7 | VU micro mode's pipelines | 1.5 | the IOP brought to the EE's time (`Iop::run_to`) | 3.5 |
+| 8 | the SPU2's voices | 1.2 | the EE interpreter's timing model | 3.3 |
+| 9 | the PCRTC | 1.2 | the IOP's bus (`fetch`, the units) | 3.2 |
+| 10 | the GS's local memory | 1.2 | idle skipping (`idle.rs`) | 2.9 |
+
+By unit, the language screen: the GS 58.4 %, the dispatcher and the compiled blocks 15.8 (with the block map's hashing
+and the rest outside the units, 17.4), the EE's own files 11.2 (the recompiler's runtime 2.2 of it), the scheduler 3.5 (1.2
+of it bringing the IOP along), the IOP 1.9; Jak and Daxter: the dispatcher and the compiled blocks 32.9 % of the other
+samples (the block map's hashing 2.4 more), the EE's own files 27.6 (the runtime 6.7 of it), the IOP 10.4, the scheduler
+8.6 (3.5 of it bringing the IOP along). **What this says for the next lever**: the language screen waits on the GS's workers (S44's device path, or more
+workers); Jak and Daxter's loading is the recompiler's dispatch and replay at block boundaries and the interpreted EE steps
+it leaves, before any unit; of the IOP's 14 % there, its fetch and decode are about a quarter, the
+larger part the board bringing it along after EE instructions and the TTY hook stepping it one instruction at a time while
+armed.
+
+### 53.7 Exposure
+
+Running the player's BIOS and the game made the stage's writer an exposed writer of a player's-BIOS stage, never a
+replacement writer (`Sapphire_Plan.md` §1.4); no firmware was opened, hashed, listed or dumped, and nothing printed or kept
+holds a program counter, an instruction or memory of the BIOS or the game. No emulator's source was read.
+
+### 53.8 Where the plan was wrong, or left open
+
+- §5.12's lever 2 for the IOP described a memo invalidated by writes; the console's cache makes the decode at the refill
+  exact without one (§53.2), as Diamond found for the PlayStation.
+- After idle skipping the lever is worth 1 to 2 % (§53.5), below S32's expectation of 1.05 to 1.19 for the whole lever,
+  most of which was the EE's interpreted fetch, translation and decode, now mostly compiled.
+- The recompiled tier's skip counts vary between runs of one binary by about a hundred EE cycles over 900 frames, the
+  digests equal: the counts are not a determinism oracle on that tier, the digests are.
+
+### 53.9 What was read, and what this stage does not cover
+
+Read: `Sapphire_Plan.md` §5.12 and §7; this page's §22, §43.5 to §43.8 and §47; `Diamond_Speed.md` §5; psx-spx "i-Cache".
+WiseMan's `SapphireTests` passed (5 of 5). Not covered: the handheld; the EE interpreter's decoded cache and the uncached
+memo (§53.4); the board's per-instruction bringing along of the IOP (§43.8 row 9) and the TTY hook's single steps.

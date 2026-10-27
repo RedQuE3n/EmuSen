@@ -2,7 +2,9 @@
 //! (psx-spx "i-Cache" and "FFFE0130h - BCC"), 4 KiB to begin with: no public document gives the IOP's size, and Sony's
 //! "minor enhancements to the cache" are unread (Sapphire_References.md §5.1; Sapphire_Disputes.md D-62). 256
 //! direct-mapped lines of four words, a tag of the physical address's bits 31-12 with a valid bit per word.
-//! Sapphire_Native.md §22.3.
+//! Sapphire_Native.md §22.3; each word's decode kept beside it, §53.
+
+use emusen_mips::{Op, decode};
 
 pub mod bcc {
     pub const TAG: u32 = 1 << 2;
@@ -29,11 +31,13 @@ pub struct ICache {
     /// Per line: the tag (physical bits 31-12) with the valid bits in 3-0.
     pub tags: [u32; LINES],
     pub words: [u32; LINES * 4],
+    /// Each word decoded as it entered (a refill or an isolated store), and again after a state load: never state.
+    pub ops: [Op; LINES * 4],
 }
 
 impl Default for ICache {
     fn default() -> ICache {
-        ICache { bcc: 0, tags: [0; LINES], words: [0; LINES * 4] }
+        ICache { bcc: 0, tags: [0; LINES], words: [0; LINES * 4], ops: [decode(0); LINES * 4] }
     }
 }
 
@@ -61,6 +65,22 @@ impl ICache {
         Lookup::Miss { first: word, count }
     }
 
+    /// A cached fetch's hit at `physical` with its word decoded, or none for a miss (`lookup` then says what it refills).
+    #[inline(always)]
+    pub fn hit(&self, physical: u32) -> Option<(u32, Op)> {
+        let (line, word) = place(physical);
+        let tag = self.tags[line];
+        let k = line * 4 + word as usize;
+        (tag & !0xFFF == physical & !0xFFF && tag & 1 << word != 0).then(|| (self.words[k], self.ops[k]))
+    }
+
+    /// Every word decoded again from the words, after they were restored from a state.
+    pub fn redecode(&mut self) {
+        for (op, &w) in self.ops.iter_mut().zip(&self.words) {
+            *op = decode(w);
+        }
+    }
+
     /// The refilled words placed, from word `first` of `physical`'s line; their valid bits joined to the line's when the
     /// tag matched, replacing them when it did not.
     pub fn fill(&mut self, physical: u32, first: u32, words: &[u32]) {
@@ -69,6 +89,7 @@ impl ICache {
         for (i, &w) in words.iter().enumerate() {
             let k = first as usize + i;
             self.words[line * 4 + k] = w;
+            self.ops[line * 4 + k] = decode(w);
             valid |= 1 << k;
         }
         let tag = self.tags[line];
@@ -84,6 +105,7 @@ impl ICache {
             self.tags[line] = value & 0xF | address & 0x1FFF_F000;
         } else {
             self.words[line * 4 + word as usize] = value;
+            self.ops[line * 4 + word as usize] = decode(value);
         }
     }
 

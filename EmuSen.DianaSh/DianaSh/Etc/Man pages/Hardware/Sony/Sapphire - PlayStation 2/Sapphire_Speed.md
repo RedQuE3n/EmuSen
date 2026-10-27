@@ -604,3 +604,247 @@ game was printed or logged, and the perf map stayed off. No emulator's source wa
 
 This page's §51 and §52; `Sapphire_Native.md` §45 and §50; `EmuSen_Jit.md` §3 and §5. The code of `emusen-jit`,
 `vu::jit`, `gs::workers`, `gs::texture`'s CLUT load, `v1` and the bench. No article, no emulator source, no firmware.
+
+## 56. The PlayStation 2's floats by exact fast paths (2026-10-27)
+
+*Numbered §56 after §55; disputes would start at D-1040, and the step raised none. Decided 2026-10-27 by the tester:
+work is chosen by the overhead it consumes, largest first; §55.7 put "the EE's floats in software" first, at 9.9 to
+12.3 % of the emulation thread. This step is §51.8's lever #7 (§51.14 Q2): the operations and operand classes where the
+host's arithmetic gives `sapphire::float`'s bits are taken there, as §46 did for the GS, and nothing else. C3 (§51.8 #8),
+the floats on the host with clamping, changes bytes and is not part of it.*
+
+### 56.1 In one paragraph
+
+A census of every call into `sapphire::float` on the three windows (§56.2) found that **the share §55.7 gave the EE was
+the vector units'**: COP1 makes 0.5 to 1.2 % of the calls, VU0 and VU1 the rest, and the profile's rule put any sample in
+`float.rs` without a VU frame in its inline chain on the EE, which a call from compiled microcode never has. Most of the
+cost was one function, the Booth multiplier of D-26, a loop of thirteen rows run 1.3 to 3.6 million times a frame by the
+VUs' multiplies and multiply-adds. **Three changes, each proven bit for bit (§56.3, §56.4)**: the product is the exact
+integer product less a loss of 0, 1 or 2 read from three bits, which is what the Booth loop sums for every pair of
+significands; DIV and SQRT take the host's single-precision division and root, correctly rounded to the nearest as the
+console's are (D-27), wherever both operands have an exponent field of 1 to 254 and the quotient lands at a field of
+2 to 254; the rest stays as it was. **No rounding mode is set anywhere**: where the console truncates (the adder, the
+multiplier, RSQRT's quotient) the step keeps integers, and where it rounds to the nearest it uses the host's default
+rounding, which is the same. The checks live in `float.rs`, so the EE's two tiers and both VUs' tiers take them alike.
+**At CPU weight 100, two rounds each: the dock from 251.4 to 235.3 ms a frame (3.98 to 4.25 frames a second, 1.07
+times), Misty Island from 470.1 to 423.9 (2.13 to 2.36, 1.11 times), the arena from 811.4 to 726.1 (1.23 to 1.38, 1.12
+times)**; every picture, sound and state digest equal on the windows, the boot's 760 frames and Jak's 900 on both EE
+tiers. The floats fall from 9.9 / 12.3 / 10.3 % of the emulation thread to 2.1 / 2.8 / 2.1 %.
+
+### 56.2 The census: who calls, which operations, which classes (measured 2026-10-27)
+
+A counting build (a census module and one line in the bench, kept in the step's scratch, not committed) counted each
+call by caller (COP1, or a VU: VU0's macro and micro modes and VU1), operation and the class of each operand: **Z** zero,
+**D** a would-be denormal (field 0, fraction not 0), **N** a field of 1 to 254, **M** a field of 255; and of the result:
+an exponent overflow or underflow. "RZ differs" counts where IEEE 754's rounding towards zero on the exact result would
+give other bits than the console's rule (§56.3). The windows' 360 frames each (60 warming, 300 timed); calls a frame:
+
+| Caller, operation | `jak-dock` | `jak-island` | `jak-arena` | N op N | a zero | a would-be denormal | field 255 | overflow / underflow | RZ differs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| VU add and subtract | 284 k | 408 k | 864 k | 73–89 % | 7–13 % | 3.5–14.4 % | under 0.07 % | 0.02 % / none | **10.8–12.5 %** |
+| VU multiply | 608 k | 1,176 k | 1,810 k | 77–88 % | 12–23 % | 0.4–0.6 % | under 0.23 % | under 0.08 % / 0.02 % | **3.3–6.2 %** |
+| VU multiply-add (the product summed) | 650 k | 1,293 k | 1,804 k | 58–82 % | 17–40 % | 0.5–2.4 % | under 0.02 % | 0.03 % / 0.0001 % | — |
+| VU DIV | 15 k | 67 k | 67 k | 99.1–99.9 % | 0.1–0.9 % | 0.03 % | 0.02 % | — | — |
+| VU RSQRT | 10 k | 11 k | 32 k | 98.9–99.7 % | 0.3–1.0 % | — | 0.06–0.14 % | — | — |
+| VU SQRT | 0.7 k | 0.1 k | 0.5 k | 99 % | 0.4–1.5 % | — | — | — | — |
+| COP1 ADD.S, SUB.S, ADDA.S, SUBA.S | 3.7 k | 2.6 k | 9.4 k | 88–94 % | 6–12 % | 0.01 % | — | — | **10.7–15.8 %** |
+| COP1 MUL.S, MULA.S | 4.6 k | 2.7 k | 9.7 k | 84–89 % | 11–16 % | — | — | none / 0.005 % | **0.6–2.9 %** |
+| COP1 DIV.S | 2.8 k | 1.9 k | 8.6 k | 96–99.5 % | 0.5–3.8 % | — | — | — | — |
+| COP1 the multiply-adds, SQRT.S | 0.3 k | 0.3 k | 0.4 k | 78–99 % | 1–23 % | — | — | — | — |
+
+So **the multiplier carries the share**: 1.26, 2.47 and 3.61 million Booth sums a frame from the VUs, against 5 to
+10 thousand from COP1. Would-be denormals and field 255 occur, in the VUs' data above all (a 14 % share of the dock's
+VU additions has a would-be denormal operand), so no fast path may assume them away. RZ differs in 3 to 16 % of the
+additions and products, far more than random significands would give (the product's case is about 2 in 2^23 for them):
+the games' numbers have short significands, 1.0, 0.5 and the like, whose exact products end in zeros that the Booth
+loss reaches.
+
+### 56.3 Each operation and class: what the host's arithmetic gives
+
+[A; R the *EE Core User's Manual* §8.1.1, §8.7, §8.8 and Table 8-4 as §19 read them; IEEE 754-2019 §4.3.1 (rounding
+to the nearest, ties to even) and §5.4.1 (the arithmetic operations, each correctly rounded: the exact result rounded
+once in the destination's format)]. "The host" is the x86-64 SSE unit as Rust leaves it: rounding to the nearest, no
+flush to zero, no denormals-are-zero; nothing in the project changes MXCSR (searched 2026-10-27).
+
+| Operation | Classes taken on the fast path | Proven equal because | Left to the integers, and why |
+| --- | --- | --- | --- |
+| **MUL** (MUL.S, MULA.S; the VUs' MUL, MULA, OPMULA and the products of every multiply-add, OPMSUB) | every pair: the product is integer arithmetic (§56.4) | the closed form is the Booth sum, for every pair of 24-bit significands (§56.4); the exponent, normalisation and `finish` are unchanged | nothing. The host's multiply rounded towards zero would give other bits in 0.6 to 6.2 % of the windows' products (§56.2), where the Booth loss crosses a 24-bit boundary, so it is not used |
+| **DIV** (DIV.S; the VUs' DIV) | both operands N, the host's quotient at a field of 2 to 254 | the console rounds the quotient to the nearest (D-27) and §19.3 shows no tie can occur; IEEE 754's division rounds the exact quotient to the nearest of the same 24-bit format, so the bits agree wherever both formats read the operands alike (N) and the result is a normal number in both | a zero, a would-be denormal or field 255 operand (the console's rules for them are not IEEE 754's); a quotient at field 1 (the host may round up into it from below 2^-126 at denormal precision where the console flushes to zero), 0 or 255 (the host's denormal and infinity; the console's underflow to ±0 and exponent 255). 0.1 to 3.8 % of the windows' quotients |
+| **SQRT** (SQRT.S; the VUs' SQRT; RSQRT's root) | the operand N | the console rounds the root to the nearest (D-27), no tie possible (§19.3); a root of a normal number is normal; the sign is dropped as the console drops it (D-29) | zero (the root of either zero is +0), a would-be denormal, field 255 |
+| **RSQRT** | its root, as SQRT | as SQRT | the quotient: the console truncates it (D-28's reading), which the host can do only with the rounding mode changed or in a wider format; 10 to 32 thousand a frame are not worth it |
+| **ADD, SUB** (and the sum of every multiply-add) | none | — | the console aligns the smaller operand to the larger's 24 bits and one more and drops the rest (D-25). For equal signs that is IEEE 754's rounding towards zero of the exact sum; for opposite signs it is the larger less the smaller rounded *down*, which truncates to one unit more than the exact difference truncated wherever bits were dropped: 10.7 to 15.8 % of the windows' additions. A host form must take the exponents' difference and mask the dropped bits, which is the integer path's own work; after this step the adder is 0.4 to 0.6 % of the thread |
+| MAX, MIN, the compares, ABS, NEG, MOV, the conversions | — | — | already a few integer operations on the bits |
+
+**The rounding mode.** A fast path could set the host's rounding towards zero in one place, or avoid that by an exact
+formulation; this one avoids it. Every operation the console rounds to the nearest goes to the host as it
+stands, and every one it truncates stays on integers. Changing MXCSR would touch state the compiler assumes fixed (Rust
+and LLVM fold and reorder floating-point operations on the assumption of rounding to the nearest) and that the GS's
+code, Cranelift's compiled code and the bench's own timing share on the emulation thread; and truncation alone would
+still not give the console's adder or multiplier.
+
+**Per caller.** `add`, `mul`, `div`, `sqrt`, `rsqrt` and `fused` return the same `Outcome`, `Quotient` or `Fused`, bits
+and flags, for every input (§56.5). Every flag each caller raises is a function of those: **the EE's FPU** its O, U and
+SU (with SO and SU sticky) from the outcome and the multiply-add's product, I and D (SI, SD) from the quotient
+(§19.2); **the VUs' upper instructions** their MAC flags (O, U, S, Z) and the status register's sticky flags from the
+outcome and, for the multiply-adds, the product's own overflow and underflow (§21.3); **the VUs' lower instructions**
+DIV's, SQRT's and RSQRT's I and D status flags from the quotient. CLIP's judgement (`order`) and the clamping of
+conversions are not touched. So the proof of each function covers every caller, on both tiers of each unit.
+
+**Left for the VUs.** Their floats are now 2.1 to 2.8 % of the thread with COP1's; what remains of "VU micro" is the
+calls themselves, one function pointer a lane through `arith` and `lanes`, and the dispatcher and `Pipe` (§56.7).
+
+### 56.4 The Booth sum in closed form
+
+`booth(x, y)` (D-26) recodes `y`, shifted left one bit, as thirteen radix-4 digits from bits 2i + 2, 2i + 1, 2i; a
+digit selects 0, x or 2x, negative ones as the ones' complement with a carry-in of 1, and the row is added at column 2i
+with every column below `DROPPED_COLUMNS` (1) cleared. **Argument** [A]:
+
+1. Without the clearing, the rows sum to x × y exactly: radix-4 Booth recoding is exact for any `y` below 2^24 with
+   thirteen digits (the top digit reads `y`'s bit 23 and two zeros, so it is 0 or +1), and a negative row's
+   complement plus its carry is the negated multiple modulo 2^64.
+2. Clearing column 0 changes only the row at i = 0: a row at i ≥ 2 is shifted left by i and has no bit in column 0, and
+   its carry 1 << i lies above column 0 and is kept. The row at i = 0 loses its bit 0, and its carry, which would land
+   in column 0, is dropped.
+3. That row's digit reads `y`'s bits 1 and 0 and a zero: y & 3 = 0 gives 0 (nothing lost); 1 gives +x (loses x & 1);
+   2 gives −2x, whose complement is odd (loses 1 and the carry, 2); 3 gives −x, whose complement's bit 0 is 1 − (x & 1)
+   (loses that and the carry, 2 − (x & 1)).
+4. The sum is therefore x × y − loss, loss in {0, 1, 2}, and since x × y ≥ 2^46 the 48-bit mask the loop applies is
+   never reached.
+
+`product(x, y)` computes it as `x * y - (0x1222_1000 >> (((y & 3) << 1 | x & 1) << 2) & 3)`, the eight losses as
+nibbles; a constant assertion ties it to `DROPPED_COLUMNS == 1`, so that a different reading of D-26 fails to build
+rather than computing the wrong product. `booth` stays in the tests as the reference.
+
+### 56.5 The equality evidence (2026-10-27)
+
+`float`'s tests, in release; the classes drawn are zero, would-be denormals, field 255, fields 1 to 4 and 251 to 254,
+fields within 32 of 127 and anything else, with a zero, all-ones or random fraction, either sign.
+
+| Test | What it compares | Cases |
+| --- | --- | --- |
+| `the_closed_form_product_is_the_booth_sum_for_every_multiplier` | `product` against `booth`: six multiplicands (the smallest and largest, odd and even, two random) with **every** 24-bit multiplier, then random pairs | 50,331,648 and 2,000,000 |
+| `a_billion_products_equal_the_booth_sum` (ignored) | the same, random | **1,000,000,000** |
+| `products_and_multiply_adds_keep_their_outcomes_and_flags_over_every_class` | `mul` and `fused` (adding and subtracting) against their bodies on `booth`, the whole outcome with its overflow and underflow, over every class; asserts more than 10,000 overflows and underflows met | 4,000,000 each |
+| `the_host_quotient_equals_the_integer_one_wherever_it_is_taken` | `div` against `div_soft`, the whole quotient with I and D, over every class (asserting more than a million taken by the host); and dividends at fields 1, 2, 3, 127, 128, 253, 254 and 255 by divisors at fields 1, 126, 127, 128 and 253, each side of a result field's edge | 4,000,000; 40,000,000 |
+| `a_billion_quotients_equal_the_integer_ones` (ignored) | the same, random | **1,000,000,000** |
+| `the_host_root_equals_the_integer_one_for_every_operand_of_two_binades_and_every_class` | `sqrt` against `sqrt_soft` for every fraction at fields 126 and 127, either sign (a root's bits at any field are those of the binade of the same parity, scaled), then random over every class | 33,554,432 and 4,000,000 |
+| `every_root_equals_the_integer_one` (ignored) | every 32-bit pattern | **4,294,967,296**, all |
+
+The ignored tests ran once, in 53 s together. S9's lib tests (`the_booth_sum_is_the_exact_product_or_just_below_it`,
+the ties) pass unchanged.
+
+### 56.6 Speed (measured 2026-10-27)
+
+**The method**: §55.6's: the bench's three windows with `--defaults` from the states at 6,000, 7,500 and 9,000; two
+rounds, before and after alternating window by window; every run alone at CPU weight 100, the one-minute load 0.9 to
+4.3. **Before** is WiseMan `87265dcf4` (§55 merged; its bench built from `c0675c294`), **after** this step.
+
+| Window | Before: means (median ms) | After: means (median ms) | Before → after, median of means | Frames a second | Longest frame |
+| --- | --- | --- | --- | --- | --- |
+| `jak-dock` | 251.1, 251.7 (244.1, 246.8) | 234.0, 236.6 (225.1, 228.7) | **251.4 → 235.3, 1.07×** | 3.98 → 4.25 | 0.41 → 0.37 s |
+| `jak-island` | 469.1, 471.1 (459.8, 458.5) | 417.8, 429.9 (413.7, 415.9) | **470.1 → 423.9, 1.11×** | 2.13 → 2.36 | 0.97 → 0.88 s |
+| `jak-arena` | 808.1, 814.6 (701.2, 698.5) | 724.0, 728.1 (654.8, 652.4) | **811.4 → 726.1, 1.12×** | 1.23 → 1.38 | 1.17 → 0.99 s |
+
+The rounds agree within 3 %. §51.8 expected 1.05 / 1.08 / 1.06 from three quarters of the classes; the gain is larger
+because the VUs' calls, which §51.6 counted as VU micro rather than as floats, go through the same functions.
+
+**The menus and the loading**, from power-on (the means of the frames named, ms; two rounds on the recompiler tier, one on
+the interpreter tier):
+
+| Workload | Before | After |
+| --- | --- | --- |
+| the boot's language screen (frames 690–760) | 44.8, 44.9 | 44.6, 49.0 |
+| the boot, frames 0–760 | 68.1, 69.2; interpreter 91.4 | 68.7, 70.5; interpreter 92.4 |
+| Jak's start and loading by the script (frames 8–400) | 85.3, 85.4; interpreter 132.6 | 85.4, 86.3; interpreter 131.1 |
+| Jak, frames 0–900 | 60.2, 60.2; interpreter 95.9 | 60.5, 60.7; interpreter 94.8 |
+
+Unchanged within the rounds' spread (the 49.0 is one round's), as expected: the menus run few floats.
+
+### 56.7 Where the frame goes now (measured 2026-10-27)
+
+**The method**: §55.7's sampler at 4 ms on every thread of one run of each window, the emulation thread's samples classed
+by §55.7's rules with one change: a sample in `float.rs` is counted as `sapphire::float` with every caller, since the
+census (§56.2) shows that the rule that put it on the EE was wrong for 99 % of the calls.
+
+| The emulation thread | `jak-dock` (12,525 samples) | `jak-island` (23,659) | `jak-arena` (37,648) | §55.7 |
+| --- | --- | --- | --- | --- |
+| **`sapphire::float`**, every caller | **2.1 %** | **2.8 %** | **2.1 %** | 9.9 / 12.3 / 10.3 % (as "the EE's floats") |
+| of which the adder, the multiplier and the multiply-add (with `finish`) | 0.7, 0.6, 0.4 % | 1.0, 0.7, 0.6 % | | |
+| **EE**, all of it | 32.3 % | 24.7 % | 28.3 % | 34 to 39 % with the floats |
+| of which the recompiler's dispatcher and exit replay | 10.2 % | 7.3 % | 6.1 % | 5.6 to 9.1 % |
+| of which the timing model | 5.8 % | 4.8 % | 6.6 % | 4.3 to 6.3 % |
+| **VU micro mode** (`vu::jit`, `Pipe`, `vu::ops`) | 18.4 % | 22.7 % | 21.0 % | 17.8 to 20.9 % with its float calls |
+| of which `vu::jit` and `Pipe` | 5.6 and 5.4 % | 7.0 and 7.8 % | 6.4 and 8.0 % | |
+| **GIF** | 9.1 % | 8.8 % | 9.2 % | 8.1 to 9.2 % |
+| **VIF** | 8.3 % | 7.7 % | 8.3 % | 7.1 to 7.3 % |
+| **Compiled code** | 7.4 % | 8.0 % | 6.4 % | 5.9 to 7.2 % |
+| **Idle skipping's own work** | 1.2 % | 2.9 % | 7.5 % | 1.2 / 2.5 / 6.9 % |
+| Scheduler and synchronisation | 5.4 % | 4.3 % | 4.9 % | 4.2 to 4.9 % |
+| GS on the emulation thread | 5.0 % | 8.7 % | 3.5 % | 3.2 to 7.3 % |
+
+**The new top five** (by the emulation thread's share, the three windows together): **1. VU micro mode's call path**,
+18.4 to 22.7 % (the dispatcher and `Pipe`'s synchronisation 11.0 to 14.8 % of it; S42's lever, §51.8 #9); **2. the EE
+recompiler's dispatcher and exit replay**, 6.1 to 10.2 % (S37 to S39, §51.8 #6); **3. the GIF**, 8.8 to 9.2 %; **4. the
+VIF**, 7.7 to 8.3 % (3 and 4 together §51.8 #10); **5. the EE's timing model**, 4.8 to 6.6 % (C1's share, refused at
+§44.9). On the arena idle skipping's own work (7.5 %) comes before the fifth.
+
+### 56.8 Tests and seeded faults (2026-10-27)
+
+**Tests** [M, release]: `float`'s 6 of 6 and the 3 ignored (§56.5); the blast radius: Sapphire's crate **493 of 493** (4 new), WiseMan's
+`SapphireTests` **5 of 5** on lavapipe. **The bench's gate**: the three windows' picture, sound and state digests
+(`43D839015A0E4DA1`, `2C225C73DB4D3F9D`, `E220B19BD26D8EBC`; `D9F0AF56FD3DEF28`, `4F27F29527E1B781`, `F074C69B5F66E65E`;
+`B77DC314C6AE837C`, `BCA8F00F4743A955`, `4ED52755B09F207E`) equal in all four rounds of each build and in the census
+build; the boot's 760 frames (`50F06A02F1B76860`, `2EE7B3D10DF3C401`, `2051C6BB42228C53`) and Jak by the BIOS and the
+script to 900 (`FFB0FCE98BD7C164`, `7CF6B8FA4F6C2701`, `0DCD2B18F0881625`) equal before and after on both EE tiers.
+ps2autotests: **52 of 55 and 23 of 23** with both units recompiled, the same three failing as §36.5
+(`cpu/ee_fpu/sqrt`, the RSQRT.S line D-28 names; `dma/vif/intstall`; `vu/lower/efu`).
+
+**Seeded faults**, each made in `float.rs`, the lib tests and `tests/fpu.rs`, `vu0.rs` and `vu_micro.rs` run, the
+source restored:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | a would-be denormal operand taken on the host (the class check reading field 0 as a number) | `the_host_quotient_equals_the_integer_one_wherever_it_is_taken`, `the_host_root_equals_…`; the EE's `square_root_and_reciprocal_square_root_equal_the_manual`, `multiply_and_divide_over_every_pair_of_input_classes_equal_the_manual`; VU0's `divide_square_root_and_reciprocal_root_equal_the_manual` |
+| F2 | an overflowing quotient taken on the host (field 255, the host's infinity, accepted) | `the_host_quotient_equals_…`; the EE's `multiply_and_divide_…`; VU0's `divide_square_root_and_reciprocal_root_…` |
+| F3 | the rounding left at the nearest: the product of two N operands taken from the host's multiply as it rounds | `products_and_multiply_adds_keep_their_outcomes_and_flags_over_every_class`; the EE's `the_format_reproduces_the_console_lines_that_decide_its_readings`, `multiply_and_divide_…`, `the_accumulator_instructions_equal_the_manual`; VU0's `multiply_over_every_pair_of_input_classes_equals_the_manual`, `the_multiply_adds_and_the_outer_product_equal_the_manual`; `vu::efu`'s `the_series_land_where_the_code_puts_them` |
+| F4 | the EE's flags not set on the fast path: the product's underflow dropped (U, SU) | `products_and_multiply_adds_…`; the EE's `multiply_and_divide_…`, `the_accumulator_instructions_…`; VU0's `multiply_over_every_pair_…`, `the_multiply_adds_…` |
+| F5 | a VU flag not set on the fast path: the product's overflow dropped (the MAC's O and the status's sticky O) | `products_and_multiply_adds_…`; VU0's `multiply_over_every_pair_of_input_classes_equals_the_manual`, `the_multiply_adds_and_the_outer_product_equal_the_manual`; the EE's `the_format_reproduces_…`, `multiply_and_divide_…`, `the_accumulator_instructions_…` |
+
+The EE's and VU0's tests that caught them are S9's and S12's programs graded against the manuals transcribed apart from
+`float.rs` (§19.4, §21.4); `vu_micro.rs` caught none, its programs comparing the tiers with each other.
+
+### 56.9 Exposure
+
+Running the player's BIOS and Jak and Daxter makes this writer a writer of a player's-BIOS stage (§1.4): **exposed, and
+never a replacement writer.** The BIOS was handed to the machine by the link the step was given (market americas); it was
+never opened, hashed, diffed, listed, disassembled or dumped, and no firmware folder was listed. Observed: the bench's
+times, digests and counts, the census's counts of calls by operation and operand class, and the host's instruction
+pointers in Sapphire's own code; no program counter, operand value, microprogram word or memory of the BIOS or the game
+was printed or logged. No emulator's source was read.
+
+### 56.10 Named limits
+
+- **Two rounds a window.** The gains (7 to 12 %) are well outside the rounds' spread (3 %).
+- **The census is the opening's three windows.** Other scenes may divide or take roots more; the fast paths' share of
+  the work moves with them, their results do not.
+- **The host's default floating-point environment is assumed**: rounding to the nearest, no flush to zero. Rust
+  guarantees it on every target the project builds for; code that changed MXCSR on the emulation thread would break
+  DIV's and SQRT's fast paths, and §56.3 records that nothing does.
+- **RSQRT's quotient and the adder stay on integers** (§56.3), as does every operation on a zero, a would-be denormal
+  or field 255.
+- **The handheld's columns** remain owed with §51.9's.
+
+### 56.11 Questions this step leaves
+
+1. **[routine] The profile's attribution.** *Recommended*: keep §56.7's rule (a sample in `float.rs` is the floats',
+   every caller), and split it by the census when a step needs the callers; the old rule's "EE floats" was the VUs'.
+2. **[decision] The next step by overhead.** *Recommended*: the VU's call path (S42, §51.8 #9), 18 to 23 % of the
+   thread and now the largest single share; the EE recompiler's remaining stages (#6) after it.
+3. **[routine] C3** (§51.8 #8). *Recommended*: retire it from the ranking: the floats it would replace are 2.1 to
+   2.8 % of the thread, so its bound is now about 1.03 against a byte-changing cost.
+
+### 56.12 What was read for this step
+
+This page's §51 and §55; `Sapphire_Native.md` §19 (S9, the FPU and `sapphire::float`) and §46 (the GS's exact fast
+paths); `float.rs` and `ee/fpu.rs`, `vu/ops.rs`'s float calls. IEEE 754-2019 §4.3.1 and §5.4.1 for correct rounding,
+and the *EE Core User's Manual* §8 as §19 cites it. No emulator source, no firmware.

@@ -137,7 +137,7 @@ pub static APP_SETTINGS: Schema = Schema {
         text("ScrapeRegion", "auto"),
         text("ScrapeLanguage", "en"),
         flag("ScrapeRegionFallback", true),
-        int("ScrapeThreads", "1"),
+        int("ScrapeThreads", "0"),
         flag("ScrapeBackCovers", false),
         flag("Scrape3DBoxes", false),
         flag("ScrapePhysicalMedia", false),

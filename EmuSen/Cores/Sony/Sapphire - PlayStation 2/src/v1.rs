@@ -120,6 +120,8 @@ pub const EE_TIER_KEY: &str = "ee_tier";
 pub const TIERS: [(&str, &str); 2] = [("interpreter", "Interpreter"), ("recompiler", "Recompiler")];
 /// VU1's tier (Sapphire_Native.md §45.6): the interpreter, or the recompiler, which is exact.
 pub const VU1_KEY: &str = "vu1";
+/// VU0's tier in micro mode (Sapphire_Speed.md §55): the interpreter, or the same recompiler, which is exact.
+pub const VU0_KEY: &str = "vu0";
 /// Idle skipping (S33, Sapphire_Native.md §47): on or off.
 pub const IDLE_KEY: &str = "idle_skip";
 pub const IDLE_CHOICES: [(&str, &str); 2] = [("on", "On"), ("off", "Off")];
@@ -147,6 +149,10 @@ fn schema() -> Vec<Setting> {
         },
         Setting {
             effect: Effect::Exact,
+            ..Setting::create_choice(VU0_KEY, "VU0", "How the vector unit beside the main processor runs the microprograms a game starts on it: interpreted, or compiled whole to the host's machine code as VU1's are, each checked against the unit's memory before it runs. Exact: the recompiler leaves the console as the interpreter does at every point the rest of the machine can see. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "recompiler", "Performance")
+        },
+        Setting {
+            effect: Effect::Exact,
             ..Setting::create_choice(IDLE_KEY, "Idle skipping", "Passes the time the processors spend waiting in a loop for something to happen at once, up to the moment it happens, instead of running each turn of the loop. Exact: every picture, sound and saved state is the one the console gives with it off, which is the other choice, slower. Takes effect when a game is next loaded.", IDLE_CHOICES.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "on", "Performance")
         },
         Setting {
@@ -160,6 +166,12 @@ fn schema() -> Vec<Setting> {
 /// met (decided 2026-10-26 by the tester, Sapphire_Native.md §45.6).
 pub fn vu1_recompiler_chosen(setting: Option<&str>) -> bool {
     std::env::var("SAPPHIRE_VU1").ok().as_deref().or(setting) != Some("interpreter")
+}
+
+/// Whether the settings, or `SAPPHIRE_VU0` for measurement, choose VU0's recompiler, the default since Sapphire_Speed.md
+/// §55's gate was met.
+pub fn vu0_recompiler_chosen(setting: Option<&str>) -> bool {
+    std::env::var("SAPPHIRE_VU0").ok().as_deref().or(setting) != Some("interpreter")
 }
 
 /// Whether the settings, or `EMUSEN_SAPPHIRE_IDLE` for measurement, turn idle skipping on, the default once S33's gate
@@ -608,6 +620,7 @@ impl Machine {
         } else {
             m.sys.board.vpu.set_tier(1, None);
         }
+        m.sys.board.vpu.set_tier(0, vu0_recompiler_chosen(s.get(VU0_KEY)).then(crate::vu::jit::Settings::default));
         m.idle.on = idle_chosen(s.get(IDLE_KEY));
         m.sys.board.gs.set_workers(gs_workers_chosen(s.get(GS_WORKERS_KEY)));
         // An empty file is a card not yet saved: the slot keeps its erased card.
@@ -689,10 +702,19 @@ mod tests {
         }
         let compiled = create(&elf(), &[(VU1_KEY, "recompiler")]).unwrap();
         assert!(compiled.sys.board.vpu.jit_counts(1).is_some());
-        if std::env::var_os("SAPPHIRE_VU0").is_none() {
-            assert!(compiled.sys.board.vpu.jit_counts(0).is_none(), "VU0 stays on the interpreter");
-        }
         let s = schema().into_iter().find(|s| s.key == VU1_KEY).unwrap();
+        assert!(s.default == "recompiler" && matches!(s.effect, Effect::Exact));
+    }
+
+    #[test]
+    fn the_vu0_setting_chooses_its_tier_and_the_recompiler_is_the_default() {
+        if std::env::var_os("SAPPHIRE_VU0").is_none() {
+            assert!(create(&elf(), &[(VU0_KEY, "interpreter")]).unwrap().sys.board.vpu.jit_counts(0).is_none());
+            assert!(create(&elf(), &[]).unwrap().sys.board.vpu.jit_counts(0).is_some(), "the recompiler without a setting");
+        }
+        let both = create(&elf(), &[(VU0_KEY, "recompiler"), (VU1_KEY, "interpreter")]).unwrap();
+        assert!(both.sys.board.vpu.jit_counts(0).is_some());
+        let s = schema().into_iter().find(|s| s.key == VU0_KEY).unwrap();
         assert!(s.default == "recompiler" && matches!(s.effect, Effect::Exact));
     }
 

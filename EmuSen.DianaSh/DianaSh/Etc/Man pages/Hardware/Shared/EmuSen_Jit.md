@@ -99,7 +99,13 @@ A batch is every job queued when the thread wakes, so the pages are shared by bl
 Code is never freed a block at a time: a block whose words changed is dropped by its dispatcher, and its code stays in
 the module. `Jit::over_budget` compares the bytes compiled with the budget and, past it, drops the compiler and its
 module whole, counts a flush and returns true; the dispatcher then forgets every block and compiles them again as they
-run. Code exactly at the budget is kept. MarsRT checks it at the start of every run with a budget of 256 MiB, which no
+run. Code exactly at the budget is kept. **The thread is retired, not joined** (since 2026-10-27, `Sapphire_Speed.md`
+§55): `over_budget` sets the thread's stop and lets it go; the thread refuses every job still queued (publishing `FAILED`,
+so that no `Slot::wait` waits for ever), finishes the block in hand, and frees the module itself as it exits. That is
+safe because the dispatcher has already forgotten every address the module published, and it was measured to matter:
+Sapphire's VU1 dispatcher joined the thread at its budget while it compiled a long queue, and Jak and Daxter's arena
+spent frames of 2 to 50 seconds there (`Sapphire_Speed.md` §51.6). A dropped compiler (`reset`, or the `Jit`'s drop)
+still joins its thread, which now refuses its queue rather than compiling it. MarsRT checks it at the start of every run with a budget of 256 MiB, which no
 game has reached (GoldenEye's 600 frames compile 20 MB, `Mars_Native.md` §5.8.4); a dispatcher that checks before each
 run never starts one with more code than the budget, and holds at most one run's compiling past it.
 
@@ -124,7 +130,7 @@ than stepped.
 ## 5. The evidence
 
 **The crate's tests**, `src/tests/mod.rs`, on a toy processor of four registers, sixteen words of memory and five
-instructions, with its interpreter and its lowering [M, `cargo test --release`, 10 of 10]:
+instructions, with its interpreter and its lowering [M, `cargo test --release`, 11 of 11]:
 
 | Test | What it holds |
 | --- | --- |
@@ -133,6 +139,7 @@ instructions, with its interpreter and its lowering [M, `cargo test --release`, 
 | `code_pages_are_never_writable_and_a_later_batch_leaves_them_alone` | every published address in an `r-x` page of `/proc/self/maps`, before and after 80 more blocks, its bytes unchanged |
 | `a_block_the_lowering_refuses_publishes_the_sentinel_and_the_next_compiles` | a refusal is `FAILED`, counted, and the module goes on |
 | `past_its_budget_the_module_goes_whole_and_compiling_starts_again` | at the budget nothing happens; past it the module goes, the flush is counted, a new thread counts from nothing |
+| `past_its_budget_the_compiler_is_retired_without_waiting_for_its_queue` | a thread held 500 ms in one block with eight queued behind it: `over_budget` returns in under 250 ms, and the eight are refused, not compiled (seeded fault: the join put back, caught) |
 | `a_dispatcher_that_checks_its_budget_each_run_starts_no_run_past_it` | thirty runs at a 4 KiB budget, none started past it, at least three flushes |
 | `the_verifier_steps_beside_every_compiled_instruction_and_finds_nothing` | 40 programs, the reference stepped exactly once an instruction |
 | `the_verifier_finds_a_miscompiled_instruction_at_that_instruction` | an ADDI lowered as a subtraction is found after step 2 |

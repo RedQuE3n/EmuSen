@@ -36,6 +36,9 @@ const STORE: u32 = 4;
 const HALT: u32 = 5;
 /// An operation the lowering refuses, so that a block publishes the sentinel.
 const REFUSED: u32 = 0xEE;
+/// The lowering holds the compiler's thread on this word until `HELD` is let go, then refuses the block.
+const HOLD: u32 = 0xEF;
+static HELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 const DONE: u32 = 0;
 const HALTED: u32 = 1;
@@ -80,6 +83,12 @@ impl Lowering for ToyLowering {
     const EXITS: &'static [&'static str] = &["done", "halted", "unknown"];
 
     fn lower(&mut self, module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) -> Result<(), String> {
+        if words.iter().any(|&w| w >> 24 == HOLD) {
+            while HELD.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::yield_now();
+            }
+            return Err("held".into());
+        }
         if words.iter().any(|&w| w >> 24 == REFUSED) {
             return Err("an operation the toy refuses".into());
         }
@@ -356,6 +365,29 @@ fn past_its_budget_the_module_goes_whole_and_compiling_starts_again() {
     assert_eq!(jit.counters().unwrap().queued.load(std::sync::atomic::Ordering::Relaxed), 1, "a new compiler counts from nothing");
     let copy = jit.clone();
     assert!(copy.counters().is_none() && copy.budget == jit.budget && copy.flushes == 0, "a copy keeps the settings and no code");
+}
+
+/// Past its budget the module goes without waiting for its thread: a compiler held on one block with others queued is
+/// retired at once, and the queued blocks are settled as refused when the held one ends.
+#[test]
+fn past_its_budget_the_compiler_is_retired_without_waiting_for_its_queue() {
+    use std::sync::atomic::Ordering::Release;
+    let mut jit = jit();
+    jit.enqueue(program(9, 20).into(), 0, Options::default()).wait().unwrap();
+    jit.budget = 0;
+    let held = jit.enqueue(vec![word(HOLD, 0, 0, 0)].into(), 0, Options::default());
+    let queued: Vec<_> = (0..8).map(|k| jit.enqueue(program(10 + k, 20).into(), 0, Options::default())).collect();
+    let releaser = std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        HELD.store(false, Release);
+    });
+    let t0 = std::time::Instant::now();
+    assert!(jit.over_budget());
+    assert!(t0.elapsed() < std::time::Duration::from_millis(250), "the budget waited {:?} for the thread", t0.elapsed());
+    assert!(jit.counters().is_none());
+    releaser.join().unwrap();
+    assert!(held.wait().is_none());
+    assert!(queued.iter().all(|s| s.wait().is_none()), "a block queued behind the retirement is refused, not compiled");
 }
 
 /// A dispatcher's loop that keeps to its budget, as MarsRT's does before each run: no run starts with more code than the budget.

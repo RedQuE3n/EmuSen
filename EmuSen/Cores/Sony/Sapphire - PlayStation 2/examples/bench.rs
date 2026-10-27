@@ -3,7 +3,7 @@
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
 //! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram]
-//! [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]`
+//! [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -29,8 +29,9 @@
 //! the dispatcher's counts; without it the EE is interpreted, the reference.
 //! `--idle` turns idle skipping on (S33, Sapphire_Native.md §47); without it the waits are stepped, the reference.
 //! `--gs-workers N` draws on N workers (S43, Sapphire_Native.md §50; `auto` for the automatic count, 1 the GS's own
-//! thread) and prints their counts; `--vu1` runs VU1's microprograms compiled (S40, §45); `--defaults` is the levers as a
-//! player has them, `--blocks --idle --gs-workers auto --vu1`; `--edram` digests the GS's local memory after every frame, outside the timed span,
+//! thread) and prints their counts; `--vu1` runs VU1's microprograms compiled (S40, §45) and `--vu0` VU0's (Sapphire_Speed.md
+//! §55), each with the settings the environment gives and left interpreted under `SAPPHIRE_VU1=interpreter` or
+//! `SAPPHIRE_VU0=interpreter`; `--defaults` is the levers as a player has them, `--blocks --idle --gs-workers auto --vu0 --vu1`; `--edram` digests the GS's local memory after every frame, outside the timed span,
 //! which joins the workers there, so its times are not the bench's.
 //! The BIOS
 //! image is handed to the machine and never read here; nothing printed holds an address, an instruction or memory.
@@ -83,8 +84,9 @@ struct Counts {
     compiled: u64,
     interpreted: u64,
     idle: [u64; 4],
-    /// VU1's recompiler: pairs compiled and interpreted, microprograms compiled, words found changed, the budget's flushes.
-    vu1: [u64; 5],
+    /// Each VU's recompiler: pairs compiled and interpreted, microprograms compiled, words found changed, the budget's
+    /// flushes, the bytes of code held, the compiler's nanoseconds, the microprograms kept and the most for one start.
+    vu: [[u64; 9]; 2],
 }
 
 fn counts(m: &Machine) -> Counts {
@@ -98,7 +100,7 @@ fn counts(m: &Machine) -> Counts {
         compiled: m.blocks.as_ref().map_or(0, |b| b.stats.compiled_steps),
         interpreted: m.blocks.as_ref().map_or(0, |b| b.stats.interpreted),
         idle: { let c = &m.idle.counts; [c.ee_cycles, c.ee_steps, c.iop_cycles, c.iop_instructions] },
-        vu1: s.board.vpu.jit_counts(1).map_or([0; 5], |c| [c.compiled_pairs, c.interpreted_pairs, c.programs, c.invalidated, c.flushes]),
+        vu: [0, 1].map(|u| s.board.vpu.jit_counts(u).map_or([0; 9], |c| [c.compiled_pairs, c.interpreted_pairs, c.programs, c.invalidated, c.flushes, c.bytes, c.nanos, c.kept, c.widest])),
     }
 }
 
@@ -124,7 +126,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]";
+    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -164,8 +166,10 @@ fn main() {
     if defaults || args.iter().any(|a| a == "--blocks") {
         m.blocks = Some(Box::new(sapphire::blocks::Blocks::from_env()));
     }
-    if defaults || args.iter().any(|a| a == "--vu1") {
-        m.sys.board.vpu.set_tier(1, Some(sapphire::vu::jit::Settings::default()));
+    for (u, flag, key) in [(0, "--vu0", "SAPPHIRE_VU0"), (1, "--vu1", "SAPPHIRE_VU1")] {
+        if (defaults || args.iter().any(|a| a == flag)) && std::env::var(key).ok().as_deref() != Some("interpreter") {
+            m.sys.board.vpu.set_tier(u, Some(sapphire::vu::jit::Settings::from_environment()));
+        }
     }
     m.idle.on = defaults || args.iter().any(|a| a == "--idle");
     if let Some(n) = flag("--gs-workers").or(defaults.then(|| "auto".to_string())) {
@@ -298,9 +302,9 @@ fn main() {
         let g = |n: usize| d(at_from.idle[n], end.idle[n]);
         println!("idle\tEE {:.0} cycles ({:.1}% of its cycles) and {:.0} steps passed a frame\tIOP {:.0} cycles and {:.0} instructions passed a frame", g(0), 100.0 * g(0) / cycles.max(1.0), g(1), g(2), g(3));
     }
-    if m.sys.board.vpu.jit_counts(1).is_some() {
-        let g = |n: usize| d(at_from.vu1[n], end.vu1[n]);
-        println!("vu1 recompiler\t{:.0} pairs compiled and {:.0} interpreted a frame\t{:.2} microprograms compiled and {:.2} found changed a frame\t{} flushes at its code budget", g(0), g(1), g(2), g(3), end.vu1[4] - at_from.vu1[4]);
+    for u in (0..2).filter(|&u| m.sys.board.vpu.jit_counts(u).is_some()) {
+        let g = |n: usize| d(at_from.vu[u][n], end.vu[u][n]);
+        println!("vu{u} recompiler\t{:.0} pairs compiled and {:.0} interpreted a frame\t{:.2} microprograms compiled and {:.2} found changed a frame\t{} flushes at its code budget\t{:.1} MiB of code and {} microprograms held at the end, at most {} for a start", g(0), g(1), g(2), g(3), end.vu[u][4] - at_from.vu[u][4], end.vu[u][5] as f64 / 1048576.0, end.vu[u][7], end.vu[u][8]);
     }
     for u in 0..2 {
         let p = d(at_from.pairs[u], end.pairs[u]);

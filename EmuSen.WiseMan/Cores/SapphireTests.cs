@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Ps2System.Bios.Select(b => (b.Name, b.Size)), system.Firmware.Select(f => (f.Name, f.Size)));
             Assert.All(system.Firmware, f => Assert.False(f.Required));
             Assert.Equal(new[] { ("ps2.dualshock2", 16, 4), ("ps2.digital", 14, 0) }, system.Controllers.Select(c => (c.Id, c.Buttons.Count, c.Axes.Count)));
-            Assert.Equal(new[] { "region", "pad1", "pad2", "ee_tier", "vu1", "idle_skip", "gs_workers" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "region", "pad1", "pad2", "ee_tier", "vu1", "vu0", "idle_skip", "gs_workers" }, library.Settings.Select(s => s.Key));
             Assert.Equal(new[] { "ps2-0230a-20080220.bin", "ps2-0230e-20080220.bin", "ps2-0230j-20080220.bin" }, library.FirmwareFor(SyntheticPs2Elf.Build()).Select(f => f.Name));
             Assert.Equal("ps2-0230a-20080220.bin", library.FirmwareFor(SyntheticPs2Disc.Dvd().Iso).Single().Name);
             Assert.Empty(library.FirmwareFor(new byte[4096]));

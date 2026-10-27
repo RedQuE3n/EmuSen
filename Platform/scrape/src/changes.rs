@@ -1,5 +1,6 @@
 //! `emusen_scrape_change`: one change, `{"op": …}`, as `emusen_scrape.h` lists them. See EmuSen_Backend.md §30.3.
 
+pub(crate) use emusen_dotnet::date::local_offset;
 use crate::json::{self, quoted, strings_into};
 use crate::{Error, Scraper, credentials, layout};
 use emusen_dotnet::json::Value;
@@ -22,18 +23,6 @@ fn offset_written(text: &str) -> i64 {
         let minutes = tail[1..3].parse::<i64>().unwrap_or(0) * 60 + tail[4..6].parse::<i64>().unwrap_or(0);
         return if b[0] == b'-' { -minutes * 60 } else { minutes * 60 };
     }
-    0
-}
-
-#[cfg(unix)]
-pub(crate) fn local_offset(seconds: i64) -> i64 {
-    let t = seconds as libc::time_t;
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() { 0 } else { tm.tm_gmtoff as i64 }
-}
-
-#[cfg(not(unix))]
-pub(crate) fn local_offset(_: i64) -> i64 {
     0
 }
 

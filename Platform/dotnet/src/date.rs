@@ -97,6 +97,60 @@ pub fn instant(text: &str) -> Option<i64> {
     Some(seconds * TICKS_PER_SECOND + fraction)
 }
 
+/// The system zone's offset from UTC, in seconds, at a Unix time; none known off Unix, so 0.
+#[cfg(unix)]
+pub fn local_offset(unix_seconds: i64) -> i64 {
+    let t = unix_seconds as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() { 0 } else { tm.tm_gmtoff as i64 }
+}
+
+#[cfg(not(unix))]
+pub fn local_offset(_: i64) -> i64 {
+    0
+}
+
+/// Ticks from 1970 of a system time, negative before it, the fraction cut to whole ticks.
+pub fn ticks_of(time: std::time::SystemTime) -> i64 {
+    match time.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs() as i64 * TICKS_PER_SECOND + (d.subsec_nanos() / 100) as i64,
+        Err(e) => -(e.duration().as_secs() as i64 * TICKS_PER_SECOND + (e.duration().subsec_nanos() / 100) as i64),
+    }
+}
+
+/// The fields of a time of day counted in seconds from 1970 as if in UTC: year, month, day, hour, minute, second.
+pub fn civil_time(seconds: i64) -> (i64, u32, u32, u32, u32, u32) {
+    let (y, m, d) = civil(seconds.div_euclid(86_400));
+    let rest = seconds.rem_euclid(86_400) as u32;
+    (y, m, d, rest / 3600, rest / 60 % 60, rest % 60)
+}
+
+/// The fields of a Unix time in the system zone, as `DateTime.Now` gives them.
+pub fn local_fields(unix_seconds: i64) -> (i64, u32, u32, u32, u32, u32) {
+    civil_time(unix_seconds + local_offset(unix_seconds))
+}
+
+/// `yyyy-MM-ddTHH:mm:ss.fffffff` of ticks counted from 1970, then `suffix`: the text of `ToString("o")`.
+pub fn round_trip_text(ticks: i64, suffix: &str) -> String {
+    let days = ticks.div_euclid(TICKS_PER_DAY);
+    let rest = ticks.rem_euclid(TICKS_PER_DAY);
+    let (y, m, d) = civil(days);
+    let s = rest / TICKS_PER_SECOND;
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:07}{suffix}", s / 3600, s / 60 % 60, s % 60, rest % TICKS_PER_SECOND)
+}
+
+/// An offset in seconds as `+hh:mm` or `-hh:mm`.
+pub fn offset_text(offset: i64) -> String {
+    let minutes = offset.abs() / 60;
+    format!("{}{:02}:{:02}", if offset < 0 { '-' } else { '+' }, minutes / 60, minutes % 60)
+}
+
+/// A UTC instant in ticks from 1970 as the round-trip text of the system's local time, with its offset.
+pub fn local_of_utc(utc_ticks: i64) -> String {
+    let offset = local_offset(utc_ticks.div_euclid(TICKS_PER_SECOND));
+    round_trip_text(utc_ticks + offset * TICKS_PER_SECOND, &offset_text(offset))
+}
+
 /// `TimeSpan.FromSeconds(double)` in ticks: the product cut toward zero, as .NET Core 3.0 and later cut it.
 pub fn ticks_from_seconds(seconds: f64) -> i64 {
     (seconds * TICKS_PER_SECOND as f64) as i64
@@ -117,5 +171,35 @@ mod tests {
         assert_eq!(weekday(days_from_civil(2026, 10, 18)), 0);
         assert_eq!(local_text(instant("2026-10-18T14:03:09Z").unwrap(), "yyyy-MM-dd_HHmmss"), "2026-10-18_140309");
         assert_eq!(ticks_from_seconds(60.0 / (60.0 * 0.9)), 11_111_111);
+    }
+
+    #[test]
+    fn known_instants_are_written_as_the_same_text_and_ticks() {
+        assert_eq!(round_trip_text(0, "Z"), "1970-01-01T00:00:00.0000000Z");
+        assert_eq!(round_trip_text(-1, "Z"), "1969-12-31T23:59:59.9999999Z");
+        assert_eq!(round_trip_text(951_782_400 * TICKS_PER_SECOND + 12_345_678, ""), "2000-02-29T00:00:01.2345678");
+        assert_eq!(round_trip_text(1_791_936_000 * TICKS_PER_SECOND + 3661 * TICKS_PER_SECOND + 5, "+02:00"), "2026-10-14T01:01:01.0000005+02:00");
+        let last_day = (days_from_civil(9999, 12, 31) + 1) * TICKS_PER_DAY - 1;
+        assert_eq!(round_trip_text(last_day, "Z"), "9999-12-31T23:59:59.9999999Z");
+        assert_eq!(utc_millis(last_day), "9999-12-31T23:59:59.999Z");
+        assert_eq!(civil(days_from_civil(2026, 2, 28) + 1), (2026, 3, 1));
+        assert_eq!(civil(days_from_civil(2024, 2, 28) + 1), (2024, 2, 29));
+        assert_eq!(civil(days_from_civil(2025, 12, 31) + 1), (2026, 1, 1));
+        assert_eq!(civil_time(1_791_936_000 + 3661), (2026, 10, 14, 1, 1, 1));
+        assert_eq!(civil_time(-1), (1969, 12, 31, 23, 59, 59));
+        assert_eq!(offset_text(7200), "+02:00");
+        assert_eq!(offset_text(-12_600), "-03:30");
+        assert_eq!(offset_text(0), "+00:00");
+        let t = std::time::UNIX_EPOCH + std::time::Duration::new(1_000, 123_456_789);
+        assert_eq!(ticks_of(t), 1_000 * TICKS_PER_SECOND + 1_234_567);
+        assert_eq!(ticks_of(std::time::UNIX_EPOCH - std::time::Duration::from_millis(1)), -TICKS_PER_MILLISECOND);
+    }
+
+    #[test]
+    fn the_local_text_is_the_utc_instant_plus_the_systems_offset() {
+        let utc = 1_791_936_000 * TICKS_PER_SECOND;
+        let offset = local_offset(1_791_936_000);
+        assert_eq!(local_of_utc(utc), round_trip_text(utc + offset * TICKS_PER_SECOND, &offset_text(offset)));
+        assert_eq!(local_fields(1_791_936_000), civil_time(1_791_936_000 + offset));
     }
 }

@@ -6,7 +6,11 @@ license.workspace = true
 publish.workspace = true
 
 # .NET's rules for text, numbers and text files, reproduced where an answer shown to the player depends on them:
-# pure functions with no state and no dependency, shared by Galaxia, the shell and the shell's command modules,
+# pure functions with no state and no dependency but libc, shared by Galaxia, the shell and the shell's command modules,
 # which may not link Galaxia (EmuSen_DianaSh.md §16 Q11). See EmuSen_RustPlatform.md §11.3.
 [lib]
 name = "emusen_dotnet"
+
+# localtime_r, for the system zone's offset as .NET's DateTime.Now takes it.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -15,6 +15,5 @@ name = "emusen_recorder"
 # Deflate and the CRC-32, for the archive of the pictures; already in the workspace.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
-[target.'cfg(unix)'.dependencies]
-# localtime_r, for the folder's and the ledger's local time as .NET's DateTime.Now gives it.
-libc = "0.2"
+# The folder's and the ledger's local time as .NET's DateTime.Now gives it.
+emusen-dotnet = { path = "../dotnet" }

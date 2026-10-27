@@ -28,5 +28,3 @@ emusen-library = { path = "../library" }
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 [target.'cfg(unix)'.dependencies]
-# The local time's offset, for CLEANUP's folder name.
-libc = "0.2"

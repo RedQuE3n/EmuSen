@@ -1054,6 +1054,17 @@ each in a scratch program on .NET 10, and each is a case of the parity class:
   recalled from the runtime's source and built; the parity class showed it orders by their upper case throughout
   (§11.5).
 
+*Clock and date helpers, held once (2026-10-27).* `emusen_dotnet::date` owns the civil-date arithmetic, the system
+zone's offset (`local_offset`, from `localtime_r`; 0 off Unix), the ticks of a system time, and the `ToString("o")` text
+of an instant (`round_trip_text`, `offset_text`, `local_of_utc`), with the local fields (`civil_time`, `local_fields`).
+Galaxia, the library, the scraper, the shell's `ls` and the recorder call it; each had a copy, and the copies were
+token-identical (about 1,100 tokens in the duplication audit). The text each crate writes is unchanged; known instants
+(the epoch, one tick before it, a leap day, 9999-12-31) are pinned in the owner's tests. Windows keeps the shell's own
+zone lookup, and the other crates' non-Unix offset stays 0 as before. The three parsers (`date::instant`, the
+library's `clock::instant`, Galaxia's `clock::round_trip`) stay apart: they differ in what an untagged time means, in
+which digits they accept and in an empty fraction, and merging them would change which stored texts read back.
+`emusen-recorder` now depends on `emusen-dotnet`, and `emusen-dotnet` on `libc` on Unix.
+
 ### 11.4 The error log
 
 The C# formats the time, calls the library to shape the entry, runs its redactor over the result, and hands the

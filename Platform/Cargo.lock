@@ -277,7 +277,6 @@ version = "0.1.0"
 dependencies = [
  "dianash-module",
  "emusen-dotnet",
- "libc",
  "regex",
  "regex-syntax",
 ]
@@ -406,6 +405,9 @@ dependencies = [
 [[package]]
 name = "emusen-dotnet"
 version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "emusen-endymion"
@@ -445,7 +447,6 @@ dependencies = [
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
- "libc",
 ]
 
 [[package]]
@@ -550,8 +551,8 @@ version = "0.1.0"
 name = "emusen-recorder"
 version = "0.1.0"
 dependencies = [
+ "emusen-dotnet",
  "flate2",
- "libc",
 ]
 
 [[package]]
@@ -574,7 +575,6 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
- "libc",
 ]
 
 [[package]]

@@ -32,8 +32,8 @@ tree
           16 TextBlock at=569,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=557,210,156,48 owner=15 paints=#86868AFF role=text size=30 text=PLAYSTATION
         17 TabItem at=713,210,174,48 by=clip drawn focus heard="PLAYSTATION 2" limit=274,210,733,360 op paints=#EEEEF0FF role=tabitem sideways text="PlayStation 2"
           18 TextBlock at=725,216,150,36 box=150,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=149.97,36 limit=713,210,174,48 owner=17 paints=#EEEEF0FF role=text size=30 text="PLAYSTATION 2"
-        19 ScrollViewer at=286,260,709,310 by=clip fades=b limit=274,260,733,310 overflow=1127 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,310
-          20 StackPanel at=286,268,709,1429 by=scroll in=19 limit=286,260,709,310 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF,#D2D2D6FF,#FFFFFFFF role=none seen=286,268,709,302
+        19 ScrollViewer at=286,260,709,310 by=clip fades=b limit=274,260,733,310 overflow=1151 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,310
+          20 StackPanel at=286,268,709,1453 by=scroll in=19 limit=286,260,709,310 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF,#D2D2D6FF,#FFFFFFFF role=none seen=286,268,709,302
             21 StackPanel at=286,268,709,778 by=scroll in=19 limit=286,260,709,310 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#D2D2D6FF role=none seen=286,268,709,302
               22 SectionHeader at=286,268,709,34 box=709,34 by=scroll caps=19.5986 drawn face="Barlow Condensed" heard="Memory Card (PS2)" in=19 layout=186.09,33.6 limit=286,260,709,310 paints=#B4B4B8FF role=text size=28 text="Memory Card (PS2)"
               23 FieldRow at=286,310,709,157 by=scroll heard=Card in=19 limit=286,260,709,310 paints=#9C9CA0FF role=group

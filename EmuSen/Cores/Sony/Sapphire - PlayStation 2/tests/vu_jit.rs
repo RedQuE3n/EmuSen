@@ -696,3 +696,53 @@ fn c4_writes_the_flags_early_and_parts_from_the_interpreter() {
     assert_ne!((i.u.vu1.vi(1), i.u.vu1.vi(3)), (c.u.vu1.vi(1), c.u.vu1.vi(3)), "the flag checks read the flags early");
     assert_eq!((i.u.vu1.mac, i.u.vu1.status), (c.u.vu1.mac, c.u.vu1.status), "the flags themselves end the same");
 }
+
+/// Three programs uploaded to one start in turn, each started and finished on both tiers and compared; the recompiler's
+/// counts after.
+fn uploads_in_turn(unit: usize, settings: Settings, order: &[u32]) -> Counts {
+    let progs: Vec<_> = (1..=3u32)
+        .map(|n| table::assemble(&format!("nop | iaddiu vi1, vi0, {:#x}\nnop | iaddiu vi2, vi1, 0x1\n{END}", 0x10 * n)).unwrap())
+        .collect();
+    let mut i = Side::new(unit, 0, None);
+    let mut c = Side::new(unit, 0, Some(settings));
+    let mut t = 10;
+    for (round, &n) in order.iter().enumerate() {
+        for s in [&mut i, &mut c] {
+            for (k, p) in progs[n as usize - 1].iter().enumerate() {
+                put(&mut s.u, unit, k, *p);
+            }
+            assert!(s.p.start(&mut s.u, 0, t));
+            s.p.finish(&mut s.u, t);
+        }
+        t += 40;
+        same(&i, &c, &format!("round {round}"));
+        let vu = if unit == 0 { &c.u.vu0 } else { &c.u.vu1 };
+        assert_eq!(u32::from(vu.vi(2)), 0x10 * n + 1, "round {round}");
+    }
+    c.counts()
+}
+
+/// VU0's micro mode on the recompiler: an upload over a compiled program is run as uploaded, and a program whose words
+/// come back finds its code again.
+#[test]
+fn an_upload_over_a_compiled_vu0_program_is_run_as_uploaded() {
+    let k = uploads_in_turn(0, settings(false), &[1, 1, 2, 2, 1]);
+    assert_eq!((k.programs, k.interpreted_pairs), (2, 0), "{k:?}");
+}
+
+/// Past its budget every program is forgotten with the module: each start after a flush compiles its program anew
+/// rather than running code the flush freed.
+#[test]
+fn past_the_code_budget_every_program_is_compiled_anew() {
+    let k = uploads_in_turn(1, Settings { budget_mib: 0, ..settings(false) }, &[1, 1, 2, 1, 2]);
+    assert_eq!(k.flushes, 3, "a flush before each compile but the first: {k:?}");
+    assert_eq!(k.programs, 4, "the first program found again before any flush, then each compiled anew: {k:?}");
+}
+
+/// The programs kept for a start are dropped least recently run first: with two kept, the program run between two
+/// others' uploads stays, where the oldest compiled would be dropped.
+#[test]
+fn the_programs_kept_for_a_start_drop_the_least_recently_run() {
+    let k = uploads_in_turn(1, Settings { variants: 2, ..settings(false) }, &[1, 2, 1, 3, 1]);
+    assert_eq!(k.programs, 3, "the first program kept, being run last before the third came: {k:?}");
+}

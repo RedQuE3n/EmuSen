@@ -32,11 +32,11 @@ pub const RELEASE: u32 = 3;
 /// The frame's budget of pairs is spent.
 pub const BOUND: u32 = 4;
 
-/// The microprograms kept for one start, the oldest dropped past them.
-const VARIANTS: usize = 8;
+/// The microprograms kept for one start, the least recently run dropped past them (Sapphire_Speed.md §55).
+const VARIANTS: usize = 32;
 
-/// Code past which the module is dropped whole (EmuSen_Jit.md §3.4).
-const BUDGET: u64 = 64 << 20;
+/// Code past which the module is dropped whole (EmuSen_Jit.md §3.4), in MiB.
+const BUDGET_MIB: u64 = 128;
 
 /// How the recompiler runs: after how many entries at an address a microprogram is compiled, whether the dispatcher
 /// waits for its code, the verifier, and the two compromises of Sapphire_Plan.md §5.13 the emitter carries, both off.
@@ -49,21 +49,27 @@ pub struct Settings {
     pub c3: bool,
     /// C4: the flags written at the pair's own cycle rather than its S stage (never on by default; §45.9).
     pub c4: bool,
+    /// The microprograms kept for one start, and the code budget in MiB.
+    pub variants: usize,
+    pub budget_mib: u64,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { threshold: 2, wait: false, verify: false, c3: false, c4: false }
+        Settings { threshold: 2, wait: false, verify: false, c3: false, c4: false, variants: VARIANTS, budget_mib: BUDGET_MIB }
     }
 }
 
 impl Settings {
     /// The settings the environment names for measurement and tests: `SAPPHIRE_VU_THRESHOLD`, `SAPPHIRE_VU_WAIT=1`,
-    /// `SAPPHIRE_VU_VERIFY=1`, `SAPPHIRE_VU_C3=1`, `SAPPHIRE_VU_C4=1`.
+    /// `SAPPHIRE_VU_VERIFY=1`, `SAPPHIRE_VU_C3=1`, `SAPPHIRE_VU_C4=1`, `SAPPHIRE_VU_VARIANTS`, `SAPPHIRE_VU_BUDGET_MIB`.
     pub fn from_environment() -> Settings {
         let on = |k: &str| std::env::var(k).is_ok_and(|v| v == "1");
         let d = Settings::default();
+        let number = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<u64>().ok()).filter(|&n| n > 0);
         Settings {
+            variants: number("SAPPHIRE_VU_VARIANTS").map_or(d.variants, |n| n as usize),
+            budget_mib: number("SAPPHIRE_VU_BUDGET_MIB").unwrap_or(d.budget_mib),
             threshold: std::env::var("SAPPHIRE_VU_THRESHOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(d.threshold),
             wait: on("SAPPHIRE_VU_WAIT"),
             verify: on("SAPPHIRE_VU_VERIFY"),
@@ -115,6 +121,9 @@ pub struct Counts {
     /// The compiler's thread: bytes of code and nanoseconds compiling.
     pub bytes: u64,
     pub nanos: u64,
+    /// Microprograms kept now, and the most kept for one start.
+    pub kept: u64,
+    pub widest: u64,
 }
 
 /// A microprogram: the pairs reachable from its start (`[address, upper, lower]` each), the addresses it covers, its code's
@@ -216,7 +225,7 @@ impl Tier {
         Tier {
             unit,
             settings,
-            jit: emusen_jit::Jit::new(VuLowering, BUDGET),
+            jit: emusen_jit::Jit::new(VuLowering, settings.budget_mib << 20),
             programs: (0..pairs).map(|_| Vec::new()).collect(),
             current: None,
             entry: None,
@@ -240,6 +249,8 @@ impl Tier {
     pub fn counts(&self) -> Counts {
         let mut c = self.counts;
         c.flushes = self.jit.flushes;
+        c.kept = self.programs.iter().map(|v| v.len() as u64).sum();
+        c.widest = self.programs.iter().map(|v| v.len() as u64).max().unwrap_or(0);
         if let Some(k) = self.jit.counters() {
             use std::sync::atomic::Ordering::Relaxed;
             c.bytes = k.bytes.load(Relaxed);
@@ -282,9 +293,12 @@ impl Tier {
             self.current = None;
             self.entry = Some(pc);
         }
-        if let Some(k) = self.programs[pc as usize].iter_mut().position(|p| p.valid(micro)) {
-            self.current = Some((pc, k));
-            return published(&self.programs[pc as usize][k].slot);
+        let variants = &mut self.programs[pc as usize];
+        if let Some(k) = variants.iter_mut().rposition(|p| p.valid(micro)) {
+            let last = variants.len() - 1;
+            variants[k..].rotate_left(1);
+            self.current = Some((pc, last));
+            return published(&variants[last].slot);
         }
         if !self.programs[pc as usize].is_empty() && self.entry == Some(pc) {
             self.counts.invalidated += 1;
@@ -297,6 +311,10 @@ impl Tier {
             return None;
         }
         self.entries[pc as usize] = 0;
+        // The budget is checked where code is added, not on every run (Sapphire_Speed.md §55.3).
+        if self.jit.over_budget() {
+            self.forget_all();
+        }
         let (words, covers) = discover(micro, pc, mask);
         let options = Options { unit: self.unit as u8, verify: self.settings.verify, c3: self.settings.c3, c4: self.settings.c4 };
         let slot = self.jit.enqueue(words.clone().into_boxed_slice(), pc as u32, options);
@@ -305,7 +323,7 @@ impl Tier {
             slot.wait();
         }
         let variants = &mut self.programs[pc as usize];
-        if variants.len() == VARIANTS {
+        if variants.len() >= self.settings.variants {
             variants.remove(0);
         }
         variants.push(Program { words: words.into_boxed_slice(), covers, slot, checked: micro.lent() });
@@ -318,9 +336,6 @@ impl Tier {
     /// `Pipe::run_pairs` on the recompiler: compiled code where a microprogram covers the pair, the interpreter's step
     /// elsewhere, both stopping where the interpreter's loop stops.
     fn run(&mut self, pipe: &mut Pipe, units: &mut Units, limit: u64, release: bool, bound: u64) -> u64 {
-        if self.jit.over_budget() {
-            self.forget_all();
-        }
         let mask = pipe.pairs(units) - 1;
         if pipe.state != State::Run || pipe.next_t.max(pipe.kick_wait) > limit {
             return 0;

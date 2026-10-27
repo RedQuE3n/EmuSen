@@ -421,3 +421,35 @@ fn a_clut_loaded_while_primitives_still_read_the_last_does_not_change_what_they_
     assert_eq!(one.local().words()[9 * 2048 + 2047] & 0xFF, 0x22);
     assert_eq!(gs.worker_counts().expect("workers").clut_copies, 2);
 }
+
+#[test]
+fn a_clut_slot_is_reused_only_after_the_worker_drawing_with_it_is_done() {
+    // Three CLUTs loaded in turn before 300 PSMT4 sprites on worker 1's rows, each in its own page: more loads than the
+    // CLUT slots, so a slot comes round again while the held worker has yet to draw the sprite that read it.
+    let program = |gs: &mut Gs| {
+        for (cbp, colour) in [(64u64, 0x1111_1111u64), (96, 0x2222_2222), (160, 0x3333_3333)] {
+            gs.write(reg::BITBLTBUF, cbp << 32 | 1 << 48);
+            gs.write(reg::TRXPOS, 0);
+            gs.write(reg::TRXREG, 8 | 2 << 32);
+            gs.write(reg::TRXDIR, 0);
+            (0..8).for_each(|_| gs.image(colour | colour << 32));
+        }
+        gs.join();
+        gs.write(reg::SCISSOR_1, 63 << 16 | 63 << 48);
+        gs.write(reg::TEST_1, 0);
+        gs.write(reg::PRMODECONT, 1);
+        for k in 0..300u64 {
+            let cbp = [64u64, 96, 160][k as usize % 3];
+            gs.write(reg::TEX0_1, 128 | 1 << 14 | 0x14 << 20 | 6 << 26 | 6 << 30 | 1 << 35 | cbp << 37 | 1 << 61);
+            gs.write(reg::FRAME_1, (16 + k) | 1 << 16);
+            gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
+            gs.write(reg::UV, 0);
+            gs.write(reg::XYZ2, (32 * 16) << 16);
+            gs.write(reg::UV, 8 * 16 | 32 * 16 << 16);
+            gs.write(reg::XYZ2, 8 * 16 | (64 * 16) << 16);
+        }
+    };
+    let (one, gs) = with_worker_1_held(program);
+    assert_eq!(one.local().words()[17 * 2048] & 0xFF, 0x11);
+    assert!(gs.worker_counts().expect("workers").clut_copies >= 300);
+}

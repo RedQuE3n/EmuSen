@@ -370,3 +370,236 @@ with the spread of the window's slow frames (§51.5). The picture, sound and sta
 were seeded and reverted: an entry running another's function (`add` running `sub`) fails four of `vu0`'s tests; one
 operation given another's index (`sub` as `add`) fails the unit test; the micro-only operations left unmapped fail the
 unit test.
+
+## 55. The vector units' and the GS's pure overhead in the 3D (2026-10-27)
+
+*Numbered §55 after S34's §53 and §54; disputes would start at D-1020, and the step raised none. Decided 2026-10-27 by the
+tester: work is chosen by the overhead it consumes, largest first; this step takes the overhead §51.6 measured in Jak and
+Daxter's 3D that buys nothing for the emulated machine: VU1's compiler joined at its budget, its microprogram cache
+overrun, VU0 interpreted where its compiled tier was built and graded (§45), and the emulation thread waiting for the GS's
+workers over the CLUT. §52 took the name map out of the VU's decode beforehand; its tree is this step's "before".*
+
+### 55.1 In one paragraph
+
+Four exact changes, each measured on its own: **VU1's compiler is retired at its code budget instead of joined**
+(`emusen-jit`'s `over_budget` lets the thread go, which refuses what is queued and frees its module as it exits); **the
+microprograms kept for a start are 32, dropped least recently run, and the budget is 128 MiB**, sized from the working set
+the three windows measure (24 to 31 MiB of code, 35 to 42 VU1 microprograms, at most 11 for one start, against the eight
+kept oldest-first before); **VU0's micro mode runs on the same recompiler by default**, a setting `vu0` beside `vu1`; and
+**a CLUT slot is reused only after the workers that read it have drawn**, one of 256 slots rather than 16, which is what
+the dock's 45 ms a frame were (§55.4: not the CLUT's load, which never waited there). The windows' pictures, sound and
+states are those of the tree before, on both EE tiers wherever measured, and VU0's code ran under S40's verifier over the
+dock's 300 frames without a difference. **At CPU weight 100, two rounds each: the dock from 314.1 to 254.4 ms a frame
+(3.18 to 3.93 frames a second, 1.23 times), Misty Island from 545.2 to 470.6 (1.83 to 2.13, 1.16 times), the arena from
+990.0 to 818.9 (1.01 to 1.22, 1.21 times)**; the arena's and the island's frames of 12 to 18 s are gone (the longest
+now 1.2 s), and the menus are unchanged. The sampled profile after (§55.6) puts the EE first (its software floats 8 to
+10 % and the recompiler's dispatch 5 to 9 %), then VU micro mode's calls, which are now the calls into code rather than
+interpretation, then the GIF and the VIF.
+
+### 55.2 What was built
+
+| Where | What |
+| --- | --- |
+| `emusen-jit/src/lib.rs` | `Compiler::retire`: the thread's stop set and its handle let go, never joined; a stopped thread refuses (publishes `FAILED` for) every job still queued, checked between the blocks of a batch too, so that a drop or a retirement compiles nothing more than the block in hand; `Jit::over_budget` retires the compiler. `EmuSen_Jit.md` §3.4 |
+| `vu/jit/mod.rs` | the variants a start keeps, looked up most recent first and moved to the back when found, the least recently run dropped; `Settings::variants` (32) and `Settings::budget_mib` (128), `SAPPHIRE_VU_VARIANTS` and `SAPPHIRE_VU_BUDGET_MIB` for measurement; the budget checked where a program is handed to the compiler rather than on every run; `Counts::kept` and `widest`, the programs held and the most for a start |
+| `gs/workers.rs` | 256 CLUT slots; the last job each worker reads a slot in, so that a slot's reuse waits for those workers only, up to those jobs |
+| `v1.rs` | the setting `vu0` (*Performance*, `effect: exact`, the recompiler by default) and `vu0_recompiler_chosen`, read as `vu1` is |
+| `examples/bench.rs` | `--vu0`, in `--defaults`; either unit left interpreted under `SAPPHIRE_VU0=interpreter` or `SAPPHIRE_VU1=interpreter`; the tier's settings from the environment; each unit's recompiler counts with the code and programs held |
+| WiseMan `SapphireTests` | the settings' keys with `vu0` |
+
+### 55.3 VU1's compiler at its budget, and the cache sized for the 3D
+
+**What the join cost.** The budget check at the top of `vu::jit::run` dropped the module when its code passed 64 MiB, and
+the drop joined the compiler's thread, which first compiled every microprogram still queued: on the arena, 4 to 18 frames
+of 2 to 50 s a round (§51.5). Nothing needed the join: the dispatcher forgets every address the module published before
+it runs again, so the thread can finish its block and free the module by itself. Retired that way, with the old cache
+(eight a start, 64 MiB) kept to measure the change alone, the arena ran at 840.9 ms a frame with its longest frame 1.19 s
+(before: 990.0, frames of 16.5 to 18.1 s) and the island at 486.4 with 1.01 s (545.2, 12.5 s); single rounds.
+
+**Why the budget was reached at all.** The cache kept eight programs a start and dropped the oldest compiled, and Jak and
+Daxter uploads more than eight to some starts in turn: with eight, a cycle of nine finds none of them, every upload
+compiles again, and 2.1 to 3.1 programs a frame of 0.4 to 0.8 MiB each filled 64 MiB every 50 frames. **The working set**,
+measured with 64 kept a start and a budget of 4 GiB, after each window's 60 frames of warming:
+
+| Window | VU1 programs held | most for a start | code | compiled in the 300 frames | VU0 programs, code |
+| --- | --- | --- | --- | --- | --- |
+| `jak-dock` | 40 | 11 | 26.8 MiB | 0.02 a frame | 22, 0.6 MiB |
+| `jak-island` | 35 | 9 | 24.1 MiB | 0.03 a frame | 21, 0.5 MiB |
+| `jak-arena` | 42 | 11 | 30.8 MiB | 0.00 a frame | 40, 0.9 MiB |
+
+So **32 kept a start, the least recently run dropped**, is three times the widest start measured, and **128 MiB** holds
+four such windows' programs before a flush, which now costs a recompilation and no wait. Looking up most recent first
+keeps the cost of a changed memory where it was: the running program is found first. With these, VU1 interprets 0.8 to
+8.2 thousand pairs a frame on the island and the arena, against 180 and 309 thousand with the old cache, and compiles
+nothing in the windows; the arena's mean moves from 840.9 to 818.9 ms (with VU0's tier, below, which the old-cache run
+also had), the island's from 486.4 to 470.6.
+
+**The check itself.** The sampled profile after (§55.7) found the budget's check at the top of every `run` at 0.8 to 1.2 %
+of the emulation thread (an `Option`, an `Arc` and an atomic load, nine times a pair): the bytes of code change only when
+a program is compiled, so the check moved to the one place a program is handed to the compiler, before it is, which keeps
+the module at most the programs still in flight past the budget. One round on the build with the check moved, after the series: the dock 250.6, the island 468.3 and the arena
+803.8 ms a frame (the series' after: 254.4, 470.6 and 818.9), the digests equal.
+
+### 55.4 The CLUT's wait was its slots, not its load
+
+§51.6 put about 48 ms of the dock's frame in "publishing jobs and waiting for CLUT reads", and the plan for this step
+read that as the CLUT's load (TEX0 with CLD) waiting for the workers. **Measured on the dock, the load waited 2 times in
+360 frames for 0.1 ms; the 45 ms a frame (2,885 waits, 16.4 s) were `Cause::Clut`**, the GS's thread waiting to reuse one
+of the sixteen CLUT slots: the dock changes its CLUT 105 times a frame, so a slot came round again every sixteen
+changes, and its reuse waited for every worker to pass the last primitive that had read it. The load itself already
+waits only for the workers whose jobs change the lanes it reads (§50.3.5), exactly as asked; on the island and the arena
+it costs 1.1 to 1.5 ms a frame, the real order of a CLUT drawn or uploaded just before, and is left as it is.
+
+**The change**: 256 slots (a slot is 1 KiB and 8 bytes), and for each slot the last job each worker reads it in: every
+worker for a primitive shared by rows, the one worker for a primitive drawn alone. A slot's reuse waits for those
+workers, up to those jobs, and for no other. That is exact by §50.3's argument: a worker reads a slot only while running
+a job that names it and gives it rows, and its count stored with Release after the job orders that read before the
+GS's thread's Acquire and the copy over the slot. On the dock the CLUT's waits went from 45.5 ms a frame to none; the
+ring's backpressure now appears instead (5,480 waits, 2.7 ms a frame), the workers being busy 85 to 94 ms a frame. On the
+arena, 2.9 ms a frame of slot waits went too.
+
+### 55.5 VU0's micro mode on the recompiler
+
+S40 built the tier for both units and graded VU0 by the same oracles (§45.5: 80 random programs, every operation, the
+mechanisms); §45.6 left it off because the frames S40 measured ran almost none of VU0's micro mode. The 3D runs 0.12 to
+0.36 million VU0 pairs a frame (§51.5). Switching it on needed nothing more than the setting: VU0's memory operations
+reach VU1 through the window by the helpers S40 wrote, and the stall memo stays VU1's (§45.3). With it on, every VU0
+pair of the three windows but 1 to 98 a frame runs compiled, from 22 to 40 programs and under 1 MiB of code. **Its
+share, measured by the bench left with `SAPPHIRE_VU0=interpreter` on the same build (single rounds)**: the dock 265.6 to
+254.4 ms (4.2 %), the island 478.1 to 470.6 (1.6 %), the arena 842.7 to 818.9 (2.8 %). The setting is `vu0`, the
+recompiler by default, as `vu1` is (decided 2026-10-26 by the tester for VU1, §45.6; this step applies the same rule to
+the unit the same oracles graded).
+
+### 55.6 Speed (measured 2026-10-27)
+
+**The method**: the bench's three windows with `--defaults`, from the states at frames 6,000, 7,500 and 9,000; **two
+rounds** (two rather than three to save time, decided 2026-10-27), before and after alternating window by
+window (before 1, after 1, before 2, after 2); every run alone at CPU weight 100, nothing else of the project running, the
+one-minute load 0.9 to 3.7. **Before** is WiseMan `8b1b27d54` (S43, S33, S36, S37, S34, §52), VU1 recompiled and VU0
+interpreted as its `--defaults` had it; **after** is this step, VU0 recompiled.
+
+| Window | Before: means (median ms) | After: means (median ms) | Before → after, median of means | Frames a second | Longest frame |
+| --- | --- | --- | --- | --- | --- |
+| `jak-dock` | 322.4, 305.7 (306.5, 295.4) | 256.0, 252.8 (247.7, 245.5) | **314.1 → 254.4, 1.23×** | 3.18 → 3.93 | 1.4–2.2 s → 0.42 s |
+| `jak-island` | 545.1, 545.3 (486.2, 484.7) | 470.6, 470.5 (461.9, 462.5) | **545.2 → 470.6, 1.16×** | 1.83 → 2.13 | 12.5 s → 0.97 s |
+| `jak-arena` | 997.6, 982.4 (746.8, 750.2) | 821.9, 815.9 (711.5, 696.6) | **990.0 → 818.9, 1.21×** | 1.01 → 1.22 | 16.5–18.1 s → 1.16 s |
+
+The rounds agree within 6 % before (the dock) and 1 % after. Against §51.5's series on the older tree (361.1, 564.1 and
+1,337.4 ms) the windows are 1.42, 1.20 and 1.63 times faster with §52, S37 and S34 between.
+
+**The menus and the loading**, two rounds a build on the recompiler tier, one on the interpreter tier, from power-on:
+
+| Workload | Before | After |
+| --- | --- | --- |
+| the boot's language screen (frames 690–760) | 44.5, 44.4 ms | 44.9, 44.5 |
+| the boot, frames 0–760 | 68.6, 68.6 | 68.4, 68.3 |
+| Jak's start and loading by the script (frames 8–400) | 85.3, 85.4 | 84.8, 84.5 |
+| Jak, frames 0–900 | 60.3, 59.9 | 59.9, 59.7 |
+
+Unchanged, as they must be: they run almost no VU micro mode and change their CLUT rarely.
+
+**Each piece's share** (single rounds on the after build, each piece taken away alone; the frames' means):
+
+| Piece | `jak-dock` | `jak-island` | `jak-arena` | Evidence |
+| --- | --- | --- | --- | --- |
+| 1. VU1's compiler retired, not joined | none (one long frame a round) | 545.2 → 486.4 (11 %) | 990.0 → 840.9 (15 %) | the old cache kept, the join gone; longest frames 1.0 and 1.2 s |
+| 3. the cache sized (32 a start, LRU, 128 MiB) | under 1 % | 486.4 → 470.6 (3 %) | 840.9 → 818.9 (3 %) | VU1's interpreted pairs 180k → 0.8k, 309k → 8k a frame; flushes 2 and 6 → 0 |
+| 4. VU0 recompiled | 265.6 → 254.4 (4 %) | 478.1 → 470.6 (2 %) | 842.7 → 818.9 (3 %) | VU0 interpreted on the same build |
+| 5. the CLUT's slots | 45.5 ms a frame of waits → none (with the ring's 2.7 back), about 15 % | none to speak of | 2.9 ms a frame → none | the GS's wait counts |
+
+### 55.7 Where the frame goes now (measured 2026-10-27)
+
+**The method**: §51.6's: the sampler at 4 ms on every thread of one run of each window from its first progress line, the
+emulation thread's samples classed by S32's rules (`units2.py` in the step's scratch), host functions only.
+
+| The emulation thread | `jak-dock` (13,512 samples) | `jak-island` (26,610) | `jak-arena` (41,661) | §51.6 before |
+| --- | --- | --- | --- | --- |
+| **EE**, all of it | 39.3 % (100 ms) | 34.2 % (161 ms) | 36.3 % (297 ms) | 30 to 31 % |
+| of which COP1's floats in software | **9.9 % (25 ms)** | **12.3 % (58 ms)** | **10.3 % (84 ms)** | 6 to 10 % |
+| of which the recompiler's dispatcher and exit replay | 9.1 % | 6.1 % | 5.6 % | 5 to 7 % |
+| of which the timing model | 5.1 % | 4.3 % | 6.3 % | |
+| **VU micro mode** (the dispatcher in `vu::jit`, `Pipe`'s `run_to` and `finish`, the float operations compiled code calls) | **17.8 % (45 ms)** | **20.9 % (98 ms)** | **19.8 % (162 ms)** | 18 to 24 % |
+| of which `vu::jit`'s dispatcher, and `Pipe` | 6.0 and 5.2 % | 7.5 and 7.2 % | 6.7 and 7.2 % | |
+| **Compiled code** (EE blocks, VU0 and VU1 microprograms) | 7.1 % (18 ms) | 7.2 % (34 ms) | 5.9 % (48 ms) | 3.5 to 4.8 % |
+| **GIF** | 9.2 % (23 ms) | 8.1 % (38 ms) | 8.2 % (67 ms) | 6.7 to 7.5 % |
+| **VIF** | 7.1 % (18 ms) | 7.2 % (34 ms) | 7.3 % (60 ms) | 5.3 to 6.4 % |
+| **GS** on the emulation thread | **3.7 % (9 ms)** | 7.3 % (34 ms) | 3.2 % (26 ms) | 18.7 / 7.0 / 2.9 % |
+| **Idle skipping's own work** | 1.2 % | 2.5 % | 6.9 % (56 ms) | 0.9 / 2.2 / 5.5 % |
+| Scheduler and synchronisation | 4.9 % | 4.2 % | 4.6 % | 4.2 to 4.4 % |
+| EE timers and INTC, DMAC, IOP, PCRTC and the rest | 9.4 % | 8.4 % | 7.7 % | |
+| In a system call (the workers' unparking at a job's publication; no join) | 1.4 % | 1.2 % | 0.6 % | 1.6 / 1 / **9.7 %** |
+
+The shares are of a shorter frame, so a unit whose cost did not change takes a larger share: the EE's floats are 25, 58
+and 84 ms a frame, as before (23, 59, 108 in §51.6 on the older tree). The VU's 45 to 162 ms are no longer interpretation:
+both units' pairs run compiled (all but 0.8 to 8 thousand a frame), and what remains is the cost of reaching the code nine
+times a pair (§45.3, §45.11): the dispatcher's checks and the frame it builds, `Pipe::run_to` and `finish` after every EE
+instruction, and the float operations called. The GS on the dock fell from 68 to 9 ms. No sample of the emulation thread
+waited for a compiler; the budget's check itself was 0.8 to 1.2 % and has moved since (§55.3).
+
+**The new top five** (by the emulation thread's share, the three windows together): **1. the EE's floats in software** (9.9 to 12.3 %, §51.8 #7 and C3); **2. VU micro mode's call path**
+(17.8 to 20.9 % with its float calls; 12 to 15 % the dispatcher and `Pipe`'s synchronisation alone, S42's lever, §51.8
+#9); **3. the GIF** (8.1 to 9.2 %); **4. the VIF** (7.1 to 7.3 %), 3 and 4 together §51.8 #10; **5. the EE recompiler's
+dispatcher and exit replay** (5.6 to 9.1 %, the blocks ending at every load, store, MMI and COP instruction S38 and S39
+would compile, §51.7). On the arena idle skipping's own work (6.9 %) comes next.
+
+### 55.8 Tests and seeded faults (2026-10-27)
+
+**Tests** [M, Release]: `emusen-jit` **11 of 11** (new: `past_its_budget_the_compiler_is_retired_without_waiting_for_its_queue`);
+`tests/vu_jit.rs` **19 of 19** (new: `an_upload_over_a_compiled_vu0_program_is_run_as_uploaded`,
+`past_the_code_budget_every_program_is_compiled_anew`, `the_programs_kept_for_a_start_drop_the_least_recently_run`; S40's
+oracles, VU1 and VU0 recompiled against the interpreter, unchanged and passing); `tests/threads.rs` **11 of 11** (new:
+`a_clut_slot_is_reused_only_after_the_worker_drawing_with_it_is_done`, 300 sprites over three CLUTs with a worker held,
+compared with one thread); `v1`'s `the_vu0_setting_chooses_its_tier_and_the_recompiler_is_the_default`; the blast
+radius's suites (§55.10). **The bench's gate**: the three windows' picture, sound and state digests equal in all four
+rounds and in every single-round run of §55.6 (`43D839015A0E4DA1`, `D9F0AF56FD3DEF28`, `B77DC314C6AE837C` the pictures);
+the boot's 760 frames (`50F06A02…`), Jak by the disc's fast boot to 900 (`7EEC08D4…`) and Jak by the BIOS and the script to 900 (`FFB0FCE9…`) equal before and after on both EE tiers; **S40's verifier** (oracle 1,
+`SAPPHIRE_VU_VERIFY=1`) on the dock's 300 frames with both units recompiled: no difference, 247,430 VU0 and 364,653 VU1
+pairs a frame compiled. ps2autotests: **52 of 55 and 23 of 23** with both units recompiled (`SAPPHIRE_VU0` and `SAPPHIRE_VU1` set for `s10`, whose machine is made directly), the same three failing as §36.5 (`cpu/ee_fpu/sqrt`, `dma/vif/intstall`, `vu/lower/efu`).
+
+**Seeded faults**, each made in place, the tests run, the source restored:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | a CLUT load not waiting for the worker that writes its source (`Mem::read` under `Cause::ClutLoad` settles nothing) | `generated_streams_leave_the_memory_and_every_read_back_as_one_thread_does_at_every_worker_count`, `a_state_saved_with_primitives_in_flight_loads_and_continues_as_one_thread_does` |
+| F2 | a VU0 program resumed without its words checked (a stale microprogram run) | `random_microprograms_on_vu0_leave_the_units_as_the_interpreter_does` |
+| F3 | the programs kept after the budget dropped their code (compiled code run after its eviction), seeded at the check's first place and again at its second | `past_the_code_budget_every_program_is_compiled_anew`, both times |
+| F4 | a CLUT slot reused without waiting for the worker reading it | `a_clut_slot_is_reused_only_after_the_worker_drawing_with_it_is_done` |
+| F5 | the join put back at the budget | `past_its_budget_the_compiler_is_retired_without_waiting_for_its_queue` |
+| F6 | the programs a start keeps dropped oldest compiled again, not least recently run | `the_programs_kept_for_a_start_drop_the_least_recently_run` |
+
+F1's own test, `a_clut_load_from_a_page_being_drawn_waits_and_loads_what_was_drawn`, passed under the fault: its held
+worker had finished by the load. The generated streams find it.
+
+### 55.9 Exposure
+
+Running the player's BIOS and Jak and Daxter makes this writer a writer of a player's-BIOS stage (§1.4): **exposed, and
+never a replacement writer.** The BIOS was handed to the machine by the link the step was given (market americas); it was
+never opened, hashed, diffed, listed, disassembled or dumped, and no firmware folder was listed. Observed: the bench's
+times, digests and counts (microprograms compiled, held and kept a start, code bytes, the GS's waits by cause), and the
+host's instruction pointers in Sapphire's own code; no program counter, microprogram word or memory of the BIOS or the
+game was printed or logged, and the perf map stayed off. No emulator's source was read.
+
+### 55.10 Named limits
+
+- **Two rounds a window**, and the pieces' shares single rounds: a piece's share under 3 % is within one round's spread.
+- **The working set is the opening's three windows**; play may hold more programs a start. The counts the bench prints
+  (`held`, `at most … for a start`) show it on any later window.
+- **The budget's flush is cheaper, not free**: past 128 MiB every program is compiled again, and VU1 interprets until
+  its code returns.
+- **The handheld's columns** remain owed with §51.9's.
+
+### 55.11 Questions this step leaves
+
+1. **[routine] VU0's default.** *Recommended*: the recompiler, as set here, on the same oracles as VU1's (§55.5, §55.8);
+   the setting `vu0` keeps the interpreter one choice away.
+2. **[decision] The next step by overhead.** *Recommended*: the EE's floats by an exact fast path (§51.8 #7, §51.14 Q2),
+   the largest single share left (8 to 10 %); then the VU's call cost (S42, VU1 running ahead to its observation points),
+   now that its pairs run compiled and the calls into them are what remains of "VU micro".
+3. **[routine] The CLUT's load** costs 1.1 to 1.5 ms a frame on the island and the arena, the real order of a CLUT
+   drawn just before; finer lanes (blocks rather than pages) would shorten it. *Recommended*: leave it until the GS on
+   the device (S44) changes where the CLUT lives.
+
+### 55.12 What was read for this step
+
+This page's §51 and §52; `Sapphire_Native.md` §45 and §50; `EmuSen_Jit.md` §3 and §5. The code of `emusen-jit`,
+`vu::jit`, `gs::workers`, `gs::texture`'s CLUT load, `v1` and the bench. No article, no emulator source, no firmware.

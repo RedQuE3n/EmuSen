@@ -17,8 +17,8 @@
 //! point the machine can observe is the one-thread path's. The registers (CSR, SIGLBLID and the events FINISH, SIGNAL
 //! and LABEL raise) are the GS's thread's alone, so they need no barrier.
 //!
-//! The CLUT's buffer is copied into one of sixteen slots when a primitive uses it after a load, and a slot is reused
-//! only once every primitive that read it is drawn. Every hand-over is one of this module's atomics: a job is written
+//! The CLUT's buffer is copied into one of 256 slots when a primitive uses it after a load, and a slot is reused only
+//! once each worker that reads it in a primitive has drawn that primitive. Every hand-over is one of this module's atomics: a job is written
 //! into its slot before the count that publishes it is stored with Release, and a worker's count is stored with Release
 //! after its last access to a job, the memory and the slot, and loaded with Acquire before the GS's thread, or another
 //! worker, touches what it covered. A worker waits only for earlier jobs, so no wait closes a cycle.
@@ -41,8 +41,8 @@ use super::transfer::Transfer;
 pub const MAX: usize = 8;
 /// Jobs published and not yet run by every worker, at most.
 const RING: u64 = 4096;
-/// CLUT buffers in use at once, at most.
-const CLUTS: usize = 16;
+/// CLUT buffers in use at once, at most (Sapphire_Speed.md §55).
+const CLUTS: usize = 256;
 /// Rounds a worker spins on an empty ring before it parks.
 const SPIN: u32 = 2000;
 /// A host-to-local transfer's 64-bit units in one job.
@@ -157,7 +157,8 @@ pub struct Workers {
     seen: [Cell<u64>; MAX],
     seen_min: Cell<u64>,
     clut_slot: Cell<usize>,
-    clut_use: [Cell<u64>; CLUTS],
+    /// By CLUT slot and worker: the last job in which that worker reads the slot.
+    clut_use: Box<[[Cell<u64>; MAX]]>,
     /// The CLUT's buffer changed since it was last copied to a slot.
     clut_dirty: Cell<bool>,
     textures: Cell<Option<(Sampler, Units)>>,
@@ -198,7 +199,7 @@ impl Workers {
             seen: std::array::from_fn(|_| Cell::new(0)),
             seen_min: Cell::new(0),
             clut_slot: Cell::new(0),
-            clut_use: std::array::from_fn(|_| Cell::new(0)),
+            clut_use: (0..CLUTS).map(|_| std::array::from_fn(|_| Cell::new(0))).collect(),
             clut_dirty: Cell::new(false),
             textures: Cell::new(None),
             rotate: Cell::new(0),
@@ -351,10 +352,12 @@ impl Workers {
             let same = unsafe { (*self.shared.cluts[slot].get()).entries == clut.entries };
             if !same {
                 let next = (slot + 1) % CLUTS;
-                if self.clut_use[next].get() > self.seen_min.get() {
-                    self.wait_all(self.clut_use[next].get(), Cause::Clut);
+                for (w, last) in self.clut_use[next][..self.n].iter().enumerate() {
+                    if last.get() > self.seen[w].get() {
+                        self.wait(w, last.get(), Cause::Clut);
+                    }
                 }
-                // SAFETY: every primitive that read slot `next` is drawn, and no later one names it yet.
+                // SAFETY: every worker that reads slot `next` in a job has run that job, and no later one names it yet.
                 unsafe { *self.shared.cluts[next].get() = clut.clone() };
                 self.clut_slot.set(next);
                 self.tally(|c| c.clut_copies += 1);
@@ -497,7 +500,11 @@ impl Workers {
         };
         let slot = self.clut_for(clut);
         self.publish(Job::Draw { kind, env, v, clut: slot as u32 }, split, &sets, &reads);
-        self.clut_use[slot].set(self.published.get());
+        let s = self.published.get();
+        match split {
+            Split::Rows(_) => self.clut_use[slot][..n].iter().for_each(|c| c.set(s)),
+            Split::One(k) => self.clut_use[slot][k as usize].set(s),
+        }
         self.tally(|c| {
             c.primitives += 1;
             if matches!(split, Split::One(_)) {

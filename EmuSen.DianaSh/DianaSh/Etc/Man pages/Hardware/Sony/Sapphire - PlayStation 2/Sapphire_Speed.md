@@ -550,7 +550,8 @@ would compile, §51.7). On the arena idle skipping's own work (6.9 %) comes next
 oracles, VU1 and VU0 recompiled against the interpreter, unchanged and passing); `tests/threads.rs` **11 of 11** (new:
 `a_clut_slot_is_reused_only_after_the_worker_drawing_with_it_is_done`, 300 sprites over three CLUTs with a worker held,
 compared with one thread); `v1`'s `the_vu0_setting_chooses_its_tier_and_the_recompiler_is_the_default`; the blast
-radius's suites (§55.10). **The bench's gate**: the three windows' picture, sound and state digests equal in all four
+radius: Sapphire's crate **489 of 489**, MarsRT's **507 of 507** (it shares `emusen-jit`), WiseMan's `MarsRt` and `SapphireTests`
+**269 of 269** on lavapipe. **The bench's gate**: the three windows' picture, sound and state digests equal in all four
 rounds and in every single-round run of §55.6 (`43D839015A0E4DA1`, `D9F0AF56FD3DEF28`, `B77DC314C6AE837C` the pictures);
 the boot's 760 frames (`50F06A02…`), Jak by the disc's fast boot to 900 (`7EEC08D4…`) and Jak by the BIOS and the script to 900 (`FFB0FCE9…`) equal before and after on both EE tiers; **S40's verifier** (oracle 1,
 `SAPPHIRE_VU_VERIFY=1`) on the dock's 300 frames with both units recompiled: no difference, 247,430 VU0 and 364,653 VU1

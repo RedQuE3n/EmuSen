@@ -100,11 +100,17 @@ namespace EmuSen.WiseMan.Mistress
         public Task Interrupt_stops_a_running_loop_and_the_next_line_runs() => Session.Dispatch(() =>
         {
             HotaruWindow w = Ready();
-            var stop = Task.Run(() => { System.Threading.Thread.Sleep(100); Toolbar(w, "Interrupt"); });
             Submit(w, "while true; do echo x | grep x; done");
-            Assert.True(stop.Wait(TimeSpan.FromSeconds(5)));
+            // The line is queued for the emulation thread; this task is that thread, and the toolbar stops it.
+            var run = Task.Run(w.DrainPendingFromEmulationThread);
+            System.Threading.Thread.Sleep(100);
+            Toolbar(w, "Interrupt");
+            Assert.True(run.Wait(TimeSpan.FromSeconds(5)));
+            Dispatcher.UIThread.RunJobs();
             Assert.EndsWith("^C", (string)typeof(HotaruWindow).GetField("_lastOutput", Hidden)!.GetValue(w)!);
             Submit(w, "echo after");
+            Task.Run(w.DrainPendingFromEmulationThread).Wait();
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal("after", (string)typeof(HotaruWindow).GetField("_lastOutput", Hidden)!.GetValue(w)!);
             w.Close();
         }, default);

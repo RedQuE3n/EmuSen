@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.WiseMan.Fixtures;
 using Xunit;
 
 namespace EmuSen.WiseMan.DianaSh

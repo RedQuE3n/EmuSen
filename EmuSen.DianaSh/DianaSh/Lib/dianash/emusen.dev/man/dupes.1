@@ -1,0 +1,71 @@
+NAME
+    dupes - find new code that duplicates code already in the repository
+
+SYNOPSIS
+    dupes [--base <rev>] [--min-tokens N] [--warn-tokens N]
+          [--lang cs|rust|all] [--repo <dir>]
+
+DESCRIPTION
+    The development tool of the emusen.dev module, linked into the
+    standalone dianash program and not into the platform library. It
+    runs PMD's copy-paste detector (CPD) over the repository's tracked
+    .rs and .cs files and prints each duplicated block, one line each:
+
+        file:first-last  duplicates  file:first-last  (N tokens)
+
+    With --base <rev> only the blocks with a place that overlaps a line
+    added between <rev> and HEAD (git diff -U0 <rev>..HEAD) are
+    reported, the added place first. Without it the whole tree is an
+    audit, a block's first place against each of its others, ranked by
+    tokens times places.
+
+    --min-tokens (default 100) is the size at which a finding fails the
+    run; --warn-tokens (default 75) is the least size CPD is asked for.
+    A finding from the warning size up to the minimum prints as
+    'warning: <line>' and does not fail. --lang limits the run to one
+    language; C# is read with CPD's --ignore-usings.
+
+    The summary goes to standard error. The exit status is 1 when a
+    finding is at or over --min-tokens, 0 otherwise, and 2 when the
+    command could not run: PMD missing, git failing, a bad option, a
+    malformed dupes.accept.
+
+    CPD is the program named by EMUSEN_CPD, by default
+    ~/.cache/emusen/toolchains/pmd-7.28.0/bin/pmd. PMD is a developer's
+    tool and is never shipped. The repository is --repo, else
+    EMUSEN_REPO, else the one the process stands in; the standalone
+    shell moves its own directory, so name it there. The module reads
+    the repository directly, not through the shell's root.
+
+    dupes.ignore, at the repository root, lists what is not compared:
+    one pattern a line, # for comments. A pattern is matched against
+    consecutive parts of a path, * standing for any text within a part:
+    'tests' ignores every folder or file of that name, 'board_chip.rs' a
+    file, 'Cores/Sega/gen' that folder. The list as measured on
+    2026-10-27 is generated tables (board_chip.rs, board_fm.rs), tests,
+    examples, benches, the WiseMan harness, build output, .claude and
+    Reference.
+
+    dupes.accept, beside it, records a duplicate the project keeps. One
+    line: the two places exactly as dupes prints them, two spaces, and
+    the reason, which is required:
+
+        a/x.rs:5-14  duplicates  b/y.rs:40-49  one table, two ports
+
+    A pair is skipped while both places stand at those lines, either way
+    round; if either moves, the finding comes back to be accepted again
+    or removed.
+
+    The overlap rule is any shared line, so touching a line of an old
+    duplicate reports it. CPD works on the files as they stand, so
+    uncommitted edits shift the lines the diff names; run it on a
+    committed tree.
+
+EXAMPLES
+    Check what the last merge added:
+
+        EMUSEN_REPO=$PWD dianash -c 'dupes --base WiseMan~1'
+
+    Audit the whole tree, Rust only, with a stricter limit:
+
+        EMUSEN_REPO=$PWD dianash -c 'dupes --lang rust --min-tokens 150'

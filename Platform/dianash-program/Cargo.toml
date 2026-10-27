@@ -18,6 +18,8 @@ path = "src/nano.rs"
 
 [dependencies]
 dianash-text = { path = "../dianash-text" }
+# The project's development tools (dupes); never in the platform library.
+emusen-dev-module = { path = "../emusen-dev-module" }
 emusen-dotnet = { path = "../dotnet" }
 emusen-dianash = { path = "../dianash" }
 emusen-galaxia = { path = "../galaxia" }

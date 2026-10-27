@@ -1,4 +1,4 @@
-# EmuSen_PackageManager — Setsuna, one window to manage the library's game packages
+# EmuSen_PackageManager — Setsuna, one window to manage the library's game packages and their mods
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester: a
 window where the player manages the library's games as packages — makes them, unmakes them, with the options the
@@ -57,7 +57,8 @@ for the space used.
   the stores first") and then runs the jobs in order with one progress line. Nothing destructive happens on a click.
 - **Filters**: console; state (packaged, not packaged, problems: moved, missing, changed, a failed check); search by
   title.
-- **The detail pane** is the Game Package window's controls (patches, identity, migrate), reused, not copied.
+- **The detail pane** is the Game Package window's controls (identity, migrate), reused, not copied, and the game's
+  layers (§3b).
 - **Space**: the packages' total and the free space of the disk they are on.
 - The window fits 1280×800 and 1920×1200 (the fit audits).
 
@@ -79,6 +80,18 @@ Discs window stays as it is.
   row's state, in the tool's own words.
 - **Space**: the space bar shows what the marked conversions are expected to save where the tool can estimate it, and what each saved once it is done.
 
+## 3b. A package's layers: Setsuna is also the mod manager (consolidated 2026-10-27 by the tester)
+
+A mod is a layer inside a game's package (`EmuSen_Modding.md` §1), so the tool that manages packages manages what is
+in them; a separate mod manager would have shown the same game twice. In a game's detail pane:
+
+- **Layers**: patches, texture packs, scripts, audio and enhancement codes, each on or off and in order, with the
+  conflicts named (two layers writing the same bytes) and a patch checked against the dump before it is switched on.
+- **Install** from the emusen-mods repository or a file; **Export Patched Game** to a folder the player chooses, never
+  into the ROM library.
+- Through the `mod` commands (`emusen.mod`), as the rest of Setsuna goes through `pkg` and `chd`; the *Game Package*
+  window's patch controls move here, and `pkg patch add/rm` stay as aliases of `mod add/rm`.
+
 ## 4. Unmake
 
 - **Its stores first.** A package holds the game's saves, states and their records, settings, art and cheats
@@ -96,7 +109,7 @@ Discs window stays as it is.
 |---|---|---|
 | **M1** | The window: the listing and its extension, filters and search, make, check, zip, and CHD conversion (§3a) through the existing jobs, mark and apply | WiseMan, headless, on a synthetic library; the fit audits; the jobs' outcomes shown |
 | **M2** | `pkg unmake`: the stores copied out, linked and self-contained, `--to` | Library tool tests: every store copied out and found where the game unpackaged reads it; nothing overwritten; the ROM library untouched; seeded faults |
-| **M3** | The detail pane (patches, identity, migrate) from the Game Package window's controls | WiseMan; the Game Package window unchanged |
+| **M3** | The detail pane (identity, migrate) from the Game Package window's controls, and the layers of §3b over the `mod` commands | WiseMan; the Game Package window unchanged until its controls have moved |
 
 M1 and M3 are routine; M2 carries the risk of losing a save and is done with the most care.
 

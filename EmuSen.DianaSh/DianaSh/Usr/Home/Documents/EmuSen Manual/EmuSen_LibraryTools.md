@@ -53,6 +53,43 @@ the form it is shown in.** LunaP gains that, and the frame is built on it.
 Recorded in LunaP's own document when built. A stage of its own, **T0**, before Setsuna's M1, built with the most care
 (everything else stands on it).
 
+### 1b. Where a tool is shown: tools as libraries, thin hosts, and Usagi the hub (decided 2026-10-27 by the tester)
+
+After the Xfce Settings Manager, one window that opens the others, each of which also runs alone:
+
+- **Every tool is a library** of its own (an assembly), needing only LunaP, Galaxia and the platform library — never
+  Mistress. Its content is declared once (§1a) and **hosted** in any of: its own window; **Usagi**, the hub; a
+  big-picture sheet; or the **standalone launcher** `emusen-tools <tool>`, a multi-call program (as busybox is) with a
+  link and a desktop entry per tool, so a player can open, say, the package manager without starting EmuSen.
+- **Usagi is the hub** and the settings: a grid of tiles by category with a search, each tile a tool, which fills
+  Usagi's pane with a back button; the present Preferences window's tabs become small tiles of their own (General,
+  Paths, Saves, Account, Big Picture). Galaxia is the one owner of the settings files every tool reads and writes, as
+  xfconf is Xfce's. In big picture Usagi is the settings menu, a tile grid the pad moves through.
+- **Usagi's first-run mode** is the welcome a new player meets: the same tools' panes in order — the ROM folder, the
+  BIOS files, the controllers, a theme, the ScreenScraper sign-in — with Next and Back, built from the panes and not
+  written again.
+- **Limits**: a tool that needs a running game (Chibiusa, Hotaru) opens one itself when standalone, as `emusen-shell`
+  does; attaching to a running Mistress is a later feature. Mistress and a standalone tool open together are safe through
+  Galaxia and SQLite, and Mistress picks up what changed; each tool has a test for it. Xfce embeds separate programs
+  through XEmbed, which does not exist under Wayland; these are in-process libraries, which works on every platform.
+
+### 1c. The family (consolidated 2026-10-27 by the tester)
+
+| Name | Tool | Menus say |
+|---|---|---|
+| **Usagi** | the hub and settings, and the first-run welcome | *Settings* |
+| **Ami** | the scraping tool (§2) | *Scraper* |
+| **Rei** | the library manager (§3) | *Library Manager* |
+| **Mako** | the controller window (`EmuSen_ControllerWindow.md`) | *Controllers* |
+| **Minako** | display: graphics settings and shaders (`EmuSen_ShaderWindow.md`) | *Display* |
+| **Michiru** | the mod workshop: graphics out and in, later translation (`EmuSen_Modding.md` §4) | *Mod Workshop* |
+| **Setsuna** | packages, CHD and a package's mods (`EmuSen_PackageManager.md`) | *Packages* |
+| **Hotaru** | the shell (`EmuSen_HotaruWindow.md`) | *Shell* |
+| **Chibiusa** | the debugger and its Explore mode (`EmuSen_DebugWindow.md`) | *Debugger* |
+| **Haruka** | the cheat manager, in place of the cheat database and active cheats windows | *Cheats* |
+
+Two tools that turn out to be one job are merged; a tool whose commands cover everything stays a command.
+
 **The list of games is one answer**: the library scan's entries (`RomLibrary`, `RomEntry`), with what each tool adds as
 columns: Setsuna its package mode and state, the scraping tool what each game has of each media type, the library
 manager its hashes and check result.

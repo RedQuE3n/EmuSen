@@ -203,6 +203,9 @@ dependencies = [
 [[package]]
 name = "emusen-dotnet"
 version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "emusen-galaxia"
@@ -211,7 +214,6 @@ dependencies = [
  "emusen-disc",
  "emusen-dotnet",
  "flate2",
- "libc",
  "md-5",
  "memmap2",
  "sha1",

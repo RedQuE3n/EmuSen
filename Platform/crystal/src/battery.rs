@@ -19,10 +19,12 @@ pub fn is_flush_frame(frame: i64) -> bool {
 pub struct BatterySave {
     pub path: Option<String>,
     previous: Option<String>,
+    /// Whether `previous` is a game's own file a console medium adopts, rather than this save's earlier home.
+    adopts: bool,
 }
 
 impl BatterySave {
-    pub const NONE: BatterySave = BatterySave { path: None, previous: None };
+    pub const NONE: BatterySave = BatterySave { path: None, previous: None, adopts: false };
 
     /// A game's own file, `BatterySave.Open`: in its package where it opened as one, the plain save then read until
     /// copied in, as an earlier place is (EmuSen_GamePackages.md §3.5); a patched game's by its list's key, with nothing
@@ -35,7 +37,7 @@ impl BatterySave {
         let plain = path::change_extension(Style::HOST, &saves::sram_path(tree, rom, console), extension);
         let Some(root) = package.filter(|p| !p.is_empty()) else {
             let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
-            return BatterySave { path: Some(plain), previous };
+            return BatterySave { path: Some(plain), previous, adopts: false };
         };
         let at = path::change_extension(Style::HOST, &saves::package_sram_path(root, key), extension);
         let previous = if exists(&at) || key.is_some_and(|k| !k.is_empty()) {
@@ -45,16 +47,18 @@ impl BatterySave {
         } else {
             previous_home(tree, rom, console, extension)
         };
-        BatterySave { path: Some(at), previous }
+        BatterySave { path: Some(at), previous, adopts: false }
     }
 
-    /// A shared or named medium's file, `BatterySave.Medium`.
-    pub fn medium(tree: &Tree, console: &str, console_kind: bool, name: &str, extension: &str, disabled: bool) -> BatterySave {
+    /// A shared or named medium's file, adopting a game's own file that `settle` copies in where it has none,
+    /// `BatterySave.Medium` (EmuSen_SaveMedia.md §3.6).
+    pub fn medium(tree: &Tree, console: &str, console_kind: bool, name: &str, extension: &str, disabled: bool, adopt: Option<String>) -> BatterySave {
         if disabled {
             return BatterySave::NONE;
         }
         let folder = crate::media::medium_folder(tree, console, console_kind);
-        BatterySave { path: Some(path::combine(Style::HOST, &folder, &format!("{name}{extension}"))), previous: None }
+        let adopts = adopt.is_some();
+        BatterySave { path: Some(path::combine(Style::HOST, &folder, &format!("{name}{extension}"))), previous: adopt, adopts }
     }
 
     /// The save kept before copied into its own place, once a load knows the machine keeps the file.
@@ -66,9 +70,14 @@ impl BatterySave {
                 return;
             }
             let Ok(Some(saved)) = atomic::try_read(previous) else { return };
-            if atomic::write(at, &saved).is_ok() {
-                say(format!("[BatterySave] Copied {previous} to {at}, where this game's battery save now lives; the original is untouched."));
+            if atomic::write(at, &saved).is_err() {
+                return;
             }
+            say(if self.adopts {
+                format!("[BatterySave] Copied {previous}, the most recently written game's own, to {at}, the console's memory every game now shares; each game's own is untouched.")
+            } else {
+                format!("[BatterySave] Copied {previous} to {at}, where this game's battery save now lives; the original is untouched.")
+            });
         }
     }
 

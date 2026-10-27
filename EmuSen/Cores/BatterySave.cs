@@ -18,7 +18,10 @@ namespace EmuSen.Cores
         // Where the save was kept before, read until Settle copies it in; null when it already lives at Path.
         private readonly string? _previous;
 
-        private BatterySave(string? path, string? previous = null) => (Path, _previous) = (path, previous);
+        // Whether _previous is a game's own file a console medium adopts, rather than this save's earlier home.
+        private readonly bool _adopts;
+
+        private BatterySave(string? path, string? previous = null, bool adopts = false) => (Path, _previous, _adopts) = (path, previous, adopts);
 
         public static bool IsFlushFrame(long frame) => frame % FlushEveryNFrames == 0;
 
@@ -39,15 +42,15 @@ namespace EmuSen.Cores
         // The save kept before copied into its own place, once a load knows the machine keeps the file; the original untouched.
         public void Settle(Action<string>? say = null)
         {
-            if (Path is not null && _previous is not null && !File.Exists(Path)) CopyIn(_previous, Path, say);
+            if (Path is not null && _previous is not null && !File.Exists(Path)) CopyIn(_previous, Path, say, _adopts);
         }
 
         // A card shared between games, by its own path rather than a game's; --nobattery holds for it as for any save - see Diamond_Cards.md §9.2.
         public static BatterySave Card(string console, string name, string extension, bool disabled = false) => Medium(console, false, name, extension, disabled);
 
-        // A shared or named medium's file of either kind - see EmuSen_SaveMedia.md §3.3.
-        public static BatterySave Medium(string console, bool consoleKind, string name, string extension, bool disabled = false) =>
-            disabled ? None : new BatterySave(SaveLibrary.MediumPathFor(console, consoleKind, name, extension));
+        // A shared or named medium's file of either kind, adopting a game's own file that Settle copies in where it has none - see EmuSen_SaveMedia.md §3.3, §3.6.
+        public static BatterySave Medium(string console, bool consoleKind, string name, string extension, bool disabled = false, string? adopt = null) =>
+            disabled ? None : new BatterySave(SaveLibrary.MediumPathFor(console, consoleKind, name, extension), adopt, adopt is not null);
 
         // The one place each console's saves were kept before: the flat Saves folder for the SNES and N64, beside the ROM for the NES and Game Boy.
         public static string? PreviousHome(string romPath, string console, string extension = SaveLibrary.SramExtension) => console switch
@@ -61,11 +64,14 @@ namespace EmuSen.Cores
         };
 
         // Copied, never moved: the old file is left exactly as it was.
-        private static void CopyIn(string previous, string path, Action<string>? say)
+        private static void CopyIn(string previous, string path, Action<string>? say, bool adopts)
         {
             if (string.Equals(System.IO.Path.GetFullPath(previous), System.IO.Path.GetFullPath(path), StringComparison.Ordinal)) return;
             if (AtomicFile.TryRead(previous) is not { } saved) return;
-            if (AtomicFile.Write(path, saved)) say?.Invoke($"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
+            if (!AtomicFile.Write(path, saved)) return;
+            say?.Invoke(adopts
+                ? $"[BatterySave] Copied {previous}, the most recently written game's own, to {path}, the console's memory every game now shares; each game's own is untouched."
+                : $"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
         }
 
         public byte[]? Read() => Path is null ? null : AtomicFile.TryRead(Path) ?? (_previous is null || File.Exists(Path) ? null : AtomicFile.TryRead(_previous));

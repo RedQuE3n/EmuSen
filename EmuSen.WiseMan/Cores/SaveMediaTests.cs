@@ -79,6 +79,48 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // With nothing chosen a game's session uses the console's memory, as the console does, whether the choices were read from the settings or never given.
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void A_games_session_uses_the_consoles_memory_unless_the_player_chose_otherwise(bool stored)
+        {
+            var memory = MemoryCards.MediaOf("TEST", TestSystem)[1];
+            byte[] pattern = Enumerable.Range(0, 16).Select(i => (byte)(0x60 + i)).ToArray();
+            Directory.CreateDirectory(Path.GetDirectoryName(memory.PathOf("Memory 1"))!);
+            File.WriteAllBytes(memory.PathOf("Memory 1"), pattern);
+            using var engine = new CoreEngine(CoreAdapterTests.Full);
+            if (stored) engine.Media = MemoryCards.Stored(MemoryCards.MediaOf("TEST", TestSystem), _ => null);
+            engine.LoadRom(Rom("Game", 0xCE, 1, 2));
+            Assert.Equal(pattern, engine.Machine.Battery(2).Data);
+            engine.SaveSram();
+            Assert.False(File.Exists(Path.Combine(DataStore.Saves, "TEST", "Game.mem")), "the console's memory is not filed under the game");
+        }
+
+        // With no console file yet, the most recently written game's own is copied in once, said in the log, and every game's own left as it was.
+        [Fact]
+        public void The_consoles_memory_adopts_the_newest_games_own_without_moving_any()
+        {
+            var memory = MemoryCards.MediaOf("TEST", TestSystem)[1];
+            string folder = Path.Combine(DataStore.Saves, "TEST");
+            Directory.CreateDirectory(folder);
+            byte[] older = Enumerable.Repeat((byte)0x11, 16).ToArray(), newer = Enumerable.Repeat((byte)0x22, 16).ToArray();
+            string first = Path.Combine(folder, "First.mem"), second = Path.Combine(folder, "Second.mem");
+            File.WriteAllBytes(second, newer);
+            File.WriteAllBytes(first, older);
+            File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddDays(-2));
+            File.SetLastWriteTimeUtc(second, DateTime.UtcNow.AddDays(-1));
+            using var engine = new CoreEngine(CoreAdapterTests.Full);
+            engine.LoadRom(Rom("Third", 0xCE, 1, 2));
+            Assert.Equal(newer, engine.Machine.Battery(2).Data);
+            Assert.Equal(newer, File.ReadAllBytes(memory.PathOf("Memory 1")));
+            Assert.Equal(older, File.ReadAllBytes(first));
+            Assert.Equal(newer, File.ReadAllBytes(second));
+            var said = new List<string>();
+            engine.TakeSaid(said);
+            Assert.Contains(said, l => l.Contains(second) && l.Contains("untouched"));
+        }
+
         // The lock: held by a machine for its life, shared by the program's machines, refused to the card manager and to another program, named by its holder.
         [Fact]
         public void A_shared_file_is_locked_while_a_game_holds_it()

@@ -120,15 +120,15 @@ namespace EmuSen.Cores
             return media;
         }
 
-        // The mode a medium has when nothing is stored: Shared where a format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9, §10 Q2.
-        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable or CoreBatteryKind.Console, Entry.Format: not null } ? Shared : PerGame;
+        // The mode a medium has when nothing is stored: a console's own memory Shared, as the console does; a removable one Shared where a format module gives it the import - see EmuSen_SaveMedia.md §3.6, §9.
+        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Console } or { Kind: CoreBatteryKind.Removable, Entry.Format: not null } ? Shared : PerGame;
 
         // The key recording that the import was offered for a medium, beside its mode's.
         public static string OfferedKey(SaveMedium medium) => medium.ModeKey + "Offered";
 
         // The medium whose import a frontend offers before a game starts: Shared by default with nothing stored, its first shared card absent, games' own cards present, and not offered before - see EmuSen_SaveMedia.md §9.
         public static SaveMedium? ImportToOffer(IReadOnlyList<SaveMedium> media, Func<string, string?> stored) =>
-            media.FirstOrDefault(m => stored(m.ModeKey) is null && DefaultMode(m) == Shared && stored(OfferedKey(m)) is null
+            media.FirstOrDefault(m => stored(m.ModeKey) is null && DefaultMode(m) == Shared && m.Entry?.Format is not null && stored(OfferedKey(m)) is null
                 && !File.Exists(m.PathOf(m.DefaultName(0))) && CardsOf(m).Any(c => c.GamesOwn));
 
         // 1.7's reading: the console's first removable medium, two slots named Card n.
@@ -155,18 +155,28 @@ namespace EmuSen.Cores
         public static IReadOnlyList<MediumFile> CardsOf(SaveMedium medium)
         {
             var cards = SaveLibrary.MediumNames(medium.Console, medium.IsConsole, medium.Extension).Select(n => new MediumFile(medium.PathOf(n), n, n, false)).ToList();
+            foreach (var (file, game, slot, _) in GamesOwn(medium))
+                cards.Add(new MediumFile(file, game, slot > 0 ? $"{game}, {medium.SlotLabel(slot)} (the game's own)" : $"{game} (the game's own)", true));
+            return cards;
+        }
+
+        // Each game's own file of a medium in its console's folder: its game, its slot, and whether a slot's suffix named it.
+        private static IEnumerable<(string File, string Game, int Slot, bool Matched)> GamesOwn(SaveMedium medium)
+        {
             string own = Path.Combine(DataStore.Saves, medium.Console);
-            if (!Directory.Exists(own)) return cards;
+            if (!Directory.Exists(own)) yield break;
             var suffixes = medium.Slots.Select((s, n) => (s.Suffix, Slot: n)).OrderByDescending(s => s.Suffix.Length).ToArray();
             foreach (string file in Directory.EnumerateFiles(own).Where(f => string.Equals(Path.GetExtension(f), medium.Extension, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
             {
                 string name = Path.GetFileName(file);
                 var (suffix, slot) = suffixes.FirstOrDefault(s => name.EndsWith(s.Suffix, StringComparison.OrdinalIgnoreCase) && name.Length > s.Suffix.Length);
-                string game = suffix is null ? Path.GetFileNameWithoutExtension(file) : name[..^suffix.Length];
-                cards.Add(new MediumFile(file, game, slot > 0 ? $"{game}, {medium.SlotLabel(slot)} (the game's own)" : $"{game} (the game's own)", true));
+                yield return (file, suffix is null ? Path.GetFileNameWithoutExtension(file) : name[..^suffix.Length], slot, suffix is not null);
             }
-            return cards;
         }
+
+        // The most recently written game's own file of a slot, which a console medium with no file and no import adopts - see EmuSen_SaveMedia.md §3.6.
+        public static string? NewestOwn(SaveMedium medium, int slot) =>
+            GamesOwn(medium).Where(g => g.Matched && g.Slot == slot).Select(g => g.File).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
 
         // The first of the noun's names that no file in the drawer has.
         public static string NextName(SaveMedium medium)
@@ -207,19 +217,19 @@ namespace EmuSen.Cores
             value(medium.ModeKey) == Named && Enumerable.Range(0, slot).Any(s => string.Equals(value(medium.SlotKey(s)), value(medium.SlotKey(slot)), StringComparison.OrdinalIgnoreCase))
                 ? $"The same {MediumWords.InText(medium.Noun)} cannot be in two slots: this slot keeps the game's own while they match." : null;
 
-        // Each slot's file at a load: under Shared or Named its medium's file, locked for holder, else own(slot); none under --nobattery - see EmuSen_SaveMedia.md §3.3, §3.5.
+        // Each slot's file at a load: under Shared or Named its medium's file, locked for holder, else own(slot); a console medium with no choice given Shared; none under --nobattery - see EmuSen_SaveMedia.md §3.3, §3.5, §3.6.
         public static MediaPlacement Place(string console, CoreSystem? system, IReadOnlyDictionary<string, CardChoice> choices, string holder, Func<CoreBatteryFile, BatterySave> own, bool batteryDisabled = false)
         {
             var placed = new MediaPlacement();
             var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (SaveMedium medium in MediaOf(console, system))
             {
-                CardChoice choice = choices.TryGetValue(medium.Id, out CardChoice? c) ? c : new CardChoice(PerGame, Array.Empty<string>());
+                CardChoice choice = choices.TryGetValue(medium.Id, out CardChoice? c) ? c : new CardChoice(medium.IsConsole ? Shared : PerGame, Array.Empty<string>());
                 for (int slot = 0; slot < medium.Slots.Count; slot++)
                 {
                     CoreBatteryFile file = medium.Slots[slot];
                     if (medium.IsConsole && medium.Entry?.Format is { } format) placed.Fresh[file.Which] = format;
-                    BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed, batteryDisabled) : null;
+                    BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed, batteryDisabled, adopts: choice.Mode == Shared) : null;
                     if (apart is not null)
                     {
                         placed.Files[file.Which] = apart;
@@ -235,10 +245,11 @@ namespace EmuSen.Cores
         }
 
         // The medium's file named name for a slot, locked; null, with the reason noted, where an earlier slot or another program has it.
-        private static BatterySave? Apart(string console, SaveMedium medium, string name, int slot, string holder, HashSet<string> taken, MediaPlacement placed, bool batteryDisabled)
+        private static BatterySave? Apart(string console, SaveMedium medium, string name, int slot, string holder, HashSet<string> taken, MediaPlacement placed, bool batteryDisabled, bool adopts)
         {
-            BatterySave save = BatterySave.Medium(console, medium.IsConsole, name, medium.Extension, batteryDisabled);
             string key = medium.PathOf(name);
+            string? adopted = adopts && medium.IsConsole && medium.Entry?.Format is null && !File.Exists(key) ? NewestOwn(medium, slot) : null;
+            BatterySave save = BatterySave.Medium(console, medium.IsConsole, name, medium.Extension, batteryDisabled, adopted);
             if (!taken.Add(key))
             {
                 Note(placed, $"{name} is already in another slot; {medium.SlotLabel(slot)} keeps the game's own {MediumWords.InText(medium.Noun)}.");

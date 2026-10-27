@@ -1086,7 +1086,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ### 10.1 Decided (2026-09-24 onward)
 
-- **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`.
+- **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`. *Retired 2026-10-27 by the tester: Art Book Next is no longer the suggested or default theme; big picture keeps the look it has, and themes are the player's choice from the theme downloader. It stays the reference the theme engine is measured against (the reference tests), and `ThemeSource.ArtBookNext`, used nowhere, is removed.*
 - **Q2, the resolution:** answered from the device, not asked. Game Mode's gamescope session is started with
   `-w 1280 -h 800` (read from the running process on 2026-09-24), so Mistress draws at 1280×800 there; the panel
   itself is 1920×1200. Both are 16:10, so the variant chosen is the same; performance is to be measured at 1280×800

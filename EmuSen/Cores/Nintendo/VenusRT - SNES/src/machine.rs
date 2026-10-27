@@ -698,6 +698,7 @@ pub(crate) mod tests {
         venus[..4].copy_from_slice(&VENUS_MAGIC.to_le_bytes());
         assert_eq!(back.load_state(&venus), Err(StateError::Foreign(VENUS_MAGIC)));
         assert!(matches!(back.load_state(&state[..state.len() - 1]), Err(StateError::Truncated { .. })));
+        emusen_native::shell::assert_header_refusals(&mut back, &state);
     }
 
     // A NEC DSP's registers and RAM travel in the state, in a group only its cartridges have.

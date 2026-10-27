@@ -447,6 +447,7 @@ mod tests {
         let mut wrong = state.clone();
         wrong[4] = 2;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
+        emusen_native::shell::assert_header_refusals(&mut m, &state);
         let mut later = m.clone();
         for _ in 0..3 {
             later.run_frame().unwrap();

@@ -87,7 +87,8 @@ A battery file is of one of three **kinds**, each defined by where the memory is
 The `console` kind is kept on a load for the reason `removable` is (`Diamond_Cards.md` §1): once one file serves
 several games, a state of one game that puts back the copy it holds removes every other game's save made since. Its
 modes are the removable kind's, because what decides them is the same question, whether the file is the game's alone:
-*Per game* is today's behaviour, one `.brm` per game; *Shared* is the console's own, one memory used by every game; and
+*Per game* is one `.brm` per game; *Shared* is the console's own, one memory used by every game, and the default since
+2026-10-27 (§3.6); and
 *Named* is a drawer of consoles, a Japanese and an American unit kept apart, which costs nothing to offer since the
 runtime's rule is the same [C].
 
@@ -116,8 +117,8 @@ Each medium of a console has its own mode, *Per game*, *Shared* or *Named*, and 
 
 | Mode | Slot *n* (from 1) of the medium | Default |
 |---|---|---|
-| **Per game** | `Saves/<console>/<game><suffix>`, the runtime's rule for any battery file | the default for every medium until §9 |
-| **Shared** | `<Noun> n`, the same file in every game | the default for a medium whose import exists (§9) |
+| **Per game** | `Saves/<console>/<game><suffix>`, the runtime's rule for any battery file | a removable medium's default until its import exists (§9) |
+| **Shared** | `<Noun> n`, the same file in every game | the default for every `console` medium (§3.6) and for a removable medium whose import exists (§9) |
 | **Named** | the name the player chose for slot *n* | — |
 
 **A packaged game's** *Per game* media are in its package instead: `<package>/saves/<package's name><suffix>`, the
@@ -206,6 +207,51 @@ that a refusal can say who holds the card.
 on the same file with the same words in it and the same table of shared handles, which `MediumLock` forwards to under
 Galaxia's own switch, so a program's games and its card manager hold one table between them; a lock either half takes
 refuses the other as another program's would (`EmuSen_Backend.md` §15.2).
+
+### 3.6 A console's own memory: as the console does (decided 2026-10-27)
+
+**The rule.** *Decided 2026-10-27 by the tester:* a console behaves as the console does unless the player specifies
+otherwise. Memory inside a console belongs to the console, so a `console` medium with no choice stored is *Shared*: one
+file per slot, which for a console that keeps one memory per model is one file per console model, at
+`Saves/<console>/Console/<Noun> n<extension>`, used by every game of that console and by its empty-tray start
+(`Diamond_Shell.md` §11.2). The rule is the generic one for every `console` medium of every core, not one console's;
+no per-game setting is added for it. *Per game* and *Named* stay in the medium's row in Graphics Settings and the Memory
+Cards window, and a mode the player chose is kept: that is what "unless the player specifies otherwise" means here. A
+removable medium is unchanged: *Shared* by default where its import exists (§9), *Per game* otherwise.
+
+**The defect it closes**, reported by the tester on 2026-10-27 on the handheld: every PlayStation 2 game met the BIOS's
+first-time setup and asked for its language. Sapphire declares its EEPROM as the `console` medium `ps2.nvm`, one slot
+per console model (`.jp.nvm`, `.us.nvm`, `.eu.nvm`; `Sapphire_Native.md` §36, `Sapphire_Plan.md` §4.4), but the
+default of §9 made a console medium *Shared* only where a format module exists, and none reads `ps2.nvm`; so each game
+had its own copy (`Kingdom Hearts (USA).us.nvm` and so on) and the empty-tray start, which always places console media
+apart, a third (`Console/Memory 2.nvm`). The setup a player finished in one game was therefore never seen by the next.
+
+**Where it is applied.** `MemoryCards.DefaultMode` gives *Shared* to every `console` medium; `MemoryCards.Place` gives
+it to a `console` medium for which no choice was passed at all (an engine made without the settings, as headless tools
+make one), so the rule holds whoever builds the session; the Rust runtime's twin (`emusen-crystal`'s `media.rs`) does
+the same. The import offered once (§9) still needs a format module: a medium without one is never offered it.
+
+**The migration: one copy, nothing moved.** The first time a `console` medium is placed *Shared* and its file does not
+exist, and the medium has no format module (so no import can merge the games' copies), the most recently written of
+the games' own files of that slot (by modification time, matched by the slot's suffix in `Saves/<console>/`) is
+adopted: it is read for that load and copied to the console's file when the machine is adopted, as an earlier save's
+home is (§8; `BatterySave.Settle`), and the log says so in one line beginning `[BatterySave] Copied`, naming both
+files. Every game's own file is left where it was, byte for byte. A medium with a module (the Sega CD's backup RAM)
+keeps §9's import instead, which merges every game's saves rather than choosing one. Choosing the newest is a
+judgement: it is the copy a player most likely set last, and since no copy is removed, any other can be put in its
+place in the Memory Cards window or with `memcard`.
+
+**Tidying the games' own files.** They are inert once the console's file exists, used again only if the player
+chooses *Per game* for the medium. A player who wants them gone deletes them by hand from `Saves/<console>/` (for the
+PlayStation 2, the `<game>.<market>.nvm` files and any `.lock` beside them, never the `Console` folder); nothing in
+EmuSen deletes them, by the save library's rule that a player's files are copied and never removed.
+
+**Proof.** `SaveMediaTests.A_games_session_uses_the_consoles_memory_unless_the_player_chose_otherwise` (with the choices
+read from empty settings, and with none given) and `SaveMediaTests.The_consoles_memory_adopts_the_newest_games_own_without_moving_any`
+failed before the change and pass after it; `emusen-crystal`'s `media::tests` hold the twin. Seeded faults, each
+reverted: the default kept to media with a module, caught by the first test with read settings; `Place`'s fallback
+returned to *Per game*, caught by the first test without settings and by the second; the adoption removed, caught by
+the second; in the Rust twin, the fallback returned to *Per game*, caught by both of its tests (measured 2026-10-27).
 
 ## 4. Who owns which fact
 
@@ -508,7 +554,7 @@ there is argued.
 
 When the import exists (§6.6), **a removable medium whose format module reads it defaults to *Shared***, the
 PlayStation's card first; a medium with no module, and every console medium, stays *Per game* by default until its
-module exists, since without a module the import could only copy one game's whole card, which would hide every other
+module exists (*for console media superseded 2026-10-27: every one is* Shared *by default, §3.6*), since without a module the import could only copy one game's whole card, which would hide every other
 game's [C]. A mode the player chose is kept: only a console with nothing stored changes. *Since 2026-10-16* (§10 Q2) a console
 medium whose module exists defaults to *Shared* as well, the Sega CD's internal backup RAM first, and a new machine's
 console memory with no file yet is given the module's formatted blank (§11.7).

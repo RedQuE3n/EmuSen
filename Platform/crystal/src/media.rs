@@ -116,9 +116,11 @@ impl SaveMedium {
         path::combine(Style::HOST, &self.folder(tree), &format!("{name}{}", self.extension))
     }
 
-    /// The mode a medium has when nothing is stored: shared where a format module gives it the import, `DefaultMode`.
+    /// The mode a medium has when nothing is stored: a console's own memory shared, as the console does; a removable one
+    /// shared where a format module gives it the import, `DefaultMode` (EmuSen_SaveMedia.md §3.6).
     pub fn default_mode(&self) -> &'static str {
-        if self.kind != BatteryKind::Game && self.entry.as_ref().is_some_and(|e| e.module.is_some()) { SHARED } else { PER_GAME }
+        let module = self.entry.as_ref().is_some_and(|e| e.module.is_some());
+        if self.kind == BatteryKind::Console || (self.kind == BatteryKind::Removable && module) { SHARED } else { PER_GAME }
     }
 
     pub fn offered_key(&self) -> String {
@@ -219,25 +221,50 @@ pub fn cards_of(tree: &Tree, m: &SaveMedium) -> Vec<MediumFile> {
         .into_iter()
         .map(|n| MediumFile { path: m.path_of(tree, &n), label: n.clone(), name: n, games_own: false })
         .collect();
+    for (file, game, slot, _) in games_own(tree, m) {
+        let label = if slot > 0 { format!("{game}, {} (the game's own)", m.slot_label(slot)) } else { format!("{game} (the game's own)") };
+        cards.push(MediumFile { path: file, name: game, label, games_own: true });
+    }
+    cards
+}
+
+/// Each game's own file of a medium in its console's folder: its game, its slot, and whether a slot's suffix named it.
+fn games_own(tree: &Tree, m: &SaveMedium) -> Vec<(String, String, usize, bool)> {
     let own = path::combine(Style::HOST, &tree.saves(), &m.console);
     if !emusen_galaxia::dotnet_files::directory_exists(&own) {
-        return cards;
+        return Vec::new();
     }
     let mut suffixes: Vec<(String, usize)> = m.slots.iter().enumerate().map(|(n, s)| (s.suffix.clone(), n)).collect();
     suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
     let mut files: Vec<String> = files_in(&own).into_iter().filter(|(_, name)| equals_ignore_case(path::extension(Style::HOST, name), &m.extension)).map(|(at, _)| at).collect();
     files.sort_by(|a, b| emusen_dotnet::text::compare_ignore_case(a, b));
-    for file in files {
-        let name = path::file_name(Style::HOST, &file).to_string();
-        let found = suffixes.iter().find(|(s, _)| emusen_dotnet::text::ends_with_ignore_case(&name, s) && name.len() > s.len());
-        let (game, slot) = match found {
-            Some((s, slot)) => (name[..name.len() - s.len()].to_string(), *slot),
-            None => (path::file_name_without_extension(Style::HOST, &file).to_string(), 0),
-        };
-        let label = if slot > 0 { format!("{game}, {} (the game's own)", m.slot_label(slot)) } else { format!("{game} (the game's own)") };
-        cards.push(MediumFile { path: file, name: game, label, games_own: true });
-    }
-    cards
+    files
+        .into_iter()
+        .map(|file| {
+            let name = path::file_name(Style::HOST, &file).to_string();
+            match suffixes.iter().find(|(s, _)| emusen_dotnet::text::ends_with_ignore_case(&name, s) && name.len() > s.len()) {
+                Some((s, slot)) => {
+                    let game = name[..name.len() - s.len()].to_string();
+                    (file, game, *slot, true)
+                }
+                None => {
+                    let game = path::file_name_without_extension(Style::HOST, &file).to_string();
+                    (file, game, 0, false)
+                }
+            }
+        })
+        .collect()
+}
+
+/// The most recently written game's own file of a slot, which a console medium with no file and no import adopts,
+/// `NewestOwn` (EmuSen_SaveMedia.md §3.6).
+pub fn newest_own(tree: &Tree, m: &SaveMedium, slot: usize) -> Option<String> {
+    games_own(tree, m)
+        .into_iter()
+        .filter(|g| g.3 && g.2 == slot)
+        .filter_map(|g| std::fs::metadata(&g.0).and_then(|d| d.modified()).ok().map(|t| (t, g.0)))
+        .max_by_key(|(t, _)| *t)
+        .map(|(_, f)| f)
 }
 
 /// The first of the noun's names no file in the drawer has, `NextName`.
@@ -251,6 +278,7 @@ pub fn import_to_offer<'m>(tree: &Tree, media: &'m [SaveMedium], stored: &dyn Fn
     media.iter().find(|m| {
         stored(&m.mode_key()).is_none()
             && m.default_mode() == SHARED
+            && m.entry.as_ref().is_some_and(|e| e.module.is_some())
             && stored(&m.offered_key()).is_none()
             && !emusen_galaxia::dotnet_files::file_exists(&m.path_of(tree, &m.default_name(0)))
             && cards_of(tree, m).iter().any(|c| c.games_own)
@@ -444,7 +472,8 @@ pub fn place(
     let mut placed = Placement::default();
     let mut taken: Vec<String> = Vec::new();
     for medium in media_of(console, system) {
-        let choice = choices.iter().find(|(id, _)| *id == medium.id).map(|(_, c)| c.clone()).unwrap_or(Choice { mode: PER_GAME.to_string(), names: Vec::new() });
+        let given = choices.iter().find(|(id, _)| *id == medium.id).map(|(_, c)| c.clone());
+        let choice = given.unwrap_or(Choice { mode: if medium.is_console() { SHARED } else { PER_GAME }.to_string(), names: Vec::new() });
         for slot in 0..medium.slots.len() {
             let file = medium.slots[slot].clone();
             if medium.is_console()
@@ -457,7 +486,8 @@ pub fn place(
             }
             if choice.apart() {
                 let name = medium.name_for(&choice, slot);
-                if let Some(save) = apart(tree, &medium, &name, slot, holder, &mut taken, &mut placed, disabled) {
+                let adopts = choice.mode == SHARED;
+                if let Some(save) = apart(tree, &medium, &name, slot, holder, &mut taken, &mut placed, disabled, adopts) {
                     placed.set(file.which, save);
                     if medium.is_console() {
                         placed.console_apart = true;
@@ -480,9 +510,11 @@ pub fn place(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str, taken: &mut Vec<String>, placed: &mut Placement, disabled: bool) -> Option<crate::battery::BatterySave> {
-    let save = crate::battery::BatterySave::medium(tree, &medium.console, medium.is_console(), name, &medium.extension, disabled);
+fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str, taken: &mut Vec<String>, placed: &mut Placement, disabled: bool, adopts: bool) -> Option<crate::battery::BatterySave> {
     let key = medium.path_of(tree, name);
+    let without_module = medium.entry.as_ref().is_none_or(|e| e.module.is_none());
+    let adopted = if adopts && medium.is_console() && without_module && !emusen_galaxia::dotnet_files::file_exists(&key) { newest_own(tree, medium, slot) } else { None };
+    let save = crate::battery::BatterySave::medium(tree, &medium.console, medium.is_console(), name, &medium.extension, disabled, adopted);
     if taken.iter().any(|t| equals_ignore_case(t, &key)) {
         placed.notices.push(format!("{name} is already in another slot; {} keeps the game's own {}.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));
         return None;
@@ -505,4 +537,57 @@ fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str
 /// Every medium's stored choice, by medium id, `MemoryCards.Stored`.
 pub fn stored_choices(media: &[SaveMedium], stored: &dyn Fn(&str) -> Option<String>) -> Vec<(String, Choice)> {
     media.iter().map(|m| (m.id.clone(), m.read(stored))).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::battery::BatterySave;
+    use std::time::{Duration, SystemTime};
+
+    fn system() -> SystemDetail {
+        let v = emusen_native::json::parse(br#"{"systems":[{"id":"test","battery":[{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]}]}"#).unwrap();
+        info::systems(&v).remove(0)
+    }
+
+    fn tree(name: &str) -> Tree {
+        let home = std::env::temp_dir().join(format!("emusen-crystal-media-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("Saves").join("TEST")).unwrap();
+        Tree { data_override: Some(home.to_string_lossy().into_owned()), ..Tree::default() }
+    }
+
+    #[test]
+    fn a_consoles_memory_with_nothing_chosen_is_the_consoles_file() {
+        let tree = tree("chosen");
+        let system = system();
+        assert_eq!(media_of("TEST", Some(&system))[0].default_mode(), SHARED);
+        let placed = place(&tree, "TEST", Some(&system), &[], "Game", &|_| BatterySave::NONE, false);
+        let expected = path::combine_all(Style::HOST, &[&tree.saves(), "TEST", CONSOLE_FOLDER, "Memory 1.mem"]);
+        assert_eq!(placed.file(2).and_then(|s| s.path.clone()), Some(expected));
+        assert!(placed.console_apart);
+        let _ = std::fs::remove_dir_all(tree.home());
+    }
+
+    #[test]
+    fn a_consoles_memory_adopts_the_newest_games_own_without_moving_any() {
+        let tree = tree("adopt");
+        let folder = path::combine(Style::HOST, &tree.saves(), "TEST");
+        let (first, second) = (path::combine(Style::HOST, &folder, "First.mem"), path::combine(Style::HOST, &folder, "Second.mem"));
+        std::fs::write(&first, [0x11u8; 16]).unwrap();
+        std::fs::write(&second, [0x22u8; 16]).unwrap();
+        let now = SystemTime::now();
+        std::fs::File::options().write(true).open(&first).unwrap().set_modified(now - Duration::from_secs(172_800)).unwrap();
+        std::fs::File::options().write(true).open(&second).unwrap().set_modified(now - Duration::from_secs(86_400)).unwrap();
+        let placed = place(&tree, "TEST", Some(&system()), &[], "Third", &|_| BatterySave::NONE, false);
+        let save = placed.file(2).unwrap();
+        assert_eq!(save.read(), Some(vec![0x22; 16]));
+        let said = std::cell::RefCell::new(Vec::new());
+        save.settle(&|line| said.borrow_mut().push(line));
+        assert_eq!(std::fs::read(save.path.as_ref().unwrap()).unwrap(), [0x22; 16]);
+        assert_eq!((std::fs::read(&first).unwrap(), std::fs::read(&second).unwrap()), (vec![0x11; 16], vec![0x22; 16]));
+        assert!(said.borrow().iter().any(|l| l.contains(&second) && l.contains("untouched")));
+        drop(placed);
+        let _ = std::fs::remove_dir_all(tree.home());
+    }
 }

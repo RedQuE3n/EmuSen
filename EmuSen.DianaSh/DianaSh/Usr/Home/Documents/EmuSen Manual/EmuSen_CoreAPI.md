@@ -4799,6 +4799,15 @@ The duplication report for Rust (`dupes --lang rust`) showed 99 findings at 100 
 and 108 after; no finding between those four `state.rs` files remains (measured 2026-10-27). MarsRT's and MoonRT's `state.rs`
 still share an 83-token warning and were not part of this move.
 
+MercuryRT, MoonRT, VenusRT and MarsRT moved onto the same shell on 2026-10-27. Their `StateError` enums come from
+`state_error!`, so the foreign-magic variant is `Foreign` in all of them. Their headers are read by `open_state`. Mercury, Moon and
+Venus load through `load_state_into(machine, data, magic, accepts, read)`, which opens the header, reads into a copy and keeps the
+copy only if every field read, and write through `state_write_methods!`; their `StateMachine` impl is the only home of
+`load_state`, `state_size`, `save_state` and `layout`, so a caller imports the trait. MarsRT keeps its own save methods, which take
+a snapshot flag and can refuse. A state shorter than its magic is now refused as foreign rather than truncated, as in the first four
+cores; no state that loaded before fails to load and no saved byte changes. The report went from 94 findings and 108 warnings to
+91 and 106 (measured 2026-10-27).
+
 ## Appendix A. The draft header
 
 *Superseded, 2026-10-03, by the committed header, `EmuSen/Cores/Shared/emusen-native/include/emusen_core.h`, which is

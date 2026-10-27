@@ -168,6 +168,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   opening that no button skips and the GS's held writes that stop it short of play (D-900), the bench's `game` windows of
   the opening drawn in its engine at 2.77, 1.77 and 0.75 frames a second, the profile on every thread with the EE's
   instruction mix, VU1's compiler joined at its budget, and the levers and compromises ranked again for the 3D.
+- **`Sapphire_Scheduler.md`** — the board's and the scheduler's record from §54 on (2026-10-26), continuing
+  `Sapphire_Native.md`'s numbering: S32's lever #9, the board's calls answered where each unit's next event is known (the
+  IOP's next instruction, its service with nothing due, the lines between events, the VIFs and the VUs resting, the
+  console hook's breakpoint), the programs and seeded faults, the speed, and why the IOP cannot be brought along only at
+  the SIF.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

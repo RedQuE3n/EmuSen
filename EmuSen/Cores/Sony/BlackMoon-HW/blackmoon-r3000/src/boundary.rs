@@ -26,6 +26,8 @@ struct Rig {
     line_bit: Option<u32>,
     /// The moves told, while it is kept.
     moves: Option<Vec<Move>>,
+    /// The PC a run stops in front of.
+    breakpoint: Option<u32>,
 }
 
 fn at(address: u32) -> usize {
@@ -34,7 +36,7 @@ fn at(address: u32) -> usize {
 
 impl Rig {
     fn new() -> Rig {
-        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false, until: u64::MAX, line_bit: None, moves: None }
+        Rig { ram: vec![0; RAM], clock: 0, idled: 0, line: false, commands: Vec::new(), cop2: [0; 32], isolated: Vec::new(), writes: Vec::new(), absent: u32::MAX, faulted: false, until: u64::MAX, line_bit: None, moves: None, breakpoint: None }
     }
 
     fn word(&self, address: u32) -> u32 {
@@ -94,6 +96,9 @@ impl Bus for Rig {
     }
     fn running(&mut self) -> bool {
         self.clock < self.until
+    }
+    fn stop_before(&mut self, pc: u32) -> bool {
+        self.breakpoint == Some(pc)
     }
     fn cop2_data(&mut self, register: u8) -> u32 {
         self.cop2[register as usize]
@@ -656,6 +661,22 @@ fn a_runs_boundary_is_the_steps() {
     let (mut cpu, mut rig) = machine("addiu t1, t1, 1\naddiu t1, t1, 1\njr t0\naddiu t1, t1, 1\naddiu t1, t1, 1");
     (cpu.regs.pc, cpu.regs.sr, cpu.regs.r[8]) = (ORIGIN & 0x1FFF_FFFF, sr::KUC, ORIGIN + 0x100);
     assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[9], cpu.regs.bad_vaddr), ((5, Step::Exception(code::ADEL as u8)), 3, ORIGIN + 0x100), "kernel space in user mode");
+}
+
+/// A run ends in front of the bus's breakpoint, in a straight line, at a jump's target after its delay slot and at a
+/// loop's head, having run every step before it; a run that starts there runs that step (BlackMoon_R3000.md §13).
+#[test]
+fn a_run_ends_in_front_of_the_buss_breakpoint() {
+    let source = "addiu t0, t0, 1\naddiu t0, t0, 1\nj 0x80001018\naddiu t1, t1, 1\naddiu t0, t0, 100\naddiu t0, t0, 100\nloop: addiu t2, t2, 1\nbne t2, t3, loop\nnop\naddiu t0, t0, 1";
+    let (mut cpu, mut rig) = machine(source);
+    rig.breakpoint = Some(ORIGIN + 4);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.pc, cpu.regs.r[8]), ((1, Step::Instruction), ORIGIN + 4, 1), "in a straight line");
+    rig.breakpoint = Some(ORIGIN + 0x18);
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.pc, cpu.regs.r[8], cpu.regs.r[9]), ((3, Step::Instruction), ORIGIN + 0x18, 2, 1), "at the jump's target, its slot run");
+    cpu.regs.r[11] = 3;
+    let runs: Vec<_> = (0..2).map(|_| (cpu.run(&mut rig, 100), cpu.regs.pc, cpu.regs.r[10])).collect();
+    assert_eq!(runs, [((3, Step::Instruction), ORIGIN + 0x18, 1), ((3, Step::Instruction), ORIGIN + 0x18, 2)].to_vec(), "a run that starts at the breakpoint runs its step, then stops at the loop's return");
+    assert_eq!((cpu.run(&mut rig, 100), cpu.regs.r[8], cpu.regs.r[10]), ((100, Step::Instruction), 3, 3), "past the loop the run goes on to its limit");
 }
 
 struct Random(u64);

@@ -156,6 +156,26 @@ impl dmac::Memory for Map {
     }
 }
 
+/// What a run of times shows each time it brings the board through (`Board::run_through`): `each` the lines after time
+/// `j`, false to stop there; `quiet` the same for every time from `from` to `to` while the lines stand, without stopping,
+/// the first time `each` would stop at, or `to` (Sapphire_Scheduler.md §54.4).
+pub trait Times {
+    fn each(&mut self, j: usize, lines: (bool, bool, bool)) -> bool;
+    fn quiet(&mut self, from: usize, to: usize, lines: (bool, bool, bool)) -> usize;
+}
+
+/// Every time seen and none refused.
+pub struct Through;
+
+impl Times for Through {
+    fn each(&mut self, _: usize, _: (bool, bool, bool)) -> bool {
+        true
+    }
+    fn quiet(&mut self, _: usize, to: usize, _: (bool, bool, bool)) -> usize {
+        to
+    }
+}
+
 /// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for, after the quick path's
 /// clock moves on the run's quiet path (Sapphire_Recompiler.md §48.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -383,33 +403,37 @@ impl Board {
         }
     }
 
-    /// `run_to` through each of `times` in turn, as that many calls make it, `each` shown the lines after each time and
-    /// stopping the run by returning false. While no event falls by the last time and the GIF, the VIFs and the VUs are
+    /// `run_to` through each of `times` in turn, as that many calls make it, `seen` shown the lines after each time and
+    /// stopping the run by refusing one. While no event falls by the last time and the GIF, the VIFs and the VUs are
     /// idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's DMAC, so the checks
-    /// are made once and the clocks' moves once at the end; from a wake on, each time is `run_to` itself
-    /// (Sapphire_Native.md §44.5). The DMAC is the only unit that reads or writes memory or the scratchpad, and it may not
-    /// run within the first `guard` times (Sapphire_Recompiler.md §48.5): the run stops before an event falls due there, or before a wake is
-    /// taken there. The steps that stand (the times run, a held one with its `Tail` included) and the tail.
-    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, each: &mut dyn FnMut(usize, (bool, bool, bool)) -> bool) -> (usize, Option<Tail>) {
+    /// are made once, the lines shown once for all those times, and the clocks' moves made once at the end; from a wake
+    /// on, each time is `run_to` itself (Sapphire_Native.md §44.5, Sapphire_Scheduler.md §54.4). The DMAC is the only
+    /// unit that reads or writes memory or the scratchpad, and it may not run within the first `guard` times
+    /// (Sapphire_Recompiler.md §48.5): the run stops before an event falls due there, or before a wake is taken there.
+    /// The steps that stand (the times run, a held one with its `Tail` included) and the tail.
+    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, seen: &mut dyn Times) -> (usize, Option<Tail>) {
         let Some(&last) = times.last() else { return (0, None) };
         let quiet = self.next > last && self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending();
         let mut from = 0;
         if quiet {
             let lines = self.lines();
-            while from < times.len() {
-                let t = times[from];
-                self.now = self.now.max(t);
+            let stop = seen.quiet(0, times.len(), lines);
+            let end = times.len().min(stop + 1);
+            while from < end {
+                self.now = self.now.max(times[from]);
                 self.iop.catch_up(self.now);
                 if self.iop.bus.sif.wake_ee_pending() {
                     break;
                 }
                 from += 1;
-                if !each(from - 1, lines) {
-                    self.idle_through(t);
+            }
+            if from == end {
+                if stop < times.len() {
+                    let go_on = seen.each(stop, lines);
+                    debug_assert!(!go_on, "`quiet` names the time `each` stops at");
+                    self.idle_through(times[stop]);
                     return (from, None);
                 }
-            }
-            if from == times.len() {
                 self.idle_through(last);
                 return (from, None);
             }
@@ -421,7 +445,7 @@ impl Board {
             self.idle_through(t);
             self.take_wake(true, spram);
             from += 1;
-            if !each(from - 1, self.lines()) {
+            if !seen.each(from - 1, self.lines()) {
                 return (from, None);
             }
         }
@@ -436,7 +460,7 @@ impl Board {
             }
             self.take_wake(quick, spram);
             from += 1;
-            if !each(from - 1, self.lines()) {
+            if !seen.each(from - 1, self.lines()) {
                 return (from, None);
             }
         }
@@ -536,6 +560,8 @@ impl Board {
     /// filled and raising their interrupts.
     fn run_vifs(&mut self, t: u64) {
         self.run_gif(t);
+        // Where the board reaches the VUs, their rest ends (Sapphire_Scheduler.md §54.5).
+        self.vpu.wake();
         let dma = self.dmac.ch[dmac::GIF].str();
         let Board { vif, vpu, gif, gs, dmac, intc: unit_intc, now, .. } = self;
         let mut gif = GifPort { gif, gs, dma };

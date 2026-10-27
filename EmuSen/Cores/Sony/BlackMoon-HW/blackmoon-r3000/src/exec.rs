@@ -100,7 +100,7 @@ pub(crate) fn run<B: Bus>(cpu: &mut R3000, b: &mut B, limit: u32) -> (u32, Step)
     'full: loop {
         let s = step(cpu, b, &mut crate::Unobserved);
         n += 1;
-        if s != Step::Instruction || n >= limit || !b.running() {
+        if s != Step::Instruction || n >= limit || !b.running() || b.stop_before(cpu.regs.pc) {
             return (n, s);
         }
         let Some(line) = quiet(cpu) else { continue };
@@ -114,7 +114,7 @@ pub(crate) fn run<B: Bus>(cpu: &mut R3000, b: &mut B, limit: u32) -> (u32, Step)
             let next = if slot.slot && slot.taken { slot.target } else { at.wrapping_add(4) };
             let (s, moved) = instruction(cpu, b, &mut crate::Unobserved, at, slot, pending, next);
             n += 1;
-            if s != Step::Instruction || n >= limit || !b.running() {
+            if s != Step::Instruction || n >= limit || !b.running() || b.stop_before(cpu.regs.pc) {
                 return (n, s);
             }
             if moved {

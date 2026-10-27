@@ -658,7 +658,11 @@ impl Pipe {
 
 impl Micro for Pipe {
     fn write_state(&self, w: &mut emusen_native::StateWriter) {
-        self.write(w);
+        self.write(w, 0);
+    }
+
+    fn write_state_resting(&self, w: &mut emusen_native::StateWriter, rest: u64) {
+        self.write(w, rest);
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
@@ -794,7 +798,7 @@ fn deferred_of(some: u8, v: &[u32]) -> Deferred {
 /// A unit's micro mode in `SPH2` (Sapphire_Native.md §38.2): its state and program counter, the next pair's time, the
 /// branch, end and halt in progress, the hazards' ready cycles and the flag writes in flight. The trace is a test's.
 impl Pipe {
-    fn write(&self, w: &mut emusen_native::StateWriter) {
+    fn write(&self, w: &mut emusen_native::StateWriter, rest: u64) {
         w.u8("State", match self.state {
             State::Ready => 0,
             State::Run => 1,
@@ -817,7 +821,7 @@ impl Pipe {
         w.u64s("FlagsAt", &slots.map(|f| f.at));
         w.bytes("FlagsSome", &words.map(|d| d.0));
         w.u32s("FlagsValues", words.map(|d| d.1).as_flattened());
-        w.u64s("Times", &[self.path1_free, self.kick_wait, self.now]);
+        w.u64s("Times", &[self.path1_free, self.kick_wait, self.now.max(rest)]);
         crate::state::opt_u64(w, "ReleaseT", some(self.release_t));
         w.u32("StoppedBy", self.stopped_by);
     }

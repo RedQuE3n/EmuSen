@@ -661,15 +661,9 @@ fn replay_steps(ctx: &mut Context, steps: u32, rewind: bool) -> u32 {
     let ip7 = cause_now & cause::IP7 != 0;
     let m = steps as usize;
     let System { ee, board } = sys;
-    let times = &ctx.times[..m];
-    let lines_out = &mut ctx.lines;
-    let mut interrupted = false;
-    let (ran, tail) = board.run_through(times, &mut ee.spram[..], ctx.guard as usize, &mut |j, lines| {
-        lines_out[j] = pack(lines);
-        let ip7 = ip7 || u64::from(compare.wrapping_sub(count0).wrapping_sub(1)) < times[j].wrapping_sub(seen0);
-        interrupted = j + 1 < m && crate::ee::Ee::interrupt_due(status, cause_now, lines.0, lines.1, ip7);
-        !interrupted
-    });
+    let mut seen = Seen { times: &ctx.times[..m], lines: &mut ctx.lines, ip7, compare, count0, seen0, status, cause_now, interrupted: false };
+    let (ran, tail) = board.run_through(&ctx.times[..m], &mut ee.spram[..], ctx.guard as usize, &mut seen);
+    let interrupted = seen.interrupted;
     run.tail = tail;
     run.guarded = ran < m && !interrupted;
     if ran < m || rewind {
@@ -684,6 +678,48 @@ fn replay_steps(ctx: &mut Context, steps: u32, rewind: bool) -> u32 {
         *c = *c & !(cause::IP2 | cause::IP3) | if l & 1 != 0 { cause::IP2 } else { 0 } | if l & 2 != 0 { cause::IP3 } else { 0 };
     }
     steps
+}
+
+/// What the replay sees at each time: the lines kept, and whether the interpreter would take an interrupt before the
+/// next instruction, Count's against Compare at that time.
+struct Seen<'a> {
+    times: &'a [u64],
+    lines: &'a mut [u8; shape::MAX],
+    ip7: bool,
+    compare: u32,
+    count0: u32,
+    seen0: u64,
+    status: u32,
+    cause_now: u32,
+    interrupted: bool,
+}
+
+impl Seen<'_> {
+    fn ip7(&self, j: usize) -> bool {
+        self.ip7 || u64::from(self.compare.wrapping_sub(self.count0).wrapping_sub(1)) < self.times[j].wrapping_sub(self.seen0)
+    }
+}
+
+impl crate::board::Times for Seen<'_> {
+    fn each(&mut self, j: usize, lines: (bool, bool, bool)) -> bool {
+        self.lines[j] = pack(lines);
+        let ip7 = self.ip7(j);
+        self.interrupted = j + 1 < self.times.len() && crate::ee::Ee::interrupt_due(self.status, self.cause_now, lines.0, lines.1, ip7);
+        !self.interrupted
+    }
+
+    /// The lines standing, an interrupt is due before the next instruction where it is due with Count's request as it
+    /// stands at that time; the last time is never one.
+    fn quiet(&mut self, from: usize, to: usize, lines: (bool, bool, bool)) -> usize {
+        self.lines[from..to].fill(pack(lines));
+        let due = |ip7| crate::ee::Ee::interrupt_due(self.status, self.cause_now, lines.0, lines.1, ip7);
+        let (without, with) = (due(false), due(true));
+        let last = self.times.len() - 1;
+        if !without && !with {
+            return to;
+        }
+        (from..to.min(last)).find(|&j| if self.ip7(j) { with } else { without }).unwrap_or(to)
+    }
 }
 
 /// The verifier's call after each compiled instruction, everything written back: the board brought to its cycles, the

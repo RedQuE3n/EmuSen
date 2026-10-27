@@ -155,6 +155,9 @@ pub struct IopBus {
     pub writes: u64,
     pub io: u64,
     pub fills: u64,
+    /// The physical address a run of the processor stops in front of, the console hook's while it is armed; none at
+    /// `u32::MAX`. Not state.
+    pub breakpoint: u32,
 }
 
 impl IopBus {
@@ -184,6 +187,7 @@ impl IopBus {
             writes: 0,
             io: 0,
             fills: 0,
+            breakpoint: u32::MAX,
         };
         b.reschedule();
         b
@@ -365,6 +369,12 @@ impl IopBus {
 
     /// Before an instruction: the units brought to the clock, and the processor held while the DMAC has the bus.
     pub fn service(&mut self) {
+        let t = self.now * IOP;
+        if self.next > t && !self.sif.wake_iop_pending() && !self.spu2.wake_pending() && !self.spu2.due(self.now) && self.dmac.hold <= self.now {
+            // `run_units` with nothing due moves only its sync time (Sapphire_Scheduler.md §54.3).
+            self.synced = self.synced.max(t);
+            return;
+        }
         loop {
             self.run_units(self.now * IOP);
             if self.dmac.hold <= self.now {
@@ -653,6 +663,11 @@ impl Bus for IopBus {
 
     fn running(&mut self) -> bool {
         self.now * IOP < self.horizon
+    }
+
+    #[inline(always)]
+    fn stop_before(&mut self, pc: u32) -> bool {
+        pc & 0x1FFF_FFFF == self.breakpoint
     }
 }
 

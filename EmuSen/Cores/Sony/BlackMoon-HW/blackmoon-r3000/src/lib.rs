@@ -84,6 +84,12 @@ pub trait Bus {
     fn running(&mut self) -> bool {
         false
     }
+    /// Whether `R3000::run` ends before the step at `pc`, a breakpoint the bus keeps, so that a console can look at that
+    /// boundary itself; the default ends at none (BlackMoon_R3000.md §13).
+    #[inline(always)]
+    fn stop_before(&mut self, _pc: u32) -> bool {
+        false
+    }
     /// Whether the bus is told the processor's moves; a constant, so that the step compiled for a bus that is not holds
     /// no trace of them (BlackMoon_R3000.md §14).
     const MOVES: bool = false;

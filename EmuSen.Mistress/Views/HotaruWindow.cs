@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using EmuSen.Mistress.Input;
@@ -66,7 +68,8 @@ namespace EmuSen.Mistress.Views
                 new LunaAction("History Forward", HistoryForward),
                 new LunaAction("Complete", Complete),
                 new LunaAction("Clear", () => _console.Clear()),
-                new LunaAction("Copy Output", CopyLastOutput));
+                new LunaAction("Copy Output", CopyLastOutput),
+                new LunaAction("Interrupt", Interrupt));
             var hint = new HintText { Name = "HotaruHint", Text = "L1 / R1 recall history · L2 / R2 complete · B clears the line, then closes" };
             DockPanel.SetDock(toolbar, Dock.Top);
             DockPanel.SetDock(hint, Dock.Bottom);
@@ -85,7 +88,16 @@ namespace EmuSen.Mistress.Views
             else if (session is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             Opened += (_, _) => _console.FocusInput();
+
+            // Ctrl+C stops the running line, as a terminal's does; Copy Output is the toolbar's.
+            AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (e.Key == Key.C && e.KeyModifiers == KeyModifiers.Control) { Interrupt(); e.Handled = true; }
+            }, RoutingStrategies.Tunnel);
         }
+
+        // Stops the line the shell is running at its next check; safe from any thread - see EmuSen_DianaSh.md §10.2.
+        public void Interrupt() => _shell.Interrupt();
 
         public void HistoryBack() => _console.HistoryBack();
 

@@ -23,6 +23,10 @@ DESCRIPTION
     an empty line ends the shell, as 'shutdown' does. When standard input
     is not a terminal, lines are read as they come and nothing is echoed.
 
+    An interrupted line prints '^C' on its own line, leaves $? at 130 (128
+    and SIGINT, as a Unix shell does) and clears the interrupt, so the next
+    line runs normally. An interrupt with nothing running does nothing.
+
     With -c, each argument is run as one line typed at the prompt, in
     order, and the program exits with the last line's $?.
 

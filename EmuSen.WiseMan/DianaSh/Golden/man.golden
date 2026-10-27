@@ -816,7 +816,7 @@ case the page for for
 target none
 covers 1
 $ man for
-out 518
+out 587
 NAME
     for - loop over a list of words
 
@@ -829,6 +829,7 @@ DESCRIPTION
     word. 'break' exits the loop early; 'continue' skips to the next word.
     Every iteration counts against a shared 10-second wall-clock safety
     timeout (see 'while') that aborts a runaway loop with a clear error.
+    An interrupt stops it at the next iteration, as it does 'while'.
 
 EXAMPLES
     for i in 1 2 3; do echo $i; done
@@ -840,7 +841,7 @@ case the page for while
 target none
 covers 1
 $ man while
-out 758
+out 963
 NAME
     while, until - loop while/until a condition holds
 
@@ -856,6 +857,10 @@ DESCRIPTION
     be bypassed that way) aborts a typo'd infinite loop with a clear error
     instead of hanging the console - a real 'while true; do echo x; done'
     prints for about 10 seconds, then cleanly reports the timeout.
+
+    An interrupt (Ctrl-C at a terminal, or the host's cancel) ends the loop
+    at the next iteration, between the commands of a list and the stages of
+    a pipeline: the line prints '^C' and $? is 130.
 
 EXAMPLES
     while false; do echo never; done
@@ -2958,7 +2963,7 @@ case the page for dianash
 target none
 covers 1
 $ man dianash
-out 1609
+out 1833
 NAME
     dianash - the standalone DianaSh shell, with no emulator in it
 
@@ -2983,6 +2988,10 @@ DESCRIPTION
     typed, and stops a line that is running at its next check; Ctrl-D on
     an empty line ends the shell, as 'shutdown' does. When standard input
     is not a terminal, lines are read as they come and nothing is echoed.
+
+    An interrupted line prints '^C' on its own line, leaves $? at 130 (128
+    and SIGINT, as a Unix shell does) and clears the interrupt, so the next
+    line runs normally. An interrupt with nothing running does nothing.
 
     With -c, each argument is run as one line typed at the prompt, in
     order, and the program exits with the last line's $?.

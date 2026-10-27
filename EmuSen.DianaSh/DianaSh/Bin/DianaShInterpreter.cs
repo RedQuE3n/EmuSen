@@ -418,6 +418,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             return (status == DianaShNative.NeedsMore, output, action);
         }
 
+        // Stops the running line at its next check, from any thread: it prints ^C and leaves $? at 130 - see EmuSen_DianaSh.md §10.2.
+        public void Interrupt()
+        {
+            if (_managed is not null) _managed.Interrupt();
+            else Native.Cancel();
+        }
+
         // Answers whether a line is safe to run off the caller's thread, without running it - see §3.17.
         public bool TryGetReadOnlyFastPath(string rawLine, out string trimmed)
         {
@@ -545,6 +552,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             {
                 var sub = new Managed(_target, _table, new Dictionary<string, string>(_variables), new CommandHistory(), isRoot: false);
                 sub._stopwatch = _stopwatch;
+                sub._interrupt = _interrupt;
                 sub.CurrentUser = CurrentUser;
                 return sub;
             }
@@ -552,6 +560,18 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             // Exceptions are how a tree-walker unwinds to the nearest loop - see §3.17a.
             private class BreakSignal : Exception { }
             private class ContinueSignal : Exception { }
+            private class InterruptSignal : Exception { }
+
+            // One flag per session, shared with its subshells; set from any thread by Interrupt - see EmuSen_DianaSh.md §10.2.
+            private sealed class InterruptFlag { public volatile bool Set; }
+            private InterruptFlag _interrupt = new();
+
+            public void Interrupt() => _interrupt.Set = true;
+
+            private void CheckInterrupt()
+            {
+                if (_interrupt.Set) throw new InterruptSignal();
+            }
 
             public string Execute(string commandLine) => Submit(commandLine).Output;
 
@@ -646,6 +666,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
                 if (interactive) History.Add(finalText);
                 if (_isRoot) _stopwatch = Stopwatch.StartNew();
+                if (_isRoot && _sourceDepth == 0) _interrupt.Set = false;
 
                 _pendingHostAction = null;
                 var sb = new StringBuilder();
@@ -658,6 +679,17 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 {
                     // Bare `continue` can only reach here from outside a loop, where it means resume - see §3.17a.
                     _pendingHostAction = new HostAction.Resume();
+                }
+                catch (InterruptSignal)
+                {
+                    // A sourced script or a substitution leaves the flag for the line that called it.
+                    if (_isRoot && _sourceDepth == 0)
+                    {
+                        _interrupt.Set = false;
+                        _variables["?"] = "130";
+                        if (sb.Length > 0 && sb[^1] != '\n') sb.Append('\n');
+                        sb.Append("^C");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -693,7 +725,11 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             private int ExecuteStatementList(StatementList list, StringBuilder output)
             {
                 int exit = 0;
-                foreach (Node stmt in list.Statements) exit = ExecuteStatement(stmt, output);
+                foreach (Node stmt in list.Statements)
+                {
+                    CheckInterrupt();
+                    exit = ExecuteStatement(stmt, output);
+                }
                 return exit;
             }
 
@@ -718,6 +754,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 {
                     if (kind == AndOrKind.And && exit != 0) continue;
                     if (kind == AndOrKind.Or && exit == 0) continue;
+                    CheckInterrupt();
                     exit = ExecutePipeline(pipeline, output);
                 }
                 return exit;
@@ -741,6 +778,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 foreach (string item in items)
                 {
                     CheckTimeout();
+                    CheckInterrupt();
                     _variables[node.VarName] = item;
                     try { exit = ExecuteStatementList(node.Body, output); }
                     catch (ContinueSignal) { continue; }
@@ -755,6 +793,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 while (true)
                 {
                     CheckTimeout();
+                    CheckInterrupt();
                     int condExit = ExecuteStatementList(node.Condition, output);
                     bool shouldRun = node.Until ? condExit != 0 : condExit == 0;
                     if (!shouldRun) break;
@@ -782,7 +821,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
                 for (int i = 0; i < node.Stages.Count; i++)
                 {
+                    CheckInterrupt();
                     (stageOutput, exitCode) = ExecuteSimpleCommand(node.Stages[i], stdin);
+                    CheckInterrupt();
                     stdin = stageOutput;
                 }
 
@@ -993,6 +1034,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                         if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
 
                         (bool needsMore, string output, HostAction? action) = SubmitCore(rawLine, interactive: false);
+                        if (_interrupt.Set) break;
                         if (needsMore) continue; // still buffering a multi-line if/for/while block
                         if (output.Length > 0) { sb.Append(output); sb.Append('\n'); }
 
@@ -1135,6 +1177,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 Managed sub = CreateSubshell();
                 // A subshell's own host action is isolated by construction; the discard is only arity.
                 (bool needsMore, string output, _) = sub.Submit(source);
+                CheckInterrupt();
                 if (needsMore)
                 {
                     throw new ShellSyntaxException("Command substitution \"$(...)\" isn't syntactically complete (e.g. a missing 'fi'/'done') - finish the block outside the substitution instead.");

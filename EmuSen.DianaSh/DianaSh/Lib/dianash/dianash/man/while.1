@@ -14,6 +14,10 @@ DESCRIPTION
     instead of hanging the console - a real 'while true; do echo x; done'
     prints for about 10 seconds, then cleanly reports the timeout.
 
+    An interrupt (Ctrl-C at a terminal, or the host's cancel) ends the loop
+    at the next iteration, between the commands of a list and the stages of
+    a pipeline: the line prints '^C' and $? is 130.
+
 EXAMPLES
     while false; do echo never; done
     until [ -f ready.txt ]; do echo waiting; done

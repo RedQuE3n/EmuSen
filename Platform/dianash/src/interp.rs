@@ -19,6 +19,8 @@ use std::time::Instant;
 pub(crate) enum Flow {
     Break,
     Continue,
+    /// The cancellation flag was seen: the line stops, prints `^C` and leaves `$?` at 130.
+    Interrupted,
     Error(String),
 }
 
@@ -47,6 +49,9 @@ impl Outcome {
 }
 
 const MAX_SOURCE_DEPTH: u32 = 20;
+
+/// `$?` after an interrupt: 128 and SIGINT, as Unix shells give (EmuSen_DianaSh.md §10.2).
+const INTERRUPTED_STATUS: i32 = 130;
 
 /// The names the language answers before any table, which nothing takes the place of.
 const LANGUAGE: [&str; 9] = ["help", "man", "export", "unset", "source", ".", "which", "command", "trust"];
@@ -195,6 +200,16 @@ impl Interp {
             Ok(_) | Err(Flow::Break) => {}
             // A bare `continue` reaches here only from outside a loop: the host decides what it means (§13.4 finding 4).
             Err(Flow::Continue) => self.pending_request = Some(Request::Continue),
+            // A sourced script or a substitution leaves the flag for the line that called it to see.
+            Err(Flow::Interrupted) if !self.is_root || self.source_depth > 0 => {}
+            Err(Flow::Interrupted) => {
+                world.cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+                self.variables.insert("?".to_string(), INTERRUPTED_STATUS.to_string());
+                if !output.is_empty() && !output.ends_with('\n') {
+                    output.push('\n');
+                }
+                output.push_str("^C");
+            }
             Err(Flow::Error(words)) => {
                 if !output.is_empty() && !output.ends_with('\n') {
                     output.push('\n');
@@ -229,6 +244,7 @@ impl Interp {
     fn statement_list(&mut self, world: &mut World, list: &StatementList, output: &mut String) -> Exec<i32> {
         let mut exit = 0;
         for statement in &list.statements {
+            self.check_cancel(world)?;
             exit = self.statement(world, statement, output)?;
         }
         Ok(exit)
@@ -295,15 +311,21 @@ impl Interp {
             if (*kind == AndOr::And && exit != 0) || (*kind == AndOr::Or && exit == 0) {
                 continue;
             }
+            self.check_cancel(world)?;
             exit = self.pipeline(world, pipeline, output)?;
         }
         Ok(exit)
     }
 
-    pub(crate) fn check_timeout(&self, world: &World) -> Exec<()> {
+    pub(crate) fn check_cancel(&self, world: &World) -> Exec<()> {
         if world.cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(Flow::Error("Interrupted.".to_string()));
+            return Err(Flow::Interrupted);
         }
+        Ok(())
+    }
+
+    pub(crate) fn check_timeout(&self, world: &World) -> Exec<()> {
+        self.check_cancel(world)?;
         if self.started.is_some_and(|started| started.elapsed() > world.config.budget) {
             return Err(Flow::Error(format!(
                 "Loop exceeded the {}-second safety timeout - aborting rather than hanging the console.",
@@ -318,8 +340,10 @@ impl Interp {
         let mut stage_output = String::new();
         let mut code = 0;
         for stage in &pipeline.stages {
+            self.check_cancel(world)?;
             let errors;
             (stage_output, errors, code) = self.simple_command(world, stage, stdin.take())?;
+            self.check_cancel(world)?;
             // Standard error goes where the output goes, as the stage ends; no pipe and no redirection takes it (§4.3, Q10).
             if !errors.is_empty() {
                 output.push_str(&errors);
@@ -552,6 +576,9 @@ impl Interp {
                 continue;
             }
             let (needs_more, output, action) = self.submit_core(world, raw, false);
+            if world.cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             if needs_more {
                 continue;
             }
@@ -631,6 +658,7 @@ impl Interp {
     fn substitute(&mut self, world: &mut World, source: &str) -> Exec<String> {
         let mut sub = self.subshell();
         let (needs_more, output, _) = sub.submit_core(world, source, true);
+        self.check_cancel(world)?;
         if needs_more {
             return Err(Flow::Error(
                 "Command substitution \"$(...)\" isn't syntactically complete (e.g. a missing 'fi'/'done') - finish the block outside the substitution instead.".to_string(),

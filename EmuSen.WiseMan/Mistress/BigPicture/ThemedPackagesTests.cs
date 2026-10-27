@@ -92,5 +92,31 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(Path.Combine(s.RomDirectory, "segacd", Disc, Disc + ".cue"), game.File);
             Assert.Equal(folder, EmuSen.Galaxia.Media.GamePackages.RootFor(game.File));
         }, default);
+
+        // The same package with no art of its own, the store's art kept under the library file's game folder as scraped before packaging.
+        private static void DiscLibraryScrapedBefore(string roms)
+        {
+            DiscLibrary(roms);
+            Directory.Delete(Path.Combine(DataStore.Packages, "Sega CD", Disc, Disc + ".cue", "media"), true);
+            foreach (string type in new[] { "covers", "screenshots", "marquees" })
+                WritePicture(Path.Combine(EmuSen.Mistress.Scraping.MediaStore.DefaultRoot, "segacd", type, Disc, Disc + ".png"));
+        }
+
+        [Fact]
+        public Task A_package_made_after_scraping_shows_every_type_of_the_stores_art() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession(roms: DiscLibraryScrapedBefore);
+            ThemedLibraryPadTests.Enter(s, "segacd");
+            var system = s.Themed.Stage!.Current.Data.System;
+            var game = Assert.Single(system.Games);
+            Assert.Equal("", game.FolderPath);
+            var media = (EmuSen.Mistress.Scraping.MediaSources)typeof(EmuSen.Mistress.Views.MainWindow).GetMethod("MediaSourcesNow", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null)!;
+            var present = media.Present(system.System, system.Games);
+            foreach (var (type, folder) in new[] { ("cover", "covers"), ("screenshot", "screenshots"), ("marquee", "marquees") })
+            {
+                Assert.Equal(Path.Combine(EmuSen.Mistress.Scraping.MediaStore.DefaultRoot, "segacd", folder, Disc, Disc + ".png"), media.Find(system.System, game, type));
+                Assert.Contains(type, present);
+            }
+        }, default);
     }
 }

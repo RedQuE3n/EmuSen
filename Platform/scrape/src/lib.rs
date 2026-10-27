@@ -159,6 +159,11 @@ impl Settings {
     pub fn folder_of(&self, rom: &str) -> String {
         emusen_galaxia::game_folders::of(self.roms.as_deref(), rom)
     }
+
+    /// The folder the media store names a game's art under: a packaged game's is its library file's own, whatever folder the list shows it in.
+    pub fn store_folder(&self, file: &str, folder_path: &str, folder: bool) -> String {
+        if !folder && self.package_of(file).is_some() { self.folder_of(file) } else { folder_path.to_string() }
+    }
 }
 
 /// One media store, its `media.db`, its quota and what its host lent it.

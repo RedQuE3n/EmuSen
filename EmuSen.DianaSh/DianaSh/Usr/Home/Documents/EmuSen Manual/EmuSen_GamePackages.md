@@ -2580,7 +2580,8 @@ name as its saves are (§14.2), so that the game renamed or moved keeps its art 
 - **Reading** [M]: a picture is looked for in a packaged game's package after the cover the player chose from another
   game and what the player placed, and before the media store, an ES-DE folder and OpenEmu's failover
   (`MediaSources.Locate`, `media.rs`' `locate`); its source is `package`. The store's picture is therefore read until
-  the package has its own of that type. The variant triggers count a package's types (`Present`), and the stamp that
+  the package has its own of that type, the store's named by the library file's own game folder whatever folder a list
+  shows the game in (`EmuSen_BigPicture.md` §30.3a). The variant triggers count a package's types (`Present`), and the stamp that
   tells the library to draw again includes each package's `media` folders.
 - **Which games are packages** is the library scan's answer (`RomEntry.Package`), handed to both halves as a map of
   game file to package: to the C# `MediaSources` directly, and to the scraper in Rust as its settings' `packages`

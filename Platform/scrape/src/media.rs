@@ -159,6 +159,8 @@ impl Scraper {
         {
             return Some((Source::Package, packaged));
         }
+        let stored = Game { file: game.file, folder_path: settings.store_folder(game.file, &game.folder_path, game.folder), folder: game.folder };
+        let game = &stored;
         if let Some(scraped) = find_in(&self.root(), esde_system, game, media_type) {
             return Some((Source::ScreenScraper, scraped));
         }
@@ -251,9 +253,10 @@ impl Scraper {
     /// any source counted too.
     pub fn present(&self, system: &str, games: &[(String, String, bool)]) -> Vec<String> {
         let settings = self.settings();
-        let mut found: Vec<String> = present_in(&self.root(), system, games).into_iter().map(str::to_string).collect();
+        let stored: Vec<(String, String, bool)> = games.iter().map(|(f, p, d)| (f.clone(), settings.store_folder(f, p, *d), *d)).collect();
+        let mut found: Vec<String> = present_in(&self.root(), system, &stored).into_iter().map(str::to_string).collect();
         if let Some(esde) = settings.esde_media.as_deref().filter(|e| !emusen_dotnet::text::is_blank(Some(e))) {
-            for t in present_in(esde, system, games) {
+            for t in present_in(esde, system, &stored) {
                 if !found.iter().any(|f| f == t) {
                     found.push(t.to_string());
                 }

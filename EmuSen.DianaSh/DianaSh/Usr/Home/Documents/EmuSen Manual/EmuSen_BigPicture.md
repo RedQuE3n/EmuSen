@@ -6691,6 +6691,14 @@ folder (`GameFolders.Of` with the entry's package), so it is one entry at the co
 (section 18.3 there; the usual folders still name the game by its library path, as the scraper stored it). Launching hands over the entry's file, which opens as its package. Covered by
 `ThemedPackagesTests`. Folders of unpackaged games are unchanged.
 
+**The store's art, found by the library file's folder (2026-10-27).** The gamelist's folder is also the folder the store
+lookup names a game by, so the packaged disc's entry, now with no folder, was looked for at `<type>/<game>.png` while the
+art scraped before packaging sits at `<type>/<game folder>/<game>.png`: only types the package held of its own showed,
+and the tester's way round it was to clear the art and scrape again, which writes into the package. Both halves of the
+lookup (`MediaSources.Stored`, the scraper's `Settings::store_folder`) now take a packaged game's store folder from its
+library file (`GameFolders.Of` without the package), in `Locate` and in `Present`, so the art scraped before `pkg make`
+shows in every type. Covered by `ThemedPackagesTests.A_package_made_after_scraping_shows_every_type_of_the_stores_art`.
+
 ### 30.4 The store's one layout step
 
 `media.db`'s second migration adds `store_move (from_path, to_path, how, at)` and `store_step (name, done_at)`.

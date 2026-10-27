@@ -1,8 +1,8 @@
-# EmuSen_ShaderWindow — Minako, the shader window on the shared frame
+# EmuSen_ShaderWindow — Minako, the display window on the shared frame: graphics settings and shaders together
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§5). Nothing is built.* Asked by the tester the same day: a proper shader window in place
 of the present one, consistent with the other tools (`EmuSen_LibraryTools.md` §1), named **Minako** (Sailor Venus).
-Menus call it *Shaders*.
+The same day the redesigned graphics settings were folded in (§2a), and the menus call it *Display*.
 
 ## 1. What exists
 
@@ -46,10 +46,18 @@ On LunaP's `ManagerLayout` (§1 there), as Setsuna, Ami and Rei are, with the pa
   the other (RetroArch's and many image editors' before/after).
 - **Apply** to this console, or every console of the same kind (every TV console, every handheld); nothing changes until
   Apply, and the bar says what will.
-- **The Graphics Settings window** keeps the engine and scale; its shader row names the choice and opens Minako at that
-  console, as today.
+- **The Graphics Settings window's settings are Minako's** (§2a); there is no separate graphics window.
 - **The big-screen layout** stays: the panes stack for the pad as the present window's do, the preview at the top.
 - The window fits 1280×800 and 1920×1200 (the fit audits).
+
+## 2a. Graphics settings in the same window (consolidated 2026-10-27 by the tester)
+
+The redesigned graphics settings were to be a window of their own; they hand off to the shaders so often, and the
+preview shows both at once, that they are one tool. A console chosen in the sidebar shows, above its shader list, the
+`GraphicsSettingsWindow`'s settings for it — the engine, the internal resolution, the display shape and the frame
+pacing — as rows declared through the console's settings schema (`ICoreSettings`, `CoreCatalog.SettingsFor`), so no
+console's rows are written by hand, and the preview redraws for a setting as it does for a shader parameter.
+`GraphicsSettingsWindow` is retired with `ShaderSettingsWindow` once Minako has everything both have.
 
 ## 3. What it needs beneath
 

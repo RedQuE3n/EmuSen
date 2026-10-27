@@ -15,7 +15,10 @@ DESCRIPTION
 
     With --base <rev> only the blocks with a place that overlaps a line
     added between <rev> and HEAD (git diff -U0 <rev>..HEAD) are
-    reported, the added place first. Without it the whole tree is an
+    reported, the added place first. A place is a new copy when the
+    added lines cover at least half of its lines; one that a change only
+    touches prints as 'warning: touches an existing duplicate: <line>'
+    and never fails the run. Without it the whole tree is an
     audit, a block's first place against each of its others, ranked by
     tokens times places.
 
@@ -56,8 +59,7 @@ DESCRIPTION
     round; if either moves, the finding comes back to be accepted again
     or removed.
 
-    The overlap rule is any shared line, so touching a line of an old
-    duplicate reports it. CPD works on the files as they stand, so
+    CPD works on the files as they stand, so
     uncommitted edits shift the lines the diff names; run it on a
     committed tree.
 

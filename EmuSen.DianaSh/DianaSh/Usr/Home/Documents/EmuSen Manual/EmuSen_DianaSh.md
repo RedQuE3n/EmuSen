@@ -2621,8 +2621,9 @@ the platform library, since PMD is a developer's tool and is never shipped. It r
 `git` and the program named by `EMUSEN_CPD`, not through the shell's root, and takes the repository from `--repo` or
 `EMUSEN_REPO` because the standalone shell moves its own directory.
 
-**Rule.** A finding is a duplicated block of at least `--warn-tokens` (75) tokens with a place overlapping a line added
-since `--base`; one of at least `--min-tokens` (100) fails the run (exit 1), a smaller one prints as a warning. What is
+**Rule.** A finding is a duplicated block of at least `--warn-tokens` (75) tokens with a place the added lines since
+`--base` cover at least half of (the audit's rule); one of at least `--min-tokens` (100) fails the run (exit 1), a smaller
+one prints as a warning, and a duplicate a change only touches prints as a warning whatever its size. What is
 not compared is `dupes.ignore` (generated tables, tests, examples, benches, the WiseMan harness, build output, the
 reference trees) and a duplicate the project keeps is recorded in `dupes.accept` with its reason, both at the
 repository root and both plain text. An accepted pair is skipped only while both places stand at the recorded lines.

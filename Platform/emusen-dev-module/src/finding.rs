@@ -30,6 +30,8 @@ pub struct Finding {
     pub copies: usize,
     pub subject: Place,
     pub other: Place,
+    /// The change only touches this duplicate: under half of the subject's lines are added.
+    pub touching: bool,
 }
 
 impl Finding {
@@ -103,8 +105,9 @@ pub fn parse_diff(text: &str) -> Added {
     added
 }
 
-fn touches(place: &Place, ranges: &[(u32, u32)]) -> bool {
-    ranges.iter().any(|&(a, b)| a <= place.end && place.start <= b)
+/// How many of the place's lines the ranges add.
+fn covered(place: &Place, ranges: &[(u32, u32)]) -> u32 {
+    ranges.iter().map(|&(a, b)| (b.min(place.end) + 1).saturating_sub(a.max(place.start))).sum()
 }
 
 /// The ignore file's patterns: `#` comments and blank lines dropped.
@@ -174,19 +177,20 @@ impl Report {
 }
 
 /// Each pair of places of a block, the first a subject. With `added`, only pairs where a place overlaps the added
-/// lines, that place the subject; without it, the block's first place against each other.
+/// lines, that place the subject: a new copy when the added lines cover at least half of it, else a touched one; without it, the block's first place against each other.
 fn pairs(block: &Block, added: Option<&Added>) -> Vec<Finding> {
     let copies = block.places.len();
-    let make = |subject: &Place, other: &Place| Finding { tokens: block.tokens, copies, subject: subject.clone(), other: other.clone() };
+    let make = |subject: &Place, other: &Place| Finding { tokens: block.tokens, copies, subject: subject.clone(), other: other.clone(), touching: false };
     let Some(added) = added else { return block.places[1..].iter().map(|o| make(&block.places[0], o)).collect() };
-    let new: Vec<bool> = block.places.iter().map(|p| added.get(&p.file).is_some_and(|r| touches(p, r))).collect();
+    let lines = |p: &Place| (p.end - p.start + 1, added.get(&p.file).map_or(0, |r| covered(p, r)));
+    // 2: mostly added, 1: touched, 0: untouched.
+    let kind: Vec<u8> = block.places.iter().map(|p| { let (all, got) = lines(p); if got * 2 >= all && got > 0 { 2 } else { u8::from(got > 0) } }).collect();
     let mut out = Vec::new();
     for i in 0..copies {
         for j in i + 1..copies {
-            match (new[i], new[j]) {
-                (true, _) => out.push(make(&block.places[i], &block.places[j])),
-                (false, true) => out.push(make(&block.places[j], &block.places[i])),
-                _ => {}
+            let (s, o) = if kind[i] >= kind[j] { (i, j) } else { (j, i) };
+            if kind[s] > 0 {
+                out.push(Finding { touching: kind[s] == 1, ..make(&block.places[s], &block.places[o]) });
             }
         }
     }
@@ -197,7 +201,7 @@ fn pairs(block: &Block, added: Option<&Added>) -> Vec<Finding> {
 pub fn evaluate(blocks: &[Block], added: Option<&Added>, accept: &[(Place, Place)], warn: u32, min: u32) -> Report {
     let mut all: Vec<Finding> = blocks.iter().filter(|b| b.tokens >= warn).flat_map(|b| pairs(b, added)).filter(|f| !accepted(f, accept)).collect();
     all.sort_by(|a, b| (b.tokens as usize * b.copies).cmp(&(a.tokens as usize * a.copies)).then_with(|| a.subject.show().cmp(&b.subject.show())));
-    let (failures, warnings) = all.into_iter().partition(|f| f.tokens >= min);
+    let (failures, warnings) = all.into_iter().partition(|f| f.tokens >= min && !f.touching);
     Report { failures, warnings }
 }
 
@@ -236,10 +240,13 @@ mod tests {
     #[test]
     fn a_finding_must_overlap_the_added_lines() {
         let b = parse_csv(&csv(), ROOT);
-        // The block at a/x.rs 5-14: lines 14 and 15 added touches it, line 15 alone does not.
-        let hit = evaluate(&b, Some(&diff("+++ b/a/x.rs\n@@ -0,0 +14,2 @@\n")), &[], 75, 100);
+        // The block at a/x.rs 5-14: lines 10-14 are half of it, 11-14 less than half, 15 none.
+        let hit = evaluate(&b, Some(&diff("+++ b/a/x.rs\n@@ -0,0 +10,5 @@\n")), &[], 75, 100);
         assert_eq!(hit.failures.len(), 1);
         assert_eq!(hit.failures[0].line(), "a/x.rs:5-14  duplicates  b/y.rs:40-49  (120 tokens)");
+        let touch = evaluate(&b, Some(&diff("+++ b/a/x.rs\n@@ -0,0 +11,4 @@\n")), &[], 75, 100);
+        assert!(touch.failures.is_empty() && touch.warnings.len() == 1 && touch.warnings[0].touching, "under half is a touched duplicate");
+        assert_eq!(touch.status(), 0);
         let miss = evaluate(&b, Some(&diff("+++ b/a/x.rs\n@@ -0,0 +15,2 @@\n")), &[], 75, 100);
         assert!(miss.failures.is_empty() && miss.warnings.is_empty());
         let before = evaluate(&b, Some(&diff("+++ b/a/x.rs\n@@ -0,0 +1,4 @@\n")), &[], 75, 100);
@@ -249,7 +256,7 @@ mod tests {
     #[test]
     fn the_new_place_is_the_subject_wherever_it_stands() {
         let b = parse_csv(&csv(), ROOT);
-        let r = evaluate(&b, Some(&diff("+++ b/b/y.rs\n@@ -0,0 +45 @@\n")), &[], 75, 100);
+        let r = evaluate(&b, Some(&diff("+++ b/b/y.rs\n@@ -0,0 +45,5 @@\n")), &[], 75, 100);
         assert_eq!(r.failures[0].line(), "b/y.rs:40-49  duplicates  a/x.rs:5-14  (120 tokens)");
     }
 

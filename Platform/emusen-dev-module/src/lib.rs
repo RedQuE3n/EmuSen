@@ -132,7 +132,7 @@ pub fn dupes(o: &Options) -> Result<(String, String, i32), String> {
         out.push('\n');
     }
     for f in &report.warnings {
-        out.push_str(&format!("warning: {}\n", f.line()));
+        out.push_str(&format!("warning: {}{}\n", if f.touching { "touches an existing duplicate: " } else { "" }, f.line()));
     }
     let scope = o.base.as_deref().map_or("the whole tree".to_string(), |b| format!("the lines added since {b}"));
     let summary = format!("dupes: {} at or over {} tokens, {} warnings from {}, in {scope}; {skipped} files CPD could not read\n", report.failures.len(), o.min, report.warnings.len(), o.warn);

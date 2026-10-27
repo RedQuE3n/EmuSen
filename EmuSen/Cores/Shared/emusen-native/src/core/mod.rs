@@ -9,7 +9,9 @@ pub mod exports;
 pub mod jsonw;
 pub mod lend;
 pub mod outbox;
+pub mod pads;
 pub mod schema;
+pub mod spaces;
 pub mod sys;
 
 #[cfg(test)]
@@ -41,6 +43,14 @@ pub struct Create<'a> {
     /// Since 1.9, `DEVICE_PICTURE`: the host's device lent to the core, given only to a core that claims the bit and
     /// only when the host has one to lend (EmuSen_CoreAPI.md §6.29).
     pub device: Option<DeviceLend>,
+}
+
+impl<'a> Create<'a> {
+    /// A create with the host's defaults: the settings given as pairs, no shared batteries and no device.
+    pub fn plain(image: &'a [u8], settings: &[(&str, &str)], files: Vec<File<'a>>) -> Self {
+        let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
+        Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }
+    }
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and
@@ -382,6 +392,32 @@ macro_rules! __core_capability {
     (telemetry) => { $crate::core::caps::TELEMETRY };
     (presence) => { $crate::core::caps::PRESENCE };
     (debug_translate) => { $crate::core::caps::DEBUG_TRANSLATE };
+}
+
+/// In `impl Core`: `debug_pc` and `debug_registers` forwarding to the machine's inherent methods of the same names. With
+/// a processor name and a refusal, `debug_disassemble` too: `NOT_SUPPORTED` where the refusal holds, else the inherent
+/// method, `NO_SUCH_SPACE` when it answers `None`.
+#[macro_export]
+macro_rules! debug_forwarders {
+    () => {
+        fn debug_pc(&self, processor: u32) -> Option<u64> {
+            Self::debug_pc(self, processor)
+        }
+
+        fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+            Self::debug_registers(self, processor).ok_or($crate::core::status::NOT_SUPPORTED)
+        }
+    };
+    ($processor:ident, $refuse:expr) => {
+        $crate::debug_forwarders!();
+
+        fn debug_disassemble(&mut self, $processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<$crate::core::Instruction>, i32> {
+            if $refuse {
+                return Err($crate::core::status::NOT_SUPPORTED);
+            }
+            Self::debug_disassemble(self, $processor, space, address, count).ok_or($crate::core::status::NO_SUCH_SPACE)
+        }
+    };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.

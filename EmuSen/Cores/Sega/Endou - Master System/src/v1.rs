@@ -39,7 +39,7 @@ fn pad(id: &str, label: &str, buttons: usize) -> Controller {
         id: id.into(),
         label: label.into(),
         ports: vec![0, 1],
-        buttons: BUTTONS[..buttons].iter().map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect(),
+        buttons: emusen_native::core::pads::buttons(&BUTTONS[..buttons]),
         axes: Vec::new(),
     }
 }
@@ -505,10 +505,7 @@ impl Core for Machine {
             }
             return Ok(());
         }
-        let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
-        for (i, b) in out.iter_mut().enumerate() {
-            *b = m.get(address as usize + i).copied().unwrap_or(0);
-        }
+        emusen_native::core::spaces::read_bytes(self.space(space).ok_or(status::NO_SUCH_SPACE)?, address, out);
         Ok(())
     }
 
@@ -519,12 +516,7 @@ impl Core for Machine {
         if self.space(space).is_none() {
             return Err(status::NO_SUCH_SPACE);
         }
-        let m = self.space_mut(space).ok_or(status::READ_ONLY)?;
-        for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.get_mut(address as usize + i) {
-                *d = b;
-            }
-        }
+        emusen_native::core::spaces::write_bytes(self.space_mut(space).ok_or(status::READ_ONLY)?, address, data);
         Ok(())
     }
 

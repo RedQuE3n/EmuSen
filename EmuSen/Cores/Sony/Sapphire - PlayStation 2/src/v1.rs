@@ -3,6 +3,7 @@
 //! PCRTC's picture and the SPU2's sound handed on, the pads and cards on SIO2, the EEPROM as the medium `ps2.nvm`.
 
 use emusen_native::abi::Region;
+use emusen_native::core::pads::{self, PLAYSTATION};
 use emusen_native::core::*;
 
 use crate::bios;
@@ -32,42 +33,19 @@ pub const STATUS_BAD_DISC: i32 = -17;
 /// The DVD drive, the console's one, in machine info's `drives` (G10).
 pub const DRIVE: u32 = 0;
 
-/// The pad report's bits in the PlayStation's order, which the DualShock 2's digital report keeps [A, read at S25], each
-/// with Diamond's canonical control so that bindings carry between the two (Sapphire_Plan.md §4.2).
-const BUTTONS: [(u32, Control, &str); 16] = [
-    (4, Control::Up, "Up"),
-    (6, Control::Down, "Down"),
-    (7, Control::Left, "Left"),
-    (5, Control::Right, "Right"),
-    (12, Control::X, "Triangle"),
-    (13, Control::A, "Circle"),
-    (14, Control::B, "Cross"),
-    (15, Control::Y, "Square"),
-    (10, Control::L, "L1"),
-    (11, Control::R, "R1"),
-    (8, Control::L2, "L2"),
-    (9, Control::R2, "R2"),
-    (0, Control::Select, "Select"),
-    (3, Control::Start, "Start"),
-    (1, Control::L3, "L3"),
-    (2, Control::R3, "R3"),
-];
-
 pub const DUALSHOCK2: &str = "ps2.dualshock2";
 pub const DIGITAL: &str = "ps2.digital";
 
 fn controllers() -> Vec<Controller> {
-    let buttons = |n: usize| BUTTONS[..n].iter().map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect();
-    let stick = |axis, control, label: &str| AxisControl { axis, control: Some(control), trigger: false, label: label.into() };
     vec![
         Controller {
             id: DUALSHOCK2.into(),
             label: "DualShock 2".into(),
             ports: vec![0, 1],
-            buttons: buttons(16),
-            axes: vec![stick(0, Axis::LeftX, "Left Stick"), stick(1, Axis::LeftY, "Left Stick"), stick(2, Axis::RightX, "Right Stick"), stick(3, Axis::RightY, "Right Stick")],
+            buttons: pads::buttons(&PLAYSTATION),
+            axes: pads::playstation_sticks(),
         },
-        Controller { id: DIGITAL.into(), label: "Digital Controller".into(), ports: vec![0, 1], buttons: buttons(14), axes: Vec::new() },
+        Controller { id: DIGITAL.into(), label: "Digital Controller".into(), ports: vec![0, 1], buttons: pads::buttons(&PLAYSTATION[..14]), axes: Vec::new() },
     ]
 }
 
@@ -152,49 +130,28 @@ pub const PAD_KEYS: [&str; 2] = ["pad1", "pad2"];
 pub const REGIONS: [(&str, &str, Market); 3] = [("ps2.jp", "Japan (NTSC)", Market::Japan), ("ps2.us", "Americas (NTSC)", Market::Americas), ("ps2.eu", "Europe (PAL)", Market::Europe)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK2, "DualShock 2"), (DIGITAL, "Digital Controller"), ("none", "Nothing")];
 
-fn choice(value: &str, label: &str) -> Choice {
-    Choice { value: value.into(), label: label.into(), help: None }
-}
-
-fn setting(key: &str, label: &str, help: &str, choices: Vec<Choice>, default: &str, category: &str) -> Setting {
-    Setting {
-        key: key.into(),
-        label: label.into(),
-        help: help.into(),
-        kind: SettingKind::Choice(choices),
-        default: default.into(),
-        scope: Scope::Create,
-        category: Some(category.into()),
-        effect: Effect::None,
-        advanced: false,
-        hidden: false,
-        restart: true,
-    }
-}
-
 fn schema() -> Vec<Setting> {
-    let mut regions = vec![choice("auto", "Automatic")];
-    regions.extend(REGIONS.iter().map(|&(v, l, _)| choice(v, l)));
-    let pads = |port: usize| PLUGS.iter().filter(|p| port == 1 || p.0 != "none").map(|&(v, l)| choice(v, l)).collect();
+    let mut regions = vec![Choice::new("auto", "Automatic")];
+    regions.extend(Choice::rows(REGIONS.iter().map(|&(v, l, _)| (v, l))));
     vec![
-        setting(REGION_KEY, "Region", "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL, and which BIOS the console has. Automatic runs an American console until the disc's own market is read. Takes effect when a game is next loaded.", regions, "auto", "Console"),
-        setting(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock 2, or a controller with buttons alone. Takes effect when a game is next loaded.", pads(0), DUALSHOCK2, "Controllers"),
-        setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock 2, a controller with buttons alone, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK2, "Controllers"),
+        Setting::create_choice(REGION_KEY, "Region", "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL, and which BIOS the console has. Automatic runs an American console until the disc's own market is read. Takes effect when a game is next loaded.", regions, "auto", "Console"),
+        Setting::create_choice(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock 2, or a controller with buttons alone. Takes effect when a game is next loaded.", Choice::plugs(&PLUGS, 0), DUALSHOCK2, "Controllers"),
+        Setting::create_choice(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock 2, a controller with buttons alone, or nothing. Takes effect when a game is next loaded.", Choice::plugs(&PLUGS, 1), DUALSHOCK2, "Controllers"),
         Setting {
             effect: Effect::Exact,
-            ..setting(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter, which is the other choice, slower. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
+            ..Setting::create_choice(EE_TIER_KEY, "EE processor", "How the main processor's code runs: the interpreter, one instruction at a time, or the recompiler, which compiles its integer code and branches to the host's machine code in blocks on a thread of its own. Exact: frame for frame the interpreter, which is the other choice, slower. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "recompiler", "Performance")
         },
         Setting {
             effect: Effect::Exact,
-            ..setting(VU1_KEY, "VU1", "How the vector unit that transforms most of a game's geometry runs its microprograms: interpreted, or compiled whole to the host's machine code on a thread of its own, each checked against the unit's memory before it runs. Exact: the recompiler leaves the console as the interpreter does at every point the rest of the machine can see. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| choice(v, l)).collect(), "recompiler", "Performance")
+            ..Setting::create_choice(VU1_KEY, "VU1", "How the vector unit that transforms most of a game's geometry runs its microprograms: interpreted, or compiled whole to the host's machine code on a thread of its own, each checked against the unit's memory before it runs. Exact: the recompiler leaves the console as the interpreter does at every point the rest of the machine can see. Takes effect when a game is next loaded.", TIERS.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "recompiler", "Performance")
         },
         Setting {
             effect: Effect::Exact,
-            ..setting(IDLE_KEY, "Idle skipping", "Passes the time the processors spend waiting in a loop for something to happen at once, up to the moment it happens, instead of running each turn of the loop. Exact: every picture, sound and saved state is the one the console gives with it off, which is the other choice, slower. Takes effect when a game is next loaded.", IDLE_CHOICES.iter().map(|&(v, l)| choice(v, l)).collect(), "on", "Performance")
+            ..Setting::create_choice(IDLE_KEY, "Idle skipping", "Passes the time the processors spend waiting in a loop for something to happen at once, up to the moment it happens, instead of running each turn of the loop. Exact: every picture, sound and saved state is the one the console gives with it off, which is the other choice, slower. Takes effect when a game is next loaded.", IDLE_CHOICES.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "on", "Performance")
         },
         Setting {
             effect: Effect::Exact,
-            ..setting(GS_WORKERS_KEY, "GS drawing threads", "How many threads draw the graphics synthesizer's primitives: one, the emulation thread itself, or several workers each drawing its own bands of rows in the console's order. Exact: every pixel the game can read back and every picture is the one thread's. Automatic takes a quarter of this computer's threads, at most four. Takes effect when a game is next loaded.", GS_WORKERS.iter().map(|&(v, l)| choice(v, l)).collect(), "auto", "Performance")
+            ..Setting::create_choice(GS_WORKERS_KEY, "GS drawing threads", "How many threads draw the graphics synthesizer's primitives: one, the emulation thread itself, or several workers each drawing its own bands of rows in the console's order. Exact: every pixel the game can read back and every picture is the one thread's. Automatic takes a quarter of this computer's threads, at most four. Takes effect when a game is next loaded.", GS_WORKERS.iter().map(|&(v, l)| Choice::new(v, l)).collect(), "auto", "Performance")
         },
     ]
 }
@@ -392,20 +349,7 @@ impl Core for Machine {
         self.debug.stopped
     }
 
-    fn debug_pc(&self, processor: u32) -> Option<u64> {
-        Machine::debug_pc(self, processor)
-    }
-
-    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
-    }
-
-    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
-        if processor > debugger::VU1 {
-            return Err(status::NOT_SUPPORTED);
-        }
-        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
-    }
+    emusen_native::debug_forwarders!(processor, processor > debugger::VU1);
 
     fn set_options(&mut self, flags: u32) {
         self.skip = flags & emusen_native::core::flags::OPTION_SKIP_RENDERING != 0;
@@ -695,8 +639,7 @@ mod tests {
     use crate::media::sample::{cd, dvd, elf, raw, volume};
 
     fn create_with(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
-        let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
+        Machine::create(&Create::plain(image, settings, files))
     }
 
     fn create(image: &[u8], settings: &[(&str, &str)]) -> Result<Machine, i32> {

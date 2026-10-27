@@ -559,10 +559,7 @@ impl Core for Machine {
             out[n..].fill(0);
             return Ok(());
         }
-        let m = self.bytes(space).ok_or(status::NO_SUCH_SPACE)?;
-        for (i, b) in out.iter_mut().enumerate() {
-            *b = m.get(address as usize + i).copied().unwrap_or(0);
-        }
+        emusen_native::core::spaces::read_bytes(self.bytes(space).ok_or(status::NO_SUCH_SPACE)?, address, out);
         Ok(())
     }
 
@@ -570,12 +567,7 @@ impl Core for Machine {
         if self.spaces().iter().any(|s| s.id == space && s.read_only) {
             return Err(status::READ_ONLY);
         }
-        let m = self.bytes_mut(space).ok_or(status::NO_SUCH_SPACE)?;
-        for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.get_mut(address as usize + i) {
-                *d = b;
-            }
-        }
+        emusen_native::core::spaces::write_bytes(self.bytes_mut(space).ok_or(status::NO_SUCH_SPACE)?, address, data);
         self.refresh_battery_file();
         Ok(())
     }
@@ -608,20 +600,7 @@ impl Core for Machine {
         self.debug_stopped
     }
 
-    fn debug_pc(&self, processor: u32) -> Option<u64> {
-        Machine::debug_pc(self, processor)
-    }
-
-    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
-    }
-
-    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
-        if processor > crate::genesis::debugger::Z80 {
-            return Err(status::NOT_SUPPORTED);
-        }
-        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
-    }
+    emusen_native::debug_forwarders!(processor, processor > crate::genesis::debugger::Z80);
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match (which, self.battery_id()) {
@@ -725,6 +704,14 @@ emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debu
 mod tests {
     use super::*;
     use crate::media::cartridge;
+
+    fn ports(m: &Machine) -> Vec<String> {
+        m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect()
+    }
+
+    fn set(m: &mut Machine, a: &str, b: &str) {
+        m.set_settings(&Settings::from_pairs(vec![("pad1".into(), a.into()), ("pad2".into(), b.into())])).unwrap();
+    }
 
     fn create(image: &[u8], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
@@ -951,7 +938,6 @@ mod tests {
         let image = cartridge("SEGA GENESIS", "U", None);
         let settings = Settings::from_pairs(vec![("pad2".into(), "md.pad6".into())]);
         let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None }).unwrap();
-        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
         assert_eq!(ports(&m), ["md.pad3", "md.pad6"]);
         m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
         assert_eq!(ports(&m), ["md.pad6", "md.pad3"]);
@@ -965,8 +951,6 @@ mod tests {
         let mut image = cartridge("SEGA GENESIS", "U", None);
         image[0x180..0x18E].copy_from_slice(b"GM T-120096-50");
         let mut m = create(&image, vec![]).unwrap();
-        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
-        let set = |m: &mut Machine, a: &str, b: &str| m.set_settings(&Settings::from_pairs(vec![("pad1".into(), a.into()), ("pad2".into(), b.into())])).unwrap();
         assert_eq!(ports(&m), ["md.pad3"; 4]);
         set(&mut m, "md.pad6", "md.pad6");
         assert_eq!(ports(&m), ["md.pad6", "md.pad6", "md.pad3", "md.pad3"]);
@@ -994,8 +978,6 @@ mod tests {
         assert_eq!(choices("pad2"), ["md.pad3", "md.pad6", "md.teamplayer3", "md.teamplayer6"]);
         let image = cartridge("SEGA GENESIS", "U", None);
         let mut m = create(&image, vec![]).unwrap();
-        let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
-        let set = |m: &mut Machine, a: &str, b: &str| m.set_settings(&Settings::from_pairs(vec![("pad1".into(), a.into()), ("pad2".into(), b.into())])).unwrap();
         set(&mut m, "md.teamplayer6", "md.pad3");
         assert_eq!(ports(&m), ["md.pad6", "md.pad6", "md.pad6", "md.pad6", "md.pad3"]);
         assert!(m.setting_notes().is_empty());

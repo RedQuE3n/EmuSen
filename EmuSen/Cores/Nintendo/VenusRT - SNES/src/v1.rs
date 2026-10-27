@@ -517,13 +517,7 @@ impl Core for Machine {
         self.debug_stopped
     }
 
-    fn debug_pc(&self, processor: u32) -> Option<u64> {
-        Machine::debug_pc(self, processor)
-    }
-
-    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
-    }
+    emusen_native::debug_forwarders!();
 
     /// The instruction set is the space's where the space is a processor's own (APURAM the SPC700's, GSUBUS and
     /// GSURAM the GSU's, SA1BUS, SA1IRAM and BWRAM the SA-1's, DSPPRG the DSP's), else `processor`'s.

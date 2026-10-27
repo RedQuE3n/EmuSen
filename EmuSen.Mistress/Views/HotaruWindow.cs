@@ -64,11 +64,11 @@ namespace EmuSen.Mistress.Views
 
             var toolbar = new ToolBar { Name = ToolbarName };
             toolbar.SetActions(
-                new LunaAction("History Back", HistoryBack),
-                new LunaAction("History Forward", HistoryForward),
+                new LunaAction("Back", HistoryBack),
+                new LunaAction("Forward", HistoryForward),
                 new LunaAction("Complete", Complete),
                 new LunaAction("Clear", () => _console.Clear()),
-                new LunaAction("Copy Output", CopyLastOutput),
+                new LunaAction("Copy", CopyLastOutput),
                 new LunaAction("Interrupt", Interrupt));
             var hint = new HintText { Name = "HotaruHint", Text = "L1 / R1 recall history · L2 / R2 complete · B clears the line, then closes" };
             DockPanel.SetDock(toolbar, Dock.Top);
@@ -89,7 +89,7 @@ namespace EmuSen.Mistress.Views
 
             Opened += (_, _) => _console.FocusInput();
 
-            // Ctrl+C stops the running line, as a terminal's does; Copy Output is the toolbar's.
+            // Ctrl+C stops the running line, as a terminal's does; Copy is the toolbar's.
             AddHandler(KeyDownEvent, (_, e) =>
             {
                 if (e.Key == Key.C && e.KeyModifiers == KeyModifiers.Control) { Interrupt(); e.Handled = true; }

@@ -11,6 +11,9 @@
 //! 24 bits and one more and drops what falls below, then truncates; a multiplication forms its product from a radix-4 Booth recoding
 //! of the second operand with the lowest column dropped, then truncates; a division and a square root round to the
 //! nearest; RSQRT divides by the rounded square root and truncates.
+//!
+//! The product is computed in closed form and DIV and SQRT on the host's arithmetic where that is proven to give the same
+//! bits and flags (`host`); Sapphire_Speed.md §56 records the census, the proofs and the tests.
 
 /// The largest magnitude, the result of an overflow and of a division by zero (EE Core User's Manual Table 8-4).
 pub const MAX: u32 = 0x7FFF_FFFF;
@@ -132,7 +135,9 @@ const DROPPED_COLUMNS: u32 = 1;
 
 /// `x × y` for two 24-bit significands as the multiplier sums them: `y` recoded as radix-4 Booth digits, each partial
 /// product a multiple of `x` (a negative one as its ones' complement and a carry-in of 1), the columns below
-/// `DROPPED_COLUMNS` left out. The result is the exact product or a little less.
+/// `DROPPED_COLUMNS` left out. The result is the exact product or a little less. The reference `product` is proven
+/// against (Sapphire_Speed.md §56.4).
+#[cfg(test)]
 fn booth(x: u64, y: u64) -> u64 {
     let y = y << 1;
     let mut total = 0u64;
@@ -152,6 +157,14 @@ fn booth(x: u64, y: u64) -> u64 {
     total & ((1 << 48) - 1)
 }
 
+/// `booth` in closed form: the exact product less what the dropped column held, which only the first digit's row and
+/// carry reach, by `y`'s lowest two bits and `x`'s lowest (Sapphire_Speed.md §56.4). Proven for one dropped column.
+fn product(x: u64, y: u64) -> u64 {
+    const _: () = assert!(DROPPED_COLUMNS == 1);
+    const LOSS: u64 = 0x1222_1000;
+    x * y - (LOSS >> ((((y & 3) << 1) | (x & 1)) << 2) & 3)
+}
+
 /// `a × b`, `b` the operand the multiplier recodes (FPR[ft] for the FPU), so that the product is not commutative in its
 /// last bit (Sapphire_Disputes.md D-26).
 pub fn mul(a: u32, b: u32) -> Outcome {
@@ -159,7 +172,7 @@ pub fn mul(a: u32, b: u32) -> Outcome {
     if is_zero(a) || is_zero(b) {
         return Outcome::of(zero(s));
     }
-    let p = booth(significand(a), significand(b));
+    let p = product(significand(a), significand(b));
     let e = exponent(a) + exponent(b) - 127;
     if p >> 47 == 1 { finish(s, e + 1, p >> 24) } else { finish(s, e, p >> 23) }
 }
@@ -179,6 +192,14 @@ fn quotient_bits(a: u32, b: u32) -> (i32, u64, bool) {
 /// `a / b`, rounded to the nearest (Sapphire_Disputes.md D-27). A zero divisor gives the largest magnitude, with
 /// invalid for 0/0 and divide otherwise; the sign is the operands' signs combined.
 pub fn div(a: u32, b: u32) -> Quotient {
+    match host::div(a, b) {
+        Some(q) => Quotient { value: Outcome::of(q), ..Quotient::default() },
+        None => div_soft(a, b),
+    }
+}
+
+/// `div` on integers, for every operand; the reference `host::div` is proven against.
+fn div_soft(a: u32, b: u32) -> Quotient {
     let s = sign(a) ^ sign(b);
     if is_zero(b) {
         let invalid = is_zero(a);
@@ -194,6 +215,14 @@ pub fn div(a: u32, b: u32) -> Quotient {
 /// The square root of `b`'s magnitude, rounded to the nearest (D-27); the root of any zero is +0 (D-29). Whether `b`
 /// was negative is the instruction's flag to raise.
 pub fn sqrt(b: u32) -> Outcome {
+    match host::sqrt(b) {
+        Some(r) => Outcome::of(r),
+        None => sqrt_soft(b),
+    }
+}
+
+/// `sqrt` on integers, for every operand; the reference `host::sqrt` is proven against.
+fn sqrt_soft(b: u32) -> Outcome {
     if is_zero(b) {
         return Outcome::of(0);
     }
@@ -238,6 +267,32 @@ pub fn fused(acc: u32, a: u32, b: u32, subtract: bool) -> Fused {
         add(acc, term)
     };
     Fused { value, product: Outcome { bits: term, ..product } }
+}
+
+/// The classes of operand where the host's IEEE 754 single-precision arithmetic, rounding to the nearest as Rust
+/// leaves it, gives the bits the integer functions give, and nothing else: an exponent field from 1 to 254 in, a
+/// result the host keeps normal out (Sapphire_Speed.md §56.3, §56.5). `None` sends an operation to its integer form.
+mod host {
+    /// An exponent field of 1 to 254: a number the host reads as the console does.
+    const fn normal(x: u32) -> bool {
+        (x >> 23 & 0xFF).wrapping_sub(1) < 254
+    }
+
+    /// DIV.S's quotient, correctly rounded to the nearest as the console's is, where it lands at a field of 2 to 254.
+    #[inline]
+    pub fn div(a: u32, b: u32) -> Option<u32> {
+        if !(normal(a) && normal(b)) {
+            return None;
+        }
+        let q = (f32::from_bits(a) / f32::from_bits(b)).to_bits();
+        if (q >> 23 & 0xFF).wrapping_sub(2) < 253 { Some(q) } else { None }
+    }
+
+    /// SQRT.S's root of the magnitude, correctly rounded to the nearest; every normal operand's root is normal.
+    #[inline]
+    pub fn sqrt(b: u32) -> Option<u32> {
+        if normal(b) { Some(f32::from_bits(b & super::MAX).sqrt().to_bits()) } else { None }
+    }
 }
 
 /// The order the compares use: zeros (the would-be denormals among them) equal, otherwise sign and magnitude.
@@ -336,4 +391,157 @@ mod tests {
             assert!(!(q & 1 == 1 && !sticky), "{a:x} / {b:x}");
         }
     }
+    /// A xorshift stream, the tests' operands.
+    fn stream(mut seed: u64) -> impl FnMut() -> u64 {
+        move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        }
+    }
+
+    /// An operand of every class the host's paths must take or refuse: zero, would-be denormals, exponent 255, and
+    /// exponents at and near either end of the range and at the centre, either sign, any fraction.
+    fn operand(r: u64) -> u32 {
+        let e = match r >> 40 & 15 {
+            0 => 0,
+            1 => 255,
+            2 => 1 + (r >> 44 & 3) as u32,
+            3 => 254 - (r >> 44 & 3) as u32,
+            4 => 127 + (r >> 44 & 63) as u32 - 32,
+            _ => (r >> 44) as u32 % 256,
+        };
+        let f = match r >> 52 & 7 {
+            0 => 0,
+            1 => 0x7F_FFFF,
+            _ => r as u32 & 0x7F_FFFF,
+        };
+        ((r >> 63) as u32 * SIGN) | (e << 23) | f
+    }
+
+    #[test]
+    fn the_closed_form_product_is_the_booth_sum_for_every_multiplier() {
+        let mut next = stream(0x9E37_79B9_7F4A_7C15);
+        let xs = [0x80_0000u64, 0x80_0001, 0xFF_FFFF, 0xFF_FFFE, 0x80_0000 | next() & 0x7F_FFFF, 0x80_0001 | next() & 0x7F_FFFE];
+        for x in xs {
+            for y in 0x80_0000..0x100_0000u64 {
+                assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+            }
+        }
+        for _ in 0..2_000_000 {
+            let r = next();
+            let (x, y) = (0x80_0000 | r & 0x7F_FFFF, 0x80_0000 | r >> 32 & 0x7F_FFFF);
+            assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+        }
+    }
+
+    /// `mul` and `fused` as they were written on `booth`, the references for the whole outcome and its flags.
+    fn mul_on_booth(a: u32, b: u32) -> Outcome {
+        let s = sign(a) ^ sign(b);
+        if is_zero(a) || is_zero(b) {
+            return Outcome::of(zero(s));
+        }
+        let p = booth(significand(a), significand(b));
+        let e = exponent(a) + exponent(b) - 127;
+        if p >> 47 == 1 { finish(s, e + 1, p >> 24) } else { finish(s, e, p >> 23) }
+    }
+    fn fused_on_booth(acc: u32, a: u32, b: u32, subtract: bool) -> Fused {
+        let product = mul_on_booth(a, b);
+        let term = if subtract { product.bits ^ SIGN } else { product.bits };
+        let value = if product.overflow {
+            Outcome { bits: term, overflow: true, underflow: false }
+        } else if exponent(acc) == 255 {
+            Outcome { bits: acc, overflow: true, underflow: false }
+        } else {
+            add(acc, term)
+        };
+        Fused { value, product: Outcome { bits: term, ..product } }
+    }
+
+    #[test]
+    fn products_and_multiply_adds_keep_their_outcomes_and_flags_over_every_class() {
+        let mut next = stream(0x6A09_E667_F3BC_C908);
+        let (mut over, mut under) = (0, 0);
+        for i in 0..4_000_000u64 {
+            let (a, b, acc) = (operand(next()), operand(next()), operand(next()));
+            let m = mul(a, b);
+            assert_eq!(m, mul_on_booth(a, b), "{a:08x} × {b:08x}");
+            (over, under) = (over + m.overflow as u64, under + m.underflow as u64);
+            assert_eq!(fused(acc, a, b, i & 1 == 1), fused_on_booth(acc, a, b, i & 1 == 1), "{acc:08x} ± {a:08x} × {b:08x}");
+        }
+        assert!(over > 10_000 && under > 10_000, "{over} {under}");
+    }
+
+    #[test]
+    #[ignore]
+    fn a_billion_products_equal_the_booth_sum() {
+        let mut next = stream(0xD1B5_4A32_D192_ED03);
+        for _ in 0..1_000_000_000u64 {
+            let r = next();
+            let (x, y) = (0x80_0000 | r & 0x7F_FFFF, 0x80_0000 | r >> 32 & 0x7F_FFFF);
+            assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+        }
+    }
+
+    /// Every operand pair through `div` against `div_soft`, and a count of those the host took.
+    fn divisions(n: u64, seed: u64) -> u64 {
+        let mut next = stream(seed);
+        let mut taken = 0;
+        for _ in 0..n {
+            let (a, b) = (operand(next()), operand(next()));
+            taken += host::div(a, b).is_some() as u64;
+            assert_eq!(div(a, b), div_soft(a, b), "{a:08x} / {b:08x}");
+        }
+        taken
+    }
+
+    #[test]
+    fn the_host_quotient_equals_the_integer_one_wherever_it_is_taken() {
+        let taken = divisions(4_000_000, 0x2545_F491_4F6C_DD1D);
+        assert!(taken > 1_000_000, "{taken}");
+        // Quotients whose field is 1, 2, 254 or 255 either side of rounding: the edges of the host's range.
+        let mut next = stream(0x5851_F42D_4C95_7F2D);
+        for _ in 0..1_000_000 {
+            let r = next();
+            let b = 0x3F80_0000 | r as u32 & 0x7F_FFFF;
+            for e in [1u32, 2, 3, 127, 128, 253, 254, 255] {
+                let a = ((r >> 63) as u32 * SIGN) | (e << 23) | ((r >> 32) as u32 & 0x7F_FFFF);
+                for d in [b, b + (1 << 23), b - (1 << 23), (b + (126 << 23)) & MAX, (b & !(0xFF << 23)) | (1 << 23)] {
+                    assert_eq!(div(a, d), div_soft(a, d), "{a:08x} / {d:08x}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn a_billion_quotients_equal_the_integer_ones() {
+        divisions(1_000_000_000, 0xBF58_476D_1CE4_E5B9);
+    }
+
+    #[test]
+    fn the_host_root_equals_the_integer_one_for_every_operand_of_two_binades_and_every_class() {
+        for e in [126u32, 127] {
+            for f in 0..0x80_0000u32 {
+                let x = e << 23 | f;
+                assert_eq!(sqrt(x), sqrt_soft(x), "{x:08x}");
+                assert_eq!(sqrt(x | SIGN), sqrt_soft(x | SIGN), "{x:08x}");
+            }
+        }
+        let mut next = stream(0x94D0_49BB_1331_11EB);
+        for _ in 0..4_000_000 {
+            let x = operand(next());
+            assert_eq!(sqrt(x), sqrt_soft(x), "{x:08x}");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn every_root_equals_the_integer_one() {
+        for x in 0..=u32::MAX {
+            assert_eq!(sqrt(x), sqrt_soft(x), "{x:08x}");
+        }
+    }
+
 }

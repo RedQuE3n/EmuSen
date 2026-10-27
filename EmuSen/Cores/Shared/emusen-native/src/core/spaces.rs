@@ -15,3 +15,20 @@ pub fn write_bytes(mem: &mut [u8], address: u32, data: &[u8]) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_space_reads_zero_and_drops_writes_past_its_end() {
+        let mut mem = [1u8, 2, 3, 4];
+        let mut out = [9u8; 4];
+        read_bytes(&mem, 2, &mut out);
+        assert_eq!(out, [3, 4, 0, 0]);
+        write_bytes(&mut mem, 3, &[7, 8, 9]);
+        assert_eq!(mem, [1, 2, 3, 7]);
+        read_bytes(&mem, u32::MAX, &mut out);
+        assert_eq!(out, [0; 4]);
+    }
+}

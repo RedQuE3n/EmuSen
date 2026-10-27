@@ -647,6 +647,15 @@ mod tests {
     }
 
     #[test]
+    fn the_debugger_refuses_what_is_not_one_of_the_four_processors() {
+        let mut m = create(&elf(), &[]).unwrap();
+        assert_ne!(Core::debug_disassemble(&mut m, 3, 0, 0, 1).err(), Some(status::NOT_SUPPORTED));
+        assert_eq!(Core::debug_disassemble(&mut m, 4, 0, 0, 1).err(), Some(status::NOT_SUPPORTED));
+        assert_ne!(Core::debug_disassemble(&mut m, 1, 0, 0, 1).err(), Some(status::NOT_SUPPORTED));
+        assert_eq!(Core::debug_registers(&m, 99), Err(status::NOT_SUPPORTED));
+    }
+
+    #[test]
     fn a_program_and_each_disc_form_make_a_black_silent_machine() {
         for image in [elf(), cd(), raw(&cd()), dvd()] {
             let mut m = create(&image, &[]).unwrap();

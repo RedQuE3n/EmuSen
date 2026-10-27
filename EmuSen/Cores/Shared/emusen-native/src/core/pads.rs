@@ -36,3 +36,22 @@ pub fn playstation_sticks() -> Vec<AxisControl> {
     let stick = |axis, control, label: &str| AxisControl { axis, control: Some(control), trigger: false, label: label.into() };
     vec![stick(0, Axis::LeftX, "Left Stick"), stick(1, Axis::LeftY, "Left Stick"), stick(2, Axis::RightX, "Right Stick"), stick(3, Axis::RightY, "Right Stick")]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_playstation_report_keeps_its_bits_and_controls() {
+        let text: Vec<String> = PLAYSTATION.iter().map(|&(bit, c, l)| format!("{bit}:{c:?}:{l}")).collect();
+        assert_eq!(
+            text.join(" "),
+            "4:Up:Up 6:Down:Down 7:Left:Left 5:Right:Right 12:X:Triangle 13:A:Circle 14:B:Cross 15:Y:Square 10:L:L1 11:R:R1 8:L2:L2 9:R2:R2 0:Select:Select 3:Start:Start 1:L3:L3 2:R3:R3"
+        );
+        let mut bits: Vec<u32> = PLAYSTATION.iter().map(|r| r.0).collect();
+        bits.sort_unstable();
+        assert_eq!(bits, (0..16).collect::<Vec<_>>());
+        assert_eq!(buttons(&PLAYSTATION[..14]).len(), 14);
+        assert_eq!(playstation_sticks().iter().map(|a| a.axis).collect::<Vec<_>>(), [0, 1, 2, 3]);
+    }
+}

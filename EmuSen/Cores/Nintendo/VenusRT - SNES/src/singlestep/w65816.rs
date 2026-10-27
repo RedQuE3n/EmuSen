@@ -5,7 +5,7 @@ use std::path::Path;
 
 use emusen_native::json::Value;
 
-use super::{FileReport, Outcome, int, ram, read_cases};
+use super::{FileReport, Outcome, int, ram, run_cases};
 
 /// MVN and MVP cases stop at this many cycles, mid-move.
 pub const CYCLE_CAP: usize = 100;
@@ -270,15 +270,12 @@ pub fn run_case_with<C: Cpu>(cpu: &mut C, bus: &mut FlatBus, want: &Expected, sa
 
 /// Every case of one file, with a CPU made for each case.
 pub fn run_file<C: Cpu>(path: &Path, limit: usize, mut make: impl FnMut(&Expected) -> C) -> FileReport {
-    let mut report = FileReport { file: path.file_name().unwrap().to_string_lossy().into_owned(), ..FileReport::default() };
     let mut bus = FlatBus::default();
-    for case in read_cases(path).iter().take(limit) {
+    run_cases(path, limit, |case| {
         let want = Expected::from_json(case);
         let mut cpu = make(&want);
-        let o = run_case(&mut cpu, &mut bus, &want);
-        report.add(case.get("name").and_then(Value::as_str).unwrap_or("?"), &o);
-    }
-    report
+        run_case(&mut cpu, &mut bus, &want)
+    })
 }
 
 /// A way to spoil the replay, so that the harness is shown to notice.
@@ -346,7 +343,7 @@ impl Cpu for Replay {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{run_suite, suite_dir, suite_files, summary, threads};
+    use super::super::{read_cases, run_suite, suite_dir, suite_files, summary, threads};
     use super::*;
     use emusen_native::json;
 

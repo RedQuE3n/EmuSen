@@ -5,7 +5,7 @@ use std::path::Path;
 
 use emusen_native::json::Value;
 
-use super::{FileReport, Outcome, int, ram, read_cases};
+use super::{FileReport, Outcome, int, ram, run_cases};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Registers {
@@ -155,19 +155,16 @@ pub fn run_case<C: Cpu>(cpu: &mut C, bus: &mut FlatBus, want: &Expected) -> Outc
     let memory = want.last_ram.iter().find(|&&(a, v)| bus.memory[a as usize & 0xFFFF] != v).map(|&(a, v)| format!("{a:04X} got {:02X} want {v:02X}", bus.memory[a as usize & 0xFFFF]));
     let cycles = bus.log.iter().zip(&want.cycles).enumerate().find(|(_, (g, w))| !w.matches(g)).map(|(i, (g, w))| format!("cycle {i}: got {} want {}", g.text(), w.text()))
         .or_else(|| (bus.log.len() != want.cycles.len()).then(|| format!("{} cycles, want {}", bus.log.len(), want.cycles.len())));
-    Outcome { registers: registers.is_none(), memory: memory.is_none(), cycles: cycles.is_none(), capped: false, first_difference: registers.or(memory).or(cycles) }
+    Outcome::from_checks(registers, memory, cycles)
 }
 
 pub fn run_file<C: Cpu>(path: &Path, limit: usize, mut make: impl FnMut(&Expected) -> C) -> FileReport {
-    let mut report = FileReport { file: path.file_name().unwrap().to_string_lossy().into_owned(), ..FileReport::default() };
     let mut bus = FlatBus::default();
-    for case in read_cases(path).iter().take(limit) {
+    run_cases(path, limit, |case| {
         let want = Expected::from_json(case);
         let mut cpu = make(&want);
-        let o = run_case(&mut cpu, &mut bus, &want);
-        report.add(case.get("name").and_then(Value::as_str).unwrap_or("?"), &o);
-    }
-    report
+        run_case(&mut cpu, &mut bus, &want)
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -234,7 +231,7 @@ impl Cpu for Replay {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{run_suite, suite_dir, suite_files, summary, threads};
+    use super::super::{read_cases, run_suite, suite_dir, suite_files, summary, threads};
     use super::*;
     use emusen_native::json;
 

@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "emusen-mips",
  "emusen-native",
+ "emusen-singlestep",
 ]
 
 [[package]]
@@ -17,3 +18,10 @@ version = "0.1.0"
 [[package]]
 name = "emusen-native"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-singlestep"
+version = "0.1.0"
+dependencies = [
+ "emusen-native",
+]

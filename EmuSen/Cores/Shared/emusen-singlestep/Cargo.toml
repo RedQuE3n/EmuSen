@@ -1,0 +1,17 @@
+[package]
+name = "emusen-singlestep"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The shared harness of the single-step CPU suites: case loading, the parallel run, the three checks and the report. A dev-dependency only; it never ships. See EmuSen_RustPlatform.md.
+[lib]
+name = "emusen_singlestep"
+
+[dependencies]
+emusen-native = { path = "../emusen-native" }
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

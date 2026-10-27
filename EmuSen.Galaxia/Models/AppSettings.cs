@@ -94,7 +94,8 @@ namespace EmuSen.Galaxia.Models
         public string ScrapeRegion { get; set; } = "auto";
         public string ScrapeLanguage { get; set; } = "en";
         public bool ScrapeRegionFallback { get; set; } = true;
-        public int ScrapeThreads { get; set; } = 1;
+        // 0: as many workers as the member's maxthreads allows - see EmuSen_Settings_Reference.md, the scraping table.
+        public int ScrapeThreads { get; set; }
 
         // Pass 8's kinds, each off until the player turns it on, and ScreenScraper's names shown (Q30) - see EmuSen_Settings_Reference.md §4.76.
         public bool ScrapeBackCovers { get; set; }

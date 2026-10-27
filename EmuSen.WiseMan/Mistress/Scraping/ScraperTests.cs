@@ -514,10 +514,21 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(roms.Count, _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")).Distinct().Count());
         }
 
+        [Fact]
+        public void The_default_asks_for_every_thread_the_account_allows()
+        {
+            Assert.Equal(0, new EmuSen.Galaxia.Models.AppSettings().ScrapeThreads);
+            Assert.Equal(int.MaxValue, ScrapeRules.ThreadsWanted(0));
+            Assert.Equal(3, ScrapeRules.ThreadsWanted(3));
+            _quota.Observe(new ScrapeQuota(4, 128, 0, 0, 6000, 20000, 2000));
+            Assert.Equal(4, _quota.Threads(ScrapeRules.ThreadsWanted(0)));
+        }
+
         [Theory]
         [InlineData(1, 4, 1)]
         [InlineData(2, 4, 2)]
         [InlineData(4, 2, 2)]
+        [InlineData(4, int.MaxValue, 4)]
         public void Never_more_requests_at_once_than_maxthreads(int maxThreads, int wanted, int most)
         {
             _server.User = FakeScreenScraper.Quota(maxThreads, perMinute: 6000, perDay: 20000, koPerDay: 2000, today: 0, koToday: 0);

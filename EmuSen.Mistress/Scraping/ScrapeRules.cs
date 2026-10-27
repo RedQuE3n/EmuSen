@@ -53,6 +53,9 @@ namespace EmuSen.Mistress.Scraping
     // The region, language and rating rules of §5.4, which decide what is kept from an answer - see EmuSen_BigPicture.md §17.
     public static partial class ScrapeRules
     {
+        // The workers a run asks for: the setting, or with 0 every one the quota allows (maxthreads, one until an answer has said).
+        public static int ThreadsWanted(int setting) => setting > 0 ? setting : int.MaxValue;
+
         public const string AutomaticRegion = "auto";
 
         public static readonly ScrapeMediaKind Cover = new("cover", "covers", ["box-2D"]);

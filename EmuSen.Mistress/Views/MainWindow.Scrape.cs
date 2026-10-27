@@ -67,7 +67,7 @@ namespace EmuSen.Mistress.Views
             {
                 Covers = _appSettings.ScrapeCovers, Screenshots = _appSettings.ScrapeScreenshots, Marquees = _appSettings.ScrapeMarquees,
                 TitleScreens = _appSettings.ScrapeTitleScreens, Miximages = _appSettings.ScrapeMiximages, Region = _appSettings.ScrapeRegion,
-                Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = Math.Max(1, _appSettings.ScrapeThreads),
+                Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = ScrapeRules.ThreadsWanted(_appSettings.ScrapeThreads),
                 BackCovers = _appSettings.ScrapeBackCovers, Boxes3D = _appSettings.Scrape3DBoxes, PhysicalMedia = _appSettings.ScrapePhysicalMedia,
                 FanArt = _appSettings.ScrapeFanArt, Manuals = _appSettings.ScrapeManuals, Videos = _appSettings.ScrapeVideos,
             };

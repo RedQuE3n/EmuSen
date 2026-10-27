@@ -135,6 +135,7 @@ namespace EmuSen.Mistress.Views
         {
             var rows = new List<PadMenuEntry>();
             if (inGame) rows.Add(Opens("Preferences", ShowPreferences));
+            rows.Add(Opens("Shell", ShowShellConsole));
             if (!_bigScreen) rows.Add(new(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
             if (!_bigScreenForced) rows.Add(new(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
             rows.Add(Ask("Exit EmuSen...", "Exit EmuSen?", inGame ? "The game closes, then EmuSen." : "EmuSen closes.", Close));

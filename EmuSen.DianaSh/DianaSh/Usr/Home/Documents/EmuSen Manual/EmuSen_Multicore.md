@@ -63,7 +63,7 @@ Everything that needs a "which consoles?" answer reads it:
 | `RomLibrary.Extensions` (Mistress' library scan) | `RomExtensions` |
 | `MainWindow`'s Open ROM file picker | one `FilePickerFileType` per core |
 | `PreferencesWindow`'s core combo | `Cores.Select(c => c.DisplayName)` |
-| `DianaShConsoleWindow`'s welcome banner | same |
+| `HotaruWindow`'s welcome banner | same |
 | `cheat db prune` | `SupportedCheatSystems` |
 
 Each of those was its own hardcoded copy of the list before. Three of them said `"SNES (Venus)"` as a string literal, and `RomLibrary` had `{ ".smc", ".sfc" }` — which is why, until this pass, an `.nes` file was invisible in Mistress' ROM library and unselectable in its file picker even though a working NES core existed behind it.

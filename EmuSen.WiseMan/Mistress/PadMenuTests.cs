@@ -120,7 +120,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(["Restart Game?", "Quit Game?"], rows.Where(r => r.Question is not null).Select(r => r.Question!));
 
             Assert.Equal(GameSettings, SubmenuLines(window, MainWindow.GameSettingsMenu));
-            Assert.Equal(bigScreen ? ["Preferences", "Exit Big Picture", "Exit EmuSen..."] : ["Preferences", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
+            Assert.Equal(bigScreen ? ["Preferences", "Shell", "Exit Big Picture", "Exit EmuSen..."] : ["Preferences", "Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
 
             // The big panel: the game's name over it, a chevron on each submenu, arrows on each value, no version under the first page.
             if (bigScreen)
@@ -146,7 +146,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal([3], Enumerable.Range(0, 6).Where(i => PadMenu.Entries(window)[i].StartsSection));
             Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games..."], SubmenuLines(window, MainWindow.LibraryMenu));
             Assert.Equal(Settings, SubmenuLines(window, MainWindow.SettingsMenu));
-            Assert.Equal(["Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
+            Assert.Equal(["Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.DeskTitle(window));
             Done(window);
         }, default);
@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.Mistress
             s.Pad.Start();
             Assert.Equal(["Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(s.Window));
             Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
-            Assert.Equal(["Exit Big Picture", "Exit EmuSen..."], SubmenuLines(s.Window, MainWindow.EmuSenMenu));
+            Assert.Equal(["Shell", "Exit Big Picture", "Exit EmuSen..."], SubmenuLines(s.Window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.Big(s.Window).Title);
 
             s.Pad.Up();
@@ -423,7 +423,7 @@ namespace EmuSen.WiseMan.Mistress
             { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) }, { "Graphics", typeof(GraphicsSettingsWindow) },
             { "Shaders", typeof(ShaderSettingsWindow) }, { "Cheats", typeof(ActiveCheatsWindow) }, { "Preferences", typeof(PreferencesWindow) },
             { "Collections", typeof(CollectionSettingsWindow) }, { "Scrape Games...", typeof(PreferencesWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
-            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) },
+            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Shell", typeof(HotaruWindow) },
         };
 
         [Theory]

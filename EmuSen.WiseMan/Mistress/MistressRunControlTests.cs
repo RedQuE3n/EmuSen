@@ -69,14 +69,14 @@ namespace EmuSen.WiseMan.Mistress
         private static long Frames(MainWindow window) => MistressGame.TotalFrames(window);
 
         // The console window opened as the menu opens it, and a line typed into it.
-        private static DianaShConsoleWindow Console(MainWindow window)
+        private static HotaruWindow Console(MainWindow window)
         {
             typeof(MainWindow).GetMethod("ShowShellConsole", Hidden)!.Invoke(window, null);
-            return window.OwnedWindows.OfType<DianaShConsoleWindow>().Single();
+            return window.OwnedWindows.OfType<HotaruWindow>().Single();
         }
 
-        private static void Type(DianaShConsoleWindow console, string line) =>
-            typeof(DianaShConsoleWindow).GetMethod("Submit", Hidden)!.Invoke(console, new object[] { line });
+        private static void Type(HotaruWindow console, string line) =>
+            typeof(HotaruWindow).GetMethod("Submit", Hidden)!.Invoke(console, new object[] { line });
 
         // Frames that stay where they are for a while: nothing advanced.
         private static bool Held(MainWindow window)
@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task C1_a_resume_typed_while_paused_resumes_the_game() => Session.Dispatch(() =>
         {
             MainWindow window = Started();
-            DianaShConsoleWindow console = Console(window);
+            HotaruWindow console = Console(window);
             window.PauseEmulation();
             Assert.True(Held(window), "the pause did not hold the game");
 
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task C2_a_breakpoint_set_from_the_console_stops_the_game() => Session.Dispatch(() =>
         {
             MainWindow window = Started();
-            DianaShConsoleWindow console = Console(window);
+            HotaruWindow console = Console(window);
             TextBlock status = window.GetControl<TextBlock>("StatusText");
 
             Type(console, "bp add 008005");

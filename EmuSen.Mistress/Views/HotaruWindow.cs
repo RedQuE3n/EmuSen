@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
+using EmuSen.Mistress.Input;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -9,6 +12,7 @@ using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Client;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
+using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
@@ -16,8 +20,8 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // A real terminal-style window onto the same DianaShInterpreter the F4 prompt and EmuSen.Pharaoh's --commands use - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
-    public class DianaShConsoleWindow : ToolWindow
+    // Hotaru, the shell's window: a terminal onto the DianaShInterpreter with a toolbar for what a pad cannot type - see EmuSen_HotaruWindow.md and EmuSen_Debugging_Tools_Reference_v5.md §3.17.
+    public class HotaruWindow : ToolWindow, IPadDriven
     {
         // See `man tmux`.
         private readonly DianaShSessionManager _sessions = new();
@@ -25,7 +29,7 @@ namespace EmuSen.Mistress.Views
         // One scheduler per session - see `man tmux`. ConcurrentDictionary since MainWindow's emulation thread reads it while the UI thread edits it.
         private readonly ConcurrentDictionary<DianaShSession, DianaShInterpreterScheduler> _schedulers = new();
 
-        private readonly ConsolePane _console = new() { Prompt = "DianaSh #: " };
+        private readonly ConsolePane _console = new() { Prompt = "DianaSh #: ", OutputFocusable = false };
 
         private DianaShInterpreter _shell => _sessions.Current!.Interpreter;
         private DianaShInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
@@ -39,19 +43,34 @@ namespace EmuSen.Mistress.Views
         // The running game's session, whose service table the shell is made over; null with no game - see EmuSen_Backend.md §14.13.
         private CrystalSession? _session;
 
-        public DianaShConsoleWindow() : this(null, null) { }
+        // The newest non-empty output, which the toolbar's copy puts on the clipboard.
+        private string _lastOutput = "";
 
-        public DianaShConsoleWindow(CrystalSession? session, IEnumerable<IDianaShCommand>? extraCommands = null)
+        public const string ToolbarName = "HotaruToolbar";
+
+        public HotaruWindow() : this(null, null) { }
+
+        public HotaruWindow(CrystalSession? session, IEnumerable<IDianaShCommand>? extraCommands = null)
         {
             _extraCommands = Combine(extraCommands);
             _session = session;
 
-            Title = "DianaSh";
+            Title = "Shell";
             Width = 860;
             Height = 540;
             this.MinSize(420, 240);
 
-            Content = _console.Margin(8);
+            var toolbar = new ToolBar { Name = ToolbarName };
+            toolbar.SetActions(
+                new LunaAction("History Back", HistoryBack),
+                new LunaAction("History Forward", HistoryForward),
+                new LunaAction("Complete", Complete),
+                new LunaAction("Clear", () => _console.Clear()),
+                new LunaAction("Copy Output", CopyLastOutput));
+            var hint = new HintText { Name = "HotaruHint", Text = "L1 / R1 recall history · L2 / R2 complete · B clears the line, then closes" };
+            DockPanel.SetDock(toolbar, Dock.Top);
+            DockPanel.SetDock(hint, Dock.Bottom);
+            Content = new DockPanel { Children = { toolbar, hint, _console.Margin(8) } };
 
             var initial = new DianaShSession("main", BuildInterpreter());
             _sessions.RegisterInitial(initial);
@@ -66,6 +85,48 @@ namespace EmuSen.Mistress.Views
             else if (session is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             Opened += (_, _) => _console.FocusInput();
+        }
+
+        public void HistoryBack() => _console.HistoryBack();
+
+        public void HistoryForward() => _console.HistoryForward();
+
+        // Completes the first word to the longest prefix the command names share, with a space when one command remains.
+        public void Complete()
+        {
+            string typed = _console.InputText;
+            if (typed.Length == 0 || typed.Any(char.IsWhiteSpace)) return;
+            List<string> matches = _shell.CommandNames.Where(n => n.StartsWith(typed, System.StringComparison.Ordinal)).ToList();
+            if (matches.Count == 0) return;
+            string common = matches.Aggregate((a, b) => a.Substring(0, CommonLength(a, b)));
+            _console.Insert(common.Substring(typed.Length) + (matches.Count == 1 ? " " : ""));
+        }
+
+        private static int CommonLength(string a, string b)
+        {
+            int n = 0;
+            while (n < a.Length && n < b.Length && a[n] == b[n]) n++;
+            return n;
+        }
+
+        // The last output put on the clipboard; nothing when there has been none.
+        public void CopyLastOutput()
+        {
+            if (_lastOutput.Length == 0) return;
+            _ = GetTopLevel(this)?.Clipboard?.SetTextAsync(_lastOutput);
+        }
+
+        // Shoulders step through history, a trigger completes, and B with a line typed clears it before it closes the window.
+        public bool OnPad(UiButton button)
+        {
+            switch (button)
+            {
+                case UiButton.PageUp: HistoryBack(); return true;
+                case UiButton.PageDown: HistoryForward(); return true;
+                case UiButton.First or UiButton.Last: Complete(); return true;
+                case UiButton.Back when _console.InputText.Length > 0: _console.SetInput(""); return true;
+                default: return false;
+            }
         }
 
         // Adds this window's own `clear` override onto whatever MainWindow passed in - only this window can reach its own output.
@@ -140,7 +201,7 @@ namespace EmuSen.Mistress.Views
             if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
             _console.Prompt = _shell.IsAwaitingMoreInput ? "> " : "DianaSh #: ";
             if (needsMore) return;
-            if (output.Length > 0) _console.AppendLine(output);
+            if (output.Length > 0) { _lastOutput = output; _console.AppendLine(output); }
         }
 
         // Called once per frame from MainWindow's emulation thread; must only be called from the thread that owns the core.

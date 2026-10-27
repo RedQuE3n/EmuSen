@@ -112,7 +112,7 @@ Eleven windows, probed with `ControlAutomationPeer.CreatePeerForElement` — the
 | `MainWindow` | 20 of 22 | 22 of 22 |
 | `CheatDatabaseWindow` | 8 of 10 | 9 of 10 |
 | `ActiveCheatsWindow` | 12 of 13 | 13 of 13 |
-| `DianaShConsoleWindow` | 1 of 2 | 2 of 2 |
+| `HotaruWindow` | 1 of 2 | 2 of 2 |
 | **Total** | **69 of 97** | **95 of 97** |
 
 **Twenty-six controls became reachable to a screen reader without a line changing in this repository.** `DebugSettingsWindow` is the clearest case: fifteen of its sixteen tab stops are `LunaSwitch`es, and every one of them announced as an unnamed button because §14.1 of the toolkit's own record put their labels in `OnContent` rather than `Content`, which is where Avalonia's toggle peer looks. `PreferencesWindow` doubled because `PathPickerRow` and `FieldRow` now name their own parts.

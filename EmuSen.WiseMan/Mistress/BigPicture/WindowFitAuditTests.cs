@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // The windows a player reaches in a game, and those reached from the themed library.
         public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
-            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
+            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames", "Shell"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName",
             "GamePackageNew", "GamePackageLongTitle", "GamePackageSelfContained"];
@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
             // The long names, where a cut would first appear (Q190).
             ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow), ["ScreenshotLongTitle"] = typeof(ScreenshotWindow),
-            ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
+            ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
             ["FindByNameLongTitle"] = typeof(FindByNameWindow), ["CoverPickerLongTitle"] = typeof(CoverPickerWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
             ["GamePackageNew"] = typeof(GamePackageWindow), ["GamePackageLongTitle"] = typeof(GamePackageWindow), ["GamePackageSelfContained"] = typeof(GamePackageWindow),
@@ -285,6 +285,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Call(window, "ShowActiveCheats");
                     Settle(window);
                     if (which == "ActiveCheatsGeneral") Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TabControl>().First().SelectedIndex = 0;
+                    break;
+                case "Shell":
+                    Call(window, "ShowShellConsole");
+                    Settle(window);
                     break;
                 case "CheatDatabase":
                     CheatFiles();

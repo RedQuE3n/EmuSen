@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.LunaP
             "Vstop" => new VstopWindow(),
             "Main" => new MainWindow(),
             "RomBrowser" => new RomBrowserWindow(),
-            "DianaShConsole" => new DianaShConsoleWindow(),
+            "DianaShConsole" => new HotaruWindow(),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "No builder for this window."),
         };
 

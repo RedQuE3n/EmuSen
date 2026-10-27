@@ -355,14 +355,14 @@ loop of its own: Mistress's `EmulationLoop` at `MainWindow.axaml.cs:1239–1464`
 |---|---|---|---|
 | Rewind capture | gated on the engine's opt-out, `EngineFeatures.Of(core).RewindCapture` (`MainWindow.axaml.cs:1349`) | **ungated** (`GameWindow.axaml.cs:435`) | **ungated** (`FrameRunner.cs:177`) |
 | After a state load | hotkey: rewind cleared and rate control reset (`MainWindow.axaml.cs:702–704`); console: **rate control not reset** (`:617–620`) | hotkey: both (`:570–572`); console: **neither** (`Program.cs:189`) | rewind cleared, providers refreshed (`CommandsScriptRunner.cs:240–244`) |
-| `HostAction`s the shell returns | `SwitchSession` only (`DianaShConsoleWindow.cs:135`) | `Shutdown`, `Resume`, `Step`, `LoadCore`, `SwitchSession` (`GameWindow.axaml.cs:238–240,647–657`) | discarded: it calls `Execute` (`CommandsScriptRunner.cs:419`), which returns `Submit(line).Output` alone (`DianaShInterpreter.cs:210`) |
+| `HostAction`s the shell returns | `SwitchSession` only (`HotaruWindow.cs:135`) | `Shutdown`, `Resume`, `Step`, `LoadCore`, `SwitchSession` (`GameWindow.axaml.cs:238–240,647–657`) | discarded: it calls `Execute` (`CommandsScriptRunner.cs:419`), which returns `Submit(line).Output` alone (`DianaShInterpreter.cs:210`) |
 | A breakpoint halt after `RunFrame` | `IsHaltedAtBreakpoint` named nowhere (`grep`: 0; how Mistress stops was not traced) | `:426` | `FrameRunner.cs:161` |
 | The frame hand-off | `FrameHandOff.cs`: repeated rows, aspect, display lines, lending, de-duplication by frame serial | `Latest<FrameData>` with picture, width and height only (`GameWindow.axaml.cs:117`) | — |
 | Screenshot | expands repeated rows (`MainWindow.Resume.cs:90`) | does not (`:536–546`) | does not (`CommandsScriptRunner.cs:267`) |
 
 Five post-load sequences for one operation, three answers to "does this engine capture rewind", and a shell whose
 `load` works in one frontend and not the other: each a defect or a latent one, and each born of the same cause. The
-shell's host code is copied too: `SyncSchedulersToSessions` is identical in `Mistress/Views/DianaShConsoleWindow.cs:109`
+shell's host code is copied too: `SyncSchedulersToSessions` is identical in `Mistress/Views/HotaruWindow.cs:109`
 and `Hotaru/Views/GameWindow.axaml.cs:347` (`diff`: no difference), and `BuildInterpreter`, `RegisterInitial` and
 `RebuildAll` nearly so.
 

@@ -74,17 +74,17 @@ namespace EmuSen.WiseMan.Mistress
             return window;
         }
 
-        private static DianaShConsoleWindow Console(MainWindow window)
+        private static HotaruWindow Console(MainWindow window)
         {
             typeof(MainWindow).GetMethod("ShowShellConsole", Hidden)!.Invoke(window, null);
-            return window.OwnedWindows.OfType<DianaShConsoleWindow>().Single();
+            return window.OwnedWindows.OfType<HotaruWindow>().Single();
         }
 
-        private static string Output(DianaShConsoleWindow console) =>
-            ((ConsolePane)typeof(DianaShConsoleWindow).GetField("_console", Hidden)!.GetValue(console)!).OutputText;
+        private static string Output(HotaruWindow console) =>
+            ((ConsolePane)typeof(HotaruWindow).GetField("_console", Hidden)!.GetValue(console)!).OutputText;
 
-        private static void Type(DianaShConsoleWindow console, string line) =>
-            typeof(DianaShConsoleWindow).GetMethod("Submit", Hidden)!.Invoke(console, new object[] { line });
+        private static void Type(HotaruWindow console, string line) =>
+            typeof(HotaruWindow).GetMethod("Submit", Hidden)!.Invoke(console, new object[] { line });
 
         private static string RefusalLine => $"[ERROR] {DianaShInterpreter.ForeignTableRefusal}";
 
@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_console_over_a_running_game_refuses_only_the_csharp_shell_over_the_rust_runtime_in_words() => Session.Dispatch(() =>
         {
             MainWindow window = Started();
-            DianaShConsoleWindow console = Console(window);
+            HotaruWindow console = Console(window);
             bool refused = CrystalRuntime.Native && !DianaShNative.Active;
 
             if (refused)

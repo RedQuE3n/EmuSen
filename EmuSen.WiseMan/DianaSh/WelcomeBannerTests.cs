@@ -6,7 +6,7 @@ using EmuSen.DianaSh.DianaSh.Dev;
 namespace EmuSen.WiseMan.DianaSh
 {
     // GetWelcomeBanner() - the banner both EmuSen.Hotaru's RunStandaloneShell
-    // and EmuSen.Mistress's DianaShConsoleWindow print once, at actual
+    // and EmuSen.Mistress's HotaruWindow print once, at actual
     // shell launch. Headless-testable content only (text/formatting) -
     // there's no visual rendering to check here, same limitation every
     // other frontend-display feature in this project has.

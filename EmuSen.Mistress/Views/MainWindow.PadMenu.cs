@@ -128,6 +128,7 @@ namespace EmuSen.Mistress.Views
             Opens(MemoryCardsMenu, ShowMemoryCards),
             Opens(CompressedDiscsMenu, ShowCompressedDiscs),
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
+            Opens("Shell", ShowShellConsole),
             Opens("Preferences", ShowPreferences),
         ];
 

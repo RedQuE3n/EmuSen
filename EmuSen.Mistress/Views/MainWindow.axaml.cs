@@ -109,7 +109,7 @@ namespace EmuSen.Mistress.Views
         private readonly FrameHandOff _frames;
 
         // At most one, reused and brought forward rather than duplicated; cleared on Closed.
-        private readonly WindowSlot<DianaShConsoleWindow> _consoleWindow = new();
+        private readonly WindowSlot<HotaruWindow> _consoleWindow = new();
 
         // Same rule, opened by typing `coretop` rather than from a menu item.
         private readonly WindowSlot<CoretopWindow> _coretopWindow = new();
@@ -576,7 +576,7 @@ namespace EmuSen.Mistress.Views
 
         private void ShowShellConsole()
         {
-            _consoleWindow.Show(this, () => new DianaShConsoleWindow(_session?.Crystal, MakeEmulationControlCommands()));
+            _consoleWindow.Show(this, () => new HotaruWindow(_session?.Crystal, MakeEmulationControlCommands()));
         }
 
         // Built fresh per console window, so the delegates never outlive a MainWindow.
@@ -764,7 +764,7 @@ namespace EmuSen.Mistress.Views
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.
                     new LunaAction("_Runtime Dashboard...", OpenVstopWindow),
-                    new LunaAction("_DianaSh Console...", ShowShellConsole)));
+                    new LunaAction("S_hell...", ShowShellConsole)));
 
             SyncMenuState();
         }

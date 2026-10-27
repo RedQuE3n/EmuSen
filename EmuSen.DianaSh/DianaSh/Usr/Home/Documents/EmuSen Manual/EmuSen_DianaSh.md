@@ -130,7 +130,7 @@ There are **83 command classes**, in 84 files: `Bin/Commands/Unix/` holds 37 (36
 - **Five aliases are mapped by hand, twice**, in `Dispatch` and again in `TryGetReadOnlyFastPath`: `c` to `resume`,
   `quit` to `shutdown`, `s` to `step`, `jobs` to `ps`, `hexdump` to `xxd`.
 - **The frontends add their own**: Mistress seven (`pause`, its own `resume`, `coretop` and `vstop` openers, `feed`,
-  `state`, and its console's `clear`; `MainWindow.axaml.cs:598`, `DianaShConsoleWindow.cs:80`), Hotaru four
+  `state`, and its console's `clear`; `MainWindow.axaml.cs:598`, `HotaruWindow.cs:80`), Hotaru four
   (`coretop` with its window opener, `state`, `core`, and its shell window's `clear`; `Program.cs:184`,
   `DianaShShellWindow.cs:60`). A frontend's command replaces a same-named default (`DianaShInterpreter.cs:165`).
 
@@ -204,14 +204,14 @@ And within the shell:
 | Host | How | Where |
 |---|---|---|
 | The standalone program | `CreateDefault(null)` and a read loop over `ConsoleLineReader` | `Bin/Program.cs` |
-| Mistress | a console window per main window: a session manager, a scheduler per session, read-only lines run on the UI thread, the rest drained by the emulation thread each frame (`DrainPendingFromEmulationThread`) | `DianaShConsoleWindow.cs` (175 lines), `MainWindow.axaml.cs:1332` |
+| Mistress | a console window per main window: a session manager, a scheduler per session, read-only lines run on the UI thread, the rest drained by the emulation thread each frame (`DrainPendingFromEmulationThread`) | `HotaruWindow.cs` (175 lines), `MainWindow.axaml.cs:1332` |
 | Hotaru | the F4 prompt and an always-live terminal on a reader thread; while halted at a breakpoint, lines go to `TakeHaltedLine` on the thread that owns the core; `HostAction.Resume`, `Step`, `Shutdown`, `LoadCore` and `SwitchSession` steer its loop | `GameWindow.axaml.cs` (704 lines), `DianaShShellWindow.cs`, `Program.cs` |
 | Pharaoh | an unknown `--commands` verb falls through to an interpreter built over the bundle's debug target | `CommandsScriptRunner.cs:19`, `Program.cs:237` |
 | WiseMan | `CreateDefault` over fake targets and real cores, 645 cases in `DianaSh/` (55 files, 9,967 lines) and 43 more files elsewhere | `Fixtures/DianaShellFixtures.cs` |
 | The conformance kit | none yet; `EmuSen_CoreAPI.md` §12.2 plans Pharaoh as the runtime suite's client | — |
 
 Every host reaches the shell's classes directly, and every one constructs its commands' dependencies itself. The
-copying shows: `SyncSchedulersToSessions` is identical in `DianaShConsoleWindow.cs` and `GameWindow.axaml.cs`
+copying shows: `SyncSchedulersToSessions` is identical in `HotaruWindow.cs` and `GameWindow.axaml.cs`
 (compared with `diff`, 2026-10-10), and each host answers `HostAction` its own way: Mistress handles `SwitchSession`
 alone, Hotaru all five, and Pharaoh none, because it calls `Execute`, which returns the output and drops the action
 (`EmuSen_Surfaces.md` §4.1). So `core <name> <path>` loads a game in Hotaru and does nothing in Mistress.

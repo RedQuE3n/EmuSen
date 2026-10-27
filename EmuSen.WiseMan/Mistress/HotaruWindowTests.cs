@@ -87,11 +87,11 @@ namespace EmuSen.WiseMan.Mistress
             HotaruWindow w = Ready();
             Submit(w, "echo one");
             Submit(w, "echo two");
-            Toolbar(w, "History Back");
+            Toolbar(w, "Back");
             Assert.Equal("echo two", Pane(w).InputText);
-            Toolbar(w, "History Back");
+            Toolbar(w, "Back");
             Assert.Equal("echo one", Pane(w).InputText);
-            Toolbar(w, "History Forward");
+            Toolbar(w, "Forward");
             Assert.Equal("echo two", Pane(w).InputText);
             w.Close();
         }, default);
@@ -148,7 +148,7 @@ namespace EmuSen.WiseMan.Mistress
             HotaruWindow w = Ready();
             Submit(w, "echo first");
             Submit(w, "echo second");
-            Toolbar(w, "Copy Output");
+            Toolbar(w, "Copy");
             Assert.Equal("second", await Avalonia.Input.Platform.ClipboardExtensions.TryGetTextAsync(w.Clipboard!));
             w.Close();
         }, default);

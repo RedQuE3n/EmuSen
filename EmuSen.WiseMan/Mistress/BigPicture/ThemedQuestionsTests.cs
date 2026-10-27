@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.LogicalTree;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 using Xunit;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture

@@ -3,8 +3,8 @@
 //! `Timing::commit` with the instruction's category, row, reads and writes made constants, and folded where the
 //! block's own earlier instructions fix a value. A load or store reaches the scratchpad, RDRAM or the data cache's line
 //! through the translation cache, or leaves the block before it. Each exit hands the cycles to the replay, then writes
-//! everything back; a load or store leaving once the block has run a step writes back only the state after the load or
-//! store before it, which that access's own block holds, and the interpreter runs the steps between. Sapphire_Native.md
+//! everything back; a load or store leaving at most `REWIND_MOST` steps after the load or store before it writes back
+//! only the state after that one, which that access's own block holds, and the interpreter runs the steps between. Sapphire_Native.md
 //! §44.4 and Sapphire_Recompiler.md §48.4 and §48.15 record what is computed where.
 
 use std::mem::offset_of;
@@ -56,6 +56,10 @@ const X_DUMMY: i32 = offset_of!(Context, dummy) as i32;
 const X_LOG: i32 = offset_of!(Context, log) as i32;
 const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_UNCACHED_LOADS: i32 = offset_of!(Context, uncached_loads) as i32;
+/// The most steps since the last load or store for which a load or store leaving its block shares that access's state
+/// and has the interpreter run them again; past it, the access's exit writes everything back itself
+/// (Sapphire_Recompiler.md §48.15).
+const REWIND_MOST: u32 = 2;
 /// Why a load or store left its block, `Context::left`'s index.
 const LEFT_HORIZON: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
@@ -1511,10 +1515,14 @@ impl Emitter<'_, '_> {
         self.b.seal_block(slow);
         self.b.switch_to_block(slow);
         self.held = kept;
-        if kept.steps == 0 || self.options.verify {
-            // Nothing to write back: nothing ran, or the verifier's calls wrote back every step.
+        let base = kept.snap.map_or(0, |i| self.snaps[i].held.steps);
+        if kept.steps == 0 || self.options.verify || kept.steps - base > REWIND_MOST {
+            // Nothing to write back (nothing ran, or the verifier's calls wrote back every step), or too many steps to
+            // run again: the exit of its own.
             self.count_left(why);
+            self.cold = true;
             self.exit(before);
+            self.cold = false;
         } else {
             self.leave(why);
         }

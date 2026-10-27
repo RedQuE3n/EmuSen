@@ -43,6 +43,10 @@ pub trait Micro {
     }
     /// The micro mode's block of `SPH2`; none for a micro mode that keeps nothing (Sapphire_Native.md §38.2).
     fn write_state(&self, _w: &mut emusen_native::StateWriter) {}
+    /// The block as `write_state` writes it once the clock move a resting VPU owes, `idle_to(rest)`, is made.
+    fn write_state_resting(&self, w: &mut emusen_native::StateWriter, _rest: u64) {
+        self.write_state(w);
+    }
     fn read_state(&mut self, _r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         Ok(())
     }

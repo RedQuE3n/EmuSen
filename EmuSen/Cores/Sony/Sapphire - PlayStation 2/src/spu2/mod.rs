@@ -238,6 +238,15 @@ impl Spu2 {
     pub fn take_wake(&mut self) -> bool {
         core::mem::take(&mut self.wake)
     }
+
+    pub fn wake_pending(&self) -> bool {
+        self.wake
+    }
+
+    /// Whether `run(now)` has a sample to make.
+    pub fn due(&self, now: u64) -> bool {
+        self.next_tick <= now
+    }
 }
 
 /// The IOP DMAC's peripherals: the SPU2's cores on channels 4 and 7, the others through `others`; `irq` records

@@ -90,8 +90,17 @@ impl Iop {
         if self.held { u64::MAX } else { self.bus.now * IOP }
     }
 
-    /// Runs the IOP until its clock reaches EE cycle `t`; the units are brought along at their events.
+    /// Runs the IOP until its clock reaches EE cycle `t`; the units are brought along at their events. A call at a time
+    /// the IOP has reached does nothing, and is answered here (Sapphire_Scheduler.md §54.3).
+    #[inline]
     pub fn run_to(&mut self, t: u64) {
+        if self.held || self.bus.now * IOP < t {
+            self.run_on(t);
+        }
+    }
+
+    #[inline(never)]
+    fn run_on(&mut self, t: u64) {
         if self.held {
             self.bus.now = self.bus.now.max(t / IOP);
             self.bus.run_units(t);
@@ -125,10 +134,13 @@ impl Iop {
     }
 
     /// `run_to` as the board runs the IOP at an EE instruction's end, the one place the debugger's probe may stop it.
+    #[inline]
     pub fn catch_up(&mut self, t: u64) {
-        self.halts = true;
-        self.run_to(t);
-        self.halts = false;
+        if self.held || self.bus.now * IOP < t {
+            self.halts = true;
+            self.run_on(t);
+            self.halts = false;
+        }
     }
 
     /// Stopped by the debugger's probe in front of an instruction, until the debugger resumes it.
@@ -167,10 +179,22 @@ impl Iop {
         self.tty.resolve(&self.bus.ram, &self.bus.export_tables);
     }
 
-    /// The run one instruction at a time while the console's hook is armed, each boundary shown to it first (S10).
+    /// The run while the console's hook is armed (S10): a boundary at the hook shown to it first and stepped alone, the
+    /// steps between run on to the next boundary at the hook, the bus's breakpoint (Sapphire_Scheduler.md §54.6).
     fn run_watched(&mut self) -> blackmoon_r3000::Step {
         use blackmoon_r3000::{Bus, Step};
         loop {
+            let hook = self.tty.hook().unwrap_or(u32::MAX);
+            if self.probe.is_none() && self.cpu.regs.pc & 0x1FFF_FFFF != hook {
+                self.bus.breakpoint = hook;
+                let (n, step) = self.cpu.run(&mut self.bus, u32::MAX);
+                self.bus.breakpoint = u32::MAX;
+                self.instructions += u64::from(n);
+                if step != Step::Instruction || !self.bus.running() {
+                    return step;
+                }
+                continue;
+            }
             let r = &self.cpu.regs.r;
             let a = [r[4], r[5], r[6]];
             if let Some(v) = self.tty.answer(self.cpu.regs.pc, a, &self.bus.ram) {

@@ -942,10 +942,10 @@ fn the_board_stops_a_guarded_run_before_the_dmac_runs() {
     let mut copy = System::new(ORIGIN);
     copy.read_state(&mut emusen_native::StateReader::new(&blocks::state_of(&sys))).unwrap();
     let System { ee, board } = &mut sys;
-    let (stood, tail) = board.run_through(&times, &mut ee.spram[..], times.len(), &mut |_, _| true);
+    let (stood, tail) = board.run_through(&times, &mut ee.spram[..], times.len(), &mut sapphire::board::Through);
     assert_eq!((stood, tail), (before, None), "the run stood before the time the event falls in");
     let System { ee, board } = &mut copy;
-    let (stood, _) = board.run_through(&times, &mut ee.spram[..], 0, &mut |_, _| true);
+    let (stood, _) = board.run_through(&times, &mut ee.spram[..], 0, &mut sapphire::board::Through);
     assert_eq!(stood, times.len(), "unguarded, every time runs");
 }
 

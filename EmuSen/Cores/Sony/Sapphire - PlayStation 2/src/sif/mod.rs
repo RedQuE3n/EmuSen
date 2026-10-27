@@ -157,6 +157,11 @@ impl Sif {
         std::mem::take(&mut self.wake_ee)
     }
 
+    /// Whether the EE's side has changed a FIFO since the IOP's side last took the wake.
+    pub fn wake_iop_pending(&self) -> bool {
+        self.wake_iop
+    }
+
     /// Whether the EE's side changed a FIFO since the last call.
     pub fn take_wake_iop(&mut self) -> bool {
         std::mem::take(&mut self.wake_iop)

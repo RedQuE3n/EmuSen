@@ -367,6 +367,9 @@ pub struct Vpu {
     pub last_macro: Option<u64>,
     pub micro0: Box<dyn Micro>,
     pub micro1: Box<dyn Micro>,
+    /// Both units found idle with nothing reaching them since, and the clock move they are owed, which `wake` makes
+    /// before anything else reaches them (Sapphire_Scheduler.md §54.5). Not state.
+    rest: Option<u64>,
 }
 
 impl Default for Vpu {
@@ -385,7 +388,26 @@ impl Vpu {
             last_macro: None,
             micro0: Box::new(pipe::Pipe::new(0)),
             micro1: Box::new(pipe::Pipe::new(1)),
+            rest: None,
         }
+    }
+
+    /// The clock move a rest owes, made: what reaches the units' state comes after it. The board makes it where it
+    /// reaches the units (`Board::run_vifs`, which every COP2 instruction, VU memory access, VIF access and event passes
+    /// through), and a start makes it; a caller that reaches `units`, `micro0` or `micro1` otherwise calls this first.
+    #[inline]
+    pub fn wake(&mut self) {
+        if let Some(t) = self.rest.take() {
+            self.owed(t);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn owed(&mut self, t: u64) {
+        let Vpu { micro0, micro1, units, .. } = self;
+        let idle = micro0.idle_to(units, t) & micro1.idle_to(units, t);
+        debug_assert!(idle, "a resting unit is idle");
     }
 
     /// Lands VU0's quotient for a macro instruction issued at cycle `t`, which reads Q at its T stage a cycle later
@@ -408,6 +430,7 @@ impl Vpu {
     /// Starts unit `unit`'s microprogram at doubleword `addr`, its first pair's T stage at cycle `first`: VCALLMS,
     /// VCALLMSR, CMSAR1 and VIF's MSCAL family (S14) all come here. False when the unit cannot start.
     pub fn start(&mut self, unit: usize, addr: u16, first: u64) -> bool {
+        self.wake();
         let m = if unit == 0 { &mut self.micro0 } else { &mut self.micro1 };
         m.start(&mut self.units, addr, first)
     }
@@ -466,14 +489,30 @@ impl Vpu {
     }
 
     /// Whether `run_to(t)` would change nothing but the units' clocks, those moved if so (Sapphire_Native.md §35.7).
+    /// Once both are found idle the units rest, the moves owed until `wake`, and the answer is known until then.
+    #[inline]
     pub fn idle_to(&mut self, t: u64) -> bool {
+        if let Some(r) = &mut self.rest {
+            *r = (*r).max(t);
+            return true;
+        }
+        self.idle_to_asked(t)
+    }
+
+    #[inline(never)]
+    fn idle_to_asked(&mut self, t: u64) -> bool {
         let Vpu { micro0, micro1, units, .. } = self;
-        micro0.idle_to(units, t) & micro1.idle_to(units, t)
+        let idle = micro0.idle_to(units, t) & micro1.idle_to(units, t);
+        if idle {
+            self.rest = Some(t);
+        }
+        idle
     }
 
     /// `idle_to`'s answer without the clocks' moves.
+    #[inline]
     pub fn idle(&self) -> bool {
-        self.micro0.idle(&self.units) && self.micro1.idle(&self.units)
+        self.rest.is_some() || self.micro0.idle(&self.units) && self.micro1.idle(&self.units)
     }
 
     /// VU1 running a microprogram: the COP2 condition signal BC2F and BC2T test (§5.5.1).
@@ -669,8 +708,9 @@ impl emusen_native::State for Vpu {
         w.u16s("Cmsar", &[self.cmsar0, self.cmsar1]);
         w.u32("Ccr24", self.ccr24);
         crate::state::opt_u64(w, "LastMacro", self.last_macro);
-        w.group("Micro0", |w| self.micro0.write_state(w));
-        w.group("Micro1", |w| self.micro1.write_state(w));
+        let rest = self.rest.unwrap_or(0);
+        w.group("Micro0", |w| self.micro0.write_state_resting(w, rest));
+        w.group("Micro1", |w| self.micro1.write_state_resting(w, rest));
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
@@ -689,6 +729,7 @@ impl emusen_native::State for Vpu {
         [self.cmsar0, self.cmsar1] = c;
         self.ccr24 = r.u32()?;
         self.last_macro = crate::state::read_opt_u64(r)?;
+        self.rest = None;
         self.micro0.read_state(r)?;
         self.micro1.read_state(r)
     }

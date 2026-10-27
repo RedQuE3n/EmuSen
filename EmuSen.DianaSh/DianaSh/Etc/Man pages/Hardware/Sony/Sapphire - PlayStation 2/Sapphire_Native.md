@@ -11726,3 +11726,13 @@ holds a program counter, an instruction or memory of the BIOS or the game. No em
 Read: `Sapphire_Plan.md` §5.12 and §7; this page's §22, §43.5 to §43.8 and §47; `Diamond_Speed.md` §5; psx-spx "i-Cache".
 WiseMan's `SapphireTests` passed (5 of 5). Not covered: the handheld; the EE interpreter's decoded cache and the uncached
 memo (§53.4); the board's per-instruction bringing along of the IOP (§43.8 row 9) and the TTY hook's single steps.
+
+## 54. The board brought along at events, not after every EE instruction (2026-10-26)
+
+*Recorded in `Sapphire_Scheduler.md` §54, a page of its own because this one is within a few kilobytes of the size a page
+in the tree may have; that page keeps this one's numbering, and its disputes would be numbered from D-980.* S32's lever
+#9: the IOP called at an EE time only when it is behind it and its service with nothing due moving only its sync time;
+the replay shown the lines once between events; the VIFs and the VUs resting with their clock moves owed until the board
+reaches them; the console hook's run stopping only at the hook, through a breakpoint `blackmoon-r3000`'s bus may name.
+Every digest, state, verifier run and ps2autotests text equal to the tree before; the IOP brought along only at the SIF
+shown not to be exact, and why.

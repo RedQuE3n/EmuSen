@@ -36,6 +36,9 @@ names and layout only; no emulator's source and no firmware was read.
   instruction or after which `running` says no; the steps taken and the last one's result. A bus answers true while
   nothing it must do between two steps is due (Diamond's: while the clock is short of the next event). The default
   makes a run one step, so a bus that does not give it is unchanged (§13).
+  *Sapphire's scheduler step (2026-10-26)* added **`stop_before(pc)`**, a default method answering false, asked with
+  `running` after each step that completed an instruction: a yes ends the run in front of the step at `pc`. A bus that
+  keeps no breakpoint is unchanged (§13).
 - **`Size`**: `Byte`, `Half`, `Tribyte` and `Word`. A read's value is in the low bits and anything above them is
   ignored. A write carries the register as the processor drives it, the datum in the low `size` bytes: a byte or
   halfword store passes the whole register, which psx-spx's "Caution - 8/16-bit writes to certain IO registers" says
@@ -744,6 +747,14 @@ word's, and kernel space reached in user mode. Twenty-four mutants were applied 
 caught. The survivor, the quiet check's interrupt test without SR's mask bits, makes the check stricter: a masked
 request then sends a run back to full steps, which costs speed and changes no step, so nothing can catch it.
 
+
+**A breakpoint the bus keeps** (added 2026-10-26 for Sapphire's IOP, `Sapphire_Scheduler.md` §54.6). `Bus::stop_before(pc)`,
+false by default, is asked where `running` is, after every step that completed an instruction, with the PC of the step
+that would come next: a yes ends the run there, that step not run, as `running`'s no does. A run that starts at that PC
+runs its step, since the question is asked only after one. A console that must look at one boundary itself (Sapphire's
+IOP console hook, at IOMAN's `write`) so runs on between them instead of stepping; a bus that keeps no breakpoint keeps
+the default, which the compiler folds away, so Diamond's run is the same code. `a_run_ends_in_front_of_the_buss_breakpoint`
+holds it in a straight line, at a jump's target after its delay slot and at a loop's head.
 
 ## 14. The moves, for the enhancement layer (2026-10-13)
 

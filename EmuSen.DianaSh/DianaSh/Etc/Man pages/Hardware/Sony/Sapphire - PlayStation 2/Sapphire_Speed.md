@@ -344,3 +344,29 @@ was read in place from the probe's folder. No emulator's source was read.
 (S28's runner, anchors and presses), §43 (S32's bench, profile and ranking), §44 to §47 and §50; `Diamond_Speed.md` §1 to
 §3; `Sapphire_Disputes.md`'s D-800 to D-860 for the form. The bench's, the runner's, `vu::jit`'s, `vu::ops`'s,
 `gs::workers`' and `emusen-jit`'s sources in the crate. No article, no emulator source, and no firmware.
+
+## 52. The VU decode without the name map (2026-10-27)
+
+§51's profile put the VU operation lookup at about 4 % of Jak's 3D frame: `vu::ops::entry` found an operation's `TABLE`
+entry through a `HashMap` keyed on its name, hashed on every interpreted VU pair and every COP2 instruction. The lookup is
+now constant time and hashes nothing. The decoder's three tables (`SPECIAL1`, `SPECIAL2`, `LOWER`) are statics, so an
+operation's address gives its slot among their 320; a list of `TABLE` indices, one per slot, is built once from the names
+and read thereafter. `entry`, `of_word` and `of_lower` keep their signatures, and the decoder in `emusen-mips` is unchanged.
+
+**Measured on 2026-10-27**: the bench's `jak-arena` window from the state at frame 9,000 with `--defaults`, at CPU weight 100,
+two rounds each, alternating before and after:
+
+| Build | Mean ms a frame, rounds | Median ms a frame, rounds | Wall s |
+|---|---|---|---|
+| before | 1,211.7, 1,234.7 | 803.5, 819.9 | 363.5, 370.4 |
+| after | 1,014.2, 1,171.6 | 759.2, 770.2 | 304.3, 351.5 |
+
+The medians fall by 5.5 % and 6.1 %, a little more than the 4 % share, the rest being the machine's drift; the means move
+with the spread of the window's slow frames (§51.5). The picture, sound and state digests (`B77DC314C6AE837C`,
+`BCA8F00F4743A955`, `4ED52755B09F207E`) are equal in all four rounds.
+
+**Proof**: a unit test maps every decoder operation to the entry found by name. The tests `vu0` (12), `vu_micro` (14),
+`micro` (25) and the VU1 recompiler's oracles in `vu_jit` (16, recompiled equal to the interpreter) pass. Three faults
+were seeded and reverted: an entry running another's function (`add` running `sub`) fails four of `vu0`'s tests; one
+operation given another's index (`sub` as `add`) fails the unit test; the micro-only operations left unmapped fail the
+unit test.

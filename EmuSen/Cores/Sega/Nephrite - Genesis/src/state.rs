@@ -19,33 +19,11 @@ pub const OLDEST_MCD_STATE_VERSION: i32 = 20;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    Foreign(u32),
-    Version(i32),
-    OtherSystem(u8),
-    BufferTooSmall { needed: usize },
-    /// A Sega CD's state made over another disc than the drive's: the two fingerprints.
-    WrongMedia { saved: u64, here: u64 },
-}
-
-impl Status for StateError {
-    fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::OtherSystem(_) => STATUS_OTHER_SYSTEM,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-            StateError::WrongMedia { .. } => emusen_native::core::status::WRONG_MEDIA,
-        }
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    pub enum StateError {
+        OtherSystem(u8) => STATUS_OTHER_SYSTEM,
+        /// A Sega CD's state made over another disc than the drive's: the two fingerprints.
+        WrongMedia { saved: u64, here: u64 } => emusen_native::core::status::WRONG_MEDIA,
     }
 }
 
@@ -152,15 +130,7 @@ impl StateMachine for Machine {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
-        let mut r = StateReader::new(data);
-        let magic = r.u32().map_err(|_| StateError::Foreign(0))?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::Foreign(magic));
-        }
-        let version = r.i32()?;
-        if !(self.oldest_state_version()..=STATE_VERSION).contains(&version) {
-            return Err(StateError::Version(version));
-        }
+        let (mut r, version) = emusen_native::shell::open_state(data, STATE_MAGIC, |version| (self.oldest_state_version()..=STATE_VERSION).contains(&version))?;
         let system = r.u8()?;
         if system != self.state_system() {
             return Err(StateError::OtherSystem(system));
@@ -186,27 +156,7 @@ impl StateMachine for Machine {
         Ok(())
     }
 
-    fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write(&mut w);
-        w.len()
-    }
-
-    fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
-        let needed = self.state_size();
-        if out.len() < needed {
-            return Err(StateError::BufferTooSmall { needed });
-        }
-        let mut w = StateWriter::new(out);
-        self.write(&mut w);
-        Ok(w.len())
-    }
-
-    fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write(&mut w);
-        w.into_layout()
-    }
+    emusen_native::state_write_methods!(write);
 }
 
 #[cfg(test)]

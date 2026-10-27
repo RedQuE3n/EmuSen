@@ -4781,6 +4781,24 @@ Diamond, Sapphire, Endou, VenusRT and Nephrite use them; their descriptors, answ
 duplication report for Rust (`dupes --lang rust`) showed 9 findings between those cores' `v1.rs` files and 21 warnings
 before the move, and none and 11 after (measured 2026-10-27).
 
+## 33. The save-state shell, 2026-10-27
+
+`emusen-native`'s `shell` module owns the frame Endou, Diamond, Nephrite and Sapphire each wrote round their own fields in
+`state.rs`. It sits beside `StateMachine`, `StateWriter` and `StateReader`, which already live in `emusen-native`, so no core
+gains a dependency. The state bytes, the layouts and the C ABI are unchanged; a core keeps its magic, its versions and every
+refusal that is its own, passed in as data.
+
+- `state_error!`: a core's `StateError` with the four shared refusals (truncated, foreign, version, buffer too small), their
+  statuses and the conversions, then the core's own variants each with its status.
+- `open_state(data, magic, accepts)`: the magic and the version, with the core's own rule for which versions it reads.
+- `state_write_methods!(write)`, or `(write, ready)` where a save can be refused after the length check (Sapphire's queues):
+  `state_size`, `save_state` and `layout` over the core's one `write` method.
+- `assert_header_refusals`: the tests' check that a truncated, foreign, older and newer state is refused.
+
+The duplication report for Rust (`dupes --lang rust`) showed 99 findings at 100 tokens or more and 118 warnings before, and 94
+and 108 after; no finding between those four `state.rs` files remains (measured 2026-10-27). MarsRT's and MoonRT's `state.rs`
+still share an 83-token warning and were not part of this move.
+
 ## Appendix A. The draft header
 
 *Superseded, 2026-10-03, by the committed header, `EmuSen/Cores/Shared/emusen-native/include/emusen_core.h`, which is

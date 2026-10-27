@@ -2,7 +2,7 @@
 //! R3000A's and the GTE's blocks, the bus with its clock and every device's registers, then every writable memory,
 //! the TTY, the disc's fingerprint and the picture. The layout listing is pinned by a test.
 
-use emusen_native::ffi::{StateMachine, Status, status};
+use emusen_native::ffi::{StateMachine};
 use emusen_native::{State, StateReader, StateWriter, Truncated};
 
 use crate::bus::Board;
@@ -25,31 +25,10 @@ pub const LOADS_FROM: [i32; 3] = [8, 9, 10];
 /// The tag of the empty block that marks a state made with the cards kept apart from the game (Diamond_Cards.md §6).
 pub const CARDS_APART: [u8; 4] = *b"SHRD";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    Foreign(u32),
-    Version(i32),
-    BufferTooSmall { needed: usize },
-    /// The state was made over another disc than the drive holds (EmuSen_CoreAPI.md §6.23).
-    WrongMedia { state: u64, drive: u64 },
-}
-
-impl Status for StateError {
-    fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-            StateError::WrongMedia { .. } => emusen_native::core::status::WRONG_MEDIA,
-        }
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    pub enum StateError {
+        /// The state was made over another disc than the drive holds (EmuSen_CoreAPI.md §6.23).
+        WrongMedia { state: u64, drive: u64 } => emusen_native::core::status::WRONG_MEDIA,
     }
 }
 
@@ -555,15 +534,7 @@ impl StateMachine for Machine {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
-        let mut r = StateReader::new(data);
-        let magic = r.u32().map_err(|_| StateError::Foreign(0))?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::Foreign(magic));
-        }
-        let version = r.i32()?;
-        if !LOADS_FROM.contains(&version) {
-            return Err(StateError::Version(version));
-        }
+        let (mut r, version) = emusen_native::shell::open_state(data, STATE_MAGIC, |version| LOADS_FROM.contains(&version))?;
         let frames = r.i64()?;
         let mut cpu = self.cpu.clone();
         cpu.read_state(&mut r)?;
@@ -617,32 +588,14 @@ impl StateMachine for Machine {
         Ok(())
     }
 
-    fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write(&mut w);
-        w.len()
-    }
-
-    fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
-        let needed = self.state_size();
-        if out.len() < needed {
-            return Err(StateError::BufferTooSmall { needed });
-        }
-        let mut w = StateWriter::new(out);
-        self.write(&mut w);
-        Ok(w.len())
-    }
-
-    fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write(&mut w);
-        w.into_layout()
-    }
+    emusen_native::state_write_methods!(write);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::Status;
+    use emusen_native::ffi::status;
     use crate::machine::RAM_ID;
     use crate::machine::tests::{machine_for, program};
     use crate::media::Market;
@@ -692,13 +645,8 @@ mod tests {
         assert_eq!((b.board.now, b.cpu.regs.pc), after, "the run continues the same");
 
         let before = b.space(RAM_ID).unwrap().to_vec();
-        assert_eq!(b.load_state(&s[..s.len() - 1]).unwrap_err().status(), status::TRUNCATED);
+        emusen_native::shell::assert_header_refusals(&mut b, &s);
         assert_eq!(b.load_state(&s[..300]).unwrap_err().status(), status::TRUNCATED);
-        assert_eq!(b.load_state(b"NPHR0000").unwrap_err().status(), status::FOREIGN);
-        assert_eq!(b.load_state(&[]).unwrap_err().status(), status::FOREIGN);
-        let mut v1 = s.clone();
-        v1[4] = 1;
-        assert_eq!(b.load_state(&v1).unwrap_err().status(), status::VERSION, "a version 1 state, from before the GTE's interlock");
         assert_eq!((b.frames, b.space(RAM_ID).unwrap()), (2, &before[..]));
 
         let mut v9 = s[..s.len() - PICTURE].to_vec();

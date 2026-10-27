@@ -7,7 +7,7 @@
 
 use std::collections::VecDeque;
 
-use emusen_native::ffi::{StateMachine, Status, status};
+use emusen_native::ffi::{StateMachine, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
 
 use crate::machine::{Machine, Market, Stop};
@@ -28,41 +28,18 @@ pub const STATUS_OTHER_BIOS: i32 = -14;
 /// A queue of the machine holds more entries than its slots in the state at this instant.
 pub const STATUS_QUEUE_PAST_STATE: i32 = -15;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    Foreign(u32),
-    Version(i32),
-    /// A state of a console of another market, by its byte.
-    Market(u8),
-    /// A state made with another BIOS entry than this console's, by the two file numbers (0 for none).
-    Bios { state: u32, here: u32 },
-    /// A state made over another image, by the two identities.
-    WrongMedia { state: u64, here: u64 },
-    /// A state longer than its picture and blocks, by the length it should have had.
-    Length { wanted: usize },
-    /// A queue past its slots: the machine cannot be saved at this instant.
-    Queue,
-    BufferTooSmall { needed: usize },
-}
-
-impl Status for StateError {
-    fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) | StateError::Market(_) | StateError::Length { .. } => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::Bios { .. } => STATUS_OTHER_BIOS,
-            StateError::WrongMedia { .. } => emusen_native::core::status::WRONG_MEDIA,
-            StateError::Queue => STATUS_QUEUE_PAST_STATE,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-        }
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    pub enum StateError {
+        /// A state of a console of another market, by its byte.
+        Market(u8) => status::FOREIGN,
+        /// A state made with another BIOS entry than this console's, by the two file numbers (0 for none).
+        Bios { state: u32, here: u32 } => STATUS_OTHER_BIOS,
+        /// A state made over another image, by the two identities.
+        WrongMedia { state: u64, here: u64 } => emusen_native::core::status::WRONG_MEDIA,
+        /// A state longer than its picture and blocks, by the length it should have had.
+        Length { wanted: usize } => status::FOREIGN,
+        /// A queue past its slots: the machine cannot be saved at this instant.
+        Queue => STATUS_QUEUE_PAST_STATE,
     }
 }
 
@@ -119,6 +96,10 @@ pub(crate) fn refill<T: Copy, const N: usize>(q: &mut VecDeque<T>, len: u32, slo
 }
 
 impl Machine {
+    fn ready_to_save(&self) -> Result<(), StateError> {
+        if self.sys.fits() { Ok(()) } else { Err(StateError::Queue) }
+    }
+
     /// The BIOS entry the console runs by its file number, the entry's declared identity; 0 for none.
     pub fn bios_entry(&self) -> u32 {
         if self.booted { crate::v1::bios(self.market).which } else { 0 }
@@ -157,15 +138,7 @@ impl StateMachine for Machine {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
-        let mut r = StateReader::new(data);
-        let magic = r.u32().map_err(|_| StateError::Foreign(0))?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::Foreign(magic));
-        }
-        let version = r.i32()?;
-        if !(OLDEST_STATE_VERSION..=STATE_VERSION).contains(&version) {
-            return Err(StateError::Version(version));
-        }
+        let (mut r, version) = emusen_native::shell::open_state(data, STATE_MAGIC, |version| (OLDEST_STATE_VERSION..=STATE_VERSION).contains(&version))?;
         r.set_version(version);
         let frames = r.i64()?;
         let market = r.u8()?;
@@ -206,35 +179,14 @@ impl StateMachine for Machine {
         Ok(())
     }
 
-    fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write(&mut w);
-        w.len()
-    }
-
-    fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
-        let needed = self.state_size();
-        if out.len() < needed {
-            return Err(StateError::BufferTooSmall { needed });
-        }
-        if !self.sys.fits() {
-            return Err(StateError::Queue);
-        }
-        let mut w = StateWriter::new(out);
-        self.write(&mut w);
-        Ok(w.len())
-    }
-
-    fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write(&mut w);
-        w.into_layout()
-    }
+    emusen_native::state_write_methods!(write, ready_to_save);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::Status;
+    use emusen_native::ffi::status;
     use crate::machine::{BIOS_BYTES, RAM_ID};
     use crate::media::Media;
     use crate::media::sample::{dvd, elf};

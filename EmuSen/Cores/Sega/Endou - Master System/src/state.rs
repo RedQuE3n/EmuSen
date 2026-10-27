@@ -5,8 +5,8 @@
 //! system ports and the EEPROM board's chip (Jadeite_Native.md §9.5). Version 6 is stage 6's;
 //! versions 1 to 5 reached no player and are refused. The layout listing is pinned by a test.
 
-use emusen_native::ffi::{StateMachine, Status, status};
-use emusen_native::{StateReader, StateWriter, Truncated};
+use emusen_native::ffi::{StateMachine, status};
+use emusen_native::{StateWriter};
 
 use crate::board::Mapper;
 use crate::machine::Machine;
@@ -18,32 +18,12 @@ pub const STATE_VERSION: i32 = 7;
 /// The last version before the FM unit, read on the consoles without one.
 pub const STATE_VERSION_BEFORE_FM: i32 = 6;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    Truncated { at: usize, wanted: usize },
-    Foreign(u32),
-    Version(i32),
-    /// A state of another console or model, by its bytes.
-    Console(u8, u8),
-    /// A state of a machine started by another boot or BIOS: the boot's byte and the BIOS's CRC-32.
-    Boot(u8, u32),
-    BufferTooSmall { needed: usize },
-}
-
-impl Status for StateError {
-    fn status(&self) -> i32 {
-        match self {
-            StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) | StateError::Console(..) | StateError::Boot(..) => status::FOREIGN,
-            StateError::Version(_) => status::VERSION,
-            StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
-        }
-    }
-}
-
-impl From<Truncated> for StateError {
-    fn from(t: Truncated) -> Self {
-        StateError::Truncated { at: t.at, wanted: t.wanted }
+emusen_native::state_error! {
+    pub enum StateError {
+        /// A state of another console or model, by its bytes.
+        Console(u8, u8) => status::FOREIGN,
+        /// A state of a machine started by another boot or BIOS: the boot's byte and the BIOS's CRC-32.
+        Boot(u8, u32) => status::FOREIGN,
     }
 }
 
@@ -95,15 +75,7 @@ impl StateMachine for Machine {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
-        let mut r = StateReader::new(data);
-        let magic = r.u32().map_err(|_| StateError::Foreign(0))?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::Foreign(magic));
-        }
-        let version = r.i32()?;
-        if version != STATE_VERSION && !(version == STATE_VERSION_BEFORE_FM && self.model().fm().is_none()) {
-            return Err(StateError::Version(version));
-        }
+        let (mut r, _) = emusen_native::shell::open_state(data, STATE_MAGIC, |version| version == STATE_VERSION || (version == STATE_VERSION_BEFORE_FM && self.model().fm().is_none()))?;
         let (console, model) = (r.u8()?, r.u8()?);
         if console != console_byte(self.console()) || model != self.model().byte() {
             return Err(StateError::Console(console, model));
@@ -118,7 +90,7 @@ impl StateMachine for Machine {
         emusen_native::State::read_state(&mut cpu, &mut r)?;
         let mut sound = self.bus.sound.clone();
         if !sound.read_state(&mut r)? {
-            return Err(StateError::Foreign(magic));
+            return Err(StateError::Foreign(STATE_MAGIC));
         }
         let (memory_control, io_control, data_bus) = (r.u8()?, r.u8()?, r.u8()?);
         let (nmi, pause_held) = (r.bool()?, r.bool()?);
@@ -129,13 +101,13 @@ impl StateMachine for Machine {
         // A slot's offset is a bank of this ROM, or a plain board's fixed slot past a short one.
         let banks = self.bus.cart.rom.len().div_ceil(0x4000).max(3);
         if slots.iter().any(|&s| s as usize % 0x4000 != 0 || s as usize >= banks * 0x4000) {
-            return Err(StateError::Foreign(magic));
+            return Err(StateError::Foreign(STATE_MAGIC));
         }
         let mut ram = vec![0; self.bus.ram.len()];
         r.bytes(&mut ram)?;
         let mut vdp = self.bus.vdp.clone();
         if !vdp.read_state(&mut r)? {
-            return Err(StateError::Foreign(magic));
+            return Err(StateError::Foreign(STATE_MAGIC));
         }
         let mut cart_ram = vec![0; self.bus.cart.ram.len()];
         r.bytes(&mut cart_ram)?;
@@ -174,27 +146,7 @@ impl StateMachine for Machine {
         Ok(())
     }
 
-    fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write(&mut w);
-        w.len()
-    }
-
-    fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
-        let needed = self.state_size();
-        if out.len() < needed {
-            return Err(StateError::BufferTooSmall { needed });
-        }
-        let mut w = StateWriter::new(out);
-        self.write(&mut w);
-        Ok(w.len())
-    }
-
-    fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write(&mut w);
-        w.into_layout()
-    }
+    emusen_native::state_write_methods!(write);
 }
 
 #[cfg(test)]
@@ -304,12 +256,7 @@ mod tests {
         assert_eq!(b.bus.sound.psg, a.bus.sound.psg);
 
         let before = b.space(RAM_ID).unwrap().to_vec();
-        assert_eq!(b.load_state(&s[..s.len() - 1]).unwrap_err().status(), status::TRUNCATED);
-        assert_eq!(b.load_state(b"NPHR0000").unwrap_err().status(), status::FOREIGN);
-        assert_eq!(b.load_state(&[]).unwrap_err().status(), status::FOREIGN);
-        let mut v1 = s.clone();
-        v1[4] = 1;
-        assert_eq!(b.load_state(&v1).unwrap_err().status(), status::VERSION);
+        emusen_native::shell::assert_header_refusals(&mut b, &s);
         let mut sg = machine(&[0u8; 0x2000]);
         assert_eq!(sg.load_state(&s).unwrap_err(), StateError::Console(0, Model::Sms2.byte()));
         let small = machine(&cartridge(0x8000, 4));

@@ -1086,7 +1086,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ### 10.1 Decided (2026-09-24 onward)
 
-- **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`.
+- **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`. *Retired 2026-10-27 by the tester: Art Book Next is no longer the suggested or default theme; big picture keeps the look it has, and themes are the player's choice from the theme downloader. It stays the reference the theme engine is measured against (the reference tests), and `ThemeSource.ArtBookNext`, used nowhere, is removed.*
 - **Q2, the resolution:** answered from the device, not asked. Game Mode's gamescope session is started with
   `-w 1280 -h 800` (read from the running process on 2026-09-24), so Mistress draws at 1280×800 there; the panel
   itself is 1920×1200. Both are 16:10, so the variant chosen is the same; performance is to be measured at 1280×800
@@ -6691,6 +6691,14 @@ folder (`GameFolders.Of` with the entry's package), so it is one entry at the co
 (section 18.3 there; the usual folders still name the game by its library path, as the scraper stored it). Launching hands over the entry's file, which opens as its package. Covered by
 `ThemedPackagesTests`. Folders of unpackaged games are unchanged.
 
+**The store's art, found by the library file's folder (2026-10-27).** The gamelist's folder is also the folder the store
+lookup names a game by, so the packaged disc's entry, now with no folder, was looked for at `<type>/<game>.png` while the
+art scraped before packaging sits at `<type>/<game folder>/<game>.png`: only types the package held of its own showed,
+and the tester's way round it was to clear the art and scrape again, which writes into the package. Both halves of the
+lookup (`MediaSources.Stored`, the scraper's `Settings::store_folder`) now take a packaged game's store folder from its
+library file (`GameFolders.Of` without the package), in `Locate` and in `Present`, so the art scraped before `pkg make`
+shows in every type. Covered by `ThemedPackagesTests.A_package_made_after_scraping_shows_every_type_of_the_stores_art`.
+
 ### 30.4 The store's one layout step
 
 `media.db`'s second migration adds `store_move (from_path, to_path, how, at)` and `store_step (name, done_at)`.
@@ -7663,6 +7671,14 @@ Name* with the name in red, and *Keep Current Name*.
   - `MainWindow` opens the editor with the custom collections sortname only when the themed view's system is a custom
     collection.
 
+
+### 34.2a Every question in a big-screen session is the menu's message box (2026-10-27)
+
+Only the metadata editor asked through `MenuConfirmAsync`; Scrape This Game from the pad menu or the game options asked
+through the desktop's `Dialogs.ConfirmAsync`, so in big picture (and in Game Mode, where gamescope fills the screen with
+it) a desktop window with a title bar and small buttons came up over the themed list to say "Scrape". `MainWindow.AskAsync`
+now asks as the editor does, the message box in a big-screen session and the dialog on the desktop, and Scrape This Game
+and Delete Custom Collection go through it.
 ### 34.3 The two fields
 
 **Hide metadata fields.** The guide: *"This option will hide most metadata fields as well as any badges … The only

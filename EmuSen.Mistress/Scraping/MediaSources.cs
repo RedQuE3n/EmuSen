@@ -57,12 +57,16 @@ namespace EmuSen.Mistress.Scraping
         // A ROM as the media folders name it: its stem, below the folder it sits in under its console's (§30).
         private SceneGame GameAt(string romPath) => new(Path.GetFileNameWithoutExtension(romPath), romPath) { FolderPath = Library.GameFolders.Of(_romDirectory, romPath) };
 
+        // A packaged game's art in the store is named by its library file's own folder, whatever folder the list shows it in.
+        private SceneGame Stored(SceneGame g) => !g.Folder && _packages.ContainsKey(g.File) ? g with { FolderPath = Library.GameFolders.Of(_romDirectory, g.File) } : g;
+
         // The folders' own listings for the variant triggers (§16), and a cover from the player's folder or OpenEmu's counts too.
         public IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games)
         {
             if (_native is { } n) return n.Present(system.Name, games.Select(g => (g.File, g.FolderPath, g is { Folder: true, IsCollection: false })));
-            var found = new HashSet<string>(_scraped.Present(system, games), StringComparer.Ordinal);
-            if (_esde is not null) found.UnionWith(_esde.Present(system, games));
+            var stored = games.Select(Stored).ToList();
+            var found = new HashSet<string>(_scraped.Present(system, stored), StringComparer.Ordinal);
+            if (_esde is not null) found.UnionWith(_esde.Present(system, stored));
             foreach (SceneGame g in games)
                 if (!g.Folder && _packages.TryGetValue(g.File, out string? package))
                     found.UnionWith(EsdeMediaFolder.Folders.Keys.Where(t => EsdeMediaFolder.FindInPackage(package, t) is not null));
@@ -102,6 +106,7 @@ namespace EmuSen.Mistress.Scraping
 
             if (cover && console is not null && _handPlaced(console, title) is string hand) return (MediaSource.HandPlaced, hand);
             if (file && _packages.TryGetValue(romPath, out string? package) && EsdeMediaFolder.FindInPackage(package, mediaType) is string packaged) return (MediaSource.Package, packaged);
+            game = Stored(game);
             if (_scraped.Find(system, game, mediaType) is string scraped) return (MediaSource.ScreenScraper, scraped);
             if (_esde?.Find(system, game, mediaType) is string esde) return (MediaSource.EsdeFolder, esde);
             if (cover && console is not null && _openEmu is not null && OpenEmuCover(_openEmu, console, title) is string openEmu) return (MediaSource.OpenEmu, openEmu);

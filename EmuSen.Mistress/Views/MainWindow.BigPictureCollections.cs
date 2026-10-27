@@ -145,7 +145,7 @@ namespace EmuSen.Mistress.Views
 
         async Task ICollectionSettingsHost.DeleteCollectionAsync(Window owner, GameCollection collection)
         {
-            if (!await Dialogs.ConfirmAsync(owner, "Delete Custom Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;
+            if (!await AskAsync(owner, "Delete Custom Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;
             _records.DeleteCollection(collection.Id);
             if (_editedCollection?.Id == collection.Id) _editedCollection = null;
             _appSettings.BigPictureCollections.HiddenCustomCollections.Remove(collection.Id);

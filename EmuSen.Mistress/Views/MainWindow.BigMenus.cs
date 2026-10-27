@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -15,6 +16,13 @@ namespace EmuSen.Mistress.Views
     // A big-screen session's list menus in ES-DE's layout: the pad menu and the game options, over the screen blurred - see EmuSen_Settings_Reference.md §4.69.
     public partial class MainWindow
     {
+        // A question as ES-DE's message box in a big-screen session, a dialog on the desktop; the accepting button is focused first - see EmuSen_BigPicture.md §34.2a.
+        internal Task<bool> AskAsync(Window owner, string title, string message, string accept, string cancel) =>
+            _bigScreen
+                ? Dialogs.MenuConfirmAsync(owner, message, accept, cancel, HelpFamily,
+                    [new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) }, new("Choose") { Button = PadGlyphButton.DPadLeftRight }])
+                : Dialogs.ConfirmAsync(owner, title, message, accept, cancel);
+
         // Barlow Condensed, OFL 1.1, shipped beside the program - see THIRD_PARTY_NOTICES.md and §4.69.
         internal static readonly string BigMenuFont = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", "BarlowCondensed-Regular.ttf");
 

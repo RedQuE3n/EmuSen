@@ -3602,7 +3602,7 @@ goes back to the name box. **Status...**, and the pad menu's entry during a run,
 | Region | `ScrapeRegion` | `auto` | whose box and name are preferred; Automatic reads the file's No-Intro tag, (USA) us, (Europe) eu, (Japan) jp, (World) wor, and the other country names ScreenScraper has a code for |
 | Else world, USA, Europe, Japan, then any | `ScrapeRegionFallback` | on | ES-DE's documented fallback order, then any region; off, only the preferred region (and a file with no region) is taken |
 | Language | `ScrapeLanguage` | `en` | the description's and genre's; English when there is none in it |
-| (no row) | `ScrapeThreads` | 1 | the workers wanted; never more than the member's `maxthreads` |
+| (no row) | `ScrapeThreads` | 0 | the workers wanted; 0 (since 2026-10-27, was 1) asks for every one the member's `maxthreads` allows, one until ScreenScraper's first answer says; never more than `maxthreads`. A file saved before keeps the 1 it was written with |
 | OpenEmu Failover | `OpenEmuFallback` | on | below |
 
 A change takes effect when the sheet closes; a sign-in takes effect at once.

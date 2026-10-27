@@ -7671,6 +7671,14 @@ Name* with the name in red, and *Keep Current Name*.
   - `MainWindow` opens the editor with the custom collections sortname only when the themed view's system is a custom
     collection.
 
+
+### 34.2a Every question in a big-screen session is the menu's message box (2026-10-27)
+
+Only the metadata editor asked through `MenuConfirmAsync`; Scrape This Game from the pad menu or the game options asked
+through the desktop's `Dialogs.ConfirmAsync`, so in big picture (and in Game Mode, where gamescope fills the screen with
+it) a desktop window with a title bar and small buttons came up over the themed list to say "Scrape". `MainWindow.AskAsync`
+now asks as the editor does, the message box in a big-screen session and the dialog on the desktop, and Scrape This Game
+and Delete Custom Collection go through it.
 ### 34.3 The two fields
 
 **Hide metadata fields.** The guide: *"This option will hide most metadata fields as well as any badges … The only

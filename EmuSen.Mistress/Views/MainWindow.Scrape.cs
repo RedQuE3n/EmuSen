@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
 
         // The confirm step before a run; a test answers it instead of a person.
         internal static Func<MainWindow, string, string, Task<bool>> ConfirmScrape =
-            (owner, title, message) => Dialogs.ConfirmAsync(owner, title, message, "Scrape", "Cancel");
+            (owner, title, message) => owner.AskAsync(owner, title, message, "Scrape", "Cancel");
 
         private MediaStore? _mediaStore;
         private ScrapeQuotaManager? _scrapeQuota;

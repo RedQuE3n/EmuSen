@@ -1,7 +1,7 @@
 //! Nephrite's own state format, "NPHR" (Nephrite_Plan.md §5.7): the magic, the version, the system, the frame count
 //! and every writable memory in id order. The layout listing is pinned by a test, there being no other record.
 
-use emusen_native::ffi::{StateMachine, Status, status};
+use emusen_native::ffi::StateMachine;
 use emusen_native::{StateReader, StateWriter, Truncated};
 
 use crate::interface::{AttachmentState, Refusal};
@@ -162,6 +162,7 @@ impl StateMachine for Machine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::{Status, status};
     use crate::media::{Media, cartridge};
 
     fn machine(system: &str) -> Machine {

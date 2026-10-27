@@ -19,6 +19,8 @@ below is the processors'; a crate of another kind keeps the contract its own sec
 - `beryl-sms-colours` — the Master System VDP family's colours (the 315-5124's, the 315-5246's and the TMS9918A's) as
   RGBA, read by Endou's picture and the `sms` pack's palette view; no dependencies. Created 2026-10-19 at Endou's stage
   8, its record `Beryl_SmsVdp.md` §10.
+- [`Beryl_FmTables.md`](Beryl_FmTables.md) — `beryl-fm-tables`, the log-sine and exponent ROMs of the Yamaha FM operator,
+  one pair for Endou's YM2413 and Nephrite's YM2612; data only, no dependencies. Created 2026-10-27.
 - `beryl-asm` — the front half of the processors' assemblers, below; no record page of its own, the processors' §8 being
   where its readings are measured.
 - [`Beryl_Font.md`](Beryl_Font.md) — `beryl-font`, the open firmware's own five-by-seven font, drawn for Nephrite's open

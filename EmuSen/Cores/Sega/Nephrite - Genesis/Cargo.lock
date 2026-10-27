@@ -19,6 +19,10 @@ name = "beryl-asm"
 version = "0.1.0"
 
 [[package]]
+name = "beryl-fm-tables"
+version = "0.1.0"
+
+[[package]]
 name = "beryl-font"
 version = "0.1.0"
 
@@ -157,6 +161,7 @@ dependencies = [
 name = "nephrite"
 version = "0.1.0"
 dependencies = [
+ "beryl-fm-tables",
  "beryl-font",
  "beryl-m68k",
  "beryl-sh2",

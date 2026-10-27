@@ -34,8 +34,8 @@ fn increment(rate: u8, cycle: usize) -> u16 {
     }
 }
 
-// The log-sine and exponent ROMs (`fm_tables.rs`, whose sources Nephrite_OperatorTables.md gives).
-use crate::genesis::fm_tables::{EXP, LOGSIN};
+// The log-sine and exponent ROMs, held by Beryl (Beryl_FmTables.md; sources in Nephrite_OperatorTables.md).
+use beryl_fm_tables::{EXP, LOGSIN};
 
 pub(in crate::genesis) struct Tables {
     pub(in crate::genesis) logsin: [u16; 256],

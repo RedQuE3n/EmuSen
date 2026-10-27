@@ -7,7 +7,8 @@ use emusen_native::{StateReader, StateWriter, Truncated};
 
 mod tables;
 
-pub use tables::{EXP, INSTRUMENTS, LOGSIN, RHYTHM_INSTRUMENTS};
+pub use beryl_fm_tables::{EXP, LOGSIN};
+pub use tables::{INSTRUMENTS, RHYTHM_INSTRUMENTS};
 
 /// Master clocks a sample: 18 slots of four [D the manual, (III-1-6): fsam = fM / 72].
 pub const CLOCKS_PER_SAMPLE: u64 = 72;

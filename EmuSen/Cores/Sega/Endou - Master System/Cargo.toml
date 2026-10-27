@@ -14,6 +14,7 @@ crate-type = ["cdylib", "rlib"]
 emusen-native = { path = "../../Shared/emusen-native" }
 beryl-z80 = { path = "../Beryl-HW/beryl-z80" }
 beryl-sn76489 = { path = "../Beryl-HW/beryl-sn76489" }
+beryl-fm-tables = { path = "../Beryl-HW/beryl-fm-tables" }
 beryl-sms-vdp = { path = "../Beryl-HW/beryl-sms-vdp" }
 beryl-sms-colours = { path = "../Beryl-HW/beryl-sms-colours" }
 

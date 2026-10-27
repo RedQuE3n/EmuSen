@@ -4762,6 +4762,25 @@ its summary and `ResolvePhysical` (`N64DebugViews`), the VI read from MarsRT's `
 
 ---
 
+## 32. The core side's shared glue, 2026-10-27
+
+`emusen-native`'s `core` module owns what every Rust core's `v1.rs` repeated, and the core keeps what differs, passed in as data.
+`emusen-native` and not `emusen-core-host`, because the host crate is the loading side (discovery, trust, the calls) and no
+core depends on it, while every core already builds on `emusen-native::core`, which holds `Core`, the descriptors and
+`core_exports!`. The surface of the C ABI is unchanged; these are Rust items of the core side only.
+
+- `core::pads`: `PLAYSTATION`, the sixteen-bit report of Diamond and Sapphire with each bit's canonical control, `buttons(rows)`
+  for any table of rows, and `playstation_sticks()`, the DualShock's four axes.
+- `Choice::new`, `Choice::rows`, `Choice::plugs` and `Setting::create_choice`: the create-time choice setting and the plug lists.
+- `core::spaces`: `read_bytes` and `write_bytes`, a plain space read from or written to outside, 0 and dropped past its end.
+- `debug_forwarders!`: in `impl Core`, `debug_pc` and `debug_registers` forwarding to the machine's inherent methods, and with
+  a processor name and its refusal, `debug_disassemble` as well.
+- `Create::plain`: a create with the host's defaults, for tests.
+
+Diamond, Sapphire, Endou, VenusRT and Nephrite use them; their descriptors, answers and digests are unchanged. The
+duplication report for Rust (`dupes --lang rust`) showed 9 findings between those cores' `v1.rs` files and 21 warnings
+before the move, and none and 11 after (measured 2026-10-27).
+
 ## Appendix A. The draft header
 
 *Superseded, 2026-10-03, by the committed header, `EmuSen/Cores/Shared/emusen-native/include/emusen_core.h`, which is

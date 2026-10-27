@@ -882,3 +882,43 @@ fn the_items_of_1_13_are_written_and_answered() {
     assert_eq!(flags, [0, 0, 0, flags::FRAME_CHEATS_HELD]);
     unsafe { emusen_core_free(held) };
 }
+
+// `debug_forwarders!` expanded in a trait of `Core`'s own signatures, over inherent methods that answer for processors 0 and 1.
+struct Toy;
+
+impl Toy {
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        (processor < 2).then_some(0x100 + processor as u64)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Option<Vec<i64>> {
+        (processor < 2).then(|| vec![processor as i64])
+    }
+
+    fn debug_disassemble(&mut self, processor: u32, space: u32, _address: u32, _count: u32) -> Option<Vec<super::Instruction>> {
+        (space == 0 && processor == 1).then(Vec::new)
+    }
+}
+
+trait Forwarded {
+    fn debug_pc(&self, processor: u32) -> Option<u64>;
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32>;
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<super::Instruction>, i32>;
+}
+
+impl Forwarded for Toy {
+    crate::debug_forwarders!(processor, processor > 1);
+}
+
+#[test]
+fn the_debug_forwarders_answer_as_the_inherent_methods_and_refuse_as_told() {
+    use super::status;
+    let mut t = Toy;
+    assert_eq!(Forwarded::debug_pc(&t, 1), Some(0x101));
+    assert_eq!(Forwarded::debug_pc(&t, 5), None);
+    assert_eq!(Forwarded::debug_registers(&t, 1), Ok(vec![1]));
+    assert_eq!(Forwarded::debug_registers(&t, 5), Err(status::NOT_SUPPORTED));
+    assert!(Forwarded::debug_disassemble(&mut t, 1, 0, 0, 1).is_ok());
+    assert_eq!(Forwarded::debug_disassemble(&mut t, 1, 3, 0, 1).err(), Some(status::NO_SUCH_SPACE));
+    assert_eq!(Forwarded::debug_disassemble(&mut t, 2, 0, 0, 1).err(), Some(status::NOT_SUPPORTED));
+}

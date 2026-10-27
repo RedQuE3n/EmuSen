@@ -422,7 +422,40 @@ pub enum Effect {
     Enhancement { cost: String, hardware: String },
 }
 
+impl Choice {
+    pub fn new(value: &str, label: &str) -> Choice {
+        Choice { value: value.into(), label: label.into(), help: None }
+    }
+
+    /// One choice for each (value, label) row.
+    pub fn rows<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Choice> {
+        rows.into_iter().map(|(v, l)| Choice::new(v, l)).collect()
+    }
+
+    /// What a controller port takes: the plugs, and "none" only in the second port.
+    pub fn plugs(plugs: &[(&str, &str)], port: usize) -> Vec<Choice> {
+        Choice::rows(plugs.iter().copied().filter(|p| port == 1 || p.0 != "none"))
+    }
+}
+
 impl Setting {
+    /// A choice read at create, in `category`, with no effect on accuracy or latency.
+    pub fn create_choice(key: &str, label: &str, help: &str, choices: Vec<Choice>, default: &str, category: &str) -> Setting {
+        Setting {
+            key: key.into(),
+            label: label.into(),
+            help: help.into(),
+            kind: SettingKind::Choice(choices),
+            default: default.into(),
+            scope: Scope::Create,
+            category: Some(category.into()),
+            effect: Effect::None,
+            advanced: false,
+            hidden: false,
+            restart: true,
+        }
+    }
+
     /// Whether `value` lies in this setting's domain.
     pub fn accepts(&self, value: &str) -> bool {
         match &self.kind {

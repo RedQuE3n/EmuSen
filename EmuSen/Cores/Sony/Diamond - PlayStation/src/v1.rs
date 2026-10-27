@@ -3,6 +3,8 @@
 //! enhancements (Diamond_Enhancements.md §24.1).
 
 use emusen_native::abi::Region;
+use emusen_native::core::pads::{self, PLAYSTATION};
+use emusen_native::core::spaces;
 use emusen_native::core::*;
 
 use crate::bus::BIOS_BYTES;
@@ -26,40 +28,17 @@ pub const STATUS_BAD_DISC: i32 = -12;
 /// sheet's nth file, then an `.sbi` found beside the image (EmuSen_CoreAPI_Extensions.md §2.4).
 pub const MEDIA_FILE: u32 = flags::FILE_MEDIA;
 
-/// The pad report's bits (psx-spx "Standard Controllers"), pressed as 1, in the order a bindings screen lists them,
-/// each with its canonical control (Diamond_Plan.md §4.2); L3 and R3 are the DualShock's alone.
-const BUTTONS: [(u32, Control, &str); 16] = [
-    (4, Control::Up, "Up"),
-    (6, Control::Down, "Down"),
-    (7, Control::Left, "Left"),
-    (5, Control::Right, "Right"),
-    (12, Control::X, "Triangle"),
-    (13, Control::A, "Circle"),
-    (14, Control::B, "Cross"),
-    (15, Control::Y, "Square"),
-    (10, Control::L, "L1"),
-    (11, Control::R, "R1"),
-    (8, Control::L2, "L2"),
-    (9, Control::R2, "R2"),
-    (0, Control::Select, "Select"),
-    (3, Control::Start, "Start"),
-    (1, Control::L3, "L3"),
-    (2, Control::R3, "R3"),
-];
-
 pub use crate::pad::{DUALSHOCK, PAD};
 
 fn controllers() -> Vec<Controller> {
-    let buttons = |n: usize| BUTTONS[..n].iter().map(|&(bit, c, l)| Button { bit, control: Some(c), label: l.into() }).collect();
-    let stick = |axis, control, label: &str| AxisControl { axis, control: Some(control), trigger: false, label: label.into() };
     vec![
-        Controller { id: PAD.into(), label: "Digital Controller".into(), ports: vec![0, 1], buttons: buttons(14), axes: Vec::new() },
+        Controller { id: PAD.into(), label: "Digital Controller".into(), ports: vec![0, 1], buttons: pads::buttons(&PLAYSTATION[..14]), axes: Vec::new() },
         Controller {
             id: DUALSHOCK.into(),
             label: "DualShock".into(),
             ports: vec![0, 1],
-            buttons: { let mut b: Vec<Button> = buttons(16); b.push(Button { bit: 16, control: None, label: "Analog".into() }); b },
-            axes: vec![stick(0, Axis::LeftX, "Left Stick"), stick(1, Axis::LeftY, "Left Stick"), stick(2, Axis::RightX, "Right Stick"), stick(3, Axis::RightY, "Right Stick")],
+            buttons: { let mut b: Vec<Button> = pads::buttons(&PLAYSTATION); b.push(Button { bit: 16, control: None, label: "Analog".into() }); b },
+            axes: pads::playstation_sticks(),
         },
     ]
 }
@@ -104,26 +83,6 @@ pub const REGIONS: [(&str, &str, Market); 3] = [("psx.jp", "Japan (NTSC)", Marke
 pub const GPUS: [(&str, &str, Gpu); 2] = [("psx.gpu208", "208-pin GPU (later consoles)", Gpu::Pin208), ("psx.gpu160", "160-pin GPU (early consoles)", Gpu::Pin160)];
 pub const PLUGS: [(&str, &str); 3] = [(DUALSHOCK, "DualShock"), (PAD, "Digital Controller"), ("none", "Nothing")];
 
-fn choice(value: &str, label: &str) -> Choice {
-    Choice { value: value.into(), label: label.into(), help: None }
-}
-
-fn setting(key: &str, label: &str, help: &str, choices: Vec<Choice>, default: &str, category: &str) -> Setting {
-    Setting {
-        key: key.into(),
-        label: label.into(),
-        help: help.into(),
-        kind: SettingKind::Choice(choices),
-        default: default.into(),
-        scope: Scope::Create,
-        category: Some(category.into()),
-        effect: Effect::None,
-        advanced: false,
-        hidden: false,
-        restart: true,
-    }
-}
-
 /// An enhancement's values: a switch, off the hardware's, or a choice whose first value is the hardware's.
 pub enum Values {
     Switch,
@@ -147,7 +106,7 @@ impl Enhancement {
     pub fn setting(&self) -> Setting {
         let (kind, hardware) = match self.values {
             Values::Switch => (SettingKind::Switch, "false"),
-            Values::Choice(values) => (SettingKind::Choice(values.iter().map(|&(v, l)| choice(v, l)).collect()), values.first().map_or("", |v| v.0)),
+            Values::Choice(values) => (SettingKind::Choice(values.iter().map(|&(v, l)| Choice::new(v, l)).collect()), values.first().map_or("", |v| v.0)),
         };
         Setting {
             key: self.key.into(),
@@ -166,18 +125,17 @@ impl Enhancement {
 }
 
 fn schema() -> Vec<Setting> {
-    let mut regions = vec![choice("auto", "From the disc or program")];
-    regions.extend(REGIONS.iter().map(|&(v, l, _)| choice(v, l)));
-    let pads = |port: usize| PLUGS.iter().filter(|p| port == 1 || p.0 != "none").map(|&(v, l)| choice(v, l)).collect();
+    let mut regions = vec![Choice::new("auto", "From the disc or program")];
+    regions.extend(Choice::rows(REGIONS.iter().map(|&(v, l, _)| (v, l))));
     vec![
-        setting(REGION_KEY, "Region", "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL, and which BIOS the console has. From the disc, a game runs as a console of the market its licence text names; a program that names none runs as an American console. Takes effect when a game is next loaded.", regions, "auto", "Console"),
-        setting(GPU_KEY, "Graphics chip", "Which of the two GPU families the console has: the 208-pin chip of the later consoles, or the 160-pin chip of the first ones, which differ in a few drawing details that some programs can tell apart. Takes effect when a game is next loaded.", GPUS.iter().map(|&(v, l, _)| choice(v, l)).collect(), GPUS[0].0, "Console"),
-        setting(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock, which starts in digital mode and answers as the digital pad until it is switched, so every game accepts it; or Sony's first, digital controller. Takes effect when a game is next loaded.", pads(0), DUALSHOCK, "Controllers"),
-        setting(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock, Sony's digital controller, or nothing. Takes effect when a game is next loaded.", pads(1), DUALSHOCK, "Controllers"),
-        setting(TAP_KEYS[0], "Port 1 multitap", "A multitap on port 1, so that four controllers of the port's kind are plugged in; only games made for it look for the others. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(MULTITAP, "Multitap")], "none", "Controllers"),
-        setting(TAP_KEYS[1], "Port 2 multitap", "A multitap on port 2, which a few games need instead of port 1's. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(MULTITAP, "Multitap")], "none", "Controllers"),
-        setting(CARD_KEYS[0], "Memory card in slot 1", "A memory card in slot 1, kept for this game beside its file; with none, the game finds no card and saves nothing. Takes effect when a game is next loaded.", vec![choice(CARD, "Memory card"), choice("none", "None")], CARD, "Memory cards"),
-        setting(CARD_KEYS[1], "Memory card in slot 2", "A second memory card in slot 2, kept for this game beside the first. Takes effect when a game is next loaded.", vec![choice("none", "None"), choice(CARD, "Memory card")], "none", "Memory cards"),
+        Setting::create_choice(REGION_KEY, "Region", "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL, and which BIOS the console has. From the disc, a game runs as a console of the market its licence text names; a program that names none runs as an American console. Takes effect when a game is next loaded.", regions, "auto", "Console"),
+        Setting::create_choice(GPU_KEY, "Graphics chip", "Which of the two GPU families the console has: the 208-pin chip of the later consoles, or the 160-pin chip of the first ones, which differ in a few drawing details that some programs can tell apart. Takes effect when a game is next loaded.", GPUS.iter().map(|&(v, l, _)| Choice::new(v, l)).collect(), GPUS[0].0, "Console"),
+        Setting::create_choice(PAD_KEYS[0], "Port 1 controller", "What is plugged into the port: a DualShock, which starts in digital mode and answers as the digital pad until it is switched, so every game accepts it; or Sony's first, digital controller. Takes effect when a game is next loaded.", Choice::plugs(&PLUGS, 0), DUALSHOCK, "Controllers"),
+        Setting::create_choice(PAD_KEYS[1], "Port 2 controller", "What is plugged into the port: a DualShock, Sony's digital controller, or nothing. Takes effect when a game is next loaded.", Choice::plugs(&PLUGS, 1), DUALSHOCK, "Controllers"),
+        Setting::create_choice(TAP_KEYS[0], "Port 1 multitap", "A multitap on port 1, so that four controllers of the port's kind are plugged in; only games made for it look for the others. Takes effect when a game is next loaded.", vec![Choice::new("none", "None"), Choice::new(MULTITAP, "Multitap")], "none", "Controllers"),
+        Setting::create_choice(TAP_KEYS[1], "Port 2 multitap", "A multitap on port 2, which a few games need instead of port 1's. Takes effect when a game is next loaded.", vec![Choice::new("none", "None"), Choice::new(MULTITAP, "Multitap")], "none", "Controllers"),
+        Setting::create_choice(CARD_KEYS[0], "Memory card in slot 1", "A memory card in slot 1, kept for this game beside its file; with none, the game finds no card and saves nothing. Takes effect when a game is next loaded.", vec![Choice::new(CARD, "Memory card"), Choice::new("none", "None")], CARD, "Memory cards"),
+        Setting::create_choice(CARD_KEYS[1], "Memory card in slot 2", "A second memory card in slot 2, kept for this game beside the first. Takes effect when a game is next loaded.", vec![Choice::new("none", "None"), Choice::new(CARD, "Memory card")], "none", "Memory cards"),
     ]
 }
 
@@ -378,20 +336,7 @@ impl Core for Machine {
         self.debug.stopped
     }
 
-    fn debug_pc(&self, processor: u32) -> Option<u64> {
-        Machine::debug_pc(self, processor)
-    }
-
-    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
-    }
-
-    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
-        if processor != R3000 {
-            return Err(status::NOT_SUPPORTED);
-        }
-        Machine::debug_disassemble(self, processor, space, address, count).ok_or(status::NO_SUCH_SPACE)
-    }
+    emusen_native::debug_forwarders!(processor, processor != R3000);
 
     fn set_options(&mut self, flags: u32) {
         self.skip = flags & emusen_native::core::flags::OPTION_SKIP_RENDERING != 0;
@@ -461,10 +406,7 @@ impl Core for Machine {
             }
             return Ok(());
         }
-        let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
-        for (i, b) in out.iter_mut().enumerate() {
-            *b = m.get(address as usize + i).copied().unwrap_or(0);
-        }
+        spaces::read_bytes(self.space(space).ok_or(status::NO_SUCH_SPACE)?, address, out);
         Ok(())
     }
 
@@ -475,12 +417,7 @@ impl Core for Machine {
         if self.space(space).is_none() {
             return Err(status::NO_SUCH_SPACE);
         }
-        let m = self.space_mut(space).ok_or(status::READ_ONLY)?;
-        for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.get_mut(address as usize + i) {
-                *d = b;
-            }
-        }
+        spaces::write_bytes(self.space_mut(space).ok_or(status::READ_ONLY)?, address, data);
         Ok(())
     }
 
@@ -600,13 +537,11 @@ mod tests {
     use crate::media::{LICENCE_SECTOR, RAW_SECTOR};
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
-        let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
+        Machine::create(&Create::plain(image, settings, files))
     }
 
     fn create_empty(settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
-        let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
-        Machine::create_empty("psx", &Create { image: &[], settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
+        Machine::create_empty("psx", &Create::plain(&[], settings, files))
     }
 
     /// Diamond_Shell.md §1.2: started empty, the drive is listed empty with its lid closed, the open kernel finds no

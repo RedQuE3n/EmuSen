@@ -1,0 +1,17 @@
+# Jak and Daxter: The Precursor Legacy (SCUS-97124, Rev 1), from power-on on the Americas BIOS with the console's
+# configured EEPROM and its erased card in slot 1, into its opening, which stops short of play (D-900); see
+# Sapphire_Native.md §39.4 and Sapphire_Speed.md §51.3.
+# Bits: 3 Start, 12 Triangle, 13 Circle, 14 Cross, 15 Square; sticks: 0 left X, 1 left Y, 2 right X, 3 right Y.
+# The memory card message: Cross.
+press 1100 14
+# The title: Start; NEW GAME: Cross; the memory card message again: Cross.
+press 2700 3
+press 2820 14
+press 2960 14
+# The opening: Start pauses it and Start again goes on; Square, Cross, Triangle and Circle do not skip it.
+press 3410 3
+press 3510 3
+press 3530 15
+press 3560 14
+press 3590 12
+press 3620 13

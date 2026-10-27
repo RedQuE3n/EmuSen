@@ -163,6 +163,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   and the loads' and stores' exits shared (§48.15, 2026-10-26): one write-back an access instead of two, the code 28 %
   smaller an access, every oracle equal, the card screen 1.03 times S37's but short of memory-in-blocks off, its
   remaining cost the compiler's throughput against the issue model's code, measured.
+- **`Sapphire_Speed.md`** — the speed record on the games themselves, from the gameplay workload on (2026-10-26),
+  continuing `Sapphire_Native.md`'s numbering: Jak and Daxter toward play (§51), its press script from power-on, the
+  opening that no button skips and the GS's held writes that stop it short of play (D-900), the bench's `game` windows of
+  the opening drawn in its engine at 2.77, 1.77 and 0.75 frames a second, the profile on every thread with the EE's
+  instruction mix, VU1's compiler joined at its budget, and the levers and compromises ranked again for the 3D.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

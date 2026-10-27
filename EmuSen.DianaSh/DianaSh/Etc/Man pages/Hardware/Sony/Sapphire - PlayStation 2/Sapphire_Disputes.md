@@ -4680,3 +4680,39 @@ it.*
   - `a_recognised_interrupt_keeps_a_wait_from_being_passed` (`ee::idle`).
 - **Implemented in:** `ee::INTERRUPT_DELAY`, `Ee::interrupt_now`, `Ee::raise`, `Ee::raise2` and `Ee::block_entry`;
   `Ee::idle_eligible`, the turn's mark and `idle::ended` for idle skipping; `SPH2` version 5.
+
+### D-900. Jak and Daxter's opening: from about frame 12,900 the GS holds its writes behind a SIGNAL and the display cycles four stale frames, after pictures ghosted and combed from 11,775; play is never reached
+
+*Numbered from D-900 at the gameplay workload's step (2026-10-26), other steps being recorded beside it.*
+
+- **Opened:** 2026-10-26, when the gameplay step's run of Jak and Daxter from power-on (`Sapphire_Speed.md` §51.3)
+  stopped short of play.
+- **Observed** (the run's pictures and the units' own queues only; the press script `examples/scripts/jak-and-daxter.txt`,
+  the Americas BIOS, the player's defaults):
+  - The opening, which no button skips, draws whole by eye, with nothing missing or misdrawn, to frame 11,700 (Daxter
+    fallen on the sand after the dark eco; no referee was run on it), with three exceptions near one cut: the GIF's
+    queues are past their state slots at frames 10,500 to 10,530 (a save there is refused, §38.2's bound), the shot at
+    10,500 shows a sky over the upper half of the picture and black below, and the shot at 10,650 two scenes blended with
+    every second row darker; the shot at 10,800 is whole again. Either may be the game's own transition.
+  - From 11,775 every shot is so, ghosted and combed, each different, to 12,600.
+  - From about 12,900 the display shows only four pictures in turn, the same four bytes for bytes every 60 to 300 frames,
+    to frame 15,100 where the run was stopped; the GS's writes held behind a SIGNAL are past the state's 64 slots from
+    frame 13,500 (the first save tried) to the end, so no state can be saved there. The display registers (PMODE
+    FFA1h, DISPFB1 and DISPFB2 alternating 1140h and 1180h, DISPLAY1 and DISPLAY2 unchanged) are as before the defect.
+  - The emulation thread runs about one frame a second throughout, the frames continuing to arrive: the machine does
+    not stop, the game's drawing does.
+- **Triage** (from the state saved at frame 10,531, every 150 frames): with **one GS thread** (`SAPPHIRE_GS_WORKERS=1`,
+  S43's reference path) the pictures at 10,800 to 12,000 are byte for byte the four workers'; with **idle skipping off**
+  (`EMUSEN_SAPPHIRE_IDLE=off`) they are again the same at 10,800 to 12,000. So neither S43's workers nor S33's skipping
+  makes it; the EE's interpreter tier, VU1's interpreter and the referee were not run.
+- **Documents read:** none yet; the GS User's Manual's SIGNAL and FINISH (CSR, IMR) and the EE's GS interrupt are the
+  first to read.
+- **Test program:** none yet.
+- **Referee:** not yet run on this window. RetroArch's PCSX2 core on the handheld plays Jak past this scene at the
+  television's rate (the tester's report of 2026-10-26).
+- **Conclusion:** **open.** The next step: the referee's pictures at 11,700 to 13,000 on the same script, the GS's CSR
+  and IMR and the SIGNAL's count at the first stalled frame (the GS's own registers), and the same window on the EE's
+  interpreter and VU1's interpreter to place the defect in a unit.
+- **Depends on it:** every workload with play (`Sapphire_Speed.md` §51), G5's anchors past the opening.
+- **Pinned by:** nothing yet.
+- **Implemented in:** nothing yet.

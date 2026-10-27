@@ -157,7 +157,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
 - **`Sapphire_Recompiler.md`** — the EE recompiler's record from stage S37 on (2026-10-26), continuing
   `Sapphire_Native.md`'s numbering past the size a page may have: S37's loads and stores in blocks (§48), with the
   translation cache, the data cache's lines reached in place, the board's guard of the DMAC and the rollbacks, the
-  instruction cache's lines, the gate on every base, the speed and the memory card screen's causes, the seeded faults.
+  instruction cache's lines, the gate on every base, the speed and the memory card screen's causes, the seeded faults;
+  and the loads' and stores' exits shared (§48.15, 2026-10-26): one write-back an access instead of two, the code 28 %
+  smaller an access, every oracle equal, the card screen 1.03 times S37's but short of memory-in-blocks off, its
+  remaining cost the compiler's throughput against the issue model's code, measured.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

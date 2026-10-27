@@ -2,7 +2,8 @@
 
 The build record of Sapphire's EE recompiler from stage S37 on, continuing `Sapphire_Native.md`, which grew past the size
 a page in the tree may have. Its sections keep that page's numbering: a section number with no page named is
-`Sapphire_Native.md`'s (§44 is S36's recompiler, §47 S33's idle skipping), or this page's own from §48. The plan is
+`Sapphire_Native.md`'s (§44 is S36's recompiler, §47 S33's idle skipping), or this page's own from §48 (§48.15, the
+loads' and stores' exits shared, continues it). The plan is
 `Sapphire_Plan.md` (§5.12, §5.13, §7's S36 to S39 rows); disputes, were any raised, would be in `Sapphire_Disputes.md`.
 
 ## 48. Stage S37, the EE recompiler: loads and stores, with the RDRAM, scratchpad and data cache fast paths (2026-10-26)
@@ -353,7 +354,7 @@ guest address was printed. No SIF traffic was traced. No emulator, SDK or loader
    misses (15 million over Jak and Daxter's 900 frames) above the noise.
 3. **Q3 [routine], an exit's size.** Each load or store carries its own exit and two write-backs (§48.5), which costs the
    memory card screen 6 % (§48.8). *Recommended*: a next step, before S38 adds more code a block: exits shared by a
-   block's accesses, measured on that screen and the language screen.
+   block's accesses, measured on that screen and the language screen. *Decided 2026-10-26 (routine) and built: §48.15.*
 4. **Q4 [routine], the polled registers.** The largest reason a load leaves its block is a page it cannot serve, a
    device register polled (§48.8). *Recommended*: leave them to idle skipping (S33), which passes such waits whole.
 
@@ -370,5 +371,228 @@ the rebases); S33's `src/idle.rs` where it meets the board and the dispatcher; t
 
 - A data cache miss's refill, an uncached load and the UCAB inside a block (each leaves to the interpreter; §48.6).
 - MMI as vector code (S38), COP1 and COP2's macro forms (S39), COP0, SYSCALL, BREAK and CACHE: each still ends a block.
-- Chaining blocks, loops inside a block, and sharing the exits' write-backs.
+- Chaining blocks, loops inside a block, and sharing the exits' write-backs (the last built at §48.15).
 - The handheld: no measurement was made there.
+
+## 48 (continued)
+
+### 48.15 The loads' and stores' exits shared (2026-10-26)
+
+*S37's Q3 (§48.12), decided 2026-10-26 (routine): shrink the code a block's loads and stores emit before S38 adds more
+code to a block. Built on WiseMan `9c754f2c4` (S37 merged). Its disputes would be numbered from D-960; it raised none:
+every oracle below agreed with the interpreter, and the step reads nothing of the hardware the interpreter does not
+already implement.*
+
+#### 48.15.1 In one paragraph
+
+At S37 every load or store carried its own exit: a call of the replay, a write-back of everything the block held for
+the case where every step stood, and the branches to the rollbacks; and, for the rollback past it, a second write-back,
+of the state after it (§48.5). **Now a load or store that leaves at most two steps after the load or store before it
+writes back nothing of its own**: one helper call (`Context::leave`) counts the reason, sets the guard and replays the
+board through the steps run, and the state after the access before it is written back by that access's own block, the
+one S37 already emitted for the rollback past it; the dispatcher then has the interpreter run the steps from there to
+the access that left, as it does after any rollback past the last access. One write-back an access instead of two, and
+the replay's call and its branches made once in Rust instead of in every exit. An access further than two steps from
+the one before it keeps an exit of its own, as at S37, because running more steps again cost Jak and Daxter's loading
+more than the smaller code saved (§48.15.4). The machine the dispatcher hands back is the interpreter's at the access,
+exactly as before: the gate (§48.15.7) holds on every oracle, and ten seeded faults are caught (§48.15.8). **The code
+is 28 % smaller an access** on the project's own blocks, 12 % smaller on the boot's and the loading's windows and 15 to
+28 % on the card screen's; **the memory card screen ran at 1.03 to 1.04 times S37's speed, but not back to
+memory-in-blocks off** (0.96 to 0.985 of it); Jak and
+Daxter's loading is kept. The remaining cost is not in the exits: the publishing wait follows the compiler's throughput,
+and most of a block's bytes are the issue model computed at run time (§48.15.6).
+
+#### 48.15.2 What was built
+
+| Module | What changed |
+| --- | --- |
+| `src/ee/jit/emit.rs` | a load or store's slow path: `leave` (the helper's call, then the state block of the access before it, or the shared return of `ROLLBACK` with nothing written when the replay stopped short of it or there is none) when at most `REWIND_MOST` (2) steps stand since that access; S37's exit otherwise, and when nothing ran or the verifier wrote back every step |
+| `src/ee/jit/mod.rs` | `Context::leave`; `leave_word` and `left_by`, the one owner of the word the exit hands over (the steps run, the steps after the access before it, the undo entries written, the reason) |
+| `src/blocks.rs` | `leave`: the reason counted, the guard set, the replay made without setting the lines when every step stands; the dispatcher's rollback branch takes it (`Run::rewound`); `Stats::rewinds`, `rewound_steps` and `queued` (entries that found their block's code still with the compiler); `Blocks::compile_nanos`; `EMUSEN_SAPPHIRE_WAIT=1`, for measurement |
+| `examples/s33.rs` | `time` prints for each window the blocks and bytes compiled, the steps interpreted and compiled, the entries that waited for the compiler, and the compiler's seconds |
+| `tests/blocks.rs` | `a_load_or_store_leaving_after_plain_instructions_leaves_the_interpreters_machine` |
+
+`emusen-jit` is unchanged, so MarsRT is outside the blast radius.
+
+#### 48.15.3 Why it is exact
+
+The exit before access k, at instruction j, used to write back the state at j. It now writes back the state after access
+k-1 (the instruction at `base`), which the code already held for S37's rollback past k-1, and the interpreter runs the
+instructions from `base` to j. Those instructions make no load or store (k-1 is the last before k), so running them
+again reads nothing a DMAC step could have changed and writes nothing the undo log must know; they read the registers
+and the issue model the state block wrote, which are what the interpreter's machine held after k-1. The board is not
+run twice: the replay has brought it through the times of every step to j, and the dispatcher's interpreter steps find
+it there (`run_to` of a time already reached does nothing), the lines set before each step from what the replay saw, as
+after an interrupt's rollback. The replay must not set the lines and Cause.IP2 and IP3 as an exit where every step stands
+does, since the steps run again would see the last step's lines; `leave` replays with that part left out, and the
+rollback branch then sets them exactly as for a rollback stopped at j. When the replay stops short of `base` (an
+interrupt, or the DMAC within the guard), nothing is written and the stores are undone, as at every exit since S37.
+With no access before k, `base` is 0 and the same branch undoes nothing and runs the steps from the block's start. The
+guard is the one S37's exit set (the last access's index), so the DMAC's order against the block's accesses is
+unchanged (§48.5). The interrupt delay of D-860 (`Sapphire_Native.md` §30.78) is untouched: the replay stops before any step at which an interrupt is
+due, so no step run again makes a recognition, and the recognition stays the interpreter's next step's.
+
+#### 48.15.4 The limit of two steps (measured 2026-10-26)
+
+The first version shared the exit of every load or store that left once its block had run a step. On Jak and Daxter's
+900 frames it made 11.2 million rewinds and ran 39.1 million steps again in the interpreter (3.5 a rewind), and the
+loading window ran at 48.7 ms a frame against S37's 46.5 (§48.15.5, series A). The gap between two accesses is known when
+the block is compiled, so an access more than `REWIND_MOST` steps from the one before it keeps S37's exit. In one
+interleaved round of two pairs on Jak and Daxter (loads 1.5 to 4.7), the limit of two took the loading window from 49.7
+to 47.5 ms a frame and left the memory card screen as it was (106.3 against 106.8), the steps run again falling to 5.0
+million in 6.3 million rewinds; the code grew by 3 to 5 % (the card screen's window 115 to 117 MB against 111 to 113,
+the loading's 39.6 against 37.7). The limit is the one kept.
+
+#### 48.15.5 The code and the speed (measured 2026-10-26)
+
+**The code an access emits**, on the project's own block (an ADDU, n accesses, an ADDU), compiled by the same lowering and
+measured as Cranelift's code size (bytes), S37 against this step:
+
+| n | loads | | loads, each with an ADDU | | stores, each with an ADDIU | |
+| --- | --- | --- | --- | --- | --- | --- |
+| 8 | 14,192 | 12,496 | 22,688 | 17,056 | 22,288 | 16,992 |
+| 16 | 27,048 | 24,488 | 45,264 | 32,888 | 45,304 | 32,888 |
+
+An access with a plain instruction beside it costs 1,974 bytes against 2,748 (28 % less); back-to-back loads gain less
+(9 %), since S37 already emitted no state block for an access with nothing between it and the one before.
+
+**The windows**, S33's runner (`s33 time … recompiler on`, idle skipping on, the GS's workers at their default count),
+each binary built from its tree with the release profile, and memory-in-blocks off being this step's binary with
+`EMUSEN_SAPPHIRE_MEMORY=0`. Code compiled in each window (blocks, MB), steps the interpreter took (millions) and entries
+that found their block's code still with the compiler (millions), from series B; every round of a binary gave the same
+counts within a few per cent, except on the card screen (below):
+
+| Window | S37 | this step | memory off |
+| --- | --- | --- | --- |
+| The boot, 0-690 | 14,778, 128.5; 211; 68 | 14,771, 112.9; 200; 58 | 9,821, 16.6; 346; 5.8 |
+| Its language screen, 690-760 | 136, 0.6; 4.8; 0 | 136, 0.5; 4.8; 0 | 116, 0.2; 10.1; 0 |
+| Jak and Daxter loading, 8-400 | 4,877, 45.2; 70; 31 | 4,877, 39.6; 67; 29 | 6,404, 8.9; 214; 1.9 |
+| Its memory card screen, 400-900 | 12,855 to 14,905, 137 to 184; 155 to 170; 77 to 91 | 12,855 to 13,781, 117 to 132; 158; 80 | 8,964, 13.0; 116; 2.1 |
+
+**The card screen's code is bimodal**: in one run of S37 and one of this step (and in no run with memory off) the window
+compiled only 1,116 and 1,504 blocks, 17.6 and 16.3 MB, with 104 million entries waiting; the other seven runs of the two
+compiled 12,500 to 14,900. Which happens depends on when the screen's first blocks are published, which depends on the
+compiler thread's timing, not on any result: every run's pictures, sound and state were the interpreter's.
+
+**The speed.** Each frame's `advance` timed, one run at a time at CPU weight 100 beside other stages' work, the order of
+the binaries alternated within each round, the one-minute load before and after each run recorded. Medians of three
+rounds (ms a frame), with the spread of the three:
+
+| Window | S37 | this step | memory off | this step against S37 | against memory off |
+| --- | --- | --- | --- | --- | --- |
+| *Series A*, shared exits without the limit, loads 1.2 to 4.0 | | | | | |
+| The boot, 0-690 | 173.2 (2 %) | 173.3 (2 %) | 189.7 (1 %) | 1.00 | 1.09 |
+| Its language screen, 690-760 | 123.3 (3 %) | 124.2 (1 %) | 129.2 (1 %) | 0.99 | 1.04 |
+| Jak and Daxter loading, 8-400 | 46.5 (1 %) | 48.7 (7 %) | 70.9 (2 %) | 0.95 | 1.46 |
+| Its memory card screen, 400-900 | 105.8 (2 %) | 102.2 (2 %) | 100.7 (1 %) | **1.04** | **0.985** |
+| *Series B*, the step as committed, loads 3.5 to 10.2 | | | | | |
+| The boot, 0-690 | 185.3 (15 %) | 180.3 (23 %) | 202.0 (11 %) | 1.03 | 1.12 |
+| Its language screen, 690-760 | 127.5 (9 %) | 130.0 (6 %) | 140.0 (3 %) | 0.98 | 1.08 |
+| Jak and Daxter loading, 8-400 | 52.0 (17 %) | 50.0 (20 %) | 74.9 (11 %) | 1.04 | 1.50 |
+| Its memory card screen, 400-900 | 114.2 (30 %) | 111.3 (8 %) | 106.8 (10 %) | **1.03** | **0.96** |
+
+A preliminary round on Jak and Daxter (shared exits without the limit, loads 4.0 to 6.6) gave the card screen 112.0,
+109.8 and 106.5 ms and the loading 51.8, 51.7 and 74.4 (S37, this step, memory off). Series B ran under twice series A's
+load and its spreads are wide; on the card screen the two series and the preliminary round agree on the order (memory
+off, then this step, then S37), and on this step's distance from memory off, 1.5 to 4.5 ms a frame. The goal (the card
+screen at least as fast as memory off, the loading kept) is half met: the loading is kept, the card screen not.
+
+#### 48.15.6 The publishing wait, and where the bytes are (measured 2026-10-26)
+
+**The wait is the compiler's throughput.** With memory in blocks the card screen's window waits for the compiler about
+40 times as often as without (80 against 2 million entries), and the interpreter takes 158 against 116 million steps of
+it; the compiler is busy 32 to 36 s of the window's 55 (4 s without). `EMUSEN_SAPPHIRE_WAIT=1` waits for each block's code
+at its hand-over, so that nothing runs interpreted behind the queue: in two runs the card screen took 188.2 and 184.1 ms a
+frame and the loading 102.6 and 100.0, the compiler's 45 and 22 s now inside the frames, 15,108 blocks and 169 MB
+compiled on the card screen. Compiling a block's first version sooner does not pay while compiling costs this much: the
+compiler makes about 3.7 MB of code a second, so the wait falls only with the bytes.
+
+**Where a block's bytes are.** Cranelift's listing of the project's block of two loads, each with an ADDU, shows about 50
+host instructions for an access's fast path, 70 for a write-back, and **85 for each instruction's issue model**, loads and
+plain instructions alike: the pairing state a block enters with (`open`, the last category and pipe, `last_writes`) is
+loaded, not known, and once it is a run-time value the model's selects and maxima stay run-time values to the block's
+end (§44.4's folding acts only on what the block itself fixes). The exits were the part an access added beyond that,
+and this step removed most of it; what remains of a memory block's size is the model, paid by every instruction of a
+block whose code is 4.5 (the boot) to 6.3 (the card screen) times as large as with memory off.
+
+**The next step, measured and not built**: make the issue model's code smaller, by specialising a block on the pairing
+state at its entry (a guard on the few fields, the model then folded from constants), or by a first tier of S36's shapes
+(memory off: 13 MB on the card screen against 117 to 132) recompiled with memory in blocks once a block is hot. Either is
+a change to S36's emitter or to the dispatcher's tiers, not to the exits (§48.15.10, Q2).
+
+#### 48.15.7 The gate (measured 2026-10-26)
+
+On the desktop beside other stages' work; the player's Americas BIOS executed through the referees' link to it, never
+read; ps2autotests from `~/.cache/emusen/probe/sapphire/ps2autotests/`, Jak and Daxter read in place from
+`~/.cache/emusen/probe/sapphire/discs/`. Every whole-machine oracle ran on the shared exits without the limit and again on
+the step as committed; the figures are the latter's, and both agreed throughout.
+
+| Oracle | Run | Result |
+| --- | --- | --- |
+| 1. The verifier | `the_verifier_steps_beside_every_compiled_instruction_and_finds_nothing`, `random_programs_under_the_verifier_find_nothing` (`Verify::Steps` and `Verify::Blocks`); `s33 verify boot` and `s33 verify disc`, 30 frames each, quiet | held: 220,863,488 and 231,997,440 steps compared, the whole states equal |
+| 2. Random programs | seeds 0 to 159 and 1000 to 1079, 24,000 steps each, compared every 400 and whole at the end | equal: 3,790,606 and 1,883,354 steps compiled, 1,431 and 739 rollbacks as at S37, 975 and 767 rewinds |
+| 3. The mechanisms | the 24 tests S36, S37, D-780 and D-860 left, and the new test | 25 of 25 |
+| 4. ps2autotests | `s10` on each tier | 52 of 55 on both, the same three as §36.5; all 55 texts identical byte for byte between the tiers |
+| | the S6 and S7 memory programs | equal to the interpreter and to their records on the blocks' machine |
+| 5. The bench workloads | `examples/bench.rs` interpreted, with `--blocks`, and with `--blocks --idle` | the boot's 760 frames `50F06A02F1B76860`, `2EE7B3D10DF3C401`, state `2051C6BB42228C53`; Jak and Daxter's 900 frames `7EEC08D4D07DB621`, `20BB66B5E91347C9`, state `83E7D9CAFA075D14`; the same on every tier, and in every timed run |
+| 6. A state into an empty cache | `a_state_saved_between_blocks_loads_into_an_empty_cache_and_runs_alike`; `s36 state` on the boot (400, 100) and Jak and Daxter (300, 100) | equal: 0 pictures, 0 sound, 0 states differing |
+
+**The new test**, `a_load_or_store_leaving_after_plain_instructions_leaves_the_interpreters_machine`: a loop whose second
+access is followed two steps later by a load of a timer's count, which leaves at every pass, then by a load that misses
+now and then and one misaligned at every fourth pass, each further from the access before it; 20,000 steps beside the
+interpreter, compared every 100, and under `Verify::Blocks`: 890 rewinds, 1,359 steps run again, and every way of
+leaving taken.
+
+#### 48.15.8 Seeded faults (2026-10-26)
+
+Each made alone on a copy of the crate built apart (the step as committed), the 25 tests of `tests/blocks.rs` run, the
+source restored. F1 to F8 are S37's (§48.9), made again on this code (F3 narrower: the check of the board's next event
+removed, the guard kept, which F4 removes); F9 and F10 are this step's.
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | a rollback leaves the block's stores in memory | 1: the rollback beside the handler's reads |
+| F2 | a store hitting a cached line leaves its D bit clear | 6 |
+| F3 | the board's next event not checked before an access | 1: beside the DMAC |
+| F4 | the replay's guard ignored | 1: the guarded board |
+| F5 | the translation cache's key without the mode | 2: the TLB and mode, the S6 programs |
+| F6 | LWR at a word's first byte keeps the register's upper half | 1: the S6 programs |
+| F7 | an uncached load without its bus wait | 6, among them the random programs |
+| F8 | the two ways of a data cache hit swapped | 13 |
+| F9 | a load or store's exit restores the state after the access two before it, not the one before | 8, among them the new test |
+| F10 | the exit's replay sets the lines and leaves `Context::steps` as an exit where every step stands does | 10 |
+
+F9 first survived the new test: its load of the timer's count followed the block's first access, whose line was
+replaced by the loop's two conflicting ones, so that it left at once and the block began after it; the access two before
+and the access before were then the same. The loop's first load was moved to a line of its own and F9 is caught there.
+
+#### 48.15.9 Exposure, and what was observed
+
+Running the player's BIOS on Sapphire makes this writer a writer of a player's-BIOS stage (`Sapphire_Plan.md` §1.4):
+**exposed, and never a replacement writer**. The BIOS image was executed by the machine through the path of the
+referees' link to it, and never opened, hashed, diffed, disassembled or dumped, and the BIOS folder was not listed. What
+was printed of BIOS runs: counts (steps, blocks, bytes, rewinds, rollbacks, exits by reason, entries waiting, the
+compiler's seconds), the verifier's pass and its count of steps, digests, equality of pictures, sound and states, and
+times. One mistake in this stage's own build printed Cranelift's refusals of blocks it had lowered wrongly (a value used
+where it was not defined), each naming the block's start address; those addresses were not looked at further, and the
+code that caused them was replaced before any measurement. The disassembly of §48.15.6 is of the project's own block,
+assembled for the purpose. No SIF traffic was traced. No emulator, SDK or loader source was read.
+
+#### 48.15.10 Questions this step leaves
+
+1. **Q1 [routine], the limit.** `REWIND_MOST` is 2, measured against no limit (§48.15.4). *Recommended*: keep it; measure
+   it again if S38's vector code changes how far apart a block's accesses fall.
+2. **Q2 [decision], the card screen's remaining cost.** It is the compiler's throughput against the bytes a block of
+   loads and stores now holds, most of them the issue model computed at run time (§48.15.6). *Recommended*: a next step
+   before S38, specialising a block on its entry's pairing state so that the model folds, measured on the card screen,
+   the loading and the boot's language screen; the first tier of S36's shapes as the alternative if the guard on the
+   entry's state refuses too many entries.
+3. **Q3 [routine], the card screen's two modes.** Which one a run takes depends on the compiler thread's timing
+   (§48.15.5). *Recommended*: record the blocks compiled beside every timing of that screen, as here, and compare only
+   runs of the same mode.
+
+#### 48.15.11 What was read for this step
+
+This page's §48; `Sapphire_Native.md` §30.78 to §30.85, §44 and §47; `EmuSen_Jit.md`; the dispatcher (`blocks.rs`),
+the emitter (`emit.rs`, `mod.rs`), `Board::run_through`, `Ee::interrupt_now` and S33's runner; Cranelift 0.136's
+`FunctionBuilder`, jump tables and `Context::set_disasm`. No emulator, SDK or loader source, no article, and no firmware.

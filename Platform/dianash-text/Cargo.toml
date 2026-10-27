@@ -18,7 +18,3 @@ emusen-dotnet = { path = "../dotnet" }
 regex = "1"
 # The parser's own errors, to word a refusal as .NET words it.
 regex-syntax = "0.8"
-
-# ls -l's local time.
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"

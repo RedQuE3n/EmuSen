@@ -2,48 +2,8 @@
 //! read back as `DateTime.Parse(…, RoundtripKind)` reads it and written again. The local offset is the system's at that
 //! instant (EmuSen_Backend.md §29.18).
 
-use emusen_dotnet::date::{TICKS_PER_SECOND, civil, days_from_civil};
-
-/// The system's offset from UTC, in seconds, at an instant.
-#[cfg(unix)]
-pub fn local_offset(unix_seconds: i64) -> i64 {
-    let t = unix_seconds as libc::time_t;
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() { 0 } else { tm.tm_gmtoff as i64 }
-}
-
-#[cfg(not(unix))]
-pub fn local_offset(_: i64) -> i64 {
-    0
-}
-
-/// `yyyy-MM-ddTHH:mm:ss.fffffff` of ticks counted from 1970, then `suffix`.
-fn text(ticks: i64, suffix: &str) -> String {
-    let days = ticks.div_euclid(TICKS_PER_SECOND * 86_400);
-    let rest = ticks.rem_euclid(TICKS_PER_SECOND * 86_400);
-    let (y, m, d) = civil(days);
-    let s = rest / TICKS_PER_SECOND;
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:07}{suffix}", s / 3600, s / 60 % 60, s % 60, rest % TICKS_PER_SECOND)
-}
-
-fn offset_text(offset: i64) -> String {
-    let minutes = offset.abs() / 60;
-    format!("{}{:02}:{:02}", if offset < 0 { '-' } else { '+' }, minutes / 60, minutes % 60)
-}
-
-/// A UTC instant in ticks from 1970 as local time with its offset.
-pub fn local_of_utc(utc_ticks: i64) -> String {
-    let offset = local_offset(utc_ticks.div_euclid(TICKS_PER_SECOND));
-    text(utc_ticks + offset * TICKS_PER_SECOND, &offset_text(offset))
-}
-
-/// Ticks from 1970 of a system time.
-pub fn ticks_of(time: std::time::SystemTime) -> i64 {
-    match time.duration_since(std::time::UNIX_EPOCH) {
-        Ok(d) => d.as_secs() as i64 * TICKS_PER_SECOND + (d.subsec_nanos() / 100) as i64,
-        Err(e) => -(e.duration().as_secs() as i64 * TICKS_PER_SECOND + (e.duration().subsec_nanos() / 100) as i64),
-    }
-}
+pub use emusen_dotnet::date::{local_of_utc, local_offset, ticks_of};
+use emusen_dotnet::date::{TICKS_PER_SECOND, days_from_civil, round_trip_text as text};
 
 /// Now as local ticks from 1970, the system's offset added.
 pub fn local_ticks_now() -> i64 {

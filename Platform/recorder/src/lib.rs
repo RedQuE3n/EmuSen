@@ -22,34 +22,9 @@ pub fn local_now() -> (i64, u32, u32, u32, u32, u32, u32) {
     local(now.as_secs() as i64, now.subsec_millis())
 }
 
-#[cfg(unix)]
 fn local(seconds: i64, millis: u32) -> (i64, u32, u32, u32, u32, u32, u32) {
-    let t = seconds as libc::time_t;
-    // SAFETY: tm is plain data, and localtime_r only writes the structure given.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&t, &mut tm) };
-    (tm.tm_year as i64 + 1900, tm.tm_mon as u32 + 1, tm.tm_mday as u32, tm.tm_hour as u32, tm.tm_min as u32, tm.tm_sec as u32, millis)
-}
-
-#[cfg(not(unix))]
-fn local(seconds: i64, millis: u32) -> (i64, u32, u32, u32, u32, u32, u32) {
-    let days = seconds.div_euclid(86_400);
-    let rest = seconds.rem_euclid(86_400) as u32;
-    let (y, m, d) = civil(days);
-    (y, m, d, rest / 3600, rest / 60 % 60, rest % 60, millis)
-}
-
-#[cfg(not(unix))]
-fn civil(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    (yoe + era * 400 + if m <= 2 { 1 } else { 0 }, m, d)
+    let (y, mo, d, h, mi, s) = emusen_dotnet::date::local_fields(seconds);
+    (y, mo, d, h, mi, s, millis)
 }
 
 /// The fields of a file's time in the local zone.

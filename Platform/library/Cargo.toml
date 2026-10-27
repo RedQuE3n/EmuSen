@@ -18,7 +18,3 @@ emusen-systems = { path = "../systems" }
 emusen-dotnet = { path = "../dotnet" }
 # The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
 emusen-sqlite = { path = "../sqlite" }
-
-[target.'cfg(unix)'.dependencies]
-# The local time's offset, for a time recorded with none given.
-libc = "0.2"

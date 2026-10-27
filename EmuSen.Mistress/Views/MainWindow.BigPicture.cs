@@ -145,7 +145,7 @@ namespace EmuSen.Mistress.Views
             {
                 Favorite = r?.Favourite == true, LastPlayed = r?.LastPlayed, PlayCount = r?.PlayCount ?? 0,
                 PlayTime = r is { PlaySeconds: > 0 } ? TimeSpan.FromSeconds(r.PlaySeconds) : null,
-                FolderPath = GameFolders.Of(_appSettings.RomDirectory, entry.FullPath),
+                FolderPath = GameFolders.Of(_appSettings.RomDirectory, entry.FullPath, entry.Package),
             });
         }
 

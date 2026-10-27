@@ -504,6 +504,8 @@ Mistress's scan walks `RomDirectory` for files (`RomLibrary.cs:70`) and folds a 
 - a folder holding a `package.json` is one entry, and its contents are never listed as games;
 - a library file that a package claims is not shown a second time.
 
+Big picture follows the same rule: a packaged game is one entry at its console's top, not inside the folder of its library file, and shows the package's art (`EmuSen_BigPicture.md` section 30.3a).
+
 *Decided 2026-10-25 (§14.8 Q34):* a claimed file that is no longer the dump its package was made for still opens by its
 plain path, as a plain game with its plain saves; opening its package is refused with both hashes named, and `pkg ls`,
 `pkg check` and the game's *Game Package* window say the package is changed (§17).

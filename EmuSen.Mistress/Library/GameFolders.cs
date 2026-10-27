@@ -17,6 +17,9 @@ namespace EmuSen.Mistress.Library
             return string.Join('/', parts.Skip(1));
         }
 
+        // A packaged game is one entry at its console's top, whatever folder its library file sits in - see EmuSen_GamePackages.md §3.6.
+        public static string Of(string? romDirectory, string path, string? package) => package is null ? Of(romDirectory, path) : "";
+
         // The folder that holds a path, one level up; "" at the top.
         public static string Parent(string folder) => folder.LastIndexOf('/') is var at and >= 0 ? folder[..at] : "";
 

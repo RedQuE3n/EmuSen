@@ -6680,6 +6680,17 @@ another folder the way it followed a rename.
 - **A folder's picture** is `<system>/<type>/<parent folders>/<folder name>.<ext>`, the name whole, dots included;
   THEMES.md says `physicalName` strips a folder's last dot, and whether media names do was not established.
 
+### 30.3a A packaged game is not in a folder (2026-10-27)
+
+`pkg make` mirrors a library game's folders under `Packages/<console>/` and links the package to the library's file, so a
+Sega CD disc kept in `segacd/<game>/<game>.cue` has its package at `Packages/Sega CD/<game>/<game>.cue/`. The scan
+returns one entry for it, the claimed library file, and the gamelist took that file's folder as its own: the disc showed
+as a folder named for the game that the player had to enter, with no art on the row. A game with a package now has no
+folder (`GameFolders.Of` with the entry's package), so it is one entry at the console's top, as in the desktop library
+(`EmuSen_GamePackages.md` section 3.6), and `MediaSources` reads its art from the package first, then the usual folders
+(section 18.3 there; the usual folders still name the game by its library path, as the scraper stored it). Launching hands over the entry's file, which opens as its package. Covered by
+`ThemedPackagesTests`. Folders of unpackaged games are unchanged.
+
 ### 30.4 The store's one layout step
 
 `media.db`'s second migration adds `store_move (from_path, to_path, how, at)` and `store_step (name, done_at)`.

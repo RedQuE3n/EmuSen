@@ -7,10 +7,9 @@
 //! timing is the caller's: in micro mode (`Ctx::micro`) the flags an operation sets are handed back in `Deferred` for
 //! the pipeline to write at the S stage, and the branches, the external units and the waits are the pipeline's own.
 
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use emusen_mips::vu::{self as table, Operation};
+use emusen_mips::vu::{self as table, LOWER, Operation, SPECIAL1, SPECIAL2};
 
 use super::{Vu, efu, status};
 use crate::float::{self, Outcome};
@@ -667,14 +666,35 @@ pub static TABLE: &[Entry] = &[
     e("xgkick", nothing, External, false), e("xtop", nothing, External, false), e("xitop", nothing, External, false),
 ];
 
-fn by_name() -> &'static HashMap<&'static str, usize> {
-    static MAP: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
-    MAP.get_or_init(|| TABLE.iter().enumerate().map(|(i, e)| (e.name, i)).collect())
+const NONE: u16 = u16::MAX;
+
+/// The TABLE index of the operation in each decoder slot, SPECIAL1 then SPECIAL2 then LOWER.
+fn slots() -> &'static [u16] {
+    static MAP: OnceLock<Box<[u16]>> = OnceLock::new();
+    MAP.get_or_init(|| {
+        let index = |o: &Option<Operation>| o.as_ref().map_or(NONE, |o| TABLE.iter().position(|e| e.name == o.name).expect("an operation without an entry") as u16);
+        SPECIAL1.iter().chain(SPECIAL2.iter()).chain(LOWER.iter()).map(index).collect()
+    })
+}
+
+/// The decoder slot of an operation, from its address in one of the three tables (Sapphire_Speed.md section 52).
+fn slot(o: &Operation) -> usize {
+    let at = std::ptr::from_ref(o) as usize;
+    let size = std::mem::size_of::<Option<Operation>>();
+    let mut first = 0;
+    for (base, len) in [(SPECIAL1.as_ptr(), SPECIAL1.len()), (SPECIAL2.as_ptr(), SPECIAL2.len()), (LOWER.as_ptr(), LOWER.len())] {
+        let from = at.wrapping_sub(base as usize);
+        if from < len * size {
+            return first + from / size;
+        }
+        first += len;
+    }
+    panic!("an operation outside the decoder's tables")
 }
 
 /// The entry for a decoded operation.
 pub fn entry(o: &Operation) -> &'static Entry {
-    &TABLE[by_name()[o.name]]
+    &TABLE[slots()[slot(o)] as usize]
 }
 
 /// The entry for the operation in a word's low 25 bits, through the decoder alone.
@@ -685,4 +705,21 @@ pub fn of_word(w: u32) -> Option<(&'static Operation, &'static Entry)> {
 /// The entry for a lower word in micro mode, the micro-only operations included.
 pub fn of_lower(w: u32) -> Option<(&'static Operation, &'static Entry)> {
     table::lower(w).map(|o| (o, entry(o)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_decoder_operation_maps_to_its_entry_by_name() {
+        let all = SPECIAL1.iter().chain(SPECIAL2.iter()).chain(LOWER.iter()).filter_map(Option::as_ref);
+        let mut seen = 0;
+        for o in all {
+            let by_name = TABLE.iter().find(|e| e.name == o.name).expect("a table entry");
+            assert!(std::ptr::eq(entry(o), by_name), "{}", o.name);
+            seen += 1;
+        }
+        assert!(seen > 100);
+    }
 }

@@ -24,7 +24,8 @@ pub const DONE: u32 = 0;
 /// The replay found an interrupt the interpreter would take before the block's end, or the DMAC due between its loads
 /// and stores: the interpreter runs the `Context::steps` instructions that stand. When they reach past the last load or
 /// store (`Context::base`), the core holds the state after it; otherwise nothing was written but the stores
-/// `Context::log` undoes (Sapphire_Recompiler.md §48.5).
+/// `Context::log` undoes (Sapphire_Recompiler.md §48.5). A load or store's exit returns it too, when every step stands
+/// (§48.15).
 pub const ROLLBACK: u32 = 1;
 
 /// The entries of the translation cache, by virtual page.
@@ -81,6 +82,10 @@ pub struct Context {
     pub replay: Helper,
     /// The verifier's call after each instruction, with everything written back: nonzero when an interrupt is due.
     pub hook: Helper,
+    /// A load or store's exit once its block has run a step (`leave_word`): the reason counted, the guard set and the
+    /// board replayed through the steps run, which stand unless it stops; the steps that stand, in `steps` too
+    /// (Sapphire_Recompiler.md §48.15).
+    pub leave: Helper,
     /// The dispatcher's own state, for the helpers.
     pub owner: *mut std::ffi::c_void,
     /// Where the measurement of held registers (`Options::spill`) writes them after each instruction.
@@ -154,6 +159,17 @@ pub fn published(slot: &Slot) -> Option<Code> {
 
 /// The flag a hook's step count carries when the step is the block's last.
 pub const FINAL: u32 = 1 << 31;
+/// What a load or store's exit hands `Context::leave`: the steps run, the steps after the last load or store before it
+/// (`Context::base`) and the undo entries written, with why it left (`Context::left`'s index) at `WHY_SHIFT`.
+pub const fn leave_word(steps: u32, base: u32, logged: u32) -> u32 {
+    assert!(steps < 128 && base < 128 && logged < 256, "a block of at most 64 instructions");
+    steps | base << 7 | logged << 14
+}
+pub const WHY_SHIFT: u32 = 24;
+/// `leave_word`'s fields and the reason: (steps, base, logged, why).
+pub const fn left_by(word: u32) -> (u32, u32, u32, usize) {
+    (word & 0x7F, word >> 7 & 0x7F, word >> 14 & 0xFF, (word >> WHY_SHIFT) as usize)
+}
 
 impl Ee {
     /// Where a block may be entered now: the physical address of `pc`, when no step boundary check would act there and

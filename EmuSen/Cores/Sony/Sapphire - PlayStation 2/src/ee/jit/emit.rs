@@ -3,7 +3,9 @@
 //! `Timing::commit` with the instruction's category, row, reads and writes made constants, and folded where the
 //! block's own earlier instructions fix a value. A load or store reaches the scratchpad, RDRAM or the data cache's line
 //! through the translation cache, or leaves the block before it. Each exit hands the cycles to the replay, then writes
-//! everything back. Sapphire_Native.md §44.4 and Sapphire_Recompiler.md §48.4 record what is computed where.
+//! everything back; a load or store leaving at most `REWIND_MOST` steps after the load or store before it writes back
+//! only the state after that one, which that access's own block holds, and the interpreter runs the steps between. Sapphire_Native.md
+//! §44.4 and Sapphire_Recompiler.md §48.4 and §48.15 record what is computed where.
 
 use std::mem::offset_of;
 
@@ -39,6 +41,7 @@ const X_TIMES: i32 = offset_of!(Context, times) as i32;
 const X_STEPS: i32 = offset_of!(Context, steps) as i32;
 const X_LIMIT: i32 = offset_of!(Context, limit) as i32;
 const X_REPLAY: i32 = offset_of!(Context, replay) as i32;
+const X_LEAVE: i32 = offset_of!(Context, leave) as i32;
 const X_HOOK: i32 = offset_of!(Context, hook) as i32;
 const X_SPILL: i32 = offset_of!(Context, spill) as i32;
 const X_FILL: i32 = offset_of!(Context, fill) as i32;
@@ -53,6 +56,10 @@ const X_DUMMY: i32 = offset_of!(Context, dummy) as i32;
 const X_LOG: i32 = offset_of!(Context, log) as i32;
 const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_UNCACHED_LOADS: i32 = offset_of!(Context, uncached_loads) as i32;
+/// The most steps since the last load or store for which a load or store leaving its block shares that access's state
+/// and has the interpreter run them again; past it, the access's exit writes everything back itself
+/// (Sapphire_Recompiler.md §48.15).
+const REWIND_MOST: u32 = 2;
 /// Why a load or store left its block, `Context::left`'s index.
 const LEFT_HORIZON: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
@@ -254,6 +261,9 @@ struct Emitter<'a, 'b> {
     memory: Option<Memory>,
     /// Emitting an exit taken only on a rare condition: its blocks are laid out after the block's straight line.
     cold: bool,
+    /// The return of `ROLLBACK` with nothing written, which the loads' and stores' exits share once the block has run a
+    /// step (Sapphire_Recompiler.md §48.15).
+    undo: Option<ir::Block>,
     /// Entry values the exits read: Count, Compare, the cycles Count last saw, Wired.
     count0: Value,
     compare: Value,
@@ -1294,7 +1304,7 @@ impl Emitter<'_, '_> {
     /// A load, store or PREF at `pc`, `slot` as in `plain`: its address translated through the translation cache, the
     /// scratchpad and RDRAM reached directly and a cached page through the data cache's tags, hits only; everything
     /// else (a misaligned address, a page the cache cannot serve, a miss, the board's next event reached) leaves the
-    /// block before it, to the interpreter (Sapphire_Recompiler.md §48.4).
+    /// block before it, to the interpreter, by `leave` (Sapphire_Recompiler.md §48.4, §48.15).
     fn memory(&mut self, w: u32, pc: u32, slot: Option<Tv>) {
         let name = shape::name(w);
         let op = ops::get(ops::index(w));
@@ -1504,19 +1514,68 @@ impl Emitter<'_, '_> {
         self.b.ins().jump(on, &[]);
         self.b.seal_block(slow);
         self.b.switch_to_block(slow);
+        self.held = kept;
+        let base = kept.snap.map_or(0, |i| self.snaps[i].held.steps);
+        if kept.steps == 0 || self.options.verify || kept.steps - base > REWIND_MOST {
+            // Nothing to write back (nothing ran, or the verifier's calls wrote back every step), or too many steps to
+            // run again: the exit of its own.
+            self.count_left(why);
+            self.cold = true;
+            self.exit(before);
+            self.cold = false;
+        } else {
+            self.leave(why);
+        }
+        self.held = after;
+        self.b.seal_block(on);
+        self.b.switch_to_block(on);
+    }
+
+    /// `Context::left`'s count for the reason `why`.
+    fn count_left(&mut self, why: Value) {
         let ctx = self.ctx;
         let at = self.b.ins().ishl_imm_s(why, 3);
         let at = self.b.ins().iadd(ctx, at);
         let n = self.b.ins().load(I64, trusted(), at, X_LEFT);
         let n = self.b.ins().iadd_imm_s(n, 1);
         self.b.ins().store(trusted(), n, at, X_LEFT);
-        self.held = kept;
-        self.cold = true;
-        self.exit(before);
-        self.cold = false;
-        self.held = after;
-        self.b.seal_block(on);
-        self.b.switch_to_block(on);
+    }
+
+    /// A load or store's exit once the block has run a step, the core still at the block's entry
+    /// (Sapphire_Recompiler.md §48.15): `Context::leave` counts the reason, sets the guard and replays the board through
+    /// the steps run; then the state after the last load or store before this one is written back by that access's own
+    /// block, and the interpreter runs the steps from there; or, the replay stopped short of it (or there is none),
+    /// nothing is written and the stores are undone, as at any exit.
+    fn leave(&mut self, why: Value) {
+        let h = self.held;
+        let base = h.snap.map_or(0, |i| self.snaps[i].held.steps);
+        let word = self.b.ins().iconst(I32, i64::from(super::leave_word(h.steps, base, h.logged)));
+        let why = self.b.ins().ireduce(I32, why);
+        let why = self.b.ins().ishl_imm_s(why, i64::from(super::WHY_SHIFT));
+        let word = self.b.ins().bor(word, why);
+        let ctx = self.ctx;
+        let f = self.b.ins().load(I64, trusted(), ctx, X_LEAVE);
+        let call = self.b.ins().call_indirect(self.helper, f, &[ctx, word]);
+        let kept = self.b.inst_results(call)[0];
+        let undo = match self.undo {
+            Some(b) => b,
+            None => {
+                let b = self.b.create_block();
+                self.b.set_cold_block(b);
+                self.undo = Some(b);
+                b
+            }
+        };
+        match h.snap {
+            Some(i) => {
+                let state = self.partial(i);
+                let short = self.b.ins().icmp_imm_s(IntCC::UnsignedLessThan, kept, i64::from(base));
+                self.b.ins().brif(short, undo, &[], state, &[]);
+            }
+            None => {
+                self.b.ins().jump(undo, &[]);
+            }
+        }
     }
 
     /// The undo of a store at `ptr` (guest address `a`): the 16 bytes of its quadword and the 8 of its line's tag.
@@ -1790,6 +1849,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         snaps: Vec::new(),
         memory,
         cold: false,
+        undo: None,
         count0,
         compare,
         seen0,
@@ -1825,7 +1885,11 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
             _ => return Err(format!("the word at {i} is not one a block holds")),
         }
     }
-    // The write-backs of the state after a load or store that the exits' rollbacks reached.
+    if let Some(undo) = e.undo {
+        e.b.switch_to_block(undo);
+        e.ret(ROLLBACK);
+    }
+    // The write-backs of the state after a load or store that the exits' rollbacks and the loads' and stores' exits reached.
     for i in 0..e.snaps.len() {
         if let Some(block) = e.snaps[i].block {
             e.b.switch_to_block(block);

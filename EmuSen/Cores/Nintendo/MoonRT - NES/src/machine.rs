@@ -327,15 +327,7 @@ impl Machine {
         }
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
-        let magic = r.u32()?;
-        let version = r.i32()?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::NotAMoonState(magic));
-        }
-        if !(OLDEST_READABLE_VERSION..=STATE_VERSION).contains(&version) {
-            return Err(StateError::Version(version));
-        }
+    fn read_state(&mut self, r: &mut StateReader, version: i32) -> StateResult {
         self.total_frames = r.i64()?; // TotalFrames
         self.line_start_clock = r.i64()?; // _lineStartClock
         self.cpu_budget = r.i64()?; // _cpuBudget
@@ -379,58 +371,21 @@ impl Machine {
         self.bus.apu.end_length_cycle();
         Ok(())
     }
-
-    /// `MoonCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.
-    pub fn load_state(&mut self, data: &[u8]) -> StateResult {
-        let mut next = self.clone();
-        next.read_state(&mut StateReader::new(data))?;
-        *self = next;
-        Ok(())
-    }
-
-    pub fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write_state(&mut w);
-        w.len()
-    }
-
-    pub fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        let mut w = StateWriter::new(out);
-        self.write_state(&mut w);
-        if w.overflowed() {
-            return Err(StateError::BufferTooSmall { needed: w.len() });
-        }
-        Ok(w.len())
-    }
-
-    /// One line per field, `offset length type path`, in the order the state writes them.
-    pub fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write_state(&mut w);
-        w.into_layout()
-    }
 }
-
 
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
+    /// `MoonCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        Machine::load_state(self, data)
+        emusen_native::shell::load_state_into(self, data, STATE_MAGIC, |v| (OLDEST_READABLE_VERSION..=STATE_VERSION).contains(&v), Machine::read_state)
     }
-    fn state_size(&self) -> usize {
-        Machine::state_size(self)
-    }
-    fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        Machine::save_state(self, out)
-    }
-    fn layout(&self) -> String {
-        Machine::layout(self)
-    }
+    emusen_native::state_write_methods!(write_state);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::{StateMachine, Status};
 
     pub(crate) fn rom(mapper: u8, prg_banks: u8, chr_banks: u8, program: &[u8]) -> Vec<u8> {
         let mut image = vec![0x4E, 0x45, 0x53, 0x1A, prg_banks, chr_banks, (mapper & 0x0F) << 4 | 0x02, mapper & 0xF0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -492,6 +447,7 @@ mod tests {
         let mut wrong = state.clone();
         wrong[4] = 2;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
+        emusen_native::shell::assert_header_refusals(&mut m, &state);
         let mut later = m.clone();
         for _ in 0..3 {
             later.run_frame().unwrap();

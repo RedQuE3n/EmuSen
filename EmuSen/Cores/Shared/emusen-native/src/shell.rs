@@ -27,6 +27,21 @@ pub fn open_state(data: &[u8], magic: u32, accepts: impl Fn(i32) -> bool) -> Res
     Ok((r, version))
 }
 
+/// Loads `data` into a copy of `machine` through `read`, after the header; the copy replaces `machine` only if every field read.
+pub fn load_state_into<M: Clone, E: From<Refusal>>(
+    machine: &mut M,
+    data: &[u8],
+    magic: u32,
+    accepts: impl Fn(i32) -> bool,
+    read: impl FnOnce(&mut M, &mut StateReader, i32) -> Result<(), E>,
+) -> Result<(), E> {
+    let (mut r, version) = open_state(data, magic, accepts)?;
+    let mut next = machine.clone();
+    read(&mut next, &mut r, version)?;
+    *machine = next;
+    Ok(())
+}
+
 /// The bytes a state of `write` takes.
 pub fn size_of_state(write: impl FnOnce(&mut StateWriter)) -> usize {
     let mut w = StateWriter::counter();

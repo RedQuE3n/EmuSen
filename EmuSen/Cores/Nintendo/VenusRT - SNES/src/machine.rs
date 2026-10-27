@@ -436,15 +436,7 @@ impl Machine {
         w.bytes("Sram", &self.sys.cart.sram);
     }
 
-    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
-        let magic = r.u32()?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::Foreign(magic));
-        }
-        let version = r.i32()?;
-        if !(17..=STATE_VERSION).contains(&version) {
-            return Err(StateError::Version(version));
-        }
+    fn read_state(&mut self, r: &mut StateReader, version: i32) -> StateResult {
         r.set_version(version);
         let c = &mut self.cpu;
         for v in [&mut c.a, &mut c.x, &mut c.y, &mut c.s, &mut c.d, &mut c.pc] {
@@ -618,64 +610,29 @@ impl Machine {
         r.bytes(&mut self.sys.cart.sram)?;
         self.sys.timing.interlace = interlace;
         self.sys.timing.schedule();
+        self.debug_open = None;
         Ok(())
-    }
-
-    /// A failed load changes nothing.
-    pub fn load_state(&mut self, data: &[u8]) -> StateResult {
-        let mut next = self.clone();
-        next.read_state(&mut StateReader::new(data))?;
-        next.debug_open = None;
-        *self = next;
-        Ok(())
-    }
-
-    pub fn state_size(&self) -> usize {
-        let mut w = StateWriter::counter();
-        self.write_state(&mut w);
-        w.len()
-    }
-
-    pub fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        let mut w = StateWriter::new(out);
-        self.write_state(&mut w);
-        if w.overflowed() {
-            return Err(StateError::BufferTooSmall { needed: w.len() });
-        }
-        Ok(w.len())
-    }
-
-    pub fn layout(&self) -> String {
-        let mut w = StateWriter::layout();
-        self.write_state(&mut w);
-        w.into_layout()
     }
 }
 
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
+    /// A failed load changes nothing.
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        let r = Machine::load_state(self, data);
+        let r = emusen_native::shell::load_state_into(self, data, STATE_MAGIC, |v| (17..=STATE_VERSION).contains(&v), Machine::read_state);
         // A state with C# Venus's magic is named as its engine's (VenusRT_Plan.md §4.5).
         if r == Err(StateError::Foreign(VENUS_MAGIC)) {
             emusen_native::core::detail(VENUS_STATE_WORDS);
         }
         r
     }
-    fn state_size(&self) -> usize {
-        Machine::state_size(self)
-    }
-    fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
-        Machine::save_state(self, out)
-    }
-    fn layout(&self) -> String {
-        Machine::layout(self)
-    }
+    emusen_native::state_write_methods!(write_state);
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use emusen_native::ffi::StateMachine;
 
     /// A LoROM image whose reset runs `program` at $00:8000.
     pub fn rom(program: &[u8]) -> Vec<u8> {
@@ -741,6 +698,7 @@ pub(crate) mod tests {
         venus[..4].copy_from_slice(&VENUS_MAGIC.to_le_bytes());
         assert_eq!(back.load_state(&venus), Err(StateError::Foreign(VENUS_MAGIC)));
         assert!(matches!(back.load_state(&state[..state.len() - 1]), Err(StateError::Truncated { .. })));
+        emusen_native::shell::assert_header_refusals(&mut back, &state);
     }
 
     // A NEC DSP's registers and RAM travel in the state, in a group only its cartridges have.

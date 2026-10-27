@@ -1,5 +1,6 @@
 //! The PAL NES and the Dendy measured on synthetic programs, beside the NTSC NES as the control. See Moon_PAL.md §8.
 
+use emusen_native::ffi::{StateMachine, Status};
 use crate::apu::Apu;
 use crate::machine::Machine;
 use crate::memory::cartridge::Cartridge;

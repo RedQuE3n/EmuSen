@@ -428,6 +428,7 @@ pub unsafe extern "C" fn moonrt_core_step(machine: *mut v1::sys::Machine) -> i32
 #[cfg(test)]
 mod tests {
     use super::*;
+    use emusen_native::ffi::StateMachine;
     use crate::ppu::RAW_BYTES;
     use emusen_native::abi::Settings;
     use emusen_native::core::{Core, sys};

@@ -13,7 +13,7 @@ use crate::memory::dp::{DpInterface, SNAPSHOT_WORDS};
 use crate::memory::dp_threads::Threads;
 use crate::rom::{self, Cic, RomImage};
 use crate::memory::save::{SaveChip, save_type};
-use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
+use crate::state::{State, StateError, StateResult, StateWriter};
 use crate::vi::scan::{self as vi_scan, Presented, Scanout};
 
 /// `StateMagic`: "MARS" little-endian.
@@ -168,15 +168,7 @@ impl Machine {
 
     /// `MarsCore.LoadState`: a state of the other known RDRAM size rebuilds the machine to it. A failed load changes nothing.
     pub fn load_state(&mut self, data: &[u8]) -> StateResult {
-        let mut r = StateReader::new(data);
-        let magic = r.u32()?;
-        if magic != STATE_MAGIC {
-            return Err(StateError::NotAMarsState(magic));
-        }
-        let version = r.i32()?;
-        if version != STATE_VERSION && version != SNAPSHOT_VERSION {
-            return Err(StateError::Version(version));
-        }
+        let (mut r, version) = emusen_native::shell::open_state(data, STATE_MAGIC, |v| v == STATE_VERSION || v == SNAPSHOT_VERSION)?;
         let rdram = r.i32()?;
         let mut machine = usize::try_from(rdram).ok().and_then(Machine::new).ok_or(StateError::RdramSize(rdram))?;
 

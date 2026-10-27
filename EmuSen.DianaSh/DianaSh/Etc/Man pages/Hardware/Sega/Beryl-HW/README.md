@@ -43,7 +43,7 @@ below is the processors'; a crate of another kind keeps the contract its own sec
 - **State, disassembly and an assembler.** Each processor's registers are a block of its core's state written with
   `StateWriter`; each crate decodes its instructions for `DEBUG_DISASSEMBLE` and carries an assembler as a development
   tool, for its test programs and for the firmware replacements `Nephrite_Plan.md` §5.6 writes in assembly.
-- **The single-step oracle lives in the crate**, as unit tests that find the corpus through `EMUSEN_BERYL_CORPUS`
+- **The single-step oracle lives in the crate**, as unit tests (their shared half in `emusen-singlestep`, `EmuSen_SingleStep.md`) that find the corpus through `EMUSEN_BERYL_CORPUS`
   (`~/.cache/emusen/probe/nephrite/singlestep` on the desktop) and pass unrun without it, or while the crate's `BUILT`
   is false.
 

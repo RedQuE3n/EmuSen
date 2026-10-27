@@ -12,6 +12,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
 
+[dev-dependencies]
+emusen-singlestep = { path = "../../Shared/emusen-singlestep" }
+
 [profile.release]
 panic = "abort"
 opt-level = 3

@@ -4,9 +4,9 @@
 //! the disputes whose cases are graded in their own way here.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-use emusen_native::json::{self, Value};
+use emusen_native::json::Value;
+use emusen_singlestep::{FileReport, Outcome, default_threads, first_mismatch, int, run_cases};
 
 use crate::{BranchDelay, Bus, LoadDelay, R3000, Registers, Size};
 
@@ -15,27 +15,7 @@ pub const SUITE: &str = "r3000/v1";
 
 pub fn suite_files() -> Option<Vec<PathBuf>> {
     let dir = Path::new(&std::env::var_os(CORPUS_VARIABLE)?).join(SUITE);
-    if !dir.is_dir() {
-        return None;
-    }
-    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .expect("the suite's folder")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    files.sort();
-    Some(files)
-}
-
-fn read_cases(path: &Path) -> Vec<Value> {
-    match json::parse(&std::fs::read(path).expect("a suite file")) {
-        Ok(Value::Array(cases)) => cases,
-        other => panic!("{}: not an array of cases ({:?})", path.display(), other.err()),
-    }
-}
-
-fn int(v: &Value, key: &str) -> i64 {
-    v.get(key).and_then(Value::as_i64).unwrap_or_else(|| panic!("no integer {key}"))
+    dir.is_dir().then(|| emusen_singlestep::suite_files(&dir))
 }
 
 fn flag(v: &Value, key: &str) -> bool {
@@ -193,19 +173,6 @@ impl Bus for FlatBus {
     fn cop2_command(&mut self, _command: u32) {}
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Outcome {
-    pub registers: bool,
-    pub cycles: bool,
-    pub first_difference: Option<String>,
-}
-
-impl Outcome {
-    pub fn passed(&self) -> bool {
-        self.registers && self.cycles
-    }
-}
-
 /// The dispute a case is graded under, if any (BlackMoon_R3000.md §8).
 pub fn dispute(case: &Value) -> Option<&'static str> {
     let c = cycles(case);
@@ -245,16 +212,10 @@ pub fn grade_as(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) ->
     let mut bus = FlatBus::new(expected.clone());
     let got = processor(case, &mut bus);
     let want = recorded(case.get("final").expect("final"));
-    let mut o = Outcome { registers: got == want, ..Outcome::default() };
-    if !o.registers {
-        o.first_difference = Some(format!("registers: got {got:X?} want {want:X?}"));
-    }
-    o.cycles = bus.log.len() == expected.len() && expected.iter().zip(&bus.log).all(|(w, g)| same(w, g));
-    if !o.cycles && o.first_difference.is_none() {
-        let at = expected.iter().zip(&bus.log).position(|(w, g)| !same(w, g)).unwrap_or(expected.len().min(bus.log.len()));
-        o.first_difference = Some(format!("cycle {at}: got {:X?} want {:X?}", bus.log.get(at), expected.get(at)));
-    }
-    o
+    let registers = (got != want).then(|| format!("registers: got {got:X?} want {want:X?}"));
+    let at = first_mismatch(&expected, &bus.log, same);
+    let cycles = at.map(|at| format!("cycle {at}: got {:X?} want {:X?}", bus.log.get(at), expected.get(at)));
+    Outcome::from_checks(registers, None, cycles)
 }
 
 /// The positive control: a fake processor that performs the case's own cycles through the bus, in order, and ends in
@@ -282,59 +243,8 @@ pub fn processor(case: &Value, bus: &mut FlatBus) -> Recorded {
     Recorded::of(&cpu.regs)
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Tally {
-    pub cases: usize,
-    pub passed: usize,
-    pub registers: usize,
-    pub cycles: usize,
-    pub first_failure: Option<String>,
-}
-
-pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, &mut FlatBus) -> Recorded) -> Vec<(String, Tally)> {
-    let next = Mutex::new(0usize);
-    let out = Mutex::new(Vec::new());
-    let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4));
-    std::thread::scope(|s| {
-        for _ in 0..threads {
-            s.spawn(|| {
-                loop {
-                    let i = {
-                        let mut n = next.lock().unwrap();
-                        *n += 1;
-                        *n - 1
-                    };
-                    let Some(path) = files.get(i) else { break };
-                    let mut t = Tally::default();
-                    for case in read_cases(path).iter().take(limit.unwrap_or(usize::MAX)) {
-                        let o = grade(case, &mut |c, b| processor(c, b));
-                        t.cases += 1;
-                        t.passed += o.passed() as usize;
-                        t.registers += o.registers as usize;
-                        t.cycles += o.cycles as usize;
-                        if !o.passed() && t.first_failure.is_none() {
-                            let name = case.get("name").and_then(Value::as_str).unwrap_or("?");
-                            t.first_failure = Some(format!("{name}: {}", o.first_difference.unwrap_or_default()));
-                        }
-                    }
-                    out.lock().unwrap().push((path.file_name().unwrap().to_string_lossy().into_owned(), t));
-                }
-            });
-        }
-    });
-    let mut v = out.into_inner().unwrap();
-    v.sort_by(|a, b| a.0.cmp(&b.0));
-    v
-}
-
-fn total(reports: &[(String, Tally)]) -> Tally {
-    reports.iter().fold(Tally::default(), |mut t, (_, r)| {
-        t.cases += r.cases;
-        t.passed += r.passed;
-        t.registers += r.registers;
-        t.cycles += r.cycles;
-        t
-    })
+pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, &mut FlatBus) -> Recorded) -> Vec<FileReport> {
+    emusen_singlestep::run_suite(files, default_threads(), |path| run_cases(path, limit.unwrap_or(usize::MAX), |case| grade(case, &mut |c, b| processor(c, b))))
 }
 
 /// The spoiled replays: one field of the final state perturbed, and the last cycle dropped.
@@ -352,6 +262,9 @@ fn spoiled_cycle(c: &Value, b: &mut FlatBus) -> Recorded {
 
 #[cfg(test)]
 mod tests {
+    use emusen_native::json;
+    use emusen_singlestep::{print_misses, read_cases, total};
+
     use super::*;
 
     /// SB as the suite records it: the fetch, then a byte write, with a load pending from before.
@@ -392,9 +305,7 @@ mod tests {
         let reports = run_suite(&files, None, replay);
         let t = total(&reports);
         eprintln!("{SUITE}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
-        for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases).take(20) {
-            eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
-        }
+        print_misses(&reports, 20);
         assert!(t.cases > 0);
         assert_eq!(t.passed, t.cases);
     }
@@ -420,8 +331,8 @@ mod tests {
         let reports = run_suite(&files, None, processor);
         let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, cycles {})", t.passed, t.cases, t.registers, t.cycles);
-        for (f, r) in &reports {
-            eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
+        for r in &reports {
+            eprintln!("  {}: {} of {}; {}", r.file, r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
         }
         assert_eq!(t.passed, t.cases, "a case fails");
     }

@@ -16,6 +16,9 @@ asm = ["dep:beryl-asm"]
 emusen-native = { path = "../../../Shared/emusen-native" }
 beryl-asm = { path = "../beryl-asm", optional = true }
 
+[dev-dependencies]
+emusen-singlestep = { path = "../../../Shared/emusen-singlestep" }
+
 # What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
 [profile.test-checked]
 inherits = "release"

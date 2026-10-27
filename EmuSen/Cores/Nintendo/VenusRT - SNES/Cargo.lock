@@ -7,8 +7,16 @@ name = "emusen-native"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-singlestep"
+version = "0.1.0"
+dependencies = [
+ "emusen-native",
+]
+
+[[package]]
 name = "venusrt"
 version = "0.1.0"
 dependencies = [
  "emusen-native",
+ "emusen-singlestep",
 ]

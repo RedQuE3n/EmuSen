@@ -4,9 +4,9 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-use emusen_native::json::{self, Value};
+use emusen_native::json::Value;
+use emusen_singlestep::{FileReport, Outcome, default_threads, first_mismatch, run_cases};
 
 use crate::{Access, Bus, M68000, Registers, Size};
 
@@ -19,25 +19,8 @@ pub fn suite_dir(suite: &str) -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-pub fn suite_files(dir: &Path) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("the suite's folder")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    files.sort();
-    files
-}
-
-fn read_cases(path: &Path) -> Vec<Value> {
-    match json::parse(&std::fs::read(path).expect("a suite file")) {
-        Ok(Value::Array(cases)) => cases,
-        other => panic!("{}: not an array of cases ({:?})", path.display(), other.err()),
-    }
-}
-
 fn int(v: &Value, key: &str) -> u32 {
-    v.get(key).and_then(Value::as_i64).unwrap_or_else(|| panic!("no integer {key}")) as u32
+    emusen_singlestep::int(v, key) as u32
 }
 
 /// One bus transaction in the form the processor's `Bus` sees it: a byte cycle's address carries A0 and its value is
@@ -136,15 +119,7 @@ pub fn registers(v: &Value, offset: u32) -> Registers {
 }
 
 fn ram(v: &Value) -> Vec<(u32, u8)> {
-    v.get("ram")
-        .and_then(Value::as_array)
-        .expect("ram")
-        .iter()
-        .map(|p| {
-            let p = p.as_array().expect("a pair");
-            (p[0].as_i64().expect("an address") as u32 & 0xFF_FFFF, p[1].as_i64().expect("a byte") as u8)
-        })
-        .collect()
+    emusen_singlestep::ram(v, 0xFF_FFFF)
 }
 
 /// A flat 16 MiB of RAM holding only what the case lists, recording every transaction.
@@ -201,21 +176,6 @@ impl Bus for FlatBus {
     }
 }
 
-/// What one case showed: which of the three checks held, and the first difference.
-#[derive(Clone, Debug, Default)]
-pub struct Outcome {
-    pub registers: bool,
-    pub memory: bool,
-    pub cycles: bool,
-    pub first_difference: Option<String>,
-}
-
-impl Outcome {
-    pub fn passed(&self) -> bool {
-        self.registers && self.memory && self.cycles
-    }
-}
-
 /// A case run through `processor`, which steps once over the bus and returns the registers it ends with.
 pub fn grade(case: &Value, offset: u32, processor: &mut dyn FnMut(&Value, u32, &mut FlatBus) -> Registers) -> Outcome {
     let initial = case.get("initial").expect("initial");
@@ -223,22 +183,16 @@ pub fn grade(case: &Value, offset: u32, processor: &mut dyn FnMut(&Value, u32, &
     let mut bus = FlatBus { ram: ram(initial).into_iter().collect(), log: Vec::new() };
     let got = processor(case, offset, &mut bus);
     let want = registers(fin, offset);
-    let mut o = Outcome { registers: got == want, ..Outcome::default() };
-    if !o.registers {
-        o.first_difference = Some(format!("registers: got {got:X?} want {want:X?}"));
-    }
+    let registers = (got != want).then(|| format!("registers: got {got:X?} want {want:X?}"));
     let wrong: Vec<_> = ram(fin).into_iter().filter(|&(a, v)| bus.byte(a) != v).collect();
-    o.memory = wrong.is_empty();
-    if !o.memory && o.first_difference.is_none() {
-        o.first_difference = Some(format!("memory: {:X?} wanted", &wrong[..wrong.len().min(4)]));
-    }
+    let memory = (!wrong.is_empty()).then(|| format!("memory: {:X?} wanted", &wrong[..wrong.len().min(4)]));
     let expected = merged(case.get("transactions").and_then(Value::as_array).expect("transactions").iter().flat_map(cycles));
     let actual = merged(bus.log);
-    o.cycles = expected.len() == actual.len() && expected.iter().zip(&actual).all(|(a, b)| same(a, b));
-    if !o.cycles && o.first_difference.is_none() {
-        let at = expected.iter().zip(&actual).position(|(a, b)| !same(a, b)).unwrap_or(expected.len().min(actual.len()));
-        o.first_difference = Some(format!("transaction {at}: got {:?} want {:?}", actual.get(at), expected.get(at)));
-    }
+    let at = first_mismatch(&expected, &actual, same);
+    let cycles = at.map(|at| format!("transaction {at}: got {:?} want {:?}", actual.get(at), expected.get(at)));
+    let mut o = Outcome::from_checks(registers, memory, cycles);
+    let faults = case.get("transactions").and_then(Value::as_array).is_some_and(|l| l.iter().any(|x| x.as_array().and_then(|a| a[0].as_str()).is_some_and(|k| k == "re" || k == "we")));
+    o.explained = faults;
     o
 }
 
@@ -270,75 +224,16 @@ pub fn processor(case: &Value, offset: u32, bus: &mut FlatBus) -> Registers {
     cpu.regs
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Tally {
-    pub cases: usize,
-    pub passed: usize,
-    pub registers: usize,
-    pub memory: usize,
-    pub cycles: usize,
-    /// Failing cases without an address error.
-    pub unfaulted_misses: usize,
-    pub first_failure: Option<String>,
-}
-
-/// Every file through `run`, a few at a time, each case graded with `processor`; the first `limit` cases a file, when
-/// given.
-pub fn run_suite(files: &[PathBuf], offset: u32, limit: Option<usize>, processor: fn(&Value, u32, &mut FlatBus) -> Registers) -> Vec<(String, Tally)> {
-    let next = Mutex::new(0usize);
-    let out = Mutex::new(Vec::new());
-    let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4));
-    std::thread::scope(|s| {
-        for _ in 0..threads {
-            s.spawn(|| {
-                loop {
-                    let i = {
-                        let mut n = next.lock().unwrap();
-                        *n += 1;
-                        *n - 1
-                    };
-                    let Some(path) = files.get(i) else { break };
-                    let mut t = Tally::default();
-                    for case in read_cases(path).iter().take(limit.unwrap_or(usize::MAX)) {
-                        let o = grade(case, offset, &mut |c, f, b| processor(c, f, b));
-                        t.cases += 1;
-                        t.passed += o.passed() as usize;
-                        t.registers += o.registers as usize;
-                        t.memory += o.memory as usize;
-                        t.cycles += o.cycles as usize;
-                        let faults = case.get("transactions").and_then(Value::as_array).is_some_and(|l| {
-                            l.iter().any(|x| x.as_array().and_then(|a| a[0].as_str()).is_some_and(|k| k == "re" || k == "we"))
-                        });
-                        t.unfaulted_misses += (!o.passed() && !faults) as usize;
-                        if !o.passed() && t.first_failure.is_none() {
-                            let name = case.get("name").and_then(Value::as_str).unwrap_or("?");
-                            t.first_failure = Some(format!("{name}: {}", o.first_difference.unwrap_or_default()));
-                        }
-                    }
-                    out.lock().unwrap().push((path.file_name().unwrap().to_string_lossy().into_owned(), t));
-                }
-            });
-        }
-    });
-    let mut v = out.into_inner().unwrap();
-    v.sort_by(|a, b| a.0.cmp(&b.0));
-    v
-}
-
-fn total(reports: &[(String, Tally)]) -> Tally {
-    reports.iter().fold(Tally::default(), |mut t, (_, r)| {
-        t.cases += r.cases;
-        t.passed += r.passed;
-        t.registers += r.registers;
-        t.memory += r.memory;
-        t.cycles += r.cycles;
-        t.unfaulted_misses += r.unfaulted_misses;
-        t
-    })
+/// Every file through `run`, a few at a time, each case graded with `processor`; the first `limit` cases a file, when given.
+pub fn run_suite(files: &[PathBuf], offset: u32, limit: Option<usize>, processor: fn(&Value, u32, &mut FlatBus) -> Registers) -> Vec<FileReport> {
+    emusen_singlestep::run_suite(files, default_threads(), |path| run_cases(path, limit.unwrap_or(usize::MAX), |case| grade(case, offset, &mut |c, f, b| processor(c, f, b))))
 }
 
 #[cfg(test)]
 mod tests {
+    use emusen_native::json;
+    use emusen_singlestep::{print_misses, read_cases, suite_files, total};
+
     use super::*;
 
     const CASE: &str = r#"{"name": "t", "initial": {"d0": 0, "d1": 0, "d2": 0, "d3": 0, "d4": 0, "d5": 0, "d6": 0, "d7": 0,
@@ -391,9 +286,7 @@ mod tests {
             let reports = run_suite(&files, pc_offset(suite), None, replay);
             let t = total(&reports);
             eprintln!("{suite}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
-            for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases) {
-                eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
-            }
+            print_misses(&reports, usize::MAX);
             assert_eq!(t.passed, t.cases, "{suite}");
         }
     }
@@ -450,15 +343,16 @@ mod tests {
             let line = format!("{suite}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
             eprintln!("{line}");
             lines.push(line);
-            for (f, r) in &reports {
-                lines.push(format!("  {f}\t{}\t{}\t{}\t{}\t{}\t{}", r.cases, r.passed, r.registers, r.memory, r.cycles, r.first_failure.as_deref().unwrap_or("")));
+            for r in &reports {
+                lines.push(format!("  {}\t{}\t{}\t{}\t{}\t{}\t{}", r.file, r.cases, r.passed, r.registers, r.memory, r.cycles, r.first_failure.as_deref().unwrap_or("")));
             }
             if suite == SUITES[0] {
                 let ruled = |f: &str| RULED.iter().find(|r| r.0 == f).map_or(0, |r| r.1);
-                for (f, r) in &reports {
-                    let unfaulted = if UNFAULTED.contains(&f.as_str()) { ruled(f) } else { 0 };
-                    if r.cases - r.passed != ruled(f) || r.unfaulted_misses != unfaulted {
-                        eprintln!("{f}: {} misses, {} ruled, {} without an address error", r.cases - r.passed, ruled(f), r.unfaulted_misses);
+                for r in &reports {
+                    let f = r.file.as_str();
+                    let unfaulted = if UNFAULTED.contains(&f) { ruled(f) } else { 0 };
+                    if r.cases - r.passed != ruled(f) || r.unexplained != unfaulted {
+                        eprintln!("{f}: {} misses, {} ruled, {} without an address error", r.cases - r.passed, ruled(f), r.unexplained);
                         failed_primary = true;
                     }
                 }

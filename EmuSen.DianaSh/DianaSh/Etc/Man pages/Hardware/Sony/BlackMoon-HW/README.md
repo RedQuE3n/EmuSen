@@ -41,7 +41,7 @@ The interface of `Beryl-HW/README.md`, which the Sony crates keep unchanged:
 - **Disassembly and assembly through `emusen-mips`** (`../../Shared/EmuSen_Mips.md`): the shared crate holds the
   instruction set as data and no execution; each processor crate gives its coprocessor 0's table and its dialect, and
   `blackmoon-gte` gives the GTE's table as coprocessor 2's, which the core joins to the R3000A's.
-- **The single-step oracle lives in the crate**, as unit tests that find the corpus through `EMUSEN_BLACKMOON_CORPUS`
+- **The single-step oracle lives in the crate**, as unit tests (their shared half in `emusen-singlestep`, `EmuSen_SingleStep.md`) that find the corpus through `EMUSEN_BLACKMOON_CORPUS`
   (`~/.cache/emusen/probe/diamond` on the desktop) and pass unrun without it; the processor's own run is skipped while
   the crate's `BUILT` is false, its replay controls are not.
 

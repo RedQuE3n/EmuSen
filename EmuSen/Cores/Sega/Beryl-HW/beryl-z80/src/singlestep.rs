@@ -4,9 +4,9 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-use emusen_native::json::{self, Value};
+use emusen_native::json::Value;
+use emusen_singlestep::{FileReport, Outcome, default_threads, first_mismatch, run_cases};
 
 use crate::{Bus, Registers, Z80};
 
@@ -15,27 +15,11 @@ pub const SUITE: &str = "z80/v1";
 
 pub fn suite_files() -> Option<Vec<PathBuf>> {
     let dir = Path::new(&std::env::var_os(CORPUS_VARIABLE)?).join(SUITE);
-    if !dir.is_dir() {
-        return None;
-    }
-    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .expect("the suite's folder")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    files.sort();
-    Some(files)
-}
-
-fn read_cases(path: &Path) -> Vec<Value> {
-    match json::parse(&std::fs::read(path).expect("a suite file")) {
-        Ok(Value::Array(cases)) => cases,
-        other => panic!("{}: not an array of cases ({:?})", path.display(), other.err()),
-    }
+    dir.is_dir().then(|| emusen_singlestep::suite_files(&dir))
 }
 
 fn int(v: &Value, key: &str) -> u32 {
-    v.get(key).and_then(Value::as_i64).unwrap_or_else(|| panic!("no integer {key}")) as u32
+    emusen_singlestep::int(v, key) as u32
 }
 
 /// One T-state as the suite samples it: the address pins (`None` for an internal T-state, whose address is not
@@ -161,20 +145,6 @@ impl Bus for FlatBus {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Outcome {
-    pub registers: bool,
-    pub memory: bool,
-    pub cycles: bool,
-    pub first_difference: Option<String>,
-}
-
-impl Outcome {
-    pub fn passed(&self) -> bool {
-        self.registers && self.memory && self.cycles
-    }
-}
-
 fn same(want: &TState, got: &TState) -> bool {
     want.pins == got.pins && want.data == got.data && (got.address.is_none() || want.address == got.address)
 }
@@ -190,23 +160,15 @@ pub fn grade(case: &Value, processor: &mut dyn FnMut(&Value, &mut FlatBus) -> Re
     };
     let got = processor(case, &mut bus);
     let want = registers(fin);
-    let mut o = Outcome { registers: got == want, ..Outcome::default() };
-    if !o.registers {
-        o.first_difference = Some(format!("registers: got {got:X?} want {want:X?}"));
-    }
+    let registers = (got != want).then(|| format!("registers: got {got:X?} want {want:X?}"));
     let wrong: Vec<_> = pairs(fin, "ram").iter().map(|p| (p[0].as_i64().unwrap() as u16, p[1].as_i64().unwrap() as u8)).filter(|&(a, v)| bus.byte(a) != v).collect();
-    o.memory = wrong.is_empty();
-    if !o.memory && o.first_difference.is_none() {
-        o.first_difference = Some(format!("memory: {wrong:X?} wanted"));
-    }
+    let memory = (!wrong.is_empty()).then(|| format!("memory: {wrong:X?} wanted"));
     let expected = tstates(case);
     let want_ports: Vec<(u16, u8, u8)> = ports.iter().map(|p| (p[0].as_i64().unwrap() as u16, p[1].as_i64().unwrap() as u8, p[2].as_str().unwrap().as_bytes()[0])).collect();
-    o.cycles = expected.len() == bus.log.len() && expected.iter().zip(&bus.log).all(|(w, g)| same(w, g)) && want_ports == bus.ports;
-    if !o.cycles && o.first_difference.is_none() {
-        let at = expected.iter().zip(&bus.log).position(|(w, g)| !same(w, g)).unwrap_or(expected.len().min(bus.log.len()));
-        o.first_difference = Some(format!("T-state {at}: got {:?} want {:?}; ports got {:?} want {:?}", bus.log.get(at), expected.get(at), bus.ports, want_ports));
-    }
-    o
+    let at = first_mismatch(&expected, &bus.log, same);
+    let cycles = (at.is_some() || want_ports != bus.ports)
+        .then(|| format!("T-state {}: got {:?} want {:?}; ports got {:?} want {:?}", at.unwrap_or(0), bus.log.get(at.unwrap_or(0)), expected.get(at.unwrap_or(0)), bus.ports, want_ports));
+    Outcome::from_checks(registers, memory, cycles)
 }
 
 /// The positive control: the suite's T-states read back into the bus calls that make them, performed in order, ending
@@ -246,66 +208,15 @@ pub fn processor(case: &Value, bus: &mut FlatBus) -> Registers {
     cpu.regs
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Tally {
-    pub cases: usize,
-    pub passed: usize,
-    pub registers: usize,
-    pub memory: usize,
-    pub cycles: usize,
-    pub first_failure: Option<String>,
-}
-
-pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, &mut FlatBus) -> Registers) -> Vec<(String, Tally)> {
-    let next = Mutex::new(0usize);
-    let out = Mutex::new(Vec::new());
-    let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4));
-    std::thread::scope(|s| {
-        for _ in 0..threads {
-            s.spawn(|| {
-                loop {
-                    let i = {
-                        let mut n = next.lock().unwrap();
-                        *n += 1;
-                        *n - 1
-                    };
-                    let Some(path) = files.get(i) else { break };
-                    let mut t = Tally::default();
-                    for case in read_cases(path).iter().take(limit.unwrap_or(usize::MAX)) {
-                        let o = grade(case, &mut |c, b| processor(c, b));
-                        t.cases += 1;
-                        t.passed += o.passed() as usize;
-                        t.registers += o.registers as usize;
-                        t.memory += o.memory as usize;
-                        t.cycles += o.cycles as usize;
-                        if !o.passed() && t.first_failure.is_none() {
-                            let name = case.get("name").and_then(Value::as_str).unwrap_or("?");
-                            t.first_failure = Some(format!("{name}: {}", o.first_difference.unwrap_or_default()));
-                        }
-                    }
-                    out.lock().unwrap().push((path.file_name().unwrap().to_string_lossy().into_owned(), t));
-                }
-            });
-        }
-    });
-    let mut v = out.into_inner().unwrap();
-    v.sort_by(|a, b| a.0.cmp(&b.0));
-    v
-}
-
-fn total(reports: &[(String, Tally)]) -> Tally {
-    reports.iter().fold(Tally::default(), |mut t, (_, r)| {
-        t.cases += r.cases;
-        t.passed += r.passed;
-        t.registers += r.registers;
-        t.memory += r.memory;
-        t.cycles += r.cycles;
-        t
-    })
+pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, &mut FlatBus) -> Registers) -> Vec<FileReport> {
+    emusen_singlestep::run_suite(files, default_threads(), |path| run_cases(path, limit.unwrap_or(usize::MAX), |case| grade(case, &mut |c, b| processor(c, b))))
 }
 
 #[cfg(test)]
 mod tests {
+    use emusen_native::json;
+    use emusen_singlestep::{print_misses, total};
+
     use super::*;
 
     /// IN A,(n) as the suite records it: two fetches' worth of T-states, then the port read.
@@ -354,9 +265,7 @@ mod tests {
         let reports = run_suite(&files, None, replay);
         let t = total(&reports);
         eprintln!("{SUITE}: replay {} of {} in {} files", t.passed, t.cases, reports.len());
-        for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases).take(20) {
-            eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
-        }
+        print_misses(&reports, 20);
         assert_eq!(t.passed, t.cases);
     }
 
@@ -387,9 +296,7 @@ mod tests {
         let reports = run_suite(&files, None, processor);
         let t = total(&reports);
         eprintln!("{SUITE}: {} of {} (registers {}, memory {}, cycles {})", t.passed, t.cases, t.registers, t.memory, t.cycles);
-        for (f, r) in reports.iter().filter(|(_, r)| r.passed != r.cases).take(40) {
-            eprintln!("  {f}: {} of {}; {}", r.passed, r.cases, r.first_failure.as_deref().unwrap_or(""));
-        }
+        print_misses(&reports, 40);
         assert_eq!(t.passed, t.cases, "a case fails");
     }
 }

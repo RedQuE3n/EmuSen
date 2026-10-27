@@ -149,6 +149,17 @@ impl<L: Lowering> Compiler<L> {
     }
 }
 
+impl<L: Lowering> Compiler<L> {
+    /// Stops the thread without waiting for it: it refuses what is queued, finishes the block in hand and frees its code
+    /// itself. Only for an owner that has forgotten every address the module published (EmuSen_Jit.md §3.4).
+    fn retire(mut self) {
+        self.queue.stop.store(true, Release);
+        if let Some(t) = self.thread.take() {
+            t.thread().unpark();
+        }
+    }
+}
+
 impl<L: Lowering> Drop for Compiler<L> {
     fn drop(&mut self) {
         self.queue.stop.store(true, Release);
@@ -184,16 +195,22 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
     let mut serial = 0u64;
     loop {
         let jobs = queue.with(std::mem::take);
+        if queue.stop.load(Acquire) {
+            refuse(queue, jobs);
+            break;
+        }
         if jobs.is_empty() {
-            if queue.stop.load(Acquire) {
-                break;
-            }
             std::thread::park_timeout(std::time::Duration::from_millis(1));
             continue;
         }
         let started = Instant::now();
         let mut done = Vec::with_capacity(jobs.len());
-        for job in jobs {
+        let mut jobs = jobs.into_iter();
+        while let Some(job) = jobs.next() {
+            if queue.stop.load(Acquire) {
+                refuse(queue, std::iter::once(job).chain(jobs).collect());
+                break;
+            }
             serial += 1;
             let name = format!("b{:08X}_{serial}", job.start);
             match compile(&mut lowering, &mut module, &mut context, &mut functions, &job, &name) {
@@ -223,6 +240,14 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
     }
     // SAFETY: the owner that ran this code is dropping it; nothing will call it again.
     unsafe { module.free_memory() };
+}
+
+/// Jobs a stopped thread will not compile: settled as refused, so that no `Slot::wait` waits on them for ever.
+fn refuse<O>(queue: &Queue<O>, jobs: Vec<Job<O>>) {
+    for job in jobs {
+        job.slot.publish(FAILED);
+        queue.counters.finished.fetch_add(1, Release);
+    }
 }
 
 /// A processor's compiler as its dispatcher holds it: started at the first block it is given, dropped past its code budget.
@@ -274,11 +299,14 @@ impl<L: Lowering> Jit<L> {
         self.compiler = None;
     }
 
-    /// Code is never freed a block at a time: past the budget the module goes whole. True when it went, and the caller must then
-    /// forget every address published before running again.
+    /// Code is never freed a block at a time: past the budget the module goes whole, its thread retired without a join (it
+    /// frees the code once it has finished the block in hand). True when it went, and the caller must then forget every
+    /// address published before running again.
     pub fn over_budget(&mut self) -> bool {
         if self.counters().is_some_and(|c| c.bytes.load(Relaxed) > self.budget) {
-            self.reset();
+            if let Some(c) = self.compiler.take() {
+                c.retire();
+            }
             self.flushes += 1;
             return true;
         }

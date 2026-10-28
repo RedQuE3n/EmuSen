@@ -274,6 +274,15 @@ impl Tier {
         self.entry = running.then_some(pc);
     }
 
+    /// The planned T stage of the pair VU1's last run stopped before, while the unit still stands there with the micro
+    /// memory unchanged; 0 otherwise (`run`'s first check, read without the call).
+    pub(super) fn stalled_until(&self, pc: u16, lent: u64) -> u64 {
+        match self.stall {
+            Some((p, planned, at)) if (p, at) == (pc, lent) => planned,
+            _ => 0,
+        }
+    }
+
     fn forget_all(&mut self) {
         self.programs.iter_mut().for_each(Vec::clear);
         self.current = None;
@@ -425,6 +434,8 @@ pub struct Frame {
     pub reference: *mut Reference,
     /// The planned T stage of the last pair the code looked at, 0 when the probe held it.
     pub planned: u64,
+    /// The earliest landing in flight as the run begins (`pending`).
+    pub pending: u64,
     low: Deferred,
     up: Deferred,
 }
@@ -435,6 +446,7 @@ pub const HALTS: u32 = 4;
 
 impl Frame {
     fn new(pipe: &mut Pipe, units: &mut Units, limit: u64, budget: u64, release: bool, reference: *mut Reference) -> Frame {
+        let pending = pending(pipe, if pipe.unit == 0 { &units.vu0 } else { &units.vu1 });
         let flags = (u32::from(pipe.trace.is_some()) * TRACING) | (u32::from(pipe.probe.is_some()) * PROBING) | (u32::from(units.halts) * HALTS);
         let (vu, window) = if pipe.unit == 0 { (&mut units.vu0 as *mut Vu, &mut units.vu1 as *mut Vu) } else { (&mut units.vu1 as *mut Vu, std::ptr::null_mut()) };
         // SAFETY: `vu` was made from a live reference just above.
@@ -451,6 +463,7 @@ impl Frame {
             flags,
             reference,
             planned: 0,
+            pending,
             low: Deferred::default(),
             up: Deferred::default(),
         }
@@ -458,7 +471,7 @@ impl Frame {
 }
 
 /// The earliest cycle a flag write, a quotient or an EFU result lands at, `NONE` with none in flight.
-fn pending(pipe: &Pipe, vu: &Vu) -> u64 {
+pub(super) fn pending(pipe: &Pipe, vu: &Vu) -> u64 {
     let f = pipe.flags.front().map_or(NONE, |f| f.at);
     let q = vu.q_next.map_or(NONE, |l| l.at);
     let p = vu.p_next.map_or(NONE, |l| l.at);
@@ -467,14 +480,9 @@ fn pending(pipe: &Pipe, vu: &Vu) -> u64 {
 
 // The helpers compiled code calls. Each borrows from the frame only what it touches, for the length of the call.
 
-pub(super) extern "C" fn h_pending(f: *mut Frame) -> u64 {
-    // SAFETY: compiled code passes the frame it was given, whose pointers are live for the run.
-    unsafe { pending(&*(*f).pipe, &*(*f).vu) }
-}
-
 /// `execute`'s first step: the quotient and the EFU result due by `t`, then the flags (`Vu::settle`, `pipe::drain`).
 pub(super) extern "C" fn h_land(f: *mut Frame, t: u64) -> u64 {
-    // SAFETY: as `h_pending`.
+    // SAFETY: compiled code passes the frame it was given, whose pointers are live for the run.
     let (pipe, vu) = unsafe { (&mut *(*f).pipe, &mut *(*f).vu) };
     vu.settle(t);
     pipe::drain(&mut pipe.flags, vu, t);
@@ -483,13 +491,13 @@ pub(super) extern "C" fn h_land(f: *mut Frame, t: u64) -> u64 {
 
 /// The cycle WAITQ waits for (`Pipe::plan`).
 pub(super) extern "C" fn h_q_at(f: *mut Frame) -> u64 {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     unsafe { (*(*f).vu).q_next.map_or(0, |l| l.at) }
 }
 
 /// The cycle WAITP waits for (`Pipe::plan`).
 pub(super) extern "C" fn h_p_at(f: *mut Frame) -> u64 {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     unsafe { (*(*f).vu).p_last().map_or(0, |l| l.at - 1) }
 }
 
@@ -498,7 +506,7 @@ pub const KIND_DIV: u32 = 1 << 8;
 pub const KIND_EFU: u32 = 2 << 8;
 
 fn context<'a>(f: *mut Frame) -> Ctx<'a> {
-    // SAFETY: as `h_pending`; VU0's window is VU1, a different unit from the one `vu` names.
+    // SAFETY: as `h_land`; VU0's window is VU1, a different unit from the one `vu` names.
     unsafe { Ctx::micro(&mut *(*f).vu, (*f).window.as_mut()) }
 }
 
@@ -510,7 +518,7 @@ pub(super) extern "C" fn h_lower(f: *mut Frame, run: usize, word: u32, t: u64, k
     let mut c = context(f);
     run(&mut c, word);
     let (out, quotient) = (c.out, c.q_out);
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     let (frame, vu) = unsafe { (&mut *f, &mut *(*f).vu) };
     frame.low = out;
     let latency = u64::from(kind & 0xFF);
@@ -531,7 +539,7 @@ pub(super) extern "C" fn h_lower(f: *mut Frame, run: usize, word: u32, t: u64, k
         }
         _ => {}
     }
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     unsafe { pending(&*frame.pipe, vu) }
 }
 
@@ -542,7 +550,7 @@ pub(super) extern "C" fn h_upper(f: *mut Frame, run: usize, word: u32, t: u64, w
     let mut c = context(f);
     run(&mut c, word);
     let out = c.out;
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     unsafe { (*f).up = out };
     h_push(f, t, which)
 }
@@ -556,7 +564,7 @@ pub const NOW: u32 = 4;
 /// The pair's flag write for its S stage, as `execute` puts it together: the upper operation's MAC, status and clipping
 /// judgement, the lower's FCSET and FSSET.
 pub(super) extern "C" fn h_push(f: *mut Frame, t: u64, which: u32) -> u64 {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     let (frame, pipe, vu) = unsafe { (&mut *f, &mut *(*f).pipe, &mut *(*f).vu) };
     let up = if which & USE_UP != 0 { frame.up } else { Deferred::default() };
     let low = if which & USE_LOW != 0 { frame.low } else { Deferred::default() };
@@ -578,7 +586,7 @@ pub const EXT_XITOP: u32 = 2;
 
 /// XGKICK, XTOP and XITOP as `execute` carries them out.
 pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32) {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     let (frame, pipe, vu, link) = unsafe { (&mut *f, &mut *(*f).pipe, &mut *(*f).vu, &mut *(*f).link) };
     let unit = pipe.unit;
     match kind {
@@ -599,7 +607,7 @@ pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32)
 }
 
 pub(super) extern "C" fn h_trace(f: *mut Frame, pc: u32, t: u64) {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     let pipe = unsafe { &mut *(*f).pipe };
     if let Some(tr) = &mut pipe.trace {
         tr.push((pc as u16, t));
@@ -608,14 +616,14 @@ pub(super) extern "C" fn h_trace(f: *mut Frame, pc: u32, t: u64) {
 
 /// The debugger's probe asked before the pair runs (`Pipe::step`); 0 when it holds the unit there.
 pub(super) extern "C" fn h_admit(f: *mut Frame, pc: u32) -> u32 {
-    // SAFETY: as `h_pending`.
+    // SAFETY: as `h_land`.
     let (frame, pipe) = unsafe { (&*f, &mut *(*f).pipe) };
     pipe.probe.as_mut().map_or(1, |p| u32::from(p.admit(pc * 8, frame.flags & HALTS != 0)))
 }
 
 /// The verifier: the interpreter steps the same pair on its own copy of the units, and the two are compared.
 pub(super) extern "C" fn h_verify(f: *mut Frame) {
-    // SAFETY: as `h_pending`; the reference is the tier's, apart from the units.
+    // SAFETY: as `h_land`; the reference is the tier's, apart from the units.
     let (frame, pipe) = unsafe { (&*f, &*(*f).pipe) };
     // SAFETY: as above; the units are borrowed only to be read.
     let units_vu = unsafe { &*frame.vu };

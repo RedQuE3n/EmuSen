@@ -560,6 +560,12 @@ D-0. The progressive and 1080i modes some games offer need the profile's answer 
   It wakes the EE's DMAC from any instruction that starts a SIF channel, at the board's time after the EE instruction
   during which that happened, and the EE reads its SIF registers and its RAM at instruction granularity, so it stands at
   every EE instruction's time; a call at a time it has reached is answered without being made.
+- *Amended 2026-10-27* (`Sapphire_Speed.md` §57.4): on this board VU1 is observed at every board step at which it
+  runs, not only at the points above: the GIF's arbitration at the step's end takes the XGKICKs up to its time and reads
+  PATH1's packet from VU1's memory, and VU1's XGKICK reads the GIF's estimate the board gives it at that step; VIF1 also
+  writes VU1's data memory while it runs. A thread synchronised there stays exact, but it hands over 0.5 to 2.2 million
+  times a frame on Jak and Daxter's opening, which costs as much as VU1's whole work; the basis for threads holds only
+  once the GIF is run at its own events.
 
 ### 5.2 The EE's timing model
 

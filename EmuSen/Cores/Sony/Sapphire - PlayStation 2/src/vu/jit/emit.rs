@@ -53,6 +53,7 @@ const F_BUDGET: i32 = offset_of!(Frame, budget) as i32;
 const F_RELEASE: i32 = offset_of!(Frame, release) as i32;
 const F_FLAGS: i32 = offset_of!(Frame, flags) as i32;
 const F_PLANNED: i32 = offset_of!(Frame, planned) as i32;
+const F_PENDING: i32 = offset_of!(Frame, pending) as i32;
 
 fn mem() -> MemFlagsData {
     MemFlagsData::new().with_notrap()
@@ -987,11 +988,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
     let land_at = b.declare_var(I64);
     let initial = b.ins().load(I64, mem(), f, F_BUDGET);
     b.def_var(budget, initial);
-    let pending = {
-        let a = b.ins().iconst(ptr, super::h_pending as *const () as usize as i64);
-        let inst = b.ins().call_indirect(sigs.frame_u64, a, &[f]);
-        b.inst_results(inst)[0]
-    };
+    let pending = b.ins().load(I64, mem(), f, F_PENDING);
     b.def_var(land_at, pending);
 
     let mut blocks = vec![None; pairs];

@@ -1980,3 +1980,24 @@ built, and the second changes what a block is, not how it is compiled.
   horizon fault, as above.
 - **The six seeded faults** as above, each on its own Release build, and reverted.
 - **The ring:** two rounds at three sizes on the desktop, and on the handheld on the charger.
+
+## The exact design's work a block: one translation a page, one tag check a line, a shared exit (2026-10-28)
+
+*Decided 2026-10-28 by the tester: after option 1, cut the per-access and per-exit work its assessment measured as the
+larger part of what remains, in three levers behind the `forms` feature (the default build unchanged), measured one at
+a time in this order: (1) one translation a page a block; (2) one cache-tag check a line a block; (3) one shared exit
+stub. The stop rule: each lever's saving estimated in writing before it is built; stop after a lever that saves less
+than half its estimate or cannot be proven exact, or when the arena reaches about 96. These are byte-face emitter forms
+(`EmuSen_TwoFaces.md`); exactness is the requirement.*
+
+### The estimates, set before each lever was built
+
+The base is option 1's step 3 on the arena: 180.6 hot bytes a guest instruction, 37.7 % of guest instructions loads and
+stores, so about 479 hot bytes a load or store, of which the translation's tag holds 17.5 a guest instruction (about 46
+a load or store) and the cache path and its dispatch 52.8 (about 140).
+
+**Lever 1, one translation a page.** Assumptions: about 45 % of a block's loads and stores have an earlier one in the
+same block on the same base register unchanged (stack frames, a structure's fields); each such access drops the
+translation (about 46 bytes, and about 10 of the untagged bytes with it) and pays a guard of about 14 (an exclusive or, a
+compare and a branch to the full path laid cold). **Estimated saving: about 7 hot bytes a guest instruction** (0.377 ×
+0.45 × 42), a range of 5 to 10.

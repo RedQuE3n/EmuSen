@@ -85,20 +85,26 @@ pub fn sub(a: u32, b: u32) -> (u32, bool, bool) {
     add(a, b ^ 0x8000_0000)
 }
 
-/// MUL.S: the exact product less what the multiplier's lowest column would have held (D-26): with FPR[ft]'s lowest
-/// radix-4 Booth digit d (from its bits 1 and 0 and an implied 0), +x contributes bit 0 of x, +2x nothing, and a
-/// negative multiple its ones' complement's bit 0 and the carry-in 1. Then truncated.
+/// The multiplier's columns below this one are not summed (D-26, its column settled by D-1104).
+pub const DROPPED_COLUMNS: u32 = 15;
+
+/// MUL.S: the exact product less, per Booth digit below the column, its multiple mod 2^k or 2^k less it if negative (Sapphire_Speed.md §56.4).
 pub fn mul(a: u32, b: u32) -> (u32, bool, bool) {
     let s = (a ^ b) >> 31;
     let (Some(x), Some(y)) = (number(a), number(b)) else { return (s << 31, false, false) };
-    let digit: i32 = match y.2 & 3 {
-        0 => 0,
-        1 => 1,
-        2 => -2,
-        _ => -1,
-    };
-    let multiple = digit.unsigned_abs() as u128 * x.2;
-    let lost = if digit >= 0 { multiple & 1 } else { (1 - (multiple & 1)) + 1 };
+    let k = 1u128 << DROPPED_COLUMNS;
+    let mut lost = 0u128;
+    for i in (0..DROPPED_COLUMNS).step_by(2) {
+        let digit: i32 = match (y.2 << 1) >> i & 7 {
+            0 | 7 => 0,
+            1 | 2 => 1,
+            3 => 2,
+            4 => -2,
+            _ => -1,
+        };
+        let held = (digit.unsigned_abs() as u128 * x.2 << i) % k;
+        lost += if digit >= 0 { held } else { k - held };
+    }
     truncate(s, x.2 * y.2 - lost, x.1 + y.1 - 150)
 }
 

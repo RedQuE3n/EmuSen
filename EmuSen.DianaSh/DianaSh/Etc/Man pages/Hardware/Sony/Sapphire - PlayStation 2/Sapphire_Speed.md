@@ -717,6 +717,25 @@ with every column below `DROPPED_COLUMNS` (1) cleared. **Argument** [A]:
 nibbles; a constant assertion ties it to `DROPPED_COLUMNS == 1`, so that a different reading of D-26 fails to build
 rather than computing the wrong product. `booth` stays in the tests as the reference.
 
+**Revised 2026-10-28, for *k* = 15 (D-1104).** Steps 1 and 2 hold for any *k*: only the rows at columns i < *k*
+lose bits, the rows at 0, 2, …, 14 for *k* = 15, so the loss is read from `y`'s low 16 bits and `x`'s low *k*, and
+`loss(x, y)` sums those eight rows' bits below *k* and their carries. Two facts make the product cheap [M, every low
+part, `the_loss_never_exceeds_its_bound_over_every_low_part_it_reads` and a scratch count of 2³¹ and 2³² pairs]:
+
+5. **The loss is at most 8 · 2^*k*** (2¹⁸ for *k* = 15), reached by three low parts in 2³¹, the first x ≡ 0 and
+   y ≡ AAAAh, eight digits of −2.
+6. **The loss is congruent to x · y modulo 2^*k*** on every low part, as it must be: the dropped columns hold the
+   product's own low bits, less what the rows above carried out of them.
+
+So `product` returns x · y unchanged when `y`'s low 16 bits are zero (no digit below *k* is non-zero) or when the
+product's bits below column 23 are at least 2¹⁸ (then x · y − loss has the same bits from column 23 up, which is all
+`mul` reads), and otherwise subtracts `loss`. On uniform significands the second test fails in 1 in 32; on an exact
+product with a non-zero low part it always does. `product` is now defined by its bits from column 23 up, and the
+tests compare those with `booth`'s. **The one-unit-low rule** that follows: for *k* = 15 the result is RZ(x · y) one
+unit low exactly when ⌊loss / 2^*k*⌋ > ⌊D / 2^*k*⌋, D the product's bits below the 24 kept (by 6); D ≥ 2¹⁸ always
+keeps RZ(x · y). For 1.0 × y with 1.0 as the multiplicand, x ≡ 0 modulo 2^*k* and the loss is 2^*k* for each negative
+digit at a column below *k*, which is F0bes's list (D-1104).
+
 ### 56.5 The equality evidence (2026-10-27)
 
 `float`'s tests, in release; the classes drawn are zero, would-be denormals, field 255, fields 1 to 4 and 251 to 254,

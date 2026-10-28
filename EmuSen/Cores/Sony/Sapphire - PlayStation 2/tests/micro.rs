@@ -102,7 +102,7 @@ fn the_programs_carry_every_micro_instruction() {
 }
 
 /// The console's `vu/lower/efu` text (Sapphire_References.md §2: a console's output): the EFU's nano code on the
-/// format's arithmetic equals 193 of its 208 lines and is within 2 in the last place of the rest, its algorithm's own
+/// format's arithmetic equals 198 of its 208 lines and is within 2 in the last place of the rest, its algorithm's own
 /// last bits being undocumented (Sapphire_Native.md §23, a named loss).
 #[test]
 fn the_efu_against_the_console_s_text() {
@@ -131,7 +131,7 @@ fn the_efu_against_the_console_s_text() {
             near += u32::from(got != want && got >> 31 == want >> 31 && (got as i64 - want as i64).abs() <= 2);
         }
     }
-    assert_eq!((exact, near), (193, 15), "exact, and within two in the last place");
+    assert_eq!((exact, near), (198, 10), "exact, and within two in the last place");
 }
 
 /// §5.4.5 and §5.4.6 on the board: VCALLMS's first pair 3 cycles after it, 4 behind a macro instruction; a macro

@@ -1647,7 +1647,8 @@ which turned −0 into +0, exposed by `s9-acc`.
    guard bit" stays the alternative in D-25, one constant away, until a console text decides.
 2. **Q2 [routine], the multiplier's lowest summed column (D-26).** *Recommended*: keep *k* = 1, the departure from the
    exact product the texts force and no more; revisit if VU tests (S12, S13) show the same multiplier with more
-   evidence, since `vu/*`'s console texts may exercise it.
+   evidence, since `vu/*`'s console texts may exercise it. *Answered 2026-10-28* (D-1104): *k* = 15, from a console
+   list of VMUL by 1.0 and the EFU's console text.
 3. **Q3 [routine], RSQRT.S (D-28).** *Recommended*: accept the 38-of-39 reading as a named loss; look again at S12, where
    VU0's RSQRT and its console texts may share the unit.
 4. **Q4 [routine], the referees on the FPU.** *Recommended*: record in `Sapphire_Referees.md`'s next edit that neither
@@ -2477,7 +2478,7 @@ but the three that reach outside the VPU) and 24 transcriptions of the manual's 
 manual on the interpreter. PCSX2 reproduces six of the seven `vu/*` console texts whole but for its own log lines; its
 EFU and its arithmetic miss the console in `vu/lower/efu` and in one of `vu/games/triace`'s twelve values, while the
 EFU's nano code on the format's arithmetic equals 193 of `efu`'s 208 console values and is within two in the last place
-of the rest. Disputes D-80 to D-85; D-43 stands with console evidence beside its argument, and D-51's micro form is
+of the rest (198 since D-1104, 2026-10-28). Disputes D-80 to D-85; D-43 stands with console evidence beside its argument, and D-51's micro form is
 measured. No emulator, SDK or loader source, no ps2autotests source and no firmware was read.
 
 ### 23.2 What was built
@@ -2552,6 +2553,13 @@ ESIN's one or two low, six reciprocals and reciprocal roots one low, two roots o
 No document gives the EFU's own last bits, and no single rounding rule fits the fifteen: rounding the divides and roots
 up, truncating them, or mixing those with rounding to the nearest equals 60 to 72 of the 96 values they produce, against
 87 for the nano code's own rounding [M, a scratch comparison, not kept]; it is a named loss (§23.9).
+
+**Revised 2026-10-28 (D-1104).** With the multiplier's columns below 15 left out, **198 of 208 equal and 10 within
+two** [M, the same test]: four of the five ESIN values (`CVF_ONE`, `CVF_NEGONE`, `CVF_MAX_MANTISSA`, `CVF_DECREASING`)
+and the EEXP were the multiplier's, not the nano code's. The ten left are the six reciprocals and reciprocal roots, the
+two roots, the EATAN, and ESIN of `CVF_MAX_EXP`, which the machine's own run of `efu` gives as the console does (so 9 of
+the run's lines differ): that one is the test's transcribed input. Every function left with a miss divides or takes a
+root, so the next reading to test is the divider's, not the multiplier's.
 
 ### 23.5 The gate: the programs (measured 2026-10-25)
 
@@ -2647,7 +2655,8 @@ D-43, not a measurement of it. D-43 stands, argued as at S12; no constant change
 
 ### 23.9 Named losses
 
-- **The EFU's last bits**: 15 of the console's 208 values off by one or two in the last place (§23.4).
+- **The EFU's last bits**: ~~15~~ 10 of the console's 208 values off by one or two in the last place since D-1104
+  (2026-10-28), 9 on the machine's own run, each a function that divides or takes a root (§23.4).
 - **The divider's I and D in micro mode** land with the quotient at the F stage (D-83); no document times them.
 - **CMSAR1's start**: VU1's first pair issues `START` cycles after the CTC2, as VCALLMS's; §5.4.5 draws only VCALLMS
   (D-85).

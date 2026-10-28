@@ -187,7 +187,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   hazard by watched pages; whole VU microprograms with the other units' accesses interleaved; the GIF and VIF at events
   and the DMA and FIFOs on one timeline; the IOP at its own times; the GS on the device and its throughput; every
   compromise named with its default; why the recompiled tier is slower than the interpreter; the components and their
-  surfaces; verification and the scoreboard; stages R1 to R10 with gates; risks, weak points and questions.
+  surfaces; verification and the scoreboard; stages R1 to R10 with gates; risks, weak points and questions. Revised the
+  same day after the critic's review: the byte face built against the cycle-ordered reference (`EmuSen_TwoFaces.md`),
+  R0's five risk checks and the stop rule, budgets at a handheld factor of 2, a deterministic two-thread split at fixed
+  quanta decided before R3, unified memory first for the GS, the portability constraints, and the review answered.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

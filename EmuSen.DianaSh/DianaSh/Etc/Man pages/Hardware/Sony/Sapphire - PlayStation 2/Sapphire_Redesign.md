@@ -1453,6 +1453,13 @@ multiply-add's length, and the AVX-512 encodings cost the rest. **Against the ha
 1.24 to 1.34 times. The binding pattern is the multiply-add chain through ACC, 37–39 % of VU1's operations, which
 neither pairing nor wider registers reach. **R0.4 is closed as failed.**
 
+**Revised 2026-10-28 (D-1104).** The multiplier's dropped columns are settled at 15, which made this section's loss
+table, §56.4's for one column, wrong; `float_lanes` now takes the loss as `float::product` does, bit-exact under the
+same three suites, and costs more: 1.81–2.12 ns a lane operation on the desktop and 1.92–1.96 on the handheld for the
+AVX2 form, 1.63–1.69 and 1.79–1.85 for the AVX-512VL form (`Sapphire_Speed.md` §59.6). The figures above are for
+*k* = 1. An exact kernel on the host's floats, built beside it, reaches 1.66–1.70 on the handheld and also fails
+(§59.7).
+
 ### R0.3: the handheld's factor (measured on the charger)
 
 The same bench binary and the state at 9,000 as the desktop's denominator ran the arena window with one hot thread

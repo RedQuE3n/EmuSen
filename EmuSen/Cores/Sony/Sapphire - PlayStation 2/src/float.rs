@@ -9,7 +9,7 @@
 //! The rounding is the console's, as ps2autotests' `cpu/ee_fpu` console texts decide it where the manuals stop
 //! (Sapphire_Native.md §19.3, Sapphire_Disputes.md D-25 to D-28): an addition aligns the smaller operand to the larger's
 //! 24 bits and one more and drops what falls below, then truncates; a multiplication forms its product from a radix-4 Booth recoding
-//! of the second operand with the lowest column dropped, then truncates; a division and a square root round to the
+//! of the second operand with the columns below 15 dropped, then truncates; a division and a square root round to the
 //! nearest; RSQRT divides by the rounded square root and truncates.
 //!
 //! The product is computed in closed form and DIV and SQRT on the host's arithmetic where that is proven to give the same
@@ -129,9 +129,8 @@ pub fn sub(a: u32, b: u32) -> Outcome {
     add(a, b ^ SIGN)
 }
 
-/// The columns of the product below this one are not summed (Sapphire_Disputes.md D-26: the console texts place it
-/// between 1 and 22; 1 is taken, the reading nearest the documented truncation).
-const DROPPED_COLUMNS: u32 = 1;
+/// The columns of the product below this one are not summed (Sapphire_Disputes.md D-26, D-1104).
+const DROPPED_COLUMNS: u32 = 15;
 
 /// `x × y` for two 24-bit significands as the multiplier sums them: `y` recoded as radix-4 Booth digits, each partial
 /// product a multiple of `x` (a negative one as its ones' complement and a carry-in of 1), the columns below
@@ -157,12 +156,54 @@ fn booth(x: u64, y: u64) -> u64 {
     total & ((1 << 48) - 1)
 }
 
-/// `booth` in closed form: the exact product less what the dropped column held, which only the first digit's row and
-/// carry reach, by `y`'s lowest two bits and `x`'s lowest (Sapphire_Speed.md §56.4). Proven for one dropped column.
+/// What the columns below `DROPPED_COLUMNS` held, rows and carries (Sapphire_Speed.md §56.4).
+pub(crate) fn loss(x: u64, y: u64) -> u64 {
+    let (y, mask) = (y << 1, (1u64 << DROPPED_COLUMNS) - 1);
+    let mut lost = 0;
+    let mut i = 0;
+    while i < DROPPED_COLUMNS {
+        let d = y >> i & 7;
+        let multiple = if d == 3 || d == 4 { 2 * x } else if d == 0 || d == 7 { 0 } else { x };
+        let negative = d >> 2 & (d != 7) as u64;
+        let row = if negative == 1 { !multiple } else { multiple };
+        lost += (row << i & mask) + (negative << i);
+        i += 2;
+    }
+    lost
+}
+
+/// The bits of `y` the digits below `DROPPED_COLUMNS` read.
+pub(crate) const READ: u64 = (1 << ((DROPPED_COLUMNS - 1) / 2 * 2 + 2)) - 1;
+
+/// The most `loss` can be, measured over every low part it reads (Sapphire_Speed.md §56.4).
+pub(crate) const MOST_LOST: u64 = if DROPPED_COLUMNS == 1 { 2 } else { 8 << DROPPED_COLUMNS };
+
+/// The column, for the vector forms.
+#[cfg(any(test, feature = "lanes"))]
+pub(crate) const K: u32 = DROPPED_COLUMNS;
+
+/// The even columns below `DROPPED_COLUMNS`, where the digits whose rows lose bits stand.
+#[cfg(any(test, feature = "lanes"))]
+pub(crate) const DIGITS: u64 = 0x5555 & ((1 << DROPPED_COLUMNS) - 1);
+
+/// The digits below `DROPPED_COLUMNS` that are negative: `loss` is this times 2^k when `x` ≡ 0 mod 2^k (Sapphire_Speed.md §59.2).
+#[cfg(test)]
+const fn negative_digits(y: u64) -> u64 {
+    let y = y << 1;
+    ((y >> 2) & !((y >> 1) & y) & DIGITS).count_ones() as u64
+}
+
+/// `booth`'s bits from column 23 up, which are all `mul` reads, without its loop (Sapphire_Speed.md §56.4).
 fn product(x: u64, y: u64) -> u64 {
-    const _: () = assert!(DROPPED_COLUMNS == 1);
-    const LOSS: u64 = 0x1222_1000;
-    x * y - (LOSS >> ((((y & 3) << 1) | (x & 1)) << 2) & 3)
+    let p = x * y;
+    if DROPPED_COLUMNS == 1 {
+        const LOSS: u64 = 0x1222_1000;
+        p - (LOSS >> ((((y & 3) << 1) | (x & 1)) << 2) & 3)
+    } else if y & READ == 0 || p & 0x7F_FFFF >= MOST_LOST {
+        p
+    } else {
+        p - loss(x, y)
+    }
 }
 
 /// `a × b`, `b` the operand the multiplier recodes (FPR[ft] for the FPU), so that the product is not commutative in its
@@ -380,7 +421,8 @@ pub(crate) mod tests {
             let (x, y) = (0x80_0000 | seed & 0x7F_FFFF, 0x80_0000 | seed >> 32 & 0x7F_FFFF);
             let exact = x * y;
             let p = booth(x, y);
-            assert!(p <= exact && exact - p <= 2, "{x:x} × {y:x}: {p:x} against {exact:x}");
+            assert!(p <= exact && exact - p <= MOST_LOST, "{x:x} × {y:x}: {p:x} against {exact:x}");
+            assert_eq!(p, exact - loss(x, y), "{x:x} × {y:x}: the loss");
         }
     }
 
@@ -426,13 +468,13 @@ pub(crate) mod tests {
         let xs = [0x80_0000u64, 0x80_0001, 0xFF_FFFF, 0xFF_FFFE, 0x80_0000 | next() & 0x7F_FFFF, 0x80_0001 | next() & 0x7F_FFFE];
         for x in xs {
             for y in 0x80_0000..0x100_0000u64 {
-                assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+                assert_eq!(product(x, y) >> 23, booth(x, y) >> 23, "{x:x} × {y:x}");
             }
         }
         for _ in 0..2_000_000 {
             let r = next();
             let (x, y) = (0x80_0000 | r & 0x7F_FFFF, 0x80_0000 | r >> 32 & 0x7F_FFFF);
-            assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+            assert_eq!(product(x, y) >> 23, booth(x, y) >> 23, "{x:x} × {y:x}");
         }
     }
 
@@ -474,13 +516,32 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_multiplicand_with_no_bits_below_the_column_loses_two_to_the_k_a_negative_digit() {
+        for x in (0x80_0000..0x100_0000u64).step_by(1 << DROPPED_COLUMNS) {
+            for y in 0x80_0000..0x80_0000 + READ + 1 {
+                assert_eq!(loss(x, y), negative_digits(y) << DROPPED_COLUMNS, "{x:x} × {y:x}");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn the_loss_never_exceeds_its_bound_over_every_low_part_it_reads() {
+        for x in 0x80_0000..0x80_0000 + (1u64 << DROPPED_COLUMNS) {
+            for y in 0x80_0000..0x80_0000 + READ + 1 {
+                assert!(loss(x, y) <= MOST_LOST, "{x:x} × {y:x}");
+            }
+        }
+    }
+
+    #[test]
     #[ignore]
     fn a_billion_products_equal_the_booth_sum() {
         let mut next = stream(0xD1B5_4A32_D192_ED03);
         for _ in 0..1_000_000_000u64 {
             let r = next();
             let (x, y) = (0x80_0000 | r & 0x7F_FFFF, 0x80_0000 | r >> 32 & 0x7F_FFFF);
-            assert_eq!(product(x, y), booth(x, y), "{x:x} × {y:x}");
+            assert_eq!(product(x, y) >> 23, booth(x, y) >> 23, "{x:x} × {y:x}");
         }
     }
 

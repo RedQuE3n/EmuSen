@@ -573,6 +573,8 @@ too; disputes about the R5900 are kept in its crate's record once it exists.
 - **Conclusion:** Booth recoding of ft, *k* = 1, the reading nearest the documented truncation (the product is exact
   or one or two units of its lowest column below it); **measured** for the recoding of ft and its loss, **open** for
   *k*, which the texts bound to 1–22 and nothing available narrows.
+- **Settled 2026-10-28** (D-1104): a console list of VMUL by 1.0 gives *k* = 15 or 16, and the EFU's console text
+  separates them for 15. The recoding of ft stands; ~~*k* = 1~~ is overturned.
 - **Depends on it:** `float::booth` (`DROPPED_COLUMNS`), MUL.S, MULA.S and the multiply-adds; the VUs' FMAC if it is the
   same multiplier (S12).
 - **Pinned by:** `multiply_and_divide_over_every_pair_of_input_classes_equal_the_manual`,
@@ -4812,3 +4814,69 @@ it.*
 - **Depends on it:** `vif::Vif::fbrst`.
 - **Pinned by:** `stc_before_the_next_vifcode_cancels_the_i_bit_s_stall` (`tests/vif.rs`).
 - **Implemented in:** D-1103's commit.
+
+### D-1104. EE FPU and VU float, the multiplier: the Booth rows' columns below column 15 are not summed (D-26's *k* = 15), so 1.0 × (n + 0.5) with 1.0 as the multiplicand is one unit low from 128.5 up
+
+*Numbered after D-1103 (2026-10-28). It settles the constant D-26 left open.*
+
+- **Opened:** 2026-10-28, by a console list published by a homebrew developer, which falls inside D-26's open range
+  and narrows it.
+- **Documents read:** *VU User's Manual* §4.2, every multiply page's Remarks ("There is an operation error of 1 bit in
+  multiplication, so the value multiplied by 1 may not be the same as the original value. By using VF[fs] as a
+  multiplicand, the results of multiplication with 1 are guaranteed to be accurate"), as D-43 reads them. F0bes,
+  "Detecting emulators via VU floats", fobes.dev/ps2/detecting-emu-vu-floats (2024-06-07, read 2026-10-28), and its
+  data, gist.github.com/F0bes/5f209d8a0890879ad0e25ceb6973977a, `gistfile1.txt` (2022-11-14, 122 lines, MD5
+  0f76ebb12982ac6ba3390ac7531545b8, read 2026-10-28). Prose and data only; the page quotes no emulator source.
+- **The console's evidence** (measured on a console by its author, read here as data):
+  - The page: VMUL with 1.0 in VF2 as fs and the value in VF1 as ft, VF1 = VF2 × VF1; 129.5 comes back as 129.499985.
+    The gist is titled "First numbers from 0 to 250 with a .5 increment that are different when used to multiply 1" and
+    lists 122 values, **every n + 0.5 from 128.5 to 249.5 and nothing below**, each one unit below its input (43008000h
+    to 43007FFFh, … 43798000h to 43797FFFh), labelled by lanes y and w.
+  - **Inferred, not stated:** that the 378 other halves from 0 to 249.5 came back unchanged (from the title's "that are
+    different"), and that fs held 1.0 in every lane (read literally, the page's VADDw gives 1.0 in x, y and z and 2.0
+    in w, yet the w lines show a product by 1.0). The test pins both readings.
+- **What D-26's model gives** [A, `Sapphire_Speed.md` §56.4]: with x = 2²³ (1.0), every row's bits below column 23 are
+  zero, so a positive digit loses nothing and a negative digit at a column i < *k* loses 2^*k* (its ones' complement and
+  carry). For n + 0.5 in [128, 256) the recoded significand is (2n + 1)·2¹⁵, with one digit at column 14, −2x, negative.
+  The product is one unit low exactly when that digit is dropped, *k* ≥ 15. In [64, 128) the lowest digit sits at column
+  16, negative for odd n, so any *k* ≥ 17 makes values below 128.5 low, which the list excludes. **The list gives
+  *k* = 15 or 16.** Below 64 the digits sit higher still, and whole numbers' significands end in 16 zeros.
+- **Test programs, per *k*** [M, 2026-10-28, `DROPPED_COLUMNS` and the transcription's constant set together]:
+
+  | Suite | *k* = 1 | *k* = 15 | *k* = 16 |
+  | --- | --- | --- | --- |
+  | F0bes's 500 halves (`vmul_of_one_by_halves_…`, VMUL in VU0's macro mode) | 122 wrong | **pass** | pass |
+  | `s9 texts`, `cpu/ee_fpu`'s 901 lines | 900 (the RSQRT.S line, D-28) | 900 | 900 |
+  | ps2autotests on Sapphire through `examples/s10.rs` (Americas BIOS): `vu/games/triace`, `cpu/ee_fpu/muldiv` and `arithmetic`, `vu/lower/random`, `fdivdelay`, `branch` and `integer`, `vu/upper/clip`, `cpu/vu0_macro/integer` and `transfer` | pass | pass | pass |
+  | `vu/lower/efu` on Sapphire, values of 208 unequal | 14 | **9** | 10 |
+  | `the_efu_against_the_console_s_text`, exact and within two of 208 | 193, 15 | **198, 10** | 197, 10 (one beyond two) |
+  | `float`'s lib tests, `tests/fpu.rs`, `tests/vu0.rs`'s programs against the transcriptions | pass | pass | pass |
+
+  *k* = 15 and 16 both mend EEXP of `CVF_DECREASING` and ESIN of `CVF_ONE`, `CVF_NEGONE`, `CVF_MAX_MANTISSA` and
+  `CVF_DECREASING`; *k* = 16 breaks ESIN of `CVF_PI` (3B5659E0h for the console's 3B565DE0h), which *k* = 1 and 15 give.
+  **Nothing that passes at *k* = 1 fails at *k* = 15.** The unit test counts one miss more than the run at every *k*:
+  ESIN of `CVF_MAX_EXP`, which the run gives as the console does; that is the test's transcribed input, not the
+  multiplier.
+- **Referee:** not consulted. PCSX2 and Play! multiply exactly (D-26, D-43), so neither is a witness, and F0bes's page
+  names both among the emulators the test detects.
+- **Conclusion:** *k* = 15. **Measured** for 15 or 16, a console list read against D-26's model; **measured, on weaker
+  evidence,** for 15 over 16, since the one value that separates them is an EFU result, which depends on §7.2's nano code
+  as `vu::efu` reads it (`Sapphire_Native.md` §23.4) as well as on the multiplier. The EE's FPU takes the same constant
+  on D-43's argument that the units share one multiplier; `cpu/ee_fpu`'s texts allow every *k* from 1 to 22 and cannot
+  separate the units.
+- **Depends on it:** `float::product` and `loss` (`DROPPED_COLUMNS`): every MUL, MULA, OPMULA and multiply-add and the
+  EFU's products on both units, MUL.S, MULA.S and the multiply-adds on the EE; `Sapphire_Speed.md` §56.4's closed form;
+  every picture, sound and state digest a game's products reach.
+- **What it moves** (2026-10-28):
+  - *Tests*, measured: `the_efu_against_the_console_s_text`'s counts, (193, 15) to (198, 10), recorded again; the new
+    `vmul_of_one_by_halves_…`. Nothing else in Sapphire's crate (495 of 495, release) or WiseMan's `SapphireTests`
+    holds a value the change reaches; ps2autotests' texts on Sapphire are unchanged (the table above).
+  - *Recorded digests*, not re-measured, each from a run of the player's BIOS or a game whose products may reach it,
+    so each is to be recorded again by its owner's next run: `Sapphire_Speed.md` §52, §55, §56.8 (the bench's three
+    windows, the boot's 760 frames, Jak to 900) and §57; `Sapphire_Native.md` §42, §43, §46, §50 and §53;
+    `Sapphire_Recompiler.md` §48; `Sapphire_Scheduler.md` §54. A digest from a run with no VU or FPU product is
+    unchanged by construction, but none was checked one by one.
+  - *R0.4's lane form*, which carried *k* = 1's loss table: revised to stay exact, and slower (`Sapphire_Speed.md` §59.6).
+- **Pinned by:** `vmul_of_one_by_halves_is_one_unit_low_from_128_5_as_f0bes_s_console_list_gives`,
+  `the_efu_against_the_console_s_text` (198, 10), `the_booth_sum_is_the_exact_product_or_just_below_it`.
+- **Implemented in:** the commit after this entry's.

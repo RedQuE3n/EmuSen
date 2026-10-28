@@ -717,6 +717,25 @@ with every column below `DROPPED_COLUMNS` (1) cleared. **Argument** [A]:
 nibbles; a constant assertion ties it to `DROPPED_COLUMNS == 1`, so that a different reading of D-26 fails to build
 rather than computing the wrong product. `booth` stays in the tests as the reference.
 
+**Revised 2026-10-28, for *k* = 15 (D-1104).** Steps 1 and 2 hold for any *k*: only the rows at columns i < *k*
+lose bits, the rows at 0, 2, …, 14 for *k* = 15, so the loss is read from `y`'s low 16 bits and `x`'s low *k*, and
+`loss(x, y)` sums those eight rows' bits below *k* and their carries. Two facts make the product cheap [M, every low
+part, `the_loss_never_exceeds_its_bound_over_every_low_part_it_reads` and a scratch count of 2³¹ and 2³² pairs]:
+
+5. **The loss is at most 8 · 2^*k*** (2¹⁸ for *k* = 15), reached by three low parts in 2³¹, the first x ≡ 0 and
+   y ≡ AAAAh, eight digits of −2.
+6. **The loss is congruent to x · y modulo 2^*k*** on every low part, as it must be: the dropped columns hold the
+   product's own low bits, less what the rows above carried out of them.
+
+So `product` returns x · y unchanged when `y`'s low 16 bits are zero (no digit below *k* is non-zero) or when the
+product's bits below column 23 are at least 2¹⁸ (then x · y − loss has the same bits from column 23 up, which is all
+`mul` reads), and otherwise subtracts `loss`. On uniform significands the second test fails in 1 in 32; on an exact
+product with a non-zero low part it always does. `product` is now defined by its bits from column 23 up, and the
+tests compare those with `booth`'s. **The one-unit-low rule** that follows: for *k* = 15 the result is RZ(x · y) one
+unit low exactly when ⌊loss / 2^*k*⌋ > ⌊D / 2^*k*⌋, D the product's bits below the 24 kept (by 6); D ≥ 2¹⁸ always
+keeps RZ(x · y). For 1.0 × y with 1.0 as the multiplicand, x ≡ 0 modulo 2^*k* and the loss is 2^*k* for each negative
+digit at a column below *k*, which is F0bes's list (D-1104).
+
 ### 56.5 The equality evidence (2026-10-27)
 
 `float`'s tests, in release; the classes drawn are zero, would-be denormals, field 255, fields 1 to 4 and 251 to 254,
@@ -1358,3 +1377,164 @@ This page's §51.8 and §57; `Sapphire_Plan.md` §5.1 and §5.12's handheld fact
 and §52.1 and §52.5 (S44, from its branch); `Mars_Performance.md` §24 and `Mars_Native.md`'s RSP figure for the second
 reference; `board.rs`, `gif/mod.rs`, `vif/mod.rs`, `machine.rs`'s frame loop, `blocks.rs`'s replay and `ee::step`. No
 emulator source, no firmware.
+
+## 59. The VU's multiply-add on the host's floats, exact (2026-10-28)
+
+*Numbered §59 after §58. A measurement kernel behind the `lanes` feature, beside R0.4's (`Sapphire_Redesign.md`, R0
+results): nothing in the default build uses it. It is built against the multiplier as D-1104 settles it, *k* = 15, the
+same day. Disputes would start at D-1105; the step raised none.*
+
+### 59.1 In one paragraph
+
+`float_host` computes `float::add`, `mul` and `fused` for four lanes, or two operations in eight, on the host's
+single-precision arithmetic, bit for bit with the MAC flags, in two forms: one with AVX-512's embedded rounding towards
+zero (`{rz-sae}`, `_mm512_*_round_ps`), and one with AVX2 and no rounding mode at all, its sums and products formed
+exactly in doubles and cut to 24 bits by a mask. **No rounding mode is set anywhere**; MXCSR is never read or
+written. A lane the host cannot take exactly (§59.2, §59.3) sends its vector to R0.4's integer form, `float_lanes`.
+Graded by R0.4's suites and a billion random lanes, with seven seeded faults, a fused multiply-add among them, all
+caught. **Timed on VU1's recorded mix, the AVX2 form is the fastest exact form measured, 1.56–1.64 ns a lane operation
+on the desktop and 1.66–1.70 on the handheld, against the handheld's mark of 1.125: it fails by 1.47–1.51 times.**
+The `{rz-sae}` form is slower than the AVX2 one on both machines (2.07–2.12 on the handheld).
+
+### 59.2 The product
+
+The host's product of two normal operands rounded towards zero is RZ(x · y), and the console's is RZ(x · y) or one
+unit below it (§56.4, revised for *k* = 15). The rule for a lane, every test on integers beside the one multiply:
+
+- **a zero operand** (field 0, the would-be denormals included): ±0 with the operands' signs combined, taken;
+- **both fields 1 to 254 and their sum 129 to 380**: the result's field is 2 to 254, so neither the host's denormals
+  nor its overflow is met, and a decrement below cannot leave the normal range;
+- then one of three, each exact [A, §56.4's facts 5 and 6]:
+  1. `y`'s low 16 bits are zero: no digit below the column is non-zero, nothing is lost, the result is RZ(x · y);
+  2. the product's bits below column 23 are at least 2¹⁸ (`MOST_LOST`), read from the low 32 bits of the integer
+     product (`vpmulld`): the loss cannot reach column 23, the result is RZ(x · y);
+  3. **`x`'s low 15 bits are zero** (a short multiplicand: 1.0, 0.5, 1.5 and the like): every row's bits below the
+     column are zero, a positive digit loses nothing and a negative one 2^*k*, so the loss is 2^*k* times the negative
+     digits below the column, which a few shifts and masks count (`negative_digits`,
+     `a_multiplicand_with_no_bits_below_the_column_loses_two_to_the_k_a_negative_digit`, every such x against every
+     low part); the result is one unit low exactly when that count exceeds ⌊D / 2^*k*⌋, D the product's bits below the
+     24 kept, so the kernel decrements those lanes' bits (which crosses a binade correctly, §56.4).
+- anything else (a field of 255, a result at field 1 or out of range, a long multiplicand with a small D) goes to the
+  integer form.
+
+**The exact-product weakness** the check was expected to have: on the mix's operands **55.8 % of the products of two
+non-zero operands are exact** and the first two tests refuse **17.4 %** of them; with the third, **1.4 %** are refused
+[M, `lanes mix … host`'s shares line, both windows]. The operands are §56.2's classes as R0's fourth addendum drew
+them, a quarter with a zero fraction and a quarter with a short one; the games' own operands were not recorded, so the
+share in play is not measured.
+
+### 59.3 The sum
+
+D-25's adder aligns the smaller operand S to the larger L's 24 bits and one more and truncates; that is RZ(L + S′),
+S′ being S cut towards zero at L's guard bit, 2^(e−24) for L in [2^e, 2^(e+1)) [A]. With L's field f:
+
+- the `{rz-sae}` form: when the fields differ by 2 or more, |S| < 2^(e−1), and with C = ±2^(e−1) of S's sign,
+  RZ(S + C) lies in [2^(e−1), 2^e), whose unit is the guard bit, so **S′ = RZ(S + C) − C**, the subtraction exact
+  (Sterbenz); when they differ by 0 or 1, S's own unit is at or above the guard bit and S′ = S. Then RZ(L + S′);
+- the AVX2 form: S′ by clearing d − 1 fraction bits of S (d the fields' difference, 2 to 24; nothing left from 25),
+  then L + S′ in double precision, exact since its bits span at most 26, and cut to 24 bits by masking 29.
+
+Taken when f is at most 253 (so no sum reaches field 255, where the host would give its largest finite number) and
+f is at least 25 or S is zero (so a non-zero sum is at least 2^−126 and the host never forms a denormal where the
+console flushes). Zeros, the would-be denormals among them, become the host's signed zeros first; the host's
++0 + −0 = +0 and −0 + −0 = −0 under rounding towards zero are Table 8-5's. An exact cancellation gives +0, as `add`
+does.
+
+**The multiply-add** is the product and then the sum, **two separately truncated steps, never fused**: a fused
+multiply-add would round x · y + acc once, which D-25 and D-26 exclude (seeded fault F1). An overflowing product and
+an accumulator at field 255 are never on the host path. The MAC flags are Z and S of the bits (U and O cannot arise
+on the path), the term's for the sticky flags.
+
+### 59.4 Grading and seeded faults (2026-10-28)
+
+`cargo test --release --features lanes --lib float` [M]: `float_host`'s tests against `float` lane by lane, each of
+add, sub, mul and both multiply-adds, four lanes and paired, both forms on the desktop (AVX-512 present), field masks
+random or full:
+
+| Test | Cases | Taken whole by the host |
+| --- | --- | --- |
+| R0.4's reduced set, every pair beside three others, every fourth pair filling the vector | 4,596,736 vectors | over 100,000 each of add, mul and multiply-add (asserted) |
+| §56.5's classes, half the vectors one lane repeated | 4,000,000 vectors | the same |
+| random (ignored; 404 s with the other three billion-case tests, two at a time) | 1,000,000,000 lanes | add 175,957,153, mul 55,842,346, multiply-add 95,538,758 vectors |
+| the vector masks against the scalar rules (`mul_taken`, `add_taken`, `fused_taken`) | 1,000,000 vectors | — |
+
+All equal, and `float_lanes`' own three suites with its loss revised for *k* = 15 (§59.6). **Seeded faults** (each
+made alone, the tests run, the source restored by the script that made it):
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | **the multiply-add fused**: the sum as `_mm512_fmadd_round_ps` of acc, a and b, rounded once | the reduced set, the classes |
+| F2 | the guard cut left out (S′ = S) | the reduced set, the classes, the kept vector |
+| F3 | a short multiplicand's lanes not decremented | the reduced set, the classes |
+| F4 | the sum taken to field 254 | the reduced set, the classes, the masks |
+| F5 | the AVX2 form's cut at 28 bits | the reduced set, the classes |
+| F6 | `float_lanes`' loss for long multiplicands left out | both kernels' reduced sets and classes |
+| F7 | the would-be denormals left to the host's adder | the reduced set, the classes, the kept vector |
+
+### 59.5 A failure from a stale mutant
+
+The first billion-lane run (2026-10-28) failed one assertion: `four::add` on a = [07F3A3B1h, 15F3A3B1h, 858A71D6h,
+92AA88B6h], b = [807FFFFFh, …] gave 07F3A1B1h in lane 0 where `float::add` gives 07F3A3B1h. The same inputs run alone
+gave 07F3A3B1h, and the whole seeded run passed when repeated after a source edit (245 s). **The cause:** the run
+followed the seeded faults, the last of them F7 (the would-be denormals left to the host: b's lane 0 is one), and the
+script restored each source by moving its copy back, which keeps the copy's older time, so cargo saw nothing newer than
+the mutant's build and ran it. F7 is caught by this very vector (§59.4). Every later run in this step followed an
+edit or a touch of the sources. The vector is kept as `the_vector_a_stale_mutant_failed_on_equals_float`, named for
+how it was first met.
+
+### 59.6 What *k* = 15 does to R0.4's lane form
+
+`float_lanes`' multiplier took §56.4's eight-entry loss table for *k* = 1, so D-1104 made it wrong; it now takes the
+loss as `float::product` does: zero where `y`'s low 16 bits are zero, 2^*k* times the negative digits where `x` is
+short (`negatives`, in lanes), and otherwise, only in the lanes whose bits below column 23 are under 2¹⁸, `float::loss`
+lane by lane after a test of the whole vector. R0.4's suites pass on it. Its time on VU1's mix grows: **1.81–2.12 ns a
+lane operation on the desktop and 1.92–1.96 on the handheld for the AVX2 form** (R0's fourth addendum: 1.28–1.31 and
+1.43–1.47 at *k* = 1), 1.63–1.69 and 1.79–1.85 for the AVX-512VL form. R0.4's verdict, a failure, stands and widens.
+
+### 59.7 Speed (measured 2026-10-28)
+
+`lanes mix FILE 7 FORM` on R0's recorded mixes of VU1 (`mix-arena.txt`, `mix-island.txt`), pairs of one kind in eight
+lanes and the rest in four, ns a lane operation written, the median of seven, two rounds. The desktop at a one-minute
+load of 2.7 to 3.1 (other jobs running, CPU weight 20); the handheld on the charger (ACAD online before and after),
+EmuSen not running, load 0.19 to 0.26, under `systemd-run --user`, the binary needing GLIBC_2.34 against its 2.43.
+
+| Form | Desktop, arena r1 / r2, island r1 / r2 | Handheld, arena r1 / r2, island r1 / r2 | Against 1.125 |
+| --- | --- | --- | --- |
+| `float_host`, AVX2 | **1.563 / 1.568, 1.566 / 1.638** | **1.658 / 1.667, 1.668 / 1.702** | fails, 1.47–1.51× |
+| `float_host`, `{rz-sae}` | 1.913 / 1.907, 1.941 / 1.951 | 2.071 / 2.082, 2.100 / 2.115 | fails, 1.84–1.88× |
+| `float_lanes`, AVX2 (*k* = 15) | 1.824 / 1.806, 1.832 / 2.121 | 1.916 / 1.924, 1.944 / 1.956 | fails |
+| `float_lanes`, AVX-512VL (*k* = 15) | 1.634 / 1.634, 1.693 / 1.640 | 1.790 / 1.793, 1.852 / 1.804 | fails |
+| the stream alone (`floor`: the same calls, no arithmetic) | 0.521 (arena, one round) | 0.591 / 0.546, 0.553 / 0.547 | — |
+
+**What the numbers say.** Measured: the host's floats take 13 % less time than the integer form (AVX2 against R0's AVX2 at
+*k* = 15) on the handheld and fail the mark. The stream's own calls and copies cost 0.55–0.59 ns of each lane
+operation on the handheld; the arithmetic is the rest, about 1.1 ns (an estimate by subtraction: the floor's calls are
+kept out of line where the kernels' may be inlined). So even a kernel of no cost through this interface would leave
+half the budget used. The `{rz-sae}` form is slower, not faster, on both machines (Zen 4's and the handheld's 512-bit
+operations, their mask registers and the two embedded-rounding additions S′ takes, against the AVX2 form's integer
+cut); R0's AVX-512VL form showed the same direction (R0.4 in the conclusion).
+
+### 59.8 Named limits
+
+- **The operands are drawn, not recorded**: §56.2's classes in R0's shares; the exact products' share in play, and so
+  the share refused, is not measured.
+- **The mark is per lane operation through `lanes mix`'s interface**, which costs about half of it alone (§59.7).
+- **The default build is unchanged by this step**; D-1104's change to the multiplier is the other commit's.
+
+### 59.9 Questions this step leaves
+
+1. **[decision] The host path's place.** *Recommended*: keep `float_host` as a measurement kernel only. It is exact
+   and the fastest form measured, but 1.47–1.51 times over the handheld's mark, and the interface alone takes half of
+   it; a VU1 kernel that keeps ACC and the operands in registers across a microprogram's pairs (the recompiler's form)
+   is where the per-call cost could go, and it would need the same proofs.
+2. **[routine] The `{rz-sae}` form.** *Recommended*: keep it beside the AVX2 form as the measured counter-example, the
+   research's preference for embedded rounding not holding on either machine.
+3. **[routine] The games' operands.** *Recommended*: when VU1's recompiler is next profiled, count the exact products
+   and the refused lanes on recorded operands (a counting build, as §56.2's census), since §59.2's shares are drawn.
+
+### 59.10 What was read for this step
+
+`~/.cache/emusen/tmp/vu-madd/research.md` (theory, with its sources: the Intel SDM on VADDPS's embedded rounding,
+Rust's `_mm512_add_round_ps` documentation, Ogita, Rump and Oishi 2005 and Rump, Zimmermann, Boldo and Melquiond 2009
+for the exactness of the error terms); this page's §56; `Sapphire_Redesign.md`'s R0.4 sections; `Sapphire_Disputes.md`
+D-25, D-26, D-43, D-44; `float.rs`, `float_lanes.rs` and `examples/lanes.rs`. No emulator source, no firmware.

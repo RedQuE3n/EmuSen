@@ -40,6 +40,8 @@ pub mod dmac;
 pub mod ee;
 pub mod float;
 #[cfg(feature = "lanes")]
+pub mod float_host;
+#[cfg(feature = "lanes")]
 pub mod float_lanes;
 pub mod gif;
 pub mod gs;

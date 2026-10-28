@@ -15,6 +15,8 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+use crate::float;
+
 /// Four lanes' results and their MAC flags in the VU's layout (lane 0, x, at bit 3 of each group: Z, S, U, O).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Vector {
@@ -67,8 +69,12 @@ const fn mac_mask(mask: u32) -> u32 {
 
 /// A register of 32-bit lanes, four or eight; each method one or two AVX2 instructions, sound only where AVX2 is present.
 #[cfg(target_arch = "x86_64")]
-trait Lanes: Copy {
+pub(crate) trait Lanes: Copy {
+    /// The lanes in the register.
+    const N: usize;
     fn k(x: i32) -> Self;
+    /// Each lane's product's low 32 bits.
+    fn mullo(self, b: Self) -> Self;
     fn and(self, b: Self) -> Self;
     fn or(self, b: Self) -> Self;
     fn xor(self, b: Self) -> Self;
@@ -113,11 +119,14 @@ trait Lanes: Copy {
 
 #[cfg(target_arch = "x86_64")]
 macro_rules! lanes {
-    ($t:ty, $set1:ident, $and:ident, $or:ident, $xor:ident, $andnot:ident, $add:ident, $sub:ident, $eq:ident, $gt:ident, $blendv:ident, $srli:ident, $slli:ident, $srai:ident, $srlv:ident, $sllv:ident, $cvt:ident, $cast:ident, $mul:ident, $sub64:ident, $add64:ident, $set64:ident, $srli64:ident, $slli64:ident, $srlv64:ident, $blend32:ident, $odd:expr, $packs32:ident, $packs16:ident, $shuffle:ident, $movemask:ident, $loadu:ident, $storeu:ident, $reverse:expr, $on:expr) => {
+    ($t:ty, $n:literal, $mullo:ident, $set1:ident, $and:ident, $or:ident, $xor:ident, $andnot:ident, $add:ident, $sub:ident, $eq:ident, $gt:ident, $blendv:ident, $srli:ident, $slli:ident, $srai:ident, $srlv:ident, $sllv:ident, $cvt:ident, $cast:ident, $mul:ident, $sub64:ident, $add64:ident, $set64:ident, $srli64:ident, $slli64:ident, $srlv64:ident, $blend32:ident, $odd:expr, $packs32:ident, $packs16:ident, $shuffle:ident, $movemask:ident, $loadu:ident, $storeu:ident, $reverse:expr, $on:expr) => {
         // SAFETY (every method): the kernel's entry points run only where AVX2 is present (`available`).
         impl Lanes for $t {
+            const N: usize = $n;
             #[inline(always)]
             fn k(x: i32) -> Self { unsafe { $set1(x) } }
+            #[inline(always)]
+            fn mullo(self, b: Self) -> Self { unsafe { $mullo(self, b) } }
             #[inline(always)]
             fn and(self, b: Self) -> Self { unsafe { $and(self, b) } }
             #[inline(always)]
@@ -180,7 +189,7 @@ macro_rules! lanes {
 }
 
 #[cfg(target_arch = "x86_64")]
-lanes!(__m128i, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_andnot_si128, _mm_add_epi32, _mm_sub_epi32,
+lanes!(__m128i, 4, _mm_mullo_epi32, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_andnot_si128, _mm_add_epi32, _mm_sub_epi32,
     _mm_cmpeq_epi32, _mm_cmpgt_epi32, _mm_blendv_epi8, _mm_srli_epi32, _mm_slli_epi32, _mm_srai_epi32, _mm_srlv_epi32,
     _mm_sllv_epi32, _mm_cvtepi32_ps, _mm_castps_si128, _mm_mul_epu32, _mm_sub_epi64, _mm_add_epi64, _mm_set1_epi64x,
     _mm_srli_epi64, _mm_slli_epi64, _mm_srlv_epi64, _mm_blend_epi32, 0b1010, _mm_packs_epi32, _mm_packs_epi16,
@@ -188,7 +197,7 @@ lanes!(__m128i, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_
     _mm_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12),
     |m: i32| _mm_setr_epi32(m & 8, m & 4, m & 2, m & 1));
 #[cfg(target_arch = "x86_64")]
-lanes!(__m256i, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor_si256, _mm256_andnot_si256, _mm256_add_epi32,
+lanes!(__m256i, 8, _mm256_mullo_epi32, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor_si256, _mm256_andnot_si256, _mm256_add_epi32,
     _mm256_sub_epi32, _mm256_cmpeq_epi32, _mm256_cmpgt_epi32, _mm256_blendv_epi8, _mm256_srli_epi32, _mm256_slli_epi32,
     _mm256_srai_epi32, _mm256_srlv_epi32, _mm256_sllv_epi32, _mm256_cvtepi32_ps, _mm256_castps_si256, _mm256_mul_epu32,
     _mm256_sub_epi64, _mm256_add_epi64, _mm256_set1_epi64x, _mm256_srli_epi64, _mm256_slli_epi64, _mm256_srlv_epi64,
@@ -211,7 +220,9 @@ macro_rules! wide_lanes {
     ($z:ident, $t:ty, $lzcnt:ident, $ternlog:ident) => {
         // SAFETY (every method): the AVX-512VL entry points run only where `available512` is true.
         impl Lanes for $z {
+            const N: usize = <$t>::N;
             #[inline(always)] fn k(x: i32) -> Self { $z(<$t>::k(x)) }
+            #[inline(always)] fn mullo(self, b: Self) -> Self { $z(self.0.mullo(b.0)) }
             #[inline(always)] fn and(self, b: Self) -> Self { $z(self.0.and(b.0)) }
             #[inline(always)] fn or(self, b: Self) -> Self { $z(self.0.or(b.0)) }
             #[inline(always)] fn xor(self, b: Self) -> Self { $z(self.0.xor(b.0)) }
@@ -326,6 +337,47 @@ fn add_fast_raw<T: Lanes>(a: T, b: T) -> Option<T> {
     if ea.eq(T::k(0)).or(eb.eq(T::k(0))).or(over).or(under).any() { None } else { Some(bits) }
 }
 
+/// `float::product`'s loss in lanes: zero unless a lane's low digits are not all zero and its bits below column 23 are
+/// under `float::MOST_LOST`, those lanes' loss from `float::loss` (Sapphire_Speed.md §56.4).
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub(crate) fn booth_loss<T: Lanes>(x: T, y: T) -> T {
+    let quiet = y.and(T::k(float::READ as i32)).eq(T::k(0));
+    let short = x.and(T::k((1 << float::K) - 1)).eq(T::k(0));
+    let near = quiet.andnot(T::k(float::MOST_LOST as i32).gt(x.mullo(y).and(T::k(0x7F_FFFF))));
+    // A multiplicand with no bits below the column loses 2^k for each negative digit there.
+    let counted = short.and(negatives(y)).sllv(T::k(float::K as i32));
+    let need = short.andnot(near);
+    if !need.any() {
+        return counted;
+    }
+    let (mut xs, mut ys, mut ns, mut out) = ([0u32; 8], [0u32; 8], [0u32; 8], [0u32; 8]);
+    // SAFETY: the arrays hold eight lanes, the most a type has.
+    unsafe {
+        x.store(xs.as_mut_ptr());
+        y.store(ys.as_mut_ptr());
+        need.store(ns.as_mut_ptr());
+    }
+    for l in 0..T::N {
+        if ns[l] != 0 {
+            out[l] = float::loss(xs[l] as u64, ys[l] as u64) as u32;
+        }
+    }
+    // SAFETY: as above.
+    counted.or(unsafe { T::load(out.as_ptr()) })
+}
+
+/// `float::negative_digits` in lanes: the digits below the column that are negative, each lane 0 to 8.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub(crate) fn negatives<T: Lanes>(y: T) -> T {
+    let yy = y.sll::<1>();
+    let n = yy.srl::<1>().and(yy).andnot(yy.srl::<2>()).and(T::k(float::DIGITS as i32));
+    let v = n.add(n.srl::<2>()).and(T::k(0x3333));
+    let v = v.add(v.srl::<4>()).and(T::k(0x0F0F));
+    v.add(v.srl::<8>()).and(T::k(0x1F))
+}
+
 /// `float::mul` in lanes, `b` the recoded operand: the bits, overflow and underflow masks.
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
@@ -336,10 +388,7 @@ fn mul_raw<T: Lanes>(a: T, b: T) -> (T, T, T) {
     let s = a.xor(b).and(T::k(SIGN));
     let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
     let (x, y) = (hidden.or_and(a, frac), hidden.or_and(b, frac));
-    // The Booth sum's loss (float::product): eight two-bit answers by y's lowest two bits and x's lowest.
-    let index = y.and(T::k(3)).sll::<1>().or(x.and(T::k(1))).sll::<2>();
-    let loss = T::k(0x1222_1000).srlv(index).and(T::k(3));
-    let (m, top) = T::product(x, y, loss);
+    let (m, top) = T::product(x, y, booth_loss(x, y));
     let (bits, over, under) = finish(s, ea.add(eb).add(top.sub(T::k(127))), m);
     (bits.pick(s, none), none.andnot(over), none.andnot(under))
 }
@@ -545,19 +594,19 @@ pub use eight::{add2, add2_bits, fused2, mul2, mul2_bits, sub2};
 pub use four::{add, add_bits, add_fast, fused, mul, mul_bits, sub};
 
 #[cfg(all(test, target_arch = "x86_64"))]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::float::tests::{operand, stream};
     use crate::float::{self, Outcome};
 
     /// The MAC bits of one lane, as `vu::ops` sets them.
-    fn mac_bits(o: Outcome, lane: usize) -> u32 {
+    pub(crate) fn mac_bits(o: Outcome, lane: usize) -> u32 {
         let at = 3 - lane as u32;
         u32::from(float::is_zero(o.bits)) << at | (o.bits >> 31) << (4 + at) | u32::from(o.underflow) << (8 + at) | u32::from(o.overflow) << (12 + at)
     }
 
     /// The reference: each lane through `float`, the lanes off the mask keeping `old` and no flag.
-    fn reference(old: &[u32; 4], mask: u32, f: impl Fn(usize) -> Outcome) -> Vector {
+    pub(crate) fn reference(old: &[u32; 4], mask: u32, f: impl Fn(usize) -> Outcome) -> Vector {
         let mut v = Vector { bits: *old, mac: 0 };
         for l in 0..4 {
             if mask >> (3 - l) & 1 == 1 {
@@ -608,11 +657,7 @@ mod tests {
             assert_eq!(add_fast(&a, &b, &old, mask), want, "add_fast {a:08x?} {b:08x?}");
             assert_eq!(add_bits(&a, &b, &old, mask), want.bits, "add_bits {a:08x?} {b:08x?}");
             assert_eq!(mul_bits(&a, &b, &old, mask), reference(&old, mask, |l| float::mul(a[l], b[l])).bits, "mul_bits");
-            // The same operations paired with a second of other operands in lanes 4 to 7.
-            let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
-            let join = |x: [u32; 4], y: [u32; 4]| -> [u32; 8] { [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]] };
-            let both = |x: Vector, y: Vector| Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 };
-            let (pa, pb, pc, po, pm) = (join(a, a2), join(b, b2), join(c, c2), join(old, old2), mask | mask2 << 16);
+            let Paired { a2, b2, c2, old2, mask2, pa, pb, pc, po, pm } = paired(a, b, c, old, mask);
             let r = |f: fn(u32, u32) -> Outcome| both(reference(&old, mask, |l| f(a[l], b[l])), reference(&old2, mask2, |l| f(a2[l], b2[l])));
             assert_eq!(add2(&pa, &pb, &po, pm), r(float::add), "add2");
             assert_eq!(sub2(&pa, &pb, &po, pm), r(float::sub), "sub2");
@@ -644,60 +689,78 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_pair_of_the_reduced_set_equals_float_in_every_lane() {
-        if !available() {
-            return;
-        }
+    pub(crate) fn join(x: [u32; 4], y: [u32; 4]) -> [u32; 8] {
+        [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]]
+    }
+    pub(crate) fn both(x: Vector, y: Vector) -> Pair {
+        Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 }
+    }
+
+    /// A case's second operation for the paired forms, other operands in lanes 4 to 7 and the other lanes written.
+    pub(crate) struct Paired {
+        pub a2: [u32; 4],
+        pub b2: [u32; 4],
+        pub c2: [u32; 4],
+        pub old2: [u32; 4],
+        pub mask2: u32,
+        pub pa: [u32; 8],
+        pub pb: [u32; 8],
+        pub pc: [u32; 8],
+        pub po: [u32; 8],
+        pub pm: u32,
+    }
+    pub(crate) fn paired(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32) -> Paired {
+        let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
+        Paired { a2, b2, c2, old2, mask2, pa: join(a, a2), pb: join(b, b2), pc: join(c, c2), po: join(old, old2), pm: mask | mask2 << 16 }
+    }
+
+    /// Each pair of the reduced set in lane `i % 4`, beside three other pairs of it, against an accumulator drawn from it;
+    /// with `fill`, every fourth pair fills the vector instead, so that vectors taken whole by a fast path are met.
+    pub(crate) fn reduced_pairs(fill: bool, mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let v = reduced();
         let mut next = stream(0x5EED_1A9E_5000_0001);
-        let mut flags = [0; 2];
-        // Each pair in lane `i % 4`, beside three other pairs of the set, against an accumulator drawn from it.
         for (i, &x) in v.iter().enumerate() {
-            for (j, &y) in v.iter().enumerate().step_by(1) {
+            for (j, &y) in v.iter().enumerate() {
                 let k = (i + j) % 4;
                 let r = next();
                 let mut a = [v[r as usize % v.len()], v[(r >> 16) as usize % v.len()], v[(r >> 32) as usize % v.len()], v[(r >> 48) as usize % v.len()]];
                 let mut b = [a[3], a[2], a[1], a[0]];
                 a[k] = x;
                 b[k] = y;
-                let c = [v[(r >> 8) as usize % v.len()], y, x, v[(r >> 24) as usize % v.len()]];
+                let mut c = [v[(r >> 8) as usize % v.len()], y, x, v[(r >> 24) as usize % v.len()]];
+                if fill && j % 4 == 1 {
+                    (a, b, c) = ([x; 4], [y; 4], [c[0]; 4]);
+                }
                 if j % 4 == 0 {
-                    check(a, b, c, [0xDEAD_BEEF; 4], 0xF, &mut flags);
+                    check(a, b, c, [0xDEAD_BEEF; 4], 0xF);
                 } else {
-                    check(a, b, c, [r as u32, (r >> 32) as u32, 7, 9], (r >> 60) as u32, &mut flags);
+                    check(a, b, c, [r as u32, (r >> 32) as u32, 7, 9], (r >> 60) as u32);
                 }
             }
         }
-        assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
     }
 
-    #[test]
-    fn four_million_vectors_of_every_class_equal_float() {
-        if !available() {
-            return;
-        }
+    /// Four million vectors of §56.5's classes; with `repeat`, every second one has its first lane's operands in all four.
+    pub(crate) fn class_vectors(repeat: bool, mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let mut next = stream(0x0DDB_A11C_0FFE_E123);
-        let mut flags = [0; 2];
-        for _ in 0..4_000_000 {
+        for i in 0..4_000_000 {
             let mut v = [0u32; 12];
             for x in &mut v {
                 *x = operand(next());
             }
+            if repeat && i % 2 == 0 {
+                for l in 1..4 {
+                    (v[l], v[4 + l], v[8 + l]) = (v[0], v[4], v[8]);
+                }
+            }
             let m = next();
-            check(v[0..4].try_into().unwrap(), v[4..8].try_into().unwrap(), v[8..12].try_into().unwrap(), [m as u32; 4], (m >> 32) as u32 & 0xF | 0x8, &mut flags);
+            check(v[0..4].try_into().unwrap(), v[4..8].try_into().unwrap(), v[8..12].try_into().unwrap(), [m as u32; 4], (m >> 32) as u32 & 0xF | 0x8);
         }
-        assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
     }
 
-    #[test]
-    #[ignore = "a billion vectors, a minute or more in release"]
-    fn a_billion_vectors_equal_float() {
-        if !available() {
-            return;
-        }
+    /// A billion random lanes, every lane written.
+    pub(crate) fn random_lanes(mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let mut next = stream(0x1234_5678_9ABC_DEF1);
-        let mut flags = [0; 2];
         for _ in 0..1_000_000_000u64 / 4 {
             let r = [next(), next(), next()];
             let v = |i: usize| (r[i] as u32, (r[i] >> 32) as u32);
@@ -705,7 +768,34 @@ mod tests {
             let a = [operand(r[0]), a0, a1 ^ b0, operand(r[1])];
             let b = [operand(r[2]), b1, c0, a0 ^ c1];
             let c = [c0, operand(r[0] ^ r[2]), c1, b0];
-            check(a, b, c, [0; 4], 0xF, &mut flags);
+            check(a, b, c, [0; 4], 0xF);
+        }
+    }
+
+    #[test]
+    fn every_pair_of_the_reduced_set_equals_float_in_every_lane() {
+        let mut flags = [0; 2];
+        if available() {
+            reduced_pairs(false, |a, b, c, o, m| check(a, b, c, o, m, &mut flags));
+            assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
+        }
+    }
+
+    #[test]
+    fn four_million_vectors_of_every_class_equal_float() {
+        let mut flags = [0; 2];
+        if available() {
+            class_vectors(false, |a, b, c, o, m| check(a, b, c, o, m, &mut flags));
+            assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
+        }
+    }
+
+    #[test]
+    #[ignore = "a billion vectors, a minute or more in release"]
+    fn a_billion_vectors_equal_float() {
+        if available() {
+            random_lanes(|a, b, c, o, m| check(a, b, c, o, m, &mut [0; 2]));
         }
     }
 }
+

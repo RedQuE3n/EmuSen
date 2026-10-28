@@ -94,6 +94,34 @@ fn the_programs_execute_every_macro_instruction() {
     assert!(missing.is_empty(), "not executed by any program: {missing:?}");
 }
 
+/// F0bes's list of console results (gist 5f209d8a0890879ad0e25ceb6973977a, 2022-11-14, with fobes.dev's "Detecting
+/// emulators via VU floats", 2024-06-07): VMUL of fs = 1.0 by ft = v over v from 0 to 249.5 by halves gives v one unit
+/// low exactly for v = n + 0.5, n from 128 to 249, and v itself for the rest (Sapphire_Disputes.md D-1104).
+#[test]
+fn vmul_of_one_by_halves_is_one_unit_low_from_128_5_as_f0bes_s_console_list_gives() {
+    let values: Vec<u32> = (0..500).map(|h| (h as f32 / 2.0).to_bits()).collect();
+    let low = |v: u32| { let f = f32::from_bits(v); f >= 128.5 && f.fract() == 0.5 };
+    assert_eq!(values.iter().filter(|v| low(**v)).count(), 122, "the list's lines");
+    let quad = |l: &[u32]| l.iter().rev().fold(0u128, |q, &w| q << 32 | w as u128);
+    let mut p = Program::new("f0bes");
+    p.emit("mfc0 t0, Status");
+    p.emit("lui t1, 0x4000");
+    p.emit("or t0, t0, t1");
+    p.emit("mtc0 t0, Status");
+    p.emit("sync.p");
+    p.quad("t0", quad(&[0x3F80_0000; 4]));
+    p.emit("qmtc2 t0, vf2");
+    for four in values.chunks(4) {
+        p.quad("t0", quad(four));
+        p.emit("qmtc2 t0, vf1");
+        p.emit("vmul.xyzw vf1, vf2, vf1");
+        p.emit("qmfc2 t2, vf1");
+        let want: Vec<u32> = four.iter().map(|&v| if low(v) { v - 1 } else { v }).collect();
+        p.record_quad("t2", Some(quad(&want)));
+    }
+    grade(p);
+}
+
 /// The manual's own examples (§4.2's FTOI and ITOF Remarks, §4.3's RGET range) and lines of ps2autotests' console texts
 /// (consoles' outputs, Sapphire_References.md §2) that decide a reading.
 #[test]

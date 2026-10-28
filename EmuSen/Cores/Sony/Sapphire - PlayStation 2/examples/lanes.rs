@@ -210,7 +210,94 @@ fn stream_run512(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], spl
     stream_body!(four::add, four::mul, four::fused, eight::add2, eight::mul2, eight::fused2, ops, a, b, c, split)
 }
 
+/// The same on `float_host`'s `{rz-sae}` form.
+#[target_feature(enable = "avx2,avx512f,avx512dq")]
+fn stream_run_host(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+    use sapphire::float_host::{eight, four};
+    stream_body!(four::add, four::mul, four::fused, eight::add, eight::mul, eight::fused, ops, a, b, c, split)
+}
+
+/// The same on `float_host`'s AVX2 form.
+#[target_feature(enable = "avx2")]
+fn stream_run_host2(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+    use sapphire::float_host::avx2 as h;
+    stream_body!(h::add, h::mul, h::fused, h::add2, h::mul2, h::fused2, ops, a, b, c, split)
+}
+
+/// The stream's own cost: entry points that read their operands and return them, no arithmetic.
+mod floor {
+    use sapphire::float_lanes::{FusedPair, FusedVector, Pair, Vector};
+    #[inline(never)]
+    pub fn add(a: &[u32; 4], b: &[u32; 4], _: &[u32; 4], m: u32) -> Vector {
+        Vector { bits: [a[0] ^ b[0], a[1] ^ b[1], a[2] ^ b[2], a[3] ^ b[3]], mac: m }
+    }
+    pub use add as mul;
+    #[inline(never)]
+    pub fn fused(c: &[u32; 4], a: &[u32; 4], b: &[u32; 4], _: bool, o: &[u32; 4], m: u32) -> FusedVector {
+        FusedVector { value: add(a, b, o, m), product: add(c, b, o, m) }
+    }
+    #[inline(never)]
+    pub fn add2(a: &[u32; 8], b: &[u32; 8], _: &[u32; 8], m: u32) -> Pair {
+        Pair { bits: std::array::from_fn(|i| a[i] ^ b[i]), mac: m }
+    }
+    pub use add2 as mul2;
+    #[inline(never)]
+    pub fn fused2(c: &[u32; 8], a: &[u32; 8], b: &[u32; 8], _: bool, o: &[u32; 8], m: u32) -> FusedPair {
+        FusedPair { value: add2(a, b, o, m), product: add2(c, b, o, m) }
+    }
+}
+
+/// The same on the floor's entry points.
+fn stream_run_floor(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+    stream_body!(floor::add, floor::mul, floor::fused, floor::add2, floor::mul2, floor::fused2, ops, a, b, c, split)
+}
+
+/// The shares the host path meets on the stream's operands: products exact, lanes its check refuses, vectors taken whole.
+fn shares(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]]) {
+    use sapphire::float_host::{add_taken, fused_taken, mul_taken};
+    let (mut products, mut exact, mut refused, mut vectors, mut whole) = (0u64, 0u64, 0u64, [0u64; 3], [0u64; 3]);
+    for (i, op) in ops.iter().enumerate() {
+        let j = i % a.len();
+        for (n, kind) in op.kinds.iter().enumerate().take(if op.paired { 2 } else { 1 }) {
+            let lane = |l: usize| (a[j][4 * n + l], b[j][4 * n + l], c[j][4 * n + l]);
+            let k = *kind as usize;
+            vectors[k] += 1;
+            whole[k] += u64::from((0..4).all(|l| {
+                let (x, y, z) = lane(l);
+                match k {
+                    0 => add_taken(x, y),
+                    1 => mul_taken(x, y),
+                    _ => fused_taken(z, x, y, false),
+                }
+            }));
+            if k == 0 {
+                continue;
+            }
+            for l in 0..4 {
+                let (x, y, _) = lane(l);
+                if (x >> 23 & 0xFF) == 0 || (y >> 23 & 0xFF) == 0 {
+                    continue;
+                }
+                products += 1;
+                let p = u64::from(x & 0x7F_FFFF | 0x80_0000) * u64::from(y & 0x7F_FFFF | 0x80_0000);
+                exact += u64::from(p & if p >> 47 == 1 { 0xFF_FFFF } else { 0x7F_FFFF } == 0);
+                refused += u64::from(!mul_taken(x, y));
+            }
+        }
+    }
+    let pc = |n: u64, d: u64| 100.0 * n as f64 / d.max(1) as f64;
+    println!(
+        "shares\tproducts of two non-zero operands: {:.2} % exact, {:.2} % refused by the host's check\tvectors taken whole: add {:.1} %, mul {:.1} %, multiply-add {:.1} %",
+        pc(exact, products), pc(refused, products), pc(whole[0], vectors[0]), pc(whole[1], vectors[1]), pc(whole[2], vectors[2])
+    );
+}
+
 fn mix(path: &str, rounds: usize, shuffle: bool, wide: bool) {
+    mix_on(path, rounds, shuffle, if wide { 1 } else { 0 })
+}
+
+/// `form`: 0 `float_lanes`' AVX2 form, 1 its AVX-512VL form, 2 `float_host`'s `{rz-sae}` form, 3 `float_host`'s AVX2 form.
+fn mix_on(path: &str, rounds: usize, shuffle: bool, form: u8) {
     let text = std::fs::read_to_string(path).expect("the count");
     let mut groups: Vec<(Op, u64)> = Vec::new();
     for line in text.lines() {
@@ -241,11 +328,22 @@ fn mix(path: &str, rounds: usize, shuffle: bool, wide: bool) {
     let pairs = ops.iter().filter(|o| o.paired).count();
     let mut draw = || (0..N).map(|_| [0; 8].map(|_: u32| operand(next()))).collect::<Vec<[u32; 8]>>();
     let (a, b, c) = (draw(), draw(), draw());
+    if form == 2 || form == 3 {
+        shares(&ops, &a, &b, &c);
+    }
     for split in [false, true] {
         let ns = median((0..rounds).map(|_| {
             let t = Instant::now();
-            // SAFETY: AVX2 was asserted.
-            black_box(unsafe { if wide { stream_run512(black_box(&ops), &a, &b, &c, split) } else { stream_run(black_box(&ops), &a, &b, &c, split) } });
+            // SAFETY: AVX2 was asserted, and AVX-512 for the forms that need it.
+            black_box(unsafe {
+                match form {
+                    1 => stream_run512(black_box(&ops), &a, &b, &c, split),
+                    2 => stream_run_host(black_box(&ops), &a, &b, &c, split),
+                    3 => stream_run_host2(black_box(&ops), &a, &b, &c, split),
+                    4 => stream_run_floor(black_box(&ops), &a, &b, &c, split),
+                    _ => stream_run(black_box(&ops), &a, &b, &c, split),
+                }
+            });
             t.elapsed().as_secs_f64() * 1e9
         }).collect());
         println!(
@@ -253,7 +351,7 @@ fn mix(path: &str, rounds: usize, shuffle: bool, wide: bool) {
             ops.len(),
             lane_ops / ops.len() as f64,
             if split { "every operation in four lanes" } else { "pairs of one kind in eight lanes" },
-            if shuffle { ", shuffled" } else if wide { ", AVX-512VL" } else { "" },
+            if shuffle { ", shuffled" } else { ["", ", AVX-512VL", ", host floats {rz-sae}", ", host floats AVX2", ", the stream alone"][form as usize] },
             ns / lane_ops,
             ns / computed
         );
@@ -266,7 +364,16 @@ fn main() {
     if args.first().map(String::as_str) == Some("mix") {
         let wide = args.get(3).is_some_and(|a| a == "wide");
         assert!(!wide || lanes::available512(), "the AVX-512VL form needs AVX-512VL and CD");
-        mix(args.get(1).expect("a count's file"), args.get(2).map_or(7, |a| a.parse().expect("rounds")), args.get(3).is_some_and(|a| a == "shuffle"), wide);
+        let (file, rounds) = (args.get(1).expect("a count's file"), args.get(2).map_or(7, |a| a.parse().expect("rounds")));
+        match args.get(3).map(String::as_str) {
+            Some("host") => {
+                assert!(sapphire::float_host::available512(), "the host form needs AVX-512F and DQ");
+                mix_on(file, rounds, false, 2);
+            }
+            Some("host2") => mix_on(file, rounds, false, 3),
+            Some("floor") => mix_on(file, rounds, false, 4),
+            _ => mix(file, rounds, args.get(3).is_some_and(|a| a == "shuffle"), wide),
+        }
         return;
     }
     let rounds: usize = std::env::args().nth(1).map_or(7, |a| a.parse().expect("a count of rounds"));

@@ -4867,6 +4867,16 @@ it.*
 - **Depends on it:** `float::product` and `loss` (`DROPPED_COLUMNS`): every MUL, MULA, OPMULA and multiply-add and the
   EFU's products on both units, MUL.S, MULA.S and the multiply-adds on the EE; `Sapphire_Speed.md` §56.4's closed form;
   every picture, sound and state digest a game's products reach.
+- **What it moves** (2026-10-28):
+  - *Tests*, measured: `the_efu_against_the_console_s_text`'s counts, (193, 15) to (198, 10), recorded again; the new
+    `vmul_of_one_by_halves_…`. Nothing else in Sapphire's crate (495 of 495, release) or WiseMan's `SapphireTests`
+    holds a value the change reaches; ps2autotests' texts on Sapphire are unchanged (the table above).
+  - *Recorded digests*, not re-measured, each from a run of the player's BIOS or a game whose products may reach it,
+    so each is to be recorded again by its owner's next run: `Sapphire_Speed.md` §52, §55, §56.8 (the bench's three
+    windows, the boot's 760 frames, Jak to 900) and §57; `Sapphire_Native.md` §42, §43, §46, §50 and §53;
+    `Sapphire_Recompiler.md` §48; `Sapphire_Scheduler.md` §54. A digest from a run with no VU or FPU product is
+    unchanged by construction, but none was checked one by one.
+  - *R0.4's lane form*, which carried *k* = 1's loss table: revised to stay exact, and slower (`Sapphire_Speed.md` §59.6).
 - **Pinned by:** `vmul_of_one_by_halves_is_one_unit_low_from_128_5_as_f0bes_s_console_list_gives`,
   `the_efu_against_the_console_s_text` (198, 10), `the_booth_sum_is_the_exact_product_or_just_below_it`.
 - **Implemented in:** the commit after this entry's.

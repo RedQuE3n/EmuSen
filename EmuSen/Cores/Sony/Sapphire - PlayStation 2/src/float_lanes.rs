@@ -234,6 +234,7 @@ pub fn collect(mac: u32) -> u32 {
 #[cfg(all(test, target_arch = "x86_64"))]
 mod tests {
     use super::*;
+    use crate::float::tests::{operand, stream};
     use crate::float::{self, Outcome};
 
     /// The MAC bits of one lane, as `vu::ops` sets them.
@@ -253,34 +254,6 @@ mod tests {
             }
         }
         v
-    }
-
-    fn stream(mut seed: u64) -> impl FnMut() -> u64 {
-        move || {
-            seed ^= seed << 13;
-            seed ^= seed >> 7;
-            seed ^= seed << 17;
-            seed
-        }
-    }
-
-    /// `float`'s tests' classes (Sapphire_Speed.md §56.5): zero, would-be denormals, field 255, fields 1 to 4 and 251 to
-    /// 254, within 32 of 127 and anything, with a zero, all-ones or random fraction, either sign.
-    fn operand(r: u64) -> u32 {
-        let e = match r >> 40 & 15 {
-            0 => 0,
-            1 => 255,
-            2 => 1 + (r >> 44 & 3) as u32,
-            3 => 254 - (r >> 44 & 3) as u32,
-            4 => 127 + (r >> 44 & 63) as u32 - 32,
-            _ => (r >> 44) as u32 % 256,
-        };
-        let f = match r >> 52 & 7 {
-            0 => 0,
-            1 => 0x7F_FFFF,
-            _ => r as u32 & 0x7F_FFFF,
-        };
-        ((r >> 63) as u32) << 31 | e << 23 | f
     }
 
     /// The reduced set graded exhaustively in pairs: every exponent field at either end and a run of 55 about the

@@ -2278,3 +2278,78 @@ against 2.75, and is 1.2 times the arena's 2.28. R0 measured 2.24 to 2.43 there 
 - **The seven seeded faults** as above, each on its own Release build, and reverted; the three the fields missed with
   the whole of `tests/blocks.rs`, and three they caught with the new test alone.
 - **The ring:** two rounds at three sizes on the desktop, and on the handheld on the charger.
+
+## One horizon check a block (2026-10-28)
+
+*Decided 2026-10-28 by the tester: one more exact lever behind the `forms` feature (the default build unchanged), the
+check of the board's next event made once a block instead of before each load and store. The estimate and the
+exactness argument were written and committed before the lever was built; stop if it saves less than half its estimate
+or cannot be proven exact.*
+
+### What the horizon is, and what each check guards
+
+The horizon is `Board::next_event` at the block's entry (`Context::horizon`, set by the dispatcher). Before each load,
+store or PREF after the block's first instruction, the emitter compares the cycles after the instruction before it,
+`times[k−1]` (`last` plus one), with the horizon, and leaves before the access if they reach it (`LEFT_HORIZON`). It
+guards the one ordering a block must keep with the board (`Sapphire_Recompiler.md` §48.5): **no DMAC step may fall in
+`run_to(times[j])` for any j before the block's last access**, since in the interpreter a load after that step would
+see what the DMAC wrote, and the DMAC would see the block's stores before it.
+
+### The argument: the guarded replay already enforces the same condition
+
+§48.5 names two mechanisms. The second, **the guarded replay**, is sufficient on its own:
+- **every exit hands the replay its last access.** An exit after a load or store stores `Context::guard`, the index of
+  its block's last access (`emit.rs`'s `exit`, the shared exit's word under `stub`, `leave`'s word); an exit with no
+  step run writes nothing and replays nothing;
+- **`Board::run_through` stops before any time within the guard at which an event is due.** For each `from < guard` it
+  tests `next <= times[from]` before running that time, and its quick path is taken only when `next` is past every
+  time;
+- **nothing moves the board between the entry and the replay.** The block's helpers are `fill`, which reads the core,
+  `hook`, the verifier's only, and the exits' `replay`, `leave` and `commit`. So when the replay starts, `next` is the
+  horizon the block was handed;
+- **times only grow** (`Timing::plan` issues at the last instruction's cycle or later).
+
+So if the per-access check would leave before access k, then `times[k−1] >= horizon`, and the replay, walking the
+times in order, stops at the first `from <= k−1 < guard` where the then-current `next` is due. The stop is a rollback
+short of the last access: the logged stores are undone and the interpreter runs the instructions that stand (§48.5,
+"Rollbacks"), which is exact, and has been since S37 for the other cases it covers, an event moved earlier by a busy
+unit's request and a wake from the IOP's side. **The per-access check is an early exit, not the exactness mechanism.**
+The record agrees: S37's fault F3 (`Sapphire_Recompiler.md` §48.15.8), the check removed with the guard kept, was
+caught by `loads_and_stores_beside_the_dmac_leave_the_interpreters_machine`, whose count of accesses left at the event
+it zeroes, while F4, the guard ignored, was caught by the guarded board.
+
+Each way the horizon or the event time could move during a block, and what handles it:
+- **a helper.** None moves the board (above); `fill` writes one translation-cache entry and nothing the replay reads;
+- **a device write.** A block's accesses reach only RDRAM, the scratchpad and the data cache; a page of registers is
+  of kind `NONE` and leaves before its access to the interpreter, so a block never writes a device and never moves
+  `next`;
+- **a busy unit's request or the IOP's wake during the replay.** These move `next` earlier or wake the DMAC while the
+  replay runs; the guard tests the current `next` and the wake at each time, as before;
+- **an interrupt.** The replay's interrupt check before each instruction is unchanged and stops as before;
+- **the verifier.** Under `Options::verify` the per-access check is not emitted today, since `hook` runs the board at
+  every instruction; the lever changes nothing there.
+
+### The form
+
+`horizon` drops the per-access check from the emitter. The one check a block moves into the dispatcher, before it
+calls the code, where it costs no emitted bytes: with `g` the index of the block's last load or store, the block is
+refused, and the interpreter takes the step, when `cycles + ⌊g/2⌋ >= horizon`. ⌊g/2⌋ is the fewest cycles the
+instructions before the last access can add: an instruction issues in the last one's cycle only beside it, and never
+two in a row, so instructions 0 to g−1 move `last` on by at least ⌈(g−1)/2⌉, and `times[g−1] >= cycles + ⌊g/2⌋`. A
+refused block is one the per-access checks would have left before its last access. The constant is not load-bearing
+for exactness: a refusal runs the interpreter, the reference, and a block let in that crosses the horizon is rolled
+back by the guard, so any constant gives the same results and only moves work between the tiers.
+
+### The estimate, set before the lever is built
+
+From the newest per-purpose table (arena, lever 3): **horizon and line checks, 9.6 hot bytes a guest instruction.** Of
+it, the instruction cache's line limit is a load, a compare and an exit at each new line after a block's first, about
+15 bytes at about one in eight guest instructions, so about 1.5 to 2; the horizon's check is the rest, about 7.5 to 8,
+at about 0.34 checks a guest instruction (about 23 bytes each: `last` read again and moved on, the horizon read again,
+a compare and a branch to the access's cold path). Its untagged share (the reloads Cranelift leaves without a source
+location) adds perhaps 0.5 to 1. The dispatcher's check emits nothing. **Estimated saving: about 8 hot bytes a guest
+instruction** (a range of 6 to 10), so about 111 on the arena. The stop line is a saving under 4.
+
+The cost to watch is not in bytes: an event inside a block now costs the block run and rolled back instead of an early
+exit at the access, and a refusal sends the block to the interpreter. The bench's rollback, DMAC-stop and left-at-event
+counts are to be compared with and without the lever.

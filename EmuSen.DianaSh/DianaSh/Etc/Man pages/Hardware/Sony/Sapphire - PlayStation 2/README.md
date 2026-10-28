@@ -179,6 +179,15 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   IOP's next instruction, its service with nothing due, the lines between events, the VIFs and the VUs resting, the
   console hook's breakpoint), the programs and seeded faults, the speed, and why the IOP cannot be brought along only at
   the SIF.
+- **`Sapphire_Redesign.md`** — the redesign proposal (2026-10-28, a design only, for a critic and the tester's
+  approval), replacing `Sapphire_Speed.md` §58.7's lever list: the problem in numbers and the handheld's budget by unit
+  for Jak and Daxter's three windows; the board at events, batched to a horizon below which no line or observed value can
+  change; the EE in chained blocks covering every class, its timing folded where static and summed where not, memory
+  through a page table with both caches kept, self-modifying code by the instruction cache's line generations, the DMA
+  hazard by watched pages; whole VU microprograms with the other units' accesses interleaved; the GIF and VIF at events
+  and the DMA and FIFOs on one timeline; the IOP at its own times; the GS on the device and its throughput; every
+  compromise named with its default; why the recompiled tier is slower than the interpreter; the components and their
+  surfaces; verification and the scoreboard; stages R1 to R10 with gates; risks, weak points and questions.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

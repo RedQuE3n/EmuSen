@@ -2001,3 +2001,10 @@ same block on the same base register unchanged (stack frames, a structure's fiel
 translation (about 46 bytes, and about 10 of the untagged bytes with it) and pays a guard of about 14 (an exclusive or, a
 compare and a branch to the full path laid cold). **Estimated saving: about 7 hot bytes a guest instruction** (0.377 ×
 0.45 × 42), a range of 5 to 10.
+
+**Lever 2, one tag check a line**, set after lever 1's first measurement (the dock's first 60 fields: the translation's
+tag down by 7.0 bytes a guest instruction, about 40 % of it, so that about half the loads and stores have an earlier one
+on their base). Assumptions: about 60 % of those are within 64 bytes of it by displacement, so about 30 % of all loads
+and stores; each drops the cache path and its dispatch (about 140 bytes, its untagged share about 10) and pays a guard
+and the line's pointer (about 20), the translation's guard it replaces already counted by lever 1. **Estimated saving:
+about 12 hot bytes a guest instruction** (0.377 × 0.30 × 110), a range of 8 to 16.

@@ -1242,3 +1242,40 @@ pair even two). Worth building only if R0.4's mix is to be measured, not estimat
   measured on the same counter, against 96 bytes.
 - **R0.4's mix:** the paired kernel run on recorded microprograms, rather than the 60/40 estimate.
 - **R0.3 and both kernels' handheld ns:** the charger session, once EmuSen there is closed.
+
+### Third addendum: both kernels on the handheld (measured 2026-10-28)
+
+*EmuSen on the handheld was closed at the tester's request (SIGTERM, exited in 2 s) and was not restarted. The handheld
+was on the charger (ACAD online = 1 before and after) and the GPU was not used. The same binaries ran as on the desktop,
+two rounds each under `systemd-run --user`, and were removed afterwards. Clocks sampled every 0.5 s through the runs:
+- the memory clock's active level moved between 400, 800, 937 and 1,200 MHz, mostly 800 and 937;
+- the fabric clock between 400, 937 and 1,200 MHz (21 of 91 samples marked no level);
+- the fastest core ran at 4.8 to 5.0 GHz.*
+
+| Kernel | Handheld, round 1 / 2 | Desktop | Ratio |
+| --- | --- | --- | --- |
+| ring, working set, today's 2.87 instructions an entry, 96 bytes | 2.236 / 2.371 ns a guest instruction | 2.01 / 2.00 | 1.12–1.18 |
+| ring, working set, §4.2's 14.5 an entry, 99 bytes | 2.430 / 2.247 | 1.474 / 1.404 | 1.60–1.65 |
+| ring, the same at the prototype's 587 bytes | 22.66 / 20.53 | 13.67 / 13.22 | 1.55–1.66 |
+| ring, one block | 0.765 / 0.746 | 0.754 | 1.0 |
+| lanes, four, add | 1.184 / 1.229 ns a lane | 1.09–1.25 | ~1.05 |
+| lanes, four, mul | 1.030 / 1.070 | 0.95–1.09 | ~1.05 |
+| lanes, four, multiply-add (two lane operations) | 2.509 / 2.632 | 2.34–2.68 | ~1.05 |
+| lanes, paired, add | 0.504 / 0.522 | 0.456–0.472 | 1.10 |
+| lanes, paired, mul | 0.434 / 0.442 | 0.383–0.393 | 1.12 |
+| lanes, paired, multiply-add | 1.409 / 1.446 | 1.279–1.294 | 1.10 |
+
+The kernels' own factors are 1.0 to 1.2 where the code stays in the cache and about 1.6 where §4.2's longer blocks
+stream 8 MB of code. They measure kernels, not the emulation thread under a busy GPU, so they do not replace R0.3.
+
+**The marks against the handheld's own ns** (§3.1's definition, two threads, the plateau excluded; marks from the
+second addendum, no factor applied):
+
+| Check | Handheld | Mark (handheld) | Result |
+| --- | --- | --- | --- |
+| R0.2 ns, Jak's opening | 2.24–2.37 (today's entries), 2.25–2.43 (§4.2's) | 2.75 | **pass** |
+| R0.2 ns, the arena's fields | the same | 2.28 | **at the mark**: one round each side of it |
+| R0.2 bytes | the prototype's 568 | 96 | **fail** |
+| R0.4, four lanes | add 1.18–1.23, mul 1.03–1.07, multiply-add 1.25–1.32 a lane operation | 1.125 | add and multiply-add **fail**, mul **passes** |
+| R0.4, paired | add 0.50–0.52, mul 0.43–0.44, multiply-add 0.70–0.72 a lane operation | 1.125 | **pass** |
+| R0.3 | not run | 2.0 | **not run** |

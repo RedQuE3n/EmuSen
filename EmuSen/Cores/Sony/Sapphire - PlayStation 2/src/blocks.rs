@@ -127,6 +127,11 @@ pub struct Blocks {
     pub longest: usize,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     pub stats: Stats,
+    /// For measurement, behind the `census` feature: each compiled block entered since the census was last taken, by
+    /// its code's address, with its entries, the steps it ran and its guest instructions (Sapphire_Redesign.md, R0
+    /// results, the working set).
+    #[cfg(feature = "census")]
+    pub census: HashMap<usize, (u64, u64, u64)>,
     ctx: Box<Context>,
     /// The translation cache the context points at, and what its generation was made for: the TLB's stamp, the mode,
     /// ASID and configuration, and RDRAM's place.
@@ -185,6 +190,8 @@ impl Blocks {
             longest: shape::MAX,
             verify: None,
             stats: Stats::default(),
+            #[cfg(feature = "census")]
+            census: HashMap::default(),
             ctx,
             pages,
             key: [0; 3],
@@ -457,6 +464,13 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         panic!("{f}");
     }
     let steps = ctx.steps;
+    #[cfg(feature = "census")]
+    {
+        let e = blocks.census.entry(code as usize).or_default();
+        e.0 += 1;
+        e.1 += u64::from(steps);
+        e.2 = b_len as u64;
+    }
     blocks.stats.fills += run.fills;
     for (total, n) in blocks.stats.left.iter_mut().zip(ctx.left.iter_mut()) {
         *total += std::mem::take(n);

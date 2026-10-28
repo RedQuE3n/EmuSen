@@ -367,7 +367,7 @@ pub fn from_word(w: u32) -> u32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
         }
     }
     /// A xorshift stream, the tests' operands.
-    fn stream(mut seed: u64) -> impl FnMut() -> u64 {
+    pub(crate) fn stream(mut seed: u64) -> impl FnMut() -> u64 {
         move || {
             seed ^= seed << 13;
             seed ^= seed >> 7;
@@ -403,7 +403,7 @@ mod tests {
 
     /// An operand of every class the host's paths must take or refuse: zero, would-be denormals, exponent 255, and
     /// exponents at and near either end of the range and at the centre, either sign, any fraction.
-    fn operand(r: u64) -> u32 {
+    pub(crate) fn operand(r: u64) -> u32 {
         let e = match r >> 40 & 15 {
             0 => 0,
             1 => 255,

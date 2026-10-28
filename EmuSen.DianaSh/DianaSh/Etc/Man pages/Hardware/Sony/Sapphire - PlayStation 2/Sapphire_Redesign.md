@@ -1736,3 +1736,247 @@ the work resumes.
 - `tests/blocks.rs`, test-checked profile: 25 of 25 on today's path; 25 of 25 with the lever, on its final form; the
   two faults' runs as above.
 - The bench: the arena, the dock and the dock's first 60 fields, with and without the lever, digests as above.
+
+## Option 1: Cranelift kept, the code handed to it reshaped (measured 2026-10-28)
+
+*Decided 2026-10-28 by the tester: keep Cranelift, reshape the code the emitter hands it in three steps, each a form
+behind the `forms` feature (the default build unchanged), each measured before the next, and find how close exact
+compiled code comes to about 96 hot bytes a guest instruction. The steps: (1) write back only what the block changed;
+(2) hold nothing across a helper call; (3) Cranelift's own features: cold blocks, a pinned register, a cheaper calling
+convention. The stop rule: stop after a step that saves less than half its estimate or cannot stay exact, or when the
+arena reaches about 96. These are byte-face emitter forms (`EmuSen_TwoFaces.md`); exactness is the requirement.*
+
+**The result.** Step 1 met its estimate: about 31 to 34 hot bytes a guest instruction against about 40. Step 2 saved
+7.7 to 8.0 against the 35.6 bytes of spills and reloads it targeted, so **the stop rule was met after step 2**. Step 3
+had been built in the same tree and was measured in the same runs, and it saved 2.6 to 2.7 against an earlier estimate
+of 5 to 8. The forms end at **180.6 hot bytes a guest instruction on the arena and 180.9 on the dock**, 1.9 times the
+mark of 96. Every form is exact on every digest. On the handheld the ring at those bytes runs 3.93 to 4.00 ns a guest
+instruction with today's entries, against marks of 2.75 for Jak's opening and 2.28 for the arena.
+
+### The forms
+
+`EMUSEN_SAPPHIRE_FORMS` takes the levers, comma-separated:
+- `changed` (step 1);
+- `reload` (step 2);
+- `preserve` (step 3);
+- `pinned` (step 3), for the shadow count only;
+- `watch`, an instrument.
+
+`EMUSEN_SAPPHIRE_FORMS_BYTES=1` now also compiles the static prototype with each step's levers in turn (`static+cache`,
+`static+changed`, `static+reload`, `static+preserve`, `static+reload+pinned`, `static+preserve+pinned`). Every step can
+then be compared on the same blocks in one run.
+
+- **`changed`, write back only what changed.** An exit stores a model field, Random or the group only when the value the
+  block holds for it is not the very value the entry loaded (the same SSA value, `emit.rs`'s `same`). Otherwise memory
+  already holds it, and the entry's load goes dead. The guest registers already followed this rule. In today's
+  full-model emitter every issue computes every field anew, so the rule stores nothing less there. In the static
+  prototype only `last` changes, so ten entry loads and their stores go.
+- **`reload`, nothing held across a helper call.** At the write-back, the instructions issued, Count, Compare and the
+  cycles Count saw are read after the replay, not loaded at the entry and held to every exit. The translation cache's
+  address and generation, the horizon and the data cache's line pointer are read at each load or store. Cranelift's
+  alias analysis merges loads with no store or call between them, so after a call they are read again rather than
+  spilled. In the static prototype `last` is the entry's plus a constant, read again where it is used (`Held::last_k`).
+  It is off under the verifier, whose write-back after every instruction would make those memory values the last
+  write-back's rather than the entry's.
+- **`preserve`, a calling convention that clobbers nothing.** Cranelift 0.136.4 (the version in `Cargo.lock`) offers
+  `CallConv::PreserveAll`: a call clobbers no register, the callee saves what it uses, and it may return no value
+  (`cranelift-codegen` `isa/x64/abi.rs`, `get_regs_clobbered_by_call` and `compute_frame_layout`). The Rust helpers
+  cannot be written in that convention. `forms::trampolines` compiles, once a process, one Cranelift function a helper
+  (replay, `leave`, fill) in `preserve_all`, which calls the Rust helper and stores its answer in `Context::answer`. The
+  dispatcher puts the trampolines in the context's helper slots, and the code reads the answer after the call. The
+  verifier's hook keeps the System V call.
+- **`pinned`, the context pointer in a reserved register.** Cranelift's shared flag `enable_pinned_reg` reserves r15 on
+  x86-64 from allocation, with `get_pinned_reg` and `set_pinned_reg` to use it. With the flag, r15 is no longer
+  callee-saved, so a block saves the caller's r15 at its entry and restores it at every return. The flag belongs to the
+  module's ISA, which `emusen-jit` builds, so the form is compiled only by the shadow, against an ISA rebuilt from the
+  module's flags with the pinned register on. It never runs.
+- **Cold blocks** were already in use for every exit, rollback, miss and fill. Cranelift lays the cold blocks after the
+  straight line, and the hot-tagged bytes laid past the first cold block are 1.0 a guest instruction, so nothing rare
+  is left on the straight line to move.
+- **`watch`**: every call of the replay, `leave`, the fill and the hook is checked to leave alone the issue model, COP0
+  (but Cause's IP2 and IP3), the cycles Count saw, the group, the guest's registers and place, and the memory context.
+  It reports the calls and those that changed anything (`forms watch`).
+
+### What the helpers can write (from the code)
+
+A compiled block calls four helpers, all in `src/blocks.rs`. Each reaches the machine only through `Run::sys`, and what
+it borrows mutably decides what it can change:
+
+| Helper | When it runs | What it can write | Why the skipped and reloaded fields are not among them |
+| --- | --- | --- | --- |
+| `replay` | every exit that ran a step, before the write-back | the board (`Board::run_through`, handed `&mut ee.spram` and nothing else of the core); `ee.int0`, `int1` and `cpcond0`; Cause's IP2 and IP3; the context's `steps` and `lines`; the dispatcher's `Run` | the board holds no reference to the core, so only the scratchpad can change through it; Cause is never skipped, and the write-back already reads it after the call |
+| `leave` | a load or store leaving its block after a step | the context's `left`, `guard`, `base`, `logged` and `steps`; then `replay_steps` with `rewind`, which returns before the lines and Cause are touched | as `replay` |
+| `fill` | a translation-cache miss (cold) | one entry of `Context::pages`, and `Run::fills` | it reads the core only through `Ee::data_page(&self)`; an unmapped page or a TLB miss comes back as `None` and is cached as kind `NONE`, with no exception raised and no COP0 register written |
+| `hook` | the verifier only (`Options::verify`) | the board through `run_to`; the lines; Cause's IP2 and IP3 (`interrupt_pending`) | the verifier's machine is read through `&System`; `reload` is off under the verifier, and `changed` holds there because the write-back before each hook call stores every field the block has changed |
+
+**So no helper, on any path, writes the fields the forms skip or read again.** That covers:
+- the issue model, Random, Wired and the group;
+- Count, Compare, the cycles Count saw and the instructions issued;
+- the guest's registers and place;
+- the translation cache's address and generation, the horizon, and the data cache's line pointer.
+
+The types show it: during a call, the only mutable routes into `Ee` are `spram`, the three lines and Cause. **No rare
+path needs accounting for.** None of the helpers raises an exception, refills the TLB or writes COP0 beyond those two
+bits. Had one done so, the form would have stored the field after any call to that helper, whatever its value; none
+needed it.
+
+**Measured:** the watch saw 119,145,125 replays, 7,879,387 leaves and 91,971 fills on the arena, and 55,108,463,
+1,949,174 and 54,237 on the dock, with no change in any of them. This is evidence beside the argument, not the proof.
+
+**Rollback stays exact.** A rollback returns before any write-back, or through the write-back of the state after the
+last load or store (`partial`). That write-back obeys the same rule: on the path to it, no write-back ran before, so
+memory still holds every entry value. A field's held value never returns to the entry's SSA value once changed, since
+every issue makes a new value or a constant.
+
+### Exactness (measured)
+
+The digests before the forms are this tree's own. They differ from the previous section's because D-1104 moved the VU's
+products, which changes the picture and the state.
+
+| Check | No form (`base`) | Step 1: `cache,changed` | Step 2: `+reload` | Step 3: `+preserve` |
+| --- | --- | --- | --- | --- |
+| the dock's first 60 fields (picture, sound, state) | 0F8671F57AB63C25, D5F15509CCDD1709, 818361BFE5D2DBF9 | the same | the same | the same |
+| the dock, 300 fields from the state at 6,000 | 830E3FEFEE1BE6B1, 2C225C73DB4D3F9D, 9CF1BED1AA64EAEE | the same | (graded with step 3) | the same |
+| the arena, 300 fields from the state at 9,000 | 611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0 | the same | (graded with step 3) | the same |
+| `tests/blocks.rs`, test-checked profile, every lever on and `watch` | — | — | — | 25 of 25 |
+
+**Seeded faults**, each built alone into the Release bench, run on the dock's first 60 fields with its step's levers,
+and reverted:
+
+| Step | Fault | Caught by |
+| --- | --- | --- |
+| 1 | a changed field taken as unchanged: `floor` compared with itself, so it is not written back | the state (EF5F76A3666814CF) |
+| 1 | the premise broken: the replay writes Random between the entry and the exit | the watch (17,152,565 of 18,190,414 replays and 746,533 leaves changed); the state (D109ABD4C87E29BA), through the rollbacks that return with nothing written back |
+| 2 | Count read again from Compare's register after the replay | the state (3B0986B5246E7E4E) |
+| 2 | the horizon read again from the translation cache's pointer, so no load or store ever leaves at the board's next event | not the 60 fields; `tests/blocks.rs`'s `loads_and_stores_beside_the_dmac_leave_the_interpreters_machine` (24 of 25) |
+| 3 | the trampolines not installed: the code calls the System V helpers as though they preserved every register | a segmentation fault in the first field |
+| 3 | the answer read from `Context::steps` in place of `Context::answer` | the run stalled: no field past 6,000 in 139 s, where 16 s is the norm |
+
+### The bytes (measured)
+
+Host bytes a guest instruction on the hot straight line, by R0's method. All forms of a row come from one run, on the
+same blocks: the arena, 13,471 blocks of 128,851 guest instructions (37.7 % memory); the dock, 4,697 blocks of 41,665
+(37.5 %). Which blocks a run compiles depends on its timing, so the static prototype comes out at 257.9 here against the
+previous section's 271.9. Compare within a row.
+
+| Form | Arena hot | its saving | Arena cold | Dock hot | its saving |
+| --- | --- | --- | --- | --- | --- |
+| the static prototype | 257.9 | | 271.0 | 260.3 | |
+| + the cache path (the previous section) | 222.2 | 35.7 | 304.2 | 225.2 | 35.1 |
+| **step 1**, + `changed` | **191.0** | **31.2** | 232.0 | **191.5** | **33.7** |
+| **step 2**, + `reload` | **183.3** | **7.7** | 224.8 | **183.5** | **8.0** |
+| **step 3**, + `preserve` | **180.6** | **2.7** | 222.0 | **180.9** | **2.6** |
+| step 2 with `pinned` in place of `preserve` | 184.5 | −1.2 against step 2 | 218.4 | 184.4 | −0.9 |
+| step 3 with `pinned` too | 179.5 | 1.1 against step 3 | 217.8 | 179.5 | 1.4 |
+
+Each step's first measurement had its own run. Step 1 alone, on 22,069 arena blocks, took the arena from 234.9 (the
+previous section's cache path) to 200.9, and the dock from 209.6 to 182.9.
+
+**By purpose at step 3 (arena; untagged bytes as measured, not apportioned):**
+
+| Purpose | Static prototype | Step 3 |
+| --- | --- | --- |
+| cache tags and dispatch | 77.0 | 52.8 |
+| untagged | 84.4 | 61.2 |
+| exits' write-back | 40.4 | 27.6 |
+| translation | 16.3 | 17.5 |
+| horizon and line checks | 4.2 | 9.6 |
+| address and alignment | 4.3 | 4.2 |
+| guest registers | 3.3 | 2.7 |
+| data access | 4.2 | 2.3 |
+| entry | 22.4 | 1.5 |
+| the instruction's work | 1.3 | 1.2 |
+| timing | 0.2 | 0.1 |
+
+**The spills, from the disassembly** (`EMUSEN_SAPPHIRE_FORMS_DUMP`; the first eight blocks with three or more loads and
+stores on the dock's first 60 fields, 53 guest instructions, sized as the previous section sized them):
+
+| Bytes a guest instruction | Static prototype | Step 1 | Step 3 |
+| --- | --- | --- | --- |
+| spills | 22.4 | 10.5 | 0.6 |
+| reloads | 45.2 | 25.1 | 4.6 |
+| the entry's loads | 21.8 | 10.4 | 3.2 |
+| host instructions on the hot line, in all | 3,585 | 2,739 | 2,546 |
+
+**Why step 2 missed.** The spills and reloads went, nearly all of them: 35.6 bytes a guest instruction to 5.2 on those
+blocks. The hot code fell far less, because each reload from the stack became a load of the same size from the core or
+the context. The value still has to come from memory after a call. Only the spill stores, and the entry's loads with
+them, were saved. The horizon check shows it: under `reload` each load or store reads `last` and the horizon again, and
+that tag rose from 4.2 to 9.6. Step 3's convention mattered little for the same reason. By step 2 almost nothing was
+held across the hot call, so there was little for `preserve_all` to keep.
+
+### The ring at the bytes reached (measured)
+
+R0's `ring mix` (Jak's p90 working set), asked for sizes that land near each step's bytes. The handheld ran on the
+charger (ACAD online 1 before and after), CPU only, through `systemd-run --user`, with its scratch removed afterwards.
+The ring binary needs GLIBC_2.34 at most. ns a guest instruction, two rounds:
+
+| Step (arena hot bytes) | Ring code | Desktop, today's 2.87 an entry | Desktop, §4.2's 14.5 | Handheld, today's | Handheld, §4.2's |
+| --- | --- | --- | --- | --- | --- |
+| the cache path (234.9) | 243.0 / 243.3 | 4.60–4.74 | 3.99–4.40 | 5.56–5.61 | 9.00–9.27 |
+| step 1 (191.0) | 191.8 / 194.2 | 3.79–3.85 | 3.26–3.28 | 4.26–4.30 | 6.31–6.45 |
+| step 2 (183.3) | 185.5 / 185.7 | 3.64–3.66 | 2.98–3.03 | 4.10–4.13 | 6.26–6.28 |
+| step 3 (180.6) | 178.5 / 181.0 | 3.51–3.54 | 3.03–3.04 | 3.93–4.00 | 5.88–6.12 |
+| the mark, handheld | | | | **2.75** (Jak's opening) / **2.28** (the arena's fields) | |
+
+The cache path's row is the previous section's. At step 3 the handheld is 1.4 to 1.5 times the mark for Jak's opening,
+and 1.7 to 1.8 times the arena's, with today's entries. R0 measured 2.24 to 2.43 there at 96 bytes.
+
+### What is left, and whose limit it is (an assessment)
+
+**Measured.** The forms reach 180.6 hot bytes a guest instruction with every result exact. The three steps together
+saved 41.6 bytes from the cache path's 222.2. What remains is no longer state held for exits. On the eight heavy blocks
+the hot line is 48.0 host instructions a guest instruction. The tags place the
+bytes in the cache path and its dispatch (52.8), the exits' write-back (27.6), the translation (17.5) and the horizon
+checks (9.6), with 61.2 untagged.
+
+**The design's share.** Most of those bytes are the exact model's own work at every load and store:
+- the translation cache's hash, tag load and compare, and the page's host address and kind;
+- the kind's dispatch;
+- both ways' tags and the scratchpad's second fast path;
+- the D bit;
+- the horizon compare.
+
+A block's final exit also stores its place, Count, Cause, the instructions issued and the replay's guard, base and log
+count. None of that is Cranelift's. A form that saves it changes the design:
+- one translation a block for each base register and page;
+- one tag check a line rather than an access;
+- an exit stub shared between blocks, fed by a table of each block's constants.
+
+Those are estimates for a redesign, not levers of this emitter.
+
+**Cranelift's share, counted on the disassembly of the heavy blocks** (`overhead.py`; counts measured, bytes estimated
+from x86-64 encodings). In each guest instruction's hot code:
+- **register-to-register moves:** 6.7, about 20 bytes, from the allocator's splits and its fixed argument registers (the
+  context pointer moved into `rdi` before each use as a base);
+- **blocks holding only a jump:** 0.8, about 3 bytes, the edges of the fill's miss and the cache path's joins;
+- **operands taken from the constant pool:** 2.1, about 6 bytes over a 32-bit immediate, for masks such as 0xFFFFF000
+  and 0xFFFFFFFF;
+- **block parameters zeroed with an `uninit` and an `xor`:** 1.1, about 3 bytes;
+- **conditions materialised with `setcc` before a test:** 1.4, about 8 bytes with their `or` and `test`.
+
+That is about 40 bytes a guest instruction on these memory-heavy blocks, and plausibly 25 to 30 on the average block,
+by the share of memory instructions.
+
+**What a purpose-built emitter would plausibly save (an estimate).** An emitter in the manner of Wasmtime's Winch would
+write x86-64 directly through Cranelift's assembler crate (`cranelift-assembler-x64`, in the lock file). It would keep a
+fixed assignment of the context, the core, the memory context and the guest registers the block names, and lay each
+fast path as a straight sequence that branches on flags. The overheads above are its natural saving: about 25 to 30
+bytes a guest instruction, which would take 180.6 to about 150 to 155. The remaining distance to 96 is the design's per
+access and per exit work. An emitter's quality does not reach it.
+
+**So option 1 cannot get near 96.** Of the 84.6 bytes between step 3 and the mark:
+- about 25 to 30 are Cranelift's code generation (estimated);
+- the rest, about 55 to 60, is the exact design's per-access and per-exit work (by the tags, measured).
+
+Reaching about 96 would need both a purpose-built emitter and the design changes above. Each is an estimate until it is
+built, and the second changes what a block is, not how it is compiled.
+
+### Tests run
+
+- **The bench, before the forms and with them:** on the dock's first 60 fields, `base`, step 1, step 2 and step 3; on
+  the dock and the arena, `base`, step 1 and step 3. Digests as above.
+- **`tests/blocks.rs`, test-checked profile:** 25 of 25 with `cache,changed,reload,preserve,watch`; 24 of 25 with the
+  horizon fault, as above.
+- **The six seeded faults** as above, each on its own Release build, and reverted.
+- **The ring:** two rounds at three sizes on the desktop, and on the handheld on the charger.

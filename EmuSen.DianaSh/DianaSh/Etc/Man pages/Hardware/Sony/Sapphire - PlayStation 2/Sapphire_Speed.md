@@ -231,6 +231,8 @@ skipping does not pass.
 
 ### 51.8 The levers and compromises, ranked again for the 3D
 
+*Superseded 2026-10-28 by §58.7: the ceiling measurement showed that no lever on this list, nor all of them together, reaches full speed; the redesign of §58.7 replaces it as the plan.*
+
 As §43.8: the share of each window's frame a lever addresses (dock / island / arena), the bound 1 / (1 − s), the
 expectation under its assumption, the work in stages, its kind, and the gain per stage. The shares are of the default
 path (S33, S36, S40 and S43 in).
@@ -1116,3 +1118,243 @@ or logged. No emulator's source was read.
 `Sapphire_Native.md` §21.6, §23.1 and §23.2 (`Pipe`), §45.1 to §45.4 (`vu::jit`); `vu/micro.rs`, `vu/pipe.rs`,
 `vu/mod.rs`, `vu/jit/mod.rs` and `emit.rs`'s entry, `board.rs`'s `run_to`, `run_gif` and `run_vifs`, `gif`'s
 `Path1Port`, `vif`'s `store`. No emulator source, no firmware. 
+
+## 58. The ceiling: what the design itself costs, measured with the synchronisation relaxed (2026-10-28)
+
+*Decided 2026-10-28 by the tester: stop climbing the lever list. §51.8 put every exact lever together at about 2×,
+still 12 to 38 times short of 16.68 ms, so before more speed work the step measures what the design costs. This is a
+measurement and nothing in the core changes: the two builds it ran were patches kept outside the repository and reverted.
+Framed by three decisions of the same day: Sapphire's goal is compatibility, more games played correctly than other
+PlayStation 2 emulators, with Unix-style modularity and results that are bit-accurate rather than timing that is
+cycle-accurate, so each point below is judged by its results and a difference only in timing is acceptable; the first
+scoreboard is the games on the handheld, correct and at full speed, with no per-game fixes, the defaults working as
+shipped and the trade-offs offered as the player's options. Disputes would start at D-1080; the step raised none.*
+
+### 58.1 In one paragraph
+
+**The target is 16.68 ms a frame on every window.** A bench frame is one field, and Jak and Daxter changes its
+displayed buffer at 47.9, 47.1 and 33.8 new pictures a second on the dock, Misty Island and the arena (§58.2). It is a
+60-field game that drops pictures, not a 30-frame one, and even a game that drew at 30 would need every field emulated
+in real time. **The sweep** (§58.3): a board that catches up only every N EE cycles, or at the next scheduled event,
+**breaks Jak's 3D at N = 64 already**: VU1's geometry turns to spikes on all three windows, and four VIF result tests
+fail, because the EE reads the units at a stale time. A second build that **still brings the board to the EE's time at
+every EE access to a unit**, and batches only the catch-ups nothing observes, keeps ps2autotests at 52 of 55 and 23 of
+23 at every N, the boot's picture and sound digests at every N, and **Jak's pictures right at N = 64**, with dock 234–243 →
+207 ms, island 414–434 → 302 ms and arena 715–744 → 488 ms (1.1 to 1.5 times). From N = 512 the game stalls: the
+pictures freeze, though the geometry stays right. **The floors at that point** (§58.4): the EE's interpreter, its
+dispatcher and exits, the VUs and the board lead; MMI, COP1 and COP2 are interpreted entirely, and the interpreter tier
+alone is *faster* than the recompiled tier on all three windows. **The projection** (§58.5), the emulation thread on the
+desktop: the best workable N 207 / 302 / 488 ms; with every EE instruction compiled at today's measured 7 to 9 ns, 171 /
+263 / 419; with the GS's drawing off the thread as S44's mirror costs, 156 / 232 / 388. That is 9 to 23 times short on
+the desktop, 12 to 33 on the handheld, and the software GS's workers alone are busy 90 to 98 ms per dock frame. **Full
+speed is not reachable by this design's levers.** It needs a design whose cost per EE instruction, per VU pair and per
+board observation is about ten times lower (§58.7).
+
+### 58.2 The target (measured 2026-10-28)
+
+The bench, extended in the throwaway build to count over each window's 300 timed frames the frames whose displayed
+picture's digest changed and the changes of DISPFB1's base pointer (the buffer the PCRTC shows, GS User's Manual §4.2):
+
+| Window | Picture changed | DISPFB1 changed | New pictures a second (of 59.94 fields) | Target |
+| --- | --- | --- | --- | --- |
+| `jak-dock` | 300 of 300 | 240 | 47.9 | 16.68 ms |
+| `jak-island` | 300 of 300 | 236 | 47.1 | 16.68 ms |
+| `jak-arena` | 210 of 300 | 169 | 33.8 | 16.68 ms |
+
+The picture changes on every field because the display is interlaced; DISPFB1 is the game's own count of pictures.
+Jak aims at 60 and drops pictures where its frame's work exceeds a field. That is the emulated console's timing (P58a:
+on a console the dock and the island hold nearer 60; not measured, since no hardware is used). **The target per bench
+frame is 16.68 ms in every case**: the emulator must run every field's cycles in real time, whatever rate the game draws
+at. A 30-picture game is not a 33.4 ms target.
+
+### 58.3 The sweep (measured 2026-10-28)
+
+**The builds.** *Plain*: `Board::run_to` returns without doing anything when its time lies before both the next
+scheduled event and N cycles past the last full catch-up (after the quick path for idle units, so both tiers see the
+same board), so the units, the IOP and the lines move only every N cycles or at an event. *Synced*: as plain, but every
+EE access to a unit's registers, FIFOs, VU memories, the GS's privileged registers, IOP RAM or COP2 first runs the
+catch-ups the slack skipped, and the compiled code's pure register reads take the slow path while any are owed. RDRAM is
+current in both builds, since the DMAC runs only at its events. N = 1 is the shipped path: its digests are §57.8's.
+**The method**: §57.6's windows with `--defaults`, at CPU weight 100 on an otherwise idle machine (one-minute load 1.2
+to 4.2); two rounds at N = 1 and at synced N = 64, the second under the sampler, and one round elsewhere. Where a run's
+final state could not be saved (§58.8) the mean is taken from the bench's progress lines, frames 6,100 to 6,300 and
+alike, whose resolution is a second over 200 frames, ±5 ms. Pictures every 100 frames were compared by eye with N = 1's.
+
+| N | Build | `jak-dock` ms (fps) | `jak-island` ms (fps) | `jak-arena` ms (fps) | Picture digests | By eye | Language screen ms | ps2autotests |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | shipped | 234.1, 242.5 (4.2) | 413.7, 433.8 (2.4) | 714.6, 744.1 (1.4) | §57.8's | right | 44.7 | 52 / 55, 23 / 23 |
+| 64 | plain | 323.4 (3.1) | 319.6 (3.1) | 1,036.0 (0.97) | all drift | spiked geometry, then wrong scenes | 45.6 | 51, 23 |
+| 512 | plain | ~365 | ~500 | ~400 | all drift | broken, frozen | 46.7 | 51, 23 |
+| 4,096 | plain | 446.3 | ~390 | ~495 | all drift | broken, frozen | 49.9 | 48, 23 |
+| 18,743 (a line) | plain | 414.9 | ~385 | ~400 | all drift | broken, frozen | 66.7 | 48, 23 |
+| 64 | synced | 204.6, 210.5 (4.8) | ~305, ~300 (3.3) | 485.6, 490.1 (2.0) | drift | **right: the same scenes, a few frames out of phase** | 46.5 | **52, 23** |
+| 512 | synced | ~170 | ~260 | ~225 | drift | geometry right, the game stalls | 47.0 | 52, 23 |
+| 4,096 | synced | ~180 | ~300 | ~355 | drift | geometry right, the game stalls | 46.9 | 52, 23 |
+| 18,743 | synced | ~190 | ~300 | ~210 | drift | geometry right, the game stalls | 46.0 | 52, 23 |
+
+The boot's picture digest (frames 0 to 760) is §57.8's at every N in both builds; its sound digest is too, but at plain
+N = 4,096. Jak's sound digests are equal to N = 1's at every point where the summary printed. The plain build's times
+are **not an upper bound on speed**: once the game misbehaves it does different work, and on the dock and the arena it
+does more of it (more pictures drawn at N = 64). The synced times from N = 512 are those of a stalled game, pictures
+changing 0 to 30 times in 300 frames, and are listed for scale only.
+
+**The emulation thread's top five** (§55.7's classes by the innermost frame, the EE's blocks named through the
+recompiler's perf map, §58.4's table for the rest; N = 1's island from §57.7's samples, whose compiled code is not split
+by unit):
+
+| Point | `jak-dock` | `jak-island` | `jak-arena` |
+| --- | --- | --- | --- |
+| N = 1 | EE interpreter 17.2, VU 15.4, EE dispatcher and exits 12.8, board 12.6, GIF and VIF 7.7 each | VU 19.8, EE interpreter 14.6, board 13.1, dispatcher 8.7, compiled code 8.5 | EE interpreter 20.9, VU 17.3, board 13.8, dispatcher 8.8, VIF 6.8 |
+| synced N = 64 | EE interpreter 22.3, dispatcher 19.7, VU 11.3, board 9.5, GS 7.3 | EE interpreter 15.7, VU 15.6, dispatcher 14.8, board 11.6, GS 10.3 | EE interpreter 18.0, VU 16.9, dispatcher 16.7, board 10.1, VU compiled code 7.5 |
+
+The batching takes most of the GIF's and VIF's share (15.4 → 7.6 % on the dock, 13.4 → 7.9 % on the arena) and some of
+the board's: the per-step checks that find nothing to do; the EE's own costs do not move and now lead.
+
+### 58.4 The units' floors at synced N = 64 (measured 2026-10-28)
+
+Each class's share of the sampled run times its mean, ms a frame. VU0 and VU1 are split by their pairs a frame (dock
+231 k and 340 k, island 123 k and 1,220 k at N = 1, arena 421 k and 2,534 k), an approximation, since their costs a pair
+differ. The GS workers' time is the bench's own busy count, each of four.
+
+| ms a frame | `jak-dock` (210.5) | `jak-island` (~300) | `jak-arena` (490.1) |
+| --- | --- | --- | --- |
+| EE: compiled code | 6.4 | (not attributed) | 10.0 |
+| EE: interpreter (the fallbacks: every MMI, COP1 and COP2, part of the rest) | 47.0 | 47.1 | 88.2 |
+| EE: dispatcher, exits and the replay's per-step work | 41.5 | 44.3 | 81.9 |
+| EE: timing model | 13.8 | 12.1 | 26.8 |
+| floats (`sapphire::float`, EE and VU) | 5.3 | 11.8 | 21.4 |
+| VU1 (its calls, work and compiled code) | about 18 | about 66 | about 103 |
+| VU0 | about 12 | about 7 | about 17 |
+| GIF | 7.7 | 11.1 | 16.2 |
+| VIF | 8.5 | 15.5 | 22.6 |
+| GS on the emulation thread | 15.4 | 31.0 | 31.2 |
+| GS workers, busy, each | 90 to 98 | 34 to 46 (N = 1) | 35 to 48 |
+| IOP and its units | 6.2 | 7.4 | 8.4 |
+| SPU2 | under 0.5 | under 0.5 | under 0.5 |
+| Scheduler and board | 20.1 | 34.9 | 49.7 |
+| Idle skipping's own work | 1.1 | 1.1 | 1.3 |
+
+**The EE's instructions a frame by tier and class** at N = 1, where both tiers' digests are equal, so their streams are
+the same: the interpreter tier counts every instruction executed (idle skipping's passed steps apart: 4.1, 3.8 and 1.7
+million a frame are passed, not run); the recompiled tier counts those it interprets; compiled is the difference, which
+equals the bench's compiled steps to within 1 %.
+
+| Thousands a frame | Loads and stores | MMI | COP1 | COP2 (macro) | Other | All |
+| --- | --- | --- | --- | --- | --- | --- |
+| `jak-dock`: executed; interpreted | 431; 188 | 241; 241 | 137; 137 | 145; 145 | 712; 200 | 1,665; 911 |
+| `jak-island` | 433; 230 | 233; 233 | 153; 153 | 136; 136 | 976; 449 | 1,930; 1,200 |
+| `jak-arena` | 789; 516 | 306; 306 | 187; 187 | 210; 210 | 2,494; 1,620 | 3,986; 2,840 |
+
+So 29 to 46 % of the executed instructions are compiled. Every MMI, COP1 and COP2 instruction is interpreted (S38 and
+S39 are not built), and so are 44 to 65 % of the loads and stores and 28 to 65 % of the rest, which run where a block
+leaves for one of them. **The recompiled tier is slower than the interpreter tier on all three windows**: 234.1 and
+242.5 against 229.6 ms, 413.7 and 433.8 against 403.3, 714.6 and 744.1 against 692.9, one interpreter-tier round each.
+At this coverage the dispatcher and the exits cost more than compiling saves.
+
+### 58.5 The projections
+
+**The recompiler's** (§58.4's numbers, synced N = 64): the compiled code costs 6.4 ms over 693 k compiled instructions
+on the dock (9.2 ns each) and 10.0 ms over 1,343 k on the arena (7.4 ns); the interpreter costs about 40 ns an
+interpreted instruction before the dispatcher's share. With every instruction compiled at that cost, the interpreter's
+47.0 / 47.1 / 88.2 ms become 10.9 / 8.4 / 19.0, the dispatcher and the timing model left as measured (if blocks stopped
+leaving for the fallbacks the dispatcher would fall too; it is not projected, for want of a measurement). As a second
+reference, Mars's recompiler measured 1.1 to 2.1 ns a compiled instruction against its interpreter's 5.4 to 6.6
+(`Mars_Recompiler.md` §7, `Mars_Performance.md` §24) and MarsRT's RSP's compiled blocks about 3 ns a step (`Mars_Native.md`,
+after `Mars_Rsp.md` §11.2): Sapphire's compiled instruction costs four to eight times Mars's, and its interpreted one six times.
+
+**The critical path**, the emulation thread (no other thread bounds it on the desktop: the GS workers' busy time per
+frame is under the frame's on every window), and the handheld at 1.3 to 1.4 times (`Sapphire_Plan.md` §5.12):
+
+| ms a frame | `jak-dock` | `jak-island` | `jak-arena` | Short of 16.68 ms (desktop; handheld) |
+| --- | --- | --- | --- | --- |
+| (a) synced N = 64 | 207 | 302 | 488 | 12–29×; 16–41× |
+| (b) (a) with every EE instruction compiled at 7–9 ns | 171 | 263 | 419 | 10–25×; 13–35× |
+| (c) (b) with the GS off the emulation thread (S44: 0.06 to 0.12 ms a frame of recording, `Sapphire_Native.md` §52.5) | 156 | 232 | 388 | 9–23×; 12–33× |
+
+(c) assumes the device draws what the workers draw now at no cost to the processor: S44 built the mirror and the
+transfers, and its device rasteriser's throughput is owed (§52.6.4). That is also the bound after (c) on the dock,
+where the software workers are busy 90 to 98 ms a frame. **After (c) the emulation thread is bound by** the VUs (30 /
+73 / 120 ms, their floats apart), the EE's dispatcher, exits and timing model (55 / 56 / 109), the board and scheduler
+(20 / 35 / 50), and the GIF and VIF (16 / 27 / 39). None of them is near 16.68 ms alone on the island or the arena.
+
+### 58.6 The accuracy side: what a batched board must keep exact
+
+**ps2autotests by point**: the three failures of §57.8 (`cpu/ee_fpu/sqrt`, `dma/vif/intstall`, `vu/lower/efu`, all
+result tests failing for their own named reasons) at every point. The plain build adds `dma/vif/unpack` from N = 64, and
+`dma/vif/basic`, `stcycl` and `stmod` from N = 4,096. The synced build adds none at any N; the IOP's 23 pass
+everywhere.
+
+**Timing tests and result tests.** Of the 78 programs, the timing tests are those whose expected text depends on
+cycles or on the order of events: `cpu/ee/branchdelay`, `lsudelay`, `cpu/ee_fpu/branchdelay`, `cpu/ee_cop0/performance`,
+`vu/lower/fdivdelay`, `cpu/iop/branchdelay`, `hilodelay` and `lsudelay` (one processor's pipeline, which the board's
+slack cannot touch), and `dma/dmac/cpcond`, `tagintr`, `gs/signal`, `gs/label` and the kernel's
+`interrupt/dmac_order` and `intc_order` (the order of interrupts and of the DMAC's ends). The rest are result tests:
+values computed and read back. **No timing test failed at any N in either build.** The four that failed under the plain
+slack are result tests that read a VU's memory or the VIF's registers after a transfer, and they failed because the read
+saw a VIF that had not yet run. Bringing the board to the EE's time at the access was enough to pass them at every N.
+
+**What this says for a block-scheduled design.** (1) **The observations must stay exact**: every access the EE makes to
+a unit sees the unit at the access's time. Without that, results change within 64 cycles (the plain build's spikes and
+VIF tests). (2) **The background catch-ups can be batched** to at least 64 cycles without any result changing that a test,
+the boot or Jak's pictures show: a timing-only compromise. (3) **Something else must be kept exact beyond 64 cycles.**
+From N = 512 the game stalls with its geometry right and every test passing. The candidates, not separated by this step,
+are the interrupt lines (sampled only at catch-ups in this build, so a VIF, VU or GS interrupt reaches the EE up to N
+cycles late), VU1's end and XGKICK as VIF1's MSCAL and FLUSH see them, and idle skipping's waits, which pass cycles the
+batched board did not run. Finding which is the redesign's first measurement.
+
+### 58.7 Is full speed reachable, and what a redesign must do
+
+**Not with this design's levers.** Batching the board's background work (exact in results at N = 64), compiling every
+EE instruction at today's cost and taking the GS's drawing off the thread together leave the dock at 156 ms, the island
+at 232 and the arena at 388 on the desktop, 9 to 23 times short, and 12 to 33 times on the handheld. No single unit
+remains whose removal closes that. The cost lies in every unit's per-instruction, per-pair and per-observation
+overhead: the EE's dispatcher and exits at about 60 ns per compiled step, its timing model, VU1 entered a pair or two at
+a time through calls, and a board consulted for every unit after every instruction or batch. **What a redesign serving
+compatibility and speed together must do**, each piece judged by results as §58.6 sets out:
+
+- **Run the EE in long compiled blocks covering every class** (MMI, COP1, COP2 included), with the board brought along
+  only at the block's I/O accesses and at scheduled events. Exact in results by §58.6 (1) and (2), timing-only otherwise,
+  and the first default the handheld needs.
+- **Run VU1's microprograms whole on their own thread**, synchronised only at VIF1's and the EE's accesses, XGKICK and
+  the E bit, once the GIF runs at its own events (§57.4; on §57.7's samples the GIF's arbitration, checked twice at every board step and finding
+  nothing, is about 3 % of the thread). By §58.3 the VIF's and GIF's per-step work mostly disappears under batching anyway.
+- **The GS on the device** with its rasteriser (S45 and S46), since the software workers alone are near 100 ms per dock
+  frame.
+- **Drop the per-instruction timing model for a cost per block** (C1, timing-only; refused at §44.9 under the old rule,
+  and acceptable under results-first).
+- **Keep exact what results depend on**: observations, the interrupts' order (§58.6 (3)), every value read back.
+
+**For the handheld's defaults**: batched synchronisation with exact observations (the synced build's form, at the
+largest N that leaves the game behaving, 64 measured) and C1 would have to be on by default. Both are timing-only
+compromises that no test or picture here distinguishes. N past the point where the game stalls, the plain build's
+unsynchronised observations, and C3 (the floats on the host with clamping, byte-changing) would be options only. Even
+so, the measured costs say the cycle-stepped architecture cannot reach the target, so the recommendation is the redesign
+above, not further levers.
+
+### 58.8 Named limits
+
+- **One round** at the intermediate points, two at N = 1 and synced N = 64; for scale, not precision.
+- **Times from progress lines** where the run could not save its final state: with the board lagging, a queue (a FIFO
+  or the kicks) grew past its slots in the state, which is a fault of the slack itself and the reason the plain and
+  synced builds are not shippable as built.
+- **The island's N = 1 profile** is §57.7's, which does not split the compiled code by unit. Synced N = 64's island
+  perf map attributed almost none of the EE's blocks.
+- **VU0 and VU1 split by pairs**, not by samples.
+- **The stall from N = 512 is not diagnosed** (§58.6 (3)).
+- **The handheld's columns are the desktop's times 1.3 to 1.4**, not measured.
+
+### 58.9 Exposure
+
+Running the player's BIOS and Jak and Daxter makes this writer a writer of a player's-BIOS stage (§1.4): **exposed, and
+never a replacement writer.** The BIOS was handed to the machine by its link (market americas); it was never opened,
+hashed, diffed, listed, disassembled or dumped, and no firmware folder was listed. Observed: the bench's times, digests
+and counts, the instruction classes' counts (opcode fields counted, no program counter or word logged), the pictures
+every 100 frames looked at as a scene, and the host's instruction pointers in Sapphire's own code. No emulator's source
+was read.
+
+### 58.10 What was read for this step
+
+This page's §51.8 and §57; `Sapphire_Plan.md` §5.1 and §5.12's handheld factor; `Sapphire_Native.md` §33.1 to §33.5
+and §52.1 and §52.5 (S44, from its branch); `Mars_Performance.md` §24 and `Mars_Native.md`'s RSP figure for the second
+reference; `board.rs`, `gif/mod.rs`, `vif/mod.rs`, `machine.rs`'s frame loop, `blocks.rs`'s replay and `ee::step`. No
+emulator source, no firmware.

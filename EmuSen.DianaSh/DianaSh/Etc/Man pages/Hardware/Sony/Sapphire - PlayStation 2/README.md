@@ -171,7 +171,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   VUs' and the GS's overhead taken out (§55); and the floats by exact fast paths (§56): the census of `sapphire::float`'s
   callers and operand classes, the Booth product in closed form, DIV and SQRT on the host where proven, the proofs;
   and the VU's call path (§57): its split, the census of calls and observations, why an exact VU1 thread does not pay
-  on this board, and the calls answered below the unit's due cycle.
+  on this board, and the calls answered below the unit's due cycle; and the ceiling (§58): the target per field, a sweep of
+  batched synchronisation with and without exact observations, the units' floors, the EE's instructions by tier and
+  class, the projections to the handheld, and what a redesign must keep exact.
 - **`Sapphire_Scheduler.md`** — the board's and the scheduler's record from §54 on (2026-10-26), continuing
   `Sapphire_Native.md`'s numbering: S32's lever #9, the board's calls answered where each unit's next event is known (the
   IOP's next instruction, its service with nothing due, the lines between events, the VIFs and the VUs resting, the

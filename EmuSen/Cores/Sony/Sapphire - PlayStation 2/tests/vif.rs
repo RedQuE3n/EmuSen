@@ -3,6 +3,7 @@
 //! console texts reproduced on the VIF directly, in the shape their lines show; and what no program can show a
 //! referee (PATH2's stand-in, the reversed FIFO, the DMAC waiting on a full FIFO), checked on the units directly.
 
+mod d1103;
 mod s6;
 mod s11;
 mod s14;
@@ -74,6 +75,13 @@ fn vif1_s_double_buffer_equals_section_6_3_8() {
 #[test]
 fn the_registers_the_interrupt_stall_fbrst_and_the_error_masks() {
     grade(s14::regs());
+}
+
+/// D-1103's program (Sapphire_Native.md §59): STC written while INT is set and before the next VIFcode arrives cancels
+/// the i bit's stall, so the next packet's STMASK runs; Jak and Daxter's VIF1 handler writes STC so.
+#[test]
+fn stc_before_the_next_vifcode_cancels_the_i_bit_s_stall() {
+    grade(d1103::stc_bare());
 }
 
 /// DIRECT's and DIRECTHL's packets reach the GS through PATH2 in order (each a LABEL, whose ID the program reads back

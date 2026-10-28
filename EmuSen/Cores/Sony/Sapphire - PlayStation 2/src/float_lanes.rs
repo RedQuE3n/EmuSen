@@ -15,6 +15,8 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+use crate::float;
+
 /// Four lanes' results and their MAC flags in the VU's layout (lane 0, x, at bit 3 of each group: Z, S, U, O).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Vector {
@@ -67,8 +69,12 @@ const fn mac_mask(mask: u32) -> u32 {
 
 /// A register of 32-bit lanes, four or eight; each method one or two AVX2 instructions, sound only where AVX2 is present.
 #[cfg(target_arch = "x86_64")]
-trait Lanes: Copy {
+pub(crate) trait Lanes: Copy {
+    /// The lanes in the register.
+    const N: usize;
     fn k(x: i32) -> Self;
+    /// Each lane's product's low 32 bits.
+    fn mullo(self, b: Self) -> Self;
     fn and(self, b: Self) -> Self;
     fn or(self, b: Self) -> Self;
     fn xor(self, b: Self) -> Self;
@@ -113,11 +119,14 @@ trait Lanes: Copy {
 
 #[cfg(target_arch = "x86_64")]
 macro_rules! lanes {
-    ($t:ty, $set1:ident, $and:ident, $or:ident, $xor:ident, $andnot:ident, $add:ident, $sub:ident, $eq:ident, $gt:ident, $blendv:ident, $srli:ident, $slli:ident, $srai:ident, $srlv:ident, $sllv:ident, $cvt:ident, $cast:ident, $mul:ident, $sub64:ident, $add64:ident, $set64:ident, $srli64:ident, $slli64:ident, $srlv64:ident, $blend32:ident, $odd:expr, $packs32:ident, $packs16:ident, $shuffle:ident, $movemask:ident, $loadu:ident, $storeu:ident, $reverse:expr, $on:expr) => {
+    ($t:ty, $n:literal, $mullo:ident, $set1:ident, $and:ident, $or:ident, $xor:ident, $andnot:ident, $add:ident, $sub:ident, $eq:ident, $gt:ident, $blendv:ident, $srli:ident, $slli:ident, $srai:ident, $srlv:ident, $sllv:ident, $cvt:ident, $cast:ident, $mul:ident, $sub64:ident, $add64:ident, $set64:ident, $srli64:ident, $slli64:ident, $srlv64:ident, $blend32:ident, $odd:expr, $packs32:ident, $packs16:ident, $shuffle:ident, $movemask:ident, $loadu:ident, $storeu:ident, $reverse:expr, $on:expr) => {
         // SAFETY (every method): the kernel's entry points run only where AVX2 is present (`available`).
         impl Lanes for $t {
+            const N: usize = $n;
             #[inline(always)]
             fn k(x: i32) -> Self { unsafe { $set1(x) } }
+            #[inline(always)]
+            fn mullo(self, b: Self) -> Self { unsafe { $mullo(self, b) } }
             #[inline(always)]
             fn and(self, b: Self) -> Self { unsafe { $and(self, b) } }
             #[inline(always)]
@@ -180,7 +189,7 @@ macro_rules! lanes {
 }
 
 #[cfg(target_arch = "x86_64")]
-lanes!(__m128i, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_andnot_si128, _mm_add_epi32, _mm_sub_epi32,
+lanes!(__m128i, 4, _mm_mullo_epi32, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_andnot_si128, _mm_add_epi32, _mm_sub_epi32,
     _mm_cmpeq_epi32, _mm_cmpgt_epi32, _mm_blendv_epi8, _mm_srli_epi32, _mm_slli_epi32, _mm_srai_epi32, _mm_srlv_epi32,
     _mm_sllv_epi32, _mm_cvtepi32_ps, _mm_castps_si128, _mm_mul_epu32, _mm_sub_epi64, _mm_add_epi64, _mm_set1_epi64x,
     _mm_srli_epi64, _mm_slli_epi64, _mm_srlv_epi64, _mm_blend_epi32, 0b1010, _mm_packs_epi32, _mm_packs_epi16,
@@ -188,7 +197,7 @@ lanes!(__m128i, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_
     _mm_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12),
     |m: i32| _mm_setr_epi32(m & 8, m & 4, m & 2, m & 1));
 #[cfg(target_arch = "x86_64")]
-lanes!(__m256i, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor_si256, _mm256_andnot_si256, _mm256_add_epi32,
+lanes!(__m256i, 8, _mm256_mullo_epi32, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor_si256, _mm256_andnot_si256, _mm256_add_epi32,
     _mm256_sub_epi32, _mm256_cmpeq_epi32, _mm256_cmpgt_epi32, _mm256_blendv_epi8, _mm256_srli_epi32, _mm256_slli_epi32,
     _mm256_srai_epi32, _mm256_srlv_epi32, _mm256_sllv_epi32, _mm256_cvtepi32_ps, _mm256_castps_si256, _mm256_mul_epu32,
     _mm256_sub_epi64, _mm256_add_epi64, _mm256_set1_epi64x, _mm256_srli_epi64, _mm256_slli_epi64, _mm256_srlv_epi64,
@@ -211,7 +220,9 @@ macro_rules! wide_lanes {
     ($z:ident, $t:ty, $lzcnt:ident, $ternlog:ident) => {
         // SAFETY (every method): the AVX-512VL entry points run only where `available512` is true.
         impl Lanes for $z {
+            const N: usize = <$t>::N;
             #[inline(always)] fn k(x: i32) -> Self { $z(<$t>::k(x)) }
+            #[inline(always)] fn mullo(self, b: Self) -> Self { $z(self.0.mullo(b.0)) }
             #[inline(always)] fn and(self, b: Self) -> Self { $z(self.0.and(b.0)) }
             #[inline(always)] fn or(self, b: Self) -> Self { $z(self.0.or(b.0)) }
             #[inline(always)] fn xor(self, b: Self) -> Self { $z(self.0.xor(b.0)) }
@@ -326,6 +337,47 @@ fn add_fast_raw<T: Lanes>(a: T, b: T) -> Option<T> {
     if ea.eq(T::k(0)).or(eb.eq(T::k(0))).or(over).or(under).any() { None } else { Some(bits) }
 }
 
+/// `float::product`'s loss in lanes: zero unless a lane's low digits are not all zero and its bits below column 23 are
+/// under `float::MOST_LOST`, those lanes' loss from `float::loss` (Sapphire_Speed.md §56.4).
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub(crate) fn booth_loss<T: Lanes>(x: T, y: T) -> T {
+    let quiet = y.and(T::k(float::READ as i32)).eq(T::k(0));
+    let short = x.and(T::k((1 << float::K) - 1)).eq(T::k(0));
+    let near = quiet.andnot(T::k(float::MOST_LOST as i32).gt(x.mullo(y).and(T::k(0x7F_FFFF))));
+    // A multiplicand with no bits below the column loses 2^k for each negative digit there.
+    let counted = short.and(negatives(y)).sllv(T::k(float::K as i32));
+    let need = short.andnot(near);
+    if !need.any() {
+        return counted;
+    }
+    let (mut xs, mut ys, mut ns, mut out) = ([0u32; 8], [0u32; 8], [0u32; 8], [0u32; 8]);
+    // SAFETY: the arrays hold eight lanes, the most a type has.
+    unsafe {
+        x.store(xs.as_mut_ptr());
+        y.store(ys.as_mut_ptr());
+        need.store(ns.as_mut_ptr());
+    }
+    for l in 0..T::N {
+        if ns[l] != 0 {
+            out[l] = float::loss(xs[l] as u64, ys[l] as u64) as u32;
+        }
+    }
+    // SAFETY: as above.
+    counted.or(unsafe { T::load(out.as_ptr()) })
+}
+
+/// `float::negative_digits` in lanes: the digits below the column that are negative, each lane 0 to 8.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub(crate) fn negatives<T: Lanes>(y: T) -> T {
+    let yy = y.sll::<1>();
+    let n = yy.srl::<1>().and(yy).andnot(yy.srl::<2>()).and(T::k(float::DIGITS as i32));
+    let v = n.add(n.srl::<2>()).and(T::k(0x3333));
+    let v = v.add(v.srl::<4>()).and(T::k(0x0F0F));
+    v.add(v.srl::<8>()).and(T::k(0x1F))
+}
+
 /// `float::mul` in lanes, `b` the recoded operand: the bits, overflow and underflow masks.
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
@@ -336,10 +388,7 @@ fn mul_raw<T: Lanes>(a: T, b: T) -> (T, T, T) {
     let s = a.xor(b).and(T::k(SIGN));
     let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
     let (x, y) = (hidden.or_and(a, frac), hidden.or_and(b, frac));
-    // The Booth sum's loss (float::product): eight two-bit answers by y's lowest two bits and x's lowest.
-    let index = y.and(T::k(3)).sll::<1>().or(x.and(T::k(1))).sll::<2>();
-    let loss = T::k(0x1222_1000).srlv(index).and(T::k(3));
-    let (m, top) = T::product(x, y, loss);
+    let (m, top) = T::product(x, y, booth_loss(x, y));
     let (bits, over, under) = finish(s, ea.add(eb).add(top.sub(T::k(127))), m);
     (bits.pick(s, none), none.andnot(over), none.andnot(under))
 }

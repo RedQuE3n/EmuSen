@@ -157,7 +157,7 @@ fn booth(x: u64, y: u64) -> u64 {
 }
 
 /// What the columns below `DROPPED_COLUMNS` held, rows and carries (Sapphire_Speed.md §56.4).
-fn loss(x: u64, y: u64) -> u64 {
+pub(crate) fn loss(x: u64, y: u64) -> u64 {
     let (y, mask) = (y << 1, (1u64 << DROPPED_COLUMNS) - 1);
     let mut lost = 0;
     let mut i = 0;
@@ -173,10 +173,25 @@ fn loss(x: u64, y: u64) -> u64 {
 }
 
 /// The bits of `y` the digits below `DROPPED_COLUMNS` read.
-const READ: u64 = (1 << ((DROPPED_COLUMNS - 1) / 2 * 2 + 2)) - 1;
+pub(crate) const READ: u64 = (1 << ((DROPPED_COLUMNS - 1) / 2 * 2 + 2)) - 1;
 
 /// The most `loss` can be, measured over every low part it reads (Sapphire_Speed.md §56.4).
-const MOST_LOST: u64 = if DROPPED_COLUMNS == 1 { 2 } else { 8 << DROPPED_COLUMNS };
+pub(crate) const MOST_LOST: u64 = if DROPPED_COLUMNS == 1 { 2 } else { 8 << DROPPED_COLUMNS };
+
+/// The column, for the vector forms.
+#[cfg(any(test, feature = "lanes"))]
+pub(crate) const K: u32 = DROPPED_COLUMNS;
+
+/// The even columns below `DROPPED_COLUMNS`, where the digits whose rows lose bits stand.
+#[cfg(any(test, feature = "lanes"))]
+pub(crate) const DIGITS: u64 = 0x5555 & ((1 << DROPPED_COLUMNS) - 1);
+
+/// The digits below `DROPPED_COLUMNS` that are negative: `loss` is this times 2^k when `x` ≡ 0 mod 2^k (Sapphire_Speed.md §59.2).
+#[cfg(test)]
+const fn negative_digits(y: u64) -> u64 {
+    let y = y << 1;
+    ((y >> 2) & !((y >> 1) & y) & DIGITS).count_ones() as u64
+}
 
 /// `booth`'s bits from column 23 up, which are all `mul` reads, without its loop (Sapphire_Speed.md §56.4).
 fn product(x: u64, y: u64) -> u64 {
@@ -498,6 +513,15 @@ pub(crate) mod tests {
             assert_eq!(fused(acc, a, b, i & 1 == 1), fused_on_booth(acc, a, b, i & 1 == 1), "{acc:08x} ± {a:08x} × {b:08x}");
         }
         assert!(over > 10_000 && under > 10_000, "{over} {under}");
+    }
+
+    #[test]
+    fn a_multiplicand_with_no_bits_below_the_column_loses_two_to_the_k_a_negative_digit() {
+        for x in (0x80_0000..0x100_0000u64).step_by(1 << DROPPED_COLUMNS) {
+            for y in 0x80_0000..0x80_0000 + READ + 1 {
+                assert_eq!(loss(x, y), negative_digits(y) << DROPPED_COLUMNS, "{x:x} × {y:x}");
+            }
+        }
     }
 
     #[test]

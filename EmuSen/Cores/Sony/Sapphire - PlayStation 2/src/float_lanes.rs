@@ -594,19 +594,19 @@ pub use eight::{add2, add2_bits, fused2, mul2, mul2_bits, sub2};
 pub use four::{add, add_bits, add_fast, fused, mul, mul_bits, sub};
 
 #[cfg(all(test, target_arch = "x86_64"))]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::float::tests::{operand, stream};
     use crate::float::{self, Outcome};
 
     /// The MAC bits of one lane, as `vu::ops` sets them.
-    fn mac_bits(o: Outcome, lane: usize) -> u32 {
+    pub(crate) fn mac_bits(o: Outcome, lane: usize) -> u32 {
         let at = 3 - lane as u32;
         u32::from(float::is_zero(o.bits)) << at | (o.bits >> 31) << (4 + at) | u32::from(o.underflow) << (8 + at) | u32::from(o.overflow) << (12 + at)
     }
 
     /// The reference: each lane through `float`, the lanes off the mask keeping `old` and no flag.
-    fn reference(old: &[u32; 4], mask: u32, f: impl Fn(usize) -> Outcome) -> Vector {
+    pub(crate) fn reference(old: &[u32; 4], mask: u32, f: impl Fn(usize) -> Outcome) -> Vector {
         let mut v = Vector { bits: *old, mac: 0 };
         for l in 0..4 {
             if mask >> (3 - l) & 1 == 1 {
@@ -657,11 +657,7 @@ mod tests {
             assert_eq!(add_fast(&a, &b, &old, mask), want, "add_fast {a:08x?} {b:08x?}");
             assert_eq!(add_bits(&a, &b, &old, mask), want.bits, "add_bits {a:08x?} {b:08x?}");
             assert_eq!(mul_bits(&a, &b, &old, mask), reference(&old, mask, |l| float::mul(a[l], b[l])).bits, "mul_bits");
-            // The same operations paired with a second of other operands in lanes 4 to 7.
-            let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
-            let join = |x: [u32; 4], y: [u32; 4]| -> [u32; 8] { [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]] };
-            let both = |x: Vector, y: Vector| Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 };
-            let (pa, pb, pc, po, pm) = (join(a, a2), join(b, b2), join(c, c2), join(old, old2), mask | mask2 << 16);
+            let Paired { a2, b2, c2, old2, mask2, pa, pb, pc, po, pm } = paired(a, b, c, old, mask);
             let r = |f: fn(u32, u32) -> Outcome| both(reference(&old, mask, |l| f(a[l], b[l])), reference(&old2, mask2, |l| f(a2[l], b2[l])));
             assert_eq!(add2(&pa, &pb, &po, pm), r(float::add), "add2");
             assert_eq!(sub2(&pa, &pb, &po, pm), r(float::sub), "sub2");
@@ -693,60 +689,78 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_pair_of_the_reduced_set_equals_float_in_every_lane() {
-        if !available() {
-            return;
-        }
+    pub(crate) fn join(x: [u32; 4], y: [u32; 4]) -> [u32; 8] {
+        [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]]
+    }
+    pub(crate) fn both(x: Vector, y: Vector) -> Pair {
+        Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 }
+    }
+
+    /// A case's second operation for the paired forms, other operands in lanes 4 to 7 and the other lanes written.
+    pub(crate) struct Paired {
+        pub a2: [u32; 4],
+        pub b2: [u32; 4],
+        pub c2: [u32; 4],
+        pub old2: [u32; 4],
+        pub mask2: u32,
+        pub pa: [u32; 8],
+        pub pb: [u32; 8],
+        pub pc: [u32; 8],
+        pub po: [u32; 8],
+        pub pm: u32,
+    }
+    pub(crate) fn paired(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32) -> Paired {
+        let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
+        Paired { a2, b2, c2, old2, mask2, pa: join(a, a2), pb: join(b, b2), pc: join(c, c2), po: join(old, old2), pm: mask | mask2 << 16 }
+    }
+
+    /// Each pair of the reduced set in lane `i % 4`, beside three other pairs of it, against an accumulator drawn from it;
+    /// with `fill`, every fourth pair fills the vector instead, so that vectors taken whole by a fast path are met.
+    pub(crate) fn reduced_pairs(fill: bool, mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let v = reduced();
         let mut next = stream(0x5EED_1A9E_5000_0001);
-        let mut flags = [0; 2];
-        // Each pair in lane `i % 4`, beside three other pairs of the set, against an accumulator drawn from it.
         for (i, &x) in v.iter().enumerate() {
-            for (j, &y) in v.iter().enumerate().step_by(1) {
+            for (j, &y) in v.iter().enumerate() {
                 let k = (i + j) % 4;
                 let r = next();
                 let mut a = [v[r as usize % v.len()], v[(r >> 16) as usize % v.len()], v[(r >> 32) as usize % v.len()], v[(r >> 48) as usize % v.len()]];
                 let mut b = [a[3], a[2], a[1], a[0]];
                 a[k] = x;
                 b[k] = y;
-                let c = [v[(r >> 8) as usize % v.len()], y, x, v[(r >> 24) as usize % v.len()]];
+                let mut c = [v[(r >> 8) as usize % v.len()], y, x, v[(r >> 24) as usize % v.len()]];
+                if fill && j % 4 == 1 {
+                    (a, b, c) = ([x; 4], [y; 4], [c[0]; 4]);
+                }
                 if j % 4 == 0 {
-                    check(a, b, c, [0xDEAD_BEEF; 4], 0xF, &mut flags);
+                    check(a, b, c, [0xDEAD_BEEF; 4], 0xF);
                 } else {
-                    check(a, b, c, [r as u32, (r >> 32) as u32, 7, 9], (r >> 60) as u32, &mut flags);
+                    check(a, b, c, [r as u32, (r >> 32) as u32, 7, 9], (r >> 60) as u32);
                 }
             }
         }
-        assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
     }
 
-    #[test]
-    fn four_million_vectors_of_every_class_equal_float() {
-        if !available() {
-            return;
-        }
+    /// Four million vectors of §56.5's classes; with `repeat`, every second one has its first lane's operands in all four.
+    pub(crate) fn class_vectors(repeat: bool, mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let mut next = stream(0x0DDB_A11C_0FFE_E123);
-        let mut flags = [0; 2];
-        for _ in 0..4_000_000 {
+        for i in 0..4_000_000 {
             let mut v = [0u32; 12];
             for x in &mut v {
                 *x = operand(next());
             }
+            if repeat && i % 2 == 0 {
+                for l in 1..4 {
+                    (v[l], v[4 + l], v[8 + l]) = (v[0], v[4], v[8]);
+                }
+            }
             let m = next();
-            check(v[0..4].try_into().unwrap(), v[4..8].try_into().unwrap(), v[8..12].try_into().unwrap(), [m as u32; 4], (m >> 32) as u32 & 0xF | 0x8, &mut flags);
+            check(v[0..4].try_into().unwrap(), v[4..8].try_into().unwrap(), v[8..12].try_into().unwrap(), [m as u32; 4], (m >> 32) as u32 & 0xF | 0x8);
         }
-        assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
     }
 
-    #[test]
-    #[ignore = "a billion vectors, a minute or more in release"]
-    fn a_billion_vectors_equal_float() {
-        if !available() {
-            return;
-        }
+    /// A billion random lanes, every lane written.
+    pub(crate) fn random_lanes(mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {
         let mut next = stream(0x1234_5678_9ABC_DEF1);
-        let mut flags = [0; 2];
         for _ in 0..1_000_000_000u64 / 4 {
             let r = [next(), next(), next()];
             let v = |i: usize| (r[i] as u32, (r[i] >> 32) as u32);
@@ -754,7 +768,34 @@ mod tests {
             let a = [operand(r[0]), a0, a1 ^ b0, operand(r[1])];
             let b = [operand(r[2]), b1, c0, a0 ^ c1];
             let c = [c0, operand(r[0] ^ r[2]), c1, b0];
-            check(a, b, c, [0; 4], 0xF, &mut flags);
+            check(a, b, c, [0; 4], 0xF);
+        }
+    }
+
+    #[test]
+    fn every_pair_of_the_reduced_set_equals_float_in_every_lane() {
+        let mut flags = [0; 2];
+        if available() {
+            reduced_pairs(false, |a, b, c, o, m| check(a, b, c, o, m, &mut flags));
+            assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
+        }
+    }
+
+    #[test]
+    fn four_million_vectors_of_every_class_equal_float() {
+        let mut flags = [0; 2];
+        if available() {
+            class_vectors(false, |a, b, c, o, m| check(a, b, c, o, m, &mut flags));
+            assert!(flags[0] > 10_000 && flags[1] > 10_000, "overflows and underflows met: {flags:?}");
+        }
+    }
+
+    #[test]
+    #[ignore = "a billion vectors, a minute or more in release"]
+    fn a_billion_vectors_equal_float() {
+        if available() {
+            random_lanes(|a, b, c, o, m| check(a, b, c, o, m, &mut [0; 2]));
         }
     }
 }
+

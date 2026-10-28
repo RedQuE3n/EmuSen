@@ -419,28 +419,7 @@ mod tests {
     use super::*;
     use crate::float::Outcome;
     use crate::float::tests::{operand, stream};
-
-    fn mac_bits(o: Outcome, lane: usize) -> u32 {
-        let at = 3 - lane as u32;
-        u32::from(float::is_zero(o.bits)) << at | (o.bits >> 31) << (4 + at) | u32::from(o.underflow) << (8 + at) | u32::from(o.overflow) << (12 + at)
-    }
-    fn reference(old: &[u32; 4], mask: u32, f: impl Fn(usize) -> Outcome) -> Vector {
-        let mut v = Vector { bits: *old, mac: 0 };
-        for l in 0..4 {
-            if mask >> (3 - l) & 1 == 1 {
-                let o = f(l);
-                v.bits[l] = o.bits;
-                v.mac |= mac_bits(o, l);
-            }
-        }
-        v
-    }
-    fn join(x: [u32; 4], y: [u32; 4]) -> [u32; 8] {
-        [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]]
-    }
-    fn both(x: Vector, y: Vector) -> Pair {
-        Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 }
-    }
+    use crate::float_lanes::tests::{Paired, both, class_vectors, paired, random_lanes, reduced_pairs, reference};
 
     /// Both forms against `float` lane by lane, four lanes and paired; counts the vectors taken whole as add, mul, multiply-add.
     fn check(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32, taken: &mut [u64; 3]) {
@@ -448,9 +427,7 @@ mod tests {
         let r = |f: fn(u32, u32) -> Outcome| reference(&old, mask, |l| f(a[l], b[l]));
         taken[0] += u64::from((0..4).all(|l| add_taken(a[l], b[l])));
         taken[1] += u64::from((0..4).all(|l| mul_taken(a[l], b[l])));
-        // The paired forms' second operation: other operands, the other lanes written.
-        let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
-        let (pa, pb, pc, po, pm) = (join(a, a2), join(b, b2), join(c, c2), join(old, old2), mask | mask2 << 16);
+        let Paired { a2, b2, c2, old2, mask2, pa, pb, pc, po, pm } = paired(a, b, c, old, mask);
         let r2 = |f: fn(u32, u32) -> Outcome| both(r(f), reference(&old2, mask2, |l| f(a2[l], b2[l])));
         // SAFETY: the tests run where AVX2 is present, and the wide form only where `available512` is.
         unsafe {
@@ -490,92 +467,32 @@ mod tests {
         }
     }
 
-    /// R0.4's reduced set: fields 0-5, 100-154 and 250-255, sixteen edge fractions, both signs.
-    fn reduced() -> Vec<u32> {
-        let fields: Vec<u32> = (0..=5).chain(100..=154).chain(250..=255).collect();
-        let fractions = [0, 1, 2, 3, 0x1FFF, 0x2000, 0x3F_FFFF, 0x40_0000, 0x40_0001, 0x55_5555, 0x2A_AAAA, 0x7F_FFFC, 0x7F_FFFD, 0x7F_FFFE, 0x7F_FFFF, 0x60_0000];
-        let mut v = Vec::new();
-        for s in 0..2u32 {
-            for &e in &fields {
-                for &f in &fractions {
-                    v.push(s << 31 | e << 23 | f);
-                }
-            }
-        }
-        v
-    }
-
     #[test]
     fn every_pair_of_the_reduced_set_equals_float_on_the_host_path() {
-        if !available() {
-            return;
-        }
-        let v = reduced();
-        let mut next = stream(0x5EED_1A9E_5000_0001);
         let mut taken = [0; 3];
-        for (i, &x) in v.iter().enumerate() {
-            for (j, &y) in v.iter().enumerate() {
-                let k = (i + j) % 4;
-                let r = next();
-                let mut a = [v[r as usize % v.len()], v[(r >> 16) as usize % v.len()], v[(r >> 32) as usize % v.len()], v[(r >> 48) as usize % v.len()]];
-                let mut b = [a[3], a[2], a[1], a[0]];
-                a[k] = x;
-                b[k] = y;
-                let mut c = [v[(r >> 8) as usize % v.len()], y, x, v[(r >> 24) as usize % v.len()]];
-                // Every fourth pair fills the vector, so that vectors the host takes whole are met as often.
-                if j % 4 == 1 {
-                    (a, b, c) = ([x; 4], [y; 4], [c[0]; 4]);
-                }
-                check(a, b, c, [r as u32, (r >> 32) as u32, 7, 9], if j % 4 == 0 { 0xF } else { (r >> 60) as u32 }, &mut taken);
-            }
+        if available() {
+            reduced_pairs(true, |a, b, c, o, m| check(a, b, c, o, m, &mut taken));
+            assert!(taken.iter().all(|&t| t > 100_000), "vectors taken whole: {taken:?}");
         }
-        assert!(taken.iter().all(|&t| t > 100_000), "vectors taken whole: {taken:?}");
     }
 
     #[test]
     fn four_million_vectors_of_every_class_equal_float_on_the_host_path() {
-        if !available() {
-            return;
-        }
-        let mut next = stream(0x0DDB_A11C_0FFE_E123);
         let mut taken = [0; 3];
-        for i in 0..4_000_000 {
-            let mut v = [0u32; 12];
-            for x in &mut v {
-                *x = operand(next());
-            }
-            // Half the vectors repeat one lane's operands, so that vectors the host takes whole are met.
-            if i % 2 == 0 {
-                for l in 1..4 {
-                    v[l] = v[0];
-                    v[4 + l] = v[4];
-                    v[8 + l] = v[8];
-                }
-            }
-            let m = next();
-            check(v[0..4].try_into().unwrap(), v[4..8].try_into().unwrap(), v[8..12].try_into().unwrap(), [m as u32; 4], (m >> 32) as u32 & 0xF | 0x8, &mut taken);
+        if available() {
+            class_vectors(true, |a, b, c, o, m| check(a, b, c, o, m, &mut taken));
+            assert!(taken.iter().all(|&t| t > 100_000), "vectors taken whole: {taken:?}");
         }
-        assert!(taken.iter().all(|&t| t > 100_000), "vectors taken whole: {taken:?}");
     }
 
     #[test]
     #[ignore = "a billion lanes, minutes in release"]
     fn a_billion_lanes_equal_float_on_the_host_path() {
-        if !available() {
-            return;
-        }
-        let mut next = stream(0x1234_5678_9ABC_DEF1);
         let mut taken = [0; 3];
-        for _ in 0..1_000_000_000u64 / 4 {
-            let r = [next(), next(), next()];
-            let v = |i: usize| (r[i] as u32, (r[i] >> 32) as u32);
-            let ((a0, a1), (b0, b1), (c0, c1)) = (v(0), v(1), v(2));
-            let a = [operand(r[0]), a0, a1 ^ b0, operand(r[1])];
-            let b = [operand(r[2]), b1, c0, a0 ^ c1];
-            let c = [c0, operand(r[0] ^ r[2]), c1, b0];
-            check(a, b, c, [0; 4], 0xF, &mut taken);
+        if available() {
+            random_lanes(|a, b, c, o, m| check(a, b, c, o, m, &mut taken));
+            println!("vectors taken whole: {taken:?}");
         }
-        println!("vectors taken whole: {taken:?}");
     }
 
     /// The vector a billion-lane run failed on when it ran a stale build of seeded fault F7 (Sapphire_Speed.md §59.5).

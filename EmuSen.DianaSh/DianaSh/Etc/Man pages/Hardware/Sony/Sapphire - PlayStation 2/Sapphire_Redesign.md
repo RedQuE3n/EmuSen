@@ -1550,3 +1550,182 @@ Disputes:
 
 Exposure: the player's-BIOS writer of this stage ran the player's BIOS and Jak and Daxter, both on the desktop and on
 the handheld. No firmware was listed, hashed or read, and no program counter, code word or operand was logged.
+
+## The emitter's exact forms: the data cache's path (measured 2026-10-28)
+
+*Decided 2026-10-28 by the tester: prototype R0.2's largest lever, the data cache's path, then the exits' write-back
+and a shared entry stub, one at a time, as measurement prototypes for the byte face's emitter (EmuSen_TwoFaces.md). Each
+must stay exact. The work stops early if a lever comes in at less than half its estimated saving.*
+
+**The stop rule was met after the first lever.** The cache path is exact, but it saves **37.0 hot bytes a guest
+instruction on the arena** (271.9 to 234.9) against an estimated saving of about 106 (about 130 down to about 24), so
+the exits' write-back and the entry stub were not built. The disassembly shows where the remaining bytes are: the
+spills and reloads of the entry's values, which the exits hold live (below). That is the evidence for the next lever.
+
+### The instrument
+
+The `forms` feature (off by default; without it `jit/forms_off.rs` compiles every lever out, so the default build's
+code is unchanged):
+- `EMUSEN_SAPPHIRE_FORMS=cache` turns the lever on for the blocks the dispatcher runs, so the bench's digests and
+  `tests/blocks.rs` grade it;
+- `EMUSEN_SAPPHIRE_FORMS=count` counts each compiled load and store that stays in its block, by its page's kind;
+- `EMUSEN_SAPPHIRE_FORMS_BYTES=1` is R0.2's shadow compile, now kept in the tree: each block the dispatcher compiles is
+  compiled again outside the module as today's emitter, C1, the static prototype, the static prototype with the
+  levers, and today's with the levers. The hot straight line is counted by purpose, by R0's method;
+- `EMUSEN_SAPPHIRE_FORMS_DUMP=FILE` writes the compiled code of the first eight blocks with three or more loads and
+  stores, in the two static forms.
+
+### The form
+
+- **Dispatch:** the page's kind and, for a store, its writable bit tested as one masked compare.
+- **A hit in either way:** each way's tag read as one little-endian word, its frame and V kept by a mask and compared
+  with the page's frame and V set. Way 0 is taken first, as `DCache::hit` finds it. The line's address and its tag's
+  address follow with no multiply.
+- **The scratchpad** goes inline too, as a second fast path. Counted on the dock window with the lever
+  (`EMUSEN_SAPPHIRE_FORMS=cache,count`, 300 fields), the compiled loads and stores that stayed in their blocks were
+  35.3 M to the scratchpad, 45.4 M cached hits and 6,307 uncached. The scratchpad is common, and RDRAM past the caches
+  is not.
+- **Out of line:** everything else, in the existing path laid cold. That covers RDRAM past the caches, the accelerated
+  pages, a page not writable, a miss and anything the interpreter takes. The counts of RDRAM's traffic past the caches
+  (`Context::uncached`, `uncached_loads`) moved into that path, because a hit adds zero to them.
+- **The store's D bit** is set as before, unless the line is locked.
+
+### Exactness (measured)
+
+| Check | Today's path | With the lever |
+| --- | --- | --- |
+| the arena window, 300 fields from the state at 9,000 | picture B77DC314C6AE837C, sound BCA8F00F4743A955, state 4ED52755B09F207E (R0's runs) | the same |
+| the dock window, 300 fields from the state at 6,000 | 43D839015A0E4DA1, 2C225C73DB4D3F9D, E220B19BD26D8EBC (R0's runs) | the same |
+| the dock's first 60 fields | 5A2BDD3521E043D7, D5F15509CCDD1709, 66581EBBF2A092D5 | the same |
+| `tests/blocks.rs`, test-checked profile | 25 of 25 | 25 of 25 |
+
+**Seeded faults**, each seeded into the lever alone, then reverted:
+
+| Fault | Caught by |
+| --- | --- |
+| the wrong way: way 0's hit takes way 1's line | the 60 fields' picture and state |
+| a miss taken as a hit in way 1 | the 60 fields' picture and state |
+| V ignored: an invalid line with the frame hits | the 60 fields' picture and state |
+| the D bit set on way 0's tag whichever way hit | the 60 fields' picture and state |
+| a store to a cached page the TLB has not made writable run inline | not the 60 fields (no such store in them); `a_tlb_write_or_a_mode_change_is_seen_by_the_next_access` |
+| an uncached load's bus wait dropped | not the 60 fields; six tests of `tests/blocks.rs`, among them `every_load_and_store_runs_compiled_on_every_region` and `the_stage_s7_memory_programs_leave_the_interpreters_machine` |
+
+### The bytes (measured)
+
+Host bytes a guest instruction; the hot straight line is the part laid before the first cold block.
+
+| Window | Form | Hot | Cold | Total | Cache tags and dispatch, tagged (a memory instruction) |
+| --- | --- | --- | --- | --- | --- |
+| arena (23,251 blocks, 212,366 instructions, 39.5 % memory) | the static prototype | 271.9 | 272.0 | 544.0 | 80.3 (203) |
+| | **with the cache path** | **234.9** | 306.4 | 541.2 | **53.2 (135)** |
+| | today's emitter | 538.6 | 703.5 | 1,242.1 | — |
+| | today's, with the cache path | 502.7 | 743.9 | 1,246.6 | 56.1 |
+| dock (5,705 blocks, 62,319 instructions, 37.0 % memory) | the static prototype | 243.8 | 280.7 | 524.4 | 75.5 |
+| | **with the cache path** | **209.6** | 313.9 | 523.5 | **49.4** |
+| | today's emitter | 511.4 | 872.1 | 1,383.5 | 80.6 |
+| | today's, with the cache path | 478.5 | 911.4 | 1,389.9 | 51.5 |
+
+- **The saving:** 37.0 hot bytes a guest instruction on the arena and 34.2 on the dock (94 and 92 a memory
+  instruction). The tagged cache bytes fell by 27 and 26, and the untagged ones by the rest. The estimate was about 106.
+  The cold bytes rose by about 34, the moved paths.
+- **A branchy way selection**, tried on the dock's first 60 fields (way 0 compared and taken first, way 1 only on its
+  miss), took the tagged cache bytes from 54.3 to 47.4, but the untagged bytes rose from 84.2 to 92.2. The hot total was
+  the same (252.9 against 253.5), so the select form was kept.
+- **Why the estimate missed:** it priced the cache path's own instructions. About 135 bytes a memory instruction remain
+  under that tag:
+  - the two kinds' tests;
+  - both ways' masked compares;
+  - the line's address;
+  - the scratchpad's path;
+  - the D bit;
+  - the moves of the three values the paths join with;
+
+  and below them the reloads of values the register allocator has spilled.
+
+### The ring at the bytes reached (measured)
+
+R0's `ring` binary (`ring mix`, Jak's p90 working set), asked for 235 bytes. Its code came to 243.0 and 243.3 bytes a
+guest instruction. Two rounds; the handheld on the charger (ACAD online 1 before and after), CPU only, scratch removed
+afterwards.
+
+| Entries | Desktop | Handheld | R0 at 283 bytes, desktop / handheld | Mark (handheld): Jak's opening / the arena's fields |
+| --- | --- | --- | --- | --- |
+| today's 2.87 instructions an entry | 4.60–4.74 ns a guest instruction | 5.56–5.61 | 5.20 / 6.49 | 2.75 / 2.28 |
+| §4.2's 14.5 | 3.99–4.40 | 9.00–9.27 | 4.95–5.03 / 10.1–10.3 | 2.75 / 2.28 |
+
+Both fail by about two to four times. The ring is still far from the mark of about 96 bytes, at which R0 measured 2.24
+to 2.43 on the handheld.
+
+### The next lever's evidence: the entry's values held to every exit (measured from the disassembly; the saving estimated)
+
+*Analysis only; nothing was built or run for it. The figures are from `EMUSEN_SAPPHIRE_FORMS_DUMP` on the dock's first
+60 fields: the first eight blocks with three or more loads and stores, 58 guest instructions, in the static prototype
+with the cache path. Blocks that heavy in loads and stores are not the average. Instructions are sized by their x86-64
+encodings (REX, opcode, ModRM, SIB for a stack address, disp8 or disp32). The hot blocks are those printed before the
+first cold one, since Cranelift emits cold blocks last.*
+
+**(a) What is held.** The entry loads about twenty values, the same in every block:
+- **the issue model:** `last`, `floor`, the two halves of `last_writes`, and the five byte fields `open`,
+  `group_ends`, `paired`, `last_category` and `last_pipe`;
+- **the instructions issued**, Count, Compare, Random, the cycles Count last saw, and the issue group;
+- **the memory context:** the translation cache's address and generation, the horizon, and the data cache's lines;
+- **the context pointer itself**, which arrives in a caller-saved register.
+
+Guest registers are loaded where an instruction first reads them, not at the entry.
+
+**(b) Why they live to every exit.**
+- **Every exit writes back the whole model.** `write_back` stores each of the model's fields, Random and the group at
+  every exit, whether or not the block changed them. In the static prototype only `last` changes, so the other values
+  stored are the entry's, and each must stay live to the block's last exit.
+- **A block has many exits:** each load's and store's way out, the line checks, and the final exit.
+- **Calls cross those live ranges.** The final exit, which is hot, calls the replay helper before its write-back.
+  Cold paths call the translation cache's fill and `leave`. The System V convention lets a call clobber nine
+  general-purpose registers, and leaves five callee-saved ones, which the block's own pointers fill. Cranelift's
+  allocator therefore spills these values at the entry and reloads them at each use. It does the same for the guest
+  registers and addresses that are live across the final exit's call.
+
+**(c) What they cost, measured.** In the hot code of those blocks:
+- **spills:** 186, 18.8 bytes a guest instruction;
+- **reloads:** 323, 33.3 bytes;
+- **the entry's loads:** 157, 19.7 bytes;
+- **the prologue:** the frame and five saved registers, about 30 bytes a block.
+
+Spills and reloads together are **52.1 bytes a guest instruction**, about a fifth of the hot code. With the entry's
+loads they are 71.8.
+
+The reloads by the slot read:
+- 110 are of the model, the instructions issued, the cycles seen and the group (41 of them the five byte fields, 21
+  `last`);
+- 26 are of the data cache's lines and 14 of the horizon;
+- 34 are of the context pointer;
+- 99 are of values computed in the block.
+
+**(d) The smallest exact change, with its saving estimated.**
+- **Write back only what changed**, the rule the guest registers already follow: a model field, Random or the group is
+  stored at an exit only when the block's value is not the very value the entry loaded. Unchanged means the memory
+  already holds it, unless a helper wrote it in between. The replay, `leave` and the fill are not expected to write
+  the EE's issue model, and that would have to be checked before relying on it. In the static prototype this makes
+  ten of the entry's loads dead (every model field but `last`, Random and the group), so their spills and reloads go
+  with them.
+  - **Estimated saving:** about 40 hot bytes a guest instruction. That is their share of the entry's loads (about 10),
+    of the spills (about 11) and of the reloads (about 9), and the final exit's ten stores (about 11).
+  - **Where it applies:** in today's full-model emitter most of the model changes at every instruction, so it saves
+    much less there.
+- **The count of instructions issued** as one add to memory at the exit, in place of a load at the entry kept live to
+  the exit: a few bytes more.
+- **Not exact as it stands:** writing back before the replay call, so that nothing is live across it, would leave a
+  rollback (kept < steps) with the EE's registers already overwritten. It needs an undo of its own.
+- **To be checked:** a calling convention for the helpers that preserves more registers would keep the context pointer
+  and the memory context in registers, worth about 5 to 8 bytes by the reload counts. Whether this Cranelift version
+  offers one for indirect calls was not checked.
+
+**What it says.** The bytes left are mostly not the cache path's or the translation's own instructions. They are the
+cost of state the block holds from its entry for exits that may never be taken. An exit form that writes back only what
+changed attacks the entry, the write-back and a fifth of the untagged bytes at once. That is the lever to build next if
+the work resumes.
+
+### Tests run
+
+- `tests/blocks.rs`, test-checked profile: 25 of 25 on today's path; 25 of 25 with the lever, on its final form; the
+  two faults' runs as above.
+- The bench: the arena, the dock and the dock's first 60 fields, with and without the lever, digests as above.

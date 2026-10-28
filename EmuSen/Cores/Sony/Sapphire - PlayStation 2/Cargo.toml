@@ -32,6 +32,8 @@ cranelift-module = "0.136.0"
 lanes = []
 # The working-set census of compiled blocks a field, for measurement only (the bench's `--working FILE`).
 census = []
+# The emitter's smaller exact forms and their byte count, for measurement only (Sapphire_Redesign.md, the emitter's exact forms).
+forms = []
 
 [[example]]
 name = "lanes"

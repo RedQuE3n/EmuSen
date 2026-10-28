@@ -77,6 +77,10 @@ const TAG_VALID: i32 = offset_of!(DTag, valid) as i32;
 const TAG_DIRTY: i32 = offset_of!(DTag, dirty) as i32;
 const TAG_LOCK: i32 = offset_of!(DTag, lock) as i32;
 const _: () = assert!(size_of::<DTag>() == 8 && size_of::<Page>() == 32, "a tag is undone as 8 bytes, a page found by a shift of 5");
+/// A tag read as one little-endian word: the frame and V kept, the rest masked off; a hit is the frame with V set.
+const HIT_MASK: i64 = (0xFFFF_FFFFu64 << (8 * TAG_PFN) | 0xFFu64 << (8 * TAG_VALID)) as i64;
+const HIT_WANT: i64 = 1 << (8 * TAG_VALID);
+const _: () = assert!(cfg!(target_endian = "little"), "a tag read as one word");
 
 const fn cop0_at(r: usize) -> i32 {
     COP0 + 4 * r as i32
@@ -407,7 +411,9 @@ impl Emitter<'_, '_> {
         if let Some(v) = self.held.regs[r] {
             return v;
         }
+        let p = super::forms::push(self.b, 3);
         let v = self.load(I64, GPR + 16 * r as i32);
+        super::forms::tag(self.b, p);
         self.held.regs[r] = Some(v);
         v
     }
@@ -426,7 +432,9 @@ impl Emitter<'_, '_> {
         if let Some(v) = self.held.highs[r] {
             return v;
         }
+        let p = super::forms::push(self.b, 3);
         let v = self.load(I64, GPR + 16 * r as i32 + 8);
+        super::forms::tag(self.b, p);
         self.held.highs[r] = Some(v);
         v
     }
@@ -446,7 +454,9 @@ impl Emitter<'_, '_> {
         if let Some(v) = self.held.hilo[i] {
             return v;
         }
+        let p = super::forms::push(self.b, 3);
         let v = self.load(I64, Self::hilo_at(i));
+        super::forms::tag(self.b, p);
         self.held.hilo[i] = Some(v);
         v
     }
@@ -565,6 +575,13 @@ impl Emitter<'_, '_> {
     /// `issue` with the cycles the instruction's data access waited for memory (`Issue::data`), 0 or an uncached
     /// load's at run time.
     fn issue_waiting(&mut self, op: &Op, w: u32, taken: Tv, data: Tv) -> Tv {
+        if super::forms::is_static() {
+            let _ = (taken, data);
+            let at = self.add(self.held.model.last, 1);
+            self.held.model.last = at;
+            self.held.steps += 1;
+            return at;
+        }
         let i = ops::issue(op, w);
         let data = if self.options.fixed_cost { K(0) } else { data };
         let waits = self.flag(IntCC::NotEqual, data, K(0));
@@ -809,6 +826,7 @@ impl Emitter<'_, '_> {
 
     /// The exit at the current point, the core at `at` after the block's steps so far.
     fn exit(&mut self, at: At) {
+        super::forms::tag(self.b, 10);
         let steps = self.held.steps;
         if steps == 0 || self.options.verify {
             // Nothing ran, or each step was written back and replayed by the verifier's calls.
@@ -1252,9 +1270,12 @@ impl Emitter<'_, '_> {
             Some(next) => At::Slot { pc, next },
             None => At::Line(pc),
         };
+        super::forms::tag(self.b, 11);
         let fault = self.fault(name, w);
         self.exit_if(fault, before);
+        super::forms::tag(self.b, 9);
         self.compute(name, w);
+        super::forms::tag(self.b, 2);
         self.issue(op, w, K(0));
     }
 
@@ -1321,10 +1342,12 @@ impl Emitter<'_, '_> {
         if kept.steps > 0 && !self.options.verify {
             // The times of the instructions before this one stay short of the board's next event, so that no DMAC step
             // falls between them and this access.
+            let p = super::forms::push(self.b, 4);
             let t = self.add(kept.model.last, 1);
             let t = self.v(t);
             let ok = self.b.ins().icmp(IntCC::UnsignedLessThan, t, m.horizon);
             self.go_if(ok, slow, LEFT_HORIZON);
+            super::forms::tag(self.b, p);
         }
         let base = self.reg(rs(w));
         let ea = self.b.ins().iadd_imm_s(base, simm(w));
@@ -1341,56 +1364,97 @@ impl Emitter<'_, '_> {
             _ => va,
         };
         let store = matches!(acc, Access::Store { .. } | Access::Sq | Access::StoreUnit { .. });
+        super::forms::tag(self.b, 6);
         let (host, meta) = self.page(a, slow);
+        super::forms::tag(self.b, 7);
+        let inline = super::forms::on(super::forms::CACHE);
         let class = self.b.ins().band_imm_s(meta, 3);
-        let cached = self.b.ins().icmp_imm_s(IntCC::Equal, class, kind::CACHED as i64);
+        let cached = if inline {
+            let (mask, want) = if store { (3 | kind::WRITABLE, kind::CACHED | kind::WRITABLE) } else { (3, kind::CACHED) };
+            let c = self.b.ins().band_imm_s(meta, mask as i64);
+            self.b.ins().icmp_imm_s(IntCC::Equal, c, want as i64)
+        } else {
+            self.b.ins().icmp_imm_s(IntCC::Equal, class, kind::CACHED as i64)
+        };
         let line = self.b.create_block();
         let flat = self.b.create_block();
         let join = self.b.create_block();
         let ptr = self.b.append_block_param(join, I64);
         let tagp = self.b.append_block_param(join, I64);
         let unc = self.b.append_block_param(join, I64);
-        self.b.ins().brif(cached, line, &[], flat, &[]);
+        if inline {
+            // The scratchpad inline beside a hit; everything else out of line in `flat`.
+            let other = self.b.create_block();
+            self.b.ins().brif(cached, line, &[], other, &[]);
+            self.b.seal_block(other);
+            self.b.switch_to_block(other);
+            let (mask, want) = if store { (3 | kind::WRITABLE, kind::SCRATCHPAD | kind::WRITABLE) } else { (3, kind::SCRATCHPAD) };
+            let c = self.b.ins().band_imm_s(meta, mask as i64);
+            let spr = self.b.ins().icmp_imm_s(IntCC::Equal, c, want as i64);
+            let near = self.b.create_block();
+            self.b.ins().brif(spr, near, &[], flat, &[]);
+            self.b.seal_block(near);
+            self.b.switch_to_block(near);
+            if super::forms::on(super::forms::COUNT) {
+                let k = self.k(kind::SCRATCHPAD as i64);
+                self.count_kind(k);
+            }
+            let within = self.b.ins().band_imm_s(a, 0xFFF);
+            let p = self.b.ins().iadd(host, within);
+            let ctx = self.ctx;
+            let dummy = self.b.ins().iadd_imm_s(ctx, i64::from(X_DUMMY));
+            let zero = self.k(0);
+            self.b.ins().jump(join, &[p.into(), dummy.into(), zero.into()]);
+            self.b.set_cold_block(flat);
+        } else {
+            self.b.ins().brif(cached, line, &[], flat, &[]);
+        }
         self.b.seal_block(line);
         self.b.seal_block(flat);
 
         // A cached page: a hit in either way of the set, which the interpreter's `DCache::hit` finds way 0 first.
         self.b.switch_to_block(line);
-        if store {
-            let wr = self.b.ins().band_imm_s(meta, kind::WRITABLE as i64);
-            self.go_if(wr, slow, LEFT_PAGE);
+        if inline {
+            let (l, t) = self.line_hit(a, meta, slow);
+            let zero = self.k(0);
+            self.b.ins().jump(join, &[l.into(), t.into(), zero.into()]);
+        } else {
+            if store {
+                let wr = self.b.ins().band_imm_s(meta, kind::WRITABLE as i64);
+                self.go_if(wr, slow, LEFT_PAGE);
+            }
+            let set = self.b.ins().ushr_imm_s(a, 6);
+            let set = self.b.ins().band_imm_s(set, 63);
+            let tags_off = self.b.ins().imul_imm_s(set, 2 * TAG);
+            let tags = self.b.ins().iadd(self.ee, tags_off);
+            let ppage = self.b.ins().ushr_imm_s(meta, 32);
+            let ppage = self.b.ins().ireduce(I32, ppage);
+            let mut hits = [None; 2];
+            for (way, h) in hits.iter_mut().enumerate() {
+                let at = D_TAGS + (TAG * way as i64) as i32;
+                let pfn = self.b.ins().load(I32, trusted(), tags, at + TAG_PFN);
+                let valid = self.b.ins().load(I8, trusted(), tags, at + TAG_VALID);
+                let same = self.b.ins().icmp(IntCC::Equal, pfn, ppage);
+                let on = self.b.ins().icmp_imm_s(IntCC::NotEqual, valid, 0);
+                *h = Some(self.b.ins().band(same, on));
+            }
+            let (hit0, hit1) = (hits[0].expect("way 0"), hits[1].expect("way 1"));
+            let any = self.b.ins().bor(hit0, hit1);
+            self.go_if(any, slow, LEFT_MISS);
+            let one = self.k(1);
+            let zero = self.k(0);
+            let way = self.b.ins().select(hit0, zero, one);
+            let set_bytes = self.b.ins().ishl_imm_s(set, 7);
+            let way_bytes = self.b.ins().ishl_imm_s(way, 6);
+            let within = self.b.ins().band_imm_s(a, 63);
+            let l = self.b.ins().iadd(m.lines, set_bytes);
+            let l = self.b.ins().iadd(l, way_bytes);
+            let l = self.b.ins().iadd(l, within);
+            let tag_way = self.b.ins().imul_imm_s(way, TAG);
+            let t = self.b.ins().iadd(tags, tag_way);
+            let t = self.b.ins().iadd_imm_s(t, i64::from(D_TAGS));
+            self.b.ins().jump(join, &[l.into(), t.into(), zero.into()]);
         }
-        let set = self.b.ins().ushr_imm_s(a, 6);
-        let set = self.b.ins().band_imm_s(set, 63);
-        let tags_off = self.b.ins().imul_imm_s(set, 2 * TAG);
-        let tags = self.b.ins().iadd(self.ee, tags_off);
-        let ppage = self.b.ins().ushr_imm_s(meta, 32);
-        let ppage = self.b.ins().ireduce(I32, ppage);
-        let mut hits = [None; 2];
-        for (way, h) in hits.iter_mut().enumerate() {
-            let at = D_TAGS + (TAG * way as i64) as i32;
-            let pfn = self.b.ins().load(I32, trusted(), tags, at + TAG_PFN);
-            let valid = self.b.ins().load(I8, trusted(), tags, at + TAG_VALID);
-            let same = self.b.ins().icmp(IntCC::Equal, pfn, ppage);
-            let on = self.b.ins().icmp_imm_s(IntCC::NotEqual, valid, 0);
-            *h = Some(self.b.ins().band(same, on));
-        }
-        let (hit0, hit1) = (hits[0].expect("way 0"), hits[1].expect("way 1"));
-        let any = self.b.ins().bor(hit0, hit1);
-        self.go_if(any, slow, LEFT_MISS);
-        let one = self.k(1);
-        let zero = self.k(0);
-        let way = self.b.ins().select(hit0, zero, one);
-        let set_bytes = self.b.ins().ishl_imm_s(set, 7);
-        let way_bytes = self.b.ins().ishl_imm_s(way, 6);
-        let within = self.b.ins().band_imm_s(a, 63);
-        let l = self.b.ins().iadd(m.lines, set_bytes);
-        let l = self.b.ins().iadd(l, way_bytes);
-        let l = self.b.ins().iadd(l, within);
-        let tag_way = self.b.ins().imul_imm_s(way, TAG);
-        let t = self.b.ins().iadd(tags, tag_way);
-        let t = self.b.ins().iadd_imm_s(t, i64::from(D_TAGS));
-        self.b.ins().jump(join, &[l.into(), t.into(), zero.into()]);
 
         // The scratchpad, and RDRAM past the caches for a store.
         self.b.switch_to_block(flat);
@@ -1425,6 +1489,9 @@ impl Emitter<'_, '_> {
             self.b.ins().select(is_unc, unc, page)
         };
         let on = self.b.create_block();
+        if inline {
+            self.b.set_cold_block(on);
+        }
         self.b.ins().brif(ok, on, &[], slow, &[reason.into()]);
         self.b.seal_block(on);
         self.b.switch_to_block(on);
@@ -1433,14 +1500,33 @@ impl Emitter<'_, '_> {
         let ctx = self.ctx;
         let dummy = self.b.ins().iadd_imm_s(ctx, i64::from(X_DUMMY));
         let u = self.b.ins().uextend(I64, is_unc);
+        if super::forms::on(super::forms::COUNT) {
+            self.count_kind(class);
+        }
+        if inline {
+            // The counts of RDRAM's traffic past the caches, which a hit leaves alone.
+            let at = match acc {
+                Access::Load { .. } | Access::Lq | Access::LoadUnit { .. } => Some(X_UNCACHED_LOADS),
+                Access::Store { .. } | Access::Sq | Access::StoreUnit { .. } => Some(X_UNCACHED),
+                Access::Pref => None,
+            };
+            if let Some(at) = at {
+                let n = self.b.ins().load(I64, trusted(), ctx, at);
+                let n = self.b.ins().iadd(n, u);
+                self.b.ins().store(trusted(), n, ctx, at);
+            }
+        }
         self.b.ins().jump(join, &[p.into(), dummy.into(), u.into()]);
         self.b.seal_block(join);
         self.b.switch_to_block(join);
 
+        super::forms::tag(self.b, 8);
         let rt_ = rt(w);
         let loads = matches!(acc, Access::Load { .. } | Access::Lq | Access::LoadUnit { .. });
         // An uncached load waits for the bus (`timing::UNCACHED`) and is counted as the board counts `Bus::read`.
-        let data = if loads {
+        let data = if loads && inline {
+            D(self.b.ins().imul_imm_s(unc, timing::UNCACHED as i64))
+        } else if loads {
             let ctx = self.ctx;
             let n = self.b.ins().load(I64, trusted(), ctx, X_UNCACHED_LOADS);
             let n = self.b.ins().iadd(n, unc);
@@ -1478,7 +1564,7 @@ impl Emitter<'_, '_> {
                 let v = self.reg(rt_);
                 let v = if bytes == 8 { v } else { self.b.ins().ireduce(int_type(bytes), v) };
                 self.b.ins().store(guest(), v, ptr, 0);
-                self.stored(tagp, unc);
+                self.stored(tagp, unc, inline);
             }
             Access::Sq => {
                 self.log(ptr, a, tagp);
@@ -1486,7 +1572,7 @@ impl Emitter<'_, '_> {
                 let hi = self.high(rt_);
                 self.b.ins().store(guest(), lo, ptr, 0);
                 self.b.ins().store(guest(), hi, ptr, 8);
-                self.stored(tagp, unc);
+                self.stored(tagp, unc, inline);
             }
             Access::StoreUnit { n, left } => {
                 self.log(ptr, a, tagp);
@@ -1500,10 +1586,11 @@ impl Emitter<'_, '_> {
                 let v = self.b.ins().bor(kept_bits, new_bits);
                 let v = if n == 8 { v } else { self.b.ins().ireduce(I32, v) };
                 self.b.ins().store(guest(), v, ptr, 0);
-                self.stored(tagp, unc);
+                self.stored(tagp, unc, inline);
             }
             Access::Pref => {}
         }
+        super::forms::tag(self.b, 2);
         self.issue_waiting(op, w, K(0), data);
         self.snaps.push(Snap { held: self.held, at: At::Line(pc.wrapping_add(4)), block: None });
         self.held.snap = Some(self.snaps.len() - 1);
@@ -1529,6 +1616,52 @@ impl Emitter<'_, '_> {
         self.held = after;
         self.b.seal_block(on);
         self.b.switch_to_block(on);
+    }
+
+    /// The inline hit (`forms::CACHE`): each way's tag compared as one masked word; the line and its tag, or `slow`.
+    fn line_hit(&mut self, a: Value, meta: Value, slow: ir::Block) -> (Value, Value) {
+        let m = self.memory.expect("a block with loads or stores");
+        let set64 = self.b.ins().band_imm_s(a, 0xFC0);
+        let tags_off = self.b.ins().ushr_imm_s(set64, 2);
+        let tags = self.b.ins().iadd(self.ee, tags_off);
+        let ppage = self.b.ins().ushr_imm_s(meta, 32);
+        let ppage = if TAG_PFN == 0 { ppage } else { self.b.ins().ishl_imm_s(ppage, 8 * i64::from(TAG_PFN)) };
+        let want = self.b.ins().bor_imm_s(ppage, HIT_WANT);
+        let mask = self.k(HIT_MASK);
+        let mut hits = [None; 2];
+        for (way, h) in hits.iter_mut().enumerate() {
+            let word = self.b.ins().load(I64, trusted(), tags, D_TAGS + (TAG * way as i64) as i32);
+            let word = self.b.ins().band(word, mask);
+            *h = Some(self.b.ins().icmp(IntCC::Equal, word, want));
+        }
+        let (hit0, hit1) = (hits[0].expect("way 0"), hits[1].expect("way 1"));
+        let any = self.b.ins().bor(hit0, hit1);
+        self.go_if(any, slow, LEFT_MISS);
+        if super::forms::on(super::forms::COUNT) {
+            let k = self.k(kind::CACHED as i64);
+            self.count_kind(k);
+        }
+        let way = self.b.ins().bxor_imm_s(hit0, 1);
+        let way = self.b.ins().uextend(I64, way);
+        let way_bytes = self.b.ins().ishl_imm_s(way, 6);
+        let page = self.b.ins().band_imm_s(a, 0xFFF);
+        let l = self.b.ins().iadd(m.lines, set64);
+        let l = self.b.ins().iadd(l, page);
+        let l = self.b.ins().iadd(l, way_bytes);
+        let tag_way = self.b.ins().ishl_imm_s(way, 3);
+        let t = self.b.ins().iadd(tags, tag_way);
+        let t = self.b.ins().iadd_imm_s(t, i64::from(D_TAGS));
+        (l, t)
+    }
+
+    /// `forms::COUNT`'s count of an access to a page of kind `k`.
+    fn count_kind(&mut self, k: Value) {
+        let base = self.k(super::forms::kinds());
+        let at = self.b.ins().ishl_imm_s(k, 3);
+        let at = self.b.ins().iadd(base, at);
+        let n = self.b.ins().load(I64, trusted(), at, 0);
+        let n = self.b.ins().iadd_imm_s(n, 1);
+        self.b.ins().store(trusted(), n, at, 0);
     }
 
     /// `Context::left`'s count for the reason `why`.
@@ -1580,6 +1713,10 @@ impl Emitter<'_, '_> {
 
     /// The undo of a store at `ptr` (guest address `a`): the 16 bytes of its quadword and the 8 of its line's tag.
     fn log(&mut self, ptr: Value, a: Value, tagp: Value) {
+        if super::forms::is_static() {
+            let _ = (ptr, a, tagp);
+            return;
+        }
         let k = self.held.logged as i32;
         assert!((k as usize) + 2 <= 2 * shape::MAX, "two undo entries a store");
         let ctx = self.ctx;
@@ -1601,16 +1738,23 @@ impl Emitter<'_, '_> {
 
     /// After a store: the line's D set unless it is locked (§6.3.7), the UCAB disabled (§6.5.1), and a store past the
     /// caches counted.
-    fn stored(&mut self, tagp: Value, unc: Value) {
+    fn stored(&mut self, tagp: Value, unc: Value, counted: bool) {
+        let p = super::forms::push(self.b, 7);
         let lock = self.b.ins().load(I8, guest(), tagp, TAG_LOCK);
         let dirty = self.b.ins().load(I8, guest(), tagp, TAG_DIRTY);
         let free = self.b.ins().icmp_imm_s(IntCC::Equal, lock, 0);
         let set = self.b.ins().bor(dirty, free);
         self.b.ins().store(guest(), set, tagp, TAG_DIRTY);
+        if counted {
+            super::forms::tag(self.b, p);
+            self.held.sync = true;
+            return;
+        }
         let ctx = self.ctx;
         let n = self.b.ins().load(I64, trusted(), ctx, X_UNCACHED);
         let n = self.b.ins().iadd(n, unc);
         self.b.ins().store(trusted(), n, ctx, X_UNCACHED);
+        super::forms::tag(self.b, p);
         self.held.sync = true;
     }
 
@@ -1786,6 +1930,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
     b.append_block_params_for_function_params(head);
     b.switch_to_block(head);
     b.seal_block(head);
+    super::forms::tag(&mut b, 1);
     let (ee, ctx) = (b.block_params(head)[0], b.block_params(head)[1]);
     let helper = b.import_signature(helper);
     let ld = |b: &mut FunctionBuilder, ty, at| b.ins().load(ty, trusted(), ee, at);
@@ -1866,6 +2011,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         if i > 0 && pc & 63 == 0 {
             // A new line of the instruction cache: the block leaves here when the cache does not hold it
             // (`Context::limit`).
+            super::forms::tag(e.b, 4);
             let ctx = e.ctx;
             let limit = e.b.ins().load(I32, trusted(), ctx, X_LIMIT);
             let short = e.b.ins().icmp_imm_s(IntCC::UnsignedLessThanOrEqual, limit, i as i64);
@@ -1874,11 +2020,13 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         }
         match shape::class(words[i]) {
             Class::Plain | Class::Memory => {
+                super::forms::tag(e.b, if shape::class(words[i]) == Class::Memory { 5 } else { 9 });
                 e.straight(words[i], pc, None);
                 e.after(At::Line(pc.wrapping_add(4)), i + 1 == words.len());
                 i += 1;
             }
             Class::Branch if i + 1 < words.len() => {
+                super::forms::tag(e.b, 9);
                 e.branch(words[i], pc, words[i + 1]);
                 break;
             }

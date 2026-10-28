@@ -114,6 +114,8 @@ pub struct Context {
     /// The loads and stores that left their blocks: at the board's next event, misaligned, on a page the code does not
     /// serve (a register, the boot ROM, a fault), missing the data cache, and a load of an accelerated page (the UCAB).
     pub left: [u64; 5],
+    /// A helper's answer when the code calls it through `forms::PRESERVE`'s trampolines, which return nothing.
+    pub answer: u32,
 }
 
 /// How a block is compiled.
@@ -150,7 +152,7 @@ impl emusen_jit::Lowering for R5900 {
             if std::env::var_os("EMUSEN_SAPPHIRE_FORMS_BYTES").is_some() {
                 forms::shadow(module, functions, words, start, options);
             }
-            forms::set(forms::chosen());
+            forms::set(forms::chosen() & !forms::PINNED);
         }
         emit::lower(module, func, functions, words, start, options)
     }

@@ -72,7 +72,7 @@ plan commits to a game's full speed before R0 has shown the per-item costs withi
 | --- | --- | --- |
 | **R0.1** Busy scenes | EE instructions executed and passed, and VU pairs, a field, in gameplay windows of every scoreboard game available | defines the design point, the 90th-percentile field across the games; the plan's tables hold if it is at or below the arena's 3.99 M instructions and 2.96 M pairs, and are redrawn at it before R1 otherwise |
 | **R0.2** The emitter's footprint | a ring of compiled blocks at Jak's live-block count, ns an entry and an instruction; host bytes a guest instruction, today's emitter and the static form | at the design point and a factor of 2, ns an executed guest instruction, everything in, at most the EE's allowance (§3.5: 1.13 on the arena split over two threads), and **at most 96 bytes of host code a guest instruction** |
-| **R0.3** The handheld's factor | the emulation thread's field time on the handheld on battery against the desktop, with one hot thread and the GPU busy at the redesign's expected load, after the clocks settle | **at most 2.0**; the tables are then redrawn at the measured factor |
+| **R0.3** The handheld's factor | the emulation thread's field time on the handheld on the charger against the desktop (on battery until battery runs were dropped, decided 2026-10-28), with one hot thread and the GPU busy at the redesign's expected load, after the clocks settle | **at most 2.0**; the tables are then redrawn at the measured factor |
 | **R0.4** The VU's floats in vector lanes | a kernel of the console's adder and multiplier with MAC flags in host vector lanes, exact integer arithmetic, graded bit-equal and timed | equal on every case graded, and **at most 1.0 ns a lane operation on the handheld** (0.5 on the desktop) |
 | **R0.5** Unified memory | on the handheld, 4 MB written by the GPU and read by the processor after a fence, for each memory type; uploads written in place | a host-visible, device-local, processor-cached type reads 4 MB in at most 1 ms after the fence; if none exists, the staging path's cost is recorded and the census's count of local-to-host transfers (R2) decides whether it matters |
 
@@ -449,8 +449,8 @@ device:
 
 Neither changes a result: the bytes are the same, only where they live and how they are reached differs.
 
-**Its costs, named and measured.** The processor and GPU share the memory's bandwidth, and on battery the handheld's
-memory clock falls to its lowest level after a few seconds (`Mars_Performance.md` §42.4); they share one power budget, so
+**Its costs, named and measured.** The processor and GPU share the memory's bandwidth, and in MarsRT's runs the handheld's
+memory clock fell to its lowest level after a few seconds (`Mars_Performance.md` §42.4); they share one power budget, so
 a busy GPU may lower the emulation thread's boost clock; and host-visible types that the processor does not cache are slow
 to read, so a readback through one would cost far more than its bytes suggest. The first two are in R0.3's factor, which is
 measured with the GPU busy at the redesign's expected load; the third is R0.5, which times a 4 MB GPU write then processor
@@ -663,7 +663,7 @@ Sapphire's own runs of the tester's games, kept out of the repository with the d
 **Each of the handheld's PlayStation 2 games, run headless** (the probe's discs under
 `~/.cache/emusen/probe/sapphire/discs/`, never off the NAS), at three levels: **boots** (the game's own first picture),
 **reaches gameplay** (a press script to a gameplay anchor), **looks right** (pictures at anchors against the reference,
-then by eye on the first pass), and on the handheld **its speed** (mean and 95th percentile ms a field on battery). One
+then by eye on the first pass), and on the handheld **its speed** (mean and 95th percentile ms a field on the charger; battery runs dropped, decided 2026-10-28). One
 plain-text row a game from `ps2score`. The audit's hint 2: no other emulator runs its library automatically; the games are
 best chosen to cover the classes that break elsewhere (DMA completion, PATH1 and PATH3, the VIF and GIF FIFOs, VU0's macro
 flags, floats, data cache coherency, FMV, the CDVD). **FMV is in every stage's check from R3**, as the audit's test of the
@@ -677,7 +677,7 @@ for the GPU.
 
 | Stage | What | Gate (measurable) | Size | Buys |
 | --- | --- | --- | --- | --- |
-| **R0** | **Five risk checks** (§2): R0.1 the busy-scene census, counting patches outside the repository; R0.2 the ring benchmark of Sapphire's emitter at Jak's live-block count, with the static form's bytes by a prototype emitter switch, on the desktop and the handheld; R0.3 the handheld's factor on battery with one hot thread (the GS's workers at one) and a GPU kernel (S44's `exact64` in a loop) busy at the expected load, after the clocks settle, reading the memory and fabric clocks; R0.4 the VU's adder and multiplier with MAC flags in vector lanes, graded and timed on both machines; R0.5 the memory types' 4 MB readback and uploads on the handheld | §2's pass marks; R0.2, R0.3 and R0.4 all pass at R0.1's design point, or the plan stops | S to M: about 1,500 lines, mostly R0.4's kernel and its tests; two handheld sessions | whether the plan is reachable, before 13,000 lines |
+| **R0** | **Five risk checks** (§2): R0.1 the busy-scene census, counting patches outside the repository; R0.2 the ring benchmark of Sapphire's emitter at Jak's live-block count, with the static form's bytes by a prototype emitter switch, on the desktop and the handheld; R0.3 the handheld's factor on the charger (battery runs dropped, decided 2026-10-28) with one hot thread (the GS's workers at one) and a GPU kernel (S44's `exact64` in a loop) busy at the expected load, after the clocks settle, reading the memory and fabric clocks; R0.4 the VU's adder and multiplier with MAC flags in vector lanes, graded and timed on both machines; R0.5 the memory types' 4 MB readback and uploads on the handheld | §2's pass marks; R0.2, R0.3 and R0.4 all pass at R0.1's design point, or the plan stops | S to M: about 1,500 lines, mostly R0.4's kernel and its tests; two handheld sessions | whether the plan is reachable, before 13,000 lines |
 | **R1** | **The cycle-ordered reference, then batching tested strictly against it.** (a) Today's board with each step-quantised coupling moved to its cycle: VU memory read by `Bus::read` at the access's cycle; the DMAC's wake at the IOP store's cycle; VU interrupts at the T and D bits' cycles; the kick handed to the GIF and `set_free`'s estimate at the kick's cycle; the VIF's and GIF's latches at theirs; any other the code reading finds; goldens re-recorded once (§7.1). (b) Throwaway batched builds on (a) with **every candidate fixed** (the lines at their cycles, VU1's end and XGKICK at VIF1's time, the DMAC's wakes for FIFO room, the IOP's and SIF's wakes, idle skipping passing only cycles the board has run) at N = 2, 4, 16 and 64, then each candidate removed in turn | **Strict**: canonical, picture and sound digests of (b) equal to (a)'s at N = 2, 4 and 16 on the boot, Jak's 900 and the three windows, and ps2autotests' texts equal; **failing stops the plan**. N = 64 and the removals recorded, a difference at 64 alone naming a horizon rule R5 must have | M: (a) about 600 lines that stay, (b) throwaway | the reference; the test of §4.0's claim, on interacting causes rather than one at a time |
 | **R2** | **The instruments**: the canonical digest; a census build counting a field the EE's observations by class, block entries and lengths, static-region coverage and distinct entry states per block, the replay's calls, watched-page accesses, SIF0 conflicts, the board's events, VIF1 writes into a running VU1, VU recompiles, IOP instructions executed and passed, local-to-host transfers, Jak's pixels drawn; **VU1's lookahead computed offline** from Jak's microprograms; `ps2score` on the desktop | the digest equal across tiers on the reference; P-R1, P-R3 and §4.5's IOP count settled; the horizon's distribution recorded | M: about 900 lines | numbers for the decision and for R3 to R7 |
 | **Decision** | **The split** (§4.7, §11 Q4), the tester's, on R0's and R2's numbers | before R3 | — | R5's ownership fixed |
@@ -688,7 +688,7 @@ for the GPU.
 | **R7** | **The second thread and the rest of the thread.** The split's thread B at Q > 0 if decided; the parser to parse and record only (P-R7); the IOP's block tier if R2 asks for it | Q = 0 equal to the reference; at the chosen Q, determinism (§7.1) and the scoreboard at every level it reached at Q = 0; each thread under its §3.5 allowance at the measured factor (P-R11) | L: about 2,500 lines | the arena's VU1 off thread A |
 | **R8** | **The GPU window** (the tester present): P-S44b on the RX 6800 and the handheld, the device's ns a pixel on Jak's profile, the GPU's clock under the device path's load; the unified-memory path built on the 610M | P-S44b retired on both; the handheld's clock and ns a pixel recorded | S: about 40 minutes a device | whether S45 stays bit-exact on the device |
 | **R9** | **The GS on the device**, S45 and S46, unified memory first (§4.6) | pictures bit-equal to the software reference on the boot, Jak and the GS streams; the device at most 14 ms a field on the handheld on the windows | XL | the GS workers' 90–98 ms off the processor |
-| **R10** | **The handheld scoreboard**, on battery; any compromise of §4.8 taken only here, measured and named | the scoreboard's games at 13.4 ms mean and under 16.7 at the 95th percentile at R0.1's design point; every level each game reached kept | M | the first scoreboard |
+| **R10** | **The handheld scoreboard**, on the charger (battery runs dropped, decided 2026-10-28); any compromise of §4.8 taken only here, measured and named | the scoreboard's games at 13.4 ms mean and under 16.7 at the 95th percentile at R0.1's design point; every level each game reached kept | M | the first scoreboard |
 
 **P-R12**: if R0 passes, R3 to R7 put every window within the handheld's budget on both threads at the measured factor;
 if R0.2 or R0.4 passes only at a factor of 1.35, the arena is named short at a factor of 2 with its number.
@@ -773,7 +773,8 @@ arena alone. The rest of the review is taken as written.
 5. **[decision] §5.13's second condition and "no fixes for one game".** Recommended: amend "narrowed or turned off for the
    unit or game involved" to "for the unit involved, for every game".
 6. **[routine] The handheld for R0.3, R0.2's and R0.4's handheld runs, and R0.5.** Recommended: one session when the
-   tester next has it free, on battery, under `systemd-run --user`.
+   tester next has it free, under `systemd-run --user`; on the charger since battery runs were dropped (decided
+   2026-10-28).
 
 ## 12. What was read for this proposal, and exposure
 

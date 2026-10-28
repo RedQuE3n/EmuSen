@@ -3,7 +3,7 @@
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
 //! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram]
-//! [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE]`
+//! [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE] [--working FILE]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -24,6 +24,9 @@
 //! writes each frame's milliseconds, `--every K DIR` the picture every K frames as `DIR/frame-<n>.ppm`, and
 //! `--census FILE` writes each timed frame's counts as a tab-separated row (Sapphire_Redesign.md, R0 results, R0.1): the
 //! frame, its milliseconds, the EE's instructions executed, those idle skipping passed and their cycles, and each VU's pairs.
+//! `--working FILE`, built with the `census` feature, writes each timed frame's working set of compiled blocks: the
+//! blocks entered, their guest instructions, their entries and steps, and the fewest blocks holding nine tenths of the
+//! entries with their guest instructions (Sapphire_Redesign.md, R0 results).
 //! `--registers` counts every register access the units answer over the window (S24's reports, which slow the run, so
 //! its times are not the bench's) and prints the most frequent a frame, for finding which device a processor waits on.
 //! `--press F:BITS` holds the pad's buttons (the core's bit numbers, `+`-joined) in port 1 for six frames from frame F.
@@ -113,7 +116,7 @@ fn main() {
         let mut v = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--nvm" | "--state" | "--script" | "--window" | "--census") {
+            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--nvm" | "--state" | "--script" | "--window" | "--census" | "--working") {
                 i += 2;
                 continue;
             }
@@ -128,7 +131,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE]";
+    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE] [--working FILE]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -209,6 +212,13 @@ fn main() {
     let mut timed = 0usize;
     let started = Instant::now();
     let first = m.frames;
+    #[cfg(feature = "census")]
+    let mut working = flag("--working").map(|f| {
+        let mut file = std::fs::File::create(f).expect("the working-set file");
+        use std::io::Write;
+        writeln!(file, "frame\tblocks\twords\tentries\tsteps\thot_blocks\thot_words").expect("written");
+        file
+    });
     let mut census = flag("--census").map(|f| (std::fs::File::create(f).expect("the census file"), counts(&m)));
     if let Some((file, _)) = &mut census {
         use std::io::Write;
@@ -241,6 +251,27 @@ fn main() {
         if f >= from {
             wall += t;
             timed += 1;
+        }
+        #[cfg(feature = "census")]
+        if let (Some(file), Some(b)) = (&mut working, m.blocks.as_deref_mut()) {
+            let set = std::mem::take(&mut b.census);
+            if f >= from {
+                use std::io::Write;
+                let mut v: Vec<(u64, u64, u64)> = set.into_values().collect();
+                v.sort_unstable_by_key(|x| std::cmp::Reverse(x.0));
+                let entries: u64 = v.iter().map(|x| x.0).sum();
+                let (mut run, mut hot, mut hot_words) = (0, 0, 0);
+                for x in &v {
+                    if 10 * run >= 9 * entries {
+                        break;
+                    }
+                    run += x.0;
+                    hot += 1;
+                    hot_words += x.2;
+                }
+                let row = [v.len() as u64, v.iter().map(|x| x.2).sum(), entries, v.iter().map(|x| x.1).sum(), hot, hot_words];
+                writeln!(file, "{}\t{}", m.frames, row.map(|x| x.to_string()).join("\t")).expect("written");
+            }
         }
         if let Some((file, last)) = &mut census {
             use std::io::Write;

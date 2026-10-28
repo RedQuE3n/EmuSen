@@ -4734,3 +4734,20 @@ it.*
   over the 9,667 blocks it compiled, 12.7 KB a block against the counter's 10.2).
 - **Conclusion:** **settled by measurement.** §44.8 measured S36's and S37's blocks of 3.6 instructions; today's carry the
   loads' and stores' exits, the rollbacks and the rewind. Sapphire_Redesign.md §3.5 and §4.2 used the older figure.
+
+### D-1102. emusen-jit's perf map: a second compiler thread in the process truncates `/tmp/perf-<pid>.map` and both write over each other
+
+- **Seen:** the R0 follow-up's working-set census (Sapphire_Redesign.md, R0 results, the addendum; 2026-10-28) read
+  block sizes from the map with `EMUSEN_SAPPHIRE_PERFMAP=1`: 608,555 of its lines held bytes that are not the map's
+  `address size name` form (NUL runs), and about four in five of the blocks a field entered had no size.
+- **Cause, from the code** (`emusen-jit` `run`): each compiler thread opens the map with `File::create`, which truncates,
+  and writes from its own offset. A thread starts with each `Compiler::new`, which runs again after `Jit::over_budget`
+  retires the old thread at the code budget (the arena's run flushed) and after `reset`, and a cloned `Jit` keeps
+  `perf_map`. So a later thread truncates the file while an earlier one may still write at its old offset, leaving
+  holes that read as zeros.
+- **Proposed fix, not made:** open the map once a process with `OpenOptions::new().create(true).append(true)` and
+  write each line in one `write` call, so that threads never truncate and lines never interleave. `perf` reads a map
+  with lines appended in any order.
+- **What it touched:** no R0 figure. D-1101's bytes came from the throwaway counter's compiled sizes, and its check
+  from emusen-jit's byte counter, neither from the map. The census was rebuilt to count guest instructions.
+- **Conclusion:** **open**, a defect candidate in a measurement aid.

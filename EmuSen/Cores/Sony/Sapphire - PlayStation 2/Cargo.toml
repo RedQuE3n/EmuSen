@@ -30,6 +30,8 @@ cranelift-module = "0.136.0"
 # R0.4's kernel of the VU's floats in vector lanes, for measurement only (Sapphire_Redesign.md, R0 results).
 [features]
 lanes = []
+# The working-set census of compiled blocks a field, for measurement only (the bench's `--working FILE`).
+census = []
 
 [[example]]
 name = "lanes"

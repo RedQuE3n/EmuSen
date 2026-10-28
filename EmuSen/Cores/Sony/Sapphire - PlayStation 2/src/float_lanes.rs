@@ -1,10 +1,16 @@
-//! The console's adder and multiplier four lanes at a time in the host's vector registers, on integers, with the VU's MAC
-//! flags: `float::add`, `float::mul` and `float::fused` for a whole vector, bit for bit. A measurement kernel behind the
-//! `lanes` feature, off by default and used by nothing in the machine; Sapphire_Redesign.md, R0 results, R0.4 records the
-//! argument for each step, the grading and the timing.
+//! The console's adder and multiplier in the host's vector registers, on integers, with the VU's MAC flags:
+//! `float::add`, `float::mul` and `float::fused` for a whole vector bit for bit, or for two vectors at once (`*2`, eight
+//! lanes, two independent operations). A measurement kernel behind the `lanes` feature, off by default and used by
+//! nothing in the machine; Sapphire_Redesign.md, R0 results and their addendum, records the argument for each step, the
+//! grading and the timing.
 //!
-//! x86-64 with AVX2 only (`available`): the per-lane shifts are AVX2's. Every function here is `unsafe` for that reason
-//! alone and touches no memory but its arguments.
+//! x86-64 with AVX2 only (`available`): the per-lane shifts are AVX2's. Each entry point is a `target_feature` function,
+//! to be called only where `available` is true; the register type `Lanes` wraps one or two AVX2 instructions a method
+//! and is private to that use.
+//!
+//! The forms: the full form (`add`, `mul`, `fused` and their pairs); `*_bits`, the same without the MAC word, for
+//! operations whose flags no later pair reads; and `*_fast`, the classes §56.2 found most common (no zero operand, no
+//! exponent overflow or underflow) on a short path, any other lane sending the vector to the full form.
 
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
@@ -23,6 +29,20 @@ pub struct FusedVector {
     pub product: Vector,
 }
 
+/// Two operations' results in eight lanes, the second's in lanes 4 to 7; their MAC words in bits 15-0 and 31-16.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Pair {
+    pub bits: [u32; 8],
+    pub mac: u32,
+}
+
+/// Two multiply-adds in eight lanes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FusedPair {
+    pub value: Pair,
+    pub product: Pair,
+}
+
 /// Whether the host runs this kernel.
 pub fn available() -> bool {
     #[cfg(target_arch = "x86_64")]
@@ -35,201 +55,379 @@ pub fn available() -> bool {
     }
 }
 
-/// The four flag groups' answers as the MAC word; each mask an all-ones or zero lane.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn mac_of(z: __m128i, s: __m128i, u: __m128i, o: __m128i) -> u32 {
-    let bytes = _mm_packs_epi16(_mm_packs_epi32(z, s), _mm_packs_epi32(u, o));
-    let reversed = _mm_shuffle_epi8(bytes, _mm_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12));
-    _mm_movemask_epi8(reversed) as u32
-}
-
-/// A result's Z and S masks: an exponent field of 0, the sign bit.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn zs(bits: __m128i) -> (__m128i, __m128i) {
-    let z = _mm_cmpeq_epi32(_mm_and_si128(bits, _mm_set1_epi32(0x7F80_0000)), _mm_setzero_si128());
-    (z, _mm_srai_epi32(bits, 31))
-}
-
-/// `float::finish` for four lanes: the sign (bit 31 alone), the biased exponent (signed), a 24-bit significand.
-/// Returns the bits and the overflow and underflow masks.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn finish(s: __m128i, e: __m128i, m: __m128i) -> (__m128i, __m128i, __m128i) {
-    let over = _mm_cmpgt_epi32(e, _mm_set1_epi32(255));
-    let under = _mm_cmpgt_epi32(_mm_set1_epi32(1), e);
-    let packed = _mm_or_si128(_mm_or_si128(s, _mm_slli_epi32(e, 23)), _mm_and_si128(m, _mm_set1_epi32(0x7F_FFFF)));
-    let largest = _mm_or_si128(s, _mm_set1_epi32(0x7FFF_FFFF));
-    let bits = _mm_blendv_epi8(_mm_blendv_epi8(packed, largest, over), s, under);
-    (bits, over, under)
-}
-
-/// The lanes of `old` the field mask (`mask`, lane 0 at bit 3) leaves alone, and the MAC bits it clears.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn masked(bits: __m128i, mac: u32, old: __m128i, mask: u32) -> Vector {
-    let on = _mm_cmpgt_epi32(_mm_and_si128(_mm_set1_epi32(mask as i32), _mm_setr_epi32(8, 4, 2, 1)), _mm_setzero_si128());
-    let out = _mm_blendv_epi8(old, bits, on);
-    let mut v = [0u32; 4];
-    // SAFETY: four u32 are 16 bytes, written unaligned.
-    unsafe { _mm_storeu_si128(v.as_mut_ptr().cast(), out) };
-    Vector { bits: v, mac: mac & ((mask & 0xF) * 0x1111) }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn load(v: &[u32; 4]) -> __m128i {
-    // SAFETY: four u32 are 16 bytes, read unaligned.
-    unsafe { _mm_loadu_si128(v.as_ptr().cast()) }
-}
-
-/// `float::add` in four lanes: the bits, overflow and underflow masks.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn add_raw(a: __m128i, b: __m128i) -> (__m128i, __m128i, __m128i) {
-    let field = _mm_set1_epi32(0xFF);
-    let ea = _mm_and_si128(_mm_srli_epi32(a, 23), field);
-    let eb = _mm_and_si128(_mm_srli_epi32(b, 23), field);
-    let zero = _mm_setzero_si128();
-    let za = _mm_cmpeq_epi32(ea, zero);
-    let zb = _mm_cmpeq_epi32(eb, zero);
-    let max = _mm_set1_epi32(0x7FFF_FFFF);
-    // The larger magnitude: `a` unless `b`'s is strictly greater (both below 2^31, so a signed compare).
-    let b_big = _mm_cmpgt_epi32(_mm_and_si128(b, max), _mm_and_si128(a, max));
-    let big = _mm_blendv_epi8(a, b, b_big);
-    let small = _mm_blendv_epi8(b, a, b_big);
-    let e_big = _mm_blendv_epi8(ea, eb, b_big);
-    let d = _mm_sub_epi32(e_big, _mm_blendv_epi8(eb, ea, b_big));
-    let hidden = _mm_set1_epi32(0x80_0000);
-    let frac = _mm_set1_epi32(0x7F_FFFF);
-    let wide = _mm_slli_epi32(_mm_or_si128(hidden, _mm_and_si128(big, frac)), 1);
-    // A count of 32 or more gives 0, so the shift needs no test of `d < 25`: a 25-bit value is 0 from 25 on.
-    let aligned = _mm_srlv_epi32(_mm_slli_epi32(_mm_or_si128(hidden, _mm_and_si128(small, frac)), 1), d);
-    let opposite = _mm_srai_epi32(_mm_xor_si128(big, small), 31);
-    let m = _mm_blendv_epi8(_mm_add_epi32(wide, aligned), _mm_sub_epi32(wide, aligned), opposite);
-    // The leading bit's place, exactly: with the bit below the leading one cleared, the conversion cannot round up a binade.
-    let lone = _mm_andnot_si128(_mm_srli_epi32(m, 1), m);
-    let lead = _mm_sub_epi32(_mm_srli_epi32(_mm_castps_si128(_mm_cvtepi32_ps(lone)), 23), _mm_set1_epi32(127));
-    let k23 = _mm_set1_epi32(23);
-    let norm = _mm_or_si128(_mm_srlv_epi32(m, _mm_sub_epi32(lead, k23)), _mm_sllv_epi32(m, _mm_sub_epi32(k23, lead)));
-    let e = _mm_add_epi32(e_big, _mm_sub_epi32(lead, _mm_set1_epi32(24)));
-    let s = _mm_and_si128(big, _mm_set1_epi32(i32::MIN));
-    let (bits, over, under) = finish(s, e, norm);
-    let cancelled = _mm_cmpeq_epi32(m, zero);
-    let none = _mm_or_si128(_mm_or_si128(za, zb), cancelled);
-    let bits = _mm_andnot_si128(cancelled, bits);
-    // A zero operand gives the other; two zeros give the signs' conjunction as -0 or +0.
-    let both = _mm_and_si128(za, zb);
-    let bits = _mm_blendv_epi8(bits, b, za);
-    let bits = _mm_blendv_epi8(bits, a, _mm_andnot_si128(za, zb));
-    let bits = _mm_blendv_epi8(bits, _mm_and_si128(_mm_and_si128(a, b), _mm_set1_epi32(i32::MIN)), both);
-    (bits, _mm_andnot_si128(none, over), _mm_andnot_si128(none, under))
-}
-
-/// `float::mul` in four lanes, `b` the recoded operand: the bits, overflow and underflow masks.
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-fn mul_raw(a: __m128i, b: __m128i) -> (__m128i, __m128i, __m128i) {
-    let field = _mm_set1_epi32(0xFF);
-    let ea = _mm_and_si128(_mm_srli_epi32(a, 23), field);
-    let eb = _mm_and_si128(_mm_srli_epi32(b, 23), field);
-    let zero = _mm_setzero_si128();
-    let none = _mm_or_si128(_mm_cmpeq_epi32(ea, zero), _mm_cmpeq_epi32(eb, zero));
-    let s = _mm_and_si128(_mm_xor_si128(a, b), _mm_set1_epi32(i32::MIN));
-    let hidden = _mm_set1_epi32(0x80_0000);
-    let frac = _mm_set1_epi32(0x7F_FFFF);
-    let x = _mm_or_si128(hidden, _mm_and_si128(a, frac));
-    let y = _mm_or_si128(hidden, _mm_and_si128(b, frac));
-    // The Booth sum's loss (float::product): eight two-bit answers by y's lowest two bits and x's lowest.
-    let index = _mm_slli_epi32(_mm_or_si128(_mm_slli_epi32(_mm_and_si128(y, _mm_set1_epi32(3)), 1), _mm_and_si128(x, _mm_set1_epi32(1))), 2);
-    let loss = _mm_and_si128(_mm_srlv_epi32(_mm_set1_epi32(0x1222_1000), index), _mm_set1_epi32(3));
-    let p = _mm256_sub_epi64(_mm256_mul_epu32(_mm256_cvtepu32_epi64(x), _mm256_cvtepu32_epi64(y)), _mm256_cvtepu32_epi64(loss));
-    let top = _mm256_srli_epi64(p, 47);
-    let m = _mm256_srlv_epi64(p, _mm256_add_epi64(top, _mm256_set1_epi64x(23)));
-    let pick = _mm256_setr_epi32(0, 2, 4, 6, 0, 2, 4, 6);
-    let m = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(m, pick));
-    let top = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(top, pick));
-    let e = _mm_add_epi32(_mm_add_epi32(ea, eb), _mm_sub_epi32(top, _mm_set1_epi32(127)));
-    let (bits, over, under) = finish(s, e, m);
-    (_mm_blendv_epi8(bits, s, none), _mm_andnot_si128(none, over), _mm_andnot_si128(none, under))
-}
-
-/// `float::add` on every lane, the results written where `mask` (lane 0 at bit 3) allows over `old`.
-///
-/// # Safety
-/// The host has AVX2 (`available`).
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-pub fn add(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-    let (bits, over, under) = add_raw(load(a), load(b));
-    let (z, s) = zs(bits);
-    masked(bits, mac_of(z, s, under, over), load(old), mask)
-}
-
-/// `float::sub` on every lane: the addition of `b` with its signs reversed.
-///
-/// # Safety
-/// The host has AVX2 (`available`).
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-pub fn sub(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-    let (bits, over, under) = add_raw(load(a), _mm_xor_si128(load(b), _mm_set1_epi32(i32::MIN)));
-    let (z, s) = zs(bits);
-    masked(bits, mac_of(z, s, under, over), load(old), mask)
-}
-
-/// `float::mul` on every lane.
-///
-/// # Safety
-/// The host has AVX2 (`available`).
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-pub fn mul(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-    let (bits, over, under) = mul_raw(load(a), load(b));
-    let (z, s) = zs(bits);
-    masked(bits, mac_of(z, s, under, over), load(old), mask)
-}
-
-/// `float::fused` on every lane: `acc ± a × b`, with the products' own flags for the sticky bits.
-///
-/// # Safety
-/// The host has AVX2 (`available`).
-#[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-pub fn fused(acc: &[u32; 4], a: &[u32; 4], b: &[u32; 4], subtract: bool, old: &[u32; 4], mask: u32) -> FusedVector {
-    let acc = load(acc);
-    let (p, p_over, p_under) = mul_raw(load(a), load(b));
-    let term = if subtract { _mm_xor_si128(p, _mm_set1_epi32(i32::MIN)) } else { p };
-    let (sum, s_over, s_under) = add_raw(acc, term);
-    let acc_top = _mm_cmpeq_epi32(_mm_and_si128(acc, _mm_set1_epi32(0x7F80_0000)), _mm_set1_epi32(0x7F80_0000));
-    // An overflowing product gives its term; else an accumulator at field 255 is kept; both with overflow.
-    let kept = _mm_andnot_si128(p_over, acc_top);
-    let bits = _mm_blendv_epi8(_mm_blendv_epi8(sum, acc, kept), term, p_over);
-    let special = _mm_or_si128(p_over, kept);
-    let over = _mm_or_si128(special, s_over);
-    let under = _mm_andnot_si128(special, s_under);
-    let (z, s) = zs(bits);
-    let (pz, ps) = zs(term);
-    let old = load(old);
-    FusedVector { value: masked(bits, mac_of(z, s, under, over), old, mask), product: masked(term, mac_of(pz, ps, p_under, p_over), old, mask) }
-}
-
 /// The MAC word's four groups as the status flag's Z, S, U, O (bits 0 to 3).
 pub fn collect(mac: u32) -> u32 {
     u32::from(mac & 0xF != 0) | u32::from(mac & 0xF0 != 0) << 1 | u32::from(mac & 0xF00 != 0) << 2 | u32::from(mac & 0xF000 != 0) << 3
 }
+
+/// A field mask's MAC bits: `mask`'s bits 3-0 for the first operation, 19-16 for a second.
+const fn mac_mask(mask: u32) -> u32 {
+    ((mask & 0xF) * 0x1111) | (((mask >> 16 & 0xF) * 0x1111) << 16)
+}
+
+/// A register of 32-bit lanes, four or eight; each method one or two AVX2 instructions, sound only where AVX2 is present.
+#[cfg(target_arch = "x86_64")]
+trait Lanes: Copy {
+    fn k(x: i32) -> Self;
+    fn and(self, b: Self) -> Self;
+    fn or(self, b: Self) -> Self;
+    fn xor(self, b: Self) -> Self;
+    /// `!self & b`.
+    fn andnot(self, b: Self) -> Self;
+    fn add(self, b: Self) -> Self;
+    fn sub(self, b: Self) -> Self;
+    fn eq(self, b: Self) -> Self;
+    fn gt(self, b: Self) -> Self;
+    /// `b` where `m`'s lanes are set, `self` elsewhere.
+    fn pick(self, b: Self, m: Self) -> Self;
+    fn srl<const K: i32>(self) -> Self;
+    fn sll<const K: i32>(self) -> Self;
+    fn sra<const K: i32>(self) -> Self;
+    fn srlv(self, c: Self) -> Self;
+    fn sllv(self, c: Self) -> Self;
+    /// The float conversion's biased exponent field of each lane, taken as a signed integer.
+    fn exponent_of(self) -> Self;
+    /// `float::product`'s significand: (the product less `loss` shifted to 24 bits, its top bit at 47 as 0 or 1).
+    fn product(x: Self, y: Self, loss: Self) -> (Self, Self);
+    /// The MAC word of masks for Z, S, U and O, per operation of four lanes.
+    fn mac(z: Self, s: Self, u: Self, o: Self) -> u32;
+    /// The lanes `mask` writes (`mac_mask`'s layout).
+    fn on(mask: u32) -> Self;
+    fn any(self) -> bool;
+    /// # Safety
+    /// `p` reads or writes as many u32 as the type has lanes.
+    unsafe fn load(p: *const u32) -> Self;
+    unsafe fn store(self, p: *mut u32);
+}
+
+#[cfg(target_arch = "x86_64")]
+macro_rules! lanes {
+    ($t:ty, $set1:ident, $and:ident, $or:ident, $xor:ident, $andnot:ident, $add:ident, $sub:ident, $eq:ident, $gt:ident, $blendv:ident, $srli:ident, $slli:ident, $srai:ident, $srlv:ident, $sllv:ident, $cvt:ident, $cast:ident, $mul:ident, $sub64:ident, $add64:ident, $set64:ident, $srli64:ident, $slli64:ident, $srlv64:ident, $blend32:ident, $odd:expr, $packs32:ident, $packs16:ident, $shuffle:ident, $movemask:ident, $loadu:ident, $storeu:ident, $reverse:expr, $on:expr) => {
+        // SAFETY (every method): the kernel's entry points run only where AVX2 is present (`available`).
+        impl Lanes for $t {
+            #[inline(always)]
+            fn k(x: i32) -> Self { unsafe { $set1(x) } }
+            #[inline(always)]
+            fn and(self, b: Self) -> Self { unsafe { $and(self, b) } }
+            #[inline(always)]
+            fn or(self, b: Self) -> Self { unsafe { $or(self, b) } }
+            #[inline(always)]
+            fn xor(self, b: Self) -> Self { unsafe { $xor(self, b) } }
+            #[inline(always)]
+            fn andnot(self, b: Self) -> Self { unsafe { $andnot(self, b) } }
+            #[inline(always)]
+            fn add(self, b: Self) -> Self { unsafe { $add(self, b) } }
+            #[inline(always)]
+            fn sub(self, b: Self) -> Self { unsafe { $sub(self, b) } }
+            #[inline(always)]
+            fn eq(self, b: Self) -> Self { unsafe { $eq(self, b) } }
+            #[inline(always)]
+            fn gt(self, b: Self) -> Self { unsafe { $gt(self, b) } }
+            #[inline(always)]
+            fn pick(self, b: Self, m: Self) -> Self { unsafe { $blendv(self, b, m) } }
+            #[inline(always)]
+            fn srl<const K: i32>(self) -> Self { unsafe { $srli::<K>(self) } }
+            #[inline(always)]
+            fn sll<const K: i32>(self) -> Self { unsafe { $slli::<K>(self) } }
+            #[inline(always)]
+            fn sra<const K: i32>(self) -> Self { unsafe { $srai::<K>(self) } }
+            #[inline(always)]
+            fn srlv(self, c: Self) -> Self { unsafe { $srlv(self, c) } }
+            #[inline(always)]
+            fn sllv(self, c: Self) -> Self { unsafe { $sllv(self, c) } }
+            #[inline(always)]
+            fn exponent_of(self) -> Self { unsafe { $srli::<23>($cast($cvt(self))) } }
+            #[inline(always)]
+            fn product(x: Self, y: Self, loss: Self) -> (Self, Self) {
+                unsafe {
+                    let low = $set64(0xFFFF_FFFF);
+                    let k23 = $set64(23);
+                    let even = $sub64($mul(x, y), $and(loss, low));
+                    let odd = $sub64($mul($srli64::<32>(x), $srli64::<32>(y)), $srli64::<32>(loss));
+                    let (te, to) = ($srli64::<47>(even), $srli64::<47>(odd));
+                    let (me, mo) = ($srlv64(even, $add64(te, k23)), $srlv64(odd, $add64(to, k23)));
+                    ($blend32::<{ $odd }>(me, $slli64::<32>(mo)), $blend32::<{ $odd }>(te, $slli64::<32>(to)))
+                }
+            }
+            #[inline(always)]
+            fn mac(z: Self, s: Self, u: Self, o: Self) -> u32 {
+                unsafe { $movemask($shuffle($packs16($packs32(z, s), $packs32(u, o)), $reverse)) as u32 }
+            }
+            #[inline(always)]
+            fn on(mask: u32) -> Self {
+                let m = mask as i32;
+                unsafe { $gt($on(m), $set1(0)) }
+            }
+            #[inline(always)]
+            fn any(self) -> bool { unsafe { $movemask(self) != 0 } }
+            #[inline(always)]
+            unsafe fn load(p: *const u32) -> Self { unsafe { $loadu(p.cast()) } }
+            #[inline(always)]
+            unsafe fn store(self, p: *mut u32) { unsafe { $storeu(p.cast(), self) } }
+        }
+    };
+}
+
+#[cfg(target_arch = "x86_64")]
+lanes!(__m128i, _mm_set1_epi32, _mm_and_si128, _mm_or_si128, _mm_xor_si128, _mm_andnot_si128, _mm_add_epi32, _mm_sub_epi32,
+    _mm_cmpeq_epi32, _mm_cmpgt_epi32, _mm_blendv_epi8, _mm_srli_epi32, _mm_slli_epi32, _mm_srai_epi32, _mm_srlv_epi32,
+    _mm_sllv_epi32, _mm_cvtepi32_ps, _mm_castps_si128, _mm_mul_epu32, _mm_sub_epi64, _mm_add_epi64, _mm_set1_epi64x,
+    _mm_srli_epi64, _mm_slli_epi64, _mm_srlv_epi64, _mm_blend_epi32, 0b1010, _mm_packs_epi32, _mm_packs_epi16,
+    _mm_shuffle_epi8, _mm_movemask_epi8, _mm_loadu_si128, _mm_storeu_si128,
+    _mm_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12),
+    |m: i32| _mm_setr_epi32(m & 8, m & 4, m & 2, m & 1));
+#[cfg(target_arch = "x86_64")]
+lanes!(__m256i, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor_si256, _mm256_andnot_si256, _mm256_add_epi32,
+    _mm256_sub_epi32, _mm256_cmpeq_epi32, _mm256_cmpgt_epi32, _mm256_blendv_epi8, _mm256_srli_epi32, _mm256_slli_epi32,
+    _mm256_srai_epi32, _mm256_srlv_epi32, _mm256_sllv_epi32, _mm256_cvtepi32_ps, _mm256_castps_si256, _mm256_mul_epu32,
+    _mm256_sub_epi64, _mm256_add_epi64, _mm256_set1_epi64x, _mm256_srli_epi64, _mm256_slli_epi64, _mm256_srlv_epi64,
+    _mm256_blend_epi32, 0b1010_1010, _mm256_packs_epi32, _mm256_packs_epi16, _mm256_shuffle_epi8, _mm256_movemask_epi8,
+    _mm256_loadu_si256, _mm256_storeu_si256,
+    _mm256_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12, 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12),
+    |m: i32| _mm256_setr_epi32(m & 8, m & 4, m & 2, m & 1, m >> 16 & 8, m >> 16 & 4, m >> 16 & 2, m >> 16 & 1));
+
+const SIGN: i32 = i32::MIN;
+
+/// A result's Z and S masks: an exponent field of 0, the sign bit.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn zs<T: Lanes>(bits: T) -> (T, T) {
+    (bits.and(T::k(0x7F80_0000)).eq(T::k(0)), bits.sra::<31>())
+}
+
+/// `float::finish`: the sign (bit 31 alone), the biased exponent (signed), a 24-bit significand; the bits, overflow and
+/// underflow masks.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn finish<T: Lanes>(s: T, e: T, m: T) -> (T, T, T) {
+    let over = e.gt(T::k(255));
+    let under = T::k(1).gt(e);
+    let packed = s.or(e.sll::<23>()).or(m.and(T::k(0x7F_FFFF)));
+    let bits = packed.pick(s.or(T::k(0x7FFF_FFFF)), over).pick(s, under);
+    (bits, over, under)
+}
+
+/// The adder's general path for lanes whose operands are both non-zero: bits, overflow, underflow, and the lanes whose
+/// sum cancelled to zero.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn add_core<T: Lanes>(a: T, b: T, ea: T, eb: T) -> (T, T, T, T) {
+    let max = T::k(0x7FFF_FFFF);
+    // The larger magnitude: `a` unless `b`'s is strictly greater (both below 2^31, so a signed compare).
+    let b_big = b.and(max).gt(a.and(max));
+    let (big, small) = (a.pick(b, b_big), b.pick(a, b_big));
+    let e_big = ea.pick(eb, b_big);
+    let d = e_big.sub(eb.pick(ea, b_big));
+    let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
+    let wide = hidden.or(big.and(frac)).sll::<1>();
+    // A count of 32 or more gives 0, so the shift needs no test of `d < 25`: a 25-bit value is 0 from 25 on.
+    let aligned = hidden.or(small.and(frac)).sll::<1>().srlv(d);
+    let opposite = big.xor(small).sra::<31>();
+    let m = wide.add(aligned).pick(wide.sub(aligned), opposite);
+    // The leading bit's place, exactly: with the bit below the leading one cleared, the conversion cannot round up a binade.
+    let lead = m.srl::<1>().andnot(m).exponent_of().sub(T::k(127));
+    let k23 = T::k(23);
+    let norm = m.srlv(lead.sub(k23)).or(m.sllv(k23.sub(lead)));
+    let e = e_big.add(lead.sub(T::k(24)));
+    let (bits, over, under) = finish(big.and(T::k(SIGN)), e, norm);
+    let cancelled = m.eq(T::k(0));
+    (cancelled.andnot(bits), over, under, cancelled)
+}
+
+/// `float::add` in lanes: the bits, overflow and underflow masks.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn add_raw<T: Lanes>(a: T, b: T) -> (T, T, T) {
+    let field = T::k(0xFF);
+    let (ea, eb) = (a.srl::<23>().and(field), b.srl::<23>().and(field));
+    let (za, zb) = (ea.eq(T::k(0)), eb.eq(T::k(0)));
+    let (bits, over, under, cancelled) = add_core(a, b, ea, eb);
+    let none = za.or(zb).or(cancelled);
+    // A zero operand gives the other; two zeros give the signs' conjunction as -0 or +0.
+    let bits = bits.pick(b, za).pick(a, za.andnot(zb)).pick(a.and(b).and(T::k(SIGN)), za.and(zb));
+    (bits, none.andnot(over), none.andnot(under))
+}
+
+/// `add_raw` where no lane has a zero operand, overflows or underflows; `None` when one does.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn add_fast_raw<T: Lanes>(a: T, b: T) -> Option<T> {
+    let field = T::k(0xFF);
+    let (ea, eb) = (a.srl::<23>().and(field), b.srl::<23>().and(field));
+    let (bits, over, under, _) = add_core(a, b, ea, eb);
+    if ea.eq(T::k(0)).or(eb.eq(T::k(0))).or(over).or(under).any() { None } else { Some(bits) }
+}
+
+/// `float::mul` in lanes, `b` the recoded operand: the bits, overflow and underflow masks.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn mul_raw<T: Lanes>(a: T, b: T) -> (T, T, T) {
+    let field = T::k(0xFF);
+    let (ea, eb) = (a.srl::<23>().and(field), b.srl::<23>().and(field));
+    let none = ea.eq(T::k(0)).or(eb.eq(T::k(0)));
+    let s = a.xor(b).and(T::k(SIGN));
+    let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
+    let (x, y) = (hidden.or(a.and(frac)), hidden.or(b.and(frac)));
+    // The Booth sum's loss (float::product): eight two-bit answers by y's lowest two bits and x's lowest.
+    let index = y.and(T::k(3)).sll::<1>().or(x.and(T::k(1))).sll::<2>();
+    let loss = T::k(0x1222_1000).srlv(index).and(T::k(3));
+    let (m, top) = T::product(x, y, loss);
+    let (bits, over, under) = finish(s, ea.add(eb).add(top.sub(T::k(127))), m);
+    (bits.pick(s, none), none.andnot(over), none.andnot(under))
+}
+
+/// `float::fused`: (sum bits, overflow, underflow, term bits, product overflow, product underflow).
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn fused_raw<T: Lanes>(acc: T, a: T, b: T, subtract: bool) -> (T, T, T, T, T, T) {
+    let (p, p_over, p_under) = mul_raw(a, b);
+    let term = if subtract { p.xor(T::k(SIGN)) } else { p };
+    let (sum, s_over, s_under) = add_raw(acc, term);
+    let top = T::k(0x7F80_0000);
+    let acc_top = acc.and(top).eq(top);
+    // An overflowing product gives its term; else an accumulator at field 255 is kept; both with overflow.
+    let kept = p_over.andnot(acc_top);
+    let bits = sum.pick(acc, kept).pick(term, p_over);
+    let special = p_over.or(kept);
+    (bits, special.or(s_over), special.andnot(s_under), term, p_over, p_under)
+}
+
+/// The full form's result: the lanes `mask` writes taken over `old`, and the MAC word they set.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn flagged<T: Lanes>(bits: T, over: T, under: T, old: T, mask: u32) -> (T, u32) {
+    let (z, s) = zs(bits);
+    (old.pick(bits, T::on(mask)), T::mac(z, s, under, over) & mac_mask(mask))
+}
+
+macro_rules! entry {
+    ($t:ty, $n:literal, $out:ident, $fused_out:ident) => {
+        #[inline(always)]
+        fn out(v: $t) -> [u32; $n] {
+            let mut r = [0u32; $n];
+            // SAFETY: `r` holds the type's lanes.
+            unsafe { v.store(r.as_mut_ptr()) };
+            r
+        }
+        #[inline(always)]
+        fn get(v: &[u32; $n]) -> $t {
+            // SAFETY: `v` holds the type's lanes.
+            unsafe { <$t>::load(v.as_ptr()) }
+        }
+        #[inline(always)]
+        fn arith(f: impl Fn($t, $t) -> ($t, $t, $t), a: &[u32; $n], b: &[u32; $n], old: &[u32; $n], mask: u32) -> $out {
+            let (bits, over, under) = f(get(a), get(b));
+            let (bits, mac) = flagged(bits, over, under, get(old), mask);
+            $out { bits: out(bits), mac }
+        }
+        #[inline(always)]
+        fn fused_of(acc: &[u32; $n], a: &[u32; $n], b: &[u32; $n], subtract: bool, old: &[u32; $n], mask: u32) -> $fused_out {
+            let (bits, over, under, term, p_over, p_under) = fused_raw(get(acc), get(a), get(b), subtract);
+            let old = get(old);
+            let (v, vm) = flagged(bits, over, under, old, mask);
+            let (p, pm) = flagged(term, p_over, p_under, old, mask);
+            $fused_out { value: $out { bits: out(v), mac: vm }, product: $out { bits: out(p), mac: pm } }
+        }
+        #[inline(always)]
+        fn bits_of(bits: $t, old: &[u32; $n], mask: u32) -> [u32; $n] {
+            out(get(old).pick(bits, <$t>::on(mask)))
+        }
+        #[inline(always)]
+        fn negated(b: &[u32; $n]) -> $t {
+            get(b).xor(<$t>::k(SIGN))
+        }
+    };
+}
+
+/// Safety, for every entry point: the host has AVX2 (`available`).
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::missing_safety_doc)]
+mod four {
+    use super::*;
+    entry!(__m128i, 4, Vector, FusedVector);
+
+    /// `float::add` on four lanes, written where `mask` (lane 0 at bit 3) allows over `old`.
+    #[target_feature(enable = "avx2")]
+    pub fn add(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+        arith(add_raw, a, b, old, mask)
+    }
+    /// `float::sub`: the addition of `b` with its signs reversed.
+    #[target_feature(enable = "avx2")]
+    pub fn sub(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+        arith(add_raw, a, &out(negated(b)), old, mask)
+    }
+    /// `float::mul`.
+    #[target_feature(enable = "avx2")]
+    pub fn mul(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+        arith(mul_raw, a, b, old, mask)
+    }
+    /// `float::fused`: `acc ± a × b`, with the products' own flags for the sticky bits.
+    #[target_feature(enable = "avx2")]
+    pub fn fused(acc: &[u32; 4], a: &[u32; 4], b: &[u32; 4], subtract: bool, old: &[u32; 4], mask: u32) -> FusedVector {
+        fused_of(acc, a, b, subtract, old, mask)
+    }
+    /// `add` without the MAC word.
+    #[target_feature(enable = "avx2")]
+    pub fn add_bits(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> [u32; 4] {
+        bits_of(add_raw(get(a), get(b)).0, old, mask)
+    }
+    /// `mul` without the MAC word.
+    #[target_feature(enable = "avx2")]
+    pub fn mul_bits(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> [u32; 4] {
+        bits_of(mul_raw(get(a), get(b)).0, old, mask)
+    }
+    /// `add` on the short path when every lane takes it, otherwise the full form.
+    #[target_feature(enable = "avx2")]
+    pub fn add_fast(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+        match add_fast_raw(get(a), get(b)) {
+            Some(bits) => {
+                let (bits, mac) = flagged(bits, <__m128i>::k(0), <__m128i>::k(0), get(old), mask);
+                Vector { bits: out(bits), mac }
+            }
+            None => add(a, b, old, mask),
+        }
+    }
+}
+
+/// Safety, for every entry point: the host has AVX2 (`available`).
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::missing_safety_doc)]
+mod eight {
+    use super::*;
+    entry!(__m256i, 8, Pair, FusedPair);
+
+    /// Two independent `float::add`s, the second in lanes 4 to 7, `mask` the first's in bits 3-0 and the second's in
+    /// bits 19-16.
+    #[target_feature(enable = "avx2")]
+    pub fn add2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
+        arith(add_raw, a, b, old, mask)
+    }
+    #[target_feature(enable = "avx2")]
+    pub fn sub2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
+        arith(add_raw, a, &out(negated(b)), old, mask)
+    }
+    #[target_feature(enable = "avx2")]
+    pub fn mul2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
+        arith(mul_raw, a, b, old, mask)
+    }
+    #[target_feature(enable = "avx2")]
+    pub fn fused2(acc: &[u32; 8], a: &[u32; 8], b: &[u32; 8], subtract: bool, old: &[u32; 8], mask: u32) -> FusedPair {
+        fused_of(acc, a, b, subtract, old, mask)
+    }
+    #[target_feature(enable = "avx2")]
+    pub fn add2_bits(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> [u32; 8] {
+        bits_of(add_raw(get(a), get(b)).0, old, mask)
+    }
+    #[target_feature(enable = "avx2")]
+    pub fn mul2_bits(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> [u32; 8] {
+        bits_of(mul_raw(get(a), get(b)).0, old, mask)
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+pub use eight::{add2, add2_bits, fused2, mul2, mul2_bits, sub2};
+#[cfg(target_arch = "x86_64")]
+pub use four::{add, add_bits, add_fast, fused, mul, mul_bits, sub};
 
 #[cfg(all(test, target_arch = "x86_64"))]
 mod tests {
@@ -290,6 +488,29 @@ mod tests {
                 let product = reference(&old, mask, |l| float::fused(c[l], a[l], b[l], subtract).product);
                 flags[1] += u64::from((value.mac >> 8).count_ones());
                 assert_eq!(got, FusedVector { value, product }, "fused {c:08x?} {a:08x?} {b:08x?} subtract {subtract}");
+            }
+            let want = reference(&old, mask, |l| float::add(a[l], b[l]));
+            assert_eq!(add_fast(&a, &b, &old, mask), want, "add_fast {a:08x?} {b:08x?}");
+            assert_eq!(add_bits(&a, &b, &old, mask), want.bits, "add_bits {a:08x?} {b:08x?}");
+            assert_eq!(mul_bits(&a, &b, &old, mask), reference(&old, mask, |l| float::mul(a[l], b[l])).bits, "mul_bits");
+            // The same operations paired with a second of other operands in lanes 4 to 7.
+            let (a2, b2, c2, old2, mask2) = ([b[1], c[0], a[3], b[2]], [c[2], a[0], b[3], a[1]], [a[2], b[0], c[3], c[1]], [old[3], old[2], old[1], old[0]], !mask & 0xF);
+            let join = |x: [u32; 4], y: [u32; 4]| -> [u32; 8] { [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]] };
+            let both = |x: Vector, y: Vector| Pair { bits: join(x.bits, y.bits), mac: x.mac | y.mac << 16 };
+            let (pa, pb, pc, po, pm) = (join(a, a2), join(b, b2), join(c, c2), join(old, old2), mask | mask2 << 16);
+            let r = |f: fn(u32, u32) -> Outcome| both(reference(&old, mask, |l| f(a[l], b[l])), reference(&old2, mask2, |l| f(a2[l], b2[l])));
+            assert_eq!(add2(&pa, &pb, &po, pm), r(float::add), "add2");
+            assert_eq!(sub2(&pa, &pb, &po, pm), r(float::sub), "sub2");
+            assert_eq!(mul2(&pa, &pb, &po, pm), r(float::mul), "mul2");
+            assert_eq!(add2_bits(&pa, &pb, &po, pm), r(float::add).bits, "add2_bits");
+            assert_eq!(mul2_bits(&pa, &pb, &po, pm), r(float::mul).bits, "mul2_bits");
+            for subtract in [false, true] {
+                let f = |k: bool| {
+                    let one = reference(&old, mask, |l| { let x = float::fused(c[l], a[l], b[l], subtract); if k { x.product } else { x.value } });
+                    let two = reference(&old2, mask2, |l| { let x = float::fused(c2[l], a2[l], b2[l], subtract); if k { x.product } else { x.value } });
+                    both(one, two)
+                };
+                assert_eq!(fused2(&pc, &pa, &pb, subtract, &po, pm), FusedPair { value: f(false), product: f(true) }, "fused2");
             }
         }
     }

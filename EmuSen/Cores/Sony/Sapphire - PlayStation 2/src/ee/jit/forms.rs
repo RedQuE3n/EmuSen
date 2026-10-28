@@ -16,20 +16,27 @@ use crate::ee::Ee;
 use crate::ee::timing::Timing;
 
 /// The data cache's hit inline, every other case of a load or store out of line.
-pub const CACHE: u8 = 1;
+pub const CACHE: u16 = 1;
 /// An exit stores a model field, Random or the group only when the block changed it from the entry's value.
-pub const CHANGED: u8 = 2;
+pub const CHANGED: u16 = 2;
 /// What the block keeps in the core or the context read where it is used, after the calls, not held from the entry.
-pub const RELOAD: u8 = 4;
+pub const RELOAD: u16 = 4;
 /// Each compiled load and store that stays in its block counted by its page's kind (`kind`).
-pub const COUNT: u8 = 8;
+pub const COUNT: u16 = 8;
 /// Each helper call checked to leave alone what the levers hold across it (`Watched`).
-pub const WATCH: u8 = 16;
+pub const WATCH: u16 = 16;
 /// The replay, `leave` and the fill called through trampolines that preserve every register (`trampolines`).
-pub const PRESERVE: u8 = 32;
+pub const PRESERVE: u16 = 32;
 /// For the shadow count only: the context pointer in Cranelift's pinned register.
-pub const PINNED: u8 = 64;
-static KINDS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
+pub const PINNED: u16 = 64;
+/// One translation a page a block: a later access on the same base register reuses an earlier one's page when one compare shows the same page (Sapphire_Redesign.md, "The exact design's work a block").
+pub const PAGE: u16 = 128;
+/// One tag check a line a block: a later access on the same base register reuses an earlier one's line when one compare shows the same line.
+pub const LINE: u16 = 256;
+/// One shared exit: the hot exit's replay and commit made by one helper, handed the exit's few values.
+pub const STUB: u16 = 512;
+/// The kinds `COUNT` counts (1 to 3), then the reuses: a page reused, its guard failed, a line reused, its guard failed.
+static KINDS: [AtomicU64; 8] = [const { AtomicU64::new(0) }; 8];
 
 /// The address of `KINDS`, which `COUNT`'s code adds to.
 pub fn kinds() -> i64 {
@@ -37,14 +44,14 @@ pub fn kinds() -> i64 {
 }
 
 thread_local! {
-    static LEVERS: Cell<u8> = const { Cell::new(0) };
+    static LEVERS: Cell<u16> = const { Cell::new(0) };
     static STATIC: Cell<bool> = const { Cell::new(false) };
     static BASE: Cell<u32> = const { Cell::new(0) };
 }
 
 /// The levers `EMUSEN_SAPPHIRE_FORMS` names (`cache`, `count`, comma-separated).
-pub fn chosen() -> u8 {
-    static CHOSEN: OnceLock<u8> = OnceLock::new();
+pub fn chosen() -> u16 {
+    static CHOSEN: OnceLock<u16> = OnceLock::new();
     *CHOSEN.get_or_init(|| {
         let v = std::env::var("EMUSEN_SAPPHIRE_FORMS").unwrap_or_default();
         v.split(',').map(|s| match s.trim() {
@@ -55,16 +62,19 @@ pub fn chosen() -> u8 {
             "watch" => WATCH,
             "preserve" => PRESERVE,
             "pinned" => PINNED,
+            "page" => PAGE,
+            "line" => LINE,
+            "stub" => STUB,
             _ => 0,
         }).fold(0, |a, b| a | b)
     })
 }
 
-pub fn set(levers: u8) {
+pub fn set(levers: u16) {
     LEVERS.with(|c| c.set(levers));
 }
 
-pub fn on(lever: u8) -> bool {
+pub fn on(lever: u16) -> bool {
     LEVERS.with(|c| c.get()) & lever != 0
 }
 
@@ -179,6 +189,48 @@ pub fn trampolines(helpers: [super::Helper; 3]) -> [super::Helper; 3] {
     made.map(|a| unsafe { std::mem::transmute::<usize, super::Helper>(a) })
 }
 
+/// Under `PRESERVE`, the shared exit behind a `preserve_all` trampoline as `trampolines` makes them.
+pub fn commit_trampoline(f: super::Commit) -> super::Commit {
+    if chosen() & PRESERVE == 0 {
+        return f;
+    }
+    static MADE: OnceLock<usize> = OnceLock::new();
+    let made = *MADE.get_or_init(|| {
+        use cranelift_codegen::ir::{AbiParam, InstBuilder, MemFlagsData, types};
+        use cranelift_codegen::isa::CallConv;
+        let mut module = JITModule::new(cranelift_jit::JITBuilder::with_flags(&[("opt_level", "speed")], cranelift_module::default_libcall_names()).expect("the host"));
+        let ptr = module.target_config().pointer_type();
+        let mut ctx = module.make_context();
+        ctx.func.signature.call_conv = CallConv::PreserveAll;
+        ctx.func.signature.params.extend([AbiParam::new(ptr), AbiParam::new(types::I64), AbiParam::new(types::I64), AbiParam::new(types::I64)]);
+        let mut sysv = module.make_signature();
+        sysv.params.extend([AbiParam::new(ptr), AbiParam::new(types::I64), AbiParam::new(types::I64), AbiParam::new(types::I64)]);
+        sysv.returns.push(AbiParam::new(types::I32));
+        let mut fc = FunctionBuilderContext::new();
+        let mut b = FunctionBuilder::new(&mut ctx.func, &mut fc);
+        let block = b.create_block();
+        b.append_block_params_for_function_params(block);
+        b.switch_to_block(block);
+        b.seal_block(block);
+        let args: Vec<_> = b.block_params(block).to_vec();
+        let sig = b.import_signature(sysv);
+        let h = b.ins().iconst(ptr, f as usize as i64);
+        let call = b.ins().call_indirect(sig, h, &args);
+        let r = b.inst_results(call)[0];
+        b.ins().store(MemFlagsData::trusted(), r, args[0], std::mem::offset_of!(Context, answer) as i32);
+        b.ins().return_(&[]);
+        b.finalize(module.target_config());
+        let id = module.declare_function("commit", cranelift_module::Linkage::Local, &ctx.func.signature).expect("declared");
+        module.define_function(id, &mut ctx).expect("defined");
+        module.finalize_definitions().expect("finalized");
+        let a = module.get_finalized_function(id) as usize;
+        std::mem::forget(module);
+        a
+    });
+    // SAFETY: the code calls this address with `preserve_all`'s convention, as the trampoline was compiled; Rust never calls it.
+    unsafe { std::mem::transmute::<usize, super::Commit>(made) }
+}
+
 thread_local! {
     static PINNED_ISA: std::cell::OnceCell<cranelift_codegen::isa::OwnedTargetIsa> = const { std::cell::OnceCell::new() };
 }
@@ -200,8 +252,10 @@ fn pinned_isa(module: &JITModule) -> cranelift_codegen::isa::OwnedTargetIsa {
 }
 
 /// The forms the shadow compiles: today's, C1, static, both with the chosen levers, and static with each step's levers (`STEPS`).
-const FORMS: [&str; 11] = ["today", "C1", "static", "static+levers", "today+levers", "static+cache", "static+changed", "static+reload", "static+preserve", "static+reload+pinned", "static+preserve+pinned"];
-const STEPS: [u8; 6] = [CACHE, CACHE | CHANGED, CACHE | CHANGED | RELOAD, CACHE | CHANGED | RELOAD | PRESERVE, CACHE | CHANGED | RELOAD | PINNED, CACHE | CHANGED | RELOAD | PRESERVE | PINNED];
+const FORMS: [&str; 9] = ["today", "C1", "static", "static+levers", "today+levers", "static+option1", "static+page", "static+line", "static+stub"];
+/// Option 1's levers, then each of this step's added in turn.
+const OPTION1: u16 = CACHE | CHANGED | RELOAD | PRESERVE;
+const STEPS: [u16; 4] = [OPTION1, OPTION1 | PAGE, OPTION1 | PAGE | LINE, OPTION1 | PAGE | LINE | STUB];
 const N: usize = FORMS.len();
 /// For each form: total, hot, cold bytes, hot-tagged bytes past the first cold one, then the hot bytes by purpose.
 const ROW: usize = 4 + 12;
@@ -220,7 +274,7 @@ fn purpose(l: SourceLoc) -> usize {
 pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) {
     let c1 = Options { fixed_cost: true, ..options };
     let levers = chosen();
-    let forms: [(Options, bool, u8); N] = std::array::from_fn(|k| match k {
+    let forms: [(Options, bool, u16); N] = std::array::from_fn(|k| match k {
         0 => (options, false, 0),
         1 => (c1, false, 0),
         2 => (c1, true, 0),
@@ -315,10 +369,11 @@ pub fn report() -> String {
         return String::new();
     }
     let per = |n: u64| n as f64 / w[0].max(1) as f64;
-    let k: [u64; 4] = std::array::from_fn(|i| KINDS[i].load(Relaxed));
+    let k: [u64; 8] = std::array::from_fn(|i| KINDS[i].load(Relaxed));
     let wt: [u64; 8] = std::array::from_fn(|i| WATCHES[i].load(Relaxed));
     let mut s = format!("forms watch\treplay {} changed {}\tleave {} changed {}\tfill {} changed {}\thook {} changed {}\n", wt[0], wt[1], wt[2], wt[3], wt[4], wt[5], wt[6], wt[7]);
     s += &format!("forms kinds\tscratchpad {}\tcached {}\tuncached {}\n", k[1], k[2], k[3]);
+    s += &format!("forms reuse\tpage {} its guard failed {}\tline {} its guard failed {}\n", k[4], k[5], k[6], k[7]);
     s += &format!("forms\tblocks {}\twords {}\t{:.2} a block\tmemory {} plain {} branch {}\tlevers {}\n", w[1], w[0], w[0] as f64 / w[1] as f64, w[2], w[3], w[4], chosen());
     for (k, name) in FORMS.iter().enumerate() {
         let b: [u64; ROW] = std::array::from_fn(|j| BYTES[k * ROW + j].load(Relaxed));

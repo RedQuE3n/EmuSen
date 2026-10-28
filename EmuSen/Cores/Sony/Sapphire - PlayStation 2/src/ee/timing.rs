@@ -507,6 +507,13 @@ impl Timing {
         });
         self.instructions += k * (self.instructions - a.instructions);
     }
+
+    /// `forms::STUB`'s exit: the last issue moved on by `k` cycles, and the cycle after it.
+    #[cfg(feature = "forms")]
+    pub(crate) fn advance_last(&mut self, k: u64) -> u64 {
+        self.last += k;
+        self.last + 1
+    }
 }
 
 /// Where the issue model's fields lie, for the recompiler's code, which reads and writes them as the model does

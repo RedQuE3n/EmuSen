@@ -1980,3 +1980,301 @@ built, and the second changes what a block is, not how it is compiled.
   horizon fault, as above.
 - **The six seeded faults** as above, each on its own Release build, and reverted.
 - **The ring:** two rounds at three sizes on the desktop, and on the handheld on the charger.
+
+## The exact design's work a block: one translation a page, one tag check a line, a shared exit (2026-10-28)
+
+*Decided 2026-10-28 by the tester: after option 1, cut the per-access and per-exit work its assessment measured as the
+larger part of what remains, in three levers behind the `forms` feature (the default build unchanged), measured one at
+a time in this order: (1) one translation a page a block; (2) one cache-tag check a line a block; (3) one shared exit
+stub. The stop rule: each lever's saving estimated in writing before it is built; stop after a lever that saves less
+than half its estimate or cannot be proven exact, or when the arena reaches about 96. These are byte-face emitter forms
+(`EmuSen_TwoFaces.md`); exactness is the requirement.*
+
+### The estimates, set before each lever was built
+
+The base is option 1's step 3 on the arena: 180.6 hot bytes a guest instruction, 37.7 % of guest instructions loads and
+stores, so about 479 hot bytes a load or store, of which the translation's tag holds 17.5 a guest instruction (about 46
+a load or store) and the cache path and its dispatch 52.8 (about 140).
+
+**Lever 1, one translation a page.** Assumptions: about 45 % of a block's loads and stores have an earlier one in the
+same block on the same base register unchanged (stack frames, a structure's fields); each such access drops the
+translation (about 46 bytes, and about 10 of the untagged bytes with it) and pays a guard of about 14 (an exclusive or, a
+compare and a branch to the full path laid cold). **Estimated saving: about 7 hot bytes a guest instruction** (0.377 ×
+0.45 × 42), a range of 5 to 10.
+
+**Lever 2, one tag check a line**, set after lever 1's first measurement (the dock's first 60 fields: the translation's
+tag down by 7.0 bytes a guest instruction, about 40 % of it, so that about half the loads and stores have an earlier one
+on their base). Assumptions: about 60 % of those are within 64 bytes of it by displacement, so about 30 % of all loads
+and stores; each drops the cache path and its dispatch (about 140 bytes, its untagged share about 10) and pays a guard
+and the line's pointer (about 20), the translation's guard it replaces already counted by lever 1. **Estimated saving:
+about 12 hot bytes a guest instruction** (0.377 × 0.30 × 110), a range of 8 to 16.
+
+**Lever 3, one shared exit**, set after lever 2's measurement on the dock (136.3 hot bytes, the exits' write-back 29.5
+of them). Read from option 1's disassembly of a block of six guest instructions: its hot exit holds about 235 bytes
+besides the registers' stores: the guard, base and log count stored before the replay (about 30), the call, the
+check of its answer, `last`, the instructions issued, Count, the cycles seen, Cause's IP7, the UCAB's valid flag, the
+place (with a select for a branch's outcome), the delay flag and the steps (about 200). Assumptions: about 1.1 hot exits
+a block of 9.2 guest instructions (the final exit, and a likely branch's not taken), about 190 bytes of each moved into
+one helper, which the exit calls with a packed word, its place and its end cycle (about 30). **Estimated saving: about
+14 hot bytes a guest instruction** (1.1 × 160 / 9.2 is 19, less a quarter for blocks whose exits store less), a range
+of 10 to 18.
+
+### The result
+
+All three levers met their estimates, and every form is exact on every digest. On the arena the static prototype
+with option 1's levers goes from **181.3 to 119.1 hot bytes a guest instruction**: lever 1 saves 7.7 (estimated 7),
+lever 2 34.9 (estimated 12), lever 3 19.6 (estimated 14). The mark of about 96 is not reached; the stop rule did not
+stop the work early, and the three levers are the step's whole list. On the handheld the ring at 119 bytes runs **2.68 to
+2.85 ns a guest instruction** with today's entries, at the mark of 2.75 for Jak's opening and 1.2 times the arena's
+2.28. Of what remains, about 63 bytes are still the design's work by the tags; a Winch-style emitter is estimated to
+take the 119.1 to about 88 to 92, under the mark (below).
+
+### The forms
+
+`EMUSEN_SAPPHIRE_FORMS` takes three more levers, each on top of option 1's (`cache`, `changed`, `reload`, `preserve`):
+- **`page`, one translation a page.** Each load or store that stays in its block is recorded on the main line with the
+  SSA value of its base register, its displacement and alignment mask, its address and its page's host address and
+  meaning (at most four, the latest for each base). A later access on the same base value reuses the page: with no code
+  where its displacement and mask are the same (the same address), otherwise behind one compare, `(a ^ a_earlier) <
+  4096`, with the full translation laid cold behind it (`Emitter::page_reusing`).
+- **`line`, one tag check a line**, which needs `page` and `cache`. The cache path's join carries one more value, the
+  address where the access reached a cached line or the scratchpad, with bit 32 set where it went past the caches. A
+  later access on the same base, within 63 bytes of it by displacement, a load or PREF after any access or a store after
+  a store, compares `(a ^ key) < 64`; where it holds the line's pointer is the earlier one's plus the difference of the
+  addresses, the tag pointer the earlier's, and the translation, the kind's dispatch, both ways' compares and the
+  scratchpad's path are not emitted. The full path is laid cold behind the compare. The D bit is set after a store as
+  before.
+- **`stub`, one shared exit.** An exit calls one helper, `blocks::commit` (through a `preserve_all` trampoline under
+  `preserve`), with three values: a word packing the steps, the last load or store's base and log count, the UCAB's flag,
+  the delay slot and, in the static prototype, the cycles `last` moves on by; the place, the address in the low half and
+  the next address in the high; and the end cycle, where the form computes `last` at run time. It sets the guard, runs
+  the replay, and when every step stands makes the commit the exit made (`Ee::commit_exit`): `last`, Count, the cycles
+  Count saw, Cause's IP7, the instructions issued, the UCAB's valid flag, the place and the steps. The block then stores
+  only the registers and model fields it changed (option 1's `changed` rule) and returns. The shadow's forms are now
+  `static+option1`, `static+page`, `static+line` and `static+stub`, each with the levers before it; `count` adds the
+  reuses taken and their guards failed (`forms reuse`).
+
+### Exactness, from the code
+
+**Lever 1: nothing during a block changes what a page means.** The translation cache's entry for a page is a function of
+the TLB, the ASID, the mode as a data access sees it, Config's K0 and DCE (`Ee::translation_key`) and RDRAM's place, under
+the generation `Blocks::translation` chooses before each entry. During a block:
+- **no instruction it holds writes any of those.** A block holds the integer instructions, the branches, the loads,
+  the stores and PREF (`shape.rs`). TLBWI, TLBWR, TLBP, MTC0, ERET, SYSCALL, BREAK, CACHE and every coprocessor
+  instruction end a block before them;
+- **an exception leaves before it.** An overflow or a trap leaves by `exit_if` before the instruction. A misaligned
+  address, a TLB miss, an invalid or unmapped page and a store to a page not writable leave by the access's slow path,
+  before it, to the interpreter;
+- **no helper called inside the block writes them.** `fill` (cold, a translation-cache miss) writes one entry of
+  `Context::pages` and reads the core only through `Ee::data_page(&self)`. `hook` (the verifier only) runs the board,
+  which is handed the scratchpad and nothing else of the core, and writes Cause's IP2 and IP3. `replay`, `leave` and
+  `commit` run only at exits, after which the block returns;
+- **the reuse holds the earlier access's values, not the cache's entry**, so a fill replacing the entry at the same
+  index changes nothing it uses.
+
+A later access is reached on the main line only if the earlier one stayed in the block, since every slow path exits, so
+the earlier translation was found. The same page is proven at run time: the same SSA value is the same base, the same
+displacement and mask the same address, and otherwise the compare of the two 32-bit virtual addresses.
+
+**Lever 2: nothing during a block evicts, fills or invalidates a line.** The data cache (`Ee::dcache`) is written only
+by the EE's own accesses and its CACHE instruction (`ee/memory.rs`), by a state's load and by a reset. The board, and
+with it every DMA channel, is handed `&mut ee.spram` and no reference to the core (`Board::run_through`, `run_to`), so
+DMA cannot reach the data cache; that is the core's model, as the EE's data cache is not snooped. During a block:
+- **a miss leaves before its access**, so no line is filled or evicted;
+- **CACHE ends the block**, so none is invalidated, written back or locked;
+- **the interpreter does not run.**
+
+So the only change to the data cache between two accesses of one block is the D bit the block's own stores set, which
+`stored` sets again on a reused line (idempotent, since `dirty | !lock` with lock unchanged). A line the earlier access
+hit is still resident, in the same way, with the same tag. The rest of the argument is the paths:
+- **the key is poisoned past the caches**, so an access to RDRAM uncached, whose bus wait and traffic count sit on that
+  path, is never reused;
+- **a store reuses only a store's line**, whose page's writable bit its own dispatch tested; a load or PREF accepts a
+  cached hit or the scratchpad whatever the bit;
+- **every access is naturally aligned and at most 16 bytes** (a misaligned one leaves), so an address in the earlier
+  one's 64-byte line has the whole access in it. The scratchpad is contiguous, so its "line" is any 64 bytes.
+
+**Lever 3: the same stores, made in one place.** `Ee::commit_exit` computes what `write_back` computed, from the same
+inputs and in the same order with respect to the replay. Count is Count plus the end cycle less the cycles seen, and the
+cycles seen become the end. IP7 is set where `(Compare − Count − 1) mod 2³²` is below that difference. The instructions
+issued grow by the steps. The UCAB's flag is cleared where a store ran, and PC, the next address and the delay flag are
+the exit's place. Count, Compare and the cycles seen are read after the replay, which the watch confirms leaves them
+alone. With fewer steps standing it writes nothing and the block takes the same rollback path as before. Rollbacks and the
+partial write-backs keep their own stores.
+
+### Exactness (measured)
+
+| Check | No form (`base`, option 1's runs) | Lever 1: option 1 + `page` | Lever 2: + `line` | Lever 3: + `stub` |
+| --- | --- | --- | --- | --- |
+| the dock's first 60 fields (picture, sound, state) | 0F8671F57AB63C25, D5F15509CCDD1709, 818361BFE5D2DBF9 | the same | the same | the same |
+| the dock, 300 fields from the state at 6,000 | 830E3FEFEE1BE6B1, 2C225C73DB4D3F9D, 9CF1BED1AA64EAEE | the same | the same | the same |
+| the arena, 300 fields from the state at 9,000 | 611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0 | the same | the same | the same |
+| `tests/blocks.rs`, test-checked profile, every lever on and `watch` | — | — | — | 26 of 26 |
+
+The watch, on the dock's first 60 fields with every lever: 4,370,850 replays (through the shared exit), 79,989 leaves and
+2,774 fills, none changing what it watches.
+
+**Seeded faults**, each built alone into the Release bench and run on the dock's first 60 fields with every lever on,
+then where the fields missed it with the whole of `tests/blocks.rs` (test-checked), and reverted:
+
+| Lever | Fault | Caught by |
+| --- | --- | --- |
+| 1 | the page guard always passes (a translation reused across a page's end) | the 60 fields (the bench stops: its state no longer saves); `accesses_on_one_base_across_a_page_and_lines_leave_the_interpreters_machine` |
+| 1 | an earlier access on any base reused, its displacement's key skipping the guard | the 60 fields' picture and state (AB3CA1F3B49E5B55, 33ECAE6065764168); the new test |
+| 2 | the line guard as wide as a page (a line reused for another line of its page) | the 60 fields' picture and state (A65165FA1FEC411E, 2244E8CE2F6B222A); the new test |
+| 2 | a store reusing a load's line, its page's writable bit not tested | not the 60 fields; `a_tlb_write_or_a_mode_change_is_seen_by_the_next_access` |
+| 2 | the key not poisoned past the caches, so a line is reused after an uncached access | not the 60 fields; three tests, among them `every_load_and_store_runs_compiled_on_every_region` and `a_store_into_a_clean_line_dirties_it_and_reaches_memory_when_it_is_replaced` |
+| 3 | the shared exit's place with its halves swapped | the 60 fields' picture and state (1564A3D56CE1CF2D, CDB58B54B546F4AD) |
+| 3 | Compare's match taken one cycle late | not the 60 fields; five tests, among them both random-program tests and `a_state_saved_between_blocks_loads_into_an_empty_cache_and_runs_alike` |
+
+Three faults were not seeded, because the design rules them out rather than a test: a translation reused across a TLB write
+or a mode change, a line reused after an eviction in its set, and a CACHE instruction passed over. None can happen inside
+a block (above), and the reuse never outlives one, since the records are the emitter's and each block starts with none.
+The existing `a_tlb_write_or_a_mode_change_is_seen_by_the_next_access` and
+`code_replaced_runs_old_until_its_line_is_invalidated_and_the_block_is_shaped_again` run with every lever on.
+
+### The bytes (measured)
+
+Host bytes a guest instruction, by R0's method, all forms of a row from one run on the same blocks: the arena, 15,596
+blocks of 142,825 guest instructions (37.5 % memory); the dock, 4,739 blocks of 44,215.
+
+| Form | Arena hot | its saving | Arena cold | Dock hot | its saving | Dock cold |
+| --- | --- | --- | --- | --- | --- | --- |
+| option 1 (`static+option1`) | 181.3 | | 218.6 | 177.1 | | 224.2 |
+| **lever 1**, + `page` | **173.6** | **7.7** | 237.4 | **169.1** | **8.0** | 238.6 |
+| **lever 2**, + `line` | **138.7** | **34.9** | 292.4 | **134.9** | **34.2** | 292.8 |
+| **lever 3**, + `stub` | **119.1** | **19.6** | 273.9 | **115.5** | **19.4** | 270.9 |
+| today's emitter | 530.1 | | 731.3 | 518.7 | | 769.7 |
+| today's, with all of them | 424.1 | 106.0 | 817.1 | 414.6 | 104.1 | 848.9 |
+
+Each lever's first run gave the same savings within 0.3 bytes (lever 1: 181.2 to 173.5 on the arena; lever 2: 173.6 to
+138.3).
+
+**By purpose, after each lever (arena, untagged bytes as measured):**
+
+| Purpose | Option 1 | + `page` | + `line` | + `stub` |
+| --- | --- | --- | --- | --- |
+| cache tags and dispatch | 52.5 | 53.3 | 33.4 | 33.5 |
+| untagged | 61.0 | 58.5 | 45.3 | 43.6 |
+| exits' write-back | 28.8 | 29.0 | 29.2 | 10.9 |
+| translation | 17.4 | 11.0 | 8.9 | 8.9 |
+| horizon and line checks | 9.5 | 9.5 | 9.6 | 9.6 |
+| address and alignment | 4.3 | 4.2 | 4.2 | 4.2 |
+| guest registers | 2.8 | 2.8 | 2.9 | 2.9 |
+| data access | 2.2 | 2.4 | 2.5 | 2.6 |
+| entry | 1.5 | 1.5 | 1.5 | 1.5 |
+| the instruction's work | 1.2 | 1.3 | 1.3 | 1.4 |
+| timing | 0.1 | 0.1 | 0.1 | 0.1 |
+| **hot, in all** | **181.3** | **173.6** | **138.7** | **119.1** |
+
+**Why lever 2 beat its estimate by three times.** Its estimate priced the tag check and the dispatch at about 150 bytes
+with their untagged share, and a reuse at 30 % of the loads and stores. Both were low:
+- **the reuses** (an estimate from the tags): the cache path's tag fell by 19.9 bytes a guest instruction, and a reused
+  access sheds about 130 of its tagged bytes (the 142 a memory instruction under that tag after lever 1, less the
+  guard's 12), so about 41 % of the loads and stores in the compiled code are reused;
+- **the bytes a reuse sheds**: 34.9 over 0.41 × 0.375 is **about 230 bytes a reused access**, the whole access path
+  but the data access itself. Beside the tagged cache path, that is the translation's guard (now unneeded), the joins'
+  block parameters and their moves, and the reloads of the memory context, about 70 untagged bytes the estimate gave
+  only 10.
+
+**The reuses run, counted** (`count`, the dock's first 60 fields, every lever): of about 3.07 M loads and stores run in
+blocks, 0.60 M were line candidates, of which 130,000 (21.6 %) failed the guard and ran the full path laid cold; 0.20 M
+were page candidates, of which 7,738 (3.9 %) failed. A failed line guard is a displacement within 63 bytes whose base
+put the two addresses in different lines. **So 4.2 % of the loads and stores run cold code**, about 190 bytes each, about
+3 bytes a guest instruction of fetched code that the hot count leaves out. The page guard's failures are under 0.3 %
+of the accesses.
+
+**Where the per-access and per-exit bytes went, against option 1's assessment.** The assessment put about 55 to 60 bytes
+of option 1's 180.6 in the design's work at each load, store and exit. By purpose, the three levers took from it:
+- **the cache path and its dispatch**, 52.5 to 33.5: 19.0;
+- **the translation**, 17.4 to 8.9: 8.5;
+- **the exits' write-back**, 28.8 to 10.9: 17.9;
+- **the untagged bytes**, 61.0 to 43.6: 17.4, most of it the moves and reloads of the paths removed.
+
+That is 62.8 bytes in all, about the assessment's figure, because the reuses also removed bytes the assessment had given
+to Cranelift. What remains of the design's own work, about 63 bytes a guest instruction by the tags:
+- **cache tags and dispatch, 33.5**: the first access to each line in a block, about 150 bytes each (33.5 over the
+  59 % of 0.375 not reused) with the scratchpad's path, the D bit and the joins;
+- **exits' write-back, 10.9**: the stores of the registers the block changed, the call to the shared exit and its three
+  values, and the check of its answer;
+- **horizon and line checks, 9.6**: one compare of `last` read again against the horizon read again at every load and
+  store after the first instruction, and the instruction cache's line limit at each new line;
+- **translation, 8.9**: the first access on each base;
+- **address and alignment, 4.2**, and the data access itself, 2.6, which any form keeps.
+
+Design work beyond these three levers, estimated and not built:
+- **one horizon check a block** in the static form. The cycles of every instruction are the entry's `last` plus a
+  constant, so one compare at the entry, of `last` plus the last access's constant against the horizon, proves every
+  access's check. Where it fails the block leaves at its entry with no step run, which the dispatcher already handles
+  exactly, and the interpreter runs it. About 8 bytes a guest instruction.
+- **the D bit set once a line** for a store after a store to the same line: about 1 to 2.
+- **a translation reused across base registers** whose values differ by a constant the block knows (a register copied,
+  or set from another plus an immediate): not counted, plausibly a few bytes.
+
+### What a Winch-style emitter would remove from what remains (an estimate)
+
+*From the disassembly (`EMUSEN_SAPPHIRE_FORMS_DUMP`, the dock's first 60 fields: the first eight blocks with three or
+more loads and stores, 53 guest instructions, the same blocks as option 1's count) and option 1's `overhead.py`; the
+counts are measured, the bytes estimated from x86-64 encodings.*
+
+In those blocks' hot code, a guest instruction now takes 37.2 host instructions, against option 1's 48.0 and the static
+prototype's 67.6. Cranelift's overheads in each guest instruction's hot code:
+
+| Overhead | Option 1 (count) | Now (count) | Now, bytes (estimate) |
+| --- | --- | --- | --- |
+| register-to-register moves | 6.7 | 4.85 | about 15 |
+| operands from the constant pool | 2.1 | 1.87 | about 6 |
+| conditions made with `setcc` before a test | 1.4 | 1.00 | about 6 |
+| block parameters zeroed with `uninit` and `xor` | 1.1 | 1.11 | about 3 |
+| blocks holding only a jump | 0.8 | 0.47 | about 2 |
+| **in all** | about 40 bytes | | **about 32** |
+
+These blocks are memory-dense, so on the average block the share is lower, about 22 to 24 bytes by option 1's
+proportion (25 to 30 of 40).
+
+**A Winch-style emitter on `cranelift-assembler-x64`** would write x86-64 with a fixed assignment of the context, the
+core, the memory context and the guest registers a block names, and lay each fast path as a straight sequence branching
+on flags. It would remove:
+- **Cranelift's overheads above**: about 22 to 24 bytes a guest instruction;
+- **the memory context read again at each load and store**: under `reload` the horizon, `last`, the translation cache's
+  address and generation and the line pointer are loads from the context or the core, because nothing may be held across
+  a call. On the hot line there is no call before the exit, so fixed registers would hold them from the entry: about 5
+  to 7 bytes (two loads a horizon check, about 10 bytes, at about 0.34 a guest instruction; the full translations' two
+  loads and the line pointer's, about 13 bytes, at about 0.19);
+- **the join's block parameters** of the cache path and the reuse, which a fixed assignment makes the same registers on
+  every edge: counted among the moves above.
+
+**So a Winch-style emitter would take the 119.1 to about 88 to 92 hot bytes a guest instruction** (119.1 less 27 to 31),
+below the mark of 96. With the one-horizon-check-a-block lever above (about 8), about 80. Both are estimates: the
+emitter's own encodings were not written, and the overheads were counted on memory-heavy blocks and scaled.
+
+### The ring at the bytes reached (measured)
+
+R0's `ring mix` (Jak's p90 working set), asked for sizes that land near each lever's bytes. The desktop ran alone at
+CPU weight 100. The handheld ran on the charger (ACAD online 1 before and after), CPU only, through `systemd-run --user`,
+with its scratch removed afterwards; the ring binary needs GLIBC_2.34 at most. ns a guest instruction, two rounds, and a
+third at the last size on the handheld, where the result sat at the mark:
+
+| Lever (arena hot bytes) | Ring code | Desktop, today's 2.87 an entry | Desktop, §4.2's 14.5 | Handheld, today's | Handheld, §4.2's |
+| --- | --- | --- | --- | --- | --- |
+| option 1 (180.6, its own runs) | 178.5 / 181.0 | 3.51–3.54 | 3.03–3.04 | 3.93–4.00 | 5.88–6.12 |
+| lever 1 (173.6) | 178.5 / 175.0 | 3.49–3.50 | 2.94–2.95 | 4.14 | 7.02–7.20 |
+| lever 2 (138.7) | 138.9 / 139.7 | 2.74–2.75 | 2.10–2.11 | 3.18–3.20 | 3.99–4.22 |
+| **lever 3 (119.1)** | 118.2 / 119.5 | **2.33–2.43** | **1.73–1.77** | **2.68–2.85** | **2.57–2.76** |
+| the mark, handheld | | | | **2.75** (Jak's opening) / **2.28** (the arena's fields) | |
+
+The ring's code for lever 1 came out at option 1's size with today's entries (178.5), so that row measures no
+difference there; with §4.2's entries it is 175.0 against 181.0. **At lever 3's bytes the handheld meets the mark for
+Jak's opening**, 2.68 to 2.85 with today's entries (2.73, 2.85, 2.68 in three rounds) and 2.57 to 2.76 with §4.2's,
+against 2.75, and is 1.2 times the arena's 2.28. R0 measured 2.24 to 2.43 there at 96 bytes.
+
+### Tests run
+
+- **The bench**, with each lever added in turn, on the dock's first 60 fields, the dock and the arena, the byte count on;
+  digests as above. Once more on the 60 fields with `count` and `watch`, and once with the disassembly dump.
+- **`tests/blocks.rs`, test-checked profile**, every lever on and `watch`: 26 of 26. The new test,
+  `accesses_on_one_base_across_a_page_and_lines_leave_the_interpreters_machine`, walks one base register across a page's
+  end and many lines' ends in kseg0, kuseg and the scratchpad, with a second base one page on at the same displacements.
+- **The seven seeded faults** as above, each on its own Release build, and reverted; the three the fields missed with
+  the whole of `tests/blocks.rs`, and three they caught with the new test alone.
+- **The ring:** two rounds at three sizes on the desktop, and on the handheld on the charger.

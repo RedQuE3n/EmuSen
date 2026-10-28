@@ -176,6 +176,8 @@ impl Blocks {
             log: [[0; 3]; 2 * shape::MAX],
             left: [0; 5],
             answer: 0,
+            #[cfg(feature = "forms")]
+            commit: jit::forms::commit_trampoline(commit),
         });
         let mut ctx = ctx;
         [ctx.replay, ctx.leave, ctx.fill] = jit::forms::trampolines([ctx.replay, ctx.leave, ctx.fill]);
@@ -659,6 +661,25 @@ extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
     let seen = watch(ctx);
     let kept = replay_steps(ctx, steps, false);
     watched(seen, ctx, 0);
+    kept
+}
+
+/// `forms::STUB`'s shared exit (`jit::commit_word`): the guard set, the board replayed, and with every step standing the exit's commit.
+#[cfg(feature = "forms")]
+extern "C" fn commit(ctx: *mut Context, word: u64, place: u64, end: u64) -> u32 {
+    // SAFETY: as `replay`.
+    let ctx = unsafe { &mut *ctx };
+    let (steps, base, logged) = ((word & 0x7F) as u32, (word >> 7 & 0x7F) as u32, (word >> 14 & 0xFF) as u32);
+    (ctx.guard, ctx.base, ctx.logged) = (base.saturating_sub(1), base, logged);
+    let seen = watch(ctx);
+    let kept = replay_steps(ctx, steps, false);
+    watched(seen, ctx, 0);
+    if kept == steps {
+        // SAFETY: as `replay`.
+        let sys = unsafe { &mut *(*ctx.owner.cast::<Run>()).sys };
+        sys.ee.commit_exit(word, place, end);
+        ctx.steps = steps;
+    }
     kept
 }
 

@@ -2008,3 +2008,13 @@ on their base). Assumptions: about 60 % of those are within 64 bytes of it by di
 and stores; each drops the cache path and its dispatch (about 140 bytes, its untagged share about 10) and pays a guard
 and the line's pointer (about 20), the translation's guard it replaces already counted by lever 1. **Estimated saving:
 about 12 hot bytes a guest instruction** (0.377 × 0.30 × 110), a range of 8 to 16.
+
+**Lever 3, one shared exit**, set after lever 2's measurement on the dock (136.3 hot bytes, the exits' write-back 29.5
+of them). Read from option 1's disassembly of a block of six guest instructions: its hot exit holds about 235 bytes
+besides the registers' stores: the guard, base and log count stored before the replay (about 30), the call, the
+check of its answer, `last`, the instructions issued, Count, the cycles seen, Cause's IP7, the UCAB's valid flag, the
+place (with a select for a branch's outcome), the delay flag and the steps (about 200). Assumptions: about 1.1 hot exits
+a block of 9.2 guest instructions (the final exit, and a likely branch's not taken), about 190 bytes of each moved into
+one helper, which the exit calls with a packed word, its place and its end cycle (about 30). **Estimated saving: about
+14 hot bytes a guest instruction** (1.1 × 160 / 9.2 is 19, less a quarter for blocks whose exits store less), a range
+of 10 to 18.

@@ -6,6 +6,8 @@
 //! decides how many of its instructions stand. Sapphire_Native.md §44 and Sapphire_Recompiler.md §48 are the record.
 
 mod emit;
+#[cfg_attr(not(feature = "forms"), path = "forms_off.rs")]
+pub(crate) mod forms;
 pub mod shape;
 
 use cranelift_codegen::ir;
@@ -143,6 +145,13 @@ impl emusen_jit::Lowering for R5900 {
     const EXITS: &'static [&'static str] = &["done", "rollback"];
 
     fn lower(&mut self, module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) -> Result<(), String> {
+        #[cfg(feature = "forms")]
+        {
+            if std::env::var_os("EMUSEN_SAPPHIRE_FORMS_BYTES").is_some() {
+                forms::shadow(module, functions, words, start, options);
+            }
+            forms::set(forms::chosen());
+        }
         emit::lower(module, func, functions, words, start, options)
     }
 }

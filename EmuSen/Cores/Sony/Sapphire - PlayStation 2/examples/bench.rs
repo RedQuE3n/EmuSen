@@ -397,6 +397,8 @@ fn main() {
             b.memory, s.entered, s.compiled_steps, s.interpreted, s.rollbacks, s.rerun_steps, s.kept_past, s.dmac_stops, s.fills, s.generations, s.left
         );
     }
+    #[cfg(feature = "forms")]
+    print!("{}", sapphire::ee::forms_report());
     let cd = &m.sys.board.iop.bus.cdvd;
     println!(
         "machine\tentered at frame {:?}\tstopped {:?}\tdrive N commands {}\tS commands {}",

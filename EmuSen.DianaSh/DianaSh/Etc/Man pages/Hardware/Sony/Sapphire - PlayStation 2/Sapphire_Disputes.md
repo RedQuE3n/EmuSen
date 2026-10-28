@@ -4716,3 +4716,21 @@ it.*
 - **Depends on it:** every workload with play (`Sapphire_Speed.md` §51), G5's anchors past the opening.
 - **Pinned by:** nothing yet.
 - **Implemented in:** nothing yet.
+
+### D-1100. VU pairs a field on Jak's arena: Sapphire_Speed.md §58.4's 2,534 k (VU1) and 421 k (VU0) against the bench's 1,559 k and 360 k
+
+- **Seen:** R0.1's census (Sapphire_Redesign.md, R0 results, measured 2026-10-28), the arena window from the state at
+  9,000, counts `vpu.pairs_run` as the bench's `vu` line does.
+- **Triage:** the counter gives the same pairs field by field with both VUs interpreted and with both compiled (30
+  fields); the bench's runs of 2026-10-26 on the same window printed the same 1.56 M and 0.36 M. §58.4's figures were
+  taken at N = 1 on that stage's own build and are not re-derived.
+- **Conclusion:** **open**, a measurement dispute: which count §3.3 and §3.5 should divide by. R0.1 compares the census
+  with the arena on its own counter.
+
+### D-1101. The EE emitter's code: Sapphire_Native.md §44.8's 380 bytes a guest instruction against 1,208 measured
+
+- **Seen:** R0.2's byte counter on the arena window (Sapphire_Redesign.md, R0 results, measured 2026-10-28): 31,770
+  blocks of 267,094 guest instructions, 8.41 a block; emusen-jit's own count is of the same order (122.3 MB
+  over the 9,667 blocks it compiled, 12.7 KB a block against the counter's 10.2).
+- **Conclusion:** **settled by measurement.** §44.8 measured S36's and S37's blocks of 3.6 instructions; today's carry the
+  loads' and stores' exits, the rollbacks and the rewind. Sapphire_Redesign.md §3.5 and §4.2 used the older figure.

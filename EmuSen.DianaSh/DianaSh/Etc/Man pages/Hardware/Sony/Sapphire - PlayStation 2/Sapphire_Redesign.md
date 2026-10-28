@@ -783,3 +783,217 @@ to §48.6 and §48.15.1; `Sapphire_Scheduler.md` §54.1 and §54.9; `Mars_Recomp
 §42.4; the paused plan for the GIF's and VIF's exact skip (2026-10-28); `EmuSen_FastExact.md` from branch
 `sim-reference`; the sealed review, the sealed review's audit, and the critic's review of the first version. No emulator's
 source, no firmware, no game data. Nothing was built or run for this page.
+
+## R0 results (measured 2026-10-28)
+
+*Measured on the desktop (Ryzen 7 7700X) only; the handheld's session (R0.3, R0.5 and the handheld's runs of R0.2 and
+R0.4) was held by the tester's decision of the same day, since R0.2 and R0.4 had already failed on the desktop. Disputes
+D-1100 and D-1101. The instruments are committed and off by default: the bench's `--census FILE` (one row a field),
+`examples/ring.rs`, `src/float_lanes.rs` behind the `lanes` feature with `examples/lanes.rs`, and `emusen-gpu`'s
+`examples/memtypes.rs`. The static form's byte counter was a throwaway patch (a shadow compile of every block in three
+forms), kept in the stage's scratch and reverted. Every timing ran alone at CPU weight 100. Exposure: the census and the
+byte counter ran the player's BIOS (market americas) and Jak and Daxter, which makes this stage a player's-BIOS stage
+(exposed, never a replacement writer). No firmware was listed, hashed or read, no program counter or code of the BIOS
+or the game was logged, and no emulator's source was read.*
+
+### The verdict
+
+**Stop.** At R0.1's design point, R0.2 and R0.4 both fail on the desktop, and the handheld's factor (R0.3) cannot be
+below 1, so it can only widen both gaps. By §2 the plan does not continue to R1 and returns to the tester with the
+numbers below. R0.3 and R0.5 were not run.
+
+| Check | Measured (desktop) | Pass mark | Result |
+| --- | --- | --- | --- |
+| R0.1 the design point | the 90th-percentile field: **4.92 M** EE instructions executed, **2.72 M** VU pairs (VU1 2.33 M) | tables hold at or below 3.99 M and 2.96 M | **redrawn**: 1.23 times the arena's instructions; the pairs below the mark's 2.96 M but 1.42 times the arena's 1.92 M on the same counter (D-1100) |
+| R0.2 bytes | today's emitter **1,208**, C1 **924**, the static prototype **568** host bytes a guest instruction | at most 96 | **fail**, 5.9 times the mark |
+| R0.2 the ring | **2.19 ns** a guest instruction at 15,549 blocks and 98 bytes; **56.0 ns** at 585 bytes | the EE's allowance at the design point: 0.92 ns (two threads, factor 2), 1.36 (factor 1.35) | **fail**, 2.4 and 1.6 times; 61 times at the prototype's bytes |
+| R0.3 the handheld's factor | not run; the desktop's denominator is recorded below | at most 2.0 | **not run** |
+| R0.4 the VU's lanes | bit-equal on every case graded; **1.06 ns** a lane addition, **0.86** a lane product | 0.5 ns on the desktop (1.0 on the handheld) | **fail**, 2.1 and 1.7 times |
+| R0.5 unified memory | not run on the handheld | a cached device-local type reads 4 MB within 1 ms | **not run** |
+
+### R0.1, the busy-scene census
+
+The bench's census, with `--defaults` from the state at 6,000, wrote one row for each of 4,800 fields, 6,001 to 10,800.
+The desktop reset itself at frame 10,570 of the first run (cause unknown: no OOM, MCE or GPU error in the log), so the
+tail ran again from the state at 10,531. On the 39 fields the two runs share, the totals agree exactly: the EE's
+instructions, the cycles, both VUs' pairs. The split between executed and passed moves by up to 1,104 instructions in 18
+fields, since idle skipping's split depends on which blocks are compiled when a wait begins. The shared fields took 1.03
+times their first time, so the slowdown the first run showed from about frame 10,380 (fields of 323 ms rising to 650 to
+810) is the content's, not the machine's.
+
+| Fields | EE executed, mean / p50 / **p90** / max (M) | passed (M instructions, M cycles) | VU pairs, mean / **p90** / max (M) | VU1 p90 | VU0 p90 |
+| --- | --- | --- | --- | --- | --- |
+| `jak-dock` (6,061–6,360) | 1.67 / 1.74 / 1.74 / 2.17 | 4.12, 3.61 | 0.61 / 0.86 / 1.11 | 0.72 | 0.31 |
+| `jak-island` (7,561–7,860) | 1.93 / 1.93 / 1.99 / 3.56 | 3.83, 3.35 | 1.34 / 1.39 / 2.82 | 1.22 | 0.18 |
+| `jak-arena` (9,061–9,360) | 3.99 / 4.03 / 4.92 / 5.98 | 1.71, 1.50 | 1.92 / 3.23 / 3.49 | 2.82 | 0.67 |
+| **all 4,800 (6,001–10,800)** | 2.43 / 1.94 / **4.92** / 5.98 | 3.30, 2.89 | 1.25 / **2.72** / 3.49 | **2.33** | 0.37 |
+
+The arena window's mean, 3.99 M instructions and 1.71 M passed, is §3.3's figure exactly. The 90th, 95th and 99th
+percentiles of the instructions executed are all 4,920,320: in at least a tenth of the fields the EE passes nothing
+and executes an instruction for nearly every one of the field's 4.92 M cycles. That is the most a field can ask of the
+EE at this rate, and it is the design point. 856 of the 4,800 fields (17.8 %) are above the arena's mean instructions or
+pairs.
+
+**What the census does not cover.** One game. Jak's 4,800 fields are its opening drawn in its engine, not play, which
+the core does not yet reach (D-900). Kingdom Hearts and Dark Cloud 2 are in the probe's disc folder with no press
+script, state or window, and no other scoreboard game is installed for the probe. A design point drawn from one game's
+cutscenes is the floor of the busy scenes, not their 90th percentile across a library (§11 Q2 below).
+
+**The budget redrawn at the design point** (§3.5's allocation; the VU's counts the census's own, D-1100), desktop ns an
+item at a handheld factor of 1.35 / 2:
+
+| | One thread | Two threads |
+| --- | --- | --- |
+| an EE instruction executed, everything in (4.92 M) | 0.75 / 0.51 | **1.36 / 0.92** |
+| a VU pair, both units (2.72 M) | 0.98 / 0.66 | — |
+| a VU1 pair (2.33 M) | — | 2.86 / 1.93 |
+| a VU0 pair (0.37 M) | — | 3.00 / 2.03 |
+
+### R0.2, the emitter's footprint and the ring
+
+**The bytes** (the throwaway counter: each block the dispatcher compiles is also lowered and compiled three more times
+outside the module, as today's emitter, with C1's fixed cost, and as the static prototype, and their sizes summed; the
+arena window from the state at 9,000, its 360 fields): 31,770 blocks lowered of 267,094 guest instructions, 8.41 a
+block.
+
+| Form | Host bytes a guest instruction |
+| --- | --- |
+| today's emitter | **1,207.8** |
+| C1, a fixed cycle an instruction (`EMUSEN_SAPPHIRE_C1`) | 923.8 |
+| **the static prototype**: C1, with each instruction's issue charge reduced to a constant offset and the per-step replay store and Random's update removed | **567.9** |
+
+The prototype is a lower bound on the static form's code, which also needs the quiescent test at each region's start (a
+few compares, estimated at 30 to 40 bytes a block) and Random and Count computed at its exits. **It is 5.9 times the
+mark of 96.** Today's emitter is 3.2 times §44.8's 380 bytes, which was measured at S36 and S37, before the loads' and
+stores' exits, the rollbacks and the rewind (D-1101).
+
+**The ring** (`examples/ring.rs`): Cranelift blocks chained in one random cycle through every block, each entered as
+§4.2's chained jump would enter it: its horizon compare, a compare of its instruction-cache line's generation, its guest
+instructions, its cycles added, a tail call to the next. Blocks hold 3 or 4 guest instructions, 3.6 on average, as
+§44.8's Jak did. Each guest instruction is a run of synthetic loads, operations and stores on a register file in memory,
+as many as make the compiled code the bytes asked for, measured on the code. Two rounds at 15,549 blocks and 98 bytes
+agree within 0.5 %; the medians of five laps:
+
+| Blocks live | Code | 98 bytes: ns an entry / an instruction | 390 bytes: ns an entry / an instruction |
+| --- | --- | --- | --- |
+| 1 | — | 3.25 / 0.81 | 15.3 / 3.82 |
+| 500 | 0.18 MB at 98 bytes | 3.99 / 1.11 | 16.3 / 4.55 |
+| 5,000 | 1.76 MB | 6.26 / 1.74 | 20.6 / 5.72 |
+| **15,549** | **5.47 MB** (21.8 at 390) | **7.86 / 2.19** | **51.4 / 14.3** |
+| 15,549 at the prototype's 585 bytes | 32.7 MB | 201.5 ns an entry, **56.0** an instruction | |
+
+**Why the ring's 98 bytes and the prototype's 568 differ.** They measure different things. The ring's blocks are the
+fastest code a block of that size could be. They carry only the chained entry's two compares, the instructions' own
+work and the exit, with no exit path writing state back, no translation-cache probe, no data-cache tag compare, no undo
+log and no helper call. The ring answers "if the static form were 96 bytes, would its footprint fit the allowance?". The
+prototype is today's emitter with the issue model taken out, so it keeps every load's and store's inline page probe and
+tag compare, their slow paths, and the side exits that each write back the block's registers and the model, and those
+dominate its bytes. Its count includes the cold exit blocks, which Cranelift lays after the straight line and which are
+fetched only when taken. The hot path's share was not separated (the compiled code gives no block boundaries without
+Cranelift's `machine_code_cfg_info` flag, which the counter did not set), so the prototype's fetched footprint is below
+568 by an unmeasured amount.
+
+**Against the mark.** Even at 98 bytes the ring fails. At Jak's live-block count it costs 2.19 ns a guest instruction:
+2.4 times the 0.92 allowed with two threads at a factor of 2, and 1.6 times the 1.36 at 1.35. Its footprint alone, 2.19
+less the 0.81 of one block live, is 1.38 ns, more than either allowance before any instruction's real work. At the
+prototype's bytes the code no longer fits the desktop's 32 MB last-level cache and the cost is 56 ns.
+
+### R0.4, the VU's floats in vector lanes
+
+`float_lanes` computes `float::add`, `sub`, `mul` and `fused` for four lanes in AVX2's 128-bit integer lanes, with the
+MAC word in the VU's layout and the field mask. The adder aligns by a per-lane shift, which gives 0 for a count of 32 or
+more, so no test of the distance is needed. It finds the sum's leading bit by converting the sum, with the bit below its
+leading one cleared, to a float and reading the exponent. That conversion is exact under any rounding mode, since a
+value whose second-highest bit is clear cannot round into the next binade. The multiplier forms four 48-bit products in
+64-bit lanes less §56.4's loss. Nothing goes through the host's float arithmetic, and MXCSR is never read or changed.
+
+**Equality** (`cargo test --release --features lanes`), against `float` lane by lane with the reference's MAC bits as
+`vu::ops` sets them, the field mask random or full:
+
+| Test | Cases |
+| --- | --- |
+| every pair of a reduced set: fields 0–5, 100–154 (every alignment distance 0 to 54) and 250–255, sixteen fractions at the significand's edges, both signs; each pair beside three others, against an accumulator from the set | 4,596,736 vectors, each graded as add, sub, mul and both multiply-adds |
+| §56.5's classes | 4,000,000 vectors |
+| random (ignored, 61 s) | 1,000,000,000 lanes |
+
+All equal. The redesign asked for a reduced *format* graded exhaustively. `float` is not parameterised by its format,
+so there is no reduced reference to grade against, and a reduced *set* of operands graded exhaustively in pairs takes
+its place.
+
+**Speed** (`examples/lanes.rs`: 1,024 vectors of operands drawn in §56.2's shares, 4,096 times over, the results stored;
+the median of seven; two rounds):
+
+| ns a lane operation | Lanes, round 1 / 2 | `float` lane by lane | Mark (desktop) |
+| --- | --- | --- | --- |
+| add | **1.072 / 1.058** | 1.78 | 0.5 |
+| mul | **0.863 / 0.862** | 1.56 | 0.5 |
+| multiply-add (two lane operations) | 2.290 / 2.275 | 3.03 | 1.0 |
+| multiply-add chained through the accumulator | 2.234 / 2.204 | — | — |
+
+The kernel is 1.3 to 1.8 times faster than `float` and 1.7 to 2.1 times slower than the mark. A lane addition is about
+65 vector instructions for four lanes, so it is bound by its instruction count, not by latency: the chained
+multiply-add costs what the independent one does.
+
+**Seeded faults**, each caught by both tests: the leading-bit conversion without its clearing (F1), the loss table's
+row for an even multiplicand and y ≡ 2 (mod 4) set to 0 (F2c), the MAC word's lanes unreversed (F3), and the
+accumulator's field-255 rule removed (F4). Two first attempts at F2 survived and are **equivalent mutants**, which the
+argument shows: rows 3 (y ≡ 1, x odd) and 5 (y ≡ 2, x odd) of the loss table can never change a result. With x odd the
+exact product P is odd in row 3 and ≡ 2 (mod 4) in row 5, so neither P − 1 nor P − 2 crosses a multiple of 2^23, and
+the truncated significand is the same with the loss or without it. **Only the even multiplicand's rows (4 and 6) reach
+a result**, a sharper statement of §56.4 than it makes.
+
+### R0.3 and R0.5: not run
+
+R0.3's denominator is recorded: the arena window with one hot thread (`--blocks --idle --vu0 --vu1 --gs-workers 1`)
+takes **819.8 and 818.0 ms** a field on the desktop (medians 722.2 and 727.2), two rounds. The handheld's run of the
+same binary, the state at 9,000 and S44's `exact64` in a loop is ready and waits for the tester. `memtypes` (R0.5) runs
+on llvmpipe, a single software type that reads 4 MB in 0.20 ms. That is a check of the probe and not evidence.
+
+### Could anything close the gaps? (estimates, not measurements)
+
+- **The EE's footprint (R0.2).** Longer chained blocks would not close it. The ring has no dispatcher already, and its
+  cost grows with the bytes live, not with the entries: from 0.81 ns at one block to 1.11, 1.74 and 2.19 as the code
+  grows from nothing to 0.18, 1.76 and 5.47 MB. Longer blocks with the same bytes move the same lines. The ring met the
+  1.36 allowance only with the code within the desktop's L2 (500 blocks, 0.18 MB, 1.11 ns), and never met the 0.92. For
+  Jak's 56,000 live guest instructions to stay within about 1 MB, the code would have to fall to about 18 bytes a guest
+  instruction. No emitter the project has measured comes near that (Mars's 80 to 100, the prototype's 568). The one way
+  the ring could be too pessimistic is locality. It visits every block uniformly, while a field may re-run a small
+  working set: 4.92 M instructions over a live set of about 56,000 is about 88 runs of each instruction a field. R2's
+  census of block entries a field would measure the working set. It is the only number that could reverse R0.2, and
+  R0.2's mark on bytes would still fail.
+- **The VU's lanes (R0.4).** Three changes to the lane form are visible, each an estimate:
+  - Specialise the common case: 73 to 89 % of the VU's additions are two normal operands (§56.2). A path for those alone,
+    leaving zeros, saturation and field 255 to a slower path, saves about 15 of the addition's 65 instructions.
+  - Elide the MAC word where §4.3's analysis finds it unread: about 6 more.
+  - Process two independent upper operations in AVX2's 256-bit lanes: about half the cost a lane, where a microprogram
+    has two independent FMAC operations in a row.
+
+  The first two together give an estimated 0.7 to 0.8 ns a lane addition on the desktop, still above 0.5. With the third,
+  about 0.35 to 0.45, within the mark only for code that supplies operations in pairs. Whether microprograms do is a
+  count R2 could take. The handheld's processor is not assumed to have AVX-512.
+
+### Disputes raised
+
+- **D-1100. VU pairs a field: §3.3's 2.53 M VU1 and 0.42 M VU0 on the arena against the bench's 1.56 M and 0.36 M.**
+  The census's counter (`vpu.pairs_run`, which the bench's `vu` line has always printed) gives the same counts with
+  both VUs interpreted and with both compiled (30 fields from 9,000, equal field by field), and the Oct-26 runs of the
+  same window printed 1.56 M and 0.36 M. §58.4's figures came from that stage's own runs at N = 1 and were not
+  re-derived here. Until they are, R0.1's pairs are compared with the arena on the census's own counter. **Open.**
+- **D-1101. The EE emitter's bytes: §44.8's 380 a guest instruction against 1,208 measured.** §44.8 measured S36's and
+  S37's blocks (3.6 instructions a block). Today's blocks average 8.41 and carry the loads' and stores' exits, rollbacks
+  and rewind. Both counts are total code from the compiled size. The redesign's §4.2 and §3.5 used 380. **Settled by
+  measurement: 1,208 for today's emitter on the arena.**
+
+### Questions for the tester
+
+1. **[decision] The stop.** R0.2 and R0.4 fail at the design point, so by §2 the plan stops before R1. The choices are
+   §2's: compromises that change more than timing (C3 on the VU, or C1), or a narrower target than every field at full
+   speed on the handheld. Recommended: before choosing, two cheap measurements that could move the verdict. (a) R2's
+   working-set census of block entries a field, the only number that could make the ring's uniform walk too pessimistic.
+   (b) The lane form specialised and in pairs (above), a day's kernel work, to settle whether R0.4's gap is the form's or
+   the method's. If both stay short, accept the stop.
+2. **[decision] The handheld session.** Recommended: run it once anyway. R0.3's factor and R0.5's memory type decide any
+   narrower target too, and the binary, the state and the GPU load are ready.
+3. **[decision] The scoreboard's games (§11 Q2), for a design point that is more than one game's opening.**
+   Recommended as §11 Q2: press scripts and states for Kingdom Hearts and Dark Cloud 2 from their discs in the probe's
+   folder, and the PlayStation 2 games installed on the handheld.

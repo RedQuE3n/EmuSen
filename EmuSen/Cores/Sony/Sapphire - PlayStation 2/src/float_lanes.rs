@@ -78,7 +78,7 @@ fn masked(bits: __m128i, mac: u32, old: __m128i, mask: u32) -> Vector {
     let mut v = [0u32; 4];
     // SAFETY: four u32 are 16 bytes, written unaligned.
     unsafe { _mm_storeu_si128(v.as_mut_ptr().cast(), out) };
-    Vector { bits: v, mac: mac & (mask & 0xF) * 0x1111 }
+    Vector { bits: v, mac: mac & ((mask & 0xF) * 0x1111) }
 }
 
 #[cfg(target_arch = "x86_64")]

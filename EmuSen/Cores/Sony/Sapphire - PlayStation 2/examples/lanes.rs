@@ -48,11 +48,11 @@ fn median(mut v: Vec<f64>) -> f64 {
 
 #[target_feature(enable = "avx2")]
 fn vector(op: u8, a: &[[u32; 4]], b: &[[u32; 4]], c: &[[u32; 4]]) -> u32 {
-    let mut h = 0u32;
+    let mut out = vec![lanes::Vector::default(); N];
     let old = [0u32; 4];
     for _ in 0..REPEAT {
         for i in 0..N {
-            let v = match op {
+            out[i] = match op {
                 0 => lanes::add(&a[i], &b[i], &old, 0xF),
                 1 => lanes::mul(&a[i], &b[i], &old, 0xF),
                 _ => {
@@ -60,10 +60,10 @@ fn vector(op: u8, a: &[[u32; 4]], b: &[[u32; 4]], c: &[[u32; 4]]) -> u32 {
                     lanes::Vector { bits: f.value.bits, mac: f.value.mac ^ f.product.mac }
                 }
             };
-            h = h.rotate_left(5) ^ v.bits[0] ^ v.bits[3] ^ v.mac;
         }
+        black_box(&mut out);
     }
-    h
+    out.iter().fold(0, |h, v| h ^ v.bits[0] ^ v.mac)
 }
 
 #[target_feature(enable = "avx2")]

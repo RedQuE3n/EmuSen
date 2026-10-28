@@ -45,7 +45,7 @@ fn stream(mut seed: u64) -> impl FnMut() -> u64 {
 }
 
 fn module() -> JITModule {
-    let b = JITBuilder::with_flags(&[("opt_level", "speed")], default_libcall_names()).expect("the host's Cranelift");
+    let b = JITBuilder::with_flags(&[("opt_level", "speed"), ("preserve_frame_pointers", "true")], default_libcall_names()).expect("the host's Cranelift");
     JITModule::new(b)
 }
 
@@ -58,6 +58,7 @@ fn block_sig(m: &JITModule) -> Signature {
 }
 
 /// One block: `n` guest instructions of `units` synthetic operations in all, its line `slot`, its tail call to `next`.
+#[allow(clippy::too_many_arguments)]
 fn lower(m: &mut JITModule, ctx: &mut cranelift_codegen::Context, fb: &mut FunctionBuilderContext, id: FuncId, next: FuncId, n: u32, units: u32, slot: u32, seed: u64) -> usize {
     m.clear_context(ctx);
     ctx.func.signature = block_sig(m);
@@ -132,10 +133,11 @@ fn ring(blocks: usize, per: f64) -> Ring {
     let (a, u) = {
         let mut probe = module();
         let s = block_sig(&probe);
-        let p = probe.declare_function("probe", Linkage::Local, &s).expect("declared");
+        let p0 = probe.declare_function("probe0", Linkage::Local, &s).expect("declared");
+        let p40 = probe.declare_function("probe40", Linkage::Local, &s).expect("declared");
         let mut c = probe.make_context();
-        let s0 = lower(&mut probe, &mut c, &mut fb, p, p, 4, 0, 1, 7) as f64;
-        let s40 = lower(&mut probe, &mut c, &mut fb, p, p, 4, 40, 1, 7) as f64;
+        let s0 = lower(&mut probe, &mut c, &mut fb, p0, p0, 4, 0, 1, 7) as f64;
+        let s40 = lower(&mut probe, &mut c, &mut fb, p40, p40, 4, 40, 1, 7) as f64;
         (s0, (s40 - s0) / 40.0)
     };
     let mut bytes = 0;

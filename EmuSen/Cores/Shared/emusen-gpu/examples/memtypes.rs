@@ -160,7 +160,7 @@ fn read(p: *mut u64, want: u64) -> (u64, bool) {
     // SAFETY: a mapped allocation of `BYTES`, which no submission is writing.
     let words = unsafe { std::slice::from_raw_parts(p.cast_const(), (BYTES / 8) as usize) };
     let (mut sum, mut all) = (0u64, true);
-    for w in words.chunks_exact(8) {
+    for w in words.as_chunks::<8>().0 {
         let mut x = 0;
         for &v in w {
             x ^= v;

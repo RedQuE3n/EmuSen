@@ -237,3 +237,32 @@ It also passes §11's harder test, the one about whether a name is needed at all
 **Two things about this entry are unlike every other name here.** It *was* the only project in the repository written in F#, and its departure takes `FSharp.Core` out of this solution entirely — which retires the `F#ascent` objection here by removing its subject rather than by answering it. And it is the first name claimed for something that is not part of the emulator at all: Pegasus is a tool the project is built *with*, not a component of what the project builds. That distinction is what eventually justified the separate repository, and if a second such tool ever arrives, this section is the precedent for both halves — keep it in the same pool, and expect it to leave.
 
 One tie remains, and it is a real constraint rather than a courtesy: Pegasus consumes `EmuSen.LunaP` as a NuGet package. LunaP now has a consumer outside this solution, which `EmuSen_LunaP.md` §17 records.
+
+## 13. Tool windows take plain names (decided 2026-10-28)
+
+The tool windows and tools planned in 2026-10 drop their codenames and take plain descriptive names, on screen, in the
+code and in the docs, so that no tool has two names.
+
+| Codename | Plain name |
+|---|---|
+| Setsuna | Packages (the package manager) |
+| Ami | Scraper |
+| Rei | Library (the library manager) |
+| Minako | Display (graphics and shaders) |
+| Mako | Controllers |
+| Hotaru (the shell window only) | Shell |
+| Chibiusa | Debugger |
+| Michiru | Mods (the mod workshop) |
+| Haruka | Cheats (the cheat manager) |
+| Usagi | Home (the hub), with Setup for its first-run part |
+| Seiya | Translation (the future translation tool) |
+| Mamo | retired; it was benched before it was built |
+
+Why: the player reads the plain word in the menu, and a tool known by two names is looked for under the wrong one.
+
+What keeps its codename: the established components, which stay developer-facing. These are the cores, DianaSh,
+LunaP, Galaxia, Endymion, Pegasus, Beryl and the rest of the names in §§1-12, and `EmuSen.Hotaru`, the shell frontend,
+which is a separate program from the Shell window. The window's class is still named `HotaruWindow`; it takes the plain
+name when next changed.
+
+The Sailor Moon names of the tools may appear in the About screen's credits as a note.

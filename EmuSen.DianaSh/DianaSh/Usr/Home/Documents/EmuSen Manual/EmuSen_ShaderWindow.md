@@ -1,8 +1,8 @@
-# EmuSen_ShaderWindow — Minako, the display window on the shared frame: graphics settings and shaders together
+# EmuSen_ShaderWindow — Display, the display window on the shared frame: graphics settings and shaders together
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§5). Nothing is built.* Asked by the tester the same day: a proper shader window in place
-of the present one, consistent with the other tools (`EmuSen_LibraryTools.md` §1), named **Minako** (Sailor Venus).
-The same day the redesigned graphics settings were folded in (§2a), and the menus call it *Display*.
+of the present one, consistent with the other tools (`EmuSen_LibraryTools.md` §1), named **Display**.
+The same day the redesigned graphics settings were folded in (§2a).
 
 ## 1. What exists
 
@@ -18,7 +18,7 @@ All of the list's, the reads' and the sliders' machinery is kept.
 
 ## 2. The window
 
-On LunaP's `ManagerLayout` (§1 there), as Setsuna, Ami and Rei are, with the panes put to a shader's use:
+On LunaP's `ManagerLayout` (§1 there), as Packages, Scraper and Library are, with the panes put to a shader's use:
 
 ```
 ┌ Toolbar: [Apply] [Compare ◐] [Reset All]   Preview: [Last played ▾]   Search… ┐
@@ -46,7 +46,7 @@ On LunaP's `ManagerLayout` (§1 there), as Setsuna, Ami and Rei are, with the pa
   the other (RetroArch's and many image editors' before/after).
 - **Apply** to this console, or every console of the same kind (every TV console, every handheld); nothing changes until
   Apply, and the bar says what will.
-- **The Graphics Settings window's settings are Minako's** (§2a); there is no separate graphics window.
+- **The Graphics Settings window's settings are Display's** (§2a); there is no separate graphics window.
 - **The big-screen layout** stays: the panes stack for the pad as the present window's do, the preview at the top.
 - The window fits 1280×800 and 1920×1200 (the fit audits).
 
@@ -57,7 +57,7 @@ preview shows both at once, that they are one tool. A console chosen in the side
 `GraphicsSettingsWindow`'s settings for it — the engine, the internal resolution, the display shape and the frame
 pacing — as rows declared through the console's settings schema (`ICoreSettings`, `CoreCatalog.SettingsFor`), so no
 console's rows are written by hand, and the preview redraws for a setting as it does for a shader parameter.
-`GraphicsSettingsWindow` is retired with `ShaderSettingsWindow` once Minako has everything both have.
+`GraphicsSettingsWindow` is retired with `ShaderSettingsWindow` once Display has everything both have.
 
 ## 3. What it needs beneath
 
@@ -78,15 +78,15 @@ console's rows are written by hand, and the preview redraws for a setting as it 
 | Stage | What | Model |
 |---|---|---|
 | **S1** | The preview renderer and `shader render`; the last frame kept; test patterns | careful (the GPU path; a GPU window with the tester present) |
-| **S2** | Minako on `ManagerLayout`: the sidebar, the list, the sliders moved over, Apply's scopes | routine |
+| **S2** | Display on `ManagerLayout`: the sidebar, the list, the sliders moved over, Apply's scopes | routine |
 | **S3** | The live preview and Compare in the window; the big-screen layout | routine, the GPU checks in a GPU window |
 | **S4** | `shader ls`, `use`, `set` | routine |
 
-It follows Setsuna's M1, which builds the frame.
+It follows Packages' M1, which builds the frame.
 
 ## 5. Decided 2026-10-27 by the tester
 
 1. The preview shows the last frame played, and the test pattern where the console has none.
 2. Apply's scopes are this console and every console of its kind; no per-game shader.
-3. The present window is retired once Minako has everything it has.
-4. Order: after Setsuna's M1; S1 with the most care after 2026-10-31, in a GPU window with the tester present.
+3. The present window is retired once Display has everything it has.
+4. Order: after Packages' M1; S1 with the most care after 2026-10-31, in a GPU window with the tester present.

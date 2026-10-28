@@ -22,7 +22,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // Hotaru, the shell's window: a terminal onto the DianaShInterpreter with a toolbar for what a pad cannot type - see EmuSen_HotaruWindow.md and EmuSen_Debugging_Tools_Reference_v5.md §3.17.
+    // The Shell window: a terminal onto the DianaShInterpreter with a toolbar for what a pad cannot type - see EmuSen_Shell.md and EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public class HotaruWindow : ToolWindow, IPadDriven
     {
         // See `man tmux`.

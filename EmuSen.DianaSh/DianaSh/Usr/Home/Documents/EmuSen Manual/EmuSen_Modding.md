@@ -23,7 +23,7 @@ giant.
 |---|---|
 | `emusen-patch` (built) | IPS, UPS and BPS: reading, applying, the source's checksum; and **making** a patch from two files |
 | `emusen-tbl` (new) | table files, text encoding and decoding by a table, pointer tables |
-| the debug-views capability (`EmuSen_DebugWindow.md` §2) | decoding a view, and an optional **encode** a core declares per view |
+| the debug-views capability (`EmuSen_Debugger.md` §2) | decoding a view, and an optional **encode** a core declares per view |
 | a texture hash shared by Mars, Diamond and Sapphire | one name for a texture everywhere |
 | the mod manifest, in Galaxia beside the package manifest | what a mod is: kind, version, order, files |
 
@@ -45,12 +45,12 @@ giant.
 
 ## 4. Layer 3: windows, thin, built last
 
-- **Michiru**, the mod workshop (she paints and plays the violin): a game's tiles, sprites, tilemaps and palettes
-  browsed through the same renderers Chibiusa uses, **exported** to an image editor and **imported** back with `view
+- **Mods**, the mod workshop: a game's tiles, sprites, tilemaps and palettes
+  browsed through the same renderers the Debugger uses, **exported** to an image editor and **imported** back with `view
   put`'s checks, small touch-ups in place, and **Save as Patch** for what was changed; later the translation work —
-  tables, pointers, the script beside the screen — over `emusen.text`. Chibiusa stays read-only.
-- **Setsuna owns a game's layers**, since a mod is a layer inside a game's package
-  (`EmuSen_PackageManager.md` §3b): patches, textures, scripts, audio and codes, on, off and in order; conflicts named
+  tables, pointers, the script beside the screen — over `emusen.text`. The Debugger stays read-only.
+- **Packages owns a game's layers**, since a mod is a layer inside a game's package
+  (`EmuSen_Packages.md` §3b): patches, textures, scripts, audio and codes, on, off and in order; conflicts named
   (two layers writing the same bytes); a patch checked against the dump; mods installed from the emusen-mods
   repository; **Export Patched Game** to a folder the player chooses. The patch controls of the *Game Package* window
   move there.
@@ -62,20 +62,20 @@ giant.
 |---|---|---|
 | **X1** | `patch make/apply/info`; the mod manifest and layers; `mod ls/add/rm/on/off/order/pack`; `pkg patch` as aliases | routine |
 | **X2** | Enhancement codes through the cheats; the emusen-mods repository | routine |
-| **X3** | The encode side of debug views; `view get`, `view put` (after Chibiusa's D0–D2) | careful: a stable surface |
+| **X3** | The encode side of debug views; `view get`, `view put` (after the Debugger's D0–D2) | careful: a stable surface |
 | **X4** | `emusen-tbl`, `text dump`, `text insert` | routine |
 | **X5** | `mod run`: live script mods, frame hooks | routine |
 | **X6** | Texture dump and packs on the GPU path | careful, GPU windows with the tester present |
 | **X7** | MSU-1 in Venus | careful: accuracy |
-| **X8** | The layers in Setsuna, then Michiru's workshop, on `AdaptiveLayout` | routine |
+| **X8** | The layers in Packages, then the Mods workshop, on `AdaptiveLayout` | routine |
 
 ## 6. Decided 2026-10-27 by the tester
 
 1. The Unix foundation: commands first, the windows built up to; mods as files and package layers, never a ROM.
 2. The split in three layers (formats, commands, thin windows), the tools people already use kept rather than rebuilt.
-3. The ROM patcher is not a window of its own: applying patches is Setsuna's (a patch is a layer), making them is
-   `patch make` and Michiru's Save as Patch, and a patched file is `patch apply` or Setsuna's Export Patched Game.
-4. One owner for layers: Setsuna, where the packages already are.
-5. Names, consolidated the same day: **Michiru** (the mod workshop: graphics and, later, translation) and **Setsuna**
+3. The ROM patcher is not a window of its own: applying patches is Packages' (a patch is a layer), making them is
+   `patch make` and Mods' Save as Patch, and a patched file is `patch apply` or Packages' Export Patched Game.
+4. One owner for layers: Packages, where the packages already are.
+5. Names, consolidated the same day: **Mods** (the mod workshop: graphics and, later, translation) and **Packages**
    (packages and their layers); no tool of its own for mods, for graphics or for translation.
 6. An emusen-mods repository, each mod under its authors' licence with attribution.

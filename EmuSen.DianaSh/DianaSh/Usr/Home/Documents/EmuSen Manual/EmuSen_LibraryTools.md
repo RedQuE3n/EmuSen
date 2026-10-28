@@ -1,25 +1,25 @@
-# EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Setsuna
+# EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Packages
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester the same day: a proper scraping tool in place
-of the many clicks a scrape takes today, laid out as Setsuna is (`EmuSen_PackageManager.md`) and made for theming, with
+of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_Packages.md`) and made for theming, with
 the system and the games (favourites or all) chosen; and a library manager laid out the same, which finds duplicate and
 broken ROMs; every backend tool these lack made as a DianaSh command.
 
 ## 1. Three tools, one frame
 
-**Setsuna, the scraping tool and the library manager are three tools**, not one window with three jobs: Setsuna changes
+**Packages, Scraper and Library (the library manager) are three tools**, not one window with three jobs: Packages changes
 how a game is stored, the scraping tool fetches what is shown of it, the library manager reports on the files
 themselves. Each stands alone and each calls only its own backend.
 
 **What they share is a frame, and the frame is LunaP's**: a `ManagerLayout` control with a filter sidebar, a table with
 a mark per row and sortable columns, a detail pane, a toolbar, and an apply bar that summarises the marked work and runs
-it with one progress line (Synaptic's and Pamac's pattern, `EmuSen_PackageManager.md` §3). It holds no EmuSen knowledge;
-a tool hands it rows, filters and actions. Built once, in Setsuna's M1, and reused by the other two.
+it with one progress line (Synaptic's and Pamac's pattern, `EmuSen_Packages.md` §3). It holds no EmuSen knowledge;
+a tool hands it rows, filters and actions. Built once, in Packages' M1, and reused by the other two.
 
 **Every tool on the frame has a big-picture counterpart and is driven by a pad** (decided 2026-10-27 by the tester), so
 the frame carries both forms: the desktop's panes side by side, and a big-screen sheet with the panes stacked in the
 menus' type, the focus moved by the pad between the sidebar, the table, the detail and the apply bar, ES-DE's button
-grammar, and the docked on-screen keyboard (`EmuSen_HotaruWindow.md` §3) for search. A tool built on it gets its
+grammar, and the docked on-screen keyboard (`EmuSen_Shell.md` §3) for search. A tool built on it gets its
 big-picture form from the frame rather than as a second window.
 
 ### 1a. Beneath the frame: one description, two forms (decided 2026-10-27 by the tester, to come first)
@@ -40,58 +40,61 @@ the form it is shown in.** LunaP gains that, and the frame is built on it.
 - **Actions declared once.** An action (LunaP's `LunaAction`, extended) carries its name, its key, its pad button and
   whether it is the main one; the desktop draws it as a toolbar or menu item, the big screen as a button and its entry
   in the help bar. A window never writes "Select / Choose" hints by hand.
-- **Text entry** in a big-screen form opens the docked on-screen keyboard (`EmuSen_HotaruWindow.md` §3) beneath the
+- **Text entry** in a big-screen form opens the docked on-screen keyboard (`EmuSen_Shell.md` §3) beneath the
   form, never over it.
 - **Checked by the toolkit.** LunaP's own tests render every canonical layout in both forms at 1280×800, 1920×1200 and
   the handheld's screen, and walk the pad's focus through each, so a window built on them inherits fit and reach rather
   than proving them again.
 - **`ManagerLayout` is one canonical layout** on `AdaptiveLayout` (navigation, a marked list, detail, an apply bar);
-  Hotaru's is another (content over the docked keyboard); the settings windows (Michiru, Haruka) will likely be a third
+  the Shell window's is another (content over the docked keyboard); the settings windows (Mods, Cheats) will likely be a third
   (sections and their rows). The existing windows move onto it as each is remade, their hand-written sheet arrangements
   removed.
 
-Recorded in LunaP's own document when built. A stage of its own, **T0**, before Setsuna's M1, built with the most care
+Recorded in LunaP's own document when built. A stage of its own, **T0**, before Packages' M1, built with the most care
 (everything else stands on it).
 
-### 1b. Where a tool is shown: tools as libraries, thin hosts, and Usagi the hub (decided 2026-10-27 by the tester)
+### 1b. Where a tool is shown: tools as libraries, thin hosts, and Home the hub (decided 2026-10-27 by the tester)
 
 After the Xfce Settings Manager, one window that opens the others, each of which also runs alone:
 
 - **Every tool is a library** of its own (an assembly), needing only LunaP, Galaxia and the platform library — never
-  Mistress. Its content is declared once (§1a) and **hosted** in any of: its own window; **Usagi**, the hub; a
+  Mistress. Its content is declared once (§1a) and **hosted** in any of: its own window; **Home**, the hub; a
   big-picture sheet; or the **standalone launcher** `emusen-tools <tool>`, a multi-call program (as busybox is) with a
   link and a desktop entry per tool, so a player can open, say, the package manager without starting EmuSen.
-- **Usagi is the hub** and the settings: a grid of tiles by category with a search, each tile a tool, which fills
-  Usagi's pane with a back button; the present Preferences window's tabs become small tiles of their own (General,
+- **Home is the hub** and the settings: a grid of tiles by category with a search, each tile a tool, which fills
+  Home's pane with a back button; the present Preferences window's tabs become small tiles of their own (General,
   Paths, Saves, Account, Big Picture). Galaxia is the one owner of the settings files every tool reads and writes, as
-  xfconf is Xfce's. In big picture Usagi is the settings menu, a tile grid the pad moves through.
-- **Usagi's first-run mode** is the welcome a new player meets: the same tools' panes in order — the ROM folder, the
+  xfconf is Xfce's. In big picture Home is the settings menu, a tile grid the pad moves through.
+- **Home's first-run part, Setup,** is the welcome a new player meets: the same tools' panes in order — the ROM folder, the
   BIOS files, the controllers, a theme, the ScreenScraper sign-in — with Next and Back, built from the panes and not
   written again.
-- **Limits**: a tool that needs a running game (Chibiusa, Hotaru) opens one itself when standalone, as `emusen-shell`
+- **Limits**: a tool that needs a running game (the Debugger, Shell) opens one itself when standalone, as `emusen-shell`
   does; attaching to a running Mistress is a later feature. Mistress and a standalone tool open together are safe through
   Galaxia and SQLite, and Mistress picks up what changed; each tool has a test for it. Xfce embeds separate programs
   through XEmbed, which does not exist under Wayland; these are in-process libraries, which works on every platform.
 
 ### 1c. The family (consolidated 2026-10-27 by the tester)
 
-| Name | Tool | Menus say |
-|---|---|---|
-| **Usagi** | the hub and settings, and the first-run welcome | *Settings* |
-| **Ami** | the scraping tool (§2) | *Scraper* |
-| **Rei** | the library manager (§3) | *Library Manager* |
-| **Mako** | the controller window (`EmuSen_ControllerWindow.md`) | *Controllers* |
-| **Minako** | display: graphics settings and shaders (`EmuSen_ShaderWindow.md`) | *Display* |
-| **Michiru** | the mod workshop: graphics out and in, later translation (`EmuSen_Modding.md` §4) | *Mod Workshop* |
-| **Setsuna** | packages, CHD and a package's mods (`EmuSen_PackageManager.md`) | *Packages* |
-| **Hotaru** | the shell (`EmuSen_HotaruWindow.md`) | *Shell* |
-| **Chibiusa** | the debugger and its Explore mode (`EmuSen_DebugWindow.md`) | *Debugger* |
-| **Haruka** | the cheat manager, in place of the cheat database and active cheats windows | *Cheats* |
+| Tool | What it is |
+|---|---|
+| **Home** | the hub and settings; its first-run part is *Setup*, the welcome |
+| **Scraper** | the scraping tool (§2) |
+| **Library** | the library manager (§3) |
+| **Controllers** | the controller window (`EmuSen_Controllers.md`) |
+| **Display** | graphics settings and shaders (`EmuSen_Display.md`) |
+| **Mods** | the mod workshop: graphics out and in, later translation (`EmuSen_Modding.md` §4) |
+| **Packages** | packages, CHD and a package's mods (`EmuSen_Packages.md`) |
+| **Shell** | the shell (`EmuSen_Shell.md`) |
+| **Debugger** | the debugger and its Explore mode (`EmuSen_Debugger.md`) |
+| **Cheats** | the cheat manager, in place of the cheat database and active cheats windows |
+
+Each tool has one name, the one the menus show; the codenames it carried before 2026-10-28 are listed in
+`EmuSen_Core_Naming_Scheme.md` §13.
 
 Two tools that turn out to be one job are merged; a tool whose commands cover everything stays a command.
 
 **The list of games is one answer**: the library scan's entries (`RomLibrary`, `RomEntry`), with what each tool adds as
-columns: Setsuna its package mode and state, the scraping tool what each game has of each media type, the library
+columns: Packages its package mode and state, the scraping tool what each game has of each media type, the library
 manager its hashes and check result.
 
 ## 2. The scraping tool
@@ -176,7 +179,7 @@ scraper is its own crate.
 | Stage | What | Model |
 |---|---|---|
 | **T0** | `AdaptiveLayout` in LunaP: roles, the two forms, focus from roles, actions declared once, its own fit and reach tests (§1a) | careful, after 2026-10-31 |
-| **T1** | `ManagerLayout` in LunaP on `AdaptiveLayout` (Setsuna's M1 builds it) | with M1 |
+| **T1** | `ManagerLayout` in LunaP on `AdaptiveLayout` (Packages' M1 builds it) | with M1 |
 | **T2** | `rom hash`, `rom check` (the size, sheet, archive and CHD checks), `rom dups`, `uniq -D -w` | routine |
 | **T3** | The header checks, per system pack, with seeded faults | careful: a false "broken" sends a player hunting |
 | **T4** | `emusen.scrape` and `scrape` | routine |
@@ -186,11 +189,11 @@ scraper is its own crate.
 
 ## 6. Decided 2026-10-27 by the tester
 
-1. Three tools on one frame, the library manager apart from Setsuna.
+1. Three tools on one frame, the library manager apart from Packages.
 2. Duplicates in two tiers, the same dump and the same game.
 3. The library manager reports and hides, and moves to the Trash where the player switches it on (§3.1), respecting
    the operating system's permissions; it never deletes.
 4. Broken means the structural checks now; catalogues of good dumps come with the game database.
-5. Names: the scraping tool is **Ami**, the library manager **Rei**; menus say *Scraper* and *Library Manager*.
-6. Order: Setsuna's M1 with T1, then the commands (T2, T4), then the windows; T3 and T7 with the most care, after
+5. Names: the scraping tool is **Scraper**, the library manager **Library**; the codenames Ami and Rei were dropped 2026-10-28.
+6. Order: Packages' M1 with T1, then the commands (T2, T4), then the windows; T3 and T7 with the most care, after
    2026-10-31.

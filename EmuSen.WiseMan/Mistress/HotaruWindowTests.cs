@@ -19,7 +19,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Hotaru, the shell's window in Mistress: opened from the menu, its toolbar, and the pad - see EmuSen_HotaruWindow.md §6.
+    // The Shell window in Mistress: opened from the menu, its toolbar, and the pad - see EmuSen_Shell.md §6.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class HotaruWindowTests : IDisposable
     {

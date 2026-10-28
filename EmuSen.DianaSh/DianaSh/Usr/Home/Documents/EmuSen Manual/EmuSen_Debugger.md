@@ -1,4 +1,4 @@
-# EmuSen_DebugWindow — Chibiusa, one window to see inside the machine, for debugging and for learning
+# EmuSen_Debugger — Debugger, one window to see inside the machine, for debugging and for learning
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester the same day: a proper debug window in the
 manner of Mesen's viewers — tiles and where they sit in memory, sprites, how hard each part of the emulated machine is
@@ -63,8 +63,8 @@ start:
   address and fields.
 - **Detail**: the selected thing in full, and its explanation.
 - **Actions**: pause, step a frame, step an instruction, capture a frame (3D), set a breakpoint on this address, copy.
-- **A console docked beneath**: Hotaru's shell pane (`EmuSen_HotaruWindow.md`), hosted under the views as Mesen keeps its
-  script window, so `bp`, `mem` and `step` are typed beside what they change; Chibiusa writes no shell of her own
+- **A console docked beneath**: the Shell window's pane (`EmuSen_Shell.md`), hosted under the views as Mesen keeps its
+  script window, so `bp`, `mem` and `step` are typed beside what they change; the Debugger writes no shell of its own
   (`EmuSen_LibraryTools.md` §1b).
 
 ### 4.1 Learning: the same window, explained (the tester's 2026-10-27 choice)
@@ -92,5 +92,5 @@ source is read.
 
 1. Cores declare their views and decode them; one generic window draws every core's.
 2. Learning is the window's Explore mode; tours are text files run by DianaSh.
-3. The window is **Chibiusa**; menus say *Debugger*.
+3. The window is the **Debugger**; its name was Chibiusa until 2026-10-28.
 4. Order: after T0; D0 and D3 with the most care.

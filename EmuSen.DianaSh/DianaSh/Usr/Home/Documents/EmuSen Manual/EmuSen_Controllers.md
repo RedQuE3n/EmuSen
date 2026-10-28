@@ -1,8 +1,7 @@
-# EmuSen_ControllerWindow — Mako, the controller window on the shared frame
+# EmuSen_Controllers — Controllers, the controller window on the shared frame
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§5). Nothing is built.* Asked by the tester the same day: the controller window remade on
-the frame the other tools share (`EmuSen_LibraryTools.md` §1), named **Mako** (Makoto, Sailor Jupiter). Menus call it
-*Controllers*.
+the frame the other tools share (`EmuSen_LibraryTools.md` §1), named **Controllers**; the menus say the same.
 
 ## 1. What exists
 
@@ -58,13 +57,13 @@ tester are kept.
 | Stage | What | Model |
 |---|---|---|
 | **C1** | `emusen.input`: `pad ls`, `test`, `bind`, `show` | routine |
-| **C2** | Mako on `ManagerLayout`: the sidebar, the table, the drawing and the tester moved over, Copy From, Apply | routine |
+| **C2** | Controllers on `ManagerLayout`: the sidebar, the table, the drawing and the tester moved over, Copy From, Apply | routine |
 | **C3** | The big-screen layout and the fit audits | routine |
 
 ## 5. Decided 2026-10-27 by the tester
 
 1. Apply's scopes: this console and every console, for the player shown.
 2. Copy From… through the RetroPad template, nothing copied to a button the target lacks.
-3. The present window retired once Mako has everything it has.
+3. The present window retired once Controllers has everything it has.
 4. Rumble and turbo later, each a proposal of its own.
-5. Order: after Setsuna's M1; all three stages routine.
+5. Order: after Packages' M1; all three stages routine.

@@ -1,11 +1,11 @@
-# EmuSen_PackageManager — Setsuna, one window to manage the library's game packages and their mods
+# EmuSen_Packages — Packages, one window to manage the library's game packages and their mods
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester: a
 window where the player manages the library's games as packages — makes them, unmakes them, with the options the
 packages have — laid out after the graphical package managers.
 
-**Its name is Setsuna** (decided 2026-10-27 by the tester), after Sailor Pluto, the keeper of the Time Gate: what is put
-away and what passes back through. The window is `SetsunaWindow`; menus call it *Package Manager*.
+**Its name is Packages** (the package manager; named 2026-10-27 and given this plain name 2026-10-28 by the tester). The
+window is `PackagesWindow`; menus call it *Packages*.
 
 ## 1. What exists, and what does not
 
@@ -64,7 +64,7 @@ for the space used.
 
 ## 3a. Converting discs to CHD (asked by the tester 2026-10-27)
 
-Setsuna converts disc games to CHD through the CHD tool's existing jobs (`chd convert`, `chd check`, `chd ls`;
+Packages converts disc games to CHD through the CHD tool's existing jobs (`chd convert`, `chd check`, `chd ls`;
 `EmuSen_GamePackages.md` §4 and §12), so it is the Compressed Discs window's work in the same list, and the Compressed
 Discs window stays as it is.
 
@@ -74,13 +74,13 @@ Discs window stays as it is.
   `dump` is the original (§4.4 there); the row's mode says linked, or self-contained where the player chose the CHD
   inside the package.
 - **Options in Apply's summary**: linked (the CHD in `Compressed`) or self-contained; the threads chdman may use; and
-  the check after each disc, on by default. The originals are **never removed** by Setsuna; the tool's replacement,
+  the check after each disc, on by default. The originals are **never removed** by Packages; the tool's replacement,
   with its per-batch confirmation (§4.5 there), stays in the Compressed Discs window.
 - **Progress and outcome**: the job's events, a disc at a time, with the space saved; a refusal or a failed check in the
   row's state, in the tool's own words.
 - **Space**: the space bar shows what the marked conversions are expected to save where the tool can estimate it, and what each saved once it is done.
 
-## 3b. A package's layers: Setsuna is also the mod manager (consolidated 2026-10-27 by the tester)
+## 3b. A package's layers: Packages is also the mod manager (consolidated 2026-10-27 by the tester)
 
 A mod is a layer inside a game's package (`EmuSen_Modding.md` §1), so the tool that manages packages manages what is
 in them; a separate mod manager would have shown the same game twice. In a game's detail pane:
@@ -89,7 +89,7 @@ in them; a separate mod manager would have shown the same game twice. In a game'
   conflicts named (two layers writing the same bytes) and a patch checked against the dump before it is switched on.
 - **Install** from the emusen-mods repository or a file; **Export Patched Game** to a folder the player chooses, never
   into the ROM library.
-- Through the `mod` commands (`emusen.mod`), as the rest of Setsuna goes through `pkg` and `chd`; the *Game Package*
+- Through the `mod` commands (`emusen.mod`), as the rest of Packages goes through `pkg` and `chd`; the *Game Package*
   window's patch controls move here, and `pkg patch add/rm` stay as aliases of `mod add/rm`.
 
 ## 4. Unmake
@@ -116,7 +116,7 @@ M1 and M3 are routine; M2 carries the risk of losing a save and is done with the
 ## 6. Decided 2026-10-27 by the tester
 
 1. **Unmaking a self-contained package exports the game to a folder the player chooses**; with none, it refuses.
-2. **A big-screen (pad) version comes later**, as its own step. *Superseded the same day: every tool on the shared frame has a big-picture counterpart driven by a pad, carried by the frame itself (`EmuSen_LibraryTools.md` §1), so Setsuna has hers from M1.*
-3. The name: **Setsuna** (the name, above), the menus saying *Package Manager*.
+2. **A big-screen (pad) version comes later**, as its own step. *Superseded the same day: every tool on the shared frame has a big-picture counterpart driven by a pad, carried by the frame itself (`EmuSen_LibraryTools.md` §1), so Packages has its own from M1.*
+3. The name: **Packages** (above), the menus saying *Packages*.
 4. The proposal as written: Synaptic-style mark and apply, unmake as a `pkg` job, the window over the library tool's
    jobs, in stages M1–M3.

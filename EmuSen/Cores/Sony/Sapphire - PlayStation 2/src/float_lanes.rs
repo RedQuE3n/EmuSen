@@ -87,6 +87,17 @@ trait Lanes: Copy {
     fn sllv(self, c: Self) -> Self;
     /// The float conversion's biased exponent field of each lane, taken as a signed integer.
     fn exponent_of(self) -> Self;
+    /// The place of each lane's leading bit, for a lane above zero (below 2^31).
+    #[inline(always)]
+    fn lead(self) -> Self {
+        // With the bit below the leading one cleared, the conversion cannot round up a binade.
+        self.srl::<1>().andnot(self).exponent_of().sub(Self::k(127))
+    }
+    /// `self | (b & c)`.
+    #[inline(always)]
+    fn or_and(self, b: Self, c: Self) -> Self {
+        self.or(b.and(c))
+    }
     /// `float::product`'s significand: (the product less `loss` shifted to 24 bits, its top bit at 47 as 0 or 1).
     fn product(x: Self, y: Self, loss: Self) -> (Self, Self);
     /// The MAC word of masks for Z, S, U and O, per operation of four lanes.
@@ -186,6 +197,64 @@ lanes!(__m256i, _mm256_set1_epi32, _mm256_and_si256, _mm256_or_si256, _mm256_xor
     _mm256_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12, 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12),
     |m: i32| _mm256_setr_epi32(m & 8, m & 4, m & 2, m & 1, m >> 16 & 8, m >> 16 & 4, m >> 16 & 2, m >> 16 & 1));
 
+/// The AVX-512VL form's registers: the AVX2 form's, with the leading bit from `vplzcntd` and `a | (b & c)` from
+/// `vpternlogd`.
+#[cfg(target_arch = "x86_64")]
+#[derive(Clone, Copy)]
+struct Z4(__m128i);
+#[cfg(target_arch = "x86_64")]
+#[derive(Clone, Copy)]
+struct Z8(__m256i);
+
+#[cfg(target_arch = "x86_64")]
+macro_rules! wide_lanes {
+    ($z:ident, $t:ty, $lzcnt:ident, $ternlog:ident) => {
+        // SAFETY (every method): the AVX-512VL entry points run only where `available512` is true.
+        impl Lanes for $z {
+            #[inline(always)] fn k(x: i32) -> Self { $z(<$t>::k(x)) }
+            #[inline(always)] fn and(self, b: Self) -> Self { $z(self.0.and(b.0)) }
+            #[inline(always)] fn or(self, b: Self) -> Self { $z(self.0.or(b.0)) }
+            #[inline(always)] fn xor(self, b: Self) -> Self { $z(self.0.xor(b.0)) }
+            #[inline(always)] fn andnot(self, b: Self) -> Self { $z(self.0.andnot(b.0)) }
+            #[inline(always)] fn add(self, b: Self) -> Self { $z(self.0.add(b.0)) }
+            #[inline(always)] fn sub(self, b: Self) -> Self { $z(self.0.sub(b.0)) }
+            #[inline(always)] fn eq(self, b: Self) -> Self { $z(self.0.eq(b.0)) }
+            #[inline(always)] fn gt(self, b: Self) -> Self { $z(self.0.gt(b.0)) }
+            #[inline(always)] fn pick(self, b: Self, m: Self) -> Self { $z(self.0.pick(b.0, m.0)) }
+            #[inline(always)] fn srl<const K: i32>(self) -> Self { $z(self.0.srl::<K>()) }
+            #[inline(always)] fn sll<const K: i32>(self) -> Self { $z(self.0.sll::<K>()) }
+            #[inline(always)] fn sra<const K: i32>(self) -> Self { $z(self.0.sra::<K>()) }
+            #[inline(always)] fn srlv(self, c: Self) -> Self { $z(self.0.srlv(c.0)) }
+            #[inline(always)] fn sllv(self, c: Self) -> Self { $z(self.0.sllv(c.0)) }
+            #[inline(always)] fn exponent_of(self) -> Self { $z(self.0.exponent_of()) }
+            #[inline(always)] fn lead(self) -> Self { $z(<$t>::k(31).sub(unsafe { $lzcnt(self.0) })) }
+            #[inline(always)] fn or_and(self, b: Self, c: Self) -> Self { $z(unsafe { $ternlog::<0xF8>(self.0, b.0, c.0) }) }
+            #[inline(always)] fn product(x: Self, y: Self, loss: Self) -> (Self, Self) { let (m, t) = <$t>::product(x.0, y.0, loss.0); ($z(m), $z(t)) }
+            #[inline(always)] fn mac(z: Self, s: Self, u: Self, o: Self) -> u32 { <$t>::mac(z.0, s.0, u.0, o.0) }
+            #[inline(always)] fn on(mask: u32) -> Self { $z(<$t>::on(mask)) }
+            #[inline(always)] fn any(self) -> bool { self.0.any() }
+            #[inline(always)] unsafe fn load(p: *const u32) -> Self { $z(unsafe { <$t>::load(p) }) }
+            #[inline(always)] unsafe fn store(self, p: *mut u32) { unsafe { self.0.store(p) } }
+        }
+    };
+}
+#[cfg(target_arch = "x86_64")]
+wide_lanes!(Z4, __m128i, _mm_lzcnt_epi32, _mm_ternarylogic_epi32);
+#[cfg(target_arch = "x86_64")]
+wide_lanes!(Z8, __m256i, _mm256_lzcnt_epi32, _mm256_ternarylogic_epi32);
+
+/// Whether the host runs the AVX-512VL form (`*_512`).
+pub fn available512() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::arch::is_x86_feature_detected!("avx512vl") && std::arch::is_x86_feature_detected!("avx512cd") && std::arch::is_x86_feature_detected!("avx2")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
 const SIGN: i32 = i32::MIN;
 
 /// A result's Z and S masks: an exponent field of 0, the sign bit.
@@ -202,7 +271,7 @@ fn zs<T: Lanes>(bits: T) -> (T, T) {
 fn finish<T: Lanes>(s: T, e: T, m: T) -> (T, T, T) {
     let over = e.gt(T::k(255));
     let under = T::k(1).gt(e);
-    let packed = s.or(e.sll::<23>()).or(m.and(T::k(0x7F_FFFF)));
+    let packed = s.or(e.sll::<23>()).or_and(m, T::k(0x7F_FFFF));
     let bits = packed.pick(s.or(T::k(0x7FFF_FFFF)), over).pick(s, under);
     (bits, over, under)
 }
@@ -219,13 +288,12 @@ fn add_core<T: Lanes>(a: T, b: T, ea: T, eb: T) -> (T, T, T, T) {
     let e_big = ea.pick(eb, b_big);
     let d = e_big.sub(eb.pick(ea, b_big));
     let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
-    let wide = hidden.or(big.and(frac)).sll::<1>();
+    let wide = hidden.or_and(big, frac).sll::<1>();
     // A count of 32 or more gives 0, so the shift needs no test of `d < 25`: a 25-bit value is 0 from 25 on.
-    let aligned = hidden.or(small.and(frac)).sll::<1>().srlv(d);
+    let aligned = hidden.or_and(small, frac).sll::<1>().srlv(d);
     let opposite = big.xor(small).sra::<31>();
     let m = wide.add(aligned).pick(wide.sub(aligned), opposite);
-    // The leading bit's place, exactly: with the bit below the leading one cleared, the conversion cannot round up a binade.
-    let lead = m.srl::<1>().andnot(m).exponent_of().sub(T::k(127));
+    let lead = m.lead();
     let k23 = T::k(23);
     let norm = m.srlv(lead.sub(k23)).or(m.sllv(k23.sub(lead)));
     let e = e_big.add(lead.sub(T::k(24)));
@@ -267,7 +335,7 @@ fn mul_raw<T: Lanes>(a: T, b: T) -> (T, T, T) {
     let none = ea.eq(T::k(0)).or(eb.eq(T::k(0)));
     let s = a.xor(b).and(T::k(SIGN));
     let (hidden, frac) = (T::k(0x80_0000), T::k(0x7F_FFFF));
-    let (x, y) = (hidden.or(a.and(frac)), hidden.or(b.and(frac)));
+    let (x, y) = (hidden.or_and(a, frac), hidden.or_and(b, frac));
     // The Booth sum's loss (float::product): eight two-bit answers by y's lowest two bits and x's lowest.
     let index = y.and(T::k(3)).sll::<1>().or(x.and(T::k(1))).sll::<2>();
     let loss = T::k(0x1222_1000).srlv(index).and(T::k(3));
@@ -423,6 +491,54 @@ mod eight {
     }
 }
 
+/// The AVX-512VL form of the four-lane and paired entry points, the same results bit for bit.
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::missing_safety_doc)]
+pub mod wide {
+    use super::*;
+    pub mod four {
+        use super::*;
+        entry!(Z4, 4, Vector, FusedVector);
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn add(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+            arith(add_raw(get(a), get(b)), old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn sub(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+            arith(add_raw(get(a), negated(b)), old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn mul(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
+            arith(mul_raw(get(a), get(b)), old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn fused(acc: &[u32; 4], a: &[u32; 4], b: &[u32; 4], subtract: bool, old: &[u32; 4], mask: u32) -> FusedVector {
+            fused_of(acc, a, b, subtract, old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn add_bits(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> [u32; 4] {
+            bits_of(add_raw(get(a), get(b)).0, old, mask)
+        }
+    }
+    #[allow(dead_code)]
+    pub mod eight {
+        use super::*;
+        entry!(Z8, 8, Pair, FusedPair);
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn add2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
+            arith(add_raw(get(a), get(b)), old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn mul2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
+            arith(mul_raw(get(a), get(b)), old, mask)
+        }
+        #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+        pub fn fused2(acc: &[u32; 8], a: &[u32; 8], b: &[u32; 8], subtract: bool, old: &[u32; 8], mask: u32) -> FusedPair {
+            fused_of(acc, a, b, subtract, old, mask)
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 pub use eight::{add2, add2_bits, fused2, mul2, mul2_bits, sub2};
 #[cfg(target_arch = "x86_64")]
@@ -510,6 +626,20 @@ mod tests {
                     both(one, two)
                 };
                 assert_eq!(fused2(&pc, &pa, &pb, subtract, &po, pm), FusedPair { value: f(false), product: f(true) }, "fused2");
+                if available512() {
+                    assert_eq!(wide::eight::fused2(&pc, &pa, &pb, subtract, &po, pm), FusedPair { value: f(false), product: f(true) }, "wide fused2");
+                    let one = reference(&old, mask, |l| float::fused(c[l], a[l], b[l], subtract).value);
+                    let p1 = reference(&old, mask, |l| float::fused(c[l], a[l], b[l], subtract).product);
+                    assert_eq!(wide::four::fused(&c, &a, &b, subtract, &old, mask), FusedVector { value: one, product: p1 }, "wide fused");
+                }
+            }
+            if available512() {
+                assert_eq!(wide::four::add(&a, &b, &old, mask), reference(&old, mask, |l| float::add(a[l], b[l])), "wide add");
+                assert_eq!(wide::four::sub(&a, &b, &old, mask), reference(&old, mask, |l| float::sub(a[l], b[l])), "wide sub");
+                assert_eq!(wide::four::mul(&a, &b, &old, mask), reference(&old, mask, |l| float::mul(a[l], b[l])), "wide mul");
+                assert_eq!(wide::four::add_bits(&a, &b, &old, mask), reference(&old, mask, |l| float::add(a[l], b[l])).bits, "wide add_bits");
+                assert_eq!(wide::eight::add2(&pa, &pb, &po, pm), r(float::add), "wide add2");
+                assert_eq!(wide::eight::mul2(&pa, &pb, &po, pm), r(float::mul), "wide mul2");
             }
         }
     }

@@ -1367,3 +1367,141 @@ last-level cache.
 | lanes, four, add / mul / multiply-add a lane | 1.09–1.25 / 0.95–1.09 / 2.34–2.68 | 1.18–1.23 / 1.03–1.07 / 2.51–2.63 |
 | lanes, paired, add / mul / multiply-add a lane | 0.46–0.47 / 0.38–0.39 / 1.28–1.29 | 0.50–0.52 / 0.43–0.44 / 1.41–1.45 |
 | lanes on VU1's stream, a lane operation written | 1.28–1.31 | 1.43–1.47 |
+
+## R0 conclusion (2026-10-28): the stop is accepted
+
+*Decided 2026-10-28 by the tester, before the last round was run: the exit rule.*
+- *Split the static prototype's hot bytes by purpose, and say whether an exact path to about 96 bytes a guest
+  instruction exists. If none does, R0.2 is closed as failed.*
+- *Build the AVX-512VL lane form, AVX2 kept as the fallback, and time it on VU1's recorded mix on the handheld. If it
+  misses 1.125 ns a lane operation, R0.4 is closed as failed.*
+- *If either closes, the stop is accepted.*
+
+*The same day the tester allowed the handheld's GPU for tests, so R0.3 and R0.5 ran there in full, on the charger.*
+
+**R0.4 closed as failed, so by the rule the stop is accepted.** By §2 the plan does not go on to R1. The choices are
+the tester's:
+- compromises that change more than timing (C3 on the VU, or C1);
+- a target narrower than every field at full speed on the handheld.
+
+### Every check, at the end
+
+| Check | Measured | Mark | Result |
+| --- | --- | --- | --- |
+| R0.1 the design point | the plateau (D-1103) excluded: EE p95 4.08 M, VU1 p95 2.77 M a field | — | redrawn (second addendum) |
+| R0.2 ns, at 96 bytes | handheld 2.24–2.43 ns a guest instruction | 2.75 | pass |
+| R0.2 bytes | the static prototype's hot straight line, 274.5 a guest instruction (arena), 248.5 (dock) | 96 | not met by the prototype; an exact path to about 96 is plausible by estimate (below), so not closed by the rule |
+| R0.3 the handheld's factor | **1.19–1.20** (978.8 and 983.4 ms a field against the desktop's 819.8 and 818.0) | at most 2.0 | **pass** |
+| R0.4 the lanes on VU1's own mix, AVX-512VL | handheld **1.48–1.51** ns a lane operation written (AVX2 1.39–1.45) | 1.125 | **fail: closed** |
+| R0.5 unified memory | no device-local, cached, host-visible type; GPU-written host-cached memory reads 4 MB in **0.147–0.154 ms** after the fence | 1 ms | met through host-cached system memory |
+
+### R0.2's bytes, by purpose
+
+**The method.** The static prototype is the fourth addendum's. Every IR instruction is tagged with the emitter's
+purpose for it, the hot straight line's bytes are summed by tag, and the cold exits are left out. Cranelift's optimiser
+drops the source locations of the pure operations it re-creates, so a share of the bytes is untagged. Separately, the
+pure IR operations of each purpose are counted before optimisation, and the untagged bytes are apportioned in those
+proportions. **That apportioning is an estimate**; the tagged bytes are measured. Aggregate counts only.
+
+The arena window: 31,416 blocks of 264,275 guest instructions, of which **39.7 % are loads and stores**, 51.6 % plain
+and 8.7 % branches. The dock window: 248.5 hot bytes, the same order of purposes.
+
+| Purpose (arena) | Tagged hot bytes a guest instruction | With the untagged share (estimate) | Smallest exact form | Its bytes a guest instruction (estimate) |
+| --- | --- | --- | --- | --- |
+| **cache tags and dispatch** | 80.5 | **about 130** (about 330 a memory instruction) | an inline fast path for a hit in either way of the set (a tag compare a way, the line's address, the dirty bit for a store); the scratchpad, uncached and accelerated pages, a miss, a locked line and every counter out of line | about 24 (about 60 a memory instruction) |
+| exits' write-back | 46.6 | about 55 | write back only the registers the block changed, and Count, Random and the cycle total from the block's constants; the issue model's fields not at all in a static region | about 6 |
+| entry | 25.6 | about 29 | a shared entry stub: the quiescent test's few compares and the two memory-context loads, not the twenty fields of today's model | about 5 |
+| translation | 17.2 | about 28 | §4.2's page table: a shift, a load and a compare of the kind | about 8 |
+| address and alignment | 5.1 | about 11 | the base, the offset, the alignment check | about 4 |
+| horizon and line checks | 4.3 | about 7 | one compare a load or store against the horizon | about 3 |
+| data access | 4.3 | about 6 | the load or store itself | about 6 |
+| the instruction's work | 1.3 | about 6 | as now | about 6 |
+| timing | 0.2 | about 4 | constants folded at the exit | about 1 |
+| guest registers | 3.6 | 3.6 | as now | about 4 |
+| exception checks | 0.0 | 0.0 | as now | 0 |
+| **in all** | 274.5 (untagged 91.6) | 280 | | **about 66** |
+
+**The verdict on the bytes.** By these estimates an exact path to about 96 bytes exists: about 66 bytes a guest
+instruction. Nearly all of the saving comes from three levers:
+- **the cache path:** about 130 down to about 24;
+- **the exits' write-back:** about 55 down to about 6;
+- **the entry:** about 29 down to about 5.
+
+None of the three changes a result. The estimate is not a measurement, and the prototypes that would measure it were
+not built, because R0.4 closed first. R0.2 is therefore **not closed as failed**. It stays unproven either way, and the
+cache path's 330 bytes a memory instruction is its leading lever if the work resumes.
+
+### R0.4: the AVX-512VL form
+
+`float_lanes::wide` is the same generic form with two of its operations taken from AVX-512VL: the leading bit from
+`vplzcntd` and `a | (b & c)` from `vpternlogd`. The AVX2 form stays the fallback, chosen by `available512` at run time.
+It is bit-equal to `float`, with flags and field masks, in four lanes and paired, under the same tests: 4.6 M
+reduced-set vectors, 4 M class vectors and the billion-lane run (305 s). Two seeded faults, each caught by both tests:
+- W1: the leading bit one off;
+- W2: the merge's truth table wrong.
+
+**Timed on VU1's recorded mix** (`lanes mix FILE 7 wide`), two rounds each window, with pairs of one kind in eight
+lanes:
+
+| | AVX2 | AVX-512VL |
+| --- | --- | --- |
+| desktop (another job of up to 8 GB running alongside) | 1.34–1.37 | 1.39–1.44 |
+| **handheld** (charger) | 1.39–1.45 | **1.48–1.51** |
+
+The AVX-512VL form is about 5 % slower, not faster. The two instructions save little against the adder's and
+multiply-add's length, and the AVX-512 encodings cost the rest. **Against the handheld's 1.125, both forms fail**, by
+1.24 to 1.34 times. The binding pattern is the multiply-add chain through ACC, 37–39 % of VU1's operations, which
+neither pairing nor wider registers reach. **R0.4 is closed as failed.**
+
+### R0.3: the handheld's factor (measured on the charger)
+
+The same bench binary and the state at 9,000 as the desktop's denominator ran the arena window with one hot thread
+(`--blocks --idle --vu0 --vu1 --gs-workers 1`). S44's exact64 kernel ran in a loop on the handheld's GPU beside it,
+started 60 s ahead so that the clocks settled. Two rounds, sampled by `mon.py`:
+- **978.8 and 983.4 ms a field** (medians 871.3 and 876.6) against the desktop's 819.8 and 818.0: **a factor of 1.19
+  to 1.20**;
+- the picture, sound and state digests equal to the desktop's;
+- the GPU 56 to 57 % busy at 800 MHz throughout, memory and fabric clocks at 937 MHz throughout;
+- package power 31 W (p90 37 W);
+- the emulation thread's core at 4.47 to 4.49 GHz.
+
+The factor is well under the mark of 2.0, and under the 1.35 the tables were drawn at.
+
+### R0.5: unified memory (measured on the charger)
+
+`memtypes` on the handheld's GPU (RADV PHOENIX), 4 MB a type, nine rounds:
+
+| Types | Read after the fence | Written in place |
+| --- | --- | --- |
+| host-visible, coherent, **cached** (system memory: types 5 and 16) | **0.147–0.154 ms** | 0.056–0.057 ms |
+| device-local and host-visible, uncached (types 3, 4 and 15) | 74.6–75.3 ms | 0.118–0.125 ms |
+| host-visible, uncached (system memory: types 2 and 14) | 74.1–75.9 ms | 0.109 ms |
+| device-local only (type 0), staged through type 5 | copy and read 0.303 ms | — |
+
+No type is device-local, host-visible and cached together. The mark is met another way: the GPU writes into
+host-cached system memory, which the processor reads at once. That is §4.6's device path for readback on this machine,
+and a staged copy from device-local memory costs 0.30 ms for 4 MB. The protected types read back wrong words, as
+protected memory must, and are not candidates.
+
+### What the R0 stage leaves
+
+The instruments, all off by default:
+- the bench's `--census` and `--working`, the latter behind the `census` feature;
+- `examples/ring.rs`;
+- `float_lanes` with its four-lane, paired and AVX-512VL forms behind the `lanes` feature, and `examples/lanes.rs`
+  with its mix mode;
+- `emusen-gpu`'s `examples/memtypes.rs`.
+
+The throwaway patches stay in the stage's scratch:
+- the static-form byte counter and its purpose tags;
+- VU1's pairing counter;
+- the EE's transfer counter.
+
+Disputes:
+- D-1100, the VU pair counts, open;
+- D-1101, the emitter's bytes, settled;
+- D-1102, the perf map, a defect candidate;
+- D-1103, the D1_CHCR poll, taken as core work on its own branch.
+
+Exposure: the player's-BIOS writer of this stage ran the player's BIOS and Jak and Daxter, both on the desktop and on
+the handheld. No firmware was listed, hashed or read, and no program counter, code word or operand was logged.

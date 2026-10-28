@@ -9,7 +9,8 @@
 //! count gives (FILE's lines `pair KA LA KB LB N` and `single K L N`, kinds 0 add, 1 mul, 2 multiply-add, L the lanes
 //! written), each kind's operations in a run as compiled code would hold them (shuffled with `shuffle`, which adds the
 //! host's mispredicted dispatch); a pair of one kind runs in eight lanes, any other operation in four; ns a lane
-//! operation over the lanes written, a multiply-add's counting twice, and over the lanes computed.
+//! operation over the lanes written, a multiply-add's counting twice, and over the lanes computed; `wide` instead of
+//! `shuffle` runs the AVX-512VL form.
 
 use std::hint::black_box;
 use std::time::Instant;
@@ -163,40 +164,53 @@ const fn lane_mask(l: u32) -> u32 {
     [0, 0x8, 0xC, 0xE, 0xF][l as usize]
 }
 
+/// The stream run's body over one form's six entry points.
+macro_rules! stream_body {
+    ($add:path, $mul:path, $fused:path, $add2:path, $mul2:path, $fused2:path, $ops:expr, $a:expr, $b:expr, $c:expr, $split:expr) => {{
+        let (ops, a, b, c, split): (&[Op], &[[u32; 8]], &[[u32; 8]], &[[u32; 8]], bool) = ($ops, $a, $b, $c, $split);
+        let (old4, old8) = ([0u32; 4], [0u32; 8]);
+        let mut h = 0u32;
+        let half = |v: &[u32; 8], i: usize| -> [u32; 4] { [v[4 * i], v[4 * i + 1], v[4 * i + 2], v[4 * i + 3]] };
+        for (i, op) in ops.iter().enumerate() {
+            let j = i % a.len();
+            let (x, y, z) = (&a[j], &b[j], &c[j]);
+            h ^= if op.paired && op.kinds[0] == op.kinds[1] && !split {
+                match op.kinds[0] {
+                    0 => $add2(x, y, &old8, op.mask).mac,
+                    1 => $mul2(x, y, &old8, op.mask).mac,
+                    _ => $fused2(z, x, y, false, &old8, op.mask).value.mac,
+                }
+            } else {
+                let mut m = 0;
+                for (n, (kind, mask)) in [(op.kinds[0], op.mask & 0xF), (op.kinds[1], op.mask >> 16)].into_iter().enumerate().take(if op.paired { 2 } else { 1 }) {
+                    let (p, q, r) = (half(x, n), half(y, n), half(z, n));
+                    m ^= match kind {
+                        0 => $add(&p, &q, &old4, mask).mac,
+                        1 => $mul(&p, &q, &old4, mask).mac,
+                        _ => $fused(&r, &p, &q, false, &old4, mask).value.mac,
+                    };
+                }
+                m
+            };
+        }
+        h
+    }};
+}
+
 /// The stream run: pairs of one kind in eight lanes, the rest in four (`split` runs every operation in four).
 #[target_feature(enable = "avx2")]
 fn stream_run(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
-    let (old4, old8) = ([0u32; 4], [0u32; 8]);
-    let mut h = 0u32;
-    let four = |k: u8, a: &[u32; 4], b: &[u32; 4], c: &[u32; 4], m: u32| -> u32 {
-        match k {
-            0 => lanes::add(a, b, &old4, m).mac,
-            1 => lanes::mul(a, b, &old4, m).mac,
-            _ => lanes::fused(c, a, b, false, &old4, m).value.mac,
-        }
-    };
-    let half = |v: &[u32; 8], i: usize| -> [u32; 4] { [v[4 * i], v[4 * i + 1], v[4 * i + 2], v[4 * i + 3]] };
-    for (i, op) in ops.iter().enumerate() {
-        let j = i % a.len();
-        let (x, y, z) = (&a[j], &b[j], &c[j]);
-        h ^= if op.paired && op.kinds[0] == op.kinds[1] && !split {
-            match op.kinds[0] {
-                0 => lanes::add2(x, y, &old8, op.mask).mac,
-                1 => lanes::mul2(x, y, &old8, op.mask).mac,
-                _ => lanes::fused2(z, x, y, false, &old8, op.mask).value.mac,
-            }
-        } else {
-            let mut m = four(op.kinds[0], &half(x, 0), &half(y, 0), &half(z, 0), op.mask & 0xF);
-            if op.paired {
-                m ^= four(op.kinds[1], &half(x, 1), &half(y, 1), &half(z, 1), op.mask >> 16);
-            }
-            m
-        };
-    }
-    h
+    stream_body!(lanes::add, lanes::mul, lanes::fused, lanes::add2, lanes::mul2, lanes::fused2, ops, a, b, c, split)
 }
 
-fn mix(path: &str, rounds: usize, shuffle: bool) {
+/// The same on the AVX-512VL form.
+#[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
+fn stream_run512(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+    use lanes::wide::{eight, four};
+    stream_body!(four::add, four::mul, four::fused, eight::add2, eight::mul2, eight::fused2, ops, a, b, c, split)
+}
+
+fn mix(path: &str, rounds: usize, shuffle: bool, wide: bool) {
     let text = std::fs::read_to_string(path).expect("the count");
     let mut groups: Vec<(Op, u64)> = Vec::new();
     for line in text.lines() {
@@ -231,7 +245,7 @@ fn mix(path: &str, rounds: usize, shuffle: bool) {
         let ns = median((0..rounds).map(|_| {
             let t = Instant::now();
             // SAFETY: AVX2 was asserted.
-            black_box(unsafe { stream_run(black_box(&ops), &a, &b, &c, split) });
+            black_box(unsafe { if wide { stream_run512(black_box(&ops), &a, &b, &c, split) } else { stream_run(black_box(&ops), &a, &b, &c, split) } });
             t.elapsed().as_secs_f64() * 1e9
         }).collect());
         println!(
@@ -239,7 +253,7 @@ fn mix(path: &str, rounds: usize, shuffle: bool) {
             ops.len(),
             lane_ops / ops.len() as f64,
             if split { "every operation in four lanes" } else { "pairs of one kind in eight lanes" },
-            if shuffle { ", shuffled" } else { "" },
+            if shuffle { ", shuffled" } else if wide { ", AVX-512VL" } else { "" },
             ns / lane_ops,
             ns / computed
         );
@@ -250,7 +264,9 @@ fn main() {
     assert!(lanes::available(), "the kernel needs AVX2");
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("mix") {
-        mix(args.get(1).expect("a count's file"), args.get(2).map_or(7, |a| a.parse().expect("rounds")), args.get(3).is_some_and(|a| a == "shuffle"));
+        let wide = args.get(3).is_some_and(|a| a == "wide");
+        assert!(!wide || lanes::available512(), "the AVX-512VL form needs AVX-512VL and CD");
+        mix(args.get(1).expect("a count's file"), args.get(2).map_or(7, |a| a.parse().expect("rounds")), args.get(3).is_some_and(|a| a == "shuffle"), wide);
         return;
     }
     let rounds: usize = std::env::args().nth(1).map_or(7, |a| a.parse().expect("a count of rounds"));

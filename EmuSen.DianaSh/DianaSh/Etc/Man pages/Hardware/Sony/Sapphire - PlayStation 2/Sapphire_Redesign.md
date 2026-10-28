@@ -1483,6 +1483,51 @@ host-cached system memory, which the processor reads at once. That is §4.6's de
 and a staged copy from device-local memory costs 0.30 ms for 4 MB. The protected types read back wrong words, as
 protected memory must, and are not candidates.
 
+### How many fields would make full speed on the handheld, at the measured costs (an estimate from R0's data)
+
+*An analysis of data already measured; nothing was run for it.*
+
+**The model.**
+- **Per-field counts:** the census's per-field counts of Jak's opening, the plateau's 420 fields excluded (D-1103).
+  Each field's two threads are costed as §4.7 splits them.
+- **Thread A:** the EE's instructions executed at the ring's handheld ns a guest instruction, and VU0's pairs at the
+  lanes' cost, plus §3.5's allocations for the board (0.7 ms), the IOP's side (1.2), the remainder (0.5) and the spare
+  (0.5).
+- **Thread B:** VU1's pairs at the lanes' cost, plus §3.5's allocations for VIF1 and the GIF (2.0), the parser (1.4),
+  the quantum barriers (0.5) and the spare (0.5).
+- **The lanes' cost:** 2.70 lane operations written a pair (VU1's own mix: 0.54 adder or multiplier operations a pair,
+  4.95 lanes each) at 1.42 ns, the AVX2 form's handheld figure on that mix.
+- **The field's time** is the slower thread's.
+- **The kernels' ns are the handheld's own**, so no factor is applied. R0.3's measured 1.2 says the handheld's
+  emulation thread is no slower than that against the desktop.
+
+**What the model leaves out, so that it is optimistic:**
+- every unit cost only by the items R0 measured or by §3.5's allocations;
+- VU1's work beyond its floats (the integer and lower operations, the pipeline, the dispatch), which is not counted;
+- the EE's helpers and its interpreted fallbacks;
+- the rule that a unit's allocation is met;
+- the ring's own synthetic work standing in for the instructions' real work.
+
+| Window (fields) | EE at the prototype's 274 bytes, §4.2's entries (10.2 ns) | at 274 bytes, today's entries (6.5 ns) | **at the exact forms' ~66 bytes (an estimate; the ring at 96, 2.34 ns, as its bound)** |
+| --- | --- | --- | --- |
+| `jak-dock` (300) | 0 % of fields; mean 20.8, p95 23.0 ms | 97.0 %; mean 14.7, p95 16.0 | **100 %; mean 7.8, p95 8.2: full speed** |
+| `jak-island` (300) | 0 %; 23.1, 34.6 | 93.3 %; 15.9, 23.3 | **100 %; 9.1, 12.3: full speed** |
+| `jak-arena`'s fields (218) | 0 %; 41.9, 53.1 | 0 %; 28.4, 34.9 | **99.1 %; mean 13.8, p95 15.3: the p95 met, the mean 3 % over** |
+| Jak's opening (4,380) | 1.7 %; 26.1, 45.4 | 59.9 %; 18.0, 30.2 | **99.9 %; 9.5, 15.2: full speed** |
+
+A window is at full speed by §3.1 when its mean is at most 13.4 ms and its 95th-percentile field under 16.7 ms. The
+percentages are the fields each under 16.7 ms.
+
+**What binds.** In every field that misses, in every form, it is **thread A, the EE**. VU1's thread B averages 5.8,
+9.1 and 12.6 ms on the three windows and never binds, but it holds only VU1's floats. At today's bytes the EE's fields
+miss by a median of 1.29 to 2.67 times (up to 4.0) with §4.2's entries, and by 1.04 to 1.80 times with today's. At the
+exact forms' bytes the five fields that miss are the arena's heaviest, by 1.15 to 1.18 times.
+
+**What it says.** In this model the EE's code size decides the result. At the static prototype's bytes the handheld
+misses on every window. At the exact forms the estimate puts nearly every field of Jak's opening under 16.7 ms, the
+arena's mean 3 % over. The estimate rests on unbuilt forms and on the optimistic model above. It does not reopen R0.4,
+closed by the exit rule, but it names the EE's bytes as the lever that matters most if the target is reconsidered.
+
 ### What the R0 stage leaves
 
 The instruments, all off by default:

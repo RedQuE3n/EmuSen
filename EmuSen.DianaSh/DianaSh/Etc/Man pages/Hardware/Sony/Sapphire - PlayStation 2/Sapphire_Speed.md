@@ -848,3 +848,271 @@ was printed or logged. No emulator's source was read.
 This page's §51 and §55; `Sapphire_Native.md` §19 (S9, the FPU and `sapphire::float`) and §46 (the GS's exact fast
 paths); `float.rs` and `ee/fpu.rs`, `vu/ops.rs`'s float calls. IEEE 754-2019 §4.3.1 and §5.4.1 for correct rounding,
 and the *EE Core User's Manual* §8 as §19 cites it. No emulator source, no firmware.
+
+## 57. The VU's call path: what threads would cost, and the calls answered at the unit's due cycle (2026-10-27)
+
+*Numbered §57 after §56; disputes would start at D-1060, and the step raised none. Decided 2026-10-27 by the tester:
+work is chosen by the overhead it consumes, and S42 (the plan's §5.12 lever 3, §51.8 #9) follows the EE's floats. §56.7
+put VU micro mode's call path first, at 18.4 to 22.7 % of the emulation thread. The step was to profile the path, then
+put VU1 (and the IOP, if its share warranted it) on a thread of its own, exact by construction. The profile and a count
+of the observations (§57.2, §57.4) show that an exact thread cannot pay for itself on this board, so VU1 stays on the
+emulation thread and the question goes to the tester (§57.11 Q1); what was built is the exact part of the lever that the
+profile asked for, the calls that cannot run a pair answered without running the unit (§57.3).*
+
+### 57.1 In one paragraph
+
+The board brings both VUs to the EE's time after every instruction it does not pass (§45.3), and the "synchronisation"
+§55.7 named is those calls, not locks: `Pipe` has none. **The profile split** (§57.2): of the 18.5 / 22.8 / 21.0 % the
+call path takes, **7.6 / 10.6 / 11.2 % is the catch-up itself** (calls, the landing of flags and results, the checks
+that find nothing to run), 2.6 / 3.4 / 3.1 % finding and entering compiled code, and 7.7 / 8.5 / 6.7 % the work (the
+float operations compiled code calls and their helpers; the compiled code's own share is not separable from the EE's
+blocks). **A count of the calls** (§57.2) found that 81 to 85 % of VU1's calls and 80 to 95 % of VU0's run nothing and
+land nothing. **A thread does not pay** (§57.4): every board step at which VU1 runs (0.49, 1.52 and 2.20 million a frame)
+observes VU1, because the GIF's arbitration at the step's end takes the XGKICKs up to its time and reads PATH1's packet
+from VU1's memory, and VU1's XGKICK reads the GIF's estimate the board gives it at that step; a VU1 thread that trails
+the EE therefore hands over at each such step, 63 ns a round trip on this machine, which is 31 / 96 / 139 ms a frame,
+72 to 100 % of what the whole of VU micro mode costs now; and VU1 cannot lead the EE, because VIF1 writes VU1's data
+memory while VU1 runs 35 to 151 thousand times a frame (80 to 90 % of its writes), each an input VU1 would have to stand
+at. **What was built** (§57.3): `Pipe::run_to` answers at once below the unit's due cycle, the earliest of its next
+pair's T stage (with the recompiler's planned stall) and its first landing, moving only its clock; compiled code reads
+the earliest landing from its frame instead of calling for it. **At CPU weight 100: the dock from 234.0 to 227.8 ms a
+frame (4.27 to 4.39 frames a second, 1.03 times), Misty Island from 420.3 to 407.5 (2.38 to 2.45, 1.03 times), the arena
+from 728.1 to 701.6 (1.37 to 1.43, 1.04 times)**; every picture, sound and state digest equal on the windows, the boot's
+760 frames and Jak's 900 on both EE tiers. The catch-up falls to 3.5 / 5.2 / 4.9 % of the thread. The IOP is 1.1 to
+2.1 % and stays where it is (§57.5).
+
+### 57.2 The call path, split (measured 2026-10-27)
+
+**The profile** is §56.7's samples of the emulation thread, read again by the innermost frame in Sapphire's VU modules
+(`callsplit.py` in the step's scratch): **catch-up** is `Vpu::catch_up` and `run_to`, `Pipe::run_to`, `run_pairs`,
+`land`, `drain` and `settle` outside a helper, the idle checks, `stat`, `ready`, and the recompiler's checks at a call's
+entry (`vu::jit::run` and the lines of `Tier::run` before its loop); **dispatch** is `Tier::run`'s loop, `code_for`,
+`covers`, `valid`, `published`, `Frame::new` and `pending`; **work** is `vu::ops`, `vu::efu`, `sapphire::float` under
+a VU frame, the helpers compiled code calls (`h_upper`, `h_lower`, `h_push`, `h_land`, `h_external`) with what they call,
+and the register accessors.
+
+| Share of the emulation thread | `jak-dock` | `jak-island` | `jak-arena` |
+| --- | --- | --- | --- |
+| VU micro mode, all of it (with its float calls) | 18.5 % | 22.8 % | 21.0 % |
+| catch-up | **7.6 %** | **10.6 %** | **11.2 %** |
+| dispatch | 2.6 % | 3.4 % | 3.1 % |
+| work (compiled code apart) | 7.7 % | 8.5 % | 6.7 % |
+
+**The census**: a counting build (counters at the calls, the board's steps, the kicks and the writes into VU1's memory,
+kept in the step's scratch, not committed) over each window's 360 frames, with the lever of §57.3 in, its digests
+those of §56.8. A frame's counts:
+
+| Per frame | `jak-dock` | `jak-island` | `jak-arena` |
+| --- | --- | --- | --- |
+| board steps that bring the VUs along | 1.05 M | 1.87 M | 3.76 M |
+| of which with VU1 running | 0.49 M (46 %) | 1.52 M (81 %) | 2.20 M (59 %) |
+| VU1's `run_to` calls (the steps, VIF1's `ready` and its writes) | 2.04 M | 4.89 M | 8.78 M |
+| of which nothing to run or land (answered by §57.3) | 1.73 M (85 %) | 3.97 M (81 %) | 7.49 M (85 %) |
+| of which ran a pair; pairs a running call | 0.31 M; 1.19 | 0.92 M; 1.33 | 1.28 M; 1.22 |
+| VIF1's polls of VU1's state (`Vpu::ready`) | 0.95 M | 2.91 M | 4.84 M |
+| VU0's calls; nothing to do | 1.06 M; 80 % | 1.88 M; 95 % | 3.77 M; 92 % |
+| VU1's starts; XGKICKs | 235; 1,085 | 2,043; 3,701 | 1,592; 3,545 |
+| VIF1's writes into VU1's data memory; while VU1 runs | 39.0 k; 35.1 k (90 %) | 104.5 k; 83.5 k (80 %) | 175.9 k; 151.1 k (86 %) |
+| the EE's stores into VU memory; BC2F and BC2T | 0; 0 | 0; 0 | 0; 0 |
+
+**Which the lever addresses.** The catch-up is the largest third, and nine tenths of it is calls that find nothing
+(§45.3 counted nine calls a pair on the opening; here 5.6 to 6.7 calls a pair on VU1 alone). A thread would move the work
+(7 to 9 %) and VU1's part of the compiled code off the emulation thread, and turn the catch-up into handoffs between
+threads (§57.4). Dispatch is the smallest part and does not dominate; the step took one helper call out of it (§57.3).
+
+### 57.3 What was built: the call answered at the unit's due cycle
+
+- **`Pipe::due`** (`src/vu/pipe.rs`): the earliest cycle by which `run_to` could change more than the unit's clock: the
+  first flag write, quotient or EFU result in flight (`vu::jit::pending`, the minimum `drain` and `Vu::settle` test) and,
+  while the unit runs, its next pair's earliest T stage, `next_t` and `kick_wait` and, on the recompiler, the T stage it
+  planned for the pair it stopped before (`Tier::stalled_until`, §45.3's memo, valid while the PC and the micro memory's
+  lending count are those it was planned with).
+- **`Pipe::run_to`** answers a call below that cycle by moving the unit's clock and nothing else.
+- **The frame carries the earliest landing** (`Frame::pending`), computed by the dispatcher as it builds the frame;
+  compiled code loads it where it called `h_pending` at its entry, a helper call less for each of the 0.3 to 1.3 million
+  entries a frame. `h_pending` is gone.
+
+**Why it is exact** [A]. `Pipe::plan` starts every pair's T stage at `next_t.max(kick_wait)` and only raises it, so no
+pair issues by `t` below that cycle, and the recompiler's dispatcher returns at once for the same condition and, below
+the memo's planned cycle, at its second check (§45.3), each before touching anything; `drain` lands only from the front
+of the flag queue while its cycle is at most `t`, and `settle` only a quotient or EFU result whose cycle is at most `t`
+(the second EFU result waits for the first); the debugger's probe and the trace are asked only for a pair that runs.
+So below `due` the full call changes nothing but `now`, which the answer moves. The due cycle is read from the unit's
+state at each call, never cached, so no write elsewhere (a start, a state's load, FBRST, VU0's early Q through CTC2) can
+leave it stale. The frame's landing is `pending` of the state the code is entered with, which `h_pending` returned at
+the same instant. The counts the bench prints are unchanged; the bench clock's count of calls (§45.7) no longer counts
+the answered ones.
+
+### 57.4 Why VU1 is not on a thread: the observation points on this board
+
+The plan's claim (§5.1, §5.12 lever 3) was that VU1 is observed only at a VIF1 or EE access to its memories or
+registers, at XGKICK's packet and at the E bit, and that a thread synchronised there would be exact and would wait only
+where another unit could see it. Exactness holds; the waiting does not, for three reasons found on this board:
+
+1. **The GIF observes VU1 at every board step at which VU1 runs.** `Board::run_to` brings VU1 to the step's time, then
+   the GIF: `run_gif` takes every XGKICK up to that time and runs PATH1 from VU1's data memory as it stands. A kick handed
+   to the GIF a step late starts a step late, and the GIF's wake of the DMAC and its interrupts follow it, so the GIF
+   cannot be run without VU1 at the step's time. There is no lookahead: a kick's cycle is known only by running VU1 to it.
+2. **VU1 observes the GIF at every XGKICK.** The end of a PATH1 transfer VU1 is told comes from the GIF's estimate the
+   board hands the port at the step (`Path1::set_free`, §33.4), so VU1 cannot pass a kick before the EE's side reaches
+   the step that contains it.
+3. **VU1's inputs arrive while it runs.** VIF1 unpacks into VU1's data memory while VU1 runs, 80 to 90 % of its writes
+   (§57.2's census), each brought to the write's cycle (`Vif::store`'s `run_unit`). A VU1 thread running ahead of the EE
+   would have to roll back past each such write, or stop at the EE's time, which is trailing.
+
+**A trailing thread**, which runs VU1 to each step's time after the EE's side posts it, is exact by construction (a
+queue of the board's calls, VU1's state read only when the queue is empty) and waits at each of the 0.49, 1.52 and 2.20
+million steps a frame at which VU1 runs. **The handoff measured** (a two-thread round trip on atomics, both threads
+spinning, `pingpong` in the step's scratch, three runs): **63 ns** on this machine (Ryzen 7 7700X, one CCD). That is
+**31, 96 and 139 ms a frame** of waiting alone, against 43, 96 and 152 ms for the whole of VU micro mode, both units,
+work and catch-up, on §56's frames (18.5 / 22.8 / 21.0 % of 235 / 424 / 726 ms). The best a trailing thread could do is
+break even on the island and lose on the dock; it was not built, since building it would only confirm the arithmetic.
+
+**What would make a thread pay** is fewer observations, and each way is outside this step:
+
+- **C7** (§5.13), synchronisation at a bounded slack: timing-only, the exact cycle at which the GIF sees a kick moved
+  within the quantum; it needs the tester's acceptance, and this step was to be exact.
+- **Speculation with rollback**: VU1 runs ahead and is rolled back to the cycle of any input that arrives behind it.
+  Exact, but each of the 35 to 151 thousand VIF1 writes a frame into a running VU1 would roll back unless the writes are
+  tracked against what VU1 read and wrote since, a check in every compiled load and store; its state (32 KiB of memory,
+  the registers, the pipelines' state, the PATH1 port) would be copied at each point it may return to.
+- **A board at events for the GIF** (§51.8 #12, `Sapphire_Scheduler.md` §54): the GIF run only where it is observed,
+  with its next event known, so that VU1's kicks are needed at the GIF's events rather than at every EE instruction.
+  That is the precondition for an exact thread worth having, and it is a stage of its own.
+
+### 57.5 The IOP
+
+1.1 to 2.1 % of the emulation thread on the windows (§56.7's samples and this step's), with the SPU2 0.2 to 0.4 %: the
+bound of a thread for it is 1.01 to 1.02, before its handoffs, and it is observed at every EE instruction's time
+(`Sapphire_Scheduler.md` §54.9: it wakes the EE's DMAC from any instruction that starts a SIF channel). Named and left.
+
+### 57.6 Speed (measured 2026-10-27)
+
+**The method**: §56.6's windows with `--defaults` from the states at 6,000, 7,500 and 9,000, every run alone at CPU
+weight 100 on a machine otherwise idle, the one-minute load 1.0 to 3.8 (2.4 to 3.8 for the windows). **Before** is §56's
+"after" build (`5d054b083`, landed on WiseMan as `45f77f6c0`): its two rounds from §56.6 and a third today, taken because
+the island's first two "after" rounds were 5 % apart; **after** is this step, three rounds on the island and two on the
+others.
+
+| Window | Before: means (median ms) | After: means (median ms) | Before → after, median of means | Frames a second | Longest frame |
+| --- | --- | --- | --- | --- | --- |
+| `jak-dock` | 234.0, 236.6, 231.8 (225.1, 228.7, 222.7) | 226.9, 228.7 (218.6, 219.4) | **234.0 → 227.8, 1.03×** | 4.27 → 4.39 | 0.37 → 0.36 s |
+| `jak-island` | 417.8, 429.9, 420.3 (413.7, 415.9, 411.5) | 407.5, 429.8, 406.0 (399.2, 422.2, 402.3) | **420.3 → 407.5, 1.03×** | 2.38 → 2.45 | 0.88 → 0.84 s |
+| `jak-arena` | 724.0, 728.1, 735.2 (654.8, 652.4, 677.6) | 706.0, 697.1 (620.5, 615.7) | **728.1 → 701.6, 1.04×** | 1.37 → 1.43 | 0.99 → 0.98 s |
+
+The gain is about 3 %, the size of the rounds' spread on the island (one round of each build there sits 2 to 3 % above
+the other two), and outside it on the dock and the arena. The catch-up's share fell by 4 to 6 points of the thread
+(§57.7), the frames by 3 to 4 %: the answered calls still cost the call through `Box<dyn Micro>` and the reads of the
+unit's state.
+
+**The menus and the loading**, from power-on (the means of the frames named, ms; two rounds on the recompiler tier, one
+on the interpreter tier, and the interpreter tier's Jak run again with both builds because its first after-run read
+104.1 under load):
+
+| Workload | Before (§56.6's after) | After |
+| --- | --- | --- |
+| the boot's language screen (frames 690–760) | 44.6, 49.0 | 44.6, 44.7 |
+| the boot, frames 0–760 | 68.7, 70.5; interpreter 92.4 | 68.1, 68.1; interpreter 91.0, 91.1 (before again: 91.5) |
+| Jak's start and loading by the script (frames 8–400) | 85.4, 86.3; interpreter 131.1 | 85.0, 85.0; interpreter 131.4 (before again: 132.1) |
+| Jak, frames 0–900 | 60.5, 60.7; interpreter 94.8 | 60.1, 59.9; interpreter 95.0 (before again: 95.4) |
+
+Unchanged within the rounds' spread: the menus run little VU micro mode.
+
+### 57.7 Where the frame goes now (measured 2026-10-27)
+
+**The method**: §56.7's sampler at 4 ms on every thread of one run of each window, the emulation thread classed by
+§55.7's rules (VU micro mode with its float calls, as §57.2 counts it) and the call path by §57.2's.
+
+| The emulation thread | `jak-dock` (12,481 samples) | `jak-island` (23,135) | `jak-arena` (36,470) | §57.2 before |
+| --- | --- | --- | --- | --- |
+| **VU micro mode**, with its float calls | **15.7 %** | **20.2 %** | **17.1 %** | 18.5 / 22.8 / 21.0 % |
+| of which the catch-up | 3.5 % | 5.2 % | 4.9 % | 7.6 / 10.6 / 11.2 % |
+| of which dispatch | 3.4 % | 5.3 % | 4.7 % | 2.6 / 3.4 / 3.1 % |
+| of which the work | 8.0 % | 8.7 % | 6.8 % | 7.7 / 8.5 / 6.7 % |
+| **EE**, all of it | 34.9 % | 25.7 % | 29.1 % | 32.3 / 24.7 / 28.3 % |
+| of which the recompiler's dispatcher and exit replay | 10.9 % | 7.2 % | 6.2 % | 10.2 / 7.3 / 6.1 % |
+| of which the timing model | 6.2 % | 5.1 % | 6.6 % | 5.8 / 4.8 / 6.6 % |
+| **GIF** | 10.1 % | 9.2 % | 9.7 % | 9.1 / 8.8 / 9.2 % |
+| **VIF** | 7.8 % | 8.1 % | 8.4 % | 8.3 / 7.7 / 8.3 % |
+| **Compiled code** | 7.1 % | 8.5 % | 7.3 % | 7.4 / 8.0 / 6.4 % |
+| **Idle skipping's own work** | 1.3 % | 3.1 % | 7.9 % | 1.2 / 2.9 / 7.5 % |
+| Scheduler and synchronisation | 5.4 % | 4.4 % | 5.1 % | 5.4 / 4.3 / 4.9 % |
+| GS on the emulation thread | 5.3 % | 8.2 % | 3.6 % | 5.0 / 8.7 / 3.5 % |
+| IOP | 2.0 % | 1.3 % | 1.3 % | 2.1 / 1.1 / 1.1 % |
+
+Dispatch's share rose because the calls that reach the dispatcher are now nearly all calls that run a pair, whose
+entry the old split counted partly as catch-up, and the frame is shorter; its absolute cost is about what it was.
+
+**The new top five** (the three windows together): **1. VU micro mode**, 15.7 to 20.2 %, now mostly its work and the
+entry into compiled code a pair at a time (1.2 to 1.3 pairs a call); **2. the EE recompiler's dispatcher and exit replay**,
+6.2 to 10.9 % (S37 to S39, §51.8 #6); **3. the GIF**, 9.2 to 10.1 %; **4. the VIF**, 7.8 to 8.4 % (3 and 4 together
+§51.8 #10); **5. the EE's timing model**, 5.1 to 6.6 % (C1's share, refused at §44.9). On the arena idle skipping's own
+work (7.9 %) comes before the fifth.
+
+### 57.8 Tests and seeded faults (2026-10-27)
+
+**Tests** [M, release]: the crate's lib tests 116 of 116 (5 ignored), `vu_micro` 25, `vu_jit` 19, `vu0` 14, `vif` 14,
+`gif` 16, `micro` 12, `state` 11 and `threads` 10, all passing; the blast radius: Sapphire's crate **493 of 493** (5 ignored), WiseMan's `SapphireTests` **5 of 5**
+on lavapipe. **The bench's gate**:
+the three windows' digests (§56.8's `43D839015A0E4DA1`, `2C225C73DB4D3F9D`, `E220B19BD26D8EBC`; `D9F0AF56FD3DEF28`,
+`4F27F29527E1B781`, `F074C69B5F66E65E`; `B77DC314C6AE837C`, `BCA8F00F4743A955`, `4ED52755B09F207E`) equal in every round
+and in the census build; the boot's 760 frames (`50F06A02F1B76860`, `2EE7B3D10DF3C401`, `2051C6BB42228C53`) and Jak to
+900 (`FFB0FCE98BD7C164`, `7CF6B8FA4F6C2701`, `0DCD2B18F0881625`) equal on both EE tiers. ps2autotests: **52 of 55 and 23 of 23** with both units recompiled, the
+same three failing as §56.8 (`cpu/ee_fpu/sqrt`, `dma/vif/intstall`, `vu/lower/efu`).
+
+**Seeded faults**, each made alone, the tests above run, the source restored:
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | the landings left out of the due cycle (a flag write, Q or P due by the call's cycle not landed; an observer that does not wait for them) | `vu_jit`'s `q_and_p_land_at_their_latency_alike`, `random_microprograms_on_vu1_leave_the_units_as_the_interpreter_does` |
+| F2 | the answer taken at the due cycle itself (`<=`: a pair issuing exactly at the call's cycle left for the next call, a wait to the wrong cycle) | `q_and_p_land_…`, `random_microprograms_on_vu1_…`, `every_operation_lands_on_the_same_cycle`, `a_state_saved_while_vu1_runs_continues_from_an_empty_cache` |
+| F3 | the recompiler's memo read without the lending count (a stall planned before an MPG or a state's load trusted after it) | `random_microprograms_on_vu1_…` |
+| F4 | the answered call leaving the unit's clock where it was (VGW and the clock the state writes) | `random_microprograms_on_vu1_…`, `q_and_p_land_…`, `every_operation_lands_…`, `a_state_saved_while_vu1_runs_…` |
+| F5 | the frame's earliest landing set to none (compiled code never landing a flag, Q or P it would have) | `every_operation_lands_…`, `the_flags_land_four_cycles_on_and_their_readers_see_them_alike`, `q_and_p_land_…`, both units' `random_microprograms_…`, `a_state_saved_while_vu1_runs_…` |
+
+All five were caught by `vu_jit`, whose verifier steps the interpreter's `Pipe::step` beside every compiled pair and
+compares the units after each call; `vu_micro`, `vif`, `gif`, `state` and `threads` caught none.
+
+**Left out of the gate, with the thread**: the threaded-against-unthreaded digests and states, the three runs of each
+threaded case, and the faults planned for a thread (an observation that does not wait, a wait to the wrong
+cycle, a VU1 write seen early, the thread left running across a state or a reset). F1 to F5 are their counterparts for
+what was built: a landing an observer must see (F1, F5), a pair's cycle (F2), a memo across a change of memory (F3)
+and the unit's clock in its state (F4).
+
+### 57.9 Exposure
+
+Running the player's BIOS and Jak and Daxter makes this writer a writer of a player's-BIOS stage (§1.4): **exposed, and
+never a replacement writer.** The BIOS was handed to the machine by the link the step was given (market americas); it was
+never opened, hashed, diffed, listed, disassembled or dumped, and no firmware folder was listed. Observed: the bench's
+times, digests and counts, the census's counts of calls, steps, kicks and writes, and the host's instruction pointers in
+Sapphire's own code; no program counter, operand value, microprogram word or memory of the BIOS or the game was printed
+or logged. No emulator's source was read.
+
+### 57.10 Named limits
+
+- **The gain is the size of the island's spread**: three rounds there, two elsewhere; the dock's and the arena's are
+  outside it.
+- **The handoff is one machine's**: 63 ns between two cores of one CCD with both spinning. Two CCDs, a handheld's
+  cores, or a waiting thread woken by the kernel would cost more, which only strengthens §57.4.
+- **The census is the opening's three windows**; play may couple VU1 less or more. The argument of §57.4 rests on the
+  board's structure (the GIF at every step), not on the counts.
+- **The handheld's columns** remain owed with §51.9's.
+
+### 57.11 Questions this step leaves
+
+1. **[decision] VU1 on a thread.** An exact thread loses or breaks even on this board (§57.4). *Recommended*: do not
+   build S42's threads now; take the board at events for the GIF first (§51.8 #12 extended to the GIF), which removes the
+   per-instruction observation and is exact, and measure the thread again after it. C7 remains the timing-only
+   alternative if the tester wants the thread sooner; speculation with rollback is not recommended.
+2. **[routine] The plan's claim.** *Recommended*: amend §5.1 and §5.12 lever 3 to say the observation points are as
+   §57.4 finds them on this board (done in `Sapphire_Plan.md` §5.1's amendment of 2026-10-27).
+3. **[decision] The next step by overhead.** *Recommended*: the EE recompiler's remaining stages (S37 to S39, §51.8 #6),
+   the largest exact lever left in absolute terms; or the GIF's and VIF's paths (#10, 16 to 18 % together), which the
+   board at events would touch too.
+
+### 57.12 What was read for this step
+
+`Sapphire_Plan.md` §5.1, §5.12 lever 3 and the S42 and C7 rows; this page's §51.8, §55.7, §55.10 and §56;
+`Sapphire_Native.md` §21.6, §23.1 and §23.2 (`Pipe`), §45.1 to §45.4 (`vu::jit`); `vu/micro.rs`, `vu/pipe.rs`,
+`vu/mod.rs`, `vu/jit/mod.rs` and `emit.rs`'s entry, `board.rs`'s `run_to`, `run_gif` and `run_vifs`, `gif`'s
+`Path1Port`, `vif`'s `store`. No emulator source, no firmware. 

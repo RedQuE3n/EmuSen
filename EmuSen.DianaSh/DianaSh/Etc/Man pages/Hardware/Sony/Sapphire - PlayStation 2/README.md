@@ -169,7 +169,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   the opening drawn in its engine at 2.77, 1.77 and 0.75 frames a second, the profile on every thread with the EE's
   instruction mix, VU1's compiler joined at its budget, and the levers and compromises ranked again for the 3D; the
   VUs' and the GS's overhead taken out (§55); and the floats by exact fast paths (§56): the census of `sapphire::float`'s
-  callers and operand classes, the Booth product in closed form, DIV and SQRT on the host where proven, the proofs.
+  callers and operand classes, the Booth product in closed form, DIV and SQRT on the host where proven, the proofs;
+  and the VU's call path (§57): its split, the census of calls and observations, why an exact VU1 thread does not pay
+  on this board, and the calls answered below the unit's due cycle.
 - **`Sapphire_Scheduler.md`** — the board's and the scheduler's record from §54 on (2026-10-26), continuing
   `Sapphire_Native.md`'s numbering: S32's lever #9, the board's calls answered where each unit's next event is known (the
   IOP's next instruction, its service with nothing due, the lines between events, the VIFs and the VUs resting, the

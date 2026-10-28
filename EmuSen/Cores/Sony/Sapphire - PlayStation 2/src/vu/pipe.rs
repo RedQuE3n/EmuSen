@@ -648,6 +648,18 @@ impl Pipe {
         }
     }
 
+    /// The earliest cycle by which `run_to` could change more than the unit's clock: its next pair's earliest T stage
+    /// while it runs, and the first flag, quotient or EFU result to land (Sapphire_Speed.md §57.3).
+    fn due(&self, units: &Units) -> u64 {
+        let vu = if self.unit == 0 { &units.vu0 } else { &units.vu1 };
+        let land = super::jit::pending(self, vu);
+        if self.state != State::Run {
+            return land;
+        }
+        let stall = self.jit.as_ref().map_or(0, |j| j.stalled_until(self.pc, vu.micro.lent()));
+        land.min(self.next_t.max(self.kick_wait).max(stall))
+    }
+
     /// Lands every flag and result due by `t` in this unit.
     fn land(&mut self, units: &mut Units, t: u64) {
         let vu = if self.unit == 0 { &mut units.vu0 } else { &mut units.vu1 };
@@ -690,6 +702,10 @@ impl Micro for Pipe {
     }
 
     fn run_to(&mut self, units: &mut Units, t: u64) {
+        if t < self.due(units) {
+            self.now = self.now.max(t);
+            return;
+        }
         self.run_pairs(units, t, false, u64::MAX);
         self.now = self.now.max(t);
         self.land(units, t);

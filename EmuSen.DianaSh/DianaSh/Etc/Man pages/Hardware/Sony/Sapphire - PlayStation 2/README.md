@@ -191,6 +191,9 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   same day after the critic's review: the byte face built against the cycle-ordered reference (`EmuSen_TwoFaces.md`),
   R0's five risk checks and the stop rule, budgets at a handheld factor of 2, a deterministic two-thread split at fixed
   quanta decided before R3, unified memory first for the GS, the portability constraints, and the review answered.
+  After R0, the EE emitter's exact forms measured behind the `forms` feature: the data cache's path, option 1, and one
+  translation a page, one tag check a line and a shared exit a block (181 to 119 hot bytes a guest instruction, exact),
+  with an estimate for a Winch-style emitter.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

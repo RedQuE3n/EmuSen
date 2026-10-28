@@ -1,4 +1,4 @@
-//! Dispute D-1103's program (Sapphire_Native.md §59): `d1103 write <folder>` makes `<name>.elf` and
+//! Dispute D-1103's program (`Sapphire_Disputes.md`): `d1103 write <folder>` makes `<name>.elf` and
 //! `<name>.expected` for the referees, as `examples/d700.rs` does; `d1103 run <bios> <program.elf> <expected> [frames]`
 //! enters the program by the fast boot on the player's BIOS given by path, runs to its done word and prints its record
 //! against the expected words. The BIOS is handed to the machine and never read here; what is

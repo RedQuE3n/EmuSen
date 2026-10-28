@@ -77,7 +77,7 @@ fn the_registers_the_interrupt_stall_fbrst_and_the_error_masks() {
     grade(s14::regs());
 }
 
-/// D-1103's program (Sapphire_Native.md §59): STC written while INT is set and before the next VIFcode arrives cancels
+/// D-1103's program (`Sapphire_Disputes.md`): STC written while INT is set and before the next VIFcode arrives cancels
 /// the i bit's stall, so the next packet's STMASK runs; Jak and Daxter's VIF1 handler writes STC so.
 #[test]
 fn stc_before_the_next_vifcode_cancels_the_i_bit_s_stall() {

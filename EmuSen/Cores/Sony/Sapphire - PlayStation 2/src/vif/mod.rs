@@ -646,6 +646,8 @@ impl Vif {
         if v & fbrst::STC != 0 {
             self.stat &= !stat::STALLS;
             self.stop_next = false;
+            // An i bit's stall not yet begun is cancelled with INT (D-1103).
+            self.stall_next = false;
         }
     }
 

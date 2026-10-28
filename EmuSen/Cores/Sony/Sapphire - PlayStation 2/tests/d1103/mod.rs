@@ -1,4 +1,4 @@
-//! The project's program for dispute D-1103 (Sapphire_Native.md §59): `d1103-stc` sends VIF1 packets by DMA channel 1
+//! The project's program for dispute D-1103 (`Sapphire_Disputes.md`): `d1103-stc` sends VIF1 packets by DMA channel 1
 //! in normal mode and reads VIF1's STAT (INT and VIS only, D-363 leaving FQC aside) and MASK, which an STMASK sets. Its
 //! first case is D-189's stall, the code after the i bit already in the FIFO before STC; its second sends a NOP with
 //! the i bit as a packet's last word, writes STC while INT is set and nothing follows, then sends an STMASK, which a
@@ -102,9 +102,10 @@ fn send(p: &mut Program, f: Form, at: u32, qwords: &[[u32; 4]]) {
     pause(p, 2_000);
 }
 
-fn flags_and_mask(p: &mut Program, f: Form, flags: u32, mask: u32) {
+/// STAT's INT and VIS (none: ungraded) and MASK, recorded.
+fn flags_and_mask(p: &mut Program, f: Form, flags: Option<u32>, mask: u32) {
     read(p, f, VIF1_STAT, FLAGS);
-    p.record("t2", Some(flags as u64));
+    p.record("t2", flags.map(u64::from));
     read(p, f, VIF1_MASK, u32::MAX);
     p.record("t2", Some(mask as u64));
 }
@@ -139,7 +140,7 @@ pub fn stc_bare() -> Program {
     body(Program::kernel("d1103-stc-bare"), Form::Bare, 3)
 }
 
-/// The expected words are D-1103's reading, STC cancelling an i bit's stall not yet begun; the bare form also sets DMAE.
+/// The expected words are PCSX2 2.8.2's, measured 2026-10-28, but where D-1103 keeps D-363's and D-189's readings; DMAE set bare.
 fn body(mut p: Program, f: Form, cases: u32) -> Program {
     if f == Form::Bare {
         store(&mut p, f, D_CTRL, 1);
@@ -147,35 +148,35 @@ fn body(mut p: Program, f: Form, cases: u32) -> Program {
     store(&mut p, f, VIF1_FBRST, 1);
     store(&mut p, f, VIF1_ERR, 0);
     send(&mut p, f, PACKETS, &[[STMASK, 0x1111_1111, 0, 0]]);
-    flags_and_mask(&mut p, f, 0, 0x1111_1111);
+    flags_and_mask(&mut p, f, Some(0), 0x1111_1111);
     if cases == 0 {
         return p;
     }
     // D-189: the next VIFcode already in the FIFO stalls, and STC lets it run.
     send(&mut p, f, PACKETS + 0x100, &[[NOP_I, STMASK, 0x2222_2222, 0]]);
-    flags_and_mask(&mut p, f, 0xC00, 0x1111_1111);
+    flags_and_mask(&mut p, f, Some(0xC00), 0x1111_1111);
     stc(&mut p, f);
-    flags_and_mask(&mut p, f, 0, 0x2222_2222);
+    flags_and_mask(&mut p, f, Some(0), 0x2222_2222);
     if cases == 1 {
         return p;
     }
     // The i bit on a packet's last word: INT with nothing to stall yet; STC then; the next packet's STMASK.
     send(&mut p, f, PACKETS + 0x200, &[[0, 0, 0, NOP_I]]);
-    flags_and_mask(&mut p, f, 0x800, 0x2222_2222);
+    flags_and_mask(&mut p, f, None, 0x2222_2222);
     stc(&mut p, f);
-    flags_and_mask(&mut p, f, 0, 0x2222_2222);
+    flags_and_mask(&mut p, f, Some(0), 0x2222_2222);
     send(&mut p, f, PACKETS + 0x300, &[[STMASK, 0x3333_3333, 0, 0]]);
-    flags_and_mask(&mut p, f, 0, 0x3333_3333);
+    flags_and_mask(&mut p, f, Some(0), 0x3333_3333);
     if cases == 2 {
         return p;
     }
     // The same without STC: the next packet's STMASK stalls until it.
     send(&mut p, f, PACKETS + 0x400, &[[0, 0, 0, NOP_I]]);
-    flags_and_mask(&mut p, f, 0x800, 0x3333_3333);
+    flags_and_mask(&mut p, f, None, 0x3333_3333);
     send(&mut p, f, PACKETS + 0x500, &[[STMASK, 0x4444_4444, 0, 0]]);
-    flags_and_mask(&mut p, f, 0xC00, 0x3333_3333);
+    flags_and_mask(&mut p, f, Some(0xC00), 0x3333_3333);
     stc(&mut p, f);
-    flags_and_mask(&mut p, f, 0, 0x4444_4444);
+    flags_and_mask(&mut p, f, Some(0), 0x4444_4444);
     store(&mut p, f, VIF1_FBRST, 1);
     p
 }

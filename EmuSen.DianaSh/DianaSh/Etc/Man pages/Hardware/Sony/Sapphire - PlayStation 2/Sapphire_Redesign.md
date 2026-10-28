@@ -1279,3 +1279,91 @@ second addendum, no factor applied):
 | R0.4, four lanes | add 1.18–1.23, mul 1.03–1.07, multiply-add 1.25–1.32 a lane operation | 1.125 | add and multiply-add **fail**, mul **passes** |
 | R0.4, paired | add 0.50–0.52, mul 0.43–0.44, multiply-add 0.70–0.72 a lane operation | 1.125 | **pass** |
 | R0.3 | not run | 2.0 | **not run** |
+
+### Fourth addendum: the lanes on VU1's own stream, and the static form's hot bytes (measured 2026-10-28)
+
+*Decided 2026-10-28 by the tester ("yes to both"): replace the 60/40 estimate with VU1's own stream, and measure a
+static-form emitter prototype's bytes, hot and cold apart. Both are measurements; nothing in the default build changes.*
+
+| Check | Desktop | Handheld (charger) | Mark (desktop / handheld) | Result |
+| --- | --- | --- | --- | --- |
+| R0.4 on VU1's stream, pairs of one kind in eight lanes | **1.28–1.31** ns a lane operation written | **1.43–1.47** | 0.83 / 1.125 | **fail**, 1.55 and 1.30 times |
+| the same, every operation in four lanes | 1.37–1.40 | 1.50–1.57 | 0.83 / 1.125 | fail |
+| R0.2 bytes, the static prototype's hot straight line | **273.5** host bytes a guest instruction (cold exits 272.6 more) | — | 96 | **fail**, 2.85 times |
+| R0.2 ns, the ring at those hot bytes (283), §4.2's 14.5 an entry | **4.95–5.03** ns a guest instruction | **10.1–10.3** | 2.04 / 2.75 | **fail**, 2.4 and 3.7 times |
+| the same with today's 2.87 an entry | 5.20 | 6.49 | 2.04 / 2.75 | fail |
+
+**Verdict: stop.** Measured on VU1's own operations, R0.4 fails on both machines. Measured on the hot straight line
+alone, R0.2's bytes fail, and the ring at the bytes reached fails on both machines. Nothing is left estimated in either
+verdict. What remains estimated is only how a different design than the one measured might do: the AVX-512VL form
+(the second addendum) and an emitter further from today's than this prototype.
+
+#### R0.4 on VU1's own stream
+
+**The count** (a throwaway counter on VU1's interpreter, in the stage's scratch and reverted, keeping no address, word
+or operand: only how many operations of each kind and lanes ran, and how many pairs the microcode allows). The rule
+is the earlier addendum's: an adder or multiplier operation pairs with the next pair's if that one reads nothing the
+first writes. Pairs are taken greedily along the execution. The arena and island windows, 360 fields each, from their
+states:
+
+| | `jak-arena` | `jak-island` |
+| --- | --- | --- |
+| adder and multiplier operations | 318.8 M | 238.9 M |
+| additions / products / multiply-adds | 23.6 / 39.9 / 36.5 % | 19.3 / 42.0 / 38.7 % |
+| run in pairs | 60.5 % | 60.2 % |
+| **run in pairs of one kind** (what the eight-lane kernel takes) | **18.7 %** | **22.8 %** |
+| lanes written an operation | 4.95 (a multiply-add counted twice) | 4.94 |
+
+Most pairs join an addition and a product, which the paired kernel, one operation over eight lanes, cannot take
+together. Multiply-adds seldom pair: each reads the ACC the one before it wrote.
+
+**The timing** (`lanes mix`): a million operations in the counted shares, the lanes written as counted, operands in
+§56.2's classes, each kind in runs as compiled code would hold them. A pair of one kind runs in eight lanes and
+everything else in four. The ns are over the lanes written, a multiply-add counting twice; over the lanes computed
+they are about a tenth lower. Two rounds each window:
+- desktop: **1.28–1.31** ns paired where it can, 1.37–1.40 all in four lanes;
+- handheld: **1.43–1.47** and 1.50–1.57.
+
+A shuffled order, which adds the host's mispredicted dispatch between kinds, costs 1.76–1.79 on the desktop. The
+stream is costlier per lane than any kernel alone for three reasons. The multiply-add is its largest share and its
+dearest operation. Only a fifth of the operations pair in one kind. And a masked operation computes four lanes to
+write fewer.
+
+#### R0.2: the static prototype's bytes, hot and cold
+
+**The prototype** (the throwaway byte counter of the R0 results, carried further): C1's constant issue charges, no
+per-step replay store, no per-step update of Random, and now no undo log on the stores. Each block the dispatcher
+compiles is compiled again outside the module in three forms. Every IR instruction is tagged by whether its block is
+cold, and the hot straight line is measured from the code's own layout: Cranelift places every cold block after the
+hot ones, so the hot region ends where the first cold-tagged range starts. The arena window, 360 fields from the state
+at 9,000: 29,997 blocks of 270,601 guest instructions, 9.02 a block. A guest instruction costs:
+
+| Form | Hot straight line | Cold exits | Total |
+| --- | --- | --- | --- |
+| today's emitter | 543.8 bytes | 705.2 | 1,249.0 |
+| C1 | 348.9 | 597.5 | 946.4 |
+| **the static prototype** | **273.5** | 272.6 | 546.1 |
+
+The tagging is clean: in the prototype one byte a guest instruction of hot-tagged code falls past the first cold range;
+today's emitter has 23. **The fetched part is 273.5 bytes, 2.85 times the mark of 96.** The remaining hot bytes are
+the instructions' own work plus each load's and store's inline translation probe, data-cache tag compare and dirty-bit
+update.
+
+**The ring at the bytes reached** (283 bytes a guest instruction, Jak's p90 working set):
+- with §4.2's 14.5 instructions an entry: 4.95–5.03 ns a guest instruction on the desktop (23.5 MB of code), 10.1–10.3
+  on the handheld;
+- with today's 2.87 an entry: 5.20 and 6.49.
+
+All fail 2.04 and 2.75. The handheld's longer-block figure is the worse of the two because 23.5 MB of code exceeds its
+last-level cache.
+
+#### Handheld and desktop, every kernel of R0 side by side
+
+| Kernel | Desktop | Handheld (charger) |
+| --- | --- | --- |
+| ring, working set, today's entries, 96 bytes | 2.00–2.01 ns a guest instruction | 2.24–2.37 |
+| ring, working set, §4.2's entries, 99 bytes | 1.40–1.47 | 2.25–2.43 |
+| ring, working set, §4.2's entries, 283 bytes | 4.95–5.03 | 10.1–10.3 |
+| lanes, four, add / mul / multiply-add a lane | 1.09–1.25 / 0.95–1.09 / 2.34–2.68 | 1.18–1.23 / 1.03–1.07 / 2.51–2.63 |
+| lanes, paired, add / mul / multiply-add a lane | 0.46–0.47 / 0.38–0.39 / 1.28–1.29 | 0.50–0.52 / 0.43–0.44 / 1.41–1.45 |
+| lanes on VU1's stream, a lane operation written | 1.28–1.31 | 1.43–1.47 |

@@ -62,7 +62,9 @@ RAM, so neither can produce a record without the firmware.
   process found was the desktop's own, started 2026-10-23].
 - **Settings**, in its own data folder (`-datapath`): no setup wizard, no shutdown prompt, `Renderer = 13`, which is
   the software renderer [M: a failed start's message names "the chosen renderer (Software)"; the software renderer
-  presents through Vulkan on the RX 6800], a `Null` audio stream, fast boot (an ELF is entered without the menu),
+  presents through Vulkan on the RX 6800; under lavapipe (`VK_DRIVER_FILES` set to `lvp_icd`, `LIBGL_ALWAYS_SOFTWARE=1`)
+  it never reports a swap chain, so the driver never connects, even for D-780's program that passed before (M 2026-10-28,
+  D-1103); a referee run therefore takes the RX 6800], a `Null` audio stream, fast boot (an ELF is entered without the menu),
   patches off, PINE on at a free slot. Its command line is `pcsx2-qt -datapath D -batch -nogui [-unlimited] -logfile L --
   <elf>` [R pcsx2.net "Command Line Options"].
 - **PINE** [R the protocol's draft standard, `pine/standard/draft.dtd`]: a Unix socket named `pcsx2.sock.<slot>` in

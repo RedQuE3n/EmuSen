@@ -4760,9 +4760,55 @@ it.*
   field of 10009000h (D1_CHCR, VIF1's channel) and 702,903 taken conditional branches, one every seven instructions.
   Idle skipping refuses the turn as a device read (`Refusal::Device`, about 172 a field) and waits out about 702,000
   arrivals a field behind the refusal's backoff.
-- **Unknown:** whether VIF1's transfer should end sooner on the console. Nothing in the counts says why it does not
-  end while neither VU runs. Two causes are possible: the game waits on something else, or a channel stalls as D-465's
-  did.
-- **Next step, not taken:** VIF1's and the DMAC's own registers at the first field of a run, read by the debugger, and
-  the referee's pictures over the same frames.
-- **Conclusion:** **open.**
+- **Documents read:** ps2tek, "VIFn_STAT", "VIFn_FBRST" and "VIFcodes" (the probe's copy, commit 1c91660, read
+  2026-10-28); D-189's reading of the EE User's Manual §6.3.2 and VIFn_FBRST. **Documented:** STC is "Stall cancel.
+  Clears VSS, VFS, VIS, INT, ER0, and ER1 in VIFn_STAT"; with a VIFcode's bit 31 "a VIF interrupt is generated after
+  the command executes, and the VIF stalls on the following command except for the MARK command". **Not documented:**
+  what STC does when it is written while INT is set and the following VIFcode has not yet arrived, so that no stall
+  has begun; nor whether VIS reads set before that VIFcode arrives.
+- **Diagnosis** (measured 2026-10-28, from the state at 9,000 with the press script, the EE and both VUs interpreted, no
+  idle skipping; the device registers read by `System::peek` at each field's end, and a temporary trace of VIF1's
+  FBRST writes, i-bit completions and VIS stalls, reverted). From field 9,175 to 9,198 channel 1 holds D1_CHCR
+  30000145h (STR, chain mode, TTE), MADR 00712250h, QWC 7Fh and TADR 004A51B0h unchanged. VIF1_STAT reads 10000482h:
+  FQC 16 (a full FIFO), VIS, DBF and VPS 2 (a VIFcode held), with INT clear and VIF1_CODE 0. I_STAT's VIF1 bit is clear
+  with I_MASK enabling it, and GIF_STAT is 0 with channel 2 idle, so nothing waits on a path. The trace shows why. The
+  stream's last VIFcode before the stall is a NOP with the i bit, the last word in the FIFO, with none behind it. Its
+  interrupt is taken, and 314 cycles later the game's VIF1 handler writes FBRST.STC, with INT set and no following
+  code fetched. Sapphire's STC cleared STAT's flags but not its own pending stall (`Vif::stall_next`). The next packet's
+  first VIFcode arrived 707 cycles later and was held with VIS, and no handler writes STC again, since INT stays clear
+  and no interrupt follows. The EE then reads D1_CHCR.STR until its wait gives up, after about 2^24 reads (23 fields of
+  about 702,875). Then channel 1 is started again with another chain. Each of the 13,577 earlier i-bit interrupts in
+  those 175 fields had its following code already in the FIFO, where STC ends a stall that has already begun.
+- **Test program:** `d1103-stc` (`tests/d1103/mod.rs`, written for the referees by `examples/d1103.rs`). VIF1 packets
+  are sent by channel 1 in normal mode, and STAT's INT and VIS and MASK are read after each. Case 1 is D-189's stall
+  (the code after the i bit in the same qword, then STC). Case 2 puts the i bit on a packet's last word, writes STC
+  while INT is set, then sends a packet with an STMASK. Case 3 is the same without STC, the STMASK held until it.
+  Bare, Sapphire before the change differed on 8 of 48 words, every one in case 2 or after it: STAT 400h (VIS) and
+  MASK unchanged after the STMASK. On the player's BIOS by the fast boot, the same 8.
+- **Referee:** PCSX2 2.8.2, run on 2026-10-28 by `ps2referee.py ram pcsx2` with the program fast-booted (the desktop's
+  device, the tester's approval of the same day; on Vulkan's software ICD the referee never drew, and D-780's
+  program failed there too). **Case 2's STMASK runs after STC**: STAT 0 and MASK 33333333h, as after the change. Two
+  readings differ from Sapphire's, and neither bears on the stall. With a VIFcode stalled, PCSX2 holds the DMA
+  (D1_CHCR.STR still set, cases 1 and 3), where the console's `intstall` text shows the DMA ending (D-189, D-363).
+  With INT set and no VIFcode behind it, PCSX2 already reads VIS (C00h), where Sapphire reads INT alone (800h) until
+  the following code arrives (D-189's reading). The program leaves those two words ungraded.
+- **Conclusion:** STC written while INT is set cancels the i bit's stall whether or not the following VIFcode has
+  arrived. `Vif::fbrst` clears the pending stall with STAT's flags. **Measured** on one lineage (PCSX2), and argued
+  from the documents and the game. STC clears INT, the bit that records the i bit, and no document has a stall
+  outlive it. The game is a console program's witness: its handler acknowledges each VIF1 interrupt with STC, and its
+  wait on the channel times out after about 2^24 reads, so were the stall kept on the console its opening would halt
+  for 23 fields every few seconds. **Measured on Jak** (from the state at 9,000 to 10,800 with the player's levers,
+  2026-10-28): **no plateau field** remains, against 332 in R0's census over the same frames. No field lacks VU pairs,
+  none ends with D1_CHCR.STR set, and none executes 4,920,320 or 4,919,296. The EE's instructions a field, executed
+  and passed, have a p50 of 5.98 M and a p90 of 6.21 M (5.91 M and 6.14 M before); executed alone, p50 2.53 M and
+  p90 3.95 M (2.83 M and 4.92 M). **The pictures change.** Before, the picture repeated the previous field's in 90
+  of 300 fields from 9,001, all 22 of 9,177 to 9,198 among them, frozen while the game waited. After, it differs
+  from field 9,176 on, and every one of the 1,800 fields differs from the one before. The game draws through what
+  were the waits, so later frames are not comparable with digests recorded before the change. **The bench's gate**
+  (`Sapphire_Speed.md` §57.8; the three windows with `--defaults`, 2026-10-28): `jak-dock` and `jak-island` are equal
+  in picture, sound and state; `jak-arena`'s sound is equal (`BCA8F00F4743A955`), and its picture and state move from
+  `B77DC314C6AE837C` and `4ED52755B09F207E` (measured again that day on the build before the change) to
+  `C585D6C29E3A29E2` and `896F6F78455F92EA`, which are the gate's from this change on.
+- **Depends on it:** `vif::Vif::fbrst`.
+- **Pinned by:** `stc_before_the_next_vifcode_cancels_the_i_bit_s_stall` (`tests/vif.rs`).
+- **Implemented in:** D-1103's commit.

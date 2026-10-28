@@ -7376,7 +7376,7 @@ its Mesen columns reproduced, its C# columns frozen.
   field, but not to the instruction. MoonRT's and MercuryRT's step traces have no counterpart here yet.
 - **`EmuSen_Games_Tested.md`'s SNES list** describes C# Venus and is marked historical; no game's rating has been taken
   again on VenusRT.
-- **G6's battery run on the handheld**, owed since §65, is still owed.
+- **G6's battery run on the handheld**, owed since §65, was dropped on 2026-10-28: runs on battery are no longer made, and the handheld is measured on the charger.
 - **The pre-stable interface.** `VenusMachine` and `VenusNative` stay for the runner and the native host's tests until
   that interface retires (`EmuSen_CoreAPI.md` §13.5).
   *Retired 2026-10-18 (`EmuSen_Backend.md` §19.9): the two classes are deleted, the runner and its tests drive the bare

@@ -155,8 +155,8 @@ These are being built now and are not finished:
   the core interface's raw picture output.
 - **VenusRT** is the SNES's only engine since Venus (C#) was retired on 2026-10-16, graded by its own goldens and the
   SNES test-ROM corpus. (This line said until then that Venus (C#) was kept until VenusRT had had four weeks as the
-  default with no open regression; that gate was proposed by `VenusRT_Plan.md` and never decided.) A battery run on
-  the handheld is still owed.
+  default with no open regression; that gate was proposed by `VenusRT_Plan.md` and never decided.) The battery run on
+  the handheld was dropped on 2026-10-28.
 - **Diamond** does not read `.pbp` images yet and has no rumble.
 - **The picture on the Vulkan device** is used on Linux; Windows and macOS still draw it the older way, with a
   readback.

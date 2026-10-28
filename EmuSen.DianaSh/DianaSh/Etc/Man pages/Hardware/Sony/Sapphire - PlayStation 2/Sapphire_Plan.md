@@ -836,13 +836,13 @@ effect is measured against the exact output.
 
 - **The desktop**: every bench game at full speed with the exact levers on, leaving a fifth of the frame: a mean of
   13.4 ms of wall time a frame for the emulation's threads together, and no frame over 16.7 ms at the 95th percentile.
-- **The handheld**: full speed on battery for the bench games the desktop runs within 9.5 ms (13.4 / 1.4); the others
+- **The handheld**: full speed on the charger (decided 2026-10-28: runs on battery are dropped, and the handheld is measured on the charger) for the bench games the desktop runs within 9.5 ms (13.4 / 1.4); the others
   measured and named. Some VU1-bound titles are expected to miss at first (P12).
 
 **Targets, decided 2026-10-24 by the tester** (Q11 changed):
 
 - **The handheld is the full-speed target**: every target game and every bench game at full speed on the Legion Go S,
-  on battery, in the default build: a mean of 13.4 ms of wall time a frame for the emulation's threads together,
+  on the charger (on battery until 2026-10-28, when runs on battery were dropped), in the default build: a mean of 13.4 ms of wall time a frame for the emulation's threads together,
   leaving a fifth of the NTSC frame, and no frame over 16.7 ms at the 95th percentile (the desktop's former target,
   moved). The exact levers come first and the compromises of §5.13 after them; a game that still misses is named with
   its measured shortfall and the compromise that would close it, for the tester to accept or refuse.
@@ -855,7 +855,7 @@ effect is measured against the exact output.
 - **How measured**: Diamond's bench method (`Diamond_Speed.md` §2): `examples/bench.rs` timing each frame's `advance`,
   digests outside the timed span, builds interleaved on pinned cores, the aligned link as the instrument, fastest and
   median of rounds; threaded units measured as wall time with every thread's share sampled by `ipsample.py`; the
-  handheld under `systemd-run --user` with no frontend running, on charger and on battery.
+  handheld under `systemd-run --user` with no frontend running, on the charger (runs on battery dropped 2026-10-28).
 
 **The speed settings that are not exact**, offered only after all of the above (`effect: accuracy`, each with its
 cost): the EE's timing reduced to a fixed cost an instruction; the VUs' floats on the host's arithmetic where it is not

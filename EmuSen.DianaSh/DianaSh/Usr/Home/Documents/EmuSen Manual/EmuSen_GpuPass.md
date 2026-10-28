@@ -724,7 +724,7 @@ if taken; stage 8 one. About 8 to 12 steps in all [A].
 *Decided 2026-10-20 by the tester: all six as recommended.* The tester takes stage 1's three runs on the television,
 and stage 2 proceeds beside them; the frontends move to Avalonia's Vulkan mode only if stage 4 meets Q2's threshold;
 L5 is not built in this pass; L4 is the MarsRT pass's; D1 is fixed in stage 2, its failing test first; stage 8
-measures once on battery. The pass starts when B10 closes.
+measures once on battery (dropped 2026-10-28: runs on battery are no longer made). The pass starts when B10 closes.
 
 ---
 

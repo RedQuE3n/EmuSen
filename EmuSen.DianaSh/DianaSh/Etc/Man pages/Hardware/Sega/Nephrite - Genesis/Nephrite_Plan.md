@@ -695,7 +695,7 @@ and reports what breaks. The gates still measure the Genesis, and those not yet 
   the system's cheats decode.
 - **G5, the goldens.** Commercial games per system (the tester's library, §9 Q13), each at three anchors, equal to the
   references in picture and RAM, or dispute-logged.
-- **G6, speed.** §5.5's budget at 33% quota on the bench set, and full speed on the Legion Go S on battery.
+- **G6, speed.** §5.5's budget at 33% quota on the bench set, and full speed on the Legion Go S on the charger (decided 2026-10-28: runs on battery are dropped, and the handheld is measured on the charger).
 - **G7, the debugger.** Breakpoints, stepping, watches, coverage and the call stack on each processor, each a test.
 - **G8, the clean room.** `clonecheck.py` (`VenusRT_Native.md` §4) over Nephrite's and Beryl's sources against
   Genesis Plus GX, PicoDrive, BlastEm and MAME's Sega drivers finds nothing above its threshold, the reference side

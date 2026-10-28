@@ -1552,8 +1552,8 @@ case now also draws spots twice the size.
 
 The tiers exist, so this is the ask of §9's ninth decision. **Nothing has been run on either machine.**
 *(2026-10-24: the handheld's figures, on the charger and on the device path, are `EmuSen_Serenity.md` §13.4:
-Performance 0.89, Balanced 2.01 and Accurate 7.86 ms of GPU time at 1280 × 800. The laptop and the battery run are
-still owed.)*
+Performance 0.89, Balanced 2.01 and Accurate 7.86 ms of GPU time at 1280 × 800. The laptop run is
+still owed; the battery run was dropped on 2026-10-28.)*
 
 **A build to hand over**: `~/.cache/emusen/probe/crt/handover/crt-bench.tgz` (51 MB; the bench of §8.1 with
 this branch's Serenity, self-contained for linux-x64, its native libraries asking for glibc 2.27 at most). It

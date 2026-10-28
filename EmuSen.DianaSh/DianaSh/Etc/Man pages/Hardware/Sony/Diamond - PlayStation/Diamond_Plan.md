@@ -771,7 +771,7 @@ decision, as the Genesis was offered (`Nephrite_Plan.md` §7). The core carries 
 - **G4, the frontend.** The kit's C1–C15 on the tester's discs; cards round-trip; the fit audit; the cheats decode.
 - **G5, the goldens.** The bench discs (§11 Q16), each at three anchors, equal to the references in picture and RAM, or
   dispute-logged.
-- **G6, speed.** §5.12's budget at 33% quota on the bench set, and full speed on the Legion Go S on battery.
+- **G6, speed.** §5.12's budget at 33% quota on the bench set, and full speed on the Legion Go S on the charger (decided 2026-10-28: runs on battery are dropped, and the handheld is measured on the charger).
 - **G7, the debugger.** Breakpoints, stepping, watches, coverage and the call stack, each a test.
 - **G8, the clean room.** `clonecheck.py` over Diamond's and the shared crates' sources against the reference
   emulators finds nothing above its threshold, the reference side never printed; the disputes log read end to end by

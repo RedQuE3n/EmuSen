@@ -2803,7 +2803,7 @@ From the gates and the tester's requests, in the order they would be taken:
    four pads are named; the J-Cart since §48*). The tester has asked for players two to four across the platform. Not
    a gate; it ranks with the first.
 3. **G5, the goldens**: a third anchor, and the differing games examined one by one.
-4. **G6**: the bench at a 33% quota, and a battery run on the handheld.
+4. **G6**: the bench at a 33% quota, and a run on the handheld on the charger (the battery run was dropped on 2026-10-28).
 5. **G9**: the TMSS boot program run from the player's image.
 6. **G8**: the clone check, if it is ever wanted, and the constants not yet read by a second reader.
 7. **D-9**, for a 68000 test program (G1); **D-10**, **D-7**, **D-11**'s display-off residual and **D-9**'s VRAM lead

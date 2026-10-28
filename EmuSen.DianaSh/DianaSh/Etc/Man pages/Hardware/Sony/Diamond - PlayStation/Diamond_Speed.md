@@ -291,7 +291,7 @@ the build before the levers took 4.20 to 5.69 ms on battery. The worst frame of 
 before this stage and is at about a fifth of a frame after it**: the slowness the tester reported playing stage 11's
 build on the handheld does not come from the emulation thread's cost, which this bench measures, and is to be looked
 for in what surrounds it there (the frontend's loop and presentation, the disc's opening, the games that do not
-start). A run on battery of the current tree is owed; it needs the handheld unplugged.
+start). A run on battery of the current tree was owed until 2026-10-28, when runs on battery were dropped.
 
 ### 6.4 G6
 

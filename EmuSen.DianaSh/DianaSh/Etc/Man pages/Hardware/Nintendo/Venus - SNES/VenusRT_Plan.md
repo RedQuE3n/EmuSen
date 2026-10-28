@@ -593,7 +593,7 @@ Two gates: one to make VenusRT Mistress's SNES default, and one to remove C# Ven
   message of §4.5; the fit audit passes.
 - **G5, the goldens.** Twelve commercial games (at least one per coprocessor, plus the tricky-to-emulate list's first
   entries), each at three anchors, equal to Mesen in picture, or dispute-logged.
-- **G6, speed.** §5.5's budget at 33% quota on the bench set, and full speed on the Legion Go S on battery.
+- **G6, speed.** §5.5's budget at 33% quota on the bench set, and full speed on the Legion Go S on the charger (decided 2026-10-28: runs on battery are dropped, and the handheld is measured on the charger).
 - **G7, the debugger.** Breakpoints, stepping, watches, coverage, the call stack and coprocessor breakpoints work on
   VenusRT, each claim a test.
 - **G8, the clean room.** A clone-detection pass of VenusRT's sources against Mesen's SNES sources (the audit owed for

@@ -777,7 +777,7 @@ as the Genesis, the Sega CD and the PlayStation were offered [R `Nephrite_Plan.m
   Shooting Gallery (the Light Phaser); Missile Defense 3-D and Space Harrier 3-D (the glasses); Alex Kidd BMX Trial
   (the Paddle); Great Ice Hockey (the Sports Pad); Flicky and Girl's Garden (the SG-1000); for the Game Gear, Sonic
   Chaos and Shinobi.
-- **G6, speed.** §5.9's budget at 33% quota on the bench set, and full speed on the Legion Go S on battery.
+- **G6, speed.** §5.9's budget at 33% quota on the bench set, and full speed on the Legion Go S on the charger (decided 2026-10-28: runs on battery are dropped, and the handheld is measured on the charger).
 - **G7, the debugger.** Breakpoints, stepping, watches, coverage and the call stack, each a test.
 - **G8, the clean room.** `clonecheck.py` over Endou's and the new Beryl crates' sources against the references whose
   sources exist finds nothing above its threshold, the reference side never printed; the disputes log read end to end

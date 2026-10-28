@@ -4804,7 +4804,11 @@ it.*
   p90 3.95 M (2.83 M and 4.92 M). **The pictures change.** Before, the picture repeated the previous field's in 90
   of 300 fields from 9,001, all 22 of 9,177 to 9,198 among them, frozen while the game waited. After, it differs
   from field 9,176 on, and every one of the 1,800 fields differs from the one before. The game draws through what
-  were the waits, so later frames are not comparable with digests recorded before the change.
+  were the waits, so later frames are not comparable with digests recorded before the change. **The bench's gate**
+  (`Sapphire_Speed.md` §57.8; the three windows with `--defaults`, 2026-10-28): `jak-dock` and `jak-island` are equal
+  in picture, sound and state; `jak-arena`'s sound is equal (`BCA8F00F4743A955`), and its picture and state move from
+  `B77DC314C6AE837C` and `4ED52755B09F207E` (measured again that day on the build before the change) to
+  `C585D6C29E3A29E2` and `896F6F78455F92EA`, which are the gate's from this change on.
 - **Depends on it:** `vif::Vif::fbrst`.
 - **Pinned by:** `stc_before_the_next_vifcode_cancels_the_i_bit_s_stall` (`tests/vif.rs`).
 - **Implemented in:** D-1103's commit.

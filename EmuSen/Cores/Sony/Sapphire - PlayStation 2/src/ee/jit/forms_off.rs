@@ -2,12 +2,15 @@
 
 use cranelift_frontend::FunctionBuilder;
 
-pub const CACHE: u8 = 1;
-pub const CHANGED: u8 = 2;
-pub const RELOAD: u8 = 4;
-pub const PRESERVE: u8 = 32;
-pub const PINNED: u8 = 64;
-pub const COUNT: u8 = 8;
+pub const CACHE: u16 = 1;
+pub const CHANGED: u16 = 2;
+pub const RELOAD: u16 = 4;
+pub const PRESERVE: u16 = 32;
+pub const PINNED: u16 = 64;
+pub const COUNT: u16 = 8;
+pub const PAGE: u16 = 128;
+pub const LINE: u16 = 256;
+pub const STUB: u16 = 512;
 
 pub struct Watched;
 
@@ -29,7 +32,7 @@ pub fn kinds() -> i64 {
 }
 
 #[inline(always)]
-pub fn on(_: u8) -> bool {
+pub fn on(_: u16) -> bool {
     false
 }
 

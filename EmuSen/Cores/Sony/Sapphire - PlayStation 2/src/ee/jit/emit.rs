@@ -57,6 +57,8 @@ const X_LOG: i32 = offset_of!(Context, log) as i32;
 const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_UNCACHED_LOADS: i32 = offset_of!(Context, uncached_loads) as i32;
 const X_ANSWER: i32 = offset_of!(Context, answer) as i32;
+#[cfg(feature = "forms")]
+const X_COMMIT: i32 = offset_of!(Context, commit) as i32;
 /// The most steps since the last load or store for which a load or store leaving its block shares that access's state
 /// and has the interpreter run them again; past it, the access's exit writes everything back itself
 /// (Sapphire_Recompiler.md §48.15).
@@ -257,6 +259,22 @@ struct Memory {
     lines: Value,
 }
 
+/// An earlier load or store `forms::PAGE` reuses: base value, displacement and mask, address, page (Sapphire_Redesign.md, "The exact design's work a block").
+#[derive(Clone, Copy)]
+struct Reach {
+    base: Value,
+    key: (i64, i64),
+    a: Value,
+    host: Value,
+    meta: Value,
+    /// `forms::LINE`: the address where it reached a cached line or the scratchpad (bit 32 set otherwise), its pointer and tag.
+    line: Option<(Value, Value, Value)>,
+    store: bool,
+}
+
+/// The most earlier accesses `forms::PAGE` keeps, by base register.
+const REACHES: usize = 4;
+
 struct Emitter<'a, 'b> {
     b: &'a mut FunctionBuilder<'b>,
     ee: Value,
@@ -283,6 +301,13 @@ struct Emitter<'a, 'b> {
     issued0: Value,
     /// The model, Random and the group as the entry loaded them, which `forms::CHANGED` leaves unstored.
     entry: (Model, Value, Tv),
+    /// `forms::PAGE`: the block's earlier accesses on the main line.
+    reached: Vec<Reach>,
+    /// Emitting the full path behind a reuse's guard: its blocks are laid cold.
+    fallback: bool,
+    /// `forms::STUB`'s signature, once imported.
+    #[cfg_attr(not(feature = "forms"), allow(dead_code))]
+    commit_sig: Option<SigRef>,
 }
 
 /// Whether `t` is the very value the entry loaded, `t0`.
@@ -731,6 +756,11 @@ impl Emitter<'_, '_> {
 
     /// Writes back everything the block holds, and the core's place `at`.
     fn write_back(&mut self, at: At) {
+        self.write_back_with(at, false);
+    }
+
+    /// The write-back, `stubbed` leaving to `forms::STUB`'s shared exit what it commits (`Ee::commit_exit`).
+    fn write_back_with(&mut self, at: At, stubbed: bool) {
         let h = self.held;
         for r in 1..32 {
             if h.dirty >> r & 1 == 1 {
@@ -757,9 +787,10 @@ impl Emitter<'_, '_> {
         if h.steps > 0 {
             let m = h.model;
             let (m0, random0, group0) = self.entry;
-            let last = self.last_of(&h);
+            let relative = stubbed && h.last_k.is_some();
+            let last = if relative { m0.last } else { self.last_of(&h) };
             for (field, t, t0) in [(layout::LAST, last, m0.last), (layout::FLOOR, m.floor, m0.floor), (layout::LAST_WRITES, m.writes_lo, m0.writes_lo), (layout::LAST_WRITES + 8, m.writes_hi, m0.writes_hi)] {
-                if !same(t, t0) {
+                if !same(t, t0) && !(relative && field == layout::LAST) {
                     let v = self.v(t);
                     self.store(v, t_at(field));
                 }
@@ -785,6 +816,16 @@ impl Emitter<'_, '_> {
                     let v = self.v(t);
                     self.store(v, t_at(if n == 0 { layout::MAC0_FREE } else { layout::MAC1_FREE }));
                 }
+            }
+            if stubbed {
+                if !same(D(h.random), D(random0)) {
+                    let r = self.b.ins().ireduce(I32, h.random);
+                    self.store(r, cop0_at(cop0::RANDOM));
+                }
+                if !same(h.group, group0) {
+                    self.store_narrow(I8, h.group, GROUP);
+                }
+                return;
             }
             let (issued0, count0, compare, seen0) = if self.reload() {
                 let i = self.load(I64, t_at(layout::INSTRUCTIONS));
@@ -930,14 +971,19 @@ impl Emitter<'_, '_> {
         // keeps it writes back the state after it (Sapphire_Recompiler.md §48.5).
         let snap = self.held.snap;
         let base = snap.map_or(0, |i| self.snaps[i].held.steps);
-        if self.memory.is_some() {
-            let ctx = self.ctx();
-            for (field, v) in [(X_GUARD, base.saturating_sub(1)), (X_BASE, base), (X_LOGGED, self.held.logged)] {
-                let k = self.b.ins().iconst(I32, i64::from(v));
-                self.b.ins().store(trusted(), k, ctx, field);
+        let stubbed = super::forms::on(super::forms::STUB);
+        let kept = if stubbed {
+            self.call_commit(at, base)
+        } else {
+            if self.memory.is_some() {
+                let ctx = self.ctx();
+                for (field, v) in [(X_GUARD, base.saturating_sub(1)), (X_BASE, base), (X_LOGGED, self.held.logged)] {
+                    let k = self.b.ins().iconst(I32, i64::from(v));
+                    self.b.ins().store(trusted(), k, ctx, field);
+                }
             }
-        }
-        let kept = self.call_helper(X_REPLAY, steps);
+            self.call_helper(X_REPLAY, steps)
+        };
         let all = self.b.ins().icmp_imm_s(IntCC::Equal, kept, i64::from(steps));
         let commit = self.b.create_block();
         let back = self.b.create_block();
@@ -963,9 +1009,79 @@ impl Emitter<'_, '_> {
             _ => self.ret(ROLLBACK),
         }
         self.b.switch_to_block(commit);
-        self.write_back(at);
-        self.steps_out(steps);
+        self.write_back_with(at, stubbed);
+        if !stubbed {
+            self.steps_out(steps);
+        }
         self.ret(DONE);
+    }
+
+    /// `forms::STUB`'s shared exit called with the exit's word, its place (the address and the next in the high half) and its end cycle.
+    #[cfg(feature = "forms")]
+    fn call_commit(&mut self, at: At, base: u32) -> Value {
+        let h = self.held;
+        let (place, delay) = match at {
+            At::Line(pc) => (K(i64::from(pc) | i64::from(pc.wrapping_add(4)) << 32), false),
+            At::Jumped(K(t)) => (K(t | (t + 4 & 0xFFFF_FFFF) << 32), false),
+            At::Jumped(t) => {
+                let n = self.add(t, 4);
+                let n = self.v(n);
+                let n = self.b.ins().ishl_imm_s(n, 32);
+                let t = self.v(t);
+                (D(self.b.ins().bor(t, n)), false)
+            }
+            At::Slot { pc, next: K(n) } => (K(i64::from(pc) | n << 32), true),
+            At::Slot { pc, next } => {
+                let n = self.v(next);
+                let n = self.b.ins().ishl_imm_s(n, 32);
+                (D(self.b.ins().bor_imm_s(n, i64::from(pc))), true)
+            }
+        };
+        let k = h.last_k.map(|k| u32::try_from(k).expect("a block's cycles"));
+        let word = super::commit_word(h.steps, base, h.logged, h.sync, delay, k);
+        let end = if k.is_some() {
+            K(0)
+        } else {
+            let last = self.last_of(&h);
+            self.add(last, 1)
+        };
+        let (word, place, end) = (self.k(word as i64), self.v(place), self.v(end));
+        let ctx = self.ctx();
+        let f = self.b.ins().load(I64, trusted(), ctx, X_COMMIT);
+        match self.preserve {
+            Some(_) => {
+                let sig = self.commit_sig(cranelift_codegen::isa::CallConv::PreserveAll, false);
+                self.b.ins().call_indirect(sig, f, &[ctx, word, place, end]);
+                let ctx = self.ctx();
+                self.b.ins().load(I32, trusted(), ctx, X_ANSWER)
+            }
+            None => {
+                let sig = self.commit_sig(cranelift_codegen::isa::CallConv::SystemV, true);
+                let call = self.b.ins().call_indirect(sig, f, &[ctx, word, place, end]);
+                self.b.inst_results(call)[0]
+            }
+        }
+    }
+
+    #[cfg(not(feature = "forms"))]
+    fn call_commit(&mut self, _: At, _: u32) -> Value {
+        unreachable!("the shared exit is a form")
+    }
+
+    /// The shared exit's signature, imported once a function.
+    #[cfg(feature = "forms")]
+    fn commit_sig(&mut self, conv: cranelift_codegen::isa::CallConv, answers: bool) -> SigRef {
+        if let Some(s) = self.commit_sig {
+            return s;
+        }
+        let mut sig = ir::Signature::new(conv);
+        sig.params.extend([AbiParam::new(I64), AbiParam::new(I64), AbiParam::new(I64), AbiParam::new(I64)]);
+        if answers {
+            sig.returns.push(AbiParam::new(I32));
+        }
+        let s = self.b.import_signature(sig);
+        self.commit_sig = Some(s);
+        s
     }
 
     /// The block writing back the state after the load or store `i`, made when an exit first needs it and filled at the
@@ -980,9 +1096,18 @@ impl Emitter<'_, '_> {
         b
     }
 
+    /// A new block, laid cold behind a reuse's guard (`fallback`).
+    fn block(&mut self) -> ir::Block {
+        let b = self.b.create_block();
+        if self.fallback {
+            self.b.set_cold_block(b);
+        }
+        b
+    }
+
     /// Goes on in a new block where `ok` holds, to `out` otherwise.
     fn go_if(&mut self, ok: Value, out: ir::Block, why: i64) {
-        let on = self.b.create_block();
+        let on = self.block();
         let w = self.k(why);
         self.b.ins().brif(ok, on, &[], out, &[w.into()]);
         self.b.seal_block(on);
@@ -1397,7 +1522,7 @@ impl Emitter<'_, '_> {
         let found = self.b.ins().icmp(IntCC::Equal, tag, want);
         let miss = self.b.create_block();
         self.b.set_cold_block(miss);
-        let known = self.b.create_block();
+        let known = self.block();
         self.b.ins().brif(found, known, &[], miss, &[]);
         self.b.seal_block(miss);
         self.b.switch_to_block(miss);
@@ -1409,6 +1534,40 @@ impl Emitter<'_, '_> {
         self.b.switch_to_block(known);
         let host = self.b.ins().load(I64, trusted(), entry, P_HOST);
         let meta = self.b.ins().load(I64, trusted(), entry, P_META);
+        (host, meta)
+    }
+
+    /// `forms::PAGE`: an earlier access's page on the same base value, proven by its key or one compare; `page` otherwise, behind the compare laid cold.
+    fn page_reusing(&mut self, base: Value, key: (i64, i64), a: Value, slow: ir::Block) -> (Value, Value) {
+        let found = if super::forms::on(super::forms::PAGE) { self.reached.iter().rev().find(|r| r.base == base).copied() } else { None };
+        let Some(r) = found else { return self.page(a, slow) };
+        if super::forms::on(super::forms::COUNT) {
+            let k = self.k(4);
+            self.count_kind(k);
+        }
+        if r.key == key {
+            return (r.host, r.meta);
+        }
+        let x = self.b.ins().bxor(a, r.a);
+        let same = self.b.ins().icmp_imm_s(IntCC::UnsignedLessThan, x, 0x1000);
+        let full = self.b.create_block();
+        self.b.set_cold_block(full);
+        let join = self.block();
+        let host = self.b.append_block_param(join, I64);
+        let meta = self.b.append_block_param(join, I64);
+        self.b.ins().brif(same, join, &[r.host.into(), r.meta.into()], full, &[]);
+        self.b.seal_block(full);
+        self.b.switch_to_block(full);
+        if super::forms::on(super::forms::COUNT) {
+            let k = self.k(5);
+            self.count_kind(k);
+        }
+        let was = std::mem::replace(&mut self.fallback, true);
+        let (h, m) = self.page(a, slow);
+        self.fallback = was;
+        self.b.ins().jump(join, &[h.into(), m.into()]);
+        self.b.seal_block(join);
+        self.b.switch_to_block(join);
         (host, meta)
     }
 
@@ -1441,8 +1600,14 @@ impl Emitter<'_, '_> {
             super::forms::tag(self.b, p);
         }
         let base = self.reg(rs(w));
+        let reg_base = base;
         let ea = self.b.ins().iadd_imm_s(base, simm(w));
         let va = self.b.ins().band_imm_s(ea, 0xFFFF_FFFF);
+        let align = match acc {
+            Access::Lq | Access::Sq => 0xFFFF_FFF0,
+            Access::LoadUnit { n, .. } | Access::StoreUnit { n, .. } => 0xFFFF_FFFF & !i64::from(n - 1),
+            _ => 0xFFFF_FFFF,
+        };
         let a = match acc {
             Access::Load { bytes, .. } | Access::Store { bytes } if bytes > 1 => {
                 let low = self.b.ins().band_imm_s(va, i64::from(bytes - 1));
@@ -1455,10 +1620,46 @@ impl Emitter<'_, '_> {
             _ => va,
         };
         let store = matches!(acc, Access::Store { .. } | Access::Sq | Access::StoreUnit { .. });
-        super::forms::tag(self.b, 6);
-        let (host, meta) = self.page(a, slow);
-        super::forms::tag(self.b, 7);
         let inline = super::forms::on(super::forms::CACHE);
+        let lines = inline && super::forms::on(super::forms::LINE);
+        let join = self.b.create_block();
+        let ptr = self.b.append_block_param(join, I64);
+        let tagp = self.b.append_block_param(join, I64);
+        let unc = self.b.append_block_param(join, I64);
+        let key = lines.then(|| self.b.append_block_param(join, I64));
+        super::forms::tag(self.b, 7);
+        let same_line = if lines { self.reached.iter().rev().find(|r| r.base == reg_base).copied().filter(|r| r.line.is_some() && (r.store || !store) && (r.key.0 - simm(w)).abs() < 64) } else { None };
+        let paged = same_line.map(|_| (self.b.append_block_param(join, I64), self.b.append_block_param(join, I64)));
+        if let Some(r) = same_line {
+            // The line an earlier access on the same base reached, when one compare shows this address in it; the full path laid cold otherwise.
+            let (rkey, rptr, rtag) = r.line.expect("a line reached");
+            if super::forms::on(super::forms::COUNT) {
+                let k = self.k(6);
+                self.count_kind(k);
+            }
+            let x = self.b.ins().bxor(a, rkey);
+            let near = self.b.ins().icmp_imm_s(IntCC::UnsignedLessThan, x, 64);
+            let reuse = self.b.create_block();
+            let full = self.b.create_block();
+            self.b.set_cold_block(full);
+            self.b.ins().brif(near, reuse, &[], full, &[]);
+            self.b.seal_block(reuse);
+            self.b.seal_block(full);
+            self.b.switch_to_block(reuse);
+            let d = self.b.ins().isub(a, r.a);
+            let p = self.b.ins().iadd(rptr, d);
+            let zero = self.k(0);
+            self.b.ins().jump(join, &[p.into(), rtag.into(), zero.into(), a.into(), r.host.into(), r.meta.into()]);
+            self.b.switch_to_block(full);
+            if super::forms::on(super::forms::COUNT) {
+                let k = self.k(7);
+                self.count_kind(k);
+            }
+            self.fallback = true;
+        }
+        super::forms::tag(self.b, 6);
+        let (host, meta) = self.page_reusing(reg_base, (simm(w), align), a, slow);
+        super::forms::tag(self.b, 7);
         let class = self.b.ins().band_imm_s(meta, 3);
         let cached = if inline {
             let (mask, want) = if store { (3 | kind::WRITABLE, kind::CACHED | kind::WRITABLE) } else { (3, kind::CACHED) };
@@ -1467,22 +1668,28 @@ impl Emitter<'_, '_> {
         } else {
             self.b.ins().icmp_imm_s(IntCC::Equal, class, kind::CACHED as i64)
         };
-        let line = self.b.create_block();
-        let flat = self.b.create_block();
-        let join = self.b.create_block();
-        let ptr = self.b.append_block_param(join, I64);
-        let tagp = self.b.append_block_param(join, I64);
-        let unc = self.b.append_block_param(join, I64);
+        let line = self.block();
+        let flat = self.block();
+        // The join's key: the address where the access reached a line or the scratchpad, bit 32 set past them.
+        let keyed = |e: &mut Self, args: &mut Vec<ir::BlockArg>, far: bool| {
+            if lines {
+                let k = if far { e.b.ins().bor_imm_s(a, 1 << 32) } else { a };
+                args.push(k.into());
+            }
+            if paged.is_some() {
+                args.extend([ir::BlockArg::from(host), ir::BlockArg::from(meta)]);
+            }
+        };
         if inline {
             // The scratchpad inline beside a hit; everything else out of line in `flat`.
-            let other = self.b.create_block();
+            let other = self.block();
             self.b.ins().brif(cached, line, &[], other, &[]);
             self.b.seal_block(other);
             self.b.switch_to_block(other);
             let (mask, want) = if store { (3 | kind::WRITABLE, kind::SCRATCHPAD | kind::WRITABLE) } else { (3, kind::SCRATCHPAD) };
             let c = self.b.ins().band_imm_s(meta, mask as i64);
             let spr = self.b.ins().icmp_imm_s(IntCC::Equal, c, want as i64);
-            let near = self.b.create_block();
+            let near = self.block();
             self.b.ins().brif(spr, near, &[], flat, &[]);
             self.b.seal_block(near);
             self.b.switch_to_block(near);
@@ -1495,7 +1702,9 @@ impl Emitter<'_, '_> {
             let ctx = self.ctx();
             let dummy = self.b.ins().iadd_imm_s(ctx, i64::from(X_DUMMY));
             let zero = self.k(0);
-            self.b.ins().jump(join, &[p.into(), dummy.into(), zero.into()]);
+            let mut args = vec![p.into(), dummy.into(), zero.into()];
+            keyed(self, &mut args, false);
+            self.b.ins().jump(join, &args);
             self.b.set_cold_block(flat);
         } else {
             self.b.ins().brif(cached, line, &[], flat, &[]);
@@ -1508,7 +1717,9 @@ impl Emitter<'_, '_> {
         if inline {
             let (l, t) = self.line_hit(a, meta, slow);
             let zero = self.k(0);
-            self.b.ins().jump(join, &[l.into(), t.into(), zero.into()]);
+            let mut args = vec![l.into(), t.into(), zero.into()];
+            keyed(self, &mut args, false);
+            self.b.ins().jump(join, &args);
         } else {
             if store {
                 let wr = self.b.ins().band_imm_s(meta, kind::WRITABLE as i64);
@@ -1580,7 +1791,7 @@ impl Emitter<'_, '_> {
             let unc = self.k(LEFT_UNCACHED);
             self.b.ins().select(is_unc, unc, page)
         };
-        let on = self.b.create_block();
+        let on = self.block();
         if inline {
             self.b.set_cold_block(on);
         }
@@ -1608,9 +1819,21 @@ impl Emitter<'_, '_> {
                 self.b.ins().store(trusted(), n, ctx, at);
             }
         }
-        self.b.ins().jump(join, &[p.into(), dummy.into(), u.into()]);
+        let mut args = vec![p.into(), dummy.into(), u.into()];
+        keyed(self, &mut args, true);
+        self.b.ins().jump(join, &args);
+        self.fallback = false;
         self.b.seal_block(join);
         self.b.switch_to_block(join);
+        if super::forms::on(super::forms::PAGE) {
+            self.reached.retain(|r| r.base != reg_base);
+            if self.reached.len() == REACHES {
+                self.reached.remove(0);
+            }
+            let line = key.map(|k| (k, ptr, tagp));
+            let (host, meta) = paged.unwrap_or((host, meta));
+            self.reached.push(Reach { base: reg_base, key: (simm(w), align), a, host, meta, line, store });
+        }
 
         super::forms::tag(self.b, 8);
         let rt_ = rt(w);
@@ -2103,6 +2326,9 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         wired,
         issued0,
         entry: (model, random, group),
+        reached: Vec::new(),
+        fallback: false,
+        commit_sig: None,
     };
     let mut i = 0;
     loop {

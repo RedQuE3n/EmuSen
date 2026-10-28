@@ -116,6 +116,46 @@ pub struct Context {
     pub left: [u64; 5],
     /// A helper's answer when the code calls it through `forms::PRESERVE`'s trampolines, which return nothing.
     pub answer: u32,
+    /// `forms::STUB`'s shared exit: the replay, and with every step standing the exit's commit (`commit_word`).
+    #[cfg(feature = "forms")]
+    pub commit: Commit,
+}
+
+/// The shared exit `forms::STUB` calls: `(context, word, place, end) -> steps standing`.
+#[cfg(feature = "forms")]
+pub type Commit = extern "C" fn(*mut Context, u64, u64, u64) -> u32;
+
+/// The shared exit's word: the steps, the base and log count of the last load or store, the UCAB's flag, the delay slot, and `last` moved on by `k` when relative.
+#[cfg(feature = "forms")]
+pub const fn commit_word(steps: u32, base: u32, logged: u32, sync: bool, delay: bool, k: Option<u32>) -> u64 {
+    assert!(steps < 128 && base < 128 && logged < 256, "a block of at most 64 instructions");
+    let relative = match k {
+        Some(k) => 1 << 24 | (k as u64) << 32,
+        None => 0,
+    };
+    steps as u64 | (base as u64) << 7 | (logged as u64) << 14 | (sync as u64) << 22 | (delay as u64) << 23 | relative
+}
+
+#[cfg(feature = "forms")]
+impl Ee {
+    /// The shared exit's commit once every step stands: the cycles to `end` (or `last` moved on by the word's `k`), Count, the cycles seen, Cause's IP7, the instructions issued, the UCAB, the place.
+    pub(crate) fn commit_exit(&mut self, word: u64, place: u64, end: u64) {
+        use super::cop0::{CAUSE, COMPARE, COUNT, cause};
+        let steps = word & 0x7F;
+        let end = if word >> 24 & 1 != 0 { self.timing.advance_last(word >> 32) } else { end };
+        let (count0, compare, seen0) = (u64::from(self.cop0[COUNT]), u64::from(self.cop0[COMPARE]), self.cycles_seen);
+        let delta = end.wrapping_sub(seen0);
+        self.cop0[COUNT] = count0.wrapping_add(delta) as u32;
+        self.cycles_seen = end;
+        if compare.wrapping_sub(count0).wrapping_sub(1) & 0xFFFF_FFFF < delta {
+            self.cop0[CAUSE] |= cause::IP7;
+        }
+        self.timing.instructions += steps;
+        if word >> 22 & 1 != 0 {
+            self.ucab.valid = false;
+        }
+        (self.pc, self.next_pc, self.delay) = (place as u32, (place >> 32) as u32, word >> 23 & 1 != 0);
+    }
 }
 
 /// How a block is compiled.

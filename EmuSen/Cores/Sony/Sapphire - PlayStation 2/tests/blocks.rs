@@ -909,6 +909,39 @@ const REMAPPED: &str = "
     sw t6, 0x2c(gp)
 ";
 
+/// Loads and stores on one base register walked across a page's end and many lines' ends, with a second base one page on at the same displacements, in kseg0, kuseg and the scratchpad (Sapphire_Redesign.md, "The exact design's work a block").
+fn one_base_program() -> String {
+    let mut l = vec!["ori t9, zero, 3".to_string(), "pass:".into()];
+    for (n, &(_, base)) in REGIONS.iter().enumerate().filter(|(_, r)| matches!(r.0, "kseg0" | "kuseg" | "scratchpad")) {
+        l.push(format!("lui a2, 0x{:x}", base >> 16));
+        l.push(format!("ori a2, a2, 0x{:x}", 0x100 * n as u32));
+        l.push("daddiu a0, a2, 0xf90".into());
+        l.push("ori s1, zero, 28".into());
+        l.push(format!("walk{n}:"));
+        l.extend(
+            [
+                "daddiu a1, a0, 0x1000", "ld t0, 0(a2)", "sd t8, -8(a0)", "ld t1, 0(a0)", "ld t4, 0(a1)", "daddu t8, t8, t1", "sd t8, 8(a0)", "lw t2, 0x40(a0)",
+                "sw t4, 0x3c(a0)", "lq t5, 0x10(a0)", "ld t3, -0x40(a0)", "sq t5, 0x20(a0)", "lw t6, 0x44(a0)", "lbu t7, 0x6f(a0)", "daddu t8, t8, t3",
+                "sb t8, 0x70(a0)", "addu t8, t8, t2", "lwl t6, 0x13(a0)", "lwr t6, 0x10(a0)", "sw t6, 0x48(a1)", "lhu t7, 0x46(a0)", "daddu t8, t8, t7",
+                "sd t0, 0x18(a2)",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+        l.extend(["addiu s1, s1, -1".into(), format!("bgtz s1, walk{n}"), "daddiu a0, a0, 8".into()]);
+    }
+    l.extend(["addiu t9, t9, -1".into(), "bgtz t9, pass".into(), "nop".into(), "end: beq zero, zero, end".into(), "nop".into()]);
+    l.join("\n")
+}
+
+#[test]
+fn accesses_on_one_base_across_a_page_and_lines_leave_the_interpreters_machine() {
+    let words = assemble(&one_base_program(), ORIGIN);
+    let s = twin(&words, 9000, 200, &mut eager());
+    println!("one base across a page: {s:?}");
+    assert!(s.compiled_steps > 4000, "{s:?}");
+}
+
 #[test]
 fn a_tlb_write_or_a_mode_change_is_seen_by_the_next_access() {
     let words = assemble(&format!("lui gp, 0x0030\n{REMAPPED}"), ORIGIN);

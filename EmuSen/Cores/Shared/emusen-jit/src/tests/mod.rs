@@ -11,7 +11,7 @@ use cranelift_jit::JITModule;
 use cranelift_module::Module;
 
 use crate::verify::{Reference, Verifier};
-use crate::{FAILED, Jit, Lowering, Slot, exit_name};
+use crate::{FAILED, Jit, Lowering, Slot, exit_name, perf_map_path};
 
 /// The toy machine a block runs on.
 #[repr(C)]
@@ -471,4 +471,30 @@ fn the_verifiers_last_check_finds_memory_the_steps_do_not_compare() {
     v.check(&toy, "a step");
     let e = catch_unwind(AssertUnwindSafe(|| v.check_all(&toy))).expect_err("memory written outside the blocks went unseen");
     assert!(e.downcast_ref::<String>().unwrap().contains("in memory"));
+}
+
+/// Two compilers in one process share the perf map: the second keeps the first's lines rather than truncating them (D-1102).
+#[test]
+fn a_second_compiler_keeps_the_first_compilers_perf_map_lines() {
+    let path = perf_map_path();
+    let _ = std::fs::remove_file(&path);
+    let mut first = jit();
+    first.perf_map = true;
+    for i in 0..8u32 {
+        first.enqueue(program(i as u64 + 1, 4).into(), 0xA000 + 4 * i, Options::default()).wait().expect("compiled");
+    }
+    let mut second = jit();
+    second.perf_map = true;
+    for i in 0..8u32 {
+        second.enqueue(program(i as u64 + 9, 4).into(), 0xB000 + 4 * i, Options::default()).wait().expect("compiled");
+    }
+    let map = std::fs::read_to_string(&path).expect("the perf map");
+    let _ = std::fs::remove_file(&path);
+    let lines: Vec<&str> = map.lines().collect();
+    assert_eq!(lines.len(), 16, "{map}");
+    for i in 0..8u32 {
+        for start in [0xA000 + 4 * i, 0xB000 + 4 * i] {
+            assert!(lines.iter().any(|l| l.split(' ').nth(2).is_some_and(|n| n.starts_with(&format!("b{start:08X}_")))), "block {start:08X} missing from {map}");
+        }
+    }
 }

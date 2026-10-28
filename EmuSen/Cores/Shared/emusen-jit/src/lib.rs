@@ -186,12 +186,17 @@ fn compile<L: Lowering>(lowering: &mut L, module: &mut JITModule, context: &mut 
     Ok((id, context.compiled_code().map_or(0, |c| c.code_info().total_size as usize)))
 }
 
+/// The perf map every compiler thread of this process appends to, one whole line a write (Sapphire_Disputes.md D-1102).
+fn perf_map_path() -> String {
+    format!("/tmp/perf-{}.map", std::process::id())
+}
+
 /// The thread: take every job queued, compile them, make their pages executable once, publish each.
 fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) {
     let mut module = module();
     let mut context = Context::new();
     let mut functions = FunctionBuilderContext::new();
-    let mut map = perf_map.then(|| std::fs::File::create(format!("/tmp/perf-{}.map", std::process::id())).ok()).flatten();
+    let mut map = perf_map.then(|| std::fs::OpenOptions::new().create(true).append(true).open(perf_map_path()).ok()).flatten();
     let mut serial = 0u64;
     loop {
         let jobs = queue.with(std::mem::take);
@@ -229,7 +234,7 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
             let code = module.get_finalized_function(id);
             if let Some(f) = map.as_mut() {
                 use std::io::Write;
-                let _ = writeln!(f, "{:x} {:x} {name}", code as usize, bytes);
+                let _ = f.write_all(format!("{:x} {:x} {name}\n", code as usize, bytes).as_bytes());
             }
             queue.counters.bytes.fetch_add(bytes as u64, Relaxed);
             queue.counters.compiled.fetch_add(1, Relaxed);

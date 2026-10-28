@@ -1,4 +1,4 @@
-//! For measurement only: the emitter's smaller exact forms and the shadow byte count (Sapphire_Redesign.md, "The emitter's exact forms").
+//! For measurement only: the emitter's smaller exact forms and the shadow byte count (Sapphire_Redesign.md, "The emitter's exact forms" and "Option 1").
 
 use std::cell::Cell;
 use std::sync::OnceLock;
@@ -11,12 +11,24 @@ use cranelift_jit::JITModule;
 use cranelift_module::Module;
 
 use super::shape::{self, Class};
-use super::{Options, emit};
+use super::{Context, Options, emit};
+use crate::ee::Ee;
+use crate::ee::timing::Timing;
 
 /// The data cache's hit inline, every other case of a load or store out of line.
 pub const CACHE: u8 = 1;
+/// An exit stores a model field, Random or the group only when the block changed it from the entry's value.
+pub const CHANGED: u8 = 2;
+/// What the block keeps in the core or the context read where it is used, after the calls, not held from the entry.
+pub const RELOAD: u8 = 4;
 /// Each compiled load and store that stays in its block counted by its page's kind (`kind`).
 pub const COUNT: u8 = 8;
+/// Each helper call checked to leave alone what the levers hold across it (`Watched`).
+pub const WATCH: u8 = 16;
+/// The replay, `leave` and the fill called through trampolines that preserve every register (`trampolines`).
+pub const PRESERVE: u8 = 32;
+/// For the shadow count only: the context pointer in Cranelift's pinned register.
+pub const PINNED: u8 = 64;
 static KINDS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
 
 /// The address of `KINDS`, which `COUNT`'s code adds to.
@@ -37,7 +49,12 @@ pub fn chosen() -> u8 {
         let v = std::env::var("EMUSEN_SAPPHIRE_FORMS").unwrap_or_default();
         v.split(',').map(|s| match s.trim() {
             "cache" => CACHE,
+            "changed" => CHANGED,
+            "reload" => RELOAD,
             "count" => COUNT,
+            "watch" => WATCH,
+            "preserve" => PRESERVE,
+            "pinned" => PINNED,
             _ => 0,
         }).fold(0, |a, b| a | b)
     })
@@ -70,8 +87,121 @@ pub fn push(b: &mut FunctionBuilder, t: u32) -> u32 {
     p
 }
 
-/// The forms the shadow compiles: today's, C1, the static prototype, and the last two with the chosen levers.
-const FORMS: [&str; 5] = ["today", "C1", "static", "static+levers", "today+levers"];
+/// What the levers rely on no helper changing (Sapphire_Redesign.md, "Option 1": what the helpers can write).
+pub struct Watched {
+    timing: Timing,
+    cop0: [u32; 32],
+    seen: u64,
+    group: u8,
+    regs: [u128; 32],
+    hilo: [u128; 2],
+    place: (u32, u32, bool, u64),
+    memory: [u64; 4],
+}
+
+/// Helper calls watched and those that changed what `Watched` holds: replay, leave, fill, hook.
+static WATCHES: [AtomicU64; 8] = [const { AtomicU64::new(0) }; 8];
+
+fn watched_now(ee: &Ee, ctx: &Context) -> Watched {
+    let mut cop0 = ee.cop0;
+    cop0[crate::ee::cop0::CAUSE] &= !(crate::ee::cop0::cause::IP2 | crate::ee::cop0::cause::IP3);
+    Watched {
+        timing: ee.timing.clone(),
+        cop0,
+        seen: ee.cycles_seen,
+        group: ee.group,
+        regs: std::array::from_fn(|r| ee.gpr[r]),
+        hilo: [ee.hi, ee.lo],
+        place: (ee.pc, ee.next_pc, ee.delay, ee.sa),
+        memory: [ctx.pages as u64, ctx.gen1, ctx.horizon, ee.dcache.data.as_ptr() as u64],
+    }
+}
+
+/// Before helper `which`'s body, when `watch` is chosen.
+pub fn watch(ee: &Ee, ctx: &Context) -> Option<Watched> {
+    (chosen() & WATCH != 0).then(|| watched_now(ee, ctx))
+}
+
+/// After it: counted, and counted as changed when anything `Watched` holds moved.
+pub fn watched(before: Option<Watched>, ee: &Ee, ctx: &Context, which: usize) {
+    let Some(b) = before else { return };
+    let a = watched_now(ee, ctx);
+    WATCHES[2 * which].fetch_add(1, Relaxed);
+    let same = a.timing == b.timing && a.cop0 == b.cop0 && a.seen == b.seen && a.group == b.group && a.regs == b.regs && a.hilo == b.hilo && a.place == b.place && a.memory == b.memory;
+    if !same {
+        WATCHES[2 * which + 1].fetch_add(1, Relaxed);
+    }
+}
+
+/// Under `PRESERVE`, each helper behind a `preserve_all` trampoline that leaves its answer in `Context::answer`; Rust never calls one.
+pub fn trampolines(helpers: [super::Helper; 3]) -> [super::Helper; 3] {
+    if chosen() & PRESERVE == 0 {
+        return helpers;
+    }
+    static MADE: OnceLock<[usize; 3]> = OnceLock::new();
+    let made = MADE.get_or_init(|| {
+        use cranelift_codegen::ir::{AbiParam, InstBuilder, MemFlagsData, types};
+        use cranelift_codegen::isa::CallConv;
+        let mut module = JITModule::new(cranelift_jit::JITBuilder::with_flags(&[("opt_level", "speed")], cranelift_module::default_libcall_names()).expect("the host"));
+        let ptr = module.target_config().pointer_type();
+        let mut ids = Vec::new();
+        for (k, &h) in helpers.iter().enumerate() {
+            let mut ctx = module.make_context();
+            ctx.func.signature.call_conv = CallConv::PreserveAll;
+            ctx.func.signature.params.extend([AbiParam::new(ptr), AbiParam::new(types::I32)]);
+            let mut sysv = module.make_signature();
+            sysv.params.extend([AbiParam::new(ptr), AbiParam::new(types::I32)]);
+            sysv.returns.push(AbiParam::new(types::I32));
+            let mut fc = FunctionBuilderContext::new();
+            let mut b = FunctionBuilder::new(&mut ctx.func, &mut fc);
+            let block = b.create_block();
+            b.append_block_params_for_function_params(block);
+            b.switch_to_block(block);
+            b.seal_block(block);
+            let (c, arg) = (b.block_params(block)[0], b.block_params(block)[1]);
+            let sig = b.import_signature(sysv);
+            let f = b.ins().iconst(ptr, h as usize as i64);
+            let call = b.ins().call_indirect(sig, f, &[c, arg]);
+            let r = b.inst_results(call)[0];
+            b.ins().store(MemFlagsData::trusted(), r, c, std::mem::offset_of!(Context, answer) as i32);
+            b.ins().return_(&[]);
+            b.finalize(module.target_config());
+            let id = module.declare_function(&format!("trampoline{k}"), cranelift_module::Linkage::Local, &ctx.func.signature).expect("declared");
+            module.define_function(id, &mut ctx).expect("defined");
+            ids.push(id);
+        }
+        module.finalize_definitions().expect("finalized");
+        let out = std::array::from_fn(|k| module.get_finalized_function(ids[k]) as usize);
+        std::mem::forget(module);
+        out
+    });
+    // SAFETY: the code calls these addresses with `preserve_all`'s convention, as the trampolines were compiled; Rust never calls them.
+    made.map(|a| unsafe { std::mem::transmute::<usize, super::Helper>(a) })
+}
+
+thread_local! {
+    static PINNED_ISA: std::cell::OnceCell<cranelift_codegen::isa::OwnedTargetIsa> = const { std::cell::OnceCell::new() };
+}
+
+/// The module's ISA, its flags and the host's, with Cranelift's pinned register reserved (`PINNED`).
+fn pinned_isa(module: &JITModule) -> cranelift_codegen::isa::OwnedTargetIsa {
+    use cranelift_codegen::settings::{self, Configurable};
+    let isa = module.isa();
+    let mut builder = cranelift_codegen::isa::lookup(isa.triple().clone()).expect("the module's triple");
+    for v in isa.isa_flags() {
+        builder.set(v.name, &v.value_string()).expect("the host's flag");
+    }
+    let mut flags = settings::builder();
+    for v in isa.flags().iter() {
+        flags.set(v.name, &v.value_string()).expect("the module's flag");
+    }
+    flags.enable("enable_pinned_reg").expect("the pinned register");
+    builder.finish(settings::Flags::new(flags)).expect("an ISA")
+}
+
+/// The forms the shadow compiles: today's, C1, static, both with the chosen levers, and static with each step's levers (`STEPS`).
+const FORMS: [&str; 11] = ["today", "C1", "static", "static+levers", "today+levers", "static+cache", "static+changed", "static+reload", "static+preserve", "static+reload+pinned", "static+preserve+pinned"];
+const STEPS: [u8; 6] = [CACHE, CACHE | CHANGED, CACHE | CHANGED | RELOAD, CACHE | CHANGED | RELOAD | PRESERVE, CACHE | CHANGED | RELOAD | PINNED, CACHE | CHANGED | RELOAD | PRESERVE | PINNED];
 const N: usize = FORMS.len();
 /// For each form: total, hot, cold bytes, hot-tagged bytes past the first cold one, then the hot bytes by purpose.
 const ROW: usize = 4 + 12;
@@ -90,7 +220,14 @@ fn purpose(l: SourceLoc) -> usize {
 pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) {
     let c1 = Options { fixed_cost: true, ..options };
     let levers = chosen();
-    let forms = [(options, false, 0), (c1, false, 0), (c1, true, 0), (c1, true, levers), (options, false, levers)];
+    let forms: [(Options, bool, u8); N] = std::array::from_fn(|k| match k {
+        0 => (options, false, 0),
+        1 => (c1, false, 0),
+        2 => (c1, true, 0),
+        3 => (c1, true, levers),
+        4 => (options, false, levers & !PINNED),
+        _ => (c1, true, STEPS[k - 5]),
+    });
     let mut row = [[0u64; ROW]; N];
     let mut pure = [[0u64; 12]; N];
     let kept = LEVERS.with(|c| c.get());
@@ -120,7 +257,12 @@ pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words:
         }
         let dump = std::env::var("EMUSEN_SAPPHIRE_FORMS_DUMP").ok().filter(|_| (k == 2 || k == 3) && DUMPED.load(Relaxed) < 8 && words.iter().filter(|&&w| shape::class(w) == Class::Memory).count() >= 3);
         ctx.set_disasm(dump.is_some());
-        let Ok(c) = ctx.compile(module.isa(), &mut ControlPlane::default()) else { return };
+        let compiled = if lv & PINNED != 0 {
+            PINNED_ISA.with(|i| ctx.compile(&**i.get_or_init(|| pinned_isa(module)), &mut ControlPlane::default()).is_ok())
+        } else {
+            ctx.compile(module.isa(), &mut ControlPlane::default()).is_ok()
+        };
+        let Some(c) = ctx.compiled_code().filter(|_| compiled) else { return };
         if let (Some(path), Some(text)) = (dump, c.vcode.as_ref()) {
             use std::io::Write;
             let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path).expect("the dump file");
@@ -169,12 +311,14 @@ pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words:
 /// The shadow's counts as tab-separated lines, bytes a guest instruction; empty if nothing was compiled.
 pub fn report() -> String {
     let w: [u64; 5] = std::array::from_fn(|k| WORDS[k].load(Relaxed));
-    if w[1] == 0 && KINDS.iter().all(|k| k.load(Relaxed) == 0) {
+    if w[1] == 0 && KINDS.iter().chain(WATCHES.iter()).all(|k| k.load(Relaxed) == 0) {
         return String::new();
     }
     let per = |n: u64| n as f64 / w[0].max(1) as f64;
     let k: [u64; 4] = std::array::from_fn(|i| KINDS[i].load(Relaxed));
-    let mut s = format!("forms kinds\tscratchpad {}\tcached {}\tuncached {}\n", k[1], k[2], k[3]);
+    let wt: [u64; 8] = std::array::from_fn(|i| WATCHES[i].load(Relaxed));
+    let mut s = format!("forms watch\treplay {} changed {}\tleave {} changed {}\tfill {} changed {}\thook {} changed {}\n", wt[0], wt[1], wt[2], wt[3], wt[4], wt[5], wt[6], wt[7]);
+    s += &format!("forms kinds\tscratchpad {}\tcached {}\tuncached {}\n", k[1], k[2], k[3]);
     s += &format!("forms\tblocks {}\twords {}\t{:.2} a block\tmemory {} plain {} branch {}\tlevers {}\n", w[1], w[0], w[0] as f64 / w[1] as f64, w[2], w[3], w[4], chosen());
     for (k, name) in FORMS.iter().enumerate() {
         let b: [u64; ROW] = std::array::from_fn(|j| BYTES[k * ROW + j].load(Relaxed));

@@ -56,6 +56,7 @@ const X_DUMMY: i32 = offset_of!(Context, dummy) as i32;
 const X_LOG: i32 = offset_of!(Context, log) as i32;
 const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_UNCACHED_LOADS: i32 = offset_of!(Context, uncached_loads) as i32;
+const X_ANSWER: i32 = offset_of!(Context, answer) as i32;
 /// The most steps since the last load or store for which a load or store leaving its block shares that access's state
 /// and has the interpreter run them again; past it, the access's exit writes everything back itself
 /// (Sapphire_Recompiler.md §48.15).
@@ -225,6 +226,8 @@ struct Held {
     group: Tv,
     sync: bool,
     steps: u32,
+    /// Under `forms::RELOAD` in the static prototype: `last` is the entry's plus this, read again where it is used.
+    last_k: Option<i64>,
 }
 
 /// Where the core stands at an exit.
@@ -259,6 +262,10 @@ struct Emitter<'a, 'b> {
     ee: Value,
     ctx: Value,
     helper: SigRef,
+    /// `forms::PRESERVE`'s signature for the trampolines.
+    preserve: Option<SigRef>,
+    /// `forms::PINNED`: the caller's pinned register, restored at each return.
+    pinned: Option<Value>,
     options: Options,
     held: Held,
     snaps: Vec<Snap>,
@@ -274,6 +281,13 @@ struct Emitter<'a, 'b> {
     seen0: Value,
     wired: Value,
     issued0: Value,
+    /// The model, Random and the group as the entry loaded them, which `forms::CHANGED` leaves unstored.
+    entry: (Model, Value, Tv),
+}
+
+/// Whether `t` is the very value the entry loaded, `t0`.
+fn same(t: Tv, t0: Tv) -> bool {
+    super::forms::on(super::forms::CHANGED) && matches!((t, t0), (D(a), D(b)) if a == b)
 }
 
 impl Emitter<'_, '_> {
@@ -580,6 +594,7 @@ impl Emitter<'_, '_> {
             let at = self.add(self.held.model.last, 1);
             self.held.model.last = at;
             self.held.steps += 1;
+            self.held.last_k = self.held.last_k.map(|k| k + 1);
             return at;
         }
         let i = ops::issue(op, w);
@@ -708,7 +723,7 @@ impl Emitter<'_, '_> {
 
         let cycles = self.add(at, 1);
         let c = self.v(cycles);
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         self.b.ins().store(trusted(), c, ctx, X_TIMES + 8 * self.held.steps as i32);
         self.held.steps += 1;
         at
@@ -741,12 +756,18 @@ impl Emitter<'_, '_> {
         }
         if h.steps > 0 {
             let m = h.model;
-            for (field, t) in [(layout::LAST, m.last), (layout::FLOOR, m.floor), (layout::LAST_WRITES, m.writes_lo), (layout::LAST_WRITES + 8, m.writes_hi)] {
-                let v = self.v(t);
-                self.store(v, t_at(field));
+            let (m0, random0, group0) = self.entry;
+            let last = self.last_of(&h);
+            for (field, t, t0) in [(layout::LAST, last, m0.last), (layout::FLOOR, m.floor, m0.floor), (layout::LAST_WRITES, m.writes_lo, m0.writes_lo), (layout::LAST_WRITES + 8, m.writes_hi, m0.writes_hi)] {
+                if !same(t, t0) {
+                    let v = self.v(t);
+                    self.store(v, t_at(field));
+                }
             }
-            for (field, t) in [(layout::OPEN, m.open), (layout::GROUP_ENDS, m.group_ends), (layout::PAIRED, m.paired), (layout::LAST_CATEGORY, m.category), (layout::LAST_PIPE, m.pipe)] {
-                self.store_narrow(I8, t, t_at(field));
+            for (field, t, t0) in [(layout::OPEN, m.open, m0.open), (layout::GROUP_ENDS, m.group_ends, m0.group_ends), (layout::PAIRED, m.paired, m0.paired), (layout::LAST_CATEGORY, m.category, m0.category), (layout::LAST_PIPE, m.pipe, m0.pipe)] {
+                if !same(t, t0) {
+                    self.store_narrow(I8, t, t_at(field));
+                }
             }
             for r in 0..TRACKED {
                 if m.ready_dirty >> r & 1 == 1 {
@@ -765,17 +786,27 @@ impl Emitter<'_, '_> {
                     self.store(v, t_at(if n == 0 { layout::MAC0_FREE } else { layout::MAC1_FREE }));
                 }
             }
-            let issued = self.b.ins().iadd_imm_s(self.issued0, i64::from(h.steps));
+            let (issued0, count0, compare, seen0) = if self.reload() {
+                let i = self.load(I64, t_at(layout::INSTRUCTIONS));
+                let c = self.load(I32, cop0_at(cop0::COUNT));
+                let c = self.b.ins().uextend(I64, c);
+                let k = self.load(I32, cop0_at(cop0::COMPARE));
+                let k = self.b.ins().uextend(I64, k);
+                (i, c, k, self.load(I64, CYCLES_SEEN))
+            } else {
+                (self.issued0, self.count0, self.compare, self.seen0)
+            };
+            let issued = self.b.ins().iadd_imm_s(issued0, i64::from(h.steps));
             self.store(issued, t_at(layout::INSTRUCTIONS));
             // Count, Compare's match and the cycles seen, as each step's advance would have left them in turn.
-            let end = self.add(m.last, 1);
+            let end = self.add(last, 1);
             let end = self.v(end);
-            let delta = self.b.ins().isub(end, self.seen0);
-            let count = self.b.ins().iadd(self.count0, delta);
+            let delta = self.b.ins().isub(end, seen0);
+            let count = self.b.ins().iadd(count0, delta);
             let count32 = self.b.ins().ireduce(I32, count);
             self.store(count32, cop0_at(cop0::COUNT));
             self.store(end, CYCLES_SEEN);
-            let gap = self.b.ins().isub(self.compare, self.count0);
+            let gap = self.b.ins().isub(compare, count0);
             let gap = self.b.ins().iadd_imm_s(gap, -1);
             let gap = self.b.ins().band_imm_s(gap, 0xFFFF_FFFF);
             let passed = self.b.ins().icmp(IntCC::UnsignedLessThan, gap, delta);
@@ -783,9 +814,13 @@ impl Emitter<'_, '_> {
             let ip7 = self.b.ins().bor_imm_s(cause, i64::from(cause::IP7));
             let cause = self.b.ins().select(passed, ip7, cause);
             self.store(cause, cop0_at(cop0::CAUSE));
-            let r = self.b.ins().ireduce(I32, h.random);
-            self.store(r, cop0_at(cop0::RANDOM));
-            self.store_narrow(I8, h.group, GROUP);
+            if !same(D(h.random), D(random0)) {
+                let r = self.b.ins().ireduce(I32, h.random);
+                self.store(r, cop0_at(cop0::RANDOM));
+            }
+            if !same(h.group, group0) {
+                self.store_narrow(I8, h.group, GROUP);
+            }
         }
         if h.sync {
             let z = self.b.ins().iconst(I8, 0);
@@ -805,21 +840,78 @@ impl Emitter<'_, '_> {
         self.store(d, DELAY);
     }
 
+    /// `forms::RELOAD`: what the block keeps in the core or the context is read where it is used, not held from the entry.
+    fn reload(&self) -> bool {
+        super::forms::on(super::forms::RELOAD) && !self.options.verify
+    }
+
+    /// The memory context: the translation cache (0), its generation (1), the horizon (2) and the data cache's lines (3).
+    fn mem_value(&mut self, which: usize) -> Value {
+        let m = self.memory.expect("a block with loads or stores");
+        if !self.reload() {
+            return [m.pages, m.gen1, m.horizon, m.lines][which];
+        }
+        let (base, at) = match which {
+            0 => (self.ctx, X_PAGES),
+            1 => (self.ctx, X_GEN1),
+            2 => (self.ctx, X_HORIZON),
+            _ => (self.ee, D_DATA),
+        };
+        let base = if base == self.ctx { self.ctx() } else { base };
+        self.b.ins().load(I64, trusted(), base, at)
+    }
+
+    /// The issue model's `last` as `held` has it, read again from the core under `last_k`.
+    fn last_of(&mut self, held: &Held) -> Tv {
+        match held.last_k {
+            Some(k) => {
+                let v = self.load(I64, t_at(layout::LAST));
+                D(self.b.ins().iadd_imm_s(v, k))
+            }
+            None => held.model.last,
+        }
+    }
+
     fn steps_out(&mut self, steps: u32) {
         let s = self.b.ins().iconst(I32, i64::from(steps));
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         self.b.ins().store(trusted(), s, ctx, X_STEPS);
     }
 
     fn call_helper(&mut self, at: i32, steps: u32) -> Value {
-        let ctx = self.ctx;
-        let f = self.b.ins().load(I64, trusted(), ctx, at);
         let s = self.b.ins().iconst(I32, i64::from(steps));
-        let call = self.b.ins().call_indirect(self.helper, f, &[ctx, s]);
-        self.b.inst_results(call)[0]
+        self.call_at(at, s)
+    }
+
+    /// The helper at `at` called with `arg`, and its answer; under `forms::PRESERVE` through its trampoline (`Context::answer`).
+    fn call_at(&mut self, at: i32, arg: Value) -> Value {
+        let ctx = self.ctx();
+        let f = self.b.ins().load(I64, trusted(), ctx, at);
+        match self.preserve {
+            Some(sig) if at != X_HOOK => {
+                self.b.ins().call_indirect(sig, f, &[ctx, arg]);
+                let ctx = self.ctx();
+                self.b.ins().load(I32, trusted(), ctx, X_ANSWER)
+            }
+            _ => {
+                let call = self.b.ins().call_indirect(self.helper, f, &[ctx, arg]);
+                self.b.inst_results(call)[0]
+            }
+        }
+    }
+
+    /// The context pointer: the entry's, or Cranelift's pinned register under `forms::PINNED`.
+    fn ctx(&mut self) -> Value {
+        match self.pinned {
+            Some(_) => self.b.ins().get_pinned_reg(I64),
+            None => self.ctx,
+        }
     }
 
     fn ret(&mut self, exit: u32) {
+        if let Some(caller) = self.pinned {
+            self.b.ins().set_pinned_reg(caller);
+        }
         let v = self.b.ins().iconst(I32, i64::from(exit));
         self.b.ins().return_(&[v]);
     }
@@ -839,7 +931,7 @@ impl Emitter<'_, '_> {
         let snap = self.held.snap;
         let base = snap.map_or(0, |i| self.snaps[i].held.steps);
         if self.memory.is_some() {
-            let ctx = self.ctx;
+            let ctx = self.ctx();
             for (field, v) in [(X_GUARD, base.saturating_sub(1)), (X_BASE, base), (X_LOGGED, self.held.logged)] {
                 let k = self.b.ins().iconst(I32, i64::from(v));
                 self.b.ins().store(trusted(), k, ctx, field);
@@ -922,7 +1014,7 @@ impl Emitter<'_, '_> {
     fn after(&mut self, at: At, last: bool) {
         if self.options.spill {
             let h = self.held;
-            let ctx = self.ctx;
+            let ctx = self.ctx();
             for r in 1..32 {
                 if h.dirty >> r & 1 == 1 {
                     self.b.ins().store(trusted(), h.regs[r].expect("held"), ctx, X_SPILL + 8 * r as i32);
@@ -1290,17 +1382,18 @@ impl Emitter<'_, '_> {
     /// The host address of the 4 KiB page of `a` and its translation cache's meaning, the fill called for a page not
     /// found; to `slow` where the fill cannot (Sapphire_Recompiler.md §48.3).
     fn page(&mut self, a: Value, slow: ir::Block) -> (Value, Value) {
-        let m = self.memory.expect("a block with loads or stores");
         // `jit::page_index`.
         let low = self.b.ins().ushr_imm_s(a, 12);
         let top = self.b.ins().ushr_imm_s(a, 24);
         let index = self.b.ins().bxor(low, top);
         let index = self.b.ins().band_imm_s(index, super::PAGES as i64 - 1);
         let offset = self.b.ins().ishl_imm_s(index, 5);
-        let entry = self.b.ins().iadd(m.pages, offset);
+        let pages = self.mem_value(0);
+        let entry = self.b.ins().iadd(pages, offset);
         let tag = self.b.ins().load(I64, trusted(), entry, P_TAG);
         let page = self.b.ins().band_imm_s(a, 0xFFFF_F000);
-        let want = self.b.ins().bor(m.gen1, page);
+        let gen1 = self.mem_value(1);
+        let want = self.b.ins().bor(gen1, page);
         let found = self.b.ins().icmp(IntCC::Equal, tag, want);
         let miss = self.b.create_block();
         self.b.set_cold_block(miss);
@@ -1308,11 +1401,8 @@ impl Emitter<'_, '_> {
         self.b.ins().brif(found, known, &[], miss, &[]);
         self.b.seal_block(miss);
         self.b.switch_to_block(miss);
-        let ctx = self.ctx;
-        let f = self.b.ins().load(I64, trusted(), ctx, X_FILL);
         let a32 = self.b.ins().ireduce(I32, a);
-        let call = self.b.ins().call_indirect(self.helper, f, &[ctx, a32]);
-        let filled = self.b.inst_results(call)[0];
+        let filled = self.call_at(X_FILL, a32);
         let w = self.k(LEFT_PAGE);
         self.b.ins().brif(filled, known, &[], slow, &[w.into()]);
         self.b.seal_block(known);
@@ -1335,7 +1425,6 @@ impl Emitter<'_, '_> {
             None => At::Line(pc),
         };
         let kept = self.held;
-        let m = self.memory.expect("a block with loads or stores");
         let slow = self.b.create_block();
         self.b.set_cold_block(slow);
         let why = self.b.append_block_param(slow, I64);
@@ -1343,9 +1432,11 @@ impl Emitter<'_, '_> {
             // The times of the instructions before this one stay short of the board's next event, so that no DMAC step
             // falls between them and this access.
             let p = super::forms::push(self.b, 4);
-            let t = self.add(kept.model.last, 1);
+            let last = self.last_of(&kept);
+            let t = self.add(last, 1);
             let t = self.v(t);
-            let ok = self.b.ins().icmp(IntCC::UnsignedLessThan, t, m.horizon);
+            let horizon = self.mem_value(2);
+            let ok = self.b.ins().icmp(IntCC::UnsignedLessThan, t, horizon);
             self.go_if(ok, slow, LEFT_HORIZON);
             super::forms::tag(self.b, p);
         }
@@ -1401,7 +1492,7 @@ impl Emitter<'_, '_> {
             }
             let within = self.b.ins().band_imm_s(a, 0xFFF);
             let p = self.b.ins().iadd(host, within);
-            let ctx = self.ctx;
+            let ctx = self.ctx();
             let dummy = self.b.ins().iadd_imm_s(ctx, i64::from(X_DUMMY));
             let zero = self.k(0);
             self.b.ins().jump(join, &[p.into(), dummy.into(), zero.into()]);
@@ -1447,7 +1538,8 @@ impl Emitter<'_, '_> {
             let set_bytes = self.b.ins().ishl_imm_s(set, 7);
             let way_bytes = self.b.ins().ishl_imm_s(way, 6);
             let within = self.b.ins().band_imm_s(a, 63);
-            let l = self.b.ins().iadd(m.lines, set_bytes);
+            let lines = self.mem_value(3);
+            let l = self.b.ins().iadd(lines, set_bytes);
             let l = self.b.ins().iadd(l, way_bytes);
             let l = self.b.ins().iadd(l, within);
             let tag_way = self.b.ins().imul_imm_s(way, TAG);
@@ -1497,7 +1589,7 @@ impl Emitter<'_, '_> {
         self.b.switch_to_block(on);
         let within = self.b.ins().band_imm_s(a, 0xFFF);
         let p = self.b.ins().iadd(host, within);
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         let dummy = self.b.ins().iadd_imm_s(ctx, i64::from(X_DUMMY));
         let u = self.b.ins().uextend(I64, is_unc);
         if super::forms::on(super::forms::COUNT) {
@@ -1527,7 +1619,7 @@ impl Emitter<'_, '_> {
         let data = if loads && inline {
             D(self.b.ins().imul_imm_s(unc, timing::UNCACHED as i64))
         } else if loads {
-            let ctx = self.ctx;
+            let ctx = self.ctx();
             let n = self.b.ins().load(I64, trusted(), ctx, X_UNCACHED_LOADS);
             let n = self.b.ins().iadd(n, unc);
             self.b.ins().store(trusted(), n, ctx, X_UNCACHED_LOADS);
@@ -1620,7 +1712,6 @@ impl Emitter<'_, '_> {
 
     /// The inline hit (`forms::CACHE`): each way's tag compared as one masked word; the line and its tag, or `slow`.
     fn line_hit(&mut self, a: Value, meta: Value, slow: ir::Block) -> (Value, Value) {
-        let m = self.memory.expect("a block with loads or stores");
         let set64 = self.b.ins().band_imm_s(a, 0xFC0);
         let tags_off = self.b.ins().ushr_imm_s(set64, 2);
         let tags = self.b.ins().iadd(self.ee, tags_off);
@@ -1645,7 +1736,8 @@ impl Emitter<'_, '_> {
         let way = self.b.ins().uextend(I64, way);
         let way_bytes = self.b.ins().ishl_imm_s(way, 6);
         let page = self.b.ins().band_imm_s(a, 0xFFF);
-        let l = self.b.ins().iadd(m.lines, set64);
+        let lines = self.mem_value(3);
+        let l = self.b.ins().iadd(lines, set64);
         let l = self.b.ins().iadd(l, page);
         let l = self.b.ins().iadd(l, way_bytes);
         let tag_way = self.b.ins().ishl_imm_s(way, 3);
@@ -1666,7 +1758,7 @@ impl Emitter<'_, '_> {
 
     /// `Context::left`'s count for the reason `why`.
     fn count_left(&mut self, why: Value) {
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         let at = self.b.ins().ishl_imm_s(why, 3);
         let at = self.b.ins().iadd(ctx, at);
         let n = self.b.ins().load(I64, trusted(), at, X_LEFT);
@@ -1686,10 +1778,7 @@ impl Emitter<'_, '_> {
         let why = self.b.ins().ireduce(I32, why);
         let why = self.b.ins().ishl_imm_s(why, i64::from(super::WHY_SHIFT));
         let word = self.b.ins().bor(word, why);
-        let ctx = self.ctx;
-        let f = self.b.ins().load(I64, trusted(), ctx, X_LEAVE);
-        let call = self.b.ins().call_indirect(self.helper, f, &[ctx, word]);
-        let kept = self.b.inst_results(call)[0];
+        let kept = self.call_at(X_LEAVE, word);
         let undo = match self.undo {
             Some(b) => b,
             None => {
@@ -1719,7 +1808,7 @@ impl Emitter<'_, '_> {
         }
         let k = self.held.logged as i32;
         assert!((k as usize) + 2 <= 2 * shape::MAX, "two undo entries a store");
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         let low = self.b.ins().band_imm_s(a, 15);
         let quad = self.b.ins().isub(ptr, low);
         let q0 = self.b.ins().load(I64, guest(), quad, 0);
@@ -1750,7 +1839,7 @@ impl Emitter<'_, '_> {
             self.held.sync = true;
             return;
         }
-        let ctx = self.ctx;
+        let ctx = self.ctx();
         let n = self.b.ins().load(I64, trusted(), ctx, X_UNCACHED);
         let n = self.b.ins().iadd(n, unc);
         self.b.ins().store(trusted(), n, ctx, X_UNCACHED);
@@ -1932,6 +2021,16 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
     b.seal_block(head);
     super::forms::tag(&mut b, 1);
     let (ee, ctx) = (b.block_params(head)[0], b.block_params(head)[1]);
+    let preserve = super::forms::on(super::forms::PRESERVE).then(|| {
+        let mut sig = ir::Signature::new(cranelift_codegen::isa::CallConv::PreserveAll);
+        sig.params.extend([AbiParam::new(ptr), AbiParam::new(I32)]);
+        b.import_signature(sig)
+    });
+    let pinned = super::forms::on(super::forms::PINNED).then(|| {
+        let caller = b.ins().get_pinned_reg(I64);
+        b.ins().set_pinned_reg(ctx);
+        caller
+    });
     let helper = b.import_signature(helper);
     let ld = |b: &mut FunctionBuilder, ty, at| b.ins().load(ty, trusted(), ee, at);
     let ldu = |b: &mut FunctionBuilder, ty, at| {
@@ -1973,6 +2072,8 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         ee,
         ctx,
         helper,
+        preserve,
+        pinned,
         options,
         held: Held {
             regs: [None; 32],
@@ -1990,6 +2091,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
             group,
             sync: false,
             steps: 0,
+            last_k: (super::forms::is_static() && super::forms::on(super::forms::RELOAD) && !options.verify).then_some(0),
         },
         snaps: Vec::new(),
         memory,
@@ -2000,6 +2102,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         seen0,
         wired,
         issued0,
+        entry: (model, random, group),
     };
     let mut i = 0;
     loop {
@@ -2012,7 +2115,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
             // A new line of the instruction cache: the block leaves here when the cache does not hold it
             // (`Context::limit`).
             super::forms::tag(e.b, 4);
-            let ctx = e.ctx;
+            let ctx = e.ctx();
             let limit = e.b.ins().load(I32, trusted(), ctx, X_LIMIT);
             let short = e.b.ins().icmp_imm_s(IntCC::UnsignedLessThanOrEqual, limit, i as i64);
             let short = e.b.ins().uextend(I64, short);

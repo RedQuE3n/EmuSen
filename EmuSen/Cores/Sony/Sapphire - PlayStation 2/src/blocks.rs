@@ -175,7 +175,10 @@ impl Blocks {
             dummy: [0; 2],
             log: [[0; 3]; 2 * shape::MAX],
             left: [0; 5],
+            answer: 0,
         });
+        let mut ctx = ctx;
+        [ctx.replay, ctx.leave, ctx.fill] = jit::forms::trampolines([ctx.replay, ctx.leave, ctx.fill]);
         let mut jit = Jit::new(jit::R5900, BUDGET);
         jit.perf_map = std::env::var("EMUSEN_SAPPHIRE_PERFMAP").is_ok_and(|v| v == "1");
         Blocks {
@@ -603,6 +606,7 @@ extern "C" fn fill(ctx: *mut Context, vaddr: u32) -> u32 {
     let run = unsafe { &mut *ctx.owner.cast::<Run>() };
     let sys = unsafe { &mut *run.sys };
     run.fills += 1;
+    let seen = jit::forms::watch(&sys.ee, ctx);
     let (meta, host) = match sys.ee.data_page(vaddr) {
         None => (kind::NONE, 0),
         Some((place, writable)) => {
@@ -622,6 +626,7 @@ extern "C" fn fill(ctx: *mut Context, vaddr: u32) -> u32 {
     // SAFETY: the pages the context points at are `Blocks::pages`, alive for the call.
     let page = unsafe { &mut *ctx.pages.add(i) };
     *page = Page { tag: ctx.gen1 | u64::from(vaddr & !0xFFF), host, meta, pad: 0 };
+    jit::forms::watched(seen, &sys.ee, ctx, 2);
     1
 }
 
@@ -650,7 +655,24 @@ fn set_lines(sys: &mut System, l: u8) {
 /// all do, the core's lines and Cause.IP2 and IP3 are set as the last step leaves them.
 extern "C" fn replay(ctx: *mut Context, steps: u32) -> u32 {
     // SAFETY: called by compiled code during `block`, whose context is alive and borrowed by nothing else.
-    replay_steps(unsafe { &mut *ctx }, steps, false)
+    let ctx = unsafe { &mut *ctx };
+    let seen = watch(ctx);
+    let kept = replay_steps(ctx, steps, false);
+    watched(seen, ctx, 0);
+    kept
+}
+
+/// `forms::watch` and `forms::watched` around a helper's body.
+fn watch(ctx: &Context) -> Option<jit::forms::Watched> {
+    // SAFETY: as `replay`.
+    let sys = unsafe { &*(*ctx.owner.cast::<Run>()).sys };
+    jit::forms::watch(&sys.ee, ctx)
+}
+
+fn watched(seen: Option<jit::forms::Watched>, ctx: &Context, which: usize) {
+    // SAFETY: as `replay`.
+    let sys = unsafe { &*(*ctx.owner.cast::<Run>()).sys };
+    jit::forms::watched(seen, &sys.ee, ctx, which);
 }
 
 /// A load or store's exit once its block has run a step (`jit::leave_word`): the reason counted, the guard set and the
@@ -662,7 +684,10 @@ extern "C" fn leave(ctx: *mut Context, word: u32) -> u32 {
     let (steps, base, logged, why) = jit::left_by(word);
     ctx.left[why] += 1;
     (ctx.guard, ctx.base, ctx.logged) = (base.saturating_sub(1), base, logged);
-    replay_steps(ctx, steps, true)
+    let seen = watch(ctx);
+    let kept = replay_steps(ctx, steps, true);
+    watched(seen, ctx, 1);
+    kept
 }
 
 fn replay_steps(ctx: &mut Context, steps: u32, rewind: bool) -> u32 {
@@ -744,6 +769,7 @@ extern "C" fn hook(ctx: *mut Context, steps: u32) -> u32 {
     let ctx = unsafe { &mut *ctx };
     let run = unsafe { &mut *ctx.owner.cast::<Run>() };
     let sys = unsafe { &mut *run.sys };
+    let seen = jit::forms::watch(&sys.ee, ctx);
     let last = steps & FINAL != 0;
     let j = (steps & !FINAL) as usize;
     let t = sys.ee.timing.cycles();
@@ -761,7 +787,9 @@ extern "C" fn hook(ctx: *mut Context, steps: u32) -> u32 {
             return 1;
         }
     }
-    u32::from(!last && sys.ee.check_interrupt())
+    let due = u32::from(!last && sys.ee.check_interrupt());
+    jit::forms::watched(seen, &sys.ee, ctx, 3);
+    due
 }
 
 /// The interpreter's machine the verifier steps (`emusen_jit::verify::Reference`).

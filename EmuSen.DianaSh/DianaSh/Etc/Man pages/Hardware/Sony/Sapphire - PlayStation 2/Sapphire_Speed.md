@@ -231,6 +231,8 @@ skipping does not pass.
 
 ### 51.8 The levers and compromises, ranked again for the 3D
 
+*Superseded 2026-10-28 by §58.7: the ceiling measurement showed that no lever on this list, nor all of them together, reaches full speed; the redesign of §58.7 replaces it as the plan.*
+
 As §43.8: the share of each window's frame a lever addresses (dock / island / arena), the bound 1 / (1 − s), the
 expectation under its assumption, the work in stages, its kind, and the gain per stage. The shares are of the default
 path (S33, S36, S40 and S43 in).

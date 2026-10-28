@@ -3,7 +3,7 @@
 //!
 //! `cargo run --release --example bench -- <workload> <bios> <americas|europe|japan> [image] [frames] [--from N]
 //! [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram]
-//! [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]`
+//! [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE]`
 //!
 //! - `boot`: the console started empty with no disc, the BIOS booting to OSDSYS; slot 1 empty unless `--card`.
 //! - `elf <program.elf>`: an EE program entered by the fast boot (Sapphire_Native.md §36), a ps2autotests program.
@@ -22,6 +22,8 @@
 //! sound and of the final state, each FNV-1a and taken outside the timed span; then the units' counts a frame over the
 //! window: the EE's steps by mode and its cycles, the IOP's instructions, and each VU's pairs in micro mode. `--times`
 //! writes each frame's milliseconds, `--every K DIR` the picture every K frames as `DIR/frame-<n>.ppm`, and
+//! `--census FILE` writes each timed frame's counts as a tab-separated row (Sapphire_Redesign.md, R0 results, R0.1): the
+//! frame, its milliseconds, the EE's instructions executed, those idle skipping passed and their cycles, and each VU's pairs.
 //! `--registers` counts every register access the units answer over the window (S24's reports, which slow the run, so
 //! its times are not the bench's) and prints the most frequent a frame, for finding which device a processor waits on.
 //! `--press F:BITS` holds the pad's buttons (the core's bit numbers, `+`-joined) in port 1 for six frames from frame F.
@@ -111,7 +113,7 @@ fn main() {
         let mut v = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--nvm" | "--state" | "--script" | "--window") {
+            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--nvm" | "--state" | "--script" | "--window" | "--census") {
                 i += 2;
                 continue;
             }
@@ -126,7 +128,7 @@ fn main() {
         }
         v
     };
-    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME]";
+    let usage = "bench <boot|elf|disc|game> <bios> <americas|europe|japan> [image] [frames] [--from N] [--times FILE] [--every K DIR] [--registers] [--press F:BITS]... [--card] [--blocks] [--idle] [--gs-workers N] [--edram] [--vu0] [--vu1] [--defaults] [--nvm FILE] [--state FILE] [--save-at N FILE] [--script FILE] [--window NAME] [--census FILE]";
     let workload = plain.first().unwrap_or_else(|| panic!("{usage}")).as_str();
     let bios = std::fs::read(plain.get(1).unwrap_or_else(|| panic!("{usage}"))).expect("the BIOS");
     let market = match plain.get(2).map(|s| s.as_str()) {
@@ -207,6 +209,11 @@ fn main() {
     let mut timed = 0usize;
     let started = Instant::now();
     let first = m.frames;
+    let mut census = flag("--census").map(|f| (std::fs::File::create(f).expect("the census file"), counts(&m)));
+    if let Some((file, _)) = &mut census {
+        use std::io::Write;
+        writeln!(file, "frame\tms\tee_executed\tee_passed\tee_passed_cycles\tvu0_pairs\tvu1_pairs").expect("written");
+    }
     if let Some(w) = window {
         eprintln!("{}: from the state at frame {}, timed after frame {} to {}", w.name, w.state, w.from, w.to);
     }
@@ -234,6 +241,17 @@ fn main() {
         if f >= from {
             wall += t;
             timed += 1;
+        }
+        if let Some((file, last)) = &mut census {
+            use std::io::Write;
+            let now = counts(&m);
+            if f >= from {
+                let all = now.ee_instructions - last.ee_instructions;
+                let passed = now.idle[1] - last.idle[1];
+                let row = [all - passed, passed, now.idle[0] - last.idle[0], now.pairs[0] - last.pairs[0], now.pairs[1] - last.pairs[1]];
+                writeln!(file, "{}\t{t:.3}\t{}", m.frames, row.map(|v| v.to_string()).join("\t")).expect("written");
+            }
+            *last = now;
         }
         if let Some((at, file)) = &save_at
             && m.frames >= *at

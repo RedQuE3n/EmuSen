@@ -27,6 +27,14 @@ cranelift-frontend = "0.136.0"
 cranelift-jit = "0.136.0"
 cranelift-module = "0.136.0"
 
+# R0.4's kernel of the VU's floats in vector lanes, for measurement only (Sapphire_Redesign.md, R0 results).
+[features]
+lanes = []
+
+[[example]]
+name = "lanes"
+required-features = ["lanes"]
+
 [profile.release]
 panic = "abort"
 opt-level = 3

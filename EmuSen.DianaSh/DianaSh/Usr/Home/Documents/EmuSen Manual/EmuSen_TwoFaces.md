@@ -109,3 +109,32 @@ made it.
 The phase-shift bound of §5 is a number per core, not a principle, and a bound too generous would accept a byte face that
 plays differently. A quiet point may be rare in a busy game, which makes switching slow, not wrong. Code compiled twice
 costs build time and binary size. Each is measured where a core applies the rule.
+
+## 9. The accuracy tiers, and the scope they serve
+
+*Decided 2026-10-28 by the tester: the tiers, ranked by what can be proven, and the scope and preference that choose
+among them.*
+
+**The tiers.** Each names what a claim of accuracy rests on, not how the component is built.
+
+| Tier | Name | What it rests on | The usual terms elsewhere |
+| --- | --- | --- | --- |
+| 1 | **Cycle accurate** | proven against the hardware: test programs with recorded console output, hardware documents, referees run as black boxes | cycle-accurate |
+| 2 | **Byte accurate** | results proven identical to tier 1: every value a game can read back, every pixel and every sample | cycle-approximate, functional |
+| 3 | **Theory accurate** | built from documentation or derivation, and not provable against the hardware | high-level emulation (HLE), specification-based |
+| 4 | **Whatever works** | no accuracy claim; still general, never written for one game | workaround |
+
+A cycle face (§1) is tier 1 and a byte face tier 2, unit by unit. High-level emulation and the open BIOS replacements
+of the project's firmware policy are tier 3: there is no console output to grade a replacement written from documents
+against, so the claim is the derivation's and the page says so. Tier 4 is the floor below which nothing is written: a
+workaround that names a game, a serial or a checksum is no tier at all.
+
+**Every component states its tier, and aims as high as it can.** Dropping a tier is a named exception, recorded on the
+core's page with its reason and with what would lift it back: the test program that would prove it, the document that
+would derive it, or the measurement that would show the cost gone.
+
+**Scope and preference.** Playability of every game is the requirement, and the handheld's list of games is only the
+first scoreboard. Accuracy is the preference: a component takes the highest tier that keeps every game playable, drops a
+tier by the smallest step and only when playability demands it, and a tie between two forms goes to the more accurate.
+So speed alone never lowers a tier on a machine that plays every game at the higher one; it lowers it only where a game
+is unplayable without, and then by one step, measured, for every game alike.

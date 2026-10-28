@@ -1,4 +1,4 @@
-# EmuSen_DebugWindow — Debugger, one window to see inside the machine, for debugging and for learning
+# EmuSen_Debugger — Debugger, one window to see inside the machine, for debugging and for learning
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester the same day: a proper debug window in the
 manner of Mesen's viewers — tiles and where they sit in memory, sprites, how hard each part of the emulated machine is
@@ -63,7 +63,7 @@ start:
   address and fields.
 - **Detail**: the selected thing in full, and its explanation.
 - **Actions**: pause, step a frame, step an instruction, capture a frame (3D), set a breakpoint on this address, copy.
-- **A console docked beneath**: the Shell window's pane (`EmuSen_HotaruWindow.md`), hosted under the views as Mesen keeps its
+- **A console docked beneath**: the Shell window's pane (`EmuSen_Shell.md`), hosted under the views as Mesen keeps its
   script window, so `bp`, `mem` and `step` are typed beside what they change; the Debugger writes no shell of its own
   (`EmuSen_LibraryTools.md` §1b).
 

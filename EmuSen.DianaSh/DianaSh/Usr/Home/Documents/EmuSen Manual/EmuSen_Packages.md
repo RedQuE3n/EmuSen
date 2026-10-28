@@ -1,4 +1,4 @@
-# EmuSen_PackageManager — Packages, one window to manage the library's game packages and their mods
+# EmuSen_Packages — Packages, one window to manage the library's game packages and their mods
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester: a
 window where the player manages the library's games as packages — makes them, unmakes them, with the options the

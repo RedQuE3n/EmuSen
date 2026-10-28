@@ -23,7 +23,7 @@ giant.
 |---|---|
 | `emusen-patch` (built) | IPS, UPS and BPS: reading, applying, the source's checksum; and **making** a patch from two files |
 | `emusen-tbl` (new) | table files, text encoding and decoding by a table, pointer tables |
-| the debug-views capability (`EmuSen_DebugWindow.md` §2) | decoding a view, and an optional **encode** a core declares per view |
+| the debug-views capability (`EmuSen_Debugger.md` §2) | decoding a view, and an optional **encode** a core declares per view |
 | a texture hash shared by Mars, Diamond and Sapphire | one name for a texture everywhere |
 | the mod manifest, in Galaxia beside the package manifest | what a mod is: kind, version, order, files |
 
@@ -50,7 +50,7 @@ giant.
   put`'s checks, small touch-ups in place, and **Save as Patch** for what was changed; later the translation work —
   tables, pointers, the script beside the screen — over `emusen.text`. The Debugger stays read-only.
 - **Packages owns a game's layers**, since a mod is a layer inside a game's package
-  (`EmuSen_PackageManager.md` §3b): patches, textures, scripts, audio and codes, on, off and in order; conflicts named
+  (`EmuSen_Packages.md` §3b): patches, textures, scripts, audio and codes, on, off and in order; conflicts named
   (two layers writing the same bytes); a patch checked against the dump; mods installed from the emusen-mods
   repository; **Export Patched Game** to a folder the player chooses. The patch controls of the *Game Package* window
   move there.

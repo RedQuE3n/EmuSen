@@ -1,4 +1,4 @@
-# EmuSen_HotaruWindow — Shell, the shell's own window in Mistress
+# EmuSen_Shell — Shell, the shell's own window in Mistress
 
 *The class is still named `HotaruWindow`; it takes the plain name when next changed.*
 

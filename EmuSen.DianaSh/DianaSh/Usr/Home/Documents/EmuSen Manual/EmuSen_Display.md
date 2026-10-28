@@ -1,4 +1,4 @@
-# EmuSen_ShaderWindow — Display, the display window on the shared frame: graphics settings and shaders together
+# EmuSen_Display — Display, the display window on the shared frame: graphics settings and shaders together
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§5). Nothing is built.* Asked by the tester the same day: a proper shader window in place
 of the present one, consistent with the other tools (`EmuSen_LibraryTools.md` §1), named **Display**.

@@ -1,7 +1,7 @@
 # EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Packages
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester the same day: a proper scraping tool in place
-of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_PackageManager.md`) and made for theming, with
+of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_Packages.md`) and made for theming, with
 the system and the games (favourites or all) chosen; and a library manager laid out the same, which finds duplicate and
 broken ROMs; every backend tool these lack made as a DianaSh command.
 
@@ -13,13 +13,13 @@ themselves. Each stands alone and each calls only its own backend.
 
 **What they share is a frame, and the frame is LunaP's**: a `ManagerLayout` control with a filter sidebar, a table with
 a mark per row and sortable columns, a detail pane, a toolbar, and an apply bar that summarises the marked work and runs
-it with one progress line (Synaptic's and Pamac's pattern, `EmuSen_PackageManager.md` §3). It holds no EmuSen knowledge;
+it with one progress line (Synaptic's and Pamac's pattern, `EmuSen_Packages.md` §3). It holds no EmuSen knowledge;
 a tool hands it rows, filters and actions. Built once, in Packages' M1, and reused by the other two.
 
 **Every tool on the frame has a big-picture counterpart and is driven by a pad** (decided 2026-10-27 by the tester), so
 the frame carries both forms: the desktop's panes side by side, and a big-screen sheet with the panes stacked in the
 menus' type, the focus moved by the pad between the sidebar, the table, the detail and the apply bar, ES-DE's button
-grammar, and the docked on-screen keyboard (`EmuSen_HotaruWindow.md` §3) for search. A tool built on it gets its
+grammar, and the docked on-screen keyboard (`EmuSen_Shell.md` §3) for search. A tool built on it gets its
 big-picture form from the frame rather than as a second window.
 
 ### 1a. Beneath the frame: one description, two forms (decided 2026-10-27 by the tester, to come first)
@@ -40,7 +40,7 @@ the form it is shown in.** LunaP gains that, and the frame is built on it.
 - **Actions declared once.** An action (LunaP's `LunaAction`, extended) carries its name, its key, its pad button and
   whether it is the main one; the desktop draws it as a toolbar or menu item, the big screen as a button and its entry
   in the help bar. A window never writes "Select / Choose" hints by hand.
-- **Text entry** in a big-screen form opens the docked on-screen keyboard (`EmuSen_HotaruWindow.md` §3) beneath the
+- **Text entry** in a big-screen form opens the docked on-screen keyboard (`EmuSen_Shell.md` §3) beneath the
   form, never over it.
 - **Checked by the toolkit.** LunaP's own tests render every canonical layout in both forms at 1280×800, 1920×1200 and
   the handheld's screen, and walk the pad's focus through each, so a window built on them inherits fit and reach rather
@@ -80,12 +80,12 @@ After the Xfce Settings Manager, one window that opens the others, each of which
 | **Home** | the hub and settings; its first-run part is *Setup*, the welcome |
 | **Scraper** | the scraping tool (§2) |
 | **Library** | the library manager (§3) |
-| **Controllers** | the controller window (`EmuSen_ControllerWindow.md`) |
-| **Display** | graphics settings and shaders (`EmuSen_ShaderWindow.md`) |
+| **Controllers** | the controller window (`EmuSen_Controllers.md`) |
+| **Display** | graphics settings and shaders (`EmuSen_Display.md`) |
 | **Mods** | the mod workshop: graphics out and in, later translation (`EmuSen_Modding.md` §4) |
-| **Packages** | packages, CHD and a package's mods (`EmuSen_PackageManager.md`) |
-| **Shell** | the shell (`EmuSen_HotaruWindow.md`) |
-| **Debugger** | the debugger and its Explore mode (`EmuSen_DebugWindow.md`) |
+| **Packages** | packages, CHD and a package's mods (`EmuSen_Packages.md`) |
+| **Shell** | the shell (`EmuSen_Shell.md`) |
+| **Debugger** | the debugger and its Explore mode (`EmuSen_Debugger.md`) |
 | **Cheats** | the cheat manager, in place of the cheat database and active cheats windows |
 
 Each tool has one name, the one the menus show; the codenames it carried before 2026-10-28 are listed in

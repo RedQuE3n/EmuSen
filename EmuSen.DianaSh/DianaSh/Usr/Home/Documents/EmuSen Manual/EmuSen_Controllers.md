@@ -1,4 +1,4 @@
-# EmuSen_ControllerWindow — Controllers, the controller window on the shared frame
+# EmuSen_Controllers — Controllers, the controller window on the shared frame
 
 *Proposal, 2026-10-27; its questions answered by the tester the same day (§5). Nothing is built.* Asked by the tester the same day: the controller window remade on
 the frame the other tools share (`EmuSen_LibraryTools.md` §1), named **Controllers**; the menus say the same.

@@ -4751,3 +4751,18 @@ it.*
 - **What it touched:** no R0 figure. D-1101's bytes came from the throwaway counter's compiled sizes, and its check
   from emusen-jit's byte counter, neither from the map. The census was rebuilt to count guest instructions.
 - **Conclusion:** **open**, a defect candidate in a measurement aid.
+
+### D-1103. Jak and Daxter's opening: runs of 20 to 23 fields in which the EE polls D1_CHCR every turn and neither VU runs
+
+- **Seen:** R0's census (Sapphire_Redesign.md, R0 results, the second addendum; 2026-10-28). 420 of the 4,800 fields
+  from 6,001 to 10,800, in runs of 20 to 23 separated by one or two fields, execute exactly 4,920,320 or 4,919,296
+  instructions, one a cycle, with no VU pair. On the interpreter tier, fields 9,177 to 9,197 make 702,875 EE reads a
+  field of 10009000h (D1_CHCR, VIF1's channel) and 702,903 taken conditional branches, one every seven instructions.
+  Idle skipping refuses the turn as a device read (`Refusal::Device`, about 172 a field) and waits out about 702,000
+  arrivals a field behind the refusal's backoff.
+- **Unknown:** whether VIF1's transfer should end sooner on the console. Nothing in the counts says why it does not
+  end while neither VU runs. Two causes are possible: the game waits on something else, or a channel stalls as D-465's
+  did.
+- **Next step, not taken:** VIF1's and the DMAC's own registers at the first field of a run, read by the debugger, and
+  the referee's pictures over the same frames.
+- **Conclusion:** **open.**

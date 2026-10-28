@@ -1129,3 +1129,116 @@ mark of 1.0 depends on R0.3's factor, which is not measured.
 No R0 figure came from the perf map. D-1101's 1,208 bytes a guest instruction came from the throwaway counter's own
 compiles (Cranelift's `code_info().total_size` for each shadow-compiled block), and its check from emusen-jit's byte
 counter. The census now counts guest instructions. The two-writer race is D-1102, with its proposed fix.
+
+### Second addendum: the plateau, the marks at §3.1's definition, and instructions an entry (measured 2026-10-28)
+
+*Decided 2026-10-28 by the tester:*
+- *The marks use §3.1's definition: a mean of 13.4 ms a field and the 95th-percentile field under 16.7 ms on the
+  handheld, not the 90th-percentile field against the mean.*
+- *Heavy fields that stay short of it are a named limitation, the tier kept.*
+
+*The critic's review of the census found the plateau below. The handheld's kernel runs (step 1) did not take place:
+EmuSen was running on the handheld, and closing it was refused by the permission system, so the handheld's own ns are
+still owed and the charger's assumed factor of 1.35 stands in for them.*
+
+| Check | Measured (desktop) | Mark at §3.1, two threads, factor 1.35 | Result |
+| --- | --- | --- | --- |
+| R0.1 the design point | the plateau excluded: EE executed mean **2.19 M**, p95 **4.08 M**; VU1 mean 1.14 M, p95 2.77 M | — | **redrawn** (below) |
+| R0.2 ns, at Jak's working set and 96 bytes | **1.40–1.47 ns** a guest instruction with §4.2's 14.5 instructions an entry; 2.00 with today's 2.87 | **2.04** (2.75 on the handheld) | **pass** with either; 1.69 for the arena's own fields, which only §4.2's entries meet |
+| R0.2 bytes | the static prototype **568** bytes a guest instruction; at that size the ring costs 13.2–13.7 ns | at most 96 | **fail** |
+| R0.3 the factor | not run | at most 2.0 | **not run** |
+| R0.4 lanes | four lanes: 1.06 (add), 0.86 (mul); two operations at once: 0.46, 0.39; a multiply-add 1.17 a lane operation in four lanes, 0.64 paired | **0.83** (1.125 on the handheld) | four lanes **fail**; paired **pass**; the 60/40 mix of pairable and single operations, an estimate: add 0.70 and mul 0.58 pass, the multiply-add about 0.85 at the mark |
+
+**Verdict: still stop by §2's rule**, but on two narrow points. (1) R0.2's byte mark: the ns pass only if the static
+form comes to about 96 bytes a guest instruction, and the one prototype measures 568. (2) R0.4 is under the mark
+paired but not alone, and the mix is an estimate. R0.3 is not measured. What would settle each is in the last
+paragraph.
+
+#### The plateau, proven
+
+- **Which fields.** 420 of the 4,800 fields, 82 of the arena window's 300, execute exactly 4,920,320 or 4,919,296 EE
+  instructions with no VU pair, in runs of 20 to 23 fields separated by one or two (8,381–8,471, 9,176–9,268,
+  9,513–9,673, 10,439–10,530, 10,728–10,800). The critic counted 428 and 83; the difference is the join's.
+- **What runs** (a counting patch on the EE's step, in the stage's scratch and reverted, counting transfers by class
+  and keeping no address; the interpreter tier with idle skipping on, from the state at 9,000, fields 9,177 to 9,197).
+  Each field makes 702,903 taken conditional branches, one every seven instructions, and no other transfer. With blocks
+  on, the working-set census shows the same loop as two hot blocks of five or six guest instructions (272 of the 420
+  fields), entered about 446,000 times a field.
+- **What it reads** (the bench's `--registers`, the same fields). The EE reads **10009000h, D1_CHCR**, the control
+  register of the DMAC's channel 1 (VIF1), 702,875 times a field: once a turn. Nothing else the EE reads comes close;
+  the IOP's busiest register is read 333 times a field. No VU pair runs, so VIF1 is not feeding VU1 while the EE waits
+  for the channel to end.
+- **Why the skipper misses it.** Idle skipping refuses a turn that reads a unit's register at 10000000h
+  (`Refusal::Device`). The counts show about 172 refusals a field on that kind and about 702,000 arrivals a field
+  waiting behind its backoff. Every turn is stepped, and the EE executes an instruction every cycle of the field.
+- **The observations those fields make:** 702,875 EE register reads a field. That is **seven times P-R1's bound of
+  100,000 events a field**, so the plateau, as the console runs it, refutes P-R1 for these fields unless the loop is
+  passed rather than observed. Passing it would need the skipper to treat a DMAC register as changed only at the
+  DMAC's events. That is not done here: idle skipping is unchanged.
+- **Whether the console does the same is open (D-1103):** a VIF1 transfer that does not end for 23 fields while
+  neither VU runs may be the game's own wait, or a stall like D-465's.
+
+#### The design point and the marks, redrawn at §3.1's definition
+
+The plateau is excluded from the design point and named. Its fields keep their tier: the poll is exact, and on today's
+skipper they cost a full field of EE instructions. With the plateau excluded, Jak's 4,380 other fields of the opening:
+
+| A field | mean | p90 | p95 |
+| --- | --- | --- | --- |
+| EE instructions executed | 2.187 M | 3.618 M | **4.083 M** |
+| VU1 pairs | 1.144 M | 2.345 M | **2.771 M** |
+| VU0 pairs | 0.230 M | 0.375 M | 0.521 M |
+| both VUs' pairs | 1.375 M | 2.721 M | 3.159 M |
+
+The arena window's 218 other fields: EE mean 3.635 M, p95 4.919 M; VU1 mean 2.146 M, p95 2.850 M.
+
+**The marks.** §3.5's two-thread allocation gives the EE 9.0 ms and VU1 9.0 ms of the handheld's 13.4 ms mean. At the
+95th-percentile field the same shares of the 16.7 ms ceiling are 11.2 ms each. An item's allowance is the smaller of
+the mean budget over the mean count and the p95 budget over the p95 count:
+
+| Allowance (handheld ns; desktop at 1.35) | Jak's opening | the arena's fields |
+| --- | --- | --- |
+| an EE instruction | min(4.12, **2.75**) → **2.04** | min(2.48, **2.28**) → 1.69 |
+| a VU1 pair | min(7.87, **4.05**) → 3.00 | min(4.19, **3.94**) → 2.92 |
+| a lane operation (R0.4's 1.0 at 3.6 ns a pair, scaled) | **1.125** → **0.83** | 1.09 → 0.81 |
+| one thread, an EE instruction (5.0 ms mean, 6.2 at p95) | min(2.29, 1.53) → 1.13 | — |
+
+On one thread no measured EE figure meets 1.13. The split (§4.7) is what lets the EE's marks pass.
+
+#### Instructions an entry under §4.2's rule
+
+The same counting patch on the arena's fields 9,061 to 9,175, interpreted, gives per field:
+- 4.053 M instructions;
+- 251,942 taken conditional branches;
+- 395 J and JAL;
+- 21,211 JR and JALR;
+- 6,282 other non-sequential steps: exceptions, ERET and the skipped slots of likely branches.
+
+That is **14.5 instructions a transfer**. A block that ends only at a transfer it cannot follow (§4.2) runs at most that
+many an entry; page ends and lines the cache does not hold shorten it, and were not counted. Today's blocks run 2.87
+an entry because loads and stores leave them.
+
+**The ring at that length** (`ring mix`, desktop, two rounds): Jak's p90 working set of 83,077 guest instructions in
+blocks of 14.5, 652 hot and 5,078 cold, 70 hot laps to each cold pass (nine tenths of the entries hot). At 99 bytes
+(8.23 MB of code) it costs 20.4–21.4 ns an entry and **1.40–1.47 ns a guest instruction**. At the prototype's 587
+bytes (48.8 MB) it costs 13.2–13.7 ns.
+
+#### An AVX-512VL lane form (proposed, not built; estimates)
+
+The handheld's processor (a Ryzen Z1 Extreme) and the desktop's both report AVX-512VL. Three of its instructions
+replace sequences in today's adder:
+- `vplzcntd` gives the leading bit directly, replacing the five-instruction conversion trick;
+- `vpternlogd` merges the sign, field and mask logic three operations at a time;
+- mask registers replace `blendv` and the zero handling.
+
+The estimate is a quarter to a third fewer instructions for an addition. That would bring the four-lane full form to
+about 0.75 to 0.8 ns a lane addition on the desktop, just under the 0.83 mark, and the paired 256-bit form
+to about 0.35. 512-bit registers would hold four operations at once, which few microprograms supply in a row (60 %
+pair even two). Worth building only if R0.4's mix is to be measured, not estimated.
+
+#### What would settle the remaining points
+
+- **R0.2's bytes:** an emitter prototype of §4.2's static form (the page table, chaining, no replay and no undo log)
+  measured on the same counter, against 96 bytes.
+- **R0.4's mix:** the paired kernel run on recorded microprograms, rather than the 60/40 estimate.
+- **R0.3 and both kernels' handheld ns:** the charger session, once EmuSen there is closed.

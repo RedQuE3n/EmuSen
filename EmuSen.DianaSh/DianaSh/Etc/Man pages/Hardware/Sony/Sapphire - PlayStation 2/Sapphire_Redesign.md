@@ -998,3 +998,134 @@ on llvmpipe, a single software type that reads 4 MB in 0.20 ms. That is a check 
 3. **[decision] The scoreboard's games (§11 Q2), for a design point that is more than one game's opening.**
    Recommended as §11 Q2: press scripts and states for Kingdom Hearts and Dark Cloud 2 from their discs in the probe's
    folder, and the PlayStation 2 games installed on the handheld.
+
+### Addendum: the two follow-up measurements (measured 2026-10-28)
+
+*Decided 2026-10-28 by the tester: measure the two numbers that could move the stop (R0 results, Q1) before any
+verdict on the target, and give them to the critic. The scoreboard is Jak's opening, Kingdom Hearts, Dark Cloud 2 and
+the PlayStation 2 games installed on the handheld. Battery runs on the handheld are dropped, all of them: R0.3 measures
+the handheld on the charger. The critic's estimate of a factor of about 2 on battery stays only as a recorded risk,
+never measured. Measured figures and estimates are kept apart below; every estimate says so.*
+
+**Verdict: unchanged, stop.** Neither follow-up moves R0.2 or R0.4 within its mark at the design point.
+
+| Check | Measured (desktop) | Mark | Moves the stop? |
+| --- | --- | --- | --- |
+| R0.2, the ring at a field's working set | **2.00 ns** a guest instruction at 96 bytes (two rounds, 2.01 / 2.00) | 0.92 (two threads, factor 2) and 1.36 (factor 1.35) | **no**: 2.2 and 1.5 times the marks, against 2.4 and 1.6 at all 15,549 blocks |
+| R0.4, two operations at once in eight lanes | **0.46 ns** a lane addition, **0.39** a lane product; a multiply-add 1.29 a lane (0.64 a lane operation) | 0.5 | **no**: under the mark for an addition or a product alone, over it for the multiply-add, the VUs' most common operation (§56.2). Only 60 % of the adder's and multiplier's operations can be paired |
+| R0.1 on Kingdom Hearts and Dark Cloud 2 | not run | — | — |
+
+**Kingdom Hearts and Dark Cloud 2 (C): skipped.** Both boot from the probe's images, but neither reaches gameplay on the
+core. Dark Cloud 2 holds a grey shape after its memory-card message (`Sapphire_Native.md` §39.19), and Kingdom Hearts
+has no press script past its logo (D-464). Getting them to gameplay is core work, not part of R0.
+
+#### R0.2 again: the working set a field
+
+**The census** (the bench's `--working FILE`, the `census` feature): for each field, the compiled blocks entered, their
+guest instructions, entries and steps, and the fewest blocks holding nine tenths of the entries (the hot set). Jak's
+4,800 fields from 6,000 to 10,800, `--defaults`, from the state at 6,000, under a watch comparing each 100 fields'
+time with the first census's for the same frames (0.97 to 1.08 times throughout). Two earlier attempts ended early.
+One was stopped by a watch rule that tripped on Jak's own swings, and in one the sizes the perf map gave were corrupt
+(D-1102). A third was killed from outside the run at frame 7,313, its watch healthy to the end.
+
+| A field | p50 | p90 | max |
+| --- | --- | --- | --- |
+| compiled blocks entered | 4,072 | 10,200 | 12,887 |
+| their guest instructions | 32,846 | 83,077 | 105,734 |
+| hot blocks (nine tenths of the entries) | 1,077 | 1,926 | 2,790 |
+| their guest instructions | 4,778 | 9,450 | 17,571 |
+| steps an entry | 2.87 | 3.01 | — |
+| steps in compiled code | 0.87 M | 1.48 M | 3.70 M |
+
+The arena window alone has p90 fields of 11,366 blocks and 91,879 guest instructions, 2,168 blocks hot. A field
+enters about two thirds as many blocks as §44.8's 15,549 live, and nine tenths of its entries fall on a fifth of them.
+**What the census does not cover:** only today's compiled code. That is 0.87 M to 1.48 M steps of the 1.94 M to 4.92 M
+a field executes (R0.1). The interpreted remainder, which P-R2 would compile, has code of its own that no count here
+includes, so the working set measured is a lower bound.
+
+**The ring at that working set** (`ring mix`): the p90 field by blocks entered, 2,048 hot blocks in a random ring
+turned 36 times to each pass through a random chain of the 8,152 cold ones. That makes the hot blocks nine tenths of
+the entries, as measured. Each entry runs 2.87 guest instructions, every block's place in memory is random, and the
+rest is as R0.2's ring. The medians of five laps, two rounds:
+
+| Ring | Code | ns an entry | ns a guest instruction |
+| --- | --- | --- | --- |
+| one block, 3 instructions an entry, 96 bytes | — | 2.26 | 0.75 |
+| the 2,048 hot blocks alone, 96 bytes | 0.56 MB | 4.03 | 1.41 |
+| **hot and cold, 96 bytes** | 2.82 MB | **5.77 / 5.74** | **2.01 / 2.00** |
+| hot and cold, 96 bytes for each of a block's 8.13 static instructions (281 an executed one) | 8.26 MB | 15.0 / 15.0 | 5.23 / 5.21 |
+| hot and cold, the static prototype's bytes (586) | 17.2 MB | 30.7 / 30.2 | 10.7 / 10.5 |
+
+The working set takes the ring from 2.19 ns to 2.00 at 96 bytes, and the hot set alone would take it to 1.41. Neither
+meets 0.92. The hot set alone is within 4 % of the 1.36 allowed at a factor of 1.35, but the cold entries are a tenth
+of the field's, and they carry the cost. **What dominates now is the entry**: today's blocks run 2.87 instructions an
+entry, so even one hot block costs 0.75 ns an instruction, most of it the entry's compares, its counters and the call.
+
+**Could longer blocks close it?** (estimates, not measurements) The redesign's blocks end only at transfers they
+cannot follow (§4.2), so an entry would carry more instructions than today's 2.87, which leave at loads, stores and
+side exits. If the entry's fixed cost of about 1.5 ns (the one-block ring's 2.26 ns less its three instructions' work)
+were spread over 10 instructions, the hot-and-cold ring would come to about 1.1 to 1.3 ns an instruction at 96 bytes.
+That is within 1.36 and still above 0.92. Two things stand against it. The 96 bytes are the mark, not a measured form:
+the prototype measures 568. And the interpreted code the census does not count would join the working set. **R0.2
+stays failed.**
+
+#### R0.4 again: the lane form specialised and paired
+
+`float_lanes` is now one generic form over AVX2's four lanes and eight, of which eight are two independent four-lane
+operations. Four forms are timed:
+
+- **the full form:** results and MAC words;
+- **`*_bits`:** without the MAC word, for operations whose flags no later pair reads;
+- **`*_fast`:** a short path for vectors with no zero operand and no exponent overflow or underflow, with any other
+  vector sent to the full form;
+- **`*2`:** two operations at once.
+
+Every form is graded bit-equal, results and MAC words with the field masks, against `float` lane by lane: 4,596,736
+reduced-set vectors, 4,000,000 class vectors and the billion-lane random test, each now also checking the paired, flag-free
+and short forms. Seeded faults, each caught by both tests:
+
+- F5: the second operation's field mask read from the first's;
+- F6: the product's odd lanes blended wrongly;
+- F7: the short path's underflow check dropped.
+
+| ns a lane operation (three rounds; seven or nine laps each) | Four lanes | Eight lanes, two operations |
+| --- | --- | --- |
+| add, full | 1.09–1.25 (the first kernel's 1.06) | **0.456–0.472** |
+| mul, full | 0.95–1.09 (the first kernel's 0.86) | **0.383–0.393** |
+| multiply-add, full (two lane operations) | 2.34–2.68 | 1.279–1.294 |
+| add, without the MAC word | 0.817–0.822 | 0.453–0.468 |
+| mul, without the MAC word | 0.697–0.700 | 0.385–0.395 |
+| add, the short path | 1.244–1.248 | — |
+
+The generic form's four lanes are slower than the first kernel's: its even-and-odd product and the mask built per
+call cost about 10 % on the adder and about 20 % on the multiplier. The first kernel's figures stand for four lanes.
+The short path is no faster than the full form. §56.2's shares put a zero or would-be denormal in one VU addition
+operand in 10 to 25 %, so most four-lane vectors hold such a lane and take the full form after the short one. Dropping
+the MAC word saves a quarter. **Pairing halves the cost a lane**: an addition or a product alone comes under 0.5.
+
+**How often two operations are there to pair** (a counting patch on VU1's interpreter, kept in the stage's scratch
+and reverted; the arena and island windows, 360 fields each from their states). An adder or multiplier upper
+operation (ADD, SUB, MUL, MADD, MSUB in every form, OPMULA, OPMSUB) can run with the next pair's upper operation if
+that one is also one of them and reads no lane of a VF register, nor ACC, that the first writes. Pairs are taken
+greedily along the order of execution, a pairing undone when the next pair run is not the next in memory. The count
+is static over distinct pair positions (by address and both words) and dynamic over the pairs run:
+
+| | `jak-arena` | `jak-island` |
+| --- | --- | --- |
+| VU1 pairs run | 587.1 M | 434.8 M |
+| of which adder or multiplier upper operations | 318.8 M (54.3 %) | 238.9 M (54.9 %) |
+| **those run two at a time** | **192.9 M (60.5 %)** | **143.9 M (60.2 %)** |
+| distinct pair positions; adder or multiplier; pairable with the next | 7,181; 3,725; 1,723 (46.3 %) | 5,354; 2,718; 1,272 (46.8 %) |
+
+**What the two give together** (an estimate from measured parts). With 60 % of the adder's and multiplier's
+operations paired and 40 % single on the first kernel, a lane addition averages about 0.6 × 0.46 + 0.4 × 1.06 =
+0.70 ns and a lane product about 0.6 × 0.39 + 0.4 × 0.86 = 0.58 ns. A multiply-add, at 0.64 a lane operation paired,
+is above the mark even when paired. MAC words elided where unread would take some 10 to 25 % off, by a share not yet
+counted. **R0.4 stays failed at the desktop's 0.5**, by about 1.2 to 1.4 times instead of 1.7 to 2.1. The handheld's
+mark of 1.0 depends on R0.3's factor, which is not measured.
+
+#### The perf map and D-1101
+
+No R0 figure came from the perf map. D-1101's 1,208 bytes a guest instruction came from the throwaway counter's own
+compiles (Cranelift's `code_info().total_size` for each shadow-compiled block), and its check from emusen-jit's byte
+counter. The census now counts guest instructions. The two-writer race is D-1102, with its proposed fix.

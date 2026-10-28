@@ -315,8 +315,7 @@ macro_rules! entry {
             unsafe { <$t>::load(v.as_ptr()) }
         }
         #[inline(always)]
-        fn arith(f: impl Fn($t, $t) -> ($t, $t, $t), a: &[u32; $n], b: &[u32; $n], old: &[u32; $n], mask: u32) -> $out {
-            let (bits, over, under) = f(get(a), get(b));
+        fn arith((bits, over, under): ($t, $t, $t), old: &[u32; $n], mask: u32) -> $out {
             let (bits, mac) = flagged(bits, over, under, get(old), mask);
             $out { bits: out(bits), mac }
         }
@@ -349,17 +348,17 @@ mod four {
     /// `float::add` on four lanes, written where `mask` (lane 0 at bit 3) allows over `old`.
     #[target_feature(enable = "avx2")]
     pub fn add(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-        arith(add_raw, a, b, old, mask)
+        arith(add_raw(get(a), get(b)), old, mask)
     }
     /// `float::sub`: the addition of `b` with its signs reversed.
     #[target_feature(enable = "avx2")]
     pub fn sub(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-        arith(add_raw, a, &out(negated(b)), old, mask)
+        arith(add_raw(get(a), negated(b)), old, mask)
     }
     /// `float::mul`.
     #[target_feature(enable = "avx2")]
     pub fn mul(a: &[u32; 4], b: &[u32; 4], old: &[u32; 4], mask: u32) -> Vector {
-        arith(mul_raw, a, b, old, mask)
+        arith(mul_raw(get(a), get(b)), old, mask)
     }
     /// `float::fused`: `acc ± a × b`, with the products' own flags for the sticky bits.
     #[target_feature(enable = "avx2")]
@@ -400,15 +399,15 @@ mod eight {
     /// bits 19-16.
     #[target_feature(enable = "avx2")]
     pub fn add2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
-        arith(add_raw, a, b, old, mask)
+        arith(add_raw(get(a), get(b)), old, mask)
     }
     #[target_feature(enable = "avx2")]
     pub fn sub2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
-        arith(add_raw, a, &out(negated(b)), old, mask)
+        arith(add_raw(get(a), negated(b)), old, mask)
     }
     #[target_feature(enable = "avx2")]
     pub fn mul2(a: &[u32; 8], b: &[u32; 8], old: &[u32; 8], mask: u32) -> Pair {
-        arith(mul_raw, a, b, old, mask)
+        arith(mul_raw(get(a), get(b)), old, mask)
     }
     #[target_feature(enable = "avx2")]
     pub fn fused2(acc: &[u32; 8], a: &[u32; 8], b: &[u32; 8], subtract: bool, old: &[u32; 8], mask: u32) -> FusedPair {

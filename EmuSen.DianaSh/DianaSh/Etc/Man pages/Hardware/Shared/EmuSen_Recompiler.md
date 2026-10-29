@@ -795,3 +795,51 @@ which a rollback needs. Neither of those is in the Cranelift forms' 105.9, becau
   catches that gap today, and it does not fall within E0's slice, so it is added to E1's verification plan.
 - **Form coverage** (§7.1) was not instrumented with counters at E0; the walk across a page was added when the dock
   window found its path untested. E1 should add the counters before it adds paths.
+
+## 15. E1, the EE's S36 and S37 classes and the dynamic prefix (2026-10-29)
+
+*Decided 2026-10-29 by the tester: E1 starts with the dynamic prefix (§3.2), before the instruction classes.*
+
+### 15.1 The prefix's estimate, written before the build
+
+*Set on 2026-10-29, before any of the prefix's code was written. Nothing in this subsection is measured.*
+
+**Where the prefix lives** [A]. Since E0 the static form's code holds no timing at all: its cycles are constants in each
+exit's record, which the shared exit applies (§14.3, "What the exits commit"). So a dynamic prefix needs no code of its
+own. Where the entry's test fails, the block notes it in the context (a store laid cold) and runs on into the same body
+in place of jumping to the Cranelift function; at the exit, the shared exit runs the core's own issue model from the
+entry's model over the first steps, and at the first step *c* where that model is the static snapshot shifted in time
+for everything the rest of the block can read, takes the record's constants rebased by one add. Where no such *c*
+comes before the exit, the model runs over every step, which is the interpreter's timing and exact by definition. The
+convergence is tested per entry, not found by the planner for a class of entries as §3.2 proposed: a test at run time
+needs no bound on the class and is exact for every member of it. **No entry falls back whole.**
+
+**The bytes** [E]. E0's working set on the arena's covered blocks was the static form for the 61.4 % of steps it ran and,
+for the rest, the entry's test and then the Cranelift function with today's levers, about 424 hot bytes a guest
+instruction on the arena (`Sapphire_Redesign.md`, "The exact design's work a block"): about
+0.614 × 103.4 + 0.386 × (7.5 + 424) ≈ **230**. With the prefix every covered step runs the exact form, whose code is
+unchanged: **103.4**. The estimate of the saving is therefore about **127 hot bytes a guest instruction on the working
+set**; the stop rule's half is 63. The Cranelift function's bytes on the same blocks are measured in the same run (the
+shadow's `today+levers`), so the 424 becomes a measurement there.
+
+**The static share *s*** [E]. Of E0's entries not at rest, the reason is most often the pair slot left open (an entry by
+fall-through, or after an instruction the interpreter ran) or a result still in flight from such an instruction. An
+open slot whose first instruction cannot pair converges at *c* = 1; one that pairs shifts the pairing parity until a
+dependent instruction issues alone in both models, which on the EE's dependency-dense code is usually the next one or
+two. Taking 70 % of those entries at *c* about 1.5, 15 % at about 3.5 and 15 % never before their exit (3.64 steps an
+entry, E0's mean for them): about 27 M of the arena's 121 M covered steps in prefixes, so ***s* about 78 %, 72 to 85 %**.
+
+**The nanoseconds** [E]. The code's bytes are those E0's ring measured at 103: 2.14 to 2.25 ns a guest instruction on
+the desktop and 2.32 to 2.36 on the handheld with today's entries, now for every covered step rather than 61 % of them.
+The prefix's own cost is in the shared exit, where the ring cannot see it: a copy of the issue model (about 900 bytes),
+then one issue and one comparison a step of the prefix, estimated at **15 to 35 ns an entry not at rest**, about 1.5 to
+3.5 ns a guest instruction of those entries. Whether that is less than the Cranelift function's cost on the same
+entries is not known from the ring, so **the arena window's wall time with the baseline dispatched is recorded beside
+E0's**, two rounds each.
+
+**P-E4** [E] said the working set would be within 1.15 times the static form's if *s* ≥ 90 % and the prefix ended within
+four instructions. Here the working set's code is the static form's by construction (the ratio is 1.0 at any *s*), and
+*s* instead prices the shared exit's work: the share of steps whose cycles are constants rather than computed.
+
+**Stop rules** for this step: the working set saves under 63 hot bytes a guest instruction, or any entry's cycles or
+model differ from the issue model's.

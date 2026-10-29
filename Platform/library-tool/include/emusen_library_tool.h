@@ -1,5 +1,5 @@
 /*
- * emusen_library_tool.h - the emusen.library service, version 1.3: the library tool's jobs as a DianaSh command module
+ * emusen_library_tool.h - the emusen.library service, version 1.4: the library tool's jobs as a DianaSh command module
  * reaches them. A module never links Galaxia (EmuSen_DianaSh.md, section 16, Q11), so the tool, which reads Galaxia's
  * tree and settings, is lent to it as this table, which the platform library hands every shell it makes; the shell
  * copies it into each call unread. The calls are the platform library's own emusen_tool_job_* (emusen_platform.h),
@@ -8,7 +8,8 @@
  * are EmuSen_GamePackages.md, section 12.3's; since 1.1 the table is unchanged and a request may also be a pkg one,
  * whose ops and package events are section 14's; since 1.2 also pkg-patch-add and pkg-patch-rm, section 15's; since
  * 1.3 pkg-make's self_contained and zip, a package's zip among pkg-check's paths, pkg-identity and pkg-zip, section
- * 19's.
+ * 19's; since 1.4 a request's output (the folder CHDs go to) and convert's beside (each CHD beside its original in the
+ * library), section 20's.
  */
 #ifndef EMUSEN_LIBRARY_TOOL_H
 #define EMUSEN_LIBRARY_TOOL_H
@@ -18,7 +19,7 @@
 
 #define EMUSEN_LIBRARY_TOOL_SERVICE "emusen.library"
 #define EMUSEN_LIBRARY_TOOL_MAJOR 1u
-#define EMUSEN_LIBRARY_TOOL_MINOR 3u
+#define EMUSEN_LIBRARY_TOOL_MINOR 4u
 
 typedef struct emusen_tool_job emusen_tool_job;
 

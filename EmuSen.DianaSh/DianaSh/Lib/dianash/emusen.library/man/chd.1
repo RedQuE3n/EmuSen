@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
     chd ls [<path>...]
-    chd convert <path>... [--fast] [-j <threads>]
+    chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside]
     chd check [<path>...]
     chd wait [chd<n>]
 
@@ -17,16 +17,19 @@ DESCRIPTION
     Which console a file is for is the library scan's own routing, then
     the nearest console folder above it (psx, segacd).
 
-    THE LIBRARY IS ONLY READ. Nothing under it is written, renamed or
-    removed: no CHD, no package, no link. A batch whose output folders and
-    the library overlap is refused before anything is written.
+    THE LIBRARY IS ONLY READ, unless a conversion is given --beside.
+    Nothing under it is written, renamed or removed: no CHD, no package,
+    no link. A batch whose output folders and the library overlap is
+    refused before anything is written. With --beside the one thing
+    written into the library is each disc's new CHD (see BESIDE THE
+    ORIGINAL); no original is ever written, renamed or removed.
 
     'convert' converts each disc with chdman, MAME's CHD manager, which a
-    build ships beside the platform library. The CHD goes to Compressed,
-    at the disc's path in the library with .chd (psx/Rayman (USA).cue
-    becomes Compressed/psx/Rayman (USA).chd), first as a partial file
-    that is renamed into place only when three checks pass in the same
-    run:
+    build ships beside the platform library. The CHD goes to the output
+    folder, at the disc's path in the library with .chd (psx/Rayman
+    (USA).cue becomes <output>/psx/Rayman (USA).chd), first as a partial
+    file that is renamed into place only when three checks pass in the
+    same run:
 
         1  chdman's own verify: every hunk decompressed, the overall SHA-1
            compared;
@@ -51,15 +54,61 @@ DESCRIPTION
     WAVE file, and a file that is neither a raw track nor an ISO image are
     skipped with the reason. One disc failing never stops a batch.
 
+    THE OUTPUT FOLDER is Compressed unless AppSettings.ChdOutputDirectory
+    names another, in appsettings.json or from the Compressed Discs
+    window; --output <folder> names one for this command alone, a path of
+    the shell (/ is EmuSen's home), so a folder outside the home is named
+    in the setting. The folder follows the rules of every folder setting:
+    ~ is the home, a relative path or a file is refused, and one not yet
+    there is made. It may be neither inside the library nor hold it;
+    either is refused with words before anything is written. A disc's
+    package names a CHD outside Compressed by its full path, so changing
+    the setting later leaves every earlier CHD found where it was, and a
+    disc already converted anywhere is not converted again.
+
     --fast writes chdman's Zstandard codecs, cdzs,cdfl, in place of its
     defaults, cdlz,cdzl,cdfl: about 1.3 to 1.8 times faster to decode for
     a CHD about a point larger. -j sets the threads chdman compresses
     with; all of the machine's by default.
 
     'check' runs the three checks again on discs already converted,
-    against their packages; the originals are not read. 'ls' lists the
-    disc games with their state: converted, not converted, changed (an
-    original changed since its conversion) or missing (its CHD is gone).
+    against their packages, wherever their CHDs are; the originals are
+    not read. 'ls' lists the disc games with their state: converted, not
+    converted, changed (an original changed since its conversion) or
+    missing (its CHD is gone); a CHD beside its original is marked so.
+
+BESIDE THE ORIGINAL
+    --beside writes each disc's CHD into the library, in the folder of
+    its original, as <stem>.chd: psx/Rayman (USA)/Rayman (USA).cue gets
+    psx/Rayman (USA)/Rayman (USA).chd. It is a choice for the one command
+    and never a setting, so that no script and no forgotten setting
+    writes the library. Before the first disc, the command's first line
+    says that it writes into the library and how many CHD files it adds
+    at most: the discs not converted whose name is free.
+
+    The originals are never removed, renamed or overwritten. Where a
+    file of the CHD's name is already there, that disc is left as it is
+    with the reason, and nothing is written for it. chdman writes to
+    <stem>.chd.partial-<process> in the same folder; the partial is
+    renamed to <stem>.chd only after the three checks pass, by a rename
+    that refuses to replace a file (renameat2's RENAME_NOREPLACE on
+    Linux), and is removed when any check fails or the job is stopped. A
+    partial a killed process left is removed an hour later, the next
+    time that disc is converted: only a file of that exact name. Should
+    the package not be written, the CHD just placed is taken out again,
+    so the library never holds a CHD without its record.
+
+    The library shows such a game once, launching the CHD, while the
+    tool's record verifies it. The record is the disc's package, not the
+    file's name: its container is a CHD whose game is in the library,
+    whose three checks are each recorded as passed with its SHA-1, whose
+    CHD has the size and time recorded, and whose every original file
+    still has the size and time it had. Then the package claims the
+    originals, and the scan lists the package alone. Without the record
+    (no package, or one that does not verify) the CHD and the original
+    are both listed, each opening as itself, and a convert leaves the
+    disc as it is, its name being taken. The originals stay on disk in
+    every case.
 
 JOBS
     Each command runs as a job, followed one line a disc until it ends or
@@ -84,6 +133,8 @@ EXAMPLES
     chd ls psx
     chd convert psx SCD
     chd convert "psx/Crash Bandicoot (USA).bin" --fast
+    chd convert psx --output /Compressed-PS1
+    chd convert SCD --beside
     chd check psx
     ps
     chd wait chd1
@@ -102,5 +153,6 @@ SOURCES
 
 SEE ALSO
     EmuSen_GamePackages.md (sections 4 and 12: the design, the checks,
-    the events and the measurements), EmuSen_Galaxia.md (section 3.10,
+    the events and the measurements; section 20: the output folder and
+    beside the original), EmuSen_Galaxia.md (section 3.10,
     the package manifest), EmuSen_Disc.md (how a CHD is read)

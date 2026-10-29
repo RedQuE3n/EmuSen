@@ -136,6 +136,11 @@ Moved here from `EmuSen.Mistress/Settings/`; it holds no frontend types, so ther
 written; it is the first folder setting held to the rules of §7.7. See `EmuSen_Firmware.md` §2.3 and
 `EmuSen_Settings_Reference.md` §4.121.
 
+`ChdOutputDirectory` (default blank, which is `home/Compressed`) is where the CHD tool writes its CHDs, at each disc's
+path in the library. It follows §7.7's rules, and the tool refuses a value that lies inside `RomDirectory` or holds
+it. The Compressed Discs window sets it, and `chd convert --output` overrides it for one command. Writing beside the
+originals is a choice for one batch and has no setting. See `EmuSen_GamePackages.md` §20.
+
 The class name and the file name are unchanged, so existing files load as-is.
 
 ### 3.2 `audio.json` — `AudioConfig`

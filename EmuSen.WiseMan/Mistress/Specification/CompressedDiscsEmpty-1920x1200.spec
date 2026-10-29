@@ -19,8 +19,8 @@ tree
         4 ButtonBar at=1376,919,135,66 by=panel limit=350.48,187,1219.05,822 paints=#9C9CA0FF role=toolbar
           5 Button at=1376,919,135,66 by=clip drawn focus heard=CLOSE limit=1376,919,135,66 name=CompressedDiscsClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
             6 TextBlock at=1401.5,928,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1376,919,135,66 owner=5 paints=#EEEEF0FF role=text size=26 text=CLOSE
-      7 ScrollViewer at=410,229,1101,627 by=panel fades=b limit=350.48,187,1219.05,822 overflow=88.5 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=410,229,1101,627
-        8 StackPanel at=410,229,1095,715.5 by=scroll in=7 limit=410,229,1101,627 role=none seen=410,229,1095,627
+      7 ScrollViewer at=410,229,1101,627 by=panel fades=b limit=350.48,187,1219.05,822 overflow=273 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=410,229,1101,627
+        8 StackPanel at=410,229,1095,900 by=scroll in=7 limit=410,229,1101,627 paints=#86868AFF,#9C9CA0FF role=none seen=410,229,1095,627
           9 HintText name=CompressedDiscsAbout paints=#86868AFF role=text volatile="its words name the run's own folders"
           10 FieldRow at=410,361,1095,229.5 by=scroll heard="Convert or check" in=7 limit=410,229,1101,627 paints=#9C9CA0FF role=group
             11 TextBlock at=410,361,1095,43.5 box=730,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Convert or check" in=7 layout=138.12,28.8 limit=410,361,1095,229.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Convert or check"
@@ -38,17 +38,28 @@ tree
             23 TextBlock at=410,614.5,1095,43.5 box=730,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Progress in=7 layout=71.38,28.8 limit=410,614.5,1095,93 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Progress
             24 StackPanel at=410,664,1095,43.5 by=clip heard=Progress in=7 limit=410,614.5,1095,93 role=none
               25 TextBlock at=410,664,1095,43.5 box=730,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="No batch has run since this window opened." in=7 layout=358.42,28.8 limit=410,614.5,1095,93 name=CompressedDiscsProgressText paints=#9C9CA0FF role=text size=24 text="No batch has run since this window opened."
-          26 FieldRow at=410,731.5,1095,213 by=scroll heard=Discs in=7 limit=410,229,1101,627 paints=#9C9CA0FF role=group seen=410,731.5,1095,124.5
-            27 TextBlock at=410,731.5,1095,43.5 box=730,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Discs in=7 layout=43.75,28.8 limit=410,731.5,1095,213 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Discs
-            28 HintText at=410,781,1095,36 box=730,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Each disc's size and state; choose discs to convert or check only those." in=7 layout=483.2,24 limit=410,731.5,1095,213 paints=#86868AFF part role=text size=20 text="Each disc's size and state; choose discs to convert or check only those."
-            29 ContentControl at=410,823,1095,121.5 by=clip heard=Discs in=7 limit=410,731.5,1095,213 paints=#9C9CA0FF role=none seen=410,823,1095,33
-              30 EmptyState at=417.5,823,1080,121.5 by=clip heard="No discs to convert" in=7 limit=410,823,1095,121.5 name=CompressedDiscsEmpty paints=#86868AFF,#9C9CA0FF role=text seen=417.5,823,1080,33
-                31 TextBlock at=839,823,237,43.5 box=158,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="No discs to convert" in=7 layout=157.13,28.8 limit=417.5,823,1080,121.5 name=PART_Message paints=#86868AFF part role=text seen=839,823,237,33 size=24 text="No discs to convert"
+          26 FieldRow at=410,731.5,1095,160.5 by=scroll heard="Output folder" in=7 limit=410,229,1101,627 paints=#9C9CA0FF role=group seen=410,731.5,1095,124.5
+            27 TextBlock at=410,731.5,1095,43.5 box=730,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Output folder" in=7 layout=107.06,28.8 limit=410,731.5,1095,160.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Output folder"
+            28 HintText at=410,781,1095,36 box=730,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Kept for every batch. It may not be inside the library, nor hold it." in=7 layout=433.48,24 limit=410,731.5,1095,160.5 paints=#86868AFF part role=text size=20 text="Kept for every batch. It may not be inside the library, nor hold it."
+            29 PathPickerRow at=410,823,1095,69 by=clip heard="Output folder" in=7 limit=410,731.5,1095,160.5 name=CompressedDiscsOutput paints=#9C9CA0FF role=group seen=410,823,1095,33
+              30 TextBox at=410,823,900,69 drawn focus heard="Choose the Folder for CHDs" in=7 name=PART_Path op paints=#0E0E10FF,#55555AFF,#D2D2D6FF part role=edit seen=410,823,900,33
+                31 ScrollViewer allow="a text box scrolls its own text" at=426.5,833.5,867,48 in=7 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer seen=426.5,833.5,867,22.5
+                  32 TextBlock name=PART_Placeholder paints=#86868AFF part role=text volatile="its words name the run's own folders"
+              33 Button at=1322,824.5,183,66 drawn focus heard=BROWSE... in=7 name=PART_Browse op paints=#55555AFF,#9C9CA0FF part role=button seen=1322,824.5,183,31.5 text=Browse...
+                34 TextBlock at=1347.5,833.5,132,48 box=88,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=BROWSE... in=7 layout=87.54,31.2 limit=1322,824.5,183,66 owner=33 paints=#9C9CA0FF role=text seen=1347.5,833.5,132,22.5 size=26 text=BROWSE...
 focus 5
-edge 5 up same
+edge 5 up 33
 edge 5 down same
-edge 5 left same
+edge 5 left 30
 edge 5 right same
+edge 30 up same
+edge 30 down 5
+edge 30 left same
+edge 30 right 33
+edge 33 up same
+edge 33 down 5
+edge 33 left 30
+edge 33 right same
 press pageup focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow
 press pagedown focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow
 press first focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow

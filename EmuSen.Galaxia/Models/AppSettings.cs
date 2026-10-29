@@ -123,6 +123,9 @@ namespace EmuSen.Galaxia.Models
         public string? BigPictureTheme { get; set; }
         public string? EsdeMediaDirectory { get; set; }
 
+        // Where the CHD tool writes; blank is home/Compressed, and it may not overlap the library - see EmuSen_GamePackages.md §20.1.
+        public string? ChdOutputDirectory { get; set; }
+
         // The theme's navigation sounds, on a stream beside the game's - see §4.52.
         public bool NavigationSounds { get; set; } = true;
 

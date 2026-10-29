@@ -19,8 +19,8 @@ tree
         4 ButtonBar at=917,612,90,44 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=toolbar
           5 Button at=917,612,90,44 by=clip drawn focus heard=CLOSE limit=917,612,90,44 name=CompressedDiscsClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
             6 TextBlock at=934,618,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=917,612,90,44 owner=5 paints=#EEEEF0FF role=text size=26 text=CLOSE
-      7 ScrollViewer at=274,152,733,418 by=panel fades=b limit=234,124,812.35,548 overflow=762 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=274,152,733,418
-        8 StackPanel at=274,152,729,1180 by=scroll in=7 limit=274,152,733,418 paints=#0E0E10FF,#4C9AE8FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=274,152,729,418
+      7 ScrollViewer at=274,152,733,418 by=panel fades=b limit=234,124,812.35,548 overflow=1030 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=274,152,733,418
+        8 StackPanel at=274,152,729,1448 by=scroll in=7 limit=274,152,733,418 paints=#0E0E10FF,#4C9AE8FF,#55555AFF,#86868AFF,#9C9CA0FF,#D2D2D6FF role=none seen=274,152,729,418
           9 HintText name=CompressedDiscsAbout paints=#86868AFF role=text volatile="its words name the run's own folders"
           10 FieldRow at=274,240,729,153 by=scroll heard="Convert or check" in=7 limit=274,152,733,418 paints=#9C9CA0FF role=group
             11 TextBlock at=274,240,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Convert or check" in=7 layout=138.12,28.8 limit=274,240,729,153 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Convert or check"
@@ -40,26 +40,30 @@ tree
               25 ProgressBar at=274,442,729,4 by=clip drawn in=7 limit=274,409,729,102 name=CompressedDiscsProgress paints=#333337FF,#4C9AE8FF role=progressbar
               26 TextBlock at=274,452,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="3 of 3 discs done." in=7 layout=142.58,28.8 limit=274,409,729,102 name=CompressedDiscsProgressText paints=#9C9CA0FF role=text size=24 text="3 of 3 discs done."
               27 HintText name=CompressedDiscsLog paints=#86868AFF role=text volatile="its words name the run's own folders"
-          28 FieldRow at=274,527,729,105 by=scroll heard="Discs from" in=7 limit=274,152,733,418 paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=group seen=274,527,729,43
-            29 TextBlock at=274,527,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Discs from" in=7 layout=87.62,28.8 limit=274,527,729,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Discs from"
-            30 HintText at=274,560,729,24 box=729,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="A folder of the library, or every folder." in=7 layout=253.92,24 limit=274,527,729,105 paints=#86868AFF part role=text seen=274,560,729,10 size=20 text="A folder of the library, or every folder."
+          28 FieldRow at=274,527,729,129 by=scroll heard="CHDs go" in=7 limit=274,152,733,418 paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=group seen=274,527,729,43
+            29 TextBlock at=274,527,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CHDs go" in=7 layout=66.34,28.8 limit=274,527,729,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="CHDs go"
+            30 HintText at=274,560,729,48 box=729,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once." in=7 layout=709.18,48 limit=274,527,729,129 paints=#86868AFF part role=text seen=274,560,729,10 size=20 text="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once."
 focus 5
 edge 5 up 16
-edge 5 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0
+edge 5 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1
 edge 5 left 16
 edge 5 right same
 edge 14 up same
-edge 14 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0
+edge 14 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
 edge 14 left same
 edge 14 right 16
 edge 16 up same
-edge 16 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0
+edge 16 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0
 edge 16 left 14
 edge 16 right 5
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/1/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0 right same
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0 left same
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0 right path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1 up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/7/0/2/0/0/0/0/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1 left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1 right same
 press pageup focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow
 press pagedown focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow
 press first focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow

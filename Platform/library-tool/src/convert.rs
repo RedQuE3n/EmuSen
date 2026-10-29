@@ -5,7 +5,7 @@
 use crate::chdman::Chdman;
 use crate::checks::{self, Toc};
 use crate::discs::{self, Item};
-use crate::Context;
+use crate::{Context, Destination};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{Text, Value};
 use emusen_galaxia::package;
@@ -55,11 +55,14 @@ fn text(s: &str) -> Value {
     Value::string(s)
 }
 
-/// Where a disc's CHD and package go: the CHD at the library's relative path under `Compressed`, the package under
-/// `Packages/<console>/` at the same path less the library's console folder (§3.1, §4.2).
+/// Where a disc's CHD and package go: the CHD at the library's relative path under the destination (`Compressed`, the
+/// player's folder, or the library itself beside the original), the package under `Packages/<console>/` at the same
+/// path less the library's console folder (§3.1, §4.2, §20). `game_where` and `game_path` are the manifest's.
 pub struct Placed {
     pub chd: String,
     pub chd_rel: String,
+    pub game_where: &'static str,
+    pub game_path: String,
     pub package: String,
     pub package_rel: String,
 }
@@ -74,11 +77,23 @@ fn under(root: &str, rel: &str) -> String {
     rel.split('/').fold(root.to_string(), |at, part| path::combine(Style::HOST, &at, part))
 }
 
-pub fn place(ctx: &Context, item: &Item) -> Placed {
+pub fn place(ctx: &Context, dest: &Destination, item: &Item) -> Placed {
     let chd_rel = with_chd(&item.rel);
     let rest = item.rel.split_once('/').map_or(item.rel.as_str(), |(_, r)| r);
     let package_rel = format!("{}/{}", item.system.console, with_chd(rest));
-    Placed { chd: under(&ctx.compressed(), &chd_rel), chd_rel, package: under(&ctx.packages(), &package_rel), package_rel }
+    let chd = under(dest.root(), &chd_rel);
+    let (game_where, game_path) = match dest {
+        Destination::Beside { .. } => ("library", chd_rel.clone()),
+        Destination::Folder { compressed: true, .. } => ("compressed", chd_rel.clone()),
+        Destination::Folder { .. } => ("absolute", path::full_path(&chd)),
+    };
+    Placed { chd, chd_rel, game_where, game_path, package: under(&ctx.packages(), &package_rel), package_rel }
+}
+
+/// Whether a conversion beside the original would add a file for this disc: not done, and its name not taken (§20.2).
+pub fn adds(ctx: &Context, dest: &Destination, item: &Item) -> bool {
+    let placed = place(ctx, dest, item);
+    !manifest(&placed).is_ok_and(|doc| done(ctx, &placed, &doc)) && std::fs::symlink_metadata(&placed.chd).is_err()
 }
 
 /// A file's size and modification time, the time to the nanosecond and as the manifest writes it.
@@ -137,26 +152,26 @@ pub fn manifest(placed: &Placed) -> Result<Value, String> {
     }
 }
 
-/// Where a disc's CHD is: in `Compressed` as converted, or in its package once the package was made self-contained,
-/// which copied it there (EmuSen_GamePackages.md §19).
-pub fn chd_of(placed: &Placed, doc: &Value) -> String {
-    let game = doc.get("game");
-    match (game.and_then(|g| g.get("where")).and_then(Value::as_str), game.and_then(|g| g.get("path")).and_then(Value::as_str)) {
-        (Some("package"), Some(rel)) => under(&placed.package, rel),
-        _ => placed.chd.clone(),
-    }
+/// Where a disc's CHD is, as its package names it: in `Compressed`, in the player's folder, beside the original in the
+/// library, or in the package once it was made self-contained (EmuSen_GamePackages.md §19, §20).
+pub fn chd_of(ctx: &Context, placed: &Placed, doc: &Value) -> Option<String> {
+    emusen_galaxia::claims::place(&ctx.places().roots(), &placed.package, doc.get("game")?)
 }
 
-/// Whether a disc is done: its package names this CHD, in `Compressed` or copied into the package, at the size and time
-/// recorded, and the library files it was converted from still have the size and time they had.
+/// The manifest's `where` and `path` of its game, for an event.
+fn recorded_place(doc: &Value) -> (String, String) {
+    let game = doc.get("game");
+    let field = |name| game.and_then(|g| g.get(name)).and_then(Value::as_str).unwrap_or("").to_string();
+    (field("where"), field("path"))
+}
+
+/// Whether a disc is done: its package names a CHD, wherever the conversion put it, at the size and time recorded with
+/// its SHA-1, and the library files it was converted from still have the size and time they had.
 pub fn done(ctx: &Context, placed: &Placed, doc: &Value) -> bool {
     let game = doc.get("game");
-    let container = doc.get("container");
-    let contained = game.and_then(|g| g.get("where")).and_then(Value::as_str) == Some("package");
-    let names_it = contained || game.and_then(|g| g.get("path")).and_then(Value::as_str) == Some(placed.chd_rel.as_str());
-    let has_sha1 = container.and_then(|c| c.get("sha1")).and_then(Value::as_str).is_some();
-    let chd_same = same_seen(game.and_then(|g| g.get("seen")), &seen(&chd_of(placed, doc)));
-    names_it && has_sha1 && chd_same && sources_same(ctx, doc)
+    let has_sha1 = doc.get("container").and_then(|c| c.get("sha1")).and_then(Value::as_str).is_some();
+    let chd_same = chd_of(ctx, placed, doc).is_some_and(|at| same_seen(game.and_then(|g| g.get("seen")), &seen(&at)));
+    has_sha1 && chd_same && sources_same(ctx, doc)
 }
 
 fn sources_same(ctx: &Context, doc: &Value) -> bool {
@@ -229,19 +244,68 @@ fn reader_checks(check1: &Result<(), String>, at: &str, toc: &Toc, sheet: &str, 
     }
 }
 
+/// A partial file a stopped process left beside an original more than an hour ago, removed: only the tool's own
+/// `<name>.chd.partial-<process>` beside this disc's CHD (§20.2).
+fn sweep_beside(placed: &Placed) {
+    let (Some(dir), Some(name)) = (path::directory_name(Style::HOST, &placed.chd), std::path::Path::new(&placed.chd).file_name().map(|n| n.to_string_lossy().into_owned())) else { return };
+    let prefix = format!("{name}.partial-");
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for e in entries.flatten() {
+        let n = e.file_name().to_string_lossy().into_owned();
+        let ours = n.strip_prefix(&prefix).is_some_and(|pid| !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()));
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > PARTIAL_AGE);
+        if ours && old && e.file_type().is_ok_and(|t| t.is_file()) {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+/// Renames a file into place without replacing one there: refused where `to` exists (§20.2).
+pub fn rename_new(from: &str, to: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        let c = |s: &str| std::ffi::CString::new(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e));
+        let (f, t) = (c(from)?, c(to)?);
+        // SAFETY: two NUL-terminated paths.
+        if unsafe { libc::renameat2(libc::AT_FDCWD, f.as_ptr(), libc::AT_FDCWD, t.as_ptr(), libc::RENAME_NOREPLACE) } == 0 {
+            return Ok(());
+        }
+        let e = std::io::Error::last_os_error();
+        if !matches!(e.raw_os_error(), Some(libc::EINVAL) | Some(libc::ENOSYS)) {
+            return Err(e);
+        }
+    }
+    if std::fs::symlink_metadata(to).is_ok() {
+        return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, format!("{to} is already there")));
+    }
+    std::fs::rename(from, to)
+}
+
+fn taken(placed: &Placed) -> Outcome {
+    Outcome::said("skipped", format!("{} is already in the library, so nothing was written: a file there is never replaced", placed.chd_rel)).with("output", text(&placed.chd_rel))
+}
+
 /// Converts one disc. `stop` ends chdman and leaves nothing behind.
-pub fn convert(ctx: &Context, chdman: &Chdman, item: &Item, index: usize, options: Options, stop: &dyn Fn() -> bool) -> Outcome {
-    let placed = place(ctx, item);
-    if manifest(&placed).is_ok_and(|doc| done(ctx, &placed, &doc)) {
-        return Outcome::new("already").with("output", text(&placed.chd_rel)).with("package", text(&placed.package_rel));
+pub fn convert(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, index: usize, options: Options, stop: &dyn Fn() -> bool) -> Outcome {
+    let placed = place(ctx, dest, item);
+    if let Some(doc) = manifest(&placed).ok().filter(|doc| done(ctx, &placed, doc)) {
+        let (at, output) = recorded_place(&doc);
+        return Outcome::new("already").with("output", text(&output)).with("where", text(&at)).with("package", text(&placed.package_rel));
+    }
+    if dest.beside() {
+        if std::fs::symlink_metadata(&placed.chd).is_ok() {
+            return taken(&placed);
+        }
+        sweep_beside(&placed);
     }
     let scratch = scratch_for(ctx, index);
-    let outcome = convert_in(ctx, chdman, item, &placed, &scratch, options, stop);
+    let outcome = convert_in(ctx, dest, chdman, item, &placed, &scratch, options, stop);
     let _ = std::fs::remove_dir_all(&scratch);
     outcome
 }
 
-fn convert_in(ctx: &Context, chdman: &Chdman, item: &Item, placed: &Placed, scratch: &str, options: Options, stop: &dyn Fn() -> bool) -> Outcome {
+#[allow(clippy::too_many_arguments)]
+fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, placed: &Placed, scratch: &str, options: Options, stop: &dyn Fn() -> bool) -> Outcome {
     let started = Instant::now();
     let prepared = match discs::prepare(&ctx.tree, item, scratch) {
         Ok(p) => p,
@@ -259,7 +323,8 @@ fn convert_in(ctx: &Context, chdman: &Chdman, item: &Item, placed: &Placed, scra
     };
     let original_bytes: u64 = prepared.files.iter().filter_map(|f| seen(f)).map(|s| s.size).sum();
     let out_dir = path::directory_name(Style::HOST, &placed.chd).unwrap_or_default();
-    if let Err(e) = std::fs::create_dir_all(&out_dir) {
+    // Beside the original the folder is the disc's own, and no folder is made in the library.
+    if let Err(e) = if dest.beside() { Ok(()) } else { std::fs::create_dir_all(&out_dir) } {
         return Outcome::said("failed", format!("{out_dir} could not be made: {e}"));
     }
     if let Some(free) = free_bytes(&out_dir).filter(|&f| f < original_bytes + MARGIN) {
@@ -304,26 +369,42 @@ fn convert_in(ctx: &Context, chdman: &Chdman, item: &Item, placed: &Placed, scra
         return Outcome::said("failed", words).with("checks", checks_json);
     }
     let info = info.expect("checked above");
-    if let Err(e) = std::fs::rename(&partial, &placed.chd) {
+    let put = if dest.beside() { rename_new(&partial, &placed.chd) } else { std::fs::rename(&partial, &placed.chd) };
+    if let Err(e) = put {
         remove();
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            return taken(placed);
+        }
         return Outcome::said("failed", format!("the CHD could not be put in place: {e}"));
     }
+    // Beside the original, a CHD whose record could not be written is taken out again, so the library never holds one unrecorded.
+    let unplace = || {
+        if dest.beside() {
+            let _ = std::fs::remove_file(&placed.chd);
+        }
+    };
     let chd_seen = seen(&placed.chd);
     let doc = package_of(ctx, item, placed, &prepared, &tracks, &original_toc, chdman, &info, codecs, chd_seen.as_ref(), &before, &checks_json);
     let manifest_at = path::combine(Style::HOST, &placed.package, package::FILE_NAME);
     if let Some((name, bytes)) = &prepared.original {
         if let Err(w) = emusen_galaxia::atomic::write(&path::combine(Style::HOST, &placed.package, name), bytes) {
+            unplace();
             return Outcome::said("failed", w);
         }
     }
-    match package::write(&manifest_at, &doc) {
-        Ok(Ok(())) => {}
-        Ok(Err(w)) => return Outcome::said("failed", w),
-        Err(refusal) => return Outcome::said("failed", refusal.words().to_string()),
+    let written = match package::write(&manifest_at, &doc) {
+        Ok(Ok(())) => None,
+        Ok(Err(w)) => Some(w),
+        Err(refusal) => Some(refusal.words().to_string()),
+    };
+    if let Some(w) = written {
+        unplace();
+        return Outcome::said("failed", w);
     }
     let chd_bytes = chd_seen.map_or(0, |s| s.size);
     Outcome::new("converted")
         .with("output", text(&placed.chd_rel))
+        .with("where", text(placed.game_where))
         .with("package", text(&placed.package_rel))
         .with("original", Value::number(original_bytes))
         .with("chd", Value::number(chd_bytes))
@@ -348,7 +429,7 @@ fn package_of(
 ) -> Value {
     let library = ctx.library.clone().unwrap_or_default();
     let title = path::file_name_without_extension(Style::Unix, &item.rel).to_string();
-    let mut game = package::file_entry("image", "compressed", &placed.chd_rel, chd_seen.map(|s| s.size));
+    let mut game = package::file_entry("image", placed.game_where, &placed.game_path, chd_seen.map(|s| s.size));
     if let (Value::Object(members), Some(s)) = (&mut game, chd_seen) {
         members.push((Text::new("seen"), seen_json(s)));
     }
@@ -410,13 +491,19 @@ fn disc_bytes(item: &Item) -> u64 {
     named + emusen_galaxia::image_sets::companions(&item.path).unwrap_or_default().iter().filter_map(|f| seen(f)).map(|s| s.size).sum::<u64>()
 }
 
-/// `chd ls`'s view of one disc: converted, changed since, its CHD gone, or not converted.
-pub fn list(ctx: &Context, item: &Item) -> Outcome {
-    let placed = place(ctx, item);
+/// `chd ls`'s view of one disc: converted, changed since, its CHD gone, or not converted; `taken` where a file already
+/// has the name its CHD would have beside it in the library (§20.2).
+pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
+    let placed = place(ctx, dest, item);
     let size = disc_bytes(item);
-    let base = |state| Outcome::new(state).with("size", Value::number(size));
+    let beside = place(ctx, &Destination::Beside { library: ctx.library.clone().unwrap_or_default() }, item);
+    let taken = std::fs::symlink_metadata(&beside.chd).is_ok();
+    let base = |state| {
+        let o = Outcome::new(state).with("size", Value::number(size));
+        if taken { o.with("taken", Value::Bool(true)) } else { o }
+    };
     let Ok(doc) = manifest(&placed) else { return base("not converted") };
-    let chd = seen(&chd_of(&placed, &doc));
+    let chd = chd_of(ctx, &placed, &doc).and_then(|at| seen(&at));
     let outcome = if chd.is_none() {
         base("missing")
     } else if !sources_same(ctx, &doc) {
@@ -430,25 +517,21 @@ pub fn list(ctx: &Context, item: &Item) -> Outcome {
         Some(Value::Array(tracks)) => tracks.iter().filter_map(|t| t.get("size").and_then(number)).sum(),
         _ => 0,
     };
-    outcome.with("output", text(&placed.chd_rel)).with("original", Value::number(original)).with("chd", Value::number(chd.map_or(0, |s| s.size)))
+    let (at, output) = recorded_place(&doc);
+    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::number(original)).with("chd", Value::number(chd.map_or(0, |s| s.size)))
 }
 
 /// `chd check`'s three checks of one converted disc against its package, the original not read.
-pub fn check(ctx: &Context, chdman: &Chdman, item: &Item, stop: &dyn Fn() -> bool) -> Outcome {
-    let placed = place(ctx, item);
+pub fn check(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, stop: &dyn Fn() -> bool) -> Outcome {
+    let placed = place(ctx, dest, item);
     let doc = match manifest(&placed) {
         Ok(doc) => doc,
         Err(words) if words == "not converted" => return Outcome::new("not converted"),
         Err(words) => return Outcome::said("failed", words),
     };
     let Some(container) = doc.get("container") else { return Outcome::said("failed", "the package names no container") };
-    let at = match doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str) {
-        Some("package") => chd_of(&placed, &doc),
-        _ => under(&ctx.compressed(), doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).unwrap_or("")),
-    };
-    if seen(&at).is_none() {
-        return Outcome::said("failed", format!("the CHD {} is not there", placed.chd_rel));
-    }
+    let (_, output) = recorded_place(&doc);
+    let Some(at) = chd_of(ctx, &placed, &doc).filter(|at| seen(at).is_some()) else { return Outcome::said("failed", format!("the CHD {output} is not there")) };
     let toc = container.get("toc").and_then(Toc::from_json);
     let sheet = container.get("sheet").and_then(Value::as_str);
     let expected: Option<Vec<Hashes>> = match doc.get("dump").and_then(|d| d.get("tracks")) {
@@ -468,5 +551,5 @@ pub fn check(ctx: &Context, chdman: &Chdman, item: &Item, stop: &dyn Fn() -> boo
     }
     let checks_json = obj(vec![("chdman", word(&check1)), ("tracks", word(&check2)), ("toc", word(&check3))]);
     let state = if check1.is_ok() && check2.is_ok() && check3.is_ok() { "verified" } else { "failed" };
-    Outcome::new(state).with("output", text(&placed.chd_rel)).with("checks", checks_json)
+    Outcome::new(state).with("output", text(&output)).with("checks", checks_json)
 }

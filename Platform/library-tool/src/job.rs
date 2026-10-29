@@ -53,13 +53,18 @@ pub struct Request {
     pub making: packages::Making,
     /// `pkg identity`'s `original` or `patched` (since 1.3).
     pub identity: Option<String>,
+    /// Since 1.4: the folder CHDs go to in place of `AppSettings.ChdOutputDirectory`, and convert's choice for one batch
+    /// to write each CHD beside its original in the library (EmuSen_GamePackages.md §20).
+    pub output: Option<String>,
+    pub beside: bool,
 }
 
 /// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
 /// `{"op": "pkg-make" | "pkg-ls" | "pkg-check" | "pkg-migrate", "paths": [...], "console": null}`, or since 1.2
 /// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`,
 /// or since 1.3 `pkg-make`'s `"self_contained": true` and `"zip": true`, a package's zip among `pkg-check`'s paths, and
-/// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}` and `{"op": "pkg-zip", "paths": [<package>...]}`.
+/// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}` and `{"op": "pkg-zip", "paths": [<package>...]}`,
+/// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -103,7 +108,19 @@ pub fn request(text: &str) -> Result<Request, String> {
     }
     let flag = |name: &str| doc.get(name).and_then(Value::as_bool).unwrap_or(false);
     let making = packages::Making { self_contained: flag("self_contained") || flag("zip"), zip: flag("zip") };
-    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity })
+    let output = match doc.get("output") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(t)) if !t.text.trim().is_empty() && matches!(op, Op::Convert | Op::Check | Op::List) => Some(t.text.clone()),
+        Some(_) => return Err("the request's output is a folder's path, for convert, check or ls".into()),
+    };
+    let beside = flag("beside");
+    if beside && op != Op::Convert {
+        return Err("beside is convert's choice alone".into());
+    }
+    if beside && output.is_some() {
+        return Err("a CHD goes to the output folder or beside its original, not both".into());
+    }
+    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside })
 }
 
 struct Queue {
@@ -230,6 +247,10 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
             Err(words) => return end(queue, &req.op, &counts, started, Some(words)),
         },
     };
+    let dest = match ctx.destination(&library, req.output.as_deref(), req.beside) {
+        Ok(d) => d,
+        Err(words) => return end(queue, &req.op, &counts, started, Some(words)),
+    };
     let (items, refused) = discs::items(&library, &req.paths);
     let threads = if req.options.threads > 0 { req.options.threads } else { std::thread::available_parallelism().map_or(1, |n| n.get()) };
     let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("discs", Value::number(items.len()))];
@@ -243,7 +264,11 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     if req.op == Op::Convert {
         start.push(("codecs", Value::string(if req.options.fast { convert::FAST_CODECS } else { "cdlz,cdzl,cdfl" })));
         start.push(("threads", Value::number(threads)));
-        start.push(("output", Value::string(&ctx.compressed())));
+        start.push(("output", Value::string(dest.root())));
+        if dest.beside() {
+            let adds = items.iter().filter(|i| convert::adds(ctx, &dest, i)).count();
+            start.extend([("beside", Value::Bool(true)), ("adds", Value::number(adds))]);
+        }
     }
     start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
     emit(queue, obj(start));
@@ -269,9 +294,9 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
         }
         let begun = Instant::now();
         let outcome: Outcome = match (&req.op, &chdman) {
-            (Op::Convert, Some(c)) => convert::convert(ctx, c, item, i, options, stop),
-            (Op::Check, Some(c)) => convert::check(ctx, c, item, stop),
-            _ => convert::list(ctx, item),
+            (Op::Convert, Some(c)) => convert::convert(ctx, &dest, c, item, i, options, stop),
+            (Op::Check, Some(c)) => convert::check(ctx, &dest, c, item, stop),
+            _ => convert::list(ctx, &dest, item),
         };
         count(&mut counts, outcome.state);
         let mut event = head(outcome.state);

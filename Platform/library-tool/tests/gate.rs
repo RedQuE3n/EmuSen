@@ -164,7 +164,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
 fn context(temp: &Temp, chdman: &str, pinned: Option<String>) -> Context {
     let tree = Tree { root: temp.at("root").to_string_lossy().into_owned(), data_override: Some(temp.at("home").to_string_lossy().into_owned()), ..Tree::default() };
     let pin = pinned.or_else(|| rom_hash_sha256(chdman));
-    Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into(), state_folder: None, sqlite: None }
+    Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into(), state_folder: None, sqlite: None, output: None }
 }
 
 fn rom_hash_sha256(at: &str) -> Option<String> {
@@ -457,4 +457,87 @@ fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
     assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "already");
     assert_eq!(listing(&temp.at("library")), before, "the library changed");
+}
+
+fn package_game(temp: &Temp, rel: &str) -> Value {
+    let manifest = std::fs::read_to_string(temp.at(&format!("home/Packages/{rel}/package.json"))).unwrap();
+    emusen_galaxia::package::parse(&manifest).unwrap().get("game").cloned().unwrap()
+}
+
+fn end_error(events: &[Value]) -> String {
+    events.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("end")).and_then(|e| e.get("error")).and_then(Value::as_str).unwrap_or("").to_string()
+}
+
+/// A chosen output folder (EmuSen_GamePackages.md §20.1): the setting is used and a request's folder replaces it, the
+/// package names the CHD by its full path, and a folder inside the library or holding it is refused before anything
+/// is written.
+#[test]
+fn a_chosen_output_folder_is_used_and_one_overlapping_the_library_is_refused() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("output");
+    library(&temp.at("library"));
+    let before = listing(&temp.at("library"));
+    let mut ctx = context(&temp, &chdman, None);
+    ctx.output = Some(temp.at("chds").to_string_lossy().into_owned());
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"]}"#);
+    assert_eq!(state_of(&got, "psx/Two/Two.cue"), "converted", "{}", summary(&got));
+    let chd = temp.at("chds/psx/Two/Two.chd");
+    assert!(chd.is_file() && !temp.at("home/Compressed/psx/Two/Two.chd").exists());
+    let game = package_game(&temp, "PlayStation/Two/Two.chd");
+    assert_eq!((game.get("where").and_then(Value::as_str), game.get("path").and_then(Value::as_str)), (Some("absolute"), Some(chd.to_string_lossy().as_ref())));
+    ctx.output = None;
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "ls", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "converted", "found where its package names it");
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
+    let asked = format!(r#"{{"op": "convert", "paths": ["psx/One.cue"], "output": "{}"}}"#, temp.at("asked").to_string_lossy());
+    assert_eq!(state_of(&run(&ctx, &asked), "psx/One.cue"), "converted");
+    assert!(temp.at("asked/psx/One.chd").is_file());
+    for (folder, label) in [(temp.at("library/psx/out"), "inside"), (temp.at(""), "holding")] {
+        ctx.output = Some(folder.to_string_lossy().into_owned());
+        let refused = run(&ctx, r#"{"op": "convert", "paths": ["psx/Lone (Track 1).bin"]}"#);
+        assert!(end_error(&refused).starts_with("The output folder ("), "{label}: {}", summary(&refused));
+        assert!(end_error(&refused).contains("overlap"), "{label}");
+        assert_eq!(state_of(&refused, "psx/Lone (Track 1).bin"), "absent");
+    }
+    ctx.output = Some("relative/chds".into());
+    assert!(end_error(&run(&ctx, r#"{"op": "ls"}"#)).contains("is not a full path"));
+    assert!(!temp.at("library/psx/out").exists());
+    assert_eq!(listing(&temp.at("library")), before, "the library changed");
+}
+
+/// Beside the original (§20.2): one CHD added beside its original through a partial renamed into place, a name
+/// already taken left as it is, a failed check leaving no partial, and every original as it was.
+#[test]
+fn beside_the_original_adds_only_the_chd_and_never_replaces_a_file() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("beside");
+    let lib = temp.at("library");
+    library(&lib);
+    put(lib.join("psx/One.chd"), b"the player's own file");
+    let mut short = std::fs::OpenOptions::new().append(true).open(lib.join("psx/Noise/Noise (Track 2).bin")).unwrap();
+    std::io::Write::write_all(&mut short, &[0u8; 100]).unwrap();
+    drop(short);
+    let before = listing(&lib);
+    let ctx = context(&temp, &chdman, None);
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["psx/Two", "psx/One.cue", "psx/Noise"], "beside": true}"#);
+    let start = got.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("start")).unwrap();
+    assert_eq!((start.get("beside"), start.get("adds")), (Some(&Value::Bool(true)), Some(&Value::number(2))), "{}", summary(&got));
+    assert_eq!(state_of(&got, "psx/Two/Two.cue"), "converted", "{}", summary(&got));
+    assert_eq!(state_of(&got, "psx/One.cue"), "skipped");
+    assert_eq!(state_of(&got, "psx/Noise/Noise.cue"), "failed", "{}", summary(&got));
+    assert_eq!(std::fs::read(lib.join("psx/One.chd")).unwrap(), b"the player's own file");
+    let game = package_game(&temp, "PlayStation/Two/Two.chd");
+    assert_eq!((game.get("where").and_then(Value::as_str), game.get("path").and_then(Value::as_str)), (Some("library"), Some("psx/Two/Two.chd")));
+    let after = listing(&lib);
+    let added: Vec<&str> = after.iter().filter(|f| !before.contains(f)).map(|f| f.0.as_str()).collect();
+    assert_eq!(added, vec![lib.join("psx/Two/Two.chd").to_string_lossy().as_ref()], "only the CHD was added");
+    assert!(before.iter().all(|b| after.contains(b)), "an original changed");
+    assert!(after.iter().all(|f| !f.0.contains(".partial-")), "a partial was left");
+    let listed = run(&ctx, r#"{"op": "ls", "paths": ["psx/Two", "psx/One.cue"]}"#);
+    let two = listed.iter().find(|e| e.get("source").and_then(Value::as_str) == Some("psx/Two/Two.cue")).unwrap();
+    assert_eq!((two.get("state").and_then(Value::as_str), two.get("where").and_then(Value::as_str)), (Some("converted"), Some("library")));
+    let one = listed.iter().find(|e| e.get("source").and_then(Value::as_str) == Some("psx/One.cue")).unwrap();
+    assert_eq!(one.get("taken"), Some(&Value::Bool(true)));
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"], "beside": true}"#), "psx/Two/Two.cue"), "already");
+    assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
+    assert!(job::start(r#"{"op": "check", "beside": true}"#, ctx.clone()).is_err());
 }

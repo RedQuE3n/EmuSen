@@ -1,5 +1,11 @@
 # EmuSen — game packages, and a CHD tool for the library
 
+*Revised 2026-10-28: where the CHD tool writes is the player's choice (§20), as the tester approved the same day. A
+persistent output folder, `AppSettings.ChdOutputDirectory`, refused where it overlaps the library either way; and, for
+one batch at a time, each CHD written beside its original in the library through a partial renamed into place only
+after the three checks, never over a file already there. The library then shows such a game once, as its package,
+while the tool's record verifies the CHD; without the record both are shown.*
+
 *Revised 2026-10-25, an eighth time: step 7 is built (§19). `pkg make --self-contained` copies a game into its package,
 the library's file kept as its source and never moved; `--zip` and `pkg zip` write a package as one zip, which EmuSen
 opens by unpacking it once into `Packages`, every file's time kept to the tick; `pkg identity` and the *Game Package*
@@ -603,7 +609,9 @@ CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289 (§10); M
 - Keeping the library's relative path keeps the console folder's name, which is how a CHD is routed today (§1.4). It
   also lets a player see which CHD came from which original.
 - A player-chosen folder may replace it. That setting refuses any folder inside `RomDirectory`, unless the player has
-  chosen §4.5's replacement.
+  chosen §4.5's replacement. *Built 2026-10-28 (§20.1): `AppSettings.ChdOutputDirectory`, refused where it lies inside
+  the library or holds it; and, for one batch, each CHD beside its original in the library (§20.2), which writes the
+  CHD alone and never replaces a file.*
 
 ### 4.3 Verification: three checks, two of them independent of chdman
 
@@ -2923,3 +2931,208 @@ of passed, unmasked. The golden corpus's `pkg`, `help` and `man` were given the 
 - **Q49 [routine]: no *Make Self-Contained* or *Make Zip* in Mistress yet**; the window shows a self-contained package
   and switches the identity. *Recommended:* add both buttons to the *Game Package* window when a player is to carry a
   package without the shell.
+
+## 20. Built 2026-10-28: where CHDs go — a chosen output folder, and beside the original
+
+*Approved by the tester on 2026-10-28 as two extensions of the CHD tool, not components of their own: a persistent
+output folder, and an opt-in mode that writes each disc's CHD beside its original in the library. Measured on the
+development desktop on 2026-10-28. No batch was run on the ROM library or the NAS: every test made its own discs in a
+temporary folder, as §12.4 and §13.5 make them.* Marks as at the top: what was run is [M].
+
+**The form.** Both are extensions of existing surfaces (the rule of `EmuSen_Surfaces.md`): one optional request field
+each in the `emusen.library` service, which becomes 1.4 with its table unchanged; one folder setting in
+`AppSettings`; one rule in the claim index; two rows in the window. Nothing gains a second job: the tool still converts,
+the scan still lists, the window still fronts the tool.
+
+### 20.1 The output folder (decided 2026-10-28)
+
+**The setting.** `AppSettings.ChdOutputDirectory`, blank by default, which is `<home>/Compressed` as before (§4.2). It
+holds the rules of every folder setting (`EmuSen_Config_Reference.md` §7.7): `~` and `~/` are the home, a relative path
+or a file is refused with words, and a folder not yet there is made at the first disc. `SettingFolders.ChdOutput` is
+the C# reading of it and `Context::destination` the tool's, both over `SettingFolders.Checked`'s one rule.
+
+**Where it is reached.**
+
+- The Compressed Discs window's *Output folder* row, a LunaP `PathPickerRow` that can be typed as well as browsed, as
+  Preferences' folder rows are, so that Game Mode and big picture, where no platform picker opens, reach it with the
+  pad and the on-screen keyboard. A pick is saved at once and the library listed again, so that the tool says at once
+  whether the folder can be used.
+- `chd convert --output <folder>` for one command: a shell path, so `/` is EmuSen's home and the walled garden holds
+  (`man hier`); a folder outside the home is named in the setting.
+- `appsettings.json` by hand.
+
+**The overlap refusal, both ways.** Before anything is written, `Context::destination` refuses a chosen folder that
+lies inside the library or holds it, by the same canonical comparison `checked_library` makes of `Compressed`,
+`Packages`, `Logs` and `Unpacked` (§12.3), which it still makes. The words: "The output folder (…) and the library (…)
+overlap: the library is never written, so nothing was done." `ls` and `check` are refused alike, as they already were
+for an overlapping `Compressed`: the window learns of a bad folder from its listing, and keeps the row shown so that it
+can be chosen again.
+
+**The relative structure is kept**: `<output>/<the library-relative path, with .chd>`.
+
+**The package names a CHD outside `Compressed` by its full path** (`where: "absolute"`), and one inside it as before
+(`where: "compressed"`). So a later change of the setting leaves every earlier CHD found where it lies, and the
+default's packages are written byte for byte as before.
+
+**A disc is done wherever its package names its CHD** (§12.2's rule, generalised). It was "the package names this
+CHD under `Compressed`"; it is now "the package names a CHD, at the recorded size, time and SHA-1, from originals that
+have not changed", the place read through Galaxia's `claims::place`, which resolves every `where`. Changing the folder
+therefore converts nothing again, and `ls` and `check` find each CHD in the folder it went to. Under the default every
+package names `Compressed`, so the default's answers are unchanged.
+
+### 20.2 Beside the original (decided 2026-10-28)
+
+**What it writes.** For each disc, `<stem>.chd` in the library folder of its original: `psx/Rayman (USA)/Rayman
+(USA).cue` gets `psx/Rayman (USA)/Rayman (USA).chd`; a zip or a lone track the same, beside it. No folder is made in the
+library. The package stays under `Packages`, its game `where: "library"`.
+
+**A choice for the batch, not a setting.** *Decided on 2026-10-28, from the existing settings:* §4.5 made the one other
+operation that would write the library (*Replace originals*) "never a setting that persists", and this follows it. A
+persistent mode would let a script's plain `chd convert`, or a batch started months after the setting was forgotten,
+write into the library. So the shell takes `--beside` per command and reads nothing of it from config, and the window's
+*CHDs go* row opens on *In the output folder* every time. The output folder, which writes nothing in the library, is
+the persistent half.
+
+**Named before the batch starts.**
+
+- In the window, while *Beside each original, in the library* is chosen, a line under the choice says: "This writes
+  into the library: converting adds up to *n* CHD files to `<library>`, each beside its original as `<name>.chd`. No
+  original is changed, moved or removed, and a disc whose name is already taken is left as it is." *n* follows the
+  discs the batch would name, counted from the listing: those not converted whose name is free (the listing's new
+  `taken`). The plain statement at the top changes with it, and the summary after the batch counts the files added.
+- In the shell, the start event of a batch beside the originals carries `beside` and `adds`, computed before the first
+  disc, and `chd` prints them as its first line: "Converting 3 disc(s) beside their originals, writing into the
+  library …: up to 2 CHD file(s) added, no original changed, moved or removed, a name already taken skipped."
+- "Up to": a disc skipped for its form (§12.2) or failing a check adds nothing, and is known only when it is reached.
+
+**The originals.** Never removed, renamed or overwritten: the tool writes no file of a disc's but its new CHD. The
+before-and-after check of the originals' sizes and times (§4.6) still discards a result whose original changed.
+
+**A name already taken** is skipped and reported ("psx/X.chd is already in the library, so nothing was written: a file
+there is never replaced"), checked before chdman runs, and again at the rename, which refuses to replace a file:
+`renameat2` with `RENAME_NOREPLACE` on Linux, and where a file system answers `EINVAL` to it, an existence check and a
+plain rename (the window between them is the one race left, and a player writing that very name in that instant is
+what it would take).
+
+**The temporary file.** chdman writes `<stem>.chd.partial-<process>` in the same folder, step 2 of §4.5's design, and it
+is renamed into place only after §4.3's three checks pass. A failed check, a stop or a refused rename removes it. A
+partial a killed process left is removed an hour later, the next time that disc is converted: only a file of that exact
+name, `<stem>.chd.partial-` and digits, beside that disc. Should the package not be written after the rename, the CHD
+just placed is taken out again, so that the library never holds a CHD without its record (in `Compressed`, as before, it
+stays).
+
+**Free space** is checked at the library folder, as at any output.
+
+### 20.3 One game in the library: the verified CHD beside its original
+
+**What already did most of it.** The scan lists a package once and no file it claims (§3.6, §14.3), and a converted
+disc's package claims its originals (`container.sources`). A CHD written beside its original is its package's game, so
+it is claimed too. With the record in place the library and big picture therefore show the game once, as the package,
+launching the CHD, with no new rule in the scan; big picture takes the same scan's entries.
+
+**"Verified" is the tool's record, not the name.** A matching `<stem>.chd` beside a cue sheet proves nothing: it may be
+the player's own, another dump's, or half a file. So the claim index (`claims.rs` and its twin `GamePackages`) holds a
+package whose game is a CHD in the library (`container.type` is `chd` and `game.where` is `library`) to its record: the
+originals are claimed only while
+
+1. its container records each of the three checks as `passed`, and a SHA-1;
+2. the CHD has the size and time recorded in `game.seen`;
+3. every original in `container.sources` has the size and time recorded with it.
+
+These are the same facts §12.2's "done" reads, taken with a `stat` of each file and no read (§3.6's rule that no file
+is read for a claim). Where any fails the package keeps its game, so a played CHD keeps its saves, but claims no
+original, and the original is listed beside it.
+
+**Without the record** (the package deleted, or never written): the CHD and the original are two plain entries, each
+opening as itself, and a conversion beside the originals leaves that disc as it is, its name being taken. Nothing is
+hidden on a name alone, and the originals stay on disk in every case.
+
+**The default is unchanged.** A CHD in `Compressed` or a chosen folder is not in the library, and its package claims its
+originals as before (§14.1), checked or not; the rule above applies only to the new case. Q53 asks whether it should.
+
+### 20.4 The surfaces
+
+- **`emusen.library` 1.4** (`emusen_library_tool.h`): the request's `output` (convert, check and ls) and convert's
+  `beside`; `beside` with `output`, or `beside` on another op, is refused `PARSE`. Events gain fields only: the start
+  event's `beside` and `adds`; a disc event's `where` (the recorded place's `where`) for convert and ls, and the listing's
+  `taken`. The module requires 1.4, and ships in the same library.
+- **`AppSettings.ChdOutputDirectory`**, in both halves' schema (`models.rs` 62 fields).
+- **The claim index**: §20.3's rule, in both halves, held equal by `GalaxiaParityTests`.
+- **`CompressedDiscsWindow(library, settings)`**: the settings it saves the folder to; `ChooseOutput`, `Beside` and
+  `BesideAdds`.
+
+### 20.5 The window
+
+From the top, the window of §13.2 gains two rows after *Progress*:
+
+1. **CHDs go**: *In the output folder* or *Beside each original, in the library*, a LunaP `Dropdown`, and under it the
+   line of §20.2 while the second is chosen.
+2. **Output folder**: the `PathPickerRow`, its placeholder "(default) `<home>/Compressed`". Hidden while the batch writes
+   beside the originals, since it does not apply.
+
+Both are hidden while a batch runs, as §13.2's choosers are, so that the choice cannot change under it. Desktop and big
+picture reach them by the same pad walk; `WindowFitAuditTests` gained the state `CompressedDiscsBeside`.
+
+### 20.6 The gate, the tests, and the faults seeded
+
+**Rust** [M], `cargo test --profile test-checked` with `EMUSEN_CHDMAN` naming the pinned chdman:
+
+- `emusen-library-tool`'s gate, 10, two of them new. *A chosen output folder*: the setting used, a request's `output`
+  replacing it, the package naming the CHD by its full path, `ls` and `check` finding it with the setting cleared, a
+  folder inside the library and one holding it each refused with the words of §20.1 and nothing converted, a relative
+  value refused, and the library's listing (every file's path, size, time and MD5) the same after. *Beside the
+  original*, over a two-file dump, a sheet whose `<stem>.chd` is already a file of the player's, and a disc whose audio
+  file ends in part of a sector: the start event's `adds` is 2; the first converted, its package's game
+  `where: "library"`; the second skipped and its file's bytes unchanged; the third failed; the library's listing after is
+  the listing before plus the one CHD, no partial anywhere; `ls` gives `where` and `taken`; a second batch calls the
+  first `already`, `check` verifies it in place, and `beside` on `check` is refused.
+- `emusen-galaxia`, 95: `claims`' new case holds §20.3's rule (verified; a check not passed; the CHD at another time;
+  recorded afresh; an original changed), and the schema's count is 62.
+- `emusen-library-module`, 4: `--output` resolved as a shell path, `--beside`, both refused together, `--beside` not
+  an option of `ls`, and the start and listing lines beside the originals.
+
+**WiseMan** [M], headless, with the pinned chdman beside the tests:
+
+- `CompressedDiscsOutputTests`, 3, over generated sheets. The output folder chosen in the window is saved to
+  `appsettings.json` and used, Compressed left empty; a folder inside the library, then one holding it, is refused in
+  the window's words with *Convert* disabled and the row still offered; cleared, the setting is blank and the disc is
+  still found. Beside the originals: the window opens on the output folder; the line counts 2 to add (one disc's name
+  taken); after the batch one disc converted beside its original, one left as it is, one failed, the summary counting
+  the one file added, the player's file unchanged, and the library's listing the one before plus that CHD, every
+  original's path, size, time and MD5 as they were, no partial left. Duplicate hiding, by the managed scan and the
+  library's: one entry, the package's, launching the CHD; with the CHD's time moved, both entries; with the package
+  removed, both entries, neither a package's; the originals on disk throughout.
+- `GalaxiaParityTests`' new case: §20.3's three states give the same index from both halves.
+- `CompressedDiscsWindowTests`, the theory gaining four phrases (34 cases).
+- `WindowFitAuditTests`: the six CompressedDiscs states at both sizes, `CompressedDiscsBeside` new; their twelve
+  recordings re-recorded (the two new rows), and a second run compared equal. No other state's recording changed.
+
+**The blast radius** `blast.sh` named, run once: see the commit that records it.
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| §20.3's rule without its third condition, the originals' times | `claims`' new case: an original changed still claimed |
+| beside the originals, the check for a taken name removed and the rename made a plain one | the gate's beside case: the player's `One.chd` replaced, the disc not skipped |
+| the overlap refused one way only, a folder that holds the library let through | the gate's output case: the folder holding the library was converted into, with no refusal |
+| a failed check's partial left beside the original | the gate's beside case: the library's listing gained the partial |
+| the window's count of files to add not leaving out a taken name | `CompressedDiscsOutputTests`: "adds up to 3" where 2 was due |
+
+### 20.7 Left, and for the tester
+
+- **Q50 [routine]: beside the originals is a choice for one batch**, not a setting (§20.2), following §4.5.
+  *Recommended:* keep it; a setting would let a forgotten choice or a script write the library.
+- **Q51 [routine]: a disc already converted elsewhere is `already` in a batch beside the originals** (§20.1's done
+  rule): one disc, one package, one CHD. Moving a CHD from `Compressed` into the library is not offered.
+  *Recommended:* keep it; a player who wants it beside deletes the CHD in `Compressed`, and the next batch writes it
+  beside the original.
+- **Q52 [decision]: a CHD already beside its original with no record is never adopted.** It is listed beside its
+  original and a batch leaves the disc as it is (§20.3). *Recommended:* a later extension, `chd adopt`, running checks
+  2 and 3 of an existing CHD against the original and writing the package without writing the library.
+- **Q53 [decision]: §20.3's rule applies only to a CHD in the library.** A CHD in `Compressed` or a chosen folder
+  hides its originals while its package exists, checked or not, as since §14. *Recommended:* keep the default as it
+  is, as the approval asked; holding every converted disc to its record is a one-line change if the tester wants the
+  two alike.
+- **Q54 [routine]: `chd convert --output` takes a shell path**, inside EmuSen's home; a folder elsewhere is named in the
+  setting or the window. *Recommended:* keep the walled garden (`man hier`).

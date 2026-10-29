@@ -144,9 +144,31 @@ impl Ee {
         Err(if fetch { Exception::BusInstruction } else { Exception::BusData })
     }
 
+    /// `translate` for a fetch, through the memo of the last page fetched from, a pure function of its key.
+    pub(crate) fn fetch_place(&mut self, vaddr: u32) -> Result<Place, Exception> {
+        let s = self.status() & (status::KSU | status::EXL | status::ERL);
+        let key = [u64::from(vaddr >> 12) | u64::from(s) << 32, u64::from(self.cop0[cop0::CONFIG] & config::K0) | u64::from(self.cop0[cop0::ENTRYHI] & 0xFF) << 32, self.tlb_stamp];
+        let at = vaddr & 0xFFF;
+        if let Some(p) = self.fetch_memo.place
+            && self.fetch_memo.key == key
+        {
+            return Ok(match p {
+                Place::Scratchpad(o) => Place::Scratchpad(o | at),
+                Place::Physical(a, m) => Place::Physical(a | at, m),
+            });
+        }
+        let p = self.translate(vaddr, Access::Fetch)?;
+        let page = match p {
+            Place::Scratchpad(o) => Place::Scratchpad(o & !0xFFF),
+            Place::Physical(a, m) => Place::Physical(a & !0xFFF, m),
+        };
+        self.fetch_memo = super::FetchMemo { key, place: Some(page) };
+        Ok(p)
+    }
+
     /// An instruction fetch (§6.3.3): the instruction cache for a cached page with Config.ICE, the bus otherwise.
     pub(crate) fn fetch(&mut self, bus: &mut dyn Bus, vaddr: u32) -> Result<u32, Exception> {
-        match self.translate(vaddr, Access::Fetch)? {
+        match self.fetch_place(vaddr)? {
             Place::Scratchpad(o) => Ok(bytes_of(&self.spram[..], o as usize, 4) as u32),
             Place::Physical(paddr, Mode::Cached | Mode::Through) if self.cop0[cop0::CONFIG] & config::ICE != 0 => {
                 let set = ICache::set(vaddr);

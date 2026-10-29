@@ -43,12 +43,8 @@ fn up(n: usize, to: usize) -> usize {
 
 impl Memory {
     pub(crate) fn new() -> Memory {
-        // SAFETY: an anonymous reservation, no access until a batch is written.
-        let base = unsafe { libc::mmap(std::ptr::null_mut(), RESERVED, libc::PROT_NONE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE, -1, 0) };
-        assert!(base != libc::MAP_FAILED, "the code reservation");
-        // SAFETY: sysconf has no preconditions.
-        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
-        Memory { base: base.cast(), page, hot: 0, cold: COLD, stubs: Vec::new() }
+        let (base, page) = os::reserve(RESERVED);
+        Memory { base, page, hot: 0, cold: COLD, stubs: Vec::new() }
     }
 
     /// One batch: the stubs, at the first, then each block; each block's entry, or none where it could not be linked or the reservation is full.
@@ -99,7 +95,7 @@ impl Memory {
         for &(from, to) in &ranges {
             if to > from {
                 // SAFETY: inside the reservation; the pages are this batch's alone, which nothing has run yet.
-                assert_eq!(unsafe { libc::mprotect(self.base.add(from).cast(), to - from, libc::PROT_READ | libc::PROT_WRITE) }, 0, "writable");
+                unsafe { os::protect(self.base.add(from), to - from, false) };
             }
         }
         for (at, bytes) in writes {
@@ -109,7 +105,7 @@ impl Memory {
         for &(from, to) in &ranges {
             if to > from {
                 // SAFETY: as above.
-                assert_eq!(unsafe { libc::mprotect(self.base.add(from).cast(), to - from, libc::PROT_READ | libc::PROT_EXEC) }, 0, "executable");
+                unsafe { os::protect(self.base.add(from), to - from, true) };
             }
         }
         // Each batch starts on a fresh page, so that a published page is never writable again.
@@ -122,6 +118,43 @@ impl Memory {
 impl Drop for Memory {
     fn drop(&mut self) {
         // SAFETY: the reservation made in `new`; the owner has forgotten every address in it.
-        unsafe { libc::munmap(self.base.cast(), RESERVED) };
+        unsafe { os::release(self.base, RESERVED) };
     }
+}
+
+/// The code memory's reservation and protection: Unix's calls; elsewhere the tailored code is never placed, and asking panics.
+#[cfg(unix)]
+mod os {
+    pub(super) fn reserve(bytes: usize) -> (*mut u8, usize) {
+        // SAFETY: an anonymous reservation, no access until a batch is written.
+        let base = unsafe { libc::mmap(std::ptr::null_mut(), bytes, libc::PROT_NONE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE, -1, 0) };
+        assert!(base != libc::MAP_FAILED, "the code reservation");
+        // SAFETY: sysconf has no preconditions.
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        (base.cast(), page)
+    }
+
+    /// # Safety
+    /// `at..at + bytes` is inside a reservation and pages no code runs from while they are writable.
+    pub(super) unsafe fn protect(at: *mut u8, bytes: usize, exec: bool) {
+        let p = if exec { libc::PROT_READ | libc::PROT_EXEC } else { libc::PROT_READ | libc::PROT_WRITE };
+        // SAFETY: the caller's.
+        assert_eq!(unsafe { libc::mprotect(at.cast(), bytes, p) }, 0, "the code's protection");
+    }
+
+    /// # Safety
+    /// A reservation of `bytes` from `reserve`, whose addresses nothing holds.
+    pub(super) unsafe fn release(base: *mut u8, bytes: usize) {
+        // SAFETY: the caller's.
+        unsafe { libc::munmap(base.cast(), bytes) };
+    }
+}
+
+#[cfg(not(unix))]
+mod os {
+    pub(super) fn reserve(_: usize) -> (*mut u8, usize) {
+        panic!("the tailored code memory is made on Unix hosts only")
+    }
+    pub(super) unsafe fn protect(_: *mut u8, _: usize, _: bool) {}
+    pub(super) unsafe fn release(_: *mut u8, _: usize) {}
 }

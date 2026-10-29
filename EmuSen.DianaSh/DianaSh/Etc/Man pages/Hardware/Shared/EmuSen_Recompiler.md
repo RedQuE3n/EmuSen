@@ -1238,3 +1238,10 @@ The Cranelift tier also drops twice in the arena's window, which §60 could not 
 and was stopped (§15.7), now passes with the rest of the file: its time was the compiler's, Cranelift compiling every
 covered block beside its tailored code and the budget dropping them again and again, and neither happens now. That
 closes §15.7's one test not run to its end.
+
+### 16.7 The default tier (2026-10-29)
+
+Since 2026-10-29 the baseline is Sapphire's default EE tier on x86-64 Unix (`baseline` a default feature), each covered
+block compiled on the dispatcher's thread and the rest left to the interpreter, so that which steps run compiled no longer
+depends on the compiler's thread; `EMUSEN_SAPPHIRE_BASELINE=0` keeps Cranelift's tier, which stays the default elsewhere.
+The measurements, the player checks and the classes it does not yet hold are `Sapphire_Speed.md` §64.

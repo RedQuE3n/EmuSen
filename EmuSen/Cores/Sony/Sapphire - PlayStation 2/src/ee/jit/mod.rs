@@ -252,7 +252,7 @@ impl Ee {
     /// Makes the interrupt check's write of Cause.IP2 and IP3, as the step would.
     pub(crate) fn block_entry(&mut self) -> Option<u32> {
         use super::cop0::{config, debug, perf};
-        use super::memory::{Access, Mode, Place};
+        use super::memory::{Mode, Place};
         if self.delay || self.pccr & perf::CTE != 0 || self.debug[debug::BPC] & (debug::IAE | debug::DRE | debug::DWE) != 0 || self.timing.instructions == 0 {
             return None;
         }
@@ -260,7 +260,7 @@ impl Ee {
         if pc & 3 != 0 || self.cop0[super::cop0::CONFIG] & config::ICE == 0 || self.interrupt_pending() || self.interrupt_after != 0 {
             return None;
         }
-        match self.translate(pc, Access::Fetch).ok()? {
+        match self.fetch_place(pc).ok()? {
             Place::Physical(paddr, Mode::Cached | Mode::Through) => Some(paddr),
             _ => None,
         }

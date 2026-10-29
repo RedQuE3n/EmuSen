@@ -104,12 +104,12 @@ impl Isa for R5900Isa {
     }
 }
 
-/// Whether the dispatcher runs the baseline's code: `EMUSEN_SAPPHIRE_BASELINE=1`.
+/// Whether the dispatcher runs the baseline's code: the default on x86-64 Unix since 2026-10-29, off with `EMUSEN_SAPPHIRE_BASELINE=0` (Sapphire_Speed.md §64.4).
 pub(crate) fn dispatched() -> bool {
     use std::sync::atomic::Ordering::Relaxed;
     match DISPATCHED.load(Relaxed) {
         0 => {
-            let on = std::env::var("EMUSEN_SAPPHIRE_BASELINE").is_ok_and(|v| v == "1");
+            let on = cfg!(all(target_arch = "x86_64", unix)) && std::env::var("EMUSEN_SAPPHIRE_BASELINE").map_or(true, |v| v != "0");
             DISPATCHED.store(if on { 2 } else { 1 }, Relaxed);
             on
         }

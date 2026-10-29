@@ -138,8 +138,14 @@ impl Hasher for Mix {
     }
 }
 
+/// Entries of the direct-mapped front of the block map, by the entry's word address (Sapphire_Speed.md §64.3).
+const FRONT: usize = 1 << 16;
+
 pub struct Blocks {
-    map: HashMap<u32, Block, BuildHasherDefault<Mix>>,
+    /// The blocks by entry address: the slab, its index, and the front the dispatcher looks in first.
+    slab: Vec<Block>,
+    index: HashMap<u32, u32, BuildHasherDefault<Mix>>,
+    front: Box<[(u32, u32)]>,
     jit: Jit,
     pub threshold: u32,
     /// Wait for each block's code when it is handed over, as the tests do.
@@ -227,7 +233,9 @@ impl Blocks {
         let mut jit = Jit::new(jit::R5900, budget);
         jit.perf_map = std::env::var("EMUSEN_SAPPHIRE_PERFMAP").is_ok_and(|v| v == "1");
         Blocks {
-            map: HashMap::default(),
+            slab: Vec::new(),
+            index: HashMap::default(),
+            front: vec![(0, 0); FRONT].into_boxed_slice(),
             jit,
             threshold: THRESHOLD,
             wait: false,
@@ -255,7 +263,8 @@ impl Blocks {
     /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
     /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions), `EMUSEN_SAPPHIRE_WAIT=1` (each block's code waited for
     /// when it is handed over, so that nothing runs interpreted behind the compiler's queue), `EMUSEN_SAPPHIRE_BASELINE_NOW=1`
-    /// (with `baseline`, each covered block compiled on the dispatcher's thread), `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` (the code budget).
+    /// (with `baseline`, each covered block compiled on the dispatcher's thread and the rest left to the interpreter, the default
+    /// while the baseline is dispatched; `=0` queues them), `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` (the code budget).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -267,7 +276,7 @@ impl Blocks {
         b.wait = std::env::var("EMUSEN_SAPPHIRE_WAIT").is_ok_and(|v| v == "1");
         #[cfg(feature = "baseline")]
         {
-            b.now = std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").is_ok_and(|v| v == "1");
+            b.now = jit::baseline::dispatched() && std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").map_or(true, |v| v != "0");
         }
         if let Some(mib) = std::env::var("EMUSEN_SAPPHIRE_BUDGET_MIB").ok().and_then(|v| v.parse::<u64>().ok()) {
             b.set_budget(mib << 20);
@@ -316,7 +325,9 @@ impl Blocks {
 
     /// Every block forgotten, its code kept until the budget drops the module; the translation cache emptied.
     pub fn forget(&mut self) {
-        self.map.clear();
+        self.slab.clear();
+        self.index.clear();
+        self.front.fill((0, 0));
         self.key = [0; 3];
         self.recent = [([0; 3], 0); 4];
     }
@@ -385,7 +396,32 @@ impl Blocks {
 
     /// The mnemonics in the blocks that hold code now.
     pub fn compiled_mnemonics(&self) -> std::collections::BTreeSet<&'static str> {
-        self.map.values().filter(|b| matches!(b.state, State::Ready(_))).flat_map(|b| b.words.iter().map(|&w| shape::name(w))).collect()
+        self.slab.iter().filter(|b| matches!(b.state, State::Ready(_))).flat_map(|b| b.words.iter().map(|&w| shape::name(w))).collect()
+    }
+
+    /// The block entered at `pc`, through the front.
+    #[inline]
+    fn find(&mut self, pc: u32) -> Option<usize> {
+        let f = &mut self.front[(pc >> 2) as usize & (FRONT - 1)];
+        if f.0 == pc && f.1 != 0 {
+            return Some(f.1 as usize - 1);
+        }
+        let i = *self.index.get(&pc)?;
+        *f = (pc, i + 1);
+        Some(i as usize)
+    }
+
+    /// The block at `pc` made `b`, and whether one was there.
+    fn put(&mut self, pc: u32, b: Block) -> (usize, bool) {
+        if let Some(i) = self.find(pc) {
+            self.slab[i] = b;
+            return (i, true);
+        }
+        let i = self.slab.len();
+        self.slab.push(b);
+        self.index.insert(pc, i as u32);
+        self.front[(pc >> 2) as usize & (FRONT - 1)] = (pc, i as u32 + 1);
+        (i, false)
     }
 
     fn options(&self, sys: &System) -> Options {
@@ -432,13 +468,15 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     // A block not compiled yet is counted, and one refused passed over, without the entry's checks: neither runs code.
     let threshold = blocks.threshold;
-    if let Some(b) = blocks.map.get_mut(&sys.ee.pc)
-        && b.rest > 0
+    let pc = sys.ee.pc;
+    let found = blocks.find(pc);
+    if let Some(i) = found
+        && blocks.slab[i].rest > 0
     {
-        b.rest -= 1;
+        blocks.slab[i].rest -= 1;
         return None;
     }
-    match blocks.map.get_mut(&sys.ee.pc).map(|b| &mut b.state) {
+    match found.map(|i| &mut blocks.slab[i].state) {
         Some(State::Refused(n)) => {
             *n = n.wrapping_add(1);
             if *n != 0 {
@@ -452,9 +490,12 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         _ => {}
     }
     let paddr = sys.ee.block_entry()?;
-    let pc = sys.ee.pc;
     let options = blocks.options(sys);
-    let held = blocks.map.get(&pc).and_then(|b| if b.paddr == paddr && b.options == options { sys.ee.held_words(pc, paddr, &b.words) } else { None });
+    let held = found.and_then(|i| {
+        let b = &blocks.slab[i];
+        if b.paddr == paddr && b.options == options { sys.ee.held_words(pc, paddr, &b.words) } else { None }
+    });
+    let mut at = found;
     if held.is_none() {
         // Past a line the cache does not hold, the words RDRAM holds; only the lines held when the dispatcher does not
         // wait for lines (a test's code run once).
@@ -472,7 +513,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             return None;
         }
         let span = span_of(&words);
-        if blocks.map.insert(pc, Block {
+        let (i, was) = blocks.put(pc, Block {
             paddr,
             #[cfg(feature = "baseline")]
             covered: jit::baseline::dispatched() && jit::baseline::covers(&words, options),
@@ -482,12 +523,13 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             idle: 0,
             rest: 0,
             span,
-        }).is_some() {
-            blocks.stats.reshaped += 1;
-        }
+        });
+        blocks.stats.reshaped += u64::from(was);
+        at = Some(i);
     }
     let wait = blocks.wait;
-    let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+    let at = at.expect("the block is in the map");
+    let b = &mut blocks.slab[at];
     // The instructions before the first line the cache does not hold, to the last line the block can leave at.
     let held = held.unwrap_or_else(|| sys.ee.held_words(pc, paddr, &b.words).unwrap_or(0));
     let b_len = b.words.len();
@@ -510,6 +552,12 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             let now = if blocks.now && b.covered { blocks.jit.compile_now(&b.words, pc, b.options) } else { None };
             #[cfg(not(feature = "baseline"))]
             let now = None;
+            #[cfg(feature = "baseline")]
+            if blocks.now && now.is_none() {
+                // Compiled on this thread or not at all, so that which steps run compiled never depends on another thread's time.
+                b.state = State::Refused(0);
+                return None;
+            }
             let slot = now.unwrap_or_else(|| blocks.jit.enqueue(b.words.clone(), pc, b.options));
             if wait {
                 slot.wait();
@@ -563,7 +611,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     let steps = ctx.steps;
     #[cfg(feature = "baseline")]
-    if blocks.map.get(&pc).is_some_and(|b| b.covered) {
+    if blocks.slab[at].covered {
         baseline::count(ctx.moved != 0, ctx.prefix, steps);
     }
     #[cfg(feature = "census")]
@@ -579,7 +627,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     }
     match exit {
         jit::DONE => {
-            let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+            let b = &mut blocks.slab[at];
             if steps == 0 {
                 // Its first instruction's access left at once (a register polled, a miss): after a few in a row the
                 // interpreter takes the next entries without the entry's checks.
@@ -623,7 +671,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
                 undo(ctx);
             }
             if run.rewound {
-                let b = blocks.map.get_mut(&pc).expect("the block is in the map");
+                let b = &mut blocks.slab[at];
                 b.idle = 0;
                 blocks.stats.entered += 1;
                 blocks.stats.compiled_steps += start as u64;

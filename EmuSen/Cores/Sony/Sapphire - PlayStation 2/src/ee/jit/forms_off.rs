@@ -11,6 +11,12 @@ pub const COUNT: u16 = 8;
 pub const PAGE: u16 = 128;
 pub const LINE: u16 = 256;
 pub const STUB: u16 = 512;
+pub const HORIZON: u16 = 1024;
+
+#[inline(always)]
+pub fn chosen() -> u16 {
+    0
+}
 
 pub struct Watched;
 

@@ -35,6 +35,8 @@ pub const PAGE: u16 = 128;
 pub const LINE: u16 = 256;
 /// One shared exit: the hot exit's replay and commit made by one helper, handed the exit's few values.
 pub const STUB: u16 = 512;
+/// One horizon check a block: none before each access, the dispatcher's one at the entry instead (Sapphire_Redesign.md, "One horizon check a block").
+pub const HORIZON: u16 = 1024;
 /// The kinds `COUNT` counts (1 to 3), then the reuses: a page reused, its guard failed, a line reused, its guard failed.
 static KINDS: [AtomicU64; 8] = [const { AtomicU64::new(0) }; 8];
 
@@ -65,6 +67,7 @@ pub fn chosen() -> u16 {
             "page" => PAGE,
             "line" => LINE,
             "stub" => STUB,
+            "horizon" => HORIZON,
             _ => 0,
         }).fold(0, |a, b| a | b)
     })
@@ -252,10 +255,10 @@ fn pinned_isa(module: &JITModule) -> cranelift_codegen::isa::OwnedTargetIsa {
 }
 
 /// The forms the shadow compiles: today's, C1, static, both with the chosen levers, and static with each step's levers (`STEPS`).
-const FORMS: [&str; 9] = ["today", "C1", "static", "static+levers", "today+levers", "static+option1", "static+page", "static+line", "static+stub"];
+const FORMS: [&str; 10] = ["today", "C1", "static", "static+levers", "today+levers", "static+option1", "static+page", "static+line", "static+stub", "static+horizon"];
 /// Option 1's levers, then each of this step's added in turn.
 const OPTION1: u16 = CACHE | CHANGED | RELOAD | PRESERVE;
-const STEPS: [u16; 4] = [OPTION1, OPTION1 | PAGE, OPTION1 | PAGE | LINE, OPTION1 | PAGE | LINE | STUB];
+const STEPS: [u16; 5] = [OPTION1, OPTION1 | PAGE, OPTION1 | PAGE | LINE, OPTION1 | PAGE | LINE | STUB, OPTION1 | PAGE | LINE | STUB | HORIZON];
 const N: usize = FORMS.len();
 /// For each form: total, hot, cold bytes, hot-tagged bytes past the first cold one, then the hot bytes by purpose.
 const ROW: usize = 4 + 12;

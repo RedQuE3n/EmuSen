@@ -1,6 +1,6 @@
 [package]
 name = "emusen-jit"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 publish = false
 
@@ -11,7 +11,7 @@ publish = false
 name = "emusen_jit"
 
 [features]
-# Version 1.1's tailored code beside the Cranelift function, in the crate's own code memory (EmuSen_Jit.md §7); off by default.
+# Version 1.1's tailored code in place of the Cranelift function, in the crate's own code memory (EmuSen_Jit.md §7, §8); off by default.
 native = ["dep:emusen-assembler", "dep:libc"]
 
 [dependencies]

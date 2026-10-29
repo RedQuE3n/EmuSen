@@ -6,6 +6,20 @@ use emusen_assembler::Code;
 pub struct Native {
     pub code: Code,
     pub fallback: Option<u32>,
+    /// 1.2: the Cranelift function compiled beside the code though no fallback word needs it, for a measurement that reads it.
+    pub function: bool,
+}
+
+impl Native {
+    /// Whether the block's Cranelift function is compiled too: for its fallback word, or when asked (EmuSen_Jit.md §8).
+    pub fn needs_function(&self) -> bool {
+        self.function || self.fallback.is_some()
+    }
+
+    /// The bytes it takes in the code memory, as the budget counts them.
+    pub fn bytes(&self) -> u64 {
+        (self.code.hot.len() + self.code.cold.len() + self.code.data.len()) as u64
+    }
 }
 
 /// The reservation: 1 GiB, so that every rel32 between the arenas and the stubs reaches.

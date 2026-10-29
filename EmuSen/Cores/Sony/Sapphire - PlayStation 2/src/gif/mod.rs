@@ -113,6 +113,8 @@ pub struct Gif {
     resume: Option<u64>,
     /// The path holding the GIF has output something since it was granted: data, or a GIFtag with NLOOP above 0.
     output: bool,
+    /// BUSDIR as the last `run_to` saw it, kept while nothing has reached the GIF since; not state (Sapphire_Speed.md §61.3).
+    still: Option<bool>,
 }
 
 impl Default for Gif {
@@ -146,6 +148,7 @@ impl Gif {
             wake: false,
             resume: None,
             output: false,
+            still: None,
         }
     }
 
@@ -219,8 +222,13 @@ impl Gif {
     /// Runs every step that begins by cycle `t`: arbitration, PATH1's qwords from VU1's memory and PATH3's from the
     /// FIFO. Nothing moves while GIF_CTRL.PSE pauses the GIF or BUSDIR turns the host interface round [A].
     pub fn run_to(&mut self, t: u64, vu1: &Vu, gs: &mut dyn HostInterface) {
+        let reversed = gs.reversed();
+        if self.still == Some(reversed) && self.resume.is_none_or(|r| t < r) {
+            return;
+        }
+        self.still = Some(reversed);
         self.resume = None;
-        if self.pse || gs.reversed() {
+        if self.pse || reversed {
             return;
         }
         loop {
@@ -295,6 +303,7 @@ impl Gif {
     }
 
     fn request2(&mut self, at: u64, hl: bool) {
+        self.still = None;
         if self.p2.is_none() {
             self.p2 = Some((at, hl));
         }
@@ -345,11 +354,13 @@ impl Gif {
 
     /// MSKPATH3 (§6.4): the mask the arbitration reads from the next PATH3 packet.
     pub fn mask_path3(&mut self, masked: bool) {
+        self.still = None;
         self.m3p = masked;
     }
 
     /// An XGKICK handed on from VU1 (`Path1Port`): VU1's qword address, its cycle, and the end the VU was told.
     pub fn kick(&mut self, addr: u16, at: u64, told: u64) {
+        self.still = None;
         self.kicks.push_back((addr, at, told));
     }
 
@@ -369,6 +380,7 @@ impl Gif {
     /// The DMAC's request on channel 2: room in the FIFO, which PATH3's mask does not change (ps2tek "GIF PATH3
     /// Masking").
     pub fn request(&mut self, want: usize) -> usize {
+        self.still = None;
         let room = DEPTH.saturating_sub(self.fifo.len());
         if room == 0 {
             self.dmac_waiting = true;
@@ -380,6 +392,7 @@ impl Gif {
     /// is dropped (D-283). The qwords of one DMA unit, handed over together at its end, are taken to have arrived one a
     /// bus cycle up to it, as the DMAC moved them (§33.4).
     pub fn put(&mut self, w: u128, tag: bool, at: u64) {
+        self.still = None;
         if tag {
             return;
         }
@@ -403,6 +416,7 @@ impl Gif {
 
     /// A register written by the EE: GIF_CTRL and GIF_MODE; the rest are read-only.
     pub fn write(&mut self, off: u32, v: u32) {
+        self.still = None;
         match off {
             reg::CTRL => {
                 if v & ctrl::RST != 0 {
@@ -609,6 +623,7 @@ impl emusen_native::State for Gif {
         let at = r.u64()?;
         self.p2 = p2[0].then_some((at, p2[1]));
         self.resume = crate::state::read_opt_u64(r)?;
+        self.still = None;
         let len = r.u32()?;
         let mut q = [0u128; FIFO_SLOTS];
         let mut at = [0u64; FIFO_SLOTS];

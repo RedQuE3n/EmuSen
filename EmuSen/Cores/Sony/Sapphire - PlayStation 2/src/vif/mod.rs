@@ -163,6 +163,8 @@ pub struct Vif {
     /// Found idle with nothing reaching it since: `idle` known until a call that may change it (Sapphire_Scheduler.md
     /// §54.5). Not state.
     rest: bool,
+    /// The last `run_to` ended stalled or short of a word, nothing reaching the VIF since; not state (Sapphire_Speed.md §61.3).
+    dry: bool,
 }
 
 impl Vif {
@@ -196,6 +198,7 @@ impl Vif {
             irq: false,
             received: 0,
             rest: false,
+            dry: false,
         }
     }
 
@@ -290,6 +293,10 @@ impl Vif {
     /// Runs every step that begins by cycle `t`.
     pub fn run_to(&mut self, t: u64, r: &mut Reach) {
         self.rest = false;
+        if self.dry {
+            self.time = self.time.max(t);
+            return;
+        }
         if self.reversed() {
             self.time = self.time.max(t);
             let had = self.fifo.len();
@@ -309,6 +316,7 @@ impl Vif {
                 None => {
                     if !matches!(self.cmd, Cmd::Wait { .. }) {
                         self.time = self.time.max(t);
+                        self.dry = !(matches!(self.cmd, Cmd::Direct { .. }) && self.stat & stat::VGW != 0);
                     }
                     return;
                 }
@@ -603,6 +611,7 @@ impl Vif {
     /// A register write (§6.5): MARK, which clears MRK; FBRST; ERR; and VIF1_STAT's FDR. The rest are read-only.
     pub fn write(&mut self, off: u32, v: u32) {
         self.rest = false;
+        self.dry = false;
         match off {
             reg::MARK => {
                 self.mark = v & 0xFFFF;
@@ -655,6 +664,7 @@ impl Vif {
     /// data when it is reversed, nothing when the DMAC's direction is not the FIFO's; refilled from the GS first.
     pub fn request(&mut self, want: usize, to_memory: bool, gif: &mut dyn Gif) -> usize {
         self.rest = false;
+        self.dry = false;
         let n = if to_memory != self.reversed() {
             0
         } else if to_memory {
@@ -675,6 +685,7 @@ impl Vif {
     /// A qword from the DMAC (a DMAtag with `tag`) or the EE's store into the FIFO; lost while reversed.
     pub fn put(&mut self, q: u128, tag: bool) {
         self.rest = false;
+        self.dry = false;
         if !self.reversed() {
             self.fifo.push_back((q, tag));
             self.received += 1;
@@ -684,6 +695,7 @@ impl Vif {
     /// A qword taken from the reversed FIFO by the DMAC or by the EE's load; 0 when there is none.
     pub fn get(&mut self, gif: &mut dyn Gif) -> u128 {
         self.rest = false;
+        self.dry = false;
         if self.reversed()
             && self.fifo.is_empty()
             && let Some(q) = gif.host_read()
@@ -783,6 +795,7 @@ impl emusen_native::State for Vif {
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         self.rest = false;
+        self.dry = false;
         let mut g = [0u32; 12];
         r.u32s(&mut g)?;
         [self.stat, self.err, self.mark, self.cycle, self.num, self.code, self.itops, self.itop, self.base, self.ofst, self.tops, self.top] = g;

@@ -466,6 +466,7 @@ impl Pipe {
                             self.kick_wait = self.path1_free;
                         }
                         self.path1_free = link.path1.kick(&vu.data, addr, start);
+                        link.kicked = true;
                     }
                     "xtop" if unit == 1 => self.write_alu(vu, ft(lower), link.top[1], t),
                     "xitop" => self.write_alu(vu, ft(lower), link.itop[unit], t),

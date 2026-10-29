@@ -557,8 +557,10 @@ impl Board {
     /// Brings the GIF to cycle `t`: the XGKICKs VU1 made handed to it, then its paths run, the DMAC woken for FIFO room
     /// freed, and the GS's interrupt latched.
     fn run_gif(&mut self, t: u64) {
-        while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick() {
-            self.gif.kick(addr, at, told);
+        if std::mem::take(&mut self.vpu.units.link.kicked) {
+            while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick() {
+                self.gif.kick(addr, at, told);
+            }
         }
         self.gif.run_to(t, &self.vpu.units.vu1, &mut self.gs);
         if self.gif.take_wake() {

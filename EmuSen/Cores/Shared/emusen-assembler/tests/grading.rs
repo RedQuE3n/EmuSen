@@ -586,3 +586,46 @@ fn a_label_s_address_reaches_it_in_either_section() {
         assert_eq!(Exec::new(code, &[]).run(&mut [0; 8]), 77, "cold={cold}");
     }
 }
+
+#[test]
+fn multiply_and_divide_match_their_models_in_every_register() {
+    let mut rng = Rng(0x0DD_BA11_5EED_0042);
+    let pick = |rng: &mut Rng, ok: &dyn Fn(Reg) -> bool| loop {
+        let x = rng.reg();
+        if ok(x) {
+            break x;
+        }
+    };
+    for _ in 0..ROUNDS * 4 {
+        let rs = distinct(&mut rng, 2);
+        let (va, mut vb) = (rng.value(), rng.value());
+        let d = if rng.next() % 3 == 0 { rs[(rng.next() % 2) as usize] } else { rng.reg() };
+        let mut io = [va, vb, 0, 0, 0, 0, 0, 0];
+        let got = Exec::new(frame(&rs, |a| a.mul(d, rs[0], rs[1]), d), &[]).run(&mut io);
+        assert_eq!(got, va.wrapping_mul(vb), "mul d={d:?} rs={rs:?} {va:x} {vb:x}");
+        let w = if rng.next() % 2 == 0 { Width::W32 } else { Width::W64 };
+        let signed = rng.next() % 2 == 0;
+        if width_of(w, vb) == 0 {
+            vb = 7;
+        }
+        let min = (w == Width::W32 && va as u32 == 0x8000_0000) || (w == Width::W64 && va == 1 << 63);
+        if signed && min && width_of(w, vb) == width_of(w, u64::MAX) {
+            vb = 3;
+        }
+        let b = pick(&mut rng, &|x| !x64::DIV_REGS.contains(&x));
+        let a = pick(&mut rng, &|x| x != b);
+        let q = rng.reg();
+        let r = pick(&mut rng, &|x| x != q && !(q == RDX && x == RAX));
+        let want = match (signed, w) {
+            (true, Width::W32) => ((va as i32).wrapping_div(vb as i32) as u32 as u64, (va as i32).wrapping_rem(vb as i32) as u32 as u64),
+            (true, Width::W64) => ((va as i64).wrapping_div(vb as i64) as u64, (va as i64).wrapping_rem(vb as i64) as u64),
+            (false, Width::W32) => (u64::from(va as u32 / vb as u32), u64::from(va as u32 % vb as u32)),
+            (false, Width::W64) => (va / vb, va % vb),
+        };
+        for (out, wanted) in [(q, want.0), (r, want.1)] {
+            let mut io = [va, vb, 0, 0, 0, 0, 0, 0];
+            let got = Exec::new(frame(&[a, b], |m| m.divrem(signed, w, q, r, a, b), out), &[]).run(&mut io);
+            assert_eq!(width_of(w, got), wanted, "divrem signed={signed} {w:?} q={q:?} r={r:?} a={a:?} b={b:?} {va:x} {vb:x}");
+        }
+    }
+}

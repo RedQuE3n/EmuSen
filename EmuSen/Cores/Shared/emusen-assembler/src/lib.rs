@@ -3,7 +3,7 @@
 pub mod x64;
 
 /// The `Assembler` trait's version: (major, minor).
-pub const VERSION: (u16, u16) = (1, 0);
+pub const VERSION: (u16, u16) = (1, 1);
 
 /// A host register, numbered as the backend numbers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -126,6 +126,10 @@ pub trait Assembler {
     fn neg(&mut self, w: Width, d: Reg, a: Reg);
     /// `d` the low 32 bits of `s` sign-extended.
     fn sext32(&mut self, d: Reg, s: Reg);
+    /// `d = a * b`, the product's low 64 bits (1.1).
+    fn mul(&mut self, d: Reg, a: Reg, b: Reg);
+    /// `q = a / b` and `r = a % b` at `w`, with `b` nonzero, not the signed minimum over -1, and none of the backend's `DIV_REGS`, which it may clobber (1.1).
+    fn divrem(&mut self, signed: bool, w: Width, q: Reg, r: Reg, a: Reg, b: Reg);
     fn cmp(&mut self, w: Width, a: Reg, b: Src);
     /// `bytes` 1, 4 or 8 of memory compared with `b`.
     fn cmp_mem(&mut self, bytes: u8, m: Mem, b: Src);

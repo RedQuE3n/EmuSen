@@ -8,6 +8,8 @@ use crate::{Assembler, By, Code, Cond, Label, Mem, Op, PURPOSES, Reg, Reloc, Sec
 pub const RAX: Reg = Reg(0);
 pub const RCX: Reg = Reg(1);
 pub const RDX: Reg = Reg(2);
+/// The registers `divrem` takes its dividend and answers in and may clobber.
+pub const DIV_REGS: [Reg; 2] = [RAX, RDX];
 pub const RBX: Reg = Reg(3);
 pub const RSP: Reg = Reg(4);
 pub const RBP: Reg = Reg(5);
@@ -430,6 +432,39 @@ impl Assembler for X64 {
 
     fn sext32(&mut self, d: Reg, s: Reg) {
         self.put(i::movslq_rm::new(r(d), r(s)));
+    }
+
+    fn mul(&mut self, d: Reg, a: Reg, b: Reg) {
+        let other = if d == b { a } else { b };
+        if d != b {
+            self.mov(Width::W64, d, a);
+        }
+        self.put(i::imulq_rm::new(r(d), GprMem::Gpr(r(other))));
+    }
+
+    fn divrem(&mut self, signed: bool, w: Width, q: Reg, rem: Reg, a: Reg, b: Reg) {
+        assert!(!DIV_REGS.contains(&b) && q != rem && !(q == RDX && rem == RAX), "the divisor outside rax and rdx, two distinct answers");
+        self.mov(w, RAX, a);
+        let trap = asm::TrapCode(std::num::NonZeroU8::MIN);
+        match (signed, w) {
+            (true, Width::W32) => self.put(i::cltd_zo::new(r(RDX), r(RAX))),
+            (true, Width::W64) => self.put(i::cqto_zo::new(r(RDX), r(RAX))),
+            _ => self.alu(Op::Xor, Width::W32, RDX, RDX, Src::Reg(RDX)),
+        }
+        let d = GprMem::Gpr(r(b));
+        match (signed, w) {
+            (true, Width::W32) => self.put(i::idivl_m::new(r(RAX), r(RDX), d, trap)),
+            (true, Width::W64) => self.put(i::idivq_m::new(r(RAX), r(RDX), d, trap)),
+            (false, Width::W32) => self.put(i::divl_m::new(r(RAX), r(RDX), d, trap)),
+            (false, Width::W64) => self.put(i::divq_m::new(r(RAX), r(RDX), d, trap)),
+        }
+        if q == RDX {
+            self.mov(Width::W64, rem, RDX);
+            self.mov(Width::W64, q, RAX);
+        } else {
+            self.mov(Width::W64, q, RAX);
+            self.mov(Width::W64, rem, RDX);
+        }
     }
 
     fn cmp(&mut self, w: Width, a: Reg, b: Src) {

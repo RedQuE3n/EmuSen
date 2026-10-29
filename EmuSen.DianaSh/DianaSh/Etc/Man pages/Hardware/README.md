@@ -82,6 +82,13 @@ here.
   no instruction set. Moved 2026-10-25 out of MarsRT, whose `cpu/blocks/jit/mod.rs` it was, at Sapphire's stage S35
   for the PlayStation 2's recompilers; a toy processor's tests, ThreadSanitizer with its positive control, and
   MarsRT's tests and speed as the gate.
+- [`Shared/EmuSen_Recompiler.md`](Shared/EmuSen_Recompiler.md) — a tailored recompiler on Cranelift's assemblers, in
+  the manner of Wasmtime's Winch (2026-10-28, a design for the tester's approval, nothing built): a MIPS block planner
+  shared by the R5900 and the VR4300, a guest-neutral macro-assembler with an x86-64 backend on
+  `cranelift-assembler-x64` and aarch64 later, and `emusen-jit` 2.0 owning code memory, link slots and invalidation;
+  fixed host registers and no call on a hot path; the EE's exact levers made rules of the design; static and dynamic
+  regions and their share; verification and gates; the EE's stages E0 to E4 with the vertical slice first; and the
+  absorption of MarsRT's, the EE's and the VU's Cranelift lowerings as a project of its own (A0 to A4).
 - [`Shared/EmuSen_MediumFormats.md`](Shared/EmuSen_MediumFormats.md) — `emusen-psx-card`, `emusen-n64-pak` and
   `emusen-mcd-bram`, the PlayStation memory card's, the Controller Pak's and the Sega CD backup RAM's file systems as
   crates with no standard library and no allocation, for a host's card tool and an open firmware alike (the backend's

@@ -162,7 +162,8 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   instruction cache's lines, the gate on every base, the speed and the memory card screen's causes, the seeded faults;
   and the loads' and stores' exits shared (§48.15, 2026-10-26): one write-back an access instead of two, the code 28 %
   smaller an access, every oracle equal, the card screen 1.03 times S37's but short of memory-in-blocks off, its
-  remaining cost the compiler's throughput against the issue model's code, measured.
+  remaining cost the compiler's throughput against the issue model's code, measured. The design of the EE's next
+  emitter, shared by intent with MarsRT, is `Hardware/Shared/EmuSen_Recompiler.md` (2026-10-28, not built).
 - **`Sapphire_Speed.md`** — the speed record on the games themselves, from the gameplay workload on (2026-10-26),
   continuing `Sapphire_Native.md`'s numbering: Jak and Daxter toward play (§51), its press script from power-on, the
   opening that no button skips and the GS's held writes that stop it short of play (D-900), the bench's `game` windows of

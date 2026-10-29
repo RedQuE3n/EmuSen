@@ -1538,3 +1538,247 @@ cut); R0's AVX-512VL form showed the same direction (R0.4 in the conclusion).
 Rust's `_mm512_add_round_ps` documentation, Ogita, Rump and Oishi 2005 and Rump, Zimmermann, Boldo and Melquiond 2009
 for the exactness of the error terms); this page's §56; `Sapphire_Redesign.md`'s R0.4 sections; `Sapphire_Disputes.md`
 D-25, D-26, D-43, D-44; `float.rs`, `float_lanes.rs` and `examples/lanes.rs`. No emulator source, no firmware.
+
+## 60. Where an arena field goes on the tree with E1, by unit (2026-10-29)
+
+A measurement only: nothing in the core changed. `EmuSen_Recompiler.md` §15.4 timed the arena at about 757 ms a field
+on Cranelift's tier and about 790 with E1's baseline, against a real-time 16.7 ms, while the EE's compiled code was a
+small share. This section finds where the rest of the field goes, what the baseline does more of, and why its prefix
+entries do not converge.
+
+### 60.1 The method
+
+The tree is `recompiler-e1` (99c50bcdc), as merged into WiseMan as `ba1cef883`. The bench was built with the crate's
+release profile twice: as shipped, and with `--features baseline`. The window is `jak-arena`: from the state at frame
+9,000, timed over 9,060 to 9,360, `--defaults`, desktop only (Ryzen 7 7700X), each run in its own scope at CPU weight
+100, one-minute load 0.5 to 3.7.
+
+- **The sampler**: §51.6's copy of S32's ptrace sampler (§43.4), 4 ms on every thread from the progress line of frame
+  9,100 to the end, with the recompiler's perf map. The emulation thread's samples are classed by their innermost
+  Sapphire frame, with waits apart (a futex, a park or a system call, named by the caller). Each class's share is
+  multiplied by the run's own mean, since the sampled run is its own timing round.
+- **Two scratch changes for this section, not committed**:
+  - the sampler names the baseline's code region, hot and cold halves apart, from a line `emusen-jit` writes under
+    `EMUSEN_NATIVE_REGION=1`;
+  - for a sample inside a `sapphire::float` function, the sampler scans 24 stack words for the first return address
+    outside those functions and takes it as the caller. A frame without a frame pointer makes this a heuristic, which
+    the result below checks.
+- **One scratch counter, not committed**: `EMUSEN_SAPPHIRE_PREFIX_WHY=1` re-runs the convergence test at the last step
+  the prefix tried and names the first condition of §15.2 that failed.
+
+| Run | Build | Settings | Mean ms a field | Picture, sound digests |
+| --- | --- | --- | --- | --- |
+| A | shipped | sampled | **765.4** | `611B58F7CFE67E8B`, `BCA8F00F4743A955` |
+| B | baseline feature, not dispatched | sampled | 767.8 | the same |
+| C | baseline feature, dispatched | sampled, `PREFIX_WHY=1` | **814.2** | the same |
+| R | baseline feature, dispatched | `PREFIX_WHY=1`, `FORMS_BYTES=1`, unsampled | 819.2 | the same |
+| WA | shipped | `EMUSEN_SAPPHIRE_WAIT=1`, unsampled | 1,915.1 (median 1,243, max 14,635) | the same |
+| WC | baseline feature, dispatched | `EMUSEN_SAPPHIRE_WAIT=1`, unsampled | 4,766.1 (median 3,556, max 16,823) | the same |
+
+A and B agree within 0.3 %, so the feature compiled in costs nothing where it is not dispatched; B stands for §15.4's
+Cranelift tier (754.1 and 760.9 there). C began while B's sampler was still naming its samples (one core busy), and R
+while C's was. The second timing rounds are §15.4's.
+
+### 60.2 Where the field goes, by unit (measured, run A)
+
+The emulation thread carries all the units below; the field is bound by it. Run A's emulation thread had 40,419
+samples.
+
+| Unit | ms a field | Share | Of which |
+| --- | --- | --- | --- |
+| **VU0 and VU1**, all of it | **264.9** | **34.6 %** | compiled microprograms 63.4; floats in software 39.5 (`float.rs`, called by the VUs, §60.3); the call path and the operations' wrappers around compiled code (`vu/pipe.rs` `run_to`, `drain`, `due`; `vu/ops.rs` `lanes`, `mac_bits`; `vu/mod.rs` `vf`, `settle`) 94.9; the recompiler's dispatcher and helpers (`vu/jit` `pending` 26.2, `run`, `h_upper`, `covers`, `h_push`) 67.1. No pair is interpreted: VU0 compiles 554,650 pairs a field and VU1 2,239,138. |
+| **EE**, all of it but idle skipping | **214.4** | **28.0 %** | interpreter (fetch 14.5, `entry`, TLB, translation, decode, ops) 93.1; dispatcher and replay (`blocks.rs` `block` 47.0) 58.3; timing model (`plan`, `commit`, `partner_of`) 30.2; compiled blocks 16.9; the compiled code's helpers in `ee/jit` (`held_words`, `block_entry`) 15.9; COP1's floats 0.1 |
+| **Board: scheduling and synchronisation** (`board.rs`, `machine.rs`) | **62.1** | 8.1 % | `run_gif` 16.1, `reschedule` 15.7, `run_vifs` 9.5, `run_to_held` 8.3 |
+| **GIF** | **57.0** | 7.4 % | `choose` 23.4, `run_to` 14.9, `take_kick` 5.7; packing about 2 |
+| **VIF** | **55.2** | 7.2 % | `run_to` 14.8, `step` 14.4, `take_irq` 6.0, `has_word` 3.1 |
+| EE timers, INTC, DMAC, PCRTC | 43.6 | 5.7 % | `timer::period` 12.3, `wants_h` 4.9, `dmac::next_work` 4.1 |
+| GS on the emulation thread | 35.5 | 4.6 % | publishing jobs and the local memory's reads 31.1; **waiting for the workers 4.4** (`publish`) |
+| Idle skipping's own work | 11.6 | 1.5 % | `prove`, `mark`, `idle_admits`; it passes 45.0 % of the EE's cycles (2.21 M a field) |
+| IOP, SIF and SIO2, SPU2, CDVD, IPU | 10.8 | 1.4 % | IOP 8.2, SIF and SIO2 1.1, SPU2 1.1, CDVD under 0.1, IPU 0.4 |
+| Other (no Sapphire frame) | 10.5 | 1.4 % | 128-bit division `__udivti3` 3.9, the blocks' hash map 2.5 |
+
+**VU0 against VU1** [E]: the sampler cannot tell their compiled code or call path apart. By pairs (554,653 and 2,239,138
+a field), VU1 is about 80 % of the 264.9 ms (≈ 212) and VU0 about 20 % (≈ 53).
+
+**The other threads.**
+
+- **EE compiler**: busy in 100 % of its samples for the whole window, Cranelift 48 % and regalloc2 49 % of them (7 %
+  in a `memset` clearing regalloc2's tables). Its 15,013 blocks over the run come to about 15 ms of compile a block.
+- **GS workers**: by the bench's own count, busy 66.1, 64.0, 62.7 and 46.9 ms a field and stalled 0.8 to 6.0. The
+  sampler sees them spinning (`workers.rs:567`) or parked the rest of the time. The emulation thread's waits on them
+  are the 4.4 ms above, plus CLUT loads (973 ms over the run, about 3 ms a field) and display waits (0.4).
+- **VU compiler**: idle, with nothing new to compile.
+
+**The top five and their nature.**
+
+1. **The EE**, 214 ms. Compute 140 ms (the interpreter, the timing model and the compiled blocks). Overhead 74 ms: the
+   dispatcher, at 47 ms for about 0.51 M entries and 2.1 M interpreted steps a field, and the compiled code's helpers.
+2. **VU1**, ≈ 212 ms. Compute ≈ 82 ms (its compiled code and floats). Call overhead ≈ 130 ms: the crossings between
+   compiled microcode and Rust, which is synchronisation of the pipeline model with each pair, not arithmetic.
+3. **The board**, 62 ms. Synchronisation: deciding which unit runs next, and rescheduling.
+4. **The GIF**, 57 ms. Synchronisation: `choose` and `run_to` asked at the board's every step. Packing, the transfer
+   itself, is about 2 ms.
+5. **The VIF**, 55 ms. About a quarter compute (`step`, the unpacking, 14.4 ms); the rest is synchronisation (`run_to`,
+   `take_irq`, `has_word`, `idle`).
+
+VU0 (≈ 53 ms) and the timers' 44 ms come next, both mostly call overhead and polls. Waiting proper is small: the GS
+costs the field under 8 ms of waits, and its workers are below 9 % busy.
+
+### 60.3 The floats belong to the VUs (measured, run C)
+
+In run C, float functions carried a caller from the stack scan. Of the samples in `float.rs`'s functions, 38.5 ms
+named a `sapphire::vu` caller or compiled code with no map entry (the VUs' microprograms). 0.3 ms named the EE's FPU
+or its blocks, and 0.1 ms named neither. Run A's float samples, which carry no caller, are therefore the VUs' 39.5 ms
+in the table above, not the EE's. §51.6's row "COP1's floats in software" on this window should be read as mostly VU
+work since the VUs were compiled (S40 on).
+
+### 60.4 The baseline's loss (measured, runs B and C; the cause inferred)
+
+C is 46.4 ms a field slower than B (6.0 %; §15.4 had 4.4 %). The EE accounts for all of it: 260.7 ms against 212.4,
+while the VUs, the board, the GIF, the VIF and the GS differ by under 3 ms each.
+
+| ms a field | B (Cranelift) | C (baseline) | Change |
+| --- | --- | --- | --- |
+| EE interpreter | 92.3 | 114.1 | +21.8 |
+| EE timing model | 29.3 | 42.1 | +12.8 |
+| EE dispatcher and replay | 58.7 | 67.1 | +8.4 |
+| the baseline's exit helpers (`prefix_of` 3.3), prefix (scratch counter 0.6 of it) and `commit_static` | — | 11.9 | +11.9 |
+| EE compiled code (Cranelift's, then the baseline's hot 3.0 and cold 0.8) | 16.8 | 7.4 | −9.4 |
+| the compiled code's helpers in `ee/jit` | 15.3 | 18.1 | +2.8 |
+
+**What the tailored tier does more of** is interpretation. Over the run:
+
+- compiled steps 326.9 M against 466.7 M (−30 %), and steps interpreted 919.5 M against 767.6 M (+20 %);
+- entries 118.9 M against 167.7 M;
+- exits at an event 31.7 M against 13.7 M, 27 % of entries against 8 %;
+- rollbacks 70,828 against 53,899, which are few;
+- the translation cache's generations 12 against 6.
+
+There is no fallback to the Cranelift function, since a covered block always enters the baseline's code. The
+baseline's own new work, its prefix and exit helpers, is about 12 ms of the 46.
+
+**Why fewer steps run compiled** (inferred from the counters; the budget's flushes are not printed by the bench):
+
+- **The code budget.** The EE's code budget is 256 MiB (`blocks::BUDGET`), and the compiler's counters restart when the
+  budget drops the module. A covered block's bytes are its Cranelift function, the tailored code and the prefix's
+  table: C's compiler ended its run at 201 MB for 7,609 blocks (26 KB a block), against B's 166 MB for 13,664 (12 KB).
+  With the compile thread saturated in both runs, and the tailored lowering under 1 % of its samples, C cannot have
+  compiled half as many blocks in the same time. The counts fit one drop of every block in mid-window, followed by
+  recompiling from cold.
+- **R shows the drop directly**: 13,434 blocks lowered by the baseline across the run (a static counter), against the
+  final compiler's 1,652.
+- **WC is the same effect amplified.** Each block's code is waited for, so every recompile after a drop is paid on the
+  emulation thread: 4,766 ms a field and 74 generations.
+
+**Every block still pays a full Cranelift compile.** The tailored lowering costs 43.0 µs a block (R's own count), but
+the runtime compiles each block's Cranelift function first and the tailored code beside it. In C, Cranelift and
+regalloc2 are 94 % of the compile thread and the tailored lowering is under 1 %. So the baseline does not yet bring
+its compile speed to the field: it adds its bytes to the Cranelift function's. That costs the cache its warmth through
+the budget, and compiles no faster.
+
+### 60.5 Cold against waited compiles (measured)
+
+| ms a field | Cold (compiled in the background) | `WAIT=1` (each block's code waited for) |
+| --- | --- | --- |
+| Cranelift's tier | 765.4 (A); compiled share 40.1 %; 15,013 blocks | 1,915.1 (WA); 51.8 %; 15,145 blocks |
+| the baseline | 814.2 (C); 26.7 %; 7,609 since the last drop | 4,766.1 (WC); 45.1 %; 6,356 since the last drop |
+
+`WAIT=1` does not warm the window. The arena keeps meeting new blocks through all 300 fields: WA's progress lines show
+100 fields taking 225 s, then 185 s. WA's extra 1,150 ms a field is about 345 s of waits for some 15,000 compiles,
+about 23 ms a block on Cranelift's tier.
+
+With every block's code ready when it is entered, the compiled share rises only from 40.1 % to 51.8 %. The other 48 %
+of the EE's steps run interpreted for reasons of the dispatcher's own (the threshold, refused shapes, steps between
+blocks), not the queue.
+
+So a warm cache would remove at most the queue's 11.7 points of steps:
+
+- about 0.41 M steps a field move from the interpreter's ≈ 58 ns a step (the interpreter and the timing model over
+  2.11 M steps) to compiled code's ≈ 23 ns, plus the dispatcher;
+- **about 14 ms a field** [E], which is under 2 %.
+
+### 60.6 Why the prefix's entries do not converge (measured, run R)
+
+R ran the prefix 13.70 M times on entries not at rest. 5.03 M converged after one step, 0.83 M later, and **7.73 M never
+did** (57 %). The counter counts prefix runs, not entries, and an entry with a commit runs the prefix twice, so these
+are 0.4 % over the bench's 7.70 M entries. Each never-converging run is named by the first condition of §15.2 that
+failed at the last step it tested, and by why testing stopped there:
+
+| Condition failed at the last test | Exit came first | `kmax` at the branch | `PMAX` (8) | All |
+| --- | --- | --- | --- | --- |
+| (1) the pair slot, open against closed | 4,448,794 | 3,078,129 | 35,141 | **7,562,064 (97.8 %)** |
+| (4) a GPR the rest reads, still in flight from before the entry | 11,360 | 141,016 | 17,240 | 169,616 (2.2 %) |
+| (3) the floor | 277 | 2 | 0 | 279 |
+| (1) the pending group's end | 10 | 0 | 0 | 10 |
+| **All** | **4,460,441 (57.7 %)** | **3,219,147 (41.6 %)** | **52,381 (0.7 %)** | 7,731,969 |
+
+At the first test (*k* = 0) of every entry not at rest, the reasons were: the slot 12.91 M, the floor 0.48 M, a GPR in
+flight 0.31 M, the group end 163. The never-converging runs ended at exit steps 2 (2.33 M), 3 (2.69 M), 4 (1.32 M),
+5 (0.70 M), 7 (0.39 M) and others (0.31 M).
+
+**The pairing parity is the reason**, as §15.4 named it among the candidates. An entry that arrives with the pair slot
+open (its predecessor issued alone and the slot stayed open) never meets the static form's slot, which is closed at
+rest, before it leaves. 58 % leave first: their blocks are 2 to 5 steps. 42 % reach the branch's `kmax` still out of
+step. Long-latency results (a GPR in flight) are 2 %, and the multipliers, HI/LO and SA never decide it here.
+
+The prefix itself costs little: `prefix_of`, `prefix::run`, `model` and `snap` together are about 3 ms a field in C.
+So the parity matters for the bytes and the static share (§15.4), not for the field's time.
+
+### 60.7 The levers the profile points at (estimated, nothing built)
+
+Each is ranked by the ms a field it could remove on run A's 765.4.
+
+1. **The units at their events: the board, the GIF, the VIF, and the timers, DMAC and PCRTC** (218 ms together). Most
+   of it is the per-step questions that find nothing to do (`choose`, `run_to`, `reschedule`, `take_irq`, `has_word`,
+   `period`, `next_work`). Exact if each unit's next event is computed exactly and the board skips to it, as
+   `Sapphire_Scheduler.md` §54 began and `Sapphire_Redesign.md`'s R-stages plan. §58's synced N = 64 removed 254 ms,
+   but changed the digests. An exact event form keeping the VIF's unpacking, the GIF's packing and the board's real
+   work (about 50 ms) could remove **≈ 120 to 170 ms** [E].
+2. **VU1's and VU0's call path** (162 ms of crossings around 103 ms of compute). The pipeline's bookkeeping (`pending`,
+   `due`, `drain`, `stalled_until`) and the operations' lane wrappers, done in the compiled microprogram, or called once
+   a pair rather than once an operation. It is exact if the same pipeline model runs with the same functions, and
+   `Sapphire_Speed.md` §57's due-cycle answers are the start. **≈ 80 to 120 ms** [E].
+3. **The EE's dispatch and its compiles** (the dispatcher's 58 ms, and the interpretation behind the queue).
+   - Cheaper per-step dispatch in `blocks::block` (47 ms for every step not run compiled) could remove **≈ 20 to
+     35 ms** [E], exact.
+   - A warm cache is worth ≈ 14 ms on the shipped tier (§60.5).
+   - For the baseline, compiling a covered block without its Cranelift function, or not counting that function against
+     the budget, would remove the 46 ms §60.4 found and make 43 µs compiles real. That is exact, since it is the code
+     E1 already proves.
+
+Not levers on this window: the GS (under 8 ms of waits, workers under 9 % busy), the IOP's side (11 ms), idle
+skipping's own work (12 ms), and the prefix (3 ms).
+
+### 60.8 Named limits
+
+- **The VU0 and VU1 split is by pairs** [E]; the sampler sees one emulation thread.
+- **The float callers come from a stack scan**, a heuristic. Its result (99 % VU) agrees with the inline chains, which name
+  `ee/fpu.rs` around only 0.1 ms of float samples in run A.
+- **The code budget's drops are inferred**, not counted. The bench prints the compiler's counters since the last drop
+  and no drop count; R's static counter is the direct evidence.
+- **One sampled run of each configuration.** The shares are each run's own, and the timing rounds' spread is §15.4's
+  (about ±4 ms).
+- **Idle skipping's refusals are not counted** by the bench; only its passes (45.0 % of the EE's cycles) and its own
+  work (11.6 ms).
+
+### 60.9 Questions this step leaves
+
+1. **[decision] The baseline's compile path.**
+   - *The question*: whether a covered block skips its Cranelift function (or keeps it out of the code budget) before
+     E2.
+   - *Recommended*: decide it before E2. Today every covered block pays Cranelift's ≈ 15 to 23 ms and twice the bytes,
+     which drops the cache mid-window and is the whole of E1's loss on the arena.
+2. **[decision] The next unit after the EE.**
+   - *The question*: which unit's work comes next.
+   - *Recommended*: the units at their events (lever 1), then VU1's call path (lever 2). Together they are over half
+     the field, against the EE's compiled code at 2 %.
+3. **[routine] A drop counter.**
+   - *Recommended*: print `Jit::flushes` for the EE on the bench's `blocks` line, so a budget drop is counted rather than
+     inferred.
+
+### 60.10 What was read for this step
+
+This page's §51.6, §58.3 and §58.4; `EmuSen_Recompiler.md` §15.2 to §15.4; `Sapphire_Native.md` §43.4; and Sapphire's
+`blocks.rs`, `blocks/baseline.rs`, `ee/jit/baseline/prefix.rs`, `ee/timing.rs` (`converges`), `ee/jit/mod.rs`,
+`ee/jit/forms.rs` and `emusen-jit`'s `lib.rs` and `native.rs`. No emulator source was read and no firmware was listed.
+The BIOS image was given only as the bench's argument.

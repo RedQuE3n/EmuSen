@@ -224,6 +224,9 @@ pub struct Board {
     /// The time whose blanking edges were last taken, so an event rescheduled at that time does not take them again;
     /// the timing's start at 0 is no edge.
     edges_taken: Option<u64>,
+    /// The timers' earliest event and H-blank wish, recomputed at each change to a timer; not state (Sapphire_Speed.md §61.2).
+    timers_next: u64,
+    timers_h: bool,
 }
 
 impl Board {
@@ -250,14 +253,23 @@ impl Board {
             next: 0,
             edges_taken: Some(0),
             pcrtc_next: None,
+            timers_next: u64::MAX,
+            timers_h: false,
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
+        b.timers_changed();
         b.reschedule();
         b
     }
 
     fn wants_h(&self) -> bool {
-        self.timers.iter().any(Timer::wants_h) || self.gs.wants_hsync()
+        self.timers_h || self.gs.wants_hsync()
+    }
+
+    /// The timers' cache brought up to date; called after every call that changes a timer.
+    fn timers_changed(&mut self) {
+        self.timers_next = self.timers.iter().map(Timer::next_event).min().unwrap_or(u64::MAX);
+        self.timers_h = self.timers.iter().any(Timer::wants_h);
     }
 
     /// The GS's interrupt, latched into I_STAT at its rising edge (EE User's Manual §3.1); called after the GS's host
@@ -280,6 +292,8 @@ impl Board {
 
     /// The next time any unit needs attention.
     fn reschedule(&mut self) {
+        debug_assert_eq!(self.timers_next, self.timers.iter().map(Timer::next_event).min().unwrap_or(u64::MAX), "the timers' next event is current");
+        debug_assert_eq!(self.timers_h, self.timers.iter().any(Timer::wants_h), "the timers' H-blank wish is current");
         let want = self.wants_h();
         let edge = match self.pcrtc_next {
             Some((e, w)) if w == want && self.now < e => e,
@@ -289,10 +303,7 @@ impl Board {
                 e
             }
         };
-        let mut next = edge.min(self.dmac.next_event());
-        for t in &self.timers {
-            next = next.min(t.next_event());
-        }
+        let mut next = edge.min(self.dmac.next_event()).min(self.timers_next);
         for v in &self.vif {
             next = next.min(v.next_event());
         }
@@ -358,6 +369,7 @@ impl Board {
                     self.intc.raise(intc::source::VB_OFF);
                 }
             }
+            self.timers_changed();
             self.pcrtc.read_due(at, &self.gs);
             loop {
                 self.run_vifs(at);
@@ -373,7 +385,6 @@ impl Board {
         }
         self.now = self.now.max(t);
         self.run_vifs(t);
-        self.reschedule();
         let free = self.gif.path1_free(self.now);
         self.vpu.units.link.path1.set_free(free);
         self.vpu.catch_up(t);
@@ -594,6 +605,7 @@ impl Board {
     fn register_value(&mut self, paddr: u32) -> u32 {
         if let Some((n, reg)) = timer::decode(paddr) {
             self.sync_timer(n, self.now);
+            self.timers_changed();
             return self.timers[n].read(reg);
         }
         if let Some(offset) = sif::ee_register(paddr) {
@@ -616,6 +628,7 @@ impl Board {
             self.sync_timer(n, self.now);
             let (h, v_) = (self.pcrtc.timing.h(self.now), self.pcrtc.timing.v(self.now));
             self.timers[n].write(reg, v, h, v_);
+            self.timers_changed();
         } else if let Some(offset) = sif::ee_register(paddr) {
             self.iop.run_to(self.now);
             match self.iop.bus.sif_write_from_ee(offset, v) {
@@ -944,6 +957,7 @@ impl System {
         r.u32s(&mut i)?;
         (b.intc.stat, b.intc.mask) = (i[0], i[1]);
         r.structures(&mut b.timers)?;
+        b.timers_changed();
         b.iop.read_state(r)?;
         b.iop.bus.sif.read_state(r)?;
         b.iop.bus.cdvd.read_state(r)?;

@@ -843,3 +843,71 @@ four instructions. Here the working set's code is the static form's by construct
 
 **Stop rules** for this step: the working set saves under 63 hot bytes a guest instruction, or any entry's cycles or
 model differ from the issue model's.
+
+### 15.2 The prefix, and why it is exact
+
+**What runs.** The entry's test of §14.3 stays in the code; where it fails it stores 1 to `Context::moved` and jumps on
+into the block's entry, in place of the Cranelift function (`lower.rs`). The code past the entry is the static form's,
+unchanged, since it holds no cycle. Each exit's helper (`blocks/baseline.rs`) then reads the flag. At rest it applies the
+record as E0 did. Otherwise it copies the core's issue model and runs `prefix::run`: at each step *k* from 0 it asks the
+model whether it now converges with the static form (`Timing::converges`), and if not, issues step *k* through
+`Timing::issue` itself and notes its cycle. It stops at the first convergence, or at the exit's own step count.
+
+**The table.** For the prefix each block lays a table first in its data (`prefix::table_bytes`): each step's resources,
+category and row as the model takes them, for each *k* up to `kmax` what the steps from *k* on read before they write
+it, and the static snapshot after *k* steps. `kmax` is at most `PMAX` (8) and never past the branch, so that every
+snapshot the prefix compares is the same for both outcomes. A record finds the table from its own offset in the data.
+
+**Convergence** (`Timing::converges`, the model's own module): the model *D* after *k* steps converges with the static
+snapshot *s* after *k* steps at the base *b* = *D*.last − *s*.last when (1) the pair slot and the pending group end are
+the same, (2) with the slot open, the last category, pipe and writes are the same, since only a pairing reads them,
+(3) the floor is the same shifted by *b*, or both at most their last issue plus one, where no issue rule can see it, and
+(4) every resource the rest of the block reads before writing it is ready at the same cycle shifted by *b*, or ready in
+both by their last issue plus *q*, with *q* = 0 where the slot is open and 1 where it is closed. The argument for (4):
+with the slot closed the next instruction issues at the last plus one or later, so a ready cycle bounded by that never
+decides a maximum; with it open the next may pair at the last itself, so the bound is the last; and every later issue
+cycle is no earlier, so the bound holds to the block's end. Every other field the rest of the block can read is then
+equal up to *b*, the model is invariant under a shift of every cycle (no rule reads a cycle's absolute value), and so
+every later step issues at the static form's cycle plus *b* and leaves the static model plus *b*. At *k* = 0 the
+condition is the entry's test of §14.3 exactly.
+
+**What the exit commits.** Past a convergence at *c*: the steps' cycles are the prefix's before *c* and *b* plus the
+record's constants from *c*; the model is the record's snapshot applied at *b*, with the ready cycles of the resources
+only the prefix wrote taken from *D* (condition (4) let them differ where no later step can see the difference, so the
+snapshot does not hold them); Random moves by the prefix's unpaired cycles plus the snapshot's after *c*. With no
+convergence before the exit the model is *D* itself, which is `Timing::issue` run over every step.
+
+**Proven, not only argued** (`ee/jit/baseline/tests.rs`, `the_prefix_then_the_static_form_is_the_issue_model_from_every_entry`):
+over random blocks of the slice, single and dual issue, each with eight random entry models made by random prefixes
+(multiplies and dividers among them, taken branches among them), at every exit's step count and for both outcomes, the
+steps' cycles, the model field for field, the unpaired cycles and the pairing equal the issue model run directly. Of
+the 35,742 random entries not at rest it met, 13,673 converged at step 1, 18,154 later, and 3,915 never before the
+block's end.
+
+### 15.3 The classes' estimate, written before their build
+
+*Set on 2026-10-29, after the prefix's bytes and share were measured (§15.4) and before any of the classes' code was
+written. Nothing in this subsection is measured.*
+
+**What is added**: the rest of S36's and S37's classes (`shape.rs`): HI and LO's moves on both pipelines, the multiplies
+and multiply-adds of both, the divides of both, SA's four moves, the twelve traps, PREF, and the unaligned loads and
+stores (LWL, LWR, LDL, LDR, SWL, SWR, SDL, SDR). The static form's snapshot gains the two multipliers' free cycles, and
+the convergence test reads them as it reads a ready cycle. HI, LO and SA are held as block values beside the general
+registers, written back at an exit only where an instruction before it wrote them, so a rollback finds them untouched.
+The macro-assembler gains a multiply and a divide (`Assembler` 1.1, an extension: two operations, nothing changed).
+
+**The bytes** [E]. On the arena run of §15.4 the blocks the baseline covers took 126.8 M of the 154.7 M compiled steps
+(82 %); the other 18 % ran the Cranelift function, 524.8 hot bytes a guest instruction on blocks like them. The working
+set over every compiled step is about 0.82 × 105.3 + 0.18 × 525 ≈ **181**. With every shaped block covered (all of
+them hold only S36's and S37's classes, so only blocks of one instruction stay out) and the new classes a little
+larger than the average word (a divide's zero and overflow paths are cold; an unaligned access is an aligned one plus
+a shift and a merge), the working set is about 0.99 × 107 + 0.01 × 525 ≈ **111**: a saving of about **70 hot bytes a
+guest instruction** over every compiled step; the stop rule's half is 35.
+
+**The static share** [E]: of every compiled step, 59.5 % today (92.0 M of 154.7 M); with the new blocks covered at about
+the share the covered ones have (72.6 %), about **71 %, 68 to 74 %**: a divide's 37 cycles in flight at a block's
+entry converge only once a step waits for it.
+
+**The nanoseconds** [E]: the ring at about 107 bytes, near E0's 103 (desktop 2.14 to 2.25, handheld 2.32 to 2.36).
+
+**Stop rules**: the working set over every compiled step saves under 35, or any class cannot be made exact.

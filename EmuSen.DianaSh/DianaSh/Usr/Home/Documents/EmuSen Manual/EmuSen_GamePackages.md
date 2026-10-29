@@ -3107,7 +3107,15 @@ picture reach them by the same pad walk; `WindowFitAuditTests` gained the state 
 - `WindowFitAuditTests`: the six CompressedDiscs states at both sizes, `CompressedDiscsBeside` new; their twelve
   recordings re-recorded (the two new rows), and a second run compared equal. No other state's recording changed.
 
-**The blast radius** `blast.sh` named, run once: see the commit that records it.
+**The blast radius** `blast.sh` named [M], run once: `CompressedDiscsOutputTests`, `CompressedDiscsWindowTests`,
+`DataStoreTests`, `DianaSh`, every test under `EmuSen.WiseMan.Mistress`, `Galaxia`, `GalaxiaParityTests`,
+`GamePackageTests`, `GameRecords`, `Golden`, `Library` and `WindowFitAuditTests`: 4,107 passed, 63 skipped and 3
+failed, in 27 min 25 s. Two were the golden corpus meeting `chd`'s longer usage (a usage line's case numbers, and
+`help | wc -l` one line longer on the Rust shell), corrected in `chd.golden` and `help.golden`, whose patterns were
+kept rather than recorded over; the third was the window's beside case run against a build that still held the fifth
+fault below, put back by restoring the file at an older time than the build, so not rebuilt. Rebuilt, the golden corpus
+and `CompressedDiscsOutputTests` pass, 105. Cargo, `test-checked`: `emusen-library` and `emusen-platform` (33,
+`library_tool` 3, `dianash_abi` 4) pass beside the three crates above.
 
 **Faults seeded**, one at a time, each put back:
 

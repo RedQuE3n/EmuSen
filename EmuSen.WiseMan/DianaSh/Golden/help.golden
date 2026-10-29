@@ -31,7 +31,7 @@ status 0
 action none
 $ help | wc -l
 match 12
-^(299|314)\z
+^(299|315)\z
 status 0
 action none
 end

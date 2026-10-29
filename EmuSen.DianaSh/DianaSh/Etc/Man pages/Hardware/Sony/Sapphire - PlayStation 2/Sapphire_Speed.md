@@ -2093,3 +2093,170 @@ foreign accesses at their cycles and without the GIF and VIF1 resumed at VU1's k
 pieces do not meet. Item 1 is therefore the compiler work §2.3 describes (the earliest foreign access checked at each
 pair, the kicks with their cycles, the GIF and VIF1 at events), not a bound added to today's run; it is left for its own
 stage, with the patch of this try kept outside the repository for reference.
+
+## 64. The EE's side: where its time goes, its dispatch, and the tailored tier as the default (2026-10-29)
+
+*Decided 2026-10-29 by the tester: the EE's tier is the tailored recompiler (`EmuSen_Recompiler.md`, `emusen-mips-planner`,
+`emusen-assembler`, `emusen-jit` 1.2), kept and improved, not replaced by Cranelift; it becomes the default once it is at
+least as fast as Cranelift's tier on the arena and the dock and passes the player checks. §62's rules hold: accuracy is
+to the player, results stay deterministic, no per-game fix.*
+
+### 64.1 Where the EE's time goes (measured 2026-10-29, the arena under the sampler)
+
+§62.4 put about 270 ms of the arena's 498 in the EE. The tree is WiseMan at `c5a643753`, the bench built with
+`--features baseline`, run as shipped (Cranelift's tier) under §43.4's sampler (4 ms, the emulation thread, from the
+state's load plus 60 s for 150 s, the compiler's perf map on). 31,881 samples; the sampled run's mean was 533.5 ms
+(another agent's build was running; the shares are the run's own). The sampler reads inline frames, not callers, so each
+sample is classed by its containing function and inline chain.
+
+| Part | ms a field | What it is |
+| --- | --- | --- |
+| **The dispatcher and block lookup** (`blocks::block` inlined in `Machine::advance`) | **73.7** | the block map's probes (hashbrown's group search and its misses) **≈ 39**; the entry's checks (`block_entry`, `held_words`' compare of the block's words with the I-cache, `translation`); `interpret` |
+| The interpreter: step, decode, the issue request (`Ee::step`, `entry`, `ops::issue`) | 35.1 | |
+| The timing model (`Timing::plan`, `commit`, `partner_of`) | 28.8 | |
+| Fetch and the I-cache (`fetch`) | 17.9 | |
+| The TLB's lookup and `translate` | 18.5 | 12.5 and 6.0: the TLB's one-page memo alternates between the fetch's page and the data's |
+| Compiled code (Cranelift's, by its perf map) | 16.6 | |
+| The replay (`replay_steps`, `run_through`) | 8.7 | |
+| Loads, stores, the D-cache, the bus | 6.5 | |
+| Count, Compare, Random and the events; `System::step`'s board call | 6.6 | |
+| COP2's, MMI's and COP1's operations themselves | 3.3, 1.7, 0.6 | |
+| The board's catch-ups an EE access asks for (`ee/observe.rs`) | 0.7 | the units' work they cause is in the units' rows; §62.3 counted them |
+| Idle skipping (`ee/idle.rs`, `idle.rs`) | 8.3 | |
+| **The EE, all of it** | **≈ 225** | against the VUs' ≈ 156, the VIF, GIF, DMAC, PCRTC and timers' 46, the GS's 41 |
+
+**Why steps run interpreted.** A scratch build (not committed) counted each step the dispatcher left to the interpreter by
+the reason it gave and the instruction run, over the arena's 300 fields: **1.76 M a field** through the dispatcher's `run`, against 1.42 M compiled (the bench's 2.10 M interpreted also counts idle skipping's proving steps).
+
+| | Steps a field | Share |
+| --- | --- | --- |
+| **Instructions no block holds** (`shape.rs`'s `Other`) | **1,189,000** | **67.6 %** |
+| — MMI (`pextlb` 57k, `pextlh` 39k, `pextub` 37k, `pextuh` 31k, `pmaddh` 28k, `pcpyud` 28k, `ppach`, `por`, `pcpyld`, `pand`, `psraw`, `pextlw`, …) | 464,000 | 26.3 % |
+| — COP2 (VU0 macro operations 156k, `qmtc2` 108k, `lqc2` 50k, `sqc2` 45k, `qmfc2` 41k) | 407,000 | 23.2 % |
+| — COP1 (`mfc1` 218k, `lwc1` 26k, `mul.s`, `div.s`, `sub.s`, `mtc1`) | 310,000 | 17.6 % |
+| — COP0 and system | 8,000 | 0.5 % |
+| **Instructions a block holds**, interpreted | 571,000 | 32.4 % |
+| — their block still with the compiler (`Queued`) | 412,000 | 23.4 % |
+| — no entry here (`block_entry`: a delay slot, an interrupt pending) | 73,000 | 4.2 % |
+| — the rest (a block at rest, counting to the threshold, a line not cached, the batch's end) | 86,000 | 4.8 % |
+
+The queue is Cranelift's: its thread was busy all window, 129 blocks a field, 10.9 KB of code a block, and the code budget
+(256 MiB) dropped every block twice in the 300 fields, since the arena's 39,612 entries came to 684 MiB of code. Every
+instruction class a block cannot hold also splits the code into short blocks at each one, which is why there are so many
+entries.
+
+### 64.2 What PCSX2 and Play! do with the same parts (read 2026-10-29)
+
+- **Block lookup and linking.** PCSX2 finds a block through `recLUT`, a table by the address's upper half pointing into an
+  array of function pointers, one per word of RAM, with no search, and a block's end jumps to its successor directly
+  unless the cycle count reaches the next event (`iBranchTest`, `DispatcherReg`, `JITCompile`; `x86/ix86-32/iR5900.cpp`).
+  Play! looks a block up in a table by address and links each block's two exits to their successors once both exist
+  (`CGenericMipsExecutor::FindBlockAt`, `SetupBlockLinks`; `Source/GenericMipsExecutor.h`). Neither has a threshold:
+  every block is compiled when first met.
+- **Memory.** PCSX2's loads and stores go to a host mapping of the guest's address space (fastmem), and an access that
+  faults is patched to call the handler (`vtlb_DynGenReadNonQuad`, `vtlb_DynBackpatchLoadStore`; `recVTLB.cpp`); Play!
+  reads through a page table where one is set (`MA_MIPSIV_Templates.cpp`).
+- **The caches.** PCSX2's recompiler models neither cache: its EE cache is an option for the interpreter only, which the
+  frontend warns "will significantly reduce performance" (`vtlb.cpp`'s `CHECK_CACHE`, `VMManager.cpp`). Sapphire keeps both
+  caches in both tiers, which is the cycle face's choice (§64.6).
+- **What is left to the interpreter.** PCSX2 compiles COP1, COP2's macro mode and most MMI; the MMI it does not compile it
+  calls as the interpreter's function from inside the block, the block's registers written back first, the block going
+  on after (`REC_FUNC_DEL`, `iR5900.h`, `iMMI.cpp`). Play! has no interpreter. Sapphire's blocks hold none of the three
+  classes.
+
+### 64.3 Step 1: one lookup an entry, and the fetch's page memoised (exact)
+
+**What was built.** The block map is a slab of blocks with a hash index, behind a direct-mapped front of 65,536 entries
+by the entry's word address (after PCSX2's `recLUT`, §64.2, at a size that holds the arena's working set): `block` looks
+the block up once, and every later use takes its slot. The interpreter's fetch keeps the last page it translated with
+what the translation depends on (the page, Status's KSU, EXL and ERL, Config.K0, the ASID and the TLB's stamp), so a
+fetch from the same page skips `translate` and the TLB; `block_entry` asks the same memo. Both are caches of pure
+functions: no value a game can read changes.
+
+| Arena | Before | After | Digests |
+| --- | --- | --- | --- |
+| tailored tier (`EMUSEN_SAPPHIRE_BASELINE=1`) | 499.3 (load 2.0) | **484.0** (load 4.0) | `D7384277019E849A`, `BCA8F00F4743A955`, `E0D24866ED7F4F28` in both |
+| Cranelift's tier | 498.2 (§62.7), 523.3 and 530.9 here (load 2.1 to 5.4) | 466.0 (load 5.4) | differ run to run (§64.4) |
+
+Under the sampler, the map's probes fell from about 39 ms to 2, the TLB from 12.5 to 4.1 and `translate` from 6.0 to 0.8.
+Another agent's builds ran through these rounds (loads 2 to 5), so the figures carry its noise; the tailored tier's equal
+digests show the step changes nothing.
+
+### 64.4 Step 2: the tailored tier as the default, compiled on the dispatcher's thread
+
+**Cranelift's tier is not deterministic on the arena.** Three runs of the base build gave three picture digests
+(`2DDD1BBF74A35D9D`, `576C912F45EBF514`, `9DEB2153A5F48835`; the sound the same each time). Which steps run compiled depends on when the compiler's thread publishes each block, and since §62's
+rounds a block's replay and the interpreter's steps bring the board along at different points, so the picture follows the
+compiler's thread. The tailored tier's compile is quick (§60.4: 43 µs a block), and with
+`EMUSEN_SAPPHIRE_BASELINE_NOW=1` each block is compiled on the dispatcher's thread at its threshold.
+
+**What was built.** With `baseline` a default feature, the tailored tier is dispatched on x86-64 Unix unless
+`EMUSEN_SAPPHIRE_BASELINE=0`, and compiles each covered block on the dispatcher's thread unless
+`EMUSEN_SAPPHIRE_BASELINE_NOW=0`; a block it does not cover (fewer than two instructions, or one the planner refuses,
+about 3 a field) is left to the interpreter rather than queued for Cranelift, so no step's tier depends on another
+thread. Elsewhere (aarch64, Windows) Cranelift's tier stays the default. `emusen-jit`'s code memory now builds off Unix,
+its calls behind one module, and is never made there.
+
+| | Arena | Dock |
+| --- | --- | --- |
+| Cranelift's tier | 498.2 (§62.7); 466.0 after step 1, load 5.4 | 164.4 (§62.5); **152.1** after step 2 (`BASELINE=0`, load 3.4) |
+| tailored, compiled on the dispatcher's thread | **475.5** (load 4.3) and **465.8** (load 2.9), equal digests `A3ABB67A39230DBA`, `BCA8F00F4743A955`, `DE981915C19BC7A4` | **151.1** (load 2.2; p95 171.7), sound `2C225C73DB4D3F9D` (§62.5's) |
+
+The dispatcher's thread compiled 49.6 blocks a field in 2.4 ms a field; 48.9 % of the arena's steps run compiled against
+38 to 40 % on Cranelift's tier, the code budget (480 MiB) was not reached, and 358 MiB of code was held at the end.
+
+**Player checks** (the arena, against the base build's pictures at fields 9,060 to 9,360 every 60): 10.4, 19.1, 27.9,
+10.7, 12.7 and 0.6 % of the pixels differ, by a mean of 0.05 to 2.4 levels of 255, as §62.3's step 2 against its base; side
+by side, the same scenes with the particles and the fire a frame or two apart. The sound digests equal the base's on
+both windows. Two runs give the same digests. ps2autotests: 52 of 55 EE and 23 of 23 IOP, the same three failing (`sqrt`, `efu`, `intstall`, §36.5), and all 78 programs' texts identical to §62's texts at a round of 0.
+
+### 64.5 What is left on the EE's side (measured, the tailored tier after step 1, sampled)
+
+29,421 samples, the sampled run's mean 505.9 ms: the dispatcher 50.4 ms (of it the tailored tier's prefix and exit
+helpers about 12, `held_words` 4, the translation key 3.5), the timing model 36.7, the interpreter's step 23.9, fetch 15.0,
+compiled code 10.0, loads and stores 9.3, the replay 8.8, the TLB 4.1: about 180 ms. The interpreter's per-step costs
+(the timing model, the step, the fetch, the board call) are paid by 1.8 M steps a field, two thirds of them instructions
+no block holds (§64.1).
+
+**The next step, not built here: blocks that hold MMI, COP2 and COP1** (1.19 M steps a field, 26, 23 and 18 % of what is
+interpreted). Estimates [E]: each costs about 45 ns interpreted plus the dispatcher's entry, against a few ns compiled;
+moving them into blocks would remove **≈ 60 to 90 ms** a field and lengthen the blocks the rest of the code is split into.
+Two forms, both general:
+
+1. **Native forms in the tailored tier.** The planner and the static model hold the upper halves of the GPRs as
+   values of their own already (`lq`, `sq`), so the logical, copy and interleaving MMI fit as pairs of 64-bit operations;
+   the arithmetic MMI want SSE in `emusen-assembler`, which has none yet. COP1 needs the static model's resource set
+   widened past 64 bits: the FPRs are resources 35 to 66, and `Static::exposed` and the prefix's tables are `u64`.
+2. **An interpreter call as a block's instruction** (PCSX2's `REC_FUNC_DEL`, §64.2): the block writes back its registers,
+   calls the operation, and goes on, its issue model folded from the word as for any other. In Sapphire's blocks a call
+   must also be undoable, since a rollback runs the block's steps again from its entry (§48.5): the values it may write
+   (a GPR's 128 bits, HI and LO, an FPR, ACC, FCR31) go into the undo log first, as stores do. COP2's macro operations
+   reach VU0 through the bus and stay out of either form until VU0's observation (§62.3's `vpu0`) can be made from a block.
+
+### 64.6 Named limits, and what was read
+
+- **The tailored tier's own costs**: entries refused at the board's next event are 27 % of its entries on the arena
+  (55 M over the run, against Cranelift's 11 M; its one horizon check a block, `EmuSen_Recompiler.md`), and its
+  rollbacks 162,000 against 61,000. Neither changes a value; both send steps to the interpreter.
+- **The code budget**: 358 MiB of the tailored tier's 480 were held at the arena's end, and the arena keeps meeting
+  blocks (51 a field); a longer session will drop every block at the budget and compile them again on the dispatcher's
+  thread, a pause of about 40,000 × 43 µs ≈ 1.7 s spread over the fields that meet them again.
+- **The caches stay modelled in compiled code** (`held_words`, the D-cache's lines). The references do not model them
+  (§64.2); doing without them is a byte-face question for `EmuSen_TwoFaces.md`, not taken here.
+- **Timing noise**: another agent's builds ran through most rounds here (loads 2 to 5); the arena's figures carry it.
+
+**Read.** This page's §60.1 to §60.10 and §62; `Sapphire_SpeedHacks.md` §2 and §3. Of the references
+(`~/.cache/emusen/sealed/ps2-reference/`): PCSX2's `x86/ix86-32/iR5900.cpp` (`recLUT`, `iBranchTest`, the dispatchers),
+`x86/ix86-32/recVTLB.cpp` (`vtlb_DynGenReadNonQuad`, `vtlb_DynBackpatchLoadStore`), `vtlb.cpp` (`CHECK_CACHE`),
+`x86/iMMI.cpp` and `x86/iR5900.h` (`REC_FUNC_DEL`), `VMManager.cpp` (the EE cache's warning); Play!'s
+`Source/GenericMipsExecutor.h` (`Execute`, `SetupBlockLinks`) and `Source/MA_MIPSIV_Templates.cpp` (the page lookup).
+Nothing was copied. No firmware was listed; the BIOS image was given only as the bench's and the runner's argument.
+
+**Questions.**
+
+1. **[decision] The next EE step.** *Recommended*: blocks that hold MMI first (26 % of what is interpreted, no new
+   resource bits), as native forms where they are 64-bit pairs and an undoable interpreter call for the rest, then COP1
+   with the static model widened, then COP2 with VU0's observation from a block.
+2. **[routine] Cranelift's tier's nondeterminism.** *Recommended*: leave it as the non-x86 tier for now and name it in
+   its losses; a `WAIT`-style compile on the dispatcher's thread would make it deterministic at Cranelift's 15 to 23 ms a
+   block.

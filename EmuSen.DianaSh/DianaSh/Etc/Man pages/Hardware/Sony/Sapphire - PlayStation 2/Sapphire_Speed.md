@@ -2106,7 +2106,7 @@ to the player, results stay deterministic, no per-game fix.*
 §62.4 put about 270 ms of the arena's 498 in the EE. The tree is WiseMan at `c5a643753`, the bench built with
 `--features baseline`, run as shipped (Cranelift's tier) under §43.4's sampler (4 ms, the emulation thread, from the
 state's load plus 60 s for 150 s, the compiler's perf map on). 31,881 samples; the sampled run's mean was 533.5 ms
-(another agent's build was running; the shares are the run's own). The sampler reads inline frames, not callers, so each
+(another build was running; the shares are the run's own). The sampler reads inline frames, not callers, so each
 sample is classed by its containing function and inline chain.
 
 | Part | ms a field | What it is |
@@ -2179,7 +2179,7 @@ functions: no value a game can read changes.
 | Cranelift's tier | 498.2 (§62.7), 523.3 and 530.9 here (load 2.1 to 5.4) | 466.0 (load 5.4) | differ run to run (§64.4) |
 
 Under the sampler, the map's probes fell from about 39 ms to 2, the TLB from 12.5 to 4.1 and `translate` from 6.0 to 0.8.
-Another agent's builds ran through these rounds (loads 2 to 5), so the figures carry its noise; the tailored tier's equal
+Another build ran through these rounds (loads 2 to 5), so the figures carry its noise; the tailored tier's equal
 digests show the step changes nothing.
 
 ### 64.4 Step 2: the tailored tier as the default, compiled on the dispatcher's thread
@@ -2243,7 +2243,7 @@ Two forms, both general:
   thread, a pause of about 40,000 × 43 µs ≈ 1.7 s spread over the fields that meet them again.
 - **The caches stay modelled in compiled code** (`held_words`, the D-cache's lines). The references do not model them
   (§64.2); doing without them is a byte-face question for `EmuSen_TwoFaces.md`, not taken here.
-- **Timing noise**: another agent's builds ran through most rounds here (loads 2 to 5); the arena's figures carry it.
+- **Timing noise**: another build ran through most rounds here (loads 2 to 5); the arena's figures carry it.
 
 **Read.** This page's §60.1 to §60.10 and §62; `Sapphire_SpeedHacks.md` §2 and §3. Of the references
 (`~/.cache/emusen/sealed/ps2-reference/`): PCSX2's `x86/ix86-32/iR5900.cpp` (`recLUT`, `iBranchTest`, the dispatchers),

@@ -42,6 +42,7 @@ const V_STATUS: i32 = offset_of!(Vu, status) as i32;
 const V_MAC: i32 = offset_of!(Vu, mac) as i32;
 const V_CLIP: i32 = offset_of!(Vu, clip) as i32;
 const V_EFU_FREE: i32 = offset_of!(Vu, efu_free) as i32;
+const V_FOREIGN: i32 = offset_of!(Vu, foreign_next) as i32;
 const L_FBRST: i32 = offset_of!(Link, fbrst) as i32;
 const L_IRQ: i32 = offset_of!(Link, irq) as i32;
 const F_PIPE: i32 = offset_of!(Frame, pipe) as i32;
@@ -369,6 +370,14 @@ impl Emitter<'_, '_> {
         self.store(t, f, F_PLANNED);
         let late = self.b.ins().icmp(IntCC::UnsignedGreaterThan, t, self.limit);
         self.exit_if(late, STALL);
+        if self.unit == 1 {
+            let vu = self.vu;
+            let next = self.load(I64, vu, V_FOREIGN);
+            let due = self.b.ins().icmp(IntCC::UnsignedGreaterThan, t, next);
+            self.when(due, |e| {
+                e.call(e.sigs.frame_t_u64, super::h_foreign as *const () as usize, &[f, t]);
+            });
+        }
         let probing = self.b.ins().band_imm_u(self.flags, PROBING as i64);
         self.when(probing, |e| {
             let pc32 = e.k(I32, pc as u64);

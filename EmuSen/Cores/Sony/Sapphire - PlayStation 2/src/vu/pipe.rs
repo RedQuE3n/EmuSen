@@ -443,6 +443,9 @@ impl Pipe {
         {
             return false;
         }
+        if self.unit == 1 && units.vu1.foreign_next < t {
+            units.vu1.land_foreign(t, units.link.ahead);
+        }
         self.execute(units, upper, lower, t);
         true
     }

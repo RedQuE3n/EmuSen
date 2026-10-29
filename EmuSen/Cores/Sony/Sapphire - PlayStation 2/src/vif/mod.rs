@@ -429,18 +429,17 @@ impl Vif {
         if self.unit == 0 { n & 0xFF } else { n & 0xFFFF }
     }
 
-    /// One UNPACK write into data memory, the fields `enable` names, with the VU brought to the write's cycle first.
+    /// One UNPACK write into data memory, the fields `enable` names, landing at the write's cycle: queued for a running
+    /// VU1 to land as its run passes it (Sapphire_Speed.md §63.4), else with the VU brought to that cycle first.
     fn store(&mut self, r: &mut Reach, at: u32, fields: [u32; 4], enable: u32) {
-        r.vpu.run_unit(self.unit, self.time);
         let a = (at % self.data_qwords()) as usize;
-        let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
-        let old = vu.mem_q(a);
-        let mut q = 0u128;
-        for (f, &v) in fields.iter().enumerate().rev() {
-            let keep = if enable >> f & 1 == 1 { v } else { (old >> (32 * f)) as u32 };
-            q = q << 32 | u128::from(keep);
+        if self.unit == 1 && r.vpu.running(1) {
+            r.vpu.units.vu1.queue_store(self.time, a, fields, enable);
+            return;
         }
-        vu.set_mem_q(a, q);
+        r.vpu.run_unit(self.unit, self.time);
+        let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
+        vu.store_fields(a, fields, enable);
     }
 
     /// Fetches and decodes the next VIFcode (§6.3.2's CMD table).

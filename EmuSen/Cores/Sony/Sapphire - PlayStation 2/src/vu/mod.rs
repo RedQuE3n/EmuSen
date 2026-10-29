@@ -74,6 +74,10 @@ pub struct Vu {
     pub ahead_log: Vec<(u16, u64, u128)>,
     /// Each qword's latest logged store, so a read the log cannot change skips it; may be stale-high.
     ahead_last: Box<[u64]>,
+    /// VIF1's writes to a running VU1, (cycle, qword, fields, enable), landed before its first pair past each (§63.4).
+    foreign: std::collections::VecDeque<(u64, u16, [u32; 4], u32)>,
+    /// The first of `foreign`'s cycles, `u64::MAX` when it is empty; read by compiled code at each pair.
+    pub foreign_next: u64,
 }
 
 /// A unit's micro memory: its bytes, read and written as a slice, and the count of the times it was lent for writing, which
@@ -143,6 +147,8 @@ impl Vu {
             efu_free: 0,
             ahead_log: Vec::new(),
             ahead_last: vec![0; mem / 16].into_boxed_slice(),
+            foreign: std::collections::VecDeque::new(),
+            foreign_next: u64::MAX,
         }
     }
 
@@ -221,13 +227,21 @@ impl Vu {
         u128::from_le_bytes(self.data[at..at + 16].try_into().unwrap())
     }
 
-    /// The qword at index `a` as a reader at cycle `at` sees it: before any store logged at or after `at`.
+    /// The qword at index `a` as a reader at cycle `at` sees it: before any store logged at or after `at`, after the
+    /// VIF's queued writes made before it (Sapphire_Speed.md §63.4).
     pub fn mem_q_at(&self, a: usize, at: u64) -> u128 {
         let q = a % (self.data.len() / 16);
-        if self.ahead_log.is_empty() || self.ahead_last[q] < at {
-            return self.mem_q(q);
+        let mut v = if self.ahead_log.is_empty() || self.ahead_last[q] < at {
+            self.mem_q(q)
+        } else {
+            self.ahead_log.iter().find(|e| e.0 as usize == q && e.1 >= at).map_or_else(|| self.mem_q(q), |e| e.2)
+        };
+        if self.foreign_next < at {
+            for &(_, _, fields, enable) in self.foreign.iter().take_while(|w| w.0 < at).filter(|w| w.1 as usize == q) {
+                v = merge(v, fields, enable);
+            }
         }
-        self.ahead_log.iter().find(|e| e.0 as usize == q && e.1 >= at).map_or_else(|| self.mem_q(q), |e| e.2)
+        v
     }
 
     /// A store to qword `a` at T stage `t`, made ahead of the board, logged with the qword it replaces.
@@ -235,6 +249,32 @@ impl Vu {
         let q = a % (self.data.len() / 16);
         self.ahead_last[q] = t;
         self.ahead_log.push((q as u16, t, self.mem_q(q)));
+    }
+
+    /// An UNPACK write of the fields `enable` names into data qword `a`, the others kept.
+    pub fn store_fields(&mut self, a: usize, fields: [u32; 4], enable: u32) {
+        let q = merge(self.mem_q(a), fields, enable);
+        self.set_mem_q(a, q);
+    }
+
+    /// A VIF write at cycle `at`, held until the unit's run passes it (Sapphire_Speed.md §63.4).
+    pub fn queue_store(&mut self, at: u64, a: usize, fields: [u32; 4], enable: u32) {
+        self.foreign_next = self.foreign_next.min(at);
+        self.foreign.push_back((at, a as u16, fields, enable));
+    }
+
+    /// Lands the queued VIF writes made before cycle `t`, logged for PATH1 while the unit runs ahead.
+    pub fn land_foreign(&mut self, t: u64, ahead: bool) {
+        while let Some(&(at, a, fields, enable)) = self.foreign.front()
+            && at < t
+        {
+            self.foreign.pop_front();
+            if ahead {
+                self.log_store(a as usize, at);
+            }
+            self.store_fields(a as usize, fields, enable);
+        }
+        self.foreign_next = self.foreign.front().map_or(u64::MAX, |w| w.0);
     }
 
     pub fn set_mem_q(&mut self, a: usize, q: u128) {
@@ -469,6 +509,14 @@ impl Vpu {
     pub fn run_unit(&mut self, unit: usize, t: u64) {
         let m = if unit == 0 { &mut self.micro0 } else { &mut self.micro1 };
         m.run_to(&mut self.units, t);
+        if unit == 1 && self.units.vu1.foreign_next <= t {
+            self.units.vu1.land_foreign(t + 1, false);
+        }
+    }
+
+    /// Whether a unit runs a microprogram, its clock where it is.
+    pub fn running(&self, unit: usize) -> bool {
+        if unit == 0 { self.micro0.busy() } else { self.micro1.busy() }
     }
 
     /// Whether a unit, brought to cycle `t`, is neither running nor stopped by a D bit, a T bit or a force break: the
@@ -513,13 +561,16 @@ impl Vpu {
             self.micro1.run_ahead(&mut self.units, limit.max(t));
             self.units.link.ahead = false;
         }
+        if self.units.vu1.foreign_next <= t {
+            self.units.vu1.land_foreign(t + 1, false);
+        }
         self.micro1.ended()
     }
 
     /// Brings both units' micro mode to EE cycle `t`.
     pub fn run_to(&mut self, t: u64) {
         self.micro0.run_to(&mut self.units, t);
-        self.micro1.run_to(&mut self.units, t);
+        self.run_unit(1, t);
     }
 
     /// `run_to` as the board runs the units at an EE instruction's end, the one place the debugger's probe may stop one
@@ -661,6 +712,10 @@ impl Vpu {
     /// The EE's view of the four memories at 11000000h to 1100FFFFh (EE User's Manual §2.1's map): VU0's micro and
     /// data memories each mirrored over 16 KiB, VU1's.
     pub fn memory(&mut self, paddr: u32) -> (&mut [u8], usize) {
+        // The board brought VU1 to now before this access, so every VIF write still queued is due (§63.4).
+        if self.units.vu1.foreign_next != u64::MAX {
+            self.units.vu1.land_foreign(u64::MAX, false);
+        }
         let off = (paddr & 0x3FFF) as usize;
         match paddr >> 14 & 3 {
             0 => (&mut self.units.vu0.micro[..], off % VU0_MEM),
@@ -681,6 +736,16 @@ impl Vpu {
         let (m, at) = self.memory(paddr);
         m[at..at + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
     }
+}
+
+/// `old` with the fields `enable` names replaced from `fields`.
+fn merge(old: u128, fields: [u32; 4], enable: u32) -> u128 {
+    let mut q = 0u128;
+    for (f, &v) in fields.iter().enumerate().rev() {
+        let keep = if enable >> f & 1 == 1 { v } else { (old >> (32 * f)) as u32 };
+        q = q << 32 | u128::from(keep);
+    }
+    q
 }
 
 fn write_landing(w: &mut emusen_native::StateWriter, name: &str, l: Option<Landing>) {
@@ -721,6 +786,8 @@ impl emusen_native::State for Vu {
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
         self.ahead_log.clear();
+        self.foreign.clear();
+        self.foreign_next = u64::MAX;
         r.u32s(self.vf.as_flattened_mut())?;
         r.u16s(&mut self.vi)?;
         r.u32s(&mut self.acc)?;
@@ -787,6 +854,6 @@ impl emusen_native::State for Vpu {
 impl Vpu {
     /// Whether the units' queues are within their slots in the state.
     pub fn fits(&self) -> bool {
-        self.units.link.path1.fits() && self.micro0.fits() && self.micro1.fits() && self.units.vu1.ahead_log.is_empty()
+        self.units.link.path1.fits() && self.micro0.fits() && self.micro1.fits() && self.units.vu1.ahead_log.is_empty() && self.units.vu1.foreign_next == u64::MAX
     }
 }

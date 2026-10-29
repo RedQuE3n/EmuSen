@@ -3,7 +3,7 @@
 The pages of Sapphire, EmuSen's PlayStation 2 core, planned 2026-10-23, its stages S1 to S6 built 2026-10-24 and S7 to S9, S11, S12, S21, S13, S16, S23, S22, S17, S20, S14, S18, S15, S26, S27, S24, S19, S30, S10 and S31 on 2026-10-25, and S28 on 2026-10-26. The core will live
 in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_Core_Naming_Scheme.md` §4.
 
-- **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23): the clean-room protocol and the exposure rule carried over from
+- **`Sapphire_Plan.md`** — the stage 0 plan (2026-10-23; Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed): the clean-room protocol and the exposure rule carried over from
   Diamond; every unit with its source and oracle (the EE and its MMI, COP0, the FPU, VU0 and VU1, VIF, GIF, the GS,
   IPU, DMAC, INTC, timers, SIF, the IOP, SPU2, CDVD, SIO2) and what is left out; PS1 discs routed to Diamond; the
   player's BIOS first and the open replacement as a separate track; the speed budget and the recompilers; the GS's

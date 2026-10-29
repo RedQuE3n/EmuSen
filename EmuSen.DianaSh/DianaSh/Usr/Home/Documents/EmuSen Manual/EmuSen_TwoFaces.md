@@ -4,6 +4,8 @@
 for its form, and sets its conditions, its acceptance test and its order. The first core to apply it is Sapphire, whose
 byte face is designed in `Sapphire_Redesign.md`.*
 
+*Decided 2026-10-29: for the PS2 and later, accuracy is to the player: games look, sound and play the same; the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay banned.*
+
 ## 1. The rule
 
 Every core has two faces over one body.

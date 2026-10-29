@@ -6,6 +6,10 @@ emulators run as black boxes, and loaded through the core ABI v1 (`EmuSen_CoreAP
 no predecessor to port. It follows `Diamond_Plan.md`'s shape, since Diamond began the same way twelve days earlier, and
 it borrows Diamond's rules wherever the PlayStation 2 gives no reason to change them; where it changes one, it says so.
 
+*Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.*
+
+*Decided 2026-10-29: for the PS2 and later, accuracy is to the player: games look, sound and play the same; the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay banned.*
+
 Every claim carries one of five marks:
 
 - **[M]** *measured* on 2026-10-23, with the tool named beside it. Nothing was run to write this page beyond listings,
@@ -92,6 +96,8 @@ named; where none is chosen for a part, the default is the reference. Before the
 to the table; that reading is retired, and the purpose of the core is restated as *as accurate as the handheld's full
 speed allows, every departure deliberate and recorded*.
 
+*Decided 2026-10-29: for the PS2 and later, accuracy is to the player: games look, sound and play the same; the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay banned.*
+
 | Part | What is in scope | Target |
 |---|---|---|
 | **EE core** (R5900, 294.912 MHz) | The MIPS III subset the R5900 implements with its own additions: 128-bit general registers, LQ/SQ, the three-operand MULT, MADD, the second multiplier pipeline (MULT1, DIV1, HI1/LO1), the branch-likely forms, SYNC.L/SYNC.P; the **MMI** instructions (the packed 128-bit integer set: parallel add, subtract, compare, shift, multiply-add, funnel and shuffle) [R ps2tek "EE Instruction Decoding"; Toshiba TX79 manual, §14 sources]; the two-way superscalar issue and the documented latencies; the short-loop hardware bug that GCC works around [R GCC manual, `-mfix-r5900`] | Instructions exact; timing as the documents give it, at instruction granularity (§5.2, Q14) |
@@ -141,6 +147,8 @@ a launcher file) [R]; LRPS2's core information lists `elf iso ciso cue bin gz ch
 `pcsx2_libretro.info`]. The two agree but for `.cue` and `.isz`.
 
 ### 1.4 Who may read what
+
+*Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.* The table below is the rule as it stood until then: the row for an emulator's source now reads **yes** for PCSX2, Play! and DobieStation, read, never copied, each adopted approach attributed in `THIRD_PARTY_NOTICES.md` and in the page that uses it; the firmware rows stand.
 
 *Set 2026-10-23, at stage 0:* `Diamond_Plan.md` §1.3's rules, with the PlayStation 2's sources placed in them. A
 **writer** writes Sapphire's or a shared crate's code, tests or design pages; a **replacement writer** writes the open
@@ -918,6 +926,8 @@ Three conditions hold for every candidate taken:
 
 ### 6.1 The rule
 
+*Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.*
+
 The clean room of §1.4 applies to the enhancements as to the rest: no emulator's enhancement code is read, and what an
 enhancement does is learned from published descriptions and from the hardware's own behaviour. Diamond's architecture
 (`Diamond_Plan.md` §6.2) is taken whole [C]: **the accurate path is the default and stays bit-exact with every
@@ -1100,7 +1110,7 @@ the player's BIOS since the fixes of D-465 and D-840 the same day); GE has nothi
 - **G7, the debugger.** Each claim a test.
 - **G8, the clean room.** `clonecheck.py` over Sapphire's and the shared crates' sources against the reference
   emulators' sources, the reference side never printed, finds nothing above its threshold; the disputes log read end to
-  end by someone who did not write it (§11 Q13).
+  end by someone who did not write it (§11 Q13). *Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.* The clone check stays, now against copying: an adopted approach is written anew and attributed.
 - **G9, firmware.** On the player's BIOS, every claimed game runs; with the open track done, every game the open BIOS is
   claimed to run runs with no firmware folder, machine info naming the replacement, and `firmwarecheck.py` passes
   against a control.

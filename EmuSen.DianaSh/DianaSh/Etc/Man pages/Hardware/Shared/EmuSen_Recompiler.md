@@ -66,13 +66,13 @@ the same run what it saves against Cranelift's forms; it stops if it saves less 
 ## 3. Architecture: the parts, each with one job and a versioned interface
 
 ```
- guest words ──► [mips-plan: decode → Plan]  (shared MIPS front end; per-guest Isa table)
+ guest words ──► [mips-planner: decode → Plan]  (shared MIPS front end; per-guest Isa table)
                          │ Plan (plain data, v1)
                          ▼
-      [guest lowering: Plan → Masm calls]    (per guest, in the core: semantics, context, timing, helpers)
-                         │ Masm trait (v1), generic, monomorphised
+      [guest lowering: Plan → Assembler calls]    (per guest, in the core: semantics, context, timing, helpers)
+                         │ Assembler trait (v1), generic, monomorphised
                          ▼
-      [masm backend: x64 now, aarch64 later] (guest-neutral: encodings, labels, sections, helper calls)
+      [assembler backend: x64 now, aarch64 later] (guest-neutral: encodings, labels, sections, helper calls)
                          │ bytes, relocations, link sites
                          ▼
       [emusen-jit 2: arena, publication, links, invalidation, budget, verifier] (guest- and host-neutral)
@@ -80,17 +80,17 @@ the same run what it saves against Cranelift's forms; it stops if it saves less 
 
 | Part | Its one job | Where it sits | Interface (version) |
 | --- | --- | --- | --- |
-| **Front end** `emusen-mips-plan` | a block's shape and facts: where it ends, delay slots, each instruction's reads and writes, the reuse keys, the exits and what each must write back | `EmuSen/Cores/Shared/emusen-mips-plan/`, new | `Isa` trait in (a per-guest table over `emusen-mips`'s decode); `Plan` out, plain data, 1.0 |
+| **Front end** `emusen-mips-planner` | a block's shape and facts: where it ends, delay slots, each instruction's reads and writes, the reuse keys, the exits and what each must write back | `EmuSen/Cores/Shared/emusen-mips-planner/`, new | `Isa` trait in (a per-guest table over `emusen-mips`'s decode); `Plan` out, plain data, 1.0 |
 | **Timing planner** | static regions, the quiescent entry test, parity variants, the dynamic remainder | each core (Sapphire's `ee::jit::timing`; MarsRT's ticks) | fills `Plan`'s per-instruction cycle and region fields |
-| **Guest lowering** | the guest's semantics as macro-assembler calls | each core (`ee::jit::lower`, `cpu::blocks::lower`) | generic over `M: Masm` |
-| **Macro-assembler** `emusen-masm` | encodings, labels and branch relaxation, hot and cold sections, constants, the helper-call sequence and its trampolines | `EmuSen/Cores/Shared/emusen-masm/`, new | `Masm` trait 1.0; backends `x64` (feature, default on x86-64) and `aarch64` (later) |
+| **Guest lowering** | the guest's semantics as macro-assembler calls | each core (`ee::jit::lower`, `cpu::blocks::lower`) | generic over `M: Assembler` |
+| **Macro-assembler** `emusen-assembler` | encodings, labels and branch relaxation, hot and cold sections, constants, the helper-call sequence and its trampolines | `EmuSen/Cores/Shared/emusen-assembler/`, new | `Assembler` trait 1.0; backends `x64` (feature, default on x86-64) and `aarch64` (later) |
 | **Runtime** `emusen-jit` | code memory and W^X, publication, link slots, invalidation, the budget, the counters, the verifier's shape; the Cranelift tier | `EmuSen/Cores/Shared/emusen-jit/`, today's crate | 2.0: the arena and the link and invalidation API added; 1.0's `Lowering` kept as the Cranelift tier (§10.3) |
 
-**New cross-component dependencies, named as the code-design rules require**: `sapphire -> emusen-mips-plan`,
-`sapphire -> emusen-masm`, `emusen-masm -> cranelift-assembler-x64` (already in Sapphire's and MarsRT's lock files as a
-dependency of `cranelift-codegen` [R, `Mars_Native.md` §5.8.4]), and, in §10's project, `marsrt -> emusen-mips-plan`,
-`marsrt -> emusen-masm`, `marsrt -> emusen-mips` (MarsRT takes only the disassembler today [R, `EmuSen_Mips.md` §1]).
-`emusen-mips-plan -> emusen-mips` for the decode. Nothing in the shared crates names a console.
+**New cross-component dependencies, named as the code-design rules require**: `sapphire -> emusen-mips-planner`,
+`sapphire -> emusen-assembler`, `emusen-assembler -> cranelift-assembler-x64` (already in Sapphire's and MarsRT's lock files as a
+dependency of `cranelift-codegen` [R, `Mars_Native.md` §5.8.4]), and, in §10's project, `marsrt -> emusen-mips-planner`,
+`marsrt -> emusen-assembler`, `marsrt -> emusen-mips` (MarsRT takes only the disassembler today [R, `EmuSen_Mips.md` §1]).
+`emusen-mips-planner -> emusen-mips` for the decode. Nothing in the shared crates names a console.
 
 ### 3.1 The guest front end: decode and block planning
 
@@ -166,9 +166,9 @@ from Wasm bytecode, with no intermediate representation" [R, the Winch RFC]. Thr
 2. **The exact forms are block-local facts** the planner already computes (the same base, the same line, what changed);
    they need no optimiser to find them.
 3. **Portability does not need an IR here.** It needs a narrow interface between the guest and the host, which the
-   `Masm` trait is, as Winch's per-ISA `Assembler` is [R, the Winch RFC: "each architecture gets its own `Assembler`"].
+   `Assembler` trait is, as Winch's per-ISA `Assembler` is [R, the Winch RFC: "each architecture gets its own `Assembler`"].
 
-**The `Masm` trait, version 1.0** (the shape, not the full list): three-operand integer operations in 32 and 64 bits
+**The `Assembler` trait, version 1.0** (the shape, not the full list): three-operand integer operations in 32 and 64 bits
 (an x86-64 backend adds the move a two-operand form needs where the destination is not the first source); compares
 that set flags and branches on them, never a materialised condition unless a value is wanted; loads and stores of 1 to
 16 bytes at `[base + displacement]`, the backend materialising a displacement out of its range; 128-bit moves and the
@@ -352,7 +352,7 @@ time in a field's cost (§10.4).
   everything written back first, with the baseline as with Cranelift; it is the first oracle of every stage.
 - **The random programs** of S36 and S37 (`tests/blocks.rs`) [R], run at every stage with the baseline on, and the
   test that walks one base across a page and many lines [R, "The exact design's work a block"].
-- **The backend's own grading**, before any guest: every `Masm` operation encoded and executed on random operands
+- **The backend's own grading**, before any guest: every `Assembler` operation encoded and executed on random operands
   against a Rust model, and the encoder's output disassembled and compared, as `cranelift-assembler-x64` itself is
   fuzzed "against a known-good disassembler" [R, its README].
 - **Form coverage**: a counter for every fast path, guard, reuse, cold path and stub, and a stage passes only if every
@@ -410,14 +410,14 @@ stay. Every stage is behind a feature, off in the default build, until E3.*
 
 | Stage | What | Estimate, before | Gate | Stop rule | Size |
 | --- | --- | --- | --- | --- | --- |
-| **E0, the vertical slice** | `emusen-masm`'s x64 subset; `emusen-mips-plan`'s shape, reads, writes and reuse keys; the EE's lowering for the integer ALU without multiply and divide, the aligned loads and stores (LB to LQ, SB to SQ) on the scratchpad and cached-hit paths with page, line and stub reuse, and every branch and jump with its slot; **the static form for real**: folded cycles, the quiescent test for what the block reads, parity variants; the dynamic remainder through today's Cranelift emitter; dispatched by today's `blocks.rs` with its replay, for blocks the slice covers | **P-E1**: on the same blocks in the same run, the baseline 22 to 31 hot bytes a guest instruction under Cranelift's forms (`static+stub`), so about 88 to 92 on the arena's mix if it held there [E]; **P-E2**: *s*, unknown, recorded; **P-E3**: a block compiled in under 30 µs [E]; the ring at the bytes measured on the handheld near R0's 2.24 to 2.43 at 96 bytes | exact on the verifier, `tests/blocks.rs` and the three windows' digests; the seeded faults caught; bytes, *s*, compile time and the ring recorded | **stop if the slice saves less than half of P-E1's low end** (11 bytes a guest instruction on the same blocks), or if any form cannot be made exact | about 2,800 (masm 1,000; planner 500; lowering and timing 800; tests 500) |
+| **E0, the vertical slice** | `emusen-assembler`'s x64 subset; `emusen-mips-planner`'s shape, reads, writes and reuse keys; the EE's lowering for the integer ALU without multiply and divide, the aligned loads and stores (LB to LQ, SB to SQ) on the scratchpad and cached-hit paths with page, line and stub reuse, and every branch and jump with its slot; **the static form for real**: folded cycles, the quiescent test for what the block reads, parity variants; the dynamic remainder through today's Cranelift emitter; dispatched by today's `blocks.rs` with its replay, for blocks the slice covers | **P-E1**: on the same blocks in the same run, the baseline 22 to 31 hot bytes a guest instruction under Cranelift's forms (`static+stub`), so about 88 to 92 on the arena's mix if it held there [E]; **P-E2**: *s*, unknown, recorded; **P-E3**: a block compiled in under 30 µs [E]; the ring at the bytes measured on the handheld near R0's 2.24 to 2.43 at 96 bytes | exact on the verifier, `tests/blocks.rs` and the three windows' digests; the seeded faults caught; bytes, *s*, compile time and the ring recorded | **stop if the slice saves less than half of P-E1's low end** (11 bytes a guest instruction on the same blocks), or if any form cannot be made exact | about 2,800 (assembler 1,000; planner 500; lowering and timing 800; tests 500) |
 | **E1, the EE's S36 and S37 classes** | multiply, divide and both pipelines; the unaligned loads and stores; PREF; SA; traps; the dynamic prefix with its convergence point, in the baseline | **P-E4**: the working set's bytes within 1.15 times the static form's, if *s* ≥ 90 % and the prefix ends within 4 instructions [E]; otherwise the dynamic code dominates and this is said | exact as E0; *s* and the convergence point's distribution counted on the three windows | stop if the working set's bytes exceed 130 a guest instruction with the prefix in: the static form then cannot carry the mark, and the remedy is C1 (the tester's, §12) | about 1,500 |
 | **E2, the runtime** | `emusen-jit` 2.0: the reservation and its two arenas, link slots, invalidation, the indirect jump's slot; one horizon check a static region; the perf map opened once with appends (D-1102's proposed fix) | **P-E5**: link slots within 2 % of a patched jump on the ring [E]; **P-E6**: hot bytes down about 8 with the one horizon check [E, the levers' page] | MarsRT's block tests and probe (Super Mario 64 and Ocarina of Time) digests and speed unchanged on its untouched Cranelift path; Sapphire's VU tests unchanged; ring and windows recorded | stop if MarsRT's digests or speed move | about 1,200 |
 | **Decision** | the split (`Sapphire_Redesign.md` §11 Q4), and whether R1 has been built | — | before E3 | — | — |
 | **E3, coverage** (R3's work on this emitter) | MMI in xmm lanes, COP1 and COP2 macro calling the float helpers, the slow paths that return (refill and write-back through trampolines), the data cache's refill as a helper | `Sapphire_Redesign.md` P-R2 (95 % compiled) and P-R8 | R3's gates against the reference (the cycle-ordered model once R1 exists): digests, the verifier, **the recompiled tier faster than the interpreter tier** on all three windows | R3's | about 3,000 |
 | **E4, blocks** (R4's work on this emitter) | the page table of 2²⁰ entries, line generations, uncached stamps, longer blocks to transfers (14.5 instructions an entry measured [M, R0's second addendum]) | P-R3; the ring at §4.2's entries at the bytes reached | R4's | R4's | about 1,500 |
 | **P, the phase-shift command** | `phasecmp` (§7.6) | — | equal runs report shift 0; a run shifted by k fields reports k; a changed field is named | — | about 400 |
-| **aarch64** | the backend, when the Mac or ARM work resumes | — | every `Masm` test and every E0 to E4 test on an aarch64 host | — | about 1,500 |
+| **aarch64** | the backend, when the Mac or ARM work resumes | — | every `Assembler` test and every E0 to E4 test on an aarch64 host | — | about 1,500 |
 
 **P-E7** [E]: if E0 to E4 meet their estimates and *s* is high, the EE's row of a field on the handheld is within the
 two-thread allowance on Jak's opening; the arena's fields stay about 1.2 times over at 119 bytes and reach their 2.28
@@ -467,11 +467,11 @@ All three are `emusen-jit` 1.0 `Lowering`s [R, `EmuSen_Jit.md` §6].
 | Publication | `emusen-jit`'s slots, unchanged (§3.2 there) | when a block is handed over (the sixty-fourth entry today) |
 | Invalidation | the runtime's mechanism (§3.8) | the rule: line generations (EE), words and write counts (VR4300), micro memory (VU) |
 | Block linking | link slots (§3.6) | which exits link; the VU links none (its programs are whole) |
-| The helper ABI | the convention and the trampolines (§3.5), in `emusen-masm` | the helper table and its write sets |
-| The register strategy | the fixed registers and the pool (§3.4), in `emusen-masm`'s backend description | which guest registers a block holds, and their widths |
-| The emitter's backends | `emusen-masm`: x64, later aarch64 | — |
+| The helper ABI | the convention and the trampolines (§3.5), in `emusen-assembler` | the helper table and its write sets |
+| The register strategy | the fixed registers and the pool (§3.4), in `emusen-assembler`'s backend description | which guest registers a block holds, and their widths |
+| The emitter's backends | `emusen-assembler`: x64, later aarch64 | — |
 | The verifier's shape | `emusen-jit`, unchanged (§4 there) | the reference machine and its comparison |
-| Decode and block planning | `emusen-mips-plan` for the two MIPS cores (§3.1) | the `Isa` table; the VU's discovery of a microprogram stays the VU's |
+| Decode and block planning | `emusen-mips-planner` for the two MIPS cores (§3.1) | the `Isa` table; the VU's discovery of a microprogram stays the VU's |
 | Guest semantics, timing | — | each core's lowering and timing planner |
 
 ### 10.3 What happens to `emusen-jit`: kept, grown, and its Cranelift path kept as the portable tier
@@ -481,7 +481,7 @@ the arenas, link slots and invalidation, and keeps 1.0's `Lowering` over Craneli
 for the VU, for any host without a baseline backend, and as each guest's fallback until its baseline is accepted. A
 major version, because the code memory moves from `cranelift-jit`'s module to the crate's own reservation for the
 baseline (the Cranelift tier keeps its module). Retiring it would put its thread, publication and verifier, "subtle …
-and proven once" [R, `EmuSen_Jit.md`, the plan's §9.6], into a new crate for no gain; absorbing it into `emusen-masm`
+and proven once" [R, `EmuSen_Jit.md`, the plan's §9.6], into a new crate for no gain; absorbing it into `emusen-assembler`
 would give the assembler a second job.
 
 ### 10.4 Where the VU fits
@@ -495,7 +495,7 @@ today, are the same functions whichever emitter calls them.
 | Stage | What | Gate | Stop rule |
 | --- | --- | --- | --- |
 | **A0** | `emusen-jit` 2.0 published to all three users; the three lowerings unchanged on the Cranelift tier | MarsRT's 21 block tests at every tier, its probe on Super Mario 64 and Ocarina of Time, digests equal and speed within noise; Sapphire's bench digests and VU tests equal | any digest moves |
-| **A1** | MarsRT's VR4300 on `emusen-mips-plan` and `emusen-masm`'s x64 as a new tier beside its Cranelift tiers (a setting, off): its 64-bit registers held whole, the 32-bit mode's sign extension, the mode test at entry, its ticks folded as constants (`Mars_Native.md` §5.8.2), its three exits | the verifier beside every instruction; its random programs and 21 mechanisms; the probe's digests on both games equal to the Cranelift tiers' | not exact, or slower than its Cranelift tier on both games over two rounds |
+| **A1** | MarsRT's VR4300 on `emusen-mips-planner` and `emusen-assembler`'s x64 as a new tier beside its Cranelift tiers (a setting, off): its 64-bit registers held whole, the 32-bit mode's sign extension, the mode test at entry, its ticks folded as constants (`Mars_Native.md` §5.8.2), its three exits | the verifier beside every instruction; its random programs and 21 mechanisms; the probe's digests on both games equal to the Cranelift tiers' | not exact, or slower than its Cranelift tier on both games over two rounds |
 | **A2** | the baseline as MarsRT's default on x86-64 if A1's speed is at least its Cranelift tier's; the Cranelift tier kept for other hosts | the probe's digests and speed, two rounds; the tester's acceptance | as A1 |
 | **A3** | the VU's census (§10.4): its code's bytes and compile time a field | recorded | — |
 | **A4** | aarch64: the backend serves both MIPS guests together | every test of A1 and E0 to E4 on an aarch64 host | — |
@@ -516,16 +516,22 @@ That is its purpose, and the gate is equality, not speed.
 | 5 | The EE alone does not reach a field's full speed while the VU's floats stay short (R0.4 closed) | none cheap; the target is the tester's (§12 Q5) | now |
 | 6 | The ring is synthetic and the real fields add helpers and interpreted code | the windows' EE row by the sampler at each stage | E2 onward |
 | 7 | Hand-written encodings carry defects Cranelift's do not | the backend's execution tests and disassembler comparison before any guest (§7.1) | E0 |
-| 8 | `cranelift-assembler-x64` is "Cranelift-specific" and its API may change between releases | pinned; only `emusen-masm`'s backend names it | each upgrade |
+| 8 | `cranelift-assembler-x64` is "Cranelift-specific" and its API may change between releases | pinned; only `emusen-assembler`'s backend names it | each upgrade |
 | 9 | MarsRT disturbed by the runtime's 2.0 | A0's gate on its probe and tests | A0 |
 | 10 | aarch64's assembler: no standalone crate for it exists beside the x64 one; its encoder lives in `cranelift-codegen`'s public `isa::aarch64::inst` with `MachBuffer` [R, the crate's source, 0.136.4], which the Winch RFC planned to factor out [R]; whether that suits a direct emitter was not checked | read the module's API, or write the few dozen encodings the trait needs and grade them as §7.1 does | before the aarch64 stage |
 | 11 | Maintenance: one backend a host is code Cranelift maintained for free | the Cranelift tier stays for every host without one | ongoing |
 
 ## 12. Questions for the tester
 
+*Decided 2026-10-28 by the tester, all as recommended:* the design is approved and E0 proceeds as a measurement
+prototype behind a feature, before R1; the crates take plain names, `emusen-mips-planner` and `emusen-assembler`, beside
+`emusen-jit` 2.0; the split is decided alongside the reference work, before E3; the absorption (§10) is its own project
+after E2; the target stays full speed, with VU1 recorded as a named open item and taken up as its own work after E2;
+handheld runs on the charger at each stage are routine. A critical review of the whole design comes before E3.
+
 1. **[decision] Approve the design, and E0 as a measurement prototype behind a feature, before R1.** It changes nothing
    a player runs, as the forms did not, and its stop rule ends the approach if P-E1 fails. Recommended: yes.
-2. **[decision] The three parts as crates under `EmuSen/Cores/Shared/`** (`emusen-mips-plan`, `emusen-masm`, and
+2. **[decision] The three parts as crates under `EmuSen/Cores/Shared/`** (`emusen-mips-planner`, `emusen-assembler`, and
    `emusen-jit` 2.0), with the new dependencies of §3 named. Recommended: yes; the names are proposals.
 3. **[decision] The split before E3** (`Sapphire_Redesign.md` §11 Q4), since the emitter's full-speed marks are the
    two-thread allowance. Recommended: decide it from E1's numbers, as the redesign recommends from R0's.

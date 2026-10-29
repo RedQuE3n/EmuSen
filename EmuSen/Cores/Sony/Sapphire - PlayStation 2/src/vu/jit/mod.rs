@@ -597,6 +597,7 @@ pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32)
                 pipe.kick_wait = pipe.path1_free;
             }
             pipe.path1_free = link.path1.kick(&vu.data, addr, start);
+            link.kicked = true;
             if let Some(r) = unsafe { frame.reference.as_mut() } {
                 r.kicks.borrow_mut().push_back((addr, start, pipe.path1_free));
             }

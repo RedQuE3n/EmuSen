@@ -1782,3 +1782,124 @@ This page's §51.6, §58.3 and §58.4; `EmuSen_Recompiler.md` §15.2 to §15.4; 
 `blocks.rs`, `blocks/baseline.rs`, `ee/jit/baseline/prefix.rs`, `ee/timing.rs` (`converges`), `ee/jit/mod.rs`,
 `ee/jit/forms.rs` and `emusen-jit`'s `lib.rs` and `native.rs`. No emulator source was read and no firmware was listed.
 The BIOS image was given only as the bench's argument.
+
+## 61. The units at their events: the timers' cached event, and the GIF's and the VIF's exact skips (2026-10-29)
+
+*Decided 2026-10-29 by the tester: build §60.7's lever 1, exact and legal in both faces (`EmuSen_TwoFaces.md` §3: an
+optimisation that keeps both results and timing identical serves both faces). Each step's saving was estimated before
+it was built, from §60.2's run A (arena, 765.4 ms a field), and the stage stops at a step that saves less than half
+its estimate or cannot be proven exact.*
+
+### 61.1 The estimates, written before building
+
+| Step | What | Run A's rows it acts on | Estimate, ms a field (arena) |
+| --- | --- | --- | --- |
+| 1 | The timers' next event and H-blank wish cached in the board, recomputed at each change to a timer; `run_to`'s first `reschedule` of its slow path, whose result the second overwrites unread, removed | `timer::period` 12.3, `wants_h` 4.9, about half of `reschedule`'s 15.7 | **≈ 20 to 30** [E] |
+| 2 | The GIF's exact skip (`Sapphire_Redesign.md` §4.4): a `run_to` before its resume with nothing arrived returns at once; VU1's kicks taken only after a kick; a VIF whose last run ended on a stall or for want of a word not stepped until something reaches it | GIF `choose` 23.4, `run_to` 14.9, `take_kick` 5.7; board `run_gif` 16.1 in part; VIF `run_to`, `step`, `has_word` in part | **≈ 45 to 65** [E] |
+
+Together ≈ 65 to 95 ms, below §60.7's 120 to 170: the VIF's waits on VU1 (MSCAL, FLUSH and MPG behind a running
+microprogram) are not skipped, since the VIF's catch-up after the VU's end runs against FIFO contents and GIF state
+whose order with the other units a skip would change (§61.3); and the board's own per-step catch-up of the VUs, the IOP
+and the lines stays.
+
+### 61.2 Step 1: the timers' next event, cached
+
+**Before.** `Board::reschedule` ran up to three times in each `run_to` that took the slow path (a unit busy, which on
+the arena is most EE steps, since VU1 runs most of the field): once after each event, once after the VIFs were brought
+to the step's time, and once at the end. Each run asked all four timers for `Timer::next_event`, whose
+`(synced / p + k) × p` divides by the clock's period, chosen at run time, and asked each timer's `wants_h`.
+
+**After.** The board keeps `timers_next`, the least of the four timers' next events, and `timers_h`, whether any wants
+the H-blank's edges, and recomputes both in `timers_changed`. `reschedule` reads the two fields. The slow path's middle
+`reschedule` is gone.
+
+**Why it is exact.**
+
+1. *The cache is a function of the timers alone.* `Timer::next_event` reads `mode`, `count`, `comp`, `synced` and
+   `gate_high` (through `period`, `counting` and `settled`) and nothing else; `wants_h` reads `mode`. So the cached values
+   are right as long as no timer changed since `timers_changed` ran.
+2. *Every change to a timer is followed by `timers_changed` before the next `reschedule`.* A timer changes only through
+   `sync`, `edges`, `write` and `read_state` (`read` takes `&mut self` and changes nothing). The board calls them at four
+   places: the event loop's `sync_timer` for each timer and `edges` for each, followed by one `timers_changed` before the
+   loop's `reschedule`; `register_value`'s `sync_timer` before a timer register is read; `write_register`'s `write`; and
+   `System::read_state`. `Board::new` fills the cache before its first `reschedule`. The timers' fields are public, but
+   only a test writes one directly (`state.rs`'s round trip), and it saves the state without running the board.
+3. *The middle `reschedule` was dead.* Between it and the slow path's last `reschedule` the board calls
+   `Gif::path1_free`, `Path1::set_free`, `Vpu::catch_up`, `take_interrupts`, the INTC's `raise` and `run_gif`. None of them
+   reads `Board::next`, and `reschedule` writes only `next` and the PCRTC's cache, which is a pure function of the time
+   and the H-blank wish (§35.7). The last `reschedule` overwrites `next`, so the state's `Scheduler` block is unchanged.
+4. A `debug_assert` in `reschedule` compares the cache with the four timers' own answers on every call, so a test run
+   with debug assertions catches any change to a timer that misses `timers_changed`.
+
+The step changes no answer, only when it is computed, so it serves both faces.
+
+### 61.3 Step 2: the GIF's and the VIF's exact skips
+
+**Before.** Every slow-path `run_to` of the board brought the GIF to its time twice (`run_gif` at the head of
+`run_vifs` and again after the VUs), and both VIFs once. `Gif::run_to` arbitrated afresh each time (`choose` with the
+step's time, then again with no limit for `resume`), `run_gif` asked VU1's PATH1 port for kicks through its trait
+object, and a VIF waiting for data or stalled stepped into its command to find the same missing word.
+
+**After.**
+
+- *The GIF* keeps `still`, the BUSDIR level its last `run_to` saw, set when a run begins and cleared by everything that
+  reaches the GIF from outside: `kick`, `path2` (through `request2`), `put`, `request`, `mask_path3`, `write` (and so
+  `reset`) and `read_state`. A `run_to(t)` while `still` matches BUSDIR and `t` is before `resume` (or `resume` is none)
+  returns at once.
+- *VU1's kicks*: the PATH1 link carries `kicked`, set by both XGKICK paths (the interpreter's `pipe` and the
+  recompiler's helper) and by loading a state; `run_gif` drains the port only when it is set.
+- *A VIF* keeps `dry`, set when its `run_to` stops on a step that returned none outside a wait (`Cmd::Wait`) and outside a
+  DIRECT refused by the GIF (VGW), and cleared by `write`, `request`, `put`, `get` and `read_state`, the calls through
+  which anything reaches a VIF. A `run_to(t)` while `dry` only moves the VIF's clock to `t`, as the stopped run does.
+
+**Why it is exact.**
+
+1. *The GIF.* `run_to` reads only its own fields, BUSDIR, the time `t` and, once a path holds the GIF, VU1's memory for
+   PATH1's next qword. Each way it returns leaves no step that begins by `t`, and `resume` names the earliest one there
+   could be: (a) paused or reversed, `resume` none; (b) no path granted by `t`, `resume` the grant's time from `choose`
+   with no limit, and `choose(t')` is none for every `t'` before it, since it grants at the later of the GIF's time and
+   the earliest request; (c) PATH1 holding the GIF with its next qword after `t`, `resume` that time; (d) PATH3 holding it
+   with its next qword arrived after `t`, `resume` that time, the slice check having found no request to yield to;
+   (e) PATH3 holding it with the FIFO empty and its packet open or already output (so D-350's release does not apply), or PATH2 holding it,
+   `resume` none. With nothing from outside since, a run at `t'` before `resume` meets the same state and returns the
+   same way, leaving `resume` as it was, which is the field the state holds, and changing nothing else; VU1's memory is
+   read only to step PATH1, which by (c) does not happen before `resume`. Every call that changes the GIF's fields from
+   outside clears `still`; its fields are private.
+2. *The kicks.* `Path1Port::kick` is called only by the two XGKICK paths, and its queue is filled otherwise only by
+   `read_state`; both set `kicked`. `take_kick` with `kicked` clear would return none.
+3. *A VIF.* A step returns none outside a wait in four cases: stalled (STAT's stall bits, changed only by `write`'s
+   FBRST and a state's load); the stream empty while a command or a fetch needs a word (the FIFO and the qword in hand,
+   changed only by `put`, `get`, `request` in the reversed direction, `write`'s reset and the load); a fetch that stalls or
+   stops (it sets a stall bit, case one); and a refused DIRECT, which depends on the GIF and is excluded. `Unpack::next`
+   returns `Word` without changing the unpack or the fill registers (`vif/unpack.rs`), and the other commands restore
+   their state before returning none, so a repeated run takes the same path to the same none. `run_to`'s own stop sets
+   the clock to the later of it and `t`, the move the skip makes. The VIF's public fields (MARK, CYCLE, the fill
+   registers and the like) change no stalled or dry decision; nothing outside `vif` and the board's ports writes them.
+
+**Not skipped, and why.** A VIF waiting for VU1 (MSCAL, MSCALF, MSCNT, FLUSH, FLUSHE, FLUSHA, MPG) checks the VU at every
+board step, and that check also brings VU1 to the step's time. Skipping it until VU1's end is not exact by this argument:
+the VIF resumes at the end's cycle and runs on to the step's time against FIFO contents and GIF state as they stand at
+that step, so seeing the end one step later would let the DMAC's and the GIF's work of that step reach the VIF first.
+That needs the units on one timeline (`Sapphire_Redesign.md` §4.4), not a cache.
+
+### 61.4 Results (measured 2026-10-29)
+
+The bench as §60.1's, `--defaults`, desktop only. Timed runs at CPU weight 100 with no other build or bench running;
+the one-minute load at each run's start is given (about 3 is the bench's own GS workers and compiler).
+
+| Window | Base (5ed26aaf8) | Step 1 | Steps 1 and 2 | Digests (picture, sound, state) |
+| --- | --- | --- | --- | --- |
+| short (6,060 to 6,120) | 270.4 | 257.2 | 226.2 (weight 20) | `0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9` in all three |
+| dock (6,060 to 6,360) | 231.8 (load 1.2) | not valid (another bench ran) | 203.7 (weight 20, load 2.7) | `830E3FEFEE1BE6B1`, `2C225C73DB4D3F9D`, `9CF1BED1AA64EAEE` in all three |
+| arena (9,060 to 9,360) | 771.7 (load 3.3); **763.2** (load 3.2) | 757.8 (load 1.2, another bench from its middle) | **681.0** (load 2.6) | `611B58F7CFE67E8B`, `BCA8F00F4743A955`, `8B710CA05FDDF3A0` in all three |
+
+- **Steps 1 and 2 together: −82 ms a field on the arena** (763.2 → 681.0, −10.8 %, one interleaved round), against
+  65 to 95 estimated. The dock's weight-20 run, −28 ms, points the same way.
+- **Step 1 alone** measured about −14 ms in one run that overlapped another bench: inside the noise, so neither
+  confirmed nor refused against its 20 to 30. Step 2's share is therefore about 68 ms, against 45 to 65 estimated.
+- **Exactness:** every digest equals the base on all three windows; §61.2 and §61.3 give the argument. The crate's
+  tests for the units touched ran in release with debug assertions on (so §61.2's check of the timers' cache ran on
+  every `reschedule`): `blocks` 28, `gif` 16, `scheduler` 5, `state` 11 and `vif` 15, all passed.
+- **Not done**, the stage being stopped on 2026-10-29 for a structural redesign of the byte face: the seeded faults, a
+  second timing round, and a profile of what remains of §60.2's 218 ms. The lever's remainder by §61.3: the VIF's
+  waits on VU1 and the board's per-step catch-up need the units on one timeline (`Sapphire_Redesign.md` §4.4).

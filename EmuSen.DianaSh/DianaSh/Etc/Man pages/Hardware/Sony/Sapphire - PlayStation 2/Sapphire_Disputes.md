@@ -4880,3 +4880,71 @@ it.*
 - **Pinned by:** `vmul_of_one_by_halves_is_one_unit_low_from_128_5_as_f0bes_s_console_list_gives`,
   `the_efu_against_the_console_s_text` (198, 10), `the_booth_sum_is_the_exact_product_or_just_below_it`.
 - **Implemented in:** the commit after this entry's.
+
+### D-1105. COP2 macro mode: an FMAC or CLIP issued by the EE writes VU0's MAC, status and clipping flags at issue, where the hardware's flags probably become visible to CFC2 only some cycles later, as micro mode's do at the S stage
+
+*Numbered after D-1104 (2026-10-29). Raised by a theory-only review of Sapphire's VU and board (2026-10-29), which compared
+the design with published descriptions; the review's possible defect 1. Recorded as behaviour; nothing changed.*
+
+- **Opened:** 2026-10-29, by the review: Sapphire's macro path (`ee/cop2.rs`, the VU operation issued as a macro
+  instruction) computes the operation through `vu::ops` and lands its flags in the instruction's own cycle, so a CFC2 of
+  MAC, status or clip in the next instructions reads the new flags at once. In micro mode Sapphire lands the flags
+  later, at the pipeline's S stage (`vu::pipe`).
+- **Documents read:** none for this entry; the review's reading is theory only. To be read first: the *VU User's
+  Manual*'s macro-mode chapter (§5.4.5 and §5.4.6 give the issue and the interlocked transfers) for any statement of
+  when a macro instruction's flags reach CFC2.
+- **Test program:** none yet. What would settle it: an EE program recorded on a console that issues VSUB (or VCLIP)
+  then CFC2 of MAC (status, clip) after 0, 1, 2, 3, 4 and 5 independent instructions, and two VSUBs back to back then a
+  CFC2, printing each value read; the console's text against the core's.
+- **Referee:** not consulted. A referee's answer would be weak evidence here, since the question is a latency no
+  document gives.
+- **Conclusion:** **open**, a defect candidate of medium likelihood. If the flags lag, a program that reads them
+  immediately after a macro FMAC sees the previous values on the console and the new ones on Sapphire.
+- **Depends on it:** `ee/cop2.rs`'s macro issue and CFC2's read of `ccr::STATUS`, `ccr::MAC` and `ccr::CLIP`.
+- **Pinned by:** nothing yet.
+- **Implemented in:** not implemented.
+
+### D-1106. XGKICK: a second XGKICK while PATH1 is busy is released at the end the GIF was estimated to reach, not at the GIF's actual end, so VU1 may run on and overwrite a packet the GIF has not yet read
+
+*Numbered after D-1105. The review's possible defect 2; it is D-286's named loss "XGKICK told an estimated end" seen
+from VU1's side.*
+
+- **Opened:** 2026-10-29, by the review. `gif::Path1Port::kick` tells VU1 an end computed from the packet in VU1's
+  memory at the kick and from the GIF's state as the board last gave it (`set_free`); the VU's second XGKICK waits only
+  until that end (`vu::pipe` and the recompiler's `EXT_XGKICK`, `kick_wait`). The GIF reads PATH1's qwords from VU1's
+  memory at its own times (`Gif::run_to`). If the GIF is later than estimated (PATH2 or PATH3 holding it longer, a
+  pause, BUSDIR reversed), VU1 is released early and may store into the packet before PATH1 reads it, so the GS draws
+  the new data.
+- **Documents read:** none for this entry. To be read first: the *VU User's Manual*'s XGKICK page and the *EE User's
+  Manual*'s §7.1.2 and PATH1's section, for when a second XGKICK's stall is released.
+- **Test program:** none yet. What would settle it: a VU1 microprogram that kicks a packet while PATH3 holds the GIF
+  with a long IMAGE transfer, kicks a second one, then overwrites the first packet's data; the picture or a readback of
+  the GS's registers on a console against the core's. The core can also count, without a console, how often the GIF's
+  actual PATH1 start falls after the end VU1 was told.
+- **Referee:** not consulted.
+- **Conclusion:** **open**, medium to high likelihood of a visible difference where a game reuses a kicked buffer at
+  once. The fix the review names is to hold VU1 until the GIF's actual end, which makes XGKICK an observation point
+  between VU1 and the GIF (`Sapphire_Redesign.md` §4.4's VU1 → GIF row).
+- **Depends on it:** `gif::Path1Port`, `vu::pipe`'s and `vu::jit`'s XGKICK, the board's `run_gif`.
+- **Pinned by:** `an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it` pins today's estimate.
+- **Implemented in:** not implemented.
+
+### D-1107. VIF1's FLUSHA: channel 2 running counts as a PATH3 transfer request even while PATH3 is masked, so FLUSHA can wait for a transfer the mask will not let start
+
+*Numbered after D-1106. The review's possible defect 3; low likelihood, a dispute candidate.*
+
+- **Opened:** 2026-10-29, by the review. `gif::Gif::idle_at` with `path3` (FLUSHA) returns none while `dma`, channel
+  2's STR, is set, whatever GIF_MODE.M3R or MSKPATH3 say. With PATH3 masked and channel 2 started, the GIF never takes
+  PATH3's data, so FLUSHA could wait until the mask is lifted, which may be the VIF's own next command after the
+  FLUSHA: a deadlock.
+- **Documents read:** none for this entry. To be read first: the *EE User's Manual*'s FLUSHA page (§6.4) and §7.1.4
+  (PATH3 masking), for whether a masked PATH3 with data waiting is a transfer request in FLUSHA's sense.
+- **Test program:** none yet. What would settle it: a program that masks PATH3 by MSKPATH3, starts channel 2 with a
+  packet, then sends VIF1 FLUSHA followed by a MARK, and reads VIF1_STAT and MARK on a console: whether FLUSHA
+  completes while the mask stands.
+- **Referee:** not consulted.
+- **Conclusion:** **open**, low likelihood; no game or test is known to meet it. The stage that cached the units' events
+  (`Sapphire_Speed.md` §61) did not touch `idle_at`.
+- **Depends on it:** `gif::Gif::idle_at`, `vif::Vif::wait`.
+- **Pinned by:** nothing yet.
+- **Implemented in:** not implemented.

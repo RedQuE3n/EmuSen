@@ -298,11 +298,13 @@ pub struct Link {
     pub top: [u16; 2],
     pub itop: [u16; 2],
     pub path1: Box<dyn Path1>,
+    /// `path1` has been kicked, or loaded, since the board last took its kicks (Sapphire_Speed.md §61.3).
+    pub kicked: bool,
 }
 
 impl Default for Link {
     fn default() -> Self {
-        Link { fbrst: 0, irq: 0, top: [0; 2], itop: [0; 2], path1: Box::new(Path1StandIn::default()) }
+        Link { fbrst: 0, irq: 0, top: [0; 2], itop: [0; 2], path1: Box::new(Path1StandIn::default()), kicked: false }
     }
 }
 
@@ -724,6 +726,7 @@ impl emusen_native::State for Vpu {
         r.u16s(&mut t)?;
         (u.link.top, u.link.itop) = ([t[0], t[1]], [t[2], t[3]]);
         u.link.path1.read_state(r)?;
+        u.link.kicked = true;
         let mut c = [0u16; 2];
         r.u16s(&mut c)?;
         [self.cmsar0, self.cmsar1] = c;

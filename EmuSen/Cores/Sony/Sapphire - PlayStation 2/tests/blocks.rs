@@ -844,6 +844,30 @@ fn loads_and_stores_beside_the_dmac_leave_the_interpreters_machine() {
     assert!(s.compiled_steps > 5_000, "{s:?}");
 }
 
+/// Sixteen units marked, sent to the scratchpad and read back behind a divide (Sapphire_Redesign.md, "One horizon check a block").
+fn stalled_reads_program() -> String {
+    let marks: String = (0..16).map(|k| format!("    sw t9, {:#x}(s7)\n", 0x80 * k)).collect();
+    let reads: String = (0..16).map(|k| format!("    lw t1, {:#x}(sp)\n    daddu t5, t5, t1\n", 0x80 * k)).collect();
+    format!(
+        "    lui s0, 0xb001\n    ori t0, zero, 0x303\n    sw t0, -0x2000(s0)\n    lui s7, 0xa030\n    lui sp, 0x7000\n    ori t9, zero, 40\n\
+         top:\n{marks}    lui t0, 0x0030\n    sw t0, -0x2bf0(s0)\n    sw zero, -0x2b80(s0)\n    ori t0, zero, 128\n    sw t0, -0x2be0(s0)\n\
+         \x20   ori t0, zero, 0x100\n    sw t0, -0x2c00(s0)\n    ori t8, zero, 40\n\
+         inner: div t9, t8\n    mflo t6\n{reads}    addiu t8, t8, -1\n    bgtz t8, inner\n    nop\n\
+         wait: lw t0, -0x2c00(s0)\n    andi t0, t0, 0x100\n    bne t0, zero, wait\n    nop\n    addiu t9, t9, -1\n    bgtz t9, top\n    nop\n\
+         end: beq zero, zero, end\n    nop\n"
+    )
+}
+
+#[test]
+fn a_divide_stalling_a_block_past_the_dmacs_event_rolls_it_back() {
+    // The divide outlasts the entry's one cycle an instruction, so blocks let in reach the event between their loads.
+    let words = assemble(&stalled_reads_program(), ORIGIN);
+    let mut b = eager();
+    let s = twin(&words, 60_000, 333, &mut b);
+    println!("a divide beside the DMAC: {s:?}");
+    assert!(s.compiled_steps > 20_000 && s.dmac_stops + s.left[0] > 0, "compiled, and the DMAC's events met inside blocks: {s:?}");
+}
+
 /// A page at 04000000h, past the wired entries, of TLB entry 40 mapped and remapped under the same virtual address, made clean and invalid, its ASID changed;
 /// then the scratch area through kseg0 in kernel mode and again in user mode, where it raises.
 const REMAPPED: &str = "

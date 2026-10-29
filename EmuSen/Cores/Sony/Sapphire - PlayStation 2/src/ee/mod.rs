@@ -191,6 +191,15 @@ pub struct Ee {
     /// A mark unique to the TLB's contents, new at every write and load: the recompiler's translation cache is keyed by it
     /// (Sapphire_Recompiler.md §48.3).
     pub(crate) tlb_stamp: u64,
+    /// The last fetch's page as `translate` placed it, and what that depends on (Sapphire_Speed.md §64.3).
+    fetch_memo: FetchMemo,
+}
+
+/// A fetch translation: the page, Status's mode bits, Config.K0, the ASID and the TLB's stamp, and where the page landed.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FetchMemo {
+    pub key: [u64; 3],
+    pub place: Option<Place>,
 }
 
 /// A mark no TLB has had before.
@@ -251,6 +260,7 @@ impl Ee {
             modes: [0; 5],
             fills: 0,
             tlb_stamp: stamp(),
+            fetch_memo: FetchMemo::default(),
         }
     }
 

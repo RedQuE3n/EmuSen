@@ -1895,7 +1895,7 @@ the one-minute load at each run's start is given (about 3 is the bench's own GS 
 
 - **Steps 1 and 2 together: −82 ms a field on the arena** (763.2 → 681.0, −10.8 %, one interleaved round), against
   65 to 95 estimated. The dock's weight-20 run, −28 ms, points the same way.
-- **Step 1 alone** measured about −14 ms in one run that overlapped another agent's bench: inside the noise, so neither
+- **Step 1 alone** measured about −14 ms in one run that overlapped another bench: inside the noise, so neither
   confirmed nor refused against its 20 to 30. Step 2's share is therefore about 68 ms, against 45 to 65 estimated.
 - **Exactness:** every digest equals the base on all three windows; §61.2 and §61.3 give the argument. The crate's
   tests for the units touched ran in release with debug assertions on (so §61.2's check of the timers' cache ran on

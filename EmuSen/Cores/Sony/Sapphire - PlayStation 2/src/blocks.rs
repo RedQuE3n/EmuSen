@@ -47,6 +47,18 @@ struct Block {
     /// interpreter after enough of them, as a refused block's are (Sapphire_Recompiler.md §48.4).
     idle: u8,
     rest: u8,
+    /// The cycles assumed before its last load or store, `NO_SPAN` when none follows the first instruction (`forms::HORIZON`).
+    span: u8,
+}
+
+const NO_SPAN: u8 = u8::MAX;
+
+/// The index of the block's last load or store, one cycle an instruction (Sapphire_Redesign.md, "One horizon check a block").
+fn span_of(words: &[u32]) -> u8 {
+    match words.iter().rposition(|&w| shape::class(w) == shape::Class::Memory) {
+        Some(g) if g > 0 => g as u8,
+        _ => NO_SPAN,
+    }
 }
 
 /// Entries in a row that run nothing before a block is rested, and the entries it rests for.
@@ -406,7 +418,8 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         if words.is_empty() {
             return None;
         }
-        if blocks.map.insert(pc, Block { paddr, words: words.into_boxed_slice(), options, state, idle: 0, rest: 0 }).is_some() {
+        let span = span_of(&words);
+        if blocks.map.insert(pc, Block { paddr, words: words.into_boxed_slice(), options, state, idle: 0, rest: 0, span }).is_some() {
             blocks.stats.reshaped += 1;
         }
     }
@@ -452,6 +465,11 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         }
     };
     if b.words.len() as u64 > left {
+        return None;
+    }
+    if b.span != NO_SPAN && !b.options.verify && jit::forms::chosen() & jit::forms::HORIZON != 0 && sys.ee.timing.cycles() + u64::from(b.span) >= sys.board.next_event() {
+        // The block's last access would reach the board's next event at one cycle an instruction: counted as left at the event.
+        blocks.stats.left[0] += 1;
         return None;
     }
     blocks.translation(sys);

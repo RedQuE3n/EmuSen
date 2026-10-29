@@ -1587,7 +1587,7 @@ impl Emitter<'_, '_> {
         let slow = self.b.create_block();
         self.b.set_cold_block(slow);
         let why = self.b.append_block_param(slow, I64);
-        if kept.steps > 0 && !self.options.verify {
+        if kept.steps > 0 && !self.options.verify && !super::forms::on(super::forms::HORIZON) {
             // The times of the instructions before this one stay short of the board's next event, so that no DMAC step
             // falls between them and this access.
             let p = super::forms::push(self.b, 4);

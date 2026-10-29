@@ -184,6 +184,7 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
         return 0;
     }
     idle.counts.attempts += 1;
+    sys.settle();
     let (steps, r) = attempt(sys, &mut blocks, left, &mut idle.counts, &mut idle.watch);
     let slot = &mut idle.heads[at];
     match r {
@@ -389,6 +390,8 @@ fn prove(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, offsets:
         }
         let taken = sys.ee.exceptions.iter().chain(&sys.ee.exceptions2).sum::<u64>();
         step(sys, blocks);
+        // A turn is proven against the board brought whole after each step, as it is passed (Sapphire_Speed.md §62).
+        sys.settle();
         offsets[n] = sys.ee.timing.cycles() - t1;
         n += 1;
         let steps = n as u64;
@@ -472,7 +475,7 @@ fn skip(sys: &mut System, a: &Mark, p: &Period, offsets: &[u64], traffic: [u64; 
         for (i, &o) in offsets.iter().enumerate() {
             let at = t + o;
             let System { ee, board } = &mut *sys;
-            board.run_to(at, &mut ee.spram[..]);
+            board.run_whole(at, &mut ee.spram[..]);
             if ended(sys, lines, fields) {
                 end_at = Some((i + 1, at));
                 break;

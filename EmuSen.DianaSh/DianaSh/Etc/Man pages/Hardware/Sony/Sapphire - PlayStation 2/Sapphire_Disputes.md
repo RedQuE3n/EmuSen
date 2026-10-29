@@ -7,6 +7,8 @@ so that the clean-room protocol of `Sapphire_Plan.md` §1.4 can be audited from 
 processor are kept in `blackmoon-r3000`'s record (`../BlackMoon-HW/BlackMoon_R3000.md` §8), since they reach Diamond
 too; disputes about the R5900 are kept in its crate's record once it exists.
 
+*Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.* An entry from then on names any reference source it read.
+
 ## The rules this log keeps
 
 - **A dispute step is separate.** Its only product is an entry. It ends with a rule stated in hardware terms, and a

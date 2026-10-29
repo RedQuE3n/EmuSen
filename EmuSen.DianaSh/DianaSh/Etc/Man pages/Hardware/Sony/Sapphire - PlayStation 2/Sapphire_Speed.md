@@ -1903,3 +1903,193 @@ the one-minute load at each run's start is given (about 3 is the bench's own GS 
 - **Not done**, the stage being stopped on 2026-10-29 for a structural redesign of the byte face: the seeded faults, a
   second timing round, and a profile of what remains of §60.2's 218 ms. The lever's remainder by §61.3: the VIF's
   waits on VU1 and the board's per-step catch-up need the units on one timeline (`Sapphire_Redesign.md` §4.4).
+
+## 62. The board in rounds, and VU1 to its end (2026-10-29)
+
+*Decided 2026-10-29 by the tester: for the PlayStation 2 and later, accuracy is to the player (games look, sound and play
+the same); the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay
+banned and results stay deterministic. Sapphire is no longer clean-room, and this section's approaches were taken from
+reading PCSX2, Play! and DobieStation (§62.9), written anew in Rust on Sapphire's own units. The target is the handheld
+at a mean of 13.4 ms a field with the 95th percentile under 16.7.*
+
+### 62.1 The plan, written before building
+
+The arena's field is 681 ms (§61.4). §60.2 put about 218 ms in the units polling and scheduling one another (the board,
+the GIF, the VIF, the timers; §61 took about 82 of it) and about 162 ms in VU1's and VU0's call path. Both have one
+cause: the board is brought to the EE's time after every EE instruction (§54), so each unit is asked about 4 million
+times a field whether it has anything to do, and VU1 runs 1.2 pairs a call.
+
+1. **Rounds** (from DobieStation's run loop, which runs the EE for at most 32 cycles and then every unit for the same
+   time, and PCSX2's event test, which brings the units along only when the EE reaches its next event, the IOP in
+   arrears). `Board::run_to(t)` brings the board along only when an event falls by `t` (the board's own `next`, so the
+   DMAC, the timers, the PCRTC's edges and the FIFOs' wakes keep their cycles) or when `t` reaches the round's end,
+   `ROUND` EE cycles after the last catch-up; otherwise it records the time as owed and returns. **Every EE observation
+   of a unit first brings the board to the owed time**: the unit registers at 1000_0000h, the VIF, GIF and IPU FIFOs,
+   VU memory, COP2, the GS's privileged registers, IOP RAM and the drive's registers. So the EE never reads a unit at a
+   stale time (§58.3's plain build broke Jak at N = 64 for want of this; its synced build did not). What changes is
+   when the units no observation reaches catch up, and that an interrupt line rising between events is seen up to a
+   round late: timing only. A compiled block's replay takes a whole run of times inside a round in one call.
+   `ROUND = 0` (`EMUSEN_SAPPHIRE_ROUND=0`) is the cycle-ordered build, the debugging tool; `System::new` keeps it, so
+   the unit tests stay on it, and `Machine` takes `ROUND`.
+2. **VU1's end as the board's event** (from PCSX2's VU1 micro mode, where `vu1ExecMicro` runs a microprogram to its end
+   at once under the default "instant VU1", and VIF1's MSCAL waits find it done). §58.3's synced build stalled the game
+   from N = 512: a VIF waiting on its VU (MSCAL, FLUSH) resumed only at the next catch-up, so each microprogram cost up
+   to a round. With VU1's end known, a waiting VIF resumes at that cycle as an event, and the round can grow.
+
+Estimates against the 681: step 1 removes most of the per-instruction catch-ups, as §58.3's synced N = 64 removed
+227 ms of 715 then: **≈ 150 to 250 ms** [E]. Step 2 takes most of what remains of the call path once rounds grow:
+**≈ 50 to 100 ms** [E]. Not reached by either: the EE's interpreter and dispatcher (§60.2's 214 ms) and the VUs' compute.
+
+### 62.2 Step 1: rounds (measured 2026-10-29)
+
+**What was built.** `Board` keeps `owed`, the latest time `run_to` was asked for, and `round_end`; neither is state, and
+a state is written with nothing owed (`Machine::advance` settles the board at each frame's end). `run_to_held` returns
+`Ran::Owed` without touching a unit while `t` is before `round_end`, no event is due by `t` and the IOP's side has no
+wake pending; otherwise `run_now` takes the quick path or the whole one and starts the next round. Every branch of
+`Bus::read` and `Bus::write` that reaches a unit, and `Bus::vpu`, first calls `observe`, which brings the units the tail
+brings (the GIF, the VIFs, the VUs, the IOP) to the owed time; the IOP's wake of the DMAC, which needs the scratchpad,
+is left pending, so the next `run_to` is whole. `run_through` takes a replay whose times all fall inside the round in one
+call: the lines stand, so `Times::quiet` is shown them once. Idle skipping (§47) settles the board before it tries a
+loop, proves a turn with the board settled after each step, and replays a busy turn whole, so that it passes turns as
+they would run.
+
+`pure_register` answers none while time is owed, so a proof never takes a register's value from a board behind the EE.
+The debugger (`run_frame_debug`) steps the cycle-ordered board, a round of 0, and restores the round after.
+
+**Exactness at a round of 0.** With `EMUSEN_SAPPHIRE_ROUND=0` the short window's digests are §61.4's exactly
+(`0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9`), so the restructuring itself changes nothing.
+
+| Window | Base (8309ff51b) | Rounds of 64 | Digests at 64 (picture, sound, state) |
+| --- | --- | --- | --- |
+| short | 226.3 (round 0, load 2.6) | **183.3**, 182.9 (load 2.8) | `EF589A2EEC6FE039`, `D5F15509CCDD1709`, `80EBEB2B95A6E71C` in both runs |
+| arena | 681.0 (§61.4) | **536.9** (load 2.8; p95 687.0) | `F15E7C2A86349885`, `BCA8F00F4743A955`, `233A3EE02974BF95` |
+
+- **−144 ms a field on the arena** (−21 %), against 150 to 250 estimated: at the estimate's bottom. The short window
+  −43 ms (−19 %).
+- **The sound digests equal the base's** on both windows. The pictures are the same scenes a few frames out of phase:
+  at fields 9,060, 9,120, 9,180, 9,240, 9,300 and 9,360 of the arena, 10.2, 19.4, 27.9, 10.7, 13.2 and 0.7 % of the
+  pixels differ, by a mean of 0.04 to 2.4 levels of 255; looked at side by side, the differences are the particles and
+  the characters' poses a frame or two apart, the geometry and textures right.
+- **Two runs give the same digests** (the short window above).
+- **ps2autotests**: 52 of 55 EE and 23 of 23 IOP, the same three failures (`sqrt`, `efu`, `intstall`, §36.5), and every
+  program's text identical to its text at a round of 0. No timing test's text changed.
+- **Longer rounds do not pay** on the short window: 186.0 at 256 and 187.4 at 1,024 (load 2.1 to 3.6), against 183.3
+  at 64; at 4,096 more than 16 XGKICKs wait at the window's end, beyond the state's slots, and the state cannot be
+  written. So the board's remaining cost is not the rounds' ends but the observations (§62.3).
+
+### 62.3 Where the rounds' catch-ups come from, and VU1 to its end refused (measured 2026-10-29)
+
+**The census.** A scratch build (not committed) counted, on the short window from the state at 6,000 to field 6,120,
+each `observe` that found time owed, by the access that made it, and each whole `run_to`, by whether an event was due.
+A field: **142,000 from COP2** (`Bus::vpu`), 2,600 reads and 1,400 writes of the unit registers at 1000_0000h, 160 from the VIFs' registers
+and FIFOs, a few from the GIF and the GS; **75,000 whole runs at an event** and **35,000 at a round's end**. So after
+step 1 the EE's COP2 instructions bring the board whole about twice as often as the events and rounds together, which
+is why longer rounds do not pay (§62.2).
+
+**VU1 to its end, as planned (§62.1 item 2), refused.** A VIF waiting for its VU (`Vif::wait`) ran the VU on to its end
+first (`Vpu::ready_ahead`, `Micro::finish`), the GIF's PATH3 slice check seeing only the requests made by its run's
+time. On the short window it reached field 6,100 in 47 to 52 s from the load, against 19 s for step 1 alone, at rounds
+of 64, 256 and 1,024, and at each the window's end held more XGKICKs than the state's 16 slots, so the state could not
+be written. A microprogram run to its end hands the GIF every packet it kicks at once, and the VIF's next waits find the
+GIF still holding them; and `finish`'s bound (2^24 pairs) lets a microprogram that waits on the VIF run on. It was not
+pursued: the census shows the rounds' ends are not where the board's time goes.
+
+**Step 2, COP2 to VU0 alone.** The COP2 instructions that reach VU0 alone, QMFC2, QMTC2, LQC2, SQC2, CFC2 and CTC2 but
+for FBRST, VPU-STAT and CMSAR1, and every VU operation issued as a macro instruction, ask the bus for `vpu0` instead of
+`vpu`. On the board, with a round above 0, `vpu0` brings only VIF0 (which writes VU0's memories and starts it) and VU0 to
+the owed time, waking the DMAC and raising VIF0's interrupt as the tail would, and leaves the rest to the round. BC2F,
+BC2T and the three control registers above reach VU1 and still bring the board whole. On the cycle-ordered board `vpu0`
+is `vpu`.
+
+| Window | Step 1 | Step 2 | Digests at step 2 (picture, sound, state) |
+| --- | --- | --- | --- |
+| short | 183.3, 182.9 | **174.8** (load 0.9) | `0FEAA87AB0100A65`, `D5F15509CCDD1709`, `9929F57C6DC08CBC` |
+| arena | 536.9 | **500.4** (load 1.0; p95 649.8) | `D324EC9EE11A8DEC`, `BCA8F00F4743A955`, `4DDB6D74ECC37C7B` |
+
+- **−37 ms a field on the arena** (−7 %), and 681 → 500 for the stage (−27 %). No estimate was written for this step
+  before it was built, since it replaced the refused one; it is measured, not judged against one.
+- **The sound digests still equal the base's.** The arena's pictures at the six fields differ from the base's by 10.6,
+  20.5, 27.9, 10.7, 12.7 and 0.6 % of the pixels, mean 0.05 to 2.4 levels: the same scenes, a few frames out of phase,
+  as step 1's.
+
+### 62.4 What is left (measured 2026-10-29, the arena under the sampler)
+
+§43.4's sampler (`rtsample.py`, 4 ms, the emulation thread, from the state's load plus 60 s for 150 s) on step 2's
+build, 29,741 samples, the run's mean 507.7 ms under the sampler. Shares of the emulation thread:
+
+| Unit | Share | ms a field [E, share × 500] |
+| --- | --- | --- |
+| EE: interpreter, timing model, TLB, fetch, FPU floats in software | 32.7 % | 164 |
+| EE dispatcher (`blocks.rs`) and compiled code with no symbol (EE and VU, `anon`) | 20.8 % | 104 |
+| VU micro mode: the recompiler's helpers 6.4, `ops.rs` 5.9, `mod.rs` 2.8, `pipe.rs` 2.8, floats 0.7 | 18.6 % | 93 |
+| GS on the emulation thread | 8.5 % | 42 |
+| VIF 4.6, DMAC 2.6, GIF 2.0, PCRTC 1.1, timers and INTC 0.8 | 11.1 % | 56 |
+| Scheduler and synchronisation (`board.rs`, `machine.rs`) | 3.7 % | 19 |
+| IOP, SPU2, SIF, IPU | 1.6 % | 8 |
+
+§60.2's board, GIF, VIF, timers, DMAC and PCRTC came to 218 ms of 765 (28 %); they are now about 75 ms (15 %). What leads
+is the EE (about 270 ms with its dispatcher) and VU micro mode's call path (the helpers and wrappers, about 80 of its 93).
+
+### 62.5 Checks, and what this stage does not do
+
+- **ps2autotests** on step 2: 52 of 55 EE and 23 of 23 IOP, every program's text identical to its text at a round of 0;
+  no timing test's text changed.
+- **Determinism**: two runs of step 2's build give the same digests on the short window (174.8 and 175.6 ms).
+- **The dock** (6,060 to 6,360), the same build: at a round of 0, 204.5 ms (load 1.9) with §61.4's digests exactly
+  (`830E3FEFEE1BE6B1`, `2C225C73DB4D3F9D`, `9CF1BED1AA64EAEE`); at 64, **164.4** (load 3.4; p95 183.8), −20 %, picture
+  `CBDAE0A825C42E52`, sound `2C225C73DB4D3F9D` (the base's), state `0FD5ABCCCD365B18`.
+- **Named limits.** (1) An interrupt a unit raises between events is seen by the EE up to a round (64 cycles) late. (2)
+  A VU operation issued as a macro instruction that reaches VU1's registers through VU0's window (§5.4.7) sees VU1 as
+  the last round left it. (3) The IOP runs up to a round behind the EE's side between observations. Each is timing only;
+  none showed in the windows' pictures or sound or in the test programs.
+- **Not done**: the VU call path (§60.7 lever 2) beyond the fewer calls rounds give; the EE's dispatcher and interpreter;
+  the dock's and island's profiles. The handheld target, 13.4 ms, stays about 37 times away on the desktop's arena.
+
+### 62.6 What was read for this stage, and questions
+
+**Read.** This page's §58.3, §60 and §61; `Sapphire_Redesign.md` §4.0, §4.1, §4.3 and §4.4; `Sapphire_Scheduler.md`
+§54's headings. Of the references (`~/.cache/emusen/sealed/ps2-reference/`): PCSX2's `R5900.cpp`
+(`_cpuEventTest_Shared`), `VUmicro.cpp` (`ExecuteBlock`), `VU1micro.cpp` (`vu1Finish`, `vu1ExecMicro`), `Vif_Codes.cpp`
+(MSCAL, FLUSH) and `VUops.cpp` (`_vuXGKICKTransfer`); DobieStation's `emulator.cpp` (`Emulator::run`) and
+`scheduler.cpp` (`calculate_run_cycles`); Play!'s `PS2VM.cpp` (`UpdateEe`). Nothing was copied; the rounds and the
+light COP2 observation are written on Sapphire's board. No firmware was listed, and the BIOS image was given only as
+the bench's argument.
+
+**Questions.**
+
+1. **[decision] The next step.** *Recommended*: VU micro mode's call path (§62.4, about 80 ms on the arena): the
+   recompiler's per-pair helpers and the operations' lane wrappers done inside the compiled microprogram. The EE's
+   dispatcher and interpreter (about 270 ms) are larger but are the recompiler's own work (`EmuSen_Recompiler.md`).
+2. **[routine] The round's length.** *Recommended*: keep 64. Longer rounds measured no gain (§62.2), and at 4,096 the
+   XGKICK queue outgrows the state's slots.
+
+### 62.7 A state written inside a round (2026-10-29)
+
+The crate's tests found that a state written between two frames' ends (`state::tests`, a console stepped 12,345
+instructions into a frame) carried no owed time, so the console that loaded it brought its board whole at the next
+`run_to` while the one that saved it went on owing, and the two diverged. The round's end is now derived, `now + round`,
+not kept, and a load takes the owed time from the EE's time (`run_to` is always last asked for the EE's time), so a
+loaded console continues as the one that saved it, and `SPH2` is unchanged. ps2autotests on this build: 52 of 55 and 23 of 23, every text identical to a round of 0. Re-measured on that build: the short window
+176.6 and 178.6 ms with step 2's digests in both runs; the arena **498.2** (load 3.1; p95 668.8), picture
+`73644478C1BFD800`, sound `BCA8F00F4743A955` (the base's), state `66A722AE67ED92E4`, the six fields' pictures differing
+from the base's as step 2's did (10.6 to 27.9 % of pixels, mean 0.05 to 2.4 levels).
+
+**Tests** (release with debug assertions, so §61.2's check of the timers' cache ran on every `reschedule`): the
+library 117, `blocks` 28, `boot` 6, `debugger` 6, `dmac` 21, `gif` 16, `idle` 7, `pcrtc` 6, `s34` 4, `scheduler` 5,
+`sif` 5, `state` 11, `vif` 15, `vu0` 15, `vu_jit` 19 and `vu_micro` 25, all passed. They run at a round of 0
+(`System::new`), but for the library's machine tests and `state`, which run `Machine` at 64. The WiseMan filter
+`SapphireTests` was not run here.
+
+### 62.8 VU1 ahead, bounded by the kick queue: a first try, not kept (2026-10-29)
+
+*Decided 2026-10-29 by the tester: build `Sapphire_SpeedHacks.md` §3's items 1 and 4, then 2 and 3.* A first, small
+form of item 1 was tried on §62.7's tree and not committed: a VIF waiting for a running VU ran it on ahead of the board
+(`Micro::run_ahead`, pairs to its end with the flags landed by its last pair), and an XGKICK that brought the kicks
+outstanding (the GIF's and PATH1's port's together) to the state's 16 slots left the VU stalled until the board's GIF
+found room. The state then saves, but on the short window VU1 ran **no pairs at all** over the 60 timed fields (544.7 ms
+a field, 21,269 primitives against millions): the stall was never lifted, or the GIF never reached the kicks it waited
+for. The cause was not found. What the try confirms is `Sapphire_SpeedHacks.md` §2.3's point: run ahead without the
+foreign accesses at their cycles and without the GIF and VIF1 resumed at VU1's kick and end cycles as events, the
+pieces do not meet. Item 1 is therefore the compiler work §2.3 describes (the earliest foreign access checked at each
+pair, the kicks with their cycles, the GIF and VIF1 at events), not a bound added to today's run; it is left for its own
+stage, with the patch of this try kept outside the repository for reference.

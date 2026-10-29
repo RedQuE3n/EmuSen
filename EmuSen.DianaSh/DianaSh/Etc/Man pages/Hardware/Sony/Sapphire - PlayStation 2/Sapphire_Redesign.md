@@ -42,6 +42,10 @@ written without access to the sources and are unverified; its ideas are used and
 checked. No emulator's source was read for this proposal, and the clean-room rules of `Sapphire_Plan.md` §1.4 apply to
 every stage below.*
 
+*Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed.*
+
+*Decided 2026-10-29: for the PS2 and later, accuracy is to the player: games look, sound and play the same; the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay banned.* Its exactness apparatus (§4.0, §7.1) is therefore no longer required.
+
 ## 1. In one paragraph
 
 §58 measured the design's own cost: with the board's background work batched and every observation kept exact, Jak and

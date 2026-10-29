@@ -176,13 +176,22 @@ impl Times for Through {
     }
 }
 
-/// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for, after the quick path's
-/// clock moves on the run's quiet path (Sapphire_Recompiler.md §48.5).
+/// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for (Sapphire_Recompiler.md §48.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tail {
-    Quiet(u64),
-    Held(bool),
+    Held(Ran),
 }
+
+/// How `run_to` took a time: left owed to the round's end, by the quick path, or whole (Sapphire_Speed.md §62).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ran {
+    Owed,
+    Quick,
+    Whole,
+}
+
+/// EE cycles a round lets the board run behind the EE while no event falls in it and nothing observes it (Sapphire_Speed.md §62).
+pub const ROUND: u64 = 64;
 
 pub struct Board {
     pub map: Map,
@@ -227,6 +236,11 @@ pub struct Board {
     /// The timers' earliest event and H-blank wish, recomputed at each change to a timer; not state (Sapphire_Speed.md §61.2).
     timers_next: u64,
     timers_h: bool,
+    /// The EE's time the board has been asked for and not yet brought to, the round ending `round` after `now`; not
+    /// state, a load taking it from the EE's time (Sapphire_Speed.md §62).
+    owed: u64,
+    /// A round's length in EE cycles; 0 brings the board along after every instruction, the cycle-ordered build.
+    pub round: u64,
 }
 
 impl Board {
@@ -255,6 +269,8 @@ impl Board {
             pcrtc_next: None,
             timers_next: u64::MAX,
             timers_h: false,
+            owed: 0,
+            round: 0,
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
         b.timers_changed();
@@ -283,6 +299,7 @@ impl Board {
     /// The video mode from the next field (the kernel's mode setting, `Pcrtc::set_mode`), the IOP's copy of the timing
     /// told too.
     pub fn set_mode(&mut self, mode: Mode) {
+        self.observe();
         if self.pcrtc.set_mode(self.now, mode) {
             self.iop.bus.blank = self.pcrtc.timing;
         }
@@ -321,8 +338,71 @@ impl Board {
     /// due and the GIF, the VIFs and the VUs idle, only the clocks move and the IOP is brought along, which is what the
     /// whole path would do (Sapphire_Native.md §35.7).
     pub fn run_to(&mut self, t: u64, spram: &mut [u8]) {
-        let quick = self.run_to_held(t, spram);
-        self.take_wake(quick, spram);
+        let ran = self.run_to_held(t, spram);
+        self.take_wake(ran, spram);
+    }
+
+    /// The board brought whole to the time it owes, as `run_to` at that time would have brought it.
+    pub fn settle(&mut self, spram: &mut [u8]) {
+        if self.owed > self.now {
+            self.run_whole(self.owed, spram);
+        }
+    }
+
+    /// `run_to` with nothing left owed, whatever the round.
+    pub fn run_whole(&mut self, t: u64, spram: &mut [u8]) {
+        let ran = self.run_now(t, spram);
+        self.take_wake(ran, spram);
+    }
+
+    /// Before the EE observes a unit: the time owed brought, the IOP side's wake left for the next `run_to`.
+    #[inline]
+    fn observe(&mut self) {
+        if self.owed > self.now {
+            self.observe_owed();
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn observe_owed(&mut self) {
+        let t = self.owed;
+        debug_assert!(self.next > t, "no event falls in an owed round");
+        if !self.quick_to(t) {
+            self.tail(t);
+        }
+    }
+
+    /// Before COP2 reaches VU0 alone: VIF0, which writes VU0's memories and starts it, and VU0 brought to the owed time,
+    /// the rest of the board left to the round (Sapphire_Speed.md §62.3).
+    #[cold]
+    #[inline(never)]
+    fn observe_vu0(&mut self) {
+        let t = self.owed;
+        self.vpu.wake();
+        let dma = self.dmac.ch[dmac::GIF].str();
+        let Board { vif, vpu, gif, gs, dmac, intc, .. } = self;
+        let mut gif = GifPort { gif, gs, dma };
+        vif[0].run_to(t, &mut Reach { vpu, gif: &mut gif });
+        if vif[0].take_wake() {
+            dmac.wake(t);
+        }
+        if vif[0].take_irq() {
+            intc.raise(intc::source::VIF0);
+        }
+        self.vpu.run_unit(0, t);
+        self.reschedule();
+    }
+
+    /// `run_to`'s quick path at `t` when no event falls by it and the units are idle, the clocks moved if so.
+    #[inline]
+    fn quick_to(&mut self, t: u64) -> bool {
+        if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
+            self.now = self.now.max(t);
+            self.iop.catch_up(self.now);
+            return true;
+        }
+        false
     }
 
     /// The next time any unit needs attention: `run_to` runs no event before it.
@@ -332,11 +412,19 @@ impl Board {
 
     /// `run_to` up to its last act, the DMAC woken if the IOP's side has changed a SIF FIFO, which is left pending; whether
     /// the quick path ran (Sapphire_Recompiler.md §48.5).
-    fn run_to_held(&mut self, t: u64, spram: &mut [u8]) -> bool {
-        if self.next > t && self.gif.quiet() && self.vif[0].idle_to(t) & self.vif[1].idle_to(t) && self.vpu.idle_to(t) {
-            self.now = self.now.max(t);
-            self.iop.catch_up(self.now);
-            return true;
+    fn run_to_held(&mut self, t: u64, spram: &mut [u8]) -> Ran {
+        if t < self.now + self.round && self.next > t && !self.iop.bus.sif.wake_ee_pending() {
+            self.owed = self.owed.max(t);
+            return Ran::Owed;
+        }
+        self.run_now(t, spram)
+    }
+
+    /// `run_to_held` with nothing left owed.
+    fn run_now(&mut self, t: u64, spram: &mut [u8]) -> Ran {
+        self.owed = self.owed.max(t);
+        if self.quick_to(t) {
+            return Ran::Quick;
         }
         while self.next <= t {
             let at = self.next;
@@ -383,6 +471,12 @@ impl Board {
             self.reschedule();
             debug_assert!(self.next > at, "an event at {at} asked for its own time again");
         }
+        self.tail(t);
+        Ran::Whole
+    }
+
+    /// The units no event brings, the GIF, the VIFs and the VUs, brought to `t` with no event due by it.
+    fn tail(&mut self, t: u64) {
         self.now = self.now.max(t);
         self.run_vifs(t);
         let free = self.gif.path1_free(self.now);
@@ -397,13 +491,15 @@ impl Board {
         self.run_gif(t);
         self.reschedule();
         self.iop.catch_up(self.now);
-        false
     }
 
     /// `run_to`'s last act: the DMAC woken at the board's time if the IOP's side has changed a SIF FIFO, and run if due;
     /// on the quick path the IPU's lines after it.
-    fn take_wake(&mut self, quick: bool, spram: &mut [u8]) {
-        if quick {
+    fn take_wake(&mut self, ran: Ran, spram: &mut [u8]) {
+        if ran == Ran::Owed {
+            return;
+        }
+        if ran == Ran::Quick {
             self.quick_wake(spram);
         } else if self.iop.bus.sif.take_wake_ee() {
             self.dmac.wake(self.now);
@@ -424,52 +520,29 @@ impl Board {
     /// The steps that stand (the times run, a held one with its `Tail` included) and the tail.
     pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, seen: &mut dyn Times) -> (usize, Option<Tail>) {
         let Some(&last) = times.last() else { return (0, None) };
-        let quiet = self.next > last && self.gif.quiet() && self.vif[0].idle() && self.vif[1].idle() && self.vpu.idle() && !self.iop.bus.sif.wake_ee_pending();
-        let mut from = 0;
-        if quiet {
+        if last < self.now + self.round && self.next > last && !self.iop.bus.sif.wake_ee_pending() {
+            // Every time falls in the round: owed, and the lines stand (Sapphire_Speed.md §62).
             let lines = self.lines();
             let stop = seen.quiet(0, times.len(), lines);
             let end = times.len().min(stop + 1);
-            while from < end {
-                self.now = self.now.max(times[from]);
-                self.iop.catch_up(self.now);
-                if self.iop.bus.sif.wake_ee_pending() {
-                    break;
-                }
-                from += 1;
+            self.owed = self.owed.max(times[end - 1]);
+            if stop < times.len() {
+                let go_on = seen.each(stop, lines);
+                debug_assert!(!go_on, "`quiet` names the time `each` stops at");
             }
-            if from == end {
-                if stop < times.len() {
-                    let go_on = seen.each(stop, lines);
-                    debug_assert!(!go_on, "`quiet` names the time `each` stops at");
-                    self.idle_through(times[stop]);
-                    return (from, None);
-                }
-                self.idle_through(last);
-                return (from, None);
-            }
-            // The wake at `times[from]`, taken as the quick path of `run_to` takes it.
-            let t = times[from];
-            if from < guard {
-                return (from + 1, Some(Tail::Quiet(t)));
-            }
-            self.idle_through(t);
-            self.take_wake(true, spram);
-            from += 1;
-            if !seen.each(from - 1, self.lines()) {
-                return (from, None);
-            }
+            return (end, None);
         }
+        let mut from = 0;
         while from < times.len() {
             let t = times[from];
             if from < guard && self.next <= t {
                 return (from, None);
             }
-            let quick = self.run_to_held(t, spram);
+            let ran = self.run_to_held(t, spram);
             if from < guard && self.iop.bus.sif.wake_ee_pending() {
-                return (from + 1, Some(Tail::Held(quick)));
+                return (from + 1, Some(Tail::Held(ran)));
             }
-            self.take_wake(quick, spram);
+            self.take_wake(ran, spram);
             from += 1;
             if !seen.each(from - 1, self.lines()) {
                 return (from, None);
@@ -480,13 +553,8 @@ impl Board {
 
     /// The rest of the time a guarded `run_through` stopped inside.
     pub fn finish(&mut self, tail: Tail, spram: &mut [u8]) {
-        match tail {
-            Tail::Quiet(t) => {
-                self.idle_through(t);
-                self.take_wake(true, spram);
-            }
-            Tail::Held(quick) => self.take_wake(quick, spram),
-        }
+        let Tail::Held(ran) = tail;
+        self.take_wake(ran, spram);
     }
 
     /// The clocks' moves `run_to`'s quick path makes at `t` once it has found the units idle.
@@ -519,7 +587,7 @@ impl Board {
     /// or while the reports count every access.
     pub(crate) fn pure_register(&self, paddr: u32) -> Option<u32> {
         let p = paddr & !0xF;
-        if self.reports.all || !(0x1000_0000..0x1001_0000).contains(&paddr) || timer::decode(p).is_some() || sif::ee_register(p).is_some() {
+        if self.owed > self.now || self.reports.all || !(0x1000_0000..0x1001_0000).contains(&paddr) || timer::decode(p).is_some() || sif::ee_register(p).is_some() {
             return None;
         }
         match p {
@@ -697,10 +765,12 @@ const IOP_RAM: std::ops::Range<u32> = 0x1C00_0000..0x1C20_0000;
 impl Bus for Board {
     fn read(&mut self, paddr: u32, bytes: usize) -> u128 {
         if VU_MEMORY.contains(&paddr) {
+            self.observe();
             self.run_vifs(self.now);
             return self.vpu.read(paddr, bytes);
         }
         if (vif::REGS[0]..vif::FIFO_END).contains(&paddr) {
+            self.observe();
             self.run_vifs(self.now);
             if paddr < vif::FIFO[0] {
                 let w = self.vif[((paddr - vif::REGS[0]) >> 10) as usize].read(paddr & 0x3F0);
@@ -719,12 +789,14 @@ impl Bus for Board {
             return 0;
         }
         if (ipu::CMD..ipu::REGS_END).contains(&paddr) || (ipu::OUT_FIFO..ipu::FIFO_END).contains(&paddr) {
+            self.observe();
             let v = self.ipu.read(paddr, bytes);
             self.sync_ipu(self.now);
             self.reschedule();
             return v;
         }
         if IOP_RAM.contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
             let a = (paddr - IOP_RAM.start) as usize;
             let mut v = [0u8; 16];
@@ -732,6 +804,7 @@ impl Bus for Board {
             return u128::from_le_bytes(v);
         }
         if (gif::REGS..gif::REGS_END).contains(&paddr) || (gif::FIFO..gif::FIFO_END).contains(&paddr) {
+            self.observe();
             self.run_gif(self.now);
             if paddr >= gif::FIFO {
                 return 0;
@@ -740,11 +813,13 @@ impl Bus for Board {
             return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
         }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
             self.run_gif(self.now);
             return u128::from(self.gs.read_privileged(paddr, bytes));
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
+            self.observe();
             if is_unit_register(paddr & !0xF) {
                 let w = self.read_register(paddr & !0xF);
                 return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
@@ -753,6 +828,7 @@ impl Bus for Board {
             return 0;
         }
         if (crate::cdvd::BASE..crate::cdvd::END).contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Read, None, self.now);
             self.iop.run_to(self.now);
             let v = self.iop.bus.cdvd_read(paddr, drive_size(bytes));
@@ -769,10 +845,12 @@ impl Bus for Board {
 
     fn write(&mut self, paddr: u32, bytes: usize, value: u128) {
         if VU_MEMORY.contains(&paddr) {
+            self.observe();
             self.run_vifs(self.now);
             return self.vpu.write(paddr, bytes, value);
         }
         if (vif::REGS[0]..vif::FIFO_END).contains(&paddr) {
+            self.observe();
             self.run_vifs(self.now);
             if paddr < vif::FIFO[0] {
                 let (v, off) = (&mut self.vif[((paddr - vif::REGS[0]) >> 10) as usize], paddr & 0x3F0);
@@ -794,18 +872,21 @@ impl Bus for Board {
             return;
         }
         if (ipu::CMD..ipu::REGS_END).contains(&paddr) || (ipu::OUT_FIFO..ipu::FIFO_END).contains(&paddr) {
+            self.observe();
             self.ipu.write(paddr, bytes, value);
             self.sync_ipu(self.now);
             self.reschedule();
             return;
         }
         if IOP_RAM.contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Write, None, self.now);
             let a = (paddr - IOP_RAM.start) as usize;
             self.iop.bus.ram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
             return;
         }
         if (gif::REGS..gif::REGS_END).contains(&paddr) || (gif::FIFO..gif::FIFO_END).contains(&paddr) {
+            self.observe();
             self.run_gif(self.now);
             if paddr >= gif::FIFO {
                 if bytes == 16 {
@@ -822,6 +903,7 @@ impl Bus for Board {
             return;
         }
         if (gs::privileged::BASE..gs::privileged::END).contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             self.run_gif(self.now);
             self.gs.write_privileged(paddr, bytes, value as u64);
@@ -834,6 +916,7 @@ impl Bus for Board {
             return;
         }
         if (0x1000_0000..0x1001_0000).contains(&paddr) {
+            self.observe();
             let reg = paddr & !0xF;
             if is_unit_register(reg) && bytes >= 4 {
                 self.write_register(reg, value as u32);
@@ -846,6 +929,7 @@ impl Bus for Board {
             return;
         }
         if (crate::cdvd::BASE..crate::cdvd::END).contains(&paddr) {
+            self.observe();
             self.reports.touch(Side::Ee, paddr, Access::Write, Some(value as u32), self.now);
             self.iop.run_to(self.now);
             self.iop.bus.cdvd_write(paddr, drive_size(bytes), value as u32);
@@ -865,7 +949,19 @@ impl Bus for Board {
     }
 
     fn vpu(&mut self) -> Option<&mut Vpu> {
+        self.observe();
         self.run_vifs(self.now);
+        Some(&mut self.vpu)
+    }
+
+    fn vpu0(&mut self) -> Option<&mut Vpu> {
+        if self.round == 0 {
+            return self.vpu();
+        }
+        if self.owed > self.now {
+            self.observe_vu0();
+        }
+        self.vpu.wake();
         Some(&mut self.vpu)
     }
 }
@@ -880,6 +976,11 @@ impl System {
     /// A program's machine entered at `pc` as `Ee::new` enters it, NTSC timing.
     pub fn new(pc: u32) -> System {
         System { ee: Ee::new(pc), board: Board::new(clock::NTSC) }
+    }
+
+    /// The board brought whole to the time it owes (`Board::settle`).
+    pub fn settle(&mut self) {
+        self.board.settle(&mut self.ee.spram[..]);
     }
 
     /// One instruction, then the board brought to the core's time and the core's lines set from it.
@@ -972,6 +1073,8 @@ impl System {
         [b.now, b.next] = s;
         b.edges_taken = crate::state::read_opt_u64(r)?;
         b.pcrtc_next = None;
+        // The time owed is the EE's, which `run_to` was last asked for; a round ends `round` after `now` (Sapphire_Speed.md §62.2).
+        b.owed = b.now.max(self.ee.timing.cycles());
         Ok(())
     }
 

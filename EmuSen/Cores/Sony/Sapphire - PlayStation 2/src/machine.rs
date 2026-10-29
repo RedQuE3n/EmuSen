@@ -130,6 +130,7 @@ impl Machine {
     fn console(market: Market, ports: [Option<&'static str>; 2]) -> Box<System> {
         let mode = if market == Market::Europe { clock::PAL } else { clock::NTSC };
         let mut sys = Box::new(System { ee: crate::ee::Ee::reset(), board: crate::board::Board::new(mode) });
+        sys.board.round = std::env::var("EMUSEN_SAPPHIRE_ROUND").ok().and_then(|v| v.parse().ok()).unwrap_or(crate::board::ROUND);
         // SMODE2 interlaced in frame mode from the first field, as the BIOS sets it, so the picture is the standard's
         // whole frame before the BIOS programs the PCRTC, and with no BIOS (Sapphire_Native.md §35.6) [C].
         crate::ee::Bus::write(&mut sys.board, 0x1200_0020, 8, 3);
@@ -362,6 +363,7 @@ impl Machine {
                 board.run_to(t, &mut ee.spram[..]);
             }
         }
+        self.sys.settle();
         if self.booted {
             self.sys.board.iop.resolve_tty();
         }

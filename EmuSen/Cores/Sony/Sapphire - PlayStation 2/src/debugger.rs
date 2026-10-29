@@ -185,6 +185,15 @@ impl Machine {
     /// the step in front of it not run, and the next call goes on from it; `run::UNCHECKED` runs that step unasked on
     /// the processor last stopped on. The EE's steps follow the plain frame's order exactly, its batches included.
     pub fn run_frame_debug(&mut self, flags: u32) -> u32 {
+        // The debugger steps the cycle-ordered board, a round of 0 (Sapphire_Speed.md §62).
+        self.sys.settle();
+        let round = std::mem::replace(&mut self.sys.board.round, 0);
+        let why = self.run_frame_stepped(flags);
+        self.sys.board.round = round;
+        why
+    }
+
+    fn run_frame_stepped(&mut self, flags: u32) -> u32 {
         let mut unchecked = flags & run::UNCHECKED != 0;
         if self.arm_probes() {
             self.catch_up();

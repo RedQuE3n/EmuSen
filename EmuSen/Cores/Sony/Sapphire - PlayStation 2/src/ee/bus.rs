@@ -13,6 +13,10 @@ pub trait Bus {
     fn vpu(&mut self) -> Option<&mut crate::vu::Vpu> {
         None
     }
+    /// `vpu` for an instruction that reaches VU0 alone, which need not bring the rest of the board (Sapphire_Speed.md §62).
+    fn vpu0(&mut self) -> Option<&mut crate::vu::Vpu> {
+        self.vpu()
+    }
 }
 
 /// RDRAM alone, 32 MiB from physical 0, for the interpreter's tests and the project's programs; elsewhere reads 0.

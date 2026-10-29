@@ -10901,7 +10901,7 @@ path (§49.9).
 | G5, the goldens | **not yet**: Jak and Daxter and Kingdom Hearts at four anchors each; Dark Cloud 2, which since D-465's and D-840's fixes reaches its menu, at one, its memory card message | §39, §39.19, §39.23 |
 | G6, speed | **not yet**: 0.4 to 5 frames a second on the desktop against the console's 59.94; the speed stages under way | §39.8, §43, §44 |
 | G7, the debugger | **met** | §41 |
-| G8, the clean room | **not yet**: the clone check and the disputes read end to end by another, at S48 | plan §7 |
+| G8, the clean room | **not yet**: the clone check and the disputes read end to end by another, at S48. Decided 2026-10-29: Sapphire is no longer clean-room; the references' source may be read and their approaches adopted, written anew in Rust and attributed | plan §7 |
 | G9, firmware | **not yet**: the open BIOS is not written, so the system runs nothing with no firmware folder, and says so; on the player's BIOS the three bench games run, Dark Cloud 2 to its title and menu since the fixes of D-465 and D-840 | §39.19, §39.23, §49.5 |
 | G10, start without a disc | **met** and offered | §30.16, §30.19 |
 | G11, the Memory Cards tab | **met** and offered | §30.17 |

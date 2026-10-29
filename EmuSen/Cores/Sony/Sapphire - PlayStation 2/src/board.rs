@@ -236,10 +236,9 @@ pub struct Board {
     /// The timers' earliest event and H-blank wish, recomputed at each change to a timer; not state (Sapphire_Speed.md §61.2).
     timers_next: u64,
     timers_h: bool,
-    /// The EE's time the board has been asked for and not yet brought to; not state (Sapphire_Speed.md §62).
+    /// The EE's time the board has been asked for and not yet brought to, the round ending `round` after `now`; not
+    /// state, a load taking it from the EE's time (Sapphire_Speed.md §62).
     owed: u64,
-    /// The time from which the next `run_to` brings the board whole; not state.
-    round_end: u64,
     /// A round's length in EE cycles; 0 brings the board along after every instruction, the cycle-ordered build.
     pub round: u64,
 }
@@ -271,7 +270,6 @@ impl Board {
             timers_next: u64::MAX,
             timers_h: false,
             owed: 0,
-            round_end: 0,
             round: 0,
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
@@ -373,7 +371,6 @@ impl Board {
         if !self.quick_to(t) {
             self.tail(t);
         }
-        self.round_end = t + self.round;
     }
 
     /// Before COP2 reaches VU0 alone: VIF0, which writes VU0's memories and starts it, and VU0 brought to the owed time,
@@ -416,7 +413,7 @@ impl Board {
     /// `run_to` up to its last act, the DMAC woken if the IOP's side has changed a SIF FIFO, which is left pending; whether
     /// the quick path ran (Sapphire_Recompiler.md §48.5).
     fn run_to_held(&mut self, t: u64, spram: &mut [u8]) -> Ran {
-        if t < self.round_end && self.next > t && !self.iop.bus.sif.wake_ee_pending() {
+        if t < self.now + self.round && self.next > t && !self.iop.bus.sif.wake_ee_pending() {
             self.owed = self.owed.max(t);
             return Ran::Owed;
         }
@@ -426,7 +423,6 @@ impl Board {
     /// `run_to_held` with nothing left owed.
     fn run_now(&mut self, t: u64, spram: &mut [u8]) -> Ran {
         self.owed = self.owed.max(t);
-        self.round_end = t + self.round;
         if self.quick_to(t) {
             return Ran::Quick;
         }
@@ -524,7 +520,7 @@ impl Board {
     /// The steps that stand (the times run, a held one with its `Tail` included) and the tail.
     pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, seen: &mut dyn Times) -> (usize, Option<Tail>) {
         let Some(&last) = times.last() else { return (0, None) };
-        if last < self.round_end && self.next > last && !self.iop.bus.sif.wake_ee_pending() {
+        if last < self.now + self.round && self.next > last && !self.iop.bus.sif.wake_ee_pending() {
             // Every time falls in the round: owed, and the lines stand (Sapphire_Speed.md §62).
             let lines = self.lines();
             let stop = seen.quiet(0, times.len(), lines);
@@ -1025,7 +1021,6 @@ impl System {
 impl System {
     pub fn write_state(&self, w: &mut emusen_native::StateWriter) {
         let b = &self.board;
-        debug_assert!(b.owed <= b.now, "a state is written with nothing owed");
         w.structure("Ee", &self.ee);
         w.bytes("Rdram", &b.map.rdram);
         w.bytes("Scratchpad", &self.ee.spram[..]);
@@ -1078,6 +1073,8 @@ impl System {
         [b.now, b.next] = s;
         b.edges_taken = crate::state::read_opt_u64(r)?;
         b.pcrtc_next = None;
+        // The time owed is the EE's, which `run_to` was last asked for; a round ends `round` after `now` (Sapphire_Speed.md §62.2).
+        b.owed = b.now.max(self.ee.timing.cycles());
         Ok(())
     }
 

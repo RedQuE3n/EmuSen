@@ -2062,3 +2062,20 @@ the bench's argument.
    dispatcher and interpreter (about 270 ms) are larger but are the recompiler's own work (`EmuSen_Recompiler.md`).
 2. **[routine] The round's length.** *Recommended*: keep 64. Longer rounds measured no gain (§62.2), and at 4,096 the
    XGKICK queue outgrows the state's slots.
+
+### 62.7 A state written inside a round (2026-10-29)
+
+The crate's tests found that a state written between two frames' ends (`state::tests`, a console stepped 12,345
+instructions into a frame) carried no owed time, so the console that loaded it brought its board whole at the next
+`run_to` while the one that saved it went on owing, and the two diverged. The round's end is now derived, `now + round`,
+not kept, and a load takes the owed time from the EE's time (`run_to` is always last asked for the EE's time), so a
+loaded console continues as the one that saved it, and `SPH2` is unchanged. ps2autotests on this build: 52 of 55 and 23 of 23, every text identical to a round of 0. Re-measured on that build: the short window
+176.6 and 178.6 ms with step 2's digests in both runs; the arena **498.2** (load 3.1; p95 668.8), picture
+`73644478C1BFD800`, sound `BCA8F00F4743A955` (the base's), state `66A722AE67ED92E4`, the six fields' pictures differing
+from the base's as step 2's did (10.6 to 27.9 % of pixels, mean 0.05 to 2.4 levels).
+
+**Tests** (release with debug assertions, so §61.2's check of the timers' cache ran on every `reschedule`): the
+library 117, `blocks` 28, `boot` 6, `debugger` 6, `dmac` 21, `gif` 16, `idle` 7, `pcrtc` 6, `s34` 4, `scheduler` 5,
+`sif` 5, `state` 11, `vif` 15, `vu0` 15, `vu_jit` 19 and `vu_micro` 25, all passed. They run at a round of 0
+(`System::new`), but for the library's machine tests and `state`, which run `Machine` at 64. The WiseMan filter
+`SapphireTests` was not run here.

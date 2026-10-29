@@ -202,3 +202,34 @@ by default: without it the crate builds and behaves as 1.0.0, and MarsRT does no
 - **Evidence**: `tests/native.rs`, a lowering whose function answers 7 and whose tailored code answers through a stub or
   falls back to the function, 300 blocks over several batches; the crate's twelve 1.0 tests unchanged with and without
   the feature.
+
+## 8. Version 1.2: tailored code without the function, compiled now, and spent across drops (2026-10-29)
+
+*Added for the baseline's covered blocks (`EmuSen_Recompiler.md` §16). Every 1.2 change is additive: a 1.0 lowering and
+MarsRT compile and behave as before, and the `native` parts stay behind that feature.*
+
+- **The function only where it is needed.** The thread now asks the lowering for its tailored code first. A `Native`
+  whose code has no fallback word (`fallback` none) and does not ask for the function (`function`, a new field, for a
+  measurement that reads the function) is published with no Cranelift function: nothing is lowered to IR, nothing goes
+  through Cranelift or regalloc2, and only the tailored bytes count against the budget. `Native::needs_function` is the
+  rule, and a fallback word implies it, so no tailored code can reach a function that was never compiled. Where the
+  lowering has no tailored code, the function is compiled as in 1.0.
+- **A tailored block the code memory cannot place** is refused (`FAILED`), since no function stands below it, and
+  counted (`Counters::unplaced`, with `failed`); `over_budget` then drops the module as if the budget were passed
+  (counted in `Jit::full` as well as `flushes`), so
+  that a full reservation is never a lasting refusal. Where a function exists it is published instead, as in 1.1. The
+  tailored bytes are counted against the budget when placed, not when lowered.
+- **`Jit::compile_now(words, start, options)`**, `native` only: the tailored code made on the caller's thread and placed
+  in a code memory the `Jit` owns (a second reservation, the same W^X batches, one block each), its slot published before
+  the call returns. It returns none, having done nothing, where the lowering has no tailored code or the code needs its
+  function, and the caller enqueues the block as before. Its bytes count against the same budget (`Jit::held`), and a
+  drop frees its memory with the module. It is the forerunner of `EmuSen_Recompiler.md` §3.9's compiling on the
+  dispatcher's thread, which E2 decides; it is not 2.0's arena.
+- **`Jit::spent()`** returns what compiling has cost since the `Jit` was made, across its drops: blocks published,
+  nanoseconds and bytes, on the compiler's threads and on the caller's (`Spent`). The counters themselves still restart
+  with each module; `spent` keeps what each dropped one had reached, so that a bench can count the compiler's busy share
+  over a window that holds a drop. A retired thread's block in hand is not in it.
+- **The perf map** names a tailored block at its entry with its hot bytes' length; 1.1 gave it the function's size.
+- **Evidence** (measured 2026-10-29): `tests/native.rs` gains two tests, a mixed batch in which only the blocks that need
+  one compile a function (counted by the lowering), and `compile_now`'s publication, refusals, budget and kept totals;
+  the 1.1 test of the fallback word is unchanged. 15 tests pass with the feature and 12 without.

@@ -30,6 +30,9 @@ pub(crate) fn baseline_helpers() -> [u64; 4] {
 
 /// Bytes of code past which every block is dropped and compiled again as it runs (`EmuSen_Jit.md` §3.4).
 pub const BUDGET: u64 = 256 << 20;
+/// The budget when the baseline is dispatched, its blocks' data being larger (EmuSen_Recompiler.md §16.5).
+#[cfg(feature = "baseline")]
+pub const BASELINE_BUDGET: u64 = 480 << 20;
 
 /// A block is handed to the compiler at this entry (MarsRT's sixty-fourth, `Mars_Native.md` §5.8.4).
 pub const THRESHOLD: u32 = 64;
@@ -154,6 +157,9 @@ pub struct Blocks {
     pub memory: bool,
     /// The most instructions a block is shaped with, at most `shape::MAX`.
     pub longest: usize,
+    /// A block the baseline covers compiled on the dispatcher's thread when it reaches the threshold, not queued (EmuSen_Recompiler.md §16).
+    #[cfg(feature = "baseline")]
+    pub now: bool,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
     pub stats: Stats,
     /// For measurement, behind the `census` feature: each compiled block entered since the census was last taken, by
@@ -214,7 +220,11 @@ impl Blocks {
         });
         let mut ctx = ctx;
         [ctx.replay, ctx.leave, ctx.fill] = jit::forms::trampolines([ctx.replay, ctx.leave, ctx.fill]);
-        let mut jit = Jit::new(jit::R5900, BUDGET);
+        #[cfg(feature = "baseline")]
+        let budget = if jit::baseline::dispatched() { BASELINE_BUDGET } else { BUDGET };
+        #[cfg(not(feature = "baseline"))]
+        let budget = BUDGET;
+        let mut jit = Jit::new(jit::R5900, budget);
         jit.perf_map = std::env::var("EMUSEN_SAPPHIRE_PERFMAP").is_ok_and(|v| v == "1");
         Blocks {
             map: HashMap::default(),
@@ -226,6 +236,8 @@ impl Blocks {
             spill: false,
             memory: true,
             longest: shape::MAX,
+            #[cfg(feature = "baseline")]
+            now: false,
             verify: None,
             stats: Stats::default(),
             #[cfg(feature = "census")]
@@ -242,7 +254,8 @@ impl Blocks {
     /// The settings the environment gives, for measurement: `EMUSEN_SAPPHIRE_THRESHOLD`, `EMUSEN_SAPPHIRE_C1=1`,
     /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
     /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions), `EMUSEN_SAPPHIRE_WAIT=1` (each block's code waited for
-    /// when it is handed over, so that nothing runs interpreted behind the compiler's queue).
+    /// when it is handed over, so that nothing runs interpreted behind the compiler's queue), `EMUSEN_SAPPHIRE_BASELINE_NOW=1`
+    /// (with `baseline`, each covered block compiled on the dispatcher's thread), `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` (the code budget).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -252,6 +265,13 @@ impl Blocks {
         b.spill = std::env::var("EMUSEN_SAPPHIRE_SPILL").is_ok_and(|v| v == "1");
         b.memory = !std::env::var("EMUSEN_SAPPHIRE_MEMORY").is_ok_and(|v| v == "0");
         b.wait = std::env::var("EMUSEN_SAPPHIRE_WAIT").is_ok_and(|v| v == "1");
+        #[cfg(feature = "baseline")]
+        {
+            b.now = std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").is_ok_and(|v| v == "1");
+        }
+        if let Some(mib) = std::env::var("EMUSEN_SAPPHIRE_BUDGET_MIB").ok().and_then(|v| v.parse::<u64>().ok()) {
+            b.set_budget(mib << 20);
+        }
         if let Some(n) = std::env::var("EMUSEN_SAPPHIRE_LONGEST").ok().and_then(|v| v.parse::<usize>().ok()) {
             b.longest = n.clamp(2, shape::MAX);
         }
@@ -349,6 +369,18 @@ impl Blocks {
     }
     pub fn flushes(&self) -> u64 {
         self.jit.flushes
+    }
+    pub fn budget(&self) -> u64 {
+        self.jit.budget
+    }
+    /// Of the flushes, those for a full code memory under the budget.
+    pub fn full_flushes(&self) -> u64 {
+        self.jit.full
+    }
+
+    /// What compiling has cost across the budget's drops, on the compiler's thread and on the dispatcher's, and the bytes held now.
+    pub fn spent(&self) -> ([emusen_jit::Spent; 2], u64) {
+        (self.jit.spent(), self.jit.held())
     }
 
     /// The mnemonics in the blocks that hold code now.
@@ -474,7 +506,11 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
                 b.state = State::Counting(n);
                 return None;
             }
-            let slot = blocks.jit.enqueue(b.words.clone(), pc, b.options);
+            #[cfg(feature = "baseline")]
+            let now = if blocks.now && b.covered { blocks.jit.compile_now(&b.words, pc, b.options) } else { None };
+            #[cfg(not(feature = "baseline"))]
+            let now = None;
+            let slot = now.unwrap_or_else(|| blocks.jit.enqueue(b.words.clone(), pc, b.options));
             if wait {
                 slot.wait();
             }

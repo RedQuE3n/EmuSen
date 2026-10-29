@@ -74,6 +74,10 @@ fn eager() -> Blocks {
     let mut b = Blocks::new();
     b.threshold = 1;
     b.wait = true;
+    #[cfg(feature = "baseline")]
+    {
+        b.now = std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").is_ok_and(|v| v == "1");
+    }
     b
 }
 

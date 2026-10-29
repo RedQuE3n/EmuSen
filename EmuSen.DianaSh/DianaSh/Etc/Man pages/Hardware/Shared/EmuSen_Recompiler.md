@@ -1094,3 +1094,147 @@ point, as the bytes are. With §4.2's longer entries it ran 4.7 ns in both round
 the same code size (106.7 against 107.4 bytes, 15.9 MB of code): the ring's code is the same generator's, so the
 difference is the handheld's state on the day, not E1's, and it is recorded without a cause. The ring is synthetic: it
 does not hold the shared exit's prefix, whose cost §15.4 measures in the window's wall time instead.
+
+## 16. The covered blocks without their Cranelift function (2026-10-29)
+
+*Approved by the tester on 2026-10-29, from `Sapphire_Speed.md` §60.4 and §60.7's third lever: a block the baseline
+covers stops paying for a Cranelift compile, and the code budget's drops are counted rather than inferred. Behind the
+`baseline` feature, as every stage before E3; the default build is unchanged.*
+
+### 16.1 The estimate, written before the measurement
+
+*Nothing in this subsection is measured.* §60.4 found every covered block compiled twice, as a Cranelift function and
+as tailored code, with Cranelift and regalloc2 94 % of the compile thread and a covered block 26 KB against the Cranelift
+tier's 12 KB, so that the 256 MiB budget dropped every block in mid-window. Without the function [E]:
+
+- **P-B1**: no drop on the arena or the dock, the tailored code alone at a few KB a block;
+- **P-B2**: the compile thread's busy share falls by at least ten times, at 43 µs a block against about 15 ms;
+- **P-B3**: the compiled share at least the Cranelift tier's (40.1 % on the arena, §60.5), since the queue empties far
+  faster; and the arena's field at or below the Cranelift tier's, removing §60.4's 46 ms;
+- **P-B4**: compiled on the dispatcher's thread, about 50 blocks a field at 43 µs, about 2 ms a field, and the compiled
+  share near §60.5's waited 45 to 52 %.
+
+### 16.2 What was built
+
+- **`emusen-jit` 1.2** (`EmuSen_Jit.md` §8): the thread asks for the tailored code first and compiles the function only
+  where `Native::needs_function` says (a fallback word, or a measurement that reads it); a tailored block it cannot place
+  is refused and makes the budget drop the module; `Jit::compile_now` makes and publishes a tailored block on the
+  caller's thread; `Jit::spent` and `Jit::held` count across drops.
+- **Sapphire**: the baseline's `Native` has no fallback word, as it had none since E1, and asks for the function only
+  under `EMUSEN_SAPPHIRE_FORMS_BYTES=1` (whose shadow reads the function, §14.4) or `EMUSEN_SAPPHIRE_BASELINE_FUNCTION=1`
+  (E1's form, both compiled, kept for this section's "before"). `EMUSEN_SAPPHIRE_BASELINE_NOW=1` (`Blocks::now`)
+  compiles a covered block on the dispatcher's thread when it reaches the threshold, in place of queueing it; a block
+  `compile_now` declines is queued as before. The tests' `eager` dispatcher reads the same variable.
+  `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` sets the code budget, for measurement only and off by default; the baseline's own
+  budget is §16.5's.
+- **The bench** prints a line `ee recompiler`: the budget's drops in the window and the budget, the bytes held at the
+  end, the compile thread's busy share of the window's wall time and its blocks a field, and the dispatcher's own
+  compile time and blocks a field.
+
+### 16.3 What relied on the function, and where each goes now
+
+Read from the code on this branch:
+
+1. **An entry not at rest.** Since E1 the tailored code's prefix handles it in the shared exit (§15.2); the code has no
+   fallback word (`ee/jit/mod.rs`, `fallback: None`), and the baseline's lowering never emits `jump_via_data`, the
+   assembler's only jump through a data word. So no path of the tailored code reached the function before this change.
+2. **A rollback** (`blocks.rs`, `block`, the arm for an exit other than `DONE`): the stores are undone or the state
+   after the last access kept, and the steps run again on the interpreter. The block's code is not entered again.
+3. **The verifier.** `baseline::covers` refuses `Options::verify`, so the per-step verifier's blocks are never covered
+   and keep their Cranelift function; the per-block verifier steps the reference interpreter after each exit and calls
+   no code.
+4. **No tailored code for a covered block** (the planner or `static_times` declines it, or the lowering returns none):
+   `needs_function` is true for an absent `Native`, so the function is compiled and published as before.
+5. **The code memory full.** 1.1 published the function in place of tailored code it could not place. With no function
+   the slot is refused, the dispatcher's `settle` makes the block `Refused` and the interpreter runs it, and the next
+   `block` call finds `over_budget` true and forgets every block.
+6. **`compile_now`** declines exactly the cases of 4 and of a `Native` that needs its function, and the dispatcher then
+   enqueues the block, so the sync path never publishes less than the queue would.
+
+Every case ends in the tailored code or the interpreter, which are exact against each other by §14.3 and §15.2; which
+of them runs a step changes no result.
+
+**How it fits E2.** E2's runtime (§8) brings 2.0's reservation with its two arenas, link slots and invalidation, and
+decides compiling on the dispatcher's thread (§3.9). This section changes none of 1.1's interfaces: the `Lowering`
+trait is unchanged, `Native` gains one field, and `compile_now` uses 1.1's `native::Memory` as it stands. When E2 builds
+its arenas, `compile_now` places into them in place of its own reservation, and the measurements below are its
+evidence for the decision.
+
+### 16.4 Results (measured 2026-10-29)
+
+One build of the bench with `--features baseline`, desktop, one round of each configuration at CPU weight 100, started
+only while no build and no other timed bench ran; the one-minute load at each run's start and end is given. The
+configurations: **Cranelift**, the feature compiled and not dispatched (§60.1's run B stands for the shipped tier);
+**E1's form**, `BASELINE=1` with `BASELINE_FUNCTION=1`, both compiled as before this section; **tailored only**,
+`BASELINE=1`; **now**, with `BASELINE_NOW=1` as well; and **at 480 MiB**, tailored only with the measurement-only
+`EMUSEN_SAPPHIRE_BUDGET_MIB=480` (off by default; the shipped budget stays 256 MiB). Drops are the budget's flushes
+inside the timed window; the busy share is the compile thread's nanoseconds over the window's wall time (`Jit::spent`).
+
+| Arena (9,060 to 9,360) | ms a field | drops | compile thread busy | blocks compiled a field | compiled share | load |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cranelift | 774.3 | 2 | 64.6 % | 195.4 | 40.7 % | 3.8 to 3.5 |
+| E1's form | 786.3 | 5 | 34.8 % | 205.8 | 32.4 % | 3.5 to 3.2 |
+| tailored only | 802.5 | 5 | 4.0 % | 496.2 | 47.3 % | 3.2 to 1.7 |
+| now | 779.2 | 5 | 2.2 %, and 19.3 ms a field on the dispatcher (426.6 blocks) | 39.5 + 426.6 | 47.5 % | 1.7 to 1.9 |
+| **at 480 MiB** | **776.6** | **0** | **0.5 %** | 51.5 | **48.5 %** | 3.4 to 2.6 |
+
+| Dock (6,060 to 6,360) | ms a field | drops | compile thread busy | blocks compiled a field | compiled share | load |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cranelift | 230.2 | 0 | 44.7 % | 26.0 | 46.2 % | 1.9 to 3.1 |
+| E1's form | 235.2 | 0 | 25.2 % | 16.1 | 46.2 % | 3.1 to 3.9 |
+| tailored only | 233.3 | 5 | 11.4 % | 463.1 | 50.8 % | 3.9 to 3.2 |
+| now | 249.1 | 5 | 4.8 %, and 16.8 ms a field on the dispatcher (357.6 blocks) | 27.6 + 357.6 | 51.4 % | 3.2 to 2.4 |
+| **at 480 MiB** | **231.3** | **0** | **1.3 %** | 49.7 | **53.2 %** | 2.6 to 2.3 |
+
+**Exactness**: every run above gave the base digests (arena `611B58F7CFE67E8B`, `BCA8F00F4743A955`, `8B710CA05FDDF3A0`;
+dock `830E3FEFEE1BE6B1`, `2C225C73DB4D3F9D`, `9CF1BED1AA64EAEE`), and so did the short window (6,060 to 6,120, weight 20)
+tailored only and now (`0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9`).
+
+**The predictions.**
+
+- **P-B1 is refuted at 256 MiB** and holds at 480. A tailored block is not a few KB but 8.7 KB (the arena's 204.5 MB
+  for 23,420 blocks), mostly its data: the prefix's table and the exits' records (§15.7's 634.9 data bytes a guest
+  instruction). With compiles cheap, every block reaching the threshold is compiled at once, the working set passes
+  the budget, and each drop recompiles it: about 470 blocks a field, against the Cranelift tier's 26 to 195. At
+  480 MiB the arena holds 359.5 MiB with no drop and compiles 51.5 blocks a field.
+- **P-B2 holds**: the compile thread's busy share falls from 34.8 % (E1's form) to 4.0 %, and to 0.5 % with no drops.
+- **P-B3 holds for the share, not for the time**: the compiled share rises 8 to 16 points over E1's form and 7 to 8
+  over Cranelift's tier, but at 480 MiB the field only returns to the Cranelift tier's (776.6 against 774.3 on the arena,
+  231.3 against 230.2 on the dock, inside one round's spread). §60.4's 46 ms are recovered; the steps moved into compiled
+  code buy nothing here, since the covered blocks leave at the event four times as often (58.7 M entries against
+  14.2 M over the arena) and roll back twice as often, which is the one-check form's (§14.3, 4), not this section's.
+- **P-B4 holds for its cost and not its value**: 43 to 47 µs a block on the dispatcher, 17 to 19 ms a field while the
+  drops churn; with the budget's drops removed the compile thread is under 2 % busy, so the queue no longer delays
+  anything and compiling now buys nothing measurable.
+
+**The earlier inference corrected.** §60.1 put Cranelift's compiles at about 15 ms a block from the counters since the
+last drop; across drops (`Jit::spent`) its thread did 58,600 compiles on the arena in 150 s, **about 2.6 ms a block**,
+and it was busy 64.6 % of the window by its own clock (the sampler's 100 % counts its time out of the batches too).
+The Cranelift tier also drops twice in the arena's window, which §60 could not see.
+
+### 16.5 What this leaves
+
+- **The budget.** Decided 2026-10-29 by the tester: with the baseline dispatched the EE's budget is 480 MiB
+  (`blocks::BASELINE_BUDGET`); every other build and setting keeps 256 MiB (`blocks::BUDGET`). The compiler's code
+  reservation already holds it: 1 GiB, of which the half for cold code and data holds 512 MiB, and the runs at 480 MiB
+  held 359.5 MiB at most with no drop for a full code memory (`Jit::full`, 0 in both). Were the reservation to fill
+  first, the module is dropped as at the budget (`EmuSen_Jit.md` §8), so the limit is never a lasting refusal. A smaller
+  prefix table would lower both.
+- **Compiling now** is kept as an option and is exact; E2 decides it (§3.9), and these numbers say it is not needed
+  while the compile thread is idle.
+- **The tests**: `tests/blocks.rs` under test-checked with `EMUSEN_SAPPHIRE_BASELINE=1` for every test — see §16.6.
+  No seeded faults were run for this section: the work was parked on 2026-10-29 for a structural redesign of the fast
+  face, and the tester asked for the tests alone.
+
+### 16.6 The tests (measured 2026-10-29)
+
+| Check | Result |
+| --- | --- |
+| `tests/blocks.rs`, test-checked, `--features baseline`, `EMUSEN_SAPPHIRE_BASELINE=1` for every test, at the 480 MiB budget | **30 of 30, in 10.7 s** |
+| `emusen-jit`, with `native` and without | 15 of 15, and 12 of 12 |
+| Sapphire with and without the feature, and MarsRT | compile (`cargo check`, tests and the bench) |
+
+`every_load_and_store_runs_compiled_on_every_region`, which ran past 18 minutes under E1 with every test on the baseline
+and was stopped (§15.7), now passes with the rest of the file: its time was the compiler's, Cranelift compiling every
+covered block beside its tailored code and the budget dropping them again and again, and neither happens now. That
+closes §15.7's one test not run to its end.

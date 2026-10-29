@@ -211,7 +211,9 @@ impl emusen_jit::Lowering for R5900 {
             return None;
         }
         let code = baseline::compile(words, start, options, false)?;
-        Some(emusen_jit::native::Native { code, fallback: None })
+        // No fallback word: the function only for the forms' byte count, or E1's form under BASELINE_FUNCTION=1 (EmuSen_Recompiler.md §16).
+        let function = std::env::var_os("EMUSEN_SAPPHIRE_FORMS_BYTES").is_some() || std::env::var("EMUSEN_SAPPHIRE_BASELINE_FUNCTION").is_ok_and(|v| v == "1");
+        Some(emusen_jit::native::Native { code, fallback: None, function })
     }
 
     #[cfg(feature = "baseline")]

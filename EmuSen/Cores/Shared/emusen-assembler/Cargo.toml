@@ -1,0 +1,25 @@
+[package]
+name = "emusen-assembler"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+# The tailored recompiler's macro-assembler: a guest-neutral `Assembler` trait (1.0) and its backends, x86-64 first, on
+# Cranelift's assembler crate. No guest. See Hardware/Shared/EmuSen_Recompiler.md §3.3 and §14.
+[lib]
+name = "emusen_assembler"
+
+[dependencies]
+# Encodings only; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0; the version Sapphire's lock file holds.
+cranelift-assembler-x64 = "=0.136.4"
+
+[dev-dependencies]
+# The grading tests' executable pages.
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

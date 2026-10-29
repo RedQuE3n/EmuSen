@@ -1903,3 +1903,76 @@ the one-minute load at each run's start is given (about 3 is the bench's own GS 
 - **Not done**, the stage being stopped on 2026-10-29 for a structural redesign of the byte face: the seeded faults, a
   second timing round, and a profile of what remains of §60.2's 218 ms. The lever's remainder by §61.3: the VIF's
   waits on VU1 and the board's per-step catch-up need the units on one timeline (`Sapphire_Redesign.md` §4.4).
+
+## 62. The board in rounds, and VU1 to its end (2026-10-29)
+
+*Decided 2026-10-29 by the tester: for the PlayStation 2 and later, accuracy is to the player (games look, sound and play
+the same); the cycle-ordered build is kept as a debugging tool and no longer gates speed work; per-game fixes stay
+banned and results stay deterministic. Sapphire is no longer clean-room, and this section's approaches were taken from
+reading PCSX2, Play! and DobieStation (§62.9), written anew in Rust on Sapphire's own units. The target is the handheld
+at a mean of 13.4 ms a field with the 95th percentile under 16.7.*
+
+### 62.1 The plan, written before building
+
+The arena's field is 681 ms (§61.4). §60.2 put about 218 ms in the units polling and scheduling one another (the board,
+the GIF, the VIF, the timers; §61 took about 82 of it) and about 162 ms in VU1's and VU0's call path. Both have one
+cause: the board is brought to the EE's time after every EE instruction (§54), so each unit is asked about 4 million
+times a field whether it has anything to do, and VU1 runs 1.2 pairs a call.
+
+1. **Rounds** (from DobieStation's run loop, which runs the EE for at most 32 cycles and then every unit for the same
+   time, and PCSX2's event test, which brings the units along only when the EE reaches its next event, the IOP in
+   arrears). `Board::run_to(t)` brings the board along only when an event falls by `t` (the board's own `next`, so the
+   DMAC, the timers, the PCRTC's edges and the FIFOs' wakes keep their cycles) or when `t` reaches the round's end,
+   `ROUND` EE cycles after the last catch-up; otherwise it records the time as owed and returns. **Every EE observation
+   of a unit first brings the board to the owed time**: the unit registers at 1000_0000h, the VIF, GIF and IPU FIFOs,
+   VU memory, COP2, the GS's privileged registers, IOP RAM and the drive's registers. So the EE never reads a unit at a
+   stale time (§58.3's plain build broke Jak at N = 64 for want of this; its synced build did not). What changes is
+   when the units no observation reaches catch up, and that an interrupt line rising between events is seen up to a
+   round late: timing only. A compiled block's replay takes a whole run of times inside a round in one call.
+   `ROUND = 0` (`EMUSEN_SAPPHIRE_ROUND=0`) is the cycle-ordered build, the debugging tool; `System::new` keeps it, so
+   the unit tests stay on it, and `Machine` takes `ROUND`.
+2. **VU1's end as the board's event** (from PCSX2's VU1 micro mode, where `vu1ExecMicro` runs a microprogram to its end
+   at once under the default "instant VU1", and VIF1's MSCAL waits find it done). §58.3's synced build stalled the game
+   from N = 512: a VIF waiting on its VU (MSCAL, FLUSH) resumed only at the next catch-up, so each microprogram cost up
+   to a round. With VU1's end known, a waiting VIF resumes at that cycle as an event, and the round can grow.
+
+Estimates against the 681: step 1 removes most of the per-instruction catch-ups, as §58.3's synced N = 64 removed
+227 ms of 715 then: **≈ 150 to 250 ms** [E]. Step 2 takes most of what remains of the call path once rounds grow:
+**≈ 50 to 100 ms** [E]. Not reached by either: the EE's interpreter and dispatcher (§60.2's 214 ms) and the VUs' compute.
+
+### 62.2 Step 1: rounds (measured 2026-10-29)
+
+**What was built.** `Board` keeps `owed`, the latest time `run_to` was asked for, and `round_end`; neither is state, and
+a state is written with nothing owed (`Machine::advance` settles the board at each frame's end). `run_to_held` returns
+`Ran::Owed` without touching a unit while `t` is before `round_end`, no event is due by `t` and the IOP's side has no
+wake pending; otherwise `run_now` takes the quick path or the whole one and starts the next round. Every branch of
+`Bus::read` and `Bus::write` that reaches a unit, and `Bus::vpu`, first calls `observe`, which brings the units the tail
+brings (the GIF, the VIFs, the VUs, the IOP) to the owed time; the IOP's wake of the DMAC, which needs the scratchpad,
+is left pending, so the next `run_to` is whole. `run_through` takes a replay whose times all fall inside the round in one
+call: the lines stand, so `Times::quiet` is shown them once. Idle skipping (§47) settles the board before it tries a
+loop, proves a turn with the board settled after each step, and replays a busy turn whole, so that it passes turns as
+they would run.
+
+`pure_register` answers none while time is owed, so a proof never takes a register's value from a board behind the EE.
+The debugger (`run_frame_debug`) steps the cycle-ordered board, a round of 0, and restores the round after.
+
+**Exactness at a round of 0.** With `EMUSEN_SAPPHIRE_ROUND=0` the short window's digests are §61.4's exactly
+(`0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9`), so the restructuring itself changes nothing.
+
+| Window | Base (8309ff51b) | Rounds of 64 | Digests at 64 (picture, sound, state) |
+| --- | --- | --- | --- |
+| short | 226.3 (round 0, load 2.6) | **183.3**, 182.9 (load 2.8) | `EF589A2EEC6FE039`, `D5F15509CCDD1709`, `80EBEB2B95A6E71C` in both runs |
+| arena | 681.0 (§61.4) | **536.9** (load 2.8; p95 687.0) | `F15E7C2A86349885`, `BCA8F00F4743A955`, `233A3EE02974BF95` |
+
+- **−144 ms a field on the arena** (−21 %), against 150 to 250 estimated: at the estimate's bottom. The short window
+  −43 ms (−19 %).
+- **The sound digests equal the base's** on both windows. The pictures are the same scenes a few frames out of phase:
+  at fields 9,060, 9,120, 9,180, 9,240, 9,300 and 9,360 of the arena, 10.2, 19.4, 27.9, 10.7, 13.2 and 0.7 % of the
+  pixels differ, by a mean of 0.04 to 2.4 levels of 255; looked at side by side, the differences are the particles and
+  the characters' poses a frame or two apart, the geometry and textures right.
+- **Two runs give the same digests** (the short window above).
+- **ps2autotests**: 52 of 55 EE and 23 of 23 IOP, the same three failures (`sqrt`, `efu`, `intstall`, §36.5), and every
+  program's text identical to its text at a round of 0. No timing test's text changed.
+- **Longer rounds do not pay** on the short window: 186.0 at 256 and 187.4 at 1,024 (load 2.1 to 3.6), against 183.3
+  at 64; at 4,096 more than 16 XGKICKs wait at the window's end, beyond the state's slots, and the state cannot be
+  written. So the board's remaining cost is not the rounds' ends but the observations (§62.3).

@@ -251,6 +251,19 @@ and their licences are the upstream projects' own texts, read on 2026-10-25:
 
 chdman loads `libSDL2-2.0.so.0` and the C library from the system it runs on; neither is shipped.
 
+### 1.8 Approaches adopted from other emulators' source
+
+Decided 2026-10-29: Sapphire, the PlayStation 2 core, is no longer clean-room. The source of the three emulators below
+may be read and their approaches adopted. Nothing is copied: each approach is written anew in Rust on Sapphire's own
+units, and the page that describes it names the source it came from. Where Sapphire's code follows a reference's
+closely, the file carries that reference's copyright line too.
+
+| Project | Licence | Copyright | Approaches adopted, and where they are described |
+|---|---|---|---|
+| [PCSX2](https://github.com/PCSX2/pcsx2) | GNU General Public License, version 3 or later | 2002-2026 PCSX2 Dev Team | the units brought along at the EE's event test, the IOP in arrears; a VU microprogram run on to its end where VIF1 waits for it (`Sapphire_Speed.md` §62) |
+| [DobieStation](https://github.com/PSI-Rockin/DobieStation) | GNU General Public License, version 3 | PSI-Rockin and the DobieStation contributors | the EE run in bounded rounds of cycles, every unit then run for the same time (`Sapphire_Speed.md` §62) |
+| [Play!](https://github.com/jpd002/Play-) | BSD-2-Clause | 2006-2026 Jean-Philip Desjardins | read for comparison: the EE run for a fixed quantum, then the VUs and the IOP (`Sapphire_Speed.md` §62) |
+
 ## 2. Downloaded only at the player's request, never shipped
 
 Mistress can fetch the following when the player asks it to. None of it is in this repository or in a build, and each

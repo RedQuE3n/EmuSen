@@ -37,6 +37,9 @@ namespace EmuSen.Galaxia.Library
 
         public static string? Roms(AppSettings settings) => Named(settings.RomDirectory);
 
+        // The folder CHDs are written to; the tool refuses a value that is not a full path or overlaps the library - see EmuSen_GamePackages.md §20.1.
+        public static string ChdOutput(AppSettings settings) => Checked(settings.ChdOutputDirectory) is { Path: { } path } ? path : DataStore.Compressed;
+
         // The folders firmware is looked for in, in order: the player's chosen folder when it can be used, then home/Firmware - see EmuSen_Firmware.md §2.3.
         public static IReadOnlyList<string> Firmware(AppSettings settings)
         {

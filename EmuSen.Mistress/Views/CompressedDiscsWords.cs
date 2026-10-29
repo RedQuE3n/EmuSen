@@ -16,6 +16,9 @@ namespace EmuSen.Mistress.Views
             (new(@"^AppSettings\.RomDirectory is not set"), _ => "No library folder is set, so there are no discs to convert. Choose the library's folder in Preferences, then open this again."),
             (new(@"^The library (.+) is not a folder\.$"), m => $"The library folder {m.Groups[1].Value} is not there, so nothing was done. Is its drive connected?"),
             (new(@"^The tree names no (\w+) folder\.$"), m => $"EmuSen could not find its own {m.Groups[1].Value} folder, so nothing was done."),
+            (new(@"^The output folder \((.+)\) and the library \((.+)\) overlap"), m => $"The output folder ({m.Groups[1].Value}) and the library ({m.Groups[2].Value}) overlap. The library is never written to, so nothing was done: choose an output folder outside the library that does not hold it, or clear it for EmuSen's Compressed folder."),
+            (new(@"^The output folder ""(.+)"" is not a full path"), m => $"The output folder \"{m.Groups[1].Value}\" is not a full path, so nothing was done. Type a full path, or one starting with ~."),
+            (new(@"^The output folder ""(.+)"" is a file, not a folder"), m => $"The output folder \"{m.Groups[1].Value}\" is a file, not a folder, so no disc was converted: choose a folder, or clear it for EmuSen's Compressed folder."),
             (new(@"^(\w+) \((.+)\) and the library \((.+)\) overlap"), m => $"EmuSen's {m.Groups[1].Value} folder ({m.Groups[2].Value}) and the library ({m.Groups[3].Value}) overlap. The library is never written to, so nothing was done: keep the library outside EmuSen's own folders."),
             (new(@"^chdman was not found at (.+?) \("), m => $"chdman, the program that writes CHD files, is not beside EmuSen (it was looked for at {m.Groups[1].Value}), so nothing was converted. EmuSen's own builds carry it."),
             (new(@"^chdman at (.+) has SHA-256 \w+, but this build is pinned to"), _ => "The chdman beside EmuSen is not the one this build was made with, so it was not run and nothing was converted. Installing EmuSen again puts the right one back."),
@@ -29,6 +32,7 @@ namespace EmuSen.Mistress.Views
         private static readonly (Regex Tool, Func<Match, string> Said)[] Reasons =
         [
             (new(@"^a check failed$"), _ => "a check did not pass"),
+            (new(@"^(.+) is already in the library, so nothing was written"), m => $"{m.Groups[1].Value} is already in the library, and a file there is never replaced"),
             (new(@"^(\d+) bytes are free at (.+), and the disc needs (\d+) with the margin$"), m => $"there is not room for it: {Size(long.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))} free at {m.Groups[2].Value}, and it needs {Size(long.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture))}"),
             (new(@"^the original changed during the conversion"), _ => "its files in the library changed while it was converting, so the CHD was thrown away; converting it again starts afresh"),
             (new(@"^the original could not be hashed: (.+)$"), m => $"its files could not be read ({m.Groups[1].Value})"),
@@ -67,13 +71,14 @@ namespace EmuSen.Mistress.Views
         {
             string shrunk = d.Original > 0 && d.Chd > 0 ? $": {Size(d.Chd)}, {(d.Chd * 100.0 / d.Original).ToString("F0", CultureInfo.InvariantCulture)}% of the original" : "";
             string why = d.Words is { Length: > 0 } w ? $": {Reason(w)}" : "";
+            string beside = d.Where == "library" ? ", beside the original" : "";
             return d.State switch
             {
                 "waiting" => "Waiting",
                 "working" => op == "check" ? "Checking..." : "Converting and checking...",
-                "converted" when d.Seconds is { } s => $"Converted and verified{shrunk}, in {s.ToString("0.#", CultureInfo.InvariantCulture)} s",
-                "converted" => $"Converted and verified{shrunk}",
-                "already" => "Already converted and verified",
+                "converted" when d.Seconds is { } s => $"Converted and verified{beside}{shrunk}, in {s.ToString("0.#", CultureInfo.InvariantCulture)} s",
+                "converted" => $"Converted and verified{beside}{shrunk}",
+                "already" => $"Already converted and verified{beside}",
                 "verified" => "Verified again: all three checks passed",
                 "not converted" when op == "check" => "Not converted, so not checked",
                 "not converted" => "Not converted",
@@ -101,7 +106,7 @@ namespace EmuSen.Mistress.Views
         }
 
         // What a finished batch did, each state counted that came up.
-        public static string Summary(string op, IReadOnlyDictionary<string, long> counts, string seconds)
+        public static string Summary(string op, IReadOnlyDictionary<string, long> counts, string seconds, bool beside = false)
         {
             static string N(long n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
             var parts = new List<string>();
@@ -110,7 +115,8 @@ namespace EmuSen.Mistress.Views
                 : new[] { ("converted", "disc converted and verified", "discs converted and verified"), ("already", "already converted", "already converted"), ("failed", "failed", "failed"), ("skipped", "left as it is", "left as they are"), ("stopped", "stopped", "stopped") })
                 if (counts.TryGetValue(state, out long n) && n > 0) parts.Add(N(n, one, many));
             string what = parts.Count == 0 ? "No disc" : string.Join(", ", parts);
-            string tail = op == "convert" ? " Nothing in the library was changed." : "";
+            long added = counts.TryGetValue("converted", out long c) ? c : 0;
+            string tail = op != "convert" ? "" : beside ? $" {added} CHD file{(added == 1 ? " was" : "s were")} added to the library beside {(added == 1 ? "its original" : "their originals")}; no original was changed." : " Nothing in the library was changed.";
             return $"{char.ToUpperInvariant(what[0])}{what[1..]}, in {seconds} s.{tail}";
         }
 

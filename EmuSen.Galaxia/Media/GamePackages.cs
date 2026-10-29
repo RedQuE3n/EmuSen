@@ -149,11 +149,34 @@ namespace EmuSen.Galaxia.Media
 
             private static IEnumerable<JsonNode?> Entries(JsonNode? o, string name) => o is JsonObject j && j[name] is JsonArray a ? a : Enumerable.Empty<JsonNode?>();
 
+            // Whether a manifest's game is a CHD the library tool wrote beside its original, in the library - see EmuSen_GamePackages.md §20.
+            public static bool BesideChd(JsonObject doc) => Text(doc["container"]?["type"]) == "chd" && Text(doc["game"]?["where"]) == "library";
+
+            private static bool SameSeen(JsonObject entry, string at)
+            {
+                JsonObject seen = entry["seen"] as JsonObject ?? entry;
+                return SeenOf(at) is { } now && Number(seen["size"]) == now.Size && Text(seen["mtime"]) == now.Mtime;
+            }
+
+            // The tool's record verifies a CHD beside its original: three checks passed, its SHA-1, the CHD and every original at the size and time recorded - see EmuSen_GamePackages.md §20.3.
+            public static bool BesideVerified(PackagePlaces roots, string folder, JsonObject doc, string game)
+            {
+                if (doc["container"] is not JsonObject container) return false;
+                bool passed = new[] { "chdman", "tracks", "toc" }.All(k => Text(container["checks"]?[k]) == "passed");
+                bool sha1 = !string.IsNullOrEmpty(Text(container["sha1"]));
+                bool chd = doc["game"] is JsonObject g && g["seen"] is JsonObject && SameSeen(g, game);
+                JsonNode?[] sources = Entries(container, "sources").ToArray();
+                bool originals = sources.Length > 0 && sources.All(s => s is JsonObject o && Place(roots, folder, o) is { } at && SameSeen(o, at));
+                return passed && sha1 && chd && originals;
+            }
+
             public static ClaimingPackage? PackageOf(PackagePlaces roots, string folder, JsonObject doc)
             {
                 if (Place(roots, folder, doc["game"]) is not { } game || Text(doc["system"]) is not { } system) return null;
                 var claims = new List<string> { game };
-                foreach (JsonNode? entry in Entries(doc, "companions").Concat(Entries(doc["container"], "sources")).Concat(Entries(doc, "sources")))
+                // A CHD beside its original claims the original only while the tool's record verifies it - see EmuSen_GamePackages.md §20.3.
+                bool verified = !BesideChd(doc) || BesideVerified(roots, folder, doc, game);
+                foreach (JsonNode? entry in Entries(doc, "companions").Concat(verified ? Entries(doc["container"], "sources") : Enumerable.Empty<JsonNode?>()).Concat(Entries(doc, "sources")))
                     if (Place(roots, folder, entry) is { } at && !claims.Contains(at)) claims.Add(at);
                 return new ClaimingPackage(folder, system, game, claims);
             }

@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Native;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
@@ -30,6 +31,9 @@ namespace EmuSen.Mistress.Views
         public long Chd { get; set; }
         public double? Seconds { get; set; }
         public bool Chosen { get; set; }
+        // Where its package records the CHD (library is beside the original), and whether a file already has that name beside it.
+        public string? Where { get; set; }
+        public bool Taken { get; set; }
     }
 
     // The library's PlayStation and Sega CD discs converted to CHD, checked again and listed, through the platform library's library tool; the library is only read - see EmuSen_GamePackages.md §13.
@@ -42,9 +46,17 @@ namespace EmuSen.Mistress.Views
 
         public static readonly TimeSpan PollEvery = TimeSpan.FromMilliseconds(100);
         public const string EveryFolder = "Every folder";
+        public const string InOutputFolder = "In the output folder";
+        public const string BesideOriginals = "Beside each original, in the library";
 
         private readonly Dropdown _folder = new() { Name = "CompressedDiscsFolder", MinWidth = 260, HorizontalAlignment = HorizontalAlignment.Left };
         private readonly Dropdown _threads = new() { Name = "CompressedDiscsThreads", MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
+        private readonly Dropdown _where = new() { Name = "CompressedDiscsWhere", MinWidth = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        private readonly PathPickerRow _output;
+        private readonly HintText _besideNote = new() { Name = "CompressedDiscsBeside" };
+        private readonly HintText _about = new() { Name = "CompressedDiscsAbout" };
+        private readonly AppSettings? _settings;
+        private readonly string _library;
         private readonly Button _convert, _check, _stop, _resume;
         private readonly ProgressBar _bar = new() { Name = "CompressedDiscsProgress", Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly TextBlock _progress = new() { Name = "CompressedDiscsProgressText", TextWrapping = TextWrapping.Wrap };
@@ -54,7 +66,7 @@ namespace EmuSen.Mistress.Views
         private readonly EmptyState _empty = new() { Name = "CompressedDiscsEmpty" };
         private readonly ContentControl _listHost = new();
         private readonly DispatcherTimer _timer;
-        private readonly FieldRow _folderRow, _threadsRow;
+        private readonly FieldRow _folderRow, _threadsRow, _whereRow, _outputRow;
         private readonly List<CompressedDisc> _discs = new();
         private readonly Dictionary<string, (CheckBox Box, HintText State, HintText Checks)> _rows = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _counts = new(StringComparer.Ordinal);
@@ -64,13 +76,15 @@ namespace EmuSen.Mistress.Views
         private string? _lastConvert;
         private string? _working;
         private int _of, _done;
-        private bool _stopping, _filling;
+        private bool _stopping, _filling, _batchBeside;
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public CompressedDiscsWindow() : this(null) { }
 
-        public CompressedDiscsWindow(string? library)
+        // settings holds ChdOutputDirectory, written when the player picks a folder; null keeps the default and saves nothing.
+        public CompressedDiscsWindow(string? library, AppSettings? settings = null)
         {
+            _settings = settings;
             Title = "Compressed Discs";
             Width = 760;
             Height = 640;
@@ -87,19 +101,27 @@ namespace EmuSen.Mistress.Views
             string[] threads = Enumerable.Range(1, total).Select(n => $"{n} of {total}").ToArray();
             _threads.Fill(threads, threads[Math.Max(1, total / 2) - 1]);
             _folder.Chose += _ => { if (!_filling) ShowFolder(); };
+            // Beside the originals is a choice for one batch, so the window always opens on the output folder - see EmuSen_GamePackages.md §20.2.
+            _where.Fill(new[] { InOutputFolder, BesideOriginals }, InOutputFolder);
+            _where.Chose += _ => Render();
+            _output = new PathPickerRow { Name = "CompressedDiscsOutput", Placeholder = $"(default) {DataStore.Compressed}", BrowseTitle = "Choose the Folder for CHDs", Path = settings?.ChdOutputDirectory ?? "", IsEditable = true };
+            _output.PathPicked += ChooseOutput;
 
-            string where = string.IsNullOrWhiteSpace(library) ? "the library" : library;
-            Control about = Ui.Hint($"A CHD of each PlayStation and Sega CD disc, about half its size. The library is left untouched: nothing in {where} is changed, moved or removed. The CHDs go to {DataStore.Compressed}.");
-            about.Name = "CompressedDiscsAbout";
+            _library = string.IsNullOrWhiteSpace(library) ? "the library" : library;
+            Control about = _about;
             var actions = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
             foreach (Button b in new[] { _convert, _check, _stop, _resume }) actions.Children.Add(b);
             _listHost.Content = _list;
             _folderRow = new FieldRow { Label = "Discs from", Hint = "A folder of the library, or every folder.", Content = _folder };
             _threadsRow = new FieldRow { Label = "Threads", Hint = "How many of this machine's threads chdman uses; half, the default, leaves the rest free.", Content = _threads };
+            _whereRow = new FieldRow { Label = "CHDs go", Hint = "Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once.", Content = Ui.Stack(6, _where, _besideNote) };
+            _outputRow = new FieldRow { Label = "Output folder", Hint = "Kept for every batch. It may not be inside the library, nor hold it.", Content = _output };
             var body = Ui.Stack(16,
                 about,
                 new FieldRow { Label = "Convert or check", Hint = "The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left.", Content = actions },
                 new FieldRow { Label = "Progress", Content = Ui.Stack(6, _bar, _progress, _log) },
+                _whereRow,
+                _outputRow,
                 _folderRow,
                 _threadsRow,
                 new FieldRow { Label = "Discs", Hint = "Each disc's size and state; choose discs to convert or check only those.", Content = _listHost });
@@ -124,7 +146,7 @@ namespace EmuSen.Mistress.Views
                 _job = null;
             };
 
-            if (ToolAvailable()) Run("ls", JsonSerializer.Serialize(new { op = "ls" }));
+            if (ToolAvailable()) Run("ls", Request("ls"));
             else
             {
                 _status.Text = $"Converting discs needs EmuSen's platform library, which is not in use here ({LibraryToolJob.Report}).";
@@ -144,6 +166,44 @@ namespace EmuSen.Mistress.Views
 
         // The log the last batch wrote to, as the tool named it.
         public string? LogPath { get; private set; }
+
+        // Whether the next conversion writes each CHD beside its original, in the library.
+        public bool Beside => _where.SelectedItem as string == BesideOriginals;
+
+        // The chosen output folder as the setting holds it, null for home/Compressed.
+        private string? OutputSetting => SettingFolders.Named(_settings?.ChdOutputDirectory);
+
+        // The folder CHDs go to when they do not go beside the originals.
+        private string OutputFolder => _settings is null ? DataStore.Compressed : SettingFolders.ChdOutput(_settings);
+
+        // A request with the output folder the setting names, and beside where convert asks for it - see EmuSen_GamePackages.md §20.
+        private string Request(string op, string[]? paths = null, int threads = 0, bool beside = false)
+        {
+            var request = new Dictionary<string, object?> { ["op"] = op };
+            if (paths is not null) request["paths"] = paths;
+            if (op == "convert") request["threads"] = threads;
+            if (beside) request["beside"] = true;
+            else if (OutputSetting is { } output) request["output"] = output;
+            return JsonSerializer.Serialize(request);
+        }
+
+        // The output folder chosen, typed or cleared: kept in the setting, and the library listed again.
+        public void ChooseOutput(string picked)
+        {
+            if (_settings is null) return;
+            _settings.ChdOutputDirectory = string.IsNullOrWhiteSpace(picked) ? null : picked;
+            _output.Path = _settings.ChdOutputDirectory ?? "";
+            _settings.Save();
+            // Listed again, so that the tool says at once whether the folder can be used.
+            if (_job is null && ToolAvailable()) Run("ls", Request("ls"));
+            Render();
+        }
+
+        // The discs a batch would act on: those its paths name.
+        private IEnumerable<CompressedDisc> Named(string[] paths) => _discs.Where(d => paths.Length == 0 || paths.Any(p => d.Source == p || d.Source.StartsWith(p + "/", StringComparison.Ordinal)));
+
+        // How many CHD files a batch beside the originals would add at most: the discs not converted whose name is free.
+        public int BesideAdds => Named(Paths()).Count(d => d.State is not ("converted" or "already" or "verified") && !d.Taken);
 
         private static Button Act(string text, string name, Action act)
         {
@@ -169,11 +229,11 @@ namespace EmuSen.Mistress.Views
 
         private void Convert()
         {
-            _lastConvert = JsonSerializer.Serialize(new { op = "convert", paths = Paths(), threads = Threads() });
+            _lastConvert = Request("convert", Paths(), Threads(), Beside);
             Run("convert", _lastConvert);
         }
 
-        private void Check() => Run("check", JsonSerializer.Serialize(new { op = "check", paths = Paths() }));
+        private void Check() => Run("check", Request("check", Paths()));
 
         private void Resume()
         {
@@ -208,14 +268,15 @@ namespace EmuSen.Mistress.Views
             {
                 using JsonDocument asked = JsonDocument.Parse(request);
                 string[] paths = asked.RootElement.GetProperty("paths").EnumerateArray().Select(p => p.GetString() ?? "").ToArray();
-                foreach (CompressedDisc d in _discs.Where(d => paths.Length == 0 || paths.Any(p => d.Source == p || d.Source.StartsWith(p + "/", StringComparison.Ordinal))))
+                _batchBeside = asked.RootElement.TryGetProperty("beside", out JsonElement b) && b.ValueKind == JsonValueKind.True;
+                foreach (CompressedDisc d in Named(paths))
                 {
                     d.State = "waiting";
                     d.Words = d.Checks = null;
                     d.Seconds = null;
                     RefreshRow(d);
                 }
-                _status.Text = op == "check" ? "Checking the converted discs again." : "Converting. The library is only read.";
+                _status.Text = op == "check" ? "Checking the converted discs again." : _batchBeside ? "Converting, each CHD written beside its original in the library. No original is changed." : "Converting. The library is only read.";
             }
             else _status.Text = "Reading the library.";
             _timer.Start();
@@ -275,7 +336,14 @@ namespace EmuSen.Mistress.Views
                     }
                     disc.State = Text(e, "state") ?? "";
                     disc.Words = Text(e, "words");
-                    if (_op == "ls") disc.Size = Number(e, "size");
+                    if (_op == "ls")
+                    {
+                        disc.Size = Number(e, "size");
+                        disc.Taken = e.TryGetProperty("taken", out JsonElement taken) && taken.ValueKind == JsonValueKind.True;
+                    }
+                    if (Text(e, "where") is { } recorded) disc.Where = recorded;
+                    else if (_op == "ls") disc.Where = null;
+                    if (disc.State == "converted" && disc.Where == "library") disc.Taken = true;
                     if (Number(e, "original") is > 0 and var original) disc.Original = original;
                     if (e.TryGetProperty("chd", out JsonElement chd) && chd.ValueKind == JsonValueKind.Number) disc.Chd = chd.GetInt64();
                     disc.Seconds = e.TryGetProperty("seconds", out JsonElement s) && s.ValueKind == JsonValueKind.Number ? s.GetDouble() : null;
@@ -295,7 +363,11 @@ namespace EmuSen.Mistress.Views
                     if (Text(e, "error") is { } error)
                     {
                         _status.Text = CompressedDiscsWords.Refusal(error);
-                        if (_op == "ls") Empty("No discs listed", _status.Text);
+                        if (_op == "ls")
+                        {
+                            _discs.Clear();
+                            Empty("No discs listed", _status.Text);
+                        }
                     }
                     else if (_op == "ls") Listed();
                     else
@@ -305,7 +377,7 @@ namespace EmuSen.Mistress.Views
                             d.State = "stopped";
                             RefreshRow(d);
                         }
-                        _status.Text = CompressedDiscsWords.Summary(_op, _counts, e.TryGetProperty("seconds", out JsonElement took) ? took.ToString() : "0");
+                        _status.Text = CompressedDiscsWords.Summary(_op, _counts, e.TryGetProperty("seconds", out JsonElement took) ? took.ToString() : "0", _batchBeside);
                     }
                     break;
             }
@@ -381,7 +453,14 @@ namespace EmuSen.Mistress.Views
             _check.Content = chosen > 0 ? $"Check {chosen} Chosen" : "Check Converted";
             _convert.IsEnabled = _check.IsEnabled = any && !running;
             // Hidden rather than disabled while a batch runs, so the choice cannot change under it.
-            _folderRow.IsVisible = _threadsRow.IsVisible = !running && any;
+            _folderRow.IsVisible = _threadsRow.IsVisible = _whereRow.IsVisible = !running && any;
+            _outputRow.IsVisible = !running && ToolAvailable() && !Beside;
+            _besideNote.IsVisible = Beside;
+            int adds = BesideAdds;
+            _besideNote.Text = Beside ? $"This writes into the library: converting adds up to {adds} CHD file{(adds == 1 ? "" : "s")} to {_library}, each beside its original as <name>.chd. No original is changed, moved or removed, and a disc whose name is already taken is left as it is." : "";
+            _about.Text = Beside
+                ? $"A CHD of each PlayStation and Sega CD disc, about half its size. This batch writes each CHD into the library, beside its original; nothing already in {_library} is changed, moved or removed."
+                : $"A CHD of each PlayStation and Sega CD disc, about half its size. The library is left untouched: nothing in {_library} is changed, moved or removed. The CHDs go to {OutputFolder}.";
             _stop.IsEnabled = batch && !_stopping;
             _resume.IsEnabled = !running && _lastConvert is not null && _counts.TryGetValue("stopped", out long stopped) && stopped > 0;
 

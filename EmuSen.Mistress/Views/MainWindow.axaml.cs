@@ -452,7 +452,7 @@ namespace EmuSen.Mistress.Views
         private void ShowMemoryCards() => _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, _session is null ? null : _activeConsole), this);
 
         // The library's discs converted to CHD beside it, checked and listed; the library is only read - see EmuSen_GamePackages.md §13.
-        private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory), this);
+        private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory, _appSettings), this);
 
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
         private void ShowShaderSettings() =>

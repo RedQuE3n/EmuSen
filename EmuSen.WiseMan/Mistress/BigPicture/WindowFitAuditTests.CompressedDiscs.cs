@@ -129,6 +129,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 shown.Poll();
                 Settle(window);
             }
+            if (state == "Beside")
+            {
+                Sheets(window).SheetOf(shown)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Dropdown>().First(d => d.Name == "CompressedDiscsWhere").SelectedItem = CompressedDiscsWindow.BesideOriginals;
+                Settle(window);
+                Assert.True(shown.Beside);
+            }
             Assert.Equal(state == "Empty" ? 0 : 5, shown.Discs.Count);
             Assert.Equal(state == "Running", shown.Busy);
         }

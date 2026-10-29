@@ -133,12 +133,38 @@ fn entries(doc: &Value, name: &str) -> Vec<Value> {
     }
 }
 
+/// Whether a manifest's game is a CHD the library tool wrote beside its original, in the library (EmuSen_GamePackages.md §20).
+pub fn beside_chd(doc: &Value) -> bool {
+    doc.get("container").and_then(|c| c.get("type")).and_then(Value::as_str) == Some("chd") && doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str) == Some("library")
+}
+
+fn same_seen(entry: &Value, at: &str) -> bool {
+    match (entry.get("seen").unwrap_or(entry), seen_of(at)) {
+        (seen, Some((size, mtime))) => number(seen.get("size")) == Some(size) && seen.get("mtime").and_then(Value::as_str) == Some(mtime.as_str()),
+        _ => false,
+    }
+}
+
+/// Whether the tool's record verifies a CHD beside its original: its three checks passed and its SHA-1 recorded, the
+/// CHD at the size and time recorded, and every original file it was made from at the size and time it had (§20.3).
+pub fn beside_verified(roots: &Roots, folder: &str, doc: &Value, game: &str) -> bool {
+    let Some(container) = doc.get("container") else { return false };
+    let passed = ["chdman", "tracks", "toc"].iter().all(|k| container.get("checks").and_then(|c| c.get(k)).and_then(Value::as_str) == Some("passed"));
+    let sha1 = container.get("sha1").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let chd = doc.get("game").is_some_and(|g| g.get("seen").is_some() && same_seen(g, game));
+    let sources = entries(container, "sources");
+    let originals = !sources.is_empty() && sources.iter().all(|s| place(roots, folder, s).is_some_and(|at| same_seen(s, &at)));
+    passed && sha1 && chd && originals
+}
+
 /// The package a manifest describes, with its claims in the order game, companions, the container's sources, then the
-/// files a self-contained package's game was copied from (`sources`, EmuSen_GamePackages.md §19).
+/// files a self-contained package's game was copied from (`sources`, EmuSen_GamePackages.md §19). A CHD beside its
+/// original claims the original only while the tool's record verifies it (§20.3).
 pub fn package_of(roots: &Roots, folder: &str, doc: &Value) -> Option<Package> {
     let game = place(roots, folder, doc.get("game")?)?;
     let mut claims = vec![game.clone()];
-    let sources = doc.get("container").map(|c| entries(c, "sources")).unwrap_or_default();
+    let verified = !beside_chd(doc) || beside_verified(roots, folder, doc, &game);
+    let sources = if verified { doc.get("container").map(|c| entries(c, "sources")).unwrap_or_default() } else { Vec::new() };
     let copied = entries(doc, "sources");
     for entry in entries(doc, "companions").iter().chain(sources.iter()).chain(copied.iter()) {
         if let Some(at) = place(roots, folder, entry).filter(|at| !claims.contains(at)) {
@@ -592,4 +618,32 @@ mod tests {
         assert_eq!(resolve(&roots, &folder).unwrap().game, format!("{folder}/G.nes"), "the package needs no library file");
     }
 
+    #[test]
+    fn a_chd_beside_its_original_claims_the_original_only_while_its_record_verifies_it() {
+        let t = TempDir::new("claims-beside");
+        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
+        let (original, chd) = (t.join("Roms/psx/D.bin"), t.join("Roms/psx/D.chd"));
+        put(&original, b"a raw track");
+        put(&chd, b"a CHD of it");
+        let folder = t.join("Packages/PlayStation/D.chd");
+        let manifest = |checks: &str| {
+            let ((size, mtime), (csize, cmtime)) = (seen_of(&original).unwrap(), seen_of(&chd).unwrap());
+            format!(
+                r#"{{"format":"emusen-package","version":"1.0","system":"psx","mode":"linked","game":{{"role":"image","where":"library","path":"psx/D.chd","size":{csize},"seen":{{"size":{csize},"mtime":"{cmtime}"}}}},"container":{{"type":"chd","sha1":"ab","sources":[{{"where":"library","path":"psx/D.bin","size":{size},"mtime":"{mtime}"}}],"checks":{{"chdman":"passed","tracks":"{checks}","toc":"passed"}}}}}}"#
+            )
+        };
+        put(&format!("{folder}/package.json"), manifest("passed").as_bytes());
+        assert_eq!(index(&roots).packages[0].claims, vec![chd.clone(), original.clone()], "verified: the original is the package's");
+        put(&format!("{folder}/package.json"), manifest("failed: track 1").as_bytes());
+        assert_eq!(index(&roots).packages[0].claims, vec![chd.clone()], "a check not passed claims no original");
+        put(&format!("{folder}/package.json"), manifest("passed").as_bytes());
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
+        std::fs::File::options().write(true).open(&chd).unwrap().set_modified(later).unwrap();
+        assert_eq!(index(&roots).packages[0].claims, vec![chd.clone()], "a CHD not at its recorded time claims no original");
+        put(&format!("{folder}/package.json"), manifest("passed").as_bytes());
+        assert_eq!(index(&roots).packages[0].claims, vec![chd.clone(), original.clone()], "recorded afresh, verified again");
+        std::fs::File::options().write(true).open(&original).unwrap().set_modified(later).unwrap();
+        assert_eq!(index(&roots).packages[0].claims, vec![chd.clone()], "an original changed since claims nothing");
+    }
 }

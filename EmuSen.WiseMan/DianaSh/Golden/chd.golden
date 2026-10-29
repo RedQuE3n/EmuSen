@@ -4,44 +4,45 @@
 command chd
 shell rust
 usage 1   chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state
-usage 2   chd convert <path>... [--fast] [-j <n>]
-usage 3                                 convert them to CHD in Compressed, each checked three ways and given a package
-usage 4   chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents
-usage 5   chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)
+usage 2   chd convert <path>... [--fast] [-j <n>] [--output <folder> | --beside]
+usage 3                                 convert them to CHD in Compressed (or ChdOutputDirectory, or the folder named),
+usage 4                                 or beside each original in the library; each checked three ways and given a package
+usage 5   chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents
+usage 6   chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)
 
 case the usage, and what a command line refuses
 target none
-covers 2-3,5
+covers 2-4,6
 $ chd
-out 210
-Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+out 241
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]
   Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
 status 1
 action none
 $ chd frobnicate
-out 210
-Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+out 241
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]
   Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
 status 1
 action none
 $ chd convert
-out 272
+out 303
 chd convert: name what to convert, or / for the whole library
-Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]
   Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
 status 1
 action none
 $ chd convert psx -j 0
-out 252
+out 283
 chd: -j needs a number of threads above 0
-Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]
   Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
 status 1
 action none
 $ chd check psx --fast
-out 252
+out 283
 chd: --fast is not an option of chd check
-Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]
+Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]
   Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.
 status 1
 action none
@@ -59,7 +60,7 @@ end
 
 case with no library set, every request is refused before anything is read or written
 target none
-covers 1-4
+covers 1-5
 $ chd ls
 out 73
 chd: AppSettings.RomDirectory is not set: there is no library to convert.

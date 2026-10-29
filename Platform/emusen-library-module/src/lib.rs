@@ -29,7 +29,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     (
         "chd",
         false,
-        "  chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state\n  chd convert <path>... [--fast] [-j <n>]\n                                convert them to CHD in Compressed, each checked three ways and given a package\n  chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents\n  chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)",
+        "  chd ls [<path>...]            the library's disc games under each path (relative to the library), each with its state\n  chd convert <path>... [--fast] [-j <n>] [--output <folder> | --beside]\n                                convert them to CHD in Compressed (or ChdOutputDirectory, or the folder named),\n                                or beside each original in the library; each checked three ways and given a package\n  chd check [<path>...]         check converted discs again: chdman's verify, every track, the table of contents\n  chd wait [chd<n>]             follow a chd job that went on in the background (ps lists them, kill stops one)",
     ),
     (
         "pkg",
@@ -42,7 +42,7 @@ pub struct LibraryCommands;
 
 pub static MODULE: LibraryCommands = LibraryCommands;
 
-const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
+const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
 
 const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
 
@@ -118,7 +118,8 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
 }
 
 /// The request a command line makes, or the usage.
-pub fn request(args: &[String]) -> Result<String, String> {
+/// A `chd` command line as a request; `resolve` turns `--output`'s folder, a shell path, into the host's.
+pub fn request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, String>) -> Result<String, String> {
     let mut words = args.iter().skip(1);
     let op = match words.next().map(String::as_str) {
         Some("ls") => "ls",
@@ -126,10 +127,15 @@ pub fn request(args: &[String]) -> Result<String, String> {
         Some("check") => "check",
         _ => return Err(USAGE.into()),
     };
-    let (mut paths, mut fast, mut threads) = (Vec::new(), false, 0u64);
+    let (mut paths, mut fast, mut threads, mut output, mut beside) = (Vec::new(), false, 0u64, None, false);
     while let Some(w) = words.next() {
         match w.as_str() {
             "--fast" if op == "convert" => fast = true,
+            "--beside" if op == "convert" => beside = true,
+            "--output" if op == "convert" => {
+                let folder = words.next().filter(|f| !f.starts_with('-')).ok_or_else(|| format!("chd: --output needs a folder\n{USAGE}"))?;
+                output = Some(resolve(folder).map_err(|e| format!("chd convert --output: {e}"))?);
+            }
             "-j" if op == "convert" => threads = words.next().and_then(|n| n.parse().ok()).filter(|&n| n > 0).ok_or_else(|| format!("chd: -j needs a number of threads above 0\n{USAGE}"))?,
             o if o.starts_with('-') && o.len() > 1 => return Err(format!("chd: {o} is not an option of chd {op}\n{USAGE}")),
             p => paths.push(Value::string(p)),
@@ -138,9 +144,18 @@ pub fn request(args: &[String]) -> Result<String, String> {
     if op == "convert" && paths.is_empty() {
         return Err(format!("chd convert: name what to convert, or / for the whole library\n{USAGE}"));
     }
+    if beside && output.is_some() {
+        return Err(format!("chd convert: --output and --beside name two places; choose one\n{USAGE}"));
+    }
     let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(paths))];
     if op == "convert" {
         members.extend([("fast", Value::Bool(fast)), ("threads", Value::number(threads))]);
+    }
+    if let Some(folder) = output {
+        members.push(("output", Value::string(folder)));
+    }
+    if beside {
+        members.push(("beside", Value::Bool(true)));
     }
     let mut out = String::new();
     json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
@@ -195,6 +210,15 @@ fn failed_checks(e: &Value) -> String {
 pub fn line(e: &Value) -> Option<String> {
     match text(e, "event") {
         "start" => match text(e, "op") {
+            "convert" if e.get("beside") == Some(&Value::Bool(true)) => Some(format!(
+                "Converting {} disc(s) beside their originals, writing into the library {}: up to {} CHD file(s) added, no original changed, moved or removed, a name already taken skipped. chdman {} ({}, {} threads).",
+                token(e, "discs"),
+                text(e, "output"),
+                token(e, "adds"),
+                text(e, "chdman"),
+                text(e, "codecs"),
+                token(e, "threads")
+            )),
             "convert" => Some(format!("Converting {} disc(s) into {} with chdman {} ({}, {} threads).", token(e, "discs"), text(e, "output"), text(e, "chdman"), text(e, "codecs"), token(e, "threads"))),
             "check" => Some(format!("Checking {} disc(s) with chdman {}.", token(e, "discs"), text(e, "chdman"))),
             _ => None,
@@ -202,7 +226,8 @@ pub fn line(e: &Value) -> Option<String> {
         "disc" if text(e, "state") == "working" => None,
         "disc" if e.get("index").is_none() => {
             let tail = sizes(e);
-            Some(format!("{:<14}{}{}", text(e, "state"), text(e, "source"), if tail.is_empty() { String::new() } else { format!("  {tail}") }))
+            let beside = if text(e, "where") == "library" { "  beside the original" } else { "" };
+            Some(format!("{:<14}{}{}{beside}", text(e, "state"), text(e, "source"), if tail.is_empty() { String::new() } else { format!("  {tail}") }))
         }
         "disc" => {
             let head = format!("[{}/{}] {}: {}", token(e, "index"), token(e, "of"), text(e, "source"), text(e, "state"));
@@ -444,7 +469,7 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
 
 fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     let args = call.args();
-    let request = match if prefix == "pkg" { pkg_request(&args, &|p| call.resolve(p)) } else { request(&args) } {
+    let request = match if prefix == "pkg" { pkg_request(&args, &|p| call.resolve(p)) } else { request(&args, &|p| call.resolve(p)) } {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
@@ -479,7 +504,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 3, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 4, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
@@ -537,8 +562,13 @@ mod tests {
         line.split_whitespace().map(str::to_string).collect()
     }
 
+    fn request_plain(a: &[String]) -> Result<String, String> {
+        request(a, &|p| Ok(format!("/host{p}")))
+    }
+
     #[test]
     fn a_command_line_is_a_request_or_the_usage() {
+        let request = request_plain;
         assert_eq!(request(&args("chd ls")).unwrap(), r#"{"op":"ls","paths":[]}"#);
         assert_eq!(request(&args("chd convert psx SCD --fast -j 4")).unwrap(), r#"{"op":"convert","paths":["psx","SCD"],"fast":true,"threads":4}"#);
         assert_eq!(request(&args("chd check psx/a.cue")).unwrap(), r#"{"op":"check","paths":["psx/a.cue"]}"#);
@@ -546,6 +576,11 @@ mod tests {
         assert!(request(&args("chd check --fast")).unwrap_err().contains("--fast is not an option of chd check"));
         assert!(request(&args("chd convert psx -j 0")).unwrap_err().contains("-j needs"));
         assert!(request(&args("chd")).unwrap_err().starts_with("Usage: chd"));
+        assert_eq!(request(&args("chd convert psx --output /chds")).unwrap(), r#"{"op":"convert","paths":["psx"],"fast":false,"threads":0,"output":"/host/chds"}"#);
+        assert_eq!(request(&args("chd convert psx --beside")).unwrap(), r#"{"op":"convert","paths":["psx"],"fast":false,"threads":0,"beside":true}"#);
+        assert!(request(&args("chd convert psx --beside --output /chds")).unwrap_err().contains("choose one"));
+        assert!(request(&args("chd convert psx --output")).unwrap_err().contains("--output needs a folder"));
+        assert!(request(&args("chd ls --beside")).unwrap_err().contains("--beside is not an option of chd ls"));
     }
 
     #[test]
@@ -564,6 +599,8 @@ mod tests {
         assert_eq!(line(&e(r#"{"event":"disc","source":"psx/c.bin","state":"not converted","size":5}"#)).unwrap(), "not converted psx/c.bin");
         assert_eq!(line(&e(r#"{"event":"disc","index":1,"of":1,"source":"psx/a.cue","state":"working"}"#)), None);
         assert_eq!(line(&e(r#"{"event":"end","op":"convert","counts":{"converted":2,"failed":1},"seconds":3.5}"#)).unwrap(), "2 converted, 1 failed; 3.5 s.");
+        assert!(line(&e(r#"{"event":"start","op":"convert","discs":3,"chdman":"0.289","codecs":"cdlz,cdzl,cdfl","threads":8,"output":"/r","beside":true,"adds":2,"refused":[]}"#)).unwrap().starts_with("Converting 3 disc(s) beside their originals, writing into the library /r: up to 2 CHD file(s) added"));
+        assert_eq!(line(&e(r#"{"event":"disc","source":"psx/a.cue","state":"converted","where":"library","original":1000,"chd":523}"#)).unwrap(), "converted     psx/a.cue  1,000 -> 523 bytes (52.3%)  beside the original");
     }
 
     #[test]

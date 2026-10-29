@@ -45,11 +45,11 @@ tree
             30 HintText at=410,841,1095,36 box=730,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Each disc's size and state; choose discs to convert or check only those." in=7 layout=483.2,24 limit=410,791.5,1095,736.5 paints=#86868AFF part role=text seen=410,841,1095,15 size=20 text="Each disc's size and state; choose discs to convert or check only those."
 focus 5
 edge 5 up 18
-edge 5 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/1/0
+edge 5 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/7/0/2/0/0/0/1/0
 edge 5 left 18
 edge 5 right same
 edge 18 up same
-edge 18 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0/0/0/0/0
+edge 18 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/7/0/2/0/0/0/0/0
 edge 18 left same
 edge 18 right 5
 press pageup focus="Button 'Close'" title="Compressed Discs" top=CompressedDiscsWindow

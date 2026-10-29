@@ -376,6 +376,27 @@ impl Board {
         self.round_end = t + self.round;
     }
 
+    /// Before COP2 reaches VU0 alone: VIF0, which writes VU0's memories and starts it, and VU0 brought to the owed time,
+    /// the rest of the board left to the round (Sapphire_Speed.md §62.3).
+    #[cold]
+    #[inline(never)]
+    fn observe_vu0(&mut self) {
+        let t = self.owed;
+        self.vpu.wake();
+        let dma = self.dmac.ch[dmac::GIF].str();
+        let Board { vif, vpu, gif, gs, dmac, intc, .. } = self;
+        let mut gif = GifPort { gif, gs, dma };
+        vif[0].run_to(t, &mut Reach { vpu, gif: &mut gif });
+        if vif[0].take_wake() {
+            dmac.wake(t);
+        }
+        if vif[0].take_irq() {
+            intc.raise(intc::source::VIF0);
+        }
+        self.vpu.run_unit(0, t);
+        self.reschedule();
+    }
+
     /// `run_to`'s quick path at `t` when no event falls by it and the units are idle, the clocks moved if so.
     #[inline]
     fn quick_to(&mut self, t: u64) -> bool {
@@ -934,6 +955,17 @@ impl Bus for Board {
     fn vpu(&mut self) -> Option<&mut Vpu> {
         self.observe();
         self.run_vifs(self.now);
+        Some(&mut self.vpu)
+    }
+
+    fn vpu0(&mut self) -> Option<&mut Vpu> {
+        if self.round == 0 {
+            return self.vpu();
+        }
+        if self.owed > self.now {
+            self.observe_vu0();
+        }
+        self.vpu.wake();
         Some(&mut self.vpu)
     }
 }

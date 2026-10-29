@@ -22,6 +22,16 @@ fn vpu(b: &mut dyn Bus) -> Result<&mut Vpu, Stop> {
     b.vpu().ok_or(Stop::Halt)
 }
 
+/// `vpu` for an instruction that reaches VU0 alone.
+fn vpu0(b: &mut dyn Bus) -> Result<&mut Vpu, Stop> {
+    b.vpu0().ok_or(Stop::Halt)
+}
+
+/// The control registers whose access reaches VU1: FBRST, VPU-STAT and CMSAR1 (§5.1.3).
+fn reaches_vu1(n: usize) -> bool {
+    matches!(n, ccr::FBRST | ccr::VPU_STAT | ccr::CMSAR1)
+}
+
 /// The interlock bit of a transfer, bit 0 (VU User's Manual §6.1.1, type 11).
 fn interlocked(w: u32) -> bool {
     w & 1 == 1
@@ -45,7 +55,7 @@ fn wait_end(e: &mut Ee, vpu: &mut Vpu, behind: u64) {
 /// QMFC2: GPR[rt] ← VF[fd], all 128 bits; with the interlock, once VU0's microprogram has ended (§6.2).
 fn qmfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let vpu = vpu(b)?;
+    let vpu = vpu0(b)?;
     if interlocked(w) {
         wait_end(e, vpu, TRANSFER);
     }
@@ -55,7 +65,7 @@ fn qmfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 /// QMTC2: VF[fd] ← GPR[rt]; with the interlock, once the microprogram ends or reaches a pair with M set (§5.4.6).
 fn qmtc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let vpu = vpu(b)?;
+    let vpu = vpu0(b)?;
     if interlocked(w) {
         let end = vpu.release0(e.planned());
         e.wait(end);
@@ -67,7 +77,7 @@ fn qmtc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 /// `cfc2: 12345678 12345678 ffffffff ffffffff`, Sapphire_Disputes.md D-45).
 fn cfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let vpu = vpu(b)?;
+    let vpu = if reaches_vu1(rd(w)) { vpu(b)? } else { vpu0(b)? };
     if interlocked(w) {
         wait_end(e, vpu, TRANSFER);
     }
@@ -78,7 +88,7 @@ fn cfc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 /// CTC2: CCR[2,id] ← GPR[rt]'s bits 31..0, each register as `Vpu::set_ccr` keeps it.
 fn ctc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let vpu = vpu(b)?;
+    let vpu = if reaches_vu1(rd(w)) { vpu(b)? } else { vpu0(b)? };
     if interlocked(w) {
         let end = vpu.release0(e.planned());
         e.wait(end);
@@ -89,17 +99,17 @@ fn ctc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
 /// LQC2: VF[ft] ← the quadword at GPR[base] + offset, an address error unless it is aligned (§6.2's Remarks).
 fn lqc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    vpu(b)?;
+    vpu0(b)?;
     let a = load_address(e, w)?;
     aligned(a, 16, false)?;
     let v = e.read(b, a, 16)?;
-    vpu(b)?.units.vu0.set_vf_quad(rt(w), v);
+    vpu0(b)?.units.vu0.set_vf_quad(rt(w), v);
     Ok(())
 }
 /// SQC2: the quadword at GPR[base] + offset ← VF[ft], its data breakpoint judged on x.
 fn sqc2(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let v = vpu(b)?.units.vu0.vf_quad(rt(w));
+    let v = vpu0(b)?.units.vu0.vf_quad(rt(w));
     let a = store_address_of(e, w, v as u32)?;
     aligned(a, 16, true)?;
     e.write(b, a, 16, v)?;
@@ -131,7 +141,7 @@ fn bc2tl(e: &mut Ee, b: &mut dyn Bus, w: u32, pc: u32) -> R {
 /// and VCALLMSR start micro mode at Imm15 or CMSAR0 (§5.4.5, §5.4.7, §6.2).
 fn vu_op(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     usable(e)?;
-    let vpu = vpu(b)?;
+    let vpu = vpu0(b)?;
     let Some((o, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
     match entry.class {
         Class::Callms => {

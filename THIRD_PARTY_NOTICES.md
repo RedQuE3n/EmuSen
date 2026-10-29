@@ -260,7 +260,7 @@ closely, the file carries that reference's copyright line too.
 
 | Project | Licence | Copyright | Approaches adopted, and where they are described |
 |---|---|---|---|
-| [PCSX2](https://github.com/PCSX2/pcsx2) | GNU General Public License, version 3 or later | 2002-2026 PCSX2 Dev Team | the units brought along at the EE's event test, the IOP in arrears; a VU microprogram run on to its end where VIF1 waits for it (`Sapphire_Speed.md` §62) |
+| [PCSX2](https://github.com/PCSX2/pcsx2) | GNU General Public License, version 3 or later | 2002-2026 PCSX2 Dev Team | the units brought along at the EE's event test, the IOP in arrears (`Sapphire_Speed.md` §62); its VU1 microprogram run on to its end where VIF1 waits for it was tried and not kept (§62.3) |
 | [DobieStation](https://github.com/PSI-Rockin/DobieStation) | GNU General Public License, version 3 | PSI-Rockin and the DobieStation contributors | the EE run in bounded rounds of cycles, every unit then run for the same time (`Sapphire_Speed.md` §62) |
 | [Play!](https://github.com/jpd002/Play-) | BSD-2-Clause | 2006-2026 Jean-Philip Desjardins | read for comparison: the EE run for a fixed quantum, then the VUs and the IOP (`Sapphire_Speed.md` §62) |
 

@@ -1976,3 +1976,89 @@ The debugger (`run_frame_debug`) steps the cycle-ordered board, a round of 0, an
 - **Longer rounds do not pay** on the short window: 186.0 at 256 and 187.4 at 1,024 (load 2.1 to 3.6), against 183.3
   at 64; at 4,096 more than 16 XGKICKs wait at the window's end, beyond the state's slots, and the state cannot be
   written. So the board's remaining cost is not the rounds' ends but the observations (§62.3).
+
+### 62.3 Where the rounds' catch-ups come from, and VU1 to its end refused (measured 2026-10-29)
+
+**The census.** A scratch build (not committed) counted, on the short window from the state at 6,000 to field 6,120,
+each `observe` that found time owed, by the access that made it, and each whole `run_to`, by whether an event was due.
+A field: **142,000 from COP2** (`Bus::vpu`), 2,600 reads and 1,400 writes of the unit registers at 1000_0000h, 160 from the VIFs' registers
+and FIFOs, a few from the GIF and the GS; **75,000 whole runs at an event** and **35,000 at a round's end**. So after
+step 1 the EE's COP2 instructions bring the board whole about twice as often as the events and rounds together, which
+is why longer rounds do not pay (§62.2).
+
+**VU1 to its end, as planned (§62.1 item 2), refused.** A VIF waiting for its VU (`Vif::wait`) ran the VU on to its end
+first (`Vpu::ready_ahead`, `Micro::finish`), the GIF's PATH3 slice check seeing only the requests made by its run's
+time. On the short window it reached field 6,100 in 47 to 52 s from the load, against 19 s for step 1 alone, at rounds
+of 64, 256 and 1,024, and at each the window's end held more XGKICKs than the state's 16 slots, so the state could not
+be written. A microprogram run to its end hands the GIF every packet it kicks at once, and the VIF's next waits find the
+GIF still holding them; and `finish`'s bound (2^24 pairs) lets a microprogram that waits on the VIF run on. It was not
+pursued: the census shows the rounds' ends are not where the board's time goes.
+
+**Step 2, COP2 to VU0 alone.** The COP2 instructions that reach VU0 alone, QMFC2, QMTC2, LQC2, SQC2, CFC2 and CTC2 but
+for FBRST, VPU-STAT and CMSAR1, and every VU operation issued as a macro instruction, ask the bus for `vpu0` instead of
+`vpu`. On the board, with a round above 0, `vpu0` brings only VIF0 (which writes VU0's memories and starts it) and VU0 to
+the owed time, waking the DMAC and raising VIF0's interrupt as the tail would, and leaves the rest to the round. BC2F,
+BC2T and the three control registers above reach VU1 and still bring the board whole. On the cycle-ordered board `vpu0`
+is `vpu`.
+
+| Window | Step 1 | Step 2 | Digests at step 2 (picture, sound, state) |
+| --- | --- | --- | --- |
+| short | 183.3, 182.9 | **174.8** (load 0.9) | `0FEAA87AB0100A65`, `D5F15509CCDD1709`, `9929F57C6DC08CBC` |
+| arena | 536.9 | **500.4** (load 1.0; p95 649.8) | `D324EC9EE11A8DEC`, `BCA8F00F4743A955`, `4DDB6D74ECC37C7B` |
+
+- **−37 ms a field on the arena** (−7 %), and 681 → 500 for the stage (−27 %). No estimate was written for this step
+  before it was built, since it replaced the refused one; it is measured, not judged against one.
+- **The sound digests still equal the base's.** The arena's pictures at the six fields differ from the base's by 10.6,
+  20.5, 27.9, 10.7, 12.7 and 0.6 % of the pixels, mean 0.05 to 2.4 levels: the same scenes, a few frames out of phase,
+  as step 1's.
+
+### 62.4 What is left (measured 2026-10-29, the arena under the sampler)
+
+§43.4's sampler (`rtsample.py`, 4 ms, the emulation thread, from the state's load plus 60 s for 150 s) on step 2's
+build, 29,741 samples, the run's mean 507.7 ms under the sampler. Shares of the emulation thread:
+
+| Unit | Share | ms a field [E, share × 500] |
+| --- | --- | --- |
+| EE: interpreter, timing model, TLB, fetch, FPU floats in software | 32.7 % | 164 |
+| EE dispatcher (`blocks.rs`) and compiled code with no symbol (EE and VU, `anon`) | 20.8 % | 104 |
+| VU micro mode: the recompiler's helpers 6.4, `ops.rs` 5.9, `mod.rs` 2.8, `pipe.rs` 2.8, floats 0.7 | 18.6 % | 93 |
+| GS on the emulation thread | 8.5 % | 42 |
+| VIF 4.6, DMAC 2.6, GIF 2.0, PCRTC 1.1, timers and INTC 0.8 | 11.1 % | 56 |
+| Scheduler and synchronisation (`board.rs`, `machine.rs`) | 3.7 % | 19 |
+| IOP, SPU2, SIF, IPU | 1.6 % | 8 |
+
+§60.2's board, GIF, VIF, timers, DMAC and PCRTC came to 218 ms of 765 (28 %); they are now about 75 ms (15 %). What leads
+is the EE (about 270 ms with its dispatcher) and VU micro mode's call path (the helpers and wrappers, about 80 of its 93).
+
+### 62.5 Checks, and what this stage does not do
+
+- **ps2autotests** on step 2: 52 of 55 EE and 23 of 23 IOP, every program's text identical to its text at a round of 0;
+  no timing test's text changed.
+- **Determinism**: two runs of step 2's build give the same digests on the short window (174.8 and 175.6 ms).
+- **The dock** (6,060 to 6,360), the same build: at a round of 0, 204.5 ms (load 1.9) with §61.4's digests exactly
+  (`830E3FEFEE1BE6B1`, `2C225C73DB4D3F9D`, `9CF1BED1AA64EAEE`); at 64, **164.4** (load 3.4; p95 183.8), −20 %, picture
+  `CBDAE0A825C42E52`, sound `2C225C73DB4D3F9D` (the base's), state `0FD5ABCCCD365B18`.
+- **Named limits.** (1) An interrupt a unit raises between events is seen by the EE up to a round (64 cycles) late. (2)
+  A VU operation issued as a macro instruction that reaches VU1's registers through VU0's window (§5.4.7) sees VU1 as
+  the last round left it. (3) The IOP runs up to a round behind the EE's side between observations. Each is timing only;
+  none showed in the windows' pictures or sound or in the test programs.
+- **Not done**: the VU call path (§60.7 lever 2) beyond the fewer calls rounds give; the EE's dispatcher and interpreter;
+  the dock's and island's profiles. The handheld target, 13.4 ms, stays about 37 times away on the desktop's arena.
+
+### 62.6 What was read for this stage, and questions
+
+**Read.** This page's §58.3, §60 and §61; `Sapphire_Redesign.md` §4.0, §4.1, §4.3 and §4.4; `Sapphire_Scheduler.md`
+§54's headings. Of the references (`~/.cache/emusen/sealed/ps2-reference/`): PCSX2's `R5900.cpp`
+(`_cpuEventTest_Shared`), `VUmicro.cpp` (`ExecuteBlock`), `VU1micro.cpp` (`vu1Finish`, `vu1ExecMicro`), `Vif_Codes.cpp`
+(MSCAL, FLUSH) and `VUops.cpp` (`_vuXGKICKTransfer`); DobieStation's `emulator.cpp` (`Emulator::run`) and
+`scheduler.cpp` (`calculate_run_cycles`); Play!'s `PS2VM.cpp` (`UpdateEe`). Nothing was copied; the rounds and the
+light COP2 observation are written on Sapphire's board. No firmware was listed, and the BIOS image was given only as
+the bench's argument.
+
+**Questions.**
+
+1. **[decision] The next step.** *Recommended*: VU micro mode's call path (§62.4, about 80 ms on the arena): the
+   recompiler's per-pair helpers and the operations' lane wrappers done inside the compiled microprogram. The EE's
+   dispatcher and interpreter (about 270 ms) are larger but are the recompiler's own work (`EmuSen_Recompiler.md`).
+2. **[routine] The round's length.** *Recommended*: keep 64. Longer rounds measured no gain (§62.2), and at 4,096 the
+   XGKICK queue outgrows the state's slots.

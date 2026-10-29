@@ -1018,3 +1018,79 @@ working set, and it is a choice of scope rather than a correction of this stage 
 
 The arena's digests with the classes are the base's (611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0). Of the
 13.59 M entries not at rest, 5.03 M converged after one step and 7.72 M (57 %) never before their exit, as in §15.4.
+
+### 15.7 Exactness (measured 2026-10-29)
+
+| Check | Base | E1's baseline dispatched (the final build) |
+| --- | --- | --- |
+| Jak's first 60 dock fields (picture, sound, state) | 0F8671F57AB63C25, D5F15509CCDD1709, 818361BFE5D2DBF9 | the same |
+| the dock, 300 fields from 6,000 | 830E3FEFEE1BE6B1, 2C225C73DB4D3F9D, 9CF1BED1AA64EAEE | the same |
+| the arena, 300 fields from 9,000 | 611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0 | the same, and in every earlier run of §15.4 and §15.6 |
+| `tests/blocks.rs`, test-checked, `EMUSEN_SAPPHIRE_BASELINE=1` for every test | — | 29 of 30, the new test among them; the 30th is below |
+| the prefix and the static form against the issue model (`tests.rs`), with E1's classes in the random blocks | — | every entry, every exit, both outcomes |
+| `emusen-assembler`'s grading | — | 10 of 10 |
+
+**The one test not run to its end**: `every_load_and_store_runs_compiled_on_every_region`, with every test on the
+baseline, ran past 18 minutes and was stopped; without the variable (the baseline dispatched only by its own tests) it
+passes in 173 s. It walks a long straight program in which a block starts after almost every access that leaves, and
+with both forms compiled a block's code passes the 256 MiB code budget again and again (two flushes in its first 90 s,
+counted with a temporary print): the compiler's time, not a result. The steps' cycles were moved from every exit's
+record into the block's table once (`prefix::Table::times`), 128 bytes a record less (the arena's data 924.2 bytes a guest instruction to 634.9, against E0's 810.8; hot bytes 104.1 in that run), which did not change that. Its
+instructions are graded in the random programs, which hold every load, store and PREF on the cached, uncached,
+scratchpad and unmapped regions, and in S7's programs, all passed on the baseline.
+
+**Seeded faults**, each built alone, run against the random programs of `tests/blocks.rs` (test-checked, every test on
+the baseline) or the prefix's own test, and reverted:
+
+| Fault | Caught by |
+| --- | --- |
+| the convergence test's bound the last issue plus one with the slot open | the prefix's test (`tests.rs`) |
+| what only the prefix wrote not kept from its model | the prefix's test |
+| the steps past the convergence rebased from the entry's last issue, not the prefix's base | all 4 random-program tests (the board's time one or two cycles apart) |
+| a signed divide by zero giving all ones for a negative dividend | all 4 random-program tests |
+| LWR always sign-extending, the register's upper word not kept | 1 random-program test |
+| MADD's accumulator without HI | all 4 random-program tests |
+| **the owed fault**: the replay's guard testing the entry's next event, not the board's | **not caught**, neither by the new test nor by the DMAC's two |
+
+**The owed test** (§14.8): `loads_and_stores_beside_a_busy_vif1_leave_the_interpreters_machine` keeps VIF1 busy with an
+UNPACK of 256 words sent from the scratchpad while the blocks write the words still to be sent, and the two machines
+stay equal. Its blocks meet the unit's events at their entry (12,777 entries left to the interpreter at the event, 110
+rewinds), but no replay met an event moved earlier inside its guard (no DMAC stop), so the seeded fault passes. **The
+gap stays open**: reaching it needs the DMAC held by a full FIFO at a block's entry and freed by the VIF during the
+replay, which this program does not arrange; how the board schedules VIF1's FIFO was not read further.
+
+### 15.8 What E1 leaves
+
+- **E1 stopped at its rule** (§15.6): the working set over every compiled step is 162.9 hot bytes a guest instruction,
+  not the estimate's 111, because the blocks of one instruction (14 % of the arena's compiled steps) stay on the
+  Cranelift tier. Covering them is the remaining lever of this stage's kind: it would take the working set towards
+  0.99 × 104 ≈ 103 if their code is like the rest.
+- **The prefix's cost is in the shared exit** (§15.4): 57 % of the entries not at rest never converge before they leave,
+  and run the issue model over every step there; the arena's wall time with the prefix equals E0's. Why they do not
+  converge (short entries, pairing parity, `kmax` at the branch) is the first count to make before any change.
+- **Both baselines are about 4 % slower than the Cranelift tier on the arena's wall time** (§15.4), unmeasured before.
+  The sampler's EE row (§7.4) should locate it before E2 builds on the baseline.
+- **The design's corrections at E1**: the prefix needs no code and lives in the shared exit (§15.1); convergence is
+  tested per entry at run time rather than found by the planner for a class (§3.2); HI, LO and SA stay out of the
+  planner's `Isa` table (§15.5); the multipliers' free cycles join the static snapshot; the steps' cycles are a block's,
+  not each exit's.
+- **The owed test's fault** (§15.7) is still not caught.
+
+### 15.9 The ring at the bytes reached (measured 2026-10-29)
+
+R0's `ring mix` (2,048 hot blocks, 8,152 cold, 36 laps a pass) asked for 104 bytes, the final build's exact form; the
+ring's code came to 103.7 with today's 2.87 instructions an entry and 107.4 with §4.2's 14.5. Two rounds each, ns a
+guest instruction:
+
+| | today's 2.87 an entry | §4.2's 14.5 |
+| --- | --- | --- |
+| desktop (other jobs on the machine) | 2.06 to 2.15 | 1.92 to 1.98 |
+| handheld, on the charger (ACAD online 1 before and after), `hh.sh guard` first | **2.39 to 2.44** | 4.72 to 4.76 |
+| E0 at 103 (§14.7), handheld | 2.32 to 2.36 | 2.66 to 3.00 |
+| the marks, handheld | **2.75** (Jak's opening), **2.28** (the arena's fields), two threads; 1.53 one thread | |
+
+With today's entries the handheld runs under the mark for Jak's opening and 1.05 to 1.07 times the arena's, about E0's
+point, as the bytes are. With §4.2's longer entries it ran 4.7 ns in both rounds, against E0's 2.66 to 3.00 at nearly
+the same code size (106.7 against 107.4 bytes, 15.9 MB of code): the ring's code is the same generator's, so the
+difference is the handheld's state on the day, not E1's, and it is recorded without a cause. The ring is synthetic: it
+does not hold the shared exit's prefix, whose cost §15.4 measures in the window's wall time instead.

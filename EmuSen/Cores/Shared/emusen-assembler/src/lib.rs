@@ -1,7 +1,4 @@
-//! The tailored recompiler's macro-assembler (EmuSen_Recompiler.md §3.3): a guest-neutral `Assembler` trait, version 1.0,
-//! that a guest's lowering calls directly, with no IR between, and one backend a host. Labels are relaxed to their short
-//! form where they reach; every sequence lies in the hot or the cold section; what crosses a section, reaches a shared
-//! stub or reads the block's data leaves a relocation for the runtime that places the code. No guest is named here.
+//! The tailored recompiler's macro-assembler (EmuSen_Recompiler.md §3.3). See EmuSen_Recompiler.md §14.
 
 pub mod x64;
 
@@ -108,8 +105,7 @@ pub struct Label(pub u32);
 /// The purposes bytes may be counted under; the lowering names them.
 pub const PURPOSES: usize = 16;
 
-/// The macro-assembler a lowering writes a block through. Every operation leaves the flags as the host's instruction
-/// does, except the moves, `lea`, `load` and `store`, which leave them alone.
+/// The macro-assembler a lowering writes a block through. See EmuSen_Recompiler.md §14.
 pub trait Assembler {
     fn label(&mut self) -> Label;
     /// The label's place: here, in the current section.
@@ -191,8 +187,7 @@ pub struct Code {
 }
 
 impl Code {
-    /// The relocations applied for sections placed at `hot`, `cold` and `data`, stub `id` at `stub(id)`; false when a
-    /// field cannot reach its target.
+    /// The relocations applied for sections placed at `hot`, `cold` and `data`, stub `id` at `stub(id)`; false when a field cannot reach its target.
     pub fn link(&mut self, hot: u64, cold: u64, data: u64, stub: &dyn Fn(u32) -> u64) -> bool {
         for r in self.relocs.clone() {
             let (base, bytes) = match r.section {

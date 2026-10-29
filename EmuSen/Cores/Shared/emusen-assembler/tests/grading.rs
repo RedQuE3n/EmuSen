@@ -1,5 +1,4 @@
-//! The backend's own grading (EmuSen_Recompiler.md §7.1, §14): every operation encoded, executed on random operands in
-//! random registers, and compared with a Rust model; jumps relaxed and relocated across sections.
+//! The backend's own grading (EmuSen_Recompiler.md §7.1, §14). See EmuSen_Recompiler.md §14.
 
 use emusen_assembler::x64::{self, *};
 use emusen_assembler::*;
@@ -449,8 +448,7 @@ fn immediates_of_every_width_load_exactly() {
 fn data_stubs_and_the_trampoline_link_and_preserve_every_register() {
     extern "C" fn helper(ctx: u64, a: u64, b: u64, c: u64) -> u64 {
         let answer = ctx ^ a.wrapping_mul(3) ^ b.rotate_left(7) ^ c.wrapping_add(11);
-        // A System V callee may clobber every caller-saved register: this one does, so the trampoline must save them.
-        // SAFETY: writes only registers declared clobbered.
+        // A System V callee may clobber every caller-saved register: this one does, so the trampoline must save them. SAFETY: writes only registers declared clobbered.
         unsafe {
             std::arch::asm!(
                 "mov rcx, -1", "mov rdx, -1", "mov rsi, -1", "mov rdi, -1", "mov r8, -1", "mov r9, -1", "mov r10, -1", "mov r11, -1",

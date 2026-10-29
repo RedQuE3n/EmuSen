@@ -1,12 +1,8 @@
-//! Version 1.1, behind the `native` feature: a lowering's tailored code beside its Cranelift function, placed in the crate's
-//! own code memory (EmuSen_Jit.md §7, EmuSen_Recompiler.md §14). One reservation, the hot arena at its bottom and the cold
-//! with the data above it; each batch written into fresh pages, made readable and executable in one call and never
-//! written again; the shared stubs placed first.
+//! Version 1.1, behind the `native` feature. See EmuSen_Recompiler.md §14.
 
 use emusen_assembler::Code;
 
-/// A block's tailored code, and the 8-byte data word, if any, that must hold the Cranelift function's address (the tier
-/// below, which the code jumps to where its entry's test fails).
+/// A block's tailored code, and the 8-byte data word, if any, that holds the Cranelift function's address (the tier below its entry's test falls back to).
 pub struct Native {
     pub code: Code,
     pub fallback: Option<u32>,
@@ -41,8 +37,7 @@ impl Memory {
         Memory { base: base.cast(), page, hot: 0, cold: COLD, stubs: Vec::new() }
     }
 
-    /// One batch: the stubs, at the first, then each block; each block's entry, or none where it could not be linked or
-    /// the reservation is full.
+    /// One batch: the stubs, at the first, then each block; each block's entry, or none where it could not be linked or the reservation is full.
     pub(crate) fn place(&mut self, stubs: &dyn Fn() -> Vec<Code>, blocks: Vec<(Native, u64)>) -> Vec<Option<u64>> {
         let (hot0, cold0) = (self.hot, self.cold);
         let mut writes: Vec<(usize, Vec<u8>)> = Vec::new();

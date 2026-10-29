@@ -1,5 +1,4 @@
-//! The static form's cycles proven against the issue model (EmuSen_Recompiler.md §14.3), and the lowering run over random
-//! blocks of the slice.
+//! The static form's cycles proven against the issue model (EmuSen_Recompiler.md §14.3), and the lowering run over random blocks of the slice.
 
 use emusen_mips_planner as planner;
 

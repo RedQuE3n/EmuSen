@@ -11,8 +11,7 @@ use emusen_assembler::{Assembler, Cond, Section, Src, Width};
 use crate::native::Native;
 use crate::{Jit, Lowering};
 
-/// A lowering whose function answers 7 and whose tailored code answers its word plus one through a stub, or jumps to the
-/// function where its argument is 0.
+/// A lowering whose function answers 7 and whose tailored code answers its word plus one through a stub, or jumps to the function where its argument is 0.
 #[derive(Clone)]
 struct Two;
 

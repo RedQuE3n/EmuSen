@@ -1,7 +1,4 @@
-//! The MIPS front end of the tailored recompiler (EmuSen_Recompiler.md §3.1): a block's shape and facts, decided once and
-//! handed on as plain data. A guest describes its instructions through `Isa`; the planner finds where a block ends, which
-//! instruction last wrote each register an instruction reads, the registers a block reads from its entry, the dirty set
-//! before each instruction, and the reuse keys of its loads and stores (§5). It knows no host and no console.
+//! The MIPS front end of the tailored recompiler (EmuSen_Recompiler.md §3.1). See EmuSen_Recompiler.md §14.
 
 use std::fmt;
 
@@ -60,8 +57,7 @@ pub enum Def {
     At(usize),
 }
 
-/// What a load or store may reuse of an earlier access in the block (§5): its page behind no guard (`same`, the same
-/// address) or one compare, and its line behind one compare.
+/// What a load or store may reuse of an earlier access in the block (§5). See EmuSen_Recompiler.md §14.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Reuse {
     pub page: Option<(usize, bool)>,
@@ -97,8 +93,7 @@ pub struct Plan {
 /// The most earlier accesses a block keeps for reuse, the latest for each base (as the forms keep, `REACHES`).
 pub const REACHES: usize = 4;
 
-/// The words from the block's start that make a block: instructions up to the first ender, a branch only with its slot
-/// when the slot is plain or memory, at most `I::MAX`; none when the first is not compiled.
+/// The words from the block's start that make a block. See EmuSen_Recompiler.md §14.
 pub fn shape<I: Isa>(isa: &I, words: &[u32]) -> Option<Vec<u32>> {
     let mut out = Vec::new();
     let mut i = 0;

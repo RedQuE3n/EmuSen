@@ -1,7 +1,4 @@
-//! E0 of the tailored recompiler, behind the `baseline` feature (EmuSen_Recompiler.md §14): the EE's blocks of integer
-//! ALU instructions, aligned loads and stores and branches, planned by `emusen-mips-planner`, lowered straight to x86-64
-//! through `emusen-assembler`, in the static form: every issue cycle folded to an offset from the entry's last issue, valid
-//! where the entry's model is at rest for what the block reads, and the block's Cranelift function otherwise.
+//! E0 of the tailored recompiler, behind the `baseline` feature (EmuSen_Recompiler.md §14)
 
 mod lower;
 
@@ -106,8 +103,7 @@ pub fn set_dispatched(on: bool) {
     DISPATCHED.store(if on { 2 } else { 1 }, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Whether the baseline compiles a block of these words with these options: every word in the slice, at least two, and
-/// none of the measurement options.
+/// Whether the baseline compiles a block of these words with these options: every word in the slice, at least two, and none of the measurement options.
 pub(crate) fn covers(words: &[u32], options: Options) -> bool {
     !options.verify && !options.fixed_cost && !options.spill && options.memory && words.len() >= 2 && planner::plan(&R5900Isa, words, 0).is_ok()
 }
@@ -125,8 +121,7 @@ pub(crate) struct Static {
 /// A base far from zero, so that every offset is positive.
 const BASE: u64 = 1 << 40;
 
-/// The static form's cycles: the core's own model run from rest, for the branch not taken and taken; none where the two
-/// disagree on a cycle or an offset does not fit (EmuSen_Recompiler.md §14.3).
+/// The static form's cycles: the core's own model run from rest, for the branch not taken and taken. See EmuSen_Recompiler.md §14.
 pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
     let n = plan.steps.len();
     let mut runs: [(Vec<u64>, Vec<Snap>); 2] = Default::default();
@@ -177,8 +172,7 @@ pub(crate) mod mode {
 pub(crate) const SYNC: u8 = 1;
 pub(crate) const BRANCHED: u8 = 2;
 
-/// What an exit hands the shared exit's helpers: its steps and their cycles, the last load or store's steps and the undo
-/// entries, its place, and the model after its steps for the branch not taken and taken (EmuSen_Recompiler.md §14.3).
+/// What an exit hands the shared exit's helpers. See EmuSen_Recompiler.md §14.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Rec {
@@ -218,8 +212,7 @@ impl Rec {
 }
 
 impl Ee {
-    /// The baseline's commit of an exit's steps once every one stands: the model from the record, Random and the group,
-    /// then Count, the cycles seen, IP7, the instructions issued, the UCAB and the place as the shared exit commits them.
+    /// The baseline's commit of an exit's steps once every one stands. See EmuSen_Recompiler.md §14.
     pub(crate) fn commit_static(&mut self, rec: &Rec, x: u64) {
         use super::super::cop0::{RANDOM, WIRED};
         let (pc, next, delay, taken) = rec.place(x);
@@ -261,8 +254,7 @@ pub(crate) const X_STATIC: i32 = offset_of!(Context, entered_static) as i32;
 const LAST: i32 = (offset_of!(Ee, timing) as i32) + super::super::timing::layout::LAST;
 const SAVED: [emusen_assembler::Reg; 6] = [x64::RBX, x64::RBP, x64::R12, x64::R13, x64::R14, x64::R15];
 
-/// The stubs: the entry (registers saved, the fixed ones set, the static entries counted), the three returns, and the
-/// helper convention's trampolines to the exit, the leave, the commit and the translation cache's fill.
+/// The stubs: the entry (registers saved, the fixed ones set, the static entries counted), the three returns, and the helper convention's trampolines.
 pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
     let mut out = Vec::new();
     let one = |f: &dyn Fn(&mut X64)| {
@@ -305,8 +297,7 @@ pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
     out
 }
 
-/// The block's code, or none outside the slice; `prototype` drops the entry's test and the undo log, for the byte count on
-/// the static prototype's terms only (§14.1).
+/// The block's code, or none outside the slice; `prototype` drops the entry's test and the undo log, for the byte count on the static prototype's terms only (§14.1).
 pub(crate) fn compile(words: &[u32], start: u32, options: Options, prototype: bool) -> Option<(Code, u32)> {
     if !covers(words, options) {
         return None;

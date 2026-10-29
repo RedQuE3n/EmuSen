@@ -1,6 +1,4 @@
-//! The baseline's helpers, which its stubs call in the helper convention (EmuSen_Recompiler.md §14.4): an exit's replay and
-//! commit, a load's or store's leave, a partial write-back's commit and the translation cache's fill; and the static
-//! share's counts.
+//! The baseline's helpers, which its stubs call in the helper convention (EmuSen_Recompiler.md §14.4)
 
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 

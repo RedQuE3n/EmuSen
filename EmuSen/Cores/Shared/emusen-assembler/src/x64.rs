@@ -1,5 +1,4 @@
-//! The x86-64 backend (EmuSen_Recompiler.md §3.3, §14.2): instructions encoded by `cranelift-assembler-x64`, jumps laid out
-//! here and relaxed to rel8 where they reach within a section, rel32 and a relocation across one.
+//! The x86-64 backend (EmuSen_Recompiler.md §3.3, §14.2). See EmuSen_Recompiler.md §14.
 
 use cranelift_assembler_x64 as asm;
 use asm::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Inst, inst as i};
@@ -26,12 +25,10 @@ pub const R15: Reg = Reg(15);
 /// Every general register but rsp.
 pub const ALL: [Reg; 15] = [RAX, RCX, RDX, RBX, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15];
 
-/// The helper convention, version 1 (EmuSen_Recompiler.md §3.5): arguments in rdi, rsi and rdx, the answer in rax, every
-/// other register preserved; the context, in `context`, is the Rust helper's first argument and is not passed.
+/// The helper convention, version 1 (EmuSen_Recompiler.md §3.5). See EmuSen_Recompiler.md §14.
 pub const HELPER_ARGS: [Reg; 3] = [RDI, RSI, RDX];
 
-/// The trampoline that calls `helper`, an `extern "C" fn(context, a, b, c) -> u64`, in the helper convention; entered by
-/// a call from code whose stack is 16-byte aligned.
+/// The trampoline that calls `helper`, an `extern "C" fn(context, a, b, c) -> u64`, in the helper convention; entered by a call from code whose stack is 16-byte aligned.
 pub fn trampoline(a: &mut X64, context: Reg, helper: u64) {
     const SAVED: [Reg; 8] = [RCX, RDX, RSI, RDI, R8, R9, R10, R11];
     for x in SAVED {

@@ -1,6 +1,4 @@
-//! The baseline's lowering of one planned block to x86-64 (EmuSen_Recompiler.md §14.2 to §14.4): the entry's test, the
-//! guest registers in fixed homes, the integer ALU, the loads and stores through the translation cache, the data cache's
-//! hit and the scratchpad with page and line reuse, the branches, and every exit through the shared stubs.
+//! The baseline's lowering of one planned block to x86-64 (EmuSen_Recompiler.md §14.2 to §14.4)
 
 use std::mem::offset_of;
 
@@ -400,8 +398,7 @@ impl L<'_> {
         self.a.jump_stub(stub::ROLLBACK);
     }
 
-    /// The rollback after an exit's replay kept fewer steps than it ran: the state after the last load or store where the
-    /// replay kept it, nothing written otherwise.
+    /// The rollback after an exit's replay kept fewer steps than it ran: the state after the last load or store where the replay kept it, nothing written otherwise.
     fn rollback(&mut self, st: &St, steps: u32) {
         match st.snap {
             Some(s) if s.base < steps => {
@@ -461,8 +458,7 @@ impl L<'_> {
         self.pur(p);
     }
 
-    /// A load or store's exit after some steps of its block (`emit.rs`'s `leave`): the board replayed through them, then the
-    /// state after the last load or store, or nothing written.
+    /// A load or store's exit after some steps of its block (`emit.rs`'s `leave`). See EmuSen_Recompiler.md §14.
     fn leave(&mut self, st: &St, why: i64) {
         let k = self.rec(st, st.steps, mode::LINE, 0, 0);
         self.a.lea_data(RDI, k);

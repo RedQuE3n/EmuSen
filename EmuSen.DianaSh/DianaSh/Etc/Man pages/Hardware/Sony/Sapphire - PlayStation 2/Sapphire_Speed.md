@@ -2079,3 +2079,17 @@ library 117, `blocks` 28, `boot` 6, `debugger` 6, `dmac` 21, `gif` 16, `idle` 7,
 `sif` 5, `state` 11, `vif` 15, `vu0` 15, `vu_jit` 19 and `vu_micro` 25, all passed. They run at a round of 0
 (`System::new`), but for the library's machine tests and `state`, which run `Machine` at 64. The WiseMan filter
 `SapphireTests` was not run here.
+
+### 62.8 VU1 ahead, bounded by the kick queue: a first try, not kept (2026-10-29)
+
+*Decided 2026-10-29 by the tester: build `Sapphire_SpeedHacks.md` §3's items 1 and 4, then 2 and 3.* A first, small
+form of item 1 was tried on §62.7's tree and not committed: a VIF waiting for a running VU ran it on ahead of the board
+(`Micro::run_ahead`, pairs to its end with the flags landed by its last pair), and an XGKICK that brought the kicks
+outstanding (the GIF's and PATH1's port's together) to the state's 16 slots left the VU stalled until the board's GIF
+found room. The state then saves, but on the short window VU1 ran **no pairs at all** over the 60 timed fields (544.7 ms
+a field, 21,269 primitives against millions): the stall was never lifted, or the GIF never reached the kicks it waited
+for. The cause was not found. What the try confirms is `Sapphire_SpeedHacks.md` §2.3's point: run ahead without the
+foreign accesses at their cycles and without the GIF and VIF1 resumed at VU1's kick and end cycles as events, the
+pieces do not meet. Item 1 is therefore the compiler work §2.3 describes (the earliest foreign access checked at each
+pair, the kicks with their cycles, the GIF and VIF1 at events), not a bound added to today's run; it is left for its own
+stage, with the patch of this try kept outside the repository for reference.

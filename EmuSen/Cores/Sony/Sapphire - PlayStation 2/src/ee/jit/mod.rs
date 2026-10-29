@@ -121,9 +121,12 @@ pub struct Context {
     /// `forms::STUB`'s shared exit: the replay, and with every step standing the exit's commit (`commit_word`).
     #[cfg(feature = "forms")]
     pub commit: Commit,
-    /// The baseline's entries into its static form, counted by its entry stub.
+    /// The baseline's entry was not at rest, set by its code for the shared exit's prefix (EmuSen_Recompiler.md §15.2).
     #[cfg(feature = "baseline")]
-    pub entered_static: u64,
+    pub moved: u32,
+    /// The steps whose cycles the prefix computed, for the static share.
+    #[cfg(feature = "baseline")]
+    pub prefix: u32,
 }
 
 /// The shared exit `forms::STUB` calls: `(context, word, place, end) -> steps standing`.
@@ -207,8 +210,8 @@ impl emusen_jit::Lowering for R5900 {
         if !baseline::dispatched() {
             return None;
         }
-        let (code, slot) = baseline::compile(words, start, options, false)?;
-        Some(emusen_jit::native::Native { code, fallback: Some(slot) })
+        let code = baseline::compile(words, start, options, false)?;
+        Some(emusen_jit::native::Native { code, fallback: None })
     }
 
     #[cfg(feature = "baseline")]

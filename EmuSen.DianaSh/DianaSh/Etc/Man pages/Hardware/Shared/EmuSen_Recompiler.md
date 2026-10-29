@@ -795,3 +795,302 @@ which a rollback needs. Neither of those is in the Cranelift forms' 105.9, becau
   catches that gap today, and it does not fall within E0's slice, so it is added to E1's verification plan.
 - **Form coverage** (§7.1) was not instrumented with counters at E0; the walk across a page was added when the dock
   window found its path untested. E1 should add the counters before it adds paths.
+
+## 15. E1, the EE's S36 and S37 classes and the dynamic prefix (2026-10-29)
+
+*Decided 2026-10-29 by the tester: E1 starts with the dynamic prefix (§3.2), before the instruction classes.*
+
+### 15.1 The prefix's estimate, written before the build
+
+*Set on 2026-10-29, before any of the prefix's code was written. Nothing in this subsection is measured.*
+
+**Where the prefix lives** [A]. Since E0 the static form's code holds no timing at all: its cycles are constants in each
+exit's record, which the shared exit applies (§14.3, "What the exits commit"). So a dynamic prefix needs no code of its
+own. Where the entry's test fails, the block notes it in the context (a store laid cold) and runs on into the same body
+in place of jumping to the Cranelift function; at the exit, the shared exit runs the core's own issue model from the
+entry's model over the first steps, and at the first step *c* where that model is the static snapshot shifted in time
+for everything the rest of the block can read, takes the record's constants rebased by one add. Where no such *c*
+comes before the exit, the model runs over every step, which is the interpreter's timing and exact by definition. The
+convergence is tested per entry, not found by the planner for a class of entries as §3.2 proposed: a test at run time
+needs no bound on the class and is exact for every member of it. **No entry falls back whole.**
+
+**The bytes** [E]. E0's working set on the arena's covered blocks was the static form for the 61.4 % of steps it ran and,
+for the rest, the entry's test and then the Cranelift function with today's levers, about 424 hot bytes a guest
+instruction on the arena (`Sapphire_Redesign.md`, "The exact design's work a block"): about
+0.614 × 103.4 + 0.386 × (7.5 + 424) ≈ **230**. With the prefix every covered step runs the exact form, whose code is
+unchanged: **103.4**. The estimate of the saving is therefore about **127 hot bytes a guest instruction on the working
+set**; the stop rule's half is 63. The Cranelift function's bytes on the same blocks are measured in the same run (the
+shadow's `today+levers`), so the 424 becomes a measurement there.
+
+**The static share *s*** [E]. Of E0's entries not at rest, the reason is most often the pair slot left open (an entry by
+fall-through, or after an instruction the interpreter ran) or a result still in flight from such an instruction. An
+open slot whose first instruction cannot pair converges at *c* = 1; one that pairs shifts the pairing parity until a
+dependent instruction issues alone in both models, which on the EE's dependency-dense code is usually the next one or
+two. Taking 70 % of those entries at *c* about 1.5, 15 % at about 3.5 and 15 % never before their exit (3.64 steps an
+entry, E0's mean for them): about 27 M of the arena's 121 M covered steps in prefixes, so ***s* about 78 %, 72 to 85 %**.
+
+**The nanoseconds** [E]. The code's bytes are those E0's ring measured at 103: 2.14 to 2.25 ns a guest instruction on
+the desktop and 2.32 to 2.36 on the handheld with today's entries, now for every covered step rather than 61 % of them.
+The prefix's own cost is in the shared exit, where the ring cannot see it: a copy of the issue model (about 900 bytes),
+then one issue and one comparison a step of the prefix, estimated at **15 to 35 ns an entry not at rest**, about 1.5 to
+3.5 ns a guest instruction of those entries. Whether that is less than the Cranelift function's cost on the same
+entries is not known from the ring, so **the arena window's wall time with the baseline dispatched is recorded beside
+E0's**, two rounds each.
+
+**P-E4** [E] said the working set would be within 1.15 times the static form's if *s* ≥ 90 % and the prefix ended within
+four instructions. Here the working set's code is the static form's by construction (the ratio is 1.0 at any *s*), and
+*s* instead prices the shared exit's work: the share of steps whose cycles are constants rather than computed.
+
+**Stop rules** for this step: the working set saves under 63 hot bytes a guest instruction, or any entry's cycles or
+model differ from the issue model's.
+
+### 15.2 The prefix, and why it is exact
+
+**What runs.** The entry's test of §14.3 stays in the code; where it fails it stores 1 to `Context::moved` and jumps on
+into the block's entry, in place of the Cranelift function (`lower.rs`). The code past the entry is the static form's,
+unchanged, since it holds no cycle. Each exit's helper (`blocks/baseline.rs`) then reads the flag. At rest it applies the
+record as E0 did. Otherwise it copies the core's issue model and runs `prefix::run`: at each step *k* from 0 it asks the
+model whether it now converges with the static form (`Timing::converges`), and if not, issues step *k* through
+`Timing::issue` itself and notes its cycle. It stops at the first convergence, or at the exit's own step count.
+
+**The table.** For the prefix each block lays a table first in its data (`prefix::table_bytes`): each step's resources,
+category and row as the model takes them, for each *k* up to `kmax` what the steps from *k* on read before they write
+it, and the static snapshot after *k* steps. `kmax` is at most `PMAX` (8) and never past the branch, so that every
+snapshot the prefix compares is the same for both outcomes. A record finds the table from its own offset in the data.
+
+**Convergence** (`Timing::converges`, the model's own module): the model *D* after *k* steps converges with the static
+snapshot *s* after *k* steps at the base *b* = *D*.last − *s*.last when (1) the pair slot and the pending group end are
+the same, (2) with the slot open, the last category, pipe and writes are the same, since only a pairing reads them,
+(3) the floor is the same shifted by *b*, or both at most their last issue plus one, where no issue rule can see it, and
+(4) every resource the rest of the block reads before writing it is ready at the same cycle shifted by *b*, or ready in
+both by their last issue plus *q*, with *q* = 0 where the slot is open and 1 where it is closed. The argument for (4):
+with the slot closed the next instruction issues at the last plus one or later, so a ready cycle bounded by that never
+decides a maximum; with it open the next may pair at the last itself, so the bound is the last; and every later issue
+cycle is no earlier, so the bound holds to the block's end. Every other field the rest of the block can read is then
+equal up to *b*, the model is invariant under a shift of every cycle (no rule reads a cycle's absolute value), and so
+every later step issues at the static form's cycle plus *b* and leaves the static model plus *b*. At *k* = 0 the
+condition is the entry's test of §14.3 exactly.
+
+**What the exit commits.** Past a convergence at *c*: the steps' cycles are the prefix's before *c* and *b* plus the
+record's constants from *c*; the model is the record's snapshot applied at *b*, with the ready cycles of the resources
+only the prefix wrote taken from *D* (condition (4) let them differ where no later step can see the difference, so the
+snapshot does not hold them); Random moves by the prefix's unpaired cycles plus the snapshot's after *c*. With no
+convergence before the exit the model is *D* itself, which is `Timing::issue` run over every step.
+
+**Proven, not only argued** (`ee/jit/baseline/tests.rs`, `the_prefix_then_the_static_form_is_the_issue_model_from_every_entry`):
+over random blocks of the slice, single and dual issue, each with eight random entry models made by random prefixes
+(multiplies and dividers among them, taken branches among them), at every exit's step count and for both outcomes, the
+steps' cycles, the model field for field, the unpaired cycles and the pairing equal the issue model run directly. Of
+the 35,742 random entries not at rest it met, 13,673 converged at step 1, 18,154 later, and 3,915 never before the
+block's end.
+
+### 15.3 The classes' estimate, written before their build
+
+*Set on 2026-10-29, after the prefix's bytes and share were measured (§15.4) and before any of the classes' code was
+written. Nothing in this subsection is measured.*
+
+**What is added**: the rest of S36's and S37's classes (`shape.rs`): HI and LO's moves on both pipelines, the multiplies
+and multiply-adds of both, the divides of both, SA's four moves, the twelve traps, PREF, and the unaligned loads and
+stores (LWL, LWR, LDL, LDR, SWL, SWR, SDL, SDR). The static form's snapshot gains the two multipliers' free cycles, and
+the convergence test reads them as it reads a ready cycle. HI, LO and SA are held as block values beside the general
+registers, written back at an exit only where an instruction before it wrote them, so a rollback finds them untouched.
+The macro-assembler gains a multiply and a divide (`Assembler` 1.1, an extension: two operations, nothing changed).
+
+**The bytes** [E]. On the arena run of §15.4 the blocks the baseline covers took 126.8 M of the 154.7 M compiled steps
+(82 %); the other 18 % ran the Cranelift function, 524.8 hot bytes a guest instruction on blocks like them. The working
+set over every compiled step is about 0.82 × 105.3 + 0.18 × 525 ≈ **181**. With every shaped block covered (all of
+them hold only S36's and S37's classes, so only blocks of one instruction stay out) and the new classes a little
+larger than the average word (a divide's zero and overflow paths are cold; an unaligned access is an aligned one plus
+a shift and a merge), the working set is about 0.99 × 107 + 0.01 × 525 ≈ **111**: a saving of about **70 hot bytes a
+guest instruction** over every compiled step; the stop rule's half is 35.
+
+**The static share** [E]: of every compiled step, 59.5 % today (92.0 M of 154.7 M); with the new blocks covered at about
+the share the covered ones have (72.6 %), about **71 %, 68 to 74 %**: a divide's 37 cycles in flight at a block's
+entry converge only once a step waits for it.
+
+**The nanoseconds** [E]: the ring at about 107 bytes, near E0's 103 (desktop 2.14 to 2.25, handheld 2.32 to 2.36).
+
+**Stop rules**: the working set over every compiled step saves under 35, or any class cannot be made exact.
+
+### 15.4 The prefix's results (measured 2026-10-29)
+
+The arena window (`jak-arena`, 300 fields from the state at 9,000, `--defaults`) with the baseline dispatched and
+`EMUSEN_SAPPHIRE_FORMS_BYTES=1`, all figures from that one run: 13,082 of the blocks compiled are the baseline's,
+132,133 guest instructions.
+
+**The bytes, the gate.** The exact form is 105.3 hot bytes a guest instruction (E0's 103.4 with the entry's test at 9.4
+rather than 7.5: the flag's store and its jump back cost 1.9 where E0's jump through the data word cost less; the
+measured build lays them hot before the entry, so that every branch of the test stays short). The Cranelift function
+on the same blocks in the same run, the form E0 ran where the test failed, is **524.8**, not the 424 the estimate took
+from the redesign's page (that figure was the arena's whole mix with every lever; the dispatcher runs today's form
+without the levers). The working set on the covered blocks, weighted by steps:
+
+| | static form | the rest | working set |
+| --- | --- | --- | --- |
+| E0 | 61.4 % at 103.4 | 38.6 % at 7.5 + 524.8 | **269** |
+| E1, the prefix | every step at 105.3 | none | **105.3** |
+
+**The saving is 164 hot bytes a guest instruction on the covered blocks' working set, against an estimate of 127**; the
+stop rule's 63 is met.
+
+**The static share *s*.** Of 126.79 M covered steps, 92.02 M (**72.6 %**) took their cycles from the static form's
+constants, against an estimate of 72 to 85 % (central 78): the estimate's low end. Of 32.38 M covered entries, 18.70 M
+(57.8 %) were at rest; of the 13.68 M that were not:
+
+| converged after | 1 step | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never before the exit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| entries | 4.92 M | 0.54 M | 0.16 M | 62 k | 27 k | 37 k | 121 | 225 | **7.93 M (58 %)** |
+
+So the estimate's 70 % converging early was wrong: an entry not at rest either converges at once (36 %) or, more often,
+not at all before it leaves (58 %), and those run the issue model over every step in the shared exit. Why they do not
+converge is not yet counted; the candidates are short entries (3.9 steps an entry on average), the pairing parity of
+§3.2, and the limit of the test at the branch (`kmax`).
+
+**The nanoseconds of the real field.** The window's mean milliseconds a field, two rounds each, interleaved on the
+desktop (other jobs on the machine; the EE is 13 % compiled in this window, the rest interpreted or idle-skipped):
+
+| | round 1 | round 2 |
+| --- | --- | --- |
+| the Cranelift tier (baseline not dispatched) | 754.1 | 760.9 |
+| E0's baseline (7cef70e11) | 792.7 | 785.8 |
+| E1's baseline, the prefix | 788.7 | 793.9 |
+
+E1 and E0 are equal within the rounds' spread: the prefix's work in the shared exit costs about what the Cranelift
+function's entries saved, so the bytes the prefix removes do not show in this window's wall time. Both baselines are
+about 4 % slower than the Cranelift tier on this window, which E0 did not measure; the cause is not yet located (the
+sampler's EE row is §7.4's measurement from E2), and it is recorded as a finding, not as the prefix's.
+
+**Exactness.** The picture, sound and state digests of the arena window are the base's (611B58F7CFE67E8B,
+BCA8F00F4743A955, 8B710CA05FDDF3A0) in every one of these seven runs, the shadow's included.
+
+### 15.5 The classes, as built
+
+- **`emusen-assembler` 1.1**: `mul` (the product's low 64 bits) and `divrem` (quotient and remainder at 32 or 64 bits,
+  signed or not, the divisor outside the backend's `DIV_REGS`, which on x86-64 are rax and rdx); graded against a Rust
+  model in every register (`multiply_and_divide_match_their_models_in_every_register`). Nothing of 1.0 changed.
+- **The planner's table** (`R5900Isa`) holds every S36 and S37 class `shape.rs` names. The planner itself is
+  unchanged: HI, LO and SA are not general registers, so its reads and writes do not carry them, and the lowering knows
+  them by the instruction (`specials`). §3.1 put them in the `Isa` table; at E1 nothing the planner decides needs them.
+- **Values** (`lower.rs`): LO, HI, LO1, HI1 and SA are value ids beside the general registers' halves, homed by the same
+  linear scan, read from the core at first use and written back at an exit only where an instruction before it wrote
+  them; the state after the last load or store saves them before a later write, as it saves a register, so a rollback
+  writes back what stood there.
+- **Multiplies** (`multiply`): both operands sign- or zero-extended to 64 bits and multiplied once, the accumulator
+  added for MADD; LO and rd the low word sign-extended, HI the high word. **Divides** (`divide`): a zero divisor and,
+  signed, a divisor of -1 out of line (the first takes `quotient_signed`'s and `quotient_unsigned`'s results of
+  `Sapphire_Disputes.md` D-6, the second negates, which is the wrapping quotient of the minimum too), so the hardware
+  divide never faults. **SA** (MFSA, MTSA, MTSAB, MTSAH) as `ops.rs` writes it. **Traps**: the compare, and the exit
+  before the instruction where it holds, as an overflow's; the interpreter raises.
+- **PREF** is a one-byte load that loads nothing: a hit in either way or the scratchpad does nothing, and everything else
+  (a miss, an uncached page, a translation that fails) leaves to the interpreter, which prefetches or ignores it. An
+  uncached PREF leaves rather than passing, so that its record never names a line a later access could reuse.
+- **The unaligned forms** (`unaligned`): the address is kept whole through the translation and the cache's dispatch, so
+  the record names the byte as every other access's does; then the unit's address and pointer are made from it, the
+  shift from the byte within the unit, and the merge is `ops.rs`'s (LWL's and LDL's from the high end, LWR's and LDR's
+  from the low end, LWR keeping the register's upper word unless the unit is whole); a store logs its quadword, marks
+  the line dirty, then merges into the line.
+- **The static form** carries the multipliers: their free cycles are snapshotted and applied with the ready cycles
+  (`Snap::mac`, at the bits `MAC_BITS` of its masks), the entry's test compares them, the prefix's convergence test
+  reads them as it reads a ready cycle, and the prefix keeps a multiplier only it used.
+
+### 15.6 The classes' results (measured 2026-10-29), and the stop
+
+The same arena run as §15.4's terms, with the classes built:
+
+| | §15.4 (prefix only) | with the classes |
+| --- | --- | --- |
+| blocks covered, of those compiled | 13,082 | 13,281 of 15,021 |
+| guest words covered, of those compiled | 132,133 | 138,364 of 140,104 (98.8 %) |
+| covered steps, of every compiled step | 126.8 M of 154.7 M (82.0 %) | 130.9 M of 152.3 M (86.0 %) |
+| the exact form's hot bytes a guest instruction | 105.3 | **104.2** (the entry's test 8.0, laid hot) |
+| on the prototype's terms | 82.8 | 83.1 |
+| the Cranelift function on the covered blocks | 524.8 | 523.0 |
+| the working set over every compiled step | 0.820 × 105.3 + 0.180 × 524.8 = **180.8** | 0.860 × 104.2 + 0.140 × 523.0 = **162.9** |
+| *s* over every compiled step | 59.5 % | **63.5 %** (73.8 % of the covered steps) |
+| compile time, a block | 40.7 µs | 43.2 µs |
+
+**The saving is 17.9 hot bytes a guest instruction against an estimate of 70; the stop rule's 35 is not met, so E1
+stops here.** The classes cover what the estimate said they would (98.8 % of the words), and their code is no larger
+than the average word's. **What the estimate got wrong**: every one of the 1,740 blocks still on the Cranelift tier is
+a block of one instruction, which E0's `covers` leaves out, and together they run 14.0 % of the compiled steps, where
+the estimate took them as about 1 %. Which code they are was not counted. Covering them is the next lever for the
+working set, and it is a choice of scope rather than a correction of this stage (§15.8).
+
+The arena's digests with the classes are the base's (611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0). Of the
+13.59 M entries not at rest, 5.03 M converged after one step and 7.72 M (57 %) never before their exit, as in §15.4.
+
+### 15.7 Exactness (measured 2026-10-29)
+
+| Check | Base | E1's baseline dispatched (the final build) |
+| --- | --- | --- |
+| Jak's first 60 dock fields (picture, sound, state) | 0F8671F57AB63C25, D5F15509CCDD1709, 818361BFE5D2DBF9 | the same |
+| the dock, 300 fields from 6,000 | 830E3FEFEE1BE6B1, 2C225C73DB4D3F9D, 9CF1BED1AA64EAEE | the same |
+| the arena, 300 fields from 9,000 | 611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0 | the same, and in every earlier run of §15.4 and §15.6 |
+| `tests/blocks.rs`, test-checked, `EMUSEN_SAPPHIRE_BASELINE=1` for every test | — | 29 of 30, the new test among them; the 30th is below |
+| the prefix and the static form against the issue model (`tests.rs`), with E1's classes in the random blocks | — | every entry, every exit, both outcomes |
+| `emusen-assembler`'s grading | — | 10 of 10 |
+
+**The one test not run to its end**: `every_load_and_store_runs_compiled_on_every_region`, with every test on the
+baseline, ran past 18 minutes and was stopped; without the variable (the baseline dispatched only by its own tests) it
+passes in 173 s. It walks a long straight program in which a block starts after almost every access that leaves, and
+with both forms compiled a block's code passes the 256 MiB code budget again and again (two flushes in its first 90 s,
+counted with a temporary print): the compiler's time, not a result. The steps' cycles were moved from every exit's
+record into the block's table once (`prefix::Table::times`), 128 bytes a record less (the arena's data 924.2 bytes a guest instruction to 634.9, against E0's 810.8; hot bytes 104.1 in that run), which did not change that. Its
+instructions are graded in the random programs, which hold every load, store and PREF on the cached, uncached,
+scratchpad and unmapped regions, and in S7's programs, all passed on the baseline.
+
+**Seeded faults**, each built alone, run against the random programs of `tests/blocks.rs` (test-checked, every test on
+the baseline) or the prefix's own test, and reverted:
+
+| Fault | Caught by |
+| --- | --- |
+| the convergence test's bound the last issue plus one with the slot open | the prefix's test (`tests.rs`) |
+| what only the prefix wrote not kept from its model | the prefix's test |
+| the steps past the convergence rebased from the entry's last issue, not the prefix's base | all 4 random-program tests (the board's time one or two cycles apart) |
+| a signed divide by zero giving all ones for a negative dividend | all 4 random-program tests |
+| LWR always sign-extending, the register's upper word not kept | 1 random-program test |
+| MADD's accumulator without HI | all 4 random-program tests |
+| **the owed fault**: the replay's guard testing the entry's next event, not the board's | **not caught**, neither by the new test nor by the DMAC's two |
+
+**The owed test** (§14.8): `loads_and_stores_beside_a_busy_vif1_leave_the_interpreters_machine` keeps VIF1 busy with an
+UNPACK of 256 words sent from the scratchpad while the blocks write the words still to be sent, and the two machines
+stay equal. Its blocks meet the unit's events at their entry (12,777 entries left to the interpreter at the event, 110
+rewinds), but no replay met an event moved earlier inside its guard (no DMAC stop), so the seeded fault passes. **The
+gap stays open**: reaching it needs the DMAC held by a full FIFO at a block's entry and freed by the VIF during the
+replay, which this program does not arrange; how the board schedules VIF1's FIFO was not read further.
+
+### 15.8 What E1 leaves
+
+- **E1 stopped at its rule** (§15.6): the working set over every compiled step is 162.9 hot bytes a guest instruction,
+  not the estimate's 111, because the blocks of one instruction (14 % of the arena's compiled steps) stay on the
+  Cranelift tier. Covering them is the remaining lever of this stage's kind: it would take the working set towards
+  0.99 × 104 ≈ 103 if their code is like the rest.
+- **The prefix's cost is in the shared exit** (§15.4): 57 % of the entries not at rest never converge before they leave,
+  and run the issue model over every step there; the arena's wall time with the prefix equals E0's. Why they do not
+  converge (short entries, pairing parity, `kmax` at the branch) is the first count to make before any change.
+- **Both baselines are about 4 % slower than the Cranelift tier on the arena's wall time** (§15.4), unmeasured before.
+  The sampler's EE row (§7.4) should locate it before E2 builds on the baseline.
+- **The design's corrections at E1**: the prefix needs no code and lives in the shared exit (§15.1); convergence is
+  tested per entry at run time rather than found by the planner for a class (§3.2); HI, LO and SA stay out of the
+  planner's `Isa` table (§15.5); the multipliers' free cycles join the static snapshot; the steps' cycles are a block's,
+  not each exit's.
+- **The owed test's fault** (§15.7) is still not caught.
+
+### 15.9 The ring at the bytes reached (measured 2026-10-29)
+
+R0's `ring mix` (2,048 hot blocks, 8,152 cold, 36 laps a pass) asked for 104 bytes, the final build's exact form; the
+ring's code came to 103.7 with today's 2.87 instructions an entry and 107.4 with §4.2's 14.5. Two rounds each, ns a
+guest instruction:
+
+| | today's 2.87 an entry | §4.2's 14.5 |
+| --- | --- | --- |
+| desktop (other jobs on the machine) | 2.06 to 2.15 | 1.92 to 1.98 |
+| handheld, on the charger (ACAD online 1 before and after), `hh.sh guard` first | **2.39 to 2.44** | 4.72 to 4.76 |
+| E0 at 103 (§14.7), handheld | 2.32 to 2.36 | 2.66 to 3.00 |
+| the marks, handheld | **2.75** (Jak's opening), **2.28** (the arena's fields), two threads; 1.53 one thread | |
+
+With today's entries the handheld runs under the mark for Jak's opening and 1.05 to 1.07 times the arena's, about E0's
+point, as the bytes are. With §4.2's longer entries it ran 4.7 ns in both rounds, against E0's 2.66 to 3.00 at nearly
+the same code size (106.7 against 107.4 bytes, 15.9 MB of code): the ring's code is the same generator's, so the
+difference is the handheld's state on the day, not E1's, and it is recorded without a cause. The ring is synthetic: it
+does not hold the shared exit's prefix, whose cost §15.4 measures in the window's wall time instead.

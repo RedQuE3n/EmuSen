@@ -880,6 +880,66 @@ fn a_divide_stalling_a_block_past_the_dmacs_event_rolls_it_back() {
     assert!(s.compiled_steps > 20_000 && s.dmac_stops + s.left[0] > 0, "compiled, and the DMAC's events met inside blocks: {s:?}");
 }
 
+/// VIF1 busy with an UNPACK from the scratchpad while blocks write the words it has still to send (EmuSen_Recompiler.md §15.7).
+const BUSY_VIF1: &str = "
+    lui s0, 0xb001
+    ori t0, zero, 1
+    sw t0, -0x2000(s0)
+    lui sp, 0x7000
+    lui t0, 0x0100
+    ori t0, t0, 0x0101
+    sw t0, 0(sp)
+    lui t0, 0x6000
+    sw t0, 4(sp)
+    ori t1, zero, 256
+    or a1, sp, zero
+    fill: sw t1, 8(a1)
+    addiu t1, t1, -1
+    bgtz t1, fill
+    addiu a1, a1, 4
+    lui gp, 0x0030
+    ori t9, zero, 40
+    top: lui t0, 0x8000
+    sw t0, -0x6ff0(s0)
+    ori t0, zero, 65
+    sw t0, -0x6fe0(s0)
+    ori t0, zero, 0x101
+    sw t0, -0x7000(s0)
+    ori t8, zero, 60
+    or a1, sp, zero
+    inner: lw t2, 0x20(gp)
+    addu t2, t2, t8
+    sw t2, 0x40(a1)
+    sd t2, 0x30(gp)
+    lw t3, 0x48(a1)
+    daddu t5, t5, t3
+    sw t5, 0x200(a1)
+    ld t4, 0x48(gp)
+    daddu t5, t5, t4
+    addiu t8, t8, -1
+    sw t9, 0x10(a1)
+    bgtz t8, inner
+    addiu a1, a1, 8
+    wait: lw t0, -0x7000(s0)
+    andi t0, t0, 0x100
+    bne t0, zero, wait
+    nop
+    addiu t9, t9, -1
+    bgtz t9, top
+    nop
+    end: beq zero, zero, end
+    nop
+";
+
+#[test]
+fn loads_and_stores_beside_a_busy_vif1_leave_the_interpreters_machine() {
+    let words = assemble(BUSY_VIF1, ORIGIN);
+    let mut b = eager();
+    let s = twin(&words, 60_000, 211, &mut b);
+    println!("beside a busy VIF1: {s:?}");
+    assert!(s.compiled_steps > 10_000 && s.dmac_stops + s.left[0] + s.rollbacks > 0, "compiled, and the unit's events met inside blocks: {s:?}");
+}
+
 /// A page at 04000000h, past the wired entries, of TLB entry 40 mapped and remapped under the same virtual address, made clean and invalid, its ASID changed;
 /// then the scratch area through kseg0 in kernel mode and again in user mode, where it raises.
 const REMAPPED: &str = "

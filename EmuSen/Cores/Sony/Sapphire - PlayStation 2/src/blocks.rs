@@ -19,6 +19,8 @@ mod baseline;
 #[cfg(feature = "baseline")]
 pub use baseline::counts as baseline_counts;
 #[cfg(feature = "baseline")]
+pub use baseline::prefix_counts as baseline_prefix_counts;
+#[cfg(feature = "baseline")]
 pub use crate::ee::jit::baseline::set_dispatched as baseline_dispatched;
 /// The baseline's helpers, for its stubs (EmuSen_Recompiler.md §14.4).
 #[cfg(feature = "baseline")]
@@ -206,7 +208,9 @@ impl Blocks {
             #[cfg(feature = "forms")]
             commit: jit::forms::commit_trampoline(commit),
             #[cfg(feature = "baseline")]
-            entered_static: 0,
+            moved: 0,
+            #[cfg(feature = "baseline")]
+            prefix: 0,
         });
         let mut ctx = ctx;
         [ctx.replay, ctx.leave, ctx.fill] = jit::forms::trampolines([ctx.replay, ctx.leave, ctx.fill]);
@@ -514,7 +518,9 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
     // borrows the machine while the code and its helpers run through these pointers.
     #[cfg(feature = "baseline")]
-    let static0 = ctx.entered_static;
+    {
+        (ctx.moved, ctx.prefix) = (0, 0);
+    }
     let exit = unsafe { code(&raw mut (*run.sys).ee, ctx) };
     if let Some(f) = run.failed.take() {
         panic!("{f}");
@@ -522,7 +528,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let steps = ctx.steps;
     #[cfg(feature = "baseline")]
     if blocks.map.get(&pc).is_some_and(|b| b.covered) {
-        baseline::count(ctx.entered_static != static0, steps);
+        baseline::count(ctx.moved != 0, ctx.prefix, steps);
     }
     #[cfg(feature = "census")]
     {

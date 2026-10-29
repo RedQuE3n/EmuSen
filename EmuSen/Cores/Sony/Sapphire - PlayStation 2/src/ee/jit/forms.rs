@@ -385,9 +385,9 @@ const BASELINE_PURPOSES: [&str; 14] = ["untagged", "entry", "timing", "guest reg
 #[cfg(feature = "baseline")]
 fn covered(row: &[[u64; ROW]; N], words: &[u32], start: u32, options: Options) {
     let t = std::time::Instant::now();
-    let Some((exact, _)) = super::baseline::compile(words, start, options, false) else { return };
+    let Some(exact) = super::baseline::compile(words, start, options, false) else { return };
     let nanos = t.elapsed().as_nanos() as u64;
-    let Some((proto, _)) = super::baseline::compile(words, start, options, true) else { return };
+    let Some(proto) = super::baseline::compile(words, start, options, true) else { return };
     for k in 0..N {
         for j in 0..ROW {
             COVERED[k * ROW + j].fetch_add(row[k][j], Relaxed);
@@ -415,6 +415,9 @@ fn covered_report() -> String {
     let mut s = format!("forms baseline\tblocks {blocks}\twords {}\tcompile {:.2} us a block\n", n as u64, COVERED_WORDS[2].load(Relaxed) as f64 / blocks.max(1) as f64 / 1000.0);
     let c = crate::blocks::baseline_counts();
     s += &format!("forms static share\tcovered entries {} steps {}\tstatic entries {} steps {}\n", c[0], c[1], c[2], c[3]);
+    let p = crate::blocks::baseline_prefix_counts();
+    let at: Vec<String> = p[1..].iter().enumerate().map(|(k, n)| if k + 2 == p.len() { format!("never {n}") } else { format!("{k} {n}") }).collect();
+    s += &format!("forms prefix\tentries not at rest {}\tconverged after\t{}\n", p[0], at.join("\t"));
     for (k, name) in FORMS.iter().enumerate() {
         let b: [u64; ROW] = std::array::from_fn(|j| COVERED[k * ROW + j].load(Relaxed));
         let parts: Vec<String> = (0..12).map(|t| format!("{} {:.1}", PURPOSES[t], b[4 + t] as f64 / n)).collect();

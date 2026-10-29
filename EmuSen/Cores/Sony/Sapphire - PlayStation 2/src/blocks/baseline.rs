@@ -5,41 +5,84 @@ use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use super::{Run, fill, replay_steps, watch, watched};
 use crate::ee::jit::Context;
 use crate::ee::jit::baseline::Rec;
+use crate::ee::jit::baseline::prefix::{self, PMAX, Prefix, Table};
+use crate::ee::timing::Timing;
 
-/// Entries and steps into the blocks the baseline covers, and those that ran its static form.
-pub(crate) static COUNTS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
+/// Entries and steps into the blocks the baseline covers, those whose cycles were the static form's, the entries not at rest, then the prefix's length: converged at 0 to `PMAX`, then never.
+pub(crate) static COUNTS: [AtomicU64; 5 + PMAX + 2] = [const { AtomicU64::new(0) }; 5 + PMAX + 2];
+
+/// `Context::prefix`'s flag: the prefix ran to the exit without converging.
+const NEVER: u32 = 1 << 31;
 
 /// The helpers' addresses, in the stubs' order: exit, leave, commit, fill.
 pub(crate) fn helpers() -> [u64; 4] {
     [exit as *const () as u64, leave as *const () as u64, commit as *const () as u64, fill_page as *const () as u64]
 }
 
-/// One entry into a covered block, which ran its static form or not, and its steps.
-pub(crate) fn count(static_form: bool, steps: u32) {
+/// One entry into a covered block, at rest or not, with the steps the prefix took and the steps that stood.
+pub(crate) fn count(moved: bool, prefix: u32, steps: u32) {
+    let ran = (prefix & !NEVER).min(steps);
     COUNTS[0].fetch_add(1, Relaxed);
     COUNTS[1].fetch_add(u64::from(steps), Relaxed);
-    if static_form {
-        COUNTS[2].fetch_add(1, Relaxed);
-        COUNTS[3].fetch_add(u64::from(steps), Relaxed);
+    COUNTS[2].fetch_add(u64::from(!moved || ran == 0), Relaxed);
+    COUNTS[3].fetch_add(u64::from(steps - ran), Relaxed);
+    if moved && steps > 0 {
+        COUNTS[4].fetch_add(1, Relaxed);
+        let bucket = if prefix & NEVER != 0 { PMAX + 1 } else { ran as usize };
+        COUNTS[5 + bucket].fetch_add(1, Relaxed);
     }
 }
 
-/// `count`'s totals: covered entries and steps, static entries and steps.
+/// `count`'s totals: covered entries and steps, entries and steps in the static form.
 pub fn counts() -> [u64; 4] {
     std::array::from_fn(|k| COUNTS[k].load(Relaxed))
 }
 
-/// The steps' cycles from the record, as the code would have stored them, and the guard, base and log count.
-fn prepare(ctx: &mut Context, rec: &Rec) -> u32 {
-    // SAFETY: called by compiled code during `block`, whose `Run` is alive and borrowed by nothing else.
-    let sys = unsafe { &*(*ctx.owner.cast::<Run>()).sys };
-    let last0 = sys.ee.timing.last();
-    let steps = u32::from(rec.steps);
-    for (t, &k) in ctx.times.iter_mut().zip(&rec.times).take(steps as usize) {
-        *t = last0 + u64::from(k);
+/// The entries not at rest, then how many converged after 0 to `PMAX` steps, then those that never did before their exit.
+pub fn prefix_counts() -> Vec<u64> {
+    COUNTS[4..].iter().map(|c| c.load(Relaxed)).collect()
+}
+
+/// The run's machine, during `block`.
+fn sys<'a>(ctx: &Context) -> &'a mut crate::board::System {
+    // SAFETY: called by compiled code during `block`, whose `Run` is alive and borrowed by nothing else while its helpers run.
+    unsafe { &mut *(*ctx.owner.cast::<Run>()).sys }
+}
+
+/// The block's table, at its data's start.
+fn table<'a>(rec: &Rec) -> Table<'a> {
+    // SAFETY: the record and the table are the same block's published data, 8-aligned, never written again.
+    unsafe { Table::at((rec as *const Rec).cast::<u8>().sub(rec.table as usize)) }
+}
+
+/// The prefix run from the core's model to the exit's steps where the entry was not at rest, the model left in `d`.
+fn prefix_of<'a>(ctx: &mut Context, rec: &Rec, taken: bool, d: &mut Option<Timing>) -> Option<(Prefix, Table<'a>)> {
+    if ctx.moved == 0 {
+        return None;
     }
-    let base = u32::from(rec.base);
-    (ctx.guard, ctx.base, ctx.logged) = (base.saturating_sub(1), base, u32::from(rec.logged));
+    let t = table(rec);
+    let m = d.insert(sys(ctx).ee.timing.clone());
+    let p = prefix::run(&t, m, usize::from(rec.steps), taken);
+    ctx.prefix = p.at as u32 | if p.base.is_none() { NEVER } else { 0 };
+    Some((p, t))
+}
+
+/// The steps' cycles, from the prefix and then the table's rebased, and the guard, base and log count.
+fn prepare(ctx: &mut Context, rec: &Rec, pre: Option<&Prefix>) -> u32 {
+    let t = table(rec);
+    let steps = u32::from(rec.steps);
+    let (from, base) = match pre {
+        None => (0, sys(ctx).ee.timing.last()),
+        Some(p) => {
+            ctx.times[..p.at].copy_from_slice(&p.times[..p.at]);
+            (p.at, p.base.unwrap_or(0))
+        }
+    };
+    for k in from..steps as usize {
+        ctx.times[k] = base + u64::from(t.times[k]);
+    }
+    let b = u32::from(rec.base);
+    (ctx.guard, ctx.base, ctx.logged) = (b.saturating_sub(1), b, u32::from(rec.logged));
     steps
 }
 
@@ -50,14 +93,15 @@ extern "C" fn exit(ctx: *mut Context, rec: u64, x: u64, why: u64) -> u64 {
     if why != u64::MAX {
         ctx.left[why as usize] += 1;
     }
-    let steps = prepare(ctx, rec);
+    let mut d = None;
+    let pre = prefix_of(ctx, rec, rec.place(x).3, &mut d);
+    let steps = prepare(ctx, rec, pre.as_ref().map(|p| &p.0));
     let seen = watch(ctx);
     let kept = replay_steps(ctx, steps, false);
     watched(seen, ctx, 0);
     if kept == steps {
-        // SAFETY: as `prepare`.
-        let sys = unsafe { &mut *(*ctx.owner.cast::<Run>()).sys };
-        sys.ee.commit_static(rec, x);
+        let model = pre.as_ref().zip(d.as_ref()).map(|((p, t), d)| (p, d, t));
+        sys(ctx).ee.commit_static(rec, x, model);
         ctx.steps = steps;
     }
     u64::from(kept)
@@ -68,7 +112,9 @@ extern "C" fn leave(ctx: *mut Context, rec: u64, why: u64, _: u64) -> u64 {
     // SAFETY: as `exit`.
     let (ctx, rec) = unsafe { (&mut *ctx, &*(rec as *const Rec)) };
     ctx.left[why as usize] += 1;
-    let steps = prepare(ctx, rec);
+    let mut d = None;
+    let pre = prefix_of(ctx, rec, false, &mut d);
+    let steps = prepare(ctx, rec, pre.as_ref().map(|p| &p.0));
     let seen = watch(ctx);
     let kept = replay_steps(ctx, steps, true);
     watched(seen, ctx, 1);
@@ -79,8 +125,10 @@ extern "C" fn leave(ctx: *mut Context, rec: u64, why: u64, _: u64) -> u64 {
 extern "C" fn commit(ctx: *mut Context, rec: u64, x: u64, _: u64) -> u64 {
     // SAFETY: as `exit`.
     let (ctx, rec) = unsafe { (&mut *ctx, &*(rec as *const Rec)) };
-    let sys = unsafe { &mut *(*ctx.owner.cast::<Run>()).sys };
-    sys.ee.commit_static(rec, x);
+    let mut d = None;
+    let pre = prefix_of(ctx, rec, rec.place(x).3, &mut d);
+    let model = pre.as_ref().zip(d.as_ref()).map(|((p, t), d)| (p, d, t));
+    sys(ctx).ee.commit_static(rec, x, model);
     0
 }
 

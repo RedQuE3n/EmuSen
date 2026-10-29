@@ -1,6 +1,7 @@
 //! E0 of the tailored recompiler, behind the `baseline` feature (EmuSen_Recompiler.md §14)
 
 mod lower;
+pub(crate) mod prefix;
 
 use std::mem::offset_of;
 
@@ -9,20 +10,25 @@ use emusen_assembler::{Assembler, Code, Op, Src, Width};
 use emusen_mips_planner::{self as planner, Access, Class, Info, Isa, Plan};
 
 use super::super::ops;
-use super::super::timing::{SNAP_READY, Snap, Timing};
+use super::super::timing::{MAC_BITS, SNAP_READY, Snap, Timing};
 use super::{Context, Options, shape};
 use crate::ee::Ee;
 
 pub(crate) use lower::lower;
 
-/// The instructions E0's slice compiles (§14.2): the integer ALU but the multipliers, HI/LO and SA, and the traps.
+/// The plain instructions the baseline compiles: S36's (E0's integer ALU, and from E1 HI and LO, the multipliers and dividers, SA and the traps).
 const PLAIN: &[&str] = &[
     "add", "addu", "sub", "subu", "addi", "addiu", "dadd", "daddu", "dsub", "dsubu", "daddi", "daddiu", "and", "or", "xor", "nor", "andi",
     "ori", "xori", "lui", "slt", "sltu", "slti", "sltiu", "movz", "movn", "sll", "srl", "sra", "sllv", "srlv", "srav", "dsll", "dsrl",
-    "dsra", "dsll32", "dsrl32", "dsra32", "dsllv", "dsrlv", "dsrav", "sync", "sync.p",
+    "dsra", "dsll32", "dsrl32", "dsra32", "dsllv", "dsrlv", "dsrav", "sync", "sync.p", "mfhi", "mflo", "mthi", "mtlo", "mfhi1", "mflo1",
+    "mthi1", "mtlo1", "mult", "multu", "mult1", "multu1", "madd", "maddu", "madd1", "maddu1", "div", "divu", "div1", "divu1", "mfsa",
+    "mtsa", "mtsab", "mtsah", "tge", "tgeu", "tlt", "tltu", "teq", "tne", "tgei", "tgeiu", "tlti", "tltiu", "teqi", "tnei",
 ];
-/// The aligned loads and stores; the unaligned ones and PREF are E1's.
-const MEMORY: &[&str] = &["lb", "lbu", "lh", "lhu", "lw", "lwu", "ld", "lq", "sb", "sh", "sw", "sd", "sq"];
+/// The loads and stores: S37's, the aligned ones from E0, the unaligned ones and PREF from E1.
+const MEMORY: &[&str] = &[
+    "lb", "lbu", "lh", "lhu", "lw", "lwu", "ld", "lq", "sb", "sh", "sw", "sd", "sq", "lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "sdr",
+    "pref",
+];
 
 fn bit(r: u32) -> u32 {
     if r == 0 { 0 } else { 1 << r }
@@ -42,6 +48,11 @@ impl Isa for R5900Isa {
         if PLAIN.contains(&name) {
             return match name {
                 "sync" | "sync.p" => plain(0, 0),
+                "mfhi" | "mflo" | "mfhi1" | "mflo1" | "mfsa" => plain(0, bit(rd)),
+                "mthi" | "mtlo" | "mthi1" | "mtlo1" | "mtsa" | "mtsab" | "mtsah" => plain(bit(rs), 0),
+                "mult" | "multu" | "mult1" | "multu1" | "madd" | "maddu" | "madd1" | "maddu1" => plain(bit(rs) | bit(rt), bit(rd)),
+                "div" | "divu" | "div1" | "divu1" | "tge" | "tgeu" | "tlt" | "tltu" | "teq" | "tne" => plain(bit(rs) | bit(rt), 0),
+                "tgei" | "tgeiu" | "tlti" | "tltiu" | "teqi" | "tnei" => plain(bit(rs), 0),
                 "lui" => plain(0, bit(rt)),
                 "addi" | "addiu" | "daddi" | "daddiu" | "andi" | "ori" | "xori" | "slti" | "sltiu" => plain(bit(rs), bit(rt)),
                 "sll" | "srl" | "sra" | "dsll" | "dsrl" | "dsra" | "dsll32" | "dsrl32" | "dsra32" => plain(bit(rt), bit(rd)),
@@ -51,7 +62,11 @@ impl Isa for R5900Isa {
         }
         if MEMORY.contains(&name) {
             let (bytes, store) = match name {
-                "lb" | "lbu" => (1, false),
+                "lb" | "lbu" | "pref" => (1, false),
+                "lwl" | "lwr" => (4, false),
+                "ldl" | "ldr" => (8, false),
+                "swl" | "swr" => (4, true),
+                "sdl" | "sdr" => (8, true),
                 "lh" | "lhu" => (2, false),
                 "lw" | "lwu" => (4, false),
                 "ld" => (8, false),
@@ -62,8 +77,15 @@ impl Isa for R5900Isa {
                 "sd" => (8, true),
                 _ => (16, true),
             };
-            let access = Access { base: rs as u8, disp: w as u16 as i16, bytes, store, align: if bytes == 16 { 0xFFFF_FFF0 } else { 0xFFFF_FFFF } };
-            let (reads, writes) = if store { (bit(rs) | bit(rt), 0) } else { (bit(rs), bit(rt)) };
+            let unit = matches!(name, "lwl" | "lwr" | "ldl" | "ldr" | "swl" | "swr" | "sdl" | "sdr");
+            let align = if bytes == 16 || unit { !(u32::from(bytes) - 1) } else { 0xFFFF_FFFF };
+            let access = Access { base: rs as u8, disp: w as u16 as i16, bytes, store, align };
+            let (reads, writes) = match name {
+                "pref" => (bit(rs), 0),
+                _ if store => (bit(rs) | bit(rt), 0),
+                _ if unit => (bit(rs) | bit(rt), bit(rt)),
+                _ => (bit(rs), bit(rt)),
+            };
             return Info { class: Class::Memory, reads, writes, access: Some(access), likely: false };
         }
         match name {
@@ -116,6 +138,12 @@ pub(crate) struct Static {
     pub snaps: Vec<[Snap; 2]>,
     /// The resources the block reads from its entry, which the entry's test finds ready.
     pub exposed: u64,
+    /// Each step as the issue model sees it, for the prefix.
+    pub steps: Vec<prefix::PStep>,
+    /// What the steps from `k` on read before they write it.
+    pub exposed_from: Vec<u64>,
+    /// The last step the prefix tests for convergence, before the branch and at most `prefix::PMAX`.
+    pub kmax: usize,
 }
 
 /// A base far from zero, so that every offset is positive.
@@ -126,6 +154,7 @@ pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
     let n = plan.steps.len();
     let mut runs: [(Vec<u64>, Vec<Snap>); 2] = Default::default();
     let mut exposed = 0u64;
+    let mut steps = Vec::with_capacity(n);
     for (taken, run) in runs.iter_mut().enumerate() {
         let mut t = Timing::at_rest(BASE);
         let (mut written, mut unpaired) = (0u64, 0u8);
@@ -135,16 +164,22 @@ pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
             i.taken = taken == 1 && s.info.class == Class::Branch;
             i.single = options.single;
             i.blocking = options.blocking;
-            let (reads, writes) = (i.reads as u64, i.writes as u64);
-            if i.reads >> 64 != 0 || i.writes >> 64 != 0 {
+            const FREE: u64 = (1 << MAC_BITS[0]) - (1 << SNAP_READY);
+            if (i.reads | i.writes) >> 64 != 0 || (i.reads | i.writes) as u64 & FREE != 0 {
                 return None;
             }
+            let units = Timing::units(&i);
+            let (reads, writes) = (i.reads as u64 | units, i.writes as u64 | units);
             exposed |= reads & !written;
+            if taken == 0 {
+                let branch = u8::from(s.info.class == Class::Branch);
+                steps.push(prefix::PStep { reads, writes, category: i.category as u8, row: i.row as u8, branch, pad: [0; 5] });
+            }
             let at = t.issue(i);
             written |= writes;
             unpaired += u8::from(!t.paired());
             run.0.push(at + 1);
-            run.1.push(t.snap(BASE, written & ((1 << SNAP_READY) - 1), unpaired)?);
+            run.1.push(t.snap(BASE, written & ((1 << SNAP_READY) - 1 | 1 << MAC_BITS[0] | 1 << MAC_BITS[1]), unpaired)?);
         }
     }
     if runs[0].0 != runs[1].0 {
@@ -155,7 +190,13 @@ pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
         times[k] = u16::try_from(c - BASE).ok()?;
     }
     let snaps = (0..=n).map(|k| [runs[0].1[k], runs[1].1[k]]).collect();
-    Some(Static { times, snaps, exposed })
+    let mut exposed_from = vec![0u64; n + 1];
+    for k in (0..n).rev() {
+        exposed_from[k] = steps[k].reads | exposed_from[k + 1] & !steps[k].writes;
+    }
+    let before_branch = plan.steps.iter().position(|s| s.info.class == Class::Branch).unwrap_or(n - 1);
+    let kmax = before_branch.min(prefix::PMAX);
+    Some(Static { times, snaps, exposed, steps, exposed_from, kmax })
 }
 
 /// An exit's place: where the core stands after its steps.
@@ -186,8 +227,8 @@ pub(crate) struct Rec {
     pub next: u32,
     /// The address after the branch's slot: a branch is taken where the place it leads to is not this.
     pub after: u32,
-    pub pad2: u32,
-    pub times: [u16; shape::MAX],
+    /// The record's offset in the block's data, where the prefix's table, with the steps' cycles, is at 0.
+    pub table: u32,
     pub snap: [Snap; 2],
 }
 
@@ -212,20 +253,26 @@ impl Rec {
 }
 
 impl Ee {
-    /// The baseline's commit of an exit's steps once every one stands. See EmuSen_Recompiler.md §14.
-    pub(crate) fn commit_static(&mut self, rec: &Rec, x: u64) {
+    /// The baseline's commit of an exit's steps once every one stands, through the prefix's model where the entry was not at rest. See EmuSen_Recompiler.md §14 and §15.
+    pub(crate) fn commit_static(&mut self, rec: &Rec, x: u64, pre: Option<(&prefix::Prefix, &Timing, &prefix::Table)>) {
         use super::super::cop0::{RANDOM, WIRED};
         let (pc, next, delay, taken) = rec.place(x);
         let s = &rec.snap[usize::from(taken)];
-        let base = self.timing.last();
-        self.timing.apply(base, s);
+        let (unpaired, paired) = match pre {
+            None => {
+                let base = self.timing.last();
+                self.timing.apply(base, s);
+                (s.unpaired, s.paired != 0)
+            }
+            Some((p, d, t)) => prefix::model(&mut self.timing, d, p, t, s, usize::from(rec.steps)),
+        };
         let wired = self.cop0[WIRED] & 63;
         let mut r = self.cop0[RANDOM];
-        for _ in 0..s.unpaired {
+        for _ in 0..unpaired {
             r = if r <= wired || r > 47 { 47 } else { r - 1 };
         }
         self.cop0[RANDOM] = r;
-        self.group = if s.paired != 0 { 2 } else { 1 };
+        self.group = if paired { 2 } else { 1 };
         let word = super::commit_word(u32::from(rec.steps), 0, 0, rec.flags & SYNC != 0, delay, None);
         let end = self.timing.last() + 1;
         self.commit_exit(word, u64::from(pc) | u64::from(next) << 32, end);
@@ -250,11 +297,11 @@ pub(crate) const SLOTS: i32 = (FRAME - 8) / 8;
 
 pub(crate) const X_STEPS: i32 = offset_of!(Context, steps) as i32;
 pub(crate) const X_PAGES: i32 = offset_of!(Context, pages) as i32;
-pub(crate) const X_STATIC: i32 = offset_of!(Context, entered_static) as i32;
+pub(crate) const X_MOVED: i32 = offset_of!(Context, moved) as i32;
 const LAST: i32 = (offset_of!(Ee, timing) as i32) + super::super::timing::layout::LAST;
 const SAVED: [emusen_assembler::Reg; 6] = [x64::RBX, x64::RBP, x64::R12, x64::R13, x64::R14, x64::R15];
 
-/// The stubs: the entry (registers saved, the fixed ones set, the static entries counted), the three returns, and the helper convention's trampolines.
+/// The stubs: the entry (registers saved, the fixed ones set), the three returns, and the helper convention's trampolines.
 pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
     let mut out = Vec::new();
     let one = |f: &dyn Fn(&mut X64)| {
@@ -274,7 +321,6 @@ pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
         a.mov(Width::W64, x64::R15, x64::RSI);
         a.load(8, false, x64::R12, emusen_assembler::at(x64::RDI, LAST));
         a.load(8, false, x64::R13, emusen_assembler::at(x64::RSI, X_PAGES));
-        a.alu_mem(Op::Add, 8, emusen_assembler::at(x64::RSI, X_STATIC), Src::Imm(1));
         a.jump_reg(x64::R11);
     }));
     let ret = |a: &mut X64, exit: u32, zero_steps: bool| {
@@ -298,13 +344,13 @@ pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
 }
 
 /// The block's code, or none outside the slice; `prototype` drops the entry's test and the undo log, for the byte count on the static prototype's terms only (§14.1).
-pub(crate) fn compile(words: &[u32], start: u32, options: Options, prototype: bool) -> Option<(Code, u32)> {
+pub(crate) fn compile(words: &[u32], start: u32, options: Options, prototype: bool) -> Option<Code> {
     if !covers(words, options) {
         return None;
     }
     let plan = planner::plan(&R5900Isa, words, start).ok()?;
     let times = static_times(&plan, options)?;
-    lower(&plan, &times, prototype)
+    lower(&plan, &times, options, prototype)
 }
 
 #[cfg(test)]

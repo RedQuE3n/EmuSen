@@ -1,10 +1,10 @@
 [package]
 name = "emusen-assembler"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 publish = false
 
-# The tailored recompiler's macro-assembler: a guest-neutral `Assembler` trait (1.0) and its backends, x86-64 first, on
+# The tailored recompiler's macro-assembler: a guest-neutral `Assembler` trait (1.1) and its backends, x86-64 first, on
 # Cranelift's assembler crate. No guest. See Hardware/Shared/EmuSen_Recompiler.md §3.3 and §14.
 [lib]
 name = "emusen_assembler"

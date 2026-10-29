@@ -223,6 +223,9 @@ pub const UCAB_REFILL: u64 = 16;
 /// The resources a `Snap` carries ready cycles for: the GPRs, HI/LO of both pipes and SA.
 #[cfg(feature = "baseline")]
 pub(crate) const SNAP_READY: usize = SA + 1;
+/// The bits a `Snap`'s masks give the two multipliers' free cycles, past every resource a block of S36 and S37 names.
+#[cfg(feature = "baseline")]
+pub(crate) const MAC_BITS: [usize; 2] = [62, 63];
 
 /// The issue model after a static region's steps, as offsets from the entry's last issue (EmuSen_Recompiler.md §14.3).
 #[cfg(feature = "baseline")]
@@ -241,12 +244,14 @@ pub(crate) struct Snap {
     /// The issue cycles that did not pair, each of which moves Random.
     pub unpaired: u8,
     pub ready: [u16; SNAP_READY],
+    /// The multipliers' free cycles, where `ready_mask` has their bits.
+    pub mac: [u16; 2],
 }
 
 #[cfg(feature = "baseline")]
 impl Default for Snap {
     fn default() -> Snap {
-        Snap { writes: [0; 2], ready_mask: 0, last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; SNAP_READY] }
+        Snap { writes: [0; 2], ready_mask: 0, last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; SNAP_READY], mac: [0; 2] }
     }
 }
 
@@ -547,7 +552,7 @@ impl Timing {
     /// Whether this model acts as `at_rest(last)` for a block reading `exposed` from its entry (EmuSen_Recompiler.md §14.3).
     #[cfg(all(feature = "baseline", test))]
     pub(crate) fn rests_for(&self, exposed: u64) -> bool {
-        let ready = (0..64).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready[r] <= self.last + 1);
+        let ready = (0..64).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready_of(r) <= self.last + 1);
         self.instructions > 0 && !self.open && self.group_ends == 0 && self.floor <= self.last + 1 && ready
     }
 
@@ -558,6 +563,11 @@ impl Timing {
         let mut s = Snap { writes: [self.last_writes as u64, (self.last_writes >> 64) as u64], ready_mask: mask, last: k(self.last)?, floor: k(self.floor)?, open: u8::from(self.open), group_ends: self.group_ends, paired: u8::from(self.paired), category: self.last_category, pipe: self.last_pipe, unpaired, ..Snap::default() };
         for r in (0..SNAP_READY).filter(|r| mask >> r & 1 == 1) {
             s.ready[r] = k(self.ready[r])?;
+        }
+        for (u, &bit) in MAC_BITS.iter().enumerate() {
+            if mask >> bit & 1 == 1 {
+                s.mac[u] = k(self.ready_of(bit))?;
+            }
         }
         Some(s)
     }
@@ -571,6 +581,71 @@ impl Timing {
         (self.open, self.group_ends, self.paired, self.last_category, self.last_pipe) = (s.open != 0, s.group_ends, s.paired != 0, s.category, s.pipe);
         for r in (0..SNAP_READY).filter(|r| s.ready_mask >> r & 1 == 1) {
             self.ready[r] = base + u64::from(s.ready[r]);
+        }
+        for (u, &bit) in MAC_BITS.iter().enumerate() {
+            if s.ready_mask >> bit & 1 == 1 {
+                self.set_ready(bit, base + u64::from(s.mac[u]));
+            }
+        }
+    }
+
+    /// The base at which this model is `s` shifted in time for every field a block's rest reading `exposed` first can see; none otherwise (EmuSen_Recompiler.md §15.2).
+    #[cfg(feature = "baseline")]
+    pub(crate) fn converges(&self, s: &Snap, exposed: u64) -> Option<u64> {
+        let (sl, sf, open) = (u64::from(s.last), u64::from(s.floor), s.open != 0);
+        let b = self.last.checked_sub(sl)?;
+        if self.instructions == 0 || self.open != open || self.group_ends != s.group_ends {
+            return None;
+        }
+        let writes = u128::from(s.writes[0]) | u128::from(s.writes[1]) << 64;
+        if open && (self.last_category, self.last_pipe, self.last_writes) != (s.category, s.pipe, writes) {
+            return None;
+        }
+        if self.floor != b + sf && !(self.floor <= self.last + 1 && sf <= sl + 1) {
+            return None;
+        }
+        let q = u64::from(!open);
+        let mut e = exposed;
+        while e != 0 {
+            let r = e.trailing_zeros() as usize;
+            e &= e - 1;
+            let d = self.ready_of(r);
+            let same = if s.ready_mask >> r & 1 == 1 {
+                let sr = u64::from(if r >= MAC_BITS[0] { s.mac[r - MAC_BITS[0]] } else { s.ready[r] });
+                d == b + sr || (d <= self.last + q && sr <= sl + q)
+            } else {
+                d <= self.last + q
+            };
+            if !same {
+                return None;
+            }
+        }
+        Some(b)
+    }
+
+    /// The multipliers an instruction takes, as their bits in `MAC_BITS`.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn units(i: &Issue) -> u64 {
+        u64::from(Self::uses_mac0(i)) << MAC_BITS[0] | u64::from(Self::uses_mac1(i)) << MAC_BITS[1]
+    }
+
+    /// The ready cycle of resource `r`, or a multiplier's free cycle at its bit in `MAC_BITS`.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn ready_of(&self, r: usize) -> u64 {
+        match r {
+            62 => self.mac0_free,
+            63 => self.mac1_free,
+            _ => self.ready[r],
+        }
+    }
+
+    /// Resource `r` ready at cycle `c`, as `ready_of` names it.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn set_ready(&mut self, r: usize, c: u64) {
+        match r {
+            62 => self.mac0_free = c,
+            63 => self.mac1_free = c,
+            _ => self.ready[r] = c,
         }
     }
 

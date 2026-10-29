@@ -8,11 +8,14 @@ use emusen_mips_planner::{Class, Plan, Step};
 
 use super::super::super::cache::{DCache, DTag};
 use super::super::super::timing::layout;
-use super::super::{Context, Page, SHORT, kind, shape};
-use super::{BRANCHED, Rec, SLOTS, SYNC, Static, mode, stub};
+use super::super::{Context, Options, Page, SHORT, kind, shape};
+use super::{BRANCHED, Rec, SLOTS, SYNC, Static, X_MOVED, mode, prefix, stub};
 use crate::ee::Ee;
 
 const GPR: i32 = offset_of!(Ee, gpr) as i32;
+const HI: i32 = offset_of!(Ee, hi) as i32;
+const LO: i32 = offset_of!(Ee, lo) as i32;
+const SA: i32 = offset_of!(Ee, sa) as i32;
 const T: i32 = offset_of!(Ee, timing) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
 const D_DATA: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, data)) as i32;
@@ -43,6 +46,8 @@ const P_FAULT: usize = 11;
 pub(crate) const P_TEST: usize = 12;
 pub(crate) const P_LOG: usize = 13;
 
+/// The loads and stores of a unit's part, which never leave for alignment.
+const UNALIGNED: [&str; 8] = ["lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "sdr"];
 /// Why a load or store left, `Context::left`'s index (as `emit.rs` counts them).
 const LEFT_ALIGN: i64 = 1;
 const LEFT_PAGE: i64 = 2;
@@ -70,36 +75,43 @@ enum Home {
     Slot(i32),
 }
 
-/// Value ids: guest registers' low halves 0..32, high halves 32..64, the branch's outcome, then each access's record.
-const NEXT: usize = 64;
+/// Value ids: guest registers' low halves 0..32, high halves 32..64, LO, HI, LO1, HI1 and SA, the branch's outcome, then each access's record.
+const LO0: usize = 64;
+const HI0: usize = 65;
+const LO1: usize = 66;
+const HI1: usize = 67;
+const SAV: usize = 68;
+/// The guest's values, held and written back alike.
+const GUEST: usize = 69;
+const NEXT: usize = 69;
 const F_A: usize = 0;
 const F_HOST: usize = 1;
 const F_META: usize = 2;
 const F_PTR: usize = 3;
 const F_TAG: usize = 4;
 fn rec_id(j: usize, f: usize) -> usize {
-    65 + 5 * j + f
+    70 + 5 * j + f
 }
-const VALUES: usize = 65 + 5 * shape::MAX;
+const VALUES: usize = 70 + 5 * shape::MAX;
 
 /// The state after the last load or store, which a rollback past it writes back.
 #[derive(Clone, Copy)]
 struct SnapSt {
     base: u32,
-    dirty: u64,
+    dirty: u128,
     pc: u32,
     logged: u32,
     sync: bool,
     /// Slots holding a value as it stood here, saved before a later write.
-    saved: [Option<i32>; 64],
+    saved: [Option<i32>; GUEST],
 }
 
 /// What the lowering knows at a point of the straight line.
 #[derive(Clone, Copy)]
 struct St {
     held: [bool; VALUES],
-    /// Guest values written (lows in bits 0..32, highs 32..64).
-    dirty: u64,
+    /// Guest values written, a bit a value id below `GUEST`.
+    dirty: u128,
     steps: u32,
     logged: u32,
     sync: bool,
@@ -127,6 +139,8 @@ struct L<'a> {
     after: u32,
     prototype: bool,
     purpose: usize,
+    /// The block's data so far, mirrored so that a record knows its own offset.
+    data_len: u32,
 }
 
 fn rs(w: u32) -> usize {
@@ -145,7 +159,28 @@ fn slot_mem(k: i32) -> Mem {
     at(RSP, 8 * k)
 }
 fn core_at(v: usize) -> Mem {
-    at(EE, GPR + 16 * (v % 32) as i32 + if v >= 32 { 8 } else { 0 })
+    match v {
+        LO0 => at(EE, LO),
+        HI0 => at(EE, HI),
+        LO1 => at(EE, LO + 8),
+        HI1 => at(EE, HI + 8),
+        SAV => at(EE, SA),
+        _ => at(EE, GPR + 16 * (v % 32) as i32 + if v >= 32 { 8 } else { 0 }),
+    }
+}
+
+/// The values beyond the general registers an instruction reads or writes: LO, HI, LO1, HI1, SA.
+fn specials(w: u32) -> &'static [usize] {
+    match shape::name(w) {
+        "mfhi" | "mthi" => &[HI0],
+        "mflo" | "mtlo" => &[LO0],
+        "mfhi1" | "mthi1" => &[HI1],
+        "mflo1" | "mtlo1" => &[LO1],
+        "mult" | "multu" | "madd" | "maddu" | "div" | "divu" => &[LO0, HI0],
+        "mult1" | "multu1" | "madd1" | "maddu1" | "div1" | "divu1" => &[LO1, HI1],
+        "mfsa" | "mtsa" | "mtsab" | "mtsah" => &[SAV],
+        _ => &[],
+    }
 }
 
 /// The block's last use of each record field, by the later accesses that reuse it.
@@ -201,6 +236,7 @@ impl L<'_> {
             {
                 vals.push(32 + rt(s.word));
             }
+            vals.extend_from_slice(specials(s.word));
             if s.info.class == Class::Branch {
                 vals.push(NEXT);
             }
@@ -253,7 +289,7 @@ impl L<'_> {
                 h
             }
             Home::Slot(k) => {
-                if (v < 64 && self.st.dirty >> v & 1 == 1) || (v >= 64 && self.st.held[v]) {
+                if (v < GUEST && self.st.dirty >> v & 1 == 1) || (v >= GUEST && self.st.held[v]) {
                     self.a.load(8, false, tmp, slot_mem(k));
                 } else {
                     self.a.load(8, false, tmp, core_at(v));
@@ -261,7 +297,7 @@ impl L<'_> {
                 tmp
             }
             Home::None => {
-                assert!(v < 64, "a value with no home is a guest register");
+                assert!(v < GUEST, "a value with no home is a guest register");
                 self.a.load(8, false, tmp, core_at(v));
                 tmp
             }
@@ -316,7 +352,7 @@ impl L<'_> {
             Home::None => panic!("a written value has a home"),
         }
         self.st.held[v] = true;
-        if v < 64 {
+        if v < GUEST {
             self.st.dirty |= 1 << v;
         }
     }
@@ -324,7 +360,7 @@ impl L<'_> {
     /// Before `v` is written: its value as the last load or store left it saved, where a rollback could write it back.
     fn before_write(&mut self, v: usize, tmp: Reg) {
         let Some(mut s) = self.st.snap else { return };
-        if v >= 64 || s.dirty >> v & 1 == 0 || s.saved[v].is_some() {
+        if v >= GUEST || s.dirty >> v & 1 == 0 || s.saved[v].is_some() {
             return;
         }
         let k = self.new_slot().expect("a slot for a saved value");
@@ -352,16 +388,23 @@ impl L<'_> {
             pc,
             next,
             after: self.after,
-            pad2: 0,
-            times: self.times.times,
+            table: self.data_len.next_multiple_of(8),
             snap: self.times.snaps[steps as usize],
         };
-        self.a.data(r.bytes())
+        self.data(r.bytes())
+    }
+
+    /// Bytes appended to the block's data, as `Assembler::data` lays them; their offset.
+    fn data(&mut self, bytes: &[u8]) -> u32 {
+        let at = self.a.data(bytes);
+        assert_eq!(at, self.data_len.next_multiple_of(8), "the data laid as mirrored");
+        self.data_len = at + bytes.len() as u32;
+        at
     }
 
     /// Every dirty guest value stored to the core.
     fn store_all(&mut self, st: &St) {
-        for v in 1..64 {
+        for v in 1..GUEST {
             if v != 32 && st.dirty >> v & 1 == 1 {
                 let r = match self.home[v] {
                     Home::Reg(h) => h,
@@ -378,7 +421,7 @@ impl L<'_> {
 
     /// The state after the last load or store written back, its commit made, and the rollback's return.
     fn partial(&mut self, st: &St, s: &SnapSt) {
-        for v in 1..64 {
+        for v in 1..GUEST {
             if v != 32 && s.dirty >> v & 1 == 1 {
                 let r = match (s.saved[v], self.home[v]) {
                     (Some(k), _) | (None, Home::Slot(k)) => {
@@ -566,6 +609,99 @@ impl L<'_> {
         self.put(d, h);
     }
 
+    /// `d = s` for two values of any kind.
+    fn copy(&mut self, d: usize, s: usize) {
+        if d == 0 {
+            return;
+        }
+        self.before_write(d, RDI);
+        let a = self.get(s, X);
+        let h = self.dest(d, X);
+        self.a.mov(Width::W64, h, a);
+        self.put(d, h);
+    }
+
+    /// LO, HI and rd from the 64-bit result in X: its low word and its high word, each sign-extended.
+    fn product_out(&mut self, upper: bool, d: usize) {
+        let (lo, hi) = if upper { (LO1, HI1) } else { (LO0, HI0) };
+        self.a.mov(Width::W64, TG, X);
+        self.a.shift(ShiftOp::Shr, Width::W64, TG, TG, By::Imm(32));
+        for (v, from) in [(lo, X), (hi, TG)] {
+            self.before_write(v, RDI);
+            let h = self.dest(v, RDI);
+            self.a.sext32(h, from);
+            self.put(v, h);
+        }
+        if d != 0 {
+            self.before_write(d, RDI);
+            let h = self.dest(d, RDI);
+            self.a.sext32(h, X);
+            self.put(d, h);
+        }
+    }
+
+    /// MULT, MULTU, MADD and MADDU of either pipeline (`ops.rs`'s `product`).
+    fn multiply(&mut self, unsigned: bool, add: bool, upper: bool, s: usize, t: usize, d: usize) {
+        let a = self.get(s, X);
+        if unsigned { self.a.mov(Width::W32, X, a) } else { self.a.sext32(X, a) }
+        let b = self.get(t, TG);
+        if unsigned { self.a.mov(Width::W32, TG, b) } else { self.a.sext32(TG, b) }
+        self.a.mul(X, X, TG);
+        if add {
+            let (lo, hi) = if upper { (LO1, HI1) } else { (LO0, HI0) };
+            let h = self.get(hi, A);
+            self.a.mov(Width::W64, A, h);
+            self.a.shift(ShiftOp::Shl, Width::W64, A, A, By::Imm(32));
+            let l = self.get(lo, TG);
+            self.a.mov(Width::W32, TG, l);
+            self.a.alu(Op::Or, Width::W64, A, A, Src::Reg(TG));
+            self.a.alu(Op::Add, Width::W64, X, X, Src::Reg(A));
+        }
+        self.product_out(upper, d);
+    }
+
+    /// DIV and DIVU of either pipeline (`ops.rs`'s `quotient_signed` and `quotient_unsigned`): a zero divisor and, signed, -1 out of line.
+    fn divide(&mut self, signed: bool, upper: bool, s: usize, t: usize) {
+        let n = self.get(s, P);
+        self.a.mov(Width::W64, P, n);
+        let dv = self.get(t, A);
+        self.a.mov(Width::W64, A, dv);
+        let (zero, minus, join) = (self.a.label(), self.a.label(), self.a.label());
+        self.a.test(Width::W32, A, Src::Reg(A));
+        self.a.branch(Cond::Eq, zero);
+        if signed {
+            self.a.cmp(Width::W32, A, Src::Imm(-1));
+            self.a.branch(Cond::Eq, minus);
+        }
+        self.a.divrem(signed, Width::W32, X, TG, P, A);
+        self.a.bind(join);
+        let out = self.cold_begin();
+        self.a.bind(zero);
+        // q = all ones (signed: 1 where the dividend is negative), r = the dividend.
+        self.a.mov_imm(X, 0xFFFF_FFFF);
+        if signed {
+            self.a.mov_imm(TG, 1);
+            self.a.test(Width::W32, P, Src::Reg(P));
+            self.a.select(Cond::Lt, X, TG);
+        }
+        self.a.mov(Width::W32, TG, P);
+        self.a.jump(join);
+        if signed {
+            self.a.bind(minus);
+            self.a.neg(Width::W32, X, P);
+            self.a.mov_imm(TG, 0);
+            self.a.jump(join);
+        }
+        self.cold_end(out);
+        let (lo, hi) = if upper { (LO1, HI1) } else { (LO0, HI0) };
+        for (v, from) in [(lo, X), (hi, TG)] {
+            self.before_write(v, RDI);
+            let h = self.dest(v, RDI);
+            self.a.sext32(h, from);
+            self.put(v, h);
+        }
+    }
+
     fn plain(&mut self, s: &Step, place: At) {
         let w = s.word;
         let (s_, t, d) = (rs(w), rt(w), rd(w));
@@ -639,7 +775,56 @@ impl L<'_> {
             "dsrav" => self.shift(ShiftOp::Sar, W64, d, t, Ok(s_)),
             "sync" => self.st.sync = true,
             "sync.p" => {}
-            other => unreachable!("{other} is not in E0's slice"),
+            "mfhi" => self.copy(d, HI0),
+            "mflo" => self.copy(d, LO0),
+            "mfhi1" => self.copy(d, HI1),
+            "mflo1" => self.copy(d, LO1),
+            "mfsa" => self.copy(d, SAV),
+            "mthi" => self.copy(HI0, s_),
+            "mtlo" => self.copy(LO0, s_),
+            "mthi1" => self.copy(HI1, s_),
+            "mtlo1" => self.copy(LO1, s_),
+            n @ ("mult" | "multu" | "mult1" | "multu1" | "madd" | "maddu" | "madd1" | "maddu1") => {
+                let upper = n.ends_with('1');
+                self.multiply(n.contains("multu") || n.contains("maddu"), n.starts_with("madd"), upper, s_, t, d);
+            }
+            n @ ("div" | "divu" | "div1" | "divu1") => self.divide(!n.starts_with("divu"), n.ends_with('1'), s_, t),
+            n @ ("mtsa" | "mtsab" | "mtsah") => {
+                self.before_write(SAV, RDI);
+                let a = self.get(s_, X);
+                self.a.mov(W64, X, a);
+                if n != "mtsa" {
+                    self.a.alu(Op::Xor, W64, X, X, Src::Imm((w & 0xFFFF) as i32));
+                }
+                if n == "mtsah" {
+                    self.a.alu(Op::And, W64, X, X, Src::Imm(7));
+                    self.a.alu(Op::Add, W64, X, X, Src::Reg(X));
+                } else {
+                    self.a.alu(Op::And, W64, X, X, Src::Imm(15));
+                }
+                let h = self.dest(SAV, X);
+                self.a.mov(W64, h, X);
+                self.put(SAV, h);
+            }
+            n @ ("tge" | "tgeu" | "tlt" | "tltu" | "teq" | "tne" | "tgei" | "tgeiu" | "tlti" | "tltiu" | "teqi" | "tnei") => {
+                let c = match n {
+                    "tge" | "tgei" => Cond::Ge,
+                    "tgeu" | "tgeiu" => Cond::Geu,
+                    "tlt" | "tlti" => Cond::Lt,
+                    "tltu" | "tltiu" => Cond::Ltu,
+                    "teq" | "teqi" => Cond::Eq,
+                    _ => Cond::Ne,
+                };
+                let st = self.st;
+                let a = self.get(s_, X);
+                self.pur(P_FAULT);
+                let imm = matches!(n, "tgei" | "tgeiu" | "tlti" | "tltiu" | "teqi" | "tnei");
+                let b = if imm { Src::Imm(simm(w)) } else { Src::Reg(self.get(t, TG)) };
+                self.a.cmp(W64, a, b);
+                self.exit_if(c, &st, place);
+                self.pur(P_WORK);
+            }
+            other => unreachable!("{other} is not in the baseline's classes"),
         }
         self.st.steps += 1;
     }
@@ -736,7 +921,8 @@ impl L<'_> {
         self.pur(P_ADDR);
         let b = self.get(acc.base as usize, A);
         self.a.lea(Width::W32, A, at(b, simm(w)));
-        if (2..=8).contains(&acc.bytes) {
+        let unit = UNALIGNED.contains(&shape::name(w));
+        if (2..=8).contains(&acc.bytes) && !unit {
             self.a.test(Width::W32, A, Src::Imm(i32::from(acc.bytes) - 1));
             let l = slow.label(&mut self.a, LEFT_ALIGN);
         self.a.branch(Cond::Ne, l);
@@ -883,7 +1069,10 @@ impl L<'_> {
 
         // The data access.
         let t = rt(w);
-        if acc.store {
+        if shape::name(w) == "pref" {
+        } else if unit {
+            self.unaligned(shape::name(w), acc.bytes, t);
+        } else if acc.store {
             if !self.prototype {
                 self.log();
             }
@@ -917,7 +1106,7 @@ impl L<'_> {
             }
         }
         self.st.steps += 1;
-        self.st.snap = Some(SnapSt { base: self.st.steps, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; 64] });
+        self.st.snap = Some(SnapSt { base: self.st.steps, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
 
         // The ways it leaves, before it.
         let here = self.a.current();
@@ -934,6 +1123,85 @@ impl L<'_> {
             }
         }
         self.a.section(here);
+    }
+
+    /// LWL to SDR (`ops.rs`'s `unit` and `store_unit`): the unit's address and pointer made from A and P, the shift from the byte within it, and the merge.
+    fn unaligned(&mut self, name: &str, n: u8, t: usize) {
+        use Width::{W32, W64};
+        let left = name.as_bytes()[2] == b'l';
+        let store = name.starts_with('s');
+        let w = if n == 8 { W64 } else { W32 };
+        let (toward, away) = if left { (ShiftOp::Shl, ShiftOp::Shr) } else { (ShiftOp::Shr, ShiftOp::Shl) };
+        if !store && t == 0 {
+            return;
+        }
+        self.pur(P_DATA);
+        if !store {
+            self.before_write(t, X);
+        }
+        self.a.mov(W32, X, A);
+        self.a.alu(Op::And, W32, X, X, Src::Imm(i32::from(n) - 1));
+        self.a.alu(Op::Sub, W32, A, A, Src::Reg(X));
+        self.a.alu(Op::Sub, W64, P, P, Src::Reg(X));
+        self.a.shift(ShiftOp::Shl, W32, X, X, By::Imm(3));
+        if left {
+            self.a.neg(W32, X, X);
+            self.a.alu(Op::Add, W32, X, X, Src::Imm(8 * (i32::from(n) - 1)));
+        }
+        if store {
+            let k = self.new_slot().expect("a slot for the shift");
+            self.a.store(8, X, slot_mem(k));
+            if !self.prototype {
+                self.log();
+            }
+            self.pur(P_CACHE);
+            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
+            self.a.set(Cond::Eq, X);
+            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
+            self.pur(P_DATA);
+            self.a.load(8, false, X, slot_mem(k));
+            let r = self.get(t, A);
+            self.a.mov(W64, A, r);
+            self.a.shift(away, w, A, A, By::Reg(X));
+            self.a.mov_imm(TG, -1);
+            self.a.shift(away, w, TG, TG, By::Reg(X));
+            self.a.not(w, TG, TG);
+            self.a.load(n, false, X, at(P, 0));
+            self.a.alu(Op::And, w, X, X, Src::Reg(TG));
+            self.a.alu(Op::Or, w, X, X, Src::Reg(A));
+            self.a.store(n, X, at(P, 0));
+            self.st.sync = true;
+            return;
+        }
+        self.a.load(n, false, P, at(P, 0));
+        self.a.mov_imm(TG, -1);
+        self.a.shift(toward, w, TG, TG, By::Reg(X));
+        self.a.not(w, TG, TG);
+        let r = self.get(t, A);
+        self.a.mov(W64, A, r);
+        self.a.alu(Op::And, w, TG, TG, Src::Reg(A));
+        self.a.shift(toward, w, P, P, By::Reg(X));
+        self.a.alu(Op::Or, w, P, P, Src::Reg(TG));
+        let out = match name {
+            "lwl" => {
+                self.a.sext32(P, P);
+                P
+            }
+            "lwr" => {
+                // The word sign-extended where it is whole (k = 0), otherwise the register's upper word kept.
+                self.a.sext32(TG, P);
+                self.a.shift(ShiftOp::Shr, W64, A, A, By::Imm(32));
+                self.a.shift(ShiftOp::Shl, W64, A, A, By::Imm(32));
+                self.a.alu(Op::Or, W64, A, A, Src::Reg(P));
+                self.a.test(W32, X, Src::Reg(X));
+                self.a.select(Cond::Eq, A, TG);
+                A
+            }
+            _ => P,
+        };
+        let h = self.dest(t, X);
+        self.a.mov(W64, h, out);
+        self.put(t, h);
     }
 
     /// The store's undo: the 16 bytes of its quadword and its line's tag, two entries of the log.
@@ -1054,21 +1322,25 @@ impl L<'_> {
     }
 }
 
-/// The block's code and the offset of its fallback word; `prototype` as `compile` says.
-pub(crate) fn lower(plan: &Plan, times: &Static, prototype: bool) -> Option<(Code, u32)> {
+/// The block's code; `prototype` as `compile` says.
+pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bool) -> Option<Code> {
     let after = plan.steps.iter().find(|s| s.info.class == Class::Branch).map_or(0, |s| s.pc.wrapping_add(8));
-    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0 };
+    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0 };
     l.allocate();
-    let fallback = l.a.data(&[0; 8]);
+    let table = l.data(&prefix::table_bytes(times, options.single, options.blocking));
+    assert_eq!(table, 0, "the prefix's table is the data's first");
     let entry = l.a.label();
     let body = l.a.label();
+    let entered = l.a.label();
     if !prototype {
-        // The entry's test: at rest for what the block reads, or the Cranelift function (§14.3).
-        let dynamic = l.a.label();
+        // The entry's test: at rest for what the block reads, or the prefix's flag set for the shared exit (§14.3, §15.2).
+        let moved = l.a.label();
         l.pur(P_TEST);
-        l.a.bind(dynamic);
-        l.a.jump_via_data(fallback);
+        l.a.bind(moved);
+        l.a.store_imm(4, 1, at(RSI, X_MOVED));
+        l.a.jump(entered);
         l.a.bind(entry);
+        let dynamic = moved;
         l.a.load(8, false, X, at(RDI, T + layout::LAST));
         l.a.alu(Op::Add, Width::W64, X, X, Src::Imm(1));
         l.a.cmp_mem(1, at(RDI, T + layout::OPEN), Src::Imm(0));
@@ -1078,12 +1350,18 @@ pub(crate) fn lower(plan: &Plan, times: &Static, prototype: bool) -> Option<(Cod
         l.a.cmp_mem(8, at(RDI, T + layout::FLOOR), Src::Reg(X));
         l.a.branch(Cond::Gtu, dynamic);
         for r in (0..64).filter(|r| times.exposed >> r & 1 == 1) {
-            l.a.cmp_mem(8, at(RDI, T + layout::READY + 8 * r), Src::Reg(X));
+            let field = match r {
+                62 => layout::MAC0_FREE,
+                63 => layout::MAC1_FREE,
+                _ => layout::READY + 8 * r,
+            };
+            l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
             l.a.branch(Cond::Gtu, dynamic);
         }
     } else {
         l.a.bind(entry);
     }
+    l.a.bind(entered);
     l.pur(P_ENTRY);
     l.a.lea_label(R11, body);
     l.a.jump_stub(stub::ENTER);
@@ -1114,5 +1392,5 @@ pub(crate) fn lower(plan: &Plan, times: &Static, prototype: bool) -> Option<(Cod
             }
         }
     }
-    Some((l.a.finish(entry), fallback))
+    Some(l.a.finish(entry))
 }

@@ -292,7 +292,7 @@ checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
 
 [[package]]
 name = "emusen-assembler"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "cranelift-assembler-x64",
 ]

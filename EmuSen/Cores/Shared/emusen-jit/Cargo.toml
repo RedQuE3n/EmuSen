@@ -1,6 +1,6 @@
 [package]
 name = "emusen-jit"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 publish = false
 
@@ -10,7 +10,15 @@ publish = false
 [lib]
 name = "emusen_jit"
 
+[features]
+# Version 1.1's tailored code beside the Cranelift function, in the crate's own code memory (EmuSen_Jit.md §7); off by default.
+native = ["dep:emusen-assembler", "dep:libc"]
+
 [dependencies]
+# The tailored code's sections and relocations, for `native`.
+emusen-assembler = { path = "../emusen-assembler", optional = true }
+# The code memory's reservation and protection, for `native`.
+libc = { version = "0.2", optional = true }
 # The code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. The version MarsRT measured (Mars_Native.md §5.8.4).
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"

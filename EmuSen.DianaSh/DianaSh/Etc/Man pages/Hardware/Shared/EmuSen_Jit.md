@@ -178,3 +178,27 @@ its noise, before and after on the same machine state; `Mars_Native.md` §5.8.10
 - **The `Arc` hand-off** stays invisible to TSan; replacing it with a slot index into storage the crate owns would make
   it visible, and was left for a stage that changes behaviour rather than one that moves it.
 - **Code is not freed a block at a time**, as before (§3.4).
+
+## 7. Version 1.1: tailored code beside the function (`native`, 2026-10-28)
+
+*Added for E0 of the tailored recompiler (`EmuSen_Recompiler.md` §14), behind the crate's `native` feature, which is off
+by default: without it the crate builds and behaves as 1.0.0, and MarsRT does not enable it.*
+
+- **The extension.** `Lowering` gains two provided methods, `native(words, start, options) -> Option<Native>` and
+  `stubs() -> Vec<Code>`, both empty by default, so that every 1.0 lowering compiles unchanged: a minor version. A
+  `Native` is an `emusen-assembler` `Code` (hot and cold bytes, data, relocations, entry) and the offset of an 8-byte data
+  word that receives the Cranelift function's address, the tier below that the code falls back to.
+- **On the thread.** Each job is lowered to its Cranelift function as before and then, if the lowering has one, to its
+  tailored code (timed apart, `Counters::native_nanos`). After the module's batch is finalized the tailored code is
+  placed, its relocations applied and the fallback word filled with the function's finalized address; the slot then
+  publishes the tailored entry in place of the function (`Counters::native`). The budget counts both.
+- **The code memory** (`native::Memory`, the precursor of 2.0's arenas, §3.7 there): one reservation of 1 GiB made with
+  no access, the hot arena from its bottom and the cold with each block's data from its middle, so that every rel32
+  between them and the stubs reaches. The stubs go first, at the first batch. Each batch is written into pages no earlier
+  batch used, made writable, written, and made readable and executable with one `mprotect` each; a published page is
+  never writable again. The page size is read at run time. The reservation is unmapped with the thread, as the module is.
+- **New dependencies**, named as the design rules require: `emusen-jit -> emusen-assembler` and `libc`, both optional,
+  under `native` alone.
+- **Evidence**: `tests/native.rs`, a lowering whose function answers 7 and whose tailored code answers through a stub or
+  falls back to the function, 300 blocks over several batches; the crate's twelve 1.0 tests unchanged with and without
+  the feature.

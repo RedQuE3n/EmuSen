@@ -37,18 +37,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-assembler-x64"
-version = "0.136.0"
+version = "0.136.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7082265252e5f49045853f3b4380bae42542215b04955c49e5dccb4724a4f33"
+checksum = "c9c587da2696fbaa58e7a2fa2e5bfdd365d0928219f36992304ac1f15e5bc254"
 dependencies = [
  "cranelift-assembler-x64-meta",
 ]
 
 [[package]]
 name = "cranelift-assembler-x64-meta"
-version = "0.136.0"
+version = "0.136.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83da86919677adc47e456975e276b9132279a43cab3202a6183de1d62ed3e4c"
+checksum = "f28a60027b7556b680b051651291053ec381edf4ffbc01784997ae51a64269bb"
 dependencies = [
  "cranelift-srcgen",
 ]
@@ -201,19 +201,28 @@ dependencies = [
 
 [[package]]
 name = "cranelift-srcgen"
-version = "0.136.0"
+version = "0.136.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16e5ba65f5a4d86ffe4a65fc8f263935b1cd8710922e3ad690bff83e72a20100"
+checksum = "b533db1679b4b728568bd490da6533cf50974c48a4d7534e78f1e0e02bc39769"
+
+[[package]]
+name = "emusen-assembler"
+version = "1.0.0"
+dependencies = [
+ "cranelift-assembler-x64",
+]
 
 [[package]]
 name = "emusen-jit"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
+ "emusen-assembler",
+ "libc",
 ]
 
 [[package]]

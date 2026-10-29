@@ -1,6 +1,9 @@
 //! The crate's own tests, on a toy processor: four registers, sixteen words of memory, five instructions, its interpreter and its
 //! lowering. They exercise the thread, publication, the W^X batches, the code budget and the verifier (EmuSen_Jit.md §5).
 
+#[cfg(feature = "native")]
+mod native;
+
 use std::mem::offset_of;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 

@@ -14,7 +14,7 @@ use cranelift_jit::JITModule;
 use cranelift_module::Module;
 use emusen_mips::vu::{self as table, I_BIT};
 
-use super::{BOUND, EXT_XGKICK, EXT_XITOP, EXT_XTOP, Frame, KIND_DIV, KIND_EFU, KIND_PLAIN, OUTSIDE, Options, PROBING, RELEASE, STALL, STOP, TRACING, USE_LOW, USE_UP, NOW};
+use super::{AHEAD, BOUND, EXT_XGKICK, EXT_XITOP, EXT_XTOP, Frame, KIND_DIV, KIND_EFU, KIND_PLAIN, OUTSIDE, Options, PROBING, RELEASE, STALL, STOP, TRACING, USE_LOW, USE_UP, NOW};
 use crate::vu::ops::{self, Class};
 use crate::vu::pipe::{self, FMAC, NO_JUMP, NONE, Pipe, State, ViWrite};
 use crate::vu::{Link, Vu, fbrst, vpu_stat};
@@ -107,6 +107,7 @@ struct Sigs {
     trace: ir::SigRef,
     admit: ir::SigRef,
     verify: ir::SigRef,
+    log: ir::SigRef,
 }
 
 struct Emitter<'a, 'b> {
@@ -478,7 +479,7 @@ impl Emitter<'_, '_> {
             (x, self.vi(r))
         });
         let dest = access.vf_write.map(|(r, l)| (r, l, self.vf(r)));
-        let inline = self.inline_lower(o.name, w, dest.map(|d| d.2));
+        let inline = self.inline_lower(o.name, w, dest.map(|d| d.2), t);
         let mut held = None;
         match (inline, dest) {
             (Some(Some(value)), Some((r, l, _))) => held = Some((r, value, l)),
@@ -520,10 +521,20 @@ impl Emitter<'_, '_> {
         (Taken::No, held, e.class == Class::FlagSet)
     }
 
+    /// A VU1 store to qword `a` at `t`, logged while the unit runs ahead of the board.
+    fn log_store(&mut self, a: Value, t: Value) {
+        let ahead = self.b.ins().band_imm_u(self.flags, AHEAD as i64);
+        let f = self.f;
+        self.when(ahead, |e| {
+            let a32 = e.b.ins().uextend(I32, a);
+            e.call(e.sigs.log, super::h_log as *const () as usize, &[f, a32, t]);
+        });
+    }
+
     /// The lower operations compiled here rather than called: none for one left to its function; otherwise the new
     /// value of the register it writes, held back as `execute` holds it (none when it writes no vector register). The
     /// memory operations are VU1's alone, whose data memory has no window and no mirror below 16 KiB.
-    fn inline_lower(&mut self, name: &str, w: u32, old: Option<Quad>) -> Option<Option<Quad>> {
+    fn inline_lower(&mut self, name: &str, w: u32, old: Option<Quad>, t: Value) -> Option<Option<Quad>> {
         let vu1 = self.unit == 1;
         let none = Some(None);
         match name {
@@ -612,6 +623,7 @@ impl Emitter<'_, '_> {
                 if name == "sqd" {
                     self.set_vi(ft(w), a);
                 }
+                self.log_store(a, t);
                 let at = self.data_at(a);
                 let m = self.load_q(at);
                 let v = self.vf(fs(w));
@@ -647,6 +659,7 @@ impl Emitter<'_, '_> {
                 } else {
                     base
                 };
+                self.log_store(a, t);
                 let at = self.data_at(a);
                 let m = self.load_q(at);
                 let v = self.vi(ft(w));
@@ -972,6 +985,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         trace: b.import_signature(sig(&[ptr, I32, I64], None)),
         admit: b.import_signature(sig(&[ptr, I32], Some(I32))),
         verify: b.import_signature(sig(&[ptr], None)),
+        log: b.import_signature(sig(&[ptr, I32, I64], None)),
     };
     let head = b.create_block();
     b.append_block_params_for_function_params(head);

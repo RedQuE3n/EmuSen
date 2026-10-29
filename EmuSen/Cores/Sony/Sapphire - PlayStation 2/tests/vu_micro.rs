@@ -380,8 +380,11 @@ fn the_d_and_t_bits_halt_when_enabled() {
     let mut u = units();
     u.link.fbrst = fbrst::TE0 << fbrst::VU1;
     let src_t = "nop | iaddiu vi1, vi0, 1\n[t] nop | b there\nnop | iaddiu vi2, vi0, 2\nnop | iaddiu vi3, vi0, 3\nthere: nop | iaddiu vi4, vi0, 4\n[e] nop | move vf0, vf0\nnop | move vf0, vf0";
-    let (p, _) = run_on(&mut u, 1, src_t);
+    let (mut p, _) = run_on(&mut u, 1, src_t);
     assert_eq!((u.vu1.vi(2), u.vu1.vi(4), u.vu1.tpc), (2, 0, 4), "on a branch: the delay slot, then TPC at the target");
+    assert_eq!(p.stat(), vpu_stat::VBS, "run on ahead of the board, VU1 is busy until the board reaches its last pair (Sapphire_Speed.md §63.3)");
+    let last = p.last().expect("a pair ran");
+    p.run_to(&mut u, last);
     assert_eq!((p.stat(), u.link.irq), (vpu_stat::VTS, 2));
 }
 

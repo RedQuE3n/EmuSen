@@ -241,6 +241,8 @@ pub struct Board {
     owed: u64,
     /// A round's length in EE cycles; 0 brings the board along after every instruction, the cycle-ordered build.
     pub round: u64,
+    /// The PCRTC's next vertical edge, cached; not state (Sapphire_Speed.md §63).
+    v_edge: u64,
 }
 
 impl Board {
@@ -271,6 +273,7 @@ impl Board {
             timers_h: false,
             owed: 0,
             round: 0,
+            v_edge: 0,
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
         b.timers_changed();
@@ -304,6 +307,7 @@ impl Board {
             self.iop.bus.blank = self.pcrtc.timing;
         }
         self.pcrtc_next = None;
+        self.v_edge = 0;
         self.reschedule();
     }
 
@@ -383,7 +387,7 @@ impl Board {
         let dma = self.dmac.ch[dmac::GIF].str();
         let Board { vif, vpu, gif, gs, dmac, intc, .. } = self;
         let mut gif = GifPort { gif, gs, dma };
-        vif[0].run_to(t, &mut Reach { vpu, gif: &mut gif });
+        vif[0].run_to(t, &mut Reach { vpu, gif: &mut gif, ahead: 0 });
         if vif[0].take_wake() {
             dmac.wake(t);
         }
@@ -482,7 +486,7 @@ impl Board {
         let free = self.gif.path1_free(self.now);
         self.vpu.units.link.path1.set_free(free);
         self.vpu.catch_up(t);
-        let irq = self.vpu.take_interrupts();
+        let irq = self.vpu.take_interrupts(t);
         for (unit, source) in [intc::source::VU0, intc::source::VU1].into_iter().enumerate() {
             if irq >> unit & 1 == 1 {
                 self.intc.raise(source);
@@ -626,11 +630,16 @@ impl Board {
     /// freed, and the GS's interrupt latched.
     fn run_gif(&mut self, t: u64) {
         if std::mem::take(&mut self.vpu.units.link.kicked) {
-            while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick() {
+            while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick(t) {
                 self.gif.kick(addr, at, told);
             }
+            self.vpu.units.link.kicked = self.vpu.units.link.path1.holds();
         }
         self.gif.run_to(t, &self.vpu.units.vu1, &mut self.gs);
+        // Once the board has passed VU1's last pair, no PATH1 read can fall before a store it ran ahead (§63).
+        if !self.vpu.units.vu1.ahead_log.is_empty() && self.vpu.last(1).is_none_or(|l| l <= t) {
+            self.vpu.units.vu1.ahead_log.clear();
+        }
         if self.gif.take_wake() {
             self.dmac.wake(t.max(self.now));
         }
@@ -643,11 +652,12 @@ impl Board {
         self.run_gif(t);
         // Where the board reaches the VUs, their rest ends (Sapphire_Scheduler.md §54.5).
         self.vpu.wake();
+        let ahead = if self.round > 0 { self.v_edge() } else { 0 };
         let dma = self.dmac.ch[dmac::GIF].str();
         let Board { vif, vpu, gif, gs, dmac, intc: unit_intc, now, .. } = self;
         let mut gif = GifPort { gif, gs, dma };
         for (n, v) in vif.iter_mut().enumerate() {
-            v.run_to(t, &mut Reach { vpu, gif: &mut gif });
+            v.run_to(t, &mut Reach { vpu, gif: &mut gif, ahead });
             if v.take_wake() {
                 dmac.wake(t.max(*now));
             }
@@ -659,6 +669,14 @@ impl Board {
             dmac.wake(t.max(*now));
         }
         self.sync_gs();
+    }
+
+    /// How far a VU1 may run ahead of the board: the next vertical edge, which every frame's end passes (§63).
+    fn v_edge(&mut self) -> u64 {
+        if self.v_edge <= self.now {
+            self.v_edge = self.pcrtc.timing.next_edge(self.now, false);
+        }
+        self.v_edge
     }
 
     /// INT0, INT1 and CPCOND0 as the core sees them now: levels, sampled before each instruction (Sapphire_Disputes.md D-39).
@@ -1073,6 +1091,7 @@ impl System {
         [b.now, b.next] = s;
         b.edges_taken = crate::state::read_opt_u64(r)?;
         b.pcrtc_next = None;
+        b.v_edge = 0;
         // The time owed is the EE's, which `run_to` was last asked for; a round ends `round` after `now` (Sapphire_Speed.md §62.2).
         b.owed = b.now.max(self.ee.timing.cycles());
         Ok(())

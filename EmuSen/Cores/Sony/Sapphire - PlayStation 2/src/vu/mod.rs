@@ -70,6 +70,10 @@ pub struct Vu {
     /// A second EFU result, which can start a cycle before the first lands (§3.4.6).
     pub p_later: Option<Landing>,
     pub efu_free: u64,
+    /// Stores made ahead of the board (qword, T stage, old qword), which PATH1 reads through; not state (§63).
+    pub ahead_log: Vec<(u16, u64, u128)>,
+    /// Each qword's latest logged store, so a read the log cannot change skips it; may be stale-high.
+    ahead_last: Box<[u64]>,
 }
 
 /// A unit's micro memory: its bytes, read and written as a slice, and the count of the times it was lent for writing, which
@@ -137,6 +141,8 @@ impl Vu {
             p_next: None,
             p_later: None,
             efu_free: 0,
+            ahead_log: Vec::new(),
+            ahead_last: vec![0; mem / 16].into_boxed_slice(),
         }
     }
 
@@ -215,6 +221,22 @@ impl Vu {
         u128::from_le_bytes(self.data[at..at + 16].try_into().unwrap())
     }
 
+    /// The qword at index `a` as a reader at cycle `at` sees it: before any store logged at or after `at`.
+    pub fn mem_q_at(&self, a: usize, at: u64) -> u128 {
+        let q = a % (self.data.len() / 16);
+        if self.ahead_log.is_empty() || self.ahead_last[q] < at {
+            return self.mem_q(q);
+        }
+        self.ahead_log.iter().find(|e| e.0 as usize == q && e.1 >= at).map_or_else(|| self.mem_q(q), |e| e.2)
+    }
+
+    /// A store to qword `a` at T stage `t`, made ahead of the board, logged with the qword it replaces.
+    pub fn log_store(&mut self, a: usize, t: u64) {
+        let q = a % (self.data.len() / 16);
+        self.ahead_last[q] = t;
+        self.ahead_log.push((q as u16, t, self.mem_q(q)));
+    }
+
     pub fn set_mem_q(&mut self, a: usize, q: u128) {
         let at = (a * 16) % self.data.len();
         self.data[at..at + 16].copy_from_slice(&q.to_le_bytes());
@@ -262,8 +284,8 @@ pub trait Path1 {
     fn kick(&mut self, data: &[u8], addr: u16, at: u64) -> u64;
     /// The cycle a PATH1 transfer kicked now could start, as the board estimates it before the VU runs (from S15).
     fn set_free(&mut self, _at: u64) {}
-    /// The next kick not yet handed to the GIF: VU1's qword address, the kick's cycle and the end the VU was told.
-    fn take_kick(&mut self) -> Option<(u16, u64, u64)> {
+    /// The next kick by cycle `t` not yet handed to the GIF: address, cycle, the end told (Sapphire_Speed.md §63).
+    fn take_kick(&mut self, _t: u64) -> Option<(u16, u64, u64)> {
         None
     }
     /// PATH1's block of `SPH2`; none for a stand-in (Sapphire_Native.md §38.2).
@@ -273,6 +295,10 @@ pub trait Path1 {
     }
     fn fits(&self) -> bool {
         true
+    }
+    /// Whether kicks are held for a later cycle.
+    fn holds(&self) -> bool {
+        false
     }
 }
 
@@ -300,11 +326,13 @@ pub struct Link {
     pub path1: Box<dyn Path1>,
     /// `path1` has been kicked, or loaded, since the board last took its kicks (Sapphire_Speed.md §61.3).
     pub kicked: bool,
+    /// VU1 runs ahead of the board (Sapphire_Speed.md §63): its data stores are logged for PATH1.
+    pub ahead: bool,
 }
 
 impl Default for Link {
     fn default() -> Self {
-        Link { fbrst: 0, irq: 0, top: [0; 2], itop: [0; 2], path1: Box::new(Path1StandIn::default()), kicked: false }
+        Link { fbrst: 0, irq: 0, top: [0; 2], itop: [0; 2], path1: Box::new(Path1StandIn::default()), kicked: false, ahead: false }
     }
 }
 
@@ -467,8 +495,25 @@ impl Vpu {
     }
 
     /// The interrupts a D or T bit raised since the last call, bit 0 VU0 and bit 1 VU1, for the INTC.
-    pub fn take_interrupts(&mut self) -> u32 {
-        std::mem::take(&mut self.units.link.irq)
+    pub fn take_interrupts(&mut self, t: u64) -> u32 {
+        let held = if self.micro1.last().is_some_and(|l| l > t) { self.units.link.irq & 2 } else { 0 };
+        std::mem::replace(&mut self.units.link.irq, held) & !held
+    }
+
+    /// `ready`, or VU1 run ahead to `limit`, its end or a stop, and whether it ended (Sapphire_Speed.md §63).
+    pub fn ready_ahead(&mut self, unit: usize, t: u64, limit: u64) -> bool {
+        if self.ready(unit, t) {
+            return true;
+        }
+        if unit != 1 {
+            return false;
+        }
+        if self.micro1.busy() {
+            self.units.link.ahead = true;
+            self.micro1.run_ahead(&mut self.units, limit.max(t));
+            self.units.link.ahead = false;
+        }
+        self.micro1.ended()
     }
 
     /// Brings both units' micro mode to EE cycle `t`.
@@ -504,7 +549,7 @@ impl Vpu {
     #[inline(never)]
     fn idle_to_asked(&mut self, t: u64) -> bool {
         let Vpu { micro0, micro1, units, .. } = self;
-        let idle = micro0.idle_to(units, t) & micro1.idle_to(units, t);
+        let idle = micro0.idle_to(units, t) & micro1.idle_to(units, t) && !units.link.path1.holds();
         if idle {
             self.rest = Some(t);
         }
@@ -514,13 +559,13 @@ impl Vpu {
     /// `idle_to`'s answer without the clocks' moves.
     #[inline]
     pub fn idle(&self) -> bool {
-        self.rest.is_some() || self.micro0.idle(&self.units) && self.micro1.idle(&self.units)
+        self.rest.is_some() || self.micro0.idle(&self.units) && self.micro1.idle(&self.units) && !self.units.link.path1.holds()
     }
 
     /// VU1 running a microprogram: the COP2 condition signal BC2F and BC2T test (§5.5.1).
     pub fn vu1_busy(&mut self, t: u64) -> bool {
         self.micro1.run_to(&mut self.units, t);
-        self.micro1.busy()
+        self.micro1.busy() || self.micro1.last().is_some_and(|l| l > t)
     }
 
     /// CCR[2,n] as CFC2 reads it at cycle `t` (§5.1.2, §5.1.3; D-45 for the reserved numbers).
@@ -675,6 +720,7 @@ impl emusen_native::State for Vu {
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
+        self.ahead_log.clear();
         r.u32s(self.vf.as_flattened_mut())?;
         r.u16s(&mut self.vi)?;
         r.u32s(&mut self.acc)?;
@@ -741,6 +787,6 @@ impl emusen_native::State for Vpu {
 impl Vpu {
     /// Whether the units' queues are within their slots in the state.
     pub fn fits(&self) -> bool {
-        self.units.link.path1.fits() && self.micro0.fits() && self.micro1.fits()
+        self.units.link.path1.fits() && self.micro0.fits() && self.micro1.fits() && self.units.vu1.ahead_log.is_empty()
     }
 }

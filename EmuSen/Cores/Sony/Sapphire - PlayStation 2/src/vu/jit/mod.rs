@@ -443,11 +443,13 @@ pub struct Frame {
 pub const TRACING: u32 = 1;
 pub const PROBING: u32 = 2;
 pub const HALTS: u32 = 4;
+/// VU1 runs ahead of the board: its data stores are logged (Sapphire_Speed.md §63).
+pub const AHEAD: u32 = 8;
 
 impl Frame {
     fn new(pipe: &mut Pipe, units: &mut Units, limit: u64, budget: u64, release: bool, reference: *mut Reference) -> Frame {
         let pending = pending(pipe, if pipe.unit == 0 { &units.vu0 } else { &units.vu1 });
-        let flags = (u32::from(pipe.trace.is_some()) * TRACING) | (u32::from(pipe.probe.is_some()) * PROBING) | (u32::from(units.halts) * HALTS);
+        let flags = (u32::from(pipe.trace.is_some()) * TRACING) | (u32::from(pipe.probe.is_some()) * PROBING) | (u32::from(units.halts) * HALTS) | (u32::from(units.link.ahead) * AHEAD);
         let (vu, window) = if pipe.unit == 0 { (&mut units.vu0 as *mut Vu, &mut units.vu1 as *mut Vu) } else { (&mut units.vu1 as *mut Vu, std::ptr::null_mut()) };
         // SAFETY: `vu` was made from a live reference just above.
         let data = unsafe { (*vu).data.as_mut_ptr() };
@@ -605,6 +607,12 @@ pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32)
         EXT_XTOP => pipe.write_alu(vu, (word >> 16 & 31) as usize, link.top[1], t),
         _ => pipe.write_alu(vu, (word >> 16 & 31) as usize, link.itop[unit], t),
     }
+}
+
+/// A store to data qword `q` at `t` made ahead of the board, logged (`Vu::log_store`).
+pub(super) extern "C" fn h_log(f: *mut Frame, q: u32, t: u64) {
+    // SAFETY: as `h_land`.
+    unsafe { (*(*f).vu).log_store(q as usize, t) }
 }
 
 pub(super) extern "C" fn h_trace(f: *mut Frame, pc: u32, t: u64) {

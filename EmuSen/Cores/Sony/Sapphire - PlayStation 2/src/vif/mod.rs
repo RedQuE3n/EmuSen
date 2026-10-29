@@ -97,6 +97,8 @@ pub trait Gif {
 pub struct Reach<'a> {
     pub vpu: &'a mut Vpu,
     pub gif: &'a mut dyn Gif,
+    /// The cycle a waited-for VU1 may run ahead to, 0 for none (Sapphire_Speed.md §63).
+    pub ahead: u64,
 }
 
 /// What the VIF waits for before a command goes on.
@@ -527,7 +529,9 @@ impl Vif {
     /// state"), then the paths idle where asked.
     fn wait(&mut self, t: u64, gif: bool, path3: bool, then: Then, r: &mut Reach) -> Option<u64> {
         let unit = self.unit;
-        if !r.vpu.ready(unit, self.time) && !r.vpu.ready(unit, t.max(self.time)) {
+        let ready = r.vpu.ready(unit, self.time)
+            || if r.ahead > 0 && unit == 1 { r.vpu.ready_ahead(unit, t.max(self.time), r.ahead) } else { r.vpu.ready(unit, t.max(self.time)) };
+        if !ready {
             self.cmd = Cmd::Wait { gif, path3, then };
             self.stat |= stat::VEW;
             return None;

@@ -370,13 +370,13 @@ fn a_direct_refused_by_the_gif_asks_for_no_event() {
         v.put(i, false);
     }
     assert_eq!(v.request(1, false, &mut gif), 0, "the FIFO is full");
-    v.run_to(1_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    v.run_to(1_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif, ahead: 0 });
     assert_ne!(v.read(reg::STAT) & 0x8, 0, "VGW: waiting for the GIF");
     v.put(15, false);
     v.put(16, false);
     assert_eq!(v.request(1, false, &mut gif), 0, "the DMAC has filled the FIFO again and waits on it");
     assert_eq!(v.next_event(), u64::MAX, "nothing the board can run");
     gif.open = true;
-    v.run_to(2_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    v.run_to(2_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif, ahead: 0 });
     assert_eq!((gif.taken, v.read(reg::STAT) & 0x8), (17, 0), "the data taken once the GIF has PATH2");
 }

@@ -195,6 +195,11 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   After R0, the EE emitter's exact forms measured behind the `forms` feature: the data cache's path, option 1, and one
   translation a page, one tag check a line and a shared exit a block (181 to 119 hot bytes a guest instruction, exact),
   with an estimate for a Winch-style emitter.
+- **`Sapphire_SpeedHacks.md`** — the speed hacks of PCSX2, Play! and DobieStation (2026-10-29, a reading): what each
+  skips, the game-database entries that turn it on and off, the condition that separates the games it breaks, which
+  have an exact or deterministic general form (VU1 to its end bounded by the kick queue, flags only where read with the
+  sticky bits kept, the GS's packet stream on its thread, the VU1 thread falling back while VU1 is watched), a ranked
+  shortlist against `Sapphire_Speed.md` §62's scheduling work, and the hacks that cannot be generalised.
 - **`Sapphire_References.md`** — the references (2026-10-24, stage S2): the documents and ps2autotests fetched and
   pinned with their sources, licences and SHA-256s; ps2tek's BIOS chapter screened, with its exclusions for the open
   BIOS's writers by section and line, and two passages of emulators' code excluded for everyone; the BIOS database

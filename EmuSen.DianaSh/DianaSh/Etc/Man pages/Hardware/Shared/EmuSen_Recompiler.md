@@ -962,3 +962,59 @@ sampler's EE row is §7.4's measurement from E2), and it is recorded as a findin
 
 **Exactness.** The picture, sound and state digests of the arena window are the base's (611B58F7CFE67E8B,
 BCA8F00F4743A955, 8B710CA05FDDF3A0) in every one of these seven runs, the shadow's included.
+
+### 15.5 The classes, as built
+
+- **`emusen-assembler` 1.1**: `mul` (the product's low 64 bits) and `divrem` (quotient and remainder at 32 or 64 bits,
+  signed or not, the divisor outside the backend's `DIV_REGS`, which on x86-64 are rax and rdx); graded against a Rust
+  model in every register (`multiply_and_divide_match_their_models_in_every_register`). Nothing of 1.0 changed.
+- **The planner's table** (`R5900Isa`) holds every S36 and S37 class `shape.rs` names. The planner itself is
+  unchanged: HI, LO and SA are not general registers, so its reads and writes do not carry them, and the lowering knows
+  them by the instruction (`specials`). §3.1 put them in the `Isa` table; at E1 nothing the planner decides needs them.
+- **Values** (`lower.rs`): LO, HI, LO1, HI1 and SA are value ids beside the general registers' halves, homed by the same
+  linear scan, read from the core at first use and written back at an exit only where an instruction before it wrote
+  them; the state after the last load or store saves them before a later write, as it saves a register, so a rollback
+  writes back what stood there.
+- **Multiplies** (`multiply`): both operands sign- or zero-extended to 64 bits and multiplied once, the accumulator
+  added for MADD; LO and rd the low word sign-extended, HI the high word. **Divides** (`divide`): a zero divisor and,
+  signed, a divisor of -1 out of line (the first takes `quotient_signed`'s and `quotient_unsigned`'s results of
+  `Sapphire_Disputes.md` D-6, the second negates, which is the wrapping quotient of the minimum too), so the hardware
+  divide never faults. **SA** (MFSA, MTSA, MTSAB, MTSAH) as `ops.rs` writes it. **Traps**: the compare, and the exit
+  before the instruction where it holds, as an overflow's; the interpreter raises.
+- **PREF** is a one-byte load that loads nothing: a hit in either way or the scratchpad does nothing, and everything else
+  (a miss, an uncached page, a translation that fails) leaves to the interpreter, which prefetches or ignores it. An
+  uncached PREF leaves rather than passing, so that its record never names a line a later access could reuse.
+- **The unaligned forms** (`unaligned`): the address is kept whole through the translation and the cache's dispatch, so
+  the record names the byte as every other access's does; then the unit's address and pointer are made from it, the
+  shift from the byte within the unit, and the merge is `ops.rs`'s (LWL's and LDL's from the high end, LWR's and LDR's
+  from the low end, LWR keeping the register's upper word unless the unit is whole); a store logs its quadword, marks
+  the line dirty, then merges into the line.
+- **The static form** carries the multipliers: their free cycles are snapshotted and applied with the ready cycles
+  (`Snap::mac`, at the bits `MAC_BITS` of its masks), the entry's test compares them, the prefix's convergence test
+  reads them as it reads a ready cycle, and the prefix keeps a multiplier only it used.
+
+### 15.6 The classes' results (measured 2026-10-29), and the stop
+
+The same arena run as §15.4's terms, with the classes built:
+
+| | §15.4 (prefix only) | with the classes |
+| --- | --- | --- |
+| blocks covered, of those compiled | 13,082 | 13,281 of 15,021 |
+| guest words covered, of those compiled | 132,133 | 138,364 of 140,104 (98.8 %) |
+| covered steps, of every compiled step | 126.8 M of 154.7 M (82.0 %) | 130.9 M of 152.3 M (86.0 %) |
+| the exact form's hot bytes a guest instruction | 105.3 | **104.2** (the entry's test 8.0, laid hot) |
+| on the prototype's terms | 82.8 | 83.1 |
+| the Cranelift function on the covered blocks | 524.8 | 523.0 |
+| the working set over every compiled step | 0.820 × 105.3 + 0.180 × 524.8 = **180.8** | 0.860 × 104.2 + 0.140 × 523.0 = **162.9** |
+| *s* over every compiled step | 59.5 % | **63.5 %** (73.8 % of the covered steps) |
+| compile time, a block | 40.7 µs | 43.2 µs |
+
+**The saving is 17.9 hot bytes a guest instruction against an estimate of 70; the stop rule's 35 is not met, so E1
+stops here.** The classes cover what the estimate said they would (98.8 % of the words), and their code is no larger
+than the average word's. **What the estimate got wrong**: every one of the 1,740 blocks still on the Cranelift tier is
+a block of one instruction, which E0's `covers` leaves out, and together they run 14.0 % of the compiled steps, where
+the estimate took them as about 1 %. Which code they are was not counted. Covering them is the next lever for the
+working set, and it is a choice of scope rather than a correction of this stage (§15.8).
+
+The arena's digests with the classes are the base's (611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0). Of the
+13.59 M entries not at rest, 5.03 M converged after one step and 7.72 M (57 %) never before their exit, as in §15.4.

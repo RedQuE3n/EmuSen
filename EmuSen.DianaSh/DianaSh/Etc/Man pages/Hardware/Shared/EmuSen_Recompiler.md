@@ -568,3 +568,36 @@ Outside the project, each read on 2026-10-28:
 
 No emulator's source, no GS renderer, no ps2sdk, nothing sealed, no firmware and no game data was read. Nothing was
 built or run for this page.
+
+## 14. E0, the vertical slice (2026-10-28)
+
+### 14.1 The estimate, written before the build
+
+*Set on 2026-10-28, before any of E0's code was written, as §8 requires. Nothing in this subsection is measured.*
+
+**P-E1** [E], restated from §8 with the terms it will be measured on. On the blocks the slice covers, compiled in the
+same run as the shadow's Cranelift forms (`EMUSEN_SAPPHIRE_FORMS_BYTES=1`), the baseline's hot bytes a guest
+instruction are **22 to 31 under `static+stub`'s on the same blocks**; if that held over the arena's whole mix it would
+take 119.1 to about 88 to 92. **The stop rule**: E0 stops if the saving is under 11 bytes a guest instruction on the same
+blocks, or if any form cannot be made exact.
+
+**The terms of the comparison** [A], found while reading `forms.rs` for this estimate. The `static` forms that the 119.1
+was measured on are R0.2's static prototype: C1's constant charge of one cycle an instruction, no store of each step's
+cycles for the replay, no update of Random, no undo log for stores, and no test at the entry (`forms::is_static`). They
+were compiled in the shadow and never run. The baseline's static form runs, so it has to carry what the prototype left
+out: the exact issue model's offsets (folded, which costs no code), the quiescent test at the entry, the undo log of
+every store, and the model's write-back at each exit. So the baseline is counted twice, from one lowering on the same
+blocks:
+- **on the prototype's terms**, without the entry's test and the undo log: the form that P-E1 and the stop rule are
+  judged on;
+- **exact**, as it runs: the form the ring is measured at, and what the working set will cost.
+
+The exact form is expected to be larger by about 5 to 9 bytes a guest instruction for the entry's test (about 40 to 70
+bytes a block of 9.2 instructions) and about 8 to 12 for the undo log (about 70 bytes a store at about 0.15 stores a
+guest instruction) [E]. The model's write-back, Random and the steps' cycles go into the shared exit's helper, fed by a
+table of the exit's constants, so they add no hot bytes beyond the table's address.
+
+**P-E2** [E]: *s* unknown; recorded. **P-E3** [E]: a block compiled in under 30 µs. **The ring** [E]: at the bytes
+measured, near the levers' 2.33 to 2.43 ns a guest instruction on the desktop at 119 bytes if P-E1 fails, and about 1.9
+to 2.0 if it holds (the ring's slope between 119 and 96 bytes on the desktop); on the handheld near R0's 2.24 to 2.43 at
+96 bytes.

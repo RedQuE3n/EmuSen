@@ -911,3 +911,54 @@ entry converge only once a step waits for it.
 **The nanoseconds** [E]: the ring at about 107 bytes, near E0's 103 (desktop 2.14 to 2.25, handheld 2.32 to 2.36).
 
 **Stop rules**: the working set over every compiled step saves under 35, or any class cannot be made exact.
+
+### 15.4 The prefix's results (measured 2026-10-29)
+
+The arena window (`jak-arena`, 300 fields from the state at 9,000, `--defaults`) with the baseline dispatched and
+`EMUSEN_SAPPHIRE_FORMS_BYTES=1`, all figures from that one run: 13,082 of the blocks compiled are the baseline's,
+132,133 guest instructions.
+
+**The bytes, the gate.** The exact form is 105.3 hot bytes a guest instruction (E0's 103.4 with the entry's test at 9.4
+rather than 7.5: the flag's store and its jump back cost 1.9 where E0's jump through the data word cost less; the
+measured build lays them hot before the entry, so that every branch of the test stays short). The Cranelift function
+on the same blocks in the same run, the form E0 ran where the test failed, is **524.8**, not the 424 the estimate took
+from the redesign's page (that figure was the arena's whole mix with every lever; the dispatcher runs today's form
+without the levers). The working set on the covered blocks, weighted by steps:
+
+| | static form | the rest | working set |
+| --- | --- | --- | --- |
+| E0 | 61.4 % at 103.4 | 38.6 % at 7.5 + 524.8 | **269** |
+| E1, the prefix | every step at 105.3 | none | **105.3** |
+
+**The saving is 164 hot bytes a guest instruction on the covered blocks' working set, against an estimate of 127**; the
+stop rule's 63 is met.
+
+**The static share *s*.** Of 126.79 M covered steps, 92.02 M (**72.6 %**) took their cycles from the static form's
+constants, against an estimate of 72 to 85 % (central 78): the estimate's low end. Of 32.38 M covered entries, 18.70 M
+(57.8 %) were at rest; of the 13.68 M that were not:
+
+| converged after | 1 step | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never before the exit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| entries | 4.92 M | 0.54 M | 0.16 M | 62 k | 27 k | 37 k | 121 | 225 | **7.93 M (58 %)** |
+
+So the estimate's 70 % converging early was wrong: an entry not at rest either converges at once (36 %) or, more often,
+not at all before it leaves (58 %), and those run the issue model over every step in the shared exit. Why they do not
+converge is not yet counted; the candidates are short entries (3.9 steps an entry on average), the pairing parity of
+§3.2, and the limit of the test at the branch (`kmax`).
+
+**The nanoseconds of the real field.** The window's mean milliseconds a field, two rounds each, interleaved on the
+desktop (other jobs on the machine; the EE is 13 % compiled in this window, the rest interpreted or idle-skipped):
+
+| | round 1 | round 2 |
+| --- | --- | --- |
+| the Cranelift tier (baseline not dispatched) | 754.1 | 760.9 |
+| E0's baseline (7cef70e11) | 792.7 | 785.8 |
+| E1's baseline, the prefix | 788.7 | 793.9 |
+
+E1 and E0 are equal within the rounds' spread: the prefix's work in the shared exit costs about what the Cranelift
+function's entries saved, so the bytes the prefix removes do not show in this window's wall time. Both baselines are
+about 4 % slower than the Cranelift tier on this window, which E0 did not measure; the cause is not yet located (the
+sampler's EE row is §7.4's measurement from E2), and it is recorded as a finding, not as the prefix's.
+
+**Exactness.** The picture, sound and state digests of the arena window are the base's (611B58F7CFE67E8B,
+BCA8F00F4743A955, 8B710CA05FDDF3A0) in every one of these seven runs, the shadow's included.

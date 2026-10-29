@@ -1,0 +1,19 @@
+[package]
+name = "emusen-mips-planner"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+# The tailored recompiler's MIPS front end: a block's shape and facts as plain data (`Plan`, 1.0) from a guest's `Isa`
+# table. Shared by the R5900 and, later, the VR4300; no console, no host. See Hardware/Shared/EmuSen_Recompiler.md §3.1.
+[lib]
+name = "emusen_mips_planner"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

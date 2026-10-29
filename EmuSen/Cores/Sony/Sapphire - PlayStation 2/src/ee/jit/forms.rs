@@ -353,6 +353,8 @@ pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words:
             PURE[k * 12 + j].fetch_add(pure[k][j], Relaxed);
         }
     }
+    #[cfg(feature = "baseline")]
+    covered(&row, words, start, options);
     WORDS[0].fetch_add(words.len() as u64, Relaxed);
     WORDS[1].fetch_add(1, Relaxed);
     for &w in words {
@@ -363,6 +365,67 @@ pub fn shadow(module: &JITModule, functions: &mut FunctionBuilderContext, words:
         };
         WORDS[c].fetch_add(1, Relaxed);
     }
+}
+
+/// The forms' bytes on the blocks the baseline covers, and the baseline's own on the same blocks (EmuSen_Recompiler.md §14).
+#[cfg(feature = "baseline")]
+static COVERED: [AtomicU64; N * ROW] = [const { AtomicU64::new(0) }; N * ROW];
+/// Blocks, guest words, and the nanoseconds the exact form's lowering took, of the blocks the baseline covers.
+#[cfg(feature = "baseline")]
+static COVERED_WORDS: [AtomicU64; 3] = [const { AtomicU64::new(0) }; 3];
+/// For the exact form and the prototype's terms: hot, cold, data, then the hot bytes by the baseline's fourteen purposes.
+#[cfg(feature = "baseline")]
+const BROW: usize = 3 + 14;
+#[cfg(feature = "baseline")]
+static BASELINE: [AtomicU64; 2 * BROW] = [const { AtomicU64::new(0) }; 2 * BROW];
+#[cfg(feature = "baseline")]
+const BASELINE_PURPOSES: [&str; 14] = ["untagged", "entry", "timing", "guest registers", "horizon and line checks", "address and alignment", "translation", "cache tags and dispatch", "data access", "the instruction's work", "exits' write-back", "exception checks", "entry's test", "undo log"];
+
+/// A block the baseline covers: the forms' bytes counted again for it, and the baseline's in both terms.
+#[cfg(feature = "baseline")]
+fn covered(row: &[[u64; ROW]; N], words: &[u32], start: u32, options: Options) {
+    let t = std::time::Instant::now();
+    let Some((exact, _)) = super::baseline::compile(words, start, options, false) else { return };
+    let nanos = t.elapsed().as_nanos() as u64;
+    let Some((proto, _)) = super::baseline::compile(words, start, options, true) else { return };
+    for k in 0..N {
+        for j in 0..ROW {
+            COVERED[k * ROW + j].fetch_add(row[k][j], Relaxed);
+        }
+    }
+    for (n, c) in [exact, proto].iter().enumerate() {
+        let b = &BASELINE[n * BROW..];
+        b[0].fetch_add(c.hot.len() as u64, Relaxed);
+        b[1].fetch_add(c.cold.len() as u64, Relaxed);
+        b[2].fetch_add(c.data.len() as u64, Relaxed);
+        for p in 0..14 {
+            b[3 + p].fetch_add(u64::from(c.hot_by_purpose[p]), Relaxed);
+        }
+    }
+    COVERED_WORDS[0].fetch_add(1, Relaxed);
+    COVERED_WORDS[1].fetch_add(words.len() as u64, Relaxed);
+    COVERED_WORDS[2].fetch_add(nanos, Relaxed);
+}
+
+/// The baseline's lines of the report.
+#[cfg(feature = "baseline")]
+fn covered_report() -> String {
+    let n = COVERED_WORDS[1].load(Relaxed).max(1) as f64;
+    let blocks = COVERED_WORDS[0].load(Relaxed);
+    let mut s = format!("forms baseline\tblocks {blocks}\twords {}\tcompile {:.2} us a block\n", n as u64, COVERED_WORDS[2].load(Relaxed) as f64 / blocks.max(1) as f64 / 1000.0);
+    let c = crate::blocks::baseline_counts();
+    s += &format!("forms static share\tcovered entries {} steps {}\tstatic entries {} steps {}\n", c[0], c[1], c[2], c[3]);
+    for (k, name) in FORMS.iter().enumerate() {
+        let b: [u64; ROW] = std::array::from_fn(|j| COVERED[k * ROW + j].load(Relaxed));
+        let parts: Vec<String> = (0..12).map(|t| format!("{} {:.1}", PURPOSES[t], b[4 + t] as f64 / n)).collect();
+        s += &format!("forms covered\t{name}\thot {:.1}\tcold {:.1}\t{}\n", b[1] as f64 / n, b[2] as f64 / n, parts.join("\t"));
+    }
+    for (k, name) in ["exact", "prototype terms"].iter().enumerate() {
+        let b: [u64; BROW] = std::array::from_fn(|j| BASELINE[k * BROW + j].load(Relaxed));
+        let parts: Vec<String> = (0..14).map(|t| format!("{} {:.1}", BASELINE_PURPOSES[t], b[3 + t] as f64 / n)).collect();
+        s += &format!("forms baseline\t{name}\thot {:.1}\tcold {:.1}\tdata {:.1}\t{}\n", b[0] as f64 / n, b[1] as f64 / n, b[2] as f64 / n, parts.join("\t"));
+    }
+    s
 }
 
 /// The shadow's counts as tab-separated lines, bytes a guest instruction; empty if nothing was compiled.
@@ -388,6 +451,10 @@ pub fn report() -> String {
         s += &format!("forms hot\t{name}\t{}\n", parts.join("\t"));
         let p: Vec<String> = (0..12).map(|t| format!("{} {}", PURPOSES[t], PURE[k * 12 + t].load(Relaxed))).collect();
         s += &format!("forms pure\t{name}\t{}\n", p.join("\t"));
+    }
+    #[cfg(feature = "baseline")]
+    {
+        s += &covered_report();
     }
     s
 }

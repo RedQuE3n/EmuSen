@@ -21,6 +21,9 @@ blackmoon-spu = { path = "../BlackMoon-HW/blackmoon-spu" }
 emusen-disc = { path = "../../Shared/emusen-disc" }
 # The recompilers' thread, publication, module, code budget and verifier, shared with MarsRT: the EE's lowering (Sapphire_Native.md §44) and VU micro mode's (§45); Sapphire_Plan.md §9.6.
 emusen-jit = { path = "../../Shared/emusen-jit" }
+# E0 of the tailored recompiler, under `baseline` only: the macro-assembler and the MIPS planner (EmuSen_Recompiler.md §14).
+emusen-assembler = { path = "../../Shared/emusen-assembler", optional = true }
+emusen-mips-planner = { path = "../../Shared/emusen-mips-planner", optional = true }
 # The code generator the lowerings write IR for; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See EmuSen_Jit.md.
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"
@@ -34,6 +37,8 @@ lanes = []
 census = []
 # The emitter's smaller exact forms and their byte count, for measurement only (Sapphire_Redesign.md, the emitter's exact forms).
 forms = []
+# E0 of the tailored recompiler: the baseline's static form dispatched under EMUSEN_SAPPHIRE_BASELINE=1 and counted beside the forms, for measurement only (EmuSen_Recompiler.md §14).
+baseline = ["forms", "emusen-jit/native", "dep:emusen-assembler", "dep:emusen-mips-planner"]
 
 [[example]]
 name = "lanes"

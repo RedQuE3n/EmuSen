@@ -14,6 +14,18 @@ use crate::ee::Halt;
 use crate::ee::jit::{self, Code, Context, FINAL, Jit, Options, PAGES, Page, SHORT, Slot, kind, shape};
 use emusen_jit::verify::Reference;
 
+#[cfg(feature = "baseline")]
+mod baseline;
+#[cfg(feature = "baseline")]
+pub use baseline::counts as baseline_counts;
+#[cfg(feature = "baseline")]
+pub use crate::ee::jit::baseline::set_dispatched as baseline_dispatched;
+/// The baseline's helpers, for its stubs (EmuSen_Recompiler.md §14.4).
+#[cfg(feature = "baseline")]
+pub(crate) fn baseline_helpers() -> [u64; 4] {
+    baseline::helpers()
+}
+
 /// Bytes of code past which every block is dropped and compiled again as it runs (`EmuSen_Jit.md` §3.4).
 pub const BUDGET: u64 = 256 << 20;
 
@@ -49,6 +61,9 @@ struct Block {
     rest: u8,
     /// The cycles assumed before its last load or store, `NO_SPAN` when none follows the first instruction (`forms::HORIZON`).
     span: u8,
+    /// The baseline compiles it (`EMUSEN_SAPPHIRE_BASELINE=1`): its entries are counted for the static share.
+    #[cfg(feature = "baseline")]
+    covered: bool,
 }
 
 const NO_SPAN: u8 = u8::MAX;
@@ -190,6 +205,8 @@ impl Blocks {
             answer: 0,
             #[cfg(feature = "forms")]
             commit: jit::forms::commit_trampoline(commit),
+            #[cfg(feature = "baseline")]
+            entered_static: 0,
         });
         let mut ctx = ctx;
         [ctx.replay, ctx.leave, ctx.fill] = jit::forms::trampolines([ctx.replay, ctx.leave, ctx.fill]);
@@ -419,7 +436,17 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             return None;
         }
         let span = span_of(&words);
-        if blocks.map.insert(pc, Block { paddr, words: words.into_boxed_slice(), options, state, idle: 0, rest: 0, span }).is_some() {
+        if blocks.map.insert(pc, Block {
+            paddr,
+            #[cfg(feature = "baseline")]
+            covered: jit::baseline::dispatched() && jit::baseline::covers(&words, options),
+            words: words.into_boxed_slice(),
+            options,
+            state,
+            idle: 0,
+            rest: 0,
+            span,
+        }).is_some() {
             blocks.stats.reshaped += 1;
         }
     }
@@ -467,7 +494,11 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     if b.words.len() as u64 > left {
         return None;
     }
-    if b.span != NO_SPAN && !b.options.verify && jit::forms::chosen() & jit::forms::HORIZON != 0 && sys.ee.timing.cycles() + u64::from(b.span) >= sys.board.next_event() {
+    #[cfg(feature = "baseline")]
+    let one_check = b.covered || jit::forms::chosen() & jit::forms::HORIZON != 0;
+    #[cfg(not(feature = "baseline"))]
+    let one_check = jit::forms::chosen() & jit::forms::HORIZON != 0;
+    if b.span != NO_SPAN && !b.options.verify && one_check && sys.ee.timing.cycles() + u64::from(b.span) >= sys.board.next_event() {
         // The block's last access would reach the board's next event at one cycle an instruction: counted as left at the event.
         blocks.stats.left[0] += 1;
         return None;
@@ -482,11 +513,17 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     (ctx.uncached, ctx.uncached_loads, ctx.guard, ctx.base, ctx.logged) = (0, 0, 0, 0, 0);
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
     // borrows the machine while the code and its helpers run through these pointers.
+    #[cfg(feature = "baseline")]
+    let static0 = ctx.entered_static;
     let exit = unsafe { code(&raw mut (*run.sys).ee, ctx) };
     if let Some(f) = run.failed.take() {
         panic!("{f}");
     }
     let steps = ctx.steps;
+    #[cfg(feature = "baseline")]
+    if blocks.map.get(&pc).is_some_and(|b| b.covered) {
+        baseline::count(ctx.entered_static != static0, steps);
+    }
     #[cfg(feature = "census")]
     {
         let e = blocks.census.entry(code as usize).or_default();

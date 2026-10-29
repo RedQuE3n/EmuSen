@@ -5,6 +5,8 @@
 //! directly through a translation cache, and at its exit hands the cycles to the dispatcher's replay of the board, which
 //! decides how many of its instructions stand. Sapphire_Native.md §44 and Sapphire_Recompiler.md §48 are the record.
 
+#[cfg(feature = "baseline")]
+pub(crate) mod baseline;
 mod emit;
 #[cfg_attr(not(feature = "forms"), path = "forms_off.rs")]
 pub(crate) mod forms;
@@ -119,6 +121,9 @@ pub struct Context {
     /// `forms::STUB`'s shared exit: the replay, and with every step standing the exit's commit (`commit_word`).
     #[cfg(feature = "forms")]
     pub commit: Commit,
+    /// The baseline's entries into its static form, counted by its entry stub.
+    #[cfg(feature = "baseline")]
+    pub entered_static: u64,
 }
 
 /// The shared exit `forms::STUB` calls: `(context, word, place, end) -> steps standing`.
@@ -195,6 +200,20 @@ impl emusen_jit::Lowering for R5900 {
             forms::set(forms::chosen() & !forms::PINNED);
         }
         emit::lower(module, func, functions, words, start, options)
+    }
+
+    #[cfg(feature = "baseline")]
+    fn native(&mut self, words: &[u32], start: u32, options: Options) -> Option<emusen_jit::native::Native> {
+        if !baseline::dispatched() {
+            return None;
+        }
+        let (code, slot) = baseline::compile(words, start, options, false)?;
+        Some(emusen_jit::native::Native { code, fallback: Some(slot) })
+    }
+
+    #[cfg(feature = "baseline")]
+    fn stubs(&self) -> Vec<emusen_assembler::Code> {
+        baseline::stubs(crate::blocks::baseline_helpers())
     }
 }
 

@@ -497,6 +497,18 @@ fn random_programs_with_timer_interrupts_through_the_board_leave_the_interpreter
     assert!(s.rollbacks > 0, "{s:?}");
 }
 
+/// E0's baseline (EmuSen_Recompiler.md §14): the random programs again with its static form dispatched, which must run.
+#[cfg(feature = "baseline")]
+#[test]
+fn random_programs_run_the_baselines_static_form_and_leave_the_interpreters_machine() {
+    blocks::baseline_dispatched(true);
+    let before = blocks::baseline_counts();
+    random_twins(0..24, 6_000, 97, false);
+    random_twins(24..32, 6_000, 97, true);
+    let after = blocks::baseline_counts();
+    assert!(after[2] > before[2] && after[3] > before[3], "the static form ran: {before:?} to {after:?}");
+}
+
 #[test]
 fn random_programs_under_the_verifier_find_nothing() {
     for seed in 0..20 {
@@ -964,6 +976,21 @@ fn accesses_on_one_base_across_a_page_and_lines_leave_the_interpreters_machine()
     let s = twin(&words, 9000, 200, &mut eager());
     println!("one base across a page: {s:?}");
     assert!(s.compiled_steps > 4000, "{s:?}");
+}
+
+/// The same walk within E0's slice, so that the baseline's static form holds it: its line and page guards fail at the
+/// page's end and take the full path, translation and fill included, out of line (EmuSen_Recompiler.md §14.5).
+#[cfg(feature = "baseline")]
+#[test]
+fn the_baselines_guards_fail_across_a_page_and_leave_the_interpreters_machine() {
+    blocks::baseline_dispatched(true);
+    let source = one_base_program().replace("lwl t6, 0x13(a0)\nlwr t6, 0x10(a0)", "lw t6, 0x10(a0)\naddu t6, t6, t8");
+    assert!(!source.contains("lwl"), "the walk is within the slice");
+    let before = blocks::baseline_counts();
+    let s = twin(&assemble(&source, ORIGIN), 9000, 200, &mut eager());
+    let after = blocks::baseline_counts();
+    assert!(s.compiled_steps > 4000, "{s:?}");
+    assert!(after[3] - before[3] > 2000, "the static form ran the walk: {before:?} to {after:?}");
 }
 
 #[test]

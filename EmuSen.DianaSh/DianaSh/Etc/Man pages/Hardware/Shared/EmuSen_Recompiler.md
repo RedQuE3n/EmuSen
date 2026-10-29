@@ -568,3 +568,230 @@ Outside the project, each read on 2026-10-28:
 
 No emulator's source, no GS renderer, no ps2sdk, nothing sealed, no firmware and no game data was read. Nothing was
 built or run for this page.
+
+## 14. E0, the vertical slice (2026-10-28)
+
+### 14.1 The estimate, written before the build
+
+*Set on 2026-10-28, before any of E0's code was written, as §8 requires. Nothing in this subsection is measured.*
+
+**P-E1** [E], restated from §8 with the terms it will be measured on. On the blocks the slice covers, compiled in the
+same run as the shadow's Cranelift forms (`EMUSEN_SAPPHIRE_FORMS_BYTES=1`), the baseline's hot bytes a guest
+instruction are **22 to 31 under `static+stub`'s on the same blocks**; if that held over the arena's whole mix it would
+take 119.1 to about 88 to 92. **The stop rule**: E0 stops if the saving is under 11 bytes a guest instruction on the same
+blocks, or if any form cannot be made exact.
+
+**The terms of the comparison** [A], found while reading `forms.rs` for this estimate. The `static` forms that the 119.1
+was measured on are R0.2's static prototype: C1's constant charge of one cycle an instruction, no store of each step's
+cycles for the replay, no update of Random, no undo log for stores, and no test at the entry (`forms::is_static`). They
+were compiled in the shadow and never run. The baseline's static form runs, so it has to carry what the prototype left
+out: the exact issue model's offsets (folded, which costs no code), the quiescent test at the entry, the undo log of
+every store, and the model's write-back at each exit. So the baseline is counted twice, from one lowering on the same
+blocks:
+- **on the prototype's terms**, without the entry's test and the undo log: the form that P-E1 and the stop rule are
+  judged on;
+- **exact**, as it runs: the form the ring is measured at, and what the working set will cost.
+
+The exact form is expected to be larger by about 5 to 9 bytes a guest instruction for the entry's test (about 40 to 70
+bytes a block of 9.2 instructions) and about 8 to 12 for the undo log (about 70 bytes a store at about 0.15 stores a
+guest instruction) [E]. The model's write-back, Random and the steps' cycles go into the shared exit's helper, fed by a
+table of the exit's constants, so they add no hot bytes beyond the table's address.
+
+**P-E2** [E]: *s* unknown; recorded. **P-E3** [E]: a block compiled in under 30 µs. **The ring** [E]: at the bytes
+measured, near the levers' 2.33 to 2.43 ns a guest instruction on the desktop at 119 bytes if P-E1 fails, and about 1.9
+to 2.0 if it holds (the ring's slope between 119 and 96 bytes on the desktop); on the handheld near R0's 2.24 to 2.43 at
+96 bytes.
+
+*Restated on 2026-10-28, after the estimate's commit and before the measurement: `ee-horizon` (`Sapphire_Redesign.md`,
+"One horizon check a block") landed while E0 was being built and took the per-access horizon compare out of Cranelift's
+forms, 118.6 to 105.7 hot bytes on the arena. The baseline never had that compare. So the comparable Cranelift form is
+now `static+horizon`, and the bytes are stated against it as well as against `static+stub`, the form the estimate named.*
+
+### 14.2 What was built
+
+Behind Sapphire's `baseline` feature (which takes `forms` and `emusen-jit/native` with it), off in the default build;
+the default and `forms` builds compile and behave as before. `EMUSEN_SAPPHIRE_BASELINE=1` dispatches it.
+
+- **`emusen-assembler` 1.0** (`EmuSen/Cores/Shared/emusen-assembler/`): the `Assembler` trait of §3.3 (three-operand
+  integer operations at 32 and 64 bits, shifts by a constant or a register, compares, `set` and `select` on a condition,
+  loads and stores of 1 to 8 bytes at `[base + displacement]`, operations on memory, labels, branches and jumps,
+  sections, stub jumps and calls, the block's data and the address of a label) and its x86-64 backend. Instructions are
+  encoded by `cranelift-assembler-x64` 0.136.4, pinned; jumps are laid out by the backend, rel8 where they reach within
+  a section and rel32 otherwise, and everything that crosses a section, reaches a stub or reads the data leaves a
+  relocation. Hot bytes are counted by purpose as they are laid. The helper convention's trampoline (§3.5) is the
+  backend's: arguments in rdi, rsi and rdx, the answer in rax, every other register saved, the context in r15 handed to
+  the Rust helper as its first argument. Variable shifts use BMI2's `shlx`, `shrx` and `sarx`, which mask their count as
+  MIPS does; every x86-64 host the project targets has BMI2.
+- **`emusen-mips-planner` 1.0** (`EmuSen/Cores/Shared/emusen-mips-planner/`): `Isa`, `Plan`, `shape` and `plan`. A plan
+  is plain data and printable: each step's class, reads and writes, the definition its base register reaches, its dirty
+  set, and the reuse keys of §5 (at most four earlier accesses, the latest for each base value, as the forms keep them).
+  It does not depend on `emusen-mips`: the guest's table supplies the decode, so the planner's surface is narrower than
+  §3 drew it.
+- **`emusen-jit` 1.1** (`EmuSen_Jit.md` §7): the tailored code published in place of the Cranelift function, in the
+  crate's own W^X code memory, its fallback word filled with the function's address.
+- **Sapphire's lowering** (`ee/jit/baseline/`): the planner's table for E0's slice (the integer ALU but HI/LO, SA and the
+  traps; LB to LQ and SB to SQ; every branch and jump), the static form's cycles (§14.3), and the lowering itself
+  (`lower.rs`), which writes x86-64 through the trait with the fixed registers of §3.4 (r15 the context, r14 the core,
+  r13 the translation cache, r12 the entry's last issue), seven pool registers for guest values and records in first-use
+  order, frame slots beyond them, and four scratch registers. The dispatcher's helpers are `blocks/baseline.rs`.
+
+### 14.3 The static form, and why it is exact
+
+**The cycles are the core's own model.** `static_times` runs `Timing::issue` over the block from a model at rest
+(`Timing::at_rest`: one instruction issued, nothing in flight, the pair slot closed) once with the branch not taken and
+once taken, and records each step's cycle after it and the whole model after each step as offsets from the entry's last
+issue (`Snap`). Nothing about the issue model is written again in the lowering, so the static form cannot disagree with
+the interpreter's model about any rule of pairing, latency or stall.
+
+**When the offsets hold** (the entry's test, `Timing::rests_for`): the pair slot closed and no group end pending
+(`open` and `group_ends` zero), `floor` at most the last issue plus one, and every resource the block reads before it
+writes it ready by the last issue plus one. The argument: the first instruction cannot pair (the slot is closed), so it
+issues at the larger of its operands' ready cycles, `floor` and the last issue plus one, which is the last plus one when
+the test holds, as from rest. Every later instruction issues no earlier than that, so an entry value bounded by the last
+plus one never decides a later maximum or a later pairing compare (`earliest <= last`); and the fields the test does not
+read (the last category, pipe and writes) matter only to a pairing the closed slot forbids. **The "plus one" is the
+design's refinement measured here**: the instruction before a block (typically the delay slot of the jump that entered
+it) leaves its result ready at the last issue plus one, and a test of "ready by the last issue" would fail on most
+entries.
+
+**Proven, not only argued** (`ee/jit/baseline/tests.rs`): over random blocks of the slice, single and dual issue, and
+random entry models made by issuing random prefixes (multiplies and dividers among them), every entry the test accepts
+gives, at every step, the cycle the model gives and a model equal field for field to the snapshot applied to the entry,
+for the branch taken and not taken.
+
+**What the exits commit.** The model after the steps, Random moved once each issue cycle that did not pair, and the
+group are applied by the shared exit's helper from a record of the exit's constants (`Rec`: steps, the last load's or
+store's steps, the undo entries, the place, the steps' cycles, the model for the branch not taken and taken), and then
+Count, the cycles seen, IP7, the instructions issued, the UCAB and the place as `Ee::commit_exit` commits them. The
+helper picks the taken model where the place the exit leads to is not the address after the slot, which is when the
+model's `taken` was set. So no exit stores the model in code, and the static form's exits are the dirty registers'
+stores, the record's address, at most the place and a reason, and a call.
+
+**Where the design was corrected while building**, each kept exact:
+1. *The exit is a call, not "the stores, then a jump"* (§3.4, §3.5). The replay at an exit may keep fewer steps than ran,
+   and a rollback must find the core's registers as the block found them (or as its last load or store left them), so
+   the registers cannot be stored before the replay. `Sapphire_Redesign.md` had already noted this ("Not exact as it
+   stands"). The exit calls the shared exit through the trampoline, which preserves every register, compares the steps
+   kept, and only then stores the dirty registers and jumps to the shared return. It costs about 8 bytes an exit more
+   than the design's form.
+2. *The state after the last load or store survives later writes.* Cranelift kept it as SSA values; a fixed home is
+   overwritten. A register the last access's state holds is saved to a frame slot before an instruction after that
+   access writes it, and only then; the partial write-back of a rollback reads the slot.
+3. *Out-of-line code begun on the cold section is jumped over.* A translation in a guard's full path (itself cold) laid
+   its cold miss path straight after its hit, so the hit fell into the fill for ever. Found on Jak's dock window (the
+   bench stalled at the first field); not by `tests/blocks.rs`, whose one-base walk holds LWL and LWR and so was never
+   in the slice. The walk is now also run within the slice
+   (`the_baselines_guards_fail_across_a_page_and_leave_the_interpreters_machine`), which hangs without the fix.
+4. *No per-access horizon compare*: since `ee-horizon` the dispatcher's one check a block guards the baseline's blocks as
+   it guards the `horizon` lever's (`blocks.rs`, `one_check`).
+
+### 14.4 The bytes (measured 2026-10-28)
+
+The arena window (`jak-arena`, 300 fields from the state at 9,000) with `EMUSEN_SAPPHIRE_FORMS_BYTES=1` and the
+baseline dispatched: 13,068 of the blocks compiled are E0's, 132,065 guest instructions. All forms in a column are from
+that one run, on those blocks. Hot bytes a guest instruction:
+
+| Purpose | `static+stub` | `static+horizon` | **baseline, the prototype's terms** | baseline, exact |
+| --- | --- | --- | --- | --- |
+| untagged | 43.8 | 40.0 | 0.0 | 0.0 |
+| entry | 1.5 | 1.0 | 1.2 | 1.2 |
+| guest registers | 2.9 | 2.9 | 4.7 | 4.7 |
+| horizon and line checks | 9.7 | 0.8 | 0.7 | 0.7 |
+| address and alignment | 4.1 | 4.2 | 5.4 | 5.4 |
+| translation | 9.0 | 9.0 | 12.4 | 12.4 |
+| cache tags and dispatch | 33.6 | 34.0 | 45.2 | 45.2 |
+| data access | 2.6 | 2.5 | 2.2 | 2.2 |
+| the instruction's work | 1.4 | 1.2 | 4.6 | 4.6 |
+| exits' write-back | 10.2 | 10.2 | 6.5 | 6.5 |
+| the entry's test | — | — | — | 7.5 |
+| the undo log | — | — | — | 13.1 |
+| **hot, in all** | **118.9** | **105.9** | **82.8** | **103.4** |
+| cold | 273.3 | 270.1 | 159.0 | 159.0 |
+
+The baseline's data (the exits' records, 360 bytes each) is 810.8 bytes a guest instruction, never fetched on a hot path.
+
+- **P-E1 holds.** On the prototype's terms the baseline saves **23.1 hot bytes a guest instruction against
+  `static+horizon`**, inside the estimate of 22 to 31, and 36.1 against `static+stub`. The stop rule's 11 is met.
+- **Where the saving is.** Cranelift's untagged bytes (its moves, block parameters, constants from the pool and
+  conditions made before a test, 40.0) are gone; the baseline's own bytes are larger in the translation, the cache
+  dispatch, the guest registers and the instruction's work (about 22 together), where Cranelift folded or shared what a
+  single pass recomputes: the page index from the address, the kind's mask, way 1's tag compares and the line's address
+  are written out each time, and a guest register in a frame slot costs a load and a store. Those are the next bytes to
+  take.
+- **Exact, as it runs: 103.4**, 2.5 under `static+horizon`, which is itself not runnable as measured (it is the static
+  prototype). The entry's test costs 7.5 (estimated 5 to 9) and the undo log 13.1 (estimated 8 to 12). The undo log is
+  today's emitter's log written out; the static prototype simply left it out.
+
+**Compile time** (P-E3): 42.5 µs a block on average in the shadow's run (the planner, the static cycles, the lowering
+and the layout; the desktop), against an estimate of under 30. Cranelift's was about a third of a millisecond for seven
+instructions on MarsRT (§3.9), so the baseline is about eight times faster, under P-E8's ten.
+
+### 14.5 The static share *s* (measured)
+
+On the same arena run (the 300 fields and the 60 before them): entries into E0's blocks 31.18 M, of which 18.34 M
+(**58.8 %**) ran the static form and the rest its Cranelift function; steps 121.2 M, of which 74.46 M (**61.4 %**) static.
+Of every compiled step of the run (147.06 M) the static form ran **50.6 %**. So, against §3.2's arithmetic, *s* is far
+from the 98 % the mark of 96 would need on the static form alone: the dynamic prefix of E1 (§3.2) is the lever that
+decides whether the working set can reach the mark, as P-E4 says.
+
+### 14.6 Exactness (measured)
+
+| Check | Base (no baseline) | Baseline dispatched |
+| --- | --- | --- |
+| Jak's first 60 dock fields (picture, sound, state) | 0F8671F57AB63C25, D5F15509CCDD1709, 818361BFE5D2DBF9 | the same |
+| the dock, 300 fields from 6,000 | 830E3FEFEE1BE6B1, 2C225C73DB4D3F9D, 9CF1BED1AA64EAEE (`Sapphire_Redesign.md`'s base) | the same |
+| the arena, 300 fields from 9,000 | 611B58F7CFE67E8B, BCA8F00F4743A955, 8B710CA05FDDF3A0 (`Sapphire_Redesign.md`'s base) | the same |
+| `tests/blocks.rs`, test-checked profile | — | 29 of 29, with the two baseline tests |
+| the static form against the issue model (`tests.rs`) | — | every accepted entry, every step |
+| `emusen-assembler`'s grading | — | 9 of 9 |
+| `emusen-mips-planner` | — | 4 of 4 |
+| `emusen-jit`, with and without `native` | 12 of 12 | 13 of 13 |
+
+**Seeded faults**, each built alone, run against `tests/blocks.rs` (test-checked, baseline dispatched) or the crate's
+own tests, and reverted:
+
+| Fault | Caught by |
+| --- | --- |
+| the state after the last load or store not saved before a later write (the partial write-back reads the newer value) | 2 tests: `loads_and_stores_beside_the_dmac_leave_the_interpreters_machine`, the S6 programs |
+| the entry's test without its ready compares (a pending result taken as at rest) | 7 tests, among them all three random-program tests, the verifier's and the new walk's |
+| the line guard as wide as a page | 2 tests: the new walk across a page, the S6 programs |
+| the trampoline not saving r11 | `emusen-assembler`'s trampoline test, once its helper clobbers every caller-saved register; the first form of that test, whose Rust helper happened to leave r11 alone, missed it, and was strengthened |
+| out-of-line code begun on the cold section not jumped over (the defect of §14.3, 3) | the new walk across a page, which hangs; Jak's dock window found it first |
+
+Not seeded, as the forms' page did not: a translation or line reused across a TLB write, an eviction or CACHE, which
+the planner rules out by ending the block before them (§4).
+
+### 14.7 The ring at the bytes reached (measured)
+
+R0's `ring mix` at the baseline's exact bytes (103) and on the prototype's terms (83), two rounds, the ring binary from
+this tree (GLIBC_2.34 at most). The desktop ran with other jobs on the machine at CPU weight 100. ns a guest
+instruction:
+
+| Bytes asked (ring code) | Desktop, today's 2.87 an entry | Desktop, §4.2's 14.5 | Handheld, today's | Handheld, §4.2's |
+| --- | --- | --- | --- | --- |
+| 103 (102.7 / 106.7), the exact form | 2.14–2.25 | 1.54–1.55 | **2.32–2.36** | 2.66–3.00 |
+| 83 (81.5 / 85.9), the prototype's terms | 1.72–1.78 | 1.22–1.25 | 1.90–2.01 | 1.55–1.66 |
+| the levers' 119 (`Sapphire_Redesign.md`) | 2.33–2.43 | 1.73–1.77 | 2.68–2.85 | 2.57–2.76 |
+| the marks, handheld | | | **2.75** (Jak's opening) and **2.28** (the arena's fields), two threads; **1.53** one thread | |
+
+The handheld ran on the charger (ACAD online 1 before and after), `hh.sh guard` first, through `systemd-run --user`,
+its scratch removed afterwards. **At the exact form's bytes the handheld runs 2.32 to 2.36 ns a guest instruction with
+today's entries: under the mark of 2.75 for Jak's opening, and 1.02 to 1.03 times the arena's 2.28.** With §4.2's
+entries the second round was noisy (2.66 and 3.00). On the prototype's terms (83 bytes) it would be 1.90 to 2.01, under
+both two-thread marks. No measured form meets the one-thread mark of about 1.53 (§7.5). These are the ring's, a
+synthetic working set at the measured bytes, not the real fields (§7.4's last rows, from E2).
+
+**The two figures.** 82.8 is the baseline on the static prototype's terms, the form the 105.9 and 118.9 were measured
+in, and the one P-E1 is judged on. 103.4 is the form that runs and was graded on every digest: the same code plus the
+entry's test (7.5), which sends an entry not at rest to the Cranelift function, and the undo log of every store (13.1),
+which a rollback needs. Neither of those is in the Cranelift forms' 105.9, because the static prototype never ran.
+
+### 14.8 What E0 leaves
+
+- **For E1, from the measurements:** *s* at 59 to 61 % on the arena makes the dynamic prefix (§3.2) the stage's main
+  lever; the single pass's own bytes (the translation, the cache dispatch and the guest registers' slots, about 22 above
+  Cranelift's) are the second; the undo log (13.1) is the third, and one horizon check a static region cannot take it.
+- **The owed test** (from `ee-horizon`): a busy VIF1 or GIF beside a block, covering an event moved mid-replay. No test
+  catches that gap today, and it does not fall within E0's slice, so it is added to E1's verification plan.
+- **Form coverage** (§7.1) was not instrumented with counters at E0; the walk across a page was added when the dock
+  window found its path untested. E1 should add the counters before it adds paths.

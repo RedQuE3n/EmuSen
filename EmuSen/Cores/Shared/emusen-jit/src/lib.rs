@@ -3,6 +3,8 @@
 //! lowering (a block's words as Cranelift IR), the block shapes and the dispatcher are the processor's. See EmuSen_Jit.md.
 
 pub mod verify;
+#[cfg(feature = "native")]
+pub mod native;
 
 #[cfg(test)]
 mod tests;
@@ -28,6 +30,17 @@ pub trait Lowering: Clone + Send + 'static {
     const EXITS: &'static [&'static str];
     /// One block as a function: its signature and its body, written into `func`, which the crate has cleared.
     fn lower(&mut self, module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Self::Options) -> Result<(), String>;
+    /// Version 1.1, `native`: the block's tailored code beside its function, published in its place; none by default.
+    #[cfg(feature = "native")]
+    fn native(&mut self, words: &[u32], start: u32, options: Self::Options) -> Option<native::Native> {
+        let _ = (words, start, options);
+        None
+    }
+    /// Version 1.1, `native`: the shared stubs the tailored code reaches by id, placed once a code memory.
+    #[cfg(feature = "native")]
+    fn stubs(&self) -> Vec<emusen_assembler::Code> {
+        Vec::new()
+    }
 }
 
 /// An exit's name, or none for a value the lowering does not name.
@@ -80,6 +93,11 @@ pub struct Counters {
     pub nanos: AtomicU64,
     pub bytes: AtomicU64,
     pub failed: AtomicU64,
+    /// `native`: blocks published as tailored code, and the nanoseconds their lowering took.
+    #[cfg(feature = "native")]
+    pub native: AtomicU64,
+    #[cfg(feature = "native")]
+    pub native_nanos: AtomicU64,
 }
 
 struct Job<O> {
@@ -198,6 +216,8 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
     let mut functions = FunctionBuilderContext::new();
     let mut map = perf_map.then(|| std::fs::OpenOptions::new().create(true).append(true).open(perf_map_path()).ok()).flatten();
     let mut serial = 0u64;
+    #[cfg(feature = "native")]
+    let mut memory: Option<native::Memory> = None;
     loop {
         let jobs = queue.with(std::mem::take);
         if queue.stop.load(Acquire) {
@@ -219,7 +239,21 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
             serial += 1;
             let name = format!("b{:08X}_{serial}", job.start);
             match compile(&mut lowering, &mut module, &mut context, &mut functions, &job, &name) {
-                Ok((id, bytes)) => done.push((job, id, bytes, name)),
+                Ok((id, bytes)) => {
+                    #[cfg(feature = "native")]
+                    let tailored = {
+                        let t = Instant::now();
+                        let n = lowering.native(&job.words, job.start, job.options);
+                        if let Some(n) = &n {
+                            queue.counters.native_nanos.fetch_add(t.elapsed().as_nanos() as u64, Relaxed);
+                            queue.counters.bytes.fetch_add((n.code.hot.len() + n.code.cold.len() + n.code.data.len()) as u64, Relaxed);
+                        }
+                        n
+                    };
+                    #[cfg(not(feature = "native"))]
+                    let tailored: Option<()> = None;
+                    done.push((job, id, bytes, name, tailored))
+                }
                 Err(e) => {
                     queue.counters.failed.fetch_add(1, Relaxed);
                     eprintln!("{}: block {:08X} not compiled: {e}", L::NAME, job.start);
@@ -230,8 +264,24 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
         }
         // W^X: the batch was written into fresh pages, made readable and executable here in one call; they are never writable again.
         module.finalize_definitions().expect("the code made executable");
-        for (job, id, bytes, name) in done {
+        #[cfg(feature = "native")]
+        let mut placed = {
+            let had: Vec<bool> = done.iter().map(|d| d.4.is_some()).collect();
+            let natives: Vec<(native::Native, u64)> = done.iter_mut().filter_map(|d| d.4.take().map(|n| (n, module.get_finalized_function(d.1) as u64))).collect();
+            let entries = if natives.is_empty() { Vec::new() } else { memory.get_or_insert_with(native::Memory::new).place(&|| lowering.stubs(), natives) };
+            let mut it = entries.into_iter();
+            had.into_iter().map(|h| if h { it.next().flatten() } else { None }).collect::<Vec<_>>().into_iter()
+        };
+        for (job, id, bytes, name, _) in done {
             let code = module.get_finalized_function(id);
+            #[cfg(feature = "native")]
+            let code = match placed.next().flatten() {
+                Some(entry) => {
+                    queue.counters.native.fetch_add(1, Relaxed);
+                    entry as *const u8
+                }
+                None => code,
+            };
             if let Some(f) = map.as_mut() {
                 use std::io::Write;
                 let _ = f.write_all(format!("{:x} {:x} {name}\n", code as usize, bytes).as_bytes());

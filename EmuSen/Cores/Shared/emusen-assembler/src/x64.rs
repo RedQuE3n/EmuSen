@@ -124,8 +124,15 @@ fn cc(c: Cond) -> u8 {
     }
 }
 
+/// What a field in a run of bytes reaches: a target outside the block's sections, or a label.
+#[derive(Clone, Copy)]
+enum Fix {
+    Out(Target),
+    At(Label),
+}
+
 enum Item {
-    Bytes { purpose: usize, bytes: Vec<u8>, relocs: Vec<(u32, Target)> },
+    Bytes { purpose: usize, bytes: Vec<u8>, relocs: Vec<(u32, Fix)> },
     Jump { cond: Option<Cond>, label: Label, purpose: usize, long: bool },
     Bind,
 }
@@ -168,7 +175,7 @@ impl X64 {
         &mut self.lanes[lane_of(self.now)]
     }
 
-    fn put_bytes(&mut self, bytes: &[u8], reloc: Option<(u32, Target)>) {
+    fn put_bytes(&mut self, bytes: &[u8], reloc: Option<(u32, Fix)>) {
         let purpose = self.purpose;
         let lane = self.lane();
         if !matches!(lane.items.last(), Some(Item::Bytes { purpose: p, .. }) if *p == purpose) {
@@ -189,7 +196,7 @@ impl X64 {
     }
 
     /// An instruction with a rip-relative operand reaching `t`; the field must end the instruction.
-    fn put_rip(&mut self, inst: impl Into<Inst<Regs>>, t: Target) {
+    fn put_rip(&mut self, inst: impl Into<Inst<Regs>>, t: Fix) {
         let mut s = Sink::default();
         inst.into().encode(&mut s);
         let at = s.field.expect("a rip-relative operand");
@@ -553,19 +560,23 @@ impl Assembler for X64 {
     }
 
     fn jump_stub(&mut self, id: u32) {
-        self.put_bytes(&[0xE9, 0, 0, 0, 0], Some((1, Target::Stub(id))));
+        self.put_bytes(&[0xE9, 0, 0, 0, 0], Some((1, Fix::Out(Target::Stub(id)))));
     }
 
     fn call_stub(&mut self, id: u32) {
-        self.put_bytes(&[0xE8, 0, 0, 0, 0], Some((1, Target::Stub(id))));
+        self.put_bytes(&[0xE8, 0, 0, 0, 0], Some((1, Fix::Out(Target::Stub(id)))));
+    }
+
+    fn lea_label(&mut self, d: Reg, l: Label) {
+        self.put_rip(i::leaq_rm::new(r(d), rip()), Fix::At(l));
     }
 
     fn lea_data(&mut self, d: Reg, offset: u32) {
-        self.put_rip(i::leaq_rm::new(r(d), rip()), Target::Data(offset));
+        self.put_rip(i::leaq_rm::new(r(d), rip()), Fix::Out(Target::Data(offset)));
     }
 
     fn jump_via_data(&mut self, offset: u32) {
-        self.put_rip(i::jmpq_m::new(GprMem::Mem(rip())), Target::Data(offset));
+        self.put_rip(i::jmpq_m::new(GprMem::Mem(rip())), Fix::Out(Target::Data(offset)));
     }
 
     fn data(&mut self, bytes: &[u8]) -> u32 {
@@ -588,9 +599,24 @@ impl Assembler for X64 {
                 let start = self.lanes[n].starts[k];
                 let purpose = match item {
                     Item::Bytes { bytes, relocs, purpose } => {
+                        let first = out.len();
                         out.extend_from_slice(bytes);
-                        for &(at, t) in relocs {
-                            code.relocs.push(Reloc { section, at: start + at, target: t });
+                        for &(at, f) in relocs {
+                            let field = start + at;
+                            match f {
+                                Fix::Out(t) => code.relocs.push(Reloc { section, at: field, target: t }),
+                                Fix::At(l) => {
+                                    let (s, to) = self.place(l);
+                                    if s == section {
+                                        let d = (i64::from(to) - i64::from(field) - 4) as i32;
+                                        let k = first + at as usize;
+                                        out[k..k + 4].copy_from_slice(&d.to_le_bytes());
+                                    } else {
+                                        let t = if s == Section::Hot { Target::Hot(to) } else { Target::Cold(to) };
+                                        code.relocs.push(Reloc { section, at: field, target: t });
+                                    }
+                                }
+                            }
                         }
                         *purpose
                     }

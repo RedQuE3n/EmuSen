@@ -555,3 +555,27 @@ fn a_long_block_relaxes_its_jumps_and_keeps_its_purposes() {
         assert_eq!(Exec::new(code, &[]).run(&mut io), 5 * body as u64);
     }
 }
+
+#[test]
+fn a_label_s_address_reaches_it_in_either_section() {
+    for cold in [false, true] {
+        let code = frame(
+            &[],
+            |a| {
+                let (to, back) = (a.label(), a.label());
+                a.lea_label(R11, to);
+                a.jump_reg(R11);
+                if cold {
+                    a.section(Section::Cold);
+                }
+                a.bind(to);
+                a.mov_imm(RDX, 77);
+                a.jump(back);
+                a.section(Section::Hot);
+                a.bind(back);
+            },
+            RDX,
+        );
+        assert_eq!(Exec::new(code, &[]).run(&mut [0; 8]), 77, "cold={cold}");
+    }
+}

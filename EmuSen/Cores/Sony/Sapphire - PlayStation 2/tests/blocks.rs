@@ -497,6 +497,18 @@ fn random_programs_with_timer_interrupts_through_the_board_leave_the_interpreter
     assert!(s.rollbacks > 0, "{s:?}");
 }
 
+/// E0's baseline (EmuSen_Recompiler.md §14): the random programs again with its static form dispatched, which must run.
+#[cfg(feature = "baseline")]
+#[test]
+fn random_programs_run_the_baselines_static_form_and_leave_the_interpreters_machine() {
+    blocks::baseline_dispatched(true);
+    let before = blocks::baseline_counts();
+    random_twins(0..24, 6_000, 97, false);
+    random_twins(24..32, 6_000, 97, true);
+    let after = blocks::baseline_counts();
+    assert!(after[2] > before[2] && after[3] > before[3], "the static form ran: {before:?} to {after:?}");
+}
+
 #[test]
 fn random_programs_under_the_verifier_find_nothing() {
     for seed in 0..20 {

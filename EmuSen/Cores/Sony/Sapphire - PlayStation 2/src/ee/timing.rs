@@ -220,6 +220,36 @@ pub const UNCACHED: u64 = 2;
 /// The uncached accelerated buffer's refill of 128 bytes, eight bus cycles [A].
 pub const UCAB_REFILL: u64 = 16;
 
+/// The resources a `Snap` carries ready cycles for: the GPRs, HI/LO of both pipes and SA.
+#[cfg(feature = "baseline")]
+pub(crate) const SNAP_READY: usize = SA + 1;
+
+/// The issue model after a static region's steps, as offsets from the entry's last issue (EmuSen_Recompiler.md §14.3).
+#[cfg(feature = "baseline")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Snap {
+    pub writes: [u64; 2],
+    pub ready_mask: u64,
+    pub last: u16,
+    pub floor: u16,
+    pub open: u8,
+    pub group_ends: u8,
+    pub paired: u8,
+    pub category: u8,
+    pub pipe: u8,
+    /// The issue cycles that did not pair, each of which moves Random.
+    pub unpaired: u8,
+    pub ready: [u16; SNAP_READY],
+}
+
+#[cfg(feature = "baseline")]
+impl Default for Snap {
+    fn default() -> Snap {
+        Snap { writes: [0; 2], ready_mask: 0, last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; SNAP_READY] }
+    }
+}
+
 /// What one instruction asks of the model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Issue {
@@ -506,6 +536,48 @@ impl Timing {
             }
         });
         self.instructions += k * (self.instructions - a.instructions);
+    }
+
+    /// The baseline's static form: a model at rest `base` cycles in, one instruction issued, nothing in flight, the pair slot closed (EmuSen_Recompiler.md §14).
+    #[cfg(feature = "baseline")]
+    pub(crate) fn at_rest(base: u64) -> Timing {
+        Timing { last: base, instructions: 1, ..Timing::default() }
+    }
+
+    /// Whether this model acts as `at_rest(last)` for a block reading `exposed` from its entry (EmuSen_Recompiler.md §14.3).
+    #[cfg(all(feature = "baseline", test))]
+    pub(crate) fn rests_for(&self, exposed: u64) -> bool {
+        let ready = (0..64).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready[r] <= self.last + 1);
+        self.instructions > 0 && !self.open && self.group_ends == 0 && self.floor <= self.last + 1 && ready
+    }
+
+    /// This model as offsets from `base`, the ready cycles of the resources in `mask`; none where one does not fit.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn snap(&self, base: u64, mask: u64, unpaired: u8) -> Option<Snap> {
+        let k = |t: u64| u16::try_from(t.checked_sub(base)?).ok();
+        let mut s = Snap { writes: [self.last_writes as u64, (self.last_writes >> 64) as u64], ready_mask: mask, last: k(self.last)?, floor: k(self.floor)?, open: u8::from(self.open), group_ends: self.group_ends, paired: u8::from(self.paired), category: self.last_category, pipe: self.last_pipe, unpaired, ..Snap::default() };
+        for r in (0..SNAP_READY).filter(|r| mask >> r & 1 == 1) {
+            s.ready[r] = k(self.ready[r])?;
+        }
+        Some(s)
+    }
+
+    /// `snap` made this model's fields, `base` cycles in; the instructions issued are the caller's.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn apply(&mut self, base: u64, s: &Snap) {
+        self.last = base + u64::from(s.last);
+        self.floor = base + u64::from(s.floor);
+        self.last_writes = u128::from(s.writes[0]) | u128::from(s.writes[1]) << 64;
+        (self.open, self.group_ends, self.paired, self.last_category, self.last_pipe) = (s.open != 0, s.group_ends, s.paired != 0, s.category, s.pipe);
+        for r in (0..SNAP_READY).filter(|r| s.ready_mask >> r & 1 == 1) {
+            self.ready[r] = base + u64::from(s.ready[r]);
+        }
+    }
+
+    /// The cycle the last instruction issued in.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn last(&self) -> u64 {
+        self.last
     }
 
     /// `forms::STUB`'s exit: the last issue moved on by `k` cycles, and the cycle after it.

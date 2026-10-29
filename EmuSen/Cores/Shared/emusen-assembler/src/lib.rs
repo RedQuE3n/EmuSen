@@ -149,6 +149,8 @@ pub trait Assembler {
     /// A jump or a call to shared stub `id`, which the runtime places once an arena.
     fn jump_stub(&mut self, id: u32);
     fn call_stub(&mut self, id: u32);
+    /// `d` the address of a label.
+    fn lea_label(&mut self, d: Reg, l: Label);
     /// `d` the address of the block's data at `offset`.
     fn lea_data(&mut self, d: Reg, offset: u32);
     /// A jump through the 8-byte word at the block's data `offset`.

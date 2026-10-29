@@ -272,6 +272,25 @@ impl L<'_> {
         r
     }
 
+    /// Out-of-line code begins: laid cold, and jumped over where the flow is already cold, so that it is never fallen into.
+    fn cold_begin(&mut self) -> (Section, Option<Label>) {
+        let here = self.a.current();
+        let over = (here == Section::Cold).then(|| {
+            let l = self.a.label();
+            self.a.jump(l);
+            l
+        });
+        self.a.section(Section::Cold);
+        (here, over)
+    }
+
+    fn cold_end(&mut self, (here, over): (Section, Option<Label>)) {
+        self.a.section(here);
+        if let Some(l) = over {
+            self.a.bind(l);
+        }
+    }
+
     fn push_purpose(&mut self, p: usize) -> usize {
         let was = self.purpose;
         self.pur(p);
@@ -464,13 +483,12 @@ impl L<'_> {
 
     /// An exit taken when `c` holds, laid cold; the state is `st`.
     fn exit_if(&mut self, c: Cond, st: &St, place: At) {
-        let out = self.a.label();
-        self.a.branch(c, out);
-        let here = self.a.current();
-        self.a.section(Section::Cold);
-        self.a.bind(out);
+        let to = self.a.label();
+        self.a.branch(c, to);
+        let out = self.cold_begin();
+        self.a.bind(to);
         self.exit(st, place, None);
-        self.a.section(here);
+        self.cold_end(out);
     }
 }
 
@@ -682,8 +700,7 @@ impl L<'_> {
         self.a.bind(known);
         self.a.load(8, false, P, at(X, P_HOST));
         self.a.load(8, false, TG, at(X, P_META));
-        let here = self.a.current();
-        self.a.section(Section::Cold);
+        let out = self.cold_begin();
         self.a.bind(miss);
         self.a.mov(Width::W32, RDI, A);
         self.a.call_stub(stub::FILL);
@@ -692,7 +709,7 @@ impl L<'_> {
         self.a.branch(Cond::Eq, l);
         self.page_entry();
         self.a.jump(known);
-        self.a.section(here);
+        self.cold_end(out);
         self.pur(p);
     }
 }

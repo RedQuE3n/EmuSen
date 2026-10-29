@@ -448,7 +448,16 @@ fn immediates_of_every_width_load_exactly() {
 #[test]
 fn data_stubs_and_the_trampoline_link_and_preserve_every_register() {
     extern "C" fn helper(ctx: u64, a: u64, b: u64, c: u64) -> u64 {
-        ctx ^ a.wrapping_mul(3) ^ b.rotate_left(7) ^ c.wrapping_add(11)
+        let answer = ctx ^ a.wrapping_mul(3) ^ b.rotate_left(7) ^ c.wrapping_add(11);
+        // A System V callee may clobber every caller-saved register: this one does, so the trampoline must save them.
+        // SAFETY: writes only registers declared clobbered.
+        unsafe {
+            std::arch::asm!(
+                "mov rcx, -1", "mov rdx, -1", "mov rsi, -1", "mov rdi, -1", "mov r8, -1", "mov r9, -1", "mov r10, -1", "mov r11, -1",
+                out("rcx") _, out("rdx") _, out("rsi") _, out("rdi") _, out("r8") _, out("r9") _, out("r10") _, out("r11") _,
+            );
+        }
+        answer
     }
     let mut stub = X64::new();
     let entry = stub.label();

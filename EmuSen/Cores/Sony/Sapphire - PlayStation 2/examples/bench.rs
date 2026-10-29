@@ -91,7 +91,7 @@ struct Counts {
     idle: [u64; 4],
     /// Each VU's recompiler: pairs compiled and interpreted, microprograms compiled, words found changed, the budget's
     /// flushes, the bytes of code held, the compiler's nanoseconds, the microprograms kept and the most for one start.
-    vu: [[u64; 10]; 2],
+    vu: [[u64; 11]; 2],
     /// The EE's compiler across its budget's drops: nanoseconds on its thread and on the dispatcher's, blocks compiled on each, and the drops.
     jit: [u64; 5],
 }
@@ -107,7 +107,7 @@ fn counts(m: &Machine) -> Counts {
         compiled: m.blocks.as_ref().map_or(0, |b| b.stats.compiled_steps),
         interpreted: m.blocks.as_ref().map_or(0, |b| b.stats.interpreted),
         idle: { let c = &m.idle.counts; [c.ee_cycles, c.ee_steps, c.iop_cycles, c.iop_instructions] },
-        vu: [0, 1].map(|u| s.board.vpu.jit_counts(u).map_or([0; 10], |c| [c.compiled_pairs, c.interpreted_pairs, c.programs, c.invalidated, c.flushes, c.bytes, c.nanos, c.kept, c.widest, c.calls])),
+        vu: [0, 1].map(|u| s.board.vpu.jit_counts(u).map_or([0; 11], |c| [c.compiled_pairs, c.interpreted_pairs, c.programs, c.invalidated, c.flushes, c.bytes, c.nanos, c.kept, c.widest, c.calls, c.dead_flags])),
         jit: m.blocks.as_ref().map_or([0; 5], |b| {
             let ([t, h], _) = b.spent();
             [t.nanos, h.nanos, t.compiled, h.compiled, b.flushes()]
@@ -372,7 +372,7 @@ fn main() {
     }
     for u in (0..2).filter(|&u| m.sys.board.vpu.jit_counts(u).is_some()) {
         let g = |n: usize| d(at_from.vu[u][n], end.vu[u][n]);
-        println!("vu{u} recompiler\t{:.0} pairs compiled and {:.0} interpreted a frame in {:.0} calls\t{:.2} microprograms compiled and {:.2} found changed a frame\t{} flushes at its code budget\t{:.1} MiB of code and {} microprograms held at the end, at most {} for a start", g(0), g(1), g(9), g(2), g(3), end.vu[u][4] - at_from.vu[u][4], end.vu[u][5] as f64 / 1048576.0, end.vu[u][7], end.vu[u][8]);
+        println!("vu{u} recompiler\t{:.0} pairs compiled and {:.0} interpreted a frame in {:.0} calls, {:.0} dead flag writes left out\t{:.2} microprograms compiled and {:.2} found changed a frame\t{} flushes at its code budget\t{:.1} MiB of code and {} microprograms held at the end, at most {} for a start", g(0), g(1), g(9), g(10), g(2), g(3), end.vu[u][4] - at_from.vu[u][4], end.vu[u][5] as f64 / 1048576.0, end.vu[u][7], end.vu[u][8]);
     }
     for u in 0..2 {
         let p = d(at_from.pairs[u], end.pairs[u]);

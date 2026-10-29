@@ -263,7 +263,8 @@ impl Blocks {
     /// `EMUSEN_SAPPHIRE_SPILL=1`, `EMUSEN_SAPPHIRE_MEMORY=0` (S36's blocks, every load and store left to the interpreter),
     /// `EMUSEN_SAPPHIRE_LONGEST=<n>` (blocks of at most n instructions), `EMUSEN_SAPPHIRE_WAIT=1` (each block's code waited for
     /// when it is handed over, so that nothing runs interpreted behind the compiler's queue), `EMUSEN_SAPPHIRE_BASELINE_NOW=1`
-    /// (with `baseline`, each covered block compiled on the dispatcher's thread), `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` (the code budget).
+    /// (with `baseline`, each covered block compiled on the dispatcher's thread and the rest left to the interpreter, the default
+    /// while the baseline is dispatched; `=0` queues them), `EMUSEN_SAPPHIRE_BUDGET_MIB=<n>` (the code budget).
     pub fn from_env() -> Blocks {
         let mut b = Blocks::new();
         if let Some(t) = std::env::var("EMUSEN_SAPPHIRE_THRESHOLD").ok().and_then(|v| v.parse().ok()) {
@@ -275,7 +276,7 @@ impl Blocks {
         b.wait = std::env::var("EMUSEN_SAPPHIRE_WAIT").is_ok_and(|v| v == "1");
         #[cfg(feature = "baseline")]
         {
-            b.now = std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").is_ok_and(|v| v == "1");
+            b.now = jit::baseline::dispatched() && std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").map_or(true, |v| v != "0");
         }
         if let Some(mib) = std::env::var("EMUSEN_SAPPHIRE_BUDGET_MIB").ok().and_then(|v| v.parse::<u64>().ok()) {
             b.set_budget(mib << 20);
@@ -551,6 +552,12 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             let now = if blocks.now && b.covered { blocks.jit.compile_now(&b.words, pc, b.options) } else { None };
             #[cfg(not(feature = "baseline"))]
             let now = None;
+            #[cfg(feature = "baseline")]
+            if blocks.now && now.is_none() {
+                // Compiled on this thread or not at all, so that which steps run compiled never depends on another thread's time.
+                b.state = State::Refused(0);
+                return None;
+            }
             let slot = now.unwrap_or_else(|| blocks.jit.enqueue(b.words.clone(), pc, b.options));
             if wait {
                 slot.wait();

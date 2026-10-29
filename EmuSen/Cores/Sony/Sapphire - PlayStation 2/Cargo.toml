@@ -32,12 +32,14 @@ cranelift-module = "0.136.0"
 
 # R0.4's kernel of the VU's floats in vector lanes, for measurement only (Sapphire_Redesign.md, R0 results).
 [features]
+# The tailored recompiler is the EE's default tier since 2026-10-29 (Sapphire_Speed.md §64.4); Cranelift's with EMUSEN_SAPPHIRE_BASELINE=0.
+default = ["baseline"]
 lanes = []
 # The working-set census of compiled blocks a field, for measurement only (the bench's `--working FILE`).
 census = []
 # The emitter's smaller exact forms and their byte count, for measurement only (Sapphire_Redesign.md, the emitter's exact forms).
 forms = []
-# E0 of the tailored recompiler: the baseline's static form dispatched under EMUSEN_SAPPHIRE_BASELINE=1 and counted beside the forms, for measurement only (EmuSen_Recompiler.md §14).
+# The tailored recompiler (EmuSen_Recompiler.md §14): the baseline's static form, dispatched on x86-64 Unix unless EMUSEN_SAPPHIRE_BASELINE=0.
 baseline = ["forms", "emusen-jit/native", "dep:emusen-assembler", "dep:emusen-mips-planner"]
 
 [[example]]

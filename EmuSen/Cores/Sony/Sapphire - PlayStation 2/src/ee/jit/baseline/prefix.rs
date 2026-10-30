@@ -1,6 +1,6 @@
 //! The dynamic prefix, run by the shared exit for an entry not at rest (EmuSen_Recompiler.md §15.2)
 
-use super::super::super::timing::{CATEGORIES, Issue, MAC_BITS, Snap, Timing};
+use super::super::super::timing::{CATEGORIES, Issue, Snap, Timing, UNITS, halves, whole};
 use super::super::shape;
 use super::Static;
 
@@ -22,8 +22,8 @@ pub(crate) struct Head {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct PStep {
-    pub reads: u64,
-    pub writes: u64,
+    pub reads: [u64; 2],
+    pub writes: [u64; 2],
     pub category: u8,
     pub row: u8,
     pub branch: u8,
@@ -37,7 +37,7 @@ pub(crate) struct Table<'a> {
     /// The cycles after each step less the entry's last issue, which every exit's record once held.
     pub times: &'a [u16],
     pub steps: &'a [PStep],
-    pub exposed: &'a [u64],
+    pub exposed: &'a [[u64; 2]],
     pub snaps: &'a [Snap],
 }
 
@@ -58,7 +58,9 @@ pub(crate) fn table_bytes(st: &Static, single: bool, blocking: bool) -> Vec<u8> 
         out.extend_from_slice(raw(s));
     }
     for e in &st.exposed_from[..=st.kmax] {
-        out.extend_from_slice(&e.to_le_bytes());
+        for h in halves(*e) {
+            out.extend_from_slice(&h.to_le_bytes());
+        }
     }
     for k in 1..=st.kmax {
         out.extend_from_slice(raw(&st.snaps[k][0]));
@@ -75,7 +77,7 @@ impl Table<'_> {
             let (n, k) = (usize::from(head.n), usize::from(head.kmax));
             let times = p.add(size_of::<Head>()).cast::<u16>();
             let steps = p.add(size_of::<Head>() + (2 * n).next_multiple_of(8)).cast::<PStep>();
-            let exposed = steps.add(n).cast::<u64>();
+            let exposed = steps.add(n).cast::<[u64; 2]>();
             let snaps = exposed.add(k + 1).cast::<Snap>();
             Table { head, times: std::slice::from_raw_parts(times, n), steps: std::slice::from_raw_parts(steps, n), exposed: std::slice::from_raw_parts(exposed, k + 1), snaps: std::slice::from_raw_parts(snaps, k) }
         }
@@ -100,15 +102,14 @@ pub(crate) fn run(t: &Table, d: &mut Timing, j: usize, taken: bool) -> Prefix {
     let kmax = usize::from(t.head.kmax);
     for k in 0..j {
         if k <= kmax
-            && let Some(b) = d.converges(&t.snap(k), t.exposed[k])
+            && let Some(b) = d.converges(&t.snap(k), whole(t.exposed[k]))
         {
             (p.at, p.base) = (k, Some(b));
             return p;
         }
         let s = t.steps[k];
         let mut i = Issue::new(CATEGORIES[usize::from(s.category)], usize::from(s.row));
-        let real = !(1 << MAC_BITS[0] | 1 << MAC_BITS[1]);
-        (i.reads, i.writes) = (u128::from(s.reads & real), u128::from(s.writes & real));
+        (i.reads, i.writes) = (whole(s.reads) & !UNITS, whole(s.writes) & !UNITS);
         (i.taken, i.single, i.blocking) = (taken && s.branch != 0, t.head.single != 0, t.head.blocking != 0);
         let at = d.issue(i);
         p.unpaired += u8::from(!d.paired());
@@ -126,8 +127,8 @@ pub(crate) fn model(core: &mut Timing, d: &Timing, p: &Prefix, t: &Table, s: &Sn
         return (p.unpaired, d.paired());
     };
     let c = p.at;
-    let before = t.steps[..c].iter().fold(0, |m, s| m | s.writes);
-    let after = t.steps[c..j].iter().fold(0, |m, s| m | s.writes);
+    let before = t.steps[..c].iter().fold(0, |m, s| m | whole(s.writes));
+    let after = t.steps[c..j].iter().fold(0, |m, s| m | whole(s.writes));
     core.apply(b, s);
     let mut keep = before & !after;
     while keep != 0 {

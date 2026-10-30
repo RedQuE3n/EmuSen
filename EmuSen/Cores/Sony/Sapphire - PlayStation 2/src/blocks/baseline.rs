@@ -14,9 +14,9 @@ pub(crate) static COUNTS: [AtomicU64; 5 + PMAX + 2] = [const { AtomicU64::new(0)
 /// `Context::prefix`'s flag: the prefix ran to the exit without converging.
 const NEVER: u32 = 1 << 31;
 
-/// The helpers' addresses, in the stubs' order: exit, leave, commit, fill.
-pub(crate) fn helpers() -> [u64; 4] {
-    [exit as *const () as u64, leave as *const () as u64, commit as *const () as u64, fill_page as *const () as u64]
+/// The helpers' addresses, in the stubs' order: exit, leave, commit, fill, call.
+pub(crate) fn helpers() -> [u64; 5] {
+    [exit as *const () as u64, leave as *const () as u64, commit as *const () as u64, fill_page as *const () as u64, call as *const () as u64]
 }
 
 /// One entry into a covered block, at rest or not, with the steps the prefix took and the steps that stood.
@@ -82,7 +82,7 @@ fn prepare(ctx: &mut Context, rec: &Rec, pre: Option<&Prefix>) -> u32 {
         ctx.times[k] = base + u64::from(t.times[k]);
     }
     let b = u32::from(rec.base);
-    (ctx.guard, ctx.base, ctx.logged) = (b.saturating_sub(1), b, u32::from(rec.logged));
+    (ctx.guard, ctx.base, ctx.logged) = (u32::from(rec.guard).saturating_sub(1), b, u32::from(rec.logged));
     steps
 }
 
@@ -134,4 +134,14 @@ extern "C" fn commit(ctx: *mut Context, rec: u64, x: u64, _: u64) -> u64 {
 
 extern "C" fn fill_page(ctx: *mut Context, vaddr: u64, _: u64, _: u64) -> u64 {
     u64::from(fill(ctx, vaddr as u32))
+}
+
+/// A call's step: the values the block handed stored to the core with their undo, the operation's writes logged, and the interpreter's operation run (Sapphire_Speed.md §65).
+extern "C" fn call(ctx: *mut Context, word: u64, logged: u64, index: u64) -> u64 {
+    // SAFETY: as `exit`.
+    let ctx = unsafe { &mut *ctx };
+    ctx.calls += 1;
+    let crate::board::System { ee, board } = sys(ctx);
+    ee.call_in_block(board, ctx, word as u32, logged as usize, index as u16);
+    0
 }

@@ -1,7 +1,8 @@
 //! What a block of EE code may hold, and where it ends: the integer instructions, the multipliers and dividers of both
 //! pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot (S36); the loads and stores of
-//! every width and PREF (S37). Everything else ends the block before it and is the interpreter's (Sapphire_Native.md
-//! §44.3, Sapphire_Recompiler.md §48.2).
+//! every width and PREF (S37); in the tailored tier's blocks also the multimedia instructions and COP1's, run as the interpreter's
+//! own operations (Sapphire_Speed.md §65). Everything else ends the block before it and is the interpreter's
+//! (Sapphire_Native.md §44.3, Sapphire_Recompiler.md §48.2).
 
 use super::super::ops;
 
@@ -18,6 +19,8 @@ pub enum Class {
     /// A load, a store or PREF (S37): compiled like a plain instruction, leaving the block before it at run time where
     /// its access is not one a block makes.
     Memory,
+    /// The interpreter's operation called from inside a tailored tier's block, which goes on after it (Sapphire_Speed.md §65).
+    Call,
     /// Not compiled: the block ends before it.
     Other,
 }
@@ -70,6 +73,8 @@ fn decode(word: u32) -> Class {
         Class::Branch
     } else if MEMORY.contains(&n) {
         Class::Memory
+    } else if ops::is_mmi(ops::index(word)) || ops::is_fpu_register(ops::index(word)) {
+        Class::Call
     } else {
         Class::Other
     }
@@ -80,33 +85,34 @@ pub fn compiled() -> impl Iterator<Item = &'static str> {
     PLAIN.iter().chain(BRANCH).chain(MEMORY).copied()
 }
 
-/// The class a block gives a word: a load or store is another instruction where `memory` is off (S36's blocks).
-pub fn class_in(word: u32, memory: bool) -> Class {
+/// The class a block gives a word: a load or store is another instruction where `memory` is off (S36's blocks), a call where `calls` is.
+pub fn class_in(word: u32, memory: bool, calls: bool) -> Class {
     match class(word) {
         Class::Memory if !memory => Class::Other,
+        Class::Call if !calls => Class::Other,
         c => c,
     }
 }
 
 /// Whether a class is compiled where it stands, the block going on after it.
 fn straight(c: Class) -> bool {
-    matches!(c, Class::Plain | Class::Memory)
+    matches!(c, Class::Plain | Class::Memory | Class::Call)
 }
 
 /// The block's words from the run `words` holds (consecutive instructions from the block's start, as far as they are
 /// known): compiled instructions up to the first other, a branch only with its delay slot when the slot is a plain or
 /// memory instruction, at most `MAX`; none if the first instruction is not compiled. With it, whether the run ended
-/// before the block did, so that more words could have made it longer. `memory` as in `class_in`.
-pub fn shape(words: &[u32], memory: bool) -> (Option<Vec<u32>>, bool) {
+/// before the block did, so that more words could have made it longer. `memory` and `calls` as in `class_in`.
+pub fn shape(words: &[u32], memory: bool, calls: bool) -> (Option<Vec<u32>>, bool) {
     let mut out = Vec::new();
     let mut i = 0;
     let mut short = true;
     while i < words.len() && out.len() < MAX {
-        match class_in(words[i], memory) {
-            Class::Plain | Class::Memory => out.push(words[i]),
+        match class_in(words[i], memory, calls) {
+            Class::Plain | Class::Memory | Class::Call => out.push(words[i]),
             Class::Branch => {
                 short = i + 1 >= words.len();
-                if !short && out.len() + 2 <= MAX && straight(class_in(words[i + 1], memory)) {
+                if !short && out.len() + 2 <= MAX && straight(class_in(words[i + 1], memory, calls)) {
                     out.extend_from_slice(&words[i..i + 2]);
                 }
                 return ((!out.is_empty()).then_some(out), short);

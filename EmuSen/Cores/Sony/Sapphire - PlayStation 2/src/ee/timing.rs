@@ -220,12 +220,30 @@ pub const UNCACHED: u64 = 2;
 /// The uncached accelerated buffer's refill of 128 bytes, eight bus cycles [A].
 pub const UCAB_REFILL: u64 = 16;
 
-/// The resources a `Snap` carries ready cycles for: the GPRs, HI/LO of both pipes and SA.
+/// The resources a `Snap` carries ready cycles for: the GPRs, HI/LO of both pipes, SA, the FPRs, ACC and FCR31.
 #[cfg(feature = "baseline")]
-pub(crate) const SNAP_READY: usize = SA + 1;
-/// The bits a `Snap`'s masks give the two multipliers' free cycles, past every resource a block of S36 and S37 names.
+pub(crate) const SNAP_READY: usize = FCR31 + 1;
+/// The resources a `Snap` holds densely, the GPRs, HI/LO of both pipes and SA; of the FPU's, at most `FPU_HELD` by number.
 #[cfg(feature = "baseline")]
-pub(crate) const MAC_BITS: [usize; 2] = [62, 63];
+const DENSE: usize = SA + 1;
+#[cfg(feature = "baseline")]
+const FPU_HELD: usize = 8;
+/// The bits a `Snap`'s masks give the two multipliers' and the FPU divider's free cycles, past every resource a block names.
+#[cfg(feature = "baseline")]
+pub(crate) const UNIT_BITS: [usize; 3] = [125, 126, 127];
+/// `UNIT_BITS` as a mask.
+#[cfg(feature = "baseline")]
+pub(crate) const UNITS: u128 = 7 << 125;
+
+/// A resource mask kept as two words, so that the blocks' 8-aligned data holds it.
+#[cfg(feature = "baseline")]
+pub(crate) fn halves(m: u128) -> [u64; 2] {
+    [m as u64, (m >> 64) as u64]
+}
+#[cfg(feature = "baseline")]
+pub(crate) fn whole(h: [u64; 2]) -> u128 {
+    u128::from(h[0]) | u128::from(h[1]) << 64
+}
 
 /// The issue model after a static region's steps, as offsets from the entry's last issue (EmuSen_Recompiler.md §14.3).
 #[cfg(feature = "baseline")]
@@ -233,7 +251,7 @@ pub(crate) const MAC_BITS: [usize; 2] = [62, 63];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Snap {
     pub writes: [u64; 2],
-    pub ready_mask: u64,
+    pub ready_mask: [u64; 2],
     pub last: u16,
     pub floor: u16,
     pub open: u8,
@@ -243,15 +261,30 @@ pub(crate) struct Snap {
     pub pipe: u8,
     /// The issue cycles that did not pair, each of which moves Random.
     pub unpaired: u8,
-    pub ready: [u16; SNAP_READY],
-    /// The multipliers' free cycles, where `ready_mask` has their bits.
-    pub mac: [u16; 2],
+    pub ready: [u16; DENSE],
+    /// The FPU's resources in `ready_mask`, in order, and their ready cycles.
+    pub fpu_at: [u8; FPU_HELD],
+    pub fpu_ready: [u16; FPU_HELD],
+    /// The multipliers' and the divider's free cycles, where `ready_mask` has their bits.
+    pub units: [u16; 3],
+}
+
+#[cfg(feature = "baseline")]
+impl Snap {
+    /// The ready cycle the snapshot holds for resource `r` below `SNAP_READY`, which `ready_mask` names.
+    fn ready_at(&self, r: usize) -> u16 {
+        if r < DENSE {
+            return self.ready[r];
+        }
+        let n = (whole(self.ready_mask) >> DENSE & ((1 << (SNAP_READY - DENSE)) - 1)).count_ones() as usize;
+        self.fpu_at[..n.min(FPU_HELD)].iter().position(|&a| usize::from(a) == r).map_or(0, |i| self.fpu_ready[i])
+    }
 }
 
 #[cfg(feature = "baseline")]
 impl Default for Snap {
     fn default() -> Snap {
-        Snap { writes: [0; 2], ready_mask: 0, last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; SNAP_READY], mac: [0; 2] }
+        Snap { writes: [0; 2], ready_mask: [0; 2], last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; DENSE], fpu_at: [0; FPU_HELD], fpu_ready: [0; FPU_HELD], units: [0; 3] }
     }
 }
 
@@ -376,6 +409,9 @@ impl Timing {
     fn uses_mac1(i: &Issue) -> bool {
         matches!(i.row, rows::MULT1 | rows::DIV1 | rows::MADD1 | rows::MMULT | rows::MMDIV)
     }
+    fn uses_fdiv(i: &Issue) -> bool {
+        matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT)
+    }
 
     fn plan(&self, i: &Issue) -> Plan {
         let next = if self.instructions == 0 { 0 } else { self.last + 1 };
@@ -398,7 +434,7 @@ impl Timing {
         if Self::uses_mac1(i) {
             earliest = earliest.max(self.mac1_free);
         }
-        if matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT) {
+        if Self::uses_fdiv(i) {
             earliest = earliest.max(self.fdiv_free);
         }
         if matches!(i.row, rows::VDIV | rows::VRSQRT) {
@@ -445,7 +481,7 @@ impl Timing {
         if Self::uses_mac1(i) {
             self.mac1_free = at + u64::from(row.throughput);
         }
-        if matches!(i.row, rows::FDIV | rows::FSQRT | rows::FRSQRT) {
+        if Self::uses_fdiv(i) {
             self.fdiv_free = at + u64::from(row.throughput);
         }
         if matches!(i.row, rows::VDIV | rows::VRSQRT) {
@@ -551,22 +587,32 @@ impl Timing {
 
     /// Whether this model acts as `at_rest(last)` for a block reading `exposed` from its entry (EmuSen_Recompiler.md §14.3).
     #[cfg(all(feature = "baseline", test))]
-    pub(crate) fn rests_for(&self, exposed: u64) -> bool {
-        let ready = (0..64).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready_of(r) <= self.last + 1);
+    pub(crate) fn rests_for(&self, exposed: u128) -> bool {
+        let ready = (0..128).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready_of(r) <= self.last + 1);
         self.instructions > 0 && !self.open && self.group_ends == 0 && self.floor <= self.last + 1 && ready
     }
 
     /// This model as offsets from `base`, the ready cycles of the resources in `mask`; none where one does not fit.
     #[cfg(feature = "baseline")]
-    pub(crate) fn snap(&self, base: u64, mask: u64, unpaired: u8) -> Option<Snap> {
+    pub(crate) fn snap(&self, base: u64, mask: u128, unpaired: u8) -> Option<Snap> {
         let k = |t: u64| u16::try_from(t.checked_sub(base)?).ok();
-        let mut s = Snap { writes: [self.last_writes as u64, (self.last_writes >> 64) as u64], ready_mask: mask, last: k(self.last)?, floor: k(self.floor)?, open: u8::from(self.open), group_ends: self.group_ends, paired: u8::from(self.paired), category: self.last_category, pipe: self.last_pipe, unpaired, ..Snap::default() };
+        let mut s = Snap { writes: halves(self.last_writes), ready_mask: halves(mask), last: k(self.last)?, floor: k(self.floor)?, open: u8::from(self.open), group_ends: self.group_ends, paired: u8::from(self.paired), category: self.last_category, pipe: self.last_pipe, unpaired, ..Snap::default() };
+        let mut f = 0;
         for r in (0..SNAP_READY).filter(|r| mask >> r & 1 == 1) {
-            s.ready[r] = k(self.ready[r])?;
+            if r < DENSE {
+                s.ready[r] = k(self.ready[r])?;
+                continue;
+            }
+            // More of the FPU's resources than a snapshot holds: no static form.
+            if f == FPU_HELD {
+                return None;
+            }
+            (s.fpu_at[f], s.fpu_ready[f]) = (r as u8, k(self.ready[r])?);
+            f += 1;
         }
-        for (u, &bit) in MAC_BITS.iter().enumerate() {
+        for (u, &bit) in UNIT_BITS.iter().enumerate() {
             if mask >> bit & 1 == 1 {
-                s.mac[u] = k(self.ready_of(bit))?;
+                s.units[u] = k(self.ready_of(bit))?;
             }
         }
         Some(s)
@@ -577,27 +623,28 @@ impl Timing {
     pub(crate) fn apply(&mut self, base: u64, s: &Snap) {
         self.last = base + u64::from(s.last);
         self.floor = base + u64::from(s.floor);
-        self.last_writes = u128::from(s.writes[0]) | u128::from(s.writes[1]) << 64;
+        self.last_writes = whole(s.writes);
         (self.open, self.group_ends, self.paired, self.last_category, self.last_pipe) = (s.open != 0, s.group_ends, s.paired != 0, s.category, s.pipe);
-        for r in (0..SNAP_READY).filter(|r| s.ready_mask >> r & 1 == 1) {
-            self.ready[r] = base + u64::from(s.ready[r]);
+        let mask = whole(s.ready_mask);
+        for r in (0..SNAP_READY).filter(|r| mask >> r & 1 == 1) {
+            self.ready[r] = base + u64::from(s.ready_at(r));
         }
-        for (u, &bit) in MAC_BITS.iter().enumerate() {
-            if s.ready_mask >> bit & 1 == 1 {
-                self.set_ready(bit, base + u64::from(s.mac[u]));
+        for (u, &bit) in UNIT_BITS.iter().enumerate() {
+            if mask >> bit & 1 == 1 {
+                self.set_ready(bit, base + u64::from(s.units[u]));
             }
         }
     }
 
     /// The base at which this model is `s` shifted in time for every field a block's rest reading `exposed` first can see; none otherwise (EmuSen_Recompiler.md §15.2).
     #[cfg(feature = "baseline")]
-    pub(crate) fn converges(&self, s: &Snap, exposed: u64) -> Option<u64> {
+    pub(crate) fn converges(&self, s: &Snap, exposed: u128) -> Option<u64> {
         let (sl, sf, open) = (u64::from(s.last), u64::from(s.floor), s.open != 0);
         let b = self.last.checked_sub(sl)?;
         if self.instructions == 0 || self.open != open || self.group_ends != s.group_ends {
             return None;
         }
-        let writes = u128::from(s.writes[0]) | u128::from(s.writes[1]) << 64;
+        let writes = whole(s.writes);
         if open && (self.last_category, self.last_pipe, self.last_writes) != (s.category, s.pipe, writes) {
             return None;
         }
@@ -605,13 +652,14 @@ impl Timing {
             return None;
         }
         let q = u64::from(!open);
+        let mask = whole(s.ready_mask);
         let mut e = exposed;
         while e != 0 {
             let r = e.trailing_zeros() as usize;
             e &= e - 1;
             let d = self.ready_of(r);
-            let same = if s.ready_mask >> r & 1 == 1 {
-                let sr = u64::from(if r >= MAC_BITS[0] { s.mac[r - MAC_BITS[0]] } else { s.ready[r] });
+            let same = if mask >> r & 1 == 1 {
+                let sr = u64::from(if r >= UNIT_BITS[0] { s.units[r - UNIT_BITS[0]] } else { s.ready_at(r) });
                 d == b + sr || (d <= self.last + q && sr <= sl + q)
             } else {
                 d <= self.last + q
@@ -623,18 +671,19 @@ impl Timing {
         Some(b)
     }
 
-    /// The multipliers an instruction takes, as their bits in `MAC_BITS`.
+    /// The multipliers and the divider an instruction takes, as their bits in `UNIT_BITS`.
     #[cfg(feature = "baseline")]
-    pub(crate) fn units(i: &Issue) -> u64 {
-        u64::from(Self::uses_mac0(i)) << MAC_BITS[0] | u64::from(Self::uses_mac1(i)) << MAC_BITS[1]
+    pub(crate) fn units(i: &Issue) -> u128 {
+        u128::from(Self::uses_mac0(i)) << UNIT_BITS[0] | u128::from(Self::uses_mac1(i)) << UNIT_BITS[1] | u128::from(Self::uses_fdiv(i)) << UNIT_BITS[2]
     }
 
-    /// The ready cycle of resource `r`, or a multiplier's free cycle at its bit in `MAC_BITS`.
+    /// The ready cycle of resource `r`, or a unit's free cycle at its bit in `UNIT_BITS`.
     #[cfg(feature = "baseline")]
     pub(crate) fn ready_of(&self, r: usize) -> u64 {
         match r {
-            62 => self.mac0_free,
-            63 => self.mac1_free,
+            125 => self.mac0_free,
+            126 => self.mac1_free,
+            127 => self.fdiv_free,
             _ => self.ready[r],
         }
     }
@@ -643,8 +692,9 @@ impl Timing {
     #[cfg(feature = "baseline")]
     pub(crate) fn set_ready(&mut self, r: usize, c: u64) {
         match r {
-            62 => self.mac0_free = c,
-            63 => self.mac1_free = c,
+            125 => self.mac0_free = c,
+            126 => self.mac1_free = c,
+            127 => self.fdiv_free = c,
             _ => self.ready[r] = c,
         }
     }
@@ -672,6 +722,7 @@ pub(crate) mod layout {
     pub const READY: i32 = offset_of!(Timing, ready) as i32;
     pub const MAC0_FREE: i32 = offset_of!(Timing, mac0_free) as i32;
     pub const MAC1_FREE: i32 = offset_of!(Timing, mac1_free) as i32;
+    pub const FDIV_FREE: i32 = offset_of!(Timing, fdiv_free) as i32;
     pub const LAST: i32 = offset_of!(Timing, last) as i32;
     pub const LAST_CATEGORY: i32 = offset_of!(Timing, last_category) as i32;
     pub const LAST_PIPE: i32 = offset_of!(Timing, last_pipe) as i32;

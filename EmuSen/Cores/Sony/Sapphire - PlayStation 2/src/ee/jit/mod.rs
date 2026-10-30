@@ -54,6 +54,8 @@ pub mod kind {
 }
 /// An undo entry of 8 bytes, not 16, has this bit set in its address.
 pub const SHORT: u64 = 1 << 63;
+/// An undo entry of 4 bytes has this bit set instead (a call's FPU register, Sapphire_Speed.md §65).
+pub const WORD: u64 = 1 << 62;
 
 /// One entry of the translation cache: valid while `tag` is the context's generation with the page's address
 /// (`Context::gen1 | vaddr & !0xFFF`); `host` the page's first byte for the scratchpad and RDRAM.
@@ -112,12 +114,19 @@ pub struct Context {
     /// A tag no line has, for the stores that reach no cache line.
     pub dummy: [u64; 2],
     /// Each store's undo: the address of the 16 bytes it changes (or 8, with `SHORT`) and their bytes before it.
-    pub log: [[u64; 3]; 2 * shape::MAX],
+    pub log: [[u64; 3]; 4 * shape::MAX],
     /// The loads and stores that left their blocks: at the board's next event, misaligned, on a page the code does not
     /// serve (a register, the boot ROM, a fault), missing the data cache, and a load of an accelerated page (the UCAB).
     pub left: [u64; 5],
     /// A helper's answer when the code calls it through `forms::PRESERVE`'s trampolines, which return nothing.
     pub answer: u32,
+    /// Calls run since the dispatcher last took the count (Sapphire_Speed.md §65).
+    pub calls: u32,
+    /// A call's values the block wrote, by the lowering's value id, and which they are (Sapphire_Speed.md §65).
+    #[cfg(feature = "baseline")]
+    pub values: [u64; 72],
+    #[cfg(feature = "baseline")]
+    pub handed: [u64; 2],
     /// `forms::STUB`'s shared exit: the replay, and with every step standing the exit's commit (`commit_word`).
     #[cfg(feature = "forms")]
     pub commit: Commit,
@@ -195,6 +204,9 @@ impl emusen_jit::Lowering for R5900 {
     const EXITS: &'static [&'static str] = &["done", "rollback"];
 
     fn lower(&mut self, module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Options) -> Result<(), String> {
+        if words.iter().any(|&w| shape::class(w) == shape::Class::Call) {
+            return Err("a call is the tailored tier's alone".into());
+        }
         #[cfg(feature = "forms")]
         {
             if std::env::var_os("EMUSEN_SAPPHIRE_FORMS_BYTES").is_some() {
@@ -367,5 +379,42 @@ impl Ee {
     pub(crate) fn count_steps(&mut self, n: u64) {
         let m = self.mode_index().map_or(4, |m| m as usize);
         self.modes[m] += n;
+    }
+}
+
+#[cfg(feature = "baseline")]
+impl Ee {
+    /// A block's call: `run`, an operation of the interpreter's table the lowering took, on the word at `pc` (Sapphire_Speed.md §65).
+    pub(crate) fn call_in_block(&mut self, bus: &mut dyn super::Bus, ctx: &mut Context, word: u32, logged: usize, index: u16) {
+        let op = super::ops::get(index);
+        let base = (self as *mut Ee).cast::<u8>();
+        let mut k = logged;
+        for h in 0..2 {
+            let mut m = ctx.handed[h];
+            while m != 0 {
+                let v = 64 * h + m.trailing_zeros() as usize;
+                m &= m - 1;
+                // SAFETY: `core_off` names an 8-byte field of the core, which nothing else borrows while the block runs.
+                unsafe {
+                    let p = base.add(baseline::lower::core_off(v) as usize).cast::<u64>();
+                    ctx.log[k] = [p as u64 | SHORT, p.read_unaligned(), 0];
+                    p.write_unaligned(ctx.values[v]);
+                }
+                k += 1;
+            }
+        }
+        for &(off, n) in baseline::lower::call_writes(word, op).logs() {
+            // SAFETY: as above, a field of 4, 8 or 16 bytes.
+            unsafe {
+                let p = base.add(off as usize);
+                ctx.log[k] = match n {
+                    4 => [p as u64 | WORD, u64::from(p.cast::<u32>().read_unaligned()), 0],
+                    8 => [p as u64 | SHORT, p.cast::<u64>().read_unaligned(), 0],
+                    _ => [p as u64, p.cast::<u64>().read_unaligned(), p.add(8).cast::<u64>().read_unaligned()],
+                };
+            }
+            k += 1;
+        }
+        assert!((op.run)(self, bus, word, 0).is_ok(), "a call's operation does not fail in a block");
     }
 }

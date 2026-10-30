@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::board::{System, Tail};
 use crate::ee::Halt;
-use crate::ee::jit::{self, Code, Context, FINAL, Jit, Options, PAGES, Page, SHORT, Slot, kind, shape};
+use crate::ee::jit::{self, Code, Context, FINAL, Jit, Options, PAGES, Page, SHORT, Slot, WORD, kind, shape};
 use emusen_jit::verify::Reference;
 
 #[cfg(feature = "baseline")]
@@ -24,7 +24,7 @@ pub use baseline::prefix_counts as baseline_prefix_counts;
 pub use crate::ee::jit::baseline::set_dispatched as baseline_dispatched;
 /// The baseline's helpers, for its stubs (EmuSen_Recompiler.md §14.4).
 #[cfg(feature = "baseline")]
-pub(crate) fn baseline_helpers() -> [u64; 4] {
+pub(crate) fn baseline_helpers() -> [u64; 5] {
     baseline::helpers()
 }
 
@@ -116,6 +116,8 @@ pub struct Stats {
     /// then ran from the last load or store before it (Sapphire_Recompiler.md §48.15).
     pub rewinds: u64,
     pub rewound_steps: u64,
+    /// Calls run inside blocks (Sapphire_Speed.md §65).
+    pub calls: u64,
     /// Entries that found their block's code still with the compiler, the interpreter taking the step.
     pub queued: u64,
 }
@@ -214,9 +216,14 @@ impl Blocks {
             uncached: 0,
             uncached_loads: 0,
             dummy: [0; 2],
-            log: [[0; 3]; 2 * shape::MAX],
+            log: [[0; 3]; 4 * shape::MAX],
             left: [0; 5],
             answer: 0,
+            calls: 0,
+            #[cfg(feature = "baseline")]
+            values: [0; 72],
+            #[cfg(feature = "baseline")]
+            handed: [0; 2],
             #[cfg(feature = "forms")]
             commit: jit::forms::commit_trampoline(commit),
             #[cfg(feature = "baseline")]
@@ -501,7 +508,16 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         // wait for lines (a test's code run once).
         let rdram: &[u8] = if blocks.wait_lines { &sys.board.map.rdram } else { &[] };
         let (words, missed) = sys.ee.cached_words(pc, paddr, blocks.longest, rdram);
-        let (shaped, short) = shape::shape(&words, options.memory);
+        #[cfg(feature = "baseline")]
+        let calls = jit::baseline::calls(options);
+        #[cfg(not(feature = "baseline"))]
+        let calls = false;
+        let (mut shaped, mut short) = shape::shape(&words, options.memory, calls);
+        #[cfg(feature = "baseline")]
+        if calls && shaped.as_ref().is_some_and(|w| w.iter().any(|&x| shape::class(x) == shape::Class::Call) && !jit::baseline::covers(w, options)) {
+            // Calls only in blocks the baseline compiles; this one is shaped again without them.
+            (shaped, short) = shape::shape(&words, options.memory, false);
+        }
         if short && missed && blocks.wait_lines {
             // The block may run on into a line the cache does not hold yet: shaped once the interpreter has fetched it.
             blocks.stats.waits += 1;
@@ -622,6 +638,7 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
         e.2 = b_len as u64;
     }
     blocks.stats.fills += run.fills;
+    blocks.stats.calls += u64::from(std::mem::take(&mut ctx.calls));
     for (total, n) in blocks.stats.left.iter_mut().zip(ctx.left.iter_mut()) {
         *total += std::mem::take(n);
     }
@@ -726,10 +743,14 @@ fn leaving_point(pc: u32, words: &[u32], held: usize) -> usize {
 /// The block's stores undone, last first, from the context's log.
 fn undo(ctx: &Context) {
     for &[addr, lo, hi] in ctx.log[..ctx.logged as usize].iter().rev() {
-        let p = (addr & !SHORT) as *mut u8;
-        // SAFETY: each address is one the block's code read 8 or 16 bytes at and stored into during this call, inside
+        let p = (addr & !(SHORT | WORD)) as *mut u8;
+        // SAFETY: each address is one the block's code read 4, 8 or 16 bytes at and stored into during this call, inside
         // the core, the scratchpad, RDRAM or the context, all alive and borrowed by nothing else now.
         unsafe {
+            if addr & WORD != 0 {
+                std::ptr::write_unaligned(p.cast::<u32>(), lo as u32);
+                continue;
+            }
             std::ptr::write_unaligned(p.cast::<u64>(), lo);
             if addr & SHORT == 0 {
                 std::ptr::write_unaligned(p.add(8).cast::<u64>(), hi);

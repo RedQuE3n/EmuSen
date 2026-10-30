@@ -263,7 +263,52 @@ fn plain(r: &mut Rng) -> String {
             _ => format!("tlti {s}, {}", -((imm & 0x7FFF) as i16)),
         },
         90..=91 => r.pick(&["sync", "sync.p"]).to_string(),
+        92..=94 => multimedia(r, d, src, t, sh),
+        95..=97 => float(r, d, src),
         _ => format!("{} {d}, {s}, {t}", r.pick(&["or", "addu", "xor"])),
+    }
+}
+
+/// A COP1 instruction other than a load, store or branch, which the tailored tier's blocks call (Sapphire_Speed.md §65).
+fn float(r: &mut Rng, d: &str, s: &str) -> String {
+    let (fd, fs, ft) = (r.below(32), r.below(32), r.below(32));
+    match r.below(10) {
+        0..=2 => format!("mtc1 {s}, f{fs}"),
+        3 => format!("mfc1 {d}, f{fs}"),
+        4..=5 => format!("{} f{fd}, f{fs}, f{ft}", r.pick(&["add.s", "sub.s", "mul.s", "div.s", "max.s", "min.s", "madd.s", "msub.s", "rsqrt.s"])),
+        6 => format!("{} f{fd}, f{fs}", r.pick(&["abs.s", "neg.s", "mov.s", "cvt.w.s", "cvt.s.w"])),
+        7 => format!("sqrt.s f{fd}, f{ft}"),
+        8 => format!("{} f{fs}, f{ft}", r.pick(&["adda.s", "suba.s", "mula.s", "madda.s", "msuba.s", "c.f.s", "c.eq.s", "c.lt.s", "c.le.s"])),
+        _ => match r.below(3) {
+            0 => format!("ctc1 {s}, fcr31"),
+            1 => format!("cfc1 {d}, fcr31"),
+            _ => format!("cfc1 {d}, fcr0"),
+        },
+    }
+}
+
+/// A multimedia instruction, which the tailored tier's blocks call (Sapphire_Speed.md §65).
+fn multimedia(r: &mut Rng, d: &str, s: &str, t: &str, sh: u64) -> String {
+    match r.below(8) {
+        0..=3 => format!(
+            "{} {d}, {s}, {t}",
+            r.pick(&[
+                "paddb", "paddh", "paddw", "psubb", "psubh", "psubw", "paddsb", "paddsh", "paddsw", "psubsb", "psubsh", "psubsw", "paddub", "padduh",
+                "padduw", "psubub", "psubuh", "psubuw", "padsbh", "pceqb", "pceqh", "pceqw", "pcgtb", "pcgth", "pcgtw", "pmaxh", "pmaxw", "pminh",
+                "pminw", "pand", "por", "pxor", "pnor", "psllvw", "psrlvw", "psravw", "pextlb", "pextub", "pextlh", "pextuh", "pextlw", "pextuw",
+                "ppacb", "ppach", "ppacw", "pinth", "pinteh", "pcpyld", "pcpyud", "qfsrv", "pmulth", "pmaddh", "pmsubh", "phmadh", "phmsbh",
+                "pmultw", "pmultuw", "pmaddw", "pmadduw", "pmsubw",
+            ])
+        ),
+        4 => format!("{} {d}, {t}", r.pick(&["pabsh", "pabsw", "pcpyh", "pexch", "pexcw", "pexeh", "pexew", "prevh", "prot3w", "pext5", "ppac5"])),
+        5 => format!("{} {d}, {t}, {}", r.pick(&["psllh", "psrlh", "psrah", "psllw", "psrlw", "psraw"]), sh & 15),
+        6 => match r.below(4) {
+            0 => format!("{} {d}", r.pick(&["pmfhi", "pmflo", "pmfhl.lw", "pmfhl.uw", "pmfhl.slw", "pmfhl.lh", "pmfhl.sh"])),
+            1 => format!("{} {s}", r.pick(&["pmthi", "pmtlo", "pmthl.lw"])),
+            2 => format!("plzcw {d}, {s}"),
+            _ => format!("{} {s}, {t}", r.pick(&["pdivw", "pdivuw", "pdivbw"])),
+        },
+        _ => format!("{} {d}, {s}, {t}", r.pick(&["pextlb", "pextlh", "pextub", "pextuh", "pcpyud", "pcpyld", "ppach", "por", "pand"])),
     }
 }
 
@@ -362,7 +407,8 @@ fn random_program(seed: u64, timer: bool) -> (Vec<u32>, Vec<u32>) {
         l.push("ori k0, zero, 0x200".into());
         l.push("sw k0, 0(k1)".into());
     }
-    l.push("lui k0, 0x1".into());
+    // COP1 usable in three programs of four; in the fourth its instructions raise.
+    l.push(if seed % 4 == 0 { "lui k0, 0x1" } else { "lui k0, 0x2001" }.into());
     l.push(format!("ori k0, k0, 0x{:x}", if timer { 0x8401 } else { 0x8001 }));
     l.push("mtc0 k0, Status".into());
     l.push("sync.p".into());
@@ -479,6 +525,7 @@ fn random_twins(seeds: std::ops::Range<u64>, steps: u64, stride: u64, timer: boo
         total.to_line += s.to_line;
         total.rewinds += s.rewinds;
         total.rewound_steps += s.rewound_steps;
+        total.calls += s.calls;
         for k in 0..5 {
             total.left[k] += s.left[k];
         }
@@ -492,6 +539,8 @@ fn random_programs_leave_the_interpreters_machine() {
     println!("random programs, Count's interrupt: {s:?}");
     assert!(s.compiled_steps > s.interpreted, "most steps ran compiled: {s:?}");
     assert!(s.rollbacks > 0, "an interrupt fell inside a block at least once: {s:?}");
+    #[cfg(all(feature = "baseline", target_arch = "x86_64", unix))]
+    assert!(s.calls > 0, "the tailored tier's blocks called multimedia and COP1 operations: {s:?}");
 }
 
 #[test]

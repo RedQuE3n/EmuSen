@@ -260,7 +260,7 @@ closely, the file carries that reference's copyright line too.
 
 | Project | Licence | Copyright | Approaches adopted, and where they are described |
 |---|---|---|---|
-| [PCSX2](https://github.com/PCSX2/pcsx2) | GNU General Public License, version 3 or later | 2002-2026 PCSX2 Dev Team | the units brought along at the EE's event test, the IOP in arrears (`Sapphire_Speed.md` §62); its VU1 microprogram run on to its end where VIF1 waits for it was tried and not kept (§62.3); the EE's blocks found through a table by address before any search, after its recompiler's lookup table (§64.3) |
+| [PCSX2](https://github.com/PCSX2/pcsx2) | GNU General Public License, version 3 or later | 2002-2026 PCSX2 Dev Team | the units brought along at the EE's event test, the IOP in arrears (`Sapphire_Speed.md` §62); its VU1 microprogram run on to its end where VIF1 waits for it was tried and not kept (§62.3); the EE's blocks found through a table by address before any search, after its recompiler's lookup table (§64.3); the multimedia and COP1 instructions run inside the EE's blocks as the interpreter's operation, the registers written back first, after its recompiler's interpreter calls (§65) |
 | [DobieStation](https://github.com/PSI-Rockin/DobieStation) | GNU General Public License, version 3 | PSI-Rockin and the DobieStation contributors | the EE run in bounded rounds of cycles, every unit then run for the same time (`Sapphire_Speed.md` §62) |
 | [Play!](https://github.com/jpd002/Play-) | BSD-2-Clause | 2006-2026 Jean-Philip Desjardins | read for comparison: the EE run for a fixed quantum, then the VUs and the IOP (`Sapphire_Speed.md` §62); the EE's block lookup and linking, and what its recompiler leaves to the interpreter (§64.2) |
 

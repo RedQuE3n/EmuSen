@@ -382,7 +382,7 @@ fn a_direct_refused_by_the_gif_asks_for_no_event() {
 }
 
 /// A VIF1 write queued while VU1 runs lands before VU1's first pair past its cycle, keeping the fields it leaves out, and
-/// a PATH1 read sees it from the cycle after (Sapphire_Speed.md §63.4).
+/// a PATH1 read sees it from the cycle after (Sapphire_Speed.md §63.5).
 #[test]
 fn a_queued_vif1_write_lands_at_its_cycle() {
     let mut vu = sapphire::vu::Vu::new(sapphire::vu::VU1_MEM);

@@ -627,7 +627,7 @@ pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32)
     }
 }
 
-/// VIF1's queued writes before the pair at `t` landed (Sapphire_Speed.md §63.4).
+/// VIF1's queued writes before the pair at `t` landed (Sapphire_Speed.md §63.5).
 pub(super) extern "C" fn h_foreign(f: *mut Frame, t: u64) -> u64 {
     // SAFETY: as `h_land`.
     let frame = unsafe { &mut *f };

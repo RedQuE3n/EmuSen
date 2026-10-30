@@ -74,7 +74,7 @@ pub struct Vu {
     pub ahead_log: Vec<(u16, u64, u128)>,
     /// Each qword's latest logged store, so a read the log cannot change skips it; may be stale-high.
     ahead_last: Box<[u64]>,
-    /// VIF1's writes to a running VU1, (cycle, qword, fields, enable), landed before its first pair past each (§63.4).
+    /// VIF1's writes to a running VU1, (cycle, qword, fields, enable), landed before its first pair past each (§63.5).
     foreign: std::collections::VecDeque<(u64, u16, [u32; 4], u32)>,
     /// The first of `foreign`'s cycles, `u64::MAX` when it is empty; read by compiled code at each pair.
     pub foreign_next: u64,
@@ -227,8 +227,7 @@ impl Vu {
         u128::from_le_bytes(self.data[at..at + 16].try_into().unwrap())
     }
 
-    /// The qword at index `a` as a reader at cycle `at` sees it: before any store logged at or after `at`, after the
-    /// VIF's queued writes made before it (Sapphire_Speed.md §63.4).
+    /// The qword at index `a` as a reader at cycle `at` sees it (Sapphire_Speed.md §63.3, §63.5).
     pub fn mem_q_at(&self, a: usize, at: u64) -> u128 {
         let q = a % (self.data.len() / 16);
         let mut v = if self.ahead_log.is_empty() || self.ahead_last[q] < at {
@@ -257,7 +256,7 @@ impl Vu {
         self.set_mem_q(a, q);
     }
 
-    /// A VIF write at cycle `at`, held until the unit's run passes it (Sapphire_Speed.md §63.4).
+    /// A VIF write at cycle `at`, held until the unit's run passes it (Sapphire_Speed.md §63.5).
     pub fn queue_store(&mut self, at: u64, a: usize, fields: [u32; 4], enable: u32) {
         self.foreign_next = self.foreign_next.min(at);
         self.foreign.push_back((at, a as u16, fields, enable));
@@ -712,7 +711,7 @@ impl Vpu {
     /// The EE's view of the four memories at 11000000h to 1100FFFFh (EE User's Manual §2.1's map): VU0's micro and
     /// data memories each mirrored over 16 KiB, VU1's.
     pub fn memory(&mut self, paddr: u32) -> (&mut [u8], usize) {
-        // The board brought VU1 to now before this access, so every VIF write still queued is due (§63.4).
+        // The board brought VU1 to now before this access, so every VIF write still queued is due (§63.5).
         if self.units.vu1.foreign_next != u64::MAX {
             self.units.vu1.land_foreign(u64::MAX, false);
         }

@@ -458,7 +458,7 @@ impl Emitter<'_, '_> {
         self.flow(pc, upper, t, taken);
     }
 
-    /// Whether a flag write `d` pairs before its overwriter is dead at run time (Sapphire_Speed.md §63.3).
+    /// Whether a flag write `d` pairs before its overwriter is dead at run time (Sapphire_Speed.md §63.4).
     fn dead_here(&mut self, t: Value, d: u16, reach: u16) -> Value {
         let pipe = self.pipe;
         let reach = self.b.ins().iadd_imm_s(t, i64::from(reach));
@@ -1002,7 +1002,7 @@ impl Emitter<'_, '_> {
 /// The pairs ahead that a dead flag write is looked for in.
 const WINDOW: u16 = 12;
 
-/// Each flag-writing pair's distance to the write that makes it dead, 0 where none (Sapphire_Speed.md §63.3).
+/// Each flag-writing pair's distance to the write that makes it dead, 0 where none (Sapphire_Speed.md §63.4).
 fn dead_writes(list: &[(u16, u32, u32)], mask: u16) -> Vec<(u16, u16)> {
     let mut at = vec![None; mask as usize + 1];
     for &(pc, upper, lower) in list {

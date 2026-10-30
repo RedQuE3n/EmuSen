@@ -429,8 +429,7 @@ impl Vif {
         if self.unit == 0 { n & 0xFF } else { n & 0xFFFF }
     }
 
-    /// One UNPACK write into data memory, the fields `enable` names, landing at the write's cycle: queued for a running
-    /// VU1 to land as its run passes it (Sapphire_Speed.md §63.4), else with the VU brought to that cycle first.
+    /// One UNPACK write into data memory at the write's cycle, queued for a running VU1 (Sapphire_Speed.md §63.5).
     fn store(&mut self, r: &mut Reach, at: u32, fields: [u32; 4], enable: u32) {
         let a = (at % self.data_qwords()) as usize;
         if self.unit == 1 && r.vpu.running(1) {

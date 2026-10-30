@@ -33,6 +33,9 @@ pub const BUDGET: u64 = 256 << 20;
 /// The budget when the baseline is dispatched, its blocks' data being larger (EmuSen_Recompiler.md §16.5).
 #[cfg(feature = "baseline")]
 pub const BASELINE_BUDGET: u64 = 480 << 20;
+#[cfg(feature = "baseline")]
+/// The most instructions a block is shaped with on the tailored tier: past this, code outgrows the budget (Sapphire_Speed.md §65.5).
+const BASELINE_LONGEST: usize = 16;
 
 /// A block is handed to the compiler at this entry (MarsRT's sixty-fourth, `Mars_Native.md` §5.8.4).
 pub const THRESHOLD: u32 = 64;
@@ -69,13 +72,16 @@ struct Block {
     /// The baseline compiles it (`EMUSEN_SAPPHIRE_BASELINE=1`): its entries are counted for the static share.
     #[cfg(feature = "baseline")]
     covered: bool,
+    /// It holds COP2 instructions: entered only with VU0 quiet (Sapphire_Speed.md §65).
+    #[cfg(feature = "baseline")]
+    cop2: bool,
 }
 
 const NO_SPAN: u8 = u8::MAX;
 
 /// The index of the block's last load or store, one cycle an instruction (Sapphire_Redesign.md, "One horizon check a block").
 fn span_of(words: &[u32]) -> u8 {
-    match words.iter().rposition(|&w| shape::class(w) == shape::Class::Memory) {
+    match words.iter().rposition(|&w| shape::touches_memory(w)) {
         Some(g) if g > 0 => g as u8,
         _ => NO_SPAN,
     }
@@ -116,8 +122,9 @@ pub struct Stats {
     /// then ran from the last load or store before it (Sapphire_Recompiler.md §48.15).
     pub rewinds: u64,
     pub rewound_steps: u64,
-    /// Calls run inside blocks (Sapphire_Speed.md §65).
+    /// Calls run inside blocks, and entries refused a block holding COP2 while VU0 was not quiet (Sapphire_Speed.md §65).
     pub calls: u64,
+    pub vu0_busy: u64,
     /// Entries that found their block's code still with the compiler, the interpreter taking the step.
     pub queued: u64,
 }
@@ -163,6 +170,9 @@ pub struct Blocks {
     pub spill: bool,
     /// Loads and stores compiled into blocks (S37); without, each ends its block as at S36.
     pub memory: bool,
+    /// A block's COP2 instructions run when VU0 is quiet; off with `EMUSEN_SAPPHIRE_COP2=0`, the block leaving before the first.
+    #[cfg(feature = "baseline")]
+    pub cop2: bool,
     /// The most instructions a block is shaped with, at most `shape::MAX`.
     pub longest: usize,
     /// A block the baseline covers compiled on the dispatcher's thread when it reaches the threshold, not queued (EmuSen_Recompiler.md §16).
@@ -223,6 +233,16 @@ impl Blocks {
             #[cfg(feature = "baseline")]
             values: [0; 72],
             #[cfg(feature = "baseline")]
+            vf0: std::ptr::null_mut(),
+            #[cfg(feature = "baseline")]
+            room: 0,
+            #[cfg(feature = "baseline")]
+            quiet: 0,
+            #[cfg(feature = "baseline")]
+            macro_step: 0,
+            #[cfg(feature = "baseline")]
+            vu0_saved: None,
+            #[cfg(feature = "baseline")]
             handed: [0; 2],
             #[cfg(feature = "forms")]
             commit: jit::forms::commit_trampoline(commit),
@@ -250,6 +270,8 @@ impl Blocks {
             fixed_cost: false,
             spill: false,
             memory: true,
+            #[cfg(feature = "baseline")]
+            cop2: std::env::var("EMUSEN_SAPPHIRE_COP2").map_or(true, |v| v != "0"),
             longest: shape::MAX,
             #[cfg(feature = "baseline")]
             now: false,
@@ -284,6 +306,9 @@ impl Blocks {
         #[cfg(feature = "baseline")]
         {
             b.now = jit::baseline::dispatched() && std::env::var("EMUSEN_SAPPHIRE_BASELINE_NOW").map_or(true, |v| v != "0");
+            if jit::baseline::dispatched() {
+                b.longest = BASELINE_LONGEST;
+            }
         }
         if let Some(mib) = std::env::var("EMUSEN_SAPPHIRE_BUDGET_MIB").ok().and_then(|v| v.parse::<u64>().ok()) {
             b.set_budget(mib << 20);
@@ -533,6 +558,8 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             paddr,
             #[cfg(feature = "baseline")]
             covered: jit::baseline::dispatched() && jit::baseline::covers(&words, options),
+            #[cfg(feature = "baseline")]
+            cop2: words.iter().any(|&w| shape::class(w) == shape::Class::Call && jit::baseline::cop2(w)),
             words: words.into_boxed_slice(),
             options,
             state,
@@ -602,12 +629,30 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
     let one_check = b.covered || jit::forms::chosen() & jit::forms::HORIZON != 0;
     #[cfg(not(feature = "baseline"))]
     let one_check = jit::forms::chosen() & jit::forms::HORIZON != 0;
-    if b.span != NO_SPAN && !b.options.verify && one_check && sys.ee.timing.cycles() + u64::from(b.span) >= sys.board.next_event() {
+    #[cfg(feature = "baseline")]
+    let at_each = b.covered;
+    #[cfg(not(feature = "baseline"))]
+    let at_each = false;
+    if !at_each && b.span != NO_SPAN && !b.options.verify && one_check && sys.ee.timing.cycles() + u64::from(b.span) >= sys.board.next_event() {
         // The block's last access would reach the board's next event at one cycle an instruction: counted as left at the event.
         blocks.stats.left[0] += 1;
         return None;
     }
+    #[cfg(feature = "baseline")]
+    let quiet = b.cop2 && blocks.cop2 && sys.board.vu0_quiet(sys.ee.timing.last() + 1, jit::baseline::QUIET);
+    #[cfg(feature = "baseline")]
+    {
+        blocks.stats.vu0_busy += u64::from(b.cop2 && !quiet);
+    }
     blocks.translation(sys);
+    #[cfg(feature = "baseline")]
+    {
+        (blocks.ctx.vu0_saved, blocks.ctx.macro_step, blocks.ctx.quiet) = (None, 0, u32::from(quiet));
+        blocks.ctx.room = sys.board.next_event().saturating_sub(sys.ee.timing.cycles()).min(u64::from(u32::MAX)) as u32;
+        if quiet {
+            blocks.ctx.vf0 = sys.board.vpu.units.vu0.vf_base();
+        }
+    }
     let mut run = Run { sys, verify: &mut blocks.verify, failed: None, tail: None, guarded: false, rewound: false, fills: 0 };
     blocks.stats.to_line += u64::from(limit < b_len);
     let ctx = &mut *blocks.ctx;
@@ -655,6 +700,8 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
                 return None;
             }
             b.idle = 0;
+            #[cfg(feature = "baseline")]
+            last_macro(sys, ctx);
             sys.board.traffic[0] += ctx.uncached_loads;
             sys.board.traffic[1] += ctx.uncached;
             sys.ee.count_steps(u64::from(steps));
@@ -681,10 +728,17 @@ fn block(sys: &mut System, blocks: &mut Blocks, left: u64) -> Option<u64> {
             let kept_past = base > 0 && steps >= base;
             let start = if kept_past { base } else { 0 };
             if kept_past {
+                #[cfg(feature = "baseline")]
+                last_macro(sys, ctx);
                 sys.board.traffic[0] += ctx.uncached_loads;
                 sys.board.traffic[1] += ctx.uncached;
                 sys.ee.count_steps(base as u64);
             } else {
+                #[cfg(feature = "baseline")]
+                if let Some((regs, last)) = &ctx.vu0_saved {
+                    sys.board.vpu.units.vu0.set_macro_regs(regs);
+                    sys.board.vpu.last_macro = *last;
+                }
                 undo(ctx);
             }
             if run.rewound {
@@ -756,6 +810,14 @@ fn undo(ctx: &Context) {
                 std::ptr::write_unaligned(p.add(8).cast::<u64>(), hi);
             }
         }
+    }
+}
+
+/// VU0's last macro operation's issue cycle, once the block's steps stand and their cycles are known.
+#[cfg(feature = "baseline")]
+fn last_macro(sys: &mut System, ctx: &Context) {
+    if ctx.macro_step != 0 {
+        sys.board.vpu.last_macro = Some(ctx.times[ctx.macro_step as usize - 1] - 1);
     }
 }
 

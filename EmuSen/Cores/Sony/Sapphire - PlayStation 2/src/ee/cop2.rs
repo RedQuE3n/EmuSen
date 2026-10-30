@@ -183,6 +183,37 @@ fn vu_op(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 
+/// COP2 instructions a block holds (Sapphire_Speed.md §65): the transfers of a quadword, and the operations of VU0's registers alone, no divide, wait, start or memory form.
+pub(super) fn in_blocks(op: &Op, w: u32) -> bool {
+    match op.name {
+        "qmfc2" | "qmtc2" | "lqc2" | "sqc2" => true,
+        "vu" => vops::of_word(w).is_some_and(|(o, entry)| matches!(entry.class, Class::Fmac | Class::Ialu) && !matches!(o.form, Form::LoadInc | Form::LoadDec | Form::StoreInc | Form::StoreDec | Form::IntMem)),
+        _ => false,
+    }
+}
+
+/// A block's COP2 call, VU0 idle since the block's entry (`Board::vu0_quiet`), so that nothing interlocks: the transfer or the operation, VU0's registers saved first; whether it was a macro operation, whose cycle the block's exit gives `Vpu::last_macro`.
+pub(super) fn in_block(e: &mut Ee, b: &mut dyn Bus, w: u32, saved: &mut Option<(crate::vu::MacroRegs, Option<u64>)>) -> Result<bool, Stop> {
+    let vpu = vpu0(b)?;
+    if saved.is_none() {
+        *saved = Some((vpu.units.vu0.macro_regs(), vpu.last_macro));
+    }
+    match super::ops::get(super::ops::index(w)).name {
+        "qmfc2" => e.set_quad(rt(w), vpu.units.vu0.vf_quad(rd(w))),
+        "qmtc2" => vpu.units.vu0.set_vf_quad(rd(w), e.gpr[rt(w)]),
+        _ => {
+            let Some((_, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
+            let units = &mut vpu.units;
+            (entry.run)(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The most cycles behind a microprogram's end an instruction a block holds may interlock.
+pub(crate) const INTERLOCK: u64 = if TRANSFER > MACRO { TRANSFER } else { MACRO };
+
 const fn cop(name: &'static str, run: super::ops::Run, category: Category, row: usize) -> Op {
     Op { name, run, category, row, reads: 0, writes: 0, kind: Kind::Cop2 }
 }

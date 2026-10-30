@@ -22,14 +22,15 @@ pub(crate) fn helpers() -> [u64; 5] {
 /// One entry into a covered block, at rest or not, with the steps the prefix took and the steps that stood.
 pub(crate) fn count(moved: bool, prefix: u32, steps: u32) {
     let ran = (prefix & !NEVER).min(steps);
-    COUNTS[0].fetch_add(1, Relaxed);
-    COUNTS[1].fetch_add(u64::from(steps), Relaxed);
-    COUNTS[2].fetch_add(u64::from(!moved || ran == 0), Relaxed);
-    COUNTS[3].fetch_add(u64::from(steps - ran), Relaxed);
+    let add = |k: usize, n: u64| COUNTS[k].store(COUNTS[k].load(Relaxed) + n, Relaxed);
+    add(0, 1);
+    add(1, u64::from(steps));
+    add(2, u64::from(!moved || ran == 0));
+    add(3, u64::from(steps - ran));
     if moved && steps > 0 {
-        COUNTS[4].fetch_add(1, Relaxed);
+        add(4, 1);
         let bucket = if prefix & NEVER != 0 { PMAX + 1 } else { ran as usize };
-        COUNTS[5 + bucket].fetch_add(1, Relaxed);
+        add(5 + bucket, 1);
     }
 }
 
@@ -137,11 +138,11 @@ extern "C" fn fill_page(ctx: *mut Context, vaddr: u64, _: u64, _: u64) -> u64 {
 }
 
 /// A call's step: the values the block handed stored to the core with their undo, the operation's writes logged, and the interpreter's operation run (Sapphire_Speed.md §65).
-extern "C" fn call(ctx: *mut Context, word: u64, logged: u64, index: u64) -> u64 {
+extern "C" fn call(ctx: *mut Context, word: u64, at: u64, index: u64) -> u64 {
     // SAFETY: as `exit`.
     let ctx = unsafe { &mut *ctx };
     ctx.calls += 1;
     let crate::board::System { ee, board } = sys(ctx);
-    ee.call_in_block(board, ctx, word as u32, logged as usize, index as u16);
+    ee.call_in_block(board, ctx, word as u32, at as usize & 0xFFFF, (at >> 16) as u32, index as u16);
     0
 }

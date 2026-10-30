@@ -31,7 +31,13 @@ fn slice_word(rng: &mut Rng) -> u32 {
     let imm = rng.next() as u16 as u32;
     let sa = rng.below(32);
     let f = |rng: &mut Rng| rng.below(4);
-    match rng.below(20) {
+    match rng.below(21) {
+        // COP2's transfers, loads, stores and an operation of VU0's registers.
+        20 => match rng.below(4) {
+            0 => 0x12 << 26 | [1u32, 5][rng.below(2) as usize] << 21 | t << 16 | f(rng) << 11,
+            1 => [0x36u32, 0x3E][rng.below(2) as usize] << 26 | s << 21 | f(rng) << 16 | (imm & 0x7F0),
+            _ => 0x12 << 26 | 1 << 25 | 0xF << 21 | f(rng) << 16 | f(rng) << 11 | f(rng) << 6 | [0x28u32, 0x2C, 0x2A][rng.below(3) as usize],
+        },
         // The calls (Sapphire_Speed.md §65): COP1's operations and moves, and multimedia instructions, the FPRs and the FPU's divider in the model.
         18 => match rng.below(4) {
             0 => 0x11 << 26 | [0u32, 4][rng.below(2) as usize] << 21 | t << 16 | f(rng) << 11,

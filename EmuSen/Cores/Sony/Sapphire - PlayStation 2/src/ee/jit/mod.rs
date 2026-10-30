@@ -127,6 +127,20 @@ pub struct Context {
     pub values: [u64; 72],
     #[cfg(feature = "baseline")]
     pub handed: [u64; 2],
+    /// VU0's VF registers, for LQC2 and SQC2; and its registers and last macro cycle before the block's first COP2 call, which a rollback puts back.
+    #[cfg(feature = "baseline")]
+    pub vf0: *mut u8,
+    /// The instructions from the entry to the board's next event, at one cycle an instruction: no load or store at or past this step runs in the block.
+    #[cfg(feature = "baseline")]
+    pub room: u32,
+    /// VU0 was quiet at the entry: a block's COP2 instructions may run.
+    #[cfg(feature = "baseline")]
+    pub quiet: u32,
+    /// One past the step of the block's last macro operation, 0 when none.
+    #[cfg(feature = "baseline")]
+    pub macro_step: u32,
+    #[cfg(feature = "baseline")]
+    pub vu0_saved: Option<(crate::vu::MacroRegs, Option<u64>)>,
     /// `forms::STUB`'s shared exit: the replay, and with every step standing the exit's commit (`commit_word`).
     #[cfg(feature = "forms")]
     pub commit: Commit,
@@ -385,7 +399,7 @@ impl Ee {
 #[cfg(feature = "baseline")]
 impl Ee {
     /// A block's call: `run`, an operation of the interpreter's table the lowering took, on the word at `pc` (Sapphire_Speed.md §65).
-    pub(crate) fn call_in_block(&mut self, bus: &mut dyn super::Bus, ctx: &mut Context, word: u32, logged: usize, index: u16) {
+    pub(crate) fn call_in_block(&mut self, bus: &mut dyn super::Bus, ctx: &mut Context, word: u32, logged: usize, step: u32, index: u16) {
         let op = super::ops::get(index);
         let base = (self as *mut Ee).cast::<u8>();
         let mut k = logged;
@@ -414,6 +428,14 @@ impl Ee {
                 };
             }
             k += 1;
+        }
+        if op.kind == super::ops::Kind::Cop2 {
+            match super::cop2::in_block(self, bus, word, &mut ctx.vu0_saved) {
+                Ok(true) => ctx.macro_step = step + 1,
+                Ok(false) => {}
+                Err(_) => panic!("a call's operation does not fail in a block"),
+            }
+            return;
         }
         assert!((op.run)(self, bus, word, 0).is_ok(), "a call's operation does not fail in a block");
     }

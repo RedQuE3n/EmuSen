@@ -8,7 +8,7 @@ use emusen_mips_planner::{Class, Plan, Step};
 
 use super::super::super::cache::{DCache, DTag};
 use super::super::super::ops;
-use super::super::super::timing::layout;
+use super::super::super::timing::{Timing, layout};
 use super::super::{Context, Options, Page, SHORT, WORD, kind, shape};
 use super::{BRANCHED, Rec, SLOTS, SYNC, Static, X_MOVED, mode, prefix, stub};
 use crate::ee::Ee;
@@ -21,6 +21,9 @@ const FPR: i32 = offset_of!(Ee, fpr) as i32;
 const ACC: i32 = offset_of!(Ee, acc) as i32;
 const FCR31: i32 = offset_of!(Ee, fcr31) as i32;
 const STATUS: i32 = (offset_of!(Ee, cop0) + 4 * crate::ee::cop0::STATUS) as i32;
+const X_VF0: i32 = offset_of!(Context, vf0) as i32;
+const X_QUIET: i32 = offset_of!(Context, quiet) as i32;
+const X_ROOM: i32 = offset_of!(Context, room) as i32;
 const T: i32 = offset_of!(Ee, timing) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
 const D_DATA: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, data)) as i32;
@@ -56,6 +59,7 @@ pub(crate) const P_LOG: usize = 13;
 /// The loads and stores of a unit's part, which never leave for alignment.
 const UNALIGNED: [&str; 8] = ["lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "sdr"];
 /// Why a load or store left, `Context::left`'s index (as `emit.rs` counts them).
+const LEFT_EVENT: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
 const LEFT_PAGE: i64 = 2;
 const LEFT_MISS: i64 = 3;
@@ -109,6 +113,11 @@ fn native(w: u32) -> bool {
     matches!(shape::name(w), "mfc1" | "mtc1") || wide(w)
 }
 
+/// LQC2 and SQC2, whose quadword is VF[rt], not a GPR.
+fn vf_memory(w: u32) -> bool {
+    matches!(shape::name(w), "lqc2" | "sqc2")
+}
+
 /// The multimedia instructions lowered in place (Sapphire_Speed.md §65).
 fn wide(w: u32) -> bool {
     matches!(shape::name(w), "por" | "pand" | "pxor" | "pnor" | "pcpyld" | "pcpyud" | "pextlw" | "pextuw" | "pextlh" | "pextuh" | "pextlb" | "pextub")
@@ -142,6 +151,14 @@ impl Writes {
 /// A call's writes by its operation's fields (Sapphire_Speed.md §65).
 pub(in crate::ee) fn call_writes(w: u32, op: &ops::Op) -> Writes {
     let mut out = Writes { logs: [(0, 0); 4], n_logs: 0, values: [0; 6], n_values: 0 };
+    if op.kind == ops::Kind::Cop2 {
+        if op.name == "qmfc2" && rt(w) != 0 {
+            out.log(GPR + 16 * rt(w) as i32, 16);
+            out.value(rt(w));
+            out.value(32 + rt(w));
+        }
+        return out;
+    }
     if op.kind == ops::Kind::Fpu {
         use crate::ee::fpu::uses::{ACC as A_, FCR, FD, FS, FT, GRT};
         if op.writes & GRT != 0 && rt(w) != 0 {
@@ -226,6 +243,8 @@ struct L<'a> {
     purpose: usize,
     /// The block's data so far, mirrored so that a record knows its own offset.
     data_len: u32,
+    /// The last record laid and where, for the exits of one load or store, which share it.
+    last_rec: Option<(Rec, u32)>,
 }
 
 fn rs(w: u32) -> usize {
@@ -314,7 +333,7 @@ impl L<'_> {
                 }
             });
             let mut vals: Vec<usize> = Vec::new();
-            if shape::class(s.word) == shape::Class::Call && !native(s.word) {
+            if shape::class(s.word) == shape::Class::Call && !native(s.word) && s.info.class != Class::Memory {
                 continue;
             }
             if wide(s.word) {
@@ -327,6 +346,7 @@ impl L<'_> {
             }
             if let Some(acc) = s.info.access
                 && acc.bytes == 16
+                && !vf_memory(s.word)
             {
                 vals.push(32 + rt(s.word));
             }
@@ -487,7 +507,14 @@ impl L<'_> {
             snap: self.times.snaps[steps as usize][0],
         };
         if !st.branched {
-            return self.data(r.bytes());
+            if let Some((l, at)) = self.last_rec
+                && (Rec { table: 0, ..l }).bytes() == (Rec { table: 0, ..r }).bytes()
+            {
+                return at;
+            }
+            let at = self.data(r.bytes());
+            self.last_rec = Some((r, at));
+            return at;
         }
         let taken = self.times.snaps[steps as usize][1];
         // SAFETY: a plain `repr(C)` value read as its bytes, laid right after its record (`Rec::snap`).
@@ -1019,13 +1046,24 @@ impl L<'_> {
     fn memory(&mut self, i: usize, s: &Step, place: At) {
         let acc = s.info.access.expect("a load or store");
         let w = s.word;
+        let vf = vf_memory(w);
+        if vf {
+            self.cop2_may_run(place);
+        }
         let pre = self.st;
         let mut slow = Slow { used: Vec::new() };
+        if i > 0 {
+            // Past the board's next event at one cycle an instruction: the block leaves before this access (Sapphire_Speed.md §65.5).
+            self.pur(P_CHECKS);
+            self.a.cmp_mem(4, at(CTX, X_ROOM), Src::Imm(i as i32));
+            let l = slow.label(&mut self.a, LEFT_EVENT);
+            self.a.branch(Cond::Leu, l);
+        }
         self.pur(P_ADDR);
         let b = self.get(acc.base as usize, A);
         self.a.lea(Width::W32, A, at(b, simm(w)));
         let unit = UNALIGNED.contains(&shape::name(w));
-        if (2..=8).contains(&acc.bytes) && !unit {
+        if ((2..=8).contains(&acc.bytes) && !unit) || vf {
             self.a.test(Width::W32, A, Src::Imm(i32::from(acc.bytes) - 1));
             let l = slow.label(&mut self.a, LEFT_ALIGN);
         self.a.branch(Cond::Ne, l);
@@ -1172,7 +1210,9 @@ impl L<'_> {
 
         // The data access.
         let t = rt(w);
-        if shape::name(w) == "pref" {
+        if vf {
+            self.vf_quad(acc.store, t);
+        } else if shape::name(w) == "pref" {
         } else if unit {
             self.unaligned(shape::name(w), acc.bytes, t);
         } else if acc.store {
@@ -1226,6 +1266,41 @@ impl L<'_> {
             }
         }
         self.a.section(here);
+    }
+
+    /// LQC2's and SQC2's data, P the quadword in memory: VF[t] through `Context::vf0`, LQC2's with its undo.
+    fn vf_quad(&mut self, store: bool, t: usize) {
+        self.pur(P_DATA);
+        if store {
+            if !self.prototype {
+                self.log();
+            }
+            self.pur(P_DATA);
+            self.a.load(8, false, X, at(CTX, X_VF0));
+            for k in [0, 8] {
+                self.a.load(8, false, A, at(X, 16 * t as i32 + k));
+                self.a.store(8, A, at(P, k));
+            }
+            self.pur(P_CACHE);
+            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
+            self.a.set(Cond::Eq, X);
+            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
+            self.st.sync = true;
+        } else if t != 0 {
+            self.a.load(8, false, X, at(CTX, X_VF0));
+            self.a.alu(Op::Add, Width::W64, X, X, Src::Imm(16 * t as i32));
+            let k = self.st.logged as i32;
+            assert!(k < LOG_MOST, "a block's undo entries fit the log");
+            let e = X_LOG + 24 * k;
+            self.a.store(8, X, at(CTX, e));
+            for j in [0, 8] {
+                self.a.load(8, false, A, at(X, j));
+                self.a.store(8, A, at(CTX, e + 8 + j));
+                self.a.load(8, false, A, at(P, j));
+                self.a.store(8, A, at(X, j));
+            }
+            self.st.logged += 1;
+        }
     }
 
     /// LWL to SDR (`ops.rs`'s `unit` and `store_unit`): the unit's address and pointer made from A and P, the shift from the byte within it, and the merge.
@@ -1546,12 +1621,22 @@ impl L<'_> {
         self.st.steps += 1;
     }
 
-    /// The block leaves before a COP1 instruction while COP1 is unusable, for the interpreter to raise.
-    fn cop1_usable(&mut self, place: At) {
+    /// The block leaves before a COP2 instruction, for the interpreter, while VU0 was not quiet at the entry or COP2 is unusable (Sapphire_Speed.md §65).
+    fn cop2_may_run(&mut self, place: At) {
+        let st = self.st;
+        let p = self.push_purpose(P_FAULT);
+        self.a.cmp_mem(4, at(CTX, X_QUIET), Src::Imm(0));
+        self.exit_if(Cond::Eq, &st, place);
+        self.pur(p);
+        self.usable(crate::ee::status::CU2, place);
+    }
+
+    /// The block leaves before a coprocessor's instruction while Status's bit `cu` is clear, for the interpreter to raise.
+    fn usable(&mut self, cu: u32, place: At) {
         let st = self.st;
         let p = self.push_purpose(P_FAULT);
         self.a.load(4, false, X, at(EE, STATUS));
-        self.a.test(Width::W32, X, Src::Imm(crate::ee::status::CU1 as i32));
+        self.a.test(Width::W32, X, Src::Imm(cu as i32));
         self.exit_if(Cond::Eq, &st, place);
         self.pur(p);
     }
@@ -1560,7 +1645,7 @@ impl L<'_> {
     fn fpu_move(&mut self, s: &Step, place: At) {
         let w = s.word;
         let (t, f) = (rt(w), FPR + 4 * rd(w) as i32);
-        self.cop1_usable(place);
+        self.usable(crate::ee::status::CU1, place);
         self.pur(P_WORK);
         if shape::name(w) == "mfc1" {
             if t != 0 {
@@ -1586,8 +1671,10 @@ impl L<'_> {
     fn call(&mut self, s: &Step, place: At) {
         let w = s.word;
         let index = ops::index(w);
-        if ops::get(index).kind == ops::Kind::Fpu {
-            self.cop1_usable(place);
+        match ops::get(index).kind {
+            ops::Kind::Fpu => self.usable(crate::ee::status::CU1, place),
+            ops::Kind::Cop2 => self.cop2_may_run(place),
+            ops::Kind::Cpu => {}
         }
         let p = self.push_purpose(P_LOG);
         let dirty = self.st.dirty & !(1 << 32);
@@ -1612,7 +1699,7 @@ impl L<'_> {
         assert!(self.st.logged <= LOG_MOST as u32, "a block's undo entries fit the log");
         self.pur(P_WORK);
         self.a.mov_imm(RDI, i64::from(w));
-        self.a.mov_imm(RSI, i64::from(logged));
+        self.a.mov_imm(RSI, i64::from(logged) | i64::from(self.st.steps) << 16);
         self.a.mov_imm(RDX, i64::from(index));
         self.a.call_stub(stub::CALL);
         self.pur(p);
@@ -1629,7 +1716,7 @@ impl L<'_> {
 /// The block's code; `prototype` as `compile` says.
 pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bool) -> Option<Code> {
     let after = plan.steps.iter().find(|s| s.info.class == Class::Branch).map_or(0, |s| s.pc.wrapping_add(8));
-    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0 };
+    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0, last_rec: None };
     l.allocate();
     let table = l.data(&prefix::table_bytes(times, options.single, options.blocking));
     assert_eq!(table, 0, "the prefix's table is the data's first");
@@ -1653,15 +1740,21 @@ pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bo
         l.a.branch(Cond::Ne, dynamic);
         l.a.cmp_mem(8, at(RDI, T + layout::FLOOR), Src::Reg(X));
         l.a.branch(Cond::Gtu, dynamic);
-        for r in (0..128).filter(|r| times.exposed >> r & 1 == 1) {
-            let field = match r {
-                125 => layout::MAC0_FREE,
-                126 => layout::MAC1_FREE,
-                127 => layout::FDIV_FREE,
-                _ => layout::READY + 8 * r,
-            };
-            l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
-            l.a.branch(Cond::Gtu, dynamic);
+        for late in [false, true] {
+            if late {
+                l.a.alu(Op::Sub, Width::W64, X, X, Src::Imm(1));
+            }
+            for r in (0..128).filter(|&r| times.exposed >> r & 1 == 1 && (Timing::read_late(r) != 0) == late) {
+                let field = match r {
+                    124 => layout::MAC0_FREE,
+                    125 => layout::MAC1_FREE,
+                    126 => layout::FDIV_FREE,
+                    127 => layout::COP2_FLOOR,
+                    _ => layout::READY + 8 * r as i32,
+                };
+                l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
+                l.a.branch(Cond::Gtu, dynamic);
+            }
         }
     } else {
         l.a.bind(entry);

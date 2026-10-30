@@ -47,6 +47,15 @@ impl Isa for R5900Isa {
         let branch = |reads, writes, likely| Info { class: Class::Branch, reads, writes, access: None, likely };
         if shape::class(w) == shape::Class::Call {
             let op = ops::get(ops::index(w));
+            match name {
+                "qmfc2" => return plain(0, bit(rt)),
+                "qmtc2" => return plain(bit(rt), 0),
+                "lqc2" | "sqc2" => {
+                    let access = Access { base: rs as u8, disp: w as u16 as i16, bytes: 16, store: name == "sqc2", align: 0xFFFF_FFFF };
+                    return Info { class: Class::Memory, reads: bit(rs), writes: 0, access: Some(access), likely: false };
+                }
+                _ => {}
+            }
             let regs = |u: u8| match op.kind {
                 ops::Kind::Fpu if u & super::super::fpu::uses::GRT != 0 => bit(rt),
                 ops::Kind::Fpu => 0,
@@ -142,6 +151,14 @@ pub(crate) fn covers(words: &[u32], options: Options) -> bool {
     !options.verify && !options.fixed_cost && !options.spill && options.memory && words.len() >= 2 && planner::plan(&R5900Isa, words, 0).is_ok()
 }
 
+/// Whether a word is a COP2 instruction.
+pub(crate) fn cop2(w: u32) -> bool {
+    ops::get(ops::index(w)).kind == ops::Kind::Cop2
+}
+
+/// The cycles past a microprogram's end before a block holding COP2 may run (`Board::vu0_quiet`).
+pub(crate) const QUIET: u64 = super::super::cop2::INTERLOCK;
+
 /// Whether blocks shaped with these options hold calls (Sapphire_Speed.md §65): the baseline's only, which compiles them; off with `EMUSEN_SAPPHIRE_CALLS=0`.
 pub(crate) fn calls(options: Options) -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -186,8 +203,8 @@ pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
             if (i.reads | i.writes) >> SNAP_READY != 0 {
                 return None;
             }
-            let units = Timing::units(&i);
-            let (reads, writes) = (i.reads | units, i.writes | units);
+            let (unit_reads, unit_writes) = Timing::units(&i);
+            let (reads, writes) = (i.reads | unit_reads, i.writes | unit_writes);
             exposed |= reads & !written;
             if taken == 0 {
                 let branch = u8::from(s.info.class == Class::Branch);

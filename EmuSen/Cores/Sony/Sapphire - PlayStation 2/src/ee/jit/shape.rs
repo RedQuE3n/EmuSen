@@ -1,6 +1,6 @@
 //! What a block of EE code may hold, and where it ends: the integer instructions, the multipliers and dividers of both
 //! pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot (S36); the loads and stores of
-//! every width and PREF (S37); in the tailored tier's blocks also the multimedia instructions and COP1's, run as the interpreter's
+//! every width and PREF (S37); in the tailored tier's blocks also the multimedia instructions, COP1's and COP2's, run as the interpreter's
 //! own operations (Sapphire_Speed.md §65). Everything else ends the block before it and is the interpreter's
 //! (Sapphire_Native.md §44.3, Sapphire_Recompiler.md §48.2).
 
@@ -73,11 +73,16 @@ fn decode(word: u32) -> Class {
         Class::Branch
     } else if MEMORY.contains(&n) {
         Class::Memory
-    } else if ops::is_mmi(ops::index(word)) || ops::is_fpu_register(ops::index(word)) {
+    } else if ops::is_mmi(ops::index(word)) || ops::is_fpu_register(ops::index(word)) || ops::is_cop2_in_blocks(ops::index(word), word) {
         Class::Call
     } else {
         Class::Other
     }
+}
+
+/// Whether a block's word reaches memory: a load, a store, PREF, LQC2 or SQC2.
+pub fn touches_memory(word: u32) -> bool {
+    class(word) == Class::Memory || matches!(name(word), "lqc2" | "sqc2")
 }
 
 /// Every mnemonic a block compiles, for the tests that cover each one.

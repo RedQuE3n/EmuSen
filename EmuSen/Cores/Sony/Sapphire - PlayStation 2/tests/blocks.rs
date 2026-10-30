@@ -92,8 +92,14 @@ fn run_steps(sys: &mut System, b: &mut Blocks, n: u64) {
 /// The interpreter's machine and the blocks' run side by side for `steps` steps, compared every `stride` and whole at
 /// the end; the blocks' counts.
 fn twin(words: &[u32], steps: u64, stride: u64, b: &mut Blocks) -> blocks::Stats {
+    twin_prepared(words, steps, stride, b, |_| {})
+}
+
+fn twin_prepared(words: &[u32], steps: u64, stride: u64, b: &mut Blocks, prepare: impl Fn(&mut System)) -> blocks::Stats {
     let mut plain = system(words);
     let mut fast = system(words);
+    prepare(&mut plain);
+    prepare(&mut fast);
     let mut done = 0;
     while done < steps {
         let n = stride.min(steps - done);
@@ -265,7 +271,21 @@ fn plain(r: &mut Rng) -> String {
         90..=91 => r.pick(&["sync", "sync.p"]).to_string(),
         92..=94 => multimedia(r, d, src, t, sh),
         95..=97 => float(r, d, src),
+        98..=99 => vector(r, d, s),
         _ => format!("{} {d}, {s}, {t}", r.pick(&["or", "addu", "xor"])),
+    }
+}
+
+/// A COP2 instruction of the kinds a tailored tier's block holds, with VU0 idle (Sapphire_Speed.md §65).
+fn vector(r: &mut Rng, d: &str, s: &str) -> String {
+    let (a, b, c) = (r.below(8), r.below(8), r.below(8));
+    match r.below(8) {
+        0 => format!("{} {s}, vf{a}", r.pick(&["qmtc2", "qmtc2.i"])),
+        1 => format!("{} {d}, vf{a}", r.pick(&["qmfc2", "qmfc2.i"])),
+        2 => format!("{} vf{a}, {}({})", r.pick(&["lqc2", "sqc2"]), 16 * r.below(0x400), r.pick(&["gp", "sp"])),
+        3 => format!("{}.xyzw acc, vf{a}, vf{b}", r.pick(&["vadda", "vmula", "vmadda"])),
+        4 => format!("{}.xyzw vf{a}, vf{b}", r.pick(&["vitof0", "vftoi0", "vmove", "vabs"])),
+        _ => format!("{}.xyzw vf{a}, vf{b}, vf{c}", r.pick(&["vadd", "vsub", "vmul", "vmadd", "vmsub", "vmax", "vmini"])),
     }
 }
 
@@ -407,8 +427,8 @@ fn random_program(seed: u64, timer: bool) -> (Vec<u32>, Vec<u32>) {
         l.push("ori k0, zero, 0x200".into());
         l.push("sw k0, 0(k1)".into());
     }
-    // COP1 usable in three programs of four; in the fourth its instructions raise.
-    l.push(if seed % 4 == 0 { "lui k0, 0x1" } else { "lui k0, 0x2001" }.into());
+    // COP1 and COP2 usable in three programs of four; in the fourth its instructions raise.
+    l.push(if seed % 4 == 0 { "lui k0, 0x1" } else { "lui k0, 0x6001" }.into());
     l.push(format!("ori k0, k0, 0x{:x}", if timer { 0x8401 } else { 0x8001 }));
     l.push("mtc0 k0, Status".into());
     l.push("sync.p".into());
@@ -526,11 +546,30 @@ fn random_twins(seeds: std::ops::Range<u64>, steps: u64, stride: u64, timer: boo
         total.rewinds += s.rewinds;
         total.rewound_steps += s.rewound_steps;
         total.calls += s.calls;
+        total.vu0_busy += s.vu0_busy;
         for k in 0..5 {
             total.left[k] += s.left[k];
         }
     }
     total
+}
+
+/// VU0 busy with a microprogram at a block holding COP2: the interpreter takes the instruction, and QMFC2.I waits for it as it always has (Sapphire_Speed.md §65).
+#[test]
+fn blocks_holding_cop2_wait_for_vu0_and_leave_the_interpreters_machine() {
+    let source = "lui t0, 0x4000\nmtc0 t0, Status\nsync.p\nlui gp, 0x30\nloop: vcallms 0x0\nqmfc2.i t2, vf5\ndaddu t3, t2, t3\nvadd.xyzw vf5, vf5, vf6\nqmtc2 t3, vf6\nsqc2 vf5, 0(gp)\nlqc2 vf7, 0(gp)\nvcallms 0x0\nvadd.xyzw vf8, vf7, vf5\naddu t4, t4, t3\nbeq zero, zero, loop\nnop\n";
+    let words = assemble(source, ORIGIN);
+    let mut b = eager();
+    let nop = 0x0000_02FF_u64 << 32 | 0x8000_033C;
+    let s = twin_prepared(&words, 6000, 53, &mut b, |sys| {
+        for i in 0..24 {
+            let p = if i == 22 { nop | 1 << 62 } else { nop };
+            sys.board.vpu.units.vu0.micro[i * 8..i * 8 + 8].copy_from_slice(&p.to_le_bytes());
+        }
+    });
+    println!("COP2 beside VU0: {s:?}");
+    #[cfg(all(feature = "baseline", target_arch = "x86_64", unix))]
+    assert!(s.calls > 0 && s.vu0_busy > 0, "blocks held COP2, and VU0 kept some from running: {s:?}");
 }
 
 #[test]

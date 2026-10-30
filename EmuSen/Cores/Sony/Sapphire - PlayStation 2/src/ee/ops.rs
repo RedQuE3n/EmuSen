@@ -1162,6 +1162,11 @@ pub(super) fn is_fpu_register(i: u16) -> bool {
     o.kind == Kind::Fpu && o.category != Branch && !matches!(o.name, "lwc1" | "swc1")
 }
 
+/// Whether a word is a COP2 instruction a block holds (`super::cop2::in_blocks`).
+pub(super) fn is_cop2_in_blocks(i: u16, w: u32) -> bool {
+    get(i).kind == Kind::Cop2 && super::cop2::in_blocks(get(i), w)
+}
+
 pub(super) fn get(i: u16) -> &'static Op {
     let i = i as usize;
     let mmi = TABLE.len() + super::mmi::TABLE.len();

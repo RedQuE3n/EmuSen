@@ -80,6 +80,21 @@ pub struct Vu {
     pub foreign_next: u64,
 }
 
+/// A unit's registers as macro operations reach them, which a block's rollback puts back (Sapphire_Speed.md §65).
+#[derive(Clone, Copy)]
+pub struct MacroRegs {
+    vf: [[u32; 4]; 32],
+    vi: [u16; 16],
+    acc: [u32; 4],
+    i: u32,
+    q: u32,
+    p: u32,
+    r: u32,
+    status: u32,
+    mac: u32,
+    clip: u32,
+}
+
 /// A unit's micro memory: its bytes, read and written as a slice, and the count of the times it was lent for writing, which
 /// a compiled microprogram is validated against (Sapphire_Native.md §45.4).
 #[derive(Clone)]
@@ -194,6 +209,19 @@ impl Vu {
     }
 
     /// The register as 128 bits, x lowest (§5.1.1, CPR[2,n]).
+    pub fn macro_regs(&self) -> MacroRegs {
+        MacroRegs { vf: self.vf, vi: self.vi, acc: self.acc, i: self.i, q: self.q, p: self.p, r: self.r, status: self.status, mac: self.mac, clip: self.clip }
+    }
+
+    pub fn set_macro_regs(&mut self, m: &MacroRegs) {
+        (self.vf, self.vi, self.acc, self.i, self.q, self.p, self.r, self.status, self.mac, self.clip) = (m.vf, m.vi, m.acc, m.i, m.q, m.p, m.r, m.status, m.mac, m.clip);
+    }
+
+    /// The VF registers' first byte, x lowest, for compiled code's LQC2 and SQC2.
+    pub fn vf_base(&mut self) -> *mut u8 {
+        self.vf.as_mut_ptr().cast()
+    }
+
     pub fn vf_quad(&self, n: usize) -> u128 {
         self.vf[n].iter().rev().fold(0u128, |a, &f| a << 32 | f as u128)
     }

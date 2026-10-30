@@ -222,18 +222,18 @@ pub const UCAB_REFILL: u64 = 16;
 
 /// The resources a `Snap` carries ready cycles for: the GPRs, HI/LO of both pipes, SA, the FPRs, ACC and FCR31.
 #[cfg(feature = "baseline")]
-pub(crate) const SNAP_READY: usize = FCR31 + 1;
-/// The resources a `Snap` holds densely, the GPRs, HI/LO of both pipes and SA; of the FPU's, at most `FPU_HELD` by number.
+pub(crate) const SNAP_READY: usize = RESOURCES;
+/// The resources a `Snap` holds densely, the GPRs, HI/LO of both pipes and SA; of the FPU's and VU0's, at most `FPU_HELD` by number.
 #[cfg(feature = "baseline")]
 const DENSE: usize = SA + 1;
 #[cfg(feature = "baseline")]
-const FPU_HELD: usize = 8;
-/// The bits a `Snap`'s masks give the two multipliers' and the FPU divider's free cycles, past every resource a block names.
+const FPU_HELD: usize = 16;
+/// The bits a `Snap`'s masks give the two multipliers', the FPU divider's and COP2's floor's cycles, past every resource a block names.
 #[cfg(feature = "baseline")]
-pub(crate) const UNIT_BITS: [usize; 3] = [125, 126, 127];
+pub(crate) const UNIT_BITS: [usize; 4] = [124, 125, 126, 127];
 /// `UNIT_BITS` as a mask.
 #[cfg(feature = "baseline")]
-pub(crate) const UNITS: u128 = 7 << 125;
+pub(crate) const UNITS: u128 = 15 << 124;
 
 /// A resource mask kept as two words, so that the blocks' 8-aligned data holds it.
 #[cfg(feature = "baseline")]
@@ -261,12 +261,14 @@ pub(crate) struct Snap {
     pub pipe: u8,
     /// The issue cycles that did not pair, each of which moves Random.
     pub unpaired: u8,
+    /// The entries of `fpu_at` in use.
+    pub held: u8,
     pub ready: [u16; DENSE],
     /// The FPU's resources in `ready_mask`, in order, and their ready cycles.
     pub fpu_at: [u8; FPU_HELD],
     pub fpu_ready: [u16; FPU_HELD],
-    /// The multipliers' and the divider's free cycles, where `ready_mask` has their bits.
-    pub units: [u16; 3],
+    /// The cycles of `UNIT_BITS`, where `ready_mask` has their bits.
+    pub units: [u16; 4],
 }
 
 #[cfg(feature = "baseline")]
@@ -276,15 +278,14 @@ impl Snap {
         if r < DENSE {
             return self.ready[r];
         }
-        let n = (whole(self.ready_mask) >> DENSE & ((1 << (SNAP_READY - DENSE)) - 1)).count_ones() as usize;
-        self.fpu_at[..n.min(FPU_HELD)].iter().position(|&a| usize::from(a) == r).map_or(0, |i| self.fpu_ready[i])
+        self.fpu_at[..usize::from(self.held)].iter().position(|&a| usize::from(a) == r).map_or(0, |i| self.fpu_ready[i])
     }
 }
 
 #[cfg(feature = "baseline")]
 impl Default for Snap {
     fn default() -> Snap {
-        Snap { writes: [0; 2], ready_mask: [0; 2], last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, ready: [0; DENSE], fpu_at: [0; FPU_HELD], fpu_ready: [0; FPU_HELD], units: [0; 3] }
+        Snap { writes: [0; 2], ready_mask: [0; 2], last: 0, floor: 0, open: 0, group_ends: 0, paired: 0, category: 0, pipe: 0, unpaired: 0, held: 0, ready: [0; DENSE], fpu_at: [0; FPU_HELD], fpu_ready: [0; FPU_HELD], units: [0; 4] }
     }
 }
 
@@ -588,7 +589,7 @@ impl Timing {
     /// Whether this model acts as `at_rest(last)` for a block reading `exposed` from its entry (EmuSen_Recompiler.md §14.3).
     #[cfg(all(feature = "baseline", test))]
     pub(crate) fn rests_for(&self, exposed: u128) -> bool {
-        let ready = (0..128).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready_of(r) <= self.last + 1);
+        let ready = (0..128).filter(|r| exposed >> r & 1 == 1).all(|r| self.ready_of(r) + Self::read_late(r) <= self.last + 1);
         self.instructions > 0 && !self.open && self.group_ends == 0 && self.floor <= self.last + 1 && ready
     }
 
@@ -609,6 +610,7 @@ impl Timing {
             }
             (s.fpu_at[f], s.fpu_ready[f]) = (r as u8, k(self.ready[r])?);
             f += 1;
+            s.held = f as u8;
         }
         for (u, &bit) in UNIT_BITS.iter().enumerate() {
             if mask >> bit & 1 == 1 {
@@ -625,13 +627,21 @@ impl Timing {
         self.floor = base + u64::from(s.floor);
         self.last_writes = whole(s.writes);
         (self.open, self.group_ends, self.paired, self.last_category, self.last_pipe) = (s.open != 0, s.group_ends, s.paired != 0, s.category, s.pipe);
-        let mask = whole(s.ready_mask);
-        for r in (0..SNAP_READY).filter(|r| mask >> r & 1 == 1) {
-            self.ready[r] = base + u64::from(s.ready_at(r));
+        let mut dense = s.ready_mask[0] & ((1 << DENSE) - 1);
+        while dense != 0 {
+            let r = dense.trailing_zeros() as usize;
+            dense &= dense - 1;
+            self.ready[r] = base + u64::from(s.ready[r]);
         }
-        for (u, &bit) in UNIT_BITS.iter().enumerate() {
-            if mask >> bit & 1 == 1 {
-                self.set_ready(bit, base + u64::from(s.units[u]));
+        for i in 0..usize::from(s.held) {
+            self.ready[usize::from(s.fpu_at[i])] = base + u64::from(s.fpu_ready[i]);
+        }
+        if s.ready_mask[1] >> (UNIT_BITS[0] - 64) != 0 {
+            let mask = whole(s.ready_mask);
+            for (u, &bit) in UNIT_BITS.iter().enumerate() {
+                if mask >> bit & 1 == 1 {
+                    self.set_ready(bit, base + u64::from(s.units[u]));
+                }
             }
         }
     }
@@ -657,12 +667,12 @@ impl Timing {
         while e != 0 {
             let r = e.trailing_zeros() as usize;
             e &= e - 1;
-            let d = self.ready_of(r);
+            let (d, l) = (self.ready_of(r), Self::read_late(r));
             let same = if mask >> r & 1 == 1 {
                 let sr = u64::from(if r >= UNIT_BITS[0] { s.units[r - UNIT_BITS[0]] } else { s.ready_at(r) });
-                d == b + sr || (d <= self.last + q && sr <= sl + q)
+                d == b + sr || (d + l <= self.last + q && sr + l <= sl + q)
             } else {
-                d <= self.last + q
+                d + l <= self.last + q
             };
             if !same {
                 return None;
@@ -671,19 +681,27 @@ impl Timing {
         Some(b)
     }
 
-    /// The multipliers and the divider an instruction takes, as their bits in `UNIT_BITS`.
+    /// The cycle past a resource's ready one a transfer from VU0 may read it in (`plan`'s late read), taken for any read of VU0's.
     #[cfg(feature = "baseline")]
-    pub(crate) fn units(i: &Issue) -> u128 {
-        u128::from(Self::uses_mac0(i)) << UNIT_BITS[0] | u128::from(Self::uses_mac1(i)) << UNIT_BITS[1] | u128::from(Self::uses_fdiv(i)) << UNIT_BITS[2]
+    pub(crate) fn read_late(r: usize) -> u64 {
+        u64::from((VU0R..RESOURCES).contains(&r))
+    }
+
+    /// The `UNIT_BITS` an instruction reads and writes: the multipliers and the divider it takes, COP2's floor an operation meets and a transfer to VU0 sets.
+    #[cfg(feature = "baseline")]
+    pub(crate) fn units(i: &Issue) -> (u128, u128) {
+        let taken = u128::from(Self::uses_mac0(i)) << UNIT_BITS[0] | u128::from(Self::uses_mac1(i)) << UNIT_BITS[1] | u128::from(Self::uses_fdiv(i)) << UNIT_BITS[2];
+        (taken | u128::from(i.category == Category::Cop2Operate) << UNIT_BITS[3], taken | u128::from(i.row == rows::VTO) << UNIT_BITS[3])
     }
 
     /// The ready cycle of resource `r`, or a unit's free cycle at its bit in `UNIT_BITS`.
     #[cfg(feature = "baseline")]
     pub(crate) fn ready_of(&self, r: usize) -> u64 {
         match r {
-            125 => self.mac0_free,
-            126 => self.mac1_free,
-            127 => self.fdiv_free,
+            124 => self.mac0_free,
+            125 => self.mac1_free,
+            126 => self.fdiv_free,
+            127 => self.cop2_floor,
             _ => self.ready[r],
         }
     }
@@ -692,9 +710,10 @@ impl Timing {
     #[cfg(feature = "baseline")]
     pub(crate) fn set_ready(&mut self, r: usize, c: u64) {
         match r {
-            125 => self.mac0_free = c,
-            126 => self.mac1_free = c,
-            127 => self.fdiv_free = c,
+            124 => self.mac0_free = c,
+            125 => self.mac1_free = c,
+            126 => self.fdiv_free = c,
+            127 => self.cop2_floor = c,
             _ => self.ready[r] = c,
         }
     }
@@ -723,6 +742,7 @@ pub(crate) mod layout {
     pub const MAC0_FREE: i32 = offset_of!(Timing, mac0_free) as i32;
     pub const MAC1_FREE: i32 = offset_of!(Timing, mac1_free) as i32;
     pub const FDIV_FREE: i32 = offset_of!(Timing, fdiv_free) as i32;
+    pub const COP2_FLOOR: i32 = offset_of!(Timing, cop2_floor) as i32;
     pub const LAST: i32 = offset_of!(Timing, last) as i32;
     pub const LAST_CATEGORY: i32 = offset_of!(Timing, last_category) as i32;
     pub const LAST_PIPE: i32 = offset_of!(Timing, last_pipe) as i32;

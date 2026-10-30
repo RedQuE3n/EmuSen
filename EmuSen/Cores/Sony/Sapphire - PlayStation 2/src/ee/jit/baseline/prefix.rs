@@ -83,9 +83,6 @@ impl Table<'_> {
         }
     }
 
-    fn snap(&self, k: usize) -> Snap {
-        if k == 0 { Snap::default() } else { self.snaps[k - 1] }
-    }
 }
 
 /// What the prefix found: the step it converged at (or the exit's, where it did not) with the base it rebases by, its unpaired issue cycles, and the steps' cycles before it.
@@ -100,9 +97,10 @@ pub(crate) struct Prefix {
 pub(crate) fn run(t: &Table, d: &mut Timing, j: usize, taken: bool) -> Prefix {
     let mut p = Prefix { at: j, base: None, unpaired: 0, times: [0; shape::MAX] };
     let kmax = usize::from(t.head.kmax);
+    let rest = Snap::default();
     for k in 0..j {
         if k <= kmax
-            && let Some(b) = d.converges(&t.snap(k), whole(t.exposed[k]))
+            && let Some(b) = d.converges(if k == 0 { &rest } else { &t.snaps[k - 1] }, whole(t.exposed[k]))
         {
             (p.at, p.base) = (k, Some(b));
             return p;
@@ -136,5 +134,5 @@ pub(crate) fn model(core: &mut Timing, d: &Timing, p: &Prefix, t: &Table, s: &Sn
         keep &= keep - 1;
         core.set_ready(r, d.ready_of(r));
     }
-    (p.unpaired + s.unpaired - t.snap(c).unpaired, s.paired != 0)
+    (p.unpaired + s.unpaired - if c == 0 { 0 } else { t.snaps[c - 1].unpaired }, s.paired != 0)
 }

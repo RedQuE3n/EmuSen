@@ -277,6 +277,19 @@ pub(super) fn apply(vu: &mut Vu, d: Deferred) {
     }
 }
 
+/// The data qword SQ, SQI, SQD, ISW or ISWR writes; none for any other operation.
+pub(super) fn store_qword(name: &str, w: u32, vu: &Vu) -> Option<usize> {
+    let a = match name {
+        "sq" => vu.vi(ft(w)).wrapping_add(table::imm11(w) as u16),
+        "sqi" => vu.vi(ft(w)),
+        "sqd" => vu.vi(ft(w)).wrapping_sub(1),
+        "isw" => vu.vi(fs(w)).wrapping_add(table::imm11(w) as u16),
+        "iswr" => vu.vi(fs(w)),
+        _ => return None,
+    };
+    Some(a as usize)
+}
+
 /// The upper word's operation, none for a word no page draws (bits 26-25 set, or a lower operation's code).
 pub(super) fn upper_op(w: u32) -> Option<(&'static Operation, &'static Entry)> {
     ops::of_word(w).filter(|(o, _)| o.unit == table::Unit::Upper && w >> 25 & 3 == 0)
@@ -430,6 +443,9 @@ impl Pipe {
         {
             return false;
         }
+        if self.unit == 1 && units.vu1.foreign_next < t {
+            units.vu1.land_foreign(t, units.link.ahead);
+        }
         self.execute(units, upper, lower, t);
         true
     }
@@ -475,6 +491,11 @@ impl Pipe {
                 Class::WaitQ | Class::WaitP => {}
                 Class::Efu(_) if unit == 0 => {}
                 _ => {
+                    if link.ahead
+                        && let Some(q) = store_qword(o.name, lower, vu)
+                    {
+                        vu.log_store(q, t);
+                    }
                     let access = lower_access(o, lower);
                     let written = vi_write(o, e, lower);
                     let before = written.map(|w| match w {
@@ -733,6 +754,14 @@ impl Micro for Pipe {
         idle
     }
 
+    fn run_ahead(&mut self, units: &mut Units, limit: u64) {
+        self.run_pairs(units, limit, false, BOUND);
+    }
+
+    fn ended(&self) -> bool {
+        self.state == State::Ready
+    }
+
     fn finish(&mut self, units: &mut Units, _: u64) -> Option<u64> {
         self.run_pairs(units, u64::MAX, false, BOUND);
         let vu = if self.unit == 0 { &mut units.vu0 } else { &mut units.vu1 };
@@ -791,6 +820,10 @@ impl Micro for Pipe {
     }
 
     fn stat(&self) -> u32 {
+        if self.unit == 1 && self.last_t != NONE && self.last_t > self.now {
+            // Run ahead of the board: running until the board reaches its last pair (Sapphire_Speed.md §63).
+            return vpu_stat::VBS;
+        }
         let run = self.state == State::Run;
         let gw = if run && self.kick_wait > self.now { vpu_stat::VGW } else { 0 };
         (u32::from(run) * vpu_stat::VBS) | self.stopped_by | gw

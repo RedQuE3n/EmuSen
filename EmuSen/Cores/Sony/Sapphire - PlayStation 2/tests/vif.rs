@@ -370,13 +370,29 @@ fn a_direct_refused_by_the_gif_asks_for_no_event() {
         v.put(i, false);
     }
     assert_eq!(v.request(1, false, &mut gif), 0, "the FIFO is full");
-    v.run_to(1_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    v.run_to(1_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif, ahead: 0 });
     assert_ne!(v.read(reg::STAT) & 0x8, 0, "VGW: waiting for the GIF");
     v.put(15, false);
     v.put(16, false);
     assert_eq!(v.request(1, false, &mut gif), 0, "the DMAC has filled the FIFO again and waits on it");
     assert_eq!(v.next_event(), u64::MAX, "nothing the board can run");
     gif.open = true;
-    v.run_to(2_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif });
+    v.run_to(2_000, &mut vif::Reach { vpu: &mut vpu, gif: &mut gif, ahead: 0 });
     assert_eq!((gif.taken, v.read(reg::STAT) & 0x8), (17, 0), "the data taken once the GIF has PATH2");
+}
+
+/// A VIF1 write queued while VU1 runs lands before VU1's first pair past its cycle, keeping the fields it leaves out, and
+/// a PATH1 read sees it from the cycle after (Sapphire_Speed.md §63.5).
+#[test]
+fn a_queued_vif1_write_lands_at_its_cycle() {
+    let mut vu = sapphire::vu::Vu::new(sapphire::vu::VU1_MEM);
+    let old = 0x4444_4444_3333_3333_2222_2222_1111_1111u128;
+    let new = 0x4444_4444_0000_000C_2222_2222_0000_000Au128;
+    vu.set_mem_q(5, old);
+    vu.queue_store(100, 5, [0xA, 0xB, 0xC, 0xD], 0b0101);
+    assert_eq!((vu.mem_q_at(5, 100), vu.mem_q_at(5, 101), vu.mem_q_at(6, 101)), (old, new, 0));
+    vu.land_foreign(100, false);
+    assert_eq!(vu.mem_q(5), old, "not for the pair at its own cycle");
+    vu.land_foreign(101, false);
+    assert_eq!((vu.mem_q(5), vu.foreign_next), (new, u64::MAX));
 }

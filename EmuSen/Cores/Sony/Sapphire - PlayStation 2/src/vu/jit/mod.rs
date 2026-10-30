@@ -113,6 +113,8 @@ pub struct Counts {
     pub compiled_pairs: u64,
     /// Pairs the interpreter ran in the compiled tier: before a program's code arrived, or outside every program.
     pub interpreted_pairs: u64,
+    /// MAC and status flag writes left out as dead (Sapphire_Speed.md §63).
+    pub dead_flags: u64,
     /// Times the words under a microprogram were found changed: the one running, or every one kept for an entry's start
     /// (their code kept, for the words each was compiled from).
     pub invalidated: u64,
@@ -377,7 +379,9 @@ impl Tier {
                     if let Some(text) = self.reference.as_mut().and_then(|r| r.failure.take()) {
                         panic!("{text}");
                     }
+                    debug_assert_eq!(frame.carry, 0, "a dead flag write's sticky bits reached the next MAC write before the exit");
                     self.counts.compiled_pairs += left - frame.budget;
+                    self.counts.dead_flags += frame.dead;
                     left = frame.budget;
                     if exit == STALL && frame.planned != 0 && self.unit == 1 {
                         self.stall = Some((pipe.pc, frame.planned, lent));
@@ -438,16 +442,21 @@ pub struct Frame {
     pub pending: u64,
     low: Deferred,
     up: Deferred,
+    /// Sticky status bits of flag writes left out as dead, owed to the next MAC write (Sapphire_Speed.md §63).
+    carry: u32,
+    dead: u64,
 }
 
 pub const TRACING: u32 = 1;
 pub const PROBING: u32 = 2;
 pub const HALTS: u32 = 4;
+/// VU1 runs ahead of the board: its data stores are logged (Sapphire_Speed.md §63).
+pub const AHEAD: u32 = 8;
 
 impl Frame {
     fn new(pipe: &mut Pipe, units: &mut Units, limit: u64, budget: u64, release: bool, reference: *mut Reference) -> Frame {
         let pending = pending(pipe, if pipe.unit == 0 { &units.vu0 } else { &units.vu1 });
-        let flags = (u32::from(pipe.trace.is_some()) * TRACING) | (u32::from(pipe.probe.is_some()) * PROBING) | (u32::from(units.halts) * HALTS);
+        let flags = (u32::from(pipe.trace.is_some()) * TRACING) | (u32::from(pipe.probe.is_some()) * PROBING) | (u32::from(units.halts) * HALTS) | (u32::from(units.link.ahead) * AHEAD);
         let (vu, window) = if pipe.unit == 0 { (&mut units.vu0 as *mut Vu, &mut units.vu1 as *mut Vu) } else { (&mut units.vu1 as *mut Vu, std::ptr::null_mut()) };
         // SAFETY: `vu` was made from a live reference just above.
         let data = unsafe { (*vu).data.as_mut_ptr() };
@@ -466,6 +475,8 @@ impl Frame {
             pending,
             low: Deferred::default(),
             up: Deferred::default(),
+            carry: 0,
+            dead: 0,
         }
     }
 }
@@ -559,6 +570,8 @@ pub const USE_UP: u32 = 1;
 pub const USE_LOW: u32 = 2;
 /// C4's flag write, made at once rather than queued for the S stage.
 pub const NOW: u32 = 4;
+/// The upper operation's flag write is dead: only its sticky bits are kept, for the next MAC write (§63).
+pub const CARRY: u32 = 8;
 
 
 /// The pair's flag write for its S stage, as `execute` puts it together: the upper operation's MAC, status and clipping
@@ -568,7 +581,14 @@ pub(super) extern "C" fn h_push(f: *mut Frame, t: u64, which: u32) -> u64 {
     let (frame, pipe, vu) = unsafe { (&mut *f, &mut *(*f).pipe, &mut *(*f).vu) };
     let up = if which & USE_UP != 0 { frame.up } else { Deferred::default() };
     let low = if which & USE_LOW != 0 { frame.low } else { Deferred::default() };
-    let d = Deferred { mac: up.mac, zsuo: up.zsuo, sticky: up.sticky, clip_shift: up.clip_shift, clip_set: low.clip_set, sticky_set: low.sticky_set, ..Deferred::default() };
+    if which & CARRY != 0 {
+        frame.carry |= frame.up.sticky;
+        frame.dead += 1;
+    }
+    let mut d = Deferred { mac: up.mac, zsuo: up.zsuo, sticky: up.sticky, clip_shift: up.clip_shift, clip_set: low.clip_set, sticky_set: low.sticky_set, ..Deferred::default() };
+    if d.mac.is_some() {
+        d.sticky |= std::mem::take(&mut frame.carry);
+    }
     if d.mac.is_some() || d.clip_shift.is_some() || d.clip_set.is_some() || d.sticky_set.is_some() {
         if which & NOW != 0 {
             // C4: written at the pair's own cycle (Sapphire_Native.md §45.9); never on by default.
@@ -605,6 +625,20 @@ pub(super) extern "C" fn h_external(f: *mut Frame, word: u32, t: u64, kind: u32)
         EXT_XTOP => pipe.write_alu(vu, (word >> 16 & 31) as usize, link.top[1], t),
         _ => pipe.write_alu(vu, (word >> 16 & 31) as usize, link.itop[unit], t),
     }
+}
+
+/// VIF1's queued writes before the pair at `t` landed (Sapphire_Speed.md §63.5).
+pub(super) extern "C" fn h_foreign(f: *mut Frame, t: u64) -> u64 {
+    // SAFETY: as `h_land`.
+    let frame = unsafe { &mut *f };
+    unsafe { (*frame.vu).land_foreign(t, frame.flags & AHEAD != 0) };
+    0
+}
+
+/// A store to data qword `q` at `t` made ahead of the board, logged (`Vu::log_store`).
+pub(super) extern "C" fn h_log(f: *mut Frame, q: u32, t: u64) {
+    // SAFETY: as `h_land`.
+    unsafe { (*(*f).vu).log_store(q as usize, t) }
 }
 
 pub(super) extern "C" fn h_trace(f: *mut Frame, pc: u32, t: u64) {

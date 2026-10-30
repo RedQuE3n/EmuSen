@@ -97,6 +97,8 @@ pub trait Gif {
 pub struct Reach<'a> {
     pub vpu: &'a mut Vpu,
     pub gif: &'a mut dyn Gif,
+    /// The cycle a waited-for VU1 may run ahead to, 0 for none (Sapphire_Speed.md §63).
+    pub ahead: u64,
 }
 
 /// What the VIF waits for before a command goes on.
@@ -427,18 +429,16 @@ impl Vif {
         if self.unit == 0 { n & 0xFF } else { n & 0xFFFF }
     }
 
-    /// One UNPACK write into data memory, the fields `enable` names, with the VU brought to the write's cycle first.
+    /// One UNPACK write into data memory at the write's cycle, queued for a running VU1 (Sapphire_Speed.md §63.5).
     fn store(&mut self, r: &mut Reach, at: u32, fields: [u32; 4], enable: u32) {
-        r.vpu.run_unit(self.unit, self.time);
         let a = (at % self.data_qwords()) as usize;
-        let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
-        let old = vu.mem_q(a);
-        let mut q = 0u128;
-        for (f, &v) in fields.iter().enumerate().rev() {
-            let keep = if enable >> f & 1 == 1 { v } else { (old >> (32 * f)) as u32 };
-            q = q << 32 | u128::from(keep);
+        if self.unit == 1 && r.vpu.running(1) {
+            r.vpu.units.vu1.queue_store(self.time, a, fields, enable);
+            return;
         }
-        vu.set_mem_q(a, q);
+        r.vpu.run_unit(self.unit, self.time);
+        let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
+        vu.store_fields(a, fields, enable);
     }
 
     /// Fetches and decodes the next VIFcode (§6.3.2's CMD table).
@@ -527,7 +527,9 @@ impl Vif {
     /// state"), then the paths idle where asked.
     fn wait(&mut self, t: u64, gif: bool, path3: bool, then: Then, r: &mut Reach) -> Option<u64> {
         let unit = self.unit;
-        if !r.vpu.ready(unit, self.time) && !r.vpu.ready(unit, t.max(self.time)) {
+        let ready = r.vpu.ready(unit, self.time)
+            || if r.ahead > 0 && unit == 1 { r.vpu.ready_ahead(unit, t.max(self.time), r.ahead) } else { r.vpu.ready(unit, t.max(self.time)) };
+        if !ready {
             self.cmd = Cmd::Wait { gif, path3, then };
             self.stat |= stat::VEW;
             return None;

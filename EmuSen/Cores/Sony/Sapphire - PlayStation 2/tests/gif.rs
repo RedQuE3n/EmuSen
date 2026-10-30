@@ -233,11 +233,45 @@ fn an_xgkick_is_told_its_packets_end_and_a_second_starts_behind_it() {
     port.set_free(0);
     assert_eq!(port.kick(&data, 10, 100), 100 + BUS * (1 + 1 + 3));
     assert_eq!(port.kick(&data, 10, 101), 100 + 2 * BUS * 5, "behind the first");
-    assert_eq!(port.take_kick(), Some((10, 100, 100 + BUS * 5)));
+    assert_eq!(port.take_kick(u64::MAX), Some((10, 100, 100 + BUS * 5)));
+    assert_eq!(port.take_kick(u64::MAX), Some((10, 101, 100 + 2 * BUS * 5)));
     let mut endless = vec![0u8; 16 << 10];
     put(&mut endless, 0, s15::manual::tag(1, false, None, 0, &[0xE]));
     port.set_free(0);
     assert_eq!(port.kick(&endless, 1, 0), BUS * (1 + 1024), "no EOP in the memory yet: one pass over it");
+}
+
+/// A kick VU1 made ahead of the board is held until the board reaches its cycle, and the next starts behind it whatever
+/// the GIF's estimate (Sapphire_Speed.md §63).
+#[test]
+fn a_kick_made_ahead_is_held_until_its_cycle() {
+    use sapphire::clock::BUS;
+    use sapphire::gif::Path1Port;
+    use sapphire::vu::Path1;
+    let mut data = vec![0u8; 16 << 10];
+    data[160..176].copy_from_slice(&s15::manual::tag(3, true, None, 0, &[0xE]).to_le_bytes());
+    let mut port = Path1Port::default();
+    let end = port.kick(&data, 10, 500);
+    assert_eq!(port.take_kick(499), None, "not yet");
+    assert!(port.holds());
+    port.set_free(0);
+    assert_eq!(port.kick(&data, 10, 501), end + BUS * 5, "behind the held kick, not the GIF's estimate");
+    assert_eq!(port.take_kick(500).map(|k| k.1), Some(500));
+    assert_eq!(port.take_kick(500), None, "the second is at 501");
+}
+
+/// A PATH1 read at a cycle sees VU1's data memory before the stores VU1 made ahead of the board at or after it, and the
+/// memory as it is after the earlier ones (Sapphire_Speed.md §63).
+#[test]
+fn a_path1_read_sees_the_memory_of_its_own_cycle() {
+    let mut vu = sapphire::vu::Vu::new(sapphire::vu::VU1_MEM);
+    vu.set_mem_q(7, 1);
+    vu.log_store(7, 100);
+    vu.set_mem_q(7, 2);
+    vu.log_store(7 + 1024, 200);
+    vu.set_mem_q(7, 3);
+    assert_eq!([vu.mem_q_at(7, 50), vu.mem_q_at(7, 100), vu.mem_q_at(7, 150), vu.mem_q_at(7, 201)], [1, 1, 2, 3]);
+    assert_eq!(vu.mem_q_at(8, 0), 0, "a qword never stored ahead");
 }
 
 /// On the GIF directly: with PATH3's packet, a kick and a DIRECT all waiting at once, PATH1 goes first, then PATH2,

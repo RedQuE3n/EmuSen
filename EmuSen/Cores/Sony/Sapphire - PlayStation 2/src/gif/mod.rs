@@ -242,7 +242,8 @@ impl Gif {
                     if path == Path::One {
                         let (addr, _, _) = self.kicks.pop_front().expect("a kick");
                         self.vuaddr = addr;
-                        let c = packing::cycles(|i| vu1.mem_q((i % VU1_QWORDS) as usize), u32::from(addr), VU1_QWORDS);
+                        let at = self.time;
+                        let c = packing::cycles(|i| vu1.mem_q_at((i % VU1_QWORDS) as usize, at), u32::from(addr), VU1_QWORDS);
                         self.p1_end = self.time + c.unwrap_or(u64::from(VU1_QWORDS)) * BUS;
                     }
                 }
@@ -251,7 +252,7 @@ impl Gif {
                         self.resume = Some(self.time);
                         return;
                     }
-                    let w = vu1.mem_q(self.vuaddr as usize);
+                    let w = vu1.mem_q_at(self.vuaddr as usize, self.time);
                     self.vuaddr = (self.vuaddr + 1) % VU1_QWORDS as u16;
                     self.step(Path::One, w, self.time, gs);
                 }
@@ -519,11 +520,12 @@ impl Path1 for Path1Port {
     }
 
     fn set_free(&mut self, at: u64) {
-        self.free = at;
+        // Kicks held for a later cycle end where the last was told to (Sapphire_Speed.md §63).
+        self.free = self.kicks.back().map_or(at, |k| k.2);
     }
 
-    fn take_kick(&mut self) -> Option<(u16, u64, u64)> {
-        self.kicks.pop_front()
+    fn take_kick(&mut self, t: u64) -> Option<(u16, u64, u64)> {
+        if self.kicks.front().is_some_and(|k| k.1 <= t) { self.kicks.pop_front() } else { None }
     }
 
     fn write_state(&self, w: &mut emusen_native::StateWriter) {
@@ -538,6 +540,10 @@ impl Path1 for Path1Port {
 
     fn fits(&self) -> bool {
         self.kicks.len() <= KICK_SLOTS
+    }
+
+    fn holds(&self) -> bool {
+        !self.kicks.is_empty()
     }
 }
 

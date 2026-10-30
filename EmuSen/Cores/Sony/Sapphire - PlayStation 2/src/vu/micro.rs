@@ -21,6 +21,12 @@ pub trait Micro {
     /// Runs the microprogram to its first pair with the M bit set, or its end, and returns the cycle QMTC2.I and CTC2.I
     /// may issue in (§5.4.6); none when none runs.
     fn release(&mut self, units: &mut Units, at: u64) -> Option<u64>;
+    /// Runs the microprogram ahead of the board as far as `limit` (Sapphire_Speed.md §63).
+    fn run_ahead(&mut self, _units: &mut Units, _limit: u64) {}
+    /// Whether the microprogram has ended, neither running nor stopped.
+    fn ended(&self) -> bool {
+        false
+    }
     /// FBRST's force break (§1.3.3).
     fn force_break(&mut self, units: &mut Units, at: u64);
     /// FBRST's reset (§1.3).

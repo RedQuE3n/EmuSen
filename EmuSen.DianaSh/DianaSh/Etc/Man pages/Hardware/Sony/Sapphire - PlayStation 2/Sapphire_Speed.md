@@ -2094,6 +2094,126 @@ pieces do not meet. Item 1 is therefore the compiler work §2.3 describes (the e
 pair, the kicks with their cycles, the GIF and VIF1 at events), not a bound added to today's run; it is left for its own
 stage, with the patch of this try kept outside the repository for reference.
 
+## 63. VU1 run on where VIF1 waits, flags only where read, and VIF1's writes landed by VU1 at their cycles (2026-10-29)
+
+*Decided 2026-10-29 by the tester: `Sapphire_SpeedHacks.md` §3's items 1 and 4 (§2.3 and §2.5 there).* Three steps on
+§64's tree (the tailored EE tier as the default). Each keeps what a program reads and the order it reads it in; what
+moves is when the units run, so the timing of a kick can shift a field's picture.
+
+### 63.1 What the references do (read 2026-10-29)
+
+- **PCSX2** (`pcsx2/VU1micro.cpp`, `vu1ExecMicro`, `vu1Finish`; `Config.h`, `vu1Instant`, on by default): with
+  instant VU1, a microprogram starts at the EE's cycle and the previous one is run to its end first, in one call; with
+  MTVU (`MTVU.cpp`) the program goes to a thread with TOP, ITOP and FBRST as they were. VIF1's later writes reach VU1
+  memory after the program, whatever their cycles, which is why 27 titles turn it off (`Sapphire_SpeedHacks.md` §2.3).
+- **DobieStation** (`core/ee/vu.cpp`, `update_XGKick`, `handle_XGKICK`): PATH1 is fed a qword every two cycles while VU1
+  runs, and a second XGKICK while the first transfers stalls VU1 (`XGKICK_stall`) until the first ends.
+- **Play!** (`ee/Vpu.cpp`, `Execute`, `ProcessXgKick`): VU1 runs for a quota of cycles and an XGKICK hands its whole
+  packet to the GIF at the kick.
+
+In what was read, none lands VIF1's writes and the GIF's reads at their own cycles while VU1 runs on; this section does.
+
+### 63.2 Why §62.8's try stalled (inferred from reading, not re-run)
+
+§62.8 stopped VU1 at a full kick queue by setting its kick wait to a sentinel cycle (`KICK_FULL`, 2^62) and lowered it
+to PATH1's free cycle once the queue had room. The recompiler's tier memoises a STALL exit (`Tier::stall`: the pair,
+its planned T stage and the micro memory's lend count) and returns without a call while the limit is below that plan.
+The plan was made under the sentinel, so it stayed above every later limit and was never re-planned: VU1 ran no pairs
+again, which is what §62.8 measured. The steps below never set a cycle the board cannot reach; a kick queue that
+holds more than the state's 16 slots defers the state instead (`Vpu::fits`, as before).
+
+### 63.3 Step 1: VU1 run on where VIF1 waits for it
+
+- A VIF1 command that waits for VU1 (MSCAL, MSCNT, FLUSH and their kin, MPG) with VU1 still running runs VU1 on, in one
+  call, to its end, a D or T stop, or the next vertical edge (`Vpu::ready_ahead`, `Board::v_edge`). VIF1 cannot write
+  VU1's memory before that end, since it waits for it, and resumes at the end's cycle (`Vif::wait`, as before).
+- What the run makes ahead of the board stays at its cycle: each XGKICK is held in PATH1's port with its cycle and handed
+  to the GIF when the board reaches it (`Path1Port::take_kick`), the next kick's wait counted from the held kick's end;
+  a D or T interrupt is held until the board passes VU1's last pair (`Vpu::take_interrupts`); VPU-STAT and BC2F/BC2T
+  see VU1 busy until then (`Pipe::stat`, `Vpu::vu1_busy`).
+- VU1's stores made ahead are logged with the qword they replace (`Vu::log_store`, from compiled code under the
+  frame's `AHEAD` flag and from the interpreter), so a PATH1 read at cycle *c* sees the memory of cycle *c*
+  (`Vu::mem_q_at`); the log is dropped once the board passes VU1's last pair.
+
+### 63.4 Step 2: flags only where read
+
+A pass over each microprogram before it is compiled (`emit::dead_writes`) marks an FMAC operation's MAC and status
+write dead when a later pair of the same straight run, within 12 pairs, writes them again and no pair until three past
+that writer reads them (FMAND, FMEQ, FMOR, FSAND, FSEQ, FSOR), sets them (FSSET, FCSET), branches, kicks or ends. The
+compiled pair checks at run time that the run cannot stop before the overwriter lands (`dead_here`: the cycles to its
+landing within the call's limit, the pairs within its budget, no probe, release, jump, halt or end pending). A dead
+write is not queued; its sticky bits are ORed into the next live write (`h_push`, `CARRY`), so the sticky bits are
+accumulated by every writer. Nothing is assumed across programs, and the debugger's verification and C4 turn the pass
+off. The operation's flags are still computed by its function in `ops.rs`: only the queued write and its landing are
+saved.
+
+### 63.5 Step 3: VIF1's writes landed by VU1 at their cycles
+
+Before this step every UNPACK qword brought VU1 to the write's cycle first (`Vif::store`), a call of VU1 for each. Now a
+write to a running VU1 is queued with its cycle (`Vu::queue_store`), and VU1 lands it before its first pair whose T
+stage is past that cycle: compiled code compares the pair's cycle with the queue's first (`Vu::foreign_next`, one load
+and a compare a pair) and calls `h_foreign` when it is due; the interpreter's `step` does the same. A VU1 brought to *t*
+lands what is due by *t* (`Vpu::run_unit`); a PATH1 read merges the queued writes before its cycle (`Vu::mem_q_at`); the
+EE's access to VU memory, made after the board is brought to now, lands them all (`Vpu::memory`). A state is written
+only with the queue empty (`Vpu::fits`), which it is at the end of every round. So VU1 reads each VIF1 write from the
+same pair as before, and VU1 is run where the board runs it rather than at every write.
+
+### 63.6 Results (measured 2026-10-29 and 30)
+
+Timed rounds of the arena (9,060 to 9,360 from the state at 9,000) at CPU weight 100, nothing else running; a VU1 call
+is one entry into compiled code. The rounds with another build running over part of them are left out.
+
+| Build | ms a field | p95 | VU1 calls a field | Picture and state digests |
+| --- | --- | --- | --- | --- |
+| §64's tree | 471.4, 470.7, 469.1 | 624.9, 619.2, 620.4 | not counted | `A3ABB67A39230DBA`, `DE981915C19BC7A4` |
+| step 1 | 461.7, 459.8 | 586.1, 583.2 | 295,900 | `06B8E7C2FDAE7539`, `F09A6C42402FB58B` |
+| steps 1 and 2 | 471.4, 464.5 | 601.7, 591.4 | 295,900 | as step 1's |
+| steps 1 and 3 (step 2 reverted, not kept) | 467.1, 469.2 | 593.6, 596.8 | 238,600 | as all three's |
+| all three | 465.7, 464.3, 465.2 | 587.5, 589.8, 589.2 | 238,600 | `C5A55090D3FCD889`, `6296AEA5CA0135A3` |
+
+- **The stage buys about 5 ms a field of the arena, 1 %, and 5 % of its p95**: 470 to 465, and 621 to 589. Step 1 alone
+  is the fastest build measured, at 461, about 9 ms below the base. `Sapphire_SpeedHacks.md`'s estimate for item 1, ≈ 40 to 80 ms,
+  is retired; its ≈ 15 to 30 for item 4 was for the flag work itself, which step 2 does not remove.
+- **Steps 2 and 3 are not separated from the noise.** Rounds of one build differ by up to 7 ms. Step 2 is 3 ms below
+  the build without it (467 or 469 against 465); step 3 is 3 ms below steps 1 and 2 and 7 above step 1. Step 3 is kept
+  because it is the foreign access at its cycle that any longer run needs; it reduces VU1's calls by 19 %.
+- **Where VU1's pairs ran** (a census build on an earlier form of step 3, not committed, the 360 fields from the load):
+  2,207 microprograms started a field; 3,796 runs on ahead, 1,889 of them reaching the end, held 1.65 million of the 2.24
+  million pairs (74 %); the other 26 % ran in about 280,000 runs of about two pairs.
+- **Why so little** (inferred). §62.4's 80 ms of the VU call path is the helpers each pair calls (`h_upper`, `h_push`, the
+  lane and flag wrappers of `ops.rs`), not the entries into compiled code: at 240,000 entries a field, even 100 ns an
+  entry [E] would be 24 ms. Step 2 saves only the queued writes, and adds its checks at run time.
+- **The dock** (6,060 to 6,360), all three against §64's tree: 153.2 against 150.8 ms (p95 176.5 against 171.0), one
+  round each, with another build's load: no gain.
+
+### 63.7 Checks
+
+- **Sound** digests equal §64's tree's in every build, on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`).
+- **Pictures.** Arena, against §64's tree, at the six fields saved: 10.6, 20.6, 27.1, 10.4, 19.0 and 1.5 % of the pixels,
+  mean 0.05 to 2.65 levels, the same scenes a few frames out of phase as in §62.4 (field 9,180 looked at side by side).
+  Against steps 1 and 2 the six are pixel-identical, though the window's digest over every field differs, so step 3
+  moves some fields' timing. Dock: 0, 0, 0, 0, 0.35 and 0.67 % (field 6,360 looked at). Short window: step 3's picture,
+  sound and state digests equal step 2's exactly, its VU1 calls 43,650 to 29,800 a field.
+- **ps2autotests** on all three: 52 of 55 EE and 23 of 23 IOP, all 78 texts identical to §62.5's run.
+- **Determinism**: all rounds of each build, on the arena, give the same digests.
+- **Tests**: the crate's 33 test programs and its unit tests in release with debug assertions, 507 passed, 6 ignored.
+  `the_d_and_t_bits_halt_when_enabled` now states that a VU1 ahead of the board is busy until the board reaches its last
+  pair. `random_microprograms_on_vu1_leave_the_units_as_the_interpreter_does` holds the dead writes to the interpreter's.
+
+### 63.8 Named limits, and what is left
+
+- **EE and VU0 reads of VU1 while it runs ahead** (step 1) see VU1's state at its end rather than at their cycle; VPU-STAT
+  and BC2F/BC2T report it busy until then. None showed in the windows or the test programs.
+- **The flag work itself** (step 2): the pass removes the queued writes only; computing MAC and status only where live
+  needs flagless forms of the FMAC operations, compiled or in `ops.rs`.
+- **Whole programs as one call.** Step 1 runs VU1 on only where VIF1 is waiting, since only then is no VIF1 write
+  possible before VU1's end. Running on from the start, while VIF1 unpacks the other buffer, needs either a proof that the
+  program does not read what VIF1 writes in the meantime, or a rollback when it does; neither is built.
+- **A kick queue past the state's 16 slots** defers a state (`StateError::Queue`); no window met it at its end, and the
+  state format is unchanged. VIF0's writes still bring VU0 along a write at a time.
+- **Next step**: the time is in the helpers a pair calls (§60.7's lever 2), so FMAC operations compiled in place, with
+  flagless forms where step 2 finds the write dead, are what can reach the 30 to 80 ms; fewer entries cannot.
+
 ## 64. The EE's side: where its time goes, its dispatch, and the tailored tier as the default (2026-10-29)
 
 *Decided 2026-10-29 by the tester: the EE's tier is the tailored recompiler (`EmuSen_Recompiler.md`, `emusen-mips-planner`,

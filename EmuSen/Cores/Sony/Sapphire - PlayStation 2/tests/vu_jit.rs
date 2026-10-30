@@ -343,8 +343,10 @@ fn random_microprograms_on_vu1_leave_the_units_as_the_interpreter_does() {
         total.invalidated += k.invalidated;
         total.refused += k.refused;
         total.calls += k.calls;
+        total.dead_flags += k.dead_flags;
     }
     assert_eq!(total.refused, 0, "a microprogram Cranelift refused");
+    assert!(total.dead_flags > 0, "dead flag writes left out, the units still the interpreter's (Sapphire_Speed.md §63): {total:?}");
     assert!(total.compiled_pairs > 10 * total.interpreted_pairs, "most pairs compiled: {total:?}");
     assert!(total.invalidated > 0, "a replaced pair invalidated its program: {total:?}");
     println!("VU1 random programs: {total:?}");

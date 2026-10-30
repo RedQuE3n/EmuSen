@@ -14,7 +14,7 @@ use cranelift_jit::JITModule;
 use cranelift_module::Module;
 use emusen_mips::vu::{self as table, I_BIT};
 
-use super::{BOUND, EXT_XGKICK, EXT_XITOP, EXT_XTOP, Frame, KIND_DIV, KIND_EFU, KIND_PLAIN, OUTSIDE, Options, PROBING, RELEASE, STALL, STOP, TRACING, USE_LOW, USE_UP, NOW};
+use super::{AHEAD, BOUND, CARRY, EXT_XGKICK, EXT_XITOP, EXT_XTOP, Frame, KIND_DIV, KIND_EFU, KIND_PLAIN, OUTSIDE, Options, PROBING, RELEASE, STALL, STOP, TRACING, USE_LOW, USE_UP, NOW};
 use crate::vu::ops::{self, Class};
 use crate::vu::pipe::{self, FMAC, NO_JUMP, NONE, Pipe, State, ViWrite};
 use crate::vu::{Link, Vu, fbrst, vpu_stat};
@@ -42,6 +42,7 @@ const V_STATUS: i32 = offset_of!(Vu, status) as i32;
 const V_MAC: i32 = offset_of!(Vu, mac) as i32;
 const V_CLIP: i32 = offset_of!(Vu, clip) as i32;
 const V_EFU_FREE: i32 = offset_of!(Vu, efu_free) as i32;
+const V_FOREIGN: i32 = offset_of!(Vu, foreign_next) as i32;
 const L_FBRST: i32 = offset_of!(Link, fbrst) as i32;
 const L_IRQ: i32 = offset_of!(Link, irq) as i32;
 const F_PIPE: i32 = offset_of!(Frame, pipe) as i32;
@@ -107,6 +108,7 @@ struct Sigs {
     trace: ir::SigRef,
     admit: ir::SigRef,
     verify: ir::SigRef,
+    log: ir::SigRef,
 }
 
 struct Emitter<'a, 'b> {
@@ -127,6 +129,8 @@ struct Emitter<'a, 'b> {
     budget: Variable,
     land_at: Variable,
     blocks: Vec<Option<Block>>,
+    /// Each pair's distance to the MAC write that kills its own and the cycles by which that one lands, (0, 0) where live.
+    dead: Vec<(u16, u16)>,
     dispatch: Block,
     exits: [Block; 5],
 }
@@ -366,6 +370,14 @@ impl Emitter<'_, '_> {
         self.store(t, f, F_PLANNED);
         let late = self.b.ins().icmp(IntCC::UnsignedGreaterThan, t, self.limit);
         self.exit_if(late, STALL);
+        if self.unit == 1 {
+            let vu = self.vu;
+            let next = self.load(I64, vu, V_FOREIGN);
+            let due = self.b.ins().icmp(IntCC::UnsignedGreaterThan, t, next);
+            self.when(due, |e| {
+                e.call(e.sigs.frame_t_u64, super::h_foreign as *const () as usize, &[f, t]);
+            });
+        }
         let probing = self.b.ins().band_imm_u(self.flags, PROBING as i64);
         self.when(probing, |e| {
             let pc32 = e.k(I32, pc as u64);
@@ -408,7 +420,16 @@ impl Emitter<'_, '_> {
                 which |= USE_UP;
             }
             if !self.inline_upper(o.name, upper) {
-                let (run, word, wv) = (self.k_ptr(e.run as usize), self.k_word(upper), self.k(I32, (which | if self.options.c4 { NOW } else { 0 }) as u64));
+                let now = if self.options.c4 { NOW } else { 0 };
+                let (run, word) = (self.k_ptr(e.run as usize), self.k_word(upper));
+                let wv = match self.dead[pc as usize] {
+                    (d, reach) if d > 0 && which & USE_UP != 0 => {
+                        let dead = self.dead_here(t, d, reach);
+                        let (yes, no) = (self.k(I32, (which & !USE_UP | CARRY | now) as u64), self.k(I32, (which | now) as u64));
+                        self.b.ins().select(dead, yes, no)
+                    }
+                    _ => self.k(I32, (which | now) as u64),
+                };
                 let next = self.call(self.sigs.upper, super::h_upper as *const () as usize, &[f, run, word, t, wv]).unwrap();
                 self.b.def_var(self.land_at, next);
                 pushed = true;
@@ -435,6 +456,28 @@ impl Emitter<'_, '_> {
             self.b.def_var(self.land_at, next);
         }
         self.flow(pc, upper, t, taken);
+    }
+
+    /// Whether a flag write `d` pairs before its overwriter is dead at run time (Sapphire_Speed.md §63.4).
+    fn dead_here(&mut self, t: Value, d: u16, reach: u16) -> Value {
+        let pipe = self.pipe;
+        let reach = self.b.ins().iadd_imm_s(t, i64::from(reach));
+        let in_time = self.b.ins().icmp(IntCC::UnsignedLessThanOrEqual, reach, self.limit);
+        let budget = self.b.use_var(self.budget);
+        let in_budget = self.b.ins().icmp_imm_u(IntCC::UnsignedGreaterThanOrEqual, budget, i64::from(d));
+        let probing = self.b.ins().band_imm_u(self.flags, PROBING as i64);
+        let watched = self.b.ins().icmp_imm_s(IntCC::NotEqual, probing, 0);
+        let released = self.b.ins().icmp_imm_s(IntCC::NotEqual, self.release, 0);
+        let j = self.load(I32, pipe, P_JUMP);
+        let jumping = self.b.ins().icmp_imm_s(IntCC::NotEqual, j, NO_JUMP as i64);
+        let h = self.load(I32, pipe, P_HALTING);
+        let halting = self.b.ins().icmp_imm_s(IntCC::NotEqual, h, 0);
+        let e = self.load(I8, pipe, P_ENDING);
+        let ending = self.b.ins().icmp_imm_s(IntCC::NotEqual, e, 0);
+        let ok = self.b.ins().band(in_time, in_budget);
+        let no = [watched, released, jumping, halting, ending].into_iter().reduce(|a, b| self.b.ins().bor(a, b)).unwrap();
+        let yes = self.not(no);
+        self.b.ins().band(ok, yes)
     }
 
     fn k_ptr(&mut self, v: usize) -> Value {
@@ -478,7 +521,7 @@ impl Emitter<'_, '_> {
             (x, self.vi(r))
         });
         let dest = access.vf_write.map(|(r, l)| (r, l, self.vf(r)));
-        let inline = self.inline_lower(o.name, w, dest.map(|d| d.2));
+        let inline = self.inline_lower(o.name, w, dest.map(|d| d.2), t);
         let mut held = None;
         match (inline, dest) {
             (Some(Some(value)), Some((r, l, _))) => held = Some((r, value, l)),
@@ -520,10 +563,20 @@ impl Emitter<'_, '_> {
         (Taken::No, held, e.class == Class::FlagSet)
     }
 
+    /// A VU1 store to qword `a` at `t`, logged while the unit runs ahead of the board.
+    fn log_store(&mut self, a: Value, t: Value) {
+        let ahead = self.b.ins().band_imm_u(self.flags, AHEAD as i64);
+        let f = self.f;
+        self.when(ahead, |e| {
+            let a32 = e.b.ins().uextend(I32, a);
+            e.call(e.sigs.log, super::h_log as *const () as usize, &[f, a32, t]);
+        });
+    }
+
     /// The lower operations compiled here rather than called: none for one left to its function; otherwise the new
     /// value of the register it writes, held back as `execute` holds it (none when it writes no vector register). The
     /// memory operations are VU1's alone, whose data memory has no window and no mirror below 16 KiB.
-    fn inline_lower(&mut self, name: &str, w: u32, old: Option<Quad>) -> Option<Option<Quad>> {
+    fn inline_lower(&mut self, name: &str, w: u32, old: Option<Quad>, t: Value) -> Option<Option<Quad>> {
         let vu1 = self.unit == 1;
         let none = Some(None);
         match name {
@@ -612,6 +665,7 @@ impl Emitter<'_, '_> {
                 if name == "sqd" {
                     self.set_vi(ft(w), a);
                 }
+                self.log_store(a, t);
                 let at = self.data_at(a);
                 let m = self.load_q(at);
                 let v = self.vf(fs(w));
@@ -647,6 +701,7 @@ impl Emitter<'_, '_> {
                 } else {
                     base
                 };
+                self.log_store(a, t);
                 let at = self.data_at(a);
                 let m = self.load_q(at);
                 let v = self.vi(ft(w));
@@ -944,6 +999,59 @@ impl Emitter<'_, '_> {
     }
 }
 
+/// The pairs ahead that a dead flag write is looked for in.
+const WINDOW: u16 = 12;
+
+/// Each flag-writing pair's distance to the write that makes it dead, 0 where none (Sapphire_Speed.md §63.4).
+fn dead_writes(list: &[(u16, u32, u32)], mask: u16) -> Vec<(u16, u16)> {
+    let mut at = vec![None; mask as usize + 1];
+    for &(pc, upper, lower) in list {
+        at[pc as usize] = Some((upper, lower));
+    }
+    let writes = |upper: u32| pipe::upper_op(upper).is_some_and(|(o, e)| e.flags && o.name != "clipw");
+    let flow = |upper: u32| upper >> 27 & 0b1011 != 0;
+    let low = |upper: u32, lower: u32| if upper & I_BIT == 0 { ops::of_lower(lower) } else { None };
+    let blocks = |upper: u32, lower: u32| {
+        flow(upper)
+            || low(upper, lower).is_some_and(|(o, e)| {
+                matches!(e.class, Class::Branch | Class::FlagSet) || o.name == "xgkick" || (e.class == Class::Fcheck && (o.name.starts_with("fm") || o.name.starts_with("fs")))
+            })
+    };
+    // The most a pair's T stage can follow the last's: an FMAC or load hazard 4, the divider 13, the EFU 54.
+    let delay = |upper: u32, lower: u32| match low(upper, lower).map(|(_, e)| e.class) {
+        Some(Class::Div(_) | Class::WaitQ) => 14,
+        Some(Class::Efu(_) | Class::WaitP) => 55,
+        _ => 4,
+    };
+    let mut dead = vec![(0, 0); mask as usize + 1];
+    for &(p, upper, lower) in list {
+        let before = at[(p.wrapping_sub(1) & mask) as usize];
+        if !writes(upper) || flow(upper) || low(upper, lower).is_some_and(|(_, e)| matches!(e.class, Class::Branch | Class::FlagSet)) || before.is_some_and(|(u, l)| u >> 30 & 1 == 1 || low(u, l).is_some_and(|(_, e)| e.class == Class::Branch)) {
+            continue;
+        }
+        let (mut over, mut reach) = (None, 0u16);
+        for k in 1..=WINDOW {
+            let Some((u, l)) = at[(p.wrapping_add(k) & mask) as usize] else { break };
+            if blocks(u, l) {
+                break;
+            }
+            if over.is_none() {
+                reach += delay(u, l);
+                if writes(u) {
+                    over = Some(k);
+                }
+            }
+            if let Some(q) = over
+                && k == q + 3
+            {
+                dead[p as usize] = (q, reach + 4);
+                break;
+            }
+        }
+    }
+    dead
+}
+
 pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], _start: u32, options: Options) -> Result<(), String> {
     if words.is_empty() || !words.len().is_multiple_of(3) {
         return Err("a microprogram is pairs of an address and two words".into());
@@ -972,6 +1080,7 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
         trace: b.import_signature(sig(&[ptr, I32, I64], None)),
         admit: b.import_signature(sig(&[ptr, I32], Some(I32))),
         verify: b.import_signature(sig(&[ptr], None)),
+        log: b.import_signature(sig(&[ptr, I32, I64], None)),
     };
     let head = b.create_block();
     b.append_block_params_for_function_params(head);
@@ -1000,7 +1109,8 @@ pub fn lower(module: &JITModule, func: &mut ir::Function, functions: &mut Functi
     let exits = [b.create_block(), b.create_block(), b.create_block(), b.create_block(), b.create_block()];
     b.ins().jump(dispatch, &[]);
 
-    let mut e = Emitter { b: &mut b, options, unit, mask, ptr, sigs, f, pipe, vu, link, data, limit, release, flags, budget, land_at, blocks, dispatch, exits };
+    let dead = if options.verify || options.c4 { vec![(0, 0); pairs] } else { dead_writes(&list, mask) };
+    let mut e = Emitter { b: &mut b, options, unit, mask, ptr, sigs, f, pipe, vu, link, data, limit, release, flags, budget, land_at, blocks, dead, dispatch, exits };
 
     // The table: each covered pair's block, the outside exit for the rest.
     e.b.switch_to_block(dispatch);

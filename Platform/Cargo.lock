@@ -381,6 +381,7 @@ name = "emusen-dev-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "libc",
 ]
 
 [[package]]

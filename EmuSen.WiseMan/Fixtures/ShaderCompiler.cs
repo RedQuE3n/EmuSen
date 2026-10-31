@@ -63,6 +63,9 @@ namespace EmuSen.WiseMan.Fixtures
         // Diamond's renderer's shaders, which its crate embeds - see Diamond_Enhancements.md §14.5.
         public static string DiamondShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Sony", "Diamond - PlayStation", "renderer", "shaders");
 
+        // Sapphire's GS walk, which its crate embeds - see Sapphire_Gs.md §4.
+        public static string SapphireShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Sony", "Sapphire - PlayStation 2", "shaders");
+
         public static byte[] Compile(string source, string name)
         {
             Shaderc api = ShadercLibrary.Load();

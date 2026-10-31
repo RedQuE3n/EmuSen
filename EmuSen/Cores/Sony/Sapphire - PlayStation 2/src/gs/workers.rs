@@ -128,6 +128,9 @@ pub struct Counts {
     /// Primitives drawn alone because their stores met between workers, or their reads met what they change.
     pub alone_why: [u64; 2],
     pub empty: u64,
+    /// Changes between a primitive split across the workers and one drawn alone, in drawing order: the runs a device would dispatch.
+    pub transitions: u64,
+    pub last_alone: bool,
     pub uploads: u64,
     pub clut_copies: u64,
     /// The GS's thread's waits by `Cause`, each a count and nanoseconds.
@@ -507,7 +510,12 @@ impl Workers {
         }
         self.tally(|c| {
             c.primitives += 1;
-            if matches!(split, Split::One(_)) {
+            let alone = matches!(split, Split::One(_));
+            if alone != c.last_alone {
+                c.transitions += 1;
+                c.last_alone = alone;
+            }
+            if alone {
                 c.alone += 1;
             } else {
                 c.split += 1;
@@ -654,6 +662,7 @@ impl Drop for Hold {
 pub struct Mem<'a> {
     pub local: &'a mut Local,
     pub workers: Option<&'a Workers>,
+    pub device: Option<(&'a super::device::Device, super::device::Cause)>,
     pub cause: Cause,
 }
 
@@ -663,6 +672,11 @@ impl Memory for Mem<'_> {
         if let Some(w) = self.workers {
             w.settle(address(psm, bp, bw, x, y).word, lanes(psm), false, self.cause);
         }
+        if let Some((d, c)) = self.device {
+            let a = address(psm, bp, bw, x, y);
+            d.before_read(a.word, lanes(psm), self.local, c);
+            return self.local.read_at(a, psm);
+        }
         self.local.read(psm, bp, bw, x, y)
     }
 
@@ -670,6 +684,11 @@ impl Memory for Mem<'_> {
     fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
         if let Some(w) = self.workers {
             w.settle(address(psm, bp, bw, x, y).word, lanes(psm), true, self.cause);
+        }
+        if let Some((d, c)) = self.device {
+            let a = address(psm, bp, bw, x, y);
+            d.before_write(a.word, self.local, c);
+            return self.local.write_at(a, psm, v);
         }
         self.local.write(psm, bp, bw, x, y, v);
     }

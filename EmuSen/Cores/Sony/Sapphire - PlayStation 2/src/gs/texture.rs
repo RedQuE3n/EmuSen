@@ -9,7 +9,6 @@ use super::draw::Vertex;
 use super::exact::{self, Float, Sum};
 use super::local::{self, Local, Memory, Units};
 use super::psm::Psm;
-use super::workers::Mem;
 
 const fn field(v: u64, lo: u32, n: u32) -> u32 {
     ((v >> lo) & ((1u64 << n) - 1)) as u32
@@ -46,7 +45,39 @@ impl Clut {
     /// TEX0, as written or as TEX2 has changed it, takes effect (§3.4.7's "Load Operation"): CLD decides whether the
     /// CLUT is loaded from CBP, in CSM1's arrangement at the buffer's start or CSM2's row at TEXCLUT's offset. Only an
     /// indexed PSM has a CLUT of a known size to load [A, D-243]. Whether it was loaded.
-    pub fn load(&mut self, tex0: u64, texclut: u64, local: &mut Mem<'_>) -> bool {
+    /// The rectangle a load by `tex0` and `texclut` would read, as (format, base, width, xs, ys): what the device path
+    /// reads back first (Sapphire_Gs.md §4.5); none for a format with no CLUT.
+    pub fn source(tex0: u64, texclut: u64) -> Option<(Psm, u32, u32, (u32, u32), (u32, u32))> {
+        let n = match Psm::from_code(field(tex0, 20, 6)) {
+            Some(Psm::T8 | Psm::T8h) => 256,
+            Some(Psm::T4 | Psm::T4hl | Psm::T4hh) => 16,
+            _ => return None,
+        };
+        let (cpsm, cbp) = (clut_format(field(tex0, 51, 4)), field(tex0, 37, 14));
+        if tex0 >> 55 & 1 != 0 {
+            let (cbw, cou, cov) = (field(texclut, 0, 6), field(texclut, 6, 6) * 16, field(texclut, 12, 10));
+            return Some((cpsm, cbp, cbw, ((cou) & 0x7FF, (cou + n - 1).min(0x7FF)), (cov, cov)));
+        }
+        Some((cpsm, cbp, 1, (0, if n == 16 { 7 } else { 15 }), (0, if n == 16 { 1 } else { 15 })))
+    }
+
+    pub fn load(&mut self, tex0: u64, texclut: u64, local: &mut impl Memory) -> bool {
+        self.load_by(tex0, texclut, |psm, bp, bw, x, y| local.read(psm, bp, bw, x, y))
+    }
+
+    /// `load` from the memory itself, a CSM1 CLUT's entries found in its first page's table (Sapphire_Gs.md §6.1).
+    pub fn load_local(&mut self, tex0: u64, texclut: u64, local: &Local) -> bool {
+        self.load_by(tex0, texclut, |psm, bp, bw, x, y| {
+            if bw != 1 || x >= 16 || y >= 16 {
+                return local.read(psm, bp, bw, x, y);
+            }
+            let e = u32::from(local::page_table(psm)[(y * 64 + x) as usize]);
+            let word = local.word(((bp * 64 + (e & 0x7FF)) as usize) & (local::WORDS - 1));
+            if psm == Psm::Ct32 { word } else { word >> (16 * (e >> 11)) & 0xFFFF }
+        })
+    }
+
+    fn load_by(&mut self, tex0: u64, texclut: u64, mut read: impl FnMut(Psm, u32, u32, u32, u32) -> u32) -> bool {
         let n = match Psm::from_code(field(tex0, 20, 6)) {
             Some(Psm::T8 | Psm::T8h) => 256,
             Some(Psm::T4 | Psm::T4hl | Psm::T4hh) => 16,
@@ -78,7 +109,7 @@ impl Clut {
             } else {
                 (i & 7 | (i >> 4 & 1) << 3, (i >> 3 & 1) | (i >> 5) << 1, 1)
             };
-            let v = local.read(cpsm, cbp, bw, x, y);
+            let v = read(cpsm, cbp, bw, x, y);
             if cpsm == Psm::Ct32 {
                 let k = ((csa + i) & 255) as usize;
                 self.entries[k] = v as u16;
@@ -303,19 +334,84 @@ impl Sampler {
     /// MXL under a mipmapping MMIN and 0 otherwise, over the coordinates its wrap modes can give, [0, size) for REPEAT
     /// and CLAMP, [0, MAX] for REGION_CLAMP and [0, MIN | MAX] for REGION_REPEAT, each shifted right by the level.
     pub fn units(&self) -> Units {
-        let Some(psm) = self.psm else { return Units::default() };
-        let top = if (2..=5).contains(&self.mmin) { self.mxl } else { 0 };
+        self.units_within(None)
+    }
+
+    /// The page lanes the texels a primitive can read lie in (Sapphire_Gs.md §4.3), from its vertices each with the Q it
+    /// takes, for a primitive whose weights are never negative (not a line): its coordinates lie between its vertices'
+    /// (a perspective quotient with every Q of one sign is a convex combination of theirs), widened by a texel for the
+    /// bilinear filter and two for the exact floor; `units` where that cannot be said.
+    pub fn reach(&self, v: &[(&Vertex, u32)]) -> Units {
+        self.units_within(self.range(v))
+    }
+
+    /// The coordinates a primitive's texels lie within, as `reach` takes them; none where that cannot be said.
+    pub fn range(&self, v: &[(&Vertex, u32)]) -> Option<((i64, i64), (i64, i64))> {
+        let (tw, th) = (self.wrap[0].log2, self.wrap[1].log2);
+        let span = |c: &dyn Fn(&(&Vertex, u32)) -> Option<f64>| -> Option<(i64, i64)> {
+            let (mut lo, mut hi) = (f64::MAX, f64::MIN);
+            for x in v {
+                let t = c(x)?;
+                lo = lo.min(t);
+                hi = hi.max(t);
+            }
+            (lo.is_finite() && hi.is_finite() && lo > -1e12 && hi < 1e12).then(|| (lo.floor() as i64 - 48, hi.ceil() as i64 + 48))
+        };
+        let range = if self.uv {
+            span(&|x| Some((x.0.uv & 0x3FFF) as f64)).zip(span(&|x| Some((x.0.uv >> 16 & 0x3FFF) as f64)))
+        } else {
+            let q = |x: &(&Vertex, u32)| f32::from_bits(x.1) as f64;
+            let first = q(&v[0]);
+            let same = first != 0.0 && v.iter().all(|x| q(x).is_finite() && q(x) * first > 0.0);
+            let st = |x: &(&Vertex, u32), hi: bool, log2: u32| {
+                let s = f32::from_bits(if hi { (x.0.st >> 32) as u32 } else { x.0.st as u32 }) as f64;
+                Some(s / q(x) * f64::from(1u32 << (log2 + 4)))
+            };
+            if same { span(&|x| st(x, false, tw)).zip(span(&|x| st(x, true, th))) } else { None }
+        };
+        range
+    }
+
+    fn units_within(&self, range: Option<((i64, i64), (i64, i64))>) -> Units {
         let mut s = Units::default();
+        self.rects(range, |psm, bp, bw, xs, ys| s.or(&local::units(psm, bp, bw, xs, ys)));
+        s
+    }
+
+    /// Each level's rectangle of texels the sampler can read, as `f(psm, bp, bw, xs, ys)`: within `range` (sixteenths of
+    /// a level-0 texel along U and V) where it is known, else over every coordinate its wrap modes can give.
+    pub fn rects(&self, range: Option<((i64, i64), (i64, i64))>, mut f: impl FnMut(Psm, u32, u32, (u32, u32), (u32, u32))) {
+        let Some(psm) = self.psm else { return };
+        let top = if (2..=5).contains(&self.mmin) { self.mxl } else { 0 };
         for n in 0..=top {
-            let extent = |w: &Wrap| match w.mode {
-                0 | 1 => (1u32 << w.log2.saturating_sub(n)).max(1) - 1,
-                2 => w.max >> n,
-                _ => (w.min >> n) | (w.max >> n),
+            let (xs, ys) = match range {
+                Some((us, vs)) => {
+                    let axis = |w: &Wrap, (lo, hi): (i64, i64)| {
+                        let size = (1i64 << w.log2.saturating_sub(n)).max(1);
+                        let (a, b) = ((lo >> n) >> 4, (hi >> n) >> 4);
+                        let (a, b) = match w.mode {
+                            0 if a >= 0 && b < size => (a as u32, b as u32),
+                            0 => (0, size as u32 - 1),
+                            1 => (a.clamp(0, size - 1) as u32, b.clamp(0, size - 1) as u32),
+                            2 => (w.apply(a, n), w.apply(b, n)),
+                            _ => (0, (w.min >> n) | (w.max >> n)),
+                        };
+                        (a.min(b), a.max(b))
+                    };
+                    (axis(&self.wrap[0], us), axis(&self.wrap[1], vs))
+                }
+                None => {
+                    let extent = |w: &Wrap| match w.mode {
+                        0 | 1 => (1u32 << w.log2.saturating_sub(n)).max(1) - 1,
+                        2 => w.max >> n,
+                        _ => (w.min >> n) | (w.max >> n),
+                    };
+                    ((0, extent(&self.wrap[0])), (0, extent(&self.wrap[1])))
+                }
             };
             let (bp, bw) = self.base[n as usize];
-            s.or(&local::units(psm, bp, bw, (0, extent(&self.wrap[0])), (0, extent(&self.wrap[1]))));
+            f(psm, bp, bw, xs, ys);
         }
-        s
     }
 }
 

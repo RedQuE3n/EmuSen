@@ -87,10 +87,12 @@ pub fn page_table(psm: Psm) -> &'static [u16] {
 /// `psm`. The pages in a row are the width over the page's width, as a whole number (§8.2; a PSMT8 or PSMT4 buffer of
 /// odd width is outside §2.6's rule, Sapphire_Disputes.md D-104).
 pub fn address(psm: Psm, bp: u32, bw: u32, x: u32, y: u32) -> Address {
+    // The page's sides are powers of two, so the divisions are shifts (Sapphire_Gs.md §6.1).
     let (pw, ph) = psm.shape().page();
-    let per_row = bw * 64 / pw;
-    let page = (y / ph) * per_row + x / pw;
-    let e = u32::from(page_table(psm)[((y % ph) * pw + x % pw) as usize]);
+    let (pwl, phl) = (pw.trailing_zeros(), ph.trailing_zeros());
+    let per_row = (bw * 64) >> pwl;
+    let page = (y >> phl) * per_row + (x >> pwl);
+    let e = u32::from(page_table(psm)[(((y & (ph - 1)) << pwl) + (x & (pw - 1))) as usize]);
     let word = ((bp + page * 32) * 64 + (e & 0x7FF)) & (WORDS as u32 - 1);
     let shift = match psm.shape() {
         Shape::Word => psm.high_shift(),
@@ -196,6 +198,37 @@ impl Units {
                 })
             })
         })
+    }
+}
+
+/// A set of the memory's 16,384 blocks of 64 words, for telling apart two rectangles that share pages but not words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockSet(pub Box<[u64; BLOCKS as usize / 64]>);
+
+impl Default for BlockSet {
+    fn default() -> BlockSet {
+        BlockSet(Box::new([0; BLOCKS as usize / 64]))
+    }
+}
+
+impl BlockSet {
+    /// The blocks a rectangle's pixels lie in; false, adding nothing more, past `limit` blocks.
+    pub fn add_rect(&mut self, psm: Psm, bp: u32, bw: u32, (x0, x1): (u32, u32), (y0, y1): (u32, u32), limit: u32) -> bool {
+        let (w, h) = psm.shape().block();
+        if (x1 / w - x0 / w + 1) * (y1 / h - y0 / h + 1) > limit {
+            return false;
+        }
+        for by in y0 / h..=y1 / h {
+            for bx in x0 / w..=x1 / w {
+                let b = (address(psm, bp, bw, bx * w, by * h).word >> 6) as usize;
+                self.0[b >> 6] |= 1 << (b & 63);
+            }
+        }
+        true
+    }
+
+    pub fn meets(&self, o: &BlockSet) -> bool {
+        self.0.iter().zip(o.0.iter()).any(|(a, b)| a & b != 0)
     }
 }
 
@@ -308,6 +341,21 @@ impl Local {
         (self.at(a.word as usize).load(std::sync::atomic::Ordering::Relaxed) >> a.shift) & mask(psm.bits())
     }
 
+    /// The pixel's value at an address `address` gave for it.
+    #[inline]
+    pub fn read_at(&self, a: Address, psm: Psm) -> u32 {
+        (self.at(a.word as usize).load(std::sync::atomic::Ordering::Relaxed) >> a.shift) & mask(psm.bits())
+    }
+
+    /// Writes the pixel's bits at an address `address` gave for it.
+    #[inline]
+    pub fn write_at(&mut self, a: Address, psm: Psm, v: u32) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let m = mask(psm.bits()) << a.shift;
+        let w = self.at(a.word as usize);
+        w.store((w.load(Relaxed) & !m) | ((v << a.shift) & m), Relaxed);
+    }
+
     /// Writes the pixel's bits, leaving the rest of its word (PSMCT24's upper byte, the other half, byte or nibble).
     #[inline]
     pub fn write(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
@@ -316,6 +364,14 @@ impl Local {
         let m = mask(psm.bits()) << a.shift;
         let w = self.at(a.word as usize);
         w.store((w.load(Relaxed) & !m) | ((v << a.shift) & m), Relaxed);
+    }
+
+    /// Words from `start` stored from the GS's thread while no worker draws: the device path's readback (Sapphire_Gs.md §4.5).
+    pub(super) fn store(&self, start: usize, words: &[u32]) {
+        assert!(start + words.len() <= WORDS);
+        for (k, &v) in words.iter().enumerate() {
+            self.at(start + k).store(v, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 
     /// The whole memory, for a state, a debugger or a test: only while no worker draws (`Gs::local` joins them first).

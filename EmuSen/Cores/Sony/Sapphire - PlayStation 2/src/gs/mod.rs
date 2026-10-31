@@ -7,12 +7,14 @@
 //! (S19) slot; the PCRTC (S20) attaches at the privileged registers and `hsync`/`vsync`. The drawing may run on worker
 //! threads (`workers`, S43), exact at every count. Sapphire_Native.md §24, §27, §31, §50.
 
+pub mod device;
 pub mod draw;
 pub mod exact;
 pub mod local;
 pub mod pixel;
 pub mod psm;
 pub mod raster;
+pub mod stream;
 pub mod texture;
 pub mod transfer;
 pub mod workers;
@@ -167,6 +169,8 @@ pub trait HostInterface {
 pub struct Gs {
     /// The drawing's workers, when the GS runs any (S43); dropped before the memory they draw into.
     workers: Option<Box<Workers>>,
+    /// The drawing on a Vulkan device, when chosen (Sapphire_Gs.md); never with workers.
+    device: Option<Box<device::Device>>,
     local: Local,
     regs: [u64; 0x63],
     /// The privileged registers as written, by GS address.
@@ -190,6 +194,8 @@ pub struct Gs {
     /// When set, every general register written, in order, with HWREG's writes counted: the GS's own report of what it
     /// was given (Sapphire_Native.md §39).
     pub trace: Option<(Vec<(u8, u64)>, u64)>,
+    /// When set, everything done to the GS from its state at the start (Sapphire_Gs.md §3).
+    pub stream: Option<stream::Recorder>,
 }
 
 impl Default for Gs {
@@ -211,6 +217,7 @@ impl Gs {
         privileged[privileged::IMR as usize] = IMR_RESET;
         let mut gs = Gs {
             workers: None,
+            device: None,
             local: Local::default(),
             regs: [0; 0x63],
             privileged,
@@ -226,11 +233,56 @@ impl Gs {
             rose: false,
             field: 0,
             trace: None,
+            stream: None,
         };
         if let Some(n) = std::env::var("SAPPHIRE_GS_WORKERS").ok().as_deref().and_then(workers::parse) {
             gs.set_workers(n);
         }
+        if let Ok(v) = std::env::var("SAPPHIRE_GS_DEVICE")
+            && let Err(e) = gs.set_device(v == "plan")
+        {
+            eprintln!("the GS stays in software: {e}");
+        }
         gs
+    }
+
+    /// The drawing on a device of the GS's own (Sapphire_Gs.md), the workers stopped; `plan_only` records and draws
+    /// nothing, for measuring the processor's part. On an error the GS draws as before.
+    pub fn set_device(&mut self, plan_only: bool) -> Result<(), String> {
+        // SAFETY: no lend.
+        unsafe { self.set_device_on(None, plan_only) }
+    }
+
+    /// `set_device` on a lent device when one is given (EmuSen_Gpu.md §5).
+    ///
+    /// # Safety
+    /// A lend's handles must stay valid while the GS lives.
+    pub unsafe fn set_device_on(&mut self, lend: Option<(emusen_gpu::Lent, u64)>, plan_only: bool) -> Result<(), String> {
+        self.join();
+        let d = device::Device::new(lend, plan_only)?;
+        if let Some(w) = self.workers.take() {
+            w.join();
+        }
+        self.device = Some(Box::new(d));
+        Ok(())
+    }
+
+    /// The device path's counts and its device, when it draws.
+    pub fn device_counts(&self) -> Option<(device::Counts, String)> {
+        self.device.as_ref().map(|d| (d.counts(), d.report()))
+    }
+
+    /// Whether the device path draws records that read where they draw on the processor, in the reference's order.
+    pub fn set_exact_feedback(&self, exact: bool) {
+        if let Some(d) = &self.device {
+            d.set_exact_feedback(exact);
+        }
+    }
+
+    /// The software rasteriser again, every primitive drawn first.
+    pub fn clear_device(&mut self) {
+        self.join();
+        self.device = None;
     }
 
     /// The drawing's workers: 1 draws on the GS's own thread, the reference; 2 to `workers::MAX` on that many threads.
@@ -239,7 +291,7 @@ impl Gs {
         if let Some(w) = self.workers.take() {
             w.join();
         }
-        if n >= 2 {
+        if n >= 2 && self.device.is_none() {
             self.workers = Some(Box::new(Workers::new(n.min(workers::MAX), &self.local, &self.clut)));
         }
     }
@@ -269,6 +321,9 @@ impl Gs {
         if let Some(w) = &self.workers {
             w.join();
         }
+        if let Some(d) = &self.device {
+            d.join(&self.local);
+        }
     }
 
     /// The local memory, every primitive drawn first.
@@ -283,6 +338,9 @@ impl Gs {
         if i >= local::WORDS {
             return false;
         }
+        if let Some(d) = &self.device {
+            d.before_write(i as u32, &self.local, device::Cause::Join);
+        }
         self.local.set_word(i, v);
         true
     }
@@ -290,6 +348,9 @@ impl Gs {
     /// A pixel written into local memory from outside the GS (a test or a tool), every primitive drawn first.
     pub fn write_pixel(&mut self, psm: Psm, bp: u32, bw: u32, x: u32, y: u32, v: u32) {
         self.join();
+        if let Some(d) = &self.device {
+            d.before_write(local::address(psm, bp, bw, x, y).word, &self.local, device::Cause::Join);
+        }
         self.local.write(psm, bp, bw, x, y, v);
     }
 
@@ -298,6 +359,9 @@ impl Gs {
     pub fn settle(&self, psm: Psm, bp: u32, bw: u32, xs: (u32, u32), ys: (u32, u32)) {
         if let Some(w) = &self.workers {
             w.settle_reads(&local::units(psm, bp, bw, xs, ys));
+        }
+        if let Some(d) = &self.device {
+            d.settle(&local::units(psm, bp, bw, xs, ys), &self.local, device::Cause::Display);
         }
     }
 
@@ -313,16 +377,40 @@ impl Gs {
 
     /// The memory as the GS's own thread reaches it, each access waiting for the workers touching its page.
     fn mem(&mut self, cause: Cause) -> (Mem<'_>, &mut Transfer, &mut texture::Clut) {
-        (Mem { local: &mut self.local, workers: self.workers.as_deref(), cause }, &mut self.transfer, &mut self.clut)
+        let on = match cause {
+            Cause::ClutLoad => device::Cause::ClutLoad,
+            Cause::Download => device::Cause::Download,
+            Cause::Copy => device::Cause::Copy,
+            Cause::Ring | Cause::Clut => device::Cause::Upload,
+            Cause::Join => device::Cause::Join,
+            Cause::Display => device::Cause::Display,
+        };
+        let device = self.device.as_deref().map(|d| (d, on));
+        (Mem { local: &mut self.local, workers: self.workers.as_deref(), device, cause }, &mut self.transfer, &mut self.clut)
     }
 
     fn load_clut(&mut self, tex0: u64) {
         let texclut = self.regs[reg::TEXCLUT as usize];
-        let (mut mem, _, clut) = self.mem(Cause::ClutLoad);
-        if clut.load(tex0, texclut, &mut mem)
-            && let Some(w) = self.workers.as_deref()
-        {
-            w.clut_changed();
+        let loaded = match self.device.as_deref() {
+            // The device path reads the rectangle back once if it was drawn, then the mirror without a check a word.
+            Some(d) => {
+                if let Some((psm, bp, bw, xs, ys)) = texture::Clut::source(tex0, texclut) {
+                    d.settle(&local::units(psm, bp, bw, xs, ys), &self.local, device::Cause::ClutLoad);
+                }
+                self.clut.load_local(tex0, texclut, &self.local)
+            }
+            None => {
+                let (mut mem, _, clut) = self.mem(Cause::ClutLoad);
+                clut.load(tex0, texclut, &mut mem)
+            }
+        };
+        if loaded {
+            if let Some(w) = self.workers.as_deref() {
+                w.clut_changed();
+            }
+            if let Some(d) = self.device.as_deref() {
+                d.clut_changed();
+            }
         }
     }
 
@@ -390,6 +478,13 @@ impl Gs {
                 let (b, p, s) = (self.regs[reg::BITBLTBUF as usize], self.regs[reg::TRXPOS as usize], self.regs[reg::TRXREG as usize]);
                 let (mut mem, transfer, _) = self.mem(Cause::Copy);
                 transfer.start(data as u32 & 3, b, p, s, &mut mem);
+                // The device path takes a host-to-local transfer's pages for the processor once, not a check a pixel.
+                if let Some(d) = self.device.as_deref() {
+                    match self.transfer.destination() {
+                        Some((buf, xs, ys)) => d.claim(&local::units(buf.psm, buf.bp, buf.bw, xs, ys), &self.local),
+                        None => d.release(),
+                    }
+                }
             }
             reg::HWREG => match self.workers.as_deref() {
                 // A worker writes the pixels, in the ring's order; the GS's thread follows the transfer's place.
@@ -398,7 +493,14 @@ impl Gs {
                     self.transfer.hwreg(data, &mut Dry);
                 }
                 Some(_) => {}
-                None => self.transfer.hwreg(data, &mut self.local),
+                None => {
+                    self.transfer.hwreg(data, &mut self.local);
+                    if let Some(d) = self.device.as_deref()
+                        && self.transfer.active.is_none()
+                    {
+                        d.release();
+                    }
+                }
             },
             reg::PRIM => {
                 self.regs[r as usize] = data;
@@ -477,6 +579,9 @@ impl Gs {
 
     /// An EE write; a narrower one writes its lanes alone [A], so CSR acts only on the bits it carries.
     pub fn write_privileged(&mut self, paddr: u32, bytes: usize, value: u64) {
+        if let Some(s) = self.stream.as_mut() {
+            s.privileged(paddr, bytes, value);
+        }
         let ga = privileged::ga(paddr);
         let (shift, mask) = lanes(paddr, bytes);
         let v = (value << shift) & mask;
@@ -499,6 +604,12 @@ impl Gs {
 
     /// V-sync, from the PCRTC: VSINT, and FIELD for the field now shown.
     pub fn vsync(&mut self, odd: bool) {
+        if let Some(s) = self.stream.as_mut() {
+            s.vsync(odd);
+        }
+        if let Some(d) = &self.device {
+            d.flush(&self.local);
+        }
         self.field = if odd { csr::FIELD } else { 0 };
         self.events |= csr::VSINT;
         self.update_line();
@@ -522,6 +633,9 @@ impl HostInterface for Gs {
                 t.push((reg, data));
             }
         }
+        if let Some(s) = self.stream.as_mut() {
+            s.write(reg, data);
+        }
         if self.reversed() {
             return;
         }
@@ -539,7 +653,11 @@ impl HostInterface for Gs {
             return None;
         }
         let (mut mem, transfer, _) = self.mem(Cause::Download);
-        transfer.read(&mut mem)
+        let v = transfer.read(&mut mem);
+        if let Some(s) = self.stream.as_mut() {
+            s.read(v);
+        }
+        v
     }
 
     fn stalled(&self) -> bool {
@@ -628,7 +746,11 @@ impl emusen_native::State for Gs {
         let mut l = [false; 2];
         r.bools(&mut l)?;
         [self.line, self.rose] = l;
-        r.u32s(self.local.words_mut())
+        r.u32s(self.local.words_mut())?;
+        if let Some(d) = self.device.as_deref() {
+            d.loaded();
+        }
+        Ok(())
     }
 }
 

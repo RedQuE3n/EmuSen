@@ -164,6 +164,8 @@ pub struct GpuDevice {
     name: String,
     software: bool,
     max_buffer_bytes: u64,
+    /// Whether shaders may use 64-bit integers: enabled on a device made here when offered; unknown, so off, on a lent one.
+    int64: bool,
 }
 
 struct Candidate {
@@ -312,7 +314,10 @@ impl GpuDevice {
         let queue_info = [vk::DeviceQueueCreateInfo::default().queue_family_index(pick.family).queue_priorities(&priority)];
         let extensions = unsafe { instance.enumerate_device_extension_properties(pick.physical) }.unwrap_or_default();
         let names = [PORTABILITY_SUBSET.as_ptr()];
-        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info);
+        // 64-bit integers in shaders, since 1.3, when the device offers them (EmuSen_Gpu.md §3.2).
+        let int64 = unsafe { instance.get_physical_device_features(pick.physical) }.shader_int64 == vk::TRUE;
+        let features = vk::PhysicalDeviceFeatures::default().shader_int64(int64);
+        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info).enabled_features(&features);
         // A layered implementation must be told its subset is accepted; this is what MoltenVK over Metal asks (Mars_Gpu.md §4).
         if has(&extensions, PORTABILITY_SUBSET) {
             device_info = device_info.enabled_extension_names(&names);
@@ -353,6 +358,7 @@ impl GpuDevice {
             name: pick.name.clone(),
             software: pick.software,
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
+            int64,
         })
     }
 
@@ -411,7 +417,13 @@ impl GpuDevice {
             name,
             software: properties.device_type == vk::PhysicalDeviceType::CPU,
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
+            int64: false,
         })
+    }
+
+    /// Whether shaders may use 64-bit integers (`shaderInt64` enabled), since 1.3.
+    pub fn int64(&self) -> bool {
+        self.int64
     }
 
     /// Whether the device is lent, and so may hand its pictures to the lender on the device.

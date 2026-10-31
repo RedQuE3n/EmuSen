@@ -1,0 +1,940 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+// Sapphire's GS on the device, the walk: one workgroup a tile of 16 by 8 pixels, one invocation a pixel, meeting the
+// tile's records in drawing order and applying each by the software rasteriser's rules in its integers: coverage and
+// interpolation (raster.rs), texturing with the exact quotient and LOD (texture.rs, exact.rs) and the pixel pipeline
+// (pixel.rs), reading and writing the 4 MiB in its own layout (local.rs). See Sapphire_Gs.md §4; the record's and the
+// environment's layouts are `device/plan.rs`'s.
+
+layout(local_size_x = 16, local_size_y = 8) in;
+
+layout(std430, set = 0, binding = 0) buffer Local { uint mem[]; };
+layout(std430, set = 0, binding = 1) readonly buffer Records { uint rec[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Envs { uint envs[]; };
+layout(std430, set = 0, binding = 3) readonly buffer Entries { uint entries[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Tiles { uvec4 tiles[]; };
+layout(std430, set = 0, binding = 5) readonly buffer Cluts { uint cluts[]; };
+// The memory as it stood before a stretch whose records read their texels from where they draw (Sapphire_Gs.md §4.4).
+layout(std430, set = 0, binding = 6) readonly buffer Snapshot { uint snap[]; };
+
+// The stretch's first tile, and measurement switches (`device::debug_bits`): 1 leaves texturing out, 2 all after
+// coverage, 4 every record, 8 the texture coordinates' arithmetic, 16 the LOD a pixel.
+layout(push_constant) uniform Push { uint first_tile; uint debug; uint unused2; uint unused3; };
+
+const uint RECORD_WORDS = 32u;
+// Records staged in shared memory a chunk at a time, each with its environment, so that a pixel meets them without a
+// round trip to memory each (Sapphire_Gs.md §5.3).
+const uint CHUNK = 16u;
+shared uint srec[CHUNK][32];
+shared uint senv[CHUNK][32];
+// For a triangle, floor((2^64 - 1) / area) as two words, found once a record by one invocation.
+shared uvec2 srec_magic[CHUNK];
+uint R;
+uint env(uint k) { return senv[R][k]; }
+const uint ENV_WORDS = 32u;
+const uint CLUT_WORDS = 256u;
+const uint WORDS_MASK = (1u << 20) - 1u;
+
+const uint CT32 = 0x00u, CT24 = 0x01u, CT16 = 0x02u, CT16S = 0x0Au, T8 = 0x13u, T4 = 0x14u, T8H = 0x1Bu;
+const uint T4HL = 0x24u, T4HH = 0x2Cu, Z32 = 0x30u, Z24 = 0x31u, Z16 = 0x32u, Z16S = 0x3Au;
+
+// ---- local.rs: a pixel's word and shift in every format ----
+
+bool psm_valid(uint p) {
+    return p == CT32 || p == CT24 || p == CT16 || p == CT16S || p == T8 || p == T4 || p == T8H || p == T4HL || p == T4HH
+        || p == Z32 || p == Z24 || p == Z16 || p == Z16S;
+}
+
+uint psm_bits(uint p) {
+    if (p == CT32 || p == Z32) return 32u;
+    if (p == CT24 || p == Z24) return 24u;
+    if (p == CT16 || p == CT16S || p == Z16 || p == Z16S) return 16u;
+    if (p == T8 || p == T8H) return 8u;
+    return 4u;
+}
+
+// 0 word, 1 half, 2 byte, 3 nibble.
+uint psm_shape(uint p) {
+    if (p == CT16 || p == CT16S || p == Z16 || p == Z16S) return 1u;
+    if (p == T8) return 2u;
+    if (p == T4) return 3u;
+    return 0u;
+}
+
+uint ct32_block(uint bx, uint by) { return (bx & 1u) | (by & 1u) << 1 | (bx & 2u) << 1 | (by & 2u) << 2 | (bx & 4u) << 2; }
+uint ct16_block(uint bx, uint by) { return (by & 1u) | (bx & 1u) << 1 | (by & 2u) << 1 | (bx & 2u) << 2 | (by & 4u) << 2; }
+uint ct16s_block(uint bx, uint by) { return (by & 1u) | (bx & 1u) << 1 | (by & 4u) | (by & 2u) << 2 | (bx & 2u) << 3; }
+
+uint block_number(uint p, uint bx, uint by) {
+    if (p == Z32 || p == Z24) return ct32_block(bx, by) ^ 0x18u;
+    if (p == CT16 || p == T4) return ct16_block(bx, by);
+    if (p == CT16S) return ct16s_block(bx, by);
+    if (p == Z16) return ct16_block(bx, by) ^ 0x18u;
+    if (p == Z16S) return ct16s_block(bx, by) ^ 0x18u;
+    return ct32_block(bx, by);
+}
+
+uint column_word(uint x, uint y) { return (x >> 1) << 2 | y << 1 | (x & 1u); }
+
+void address(uint p, uint bp, uint bw, uint x, uint y, out uint word, out uint shift) {
+    uint shape = psm_shape(p);
+    uint pw = shape >= 2u ? 128u : 64u;
+    uint ph = shape == 0u ? 32u : (shape == 3u ? 128u : 64u);
+    uint bwd = shape == 0u ? 8u : (shape == 3u ? 32u : 16u);
+    uint bhd = shape == 2u ? 16u : (shape == 3u ? 16u : 8u);
+    uint ch = shape >= 2u ? 4u : 2u;
+    uint per_row = bw * 64u / pw;
+    uint page = (y / ph) * per_row + x / pw;
+    uint xp = x % pw, yp = y % ph;
+    uint xb = xp % bwd, yb = yp % bhd;
+    uint block = block_number(p, xp / bwd, yp / bhd);
+    uint column = yb / ch, yc = yb % ch;
+    uint w, sub;
+    if (shape == 0u) {
+        w = column_word(xb, yc);
+        sub = 0u;
+    } else if (shape == 1u) {
+        w = column_word(xb & 7u, yc);
+        sub = xb >> 3;
+    } else {
+        uint turned = (yc >> 1) ^ (column & 1u);
+        uint xc = turned == 1u ? (xb + 4u) & 7u : xb & 7u;
+        w = column_word(xc, yc & 1u);
+        sub = (xb >> 3) * 2u + (yc >> 1);
+    }
+    word = ((bp + page * 32u) * 64u + block * 64u + column * 16u + w) & WORDS_MASK;
+    if (shape == 0u) shift = (p == T8H || p == T4HL) ? 24u : (p == T4HH ? 28u : 0u);
+    else shift = (shape == 1u ? 16u : (shape == 2u ? 8u : 4u)) * sub;
+}
+
+uint field_mask(uint bits) { return bits >= 32u ? 0xFFFFFFFFu : (1u << bits) - 1u; }
+
+uint read_px(uint p, uint bp, uint bw, uint x, uint y) {
+    uint w, s;
+    address(p, bp, bw, x & 0x7FFu, y & 0x7FFu, w, s);
+    return (mem[w] >> s) & field_mask(psm_bits(p));
+}
+
+bool S_snapshot;
+
+uint read_texel(uint p, uint bp, uint bw, uint x, uint y) {
+    uint w, s;
+    address(p, bp, bw, x & 0x7FFu, y & 0x7FFu, w, s);
+    return ((S_snapshot ? snap[w] : mem[w]) >> s) & field_mask(psm_bits(p));
+}
+
+// The frame's and Z's words this pixel last touched, kept in registers across records and stored when another word
+// takes the entry or the walk ends; a 16-bit word's other half is its partner's, so only this pixel's bits are stored.
+uint C_word[2], C_val[2], C_mask[2];
+bool C_live[2], C_dirty[2];
+uint C_next;
+
+void cache_store(uint i) {
+    if (!C_live[i] || !C_dirty[i]) return;
+    uint m = C_mask[i];
+    if (m == 0xFFFFFFFFu) {
+        mem[C_word[i]] = C_val[i];
+    } else if (m == 0xFFFFu || m == 0xFFFF0000u) {
+        atomicAnd(mem[C_word[i]], ~m);
+        atomicOr(mem[C_word[i]], C_val[i] & m);
+    } else {
+        mem[C_word[i]] = (mem[C_word[i]] & ~m) | (C_val[i] & m);
+    }
+    C_dirty[i] = false;
+}
+
+uint cache_entry(uint w, uint m) {
+    if (C_live[0] && C_word[0] == w) { C_mask[0] |= m; return 0u; }
+    if (C_live[1] && C_word[1] == w) { C_mask[1] |= m; return 1u; }
+    uint i = C_next;
+    C_next ^= 1u;
+    cache_store(i);
+    C_word[i] = w;
+    C_val[i] = mem[w];
+    C_mask[i] = m;
+    C_live[i] = true;
+    C_dirty[i] = false;
+    return i;
+}
+
+uint surface_read(uint p, uint bp, uint bw, uint x, uint y) {
+    uint w, s;
+    address(p, bp, bw, x, y, w, s);
+    uint i = cache_entry(w, 0u);
+    return (C_val[i] >> s) & field_mask(psm_bits(p));
+}
+
+void surface_write(uint p, uint bp, uint bw, uint x, uint y, uint v) {
+    uint w, s;
+    address(p, bp, bw, x, y, w, s);
+    uint m = field_mask(psm_bits(p)) << s;
+    uint i = cache_entry(w, m);
+    C_val[i] = (C_val[i] & ~m) | ((v << s) & m);
+    C_dirty[i] = true;
+}
+
+// ---- arithmetic: 64- and 128-bit helpers ----
+
+uint bits32(uint v) { return v == 0u ? 0u : uint(findMSB(v)) + 1u; }
+uint bits64(uint64_t v) {
+    uvec2 p = unpackUint2x32(v);
+    return p.y != 0u ? 32u + bits32(p.y) : bits32(p.x);
+}
+
+int64_t floor_div(int64_t a, int64_t b) {
+    int64_t q = a / b;
+    if ((a % b) != int64_t(0) && ((a < int64_t(0)) != (b < int64_t(0)))) q -= int64_t(1);
+    return q;
+}
+
+int64_t iabs64(int64_t v) { return v < int64_t(0) ? -v : v; }
+
+struct U128 { uint64_t hi; uint64_t lo; };
+
+uint bits128(U128 a) { return a.hi != uint64_t(0) ? 64u + bits64(a.hi) : bits64(a.lo); }
+bool is_zero128(U128 a) { return a.hi == uint64_t(0) && a.lo == uint64_t(0); }
+
+U128 shl128(U128 a, uint n) {
+    if (n == 0u) return a;
+    if (n >= 128u) return U128(uint64_t(0), uint64_t(0));
+    if (n >= 64u) return U128(a.lo << (n - 64u), uint64_t(0));
+    return U128((a.hi << n) | (a.lo >> (64u - n)), a.lo << n);
+}
+
+U128 shr128(U128 a, uint n) {
+    if (n == 0u) return a;
+    if (n >= 128u) return U128(uint64_t(0), uint64_t(0));
+    if (n >= 64u) return U128(uint64_t(0), a.hi >> (n - 64u));
+    return U128(a.hi >> n, (a.lo >> n) | (a.hi << (64u - n)));
+}
+
+U128 add128(U128 a, U128 b) {
+    uint64_t lo = a.lo + b.lo;
+    return U128(a.hi + b.hi + (lo < a.lo ? uint64_t(1) : uint64_t(0)), lo);
+}
+
+U128 sub128(U128 a, U128 b) {
+    uint64_t lo = a.lo - b.lo;
+    return U128(a.hi - b.hi - (a.lo < b.lo ? uint64_t(1) : uint64_t(0)), lo);
+}
+
+bool ge128(U128 a, U128 b) { return a.hi > b.hi || (a.hi == b.hi && a.lo >= b.lo); }
+
+U128 neg128(U128 a) { return sub128(U128(uint64_t(0), uint64_t(0)), a); }
+
+U128 mul64(uint64_t a, uint64_t b) {
+    uvec2 x = unpackUint2x32(a), y = unpackUint2x32(b);
+    uint64_t p00 = uint64_t(x.x) * uint64_t(y.x);
+    uint64_t p01 = uint64_t(x.x) * uint64_t(y.y);
+    uint64_t p10 = uint64_t(x.y) * uint64_t(y.x);
+    uint64_t p11 = uint64_t(x.y) * uint64_t(y.y);
+    uint64_t mid = (p00 >> 32) + (p01 & uint64_t(0xFFFFFFFFu)) + (p10 & uint64_t(0xFFFFFFFFu));
+    uint64_t lo = (p00 & uint64_t(0xFFFFFFFFu)) | (mid << 32);
+    uint64_t hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32);
+    return U128(hi, lo);
+}
+
+bool bit128(U128 a, uint i) { return i >= 64u ? ((a.hi >> (i - 64u)) & uint64_t(1)) != uint64_t(0) : ((a.lo >> i) & uint64_t(1)) != uint64_t(0); }
+
+// floor(n × 2^k / d) for k ≥ 0, d non-zero: the quotient's low 64 bits, whether it reached 2^40, and whether a remainder is
+// left; n's leading bits that cannot yet hold d are taken at once.
+void divide(U128 n, uint k, U128 d, out uint64_t q, out bool big, out bool rest) {
+    uint nb = bits128(n), db = bits128(d);
+    uint pre = nb > db - 1u ? nb - (db - 1u) : 0u;
+    U128 r = shr128(n, pre);
+    q = uint64_t(0);
+    big = false;
+    for (int j = int(pre + k) - 1; j >= 0; j--) {
+        uint bit = (uint(j) >= k && bit128(n, uint(j) - k)) ? 1u : 0u;
+        r = shl128(r, 1u);
+        r.lo |= uint64_t(bit);
+        q <<= 1;
+        if (ge128(r, d)) {
+            r = sub128(r, d);
+            q |= uint64_t(1);
+        }
+        if ((q >> 40) != uint64_t(0)) big = true;
+    }
+    rest = !is_zero128(r);
+}
+
+// A × B truncated to 128 bits.
+U128 mul128x64(U128 a, uint64_t b) {
+    U128 lo = mul64(a.lo, b);
+    return U128(lo.hi + a.hi * b, lo.lo);
+}
+
+float f128(U128 a) { return float(a.hi) * 18446744073709551616.0 + float(a.lo); }
+
+// floor(A / B) for B non-zero and a quotient below 2^62, estimated in single precision and corrected exactly, so that the
+// answer is the same on every device whatever its division's rounding (Sapphire_Gs.md §5.2); false where the estimate
+// does not settle, for the bit-serial `divide` to answer.
+bool fast_divide(U128 A, U128 B, out uint64_t q, out U128 r) {
+    float fb = f128(B);
+    float fq = f128(A) / fb;
+    q = uint64_t(0);
+    r = A;
+    if (!(fq < 4.0e18)) return false;
+    q = uint64_t(fq);
+    for (int it = 0; it < 8; it++) {
+        U128 d = sub128(A, mul128x64(B, q));
+        if ((d.hi >> 63) != uint64_t(0)) {
+            U128 m = neg128(d);
+            uint64_t dq = uint64_t(f128(m) / fb) + uint64_t(1);
+            if (dq > q) return false;
+            q -= dq;
+        } else if (ge128(d, B)) {
+            uint64_t dq = max(uint64_t(f128(d) / fb), uint64_t(1));
+            q += dq;
+        } else {
+            r = d;
+            return true;
+        }
+    }
+    return false;
+}
+
+// floor(n / d) for d non-zero, from m = floor((2^64 - 1) / d) found once for the record (Sapphire_Gs.md §5.2).
+uint64_t divide_by(uint64_t n, uint64_t d, uint64_t m) {
+    if (d == uint64_t(1)) return n;
+    uint64_t q = mul64(n, m).hi;
+    uint64_t r = n - q * d;
+    if (r >= d) { q += uint64_t(1); r -= d; }
+    if (r >= d) q += uint64_t(1);
+    return q;
+}
+
+// ---- exact.rs: S, T and Q as the numbers they denote ----
+
+struct Float { bool neg; uint m; int e; };
+
+Float float_of(uint b) {
+    uint ex = (b >> 23) & 0xFFu;
+    if (ex == 0u) return Float(false, 0u, 0);
+    return Float((b >> 31) != 0u, (b & 0x7FFFFFu) | 0x800000u, int(ex) - 150);
+}
+
+struct Sum { bool neg; U128 mag; int e; };
+
+// Σ f_i × w_i in 128 bits, each term held to 125 bits; terms that would pass that are taken with their lowest bits dropped
+// (Sapphire_Gs.md §5.2), which the software reference keeps in 768.
+Sum sum_of(Float f0, Float f1, Float f2, int64_t w0, int64_t w1, int64_t w2) {
+    Float f[3] = Float[3](f0, f1, f2);
+    int64_t w[3] = int64_t[3](w0, w1, w2);
+    bool any = false;
+    int ex = 0;
+    for (int i = 0; i < 3; i++) {
+        if (f[i].m != 0u && w[i] != int64_t(0)) {
+            ex = any ? min(ex, f[i].e) : f[i].e;
+            any = true;
+        }
+    }
+    if (!any) return Sum(false, U128(uint64_t(0), uint64_t(0)), 0);
+    uint64_t p[3];
+    int top = 0;
+    for (int i = 0; i < 3; i++) {
+        p[i] = (f[i].m != 0u && w[i] != int64_t(0)) ? uint64_t(f[i].m) * uint64_t(iabs64(w[i])) : uint64_t(0);
+        if (p[i] != uint64_t(0)) top = max(top, int(bits64(p[i])) + f[i].e - ex);
+    }
+    int drop = max(0, top - 125);
+    U128 acc = U128(uint64_t(0), uint64_t(0));
+    for (int i = 0; i < 3; i++) {
+        if (p[i] == uint64_t(0)) continue;
+        int d = f[i].e - ex - drop;
+        U128 t = d >= 0 ? shl128(U128(uint64_t(0), p[i]), uint(d)) : shr128(U128(uint64_t(0), p[i]), uint(-d));
+        acc = (f[i].neg != (w[i] < int64_t(0))) ? sub128(acc, t) : add128(acc, t);
+    }
+    bool neg = (acc.hi >> 63) != uint64_t(0);
+    return Sum(neg, neg ? neg128(acc) : acc, ex + drop);
+}
+
+const int64_t NEAR = int64_t(1) << 40;
+const int64_t FAR = int64_t(1) << 41;
+const uint64_t LOW = (uint64_t(1) << 24) - uint64_t(1);
+
+int64_t place(bool negative, bool small, uint64_t low, bool rest) {
+    if (!negative) return small ? int64_t(low) : FAR + int64_t(low & LOW);
+    uint64_t v = (uint64_t(0) - low) - (rest ? uint64_t(1) : uint64_t(0));
+    if (small && low + (rest ? uint64_t(1) : uint64_t(0)) <= uint64_t(NEAR)) return int64_t(v);
+    return -FAR + int64_t(v & LOW);
+}
+
+// floor(2^scale × num / den) as a coordinate; 0 when either is 0.
+int64_t quotient(Sum num, Sum den, int scale) {
+    if (is_zero128(num.mag) || is_zero128(den.mag)) return int64_t(0);
+    int k = scale + num.e - den.e;
+    uint64_t q;
+    bool big, rest;
+    U128 r;
+    if (k >= 0) {
+        if (bits128(num.mag) + uint(k) <= 127u && fast_divide(shl128(num.mag, uint(k)), den.mag, q, r)) {
+            big = (q >> 40) != uint64_t(0);
+            rest = !is_zero128(r);
+        } else {
+            divide(num.mag, uint(k), den.mag, q, big, rest);
+        }
+    } else {
+        uint s = uint(-k);
+        if (bits128(den.mag) + s > bits128(num.mag)) {
+            q = uint64_t(0);
+            big = false;
+            rest = true;
+        } else if (fast_divide(num.mag, shl128(den.mag, s), q, r)) {
+            big = (q >> 40) != uint64_t(0);
+            rest = !is_zero128(r);
+        } else {
+            divide(num.mag, 0u, shl128(den.mag, s), q, big, rest);
+        }
+    }
+    return place(num.neg != den.neg, !big, q, rest);
+}
+
+// floor(2^bits × log2(w / |den|)), from both taken to 64 significant bits and the ratio's fraction squared once a bit
+// (Sapphire_Gs.md §5.2); false when den is 0.
+bool log2_scaled(uint64_t w, Sum den, uint bits, out int64_t result) {
+    if (is_zero128(den.mag) || w == uint64_t(0)) return false;
+    uint nb = bits64(w), mb = bits128(den.mag);
+    uint64_t W = w << (64u - nb);
+    uint64_t M = mb > 64u ? shr128(den.mag, mb - 64u).lo : den.mag.lo << (64u - mb);
+    int64_t e = int64_t(nb) - int64_t(mb) - int64_t(den.e);
+    uint k = 62u;
+    if (W < M) {
+        e -= int64_t(1);
+        k = 63u;
+    }
+    uint64_t r;
+    bool big, rest;
+    U128 rem;
+    if (!fast_divide(shl128(U128(uint64_t(0), W), k), U128(uint64_t(0), M), r, rem)) divide(U128(uint64_t(0), W), k, U128(uint64_t(0), M), r, big, rest);
+    int64_t frac = int64_t(0);
+    for (uint b = 0u; b < bits; b++) {
+        U128 sq = shr128(mul64(r, r), 62u);
+        r = sq.lo;
+        frac <<= 1;
+        if ((r >> 63) != uint64_t(0)) {
+            frac |= int64_t(1);
+            r >>= 1;
+        }
+    }
+    result = (e << bits) + frac;
+    return true;
+}
+
+int lod_of(bool ok, int64_t g, int k) {
+    if (!ok) return 0x3FFFFFFF;
+    return int(clamp(g + int64_t(k), int64_t(-0x40000000), int64_t(0x3FFFFFFF)));
+}
+
+// ---- texture.rs: the sampler, its levels and filters, the texture function and fog ----
+
+uint64_t wide(uint lo, uint hi) { return uint64_t(lo) | (uint64_t(hi) << 32); }
+uint fld(uint64_t v, uint lo, uint n) { return uint((v >> lo) & ((uint64_t(1) << n) - uint64_t(1))); }
+
+uint S_psm;
+bool S_valid;
+uint S_bp0, S_bw0;
+uint64_t S_mip1, S_mip2;
+uint base_bp(uint n) { return n == 0u ? S_bp0 : fld(n < 4u ? S_mip1 : S_mip2, 20u * ((n - 1u) % 3u), 14u); }
+uint base_bw(uint n) { return n == 0u ? S_bw0 : fld(n < 4u ? S_mip1 : S_mip2, 20u * ((n - 1u) % 3u) + 14u, 6u); }
+uint S_mode[2];
+uint S_min[2];
+uint S_max[2];
+uint S_log2[2];
+bool S_rgba;
+uint S_tfx;
+bool S_cpsm32;
+uint S_csa;
+uint S_ta0, S_ta1;
+bool S_aem, S_lcm, S_mmag;
+uint S_mxl, S_mmin, S_l;
+int S_k;
+uint S_clut;
+
+void load_sampler(uint clut_slot) {
+    uint64_t tex0 = wide(env(14u), env(15u));
+    uint64_t tex1 = wide(env(16u), env(17u));
+    uint64_t clmp = wide(env(18u), env(19u));
+    uint64_t mip1 = wide(env(20u), env(21u));
+    uint64_t mip2 = wide(env(22u), env(23u));
+    uint64_t texa = wide(env(24u), env(25u));
+    S_psm = fld(tex0, 20u, 6u);
+    S_valid = psm_valid(S_psm);
+    S_bp0 = fld(tex0, 0u, 14u);
+    S_bw0 = fld(tex0, 14u, 6u);
+    S_mip1 = mip1;
+    S_mip2 = mip2;
+    S_log2[0] = min(fld(tex0, 26u, 4u), 10u);
+    S_log2[1] = min(fld(tex0, 30u, 4u), 10u);
+    S_mode[0] = fld(clmp, 0u, 2u);
+    S_mode[1] = fld(clmp, 2u, 2u);
+    S_min[0] = fld(clmp, 4u, 10u);
+    S_max[0] = fld(clmp, 14u, 10u);
+    S_min[1] = fld(clmp, 24u, 10u);
+    S_max[1] = fld(clmp, 34u, 10u);
+    S_rgba = fld(tex0, 34u, 1u) != 0u;
+    S_tfx = fld(tex0, 35u, 2u);
+    uint cpsm = fld(tex0, 51u, 4u);
+    S_cpsm32 = !(cpsm == 0x2u || cpsm == 0xAu);
+    S_csa = fld(tex0, 56u, 5u) * 16u;
+    S_ta0 = fld(texa, 0u, 8u);
+    S_ta1 = fld(texa, 32u, 8u);
+    S_aem = fld(texa, 15u, 1u) != 0u;
+    S_lcm = fld(tex1, 0u, 1u) != 0u;
+    S_mxl = min(fld(tex1, 2u, 3u), 6u);
+    S_mmag = fld(tex1, 5u, 1u) != 0u;
+    S_mmin = fld(tex1, 6u, 3u);
+    S_l = fld(tex1, 19u, 2u);
+    S_k = int(fld(tex1, 32u, 12u) << 20) >> 20;
+    S_clut = clut_slot * CLUT_WORDS;
+}
+
+uint wrap(uint axis, int64_t i, uint n) {
+    int64_t size = max(int64_t(1) << int64_t(S_log2[axis] > n ? S_log2[axis] - n : 0u), int64_t(1));
+    int64_t mn = int64_t(S_min[axis] >> n), mx = int64_t(S_max[axis] >> n);
+    uint mode = S_mode[axis];
+    if (mode == 0u) return uint(i & (size - int64_t(1)));
+    if (mode == 1u) return uint(clamp(i, int64_t(0), size - int64_t(1)));
+    if (mode == 2u) return uint(min(max(i, mn), mx));
+    return uint((i & mn) | mx);
+}
+
+uint clut16(uint i) { return (cluts[S_clut + (i >> 1)] >> (16u * (i & 1u))) & 0xFFFFu; }
+
+uvec4 expand16(uint v) {
+    uint a = (v >> 15) != 0u ? S_ta1 : ((S_aem && (v & 0x7FFFu) == 0u) ? 0u : S_ta0);
+    return uvec4((v & 31u) << 3, ((v >> 5) & 31u) << 3, ((v >> 10) & 31u) << 3, a);
+}
+
+uvec4 texel(uint n, uint x, uint y) {
+    if (!S_valid) return uvec4(0u);
+    uint raw = read_texel(S_psm, base_bp(n), base_bw(n), x, y);
+    uint p = S_psm;
+    if (p == T8 || p == T8H || p == T4 || p == T4HL || p == T4HH) {
+        if (S_cpsm32) {
+            uint k = (S_csa + raw) & 255u;
+            uint e = clut16(k) | clut16(256u + k) << 16;
+            return uvec4(e & 0xFFu, (e >> 8) & 0xFFu, (e >> 16) & 0xFFu, e >> 24);
+        }
+        return expand16(clut16((S_csa + raw) & 511u));
+    }
+    if (psm_bits(p) == 16u) return expand16(raw);
+    uint a = (p == CT24 || p == Z24) ? ((S_aem && (raw & 0xFFFFFFu) == 0u) ? 0u : S_ta0) : raw >> 24;
+    return uvec4(raw & 0xFFu, (raw >> 8) & 0xFFu, (raw >> 16) & 0xFFu, a);
+}
+
+uvec4 at_texel(uint n, int64_t iu, int64_t iv) { return texel(n, wrap(0u, iu, n), wrap(1u, iv, n)); }
+
+uvec4 level(uint n, int64_t u, int64_t v, bool linear) {
+    u >>= int64_t(n);
+    v >>= int64_t(n);
+    if (!linear) return at_texel(n, u >> 4, v >> 4);
+    u -= int64_t(8);
+    v -= int64_t(8);
+    int64_t iu = u >> 4, iv = v >> 4;
+    uint a = uint(u & int64_t(15)), b = uint(v & int64_t(15));
+    uvec4 t0 = at_texel(n, iu, iv), t1 = at_texel(n, iu + int64_t(1), iv);
+    uvec4 t2 = at_texel(n, iu, iv + int64_t(1)), t3 = at_texel(n, iu + int64_t(1), iv + int64_t(1));
+    return (t0 * ((16u - a) * (16u - b)) + t1 * (a * (16u - b)) + t2 * ((16u - a) * b) + t3 * (a * b)) >> 8;
+}
+
+uvec4 sample_texture(int64_t u, int64_t v, int lod) {
+    if (lod <= 0) return level(0u, u, v, S_mmag);
+    if (S_mmin == 2u || S_mmin == 4u) return level(min(uint((lod + 8) >> 4), S_mxl), u, v, S_mmin == 4u);
+    if (S_mmin == 3u || S_mmin == 5u) {
+        uint m = min(uint(lod >> 4), S_mxl), f = uint(lod & 15);
+        uvec4 lo = level(m, u, v, S_mmin == 5u), hi = level(min(m + 1u, S_mxl), u, v, S_mmin == 5u);
+        return (lo * (16u - f) + hi * f) >> 4;
+    }
+    return level(0u, u, v, (S_mmin & 1u) == 1u);
+}
+
+uvec4 tex_function(uvec4 t, uvec4 f) {
+    uvec3 rgb;
+    if (S_tfx == 0u) rgb = min((t.rgb * f.rgb) >> 7, uvec3(255u));
+    else if (S_tfx == 1u) rgb = t.rgb;
+    else rgb = min(((t.rgb * f.rgb) >> 7) + uvec3(f.a), uvec3(255u));
+    uint a;
+    if (!S_rgba) a = f.a;
+    else if (S_tfx == 0u) a = min((t.a * f.a) >> 7, 255u);
+    else if (S_tfx == 2u) a = min(t.a + f.a, 255u);
+    else a = t.a;
+    return uvec4(rgb, a);
+}
+
+// ---- the record's primitive: coverage, interpolation and texture coordinates at this pixel ----
+
+int vx(int k) { return int(srec[R][4 + 9 * k]); }
+int vy(int k) { return int(srec[R][5 + 9 * k]); }
+uint vz(int k) { return srec[R][6 + 9 * k]; }
+uint vrgba(int k) { return srec[R][7 + 9 * k]; }
+uint vq(int k) { return srec[R][8 + 9 * k]; }
+uint vs(int k) { return srec[R][9 + 9 * k]; }
+uint vt(int k) { return srec[R][10 + 9 * k]; }
+uint vuv(int k) { return srec[R][11 + 9 * k]; }
+uint vf(int k) { return srec[R][12 + 9 * k]; }
+
+uvec4 rgba_of(uint c) { return uvec4(c & 0xFFu, (c >> 8) & 0xFFu, (c >> 16) & 0xFFu, c >> 24); }
+
+int nearest(int v) { return (v + 8) >> 4; }
+
+int64_t edge(int p, int q, int64_t x, int64_t y) {
+    return int64_t(vx(q) - vx(p)) * (y - int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (x - int64_t(vx(p)));
+}
+
+int64_t top_left(int p, int q) {
+    int dx = vx(q) - vx(p), dy = vy(q) - vy(p);
+    return (dy < 0 || (dy == 0 && dx > 0)) ? int64_t(1) : int64_t(0);
+}
+
+// The triangle's AA1 coverage (raster.rs's `coverage`), in doubled sixteenths.
+uint tri_coverage(int a, int b, int c, int64_t b0, int64_t b1, int64_t b2, int x, int y) {
+    int ep[3] = int[3](b, c, a);
+    int eq[3] = int[3](c, a, b);
+    int64_t bias[3] = int64_t[3](b0, b1, b2);
+    int64_t x0 = int64_t(2) * (int64_t(16) * int64_t(x) - int64_t(8)), y0 = int64_t(2) * (int64_t(16) * int64_t(y) - int64_t(8));
+    bool full = true;
+    for (int k = 0; k < 4 && full; k++) {
+        int64_t px = x0 + ((k & 1) != 0 ? int64_t(32) : int64_t(0)), py = y0 + ((k & 2) != 0 ? int64_t(32) : int64_t(0));
+        for (int i = 0; i < 3; i++) {
+            int p = ep[i], q = eq[i];
+            int64_t v = int64_t(vx(q) - vx(p)) * (py - int64_t(2) * int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (px - int64_t(2) * int64_t(vx(p)));
+            if (v <= int64_t(0)) full = false;
+        }
+    }
+    if (full) return 0x80u;
+    uint n = 0u;
+    for (int j = 0; j < 16; j++) {
+        for (int k = 0; k < 16; k++) {
+            int64_t px = x0 + int64_t(2 * k + 1), py = y0 + int64_t(2 * j + 1);
+            bool inside = true;
+            for (int i = 0; i < 3; i++) {
+                int p = ep[i], q = eq[i];
+                int64_t v = int64_t(vx(q) - vx(p)) * (py - int64_t(2) * int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (px - int64_t(2) * int64_t(vx(p)));
+                if (v + bias[i] <= int64_t(0)) inside = false;
+            }
+            if (inside) n++;
+        }
+    }
+    return n / 2u;
+}
+
+bool in_diamond(int u, int v) {
+    int cu = 16 * nearest(u), cv = 16 * nearest(v);
+    return abs(u - cu) + abs(v - cv) < 8 || (u == cu && v == cv - 8);
+}
+
+// What the pixel takes from its primitive.
+bool P_cov;
+uint P_z;
+uvec4 P_rgba;
+uint P_aa;
+uint P_f;
+int64_t P_wu[3], P_wv[3];
+int P_tv[3];
+uint P_tq[3];
+int P_last;
+
+
+void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
+    P_cov = false;
+    P_aa = 0x80u;
+    if (kind == 0u) {
+        if (x != nearest(vx(0)) || y != nearest(vy(0))) return;
+        P_cov = true;
+        P_z = vz(0);
+        P_rgba = rgba_of(vrgba(0));
+        P_f = vf(0);
+        P_wu = int64_t[3](int64_t(1), int64_t(0), int64_t(0));
+        P_wv = P_wu;
+        P_tv = int[3](0, 0, 0);
+        P_tq = uint[3](vq(0), vq(0), vq(0));
+        P_last = 0;
+    } else if (kind == 3u) {
+        int ax = vx(0), bx = vx(1), ay = vy(0), by = vy(1);
+        int x0 = (min(ax, bx) + 15) >> 4, x1 = ((max(ax, bx) + 15) >> 4) - 1;
+        int y0 = (min(ay, by) + 15) >> 4, y1 = ((max(ay, by) + 15) >> 4) - 1;
+        if (x < x0 || x > x1 || y < y0 || y > y1) return;
+        P_cov = true;
+        P_z = vz(1);
+        P_rgba = rgba_of(vrgba(1));
+        P_f = vf(1);
+        int64_t sx = int64_t(sign(bx - ax)), sy = int64_t(sign(by - ay));
+        P_wu = int64_t[3](int64_t(bx - 16 * x) * sx, int64_t(16 * x - ax) * sx, int64_t(0));
+        P_wv = int64_t[3](int64_t(by - 16 * y) * sy, int64_t(16 * y - ay) * sy, int64_t(0));
+        P_tv = int[3](0, 1, 1);
+        P_tq = uint[3](vq(1), vq(1), vq(1));
+        P_last = 1;
+    } else if (kind == 2u) {
+        int a = 0, b = 1, c = 2;
+        int64_t area = edge(a, b, int64_t(vx(c)), int64_t(vy(c)));
+        if (area == int64_t(0)) return;
+        if (area < int64_t(0)) {
+            b = 2;
+            c = 1;
+            area = -area;
+        }
+        int64_t px = int64_t(16 * x), py = int64_t(16 * y);
+        int64_t w0 = edge(b, c, px, py), w1 = edge(c, a, px, py), w2 = edge(a, b, px, py);
+        int64_t b0 = top_left(b, c), b1 = top_left(c, a), b2 = top_left(a, b);
+        if (w0 + b0 <= int64_t(0) || w1 + b1 <= int64_t(0) || w2 + b2 <= int64_t(0)) return;
+        P_cov = true;
+        U128 zs = add128(add128(mul64(uint64_t(vz(a)), uint64_t(w0)), mul64(uint64_t(vz(b)), uint64_t(w1))), mul64(uint64_t(vz(c)), uint64_t(w2)));
+        uint64_t magic = uint64_t(srec_magic[R].x) | (uint64_t(srec_magic[R].y) << 32);
+        if (zs.hi == uint64_t(0)) {
+            P_z = uint(divide_by(zs.lo, uint64_t(area), magic));
+        } else {
+            uint64_t q;
+            bool big, rest;
+            divide(zs, 0u, U128(uint64_t(0), uint64_t(area)), q, big, rest);
+            P_z = uint(q);
+        }
+        if (gouraud) {
+            uvec4 ca = rgba_of(vrgba(a)), cb = rgba_of(vrgba(b)), cc = rgba_of(vrgba(c));
+            for (int i = 0; i < 4; i++) P_rgba[i] = uint(divide_by(uint64_t(int64_t(ca[i]) * w0 + int64_t(cb[i]) * w1 + int64_t(cc[i]) * w2), uint64_t(area), magic));
+        } else {
+            P_rgba = rgba_of(vrgba(2));
+        }
+        P_f = uint(divide_by(uint64_t(int64_t(vf(a)) * w0 + int64_t(vf(b)) * w1 + int64_t(vf(c)) * w2), uint64_t(area), magic));
+        P_wu = int64_t[3](w0, w1, w2);
+        P_wv = P_wu;
+        P_tv = int[3](a, b, c);
+        P_tq = uint[3](vq(a), vq(b), vq(c));
+        P_last = 2;
+        if (antialias) P_aa = tri_coverage(a, b, c, b0, b1, b2, x, y);
+    } else if (kind == 1u) {
+        int dx = vx(1) - vx(0), dy = vy(1) - vy(0);
+        if (dx == 0 && dy == 0) return;
+        bool xmajor = abs(dx) >= abs(dy);
+        int au = xmajor ? vx(0) : vy(0), av = xmajor ? vy(0) : vx(0);
+        int bu = xmajor ? vx(1) : vy(1), bv = xmajor ? vy(1) : vx(1);
+        int s = sign(bu - au);
+        int64_t du = int64_t((bu - au) * s), dv = int64_t((bv - av) * s);
+        int first = in_diamond(au, av) ? nearest(au) : (s > 0 ? (au + 15) >> 4 : au >> 4);
+        int last = in_diamond(bu, bv) ? nearest(bu) - s : (s > 0 ? bu >> 4 : (bu + 15) >> 4);
+        int c = xmajor ? x : y, m = xmajor ? y : x;
+        if ((last - c) * s < 0 || (c - first) * s < 0) return;
+        int64_t t = int64_t(16 * c - au) * int64_t(s);
+        int64_t num = int64_t(av) * du + int64_t(16 * c - au) * dv;
+        int r = int(floor_div(num + int64_t(8) * du, int64_t(16) * du));
+        if (r != m) return;
+        P_cov = true;
+        P_z = uint(clamp(floor_div(int64_t(vz(0)) * (du - t) + int64_t(vz(1)) * t, du), int64_t(0), int64_t(0xFFFFFFFFu)));
+        uvec4 ca = rgba_of(vrgba(0)), cb = rgba_of(vrgba(1));
+        if (gouraud) {
+            for (int i = 0; i < 4; i++) P_rgba[i] = uint(clamp(floor_div(int64_t(ca[i]) * (du - t) + int64_t(cb[i]) * t, du), int64_t(0), int64_t(255)));
+        } else {
+            P_rgba = cb;
+        }
+        P_f = uint(clamp(floor_div(int64_t(vf(0)) * (du - t) + int64_t(vf(1)) * t, du), int64_t(0), int64_t(255)));
+        P_wu = int64_t[3](du - t, t, int64_t(0));
+        P_wv = P_wu;
+        P_tv = int[3](0, 1, 1);
+        P_tq = uint[3](vq(0), vq(1), vq(1));
+        P_last = 1;
+        if (antialias) P_aa = uint(clamp(floor_div((int64_t(16) * du - iabs64(num - int64_t(16) * int64_t(r) * du)) * int64_t(8), du), int64_t(0), int64_t(0x7F)));
+    }
+}
+
+// The texture coordinates in sixteenths of a texel and the LOD at this pixel (texture.rs's `Setup::at`).
+void coordinates(bool uv, out int64_t u, out int64_t v, out int lod) {
+    int64_t tu = P_wu[0] + P_wu[1] + P_wu[2], tv = P_wv[0] + P_wv[1] + P_wv[2];
+    int a = P_tv[0], b = P_tv[1], c = P_tv[2];
+    Float q0 = float_of(P_tq[0]), q1 = float_of(P_tq[1]), q2 = float_of(P_tq[2]);
+    bool fixed_lod = S_lcm || uv;
+    int fixed_lod_value = S_k;
+    if (!S_lcm && uv) {
+        Float fq = float_of(vq(P_last));
+        int64_t g;
+        bool ok = log2_scaled(uint64_t(1), sum_of(fq, fq, fq, int64_t(1), int64_t(0), int64_t(0)), S_l + 4u, g);
+        fixed_lod_value = lod_of(ok, g, S_k);
+    }
+    if (uv) {
+        int64_t u0 = int64_t(vuv(a) & 0x3FFFu), u1 = int64_t(vuv(b) & 0x3FFFu), u2 = int64_t(vuv(c) & 0x3FFFu);
+        int64_t v0 = int64_t((vuv(a) >> 16) & 0x3FFFu), v1 = int64_t((vuv(b) >> 16) & 0x3FFFu), v2 = int64_t((vuv(c) >> 16) & 0x3FFFu);
+        u = floor_div(u0 * P_wu[0] + u1 * P_wu[1] + u2 * P_wu[2], tu);
+        v = floor_div(v0 * P_wv[0] + v1 * P_wv[1] + v2 * P_wv[2], tv);
+        lod = fixed_lod_value;
+        return;
+    }
+    Sum qu = sum_of(q0, q1, q2, P_wu[0], P_wu[1], P_wu[2]);
+    bool same = P_wu[0] == P_wv[0] && P_wu[1] == P_wv[1] && P_wu[2] == P_wv[2];
+    Sum qv = same ? qu : sum_of(q0, q1, q2, P_wv[0], P_wv[1], P_wv[2]);
+    Sum su = sum_of(float_of(vs(a)), float_of(vs(b)), float_of(vs(c)), P_wu[0], P_wu[1], P_wu[2]);
+    Sum sv = sum_of(float_of(vt(a)), float_of(vt(b)), float_of(vt(c)), P_wv[0], P_wv[1], P_wv[2]);
+    u = quotient(su, qu, int(S_log2[0]) + 4);
+    v = quotient(sv, qv, int(S_log2[1]) + 4);
+    if (fixed_lod) {
+        lod = fixed_lod_value;
+    } else if ((S_mmin < 2u || S_mmin > 5u) && ((S_mmin & 1u) == 1u) == S_mmag) {
+        lod = 0;
+    } else {
+        int64_t g;
+        bool ok = (debug & 16u) == 0u && log2_scaled(uint64_t(tu), qu, S_l + 4u, g);
+        lod = lod_of(ok, g, S_k);
+    }
+}
+
+// ---- pixel.rs: the pixel pipeline ----
+
+uint pack16(uint c) { return ((c >> 3) & 0x1Fu) | ((c >> 11) & 0x1Fu) << 5 | ((c >> 19) & 0x1Fu) << 10 | (c >> 31) << 15; }
+
+uint z_max(uint p) { uint b = psm_bits(p); return b == 32u ? 0xFFFFFFFFu : (1u << b) - 1u; }
+
+bool alpha_passes(uint atst, uint a, uint aref) {
+    if (atst == 0u) return false;
+    if (atst == 1u) return true;
+    if (atst == 2u) return a < aref;
+    if (atst == 3u) return a <= aref;
+    if (atst == 4u) return a == aref;
+    if (atst == 5u) return a >= aref;
+    if (atst == 6u) return a > aref;
+    return a != aref;
+}
+
+int pick(uint sel, int s, int d) { return sel == 0u ? s : (sel == 1u ? d : 0); }
+
+void draw_record(int x, int y) {
+    uint kind = srec[R][0];
+    uint flags = env(8u);
+    bool gouraud = (flags & 1u) != 0u, textured = (flags & 2u) != 0u, fogged = (flags & 4u) != 0u, abe = (flags & 8u) != 0u;
+    bool uvmode = (flags & 32u) != 0u, pabe = (flags & 256u) != 0u, dthe = (flags & 512u) != 0u, colclamp = (flags & 1024u) != 0u;
+    bool fba = (flags & 2048u) != 0u, antialias = (flags & 16384u) != 0u;
+    uint scanmsk = (flags >> 12) & 3u;
+    // The scissoring test and SCANMSK first, as the software rasteriser's pixels meet them.
+    uint s0 = env(5u), s1 = env(6u);
+    if (x < int(s0 & 0xFFFFu) || x > int(s0 >> 16) || y < int(s1 & 0xFFFFu) || y > int(s1 >> 16)) return;
+    if ((scanmsk == 2u && (y & 1) == 0) || (scanmsk == 3u && (y & 1) == 1)) return;
+    uint fw = env(0u);
+    if ((fw & 0x40u) == 0u) return;
+    primitive(kind, gouraud, antialias, x, y);
+    if (!P_cov) return;
+    if ((debug & 2u) != 0u) { mem[(uint(y) * 2048u + uint(x)) & WORDS_MASK] = P_z; return; }
+    if ((debug & 1u) != 0u) textured = false;
+    uint fpsm = fw & 0x3Fu, fbw = (fw >> 8) & 0x3Fu, fbp = env(1u), fbmsk = env(2u);
+    uint zw = env(3u), zbp = env(4u);
+    bool zvalid = (zw & 0x40u) != 0u, zmasked = (zw & 0x100u) != 0u;
+    uint zpsm = zw & 0x3Fu;
+    uint test = env(7u);
+    uvec4 rgba = P_rgba;
+    if (textured || fogged) {
+        if (textured) {
+            load_sampler(srec[R][2]);
+            S_snapshot = srec[R][3] != 0u;
+            int64_t u, v;
+            int lod;
+            if ((debug & 8u) != 0u) { u = int64_t(P_wu[0] & int64_t(1023)); v = int64_t(P_wv[1] & int64_t(1023)); lod = 0; }
+            else coordinates(uvmode, u, v, lod);
+            rgba = tex_function(sample_texture(u, v, lod), rgba);
+        }
+        if (fogged) {
+            uint fc = env(13u), f = P_f;
+            uvec3 col = uvec3(fc & 0xFFu, (fc >> 8) & 0xFFu, (fc >> 16) & 0xFFu);
+            rgba.rgb = (uvec3(f) * rgba.rgb + uvec3(256u - f) * col) >> 8;
+        }
+    }
+    bool z_ok = true;
+    if (antialias) {
+        if (!abe || rgba.a == 0x80u) rgba.a = P_aa;
+        z_ok = P_aa >= 0x80u;
+    }
+    uint ux = uint(x), uy = uint(y);
+    bool rgb_ok = true, a_ok = true;
+    if ((test & 1u) != 0u && !alpha_passes((test >> 1) & 7u, rgba.a, (test >> 4) & 0xFFu)) {
+        uint afail = (test >> 12) & 3u;
+        if (afail == 0u) return;
+        if (afail == 1u) z_ok = false;
+        else if (afail == 2u) { rgb_ok = false; a_ok = false; }
+        else { z_ok = false; a_ok = psm_bits(fpsm) != 32u; }
+    }
+    bool have_old = false;
+    uint old = 0u;
+    if (((test >> 14) & 1u) != 0u) {
+        uint d = surface_read(fpsm, fbp, fbw, ux, uy);
+        uint fb = psm_bits(fpsm);
+        if (fb != 24u) {
+            uint bit = fb == 16u ? (d >> 15) & 1u : d >> 31;
+            if (bit != ((test >> 15) & 1u)) return;
+        }
+        old = d;
+        have_old = true;
+    }
+    bool z_write = false;
+    uint zval = 0u;
+    if (((test >> 16) & 1u) != 0u && zvalid) {
+        uint z = min(P_z, z_max(zpsm));
+        uint ztst = (test >> 17) & 3u;
+        bool pass = ztst == 1u || (ztst == 2u && z >= surface_read(zpsm, zbp, fbw, ux, uy)) || (ztst == 3u && z > surface_read(zpsm, zbp, fbw, ux, uy));
+        if (!pass) return;
+        if (z_ok && !zmasked) {
+            z_write = true;
+            zval = z;
+        }
+    }
+    if (rgb_ok || a_ok) {
+        bool blending = (abe || antialias) && (!pabe || (rgba.a & 0x80u) != 0u);
+        uint keep = fbmsk | (a_ok ? 0u : 0xFF000000u);
+        if (!have_old && (blending || keep != 0u)) old = surface_read(fpsm, fbp, fbw, ux, uy);
+        uint fb = psm_bits(fpsm);
+        ivec3 sc = ivec3(rgba.rgb);
+        ivec3 c = sc;
+        if (blending) {
+            ivec3 d;
+            int ad;
+            if (fb == 16u) {
+                d = ivec3(int((old & 31u) << 3), int(((old >> 5) & 31u) << 3), int(((old >> 10) & 31u) << 3));
+                ad = ((old >> 15) & 1u) != 0u ? 0x80 : 0;
+            } else {
+                d = ivec3(int(old & 0xFFu), int((old >> 8) & 0xFFu), int((old >> 16) & 0xFFu));
+                ad = fb == 24u ? 0x80 : int(old >> 24);
+            }
+            uint alpha = env(9u);
+            uint csel = (alpha >> 4) & 3u;
+            int cv = csel == 0u ? int(rgba.a) : (csel == 1u ? ad : int(env(10u) & 0xFFu));
+            for (int i = 0; i < 3; i++) c[i] = (((pick(alpha & 3u, sc[i], d[i]) - pick((alpha >> 2) & 3u, sc[i], d[i])) * cv) >> 7) + pick((alpha >> 6) & 3u, sc[i], d[i]);
+        }
+        if (dthe && fb == 16u) {
+            uint64_t dimx = wide(env(11u), env(12u));
+            int dm = (int(uint((dimx >> (16u * (uy & 3u) + 4u * (ux & 3u))) & uint64_t(7))) << 29) >> 29;
+            c += ivec3(dm);
+        }
+        uvec3 cc = colclamp ? uvec3(clamp(c, ivec3(0), ivec3(255))) : uvec3(c) & uvec3(0xFFu);
+        uint a = rgba.a | (fba ? 0x80u : 0u);
+        uint col = cc.r | cc.g << 8 | cc.b << 16 | a << 24;
+        uint value = col;
+        if (fb == 16u) {
+            value = pack16(col);
+            keep = pack16(keep);
+        }
+        surface_write(fpsm, fbp, fbw, ux, uy, (old & keep) | (value & ~keep));
+    }
+    if (z_write) surface_write(zpsm, zbp, fbw, ux, uy, zval);
+}
+
+void main() {
+    uvec4 tile = tiles[first_tile + gl_WorkGroupID.x];
+    int x = int(tile.x * 16u + gl_LocalInvocationID.x);
+    int y = int(tile.y * 8u + gl_LocalInvocationID.y);
+    uint t = gl_LocalInvocationIndex;
+    C_live[0] = false;
+    C_live[1] = false;
+    C_dirty[0] = false;
+    C_dirty[1] = false;
+    C_next = 0u;
+    for (uint at = tile.z; at < tile.z + tile.w; at += CHUNK) {
+        uint n = min(CHUNK, tile.z + tile.w - at);
+        barrier();
+        for (uint j = t; j < n * 32u; j += 128u) srec[j >> 5][j & 31u] = rec[entries[at + (j >> 5)] * RECORD_WORDS + (j & 31u)];
+        barrier();
+        for (uint j = t; j < n * 32u; j += 128u) senv[j >> 5][j & 31u] = envs[srec[j >> 5][1] * ENV_WORDS + (j & 31u)];
+        if (t < n && srec[t][0] == 2u) {
+            R = t;
+            int64_t area = iabs64(edge(0, 1, int64_t(vx(2)), int64_t(vy(2))));
+            uint64_t m = area > int64_t(1) ? uint64_t(0xFFFFFFFFFFFFFFFFul) / uint64_t(area) : uint64_t(0);
+            srec_magic[t] = unpackUint2x32(m);
+        }
+        barrier();
+        if ((debug & 4u) == 0u) for (R = 0u; R < n; R++) draw_record(x, y);
+    }
+    cache_store(0u);
+    cache_store(1u);
+}

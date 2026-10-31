@@ -1253,3 +1253,26 @@ folded from rest, events land at block ends, nothing is rolled back, and Craneli
 stand as they were described; `emusen-jit` 1.3 (`EmuSen_Jit.md` §9) holds the code memory. The sections above are the record of how
 it got here.
 
+## 18. `emusen-assembler` 1.3: the `Vector` capability (2026-10-31)
+
+The 128-bit lane operations §3.3 promised arrive as an optional trait beside `Assembler`, `Vector`, so that a backend without vectors
+still serves the integer tier and a guest asks for the capability by its type. Registers are `Vreg`, scratch to the code that uses them:
+every one is the caller's under the System V convention, so nothing is held in one across a helper's call.
+
+- `vop(op, d, a, b)`: `d = a op b` on lanes of 8, 16, 32 or 64 bits, wrapping or saturating, signed and unsigned minimum and maximum,
+  equal and greater-than, the four logical operations with `!a & b`, interleaving of the low or high halves, packing with saturation,
+  the halfword and word multiplies (low, signed high, even words to 64 bits, adjacent pairs added), a byte shuffle, and the five float
+  operations add, subtract, multiply, minimum and maximum on 32-bit lanes.
+- `vunary` (absolute values), `vshift` by a constant, `vshuffle` of words or of either half's halfwords by a constant order,
+  `vblend_h` by a constant mask, `vmov`, `vload` and `vstore` of 16 unaligned bytes, `vload_data` from the block's data, `vjoin` and
+  `vsplit` between a vector and two general registers, and `fpcr_load` and `fpcr_store` of the float control register.
+
+**On x86-64** every form is AVX's three-operand VEX encoding at 128 bits, from `cranelift-assembler-x64`, so no form needs the move a
+two-operand SSE encoding would; MXCSR's LDMXCSR and STMXCSR, which that crate does not name, are encoded by hand. `x64::vector_supported()`
+checks AVX and BMI2 at run time; a guest falls back to its calls where they are missing. The VU stage's kernel (`float_rz`, under MXCSR's
+rounding towards zero with DAZ and FTZ) is the intended second user: the float forms and the control register are there for it.
+
+**Graded** (`tests/vector.rs`) as §7.1 grades the integer forms: every operation in random registers, aliasing included, against a lane
+model on values at each lane width's limits, 200 rounds an operation; the float forms on ordinary values under the default control word,
+where the host's arithmetic is the model's; shifts past the lane's width; the control register's rounding field written and read back.
+

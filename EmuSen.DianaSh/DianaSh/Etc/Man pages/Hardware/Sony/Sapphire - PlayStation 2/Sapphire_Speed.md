@@ -2870,3 +2870,113 @@ was given only as the bench's and the runner's argument.
 2. **[decision] Channels 8 and 9 ahead of the board** (loss 2). *Recommended*: keep them; if a program is found that
    reads a transfer's destination before its end, move them back at no cost in instructions.
 3. **[routine] The round.** *Recommended*: keep 64; 3,072 and 4,800 run and measured no gain.
+
+## 68. The EE's calls in place: lanewise MMI on the host's vectors, CACHE in blocks, registers read directly (2026-10-31)
+
+*The stage's gate, set by the tester: the EE's path on the arena from 274 M host instructions a field (§66) to at most 100 M,
+cycles falling with it, and SSE or AVX forms in `emusen-assembler` for native MMI and the VU stage. Both references are
+under 65 M. **The gate is not met**: about 256 M on §67's base to about 206 M, by samples (§68.4).*
+
+### 68.1 The census (measured 2026-10-31, the arena's fields 9,000 to 9,160 on §66's build)
+
+A scratch build (not committed) counted every slow path, call, refused entry and way out of compiled code. A field's:
+
+| What | A field | |
+| --- | --- | --- |
+| A block's end at the deadline | 132,000 | the board's events; §67 took them to about 28,000 entries a field |
+| VU0's register operations, light | 136,000 | the call's cost the EE's, the operation's the VU's |
+| Loads of D1_CHCR at 0x10009000 | 68,000 | one loop at 0010FFF0h, below |
+| QMTC2 while VU0 runs | 55,000 | through the slow path, which brings VU0 along |
+| MMI calls | 200,000 | PMADDH 27,000; PPACH 16,500; PSRAW 14,000; PADDH 11,300; PPACB 11,000; PMINH 10,000; ... |
+| COP1 calls | 42,000 | MUL.S, DIV.S, SUB.S, C.LT.S, ADD.S, the conversions |
+| CACHE, refused | 5,100 | each an interpreted step through the dispatcher |
+| MFC0, MTC0, refused | 2,700 | |
+
+The D1_CHCR loads are one loop waiting for VIF1's channel with a count: `sltu v0, a0, v0; bne v0, zero, out; addiu a1, a1, 1;
+lw v0, 0(v1); andi v0, v0, 0x100; bne v0, zero, top; daddu v0, a1, zero`. It is two blocks, it carries the count from turn to
+turn, so §66.5's waits do not take it, and its load's page is a unit's, so each turn left by the slow path's whole operation:
+the core's dirty values stored, the TLB walked, the interpreter's `lw`, the values put back. A try at letting blocks run on across
+a 4 KiB page's end (the load stood at 0010FFFCh) was built and dropped: the loop's two blocks are two because of its branches, not
+the page.
+
+### 68.2 What was built
+
+- **`emusen-assembler` 1.3, the `Vector` capability** (EmuSen_Recompiler.md §18): 128-bit lanewise integer and float operations
+  on AVX's three-operand forms, shifts, shuffles, blends, joins and splits with the general registers, data loads and MXCSR,
+  graded against lane models in every register. Built for the VU stage to reuse; vector registers are scratch, never held across
+  a helper.
+- **52 MMI in place** (`lower::lanewise`): the adds and subtracts wrapping and saturating in bytes and halfwords, PADSBH, the
+  halfword and word maxima and minima, the compares, PABSH and PABSW (the most negative lane saturating, one subtracted where the
+  top bit stays), the six shifts, PPACB, PPACH and PPACW (lanes cut to their low halves and packed, which cannot saturate), the
+  word and halfword permutations, PINTH, PINTEH, PMFHL.LW, .UW, .LH and .SH, and PMULTH, PMADDH and PMSUBH with HI and LO. Each
+  operand's two halves are joined into a vector from their homes and the result split back, so the allocator is unchanged. PADDSW,
+  PADDUW, PSUBSW, PSUBUW, the variable shifts, QFSRV, PMFHL.SLW, the word multiplies and divides stay calls (no single host form, or
+  rare). Where the host lacks AVX or BMI2 they stay calls too.
+- **CACHE in blocks**, as a call that reaches the board; after it no line an earlier access kept is taken as held, as after a
+  load's slow path.
+- **A load of a unit's register** (`kind::REGISTER`): the translation cache keeps a register page's physical page, and a plain
+  load's slow path, told the load's width and sign in its record (`Rec::load`), brings the board to the instruction's time and
+  reads the register from the board directly, with no store of the dirty values, TLB walk or interpreter operation; the stall is
+  the interpreter's uncached one. A misaligned address, a bus error or a delay slot takes the whole operation as before.
+
+### 68.3 What was looked at and left
+
+- The interpreted steps: after CACHE, 14,600 a field, chiefly MFC0 and MTC0 in the kernel's handlers; MFC0 Count needs the time
+  a block does not keep, so they stay the interpreter's.
+- VU0's light operations: the EE's share is the call (about 100 host instructions); the operation itself is the VU stage's, on
+  `float_rz`.
+- COP1: exact through `sapphire::float` by the decision; its 42,000 calls are about 5 M.
+- The counted wait above: skipping its turns would need the loop's count moved on by the turns skipped, a form of idle loop
+  neither reference has; not built.
+
+### 68.4 Results (measured 2026-10-31, the arena, uncontended; instructions and cycles by hardware counter on the emulation thread)
+
+| | Host instructions a field | Cycles a field | The EE's path, by samples |
+| --- | --- | --- | --- |
+| §67's base (f42ad79bf) | 3.398 G | 1.111 G | 256 M: Rust 115, dispatcher 68, compiled 57, timing 10, compiling 6 |
+| this stage | 3.391 G | 1.077 G | 206 M: Rust 71, dispatcher 67, compiled 55, timing 7, compiling 6 |
+
+The EE's Rust fell by about 45 M (`Ee::read` 26 to 11, the TLB walk 10 to 4, `Ee::translate` 11 to 3, the MMI functions gone);
+the total moved by 7 M, within the spread a build's different phase gives the other units (VU 1,662 to 1,670, the board 104 to 121,
+the GIF 53 to 60): the samples' shares by unit carry about 10 M of noise, and what is inlined counts where it lands. Cycles fell 3 %.
+
+Timed (bench alone, CPU weight 100, load 2.7 to 4.9, other builds having run just before): **the arena 221.3 and 217.8 ms a
+field, p95 291 and 288**, against the base's 217.0 and 287 in the same sitting; **the dock 97.6, p95 113**, against 97.8 and
+112. No change in time: the EE's path is 6 % of the thread's instructions, and what this stage took from it is within a round's spread.
+
+### 68.5 Checks
+
+- **Sound** digests equal the base's on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`).
+- **Pictures.** Arena against §67's build at fields 9,060 to 9,360 every 60: 6.9, 9.4, 24.9, 13.8, 13.0 and 1.4 % of pixels,
+  mean 0.05 to 2.5 levels; side by side at 9,180, the same scene with a spark effect in another phase. Dock: 0, 0, 0, 0, 1.1 and
+  0.1 %. Two scratch builds differing only in the MMI, in place or as calls, gave the same picture, sound and state digests over
+  the arena's fields 9,060 to 9,160: the vector forms change no result and no time.
+- **Determinism**: two timed arena rounds and the two counted runs give the same digests (`BF745D9091E42991`, `BCA8F00F4743A955`,
+  `8F14F0E8C9F283A0`).
+- **ps2autotests**: 75 of 78, the same three failing (`sqrt`, `efu`, `intstall`), all 78 texts identical to §66's.
+- **Tests** (release with debug assertions): the crate's 499, all passed, `blocks` 23 with three new (`every_lanewise_multimedia_instruction_runs_in_place_as_interpreted`, `loads_of_registers_read_as_the_interpreter_reads`, `a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept`); `emusen-assembler`'s 13, `vector` 3 new; `emusen-jit`'s 12; MarsRT checked against the lock files at `emusen-assembler` 1.3. The .NET filter the blast radius names was left to the merge.
+- **Seeded faults**, each reverted: PMADDH's accumulate as a subtract and PABSH's correction shifted by 14 (caught by
+  `every_lanewise_multimedia_instruction_runs_in_place_as_interpreted`); the register load's sign extension dropped (caught by
+  `loads_of_registers_read_as_the_interpreter_reads` and `narrower_stores_to_registers_run_compiled_as_interpreted`); MinSH encoded
+  as the unsigned minimum (caught by `every_vector_operation_matches_its_lane_model_in_every_register`). **Not caught**: dropping the
+  lines' reset after CACHE; `a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept` passed with it, so the reset is kept
+  as the conservative form and its test does not yet prove it.
+
+**Named losses.** None new: the register load reads at the instruction's time as the slow path did, MMI results are bit-equal
+(the tests compare every lane against the interpreter's), and CACHE runs the interpreter's operation.
+
+**What remains toward 100 M**, by size: the slow path for COP2 while VU0 runs and for the polling loads (`blocks::full` about
+50 M with the board's catch-up inlined); compiled code, 55 M at about 17 host instructions a step; the light VU0 calls, about 14 M on
+the EE's side; the dispatcher's entries, now about 28,000 a field. The gate needs the VU0 macro operations in place (the VU stage,
+with `float_rz`), a way for a counted wait not to leave the block every turn, and the compiled step's cost halved.
+
+**Read.** Nothing of the references this stage; the vector encodings are `cranelift-assembler-x64`'s. No firmware was listed; the
+BIOS image was given only as the bench's and the runner's argument.
+
+**Questions.**
+
+1. **[decision] The gate.** 100 M is not reachable by the EE's side alone on this design: about 120 M of the 206 M are the slow path
+   and calls that the VU0 macro operations and a counted wait's turns cause. *Recommended*: take VU0's macro operations in place in
+   the VU stage (on `float_rz`, which the new vector forms serve), then measure again before a counted-wait design.
+2. **[routine] The counted wait.** *Recommended*: not now; it saves at most about 25 M on the arena's one loop and needs a new idle
+   proof.

@@ -1,6 +1,6 @@
 //! E0 of the tailored recompiler, behind the `baseline` feature (EmuSen_Recompiler.md §14)
 
-mod lower;
+pub(crate) mod lower;
 pub(crate) mod prefix;
 
 use std::mem::offset_of;
@@ -10,7 +10,7 @@ use emusen_assembler::{Assembler, Code, Op, Src, Width};
 use emusen_mips_planner::{self as planner, Access, Class, Info, Isa, Plan};
 
 use super::super::ops;
-use super::super::timing::{MAC_BITS, SNAP_READY, Snap, Timing};
+use super::super::timing::{SNAP_READY, Snap, Timing, UNITS, halves, whole};
 use super::{Context, Options, shape};
 use crate::ee::Ee;
 
@@ -45,6 +45,27 @@ impl Isa for R5900Isa {
         let name = shape::name(w);
         let plain = |reads, writes| Info { class: Class::Plain, reads, writes, access: None, likely: false };
         let branch = |reads, writes, likely| Info { class: Class::Branch, reads, writes, access: None, likely };
+        if shape::class(w) == shape::Class::Call {
+            let op = ops::get(ops::index(w));
+            match name {
+                "qmfc2" => return plain(0, bit(rt)),
+                "qmtc2" => return plain(bit(rt), 0),
+                "lqc2" | "sqc2" => {
+                    let access = Access { base: rs as u8, disp: w as u16 as i16, bytes: 16, store: name == "sqc2", align: 0xFFFF_FFFF };
+                    return Info { class: Class::Memory, reads: bit(rs), writes: 0, access: Some(access), likely: false };
+                }
+                _ => {}
+            }
+            let regs = |u: u8| match op.kind {
+                ops::Kind::Fpu if u & super::super::fpu::uses::GRT != 0 => bit(rt),
+                ops::Kind::Fpu => 0,
+                _ => {
+                    use ops::uses::{RD, RS, RT};
+                    (if u & RS != 0 { bit(rs) } else { 0 }) | (if u & RT != 0 { bit(rt) } else { 0 }) | (if u & RD != 0 { bit(rd) } else { 0 })
+                }
+            };
+            return plain(regs(op.reads), regs(op.writes));
+        }
         if PLAIN.contains(&name) {
             return match name {
                 "sync" | "sync.p" => plain(0, 0),
@@ -130,6 +151,21 @@ pub(crate) fn covers(words: &[u32], options: Options) -> bool {
     !options.verify && !options.fixed_cost && !options.spill && options.memory && words.len() >= 2 && planner::plan(&R5900Isa, words, 0).is_ok()
 }
 
+/// Whether a word is a COP2 instruction.
+pub(crate) fn cop2(w: u32) -> bool {
+    ops::get(ops::index(w)).kind == ops::Kind::Cop2
+}
+
+/// The cycles past a microprogram's end before a block holding COP2 may run (`Board::vu0_quiet`).
+pub(crate) const QUIET: u64 = super::super::cop2::INTERLOCK;
+
+/// Whether blocks shaped with these options hold calls (Sapphire_Speed.md §65): the baseline's only, which compiles them; off with `EMUSEN_SAPPHIRE_CALLS=0`.
+pub(crate) fn calls(options: Options) -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let on = *ON.get_or_init(|| std::env::var("EMUSEN_SAPPHIRE_CALLS").map_or(true, |v| v != "0"));
+    on && dispatched() && !options.verify && !options.fixed_cost && !options.spill && options.memory
+}
+
 /// The issue cycles of a static block as offsets from the entry's last issue, and the model after each step.
 pub(crate) struct Static {
     /// The cycles after step `i`, as `Context::times` holds them, less the entry's last issue.
@@ -137,11 +173,11 @@ pub(crate) struct Static {
     /// The model after `n` steps, for a branch not taken and taken (equal before the branch issues).
     pub snaps: Vec<[Snap; 2]>,
     /// The resources the block reads from its entry, which the entry's test finds ready.
-    pub exposed: u64,
+    pub exposed: u128,
     /// Each step as the issue model sees it, for the prefix.
     pub steps: Vec<prefix::PStep>,
     /// What the steps from `k` on read before they write it.
-    pub exposed_from: Vec<u64>,
+    pub exposed_from: Vec<u128>,
     /// The last step the prefix tests for convergence, before the branch and at most `prefix::PMAX`.
     pub kmax: usize,
 }
@@ -153,33 +189,32 @@ const BASE: u64 = 1 << 40;
 pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
     let n = plan.steps.len();
     let mut runs: [(Vec<u64>, Vec<Snap>); 2] = Default::default();
-    let mut exposed = 0u64;
+    let mut exposed = 0u128;
     let mut steps = Vec::with_capacity(n);
     for (taken, run) in runs.iter_mut().enumerate() {
         let mut t = Timing::at_rest(BASE);
-        let (mut written, mut unpaired) = (0u64, 0u8);
+        let (mut written, mut unpaired) = (0u128, 0u8);
         run.1.push(Snap::default());
         for s in &plan.steps {
             let mut i = ops::issue(ops::get(ops::index(s.word)), s.word);
             i.taken = taken == 1 && s.info.class == Class::Branch;
             i.single = options.single;
             i.blocking = options.blocking;
-            const FREE: u64 = (1 << MAC_BITS[0]) - (1 << SNAP_READY);
-            if (i.reads | i.writes) >> 64 != 0 || (i.reads | i.writes) as u64 & FREE != 0 {
+            if (i.reads | i.writes) >> SNAP_READY != 0 {
                 return None;
             }
-            let units = Timing::units(&i);
-            let (reads, writes) = (i.reads as u64 | units, i.writes as u64 | units);
+            let (unit_reads, unit_writes) = Timing::units(&i);
+            let (reads, writes) = (i.reads | unit_reads, i.writes | unit_writes);
             exposed |= reads & !written;
             if taken == 0 {
                 let branch = u8::from(s.info.class == Class::Branch);
-                steps.push(prefix::PStep { reads, writes, category: i.category as u8, row: i.row as u8, branch, pad: [0; 5] });
+                steps.push(prefix::PStep { reads: halves(reads), writes: halves(writes), category: i.category as u8, row: i.row as u8, branch, pad: [0; 5] });
             }
             let at = t.issue(i);
             written |= writes;
             unpaired += u8::from(!t.paired());
             run.0.push(at + 1);
-            run.1.push(t.snap(BASE, written & ((1 << SNAP_READY) - 1 | 1 << MAC_BITS[0] | 1 << MAC_BITS[1]), unpaired)?);
+            run.1.push(t.snap(BASE, written & ((1 << SNAP_READY) - 1 | UNITS), unpaired)?);
         }
     }
     if runs[0].0 != runs[1].0 {
@@ -190,9 +225,9 @@ pub(crate) fn static_times(plan: &Plan, options: Options) -> Option<Static> {
         times[k] = u16::try_from(c - BASE).ok()?;
     }
     let snaps = (0..=n).map(|k| [runs[0].1[k], runs[1].1[k]]).collect();
-    let mut exposed_from = vec![0u64; n + 1];
+    let mut exposed_from = vec![0u128; n + 1];
     for k in (0..n).rev() {
-        exposed_from[k] = steps[k].reads | exposed_from[k + 1] & !steps[k].writes;
+        exposed_from[k] = whole(steps[k].reads) | exposed_from[k + 1] & !whole(steps[k].writes);
     }
     let before_branch = plan.steps.iter().position(|s| s.info.class == Class::Branch).unwrap_or(n - 1);
     let kmax = before_branch.min(prefix::PMAX);
@@ -222,20 +257,33 @@ pub(crate) struct Rec {
     pub logged: u8,
     pub flags: u8,
     pub mode: u8,
-    pub pad: [u8; 3],
+    /// One past the last load or store's step, the DMAC's guard; `base` also counts a call's step.
+    pub guard: u8,
+    pub pad: [u8; 2],
     pub pc: u32,
     pub next: u32,
     /// The address after the branch's slot: a branch is taken where the place it leads to is not this.
     pub after: u32,
     /// The record's offset in the block's data, where the prefix's table, with the steps' cycles, is at 0.
     pub table: u32,
-    pub snap: [Snap; 2],
+    /// The model after the steps with the branch not taken; the taken one follows the record where `BRANCHED` is set.
+    pub snap: Snap,
 }
 
 impl Rec {
     pub(crate) fn bytes(&self) -> &[u8] {
         // SAFETY: a plain `repr(C)` value read as its bytes; the helpers read it back as `Rec` from 8-aligned data.
         unsafe { std::slice::from_raw_parts((self as *const Rec).cast::<u8>(), size_of::<Rec>()) }
+    }
+
+    /// The model after the steps, the branch taken or not; the taken one only where `BRANCHED` is set.
+    pub(crate) fn snap(&self, taken: bool) -> &Snap {
+        if !taken {
+            return &self.snap;
+        }
+        assert!(self.flags & BRANCHED != 0, "a taken model follows a record past its branch");
+        // SAFETY: a record past its branch is laid in the block's data with the taken model right after it, 8-aligned (`lower::rec`).
+        unsafe { &*(self as *const Rec).add(1).cast::<Snap>() }
     }
 
     /// The place, the next address, the delay flag, and whether the branch was taken, `x` the value the code passed.
@@ -257,7 +305,7 @@ impl Ee {
     pub(crate) fn commit_static(&mut self, rec: &Rec, x: u64, pre: Option<(&prefix::Prefix, &Timing, &prefix::Table)>) {
         use super::super::cop0::{RANDOM, WIRED};
         let (pc, next, delay, taken) = rec.place(x);
-        let s = &rec.snap[usize::from(taken)];
+        let s = rec.snap(taken);
         let (unpaired, paired) = match pre {
             None => {
                 let base = self.timing.last();
@@ -289,6 +337,7 @@ pub(crate) mod stub {
     pub const LEAVE: u32 = 5;
     pub const COMMIT: u32 = 6;
     pub const FILL: u32 = 7;
+    pub const CALL: u32 = 8;
 }
 
 /// The frame a block runs in below the six saved registers: slots at `[rsp + 8k]`, and rsp 16-byte aligned in the body.
@@ -302,7 +351,7 @@ const LAST: i32 = (offset_of!(Ee, timing) as i32) + super::super::timing::layout
 const SAVED: [emusen_assembler::Reg; 6] = [x64::RBX, x64::RBP, x64::R12, x64::R13, x64::R14, x64::R15];
 
 /// The stubs: the entry (registers saved, the fixed ones set), the three returns, and the helper convention's trampolines.
-pub(crate) fn stubs(helpers: [u64; 4]) -> Vec<Code> {
+pub(crate) fn stubs(helpers: [u64; 5]) -> Vec<Code> {
     let mut out = Vec::new();
     let one = |f: &dyn Fn(&mut X64)| {
         let mut a = X64::new();

@@ -2380,3 +2380,163 @@ Nothing was copied. No firmware was listed; the BIOS image was given only as the
 2. **[routine] Cranelift's tier's nondeterminism.** *Recommended*: leave it as the non-x86 tier for now and name it in
    its losses; a `WAIT`-style compile on the dispatcher's thread would make it deterministic at Cranelift's 15 to 23 ms a
    block.
+
+## 65. MMI, COP1 and COP2 inside the EE's blocks (2026-10-30)
+
+*Decided 2026-10-29 by the tester: the tailored tier's blocks hold the multimedia instructions, COP1 and COP2's macro
+mode, first as the interpreter's operation called from inside the block, then the hottest in place, measured. §62's
+rules hold: accuracy is to the player, results stay deterministic, no per-game fix.*
+
+### 65.1 What the references do (read 2026-10-29)
+
+- **PCSX2** compiles COP1 (`x86/iFPU.cpp`, `iFPUd.cpp`), COP2's macro mode (`x86/microVU_Macro.inl`) and most MMI
+  (`x86/iMMI.cpp`). An MMI it does not compile is `REC_FUNC_DEL(name, _Rd_)` (`x86/iR5900.h`): the block's registers are
+  flushed to the CPU state, the interpreter's function called, the destination's cached copy dropped, and the block goes
+  on. Before a macro operation that can start or wait for a microprogram it flushes for a possible micro execution,
+  writes the block's cycle count back to `cpuRegs.cycle` and brings VU0 to it (`COP2_Interlock`,
+  `INTERPRETATE_COP2_FUNC`); LQC2 and SQC2 are `REC_FUNC`, calls.
+- **Play!** has no interpreter fallback: `Source/COP_FPU.cpp` and `Source/ee/MA_EE.cpp` give every COP1 and MMI
+  operation a code generator (PEXTLB, for one, as a vector unpack, `MD_UnpackLowerBH`), `Source/ee/COP_VU.cpp` every
+  macro-mode operation.
+
+### 65.2 The form: an undoable interpreter call (exact)
+
+A block's instruction may now be a **call** (`shape::Class::Call`): every MMI instruction, and every COP1 instruction
+but LWC1, SWC1 and the branches; COP2's are §65.4's. Calls are shaped only into the tailored tier's blocks (`baseline::calls`): Cranelift's
+tier and the measurement options never see one, a shaped block holding a call that the tier does not cover is shaped
+again without its calls, and `EMUSEN_SAPPHIRE_CALLS=0` turns them off (the picture base below).
+
+A Sapphire block differs from PCSX2's in one way that matters here: it can be rolled back. The replay at its exit may
+keep fewer steps than ran (an interrupt due inside it, the DMAC due before its last access), and the interpreter then
+runs the kept steps again from the entry or from the last load or store (§48.5). A call writes the core, so it is made
+undoable as a store is:
+
+1. The block hands the helper every guest value it holds written in a register (`Context::values`, with a mask), and
+   the helper stores each to the core with its old 8 bytes in the undo log.
+2. The helper logs what the operation writes (GPR rd's 16 bytes, HI and LO; an FPR, ACC or FCR31 as a 4-byte entry, the
+   log's new `WORD` kind) and runs the interpreter's operation, found by its table index.
+3. The block reloads what the operation wrote, and the state after the call is the one a rollback past it keeps, as
+   after a load or store. The DMAC's guard (`Rec::guard`) stays at the last load or store: a call reads no memory.
+
+COP1's unusable exception is tested in the block (Status.CU1) before anything is written; the block leaves before the
+instruction for the interpreter to raise it. The undo log grew from 128 to 255 entries; a block's steps add at most
+three each.
+
+**The static form carries COP1's resources.** The issue model's snapshots and the prefix's steps now hold resource
+masks 128 bits wide: the FPRs, ACC and FCR31 (resources 35 to 68), and the FPU divider beside the two multipliers
+(`UNIT_BITS`, 125 to 127). So that the blocks' data does not grow with them, a snapshot holds the GPRs' side densely and
+at most sixteen of the FPU's and VU0's resources by number (a block whose steps write more has no static form and is left to the
+interpreter), and an exit's record carries the taken branch's snapshot only past its branch (`Rec::snap`).
+
+### 65.3 In place: the moves and the 64-bit MMI
+
+MFC1 and MTC1 (the top COP1 entry of §64.1, 218,000 a field) are compiled in place: the FPR read from the core into the
+GPR's register, or the GPR's low word stored to the FPR with a 4-byte undo entry (the state after MTC1 the one a rollback
+past it keeps). The MMI that are 64-bit operations on each half (POR, PAND, PXOR, PNOR, PCPYLD, PCPYUD) and the
+interleaves (PEXTLB, PEXTUB, PEXTLH, PEXTUH, PEXTLW, PEXTUW, each half's lanes spread by two shifts and masks) are
+compiled on the halves the block already holds: of §64.1's 464,000 MMI steps a field, the five with counts there (192,000) and POR, PCPYLD, PAND and PEXTLW beside them.
+`emusen-assembler` has no SSE yet, so the arithmetic MMI (PMADDH and the rest) stay calls.
+
+### 65.4 COP2: blocks that run while VU0 rests (a named timing compromise)
+
+The static form cannot know VU0: an interlocked transfer or a macro operation issues when VU0's microprogram has ended,
+which only the run decides, and a call inside a block sees the board as the block's entry left it, since the replay
+comes at the exit (§64.5). PCSX2 writes its block's cycle count back and brings VU0 along before such an operation
+(`COP2_Interlock`). Here the form is the other way round: **a block holding COP2 is entered only while VU0 rests**, and
+the interpreter takes the instruction otherwise.
+
+- At the entry the dispatcher brings VU0 along as the first COP2 instruction would (`Board::vu0_quiet`, through
+  `Bus::vpu0`), and leaves the step to the interpreter unless VU0 runs no microprogram, no quotient is on its way, and
+  its last pair ended far enough back that no interlock could act (`cop2::INTERLOCK`). QMFC2.I, QMTC2.I and macro
+  operations therefore wait exactly as before: the interpreter runs them whenever there is anything to wait for, and a
+  block is only ever entered where the wait is zero.
+- Nothing in a block starts VU0, because a block holds only QMFC2, QMTC2, LQC2, SQC2 and the operations of VU0's
+  registers (`cop2::in_blocks`): CFC2, CTC2, the branches, VCALLMS and VCALLMSR, VDIV, VSQRT, VRSQRT, VWAITQ and the VU
+  memory forms (VLQI, VISWR and the like) still end a block.
+- QMFC2, QMTC2 and the macro operations are calls. The first in a block saves VU0's registers and `last_macro` in the
+  context, and a rollback short of the state past the last call puts them back, before the undo log so that LQC2's
+  entries, older or newer, leave the entry's values. `last_macro` is written at the exit from the step's cycle, known
+  only then for an entry not at rest.
+- LQC2 and SQC2 go through the block's load and store path: the same translation, cache and leaving at a misaligned
+  address, with VF[rt] reached through `Context::vf0` and LQC2's write in the undo log.
+- The static form holds VU0's resources sparsely with the FPU's, sixteen at most, and COP2's floor after a transfer to
+  VU0 as a fourth unit. A read of VU0's registers counts a cycle late at the entry's test and in the prefix's
+  convergence, for the transfers from VU0 that read so (§5.4.4).
+
+**Named loss, timing only.** VIF0 acts on VU0 at the board's replay, so a VIF0 transfer or MSCAL due inside a block is
+seen by that block's COP2 instructions as if after them: at most one block's cycles late. The interpreter's steps bring
+VIF0 along at each instruction. Its effect is bounded by what §65.5's checks saw on the arena and the dock's sound, and was not measured apart.
+
+**Small coupling with the vector units**: `Vu::macro_regs`, `set_macro_regs` and `vf_base` in `src/vu/mod.rs`, and
+`Board::vu0_quiet`.
+
+### 65.5 Results, and what the longer blocks cost (measured 2026-10-30, uncontended, load about 2)
+
+The tree is WiseMan `8692fdbac` (§63) merged. Each row adds to the one above; digests of two runs of one build were equal
+wherever two were made (row 2, and rows 5 and 6, whose difference alters no value).
+
+| | Arena mean, p95 | Steps compiled | Left at the event | Budget flushes, compile ms a field |
+| --- | --- | --- | --- | --- |
+| §63's base | 465, 589 | | | |
+| 1. this tree with calls off (`EMUSEN_SAPPHIRE_CALLS=0`) | 481.2, 609.6 | 40.8 % | 60 M | 0, 2.4 |
+| 2. MMI, COP1 and COP2 calls | 506.2 and 504.3, 659 | 52.5 % | 166 M | 1, 10.3 |
+| 3. the event checked at each access, each access's exits sharing a record | 511.5, 689 | 78.0 % | 46 M | 4, 30.9 |
+| — 3 with COP2 off (`EMUSEN_SAPPHIRE_COP2=0`) | 523.7, 712 | 72.0 % | 39 M | 4, 30.8 |
+| 4. blocks of at most 32 | 493.3, 637 | 79.1 % | 46 M | 1, 10.6 |
+| 5. blocks of at most 16 | 487.9, 614 | 79.8 % | 46 M | 0, 2.9 |
+| 6. `Timing::apply` by set bits, the counts unlocked, snapshots by reference | **464.3, 587** | 79.8 % | 46 M | 0, 2.9 |
+
+The dock: 148.6 ms, p95 173.4 (§63's about 153), 84.4 % compiled. Interpreted steps on the arena fell from 2.11 M a field
+to 0.70 M, and compiled ones rose from 1.45 M to 2.76 M.
+
+**Three findings, in the order they were met.**
+
+1. **Rows 1 and 6 show that the static form's widening had a cost of its own**: `Timing::apply`, run at every exit,
+   walked 100 resources where it had walked 35, and took 5.5 % of the sampled run. It now visits the set bits.
+2. **Long blocks lost to the one horizon check** (§64.6). The dispatcher refused a whole block when its last access
+   would reach the board's next event, so that lengthening the blocks tripled the refusals (row 2) and the interpreter
+   stepped up to the event. Now the dispatcher hands the block its room (`Context::room`, the instructions to the next
+   event at one cycle each, the check's own assumption) and each access past the first compares its step with it,
+   leaving the block before itself: the same rule, applied one access at a time.
+3. **Code outgrew the budget** (rows 3 and 4): blocks left at an access are entered again after it, each entry a block
+   of its own, and with 64-instruction blocks the arena compiled 491 blocks a field. Each load's and store's exits now
+   share one record, and the tailored tier shapes at most 16 instructions (`BASELINE_LONGEST`;
+   `EMUSEN_SAPPHIRE_LONGEST` overrides).
+
+**The prediction is retired.** §64.5 estimated 60 to 90 ms a field. The arena's mean is level with §63's and its p95 is
+2 ms better; the dock is 4 ms better. The steps left the interpreter (−1.41 M a field) as predicted, but their cost did
+not leave the EE: what they saved is taken by more block entries and above all by the prefix, an entry not at rest after
+an operation of long latency. The sampled build (mean 471.4 under the sampler, 21,899 samples) gives `prefix_of` 3.3 %,
+its `Timing` copy 1.2 %, `Timing::plan` 2.0 %, `issue` 1.5 % and `partner_of` 0.9 %: about **9 % of the emulation thread,
+40 ms a field**, the EE's largest remaining cost.
+
+**Player checks.** Sound digests equal §63's on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`). The arena's
+pictures at fields 9,060 to 9,360 every 60 are byte-identical, at all six, to those of this tree with calls off, so 0.0 %
+of pixels differ; the picture digest over the whole window does differ (`9357A87CB78FA645` against `C5A55090D3FCD889`),
+so some fields between them do. Two runs give the same digests (`9357A87CB78FA645`, `BCA8F00F4743A955`,
+`4C9A3DF7725A469D`). ps2autotests: 52 of 55 EE, the same three failing (`sqrt`, `efu`, `intstall`, §36.5), and all 55 texts
+identical to those of a build without calls; the 23 IOP programs were not run, nothing here reaching the IOP.
+
+**Tests** (release with debug assertions): the library 120, `blocks` 31, `boot`, `cop0`, `debugger`, `dmac`, `fpu`, `idle`, `interpreter`, `micro`, `mmi`, `programs`, `s34`, `scheduler`, `state`, `vif`, `vu0`, `vu_jit`, `vu_micro` and `bench` 220 together, all passed; the WiseMan filter `SapphireTests` was not run here. The random programs now hold MMI, COP1 and COP2, a quarter of them with
+COP1 and COP2 unusable, compared whole against the interpreter through rollbacks; a new test runs COP2 blocks beside a
+running VU0 (923 entries met it not quiet); the static-form tests cover the new resources.
+
+### 65.6 Next steps, not built
+
+- **The prefix**: 40 ms a field. Keep the entry's model without copying it, and skip the model where the block's first
+  steps read nothing pending.
+- **Native forms** for the rest of the calls, in order of their steps: the arithmetic MMI want SSE in `emusen-assembler`,
+  then COP1's arithmetic, then the macro operations; `sapphire::float` stays their one owner.
+- **CFC2, CTC2 and VDIV in blocks**, and LWC1 and SWC1 through the load and store path as LQC2 is.
+- **Block length** was tried at 64, 32 and 16 only; blocks that share their tails would remove the duplication that
+  forced it down.
+
+**Read.** PCSX2's `x86/iMMI.cpp`, `x86/iR5900.h`, `x86/iFPU.cpp`, `x86/microVU_Macro.inl`; Play!'s `Source/COP_FPU.cpp`,
+`Source/ee/MA_EE.cpp`, `Source/ee/COP_VU.cpp`. Nothing was copied. No firmware was listed; the BIOS image was given only
+as the bench's and the runner's argument.
+
+**Questions.**
+
+1. **[decision] The named loss of §65.4** (VIF0 at most a block late for COP2 in that block). *Recommended*: accept; it is
+   timing only; both windows' sound digests are unchanged and the arena's six sampled pictures are byte-identical. The dock's pictures were not compared.
+2. **[routine] The next EE step.** *Recommended*: the prefix, the EE's largest remaining cost.

@@ -7,8 +7,9 @@ use emusen_assembler::{Assembler, By, Code, Cond, Label, Mem, Op, Reg, Section, 
 use emusen_mips_planner::{Class, Plan, Step};
 
 use super::super::super::cache::{DCache, DTag};
-use super::super::super::timing::layout;
-use super::super::{Context, Options, Page, SHORT, kind, shape};
+use super::super::super::ops;
+use super::super::super::timing::{Timing, layout};
+use super::super::{Context, Options, Page, SHORT, WORD, kind, shape};
 use super::{BRANCHED, Rec, SLOTS, SYNC, Static, X_MOVED, mode, prefix, stub};
 use crate::ee::Ee;
 
@@ -16,6 +17,13 @@ const GPR: i32 = offset_of!(Ee, gpr) as i32;
 const HI: i32 = offset_of!(Ee, hi) as i32;
 const LO: i32 = offset_of!(Ee, lo) as i32;
 const SA: i32 = offset_of!(Ee, sa) as i32;
+const FPR: i32 = offset_of!(Ee, fpr) as i32;
+const ACC: i32 = offset_of!(Ee, acc) as i32;
+const FCR31: i32 = offset_of!(Ee, fcr31) as i32;
+const STATUS: i32 = (offset_of!(Ee, cop0) + 4 * crate::ee::cop0::STATUS) as i32;
+const X_VF0: i32 = offset_of!(Context, vf0) as i32;
+const X_QUIET: i32 = offset_of!(Context, quiet) as i32;
+const X_ROOM: i32 = offset_of!(Context, room) as i32;
 const T: i32 = offset_of!(Ee, timing) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
 const D_DATA: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, data)) as i32;
@@ -31,6 +39,8 @@ const X_LIMIT: i32 = offset_of!(Context, limit) as i32;
 const X_LOG: i32 = offset_of!(Context, log) as i32;
 const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_DUMMY: i32 = offset_of!(Context, dummy) as i32;
+const X_VALUES: i32 = offset_of!(Context, values) as i32;
+const X_HANDED: i32 = offset_of!(Context, handed) as i32;
 
 /// The purposes bytes are counted under: `forms::PURPOSES`' twelve, then the entry's test and the undo log.
 pub(crate) const P_ENTRY: usize = 1;
@@ -49,6 +59,7 @@ pub(crate) const P_LOG: usize = 13;
 /// The loads and stores of a unit's part, which never leave for alignment.
 const UNALIGNED: [&str; 8] = ["lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "sdr"];
 /// Why a load or store left, `Context::left`'s index (as `emit.rs` counts them).
+const LEFT_EVENT: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
 const LEFT_PAGE: i64 = 2;
 const LEFT_MISS: i64 = 3;
@@ -94,10 +105,101 @@ fn rec_id(j: usize, f: usize) -> usize {
 }
 const VALUES: usize = 70 + 5 * shape::MAX;
 
+/// The undo log's entries, `Context::log`'s length; a block's entries stay below it (Sapphire_Speed.md §65).
+const LOG_MOST: i32 = 4 * shape::MAX as i32 - 1;
+
+/// The calls the lowering makes in place: MFC1 and MTC1, and the multimedia instructions that are 64-bit operations on each half.
+fn native(w: u32) -> bool {
+    matches!(shape::name(w), "mfc1" | "mtc1") || wide(w)
+}
+
+/// LQC2 and SQC2, whose quadword is VF[rt], not a GPR.
+fn vf_memory(w: u32) -> bool {
+    matches!(shape::name(w), "lqc2" | "sqc2")
+}
+
+/// The multimedia instructions lowered in place (Sapphire_Speed.md §65).
+fn wide(w: u32) -> bool {
+    matches!(shape::name(w), "por" | "pand" | "pxor" | "pnor" | "pcpyld" | "pcpyud" | "pextlw" | "pextuw" | "pextlh" | "pextuh" | "pextlb" | "pextub")
+}
+
+/// What a call writes: the core's bytes to log (offset, 4, 8 or 16 bytes) and the block's values to load again after it.
+pub(crate) struct Writes {
+    logs: [(i32, u8); 4],
+    n_logs: usize,
+    values: [usize; 6],
+    n_values: usize,
+}
+
+impl Writes {
+    pub(crate) fn logs(&self) -> &[(i32, u8)] {
+        &self.logs[..self.n_logs]
+    }
+    fn values(&self) -> &[usize] {
+        &self.values[..self.n_values]
+    }
+    fn log(&mut self, off: i32, n: u8) {
+        self.logs[self.n_logs] = (off, n);
+        self.n_logs += 1;
+    }
+    fn value(&mut self, v: usize) {
+        self.values[self.n_values] = v;
+        self.n_values += 1;
+    }
+}
+
+/// A call's writes by its operation's fields (Sapphire_Speed.md §65).
+pub(in crate::ee) fn call_writes(w: u32, op: &ops::Op) -> Writes {
+    let mut out = Writes { logs: [(0, 0); 4], n_logs: 0, values: [0; 6], n_values: 0 };
+    if op.kind == ops::Kind::Cop2 {
+        if op.name == "qmfc2" && rt(w) != 0 {
+            out.log(GPR + 16 * rt(w) as i32, 16);
+            out.value(rt(w));
+            out.value(32 + rt(w));
+        }
+        return out;
+    }
+    if op.kind == ops::Kind::Fpu {
+        use crate::ee::fpu::uses::{ACC as A_, FCR, FD, FS, FT, GRT};
+        if op.writes & GRT != 0 && rt(w) != 0 {
+            out.log(GPR + 16 * rt(w) as i32, 8);
+            out.value(rt(w));
+        }
+        for (f, n) in [(FS, rd(w)), (FT, rt(w)), (FD, (w >> 6 & 31) as usize)] {
+            if op.writes & f != 0 {
+                out.log(FPR + 4 * n as i32, 4);
+            }
+        }
+        if op.writes & A_ != 0 {
+            out.log(ACC, 4);
+        }
+        if op.writes & FCR != 0 {
+            out.log(FCR31, 4);
+        }
+        return out;
+    }
+    use ops::uses::{HILO0, HILO1, RD};
+    if op.writes & RD != 0 && rd(w) != 0 {
+        out.log(GPR + 16 * rd(w) as i32, 16);
+        out.value(rd(w));
+        out.value(32 + rd(w));
+    }
+    if op.writes & (HILO0 | HILO1) != 0 {
+        out.log(HI, 16);
+        out.log(LO, 16);
+        for v in [LO0, HI0, LO1, HI1] {
+            out.value(v);
+        }
+    }
+    out
+}
+
 /// The state after the last load or store, which a rollback past it writes back.
 #[derive(Clone, Copy)]
 struct SnapSt {
     base: u32,
+    /// One past the last load or store's step, which a call's state carries on.
+    guard: u32,
     dirty: u128,
     pc: u32,
     logged: u32,
@@ -141,6 +243,8 @@ struct L<'a> {
     purpose: usize,
     /// The block's data so far, mirrored so that a record knows its own offset.
     data_len: u32,
+    /// The last record laid and where, for the exits of one load or store, which share it.
+    last_rec: Option<(Rec, u32)>,
 }
 
 fn rs(w: u32) -> usize {
@@ -158,15 +262,18 @@ fn simm(w: u32) -> i32 {
 fn slot_mem(k: i32) -> Mem {
     at(RSP, 8 * k)
 }
-fn core_at(v: usize) -> Mem {
+pub(crate) fn core_off(v: usize) -> i32 {
     match v {
-        LO0 => at(EE, LO),
-        HI0 => at(EE, HI),
-        LO1 => at(EE, LO + 8),
-        HI1 => at(EE, HI + 8),
-        SAV => at(EE, SA),
-        _ => at(EE, GPR + 16 * (v % 32) as i32 + if v >= 32 { 8 } else { 0 }),
+        LO0 => LO,
+        HI0 => HI,
+        LO1 => LO + 8,
+        HI1 => HI + 8,
+        SAV => SA,
+        _ => GPR + 16 * (v % 32) as i32 + if v >= 32 { 8 } else { 0 },
     }
+}
+fn core_at(v: usize) -> Mem {
+    at(EE, core_off(v))
 }
 
 /// The values beyond the general registers an instruction reads or writes: LO, HI, LO1, HI1, SA.
@@ -226,6 +333,12 @@ impl L<'_> {
                 }
             });
             let mut vals: Vec<usize> = Vec::new();
+            if shape::class(s.word) == shape::Class::Call && !native(s.word) && s.info.class != Class::Memory {
+                continue;
+            }
+            if wide(s.word) {
+                vals.extend([32 + rs(s.word), 32 + rt(s.word), 32 + rd(s.word)]);
+            }
             for r in 1..32 {
                 if (s.info.reads | s.info.writes) >> r & 1 == 1 {
                     vals.push(r);
@@ -233,6 +346,7 @@ impl L<'_> {
             }
             if let Some(acc) = s.info.access
                 && acc.bytes == 16
+                && !vf_memory(s.word)
             {
                 vals.push(32 + rt(s.word));
             }
@@ -384,14 +498,30 @@ impl L<'_> {
             logged: st.logged as u8,
             flags,
             mode: md,
-            pad: [0; 3],
+            guard: st.snap.map_or(0, |s| s.guard) as u8,
+            pad: [0; 2],
             pc,
             next,
             after: self.after,
             table: self.data_len.next_multiple_of(8),
-            snap: self.times.snaps[steps as usize],
+            snap: self.times.snaps[steps as usize][0],
         };
-        self.data(r.bytes())
+        if !st.branched {
+            if let Some((l, at)) = self.last_rec
+                && (Rec { table: 0, ..l }).bytes() == (Rec { table: 0, ..r }).bytes()
+            {
+                return at;
+            }
+            let at = self.data(r.bytes());
+            self.last_rec = Some((r, at));
+            return at;
+        }
+        let taken = self.times.snaps[steps as usize][1];
+        // SAFETY: a plain `repr(C)` value read as its bytes, laid right after its record (`Rec::snap`).
+        let tail = unsafe { std::slice::from_raw_parts((&taken as *const super::Snap).cast::<u8>(), size_of::<super::Snap>()) };
+        let mut both = r.bytes().to_vec();
+        both.extend_from_slice(tail);
+        self.data(&both)
     }
 
     /// Bytes appended to the block's data, as `Assembler::data` lays them; their offset.
@@ -916,13 +1046,24 @@ impl L<'_> {
     fn memory(&mut self, i: usize, s: &Step, place: At) {
         let acc = s.info.access.expect("a load or store");
         let w = s.word;
+        let vf = vf_memory(w);
+        if vf {
+            self.cop2_may_run(place);
+        }
         let pre = self.st;
         let mut slow = Slow { used: Vec::new() };
+        if i > 0 {
+            // Past the board's next event at one cycle an instruction: the block leaves before this access (Sapphire_Speed.md §65.5).
+            self.pur(P_CHECKS);
+            self.a.cmp_mem(4, at(CTX, X_ROOM), Src::Imm(i as i32));
+            let l = slow.label(&mut self.a, LEFT_EVENT);
+            self.a.branch(Cond::Leu, l);
+        }
         self.pur(P_ADDR);
         let b = self.get(acc.base as usize, A);
         self.a.lea(Width::W32, A, at(b, simm(w)));
         let unit = UNALIGNED.contains(&shape::name(w));
-        if (2..=8).contains(&acc.bytes) && !unit {
+        if ((2..=8).contains(&acc.bytes) && !unit) || vf {
             self.a.test(Width::W32, A, Src::Imm(i32::from(acc.bytes) - 1));
             let l = slow.label(&mut self.a, LEFT_ALIGN);
         self.a.branch(Cond::Ne, l);
@@ -1069,7 +1210,9 @@ impl L<'_> {
 
         // The data access.
         let t = rt(w);
-        if shape::name(w) == "pref" {
+        if vf {
+            self.vf_quad(acc.store, t);
+        } else if shape::name(w) == "pref" {
         } else if unit {
             self.unaligned(shape::name(w), acc.bytes, t);
         } else if acc.store {
@@ -1106,7 +1249,7 @@ impl L<'_> {
             }
         }
         self.st.steps += 1;
-        self.st.snap = Some(SnapSt { base: self.st.steps, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
+        self.st.snap = Some(SnapSt { base: self.st.steps, guard: self.st.steps, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
 
         // The ways it leaves, before it.
         let here = self.a.current();
@@ -1123,6 +1266,41 @@ impl L<'_> {
             }
         }
         self.a.section(here);
+    }
+
+    /// LQC2's and SQC2's data, P the quadword in memory: VF[t] through `Context::vf0`, LQC2's with its undo.
+    fn vf_quad(&mut self, store: bool, t: usize) {
+        self.pur(P_DATA);
+        if store {
+            if !self.prototype {
+                self.log();
+            }
+            self.pur(P_DATA);
+            self.a.load(8, false, X, at(CTX, X_VF0));
+            for k in [0, 8] {
+                self.a.load(8, false, A, at(X, 16 * t as i32 + k));
+                self.a.store(8, A, at(P, k));
+            }
+            self.pur(P_CACHE);
+            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
+            self.a.set(Cond::Eq, X);
+            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
+            self.st.sync = true;
+        } else if t != 0 {
+            self.a.load(8, false, X, at(CTX, X_VF0));
+            self.a.alu(Op::Add, Width::W64, X, X, Src::Imm(16 * t as i32));
+            let k = self.st.logged as i32;
+            assert!(k < LOG_MOST, "a block's undo entries fit the log");
+            let e = X_LOG + 24 * k;
+            self.a.store(8, X, at(CTX, e));
+            for j in [0, 8] {
+                self.a.load(8, false, A, at(X, j));
+                self.a.store(8, A, at(CTX, e + 8 + j));
+                self.a.load(8, false, A, at(P, j));
+                self.a.store(8, A, at(X, j));
+            }
+            self.st.logged += 1;
+        }
     }
 
     /// LWL to SDR (`ops.rs`'s `unit` and `store_unit`): the unit's address and pointer made from A and P, the shift from the byte within it, and the merge.
@@ -1208,7 +1386,7 @@ impl L<'_> {
     fn log(&mut self) {
         let p = self.push_purpose(P_LOG);
         let k = self.st.logged as i32;
-        assert!(k + 2 <= 2 * shape::MAX as i32, "two undo entries a store");
+        assert!(k + 2 <= LOG_MOST, "two undo entries a store");
         let e = X_LOG + 24 * k;
         self.a.mov(Width::W32, X, A);
         self.a.alu(Op::And, Width::W32, X, X, Src::Imm(15));
@@ -1317,15 +1495,228 @@ impl L<'_> {
     fn straight(&mut self, i: usize, s: &Step, place: At) {
         match s.info.class {
             Class::Memory => self.memory(i, s, place),
+            _ if wide(s.word) => self.wide(s),
+            _ if native(s.word) => self.fpu_move(s, place),
+            _ if shape::class(s.word) == shape::Class::Call => self.call(s, place),
             _ => self.plain(s, place),
         }
+    }
+
+    /// `off`'s `n` bytes in the core (4, 8 or 16) logged before a write, as a store's are.
+    fn log_core(&mut self, off: i32, n: u8) {
+        let k = self.st.logged as i32;
+        assert!(k < LOG_MOST, "a block's undo entries fit the log");
+        let e = X_LOG + 24 * k;
+        self.a.lea(Width::W64, X, at(EE, off));
+        self.a.load(n.min(8), false, A, at(X, 0));
+        self.a.store(8, A, at(CTX, e + 8));
+        if n == 16 {
+            self.a.load(8, false, A, at(X, 8));
+            self.a.store(8, A, at(CTX, e + 16));
+        } else {
+            self.a.mov_imm(TG, (if n == 8 { SHORT } else { WORD }) as i64);
+            self.a.alu(Op::Or, Width::W64, X, X, Src::Reg(TG));
+        }
+        self.a.store(8, X, at(CTX, e));
+        self.st.logged += 1;
+    }
+
+    /// The 32-bit or 16-bit lanes of `r`'s low word (its high word where `upper`) spread to every other lane of `w`, `m` a scratch register.
+    fn spread(&mut self, w: Reg, r: Reg, upper: bool, bytes: bool, m: Reg) {
+        use Width::W64;
+        if upper {
+            self.a.mov(W64, w, r);
+            self.a.shift(ShiftOp::Shr, W64, w, w, By::Imm(32));
+        } else {
+            self.a.mov(Width::W32, w, r);
+        }
+        let steps: &[(u8, i64)] = if bytes { &[(16, 0x0000_FFFF_0000_FFFF), (8, 0x00FF_00FF_00FF_00FF)] } else { &[(16, 0x0000_FFFF_0000_FFFF)] };
+        for &(k, mask) in steps {
+            self.a.mov(W64, m, w);
+            self.a.shift(ShiftOp::Shl, W64, m, m, By::Imm(k));
+            self.a.alu(Op::Or, W64, w, w, Src::Reg(m));
+            self.a.mov_imm(m, mask);
+            self.a.alu(Op::And, W64, w, w, Src::Reg(m));
+        }
+    }
+
+    /// The multimedia instructions that are 64-bit operations on each half of the registers (`mmi.rs`), in place.
+    fn wide(&mut self, s: &Step) {
+        use Width::W64;
+        let w = s.word;
+        let (a, b, d) = (rs(w), rt(w), rd(w));
+        self.pur(P_WORK);
+        let name = shape::name(w);
+        if d != 0 {
+            match name {
+                "por" | "pand" | "pxor" | "pnor" => {
+                    let op = match name {
+                        "pand" => Op::And,
+                        "pxor" => Op::Xor,
+                        _ => Op::Or,
+                    };
+                    for k in [0, 32] {
+                        self.binary(op, W64, false, d + k, a + k, Ok(b + k));
+                        if name == "pnor" {
+                            let h = self.dest(d + k, X);
+                            self.a.not(W64, h, h);
+                            self.put(d + k, h);
+                        }
+                    }
+                }
+                "pcpyld" => {
+                    self.copy(32 + d, a);
+                    self.copy(d, b);
+                }
+                "pcpyud" => {
+                    self.copy(d, 32 + a);
+                    self.copy(32 + d, 32 + b);
+                }
+                _ => {
+                    // The interleaves: rd's low half in X and its high half in P, both from the sources' low (or high) halves before either is written.
+                    let half = if name.ends_with("ub") || name.ends_with("uh") || name == "pextuw" { 32 } else { 0 };
+                    let (lane, bytes) = match &name[name.len() - 1..] {
+                        "b" => (8u8, true),
+                        "h" => (16, false),
+                        _ => (32, false),
+                    };
+                    for (out, upper) in [(X, false), (P, true)] {
+                        if lane == 32 {
+                            let t = self.get(b + half, TG);
+                            if upper {
+                                self.a.mov(W64, TG, t);
+                                self.a.shift(ShiftOp::Shr, W64, TG, TG, By::Imm(32));
+                            } else {
+                                self.a.mov(Width::W32, TG, t);
+                            }
+                            let r = self.get(a + half, out);
+                            if upper {
+                                self.a.mov(W64, out, r);
+                                self.a.mov_imm(A, -1i64 << 32);
+                                self.a.alu(Op::And, W64, out, out, Src::Reg(A));
+                            } else {
+                                self.a.mov(W64, out, r);
+                                self.a.shift(ShiftOp::Shl, W64, out, out, By::Imm(32));
+                            }
+                        } else {
+                            let t = self.get(b + half, TG);
+                            self.spread(TG, t, upper, bytes, A);
+                            let r = self.get(a + half, out);
+                            self.spread(out, r, upper, bytes, A);
+                            self.a.shift(ShiftOp::Shl, W64, out, out, By::Imm(lane));
+                        }
+                        self.a.alu(Op::Or, W64, out, out, Src::Reg(TG));
+                    }
+                    for (v, r) in [(d, X), (32 + d, P)] {
+                        self.before_write(v, TG);
+                        let h = self.dest(v, r);
+                        if h != r {
+                            self.a.mov(W64, h, r);
+                        }
+                        self.put(v, h);
+                    }
+                }
+            }
+        }
+        self.st.steps += 1;
+    }
+
+    /// The block leaves before a COP2 instruction, for the interpreter, while VU0 was not quiet at the entry or COP2 is unusable (Sapphire_Speed.md §65).
+    fn cop2_may_run(&mut self, place: At) {
+        let st = self.st;
+        let p = self.push_purpose(P_FAULT);
+        self.a.cmp_mem(4, at(CTX, X_QUIET), Src::Imm(0));
+        self.exit_if(Cond::Eq, &st, place);
+        self.pur(p);
+        self.usable(crate::ee::status::CU2, place);
+    }
+
+    /// The block leaves before a coprocessor's instruction while Status's bit `cu` is clear, for the interpreter to raise.
+    fn usable(&mut self, cu: u32, place: At) {
+        let st = self.st;
+        let p = self.push_purpose(P_FAULT);
+        self.a.load(4, false, X, at(EE, STATUS));
+        self.a.test(Width::W32, X, Src::Imm(cu as i32));
+        self.exit_if(Cond::Eq, &st, place);
+        self.pur(p);
+    }
+
+    /// MFC1 and MTC1 in place (Sapphire_Speed.md §65): the FPR read from the core, or written there with its undo, the state after MTC1 the one a rollback past it keeps.
+    fn fpu_move(&mut self, s: &Step, place: At) {
+        let w = s.word;
+        let (t, f) = (rt(w), FPR + 4 * rd(w) as i32);
+        self.usable(crate::ee::status::CU1, place);
+        self.pur(P_WORK);
+        if shape::name(w) == "mfc1" {
+            if t != 0 {
+                self.before_write(t, RDI);
+                let h = self.dest(t, X);
+                self.a.load(4, true, h, at(EE, f));
+                self.put(t, h);
+            }
+            self.st.steps += 1;
+            return;
+        }
+        self.pur(P_LOG);
+        self.log_core(f, 4);
+        self.pur(P_WORK);
+        let r = self.get(t, X);
+        self.a.store(4, r, at(EE, f));
+        self.st.steps += 1;
+        let guard = self.st.snap.map_or(0, |s| s.guard);
+        self.st.snap = Some(SnapSt { base: self.st.steps, guard, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
+    }
+
+    /// A call (Sapphire_Speed.md §65): every value the block wrote handed to the helper, which stores them to the core with their undo, logs what the operation writes and calls it; the state after it is the one a rollback past it keeps.
+    fn call(&mut self, s: &Step, place: At) {
+        let w = s.word;
+        let index = ops::index(w);
+        match ops::get(index).kind {
+            ops::Kind::Fpu => self.usable(crate::ee::status::CU1, place),
+            ops::Kind::Cop2 => self.cop2_may_run(place),
+            ops::Kind::Cpu => {}
+        }
+        let p = self.push_purpose(P_LOG);
+        let dirty = self.st.dirty & !(1 << 32);
+        for v in (1..GUEST).filter(|v| dirty >> v & 1 == 1) {
+            let r = match self.home[v] {
+                Home::Reg(h) => h,
+                Home::Slot(k) => {
+                    self.a.load(8, false, P, slot_mem(k));
+                    P
+                }
+                Home::None => unreachable!("a dirty value has a home"),
+            };
+            self.a.store(8, r, at(CTX, X_VALUES + 8 * v as i32));
+        }
+        for (k, half) in [dirty as u64, (dirty >> 64) as u64].into_iter().enumerate() {
+            self.a.mov_imm(X, half as i64);
+            self.a.store(8, X, at(CTX, X_HANDED + 8 * k as i32));
+        }
+        let written = call_writes(w, ops::get(index));
+        let logged = self.st.logged;
+        self.st.logged += dirty.count_ones() + written.logs().len() as u32;
+        assert!(self.st.logged <= LOG_MOST as u32, "a block's undo entries fit the log");
+        self.pur(P_WORK);
+        self.a.mov_imm(RDI, i64::from(w));
+        self.a.mov_imm(RSI, i64::from(logged) | i64::from(self.st.steps) << 16);
+        self.a.mov_imm(RDX, i64::from(index));
+        self.a.call_stub(stub::CALL);
+        self.pur(p);
+        self.st.dirty = 0;
+        for &v in written.values() {
+            self.st.held[v] = false;
+        }
+        self.st.steps += 1;
+        let guard = self.st.snap.map_or(0, |s| s.guard);
+        self.st.snap = Some(SnapSt { base: self.st.steps, guard, dirty: 0, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
     }
 }
 
 /// The block's code; `prototype` as `compile` says.
 pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bool) -> Option<Code> {
     let after = plan.steps.iter().find(|s| s.info.class == Class::Branch).map_or(0, |s| s.pc.wrapping_add(8));
-    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0 };
+    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0, last_rec: None };
     l.allocate();
     let table = l.data(&prefix::table_bytes(times, options.single, options.blocking));
     assert_eq!(table, 0, "the prefix's table is the data's first");
@@ -1349,14 +1740,21 @@ pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bo
         l.a.branch(Cond::Ne, dynamic);
         l.a.cmp_mem(8, at(RDI, T + layout::FLOOR), Src::Reg(X));
         l.a.branch(Cond::Gtu, dynamic);
-        for r in (0..64).filter(|r| times.exposed >> r & 1 == 1) {
-            let field = match r {
-                62 => layout::MAC0_FREE,
-                63 => layout::MAC1_FREE,
-                _ => layout::READY + 8 * r,
-            };
-            l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
-            l.a.branch(Cond::Gtu, dynamic);
+        for late in [false, true] {
+            if late {
+                l.a.alu(Op::Sub, Width::W64, X, X, Src::Imm(1));
+            }
+            for r in (0..128).filter(|&r| times.exposed >> r & 1 == 1 && (Timing::read_late(r) != 0) == late) {
+                let field = match r {
+                    124 => layout::MAC0_FREE,
+                    125 => layout::MAC1_FREE,
+                    126 => layout::FDIV_FREE,
+                    127 => layout::COP2_FLOOR,
+                    _ => layout::READY + 8 * r as i32,
+                };
+                l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
+                l.a.branch(Cond::Gtu, dynamic);
+            }
         }
     } else {
         l.a.bind(entry);

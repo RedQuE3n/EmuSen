@@ -377,6 +377,13 @@ impl Board {
         }
     }
 
+    /// A block holding COP2 may run from cycle `at`: VU0 brought along and idle, no quotient on its way and no end near enough to interlock (Sapphire_Speed.md §65).
+    pub(crate) fn vu0_quiet(&mut self, at: u64, behind: u64) -> bool {
+        use crate::ee::Bus;
+        let Some(v) = self.vpu0() else { return false };
+        !v.running(0) && v.units.vu0.q_next.is_none() && v.micro0.last().is_none_or(|l| l + behind <= at)
+    }
+
     /// Before COP2 reaches VU0 alone: VIF0, which writes VU0's memories and starts it, and VU0 brought to the owed time,
     /// the rest of the board left to the round (Sapphire_Speed.md §62.3).
     #[cold]

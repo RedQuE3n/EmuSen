@@ -30,7 +30,20 @@ fn slice_word(rng: &mut Rng) -> u32 {
     let (s, t, d) = (r(rng), r(rng), r(rng));
     let imm = rng.next() as u16 as u32;
     let sa = rng.below(32);
-    match rng.below(18) {
+    let f = |rng: &mut Rng| rng.below(4);
+    match rng.below(21) {
+        // COP2's transfers, loads, stores and an operation of VU0's registers.
+        20 => match rng.below(4) {
+            0 => 0x12 << 26 | [1u32, 5][rng.below(2) as usize] << 21 | t << 16 | f(rng) << 11,
+            1 => [0x36u32, 0x3E][rng.below(2) as usize] << 26 | s << 21 | f(rng) << 16 | (imm & 0x7F0),
+            _ => 0x12 << 26 | 1 << 25 | 0xF << 21 | f(rng) << 16 | f(rng) << 11 | f(rng) << 6 | [0x28u32, 0x2C, 0x2A][rng.below(3) as usize],
+        },
+        // The calls (Sapphire_Speed.md §65): COP1's operations and moves, and multimedia instructions, the FPRs and the FPU's divider in the model.
+        18 => match rng.below(4) {
+            0 => 0x11 << 26 | [0u32, 4][rng.below(2) as usize] << 21 | t << 16 | f(rng) << 11,
+            _ => 0x11 << 26 | 0x10 << 21 | f(rng) << 16 | f(rng) << 11 | f(rng) << 6 | [0u32, 1, 2, 3, 4, 5, 6, 7, 0x16, 0x18, 0x1A, 0x1C, 0x1E, 0x24, 0x28, 0x32][rng.below(16) as usize],
+        },
+        19 => 0x1C << 26 | s << 21 | t << 16 | d << 11 | [0x12u32, 0x16, 0x1A, 0x0E][rng.below(4) as usize] << 6 | [0x08u32, 0x28, 0x09, 0x29][rng.below(4) as usize],
         // E1's classes: HI and LO, the multipliers and dividers of both pipelines, SA, the traps, the unaligned forms and PREF.
         14 => s << 21 | t << 16 | d << 11 | [0x10, 0x11, 0x12, 0x13, 0x18, 0x19, 0x1A, 0x1B, 0x28, 0x29, 0x30, 0x31, 0x32, 0x33, 0x34, 0x36][rng.below(16) as usize],
         15 => 0x1C << 26 | s << 21 | t << 16 | d << 11 | [0x00, 0x01, 0x10, 0x11, 0x12, 0x13, 0x18, 0x19, 0x1A, 0x1B, 0x20, 0x21][rng.below(12) as usize],

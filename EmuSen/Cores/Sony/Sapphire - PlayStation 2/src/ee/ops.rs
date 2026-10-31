@@ -1151,6 +1151,22 @@ pub(super) fn index(w: u32) -> u16 {
     }
 }
 
+/// Whether a table entry is one of the multimedia instructions' (S8).
+pub(super) fn is_mmi(i: u16) -> bool {
+    (TABLE.len()..TABLE.len() + super::mmi::TABLE.len()).contains(&(i as usize))
+}
+
+/// Whether a table entry is an operation of COP1's or a move between it and the GPRs, neither a load, a store nor a branch.
+pub(super) fn is_fpu_register(i: u16) -> bool {
+    let o = get(i);
+    o.kind == Kind::Fpu && o.category != Branch && !matches!(o.name, "lwc1" | "swc1")
+}
+
+/// Whether a word is a COP2 instruction a block holds (`super::cop2::in_blocks`).
+pub(super) fn is_cop2_in_blocks(i: u16, w: u32) -> bool {
+    get(i).kind == Kind::Cop2 && super::cop2::in_blocks(get(i), w)
+}
+
 pub(super) fn get(i: u16) -> &'static Op {
     let i = i as usize;
     let mmi = TABLE.len() + super::mmi::TABLE.len();

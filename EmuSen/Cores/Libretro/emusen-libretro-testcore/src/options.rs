@@ -19,7 +19,7 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 16] = [
     ("tc_cheat_set", "Its own cheats", "memory", &["ignored", "honoured"], "Whether retro_cheat_set does anything."),
     ("tc_files", "Files", "memory", &["off", "on"], "Files written in the system and save folders."),
     ("tc_quirk", "State quirk", "states", &["none", "incomplete", "variable", "single", "platform"], "The serialization quirk declared."),
-    ("tc_unserialize", "State loads", "states", &["ok", "fail"], "A load that fails half-way."),
+    ("tc_unserialize", "State loads", "states", &["ok", "fail"], "The first load fails half-way."),
     ("tc_shutdown", "Shutdown", "states", &["off", "30"], "The core asks to stop at frame 30."),
     ("tc_probe", "Environment probe", "probe", &["off", "on"], "Every environment command called at load."),
     ("tc_log_thread", "Log from a thread", "probe", &["off", "on"], "A formatted log line from a thread of the core's."),

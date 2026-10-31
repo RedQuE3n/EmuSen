@@ -6,6 +6,9 @@ pub mod layout;
 mod options;
 pub mod probe;
 
+/// How many options the core declares.
+pub const OPTION_COUNT: usize = options::OPTIONS.len();
+
 use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::sync::Mutex;
 
@@ -66,6 +69,7 @@ struct Core {
     files_root: Option<(String, String)>,
     disc: DiscState,
     shutdown_sent: bool,
+    failed_once: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -99,6 +103,7 @@ impl Core {
             files_root: None,
             disc: DiscState { index: 0, ejected: false, images: 1 },
             shutdown_sent: false,
+            failed_once: false,
         }
     }
 
@@ -357,6 +362,7 @@ const DESCRIPTORS: [(c_uint, &CStr); 6] = [(0, c"Cross"), (8, c"Circle"), (1, c"
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> bool {
     let options = Options::read();
+    *FRAME_TIME_SUM.lock().unwrap() = 0;
     let mut core = Core::new(options.clone());
     if let Some(game) = unsafe { game.as_ref() }
         && !game.data.is_null()
@@ -674,17 +680,17 @@ pub unsafe extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> 
     let frame = u64::from_le_bytes(take(8).try_into().unwrap());
     let samples = u64::from_le_bytes(take(8).try_into().unwrap());
     let ram = take(RAM_SIZE).to_vec();
-    if core.options.unserialize_fails {
+    if core.options.unserialize_fails && !std::mem::replace(&mut core.failed_once, true) {
         core.ram[..RAM_SIZE / 2].copy_from_slice(&ram[..RAM_SIZE / 2]);
         core.frame = frame;
         return false;
     }
     core.frame = frame;
     core.samples_made = samples;
-    core.ram = ram;
-    core.vram = take(VRAM_SIZE).to_vec();
-    core.sram = take(SRAM_SIZE).to_vec();
-    core.rtc = take(RTC_SIZE).to_vec();
+    core.ram.copy_from_slice(&ram);
+    core.vram.copy_from_slice(take(VRAM_SIZE));
+    core.sram.copy_from_slice(take(SRAM_SIZE));
+    core.rtc.copy_from_slice(take(RTC_SIZE));
     true
 }
 

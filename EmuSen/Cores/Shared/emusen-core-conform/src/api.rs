@@ -135,7 +135,7 @@ impl Lib {
         let element = std::mem::size_of::<FileEntry>() + pad;
         let mut entries = vec![CANARY; element * files.len()];
         for (i, (w, d)) in files.iter().enumerate() {
-            let e = FileEntry { size: element as u32, which: *w, data: d.as_ptr(), len: d.len() };
+            let e = FileEntry { size: element as u32, which: *w, data: d.as_ptr(), len: d.len(), name: std::ptr::null() };
             unsafe { std::ptr::write_unaligned(entries.as_mut_ptr().add(i * element) as *mut FileEntry, e) };
         }
         let mut error = vec![0u8; 512];
@@ -156,6 +156,7 @@ impl Lib {
             flags,
             device,
             system: system.map_or(std::ptr::null(), |s| s.as_ptr()),
+            image_path: std::ptr::null(),
         };
         // SAFETY: `params` holds at least `known` bytes, and `known` is no more than the struct.
         unsafe { std::ptr::copy_nonoverlapping(&p as *const CreateParams as *const u8, params.as_mut_ptr(), known) };
@@ -427,7 +428,7 @@ impl<'a> Machine<'a> {
     /// `media_insert` from slices.
     pub fn media_insert_from(&self, drive: u32, image: Option<&[u8]>, files: &[(u32, &[u8])], flags: u32) -> i32 {
         let Some(f) = self.lib.f.media_insert else { return status::NOT_SUPPORTED };
-        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len() }).collect();
+        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len(), name: std::ptr::null() }).collect();
         let m = Media {
             size: std::mem::size_of::<Media>() as u32,
             flags,
@@ -436,6 +437,7 @@ impl<'a> Machine<'a> {
             files: entries.as_ptr(),
             file_count: entries.len(),
             file_size: std::mem::size_of::<FileEntry>(),
+            image_path: std::ptr::null(),
         };
         unsafe { f(self.h, drive, &m) }
     }

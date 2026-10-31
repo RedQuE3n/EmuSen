@@ -261,6 +261,7 @@ mod tests {
             flags: 0,
             device: std::ptr::null(),
             system: std::ptr::null(),
+            image_path: std::ptr::null(),
         };
         let mut code = 1;
         let m = unsafe { emusen_core_create(&p, &mut code) };

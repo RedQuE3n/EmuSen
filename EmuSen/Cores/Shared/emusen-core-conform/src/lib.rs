@@ -1179,7 +1179,7 @@ fn c11(s: &mut Session<'_>) -> Case {
         c.that((f.info)(one.as_mut_ptr(), 1) == whole && whole > 1, || "info with a one-byte buffer does not answer the whole length".to_owned());
     }
     let small_params = |size: u32, file_size: usize| -> i32 {
-        let file = FileEntry { size: 24, which: 0, data: std::ptr::null(), len: 0 };
+        let file = FileEntry { size: 24, which: 0, data: std::ptr::null(), len: 0, name: std::ptr::null() };
         let p = CreateParams {
             size,
             host_abi_version: emusen_native::core::sys::ABI_VERSION,
@@ -1196,6 +1196,7 @@ fn c11(s: &mut Session<'_>) -> Case {
             flags: 0,
             device: std::ptr::null(),
             system: std::ptr::null(),
+            image_path: std::ptr::null(),
         };
         let mut code = 0;
         let h = unsafe { (s.lib.f.create)(&p, &mut code) };

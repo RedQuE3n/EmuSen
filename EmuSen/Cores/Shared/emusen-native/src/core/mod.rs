@@ -10,6 +10,7 @@ pub mod jsonw;
 pub mod lend;
 pub mod outbox;
 pub mod pads;
+pub mod request;
 pub mod schema;
 pub mod spaces;
 pub mod sys;
@@ -23,6 +24,7 @@ pub use crate::ffi::StateMachine;
 pub use desc::*;
 pub use lend::{Kept, keep};
 pub use outbox::{Level, SEEK_SPAN, detail, emit, log, seek};
+pub use request::{file_name, file_names, image_path};
 pub use sys::{DeviceFrame, DeviceLend, FrameInfo, RawFrame, caps, event, flags, kind, pixel, status};
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,
@@ -162,6 +164,28 @@ pub trait Core: Sized + StateMachine {
 
     /// Before a state is written: the core's threads brought to rest.
     fn settle(&mut self) {}
+
+    /// Since 1.16, with `SNAPSHOT`: whether this machine offers kind 1; a core may withdraw it for a machine, which machine
+    /// info's `state.kinds` then leaves out and `state_size`/`state_save` answer `NOT_SUPPORTED` (EmuSen_LibretroHost.md §4.6).
+    fn snapshot_offered(&self) -> bool {
+        true
+    }
+
+    /// Since 1.16: the exact rate of the next sample a drain returns, as a ratio, where it is not a whole number of
+    /// hertz or the core knows it exactly; machine info's `audio.rate_exact` (EmuSen_LibretroHost.md §2, E4).
+    fn audio_rate_exact(&self) -> Option<(u64, u64)> {
+        None
+    }
+
+    /// Since 1.16: the named battery files present, which `battery` reads by number (EmuSen_LibretroHost.md §2, E3).
+    fn named_files(&self) -> Vec<NamedFile> {
+        Vec::new()
+    }
+
+    /// Since 1.16: core info's families of named battery files for system `id`, each by its kind.
+    fn battery_families(_system: &str) -> Vec<BatteryKind> {
+        Vec::new()
+    }
 
     /// `SNAPSHOT`: kind 1, which `state_load` also reads.
     fn snapshot_size(&self) -> usize {

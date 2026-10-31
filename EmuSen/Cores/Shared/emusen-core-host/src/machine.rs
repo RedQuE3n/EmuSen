@@ -24,11 +24,15 @@ pub struct Create<'a> {
     pub device: Option<&'a DeviceLend>,
     /// With an empty image, the system to start empty (since 1.11); beside an image, the system the host routed it to (since 1.15).
     pub system: Option<&'a CStr>,
+    /// Since 1.16, passed only to a core that claims `IMAGE_PATH`: the file the image's bytes are, unaltered.
+    pub image_path: Option<&'a CStr>,
+    /// Since 1.16: the names of the named battery files among `files`, by number.
+    pub names: &'a [(u32, &'a CStr)],
 }
 
 impl<'a> Create<'a> {
     pub fn new(image: &'a [u8]) -> Create<'a> {
-        Create { image, settings: "", files: &[], pixel_formats: 1, flags: 0, device: None, system: None }
+        Create { image, settings: "", files: &[], pixel_formats: 1, flags: 0, device: None, system: None, image_path: None, names: &[] }
     }
 }
 
@@ -60,7 +64,8 @@ fn count(code: i64) -> Result<usize, Status> {
 impl Machine {
     /// A machine for `c`, at this host's minor with every struct its own size.
     pub fn create(lib: &'static Library, c: &Create<'_>) -> Result<Machine, Refusal> {
-        let entries: Vec<FileEntry> = c.files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len() }).collect();
+        let name_of = |w: u32| c.names.iter().find(|n| n.0 == w).map_or(std::ptr::null(), |n| n.1.as_ptr());
+        let entries: Vec<FileEntry> = c.files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len(), name: name_of(*w) }).collect();
         let mut error = [0u8; 1024];
         let device = c.device.filter(|_| lib.claims(caps::DEVICE_PICTURE)).map_or(std::ptr::null(), |d| d as *const DeviceLend);
         let p = CreateParams {
@@ -79,6 +84,7 @@ impl Machine {
             flags: c.flags,
             device,
             system: c.system.map_or(std::ptr::null(), CStr::as_ptr),
+            image_path: c.image_path.filter(|_| lib.claims(caps::IMAGE_PATH)).map_or(std::ptr::null(), CStr::as_ptr),
         };
         let mut code = 0;
         // SAFETY: every pointer in `p` outlives the call.
@@ -316,7 +322,7 @@ impl Machine {
     /// A disc and its companions into `drive`, or none for `None`.
     pub fn media_insert(&mut self, drive: u32, image: Option<&[u8]>, files: &[(u32, &[u8])], flags: u32) -> Result<(), Status> {
         let f = self.lib.exports().media_insert.ok_or(status::NOT_SUPPORTED)?;
-        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len() }).collect();
+        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len(), name: std::ptr::null() }).collect();
         let m = Media {
             size: std::mem::size_of::<Media>() as u32,
             flags,
@@ -325,6 +331,7 @@ impl Machine {
             files: entries.as_ptr(),
             file_count: entries.len(),
             file_size: std::mem::size_of::<FileEntry>(),
+            image_path: std::ptr::null(),
         };
         ok(unsafe { f(self.h(), drive, &m) })
     }

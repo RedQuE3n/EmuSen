@@ -238,7 +238,7 @@ pub unsafe fn capabilities<T: Core>() -> u64 {
 }
 
 pub unsafe fn info<T: Core>(out: *mut u8, len: usize) -> i64 {
-    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES, &T::battery_files, &T::starts_empty), out, len) }
+    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES, &T::battery_files, &T::battery_families, &T::starts_empty), out, len) }
 }
 
 pub unsafe fn settings_schema<T: Core>(out: *mut u8, len: usize) -> i64 {
@@ -302,15 +302,39 @@ fn lent<'a, T: Core>(flag: bool, image: &'a [u8], files: &[File<'a>]) -> Option<
     (flag && T::CAPABILITIES & caps::BORROW != 0).then(|| Lend::open(std::iter::once(image).chain(files.iter().filter(|f| f.which >= flags::FILE_MEDIA).map(|f| f.data))))
 }
 
-/// The host's array of `count` files of `size` bytes each, at least 1.0's, as slices.
-unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> Vec<File<'a>> {
-    (0..count)
-        .map(|i| {
-            // SAFETY: the host gave `count` elements of `size` bytes, each at least 1.0's.
-            let f = unsafe { std::ptr::read_unaligned((files as *const u8).add(i * size) as *const FileEntry) };
-            File { which: f.which, data: unsafe { input(f.data, f.len) } }
-        })
-        .collect()
+/// The host's array of `count` files of `size` bytes each, at least 1.0's, as slices, and since 1.16 the names of the
+/// named files among them; a named file with no name or a name a host may not store is `BAD_FILE`.
+unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> Result<(Vec<File<'a>>, Vec<(u32, String)>), i32> {
+    let mut list = Vec::with_capacity(count);
+    let mut names = Vec::new();
+    for i in 0..count {
+        let mut f = std::mem::MaybeUninit::<FileEntry>::zeroed();
+        // SAFETY: the host gave `count` elements of `size` bytes, each at least 1.0's; no more than ours is copied, and
+        // a field past the host's element reads as zero, which is "absent".
+        let f = unsafe {
+            std::ptr::copy_nonoverlapping((files as *const u8).add(i * size), f.as_mut_ptr() as *mut u8, size.min(size_of::<FileEntry>()));
+            f.assume_init()
+        };
+        if super::request::is_named(f.which) {
+            match unsafe { super::request::text(f.name) } {
+                Some(Ok(name)) if super::request::valid_name(&name) => names.push((f.which, name)),
+                _ => {
+                    super::detail(&format!("named file {} has no name a host may store", f.which));
+                    return Err(status::BAD_FILE);
+                }
+            }
+        }
+        list.push(File { which: f.which, data: unsafe { input(f.data, f.len) } });
+    }
+    Ok((list, names))
+}
+
+/// Since 1.16: the image's path for a core claiming `IMAGE_PATH`, where the host gave one in UTF-8.
+unsafe fn image_path_of<T: Core>(path: *const std::ffi::c_char) -> Option<String> {
+    if T::CAPABILITIES & caps::IMAGE_PATH == 0 {
+        return None;
+    }
+    unsafe { super::request::text(path) }.and_then(Result::ok)
 }
 
 // ---- Lifecycle ----------------------------------------------------------------------------------------------
@@ -368,10 +392,11 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
         let r = (|| {
             let p = unsafe { prefix(params, CreateParams::SIZE_1_0) }?;
             error = (p.error, p.error_len);
-            if p.file_count > 0 && p.file_size < size_of::<FileEntry>() {
+            if p.file_count > 0 && p.file_size < FileEntry::SIZE_1_0 {
                 return Err(status::BAD_STRUCT);
             }
-            let files = unsafe { file_list(p.files, p.file_count, p.file_size) };
+            let (files, names) = unsafe { file_list(p.files, p.file_count, p.file_size) }?;
+            let extras = super::request::Request { image_path: unsafe { image_path_of::<T>(p.image_path) }, names };
             let settings = resolve(&T::settings_schema(), unsafe { input(p.settings, p.settings_len) }, true, true).map_err(|(code, why)| {
                 super::detail(&why);
                 code
@@ -390,11 +415,11 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 false => unsafe { routed_system::<T>(p.system) }?.map_or(Made::Chosen, Made::Routed),
             };
             let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0 && !matches!(which, Made::Empty(_)), request.image, &request.files);
-            let made = match &which {
+            let made = super::request::with(extras, || match &which {
                 Made::Empty(system) => T::create_empty(system, &request),
                 Made::Routed(system) => T::create_as(system, &request),
                 Made::Chosen => T::create(&request),
-            };
+            });
             let loan = lend.map(Lend::close);
             match (made, loan) {
                 (Ok(core), loan) => Ok((core, loan)),
@@ -463,6 +488,9 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         raw: &if T::CAPABILITIES & caps::RAW_PICTURE != 0 { core.raw_encodings() } else { Vec::new() },
         units: &if T::CAPABILITIES & caps::DEBUG_REGISTERS != 0 { core.units() } else { Vec::new() },
         telemetry: &if T::CAPABILITIES & caps::TELEMETRY != 0 { core.counters() } else { Vec::new() },
+        named: &core.named_files(),
+        audio_rate_exact: core.audio_rate_exact(),
+        snapshot_offered: core.snapshot_offered(),
     };
     let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
     let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);
@@ -682,7 +710,7 @@ pub unsafe fn set_axis<T: Core>(machine: *mut Machine, port: u32, axis: u32, val
 fn kind_size<T: Core>(core: &T, k: u32) -> Result<usize, i32> {
     match k {
         kind::FULL => Ok(core.state_size()),
-        kind::SNAPSHOT if T::CAPABILITIES & caps::SNAPSHOT != 0 => Ok(core.snapshot_size()),
+        kind::SNAPSHOT if T::CAPABILITIES & caps::SNAPSHOT != 0 && core.snapshot_offered() => Ok(core.snapshot_size()),
         _ => Err(status::NOT_SUPPORTED),
     }
 }
@@ -818,20 +846,21 @@ pub unsafe fn media_lid<T: Core>(machine: *mut Machine, drive: u32, open: u32) -
 
 pub unsafe fn media_insert<T: Core>(machine: *mut Machine, drive: u32, media: *const super::sys::Media) -> i32 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
-    let m = match unsafe { prefix(media, size_of::<super::sys::Media>()) } {
+    let m = match unsafe { prefix(media, std::mem::offset_of!(super::sys::Media, image_path)) } {
         Ok(m) => m,
         Err(code) => return code,
     };
-    if m.file_count > 0 && m.file_size < size_of::<FileEntry>() {
+    if m.file_count > 0 && m.file_size < FileEntry::SIZE_1_0 {
         return status::BAD_STRUCT;
     }
-    let insert = Insert {
-        image: if m.image.is_null() { None } else { Some(unsafe { input(m.image, m.image_len) }) },
-        files: unsafe { file_list(m.files, m.file_count, m.file_size) },
-        restore: m.flags & flags::MEDIA_RESTORE != 0,
+    let (files, names) = match unsafe { file_list(m.files, m.file_count, m.file_size) } {
+        Ok(f) => f,
+        Err(code) => return code,
     };
+    let insert = Insert { image: if m.image.is_null() { None } else { Some(unsafe { input(m.image, m.image_len) }) }, files, restore: m.flags & flags::MEDIA_RESTORE != 0 };
+    let extras = super::request::Request { image_path: unsafe { image_path_of::<T>(m.image_path) }, names };
     let lend = insert.image.and_then(|image| lent::<T>(m.flags & flags::MEDIA_LENT != 0, image, &insert.files));
-    let r = call(inst, |c| c.media_insert(drive, &insert));
+    let r = super::request::with(extras, || call(inst, |c| c.media_insert(drive, &insert)));
     let loan = lend.map(Lend::close);
     let name = || T::info().name;
     match r {

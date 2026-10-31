@@ -15,8 +15,9 @@ use crate::exports::Exports;
 /// A descriptor larger than this is refused at load (§7.2).
 pub const MAX_DESCRIPTOR_BYTES: i64 = 1 << 20;
 
-/// The host obligations this host meets, the names core info's `host_requires` may use.
-pub const HOST_OBLIGATIONS: &[&str] = &["present"];
+/// The host obligations this host meets, the names core info's `host_requires` may use: since 1.16 `image_path`, the image's
+/// file given beside its bytes, and `named_files`, a core's named battery files passed back by name (EmuSen_LibretroHost.md §2).
+pub const HOST_OBLIGATIONS: &[&str] = &["present", "image_path", "named_files"];
 
 /// Why a library could not be loaded at all.
 #[derive(Clone, Debug, PartialEq, Eq)]

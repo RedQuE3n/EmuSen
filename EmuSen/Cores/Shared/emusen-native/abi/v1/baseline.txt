@@ -22,6 +22,7 @@ const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
 const EMUSEN_CAP_DEBUG_TRANSLATE 0x2000000 @1.13
 const EMUSEN_CAP_DEVICE_PICTURE 0x200000 @1.9
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
+const EMUSEN_CAP_IMAGE_PATH 0x4000000 @1.16
 const EMUSEN_CAP_MEDIA 0x40000 @1.1
 const EMUSEN_CAP_MUTES 0x20 @1.0
 const EMUSEN_CAP_PHASES 0x80 @1.0
@@ -36,8 +37,8 @@ const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CAP_TELEMETRY 0x800000 @1.13
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0xf @1.15
-const EMUSEN_CORE_ABI_VERSION 0x1000f @1.15
+const EMUSEN_CORE_ABI_MINOR 0x10 @1.16
+const EMUSEN_CORE_ABI_VERSION 0x10010 @1.16
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -51,6 +52,7 @@ const EMUSEN_DEBUG_WRITES 0x2 @1.0
 const EMUSEN_FILE_BATTERY 0x0 @1.0
 const EMUSEN_FILE_IMAGE 0xffffffff @1.4
 const EMUSEN_FILE_MEDIA 0x10000 @1.1
+const EMUSEN_FILE_NAMED 0x8000 @1.16
 const EMUSEN_FRAME_CHEATS_HELD 0x2 @1.13
 const EMUSEN_FRAME_WALKED 0x1 @1.0
 const EMUSEN_MEDIA_LENT 0x2 @1.3
@@ -179,6 +181,7 @@ field emusen_create_params.flags offset 88 type uint32_t @1.3
 field emusen_create_params.host_abi_version offset 4 type uint32_t @1.0
 field emusen_create_params.image offset 8 type const uint8_t* @1.0
 field emusen_create_params.image_len offset 16 type size_t @1.0
+field emusen_create_params.image_path offset 112 type const char* @1.16
 field emusen_create_params.pixel_formats offset 64 type uint64_t @1.0
 field emusen_create_params.settings offset 24 type const uint8_t* @1.0
 field emusen_create_params.settings_len offset 32 type size_t @1.0
@@ -211,6 +214,7 @@ field emusen_event.kind offset 4 type uint32_t @1.0
 field emusen_event.size offset 0 type uint32_t @1.0
 field emusen_file.data offset 8 type const uint8_t* @1.0
 field emusen_file.len offset 16 type size_t @1.0
+field emusen_file.name offset 24 type const char* @1.16
 field emusen_file.size offset 0 type uint32_t @1.0
 field emusen_file.which offset 4 type uint32_t @1.0
 field emusen_frame_info.aspect_den offset 32 type uint32_t @1.0
@@ -233,6 +237,7 @@ field emusen_media.files offset 24 type const emusen_file* @1.1
 field emusen_media.flags offset 4 type uint32_t @1.1
 field emusen_media.image offset 8 type const uint8_t* @1.1
 field emusen_media.image_len offset 16 type size_t @1.1
+field emusen_media.image_path offset 48 type const char* @1.16
 field emusen_media.size offset 0 type uint32_t @1.1
 field emusen_raw_frame.bytes offset 24 type int64_t @1.10
 field emusen_raw_frame.element offset 4 type uint32_t @1.10
@@ -342,6 +347,7 @@ json info.license string required @1.0
 json info.name string required @1.0
 json info.systems array<object> required @1.0
 json info.systems[].battery array<object> optional @1.3
+json info.systems[].battery[].family string optional @1.16
 json info.systems[].battery[].kind string optional @1.7
 json info.systems[].battery[].label string optional @1.8
 json info.systems[].battery[].medium string optional @1.8
@@ -385,9 +391,14 @@ json machine_info.achievements any optional @1.0
 json machine_info.audio object required @1.0
 json machine_info.audio.channels array<string> optional @1.0
 json machine_info.audio.rate integer required @1.0
+json machine_info.audio.rate_exact object optional @1.16
+json machine_info.audio.rate_exact.den integer required @1.16
+json machine_info.audio.rate_exact.num integer required @1.16
 json machine_info.battery array<object> optional @1.0
 json machine_info.battery[].kind string optional @1.7
 json machine_info.battery[].length integer required @1.0
+json machine_info.battery[].name string optional @1.16
+json machine_info.battery[].removed boolean optional @1.16
 json machine_info.battery[].suffix string required @1.0
 json machine_info.battery[].which integer required @1.0
 json machine_info.drives array<object> optional @1.1

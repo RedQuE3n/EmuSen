@@ -43,6 +43,7 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
         flags: 0,
         device: std::ptr::null(),
         system: std::ptr::null(),
+        image_path: std::ptr::null(),
     }
 }
 
@@ -93,7 +94,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.15"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.16"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 26);
     assert!(
@@ -121,7 +122,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
     assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
     let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
@@ -145,7 +146,7 @@ fn a_firmware_entrys_md5_list_is_written_only_when_not_empty() {
 fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
     use super::desc::{MachineInfo, PICTURE_SETTLES_MAX};
     let m = MachineInfo::default();
-    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[], units: &[], telemetry: &[] }, &[]);
+    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true }, &[]);
     assert!(!of(0).contains("picture_settles"), "{}", of(0));
     assert!(of(240).contains(r#""loads_from":[],"picture_settles":240}"#), "{}", of(240));
     assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX)), Vec::<String>::new());
@@ -157,11 +158,31 @@ fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
 fn a_view_is_a_flag_of_its_space() {
     use super::desc::{MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
+    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
+// Since 1.16: named files after the numbered ones, the exact rate, a withdrawn snapshot and an unrated setting, each valid.
+#[test]
+fn the_additions_of_1_16_are_written_and_valid() {
+    use super::desc::{Battery, BatteryKind, Effect, MachineInfo, NamedFile, Scope, Setting, SettingKind, Choice};
+    let m = MachineInfo { battery: vec![Battery::game(0, ".srm")], ..MachineInfo::default() };
+    let named = [NamedFile { which: flags::FILE_NAMED, name: "save/notes.txt".into(), kind: BatteryKind::Console, removed: false }, NamedFile { which: flags::FILE_NAMED + 1, name: "save/old.txt".into(), kind: BatteryKind::Console, removed: true }];
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|w| Some(w as i64 & 0xF), capabilities: caps::SNAPSHOT, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &named, audio_rate_exact: Some((64_081, 2)), snapshot_offered: false };
+    let mi = super::desc::machine_info_json(&m, &measured, &[]);
+    assert!(mi.contains(r#""rate_exact":{"num":64081,"den":2}"#), "{mi}");
+    assert!(mi.contains(r#"{"which":32768,"suffix":"","name":"save/notes.txt","length":0,"kind":"console"}"#), "{mi}");
+    assert!(mi.contains(r#""name":"save/old.txt","length":1,"kind":"console","removed":true}"#), "{mi}");
+    assert!(mi.contains(r#""kinds":[0]"#), "{mi}");
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+    let unrated = Setting { key: "core_option".into(), label: "An option".into(), help: String::new(), kind: SettingKind::Choice(vec![Choice::new("a", "A")]), default: "a".into(), scope: Scope::Run, category: None, effect: Effect::Unrated, advanced: false, hidden: false, restart: false };
+    assert_eq!(unrated.check(), Ok(()));
+    let text = super::desc::settings_json(&[unrated]);
+    assert!(text.contains(r#""effect":"unrated""#), "{text}");
+    assert_eq!(schema::validate(schema::SETTINGS, &text), Vec::<String>::new());
 }
 
 // Since 1.14 a space's byte order is written only where the core states one, so no earlier machine info changes by a byte (§6.39).
@@ -169,7 +190,7 @@ fn a_view_is_a_flag_of_its_space() {
 fn a_spaces_byte_order_is_written_only_when_stated() {
     use super::desc::{BYTE_ORDER_BIG, BYTE_ORDER_LITTLE, MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space::new(0, "WRAM"), Space { byte_order: Some(BYTE_ORDER_LITTLE), ..Space::new(1, "Z80RAM") }, Space { byte_order: Some(BYTE_ORDER_BIG), ..Space::new(2, "VRAM") }], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| Some(8), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
+    let measured = super::desc::Measured { space_size: &|_| Some(8), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"WRAM","size":8,"flags":[]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"Z80RAM","size":8,"flags":[],"byte_order":"little"}"#), "{mi}");
@@ -230,7 +251,7 @@ fn create_refuses_with_a_status_and_nul_terminated_words() {
     let small = CreateParams { size: 80, ..params(&one, "", &[]) };
     assert!(unsafe { emusen_core_create(&small, &mut code) }.is_null());
     assert_eq!(code, status::BAD_STRUCT);
-    let file = FileEntry { size: 24, which: 0, data: null(), len: 0 };
+    let file = FileEntry { size: 24, which: 0, data: null(), len: 0, name: std::ptr::null() };
     let short_files = CreateParams { file_size: 16, ..params(&one, "", std::slice::from_ref(&file)) };
     assert!(unsafe { emusen_core_create(&short_files, &mut code) }.is_null());
     assert_eq!(code, status::BAD_STRUCT);
@@ -243,7 +264,7 @@ fn create_refuses_with_a_status_and_nul_terminated_words() {
         let got = std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap();
         assert!(got.contains(says), "{got}");
     }
-    let bad_file = FileEntry { size: 24, which: 5, data: [1u8].as_ptr(), len: 1 };
+    let bad_file = FileEntry { size: 24, which: 5, data: [1u8].as_ptr(), len: 1, name: std::ptr::null() };
     let mut p = params(&one, "", std::slice::from_ref(&bad_file));
     (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
     assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
@@ -531,20 +552,22 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000F);
-    assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
+    assert_eq!(ABI_VERSION, 0x0001_0010);
+    assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (120, 104), "since 1.11");
+    assert_eq!((std::mem::offset_of!(CreateParams, image_path), std::mem::size_of::<FileEntry>(), FileEntry::SIZE_1_0, std::mem::size_of::<Media>()), (112, 32, 24, 56), "since 1.16");
+    assert_eq!((caps::IMAGE_PATH, flags::FILE_NAMED, caps::UNASSIGNED & caps::IMAGE_PATH), (1 << 26, 0x8000, 0), "since 1.16");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");
     assert_eq!(flags::CREATE_SHARED_REMOVABLE, 2, "since 1.7, beside CREATE_LENT");
     assert_eq!(flags::CREATE_SHARED_CONSOLE, 4, "since 1.8, beside CREATE_SHARED_REMOVABLE");
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
-    assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 112), "the device lent at 1.9 follows 1.3's flags and their padding, and 1.11's system follows it");
+    assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::offset_of!(CreateParams, image_path)), (88, 96, 112), "the device lent at 1.9 follows 1.3's flags and their padding, 1.11's system follows it, and 1.16's image path that");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
     assert_eq!(EXPORTS.len(), 65);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 26);
+    assert_eq!(CAPABILITY_NAMES.len(), 27);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
@@ -571,6 +594,7 @@ fn media(image: Option<&[u8]>, flags: u32) -> Media {
         files: null(),
         file_count: 0,
         file_size: std::mem::size_of::<FileEntry>(),
+        image_path: null(),
     }
 }
 
@@ -739,10 +763,10 @@ fn a_lent_disc_is_let_go_when_its_drive_takes_another() {
 fn a_slots_medium_label_and_port_are_written_only_where_set() {
     use super::desc::{Battery, Info, System, info_json};
     let info = Info { id: "x".into(), systems: vec![System { id: "n64".into(), ..Default::default() }], ..Default::default() };
-    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]), &|_| false);
+    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]), &|_| Vec::new(), &|_| false);
     assert!(text.contains(r#""battery":[{"which":0,"suffix":".eep"},{"which":1,"suffix":".2.mpk","kind":"removable","medium":"n64.pak","label":"Controller 2","port":1}]"#), "{text}");
     assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &text), Vec::<String>::new());
-    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]), &|_| false);
+    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]), &|_| Vec::new(), &|_| false);
     assert!(!schema::validate(include_str!("../../abi/v1/info.schema.json"), &bad).is_empty(), "a medium outside [a-z0-9.]+ is refused by the schema");
 }
 

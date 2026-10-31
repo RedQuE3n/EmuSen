@@ -54,8 +54,8 @@ fn manifest(dir: &Path, libraries: &[&Path]) {
 fn the_test_core_loads_and_passes_rule_4_and_its_report_names_it() {
     let lib = Library::load(&example("host_test_core")).unwrap();
     let c = lib.check().unwrap();
-    assert_eq!(c.version, (1 << 16) | 15);
-    assert_eq!(lib.report(), format!("{}, V1TestCore (test) 1.0.0, core ABI 1.15", example("host_test_core").display()));
+    assert_eq!(c.version, (1 << 16) | 16);
+    assert_eq!(lib.report(), format!("{}, V1TestCore (test) 1.0.0, core ABI 1.16", example("host_test_core").display()));
     assert!(std::ptr::eq(lib, Library::load(&example("host_test_core")).unwrap()), "one library per path");
     let plain = Library::load(&example("host_plain_core")).unwrap();
     assert!(plain.check().is_ok() && plain.capabilities() == 0);
@@ -266,7 +266,7 @@ fn discovery_lists_from_sidecars_alone_and_opens_under_the_trust_rules() {
         c.open(&trust).unwrap();
     }
     let v = listed(&d);
-    assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.15", dir.join("libtest.so").display()));
+    assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.16", dir.join("libtest.so").display()));
     let engine = &v.get("engines").and_then(Value::as_array).unwrap()[1];
     assert_eq!(engine.get("systems"), Some(&Value::Array(vec![Value::Str("test".into())])));
     assert_eq!(engine.get("available"), Some(&Value::Bool(true)));

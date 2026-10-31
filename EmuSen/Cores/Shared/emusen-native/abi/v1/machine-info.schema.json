@@ -39,6 +39,7 @@
       "required": ["rate"],
       "properties": {
         "rate": { "type": "integer" },
+        "rate_exact": { "$ref": "#/$defs/ratio" },
         "channels": { "type": "array", "items": { "type": "string" } }
       }
     },
@@ -115,8 +116,10 @@
         "properties": {
           "which": { "type": "integer", "minimum": 0 },
           "suffix": { "type": "string" },
+          "name": { "type": "string" },
           "length": { "type": "integer", "minimum": 0 },
-          "kind": { "type": "string", "enum": ["game", "removable", "console"] }
+          "kind": { "type": "string", "enum": ["game", "removable", "console"] },
+          "removed": { "type": "boolean" }
         }
       }
     },

@@ -714,6 +714,52 @@ pub(crate) mod tests {
         Paired { a2, b2, c2, old2, mask2, pa: join(a, a2), pb: join(b, b2), pc: join(c, c2), po: join(old, old2), pm: mask | mask2 << 16 }
     }
 
+    /// Every entry point's reference for one case: four lanes and the paired form, add, sub, mul, and the multiply-add
+    /// and multiply-subtract (`fused[0]`, `fused[1]`); what each kernel's check compares against.
+    pub(crate) struct Expected {
+        pub add: Vector,
+        pub sub: Vector,
+        pub mul: Vector,
+        pub add2: Pair,
+        pub sub2: Pair,
+        pub mul2: Pair,
+        pub fused: [FusedVector; 2],
+        pub fused2: [FusedPair; 2],
+        pub paired: Paired,
+    }
+    pub(crate) fn expected(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32) -> Expected {
+        let p = paired(a, b, c, old, mask);
+        let r = |f: fn(u32, u32) -> Outcome| reference(&old, mask, |l| f(a[l], b[l]));
+        let r2 = |f: fn(u32, u32) -> Outcome| both(r(f), reference(&p.old2, p.mask2, |l| f(p.a2[l], p.b2[l])));
+        let part = |acc: [u32; 4], x: [u32; 4], y: [u32; 4], o: [u32; 4], m: u32, subtract: bool, product: bool| {
+            reference(&o, m, |l| {
+                let f = float::fused(acc[l], x[l], y[l], subtract);
+                if product { f.product } else { f.value }
+            })
+        };
+        let fused = |s: bool| FusedVector { value: part(c, a, b, old, mask, s, false), product: part(c, a, b, old, mask, s, true) };
+        let fused2 = |s: bool| {
+            let one = fused(s);
+            FusedPair { value: both(one.value, part(p.c2, p.a2, p.b2, p.old2, p.mask2, s, false)), product: both(one.product, part(p.c2, p.a2, p.b2, p.old2, p.mask2, s, true)) }
+        };
+        Expected {
+            add: r(float::add),
+            sub: r(float::sub),
+            mul: r(float::mul),
+            add2: r2(float::add),
+            sub2: r2(float::sub),
+            mul2: r2(float::mul),
+            fused: [fused(false), fused(true)],
+            fused2: [fused2(false), fused2(true)],
+            paired: p,
+        }
+    }
+
+    /// Three vectors of four operands of every class, drawn from `next`.
+    pub(crate) fn three(next: &mut impl FnMut() -> u64) -> ([u32; 4], [u32; 4], [u32; 4]) {
+        ([0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())))
+    }
+
     /// Each pair of the reduced set in lane `i % 4`, beside three other pairs of it, against an accumulator drawn from it;
     /// with `fill`, every fourth pair fills the vector instead, so that vectors taken whole by a fast path are met.
     pub(crate) fn reduced_pairs(fill: bool, mut check: impl FnMut([u32; 4], [u32; 4], [u32; 4], [u32; 4], u32)) {

@@ -157,27 +157,16 @@ pub mod raw {
         (r, term, and(_mm256_or_si256(pt, st), live))
     }
 
-    /// The MAC word's Z and S groups of the four lanes from lane `at`, and U for a sum whose operands were `a` and `b`.
+    /// The MAC word's Z, S and U groups of the four lanes from lane `at`, for a result `r` of operands `a` and `b`: U is
+    /// a zero result of two non-zero operands, and for a sum (`sum`) not an exact cancellation.
     #[target_feature(enable = "avx2")]
     #[inline]
-    pub fn mac_add(r: __m256i, a: __m256i, b: __m256i, at: u32) -> u32 {
+    pub fn mac(r: __m256i, a: __m256i, b: __m256i, at: u32, sum: bool) -> u32 {
         let zero = _mm256_cmpeq_epi32(and(r, k(EXP)), _mm256_setzero_si256());
         let z = _mm256_movemask_ps(f(zero)) as u32;
         let s = _mm256_movemask_ps(f(r)) as u32;
         let live = and(_mm256_cmpgt_epi32(and(a, k(EXP)), _mm256_setzero_si256()), _mm256_cmpgt_epi32(and(b, k(EXP)), _mm256_setzero_si256()));
-        let cancel = _mm256_cmpeq_epi32(a, _mm256_xor_si256(b, k(SIGN)));
-        let u = _mm256_movemask_ps(f(and(zero, _mm256_andnot_si256(cancel, live)))) as u32;
-        word(z >> at, s >> at, u >> at)
-    }
-
-    /// The same for a product of `a` and `b`.
-    #[target_feature(enable = "avx2")]
-    #[inline]
-    pub fn mac_mul(r: __m256i, a: __m256i, b: __m256i, at: u32) -> u32 {
-        let zero = _mm256_cmpeq_epi32(and(r, k(EXP)), _mm256_setzero_si256());
-        let z = _mm256_movemask_ps(f(zero)) as u32;
-        let s = _mm256_movemask_ps(f(r)) as u32;
-        let live = and(_mm256_cmpgt_epi32(and(a, k(EXP)), _mm256_setzero_si256()), _mm256_cmpgt_epi32(and(b, k(EXP)), _mm256_setzero_si256()));
+        let live = if sum { _mm256_andnot_si256(_mm256_cmpeq_epi32(a, _mm256_xor_si256(b, k(SIGN))), live) } else { live };
         let u = _mm256_movemask_ps(f(and(zero, live))) as u32;
         word(z >> at, s >> at, u >> at)
     }
@@ -234,7 +223,7 @@ macro_rules! entry {
             if raw::any(_mm256_and_si256(trouble, raw::on(mask))) {
                 return $add(a, b, old, mask);
             }
-            finish(r, raw::mac_add(r, x, y, 0) | if $n == 8 { raw::mac_add(r, x, y, 4) << 16 } else { 0 }, old, mask)
+            finish(r, raw::mac(r, x, y, 0, true) | if $n == 8 { raw::mac(r, x, y, 4, true) << 16 } else { 0 }, old, mask)
         }
         /// `float::sub`.
         #[target_feature(enable = "avx2")]
@@ -251,7 +240,7 @@ macro_rules! entry {
                 return $mul(a, b, old, mask);
             }
             let p = raw::fixed(p, x, y, _mm256_and_si256(fix, live));
-            finish(p, raw::mac_mul(p, x, y, 0) | if $n == 8 { raw::mac_mul(p, x, y, 4) << 16 } else { 0 }, old, mask)
+            finish(p, raw::mac(p, x, y, 0, false) | if $n == 8 { raw::mac(p, x, y, 4, false) << 16 } else { 0 }, old, mask)
         }
         /// `float::fused`, with the term's own flags.
         #[target_feature(enable = "avx2")]
@@ -261,10 +250,10 @@ macro_rules! entry {
             if raw::any(trouble) {
                 return $fused(acc, a, b, subtract, old, mask);
             }
-            let (mut vm, mut pm) = (raw::mac_add(r, c, term, 0), raw::mac_mul(term, x, y, 0));
+            let (mut vm, mut pm) = (raw::mac(r, c, term, 0, true), raw::mac(term, x, y, 0, false));
             if $n == 8 {
-                vm |= raw::mac_add(r, c, term, 4) << 16;
-                pm |= raw::mac_mul(term, x, y, 4) << 16;
+                vm |= raw::mac(r, c, term, 4, true) << 16;
+                pm |= raw::mac(term, x, y, 4, false) << 16;
             }
             $fused_out { value: finish(r, vm, old, mask), product: finish(term, pm, old, mask) }
         }
@@ -342,14 +331,13 @@ pub fn taken(op: u8, c: &[u32; 4], a: &[u32; 4], b: &[u32; 4]) -> Taken {
 mod tests {
     use super::*;
     use crate::float::Outcome;
-    use crate::float::tests::{operand, stream};
-    use crate::float_lanes::tests::{Paired, both, class_vectors, paired, random_lanes, reduced_pairs, reference};
+    use crate::float::tests::stream;
+    use crate::float_lanes::tests::{Paired, class_vectors, expected, random_lanes, reduced_pairs, three};
 
     /// Both widths against `float` lane by lane; counts the vectors kept whole and the lanes `fixed` recomputed.
     fn check(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32, counts: &mut [u64; 4]) {
-        let r = |f: fn(u32, u32) -> Outcome| reference(&old, mask, |l| f(a[l], b[l]));
-        let Paired { a2, b2, c2, old2, mask2, pa, pb, pc, po, pm } = paired(a, b, c, old, mask);
-        let r2 = |f: fn(u32, u32) -> Outcome| both(r(f), reference(&old2, mask2, |l| f(a2[l], b2[l])));
+        let e = expected(a, b, c, old, mask);
+        let Paired { pa, pb, pc, po, pm, .. } = e.paired;
         // SAFETY: the tests run where AVX2 is present, with MXCSR set by the caller.
         unsafe {
             for (op, n) in [(0u8, 0usize), (1, 1), (2, 2)] {
@@ -357,26 +345,15 @@ mod tests {
                 counts[n] += u64::from(t.whole);
                 counts[3] += u64::from(t.fixed.count_ones());
             }
-            assert_eq!(four::add(&a, &b, &old, mask), r(float::add), "add {a:08x?} {b:08x?}");
-            assert_eq!(four::sub(&a, &b, &old, mask), r(float::sub), "sub {a:08x?} {b:08x?}");
-            assert_eq!(four::mul(&a, &b, &old, mask), r(float::mul), "mul {a:08x?} {b:08x?}");
-            assert_eq!(eight::add(&pa, &pb, &po, pm), r2(float::add), "eight add");
-            assert_eq!(eight::sub(&pa, &pb, &po, pm), r2(float::sub), "eight sub");
-            assert_eq!(eight::mul(&pa, &pb, &po, pm), r2(float::mul), "eight mul");
-            for subtract in [false, true] {
-                let part = |acc: [u32; 4], x: [u32; 4], y: [u32; 4], o: [u32; 4], m: u32, k: bool| {
-                    reference(&o, m, |l| {
-                        let f = float::fused(acc[l], x[l], y[l], subtract);
-                        if k { f.product } else { f.value }
-                    })
-                };
-                let want = FusedVector { value: part(c, a, b, old, mask, false), product: part(c, a, b, old, mask, true) };
-                let want2 = FusedPair {
-                    value: both(want.value, part(c2, a2, b2, old2, mask2, false)),
-                    product: both(want.product, part(c2, a2, b2, old2, mask2, true)),
-                };
-                assert_eq!(four::fused(&c, &a, &b, subtract, &old, mask), want, "fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
-                assert_eq!(eight::fused(&pc, &pa, &pb, subtract, &po, pm), want2, "eight fused");
+            assert_eq!(four::add(&a, &b, &old, mask), e.add, "add {a:08x?} {b:08x?}");
+            assert_eq!(four::sub(&a, &b, &old, mask), e.sub, "sub {a:08x?} {b:08x?}");
+            assert_eq!(four::mul(&a, &b, &old, mask), e.mul, "mul {a:08x?} {b:08x?}");
+            assert_eq!(eight::add(&pa, &pb, &po, pm), e.add2, "eight add");
+            assert_eq!(eight::sub(&pa, &pb, &po, pm), e.sub2, "eight sub");
+            assert_eq!(eight::mul(&pa, &pb, &po, pm), e.mul2, "eight mul");
+            for (i, subtract) in [false, true].into_iter().enumerate() {
+                assert_eq!(four::fused(&c, &a, &b, subtract, &old, mask), e.fused[i], "fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
+                assert_eq!(eight::fused(&pc, &pa, &pb, subtract, &po, pm), e.fused2[i], "eight fused");
             }
         }
     }
@@ -500,7 +477,7 @@ mod tests {
             let field = |x: u32| x >> 23 & 0xFF;
             let edge = |bits: u32| (bits & MAX) >= 0x7F7F_FFFE;
             for _ in 0..1_000_000 {
-                let (a, b, c) = ([0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())));
+                let (a, b, c) = three(&mut next);
                 let rule = |o: fn(u32, u32) -> Outcome| (0..4).all(|l| field(a[l]) != 255 && field(b[l]) != 255 && !o(a[l], b[l]).overflow && !edge(o(a[l], b[l]).bits));
                 let near = |o: fn(u32, u32) -> Outcome| (0..4).any(|l| edge(o(a[l], b[l]).bits));
                 // SAFETY: AVX2 present, the mode set.

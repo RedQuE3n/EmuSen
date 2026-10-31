@@ -78,16 +78,6 @@ fn decode(word: u32) -> Class {
     }
 }
 
-/// Whether a block's word reaches memory: a load, a store, PREF, LQC2 or SQC2.
-pub fn touches_memory(word: u32) -> bool {
-    class(word) == Class::Memory
-}
-
-/// Every mnemonic a block compiles, for the tests that cover each one.
-pub fn compiled() -> impl Iterator<Item = &'static str> {
-    PLAIN.iter().chain(BRANCH).chain(MEMORY).copied()
-}
-
 /// Whether a class is compiled where it stands, the block going on after it.
 fn straight(c: Class) -> bool {
     matches!(c, Class::Plain | Class::Memory | Class::Call)

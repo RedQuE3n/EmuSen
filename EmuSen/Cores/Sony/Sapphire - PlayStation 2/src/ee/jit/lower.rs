@@ -17,7 +17,6 @@ const HI: i32 = offset_of!(Ee, hi) as i32;
 const LO: i32 = offset_of!(Ee, lo) as i32;
 const SA: i32 = offset_of!(Ee, sa) as i32;
 const FPR: i32 = offset_of!(Ee, fpr) as i32;
-const ACC: i32 = offset_of!(Ee, acc) as i32;
 const FCR31: i32 = offset_of!(Ee, fcr31) as i32;
 const STATUS: i32 = (offset_of!(Ee, cop0) + 4 * crate::ee::cop0::STATUS) as i32;
 const UCAB_VALID: i32 = offset_of!(Ee, ucab) as i32 + offset_of!(super::super::cache::Ucab, valid) as i32;

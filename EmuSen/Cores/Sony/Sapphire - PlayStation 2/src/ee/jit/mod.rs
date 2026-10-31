@@ -143,11 +143,6 @@ impl Ee {
         (0..room.min(n)).map_while(|k| map.code_word(paddr + 4 * k as u32)).collect()
     }
 
-    /// The cycles Count last saw.
-    pub(crate) fn cycles_seen(&self) -> u64 {
-        self.cycles_seen
-    }
-
     /// The instruction a helper is about to run stands at time `t`: the issue model at rest there, its stalls clear.
     pub(crate) fn begin_call(&mut self, t: u64, index: u16, word: u32) {
         self.timing.rest_at(t);

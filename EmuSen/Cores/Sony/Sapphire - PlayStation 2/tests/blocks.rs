@@ -801,123 +801,6 @@ fn the_stage_s7_memory_programs_leave_the_interpreters_machine() {
     }
 }
 
-/// The DMAC moving between RDRAM and the scratchpad, cycle-stealing in 128-byte units, while a loop reads and writes
-/// both through its caches, past them and in the scratchpad, polling the channels between passes.
-const DMA: &str = "
-    lui s0, 0xb001
-    ori t0, zero, 0x303
-    sw t0, -0x2000(s0)
-    lui s7, 0xa030
-    lui gp, 0x0030
-    lui sp, 0x7000
-    ori t9, zero, 60
-    top: lui t0, 0x0030
-    sw t0, -0x2bf0(s0)
-    sw zero, -0x2b80(s0)
-    ori t0, zero, 48
-    sw t0, -0x2be0(s0)
-    ori t0, zero, 0x100
-    sw t0, -0x2c00(s0)
-    lui t0, 0x0038
-    sw t0, -0x2ff0(s0)
-    ori t0, zero, 0x400
-    sw t0, -0x2f80(s0)
-    ori t0, zero, 32
-    sw t0, -0x2fe0(s0)
-    ori t0, zero, 0x100
-    sw t0, -0x3000(s0)
-    ori t8, zero, 24
-    inner: lq t1, 0x10(sp)
-    sq t1, 0x400(sp)
-    lw t2, 0x20(gp)
-    addu t2, t2, t9
-    sw t2, 0x20(s7)
-    sd t2, 0x30(gp)
-    lw t3, 0x404(sp)
-    sw t3, 0x40(s7)
-    ld t4, 0x48(sp)
-    daddu t5, t5, t4
-    addiu t8, t8, -1
-    bgtz t8, inner
-    sw t5, 0x50(sp)
-    wait: lw t0, -0x2c00(s0)
-    lw t1, -0x3000(s0)
-    or t0, t0, t1
-    andi t0, t0, 0x100
-    bne t0, zero, wait
-    nop
-    addiu t9, t9, -1
-    bgtz t9, top
-    nop
-    end: beq zero, zero, end
-    nop
-";
-
-/// Sixteen units marked, sent to the scratchpad and read back behind a divide (Sapphire_Redesign.md, "One horizon check a block").
-fn stalled_reads_program() -> String {
-    let marks: String = (0..16).map(|k| format!("    sw t9, {:#x}(s7)\n", 0x80 * k)).collect();
-    let reads: String = (0..16).map(|k| format!("    lw t1, {:#x}(sp)\n    daddu t5, t5, t1\n", 0x80 * k)).collect();
-    format!(
-        "    lui s0, 0xb001\n    ori t0, zero, 0x303\n    sw t0, -0x2000(s0)\n    lui s7, 0xa030\n    lui sp, 0x7000\n    ori t9, zero, 40\n\
-         top:\n{marks}    lui t0, 0x0030\n    sw t0, -0x2bf0(s0)\n    sw zero, -0x2b80(s0)\n    ori t0, zero, 128\n    sw t0, -0x2be0(s0)\n\
-         \x20   ori t0, zero, 0x100\n    sw t0, -0x2c00(s0)\n    ori t8, zero, 40\n\
-         inner: div t9, t8\n    mflo t6\n{reads}    addiu t8, t8, -1\n    bgtz t8, inner\n    nop\n\
-         wait: lw t0, -0x2c00(s0)\n    andi t0, t0, 0x100\n    bne t0, zero, wait\n    nop\n    addiu t9, t9, -1\n    bgtz t9, top\n    nop\n\
-         end: beq zero, zero, end\n    nop\n"
-    )
-}
-
-/// VIF1 busy with an UNPACK from the scratchpad while blocks write the words it has still to send (EmuSen_Recompiler.md §15.7).
-const BUSY_VIF1: &str = "
-    lui s0, 0xb001
-    ori t0, zero, 1
-    sw t0, -0x2000(s0)
-    lui sp, 0x7000
-    lui t0, 0x0100
-    ori t0, t0, 0x0101
-    sw t0, 0(sp)
-    lui t0, 0x6000
-    sw t0, 4(sp)
-    ori t1, zero, 256
-    or a1, sp, zero
-    fill: sw t1, 8(a1)
-    addiu t1, t1, -1
-    bgtz t1, fill
-    addiu a1, a1, 4
-    lui gp, 0x0030
-    ori t9, zero, 40
-    top: lui t0, 0x8000
-    sw t0, -0x6ff0(s0)
-    ori t0, zero, 65
-    sw t0, -0x6fe0(s0)
-    ori t0, zero, 0x101
-    sw t0, -0x7000(s0)
-    ori t8, zero, 60
-    or a1, sp, zero
-    inner: lw t2, 0x20(gp)
-    addu t2, t2, t8
-    sw t2, 0x40(a1)
-    sd t2, 0x30(gp)
-    lw t3, 0x48(a1)
-    daddu t5, t5, t3
-    sw t5, 0x200(a1)
-    ld t4, 0x48(gp)
-    daddu t5, t5, t4
-    addiu t8, t8, -1
-    sw t9, 0x10(a1)
-    bgtz t8, inner
-    addiu a1, a1, 8
-    wait: lw t0, -0x7000(s0)
-    andi t0, t0, 0x100
-    bne t0, zero, wait
-    nop
-    addiu t9, t9, -1
-    bgtz t9, top
-    nop
-    end: beq zero, zero, end
-    nop
-";
-
 /// A page at 04000000h, past the wired entries, of TLB entry 40 mapped and remapped under the same virtual address, made clean and invalid, its ASID changed;
 /// then the scratch area through kseg0 in kernel mode and again in user mode, where it raises.
 const REMAPPED: &str = "
@@ -1030,54 +913,6 @@ fn a_tlb_write_or_a_mode_change_is_seen_by_the_next_access() {
     assert!(fb.stats.generations > 60, "the translation cache moved to a new generation at each write: {:?}", fb.stats);
 }
 
-/// A loop of stores whose blocks the Count interrupt falls inside, and a handler that reads what the loop stored last:
-/// a rollback must leave memory as the instructions that stand left it.
-const STORING: &str = "
-    lui gp, 0x0030
-    mfc0 k0, Count
-    addiu k0, k0, 700
-    mtc0 k0, Compare
-    lui k0, 0x1
-    ori k0, k0, 0x8001
-    mtc0 k0, Status
-    sync.p
-    top: addiu s0, s0, 1
-    sw s0, 0(gp)
-    addiu s0, s0, 1
-    sw s0, 0(gp)
-    addiu s0, s0, 1
-    sd s0, 8(gp)
-    addiu s0, s0, 1
-    sw s0, 0(gp)
-    sll s1, s0, 3
-    sw s1, 0x40(sp)
-    addiu s0, s0, 1
-    sw s0, 0(gp)
-    addiu s0, s0, 1
-    sb s0, 4(gp)
-    addiu s0, s0, 1
-    sw s0, 0(gp)
-    beq zero, zero, top
-    sw s0, 0x44(sp)
-";
-
-/// The handler for `STORING`: what the loop stored last, at 0(gp) and in the scratchpad, summed into 10h(gp).
-const SEEING: &str = "
-    lw k1, 0(gp)
-    lw k0, 0x10(gp)
-    addu k0, k0, k1
-    lw k1, 0x40(sp)
-    addu k0, k0, k1
-    lbu k1, 4(gp)
-    addu k0, k0, k1
-    sw k0, 0x10(gp)
-    mfc0 k1, Count
-    addiu k1, k1, 700
-    mtc0 k1, Compare
-    sync.p
-    eret
-";
-
 /// Plain instructions between a block's loads and stores, then a load that leaves every time (a timer's count) two steps
 /// after the block's second access, one that misses now and then and one misaligned at every fourth pass: the first leaves
 /// by the state after the store before it, the interpreter running the two steps again; the others, further from the
@@ -1141,20 +976,5 @@ fn a_store_into_a_clean_line_dirties_it_and_reaches_memory_when_it_is_replaced()
     let s = twin(&words, 6000, 100, &mut eager());
     println!("stores into clean lines: {s:?}");
     assert!(s.compiled_steps > 2000, "{s:?}");
-}
-
-/// A loop of 50 instructions over four lines of the instruction cache, at 00100100h, whose third line it invalidates at
-/// every pass: its block runs to that line, the interpreter refills it, and the rest runs as a block of its own.
-fn lines_program() -> Vec<u32> {
-    let mut words = assemble("lui s0, 0x0010\nori s0, s0, 0x100\nori t9, zero, 200\nj 0x100100\nnop", ORIGIN);
-    words.resize(0x100 / 4, 0);
-    let mut l = vec!["top: addiu t9, t9, -1".to_string()];
-    for k in 0..46 {
-        l.push(format!("addu t{}, t{}, t9", k % 8, (k + 3) % 8 + 2));
-    }
-    l.push("cache 0x0b, 0x80(s0)".into());
-    l.extend(["bgtz t9, top".into(), "nop".into(), "end: beq zero, zero, end".into(), "nop".into()]);
-    words.extend(assemble(&l.join("\n"), ORIGIN + 0x100));
-    words
 }
 

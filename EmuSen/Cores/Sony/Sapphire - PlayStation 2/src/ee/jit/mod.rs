@@ -53,13 +53,14 @@ pub struct Jump {
     pub code: u64,
 }
 
+/// `Context::link` after a wait's jump back to its own start.
+pub const WAITED: u64 = 1;
+
 /// What a compiled block reads and reports beyond the core.
 #[repr(C)]
 pub struct Context {
     /// A block's end at or past this time returns to the dispatcher.
     pub deadline: u64,
-    /// The time a block that only waits runs to.
-    pub wait: u64,
     /// The time: the EE's cycles at the block's entry, moved on at each end, here while a helper runs.
     pub time: u64,
     /// Instructions run since the dispatcher entered a block.
@@ -93,9 +94,28 @@ pub(crate) fn run_op(ee: &mut Ee, bus: &mut dyn super::Bus, index: u16, word: u3
     (super::ops::get(index).run)(ee, bus, word, pc)
 }
 
-/// The macro operation `word` at cycle `t` with VU0 at rest.
-pub(crate) fn run_light(ee: &mut Ee, bus: &mut dyn super::Bus, word: u32, t: u64) -> Result<(), super::ops::Stop> {
-    super::cop2::run_light(ee, bus, word, t)
+/// Whether nothing but the operation's own effect can stop a block entered again at once: no interrupt is recognised.
+impl Ee {
+    pub(crate) fn may_go_on(&mut self) -> bool {
+        self.interrupt_after == 0 && !self.interrupt_pending()
+    }
+}
+
+/// The macro operation `word` at cycle `t` with VU0 at rest, `run` its operation on the vector unit's registers.
+pub(crate) fn run_light(ee: &mut Ee, bus: &mut dyn super::Bus, word: u32, t: u64, run: u64) -> Result<(), super::ops::Stop> {
+    super::cop2::run_light(ee, bus, word, t, run)
+}
+
+/// The operation a record of `word` calls directly: the interpreter's, or for a macro operation of VU0's registers the vector unit's.
+pub(crate) fn run_of(word: u32) -> u64 {
+    super::cop2::light_run(word).unwrap_or(super::ops::get(super::ops::index(word)).run as usize as u64)
+}
+
+/// A call of the interpreter's operation `run`, as `run_of` gave it.
+pub(crate) fn call_op(ee: &mut Ee, bus: &mut dyn super::Bus, run: u64, word: u32, pc: u32) -> Result<(), super::ops::Stop> {
+    // SAFETY: `run_of` made the value from an operation of this type, for a record without `LIGHT`.
+    let f = unsafe { std::mem::transmute::<usize, super::ops::Run>(run as usize) };
+    f(ee, bus, word, pc)
 }
 
 /// How a block's cost is folded.

@@ -188,15 +188,24 @@ pub(crate) fn light(w: u32) -> bool {
     super::ops::get(super::ops::index(w)).name == "vu" && vops::of_word(w).is_some_and(|(o, entry)| matches!(entry.class, Class::Fmac | Class::Ialu) && !matches!(o.form, Form::LoadInc | Form::LoadDec | Form::StoreInc | Form::StoreDec | Form::IntMem))
 }
 
-/// A macro operation `light` names at cycle `t` with VU0 at rest; COP2 is usable or an error.
-pub(crate) fn run_light(e: &Ee, b: &mut dyn Bus, w: u32, t: u64) -> R {
+/// The vector unit's operation of a word `light` names, for a record to hold.
+pub(super) fn light_run(w: u32) -> Option<u64> {
+    if !light(w) {
+        return None;
+    }
+    vops::of_word(w).map(|(_, entry)| entry.run as usize as u64)
+}
+
+/// A macro operation `light` names at cycle `t` with VU0 at rest, `run` from `light_run`; COP2 is usable or an error.
+pub(super) fn run_light(e: &Ee, b: &mut dyn Bus, w: u32, t: u64, run: u64) -> R {
     usable(e)?;
     let vpu = vpu0(b)?;
-    let Some((_, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
     vpu.settle_q(t);
     vpu.last_macro = Some(t);
     let units = &mut vpu.units;
-    (entry.run)(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
+    // SAFETY: `light_run` made the value from the operation's entry, of this type.
+    let run = unsafe { std::mem::transmute::<usize, fn(&mut Ctx, u32)>(run as usize) };
+    run(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
     Ok(())
 }
 

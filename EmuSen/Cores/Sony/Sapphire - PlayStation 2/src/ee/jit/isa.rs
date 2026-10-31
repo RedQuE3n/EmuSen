@@ -188,6 +188,8 @@ pub(crate) struct Rec {
     pub next: u32,
     pub flags: u32,
     pub pad: u32,
+    /// The operation, called directly (`jit::run_of`).
+    pub run: u64,
 }
 
 /// `Rec::flags`: a delay slot, its outcome in the value `NEXT`, and an operation that reaches the board.
@@ -215,6 +217,7 @@ pub(crate) mod stub {
     pub const OUT0: u32 = 3;
     pub const SLOW: u32 = 4;
     pub const FILL: u32 = 5;
+    pub const CALL: u32 = 6;
 }
 
 /// The frame a block runs in below the six saved registers: slots at `[rsp + 8k]`, and rsp 16-byte aligned in the body.
@@ -233,7 +236,7 @@ const NEXT_PC: i32 = offset_of!(Ee, next_pc) as i32;
 const DELAY: i32 = offset_of!(Ee, delay) as i32;
 
 /// The stubs: the entry from Rust, the return, the block's way out with its place, the slow path's save and return, and the helpers' trampoline.
-pub(crate) fn stubs(slow: u64, fill: u64) -> Vec<Code> {
+pub(crate) fn stubs(slow: u64, fill: u64, call: u64) -> Vec<Code> {
     use x64::{R12, R13, R14, R15, RAX, RDI, RDX, RSI, RSP};
     let one = |f: &dyn Fn(&mut X64)| {
         let mut a = X64::new();
@@ -307,6 +310,29 @@ pub(crate) fn stubs(slow: u64, fill: u64) -> Vec<Code> {
         a.jump_stub(stub::DONE);
     }));
     out.push(one(&|a| x64::trampoline(a, R15, fill)));
+    out.push(one(&|a| {
+        // Called with rdi the record, the core holding every value: only the pool's registers a call may clobber kept, the time as it stands.
+        const CLOBBERED: [emusen_assembler::Reg; 5] = [x64::RCX, x64::R8, x64::R9, x64::R10, x64::R11];
+        for x in CLOBBERED {
+            a.push(x);
+        }
+        a.store(8, R12, at(R15, X_TIME));
+        a.mov(Width::W64, RSI, RDI);
+        a.mov(Width::W64, RDI, R15);
+        a.mov_imm(RAX, call as i64);
+        a.call_reg(RAX);
+        a.load(8, false, R12, at(R15, X_TIME));
+        for x in CLOBBERED.iter().rev() {
+            a.pop(*x);
+        }
+        a.test(Width::W32, RAX, Src::Reg(RAX));
+        let left = a.label();
+        a.branch(emusen_assembler::Cond::Ne, left);
+        a.ret();
+        a.bind(left);
+        a.alu(Op::Add, Width::W64, RSP, RSP, Src::Imm(8));
+        a.jump_stub(stub::DONE);
+    }));
     out
 }
 

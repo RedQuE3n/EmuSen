@@ -2551,7 +2551,7 @@ block-start time, and results stay deterministic. I-cache checks leave compiled 
 until a census prices them. VU floats and the EE's stay exact through `sapphire::float`. Decided the same day: the EE runs on
 the tailored tier alone, Cranelift's EE tier and `EMUSEN_SAPPHIRE_BASELINE` go, and where the tier fails it is researched and
 fixed in the tier. The VU tier's move off Cranelift is the next stage. Judged in host instructions, not in ms or % compiled:
-the EE's path from 2.5 G a field to at most 300 M, 600 M the point past which what remains must be found.*
+the EE's path from 2.5 G a field to at most 300 M, confirmed as the stage's gate, with both references under 65 M the later aim.*
 
 ### 66.1 The gate (measured 2026-10-30)
 
@@ -2638,44 +2638,53 @@ a wait of several blocks spins compiled.
 | 2. LQC2 and SQC2 in the planner's table, idle skipping's proof beside blocks | 356.3, 496 | 5.19 G | 3.39 M, 687,000 |
 | — 2 with no skipping | 295.7, 378 | 4.67 G | 5.37 M, 19,600 |
 | 3. waits at compile time | 300.7, 389 | 4.44 G | 3.31 M, 9,400 |
-| 4. QMFC2 and QMTC2 in place, VU0's register operations light, the fetch folded | **278.3, 361** | **4.29 G** | 3.31 M, 9,400 |
+| 4. QMFC2 and QMTC2 in place, VU0's register operations light, the fetch folded | 278.3, 361 | 4.29 G | 3.31 M, 9,400 |
+| 5. the board's time passed only to what needs it, a return to a compiled block re-entered on what a link needs, each call's operation held in its record, a short way for calls that reach neither the board nor the time | **273.4, 356** | **4.22 G** | 3.31 M, 9,400 |
 
 **99.7 % of the EE's steps run compiled.** The estimate of about 330 ms was beaten; the arena is 40 % below the base.
 
-| Unit | Base, G a field | Now | |
+| Unit | Base, M a field | Now | |
 | --- | --- | --- | --- |
-| EE: Rust (the interpreter, reads, TLB) | 0.82 | 0.11 | |
-| EE: dispatcher (now `slow` 0.10 and `run` 0.07) | 0.62 | 0.15 | |
-| EE: the timing model | 0.27 | 0.01 | |
-| EE: compiled code | about 0.15 | 0.10 | 30 host instructions a guest one |
-| Idle skipping | 0.11 | 0 | |
-| **The EE's path** (with libc's copies, base 2.5 G) | **2.5** | **0.37** | target 0.3, limit 0.6 |
-| VU in Rust; floats | 1.99; 0.41 | 1.81; 0.42 | |
-| VU compiled code | about 0.18 | 0.16 | |
-| Board; PCRTC; DMAC; VIF | 0.95; 0.10; 0.18; 0.23 | 0.37; 0.12; 0.17; 0.19 | |
-| GS on this thread; IOP; libc | 0.48; 0.06; 0.34 | 0.48; 0.07; 0.04 | |
+| EE: Rust (the interpreter, reads, TLB) | 820 | 105 | |
+| EE: dispatcher (now `blocks::full`, `call`, `run`, `enter`) | 620 | 89 | |
+| EE: the timing model | 270 | 8 | |
+| EE: compiled code | about 150 | 72 | 22 host instructions a guest one |
+| Idle skipping | 110 | 0 | |
+| **The EE's path** (2.5 G in the tester's count of the base, with libc's copies) | **2,500** | **274** | gate 300, later aim 65 |
+| VU in Rust; floats | 1,990; 410 | 1,820; 410 | VU0's macro operations are in these rows |
+| VU compiled code | about 180 | 170 | |
+| Board; PCRTC; DMAC; VIF | 945; 105; 175; 230 | 395; 115; 175; 200 | |
+| GS on this thread; IOP; libc | 480; 60; 340 | 470; 70; 40 | |
 
-**The EE's path is 370 M, 70 M over the target and under the limit. What remains:** `slow`, 490,000 calls a field at about 210
-instructions before the operation (153,000 VU0 register operations, 73,000 QMTC2 while VU0 runs, the rest MMI and COP1); the
-dispatcher's 95,000 entries at about 700 each, which the events set and not the rounds; and compiled code at 30 a guest
-instruction, its memory paths the largest part. The next levers are the arithmetic MMI in place, which want SSE in
-`emusen-assembler`, and fewer board events. The arena's largest cost is now the VU at 2.2 G, the next stage's.
+Shares by the instruction event's samples, on the counter's total. **The EE's path is 274 M, under the gate of 300 M.** Play!'s
+compiled code takes about 11 instructions a step, by its quota subtracted once at a block's end and an inline page lookup, against
+22 here. What remains toward 65 M: the calls, 490,000 a field (153,000 VU0 register operations, 73,000 QMTC2 while VU0 runs, the rest
+MMI and COP1), whose arithmetic MMI want SSE in `emusen-assembler`; the dispatcher's 95,000 entries a field, which the board's events
+set and not the rounds; and a load or store's 35 instructions of translation, kind and tags. The arena's largest cost is now the VU
+at 2.2 G, the next stage's.
 
-**The round re-measured, as it was free**: 277.1 ms and 4.26 G at 256 against 278.3 and 4.29 G at 64, so a block's exits are set by
+**The round re-measured, as it was free**: at row 4, 277.1 ms and 4.26 G at 256 against 278.3 and 4.29 G at 64, so a block's exits are set by
 events, 95,000 a field either way, and the round stays 64. §62.2's result stands for a different reason.
 
 **Census of the D-cache tags.** A scratch build (not committed) with RDRAM reached directly in the tier and uncached in the
-interpreter ran the arena at 275.7 ms and 4.25 G against 277.1 and 4.26 G at the same round: **the tags in compiled paths cost
+interpreter ran the arena, at row 4 and a round of 256, at 275.7 ms and 4.25 G against 277.1 and 4.26 G: **the tags in compiled paths cost
 12.7 M host instructions a field, 0.3 %, about 1.4 ms**. Misses are 19,000 slow paths a field. They stay, by the decision and by the
 figure.
 
 **Census of the I-cache.** The interpreter on the short window met 147.05 M line entries and 888,192 misses, 0.6 %, at 8 cycles a
 refill: 0.048 cycles a line, which is the sixteenth `FETCH_PER_LINE` folds.
 
-**Player checks.** Sound digests equal the base's on the arena (`BCA8F00F4743A955`). The arena's pictures at fields 9,060 to 9,360
-every 60 differ from the base's by 18.2, 39.6, 37.9, 19.9, 21.3 and 13.1 % of pixels, mean 2.0 to 5.2 levels; side by side, the same
-scene with the camera and the characters some frames out of phase, as the cost folded from rest moves the game's pace against
-the field.
+**The dock**: 102.0 ms a field, p95 122, against 148.6 and 173; 1.65 M steps, 99.5 % compiled, 1.16 G host instructions (row 4). At a
+round of 0 the short window's digests are §61.4's exactly (`0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9`).
+
+**Player checks.** Sound digests equal the base's on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`). Runs of rows 4 and 5 give the
+same digests on the arena (`F0279E81EE5EB699`, `BCA8F00F4743A955`, `2EF5C6B11B77E8DC`), as do two runs on the short window. The
+arena's pictures at fields 9,060 to 9,360 every 60 differ from the base's by 18.2, 39.6, 37.9, 19.9, 21.3 and 13.1 % of pixels, mean 2.0
+to 5.2 levels; side by side, the same scene with the camera and the characters some frames out of phase, as the cost folded from rest
+moves the game's pace against the field. The dock's differ by 0.1, 46.0, 46.8, 49.5, 58.7 and 34.0 %, mean up to 28.5 levels: at field
+6,240 the base's Jak is a torn model and this build's is whole, the geometry right where the base's was not, so the figure measures
+the base. That tearing was not looked into. ps2autotests: 75 of 78, the same three failing (`sqrt`, `efu`, `intstall`, §36.5), and all 78
+texts identical to §64's.
 
 **Named losses, timing only unless said.** (1) A unit's event lands at a block's end, up to one block late. (2) An interrupt is
 taken at a block's end. (3) A block's cost starts from rest, so a load or a multiply in flight across a block's end is not
@@ -2693,7 +2702,7 @@ word kept from a return across idle skipping's interpreted turn linked to the bl
 a return now records its place, and the link is made only there. (3) A link's word kept across the budget's drop wrote to memory
 that had been unmapped. (4) `lqc2` and `sqc2` in `shape`'s memory class but not in the planner's table refused their blocks.
 
-**Tests** (release with debug assertions): `blocks` 20, with the tests of rollbacks, guards and replay removed and
+**Tests** (release with debug assertions): the crate's 496, all passed, `emusen-jit`, `emusen-assembler` and `emusen-mips-planner`'s own; `blocks` 20, with the tests of rollbacks, guards and replay removed and
 `code_replaced_in_memory_runs_new_from_the_next_entry_and_the_block_is_shaped_again` and
 `a_write_to_a_blocks_line_that_leaves_its_words_keeps_the_block` new. The twin programs no longer read Count or arm interrupts: the
 two machines are compared by what a program can read, at checkpoints. `s7-counters` and `s7-icache` stay the interpreter's.

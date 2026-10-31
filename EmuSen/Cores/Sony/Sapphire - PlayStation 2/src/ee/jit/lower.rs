@@ -23,7 +23,6 @@ const UCAB_VALID: i32 = offset_of!(Ee, ucab) as i32 + offset_of!(super::super::c
 const X_VF0: i32 = offset_of!(Context, vf0) as i32;
 const X_QUIET: i32 = offset_of!(Context, quiet) as i32;
 const X_DEADLINE: i32 = offset_of!(Context, deadline) as i32;
-const X_WAIT: i32 = offset_of!(Context, wait) as i32;
 const X_STEPS: i32 = offset_of!(Context, steps) as i32;
 const X_FRONT: i32 = offset_of!(Context, front) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
@@ -446,7 +445,7 @@ impl L<'_> {
         let flags = if self.slot.is_some() { IN_SLOT } else { 0 } | held | if board { BOARD } else { 0 } | if crate::ee::cop2_light(s.word) { LIGHT } else { 0 };
         let halves = |m: u128| [m as u64, (m >> 64) as u64];
         let at = self.data_len.next_multiple_of(8);
-        let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, pad: 0 };
+        let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, pad: 0, run: super::run_of(s.word) };
         self.data(r.bytes())
     }
 
@@ -507,16 +506,13 @@ impl L<'_> {
         self.pur(p);
     }
 
-    /// The end of a path to `target`, its cycles added: on through the link's word unless the deadline has come. A wait's jump back to its own start runs the time on to where what it reads can change.
+    /// The end of a path to `target`, its cycles added: on through the link's word unless the deadline has come. A wait's jump back to its own start goes to the dispatcher, which runs the time on to where what it reads can change.
     fn end_at(&mut self, target: u32, cycles: u32) {
         let p = self.push_purpose(P_EXIT);
         if self.waits && target == self.plan.start {
             self.a.alu(Op::Add, Width::W64, TIME, TIME, Src::Imm(cycles as i32));
-            self.a.load(8, false, X, at(CTX, X_WAIT));
-            self.a.cmp(Width::W64, X, Src::Reg(TIME));
-            self.a.select(Cond::Gtu, TIME, X);
             self.a.mov_imm(RDI, i64::from(target));
-            self.a.mov_imm(RSI, 0);
+            self.a.mov_imm(RSI, super::WAITED as i64);
             self.a.mov_imm(RDX, i64::from(target));
             self.a.jump_stub(stub::OUT);
             self.pur(p);
@@ -1597,10 +1593,18 @@ impl L<'_> {
     fn call(&mut self, s: &Step) {
         let w = s.word;
         let op = ops::get(ops::index(w));
+        self.pur(P_REGS);
+        self.store_all();
+        self.st.dirty = 0;
+        self.pre = 0;
         let k = self.rec(s, 0, op.kind == ops::Kind::Cop2);
         self.pur(P_WORK);
-        self.slow_call(k, LEFT_CALL);
-        self.st.dirty = 0;
+        if self.slot == Some(None) {
+            self.slow_call(k, LEFT_CALL);
+        } else {
+            self.a.lea_data(RDI, k);
+            self.a.call_stub(stub::CALL);
+        }
         for v in call_writes(w, op) {
             self.st.held[v] = false;
         }

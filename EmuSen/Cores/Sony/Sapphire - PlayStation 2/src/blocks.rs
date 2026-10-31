@@ -13,7 +13,7 @@ use crate::board::System;
 use crate::ee::Halt;
 use crate::ee::jit::isa::{self, BOARD, Homes, IN_SLOT, LIGHT, NEXT_HELD, Rec, stub};
 use crate::ee::jit::lower::{self, NEXT};
-use crate::ee::jit::{self, Context, Enter, FRONT, Jump, Options, PAGES, Page, kind, shape};
+use crate::ee::jit::{self, Context, Enter, FRONT, Jump, Options, PAGES, Page, WAITED, kind, shape};
 
 /// Bytes of code past which every block is dropped and compiled again as it runs.
 pub const BUDGET: u64 = 480 << 20;
@@ -129,6 +129,8 @@ pub struct Blocks {
     link_key: [u64; 3],
     /// `forget` ran: the lines' watch goes at the next entry, where the machine is at hand.
     forgot: bool,
+    /// A step ran since compiled code returned: the mode, the TLB or a breakpoint may have moved, and the next entry is checked whole.
+    stepped: bool,
 }
 
 // SAFETY: the pointers are into the blocks' own memory and boxes, which move with them.
@@ -146,7 +148,6 @@ impl Blocks {
         let mut front = vec![Jump::default(); FRONT].into_boxed_slice();
         let ctx = Box::new(Context {
             deadline: 0,
-            wait: 0,
             time: 0,
             steps: 0,
             pages: pages.as_mut_ptr(),
@@ -186,6 +187,7 @@ impl Blocks {
             turn: 0,
             link_key: [0; 3],
             forgot: false,
+            stepped: true,
         }
     }
 
@@ -252,6 +254,7 @@ impl Blocks {
         self.recent = [([0; 3], 0); 4];
         self.ctx.link = 0;
         self.forgot = true;
+        self.stepped = true;
     }
 
     /// The translation cache made valid for the machine as it stands: a new generation when anything a page's meaning
@@ -366,7 +369,7 @@ impl Blocks {
     /// The memory, made with its stubs at the first block.
     fn memory(&mut self) -> &mut Memory {
         if self.memory.is_none() {
-            let m = Memory::new(isa::stubs(slow as *const () as u64, fill as *const () as u64));
+            let m = Memory::new(isa::stubs(slow as *const () as u64, fill as *const () as u64, call as *const () as u64));
             let code = m.stub(stub::OUT0);
             self.front.iter_mut().for_each(|j| j.code = code);
             self.memory = Some(m);
@@ -449,6 +452,7 @@ pub fn run(sys: &mut System, blocks: &mut Blocks) -> Result<u64, Halt> {
 pub fn interpret(sys: &mut System, blocks: &mut Blocks) -> Result<u64, Halt> {
     let r = sys.step();
     blocks.stats.interpreted += 1;
+    blocks.stepped = true;
     if let Some((_, v)) = &mut blocks.verify {
         v.follow(sys, "an interpreter step");
     }
@@ -467,14 +471,16 @@ fn sys<'a>(ctx: &Context) -> &'a mut System {
     unsafe { &mut *(*ctx.owner.cast::<Run>()).sys }
 }
 
-/// The times compiled code comes back by, and a wait of compiled code runs to, Count's interrupt included where it can be taken.
-fn deadlines(sys: &System) -> (u64, u64) {
-    let (d, w) = (sys.board.deadline(), sys.board.wait_deadline());
-    if sys.ee.count_masked() {
-        return (d, w);
-    }
-    let c = sys.ee.compare_at();
-    (d.min(c), w.min(c))
+/// The time compiled code comes back by, Count's interrupt included where it can be taken.
+fn deadline(sys: &System) -> u64 {
+    let d = sys.board.deadline();
+    if sys.ee.count_masked() { d } else { d.min(sys.ee.compare_at()) }
+}
+
+/// The time a wait of compiled code runs to.
+fn wait_end(sys: &System) -> u64 {
+    let w = sys.board.wait_deadline();
+    if sys.ee.count_masked() { w } else { w.min(sys.ee.compare_at()) }
 }
 
 fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
@@ -499,6 +505,19 @@ fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
     let slot = std::mem::take(&mut blocks.ctx.link) as *mut u64;
     let slot = if blocks.ctx.to == pc { slot } else { std::ptr::null_mut() };
     let found = blocks.find(pc);
+    // A return at a block's end to a block already linked needs what a link needs: no interrupt recognised, nothing else has run.
+    if blocks.ctx.to == pc
+        && !blocks.stepped
+        && let Some(i) = found
+        && let State::Ready(code) = blocks.slab[i].state
+        && sys.ee.may_go_on()
+    {
+        if !slot.is_null() {
+            blocks.link(slot, i);
+        }
+        return Some(enter(sys, blocks, code));
+    }
+    blocks.stepped = false;
     match found.map(|i| &mut blocks.slab[i].state) {
         Some(State::Refused(n)) => {
             *n = n.wrapping_add(1);
@@ -576,13 +595,17 @@ fn enter(sys: &mut System, blocks: &mut Blocks, code: u64) -> u64 {
     ctx.time = sys.ee.timing.cycles();
     ctx.steps = 0;
     ctx.link = 0;
-    (ctx.deadline, ctx.wait) = deadlines(sys);
+    ctx.deadline = deadline(sys);
     ctx.vf0 = sys.board.vpu.units.vu0.vf_base();
     ctx.quiet = u32::from(!sys.board.vpu.running(0));
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
     // borrows the machine while the code and its helpers run through these pointers.
     unsafe { enter(&raw mut (*run.sys).ee, ctx, code) };
-    let (t, steps) = (ctx.time, ctx.steps);
+    let (mut t, steps) = (ctx.time, ctx.steps);
+    if ctx.link == WAITED {
+        ctx.link = 0;
+        t = t.max(wait_end(sys));
+    }
     sys.ee.blocks_ran(t, steps);
     sys.ee.count_steps(steps);
     sys.board.run_to(t, &mut sys.ee.spram[..]);
@@ -612,8 +635,38 @@ fn enter(sys: &mut System, blocks: &mut Blocks, code: u64) -> u64 {
 
 /// A slow path, called from compiled code with its pool in `Context::saved` and its frame at `frame`: the guest's dirty values stored to the core, the interpreter's operation run at the instruction's time, and what it wrote put back; nonzero where it stopped and the block leaves.
 extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64) -> u64 {
-    // SAFETY: the context is the dispatcher's, alive for the call; the record is the block's data, 8-aligned, with the homes at the data's start.
-    let (ctx, rec, homes) = unsafe { (&mut *ctx, &*rec, &*rec.cast::<u8>().sub((*rec).at as usize).cast::<Homes>()) };
+    // SAFETY: the context is the dispatcher's, alive for the call; the record is the block's data, 8-aligned.
+    let (ctx, rec) = unsafe { (&mut *ctx, &*rec) };
+    full(ctx, rec, why, frame)
+}
+
+/// A call from compiled code with every value in the core and nothing to put back, outside a jump's delay slot: an operation that reaches neither the board nor the time takes the short way.
+extern "C" fn call(ctx: *mut Context, rec: *const Rec) -> u64 {
+    // SAFETY: as `slow`.
+    let (ctx, rec) = unsafe { (&mut *ctx, &*rec) };
+    ctx.left[0] += 1;
+    let light = rec.flags & LIGHT != 0;
+    if (rec.flags & BOARD != 0 && !light) || (light && ctx.quiet == 0) {
+        ctx.left[0] -= 1;
+        return full(ctx, rec, 0, std::ptr::null_mut());
+    }
+    let System { ee, board } = sys(ctx);
+    let r = if light { crate::ee::jit::run_light(ee, board, rec.word, ctx.time + u64::from(rec.time), rec.run) } else { crate::ee::jit::call_op(ee, board, rec.run, rec.word, rec.pc) };
+    match r {
+        Ok(()) => 0,
+        Err(stop) => {
+            ee.call_stopped(stop, rec.pc, (rec.flags & IN_SLOT != 0).then_some(rec.next));
+            ctx.time += u64::from(rec.time) + 1;
+            ctx.steps += u64::from(rec.step) + 1;
+            (ctx.link, ctx.to) = (0, 1);
+            1
+        }
+    }
+}
+
+fn full(ctx: &mut Context, rec: &Rec, why: u64, frame: *mut u64) -> u64 {
+    // SAFETY: the homes stand at the start of the record's data.
+    let homes = unsafe { &*(rec as *const Rec).cast::<u8>().sub(rec.at as usize).cast::<Homes>() };
     ctx.left[why as usize] += 1;
     let System { ee, board } = sys(ctx);
     let value = |ctx: &mut Context, v: usize| -> *mut u64 {
@@ -639,17 +692,19 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
     let light = rec.flags & LIGHT != 0 && ctx.quiet != 0;
     let reaches = rec.flags & BOARD != 0 && !light;
     let op = if light {
-        crate::ee::jit::run_light(ee, board, rec.word, t)
-    } else {
+        crate::ee::jit::run_light(ee, board, rec.word, t, rec.run)
+    } else if reaches {
         ee.begin_call(t, rec.index, rec.word);
-        if reaches {
-            board.run_to(t, &mut ee.spram[..]);
-        }
+        board.run_to(t, &mut ee.spram[..]);
         crate::ee::jit::run_op(ee, board, rec.index, rec.word, rec.pc)
+    } else if rec.flags & LIGHT != 0 {
+        crate::ee::jit::run_op(ee, board, rec.index, rec.word, rec.pc)
+    } else {
+        crate::ee::jit::call_op(ee, board, rec.run, rec.word, rec.pc)
     };
     match op {
         Ok(()) => {
-            if !light {
+            if reaches {
                 ctx.time += ee.call_stall(t);
             }
             for h in 0..2 {
@@ -666,7 +721,7 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
                 let lines = board.lines();
                 let same = lines == (ee.int0, ee.int1, ee.cpcond0);
                 let sys = sys(ctx);
-                (ctx.deadline, ctx.wait) = if same && sys.board.map.written.is_empty() { deadlines(sys) } else { (0, 0) };
+                ctx.deadline = if same && sys.board.map.written.is_empty() { deadline(sys) } else { 0 };
             }
             0
         }
@@ -680,7 +735,7 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
             ee.call_stopped(stop, rec.pc, slot);
             ctx.time += u64::from(rec.time) + 1;
             ctx.steps += u64::from(rec.step) + 1;
-            ctx.link = 0;
+            (ctx.link, ctx.to) = (0, 1);
             1
         }
     }

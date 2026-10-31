@@ -441,10 +441,15 @@ impl Blocks {
         !self.watch_loops || to > from || from - to > crate::idle::SPAN || self.refused.get(&to).is_some_and(|&n| n >= REFUSALS)
     }
 
-    /// Idle skipping refused the head `pc`; twice, and its loop is left to run linked.
+    /// Idle skipping refused the head `pc`; `REFUSALS` times, and its loop is left to run linked.
     pub fn refused(&mut self, pc: u32) {
         let n = self.refused.entry(pc).or_default();
         *n = n.saturating_add(1);
+    }
+
+    /// Idle skipping proved the head `pc`'s loop: its refusals count from none.
+    pub fn proven(&mut self, pc: u32) {
+        self.refused.remove(&pc);
     }
 
     /// The block compiled code last left, or `pc` where it ran none.
@@ -453,8 +458,8 @@ impl Blocks {
     }
 }
 
-/// Times idle skipping refuses a loop's head before its backward jump is linked.
-const REFUSALS: u8 = 2;
+/// Times in a row idle skipping refuses a loop's head before its backward jump is linked.
+const REFUSALS: u8 = 4;
 
 /// One step of the machine, or compiled code to the deadline; the steps taken.
 pub fn run(sys: &mut System, blocks: &mut Blocks) -> Result<u64, Halt> {

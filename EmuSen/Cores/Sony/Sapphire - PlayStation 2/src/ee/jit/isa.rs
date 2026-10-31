@@ -40,15 +40,15 @@ impl Isa for R5900Isa {
         let name = shape::name(w);
         let plain = |reads, writes| Info { class: Class::Plain, reads, writes, access: None, likely: false };
         let branch = |reads, writes, likely| Info { class: Class::Branch, reads, writes, access: None, likely };
+        if matches!(name, "lqc2" | "sqc2") {
+            let access = Access { base: rs as u8, disp: w as u16 as i16, bytes: 16, store: name == "sqc2", align: 0xFFFF_FFFF };
+            return Info { class: Class::Memory, reads: bit(rs), writes: 0, access: Some(access), likely: false };
+        }
         if shape::class(w) == shape::Class::Call {
             let op = ops::get(ops::index(w));
             match name {
                 "qmfc2" | "cfc2" => return plain(0, bit(rt)),
                 "qmtc2" | "ctc2" => return plain(bit(rt), 0),
-                "lqc2" | "sqc2" => {
-                    let access = Access { base: rs as u8, disp: w as u16 as i16, bytes: 16, store: name == "sqc2", align: 0xFFFF_FFFF };
-                    return Info { class: Class::Memory, reads: bit(rs), writes: 0, access: Some(access), likely: false };
-                }
                 _ => {}
             }
             let regs = |u: u8| match op.kind {

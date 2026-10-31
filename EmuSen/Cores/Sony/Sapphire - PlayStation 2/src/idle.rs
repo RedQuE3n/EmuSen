@@ -188,14 +188,21 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
     let (steps, r) = attempt(sys, &mut blocks, left, &mut idle.counts, &mut idle.watch);
     let slot = &mut idle.heads[at];
     match r {
-        Ok(()) => slot.backoff = 0,
+        Ok(()) => {
+            slot.backoff = 0;
+            if let Some(b) = blocks.as_deref_mut() {
+                b.proven(head);
+            }
+        }
         Err(e) => {
             idle.counts.refused[e as usize] += 1;
             slot.why = e as u8;
             if e.penalised() {
                 slot.backoff = (slot.backoff + 1).min(MAX_BACKOFF);
                 slot.wait = (1u16 << slot.backoff) - 1;
-                if let Some(b) = blocks.as_deref_mut() {
+                if e != Refusal::Timing
+                    && let Some(b) = blocks.as_deref_mut()
+                {
                     b.refused(head);
                 }
             }
@@ -215,6 +222,10 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
     if sys.board.iop.probe.is_some() {
         return (0, Err(Refusal::Probe));
     }
+    if let Err(n) = settle(sys, blocks, left) {
+        return (n, Err(Refusal::Event));
+    }
+    let left = left.saturating_sub(1).max(1);
     let mut watch = std::mem::take(spare);
     watch.ranges.clear();
     watch.hits.clear();
@@ -244,6 +255,24 @@ fn attempt(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64, counts
         b.follow(sys, passed, "a skipped wait");
     }
     (steps + passed, Ok(()))
+}
+
+/// One turn stepped from the head, so that the issue model has met the loop's own instructions: compiled code leaves it at rest, which no later turn repeats (Sapphire_Speed.md §66). Err with the steps where the core does not come back to the head.
+fn settle(sys: &mut System, blocks: &mut Option<&mut Blocks>, left: u64) -> Result<(), u64> {
+    if sys.board.round == 0 {
+        return Ok(());
+    }
+    let head = sys.ee.pc;
+    for n in 1..=(MAX_TURN as u64).min(left) {
+        step(sys, blocks);
+        if sys.ee.pc == head && !sys.ee.in_delay_slot() {
+            return Ok(());
+        }
+        if n == MAX_TURN as u64 {
+            return Err(n);
+        }
+    }
+    Err(left)
 }
 
 /// A turn proven to repeat: the mark a turn before the head the core stands at, the period, what the last turn stepped

@@ -62,7 +62,12 @@ pub fn primitive(kind: Kind, env: &Environment, local: &mut Local, clut: &Clut, 
 /// within fifteen sixteenths of them, its rows rounded from the minor axis there).
 pub fn bounds(kind: Kind, env: &Environment, v: &[Vertex; 3]) -> Option<(i32, i32, i32, i32)> {
     env.frame.psm?;
-    let (sx0, sx1, sy0, sy1) = env.scissor;
+    bounds_in(kind, env.scissor, v)
+}
+
+/// `bounds` within a scissoring area alone, for a frame format already known to be drawn.
+pub fn bounds_in(kind: Kind, scissor: (i32, i32, i32, i32), v: &[Vertex; 3]) -> Option<(i32, i32, i32, i32)> {
+    let (sx0, sx1, sy0, sy1) = scissor;
     let (x0, x1, y0, y1) = match kind {
         Kind::Point => (nearest(v[0].x), nearest(v[0].x), nearest(v[0].y), nearest(v[0].y)),
         Kind::Sprite => {
@@ -229,6 +234,22 @@ fn coverage([a, b, c]: [&Vertex; 3], bias: [i64; 3], x: i32, y: i32) -> u32 {
 /// The edge function of p→q at (x, y): positive on one side, zero on the line, in sixteenths squared.
 const fn edge(p: &Vertex, q: &Vertex, x: i64, y: i64) -> i64 {
     (q.x as i64 - p.x as i64) * (y - p.y as i64) - (q.y as i64 - p.y as i64) * (x - p.x as i64)
+}
+
+/// A triangle's edges b→c, c→a, a→b as `triangle` orders them, each (a, b, c, bias) with a × x + b × y + c the edge
+/// function at (x, y) in sixteenths, a centre drawn when every edge's value plus its bias is positive; none when flat.
+pub fn edges(v: &[Vertex; 3]) -> Option<[(i64, i64, i64, i64); 3]> {
+    let (a, b, c) = (&v[0], &v[1], &v[2]);
+    let area = edge(a, b, i64::from(c.x), i64::from(c.y));
+    if area == 0 {
+        return None;
+    }
+    let (b, c) = if area > 0 { (b, c) } else { (c, b) };
+    let form = |p: &Vertex, q: &Vertex| {
+        let (dx, dy) = (i64::from(q.x - p.x), i64::from(q.y - p.y));
+        (-dy, dx, dy * i64::from(p.x) - dx * i64::from(p.y), top_left(p, q))
+    };
+    Some([form(b, c), form(c, a), form(a, b)])
 }
 
 /// Whether a centre on edge p→q is drawn, the inside on its positive side: the inward normal (-(qy - py), qx - px)

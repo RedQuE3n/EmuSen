@@ -235,6 +235,21 @@ impl Environment {
 }
 
 impl Gs {
+    /// Whether the queue's primitive would draw no pixel: no frame format, or nothing within the scissoring area.
+    fn covers_nothing(&self, kind: Kind) -> bool {
+        let c = self.attributes().context() as u8;
+        let frame = self.regs[(reg::FRAME_1 + c) as usize];
+        if frame_format((frame >> 24) as u32 & 0x3F).is_none() {
+            return true;
+        }
+        let s = self.regs[(reg::SCISSOR_1 + c) as usize];
+        let scissor = ((s & 0x7FF) as i32, (s >> 16 & 0x7FF) as i32, (s >> 32 & 0x7FF) as i32, (s >> 48 & 0x7FF) as i32);
+        let offset = self.regs[(reg::XYOFFSET_1 + c) as usize];
+        let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
+        let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
+        raster::bounds_in(kind, scissor, &v).is_none()
+    }
+
     /// The attributes in force: PRIM's when PRMODECONT's AC is 1, PRMODE's when it is 0 (§7.1, PRMODECONT).
     pub fn attributes(&self) -> Attributes {
         let from = if self.regs[reg::PRMODECONT as usize] & 1 != 0 { reg::PRIM } else { reg::PRMODE };
@@ -266,6 +281,14 @@ impl Gs {
             return;
         }
         if matches!(r, reg::XYZ2 | reg::XYZF2) {
+            // On the device path a primitive that covers nothing is passed before its environment is read (Sapphire_Gs.md §6.1).
+            if let Some(d) = self.device.as_deref()
+                && self.covers_nothing(kind)
+            {
+                d.empty();
+                self.queue.advance(kind);
+                return;
+            }
             // XYOFFSET of the drawing's context, at the drawing kick (Sapphire_Disputes.md D-162).
             let mut env = Environment::read(self, self.attributes());
             // Antialiasing is for lines and triangles only (§3.6; §3.2.2: points and sprites "Antialiasing Off").
@@ -273,9 +296,14 @@ impl Gs {
             let offset = self.regs[(reg::XYOFFSET_1 + env.attributes.context() as u8) as usize];
             let (ox, oy) = ((offset & 0xFFFF) as i32, (offset >> 32 & 0xFFFF) as i32);
             let v = self.queue.v.map(|v| Vertex { x: v.x - ox, y: v.y - oy, ..v });
-            match self.workers.as_deref() {
-                Some(w) => w.draw(kind, env, v, &self.clut),
-                None => raster::primitive(kind, &env, &mut self.local, &self.clut, &v, raster::Rows::ALL),
+            match (self.workers.as_deref(), self.device.as_deref()) {
+                (Some(w), _) => w.draw(kind, env, v, &self.clut),
+                (None, Some(d)) => {
+                    d.draw(&self.regs, kind, &env, &v, &self.clut, &mut self.local);
+                    // A transfer still writing keeps its pages the processor's after they were copied in for this record.
+                    d.reclaim(&self.local);
+                }
+                (None, None) => raster::primitive(kind, &env, &mut self.local, &self.clut, &v, raster::Rows::ALL),
             }
         }
         self.queue.advance(kind);

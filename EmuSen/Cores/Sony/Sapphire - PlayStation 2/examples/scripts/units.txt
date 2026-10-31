@@ -1,0 +1,27 @@
+# hwcount's table for Sapphire: the first pattern a place's name holds gives its unit. See man hwcount.
+compiled sapphire_ee  EE compiled
+compiled sapphire_vu  VU compiled
+compiled  compiled other
+float  floats
+::vu::  VU Rust
+::vif  VIF
+::gif  GIF
+::gs::  GS
+::dmac  DMAC
+::pcrtc  PCRTC
+::ipu  IPU
+::sif  SIF
+::spu  SPU2
+::iop  IOP
+::r3000  IOP
+::cdvd  IOP
+::sio2  IOP
+::ee::jit  EE compile
+::ee::timing  EE timing
+::ee::  EE Rust
+::blocks  EE dispatcher
+::idle  idle
+::board  board
+::machine  board
+libc  libc
+mem  libc

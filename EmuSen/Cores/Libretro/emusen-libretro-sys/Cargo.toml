@@ -1,0 +1,10 @@
+[package]
+name = "emusen-libretro-sys"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# The libretro interface's types and constants, shared by the libretro host and the test core. See EmuSen_LibretroHost.md §1.2.
+[lib]
+name = "emusen_libretro_sys"

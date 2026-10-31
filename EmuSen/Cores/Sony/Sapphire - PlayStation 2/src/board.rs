@@ -524,7 +524,6 @@ impl Board {
     fn tail(&mut self, t: u64) {
         self.now = self.now.max(t);
         self.run_vifs(t);
-        self.finish_vu1();
         let free = self.gif.path1_free(self.now);
         self.vpu.units.link.path1.set_free(free);
         self.vpu.catch_up(t);
@@ -610,13 +609,17 @@ impl Board {
         let mut gif = GifPort { gif, gs, dma, limit: at };
         let mut vifs = Ports { vif, ipu, stand: ports, gif: &mut gif, vif1_to_memory, at };
         let mut ports = EePorts { others: &mut vifs, sif: &mut iop.bus.sif, sif2_from_memory };
+        let stadr = dmac.stadr;
         dmac.step(at, map, spram, &mut ports);
+        if self.dmac.crosses() && self.dmac.stadr != stadr {
+            self.dmac.wake_ahead(at);
+        }
         if self.round > 0 {
             self.transact(spram);
         }
     }
 
-    /// Channels 1 and 2 run together with VIF1, VU1 and the GIF as far as they can go at once, ahead of the board, what the
+    /// Channels 1, 2, 8 and 9 run together with VIF1, VU1, the GIF and the scratchpad as far as they can go at once, ahead of the board, what the
     /// EE can see of them landing at its cycle (Sapphire_Speed.md §67).
     fn transact(&mut self, spram: &mut [u8]) {
         let limit = self.v_edge();
@@ -628,18 +631,11 @@ impl Board {
             let Board { dmac, map, vif, ports, gif, gs, ipu, .. } = self;
             let mut gif = GifPort { gif, gs, dma, limit };
             let mut vifs = Ports { vif, ipu, stand: ports, gif: &mut gif, vif1_to_memory, at: t };
+            let stadr = dmac.stadr;
             dmac.step_ahead(t, limit, map, spram, &mut vifs);
-        }
-        self.finish_vu1();
-    }
-
-    /// VU1 run to its end, ahead of the board, once VIF1 has no more for it, and what it kicked handed on.
-    fn finish_vu1(&mut self) {
-        if self.round > 0 && self.vpu.running(1) && self.dmac.ahead_due(u64::MAX).is_none() {
-            let (now, limit) = (self.now, self.v_edge());
-            self.vpu.wake();
-            self.vpu.ready_ahead(1, now, limit);
-            self.run_vifs(now);
+            if dmac.crosses() && dmac.stadr != stadr {
+                dmac.wake_main(t);
+            }
         }
     }
 

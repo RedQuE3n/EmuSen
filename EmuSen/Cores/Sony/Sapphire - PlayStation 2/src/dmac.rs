@@ -187,12 +187,12 @@ pub struct Ahead {
     limit: u64,
     stamp: u64,
     /// The cycle each channel's end lands, `u64::MAX` for none.
-    lands: [u64; 2],
+    lands: [u64; 4],
 }
 
 impl Default for Ahead {
     fn default() -> Ahead {
-        Ahead { on: false, inside: false, unit: None, release_until: 0, wake: u64::MAX, last_c: GIF, clock: 0, limit: 0, stamp: 0, lands: [u64::MAX; 2] }
+        Ahead { on: false, inside: false, unit: None, release_until: 0, wake: u64::MAX, last_c: GIF, clock: 0, limit: 0, stamp: 0, lands: [u64::MAX; 4] }
     }
 }
 
@@ -200,6 +200,8 @@ fn ahead_slot(c: usize) -> Option<usize> {
     match c {
         VIF1 => Some(0),
         GIF => Some(1),
+        TO_SPR => Some(2),
+        FROM_SPR => Some(3),
         _ => None,
     }
 }
@@ -278,14 +280,24 @@ impl Dmac {
     /// The time the DMAC next needs attention.
     pub fn next_event(&self) -> u64 {
         let ahead = if self.ahead.on { self.ahead.wake } else { u64::MAX };
-        self.wake.min(ahead).min(self.ahead.lands[0]).min(self.ahead.lands[1])
+        self.ahead.lands.iter().fold(self.wake.min(ahead), |t, &l| t.min(l))
     }
 
     /// Asks for an arbitration at `now`: a register written, or a peripheral's DREQ asserted.
     pub fn wake(&mut self, now: u64) {
+        self.wake_main(now);
+        self.wake_ahead(now);
+    }
+
+    /// `wake` for the slot of the channels outside the transactions.
+    pub fn wake_main(&mut self, now: u64) {
         if self.unit.is_none() {
             self.wake = now.max(self.release_until);
         }
+    }
+
+    /// `wake` for the transactions' slot.
+    pub fn wake_ahead(&mut self, now: u64) {
         let a = &mut self.ahead;
         if a.on && a.unit.is_none() {
             a.wake = a.wake.min(now.max(a.release_until).max(a.clock));
@@ -310,7 +322,7 @@ impl Dmac {
 
     /// The ends held for the board that are due at `now` landed: STR cleared and the channel's interrupt flag set.
     pub fn land(&mut self, now: u64) {
-        for (s, c) in [(0, VIF1), (1, GIF)] {
+        for (s, c) in [(0, VIF1), (1, GIF), (2, TO_SPR), (3, FROM_SPR)] {
             if self.ahead.lands[s] <= now {
                 self.ahead.lands[s] = u64::MAX;
                 self.ended(c);
@@ -356,7 +368,14 @@ impl Dmac {
 
     /// Whether nothing is held for the board, so that the state, which has no place for it, can be written.
     pub fn fits(&self) -> bool {
-        self.ahead.unit.is_none() && self.ahead.lands == [u64::MAX; 2]
+        self.ahead.unit.is_none() && self.ahead.lands == [u64::MAX; 4]
+    }
+
+    /// Whether stall control links a channel of one slot to a channel of the other, so that each slot's step wakes the other.
+    pub fn crosses(&self) -> bool {
+        let slot = |c: Option<usize>| c.map(|c| ahead_slot(c).is_some());
+        let (s, d) = (slot(self.sts()), slot(self.std()));
+        self.ahead.on && s.is_some() && d.is_some() && s != d
     }
 
     /// Whether channel `c` is the arbitration's to run: channels 1 and 2 on the transactions' slot alone.

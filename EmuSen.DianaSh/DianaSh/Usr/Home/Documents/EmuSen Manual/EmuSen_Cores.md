@@ -1,6 +1,6 @@
 # EmuSen_Cores — Cores, the window and command that download and manage EmuSen's cores
 
-*Design, 2026-10-31; its questions answered by the tester the same day (§11). Nothing is built.* Asked by the tester the same day: "We should also make a core download and
+*Design, 2026-10-31; its questions answered by the tester the same day (§11). C0–C2 built the same day (§3.3, §6.1, §8).* Asked by the tester the same day: "We should also make a core download and
 management window. Base it on our designs for the interface overhaul." The condition set for the libretro work holds
 here too: done properly, with no shortcuts.
 

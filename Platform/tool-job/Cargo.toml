@@ -1,0 +1,11 @@
+[package]
+name = "emusen-tool-job"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A tool's request run on a thread of its own, its events queued as lines for whoever polls them: the library tool's and
+# the core tool's one runner. See EmuSen_GamePackages.md §12.3 and EmuSen_Cores.md §6.
+[lib]
+name = "emusen_tool_job"

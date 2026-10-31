@@ -478,6 +478,7 @@ dependencies = [
  "emusen-scrape",
  "emusen-sqlite",
  "emusen-systems",
+ "emusen-tool-job",
  "libc",
  "sha2",
 ]
@@ -633,6 +634,10 @@ dependencies = [
  "emusen-psx-card",
  "silvermillennium-sm83",
 ]
+
+[[package]]
+name = "emusen-tool-job"
+version = "0.1.0"
 
 [[package]]
 name = "emusen-trace"

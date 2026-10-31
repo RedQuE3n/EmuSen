@@ -1,8 +1,14 @@
 //! `emusen.dev`: `dupes`, which runs PMD's CPD over the repository's tracked files and reports the duplicated blocks that
-//! overlap the lines a change added. What counts as a finding is `finding`'s; this module runs git and CPD and prints.
-//! See EmuSen_DianaSh.md and `man dupes`.
+//! overlap the lines a change added, and `hwcount`, which counts a program's host instructions, cycles and IPC per
+//! thread and by unit. See EmuSen_DianaSh.md, `man dupes` and `man hwcount`.
 
 mod finding;
+#[cfg(target_os = "linux")]
+mod hw;
+#[cfg(target_os = "linux")]
+mod hwcount;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod units;
 
 use dianash_module::{Answer, Call, Manifest, Module};
 use finding::{evaluate, parse_accept, parse_csv, parse_diff, Block, Ignore};
@@ -11,7 +17,10 @@ use std::process::Command;
 
 pub use finding::{Block as DupeBlock, Finding, Place, Report};
 
-pub const COMMANDS: &[(&str, bool, &str)] = &[("dupes", false, "  dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n                                duplicated blocks that overlap the lines added since <rev> (the whole tree without --base)")];
+pub const COMMANDS: &[(&str, bool, &str)] = &[
+    ("dupes", false, "  dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n                                duplicated blocks that overlap the lines added since <rev> (the whole tree without --base)"),
+    ("hwcount", false, "  hwcount --from TEXT [--to TEXT] [--per N] [--units FILE] [--functions N] [--period N] -- <program> [args]\n                                host instructions, cycles and IPC of a program's window, per thread and by unit"),
+];
 
 const USAGE: &str = "Usage: dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n  Exit 1 for a finding of --min-tokens (100) or more, 0 otherwise, 2 when it could not run. See man dupes.";
 
@@ -149,6 +158,11 @@ impl Module for DevCommands {
         let answer = match call.command().as_str() {
             "dupes" => match options(&call.args()).and_then(|o| dupes(&o)) {
                 Ok((out, summary, status)) => Answer { out, err: summary, status },
+                Err(words) => Answer { out: String::new(), err: words, status: 2 },
+            },
+            #[cfg(target_os = "linux")]
+            "hwcount" => match hwcount::run(&call.args()) {
+                Ok(out) => Answer { out, err: String::new(), status: 0 },
                 Err(words) => Answer { out: String::new(), err: words, status: 2 },
             },
             other => Answer::fault(format!("emusen.dev has no command '{other}'")),

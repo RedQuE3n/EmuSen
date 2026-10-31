@@ -2647,6 +2647,21 @@ and on `WiseMan~1` reported none.
 and the exit statuses on synthetic CSV and diff text, and the missing-PMD message. Seeded faults, each caught by one
 test: an overlap off by one line, the accept file ignored, a warning returned as a failure.
 
+### 13.17 `hwcount`: a program's host instructions, cycles and IPC (2026-10-31)
+
+Decided 2026-10-31: speed stages are gated on host instructions by unit, so the hardware counter wrapper used for
+Sapphire's measurements became `emusen.dev`'s second command (`man hwcount`). It runs a program, opens
+`perf_event_open`'s generic counters (cycles, instructions, branches, branch misses, user mode) on every thread between
+the first standard-error line holding one text and the first holding another, and prints plain rows, `thread`,
+`unit` and `function`, for `grep` and `awk`. With a table of `pattern  unit` lines it samples the program's first thread
+on cycles and on instructions and gives each unit its share of that thread's counted total; places are the program's
+symbols (`nm`), compiled code by `/tmp/perf-<pid>.map`, or a library's name. Linux only; the module's other command
+builds everywhere. Sapphire's table is its `examples/scripts/units.txt`.
+
+**Tests.** `units`' attribution on synthetic maps, symbols and a perf map; the options; a count of a shell loop between
+two of its lines, and a window that never opens. Measured 2026-10-31 on Sapphire's arena: the emulation thread's 4.23 G
+instructions a field against 4.22 G by the earlier scratch wrapper, the same unit shares within a percent.
+
 ## 14. How it is tested
 
 - **The golden corpus** (§13.1), the oracle of every step.

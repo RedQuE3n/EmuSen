@@ -2717,3 +2717,156 @@ given only as the bench's and the runner's argument.
    until the VU's move off Cranelift, then write `emusen-assembler`'s aarch64 backend once for both tiers.
 2. **[routine] The next step on the EE's path.** *Recommended*: after the VU stage, the arithmetic MMI in place on SSE.
 
+
+## 67. VIF1, VU1 and the GIF as transactions ahead of the board (2026-10-31)
+
+*Decided 2026-10-31 by the tester: stages are gated on host instructions by unit; VU1 programs run to completion with
+VIF writes landing after them, under one general static check for when that is safe, and no title list. Gates on the
+arena: the board, VIF, DMAC and PCRTC from about 1 G to at most 60 M host instructions a field; board events from about
+75,000 to at most 5,000 a field; a round of at least 3,072 with no freeze, 4,800 the aim; cycles counted beside
+instructions. The measurements are by `hwcount` (`man hwcount`, `EmuSen_DianaSh.md` §13.17), the emulation thread
+only.*
+
+### 67.1 What the references do (read 2026-10-31)
+
+Play! (`ee/Dmac_Channel.cpp`, `ee/Vif.cpp`, `ee/Vpu.cpp`, `ee/GSHandler.cpp`, `ee/Ee_SubSystem.cpp`): a CHCR write runs
+its channel at once; VIF takes a whole packet inside its DMA receive; MSCAL runs VU1 synchronously and may wait for the
+UNPACK after it; XGKICK hands its packet to the GIF at once; SIGNAL and FINISH land on the EE's side; a blocked DMA is
+retried each quantum. It reports VU1 idle to VPU-STAT, which is not copied here. PCSX2 (`Vif1_Dma.cpp`,
+`Vif_Codes.cpp`): VIF1's DMA takes packets as they arrive, and MSCAL is queued until a flush, a directly following
+UNPACK or the transfer's end, which 76 entries for 49 titles turn off (`Sapphire_SpeedHacks.md` §2.3).
+
+### 67.2 The design as built
+
+- **A transaction slot in the DMAC** (`dmac::Ahead`). Channels 1, 2, 8 and 9 arbitrate on a slot of their own, which the
+  board runs ahead of itself up to the PCRTC's next vertical edge (`Board::transact`) whenever the DMAC is stepped; the
+  other channels keep the board's slot and its events. A channel's end is held (`Ahead::lands`) and lands at its cycle:
+  STR clears and D_STAT's flag sets when the board reaches it, so INT1, CPCOND0 and a read of CHCR see it on time. Stall
+  control that links the two slots wakes the other when a step moves D_STADR. The MFIFO and fromSPR's stall control
+  against the drains stay inside the one slot.
+- **VIF1 runs as the data arrives**, its clock taking each qword's arrival (`Vif::arrive`) and kept where its last step
+  left it rather than moved to the board's time while it is busy. Its interrupt lands at its own cycle
+  (`Board::raise_at`), as does the GS's, the GIF running ahead with it. An UNPACK runs its writes in one loop; one with no
+  mask, MODE 0 and CL equal to WL writes whole qwords (`Vif::unpack_plain`).
+- **VU1 runs on where VIF1 waits for it** (MSCAL, MSCNT, FLUSH and MPG with VU1 running, §63.3), and nowhere else ahead of
+  the board. Each XGKICK reaches the GIF as it is made, in the run, and the GIF reads VU1's memory as of its own cycle
+  through the log of stores made ahead, now indexed by qword (`Vu::ahead_first`). VIF1's writes to a running VU1 land at
+  their cycles (§63.5). VPU-STAT and BC2F/BC2T see VU1 busy until the board passes its last pair, as before.
+- **A frame runs on until nothing is held** (`Board::holds`), so a state is never written with a held end, interrupt or
+  queued write, and `SPH2` is unchanged. A round of 0 turns the slot off; `Dmac::set_ahead` turns it on only with the
+  DMAC's wake and off only once it holds nothing.
+
+### 67.3 The static check: measured, and replaced by writes at their cycles
+
+Before relying on VU1 to completion, a scratch build (not committed) logged, at a round of 0 with VU1 interpreted, the
+qwords each VU1 run read and every VIF1 write that landed in VU1's memory while it ran.
+
+| Window | VU1 runs | Runs with a VIF1 write landed | Runs reading a qword after its write | Reads after the write |
+| --- | --- | --- | --- | --- |
+| short (6,000 to 6,120) | 35,496 | 29,190 (82 %) | 1,065 (3.0 %) | 3,195 |
+| arena (9,000 to 9,200) | 537,181 | 519,426 (97 %) | 4,630 (0.86 %) | 8,458 |
+
+So **run to completion with the writes after is not safe for Jak**: about one run in a hundred reads data VIF1 wrote
+during it, and a check that refused only those would have to know VIF1's future. The general form of
+`Sapphire_SpeedHacks.md` §2.3 and §63.8 was taken instead: VU1 runs ahead only where VIF1 is waiting for it, where no
+VIF1 write can come before VU1's end, and otherwise each write lands at its own cycle. That is exact by construction and
+needs no check, so there is no fallback rate. A counter of VIF1 writes landing after a VU1 run ahead had passed their
+cycle read 0 on both windows at a round of 64. A first form also ran VU1 to its end when VIF1 had nothing more for it;
+the arena measured the same instructions without it (5.24 G and 5.26 G on a debug-assertion build, digests equal), so it
+was removed rather than proved.
+
+### 67.4 Rounds of 3,072 and 4,800
+
+On this build the arena runs at both with no freeze: the sound digest equals the base's, the pictures are the same scenes
+as at 64 (0.5 to 28 % of pixels, the phase drift seen between any two builds), the state saves at the end, and events
+and instructions are unchanged (10,067 and 10,059 events, 3.42 G either way); 221 and 242 ms a field counted, against 231
+at 64, within the counted runs' noise. The base's run at 4,800 (2026-10-30) reached field 9,300 at 634 ms a field with its
+pictures repeating, and could not save its state (`StateError::Queue`). Inferred from the code, not re-run: there, VU1's
+kicks made ahead were held in PATH1's port until the board reached their cycles and the GIF ran only to the board's time,
+so with long rounds the kicks outran the GIF past the state's 16 slots and VIF1's FLUSH waits found PATH1 busy, as in
+§62.3. Here the GIF takes each kick in VU1's run and runs ahead to the vertical edge, and a frame does not end while
+anything is held. The round stays 64: longer rounds measured no gain.
+
+### 67.5 Results (measured 2026-10-31, the arena, uncontended)
+
+| | Base (§66, f6089156d) | 1. channels 1 and 2 as transactions | 2. channels 8 and 9 too | 3. whole-qword UNPACK |
+| --- | --- | --- | --- | --- |
+| Host instructions a field, emulation thread | 4.23 G | 3.42 G | 3.43 G | 3.42 G |
+| Cycles a field | 1.42 G | 1.04 G | 1.07 G | 1.07 G |
+| Board events a field | about 75,000 (§62.3) | 12,756 | 10,105 | 10,105 |
+| Arena, counted run | 282.5 | 219.6 | 231.4 | 226.5 |
+
+Timed (bench alone, CPU weight 100, load 1.5 to 2.4): **the arena 217.1 and 215.1 ms a field, p95 285 and 283**, against
+273.4 and 356; **the dock 97.2, p95 114**, against 101.5 and 122.
+
+| Unit, M a field (instructions / cycles) | Base | Step 3 |
+| --- | --- | --- |
+| Board | 395 / 127 | 104 / 32 |
+| VIF | 200 / 64 | 129 / 33 |
+| DMAC | 172 / 53 | 48 / 13 |
+| PCRTC | 109 / 33 | 15 / 4 |
+| GIF (inlined into the board in the base) | 2 / 1 | 32 / 11 |
+| **The gated units together** | **878 / 278** | **327 / 93** |
+| VU in Rust; floats; VU and EE compiled code | 1,839; 400; 239 | 1,643; 419; 213 |
+
+Step 1's first form spent 1.24 G in `Vu::mem_q_at`: the log of VU1's stores made ahead grew with the longer runs and a
+PATH1 read searched it whole. Indexing it by qword took the arena from 4.59 G to 3.45 G. Step 2 is neutral in
+instructions and costs about 3 % in cycles; it is kept for the events and for keeping the MFIFO in one slot. Step 3's
+digests equal step 2's exactly. Splitting VIF's 129 M on a scratch build: the general UNPACK 37 M and its stores 18 M
+(masked writes, or a running VU0), the whole-qword loop 25 M, and VIF's dispatch 43 M (`run_to` and `step`).
+
+### 67.6 Checks
+
+- **Sound** digests equal the base's on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`).
+- **Pictures.** Arena against §66's final build at fields 9,060 to 9,360 every 60: 3.6, 8.9, 23.2, 10.5, 12.7 and 0.5 % of
+  pixels, mean 0.04 to 2.7 levels; looked at side by side, the same scenes a few frames out of phase, as in §62 to §66.
+  Dock against §66's: 0, 0, 0, 0, 0.6 and 0.1 %.
+- **Determinism**: the two timed arena rounds give the same digests (`316A5D64DA676724`, `BCA8F00F4743A955`,
+  `7ECB74F415D33950`).
+- **A round of 0**: the short window's digests are §61.4's exactly (`0F8671F57AB63C25`, `D5F15509CCDD1709`,
+  `818361BFE5D2DBF9`).
+- **ps2autotests**: 75 of 78, the same three failing (`sqrt`, `efu`, `intstall`), all 78 texts identical to §66's.
+- **Tests** (release with debug assertions): the crate's 496, all passed; `emusen-dev-module` 18.
+- **Seeded faults**, each reverted: the whole-qword UNPACK writing a qword off (caught by `vif`, 9 tests); a loaded state
+  arming the slot with the DMAC's wake (`state`, 3 tests: the board's DMAC loop spins, a defect found and fixed during
+  the stage); an idle VIF1's clock left behind the board (`a_held_ee_stands_in_front_of_its_reset_vector`); a frame
+  ending with results held (the short window's state digest); a channel's end landing a million cycles late (the short
+  window's sound and picture digests).
+
+### 67.7 Named losses, timing only unless said
+
+1. VIF1, VU1 where VIF1 waits, the GIF and the GS run up to a field ahead of the board; what the EE can observe of them
+   (a channel's end, VIF1's, VU1's and the GS's interrupts, VPU-STAT) lands at its cycle, but GIF_STAT, VIF1_STAT and
+   their FIFO counts read by the EE show the units' progress ahead.
+2. **Byte-visible in principle**: channels 8 and 9 write the scratchpad and memory ahead of their cycles, so a program
+   reading the destination before the transfer's end, or writing its source after the kick, sees or gives data of
+   another time. No test program or window showed it. Moving them back to the board's slot costs about 2,600 events a
+   field and nothing in instructions.
+3. The two slots no longer share the bus cycle by cycle: channels 1, 2, 8 and 9 do not steal cycles from the others.
+
+### 67.8 The gates
+
+| Gate | Result |
+| --- | --- |
+| Board, VIF, DMAC, PCRTC (and GIF) at most 60 M instructions a field | **327 M** (93 M cycles), from 878 M: not met |
+| Board events at most 5,000 a field | **10,105**, from about 75,000: not met |
+| A round of at least 3,072, 4,800 the aim, no freeze | met at both |
+| The arena well under 273 ms | 216 ms, p95 284 |
+
+What remains, by size: VIF 129 M (the general UNPACK and its dispatch; Play! spends 24 M); the board 104 M, of which
+`observe_vu0`, the EE's COP2 reaching VU0, is 19 M; the DMAC's units on the board's slot, chiefly VIF0's channel, about
+1,600 units a field, each with a release period's second event; the GIF 32 M. The events gate needs VIF0's channel off
+the board's slot; VIF0 feeds VU0, which the EE drives at its own time, so that needs the same overlap check for VU0
+before it is built. No freeze and no player check changed.
+
+**Read.** Play!'s `ee/Dmac_Channel.cpp`, `ee/Vif.cpp`, `ee/Vpu.cpp`, `ee/GSHandler.cpp`, `ee/Ee_SubSystem.cpp`,
+`ee/COP_VU.cpp`; PCSX2's `Vif1_Dma.cpp`, `Vif_Codes.cpp`. Nothing was copied. No firmware was listed; the BIOS image
+was given only as the bench's and the runner's argument.
+
+**Questions.**
+
+1. **[decision] The gates not met.** *Recommended*: accept this stage at 327 M and 10,105 events, and take VIF0's
+   channel, VIF's dispatch and the general UNPACK as the next stage, VU0's overlap measured first.
+2. **[decision] Channels 8 and 9 ahead of the board** (loss 2). *Recommended*: keep them; if a program is found that
+   reads a transfer's destination before its end, move them back at no cost in instructions.
+3. **[routine] The round.** *Recommended*: keep 64; 3,072 and 4,800 run and measured no gain.

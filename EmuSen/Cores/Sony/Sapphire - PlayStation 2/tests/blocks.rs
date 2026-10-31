@@ -818,24 +818,26 @@ fn loads_of_registers_read_as_the_interpreter_reads() {
     assert!(s.left[2] > 100 && s.compiled_steps > 1000, "{s:?}");
 }
 
-/// CACHE inside a block (Sapphire_Speed.md §68): a line a store dirtied, invalidated by a hit operation, is read again from
-/// memory by the next access on the same base, which may not take the earlier access's line as held.
+/// CACHE inside a block (Sapphire_Speed.md §68): a line that hits and that a store then dirties, invalidated by a hit
+/// operation, is read again from memory by the next access on the same base, which may not take the store's line as held;
+/// a line written back by a hit operation is read past the cache.
 #[test]
 fn a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept() {
     let source = "
         lui gp, 0x8030
         lui s7, 0xa030
-        ori t9, zero, 30
-        top: addiu t0, t9, 0x111
+        ori t0, zero, 0x1234
         sw t0, 0x40(s7)
-        lw t1, 0x40(gp)
+        ori t9, zero, 30
+        top: lw t1, 0x40(gp)
         addiu t2, t1, 7
         sw t2, 0x40(gp)
         cache 0x1a, 0x40(gp)
         lw t3, 0x40(gp)
-        sw t2, 0x44(gp)
-        cache 0x18, 0x44(gp)
-        lw t4, 0x44(s7)
+        addu t5, t3, t9
+        sw t5, 0x80(gp)
+        cache 0x18, 0x80(gp)
+        lw t4, 0x80(s7)
         addu t5, t3, t4
         addiu t9, t9, -1
         bgtz t9, top

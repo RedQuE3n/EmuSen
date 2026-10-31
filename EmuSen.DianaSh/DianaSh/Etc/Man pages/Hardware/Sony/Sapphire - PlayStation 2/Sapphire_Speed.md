@@ -2958,9 +2958,11 @@ field, p95 291 and 288**, against the base's 217.0 and 287 in the same sitting; 
 - **Seeded faults**, each reverted: PMADDH's accumulate as a subtract and PABSH's correction shifted by 14 (caught by
   `every_lanewise_multimedia_instruction_runs_in_place_as_interpreted`); the register load's sign extension dropped (caught by
   `loads_of_registers_read_as_the_interpreter_reads` and `narrower_stores_to_registers_run_compiled_as_interpreted`); MinSH encoded
-  as the unsigned minimum (caught by `every_vector_operation_matches_its_lane_model_in_every_register`). **Not caught**: dropping the
-  lines' reset after CACHE; `a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept` passed with it, so the reset is kept
-  as the conservative form and its test does not yet prove it.
+  as the unsigned minimum (caught by `every_vector_operation_matches_its_lane_model_in_every_register`); the lines' reset after
+  CACHE dropped (caught by `a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept`: the load after DHIN read 123Bh, the
+  store's discarded word, where the interpreter refilled 1234h from memory). The test's first form missed it: its first load
+  missed the cache every turn, and after a slow path no later access in the block keeps that page's meaning, so no line was ever
+  taken as held. The loop now starts on a line that hits, which a store dirties before DHIN.
 
 **Named losses.** None new: the register load reads at the instruction's time as the slow path did, MMI results are bit-equal
 (the tests compare every lane against the interpreter's), and CACHE runs the interpreter's operation.
@@ -2973,10 +2975,10 @@ with `float_rz`), a way for a counted wait not to leave the block every turn, an
 **Read.** Nothing of the references this stage; the vector encodings are `cranelift-assembler-x64`'s. No firmware was listed; the
 BIOS image was given only as the bench's and the runner's argument.
 
-**Questions.**
+**Decided 2026-10-31 by the tester**: VU0's macro operations, compiled in place, move to the VU stage (on `float_rz`, which the
+new vector forms serve), and the EE's path is measured again after it.
 
-1. **[decision] The gate.** 100 M is not reachable by the EE's side alone on this design: about 120 M of the 206 M are the slow path
-   and calls that the VU0 macro operations and a counted wait's turns cause. *Recommended*: take VU0's macro operations in place in
-   the VU stage (on `float_rz`, which the new vector forms serve), then measure again before a counted-wait design.
-2. **[routine] The counted wait.** *Recommended*: not now; it saves at most about 25 M on the arena's one loop and needs a new idle
-   proof.
+**Named next step: the counted wait.** A loop of one or two blocks that only loads, tests and moves a count on by a constant against
+a bound that does not change (§68.1's D1_CHCR loop) leaves the block at every turn for its register load. Skipping its turns to the
+next event, the count moved on by the turns skipped and stopped at the bound, would save up to about 25 M on the arena; it needs its
+own proof that nothing else the loop reads can change between events. Held until the VU stage's numbers are in.

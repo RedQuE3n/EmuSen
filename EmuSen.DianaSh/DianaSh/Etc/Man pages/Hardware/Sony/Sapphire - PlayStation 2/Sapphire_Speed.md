@@ -2104,8 +2104,10 @@ moves is when the units run, so the timing of a kick can shift a field's picture
 
 - **PCSX2** (`pcsx2/VU1micro.cpp`, `vu1ExecMicro`, `vu1Finish`; `Config.h`, `vu1Instant`, on by default): with
   instant VU1, a microprogram starts at the EE's cycle and the previous one is run to its end first, in one call; with
-  MTVU (`MTVU.cpp`) the program goes to a thread with TOP, ITOP and FBRST as they were. VIF1's later writes reach VU1
-  memory after the program, whatever their cycles, which is why 27 titles turn it off (`Sapphire_SpeedHacks.md` §2.3).
+  MTVU (`MTVU.cpp`) the program goes to a thread with TOP, ITOP and FBRST as they were. Not all of VIF1's later writes
+  land after the program: MSCAL is queued and runs at a flush, a directly following UNPACK or the transfer's end
+  (`Vif_Codes.cpp`, `Vif_Transfer.cpp`), so other unpacks land first, whatever their cycles, which is why 76 entries,
+  49 titles, turn it off (`Sapphire_SpeedHacks.md` §2.3).
 - **DobieStation** (`core/ee/vu.cpp`, `update_XGKick`, `handle_XGKICK`): PATH1 is fed a qword every two cycles while VU1
   runs, and a second XGKICK while the first transfers stalls VU1 (`XGKICK_stall`) until the first ends.
 - **Play!** (`ee/Vpu.cpp`, `Execute`, `ProcessXgKick`): VU1 runs for a quota of cycles and an XGKICK hands its whole
@@ -2537,6 +2539,7 @@ as the bench's and the runner's argument.
 
 **Questions.**
 
-1. **[decision] The named loss of §65.4** (VIF0 at most a block late for COP2 in that block). *Recommended*: accept; it is
-   timing only; both windows' sound digests are unchanged and the arena's six sampled pictures are byte-identical. The dock's pictures were not compared.
+1. **The named loss of §65.4** (VIF0 at most a block late for COP2 in that block). Decided 2026-10-30 by the tester:
+   accepted. It is timing only; both windows' sound digests are unchanged and the arena's six sampled pictures are
+   byte-identical. The dock's pictures were not compared.
 2. **[routine] The next EE step.** *Recommended*: the prefix, the EE's largest remaining cost.

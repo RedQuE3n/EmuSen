@@ -125,7 +125,7 @@ pub struct Blocks {
     /// to a key (the kernel's handler and back to the program) finds its pages again.
     recent: [([u64; 3], u64); 4],
     turn: usize,
-    /// What a link's target depends on: the key without the user, supervisor and kernel modes.
+    /// What a link's target depends on: the key without the privilege mode.
     link_key: [u64; 3],
     /// `forget` ran: the lines' watch goes at the next entry, where the machine is at hand.
     forgot: bool,

@@ -122,7 +122,11 @@ only what Cores adds.
 
 The row model (§4.1), the detail pane's content, the marks' meanings, and the core tool. Nothing else.
 
-### 3.3 The frame does not exist yet
+### 3.3 The frame did not exist, and was built first
+
+**Built 2026-10-31** in LunaP (`docs/LunaP.md` §202, §203, branch `cores-window`): `AdaptiveLayout` and
+`ManagerLayout<T>`, with `LunaAction.PadButton` and `IsMain`, held by LunaP's tests to fit at 1280×800, 1920×1200 and
+1280×720 in both forms with Packages' columns and with Cores'. What follows is the reasoning recorded before.
 
 On 2026-10-31 neither `AdaptiveLayout` nor `ManagerLayout` is built, nor Packages' M1, which was to build T1. Cores
 cannot follow the frame without it, and building its own arrangement first would be the hand coding the frame exists
@@ -330,6 +334,41 @@ index), `core-ls`, `core-info`, `core-get`, `core-update`, `core-rollback`, `cor
 tool's words), `done`. Defaults and approvals are not jobs: they are the runtime's calls (§4.3, §5.2), made by the
 window directly and by the module through its host's runtime.
 
+### 6.1 The requests and events built (C2, 2026-10-31)
+
+The platform library's `emusen.library` service is at **minor 1.5**: a request whose `op` begins `core-` is handed to
+`emusen-core-tool`, whose context is the player's `/Cores` (`DataStore.Cores`), the buildbot for this platform and,
+until the systems table's `for_libretro` lands, no placement of its own (a request's `"systems"` serves meanwhile).
+
+| Request | Events |
+|---|---|
+| `{"op": "core-fetch"}` | `progress` (`step`), then `fetched` (`cores`, `skipped`: index lines not one of this platform's core zips, `date`), or `refused` (`reason`); `done` |
+| `{"op": "core-ls", "show": "all" \| "installed" \| "available" \| "updates" \| "unsupported", "console": null \| <id>}` | one `core` per row; `done` with `counts` per state and `catalogue`, the date fetched or null |
+| `{"op": "core-info", "core": <stem>}` | one `core` with the detail, or `refused`; `done` |
+
+Each may carry `"systems": {<libretro database or systemid>: <id> | [<id>...]}`, matched as `for_libretro` matches
+(the `database` names first, the `systemid` only where they are blank). A `core` event holds `stem`, `name`,
+`corename`, `systems`, `source` (`libretro`), `version` (`display_version`), `build` (the installed build's date, else
+the index's), `offered` (the index's date), `state` (`installed`, `update`, `available`, `unsupported` with `reason`,
+or `added`), `license`, `authors` and `size`; `core-info` adds `description`, `notes`, `permissions`, `extensions`,
+`needs_fullpath`, `experimental`, `savestate`, `hw_render`, `required_hw_api`, `firmware` (`desc`, `path`,
+`optional`), `from` and `index_crc32`, and for an installed core `sha256` and `fetched`. `done` is `{op, counts,
+catalogue, error?}`.
+
+**The fetch.** Both files are fetched with `emusen-net`'s `same_host` (a redirect off the buildbot fails the fetch),
+bounded at 16 MB and 4 MB, and checked (the archive's directory reads and holds at least one `.info`; the index has
+at least one core line for this platform) before either cached copy is replaced, each by an atomic rename, so a
+failed fetch leaves the catalogue as it was. Only `linux/x86_64` has a buildbot folder in this build, the only
+listing read; another platform's is added once its listing is read, and until then `core-fetch` refuses with
+"no buildbot listing is known for this platform".
+
+**Measured on 2026-10-31**: `emusen-core-tool` 7 tests against a catalogue and index made by the test and served by
+its own TLS server; `emusen-net` 19 (the same-host test new); `emusen-cores-module` 3; the platform library's
+`cores` in a shell it makes over a cached catalogue; the library tool's own 18 tests unchanged after the job runner
+was drawn out. Seeded faults, each caught: the update test inverted; the cache written before the check; a core
+called unsupported when any of its APIs is OpenGL; `same_host` off; the same-host check ignoring the host; `core-`
+requests sent to the library tool; the listing's fields out of order.
+
 ## 7. Surfaces shared with the libretro host
 
 The libretro host is being built on its own branch. Four places need one owner between the two (Q7):
@@ -372,6 +411,12 @@ cores default <console> [<core>]          print, or set, the console's engine
 cores default --game <path> [<core>|-]    print, set, or clear a game's choice
 ```
 
+**Built in C2 (2026-10-31)**: `ls`, `info`, `fetch` and `wait`, in `Platform/emusen-cores-module`, reading events
+with `emusen-library-module`'s `next_event`, shared rather than copied, since both follow jobs of the same service.
+A core is named by its file stem (§4.1). `cores default` is held back: a module reaches the runtime's settings only
+through a service, and none gives a module the console and game `Engine` setting yet (§10, Q11). The window sets the
+default through the frontend API directly (C4).
+
 Composes with the shell's tools: `cores ls --updates ps2 | wc -l`; `cores ls --installed | grep GPL`;
 `for c in $(cores ls --updates | awk '{print $3}'); do cores info $c; done`; `cores verify | grep -v ok`. Its man page, `cores.1`, is written with the module.
 
@@ -413,6 +458,10 @@ tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and t
 9. **[routine]** The command is `cores` in a new module `emusen.cores`, since `core` is taken. *Recommended:* yes.
 10. **[routine]** Cores whose host cannot run them (OpenGL-only, an unknown system) are listed under *Not supported*
     with the reason rather than hidden. *Recommended:* yes.
+11. **[decision]**, asked 2026-10-31 after C2: give command modules the runtime's `Engine` setting, console and game
+    scope, through a narrow service (`emusen.settings`, get and set of one key, the runtime's own checks kept), so that
+    `cores default` can be built. *Recommended:* yes, the service limited to the keys a module names in its manifest;
+    the alternative, the module writing `consoles.json` itself, would bypass the setting's owner.
 
 ## 11. Decided 2026-10-31 by the tester
 

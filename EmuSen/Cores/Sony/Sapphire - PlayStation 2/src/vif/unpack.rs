@@ -53,6 +53,11 @@ pub fn decode(f: Format, raw: u128, usn: bool) -> [u32; 4] {
     }
 }
 
+/// Four fields as a qword, x lowest.
+pub fn quad(f: [u32; 4]) -> u128 {
+    f.iter().rev().fold(0u128, |a, &x| a << 32 | u128::from(x))
+}
+
 /// CYCLE's write sequence (§6.3.5): CL >= WL skips, CL < WL fills; WL 0 is a block that never ends, every write
 /// reading a vector into the next qword (D-181).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,6 +185,31 @@ impl Unpack {
 
     pub fn finished(&self) -> bool {
         self.done == self.num
+    }
+
+    /// Every write takes a vector and writes all four fields unchanged at the next qword: no mask, MODE 0, CL equal to WL.
+    pub fn plain(&self, fill: &Fill) -> bool {
+        !self.masked && fill.mode == 0 && self.cycle.cl == self.cycle.wl && self.cycle.wl != 0
+    }
+
+    /// Whether the next vector's bits are not all held.
+    pub fn short(&self) -> bool {
+        self.held < self.format.bits()
+    }
+
+    /// The next write of a `plain` UNPACK whose bits are held: its qword offset and fields.
+    pub fn next_plain(&mut self) -> (u32, [u32; 4]) {
+        let need = self.format.bits();
+        let raw = if need == 128 { self.bits } else { self.bits & ((1u128 << need) - 1) };
+        self.bits = if need == 128 { 0 } else { self.bits >> need };
+        self.held -= need;
+        let at = self.addr + self.done;
+        self.done += 1;
+        if self.finished() {
+            self.bits = 0;
+            self.held = 0;
+        }
+        (at, decode(self.format, raw, self.usn))
     }
 
     /// Takes a word of the packet's data into the bit stream.

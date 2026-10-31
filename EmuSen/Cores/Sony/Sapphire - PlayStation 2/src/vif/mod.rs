@@ -91,6 +91,8 @@ pub trait Gif {
     fn mask_path3(&mut self, masked: bool, at: u64);
     /// The next qword of the GS's local-to-host data while the host interface is reversed (GS User's Manual §4.2.2).
     fn host_read(&mut self) -> Option<u128>;
+    /// VU1's kicks made by cycle `t` handed to the GIF, and the GIF run on (Sapphire_Speed.md §67).
+    fn path1(&mut self, _vpu: &mut Vpu, _t: u64) {}
 }
 
 /// What a VIF reaches while it runs: its VU through the VPU, and the GIF.
@@ -204,8 +206,18 @@ impl Vif {
         }
     }
 
-    fn reversed(&self) -> bool {
+    pub fn reversed(&self) -> bool {
         self.stat & stat::FDR != 0
+    }
+
+    /// Data arrived at cycle `at`: the VIF, whose clock stays where its last step left it, takes it no earlier.
+    pub fn arrive(&mut self, at: u64) {
+        self.time = self.time.max(at);
+    }
+
+    /// The VIF's clock.
+    pub fn clock(&self) -> u64 {
+        self.time
     }
 
     fn stalled(&self) -> bool {
@@ -296,7 +308,9 @@ impl Vif {
     pub fn run_to(&mut self, t: u64, r: &mut Reach) {
         self.rest = false;
         if self.dry {
-            self.time = self.time.max(t);
+            if r.ahead == 0 || self.unit == 0 {
+                self.time = self.time.max(t);
+            }
             return;
         }
         if self.reversed() {
@@ -317,7 +331,9 @@ impl Vif {
                 Some(cost) => self.time += cost,
                 None => {
                     if !matches!(self.cmd, Cmd::Wait { .. }) {
-                        self.time = self.time.max(t);
+                        if r.ahead == 0 || self.unit == 0 {
+                            self.time = self.time.max(t);
+                        }
                         self.dry = !(matches!(self.cmd, Cmd::Direct { .. }) && self.stat & stat::VGW != 0);
                     }
                     return;
@@ -391,6 +407,10 @@ impl Vif {
                     got += 1;
                 }
                 let q = w.iter().rev().fold(0u128, |a, &x| a << 32 | u128::from(x));
+                if r.ahead > 0 && r.vpu.running(1) {
+                    r.vpu.run_unit(1, self.time);
+                    r.gif.path1(r.vpu, self.time);
+                }
                 let Some(taken) = r.gif.path2(q, hl, self.time) else {
                     self.cmd = Cmd::Direct { hl, left, got, w };
                     self.stat |= stat::VGW;
@@ -401,26 +421,85 @@ impl Vif {
                 if left == 1 { self.complete() } else { self.cmd = Cmd::Direct { hl, left: left - 1, got: 0, w } }
                 Some(BUS + taken.saturating_sub(self.time))
             }
-            Cmd::Unpack(mut u) => loop {
-                let mut fill = self.fill;
-                let next = u.next(&mut fill, &|i| self.peek(i));
-                self.fill = fill;
-                match next {
-                    Next::Word => {
-                        let Some(x) = self.word() else {
-                            self.cmd = Cmd::Unpack(u);
-                            return None;
-                        };
-                        u.take(x);
+            Cmd::Unpack(mut u) => {
+                if u.plain(&self.fill)
+                    && let Some(done) = self.unpack_plain(&mut u, t, r)
+                {
+                    return done;
+                }
+                self.unpack(u, t, r)
+            }
+        }
+    }
+
+    /// The general UNPACK: any mask, mode and write cycle, a write at a time.
+    fn unpack(&mut self, mut u: Unpack, t: u64, r: &mut Reach) -> Option<u64> {
+        loop {
+            let mut fill = self.fill;
+            let next = u.next(&mut fill, &|i| self.peek(i));
+            self.fill = fill;
+            match next {
+                Next::Word => {
+                    let Some(x) = self.word() else {
+                        self.cmd = Cmd::Unpack(u);
+                        return None;
+                    };
+                    u.take(x);
+                }
+                Next::Write(at, fields, enable) => {
+                    self.store(r, at, fields, enable);
+                    self.num = self.num_bits(u.num - u.done);
+                    self.time += BUS;
+                    if u.finished() {
+                        self.complete();
+                        return Some(0);
                     }
-                    Next::Write(at, fields, enable) => {
-                        self.store(r, at, fields, enable);
-                        self.num = self.num_bits(u.num - u.done);
-                        if u.finished() { self.complete() } else { self.cmd = Cmd::Unpack(u) }
-                        return Some(BUS);
+                    if self.time > t {
+                        self.cmd = Cmd::Unpack(u);
+                        return Some(0);
                     }
                 }
-            },
+            }
+        }
+    }
+
+    /// An UNPACK that writes whole qwords, one after another, of a VU that is not running or of VU1 through its queue
+    /// (Sapphire_Speed.md §67); none where the general path must take it, otherwise as the general path returns.
+    fn unpack_plain(&mut self, u: &mut Unpack, t: u64, r: &mut Reach) -> Option<Option<u64>> {
+        let running = r.vpu.running(self.unit);
+        if running && self.unit == 0 || !running && r.vpu.units.vu1.foreign_next != u64::MAX {
+            return None;
+        }
+        if !running {
+            r.vpu.run_unit(self.unit, self.time);
+        }
+        let qwords = self.data_qwords();
+        loop {
+            while u.short() {
+                let Some(x) = self.word() else {
+                    self.cmd = Cmd::Unpack(u.clone());
+                    return Some(None);
+                };
+                u.take(x);
+            }
+            let (at, fields) = u.next_plain();
+            let a = (at % qwords) as usize;
+            let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
+            if running {
+                vu.queue_store(self.time, a, fields, 0xF);
+            } else {
+                vu.set_mem_q(a, unpack::quad(fields));
+            }
+            self.num = self.num_bits(u.num - u.done);
+            self.time += BUS;
+            if u.finished() {
+                self.complete();
+                return Some(Some(0));
+            }
+            if self.time > t {
+                self.cmd = Cmd::Unpack(u.clone());
+                return Some(Some(0));
+            }
         }
     }
 
@@ -527,8 +606,8 @@ impl Vif {
     /// state"), then the paths idle where asked.
     fn wait(&mut self, t: u64, gif: bool, path3: bool, then: Then, r: &mut Reach) -> Option<u64> {
         let unit = self.unit;
-        let ready = r.vpu.ready(unit, self.time)
-            || if r.ahead > 0 && unit == 1 { r.vpu.ready_ahead(unit, t.max(self.time), r.ahead) } else { r.vpu.ready(unit, t.max(self.time)) };
+        let ahead = r.ahead > 0 && unit == 1;
+        let ready = r.vpu.ready(unit, self.time) || if ahead { r.vpu.ready_ahead(unit, self.time, r.ahead) } else { r.vpu.ready(unit, t.max(self.time)) };
         if !ready {
             self.cmd = Cmd::Wait { gif, path3, then };
             self.stat |= stat::VEW;
@@ -537,6 +616,9 @@ impl Vif {
         self.time = self.time.max(r.vpu.last(unit).map_or(0, |e| e + 1));
         self.stat &= !stat::VEW;
         if gif {
+            if ahead {
+                r.gif.path1(r.vpu, u64::MAX);
+            }
             match r.gif.idle_at(path3, self.time) {
                 Some(at) => self.time = self.time.max(at),
                 None => {

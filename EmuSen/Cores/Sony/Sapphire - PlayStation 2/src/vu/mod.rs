@@ -74,6 +74,10 @@ pub struct Vu {
     pub ahead_log: Vec<(u16, u64, u128)>,
     /// Each qword's latest logged store, so a read the log cannot change skips it; may be stale-high.
     ahead_last: Box<[u64]>,
+    /// Each qword's first entry in `ahead_log` plus one (0 for none), its last, and each entry's next for the same qword.
+    ahead_first: Box<[u32]>,
+    ahead_tail: Box<[u32]>,
+    ahead_next: Vec<u32>,
     /// VIF1's writes to a running VU1, (cycle, qword, fields, enable), landed before its first pair past each (§63.5).
     foreign: std::collections::VecDeque<(u64, u16, [u32; 4], u32)>,
     /// The first of `foreign`'s cycles, `u64::MAX` when it is empty; read by compiled code at each pair.
@@ -147,6 +151,9 @@ impl Vu {
             efu_free: 0,
             ahead_log: Vec::new(),
             ahead_last: vec![0; mem / 16].into_boxed_slice(),
+            ahead_first: vec![0; mem / 16].into_boxed_slice(),
+            ahead_tail: vec![0; mem / 16].into_boxed_slice(),
+            ahead_next: Vec::new(),
             foreign: std::collections::VecDeque::new(),
             foreign_next: u64::MAX,
         }
@@ -237,7 +244,11 @@ impl Vu {
         let mut v = if self.ahead_log.is_empty() || self.ahead_last[q] < at {
             self.mem_q(q)
         } else {
-            self.ahead_log.iter().find(|e| e.0 as usize == q && e.1 >= at).map_or_else(|| self.mem_q(q), |e| e.2)
+            let mut i = self.ahead_first[q];
+            while i != 0 && self.ahead_log[i as usize - 1].1 < at {
+                i = self.ahead_next[i as usize - 1];
+            }
+            if i == 0 { self.mem_q(q) } else { self.ahead_log[i as usize - 1].2 }
         };
         if self.foreign_next < at {
             for &(_, _, fields, enable) in self.foreign.iter().take_while(|w| w.0 < at).filter(|w| w.1 as usize == q) {
@@ -252,6 +263,23 @@ impl Vu {
         let q = a % (self.data.len() / 16);
         self.ahead_last[q] = t;
         self.ahead_log.push((q as u16, t, self.mem_q(q)));
+        self.ahead_next.push(0);
+        let n = self.ahead_log.len() as u32;
+        match self.ahead_tail[q] {
+            0 => self.ahead_first[q] = n,
+            last => self.ahead_next[last as usize - 1] = n,
+        }
+        self.ahead_tail[q] = n;
+    }
+
+    /// The log of stores made ahead dropped, once no PATH1 read can fall before them.
+    pub fn clear_ahead(&mut self) {
+        for e in &self.ahead_log {
+            self.ahead_first[e.0 as usize] = 0;
+            self.ahead_tail[e.0 as usize] = 0;
+        }
+        self.ahead_log.clear();
+        self.ahead_next.clear();
     }
 
     /// An UNPACK write of the fields `enable` names into data qword `a`, the others kept.
@@ -788,7 +816,7 @@ impl emusen_native::State for Vu {
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
-        self.ahead_log.clear();
+        self.clear_ahead();
         self.foreign.clear();
         self.foreign_next = u64::MAX;
         r.u32s(self.vf.as_flattened_mut())?;

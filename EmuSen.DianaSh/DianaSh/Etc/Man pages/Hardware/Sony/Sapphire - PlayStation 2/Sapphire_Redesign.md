@@ -2484,3 +2484,265 @@ opening and 2.28 for the arena: an estimate from that ratio, not a measurement.
   passes clean and fails with the guard dropped.
 - **Three seeded faults** as above, each on its own Release build, and reverted.
 - **The ring:** two rounds at four sizes on the desktop.
+
+## The VU's floats under rounding towards zero: an exact kernel (measured 2026-10-31)
+
+*Numbered after the horizon check. R0.4 closed the lane kernels as failed (1.79 to 1.96 ns a lane operation on the
+handheld against 1.125); the budget revised for the two threads asks the VU thread for about 0.8 to 1.0 ns a lane
+operation on the handheld, 0.7 to 0.85 on the desktop. This section builds a third kernel, `float_rz`, behind the
+`lanes` feature beside `float_lanes` and `float_host`, proves it bit-equal to `float` and times it in R0.4's harness and
+in registers. Nothing in the default build uses it; the VU-in-place stage wires it into the recompiler. Disputes would
+start at D-1108; the step raised none.*
+
+### In one paragraph
+
+With MXCSR set to **round towards zero, denormals as zero in and out, exceptions masked** (`float_rz::MODE`, 0xFFC0),
+the host's `vaddps` and `vmulps` are nearly the console's: a would-be denormal reads as zero as the console reads it,
+an underflow flushes to a signed zero as the console flushes it, and the host's truncation is the console's. What is
+left is the adder's cut (D-25) and the multiplier's dropped columns (D-26, D-1104). The adder's cut is one magic
+constant: the smaller operand plus ±2^(e−1) and minus it again, rounded towards zero, is the smaller operand cut at the
+larger's guard bit, taken only where the fields differ by two or more. The multiplier's loss is handled by its
+structure: it is zero where the multiplier has no digit below the column, it is 2^15 a negative digit where the
+multiplicand is short (which the games' data makes the common case: 83 % of the lanes it reaches on the arena), and
+where neither holds and the product's kept bits are within 2^18 of a boundary the lane is recomputed by `float::mul`
+on a cold path. A lane with a field of 255 or a result the host saturated sends its vector to `float_lanes`. **The
+adder is 14 vector instructions for eight lanes, the multiplier about 30 and a cold branch, with no per-lane work and
+no table.** PCSX2 runs its VUs under this same MXCSR word (`pcsx2/Pcsx2Config.cpp` 37–41, loaded on entry in
+`pcsx2/x86/microVU_Execute.inl` 34–36, read 2026-10-31) and takes the host's results as they are; the kernel here adds
+the corrections that make them the console's.
+
+### The adder
+
+D-25's adder aligns the smaller operand S to the larger L's 24 bits and one guard bit and drops the rest, then
+truncates. That is RZ(L + S′) with S′ = S cut towards zero at the guard bit g = 2^(e−24), L in [2^e, 2^(e+1)) [A].
+The kernel (`raw::add`), each line one or two instructions:
+
+1. `big = |b| > |a|` as a float compare (DAZ makes a would-be denormal compare as zero, as the console orders zeros);
+   `L`, `S` by two blends. Equal magnitudes keep `a` as L, as `float::add` does; the sum is then exact either way.
+2. `C = (L & EXP) − 2^23` as bits: the float 2^(e−1), or −∞ for a zero L and +0 for a field of 1.
+3. `cut = |S| < C` as a float compare: exactly "the fields differ by 2 or more", since |S| ≥ 2^(e_S) and |S| < 2^(e_S+1).
+   For a zero or field-1 L the compare is false and nothing is cut, which is right: S is then zero or in L's own binade.
+4. `C |= S & SIGN`; `S′ = RZ(S + C) − C`. With |S| < 2^(e−1), S + C has the sign of S and lies in [2^(e−1), 2^e), whose
+   unit is g, so rounding towards zero cuts |S| at g; the subtraction is exact (Sterbenz). A zero S gives +0.
+5. `S′ = cut ? S′ : S`; `r = RZ(L + S′)`.
+6. `trouble = (r & MAX) > 7F7FFFFEh`: the vector's lanes left to the integer form.
+
+**Why the bits are `float::add`'s.** Where the fields differ by 0 or 1 nothing is dropped by the console either, and
+RZ of the exact sum is its truncation of the exact `m`; a deep cancellation that falls under 2^−126 is flushed to the
+signed zero `finish` gives (the sign is L's, since |L| > |S′| unless the cancellation is exact, which gives +0 under
+rounding towards zero as `add` does). Where they differ by 2 or more the result lies above 2^(e−1), is RZ(L + S′)
+exactly, and `finish`'s saturation is the one case the host does differently: the host rounds an overflow to its
+largest finite number 7F7FFFFFh where the console gives 7FFFFFFFh with O, so a result of magnitude 7F7FFFFFh or above
+goes to the integer form; that also catches every operand with a field of 255, since ∞ or NaN in gives ∞ or NaN out
+of an addition or a multiplication. Two zeros give −0 only when both are −0, as Table 8-5 and IEEE 754's rule for
+rounding towards zero agree. The flags for the form that keeps them: Z and S from the bits; U where the result is a
+zero of two non-zero operands that are not each other's negation; O never on the path.
+
+### The multiplier
+
+`float::product` is RZ(x·y) or one unit below it: it subtracts the loss, under 2^18, where `y`'s low 16 bits are not all
+zero and the product's bits below column 23 are under 2^18 (§56.4, §59.2). The kernel (`raw::mul`):
+
+1. `p = RZ(a × b)`; `low = vpmulld(x, y)`, the low 32 bits of the exact product of the 24-bit significands.
+2. `top`: whether `p`'s field is e_a + e_b − 126, that is the product's top bit at 47 and 24 bits kept from bit 24;
+   `kept = low & (top ? FFFFFFh : 7FFFFFh)`, the product's bits below the 24 kept. The loss changes the kept bits only
+   where `kept` is under the loss, so `near = kept < 2^18` is the lanes it can reach at all.
+3. `quiet`: `y`'s low 16 bits zero (no digit below the column); `zero`: a zero product (a zero operand under DAZ, or an
+   underflow under FTZ), whose bits are the console's signed zero already.
+4. `short`: `x`'s low 15 bits zero. Then the loss is 2^15 times the negative digits below the column (§59.2's third
+   rule; `float_lanes::negatives` counts them), and the result is one unit low exactly where that count exceeds
+   `kept >> 15`; the kernel decrements those lanes as integers, which crosses a binade correctly (§56.4).
+5. `fix = near ∧ ¬quiet ∧ ¬zero ∧ ¬short`: the lanes `raw::fixed` recomputes by `float::mul` behind a branch;
+   `trouble` as the adder's, on the host's product before the decrement.
+
+**Why the bits are `float::mul`'s.** A lane not `near` has its kept bits at least 2^18 above a boundary and the loss
+cannot cross it, so RZ(x·y) is the console's product; a `quiet` lane loses nothing; a `short` lane's loss is exactly
+2^15 a negative digit, and the decrement is `float::product`'s subtraction read at the kept bits; a `fix` lane is
+`float::mul` itself. The exponent, the zeros and the saturation are as the adder's. The multiply-add is the product,
+its fix, the negation for a subtraction, then the sum: two truncations, never a fused one (seeded fault F6).
+
+### What the recompiler must do with it
+
+- Set MXCSR to `MODE` on entering compiled VU code and restore it before any other float arithmetic on the thread
+  (the integer `float` functions and the integer form do not care; `host::div` and `host::sqrt` do).
+- Emit each operation as the straight line above, with the field mask ANDed into `fix` and `trouble` (a lane the mask
+  leaves has no flags, `vu::ops::lanes`), and two cold stubs: `fixed` for a product's lanes, the integer form for a
+  vector with a field of 255 or a saturated result (0.06 % of the arena's lanes; 0.26 % of its vectors before the mask).
+- Where no later pair reads the flags (the recompiler already drops 479,289 dead flag writes a field on the arena), omit
+  the Z, S and U computation; where one does, the flags are Z and S of the bits and U as above.
+- The dead lanes of the mask cost nothing in the kernel; a blend with the old register writes the result.
+
+### Exactness (measured)
+
+`cargo test --profile test-checked --features lanes --lib float_rz` [M], each kernel entry point against `float` lane by
+lane with the MAC flags, four lanes and paired, under `MODE`:
+
+| Test | Cases | Kept whole, recomputed |
+| --- | --- | --- |
+| R0.4's reduced set, every pair beside three others, every fourth pair filling the vector | 4,596,736 vectors | over 100,000 of each kind; over 10,000 lanes recomputed (asserted) |
+| §56.5's classes, half the vectors one lane repeated | 4,000,000 vectors | the same |
+| the cut at every distance 0 to 26, every 13th fraction of the smaller operand, four larger operands, both signs and orders | 8 × 27 × 645,278 lanes | — |
+| **the cut at every distance over every fraction** (ignored by default; `cut_sweep(1)`; run 2026-10-31, passed) | 8 × 27 × 8,388,608 lanes | — |
+| every multiplier against six multiplicands (as `float`'s own proof of its closed form) | 6 × 8,388,608 lanes | over 100,000 recomputed (asserted) |
+| the vectors kept whole against the scalar rule (no field of 255, no overflow, no result at the host's largest finite) | 1,000,000 vectors | — |
+| random (ignored; `random_lanes`; run 2026-10-31 with the sweep above, 154.6 s for both, passed) | 1,000,000,000 lanes | add 198,753,276, mul 116,346,481, multiply-add 107,382,661 vectors whole; 42,710,376 lanes recomputed |
+
+The adder's input space is covered exhaustively in the dimension that matters, the smaller operand's fraction at every
+alignment against the larger's, with the larger's fraction at both ends and random; the multiplier's is covered as
+`float` covers its own closed form, every multiplier against six multiplicands, and the loss-reaching lanes take
+`float::mul` itself. The random and class suites cover the exponent range, the zeros, the would-be denormals, the
+fields of 255, the overflows and underflows and the flags. **Why this suffices:** the adder's result depends on the
+fields' difference, the smaller operand's fraction and the larger's low bits, each swept in full or at both ends; the
+multiplier's host path is used only where `float::product`'s own argument says the loss cannot reach the kept bits
+(the `near`, `quiet` and `short` rules are its three tests, read lane by lane), and every other lane is `float::mul`.
+
+**Seeded faults** (each alone, the tests run, the source restored by the script that seeded it, 2026-10-31):
+
+| # | Fault | Caught by |
+| --- | --- | --- |
+| F1 | the cut's constant a binade high, 2^e for 2^(e−1) | the reduced set, the classes, the cut sweep |
+| F2 | the cut applied at every distance, 0 and 1 included | the reduced set, the classes, the cut sweep, the scalar rule |
+| F3 | the kept bits' window 23 bits wide for every product (bit 23 kept when the top bit is at 47) | the reduced set |
+| F4 | the lanes the loss can reach not recomputed | the reduced set, the classes, the six multiplicands |
+| F5 | the host's largest finite number taken as a result | the reduced set, the classes |
+| F6 | **the multiply-add fused**, `vfmadd231ps` rounding once | the reduced set, the classes |
+| F7 | an exact cancellation flagged as an underflow | the reduced set, the classes |
+| F8 | a short multiplicand's decrement left out | the reduced set, the classes, the six multiplicands |
+
+F3 is caught by one suite alone, and the reason is worth recording: a window too narrow only sends more lanes to
+`float::mul`, which stays exact, so the fault changes bits solely through the short multiplicand's decrement, where
+the top of the kept bits decides; that needs a short multiplicand whose product's top bit is at 47 and bit 23 set,
+which the six-multiplicand sweep's one short multiplicand, 1.0, never gives (its products keep their top bit at 46)
+and the reduced set's 1.5 does. The decrement is the one place the window's width reaches the bits.
+
+### The arena's operands (measured 2026-10-31)
+
+§59.8 named the operands' shares as drawn, not recorded. For this step a sampling recorder (a scratch patch of
+`vu::ops`, built into a bench binary and not committed) wrote every 32nd upper operation of VU1 after the first 72
+million, 2,000,000 operations (104 MB) of the arena from the state at 9,000, run 9,060 to 9,140: the kind, the field
+mask, VF[fs], the second operand as the instruction reads it (a broadcast field, I or Q resolved) and ACC. The sample
+was deleted once the figures below were recorded. `lanes mix … rz FILE` reads such a file and prints the census
+(`examples/lanes.rs`, `census`):
+
+| | add, sub | mul | madd, msub |
+| --- | --- | --- | --- |
+| share of the operations | 23.0 % | 39.9 % | 37.1 % |
+| lanes written a vector | 2.94 | 3.60 | 3.89 |
+| vectors with every lane kept whole (before the mask) | 99.744 % | 99.753 % | 99.941 % |
+
+Of the product lanes written, **0.93 % go to `fixed`** (none of them with a short multiplicand, which the in-line
+decrement takes; before that rule was in line, 5.62 %, 83 % of those short), 47.2 % have a quiet multiplier and 26.8 %
+a short multiplicand. Of the sum lanes written (the multiply-adds' sums included), 23.3 % have a zero operand, 49.0 %
+are cut and 27.7 % are not. Lanes with a field of 255 are 0.063 %. So **99.7 to 99.9 % of the arena's vectors take
+the fast form whole**, 0.9 % of its product lanes take the cold recompute, and the rest is the integer form on about
+one vector in 400 (fewer once the field mask is applied, since a lane the mask leaves is no reason to leave the path).
+
+The multiplicand is short in a quarter of the products and the loss reaches the kept bits in nearly all of those
+(98.7 % of the short lanes `fixed` had taken were decremented by the console): that is the games' 1.0, 0.5 and 255.0
+against long operands, the "RZ differs" share §56.2 counted, and why the short rule is in line rather than on the cold
+path.
+
+### Speed (measured 2026-10-31, desktop)
+
+Three measurements, each the median of seven, two rounds, pinned to one core (`taskset -c 15`) at CPU weight 100,
+started only with no cargo, rustc or Sapphire game running; the one-minute load was 3.7 to 3.9 (other work on other
+cores). `float_host`'s AVX2 form ran in the same sitting as the reference. In ns a lane operation written, a
+multiply-add's counting twice:
+
+**R0.4's harness** (`lanes mix mix-arena.txt 7 FORM`: the entry points, with the MAC word and the field mask, pairs of
+one kind in eight lanes):
+
+| Form | Drawn operands, r1 / r2 | Recorded operands, r1 / r2 |
+| --- | --- | --- |
+| the stream alone (`floor`) | 0.553 / 0.525 | — |
+| `float_host`, AVX2 (§59.7: 1.563–1.568 on a quieter day) | 1.834 / 1.685 | 1.791 / 1.749 |
+| **`float_rz`** through its entry points | **1.634 / 1.647** | **1.716 / 1.713** |
+
+**The kernel in a stream** (`rzreg`: the operands loaded, the kernel inlined, the result stored, no MAC word or mask, a
+troubled vector counted and skipped; the stream's own loop, its 64-bit modulo, dispatch and copies kept):
+
+| | Drawn, r1 / r2 | Recorded, r1 / r2 |
+| --- | --- | --- |
+| `float_rz` in registers | 1.181 / 1.258 | 1.338 / 1.347 |
+
+**The kernel alone** (`lanes kernels`: each kind on 128 eight-lane vectors in the first-level cache, loaded, computed
+and stored with no dispatch; and the multiply-add chained through ACC):
+
+| | Drawn, r1 / r2 | Recorded, r1 / r2 |
+| --- | --- | --- |
+| add | 0.178 / 0.182 | 0.204 / 0.199 |
+| mul | 0.391 / 0.392 | 0.450 / 0.448 |
+| multiply-add, independent | 0.335 / 0.328 | 0.384 / 0.364 |
+| multiply-add chained through ACC (latency) | 0.349 / 0.351 | 0.379 / 0.379 |
+
+(Two of the 128 drawn vectors carry a field of 255 and are counted, not computed, 1.6 % of the drawn vectors; the
+recorded ones have none.)
+
+**What the numbers say.** Through R0.4's harness the kernel is 5 to 10 % faster than `float_host` and far from the
+mark of 0.7 to 0.85, as every form must be: the harness's own floor is 0.53 to 0.55, two thirds of the mark, and its
+MAC word, mask blend and copies cost about as much again; it measures an interface no recompiled block would have, and
+R0.4's verdict on that interface stands. The stream in registers takes a third of the interface's time off and still
+carries the stream's loop, which the floor shows to be about 20 cycles an entry. The kernel alone is the figure a
+recompiled block would pay for its arithmetic, loads and stores: on the recorded operands **0.20 ns a lane for the
+adder, 0.45 for the multiplier and 0.37 for the multiply-add (0.38 chained through ACC)**, eight lanes a vector, that
+is 1.6, 3.6 and 5.9 ns a vector, about 8, 19 and 31 cycles for 16, 46 and 65 instructions with their three loads and
+one store. The chain through ACC costs no more than independent multiply-adds: the out-of-order window overlaps the
+next operations' products with the sum's latency. **A VU operation that stands alone fills four lanes of the same
+vector at the same cost**, Zen 4 running a 128-bit instruction no faster than a 256-bit one, so on the arena's mix
+(23.0 % adds at 2.94 lanes written, 39.9 % multiplies at 3.60, 37.1 % multiply-adds at 3.89, each counting twice) the
+kernel costs **0.80 ns a lane operation written with every operation alone, 0.40 with every operation paired** with
+another of its kind, and about 0.75 at the mix's 13 % of pairable entries. The recorded operands cost 10 to 15 % more
+than the drawn ones in every form, from more lanes taking the cold recompute (0.9 % of product lanes against the drawn
+operands' fewer long × long products) and more zeros.
+
+**Against the budget.** The VU thread's budget asks for about 0.7 to 0.85 ns a lane operation on the desktop and 0.8
+to 1.0 on the handheld (the revision of R0.4's mark for two threads). The kernel alone meets it: 0.75 to 0.80 unpaired
+on the desktop, 0.40 paired. The earlier kernels were never measured this way, only through the interface, so no
+kernel-alone figure of theirs stands beside it; through the interface the three exact forms are within 10 % of each
+other, the interface costing most of the time.
+
+**The handheld.** R0.3's factor of 1.19 to 1.20 puts the kernel alone at **0.90 to 0.96 ns a lane operation written
+on the handheld with every operation alone, 0.48 to 0.54 paired**. At 2.24 million VU1 pairs a field and 2.70 lane
+operations a pair (6.05 million lane operations), VU1's floats would take **5.4 to 5.8 ms a field unpaired and 2.9 to
+3.3 paired** of the VU thread's 9; at this run's 2.75 million pairs (7.4 million lane operations), 6.7 to 7.1 ms
+unpaired and 3.6 to 4.0 paired. These are estimates from the kernel loop at R0.3's factor, not a run on the handheld,
+and the recompiled form's real cost sits between the kernel alone and the registers stream, since a block holds its
+operands in registers but also spends on the loads and stores the VU's registers need, the mask blends, and the flags
+where they are live. Pairing independent operations of one kind, where the microprogram offers them, is the lever
+that halves the figure; the recorded sample can say how often it does.
+
+### Named limits
+
+- **MXCSR is changed.** §56.3 kept the mode fixed because Rust and LLVM assume rounding to the nearest and the GS, the
+  Cranelift code and the bench share the thread. The kernel needs the mode only inside compiled VU code, set at entry
+  and restored at exit as PCSX2 does; `host::div` and `host::sqrt` must not run under it. The Rust form here is a
+  reference and a timing proxy: its intrinsics honour the mode, and no fast-math flag is set, but the VU-in-place
+  stage emits the sequence itself through `emusen-assembler`, which has no vector instructions yet (a minor version).
+- **The multiplier's cold path is `float::mul` a lane**, about 60 cycles a lane plus the branch, on 0.9 % of the arena's
+  product lanes; a branch-free exact loss in 16-bit sublanes was estimated at about 55 instructions a vector and not
+  built, since the branch is cheaper at this rate. A game whose products are long × long and near a boundary more
+  often would move the balance; the census shows how to measure it.
+- **The instruction counts** are 14 for the adder and 46 for the multiplier (15 of them `negatives`' popcount), on
+  AVX2. AVX-512VL would take the popcount to one `vpopcntd` and three and-or merges to `vpternlogd`, about 11 fewer; it
+  was not measured, R0.4 and §59.7 having found the 512-bit encodings slower on Zen 4 for little gain.
+- **The handheld was not run**; its figures are the desktop's at R0.3's factor.
+- **The operands are one window of one game**, 2,000,000 operations of the arena; the island and the dock were not
+  recorded, and no other game.
+
+### Questions this step leaves
+
+1. **[decision] Build the VU-in-place stage on this kernel.** *Recommended*: yes; the mode is set by the compiled
+   code's prologue and epilogue, the two cold stubs are written once, and the flags are emitted only where the
+   recompiler's dead-flag pass finds a reader. The exactness is proven to `float`; what remains is the stage's own
+   proof that the emitted bytes are the kernel's.
+2. **[routine] Record the island and the dock** with the same recorder when the stage profiles them, and the fix rate
+   on a second game, before the cold path's cost is taken as general.
+3. **[routine] The AVX-512VL variant**: measure it in the kernel loop once the stage has the sequence in the
+   assembler, where an instruction's saving is visible; not before.
+
+### What was read for this step
+
+Sapphire_Redesign.md R0.4 and its revision (D-1104), Sapphire_Speed.md §56.2 to §56.4 and §59; `float.rs`,
+`float_lanes.rs`, `float_host.rs`, `vu/ops.rs`; PCSX2's `pcsx2/Pcsx2Config.cpp` and `pcsx2/x86/microVU_Execute.inl`
+for its VU MXCSR word (2026-10-31), as the reference rule allows, nothing of it copied; IEEE 754-2019 §4.3.2 (rounding
+towards zero) and §6.3 (the sign of a zero sum) as §56.3 cites them.

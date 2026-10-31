@@ -95,7 +95,12 @@ impl Peripherals for Ports<'_, '_> {
 
     fn put(&mut self, ch: usize, q: u128, tag: bool) {
         match ch {
-            dmac::VIF0 | dmac::VIF1 => self.vif[ch].put(q, tag),
+            dmac::VIF0 | dmac::VIF1 => {
+                self.vif[ch].put(q, tag);
+                if ch == dmac::VIF1 {
+                    self.vif[1].arrive(self.at);
+                }
+            }
             dmac::GIF => self.gif.gif.put(q, tag, self.at),
             dmac::TO_IPU if !tag => self.ipu.put(q),
             // A tag a chain sends by TTE is not part of the IPU's bit stream (Sapphire_Disputes.md D-325).
@@ -120,6 +125,8 @@ struct GifPort<'a> {
     gif: &'a mut Gif,
     gs: &'a mut Gs,
     dma: bool,
+    /// How far the GIF may run.
+    limit: u64,
 }
 
 impl vif::Gif for GifPort<'_> {
@@ -133,6 +140,13 @@ impl vif::Gif for GifPort<'_> {
 
     fn mask_path3(&mut self, masked: bool, _: u64) {
         self.gif.mask_path3(masked);
+    }
+
+    fn path1(&mut self, vpu: &mut Vpu, t: u64) {
+        while let Some((addr, at, told)) = vpu.units.link.path1.take_kick(t) {
+            self.gif.kick(addr, at, told);
+        }
+        self.gif.run_to(self.limit, &vpu.units.vu1, self.gs);
     }
 
     fn host_read(&mut self) -> Option<u128> {
@@ -200,6 +214,8 @@ pub struct Board {
     /// The IOP side's wakes of the DMAC taken by `run_to`'s quick path: the board's own count, which idle skipping reads
     /// (Sapphire_Native.md §47).
     pub wakes: u64,
+    /// Whole runs of the board at an event, a count for the bench.
+    pub events: u64,
     next: u64,
     /// The PCRTC's next event as last computed, with the H-blank wish it was asked with: still the next while `now` is
     /// before it and nothing has changed the timing (a pure function of both, cached; Sapphire_Native.md §35.7).
@@ -217,6 +233,8 @@ pub struct Board {
     pub round: u64,
     /// The PCRTC's next vertical edge, cached; not state (Sapphire_Speed.md §63).
     v_edge: u64,
+    /// Interrupts a transaction raised, by the cycle they land at, earliest last; empty at a frame's end, so not state (Sapphire_Speed.md §67).
+    lands: Vec<(u64, u32)>,
 }
 
 impl Board {
@@ -240,6 +258,7 @@ impl Board {
             traffic: [0; 3],
             reports: Reports::default(),
             wakes: 0,
+            events: 0,
             next: 0,
             edges_taken: Some(0),
             pcrtc_next: None,
@@ -248,6 +267,7 @@ impl Board {
             owed: 0,
             round: 0,
             v_edge: 0,
+            lands: Vec::new(),
         };
         b.vpu.units.link.path1 = Box::new(gif::Path1Port::default());
         b.timers_changed();
@@ -270,6 +290,13 @@ impl Board {
     pub fn sync_gs(&mut self) {
         if self.gs.take_rise() {
             self.intc.raise(intc::source::GS);
+        }
+    }
+
+    /// `sync_gs` after a transaction, the interrupt landing at the GIF's clock.
+    fn sync_gs_ahead(&mut self) {
+        if self.gs.take_rise() {
+            self.raise_at(self.gif.clock(), intc::source::GS);
         }
     }
 
@@ -303,7 +330,30 @@ impl Board {
             next = next.min(v.next_event());
         }
         next = next.min(self.gif.next_event());
+        if let Some(l) = self.lands.last() {
+            next = next.min(l.0);
+        }
         self.next = next.max(self.now);
+    }
+
+    /// An interrupt a transaction raised, landed by the board at cycle `at`.
+    fn raise_at(&mut self, at: u64, source: u32) {
+        if at <= self.now {
+            self.intc.raise(source);
+        } else {
+            let i = self.lands.partition_point(|l| l.0 > at);
+            self.lands.insert(i, (at, source));
+        }
+    }
+
+    /// The interrupts due at `t` raised.
+    fn land(&mut self, t: u64) {
+        while let Some(&(at, source)) = self.lands.last()
+            && at <= t
+        {
+            self.lands.pop();
+            self.intc.raise(source);
+        }
     }
 
     fn sync_timer(&mut self, n: usize, t: u64) {
@@ -358,9 +408,9 @@ impl Board {
     fn observe_vu0(&mut self) {
         let t = self.owed;
         self.vpu.wake();
-        let dma = self.dmac.ch[dmac::GIF].str();
+        let dma = self.dmac.running(dmac::GIF);
         let Board { vif, vpu, gif, gs, dmac, intc, .. } = self;
-        let mut gif = GifPort { gif, gs, dma };
+        let mut gif = GifPort { gif, gs, dma, limit: t };
         vif[0].run_to(t, &mut Reach { vpu, gif: &mut gif, ahead: 0 });
         if vif[0].take_wake() {
             dmac.wake(t);
@@ -381,6 +431,11 @@ impl Board {
             return true;
         }
         false
+    }
+
+    /// Whether a transaction's results still wait for the board, which the state has no place for; a frame runs on past them.
+    pub fn holds(&self) -> bool {
+        !self.lands.is_empty() || !self.dmac.fits() || !self.vpu.fits()
     }
 
     /// The next time any unit needs attention: `run_to` runs no event before it.
@@ -417,7 +472,9 @@ impl Board {
         while self.next <= t {
             let at = self.next;
             self.now = at;
+            self.events += 1;
             self.pcrtc_next = None;
+            self.land(at);
             for n in 0..4 {
                 self.sync_timer(n, at);
             }
@@ -545,12 +602,41 @@ impl Board {
         }
         let sif2_from_memory = self.dmac.ch[dmac::SIF2].chcr & dmac::chcr::DIR != 0;
         let vif1_to_memory = self.dmac.ch[dmac::VIF1].chcr & dmac::chcr::DIR == 0;
-        let dma = self.dmac.ch[dmac::GIF].str();
+        let dma = self.dmac.running(dmac::GIF);
+        self.dmac.set_ahead(self.round > 0);
+        self.dmac.land(at);
         let Board { dmac, map, vif, ports, gif, gs, iop, ipu, .. } = self;
-        let mut gif = GifPort { gif, gs, dma };
+        let mut gif = GifPort { gif, gs, dma, limit: at };
         let mut vifs = Ports { vif, ipu, stand: ports, gif: &mut gif, vif1_to_memory, at };
         let mut ports = EePorts { others: &mut vifs, sif: &mut iop.bus.sif, sif2_from_memory };
+        let stadr = dmac.stadr;
         dmac.step(at, map, spram, &mut ports);
+        if self.dmac.crosses() && self.dmac.stadr != stadr {
+            self.dmac.wake_ahead(at);
+        }
+        if self.round > 0 {
+            self.transact(spram);
+        }
+    }
+
+    /// Channels 1, 2, 8 and 9 run together with VIF1, VU1, the GIF and the scratchpad as far as they can go at once, ahead of the board, what the
+    /// EE can see of them landing at its cycle (Sapphire_Speed.md §67).
+    fn transact(&mut self, spram: &mut [u8]) {
+        let limit = self.v_edge();
+        loop {
+            self.run_vifs(self.now);
+            let Some(t) = self.dmac.ahead_due(limit) else { break };
+            let vif1_to_memory = self.dmac.ch[dmac::VIF1].chcr & dmac::chcr::DIR == 0;
+            let dma = self.dmac.running(dmac::GIF);
+            let Board { dmac, map, vif, ports, gif, gs, ipu, .. } = self;
+            let mut gif = GifPort { gif, gs, dma, limit };
+            let mut vifs = Ports { vif, ipu, stand: ports, gif: &mut gif, vif1_to_memory, at: t };
+            let stadr = dmac.stadr;
+            dmac.step_ahead(t, limit, map, spram, &mut vifs);
+            if dmac.crosses() && dmac.stadr != stadr {
+                dmac.wake_main(t);
+            }
+        }
     }
 
     /// The IPU's interrupt at a command's end, and the DMAC woken for a FIFO the IPU has filled or drained.
@@ -566,21 +652,23 @@ impl Board {
     /// Brings the GIF to cycle `t`: the XGKICKs VU1 made handed to it, then its paths run, the DMAC woken for FIFO room
     /// freed, and the GS's interrupt latched.
     fn run_gif(&mut self, t: u64) {
+        let on = self.round > 0;
+        let far = if on { self.v_edge().max(t) } else { t };
         if std::mem::take(&mut self.vpu.units.link.kicked) {
-            while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick(t) {
+            while let Some((addr, at, told)) = self.vpu.units.link.path1.take_kick(far) {
                 self.gif.kick(addr, at, told);
             }
             self.vpu.units.link.kicked = self.vpu.units.link.path1.holds();
         }
-        self.gif.run_to(t, &self.vpu.units.vu1, &mut self.gs);
+        self.gif.run_to(far, &self.vpu.units.vu1, &mut self.gs);
         // Once the board has passed VU1's last pair, no PATH1 read can fall before a store it ran ahead (§63).
-        if !self.vpu.units.vu1.ahead_log.is_empty() && self.vpu.last(1).is_none_or(|l| l <= t) {
-            self.vpu.units.vu1.ahead_log.clear();
+        if !self.vpu.units.vu1.ahead_log.is_empty() && (self.vpu.last(1).is_none_or(|l| l <= t) || on && self.gif.path1_done() && !self.vpu.running(1)) {
+            self.vpu.units.vu1.clear_ahead();
         }
         if self.gif.take_wake() {
             self.dmac.wake(t.max(self.now));
         }
-        self.sync_gs();
+        if on { self.sync_gs_ahead() } else { self.sync_gs() }
     }
 
     /// Brings the GIF, then VIF0 and VIF1 to cycle `t` (each before its VU), waking the DMAC for a FIFO they freed or
@@ -590,22 +678,32 @@ impl Board {
         // Where the board reaches the VUs, their rest ends (Sapphire_Scheduler.md §54.5).
         self.vpu.wake();
         let ahead = if self.round > 0 { self.v_edge() } else { 0 };
-        let dma = self.dmac.ch[dmac::GIF].str();
+        let dma = self.dmac.running(dmac::GIF);
+        let mut late = None;
         let Board { vif, vpu, gif, gs, dmac, intc: unit_intc, now, .. } = self;
-        let mut gif = GifPort { gif, gs, dma };
+        let mut gif = GifPort { gif, gs, dma, limit: ahead.max(t) };
         for (n, v) in vif.iter_mut().enumerate() {
-            v.run_to(t, &mut Reach { vpu, gif: &mut gif, ahead });
+            let far = if ahead > 0 && n == 1 && !v.reversed() { ahead.max(t) } else { t };
+            v.run_to(far, &mut Reach { vpu, gif: &mut gif, ahead });
+            v.idle_to(t);
             if v.take_wake() {
                 dmac.wake(t.max(*now));
             }
             if v.take_irq() {
-                unit_intc.raise(intc::source::VIF0 + n as u32);
+                if ahead > 0 && n == 1 {
+                    late = Some(v.clock());
+                } else {
+                    unit_intc.raise(intc::source::VIF0 + n as u32);
+                }
             }
         }
         if gif.gif.take_wake() {
             dmac.wake(t.max(*now));
         }
-        self.sync_gs();
+        if let Some(at) = late {
+            self.raise_at(at, intc::source::VIF1);
+        }
+        if ahead > 0 { self.sync_gs_ahead() } else { self.sync_gs() }
     }
 
     /// How far a VU1 may run ahead of the board: the next vertical edge, which every frame's end passes (§63).
@@ -732,8 +830,8 @@ impl Bus for Board {
                 return u128::from(w >> (8 * (paddr & 3))) & if bytes >= 4 { 0xFFFF_FFFF } else { (1 << (8 * bytes)) - 1 };
             }
             if paddr >= vif::FIFO[1] && bytes == 16 {
-                let dma = self.dmac.ch[dmac::GIF].str();
-                let mut gif = GifPort { gif: &mut self.gif, gs: &mut self.gs, dma };
+                let dma = self.dmac.running(dmac::GIF);
+                let mut gif = GifPort { gif: &mut self.gif, gs: &mut self.gs, dma, limit: 0 };
                 let q = self.vif[1].get(&mut gif);
                 if self.vif[1].take_wake() {
                     self.dmac.wake(self.now);
@@ -816,7 +914,9 @@ impl Bus for Board {
                     v.write(off, narrow(v.read(off), plain, paddr, bytes, value));
                 }
             } else if bytes == 16 {
-                self.vif[usize::from(paddr >= vif::FIFO[1])].put(value, false);
+                let n = usize::from(paddr >= vif::FIFO[1]);
+                self.vif[n].put(value, false);
+                self.vif[n].arrive(self.now);
             }
             for v in &mut self.vif {
                 if v.take_wake() {
@@ -1029,6 +1129,7 @@ impl System {
         b.edges_taken = crate::state::read_opt_u64(r)?;
         b.pcrtc_next = None;
         b.v_edge = 0;
+        b.dmac.set_ahead(b.round > 0);
         // The time owed is the EE's, which `run_to` was last asked for; a round ends `round` after `now` (Sapphire_Speed.md §62.2).
         b.owed = b.now.max(self.ee.timing.cycles());
         Ok(())
@@ -1038,6 +1139,6 @@ impl System {
     pub fn fits(&self) -> bool {
         let b = &self.board;
         let io = &b.iop.bus;
-        b.vpu.fits() && b.vif.iter().all(Vif::fits) && b.gif.fits() && b.gs.fits() && io.sif.fits() && io.cdvd.fits() && io.sio2.fits() && b.ipu.fits()
+        !b.holds() && b.vif.iter().all(Vif::fits) && b.gif.fits() && b.gs.fits() && io.sif.fits() && io.cdvd.fits() && io.sio2.fits() && b.ipu.fits()
     }
 }

@@ -221,6 +221,7 @@ fn main() {
     let mut chunk = vec![0i16; 1 << 16];
     let mut times = Vec::with_capacity(frames.max(0) as usize);
     let mut at_from = counts(&m);
+    let mut at_from_events = m.sys.board.events;
     let mut wall = 0.0;
     let mut timed = 0usize;
     let started = Instant::now();
@@ -244,6 +245,7 @@ fn main() {
         let f = m.frames;
         if f == from.max(first) {
             at_from = counts(&m);
+            at_from_events = m.sys.board.events;
             if gs_stream.is_some() {
                 m.sys.board.gs.stream = Some(sapphire::gs::stream::Recorder::start(&m.sys.board.gs));
             }
@@ -343,6 +345,7 @@ fn main() {
     let mean = span.iter().sum::<f64>() / k;
     span.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let at = |q: f64| span.get(((span.len() as f64 * q) as usize).min(span.len().saturating_sub(1))).copied().unwrap_or(0.0);
+    println!("board\t{:.0} events a field", (m.sys.board.events - at_from_events) as f64 / k);
     println!(
         "{name}\tframes {from}-{frames}\tmean {mean:.3}\tmedian {:.3}\tp95 {:.3}\tmax {:.3}\tfps {:.3}\twall {:.2}\tpicture {picture:016X}\tsound {sound:016X}\tstate {state:016X}",
         at(0.5),

@@ -10,7 +10,10 @@
 //! written), each kind's operations in a run as compiled code would hold them (shuffled with `shuffle`, which adds the
 //! host's mispredicted dispatch); a pair of one kind runs in eight lanes, any other operation in four; ns a lane
 //! operation over the lanes written, a multiply-add's counting twice, and over the lanes computed; `wide` instead of
-//! `shuffle` runs the AVX-512VL form.
+//! `shuffle` runs the AVX-512VL form, `host` and `host2` `float_host`'s two forms, `floor` the stream alone, `rz`
+//! `float_rz` through its entry points and `rzreg` its kernel in registers (Sapphire_Redesign.md, the VU's floats under
+//! rounding towards zero). A fifth argument names a file of recorded VU1 operations (`recorded`) to take the operands
+//! from instead of drawing them; with `rz` or `rzreg` it also prints their census.
 
 use std::hint::black_box;
 use std::time::Instant;
@@ -167,13 +170,14 @@ const fn lane_mask(l: u32) -> u32 {
 /// The stream run's body over one form's six entry points.
 macro_rules! stream_body {
     ($add:path, $mul:path, $fused:path, $add2:path, $mul2:path, $fused2:path, $ops:expr, $a:expr, $b:expr, $c:expr, $split:expr) => {{
-        let (ops, a, b, c, split): (&[Op], &[[u32; 8]], &[[u32; 8]], &[[u32; 8]], bool) = ($ops, $a, $b, $c, $split);
+        let (ops, a, b, c, split): (&[Op], &Pools, &Pools, &Pools, bool) = ($ops, $a, $b, $c, $split);
         let (old4, old8) = ([0u32; 4], [0u32; 8]);
         let mut h = 0u32;
         let half = |v: &[u32; 8], i: usize| -> [u32; 4] { [v[4 * i], v[4 * i + 1], v[4 * i + 2], v[4 * i + 3]] };
         for (i, op) in ops.iter().enumerate() {
-            let j = i % a.len();
-            let (x, y, z) = (&a[j], &b[j], &c[j]);
+            let k = op.kinds[0] as usize;
+            let j = i % a[k].len();
+            let (x, y, z) = (&a[k][j], &b[k][j], &c[k][j]);
             h ^= if op.paired && op.kinds[0] == op.kinds[1] && !split {
                 match op.kinds[0] {
                     0 => $add2(x, y, &old8, op.mask).mac,
@@ -197,31 +201,80 @@ macro_rules! stream_body {
     }};
 }
 
+/// The operands of each kind of operation (add, mul, multiply-add): drawn, the same three; recorded, each kind's own.
+type Pools = [Vec<[u32; 8]>; 3];
+
 /// The stream run: pairs of one kind in eight lanes, the rest in four (`split` runs every operation in four).
 #[target_feature(enable = "avx2")]
-fn stream_run(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+fn stream_run(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
     stream_body!(lanes::add, lanes::mul, lanes::fused, lanes::add2, lanes::mul2, lanes::fused2, ops, a, b, c, split)
 }
 
 /// The same on the AVX-512VL form.
 #[target_feature(enable = "avx2,avx512f,avx512vl,avx512cd")]
-fn stream_run512(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+fn stream_run512(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
     use lanes::wide::{eight, four};
     stream_body!(four::add, four::mul, four::fused, eight::add2, eight::mul2, eight::fused2, ops, a, b, c, split)
 }
 
 /// The same on `float_host`'s `{rz-sae}` form.
 #[target_feature(enable = "avx2,avx512f,avx512dq")]
-fn stream_run_host(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+fn stream_run_host(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
     use sapphire::float_host::{eight, four};
     stream_body!(four::add, four::mul, four::fused, eight::add, eight::mul, eight::fused, ops, a, b, c, split)
 }
 
 /// The same on `float_host`'s AVX2 form.
 #[target_feature(enable = "avx2")]
-fn stream_run_host2(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+fn stream_run_host2(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
     use sapphire::float_host::avx2 as h;
     stream_body!(h::add, h::mul, h::fused, h::add2, h::mul2, h::fused2, ops, a, b, c, split)
+}
+
+/// The same on `float_rz` through the entry points; MXCSR at `float_rz::MODE`.
+#[target_feature(enable = "avx2")]
+fn stream_run_rz(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
+    use sapphire::float_rz::{eight, four};
+    stream_body!(four::add, four::mul, four::fused, eight::add, eight::mul, eight::fused, ops, a, b, c, split)
+}
+
+/// `float_rz`'s kernel as compiled code would hold it: operands loaded, the result stored, no MAC word, no field mask,
+/// a vector left to the integer form counted and not computed; MXCSR at `float_rz::MODE`. Returns the vectors left.
+#[target_feature(enable = "avx2")]
+fn stream_regs(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, out: &mut [[u32; 8]]) -> u32 {
+    use sapphire::float_rz::raw;
+    use std::arch::x86_64::*;
+    let mut left = 0u32;
+    for (i, op) in ops.iter().enumerate() {
+        let k = op.kinds[0] as usize;
+        let j = i % a[k].len();
+        // SAFETY: eight lanes each.
+        let (x, y, z) = unsafe { (_mm256_loadu_si256(a[k][j].as_ptr().cast()), _mm256_loadu_si256(b[k][j].as_ptr().cast()), _mm256_loadu_si256(c[k][j].as_ptr().cast())) };
+        let n = if op.paired && op.kinds[0] != op.kinds[1] { 2 } else { 1 };
+        let live = raw::on(op.mask);
+        for kind in op.kinds.iter().take(n) {
+            let (r, t) = match kind {
+                0 => {
+                    let (r, t) = raw::add(x, y);
+                    (r, _mm256_and_si256(t, live))
+                }
+                1 => {
+                    let (p, fix, t) = raw::mul(x, y);
+                    (raw::fixed(p, x, y, _mm256_and_si256(fix, live)), _mm256_and_si256(t, live))
+                }
+                _ => {
+                    let (r, _, t) = raw::fused(z, x, y, false, live);
+                    (r, t)
+                }
+            };
+            if raw::any(t) {
+                left += 1;
+            }
+            // SAFETY: `out` holds a slot for each entry.
+            unsafe { _mm256_storeu_si256(out[j].as_mut_ptr().cast(), r) };
+        }
+    }
+    left
 }
 
 /// The stream's own cost: entry points that read their operands and return them, no arithmetic.
@@ -248,16 +301,18 @@ mod floor {
 }
 
 /// The same on the floor's entry points.
-fn stream_run_floor(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]], split: bool) -> u32 {
+fn stream_run_floor(ops: &[Op], a: &Pools, b: &Pools, c: &Pools, split: bool) -> u32 {
     stream_body!(floor::add, floor::mul, floor::fused, floor::add2, floor::mul2, floor::fused2, ops, a, b, c, split)
 }
 
 /// The shares the host path meets on the stream's operands: products exact, lanes its check refuses, vectors taken whole.
-fn shares(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]]) {
+fn shares(ops: &[Op], a: &Pools, b: &Pools, c: &Pools) {
     use sapphire::float_host::{add_taken, fused_taken, mul_taken};
     let (mut products, mut exact, mut refused, mut vectors, mut whole) = (0u64, 0u64, 0u64, [0u64; 3], [0u64; 3]);
     for (i, op) in ops.iter().enumerate() {
-        let j = i % a.len();
+        let k0 = op.kinds[0] as usize;
+        let j = i % a[k0].len();
+        let (a, b, c) = (&a[k0], &b[k0], &c[k0]);
         for (n, kind) in op.kinds.iter().enumerate().take(if op.paired { 2 } else { 1 }) {
             let lane = |l: usize| (a[j][4 * n + l], b[j][4 * n + l], c[j][4 * n + l]);
             let k = *kind as usize;
@@ -293,11 +348,194 @@ fn shares(ops: &[Op], a: &[[u32; 8]], b: &[[u32; 8]], c: &[[u32; 8]]) {
 }
 
 fn mix(path: &str, rounds: usize, shuffle: bool, wide: bool) {
-    mix_on(path, rounds, shuffle, if wide { 1 } else { 0 })
+    mix_on(path, rounds, shuffle, if wide { 1 } else { 0 }, None)
 }
 
-/// `form`: 0 `float_lanes`' AVX2 form, 1 its AVX-512VL form, 2 `float_host`'s `{rz-sae}` form, 3 `float_host`'s AVX2 form.
-fn mix_on(path: &str, rounds: usize, shuffle: bool, form: u8) {
+/// A recorded operation of VU1: its kind (0 add, 1 mul, 2 multiply-add), its field mask, and its four lanes' operands;
+/// a subtraction's second operand is recorded as written and negated here, so every operation is an add or a madd.
+struct Recorded {
+    kind: u8,
+    mask: u32,
+    a: [u32; 4],
+    b: [u32; 4],
+    acc: [u32; 4],
+}
+
+/// The record file: 13 words an operation (kind | subtract << 8 | mask << 16, a, b, acc), little-endian.
+fn recorded(path: &str) -> Vec<Recorded> {
+    let bytes = std::fs::read(path).expect("the recorded operands");
+    bytes
+        .chunks_exact(52)
+        .map(|r| {
+            let w = |i: usize| u32::from_le_bytes(r[4 * i..4 * i + 4].try_into().unwrap());
+            let head = w(0);
+            let sub = if head >> 8 & 1 == 1 { 0x8000_0000 } else { 0 };
+            Recorded { kind: (head & 0xFF) as u8, mask: head >> 16 & 0xF, a: [w(1), w(2), w(3), w(4)], b: [w(5) ^ sub, w(6) ^ sub, w(7) ^ sub, w(8) ^ sub], acc: [w(9), w(10), w(11), w(12)] }
+        })
+        .collect()
+}
+
+/// What the recorded operations are, lane by lane, and what `float_rz` does with them: the lanes written, the vectors left
+/// to the integer form, the product lanes `fixed` recomputes, and the adder's classes (a zero operand, the cut, no cut).
+#[target_feature(enable = "avx2")]
+fn census(recs: &[Recorded]) {
+    let field = |x: u32| x >> 23 & 0xFF;
+    let (mut ops, mut lanes_written, mut whole, mut products, mut fixed) = ([0u64; 3], [0u64; 3], [0u64; 3], 0u64, 0u64);
+    let (mut sums, mut zero_sum, mut cut, mut flat, mut field255) = (0u64, 0u64, 0u64, 0u64, 0u64);
+    let (mut quiet, mut short, mut fixed_short) = (0u64, 0u64, 0u64);
+    for r in recs {
+        let k = r.kind as usize;
+        ops[k] += 1;
+        lanes_written[k] += u64::from(r.mask.count_ones());
+        let t = sapphire::float_rz::taken(r.kind, &r.acc, &r.a, &r.b);
+        whole[k] += u64::from(t.whole);
+        for l in 0..4 {
+            if r.mask >> (3 - l) & 1 == 0 {
+                continue;
+            }
+            let (a, b, acc) = (r.a[l], r.b[l], r.acc[l]);
+            field255 += u64::from(field(a) == 255 || field(b) == 255 || (k == 2 && field(acc) == 255));
+            if k >= 1 {
+                products += 1;
+                fixed += u64::from(t.fixed >> l & 1);
+                fixed_short += u64::from(t.fixed >> l & 1 == 1 && a & 0x7FFF == 0);
+                quiet += u64::from(b & 0xFFFF == 0);
+                short += u64::from(a & 0x7FFF == 0);
+            }
+            let (x, y) = if k == 0 { (a, b) } else if k == 2 { (acc, float::mul(a, b).bits) } else { continue };
+            sums += 1;
+            let (fx, fy) = (field(x), field(y));
+            if fx == 0 || fy == 0 {
+                zero_sum += 1;
+            } else if fx.abs_diff(fy) >= 2 {
+                cut += 1;
+            } else {
+                flat += 1;
+            }
+        }
+    }
+    let pc = |n: u64, d: u64| 100.0 * n as f64 / d.max(1) as f64;
+    let total: u64 = ops.iter().sum();
+    println!(
+        "recorded\t{total} operations: add {:.1} %, mul {:.1} %, multiply-add {:.1} %\tlanes written a vector: add {:.2}, mul {:.2}, multiply-add {:.2}\tvectors kept whole: add {:.3} %, mul {:.3} %, multiply-add {:.3} %",
+        pc(ops[0], total),
+        pc(ops[1], total),
+        pc(ops[2], total),
+        lanes_written[0] as f64 / ops[0].max(1) as f64,
+        lanes_written[1] as f64 / ops[1].max(1) as f64,
+        lanes_written[2] as f64 / ops[2].max(1) as f64,
+        pc(whole[0], ops[0]),
+        pc(whole[1], ops[1]),
+        pc(whole[2], ops[2])
+    );
+    println!(
+        "recorded\tproduct lanes written: {:.2} % recomputed by fixed ({:.2} % of them with a short multiplicand), {:.1} % with a quiet multiplier, {:.1} % with a short multiplicand\tsum lanes written: {:.1} % a zero operand, {:.1} % cut, {:.1} % no cut\tlanes with a field of 255: {:.4} %",
+        pc(fixed, products),
+        pc(fixed_short, fixed),
+        pc(quiet, products),
+        pc(short, products),
+        pc(zero_sum, sums),
+        pc(cut, sums),
+        pc(flat, sums),
+        pc(field255, lanes_written.iter().sum())
+    );
+}
+
+/// Each kind's pool of `n` entries: the drawn operands (the same three for every kind), or each kind's own recorded
+/// operations, two an entry, cycled when a kind has few; with the records themselves when they were read.
+fn pools(operands: Option<&str>, n: usize, next: &mut impl FnMut() -> u64) -> (Pools, Pools, Pools, Option<Vec<Recorded>>) {
+    let same_pool = |v: Vec<[u32; 8]>| -> Pools { [v.clone(), v.clone(), v] };
+    match operands {
+        None => {
+            let mut draw = || (0..n).map(|_| [0; 8].map(|_: u32| operand(next()))).collect::<Vec<[u32; 8]>>();
+            (same_pool(draw()), same_pool(draw()), same_pool(draw()), None)
+        }
+        Some(path) => {
+            let recs = recorded(path);
+            let mut p: (Pools, Pools, Pools) = Default::default();
+            for k in 0..3u8 {
+                let of: Vec<&Recorded> = recs.iter().filter(|r| r.kind == k).collect();
+                assert!(of.len() >= 2, "no recorded operations of kind {k}");
+                for j in 0..n {
+                    let (x, y) = (of[(2 * j) % of.len()], of[(2 * j + 1) % of.len()]);
+                    let join = |x: [u32; 4], y: [u32; 4]| [x[0], x[1], x[2], x[3], y[0], y[1], y[2], y[3]];
+                    p.0[k as usize].push(join(x.a, y.a));
+                    p.1[k as usize].push(join(x.b, y.b));
+                    p.2[k as usize].push(join(x.acc, y.acc));
+                }
+            }
+            (p.0, p.1, p.2, Some(recs))
+        }
+    }
+}
+
+/// `float_rz`'s kernel alone: each kind on `KN` eight-lane vectors held in the first-level cache, loaded, computed and
+/// stored with no dispatch, the field mask full; the multiply-add also chained through ACC (its latency); ns a lane
+/// operation, a multiply-add's counting twice, the median of `rounds`; MXCSR at the kernel's mode.
+#[target_feature(enable = "avx2")]
+fn kernels(rounds: usize, a: &Pools, b: &Pools, c: &Pools) {
+    use sapphire::float_rz::raw;
+    use std::arch::x86_64::*;
+    const KN: usize = 128;
+    const KREPEAT: usize = 16384;
+    let live = raw::k(!0);
+    let mut out = vec![[0u32; 8]; KN];
+    let load = |v: &[u32; 8]| {
+        // SAFETY: eight lanes.
+        unsafe { _mm256_loadu_si256(v.as_ptr().cast()) }
+    };
+    for (kind, name, weight) in [(0usize, "add", 1.0), (1, "mul", 1.0), (2, "madd", 2.0)] {
+        let (a, b, c) = (&a[kind][..KN], &b[kind][..KN], &c[kind][..KN]);
+        let mut left = 0u32;
+        let ns = median((0..rounds).map(|_| {
+            let t = Instant::now();
+            for _ in 0..KREPEAT {
+                for i in 0..KN {
+                    let (x, y, z) = (load(&a[i]), load(&b[i]), load(&c[i]));
+                    let (r, t) = match kind {
+                        0 => raw::add(x, y),
+                        1 => {
+                            let (p, fix, t) = raw::mul(x, y);
+                            (raw::fixed(p, x, y, fix), t)
+                        }
+                        _ => {
+                            let (r, _, t) = raw::fused(z, x, y, false, live);
+                            (r, t)
+                        }
+                    };
+                    if raw::any(t) {
+                        left += 1;
+                    }
+                    // SAFETY: `out` holds KN entries.
+                    unsafe { _mm256_storeu_si256(out[i].as_mut_ptr().cast(), r) };
+                }
+                black_box(&mut out);
+            }
+            t.elapsed().as_secs_f64() * 1e9 / (KREPEAT * KN * 8) as f64 / weight
+        }).collect());
+        println!("kernel\t{name}\t{ns:.3} ns a lane operation\t{} vectors left to the integer form a round", left / rounds as u32);
+    }
+    // The chain: each multiply-add's ACC is the one before, as a VU microprogram's MADDA chain holds it.
+    let (a, b) = (&a[2][..KN], &b[2][..KN]);
+    let ns = median((0..rounds).map(|_| {
+        let mut acc = raw::k(0x3F80_0000);
+        let t = Instant::now();
+        for _ in 0..KREPEAT {
+            for i in 0..KN {
+                let (r, _, _) = raw::fused(acc, load(&a[i]), load(&b[i]), i & 1 == 1, live);
+                acc = r;
+            }
+        }
+        black_box(acc);
+        t.elapsed().as_secs_f64() * 1e9 / (KREPEAT * KN * 8) as f64 / 2.0
+    }).collect());
+    println!("kernel\tmadd chained through ACC\t{ns:.3} ns a lane operation");
+}
+
+/// `form`: 0 `float_lanes`' AVX2 form, 1 its AVX-512VL form, 2 `float_host`'s `{rz-sae}` form, 3 `float_host`'s AVX2 form,
+/// 4 the stream alone, 5 `float_rz` through its entry points, 6 `float_rz`'s kernel in registers. `operands`: a record
+/// file (`recorded`) whose operations fill each kind's pool instead of the drawn operands.
+fn mix_on(path: &str, rounds: usize, shuffle: bool, form: u8, operands: Option<&str>) {
     let text = std::fs::read_to_string(path).expect("the count");
     let mut groups: Vec<(Op, u64)> = Vec::new();
     for line in text.lines() {
@@ -326,12 +564,28 @@ fn mix_on(path: &str, rounds: usize, shuffle: bool, form: u8) {
     let computed: f64 = ops.iter().map(|o| 4.0 * (if o.kinds[0] == 2 { 2.0 } else { 1.0 } + if o.paired { if o.kinds[1] == 2 { 2.0 } else { 1.0 } } else { 0.0 })).sum();
     let same = ops.iter().filter(|o| o.paired && o.kinds[0] == o.kinds[1]).count();
     let pairs = ops.iter().filter(|o| o.paired).count();
-    let mut draw = || (0..N).map(|_| [0; 8].map(|_: u32| operand(next()))).collect::<Vec<[u32; 8]>>();
-    let (a, b, c) = (draw(), draw(), draw());
+    let (a, b, c, recs) = pools(operands, N, &mut next);
+    if let Some(recs) = &recs
+        && (form == 5 || form == 6)
+    {
+        // SAFETY: AVX2 asserted by main; the mode is restored at once.
+        unsafe {
+            let old = sapphire::float_rz::enter();
+            census(recs);
+            sapphire::float_rz::leave(old);
+        }
+    }
     if form == 2 || form == 3 {
         shares(&ops, &a, &b, &c);
     }
+    let mut out = vec![[0u32; 8]; N];
+    // SAFETY: the forms on `float_rz` need MXCSR at its mode; nothing else here computes on floats until `leave`.
+    let old = if form >= 5 { Some(unsafe { sapphire::float_rz::enter() }) } else { None };
     for split in [false, true] {
+        if form == 6 && split {
+            continue;
+        }
+        let mut left = 0;
         let ns = median((0..rounds).map(|_| {
             let t = Instant::now();
             // SAFETY: AVX2 was asserted, and AVX-512 for the forms that need it.
@@ -341,37 +595,63 @@ fn mix_on(path: &str, rounds: usize, shuffle: bool, form: u8) {
                     2 => stream_run_host(black_box(&ops), &a, &b, &c, split),
                     3 => stream_run_host2(black_box(&ops), &a, &b, &c, split),
                     4 => stream_run_floor(black_box(&ops), &a, &b, &c, split),
+                    5 => stream_run_rz(black_box(&ops), &a, &b, &c, split),
+                    6 => {
+                        left = stream_regs(black_box(&ops), &a, &b, &c, &mut out);
+                        out.iter().fold(left, |h, v| h ^ v[0] ^ v[7])
+                    }
                     _ => stream_run(black_box(&ops), &a, &b, &c, split),
                 }
             });
             t.elapsed().as_secs_f64() * 1e9
         }).collect());
         println!(
-            "mix\t{} entries, {pairs} of them pairs, {same} of one kind\t{:.2} lane operations written an entry\t{}{}\t{:.3} ns a lane operation written\t{:.3} a lane computed",
+            "mix\t{} entries, {pairs} of them pairs, {same} of one kind\t{:.2} lane operations written an entry\t{}{}{}\t{:.3} ns a lane operation written\t{:.3} a lane computed{}",
             ops.len(),
             lane_ops / ops.len() as f64,
             if split { "every operation in four lanes" } else { "pairs of one kind in eight lanes" },
-            if shuffle { ", shuffled" } else { ["", ", AVX-512VL", ", host floats {rz-sae}", ", host floats AVX2", ", the stream alone"][form as usize] },
+            if shuffle { ", shuffled" } else { ["", ", AVX-512VL", ", host floats {rz-sae}", ", host floats AVX2", ", the stream alone", ", host floats towards zero", ", towards zero in registers"][form as usize] },
+            if operands.is_some() { ", recorded operands" } else { "" },
             ns / lane_ops,
-            ns / computed
+            ns / computed,
+            if form == 6 { format!("\t{left} vectors left to the integer form") } else { String::new() }
         );
+    }
+    if let Some(old) = old {
+        // SAFETY: restores what `enter` saved.
+        unsafe { sapphire::float_rz::leave(old) };
     }
 }
 
 fn main() {
     assert!(lanes::available(), "the kernel needs AVX2");
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("kernels") {
+        let rounds = args.get(1).map_or(7, |a| a.parse().expect("rounds"));
+        let mut next = stream(0x0000_5EED_0000_0006);
+        let (a, b, c, _) = pools(args.get(2).map(String::as_str), N, &mut next);
+        // SAFETY: AVX2 was asserted; the mode is restored after.
+        unsafe {
+            let old = sapphire::float_rz::enter();
+            kernels(rounds, &a, &b, &c);
+            sapphire::float_rz::leave(old);
+        }
+        return;
+    }
     if args.first().map(String::as_str) == Some("mix") {
         let wide = args.get(3).is_some_and(|a| a == "wide");
         assert!(!wide || lanes::available512(), "the AVX-512VL form needs AVX-512VL and CD");
         let (file, rounds) = (args.get(1).expect("a count's file"), args.get(2).map_or(7, |a| a.parse().expect("rounds")));
+        let operands = args.get(4).map(String::as_str);
         match args.get(3).map(String::as_str) {
             Some("host") => {
                 assert!(sapphire::float_host::available512(), "the host form needs AVX-512F and DQ");
-                mix_on(file, rounds, false, 2);
+                mix_on(file, rounds, false, 2, operands);
             }
-            Some("host2") => mix_on(file, rounds, false, 3),
-            Some("floor") => mix_on(file, rounds, false, 4),
+            Some("host2") => mix_on(file, rounds, false, 3, operands),
+            Some("floor") => mix_on(file, rounds, false, 4, operands),
+            Some("rz") => mix_on(file, rounds, false, 5, operands),
+            Some("rzreg") => mix_on(file, rounds, false, 6, operands),
             _ => mix(file, rounds, args.get(3).is_some_and(|a| a == "shuffle"), wide),
         }
         return;

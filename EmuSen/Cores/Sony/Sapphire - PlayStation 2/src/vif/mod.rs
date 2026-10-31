@@ -421,33 +421,85 @@ impl Vif {
                 if left == 1 { self.complete() } else { self.cmd = Cmd::Direct { hl, left: left - 1, got: 0, w } }
                 Some(BUS + taken.saturating_sub(self.time))
             }
-            Cmd::Unpack(mut u) => loop {
-                let mut fill = self.fill;
-                let next = u.next(&mut fill, &|i| self.peek(i));
-                self.fill = fill;
-                match next {
-                    Next::Word => {
-                        let Some(x) = self.word() else {
-                            self.cmd = Cmd::Unpack(u);
-                            return None;
-                        };
-                        u.take(x);
+            Cmd::Unpack(mut u) => {
+                if u.plain(&self.fill)
+                    && let Some(done) = self.unpack_plain(&mut u, t, r)
+                {
+                    return done;
+                }
+                self.unpack(u, t, r)
+            }
+        }
+    }
+
+    /// The general UNPACK: any mask, mode and write cycle, a write at a time.
+    fn unpack(&mut self, mut u: Unpack, t: u64, r: &mut Reach) -> Option<u64> {
+        loop {
+            let mut fill = self.fill;
+            let next = u.next(&mut fill, &|i| self.peek(i));
+            self.fill = fill;
+            match next {
+                Next::Word => {
+                    let Some(x) = self.word() else {
+                        self.cmd = Cmd::Unpack(u);
+                        return None;
+                    };
+                    u.take(x);
+                }
+                Next::Write(at, fields, enable) => {
+                    self.store(r, at, fields, enable);
+                    self.num = self.num_bits(u.num - u.done);
+                    self.time += BUS;
+                    if u.finished() {
+                        self.complete();
+                        return Some(0);
                     }
-                    Next::Write(at, fields, enable) => {
-                        self.store(r, at, fields, enable);
-                        self.num = self.num_bits(u.num - u.done);
-                        self.time += BUS;
-                        if u.finished() {
-                            self.complete();
-                            return Some(0);
-                        }
-                        if self.time > t {
-                            self.cmd = Cmd::Unpack(u);
-                            return Some(0);
-                        }
+                    if self.time > t {
+                        self.cmd = Cmd::Unpack(u);
+                        return Some(0);
                     }
                 }
-            },
+            }
+        }
+    }
+
+    /// An UNPACK that writes whole qwords, one after another, of a VU that is not running or of VU1 through its queue
+    /// (Sapphire_Speed.md §67); none where the general path must take it, otherwise as the general path returns.
+    fn unpack_plain(&mut self, u: &mut Unpack, t: u64, r: &mut Reach) -> Option<Option<u64>> {
+        let running = r.vpu.running(self.unit);
+        if running && self.unit == 0 || !running && r.vpu.units.vu1.foreign_next != u64::MAX {
+            return None;
+        }
+        if !running {
+            r.vpu.run_unit(self.unit, self.time);
+        }
+        let qwords = self.data_qwords();
+        loop {
+            while u.short() {
+                let Some(x) = self.word() else {
+                    self.cmd = Cmd::Unpack(u.clone());
+                    return Some(None);
+                };
+                u.take(x);
+            }
+            let (at, fields) = u.next_plain();
+            let a = (at % qwords) as usize;
+            let vu = if self.unit == 0 { &mut r.vpu.units.vu0 } else { &mut r.vpu.units.vu1 };
+            if running {
+                vu.queue_store(self.time, a, fields, 0xF);
+            } else {
+                vu.set_mem_q(a, unpack::quad(fields));
+            }
+            self.num = self.num_bits(u.num - u.done);
+            self.time += BUS;
+            if u.finished() {
+                self.complete();
+                return Some(Some(0));
+            }
+            if self.time > t {
+                self.cmd = Cmd::Unpack(u.clone());
+                return Some(Some(0));
+            }
         }
     }
 

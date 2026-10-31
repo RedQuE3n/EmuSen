@@ -5340,6 +5340,83 @@ status 0
 action none
 end
 
+case the page for hwcount
+target none
+covers 1
+$ man hwcount
+out 3324
+NAME
+    hwcount - host instructions, cycles and IPC of a program's window
+
+SYNOPSIS
+    hwcount --from TEXT [--to TEXT] [--per N] [--units FILE]
+            [--functions N] [--period N] -- <program> [args]
+
+DESCRIPTION
+    A development tool of the emusen.dev module, Linux only. It runs
+    <program>, watches its standard error, and counts between the first
+    line that holds --from and the first after it that holds --to, or
+    the program's end. Time before the window, a state being loaded for
+    instance, is not counted. The program's standard error passes through
+    to hwcount's own, and its standard output follows the report.
+
+    The report is plain rows, one fact a line, for grep and awk:
+
+        window seconds S per N ms_each M
+        thread TID NAME instr I cycles C ipc R branches B misses M
+        sampled thread TID samples N lost L
+        unit instr I cycles C ipc R share P% NAME
+        function instr I cycles C ipc R share P% NAME
+        exit STATUS
+
+    A thread row is a count: a group of four hardware events (cycles,
+    instructions, branches, branch misses), user mode only, opened on
+    every thread alive when --from was seen. A thread started later is
+    not counted. --per N divides every count and gives ms_each, so
+    --per 200 over 200 fields prints figures a field.
+
+    With --units FILE the program's first thread is sampled as well,
+    once every --period (default 1,000,000) cycles and once every --period
+    instructions, and each address is taken to a place: a symbol of the
+    program (nm -n --defined-only -C), a row of /tmp/perf-<pid>.map for
+    compiled code, 'compiled ?' for anonymous memory without a row, or a
+    library's file name. The file gives a unit to a place, one line
+    'pattern  unit', two spaces between them, # for comments; the first
+    pattern found in the place's name wins, and a place no pattern finds
+    is 'compiled' or 'other'. A unit row's counts are its share of
+    samples times that thread's counted total, so they are estimates,
+    with an error of about the square root of the row's samples, and its
+    IPC is the ratio of its samples. --functions N adds the N largest
+    places.
+
+    A program started through 'systemd-run --scope' keeps its process, so
+    a capped scope may stand between hwcount and the program. The map
+    /tmp/perf-<pid>.map is removed at the end. The exit status is 2 when
+    the command could not run, the window never opened or the kernel
+    refused the counters, and otherwise 0, with the program's own status
+    in the exit row.
+
+    The counters are perf_event_open(2)'s generic hardware events, so the
+    rows mean the same on any host the kernel names them for. On AMD Zen
+    4, instructions is event C0h and cycles 76h. The two samplers and the
+    group need six counters, which that core has; a smaller core
+    multiplexes, and the group's totals are scaled by the time it ran.
+
+    Sapphire's table of units is its examples/scripts/units.txt.
+
+EXAMPLES
+    The arena's window, a field's figures on every thread and by unit:
+
+        dianash -c 'hwcount --from "frame 9100 at" --to "frame 9300 at"
+            --per 200 --units units.txt --functions 40 -- bench game ...'
+
+    Only the threads' rows:
+
+        dianash -c 'hwcount --from start --to end -- prog' | grep '^thread'
+status 0
+action none
+end
+
 case the page for chd
 target none
 covers 1

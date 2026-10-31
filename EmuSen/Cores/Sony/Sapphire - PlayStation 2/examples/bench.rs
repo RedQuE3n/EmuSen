@@ -38,6 +38,9 @@
 //! §55), each with the settings the environment gives and left interpreted under `SAPPHIRE_VU1=interpreter` or
 //! `SAPPHIRE_VU0=interpreter`; `--defaults` is the levers as a player has them, `--blocks --idle --gs-workers auto --vu0 --vu1`; `--edram` digests the GS's local memory after every frame, outside the timed span,
 //! which joins the workers there, so its times are not the bench's.
+//! `--gs-device` draws the GS on the Vulkan device (Sapphire_Gs.md; `--gs-plan` plans and draws nothing, for measuring the
+//! processor's part) and prints its counts; `--gs-stream FILE` writes the GS's stream from `--from` to the end
+//! (Sapphire_Gs.md §3), which `examples/gsstream.rs` replays.
 //! The BIOS
 //! image is handed to the machine and never read here; nothing printed holds an address, an instruction or memory.
 
@@ -122,7 +125,7 @@ fn main() {
         let mut v = Vec::new();
         let mut i = 0;
         while i < args.len() {
-            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--nvm" | "--state" | "--script" | "--window" | "--census" | "--working") {
+            if matches!(args[i].as_str(), "--from" | "--times" | "--press" | "--gs-workers" | "--gs-stream" | "--nvm" | "--state" | "--script" | "--window" | "--census" | "--working") {
                 i += 2;
                 continue;
             }
@@ -186,6 +189,10 @@ fn main() {
     if let Some(n) = flag("--gs-workers").or(defaults.then(|| "auto".to_string())) {
         m.sys.board.gs.set_workers(sapphire::gs::workers::parse(&n).expect("a count of workers or auto"));
     }
+    if args.iter().any(|a| a == "--gs-device" || a == "--gs-plan") {
+        m.sys.board.gs.set_device(args.iter().any(|a| a == "--gs-plan")).expect("the GS's device");
+    }
+    let gs_stream = flag("--gs-stream");
     if let Some(f) = flag("--state") {
         m.load_state(&std::fs::read(f).expect("the state")).expect("the state loads");
         eprintln!("loaded at frame {}", m.frames);
@@ -237,6 +244,9 @@ fn main() {
         let f = m.frames;
         if f == from.max(first) {
             at_from = counts(&m);
+            if gs_stream.is_some() {
+                m.sys.board.gs.stream = Some(sapphire::gs::stream::Recorder::start(&m.sys.board.gs));
+            }
             if registers {
                 m.sys.board.reports.registers.clear();
                 m.sys.board.iop.bus.reports.registers.clear();
@@ -317,6 +327,10 @@ fn main() {
         }
     }
     let end = counts(&m);
+    if let (Some(f), Some(r)) = (&gs_stream, m.sys.board.gs.stream.take()) {
+        std::fs::write(f, &r.bytes).expect("the GS stream written");
+        eprintln!("the GS stream: {} fields, {} bytes", r.fields, r.bytes.len());
+    }
     if let Some(file) = flag("--times") {
         let text: String = times.iter().map(|t| format!("{t:.4}\n")).collect();
         std::fs::write(file, text).expect("written");
@@ -405,6 +419,14 @@ fn main() {
             c.clut_copies,
             waits.join(" "),
             busy.join(" ")
+        );
+    }
+    if let Some((c, name)) = gs.device_counts() {
+        let p = c.plan;
+        let waits: Vec<String> = c.waits.iter().map(|&(k, ns)| format!("{k}/{:.1}ms", ns as f64 / 1e6)).collect();
+        println!(
+            "gs device\t{name}\trecords {} empty {} fallbacks {:?} snapshot records/stretches {:?}\tstretches {} closes texels/surfaces/overwrite/upload/full/sync {:?}\tpairs {} tiles {} envs {} cluts {} staged pages {} submissions {}\twaits clutload/download/copy/upload/fallback/display/join {}\tread back pages {}\tsubmitting {:.3} ms a frame",
+            p.records, p.empty, p.fallback, p.snapshot, p.stretches, p.closes, p.pairs, p.tiles, p.envs, p.cluts, p.staged_pages, p.submissions, waits.join(" "), c.read_back_pages, c.submit_ns as f64 / 1e6 / times.len() as f64
         );
     }
     if let Some(b) = m.blocks.as_deref() {

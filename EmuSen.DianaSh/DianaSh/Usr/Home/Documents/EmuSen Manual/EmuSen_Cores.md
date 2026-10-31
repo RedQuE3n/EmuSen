@@ -241,9 +241,27 @@ for the player's decision, not a substitute for it.
 ### 5.3 The install
 
 - **Staging** under `/Cores/libretro/.staging/<corename>-<pid>/`, on the same file system as its destination: the core
-  unpacked, its `.info` copied from the catalogue, `NOTICE` written, the project's proxy (`emusen-core-broker.so`) copied
-  from the installation and `broker.target` written, as `EmuSen_LibretroHost.md` §1.1 lays the folder out; files 0644,
-  folders 0755, owned by the player, so that §7.2 rule 3's checks pass.
+  unpacked, its `.info` copied from the catalogue, `NOTICE` written, the project's proxy (`emusen-core-broker.so`) and
+  adapter (`emusen-libretro-host.so`) copied from the installation, and `broker.target` written naming the adapter's
+  copy, as `EmuSen_LibretroHost.md` §1.1 lays the folder out (agreed with the libretro host 2026-10-31: the runner
+  loads the adapter as a v1 library with no folder argument, so the adapter finds its core beside itself, and a copy per
+  core is safe since each machine has its own runner); files 0644, folders 0755, owned by the player, so that §7.2
+  rule 3's checks pass.
+
+```
+/Cores/libretro/<corename>/
+    emusen-core-broker.so        the proxy hosts load (hash in cores.manifest)
+    broker.target                one line: emusen-libretro-host.so
+    emusen-libretro-host.so      the adapter's copy (hash in cores.manifest)
+    <corename>_libretro.so       the libretro core, as downloaded
+    <corename>_libretro.info     its core information, from the catalogue
+    NOTICE                       §5.2 step 4, read and written by emusen-core-entry (§7.1)
+    assets/                      data files beside firmware
+```
+
+  Every name in that folder, and `NOTICE`'s format (`format: 1` then the nine keys of §7.1, `#` lines skipped, a later
+  format's extra keys kept and written back, every field checked on read and on write), is `emusen-core-entry`'s
+  (`Platform/core-entry`, built 2026-10-31, 11 tests).
 - **Into place** by one rename to `/Cores/libretro/<corename>/`. A job stopped or failed at any point leaves the staging
   folder, which the next job of the tool removes; the destination is never half-written.
 - **Assets** a core needs beside firmware, where its `.info` or the host's profile names them, are downloaded into
@@ -294,11 +312,16 @@ The libretro host is being built on its own branch. Four places need one owner b
    (which refuses a core whose SHA-256 is not `NOTICE`'s). `NOTICE` is `key: value` lines (`name`, `corename`,
    `authors`, `license`, `source`, `build`, `index_crc32`, `sha256`, `fetched`), read and written by one crate, Cores'
    `emusen-core-entry`, on which the libretro host depends (decided, §11.7).
-2. **The table from libretro's `systemid` to EmuSen's systems**: in the systems table, read by the host's `info()` and
-   by the catalogue.
-3. **The runtime's `cores` listing for an entry of §1.1** (the host's addition (a)): the listing gains, for such an
-   entry, `"libretro": {"file", "sha256", "corename", "version", "license", "authors", "source"}` from its `NOTICE`, so the
-   window's rows and the approval read one answer.
+2. **The table from libretro's `systemid` to EmuSen's systems**, the libretro host's: each system file of the systems
+   table gains `"libretro_databases"` and `"libretro_systemids"`, and `emusen_systems::for_libretro(systemid, databases)`
+   answers the systems a core runs, matching the `.info`'s `database` list (split on `|`) first and its `systemid` only
+   where that list is blank, since one core may run several systems (PlayStation 2: `"Sony - PlayStation 2"`,
+   `"playstation2"`). Read by the host's `info()` and by the catalogue (agreed 2026-10-31).
+3. **The runtime's `cores` listing**, the libretro host's: each row gains `"libretro"`, null for a project core and
+   otherwise `{"folder", "file", "sha256", "corename", "name", "version", "license", "authors": [...], "source",
+   "build", "trust"}`, every field from `NOTICE` but `version` (the core's own library version) and `trust` (the
+   libretro file's own standing, apart from the row's), so the window's rows and the approval read one answer (agreed
+   2026-10-31).
 4. **Stage 4 of `EmuSen_LibretroHost.md` §10** lists "the core list and download" and "the engine choice per console".
    Those are Cores; the host's stage 4 keeps the approval's content, the settings window from the schema, the sound
    rate, the cards and the cheats.

@@ -30,6 +30,7 @@ struct Callbacks {
 static CALLBACKS: Mutex<Callbacks> = Mutex::new(Callbacks { environment: None, video: None, sample: None, batch: None, poll: None, input: None });
 static CORE: Mutex<Option<Core>> = Mutex::new(None);
 static LOG: Mutex<sys::retro_log_printf_t> = Mutex::new(None);
+/// The frame times reported since the last frame, added into the state's own sum at each frame.
 static FRAME_TIME_SUM: Mutex<i64> = Mutex::new(0);
 
 fn callbacks() -> Callbacks {
@@ -516,7 +517,9 @@ pub extern "C" fn retro_run() {
     }
     read_input(core, &cb);
     core.step_game();
-    core.ram[FRAME_TIME..FRAME_TIME + 8].copy_from_slice(&FRAME_TIME_SUM.lock().unwrap().to_le_bytes());
+    let pending = std::mem::take(&mut *FRAME_TIME_SUM.lock().unwrap());
+    let sum = i64::from_le_bytes(core.ram[FRAME_TIME..FRAME_TIME + 8].try_into().unwrap()) + pending;
+    core.ram[FRAME_TIME..FRAME_TIME + 8].copy_from_slice(&sum.to_le_bytes());
     core.ram[DISC] = core.disc.index;
     core.ram[DISC + 1] = core.disc.ejected as u8;
     core.ram[DISC + 2] = core.disc.images;

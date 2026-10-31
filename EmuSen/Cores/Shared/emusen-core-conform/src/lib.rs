@@ -1421,7 +1421,9 @@ fn c14(s: &mut Session<'_>) -> Case {
     if let Some(entries) = &entries {
         slots_agree(&mut c, &system, entries, &list("ports"));
     }
-    let listed: Option<Vec<(u32, String, String)>> = entries.map(|e| e.iter().map(|b| (b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32, b.get("suffix").and_then(Value::as_str).unwrap_or("").to_owned(), battery_kind(b))).collect());
+    // Since 1.16: a family of named files is no numbered file; its entries in machine info carry a name (§6.41).
+    let families: Vec<String> = entries.as_ref().map(|e| e.iter().filter(|b| b.get("family").is_some()).map(battery_kind).collect()).unwrap_or_default();
+    let listed: Option<Vec<(u32, String, String)>> = entries.as_ref().map(|e| e.iter().filter(|b| b.get("family").is_none()).map(|b| (b.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32, b.get("suffix").and_then(Value::as_str).unwrap_or("").to_owned(), battery_kind(b))).collect());
     // Since 1.7: a battery file's kind is "game" or "removable", absent being "game" (§6.27); since 1.8 also "console" (§6.28).
     for file in list("battery") {
         let which = file.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
@@ -1438,6 +1440,12 @@ fn c14(s: &mut Session<'_>) -> Case {
             let which = file.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
             let suffix = file.get("suffix").and_then(Value::as_str).unwrap_or("");
             let kind = battery_kind(&file);
+            if let Some(name) = file.get("name").and_then(Value::as_str) {
+                c.that(emusen_native::core::request::is_named(which), || format!("the named file {name} is numbered {which}, outside {}..{}", flags::FILE_NAMED, flags::FILE_MEDIA));
+                c.that(emusen_native::core::request::valid_name(name), || format!("the named file {which}'s name {name:?} is not one a host may store"));
+                c.that(families.contains(&kind), || format!("the named file {name} is of kind {kind:?}, and core info's families for system {system} are {families:?}"));
+                continue;
+            }
             c.that(listed.iter().any(|l| l.0 == which && l.1 == suffix), || format!("the machine keeps battery file {which} ({suffix}), which core info's list for system {system} does not name"));
             c.that(listed.iter().all(|l| l.0 != which || l.2 == kind), || format!("the machine's battery file {which} is of kind {kind:?}, and core info's list for system {system} gives it another"));
         }

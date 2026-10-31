@@ -60,11 +60,11 @@ without a device.
 MarsRT's `rdp/gpu/mod.rs` names the crate's items where it named `device::`'s, and re-exports `GpuDevice` and `Pending`
 for its own callers (`memory/dp.rs`, its tests), so no other file of MarsRT changed beyond the methods above.
 
-## 3. The surface, version 1.3
+## 3. The surface, version 1.4
 
 Rule **R** of `EmuSen_Surfaces.md` §6.1: an internal Rust API, a path dependency built from the same commit, guarded
 by its users' tests. It is nonetheless numbered, so that a second user can rely on its growing by addition: the
-crate's version was 1.0.0, 1.1.0 since §3.1, 1.2.0 since §5 (a lent device and the picture handed on it), and is 1.3.0 since §3.2 (64-bit integers in shaders); an
+crate's version was 1.0.0, 1.1.0 since §3.1, 1.2.0 since §5 (a lent device and the picture handed on it), 1.3.0 since §3.2 (64-bit integers in shaders), and is 1.4.0 since §3.3 (specialisation constants and the float controls); an
 addition (images, say) is a minor; a change or removal of anything below is a major, and none is planned.
 
 | Item | What it is |
@@ -141,6 +141,20 @@ way.
 query `GpuDevice::int64` says whether it was. A lent device reports false: its enabled features are the lender's and
 `Lent` does not carry them, so a user that needs them refuses the lend with a reason. Nothing MarsRT or Diamond calls
 changed meaning, so this is a minor: **1.3.0**. Their lock files moved with it; their code did not change.
+
+### 3.3 Version 1.4: specialisation constants and the float controls (2026-10-31)
+
+**The need.** Sapphire's GS draws each class of stretch with its own walk, compiled from one source, and computes its
+texture coordinates in single precision with every rounding fixed (`Sapphire_Gs.md` §10).
+
+**The additions.**
+
+- `GpuDevice::create_program_specialised(spirv, buffers, push_bytes, sets, constants)` takes 32-bit specialisation
+  constants as (id, value). `create_program_with_sets` is it with none.
+- `open` enables `VK_KHR_shader_float_controls` when the device offers it with 32-bit round-towards-zero and
+  flush-to-zero. `GpuDevice::float_controls` says whether it did; a lent device reports false.
+
+Nothing MarsRT or Diamond calls changed, so this is a minor: **1.4.0**.
 
 ## 4. Choosing a device, and the variable's name
 

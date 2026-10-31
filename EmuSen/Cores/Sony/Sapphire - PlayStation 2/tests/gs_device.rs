@@ -16,7 +16,7 @@ fn device() -> Option<Gs> {
     gs.set_workers(1);
     match gs.set_device(false) {
         Ok(()) => {
-            gs.set_exact_feedback(true);
+            gs.set_exact(true);
             Some(gs)
         }
         Err(e) => {
@@ -121,6 +121,44 @@ fn a_record_reading_what_an_earlier_one_drew_in_other_tiles_sees_it() {
     assert!(script(&mut software()) == script(&mut device().expect("a device")), "the memories differ");
 }
 
+/// Perspective-textured triangles with single-precision coordinates: nearly every pixel the software rasteriser's, the
+/// rest a texel away at most (Sapphire_Gs.md §10.2).
+#[test]
+fn single_precision_coordinates_leave_nearly_every_pixel_as_the_reference() {
+    let Some(_) = device() else { return };
+    let script = |gs: &mut Gs| {
+        gs.write(reg::FRAME_1, 64 | 8 << 16);
+        gs.write(reg::SCISSOR_1, 511 << 16 | 255 << 48);
+        gs.write(reg::TEST_1, 0);
+        gs.write(reg::PRMODECONT, 1);
+        gs.write(reg::BITBLTBUF, (8 * 32) << 32 | 2 << 48);
+        gs.write(reg::TRXPOS, 0);
+        gs.write(reg::TRXREG, 128 | 128 << 32);
+        gs.write(reg::TRXDIR, 0);
+        (0..8192u64).for_each(|k| gs.image(k.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ k << 29));
+        gs.write(reg::TEX0_1, (8 * 32) | 2 << 14 | 7 << 26 | 7 << 30 | 1 << 35);
+        gs.write(reg::PRIM, 3 | 1 << 4);
+        let vertex = |gs: &mut Gs, x: u64, y: u64, s: f32, t: f32, q: f32| {
+            gs.write(reg::ST, u64::from((s * q).to_bits()) | u64::from((t * q).to_bits()) << 32);
+            gs.write(reg::RGBAQ, 0x8080_8080 | u64::from(q.to_bits()) << 32);
+            gs.write(reg::XYZ2, x * 16 | (y * 16) << 16);
+        };
+        for k in 0..6u64 {
+            let (x0, q0, q1) = (k * 80, 1.0 + k as f32 * 0.37, 0.3 + k as f32 * 0.21);
+            vertex(gs, x0, 0, 0.0, 0.0, q0);
+            vertex(gs, x0 + 79, 10, 0.97, 0.05, q1);
+            vertex(gs, x0 + 7, 250, 0.11, 0.99, 1.5);
+        }
+        gs.local().words().to_vec()
+    };
+    let want = script(&mut software());
+    let mut gs = device().expect("a device");
+    gs.set_exact(false);
+    let got = script(&mut gs);
+    let differing = want.iter().zip(&got).filter(|(a, b)| a != b).count();
+    assert!(differing < want.len() / 2000, "{differing} words differ");
+}
+
 fn save(gs: &Gs) -> Vec<u8> {
     let mut c = StateWriter::counter();
     gs.write_state(&mut c);
@@ -157,7 +195,7 @@ fn with_snapshots_two_runs_leave_the_same_memory_and_read_backs() {
         let runs: Vec<(Vec<u64>, u64)> = (0..2)
             .map(|_| {
                 let mut gs = device().expect("a device");
-                gs.set_exact_feedback(false);
+                gs.set_exact(false);
                 let got = run(&mut gs, &steps);
                 (got, gs.device_counts().expect("counts").0.plan.snapshot[0])
             })

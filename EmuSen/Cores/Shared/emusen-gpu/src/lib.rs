@@ -19,6 +19,7 @@ pub const WRITTEN_SETS: usize = 16;
 pub const DEVICE_VARIABLE: &str = "EMUSEN_GPU_DEVICE";
 const PORTABILITY_ENUMERATION: &CStr = c"VK_KHR_portability_enumeration";
 const PORTABILITY_SUBSET: &CStr = c"VK_KHR_portability_subset";
+const FLOAT_CONTROLS: &CStr = c"VK_KHR_shader_float_controls";
 
 /// Where a buffer's memory lives: the host's, mapped for good, or the device's own, reached only by a copy.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -166,6 +167,9 @@ pub struct GpuDevice {
     max_buffer_bytes: u64,
     /// Whether shaders may use 64-bit integers: enabled on a device made here when offered; unknown, so off, on a lent one.
     int64: bool,
+    /// Whether shaders may set round-towards-zero and flush denormals for 32-bit floats (VK_KHR_shader_float_controls
+    /// enabled, both modes offered), since 1.4; off on a lent device.
+    float_controls: bool,
 }
 
 struct Candidate {
@@ -313,13 +317,26 @@ impl GpuDevice {
         let priority = [1.0f32];
         let queue_info = [vk::DeviceQueueCreateInfo::default().queue_family_index(pick.family).queue_priorities(&priority)];
         let extensions = unsafe { instance.enumerate_device_extension_properties(pick.physical) }.unwrap_or_default();
-        let names = [PORTABILITY_SUBSET.as_ptr()];
+        // The float controls' extension, since 1.4, when it is offered with 32-bit round-towards-zero and flush to zero.
+        let float_controls = has(&extensions, FLOAT_CONTROLS) && {
+            let mut fc = vk::PhysicalDeviceFloatControlsProperties::default();
+            let mut p2 = vk::PhysicalDeviceProperties2::default().push_next(&mut fc);
+            unsafe { instance.get_physical_device_properties2(pick.physical, &mut p2) };
+            fc.shader_rounding_mode_rtz_float32 == vk::TRUE && fc.shader_denorm_flush_to_zero_float32 == vk::TRUE
+        };
+        let mut names = Vec::with_capacity(2);
         // 64-bit integers in shaders, since 1.3, when the device offers them (EmuSen_Gpu.md §3.2).
         let int64 = unsafe { instance.get_physical_device_features(pick.physical) }.shader_int64 == vk::TRUE;
         let features = vk::PhysicalDeviceFeatures::default().shader_int64(int64);
         let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info).enabled_features(&features);
         // A layered implementation must be told its subset is accepted; this is what MoltenVK over Metal asks (Mars_Gpu.md §4).
         if has(&extensions, PORTABILITY_SUBSET) {
+            names.push(PORTABILITY_SUBSET.as_ptr());
+        }
+        if float_controls {
+            names.push(FLOAT_CONTROLS.as_ptr());
+        }
+        if !names.is_empty() {
             device_info = device_info.enabled_extension_names(&names);
         }
         let device = unsafe { instance.create_device(pick.physical, &device_info, None) }.map_err(|e| format!("vkCreateDevice returned {e}"))?;
@@ -359,6 +376,7 @@ impl GpuDevice {
             software: pick.software,
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
             int64,
+            float_controls,
         })
     }
 
@@ -418,12 +436,18 @@ impl GpuDevice {
             software: properties.device_type == vk::PhysicalDeviceType::CPU,
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
             int64: false,
+            float_controls: false,
         })
     }
 
     /// Whether shaders may use 64-bit integers (`shaderInt64` enabled), since 1.3.
     pub fn int64(&self) -> bool {
         self.int64
+    }
+
+    /// Whether shaders may set 32-bit round-towards-zero and flush to zero (the float controls' extension enabled), since 1.4.
+    pub fn float_controls(&self) -> bool {
+        self.float_controls
     }
 
     /// Whether the device is lent, and so may hand its pictures to the lender on the device.
@@ -530,6 +554,12 @@ impl GpuDevice {
 
     /// As `create_program`, with `sets` descriptor sets (at most `AHEAD`), one for each submission that may be out with it at once.
     pub fn create_program_with_sets(&self, spirv: &[u8], buffers: usize, push_bytes: usize, sets: usize) -> Result<GpuProgram, String> {
+        self.create_program_specialised(spirv, buffers, push_bytes, sets, &[])
+    }
+
+    /// As `create_program_with_sets`, with 32-bit specialisation constants as (constant id, value), since 1.4: one source,
+    /// a program for each set of values, the dead branches left out by the driver (EmuSen_Gpu.md §3.3).
+    pub fn create_program_specialised(&self, spirv: &[u8], buffers: usize, push_bytes: usize, sets: usize, constants: &[(u32, u32)]) -> Result<GpuProgram, String> {
         if spirv.is_empty() || !spirv.len().is_multiple_of(4) {
             return Err("SPIR-V is a whole number of words".into());
         }
@@ -548,7 +578,13 @@ impl GpuDevice {
         }
         let layout = unsafe { self.device.create_pipeline_layout(&layout_info, None) }.map_err(|e| format!("vkCreatePipelineLayout returned {e}"))?;
 
-        let stage = vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::COMPUTE).module(module).name(c"main");
+        let entries: Vec<vk::SpecializationMapEntry> = constants.iter().enumerate().map(|(k, &(id, _))| vk::SpecializationMapEntry { constant_id: id, offset: 4 * k as u32, size: 4 }).collect();
+        let data: Vec<u8> = constants.iter().flat_map(|&(_, v)| v.to_le_bytes()).collect();
+        let specialisation = vk::SpecializationInfo::default().map_entries(&entries).data(&data);
+        let mut stage = vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::COMPUTE).module(module).name(c"main");
+        if !constants.is_empty() {
+            stage = stage.specialization_info(&specialisation);
+        }
         let pipeline_info = vk::ComputePipelineCreateInfo::default().stage(stage).layout(layout);
         let made = unsafe { self.device.create_compute_pipelines(vk::PipelineCache::null(), &[pipeline_info], None) };
         unsafe { self.device.destroy_shader_module(module, None) };

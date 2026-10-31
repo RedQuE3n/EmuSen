@@ -272,11 +272,17 @@ impl Gs {
         self.device.as_ref().map(|d| (d.counts(), d.report()))
     }
 
-    /// Whether the device path draws records that read where they draw on the processor, in the reference's order.
-    pub fn set_exact_feedback(&self, exact: bool) {
+    /// Exact mode, for proof: records that read where they draw drawn on the processor in the reference's order, and the
+    /// texture coordinates in its exact arithmetic (Sapphire_Gs.md §5.4).
+    pub fn set_exact(&self, exact: bool) {
         if let Some(d) = &self.device {
-            d.set_exact_feedback(exact);
+            d.set_exact(exact);
         }
+    }
+
+    /// The walk's measurement counts (lanes, covered, textured), when the device draws with switch 32.
+    pub fn device_lane_counts(&self) -> Option<[u64; 3]> {
+        self.device.as_ref().map(|d| d.lane_counts(&self.local))
     }
 
     /// The software rasteriser again, every primitive drawn first.

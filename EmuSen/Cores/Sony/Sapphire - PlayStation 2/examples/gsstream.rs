@@ -98,6 +98,10 @@ fn main() {
     }
     let wall = started.elapsed().as_secs_f64();
     println!("fields {field}\tpictures {all:016X}\tmisread {misread}\tdrawing {:.3} ms a field\twall {wall:.2} s", 1e3 * drawing / field.max(1) as f64);
+    if let Some([lanes, covered, textured]) = gs.device_lane_counts().filter(|c| c[0] > 0) {
+        let n = field.max(1) as f64;
+        println!("lanes\t{:.0} lanes met a record, {:.0} pixels covered ({:.1}%), {:.0} textured, a field", lanes as f64 / n, covered as f64 / n, 100.0 * covered as f64 / lanes.max(1) as f64, textured as f64 / n);
+    }
     if let Some(c) = gs.worker_counts() {
         let n = field.max(1) as f64;
         println!("workers\tprimitives {:.0} split {:.0} alone {:.0} (pages met {:.0}, texture met {:.0}) empty {:.0} a field\ttransitions {:.1} a field", c.primitives as f64 / n, c.split as f64 / n, c.alone as f64 / n, c.alone_why[0] as f64 / n, c.alone_why[1] as f64 / n, c.empty as f64 / n, c.transitions as f64 / n);

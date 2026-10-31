@@ -155,8 +155,8 @@ owner. A row joins the four by the core's id (the libretro `corename`, or a proj
 - **What it is**: libretro's core information archive (`assets/frontend/info.zip`, 294 KB on 2026-10-31 [R]) and the
   platform's nightly index (`nightly/<platform>/<arch>/latest/.index-extended`: one line per core zip, date, CRC-32 of
   the zip, file name [R]). Fetched only when the player asks (*Check for Updates*, or the first time Cores is asked to
-  list what is available), into Galaxia's cache as `Cache/cores/info.zip` and `Cache/cores/index-<platform>-<arch>`,
-  each with the date fetched; Cores works offline from the copies it has, showing their date.
+  list what is available), into `/Cores/libretro/.catalogue/` as `info.zip` and `index-<platform>-<arch>`, each
+  with the date fetched (Galaxia's tree has no cache directory, and the catalogue belongs beside the cores it lists); Cores works offline from the copies it has, showing their date.
 - **Its rows**: each `.info` whose zip is in the platform's index. From the `.info` [R]: `display_name`, `corename`,
   `authors`, `license`, `permissions`, `display_version`, `systemid` and `database` (to place it under a console),
   `supported_extensions`, `firmware_count` and `firmwareN_desc`/`_path`/`_opt`, `notes`, `hw_render` and
@@ -167,7 +167,9 @@ owner. A row joins the four by the core's id (the libretro `corename`, or a proj
   supported* (with the reason, §4.6), *added by you*.
 - **Console placement** uses one table from libretro's `systemid` (and the `database` names where `systemid` is blank)
   to EmuSen's system ids. The libretro host needs the same table for `info()` (`EmuSen_LibretroHost.md` §4.1), so it
-  has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7).
+  has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7). Until the host's
+  `emusen_systems::for_libretro` lands, the core tool takes the placement from its caller, and switches to that
+  function when it does.
 
 ### 4.3 The default core, per console and per game
 

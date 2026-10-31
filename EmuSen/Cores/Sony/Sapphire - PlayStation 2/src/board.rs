@@ -388,6 +388,11 @@ impl Board {
         self.next
     }
 
+    /// The time a wait of compiled code may run to: the next event while the units are idle, nothing else being able to change what it reads, otherwise `deadline`.
+    pub(crate) fn wait_deadline(&self) -> u64 {
+        if self.quiet() { self.next } else { self.deadline() }
+    }
+
     /// The time compiled code must come back by: the next event or the round's end, at once where the IOP's side has woken the DMAC.
     pub(crate) fn deadline(&self) -> u64 {
         if self.iop.bus.sif.wake_ee_pending() { 0 } else { self.next.min(self.now + self.round) }

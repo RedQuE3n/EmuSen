@@ -410,8 +410,8 @@ fn main() {
     if let Some(b) = m.blocks.as_deref() {
         let s = b.stats;
         println!(
-            "blocks\tentered {}\tcompiled steps {}\tinterpreted {}\tpages filled {}\tgenerations {}\tslow paths call/misaligned/page/miss/uncached {:?}\tlinks {}\tlines written {}\tblocks killed {}\tall links cut {}\tshaped again {}",
-            s.entered, s.compiled_steps, s.interpreted, s.fills, s.generations, s.left, s.links, s.written, s.killed, s.unlinked, s.reshaped
+            "blocks\tentered {}\tcompiled steps {}\tinterpreted {}\tpages filled {}\tgenerations {}\tslow paths call/misaligned/page/miss/uncached {:?}\tinterpreted first/not compiled/no entry {:?}\tlinks {}\tlines written {}\tblocks killed {}\tall links cut {}\tshaped again {}",
+            s.entered, s.compiled_steps, s.interpreted, s.fills, s.generations, s.left, s.stepped, s.links, s.written, s.killed, s.unlinked, s.reshaped
         );
     }
     let cd = &m.sys.board.iop.bus.cdvd;

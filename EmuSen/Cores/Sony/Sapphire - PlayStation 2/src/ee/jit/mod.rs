@@ -58,6 +58,8 @@ pub struct Jump {
 pub struct Context {
     /// A block's end at or past this time returns to the dispatcher.
     pub deadline: u64,
+    /// The time a block that only waits runs to.
+    pub wait: u64,
     /// The time: the EE's cycles at the block's entry, moved on at each end, here while a helper runs.
     pub time: u64,
     /// Instructions run since the dispatcher entered a block.

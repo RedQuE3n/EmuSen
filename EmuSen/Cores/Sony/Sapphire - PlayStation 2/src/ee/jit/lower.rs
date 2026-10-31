@@ -24,6 +24,7 @@ const UCAB_VALID: i32 = offset_of!(Ee, ucab) as i32 + offset_of!(super::super::c
 const X_VF0: i32 = offset_of!(Context, vf0) as i32;
 const X_QUIET: i32 = offset_of!(Context, quiet) as i32;
 const X_DEADLINE: i32 = offset_of!(Context, deadline) as i32;
+const X_WAIT: i32 = offset_of!(Context, wait) as i32;
 const X_STEPS: i32 = offset_of!(Context, steps) as i32;
 const X_FRONT: i32 = offset_of!(Context, front) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
@@ -171,6 +172,31 @@ struct L<'a> {
     pre: u128,
     /// In a delay slot: the place after it, none where `NEXT` holds it.
     slot: Option<Option<u32>>,
+    /// The block only waits (`waits`).
+    waits: bool,
+}
+
+/// Whether a block only waits: it jumps back to its own start, stores nothing, calls nothing and carries no value from turn to turn, so that a turn repeats until something outside changes what it loads (after PCSX2's idle loops found at compile time, `iR5900.cpp`).
+fn waits(plan: &Plan) -> bool {
+    let n = plan.steps.len();
+    if n < 2 || plan.exposed & plan.written != 0 || plan.steps[n - 2].info.class != Class::Branch {
+        return false;
+    }
+    let b = plan.steps[n - 2];
+    let target = b.pc.wrapping_add(4).wrapping_add((simm(b.word) as u32) << 2);
+    let known = match shape::name(b.word) {
+        "beq" | "bne" | "blez" | "bgtz" | "bltz" | "bgez" | "beql" | "bnel" | "blezl" | "bgtzl" | "bltzl" | "bgezl" => target == plan.start,
+        "j" => b.pc.wrapping_add(4) & 0xF000_0000 | (b.word & 0x03FF_FFFF) << 2 == plan.start,
+        _ => false,
+    };
+    known && plan.steps.iter().enumerate().all(|(k, s)| {
+        k == n - 2
+            || match s.info.class {
+                Class::Memory => s.info.access.is_some_and(|a| !a.store) && !vf_memory(s.word) && !fp_memory(s.word),
+                Class::Plain => shape::class(s.word) == shape::Class::Plain && specials(s.word).is_empty() && !matches!(shape::name(s.word), "sync"),
+                _ => false,
+            }
+    })
 }
 
 fn rs(w: u32) -> usize {
@@ -474,9 +500,21 @@ impl L<'_> {
         self.pur(p);
     }
 
-    /// The end of a path to `target`, its cycles added: on through the link's word unless the deadline has come.
+    /// The end of a path to `target`, its cycles added: on through the link's word unless the deadline has come. A wait's jump back to its own start runs the time on to where what it reads can change.
     fn end_at(&mut self, target: u32, cycles: u32) {
         let p = self.push_purpose(P_EXIT);
+        if self.waits && target == self.plan.start {
+            self.a.alu(Op::Add, Width::W64, TIME, TIME, Src::Imm(cycles as i32));
+            self.a.load(8, false, X, at(CTX, X_WAIT));
+            self.a.cmp(Width::W64, X, Src::Reg(TIME));
+            self.a.select(Cond::Gtu, TIME, X);
+            self.a.mov_imm(RDI, i64::from(target));
+            self.a.mov_imm(RSI, 0);
+            self.a.mov_imm(RDX, i64::from(target));
+            self.a.jump_stub(stub::OUT);
+            self.pur(p);
+            return;
+        }
         let out = self.a.label();
         let slot = self.a.data_address(out);
         self.data_len = self.data_len.next_multiple_of(8) + 8;
@@ -1523,7 +1561,7 @@ impl L<'_> {
 /// The block's code.
 pub(crate) fn lower(plan: &Plan, cost: &Cost) -> Option<Code> {
     let n = plan.steps.len();
-    let mut l = L { a: X64::new(), plan, cost, home: vec![Home::None; values(n)], uses: Vec::new(), st: St { held: vec![false; values(n)], dirty: 0, steps: 0, sync: false }, next_slot: 0, purpose: 0, data_len: 0, now: 0, pre: 0, slot: None };
+    let mut l = L { a: X64::new(), plan, cost, home: vec![Home::None; values(n)], uses: Vec::new(), st: St { held: vec![false; values(n)], dirty: 0, steps: 0, sync: false }, next_slot: 0, purpose: 0, data_len: 0, now: 0, pre: 0, slot: None, waits: waits(plan) };
     l.allocate();
     let mut homes = [0u8; GUEST + 1];
     for (v, h) in l.home.iter().take(GUEST + 1).enumerate() {

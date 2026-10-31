@@ -54,8 +54,9 @@ pub struct Stats {
     /// Times compiled code was entered and left, and the instructions it ran.
     pub entered: u64,
     pub compiled_steps: u64,
-    /// Steps the interpreter took.
+    /// Steps the interpreter took, and of them those of no block yet, of a block not compiled, and those where no block may start.
     pub interpreted: u64,
+    pub stepped: [u64; 3],
     /// Blocks shaped again because their page moved or their words changed.
     pub reshaped: u64,
     /// Pages the translation cache filled, and the generations it made.
@@ -107,9 +108,6 @@ pub struct Blocks {
     pub flushes: u64,
     compiled: (u64, u64, u64),
     pub threshold: u32,
-    /// Loops the dispatcher must see: a backward jump's link waits for idle skipping to refuse its head (Sapphire_Speed.md §66).
-    pub watch_loops: bool,
-    refused: Map32<u8>,
     /// The longest block shaped, for measurement.
     pub longest: usize,
     verify: Option<(Verify, emusen_jit::verify::Verifier<Shadow>)>,
@@ -148,6 +146,7 @@ impl Blocks {
         let mut front = vec![Jump::default(); FRONT].into_boxed_slice();
         let ctx = Box::new(Context {
             deadline: 0,
+            wait: 0,
             time: 0,
             steps: 0,
             pages: pages.as_mut_ptr(),
@@ -174,8 +173,6 @@ impl Blocks {
             flushes: 0,
             compiled: (0, 0, 0),
             threshold: THRESHOLD,
-            watch_loops: false,
-            refused: HashMap::default(),
             longest: shape::MAX,
             verify: None,
             stats: Stats::default(),
@@ -423,12 +420,9 @@ impl Blocks {
         sys.board.map.written = lines;
     }
 
-    /// The link a return passed made, where its target has code and its loop is not one the dispatcher must watch.
-    fn link(&mut self, slot: *mut u64, at: usize, to: u32) {
+    /// The link a return passed made, where its target has code.
+    fn link(&mut self, slot: *mut u64, at: usize) {
         let State::Ready(code) = self.slab[at].state else { return };
-        if !self.linkable(self.ctx.from, to) {
-            return;
-        }
         // SAFETY: the link word of a block in the code memory, passed by that block's way out.
         unsafe {
             self.slab[at].incoming.push((slot, *slot));
@@ -436,37 +430,18 @@ impl Blocks {
         }
         self.stats.links += 1;
     }
-
-    fn linkable(&self, from: u32, to: u32) -> bool {
-        !self.watch_loops || to > from || from - to > crate::idle::SPAN || self.refused.get(&to).is_some_and(|&n| n >= REFUSALS)
-    }
-
-    /// Idle skipping refused the head `pc`; `REFUSALS` times, and its loop is left to run linked.
-    pub fn refused(&mut self, pc: u32) {
-        let n = self.refused.entry(pc).or_default();
-        *n = n.saturating_add(1);
-    }
-
-    /// Idle skipping proved the head `pc`'s loop: its refusals count from none.
-    pub fn proven(&mut self, pc: u32) {
-        self.refused.remove(&pc);
-    }
-
-    /// The block compiled code last left, or `pc` where it ran none.
-    pub fn last_from(&self, pc: u32) -> u32 {
-        if self.ctx.from != 0 { self.ctx.from } else { pc }
-    }
 }
 
-/// Times in a row idle skipping refuses a loop's head before its backward jump is linked.
-const REFUSALS: u8 = 4;
+/// Whether compiled code runs on this host.
+pub fn available() -> bool {
+    isa::supported()
+}
 
 /// One step of the machine, or compiled code to the deadline; the steps taken.
 pub fn run(sys: &mut System, blocks: &mut Blocks) -> Result<u64, Halt> {
     if let Some(n) = block(sys, blocks) {
         return Ok(n);
     }
-    blocks.ctx.from = 0;
     interpret(sys, blocks)
 }
 
@@ -492,10 +467,14 @@ fn sys<'a>(ctx: &Context) -> &'a mut System {
     unsafe { &mut *(*ctx.owner.cast::<Run>()).sys }
 }
 
-/// The time compiled code comes back by, Count's interrupt included where it can be taken.
-fn deadline(sys: &System) -> u64 {
-    let d = sys.board.deadline();
-    if sys.ee.count_masked() { d } else { d.min(sys.ee.compare_at()) }
+/// The times compiled code comes back by, and a wait of compiled code runs to, Count's interrupt included where it can be taken.
+fn deadlines(sys: &System) -> (u64, u64) {
+    let (d, w) = (sys.board.deadline(), sys.board.wait_deadline());
+    if sys.ee.count_masked() {
+        return (d, w);
+    }
+    let c = sys.ee.compare_at();
+    (d.min(c), w.min(c))
 }
 
 fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
@@ -517,7 +496,6 @@ fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
         blocks.written(sys);
     }
     let pc = sys.ee.pc;
-    // The link's target: a step taken since the block returned (idle skipping's proof) has moved the core past it.
     let slot = std::mem::take(&mut blocks.ctx.link) as *mut u64;
     let slot = if blocks.ctx.to == pc { slot } else { std::ptr::null_mut() };
     let found = blocks.find(pc);
@@ -525,16 +503,21 @@ fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
         Some(State::Refused(n)) => {
             *n = n.wrapping_add(1);
             if *n != 0 {
+                blocks.stats.stepped[1] += 1;
                 return None;
             }
         }
         Some(State::Counting(n)) if *n + 1 < blocks.threshold => {
             *n += 1;
+            blocks.stats.stepped[1] += 1;
             return None;
         }
         _ => {}
     }
-    let paddr = sys.ee.block_entry()?;
+    let Some(paddr) = sys.ee.block_entry() else {
+        blocks.stats.stepped[2] += 1;
+        return None;
+    };
     let options = blocks.options(sys);
     let fresh = found.is_some_and(|i| {
         let b = &blocks.slab[i];
@@ -561,6 +544,7 @@ fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
             let n = n + 1;
             if n < blocks.threshold {
                 blocks.slab[at].state = State::Counting(n);
+                blocks.stats.stepped[0] += 1;
                 return None;
             }
             let body = blocks.compile(pc, at)?;
@@ -576,7 +560,7 @@ fn block(sys: &mut System, blocks: &mut Blocks) -> Option<u64> {
     };
     blocks.translation(sys);
     if !slot.is_null() {
-        blocks.link(slot, at, pc);
+        blocks.link(slot, at);
     }
     Some(enter(sys, blocks, code))
 }
@@ -592,7 +576,7 @@ fn enter(sys: &mut System, blocks: &mut Blocks, code: u64) -> u64 {
     ctx.time = sys.ee.timing.cycles();
     ctx.steps = 0;
     ctx.link = 0;
-    ctx.deadline = deadline(sys);
+    (ctx.deadline, ctx.wait) = deadlines(sys);
     ctx.vf0 = sys.board.vpu.units.vu0.vf_base();
     ctx.quiet = u32::from(!sys.board.vpu.running(0));
     // SAFETY: the code was compiled for this signature; the core and the context outlive the call, and nothing else
@@ -675,7 +659,7 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
                 let lines = board.lines();
                 let same = lines == (ee.int0, ee.int1, ee.cpcond0);
                 let sys = sys(ctx);
-                ctx.deadline = if same && sys.board.map.written.is_empty() { deadline(sys) } else { 0 };
+                (ctx.deadline, ctx.wait) = if same && sys.board.map.written.is_empty() { deadlines(sys) } else { (0, 0) };
             }
             0
         }
@@ -690,7 +674,6 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
             ctx.time += u64::from(rec.time) + 1;
             ctx.steps += u64::from(rec.step) + 1;
             ctx.link = 0;
-            ctx.from = 0;
             1
         }
     }

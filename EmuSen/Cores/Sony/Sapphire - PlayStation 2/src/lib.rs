@@ -43,6 +43,9 @@ pub mod float;
 pub mod float_host;
 #[cfg(feature = "lanes")]
 pub mod float_lanes;
+/// The same under rounding towards zero on the host's floats, for the VU recompiler (Sapphire_Redesign.md, the VU's floats under rounding towards zero).
+#[cfg(feature = "lanes")]
+pub mod float_rz;
 pub mod gif;
 pub mod gs;
 pub mod idle;

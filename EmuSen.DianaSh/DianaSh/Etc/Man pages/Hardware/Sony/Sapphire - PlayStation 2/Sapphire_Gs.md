@@ -233,3 +233,74 @@ Seeded faults, each reverted:
 The software GS (`src/gs/`), `EmuSen_Gpu.md` §1 to §6, Diamond's renderer's layout and the start of its walk (the
 project's own code), `Sapphire_Plan.md` §5.4, `Sapphire_Redesign.md` §4.6 and §7.3, and the 2026-10-31 hardware-counter
 data. No other emulator's source was read for this stage.
+
+## 10. Second step (2026-10-31): single-precision coordinates, walks by class, ordered records
+
+*Decided by the tester 2026-10-31:* on the device, STQ and the LOD are deterministic by specification rather than
+bit-equal to the software GS. Coverage, Z, colour and every byte read back stay exact; exact mode is kept for proof.
+Self-reading records are applied record by record on one workgroup, option (b) of §8.
+
+### 10.1 Lane utilisation [M, the arena stream, measurement switch 32]
+
+| Measure | A field |
+|---|---|
+| lane-record evaluations | 11.54 M |
+| pixels covered | 1.98 M (17.2 %) |
+| pixels textured | 1.79 M |
+
+This is above the 10 % at which a change of form was to be reported. The cost is divergence: the textured path runs
+with about one lane in six live.
+
+### 10.2 Single-precision coordinates (§5.4)
+
+The walk sets round-towards-zero and flush-to-zero for 32-bit floats (`SPV_KHR_float_controls` execution modes) and
+marks every product and sum `precise`, so no fused multiply-add is formed. S, T and Q are read as `exact::Float` reads
+them. The sums ΣS·w and ΣQ·w are formed in the record's order; the quotient takes 1/ΣQ·w from an integer seed and three
+Newton steps; log2 is the exponent plus a polynomial of degree 6 (error below 2.5e-6). There is no division and no
+transcendental, so every conformant device gives the same bits. The UV path stays in integers. `emusen-gpu` 1.4
+enables `VK_KHR_shader_float_controls` when it offers both modes (`GpuDevice::float_controls`); without them the exact
+walk draws.
+
+**The picture** [M, pictures every 50 fields against the software GS, with self-reading records in the exact order]:
+fields 200 and 250 differ in 35 and 27 of 229,376 pixels, largest channel difference 2. That is invisible. Exact mode
+(`SAPPHIRE_GS_EXACT`, or `SAPPHIRE_GS_EXACT_TEXTURE` for the coordinates alone) remains bit-equal on all 300 fields.
+
+### 10.3 Walks by class (§5.5)
+
+One source, specialised by constants (`emusen-gpu` 1.4, `create_program_specialised`). The constants are exact
+coordinates, triangles, sprites, lines or points, texture, STQ, a LOD a pixel, fog and antialiasing. A stretch's class
+is the union of its records' (`plan::class`). Each class's walk is made the first time a stretch of it is submitted;
+the walk with every feature is made at the start. Compilation is synchronous for now. Building the general walk as the
+fallback while a class compiles, and caching compiled forms, are owed.
+
+[M] Nine classes on the arena. Eight still use 256 VGPRs and 92 to 102 KB of code. The pressure lies in what every
+textured class shares, not in the features taken out.
+
+### 10.4 Ordered records, option (b)
+
+A run of self-reading records is one stretch dispatched as one workgroup. Each record carries its bounds; the workgroup
+covers them 128 pixels at a time in raster order. Every lane reads, then all store, so a pixel reads the memory as the
+earlier records and the earlier batches of its own record left it. The snapshot is gone.
+
+[M] It does not reach the software picture: fields 100 and 150 still differ in 3.9 % and 5.4 % of pixels, largest
+channel difference 122. That is the same order as the snapshot's. Jak's refraction primitives read pixels they have
+drawn themselves earlier in raster order, which only option (c) keeps. It is also slow: the RX 6800's field went from
+10.3 ms to about 108 ms. Each of about 1,657 records a field waits on its own chain of memory and barriers in one
+workgroup. Reported to the tester before going on.
+
+### 10.5 Numbers after this step [M, 2026-10-31]
+
+| Measure | Value |
+|---|---|
+| processor's part (plan) | 220 M instructions and 63.6 M cycles a field, the replay's parse taken off |
+| GPU, RX 6800, single-precision coordinates, walks by class | 10.3 ms a field |
+| GPU, RX 6800, with ordered records | about 108 ms a field |
+| exact mode | all 300 arena pictures equal the software GS's |
+
+Seeded faults for this step:
+
+- A stretch's class missing the texture bit was caught by the generated streams, the state test and the transfer test.
+- The reciprocal with one Newton step first survived, because every test compared in exact mode. It was caught after
+  `single_precision_coordinates_leave_nearly_every_pixel_as_the_reference` was added.
+- An ordered record's lanes storing before every lane had read **survived**. It is a race between the waves of one
+  workgroup, which no test here provokes reliably.

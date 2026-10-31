@@ -93,6 +93,11 @@ pub(crate) fn run_op(ee: &mut Ee, bus: &mut dyn super::Bus, index: u16, word: u3
     (super::ops::get(index).run)(ee, bus, word, pc)
 }
 
+/// The macro operation `word` at cycle `t` with VU0 at rest.
+pub(crate) fn run_light(ee: &mut Ee, bus: &mut dyn super::Bus, word: u32, t: u64) -> Result<(), super::ops::Stop> {
+    super::cop2::run_light(ee, bus, word, t)
+}
+
 /// How a block's cost is folded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Options {

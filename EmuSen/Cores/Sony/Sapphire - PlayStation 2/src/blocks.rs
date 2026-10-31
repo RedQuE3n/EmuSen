@@ -11,7 +11,7 @@ use emusen_jit::verify::Reference;
 
 use crate::board::System;
 use crate::ee::Halt;
-use crate::ee::jit::isa::{self, BOARD, Homes, IN_SLOT, NEXT_HELD, Rec, stub};
+use crate::ee::jit::isa::{self, BOARD, Homes, IN_SLOT, LIGHT, NEXT_HELD, Rec, stub};
 use crate::ee::jit::lower::{self, NEXT};
 use crate::ee::jit::{self, Context, Enter, FRONT, Jump, Options, PAGES, Page, kind, shape};
 
@@ -636,15 +636,22 @@ extern "C" fn slow(ctx: *mut Context, rec: *const Rec, why: u64, frame: *mut u64
         }
     }
     let t = ctx.time + u64::from(rec.time);
-    let reaches = rec.flags & BOARD != 0;
-    ee.begin_call(t, rec.index, rec.word);
-    if reaches {
-        board.run_to(t, &mut ee.spram[..]);
-    }
-    let op = crate::ee::jit::run_op(ee, board, rec.index, rec.word, rec.pc);
+    let light = rec.flags & LIGHT != 0 && ctx.quiet != 0;
+    let reaches = rec.flags & BOARD != 0 && !light;
+    let op = if light {
+        crate::ee::jit::run_light(ee, board, rec.word, t)
+    } else {
+        ee.begin_call(t, rec.index, rec.word);
+        if reaches {
+            board.run_to(t, &mut ee.spram[..]);
+        }
+        crate::ee::jit::run_op(ee, board, rec.index, rec.word, rec.pc)
+    };
     match op {
         Ok(()) => {
-            ctx.time += ee.call_stall(t);
+            if !light {
+                ctx.time += ee.call_stall(t);
+            }
             for h in 0..2 {
                 let mut m = rec.reload[h];
                 while m != 0 {

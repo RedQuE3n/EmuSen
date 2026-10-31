@@ -194,6 +194,8 @@ pub(crate) struct Rec {
 pub(crate) const IN_SLOT: u32 = 1;
 pub(crate) const NEXT_HELD: u32 = 2;
 pub(crate) const BOARD: u32 = 4;
+/// `Rec::flags`: a macro operation of VU0's registers, done without the board or the issue model while VU0 rests.
+pub(crate) const LIGHT: u32 = 8;
 
 impl Rec {
     pub(crate) fn bytes(&self) -> &[u8] {

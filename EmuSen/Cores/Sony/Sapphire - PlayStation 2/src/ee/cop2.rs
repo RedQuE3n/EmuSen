@@ -183,6 +183,23 @@ fn vu_op(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 
+/// A macro operation that reaches VU0's registers alone: no divide, wait, start or memory form.
+pub(crate) fn light(w: u32) -> bool {
+    super::ops::get(super::ops::index(w)).name == "vu" && vops::of_word(w).is_some_and(|(o, entry)| matches!(entry.class, Class::Fmac | Class::Ialu) && !matches!(o.form, Form::LoadInc | Form::LoadDec | Form::StoreInc | Form::StoreDec | Form::IntMem))
+}
+
+/// A macro operation `light` names at cycle `t` with VU0 at rest; COP2 is usable or an error.
+pub(crate) fn run_light(e: &Ee, b: &mut dyn Bus, w: u32, t: u64) -> R {
+    usable(e)?;
+    let vpu = vpu0(b)?;
+    let Some((_, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
+    vpu.settle_q(t);
+    vpu.last_macro = Some(t);
+    let units = &mut vpu.units;
+    (entry.run)(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
+    Ok(())
+}
+
 const fn cop(name: &'static str, run: super::ops::Run, category: Category, row: usize) -> Op {
     Op { name, run, category, row, reads: 0, writes: 0, kind: Kind::Cop2 }
 }

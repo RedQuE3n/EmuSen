@@ -8,7 +8,7 @@ use emusen_mips_planner::{Class, Plan, Step};
 
 use super::super::cache::{DCache, DTag};
 use super::super::ops;
-use super::isa::{BOARD, Cost, IN_SLOT, NEXT_HELD, Rec, SLOTS, stub};
+use super::isa::{BOARD, Cost, IN_SLOT, LIGHT, NEXT_HELD, Rec, SLOTS, stub};
 use super::{Context, Jump, Page, kind, shape};
 use crate::ee::Ee;
 
@@ -101,7 +101,12 @@ const fn values(steps: usize) -> usize {
 
 /// The calls the lowering makes in place: MFC1 and MTC1, and the multimedia instructions that are 64-bit operations on each half.
 fn native(w: u32) -> bool {
-    matches!(shape::name(w), "mfc1" | "mtc1") || wide(w)
+    matches!(shape::name(w), "mfc1" | "mtc1") || vf_move(w) || wide(w)
+}
+
+/// QMFC2 and QMTC2, in place while VU0 rests.
+fn vf_move(w: u32) -> bool {
+    matches!(shape::name(w), "qmfc2" | "qmtc2")
 }
 
 /// LQC2 and SQC2, whose quadword is VF[rt], not a GPR.
@@ -292,6 +297,9 @@ impl L<'_> {
             if wide(s.word) {
                 vals.extend([32 + rs(s.word), 32 + rt(s.word), 32 + rd(s.word)]);
             }
+            if vf_move(s.word) {
+                vals.push(32 + rt(s.word));
+            }
             for r in 1..32 {
                 if (s.info.reads | s.info.writes) >> r & 1 == 1 {
                     vals.push(r);
@@ -436,7 +444,7 @@ impl L<'_> {
             Some(None) => (0, NEXT_HELD),
             None => (0, 0),
         };
-        let flags = if self.slot.is_some() { IN_SLOT } else { 0 } | held | if board { BOARD } else { 0 };
+        let flags = if self.slot.is_some() { IN_SLOT } else { 0 } | held | if board { BOARD } else { 0 } | if crate::ee::cop2_light(s.word) { LIGHT } else { 0 };
         let halves = |m: u128| [m as u64, (m >> 64) as u64];
         let at = self.data_len.next_multiple_of(8);
         let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, pad: 0 };
@@ -1410,6 +1418,7 @@ impl L<'_> {
         match s.info.class {
             Class::Memory => self.memory(i, s),
             _ if wide(s.word) => self.wide(s),
+            _ if vf_move(s.word) => self.vf_transfer(s),
             _ if native(s.word) => self.fpu_move(s),
             _ if shape::class(s.word) == shape::Class::Call => self.call(s),
             _ => self.plain(s),
@@ -1541,6 +1550,48 @@ impl L<'_> {
             self.a.store(4, r, at(EE, f));
         }
         self.st.steps += 1;
+    }
+
+    /// QMFC2 and QMTC2 in place while VU0 rests, nothing to interlock with; the interpreter's otherwise, or where COP2 is unusable.
+    fn vf_transfer(&mut self, s: &Step) {
+        let w = s.word;
+        let (t, f) = (rt(w), rd(w) as i32);
+        let from = shape::name(w) == "qmfc2";
+        if !from && t != 0 {
+            self.get(t, X);
+            self.get(32 + t, X);
+        }
+        let (cold, done) = (self.a.label(), self.a.label());
+        self.pur(P_FAULT);
+        self.a.cmp_mem(4, at(CTX, X_QUIET), Src::Imm(0));
+        self.a.branch(Cond::Eq, cold);
+        self.a.load(4, false, X, at(EE, STATUS));
+        self.a.test(Width::W32, X, Src::Imm(crate::ee::status::CU2 as i32));
+        self.a.branch(Cond::Eq, cold);
+        self.pur(P_WORK);
+        if (from && t != 0) || (!from && f != 0) {
+            self.a.load(8, false, X, at(CTX, X_VF0));
+            for (k, v) in [(0, t), (8, 32 + t)] {
+                if from {
+                    let h = self.dest(v, A);
+                    self.a.load(8, false, h, at(X, 16 * f + k));
+                    self.put(v, h);
+                } else {
+                    let r = self.get(v, A);
+                    self.a.store(8, r, at(X, 16 * f + k));
+                }
+            }
+        }
+        self.st.steps += 1;
+        self.a.bind(done);
+        let reload = if from && t != 0 { 1u128 << t | 1 << (32 + t) } else { 0 };
+        let here = self.a.current();
+        self.a.section(Section::Cold);
+        self.a.bind(cold);
+        let k = self.rec(s, reload, true);
+        self.slow_call(k, LEFT_CALL);
+        self.a.jump(done);
+        self.a.section(here);
     }
 
     /// A call: every value the block wrote is in the core for the operation, and what it writes is read again where it is next used.

@@ -20,6 +20,7 @@ pub mod timing;
 pub mod tlb;
 
 pub use bus::Bus;
+pub(crate) use cop2::light as cop2_light;
 pub use memory::{Mode, Place};
 use cop0::{cause, config, debug, event, perf};
 use timing::Timing;

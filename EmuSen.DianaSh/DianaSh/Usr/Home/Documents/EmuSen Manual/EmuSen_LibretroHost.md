@@ -4,13 +4,15 @@
 route, that way EmuSen can consume other cores." The first version's four decisions were approved the same day, with a
 condition that governs the whole design: "I would prefer this done right than hacky. So no shortcuts. If we're going to
 host libretro cores, it needs to be done right." The revision (§0.1) replaces every place where the first version took a
-shortcut or put off the proper form, and adds EmuSen's own cheats for hosted cores, also asked for by the tester.
+shortcut or put off the proper form, and adds EmuSen's own cheats for hosted cores, also asked for by the tester. An
+independent review the same day found it sound with changes, which §0.2 lists and the sections below carry.
 
 This widens `EmuSen_LibretroBridge.md` (a stopgap for the PlayStation 2, proposed 2026-10-27, superseded) to any libretro
 core, and is the inbound direction `EmuSen_CoreAPI.md` §14.1 names and §15 Q6 decided in principle. The outbound
-direction, a v1 core offered to RetroArch, keeps the name `emusen-libretro` (`EmuSen_Libretro.md` §7). PCSX2's libretro
-build, LRPS2 (`pcsx2_libretro`, the nightly pinned in `EmuSen.WiseMan/Reference/libretro-cores.sha256`), is the first
-target.
+direction, a v1 core offered to RetroArch, keeps the name `emusen-libretro` (`EmuSen_Libretro.md` §7). The first target, decided by the
+tester on 2026-10-31, is PCEE2 (`pcee2_libretro`), the libretro build of upstream PCSX2, with memory maps and software
+pictures, the nightly pinned in `EmuSen.WiseMan/Reference/libretro-cores.sha256`; LRPS2 (`pcsx2_libretro`, a hard fork of
+an older PCSX2) is the second.
 
 The marks are those of `EmuSen_Gpu.md`: **[M]** measured, with the date and tool; **[R]** read from a source; **[A]**
 argued; **[C]** a choice. A section number of the form §6.n or §7.n given without a document is `EmuSen_CoreAPI.md`'s;
@@ -18,12 +20,12 @@ every other bare number is this page's.
 
 **Sources** [R, read 2026-10-31]: `libretro.h` and `libretro_vulkan.h` from libretro-common's `master`
 (<https://github.com/libretro/libretro-common/tree/master/include>, MIT; Vulkan interface version 5, negotiation version
-2); LRPS2's published documentation (<https://docs.libretro.com/library/lrps2/>) and core information file
-(`pcsx2_libretro.info`, libretro-core-info `master`); `emusen_core.h` 1.15; `EmuSen_CoreAPI.md` §6.0–§6.22, §7, §14.1;
+2); PCEE2's and LRPS2's core information files (`pcee2_libretro.info`, `pcsx2_libretro.info`, buildbot's info archive and
+libretro-core-info `master`) and LRPS2's published documentation (<https://docs.libretro.com/library/lrps2/>); `emusen_core.h` 1.15; `EmuSen_CoreAPI.md` §6.0–§6.22, §7, §14.1;
 `EmuSen_CoreAPI_Extensions.md` §4, §6; `EmuSen_Cheats.md` §1–§4, §10; `EmuSen_Libretro.md` §2.6; `EmuSen_Gpu.md` §5;
 `EmuSen_DevicePicture.md` §1.3, §4, §5; `Platform/serenity/src/vulkan.rs`; `emusen-native`'s `core` trait;
-`CoreEngine`'s cheat path as `EmuSen_CoreAPI_Extensions.md` §6.1 records it. No emulator's source, LRPS2's included, is
-read for this work; LRPS2 is only run, as a black box.
+`CoreEngine`'s cheat path as `EmuSen_CoreAPI_Extensions.md` §6.1 records it. No emulator's source, PCSX2's builds included,
+is read for this work; they are only run, as black boxes.
 
 ### 0.1 What the revision changed
 
@@ -40,6 +42,21 @@ read for this work; LRPS2 is only run, as a black box.
 | an older host given a temporary copy of a large image | the core states `host_requires: ["image_path"]` and an older host refuses it with that reason (§2) |
 | software frames always copied in the callback | the core may draw straight into the frame's shared memory (`GET_CURRENT_SOFTWARE_FRAMEBUFFER`, §4.2) |
 | cheats not addressed | **EmuSen's cheat engine applies its codes through the memory the core exposes**; `retro_cheat_set` only for what EmuSen cannot decode, the path shown (§4.9) |
+
+### 0.2 What the review of 2026-10-31 changed
+
+| Found | Now |
+|---|---|
+| a Landlock allow-list that no Vulkan or recompiling core could run under | the ruleset of §3.3, with the render node, the driver's files and the ioctls a GPU needs; a needed path denied fails `create` and names it, and **a core never runs unconfined** (decided 2026-10-31) |
+| crashes contained, hangs not | a deadline on `create`, `advance` and `free`, a setting in seconds, after which the runner is killed (§3.4); the presenter's wait released after a crash (§5.4); the GPU's own reset named as a limit (§3.6) |
+| `PR_SET_PDEATHSIG`, which fires when the spawning *thread* ends | the runner watches its control socket for the parent's end (§3.2) |
+| the approval keyed to the proxy, a manifest file, and `NOTICE` in a folder the player can write | the approval keyed to the libretro core's own hash, compared by the host before any runner starts, and the bytes the runner loads the bytes that were hashed (§1.3); `NOTICE` is information only |
+| every file a core writes treated as a save | a persistent private folder per core; only files in the save directory, or files a profile names, are saves (§4.5); named files' names checked |
+| named files numbered from `0x20000000`, inside `BORROW`'s promise for numbers from 65536 | numbered from `0x8000` to `0xFFFF`, below `EMUSEN_FILE_MEDIA` (§2, E3) |
+| the ring's ownership hand-over left implicit | `VK_QUEUE_FAMILY_EXTERNAL` release and acquire each frame on both devices; a larger picture mid-frame held until the host lends a new ring (§5.4) |
+| memory between frames assumed still | a race check of the window (§3.2, §9); the PS2 cores' exposed memory cited from `Sapphire_Referees.md` §2 (§4.9) |
+| the ring and `DEVICE_PICTURE` read as two forms | two boundaries (§5.4) |
+| smaller points | trust on first download said (§7); the archive's bounds (§7); options declared in `retro_load_game` (§4.7); `retro_cheat_reset` (§4.9); `-10` owned by the proxy's `status_text` (§3.4) |
 
 ## 1. The form: three components, composed
 
@@ -72,16 +89,19 @@ and its own *copy* of the proxy:
 /Cores/libretro/pcsx2/
     emusen-core-broker.so               a copy of the project's proxy (hash in cores.manifest); the file hosts load
     emusen-core-broker.so.core.json     its sidecar, written by loading it once after approval
-    broker.target                       one line: the library the runner loads, emusen-libretro-host
+    broker.target                       one line: the library the runner loads, emusen-libretro-host.so here
+    emusen-libretro-host.so             a copy of the project's libretro host (hash in cores.manifest)
     pcsx2_libretro.so                   the libretro core, as downloaded
     pcsx2_libretro.info                 its published core information
     NOTICE                              the core's name, authors, licence, source address and SHA-256
     assets/                             data files the core needs beside firmware (§4.8)
 ```
 
-The runner and the libretro host are the installation's own files (`/lib/EmuSen/cores/`), never copied: each machine's
-runner is a process of its own, so nothing is shared between machines. The libretro host finds its libretro core as the
-one `*_libretro.<ext>` in the folder the proxy names to it, and refuses it unless its SHA-256 is the one `NOTICE` records.
+The runner is the installation's own executable. The libretro host is copied into the folder because the runner loads
+it as a v1 library, and v1 has no way to hand a library a folder: it finds its libretro core as the one
+`*_libretro.<ext>` beside itself. Nothing is shared between machines, since each machine's runner is a process of its
+own. `NOTICE`'s format, and the one module that reads and writes it, are the Cores window's (`emusen-core-entry`,
+`EmuSen_Cores.md` §7); this host uses that module.
 
 ### 1.2 The crates
 
@@ -95,24 +115,47 @@ Dependencies: `emusen-native`, `libloading`, `cc`, `ash` 0.38 (the version `emus
 protocol), `runner`, `sandbox`. The probe's libretro backend (`Reference/probe-rs/src/backends/libretro.rs`) keeps its
 own bindings; moving it onto `retro` is a later step of its own.
 
+### 1.3 Trust, keyed to the libretro core
+
+The approval names what runs [C, after the review]: `cores.approved` records, for each folder, the SHA-256 of its
+libretro core, read from the file and never from `NOTICE`, which sits in a folder the player can write and is
+information only (`emusen-core-entry`'s `verify` compares the two as an integrity check, nothing more). The proxy and the
+libretro host are the project's, vouched for by `cores.manifest`. The chain is closed so that the bytes approved are
+the bytes run:
+
+1. At its first library-level call the proxy copies the libretro core into a sealed `memfd` (`F_SEAL_WRITE`,
+   `F_SEAL_SHRINK`, `F_SEAL_GROW`) and hashes that copy; its `info()` carries the hash as
+   `"libretro": { "file", "sha256" }`, a field older hosts ignore.
+2. The host (`emusen-core-host`'s trust, and the C# `CoreTrust` beside it) compares that hash with the folder's entry in
+   `cores.approved` before any `create`; a hash not approved is "needs approval" and nothing starts.
+3. Each runner receives the sealed copy by descriptor and loads it from `/proc/self/fd/<n>`, so the file on disk may
+   change and nothing unapproved runs; the change is a new hash, asked about again.
+
+**Trust on first download** [A]: the buildbot publishes no signatures (`EmuSen_Cores.md` §5.2), so the first approval
+trusts what was downloaded over HTTPS; the hash then holds it to that build.
+
+**When EmuSen is updated**, the proxy's and the libretro host's hashes change. Discovery lists a folder whose copies differ
+from the installation's as "needs refresh", not "needs approval"; the core tool's `cores verify` refreshes the copies, and
+the approval, keyed to the libretro core, stands.
+
 ## 2. The core ABI: what v1.15 lacks, and minor 1.16
 
 Each item is an addition under §4.2 of `EmuSen_CoreAPI.md`: no export, field or meaning changes.
 
 | # | libretro needs | v1.15 | Proposed for 1.16 |
 |---|---|---|---|
-| E1 | a **path** to the game for a core with `need_fullpath` (LRPS2: `needs_fullpath = "true"` [R, its `.info`]; DVD images to 8.5 GB) | the image's bytes | **`IMAGE_PATH`** (capability bit 26): `emusen_create_params.image_path` and `emusen_media.image_path`, `const char *` UTF-8, appended. Filled for a core claiming the bit whenever the bytes passed are an unaltered file's (no decompression, no soft patch); the image may then be lent mapped. A core that cannot run without it lists `"image_path"` in `host_requires` (§4.6 of `EmuSen_CoreAPI.md`), so an older host refuses it with that reason. A soft patch with a need-fullpath core is refused in words, since the core opens the file itself |
+| E1 | a **path** to the game for a core with `need_fullpath` (PCEE2 and LRPS2: `needs_fullpath = "true"` [R, their `.info`]; DVD images to 8.5 GB) | the image's bytes | **`IMAGE_PATH`** (capability bit 26): `emusen_create_params.image_path` and `emusen_media.image_path`, `const char *` UTF-8, appended. Filled for a core claiming the bit whenever the bytes passed are an unaltered file's (no decompression, no soft patch); the image may then be lent mapped. A core that cannot run without it lists `"image_path"` in `host_requires` (§4.6 of `EmuSen_CoreAPI.md`), so an older host refuses it with that reason. A soft patch with a need-fullpath core is refused in words, since the core opens the file itself |
 | E2 | options whose cost **nobody has classified** | `effect` from five values, the accurate value the default for two | **`effect: "unrated"`** (the field is an open enumeration): shown under the core's own categories as the core's options, with no claim about cost; a profile may rate an option (§4.7) |
-| E3 | **files a core names at run time** (LRPS2 keeps memory cards in `system/pcsx2/memcards/` [R, its documentation]) | battery files numbered and listed ahead in core info | **named battery files**: `emusen_file.name` (`const char *`, a relative path, appended; arrays already carry their element size). Core info's `battery` may hold a *family*, `{ "family": "files", "kind": "console" }`; the host passes every file it keeps for it at create, numbered from `EMUSEN_FILE_NAMED` (`0x20000000`) with its name; machine info lists the family's files present, `{ which, name, kind, length }`, a new one raising `MACHINE_INFO` and a change `BATTERY`; a file the core deletes is listed `removed`, and the host keeps its last copy beside the folder rather than deleting the player's data |
+| E3 | **files a core names at run time** (LRPS2 keeps memory cards in `system/pcsx2/memcards/` [R, its documentation]; PCEE2 says `libretro_saves = "false"` [R, its `.info`], so its cards are files of its own) | battery files numbered and listed ahead in core info | **named battery files**: `emusen_file.name` (`const char *`, a relative path, appended; arrays already carry their element size). Core info's `battery` may hold a *family*, `{ "family": "files", "kind": "console" }`; the host passes every file it keeps for it at create, numbered from `EMUSEN_FILE_NAMED` (`0x8000`, so below `EMUSEN_FILE_MEDIA` and outside `BORROW`'s promise for numbers from 65536; at most 32,768 files) with its name; a name is UTF-8, relative, with no `..` part, no empty part and no `\0`, and the host refuses any other and never follows a link in its own folder; machine info lists the family's files present, `{ which, name, kind, length }`, a new one raising `MACHINE_INFO` and a change `BATTERY`; a file the core deletes is listed `removed`, and the host keeps its last copy beside the folder rather than deleting the player's data |
 | E4 | a sound rate that is **not a whole number of hertz** (`retro_system_timing.sample_rate` is a `double`) | `audio_rate`, an `int32_t` | machine info's **`audio.rate_exact`**, `{ num, den }`, beside `audio_rate` (its rounding); a change raises `AUDIO_RATE` and `MACHINE_INFO` |
 | E5 | a hardware picture that **crosses devices and processes** | `DEVICE_PICTURE` (1.9): one device lent within one process | **`DEVICE_RING`** (capability bit 27), §5.4: the host lends a ring of exported images and two exported timeline semaphores; `emusen_core_ring_lend` and `emusen_core_frame_ring` |
 
 **Later in this work** (stage 5): E6, rumble, as event kind 7 of `EmuSen_CoreAPI_Extensions.md` §4, minor 1.17; LRPS2
-supports rumble for the DualShock 2 [R, its documentation].
+supports rumble for the DualShock 2 [R, its documentation], and PCEE2's support is found by running it.
 
-**Outside the core ABI**: (a) discovery and trust learn that an entry of §1.1 is approved as a whole, the proxy and libretro
-host by the manifest and the libretro core by its hash, licence and authors as `NOTICE` records them; a changed libretro
-core is asked about again (§7.2, rule 2); (b) `emusen-native` lets a core claiming `SNAPSHOT` withdraw kind 1 for one
+**Outside the core ABI**: (a) discovery and trust learn the entry of §1.1: the proxy and libretro host vouched for by the
+manifest, the libretro core by its own hash in `cores.approved`, compared before any runner starts (§1.3); a changed
+libretro core is asked about again (§7.2, rule 2); (b) `emusen-native` lets a core claiming `SNAPSHOT` withdraw kind 1 for one
 machine, machine info's `state.kinds` then `[0]` and `state_save(1)` `NOT_SUPPORTED`, which C14 already reads as
 consistent; (c) `emusen-gpu` exposes its choice of card (version 1.4) so that the choice keeps one owner (§5.3).
 
@@ -155,31 +198,65 @@ write and reach. One process per machine also removes libretro's one-instance-pe
   a direct round trip and compares.
 - **Descriptors.** The ring of §5.4, the image file (opened by the proxy and passed as a descriptor where the sandbox
   denies the path) and lent images (a `memfd`) cross by `SCM_RIGHTS`.
-- **Lifetime.** The runner dies with its parent (`PR_SET_PDEATHSIG`; a job object on Windows; a kqueue watch on macOS).
-  `free` asks it to free the machine and exit, then reaps it.
+- **Lifetime.** `PR_SET_PDEATHSIG` fires when the *thread* that started the runner ends, not the process [R, prctl(2)],
+  so it is not used. The runner keeps a thread that waits on its control socket and ends the process with `_exit` when
+  the socket closes, which happens when the proxy closes it or its process ends for any reason; on Windows a job object
+  with kill-on-close does the same. `free` asks the runner to free the machine and exit, then reaps it.
+- **Memory between frames.** A foreign core runs threads of its own, so "the machine does not run between calls" is a
+  claim to prove per core, not an assumption: the check (§9) reads 1 MiB of each space twice between frames, apart in
+  time, over 1,000 frames, and requires the two reads equal. A core that fails it has its window turned off and every
+  access made as a direct round trip after its threads are idle as far as the host can make them, and the finding named
+  in its profile.
 
 ### 3.3 The sandbox
 
-On Linux, before loading the target, the runner restricts itself with Landlock [C]: reading the installation's cores,
-the core's folder and the image; reading and writing only its private directories (§4.5); and, where the kernel's
-Landlock ABI has network rules (version 4, Linux 6.7), no network. It sets `no_new_privs`. A kernel without Landlock
-runs the core unconfined and says so in the log and in the core's details window, never silently. Windows and macOS
-keep the process boundary; their sandboxes (a restricted token, the App Sandbox) are later steps of their own.
+On Linux, before loading the target, the runner sets `no_new_privs` and restricts itself with Landlock to this ruleset
+[C, after the review]:
+
+| Access | Paths | Why |
+|---|---|---|
+| read, execute | `/usr`, `/lib`, `/lib64`, the installation's cores, the core's folder | the system's libraries, the loader, the driver's libraries |
+| read | `/etc` | `ld.so.cache`, the Vulkan ICD and layer files |
+| read | `/proc/self`, `/sys/class/drm`, `/sys/devices` (the GPU's nodes as the driver reads them) | the driver's discovery of the card |
+| read, write, and `LANDLOCK_ACCESS_FS_IOCTL_DEV` where the Landlock ABI is 5 or later | `/dev/dri/renderD*` | the render node, and the ioctls every GPU submission is |
+| read | the image's folder | a sheet's or `.m3u`'s companions beside the image |
+| read, write | the core's private folders (§4.5), its Mesa shader cache among them | the core's own data |
+| none | the network, where the Landlock ABI is 4 or later | |
+
+The Mesa shader cache is pointed into the core's private cache folder (`MESA_SHADER_CACHE_DIR`, set by the runner before
+the target loads), so no wider write is needed. **A needed path denied fails `create`, naming the path, and is reported;
+a kernel without Landlock fails `create` the same way: the core never runs unconfined** (decided 2026-10-31). The set
+is proven, not guessed (§3.5): `strace -f -e trace=openat,ioctl` on the runner while the test core draws through Vulkan
+and while the PS2 core runs, every denial and every path opened read against the table. The handheld's kernel is
+checked when the handheld is back. Windows and macOS keep the process boundary; their sandboxes (a restricted token, the
+App Sandbox) are later steps of their own.
 
 ### 3.4 A crash
 
-When the runner ends without being asked, every later call on the machine answers a status of the core's band (`-10`,
-"the core's process ended"), `last_error` says how (the signal, or the exit code), and the crash log the runner was
-given names the libretro core. The frontend shows it as an error, offers to reload from the last state, and never
-hangs: every wait on the runner also watches the socket's end.
+When the runner ends without being asked, every later call on the machine answers `-10`, "the core's process ended", a
+status of the core's band that the proxy's `status_text` owns; `last_error` says how (the signal, or the exit code), and
+the crash log the runner was given names the libretro core. **A hang is treated as a crash**: `create`, `advance` and
+`free` each have a deadline, the proxy's setting `broker.deadline` in seconds (default 10 for `advance`, 60 for `create` and
+`free`, which load and save), after which the proxy kills the runner (`SIGKILL`) and answers `-11`, "the core stopped
+answering". The frontend shows either as an error, offers to reload from the last state, and never hangs: every wait on
+the runner also watches the socket's end and the deadline.
 
 ### 3.5 How it is proven
 
 The test core has options that, in its process: install a `SIGSEGV` handler and recover from a deliberate fault, as a
 fast-memory recompiler does; fault without a handler; call `abort`; write outside its private directories; open a
-network socket. Through the C# host in WiseMan (the .NET runtime present) and through `emusen-core-host`: the first runs
-on unharmed, the next two end the runner with the status of §3.4 while the host runs on, and the last two are denied by
-the kernel where Landlock is present. LRPS2 then loads, runs and frees in the .NET host the same way.
+network socket; never return from `retro_run`. Through the C# host in WiseMan (the .NET runtime present) and through
+`emusen-core-host`: the first runs on unharmed, the next two end the runner with `-10` while the host runs on, the next
+two are denied by the kernel, and the last ends at its deadline with `-11`. The ruleset's `strace` reading of §3.3, and a
+run with Landlock made unavailable that must fail `create`, complete the proof. The PS2 core then loads, runs and frees
+in the .NET host the same way.
+
+### 3.6 What the boundary does not isolate
+
+The GPU. A core that makes the driver reset the card (a hung submission, a fault the kernel answers with a GPU reset)
+takes every context on that card with it, the frontend's presenter included: process isolation separates memory and
+signals, not the device [A]. The frontend's presenter sees `VK_ERROR_DEVICE_LOST` and makes its device again, as any
+Vulkan program must; that path is tested on the presenter's side, and the limit is said in the core's details.
 
 ## 4. The mapping, call by call
 
@@ -235,7 +312,7 @@ positive, libretro's convention too [R]) is scaled by 32,767 and rounded half aw
 `ANALOG_BUTTON` L2/R2 at 0…32,767; any other analog button reads 0 or 32,767 from its digital bit, since Endymion
 carries no pressure for it (named in the core's losses: the DualShock 2's pressure-sensitive buttons read fully on or
 off). Each port is set to the device the core's `SET_CONTROLLER_INFO` lists as its pad with sticks (LRPS2's "DualShock
-2" [R], on which its rumble depends), else `RETRO_DEVICE_ANALOG`, else `JOYPAD`; `PRESENCE` sets `RETRO_DEVICE_NONE`.
+2" [R], on which its rumble depends; PCEE2's `input_descriptors = "false"` [R] means its labels are the RetroPad's), else `RETRO_DEVICE_ANALOG`, else `JOYPAD`; `PRESENCE` sets `RETRO_DEVICE_NONE`.
 `GET_INPUT_MAX_USERS` answers the ports machine info lists; labels from `SET_INPUT_DESCRIPTORS` become the controller's
 labels. Keyboard, mouse, light gun and pointer read zero until device kinds exist (`EmuSen_CoreAPI_Extensions.md` §10),
 and a core that asks for them is shown as asking, never silently. Rumble (stage 5): `GET_RUMBLE_INTERFACE` answered, each
@@ -246,17 +323,22 @@ and a core that asks for them is shown as asking, never silently. Rumble (stage 
 - **Save RAM** (`RETRO_MEMORY_SAVE_RAM`) is battery file 0, `.srm`, kind `game`, copied in after `retro_load_game` as
   libretro asks; `RETRO_MEMORY_RTC` is file 1, `.rtc`. `BATTERY_DIRTY` is claimed: `battery` compares with the copy last
   marked saved, so nothing is done per frame.
-- **The core's own files.** §7.2 forbids handing a core a host path to write to, so each runner has private directories
-  (`$XDG_RUNTIME_DIR/emusen-libretro/<pid>/system/` and `/save/`, mode 0700, removed when the runner exits) answered to
-  `GET_SYSTEM_DIRECTORY` and `GET_SAVE_DIRECTORY`. Before `retro_load_game` the runner writes into them every file of the
-  core's family the host passed (E3), by name. After each frame, at most every 250 ms, it compares the files' sizes and
-  times with what it last reported (a few `stat` calls; on Linux an `inotify` watch replaces the polling), and each new,
-  changed or removed file is reported by E3's rules. Every file a core writes, firmware and asset links excepted, is
-  therefore a save file the host owns and stores under the console's save folder, by name, shared by the games of that
-  core as the console's own memory is (kind `console`, `EmuSen_SaveMedia.md` §3.6).
-- **Profiles add meaning, never correctness.** A core's profile (data in the libretro host, per core, versioned) may
-  label files and give them a medium: LRPS2's legacy cards in `system/pcsx2/memcards/` [R, its documentation] become kind
-  `removable`, medium `ps2.card`, ports 0 and 1, so the card manager shows them as cards. Whether those bytes are the
+- **The core's own folders.** §7.2 forbids handing a core a host path to write to, so the runner gives the core folders
+  of its own, persistent and on disk (never `tmpfs`: a core's pipeline cache alone can be large), under Galaxia's data
+  folder for the core (`Var/lib/libretro/<corename>/`, with `system/`, `save/` and `cache/`), answered to
+  `GET_SYSTEM_DIRECTORY` and `GET_SAVE_DIRECTORY`. What a core keeps there for itself (its settings files, logs, patch
+  folders, pipeline caches) stays there and is **not** a save: such files are the core's working data, kept between
+  games and removed with the core, and listed nowhere as the player's.
+- **Which files are saves** [C, after the review]: those the core writes in its **save directory**, which libretro means
+  for saves, and those its **profile** names elsewhere. Each is a named battery file (E3) the host owns and stores in the
+  console's save folder by name, shared by the games of that core as the console's own memory is (kind `console`,
+  `EmuSen_SaveMedia.md` §3.6). Before `retro_load_game` the runner writes into place every such file the host passed;
+  after each frame, at most every 250 ms (an `inotify` watch on Linux, sizes and times elsewhere), each new, changed or
+  removed one is reported by E3's rules.
+- **Profiles** (data in the libretro host, per core, versioned) name the saves outside the save directory and give them a
+  medium: LRPS2's legacy cards in `system/pcsx2/memcards/` [R, its documentation] become kind `removable`, medium
+  `ps2.card`, ports 0 and 1, so the card manager shows them as cards; PCEE2's cards are found where it writes them. What a PS2 core writes is listed by one probe run
+  and `find` over its folders (stage 1), and only then written into its profile. Whether those bytes are the
   same image as Sapphire's `ps2.card` is checked (both are 8,650,752-byte raw cards if so) before a card is shared
   between the two engines; until then each engine keeps its own.
 - **States and shared files.** Under `CREATE_SHARED_REMOVABLE` and `CONSOLE` a state load leaves such files as they stand
@@ -288,15 +370,20 @@ profile rates the option with its effect, cost and hardware value. Values reach 
 reported through `setting_notes` and an event so that the settings window shows the value the core holds. Options a
 core hides for the current values (`SET_CORE_OPTIONS_DISPLAY`, the update callback) carry a note, "not used with the
 current settings", which is `setting_notes`' meaning. The schema and values live in the frontend's existing per-console
-settings, so a hosted core's settings window, reset and storage are every core's.
+settings, so a hosted core's settings window, reset and storage are every core's. **Options declared in `retro_load_game`**
+rather than at initialisation are taken for the running machine at their defaults, with a note saying so; the adapter
+records the declarations in the core's private folder, so that every later library load includes them in the schema, and
+discovery writes the sidecar again when the schema has grown (the schema is not part of the altered-library check).
 
 ### 4.8 Firmware and the system directory
 
-`firmware_for` answers from the `.info` file's firmware entries and the MD5s its notes list. LRPS2's names a folder, not
-a file: "`pcsx2/bios` folder", with no particular file name required [R]; its entry therefore takes the player's BIOS
+`firmware_for` answers from the `.info` file's firmware entries and the MD5s its notes list. PCEE2's and LRPS2's name a
+folder, not a file: "`pcsx2/bios` folder", with no particular file name required [R]; the entry therefore takes the player's BIOS
 files from the firmware settings, recognised there by content, and the runner writes them (mode 0600) under
 `system/pcsx2/bios/` by their own names at `create`. Nothing is fetched or shipped. Non-firmware data a core needs
-(LRPS2's optional `GameIndex.yaml`, which it now carries built in [R]) is in the core's `assets/`, downloaded with the
+(PCEE2's `pcsx2/resources` folder, whose `.info` says the core will not boot without it [R], though no PCEE2 run of an ELF
+needed it [M, `Sapphire_Referees.md` §2.3]; LRPS2's optional `GameIndex.yaml`, which it carries built in [R]) is in the
+core's `assets/`, downloaded with the
 core at the player's request and linked read-only into the same directory. `GET_CORE_ASSETS_DIRECTORY` answers it;
 `GET_CONTENT_DIRECTORY` answers the image's folder.
 
@@ -320,13 +407,18 @@ writes and the conditional tests (`IfEqual`, `IfNotEqual`, `IfLess`, `IfGreater`
   decodes, or for a core that exposes no memory, and only where the core's profile says it honours the call (libretro
   gives no answer to tell). The cheat window and `cheat list` show which path a code took ("EmuSen", "the core's own",
   or "refused: this core takes no codes"), and a code neither path takes is refused in words, never dropped.
-- **The PlayStation 2 with LRPS2.** Its documentation lists "Memory Monitoring (achievements)" as supported and
+  `retro_cheat_reset` is called before the secondary path's list is sent again whenever it changes, and at `reset`, so the
+  core holds exactly the codes the player has on.
+- **The PlayStation 2.** PCEE2's core information says `memory_descriptors = "true"` and `cheats = "false"` [R], so
+  EmuSen's engine reaches its memory by maps and the secondary path is closed for it. LRPS2's documentation lists "Memory Monitoring (achievements)" as supported and
   "RetroArch Cheats" as not, while its core information file says `memory_descriptors = "false"` [R]. Read together
   [A]: it exposes memory by `retro_get_memory_data` rather than by maps, which RetroAchievements reads as the PS2's main
   RAM, and `retro_cheat_set` does nothing, so the secondary path is closed for it; its own `.pnach` patches, kept in
   `system/pcsx2/cheats/` by disc hash [R], stay the core's, offered through `assets/` and shown as "the core's own".
-  Stage 1 settles by running it which regions it exposes and their sizes (32 MiB for the EE's main RAM; whether the
-  16 KiB scratchpad or the IOP's 2 MiB appear at all). The mapping, if only main RAM appears: the PS2's main RAM at
+  What the two PCSX2 libretro builds expose is already measured [M, `Sapphire_Referees.md` §2]: LRPS2's `SYSTEM_RAM` is
+  33,570,816 bytes from address 0, and PCEE2's is 33,554,432 bytes with memory maps at 0x00000000 (32 MiB) and
+  0x70000000 (16 KiB, the scratchpad), and with no BIOS it exposes none. Which build comes first is the tester's
+  question; it was decided the same day: PCEE2 first. The mapping, for PCEE2's maps and for LRPS2's main RAM alone: the PS2's main RAM at
   physical 0x00000000–0x01FFFFFF, reached by codes through its kernel-segment and uncached views (0x20000000,
   0x30000000 mirrors), resolves to space `RAM`, which is Sapphire's cheat space too; a code naming the scratchpad
   (0x70000000) or IOP RAM is refused by name, "this core does not expose the scratchpad". The PS2's systems-table entry
@@ -351,7 +443,7 @@ notices), `GET_PERF_INTERFACE`, `SET_FRAME_TIME_CALLBACK` (the nominal frame tim
 answers a status saying the core stopped), `SET_MINIMUM_AUDIO_LATENCY` (recorded), `GET_CURRENT_SOFTWARE_FRAMEBUFFER`,
 `SET_DISK_CONTROL_INTERFACE`, `SET_DISK_CONTROL_EXT_INTERFACE` and `GET_DISK_CONTROL_INTERFACE_VERSION` (1) (onto
 `MEDIA`: the lid onto the eject state, an inserted disc onto an added image by path, so multi-disc games change discs as
-on the console; LRPS2 lists disk control [R]), `SET_HW_RENDER`, `GET_PREFERRED_HW_RENDER` (Vulkan),
+on the console; LRPS2 lists disk control, PCEE2 `disk_control = "false"` [R]), `SET_HW_RENDER`, `GET_PREFERRED_HW_RENDER` (Vulkan),
 `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE`, `GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT` (2),
 `GET_HW_RENDER_INTERFACE` (§5), `SET_HW_SHARED_CONTEXT` (accepted: one context), and from stage 5
 `GET_RUMBLE_INTERFACE`.
@@ -383,8 +475,9 @@ must not disable features requested by application" [R]. The core's queue must s
 creation the frontend calls `context_reset`, and the core takes `retro_hw_render_interface_vulkan` (version 5): the
 device, the queue and its lock, `set_image` (the frame's image, view, layout, semaphores to wait for, queue family), the
 frame-in-flight index (`get_sync_index`, `_mask`, `wait_sync_index`), `set_command_buffers` and `set_signal_semaphore`.
-A frame is handed by `video_refresh(RETRO_HW_FRAME_BUFFER_VALID, w, h, 0)`. LRPS2 lists Vulkan 1.3 among its
-requirements and offers ParaLLEl-GS, a compute renderer on Vulkan [R].
+A frame is handed by `video_refresh(RETRO_HW_FRAME_BUFFER_VALID, w, h, 0)`. PCEE2 with its default renderer asks for
+Vulkan 1.1 and, refused, still runs [M, `Sapphire_Referees.md` §2.3]; its `.info` says the core negotiates its context
+[R]. LRPS2 lists Vulkan 1.3 among its requirements and offers ParaLLEl-GS, a compute renderer on Vulkan [R].
 
 ### 5.2 Why not the lent device
 
@@ -419,18 +512,34 @@ the runner's process at all. So the core's device is its own, on the host's card
   carries the descriptors across by `SCM_RIGHTS`. The host owns the memory, as the ABI's ownership rules want (§6.17); a
   larger maximum (`MACHINE_INFO`) is answered with a new ring.
 - **The core imports** the images and semaphores into its device once. Each frame, in the frame's submission: wait for
-  the core's semaphores and for `done` to reach the value the slot last held, take the core's image to a transfer source
-  (with an ownership transfer from its queue family where it differs), **one copy on the device** of the frame's
-  rectangle into the slot (`vkCmdCopyImage`, a blit where the core's format is not `R8G8B8A8`), the image returned to its
-  layout, `ready` signalled with the frame's number. `emusen_core_frame_ring(machine, emusen_ring_frame *)` answers the
-  slot, the rectangle and the value.
+  the core's semaphores and for `done` to reach the value the slot last held; **acquire** the slot from
+  `VK_QUEUE_FAMILY_EXTERNAL` with an image barrier; take the core's image to a transfer source (with an ownership transfer
+  from its queue family where it differs); **one copy on the device** of the frame's rectangle into the slot
+  (`vkCmdCopyImage`, a blit where the core's format is not `R8G8B8A8`); **release** the slot to
+  `VK_QUEUE_FAMILY_EXTERNAL`; return the core's image to its layout; signal `ready` with the frame's number. The host makes
+  the matching acquire from and release to `VK_QUEUE_FAMILY_EXTERNAL` on its own device each frame, so ownership crosses
+  explicitly on both sides, as the specification asks for memory shared between devices.
+  `emusen_core_frame_ring(machine, emusen_ring_frame *)` answers the slot, the rectangle and the value.
+- **A larger picture mid-game.** `SET_SYSTEM_AV_INFO` with larger maxima can arrive inside `retro_run`. The runner grows
+  its shared region for software pictures there and then; for the ring, a frame larger than the ring's images is held, not
+  cut, and the machine raises `MACHINE_INFO` with the new maxima; the host lends a new ring, and the held frame is copied
+  into it at the next `frame_ring`. A host that does not lend a new ring gets the read-back for such frames (§5.5).
 - **The host** waits for `ready` on its device and reads the slot as the input of its chain (`EmuSen_DevicePicture.md`
   §4), then signals `done` with that value once it no longer reads it. **The CPU never waits for the GPU**: both waits
   are on the devices, as in `EmuSen_DevicePicture.md` §4.2. A host that stops signalling stalls the core's device and
-  then its machine, and corrupts nothing (§6.29's rule, kept).
+  then its machine, and corrupts nothing (§6.29's rule, kept). **After a crash or a kill** (§3.4) the core will never
+  signal `ready` again, so the host signals its own `ready` from the CPU (`vkSignalSemaphore`) up to the value its queue
+  waits for, before it destroys the ring; otherwise the presenter's queue would wait forever and the driver call it lost.
+- **Two boundaries, not two forms** (decided 2026-10-31): `DEVICE_PICTURE` (1.9) stays the form within one process and one
+  device, for the project's cores; `DEVICE_RING` is the form across processes and devices, for hosted cores. A core
+  claims the one its boundary needs.
 - **The one copy is inherent**: a libretro core makes its own images, not exportable ones, so its image can be shared only
   by copying it on the device into memory that can (0.02–0.05 ms at 1080p for such a copy, `EmuSen_DevicePicture.md`
   §4.1 [R]). No copy passes through the CPU.
+- **What the PS2 cores hand.** PCEE2, the first target, gives a picture from stage 2. LRPS2 hands the frontend no software picture: refused a hardware context it falls back to
+  its software renderer and still hands nothing by frame 600, while PCEE2 with `software` pinned hands 640×448 XRGB8888
+  [M, `Sapphire_Referees.md` §2.3]. So LRPS2 shows nothing through this host until stage 3; PCEE2 shows its software
+  picture from stage 2.
 
 ### 5.5 The read-back, where sharing is impossible
 
@@ -468,17 +577,19 @@ its log and its details window.
 
 A libretro core is downloaded only when the player asks, from the libretro buildbot
 (`buildbot.libretro.com/nightly/<platform>/<arch>/latest/<core>_libretro.<ext>.zip`, and the core information archive
-beside it), into the folder of §1.1, then approved as §2 (a) describes, showing its name, authors, licence as its
-`.info` states (LRPS2: GPLv3, "PCSX2 Team" [R]) and its SHA-256. `THIRD_PARTY_NOTICES.md` §2 gains a row: libretro cores
+beside it), into the folder of §1.1 by the Cores window's core tool, which bounds the archive (exactly one member named
+`<corename>_libretro.<ext>`, no folder, link or absolute path in its name, 512 MB at most, `EmuSen_Cores.md` §5.2), then
+approved as §1.3 describes, showing its name, authors, licence as its
+`.info` states (PCEE2: GPLv3, "PCSX2 Team|WizzardSK"; LRPS2: GPLv3, "PCSX2 Team" [R]) and its SHA-256. `THIRD_PARTY_NOTICES.md` §2 gains a row: libretro cores
 and their core information, from buildbot.libretro.com, each under its own licence. Firmware is never fetched or
-shipped (§4.8). Tests never download: the test core is built from the repository, and measurement uses the LRPS2
-nightly the probe already pins.
+shipped (§4.8). Tests never download: the test core is built from the repository, and measurement uses the PCEE2
+and LRPS2 nightlies the probe already pins.
 
 ## 8. Platforms
 
 Linux first. Kept possible: Windows (`.dll`; named pipes and `DuplicateHandle` for the broker; a job object; `OPAQUE_WIN32`
 for the ring) and macOS (`.dylib`; the socket pair; read-back, §5.5). Nothing in the core ABI changes per platform. LRPS2
-itself is x86-64 only [R], which covers the desktop and the handheld.
+is x86-64 only [R], which covers the desktop and the handheld.
 
 ## 9. Tests
 
@@ -499,31 +610,35 @@ itself is x86-64 only [R], which covers the desktop and the handheld.
 - **Through WiseMan, headless**: a test class through the C# host: pictures, sound and its drift, input, saves and named
   files, states and their refusals, settings, cheats by both paths (a poke, a compare byte, each conditional, a code
   refused by name and one sent to `retro_cheat_set`, and the path each reports), crash and sandbox, the ring with the
-  validation layer on the RX 6800; and LRPS2 when present, the BIOS path an argument and nothing commercial committed or
+  validation layer on the RX 6800; and PCEE2 (then LRPS2) when present, the BIOS path an argument and nothing commercial committed or
   listed.
 - **Seeded faults**, three to seven a stage, aimed at what each stage could break.
-- **Measurement**: LRPS2 on Jak and Daxter's arena, milliseconds a frame on the desktop (two rounds) and on the handheld,
+- **Measurement**: PCEE2 on Jak and Daxter's arena, its software renderer from stage 2 and Vulkan from stage 3, milliseconds a frame on the desktop (two rounds) and on the handheld,
   at each stage that renders, with the bench used for `Sapphire_Speed.md`'s arena figures, against RetroArch's own
   figure for the same core (`EmuSen_LibretroBridge.md` §1); the arena reached by an input script or a state the core
   itself saved. The broker's round trip and the ring's hand-over are measured on their own.
+- **Cheap checks first**: a futex ping-pong between two processes over a shared page, the floor of P1's 50 µs (stage 2);
+  a 20-line Vulkan probe of whether RADV exports a timeline semaphore as `OPAQUE_FD`
+  (`vkGetPhysicalDeviceExternalSemaphoreProperties` with a timeline type), which the ring rests on (before stage 3).
 
 ## 10. Stages
 
 | Stage | What | Gate |
 |---|---|---|
-| **1** | The libretro host, in-process: software pictures, sound, input, saves and named files, states, options, firmware, memory spaces and both cheat paths, every environment call; the test core; minor 1.16's E1–E4 in the header, the Rust definitions, the C# host and the ABI baseline; `emusen-native`'s per-machine snapshot kinds | the kit and the libretro host's tests pass on the test core; LRPS2 loads and its exposed memory is recorded |
-| **2** | The broker: protocol, frame-end window, sandbox, crash containment; the libretro host behind it | the kit through the broker; §3.5's proofs in WiseMan; the round trip measured; LRPS2 loads, runs and frees in the .NET host |
-| **3** | Vulkan: the core's device, `DEVICE_RING` (E5) in the ABI, the Rust host and Serenity, and the read-back where sharing is impossible | the test core's Vulkan pictures match its software ones on both paths, clean under synchronisation validation; LRPS2 shows Jak's arena, timed on the desktop and the handheld |
+| **1** | The libretro host, in-process: software pictures, sound, input, saves and named files, states, options, firmware, memory spaces and both cheat paths, every environment call; the test core; minor 1.16's E1–E4 in the header, the Rust definitions, the C# host and the ABI baseline; `emusen-native`'s per-machine snapshot kinds | the kit and the libretro host's tests pass on the test core; the PS2 core loads, and one probe run with `find` records what it writes |
+| **2** | The broker: protocol, frame-end window, sandbox, crash containment; the libretro host behind it | the kit through the broker; §3.5's proofs in WiseMan, the `strace` reading among them; the round trip and the window's race check measured; the PS2 core loads, runs and frees in the .NET host (PCEE2's software picture shown and timed on Jak's arena; LRPS2's none until stage 3) |
+| **3** | Vulkan: the core's device, `DEVICE_RING` (E5) in the ABI, the Rust host and Serenity, and the read-back where sharing is impossible | the test core's Vulkan pictures match its software ones on both paths, clean under synchronisation validation; PCEE2 shows Jak's arena through Vulkan, timed on the desktop and the handheld; LRPS2 shows its first picture |
 | **4** | Frontend: the core list and download, the approval of the whole entry, the settings window from the schema, the exact rate in the resampler, cards in the card manager, cheats with their path shown, big picture, the engine choice per console; the fit and pad audits | Mistress and big picture run a game either way; cards follow the save-media rules; the choice is remembered |
 | **5** | Rumble: `EmuSen_CoreAPI_Extensions.md` §4's event 7 (minor 1.17) through Endymion to the pad | a DualShock 2 game's rumble reaches a pad; the test core's rumble pattern read back by the test |
 
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
-2. **Assets** a core needs beyond firmware are known only by running it; LRPS2's at stage 1.
-3. **Determinism**: LRPS2 runs threads of its own, so its runs may differ; its kit report is a report, not a gate.
-4. **Card images**: whether LRPS2's legacy cards are Sapphire's format is unknown until compared (§4.5).
-5. **Landlock** may be absent from the handheld's kernel; then the core runs unconfined there, and says so.
+2. **Assets** a core needs beyond firmware are known only by running it; PCEE2's resources folder at stage 1.
+3. **Determinism**: the PCSX2 builds run threads of their own, so its runs may differ; its kit report is a report, not a gate.
+4. **Card images**: whether a PCSX2 build's cards are Sapphire's format is unknown until compared (§4.5).
+5. **Landlock** may be absent from the handheld's kernel; then no hosted core runs there, which `create` says.
+6. **The GPU** is shared: a reset the core causes takes the presenter's device too (§3.6).
 
 ## 12. Questions for the tester
 
@@ -532,4 +647,5 @@ itself is x86-64 only [R], which covers the desktop and the handheld.
 2. **[decision]** Minor 1.16 with E1–E5 (image path, unrated options, named battery files, the exact sound rate, the
    host-owned picture ring), and rumble as minor 1.17 in stage 5. *Recommended:* yes.
 3. **[decision]** The PS2's unencrypted cheat formats as a system-pack step, shared by Sapphire and the hosted core, so
-   that EmuSen's own codes reach LRPS2. *Recommended:* yes, after stage 1 has recorded what memory LRPS2 exposes.
+   that EmuSen's own codes reach the hosted PS2 core. *Recommended:* yes (approved 2026-10-31), after stage 1 has recorded
+what PCEE2 exposes.

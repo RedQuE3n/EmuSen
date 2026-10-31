@@ -31,11 +31,11 @@ pub const PAGE_WORDS: usize = 2048;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Op {
     /// The walk over tiles `first` to `first + count - 1`.
-    Walk { first: u32, count: u32 },
-    /// Pages of the staging buffer copied into local memory: `pages` from staged page `from` to memory page `to`.
-    Upload { from: u32, to: u32, pages: u32 },
+    Walk { first: u32, count: u32, class: u32, ordered: bool },
     /// Pages of local memory copied to the snapshot that the next stretch's records read their texels from.
     Snapshot { page: u32, pages: u32 },
+    /// Pages of the staging buffer copied into local memory: `pages` from staged page `from` to memory page `to`.
+    Upload { from: u32, to: u32, pages: u32 },
 }
 
 /// Why a stretch ended, for the counts.
@@ -58,7 +58,8 @@ pub struct Counts {
     /// Primitives handed back to the processor: they read where they draw (with exact feedback), their frame and Z meet,
     /// or their pixels alias between tiles.
     pub fallback: [u64; 3],
-    /// Records whose texels meet the blocks they draw, read from the snapshot (Sapphire_Gs.md §4.4), and their stretches.
+    /// Records whose texels meet the blocks they draw, applied one after another by one workgroup (Sapphire_Gs.md §4.4),
+    /// and their stretches.
     pub snapshot: [u64; 2],
     pub stretches: u64,
     pub closes: [u64; 7],
@@ -143,9 +144,17 @@ pub struct Planner {
     env: Option<([u32; ENV_WORDS], u32)>,
     /// The CLUT slot in this batch, or none since the CLUT changed or the batch began.
     clut: Option<u32>,
+    /// When the open stretch is ordered: its records, applied one after another by one workgroup.
+    ordered: Option<Vec<u32>>,
     /// When the open stretch reads its texels from a snapshot: the environment its records share.
     snapshot: Option<[u32; ENV_WORDS]>,
-    /// Records that read where they draw go to the processor, the reference's order, rather than to a snapshot.
+    /// Self-reading records applied one after another by one workgroup (`SAPPHIRE_GS_ORDERED`) rather than read from a
+    /// snapshot of their run, the default (Sapphire_Gs.md §10.4).
+    pub ordered_mode: bool,
+    /// The open stretch's class: every kind and feature some record of it has (`class`).
+    class: u32,
+    /// Exact mode, for proof: records that read where they draw go to the processor, the reference's order, rather than
+    /// to a snapshot, and the walk takes the texture coordinates in the reference's exact arithmetic.
     pub exact_feedback: bool,
     /// The last sampler's whole reach.
     reach: Option<(super::super::texture::Sampler, Units)>,
@@ -225,7 +234,10 @@ impl Planner {
             used: Vec::with_capacity(TILES),
             env: None,
             clut: None,
+            ordered: None,
             snapshot: None,
+            ordered_mode: false,
+            class: 0,
             exact_feedback: false,
             reach: None,
         }
@@ -315,7 +327,14 @@ impl Planner {
             return Drawn::Fallback(u, writes);
         }
         let e = pack_env(regs, env);
-        if snapshot {
+        if snapshot && self.ordered_mode {
+            if self.ordered.is_none() {
+                self.close(Close::Snapshot);
+                self.ordered = Some(Vec::with_capacity(4096));
+                self.counts.snapshot[1] += 1;
+            }
+            self.counts.snapshot[0] += 1;
+        } else if snapshot {
             if self.snapshot != Some(e) {
                 self.close(Close::Snapshot);
                 let full = env.texture.as_ref().expect("textured").units();
@@ -334,7 +353,7 @@ impl Planner {
                 self.counts.snapshot[1] += 1;
             }
             self.counts.snapshot[0] += 1;
-        } else if self.snapshot.is_some() {
+        } else if self.ordered.is_some() || self.snapshot.is_some() {
             self.close(Close::Snapshot);
         }
         // The stretch ends before a record that would race one of it across tiles.
@@ -387,13 +406,20 @@ impl Planner {
         };
         let index = (self.batch.records.len() / RECORD_WORDS) as u32;
         let rec = &mut self.batch.records;
-        rec.extend_from_slice(&[kind_code(kind), env_index, clut_slot, u32::from(snapshot)]);
+        self.class |= class(kind, env, regs);
+        // An ordered record carries its bounds: y0 and y1 above its flag in word 3, x0 and x1 in word 31.
+        // Word 3: bit 0 a self-reading record, bit 1 one whose texels come from the snapshot, then its y0 and y1.
+        let ordered = u32::from(snapshot) | u32::from(snapshot && !self.ordered_mode) << 1 | (y0 as u32) << 8 | (y1 as u32) << 20;
+        rec.extend_from_slice(&[kind_code(kind), env_index, clut_slot, ordered]);
         for p in v {
             rec.extend_from_slice(&[p.x as u32, p.y as u32, p.z, p.rgbaq as u32, (p.rgbaq >> 32) as u32, p.st as u32, (p.st >> 32) as u32, p.uv as u32, u32::from(p.f)]);
         }
-        rec.push(0);
+        rec.push(x0 as u32 | (x1 as u32) << 16);
         self.counts.records += 1;
-        self.bin(kind, v, index, (x0, x1, y0, y1));
+        match self.ordered.as_mut() {
+            Some(list) => list.push(index),
+            None => self.bin(kind, v, index, (x0, x1, y0, y1)),
+        }
         Drawn::Recorded(writes)
     }
 
@@ -452,7 +478,24 @@ impl Planner {
 
     /// The open stretch planned as a walk: its tiles placed, each with its records in drawing order.
     pub fn close(&mut self, why: Close) {
+        let ordered = self.ordered.take();
         self.snapshot = None;
+        let class = self.class;
+        self.class = 0;
+        if let Some(list) = ordered {
+            self.surfaces.clear();
+            self.touched = Units::default();
+            self.texels = Units::default();
+            if !list.is_empty() {
+                self.counts.stretches += 1;
+                self.counts.closes[why as usize] += 1;
+                let first = self.batch.tiles.len() as u32;
+                self.batch.tiles.push([0, 0, self.batch.entries.len() as u32, list.len() as u32]);
+                self.batch.entries.extend_from_slice(&list);
+                self.batch.ops.push(Op::Walk { first, count: 1, class, ordered: true });
+            }
+            return;
+        }
         self.surfaces.clear();
         self.touched = Units::default();
         self.texels = Units::default();
@@ -483,7 +526,7 @@ impl Planner {
         for &t in &self.used {
             self.per_tile[t as usize] = 0;
         }
-        self.batch.ops.push(Op::Walk { first: first_tile, count: self.used.len() as u32 });
+        self.batch.ops.push(Op::Walk { first: first_tile, count: self.used.len() as u32, class, ordered: false });
         self.used.clear();
         self.pairs.clear();
     }
@@ -494,7 +537,7 @@ impl Planner {
         for &p in pages {
             u.add_page(p, 3);
         }
-        if u.meets(&self.touched) || u.meets(&self.texels) || self.snapshot.is_some() {
+        if u.meets(&self.touched) || u.meets(&self.texels) || self.ordered.is_some() || self.snapshot.is_some() {
             self.close(Close::Upload);
         }
         let mut i = 0;
@@ -530,4 +573,35 @@ fn writes_all(fu: Units, zu: Option<Units>, masked: bool) -> Units {
         w.or(&u);
     }
     w
+}
+
+/// The walk's class bits (its specialisation constants 1 to 8, `shaders/walk.comp`): triangles, sprites, lines or points,
+/// a texture, STQ coordinates, a LOD a pixel, fog, antialiasing.
+pub const CLASS_ALL: u32 = 0xFF;
+
+fn class(kind: Kind, env: &Environment, regs: &[u64]) -> u32 {
+    let mut c = match kind {
+        Kind::Triangle | Kind::TriangleStrip | Kind::TriangleFan => 1,
+        Kind::Sprite => 2,
+        _ => 4,
+    };
+    if env.texture.is_some() {
+        c |= 8;
+        if !env.attributes.uv() {
+            c |= 16;
+            let tex1 = regs[(reg::TEX1_1 + env.attributes.context() as u8) as usize];
+            let (lcm, mmag, mmin) = (tex1 & 1 != 0, tex1 >> 5 & 1 != 0, (tex1 >> 6 & 7) as u32);
+            let lod_matters = !((mmin < 2 || mmin > 5) && (mmin & 1 == 1) == mmag);
+            if !lcm && lod_matters {
+                c |= 32;
+            }
+        }
+    }
+    if env.fog.is_some() {
+        c |= 64;
+    }
+    if env.blend.antialias {
+        c |= 128;
+    }
+    c
 }

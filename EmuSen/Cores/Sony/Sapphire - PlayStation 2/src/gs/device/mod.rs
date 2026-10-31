@@ -62,8 +62,13 @@ struct Slot {
 
 struct Gpu {
     device: GpuDevice,
-    walk: GpuProgram,
+    /// The walks made so far, by class with exact mode in bit 8.
+    walks: Vec<(u32, GpuProgram)>,
+    float_controls: bool,
     local: GpuBuffer,
+    /// The walk's measurement counts (switch 32): lanes that met a record, pixels covered, pixels textured.
+    lanes: GpuBuffer,
+    /// The memory as it stood before a snapshot stretch (Sapphire_Gs.md §4.4).
     snapshot: GpuBuffer,
     readback: GpuBuffer,
     slots: [Slot; 2],
@@ -80,10 +85,12 @@ impl Gpu {
         if !device.int64() {
             return Err(format!("{} offers shaders no 64-bit integers", device.name()));
         }
-        let walk = device.create_program_with_sets(WALK, 7, 16, 2)?;
+        let float_controls = device.float_controls();
         let local = device.create_buffer((local::WORDS * 4) as u64, Where::Device)?;
         let readback = device.create_buffer((local::WORDS * 4) as u64, Where::Host)?;
+        let lanes = device.create_buffer(64, Where::Host)?;
         let snapshot = device.create_buffer((local::WORDS * 4) as u64, Where::Device)?;
+        lanes.slice_mut::<u32>().fill(0);
         let sizes = [
             plan::MAX_RECORDS * plan::RECORD_WORDS * 4,
             plan::MAX_ENVS * plan::ENV_WORDS * 4,
@@ -98,11 +105,32 @@ impl Gpu {
         };
         let slots = [slot()?, slot()?];
         device.submit(|c| c.fill(&local, 0));
-        Ok(Gpu { device, walk, local, snapshot, readback, slots, next: 0 })
+        let mut g = Gpu { device, walks: Vec::new(), float_controls, local, lanes, snapshot, readback, slots, next: 0 };
+        g.walk_for(plan::CLASS_ALL, false);
+        Ok(g)
+    }
+
+    /// The walk for a class, made now if it was not; single-precision coordinates need the float controls, and without
+    /// them the exact walk draws.
+    fn walk_for(&mut self, class: u32, exact: bool) {
+        let key = class | u32::from(exact) << 8;
+        if self.walks.iter().any(|w| w.0 == key) {
+            return;
+        }
+        let mut constants: Vec<(u32, u32)> = vec![(0, u32::from(exact || !self.float_controls))];
+        constants.extend((0..8).map(|b| (b + 1, class >> b & 1)));
+        let w = self.device.create_program_specialised(WALK, 8, 16, 2, &constants).expect("the walk compiles for its class");
+        self.walks.push((key, w));
     }
 
     /// A batch submitted, with the pages `back` copied to the readback buffer after it; waited for when `wait`.
-    fn submit(&mut self, batch: &plan::Batch, back: &[usize], wait: bool) {
+    fn submit(&mut self, batch: &plan::Batch, back: &[usize], wait: bool, exact: bool) {
+        // Each class's walk, made the first time a stretch of it is submitted (Sapphire_Gs.md §5.5).
+        for op in &batch.ops {
+            if let Op::Walk { class, .. } = *op {
+                self.walk_for(class, exact);
+            }
+        }
         let s = self.next;
         self.next ^= 1;
         let slot = &self.slots[s];
@@ -113,27 +141,30 @@ impl Gpu {
         slot.buffers[3].slice_mut::<[u32; 4]>()[..batch.tiles.len()].copy_from_slice(&batch.tiles);
         put(&slot.buffers[4], &batch.cluts);
         put(&slot.buffers[5], &batch.staged);
-        let (walk, local, snapshot, readback) = (&self.walk, &self.local, &self.snapshot, &self.readback);
+        let walks = &self.walks;
+        let (local, lanes, snapshot, readback) = (&self.local, &self.lanes, &self.snapshot, &self.readback);
         let record = |c: &mut emusen_gpu::Commands| {
-            let mut bound = false;
+            let mut bound: Vec<u32> = Vec::with_capacity(8);
             for op in &batch.ops {
                 match *op {
-                    Op::Walk { first, count } => {
-                        let push = [first, debug_bits(), 0, 0];
-                        if bound {
+                    Op::Walk { first, count, class, ordered } => {
+                        let push = [first, debug_bits(), u32::from(ordered), 0];
+                        let key = class | u32::from(exact) << 8;
+                        let walk = &walks.iter().find(|w| w.0 == key).expect("a walk made for each class").1;
+                        if bound.contains(&key) {
                             c.dispatch_again(walk, s, &push, count, 1, 1);
                         } else {
                             let b = &slot.buffers;
-                            c.dispatch_in(walk, s, &[local, &b[0], &b[1], &b[2], &b[3], &b[4], snapshot], &push, count, 1, 1);
-                            bound = true;
+                            c.dispatch_in(walk, s, &[local, &b[0], &b[1], &b[2], &b[3], &b[4], lanes, snapshot], &push, count, 1, 1);
+                            bound.push(key);
                         }
-                    }
-                    Op::Upload { from, to, pages } => {
-                        c.copy(&slot.buffers[5], local, u64::from(pages) * PAGE_BYTES, u64::from(from) * PAGE_BYTES, u64::from(to) * PAGE_BYTES);
                     }
                     Op::Snapshot { page, pages } => {
                         let at = u64::from(page) * PAGE_BYTES;
                         c.copy(local, snapshot, u64::from(pages) * PAGE_BYTES, at, at);
+                    }
+                    Op::Upload { from, to, pages } => {
+                        c.copy(&slot.buffers[5], local, u64::from(pages) * PAGE_BYTES, u64::from(from) * PAGE_BYTES, u64::from(to) * PAGE_BYTES);
                     }
                 }
             }
@@ -187,7 +218,8 @@ impl Device {
     pub fn new(lend: Option<(Lent, u64)>, plan_only: bool) -> Result<Device, String> {
         let gpu = if plan_only { None } else { Some(Gpu::new(lend)?) };
         let mut plan = Planner::new();
-        plan.exact_feedback = std::env::var("SAPPHIRE_GS_FEEDBACK").is_ok_and(|v| v == "exact");
+        plan.exact_feedback = std::env::var_os("SAPPHIRE_GS_EXACT").is_some();
+        plan.ordered_mode = std::env::var_os("SAPPHIRE_GS_ORDERED").is_some();
         Ok(Device {
             inner: RefCell::new(Inner {
                 plan,
@@ -205,6 +237,16 @@ impl Device {
         self.inner.borrow().gpu.as_ref().map_or_else(|| "plan only".to_string(), |g| g.device.report())
     }
 
+    /// The walk's measurement counts since the device was made, with switch 32: lanes that met a record, pixels covered,
+    /// pixels textured; each pair of words a 64-bit count. Everything is drawn first.
+    pub fn lane_counts(&self, local: &Local) -> [u64; 3] {
+        self.join(local);
+        let i = self.inner.borrow();
+        let Some(g) = &i.gpu else { return [0; 3] };
+        let w = g.lanes.slice::<u32>();
+        std::array::from_fn(|k| u64::from(w[2 * k]) | u64::from(w[2 * k + 1]) << 32)
+    }
+
     pub fn counts(&self) -> Counts {
         let i = self.inner.borrow();
         Counts { plan: i.plan.counts, ..i.counts }
@@ -216,7 +258,7 @@ impl Device {
     }
 
     /// Whether records that read where they draw are drawn by the processor in the reference's order (Sapphire_Gs.md §4.4).
-    pub fn set_exact_feedback(&self, exact: bool) {
+    pub fn set_exact(&self, exact: bool) {
         self.inner.borrow_mut().plan.exact_feedback = exact;
     }
 
@@ -380,6 +422,7 @@ impl Inner {
 
     fn submit(&mut self, why: Close, local: &Local, back: bool) {
         let t0 = Instant::now();
+        let exact = self.plan.exact_feedback || std::env::var_os("SAPPHIRE_GS_EXACT_TEXTURE").is_some();
         let batch = self.plan.take(why);
         let pages: Vec<usize> = if back {
             let mut p: Vec<usize> = self.newer.each().map(|u| u / 2).collect();
@@ -390,7 +433,7 @@ impl Inner {
         };
         if let Some(g) = self.gpu.as_mut() {
             if !batch.is_empty() || !pages.is_empty() {
-                g.submit(batch, &pages, back);
+                g.submit(batch, &pages, back, exact);
             }
             if back {
                 let src = g.readback.slice::<u32>();

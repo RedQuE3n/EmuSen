@@ -1,5 +1,6 @@
 #version 450
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_spirv_intrinsics : require
 // Sapphire's GS on the device, the walk: one workgroup a tile of 16 by 8 pixels, one invocation a pixel, meeting the
 // tile's records in drawing order and applying each by the software rasteriser's rules in its integers: coverage and
 // interpolation (raster.rs), texturing with the exact quotient and LOD (texture.rs, exact.rs) and the pixel pipeline
@@ -8,18 +9,44 @@
 
 layout(local_size_x = 16, local_size_y = 8) in;
 
+// 32-bit floats round towards zero and flush denormals, and `precise` keeps every product and sum apart, so that the
+// texture coordinates' single-precision form gives the same bits on every conformant device (Sapphire_Gs.md §5.4).
+spirv_execution_mode(extensions = ["SPV_KHR_float_controls"], capabilities = [4468], 4463, 32);
+spirv_execution_mode(extensions = ["SPV_KHR_float_controls"], capabilities = [4465], 4460, 32);
+
+// The texture coordinates and LOD in the software rasteriser's exact arithmetic (true, for proof) or in single precision.
+layout(constant_id = 0) const bool EXACT_TEXTURE = false;
+// The stretch's class (`plan::class`): the kinds and features some record of it has. Every one is on in the walk that
+// draws any stretch while its own class's walk is not yet made (Sapphire_Gs.md §5.5).
+layout(constant_id = 1) const bool HAS_TRIANGLES = true;
+layout(constant_id = 2) const bool HAS_SPRITES = true;
+layout(constant_id = 3) const bool HAS_LINES = true;
+layout(constant_id = 4) const bool HAS_TEXTURE = true;
+layout(constant_id = 5) const bool HAS_STQ = true;
+layout(constant_id = 6) const bool HAS_LOD = true;
+layout(constant_id = 7) const bool HAS_FOG = true;
+layout(constant_id = 8) const bool HAS_AA = true;
+
 layout(std430, set = 0, binding = 0) buffer Local { uint mem[]; };
 layout(std430, set = 0, binding = 1) readonly buffer Records { uint rec[]; };
 layout(std430, set = 0, binding = 2) readonly buffer Envs { uint envs[]; };
 layout(std430, set = 0, binding = 3) readonly buffer Entries { uint entries[]; };
 layout(std430, set = 0, binding = 4) readonly buffer Tiles { uvec4 tiles[]; };
 layout(std430, set = 0, binding = 5) readonly buffer Cluts { uint cluts[]; };
-// The memory as it stood before a stretch whose records read their texels from where they draw (Sapphire_Gs.md §4.4).
-layout(std430, set = 0, binding = 6) readonly buffer Snapshot { uint snap[]; };
+// Measurement counts with switch 32, each a 64-bit count in two words: lanes that met a record, pixels covered, textured.
+layout(std430, set = 0, binding = 6) buffer Lanes { uint lanes[]; };
+// The memory as it stood before a snapshot stretch, for records whose texels meet what they draw (Sapphire_Gs.md §4.4).
+layout(std430, set = 0, binding = 7) readonly buffer Snapshot { uint snap[]; };
+
+void count(uint k, uint n) {
+    uint lo = atomicAdd(lanes[2u * k], n);
+    if (lo + n < lo) atomicAdd(lanes[2u * k + 1u], 1u);
+}
 
 // The stretch's first tile, and measurement switches (`device::debug_bits`): 1 leaves texturing out, 2 all after
-// coverage, 4 every record, 8 the texture coordinates' arithmetic, 16 the LOD a pixel.
-layout(push_constant) uniform Push { uint first_tile; uint debug; uint unused2; uint unused3; };
+// coverage, 4 every record, 8 the texture coordinates' arithmetic, 16 the LOD a pixel; 32 counts lanes and pixels.
+// `ordered`: one workgroup applies the tile's records one after another, each over its bounds (Sapphire_Gs.md §4.4).
+layout(push_constant) uniform Push { uint first_tile; uint debug; uint ordered; uint unused3; };
 
 const uint RECORD_WORDS = 32u;
 // Records staged in shared memory a chunk at a time, each with its environment, so that a pixel meets them without a
@@ -29,6 +56,7 @@ shared uint srec[CHUNK][32];
 shared uint senv[CHUNK][32];
 // For a triangle, floor((2^64 - 1) / area) as two words, found once a record by one invocation.
 shared uvec2 srec_magic[CHUNK];
+shared uint slanes[3];
 uint R;
 uint env(uint k) { return senv[R][k]; }
 const uint ENV_WORDS = 32u;
@@ -114,6 +142,7 @@ uint read_px(uint p, uint bp, uint bw, uint x, uint y) {
     address(p, bp, bw, x & 0x7FFu, y & 0x7FFu, w, s);
     return (mem[w] >> s) & field_mask(psm_bits(p));
 }
+
 
 bool S_snapshot;
 
@@ -425,6 +454,56 @@ int lod_of(bool ok, int64_t g, int k) {
     return int(clamp(g + int64_t(k), int64_t(-0x40000000), int64_t(0x3FFFFFFF)));
 }
 
+// ---- the texture coordinates in single precision, deterministic by specification (Sapphire_Gs.md §5.4) ----
+
+// S, T or Q as a float the way `exact::Float` reads the bits: a zero exponent is zero, the largest an ordinary one.
+float st_float(uint b) {
+    uint e = (b >> 23) & 0xFFu;
+    if (e == 0u) return 0.0;
+    if (e == 0xFFu) return uintBitsToFloat((b & 0x80000000u) | 0x7F7FFFFFu);
+    return uintBitsToFloat(b);
+}
+
+// 1/d for a normal d, from an integer seed and three Newton steps of products and sums alone.
+float recip(float d) {
+    precise float a = abs(d);
+    precise float x = uintBitsToFloat(0x7EF311C7u - floatBitsToUint(a));
+    for (int k = 0; k < 3; k++) {
+        precise float e = 2.0 - a * x;
+        x = x * e;
+    }
+    return d < 0.0 ? -x : x;
+}
+
+// log2 of a positive normal x: its exponent, and a polynomial of degree 6 on the significand (error below 2.5e-6).
+float log2f(float x) {
+    uint b = floatBitsToUint(x);
+    precise float m = uintBitsToFloat((b & 0x7FFFFFu) | 0x3F800000u) - 1.0;
+    precise float p = -0.024568535;
+    p = p * m + 0.11761308;
+    p = p * m - 0.27269757;
+    p = p * m + 0.45450849;
+    p = p * m - 0.71731278;
+    p = p * m + 1.4424535;
+    p = p * m + 2.4434387e-06;
+    return float(int((b >> 23) & 0xFFu) - 127) + p;
+}
+
+// floor(2^scale × num / den) in sixteenths of a texel, held to ±2^30; 0 when either is 0.
+int64_t quotient_f(float num, float den, int scale) {
+    if (num == 0.0 || den == 0.0) return int64_t(0);
+    precise float r = num * recip(den);
+    float v = floor(ldexp(r, scale));
+    return int64_t(clamp(v, -1073741824.0, 1073741824.0));
+}
+
+int lod_f(float total, float den, uint l, int k) {
+    if (den == 0.0) return 0x3FFFFFFF;
+    precise float g = log2f(total) - log2f(abs(den));
+    float v = floor(ldexp(g, int(l) + 4));
+    return int(clamp(v + float(k), -1073741824.0, 1073741823.0));
+}
+
 // ---- texture.rs: the sampler, its levels and filters, the texture function and fog ----
 
 uint64_t wide(uint lo, uint hi) { return uint64_t(lo) | (uint64_t(hi) << 32); }
@@ -638,7 +717,7 @@ int P_last;
 void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
     P_cov = false;
     P_aa = 0x80u;
-    if (kind == 0u) {
+    if (kind == 0u && HAS_LINES) {
         if (x != nearest(vx(0)) || y != nearest(vy(0))) return;
         P_cov = true;
         P_z = vz(0);
@@ -649,7 +728,7 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
         P_tv = int[3](0, 0, 0);
         P_tq = uint[3](vq(0), vq(0), vq(0));
         P_last = 0;
-    } else if (kind == 3u) {
+    } else if (kind == 3u && HAS_SPRITES) {
         int ax = vx(0), bx = vx(1), ay = vy(0), by = vy(1);
         int x0 = (min(ax, bx) + 15) >> 4, x1 = ((max(ax, bx) + 15) >> 4) - 1;
         int y0 = (min(ay, by) + 15) >> 4, y1 = ((max(ay, by) + 15) >> 4) - 1;
@@ -664,7 +743,7 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
         P_tv = int[3](0, 1, 1);
         P_tq = uint[3](vq(1), vq(1), vq(1));
         P_last = 1;
-    } else if (kind == 2u) {
+    } else if (kind == 2u && HAS_TRIANGLES) {
         int a = 0, b = 1, c = 2;
         int64_t area = edge(a, b, int64_t(vx(c)), int64_t(vy(c)));
         if (area == int64_t(0)) return;
@@ -701,7 +780,7 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
         P_tq = uint[3](vq(a), vq(b), vq(c));
         P_last = 2;
         if (antialias) P_aa = tri_coverage(a, b, c, b0, b1, b2, x, y);
-    } else if (kind == 1u) {
+    } else if (kind == 1u && HAS_LINES) {
         int dx = vx(1) - vx(0), dy = vy(1) - vy(0);
         if (dx == 0 && dy == 0) return;
         bool xmajor = abs(dx) >= abs(dy);
@@ -742,18 +821,36 @@ void coordinates(bool uv, out int64_t u, out int64_t v, out int lod) {
     Float q0 = float_of(P_tq[0]), q1 = float_of(P_tq[1]), q2 = float_of(P_tq[2]);
     bool fixed_lod = S_lcm || uv;
     int fixed_lod_value = S_k;
-    if (!S_lcm && uv) {
+    if (!S_lcm && uv && !EXACT_TEXTURE) {
+        fixed_lod_value = lod_f(1.0, st_float(vq(P_last)), S_l, S_k);
+    } else if (!S_lcm && uv) {
         Float fq = float_of(vq(P_last));
         int64_t g;
         bool ok = log2_scaled(uint64_t(1), sum_of(fq, fq, fq, int64_t(1), int64_t(0), int64_t(0)), S_l + 4u, g);
         fixed_lod_value = lod_of(ok, g, S_k);
     }
-    if (uv) {
+    if (uv || !HAS_STQ) {
         int64_t u0 = int64_t(vuv(a) & 0x3FFFu), u1 = int64_t(vuv(b) & 0x3FFFu), u2 = int64_t(vuv(c) & 0x3FFFu);
         int64_t v0 = int64_t((vuv(a) >> 16) & 0x3FFFu), v1 = int64_t((vuv(b) >> 16) & 0x3FFFu), v2 = int64_t((vuv(c) >> 16) & 0x3FFFu);
         u = floor_div(u0 * P_wu[0] + u1 * P_wu[1] + u2 * P_wu[2], tu);
         v = floor_div(v0 * P_wv[0] + v1 * P_wv[1] + v2 * P_wv[2], tv);
         lod = fixed_lod_value;
+        return;
+    }
+    if (!EXACT_TEXTURE) {
+        precise float w0 = float(P_wu[0]), w1 = float(P_wu[1]), w2 = float(P_wu[2]);
+        precise float x0 = float(P_wv[0]), x1 = float(P_wv[1]), x2 = float(P_wv[2]);
+        precise float qa = st_float(P_tq[0]), qb = st_float(P_tq[1]), qc = st_float(P_tq[2]);
+        precise float du = qa * w0 + qb * w1 + qc * w2;
+        precise float dv = qa * x0 + qb * x1 + qc * x2;
+        precise float nu = st_float(vs(a)) * w0 + st_float(vs(b)) * w1 + st_float(vs(c)) * w2;
+        precise float nv = st_float(vt(a)) * x0 + st_float(vt(b)) * x1 + st_float(vt(c)) * x2;
+        u = quotient_f(nu, du, int(S_log2[0]) + 4);
+        v = quotient_f(nv, dv, int(S_log2[1]) + 4);
+        if (fixed_lod) lod = fixed_lod_value;
+        else if ((S_mmin < 2u || S_mmin > 5u) && ((S_mmin & 1u) == 1u) == S_mmag) lod = 0;
+        else if (HAS_LOD) lod = lod_f(float(tu), du, S_l, S_k);
+        else lod = 0;
         return;
     }
     Sum qu = sum_of(q0, q1, q2, P_wu[0], P_wu[1], P_wu[2]);
@@ -798,7 +895,7 @@ void draw_record(int x, int y) {
     uint flags = env(8u);
     bool gouraud = (flags & 1u) != 0u, textured = (flags & 2u) != 0u, fogged = (flags & 4u) != 0u, abe = (flags & 8u) != 0u;
     bool uvmode = (flags & 32u) != 0u, pabe = (flags & 256u) != 0u, dthe = (flags & 512u) != 0u, colclamp = (flags & 1024u) != 0u;
-    bool fba = (flags & 2048u) != 0u, antialias = (flags & 16384u) != 0u;
+    bool fba = (flags & 2048u) != 0u, antialias = HAS_AA && (flags & 16384u) != 0u;
     uint scanmsk = (flags >> 12) & 3u;
     // The scissoring test and SCANMSK first, as the software rasteriser's pixels meet them.
     uint s0 = env(5u), s1 = env(6u);
@@ -807,6 +904,11 @@ void draw_record(int x, int y) {
     uint fw = env(0u);
     if ((fw & 0x40u) == 0u) return;
     primitive(kind, gouraud, antialias, x, y);
+    if ((debug & 32u) != 0u) {
+        atomicAdd(slanes[0], 1u);
+        if (P_cov) atomicAdd(slanes[1], 1u);
+        if (P_cov && textured) atomicAdd(slanes[2], 1u);
+    }
     if (!P_cov) return;
     if ((debug & 2u) != 0u) { mem[(uint(y) * 2048u + uint(x)) & WORDS_MASK] = P_z; return; }
     if ((debug & 1u) != 0u) textured = false;
@@ -816,10 +918,12 @@ void draw_record(int x, int y) {
     uint zpsm = zw & 0x3Fu;
     uint test = env(7u);
     uvec4 rgba = P_rgba;
+    textured = textured && HAS_TEXTURE;
+    fogged = fogged && HAS_FOG;
     if (textured || fogged) {
         if (textured) {
             load_sampler(srec[R][2]);
-            S_snapshot = srec[R][3] != 0u;
+            S_snapshot = (srec[R][3] & 2u) != 0u;
             int64_t u, v;
             int lod;
             if ((debug & 8u) != 0u) { u = int64_t(P_wu[0] & int64_t(1023)); v = int64_t(P_wv[1] & int64_t(1023)); lod = 0; }
@@ -920,6 +1024,7 @@ void main() {
     C_dirty[0] = false;
     C_dirty[1] = false;
     C_next = 0u;
+    if (t < 3u) slanes[t] = 0u;
     for (uint at = tile.z; at < tile.z + tile.w; at += CHUNK) {
         uint n = min(CHUNK, tile.z + tile.w - at);
         barrier();
@@ -933,8 +1038,32 @@ void main() {
             srec_magic[t] = unpackUint2x32(m);
         }
         barrier();
-        if ((debug & 4u) == 0u) for (R = 0u; R < n; R++) draw_record(x, y);
+        // One call of the record a step, so that the walk holds one copy of it. In an ordered stretch each record is met
+        // over its bounds, 128 pixels a step in raster order: every lane reads, then all store, so a pixel reads the memory
+        // as the record found it and the steps before it in the record left it.
+        for (R = 0u; R < n; R++) {
+            uint x0 = srec[R][31] & 0xFFFFu, x1 = srec[R][31] >> 16;
+            uint y0 = (srec[R][3] >> 8) & 0x7FFu, y1 = (srec[R][3] >> 20) & 0x7FFu;
+            uint w = x1 - x0 + 1u, count_px = ordered != 0u ? w * (y1 - y0 + 1u) : 1u;
+            for (uint b = 0u; b < count_px; b += 128u) {
+                uint i = b + t;
+                bool live = ordered != 0u ? i < count_px : (debug & 4u) == 0u;
+                int px = ordered != 0u ? int(x0 + i % w) : x, py = ordered != 0u ? int(y0 + i / w) : y;
+                if (live) draw_record(px, py);
+                if (ordered != 0u) {
+                    barrier();
+                    cache_store(0u);
+                    cache_store(1u);
+                    C_live[0] = false;
+                    C_live[1] = false;
+                    groupMemoryBarrier();
+                    barrier();
+                }
+            }
+        }
     }
     cache_store(0u);
     cache_store(1u);
+    barrier();
+    if ((debug & 32u) != 0u && t < 3u) count(t, slanes[t]);
 }

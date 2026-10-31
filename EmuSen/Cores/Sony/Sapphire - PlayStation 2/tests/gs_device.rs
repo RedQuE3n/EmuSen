@@ -5,7 +5,7 @@
 //! them read from a snapshot, the same memory from two runs. Each test stands down when no Vulkan device can be made.
 
 use emusen_native::{State, StateReader, StateWriter};
-use sapphire::gs::Gs;
+use sapphire::gs::{Gs, HostInterface, reg};
 
 mod gsgen;
 
@@ -50,6 +50,75 @@ fn generated_streams_leave_the_memory_and_every_read_back_as_the_software_raster
     }
     assert!(records > 800 && stretches > 300, "records {records}, stretches {stretches}");
     assert!(fallbacks > 0, "some primitives were drawn by the processor or read a snapshot");
+}
+
+/// A host-to-local transfer cut by a V-sync and a drawing: the pixels after them still reach the device, which a sprite
+/// textured from the transfer then shows.
+#[test]
+fn a_transfer_across_a_vsync_and_a_drawing_reaches_the_device_whole() {
+    let Some(_) = device() else { return };
+    let script = |gs: &mut Gs| {
+        let sprite = |gs: &mut Gs, tex: bool, x0: u64, x1: u64| {
+            gs.write(reg::PRIM, 6 | u64::from(tex) << 4 | 1 << 8);
+            gs.write(reg::RGBAQ, 0x8080_8080);
+            gs.write(reg::UV, 0);
+            gs.write(reg::XYZ2, x0 * 16);
+            gs.write(reg::UV, 64 * 16 | (64 * 16) << 16);
+            gs.write(reg::XYZ2, x1 * 16 | (64 * 16) << 16);
+        };
+        gs.write(reg::FRAME_1, 64 | 8 << 16);
+        gs.write(reg::SCISSOR_1, 511 << 16 | 63 << 48);
+        gs.write(reg::TEST_1, 0);
+        gs.write(reg::PRMODECONT, 1);
+        gs.write(reg::TEX0_1, 64 * 32 | 1 << 14 | 6 << 26 | 6 << 30 | 1 << 35);
+        gs.write(reg::BITBLTBUF, (64 * 32) << 32 | 1 << 48);
+        gs.write(reg::TRXPOS, 0);
+        gs.write(reg::TRXREG, 64 | 64 << 32);
+        gs.write(reg::TRXDIR, 0);
+        let unit = |k: u64| (k * 0x9E37_79B9_7F4A_7C15) ^ (k << 17);
+        // Cut by a V-sync alone, then by a V-sync and a drawing.
+        for draw_between in [false, true] {
+            gs.write(reg::TRXDIR, 0);
+            (0..1024).for_each(|k| gs.image(unit(k + u64::from(draw_between))));
+            gs.vsync(false);
+            if draw_between {
+                sprite(gs, false, 128, 192);
+            }
+            (1024..2048).for_each(|k| gs.image(unit(k + u64::from(draw_between))));
+            sprite(gs, true, 192 + 128 * u64::from(draw_between), 256 + 128 * u64::from(draw_between));
+        }
+        gs.local().words().to_vec()
+    };
+    assert!(script(&mut software()) == script(&mut device().expect("a device")), "the memories differ");
+}
+
+/// A sprite drawn, then a sprite in other tiles textured from it: the second must see the first's pixels.
+#[test]
+fn a_record_reading_what_an_earlier_one_drew_in_other_tiles_sees_it() {
+    let Some(_) = device() else { return };
+    let script = |gs: &mut Gs| {
+        gs.write(reg::FRAME_1, 64 | 8 << 16);
+        gs.write(reg::SCISSOR_1, 511 << 16 | 127 << 48);
+        gs.write(reg::TEST_1, 0);
+        gs.write(reg::PRMODECONT, 1);
+        for k in 0..4u64 {
+            // Many records in the source's tiles and one in the reader's, so that a reader not held back would run first.
+            for j in 0..64u64 {
+                gs.write(reg::PRIM, 6 | 1 << 3);
+                gs.write(reg::RGBAQ, 0x8000_0000 | (0x10 + 0x30 * k + j) * 0x0001_0101);
+                gs.write(reg::XYZ2, 0);
+                gs.write(reg::XYZ2, (128 * 16) | (128 * 16) << 16);
+            }
+            gs.write(reg::TEX0_1, (64 * 32) | 8 << 14 | 7 << 26 | 7 << 30 | 1 << 35);
+            gs.write(reg::PRIM, 6 | 1 << 4 | 1 << 8);
+            gs.write(reg::UV, 0);
+            gs.write(reg::XYZ2, ((256 + 64 * k) * 16) | 0);
+            gs.write(reg::UV, (64 * 16) | (128 * 16) << 16);
+            gs.write(reg::XYZ2, ((320 + 64 * k) * 16) | (128 * 16) << 16);
+        }
+        gs.local().words().to_vec()
+    };
+    assert!(script(&mut software()) == script(&mut device().expect("a device")), "the memories differ");
 }
 
 fn save(gs: &Gs) -> Vec<u8> {

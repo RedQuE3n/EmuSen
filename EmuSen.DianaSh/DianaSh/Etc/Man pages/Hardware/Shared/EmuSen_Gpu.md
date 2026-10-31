@@ -60,11 +60,11 @@ without a device.
 MarsRT's `rdp/gpu/mod.rs` names the crate's items where it named `device::`'s, and re-exports `GpuDevice` and `Pending`
 for its own callers (`memory/dp.rs`, its tests), so no other file of MarsRT changed beyond the methods above.
 
-## 3. The surface, version 1.2
+## 3. The surface, version 1.3
 
 Rule **R** of `EmuSen_Surfaces.md` §6.1: an internal Rust API, a path dependency built from the same commit, guarded
 by its users' tests. It is nonetheless numbered, so that a second user can rely on its growing by addition: the
-crate's version was 1.0.0, 1.1.0 since §3.1, and is 1.2.0 since §5 (a lent device and the picture handed on it); an
+crate's version was 1.0.0, 1.1.0 since §3.1, 1.2.0 since §5 (a lent device and the picture handed on it), and is 1.3.0 since §3.2 (64-bit integers in shaders); an
 addition (images, say) is a minor; a change or removal of anything below is a major, and none is planned.
 
 | Item | What it is |
@@ -87,6 +87,7 @@ addition (images, say) is a minor; a change or removal of anything below is a ma
 | `Timeline`, `GpuDevice::{create_timeline, timeline_value, destroy_timeline}`, `Timeline::raw`, `GpuBuffer::raw` | *since 1.2*: a timeline semaphore of a lent device, and the handles as integers for a lender on the same device |
 | `Commands::{wait_for, signal}` | *since 1.2*: the submission waits on the device for a timeline value before its commands and signals one after them |
 | `PictureOut::{new, on_device, slot, tell, ready, hand, destroy}`, `Handed` | *since 1.2*: the picture handed at the end of a submission into one of two slots, host memory on a device of the crate's own, device memory on a lent one with `ready` signalled and the slot written again only once the lender's `done` has passed the value it was told of (§5) |
+| `GpuDevice::int64() -> bool` | *since 1.3*: whether shaders may use 64-bit integers: `shaderInt64` is enabled on a device made here when the device offers it, and taken as off on a lent one, whose features are the lender's (§3.2) |
 
 **The rules a user keeps**, unchanged from MarsRT and stated once here [R `device.rs`]:
 
@@ -103,6 +104,18 @@ addition (images, say) is a minor; a change or removal of anything below is a ma
 6. *Since 1.2.* On a lent device rule 4 is per queue: the borrower's thread submits to the lent queue, the lender's to
    its own, and nothing is locked between them. A submission holds at most one wait and one signal, which is all
    `PictureOut` needs.
+
+### 3.2 Version 1.3: 64-bit integers in shaders (2026-10-31)
+
+**The need.** Sapphire's GS walk (`Sapphire_Gs.md` §4, §5) does the software rasteriser's arithmetic in a shader: edge
+functions of 35 bits, products of a 24-bit significand by a 36-bit weight, and 128-bit sums made of 64-bit halves.
+Diamond's walk made its 64-bit products in pairs of 32-bit words (§6.4). The GS's would be several times longer that
+way.
+
+**The addition.** `open` reads the physical device's features and enables `shaderInt64` when it is offered. The new
+query `GpuDevice::int64` says whether it was. A lent device reports false: its enabled features are the lender's and
+`Lent` does not carry them, so a user that needs them refuses the lend with a reason. Nothing MarsRT or Diamond calls
+changed meaning, so this is a minor: **1.3.0**. Their lock files moved with it; their code did not change.
 
 ### 3.1 Version 1.1: a program dispatched twice in one submission (2026-10-13)
 

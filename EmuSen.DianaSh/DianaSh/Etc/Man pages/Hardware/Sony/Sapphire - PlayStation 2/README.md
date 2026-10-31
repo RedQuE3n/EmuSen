@@ -175,6 +175,10 @@ in `EmuSen/Cores/Sony/Sapphire - PlayStation 2/`; the name is fixed by `EmuSen_C
   on this board, and the calls answered below the unit's due cycle; and the ceiling (§58): the target per field, a sweep of
   batched synchronisation with and without exact observations, the units' floors, the EE's instructions by tier and
   class, the projections to the handheld, and what a redesign must keep exact.
+- **`Sapphire_Gs.md`** — the GS drawn on a Vulkan device (2026-10-31): Play!'s form, local memory on the device and
+  emulated in shaders, rasterised by a compute walk in the software rasteriser's integers so that read-backs are the
+  same on every device; the mirror's page states, GS streams recorded and replayed, stretches, tiles and snapshot
+  stretches, the stated tolerance, the measurements against the gates, and what is left.
 - **`Sapphire_Scheduler.md`** — the board's and the scheduler's record from §54 on (2026-10-26), continuing
   `Sapphire_Native.md`'s numbering: S32's lever #9, the board's calls answered where each unit's next event is known (the
   IOP's next instruction, its service with nothing due, the lines between events, the VIFs and the VUs resting, the

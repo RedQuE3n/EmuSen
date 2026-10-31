@@ -17,10 +17,20 @@ layout(std430, set = 0, binding = 5) readonly buffer Cluts { uint cluts[]; };
 // The memory as it stood before a stretch whose records read their texels from where they draw (Sapphire_Gs.md §4.4).
 layout(std430, set = 0, binding = 6) readonly buffer Snapshot { uint snap[]; };
 
-// The stretch's first tile, and measurement switches (`device::debug_bits`): 1 leaves texturing out, 2 all after coverage.
+// The stretch's first tile, and measurement switches (`device::debug_bits`): 1 leaves texturing out, 2 all after
+// coverage, 4 every record, 8 the texture coordinates' arithmetic, 16 the LOD a pixel.
 layout(push_constant) uniform Push { uint first_tile; uint debug; uint unused2; uint unused3; };
 
 const uint RECORD_WORDS = 32u;
+// Records staged in shared memory a chunk at a time, each with its environment, so that a pixel meets them without a
+// round trip to memory each (Sapphire_Gs.md §5.3).
+const uint CHUNK = 16u;
+shared uint srec[CHUNK][32];
+shared uint senv[CHUNK][32];
+// For a triangle, floor((2^64 - 1) / area) as two words, found once a record by one invocation.
+shared uvec2 srec_magic[CHUNK];
+uint R;
+uint env(uint k) { return senv[R][k]; }
 const uint ENV_WORDS = 32u;
 const uint CLUT_WORDS = 256u;
 const uint WORDS_MASK = (1u << 20) - 1u;
@@ -113,18 +123,54 @@ uint read_texel(uint p, uint bp, uint bw, uint x, uint y) {
     return ((S_snapshot ? snap[w] : mem[w]) >> s) & field_mask(psm_bits(p));
 }
 
-// A frame or Z pixel written; a 16-bit word is shared with the pixel eight to the right in the same tile, so its half is
-// written by two atomics that leave the other half as it is.
-void write_px(uint p, uint bp, uint bw, uint x, uint y, uint v) {
+// The frame's and Z's words this pixel last touched, kept in registers across records and stored when another word
+// takes the entry or the walk ends; a 16-bit word's other half is its partner's, so only this pixel's bits are stored.
+uint C_word[2], C_val[2], C_mask[2];
+bool C_live[2], C_dirty[2];
+uint C_next;
+
+void cache_store(uint i) {
+    if (!C_live[i] || !C_dirty[i]) return;
+    uint m = C_mask[i];
+    if (m == 0xFFFFFFFFu) {
+        mem[C_word[i]] = C_val[i];
+    } else if (m == 0xFFFFu || m == 0xFFFF0000u) {
+        atomicAnd(mem[C_word[i]], ~m);
+        atomicOr(mem[C_word[i]], C_val[i] & m);
+    } else {
+        mem[C_word[i]] = (mem[C_word[i]] & ~m) | (C_val[i] & m);
+    }
+    C_dirty[i] = false;
+}
+
+uint cache_entry(uint w, uint m) {
+    if (C_live[0] && C_word[0] == w) { C_mask[0] |= m; return 0u; }
+    if (C_live[1] && C_word[1] == w) { C_mask[1] |= m; return 1u; }
+    uint i = C_next;
+    C_next ^= 1u;
+    cache_store(i);
+    C_word[i] = w;
+    C_val[i] = mem[w];
+    C_mask[i] = m;
+    C_live[i] = true;
+    C_dirty[i] = false;
+    return i;
+}
+
+uint surface_read(uint p, uint bp, uint bw, uint x, uint y) {
+    uint w, s;
+    address(p, bp, bw, x, y, w, s);
+    uint i = cache_entry(w, 0u);
+    return (C_val[i] >> s) & field_mask(psm_bits(p));
+}
+
+void surface_write(uint p, uint bp, uint bw, uint x, uint y, uint v) {
     uint w, s;
     address(p, bp, bw, x, y, w, s);
     uint m = field_mask(psm_bits(p)) << s;
-    if (psm_bits(p) == 16u) {
-        atomicAnd(mem[w], ~m);
-        atomicOr(mem[w], (v << s) & m);
-    } else {
-        mem[w] = (mem[w] & ~m) | ((v << s) & m);
-    }
+    uint i = cache_entry(w, m);
+    C_val[i] = (C_val[i] & ~m) | ((v << s) & m);
+    C_dirty[i] = true;
 }
 
 // ---- arithmetic: 64- and 128-bit helpers ----
@@ -212,6 +258,52 @@ void divide(U128 n, uint k, U128 d, out uint64_t q, out bool big, out bool rest)
     rest = !is_zero128(r);
 }
 
+// A × B truncated to 128 bits.
+U128 mul128x64(U128 a, uint64_t b) {
+    U128 lo = mul64(a.lo, b);
+    return U128(lo.hi + a.hi * b, lo.lo);
+}
+
+float f128(U128 a) { return float(a.hi) * 18446744073709551616.0 + float(a.lo); }
+
+// floor(A / B) for B non-zero and a quotient below 2^62, estimated in single precision and corrected exactly, so that the
+// answer is the same on every device whatever its division's rounding (Sapphire_Gs.md §5.2); false where the estimate
+// does not settle, for the bit-serial `divide` to answer.
+bool fast_divide(U128 A, U128 B, out uint64_t q, out U128 r) {
+    float fb = f128(B);
+    float fq = f128(A) / fb;
+    q = uint64_t(0);
+    r = A;
+    if (!(fq < 4.0e18)) return false;
+    q = uint64_t(fq);
+    for (int it = 0; it < 8; it++) {
+        U128 d = sub128(A, mul128x64(B, q));
+        if ((d.hi >> 63) != uint64_t(0)) {
+            U128 m = neg128(d);
+            uint64_t dq = uint64_t(f128(m) / fb) + uint64_t(1);
+            if (dq > q) return false;
+            q -= dq;
+        } else if (ge128(d, B)) {
+            uint64_t dq = max(uint64_t(f128(d) / fb), uint64_t(1));
+            q += dq;
+        } else {
+            r = d;
+            return true;
+        }
+    }
+    return false;
+}
+
+// floor(n / d) for d non-zero, from m = floor((2^64 - 1) / d) found once for the record (Sapphire_Gs.md §5.2).
+uint64_t divide_by(uint64_t n, uint64_t d, uint64_t m) {
+    if (d == uint64_t(1)) return n;
+    uint64_t q = mul64(n, m).hi;
+    uint64_t r = n - q * d;
+    if (r >= d) { q += uint64_t(1); r -= d; }
+    if (r >= d) q += uint64_t(1);
+    return q;
+}
+
 // ---- exact.rs: S, T and Q as the numbers they denote ----
 
 struct Float { bool neg; uint m; int e; };
@@ -273,14 +365,23 @@ int64_t quotient(Sum num, Sum den, int scale) {
     int k = scale + num.e - den.e;
     uint64_t q;
     bool big, rest;
+    U128 r;
     if (k >= 0) {
-        divide(num.mag, uint(k), den.mag, q, big, rest);
+        if (bits128(num.mag) + uint(k) <= 127u && fast_divide(shl128(num.mag, uint(k)), den.mag, q, r)) {
+            big = (q >> 40) != uint64_t(0);
+            rest = !is_zero128(r);
+        } else {
+            divide(num.mag, uint(k), den.mag, q, big, rest);
+        }
     } else {
         uint s = uint(-k);
         if (bits128(den.mag) + s > bits128(num.mag)) {
             q = uint64_t(0);
             big = false;
             rest = true;
+        } else if (fast_divide(num.mag, shl128(den.mag, s), q, r)) {
+            big = (q >> 40) != uint64_t(0);
+            rest = !is_zero128(r);
         } else {
             divide(num.mag, 0u, shl128(den.mag, s), q, big, rest);
         }
@@ -303,7 +404,8 @@ bool log2_scaled(uint64_t w, Sum den, uint bits, out int64_t result) {
     }
     uint64_t r;
     bool big, rest;
-    divide(U128(uint64_t(0), W), k, U128(uint64_t(0), M), r, big, rest);
+    U128 rem;
+    if (!fast_divide(shl128(U128(uint64_t(0), W), k), U128(uint64_t(0), M), r, rem)) divide(U128(uint64_t(0), W), k, U128(uint64_t(0), M), r, big, rest);
     int64_t frac = int64_t(0);
     for (uint b = 0u; b < bits; b++) {
         U128 sq = shr128(mul64(r, r), 62u);
@@ -330,8 +432,10 @@ uint fld(uint64_t v, uint lo, uint n) { return uint((v >> lo) & ((uint64_t(1) <<
 
 uint S_psm;
 bool S_valid;
-uint S_bp[7];
-uint S_bw[7];
+uint S_bp0, S_bw0;
+uint64_t S_mip1, S_mip2;
+uint base_bp(uint n) { return n == 0u ? S_bp0 : fld(n < 4u ? S_mip1 : S_mip2, 20u * ((n - 1u) % 3u), 14u); }
+uint base_bw(uint n) { return n == 0u ? S_bw0 : fld(n < 4u ? S_mip1 : S_mip2, 20u * ((n - 1u) % 3u) + 14u, 6u); }
 uint S_mode[2];
 uint S_min[2];
 uint S_max[2];
@@ -346,23 +450,19 @@ uint S_mxl, S_mmin, S_l;
 int S_k;
 uint S_clut;
 
-void load_sampler(uint e, uint clut_slot) {
-    uint64_t tex0 = wide(envs[e + 14u], envs[e + 15u]);
-    uint64_t tex1 = wide(envs[e + 16u], envs[e + 17u]);
-    uint64_t clmp = wide(envs[e + 18u], envs[e + 19u]);
-    uint64_t mip1 = wide(envs[e + 20u], envs[e + 21u]);
-    uint64_t mip2 = wide(envs[e + 22u], envs[e + 23u]);
-    uint64_t texa = wide(envs[e + 24u], envs[e + 25u]);
+void load_sampler(uint clut_slot) {
+    uint64_t tex0 = wide(env(14u), env(15u));
+    uint64_t tex1 = wide(env(16u), env(17u));
+    uint64_t clmp = wide(env(18u), env(19u));
+    uint64_t mip1 = wide(env(20u), env(21u));
+    uint64_t mip2 = wide(env(22u), env(23u));
+    uint64_t texa = wide(env(24u), env(25u));
     S_psm = fld(tex0, 20u, 6u);
     S_valid = psm_valid(S_psm);
-    S_bp[0] = fld(tex0, 0u, 14u);
-    S_bw[0] = fld(tex0, 14u, 6u);
-    for (uint n = 0u; n < 3u; n++) {
-        S_bp[n + 1u] = fld(mip1, 20u * n, 14u);
-        S_bw[n + 1u] = fld(mip1, 20u * n + 14u, 6u);
-        S_bp[n + 4u] = fld(mip2, 20u * n, 14u);
-        S_bw[n + 4u] = fld(mip2, 20u * n + 14u, 6u);
-    }
+    S_bp0 = fld(tex0, 0u, 14u);
+    S_bw0 = fld(tex0, 14u, 6u);
+    S_mip1 = mip1;
+    S_mip2 = mip2;
     S_log2[0] = min(fld(tex0, 26u, 4u), 10u);
     S_log2[1] = min(fld(tex0, 30u, 4u), 10u);
     S_mode[0] = fld(clmp, 0u, 2u);
@@ -407,7 +507,7 @@ uvec4 expand16(uint v) {
 
 uvec4 texel(uint n, uint x, uint y) {
     if (!S_valid) return uvec4(0u);
-    uint raw = read_texel(S_psm, S_bp[n], S_bw[n], x, y);
+    uint raw = read_texel(S_psm, base_bp(n), base_bw(n), x, y);
     uint p = S_psm;
     if (p == T8 || p == T8H || p == T4 || p == T4HL || p == T4HH) {
         if (S_cpsm32) {
@@ -463,19 +563,26 @@ uvec4 tex_function(uvec4 t, uvec4 f) {
 
 // ---- the record's primitive: coverage, interpolation and texture coordinates at this pixel ----
 
-int VX[3], VY[3];
-uint VZ[3], VRGBA[3], VQ[3], VS[3], VT[3], VUV[3], VF[3];
+int vx(int k) { return int(srec[R][4 + 9 * k]); }
+int vy(int k) { return int(srec[R][5 + 9 * k]); }
+uint vz(int k) { return srec[R][6 + 9 * k]; }
+uint vrgba(int k) { return srec[R][7 + 9 * k]; }
+uint vq(int k) { return srec[R][8 + 9 * k]; }
+uint vs(int k) { return srec[R][9 + 9 * k]; }
+uint vt(int k) { return srec[R][10 + 9 * k]; }
+uint vuv(int k) { return srec[R][11 + 9 * k]; }
+uint vf(int k) { return srec[R][12 + 9 * k]; }
 
 uvec4 rgba_of(uint c) { return uvec4(c & 0xFFu, (c >> 8) & 0xFFu, (c >> 16) & 0xFFu, c >> 24); }
 
 int nearest(int v) { return (v + 8) >> 4; }
 
 int64_t edge(int p, int q, int64_t x, int64_t y) {
-    return int64_t(VX[q] - VX[p]) * (y - int64_t(VY[p])) - int64_t(VY[q] - VY[p]) * (x - int64_t(VX[p]));
+    return int64_t(vx(q) - vx(p)) * (y - int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (x - int64_t(vx(p)));
 }
 
 int64_t top_left(int p, int q) {
-    int dx = VX[q] - VX[p], dy = VY[q] - VY[p];
+    int dx = vx(q) - vx(p), dy = vy(q) - vy(p);
     return (dy < 0 || (dy == 0 && dx > 0)) ? int64_t(1) : int64_t(0);
 }
 
@@ -490,7 +597,7 @@ uint tri_coverage(int a, int b, int c, int64_t b0, int64_t b1, int64_t b2, int x
         int64_t px = x0 + ((k & 1) != 0 ? int64_t(32) : int64_t(0)), py = y0 + ((k & 2) != 0 ? int64_t(32) : int64_t(0));
         for (int i = 0; i < 3; i++) {
             int p = ep[i], q = eq[i];
-            int64_t v = int64_t(VX[q] - VX[p]) * (py - int64_t(2) * int64_t(VY[p])) - int64_t(VY[q] - VY[p]) * (px - int64_t(2) * int64_t(VX[p]));
+            int64_t v = int64_t(vx(q) - vx(p)) * (py - int64_t(2) * int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (px - int64_t(2) * int64_t(vx(p)));
             if (v <= int64_t(0)) full = false;
         }
     }
@@ -502,7 +609,7 @@ uint tri_coverage(int a, int b, int c, int64_t b0, int64_t b1, int64_t b2, int x
             bool inside = true;
             for (int i = 0; i < 3; i++) {
                 int p = ep[i], q = eq[i];
-                int64_t v = int64_t(VX[q] - VX[p]) * (py - int64_t(2) * int64_t(VY[p])) - int64_t(VY[q] - VY[p]) * (px - int64_t(2) * int64_t(VX[p]));
+                int64_t v = int64_t(vx(q) - vx(p)) * (py - int64_t(2) * int64_t(vy(p))) - int64_t(vy(q) - vy(p)) * (px - int64_t(2) * int64_t(vx(p)));
                 if (v + bias[i] <= int64_t(0)) inside = false;
             }
             if (inside) n++;
@@ -532,34 +639,34 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
     P_cov = false;
     P_aa = 0x80u;
     if (kind == 0u) {
-        if (x != nearest(VX[0]) || y != nearest(VY[0])) return;
+        if (x != nearest(vx(0)) || y != nearest(vy(0))) return;
         P_cov = true;
-        P_z = VZ[0];
-        P_rgba = rgba_of(VRGBA[0]);
-        P_f = VF[0];
+        P_z = vz(0);
+        P_rgba = rgba_of(vrgba(0));
+        P_f = vf(0);
         P_wu = int64_t[3](int64_t(1), int64_t(0), int64_t(0));
         P_wv = P_wu;
         P_tv = int[3](0, 0, 0);
-        P_tq = uint[3](VQ[0], VQ[0], VQ[0]);
+        P_tq = uint[3](vq(0), vq(0), vq(0));
         P_last = 0;
     } else if (kind == 3u) {
-        int ax = VX[0], bx = VX[1], ay = VY[0], by = VY[1];
+        int ax = vx(0), bx = vx(1), ay = vy(0), by = vy(1);
         int x0 = (min(ax, bx) + 15) >> 4, x1 = ((max(ax, bx) + 15) >> 4) - 1;
         int y0 = (min(ay, by) + 15) >> 4, y1 = ((max(ay, by) + 15) >> 4) - 1;
         if (x < x0 || x > x1 || y < y0 || y > y1) return;
         P_cov = true;
-        P_z = VZ[1];
-        P_rgba = rgba_of(VRGBA[1]);
-        P_f = VF[1];
+        P_z = vz(1);
+        P_rgba = rgba_of(vrgba(1));
+        P_f = vf(1);
         int64_t sx = int64_t(sign(bx - ax)), sy = int64_t(sign(by - ay));
         P_wu = int64_t[3](int64_t(bx - 16 * x) * sx, int64_t(16 * x - ax) * sx, int64_t(0));
         P_wv = int64_t[3](int64_t(by - 16 * y) * sy, int64_t(16 * y - ay) * sy, int64_t(0));
         P_tv = int[3](0, 1, 1);
-        P_tq = uint[3](VQ[1], VQ[1], VQ[1]);
+        P_tq = uint[3](vq(1), vq(1), vq(1));
         P_last = 1;
     } else if (kind == 2u) {
         int a = 0, b = 1, c = 2;
-        int64_t area = edge(a, b, int64_t(VX[c]), int64_t(VY[c]));
+        int64_t area = edge(a, b, int64_t(vx(c)), int64_t(vy(c)));
         if (area == int64_t(0)) return;
         if (area < int64_t(0)) {
             b = 2;
@@ -571,9 +678,10 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
         int64_t b0 = top_left(b, c), b1 = top_left(c, a), b2 = top_left(a, b);
         if (w0 + b0 <= int64_t(0) || w1 + b1 <= int64_t(0) || w2 + b2 <= int64_t(0)) return;
         P_cov = true;
-        U128 zs = add128(add128(mul64(uint64_t(VZ[a]), uint64_t(w0)), mul64(uint64_t(VZ[b]), uint64_t(w1))), mul64(uint64_t(VZ[c]), uint64_t(w2)));
+        U128 zs = add128(add128(mul64(uint64_t(vz(a)), uint64_t(w0)), mul64(uint64_t(vz(b)), uint64_t(w1))), mul64(uint64_t(vz(c)), uint64_t(w2)));
+        uint64_t magic = uint64_t(srec_magic[R].x) | (uint64_t(srec_magic[R].y) << 32);
         if (zs.hi == uint64_t(0)) {
-            P_z = uint(zs.lo / uint64_t(area));
+            P_z = uint(divide_by(zs.lo, uint64_t(area), magic));
         } else {
             uint64_t q;
             bool big, rest;
@@ -581,24 +689,24 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
             P_z = uint(q);
         }
         if (gouraud) {
-            uvec4 ca = rgba_of(VRGBA[a]), cb = rgba_of(VRGBA[b]), cc = rgba_of(VRGBA[c]);
-            for (int i = 0; i < 4; i++) P_rgba[i] = uint((int64_t(ca[i]) * w0 + int64_t(cb[i]) * w1 + int64_t(cc[i]) * w2) / area);
+            uvec4 ca = rgba_of(vrgba(a)), cb = rgba_of(vrgba(b)), cc = rgba_of(vrgba(c));
+            for (int i = 0; i < 4; i++) P_rgba[i] = uint(divide_by(uint64_t(int64_t(ca[i]) * w0 + int64_t(cb[i]) * w1 + int64_t(cc[i]) * w2), uint64_t(area), magic));
         } else {
-            P_rgba = rgba_of(VRGBA[2]);
+            P_rgba = rgba_of(vrgba(2));
         }
-        P_f = uint((int64_t(VF[a]) * w0 + int64_t(VF[b]) * w1 + int64_t(VF[c]) * w2) / area);
+        P_f = uint(divide_by(uint64_t(int64_t(vf(a)) * w0 + int64_t(vf(b)) * w1 + int64_t(vf(c)) * w2), uint64_t(area), magic));
         P_wu = int64_t[3](w0, w1, w2);
         P_wv = P_wu;
         P_tv = int[3](a, b, c);
-        P_tq = uint[3](VQ[a], VQ[b], VQ[c]);
+        P_tq = uint[3](vq(a), vq(b), vq(c));
         P_last = 2;
         if (antialias) P_aa = tri_coverage(a, b, c, b0, b1, b2, x, y);
     } else if (kind == 1u) {
-        int dx = VX[1] - VX[0], dy = VY[1] - VY[0];
+        int dx = vx(1) - vx(0), dy = vy(1) - vy(0);
         if (dx == 0 && dy == 0) return;
         bool xmajor = abs(dx) >= abs(dy);
-        int au = xmajor ? VX[0] : VY[0], av = xmajor ? VY[0] : VX[0];
-        int bu = xmajor ? VX[1] : VY[1], bv = xmajor ? VY[1] : VX[1];
+        int au = xmajor ? vx(0) : vy(0), av = xmajor ? vy(0) : vx(0);
+        int bu = xmajor ? vx(1) : vy(1), bv = xmajor ? vy(1) : vx(1);
         int s = sign(bu - au);
         int64_t du = int64_t((bu - au) * s), dv = int64_t((bv - av) * s);
         int first = in_diamond(au, av) ? nearest(au) : (s > 0 ? (au + 15) >> 4 : au >> 4);
@@ -610,18 +718,18 @@ void primitive(uint kind, bool gouraud, bool antialias, int x, int y) {
         int r = int(floor_div(num + int64_t(8) * du, int64_t(16) * du));
         if (r != m) return;
         P_cov = true;
-        P_z = uint(clamp(floor_div(int64_t(VZ[0]) * (du - t) + int64_t(VZ[1]) * t, du), int64_t(0), int64_t(0xFFFFFFFFu)));
-        uvec4 ca = rgba_of(VRGBA[0]), cb = rgba_of(VRGBA[1]);
+        P_z = uint(clamp(floor_div(int64_t(vz(0)) * (du - t) + int64_t(vz(1)) * t, du), int64_t(0), int64_t(0xFFFFFFFFu)));
+        uvec4 ca = rgba_of(vrgba(0)), cb = rgba_of(vrgba(1));
         if (gouraud) {
             for (int i = 0; i < 4; i++) P_rgba[i] = uint(clamp(floor_div(int64_t(ca[i]) * (du - t) + int64_t(cb[i]) * t, du), int64_t(0), int64_t(255)));
         } else {
             P_rgba = cb;
         }
-        P_f = uint(clamp(floor_div(int64_t(VF[0]) * (du - t) + int64_t(VF[1]) * t, du), int64_t(0), int64_t(255)));
+        P_f = uint(clamp(floor_div(int64_t(vf(0)) * (du - t) + int64_t(vf(1)) * t, du), int64_t(0), int64_t(255)));
         P_wu = int64_t[3](du - t, t, int64_t(0));
         P_wv = P_wu;
         P_tv = int[3](0, 1, 1);
-        P_tq = uint[3](VQ[0], VQ[1], VQ[1]);
+        P_tq = uint[3](vq(0), vq(1), vq(1));
         P_last = 1;
         if (antialias) P_aa = uint(clamp(floor_div((int64_t(16) * du - iabs64(num - int64_t(16) * int64_t(r) * du)) * int64_t(8), du), int64_t(0), int64_t(0x7F)));
     }
@@ -635,14 +743,14 @@ void coordinates(bool uv, out int64_t u, out int64_t v, out int lod) {
     bool fixed_lod = S_lcm || uv;
     int fixed_lod_value = S_k;
     if (!S_lcm && uv) {
-        Float fq = float_of(VQ[P_last]);
+        Float fq = float_of(vq(P_last));
         int64_t g;
         bool ok = log2_scaled(uint64_t(1), sum_of(fq, fq, fq, int64_t(1), int64_t(0), int64_t(0)), S_l + 4u, g);
         fixed_lod_value = lod_of(ok, g, S_k);
     }
     if (uv) {
-        int64_t u0 = int64_t(VUV[a] & 0x3FFFu), u1 = int64_t(VUV[b] & 0x3FFFu), u2 = int64_t(VUV[c] & 0x3FFFu);
-        int64_t v0 = int64_t((VUV[a] >> 16) & 0x3FFFu), v1 = int64_t((VUV[b] >> 16) & 0x3FFFu), v2 = int64_t((VUV[c] >> 16) & 0x3FFFu);
+        int64_t u0 = int64_t(vuv(a) & 0x3FFFu), u1 = int64_t(vuv(b) & 0x3FFFu), u2 = int64_t(vuv(c) & 0x3FFFu);
+        int64_t v0 = int64_t((vuv(a) >> 16) & 0x3FFFu), v1 = int64_t((vuv(b) >> 16) & 0x3FFFu), v2 = int64_t((vuv(c) >> 16) & 0x3FFFu);
         u = floor_div(u0 * P_wu[0] + u1 * P_wu[1] + u2 * P_wu[2], tu);
         v = floor_div(v0 * P_wv[0] + v1 * P_wv[1] + v2 * P_wv[2], tv);
         lod = fixed_lod_value;
@@ -651,8 +759,8 @@ void coordinates(bool uv, out int64_t u, out int64_t v, out int lod) {
     Sum qu = sum_of(q0, q1, q2, P_wu[0], P_wu[1], P_wu[2]);
     bool same = P_wu[0] == P_wv[0] && P_wu[1] == P_wv[1] && P_wu[2] == P_wv[2];
     Sum qv = same ? qu : sum_of(q0, q1, q2, P_wv[0], P_wv[1], P_wv[2]);
-    Sum su = sum_of(float_of(VS[a]), float_of(VS[b]), float_of(VS[c]), P_wu[0], P_wu[1], P_wu[2]);
-    Sum sv = sum_of(float_of(VT[a]), float_of(VT[b]), float_of(VT[c]), P_wv[0], P_wv[1], P_wv[2]);
+    Sum su = sum_of(float_of(vs(a)), float_of(vs(b)), float_of(vs(c)), P_wu[0], P_wu[1], P_wu[2]);
+    Sum sv = sum_of(float_of(vt(a)), float_of(vt(b)), float_of(vt(c)), P_wv[0], P_wv[1], P_wv[2]);
     u = quotient(su, qu, int(S_log2[0]) + 4);
     v = quotient(sv, qv, int(S_log2[1]) + 4);
     if (fixed_lod) {
@@ -661,7 +769,7 @@ void coordinates(bool uv, out int64_t u, out int64_t v, out int lod) {
         lod = 0;
     } else {
         int64_t g;
-        bool ok = log2_scaled(uint64_t(tu), qu, S_l + 4u, g);
+        bool ok = (debug & 16u) == 0u && log2_scaled(uint64_t(tu), qu, S_l + 4u, g);
         lod = lod_of(ok, g, S_k);
     }
 }
@@ -685,54 +793,41 @@ bool alpha_passes(uint atst, uint a, uint aref) {
 
 int pick(uint sel, int s, int d) { return sel == 0u ? s : (sel == 1u ? d : 0); }
 
-void draw_record(uint r, int x, int y) {
-    uint base = r * RECORD_WORDS;
-    uint kind = rec[base];
-    uint e = rec[base + 1u] * ENV_WORDS;
-    uint flags = envs[e + 8u];
+void draw_record(int x, int y) {
+    uint kind = srec[R][0];
+    uint flags = env(8u);
     bool gouraud = (flags & 1u) != 0u, textured = (flags & 2u) != 0u, fogged = (flags & 4u) != 0u, abe = (flags & 8u) != 0u;
     bool uvmode = (flags & 32u) != 0u, pabe = (flags & 256u) != 0u, dthe = (flags & 512u) != 0u, colclamp = (flags & 1024u) != 0u;
     bool fba = (flags & 2048u) != 0u, antialias = (flags & 16384u) != 0u;
     uint scanmsk = (flags >> 12) & 3u;
     // The scissoring test and SCANMSK first, as the software rasteriser's pixels meet them.
-    uint s0 = envs[e + 5u], s1 = envs[e + 6u];
+    uint s0 = env(5u), s1 = env(6u);
     if (x < int(s0 & 0xFFFFu) || x > int(s0 >> 16) || y < int(s1 & 0xFFFFu) || y > int(s1 >> 16)) return;
     if ((scanmsk == 2u && (y & 1) == 0) || (scanmsk == 3u && (y & 1) == 1)) return;
-    uint fw = envs[e];
+    uint fw = env(0u);
     if ((fw & 0x40u) == 0u) return;
-    for (uint k = 0u; k < 3u; k++) {
-        uint o = base + 4u + 9u * k;
-        VX[k] = int(rec[o]);
-        VY[k] = int(rec[o + 1u]);
-        VZ[k] = rec[o + 2u];
-        VRGBA[k] = rec[o + 3u];
-        VQ[k] = rec[o + 4u];
-        VS[k] = rec[o + 5u];
-        VT[k] = rec[o + 6u];
-        VUV[k] = rec[o + 7u];
-        VF[k] = rec[o + 8u];
-    }
     primitive(kind, gouraud, antialias, x, y);
     if (!P_cov) return;
     if ((debug & 2u) != 0u) { mem[(uint(y) * 2048u + uint(x)) & WORDS_MASK] = P_z; return; }
     if ((debug & 1u) != 0u) textured = false;
-    uint fpsm = fw & 0x3Fu, fbw = (fw >> 8) & 0x3Fu, fbp = envs[e + 1u], fbmsk = envs[e + 2u];
-    uint zw = envs[e + 3u], zbp = envs[e + 4u];
+    uint fpsm = fw & 0x3Fu, fbw = (fw >> 8) & 0x3Fu, fbp = env(1u), fbmsk = env(2u);
+    uint zw = env(3u), zbp = env(4u);
     bool zvalid = (zw & 0x40u) != 0u, zmasked = (zw & 0x100u) != 0u;
     uint zpsm = zw & 0x3Fu;
-    uint test = envs[e + 7u];
+    uint test = env(7u);
     uvec4 rgba = P_rgba;
     if (textured || fogged) {
         if (textured) {
-            load_sampler(e, rec[base + 2u]);
-            S_snapshot = rec[base + 3u] != 0u;
+            load_sampler(srec[R][2]);
+            S_snapshot = srec[R][3] != 0u;
             int64_t u, v;
             int lod;
-            coordinates(uvmode, u, v, lod);
+            if ((debug & 8u) != 0u) { u = int64_t(P_wu[0] & int64_t(1023)); v = int64_t(P_wv[1] & int64_t(1023)); lod = 0; }
+            else coordinates(uvmode, u, v, lod);
             rgba = tex_function(sample_texture(u, v, lod), rgba);
         }
         if (fogged) {
-            uint fc = envs[e + 13u], f = P_f;
+            uint fc = env(13u), f = P_f;
             uvec3 col = uvec3(fc & 0xFFu, (fc >> 8) & 0xFFu, (fc >> 16) & 0xFFu);
             rgba.rgb = (uvec3(f) * rgba.rgb + uvec3(256u - f) * col) >> 8;
         }
@@ -754,7 +849,7 @@ void draw_record(uint r, int x, int y) {
     bool have_old = false;
     uint old = 0u;
     if (((test >> 14) & 1u) != 0u) {
-        uint d = read_px(fpsm, fbp, fbw, ux, uy);
+        uint d = surface_read(fpsm, fbp, fbw, ux, uy);
         uint fb = psm_bits(fpsm);
         if (fb != 24u) {
             uint bit = fb == 16u ? (d >> 15) & 1u : d >> 31;
@@ -768,7 +863,7 @@ void draw_record(uint r, int x, int y) {
     if (((test >> 16) & 1u) != 0u && zvalid) {
         uint z = min(P_z, z_max(zpsm));
         uint ztst = (test >> 17) & 3u;
-        bool pass = ztst == 1u || (ztst == 2u && z >= read_px(zpsm, zbp, fbw, ux, uy)) || (ztst == 3u && z > read_px(zpsm, zbp, fbw, ux, uy));
+        bool pass = ztst == 1u || (ztst == 2u && z >= surface_read(zpsm, zbp, fbw, ux, uy)) || (ztst == 3u && z > surface_read(zpsm, zbp, fbw, ux, uy));
         if (!pass) return;
         if (z_ok && !zmasked) {
             z_write = true;
@@ -778,7 +873,7 @@ void draw_record(uint r, int x, int y) {
     if (rgb_ok || a_ok) {
         bool blending = (abe || antialias) && (!pabe || (rgba.a & 0x80u) != 0u);
         uint keep = fbmsk | (a_ok ? 0u : 0xFF000000u);
-        if (!have_old && (blending || keep != 0u)) old = read_px(fpsm, fbp, fbw, ux, uy);
+        if (!have_old && (blending || keep != 0u)) old = surface_read(fpsm, fbp, fbw, ux, uy);
         uint fb = psm_bits(fpsm);
         ivec3 sc = ivec3(rgba.rgb);
         ivec3 c = sc;
@@ -792,13 +887,13 @@ void draw_record(uint r, int x, int y) {
                 d = ivec3(int(old & 0xFFu), int((old >> 8) & 0xFFu), int((old >> 16) & 0xFFu));
                 ad = fb == 24u ? 0x80 : int(old >> 24);
             }
-            uint alpha = envs[e + 9u];
+            uint alpha = env(9u);
             uint csel = (alpha >> 4) & 3u;
-            int cv = csel == 0u ? int(rgba.a) : (csel == 1u ? ad : int(envs[e + 10u] & 0xFFu));
+            int cv = csel == 0u ? int(rgba.a) : (csel == 1u ? ad : int(env(10u) & 0xFFu));
             for (int i = 0; i < 3; i++) c[i] = (((pick(alpha & 3u, sc[i], d[i]) - pick((alpha >> 2) & 3u, sc[i], d[i])) * cv) >> 7) + pick((alpha >> 6) & 3u, sc[i], d[i]);
         }
         if (dthe && fb == 16u) {
-            uint64_t dimx = wide(envs[e + 11u], envs[e + 12u]);
+            uint64_t dimx = wide(env(11u), env(12u));
             int dm = (int(uint((dimx >> (16u * (uy & 3u) + 4u * (ux & 3u))) & uint64_t(7))) << 29) >> 29;
             c += ivec3(dm);
         }
@@ -810,14 +905,36 @@ void draw_record(uint r, int x, int y) {
             value = pack16(col);
             keep = pack16(keep);
         }
-        write_px(fpsm, fbp, fbw, ux, uy, (old & keep) | (value & ~keep));
+        surface_write(fpsm, fbp, fbw, ux, uy, (old & keep) | (value & ~keep));
     }
-    if (z_write) write_px(zpsm, zbp, fbw, ux, uy, zval);
+    if (z_write) surface_write(zpsm, zbp, fbw, ux, uy, zval);
 }
 
 void main() {
     uvec4 tile = tiles[first_tile + gl_WorkGroupID.x];
     int x = int(tile.x * 16u + gl_LocalInvocationID.x);
     int y = int(tile.y * 8u + gl_LocalInvocationID.y);
-    for (uint i = tile.z; i < tile.z + tile.w; i++) draw_record(entries[i], x, y);
+    uint t = gl_LocalInvocationIndex;
+    C_live[0] = false;
+    C_live[1] = false;
+    C_dirty[0] = false;
+    C_dirty[1] = false;
+    C_next = 0u;
+    for (uint at = tile.z; at < tile.z + tile.w; at += CHUNK) {
+        uint n = min(CHUNK, tile.z + tile.w - at);
+        barrier();
+        for (uint j = t; j < n * 32u; j += 128u) srec[j >> 5][j & 31u] = rec[entries[at + (j >> 5)] * RECORD_WORDS + (j & 31u)];
+        barrier();
+        for (uint j = t; j < n * 32u; j += 128u) senv[j >> 5][j & 31u] = envs[srec[j >> 5][1] * ENV_WORDS + (j & 31u)];
+        if (t < n && srec[t][0] == 2u) {
+            R = t;
+            int64_t area = iabs64(edge(0, 1, int64_t(vx(2)), int64_t(vy(2))));
+            uint64_t m = area > int64_t(1) ? uint64_t(0xFFFFFFFFFFFFFFFFul) / uint64_t(area) : uint64_t(0);
+            srec_magic[t] = unpackUint2x32(m);
+        }
+        barrier();
+        if ((debug & 4u) == 0u) for (R = 0u; R < n; R++) draw_record(x, y);
+    }
+    cache_store(0u);
+    cache_store(1u);
 }

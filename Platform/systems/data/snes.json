@@ -15,5 +15,7 @@
   "screenscraper_system": 4,
   "cheat_space": "CpuBus",
   "media": [],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Nintendo - Super Nintendo Entertainment System", "Nintendo - Satellaview", "Nintendo - Sufami Turbo"],
+  "libretro_systemids": ["super_nes"]
 }

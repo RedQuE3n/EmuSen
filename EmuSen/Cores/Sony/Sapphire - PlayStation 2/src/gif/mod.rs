@@ -287,6 +287,16 @@ impl Gif {
         }
     }
 
+    /// The GIF's clock.
+    pub fn clock(&self) -> u64 {
+        self.time
+    }
+
+    /// Whether PATH1 has nothing waiting or in progress.
+    pub fn path1_done(&self) -> bool {
+        self.kicks.is_empty() && self.owner != Some(Path::One)
+    }
+
     /// Whether `run_to` would find nothing to send: no path waiting, PATH3's FIFO empty, and the GIF free or held by
     /// PATH3 or PATH2 between their qwords (the board's shortcut, Sapphire_Native.md §35.7).
     pub fn quiet(&self) -> bool {

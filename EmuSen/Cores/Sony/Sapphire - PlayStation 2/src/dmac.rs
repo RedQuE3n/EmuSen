@@ -170,6 +170,40 @@ impl Watch {
     }
 }
 
+/// Channels 1 and 2 as a transaction (Sapphire_Speed.md §67): a unit slot of their own, run ahead of the board, and each
+/// channel's end held until the board reaches it. Empty at a frame's end, so not state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ahead {
+    pub on: bool,
+    /// The DMAC is stepping this slot.
+    inside: bool,
+    unit: Option<Unit>,
+    release_until: u64,
+    wake: u64,
+    last_c: usize,
+    /// The time of this slot's last unit, the earliest the next can start.
+    clock: u64,
+    /// No unit starts past this cycle, and an end is stamped no later.
+    limit: u64,
+    stamp: u64,
+    /// The cycle each channel's end lands, `u64::MAX` for none.
+    lands: [u64; 2],
+}
+
+impl Default for Ahead {
+    fn default() -> Ahead {
+        Ahead { on: false, inside: false, unit: None, release_until: 0, wake: u64::MAX, last_c: GIF, clock: 0, limit: 0, stamp: 0, lands: [u64::MAX; 2] }
+    }
+}
+
+fn ahead_slot(c: usize) -> Option<usize> {
+    match c {
+        VIF1 => Some(0),
+        GIF => Some(1),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dmac {
     pub ch: [Channel; CHANNELS],
@@ -194,6 +228,7 @@ pub struct Dmac {
     /// Neither is in the state.
     pub writes: u64,
     pub watch: Option<Box<Watch>>,
+    pub ahead: Ahead,
 }
 
 impl Default for Dmac {
@@ -214,6 +249,7 @@ impl Default for Dmac {
             last_c: TO_SPR,
             writes: 0,
             watch: None,
+            ahead: Ahead::default(),
         }
     }
 }
@@ -241,7 +277,8 @@ const SPR_BIT: u32 = 1 << 31;
 impl Dmac {
     /// The time the DMAC next needs attention.
     pub fn next_event(&self) -> u64 {
-        self.wake
+        let ahead = if self.ahead.on { self.ahead.wake } else { u64::MAX };
+        self.wake.min(ahead).min(self.ahead.lands[0]).min(self.ahead.lands[1])
     }
 
     /// Asks for an arbitration at `now`: a register written, or a peripheral's DREQ asserted.
@@ -249,6 +286,82 @@ impl Dmac {
         if self.unit.is_none() {
             self.wake = now.max(self.release_until);
         }
+        let a = &mut self.ahead;
+        if a.on && a.unit.is_none() {
+            a.wake = a.wake.min(now.max(a.release_until).max(a.clock));
+        }
+    }
+
+    /// Transactions on or off with the board's round: turned on, the slot takes the DMAC's wake; turned off only once it
+    /// holds nothing.
+    pub fn set_ahead(&mut self, on: bool) {
+        if on && !self.ahead.on {
+            self.ahead.wake = self.wake;
+        }
+        if on || self.fits() {
+            self.ahead.on = on;
+        }
+    }
+
+    /// Whether channel `c` still runs, its end not held for the board.
+    pub fn running(&self, c: usize) -> bool {
+        self.ch[c].str() && ahead_slot(c).is_none_or(|s| self.ahead.lands[s] == u64::MAX)
+    }
+
+    /// The ends held for the board that are due at `now` landed: STR cleared and the channel's interrupt flag set.
+    pub fn land(&mut self, now: u64) {
+        for (s, c) in [(0, VIF1), (1, GIF)] {
+            if self.ahead.lands[s] <= now {
+                self.ahead.lands[s] = u64::MAX;
+                self.ended(c);
+                self.wake(now);
+            }
+        }
+    }
+
+    /// The time of the transactions' next step while one falls by `limit`, or a unit is in flight; a time past it is
+    /// brought back to it, so that a frame's end leaves no clock past the board's (Sapphire_Speed.md §67).
+    pub fn ahead_due(&mut self, limit: u64) -> Option<u64> {
+        let a = &mut self.ahead;
+        if !a.on || a.wake == u64::MAX {
+            return None;
+        }
+        if a.wake < limit || a.unit.is_some() {
+            return Some(a.wake);
+        }
+        a.wake = limit;
+        a.clock = a.clock.min(limit);
+        None
+    }
+
+    /// `step` on the transactions' slot, no unit starting past `limit`.
+    pub fn step_ahead(&mut self, now: u64, limit: u64, mem: &mut dyn Memory, spr: &mut [u8], dev: &mut dyn Peripherals) {
+        self.swap_slots();
+        self.ahead.inside = true;
+        self.ahead.limit = limit;
+        self.ahead.stamp = now.min(limit);
+        self.step(now, mem, spr, dev);
+        self.ahead.inside = false;
+        self.ahead.clock = now.min(limit);
+        self.swap_slots();
+    }
+
+    fn swap_slots(&mut self) {
+        let a = &mut self.ahead;
+        std::mem::swap(&mut self.unit, &mut a.unit);
+        std::mem::swap(&mut self.wake, &mut a.wake);
+        std::mem::swap(&mut self.release_until, &mut a.release_until);
+        std::mem::swap(&mut self.last_c, &mut a.last_c);
+    }
+
+    /// Whether nothing is held for the board, so that the state, which has no place for it, can be written.
+    pub fn fits(&self) -> bool {
+        self.ahead.unit.is_none() && self.ahead.lands == [u64::MAX; 2]
+    }
+
+    /// Whether channel `c` is the arbitration's to run: channels 1 and 2 on the transactions' slot alone.
+    fn slot_has(&self, c: usize) -> bool {
+        !self.ahead.on || ahead_slot(c).is_some() == self.ahead.inside
     }
 
     /// INT1 (§5.4, D_STAT): any channel's CIS with its CIM, SIS with SIM, MEIS with MEIM, or BEIS.
@@ -333,8 +446,16 @@ impl Dmac {
     }
 
     fn finish(&mut self, c: usize) {
-        self.ch[c].chcr &= !chcr::STR;
         self.ch[c].open = false;
+        if self.ahead.inside {
+            self.ahead.lands[ahead_slot(c).expect("a transaction's channel")] = self.ahead.stamp;
+        } else {
+            self.ended(c);
+        }
+    }
+
+    fn ended(&mut self, c: usize) {
+        self.ch[c].chcr &= !chcr::STR;
         self.stat |= 1 << c;
     }
 
@@ -378,7 +499,7 @@ impl Dmac {
     /// The zero-time steps a channel takes before its next unit (a packet's end, a finished transfer); then the unit
     /// it would run now, or none when it is stopped or held.
     fn next_work(&mut self, c: usize, dev: &mut dyn Peripherals) -> Option<Work> {
-        if !self.ch[c].str() {
+        if !self.running(c) {
             return None;
         }
         let mode = self.mode(c);
@@ -443,7 +564,7 @@ impl Dmac {
         if self.ctrl & ctrl::DMAE == 0 || self.enable & CPND != 0 {
             return None;
         }
-        let allowed = |d: &Dmac, c: usize| d.pcr & PCE == 0 || d.pcr & 1 << (16 + c) != 0;
+        let allowed = |d: &Dmac, c: usize| d.slot_has(c) && (d.pcr & PCE == 0 || d.pcr & 1 << (16 + c) != 0);
         for c in [VIF0, SIF2] {
             if allowed(self, c)
                 && let Some(w) = self.next_work(c, dev)
@@ -480,6 +601,10 @@ impl Dmac {
         if self.unit.is_none() {
             if now < self.release_until {
                 self.wake = self.release_until;
+                return;
+            }
+            if self.ahead.inside && now > self.ahead.limit {
+                self.wake = self.ahead.limit;
                 return;
             }
             self.wake = u64::MAX;
@@ -590,7 +715,7 @@ impl Dmac {
     /// that has moved its last qword is acted on at once (`end_packet`).
     fn settle(&mut self, c: usize) {
         let mode = self.mode(c);
-        if self.ch[c].qwc == 0 && (mode == Mode::Normal || mode == Mode::Interleave) && self.ch[c].str() {
+        if self.ch[c].qwc == 0 && (mode == Mode::Normal || mode == Mode::Interleave) && self.running(c) {
             self.finish(c);
         } else {
             self.end_packet(c);
@@ -767,6 +892,11 @@ impl Dmac {
                     let ch = &mut self.ch[c];
                     match reg {
                         0x00 => {
+                            if let Some(s) = ahead_slot(c).filter(|&s| self.ahead.lands[s] != u64::MAX) {
+                                self.ahead.lands[s] = u64::MAX;
+                                self.ended(c);
+                            }
+                            let ch = &mut self.ch[c];
                             let was = ch.str();
                             ch.chcr = if was { ch.chcr & !chcr::STR | v & chcr::STR } else { v & chcr::BITS };
                             if !was && ch.str() {
@@ -823,7 +953,7 @@ impl emusen_native::State for Dmac {
             Some(Work::Data(n)) => n,
             _ => 0,
         });
-        w.u64s("Times", &[u.map_or(0, |u| u.end), self.release_until, self.wake, self.last_c as u64]);
+        w.u64s("Times", &[u.map_or(0, |u| u.end), self.release_until.max(self.ahead.release_until).max(self.ahead.clock), self.wake.min(self.ahead.wake), self.last_c as u64]);
     }
 
     fn read_state(&mut self, r: &mut emusen_native::StateReader) -> Result<(), emusen_native::Truncated> {
@@ -846,7 +976,9 @@ impl emusen_native::State for Dmac {
         let mut t = [0u64; 4];
         r.u64s(&mut t)?;
         self.unit = (usize::from(ch) < CHANNELS).then(|| Unit { ch: usize::from(ch), work: if tag { Work::Tag } else { Work::Data(qwords) }, end: t[0] });
-        (self.release_until, self.wake, self.last_c) = (t[1], t[2], (t[3] as usize).min(CHANNELS - 1));
+        (self.wake, self.last_c) = (t[2], (t[3] as usize).min(CHANNELS - 1));
+        self.release_until = if self.rele() { t[1] } else { 0 };
+        self.ahead = Ahead { clock: t[1], ..Ahead::default() };
         Ok(())
     }
 }

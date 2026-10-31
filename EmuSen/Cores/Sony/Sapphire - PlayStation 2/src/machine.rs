@@ -329,7 +329,7 @@ impl Machine {
     /// One frame: the console run until the PCRTC begins its next field, which is when V-blank rises.
     pub fn advance(&mut self) {
         let target = self.sys.board.pcrtc.fields + 1;
-        while self.sys.board.pcrtc.fields < target {
+        while self.sys.board.pcrtc.fields < target || self.sys.board.holds() {
             if self.booted && self.stop.is_none() && self.waiting() {
                 if self.at_entry() {
                     self.enter_program();

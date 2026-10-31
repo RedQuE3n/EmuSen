@@ -343,6 +343,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-core-tool"
+version = "0.1.0"
+dependencies = [
+ "emusen-core-entry",
+ "emusen-galaxia",
+ "emusen-net",
+ "emusen-tool-job",
+ "rcgen",
+ "rustls",
+]
+
+[[package]]
 name = "emusen-crystal"
 version = "0.1.0"
 dependencies = [

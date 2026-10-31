@@ -32,6 +32,8 @@ pub const PAGE_WORDS: usize = 2048;
 pub enum Op {
     /// The walk over tiles `first` to `first + count - 1`.
     Walk { first: u32, count: u32, class: u32, ordered: bool },
+    /// Pages of local memory copied to the snapshot that the next stretch's records read their texels from.
+    Snapshot { page: u32, pages: u32 },
     /// Pages of the staging buffer copied into local memory: `pages` from staged page `from` to memory page `to`.
     Upload { from: u32, to: u32, pages: u32 },
 }
@@ -144,6 +146,11 @@ pub struct Planner {
     clut: Option<u32>,
     /// When the open stretch is ordered: its records, applied one after another by one workgroup.
     ordered: Option<Vec<u32>>,
+    /// When the open stretch reads its texels from a snapshot: the environment its records share.
+    snapshot: Option<[u32; ENV_WORDS]>,
+    /// Self-reading records applied one after another by one workgroup (`SAPPHIRE_GS_ORDERED`) rather than read from a
+    /// snapshot of their run, the default (Sapphire_Gs.md §10.4).
+    pub ordered_mode: bool,
     /// The open stretch's class: every kind and feature some record of it has (`class`).
     class: u32,
     /// Exact mode, for proof: records that read where they draw go to the processor, the reference's order, rather than
@@ -228,6 +235,8 @@ impl Planner {
             env: None,
             clut: None,
             ordered: None,
+            snapshot: None,
+            ordered_mode: false,
             class: 0,
             exact_feedback: false,
             reach: None,
@@ -318,14 +327,33 @@ impl Planner {
             return Drawn::Fallback(u, writes);
         }
         let e = pack_env(regs, env);
-        if snapshot {
+        if snapshot && self.ordered_mode {
             if self.ordered.is_none() {
                 self.close(Close::Snapshot);
                 self.ordered = Some(Vec::with_capacity(4096));
                 self.counts.snapshot[1] += 1;
             }
             self.counts.snapshot[0] += 1;
-        } else if self.ordered.is_some() {
+        } else if snapshot {
+            if self.snapshot != Some(e) {
+                self.close(Close::Snapshot);
+                let full = env.texture.as_ref().expect("textured").units();
+                let mut pages: Vec<u32> = full.each().map(|u| (u / 2) as u32).collect();
+                pages.dedup();
+                let mut i = 0;
+                while i < pages.len() {
+                    let mut j = i + 1;
+                    while j < pages.len() && pages[j] == pages[j - 1] + 1 {
+                        j += 1;
+                    }
+                    self.batch.ops.push(Op::Snapshot { page: pages[i], pages: (j - i) as u32 });
+                    i = j;
+                }
+                self.snapshot = Some(e);
+                self.counts.snapshot[1] += 1;
+            }
+            self.counts.snapshot[0] += 1;
+        } else if self.ordered.is_some() || self.snapshot.is_some() {
             self.close(Close::Snapshot);
         }
         // The stretch ends before a record that would race one of it across tiles.
@@ -380,7 +408,8 @@ impl Planner {
         let rec = &mut self.batch.records;
         self.class |= class(kind, env, regs);
         // An ordered record carries its bounds: y0 and y1 above its flag in word 3, x0 and x1 in word 31.
-        let ordered = u32::from(snapshot) | (y0 as u32) << 8 | (y1 as u32) << 20;
+        // Word 3: bit 0 a self-reading record, bit 1 one whose texels come from the snapshot, then its y0 and y1.
+        let ordered = u32::from(snapshot) | u32::from(snapshot && !self.ordered_mode) << 1 | (y0 as u32) << 8 | (y1 as u32) << 20;
         rec.extend_from_slice(&[kind_code(kind), env_index, clut_slot, ordered]);
         for p in v {
             rec.extend_from_slice(&[p.x as u32, p.y as u32, p.z, p.rgbaq as u32, (p.rgbaq >> 32) as u32, p.st as u32, (p.st >> 32) as u32, p.uv as u32, u32::from(p.f)]);
@@ -450,6 +479,7 @@ impl Planner {
     /// The open stretch planned as a walk: its tiles placed, each with its records in drawing order.
     pub fn close(&mut self, why: Close) {
         let ordered = self.ordered.take();
+        self.snapshot = None;
         let class = self.class;
         self.class = 0;
         if let Some(list) = ordered {
@@ -507,7 +537,7 @@ impl Planner {
         for &p in pages {
             u.add_page(p, 3);
         }
-        if u.meets(&self.touched) || u.meets(&self.texels) || self.ordered.is_some() {
+        if u.meets(&self.touched) || u.meets(&self.texels) || self.ordered.is_some() || self.snapshot.is_some() {
             self.close(Close::Upload);
         }
         let mut i = 0;

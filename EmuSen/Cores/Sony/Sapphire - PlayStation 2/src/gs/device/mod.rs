@@ -68,6 +68,8 @@ struct Gpu {
     local: GpuBuffer,
     /// The walk's measurement counts (switch 32): lanes that met a record, pixels covered, pixels textured.
     lanes: GpuBuffer,
+    /// The memory as it stood before a snapshot stretch (Sapphire_Gs.md §4.4).
+    snapshot: GpuBuffer,
     readback: GpuBuffer,
     slots: [Slot; 2],
     next: usize,
@@ -87,6 +89,7 @@ impl Gpu {
         let local = device.create_buffer((local::WORDS * 4) as u64, Where::Device)?;
         let readback = device.create_buffer((local::WORDS * 4) as u64, Where::Host)?;
         let lanes = device.create_buffer(64, Where::Host)?;
+        let snapshot = device.create_buffer((local::WORDS * 4) as u64, Where::Device)?;
         lanes.slice_mut::<u32>().fill(0);
         let sizes = [
             plan::MAX_RECORDS * plan::RECORD_WORDS * 4,
@@ -102,7 +105,7 @@ impl Gpu {
         };
         let slots = [slot()?, slot()?];
         device.submit(|c| c.fill(&local, 0));
-        let mut g = Gpu { device, walks: Vec::new(), float_controls, local, lanes, readback, slots, next: 0 };
+        let mut g = Gpu { device, walks: Vec::new(), float_controls, local, lanes, snapshot, readback, slots, next: 0 };
         g.walk_for(plan::CLASS_ALL, false);
         Ok(g)
     }
@@ -116,7 +119,7 @@ impl Gpu {
         }
         let mut constants: Vec<(u32, u32)> = vec![(0, u32::from(exact || !self.float_controls))];
         constants.extend((0..8).map(|b| (b + 1, class >> b & 1)));
-        let w = self.device.create_program_specialised(WALK, 7, 16, 2, &constants).expect("the walk compiles for its class");
+        let w = self.device.create_program_specialised(WALK, 8, 16, 2, &constants).expect("the walk compiles for its class");
         self.walks.push((key, w));
     }
 
@@ -139,7 +142,7 @@ impl Gpu {
         put(&slot.buffers[4], &batch.cluts);
         put(&slot.buffers[5], &batch.staged);
         let walks = &self.walks;
-        let (local, lanes, readback) = (&self.local, &self.lanes, &self.readback);
+        let (local, lanes, snapshot, readback) = (&self.local, &self.lanes, &self.snapshot, &self.readback);
         let record = |c: &mut emusen_gpu::Commands| {
             let mut bound: Vec<u32> = Vec::with_capacity(8);
             for op in &batch.ops {
@@ -152,9 +155,13 @@ impl Gpu {
                             c.dispatch_again(walk, s, &push, count, 1, 1);
                         } else {
                             let b = &slot.buffers;
-                            c.dispatch_in(walk, s, &[local, &b[0], &b[1], &b[2], &b[3], &b[4], lanes], &push, count, 1, 1);
+                            c.dispatch_in(walk, s, &[local, &b[0], &b[1], &b[2], &b[3], &b[4], lanes, snapshot], &push, count, 1, 1);
                             bound.push(key);
                         }
+                    }
+                    Op::Snapshot { page, pages } => {
+                        let at = u64::from(page) * PAGE_BYTES;
+                        c.copy(local, snapshot, u64::from(pages) * PAGE_BYTES, at, at);
                     }
                     Op::Upload { from, to, pages } => {
                         c.copy(&slot.buffers[5], local, u64::from(pages) * PAGE_BYTES, u64::from(from) * PAGE_BYTES, u64::from(to) * PAGE_BYTES);
@@ -212,6 +219,7 @@ impl Device {
         let gpu = if plan_only { None } else { Some(Gpu::new(lend)?) };
         let mut plan = Planner::new();
         plan.exact_feedback = std::env::var_os("SAPPHIRE_GS_EXACT").is_some();
+        plan.ordered_mode = std::env::var_os("SAPPHIRE_GS_ORDERED").is_some();
         Ok(Device {
             inner: RefCell::new(Inner {
                 plan,

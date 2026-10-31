@@ -35,6 +35,8 @@ layout(std430, set = 0, binding = 4) readonly buffer Tiles { uvec4 tiles[]; };
 layout(std430, set = 0, binding = 5) readonly buffer Cluts { uint cluts[]; };
 // Measurement counts with switch 32, each a 64-bit count in two words: lanes that met a record, pixels covered, textured.
 layout(std430, set = 0, binding = 6) buffer Lanes { uint lanes[]; };
+// The memory as it stood before a snapshot stretch, for records whose texels meet what they draw (Sapphire_Gs.md §4.4).
+layout(std430, set = 0, binding = 7) readonly buffer Snapshot { uint snap[]; };
 
 void count(uint k, uint n) {
     uint lo = atomicAdd(lanes[2u * k], n);
@@ -142,10 +144,12 @@ uint read_px(uint p, uint bp, uint bw, uint x, uint y) {
 }
 
 
+bool S_snapshot;
+
 uint read_texel(uint p, uint bp, uint bw, uint x, uint y) {
     uint w, s;
     address(p, bp, bw, x & 0x7FFu, y & 0x7FFu, w, s);
-    return (mem[w] >> s) & field_mask(psm_bits(p));
+    return ((S_snapshot ? snap[w] : mem[w]) >> s) & field_mask(psm_bits(p));
 }
 
 // The frame's and Z's words this pixel last touched, kept in registers across records and stored when another word
@@ -919,6 +923,7 @@ void draw_record(int x, int y) {
     if (textured || fogged) {
         if (textured) {
             load_sampler(srec[R][2]);
+            S_snapshot = (srec[R][3] & 2u) != 0u;
             int64_t u, v;
             int lod;
             if ((debug & 8u) != 0u) { u = int64_t(P_wu[0] & int64_t(1023)); v = int64_t(P_wv[1] & int64_t(1023)); lod = 0; }

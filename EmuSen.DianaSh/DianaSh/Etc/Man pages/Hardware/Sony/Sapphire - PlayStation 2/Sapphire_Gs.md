@@ -280,7 +280,8 @@ textured class shares, not in the features taken out.
 
 A run of self-reading records is one stretch dispatched as one workgroup. Each record carries its bounds; the workgroup
 covers them 128 pixels at a time in raster order. Every lane reads, then all store, so a pixel reads the memory as the
-earlier records and the earlier batches of its own record left it. The snapshot is gone.
+earlier records and the earlier batches of its own record left it. It is reached by `SAPPHIRE_GS_ORDERED`; the
+snapshot of §4.4 stays the default until option (c) is built (decided 2026-10-31).
 
 [M] It does not reach the software picture: fields 100 and 150 still differ in 3.9 % and 5.4 % of pixels, largest
 channel difference 122. That is the same order as the snapshot's. Jak's refraction primitives read pixels they have

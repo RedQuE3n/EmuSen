@@ -118,7 +118,6 @@ fn machine(workload: &str, bios: &str, market_name: &str, image: Option<&str>) -
 
 fn recompiled(mut m: Machine, fixed_cost: bool) -> Machine {
     let mut b = Blocks::from_env();
-    b.fixed_cost |= fixed_cost;
     m.blocks = Some(Box::new(b));
     m
 }

@@ -1,40 +1,24 @@
-//! Version 1.1, behind the `native` feature. See EmuSen_Recompiler.md §14.
+//! The tailored code's memory, behind the `native` feature: a code memory a dispatcher places blocks in one at a time. See EmuSen_Jit.md §9.
 
 use emusen_assembler::Code;
-
-/// A block's tailored code, and the 8-byte data word, if any, that holds the Cranelift function's address (the tier below its entry's test falls back to).
-pub struct Native {
-    pub code: Code,
-    pub fallback: Option<u32>,
-    /// 1.2: the Cranelift function compiled beside the code though no fallback word needs it, for a measurement that reads it.
-    pub function: bool,
-}
-
-impl Native {
-    /// Whether the block's Cranelift function is compiled too: for its fallback word, or when asked (EmuSen_Jit.md §8).
-    pub fn needs_function(&self) -> bool {
-        self.function || self.fallback.is_some()
-    }
-
-    /// The bytes it takes in the code memory, as the budget counts them.
-    pub fn bytes(&self) -> u64 {
-        (self.code.hot.len() + self.code.cold.len() + self.code.data.len()) as u64
-    }
-}
 
 /// The reservation: 1 GiB, so that every rel32 between the arenas and the stubs reaches.
 const RESERVED: usize = 1 << 30;
 const COLD: usize = RESERVED / 2;
+/// The data arena: writable and never executable, so that a block's links are written without touching code pages.
+const DATA: usize = COLD + RESERVED / 4;
 
-pub(crate) struct Memory {
+/// A code memory, owned by the one thread that places in it and runs its code.
+pub struct Memory {
     base: *mut u8,
     page: usize,
     hot: usize,
     cold: usize,
+    data: usize,
     stubs: Vec<u64>,
 }
 
-// SAFETY: the memory is owned by the compiler's thread alone; the pointer is moved with it.
+// SAFETY: the memory has one owner at a time; the pointer moves with it.
 unsafe impl Send for Memory {}
 
 fn up(n: usize, to: usize) -> usize {
@@ -42,76 +26,65 @@ fn up(n: usize, to: usize) -> usize {
 }
 
 impl Memory {
-    pub(crate) fn new() -> Memory {
+    /// A memory with `stubs` placed first, each reached by its index; a stub reaches the stubs before it.
+    pub fn new(stubs: Vec<Code>) -> Memory {
         let (base, page) = os::reserve(RESERVED);
-        Memory { base, page, hot: 0, cold: COLD, stubs: Vec::new() }
+        // SAFETY: the data arena, inside the reservation, from which nothing is ever run.
+        unsafe { os::protect(base.add(DATA), RESERVED - DATA, false) };
+        let mut m = Memory { base, page, hot: 0, cold: COLD, data: DATA, stubs: Vec::new() };
+        for s in stubs {
+            assert!(s.cold.is_empty() && s.data.is_empty(), "a stub is hot code alone");
+            let e = m.place(s).expect("the stubs fit an empty memory");
+            m.stubs.push(e);
+        }
+        m
     }
 
-    /// One batch: the stubs, at the first, then each block; each block's entry, or none where it could not be linked or the reservation is full.
-    pub(crate) fn place(&mut self, stubs: &dyn Fn() -> Vec<Code>, blocks: Vec<(Native, u64)>) -> Vec<Option<u64>> {
-        let (hot0, cold0) = (self.hot, self.cold);
-        let mut writes: Vec<(usize, Vec<u8>)> = Vec::new();
-        if self.stubs.is_empty() {
-            for mut s in stubs() {
-                let at = self.base as u64 + self.hot as u64;
-                let placed = &self.stubs;
-                assert!(s.link(at, at + s.hot.len() as u64, at, &|id| placed[id as usize]), "a stub reaches the stubs before it");
-                assert!(s.cold.is_empty() && s.data.is_empty(), "a stub is hot code alone");
-                self.stubs.push(at + u64::from(s.entry));
-                writes.push((self.hot, s.hot));
-                self.hot = up(self.hot + writes.last().map_or(0, |w| w.1.len()), 16);
-            }
+    /// Stub `id`'s entry.
+    pub fn stub(&self, id: u32) -> u64 {
+        self.stubs[id as usize]
+    }
+
+    /// Bytes held.
+    pub fn held(&self) -> u64 {
+        (self.hot + (self.cold - COLD) + (self.data - DATA)) as u64
+    }
+
+    /// The code placed after what is there, its entry; none when it does not fit or cannot be linked. No code of this memory may be running: its pages are writable, never executable, while they are written.
+    pub fn place(&mut self, mut code: Code) -> Option<u64> {
+        let (hot, cold, data) = (self.hot, self.cold, up(self.data, 8));
+        if hot + code.hot.len() + 16 >= COLD || cold + code.cold.len() + 16 >= DATA || data + code.data.len() >= RESERVED {
+            return None;
         }
-        let mut entries = Vec::with_capacity(blocks.len());
-        for (mut n, fallback) in blocks {
-            let need_hot = n.code.hot.len() + 16;
-            let need_cold = n.code.cold.len() + n.code.data.len() + 32;
-            if self.hot + need_hot >= COLD || self.cold + need_cold >= RESERVED {
-                entries.push(None);
-                continue;
-            }
-            let b = self.base as u64;
-            let hot = b + self.hot as u64;
-            let cold = b + self.cold as u64;
-            let data = up(self.cold + n.code.cold.len(), 8);
-            if let Some(k) = n.fallback {
-                n.code.data[k as usize..k as usize + 8].copy_from_slice(&fallback.to_le_bytes());
-            }
-            let stubs = &self.stubs;
-            if !n.code.link(hot, cold, b + data as u64, &|id| stubs[id as usize]) {
-                entries.push(None);
-                continue;
-            }
-            entries.push(Some(if n.code.entry_cold { cold } else { hot } + u64::from(n.code.entry)));
-            writes.push((self.hot, std::mem::take(&mut n.code.hot)));
-            writes.push((self.cold, std::mem::take(&mut n.code.cold)));
-            writes.push((data, std::mem::take(&mut n.code.data)));
-            self.hot = up(self.hot + need_hot - 16, 16);
-            self.cold = up(data + writes.last().map_or(0, |w| w.1.len()), 16);
+        let b = self.base as u64;
+        let stubs = &self.stubs;
+        if !code.link(b + hot as u64, b + cold as u64, b + data as u64, &|id| stubs[id as usize]) {
+            return None;
         }
-        // W^X: the batch's fresh pages writable, written, then readable and executable; never written again.
-        debug_assert!(hot0 % self.page == 0 && cold0 % self.page == 0, "a batch starts on a fresh page");
-        let ranges = [(hot0, up(self.hot, self.page)), (cold0, up(self.cold, self.page))];
-        for &(from, to) in &ranges {
-            if to > from {
-                // SAFETY: inside the reservation; the pages are this batch's alone, which nothing has run yet.
-                unsafe { os::protect(self.base.add(from), to - from, false) };
-            }
+        let entry = if code.entry_cold { b + cold as u64 } else { b + hot as u64 } + u64::from(code.entry);
+        self.write(hot, &code.hot);
+        self.write(cold, &code.cold);
+        // SAFETY: inside the data arena, always writable.
+        unsafe { std::ptr::copy_nonoverlapping(code.data.as_ptr(), self.base.add(data), code.data.len()) };
+        self.hot = up(hot + code.hot.len(), 16);
+        self.cold = up(cold + code.cold.len(), 16);
+        self.data = data + code.data.len();
+        Some(entry)
+    }
+
+    /// `bytes` at `at`, the pages they fall on writable for the copy and executable after: W^X with the block laid beside the last, so that a block costs its bytes, not two pages.
+    fn write(&mut self, at: usize, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
         }
-        for (at, bytes) in writes {
-            // SAFETY: inside the pages made writable above.
-            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.base.add(at), bytes.len()) };
+        let from = at / self.page * self.page;
+        let to = up(at + bytes.len(), self.page);
+        // SAFETY: inside the reservation; the owner runs nothing from these pages until the second call.
+        unsafe {
+            os::protect(self.base.add(from), to - from, false);
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.base.add(at), bytes.len());
+            os::protect(self.base.add(from), to - from, true);
         }
-        for &(from, to) in &ranges {
-            if to > from {
-                // SAFETY: as above.
-                unsafe { os::protect(self.base.add(from), to - from, true) };
-            }
-        }
-        // Each batch starts on a fresh page, so that a published page is never writable again.
-        self.hot = up(self.hot, self.page);
-        self.cold = up(self.cold, self.page);
-        entries
     }
 }
 

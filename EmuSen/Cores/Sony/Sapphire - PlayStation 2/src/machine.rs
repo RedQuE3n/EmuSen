@@ -337,22 +337,23 @@ impl Machine {
                     self.stop = Some(Stop::Unimplemented);
                 }
             } else if self.booted && self.stop.is_none() {
-                let mut left = 1024;
+                let mut left = 1024u64;
+                let compiled = self.blocks.is_some() && self.sys.board.round > 0 && crate::blocks::available();
                 while left > 0 {
                     let from = self.sys.ee.pc;
                     let ran = match self.blocks.as_deref_mut() {
-                        Some(b) => crate::blocks::run(&mut self.sys, b, left),
+                        Some(b) => crate::blocks::run(&mut self.sys, b),
                         None => self.sys.step().map(|()| 1),
                     };
                     match ran {
-                        Ok(n) => left -= n,
+                        Ok(n) => left = left.saturating_sub(n),
                         Err(_) => {
                             self.stop = Some(Stop::Unimplemented);
                             break;
                         }
                     }
-                    // Once the field has begun the frame ends at this batch's end, which no skip may pass.
-                    if left > 0 && self.idle.backward(from, self.sys.ee.pc, self.sys.ee.in_delay_slot()) && self.sys.board.pcrtc.fields < target {
+                    // Once the field has begun the frame ends at this batch's end, which no skip may pass; compiled code passes its own waits (Sapphire_Speed.md §66).
+                    if left > 0 && !compiled && self.idle.backward(from, self.sys.ee.pc, self.sys.ee.in_delay_slot()) && self.sys.board.pcrtc.fields < target {
                         let n = crate::idle::arrive(&mut self.sys, &mut self.idle, self.blocks.as_deref_mut(), left);
                         left = batch_left(left, n);
                     }

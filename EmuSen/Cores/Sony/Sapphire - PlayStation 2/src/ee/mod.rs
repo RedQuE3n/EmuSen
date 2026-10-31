@@ -20,9 +20,8 @@ pub mod timing;
 pub mod tlb;
 
 pub use bus::Bus;
+pub(crate) use cop2::light as cop2_light;
 pub use memory::{Mode, Place};
-#[cfg(feature = "forms")]
-pub use jit::forms::report as forms_report;
 use cop0::{cause, config, debug, event, perf};
 use timing::Timing;
 

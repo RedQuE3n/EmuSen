@@ -3,7 +3,7 @@
 pub mod x64;
 
 /// The `Assembler` trait's version: (major, minor).
-pub const VERSION: (u16, u16) = (1, 1);
+pub const VERSION: (u16, u16) = (1, 2);
 
 /// A host register, numbered as the backend numbers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -155,8 +155,12 @@ pub trait Assembler {
     fn lea_data(&mut self, d: Reg, offset: u32);
     /// A jump through the 8-byte word at the block's data `offset`.
     fn jump_via_data(&mut self, offset: u32);
+    /// A jump through the 8-byte word at `m` (1.2).
+    fn jump_mem(&mut self, m: Mem);
     /// Bytes appended to the block's data, 8-aligned; their offset.
     fn data(&mut self, bytes: &[u8]) -> u32;
+    /// An 8-byte word of the block's data holding a label's address once placed; its offset (1.2).
+    fn data_address(&mut self, l: Label) -> u32;
     /// The offset in its section a bound label will have once laid out, for `entry`.
     fn finish(self, entry: Label) -> Code;
 }
@@ -185,6 +189,8 @@ pub struct Code {
     pub cold: Vec<u8>,
     pub data: Vec<u8>,
     pub relocs: Vec<Reloc>,
+    /// 1.2: data words that hold an address, by their offset in the data.
+    pub addresses: Vec<(u32, Target)>,
     pub entry: u32,
     pub entry_cold: bool,
     pub hot_by_purpose: [u32; PURPOSES],
@@ -193,17 +199,21 @@ pub struct Code {
 impl Code {
     /// The relocations applied for sections placed at `hot`, `cold` and `data`, stub `id` at `stub(id)`; false when a field cannot reach its target.
     pub fn link(&mut self, hot: u64, cold: u64, data: u64, stub: &dyn Fn(u32) -> u64) -> bool {
+        let place = |t: Target| match t {
+            Target::Hot(o) => hot + u64::from(o),
+            Target::Cold(o) => cold + u64::from(o),
+            Target::Data(o) => data + u64::from(o),
+            Target::Stub(id) => stub(id),
+        };
+        for &(at, t) in &self.addresses {
+            self.data[at as usize..at as usize + 8].copy_from_slice(&place(t).to_le_bytes());
+        }
         for r in self.relocs.clone() {
             let (base, bytes) = match r.section {
                 Section::Hot => (hot, &mut self.hot),
                 Section::Cold => (cold, &mut self.cold),
             };
-            let to = match r.target {
-                Target::Hot(o) => hot + u64::from(o),
-                Target::Cold(o) => cold + u64::from(o),
-                Target::Data(o) => data + u64::from(o),
-                Target::Stub(id) => stub(id),
-            };
+            let to = place(r.target);
             let end = base + u64::from(r.at) + 4;
             let Ok(d) = i32::try_from(to.wrapping_sub(end) as i64) else { return false };
             bytes[r.at as usize..r.at as usize + 4].copy_from_slice(&d.to_le_bytes());

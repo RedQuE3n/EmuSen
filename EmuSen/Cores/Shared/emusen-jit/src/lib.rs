@@ -30,17 +30,6 @@ pub trait Lowering: Clone + Send + 'static {
     const EXITS: &'static [&'static str];
     /// One block as a function: its signature and its body, written into `func`, which the crate has cleared.
     fn lower(&mut self, module: &JITModule, func: &mut ir::Function, functions: &mut FunctionBuilderContext, words: &[u32], start: u32, options: Self::Options) -> Result<(), String>;
-    /// Version 1.1, `native`: the block's tailored code, published in place of its function; from 1.2 the function is compiled only when `Native` asks for it. None by default.
-    #[cfg(feature = "native")]
-    fn native(&mut self, words: &[u32], start: u32, options: Self::Options) -> Option<native::Native> {
-        let _ = (words, start, options);
-        None
-    }
-    /// Version 1.1, `native`: the shared stubs the tailored code reaches by id, placed once a code memory.
-    #[cfg(feature = "native")]
-    fn stubs(&self) -> Vec<emusen_assembler::Code> {
-        Vec::new()
-    }
 }
 
 /// An exit's name, or none for a value the lowering does not name.
@@ -93,14 +82,6 @@ pub struct Counters {
     pub nanos: AtomicU64,
     pub bytes: AtomicU64,
     pub failed: AtomicU64,
-    /// `native`: blocks published as tailored code, and the nanoseconds their lowering took.
-    #[cfg(feature = "native")]
-    pub native: AtomicU64,
-    #[cfg(feature = "native")]
-    pub native_nanos: AtomicU64,
-    /// `native`, 1.2: tailored blocks with no function that the code memory could not place, refused; the budget then drops the module.
-    #[cfg(feature = "native")]
-    pub unplaced: AtomicU64,
 }
 
 struct Job<O> {
@@ -219,8 +200,6 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
     let mut functions = FunctionBuilderContext::new();
     let mut map = perf_map.then(|| std::fs::OpenOptions::new().create(true).append(true).open(perf_map_path()).ok()).flatten();
     let mut serial = 0u64;
-    #[cfg(feature = "native")]
-    let mut memory: Option<native::Memory> = None;
     loop {
         let jobs = queue.with(std::mem::take);
         if queue.stop.load(Acquire) {
@@ -241,25 +220,8 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
             }
             serial += 1;
             let name = format!("b{:08X}_{serial}", job.start);
-            #[cfg(feature = "native")]
-            let tailored = {
-                let t = Instant::now();
-                let n = lowering.native(&job.words, job.start, job.options);
-                if n.is_some() {
-                    queue.counters.native_nanos.fetch_add(t.elapsed().as_nanos() as u64, Relaxed);
-                }
-                n
-            };
-            #[cfg(feature = "native")]
-            let function = tailored.as_ref().is_none_or(native::Native::needs_function);
-            #[cfg(not(feature = "native"))]
-            let function = true;
-            if !function {
-                done.push(Done { job, function: None, name, #[cfg(feature = "native")] tailored });
-                continue;
-            }
             match compile(&mut lowering, &mut module, &mut context, &mut functions, &job, &name) {
-                Ok(function) => done.push(Done { job, function: Some(function), name, #[cfg(feature = "native")] tailored }),
+                Ok(function) => done.push(Done { job, function, name }),
                 Err(e) => {
                     queue.counters.failed.fetch_add(1, Relaxed);
                     eprintln!("{}: block {:08X} not compiled: {e}", L::NAME, job.start);
@@ -270,40 +232,13 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
         }
         // W^X: the batch was written into fresh pages, made readable and executable here in one call; they are never writable again.
         module.finalize_definitions().expect("the code made executable");
-        #[cfg(feature = "native")]
-        let mut placed = {
-            let had: Vec<Option<(usize, u64)>> = done.iter().map(|d| d.tailored.as_ref().map(|n| (n.code.hot.len(), n.bytes()))).collect();
-            let natives: Vec<(native::Native, u64)> = done.iter_mut().filter_map(|d| d.tailored.take().map(|n| (n, d.function.map_or(0, |f| module.get_finalized_function(f.0) as u64)))).collect();
-            let entries = if natives.is_empty() { Vec::new() } else { memory.get_or_insert_with(native::Memory::new).place(&|| lowering.stubs(), natives) };
-            let mut it = entries.into_iter();
-            had.into_iter().map(|h| h.and_then(|(hot, bytes)| it.next().flatten().map(|e| (e, hot, bytes)))).collect::<Vec<_>>().into_iter()
-        };
-        for Done { job, function, name, .. } in done {
-            #[cfg(feature = "native")]
-            let placed = placed.next().flatten();
-            #[cfg(not(feature = "native"))]
-            let placed: Option<(u64, usize, u64)> = None;
-            let (code, size, bytes) = match (placed, function) {
-                (Some((entry, hot, bytes)), f) => {
-                    #[cfg(feature = "native")]
-                    queue.counters.native.fetch_add(1, Relaxed);
-                    (entry as *const u8, hot, bytes + f.map_or(0, |f| f.1 as u64))
-                }
-                (None, Some((id, size))) => (module.get_finalized_function(id), size, size as u64),
-                (None, None) => {
-                    #[cfg(feature = "native")]
-                    queue.counters.unplaced.fetch_add(1, Relaxed);
-                    queue.counters.failed.fetch_add(1, Relaxed);
-                    job.slot.publish(FAILED);
-                    queue.counters.finished.fetch_add(1, Release);
-                    continue;
-                }
-            };
+        for Done { job, function: (id, size), name } in done {
+            let code = module.get_finalized_function(id);
             if let Some(f) = map.as_mut() {
                 use std::io::Write;
                 let _ = f.write_all(format!("{:x} {:x} {name}\n", code as usize, size).as_bytes());
             }
-            queue.counters.bytes.fetch_add(bytes, Relaxed);
+            queue.counters.bytes.fetch_add(size as u64, Relaxed);
             queue.counters.compiled.fetch_add(1, Relaxed);
             job.slot.publish(code as usize);
             queue.counters.finished.fetch_add(1, Release);
@@ -314,13 +249,11 @@ fn run<L: Lowering>(mut lowering: L, queue: &Queue<L::Options>, perf_map: bool) 
     unsafe { module.free_memory() };
 }
 
-/// A job lowered in a batch: its Cranelift function and that code's size, if it has one, and its tailored code.
+/// A job lowered in a batch: its function and that code's size.
 struct Done<O> {
     job: Job<O>,
-    function: Option<(cranelift_module::FuncId, usize)>,
+    function: (cranelift_module::FuncId, usize),
     name: String,
-    #[cfg(feature = "native")]
-    tailored: Option<native::Native>,
 }
 
 /// Jobs a stopped thread will not compile: settled as refused, so that no `Slot::wait` waits on them for ever.
@@ -359,16 +292,9 @@ pub struct Jit<L: Lowering> {
     pub perf_map: bool,
     /// Times the budget dropped the module.
     pub flushes: u64,
-    /// 1.2: of those, the drops for a full code memory under the budget.
-    pub full: u64,
-    /// 1.2: what the compiler's threads already dropped spent, then what `compile_now` spent on the caller's thread, before the last drop and since.
+    /// 1.2: what the compiler's threads already dropped spent, before the last drop and since.
     dropped: [Spent; 2],
     now: Spent,
-    /// 1.2, `native`: the code memory `compile_now` places in, dropped with the module; and whether it could not place a block.
-    #[cfg(feature = "native")]
-    memory: Option<native::Memory>,
-    #[cfg(feature = "native")]
-    unplaced: bool,
 }
 
 /// A copy keeps the settings and starts with no code.
@@ -390,17 +316,12 @@ impl<L: Lowering> Jit<L> {
             budget,
             perf_map,
             flushes: 0,
-            full: 0,
             dropped: [Spent::default(); 2],
             now: Spent::default(),
-            #[cfg(feature = "native")]
-            memory: None,
-            #[cfg(feature = "native")]
-            unplaced: false,
         }
     }
 
-    /// 1.2: what compiling has cost since this `Jit` was made, across its drops: on the compiler's threads, and on the caller's by `compile_now`.
+    /// 1.2: what compiling has cost since this `Jit` was made, across its drops: on the compiler's threads.
     pub fn spent(&self) -> [Spent; 2] {
         let mut threads = self.dropped[0];
         if let Some(c) = self.counters() {
@@ -411,35 +332,9 @@ impl<L: Lowering> Jit<L> {
         [threads, here]
     }
 
-    /// Bytes of code held now: the compiler's and `compile_now`'s.
+    /// Bytes of code held now.
     pub fn held(&self) -> u64 {
         self.counters().map_or(0, |c| c.bytes.load(Relaxed)) + self.now.bytes
-    }
-
-    /// 1.2, `native`: a block's tailored code made and published on the caller's thread, in the `Jit`'s own code memory,
-    /// with no Cranelift function; none, and nothing done, when the lowering has no tailored code for it or the code
-    /// needs its function, and the caller then enqueues it. A slot refused where the memory could not place the code.
-    #[cfg(feature = "native")]
-    pub fn compile_now(&mut self, words: &[u32], start: u32, options: L::Options) -> Option<Arc<Slot>> {
-        let t = Instant::now();
-        let n = self.lowering.native(words, start, options).filter(|n| !n.needs_function())?;
-        let bytes = n.bytes();
-        let Jit { lowering, memory, .. } = self;
-        let entry = memory.get_or_insert_with(native::Memory::new).place(&|| lowering.stubs(), vec![(n, 0)]).pop().flatten();
-        let slot = Arc::new(Slot::default());
-        match entry {
-            Some(e) => {
-                self.now.compiled += 1;
-                self.now.bytes += bytes;
-                slot.publish(e as usize);
-            }
-            None => {
-                self.unplaced = true;
-                slot.publish(FAILED);
-            }
-        }
-        self.now.nanos += t.elapsed().as_nanos() as u64;
-        Some(slot)
     }
 
     /// The module dropped, its thread retired without a join, and what it spent kept.
@@ -450,11 +345,6 @@ impl<L: Lowering> Jit<L> {
         }
         let now = std::mem::take(&mut self.now);
         self.dropped[1].add(now);
-        #[cfg(feature = "native")]
-        {
-            self.memory = None;
-            self.unplaced = false;
-        }
     }
 
     /// Hands a block to the compiler, starting its thread if none runs; the slot its code will appear in.
@@ -488,14 +378,8 @@ impl<L: Lowering> Jit<L> {
     /// Code is never freed a block at a time: past the budget the module goes whole, its thread retired without a join (it
     /// frees the code once it has finished the block in hand). True when it went, and the caller must then forget every
     /// address published before running again.
-    /// From 1.2, `native`: also when a tailored block with no function could not be placed, its code memory full.
     pub fn over_budget(&mut self) -> bool {
-        #[cfg(feature = "native")]
-        let full = self.unplaced || self.counters().is_some_and(|c| c.unplaced.load(Relaxed) > 0);
-        #[cfg(not(feature = "native"))]
-        let full = false;
-        if self.held() > self.budget || full {
-            self.full += u64::from(self.held() <= self.budget);
+        if self.held() > self.budget {
             self.drop_module();
             self.flushes += 1;
             return true;

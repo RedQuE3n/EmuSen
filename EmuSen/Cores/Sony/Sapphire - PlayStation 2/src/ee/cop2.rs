@@ -183,36 +183,31 @@ fn vu_op(e: &mut Ee, b: &mut dyn Bus, w: u32, _: u32) -> R {
     Ok(())
 }
 
-/// COP2 instructions a block holds (Sapphire_Speed.md §65): the transfers of a quadword, and the operations of VU0's registers alone, no divide, wait, start or memory form.
-pub(super) fn in_blocks(op: &Op, w: u32) -> bool {
-    match op.name {
-        "qmfc2" | "qmtc2" | "lqc2" | "sqc2" => true,
-        "vu" => vops::of_word(w).is_some_and(|(o, entry)| matches!(entry.class, Class::Fmac | Class::Ialu) && !matches!(o.form, Form::LoadInc | Form::LoadDec | Form::StoreInc | Form::StoreDec | Form::IntMem)),
-        _ => false,
-    }
+/// A macro operation that reaches VU0's registers alone: no divide, wait, start or memory form.
+pub(crate) fn light(w: u32) -> bool {
+    super::ops::get(super::ops::index(w)).name == "vu" && vops::of_word(w).is_some_and(|(o, entry)| matches!(entry.class, Class::Fmac | Class::Ialu) && !matches!(o.form, Form::LoadInc | Form::LoadDec | Form::StoreInc | Form::StoreDec | Form::IntMem))
 }
 
-/// A block's COP2 call, VU0 idle since the block's entry (`Board::vu0_quiet`), so that nothing interlocks: the transfer or the operation, VU0's registers saved first; whether it was a macro operation, whose cycle the block's exit gives `Vpu::last_macro`.
-pub(super) fn in_block(e: &mut Ee, b: &mut dyn Bus, w: u32, saved: &mut Option<(crate::vu::MacroRegs, Option<u64>)>) -> Result<bool, Stop> {
+/// The vector unit's operation of a word `light` names, for a record to hold.
+pub(super) fn light_run(w: u32) -> Option<u64> {
+    if !light(w) {
+        return None;
+    }
+    vops::of_word(w).map(|(_, entry)| entry.run as usize as u64)
+}
+
+/// A macro operation `light` names at cycle `t` with VU0 at rest, `run` from `light_run`; COP2 is usable or an error.
+pub(super) fn run_light(e: &Ee, b: &mut dyn Bus, w: u32, t: u64, run: u64) -> R {
+    usable(e)?;
     let vpu = vpu0(b)?;
-    if saved.is_none() {
-        *saved = Some((vpu.units.vu0.macro_regs(), vpu.last_macro));
-    }
-    match super::ops::get(super::ops::index(w)).name {
-        "qmfc2" => e.set_quad(rt(w), vpu.units.vu0.vf_quad(rd(w))),
-        "qmtc2" => vpu.units.vu0.set_vf_quad(rd(w), e.gpr[rt(w)]),
-        _ => {
-            let Some((_, entry)) = vops::of_word(w) else { return Err(Stop::Halt) };
-            let units = &mut vpu.units;
-            (entry.run)(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    vpu.settle_q(t);
+    vpu.last_macro = Some(t);
+    let units = &mut vpu.units;
+    // SAFETY: `light_run` made the value from the operation's entry, of this type.
+    let run = unsafe { std::mem::transmute::<usize, fn(&mut Ctx, u32)>(run as usize) };
+    run(&mut Ctx::new(&mut units.vu0, Some(&mut units.vu1)), w);
+    Ok(())
 }
-
-/// The most cycles behind a microprogram's end an instruction a block holds may interlock.
-pub(crate) const INTERLOCK: u64 = if TRANSFER > MACRO { TRANSFER } else { MACRO };
 
 const fn cop(name: &'static str, run: super::ops::Run, category: Category, row: usize) -> Op {
     Op { name, run, category, row, reads: 0, writes: 0, kind: Kind::Cop2 }

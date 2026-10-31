@@ -171,7 +171,7 @@ fn main() {
             let before = load();
             let mut times = Vec::with_capacity(frames);
             let mut marks = Vec::new();
-            let code = |m: &Machine| m.blocks.as_ref().map_or((0, 0, 0, 0, 0, 0), |b| (b.compiled().0, b.compiled().2, b.stats.interpreted, b.stats.compiled_steps, b.stats.queued, b.compile_nanos()));
+            let code = |m: &Machine| m.blocks.as_ref().map_or((0, 0, 0, 0, 0, 0), |b| (b.compiled().0, b.compiled().2, b.stats.interpreted, b.stats.compiled_steps, 0u64, b.compile_nanos()));
             let mut codes = Vec::new();
             for f in 0..frames {
                 if bounds.contains(&f) {

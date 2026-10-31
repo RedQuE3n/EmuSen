@@ -233,3 +233,18 @@ MarsRT compile and behave as before, and the `native` parts stay behind that fea
 - **Evidence** (measured 2026-10-29): `tests/native.rs` gains two tests, a mixed batch in which only the blocks that need
   one compile a function (counted by the lowering), and `compile_now`'s publication, refusals, budget and kept totals;
   the 1.1 test of the fallback word is unchanged. 15 tests pass with the feature and 12 without.
+
+## 9. Version 1.3: the code memory stands alone (2026-10-31)
+
+*With Sapphire's EE on the tailored tier alone (`Sapphire_Speed.md` §66) no lowering has both a Cranelift function and tailored code,
+so the `native` path through the compiler's thread goes: `Lowering::native`, `Lowering::stubs`, `Native`, `Jit::compile_now`, the
+tailored counters and `Jit::full`. The thread, publication, budget and verifier serve Cranelift lowerings as in 1.0.*
+
+`native::Memory` is a code memory a dispatcher owns: `Memory::new(stubs)`, `place(code) -> entry`, `stub(id)`, `held()`. Three arenas in
+one 1 GiB reservation, hot, cold and data. **Blocks are laid side by side**: 1.2's batch began on a fresh page, which at one block a
+batch held about 9 KiB of the reservation a block whatever its size. W^X holds because the owner runs none of the memory's code while
+it places: the pages a block falls on are made writable, written, and made executable again. **The data arena is writable and
+never executable**, so that a block's link words change without touching a code page, and a block is reached through them with no
+patch step. `emusen-assembler` 1.2 gives the data words that hold an address (`Assembler::data_address`, `Code::addresses`) and a
+jump through memory (`jump_mem`).
+

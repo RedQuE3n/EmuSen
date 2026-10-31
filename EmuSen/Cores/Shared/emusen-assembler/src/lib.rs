@@ -3,7 +3,7 @@
 pub mod x64;
 
 /// The `Assembler` trait's version: (major, minor).
-pub const VERSION: (u16, u16) = (1, 2);
+pub const VERSION: (u16, u16) = (1, 3);
 
 /// A host register, numbered as the backend numbers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -163,6 +163,137 @@ pub trait Assembler {
     fn data_address(&mut self, l: Label) -> u32;
     /// The offset in its section a bound label will have once laid out, for `entry`.
     fn finish(self, entry: Label) -> Code;
+}
+
+/// A 128-bit vector register, numbered as the backend numbers them (1.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Vreg(pub u8);
+
+/// A lanewise operation `d = a op b` on 128-bit vectors (1.3): B, H, W and Q name lanes of 8, 16, 32 and 64 bits, F lanes of
+/// 32-bit floats; S and U saturate signed and unsigned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VOp {
+    AddB,
+    AddH,
+    AddW,
+    AddQ,
+    SubB,
+    SubH,
+    SubW,
+    SubQ,
+    AddSB,
+    AddSH,
+    AddUB,
+    AddUH,
+    SubSB,
+    SubSH,
+    SubUB,
+    SubUH,
+    MinSH,
+    MaxSH,
+    MinSW,
+    MaxSW,
+    MinUB,
+    MaxUB,
+    MinUH,
+    MaxUH,
+    MinUW,
+    MaxUW,
+    EqB,
+    EqH,
+    EqW,
+    GtB,
+    GtH,
+    GtW,
+    And,
+    /// `!a & b`.
+    AndNot,
+    Or,
+    Xor,
+    /// The low halves' lanes interleaved, `a`'s first: a0 b0 a1 b1 ...
+    LowB,
+    LowH,
+    LowW,
+    LowQ,
+    /// The high halves' lanes interleaved.
+    HighB,
+    HighH,
+    HighW,
+    HighQ,
+    /// Each lane of `a`, then of `b`, narrowed to half its width with saturation: H to bytes, W to halfwords.
+    PackSH,
+    PackSW,
+    PackUH,
+    PackUW,
+    /// The low and the signed high halves of halfword products, the low halves of word products.
+    MulLowH,
+    MulHighSH,
+    MulLowW,
+    /// The even word lanes multiplied to 64-bit products, signed and unsigned.
+    MulEvenSW,
+    MulEvenUW,
+    /// Adjacent signed halfword products added in pairs to words.
+    MulAddH,
+    /// `a`'s bytes chosen by `b`'s, a byte of `b` with its top bit set giving zero.
+    ShuffleB,
+    AddF,
+    SubF,
+    MulF,
+    MinF,
+    MaxF,
+}
+
+/// A shift of every lane by a constant count (1.3); a count at or past the lane's width gives zero, or the sign for `Arith`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VShift {
+    LeftH,
+    LeftW,
+    LeftQ,
+    RightH,
+    RightW,
+    RightQ,
+    ArithH,
+    ArithW,
+}
+
+/// A rearrangement of one vector by a constant order, two bits a lane (1.3): its words, or the halfwords of its low or high half.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VShuffle {
+    W,
+    LowH,
+    HighH,
+}
+
+/// An operation of one vector (1.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VUnary {
+    AbsB,
+    AbsH,
+    AbsW,
+}
+
+/// The 128-bit vector operations, an optional capability of a backend beside `Assembler` (1.3), for lanewise guest
+/// instructions (the EE's multimedia instructions, the VUs). See EmuSen_Recompiler.md §14.
+pub trait Vector: Assembler {
+    fn vop(&mut self, op: VOp, d: Vreg, a: Vreg, b: Vreg);
+    fn vunary(&mut self, op: VUnary, d: Vreg, a: Vreg);
+    fn vshift(&mut self, op: VShift, d: Vreg, a: Vreg, by: u8);
+    fn vshuffle(&mut self, s: VShuffle, d: Vreg, a: Vreg, order: u8);
+    /// Halfword lane `i` from `b` where bit `i` of `mask` is set, otherwise from `a`.
+    fn vblend_h(&mut self, d: Vreg, a: Vreg, b: Vreg, mask: u8);
+    fn vmov(&mut self, d: Vreg, s: Vreg);
+    /// 16 bytes at `m`, no alignment needed.
+    fn vload(&mut self, d: Vreg, m: Mem);
+    fn vstore(&mut self, s: Vreg, m: Mem);
+    /// 16 bytes of the block's data at `offset`.
+    fn vload_data(&mut self, d: Vreg, offset: u32);
+    /// `d`'s low 64 bits `lo` and its high 64 bits `hi`.
+    fn vjoin(&mut self, d: Vreg, lo: Reg, hi: Reg);
+    /// `lo` and `hi` the low and high 64 bits of `s`; `lo` and `hi` distinct.
+    fn vsplit(&mut self, lo: Reg, hi: Reg, s: Vreg);
+    /// The float control and status register (MXCSR on x86-64) loaded from, or stored to, 4 bytes at `m`.
+    fn fpcr_load(&mut self, m: Mem);
+    fn fpcr_store(&mut self, m: Mem);
 }
 
 /// What a relocation's 32-bit field, relative to the field's end, must reach.

@@ -30,6 +30,8 @@ pub mod kind {
     pub const UNCACHED: u64 = 3;
     /// A store may be made (the TLB's D bit).
     pub const WRITABLE: u64 = 4;
+    /// With `NONE`: a page past the caches outside RDRAM, the units' registers, its physical page in bits 51..32, which a load's slow path reads directly (Sapphire_Speed.md §68).
+    pub const REGISTER: u64 = 8;
 }
 
 /// One entry of the translation cache: valid while `tag` is the context's generation with the page's address

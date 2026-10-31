@@ -1,7 +1,7 @@
 //! What a block of EE code may hold, and where it ends: the integer instructions, the multipliers and dividers of both
 //! pipelines, SA's moves, SYNC, the traps and every branch and jump with its delay slot; the loads and stores of every
-//! width and PREF; the multimedia instructions, COP1's and COP2's, in place or as the interpreter's own operations.
-//! What ends the block before it is COP0's and the system's, and the branches that test a unit (Sapphire_Speed.md §66).
+//! width and PREF; the multimedia instructions, COP1's and COP2's and CACHE, in place or as the interpreter's own operations.
+//! What ends the block before it is the rest of COP0's and the system's, and the branches that test a unit (Sapphire_Speed.md §66).
 
 use super::super::ops;
 
@@ -71,7 +71,7 @@ fn decode(word: u32) -> Class {
         Class::Branch
     } else if MEMORY.contains(&n) || matches!(n, "lqc2" | "sqc2") {
         Class::Memory
-    } else if ops::is_mmi(ops::index(word)) || ops::is_fpu_register(ops::index(word)) || ops::is_cop2_call(ops::index(word)) {
+    } else if ops::is_mmi(ops::index(word)) || ops::is_fpu_register(ops::index(word)) || ops::is_cop2_call(ops::index(word)) || n == "cache" {
         Class::Call
     } else {
         Class::Other

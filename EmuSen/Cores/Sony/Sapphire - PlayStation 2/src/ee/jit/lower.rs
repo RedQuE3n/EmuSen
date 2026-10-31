@@ -3,12 +3,12 @@
 use std::mem::offset_of;
 
 use emusen_assembler::x64::{RAX, RBP, RBX, RCX, RDI, RDX, RSI, R8, R9, R10, R11, R12, R13, R14, R15, RSP, X64};
-use emusen_assembler::{Assembler, By, Code, Cond, Label, Mem, Op, Reg, Section, ShiftOp, Src, Width, at};
+use emusen_assembler::{Assembler, By, Code, Cond, Label, Mem, Op, Reg, Section, ShiftOp, Src, VOp, VShift, VShuffle, VUnary, Vector, Vreg, Width, at};
 use emusen_mips_planner::{Class, Plan, Step};
 
 use super::super::cache::{DCache, DTag};
 use super::super::ops;
-use super::isa::{BOARD, Cost, IN_SLOT, LIGHT, NEXT_HELD, Rec, SLOTS, stub};
+use super::isa::{BOARD, Cost, IN_SLOT, LIGHT, NEXT_HELD, Rec, SIGNED, SLOTS, stub};
 use super::{Context, Jump, Page, kind, shape};
 use crate::ee::Ee;
 
@@ -52,7 +52,7 @@ const UNALIGNED: [&str; 8] = ["lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "
 /// Why a slow path was taken, `Context::left`'s index.
 const LEFT_CALL: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
-const LEFT_PAGE: i64 = 2;
+pub(crate) const LEFT_PAGE: i64 = 2;
 const LEFT_MISS: i64 = 3;
 const LEFT_UNCACHED: i64 = 4;
 
@@ -97,9 +97,45 @@ const fn values(steps: usize) -> usize {
     70 + 5 * steps
 }
 
-/// The calls the lowering makes in place: MFC1 and MTC1, and the multimedia instructions that are 64-bit operations on each half.
+/// The calls the lowering makes in place: MFC1 and MTC1, and the multimedia instructions that are 64-bit operations on each half or lanewise.
 fn native(w: u32) -> bool {
-    matches!(shape::name(w), "mfc1" | "mtc1") || vf_move(w) || wide(w)
+    matches!(shape::name(w), "mfc1" | "mtc1") || vf_move(w) || wide(w) || lanewise(w)
+}
+
+/// The multimedia instructions lowered in place on the host's vectors (Sapphire_Speed.md §68), where it has them.
+fn lanewise(w: u32) -> bool {
+    LANEWISE.contains(&shape::name(w)) && emusen_assembler::x64::vector_supported()
+}
+
+const LANEWISE: &[&str] = &[
+    "paddb", "paddh", "paddw", "psubb", "psubh", "psubw", "paddsb", "paddsh", "psubsb", "psubsh", "paddub", "padduh", "psubub", "psubuh",
+    "padsbh", "pmaxh", "pminh", "pmaxw", "pminw", "pceqb", "pceqh", "pceqw", "pcgtb", "pcgth", "pcgtw", "pabsh", "pabsw", "psllh", "psrlh",
+    "psrah", "psllw", "psrlw", "psraw", "ppacb", "ppach", "ppacw", "prot3w", "pexew", "pexcw", "pexch", "pexeh", "prevh", "pcpyh", "pinteh",
+    "pinth", "pmfhl.lw", "pmfhl.uw", "pmfhl.lh", "pmfhl.sh", "pmulth", "pmaddh", "pmsubh",
+];
+
+/// `Rec::load` for a word: a plain load's width, with `SIGNED`.
+fn plain_load(w: u32) -> u32 {
+    match shape::name(w) {
+        "lb" => 1 | SIGNED,
+        "lbu" => 1,
+        "lh" => 2 | SIGNED,
+        "lhu" => 2,
+        "lw" => 4 | SIGNED,
+        "lwu" => 4,
+        "ld" => 8,
+        _ => 0,
+    }
+}
+
+/// Whether a lanewise instruction reads HI and LO, and whether it writes them.
+fn hilo(w: u32) -> (bool, bool) {
+    match shape::name(w) {
+        "pmfhl.lw" | "pmfhl.uw" | "pmfhl.lh" | "pmfhl.sh" => (true, false),
+        "pmaddh" | "pmsubh" => (true, true),
+        "pmulth" => (false, true),
+        _ => (false, false),
+    }
 }
 
 /// QMFC2 and QMTC2, in place while VU0 rests.
@@ -295,6 +331,14 @@ impl L<'_> {
             if wide(s.word) {
                 vals.extend([32 + rs(s.word), 32 + rt(s.word), 32 + rd(s.word)]);
             }
+            if lanewise(s.word) {
+                for r in [rs(s.word), rt(s.word), rd(s.word)].into_iter().filter(|&r| r != 0) {
+                    vals.extend([r, 32 + r]);
+                }
+                if hilo(s.word) != (false, false) {
+                    vals.extend([LO0, LO1, HI0, HI1]);
+                }
+            }
             if vf_move(s.word) {
                 vals.push(32 + rt(s.word));
             }
@@ -445,7 +489,7 @@ impl L<'_> {
         let flags = if self.slot.is_some() { IN_SLOT } else { 0 } | held | if board { BOARD } else { 0 } | if crate::ee::cop2_light(s.word) { LIGHT } else { 0 };
         let halves = |m: u128| [m as u64, (m >> 64) as u64];
         let at = self.data_len.next_multiple_of(8);
-        let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, pad: 0, run: super::run_of(s.word) };
+        let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, load: plain_load(s.word), run: super::run_of(s.word) };
         self.data(r.bytes())
     }
 
@@ -1413,6 +1457,7 @@ impl L<'_> {
         match s.info.class {
             Class::Memory => self.memory(i, s),
             _ if wide(s.word) => self.wide(s),
+            _ if lanewise(s.word) => self.lanewise(s),
             _ if vf_move(s.word) => self.vf_transfer(s),
             _ if native(s.word) => self.fpu_move(s),
             _ if shape::class(s.word) == shape::Class::Call => self.call(s),
@@ -1519,6 +1564,204 @@ impl L<'_> {
         self.st.steps += 1;
     }
 
+    /// The 128-bit value of `lo` and `hi` in vector `v`; GPR 0 as zero.
+    fn quad_in(&mut self, v: Vreg, lo: usize, hi: usize) {
+        if lo == 0 {
+            self.a.vop(VOp::Xor, v, v, v);
+            return;
+        }
+        let l = self.get(lo, X);
+        let h = self.get(hi, TG);
+        self.a.vjoin(v, l, h);
+    }
+
+    /// `lo` and `hi` written from vector `v`; nothing for GPR 0.
+    fn quad_out(&mut self, v: Vreg, lo: usize, hi: usize) {
+        if lo == 0 {
+            return;
+        }
+        let (l, h) = (self.dest(lo, X), self.dest(hi, TG));
+        self.a.vsplit(l, h, v);
+        self.put(lo, l);
+        self.put(hi, h);
+    }
+
+    /// The low `bits` of every lane of `2 * bits` in `v`, zero-extended in place.
+    fn low_of_lanes(&mut self, v: Vreg, bits: u8) {
+        let (left, right) = if bits == 8 { (VShift::LeftH, VShift::RightH) } else { (VShift::LeftW, VShift::RightW) };
+        self.a.vshift(left, v, v, bits);
+        self.a.vshift(right, v, v, bits);
+    }
+
+    /// The multimedia instructions in place on the host's vectors, each as `mmi.rs` defines it (Sapphire_Speed.md §68).
+    fn lanewise(&mut self, s: &Step) {
+        let w = s.word;
+        let (a, b, d) = (rs(w), rt(w), rd(w));
+        let sa = (w >> 6 & 31) as u8;
+        let name = shape::name(w);
+        let (va, vb, vd, v3, v4, v5) = (Vreg(0), Vreg(1), Vreg(2), Vreg(3), Vreg(4), Vreg(5));
+        self.pur(P_WORK);
+        let (reads_hilo, writes_hilo) = hilo(w);
+        let unary = matches!(name, "pabsh" | "pabsw" | "psllh" | "psrlh" | "psrah" | "psllw" | "psrlw" | "psraw" | "prot3w" | "pexew" | "pexcw" | "pexch" | "pexeh" | "prevh" | "pcpyh");
+        if reads_hilo {
+            self.quad_in(v3, LO0, LO1);
+            self.quad_in(v4, HI0, HI1);
+        }
+        if !name.starts_with("pmfhl") {
+            if !unary {
+                self.quad_in(va, a, 32 + a);
+            }
+            self.quad_in(vb, b, 32 + b);
+        }
+        let op = |n: &str| -> Option<VOp> {
+            use VOp::*;
+            Some(match n {
+                "paddb" => AddB,
+                "paddh" => AddH,
+                "paddw" => AddW,
+                "psubb" => SubB,
+                "psubh" => SubH,
+                "psubw" => SubW,
+                "paddsb" => AddSB,
+                "paddsh" => AddSH,
+                "psubsb" => SubSB,
+                "psubsh" => SubSH,
+                "paddub" => AddUB,
+                "padduh" => AddUH,
+                "psubub" => SubUB,
+                "psubuh" => SubUH,
+                "pmaxh" => MaxSH,
+                "pminh" => MinSH,
+                "pmaxw" => MaxSW,
+                "pminw" => MinSW,
+                "pceqb" => EqB,
+                "pceqh" => EqH,
+                "pceqw" => EqW,
+                "pcgtb" => GtB,
+                "pcgth" => GtH,
+                "pcgtw" => GtW,
+                _ => return None,
+            })
+        };
+        let shuffle = |n: &str| -> Option<(u8, u8, u8)> {
+            // Words' order, then the low and high halfwords' orders, two bits a lane; 0xE4 keeps a part as it is.
+            Some(match n {
+                "prot3w" => (0xC9, 0xE4, 0xE4),
+                "pexew" => (0xC6, 0xE4, 0xE4),
+                "pexcw" => (0xD8, 0xE4, 0xE4),
+                "pexch" => (0xE4, 0xD8, 0xD8),
+                "pexeh" => (0xE4, 0xC6, 0xC6),
+                "prevh" => (0xE4, 0x1B, 0x1B),
+                "pcpyh" => (0xE4, 0x00, 0x00),
+                _ => return None,
+            })
+        };
+        if let Some(o) = op(name) {
+            self.a.vop(o, vd, va, vb);
+        } else if let Some((ws, lh, hh)) = shuffle(name) {
+            self.a.vmov(vd, vb);
+            if ws != 0xE4 {
+                self.a.vshuffle(VShuffle::W, vd, vd, ws);
+            }
+            if lh != 0xE4 {
+                self.a.vshuffle(VShuffle::LowH, vd, vd, lh);
+            }
+            if hh != 0xE4 {
+                self.a.vshuffle(VShuffle::HighH, vd, vd, hh);
+            }
+        } else {
+            match name {
+                "padsbh" => {
+                    self.a.vop(VOp::SubH, v3, va, vb);
+                    self.a.vop(VOp::AddH, v4, va, vb);
+                    self.a.vblend_h(vd, v3, v4, 0xF0);
+                }
+                "pabsh" | "pabsw" => {
+                    // The most negative lane's absolute value saturates: one less where the top bit is set.
+                    let (u, top) = if name == "pabsh" { (VUnary::AbsH, VShift::RightH) } else { (VUnary::AbsW, VShift::RightW) };
+                    let (sub, bits) = if name == "pabsh" { (VOp::SubH, 15) } else { (VOp::SubW, 31) };
+                    self.a.vunary(u, vd, vb);
+                    self.a.vshift(top, v3, vd, bits);
+                    self.a.vop(sub, vd, vd, v3);
+                }
+                "psllh" => self.a.vshift(VShift::LeftH, vd, vb, sa & 15),
+                "psrlh" => self.a.vshift(VShift::RightH, vd, vb, sa & 15),
+                "psrah" => self.a.vshift(VShift::ArithH, vd, vb, sa & 15),
+                "psllw" => self.a.vshift(VShift::LeftW, vd, vb, sa),
+                "psrlw" => self.a.vshift(VShift::RightW, vd, vb, sa),
+                "psraw" => self.a.vshift(VShift::ArithW, vd, vb, sa),
+                "ppacb" | "ppach" => {
+                    // GPR[rt]'s narrowed lanes below GPR[rs]'s: every lane cut to its low half, then packed, which cannot saturate.
+                    let bits = if name == "ppacb" { 8 } else { 16 };
+                    self.low_of_lanes(vb, bits);
+                    self.low_of_lanes(va, bits);
+                    self.a.vop(if bits == 8 { VOp::PackUH } else { VOp::PackUW }, vd, vb, va);
+                }
+                "ppacw" => {
+                    self.a.vshuffle(VShuffle::W, vb, vb, 0x08);
+                    self.a.vshuffle(VShuffle::W, va, va, 0x08);
+                    self.a.vop(VOp::LowQ, vd, vb, va);
+                }
+                "pinteh" => {
+                    self.low_of_lanes(vb, 16);
+                    self.a.vshift(VShift::LeftW, va, va, 16);
+                    self.a.vop(VOp::Or, vd, va, vb);
+                }
+                "pinth" => {
+                    self.a.vshuffle(VShuffle::W, va, va, 0xEE);
+                    self.a.vop(VOp::LowH, vd, vb, va);
+                }
+                "pmfhl.lw" | "pmfhl.uw" => {
+                    let o = if name == "pmfhl.lw" { 0x08 } else { 0x0D };
+                    self.a.vshuffle(VShuffle::W, v3, v3, o);
+                    self.a.vshuffle(VShuffle::W, v4, v4, o);
+                    self.a.vop(VOp::LowW, vd, v3, v4);
+                }
+                "pmfhl.lh" | "pmfhl.sh" => {
+                    if name == "pmfhl.lh" {
+                        self.low_of_lanes(v3, 16);
+                        self.low_of_lanes(v4, 16);
+                    }
+                    self.a.vop(if name == "pmfhl.lh" { VOp::PackUW } else { VOp::PackSW }, vd, v3, v4);
+                    self.a.vshuffle(VShuffle::W, vd, vd, 0xD8);
+                }
+                "pmulth" | "pmaddh" | "pmsubh" => {
+                    // The eight signed products as words: LO takes 0, 1, 4 and 5, HI 2, 3, 6 and 7; GPR[rd] the even ones as written.
+                    self.a.vop(VOp::MulLowH, v5, va, vb);
+                    self.a.vop(VOp::MulHighSH, vd, va, vb);
+                    self.a.vop(VOp::LowH, va, v5, vd);
+                    self.a.vop(VOp::HighH, vb, v5, vd);
+                    self.a.vop(VOp::LowQ, v5, va, vb);
+                    self.a.vop(VOp::HighQ, vd, va, vb);
+                    match name {
+                        "pmaddh" => {
+                            self.a.vop(VOp::AddW, v3, v3, v5);
+                            self.a.vop(VOp::AddW, v4, v4, vd);
+                        }
+                        "pmsubh" => {
+                            self.a.vop(VOp::SubW, v3, v3, v5);
+                            self.a.vop(VOp::SubW, v4, v4, vd);
+                        }
+                        _ => {
+                            self.a.vmov(v3, v5);
+                            self.a.vmov(v4, vd);
+                        }
+                    }
+                    self.a.vshuffle(VShuffle::W, va, v3, 0x08);
+                    self.a.vshuffle(VShuffle::W, vb, v4, 0x08);
+                    self.a.vop(VOp::LowW, vd, va, vb);
+                }
+                other => unreachable!("{other} is not lanewise"),
+            }
+        }
+        if writes_hilo {
+            self.quad_out(v3, LO0, LO1);
+            self.quad_out(v4, HI0, HI1);
+        }
+        self.quad_out(vd, d, 32 + d);
+        self.st.steps += 1;
+    }
+
     /// The interpreter raises the coprocessor's unusable exception while Status's bit `cu` is clear.
     fn usable(&mut self, cu: u32, s: &Step) {
         let p = self.push_purpose(P_FAULT);
@@ -1597,7 +1840,8 @@ impl L<'_> {
         self.store_all();
         self.st.dirty = 0;
         self.pre = 0;
-        let k = self.rec(s, 0, op.kind == ops::Kind::Cop2);
+        let cache = op.name == "cache";
+        let k = self.rec(s, 0, op.kind == ops::Kind::Cop2 || cache);
         self.pur(P_WORK);
         if self.slot == Some(None) {
             self.slow_call(k, LEFT_CALL);
@@ -1607,6 +1851,16 @@ impl L<'_> {
         }
         for v in call_writes(w, op) {
             self.st.held[v] = false;
+        }
+        if cache {
+            // A cache operation may replace or invalidate a line an earlier access kept.
+            let i = self.now;
+            for j in 0..i {
+                if self.home[rec_id(j, F_A)] != Home::None && self.uses[j][F_A].is_some_and(|e| e > i) {
+                    self.a.mov_imm(X, i64::MIN);
+                    self.keep(j, F_A, X);
+                }
+            }
         }
         self.st.steps += 1;
     }

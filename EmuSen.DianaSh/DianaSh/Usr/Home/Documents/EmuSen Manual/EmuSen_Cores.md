@@ -224,9 +224,11 @@ a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption a
    no other host, and a redirect off it refused.
 2. **Corruption**: the zip's CRC-32 equals the index line the plan was made from (a mismatch means the build changed
    or the bytes did; the job refuses and says which); every member's CRC-32 checked on unpacking.
-3. **Shape, before anything is kept**: exactly one member, named `<corename>_libretro.<ext>`, with no folder, link or
-   absolute path in its name; its size under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) and the zip's
-   under the same; its header (ELF, Mach-O or PE) naming this machine's architecture.
+3. **Shape, before anything is kept**: exactly one member, named `<corename>_libretro.<ext>`, with no folder, `..`,
+   link or absolute path in its name (no zip-slip: the name is compared whole, never joined to a path first); its size
+   under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) both as the zip declares it and as the bytes
+   actually inflate, the inflating stopped at the bound, and the zip's own size under the same; its header (ELF,
+   Mach-O or PE) naming this machine's architecture.
 4. **Identity**: its SHA-256, written into `NOTICE` with the source address, the build date, the index's CRC-32, the
    date fetched, the licence and the authors.
 5. **Trust**: **nothing downloaded runs before the player approves it.** The runtime lists the new folder as
@@ -235,8 +237,14 @@ a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption a
    player's permissions inside its sandbox, and records the hash. A later change to the file is a new hash and is asked
    about again (§7.2 rule 2). Cores offers *Approve…* right after an install finishes, and never approves by itself.
 
-Where a core is in `cores-notes.tsv` and its SHA-256 equals the one tested, the approval says so; that is information
-for the player's decision, not a substitute for it.
+**The approval is trust on first download**, and the question says so in those terms: libretro signs nothing, so the
+player is trusting the build the buildbot served that day, and the recorded hash makes sure nothing else is ever run
+in its place. The hash approved is the libretro core's own, recorded in `cores.approved` against its folder; the
+frontend checks the file against it before the core is started. `NOTICE`'s SHA-256 and `cores verify` are integrity
+checks only, never trust, since `NOTICE` sits in a folder the player (or anything running as the player) can write
+(an independent review of the libretro host's design, 2026-10-31). Where a core is in `cores-notes.tsv` and its
+SHA-256 equals the one tested, the approval adds "this exact build was tested by EmuSen on <date>": a second signal for
+the player's decision, not a substitute for it.
 
 ### 5.3 The install
 

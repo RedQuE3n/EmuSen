@@ -310,7 +310,8 @@ impl Entry {
         Ok(notice)
     }
 
-    /// The libretro core hashed against its `NOTICE`; the hash when they agree.
+    /// The libretro core hashed against its `NOTICE`; the hash when they agree. Integrity only, never trust: the folder
+    /// is the player's to write, so trust is the hash in `cores.approved`, checked before the core is started.
     pub fn verify(&self) -> Result<String, Refused> {
         let notice = self.read_notice()?;
         let path = self.core_path();

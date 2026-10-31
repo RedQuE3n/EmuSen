@@ -1038,16 +1038,19 @@ void main() {
             srec_magic[t] = unpackUint2x32(m);
         }
         barrier();
-        if (ordered != 0u) {
-            // Each record over its bounds, 128 pixels at a time in raster order: every lane reads, then all store, so a
-            // pixel reads the memory as the record found it and the batches before it in the record left it.
-            for (R = 0u; R < n; R++) {
-                uint x0 = srec[R][31] & 0xFFFFu, x1 = srec[R][31] >> 16;
-                uint y0 = (srec[R][3] >> 8) & 0x7FFu, y1 = (srec[R][3] >> 20) & 0x7FFu;
-                uint w = x1 - x0 + 1u, count_px = w * (y1 - y0 + 1u);
-                for (uint b = 0u; b < count_px; b += 128u) {
-                    uint i = b + t;
-                    if (i < count_px) draw_record(int(x0 + i % w), int(y0 + i / w));
+        // One call of the record a step, so that the walk holds one copy of it. In an ordered stretch each record is met
+        // over its bounds, 128 pixels a step in raster order: every lane reads, then all store, so a pixel reads the memory
+        // as the record found it and the steps before it in the record left it.
+        for (R = 0u; R < n; R++) {
+            uint x0 = srec[R][31] & 0xFFFFu, x1 = srec[R][31] >> 16;
+            uint y0 = (srec[R][3] >> 8) & 0x7FFu, y1 = (srec[R][3] >> 20) & 0x7FFu;
+            uint w = x1 - x0 + 1u, count_px = ordered != 0u ? w * (y1 - y0 + 1u) : 1u;
+            for (uint b = 0u; b < count_px; b += 128u) {
+                uint i = b + t;
+                bool live = ordered != 0u ? i < count_px : (debug & 4u) == 0u;
+                int px = ordered != 0u ? int(x0 + i % w) : x, py = ordered != 0u ? int(y0 + i / w) : y;
+                if (live) draw_record(px, py);
+                if (ordered != 0u) {
                     barrier();
                     cache_store(0u);
                     cache_store(1u);
@@ -1057,7 +1060,7 @@ void main() {
                     barrier();
                 }
             }
-        } else if ((debug & 4u) == 0u) for (R = 0u; R < n; R++) draw_record(x, y);
+        }
     }
     cache_store(0u);
     cache_store(1u);

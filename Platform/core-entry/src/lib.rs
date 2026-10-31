@@ -1,6 +1,6 @@
-//! An installed libretro core's folder under the player's `/Cores/libretro/<corename>/` and its `NOTICE`: one reader and
+//! An installed libretro core's folder under the player's `/Cores/libretro/<stem>/` and its `NOTICE`: one reader and
 //! writer, owned by Cores and used by the libretro host and discovery alike (EmuSen_Cores.md §5.3, §7; decided
-//! 2026-10-31). The folder's files are named here and nowhere else.
+//! 2026-10-31). The folder's files are named here and nowhere else, on the core's file stem, never its `corename`.
 
 use sha2::{Digest, Sha256};
 use std::fmt;
@@ -33,20 +33,42 @@ pub const fn library_suffix() -> &'static str {
     }
 }
 
-/// Whether a libretro `corename` can name an entry's folder and files: 1 to 64 of `[A-Za-z0-9_.-]`, not starting with
-/// a dot, so it is never a path, a hidden folder, `.` or `..`.
-pub fn valid_corename(name: &str) -> bool {
+/// Whether a file stem (`pcsx2` of `pcsx2_libretro.so`) can name an entry's folder and files: 1 to 64 of
+/// `[A-Za-z0-9_.-]`, not starting with a dot, so it is never a path, a hidden folder, `.` or `..`.
+pub fn valid_stem(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
         && !name.starts_with('.')
         && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
 
+fn stem_before<'a>(file_name: &'a str, tail: &str) -> Option<&'a str> {
+    file_name.strip_suffix(tail).filter(|s| valid_stem(s))
+}
+
+/// The stem of the buildbot's zip, `<stem>_libretro.<suffix>.zip`, for this platform's suffix.
+pub fn stem_of_zip(file_name: &str) -> Option<&str> {
+    stem_before(file_name, &format!("_libretro.{}.zip", library_suffix()))
+}
+
+/// The stem of a core information file, `<stem>_libretro.info`.
+pub fn stem_of_info(file_name: &str) -> Option<&str> {
+    stem_before(file_name, "_libretro.info")
+}
+
+/// The stem of the libretro core itself, `<stem>_libretro.<suffix>`.
+pub fn stem_of_core(file_name: &str) -> Option<&str> {
+    stem_before(file_name, &format!("_libretro.{}", library_suffix()))
+}
+
 /// What a `NOTICE` records of a downloaded core (EmuSen_Cores.md §5.2 step 4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notice {
+    /// The file stem the folder and files are named on (`pcsx2`), from the zip's and the `.info`'s names.
+    pub stem: String,
     /// The `.info`'s `display_name`.
     pub name: String,
+    /// The `.info`'s `corename` (`LRPS2`), information only: it names nothing on disk.
     pub corename: String,
     /// The `.info`'s `authors`, split on `|`.
     pub authors: Vec<String>,
@@ -82,7 +104,7 @@ fn refused<T>(text: impl Into<String>) -> Result<T, Refused> {
     Err(Refused(text.into()))
 }
 
-const KEYS: [&str; 10] = ["format", "name", "corename", "authors", "license", "source", "build", "index_crc32", "sha256", "fetched"];
+const KEYS: [&str; 11] = ["format", "stem", "name", "corename", "authors", "license", "source", "build", "index_crc32", "sha256", "fetched"];
 
 fn is_date(s: &str) -> bool {
     let b = s.as_bytes();
@@ -147,6 +169,7 @@ impl Notice {
             return refused("NOTICE's index_crc32 is not eight hex digits");
         }
         let notice = Notice {
+            stem: take("stem")?,
             name: take("name")?,
             corename: take("corename")?,
             authors: take("authors")?.split('|').map(str::trim).filter(|a| !a.is_empty()).map(str::to_string).collect(),
@@ -164,11 +187,11 @@ impl Notice {
 
     /// The rules every field holds to, so that what is written reads back.
     pub fn check(&self) -> Result<(), Refused> {
-        for (key, value) in [("name", &self.name), ("license", &self.license), ("source", &self.source)] {
+        for (key, value) in [("name", &self.name), ("corename", &self.corename), ("license", &self.license), ("source", &self.source)] {
             clean(key, value)?;
         }
-        if !valid_corename(&self.corename) {
-            return refused(format!("NOTICE's corename {:?} cannot name a folder", self.corename));
+        if !valid_stem(&self.stem) {
+            return refused(format!("NOTICE's stem {:?} cannot name a folder", self.stem));
         }
         if self.authors.is_empty() {
             return refused("NOTICE has no authors");
@@ -181,6 +204,9 @@ impl Notice {
         }
         if !self.source.starts_with("https://") {
             return refused("NOTICE's source is not an https:// address");
+        }
+        if self.source.rsplit('/').next().and_then(stem_of_zip) != Some(self.stem.as_str()) {
+            return refused(format!("NOTICE's source is not {}_libretro.{}.zip", self.stem, library_suffix()));
         }
         if !is_date(&self.build) {
             return refused("NOTICE's build is not a date YYYY-MM-DD");
@@ -204,8 +230,9 @@ impl Notice {
     pub fn to_text(&self) -> Result<String, Refused> {
         self.check()?;
         let mut t = String::from("# Installed by EmuSen's Cores at the player's request; the core keeps its own licence.\n");
-        let fields: [(&str, String); 10] = [
+        let fields: [(&str, String); 11] = [
             ("format", FORMAT.to_string()),
+            ("stem", self.stem.clone()),
             ("name", self.name.clone()),
             ("corename", self.corename.clone()),
             ("authors", self.authors.join("|")),
@@ -241,42 +268,47 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// One installed core's folder, `<cores>/libretro/<corename>/`, and the names of its files.
+/// One installed core's folder, `<cores>/libretro/<stem>/`, and the names of its files.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub folder: PathBuf,
-    pub corename: String,
+    pub stem: String,
 }
 
 impl Entry {
-    /// The entry for a corename under a `/Cores` folder; refused where the name cannot name a folder.
-    pub fn new(cores: &Path, corename: &str) -> Result<Entry, Refused> {
-        if !valid_corename(corename) {
-            return refused(format!("{corename:?} cannot name a core's folder"));
+    /// The entry for a file stem under a `/Cores` folder; refused where the stem cannot name a folder.
+    pub fn new(cores: &Path, stem: &str) -> Result<Entry, Refused> {
+        if !valid_stem(stem) {
+            return refused(format!("{stem:?} cannot name a core's folder"));
         }
-        Ok(Entry { folder: cores.join(LIBRETRO).join(corename), corename: corename.to_string() })
+        Ok(Entry { folder: cores.join(LIBRETRO).join(stem), stem: stem.to_string() })
+    }
+
+    /// The entry a `NOTICE` describes under a `/Cores` folder, named on its stem.
+    pub fn for_notice(cores: &Path, notice: &Notice) -> Result<Entry, Refused> {
+        Entry::new(cores, &notice.stem)
     }
 
     /// The same entry's files in another folder, such as its staging or previous copy.
-    pub fn at(folder: PathBuf, corename: &str) -> Result<Entry, Refused> {
-        if !valid_corename(corename) {
-            return refused(format!("{corename:?} cannot name a core's folder"));
+    pub fn at(folder: PathBuf, stem: &str) -> Result<Entry, Refused> {
+        if !valid_stem(stem) {
+            return refused(format!("{stem:?} cannot name a core's folder"));
         }
-        Ok(Entry { folder, corename: corename.to_string() })
+        Ok(Entry { folder, stem: stem.to_string() })
     }
 
     pub fn notice_path(&self) -> PathBuf {
         self.folder.join(NOTICE)
     }
 
-    /// `<corename>_libretro.<suffix>`, the libretro core as downloaded.
+    /// `<stem>_libretro.<suffix>`, the libretro core as downloaded.
     pub fn core_path(&self) -> PathBuf {
-        self.folder.join(format!("{}_libretro.{}", self.corename, library_suffix()))
+        self.folder.join(format!("{}_libretro.{}", self.stem, library_suffix()))
     }
 
-    /// `<corename>_libretro.info`, its published core information.
+    /// `<stem>_libretro.info`, its published core information.
     pub fn info_path(&self) -> PathBuf {
-        self.folder.join(format!("{}_libretro.info", self.corename))
+        self.folder.join(format!("{}_libretro.info", self.stem))
     }
 
     pub fn broker_path(&self) -> PathBuf {
@@ -300,17 +332,18 @@ impl Entry {
         format!("{ADAPTER}.{}\n", library_suffix())
     }
 
-    /// The entry's `NOTICE`, read and checked, its corename the folder's.
+    /// The entry's `NOTICE`, read and checked, its stem the folder's.
     pub fn read_notice(&self) -> Result<Notice, Refused> {
         let text = std::fs::read_to_string(self.notice_path()).map_err(|e| Refused(format!("{}: {e}", self.notice_path().display())))?;
         let notice = Notice::parse(&text)?;
-        if notice.corename != self.corename {
-            return refused(format!("NOTICE names {} but its folder is {}", notice.corename, self.corename));
+        if notice.stem != self.stem {
+            return refused(format!("NOTICE names {} but its folder is {}", notice.stem, self.stem));
         }
         Ok(notice)
     }
 
-    /// The libretro core hashed against its `NOTICE`; the hash when they agree.
+    /// The libretro core hashed against its `NOTICE`; the hash when they agree. Integrity only, never trust: the folder
+    /// is the player's to write, so trust is the hash in `cores.approved`, checked before the core is started.
     pub fn verify(&self) -> Result<String, Refused> {
         let notice = self.read_notice()?;
         let path = self.core_path();
@@ -321,8 +354,8 @@ impl Entry {
         Ok(hash)
     }
 
-    /// The entries under a `/Cores` folder, by corename, the staging and previous folders and anything not a valid
-    /// corename left out; none where there is no `libretro` folder.
+    /// The entries under a `/Cores` folder, by stem, the staging and previous folders and anything not a valid stem
+    /// left out; none where there is no `libretro` folder.
     pub fn list(cores: &Path) -> std::io::Result<Vec<Entry>> {
         let root = cores.join(LIBRETRO);
         let read = match std::fs::read_dir(&root) {
@@ -337,12 +370,12 @@ impl Entry {
                 continue;
             }
             if let Some(name) = item.file_name().to_str()
-                && valid_corename(name)
+                && valid_stem(name)
             {
-                entries.push(Entry { folder: item.path(), corename: name.to_string() });
+                entries.push(Entry { folder: item.path(), stem: name.to_string() });
             }
         }
-        entries.sort_by(|a, b| a.corename.cmp(&b.corename));
+        entries.sort_by(|a, b| a.stem.cmp(&b.stem));
         Ok(entries)
     }
 }

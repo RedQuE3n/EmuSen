@@ -143,31 +143,40 @@ question moves into the tool library so that Mistress's open path and Cores ask 
 | Fact | Owner | Read by Cores through |
 |---|---|---|
 | what cores are installed, their trust and their claimed systems | the runtime's discovery (`EmuSen_Backend.md` §29.40.5) | the frontend API's `cores` listing |
-| what a libretro core in `/Cores/libretro/<core>/` is: its source, build, hashes, licence | the folder itself: `NOTICE` and the `.info` (`EmuSen_LibretroHost.md` §1.1) | the shared entry module (§7.1) |
+| what a libretro core in `/Cores/libretro/<stem>/` is: its source, build, hashes, licence | the folder itself: `NOTICE` and the `.info` (`EmuSen_LibretroHost.md` §1.1) | the shared entry module (§7.1) |
 | what libretro cores exist to download | the cached catalogue (§4.2) | `emusen-core-tool` |
 | which engine runs a console, and a game | the runtime's `Engine` setting, console and game scope | `settings_get`/`settings_set`, `game_setting_get`/`_set` |
 
 There is no database of Cores' own: an installed libretro core is its folder, and everything else is asked of its
-owner. A row joins the four by the core's id (the libretro `corename`, or a project core's engine name).
+owner. A row joins the four by the core's id (a libretro core's file stem, or a project core's engine name).
+
+**A libretro core's id is its file stem, never its `corename`** [R, found 2026-10-31 by the libretro host's work]: the
+buildbot names a core's files on the stem, and the `.info`'s `corename` can differ from it (`corename = "LRPS2"` ships
+as `pcsx2_libretro.so` and `pcsx2_libretro.info`; `"PCEE2"` as `pcee2_libretro.so`). The stem is taken from the
+zip's and the `.info`'s file names, names the folder and its files, and is `NOTICE`'s `stem`; the `corename` is
+recorded as information only.
 
 ### 4.2 The catalogue
 
 - **What it is**: libretro's core information archive (`assets/frontend/info.zip`, 294 KB on 2026-10-31 [R]) and the
   platform's nightly index (`nightly/<platform>/<arch>/latest/.index-extended`: one line per core zip, date, CRC-32 of
   the zip, file name [R]). Fetched only when the player asks (*Check for Updates*, or the first time Cores is asked to
-  list what is available), into Galaxia's cache as `Cache/cores/info.zip` and `Cache/cores/index-<platform>-<arch>`,
-  each with the date fetched; Cores works offline from the copies it has, showing their date.
+  list what is available), into `/Cores/libretro/.catalogue/` as `info.zip` and `index-<platform>-<arch>`, each
+  with the date fetched (Galaxia's tree has no cache directory, and the catalogue belongs beside the cores it lists); Cores works offline from the copies it has, showing their date.
 - **Its rows**: each `.info` whose zip is in the platform's index. From the `.info` [R]: `display_name`, `corename`,
   `authors`, `license`, `permissions`, `display_version`, `systemid` and `database` (to place it under a console),
   `supported_extensions`, `firmware_count` and `firmwareN_desc`/`_path`/`_opt`, `notes`, `hw_render` and
   `required_hw_api`, `needs_fullpath`, `is_experimental`, `savestate`, `description`. From the index: the build date
   and the zip's CRC-32.
 - **States**: *built in* (a project core), *installed*, *update* (the index's CRC-32 or date for the core differs from
-  the one its `NOTICE` records), *available*, *waiting for approval* (installed, `trust` `needs_approval`), *not
+  the one its `NOTICE` records), *available*, *waiting for approval* (installed, `trust` `needs_approval`), *needs refresh* (the proxy's and adapter's copies older
+  than the installation's, §5.4), *not
   supported* (with the reason, §4.6), *added by you*.
 - **Console placement** uses one table from libretro's `systemid` (and the `database` names where `systemid` is blank)
   to EmuSen's system ids. The libretro host needs the same table for `info()` (`EmuSen_LibretroHost.md` §4.1), so it
-  has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7).
+  has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7). Until the host's
+  `emusen_systems::for_libretro` lands, the core tool takes the placement from its caller, and switches to that
+  function when it does.
 
 ### 4.3 The default core, per console and per game
 
@@ -212,7 +221,7 @@ Three kinds, kept apart so the player can tell them apart:
 ### 5.1 The source
 
 The libretro buildbot's nightlies, one zip per core: `buildbot.libretro.com/nightly/<platform>/<arch>/latest/
-<corename>_libretro.<ext>.zip` [R]. The stable releases carry no per-core archives, only one `RetroArch_cores.7z` of
+<stem>_libretro.<ext>.zip` [R]. The stable releases carry no per-core archives, only one `RetroArch_cores.7z` of
 274 MB per release (1.22.2, 2025-11-20 [R]), so they cannot serve one core at a time (Q3).
 
 ### 5.2 What can and cannot be verified
@@ -224,9 +233,11 @@ a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption a
    no other host, and a redirect off it refused.
 2. **Corruption**: the zip's CRC-32 equals the index line the plan was made from (a mismatch means the build changed
    or the bytes did; the job refuses and says which); every member's CRC-32 checked on unpacking.
-3. **Shape, before anything is kept**: exactly one member, named `<corename>_libretro.<ext>`, with no folder, link or
-   absolute path in its name; its size under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) and the zip's
-   under the same; its header (ELF, Mach-O or PE) naming this machine's architecture.
+3. **Shape, before anything is kept**: exactly one member, named `<stem>_libretro.<ext>`, with no folder, `..`,
+   link or absolute path in its name (no zip-slip: the name is compared whole, never joined to a path first); its size
+   under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) both as the zip declares it and as the bytes
+   actually inflate, the inflating stopped at the bound, and the zip's own size under the same; its header (ELF,
+   Mach-O or PE) naming this machine's architecture.
 4. **Identity**: its SHA-256, written into `NOTICE` with the source address, the build date, the index's CRC-32, the
    date fetched, the licence and the authors.
 5. **Trust**: **nothing downloaded runs before the player approves it.** The runtime lists the new folder as
@@ -235,12 +246,20 @@ a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption a
    player's permissions inside its sandbox, and records the hash. A later change to the file is a new hash and is asked
    about again (§7.2 rule 2). Cores offers *Approve…* right after an install finishes, and never approves by itself.
 
-Where a core is in `cores-notes.tsv` and its SHA-256 equals the one tested, the approval says so; that is information
-for the player's decision, not a substitute for it.
+**The approval is trust on first download**, and the question says so in those terms: libretro signs nothing, so the
+player is trusting the build the buildbot served that day, and the recorded hash makes sure nothing else is ever run
+in its place. The hash approved is the libretro core's own, recorded in `cores.approved` against its folder; the
+host compares it before any runner starts: the proxy seals a `memfd` copy of the libretro core, hashes that copy, and
+the runner loads the sealed copy, so the bytes approved are the bytes run whatever happens to the file afterwards
+(`EmuSen_LibretroHost.md` §1.3, after its review). `NOTICE`'s SHA-256 and `cores verify` are integrity
+checks only, never trust, since `NOTICE` sits in a folder the player (or anything running as the player) can write
+(an independent review of the libretro host's design, 2026-10-31). Where a core is in `cores-notes.tsv` and its
+SHA-256 equals the one tested, the approval adds "this exact build was tested by EmuSen on <date>": a second signal for
+the player's decision, not a substitute for it.
 
 ### 5.3 The install
 
-- **Staging** under `/Cores/libretro/.staging/<corename>-<pid>/`, on the same file system as its destination: the core
+- **Staging** under `/Cores/libretro/.staging/<stem>-<pid>/`, on the same file system as its destination: the core
   unpacked, its `.info` copied from the catalogue, `NOTICE` written, the project's proxy (`emusen-core-broker.so`) and
   adapter (`emusen-libretro-host.so`) copied from the installation, and `broker.target` written naming the adapter's
   copy, as `EmuSen_LibretroHost.md` §1.1 lays the folder out (agreed with the libretro host 2026-10-31: the runner
@@ -249,20 +268,20 @@ for the player's decision, not a substitute for it.
   rule 3's checks pass.
 
 ```
-/Cores/libretro/<corename>/
+/Cores/libretro/<stem>/
     emusen-core-broker.so        the proxy hosts load (hash in cores.manifest)
     broker.target                one line: emusen-libretro-host.so
     emusen-libretro-host.so      the adapter's copy (hash in cores.manifest)
-    <corename>_libretro.so       the libretro core, as downloaded
-    <corename>_libretro.info     its core information, from the catalogue
+    <stem>_libretro.so           the libretro core, as downloaded
+    <stem>_libretro.info         its core information, from the catalogue
     NOTICE                       §5.2 step 4, read and written by emusen-core-entry (§7.1)
     assets/                      data files beside firmware
 ```
 
-  Every name in that folder, and `NOTICE`'s format (`format: 1` then the nine keys of §7.1, `#` lines skipped, a later
+  Every name in that folder, and `NOTICE`'s format (`format: 1` then the ten keys of §7.1, `#` lines skipped, a later
   format's extra keys kept and written back, every field checked on read and on write), is `emusen-core-entry`'s
-  (`Platform/core-entry`, built 2026-10-31, 11 tests).
-- **Into place** by one rename to `/Cores/libretro/<corename>/`. A job stopped or failed at any point leaves the staging
+  (`Platform/core-entry`, built 2026-10-31, 12 tests; keyed on the stem the same day).
+- **Into place** by one rename to `/Cores/libretro/<stem>/`. A job stopped or failed at any point leaves the staging
   folder, which the next job of the tool removes; the destination is never half-written.
 - **Assets** a core needs beside firmware, where its `.info` or the host's profile names them, are downloaded into
   `assets/` in the same job, under the same checks.
@@ -272,10 +291,17 @@ for the player's decision, not a substitute for it.
 
 The update feed is the same index: a core is *update* when its index line's CRC-32 or date differs from its `NOTICE`.
 Checked only when the player asks (Q5). An update stages the new build as an install does, renames the installed folder
-to `/Cores/libretro/.previous/<corename>/`, renames the new one into place, and on any failure renames the previous
+to `/Cores/libretro/.previous/<stem>/`, renames the new one into place, and on any failure renames the previous
 back. The new build has a new hash and is approved again before it runs. The previous build is kept until the next
 update and offered as *Roll Back* (Q6); its approval is kept with it. A core loaded in this process is replaced on
 disk only; the running game keeps the build it opened, and the next game opened uses the new one.
+
+**Refresh, when EmuSen itself is updated.** The proxy's and the adapter's copies in each folder then differ from the
+installation's, and discovery lists the folder as *needs refresh*, not *needs approval* (`EmuSen_LibretroHost.md`
+§1.3). `cores verify` (and the window's *Verify*, offered on those rows and by the state's filter) copies them again
+from the installation, rewrites `broker.target`, and checks the libretro core against its `NOTICE`; the libretro core
+is not touched, so its hash and its approval stand and nothing is asked of the player. A folder whose libretro core
+no longer matches its approval is the other case, *needs approval*, and Verify never clears it.
 
 ### 5.5 Remove
 
@@ -309,8 +335,8 @@ window directly and by the module through its host's runtime.
 The libretro host is being built on its own branch. Four places need one owner between the two (Q7):
 
 1. **The installed core's folder and `NOTICE`.** Written by the core tool, read by discovery and by the libretro host
-   (which refuses a core whose SHA-256 is not `NOTICE`'s). `NOTICE` is `key: value` lines (`name`, `corename`,
-   `authors`, `license`, `source`, `build`, `index_crc32`, `sha256`, `fetched`), read and written by one crate, Cores'
+   (which compares the libretro core with `cores.approved`, `NOTICE` being information only). `NOTICE` is `key: value` lines (`stem`, `name`,
+   `corename` (information only), `authors`, `license`, `source`, `build`, `index_crc32`, `sha256`, `fetched`), read and written by one crate, Cores'
    `emusen-core-entry`, on which the libretro host depends (decided, §11.7).
 2. **The table from libretro's `systemid` to EmuSen's systems**, the libretro host's: each system file of the systems
    table gains `"libretro_databases"` and `"libretro_systemids"`, and `emusen_systems::for_libretro(systemid, databases)`
@@ -340,7 +366,7 @@ cores get <core>...      download, check and install; prints the SHA-256 to appr
 cores update [<core>...] the installed cores whose index line changed, or those named
 cores rollback <core>    the previous build back in place
 cores rm <core>...       a downloaded core's folder removed and its approvals revoked
-cores verify [<core>...] each installed core's files hashed against its NOTICE and the manifest
+cores verify [<core>...] each installed core hashed against its NOTICE; stale proxy and adapter copies refreshed
 cores approve <core>     the approval, at the prompt only, as 'trust': refused inside 'source' and $(...)
 cores default <console> [<core>]          print, or set, the console's engine
 cores default --game <path> [<core>|-]    print, set, or clear a game's choice

@@ -9,9 +9,8 @@ use crate::{packages, Context};
 use emusen_galaxia::claims;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{self, Value};
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use emusen_tool_job::Events as Queue;
+pub use emusen_tool_job::Job;
 use std::time::{Duration, Instant};
 
 /// What a request asks.
@@ -123,78 +122,17 @@ pub fn request(text: &str) -> Result<Request, String> {
     Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside })
 }
 
-struct Queue {
-    events: Mutex<(VecDeque<String>, bool)>,
-    arrived: Condvar,
-}
-
-/// A running or finished request.
-pub struct Job {
-    queue: Arc<Queue>,
-    stop: Arc<AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-
-impl Job {
-    /// The next event, waiting up to `wait` for one; `None` when none came, and none ever after the last.
-    pub fn peek(&self, wait: Duration) -> Option<String> {
-        let mut guard = self.queue.events.lock().unwrap_or_else(|p| p.into_inner());
-        if guard.0.is_empty() && !guard.1 {
-            guard = self.queue.arrived.wait_timeout(guard, wait).unwrap_or_else(|p| p.into_inner()).0;
-        }
-        guard.0.front().cloned()
-    }
-
-    /// Takes the event `peek` gave.
-    pub fn take(&self) {
-        self.queue.events.lock().unwrap_or_else(|p| p.into_inner()).0.pop_front();
-    }
-
-    /// Whether the job has ended and every event was taken.
-    pub fn finished(&self) -> bool {
-        let guard = self.queue.events.lock().unwrap_or_else(|p| p.into_inner());
-        guard.1 && guard.0.is_empty()
-    }
-
-    /// Asks the job to stop: a running chdman is ended, its partial file removed, and the job ends with what it did.
-    pub fn stop(&self) {
-        self.stop.store(true, Ordering::Relaxed);
-    }
-}
-
-impl Drop for Job {
-    fn drop(&mut self) {
-        self.stop();
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
-        }
-    }
-}
-
 fn emit(queue: &Queue, event: Value) {
     let mut line = String::new();
     json::write_compact(&mut line, &event);
-    let mut guard = queue.events.lock().unwrap_or_else(|p| p.into_inner());
-    guard.0.push_back(line);
-    queue.arrived.notify_all();
+    queue.emit(line);
 }
 
-/// Starts a request; a request that is not one is refused before anything runs.
+/// Starts a request; a request that is not one is refused before anything runs. A stop ends a running chdman, removes
+/// its partial file, and the job ends with what it did.
 pub fn start(text: &str, ctx: Context) -> Result<Job, String> {
     let req = request(text)?;
-    let queue = Arc::new(Queue { events: Mutex::new((VecDeque::new(), false)), arrived: Condvar::new() });
-    let stop = Arc::new(AtomicBool::new(false));
-    let (q, s) = (queue.clone(), stop.clone());
-    let thread = std::thread::Builder::new()
-        .name("emusen-library-tool".into())
-        .spawn(move || {
-            run(&ctx, &req, &q, &|| s.load(Ordering::Relaxed));
-            let mut guard = q.events.lock().unwrap_or_else(|p| p.into_inner());
-            guard.1 = true;
-            q.arrived.notify_all();
-        })
-        .map_err(|e| e.to_string())?;
-    Ok(Job { queue, stop, thread: Some(thread) })
+    Job::spawn("emusen-library-tool", move |q, stop| run(&ctx, &req, q, stop))
 }
 
 fn op_word(op: &Op) -> &'static str {

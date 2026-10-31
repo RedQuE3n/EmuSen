@@ -1,15 +1,16 @@
 //! `NOTICE` and the entry's folder, EmuSen_Cores.md §5.3 and §7.
 
-use emusen_core_entry::{library_suffix, sha256_file, valid_corename, Entry, Notice, FORMAT};
+use emusen_core_entry::{library_suffix, sha256_file, stem_of_core, stem_of_info, stem_of_zip, valid_stem, Entry, Notice, FORMAT};
 use std::path::PathBuf;
 
 fn sample() -> Notice {
     Notice {
+        stem: "testcore".into(),
         name: "Test Core".into(),
-        corename: "testcore".into(),
+        corename: "TESTC".into(),
         authors: vec!["First Author".into(), "Second Author".into()],
         license: "GPLv3".into(),
-        source: "https://buildbot.libretro.com/nightly/linux/x86_64/latest/testcore_libretro.so.zip".into(),
+        source: format!("https://buildbot.libretro.com/nightly/linux/x86_64/latest/testcore_libretro.{}.zip", library_suffix()),
         build: "2026-10-31".into(),
         index_crc32: 0x3a22_4a58,
         sha256: "9f".repeat(32),
@@ -65,8 +66,10 @@ fn every_broken_field_is_refused_with_its_name() {
     let cases: &[(&str, &str, &str)] = &[
         ("format: 1", "format: 2", "newer"),
         ("format: 1", "format: one", "format"),
-        ("corename: testcore", "corename: ../evil", "corename"),
-        ("corename: testcore", "corename: .hidden", "corename"),
+        ("stem: testcore", "stem: ../evil", "stem"),
+        ("stem: testcore", "stem: .hidden", "stem"),
+        ("stem: testcore", "stem: othercore", "source is not othercore"),
+        ("corename: TESTC", "corename:", "corename"),
         ("source: https://", "source: http://", "source"),
         ("build: 2026-10-31", "build: 2026-13-01", "build"),
         ("fetched: 2026-10-31", "fetched: yesterday", "fetched"),
@@ -102,13 +105,15 @@ fn a_control_character_in_a_value_is_refused() {
 }
 
 #[test]
-fn corenames_never_name_a_path() {
+fn stems_never_name_a_path() {
     for good in ["pcsx2", "mesen-s", "DoubleCherryGB", "mame2003_plus", "a.b"] {
-        assert!(valid_corename(good), "{good}");
+        assert!(valid_stem(good), "{good}");
     }
     for bad in ["", ".", "..", ".staging", "a/b", "a\\b", "a b", &"x".repeat(65)] {
-        assert!(!valid_corename(bad), "{bad:?}");
+        assert!(!valid_stem(bad), "{bad:?}");
     }
+    assert_eq!(stem_of_zip("../x_libretro.so.zip"), None);
+    assert_eq!(stem_of_info("_libretro.info"), None);
     assert!(Entry::new(std::path::Path::new("/c"), "../x").is_err());
 }
 
@@ -150,7 +155,40 @@ fn the_listing_leaves_out_staging_previous_files_and_bad_names() {
         std::fs::create_dir_all(root.join(d)).unwrap();
     }
     std::fs::write(root.join("loose.so"), b"").unwrap();
-    let names: Vec<String> = Entry::list(&cores).unwrap().into_iter().map(|e| e.corename).collect();
+    let names: Vec<String> = Entry::list(&cores).unwrap().into_iter().map(|e| e.stem).collect();
     assert_eq!(names, ["alpha", "zeta"]);
+    std::fs::remove_dir_all(&cores).unwrap();
+}
+
+#[test]
+fn the_folder_and_files_are_named_on_the_file_stem_never_the_corename() {
+    // Two real cases: the buildbot ships corename PCEE2 as pcee2_libretro and corename LRPS2 as pcsx2_libretro.
+    let suffix = library_suffix();
+    let cores = scratch("stem");
+    for (stem, corename) in [("pcee2", "PCEE2"), ("pcsx2", "LRPS2")] {
+        let zip = format!("{stem}_libretro.{suffix}.zip");
+        let info = format!("{stem}_libretro.info");
+        assert_eq!(stem_of_zip(&zip), Some(stem));
+        assert_eq!(stem_of_info(&info), Some(stem));
+        assert_eq!(stem_of_core(&format!("{stem}_libretro.{suffix}")), Some(stem));
+        let mut n = sample();
+        n.stem = stem.into();
+        n.corename = corename.into();
+        n.source = format!("https://buildbot.libretro.com/nightly/linux/x86_64/latest/{zip}");
+        let e = Entry::for_notice(&cores, &n).unwrap();
+        assert_eq!(e.folder, cores.join("libretro").join(stem));
+        assert_eq!(e.core_path().file_name().unwrap().to_str().unwrap(), format!("{stem}_libretro.{suffix}"));
+        assert_eq!(e.info_path().file_name().unwrap().to_str().unwrap(), info);
+        std::fs::create_dir_all(&e.folder).unwrap();
+        std::fs::write(e.core_path(), corename.as_bytes()).unwrap();
+        n.sha256 = sha256_file(&e.core_path()).unwrap();
+        let text = n.to_text().unwrap();
+        assert!(text.contains(&format!("stem: {stem}\n")) && text.contains(&format!("corename: {corename}\n")));
+        std::fs::write(e.notice_path(), text).unwrap();
+        assert_eq!(e.read_notice().unwrap().corename, corename);
+        assert_eq!(e.verify().unwrap(), n.sha256);
+    }
+    let names: Vec<String> = Entry::list(&cores).unwrap().into_iter().map(|e| e.stem).collect();
+    assert_eq!(names, ["pcee2", "pcsx2"]);
     std::fs::remove_dir_all(&cores).unwrap();
 }

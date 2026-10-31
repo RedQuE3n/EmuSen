@@ -11,7 +11,7 @@ use super::cop0::{self, debug, perf};
 use super::timing::{Category, HILO0, HILO1, Issue, SA, rows};
 use super::{Bus, Ee, Exception, status};
 
-pub(super) enum Stop {
+pub(crate) enum Stop {
     Exception(Exception),
     /// A data breakpoint asked for the debug exception (EE Core User's Manual §9.2.5).
     Debug,
@@ -1162,9 +1162,9 @@ pub(super) fn is_fpu_register(i: u16) -> bool {
     o.kind == Kind::Fpu && o.category != Branch && !matches!(o.name, "lwc1" | "swc1")
 }
 
-/// Whether a word is a COP2 instruction a block holds (`super::cop2::in_blocks`).
-pub(super) fn is_cop2_in_blocks(i: u16, w: u32) -> bool {
-    get(i).kind == Kind::Cop2 && super::cop2::in_blocks(get(i), w)
+/// Whether a table entry is a COP2 instruction other than a branch, LQC2 and SQC2 being memory.
+pub(super) fn is_cop2_call(i: u16) -> bool {
+    get(i).kind == Kind::Cop2 && get(i).category != Branch
 }
 
 pub(super) fn get(i: u16) -> &'static Op {

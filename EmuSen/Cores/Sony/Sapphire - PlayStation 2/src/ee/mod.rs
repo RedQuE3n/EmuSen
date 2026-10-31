@@ -21,8 +21,6 @@ pub mod tlb;
 
 pub use bus::Bus;
 pub use memory::{Mode, Place};
-#[cfg(feature = "forms")]
-pub use jit::forms::report as forms_report;
 use cop0::{cause, config, debug, event, perf};
 use timing::Timing;
 

@@ -337,20 +337,24 @@ impl Machine {
                     self.stop = Some(Stop::Unimplemented);
                 }
             } else if self.booted && self.stop.is_none() {
-                let mut left = 1024;
+                let mut left = 1024u64;
                 while left > 0 {
                     let from = self.sys.ee.pc;
                     let ran = match self.blocks.as_deref_mut() {
-                        Some(b) => crate::blocks::run(&mut self.sys, b, left),
+                        Some(b) => {
+                            b.watch_loops = self.idle.on;
+                            crate::blocks::run(&mut self.sys, b)
+                        }
                         None => self.sys.step().map(|()| 1),
                     };
                     match ran {
-                        Ok(n) => left -= n,
+                        Ok(n) => left = left.saturating_sub(n),
                         Err(_) => {
                             self.stop = Some(Stop::Unimplemented);
                             break;
                         }
                     }
+                    let from = self.blocks.as_deref().map_or(from, |b| b.last_from(from));
                     // Once the field has begun the frame ends at this batch's end, which no skip may pass.
                     if left > 0 && self.idle.backward(from, self.sys.ee.pc, self.sys.ee.in_delay_slot()) && self.sys.board.pcrtc.fields < target {
                         let n = crate::idle::arrive(&mut self.sys, &mut self.idle, self.blocks.as_deref_mut(), left);

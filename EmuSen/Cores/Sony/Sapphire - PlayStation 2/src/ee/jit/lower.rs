@@ -1,16 +1,15 @@
-//! The baseline's lowering of one planned block to x86-64 (EmuSen_Recompiler.md §14.2 to §14.4)
+//! One planned EE block lowered to x86-64: the guest's values in registers from its first use to the block's end, a load's or store's slow path a call that returns into the block, and one add and compare at each end (Sapphire_Speed.md §66).
 
 use std::mem::offset_of;
 
-use emusen_assembler::x64::{RAX, RBP, RBX, RCX, RDI, RDX, RSI, R8, R9, R10, R11, R13, R14, R15, RSP, X64};
+use emusen_assembler::x64::{RAX, RBP, RBX, RCX, RDI, RDX, RSI, R8, R9, R10, R11, R12, R13, R14, R15, RSP, X64};
 use emusen_assembler::{Assembler, By, Code, Cond, Label, Mem, Op, Reg, Section, ShiftOp, Src, Width, at};
 use emusen_mips_planner::{Class, Plan, Step};
 
-use super::super::super::cache::{DCache, DTag};
-use super::super::super::ops;
-use super::super::super::timing::{Timing, layout};
-use super::super::{Context, Options, Page, SHORT, WORD, kind, shape};
-use super::{BRANCHED, Rec, SLOTS, SYNC, Static, X_MOVED, mode, prefix, stub};
+use super::super::cache::{DCache, DTag};
+use super::super::ops;
+use super::isa::{BOARD, Cost, IN_SLOT, NEXT_HELD, Rec, SLOTS, stub};
+use super::{Context, Jump, Page, kind, shape};
 use crate::ee::Ee;
 
 const GPR: i32 = offset_of!(Ee, gpr) as i32;
@@ -21,10 +20,12 @@ const FPR: i32 = offset_of!(Ee, fpr) as i32;
 const ACC: i32 = offset_of!(Ee, acc) as i32;
 const FCR31: i32 = offset_of!(Ee, fcr31) as i32;
 const STATUS: i32 = (offset_of!(Ee, cop0) + 4 * crate::ee::cop0::STATUS) as i32;
+const UCAB_VALID: i32 = offset_of!(Ee, ucab) as i32 + offset_of!(super::super::cache::Ucab, valid) as i32;
 const X_VF0: i32 = offset_of!(Context, vf0) as i32;
 const X_QUIET: i32 = offset_of!(Context, quiet) as i32;
-const X_ROOM: i32 = offset_of!(Context, room) as i32;
-const T: i32 = offset_of!(Ee, timing) as i32;
+const X_DEADLINE: i32 = offset_of!(Context, deadline) as i32;
+const X_STEPS: i32 = offset_of!(Context, steps) as i32;
+const X_FRONT: i32 = offset_of!(Context, front) as i32;
 const D_TAGS: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, tags)) as i32;
 const D_DATA: i32 = (offset_of!(Ee, dcache) + offset_of!(DCache, data)) as i32;
 const TAG_PFN: i32 = offset_of!(DTag, pfn) as i32;
@@ -35,17 +36,10 @@ const P_TAG: i32 = offset_of!(Page, tag) as i32;
 const P_HOST: i32 = offset_of!(Page, host) as i32;
 const P_META: i32 = offset_of!(Page, meta) as i32;
 const X_GEN1: i32 = offset_of!(Context, gen1) as i32;
-const X_LIMIT: i32 = offset_of!(Context, limit) as i32;
-const X_LOG: i32 = offset_of!(Context, log) as i32;
-const X_LEFT: i32 = offset_of!(Context, left) as i32;
 const X_DUMMY: i32 = offset_of!(Context, dummy) as i32;
-const X_VALUES: i32 = offset_of!(Context, values) as i32;
-const X_HANDED: i32 = offset_of!(Context, handed) as i32;
 
-/// The purposes bytes are counted under: `forms::PURPOSES`' twelve, then the entry's test and the undo log.
-pub(crate) const P_ENTRY: usize = 1;
+/// The purposes bytes are counted under.
 const P_REGS: usize = 3;
-const P_CHECKS: usize = 4;
 const P_ADDR: usize = 5;
 const P_TRANSLATE: usize = 6;
 const P_CACHE: usize = 7;
@@ -53,26 +47,23 @@ const P_DATA: usize = 8;
 const P_WORK: usize = 9;
 const P_EXIT: usize = 10;
 const P_FAULT: usize = 11;
-pub(crate) const P_TEST: usize = 12;
-pub(crate) const P_LOG: usize = 13;
 
 /// The loads and stores of a unit's part, which never leave for alignment.
 const UNALIGNED: [&str; 8] = ["lwl", "lwr", "ldl", "ldr", "swl", "swr", "sdl", "sdr"];
-/// Why a load or store left, `Context::left`'s index (as `emit.rs` counts them).
-const LEFT_EVENT: i64 = 0;
+/// Why a slow path was taken, `Context::left`'s index.
+const LEFT_CALL: i64 = 0;
 const LEFT_ALIGN: i64 = 1;
 const LEFT_PAGE: i64 = 2;
 const LEFT_MISS: i64 = 3;
 const LEFT_UNCACHED: i64 = 4;
-/// As `emit.rs`: a load or store leaving at most this many steps after the last one shares that one's state.
-const REWIND_MOST: u32 = 2;
 
-/// The context, the core, the translation cache and the entry's last issue, fixed for the whole tier (§3.4).
+/// The context, the core, the translation cache and the time, fixed for the whole tier.
 const CTX: Reg = R15;
 const EE: Reg = R14;
 const PAGES: Reg = R13;
+const TIME: Reg = R12;
 /// The registers a block's values take, in first-use order; the rest are the scratch registers.
-const POOL: [Reg; 7] = [RBX, RBP, RCX, R8, R9, R10, R11];
+pub(crate) const POOL: [Reg; 7] = [RBX, RBP, RCX, R8, R9, R10, R11];
 const X: Reg = RAX;
 const TG: Reg = RDX;
 const A: Reg = RSI;
@@ -93,8 +84,8 @@ const LO1: usize = 66;
 const HI1: usize = 67;
 const SAV: usize = 68;
 /// The guest's values, held and written back alike.
-const GUEST: usize = 69;
-const NEXT: usize = 69;
+pub(crate) const GUEST: usize = 69;
+pub(crate) const NEXT: usize = 69;
 const F_A: usize = 0;
 const F_HOST: usize = 1;
 const F_META: usize = 2;
@@ -103,10 +94,9 @@ const F_TAG: usize = 4;
 fn rec_id(j: usize, f: usize) -> usize {
     70 + 5 * j + f
 }
-const VALUES: usize = 70 + 5 * shape::MAX;
-
-/// The undo log's entries, `Context::log`'s length; a block's entries stay below it (Sapphire_Speed.md §65).
-const LOG_MOST: i32 = 4 * shape::MAX as i32 - 1;
+const fn values(steps: usize) -> usize {
+    70 + 5 * steps
+}
 
 /// The calls the lowering makes in place: MFC1 and MTC1, and the multimedia instructions that are 64-bit operations on each half.
 fn native(w: u32) -> bool {
@@ -118,133 +108,69 @@ fn vf_memory(w: u32) -> bool {
     matches!(shape::name(w), "lqc2" | "sqc2")
 }
 
+/// LWC1 and SWC1, whose word is FPR[rt].
+fn fp_memory(w: u32) -> bool {
+    matches!(shape::name(w), "lwc1" | "swc1")
+}
+
 /// The multimedia instructions lowered in place (Sapphire_Speed.md §65).
 fn wide(w: u32) -> bool {
     matches!(shape::name(w), "por" | "pand" | "pxor" | "pnor" | "pcpyld" | "pcpyud" | "pextlw" | "pextuw" | "pextlh" | "pextuh" | "pextlb" | "pextub")
 }
 
-/// What a call writes: the core's bytes to log (offset, 4, 8 or 16 bytes) and the block's values to load again after it.
-pub(crate) struct Writes {
-    logs: [(i32, u8); 4],
-    n_logs: usize,
-    values: [usize; 6],
-    n_values: usize,
-}
-
-impl Writes {
-    pub(crate) fn logs(&self) -> &[(i32, u8)] {
-        &self.logs[..self.n_logs]
-    }
-    fn values(&self) -> &[usize] {
-        &self.values[..self.n_values]
-    }
-    fn log(&mut self, off: i32, n: u8) {
-        self.logs[self.n_logs] = (off, n);
-        self.n_logs += 1;
-    }
-    fn value(&mut self, v: usize) {
-        self.values[self.n_values] = v;
-        self.n_values += 1;
-    }
-}
-
-/// A call's writes by its operation's fields (Sapphire_Speed.md §65).
-pub(in crate::ee) fn call_writes(w: u32, op: &ops::Op) -> Writes {
-    let mut out = Writes { logs: [(0, 0); 4], n_logs: 0, values: [0; 6], n_values: 0 };
+/// The block's values a call writes.
+fn call_writes(w: u32, op: &ops::Op) -> Vec<usize> {
+    let mut out = Vec::new();
     if op.kind == ops::Kind::Cop2 {
-        if op.name == "qmfc2" && rt(w) != 0 {
-            out.log(GPR + 16 * rt(w) as i32, 16);
-            out.value(rt(w));
-            out.value(32 + rt(w));
+        if matches!(op.name, "qmfc2" | "cfc2") && rt(w) != 0 {
+            out.push(rt(w));
+            if op.name == "qmfc2" {
+                out.push(32 + rt(w));
+            }
         }
         return out;
     }
     if op.kind == ops::Kind::Fpu {
-        use crate::ee::fpu::uses::{ACC as A_, FCR, FD, FS, FT, GRT};
-        if op.writes & GRT != 0 && rt(w) != 0 {
-            out.log(GPR + 16 * rt(w) as i32, 8);
-            out.value(rt(w));
-        }
-        for (f, n) in [(FS, rd(w)), (FT, rt(w)), (FD, (w >> 6 & 31) as usize)] {
-            if op.writes & f != 0 {
-                out.log(FPR + 4 * n as i32, 4);
-            }
-        }
-        if op.writes & A_ != 0 {
-            out.log(ACC, 4);
-        }
-        if op.writes & FCR != 0 {
-            out.log(FCR31, 4);
+        if op.writes & crate::ee::fpu::uses::GRT != 0 && rt(w) != 0 {
+            out.push(rt(w));
         }
         return out;
     }
     use ops::uses::{HILO0, HILO1, RD};
     if op.writes & RD != 0 && rd(w) != 0 {
-        out.log(GPR + 16 * rd(w) as i32, 16);
-        out.value(rd(w));
-        out.value(32 + rd(w));
+        out.extend([rd(w), 32 + rd(w)]);
     }
     if op.writes & (HILO0 | HILO1) != 0 {
-        out.log(HI, 16);
-        out.log(LO, 16);
-        for v in [LO0, HI0, LO1, HI1] {
-            out.value(v);
-        }
+        out.extend([LO0, HI0, LO1, HI1]);
     }
     out
 }
 
-/// The state after the last load or store, which a rollback past it writes back.
-#[derive(Clone, Copy)]
-struct SnapSt {
-    base: u32,
-    /// One past the last load or store's step, which a call's state carries on.
-    guard: u32,
-    dirty: u128,
-    pc: u32,
-    logged: u32,
-    sync: bool,
-    /// Slots holding a value as it stood here, saved before a later write.
-    saved: [Option<i32>; GUEST],
-}
-
 /// What the lowering knows at a point of the straight line.
-#[derive(Clone, Copy)]
 struct St {
-    held: [bool; VALUES],
+    held: Vec<bool>,
     /// Guest values written, a bit a value id below `GUEST`.
     dirty: u128,
     steps: u32,
-    logged: u32,
     sync: bool,
-    branched: bool,
-    snap: Option<SnapSt>,
-}
-
-/// An exit's place.
-#[derive(Clone, Copy)]
-enum At {
-    Line(u32),
-    /// After the slot: the value `NEXT` holds.
-    Jumped,
-    /// At the slot, the outcome `NEXT` holds, or known.
-    Slot(u32, Option<u32>),
 }
 
 struct L<'a> {
     a: X64,
     plan: &'a Plan,
-    times: &'a Static,
+    cost: &'a Cost,
     home: Vec<Home>,
+    uses: Vec<[Option<usize>; 5]>,
     st: St,
     next_slot: i32,
-    after: u32,
-    prototype: bool,
     purpose: usize,
     /// The block's data so far, mirrored so that a record knows its own offset.
     data_len: u32,
-    /// The last record laid and where, for the exits of one load or store, which share it.
-    last_rec: Option<(Rec, u32)>,
+    /// The step in hand, and the dirty values before it.
+    now: usize,
+    pre: u128,
+    /// In a delay slot: the place after it, none where `NEXT` holds it.
+    slot: Option<Option<u32>>,
 }
 
 fn rs(w: u32) -> usize {
@@ -320,9 +246,10 @@ impl L<'_> {
     /// Homes by a linear scan in first-use order: guest values live to the block's end, records to their last reuse.
     fn allocate(&mut self) {
         let uses = record_uses(self.plan);
+        self.uses = uses.clone();
         let mut free: Vec<Reg> = POOL.iter().rev().copied().collect();
         let mut busy: Vec<(usize, Reg)> = Vec::new();
-        let mut seen = [false; VALUES];
+        let mut seen = vec![false; values(self.plan.steps.len())];
         for (i, s) in self.plan.steps.iter().enumerate() {
             busy.retain(|&(end, r)| {
                 if end < i {
@@ -471,57 +398,23 @@ impl L<'_> {
         }
     }
 
-    /// Before `v` is written: its value as the last load or store left it saved, where a rollback could write it back.
-    fn before_write(&mut self, v: usize, tmp: Reg) {
-        let Some(mut s) = self.st.snap else { return };
-        if v >= GUEST || s.dirty >> v & 1 == 0 || s.saved[v].is_some() {
-            return;
-        }
-        let k = self.new_slot().expect("a slot for a saved value");
-        let p = self.push_purpose(P_REGS);
-        let r = self.get(v, tmp);
-        self.a.store(8, r, slot_mem(k));
-        self.pur(p);
-        s.saved[v] = Some(k);
-        self.st.snap = Some(s);
-    }
 }
 
 // The rest of `L`: purposes kept beside the assembler.
 impl L<'_> {
-    fn rec(&mut self, st: &St, steps: u32, md: u8, pc: u32, next: u32) -> u32 {
-        let base = st.snap.map_or(0, |s| s.base);
-        let flags = if st.sync { SYNC } else { 0 } | if st.branched { BRANCHED } else { 0 };
-        let r = Rec {
-            steps: steps as u8,
-            base: base as u8,
-            logged: st.logged as u8,
-            flags,
-            mode: md,
-            guard: st.snap.map_or(0, |s| s.guard) as u8,
-            pad: [0; 2],
-            pc,
-            next,
-            after: self.after,
-            table: self.data_len.next_multiple_of(8),
-            snap: self.times.snaps[steps as usize][0],
+    /// The record of the step in hand, to its slow path: `reload` the values the operation writes.
+    fn rec(&mut self, s: &Step, reload: u128, board: bool) -> u32 {
+        let time = if self.now == 0 { 0 } else { self.cost.times[self.now - 1] };
+        let (next, held) = match self.slot {
+            Some(Some(n)) => (n, 0),
+            Some(None) => (0, NEXT_HELD),
+            None => (0, 0),
         };
-        if !st.branched {
-            if let Some((l, at)) = self.last_rec
-                && (Rec { table: 0, ..l }).bytes() == (Rec { table: 0, ..r }).bytes()
-            {
-                return at;
-            }
-            let at = self.data(r.bytes());
-            self.last_rec = Some((r, at));
-            return at;
-        }
-        let taken = self.times.snaps[steps as usize][1];
-        // SAFETY: a plain `repr(C)` value read as its bytes, laid right after its record (`Rec::snap`).
-        let tail = unsafe { std::slice::from_raw_parts((&taken as *const super::Snap).cast::<u8>(), size_of::<super::Snap>()) };
-        let mut both = r.bytes().to_vec();
-        both.extend_from_slice(tail);
-        self.data(&both)
+        let flags = if self.slot.is_some() { IN_SLOT } else { 0 } | held | if board { BOARD } else { 0 };
+        let halves = |m: u128| [m as u64, (m >> 64) as u64];
+        let at = self.data_len.next_multiple_of(8);
+        let r = Rec { dirty: halves(self.pre), reload: halves(reload), word: s.word, pc: s.pc, time, step: self.now as u16, index: ops::index(s.word), at, next, flags, pad: 0 };
+        self.data(r.bytes())
     }
 
     /// Bytes appended to the block's data, as `Assembler::data` lays them; their offset.
@@ -532,10 +425,31 @@ impl L<'_> {
         at
     }
 
+    /// The slow path's call: the record's address, why, and the stub, which returns here or leaves the block.
+    fn slow_call(&mut self, k: u32, why: i64) {
+        self.a.lea_data(RDI, k);
+        self.a.mov_imm(RSI, why);
+        self.a.call_stub(stub::SLOW);
+    }
+
+    /// Where `c` holds the interpreter's operation runs in place of the step in hand, which raises and leaves the block.
+    fn fault_if(&mut self, c: Cond, s: &Step) {
+        let to = self.a.label();
+        let back = self.a.label();
+        self.a.branch(c, to);
+        let out = self.cold_begin();
+        self.a.bind(to);
+        let k = self.rec(s, 0, false);
+        self.slow_call(k, LEFT_CALL);
+        self.a.jump(back);
+        self.cold_end(out);
+        self.a.bind(back);
+    }
+
     /// Every dirty guest value stored to the core.
-    fn store_all(&mut self, st: &St) {
+    fn store_all(&mut self) {
         for v in 1..GUEST {
-            if v != 32 && st.dirty >> v & 1 == 1 {
+            if v != 32 && self.st.dirty >> v & 1 == 1 {
                 let r = match self.home[v] {
                     Home::Reg(h) => h,
                     Home::Slot(k) => {
@@ -549,115 +463,67 @@ impl L<'_> {
         }
     }
 
-    /// The state after the last load or store written back, its commit made, and the rollback's return.
-    fn partial(&mut self, st: &St, s: &SnapSt) {
-        for v in 1..GUEST {
-            if v != 32 && s.dirty >> v & 1 == 1 {
-                let r = match (s.saved[v], self.home[v]) {
-                    (Some(k), _) | (None, Home::Slot(k)) => {
-                        self.a.load(8, false, X, slot_mem(k));
-                        X
-                    }
-                    (None, Home::Reg(h)) => h,
-                    (None, Home::None) => unreachable!("a dirty value has a home"),
-                };
-                self.a.store(8, r, core_at(v));
-            }
-        }
-        let snap_st = St { steps: s.base, logged: s.logged, sync: s.sync, branched: false, snap: None, ..*st };
-        let k = self.rec(&snap_st, s.base, mode::LINE, s.pc, 0);
-        self.a.lea_data(RDI, k);
-        self.a.call_stub(stub::COMMIT);
-        self.a.jump_stub(stub::ROLLBACK);
-    }
-
-    /// The rollback after an exit's replay kept fewer steps than it ran: the state after the last load or store where the replay kept it, nothing written otherwise.
-    fn rollback(&mut self, st: &St, steps: u32) {
-        match st.snap {
-            Some(s) if s.base < steps => {
-                let undo = self.a.label();
-                self.a.cmp(Width::W32, X, Src::Imm(s.base as i32));
-                self.a.branch(Cond::Ltu, undo);
-                self.partial(st, &s);
-                self.a.bind(undo);
-                self.a.jump_stub(stub::ROLLBACK);
-            }
-            _ => self.a.jump_stub(stub::ROLLBACK),
-        }
-    }
-
-    /// The exit at this point, with the state `st`; laid in the current section, its rollback cold.
-    fn exit(&mut self, st: &St, place: At, why: Option<i64>) {
+    /// The core as the block's last instruction leaves it, and its instructions counted.
+    fn write_back(&mut self, steps: u32) {
         let p = self.push_purpose(P_EXIT);
-        if st.steps == 0 {
-            if let Some(w) = why {
-                self.a.alu_mem(Op::Add, 8, at(CTX, X_LEFT + 8 * w as i32), Src::Imm(1));
-            }
-            self.a.jump_stub(stub::DONE0);
-            self.pur(p);
-            return;
+        self.store_all();
+        if self.st.sync {
+            self.a.store_imm(1, 0, at(EE, UCAB_VALID));
         }
-        let (md, pc, next) = match place {
-            At::Line(pc) => (mode::LINE, pc, 0),
-            At::Jumped => (mode::JUMPED, 0, 0),
-            At::Slot(pc, None) => (mode::SLOT, pc, 0),
-            At::Slot(pc, Some(n)) => (mode::SLOT_KNOWN, pc, n),
-        };
-        let k = self.rec(st, st.steps, md, pc, next);
-        self.a.lea_data(RDI, k);
-        if matches!(md, mode::JUMPED | mode::SLOT) {
-            let saved = self.st;
-            self.st = *st;
-            let r = self.get(NEXT, RSI);
-            self.a.mov(Width::W64, RSI, r);
-            self.st = saved;
-        }
-        if let Some(w) = why {
-            self.a.mov_imm(RDX, w);
-        } else {
-            self.a.mov_imm(RDX, -1);
-        }
-        self.a.call_stub(stub::EXIT);
-        let back = self.a.label();
-        self.a.cmp(Width::W32, X, Src::Imm(st.steps as i32));
-        self.a.branch(Cond::Ne, back);
-        self.store_all(st);
-        self.a.jump_stub(stub::DONE);
+        self.a.alu_mem(Op::Add, 8, at(CTX, X_STEPS), Src::Imm(steps as i32));
+        self.pur(p);
+    }
+
+    /// The end of a path to `target`, its cycles added: on through the link's word unless the deadline has come.
+    fn end_at(&mut self, target: u32, cycles: u32) {
+        let p = self.push_purpose(P_EXIT);
+        let out = self.a.label();
+        let slot = self.a.data_address(out);
+        self.data_len = self.data_len.next_multiple_of(8) + 8;
+        self.a.alu(Op::Add, Width::W64, TIME, TIME, Src::Imm(cycles as i32));
+        self.a.cmp_mem(8, at(CTX, X_DEADLINE), Src::Reg(TIME));
+        let cold = self.a.label();
+        self.a.branch(Cond::Leu, cold);
+        self.a.jump_via_data(slot);
         let here = self.a.current();
         self.a.section(Section::Cold);
-        self.a.bind(back);
-        self.rollback(st, st.steps);
+        self.a.bind(cold);
+        self.a.bind(out);
+        self.a.mov_imm(RDI, i64::from(target));
+        self.a.lea_data(RSI, slot);
+        self.a.mov_imm(RDX, i64::from(self.plan.start));
+        self.a.jump_stub(stub::OUT);
         self.a.section(here);
         self.pur(p);
     }
 
-    /// A load or store's exit after some steps of its block (`emit.rs`'s `leave`). See EmuSen_Recompiler.md §14.
-    fn leave(&mut self, st: &St, why: i64) {
-        let k = self.rec(st, st.steps, mode::LINE, 0, 0);
-        self.a.lea_data(RDI, k);
-        self.a.mov_imm(RSI, why);
-        self.a.call_stub(stub::LEAVE);
-        match st.snap {
-            Some(s) => {
-                let undo = self.a.label();
-                self.a.cmp(Width::W32, X, Src::Imm(s.base as i32));
-                self.a.branch(Cond::Ltu, undo);
-                self.partial(st, &s);
-                self.a.bind(undo);
-                self.a.jump_stub(stub::ROLLBACK);
-            }
-            None => self.a.jump_stub(stub::ROLLBACK),
+    /// The end of a path to the address in X, through the table of blocks.
+    fn end_through(&mut self, cycles: u32) {
+        let p = self.push_purpose(P_EXIT);
+        self.a.mov(Width::W32, RDI, X);
+        self.a.alu(Op::Add, Width::W64, TIME, TIME, Src::Imm(cycles as i32));
+        self.a.cmp_mem(8, at(CTX, X_DEADLINE), Src::Reg(TIME));
+        let out = self.a.label();
+        self.a.branch(Cond::Leu, out);
+        if self.plan.start >> 31 == 0 {
+            // From kuseg a jump to a kernel segment goes through the dispatcher, which checks the mode.
+            self.a.test(Width::W32, RDI, Src::Reg(RDI));
+            self.a.branch(Cond::Lt, out);
         }
-    }
-
-    /// An exit taken when `c` holds, laid cold; the state is `st`.
-    fn exit_if(&mut self, c: Cond, st: &St, place: At) {
-        let to = self.a.label();
-        self.a.branch(c, to);
-        let out = self.cold_begin();
-        self.a.bind(to);
-        self.exit(st, place, None);
-        self.cold_end(out);
+        self.a.mov(Width::W32, TG, RDI);
+        self.a.shift(ShiftOp::Shl, Width::W32, TG, TG, By::Imm(2));
+        self.a.alu(Op::And, Width::W32, TG, TG, Src::Imm(((super::FRONT - 1) * size_of::<Jump>()) as i32));
+        self.a.load(8, false, A, at(CTX, X_FRONT));
+        self.a.alu(Op::Add, Width::W64, TG, TG, Src::Reg(A));
+        self.a.cmp_mem(4, at(TG, offset_of!(Jump, pc) as i32), Src::Reg(RDI));
+        self.a.branch(Cond::Ne, out);
+        self.a.jump_mem(at(TG, offset_of!(Jump, code) as i32));
+        let here = self.a.current();
+        self.a.section(Section::Cold);
+        self.a.bind(out);
+        self.a.jump_stub(stub::OUT0);
+        self.a.section(here);
+        self.pur(p);
     }
 }
 
@@ -667,7 +533,6 @@ impl L<'_> {
         if d == 0 {
             return;
         }
-        self.before_write(d, RDI);
         let a = self.get(s, X);
         let b = match t {
             Ok(t) => Src::Reg(self.get(t, TG)),
@@ -682,8 +547,7 @@ impl L<'_> {
     }
 
     /// An operation that traps on overflow: computed aside, the exit before it where it overflows, then written.
-    fn trapping(&mut self, op: Op, w: Width, d: usize, s: usize, t: Result<usize, i32>, pc: At) {
-        let st = self.st;
+    fn trapping(&mut self, op: Op, w: Width, d: usize, s: usize, t: Result<usize, i32>, step: &Step) {
         let a = self.get(s, X);
         let b = match t {
             Ok(t) => Src::Reg(self.get(t, TG)),
@@ -691,12 +555,11 @@ impl L<'_> {
         };
         self.pur(P_FAULT);
         self.a.alu(op, w, X, a, b);
-        self.exit_if(Cond::Overflow, &st, pc);
+        self.fault_if(Cond::Overflow, step);
         self.pur(P_WORK);
         if d == 0 {
             return;
         }
-        self.before_write(d, RDI);
         let h = self.dest(d, X);
         match w {
             Width::W32 => self.a.sext32(h, X),
@@ -709,7 +572,6 @@ impl L<'_> {
         if d == 0 {
             return;
         }
-        self.before_write(d, RDI);
         let a = self.get(t, X);
         let by = match by {
             Ok(s) => By::Reg(self.get(s, TG)),
@@ -727,7 +589,6 @@ impl L<'_> {
         if d == 0 {
             return;
         }
-        self.before_write(d, RDI);
         let a = self.get(s, X);
         let b = match t {
             Ok(t) => Src::Reg(self.get(t, TG)),
@@ -744,7 +605,6 @@ impl L<'_> {
         if d == 0 {
             return;
         }
-        self.before_write(d, RDI);
         let a = self.get(s, X);
         let h = self.dest(d, X);
         self.a.mov(Width::W64, h, a);
@@ -757,13 +617,11 @@ impl L<'_> {
         self.a.mov(Width::W64, TG, X);
         self.a.shift(ShiftOp::Shr, Width::W64, TG, TG, By::Imm(32));
         for (v, from) in [(lo, X), (hi, TG)] {
-            self.before_write(v, RDI);
             let h = self.dest(v, RDI);
             self.a.sext32(h, from);
             self.put(v, h);
         }
         if d != 0 {
-            self.before_write(d, RDI);
             let h = self.dest(d, RDI);
             self.a.sext32(h, X);
             self.put(d, h);
@@ -825,26 +683,25 @@ impl L<'_> {
         self.cold_end(out);
         let (lo, hi) = if upper { (LO1, HI1) } else { (LO0, HI0) };
         for (v, from) in [(lo, X), (hi, TG)] {
-            self.before_write(v, RDI);
             let h = self.dest(v, RDI);
             self.a.sext32(h, from);
             self.put(v, h);
         }
     }
 
-    fn plain(&mut self, s: &Step, place: At) {
+    fn plain(&mut self, s: &Step) {
         let w = s.word;
         let (s_, t, d) = (rs(w), rt(w), rd(w));
         let sa = (w >> 6 & 31) as u8;
         self.pur(P_WORK);
         use Width::{W32, W64};
         match shape::name(w) {
-            "add" => self.trapping(Op::Add, W32, d, s_, Ok(t), place),
-            "sub" => self.trapping(Op::Sub, W32, d, s_, Ok(t), place),
-            "addi" => self.trapping(Op::Add, W32, t, s_, Err(simm(w)), place),
-            "dadd" => self.trapping(Op::Add, W64, d, s_, Ok(t), place),
-            "dsub" => self.trapping(Op::Sub, W64, d, s_, Ok(t), place),
-            "daddi" => self.trapping(Op::Add, W64, t, s_, Err(simm(w)), place),
+            "add" => self.trapping(Op::Add, W32, d, s_, Ok(t), s),
+            "sub" => self.trapping(Op::Sub, W32, d, s_, Ok(t), s),
+            "addi" => self.trapping(Op::Add, W32, t, s_, Err(simm(w)), s),
+            "dadd" => self.trapping(Op::Add, W64, d, s_, Ok(t), s),
+            "dsub" => self.trapping(Op::Sub, W64, d, s_, Ok(t), s),
+            "daddi" => self.trapping(Op::Add, W64, t, s_, Err(simm(w)), s),
             "addu" => self.binary(Op::Add, W32, true, d, s_, Ok(t)),
             "subu" => self.binary(Op::Sub, W32, true, d, s_, Ok(t)),
             "addiu" => self.binary(Op::Add, W32, true, t, s_, Err(simm(w))),
@@ -867,7 +724,6 @@ impl L<'_> {
             }
             "lui" => {
                 if t != 0 {
-                    self.before_write(t, RDI);
                     let h = self.dest(t, X);
                     self.a.mov_imm(h, i64::from((w << 16) as i32));
                     self.put(t, h);
@@ -879,7 +735,6 @@ impl L<'_> {
             "sltiu" => self.set_if(Cond::Ltu, t, s_, Err(simm(w))),
             n @ ("movz" | "movn") => {
                 if d != 0 {
-                    self.before_write(d, RDI);
                     let old = self.get(d, X);
                     let c = self.get(t, TG);
                     let a = self.get(s_, RSI);
@@ -920,7 +775,6 @@ impl L<'_> {
             }
             n @ ("div" | "divu" | "div1" | "divu1") => self.divide(!n.starts_with("divu"), n.ends_with('1'), s_, t),
             n @ ("mtsa" | "mtsab" | "mtsah") => {
-                self.before_write(SAV, RDI);
                 let a = self.get(s_, X);
                 self.a.mov(W64, X, a);
                 if n != "mtsa" {
@@ -945,16 +799,15 @@ impl L<'_> {
                     "teq" | "teqi" => Cond::Eq,
                     _ => Cond::Ne,
                 };
-                let st = self.st;
                 let a = self.get(s_, X);
                 self.pur(P_FAULT);
                 let imm = matches!(n, "tgei" | "tgeiu" | "tlti" | "tltiu" | "teqi" | "tnei");
                 let b = if imm { Src::Imm(simm(w)) } else { Src::Reg(self.get(t, TG)) };
                 self.a.cmp(W64, a, b);
-                self.exit_if(c, &st, place);
+                self.fault_if(c, s);
                 self.pur(P_WORK);
             }
-            other => unreachable!("{other} is not in the baseline's classes"),
+            other => unreachable!("{other} is not compiled in place"),
         }
         self.st.steps += 1;
     }
@@ -992,7 +845,7 @@ impl L<'_> {
         self.a.mov(Width::W32, TG, A);
         self.a.shift(ShiftOp::Shr, Width::W32, TG, TG, By::Imm(24));
         self.a.alu(Op::Xor, Width::W32, X, X, Src::Reg(TG));
-        self.a.alu(Op::And, Width::W32, X, X, Src::Imm(super::super::PAGES as i32 - 1));
+        self.a.alu(Op::And, Width::W32, X, X, Src::Imm(super::PAGES as i32 - 1));
         self.a.shift(ShiftOp::Shl, Width::W32, X, X, By::Imm(5));
         self.a.alu(Op::Add, Width::W64, X, X, Src::Reg(PAGES));
     }
@@ -1042,22 +895,36 @@ impl Slow {
 }
 
 impl L<'_> {
-    /// A load or store (`emit.rs`'s `memory` under the cache, page, line and stub levers, with E0's paths).
-    fn memory(&mut self, i: usize, s: &Step, place: At) {
+    /// A load or store: the page's kind and the data cache's tags in place; everything else the interpreter's operation, called from the cold path, which returns past the access or leaves the block where it faults.
+    fn memory(&mut self, i: usize, s: &Step) {
         let acc = s.info.access.expect("a load or store");
         let w = s.word;
         let vf = vf_memory(w);
-        if vf {
-            self.cop2_may_run(place);
+        let fp = fp_memory(w);
+        // What the data access reads is held before any slow path can be taken, which skips it.
+        let t = rt(w);
+        if t != 0 && !vf && !fp && shape::name(w) != "pref" && (acc.store || UNALIGNED.contains(&shape::name(w))) {
+            self.pur(P_REGS);
+            self.get(t, X);
+            if acc.store && acc.bytes == 16 {
+                self.get(32 + t, X);
+            }
         }
-        let pre = self.st;
+        self.pur(P_REGS);
+        self.get(acc.base as usize, A);
         let mut slow = Slow { used: Vec::new() };
-        if i > 0 {
-            // Past the board's next event at one cycle an instruction: the block leaves before this access (Sapphire_Speed.md §65.5).
-            self.pur(P_CHECKS);
-            self.a.cmp_mem(4, at(CTX, X_ROOM), Src::Imm(i as i32));
-            let l = slow.label(&mut self.a, LEFT_EVENT);
-            self.a.branch(Cond::Leu, l);
+        let done = self.a.label();
+        self.pur(P_FAULT);
+        if vf {
+            self.a.cmp_mem(4, at(CTX, X_QUIET), Src::Imm(0));
+            let l = slow.label(&mut self.a, LEFT_CALL);
+            self.a.branch(Cond::Eq, l);
+        }
+        if vf || fp {
+            self.a.load(4, false, X, at(EE, STATUS));
+            self.a.test(Width::W32, X, Src::Imm((if vf { crate::ee::status::CU2 } else { crate::ee::status::CU1 }) as i32));
+            let l = slow.label(&mut self.a, LEFT_CALL);
+            self.a.branch(Cond::Eq, l);
         }
         self.pur(P_ADDR);
         let b = self.get(acc.base as usize, A);
@@ -1209,16 +1076,23 @@ impl L<'_> {
         self.keep(i, F_TAG, TG);
 
         // The data access.
-        let t = rt(w);
         if vf {
             self.vf_quad(acc.store, t);
         } else if shape::name(w) == "pref" {
         } else if unit {
             self.unaligned(shape::name(w), acc.bytes, t);
-        } else if acc.store {
-            if !self.prototype {
-                self.log();
+        } else if fp {
+            self.pur(P_DATA);
+            let f = at(EE, FPR + 4 * t as i32);
+            if acc.store {
+                self.a.load(4, false, X, f);
+                self.a.store(4, X, at(P, 0));
+                self.dirty_line();
+            } else {
+                self.a.load(4, false, X, at(P, 0));
+                self.a.store(4, X, f);
             }
+        } else if acc.store {
             self.pur(P_DATA);
             if acc.bytes == 16 {
                 let lo = self.get(t, X);
@@ -1229,77 +1103,84 @@ impl L<'_> {
                 let v = self.get(t, X);
                 self.a.store(acc.bytes, v, at(P, 0));
             }
-            self.pur(P_CACHE);
-            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
-            self.a.set(Cond::Eq, X);
-            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
-            self.st.sync = true;
+            self.dirty_line();
         } else if t != 0 {
             self.pur(P_DATA);
             let signed = matches!(shape::name(w), "lb" | "lh" | "lw");
-            self.before_write(t, X);
             let h = self.dest(t, X);
             self.a.load(acc.bytes.min(8), signed, h, at(P, 0));
             self.put(t, h);
             if acc.bytes == 16 {
-                self.before_write(32 + t, X);
                 let h = self.dest(32 + t, X);
                 self.a.load(8, false, h, at(P, 8));
                 self.put(32 + t, h);
             }
         }
         self.st.steps += 1;
-        self.st.snap = Some(SnapSt { base: self.st.steps, guard: self.st.steps, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
+        self.a.bind(done);
 
-        // The ways it leaves, before it.
-        let here = self.a.current();
-        self.a.section(Section::Cold);
-        for (why, l) in slow.used {
-            self.a.bind(l);
-            let base = pre.snap.map_or(0, |s| s.base);
-            if pre.steps == 0 || pre.steps - base > REWIND_MOST {
-                self.exit(&pre, place, Some(why));
-            } else {
-                let p = self.push_purpose(P_EXIT);
-                self.leave(&pre, why);
-                self.pur(p);
+        // The interpreter's operation in place of the access; after it no line or page an earlier access kept may be taken as held.
+        let mut reload = 0u128;
+        if !acc.store && !vf && !fp && t != 0 && shape::name(w) != "pref" {
+            reload |= 1 << t;
+            if acc.bytes == 16 {
+                reload |= 1 << (32 + t);
             }
         }
+        let here = self.a.current();
+        self.a.section(Section::Cold);
+        let k = self.rec(s, reload, true);
+        let call = self.a.label();
+        let used = slow.used;
+        let n = used.len();
+        for (j, (why, l)) in used.into_iter().enumerate() {
+            self.a.bind(l);
+            self.a.mov_imm(RSI, why);
+            if j + 1 < n {
+                self.a.jump(call);
+            }
+        }
+        self.a.bind(call);
+        self.a.lea_data(RDI, k);
+        self.a.call_stub(stub::SLOW);
+        for j in 0..=i {
+            if self.home[rec_id(j, F_A)] != Home::None && (j == i || self.uses[j][F_A].is_some_and(|e| e > i)) {
+                self.a.mov_imm(X, i64::MIN);
+                self.keep(j, F_A, X);
+            }
+        }
+        if self.home[rec_id(i, F_META)] != Home::None {
+            self.a.mov_imm(X, 0);
+            self.keep(i, F_META, X);
+        }
+        self.a.jump(done);
         self.a.section(here);
     }
 
-    /// LQC2's and SQC2's data, P the quadword in memory: VF[t] through `Context::vf0`, LQC2's with its undo.
+    /// The line a store wrote marked dirty unless it is locked, TG its tag.
+    fn dirty_line(&mut self) {
+        self.pur(P_CACHE);
+        self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
+        self.a.set(Cond::Eq, X);
+        self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
+        self.st.sync = true;
+    }
+
+    /// LQC2's and SQC2's data, P the quadword in memory: VF[t] through `Context::vf0`.
     fn vf_quad(&mut self, store: bool, t: usize) {
         self.pur(P_DATA);
+        self.a.load(8, false, X, at(CTX, X_VF0));
         if store {
-            if !self.prototype {
-                self.log();
-            }
-            self.pur(P_DATA);
-            self.a.load(8, false, X, at(CTX, X_VF0));
             for k in [0, 8] {
                 self.a.load(8, false, A, at(X, 16 * t as i32 + k));
                 self.a.store(8, A, at(P, k));
             }
-            self.pur(P_CACHE);
-            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
-            self.a.set(Cond::Eq, X);
-            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
-            self.st.sync = true;
+            self.dirty_line();
         } else if t != 0 {
-            self.a.load(8, false, X, at(CTX, X_VF0));
-            self.a.alu(Op::Add, Width::W64, X, X, Src::Imm(16 * t as i32));
-            let k = self.st.logged as i32;
-            assert!(k < LOG_MOST, "a block's undo entries fit the log");
-            let e = X_LOG + 24 * k;
-            self.a.store(8, X, at(CTX, e));
-            for j in [0, 8] {
-                self.a.load(8, false, A, at(X, j));
-                self.a.store(8, A, at(CTX, e + 8 + j));
-                self.a.load(8, false, A, at(P, j));
-                self.a.store(8, A, at(X, j));
+            for k in [0, 8] {
+                self.a.load(8, false, A, at(P, k));
+                self.a.store(8, A, at(X, 16 * t as i32 + k));
             }
-            self.st.logged += 1;
         }
     }
 
@@ -1315,7 +1196,6 @@ impl L<'_> {
         }
         self.pur(P_DATA);
         if !store {
-            self.before_write(t, X);
         }
         self.a.mov(W32, X, A);
         self.a.alu(Op::And, W32, X, X, Src::Imm(i32::from(n) - 1));
@@ -1327,17 +1207,10 @@ impl L<'_> {
             self.a.alu(Op::Add, W32, X, X, Src::Imm(8 * (i32::from(n) - 1)));
         }
         if store {
-            let k = self.new_slot().expect("a slot for the shift");
-            self.a.store(8, X, slot_mem(k));
-            if !self.prototype {
-                self.log();
-            }
-            self.pur(P_CACHE);
-            self.a.cmp_mem(1, at(TG, TAG_LOCK), Src::Imm(0));
-            self.a.set(Cond::Eq, X);
-            self.a.alu_mem(Op::Or, 1, at(TG, TAG_DIRTY), Src::Reg(X));
+            self.a.push(X);
+            self.dirty_line();
             self.pur(P_DATA);
-            self.a.load(8, false, X, slot_mem(k));
+            self.a.pop(X);
             let r = self.get(t, A);
             self.a.mov(W64, A, r);
             self.a.shift(away, w, A, A, By::Reg(X));
@@ -1348,7 +1221,6 @@ impl L<'_> {
             self.a.alu(Op::And, w, X, X, Src::Reg(TG));
             self.a.alu(Op::Or, w, X, X, Src::Reg(A));
             self.a.store(n, X, at(P, 0));
-            self.st.sync = true;
             return;
         }
         self.a.load(n, false, P, at(P, 0));
@@ -1382,30 +1254,6 @@ impl L<'_> {
         self.put(t, h);
     }
 
-    /// The store's undo: the 16 bytes of its quadword and its line's tag, two entries of the log.
-    fn log(&mut self) {
-        let p = self.push_purpose(P_LOG);
-        let k = self.st.logged as i32;
-        assert!(k + 2 <= LOG_MOST, "two undo entries a store");
-        let e = X_LOG + 24 * k;
-        self.a.mov(Width::W32, X, A);
-        self.a.alu(Op::And, Width::W32, X, X, Src::Imm(15));
-        self.a.neg(Width::W64, X, X);
-        self.a.alu(Op::Add, Width::W64, X, X, Src::Reg(P));
-        self.a.store(8, X, at(CTX, e));
-        self.a.load(8, false, A, at(X, 0));
-        self.a.store(8, A, at(CTX, e + 8));
-        self.a.load(8, false, A, at(X, 8));
-        self.a.store(8, A, at(CTX, e + 16));
-        self.a.mov_imm(X, SHORT as i64);
-        self.a.alu(Op::Or, Width::W64, X, X, Src::Reg(TG));
-        self.a.store(8, X, at(CTX, e + 24));
-        self.a.load(8, false, A, at(TG, 0));
-        self.a.store(8, A, at(CTX, e + 32));
-        self.st.logged += 2;
-        self.pur(p);
-    }
-
     /// A branch or jump with its slot, and the block's final exit.
     fn branch(&mut self, i: usize) {
         let s = self.plan.steps[i];
@@ -1417,6 +1265,12 @@ impl L<'_> {
         let target = slot.wrapping_add((simm(w) as u32) << 2);
         self.pur(P_WORK);
         let likely = s.info.likely;
+        self.now = i;
+        self.pre = self.st.dirty;
+        if name.starts_with("bc1") {
+            self.usable(crate::ee::status::CU1, &s);
+            self.pur(P_WORK);
+        }
         // The condition in the flags, or none for a jump.
         let cond = match name {
             "beq" | "bne" | "beql" | "bnel" => {
@@ -1430,6 +1284,11 @@ impl L<'_> {
                 Some(if name.starts_with("beq") { Cond::Eq } else { Cond::Ne })
             }
             "j" | "jal" | "jr" | "jalr" => None,
+            "bc1f" | "bc1fl" | "bc1t" | "bc1tl" => {
+                self.a.load(4, false, X, at(EE, FCR31));
+                self.a.test(Width::W32, X, Src::Imm(crate::ee::fpu::flag::C as i32));
+                Some(if name.starts_with("bc1t") { Cond::Ne } else { Cond::Eq })
+            }
             _ => {
                 let a = self.get(rs(w), X);
                 self.a.cmp(Width::W64, a, Src::Imm(0));
@@ -1468,57 +1327,55 @@ impl L<'_> {
             _ => None,
         };
         if let Some(r) = link.filter(|&r| r != 0) {
-            self.before_write(r, RDI);
             let h = self.dest(r, X);
             self.a.mov_imm(h, i64::from(after));
             self.put(r, h);
         }
         self.st.steps += 1;
-        self.st.branched = true;
+        let (taken, not) = (self.cost.taken, self.cost.times[i + 1]);
         if likely {
             let c = cond.expect("a likely branch has a condition");
             let on = self.a.label();
             self.a.branch(c, on);
-            let st = self.st;
-            self.exit(&st, At::Line(after), None);
+            let n = self.st.steps;
+            self.write_back(n);
+            self.end_at(after, self.cost.times[i]);
             self.a.bind(on);
         }
-        let place = At::Slot(slot, known);
-        self.straight(i + 1, &slot_step, place);
-        let st = self.st;
+        self.slot = Some(known);
+        self.now = i + 1;
+        self.pre = self.st.dirty;
+        self.straight(i + 1, &slot_step);
+        self.slot = None;
+        let n = self.st.steps;
+        self.write_back(n);
         match known {
-            Some(n) => self.exit(&st, At::Line(n), None),
-            None => self.exit(&st, At::Jumped, None),
+            Some(t) => self.end_at(t, taken),
+            None if matches!(name, "jr" | "jalr") => {
+                let r = self.get(NEXT, X);
+                self.a.mov(Width::W32, X, r);
+                self.end_through(taken);
+            }
+            None => {
+                let r = self.get(NEXT, X);
+                self.a.cmp(Width::W32, r, Src::Imm(after as i32));
+                let fall = self.a.label();
+                self.a.branch(Cond::Eq, fall);
+                self.end_at(target, taken);
+                self.a.bind(fall);
+                self.end_at(after, not);
+            }
         }
     }
 
-    fn straight(&mut self, i: usize, s: &Step, place: At) {
+    fn straight(&mut self, i: usize, s: &Step) {
         match s.info.class {
-            Class::Memory => self.memory(i, s, place),
+            Class::Memory => self.memory(i, s),
             _ if wide(s.word) => self.wide(s),
-            _ if native(s.word) => self.fpu_move(s, place),
-            _ if shape::class(s.word) == shape::Class::Call => self.call(s, place),
-            _ => self.plain(s, place),
+            _ if native(s.word) => self.fpu_move(s),
+            _ if shape::class(s.word) == shape::Class::Call => self.call(s),
+            _ => self.plain(s),
         }
-    }
-
-    /// `off`'s `n` bytes in the core (4, 8 or 16) logged before a write, as a store's are.
-    fn log_core(&mut self, off: i32, n: u8) {
-        let k = self.st.logged as i32;
-        assert!(k < LOG_MOST, "a block's undo entries fit the log");
-        let e = X_LOG + 24 * k;
-        self.a.lea(Width::W64, X, at(EE, off));
-        self.a.load(n.min(8), false, A, at(X, 0));
-        self.a.store(8, A, at(CTX, e + 8));
-        if n == 16 {
-            self.a.load(8, false, A, at(X, 8));
-            self.a.store(8, A, at(CTX, e + 16));
-        } else {
-            self.a.mov_imm(TG, (if n == 8 { SHORT } else { WORD }) as i64);
-            self.a.alu(Op::Or, Width::W64, X, X, Src::Reg(TG));
-        }
-        self.a.store(8, X, at(CTX, e));
-        self.st.logged += 1;
     }
 
     /// The 32-bit or 16-bit lanes of `r`'s low word (its high word where `upper`) spread to every other lane of `w`, `m` a scratch register.
@@ -1608,7 +1465,6 @@ impl L<'_> {
                         self.a.alu(Op::Or, W64, out, out, Src::Reg(TG));
                     }
                     for (v, r) in [(d, X), (32 + d, P)] {
-                        self.before_write(v, TG);
                         let h = self.dest(v, r);
                         if h != r {
                             self.a.mov(W64, h, r);
@@ -1621,174 +1477,86 @@ impl L<'_> {
         self.st.steps += 1;
     }
 
-    /// The block leaves before a COP2 instruction, for the interpreter, while VU0 was not quiet at the entry or COP2 is unusable (Sapphire_Speed.md §65).
-    fn cop2_may_run(&mut self, place: At) {
-        let st = self.st;
-        let p = self.push_purpose(P_FAULT);
-        self.a.cmp_mem(4, at(CTX, X_QUIET), Src::Imm(0));
-        self.exit_if(Cond::Eq, &st, place);
-        self.pur(p);
-        self.usable(crate::ee::status::CU2, place);
-    }
-
-    /// The block leaves before a coprocessor's instruction while Status's bit `cu` is clear, for the interpreter to raise.
-    fn usable(&mut self, cu: u32, place: At) {
-        let st = self.st;
+    /// The interpreter raises the coprocessor's unusable exception while Status's bit `cu` is clear.
+    fn usable(&mut self, cu: u32, s: &Step) {
         let p = self.push_purpose(P_FAULT);
         self.a.load(4, false, X, at(EE, STATUS));
         self.a.test(Width::W32, X, Src::Imm(cu as i32));
-        self.exit_if(Cond::Eq, &st, place);
+        self.fault_if(Cond::Eq, s);
         self.pur(p);
     }
 
-    /// MFC1 and MTC1 in place (Sapphire_Speed.md §65): the FPR read from the core, or written there with its undo, the state after MTC1 the one a rollback past it keeps.
-    fn fpu_move(&mut self, s: &Step, place: At) {
+    /// MFC1 and MTC1 in place.
+    fn fpu_move(&mut self, s: &Step) {
         let w = s.word;
         let (t, f) = (rt(w), FPR + 4 * rd(w) as i32);
-        self.usable(crate::ee::status::CU1, place);
+        self.usable(crate::ee::status::CU1, s);
         self.pur(P_WORK);
         if shape::name(w) == "mfc1" {
             if t != 0 {
-                self.before_write(t, RDI);
                 let h = self.dest(t, X);
                 self.a.load(4, true, h, at(EE, f));
                 self.put(t, h);
             }
-            self.st.steps += 1;
-            return;
+        } else {
+            let r = self.get(t, X);
+            self.a.store(4, r, at(EE, f));
         }
-        self.pur(P_LOG);
-        self.log_core(f, 4);
-        self.pur(P_WORK);
-        let r = self.get(t, X);
-        self.a.store(4, r, at(EE, f));
         self.st.steps += 1;
-        let guard = self.st.snap.map_or(0, |s| s.guard);
-        self.st.snap = Some(SnapSt { base: self.st.steps, guard, dirty: self.st.dirty, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
     }
 
-    /// A call (Sapphire_Speed.md §65): every value the block wrote handed to the helper, which stores them to the core with their undo, logs what the operation writes and calls it; the state after it is the one a rollback past it keeps.
-    fn call(&mut self, s: &Step, place: At) {
+    /// A call: every value the block wrote is in the core for the operation, and what it writes is read again where it is next used.
+    fn call(&mut self, s: &Step) {
         let w = s.word;
-        let index = ops::index(w);
-        match ops::get(index).kind {
-            ops::Kind::Fpu => self.usable(crate::ee::status::CU1, place),
-            ops::Kind::Cop2 => self.cop2_may_run(place),
-            ops::Kind::Cpu => {}
-        }
-        let p = self.push_purpose(P_LOG);
-        let dirty = self.st.dirty & !(1 << 32);
-        for v in (1..GUEST).filter(|v| dirty >> v & 1 == 1) {
-            let r = match self.home[v] {
-                Home::Reg(h) => h,
-                Home::Slot(k) => {
-                    self.a.load(8, false, P, slot_mem(k));
-                    P
-                }
-                Home::None => unreachable!("a dirty value has a home"),
-            };
-            self.a.store(8, r, at(CTX, X_VALUES + 8 * v as i32));
-        }
-        for (k, half) in [dirty as u64, (dirty >> 64) as u64].into_iter().enumerate() {
-            self.a.mov_imm(X, half as i64);
-            self.a.store(8, X, at(CTX, X_HANDED + 8 * k as i32));
-        }
-        let written = call_writes(w, ops::get(index));
-        let logged = self.st.logged;
-        self.st.logged += dirty.count_ones() + written.logs().len() as u32;
-        assert!(self.st.logged <= LOG_MOST as u32, "a block's undo entries fit the log");
+        let op = ops::get(ops::index(w));
+        let k = self.rec(s, 0, op.kind == ops::Kind::Cop2);
         self.pur(P_WORK);
-        self.a.mov_imm(RDI, i64::from(w));
-        self.a.mov_imm(RSI, i64::from(logged) | i64::from(self.st.steps) << 16);
-        self.a.mov_imm(RDX, i64::from(index));
-        self.a.call_stub(stub::CALL);
-        self.pur(p);
+        self.slow_call(k, LEFT_CALL);
         self.st.dirty = 0;
-        for &v in written.values() {
+        for v in call_writes(w, op) {
             self.st.held[v] = false;
         }
         self.st.steps += 1;
-        let guard = self.st.snap.map_or(0, |s| s.guard);
-        self.st.snap = Some(SnapSt { base: self.st.steps, guard, dirty: 0, pc: s.pc.wrapping_add(4), logged: self.st.logged, sync: self.st.sync, saved: [None; GUEST] });
     }
 }
 
-/// The block's code; `prototype` as `compile` says.
-pub(crate) fn lower(plan: &Plan, times: &Static, options: Options, prototype: bool) -> Option<Code> {
-    let after = plan.steps.iter().find(|s| s.info.class == Class::Branch).map_or(0, |s| s.pc.wrapping_add(8));
-    let mut l = L { a: X64::new(), plan, times, home: vec![Home::None; VALUES], st: St { held: [false; VALUES], dirty: 0, steps: 0, logged: 0, sync: false, branched: false, snap: None }, next_slot: 0, after, prototype, purpose: 0, data_len: 0, last_rec: None };
-    l.allocate();
-    let table = l.data(&prefix::table_bytes(times, options.single, options.blocking));
-    assert_eq!(table, 0, "the prefix's table is the data's first");
-    let entry = l.a.label();
-    let body = l.a.label();
-    let entered = l.a.label();
-    if !prototype {
-        // The entry's test: at rest for what the block reads, or the prefix's flag set for the shared exit (§14.3, §15.2).
-        let moved = l.a.label();
-        l.pur(P_TEST);
-        l.a.bind(moved);
-        l.a.store_imm(4, 1, at(RSI, X_MOVED));
-        l.a.jump(entered);
-        l.a.bind(entry);
-        let dynamic = moved;
-        l.a.load(8, false, X, at(RDI, T + layout::LAST));
-        l.a.alu(Op::Add, Width::W64, X, X, Src::Imm(1));
-        l.a.cmp_mem(1, at(RDI, T + layout::OPEN), Src::Imm(0));
-        l.a.branch(Cond::Ne, dynamic);
-        l.a.cmp_mem(1, at(RDI, T + layout::GROUP_ENDS), Src::Imm(0));
-        l.a.branch(Cond::Ne, dynamic);
-        l.a.cmp_mem(8, at(RDI, T + layout::FLOOR), Src::Reg(X));
-        l.a.branch(Cond::Gtu, dynamic);
-        for late in [false, true] {
-            if late {
-                l.a.alu(Op::Sub, Width::W64, X, X, Src::Imm(1));
-            }
-            for r in (0..128).filter(|&r| times.exposed >> r & 1 == 1 && (Timing::read_late(r) != 0) == late) {
-                let field = match r {
-                    124 => layout::MAC0_FREE,
-                    125 => layout::MAC1_FREE,
-                    126 => layout::FDIV_FREE,
-                    127 => layout::COP2_FLOOR,
-                    _ => layout::READY + 8 * r as i32,
-                };
-                l.a.cmp_mem(8, at(RDI, T + field), Src::Reg(X));
-                l.a.branch(Cond::Gtu, dynamic);
-            }
-        }
-    } else {
-        l.a.bind(entry);
-    }
-    l.a.bind(entered);
-    l.pur(P_ENTRY);
-    l.a.lea_label(R11, body);
-    l.a.jump_stub(stub::ENTER);
-    l.a.bind(body);
+/// The block's code.
+pub(crate) fn lower(plan: &Plan, cost: &Cost) -> Option<Code> {
     let n = plan.steps.len();
+    let mut l = L { a: X64::new(), plan, cost, home: vec![Home::None; values(n)], uses: Vec::new(), st: St { held: vec![false; values(n)], dirty: 0, steps: 0, sync: false }, next_slot: 0, purpose: 0, data_len: 0, now: 0, pre: 0, slot: None };
+    l.allocate();
+    let mut homes = [0u8; GUEST + 1];
+    for (v, h) in l.home.iter().take(GUEST + 1).enumerate() {
+        homes[v] = match *h {
+            Home::None => 0,
+            Home::Reg(r) => 1 + POOL.iter().position(|&p| p == r).expect("a pool register") as u8,
+            Home::Slot(k) => 8 + k as u8,
+        };
+    }
+    let table = l.data(&homes);
+    assert_eq!(table, 0, "the homes are the data's first");
+    let body = l.a.label();
+    l.a.bind(body);
     let mut k = 0;
     while k < n {
         let s = plan.steps[k];
-        if k > 0 && s.pc & 63 == 0 {
-            // A new line of the instruction cache: the block leaves here when the cache does not hold it.
-            l.pur(P_CHECKS);
-            l.a.cmp_mem(4, at(CTX, X_LIMIT), Src::Imm(k as i32));
-            let st = l.st;
-            l.exit_if(Cond::Leu, &st, At::Line(s.pc));
-        }
+        l.now = k;
+        l.pre = l.st.dirty;
         match s.info.class {
             Class::Branch => {
                 l.branch(k);
                 break;
             }
             _ => {
-                l.straight(k, &s, At::Line(s.pc));
+                l.straight(k, &s);
                 k += 1;
                 if k == n {
-                    let st = l.st;
-                    l.exit(&st, At::Line(s.pc.wrapping_add(4)), None);
+                    let steps = l.st.steps;
+                    l.write_back(steps);
+                    l.end_at(s.pc.wrapping_add(4), cost.times[k - 1]);
                 }
             }
         }
     }
-    Some(l.a.finish(entry))
+    Some(l.a.finish(body))
 }

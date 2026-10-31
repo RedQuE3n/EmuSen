@@ -195,6 +195,9 @@ pub fn arrive(sys: &mut System, idle: &mut Idle, mut blocks: Option<&mut Blocks>
             if e.penalised() {
                 slot.backoff = (slot.backoff + 1).min(MAX_BACKOFF);
                 slot.wait = (1u16 << slot.backoff) - 1;
+                if let Some(b) = blocks.as_deref_mut() {
+                    b.refused(head);
+                }
             }
         }
     }

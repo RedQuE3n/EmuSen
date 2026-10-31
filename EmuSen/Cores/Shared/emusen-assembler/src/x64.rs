@@ -150,6 +150,7 @@ pub struct X64 {
     purpose: usize,
     labels: Vec<Option<(Section, usize)>>,
     data: Vec<u8>,
+    addresses: Vec<(u32, Label)>,
 }
 
 impl Default for X64 {
@@ -167,7 +168,7 @@ fn lane_of(s: Section) -> usize {
 
 impl X64 {
     pub fn new() -> X64 {
-        X64 { lanes: [Lane::default(), Lane::default()], now: Section::Hot, purpose: 0, labels: Vec::new(), data: Vec::new() }
+        X64 { lanes: [Lane::default(), Lane::default()], now: Section::Hot, purpose: 0, labels: Vec::new(), data: Vec::new(), addresses: Vec::new() }
     }
 
     fn lane(&mut self) -> &mut Lane {
@@ -611,6 +612,10 @@ impl Assembler for X64 {
         self.put_rip(i::jmpq_m::new(GprMem::Mem(rip())), Fix::Out(Target::Data(offset)));
     }
 
+    fn jump_mem(&mut self, m: Mem) {
+        self.put(i::jmpq_m::new(gm(m)));
+    }
+
     fn data(&mut self, bytes: &[u8]) -> u32 {
         while self.data.len() % 8 != 0 {
             self.data.push(0);
@@ -620,10 +625,20 @@ impl Assembler for X64 {
         at
     }
 
+    fn data_address(&mut self, l: Label) -> u32 {
+        let at = self.data(&[0; 8]);
+        self.addresses.push((at, l));
+        at
+    }
+
     fn finish(mut self, entry: Label) -> Code {
         self.relax();
         let (es, eo) = self.place(entry);
         let mut code = Code { entry: eo, entry_cold: es == Section::Cold, data: std::mem::take(&mut self.data), ..Code::default() };
+        for (at, l) in std::mem::take(&mut self.addresses) {
+            let (s, to) = self.place(l);
+            code.addresses.push((at, if s == Section::Hot { Target::Hot(to) } else { Target::Cold(to) }));
+        }
         for n in 0..2 {
             let section = if n == 0 { Section::Hot } else { Section::Cold };
             let mut out = Vec::with_capacity(self.lanes[n].size as usize);

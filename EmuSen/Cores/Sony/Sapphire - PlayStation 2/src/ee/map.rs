@@ -40,6 +40,9 @@ pub fn region(paddr: u32) -> Region {
 pub struct Map {
     pub rdram: Vec<u8>,
     pub rom: Vec<u8>,
+    /// The lines of RDRAM compiled code was made from, a bit a 64-byte line in a word a 4 KiB page; and those written since, by line number, for the dispatcher (Sapphire_Speed.md §66).
+    code: Vec<u64>,
+    pub written: Vec<u32>,
 }
 
 impl Default for Map {
@@ -50,13 +53,59 @@ impl Default for Map {
 
 impl Map {
     pub fn new() -> Map {
-        Map { rdram: vec![0; RDRAM as usize], rom: Vec::new() }
+        Map { rdram: vec![0; RDRAM as usize], rom: Vec::new(), code: vec![0; RDRAM as usize >> 12], written: Vec::new() }
     }
 
     pub fn load(&mut self, at: u32, words: &[u32]) {
         for (i, w) in words.iter().enumerate() {
             let a = at as usize + i * 4;
             self.rdram[a..a + 4].copy_from_slice(&w.to_le_bytes());
+            self.note_write(a, 4);
+        }
+    }
+
+    /// The word at `paddr` as a fetch's refill would read it, in RDRAM or the boot ROM.
+    pub fn code_word(&self, paddr: u32) -> Option<u32> {
+        let (mem, at) = match region(paddr) {
+            Region::Rdram => (&self.rdram, paddr as usize),
+            Region::BootRom => (&self.rom, (paddr - BOOT_ROM) as usize),
+            _ => return None,
+        };
+        Some(u32::from_le_bytes(mem.get(at..at + 4)?.try_into().ok()?))
+    }
+
+    /// The lines of `bytes` from `paddr` watched for a write; nothing writes the boot ROM.
+    pub fn watch(&mut self, paddr: u32, bytes: u32) {
+        if region(paddr) != Region::Rdram {
+            return;
+        }
+        for line in paddr >> 6..=(paddr + bytes - 1) >> 6 {
+            self.code[line as usize >> 6] |= 1 << (line & 63);
+        }
+    }
+
+    /// No line watched.
+    pub fn watch_none(&mut self) {
+        self.code.fill(0);
+        self.written.clear();
+    }
+
+    /// `bytes` at `at` were written: a watched line among them noted for the dispatcher, and watched no more.
+    #[inline]
+    pub fn note_write(&mut self, at: usize, bytes: usize) {
+        if self.code[at >> 12] | self.code[(at + bytes - 1) >> 12] != 0 {
+            self.note_lines(at, bytes);
+        }
+    }
+
+    #[cold]
+    fn note_lines(&mut self, at: usize, bytes: usize) {
+        for line in at >> 6..=(at + bytes - 1) >> 6 {
+            let w = &mut self.code[line >> 6];
+            if *w >> (line & 63) & 1 == 1 {
+                *w &= !(1 << (line & 63));
+                self.written.push(line as u32);
+            }
         }
     }
 
@@ -84,6 +133,7 @@ impl Bus for Map {
         if region(paddr) == Region::Rdram {
             let a = paddr as usize;
             self.rdram[a..a + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
+            self.note_write(a, bytes);
         }
     }
 

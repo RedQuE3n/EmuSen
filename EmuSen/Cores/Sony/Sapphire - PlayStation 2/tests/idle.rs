@@ -365,7 +365,6 @@ fn machine(c: &Case, idle: bool, tier: Tier) -> Machine {
     m.idle.on = idle;
     if tier == Tier::Recompiler {
         let mut b = Blocks::new();
-        b.wait = true;
         m.blocks = Some(Box::new(b));
     }
     m

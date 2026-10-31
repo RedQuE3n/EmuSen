@@ -109,8 +109,8 @@ fn counts(m: &Machine) -> Counts {
         idle: { let c = &m.idle.counts; [c.ee_cycles, c.ee_steps, c.iop_cycles, c.iop_instructions] },
         vu: [0, 1].map(|u| s.board.vpu.jit_counts(u).map_or([0; 11], |c| [c.compiled_pairs, c.interpreted_pairs, c.programs, c.invalidated, c.flushes, c.bytes, c.nanos, c.kept, c.widest, c.calls, c.dead_flags])),
         jit: m.blocks.as_ref().map_or([0; 5], |b| {
-            let ([t, h], _) = b.spent();
-            [t.nanos, h.nanos, t.compiled, h.compiled, b.flushes()]
+            let (compiled, _, _) = b.compiled();
+            [0, b.compile_nanos(), 0, compiled, b.flushes]
         }),
     }
 }
@@ -354,14 +354,13 @@ fn main() {
         println!("blocks\t{c:.0} compiled steps a frame\t{i:.0} interpreted\t{:.1}% compiled", 100.0 * c / (c + i).max(1.0));
         let j = |n: usize| end.jit[n] - at_from.jit[n];
         let b = m.blocks.as_deref().expect("blocks");
+        let s = b.stats;
         println!(
-            "ee recompiler\t{} flushes at its code budget of {} MiB ({} of them for a full code memory)\t{:.1} MiB of code held at the end\tits thread busy {:.1}% of the window, {:.1} blocks a frame\ton the dispatcher's thread {:.3} ms and {:.1} blocks a frame",
+            "ee recompiler\t{} flushes at its code budget of {} MiB\t{:.1} MiB of code held at the end, {:.0} hot bytes a guest instruction\t{:.3} ms compiling and {:.1} blocks a frame",
             j(4),
-            b.budget() >> 20,
-            b.full_flushes(),
-            b.spent().1 as f64 / 1048576.0,
-            100.0 * j(0) as f64 / (wall * 1e6).max(1.0),
-            j(2) as f64 / k,
+            b.budget >> 20,
+            b.compiled().2 as f64 / 1048576.0,
+            s.hot_bytes as f64 / s.guest_words.max(1) as f64,
             j(1) as f64 / 1e6 / k,
             j(3) as f64 / k
         );
@@ -410,14 +409,11 @@ fn main() {
     }
     if let Some(b) = m.blocks.as_deref() {
         let s = b.stats;
-        let (compiled, refused, bytes) = b.compiled();
         println!(
-            "blocks\tmemory {}\tentered {}\tcompiled steps {}\tinterpreted {}\trollbacks {}\trun again {}\tkept past {}\tDMAC stops {}\tpages filled {}\tgenerations {}\tleft at the event/misaligned/page/miss/accelerated load {:?}\tcompiled {compiled}\trefused {refused}\tbytes {bytes}",
-            b.memory, s.entered, s.compiled_steps, s.interpreted, s.rollbacks, s.rerun_steps, s.kept_past, s.dmac_stops, s.fills, s.generations, s.left
+            "blocks\tentered {}\tcompiled steps {}\tinterpreted {}\tpages filled {}\tgenerations {}\tslow paths call/misaligned/page/miss/uncached {:?}\tlinks {}\tlines written {}\tblocks killed {}\tall links cut {}\tshaped again {}",
+            s.entered, s.compiled_steps, s.interpreted, s.fills, s.generations, s.left, s.links, s.written, s.killed, s.unlinked, s.reshaped
         );
     }
-    #[cfg(feature = "forms")]
-    print!("{}", sapphire::ee::forms_report());
     let cd = &m.sys.board.iop.bus.cdvd;
     println!(
         "machine\tentered at frame {:?}\tstopped {:?}\tdrive N commands {}\tS commands {}",

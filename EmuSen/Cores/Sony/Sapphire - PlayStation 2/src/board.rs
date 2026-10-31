@@ -156,32 +156,6 @@ impl dmac::Memory for Map {
     }
 }
 
-/// What a run of times shows each time it brings the board through (`Board::run_through`): `each` the lines after time
-/// `j`, false to stop there; `quiet` the same for every time from `from` to `to` while the lines stand, without stopping,
-/// the first time `each` would stop at, or `to` (Sapphire_Scheduler.md §54.4).
-pub trait Times {
-    fn each(&mut self, j: usize, lines: (bool, bool, bool)) -> bool;
-    fn quiet(&mut self, from: usize, to: usize, lines: (bool, bool, bool)) -> usize;
-}
-
-/// Every time seen and none refused.
-pub struct Through;
-
-impl Times for Through {
-    fn each(&mut self, _: usize, _: (bool, bool, bool)) -> bool {
-        true
-    }
-    fn quiet(&mut self, _: usize, to: usize, _: (bool, bool, bool)) -> usize {
-        to
-    }
-}
-
-/// What is left of a time a guarded `run_through` stopped in: the wake the IOP's side asked for (Sapphire_Recompiler.md §48.5).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tail {
-    Held(Ran),
-}
-
 /// How `run_to` took a time: left owed to the round's end, by the quick path, or whole (Sapphire_Speed.md §62).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ran {
@@ -377,13 +351,6 @@ impl Board {
         }
     }
 
-    /// A block holding COP2 may run from cycle `at`: VU0 brought along and idle, no quotient on its way and no end near enough to interlock (Sapphire_Speed.md §65).
-    pub(crate) fn vu0_quiet(&mut self, at: u64, behind: u64) -> bool {
-        use crate::ee::Bus;
-        let Some(v) = self.vpu0() else { return false };
-        !v.running(0) && v.units.vu0.q_next.is_none() && v.micro0.last().is_none_or(|l| l + behind <= at)
-    }
-
     /// Before COP2 reaches VU0 alone: VIF0, which writes VU0's memories and starts it, and VU0 brought to the owed time,
     /// the rest of the board left to the round (Sapphire_Speed.md §62.3).
     #[cold]
@@ -419,6 +386,11 @@ impl Board {
     /// The next time any unit needs attention: `run_to` runs no event before it.
     pub fn next_event(&self) -> u64 {
         self.next
+    }
+
+    /// The time compiled code must come back by: the next event or the round's end, at once where the IOP's side has woken the DMAC.
+    pub(crate) fn deadline(&self) -> u64 {
+        if self.iop.bus.sif.wake_ee_pending() { 0 } else { self.next.min(self.now + self.round) }
     }
 
     /// `run_to` up to its last act, the DMAC woken if the IOP's side has changed a SIF FIFO, which is left pending; whether
@@ -519,53 +491,6 @@ impl Board {
             }
             self.reschedule();
         }
-    }
-
-    /// `run_to` through each of `times` in turn, as that many calls make it, `seen` shown the lines after each time and
-    /// stopping the run by refusing one. While no event falls by the last time and the GIF, the VIFs and the VUs are
-    /// idle, each call is the IOP brought along and nothing else until the IOP's side wakes the EE's DMAC, so the checks
-    /// are made once, the lines shown once for all those times, and the clocks' moves made once at the end; from a wake
-    /// on, each time is `run_to` itself (Sapphire_Native.md §44.5, Sapphire_Scheduler.md §54.4). The DMAC is the only
-    /// unit that reads or writes memory or the scratchpad, and it may not run within the first `guard` times
-    /// (Sapphire_Recompiler.md §48.5): the run stops before an event falls due there, or before a wake is taken there.
-    /// The steps that stand (the times run, a held one with its `Tail` included) and the tail.
-    pub fn run_through(&mut self, times: &[u64], spram: &mut [u8], guard: usize, seen: &mut dyn Times) -> (usize, Option<Tail>) {
-        let Some(&last) = times.last() else { return (0, None) };
-        if last < self.now + self.round && self.next > last && !self.iop.bus.sif.wake_ee_pending() {
-            // Every time falls in the round: owed, and the lines stand (Sapphire_Speed.md §62).
-            let lines = self.lines();
-            let stop = seen.quiet(0, times.len(), lines);
-            let end = times.len().min(stop + 1);
-            self.owed = self.owed.max(times[end - 1]);
-            if stop < times.len() {
-                let go_on = seen.each(stop, lines);
-                debug_assert!(!go_on, "`quiet` names the time `each` stops at");
-            }
-            return (end, None);
-        }
-        let mut from = 0;
-        while from < times.len() {
-            let t = times[from];
-            if from < guard && self.next <= t {
-                return (from, None);
-            }
-            let ran = self.run_to_held(t, spram);
-            if from < guard && self.iop.bus.sif.wake_ee_pending() {
-                return (from + 1, Some(Tail::Held(ran)));
-            }
-            self.take_wake(ran, spram);
-            from += 1;
-            if !seen.each(from - 1, self.lines()) {
-                return (from, None);
-            }
-        }
-        (from, None)
-    }
-
-    /// The rest of the time a guarded `run_through` stopped inside.
-    pub fn finish(&mut self, tail: Tail, spram: &mut [u8]) {
-        let Tail::Held(ran) = tail;
-        self.take_wake(ran, spram);
     }
 
     /// The clocks' moves `run_to`'s quick path makes at `t` once it has found the units idle.

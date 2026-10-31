@@ -2674,7 +2674,7 @@ figure.
 **Census of the I-cache.** The interpreter on the short window met 147.05 M line entries and 888,192 misses, 0.6 %, at 8 cycles a
 refill: 0.048 cycles a line, which is the sixteenth `FETCH_PER_LINE` folds.
 
-**The dock**: 102.0 ms a field, p95 122, against 148.6 and 173; 1.65 M steps, 99.5 % compiled, 1.16 G host instructions (row 4). At a
+**The dock**: 101.5 ms a field, p95 122, against 148.6 and 173; 1.65 M steps, 99.5 % compiled, 1.08 G host instructions. At a
 round of 0 the short window's digests are §61.4's exactly (`0F8671F57AB63C25`, `D5F15509CCDD1709`, `818361BFE5D2DBF9`).
 
 **Player checks.** Sound digests equal the base's on both windows (`BCA8F00F4743A955`, `2C225C73DB4D3F9D`). Runs of rows 4 and 5 give the

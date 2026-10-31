@@ -157,7 +157,7 @@ supports rumble for the DualShock 2 [R, its documentation], and PCEE2's support 
 manifest, the libretro core by its own hash in `cores.approved`, compared before any runner starts (§1.3); a changed
 libretro core is asked about again (§7.2, rule 2); (b) `emusen-native` lets a core claiming `SNAPSHOT` withdraw kind 1 for one
 machine, machine info's `state.kinds` then `[0]` and `state_save(1)` `NOT_SUPPORTED`, which C14 already reads as
-consistent; (c) `emusen-gpu` exposes its choice of card (version 1.4) so that the choice keeps one owner (§5.3).
+consistent; (c) `emusen-gpu` exposes its choice of card (its next minor, 1.5, since 1.4 went to the GS on 2026-10-31) so that the choice keeps one owner (§5.3).
 
 **What v1's rules do not promise for these cores**, named rather than hidden [A]: `deterministic` is false unless a
 core's profile says otherwise after the kit's C8 has passed on it; a foreign core's defaults are its author's, not the

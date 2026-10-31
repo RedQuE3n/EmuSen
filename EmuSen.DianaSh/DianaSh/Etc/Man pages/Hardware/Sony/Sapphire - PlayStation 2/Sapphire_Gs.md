@@ -11,8 +11,8 @@ software rasteriser (`Sapphire_Native.md` §24, §27, §31, §50), which stays t
 **Decided 2026-10-31 by the tester:** Play!'s form. The GS's 4 MiB of local memory stay on the device in the GS's own
 page, block and column layout. Every PSM's addressing, the pixel pipeline and texturing are emulated in shaders,
 reading and writing that memory. There is no texture cache and no render-target tracking, so there are no per-game
-fixes. It is not PCSX2's hardware renderer, whose texture cache needs 3,928 per-game `gsHWFixes` lines [R, the brief's
-count].
+fixes. It is not PCSX2's hardware renderer, whose texture cache needs 3,928 per-game `gsHWFixes` lines [R, PCSX2's
+`GameIndex.yaml`, counted 2026-10-31].
 
 **Departure, accepted by the tester the same day: the rasterisation is a compute walk, not Play!'s fixed-function
 rasteriser with a fragment shader interlock** (`GSH_VulkanDrawDesktop.cpp`; Play!'s code was not read for this stage).
@@ -166,7 +166,7 @@ of code. With the exact coordinates compiled out it is still 168 VGPRs and 118 K
 pressure and code size, not by its form. 44 stretches a field; 90,124 tile entries; 6,024 tiles; 1,153 environments;
 1,726 CLUT slots; 179 pages read back a field.
 
-**The gates**, as the brief and the review set them:
+**The gates**, as set on 2026-10-31:
 
 | Gate | Now | Target |
 |---|---|---|

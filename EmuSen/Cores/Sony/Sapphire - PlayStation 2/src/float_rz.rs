@@ -332,12 +332,11 @@ mod tests {
     use super::*;
     use crate::float::Outcome;
     use crate::float::tests::stream;
-    use crate::float_lanes::tests::{Paired, class_vectors, expected, random_lanes, reduced_pairs, three};
+    use crate::float_lanes::tests::{Form, check_form, class_vectors, expected, random_lanes, reduced_pairs, three};
 
     /// Both widths against `float` lane by lane; counts the vectors kept whole and the lanes `fixed` recomputed.
     fn check(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32, counts: &mut [u64; 4]) {
         let e = expected(a, b, c, old, mask);
-        let Paired { pa, pb, pc, po, pm, .. } = e.paired;
         // SAFETY: the tests run where AVX2 is present, with MXCSR set by the caller.
         unsafe {
             for (op, n) in [(0u8, 0usize), (1, 1), (2, 2)] {
@@ -345,18 +344,11 @@ mod tests {
                 counts[n] += u64::from(t.whole);
                 counts[3] += u64::from(t.fixed.count_ones());
             }
-            assert_eq!(four::add(&a, &b, &old, mask), e.add, "add {a:08x?} {b:08x?}");
-            assert_eq!(four::sub(&a, &b, &old, mask), e.sub, "sub {a:08x?} {b:08x?}");
-            assert_eq!(four::mul(&a, &b, &old, mask), e.mul, "mul {a:08x?} {b:08x?}");
-            assert_eq!(eight::add(&pa, &pb, &po, pm), e.add2, "eight add");
-            assert_eq!(eight::sub(&pa, &pb, &po, pm), e.sub2, "eight sub");
-            assert_eq!(eight::mul(&pa, &pb, &po, pm), e.mul2, "eight mul");
-            for (i, subtract) in [false, true].into_iter().enumerate() {
-                assert_eq!(four::fused(&c, &a, &b, subtract, &old, mask), e.fused[i], "fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
-                assert_eq!(eight::fused(&pc, &pa, &pb, subtract, &po, pm), e.fused2[i], "eight fused");
-            }
+            check_form("towards zero", &FORM, &e, a, b, c, old, mask);
         }
     }
+
+    const FORM: Form = Form { four: [four::add, four::sub, four::mul], fused4: four::fused, eight: [eight::add, eight::sub, eight::mul], fused8: eight::fused };
 
     /// Runs `f` with MXCSR at `MODE`, restoring it after.
     fn in_mode(f: impl FnOnce()) {

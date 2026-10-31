@@ -418,15 +418,20 @@ pub mod avx2 {
 mod tests {
     use super::*;
     use crate::float::tests::stream;
-    use crate::float_lanes::tests::{Paired, class_vectors, expected, random_lanes, reduced_pairs, three};
+    use crate::float_lanes::tests::{Form, check_form, class_vectors, expected, random_lanes, reduced_pairs, three};
+
+    /// The `{rz-sae}` form's entry points; the AVX2 form has no paired subtraction, so its check is written out.
+    const WIDE: Form = Form { four: [four::add, four::sub, four::mul], fused4: four::fused, eight: [eight::add, eight::sub, eight::mul], fused8: eight::fused };
 
     /// Both forms against `float` lane by lane, four lanes and paired; counts the vectors taken whole as add, mul, multiply-add.
     fn check(a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32, taken: &mut [u64; 3]) {
-        let wide = available512();
         taken[0] += u64::from((0..4).all(|l| add_taken(a[l], b[l])));
         taken[1] += u64::from((0..4).all(|l| mul_taken(a[l], b[l])));
+        for subtract in [false, true] {
+            taken[2] += u64::from((0..4).all(|l| fused_taken(c[l], a[l], b[l], subtract)));
+        }
         let e = expected(a, b, c, old, mask);
-        let Paired { pa, pb, pc, po, pm, .. } = e.paired;
+        let (pa, pb, pc, po, pm) = (e.paired.pa, e.paired.pb, e.paired.pc, e.paired.po, e.paired.pm);
         // SAFETY: the tests run where AVX2 is present, and the wide form only where `available512` is.
         unsafe {
             assert_eq!(avx2::add(&a, &b, &old, mask), e.add, "avx2 add {a:08x?} {b:08x?}");
@@ -434,22 +439,12 @@ mod tests {
             assert_eq!(avx2::mul(&a, &b, &old, mask), e.mul, "avx2 mul {a:08x?} {b:08x?}");
             assert_eq!(avx2::add2(&pa, &pb, &po, pm), e.add2, "avx2 add2");
             assert_eq!(avx2::mul2(&pa, &pb, &po, pm), e.mul2, "avx2 mul2");
-            if wide {
-                assert_eq!(four::add(&a, &b, &old, mask), e.add, "add {a:08x?} {b:08x?}");
-                assert_eq!(four::sub(&a, &b, &old, mask), e.sub, "sub {a:08x?} {b:08x?}");
-                assert_eq!(four::mul(&a, &b, &old, mask), e.mul, "mul {a:08x?} {b:08x?}");
-                assert_eq!(eight::add(&pa, &pb, &po, pm), e.add2, "eight add");
-                assert_eq!(eight::sub(&pa, &pb, &po, pm), e.sub2, "eight sub");
-                assert_eq!(eight::mul(&pa, &pb, &po, pm), e.mul2, "eight mul");
-            }
             for (i, subtract) in [false, true].into_iter().enumerate() {
-                taken[2] += u64::from((0..4).all(|l| fused_taken(c[l], a[l], b[l], subtract)));
                 assert_eq!(avx2::fused(&c, &a, &b, subtract, &old, mask), e.fused[i], "avx2 fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
                 assert_eq!(avx2::fused2(&pc, &pa, &pb, subtract, &po, pm), e.fused2[i], "avx2 fused2");
-                if wide {
-                    assert_eq!(four::fused(&c, &a, &b, subtract, &old, mask), e.fused[i], "fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
-                    assert_eq!(eight::fused(&pc, &pa, &pb, subtract, &po, pm), e.fused2[i], "eight fused");
-                }
+            }
+            if available512() {
+                check_form("{rz-sae}", &WIDE, &e, a, b, c, old, mask);
             }
         }
     }

@@ -755,6 +755,36 @@ pub(crate) mod tests {
         }
     }
 
+    /// One form's entry points: four lanes (add, sub, mul, fused) and eight (add, sub, mul, fused).
+    pub(crate) type Four = unsafe fn(&[u32; 4], &[u32; 4], &[u32; 4], u32) -> Vector;
+    pub(crate) type Eight = unsafe fn(&[u32; 8], &[u32; 8], &[u32; 8], u32) -> Pair;
+    pub(crate) type Fused4 = unsafe fn(&[u32; 4], &[u32; 4], &[u32; 4], bool, &[u32; 4], u32) -> FusedVector;
+    pub(crate) type Fused8 = unsafe fn(&[u32; 8], &[u32; 8], &[u32; 8], bool, &[u32; 8], u32) -> FusedPair;
+    pub(crate) struct Form {
+        pub four: [Four; 3],
+        pub fused4: Fused4,
+        pub eight: [Eight; 3],
+        pub fused8: Fused8,
+    }
+
+    /// Every entry point of `form` on one case against `e`, `name` in each message. Safety: the form's own requirements.
+    pub(crate) unsafe fn check_form(name: &str, form: &Form, e: &Expected, a: [u32; 4], b: [u32; 4], c: [u32; 4], old: [u32; 4], mask: u32) {
+        let Paired { pa, pb, pc, po, pm, .. } = e.paired;
+        // SAFETY: the caller's.
+        unsafe {
+            assert_eq!((form.four[0])(&a, &b, &old, mask), e.add, "{name} add {a:08x?} {b:08x?}");
+            assert_eq!((form.four[1])(&a, &b, &old, mask), e.sub, "{name} sub {a:08x?} {b:08x?}");
+            assert_eq!((form.four[2])(&a, &b, &old, mask), e.mul, "{name} mul {a:08x?} {b:08x?}");
+            assert_eq!((form.eight[0])(&pa, &pb, &po, pm), e.add2, "{name} eight add");
+            assert_eq!((form.eight[1])(&pa, &pb, &po, pm), e.sub2, "{name} eight sub");
+            assert_eq!((form.eight[2])(&pa, &pb, &po, pm), e.mul2, "{name} eight mul");
+            for (i, subtract) in [false, true].into_iter().enumerate() {
+                assert_eq!((form.fused4)(&c, &a, &b, subtract, &old, mask), e.fused[i], "{name} fused {c:08x?} {a:08x?} {b:08x?} {subtract}");
+                assert_eq!((form.fused8)(&pc, &pa, &pb, subtract, &po, pm), e.fused2[i], "{name} eight fused");
+            }
+        }
+    }
+
     /// Three vectors of four operands of every class, drawn from `next`.
     pub(crate) fn three(next: &mut impl FnMut() -> u64) -> ([u32; 4], [u32; 4], [u32; 4]) {
         ([0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())), [0; 4].map(|_: u32| operand(next())))

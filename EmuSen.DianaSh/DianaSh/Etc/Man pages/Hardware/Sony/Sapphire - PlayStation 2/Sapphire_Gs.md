@@ -95,7 +95,15 @@ check) are the named departure. They read their texels from a **snapshot** of th
 device before their stretch. A stretch of them keeps one environment, so a run of one GS draw is one dispatch. The
 software rasteriser instead reads in raster order the pixels the same primitive has just drawn. The snapshot reads them
 as they stood before the run, deterministically on every device. Jak's arena has about 1,657 such records a field, in
-about 2.2 snapshot stretches [M]. `SAPPHIRE_GS_FEEDBACK=exact` (`Gs::set_exact_feedback`) draws them on the processor in
+about 2.2 snapshot stretches [M]. **The departure is visible** [M, the arena stream, pictures every 50 fields against the
+software rasteriser's]:
+
+- 174 of 300 field pictures differ;
+- in the sampled fields, 0 to 6.6 % of pixels differ, 2.47 % over all sampled pixels;
+- the largest channel difference is 138.
+
+The differences are in the refraction effect drawn from the frame. This is not within a small tolerance. Whether a GPU
+form keeps the reference's order there is the question of §8. `SAPPHIRE_GS_FEEDBACK=exact` (`Gs::set_exact_feedback`) draws them on the processor in
 the reference's order instead. That mode is for proof only. It is a processor path and not the player's.
 
 **On the processor only**: a record whose frame and Z are different surfaces sharing pages, and one whose pixels alias
@@ -180,7 +188,12 @@ the replay itself.
 - with snapshots, two runs equal;
 - a transfer across a V-sync and a drawing reaching the device whole.
 
-The generator moved from `threads.rs` into `tests/gsgen/`, shared by both. Arena stream [M]: with exact feedback all
+The generator moved from `threads.rs` into `tests/gsgen/`, shared by both.
+
+**The whole machine** [M, the bench's arena window, frames 9060 to 9360, `--defaults --gs-device`]. With exact feedback,
+the picture, sound and state digests (F0279E81EE5EB699, BCA8F00F4743A955, 2EF5C6B11B77E8DC) equal the software
+workers' run, so everything the machine read back was the same. With snapshots, the sound and the final state are
+equal, and the pictures differ as §4 gives. Arena stream [M]: with exact feedback all
 300 pictures equal the software rasteriser's (digest 5F046C5478DA64A2), and two runs are equal. Two defects were found
 this way and fixed before the first commit. One was a page with its other lane drawn, copied in over the device's
 pixels, caught by the generated streams' seed 5. The other was a transfer's pixels after a V-sync never copied in,
@@ -198,6 +211,12 @@ Seeded faults, each reverted:
 
 ## 8. What is left, in order
 
+0. **An exact GPU form for records that read where they draw** (§4). The options, for the tester:
+   - (a) the snapshot of each run, as built (2.5 % of the arena's sampled pixels differ);
+   - (b) each such record after the one before, on one workgroup, its pixels reading the memory as it stood before
+     that record. This is cheap on the arena's records of one to four pixels, though a barrier for each record costs
+     milliseconds a field, and it differs from the reference only where a record reads a pixel it drew itself;
+   - (c) the reference's raster order within each record too, which is exact and dearer still.
 1. **The walk's register pressure** (§6): the per-record setup decoded once for each workgroup into shared memory (edge
    equations, the attributes' planes, the sampler's fields), and walks for each class of record (untextured, UV, STQ
    with and without a LOD a pixel) **generated from one source**, not copied by hand. The targets are the STQ quotients'

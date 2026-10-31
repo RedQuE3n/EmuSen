@@ -105,18 +105,6 @@ addition (images, say) is a minor; a change or removal of anything below is a ma
    its own, and nothing is locked between them. A submission holds at most one wait and one signal, which is all
    `PictureOut` needs.
 
-### 3.2 Version 1.3: 64-bit integers in shaders (2026-10-31)
-
-**The need.** Sapphire's GS walk (`Sapphire_Gs.md` §4, §5) does the software rasteriser's arithmetic in a shader: edge
-functions of 35 bits, products of a 24-bit significand by a 36-bit weight, and 128-bit sums made of 64-bit halves.
-Diamond's walk made its 64-bit products in pairs of 32-bit words (§6.4). The GS's would be several times longer that
-way.
-
-**The addition.** `open` reads the physical device's features and enables `shaderInt64` when it is offered. The new
-query `GpuDevice::int64` says whether it was. A lent device reports false: its enabled features are the lender's and
-`Lent` does not carry them, so a user that needs them refuses the lend with a reason. Nothing MarsRT or Diamond calls
-changed meaning, so this is a minor: **1.3.0**. Their lock files moved with it; their code did not change.
-
 ### 3.1 Version 1.1: a program dispatched twice in one submission (2026-10-13)
 
 **The need.** Diamond's renderer dispatches its walk once for every stretch of commands that reads nothing an earlier
@@ -141,6 +129,18 @@ meaning, so this is a minor: **1.1.0**.
 `dispatch_in` that skipped the write when the buffers were the same as last time would compare handles, and a handle
 the driver reuses after a buffer is destroyed would then leave a set naming memory that is gone; descriptor sets
 created with `UPDATE_AFTER_BIND` need a feature the crate does not ask for.
+
+### 3.2 Version 1.3: 64-bit integers in shaders (2026-10-31)
+
+**The need.** Sapphire's GS walk (`Sapphire_Gs.md` §4, §5) does the software rasteriser's arithmetic in a shader: edge
+functions of 35 bits, products of a 24-bit significand by a 36-bit weight, and 128-bit sums made of 64-bit halves.
+Diamond's walk made its 64-bit products in pairs of 32-bit words (§6.4). The GS's would be several times longer that
+way.
+
+**The addition.** `open` reads the physical device's features and enables `shaderInt64` when it is offered. The new
+query `GpuDevice::int64` says whether it was. A lent device reports false: its enabled features are the lender's and
+`Lent` does not carry them, so a user that needs them refuses the lend with a reason. Nothing MarsRT or Diamond calls
+changed meaning, so this is a minor: **1.3.0**. Their lock files moved with it; their code did not change.
 
 ## 4. Choosing a device, and the variable's name
 

@@ -1245,3 +1245,11 @@ Since 2026-10-29 the baseline is Sapphire's default EE tier on x86-64 Unix (`bas
 block compiled on the dispatcher's thread and the rest left to the interpreter, so that which steps run compiled no longer
 depends on the compiler's thread; `EMUSEN_SAPPHIRE_BASELINE=0` keeps Cranelift's tier, which stays the default elsewhere.
 The measurements, the player checks and the classes it does not yet hold are `Sapphire_Speed.md` §64.
+
+## 17. The tailored tier alone (2026-10-31)
+
+The static form of §14, the prefix of §15 and §16's two tiers are retired for the EE: from `Sapphire_Speed.md` §66 a block's cost is
+folded from rest, events land at block ends, nothing is rolled back, and Cranelift's EE tier is gone. §14's planner and macro-assembler
+stand as they were described; `emusen-jit` 1.3 (`EmuSen_Jit.md` §9) holds the code memory. The sections above are the record of how
+it got here.
+

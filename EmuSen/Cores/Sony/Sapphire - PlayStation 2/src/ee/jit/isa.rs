@@ -139,7 +139,7 @@ pub(crate) struct Cost {
 const BASE: u64 = 1 << 40;
 
 /// Cycles a line of instructions costs on average in fetch stalls, in sixteenths, folded into each block (Sapphire_Speed.md §66).
-pub(crate) const FETCH_PER_LINE: u32 = 0;
+pub(crate) const FETCH_PER_LINE: u32 = 1;
 
 /// The block's folded cycles, for the branch not taken and taken.
 pub(crate) fn cost(plan: &Plan, options: Options) -> Cost {

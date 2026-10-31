@@ -2543,3 +2543,168 @@ as the bench's and the runner's argument.
    accepted. It is timing only; both windows' sound digests are unchanged and the arena's six sampled pictures are
    byte-identical. The dock's pictures were not compared.
 2. **[routine] The next EE step.** *Recommended*: the prefix, the EE's largest remaining cost.
+
+## 66. The EE's byte face: events at block ends, folded costs, no rollback, the tailored tier alone (2026-10-31)
+
+*Decided 2026-10-30 by the tester: the EE's byte-face contract is events at block ends with no rollback, hardware reads may see
+block-start time, and results stay deterministic. I-cache checks leave compiled paths, with miss cost folded; D-cache tags stay
+until a census prices them. VU floats and the EE's stay exact through `sapphire::float`. Decided the same day: the EE runs on
+the tailored tier alone, Cranelift's EE tier and `EMUSEN_SAPPHIRE_BASELINE` go, and where the tier fails it is researched and
+fixed in the tier. The VU tier's move off Cranelift is the next stage. Judged in host instructions, not in ms or % compiled:
+the EE's path from 2.5 G a field to at most 300 M, 600 M the point past which what remains must be found.*
+
+### 66.1 The gate (measured 2026-10-30)
+
+A scratch build treating every entry as at rest, no `prefix_of`, no `Timing` copy, on the arena: **517.0 ms a field**, against
+464.3, no drop at all, with the EE running 7.2 M instructions a frame at 0.68 cycles each against 3.46 M at 1.42. The cost a
+block carries in from the last was half of the EE's time; without it the game's waits spin on, and the time per instruction
+fell from about 134 ns to 71.8. So the prefix was paying for accuracy of *time*, and a folded cost must reach about the model's
+cycles per instruction. It does here only because the waits are found (§66.5): 1.49 at the end. The pictures at the six fields
+differed by 12.5 to 38.7 % of pixels.
+
+### 66.2 The contract as built
+
+- **A block runs to its branch**, or to its page's end, 1,024 instructions at most (`shape::MAX`); `BASELINE_LONGEST` and the
+  undo log's limit on length are gone. Its cost is folded when it is compiled, from the core's own issue model run from rest
+  (`isa::cost`), for the branch taken and not taken: `Timing` is not touched at run time. A line of instructions adds
+  `FETCH_PER_LINE`, a sixteenth of a cycle (§66.6).
+- **One add and compare at each end.** Register r12 holds the time; a path's end adds its cost, compares with
+  `Context::deadline`, the earlier of the board's next event, the round's end and Compare's match where IM7 is on, and jumps
+  on. Nothing tests an event inside a block, and nothing is undone: a faulting access runs the interpreter's operation in the
+  slow path, which raises, and the block leaves with the work before it kept.
+- **Links** (after PCSX2's `BaseblockEx`, read 2026-10-30). A known target is a jump through an 8-byte word in the block's
+  data, starting at its cold way out, written when the dispatcher first sees the target compiled; the code pages are never
+  written again. An indirect jump looks in the table of blocks, 65,536 entries by word address, and a jump from kuseg to a
+  kernel segment goes through the dispatcher, which checks the mode. A change of the TLB, ASID, Config or ERL cuts every link
+  and empties the table's jumps; the moves between user, supervisor and kernel do not. No find, translation or held-word
+  work happens per entry.
+- **Slow paths return into the block** (after `recVTLB.cpp`). A load's or store's cold path is 20-odd bytes: it names a record
+  in the block's data and calls one stub, which saves the pool where the helper can read and write it. The helper stores the
+  dirty values the record names, brings the board to the instruction's time (the block's start plus the steps before it, a
+  finer time than the contract asks), runs the interpreter's own operation, and puts back what it wrote. The record's table of
+  homes stands once at the data's start. A data cache miss, a register, an uncached page, a bad page and every call are this
+  one path. After it no earlier access's line is taken as held, since the refill may have replaced it.
+- **COP2.** `Context::room`, the exits at an access and `vu0_quiet` went. Every COP2 instruction but the branches is now in
+  blocks: CFC2, CTC2, VDIV, VWAITQ, VCALLMS and the memory forms as calls that bring VU0 along through `Bus::vpu0` at their own
+  time and take their interlock's stall into the time. QMFC2 and QMTC2 run in place, LQC2 and SQC2 through the load and store
+  path, and VU0's register operations without the board or the issue model, all three only while VU0 rests, which
+  `Context::quiet` says and each board-reaching helper refreshes; otherwise the interpreter's operation runs. §65.4's loss, VIF0
+  a block late, is gone with `vu0_quiet`. LWC1, SWC1 and BC1 joined the blocks.
+- **Self-modifying code.** `Map` holds a bit for each 64-byte line of RDRAM compiled code was read from, tested at every write
+  that reaches RDRAM (`Map::note_write`: a store past the caches, a write-back, a DMA). A write to a watched line stops
+  compiled code at the next block's end; the dispatcher compares each block on the line with memory, watches it again if its
+  words stand and kills it otherwise, cutting its links. PCSX2 and Play! protect pages (`BaseblockEx`, `EeExecutor.cpp`); a
+  host page fault was not wanted in a core loaded into a .NET host, and a line is a finer watch than a page.
+- **A round of 0** runs the interpreter alone, the cycle-ordered debug build; `System::new` keeps it, and the block tests set
+  `ROUND`. The save-state format did not change: the state holds no compiled-code fact, and `blocks_ran` leaves the issue model
+  at rest at the block's time. The states from before this stage load.
+
+### 66.3 What went
+
+Cranelift's EE tier (`emit.rs`, 2,382 lines; `forms.rs`), the prefix, the static snapshots, `Timing::apply` and `converges`, the
+undo log, `replay_steps`, `Board::run_through`, `Times`, `Tail`, the DMAC's guard, `Verify::Steps`, `Options`' measurement fields,
+`Rec`'s model, the `baseline` and `forms` features and their environment switches (`EMUSEN_SAPPHIRE_BASELINE`,
+`_BASELINE_NOW`, `_CALLS`, `_COP2`, `_FORMS_BYTES`). **On aarch64 and Windows the EE is now interpreted** until
+`emusen-assembler` has a backend there and the stub convention is written for Windows: the tier is x86-64 Unix alone.
+
+### 66.4 The footprint: why blocks had been capped
+
+§65.5 found that code outgrew the budget and capped blocks at 16 instructions. The cause was not the blocks' code. A placement
+was a batch, each batch began on a fresh page and `compile_now` placed one block a batch, so that every block took at least two
+pages of the reservation and code sat one block to a page: 386 MiB held, with generated code taking 28 % of L2 code misses.
+`emusen-jit`'s code memory (`native::Memory`, 1.3, §9 of `EmuSen_Jit.md`) now lays blocks side by side, W^X kept by the owner's
+running none of them while the pages are written, with a data arena that is writable and never executable for the links. With
+the exits' records gone as well: **18.2 MiB held, 83 hot bytes a guest instruction**, against 386 MiB, and 13 blocks compiled a
+field.
+
+### 66.5 Idle skipping beside linked blocks, and a finding
+
+Blocks that run to the deadline no longer show the dispatcher each backward jump, so run-time idle skipping (§47) passed
+nothing. Giving it the jumps back cost more than it saved: its proof stepped 687,000 instructions a field through the
+interpreter, nearly every interpreted step there was, at about 1,100 host instructions each, to pass 2.47 M compiled steps of
+waiting. Measured on the arena: with the proof 356.3 ms and 5.19 G host instructions a field; with no skipping at all 295.7 ms
+and 4.67 G. **Waits are now found at compile time**, after PCSX2 (`iR5900.cpp`): a block that jumps to its own start, stores
+nothing, calls nothing and carries no value from turn to turn (`lower::waits`) runs the time on at its jump back to
+`Context::wait`, the board's next event while the units are idle and otherwise the deadline, nothing else being able to change
+what it reads. The arena's polling of I_STAT, 324,000 slow paths a field, is gone. Run-time skipping stays for the interpreter;
+a wait of several blocks spins compiled.
+
+### 66.6 Results (measured 2026-10-30 and 31, the arena, uncontended, load about 2; instructions by hardware counter on the emulation thread)
+
+| | Arena mean, p95 | Host instructions a field | Steps a field, interpreted |
+| --- | --- | --- | --- |
+| §65's base | 464.3, 587 | 7.0 G | 3.46 M, 724,000 |
+| 1. the contract, the tier alone | 347.2, 438 | | 5.50 M, 743,000 |
+| 2. LQC2 and SQC2 in the planner's table, idle skipping's proof beside blocks | 356.3, 496 | 5.19 G | 3.39 M, 687,000 |
+| — 2 with no skipping | 295.7, 378 | 4.67 G | 5.37 M, 19,600 |
+| 3. waits at compile time | 300.7, 389 | 4.44 G | 3.31 M, 9,400 |
+| 4. QMFC2 and QMTC2 in place, VU0's register operations light, the fetch folded | **278.3, 361** | **4.29 G** | 3.31 M, 9,400 |
+
+**99.7 % of the EE's steps run compiled.** The estimate of about 330 ms was beaten; the arena is 40 % below the base.
+
+| Unit | Base, G a field | Now | |
+| --- | --- | --- | --- |
+| EE: Rust (the interpreter, reads, TLB) | 0.82 | 0.11 | |
+| EE: dispatcher (now `slow` 0.10 and `run` 0.07) | 0.62 | 0.15 | |
+| EE: the timing model | 0.27 | 0.01 | |
+| EE: compiled code | about 0.15 | 0.10 | 30 host instructions a guest one |
+| Idle skipping | 0.11 | 0 | |
+| **The EE's path** (with libc's copies, base 2.5 G) | **2.5** | **0.37** | target 0.3, limit 0.6 |
+| VU in Rust; floats | 1.99; 0.41 | 1.81; 0.42 | |
+| VU compiled code | about 0.18 | 0.16 | |
+| Board; PCRTC; DMAC; VIF | 0.95; 0.10; 0.18; 0.23 | 0.37; 0.12; 0.17; 0.19 | |
+| GS on this thread; IOP; libc | 0.48; 0.06; 0.34 | 0.48; 0.07; 0.04 | |
+
+**The EE's path is 370 M, 70 M over the target and under the limit. What remains:** `slow`, 490,000 calls a field at about 210
+instructions before the operation (153,000 VU0 register operations, 73,000 QMTC2 while VU0 runs, the rest MMI and COP1); the
+dispatcher's 95,000 entries at about 700 each, which the events set and not the rounds; and compiled code at 30 a guest
+instruction, its memory paths the largest part. The next levers are the arithmetic MMI in place, which want SSE in
+`emusen-assembler`, and fewer board events. The arena's largest cost is now the VU at 2.2 G, the next stage's.
+
+**The round re-measured, as it was free**: 277.1 ms and 4.26 G at 256 against 278.3 and 4.29 G at 64, so a block's exits are set by
+events, 95,000 a field either way, and the round stays 64. §62.2's result stands for a different reason.
+
+**Census of the D-cache tags.** A scratch build (not committed) with RDRAM reached directly in the tier and uncached in the
+interpreter ran the arena at 275.7 ms and 4.25 G against 277.1 and 4.26 G at the same round: **the tags in compiled paths cost
+12.7 M host instructions a field, 0.3 %, about 1.4 ms**. Misses are 19,000 slow paths a field. They stay, by the decision and by the
+figure.
+
+**Census of the I-cache.** The interpreter on the short window met 147.05 M line entries and 888,192 misses, 0.6 %, at 8 cycles a
+refill: 0.048 cycles a line, which is the sixteenth `FETCH_PER_LINE` folds.
+
+**Player checks.** Sound digests equal the base's on the arena (`BCA8F00F4743A955`). The arena's pictures at fields 9,060 to 9,360
+every 60 differ from the base's by 18.2, 39.6, 37.9, 19.9, 21.3 and 13.1 % of pixels, mean 2.0 to 5.2 levels; side by side, the same
+scene with the camera and the characters some frames out of phase, as the cost folded from rest moves the game's pace against
+the field.
+
+**Named losses, timing only unless said.** (1) A unit's event lands at a block's end, up to one block late. (2) An interrupt is
+taken at a block's end. (3) A block's cost starts from rest, so a load or a multiply in flight across a block's end is not
+charged. (4) **Byte-visible and accepted by the decision above**: code a store has replaced is not kept in the instruction cache
+by compiled code; it runs new from the next entry after the write reaches RDRAM, where the console would run the old line until it
+is replaced or invalidated. A program that leaves that to chance gets the new code. `s7-icache` shows it and the interpreter
+keeps it. (5) Random moves by instructions, not by unpaired issue cycles. (6) Cycle counters are the interpreter's: blocks are
+refused while CTE is set.
+
+### 66.7 The bugs of the build, for the record
+
+Each was found by a machine that hung 300,000 cycles after a state's load. (1) A value first loaded on the fast path was
+taken as held on the slow path that skipped it; every operand is now read before the first branch to a slow path. (2) A link's
+word kept from a return across idle skipping's interpreted turn linked to the block where the core had got to, not to the target;
+a return now records its place, and the link is made only there. (3) A link's word kept across the budget's drop wrote to memory
+that had been unmapped. (4) `lqc2` and `sqc2` in `shape`'s memory class but not in the planner's table refused their blocks.
+
+**Tests** (release with debug assertions): `blocks` 20, with the tests of rollbacks, guards and replay removed and
+`code_replaced_in_memory_runs_new_from_the_next_entry_and_the_block_is_shaped_again` and
+`a_write_to_a_blocks_line_that_leaves_its_words_keeps_the_block` new. The twin programs no longer read Count or arm interrupts: the
+two machines are compared by what a program can read, at checkpoints. `s7-counters` and `s7-icache` stay the interpreter's.
+
+**Read.** PCSX2's `x86/ix86-32/iR5900.cpp`, `x86/ix86-32/recVTLB.cpp`, `x86/BaseblockEx.cpp`, `x86/microVU_Macro.inl`, `vtlb.cpp`,
+`R5900.cpp`; Play!'s `ee/EeExecutor.cpp`, `ee/EeBasicBlock.cpp`. Nothing was copied. No firmware was listed; the BIOS image was
+given only as the bench's and the runner's argument.
+
+**Questions.**
+
+1. **[decision] Hosts other than x86-64 Unix.** The EE is interpreted on the Mac and Windows from this stage. *Recommended*: accept
+   until the VU's move off Cranelift, then write `emusen-assembler`'s aarch64 backend once for both tiers.
+2. **[routine] The next step on the EE's path.** *Recommended*: after the VU stage, the arithmetic MMI in place on SSE.
+

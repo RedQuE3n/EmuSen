@@ -1,6 +1,6 @@
 # EmuSen_Cores — Cores, the window and command that download and manage EmuSen's cores
 
-*Design, 2026-10-31. Nothing is built.* Asked by the tester the same day: "We should also make a core download and
+*Design, 2026-10-31; its questions answered by the tester the same day (§11). Nothing is built.* Asked by the tester the same day: "We should also make a core download and
 management window. Base it on our designs for the interface overhaul." The condition set for the libretro work holds
 here too: done properly, with no shortcuts.
 
@@ -202,8 +202,9 @@ Three kinds, kept apart so the player can tell them apart:
    (`EmuSen_LibretroHost.md` §5); a core for a system EmuSen does not know is *not supported* ("no EmuSen console runs
    this system"); an `is_experimental` core is shown only under its filter.
 2. **What the project has found**, a small data file shipped with the build, `cores-notes.tsv`, one line per core id:
-   the date tested, the build tested (its SHA-256), the conformance kit's result, and a sentence. Shown as "Tested by
-   EmuSen on <date> with the build of <date>", or "Not tested by EmuSen". Never a gate (Q4).
+   the date tested, the build tested (its SHA-256), the conformance kit's result, and a sentence. Shown as "This exact
+   build was tested by EmuSen on <date>" where the installed or offered build's SHA-256 is the one recorded, "An earlier
+   build was tested on <date>" otherwise, or "Not tested by EmuSen". Never a gate (§11.4).
 3. **The core's own `notes`**, as its `.info` writes them, escaped as descriptor text (`EmuSen_CoreAPI.md` §7.2 rule 5).
 
 ## 5. Download, verification and install
@@ -290,9 +291,9 @@ window directly and by the module through its host's runtime.
 The libretro host is being built on its own branch. Four places need one owner between the two (Q7):
 
 1. **The installed core's folder and `NOTICE`.** Written by the core tool, read by discovery and by the libretro host
-   (which refuses a core whose SHA-256 is not `NOTICE`'s). Proposed: `NOTICE`'s format written down once, in
-   `EmuSen_LibretroHost.md` §1.1, as `key: value` lines (`name`, `corename`, `authors`, `license`, `source`, `build`,
-   `index_crc32`, `sha256`, `fetched`), and one Rust module that reads and writes it, used by both.
+   (which refuses a core whose SHA-256 is not `NOTICE`'s). `NOTICE` is `key: value` lines (`name`, `corename`,
+   `authors`, `license`, `source`, `build`, `index_crc32`, `sha256`, `fetched`), read and written by one crate, Cores'
+   `emusen-core-entry`, on which the libretro host depends (decided, §11.7).
 2. **The table from libretro's `systemid` to EmuSen's systems**: in the systems table, read by the host's `info()` and
    by the catalogue.
 3. **The runtime's `cores` listing for an entry of §1.1** (the host's addition (a)): the listing gains, for such an
@@ -363,3 +364,23 @@ tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and t
 9. **[routine]** The command is `cores` in a new module `emusen.cores`, since `core` is taken. *Recommended:* yes.
 10. **[routine]** Cores whose host cannot run them (OpenGL-only, an unknown system) are listed under *Not supported*
     with the reason rather than hidden. *Recommended:* yes.
+
+## 11. Decided 2026-10-31 by the tester
+
+Every recommendation of §10 was taken, with these particulars:
+
+1. T0 and T1 are built here (C0, C1), for Packages too, in LunaP as its README asks of general controls.
+2. Cores takes the core list, the download and the engine choice per console from the libretro host's stage 4; the host
+   keeps the runtime's side.
+3. The buildbot's nightlies are the only source.
+4. Integrity as §5.2, and `cores-notes.tsv` records the **SHA-256 of each build the project tested**, so the window can
+   say "this exact build was tested"; information, never a gate.
+5. The catalogue and updates are fetched only when the player asks; checking when Cores opens is opt-in, off by default.
+6. One previous build per core is kept for *Roll Back*.
+7. The owners of §7's surfaces: **Cores owns the `NOTICE` format and the one module that reads and writes it**, in a
+   small crate both depend on (`Platform/core-entry`, `emusen-core-entry`); **the libretro host owns** the `systemid`
+   table in the systems table and the `libretro` field of the runtime's `cores` listing. Cores builds against those two
+   once they land, their exact shape agreed with the host's work beforehand.
+8. Cores lives in the tool library `EmuSen.Tools.Cores`, hosted by Mistress now and by Home later.
+9. The command is `cores`, in `emusen.cores`.
+10. Cores the host cannot run are listed with the reason.

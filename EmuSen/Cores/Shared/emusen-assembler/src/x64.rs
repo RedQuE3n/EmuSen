@@ -3,7 +3,7 @@
 use cranelift_assembler_x64 as asm;
 use asm::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Inst, inst as i};
 
-use crate::{Assembler, By, Code, Cond, Label, Mem, Op, PURPOSES, Reg, Reloc, Section, ShiftOp, Src, Target, Width};
+use crate::{Assembler, By, Code, Cond, Label, Mem, Op, PURPOSES, Reg, Reloc, Section, ShiftOp, Src, Target, VOp, VShift, VShuffle, VUnary, Vector, Vreg, Width};
 
 pub const RAX: Reg = Reg(0);
 pub const RCX: Reg = Reg(1);
@@ -707,5 +707,137 @@ impl Assembler for X64 {
             }
         }
         code
+    }
+}
+
+/// Whether this host has the vector forms `Vector` writes (AVX's three-operand encodings) beside BMI2's shifts.
+pub fn vector_supported() -> bool {
+    std::arch::is_x86_feature_detected!("avx") && std::arch::is_x86_feature_detected!("bmi2")
+}
+
+fn x(v: Vreg) -> u8 {
+    v.0
+}
+
+fn xm(v: Vreg) -> asm::XmmMem<u8, u8> {
+    asm::XmmMem::Xmm(v.0)
+}
+
+impl X64 {
+    /// `0F AE /ext` on `[base + disp32]`: LDMXCSR (2) and STMXCSR (3), which the encodings crate does not name.
+    fn mxcsr(&mut self, ext: u8, m: Mem) {
+        let b = m.base.0;
+        let mut out = Vec::with_capacity(9);
+        if b >= 8 {
+            out.push(0x41);
+        }
+        out.extend_from_slice(&[0x0F, 0xAE, 0x80 | ext << 3 | (b & 7)]);
+        if b & 7 == 4 {
+            out.push(0x24);
+        }
+        out.extend_from_slice(&m.disp.to_le_bytes());
+        self.put_bytes(&out, None);
+    }
+}
+
+impl Vector for X64 {
+    fn vop(&mut self, op: VOp, d: Vreg, a: Vreg, b: Vreg) {
+        let (d, a, b) = (x(d), x(a), xm(b));
+        macro_rules! go {
+            ($($o:ident => $i:ident),* $(,)?) => {
+                match op {
+                    $(VOp::$o => self.put(i::$i::new(d, a, b)),)*
+                }
+            };
+        }
+        go!(
+            AddB => vpaddb_b, AddH => vpaddw_b, AddW => vpaddd_b, AddQ => vpaddq_b,
+            SubB => vpsubb_b, SubH => vpsubw_b, SubW => vpsubd_b, SubQ => vpsubq_b,
+            AddSB => vpaddsb_b, AddSH => vpaddsw_b, AddUB => vpaddusb_b, AddUH => vpaddusw_b,
+            SubSB => vpsubsb_b, SubSH => vpsubsw_b, SubUB => vpsubusb_b, SubUH => vpsubusw_b,
+            MinSH => vpminsw_b, MaxSH => vpmaxsw_b, MinSW => vpminsd_b, MaxSW => vpmaxsd_b,
+            MinUB => vpminub_b, MaxUB => vpmaxub_b, MinUH => vpminuw_b, MaxUH => vpmaxuw_b, MinUW => vpminud_b, MaxUW => vpmaxud_b,
+            EqB => vpcmpeqb_b, EqH => vpcmpeqw_b, EqW => vpcmpeqd_b, GtB => vpcmpgtb_b, GtH => vpcmpgtw_b, GtW => vpcmpgtd_b,
+            And => vpand_b, AndNot => vpandn_b, Or => vpor_b, Xor => vpxor_b,
+            LowB => vpunpcklbw_b, LowH => vpunpcklwd_b, LowW => vpunpckldq_b, LowQ => vpunpcklqdq_b,
+            HighB => vpunpckhbw_b, HighH => vpunpckhwd_b, HighW => vpunpckhdq_b, HighQ => vpunpckhqdq_b,
+            PackSH => vpacksswb_b, PackSW => vpackssdw_b, PackUH => vpackuswb_b, PackUW => vpackusdw_b,
+            MulLowH => vpmullw_b, MulHighSH => vpmulhw_b, MulLowW => vpmulld_b, MulEvenSW => vpmuldq_b, MulEvenUW => vpmuludq_b,
+            MulAddH => vpmaddwd_b, ShuffleB => vpshufb_b,
+            AddF => vaddps_b, SubF => vsubps_b, MulF => vmulps_b, MinF => vminps_b, MaxF => vmaxps_b,
+        );
+    }
+
+    fn vunary(&mut self, op: VUnary, d: Vreg, a: Vreg) {
+        let (d, a) = (x(d), xm(a));
+        match op {
+            VUnary::AbsB => self.put(i::vpabsb_a::new(d, a)),
+            VUnary::AbsH => self.put(i::vpabsw_a::new(d, a)),
+            VUnary::AbsW => self.put(i::vpabsd_a::new(d, a)),
+        }
+    }
+
+    fn vshift(&mut self, op: VShift, d: Vreg, a: Vreg, by: u8) {
+        let (d, a) = (x(d), x(a));
+        match op {
+            VShift::LeftH => self.put(i::vpsllw_d::new(d, a, by)),
+            VShift::LeftW => self.put(i::vpslld_d::new(d, a, by)),
+            VShift::LeftQ => self.put(i::vpsllq_d::new(d, a, by)),
+            VShift::RightH => self.put(i::vpsrlw_d::new(d, a, by)),
+            VShift::RightW => self.put(i::vpsrld_d::new(d, a, by)),
+            VShift::RightQ => self.put(i::vpsrlq_d::new(d, a, by)),
+            VShift::ArithH => self.put(i::vpsraw_d::new(d, a, by)),
+            VShift::ArithW => self.put(i::vpsrad_d::new(d, a, by)),
+        }
+    }
+
+    fn vshuffle(&mut self, s: VShuffle, d: Vreg, a: Vreg, order: u8) {
+        let (d, a) = (x(d), xm(a));
+        match s {
+            VShuffle::W => self.put(i::vpshufd_a::new(d, a, order)),
+            VShuffle::LowH => self.put(i::vpshuflw_a::new(d, a, order)),
+            VShuffle::HighH => self.put(i::vpshufhw_a::new(d, a, order)),
+        }
+    }
+
+    fn vblend_h(&mut self, d: Vreg, a: Vreg, b: Vreg, mask: u8) {
+        self.put(i::vpblendw_rvmi::new(x(d), x(a), xm(b), mask));
+    }
+
+    fn vmov(&mut self, d: Vreg, s: Vreg) {
+        if d != s {
+            self.put(i::vmovdqa_a::new(x(d), xm(s)));
+        }
+    }
+
+    fn vload(&mut self, d: Vreg, m: Mem) {
+        self.put(i::vmovdqu_a::new(x(d), asm::XmmMem::Mem(mem(m))));
+    }
+
+    fn vstore(&mut self, s: Vreg, m: Mem) {
+        self.put(i::vmovdqu_b::new(asm::XmmMem::Mem(mem(m)), x(s)));
+    }
+
+    fn vload_data(&mut self, d: Vreg, offset: u32) {
+        self.put_rip(i::vmovdqu_a::new(x(d), asm::XmmMem::Mem(rip())), Fix::Out(Target::Data(offset)));
+    }
+
+    fn vjoin(&mut self, d: Vreg, lo: Reg, hi: Reg) {
+        self.put(i::vmovq_a::new(x(d), GprMem::Gpr(r(lo))));
+        self.put(i::vpinsrq_b::new(x(d), x(d), GprMem::Gpr(r(hi)), 1));
+    }
+
+    fn vsplit(&mut self, lo: Reg, hi: Reg, s: Vreg) {
+        assert_ne!(lo, hi, "two distinct halves");
+        self.put(i::vmovq_b::new(GprMem::Gpr(r(lo)), x(s)));
+        self.put(i::vpextrq_a::new(GprMem::Gpr(r(hi)), x(s), 1));
+    }
+
+    fn fpcr_load(&mut self, m: Mem) {
+        self.mxcsr(2, m);
+    }
+
+    fn fpcr_store(&mut self, m: Mem) {
+        self.mxcsr(3, m);
     }
 }

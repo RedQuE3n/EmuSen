@@ -780,6 +780,76 @@ fn every_load_and_store_runs_compiled_on_every_region() {
     assert!(s.compiled_steps > s.interpreted, "{s:?}");
 }
 
+/// Loads of a unit's registers past the caches take the slow path's direct read (Sapphire_Speed.md §68): VIF1's channel's
+/// address and count, which hold what was stored, read at every width and sign through kseg1, through kuseg (a refill here), in a delay slot
+/// too, and a misaligned one that raises.
+#[test]
+fn loads_of_registers_read_as_the_interpreter_reads() {
+    let source = "
+        lui s0, 0xb000
+        ori s0, s0, 0x9000
+        lui s1, 0x1000
+        ori s1, s1, 0x9000
+        lui t0, 0x0123
+        ori t0, t0, 0xc560
+        sw t0, 0x10(s0)
+        ori t0, zero, 0x8765
+        sw t0, 0x20(s1)
+        ori t9, zero, 30
+        top: lw a0, 0x10(s0)
+        lh a1, 0x10(s0)
+        lbu a2, 0x20(s0)
+        lb a3, 0x21(s0)
+        lhu v0, 0x20(s1)
+        lwu v1, 0x10(s1)
+        ld t1, 0x10(s0)
+        addu t2, a0, a1
+        bne t9, zero, on
+        lw t3, 0x20(s1)
+        on: lw t4, 0x11(s0)
+        addiu t9, t9, -1
+        bgtz t9, top
+        nop
+        end: beq zero, zero, end
+        nop";
+    let words = assemble(source, ORIGIN);
+    let s = twin(&words, 2000, 13, &mut eager());
+    println!("loads of registers: {s:?}");
+    assert!(s.left[2] > 100 && s.compiled_steps > 1000, "{s:?}");
+}
+
+/// CACHE inside a block (Sapphire_Speed.md §68): a line that hits and that a store then dirties, invalidated by a hit
+/// operation, is read again from memory by the next access on the same base, which may not take the store's line as held;
+/// a line written back by a hit operation is read past the cache.
+#[test]
+fn a_cache_operation_in_a_block_drops_the_lines_its_accesses_kept() {
+    let source = "
+        lui gp, 0x8030
+        lui s7, 0xa030
+        ori t0, zero, 0x1234
+        sw t0, 0x40(s7)
+        ori t9, zero, 30
+        top: lw t1, 0x40(gp)
+        addiu t2, t1, 7
+        sw t2, 0x40(gp)
+        cache 0x1a, 0x40(gp)
+        lw t3, 0x40(gp)
+        addu t5, t3, t9
+        sw t5, 0x80(gp)
+        cache 0x18, 0x80(gp)
+        lw t4, 0x80(s7)
+        addu t5, t3, t4
+        addiu t9, t9, -1
+        bgtz t9, top
+        nop
+        end: beq zero, zero, end
+        nop";
+    let words = assemble(source, ORIGIN);
+    let s = twin(&words, 1500, 9, &mut eager());
+    println!("cache operations in blocks: {s:?}");
+    assert!(s.compiled_steps > 800, "{s:?}");
+}
+
 #[test]
 fn the_stage_s7_memory_programs_leave_the_interpreters_machine() {
     // `s7-icache` shows code a store replaced kept in the instruction cache and `s7-counters` reads the time, neither of which compiled code models (Sapphire_Speed.md §66).
@@ -976,5 +1046,64 @@ fn a_store_into_a_clean_line_dirties_it_and_reaches_memory_when_it_is_replaced()
     let s = twin(&words, 6000, 100, &mut eager());
     println!("stores into clean lines: {s:?}");
     assert!(s.compiled_steps > 2000, "{s:?}");
+}
+
+/// The multimedia instructions lowered on the host's vectors (Sapphire_Speed.md §68), each in a loop over lanes at their limits,
+/// with its destination apart from and equal to a source, HI and LO read and written.
+#[test]
+fn every_lanewise_multimedia_instruction_runs_in_place_as_interpreted() {
+    const TABLE: u32 = SCRATCH + 0x8000;
+    let lanes: [u64; 8] = [0x8000_7FFF_FFFF_0000, 0x0080_007F_00FF_8001, 0x7FFF_FFFF_8000_0000, 0xFFFF_FFFF_FFFF_FFFF, 0x0123_4567_89AB_CDEF, 0x8000_0000_7FFF_FFFF, 0xFEDC_BA98_7654_3210, 0x0001_0002_FFFE_8000];
+    let table: Vec<u32> = lanes.iter().flat_map(|&q| [q as u32, (q >> 32) as u32]).collect();
+    let three = [
+        "paddb", "paddh", "paddw", "psubb", "psubh", "psubw", "paddsb", "paddsh", "psubsb", "psubsh", "paddub", "padduh", "psubub", "psubuh", "padsbh",
+        "pmaxh", "pminh", "pmaxw", "pminw", "pceqb", "pceqh", "pceqw", "pcgtb", "pcgth", "pcgtw", "ppacb", "ppach", "ppacw", "pinteh", "pinth", "pmulth",
+        "pmaddh", "pmsubh",
+    ];
+    let two = ["pabsh", "pabsw", "prot3w", "pexew", "pexcw", "pexch", "pexeh", "prevh", "pcpyh"];
+    let shifts = ["psllh", "psrlh", "psrah", "psllw", "psrlw", "psraw"];
+    let one = ["pmfhl.lw", "pmfhl.uw", "pmfhl.lh", "pmfhl.sh"];
+    let mut forms: Vec<Vec<String>> = Vec::new();
+    for n in three {
+        forms.push(vec![format!("{n} v0, a0, a1"), format!("{n} v1, a1, a2"), format!("{n} a2, a2, a3"), format!("{n} a3, a3, a3"), format!("{n} zero, a0, a1")]);
+    }
+    for n in two {
+        forms.push(vec![format!("{n} v0, a0"), format!("{n} v1, a1"), format!("{n} a2, a2"), format!("{n} a3, a3")]);
+    }
+    for n in shifts {
+        forms.push(vec![format!("{n} v0, a0, 0"), format!("{n} v1, a1, 1"), format!("{n} a2, a2, 15"), format!("{n} a3, a3, 31")]);
+    }
+    for n in one {
+        forms.push(vec![format!("{n} v0"), "pmthi a1".into(), format!("{n} v1"), "pmtlo a2".into(), format!("{n} a3")]);
+    }
+    for f in forms {
+        let body = f.join("\n");
+        let source = format!(
+            "lui t0, 0x{:x}
+            ori t0, t0, 0x{:x}
+            lq a0, 0(t0)
+            lq a1, 16(t0)
+            lq a2, 32(t0)
+            lq a3, 48(t0)
+            pmthi a2
+            pmtlo a3
+            ori t9, zero, 24
+            top: {body}
+            pxor a0, a0, v0
+            pnor a1, a1, v1
+            pcpyld a3, a0, a2
+            pmthi v1
+            addiu t9, t9, -1
+            bgtz t9, top
+            nop
+            end: beq zero, zero, end
+            nop",
+            TABLE >> 16,
+            TABLE & 0xFFFF
+        );
+        let words = assemble(&source, ORIGIN);
+        let s = twin_prepared(&words, 600, 7, &mut eager(), |sys| sys.board.map.load(TABLE, &table));
+        assert!(s.compiled_steps > 300, "{}: {s:?}", f[0]);
+    }
 }
 

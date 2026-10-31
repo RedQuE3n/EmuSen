@@ -11,7 +11,7 @@ use emusen_jit::verify::Reference;
 
 use crate::board::System;
 use crate::ee::Halt;
-use crate::ee::jit::isa::{self, BOARD, Homes, IN_SLOT, LIGHT, NEXT_HELD, Rec, stub};
+use crate::ee::jit::isa::{self, BOARD, Homes, IN_SLOT, LIGHT, NEXT_HELD, Rec, SIGNED, stub};
 use crate::ee::jit::lower::{self, NEXT};
 use crate::ee::jit::{self, Context, Enter, FRONT, Jump, Options, PAGES, Page, WAITED, kind, shape};
 
@@ -679,6 +679,41 @@ fn full(ctx: &mut Context, rec: &Rec, why: u64, frame: *mut u64) -> u64 {
         // SAFETY: `core_off` names an 8-byte field of the core, which nothing else borrows while the block runs.
         unsafe { (&raw mut *ee).cast::<u8>().add(lower::core_off(v) as usize).cast::<u64>() }
     };
+    if why == lower::LEFT_PAGE as u64 && rec.load != 0 && rec.flags & IN_SLOT == 0 {
+        // A load of a unit's register: read at the instruction's time straight from the page the translation cache holds.
+        let w = rec.word;
+        let (bytes, signed) = (rec.load & 15, rec.load & SIGNED != 0);
+        let base = (w >> 21 & 31) as usize;
+        let at = |ctx: &mut Context, ee: &mut crate::ee::Ee, v: usize| -> u64 {
+            // SAFETY: as `value` and `core` below.
+            if v == 0 { 0 } else if rec.dirty[v / 64] >> (v % 64) & 1 == 1 { unsafe { *value(ctx, v) } } else { unsafe { core(ee, v).read_unaligned() } }
+        };
+        let vaddr = (at(ctx, ee, base) as u32).wrapping_add(w as u16 as i16 as i32 as u32);
+        // SAFETY: the pages the context points at are `Blocks::pages`, alive for the call.
+        let page = unsafe { *ctx.pages.add(jit::page_index(vaddr)) };
+        let paddr = (page.meta >> 32) as u32 * 0x1000 | vaddr & 0xFFF;
+        if vaddr & (bytes - 1) == 0 && page.tag == ctx.gen1 | u64::from(vaddr & !0xFFF) && page.meta & (3 | kind::REGISTER) == kind::REGISTER && !crate::ee::bus::Bus::error(board, paddr) {
+            let t = ctx.time + u64::from(rec.time);
+            board.run_to(t, &mut ee.spram[..]);
+            let raw = crate::ee::bus::Bus::read(board, paddr, bytes as usize) as u64;
+            let s = 64 - 8 * bytes;
+            let v = if signed { ((raw << s) as i64 >> s) as u64 } else { raw };
+            let rt = (w >> 16 & 31) as usize;
+            if rt != 0 {
+                // SAFETY: as above.
+                unsafe { core(ee, rt).write_unaligned(v) };
+                if homes[rt] != 0 {
+                    unsafe { *value(ctx, rt) = v };
+                }
+            }
+            ctx.time += crate::ee::timing::UNCACHED;
+            ctx.quiet = u32::from(!board.vpu.running(0));
+            let same = board.lines() == (ee.int0, ee.int1, ee.cpcond0);
+            let sys = sys(ctx);
+            ctx.deadline = if same && sys.board.map.written.is_empty() { deadline(sys) } else { 0 };
+            return 0;
+        }
+    }
     for h in 0..2 {
         let mut m = rec.dirty[h];
         while m != 0 {
@@ -759,6 +794,7 @@ extern "C" fn fill(ctx: *mut Context, vaddr: u64, _: u64, _: u64) -> u64 {
                 Place::Scratchpad(o) => (kind::SCRATCHPAD | w, sys.ee.spram.as_ptr() as u64 + u64::from(o & !0xFFF)),
                 Place::Physical(p, Mode::Cached) => (kind::CACHED | w | u64::from(p >> 12) << 32, 0),
                 Place::Physical(p, Mode::Uncached | Mode::Accelerated) if (p as usize) < sys.board.map.rdram.len() => (kind::UNCACHED | w, 0),
+                Place::Physical(p, Mode::Uncached) => (kind::NONE | kind::REGISTER | u64::from(p >> 12) << 32, 0),
                 Place::Physical(..) => (kind::NONE, 0),
             }
         }

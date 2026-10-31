@@ -187,7 +187,8 @@ pub(crate) struct Rec {
     /// In a delay slot: the place after it, or `NEXT`'s value with `NEXT_HELD`.
     pub next: u32,
     pub flags: u32,
-    pub pad: u32,
+    /// A plain load's width in bytes, with `SIGNED` where it sign-extends; 0 for anything else.
+    pub load: u32,
     /// The operation, called directly (`jit::run_of`).
     pub run: u64,
 }
@@ -198,6 +199,8 @@ pub(crate) const NEXT_HELD: u32 = 2;
 pub(crate) const BOARD: u32 = 4;
 /// `Rec::flags`: a macro operation of VU0's registers, done without the board or the issue model while VU0 rests.
 pub(crate) const LIGHT: u32 = 8;
+/// `Rec::load`: the load sign-extends.
+pub(crate) const SIGNED: u32 = 16;
 
 impl Rec {
     pub(crate) fn bytes(&self) -> &[u8] {

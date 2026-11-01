@@ -274,7 +274,12 @@ compares on both options.
 SNES, one disc as one file, as two and as a CHD, and a broken file of each check's kind; the library compared byte for
 byte before and after), the module's request and line tests, `dianash-text`'s `uniq` test, the platform test running
 `rom dups` and the pipe in one shell, and in WiseMan the golden files `rom`, `uniq`, `help` and `man` and the
-text-parity lines. Seeded faults are recorded in the stage's commit.
+text-parity lines (the golden corpus and parity classes, 104 tests, measured on 2026-10-31). Seven faults seeded
+on 2026-10-31, each reverted, each caught: a disc read from sector 0 rather than track 1's index 01 (`rom hash`'s
+test, by the size of the program area); the system pack's transform dropped (the headered and copier copies no longer
+equal, in `hash` and `dups`); a track ending inside a sector passed (`check`'s test); the package rule dropped, so a
+package's own files made a group (`dups`' test); a zip's entries not inflated (`check`'s test, `Bad.zip` passed);
+`uniq -D` printing runs of one (`uniq`'s test); and the hash line's CRC-32 and MD5 swapped (the module's test).
 
 ### 7.6 Left
 

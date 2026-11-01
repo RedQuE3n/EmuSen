@@ -1326,6 +1326,15 @@ the frame call ends in a refusal in words within its deadline, and the next ring
 frames in a ring, so the C# implementation's inability to raise the dead core's `ready` (§33.2) leaves the device
 usable.
 
+**PS2 memory cards (4.3), not built in this pass.** PCEE2's profile already gives core info its two cards as
+battery files 2 and 3 of medium `ps2.card`, so the card manager's media and `MemoryCards.Place` take them as the
+console's cards; but their suffixes are `.mcd1` and `.mcd2` where Sapphire's are `.ps2` and `.2.ps2`, so each engine
+keeps its own files, which §4.5 asks until a card formatted and written by one engine is read by the other. Making
+them one file per slot is then one change of suffix in `files::PROFILES`. The round trip needs PCEE2 driven into its
+firmware's browser (pad input at set frames, the browser's own format of a blank card, then Sapphire's card reader
+over the bytes, and the reverse with a card Sapphire's reader formatted), which the libretro host's `run` example
+cannot yet script; adding a pad script to it is the next step.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

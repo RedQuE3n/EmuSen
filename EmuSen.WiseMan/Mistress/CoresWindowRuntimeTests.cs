@@ -13,6 +13,7 @@ using EmuSen.Tools.Cores;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
+using Avalonia.VisualTree;
 using static EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests;
 
 namespace EmuSen.WiseMan.Mistress
@@ -94,6 +95,61 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("approved", row.Trust);
             Assert.NotNull(row.Engine);
             window.Close();
+        }, default);
+
+        // An entry as `cores get` lays one out: the copies, the core named on its stem, its information file, NOTICE and broker.target.
+        private string Installed(string stem, string name)
+        {
+            string folder = Path.Combine(Cores, "libretro", stem);
+            LibretroEntryFixture.Lay(folder, "", stem);
+            string core = Path.Combine(folder, $"{stem}_libretro.so");
+            File.WriteAllText(Path.Combine(folder, "NOTICE"), $"# Installed by EmuSen's Cores at the player's request; the core keeps its own licence.\nformat: 1\nstem: {stem}\nname: {name}\ncorename: {stem}\nauthors: Someone\nlicense: GPLv3\nsource: https://buildbot.libretro.com/nightly/linux/x86_64/latest/{stem}_libretro.so.zip\nbuild: 2026-11-01\nindex_crc32: d589c813\nsha256: {Sha256(core)}\nfetched: 2026-11-01\n");
+            File.WriteAllText(Path.Combine(folder, "broker.target"), "emusen-libretro-host.so\n");
+            return core;
+        }
+
+        // The handheld's state on 2026-11-01: PCEE2 and Flycast installed, neither approved, no approvals file; the big-screen form driven by the pad.
+        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        public Task The_big_screen_form_approves_an_installed_core_with_the_pad() => Session.Dispatch(() =>
+        {
+            Directory.Delete(Entry, recursive: true);
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            Installed("flycast", "Sega - Dreamcast/NAOMI (Flycast)");
+            CoresPane.StartJob = _ => new ScriptedJob([LibretroCore("pcee2", "Sony - PlayStation 2 (PCEE2)", "ps2", "installed", 1 << 20), LibretroCore("flycast", "Sega - Dreamcast/NAOMI (Flycast)", "dc", "installed", 1 << 20),
+                new { @event = "done", op = "core-ls", counts = new System.Collections.Generic.Dictionary<string, int> { ["installed"] = 2 }, catalogue = "2026-11-01" }], ends: true);
+            using CrystalRuntime runtime = Runtime();
+            CoresPane.RuntimeFor = _ => (CoresRuntime)Mistress("CoresRuntimeOf", runtime)!;
+            string? asked = null;
+            ConfirmField.SetValue(null, (Func<Avalonia.Controls.Window, string, string, Task<bool>>)((_, _, message) => { asked = message; return Task.FromResult(true); }));
+            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = Path.Combine(_root, "Roms"), BigScreen = true, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
+            Directory.CreateDirectory(Path.Combine(_root, "Roms"));
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            var pad = new PadDriver(main);
+            Settle(main);
+            typeof(MainWindow).GetMethod("ShowCores", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            Settle(main);
+            var shown = (CoresWindow)Sheets(main).Current!;
+            CoresPane pane = shown.Pane;
+            pane.Poll();
+            Settle(main);
+            Assert.Equal(EmuSen.LunaP.Controls.AdaptiveForm.BigScreen, pane.Form);
+            CoreRow row = pane.Rows.Single(r => r.Stem == "pcee2");
+            Assert.Equal((Sha256(pcee2), "needs_approval"), (row.Sha256, row.Trust));
+            pane.BigScreenTable.Select(row);
+            pane.FocusRole(EmuSen.LunaP.Controls.AdaptiveRole.Content);
+            Settle(main);
+            pad.A();
+            Settle(main);
+            Assert.True(pane.IsDetailOpen, "Accept on the row opens its page");
+            var approve = Sheets(main).SheetOf(shown)!.GetVisualDescendants().OfType<Avalonia.Controls.Button>().FirstOrDefault(b => b.Name == "CoresApprove");
+            Assert.True(approve is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }, "the page offers Approve…");
+            Assert.True(approve!.IsFocused, $"the page's first control, Approve…, has the focus, not {main.FocusManager?.GetFocusedElement()}");
+            pad.A();
+            Settle(main);
+            Assert.Contains(Sha256(pcee2), asked);
+            Assert.Contains(Sha256(pcee2), File.ReadAllText(Path.Combine(_root, "Config", "cores.approved")));
+            main.Close();
         }, default);
 
         [RustImplementationFact("the cores listing's libretro rows, 1.5")]

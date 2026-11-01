@@ -767,6 +767,7 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Memory Cards...", ShowMemoryCards),
                     new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
                     new LunaAction("Pac_kages...", ShowPackages),
+                    new LunaAction("Sc_raper...", ShowScraper),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.

@@ -183,7 +183,7 @@ scraper is its own crate.
 | **T2** | `rom hash`, `rom check` (the size, sheet, archive and CHD checks), `rom dups`, `uniq -D -w` | routine |
 | **T3** | The header checks, per system pack, with seeded faults | careful: a false "broken" sends a player hunting |
 | **T4** | `emusen.scrape` and `scrape` — built 2026-10-31 (§8) | routine |
-| **T5** | The scraping tool window, composing `scrape`; Mistress's `ScopeGames` routed through the command's choice so that it has one owner (§8.6) | routine |
+| **T5** | The scraping tool window, composing `scrape`; Mistress's `ScopeGames` routed through the command's choice so that it has one owner (§8.6) — built 2026-11-01 (§9) | routine |
 | **T6** | The library manager window | routine |
 | **T7** | The trash operation in the platform library (Linux and its portal first), `trash`, and Move to Trash in the library manager | careful: it is the only write to the library |
 
@@ -357,7 +357,7 @@ becomes `scrape<n>`, listed by `ps`, followed by `scrape wait`, cancelled by `ki
 ### 8.6 For T5
 
 The Scraper window composes `scrape`. Mistress's own `ScopeGames` and its `Meets` criteria remain until then and are
-not copied; T5's first step routes Scrape Games through the command's choice, so that the choice has one owner.
+not copied; T5's first step routes Scrape Games through the command's choice, so that the choice has one owner. Done 2026-11-01 (§9.2).
 
 ### 8.7 Tests, measured 2026-10-31
 
@@ -388,3 +388,114 @@ with words naming the holder ("another program", or "EmuSen's scraper in this pr
 the words when its store cannot be opened; a shell's `scrape` prints them. `tests/store_lock.rs` holds the store in a
 child process of the test binary and is refused in the parent, then opens once the child lets go, and is refused a
 second handle in its own process.
+
+## 9. T5 as built: the Scraper window (2026-11-01)
+
+### 9.1 The form chosen
+
+The window composes `scrape`, so it needs the command's own choice, plan and run as data rather than its printed lines.
+Three forms were weighed, as the code-design section asks. Driving a DianaSh shell from the window and parsing what
+`scrape` prints was refused: the tool library would need the shell's binding, a run past the line's budget turns into a
+background job, and progress would be read back out of sentences. Copying the choice into C# was refused outright, being
+a second owner of it. The form taken is an **extension** of two existing surfaces: the module crate gains
+`emusen_scrape_module::ask`, the command's subcommands as JSON in and JSON out over the same `Backend` a shell's call
+uses, and the platform library exports it as **`emusen_scraping_command`** (platform interface **29**). The request is
+`{"args": [...], "paths": [...], "sources": bool}`, `args` the words after `scrape`: `ls` answers the chosen games with
+each kind's source, `plan` the scraper's `ScrapePlan` with the shell's sentence, `run` a started run and the serial to
+follow it from, `progress` the scraper's progress with the shell's end sentence once it is not running, and `status`,
+`wait`, `cancel` and `collections` what their names say. Failures carry `emusen_scrape.h`'s statuses and words. Galaxia's
+`ScrapeCommand` is the C# binding; nothing of the scraper or its service changed.
+
+`--missing` was extended so that ES-DE's four criteria are the module's: a comma list of kinds keeps a game with none
+of them (ES-DE's "No game image" is `miximage,screenshot,titlescreen,cover`), and `--missing metadata` a game whose
+description, edited or scraped, is empty, read through the scraper's `metadata` read. A single kind and `any` mean what
+they meant.
+
+### 9.2 One owner of the choice
+
+Mistress's wide runs from the native scraper — Scrape Games from Preferences, the pad menu and a shelf — are now chosen by
+`scrape ls` through `ChosenGames`: the shelf becomes `--system <its ES-DE name>`, favourites `--favorites`, and "No
+cover", "No game image", "No game video" and "No metadata" the `--missing` forms above. Both the confirm step's
+`ScrapePlan` and the run take that list. Two paths keep `ScopeGames`: one game named by hand, which is no choice, and the
+managed scraper, which runs only where the platform library is not in use and so has no module to ask; it goes when the
+managed half does. A shelf's run chooses its ES-DE system's games, which is the scraper's own unit.
+
+### 9.3 The tool library and its host
+
+- **`EmuSen.Tools.Scraper`** references LunaP and Galaxia only (`LeafAssemblyTests`): `ScraperPane` (a
+  `ManagerLayout<ScrapeRow>`), `ScrapeRow` (one game of `ls`'s answer), and `ScraperPlan`, the words and command lines,
+  free of any control.
+- **Mistress's hosts share one base**, `ToolPaneWindow`: the form taken from the sheet's framing, the frame's generated
+  hints, and the pad's buttons offered to the pane in ES-DE's grammar. `PackagesWindow` moved onto it; `ScraperWindow`
+  is the second. Neither writes a hint or a focus route.
+- **Placement** (§1b): Home is not built yet, so the existing entry points open the Scraper — *Settings → Scraper…* on
+  the desktop, and the pad menu's Library page, whose *Scrape Games…* row opened Preferences' Scraping tab before. A
+  game's own *Scrape This Game* is one game and stays where it is.
+- **Retired as §2 says**: while the Scraper is open, the status sheet is not opened; a request for it brings the Scraper
+  forward, whose apply bar carries the run's progress. Preferences' Scraping tab keeps its controls (the question in
+  §9.6).
+- **ToolWords and ToolEvents** are the library tool's job events and refusals; the scraper's answers are neither, so
+  nothing of them is shared and nothing was moved.
+
+### 9.4 What the window does
+
+- **Sections**: All Games, Favourites, Missing Media (`--missing any`), No Game Image, No Description, each system the
+  listing found, and each collection. A section is one choice of the module's, so changing it asks `scrape ls` again;
+  the window filters nothing itself beyond the frame's search.
+- **Columns**: Game, System, Media (*n of m* of the kinds asked), Missing, Last Run; the big screen shows Game and Media.
+- **Options**, as checkable actions: *Theme* (`--kinds theme`, the "what my theme shows" preset, answered by
+  Mistress's theme loader and refused with its reason where none is lent), *Videos* (off by default), *Overwrite*.
+  *Mark All* marks the shown rows (in Missing Media, every game lacking a kind asked); X marks one. There is no
+  Refresh: a section or an option lists again, and so does a run's end. Six actions keep the big screen's row on one
+  line, which the plan sheet needs (§9.5).
+- **Apply** shows the plan first, from `scrape plan` with the marked games named by hand: the scraper's sentence ("2
+  game(s), about 7 request(s) …"), the kinds, whether what is there is kept, and that nothing is sent until Apply.
+  Confirmed, one `scrape run` starts and the apply bar follows it: *n of m games* and the game being asked, each result
+  in Last Run, the end's sentence after. *Stop* cancels. A run started elsewhere (a game's menu, a shell) is followed
+  when the window opens.
+- **Refusals** are said plainly in the apply bar's line: a store another program holds (the scraper's own words, §8.8),
+  a run already going, the platform library not in use.
+- **The detail**: each kind's source in words (the game's package, ScreenScraper, an ES-DE folder, placed by hand,
+  OpenEmu); with no game chosen, the options and the account's limits — threads, a minute, today's requests left, and
+  whether a member is signed in; never a name or password.
+- **One quota**: inside Mistress the command speaks for Mistress's own scraper, lent as §8.2 says, so a run the window
+  starts is counted by the same quota manager; standalone, the store lock refuses a second scraper (§8.8).
+
+### 9.5 Tests and seeded faults, measured 2026-11-01
+
+- `emusen-scrape-module` (9, two new): `--missing` as a list, `any` and `metadata`; the window's `ls` with each kind's
+  source and without, a plan naming an excluded game by hand, nothing started before `run`, a run's priority, a refusal,
+  `status`, `progress` with its end sentence and a serial past every result, `collections`.
+- `ScraperWindowTests` (7): through Mistress's own scraper lent to the command and the fake ScreenScraper over HTTPS,
+  the library's game listed with its four kinds, marked, planned with nothing sent, run and found, the request counted
+  by Mistress's quota, and the status sheet not opened while the Scraper is; with a scripted command, each section's
+  words, the plan and run naming the marked games by hand with Overwrite, the run followed to its end sentence, a held
+  store said plainly with nothing listed, a run started elsewhere followed and stopped, and the desktop window clean
+  under the fit audit at 1280×800 and 1920×1200. `LeafAssemblyTests` holds the library to LunaP and Galaxia.
+- `WindowFitAuditTests`: `Scraper`, `ScraperDetail`, `ScraperPlan` and `ScraperRunning` framed over a running game at
+  both sizes, audited and recorded (`EmuSen_InterfaceSpec.md` §6.3.14); Packages' eight cases unchanged on the shared
+  host base.
+- Changed for the new entry points: the pad menu's *Scrape Games…* opens the Scraper (`ScrapeWindowTests`,
+  `ScrapeStatusWindowTests`), and the sign-in sheet test opens Preferences' Scraping tab as Settings does
+  (`ScrapeSignInTests`). The golden corpus holds `man scrape` and the new `--missing` refusal.
+- Found by these tests and fixed: a `since` past every result read through a double and rounded past the scraper's
+  range, so the window never followed a run going (the big-screen status test); a quota field the scraper leaves null
+  read as a number (the sign-in test); the plan's words 38 units high and the progress line cut (the framed audit,
+  LunaP §203.7 and §6.3.14).
+
+| Seeded fault | Caught by |
+|---|---|
+| a list after `--missing` keeps a game lacking any one kind | `missing_names_a_list_of_kinds_none_present_or_a_description` |
+| `plan` and `run` as data drop the games named by hand | `a_window_asks_the_same_choice_plan_and_run_as_data` |
+| the Favourites section asks for every game | `Each_section_asks_the_command_for_its_choice_rather_than_filtering_here` |
+| the status sheet opens over an open Scraper | `Mistress_s_scraper_lists_plans_…`, `The_pad_menu_and_the_scraping_tab_reopen_the_window_during_a_run` |
+| the frame's plan floor at 0 | LunaP's `A_host_sized_to_its_content_…(Desktop)`, `ScraperPlan` at both sizes |
+
+### 9.6 Left
+
+- Region, language and threads are not options of the window; the scraper's settings in Preferences hold them.
+- Listing a large library looks up every kind's source of every game (as `scrape ls` does) and rescans the ROM folder
+  for each section; it runs off the interface thread. The plan is made on the interface thread when Apply is pressed.
+- Preferences' Scraping tab still offers its own scope and *Scrape…*: §2 gathers the choices into the tool but does not
+  say to remove them there, so that is put to the tester.
+

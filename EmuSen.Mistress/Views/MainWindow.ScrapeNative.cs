@@ -83,7 +83,7 @@ namespace EmuSen.Mistress.Views
         private bool StartNative(ScrapeScope scope, bool resume, ScrapedGame? chosen)
         {
             NativeScraping native = _native!;
-            var games = resume ? [] : ScopeGames(scope).Select(g => (g.FullPath, SystemOf(g)!)).ToList();
+            var games = resume ? [] : ChosenGames(scope);
             if (!resume && scope.Game is not null) _fetcher?.Forget(scope.Game);
             var priority = scope.Game is not null ? ScrapePriority.Shown : scope.Shelf is not null ? ScrapePriority.Console : ScrapePriority.Library;
             long queued;

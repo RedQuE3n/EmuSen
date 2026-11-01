@@ -472,7 +472,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         // --- where the player starts it ---
 
         [Fact]
-        public Task The_library_s_menu_and_the_pad_menu_offer_scrape_this_game_and_the_pad_menu_opens_the_scraping_tab() => OnUi(() =>
+        public Task The_library_s_menu_and_the_pad_menu_offer_scrape_this_game_and_the_pad_menu_opens_the_scraper() => OnUi(() =>
         {
             _server.Games.Add(new FakeGame(77, "F-Zero", Md5));
             MainWindow window = Open();
@@ -493,11 +493,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Invoke(window, "OpenPadMenu");
             entries.Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scrape Games...").Accept();
             Pump(100);
-            PreferencesWindow prefs = window.OwnedWindows.OfType<PreferencesWindow>().Single();
-            TabControl tabs = prefs.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "PreferenceTabs");
-            Assert.Equal(PreferencesWindow.ScrapingTab, (string?)((TabItem)tabs.SelectedItem!).Header);
+            // Scrape Games opens the Scraper, which gathers the choices (EmuSen_LibraryTools.md §9.3).
+            ScraperWindow scraper = window.OwnedWindows.OfType<ScraperWindow>().Single();
             Assert.Single(_server.JeuInfos);
-            prefs.Close();
+            scraper.Close();
         });
 
         [Fact]

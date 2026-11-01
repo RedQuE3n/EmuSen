@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 28u
+#define EMUSEN_PLATFORM_ABI_VERSION 30u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -518,7 +518,7 @@ int64_t emusen_systems_table(uint8_t *out, size_t len);
  * The libretro cores EmuSen hosts, libretro-cores.tsv, as one compact JSON array, one object a core in the list's order,
  * each with the keys stem, systems (a list of system ids), upstream, licence, renderer ("software" or "vulkan") and
  * default_for (the systems it is the default engine of ahead of a native core), in that order. By the length-query
- * idiom. EMUSEN_PLATFORM_PARSE with words only for a library built from a broken list. Since 28.
+ * idiom. EMUSEN_PLATFORM_PARSE with words only for a library built from a broken list. Since 30.
  */
 int64_t emusen_systems_libretro_cores(uint8_t *out, size_t len);
 

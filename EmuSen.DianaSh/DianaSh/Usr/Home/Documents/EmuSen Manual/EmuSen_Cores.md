@@ -258,7 +258,7 @@ host's Vulkan context); and the systems it is the default engine of ahead of a n
 lines are comments. A line of another shape, a renderer of another word, a default for a system the core does not run,
 a stem twice and a system with two defaults are each refused with the line's number. The platform library hands the list
 to the core tool as its `hosted` context, and to the C# runtime through `emusen_systems_libretro_cores` (platform
-interface 28, the export `EmuSen_LibretroHost.md` §0.3 accepted), as JSON with the keys stem, systems, upstream, licence,
+interface 30, the export `EmuSen_LibretroHost.md` §0.3 accepted), as JSON with the keys stem, systems, upstream, licence,
 renderer and default_for. A request for a core off the list is refused ("… is not one of the libretro cores EmuSen hosts
 (…)") before anything is written. A test of the tool's own mechanics may give no list, which offers the whole catalogue.
 

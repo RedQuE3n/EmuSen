@@ -5904,6 +5904,11 @@ whole assembly, and runs in the ordinary suite.
   `SceneAssets.Halves`) and `PreferencesThemeTests`' three resets; on the fixed tree it passes.
 - **Listed, not fixed:** `HeadlessRaceTool`'s two cases, which do it on purpose, and `ShaderBenchTests`, which needs a
   Vulkan device and so was never run here. Changing a test that cannot be run to see it pass was not done.
+- **Listed on 2026-11-01:** `ShaderBenchTests`' device-path case, added since, on the same ground, and
+  `HotaruOnTheApiTests.C7`, an over-approximation of the kind described below: `HotaruCommands.For` builds the command
+  table, whose `coretop` entry's lambda opens `CoretopWindow`, and the case gives `state save` and `state load` only.
+  The guard named both in full runs on either frontend API implementation measured on 2026-11-01, so neither came from
+  the suite's change to the Rust default (`EmuSen_Backend.md` §35).
 
 **What it cannot see.** It is a static reading, so it over-approximates: a method is flagged if any path through it
 reaches a site, as `LunaTheme.Apply(BuiltIn)` was, through the CSS branch that name never takes (it was wrong there for

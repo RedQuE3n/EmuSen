@@ -85,6 +85,29 @@ namespace EmuSen.Serenity.Native
         internal static delegate* unmanaged[Cdecl]<nint, int> LendSettle;
         internal static delegate* unmanaged[Cdecl]<nint, int> LendFree;
         internal static delegate* unmanaged[Cdecl]<nint, nint, int> ChainAdvanceLent;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, uint, uint, RingInfo*, nint> RingNew;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, RingImageInfo*, int> RingImage;
+        internal static delegate* unmanaged[Cdecl]<nint, int> RingFree;
+        internal static delegate* unmanaged[Cdecl]<nint, nint, uint, ulong, int, int, int> ChainAdvanceRing;
+
+        // emusen_serenity_ring_info: the ring's count, its semaphores' descriptors and the UUIDs a core matches, since interface 28.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RingInfo
+        {
+            public uint Size, Count;
+            public long Ready, Done;
+            public fixed byte DeviceUuid[16];
+            public fixed byte DriverUuid[16];
+        }
+
+        // emusen_serenity_ring_image, laid out as the core ABI's emusen_ring_image, since interface 28.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RingImageInfo
+        {
+            public uint Size, MemoryType;
+            public ulong Handle, AllocationSize;
+            public uint Width, Height, Format, Usage;
+        }
 
         // emusen_serenity_lend_info: what a core is lent, as the core ABI's emusen_device_lend holds it, since interface 11.
         [StructLayout(LayoutKind.Sequential)]
@@ -140,7 +163,7 @@ namespace EmuSen.Serenity.Native
             "emusen_serenity_chain_advance", "emusen_serenity_chain_render", "emusen_serenity_chain_render_lent", "emusen_serenity_lent_release", "emusen_serenity_chain_get",
             "emusen_serenity_parse_format", "emusen_platform_last_error", "emusen_serenity_device_identity", "emusen_serenity_shown_new", "emusen_serenity_shown_free",
             "emusen_serenity_chain_present", "emusen_serenity_lend_new", "emusen_serenity_lend_take", "emusen_serenity_lend_settle", "emusen_serenity_lend_free",
-            "emusen_serenity_chain_advance_lent",
+            "emusen_serenity_chain_advance_lent", "emusen_serenity_ring_new", "emusen_serenity_ring_image", "emusen_serenity_ring_free", "emusen_serenity_chain_advance_ring",
         };
 
         // Null when every export resolved and both libraries were lent; otherwise why the library is not in use.
@@ -203,6 +226,10 @@ namespace EmuSen.Serenity.Native
             LendSettle = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
             LendFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
             ChainAdvanceLent = (delegate* unmanaged[Cdecl]<nint, nint, int>)found[next++];
+            RingNew = (delegate* unmanaged[Cdecl]<nint, uint, uint, uint, RingInfo*, nint>)found[next++];
+            RingImage = (delegate* unmanaged[Cdecl]<nint, uint, RingImageInfo*, int>)found[next++];
+            RingFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            ChainAdvanceRing = (delegate* unmanaged[Cdecl]<nint, nint, uint, ulong, int, int, int>)found[next++];
             return Lend();
         }
 

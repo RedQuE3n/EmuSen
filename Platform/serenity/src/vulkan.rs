@@ -737,7 +737,7 @@ impl Device {
 
     /// Records and submits, waiting on the device for `wait` and signalling `signal`, and returns at once; the next
     /// call that submits or settles waits for it (EmuSen_DevicePicture.md §4.2).
-    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
+    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>, then: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -757,11 +757,11 @@ impl Device {
                 values.push(value);
             }
             let stages = [vk::PipelineStageFlags::TRANSFER; 2];
-            let signals = [signal];
-            let signal_values = [0u64];
+            let signals: Vec<vk::Semaphore> = std::iter::once(signal).chain(then.map(|t| t.0)).collect();
+            let signal_values: Vec<u64> = std::iter::once(0).chain(then.map(|t| t.1)).collect();
             let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values).signal_semaphore_values(&signal_values);
             let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals);
-            if timeline.is_some() {
+            if timeline.is_some() || then.is_some() {
                 submit = submit.push_next(&mut timeline_info);
             }
             device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
@@ -901,6 +901,15 @@ impl Device {
         self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
         let region = vk::BufferImageCopy::default().buffer_row_length(row_pixels).image_subresource(level(0)).image_extent(vk::Extent3D { width: image.width, height: image.height, depth: 1 });
         unsafe { self.inner.device.cmd_copy_buffer_to_image(commands, source, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
+        self.finish(commands, image);
+    }
+
+    /// A picture in another image, already moved for a transfer read, copied into level 0 at the image's size, and the
+    /// chain built if the image has one: a ring's slot (EmuSen_LibretroHost.md §10f).
+    pub(crate) fn record_copy_image_in(&self, commands: vk::CommandBuffer, image: &Image, source: vk::Image) {
+        self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
+        let region = vk::ImageCopy::default().src_subresource(level(0)).dst_subresource(level(0)).extent(vk::Extent3D { width: image.width, height: image.height, depth: 1 });
+        unsafe { self.inner.device.cmd_copy_image(commands, source, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
         self.finish(commands, image);
     }
 

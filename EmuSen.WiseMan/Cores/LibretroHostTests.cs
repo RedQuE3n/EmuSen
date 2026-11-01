@@ -28,11 +28,14 @@ namespace EmuSen.WiseMan.Cores
         public string Sha256 { get; }
         public DiscoveredCore Found { get; }
 
-        public LibretroEntryFixture()
+        public LibretroEntryFixture() : this("") { }
+
+        // An entry whose information file names the libretro system, so that its machine reports the systems table's console.
+        internal LibretroEntryFixture(string systemId)
         {
             DataStore.OverrideDirectory = Path.Combine(Root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(Root, "Config");
-            Lay(Entry);
+            Lay(Entry, systemId);
             Environment("EMUSEN_CORE_RUNNER", Path.Combine(AppContext.BaseDirectory, "emusen-core-runner"));
             Sha256 = CoreSidecar.HashOf(CoreFile);
             Approve(Sha256);
@@ -44,13 +47,13 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // An entry's files: the two copies from the installation, the test core named on its stem, its information file.
-        public static void Lay(string folder)
+        public static void Lay(string folder, string systemId = "")
         {
             Directory.CreateDirectory(folder);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.ProxyLibrary), LibretroEntries.ProxyPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.HostLibrary), LibretroEntries.AdapterPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"), Path.Combine(folder, "testcore_libretro.so"), overwrite: true);
-            File.WriteAllText(Path.Combine(folder, "testcore_libretro.info"), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"\"\ndatabase = \"\"\n");
+            File.WriteAllText(Path.Combine(folder, "testcore_libretro.info"), $"display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"{systemId}\"\ndatabase = \"\"\n");
         }
 
         public static void Approve(string sha256)

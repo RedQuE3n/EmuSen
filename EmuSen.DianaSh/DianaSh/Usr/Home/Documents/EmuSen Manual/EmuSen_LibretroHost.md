@@ -1078,6 +1078,31 @@ the lent device on the emulation thread, and sooner to the picture. A finding on
 undrained, the test core's queue, full at 65,536 values, dropped two from its front for every pair it made, and the
 first round's `DEVICE_PICTURE` cost read 0.66 ms; a host drains every frame, so the measurement does.
 
+**A ring's slot as the chain's input** (2026-11-01). `Chain::advance_ring(InRing)` makes the picture a core's
+`frame_ring` answered the chain's next frame; `Ring::picture(slot, value, width, height)` gives the `InRing` (the slot's
+image, `ready` to wait for, `done` to signal), and `InRing::record` the crossing `Ring::crossing` names: the slot taken
+from `VK_QUEUE_FAMILY_EXTERNAL` in `SHADER_READ_ONLY_OPTIMAL`, moved for a transfer read, copied, moved back, given back.
+Nothing is copied at `advance_ring`: the copy into the history rides the next render's or present's one submission,
+as a lent picture's does (§13 and §17 of EmuSen_DevicePicture.md), that submission waiting for `ready` at the transfer
+stage and signalling `done` with the picture's value; `run_unwaited`, the present's submission, gained a timeline
+signal beside its binary one for it. `Ring::read` is now the same `record` with a copy into host memory. A ring outlives
+every frame a chain advanced from it and has not rendered. The platform library carries it as interface 28
+(`EmuSen_RustPlatform.md` §42): `emusen_serenity_ring_new`, `_image`, `_free` and `emusen_serenity_chain_advance_ring`,
+with `SlangRing`, `SlangChain.AdvanceRing` and `CoreMachine.RingLend`/`FrameRing` on the C# side.
+
+*Proof, headless, keyed on the console* (`RingChainTests`, the RX 6800): the test core's entry with `systemid =
+"playstation2"` in its `.info`, brokered through the C# host as the frontend runs it, reports the system `ps2`, whose
+systems-table console is "PlayStation 2"; its `vulkan` picture goes into a 640 × 480 ring of the slang device across
+the process boundary, and for six frames each frame from the ring, drawn through the accurate CRT filter written for
+"PlayStation 2", through CRT Lottes for it and through no filter, is byte for byte the same frame's software picture
+from a machine lent no ring, uploaded and drawn through the same filter; through no filter it is the picture itself.
+Seeded faults: the copy into the history a column short, which fails it at frame 0; and `done` never signalled,
+which hangs it (the core's device waiting on a slot never given back, the host's render on a `ready` never raised)
+until the test host was stopped, so that fault shows as a run that never ends, not as a failure. A finding: with a ring lent, the libretro host does not read the ring's picture back, so its
+`frame_copy` holds no picture (0 bytes in the first run of the test); §6.43 of EmuSen_CoreAPI.md promises `frame_copy`
+only with no ring lent, and a screenshot or a state's picture of a ringed frame needs a read-back on demand, put to the
+tester as a question (§12).
+
 **PCEE2 on Jak and Daxter through the ring** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
 the Rust host, `examples/run.rs` with `EMUSEN_RUN_RING=1`, PCEE2's `vulkan` renderer at `pcsx2_upscale_multiplier=1`,
 the BIOS given by path through `pcsx2_bios` and the referee system folder as in §10c, frames 600 to 2,400 of the start
@@ -1117,3 +1142,8 @@ fields.
 what PCEE2 exposes.
 4. **Decided 2026-10-31: deferred.** The secondary cheat path's surface, `CHEAT_CODES` (§11a), is built when a target core
    honours `retro_cheat_set`.
+5. **[decision]** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10f): the libretro
+   host reads it back from the core's device only when `frame_copy` is asked for, which needs `Core::frame` in
+   `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
+   mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the
+   ring's saving.

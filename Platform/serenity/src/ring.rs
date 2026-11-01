@@ -122,14 +122,28 @@ impl Device {
     }
 }
 
-impl Ring {
-    /// The ownership crossing of a slot on this device: taken from `VK_QUEUE_FAMILY_EXTERNAL` for reading, or given
-    /// back to it, in `LAYOUT` both ways.
-    pub fn crossing(&self, slot: usize, take: bool) -> vk::ImageMemoryBarrier<'static> {
-        let family = self.device.family();
-        let (from, to) = if take { (vk::QUEUE_FAMILY_EXTERNAL, family) } else { (family, vk::QUEUE_FAMILY_EXTERNAL) };
+fn layers() -> vk::ImageSubresourceLayers {
+    vk::ImageSubresourceLayers { aspect_mask: vk::ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 }
+}
+
+/// One picture of a ring as this device reads it: the slot's image, `ready`'s value to wait for and `done` to signal
+/// with it once the picture is read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InRing {
+    image: vk::Image,
+    family: u32,
+    pub ready: vk::Semaphore,
+    pub done: vk::Semaphore,
+    pub value: u64,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl InRing {
+    fn crossing(&self, take: bool) -> vk::ImageMemoryBarrier<'static> {
+        let (from, to) = if take { (vk::QUEUE_FAMILY_EXTERNAL, self.family) } else { (self.family, vk::QUEUE_FAMILY_EXTERNAL) };
         vk::ImageMemoryBarrier::default()
-            .image(self.slots[slot].image)
+            .image(self.image)
             .old_layout(LAYOUT)
             .new_layout(LAYOUT)
             .src_access_mask(vk::AccessFlags::empty())
@@ -139,6 +153,36 @@ impl Ring {
             .subresource_range(color(0, 1))
     }
 
+    /// The slot taken, moved for a transfer read, read by `copy` given its image, moved back and given back, in a
+    /// submission that waits for `ready` at the transfer stage and signals `done`.
+    pub(crate) fn record(&self, device: &Device, cmd: vk::CommandBuffer, copy: impl FnOnce(vk::Image)) {
+        let d = device.vk();
+        let to_src = vk::ImageMemoryBarrier::default().image(self.image).old_layout(LAYOUT).new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL).src_access_mask(vk::AccessFlags::empty()).dst_access_mask(vk::AccessFlags::TRANSFER_READ).src_queue_family_index(vk::QUEUE_FAMILY_IGNORED).dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED).subresource_range(color(0, 1));
+        let back = vk::ImageMemoryBarrier { old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL, new_layout: LAYOUT, src_access_mask: vk::AccessFlags::TRANSFER_READ, dst_access_mask: vk::AccessFlags::empty(), ..to_src };
+        // The crossings keep the layout, as the core's do; the transitions to and from the copy are barriers of their own.
+        let take = vk::ImageMemoryBarrier { dst_access_mask: vk::AccessFlags::TRANSFER_READ, ..self.crossing(true) };
+        let one = |from, to, b: vk::ImageMemoryBarrier<'_>| unsafe { d.cmd_pipeline_barrier(cmd, from, to, vk::DependencyFlags::empty(), &[], &[], &[b]) };
+        one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::TRANSFER, take);
+        one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::TRANSFER, to_src);
+        copy(self.image);
+        one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::TRANSFER, back);
+        one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::BOTTOM_OF_PIPE, self.crossing(false));
+    }
+}
+
+impl Ring {
+    /// The ownership crossing of a slot on this device: taken from `VK_QUEUE_FAMILY_EXTERNAL` for reading, or given
+    /// back to it, in `LAYOUT` both ways.
+    pub fn crossing(&self, slot: usize, take: bool) -> vk::ImageMemoryBarrier<'static> {
+        self.picture(slot, 0, 0, 0).crossing(take)
+    }
+
+    /// The picture `frame_ring` answered, `value` in `slot`, `width` by `height`, as a chain takes it: the ring outlives
+    /// every frame a chain advanced from it and has not yet rendered (EmuSen_LibretroHost.md §10f).
+    pub fn picture(&self, slot: usize, value: u64, width: u32, height: u32) -> InRing {
+        InRing { image: self.slots[slot].image, family: self.device.family(), ready: self.ready, done: self.done, value, width, height }
+    }
+
     /// The picture of `slot` once `ready` reaches `value`, `width` by `height`, copied into host memory as RGBA rows,
     /// and the slot given back by signalling `done` to `value`: the check a test or a details window makes, never the
     /// path a picture is presented by.
@@ -146,21 +190,13 @@ impl Ring {
         let bytes = width as u64 * height as u64 * 4;
         let out = self.device.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST)?;
         let d = self.device.vk();
-        let image = self.slots[slot].image;
-        let to_src = vk::ImageMemoryBarrier::default().image(image).old_layout(LAYOUT).new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL).src_access_mask(vk::AccessFlags::empty()).dst_access_mask(vk::AccessFlags::TRANSFER_READ).src_queue_family_index(vk::QUEUE_FAMILY_IGNORED).dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED).subresource_range(color(0, 1));
-        let back = vk::ImageMemoryBarrier { old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL, new_layout: LAYOUT, src_access_mask: vk::AccessFlags::TRANSFER_READ, dst_access_mask: vk::AccessFlags::empty(), ..to_src };
-        // The crossings keep the layout, as the core's do; the transitions to and from the copy are barriers of their own.
-        let take = vk::ImageMemoryBarrier { dst_access_mask: vk::AccessFlags::TRANSFER_READ, ..self.crossing(slot, true) };
+        let picture = self.picture(slot, value, width, height);
         self.device.run_timed(
-            |cmd| unsafe {
-                let one = |from, to, b: vk::ImageMemoryBarrier<'_>| d.cmd_pipeline_barrier(cmd, from, to, vk::DependencyFlags::empty(), &[], &[], &[b]);
-                one(vk::PipelineStageFlags::TOP_OF_PIPE, vk::PipelineStageFlags::TRANSFER, take);
-                one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::TRANSFER, to_src);
-                let layers = vk::ImageSubresourceLayers { aspect_mask: vk::ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 };
-                let region = vk::BufferImageCopy { buffer_offset: 0, buffer_row_length: 0, buffer_image_height: 0, image_subresource: layers, image_offset: vk::Offset3D::default(), image_extent: vk::Extent3D { width, height, depth: 1 } };
-                d.cmd_copy_image_to_buffer(cmd, image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, out.handle, &[region]);
-                one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::TRANSFER, back);
-                one(vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::BOTTOM_OF_PIPE, self.crossing(slot, false));
+            |cmd| {
+                picture.record(&self.device, cmd, |image| unsafe {
+                    let region = vk::BufferImageCopy { buffer_offset: 0, buffer_row_length: 0, buffer_image_height: 0, image_subresource: layers(), image_offset: vk::Offset3D::default(), image_extent: vk::Extent3D { width, height, depth: 1 } };
+                    d.cmd_copy_image_to_buffer(cmd, image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, out.handle, &[region]);
+                });
                 self.device.host_read_barrier(cmd, &out);
             },
             Some((self.ready, value)),

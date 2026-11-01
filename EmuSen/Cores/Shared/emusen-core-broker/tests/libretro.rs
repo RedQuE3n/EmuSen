@@ -329,12 +329,7 @@ fn a_ring_lent_across_the_process_boundary_holds_the_software_picture() {
     };
     let mut soft = Machine::create(lib, &Create { settings: "", pixel_formats: 1, ..Create::new(GAME) }).unwrap();
     let mut m = Machine::create(lib, &Create { settings: "tc_hw=vulkan", pixel_formats: 1, ..Create::new(GAME) }).unwrap();
-    // Lavapipe says it can make a ring and then refuses the semaphore's export, measured 2026-11-01.
-    let ring = match gpu.create_ring(640, 480, 3) {
-        Ok(ring) => ring,
-        Err(why) if gpu.name().contains("llvmpipe") => return eprintln!("skipped: lavapipe claims rings and makes none: {why}"),
-        Err(why) => panic!("{why}"),
-    };
+    let ring = gpu.create_ring(640, 480, 3).unwrap();
     let images: Vec<RingImage> = ring.images.iter().map(|i| RingImage { size: size_of::<RingImage>() as u32, memory_type: i.memory_type, handle: i.handle as u64, allocation_size: i.allocation_size, width: i.width, height: i.height, format: i.format, usage: i.usage }).collect();
     let lend = RingLend { size: size_of::<RingLend>() as u32, count: 3, images: images.as_ptr(), image_size: size_of::<RingImage>(), ready: ring.ready_fd as u64, done: ring.done_fd as u64, device_uuid: ring.device_uuid, driver_uuid: ring.driver_uuid };
     m.ring_lend(Some(&lend)).unwrap();

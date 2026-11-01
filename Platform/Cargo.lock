@@ -355,6 +355,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-cores-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-library-module",
+]
+
+[[package]]
 name = "emusen-crystal"
 version = "0.1.0"
 dependencies = [
@@ -536,6 +545,9 @@ dependencies = [
  "dianash-text",
  "emusen-cheat",
  "emusen-cheats",
+ "emusen-core-entry",
+ "emusen-core-tool",
+ "emusen-cores-module",
  "emusen-crystal",
  "emusen-debug",
  "emusen-dianash",

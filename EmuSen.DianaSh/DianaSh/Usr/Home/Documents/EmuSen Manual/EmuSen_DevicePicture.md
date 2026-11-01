@@ -376,6 +376,23 @@ lendless one's at the same frame or a frame sooner, since a core lent a device m
 picture on the device equals the lent machine's own `frame_copy`; and the held picture is held through two `advance`
 calls, the second given 100 ms, so that a core writing its slot early is caught.*
 
+
+### 5.6 A device that says it makes rings makes one (2026-11-01)
+
+**Found.** `Device::rings()` answered from the extensions and the feature alone: `VK_KHR_external_memory_fd`,
+`VK_KHR_external_semaphore_fd` and timeline semaphores. Lavapipe (Mesa's llvmpipe, 22.1.8 on the desktop) offers all
+three and then refuses to make a timeline semaphore for export: `create_ring` failed with `vkCreateSemaphore returned
+ErrorInvalidExternalHandle`. Measured 2026-11-01 with `VK_DRIVER_FILES` naming lavapipe: one test in
+`emusen-core-broker` and eight in `emusen-libretro-host` that ask `rings()` before making a ring failed instead of
+skipping, and a player on such a driver would be offered the ring and refused it.
+
+**Fixed.** When the device is made, a ring's parts are tried, not read: a timeline semaphore made for export as an
+opaque file descriptor and destroyed at once, and the ring's image format (`R8G8B8A8_UNORM`, optimal tiling, the
+ring's usage) asked of the physical device with exportable memory. `rings()` is true only when both succeed as well.
+The test `a_device_that_says_it_makes_rings_makes_one` in Serenity's `ring.rs` failed on lavapipe before the change
+("llvmpipe (LLVM 22.1.8, 256 bits) says it makes rings and made none") and passes after it, where `rings()` now says no
+and every ring test skips.
+
 ---
 
 ## 6. What moves into `emusen-gpu`

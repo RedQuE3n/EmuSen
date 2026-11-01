@@ -221,6 +221,17 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
+    // A device that says it makes rings makes one: lavapipe said so and refused the timeline semaphore's export (EmuSen_DevicePicture.md §5.6).
+    #[test]
+    fn a_device_that_says_it_makes_rings_makes_one() {
+        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { return eprintln!("skipped: no Vulkan device") };
+        if device.rings() {
+            device.create_ring(64, 64, 3).map(|_| ()).unwrap_or_else(|why| panic!("{} says it makes rings and made none: {why}", device.name()));
+        } else {
+            assert!(device.create_ring(64, 64, 3).is_err());
+        }
+    }
+
     // §5.4: a presenter's submission waiting on a `ready` no dead core will signal ends once the host raises it.
     #[test]
     fn a_wait_on_ready_that_a_dead_core_never_signals_ends_when_ready_is_raised() {

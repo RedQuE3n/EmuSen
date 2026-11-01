@@ -17,4 +17,4 @@ pub fn cheat_space(system: &str) -> Option<String> {
     emusen_systems::find(system).and_then(|s| s.cheat_space.clone())
 }
 
-emusen_native::core_exports!(machine::Machine; reset, phases, axes, settings, setting_notes, presence);
+emusen_native::core_exports!(machine::Machine; reset, phases, axes, settings, setting_notes, media, presence);

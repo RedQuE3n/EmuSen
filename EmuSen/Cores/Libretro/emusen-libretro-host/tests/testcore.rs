@@ -218,7 +218,7 @@ fn a_state_loads_whole_and_each_refusal_is_its_own() {
     *damaged.last_mut().unwrap() ^= 1;
     assert_eq!(m.state_load(&damaged), Err(status::TRUNCATED));
     let layout = m.layout(kind::FULL).unwrap();
-    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 "), "{layout}");
+    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 16 bytes header.disc\n80 "), "{layout}");
 }
 
 #[test]
@@ -419,5 +419,22 @@ fn the_frame_time_callback_is_given_the_nominal_time() {
     }
     let t = i64::from_le_bytes(ram(&mut m, FRAME_TIME, 8).try_into().unwrap());
     assert_eq!(t, 10 * (1_000_000 / 60));
+}
+
+#[test]
+fn a_disc_changes_through_the_cores_disk_control() {
+    let _t = turn();
+    let mut m = make("", 0b011);
+    let info = m.machine_info().unwrap();
+    assert!(info.contains(r#""drives":[{"drive":0,"label":"Disc drive","kind":"disc""#), "{info}");
+    assert_eq!(m.media_insert(0, Some(GAME), &[], 0), Err(status::LID_CLOSED));
+    m.media_lid(0, true).unwrap();
+    m.advance().unwrap();
+    assert_eq!(ram(&mut m, DISC, 3), [0, 1, 1], "the tray open, one image");
+    m.media_insert(0, Some(b"TCG1 the second disc"), &[], 0).unwrap();
+    m.media_lid(0, false).unwrap();
+    m.advance().unwrap();
+    assert_eq!(ram(&mut m, DISC, 3), [1, 0, 2], "the second image in, the tray closed");
+    assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
 }
 

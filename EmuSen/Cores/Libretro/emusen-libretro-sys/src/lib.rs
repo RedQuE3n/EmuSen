@@ -469,6 +469,7 @@ pub struct retro_hw_render_callback {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct retro_disk_control_ext_callback {
     pub set_eject_state: Option<unsafe extern "C" fn(ejected: bool) -> bool>,
     pub get_eject_state: Option<unsafe extern "C" fn() -> bool>,

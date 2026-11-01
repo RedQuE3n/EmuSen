@@ -1,5 +1,5 @@
-//! A state's header: whose it is, which versions, a digest of the payload and, where the core asks, the platform
-//! (EmuSen_LibretroHost.md §4.6).
+//! A state's header: whose it is, which versions, a digest of the payload, the disc in the drive and, where the core
+//! asks, the platform (EmuSen_LibretroHost.md §4.6).
 
 use sha2::{Digest, Sha256};
 
@@ -7,7 +7,7 @@ pub const MAGIC: &[u8; 4] = b"ESLR";
 pub const HEADER_VERSION: u16 = 1;
 /// The adapter's own state version, which machine info's `state.version` gives.
 pub const STATE_VERSION: u32 = 1;
-pub const HEADER: usize = 64;
+pub const HEADER: usize = 80;
 const FLAG_PLATFORM: u16 = 1;
 
 /// Why a state is not this machine's, each answered with its own status.
@@ -23,6 +23,15 @@ pub enum Refusal {
     Platform,
     /// The payload does not match its digest.
     Damaged,
+    /// Saved over another disc than the one in the drive.
+    WrongMedia,
+}
+
+/// A disc's identity: its length and the digest of its first MiB, or zero for an empty drive.
+pub fn disc(image: Option<&[u8]>) -> [u8; 16] {
+    let Some(image) = image else { return [0; 16] };
+    let d = Sha256::new().chain_update((image.len() as u64).to_le_bytes()).chain_update(&image[..image.len().min(1 << 20)]).finalize();
+    d[..16].try_into().unwrap()
 }
 
 /// The libretro core's name and version, as eight bytes of their digest.
@@ -51,7 +60,7 @@ pub fn platform() -> u32 {
 }
 
 /// The header written in front of a payload already in `out[HEADER..HEADER + len]`.
-pub fn seal(out: &mut [u8], len: usize, identity: u64, platform: Option<u32>) {
+pub fn seal(out: &mut [u8], len: usize, identity: u64, platform: Option<u32>, disc: [u8; 16]) {
     let digest = Sha256::digest(&out[HEADER..HEADER + len]);
     let h = &mut out[..HEADER];
     h.fill(0);
@@ -63,10 +72,11 @@ pub fn seal(out: &mut [u8], len: usize, identity: u64, platform: Option<u32>) {
     h[20..24].copy_from_slice(&platform.unwrap_or(0).to_le_bytes());
     h[24..32].copy_from_slice(&(len as u64).to_le_bytes());
     h[32..64].copy_from_slice(&digest);
+    h[64..80].copy_from_slice(&disc);
 }
 
 /// The payload of a state this machine may load, or why not.
-pub fn open(data: &[u8], identity: u64, platform: Option<u32>) -> Result<&[u8], Refusal> {
+pub fn open(data: &[u8], identity: u64, platform: Option<u32>, disc: [u8; 16]) -> Result<&[u8], Refusal> {
     if data.len() < HEADER || &data[..4] != MAGIC {
         return Err(Refusal::Foreign);
     }
@@ -89,13 +99,16 @@ pub fn open(data: &[u8], identity: u64, platform: Option<u32>) -> Result<&[u8], 
     if Sha256::digest(payload).as_slice() != &data[32..64] {
         return Err(Refusal::Damaged);
     }
+    if data[64..80] != disc {
+        return Err(Refusal::WrongMedia);
+    }
     Ok(payload)
 }
 
 /// One line per field of the header, then the payload, as `state_layout` gives them.
 pub fn layout(len: usize) -> String {
     format!(
-        "0 4 bytes header.magic\n4 2 u16 header.version\n6 2 u16 header.flags\n8 8 u64 header.core\n16 4 u32 header.state_version\n20 4 u32 header.platform\n24 8 u64 header.length\n32 32 bytes header.sha256\n{HEADER} {len} bytes payload\n"
+        "0 4 bytes header.magic\n4 2 u16 header.version\n6 2 u16 header.flags\n8 8 u64 header.core\n16 4 u32 header.state_version\n20 4 u32 header.platform\n24 8 u64 header.length\n32 32 bytes header.sha256\n64 16 bytes header.disc\n{HEADER} {len} bytes payload\n"
     )
 }
 
@@ -106,7 +119,7 @@ mod tests {
     fn sealed(payload: &[u8], id: u64, platform: Option<u32>) -> Vec<u8> {
         let mut out = vec![0u8; HEADER + payload.len()];
         out[HEADER..].copy_from_slice(payload);
-        seal(&mut out, payload.len(), id, platform);
+        seal(&mut out, payload.len(), id, platform, disc(Some(b"a disc")));
         out
     }
 
@@ -114,22 +127,24 @@ mod tests {
     fn a_sealed_state_opens_to_its_payload() {
         let id = identity("Core", "1.0");
         let s = sealed(b"payload", id, None);
-        assert_eq!(open(&s, id, None), Ok(&b"payload"[..]));
+        assert_eq!(open(&s, id, None, disc(Some(b"a disc"))), Ok(&b"payload"[..]));
+        assert_eq!(open(&s, id, None, disc(None)), Err(Refusal::WrongMedia));
     }
 
     #[test]
     fn each_refusal_is_its_own() {
+        let here = disc(Some(b"a disc"));
         let id = identity("Core", "1.0");
         let s = sealed(b"payload", id, Some(0x0101));
-        assert_eq!(open(b"nothing", id, None), Err(Refusal::Foreign));
-        assert_eq!(open(&s, identity("Core", "1.1"), None), Err(Refusal::OtherCore));
-        assert_eq!(open(&s, id, Some(0x0201)), Err(Refusal::Platform));
+        assert_eq!(open(b"nothing", id, None, here), Err(Refusal::Foreign));
+        assert_eq!(open(&s, identity("Core", "1.1"), None, here), Err(Refusal::OtherCore));
+        assert_eq!(open(&s, id, Some(0x0201), here), Err(Refusal::Platform));
         let mut damaged = s.clone();
         *damaged.last_mut().unwrap() ^= 1;
-        assert_eq!(open(&damaged, id, Some(0x0101)), Err(Refusal::Damaged));
+        assert_eq!(open(&damaged, id, Some(0x0101), here), Err(Refusal::Damaged));
         let mut later = s.clone();
         later[16] = 2;
-        assert_eq!(open(&later, id, None), Err(Refusal::Version));
-        assert_eq!(open(&s[..HEADER + 3], id, None), Err(Refusal::Damaged));
+        assert_eq!(open(&later, id, None, here), Err(Refusal::Version));
+        assert_eq!(open(&s[..HEADER + 3], id, None, here), Err(Refusal::Damaged));
     }
 }

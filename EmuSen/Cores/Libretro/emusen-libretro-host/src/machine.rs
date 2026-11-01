@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use emusen_libretro_sys as sys;
 use emusen_native::core::{
-    self as v1, Audio, Battery, BatteryKind, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, Kept, MachineInfo, NamedFile, Port, Scope, Setting,
+    self as v1, Audio, Battery, BatteryKind, Button, Choice, Control, Controller, Create, Drive, Effect, Firmware, Insert, FrameInfo, Info, MachineInfo, NamedFile, Port, Scope, Setting,
     SettingKind, Space, StateFormat, System, Video, caps, event, status,
 };
 use emusen_native::ffi::{Status, StateMachine};
@@ -77,13 +77,17 @@ pub struct Machine {
     sram_saved: Vec<u8>,
     rtc_saved: Vec<u8>,
     /// The bytes `retro_game_info.data` points into, kept until unload.
-    _image: Option<Kept>,
+    _image: Option<Vec<u8>>,
     _strings: Vec<CString>,
     phases: [i64; 3],
     /// The spaces are `retro_get_memory_data`'s blocks, asked again after a load or reset.
     blocks: bool,
     /// The firmware files written for this machine, removed when it is freed (EmuSen_LibretroHost.md §4.8).
     _firmware: Written,
+    /// The discs given to the core's disk control, kept until it is freed: their paths and bytes.
+    discs: Vec<(Option<CString>, Option<Vec<u8>>)>,
+    /// The disc in the drive, as its state header records it.
+    disc: [u8; 16],
 }
 
 /// Files removed when dropped: the firmware copies of a machine, or of a create that failed.
@@ -217,7 +221,7 @@ impl Machine {
             v1::detail("the core did not write its state");
             return Err(STATUS_STATE_REFUSED);
         }
-        state::seal(out, n, self.identity, self.platform());
+        state::seal(out, n, self.identity, self.platform(), self.disc);
         Ok(state::HEADER + n)
     }
 }
@@ -239,19 +243,21 @@ impl StateMachine for Machine {
     type Error = Fail;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), Fail> {
-        let payload = state::open(data, self.identity, self.platform()).map_err(|r| {
+        let payload = state::open(data, self.identity, self.platform(), self.disc).map_err(|r| {
             v1::detail(match r {
                 state::Refusal::Foreign => "not a libretro host's state",
                 state::Refusal::OtherCore => "a state of another libretro core or of another version of it",
                 state::Refusal::Version => "a state of another version of the libretro host",
                 state::Refusal::Platform => "a state saved on another platform",
                 state::Refusal::Damaged => "the state's payload does not match its digest",
+                state::Refusal::WrongMedia => "the state was saved over another disc than the one in the drive",
             });
             Fail(match r {
                 state::Refusal::Foreign | state::Refusal::OtherCore => status::FOREIGN,
                 state::Refusal::Version => status::STATE_VERSION,
                 state::Refusal::Platform => STATUS_PLATFORM,
                 state::Refusal::Damaged => status::TRUNCATED,
+                state::Refusal::WrongMedia => status::WRONG_MEDIA,
             })
         })?;
         let mut before = vec![0u8; state::HEADER + unsafe { (self.lib.api.serialize_size)() }];
@@ -291,8 +297,8 @@ impl v1::Core for Machine {
         | caps::SNAPSHOT
         | caps::FRAME_SERIAL
         | caps::BATTERY_DIRTY
-        | caps::BORROW
-        | caps::IMAGE_PATH;
+        | caps::IMAGE_PATH
+        | caps::MEDIA;
 
     fn info() -> Info {
         let lib = match ready() {
@@ -584,6 +590,67 @@ impl v1::Core for Machine {
         Ok(())
     }
 
+    fn drives(&self) -> Vec<Drive> {
+        let Some(d) = self.shared.disk.as_ref() else { return Vec::new() };
+        let lid_open = d.get_eject_state.is_some_and(|f| unsafe { f() });
+        let images = d.get_num_images.map_or(0, |f| unsafe { f() });
+        let index = d.get_image_index.map_or(0, |f| unsafe { f() });
+        vec![Drive { drive: 0, label: "Disc drive".into(), kind: "disc".into(), lid_open, loaded: index < images }]
+    }
+
+    fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
+        let d = self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
+        let set = d.set_eject_state.ok_or(status::NOT_SUPPORTED)?;
+        let done = unsafe { set(open) };
+        front::flush_logs();
+        if done { Ok(()) } else { Err(STATUS_REFUSED) }
+    }
+
+    fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
+        let d = *self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
+        if !insert.restore && !d.get_eject_state.is_some_and(|f| unsafe { f() }) {
+            return Err(status::LID_CLOSED);
+        }
+        let (Some(images), Some(index), Some(replace), Some(set_index)) = (d.get_num_images, d.get_image_index, d.replace_image_index, d.set_image_index) else {
+            return Err(status::NOT_SUPPORTED);
+        };
+        let closed = !d.get_eject_state.is_some_and(|f| unsafe { f() });
+        if closed {
+            d.set_eject_state.map(|f| unsafe { f(true) });
+        }
+        let r = match insert.image {
+            None => unsafe { replace(index(), std::ptr::null()) },
+            Some(image) => {
+                let path = v1::image_path().map(|p| CString::new(p).unwrap_or_default());
+                if self.lib.need_fullpath && path.is_none() {
+                    v1::detail("this core opens the disc's file itself, and the host gave no path to it");
+                    return Err(status::BAD_IMAGE);
+                }
+                let data = (!self.lib.need_fullpath).then(|| image.to_vec());
+                let game = sys::retro_game_info {
+                    path: path.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
+                    data: data.as_ref().map_or(std::ptr::null(), |k| k.as_ptr() as *const c_void),
+                    size: data.as_ref().map_or(0, |k| k.len()),
+                    meta: std::ptr::null(),
+                };
+                let added = d.add_image_index.is_some_and(|f| unsafe { f() });
+                let at = unsafe { images() }.saturating_sub(1);
+                let ok = added && unsafe { replace(at, &game) } && unsafe { set_index(at) };
+                self.discs.push((path, data));
+                ok
+            }
+        };
+        if closed {
+            d.set_eject_state.map(|f| unsafe { f(false) });
+        }
+        front::flush_logs();
+        if !r {
+            return Err(STATUS_REFUSED);
+        }
+        self.disc = state::disc(insert.image);
+        Ok(())
+    }
+
     fn named_files(&self) -> Vec<NamedFile> {
         self.saves.listed()
     }
@@ -687,7 +754,8 @@ impl Machine {
             v1::detail("this core opens the game file itself, and the host gave no path to it (an altered or compressed image cannot be given)");
             return Err(status::BAD_IMAGE);
         }
-        let image = (!lib.need_fullpath).then(|| v1::keep(r.image));
+        // Copied, never borrowed: a libretro core may keep every image it was given until it is unloaded.
+        let image = (!lib.need_fullpath).then(|| r.image.to_vec());
         let (data, size) = image.as_ref().map_or((std::ptr::null(), 0), |k| (k.as_ptr() as *const c_void, k.len()));
         let path_ptr = path_c.as_ref().map_or(std::ptr::null(), |p| p.as_ptr());
         {
@@ -706,7 +774,7 @@ impl Machine {
                 data,
                 size,
                 file_in_archive: false,
-                persistent_data: image.as_ref().is_some_and(Kept::is_lent),
+                persistent_data: image.is_some(),
             };
             shared.game_info_ext = Some(front::GameInfoExt { strings: ext_strings.into_iter().flatten().collect(), ext });
         }
@@ -745,6 +813,8 @@ impl Machine {
             phases: [0; 3],
             blocks: false,
             _firmware: firmware_written,
+            discs: Vec::new(),
+            disc: state::disc(Some(r.image)),
         };
         front::bind(&mut *machine.shared);
         for (which, id) in [(SRAM, sys::MEMORY_SAVE_RAM), (RTC, sys::MEMORY_RTC)] {

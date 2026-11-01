@@ -8,16 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn sqlite() -> Option<Arc<Sqlite>> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
-    if let Some(home) = std::env::var_os("HOME") {
-        let root = PathBuf::from(home).join(".nuget/packages/sqlite");
-        if let Ok(versions) = std::fs::read_dir(&root) {
-            let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
-            found.sort();
-            candidates.extend(found.into_iter().rev());
-        }
-    }
-    candidates.into_iter().find_map(|p| Sqlite::open(&p.to_string_lossy()).ok().map(Arc::new))
+    emusen_sqlite::for_tests()
 }
 
 struct Temp(PathBuf);
@@ -51,7 +42,6 @@ impl Drop for Temp {
 #[test]
 fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
     let Some(sqlite) = sqlite() else {
-        eprintln!("no e_sqlite3 found: nothing was run");
         return;
     };
     let t = Temp::new("scan");

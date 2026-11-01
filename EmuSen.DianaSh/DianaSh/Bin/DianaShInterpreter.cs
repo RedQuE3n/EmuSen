@@ -105,6 +105,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         }
 
         // A shell with no game, as a launch prompt makes one before the frontend API has a session to hand it - see EmuSen_Backend.md §14.11.
+        // The host's runtime for the settings service, on the Rust shell this interpreter runs on; the C# shell has no command modules to hand it to - see EmuSen_DianaSh.md §9.9.
+        public void UseSettings(EmuSen.DianaSh.DianaSh.Bin.Native.IShellSettings settings) => _shell?.SetSettings(settings);
+
         public static DianaShInterpreter CreateWithoutSession(IEnumerable<IDianaShCommand>? extraCommands = null, Func<IReadOnlyCollection<string>>? supportedCheatSystems = null) =>
             CreateDefault(null, extraCommands, supportedCheatSystems: supportedCheatSystems);
 

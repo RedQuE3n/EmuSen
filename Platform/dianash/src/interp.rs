@@ -517,6 +517,11 @@ impl Interp {
     }
 
     /// `trust`: a module file approved by its hash, typed at the prompt and never by a script (§5.4, Q13).
+    /// Whether a line runs at the prompt itself, not in a sourced script or a substitution.
+    pub(crate) fn at_prompt(&self) -> bool {
+        self.source_depth == 0 && self.is_root
+    }
+
     fn trust(&self, world: &World, args: &[String]) -> Outcome {
         if args.len() < 2 {
             return Outcome::fail("trust: usage: trust <path>");

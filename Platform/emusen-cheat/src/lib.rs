@@ -569,7 +569,7 @@ impl Module for Cheat {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
         MANIFEST.get_or_init(|| {
-            Manifest { id: "emusen.cheat", version: env!("CARGO_PKG_VERSION"), services: &[(abi::SERVICE, abi::MAJOR, 1, false)], commands: &[("cheat", false, USAGE)], aliases: &[], jobs: &[] }.json()
+            Manifest { id: "emusen.cheat", version: env!("CARGO_PKG_VERSION"), services: &[(abi::SERVICE, abi::MAJOR, 1, false)], commands: &[("cheat", false, USAGE)], aliases: &[], jobs: &[], settings: &[], approvals: false }.json()
         })
     }
 

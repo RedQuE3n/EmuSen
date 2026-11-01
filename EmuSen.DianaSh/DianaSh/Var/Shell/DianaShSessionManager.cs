@@ -16,7 +16,29 @@ namespace EmuSen.DianaSh.DianaSh.Var.Shell
         private volatile DianaShSession? _current;
 
         // The Rust shell the sessions live in when the facade runs on it, which then owns them - see EmuSen_DianaSh.md §13.7.
-        internal NativeShell? Native { get; set; }
+        internal NativeShell? Native
+        {
+            get => _native;
+            set
+            {
+                _native = value;
+                if (value is not null && _settings is not null) value.SetSettings(_settings);
+            }
+        }
+
+        private NativeShell? _native;
+        private EmuSen.DianaSh.DianaSh.Bin.Native.IShellSettings? _settings;
+
+        // The host's runtime for the settings service (emusen.settings@1), handed to the Rust shell as it is made - see EmuSen_DianaSh.md §9.9.
+        public EmuSen.DianaSh.DianaSh.Bin.Native.IShellSettings? Settings
+        {
+            get => _settings;
+            set
+            {
+                _settings = value;
+                if (value is not null) _native?.SetSettings(value);
+            }
+        }
 
         public DianaShSession? Current => Native is { } native ? native.Current() : _current;
         public IReadOnlyList<DianaShSession> Sessions => Native is { } native ? native.Sessions() : _sessions;

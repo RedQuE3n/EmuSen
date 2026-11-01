@@ -11,6 +11,9 @@ SYNOPSIS
     cores rollback <core>
     cores rm <core>...
     cores verify [<core>...]
+    cores approve <core>
+    cores default <console> [<engine>]
+    cores default --game <path> [<engine>|-]
     cores wait [cores<n>]
 
 DESCRIPTION
@@ -90,7 +93,9 @@ INSTALLING
     libretro host installs nothing, and says so.
 
     NOTHING DOWNLOADED RUNS UNTIL YOU APPROVE IT. cores get prints the
-    SHA-256 to approve. libretro signs no build, so the approval is
+    SHA-256 to approve, and cores approve <core> approves it, typed at
+    the prompt only: a script given to source, a $(...) and a pipe are
+    refused, as trust refuses them. libretro signs no build, so the approval is
     trust on first download: it trusts the build the buildbot served,
     and the hash holds it to exactly that build; a changed file is a
     new hash and is asked about again. Where EmuSen tested a build, the
@@ -107,8 +112,8 @@ UPDATING AND ROLLING BACK
     again before it runs. One earlier build is kept: cores rollback puts
     it back, keeping the newer one, so a second cores rollback returns
     to it. Both keep their approvals. The build kept before is dropped
-    at the next update, and its hash printed, since its approval now
-    matches no file.
+    at the next update, and its approval revoked, since it now matches
+    no file.
 
 REMOVING
     cores rm removes a core's folder and its kept build, each by a
@@ -116,8 +121,22 @@ REMOVING
     core's settings are kept in EmuSen's own folders and stay; a console
     whose default was the core falls back to its first engine. A folder
     you put in /Cores/libretro yourself, with no NOTICE, is yours, and
-    cores rm never removes it. The hashes the core was approved by are
-    printed.
+    cores rm never removes it. The approvals the core was given are
+    revoked.
+
+THE DEFAULT ENGINE
+    cores default <console> prints the engine a console's games open on,
+    and cores default <console> <engine> sets it; --game <path> does the
+    same for one game, - clearing its own choice so that it follows its
+    console. These are the runtime's Engine setting, the same value the
+    Cores window's Make Default, a game's options and the metadata
+    editor's Alternative emulator change; the runtime refuses an engine
+    the console does not run, in its own words.
+
+    cores default, cores approve and the revocations need the settings
+    service, which a program with EmuSen's runtime provides, as
+    Mistress's shell does; elsewhere the command says it is missing (see
+    man modules).
 
 VERIFYING
     cores verify prints one line per installed core, its result first:
@@ -139,9 +158,8 @@ VERIFYING
 
 CONSOLES
     A core is placed under EmuSen's consoles by its information's
-    database names, or its systemid where those are blank. Until the
-    systems table's libretro names reach this build, the console field
-    is - and no core is called unsupported for its system.
+    database names, or its systemid where those are blank, as the
+    systems table's libretro names place it.
 
 JOBS
     Each command is a job of the core tool. One the line's budget cuts
@@ -158,6 +176,9 @@ EXAMPLES
     cores update
     cores rollback pcsx2
     cores verify | grep -v '^ok'
+    cores approve pcsx2
+    cores default "PlayStation 2" Sapphire
+    cores default --game /home/Games/ps2/jak.chd -
     cores rm pcsx2
     for c in $(cores ls --updates | awk '{print $3}'); do cores info $c; done
 
@@ -176,4 +197,4 @@ SOURCES
 SEE ALSO
     EmuSen_Cores.md (section 4.2: the catalogue; section 5: download,
     verification and install; section 6: the jobs and their events;
-    section 8: this command), chd(1), pkg(1)
+    section 8: this command), modules(7), trust(1), chd(1), pkg(1)

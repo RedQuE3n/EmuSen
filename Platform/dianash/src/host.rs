@@ -211,7 +211,22 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
         terminal: io_terminal,
     };
     let argv: Vec<dianash_bytes> = args.iter().map(|a| dianash_bytes::of(a.as_bytes())).collect();
-    let services = world.services_for(session);
+    // As `trust` decides it: a line typed at the prompt, not a sourced script or a substitution, and here not fed by a pipe.
+    let at_prompt = interp.at_prompt() && stdin.is_none();
+    let mut services = world.services_for(session);
+    if let Callee::Module(index) = callee {
+        // A module reaches the settings service only through the shell's guard, as far as its manifest names (§9.9).
+        let guard = world.guards.get_mut(index).and_then(|g| g.as_deref_mut());
+        let is_settings = |s: &dianash_service| s.major == SETTINGS_MAJOR && unsafe { s.name.slice() } == Some(SETTINGS_SERVICE.as_bytes());
+        match guard {
+            Some(g) => {
+                for s in services.iter_mut().filter(|s| is_settings(s)) {
+                    s.table = g.bind(s.table, at_prompt);
+                }
+            }
+            None => services.retain(|s| !is_settings(s)),
+        }
+    }
     let call = dianash_call {
         size: std::mem::size_of::<dianash_call>() as u32,
         command: dianash_bytes::of(command.as_bytes()),
@@ -219,7 +234,7 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
         argc: argv.len(),
         stdin_data: stdin.map_or(dianash_bytes::ABSENT, |s| dianash_bytes::of(s.as_bytes())),
         stdin_present: u32::from(stdin.is_some()),
-        flags: if world.config.interactive { CALL_INTERACTIVE } else { 0 },
+        flags: (if world.config.interactive { CALL_INTERACTIVE } else { 0 }) | if at_prompt { CALL_AT_PROMPT } else { 0 },
         cwd: dianash_bytes::of(cwd.as_bytes()),
         user: dianash_bytes::of(user.as_bytes()),
         io: &io,

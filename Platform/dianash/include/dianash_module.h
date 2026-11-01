@@ -1,4 +1,4 @@
-/* dianash_module.h - the command module ABI of DianaSh, version 1.0. See EmuSen_DianaSh.md §5, §6 and §13.7.
+/* dianash_module.h - the command module ABI of DianaSh, version 1.1. See EmuSen_DianaSh.md §5, §6 and §13.7.
  *
  * Normative. A command is called with a dianash_call and answers with a status and a dianash_result; everything it
  * may ask of the shell is in the io table it is handed, and it may call that table only before its call returns,
@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 #define DIANASH_MODULE_ABI_MAJOR 1u
-#define DIANASH_MODULE_ABI_MINOR 0u
+#define DIANASH_MODULE_ABI_MINOR 1u
 #define DIANASH_MODULE_ABI_VERSION ((DIANASH_MODULE_ABI_MAJOR << 16) | DIANASH_MODULE_ABI_MINOR)
 
 /* Statuses: the project's shared codes, then the band -256 to -319, then the fault (§6.9). */
@@ -41,6 +41,7 @@ extern "C" {
 /* dianash_call.flags */
 #define DIANASH_CALL_READ_ONLY_CONTEXT (1u << 0)
 #define DIANASH_CALL_INTERACTIVE (1u << 1)
+#define DIANASH_CALL_AT_PROMPT (1u << 2)    /* since 1.1: typed at the prompt, not in a script, a substitution or a pipe */
 
 /* resolve's flags: what the path is for. Version 1.0 resolves every kind alike. */
 #define DIANASH_RESOLVE_READ (1u << 0)
@@ -89,6 +90,25 @@ typedef struct dianash_service {
     uint32_t minor;
     const void *table;
 } dianash_service;
+
+/* Since 1.1: the settings service, "emusen.settings" major 1, which a host gives the shell and the shell hands a module
+ * only as far as its manifest's "settings" (keys) and "approvals" (true) name (§9.9). scope is the console's (target a
+ * console) or a game's (target the game file's path); get answers by the length-query idiom, ABSENT for a key with no
+ * stored value; set with an absent value clears it; approve and revoke take a library's SHA-256 in hex, approve only
+ * from a command typed at the prompt. */
+#define DIANASH_SETTINGS_CONSOLE 0u
+#define DIANASH_SETTINGS_GAME 1u
+#define DIANASH_SETTINGS_DENIED (-274)       /* since 1.1: a key the manifest does not name, or an approval it may not make */
+
+typedef struct dianash_settings_v1 {
+    uint32_t size;
+    void *ctx;
+    int32_t (*get)(void *ctx, uint32_t scope, dianash_bytes target, dianash_bytes key, uint8_t *out, size_t cap, int64_t *needed);
+    int32_t (*set)(void *ctx, uint32_t scope, dianash_bytes target, dianash_bytes key, dianash_bytes value);
+    int32_t (*approve)(void *ctx, dianash_bytes sha256);
+    int32_t (*revoke)(void *ctx, dianash_bytes sha256);
+    int32_t (*last_error)(void *ctx, uint8_t *out, size_t cap, int64_t *needed);
+} dianash_settings_v1;
 
 typedef struct dianash_call {
     uint32_t size;

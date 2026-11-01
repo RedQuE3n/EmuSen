@@ -11,6 +11,7 @@ pub mod builtins;
 pub mod dotnet;
 mod host;
 mod interp;
+mod settings;
 pub mod lexer;
 pub mod man;
 pub mod parser;

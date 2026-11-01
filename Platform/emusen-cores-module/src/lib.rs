@@ -3,6 +3,7 @@
 //! the background as `cores<n>`. What each word means is the tool's; this module asks and prints. See EmuSen_Cores.md
 //! §8 and `man cores`.
 
+use dianash_module::abi::{SETTINGS_CONSOLE, SETTINGS_GAME, SETTINGS_MAJOR, SETTINGS_SERVICE};
 use dianash_module::{Answer, Call, Manifest, Module};
 use emusen_dotnet::json::{self, Text, Value};
 use emusen_library_module::{detached, Next, ServiceJob, MAJOR, SERVICE};
@@ -13,10 +14,10 @@ pub const MINOR: u32 = 5;
 pub const COMMANDS: &[(&str, bool, &str)] = &[(
     "cores",
     false,
-    "  cores ls [--installed|--available|--updates|--unsupported] [<console>]\n                                one line per libretro core: state, console, id, source, version, size, licence\n  cores info <core>             what is known of one core, as key: value lines\n  cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)\n  cores get <core>...           download, check and install; prints the SHA-256 to approve\n  cores update [<core>...]      the installed cores the index offers a new build of, or those named\n  cores rollback <core>         the build kept by the last update put back in place\n  cores rm <core>...            a downloaded core removed, with its kept build; saves and settings stay\n  cores verify [<core>...]      each installed core checked against its NOTICE, the project's copies refreshed\n  cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)",
+    "  cores ls [--installed|--available|--updates|--unsupported] [<console>]\n                                one line per libretro core: state, console, id, source, version, size, licence\n  cores info <core>             what is known of one core, as key: value lines\n  cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)\n  cores get <core>...           download, check and install; prints the SHA-256 to approve\n  cores update [<core>...]      the installed cores the index offers a new build of, or those named\n  cores rollback <core>         the build kept by the last update put back in place\n  cores rm <core>...            a downloaded core removed, with its kept build; saves and settings stay\n  cores verify [<core>...]      each installed core checked against its NOTICE, the project's copies refreshed\n  cores approve <core>          trust a downloaded core, by its SHA-256; typed at the prompt only\n  cores default <console> [<engine>]\n                                the console's engine, printed or set\n  cores default --game <path> [<engine>|-]\n                                a game's own engine, printed, set or cleared\n  cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)",
 )];
 
-const USAGE: &str = "Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]\n  A core is named by its file's stem, as cores ls prints it. See man cores.";
+const USAGE: &str = "Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores approve <core> | cores default <console> [<engine>] | cores default --game <path> [<engine>|-] | cores wait [cores<n>]\n  A core is named by its file's stem, as cores ls prints it. See man cores.";
 
 pub struct CoresCommands;
 
@@ -157,21 +158,100 @@ pub fn installed_lines(e: &Value) -> String {
     if updated {
         out.push_str(&format!("  The build before it is kept: cores rollback {stem} puts it back.\n"));
     }
-    let revoke = strings(e, "revoke");
-    if !revoke.is_empty() {
-        out.push_str(&format!("  No longer on disk, their approvals now match no file: {}\n", revoke.join(" ")));
-    }
     out.trim_end().to_string()
 }
 
 /// What a removal says: the folder gone, the player's saves and the core's settings kept, and the hashes it was approved by.
 pub fn removed_lines(e: &Value) -> String {
-    let mut out = format!("Removed {}; your saves and its settings are kept.", text(e, "stem"));
-    let revoke = strings(e, "revoke");
-    if !revoke.is_empty() {
-        out.push_str(&format!("\n  Approvals recorded for it, now matching no file: {}", revoke.join(" ")));
+    format!("Removed {}; your saves and its settings are kept.", text(e, "stem"))
+}
+
+/// The approvals of builds no longer on disk revoked through the settings service, each said; without the service each
+/// is said to stay recorded (EmuSen_Cores.md §5.5, §8).
+fn revoke_all(call: &Call, e: &Value) {
+    for sha in strings(e, "revoke") {
+        match call.settings().map(|s| s.revoke(&sha)) {
+            Some(Ok(())) => call.out(&format!("  Revoked the approval of {sha}.\n")),
+            Some(Err(words)) => call.err(&format!("cores: the approval of {sha} was not revoked: {words}\n")),
+            None => call.err(&format!("cores: the approval of {sha} stays recorded; this program gives cores no settings service to revoke it\n")),
+        }
     }
-    out
+}
+
+const ENGINE: &str = "Engine";
+
+/// `cores default`: a console's or a game's engine printed, set, or (a game's) cleared, through the settings service and
+/// the runtime's own checks (EmuSen_Cores.md §4.3, §8).
+fn default(call: &Call) -> Answer {
+    let args = call.args();
+    let words: Vec<&str> = args.iter().skip(2).map(String::as_str).collect();
+    let (scope, target, shown, value) = match words.as_slice() {
+        ["--game", path] | ["--game", path, _] => {
+            let real = match call.resolve(path) {
+                Ok(real) => real,
+                Err(words) => return Answer::fail(format!("cores default: {words}")),
+            };
+            (SETTINGS_GAME, real, (*path).to_string(), words.get(2).copied())
+        }
+        [console] | [console, _] if !console.starts_with('-') => (SETTINGS_CONSOLE, (*console).to_string(), (*console).to_string(), words.get(1).copied()),
+        _ => return Answer::fail(format!("cores default: name a console, or --game and a game's path\n{USAGE}")),
+    };
+    let Some(settings) = call.settings() else { return Answer::fail("cores default: needs emusen.settings, which this program does not provide") };
+    match value {
+        None => match settings.get(scope, &target, ENGINE) {
+            Ok(Some(engine)) => Answer::ok(format!("{shown}: {engine}\n")),
+            Ok(None) if scope == SETTINGS_GAME => Answer::ok(format!("{shown}: its console's engine\n")),
+            Ok(None) => Answer::ok(format!("{shown}: its first engine, none being chosen\n")),
+            Err(words) => Answer::fail(format!("cores default: {words}")),
+        },
+        Some(engine) => {
+            let clear = scope == SETTINGS_GAME && engine == "-";
+            match settings.set(scope, &target, ENGINE, (!clear).then_some(engine)) {
+                Ok(()) if clear => Answer::ok(format!("{shown} now opens on its console's engine.\n")),
+                Ok(()) => Answer::ok(format!("{shown} now opens on {engine}.\n")),
+                Err(words) => Answer::fail(format!("cores default: {words}")),
+            }
+        }
+    }
+}
+
+/// `cores approve`: a downloaded core's SHA-256, read by `core-info`, approved through the settings service, which lets
+/// it through only from a command typed at the prompt (EmuSen_Cores.md §5.2, §8).
+fn approve(call: &Call) -> Answer {
+    let args = call.args();
+    let [_, _, core] = args.as_slice() else { return Answer::fail(format!("cores approve: name one core\n{USAGE}")) };
+    if !call.at_prompt() {
+        return Answer::fail("cores approve: a core is approved at the prompt, not by a script, a substitution or a pipe");
+    }
+    let Some(settings) = call.settings() else { return Answer::fail("cores approve: needs emusen.settings, which this program does not provide") };
+    let request = compact(vec![("op", Value::string("core-info")), ("core", Value::string(core.as_str()))]);
+    let job = match ServiceJob::start(call, "cores", &request) {
+        Ok(j) => j,
+        Err(refused) => return refused,
+    };
+    let (mut buffer, mut found, mut refusal) = (vec![0u8; 4096], None, None);
+    loop {
+        match job.next(100, &mut buffer) {
+            Next::Ended => break,
+            Next::Absent => continue,
+            Next::Failed(words) => return Answer::fail(format!("cores approve: {words}")),
+            Next::Event(line) => {
+                let Ok(e) = json::parse(&line) else { continue };
+                match text(&e, "event") {
+                    "core" => found = Some((text(&e, "sha256").to_string(), text(&e, "name").to_string())),
+                    "refused" => refusal = Some(text(&e, "reason").to_string()),
+                    _ => {}
+                }
+            }
+        }
+    }
+    let Some((sha, name)) = found.filter(|(sha, _)| !sha.is_empty()) else {
+        return Answer::fail(format!("cores approve: {}", refusal.unwrap_or_else(|| format!("{core} is not downloaded, so there is no build to approve; cores get {core} downloads it"))));
+    };
+    match settings.approve(&sha) {
+        Ok(()) => Answer::ok(format!("Approved {name} ({core}), SHA-256 {sha}: trust on first download, held to exactly this build.\n")),
+        Err(words) => Answer::fail(format!("cores approve: {words}")),
+    }
 }
 
 /// One `verify` result as a line that pipes: result, core, then the files refreshed or the reason.
@@ -231,6 +311,9 @@ fn follow(call: &Call, r: &Running) -> Option<i32> {
             Some((false, l)) => call.err(&format!("{l}\n")),
             None => {}
         }
+        if matches!(text(&event, "event"), "installed" | "removed") {
+            revoke_all(call, &event);
+        }
     }
 }
 
@@ -283,12 +366,14 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for CoresCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.cores", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, MINOR, true)], commands: COMMANDS, aliases: &[], jobs: &["cores"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.cores", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, MINOR, true), (SETTINGS_SERVICE, SETTINGS_MAJOR, 0, false)], commands: COMMANDS, aliases: &[], jobs: &["cores"], settings: &["Engine"], approvals: true }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
         call.answer(match call.command().as_str() {
             "cores" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call)),
+            "cores" if call.args().get(1).map(String::as_str) == Some("default") => default(call),
+            "cores" if call.args().get(1).map(String::as_str) == Some("approve") => approve(call),
             "cores" => start(call, jobs_of(call)),
             other => Answer::fault(format!("emusen.cores has no command '{other}'")),
         })
@@ -341,7 +426,7 @@ mod tests {
         assert!(request(&args("cores get")).unwrap_err().contains("name a core or more"));
         assert!(request(&args("cores rollback a b")).unwrap_err().contains("name one core"));
         assert!(request(&args("cores verify --all")).unwrap_err().contains("not an option"));
-        assert!(request(&args("cores approve pcsx2")).unwrap_err().starts_with("Usage: cores"));
+        assert!(request(&args("cores frobnicate pcsx2")).unwrap_err().starts_with("Usage: cores"));
         assert!(request(&args("cores")).unwrap_err().starts_with("Usage: cores"));
     }
 
@@ -366,7 +451,7 @@ mod tests {
         assert!(installed.1.starts_with(&format!("Installed pcsx2, build 2026-10-31, SHA-256 {h}.\n")), "{}", installed.1);
         assert!(installed.1.contains("on first download") && installed.1.contains("This exact build was tested by EmuSen on 2026-10-30."));
         let updated = printed(&e(&format!(r#"{{"event":"installed","stem":"pcsx2","sha256":"{h}","build":"2026-10-31","previous":"{h}","revoke":["{h}"],"tested":{{"match":"none"}}}}"#)), false).unwrap().1;
-        assert!(updated.starts_with("Updated pcsx2") && updated.contains("cores rollback pcsx2") && updated.contains("Not tested by EmuSen.") && updated.contains("match no file"));
+        assert!(updated.starts_with("Updated pcsx2") && updated.contains("cores rollback pcsx2") && updated.contains("Not tested by EmuSen.") && !updated.contains("match no file"));
         assert_eq!(printed(&e(r#"{"event":"verified","stem":"pcsx2","result":"refreshed","files":["emusen-libretro-host.so","broker.target"]}"#), false).unwrap().1, "refreshed pcsx2 emusen-libretro-host.so broker.target");
         assert_eq!(printed(&e(r#"{"event":"verified","stem":"pcsx2","result":"ok","sha256":"x"}"#), false).unwrap().1, "ok pcsx2");
         assert_eq!(printed(&e(r#"{"event":"refused","stem":"pcsx2","reason":"no"}"#), false), Some((false, "cores: pcsx2: no".into())));

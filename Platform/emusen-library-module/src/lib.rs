@@ -669,7 +669,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 6, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 6, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {

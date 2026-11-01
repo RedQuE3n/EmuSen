@@ -151,7 +151,7 @@ pub fn dupes(o: &Options) -> Result<(String, String, i32), String> {
 impl Module for DevCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.dev", version: env!("CARGO_PKG_VERSION"), services: &[], commands: COMMANDS, aliases: &[], jobs: &[] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.dev", version: env!("CARGO_PKG_VERSION"), services: &[], commands: COMMANDS, aliases: &[], jobs: &[], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {

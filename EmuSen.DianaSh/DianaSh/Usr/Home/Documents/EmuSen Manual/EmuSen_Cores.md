@@ -473,8 +473,9 @@ cores default --game <path> [<core>|-]    print, set, or clear a game's choice
 
 **Built in C2 (2026-10-31)**: `ls`, `info`, `fetch` and `wait`, in `Platform/emusen-cores-module`, reading events
 with `emusen-library-module`'s `next_event`, shared rather than copied, since both follow jobs of the same service.
-**Built in C3 (2026-10-31)**: `get`, `update`, `rollback`, `rm` and `verify` (§6.2). `cores approve` waits with
-`cores default` for a service that reaches the runtime (Q12). A core is named by its file stem (§4.1). `cores default` is held back: a module reaches the runtime's settings only
+**Built in C3 (2026-10-31)**: `get`, `update`, `rollback`, `rm` and `verify` (§6.2). **Built 2026-11-01**, after the
+tester took Q11 and Q12: `default` and `approve`, and the revocation after `rm` and `update`, through the settings service
+of module ABI 1.1 (`EmuSen_DianaSh.md` §9.10), the module's manifest naming `Engine` and approvals. A core is named by its file stem (§4.1). `cores default` is held back: a module reaches the runtime's settings only
 through a service, and none gives a module the console and game `Engine` setting yet (§10, Q11). The window sets the
 default through the frontend API directly (C4).
 
@@ -562,6 +563,10 @@ big-screen audit's ellipsis).
     `core_revoke`, so that `cores approve` (at the prompt only, as `trust` is) and the revocation after `cores rm` and
     `cores update` can be built in the shell. Until then the window does both, and the shell prints the hashes.
     *Recommended:* yes, with Q11, approval refused inside `source` and `$(...)`.
+
+**Decided 2026-10-31 by the tester:** Q11 and Q12 as recommended, the service limited to the keys a module's manifest
+names, a minor version of the module ABI with a man-page entry, approval at the interactive prompt only. Built
+2026-11-01 (`EmuSen_DianaSh.md` §9.10, `man modules`).
 
 ## 11. Decided 2026-10-31 by the tester
 

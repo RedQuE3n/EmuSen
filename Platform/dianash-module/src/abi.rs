@@ -7,7 +7,7 @@
 use std::ffi::c_void;
 
 pub const MODULE_ABI_MAJOR: u32 = 1;
-pub const MODULE_ABI_MINOR: u32 = 0;
+pub const MODULE_ABI_MINOR: u32 = 1;
 pub const MODULE_ABI_VERSION: u32 = (MODULE_ABI_MAJOR << 16) | MODULE_ABI_MINOR;
 
 /// The statuses of both surfaces: the project's shared codes, then the band −256 to −319, then the fault.
@@ -33,11 +33,34 @@ pub mod status {
     pub const BAD_MANIFEST: i32 = -272;
     /// A path above the sandbox's root; the words that refuse it are given in its place.
     pub const OUTSIDE: i32 = -273;
+    /// Since 1.1: a setting the module's manifest does not name, or an approval it may not make there.
+    pub const SETTINGS_DENIED: i32 = -274;
     pub const FAULT: i32 = -320;
 }
 
 pub const CALL_READ_ONLY_CONTEXT: u32 = 1 << 0;
 pub const CALL_INTERACTIVE: u32 = 1 << 1;
+/// Since 1.1: the command was typed at the prompt, not run by a script, a substitution or a pipe.
+pub const CALL_AT_PROMPT: u32 = 1 << 2;
+
+/// Since 1.1: the settings service's name and major, and its two scopes (EmuSen_DianaSh.md §9.9).
+pub const SETTINGS_SERVICE: &str = "emusen.settings";
+pub const SETTINGS_MAJOR: u32 = 1;
+pub const SETTINGS_CONSOLE: u32 = 0;
+pub const SETTINGS_GAME: u32 = 1;
+
+/// `dianash_settings_v1`: a console's or a game's setting got and set, and a core library's approval given and taken.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct dianash_settings_v1 {
+    pub size: u32,
+    pub ctx: *mut c_void,
+    pub get: unsafe extern "C" fn(*mut c_void, u32, dianash_bytes, dianash_bytes, *mut u8, usize, *mut i64) -> i32,
+    pub set: unsafe extern "C" fn(*mut c_void, u32, dianash_bytes, dianash_bytes, dianash_bytes) -> i32,
+    pub approve: unsafe extern "C" fn(*mut c_void, dianash_bytes) -> i32,
+    pub revoke: unsafe extern "C" fn(*mut c_void, dianash_bytes) -> i32,
+    pub last_error: unsafe extern "C" fn(*mut c_void, *mut u8, usize, *mut i64) -> i32,
+}
 
 pub const RESOLVE_READ: u32 = 1 << 0;
 pub const RESOLVE_WRITE: u32 = 1 << 1;

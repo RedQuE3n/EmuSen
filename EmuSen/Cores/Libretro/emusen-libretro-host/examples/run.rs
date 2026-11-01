@@ -1,4 +1,4 @@
-// `run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT|--data-disc OUT> <frames> [key=value]...`: one machine through the Rust host, its
+// `run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT> <frames> [key=value]...`: one machine through the Rust host, its
 // image given by path, run for a number of frames, and what it said (EmuSen_LibretroHost.md §9). With EMUSEN_RUN_RING=1
 // its pictures go on a Serenity ring; EMUSEN_RUN_PNG=DIR:F,F,... keeps the ring's picture at those frames (§10f).
 // EMUSEN_RUN_PADS=FILE presses port 0's buttons by a script; EMUSEN_RUN_FILES=N=PATH,... passes battery files and
@@ -44,69 +44,6 @@ fn ee_elf(code: &[u32]) -> Vec<u8> {
 
 const LOOP: [u32; 2] = [0x1000_FFFF, 0];
 const EXIT: [u32; 4] = [0x2403_0004, 0x0000_000C, 0x1000_FFFF, 0];
-
-/// A data disc the console does not boot: ISO 9660 (ECMA-119) with one file, `README.TXT`, and no `SYSTEM.CNF`, so a
-/// PlayStation 2's firmware stays at its browser with it in the tray. Built here.
-fn data_disc() -> Vec<u8> {
-    const S: usize = 2048;
-    let text = b"An EmuSen data disc, for the firmware's browser.\r\n";
-    let mut d = vec![0u8; 32 * S];
-    let both32 = |d: &mut Vec<u8>, at: usize, v: u32| {
-        d[at..at + 4].copy_from_slice(&v.to_le_bytes());
-        d[at + 4..at + 8].copy_from_slice(&v.to_be_bytes());
-    };
-    let both16 = |d: &mut Vec<u8>, at: usize, v: u16| {
-        d[at..at + 2].copy_from_slice(&v.to_le_bytes());
-        d[at + 2..at + 4].copy_from_slice(&v.to_be_bytes());
-    };
-    let record = |d: &mut Vec<u8>, at: usize, lba: u32, len: u32, dir: bool, name: &[u8]| -> usize {
-        let n = 33 + name.len() + (name.len() + 1) % 2;
-        d[at] = n as u8;
-        both32(d, at + 2, lba);
-        both32(d, at + 10, len);
-        d[at + 18..at + 25].copy_from_slice(&[126, 11, 1, 0, 0, 0, 0]);
-        d[at + 25] = if dir { 2 } else { 0 };
-        both16(d, at + 28, 1);
-        d[at + 32] = name.len() as u8;
-        d[at + 33..at + 33 + name.len()].copy_from_slice(name);
-        n
-    };
-    let pvd = 16 * S;
-    d[pvd] = 1;
-    d[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
-    d[pvd + 6] = 1;
-    d[pvd + 8..pvd + 72].fill(b' ');
-    d[pvd + 40..pvd + 46].copy_from_slice(b"EMUSEN");
-    both32(&mut d, pvd + 80, 32);
-    both16(&mut d, pvd + 120, 1);
-    both16(&mut d, pvd + 124, 1);
-    both16(&mut d, pvd + 128, S as u16);
-    both32(&mut d, pvd + 132, 10);
-    d[pvd + 140..pvd + 144].copy_from_slice(&18u32.to_le_bytes());
-    d[pvd + 148..pvd + 152].copy_from_slice(&19u32.to_be_bytes());
-    record(&mut d, pvd + 156, 20, S as u32, true, &[0]);
-    d[pvd + 190..pvd + 813].fill(b' ');
-    for at in [813, 830, 847, 864] {
-        d[pvd + at..pvd + at + 16].fill(b'0');
-    }
-    d[pvd + 881] = 1;
-    d[17 * S] = 255;
-    d[17 * S + 1..17 * S + 6].copy_from_slice(b"CD001");
-    d[17 * S + 6] = 1;
-    for (sector, lba) in [(18, 20u32.to_le_bytes()), (19, 20u32.to_be_bytes())] {
-        let at = sector * S;
-        d[at] = 1;
-        d[at + 2..at + 6].copy_from_slice(&lba);
-        d[at + 6] = if sector == 18 { 1 } else { 0 };
-        d[at + 7] = if sector == 18 { 0 } else { 1 };
-    }
-    let mut at = 20 * S;
-    at += record(&mut d, at, 20, S as u32, true, &[0]);
-    at += record(&mut d, at, 20, S as u32, true, &[1]);
-    record(&mut d, at, 21, text.len() as u32, false, b"README.TXT;1");
-    d[21 * S..21 * S + text.len()].copy_from_slice(text);
-    d
-}
 
 /// A Serenity ring of the machine's largest picture, lent to it, with the device it lives on; none unless asked for.
 fn ring_for(m: &mut Machine) -> Option<(emusen_serenity::vulkan::Device, emusen_serenity::ring::Ring)> {
@@ -167,13 +104,12 @@ fn battery_files(spec: &str) -> Vec<(u32, String, Option<Vec<u8>>)> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
-        eprintln!("usage: run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT|--data-disc OUT> <frames> [key=value]...");
+        eprintln!("usage: run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT> <frames> [key=value]...");
         std::process::exit(2);
     }
     let built = match args[2].as_str() {
         "--loop-elf" => Some(ee_elf(&LOOP)),
         "--exit-elf" => Some(ee_elf(&EXIT)),
-        "--data-disc" => Some(data_disc()),
         _ => None,
     };
     let image_path = match &built {

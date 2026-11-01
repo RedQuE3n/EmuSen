@@ -1335,6 +1335,68 @@ firmware's browser (pad input at set frames, the browser's own format of a blank
 over the bytes, and the reverse with a card Sapphire's reader formatted), which the libretro host's `run` example
 cannot yet script; adding a pad script to it is the next step.
 
+## 10j. Stage 4, item 4.3: the PlayStation 2's cards shared by every engine (2026-11-01)
+
+Decided 2026-11-01: the PlayStation 2 card's format has one owner, `emusen-ps2-card`, and a hosted engine keeps the
+same card files as Sapphire, as the standing rule has console-wide state shared by every engine and game unless the
+player says otherwise.
+
+**One owner.** The crate already held the format, its reader and its editor, which `emusen-systems`' card module (the
+card manager's) uses. It now also holds the facts every engine names a card by: the medium `ps2.card`, the files'
+suffixes `.ps2` and `.2.ps2` (`SUFFIXES`) and an erased card's byte, FFh (`ERASED`), beside `CARD_LENGTH`. Sapphire's
+card (`sio2/card.rs`: page, block and card sizes, the erased card) and its core info (`CARD_SUFFIXES`, `CARD_MEDIUM`)
+take them from it, as do `emusen-systems`' medium table and the libretro host's profiles; no engine keeps a copy.
+
+**The profiles' cards** (`files::PROFILES`). PCEE2's and LRPS2's two cards are battery files 2 and 3 with the crate's
+suffixes, medium and blank card, so the frontend's `MemoryCards` gives a hosted engine the same files as Sapphire: under
+Shared or Named a drawer card such as `Saves/PlayStation 2/Cards/Card 1.ps2`, under Per game `<game>.ps2` and
+`<game>.2.ps2`. Two changes came with it:
+- *A card not passed is a new, blank card* (8,650,752 bytes of FFh, what PCSX2 makes for a new card, `EmuSen_MediumFormats.md`
+  §6), written over whatever the core's folder last held, as Sapphire's slot holds an erased card when no file is given.
+  Before, the core kept the last game's card, so a new game, or a new name under Named, saw another game's card. Under
+  the referee's system folder (`EMUSEN_LIBRETRO_SYSTEM_DIR`) a card not passed is left as it is, so a referee run never
+  writes over the referee's cards.
+- *Firmware is numbered from 16* (`FIRST_FIRMWARE`). Numbered from 1, a core's firmware shared numbers with the clock's
+  file and the cards, so a card passed as file 2 was also written into PCEE2's `pcsx2/resources` folder while it loaded
+  (found 2026-11-01 when the round trip below passed its cards). Sixteen and up is where Sapphire numbers its BIOS.
+
+**Tests.** `tests/cards.rs` lays the test core under PCEE2's stem with PCEE2's published firmware entries: the battery
+list's suffixes and medium are the crate's, firmware and battery numbers are apart, a card left in the folder is replaced
+by a blank one, a card passed is the core's slot 1 and an empty file a blank card, no card is written as firmware, and a
+card the core changes is reported and read back by the crate's reader with its new save. In WiseMan, `HostedPs2CardTests`
+(the C# fixture can now lay the test core under another stem): the hosted engine and Sapphire give the card manager the
+same medium, suffixes, labels, drawer path, default mode and listed cards (Sapphire's console memory `ps2.nvm` is its
+own; PCEE2 keeps its NVM beside its BIOS); and a session opened through the frontend API puts the shared `Card 1.ps2` in
+the hosted core's slot and brings a save written to the core's card back to `Card 1.ps2`, listed by the card manager's
+reader. Seeded faults, each caught by `tests/cards.rs`: a card not passed kept; the old suffixes `.mcd1` and `.mcd2`; a
+card's change not reported; firmware numbered from 1 (the defect above, before its fix).
+
+**The round trip through PCEE2's firmware** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
+the Rust host's `run` example, PCEE2 v2.9.138 with `pcsx2_renderer=vulkan`, `pcsx2_fast_boot=disabled` and the
+Americas BIOS 2.30 given by path through `pcsx2_bios`, the system folder a scratch folder under `~/.cache/emusen/` whose
+BIOS is a link made from that path, the cards passed and written back through `EMUSEN_RUN_FILES`]:
+1. *PCEE2 formats, the crate reads.* The run example's `--exit-elf` program calls the kernel's `Exit`, after which the
+   firmware opens its browser on Memory Card (PS2)/1. With a blank card in slot 1, the pad script `400 b`, `600 left`,
+   `700 b` (Cross on the card, "Unformatted. Format now?", Yes) formats it: "Formatting completed.", 7,998 KB free.
+   The crate opens the card PCEE2 wrote as formatted, 7,998 KB free and no saves, the card manager's capacity.
+2. *The crate writes, PCEE2 reads and writes.* A card formatted by the crate with one save written by it
+   (`BASLUS-99999EMUSEN`, an `icon.sys` and a 4,000-byte file, 7 KB, 7,990 KB free) is listed by PCEE2's browser with
+   7,990 KB free; its information screen gives 7 KB and the time the crate wrote, 12:00 in Japan's zone shown as 07:30
+   in the zone chosen at the first start (GMT+4:30). It shows as "Corrupted Data", having no icon files, so the browser
+   refuses to copy it; its Delete works (`400 b`, `600 b`, `800 down`, `900 b`, `1050 left`, `1150 b`): "Delete
+   completed." The crate then reads the card PCEE2 wrote with no saves and 7,997 KB free, the root directory keeping the
+   cluster it grew for the save's entry.
+Not done: a save with its icons made by a game on one engine and loaded by the same game on the other, which needs a
+game's route on each engine (Sapphire runs games at about 0.4 to 5 frames a second); the run example's pad script and
+files are the means when it is wanted. The data disc tried first (an ISO 9660 disc with no `SYSTEM.CNF`) left the
+firmware at "Please insert a PlayStation or PlayStation 2 format disc." whatever was pressed or with the tray opened,
+which is why the route is the `Exit` program. The firmware's first start asked for the language, time zone and summer
+time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder.
+
+**The card manager.** No view changed: a console's media come from its engine's core info (`MemoryCards.MediaFor`), and
+with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
+existing fit audits stand.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

@@ -183,10 +183,40 @@ from one answer:
   sizes, the format, the soft patches and *Open Folder* (Avalonia's launcher, so the platform's own file manager).
   M3 adds identity, migrate and the layers.
 
-### 7.4 Otherwise than §3, and left
+### 7.4 The gate, the tests, and the faults seeded
+
+`PackagesWindowTests` (8): through real jobs of the platform library on a synthetic library (a SNES and an NES
+cartridge and a PlayStation disc) the window lists three games not packaged with their sizes, the disc as CUE/BIN and
+convertible; a linked and a self-contained package are made only once the plan is confirmed, then checked and zipped
+through the pad's Start, each outcome on its row, and the library is byte for byte as it was. With scripted jobs: every
+kind of row offered only its changes; the plan's requests one per kind in the fixed order; a conversion followed to its
+outcome and chdman's absence said in words; the window without the platform library saying why and starting nothing;
+the pad marking with X, opening and cancelling the plan, opening and closing the detail's page, stepping sections and
+listing again; the desktop window whole at 1280×800 and 1920×1200. `WindowFitAuditTests` frames `Packages` and
+`PackagesDetail` at both sizes, recorded as interface specifications (`EmuSen_InterfaceSpec.md` §6.3.12);
+`LeafAssemblyTests` holds the library to LunaP and Galaxia; the library tool's `the_listing_with_unpackaged_…` holds
+§7.1. Measured on 2026-10-31, each fault reverted after its run:
+
+| Fault | Caught by |
+|---|---|
+| the unpackaged list keeps games a package claims | `the_listing_with_unpackaged_names_every_game_no_package_claims_with_its_size` |
+| a package with a problem is offered more than *check* | `Each_row_is_offered_only_the_changes_that_fit_it` |
+| *check* runs first | `A_plan_runs_one_request_for_each_kind_of_change_in_a_fixed_order` |
+| the pad's X reaches North rather than *Mark* | `The_pad_marks_applies_and_climbs_back_through_the_frame` |
+| a step's refusal is not put on its rows | `A_conversion_is_followed_to_its_outcome_and_a_refusal_is_said_in_words` |
+| a package made self-contained is said to be linked | `Packages_lists_makes_checks_and_zips_through_real_jobs_…` |
+
+### 7.5 Otherwise than §3, and left
 
 - **Unmake** is not offered until M2 builds `pkg unmake`.
 - **Converting self-contained in one mark**, chdman's threads and the check after each disc are not options of the
   plan: the frame's plan is text with Apply and Cancel, and the tool always checks each disc. A converted disc's
   package is made self-contained by marking it after the conversion. The space a conversion is expected to save is
   not estimated beforehand; each conversion's outcome says what it saved.
+- **Interim forms, until the manager frame's fixes land** (found by these audits, 2026-10-31): a refusal that is not
+  about a row is said in the detail shown when no game is chosen, which also gives the library's and the packages'
+  totals, until the apply bar takes a notice; the space meter shows how full the disk is as a percentage, since its
+  value column is 55 pixels; the Game and State columns are capped (400 and 240 pixels), since the table measures a
+  star column by its content; the big screen offers only the state sections, since its section row does not scroll;
+  and the `PackagesPlan` and `PackagesRunning` states are scripted but not yet audited, since the plan sheet is drawn
+  over the table and the apply bar overlaps itself in the big screen's type.

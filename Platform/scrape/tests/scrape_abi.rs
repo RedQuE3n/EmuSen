@@ -215,6 +215,7 @@ fn every_constant_is_the_header_s() {
         ("EMUSEN_SCRAPE_BUSY", BUSY as i64),
         ("EMUSEN_SCRAPE_IO", IO as i64),
         ("EMUSEN_SCRAPE_NO_LIBRARY", NO_LIBRARY as i64),
+        ("EMUSEN_SCRAPE_STORE_IN_USE", STORE_IN_USE as i64),
     ]
     .into_iter()
     .collect();
@@ -227,7 +228,7 @@ fn every_constant_is_the_header_s() {
 /// The scraper's own statuses sit in the band §30.3 gave it.
 #[test]
 fn the_statuses_are_in_the_scraper_s_band() {
-    for status in [NEWER_FILE, DATABASE, NO_SQLITE, BAD_REQUEST, BUSY, IO, NO_LIBRARY] {
+    for status in [NEWER_FILE, DATABASE, NO_SQLITE, BAD_REQUEST, BUSY, IO, NO_LIBRARY, STORE_IN_USE] {
         assert!((-1179..=-1160).contains(&status), "{status}");
     }
 }

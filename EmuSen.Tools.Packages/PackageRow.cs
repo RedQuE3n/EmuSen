@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using static EmuSen.Tools.Packages.ToolEvents;
+using static EmuSen.Galaxia.Native.ToolEvents;
 
 namespace EmuSen.Tools.Packages
 {

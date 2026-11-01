@@ -1,6 +1,7 @@
+using EmuSen.Galaxia.Native;
 using System.Globalization;
 using System.Text.Json;
-using static EmuSen.Tools.Packages.ToolEvents;
+using static EmuSen.Galaxia.Native.ToolEvents;
 
 namespace EmuSen.Tools.Packages
 {

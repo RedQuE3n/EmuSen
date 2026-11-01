@@ -26,6 +26,8 @@ pub mod library;
 pub mod library_tool;
 pub mod patch;
 pub mod scrape;
+// The emusen.scrape service every shell is handed (EmuSen_LibraryTools.md §8).
+pub mod scraping;
 pub mod net;
 pub mod serenity;
 pub mod serenity_device;
@@ -33,7 +35,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 28;
+pub const ABI_VERSION: u32 = 29;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -286,6 +288,7 @@ mod tests {
         exported.extend(exports_in(include_str!("net.rs")));
         exported.extend(exports_in(include_str!("library_tool.rs")));
         exported.extend(exports_in(include_str!("patch.rs")));
+        exported.extend(exports_in(include_str!("scraping.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

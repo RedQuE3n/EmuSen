@@ -113,9 +113,11 @@ namespace EmuSen.Mistress.Views
             var rows = new List<PadMenuEntry>();
             if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
             AddCollectionMenuEntries(rows);
-            rows.Add(new(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }) { Opens = true });
+            rows.Add(new(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", ShowScraper) { Opens = true });
             // Under Library, where a submenu's nine rows leave it room; a tenth under Settings ran past the big panel - see EmuSen_Settings_Reference.md §4.69.8.
             rows.Add(Opens(PackagesMenu, ShowPackages));
+            rows.Add(Opens(CompressedDiscsMenu, ShowCompressedDiscs));
+            rows.Add(Opens(LibraryManagerMenu, ShowLibraryManager));
             if (_bigScreen) rows.Add(Opens("Theme Settings", ShowThemeSettings));
             return rows;
         }
@@ -128,7 +130,6 @@ namespace EmuSen.Mistress.Views
             Opens("Shaders", ShowShaderSettings),
             Opens("Cheats", ShowActiveCheats),
             Opens(MemoryCardsMenu, ShowMemoryCards),
-            Opens(CompressedDiscsMenu, ShowCompressedDiscs),
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];

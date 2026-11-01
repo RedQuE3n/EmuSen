@@ -39,6 +39,7 @@ pub enum Error {
     Busy(String),
     Io(String),
     NoLibrary,
+    InUse(String),
 }
 
 impl Error {
@@ -50,12 +51,13 @@ impl Error {
             Error::Busy(_) => abi::BUSY,
             Error::Io(_) => abi::IO,
             Error::NoLibrary => abi::NO_LIBRARY,
+            Error::InUse(_) => abi::STORE_IN_USE,
         }
     }
 
     pub fn words(&self) -> String {
         redact::redact(&match self {
-            Error::Newer(w) | Error::BadRequest(w) | Error::Busy(w) | Error::Io(w) => w.clone(),
+            Error::Newer(w) | Error::BadRequest(w) | Error::Busy(w) | Error::Io(w) | Error::InUse(w) => w.clone(),
             Error::Database(f) => f.message.clone(),
             Error::NoLibrary => "No library was lent to the scraper.".to_string(),
         })
@@ -178,6 +180,8 @@ pub struct Scraper {
     pub(crate) runs: run::Runs,
     art: RwLock<artwork::Index>,
     root: String,
+    /// The store held alone across processes, let go after everything above has closed (EmuSen_LibraryTools.md §8.8).
+    _held: emusen_galaxia::medium_lock::MediumLock,
 }
 
 impl Drop for Scraper {
@@ -196,6 +200,7 @@ impl Scraper {
             Some(start) => Clock::test(start),
             None => Clock::System,
         };
+        let held = Scraper::hold(root)?;
         let store = store::Store::open(sqlite.clone(), root)?;
         let quota = quota::Manager::new(&store, &clock)?;
         let art = artwork::Index::scan(settings.art.as_deref(), &consoles::cores(&settings.cores));
@@ -210,9 +215,19 @@ impl Scraper {
             runs: run::Runs::default(),
             art: RwLock::new(art),
             root: root.to_string(),
+            _held: held,
         };
         scraper.put_in_folders()?;
         Ok(scraper)
+    }
+
+    /// The store's lock, or why another holds it.
+    fn hold(root: &str) -> Result<emusen_galaxia::medium_lock::MediumLock, Error> {
+        let db = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, store::FILE_NAME);
+        emusen_galaxia::medium_lock::try_take(&db, "EmuSen's scraper in this program", false).ok_or_else(|| {
+            let who = emusen_galaxia::medium_lock::holder_of(&db).unwrap_or_else(|| "another program".into());
+            Error::InUse(format!("The media store {root} is in use by {who}: one scraper holds it at a time, so that the account's quota is counted once. Close the other (EmuSen, or a shell running scrape) and try again."))
+        })
     }
 
     pub(crate) fn store(&self) -> MutexGuard<'_, store::Store> {
@@ -221,6 +236,11 @@ impl Scraper {
 
     pub fn root(&self) -> String {
         self.root.clone()
+    }
+
+    /// The SQLite the host lent, for a host's own database beside the store.
+    pub fn sqlite(&self) -> Arc<Sqlite> {
+        self.sqlite.clone()
     }
 
     /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.

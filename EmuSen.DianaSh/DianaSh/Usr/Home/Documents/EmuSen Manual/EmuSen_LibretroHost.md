@@ -1025,6 +1025,26 @@ copied into the next; through the broker, five frames across the process boundar
 the descriptor count unchecked; a BGRA picture copied unswizzled; a held picture never copied; the woven PlayStation 2
 heights read as one field; the runner passing the host's handle numbers.
 
+**Measured 2026-11-01** (the RX 6800 under RADV, release builds, the test core's 320 × 240 picture, 540 frames after
+60 of warm-up, two rounds agreeing within 0.03 ms; `measure_the_ring_against_the_read_back_and_software` and
+`measure_the_ring_through_the_broker`, run with `--ignored`). The cost is `advance` and then `frame_ring` (ring) or
+`frame_copy` (software, read-back) on the host's emulation thread; the delay is from `set_buttons` to the picture on the
+host's side, which for the ring includes `Ring::read` waiting for `ready` on the host's device and copying the picture
+out, so it overstates what a presenter that samples the slot would see.
+
+| Path | In-process cost, mean / p99 (ms) | Delay, mean (ms) | Brokered cost, mean / p99 (ms) | Delay, mean (ms) |
+|---|---|---|---|---|
+| software (`frame_copy`) | 0.107 / 0.121 | 0.106 | 0.217 / 0.364 | 0.222 |
+| read-back (§5.5) | 0.264 / 0.389 | 0.277 | 0.406 / 0.642 | 0.415 |
+| ring | 0.121 / 0.160 | 0.256 | 0.150 / 0.247 | 0.291 |
+
+Through the broker the ring costs the emulation thread less than a software picture, since no picture crosses the
+socket; the press shows in the frame it was made in on every path, this core reading its pad in `retro_run`. A defect
+the first round proved: the read-back mapped host-visible memory that was not cached, and reading it cost 17.9 ms a
+frame; taking cached memory where offered brought it to 0.26 ms. **Not yet measured**: the same picture handed
+in-process by `DEVICE_PICTURE` on Serenity's lent device, the comparison §5.4a names; it needs a project core whose
+`DEVICE_PICTURE` picture is the test core's, which neither test core has yet.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

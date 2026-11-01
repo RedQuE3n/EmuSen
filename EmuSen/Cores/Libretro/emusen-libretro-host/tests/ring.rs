@@ -143,3 +143,56 @@ fn a_picture_larger_than_the_ring_is_held_and_copied_into_the_next_ring_that_hol
     assert!(big.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap() == want[0].2);
     m.ring_lend(None).unwrap();
 }
+
+/// The measurement of §10f: per frame, the cost on the host's emulation thread (advance, then frame_ring or
+/// frame_copy) and the delay from set_buttons to the picture on the host's side (the ring read on the host's device,
+/// the copy in host memory otherwise), for software, the read-back and the ring. Run with --ignored --nocapture.
+#[test]
+#[ignore]
+fn measure_the_ring_against_the_read_back_and_software() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let frames = 600usize;
+    let stats = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        (v.iter().sum::<f64>() / v.len() as f64, v[v.len() / 2], v[v.len() * 99 / 100])
+    };
+    for (name, settings) in [("software", ""), ("read-back", "tc_hw=vulkan"), ("ring", "tc_hw=vulkan")] {
+        let mut m = make(settings);
+        let ring = gpu.create_ring(640, 480, 3).unwrap();
+        let (lend, _keep) = lend_of(&ring);
+        if name == "ring" {
+            m.ring_lend(Some(&lend)).unwrap();
+        }
+        let mut copy = vec![0u8; 640 * 480 * 4];
+        let (mut cost, mut delay) = (Vec::new(), Vec::new());
+        for n in 0..frames {
+            let press = n % 10 == 5;
+            let t0 = std::time::Instant::now();
+            if press || n % 10 == 6 {
+                m.set_buttons(0, if press { 1 } else { 0 }, 1).unwrap();
+            }
+            let t1 = std::time::Instant::now();
+            m.advance().unwrap();
+            let shown = if name == "ring" { m.frame_ring().unwrap() } else { None };
+            if name != "ring" {
+                m.frame_copy(&mut copy).unwrap();
+            }
+            let spent = t1.elapsed();
+            if let Some(f) = shown {
+                ring.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap();
+            }
+            if n >= 60 {
+                cost.push(spent.as_secs_f64() * 1e3);
+                if press {
+                    delay.push(t0.elapsed().as_secs_f64() * 1e3);
+                }
+            }
+        }
+        let (c, d) = (stats(&mut cost), stats(&mut delay));
+        println!("{name:9}: emulation thread mean {:.3} median {:.3} p99 {:.3} ms; set_buttons to picture mean {:.3} median {:.3} p99 {:.3} ms", c.0, c.1, c.2, d.0, d.1, d.2);
+        if name == "ring" {
+            m.ring_lend(None).unwrap();
+        }
+    }
+}

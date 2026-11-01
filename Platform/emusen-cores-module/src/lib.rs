@@ -5,8 +5,7 @@
 
 use dianash_module::{Answer, Call, Manifest, Module};
 use emusen_dotnet::json::{self, Text, Value};
-use emusen_library_module::{last_error, next_event, LibraryToolV1, Next, MAJOR, SERVICE};
-use std::ffi::c_void;
+use emusen_library_module::{detached, Next, ServiceJob, MAJOR, SERVICE};
 
 /// The service's minor that runs the core tool's requests.
 pub const MINOR: u32 = 5;
@@ -197,8 +196,7 @@ struct Running {
     id: u32,
     op: String,
     listing: bool,
-    job: *mut c_void,
-    table: *const LibraryToolV1,
+    job: ServiceJob,
     stopping: bool,
 }
 
@@ -208,26 +206,14 @@ struct Jobs {
     running: Vec<Running>,
 }
 
-// SAFETY: a job's handle and the service's table are the platform library's, safe from any thread (emusen_platform.h).
-unsafe impl Send for Jobs {}
-
-impl Drop for Jobs {
-    fn drop(&mut self) {
-        for r in self.running.drain(..) {
-            unsafe { ((*r.table).free)(r.job) };
-        }
-    }
-}
-
 /// Prints a job's events until it ends (its status) or the line is cancelled (none: it goes on in the background).
 fn follow(call: &Call, r: &Running) -> Option<i32> {
-    let table = unsafe { &*r.table };
     let (mut buffer, mut status) = (vec![0u8; 4096], 0);
     loop {
         if call.cancelled() {
             return None;
         }
-        let line = match next_event(table, r.job, 100, &mut buffer) {
+        let line = match r.job.next(100, &mut buffer) {
             Next::Ended => return Some(status),
             Next::Absent => continue,
             Next::Failed(words) => {
@@ -251,13 +237,11 @@ fn follow(call: &Call, r: &Running) -> Option<i32> {
 fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
     match follow(call, &jobs.running[at]) {
         Some(status) => {
-            let r = jobs.running.remove(at);
-            unsafe { ((*r.table).free)(r.job) };
+            jobs.running.remove(at);
             status
         }
         None => {
-            let id = jobs.running[at].id;
-            call.out(&format!("cores{id} goes on in the background: cores wait cores{id} follows it, ps lists it, kill cores{id} stops it.\n"));
+            call.out(&detached("cores", jobs.running[at].id));
             0
         }
     }
@@ -269,14 +253,13 @@ fn start(call: &Call, jobs: &mut Jobs) -> Answer {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
-    let Some(table) = call.service(SERVICE, MAJOR).map(|t| t as *const LibraryToolV1) else { return Answer::fail("cores: needs emusen.library, which this program does not provide") };
-    let mut job: *mut c_void = std::ptr::null_mut();
-    if unsafe { ((*table).start)(request.as_ptr(), request.len(), &mut job) } != 0 {
-        return Answer::fail(format!("cores: {}", last_error(unsafe { &*table })));
-    }
+    let job = match ServiceJob::start(call, "cores", &request) {
+        Ok(j) => j,
+        Err(refused) => return refused,
+    };
     jobs.next += 1;
     let op = args[1].clone();
-    jobs.running.push(Running { id: jobs.next, listing: op == "ls", op, job, table, stopping: false });
+    jobs.running.push(Running { id: jobs.next, listing: op == "ls", op, job, stopping: false });
     let at = jobs.running.len() - 1;
     Answer::with(String::new(), follow_or_detach(call, jobs, at))
 }
@@ -314,11 +297,8 @@ impl Module for CoresCommands {
     fn jobs(&self, call: &Call) {
         let jobs = jobs_of(call);
         jobs.running.retain(|r| {
-            let ended = unsafe { ((*r.table).next)(r.job, 0, std::ptr::null_mut(), 0) } == 0;
+            let ended = r.job.ended();
             call.out(&format!("  cores{:<5} {:<11} {}\n", r.id, r.op, if ended { "ended" } else if r.stopping { "stopping" } else { "running" }));
-            if ended {
-                unsafe { ((*r.table).free)(r.job) };
-            }
             !ended
         });
     }
@@ -329,7 +309,7 @@ impl Module for CoresCommands {
             call.err(&format!("kill: no cores job cores{n} found.\n"));
             return Some(1);
         };
-        unsafe { ((*r.table).stop)(r.job) };
+        r.job.stop();
         r.stopping = true;
         call.out(&format!("cores{n} is stopping: nothing it had not finished is kept; cores wait cores{n} shows how far it got.\n"));
         Some(0)

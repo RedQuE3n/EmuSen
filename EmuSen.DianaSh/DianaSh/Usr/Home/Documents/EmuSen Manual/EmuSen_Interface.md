@@ -536,8 +536,9 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 - **EmuSen.** The Pause Card of §2.8 on that form (`EmuSen_BigPicture.md` §48): the first page, Game Options and Leave,
   the slots and reel in the pane, X for a screenshot, the volume row deferring in Game Mode, the Guide chords with their
   setting, and the library menu's Back row with the paused frame. The library menu keeps its centred, blurred look.
-- **Not in U2.** Load's undo snapshot needs the runtime to keep the rewind chain across a load; it is proposed, not
-  built (§48.8 there). Rumble has no row, since nothing reports it. Console rows still come from what the running machine
+- **The runtime.** A state load with rewind on keeps the chain and first takes a snapshot, so Rewind undoes a wrong
+  load (`EmuSen_Backend.md` §35), in the Rust runtime alone.
+- **Not in U2.** Rumble has no row, since nothing reports it. Console rows still come from what the running machine
   reports; a capability table in the core ABI is later.
 - **Recordings.** Eighteen new states, the card's and the library menu's Back row, at 1280 × 800 and 1920 × 1200, and two
   on the handheld (`EmuSen_InterfaceSpec.md` §6.3.18).

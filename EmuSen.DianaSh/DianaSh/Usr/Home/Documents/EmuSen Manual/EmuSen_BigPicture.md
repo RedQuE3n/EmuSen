@@ -11487,9 +11487,9 @@ shows what a row will act on before A is pressed.
 7. **Game Options ▸** (§48.5).
 8. **Leave ▸** (§48.6).
 
-Five rows, the console's, then two: seven on a cartridge console with one pad, nine where a disc console has a second
-pad. Nine exceeds the design's eight; the page still fits without scrolling, and §48.11 asks whether Swap Players should
-move under Game Options there.
+Five rows, the console's, then two: seven on a cartridge console with one pad. The page holds at most eight: where a
+disc row and Swap Players would make nine, Swap Players goes first under Game Options ▸ Controllers instead (decided
+2026-11-01).
 
 **X takes a screenshot** on every page of the in-game menu, with no row of its own. The menu stays open, and the notice
 says where it went, as the heads-up bar's Take a Screenshot does (§4.34 of the settings reference).
@@ -11509,7 +11509,8 @@ of its centred panel (140 design pixels wide).
 
 ### 48.5 Game Options ▸
 
-Cheats; Controllers ▸ (Players & Controllers, Controller Bindings); Display ▸ (Graphics, Shaders, and Crop This Game where
+Cheats; Controllers ▸ (Players & Controllers, Controller Bindings, and Swap Players where the first page has no room
+for it); Display ▸ (Graphics, Shaders, and Crop This Game where
 the console has an overscan, §4.100); Volume; Memory Cards on a disc console (where the machine reports a media drive).
 Five rows at most. **Volume** is the menu's own on the desktop: ◂ 80% ▸ in tenths, the same setting as the heads-up
 bar's slider. In Steam's Game Mode it reads *Quick Access Menu*, and A says that the device's quick access menu sets
@@ -11546,23 +11547,18 @@ https://steamcommunity.com/app/1675200/discussions/0/3186866449234799973/ (Steam
 General Discussions, https://steamcommunity.com/app/1675200/discussions/0/785450979403296075/ (Steam + D-pad Left;
 D-pad Up's default). [4] "Steam Deck Steam Button Shortcuts List", https://holdtoreset.com/steam-deck-steam-button-shortcuts-list
 (D-pad Right, Down and Left; Steam + B). Valve's own help pages were not found to carry the list; the device's own
-list, shown by holding the Steam button, is the authority.
+list, shown by holding the Steam button, is the authority. **The clash list therefore rests on community sources**, and
+a check by hand on the Legion Go S, holding its Legion button in Game Mode, is owed when the tester is present.
 
-### 48.8 Load's undo snapshot: proposed, not built
+### 48.8 Load's undo snapshot, in the runtime
 
 The design asks that Load first drop one snapshot into the rewind buffer, so that a wrong load is undone by Rewind. The
-runtime does not allow it from the frontend: `load_in` in `Platform/crystal/src/saving.rs` clears the rewind chain after
-every load (`run.rewind.clear()`), and the C ABI has no call that captures a snapshot on demand (`Rewind::capture_now`
-exists, used only to seed the chain). Building it is a change to the runtime's surface, proposed rather than made:
-
-- in `load_in`, while rewind is on, take `capture_now` before the load and keep the chain instead of clearing it, so
-  the moment before the load is the newest one Rewind offers; or
-- a call `rewind_mark(session)` in the ABI's next minor version, made by Mistress before a load, together with the same
-  change to keep the chain.
-
-The first changes no signature, only a documented behaviour of `state_load`; the delta encoder already copes with a
-discontinuity, since each delta is a difference of two states rather than a replay. Until one is chosen, Load acts as
-before and the reel starts again after it.
+runtime cleared the rewind chain after every load (`load_in` in `Platform/crystal/src/saving.rs`, `run.rewind.clear()`),
+and the C ABI has no call that captures on demand, so the frontend could not do it. Decided 2026-11-01: the Rust
+runtime does it itself. While rewind is on, a state load first takes a snapshot of the present, with its picture, unless
+the newest moment already is the present, and keeps the chain instead of clearing it; with rewind off it clears as
+before. Every way of loading takes it, the Pause Card's Load, the hotkeys and a shell's `state load` alike, and Mistress
+changed nothing. `EmuSen_Backend.md` §35 specifies it; the C# implementation is unchanged until B10 deletes it.
 
 ### 48.9 The library menu
 
@@ -11576,7 +11572,9 @@ The pause before the menu shows (§4.18), questions with No first, remembered su
 own menu box, which takes the same pages. `PadMenuTests` holds the pages and the rows; the pad menu's fit cases
 (`WindowFitAuditTests`, `Every_page_of_the_pad_menu...`) audit every page at 1280 × 800 and 1920 × 1200, with the pane's
 room checked clear of the panel and the help bar; `PauseCardTests` holds the pane, the screenshot button, the volume row
-in both sessions and the chords; and the card's states are recorded in `EmuSen_InterfaceSpec.md` §6.3.18.
+in both sessions, the chords and Load keeping the reel (on the Rust runtime); `ConsoleStartTests` the ninth row moving
+under Controllers; Crystal's `rewind_load` test the runtime's side; and the card's states are recorded in
+`EmuSen_InterfaceSpec.md` §6.3.18.
 
 **Seeded faults (2026-11-01).** Five faults were put in and taken out again, each caught: the card's detail left out
 of its panel (five `CardFormTests` cases), the card at half the width rather than 40 per cent (the three sizes'
@@ -11586,7 +11584,5 @@ slot test and both `PauseCardSave` recordings).
 
 ### 48.11 Open questions
 
-- Nine rows on a disc console with a second pad: leave Swap Players on the first page, or move it under Game Options ▸
-  Controllers there.
-- Load's undo snapshot (§48.8): which of the two runtime changes, if either.
 - The Guide chords' switch has no row until Settings is rebuilt (`EmuSen_Interface.md` §2.7, U6).
+- The handheld check of Steam's chords by hand (§48.7).

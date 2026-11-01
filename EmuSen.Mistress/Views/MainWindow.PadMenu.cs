@@ -71,8 +71,8 @@ namespace EmuSen.Mistress.Views
             new(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) },
             .. DiscRows(),
             .. DriveRows(),
-            // Shown while player 2 has a pad, connected or kept - see EmuSen_Input.md §8.13.
-            .. (_gamepad.CanSwapPlayers ? new[] { new PadMenuEntry(() => SwapPlayersRow, SwapPlayers) } : Array.Empty<PadMenuEntry>()),
+            // Shown while player 2 has a pad, connected or kept, under Controllers where it would make a ninth row - see EmuSen_Input.md §8.13.
+            .. (SwapOnFirstPage ? new[] { new PadMenuEntry(() => SwapPlayersRow, SwapPlayers) } : Array.Empty<PadMenuEntry>()),
             Submenu(GameOptionsMenu, GameOptionsRows, startsSection: true),
             Submenu(LeaveMenu, LeaveRows),
         ];
@@ -99,11 +99,21 @@ namespace EmuSen.Mistress.Views
             List<PadMenuEntry> rows =
             [
                 Opens("Cheats", ShowActiveCheats),
-                Submenu(ControllersMenu, () => [Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)), Opens("Controller Bindings", ShowControllerBindings)]),
+                Submenu(ControllersMenu, ControllersRows),
                 Submenu(DisplayMenu, DisplayRows),
                 VolumeEntry(),
             ];
             if (DiscDrive is not null || DriveEngine is not null) rows.Add(Opens(MemoryCardsMenu, ShowMemoryCards));
+            return rows;
+        }
+
+        // The first page holds at most eight rows: seven of its own, the console's disc rows, and Swap Players only where they leave it room (EmuSen_BigPicture.md §48.3).
+        private bool SwapOnFirstPage => _gamepad.CanSwapPlayers && 7 + DiscRows().Count() + DriveRows().Count() < 8;
+
+        private List<PadMenuEntry> ControllersRows()
+        {
+            List<PadMenuEntry> rows = [Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)), Opens("Controller Bindings", ShowControllerBindings)];
+            if (_gamepad.CanSwapPlayers && !SwapOnFirstPage) rows.Insert(0, new PadMenuEntry(() => SwapPlayersRow, SwapPlayers));
             return rows;
         }
 

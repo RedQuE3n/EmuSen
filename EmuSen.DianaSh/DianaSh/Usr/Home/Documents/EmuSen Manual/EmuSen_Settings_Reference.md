@@ -5077,13 +5077,15 @@ The desktop's menu box takes the same pages; the library's menu keeps its centre
 | Page | Rows |
 |---|---|
 | first | Resume · Rewind · Save ◂ Slot n ▸ · Load ◂ Slot n ▸ · Speed ◂ 100% ▸ · the console's rows where they apply (Change Disc, Insert Disc, Eject Disc, Swap Players 1 and 2) · Game Options ▸ · Leave ▸ |
-| Game Options | Cheats · Controllers ▸ (Players & Controllers · Controller Bindings) · Display ▸ (Graphics · Shaders · Crop This Game... where §4.100 applies) · Volume ◂ 80% ▸ · Memory Cards (disc consoles) |
+| Game Options | Cheats · Controllers ▸ (Swap Players 1 and 2 where the first page has no room · Players & Controllers · Controller Bindings) · Display ▸ (Graphics · Shaders · Crop This Game... where §4.100 applies) · Volume ◂ 80% ▸ · Memory Cards (disc consoles) |
 | Leave | Back to Library · Restart Game... · Quit Game... · Quit EmuSen... |
 
 X takes a screenshot on every page and keeps the menu open. *Volume* steps the same setting as the heads-up bar's slider
 (§4.34) in tenths; in Steam's Game Mode (§4.43) it reads *Quick Access Menu* and leaves the volume to the device. Swap
 Players moved from Game Settings to the first page; Preferences, Shell and the EmuSen page left the in-game menu and
-stay in the library's. *Save State* and *Load State* are *Save* and *Load*.
+stay in the library's. *Save State* and *Load State* are *Save* and *Load*. The first page holds at most eight rows, so
+where a disc row and Swap Players would make nine, Swap Players goes under Controllers. A load keeps the reel from before
+it, so Rewind undoes a wrong load (`EmuSen_Backend.md` §35).
 
 **`GuideChords`** (`appsettings.json`, `Auto` by default, or `On` or `Off`): with Guide held, Up saves to the current
 slot, Down loads it and R1 takes a screenshot; Guide alone then opens the menu as it is let go, and Select with Start

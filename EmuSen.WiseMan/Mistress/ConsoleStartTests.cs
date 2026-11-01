@@ -98,5 +98,31 @@ namespace EmuSen.WiseMan.Mistress
                 window.Close();
             }
         }, default);
+
+        // With a disc row and a second pad the Pause Card's first page would reach nine rows, so Swap Players goes under Game Options > Controllers, and Memory Cards shows for the disc console - see EmuSen_BigPicture.md §48.3.
+        [Fact]
+        public Task A_ninth_row_sends_swap_players_under_controllers() => Session.Dispatch(() =>
+        {
+            var window = new MainWindow();
+            window.Show();
+            try
+            {
+                var pad = new PadDriver(window);
+                pad.Plug("Xbox Wireless Controller");
+                pad.Tick();
+                Call(window, "StartConsole", "PlayStation");
+                Assert.True(pad.Gamepad.CanSwapPlayers);
+                IReadOnlyList<string> first = Rows(Call(window, "GameMenuRows"));
+                Assert.Equal(8, first.Count);
+                Assert.DoesNotContain(MainWindow.SwapPlayersRow, first);
+                Assert.Equal(MainWindow.SwapPlayersRow, Rows(Call(window, "ControllersRows"))[0]);
+                Assert.Contains(MainWindow.MemoryCardsMenu, Rows(Call(window, "GameOptionsRows")));
+            }
+            finally
+            {
+                typeof(MainWindow).GetMethod("ShowLibrary", Hidden)!.Invoke(window, null);
+                window.Close();
+            }
+        }, default);
     }
 }

@@ -607,3 +607,7 @@ two colour keys Fluent reads as colours were missing from the big screen's palet
 sheet's scroll bar painted Fluent's defaults. The words went back to Barlow Condensed at 24 until the Card form (U2,
 U3), the two keys were restored, and these recordings were then made; all 190 fit checks pass and a second run read
 every recording back unchanged.
+
+The four detail pages (`CoresDetail`, `PackagesDetail`, at both sizes) were recorded again after the page focus of LunaP
+§200 met these tokens in one tree: each holds both changes, the focus on the page's first button and the palette, and
+no other recording differed.

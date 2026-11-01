@@ -127,7 +127,7 @@ M1 and M3 are routine; M2 carries the risk of losing a save and is done with the
 `EmuSen_LibraryTools.md` asks: a library of its own, hosted by a thin host, on LunaP's manager frame
 (`ManagerLayout<T>`, LunaP §203).
 
-### 7.1 The listing: `pkg ls --all` (service 1.5)
+### 7.1 The listing: `pkg ls --all` (service 1.7)
 
 §2's extension of the listing, in the library tool (`Platform/library-tool`) so that the shell and the window draw
 from one answer:
@@ -143,7 +143,7 @@ from one answer:
   and `convertible`. The start event gains `games`, and the end's counts `unpackaged`. A console narrows both lists.
 - **Which discs convert** has one owner: the CHD tool's own test (`discs::item_of`, the predicate `chd convert`'s
   batch uses), exposed as `discs::convertible`; a playlist is never offered, since the tool does not convert one.
-- `emusen_library_tool.h` 1.4 → **1.5**; the module asks for 1.5. The table is unchanged.
+- `emusen_library_tool.h` 1.6 → **1.7** (built as 1.5 and renumbered when the core tool took 1.5 and `rom` 1.6, which landed first); the module asks for 1.7. The table is unchanged.
 
 ### 7.2 The tool library and its host
 

@@ -22,6 +22,11 @@ pub struct Game {
     pub system: &'static emusen_systems::System,
 }
 
+pub(crate) fn every_system() -> emusen_library::scan::Systems {
+    let ids: Vec<String> = emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default();
+    emusen_library::scan::Systems::named(&ids)
+}
+
 /// The system a manifest names, by its ES-DE name, else by its id.
 pub fn system_named(name: &str) -> Option<&'static emusen_systems::System> {
     let table = emusen_systems::table().ok()?;
@@ -29,7 +34,7 @@ pub fn system_named(name: &str) -> Option<&'static emusen_systems::System> {
 }
 
 /// Where the scan's routing names no system, the nearest folder above the game named as a system's ES-DE folder.
-fn by_folder(rel: &str) -> Option<&'static emusen_systems::System> {
+pub(crate) fn by_folder(rel: &str) -> Option<&'static emusen_systems::System> {
     let folders: Vec<&str> = rel.split('/').collect();
     let table = emusen_systems::table().ok()?;
     folders[..folders.len().saturating_sub(1)].iter().rev().find_map(|f| table.iter().find(|s| s.esde_system.eq_ignore_ascii_case(f)))
@@ -61,7 +66,7 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
     }
     files.sort();
     files.dedup();
-    let systems = crate::discs::every_system();
+    let systems = every_system();
     let extensions = systems.extensions();
     let mut found = Vec::new();
     for at in image_sets::shelved(files) {

@@ -153,6 +153,34 @@ fn a_redirect_from_https_to_http_is_not_followed() {
 }
 
 #[test]
+fn a_same_host_request_follows_its_own_host_and_refuses_another() {
+    let c = certs();
+    // The other host on the same port, so that only the host tells it apart.
+    let port = Arc::new(std::sync::atomic::AtomicU16::new(0));
+    let seen = port.clone();
+    let server = Server::start(&c.leaf, Arc::new(move |path, w| {
+        let text = match path {
+            "/start" => "HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 0\r\n\r\n".to_string(),
+            "/away" => format!("HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:{}/x\r\nContent-Length: 0\r\n\r\n", seen.load(Ordering::Relaxed)),
+            _ => "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi".to_string(),
+        };
+        let _ = w.write_all(text.as_bytes());
+    }));
+    port.store(server.port, Ordering::Relaxed);
+    let request = |path: &str| {
+        let mut r = Request::new(format!("https://localhost:{}{path}", server.port), Duration::from_secs(10));
+        r.test_roots = vec![c.root.clone()];
+        r.same_host = true;
+        r
+    };
+    assert_eq!(fetch(&request("/start"), &Progress::default()).unwrap(), b"hi");
+    let failure = fetch(&request("/away"), &Progress::default()).unwrap_err();
+    assert_eq!(failure.kind, Kind::Other);
+    assert!(failure.message.contains("127.0.0.1") && failure.message.contains("refused"), "{}", failure.message);
+    assert_eq!(server.heads.lock().unwrap().len(), 3);
+}
+
+#[test]
 fn a_status_names_the_reason_the_server_sent() {
     let c = certs();
     for (line, words) in [

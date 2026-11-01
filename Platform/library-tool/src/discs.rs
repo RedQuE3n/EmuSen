@@ -67,16 +67,10 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
     }
     files.sort();
     files.dedup();
-    let systems = every_system();
+    let systems = crate::packages::every_system();
     let mut found: Vec<Item> = image_sets::shelved(files).into_iter().filter_map(|at| item_of(library, at, &systems)).collect();
     found.sort_by(|a, b| compare_ignore_case(&a.rel, &b.rel).then_with(|| a.rel.cmp(&b.rel)));
     (found, refused)
-}
-
-/// Every system of this build, as the library's scan routes to them.
-pub(crate) fn every_system() -> emusen_library::scan::Systems {
-    let ids: Vec<String> = emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default();
-    emusen_library::scan::Systems::named(&ids)
 }
 
 /// A library file as the disc the tool converts, or none: a sheet, track, ISO, zip or playlist of a CD system.

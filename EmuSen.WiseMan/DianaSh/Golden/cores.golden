@@ -1,0 +1,64 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command cores
+shell rust
+usage 1   cores ls [--installed|--available|--updates|--unsupported] [<console>]
+usage 2                                 one line per libretro core: state, console, id, source, version, size, licence
+usage 3   cores info <core>             what is known of one core, as key: value lines
+usage 4   cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)
+usage 5   cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)
+
+case the usage, and what a command line refuses
+target none
+covers 1-5
+$ cores
+out 211
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores get pcsx2
+out 211
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores ls --installed --updates
+out 277
+cores ls: --updates is not an option of cores ls, or a second one
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores ls ps2 psx
+out 241
+cores ls: one console at most
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores info
+out 237
+cores info: name one core
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores fetch now
+out 211
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores wait
+out 29
+cores wait: no such cores job
+status 1
+action none
+$ cores wait cores9
+out 36
+cores wait: no such cores job cores9
+status 1
+action none
+end

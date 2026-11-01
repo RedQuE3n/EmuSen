@@ -2,7 +2,7 @@ NAME
     uniq - collapse adjacent duplicate lines
 
 SYNOPSIS
-    uniq [-c]
+    uniq [-c] [-D] [-w <chars>]
 
 DESCRIPTION
     Collapses ADJACENT duplicate lines only, matching real uniq's own
@@ -10,5 +10,14 @@ DESCRIPTION
     that's what's actually wanted ('regs | sort | uniq'). -c prefixes each
     remaining line with its consecutive repeat count.
 
+    -D prints every line of each run of two or more adjacent duplicates,
+    and nothing of a line that has none: the duplicates themselves, not
+    one of each. -c and -D together are refused, as GNU uniq refuses them.
+
+    -w <chars> (also -w<chars>) compares only the first <chars>
+    characters of each line, so lines that differ after them count as
+    duplicates; the first line of a run is the one kept.
+
 EXAMPLES
     watch log 1 | sort | uniq -c
+    rom hash -r --comparable / | sort | uniq -D -w 40

@@ -40,8 +40,12 @@ emusen-net = { path = "../net" }
 emusen-library = { path = "../library" }
 # The library tool and its command module, emusen.library, handed the tool as a service (EmuSen_GamePackages.md §12.3).
 emusen-library-tool = { path = "../library-tool" }
+# Cores' tool, whose core- requests the library tool's service routes to it since 1.5 (EmuSen_Cores.md §6).
+emusen-core-tool = { path = "../core-tool" }
 emusen-patch = { path = "../patch" }
 emusen-library-module = { path = "../emusen-library-module" }
+# emusen.cores, the cores command over the same service (EmuSen_Cores.md §8).
+emusen-cores-module = { path = "../emusen-cores-module" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).
 emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
@@ -51,3 +55,7 @@ emusen-crystal = { path = "../crystal" }
 emusen-session-service = { path = "../session-service" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }
+
+# An installed core's NOTICE, written by the cores test (tests/library_tool.rs).
+[dev-dependencies]
+emusen-core-entry = { path = "../core-entry" }

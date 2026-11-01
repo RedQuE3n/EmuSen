@@ -9,9 +9,8 @@ use crate::{packages, Context};
 use emusen_galaxia::claims;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{self, Value};
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use emusen_tool_job::Events as Queue;
+pub use emusen_tool_job::Job;
 use std::time::{Duration, Instant};
 
 /// What a request asks.
@@ -31,11 +30,19 @@ pub enum Op {
     /// `pkg identity` and `pkg zip` (EmuSen_GamePackages.md §19), since 1.3.
     PkgIdentity,
     PkgZip,
+    /// `rom hash`, `rom check` and `rom dups` (EmuSen_LibraryTools.md §4, §7), since 1.6.
+    RomHash,
+    RomCheck,
+    RomDups,
 }
 
 impl Op {
     fn packages(&self) -> bool {
         matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate | Op::PkgPatchAdd | Op::PkgPatchRm | Op::PkgIdentity | Op::PkgZip)
+    }
+
+    pub fn rom(&self) -> bool {
+        matches!(self, Op::RomHash | Op::RomCheck | Op::RomDups)
     }
 }
 
@@ -57,7 +64,10 @@ pub struct Request {
     /// to write each CHD beside its original in the library (EmuSen_GamePackages.md §20).
     pub output: Option<String>,
     pub beside: bool,
-    /// Since 1.5: `pkg ls`'s answer also lists the library's games no package claims (EmuSen_Packages.md §2).
+    /// Since 1.6: `rom hash -r` and `rom check -r`, folders taken whole; `rom hash --comparable`.
+    pub recursive: bool,
+    pub comparable: bool,
+    /// Since 1.7: `pkg ls`'s answer also lists the library's games no package claims (EmuSen_Packages.md §7.1).
     pub unpackaged: bool,
 }
 
@@ -66,8 +76,10 @@ pub struct Request {
 /// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`,
 /// or since 1.3 `pkg-make`'s `"self_contained": true` and `"zip": true`, a package's zip among `pkg-check`'s paths, and
 /// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}` and `{"op": "pkg-zip", "paths": [<package>...]}`,
-/// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert, or since 1.5
-/// `pkg-ls`'s `"unpackaged": true`.
+/// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert, or since 1.6
+/// `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}` and
+/// `{"op": "rom-dups", "console": null}` (EmuSen_LibraryTools.md §7), or since 1.7 `pkg-ls`'s
+/// `"unpackaged": true`.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -82,7 +94,10 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some("pkg-patch-rm") => Op::PkgPatchRm,
         Some("pkg-identity") => Op::PkgIdentity,
         Some("pkg-zip") => Op::PkgZip,
-        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add, pkg-patch-rm, pkg-identity or pkg-zip".into()),
+        Some("rom-hash") => Op::RomHash,
+        Some("rom-check") => Op::RomCheck,
+        Some("rom-dups") => Op::RomDups,
+        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add, pkg-patch-rm, pkg-identity, pkg-zip, rom-hash, rom-check or rom-dups".into()),
     };
     let paths = match doc.get("paths") {
         None | Some(Value::Null) => Vec::new(),
@@ -123,85 +138,34 @@ pub fn request(text: &str) -> Result<Request, String> {
     if beside && output.is_some() {
         return Err("a CHD goes to the output folder or beside its original, not both".into());
     }
+    let (recursive, comparable) = (flag("recursive"), flag("comparable"));
+    if (recursive && !matches!(op, Op::RomHash | Op::RomCheck)) || (comparable && op != Op::RomHash) {
+        return Err("recursive is rom-hash's and rom-check's, comparable rom-hash's alone".into());
+    }
+    if matches!(op, Op::RomHash | Op::RomCheck) && paths.is_empty() {
+        return Err("rom-hash and rom-check name the library's files or folders in \"paths\"".into());
+    }
+    if op == Op::RomDups && !paths.is_empty() {
+        return Err("rom-dups takes the whole library, or one console in \"console\"; it names no paths".into());
+    }
     let unpackaged = flag("unpackaged");
     if unpackaged && op != Op::PkgList {
         return Err("unpackaged is pkg-ls's choice alone".into());
     }
-    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside, unpackaged })
-}
-
-struct Queue {
-    events: Mutex<(VecDeque<String>, bool)>,
-    arrived: Condvar,
-}
-
-/// A running or finished request.
-pub struct Job {
-    queue: Arc<Queue>,
-    stop: Arc<AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-
-impl Job {
-    /// The next event, waiting up to `wait` for one; `None` when none came, and none ever after the last.
-    pub fn peek(&self, wait: Duration) -> Option<String> {
-        let mut guard = self.queue.events.lock().unwrap_or_else(|p| p.into_inner());
-        if guard.0.is_empty() && !guard.1 {
-            guard = self.queue.arrived.wait_timeout(guard, wait).unwrap_or_else(|p| p.into_inner()).0;
-        }
-        guard.0.front().cloned()
-    }
-
-    /// Takes the event `peek` gave.
-    pub fn take(&self) {
-        self.queue.events.lock().unwrap_or_else(|p| p.into_inner()).0.pop_front();
-    }
-
-    /// Whether the job has ended and every event was taken.
-    pub fn finished(&self) -> bool {
-        let guard = self.queue.events.lock().unwrap_or_else(|p| p.into_inner());
-        guard.1 && guard.0.is_empty()
-    }
-
-    /// Asks the job to stop: a running chdman is ended, its partial file removed, and the job ends with what it did.
-    pub fn stop(&self) {
-        self.stop.store(true, Ordering::Relaxed);
-    }
-}
-
-impl Drop for Job {
-    fn drop(&mut self) {
-        self.stop();
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
-        }
-    }
+    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside, recursive, comparable, unpackaged })
 }
 
 fn emit(queue: &Queue, event: Value) {
     let mut line = String::new();
     json::write_compact(&mut line, &event);
-    let mut guard = queue.events.lock().unwrap_or_else(|p| p.into_inner());
-    guard.0.push_back(line);
-    queue.arrived.notify_all();
+    queue.emit(line);
 }
 
-/// Starts a request; a request that is not one is refused before anything runs.
+/// Starts a request; a request that is not one is refused before anything runs. A stop ends a running chdman, removes
+/// its partial file, and the job ends with what it did.
 pub fn start(text: &str, ctx: Context) -> Result<Job, String> {
     let req = request(text)?;
-    let queue = Arc::new(Queue { events: Mutex::new((VecDeque::new(), false)), arrived: Condvar::new() });
-    let stop = Arc::new(AtomicBool::new(false));
-    let (q, s) = (queue.clone(), stop.clone());
-    let thread = std::thread::Builder::new()
-        .name("emusen-library-tool".into())
-        .spawn(move || {
-            run(&ctx, &req, &q, &|| s.load(Ordering::Relaxed));
-            let mut guard = q.events.lock().unwrap_or_else(|p| p.into_inner());
-            guard.1 = true;
-            q.arrived.notify_all();
-        })
-        .map_err(|e| e.to_string())?;
-    Ok(Job { queue, stop, thread: Some(thread) })
+    Job::spawn("emusen-library-tool", move |q, stop| run(&ctx, &req, q, stop))
 }
 
 fn op_word(op: &Op) -> &'static str {
@@ -217,6 +181,9 @@ fn op_word(op: &Op) -> &'static str {
         Op::PkgPatchRm => "pkg-patch-rm",
         Op::PkgIdentity => "pkg-identity",
         Op::PkgZip => "pkg-zip",
+        Op::RomHash => "rom-hash",
+        Op::RomCheck => "rom-check",
+        Op::RomDups => "rom-dups",
     }
 }
 
@@ -242,10 +209,15 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     let library = match ctx.checked_library() {
         Ok(l) => l,
         Err(words) if req.op.packages() => return end(queue, &req.op, &counts, started, Some(words.replace("there is no library to convert.", "there is no library for a package to link to."))),
+        Err(words) if req.op.rom() => return end(queue, &req.op, &counts, started, Some(words.replace("there is no library to convert.", "there is no library to read."))),
         Err(words) => return end(queue, &req.op, &counts, started, Some(words)),
     };
     if req.op.packages() {
         return run_packages(ctx, &library, req, queue, stop, started);
+    }
+    if req.op.rom() {
+        let error = crate::rom::run(ctx, &library, req, &|e| emit(queue, e), &mut |state| count(&mut counts, state), stop).err();
+        return end(queue, &req.op, &counts, started, error);
     }
     let chdman = match req.op {
         Op::List => None,
@@ -346,7 +318,7 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             (Vec::new(), f, r)
         }
     };
-    let systems = if req.op == Op::PkgList { crate::discs::every_system() } else { emusen_library::scan::Systems::named(&[]) };
+    let systems = if req.op == Op::PkgList { packages::every_system() } else { emusen_library::scan::Systems::named(&[]) };
     let unclaimed = if req.unpackaged { packages::unpackaged(ctx, library, req.console.as_deref(), &systems) } else { Vec::new() };
     let total = games.len() + folders.len();
     let log_at = path::combine(Style::HOST, &ctx.logs(), &format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10]));

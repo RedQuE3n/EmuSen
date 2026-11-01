@@ -537,3 +537,30 @@ fn a_core_that_cannot_start_the_game_is_refused_in_its_own_words() {
     drop(m);
     make("", 0b011).advance().unwrap();
 }
+
+#[test]
+fn a_picture_shown_a_frame_late_is_stale_once_after_a_load_and_exact_without_the_lag() {
+    let _t = turn();
+    for (lag, exact) in [("off", true), ("on", false)] {
+        let mut m = make(&format!("tc_lag={lag}"), 0b011);
+        for _ in 0..10 {
+            m.advance().unwrap();
+        }
+        let mut saved = vec![0u8; m.state_size(kind::FULL).unwrap()];
+        let len = m.state_save(kind::FULL, &mut saved).unwrap();
+        let after = |m: &mut Machine| -> Vec<Vec<u8>> {
+            (0..2).map(|_| {
+                m.advance().unwrap();
+                frame(m)
+            }).collect()
+        };
+        let first = after(&mut m);
+        for _ in 0..20 {
+            m.advance().unwrap();
+        }
+        m.state_load(&saved[..len]).unwrap();
+        let again = after(&mut m);
+        assert_eq!(again[1], first[1], "tc_lag={lag}: the second picture after the load is the saved timeline's");
+        assert_eq!(again[0] == first[0], exact, "tc_lag={lag}: the first picture after the load");
+    }
+}

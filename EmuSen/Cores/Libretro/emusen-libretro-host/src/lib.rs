@@ -3,6 +3,7 @@
 
 pub mod audio;
 pub mod console_picture;
+pub mod exact;
 pub mod failure;
 pub mod files;
 pub mod front;

@@ -34,6 +34,12 @@ pub fn convert_row(retro: i32, handed: u32, src: &[u8], dst: &mut [u8], width: u
                 d.copy_from_slice(&[s[0], s[1], s[2], 0xFF]);
             }
         }
+        (sys::PIXEL_FORMAT_XRGB8888, RGB565) => {
+            for (d, s) in dst[..width * 2].chunks_exact_mut(2).zip(src[..width * 4].chunks_exact(4)) {
+                let v = (u16::from(s[2] >> 3) << 11) | (u16::from(s[1] >> 2) << 5) | u16::from(s[0] >> 3);
+                d.copy_from_slice(&v.to_le_bytes());
+            }
+        }
         (sys::PIXEL_FORMAT_XRGB8888, _) => {
             for (d, s) in dst[..width * 4].chunks_exact_mut(4).zip(src[..width * 4].chunks_exact(4)) {
                 d.copy_from_slice(&[s[2], s[1], s[0], 0xFF]);
@@ -191,6 +197,8 @@ mod tests {
         let mut d2 = [0u8; 2];
         convert_row(sys::PIXEL_FORMAT_0RGB1555, RGB565, &0x7FFFu16.to_le_bytes(), &mut d2, 1);
         assert_eq!(u16::from_le_bytes(d2), 0xFFFF);
+        convert_row(sys::PIXEL_FORMAT_XRGB8888, RGB565, &[0xFF, 0x00, 0xFF, 0x5A], &mut d2, 1);
+        assert_eq!(u16::from_le_bytes(d2), 0xF81F, "a read-back frame into a picture of 16 bits");
     }
 
     #[test]

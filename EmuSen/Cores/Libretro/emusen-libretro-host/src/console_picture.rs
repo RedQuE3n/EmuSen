@@ -24,7 +24,8 @@ pub fn exceptions(stem: &str) -> Vec<Exception> {
     parse(DATA, stem)
 }
 
-fn parse(text: &str, stem: &str) -> Vec<Exception> {
+/// The rows of a five-column exceptions file for one core: stem, key, value, reason, date decided.
+pub(crate) fn parse(text: &str, stem: &str) -> Vec<Exception> {
     text.lines()
         .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
         .filter_map(|l| match l.split('\t').collect::<Vec<_>>().as_slice() {

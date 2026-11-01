@@ -134,6 +134,8 @@ pub fn ready() -> Result<&'static Library, String> {
     })?;
     let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
     front::set_library_folders(c(&system_folder(lib)), c(&folders.save));
+    let exact = crate::exact::defaults(&lib.stem).into_iter().map(|e| (e.key, e.value)).collect();
+    front::with_declared(|d| d.options.exact = exact);
     unsafe {
         (lib.api.set_environment)(Some(front::environment));
         (lib.api.set_video_refresh)(Some(front::video_refresh));

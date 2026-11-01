@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 23] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 24] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -30,6 +30,7 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 23] = [
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
     ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
     ("tc_scale", "Internal scale", "picture", &["1", "2"], "The picture drawn at a multiple of its native size, as a console core's upscaling is."),
+    ("tc_lag", "Picture a frame late", "picture", &["off", "on"], "Each frame shows the previous frame's picture, held outside the state, as a core rendering on a thread of its own does."),
     ("tc_deinterlace", "Deinterlacing", "picture", &["off", "blend"], "Each odd row a copy of the row above, as a console core's deinterlacing blends two fields."),
     ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
 ];
@@ -77,6 +78,7 @@ pub struct Options {
     pub hw: String,
     pub scale: u32,
     pub blend: bool,
+    pub lag: bool,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -214,6 +216,7 @@ impl Options {
             hw: get("tc_hw"),
             scale: get("tc_scale").parse().unwrap_or(1),
             blend: get("tc_deinterlace") == "blend",
+            lag: on("tc_lag"),
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);

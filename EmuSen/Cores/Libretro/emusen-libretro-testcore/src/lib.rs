@@ -72,6 +72,9 @@ struct Core {
     options: Options,
     format: c_int,
     picture: Vec<u8>,
+    /// The frame the picture shows, and the last one drawn, which `tc_lag` shows next; neither is in the state.
+    drawing: u64,
+    shown: u64,
     width: u32,
     height: u32,
     fps_num: u64,
@@ -106,6 +109,8 @@ impl Core {
             format: options.pixel_format(),
             options,
             picture: vec![0u8; MAX_WIDTH as usize * MAX_HEIGHT as usize * 4],
+            drawing: 0,
+            shown: 0,
             width: BASE_WIDTH,
             height: BASE_HEIGHT,
             fps_num: 60,
@@ -146,7 +151,7 @@ impl Core {
     /// The colour of a pixel, from the frame, the place, the lives and the pad.
     fn colour(&self, x: u32, y: u32) -> (u8, u8, u8) {
         let pad = u16::from_le_bytes([self.ram[PAD], self.ram[PAD + 1]]);
-        let r = (x as u64 + self.frame) as u8;
+        let r = (x as u64 + self.drawing) as u8;
         let g = (y * 2 + self.ram[LIVES] as u32 * 40) as u8;
         let b = (pad as u8) ^ (x >> 3) as u8;
         (r, g, b)
@@ -643,6 +648,7 @@ pub extern "C" fn retro_run() {
             }
         }
         let core = guard.as_mut().unwrap();
+        core.drawing = if core.options.lag { std::mem::replace(&mut core.shown, core.frame) } else { core.frame };
         let (data, pitch) = match target {
             Some((data, pitch)) => {
                 let out = unsafe { std::slice::from_raw_parts_mut(data, pitch * height as usize) };

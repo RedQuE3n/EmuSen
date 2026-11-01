@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Native;
 using System;
 using System.IO;
 using System.Linq;

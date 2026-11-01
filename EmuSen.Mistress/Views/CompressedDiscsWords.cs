@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using EmuSen.Tools.Packages;
+using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Mistress.Views
 {

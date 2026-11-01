@@ -10,37 +10,37 @@ floor 16
 frame 233.65,24,812.7,668
 title "Compressed Discs"
 case CompressedDiscs
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=none seen=234,124,812.35,548
+  0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#D4D4D4FF role=none seen=234,124,812.35,548
     1 DockPanel at=274,152,733,504 by=panel limit=234,124,812.35,548 role=none
       2 StackPanel at=274,580,733,76 by=panel limit=234,124,812.35,548 role=none
-        3 HintText at=274,580,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="5 discs in the library." layout=141.78,24 limit=234,124,812.35,548 name=CompressedDiscsStatus paints=#86868AFF role=text size=20 text="5 discs in the library."
-        4 ButtonBar at=917,612,90,44 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=toolbar
-          5 Button at=917,612,90,44 by=clip drawn focus heard=CLOSE limit=917,612,90,44 name=CompressedDiscsClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
-            6 TextBlock at=934,618,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=917,612,90,44 owner=5 paints=#EEEEF0FF role=text size=26 text=CLOSE
-      7 ScrollViewer at=274,152,733,418 by=panel fades=b limit=234,124,812.35,548 overflow=892 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=274,152,733,418
-        8 StackPanel at=274,152,729,1310 by=scroll in=7 limit=274,152,733,418 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#D2D2D6FF role=none seen=274,152,729,418
-          9 HintText name=CompressedDiscsAbout paints=#86868AFF role=text volatile="its words name the run's own folders"
-          10 FieldRow at=274,240,729,153 by=scroll heard="Convert or check" in=7 limit=274,152,733,418 paints=#9C9CA0FF role=group
-            11 TextBlock at=274,240,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Convert or check" in=7 layout=138.12,28.8 limit=274,240,729,153 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Convert or check"
-            12 HintText at=274,273,729,72 box=729,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left." in=7 layout=726.78,72 limit=274,240,729,153 paints=#86868AFF part role=text size=20 text="The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left."
+        3 HintText at=274,580,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="5 discs in the library." layout=134.66,24 limit=234,124,812.35,548 name=CompressedDiscsStatus paints=#8D8D91FF role=text size=20 text="5 discs in the library."
+        4 ButtonBar at=920,612,87,44 by=panel limit=234,124,812.35,548 paints=#D4D4D4FF role=toolbar
+          5 Button at=920,612,87,44 by=clip drawn focus heard=CLOSE limit=920,612,87,44 name=CompressedDiscsClose op paints=#707070FF,#D4D4D4FF role=button text=Close
+            6 TextBlock at=937,618,53,32 box=53,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=52.75,31.2 limit=920,612,87,44 owner=5 paints=#EEEEF0FF role=text size=26 text=CLOSE
+      7 ScrollViewer at=274,152,733,418 by=panel fades=b limit=234,124,812.35,548 overflow=892 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=274,152,733,418
+        8 StackPanel at=274,152,729,1310 by=scroll in=7 limit=274,152,733,418 paints=#0E0E10FF,#707070FF,#8D8D91FF,#D4D4D4FF role=none seen=274,152,729,418
+          9 HintText name=CompressedDiscsAbout paints=#8D8D91FF role=text volatile="its words name the run's own folders"
+          10 FieldRow at=274,240,729,153 by=scroll heard="Convert or check" in=7 limit=274,152,733,418 paints=#D4D4D4FF role=group
+            11 TextBlock at=274,240,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Convert or check" in=7 layout=131.26,28.8 limit=274,240,729,153 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Convert or check"
+            12 HintText at=274,273,729,72 box=729,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left." in=7 layout=724.46,72 limit=274,240,729,153 paints=#8D8D91FF part role=text size=20 text="The discs chosen below, or with none chosen every disc shown. A CHD is kept only when three checks pass: chdman's own, every track read back against the original, and the table of contents. Closing this window stops a batch; converting again does only what is left."
             13 WrapPanel at=274,349,729,44 by=clip heard="Convert or check" in=7 limit=274,240,729,153 role=none
-              14 Button at=274,349,222,44 by=clip drawn focus heard="CONVERT EVERY DISC" in=7 limit=274,240,729,153 name=CompressedDiscsConvert op paints=#55555AFF,#9C9CA0FF role=button text="Convert Every Disc"
-                15 TextBlock at=291,355,188,32 box=188,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CONVERT EVERY DISC" in=7 layout=187.8,31.2 limit=274,349,222,44 owner=14 paints=#9C9CA0FF role=text size=26 text="CONVERT EVERY DISC"
-              16 Button at=504,349,202,44 by=clip drawn focus heard="CHECK CONVERTED" in=7 limit=274,240,729,153 name=CompressedDiscsCheck op paints=#55555AFF,#9C9CA0FF role=button text="Check Converted"
-                17 TextBlock at=521,355,168,32 box=168,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK CONVERTED" in=7 layout=167.99,31.2 limit=504,349,202,44 owner=16 paints=#9C9CA0FF role=text size=26 text="CHECK CONVERTED"
-              18 Button at=714,349,78,44 by=clip drawn heard=STOP in=7 limit=274,240,729,153 name=CompressedDiscsStop off paints=#55555AFF,#9C9CA0FF role=button text=Stop
-                19 TextBlock at=731,355,44,32 box=44,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP in=7 layout=43.99,31.2 limit=714,349,78,44 off owner=18 paints=#55555AFF role=text size=26 text=STOP
-              20 Button at=800,349,105,44 by=clip drawn heard=RESUME in=7 limit=274,240,729,153 name=CompressedDiscsResume off paints=#55555AFF,#9C9CA0FF role=button text=Resume
-                21 TextBlock at=817,355,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESUME in=7 layout=70.56,31.2 limit=800,349,105,44 off owner=20 paints=#55555AFF role=text size=26 text=RESUME
-          22 FieldRow at=274,409,729,62 by=scroll heard=Progress in=7 limit=274,152,733,418 paints=#9C9CA0FF role=group
-            23 TextBlock at=274,409,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Progress in=7 layout=71.38,28.8 limit=274,409,729,62 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Progress
+              14 Button at=274,349,210,44 by=clip drawn focus heard="CONVERT EVERY DISC" in=7 limit=274,240,729,153 name=CompressedDiscsConvert op paints=#707070FF,#D4D4D4FF role=button text="Convert Every Disc"
+                15 TextBlock at=291,355,176,32 box=176,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CONVERT EVERY DISC" in=7 layout=175.53,31.2 limit=274,349,210,44 owner=14 paints=#D4D4D4FF role=text size=26 text="CONVERT EVERY DISC"
+              16 Button at=492,349,192,44 by=clip drawn focus heard="CHECK CONVERTED" in=7 limit=274,240,729,153 name=CompressedDiscsCheck op paints=#707070FF,#D4D4D4FF role=button text="Check Converted"
+                17 TextBlock at=509,355,158,32 box=158,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK CONVERTED" in=7 layout=157.17,31.2 limit=492,349,192,44 owner=16 paints=#D4D4D4FF role=text size=26 text="CHECK CONVERTED"
+              18 Button at=692,349,77,44 by=clip drawn heard=STOP in=7 limit=274,240,729,153 name=CompressedDiscsStop off paints=#707070FF,#D4D4D4FF role=button text=Stop
+                19 TextBlock at=709,355,43,32 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP in=7 layout=42.17,31.2 limit=692,349,77,44 off owner=18 paints=#707070FF role=text size=26 text=STOP
+              20 Button at=777,349,101,44 by=clip drawn heard=RESUME in=7 limit=274,240,729,153 name=CompressedDiscsResume off paints=#707070FF,#D4D4D4FF role=button text=Resume
+                21 TextBlock at=794,355,67,32 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESUME in=7 layout=66.64,31.2 limit=777,349,101,44 off owner=20 paints=#707070FF role=text size=26 text=RESUME
+          22 FieldRow at=274,409,729,62 by=scroll heard=Progress in=7 limit=274,152,733,418 paints=#D4D4D4FF role=group
+            23 TextBlock at=274,409,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Progress in=7 layout=68.93,28.8 limit=274,409,729,62 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Progress
             24 StackPanel at=274,442,729,29 by=clip heard=Progress in=7 limit=274,409,729,62 role=none
-              25 TextBlock at=274,442,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="No batch has run since this window opened." in=7 layout=358.42,28.8 limit=274,409,729,62 name=CompressedDiscsProgressText paints=#9C9CA0FF role=text size=24 text="No batch has run since this window opened."
-          26 FieldRow at=274,487,729,129 by=scroll heard="CHDs go" in=7 limit=274,152,733,418 paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=group seen=274,487,729,83
-            27 TextBlock at=274,487,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CHDs go" in=7 layout=66.34,28.8 limit=274,487,729,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="CHDs go"
-            28 HintText at=274,520,729,48 box=729,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once." in=7 layout=709.18,48 limit=274,487,729,129 paints=#86868AFF part role=text size=20 text="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once."
+              25 TextBlock at=274,442,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="No batch has run since this window opened." in=7 layout=343.3,28.8 limit=274,409,729,62 name=CompressedDiscsProgressText paints=#D4D4D4FF role=text size=24 text="No batch has run since this window opened."
+          26 FieldRow at=274,487,729,129 by=scroll heard="CHDs go" in=7 limit=274,152,733,418 paints=#0E0E10FF,#707070FF,#D4D4D4FF role=group seen=274,487,729,83
+            27 TextBlock at=274,487,729,29 box=729,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CHDs go" in=7 layout=63.43,28.8 limit=274,487,729,129 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="CHDs go"
+            28 HintText at=274,520,729,48 box=729,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once." in=7 layout=719.88,48 limit=274,487,729,129 paints=#8D8D91FF part role=text size=20 text="Into the output folder, at each disc's path in the library; or, for this batch only, beside each original in the library, where the library then shows the game once."
 focus 5
 edge 5 up 16
 edge 5 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/4/0/2/0/0/1

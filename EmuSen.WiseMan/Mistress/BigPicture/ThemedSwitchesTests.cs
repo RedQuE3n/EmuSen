@@ -357,11 +357,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var s = new ThemedSession(status: Device);
             float Gain() => (float)typeof(MainWindow).GetProperty("UiSoundGain", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window)!;
-            Assert.Equal(0.7f, Gain(), 3);
+            Assert.Equal(0.6f, Gain(), 3);
             ThemedLibraryFlowTests.Choose(s, "Preferences");
             Window prefs = Sheets(s).Current!;
             Slider slider = Named<Slider>(prefs, "NavigationVolumeSlider");
-            Assert.Equal(70, slider.Value);
+            Assert.Equal(60, slider.Value);
             slider.Value = 35;
             Assert.Equal(35, s.Settings.BigPictureInterface.NavigationVolume);
             Assert.Equal(35, AppSettings.Load().BigPictureInterface.NavigationVolume);

@@ -10,57 +10,57 @@ floor 16
 frame 233.65,145,812.7,484
 title "Library Manager"
 case LibraryRunning
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,245,813,364 by=panel limit=234,245,812.35,364 paints=#9C9CA0FF role=none seen=234,245,812.35,364
+  0 ContentControl at=234,245,813,364 by=panel limit=234,245,812.35,364 paints=#D4D4D4FF role=none seen=234,245,812.35,364
     1 LibraryPane at=258,257,765,352 by=panel heard="Library Manager" limit=234,245,812.35,364 role=pane
       2 Grid at=258,257,765,352 by=panel limit=234,245,812.35,364 role=none
         3 DockPanel at=274,269,733,46 by=panel limit=234,245,812.35,364 role=none
           4 Border at=827,269,180,46 by=panel limit=234,245,812.35,364 name=AdaptiveSearch role=none
-            5 TextBox at=827,269,180,46 by=panel drawn focus heard=Search limit=234,245,812.35,364 op paints=#050507FF,#0E0E10FF,#55555AFF,#EEEEF0FF role=edit
+            5 TextBox at=827,269,180,46 by=panel drawn focus heard=Search limit=234,245,812.35,364 op paints=#0E0E10FF,#26262BFF,#4C9AE8FF,#707070FF,#EEEEF0FF role=edit
               6 ScrollViewer allow="a text box scrolls its own text" at=838,276,158,32 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
-                7 TextBlock allow="a text box scrolls its own text" at=838,276,158,32 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search files" in=6 layout=103.74,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text="Search files"
+                7 TextBlock allow="a text box scrolls its own text" at=838,276,158,32 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search files" in=6 layout=99.84,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search files"
           8 Border at=274,269,553,46 by=panel limit=234,245,812.35,364 name=AdaptiveNavigation role=none
             9 WholeRow at=274,269,553,46 by=panel limit=234,245,812.35,364 paints=#FFFFFFFF role=none
-              10 ToggleButton at=274,270,66,44 by=panel drawn focus heard=All limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text=All
-                11 TextBlock at=291,276,32,32 box=32,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=31.25,31.2 limit=274,270,66,44 owner=10 paints=#EEEEF0FF role=text size=26 text=ALL
-              12 ToggleButton at=348,270,135,44 by=panel drawn focus heard="Same Dump" limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text="Same Dump"
-                13 TextBlock at=365,276,101,32 box=101,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME DUMP" layout=100.88,31.2 limit=348,270,135,44 owner=12 paints=#FFFFFFFF role=text size=26 text="SAME DUMP"
-              14 ToggleButton at=491,270,133,44 by=panel drawn focus heard="Same Game" limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text="Same Game"
-                15 TextBlock at=508,276,99,32 box=99,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME GAME" layout=98.36,31.2 limit=491,270,133,44 owner=14 paints=#FFFFFFFF role=text size=26 text="SAME GAME"
+              10 ToggleButton at=274,270,65,44 by=panel drawn focus heard=All limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text=All
+                11 TextBlock at=291,276,31,32 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=30.97,31.2 limit=274,270,65,44 owner=10 paints=#EEEEF0FF role=text size=26 text=ALL
+              12 ToggleButton at=347,270,131,44 by=panel drawn focus heard="Same Dump" limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text="Same Dump"
+                13 TextBlock at=364,276,97,32 box=97,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME DUMP" layout=96.28,31.2 limit=347,270,131,44 owner=12 paints=#FFFFFFFF role=text size=26 text="SAME DUMP"
+              14 ToggleButton at=486,270,129,44 by=panel drawn focus heard="Same Game" limit=234,245,812.35,364 op paints=#FFFFFFFF role=button text="Same Game"
+                15 TextBlock at=503,276,95,32 box=95,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME GAME" layout=94.48,31.2 limit=486,270,129,44 owner=14 paints=#FFFFFFFF role=text size=26 text="SAME GAME"
         16 Grid at=274,327,733,43 by=panel limit=234,245,812.35,364 role=none
           17 Border at=274,327,733,43 by=panel limit=234,245,812.35,364 name=AdaptiveContent role=none
             18 Grid at=274,327,733,43 by=panel limit=234,245,812.35,364 role=none
-              19 LunaTable at=274,327,733,43 by=panel heard=Rows limit=234,245,812.35,364 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=datagrid
-                20 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286,333,40,29 box=40,29 caps=16.7988 drawn face="Barlow Condensed" heard=Mark layout=39.14,28.8 paints=#9C9CA0FF role=text size=24 text=Mark
-                21 GridSplitter allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=320,331,6,32 focus heard="Resize Mark" paints=#9C9CA0FF role=thumb
-                22 Button allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=326,331,335,32 drawn focus heard="Game, not sorted" op paints=#55555AFF,#9C9CA0FF role=button
-                  23 StackPanel allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=326,331,50,32 role=none
-                    24 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=326,331,50,32 box=50,32 caps=18.1987 drawn face="Barlow Condensed" heard=Game layout=49.89,31.2 owner=22 paints=#9C9CA0FF role=text size=26 text=Game
-                25 GridSplitter allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=655,331,6,32 focus heard="Resize Game" paints=#9C9CA0FF role=thumb
-                26 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=661,333,334,29 box=334,29 caps=16.7988 drawn face="Barlow Condensed" heard=Finding layout=60.1,28.8 paints=#9C9CA0FF role=text size=24 text=Finding
+              19 LunaTable at=274,327,733,43 by=panel heard=Rows limit=234,245,812.35,364 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
+                20 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286,333,38,29 box=38,29 caps=16.7988 drawn face="Barlow Condensed" heard=Mark layout=37.13,28.8 paints=#D4D4D4FF role=text size=24 text=Mark
+                21 GridSplitter allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=318,331,6,32 focus heard="Resize Mark" paints=#D4D4D4FF role=thumb
+                22 Button allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=324,331,336,32 drawn focus heard="Game, not sorted" op paints=#707070FF,#D4D4D4FF role=button
+                  23 StackPanel allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=324,331,48,32 role=none
+                    24 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=324,331,48,32 box=48,32 caps=18.1987 drawn face="Barlow Condensed" heard=Game layout=47.89,31.2 owner=22 paints=#D4D4D4FF role=text size=26 text=Game
+                25 GridSplitter allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=654,331,6,32 focus heard="Resize Game" paints=#D4D4D4FF role=thumb
+                26 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=660,333,335,29 box=335,29 caps=16.7988 drawn face="Barlow Condensed" heard=Finding layout=56.71,28.8 paints=#D4D4D4FF role=text size=24 text=Finding
         27 Border at=274,378,733,96 by=panel limit=234,245,812.35,364 name=AdaptiveActions role=none
           28 WrapPanel at=274,378,733,96 by=panel limit=234,245,812.35,364 role=none
-            29 ActionButton at=274,378,75,44 by=panel drawn focus heard=HIDE limit=234,245,812.35,364 op paints=#55555AFF,#9C9CA0FF role=button text=Hide
-              30 TextBlock at=291,384,41,32 box=41,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=HIDE layout=40.92,31.2 limit=274,378,75,44 owner=29 paints=#9C9CA0FF role=text size=26 text=HIDE
-            31 ActionButton at=361,378,239,44 by=panel drawn focus heard="SHOW IN FILE MANAGER" limit=234,245,812.35,364 op paints=#55555AFF,#9C9CA0FF role=button text="Show in File Manager"
-              32 TextBlock at=378,384,205,32 box=205,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SHOW IN FILE MANAGER" layout=204.41,31.2 limit=361,378,239,44 owner=31 paints=#9C9CA0FF role=text size=26 text="SHOW IN FILE MANAGER"
-            33 ActionButton at=612,378,136,44 by=panel drawn focus heard="SAVE LIST…" limit=234,245,812.35,364 op paints=#55555AFF,#9C9CA0FF role=button text="Save List…"
-              34 TextBlock at=629,384,102,32 box=102,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAVE LIST…" layout=101.37,31.2 limit=612,378,136,44 owner=33 paints=#9C9CA0FF role=text size=26 text="SAVE LIST…"
-            35 ActionButton at=760,378,149,44 by=panel drawn heard="CHECK AGAIN" limit=234,245,812.35,364 off paints=#55555AFF,#9C9CA0FF role=button text="Check Again"
-              36 TextBlock at=777,384,115,32 box=115,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK AGAIN" layout=114.45,31.2 limit=760,378,149,44 off owner=35 paints=#55555AFF role=text size=26 text="CHECK AGAIN"
-            37 ActionButton at=921,378,78,44 by=panel drawn focus heard=STOP limit=234,245,812.35,364 op paints=#55555AFF,#9C9CA0FF role=button text=Stop
-              38 TextBlock at=938,384,44,32 box=44,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=43.99,31.2 limit=921,378,78,44 owner=37 paints=#9C9CA0FF role=text size=26 text=STOP
-            39 ActionButton at=274,430,82,44 by=panel drawn focus heard=MARK limit=234,245,812.35,364 op paints=#55555AFF,#9C9CA0FF role=button text=Mark
-              40 TextBlock at=291,436,48,32 box=48,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=47.48,31.2 limit=274,430,82,44 owner=39 paints=#9C9CA0FF role=text size=26 text=MARK
+            29 ActionButton at=274,378,73,44 by=panel drawn focus heard=HIDE limit=234,245,812.35,364 op paints=#707070FF,#D4D4D4FF role=button text=Hide
+              30 TextBlock at=291,384,39,32 box=39,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=HIDE layout=38.01,31.2 limit=274,378,73,44 owner=29 paints=#D4D4D4FF role=text size=26 text=HIDE
+            31 ActionButton at=359,378,230,44 by=panel drawn focus heard="SHOW IN FILE MANAGER" limit=234,245,812.35,364 op paints=#707070FF,#D4D4D4FF role=button text="Show in File Manager"
+              32 TextBlock at=376,384,196,32 box=196,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SHOW IN FILE MANAGER" layout=195.86,31.2 limit=359,378,230,44 owner=31 paints=#D4D4D4FF role=text size=26 text="SHOW IN FILE MANAGER"
+            33 ActionButton at=601,378,132,44 by=panel drawn focus heard="SAVE LIST…" limit=234,245,812.35,364 op paints=#707070FF,#D4D4D4FF role=button text="Save List…"
+              34 TextBlock at=618,384,98,32 box=98,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAVE LIST…" layout=97.11,31.2 limit=601,378,132,44 owner=33 paints=#D4D4D4FF role=text size=26 text="SAVE LIST…"
+            35 ActionButton at=745,378,144,44 by=panel drawn heard="CHECK AGAIN" limit=234,245,812.35,364 off paints=#707070FF,#D4D4D4FF role=button text="Check Again"
+              36 TextBlock at=762,384,110,32 box=110,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK AGAIN" layout=109.38,31.2 limit=745,378,144,44 off owner=35 paints=#707070FF role=text size=26 text="CHECK AGAIN"
+            37 ActionButton at=901,378,77,44 by=panel drawn focus heard=STOP limit=234,245,812.35,364 op paints=#707070FF,#D4D4D4FF role=button text=Stop
+              38 TextBlock at=918,384,43,32 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=42.17,31.2 limit=901,378,77,44 owner=37 paints=#D4D4D4FF role=text size=26 text=STOP
+            39 ActionButton at=274,430,80,44 by=panel drawn focus heard=MARK limit=234,245,812.35,364 op paints=#707070FF,#D4D4D4FF role=button text=Mark
+              40 TextBlock at=291,436,46,32 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=274,430,80,44 owner=39 paints=#D4D4D4FF role=text size=26 text=MARK
         41 Border at=258,482,765,89 by=panel limit=234,245,812.35,364 name=AdaptiveStatus role=none
           42 Grid at=262,486,757,81 by=panel limit=234,245,812.35,364 role=none
             43 Grid at=262,486,757,29 by=panel limit=234,245,812.35,364 role=none
               44 ProgressBar at=262,498,120,4 by=panel drawn heard=Progress limit=234,245,812.35,364 paints=#333337FF,#4C9AE8FF role=progressbar
-              45 TextBlock at=390,486,629,29 box=629,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Checking each file: 2 of 4, Amber Saga (USA)" layout=358.1,28.8 limit=234,245,812.35,364 paints=#9C9CA0FF role=text size=24 text="Checking each file: 2 of 4, Amber Saga (USA)"
-            46 StackPanel at=914,523,105,44 by=panel limit=234,245,812.35,364 role=none
-              47 Button at=914,523,105,44 by=panel drawn heard="Apply the marked changes" limit=234,245,812.35,364 off paints=#55555AFF,#9C9CA0FF role=button text="Apply…"
-                48 TextBlock at=931,529,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=70.54,31.2 limit=914,523,105,44 off owner=47 paints=#55555AFF role=text size=26 text="APPLY…"
+              45 TextBlock at=390,486,629,29 box=629,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Checking each file: 2 of 4, Amber Saga (USA)" layout=343.82,28.8 limit=234,245,812.35,364 paints=#D4D4D4FF role=text size=24 text="Checking each file: 2 of 4, Amber Saga (USA)"
+            46 StackPanel at=917,523,102,44 by=panel limit=234,245,812.35,364 role=none
+              47 Button at=917,523,102,44 by=panel drawn heard="Apply the marked changes" limit=234,245,812.35,364 off paints=#707070FF,#D4D4D4FF role=button text="Apply…"
+                48 TextBlock at=934,529,68,32 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=917,523,102,44 off owner=47 paints=#707070FF role=text size=26 text="APPLY…"
         49 HintBar at=274,579,733,22 by=panel heard="Open, Back, Section, Apply…, Check Again, Mark" limit=234,245,812.35,364 role=group
 focus 5
 edge 5 up same

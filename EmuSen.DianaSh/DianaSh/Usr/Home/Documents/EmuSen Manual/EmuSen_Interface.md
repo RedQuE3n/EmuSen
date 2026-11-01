@@ -509,12 +509,13 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   tokens and reduced motion; `LunaSounds` the nine cues. The look's rows, buttons and switches and `MenuRow` draw the
   focus bar; `MenuRow` and `MenuPanel` take their colours from the palette in reach.
 - **EmuSen.** The drawn menus use LunaP's Barlow Condensed (`LunaFonts.CondensedFile`) and Mistress's own copy is gone;
-  the stock controls of a framed sheet are in Barlow, its headings and tabs in Barlow Condensed; the desktop is in Barlow
+  a framed sheet's stock controls, headings and tabs stay in Barlow Condensed at their present sizes; the desktop is in Barlow
   at 13; `NavigationSounds` renders LunaP's cues under ES-DE's names, the tone code moved unchanged so the sounds are the
   same; the navigation volume defaults to 60.
-- **Not yet in U1.** The drawn menus' rows stay in Barlow Condensed at their present sizes until the Card form rebuilds
-  them (U2, U3); the player's switches for light or dark, reduced motion and Play videos arrive with Settings (U6); the
-  tile ring is a token until the first tile grid takes it (U5).
+- **Not yet in U1.** The drawn menus' rows and a framed sheet's words stay in Barlow Condensed at their present sizes
+  until the Card form rebuilds them (U2, U3): moved to Barlow at 22, the sheets failed the fit audit in 23 states,
+  wider words past their bars and a controller drawing's labels under the floor (LunaP §206.3). The player's switches for light or dark, reduced motion
+  and Play videos arrive with Settings (U6); the tile ring is a token until the first tile grid takes it (U5).
 - **Recordings.** Every recorded state changed, by the causes listed in `EmuSen_InterfaceSpec.md` §6.3.17.
 
 ---

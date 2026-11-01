@@ -31,11 +31,72 @@ static CRASH_LOG: Mutex<Option<String>> = Mutex::new(None);
 static LIBRARY_LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static INFO: OnceLock<Result<(String, String, u32), String>> = OnceLock::new();
 
-/// One machine's handle: its runner and what the proxy itself says of it.
+/// One machine's handle: its runner, what the proxy itself says of it, and the frame-end window.
 pub struct Proxied {
     link: Link,
     log: Vec<String>,
     frame: Duration,
+    window: Window,
+}
+
+/// The memory a host read between the last two frames, copied by the runner at each frame's end so that reads in it
+/// cost no round trip; exact, since the machine does not run between calls (EmuSen_LibretroHost.md §3.2).
+#[derive(Default)]
+pub struct Window {
+    /// (space, address, bytes) as the runner copied them, valid until a call that changes the machine.
+    held: Vec<(u32, u32, Vec<u8>)>,
+    valid: bool,
+    /// The ranges read this frame, asked for at the next frame's end.
+    wanted: Vec<(u32, u32, u32)>,
+}
+
+/// The most the window copies at a frame's end.
+pub const WINDOW_MAX: u32 = 1 << 20;
+
+impl Window {
+    fn read(&self, space: u32, address: u32, out: &mut [u8]) -> bool {
+        if !self.valid {
+            return false;
+        }
+        let end = address as u64 + out.len() as u64;
+        match self.held.iter().find(|(s, a, b)| *s == space && *a <= address && end <= *a as u64 + b.len() as u64) {
+            Some((_, a, b)) => {
+                let at = (address - a) as usize;
+                out.copy_from_slice(&b[at..at + out.len()]);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn wrote(&mut self, space: u32, address: u32, data: &[u8]) {
+        for (s, a, b) in self.held.iter_mut().filter(|(s, ..)| *s == space) {
+            let _ = s;
+            for (i, &v) in data.iter().enumerate() {
+                let at = address as u64 + i as u64;
+                if at >= *a as u64 && at < *a as u64 + b.len() as u64 {
+                    b[(at - *a as u64) as usize] = v;
+                }
+            }
+        }
+    }
+
+    /// A read the window did not hold, remembered for the next frame: merged with a neighbour within 256 bytes.
+    fn want(&mut self, space: u32, address: u32, len: u32) {
+        let total: u64 = self.wanted.iter().map(|w| w.2 as u64).sum();
+        if total + len as u64 > WINDOW_MAX as u64 {
+            return;
+        }
+        let (lo, hi) = (address as u64, address as u64 + len as u64);
+        match self.wanted.iter_mut().find(|(s, a, l)| *s == space && lo <= *a as u64 + *l as u64 + 256 && *a as u64 <= hi + 256) {
+            Some(w) => {
+                let new_lo = lo.min(w.1 as u64);
+                let new_hi = hi.max(w.1 as u64 + w.2 as u64);
+                (w.1, w.2) = (new_lo as u32, (new_hi - new_lo).min(u32::MAX as u64) as u32);
+            }
+            None => self.wanted.push((space, address, len)),
+        }
+    }
 }
 
 fn record(log: &mut Vec<String>, level: &str, text: &str) {
@@ -331,7 +392,7 @@ pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i3
     w.text((!by_path).then_some(image));
     w.text(image_path.as_deref().map(str::as_bytes));
     match link.call(Op::Create, false, 0, &w.0, frame * 6) {
-        Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame })) as *mut RawMachine,
+        Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame, window: Window::default() })) as *mut RawMachine,
         Ok(r) => refuse(r.ret as i32, &String::from_utf8_lossy(&r.bytes)),
         Err((code, why)) => refuse(code, &why),
     }
@@ -349,9 +410,13 @@ pub unsafe fn free<T: Target>(m: *mut RawMachine) -> i32 {
     }
 }
 
-/// A call on a machine: its reply, or the proxy's status for a runner gone.
+/// A call on a machine: its reply, or the proxy's status for a runner gone. A call that may change the machine's memory
+/// other than by a write ends the window.
 fn on(m: *mut RawMachine, op: Op, out_null: bool, out_len: u64, args: &[u8]) -> Result<Reply, i32> {
     let Some(p) = (unsafe { proxied(m) }) else { return Err(status::NULL) };
+    if matches!(op, Op::StateLoad | Op::Reset | Op::MediaInsert | Op::MediaLid | Op::SetSettings | Op::SetPresent | Op::BatterySaved) {
+        p.window.valid = false;
+    }
     let frame = p.frame;
     p.link.call(op, out_null, out_len, args, frame).map_err(|(code, why)| {
         if p.log.len() < 64 && !p.log.iter().any(|l| l.contains(&why)) {
@@ -397,10 +462,37 @@ pub unsafe fn last_error(m: *const RawMachine, out: *mut u8, len: usize) -> i64 
 }
 
 pub unsafe fn advance(m: *mut RawMachine, detail: *mut u64) -> i32 {
-    match on(m, Op::Advance, false, 0, &[]) {
+    let wanted = match unsafe { proxied(m) } {
+        Some(p) => {
+            p.window.valid = false;
+            std::mem::take(&mut p.window.wanted)
+        }
+        None => return status::NULL,
+    };
+    let request = args(|w| {
+        w.u32(wanted.len() as u32);
+        for &(s, a, l) in &wanted {
+            w.u32(s).u32(a).u32(l);
+        }
+    });
+    match on(m, Op::Advance, false, 0, &request) {
         Ok(r) => {
             if !detail.is_null() {
                 unsafe { *detail = r.aux as u64 };
+            }
+            if r.ret >= 0
+                && let Some(p) = unsafe { proxied(m) }
+            {
+                let mut at = 0usize;
+                p.window.held.clear();
+                for &(s, a, l) in &wanted {
+                    let n = l as usize;
+                    if let Some(b) = r.bytes.get(at..at + n) {
+                        p.window.held.push((s, a, b.to_vec()));
+                    }
+                    at += n;
+                }
+                p.window.valid = at == r.bytes.len();
             }
             r.ret as i32
         }
@@ -526,6 +618,16 @@ pub unsafe fn space_size(m: *const RawMachine, space: u32) -> i64 {
 }
 
 pub unsafe fn space_read(m: *mut RawMachine, space: u32, address: u32, out: *mut u8, len: usize) -> i64 {
+    if let Some(p) = unsafe { proxied(m) }
+        && !out.is_null()
+        && len > 0
+    {
+        let buf = unsafe { std::slice::from_raw_parts_mut(out, len) };
+        if p.window.read(space, address, buf) {
+            return len as i64;
+        }
+        p.window.want(space, address, len.min(u32::MAX as usize) as u32);
+    }
     text_on(m, Op::SpaceRead, &args(|w| {
         w.u32(space).u32(address);
     }), out, len)
@@ -533,9 +635,15 @@ pub unsafe fn space_read(m: *mut RawMachine, space: u32, address: u32, out: *mut
 
 pub unsafe fn space_write(m: *mut RawMachine, space: u32, address: u32, data: *const u8, len: usize) -> i64 {
     let bytes = if data.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(data, len) } };
-    code(on(m, Op::SpaceWrite, false, 0, &args(|w| {
+    let r = code(on(m, Op::SpaceWrite, false, 0, &args(|w| {
         w.u32(space).u32(address).bytes(bytes);
-    })))
+    })));
+    if r >= 0
+        && let Some(p) = unsafe { proxied(m) }
+    {
+        p.window.wrote(space, address, bytes);
+    }
+    r
 }
 
 pub unsafe fn battery(m: *const RawMachine, which: u32, out: *mut u8, len: usize, flags_out: *mut u32) -> i64 {

@@ -144,9 +144,22 @@ impl Served {
                 None => none,
             },
             Op::Advance => {
+                let ranges: Vec<(u32, u32, u32)> = (0..r.u32().min(4096)).map(|_| (r.u32(), r.u32(), r.u32())).collect();
                 let mut detail = 0u64;
                 let ret = unsafe { (x.advance)(m, &mut detail) };
-                (ret as i64, detail as i64, Vec::new())
+                let mut window = Vec::new();
+                if ret >= 0 {
+                    for (space, address, len) in ranges {
+                        let at = window.len();
+                        window.resize(at + len as usize, 0);
+                        let got = unsafe { (x.space_read)(m, space, address, window[at..].as_mut_ptr(), len as usize) };
+                        if got < 0 {
+                            window.truncate(at);
+                            break;
+                        }
+                    }
+                }
+                (ret as i64, detail as i64, window)
             }
             Op::SetOptions => (unsafe { (x.set_options)(m, r.u32()) } as i64, 0, Vec::new()),
             Op::FrameCount => (unsafe { (x.frame_count)(m) }, 0, Vec::new()),

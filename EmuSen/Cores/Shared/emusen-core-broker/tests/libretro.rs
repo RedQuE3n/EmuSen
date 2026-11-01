@@ -168,3 +168,55 @@ fn a_frame_costs_one_round_trip_per_call_measured() {
     eprintln!("broker: {per_call:?} a round trip, {per_frame:?} a frame with its {}-byte picture", px.len());
     assert!(per_call < Duration::from_millis(2), "{per_call:?}");
 }
+
+#[test]
+fn reads_between_frames_come_from_the_window_and_stay_exact() {
+    let _t = turn();
+    let mut m = make("").unwrap();
+    let counter = |m: &mut Machine| {
+        let mut b = [0u8; 4];
+        m.space_read(0, FRAME_COUNTER as u32, &mut b).unwrap();
+        u32::from_le_bytes(b)
+    };
+    let mut saved = Vec::new();
+    for n in 1..=200u32 {
+        m.advance().unwrap();
+        assert_eq!(counter(&mut m), n, "the counter after frame {n}");
+        m.space_write(0, LIVES as u32, &[7]).unwrap();
+        assert_eq!(ram(&mut m, LIVES), 7, "a write is read back at once");
+        if n == 100 {
+            saved = vec![0u8; m.state_size(0).unwrap()];
+            m.state_save(0, &mut saved).unwrap();
+        }
+    }
+    m.state_load(&saved).unwrap();
+    assert_eq!(counter(&mut m), 100, "a load ends the window");
+    let start = Instant::now();
+    for _ in 0..1000 {
+        counter(&mut m);
+    }
+    let missed = start.elapsed();
+    m.advance().unwrap();
+    let start = Instant::now();
+    for _ in 0..1000 {
+        counter(&mut m);
+    }
+    let held = start.elapsed();
+    eprintln!("window: 1,000 reads {missed:?} before it held them, {held:?} after");
+    assert!(held * 5 < missed, "{held:?} against {missed:?}");
+}
+
+#[test]
+fn memory_between_frames_holds_still_while_the_core_rests() {
+    let _t = turn();
+    let mut m = make("").unwrap();
+    let size = m.space_size(0).unwrap().min(1 << 20) as usize;
+    let (mut a, mut b) = (vec![0u8; size], vec![0u8; size]);
+    for _ in 0..1000 {
+        m.advance().unwrap();
+        m.space_read(0, 0, &mut a).unwrap();
+        std::thread::sleep(Duration::from_micros(200));
+        m.space_read(0, 0, &mut b).unwrap();
+        assert!(a == b, "memory moved between two reads with no frame between them");
+    }
+}

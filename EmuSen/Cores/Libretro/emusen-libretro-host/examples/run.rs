@@ -65,12 +65,25 @@ fn main() {
             let start = std::time::Instant::now();
             let mut audio = vec![0i16; 1 << 16];
             let mut samples = 0;
+            let race = std::env::var_os("EMUSEN_RUN_RACE").is_some();
+            let size = m.space_size(0).unwrap_or(0).min(1 << 20) as usize;
+            let (mut first, mut second) = (vec![0u8; size], vec![0u8; size]);
+            let mut moved = 0;
             for _ in 0..frames {
                 if let Err(e) = m.advance() {
                     println!("advance: {e:?} {}", m.last_error());
                     break;
                 }
                 samples += m.audio_drain(&mut audio).map_or(0, |a| a.0);
+                if race && size > 0 {
+                    let _ = m.space_read(0, 0, &mut first);
+                    std::thread::sleep(std::time::Duration::from_micros(500));
+                    let _ = m.space_read(0, 0, &mut second);
+                    moved += (first != second) as u32;
+                }
+            }
+            if race {
+                println!("race: {moved} of {frames} frames saw the first {size} bytes of space 0 move between two reads");
             }
             let f = m.frame_info().ok();
             println!("frames {} in {:?}; picture {:?}; samples {samples}", m.frame_count(), start.elapsed(), f.map(|f| (f.width, f.height, f.format, f.serial)));

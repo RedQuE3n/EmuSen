@@ -1,6 +1,6 @@
 # EmuSen_LibretroBridge — a libretro core hosted behind the core ABI, as a stopgap for the PlayStation 2
 
-*Proposal, 2026-10-27. Not decided; nothing is built.* Asked by the tester the same day: a playable PlayStation 2 on the
+*Proposal, 2026-10-27. Superseded 2026-10-31 by `EmuSen_LibretroHost.md`, when the tester chose a general libretro host over a PS2 stopgap; kept for its history.* Asked by the tester the same day: a playable PlayStation 2 on the
 handheld **as a temporary option until Sapphire is playable**, by running RetroArch's PlayStation 2 core inside EmuSen.
 
 ## 1. Why

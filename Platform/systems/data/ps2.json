@@ -15,5 +15,7 @@
   "screenscraper_system": 58,
   "cheat_space": null,
   "media": [{ "id": "ps2.card", "title": "Memory Card (PS2)", "noun": "Card" }],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Sony - PlayStation 2"],
+  "libretro_systemids": ["playstation2"]
 }

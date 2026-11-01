@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 15;
+pub const ABI_MINOR: u32 = 16;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -15,7 +15,7 @@ pub struct Machine {
     _not_send: std::marker::PhantomData<*mut u8>,
 }
 
-/// `emusen_file`.
+/// `emusen_file`. `name` is since 1.16; a host of an earlier minor passes elements of the 24 bytes before it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct FileEntry {
@@ -23,6 +23,13 @@ pub struct FileEntry {
     pub which: u32,
     pub data: *const u8,
     pub len: usize,
+    /// Since 1.16: a named battery file's relative path, NUL-terminated, or null (EmuSen_LibretroHost.md §2, E3).
+    pub name: *const std::ffi::c_char,
+}
+
+impl FileEntry {
+    /// The element's size at 1.0, the least a core accepts.
+    pub const SIZE_1_0: usize = std::mem::offset_of!(FileEntry, name);
 }
 
 /// `emusen_create_params`. `flags` is since 1.3; a host of an earlier minor passes the 88 bytes before it.
@@ -47,6 +54,8 @@ pub struct CreateParams {
     /// Since 1.11: with an image of no bytes, the NUL-terminated id of the system to start empty; since 1.15, beside an
     /// image, the system the host routed it to (EmuSen_CoreAPI.md §6.40). Absent from a shorter struct.
     pub system: *const std::ffi::c_char,
+    /// Since 1.16, `IMAGE_PATH`: the file the image's bytes are, unaltered, NUL-terminated UTF-8, or null.
+    pub image_path: *const std::ffi::c_char,
 }
 
 impl CreateParams {
@@ -100,6 +109,8 @@ pub struct Media {
     pub files: *const FileEntry,
     pub file_count: usize,
     pub file_size: usize,
+    /// Since 1.16, `IMAGE_PATH`: the disc's file, as `CreateParams::image_path`.
+    pub image_path: *const std::ffi::c_char,
 }
 
 /// `emusen_frame_info`. A core fills everything but `size`; `lines` and `reserved2` are since 1.13, absent from a
@@ -210,8 +221,10 @@ pub mod caps {
     pub const PRESENCE: u64 = 1 << 24;
     /// Since 1.13, with `DEBUG`: a processor's address on its bus, by `debug_translate`.
     pub const DEBUG_TRANSLATE: u64 = 1 << 25;
-    /// Bits 26-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 26) - 1);
+    /// Since 1.16: the core reads its image through the path a host gives beside the bytes.
+    pub const IMAGE_PATH: u64 = 1 << 26;
+    /// Bits 27-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 27) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -227,6 +240,8 @@ pub mod flags {
     pub const NO_COMPARE: u32 = u32::MAX;
     /// Since 1.1: the first companion of an image set; the nth file a sheet names is `FILE_MEDIA + n`.
     pub const FILE_MEDIA: u32 = 65_536;
+    /// Since 1.16: the first named battery file; the nth is `FILE_NAMED + n`, below `FILE_MEDIA`.
+    pub const FILE_NAMED: u32 = 0x8000;
     /// Since 1.1: `emusen_media.flags`, the drive set for a state about to load.
     pub const MEDIA_RESTORE: u32 = 1;
     /// Since 1.3: `emusen_create_params.flags`, the image and its media files lent until the loan ends.
@@ -363,4 +378,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::TELEMETRY, "TELEMETRY"),
     (caps::PRESENCE, "PRESENCE"),
     (caps::DEBUG_TRANSLATE, "DEBUG_TRANSLATE"),
+    (caps::IMAGE_PATH, "IMAGE_PATH"),
 ];

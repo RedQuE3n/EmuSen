@@ -15,5 +15,7 @@
   "screenscraper_system": 19,
   "cheat_space": "WRAM",
   "media": [],
-  "byte_order": "big"
+  "byte_order": "big",
+  "libretro_databases": ["Sega - 32X"],
+  "libretro_systemids": []
 }

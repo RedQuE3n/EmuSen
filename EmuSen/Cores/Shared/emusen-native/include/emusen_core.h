@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.15.
+/* emusen_core.h - the EmuSen core ABI, version 1.16.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 15u
+#define EMUSEN_CORE_ABI_MINOR 16u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -93,7 +93,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_TELEMETRY         (1ull << 23)  /* @since 1.13: emusen_core_telemetry, machine info's "telemetry" */
 #define EMUSEN_CAP_PRESENCE          (1ull << 24)  /* @since 1.13: emusen_core_set_present */
 #define EMUSEN_CAP_DEBUG_TRANSLATE   (1ull << 25)  /* @since 1.13, with DEBUG: emusen_core_debug_translate */
-/* Bits 26..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+#define EMUSEN_CAP_IMAGE_PATH        (1ull << 26)  /* @since 1.16: the core reads its image through create's and media's image_path */
+/* Bits 27..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -108,6 +109,9 @@ typedef struct emusen_machine emusen_machine;
 /* @since 1.1: emusen_file.which of an image set's first companion; the nth file a sheet names is MEDIA + n, and
  * the numbers below it stay the core's (EmuSen_CoreAPI_Extensions.md section 2.4). */
 #define EMUSEN_FILE_MEDIA            65536u
+/* @since 1.16: emusen_file.which of the first named battery file; the nth is NAMED + n, below MEDIA, so outside what
+ * BORROW lends. Each carries emusen_file.name, a relative path the host stores it under (EmuSen_LibretroHost.md §2, E3). */
+#define EMUSEN_FILE_NAMED            0x8000u
 #define EMUSEN_MEDIA_RESTORE         1u  /* @since 1.1: emusen_media.flags, the drive set for a state about to load */
 /* @since 1.3, BORROW (section 6.24). A host that sets LENT promises that the call's image and every file numbered
  * EMUSEN_FILE_MEDIA or above stay readable, unchanged and at the same addresses until emusen_core_free returns or a
@@ -203,14 +207,15 @@ enum emusen_axis {
 };
 
 /* ---- Structures ------------------------------------------------------------------------ */
-typedef struct emusen_file {        /* a file the host read for this game (section 6.2); 24 bytes */
+typedef struct emusen_file {        /* a file the host read for this game (section 6.2); 32 bytes since 1.16, 24 at 1.0 */
     uint32_t size;                  /* unused: an array's element size is create_params.file_size */
     uint32_t which;                 /* 0 the battery save; others from machine info or firmware_for */
     const uint8_t *data;
     size_t len;
+    const char *name;               /* @since 1.16: a named file's relative path (EMUSEN_FILE_NAMED and up), else null */
 } emusen_file;
 
-typedef struct emusen_create_params { /* 112 bytes; 88 at 1.0, the least a core accepts */
+typedef struct emusen_create_params { /* 120 bytes; 88 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t host_abi_version;      /* EMUSEN_CORE_ABI_VERSION the host was built with */
     const uint8_t *image;           /* the game file's bytes; the core parses it */
@@ -227,6 +232,7 @@ typedef struct emusen_create_params { /* 112 bytes; 88 at 1.0, the least a core 
     const struct emusen_device_lend *device; /* @since 1.9, DEVICE_PICTURE: the host's device lent, or null; 104 bytes with it */
     const char *system;             /* @since 1.11: with a null image, the system to start empty (core info's starts_empty);
                                      * @since 1.15: beside an image too, the system the host routed the image to */
+    const char *image_path;         /* @since 1.16, IMAGE_PATH: the file the image's bytes are, unaltered, UTF-8; else null */
 } emusen_create_params;
 
 /* @since 1.9, DEVICE_PICTURE (section 6.29): the host's Vulkan device, lent to a core that claims the bit. Handles are
@@ -304,7 +310,7 @@ typedef struct emusen_event {       /* 24 bytes */
     int64_t b;
 } emusen_event;
 
-typedef struct emusen_media {       /* @since 1.1, MEDIA: a disc for a drive (section 6.23); 48 bytes */
+typedef struct emusen_media {       /* @since 1.1, MEDIA: a disc for a drive (section 6.23); 56 bytes since 1.16, 48 at 1.1 */
     uint32_t size;
     uint32_t flags;                 /* EMUSEN_MEDIA_RESTORE, and since 1.3 EMUSEN_MEDIA_LENT */
     const uint8_t *image;           /* the disc's image or sheet, as create's; null empties the drive */
@@ -312,6 +318,7 @@ typedef struct emusen_media {       /* @since 1.1, MEDIA: a disc for a drive (se
     const emusen_file *files;       /* its companions, from EMUSEN_FILE_MEDIA */
     size_t file_count;
     size_t file_size;               /* sizeof(emusen_file) as the host knows it */
+    const char *image_path;         /* @since 1.16, IMAGE_PATH: the disc's file, as create's image_path */
 } emusen_media;
 
 /* ---- Library-level calls: no machine, any thread, before and after any machine ----------------- */

@@ -324,8 +324,9 @@ and a core that asks for them is shown as asking, never silently. Rumble (stage 
   libretro asks; `RETRO_MEMORY_RTC` is file 1, `.rtc`. `BATTERY_DIRTY` is claimed: `battery` compares with the copy last
   marked saved, so nothing is done per frame.
 - **The core's own folders.** §7.2 forbids handing a core a host path to write to, so the runner gives the core folders
-  of its own, persistent and on disk (never `tmpfs`: a core's pipeline cache alone can be large), under Galaxia's data
-  folder for the core (`Var/lib/libretro/<corename>/`, with `system/`, `save/` and `cache/`), answered to
+  of its own, persistent and on disk (never `tmpfs`: a core's pipeline cache alone can be large), beside the entries
+  (`/Cores/libretro/.data/<stem>/`, with `system/`, `save/` and `cache/`; a dot folder, which Cores' listing skips and its
+  updates leave in place, and which a removal deletes with the core), answered to
   `GET_SYSTEM_DIRECTORY` and `GET_SAVE_DIRECTORY`. What a core keeps there for itself (its settings files, logs, patch
   folders, pipeline caches) stays there and is **not** a save: such files are the core's working data, kept between
   games and removed with the core, and listed nowhere as the player's.
@@ -347,9 +348,10 @@ and a core that asks for them is shown as asking, never silently. Rumble (stage 
 
 ### 4.6 States
 
-Kind 0 is a 64-byte header followed by `retro_serialize`'s bytes: magic `ESLR`, header version, the libretro core's name
-and version, the adapter's state version, a SHA-256 of the payload, the payload's length, and the platform (architecture
-and operating system) where the core declares `ENDIAN_DEPENDENT` or `PLATFORM_DEPENDENT`. Another core's state is
+Kind 0 is an 80-byte header followed by `retro_serialize`'s bytes: magic `ESLR`, header version, the libretro core's name
+and version, the adapter's state version, a SHA-256 of the payload, the payload's length, the platform (architecture
+and operating system) where the core declares `ENDIAN_DEPENDENT` or `PLATFORM_DEPENDENT`, and the disc in the drive (its
+length and the digest of its first MiB), so that a state over another disc is `WRONG_MEDIA`. Another core's state is
 `FOREIGN`; another version's, adapter's or platform's is `STATE_VERSION` with words saying which; a payload whose digest
 fails is `TRUNCATED`. Machine info's `state` gives `format: "ESLR"`, its version and `loads_from`. A failed load changes
 nothing, which `retro_unserialize` does not promise, so the runner serializes the machine first and restores that copy
@@ -631,6 +633,45 @@ is x86-64 only [R], which covers the desktop and the handheld.
 | **4** | Frontend: the core list and download, the approval of the whole entry, the settings window from the schema, the exact rate in the resampler, cards in the card manager, cheats with their path shown, big picture, the engine choice per console; the fit and pad audits | Mistress and big picture run a game either way; cards follow the save-media rules; the choice is remembered |
 | **5** | Rumble: `EmuSen_CoreAPI_Extensions.md` §4's event 7 (minor 1.17) through Endymion to the pad | a DualShock 2 game's rumble reaches a pad; the test core's rumble pattern read back by the test |
 
+## 10a. Stage 1, as built (2026-10-31)
+
+**Built**: `emusen-libretro-sys` (the interface, its layouts held to gcc's for `libretro.h` [M]); `emusen-libretro-testcore`;
+the core ABI's minor 1.16 (E1–E4, `EmuSen_CoreAPI.md` §6.41) with the Rust host and the kit; the systems table's libretro
+names and `for_libretro`; and `emusen-libretro-host` in-process: pictures, sound, input, save RAM and named files, states,
+options, memory spaces, discs through disk control, and every environment command answered or refused.
+
+**What building it changed in the design** [M]:
+- **Images are copied, not borrowed.** The kit's C16, run with `BORROW` claimed, aborted the process: a libretro core may
+  keep every image it was given until it is unloaded, which `BORROW`'s loan per drive cannot promise. `BORROW` is not
+  claimed; a `need_fullpath` core reads by path and copies nothing, and a small image is copied once.
+- **The state header records the disc** (§4.6), from C16's state over an empty drive; and a restore passes the tray, since
+  a libretro core changes discs only with it open.
+- **`retro_get_memory_data`'s blocks are asked again** after a load and a reset: the test core moved its memory on a
+  load, and the space read freed memory until it was.
+- **`retro_deinit` per machine**, and `retro_init` again at the next create: the test core and PCEE2 both load again.
+- **Hardware rendering's commands are refused** until stage 3 builds them; PCEE2, refused, "falling back to readback
+  present", hands software pictures.
+
+**Tests** [M, 2026-10-31]: 22 unit tests and 19 through the Rust host on the test core, among them every environment
+command of §4.10 compared with this page's table, the exact rate over 3,600 frames at 48,000 and 32,040.5 Hz with no
+sample of drift, and a load refused half-way restored byte for byte. The kit on the test core passes every case but C7,
+C10, C12 and part of C14, each of which holds two machines in one process, which a libretro core cannot (§1.1) and the
+broker of stage 2 can. Seeded faults, each caught by the test aimed at it: the X byte left unwritten, a drain crossing a
+rate change, a refused load not restored, a changed save not raised, the payload's digest unchecked, an option update
+never reported.
+
+**PCEE2, measured** [M, the pinned nightly `00275dbf…`, no firmware, a one-instruction loop ELF built by the runner]:
+60 frames in 0.65 s; 640 × 480 pictures in BGRA8888 from the software renderer; 48,000 Hz exact; one space, `RAM`,
+33,554,432 bytes; it asks for Vulkan, an audio buffer status callback and rumble, each refused and logged. It names its
+folders under the system directory (`pcsx2/bios`, `memcards`, `sstates`, `snaps`, `logs`, `cheats`, `patches`) and
+reports no `resources` folder; with no firmware it wrote no file, so its profile (the memory cards in
+`system/pcsx2/memcards/` as `ps2.card` saves) waits for a run with the player's BIOS.
+
+**Not done in stage 1**: the profile of PCEE2's cards (above); options declared in `retro_load_game` recorded for the next
+load (they are noted, not yet kept); the C# host's 1.16 (the image path and named files), which comes with stage 2's
+WiseMan class; and the secondary cheat path, which needs a way for the host to hand a core a code it cannot decode, which
+v1 has not (§12, question 4).
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
@@ -649,3 +690,7 @@ is x86-64 only [R], which covers the desktop and the handheld.
 3. **[decision]** The PS2's unencrypted cheat formats as a system-pack step, shared by Sapphire and the hosted core, so
    that EmuSen's own codes reach the hosted PS2 core. *Recommended:* yes (approved 2026-10-31), after stage 1 has recorded
 what PCEE2 exposes.
+4. **[decision]** The secondary cheat path (§4.9) needs the host to hand a core the text of a code no codec decodes, which
+   v1 cannot: an optional capability, `CHEAT_CODES`, with `emusen_core_set_cheat_codes(machine, text, len)`, one code per
+   line with its index and switch, the core answering which it took. *Recommended:* build it when a hosted core that
+   honours `retro_cheat_set` is a target; PCEE2's `.info` says `cheats = "false"`, so it gains nothing now.

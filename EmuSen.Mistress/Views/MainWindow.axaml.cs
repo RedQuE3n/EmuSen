@@ -457,6 +457,9 @@ namespace EmuSen.Mistress.Views
         // The library's discs converted to CHD beside it, checked and listed; the library is only read - see EmuSen_GamePackages.md §13.
         private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory, _appSettings), this);
 
+        // The library's games as packages, made, checked, zipped and converted through the library tool's jobs; the library is only read - see EmuSen_Packages.md §7.
+        private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
+
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
         private void ShowShaderSettings() =>
             _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
@@ -771,6 +774,7 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
                     new LunaAction("_Memory Cards...", ShowMemoryCards),
                     new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
+                    new LunaAction("Pac_kages...", ShowPackages),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.

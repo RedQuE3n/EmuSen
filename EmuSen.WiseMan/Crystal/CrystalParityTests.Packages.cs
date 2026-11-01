@@ -25,6 +25,9 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(p.Write(Path.Combine(folder, GamePackage.FileName)));
         }
 
+        // One time for a planted game in both runs, so the manifests each leaves record the same seen time.
+        internal static readonly DateTime PlantedAt = new(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
+
         // The paths of a session's state slots, which two routes to one game must share.
         private static string SlotPaths(string slots) => string.Join("\n", JsonNode.Parse(slots)!.AsArray().Select(e => e!["path"]!.GetValue<string>()));
 
@@ -45,6 +48,7 @@ namespace EmuSen.WiseMan.Crystal
                     if (Directory.Exists(d)) Directory.Delete(d, recursive: true);
                 Directory.CreateDirectory(Path.GetDirectoryName(game)!);
                 File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+                File.SetLastWriteTimeUtc(game, PlantedAt);
                 new AppSettings { RomDirectory = library }.Save();
                 PackageFor(package, library, "TEST/plain.tst", "test");
                 Directory.CreateDirectory(Path.GetDirectoryName(plainSave)!);

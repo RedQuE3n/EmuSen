@@ -67,23 +67,30 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
     }
     files.sort();
     files.dedup();
-    let ids: Vec<String> = emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default();
-    let systems = emusen_library::scan::Systems::named(&ids);
-    let mut found: Vec<Item> = Vec::new();
-    for at in image_sets::shelved(files) {
-        if !DISC_EXTENSIONS.iter().any(|e| ends_with_ignore_case(&at, e)) {
-            continue;
-        }
-        let rel = rel_of(library, &at);
-        let Some(id) = emusen_library::scan::route(&at, &systems).or_else(|| by_folder(&rel)) else { continue };
-        if !CD_SYSTEMS.contains(&id.as_str()) {
-            continue;
-        }
-        let Some(system) = emusen_systems::find(&id) else { continue };
-        found.push(Item { rel, path: at, system });
-    }
+    let systems = crate::packages::every_system();
+    let mut found: Vec<Item> = image_sets::shelved(files).into_iter().filter_map(|at| item_of(library, at, &systems)).collect();
     found.sort_by(|a, b| compare_ignore_case(&a.rel, &b.rel).then_with(|| a.rel.cmp(&b.rel)));
     (found, refused)
+}
+
+/// A library file as the disc the tool converts, or none: a sheet, track, ISO, zip or playlist of a CD system.
+fn item_of(library: &str, at: String, systems: &emusen_library::scan::Systems) -> Option<Item> {
+    if !DISC_EXTENSIONS.iter().any(|e| ends_with_ignore_case(&at, e)) {
+        return None;
+    }
+    let rel = rel_of(library, &at);
+    let id = emusen_library::scan::route(&at, systems).or_else(|| by_folder(&rel))?;
+    if !CD_SYSTEMS.contains(&id.as_str()) {
+        return None;
+    }
+    let system = emusen_systems::find(&id)?;
+    Some(Item { rel, path: at, system })
+}
+
+/// Whether `chd convert` takes a library file, as `items` would find it (EmuSen_Packages.md §3a); a playlist is not
+/// converted as one, so it is not offered.
+pub fn convertible(library: &str, at: &str, systems: &emusen_library::scan::Systems) -> bool {
+    !ends_with_ignore_case(at, ".m3u") && item_of(library, at.to_string(), systems).is_some()
 }
 
 /// Where the scan's routing names no system (no recogniser claimed the disc, and the folder holding it is no ES-DE

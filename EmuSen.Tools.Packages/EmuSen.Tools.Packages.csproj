@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Packages, the package manager, as a tool library: needs only LunaP, Galaxia and the platform library, and is hosted by a thin host - see EmuSen_LibraryTools.md §1b and EmuSen_Packages.md. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>EmuSen.Tools.Packages</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\LunaP.props" />
+
+</Project>

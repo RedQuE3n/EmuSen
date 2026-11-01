@@ -100,7 +100,7 @@ namespace EmuSen.Serenity.Native
             public fixed byte DriverUuid[16];
         }
 
-        // emusen_serenity_ring_image, laid out as the core ABI's emusen_ring_image, since interface 28.
+        // emusen_serenity_ring_image_info, laid out as the core ABI's emusen_ring_image, since interface 28.
         [StructLayout(LayoutKind.Sequential)]
         internal struct RingImageInfo
         {

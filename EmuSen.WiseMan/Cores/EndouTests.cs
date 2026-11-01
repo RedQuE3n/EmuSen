@@ -369,7 +369,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
             Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            var expected = Enumerable.Range(1, 24).Where(n => n != 16).Select(n => $"C{n}").ToArray();
+            var expected = Enumerable.Range(1, 25).Where(n => n != 16).Select(n => $"C{n}").ToArray();
             foreach (var (name, image) in new[]
             {
                 ("export.sms", SyntheticSmsRom.Cartridge()),

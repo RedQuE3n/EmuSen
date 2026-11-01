@@ -672,6 +672,45 @@ load (they are noted, not yet kept; carried to stage 2, §10); the C# host's 1.1
 WiseMan class; and the secondary cheat path, which needs a way for the host to hand a core a code it cannot decode, which
 v1 has not (§11a).
 
+## 10b. Stage 2, as built (2026-10-31)
+
+**Built**: `emusen-core-broker` (the protocol, the runner, the client with its deadlines, the Landlock confinement, the
+frame-end window, and `broker_exports!`, which writes a proxy's exports for a target and its optional groups) and
+`emusen-libretro-proxy` (the library a host loads for an entry: the sealed copy of the core, the runner's policy, the
+`"libretro"` member of core info). Options a core declares while loading are kept in its folder and join the schema at
+every later load (§4.7).
+
+**What building it changed** [M]:
+- **A private `/dev/shm`.** PCEE2 failed to map its machine under the first ruleset ("Failed to create shared memory
+  file"): it creates `/dev/shm/pcsx2_<pid>`. Opening `/dev/shm` to a core would open every other program's segments to
+  it, so the runner makes a user and a mount namespace and a tmpfs over `/dev/shm` of its own before Landlock, and only
+  then grants it; where user namespaces are unavailable, `create` fails in words.
+- **`/proc/cpuinfo`, `/proc/meminfo` and `/proc/stat`** are readable: PCEE2 reads the first to know the processor.
+- **The ruleset, traced** with `strace -f -e trace=openat,ioctl,connect` (strace 7.3 unpacked user-locally) on PCEE2
+  brokered: the only refusals left are `/dev/input/event*`, the host's input devices, which the core reaches through the
+  host; refused, as they should be. The Vulkan half of §3.3 is traced in stage 3, with the render node in use.
+- **The runner's descriptors** are moved above 100 before being placed at 3 and 4: a sealed copy that happened to be
+  descriptor 3 was overwritten by the socket, and the core loaded the socket.
+
+**Measured** [M, 2026-10-31, the RX 6800 machine, debug builds of the proxy and runner]: a round trip 8.9–9.4 µs (P1,
+under 50 µs, holds); 1,000 reads of a held range 12.1 ms through round trips and 0.064 ms through the window; PCEE2 with
+no firmware, 60 frames in 0.74 s brokered against 0.68 s in-process (start-up included). Memory held still between two
+reads 0.5 ms apart in each of 1,000 frames, for the test core brokered and for PCEE2 in-process (1 MiB of `RAM`; with no
+firmware, so its threads were idle; to be repeated with the player's BIOS before the window is relied on for PCEE2).
+
+**Tests**: the kit passes all 24 cases on the test core through the broker (C7, C10 and C12 among them, which stage 1
+could not); 10 brokered tests: the hash of the sealed copy in core info, two machines side by side, a fault the core
+handles running on, a crash and an abort ending with `-10` and the signal while the host runs on, a hung frame stopped at
+a one-second deadline with `-11`, a write outside the core's folders and a network connection refused by the kernel, a
+kernel that cannot confine the core failing `create`, the window exact across writes and a load, and the race check.
+Seeded faults, each caught: no deadline on a read, Landlock skipped, the window outliving a load, a stale window (the
+first seed of it, a redundant line, was not a fault; the second was caught), the descriptors placed over each other.
+
+**Not done in stage 2**: the C# host's 1.16 (the image path, named files stored by name, the two new obligations) and
+the WiseMan class through it; the host's comparison of core info's `"libretro"` hash with `cores.approved` (§1.3, step 2),
+which belongs with the approval the Cores window shows; the frame's picture and sound batched into `advance`'s reply
+(each is one round trip now, about 9 µs).
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

@@ -2020,8 +2020,13 @@ buffers that `FrameHandOff` owns and gets back from the control, so a frame allo
 (`FrameHandOffTests.With_the_picture_copied_as_Mistress_copies_it_a_frame_allocates_next_to_nothing`). The raw picture
 is selected and copied the same way when the screen's filter reads one.
 
-Which way the picture reaches the screen is said once in the log, at a session's first picture (`[picture] <engine>:
-on the device …` or `read back: …` with the reason), as proposed with the device lend.
+Which way the picture reaches the screen is said in the log (`[picture] <engine>: in a ring …`, `on the device …` or
+`read back: …` with the reason), as proposed with the device lend. *Since 2026-11-01 it is said each time the path
+changes* (`PicturePaths`), not once at the first picture. The first picture is offered before the screen has ever
+presented on the device. So a ringed session was named "read back: the engine took no lent device" for its whole life,
+though every frame after the first went through the ring. On 2026-11-01 Jak on PCEE2 showed this: hand-off was 0.02 ms a
+frame, with no read-back. A ringed or lent frame shown while the screen is not presenting on the device now says so in
+its own words.
 
 The launch screen's load under the screen now opens the session on a worker for every engine, not only the v1 engines:
 `open` may be called on any thread.

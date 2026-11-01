@@ -281,6 +281,37 @@ int32_t emusen_galaxia_mapped_advise(const emusen_galaxia_mapped *mapped, uint64
 /* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
 int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
 
+/* ---- The scraper lent to every shell (EmuSen_LibraryTools.md, section 8; since 28) ---- */
+
+/*
+ * The emusen.scrape service (emusen_scrape_service.h) speaks for the process's one scraper. A host that holds its own
+ * lends it here, with the games.db library it was opened with, the systems the build opens (a JSON list of system ids,
+ * empty for every system of the table) and, where it loads themes, a function answering a system's ES-DE name with the
+ * media types its active theme draws, by the length-query idiom, callable from any thread with ctx. A null lend, or one
+ * with a null scraper, withdraws it: the service then refuses rather than open a scraper of its own, as it does in a
+ * process whose host has ever lent one. A lend or withdrawal waits for the service's calls in flight, so the host may
+ * close its handles once it returns.
+ */
+typedef struct emusen_scraping_lend_info {
+    uint32_t size;
+    struct emusen_scrape *scraper;
+    struct emusen_library *library;
+    const uint8_t *systems; size_t systems_len;
+    int64_t (*theme_kinds)(void *ctx, const uint8_t *system, size_t len, uint8_t *out, size_t out_len);
+    void *ctx;
+} emusen_scraping_lend_info;
+
+int32_t emusen_scraping_lend(const emusen_scraping_lend_info *lend);
+
+/*
+ * Since 29: the scrape command as data, for a window that fronts it (EmuSen_LibraryTools.md, section 9). The request is
+ * {"args": [...], "paths": [...], "sources": bool}, args the words after "scrape" (ls, plan, run, status, progress,
+ * wait, cancel, collections), and the answer JSON by the length-query idiom: the games the module chooses with each kind's source,
+ * the plan, a started run, the status. The choice is the emusen.scrape module's own, over the same service as a shell's.
+ * A failure is a status of emusen_scrape.h, its words read with emusen_scrape_last_error on the same thread.
+ */
+int64_t emusen_scraping_command(const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+
 /* ---- Soft patches (EmuSen_GamePackages.md, sections 5.4 and 15; since 26) ---- */
 
 /*

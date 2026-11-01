@@ -1,0 +1,87 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command scrape
+shell rust
+usage 1   scrape ls [<choice>...] [--kinds <k,...>|theme] [--videos]
+usage 2                                 the chosen games, one a line: path, system, and where each kind comes from
+usage 3   scrape plan [<choice>...] [<option>...]
+usage 4                                 what a run would ask: games, requests, the day's quota left; nothing is sent
+usage 5   scrape run [<choice>...] [<option>...] [--resume]
+usage 6                                 the plan on standard error, then the run: one line a game as it finishes
+usage 7   scrape status                 the quota, the account and the run going, one key a line
+usage 8   scrape wait [scrape<n>]       follow a run that went on in the background (ps lists it, kill stops it)
+usage 9   choices: --system <s>, --favorites, --collection <name>, --missing <kind>|any, <path>..., or paths on stdin
+usage 10   options: --kinds, --videos, --overwrite, --region <r>, --language <l>, --threads <n>
+
+case the usage, and what a command line refuses
+target none
+covers 1-10
+$ scrape
+out 368
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape frobnicate
+out 368
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape ls --overwrite
+out 418
+scrape: --overwrite is not an option of scrape ls
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape plan --kinds boxart
+out 165
+scrape: --kinds boxart: not a kind; the kinds are cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart, manual, video, or theme
+status 1
+action none
+$ scrape plan --missing wheel
+out 190
+scrape: --missing wheel: not a kind; the kinds are cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart, manual, video, a list of them, any, or metadata
+status 1
+action none
+$ scrape run --resume --system snes
+out 465
+scrape run --resume: an interrupted run goes on as it was queued, so it takes no choice or kinds
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape plan --threads 0
+out 409
+scrape: --threads needs a number above 0
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape plan --system
+out 399
+scrape: --system needs a value
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape status now
+out 401
+scrape status takes nothing more
+Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]
+  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.
+status 1
+action none
+$ scrape wait
+out 31
+scrape wait: no such scrape job
+status 1
+action none
+$ scrape wait scrape9
+out 39
+scrape wait: no such scrape job scrape9
+status 1
+action none
+end

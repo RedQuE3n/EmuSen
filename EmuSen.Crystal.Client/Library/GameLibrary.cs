@@ -216,6 +216,7 @@ namespace EmuSen.Crystal.Client.Library
         // Cancels what runs on the handle, waits for every call in progress, then closes it.
         public void Dispose()
         {
+            EmuSen.Crystal.Client.Scrape.ScrapingLend.Release(this);
             nint h;
             lock (_gate)
             {

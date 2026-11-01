@@ -12,6 +12,7 @@ const EMUSEN_SCRAPE_NOT_SUPPORTED -256 @1.0
 const EMUSEN_SCRAPE_NO_LIBRARY -1166 @1.0
 const EMUSEN_SCRAPE_NO_SQLITE -1162 @1.0
 const EMUSEN_SCRAPE_NULL -1 @1.0
+const EMUSEN_SCRAPE_STORE_IN_USE -1167 @1.1
 field emusen_scrape_config.embedded offset 40 @1.0
 field emusen_scrape_config.embedded_len offset 48 @1.0
 field emusen_scrape_config.library offset 32 @1.0

@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Crystal.Client.Scrape;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -159,6 +160,8 @@ namespace EmuSen.Mistress.Views
         {
             _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring));
             EarlyLoader = OpenSession;
+            // Mistress scrapes, so no shell of this process opens a scraper of its own (EmuSen_LibraryTools.md §8).
+            ScrapingLend.Withdraw();
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _frameAdvance = new LunaAction("Frame _Advance", AdvanceOneFrame);
             _reset = new LunaAction("_Reset", ResetEmulation);
@@ -801,6 +804,8 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
                     new LunaAction("Co_res...", ShowCores),
                     new LunaAction("Pac_kages...", ShowPackages),
+                    new LunaAction("Sc_raper...", ShowScraper),
+                    new LunaAction("_Library Manager...", ShowLibraryManager),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.

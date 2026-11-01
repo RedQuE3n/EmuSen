@@ -8,7 +8,7 @@ namespace EmuSen.Crystal.Client.Scrape
     // A status the scraper answered with, and its words, as emusen_scrape.h names them; the words are always redacted.
     public sealed class MediaServiceException(int status, string words) : Exception(words)
     {
-        public const int NewerFile = -1160, Database = -1161, NoSqlite = -1162, BadRequest = -1163, Busy = -1164, Io = -1165, NoLibrary = -1166;
+        public const int NewerFile = -1160, Database = -1161, NoSqlite = -1162, BadRequest = -1163, Busy = -1164, Io = -1165, NoLibrary = -1166, StoreInUse = -1167;
 
         public int Status { get; } = status;
     }
@@ -104,6 +104,9 @@ namespace EmuSen.Crystal.Client.Scrape
         private readonly object _gate = new();
         private int _calls;
         private bool _closing;
+
+        // The raw handle, for the lend to the shells alone.
+        internal nint Handle => _handle;
 
         private MediaService(Exports t, nint handle)
         {
@@ -228,6 +231,7 @@ namespace EmuSen.Crystal.Client.Scrape
         // Waits for every call in progress, then closes the handle, which cancels a run and joins its workers.
         public void Dispose()
         {
+            ScrapingLend.Release(this);
             lock (_gate)
             {
                 if (_handle == 0 || _closing) return;

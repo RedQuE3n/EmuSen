@@ -1,4 +1,4 @@
-/* emusen_scrape.h - scraping, version 1.0. Owned by the scraping component, emusen-scrape.
+/* emusen_scrape.h - scraping, version 1.1. Owned by the scraping component, emusen-scrape.
  *
  * Scraping below every frontend: the ScreenScraper client and its quota, the queue's run on the player's word alone,
  * OpenEmu's sources as the failover, the media store and media.db, and the order in which a game's pictures are
@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SCRAPE_MAJOR 1u
-#define EMUSEN_SCRAPE_MINOR 0u
+#define EMUSEN_SCRAPE_MINOR 1u
 #define EMUSEN_SCRAPE_VERSION ((EMUSEN_SCRAPE_MAJOR << 16) | EMUSEN_SCRAPE_MINOR)
 
 #define EMUSEN_SCRAPE_NULL (-1)
@@ -44,6 +44,7 @@ extern "C" {
 #define EMUSEN_SCRAPE_BUSY (-1164)        /* a run, or OpenVGDB's download, already going */
 #define EMUSEN_SCRAPE_IO (-1165)          /* a file of the store or a credential file could not be read or written */
 #define EMUSEN_SCRAPE_NO_LIBRARY (-1166)  /* a read that needs the lent library, with none lent */
+#define EMUSEN_SCRAPE_STORE_IN_USE (-1167) /* since 1.1: another handle, in this process or another, holds the store */
 
 typedef struct emusen_scrape emusen_scrape;
 struct emusen_library;
@@ -65,7 +66,10 @@ uint32_t emusen_scrape_abi_version(void);
 /* The words of this thread's last failing call, redacted. */
 int64_t emusen_scrape_last_error(uint8_t *out, size_t len);
 
-/* Opens the store at root, migrating media.db; a file of a newer schema is refused unwritten. */
+/* Opens the store at root, migrating media.db; a file of a newer schema is refused unwritten. Since 1.1 a handle
+ * holds the store alone, by an advisory lock on media.db.lock that other processes see, so that one quota counts the
+ * account's requests; a second open of a held store, here or in another process, is EMUSEN_SCRAPE_STORE_IN_USE with
+ * words naming the holder, and the lock is let go when the handle closes. */
 int32_t emusen_scrape_open(const emusen_scrape_config *config, emusen_scrape **out);
 
 /* Closes a handle: a run is cancelled and its workers joined, then media.db is closed. */

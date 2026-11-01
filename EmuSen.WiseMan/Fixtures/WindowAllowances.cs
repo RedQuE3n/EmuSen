@@ -32,10 +32,20 @@ namespace EmuSen.WiseMan.Fixtures
             "a game's title or state cut in the Packages table is whole in the detail while its row is chosen",
             c => c.FindAncestorOfType<LunaTable<EmuSen.Tools.Packages.PackageRow>>() is not null);
 
+        public static readonly FitAudit.Allowance ScraperCells = new(
+            "a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen",
+            c => c.FindAncestorOfType<LunaTable<EmuSen.Tools.Scraper.ScrapeRow>>() is not null);
+
+        public static readonly FitAudit.Allowance LibraryCells = new(
+            "a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen",
+            c => c.FindAncestorOfType<LunaTable<EmuSen.Tools.Library.LibraryRow>>() is not null);
+
         public static IReadOnlyList<FitAudit.Allowance> For(Window window) => window switch
         {
             CoresWindow => [FitAudit.TextBoxesScroll, CoreCells],
             PackagesWindow => [FitAudit.TextBoxesScroll, PackageCells],
+            ScraperWindow => [FitAudit.TextBoxesScroll, ScraperCells],
+            LibraryWindow => [FitAudit.TextBoxesScroll, LibraryCells],
             ActiveCheatsWindow => [FitAudit.TextBoxesScroll, CheatCells],
             ScrapeStatusWindow => [FitAudit.TextBoxesScroll, RecentGames],
             RewindReelWindow => [FitAudit.TextBoxesScroll, ReelTiles],
@@ -43,6 +53,6 @@ namespace EmuSen.WiseMan.Fixtures
         };
 
         // Every allowance, for the record of what the audit accepts.
-        public static IReadOnlyList<FitAudit.Allowance> All => [FitAudit.TextBoxesScroll, CheatCells, RecentGames, ReelTiles, PackageCells, CoreCells];
+        public static IReadOnlyList<FitAudit.Allowance> All => [FitAudit.TextBoxesScroll, CheatCells, RecentGames, ReelTiles, PackageCells, ScraperCells, LibraryCells, CoreCells];
     }
 }

@@ -565,12 +565,15 @@ dependencies = [
  "emusen-patch",
  "emusen-savemedia",
  "emusen-scrape",
+ "emusen-scrape-module",
  "emusen-serenity",
  "emusen-session",
  "emusen-session-service",
  "emusen-sqlite",
  "emusen-systems",
  "emusen-trace",
+ "rcgen",
+ "rustls",
 ]
 
 [[package]]
@@ -609,6 +612,14 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+]
+
+[[package]]
+name = "emusen-scrape-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
 ]
 
 [[package]]

@@ -24,6 +24,9 @@ namespace EmuSen.Mistress.Views
         bool ResumeScrape();
         void CancelScrape();
 
+        // The Scraper window, where a wide run is chosen and started - see EmuSen_Settings_Reference.md §4.60.
+        void ShowScraper() { }
+
         // The status window's - see EmuSen_Settings_Reference.md §4.57.
         void ShowScrapeStatus();
         bool ScrapePaused { get; }
@@ -78,11 +81,9 @@ namespace EmuSen.Mistress.Views
         private readonly Button _signOut = Ui.Button("Log Out", () => { });
         private readonly Button _statusButton = Ui.Button("Status...", () => { });
 
-        private readonly Dropdown _scopeShelf = new() { Name = "ScrapeShelfDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private readonly Dropdown _criteria = new() { Name = "ScrapeCriteriaDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly Button _cleanUp = Ui.Button("Clean Up...", () => { });
         private readonly HintText _cleanUpMessage = new() { Name = "ScrapeCleanUpMessage" };
-        private readonly Button _start = Ui.Button("Scrape...", () => { });
+        private readonly Button _scraper = Ui.Button("Open Scraper…", () => { });
         private readonly Button _resume = Ui.Button("Resume", () => { });
         private readonly Button _cancel = Ui.Button("Cancel Scraping", () => { });
         private readonly ProgressBar _progress = new() { Name = "ScrapeProgressBar", Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -91,16 +92,6 @@ namespace EmuSen.Mistress.Views
         private readonly Button _vgdbDownload = Ui.Button("Download", () => { });
         private readonly HintText _vgdbMessage = new() { Name = "OpenVgdbRemoveMessage" };
         private LunaSwitch? _fallback;
-
-        // The shelves a scope can name, Game Boy Color as its own; the first entry is the whole library.
-        public const string AllShelves = "Every console";
-
-        public static string[] ShelfChoices => [AllShelves, .. EmuSen.Mistress.Library.RuntimeCatalog.Shelves.Select(s => s.Name)];
-
-        public ScrapeScope ChosenScope() => new(Shelf: _scopeShelf.SelectedItem is string s && s != AllShelves ? s : null)
-        {
-            Criteria = ScrapeScope.CriteriaOf(_settings.ScrapeCriteria), Refresh = _settings.ScrapeRefresh,
-        };
 
         public ScrapePreferencesPane(AppSettings settings, IScrapeHost? host)
         {
@@ -119,9 +110,9 @@ namespace EmuSen.Mistress.Views
             _statusButton.Name = "ScrapeStatusButton";
             _statusButton.Click += (_, _) => _host?.ShowScrapeStatus();
 
-            _scopeShelf.Fill(ShelfChoices, AllShelves);
-            _start.Name = "ScrapeStartButton";
-            _start.Click += async (_, _) => { if (_host is not null) await _host.ConfirmAndScrapeAsync(ChosenScope()); Show(); };
+            _scraper.Name = "ScraperLinkButton";
+            _scraper.HorizontalAlignment = HorizontalAlignment.Left;
+            _scraper.Click += (_, _) => _host?.ShowScraper();
             _resume.Name = "ScrapeResumeButton";
             _resume.Click += (_, _) => { _host?.ResumeScrape(); Show(); };
             _cancel.Name = "ScrapeCancelButton";
@@ -132,14 +123,6 @@ namespace EmuSen.Mistress.Views
             _vgdbDownload.Click += async (_, _) => await DownloadOpenVgdbAsync();
             _cleanUp.Name = "ScrapeCleanUpButton";
             _cleanUp.Click += async (_, _) => await CleanUpAsync();
-            string[] criteria = ScrapeScope.CriteriaChoices.Select(c => c.Text).ToArray();
-            _criteria.Fill(criteria, ScrapeScope.CriteriaChoices.First(c => c.Value == ScrapeScope.CriteriaOf(_settings.ScrapeCriteria)).Text);
-            _criteria.Chose += chosen =>
-            {
-                if (ScrapeScope.CriteriaChoices.FirstOrDefault(c => c.Text == chosen as string) is not { Setting: not null } c) return;
-                _settings.ScrapeCriteria = c.Setting;
-                _settings.Save();
-            };
 
             string developer = _host?.DeveloperOrigin switch
             {
@@ -214,13 +197,13 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "Scrape",
-                    Hint = "Nothing is sent to ScreenScraper or OpenEmu's sources until you start it here, from a game's menu (Scrape This Game), or from the pad menu. "
-                        + "Choose a console or every console, and which of its games: all, favourites, those with no description (no metadata), with none of a mix image, screenshot, title screen or cover (no game image), with no video, or with no cover. "
-                        + "The count and the requests it will cost are shown before it starts. A run that is cancelled or stopped by the quota can be resumed; it never resumes by itself. "
-                        + "Refresh what is kept asks again about games already found: each costs a request, and a picture is fetched again only when ScreenScraper's copy has changed.",
-                    Content = Ui.Stack(6, _scopeShelf, _criteria,
+                    Hint = "Nothing is sent to ScreenScraper or OpenEmu's sources until you start it from the Scraper, from a game's menu (Scrape This Game), or from the pad menu's Scrape Games. "
+                        + "The Scraper chooses which games: a console, a collection, favourites, or those missing media or a description, with the plan shown before anything is sent. "
+                        + "A run that is cancelled or stopped by the quota can be resumed here; it never resumes by itself. "
+                        + "Refresh what is kept makes Scrape This Game ask again about a game already found: it costs a request, and a picture is fetched again only when ScreenScraper's copy has changed. The Scraper has its own Overwrite.",
+                    Content = Ui.Stack(6, _scraper,
                         Switch("ScrapeRefreshSwitch", "Refresh what is kept", _settings.ScrapeRefresh, v => _settings.ScrapeRefresh = v),
-                        Ui.Row(8, _start, _resume, _cancel, _statusButton), _progress),
+                        Ui.Row(8, _resume, _cancel, _statusButton), _progress),
                 },
                 new FieldRow
                 {
@@ -368,7 +351,7 @@ namespace EmuSen.Mistress.Views
             ShowOpenVgdb();
             _status.Text = _host?.Status ?? "";
             bool running = _host?.ScrapeRunning == true;
-            _start.IsEnabled = _host is not null && !running;
+            _scraper.IsEnabled = _host is not null;
             _resume.IsEnabled = !running && (_host?.Interrupted ?? 0) > 0;
             _cancel.IsEnabled = running;
             _cleanUp.IsEnabled = _host is not null && !running;

@@ -58,6 +58,20 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(packages));
         }
 
+        [Fact]
+        public void The_Scraper_tool_references_only_LunaP_and_Galaxia()
+        {
+            Assembly scraper = typeof(EmuSen.Tools.Scraper.ScraperPane).Assembly;
+            Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(scraper));
+        }
+
+        [Fact]
+        public void The_Library_tool_references_only_LunaP_and_Galaxia()
+        {
+            Assembly library = typeof(EmuSen.Tools.Library.LibraryPane).Assembly;
+            Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(library));
+        }
+
         // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
         [Fact]
         public void LunaP_references_nothing_of_EmuSen()

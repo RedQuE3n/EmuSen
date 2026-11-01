@@ -21,14 +21,6 @@ namespace EmuSen.Mistress.Scraping
         public bool Refresh { get; init; }
 
         public ScrapeCriteria Effective => MissingArtOnly ? ScrapeCriteria.NoCover : Criteria;
-
-        public static readonly IReadOnlyList<(ScrapeCriteria Value, string Setting, string Text)> CriteriaChoices =
-        [
-            (ScrapeCriteria.NoCover, "nocover", "Games with no cover"), (ScrapeCriteria.All, "all", "All games"), (ScrapeCriteria.Favourites, "favorites", "Favourite games"),
-            (ScrapeCriteria.NoMetadata, "nometadata", "No metadata"), (ScrapeCriteria.NoGameImage, "nogameimage", "No game image"), (ScrapeCriteria.NoGameVideo, "nogamevideo", "No game video"),
-        ];
-
-        public static ScrapeCriteria CriteriaOf(string? setting) => CriteriaChoices.FirstOrDefault(c => c.Setting == setting) is { Setting: not null } c ? c.Value : ScrapeCriteria.NoCover;
     }
 
     // What each kind is expected to cost a found game: the share of §17.9's 39 found answers offering it, and the mean size of the file the region rule would take - see EmuSen_BigPicture.md §38.

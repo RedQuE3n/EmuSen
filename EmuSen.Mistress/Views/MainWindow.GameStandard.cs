@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Layout;
 using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.Input;
 using EmuSen.Serenity.Shaders;
 
 namespace EmuSen.Mistress.Views
@@ -34,14 +35,27 @@ namespace EmuSen.Mistress.Views
             {
                 Row = () => new FieldRow { Label = StandardRow, Content = choice },
                 MenuRow = () => MenuRows.Apply(choice, StandardRow),
-                Apply = () =>
-                {
-                    string? chosen = StandardChoices.FirstOrDefault(c => c.Text == choice.SelectedItem as string, StandardChoices[0]).Value;
-                    if (chosen == stored) return;
-                    _records.SetStandardChoice(path, chosen, DateTime.Now);
-                    if (IsRunning(path)) ApplyScreenFilter(_activeConsole);
-                },
+                Apply = () => SetStandard(path, StandardChoices.FirstOrDefault(c => c.Text == choice.SelectedItem as string, StandardChoices[0]).Value),
             };
+        }
+
+        // The same choice as a card's row, stepped with Left and Right and kept at once.
+        private PadMenuEntry StandardEntry(string path)
+        {
+            int At() => Math.Max(0, Array.FindIndex(StandardChoices, c => c.Value == _records.StandardChoice(path)));
+            return new PadMenuEntry(() => StandardRow, () => { }, by => SetStandard(path, StandardChoices[(At() + by + StandardChoices.Length) % StandardChoices.Length].Value), closes: false)
+            {
+                Label = () => StandardRow,
+                Value = () => StandardChoices[At()].Text,
+            };
+        }
+
+        // Kept when it changes; a running game is drawn again with it.
+        private void SetStandard(string path, string? chosen)
+        {
+            if (chosen == _records.StandardChoice(path)) return;
+            _records.SetStandardChoice(path, chosen, DateTime.Now);
+            if (IsRunning(path)) ApplyScreenFilter(_activeConsole);
         }
     }
 }

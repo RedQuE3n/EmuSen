@@ -1136,6 +1136,7 @@ namespace EmuSen.Mistress.Views
             }
 
             PauseEmulation(); // before the screens swap, so no frame runs unwatched
+            _suspendedAt = DateTime.Now;
             GameFrame.IsVisible = false;
             LibraryView.IsVisible = true;
             RefreshLibrary();

@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // Scale-up, caught part way: the pad menu at the start of its opening.
             s.Settings.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningScaleUp;
             s.Pad.Start();
-            MenuPanel menu = s.Window.GetControl<MenuPanel>("PadMenuBig");
+            MenuPanel menu = EmuSen.WiseMan.Fixtures.PadMenu.Big(s.Window);
             menu.OpeningScale = 0.75;
             s.Capture().SavePng(Path.Combine(MetadataEditorPictureTool.PngFolder, $"{p}-menu-opening-0.75.png"));
             s.Pad.B();

@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Mistress
             try
             {
                 Assert.Contains("Start PlayStation", Rows(Call(window, "StartConsoleRows")));
-                Assert.Contains(MainWindow.StartConsoleMenu, Rows(Call(window, "LibraryRows")));
+                Assert.Contains(MainWindow.StartConsoleMenu, Rows(Call(window, "HomeRows")));
                 var button = window.GetControl<Button>("StartConsoleButton");
                 Field<AppSettings>(window, "_appSettings").SelectedCore = CoreCatalog.ShelvesInReleaseOrder.First(s => s.Core.Console == "PlayStation").Name;
                 Call(window, "UpdateStartConsoleButton");

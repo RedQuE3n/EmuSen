@@ -33,6 +33,8 @@ emusen-core-host = { path = "../../Shared/emusen-core-host" }
 emusen-libretro-testcore = { path = "../emusen-libretro-testcore" }
 # The host's side of the ring, which the ring tests lend and read (EmuSen_LibretroHost.md §10f).
 emusen-serenity = { path = "../../../../Platform/serenity" }
+# The run example's pictures at fixed frames, as PNG.
+emusen-crystal = { path = "../../../../Platform/crystal" }
 
 [profile.release]
 panic = "abort"

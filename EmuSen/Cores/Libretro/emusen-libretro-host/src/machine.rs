@@ -267,7 +267,7 @@ impl Machine {
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        // The context is destroyed before the game is unloaded and the device after it (EmuSen_LibretroHost.md §10f).
+        // The context is destroyed before the game is unloaded and the device after retro_deinit (EmuSen_LibretroHost.md §10f).
         if self.shared.gpu.is_some()
             && let Some(destroy) = self.shared.hw.and_then(|h| h.destroy)
         {
@@ -279,8 +279,8 @@ impl Drop for Machine {
         {
             unsafe { destroy() };
         }
-        self.shared.gpu = None;
         unsafe { (self.lib.api.deinit)() };
+        self.shared.gpu = None;
         front::with_declared(|d| d.initialised = false);
         front::bind(std::ptr::null_mut());
         front::flush_logs();

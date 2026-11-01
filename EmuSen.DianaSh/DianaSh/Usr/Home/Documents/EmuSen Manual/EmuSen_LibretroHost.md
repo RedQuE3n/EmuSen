@@ -1045,6 +1045,19 @@ frame; taking cached memory where offered brought it to 0.26 ms. **Not yet measu
 in-process by `DEVICE_PICTURE` on Serenity's lent device, the comparison §5.4a names; it needs a project core whose
 `DEVICE_PICTURE` picture is the test core's, which neither test core has yet.
 
+**PCEE2 on Jak and Daxter through the ring** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
+the Rust host, `examples/run.rs` with `EMUSEN_RUN_RING=1`, PCEE2's `vulkan` renderer at `pcsx2_upscale_multiplier=1`,
+the BIOS given by path through `pcsx2_bios` and the referee system folder as in §10c, frames 600 to 2,400 of the start
+with no input, CPU weight 20 beside a landing sweep]: 5.150 and 5.004 ms a frame over two rounds, of which 4.054 and
+4.395 ms on the emulation thread (`advance` and `frame_ring`; the rest is `Ring::read`, the check copy); 2,398 of 2,400
+pictures in the ring, 512 × 448 at 4:3. The ring was lent at the core's declared maximum, 2,732 × 2,048, and lent again
+when `MACHINE_INFO` came. PNGs of the ring's picture at frames 600, 1,200 and 2,399 (the last the title, "Press Start",
+drawn by PCEE2's Vulkan renderer) are kept outside the repository, in `~/.cache/emusen/probe/libretro/ring-png/`.
+Two findings: (1) PCEE2 aborted at exit while its device was destroyed before `retro_deinit`; the device now outlives
+`retro_deinit` and the run exits cleanly. (2) Without the core's `.info` the machine's system is `libretro-pcee2`, so
+`fields_of` reads its 448 rows as progressive; with the entry's `.info` naming the PlayStation 2 it is `ps2` and two woven
+fields.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

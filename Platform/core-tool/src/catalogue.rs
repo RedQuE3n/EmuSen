@@ -179,7 +179,8 @@ pub fn rows(ctx: &Context, catalogue: &Catalogue) -> Result<Vec<Row>, String> {
                 Some(l) if l.crc32 != n.index_crc32 || l.date != n.build => (State::Update, None),
                 _ => (State::Installed, None),
             },
-            (None, _) => match info.as_ref().and_then(CoreInfo::unsupported) {
+            // A listed core's renderer is the list's, which overrides a .info naming only OpenGL (EmuSen_Cores.md §4.7).
+            (None, _) => match info.as_ref().filter(|_| hosted.is_none()).and_then(CoreInfo::unsupported) {
                 Some(why) => (State::Unsupported, Some(why)),
                 None if ctx.placement.is_some() && systems.is_empty() => (State::Unsupported, Some("no EmuSen console runs this system".into())),
                 None => (State::Available, None),

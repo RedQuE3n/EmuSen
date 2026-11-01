@@ -104,7 +104,9 @@ fn engines_of_console<'d>(discovery: &'d Discovery, console: &str) -> Vec<&'d Di
             ids.push(p.id.clone());
         }
     }
-    discovery.found().iter().filter(|c| c.sidecar.info.systems.iter().any(|s| ids.contains(&s.id) || equals_ignore_case(&s.id, console))).collect()
+    let engines = discovery.found().iter().filter(|c| c.sidecar.info.systems.iter().any(|s| ids.contains(&s.id) || equals_ignore_case(&s.id, console))).collect();
+    let system = ids.iter().find(|id| emusen_systems::libretro_cores::default_for(id).is_some()).or(ids.first());
+    discovery.in_rule_order(engines, system.map(String::as_str))
 }
 
 /// A save medium's rows: its mode, and a row for each slot, `MemoryCards.RowsFor`.

@@ -17,5 +17,6 @@
   "media": [],
   "byte_order": "big",
   "libretro_databases": ["Sega - 32X"],
-  "libretro_systemids": []
+  "libretro_systemids": [],
+  "firmware_note": null
 }

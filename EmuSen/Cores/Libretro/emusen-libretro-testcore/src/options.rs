@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 22] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 24] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -24,13 +24,15 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 22] = [
     ("tc_probe", "Environment probe", "probe", &["off", "on"], "Every environment command called at load."),
     ("tc_log_thread", "Log from a thread", "probe", &["off", "on"], "A formatted log line from a thread of the core's."),
     ("tc_late_option", "Declares at load", "probe", &["off", "on"], "An option declared only while loading the game."),
-    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
+    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang", "read_system"], "What the core does at its second frame, for the broker's proofs."),
+    ("tc_fail", "Fails to start", "probe", &["none", "load", "first_frame"], "The core refuses the game at load, or takes it and says at its first frame that it cannot start."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
     ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
     ("tc_scale", "Internal scale", "picture", &["1", "2"], "The picture drawn at a multiple of its native size, as a console core's upscaling is."),
+    ("tc_lag", "Picture a frame late", "picture", &["off", "on"], "Each frame shows the previous frame's picture, held outside the state, as a core rendering on a thread of its own does."),
     ("tc_deinterlace", "Deinterlacing", "picture", &["off", "blend"], "Each odd row a copy of the row above, as a console core's deinterlacing blends two fields."),
-    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
+    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra", "vulkan_v1", "vulkan_v1_loader"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA; v1 its device made through negotiation v1, by the host's vkCreateDevice or the loader's."),
 ];
 
 pub const CATEGORIES: [(&str, &str); 5] = [("picture", "Picture"), ("sound", "Sound"), ("memory", "Memory"), ("states", "States"), ("probe", "Probe")];
@@ -71,10 +73,12 @@ pub struct Options {
     pub set_variable: bool,
     pub note: String,
     pub fault: String,
+    pub fail: String,
     pub rumble: bool,
     pub hw: String,
     pub scale: u32,
     pub blend: bool,
+    pub lag: bool,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -207,10 +211,12 @@ impl Options {
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
             fault: get("tc_fault"),
+            fail: get("tc_fail"),
             rumble: on("tc_rumble"),
             hw: get("tc_hw"),
             scale: get("tc_scale").parse().unwrap_or(1),
             blend: get("tc_deinterlace") == "blend",
+            lag: on("tc_lag"),
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);
@@ -227,6 +233,11 @@ impl Options {
         if self.hw != "off" && !self.hw.is_empty() {
             return sys::PIXEL_FORMAT_XRGB8888;
         }
+        self.declared_format()
+    }
+
+    /// The format `tc_format` names, which a Vulkan core declares though its hardware frames are 8-bit (§10o).
+    pub fn declared_format(&self) -> i32 {
         match self.format.as_str() {
             "rgb565" => sys::PIXEL_FORMAT_RGB565,
             "0rgb1555" => sys::PIXEL_FORMAT_0RGB1555,

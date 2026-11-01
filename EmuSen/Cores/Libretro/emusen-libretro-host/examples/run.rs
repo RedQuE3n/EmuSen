@@ -2,7 +2,8 @@
 // image given by path, run for a number of frames, and what it said (EmuSen_LibretroHost.md §9). With EMUSEN_RUN_RING=1
 // its pictures go on a Serenity ring; EMUSEN_RUN_PNG=DIR:F,F,... keeps the ring's picture at those frames (§10f).
 // EMUSEN_RUN_PADS=FILE presses port 0's buttons by a script; EMUSEN_RUN_FILES=N=PATH,... passes battery files and
-// writes them back at the end (§10j).
+// writes them back at the end (§10j). EMUSEN_RUN_STATE=S,L,... saves a state after frame S and loads it after each L,
+// printing the digests of the pictures that follow (§10p).
 
 use std::ffi::CString;
 use std::path::Path;
@@ -101,6 +102,14 @@ fn battery_files(spec: &str) -> Vec<(u32, String, Option<Vec<u8>>)> {
     }).collect()
 }
 
+/// The machine's picture as eight bytes of its SHA-256, read back.
+fn picture_digest(m: &Machine) -> String {
+    use sha2::Digest;
+    let mut out = vec![0u8; m.frame_bytes().unwrap_or(0)];
+    let _ = m.frame_copy(&mut out);
+    sha2::Sha256::digest(&out).iter().take(8).map(|x| format!("{x:02x}")).collect()
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
@@ -150,6 +159,9 @@ fn main() {
             let png = std::env::var("EMUSEN_RUN_PNG").ok();
             let (png_dir, png_frames): (String, Vec<u64>) = png.as_deref().and_then(|p| p.split_once(':')).map_or((String::new(), Vec::new()), |(d, f)| (d.to_owned(), f.split(',').filter_map(|x| x.parse().ok()).collect()));
             let (mut emulation, mut in_ring) = (0f64, 0u64);
+            let state_at: Vec<u64> = std::env::var("EMUSEN_RUN_STATE").unwrap_or_default().split(',').filter_map(|x| x.parse().ok()).collect();
+            let mut saved_state: Option<Vec<u8>> = None;
+            let mut show = 0u32;
             for n in 0..frames {
                 if n == timed_from {
                     timed = Some(std::time::Instant::now());
@@ -183,6 +195,22 @@ fn main() {
                     ring = ring_for(&mut m);
                 }
                 samples += m.audio_drain(&mut audio).map_or(0, |a| a.0);
+                if show > 0 {
+                    show -= 1;
+                    println!("state: frame {n} picture {}", picture_digest(&m));
+                }
+                if let Some(i) = state_at.iter().position(|&f| f == n) {
+                    if i == 0 {
+                        let mut bytes = vec![0u8; m.state_size(0).unwrap()];
+                        let len = m.state_save(0, &mut bytes).unwrap();
+                        bytes.truncate(len);
+                        println!("state: saved after frame {n}, {len} bytes, picture {}", picture_digest(&m));
+                        saved_state = Some(bytes);
+                    } else if let Some(bytes) = &saved_state {
+                        println!("state: loaded after frame {n}: {:?}, picture {}", m.state_load(bytes), picture_digest(&m));
+                    }
+                    show = 5;
+                }
                 if race && size == 0 {
                     size = m.space_size(0).unwrap_or(0).min(1 << 20) as usize;
                     (first, second) = (vec![0u8; size], vec![0u8; size]);

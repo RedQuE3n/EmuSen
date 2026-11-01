@@ -1,0 +1,22 @@
+{
+  "id": "saturn",
+  "name": "Sega Saturn",
+  "console": "Saturn",
+  "manufacturer": "Sega",
+  "release_year": 1994,
+  "extensions": [".cue", ".chd", ".ccd", ".m3u"],
+  "cheat_systems": ["Sega - Saturn"],
+  "openvgdb_systems": ["Saturn"],
+  "cover_aspect": 1.14,
+  "esde_system": "saturn",
+  "esde_full_name": "Sega Saturn",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 22,
+  "cheat_space": null,
+  "media": [],
+  "byte_order": "big",
+  "libretro_databases": ["Sega - Saturn"],
+  "libretro_systemids": ["sega_saturn"],
+  "firmware_note": "Every Saturn game needs a Saturn BIOS of your own. There is no open replacement, and EmuSen never downloads or ships one."
+}

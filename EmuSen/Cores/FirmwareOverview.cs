@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Common.Firmware;
+using EmuSen.Crystal.Systems;
 using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Models;
 
@@ -24,7 +25,11 @@ namespace EmuSen.Cores
     }
 
     // A system the build runs and the engine that runs it, with the firmware that engine declares; none for most.
-    public sealed record FirmwareSystem(string Name, string Engine, IReadOnlyList<FirmwareItem> Items);
+    public sealed record FirmwareSystem(string Name, string Engine, IReadOnlyList<FirmwareItem> Items)
+    {
+        // What the console's firmware is, said once above its files where every engine EmuSen offers for it shares the need; null for most.
+        public string? Note { get; init; }
+    }
 
     // What every shipped system's firmware is doing, read from the cores' own declarations and the firmware folder, never a table of its own - see EmuSen_Settings_Reference.md §4.89.
     public static class FirmwareOverview
@@ -57,7 +62,7 @@ namespace EmuSen.Cores
             {
                 if (Shipped(core) is null) continue;
                 foreach (CoreSystem system in core.Info.Systems.Where(s => !s.Development && CoreCatalog.ConsoleForSystem(s.Id) is null && systems.All(known => known.Name != s.Name)))
-                    systems.Add(new FirmwareSystem(system.Name, core.EngineName, system.Firmware.Select(f => Item(CoreEngine.Request(core.Info.Name, f), f.Label, folders)).ToArray()));
+                    systems.Add(new FirmwareSystem(system.Name, core.EngineName, system.Firmware.Select(f => Item(CoreEngine.Request(core.Info.Name, f), f.Label, folders)).ToArray()) { Note = SystemTable.FirmwareNotes.GetValueOrDefault(system.Id) });
             }
             return systems;
         }

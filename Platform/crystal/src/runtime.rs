@@ -34,7 +34,8 @@ pub type Fetch = Arc<dyn Fn(&str) -> Result<Vec<u8>, String> + Send + Sync>;
 
 pub struct Runtime {
     directories: Vec<PathBuf>,
-    player: Vec<PathBuf>,
+    /// The player's directories as configured; none follows the data folder's `/Cores` at each scan.
+    player: Option<Vec<PathBuf>>,
     development: bool,
     trust: Mutex<Arc<Trust>>,
     discovery: Mutex<Arc<Discovery>>,
@@ -58,16 +59,22 @@ impl Runtime {
                 vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
             }
         };
-        let player: Vec<PathBuf> = match (&config.player_cores, &config.cores) {
-            (Some(dirs), _) => dirs.iter().map(PathBuf::from).collect(),
-            (None, None) => emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).map(PathBuf::from).into_iter().collect(),
-            (None, Some(_)) => Vec::new(),
+        let player: Option<Vec<PathBuf>> = match (&config.player_cores, &config.cores) {
+            (Some(dirs), _) => Some(dirs.iter().map(PathBuf::from).collect()),
+            (None, None) => None,
+            (None, Some(_)) => Some(Vec::new()),
         };
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let events = Arc::new(crate::events::Events::default());
-        let trust = Mutex::new(Arc::new(trust_of(&directories, &player, &events)));
-        let discovery = Mutex::new(Arc::new(Discovery::scan_with_player(&directories, &player, development)));
-        Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied()
+        let mine = player_directories(player.as_deref());
+        let trust = Mutex::new(Arc::new(trust_of(&directories, &mine, &events)));
+        let discovery = Mutex::new(Arc::new(discover(&directories, &mine, development)));
+        let rt = Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied();
+        let (discovery, trust) = (rt.discovery(), rt.trust());
+        if discovery.waiting().iter().any(|w| trust.approved(&w.sha256)) {
+            rt.rescan();
+        }
+        rt
     }
 
     /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.
@@ -91,11 +98,28 @@ impl Runtime {
         Catalog::new(&discovery).supported_cheat_systems()
     }
 
-    /// The cores directories listed again and the approvals read again.
+    /// The cores directories listed again and the approvals read again; an entry waiting to be read whose core is
+    /// approved already, as after `cores verify` refreshes its copies, is read and listed again, its approval standing.
     pub fn rescan(&self) {
-        let trust = Arc::new(trust_of(&self.directories, &self.player, &self.events));
+        self.scan();
+        let (discovery, trust) = (self.discovery(), self.trust());
+        let mut read = false;
+        for w in discovery.waiting().iter().filter(|w| trust.approved(&w.sha256)) {
+            match emusen_core_host::entry::read(w, &trust) {
+                Ok(_) => read = true,
+                Err(why) => self.say(why),
+            }
+        }
+        if read {
+            self.scan();
+        }
+    }
+
+    fn scan(&self) {
+        let mine = player_directories(self.player.as_deref());
+        let trust = Arc::new(trust_of(&self.directories, &mine, &self.events));
         *self.trust.lock().unwrap_or_else(|p| p.into_inner()) = trust;
-        let fresh = Arc::new(Discovery::scan_with_player(&self.directories, &self.player, self.development));
+        let fresh = Arc::new(discover(&self.directories, &mine, self.development));
         *self.discovery.lock().unwrap_or_else(|p| p.into_inner()) = fresh;
     }
 
@@ -118,6 +142,12 @@ impl Runtime {
                     emusen_core_host::sidecar::write(&u.library_path, false).map_err(|why| (crate::abi::status::IO, why))?;
                     written = true;
                 }
+                Err(why) => self.say(why),
+            }
+        }
+        for w in discovery.waiting().iter().filter(|w| w.sha256.eq_ignore_ascii_case(sha256)) {
+            match emusen_core_host::entry::read(w, &trust) {
+                Ok(_) => written = true,
                 Err(why) => self.say(why),
             }
         }
@@ -190,7 +220,7 @@ impl Runtime {
         }
         let mut groups: Vec<(&emusen_core_host::descriptors::CoreSystem, Vec<String>, bool)> = Vec::new();
         for c in discovery.found() {
-            for s in c.sidecar.info.systems.iter().filter(|s| discovery.offered(s) && !listed.contains(&s.id.as_str())) {
+            for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && !listed.contains(&s.id.as_str())) {
                 match groups.iter_mut().find(|(g, _, _)| g.id == s.id) {
                     Some((_, engines, empty)) => {
                         if !engines.iter().any(|e| e == c.engine_name()) {
@@ -495,6 +525,24 @@ impl Runtime {
     }
 }
 
+/// The player's directories: those configured, else the data folder's `/Cores` as the tree names it now, so a moved
+/// data folder is followed at the next scan, as `CoreDiscovery.PlayerDirectories` reads `DataStore.Cores` each time.
+fn player_directories(configured: Option<&[PathBuf]>) -> Vec<PathBuf> {
+    match configured {
+        Some(dirs) => dirs.to_vec(),
+        None => emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).map(PathBuf::from).into_iter().collect(),
+    }
+}
+
+/// The engines the directories hold, ordered and held by the hosted list (EmuSen_LibretroHost.md §10k).
+fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> Discovery {
+    let hosted = emusen_systems::libretro_cores::hosted()
+        .iter()
+        .map(|c| emusen_core_host::HostedCore { stem: c.stem.clone(), systems: c.systems.clone(), default_for: c.default_for.clone() })
+        .collect();
+    Discovery::scan_with_player(directories, player, development).with_hosted(hosted)
+}
+
 /// The approvals' file in the config directory, so a test's follows its config override (EmuSen_Backend.md §29.40.3).
 fn approvals_path() -> String {
     emusen_galaxia::tree::tree().config_path(None, trust::APPROVALS)
@@ -530,5 +578,7 @@ fn listed_name(discovery: &Discovery, sha256: &str) -> Result<String, crate::ope
         .find(|c| c.sidecar.sha256.eq_ignore_ascii_case(sha256))
         .map(|c| name(&c.sidecar.library_path))
         .or_else(|| discovery.unread().iter().find(|u| u.sha256.eq_ignore_ascii_case(sha256)).map(|u| name(&u.library_path)))
+        .or_else(|| discovery.waiting().iter().find(|w| w.sha256.eq_ignore_ascii_case(sha256)).map(|w| name(&w.entry.core_path())))
+        .or_else(|| discovery.found().iter().filter_map(|c| c.entry.as_ref()).find(|e| emusen_core_host::entry::core_hash(e).is_some_and(|h| h.eq_ignore_ascii_case(sha256))).map(|e| name(&e.core_path())))
         .ok_or_else(|| (emusen_session_service::abi::status::NO_SUCH_ID, format!("no core library listed has the SHA-256 {}", sha256.to_ascii_lowercase())))
 }

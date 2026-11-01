@@ -32,7 +32,7 @@ pub fn route(catalog: &Catalog, discovery: &Discovery, at: &str) -> (Option<usiz
     let mut rows: Vec<(Option<usize>, Option<&'static System>)> =
         catalog.rows.iter().enumerate().filter(|(_, r)| r.supports(&extension)).map(|(i, r)| (Some(i), catalog::pack_of(r.console()))).collect();
     for c in discovery.for_extension(&extension) {
-        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offered(s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension))) {
+        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension)) && takes(c, &s.id, at)) {
             let Some(entry) = emusen_systems::find(&s.id) else { continue };
             if catalog::hand_console_of(&entry.id).is_none()
                 && !rows.iter().any(|(r, e)| e.is_some_and(|e| std::ptr::eq(e, entry)) || r.is_some_and(|r| catalog.rows[r].console() == entry.console))
@@ -181,15 +181,53 @@ pub fn v1_engine<'d>(catalog: &Catalog, discovery: &'d Discovery, at: &str, engi
             .and_then(|r| emusen_systems::table().unwrap_or(&[]).iter().find(|s| s.console == catalog.rows[r].console()).map(|s| s.id.clone()))
     });
     let sole = row.and_then(|r| catalog::sole_engine(catalog.rows[r].console()));
-    let named = |name: &str| discovery.for_extension(&extension).find(|c| c.engine_name() == name);
+    let claims = |c: &emusen_core_host::Discovered| c.sidecar.info.system_for(&extension).is_some_and(|s| takes(c, &s.id, at));
+    let named = |name: &str| discovery.for_extension(&extension).find(|c| c.engine_name() == name && claims(c));
     let found = engine.and_then(named).or_else(|| match sole {
         Some(sole) => named(sole),
         None if engine.is_some() => None,
         None if catalog.rows.iter().any(|r| !r.discovered && r.supports(&extension)) => None,
         None => match &routed {
-            Some(system) => discovery.found().iter().find(|c| c.sidecar.info.systems.iter().any(|s| s.id == *system && discovery.offered(s))),
-            None => discovery.for_extension(&extension).next(),
+            Some(system) => discovery.for_system(system).find(|c| takes(c, system, at)),
+            None => discovery.for_extension(&extension).find(|c| claims(c)),
         },
     });
     Ok(found)
+}
+
+/// Whether an engine takes the game as one of `system`: a hosted core the list names by its installed `.info`'s own
+/// extensions (`emusen_systems::libretro_extensions`, EmuSen_LibretroHost.md §4.1a), every other engine as its info claims.
+pub fn takes(core: &emusen_core_host::Discovered, system: &str, at: &str) -> bool {
+    let Some(entry) = &core.entry else { return true };
+    if !emusen_systems::libretro_cores::hosted().iter().any(|h| h.stem == entry.stem) {
+        return true;
+    }
+    let info = std::fs::read_to_string(entry.info_path()).unwrap_or_default();
+    emusen_systems::libretro_extensions::takes(&entry.stem, &emusen_systems::libretro_extensions::info_extensions(&info), system, std::path::Path::new(at))
+}
+
+#[cfg(test)]
+mod hosted_tests {
+    use emusen_core_host::Discovery;
+    use emusen_core_host::entry::Entry;
+
+    #[test]
+    fn a_listed_hosted_core_takes_only_what_its_installed_info_lists_and_an_unlisted_one_what_its_info_claims() {
+        let root = std::env::temp_dir().join(format!("crystal-takes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let cores = root.join("Cores");
+        for (stem, info) in [("pcee2", "supported_extensions = \"iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx\"\n"), ("testcore", "")] {
+            let entry = Entry::new(&cores, stem).unwrap();
+            std::fs::create_dir_all(&entry.folder).unwrap();
+            std::fs::write(entry.info_path(), info).unwrap();
+            let sidecar = format!(r#"{{"sidecar":1,"library":"emusen-core-broker.so","sha256":"","abi":"1.17","info":{{"id":"{stem}","name":"{stem}","systems":[{{"id":"ps2","name":"PlayStation 2","extensions":[".iso",".cue"]}}]}}}}"#);
+            std::fs::write(emusen_core_host::sidecar::path_for(&entry.broker_path()), sidecar).unwrap();
+        }
+        let d = Discovery::scan_with_player(&[], &[cores], false);
+        let core = |stem: &str| d.found().iter().find(|c| c.entry.as_ref().is_some_and(|e| e.stem == stem)).unwrap();
+        assert!(super::takes(core("pcee2"), "ps2", "/games/Disc.ISO"));
+        assert!(!super::takes(core("pcee2"), "ps2", "/games/Disc.cue"), "PCEE2's .info lists no cue");
+        assert!(super::takes(core("testcore"), "ps2", "/games/Disc.cue"), "a core the list names nowhere takes what its info claims");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

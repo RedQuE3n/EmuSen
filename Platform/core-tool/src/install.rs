@@ -5,7 +5,6 @@
 use crate::catalogue::{self, Catalogue};
 use crate::Context;
 use emusen_core_entry::{built_name, library_suffix, sha256_file, valid_stem, Entry, Notice, ADAPTER, BROKER, HOST_LIBRARY, LIBRETRO, PREVIOUS, PROXY_LIBRARY, STAGING};
-use emusen_galaxia::rom_hash::Crc32;
 use emusen_galaxia::{archive, atomic, clock};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
@@ -183,8 +182,8 @@ fn refresh(ctx: &Context, entry: &Entry) -> Result<Vec<String>, String> {
     Ok(changed)
 }
 
-/// The zip fetched into `zip`, its CRC-32 taken as it comes, bounded at [`CORE_LIMIT`].
-fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note: &mut dyn FnMut(Note)) -> Result<u32, String> {
+/// The zip fetched into `zip`, bounded at [`CORE_LIMIT`].
+fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note: &mut dyn FnMut(Note)) -> Result<(), String> {
     let source = ctx.source.as_ref().ok_or("no buildbot listing is known for this platform")?;
     let mut request = emusen_net::Request::new(url.to_string(), Duration::from_secs(120));
     request.same_host = true;
@@ -193,7 +192,6 @@ fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note:
     request.offline = source.offline;
     let file = File::create(zip).map_err(|e| io(zip, e))?;
     let mut out = BufWriter::new(file);
-    let mut crc = Crc32::default();
     let progress = emusen_net::Progress::default();
     let (mut received, mut told, mut over, mut stopped) = (0u64, 0u64, false, false);
     let streamed = emusen_net::fetch_into(&request, Duration::from_secs(3600), &progress, &mut |chunk| {
@@ -206,7 +204,6 @@ fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note:
             over = true;
             return Ok(false);
         }
-        crc.append(chunk);
         out.write_all(chunk)?;
         if received - told >= PROGRESS_STEP {
             told = received;
@@ -226,12 +223,13 @@ fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note:
         return Err(format!("{url}: the buildbot answered {}", streamed.status));
     }
     note(Note::Progress { step: "download", bytes: received, total: Some(received) });
-    Ok(crc.value())
+    Ok(())
 }
 
-/// The core unpacked from a checked zip into `core`: exactly one member, named `<stem>_libretro.<suffix>` whole, no link,
-/// at most [`CORE_LIMIT`] declared and inflated, its CRC-32 checked, its header naming this machine.
-fn unpack(stem: &str, zip: &Path, core: &Path, note: &mut dyn FnMut(Note)) -> Result<(), String> {
+/// The core unpacked from a checked zip into `core`: exactly one member, named `<stem>_libretro.<suffix>` whole, whose
+/// CRC-32 as the zip records it is the index line's, no link, at most [`CORE_LIMIT`] declared and inflated, its bytes'
+/// CRC-32 checked, its header naming this machine.
+fn unpack(stem: &str, zip: &Path, core: &Path, index_crc32: u32, note: &mut dyn FnMut(Note)) -> Result<(), String> {
     let entries = archive::entries_of(&zip.to_string_lossy()).map_err(|e| format!("the zip does not read: {e}"))?;
     let want = format!("{stem}_libretro.{}", library_suffix());
     let [entry] = entries.as_slice() else {
@@ -240,6 +238,10 @@ fn unpack(stem: &str, zip: &Path, core: &Path, note: &mut dyn FnMut(Note)) -> Re
     if entry.full_name != want {
         return Err(format!("the zip's member is {:?}, not {want}", entry.full_name));
     }
+    if entry.crc32 != index_crc32 {
+        return Err(format!("the zip records {want}'s CRC-32 as {:08x}, and the index the plan was made from says {index_crc32:08x}: the build changed since cores fetch, or the bytes did; cores fetch reads the index again", entry.crc32));
+    }
+    note(Note::Checked("crc32"));
     if entry.platform == 3 && (entry.external >> 16) & 0o170000 == 0o120000 {
         return Err(format!("the zip's {want} is a link, not a file"));
     }
@@ -281,14 +283,10 @@ fn stage(ctx: &Context, cat: &Catalogue, stem: &str, stop: &dyn Fn() -> bool, no
     let folder = staging(ctx, stem, "");
     let zip = staging(ctx, stem, ".zip");
     make_folder(&folder)?;
-    let crc = download(ctx, &url, &zip, stop, note)?;
+    download(ctx, &url, &zip, stop, note)?;
     note(Note::Checked("transport"));
-    if crc != line.crc32 {
-        return Err(format!("the zip's CRC-32 is {crc:08x}, and the index the plan was made from says {:08x}: the build changed since cores fetch, or the bytes did; cores fetch reads the index again", line.crc32));
-    }
-    note(Note::Checked("crc32"));
     let entry = Entry::at(folder.clone(), stem).map_err(|e| e.0)?;
-    unpack(stem, &zip, &entry.core_path(), note)?;
+    unpack(stem, &zip, &entry.core_path(), line.crc32, note)?;
     let _ = std::fs::remove_file(&zip);
     let sha256 = sha256_file(&entry.core_path()).map_err(|e| io(&entry.core_path(), e))?;
     note(Note::Checked("sha256"));

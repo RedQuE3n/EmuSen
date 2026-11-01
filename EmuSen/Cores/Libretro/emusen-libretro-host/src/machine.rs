@@ -12,6 +12,7 @@ use emusen_native::core::{
 use emusen_native::ffi::{Status, StateMachine};
 
 use crate::console_picture;
+use crate::failure;
 use crate::files::{self, Saves};
 use crate::front::{self, Shared};
 use crate::library::{self, Library};
@@ -35,6 +36,8 @@ pub const STATUS_PLATFORM: i32 = -15;
 pub const STATUS_STATE_REFUSED: i32 = -16;
 /// The private folders could not be made or written.
 pub const STATUS_FOLDERS: i32 = -17;
+/// The core took the game and then said its machine could not start (EmuSen_LibretroHost.md §10n).
+pub const STATUS_NOT_STARTED: i32 = -18;
 
 static LIVE: AtomicBool = AtomicBool::new(false);
 /// The options a core declared while loading a game, kept in its folder for every later load (EmuSen_LibretroHost.md §4.7).
@@ -52,6 +55,7 @@ pub fn status_words(code: i32) -> Option<&'static str> {
         STATUS_PLATFORM => "a state saved on another platform, which this core's states depend on",
         STATUS_STATE_REFUSED => "the core refused the state; the machine is as it was",
         STATUS_FOLDERS => "the core's folders could not be made or written",
+        STATUS_NOT_STARTED => "the core could not start the game; its log says why",
         _ => return None,
     })
 }
@@ -96,6 +100,8 @@ pub struct Machine {
     disc: [u8; 16],
     /// The keys `console_picture` holds at the console's values, none while it is off.
     held: Vec<String>,
+    /// The core's line saying its machine could not start, after which every frame is refused (EmuSen_LibretroHost.md §10n).
+    failed: Option<String>,
 }
 
 /// Files removed when dropped: the firmware copies of a machine, or of a create that failed.
@@ -110,9 +116,9 @@ impl Drop for Written {
 }
 
 /// The system folder the core is given: its own, or for a referee run the one `EMUSEN_LIBRETRO_SYSTEM_DIR` names by path, so
-/// that firmware is never copied (EmuSen_LibretroHost.md §10c).
-fn system_folder(folders: &files::Folders) -> std::path::PathBuf {
-    std::env::var_os("EMUSEN_LIBRETRO_SYSTEM_DIR").map_or_else(|| folders.system.clone(), std::path::PathBuf::from)
+/// that firmware is never copied (EmuSen_LibretroHost.md §10c); the proxy grants the runner the same folder.
+fn system_folder(lib: &Library) -> std::path::PathBuf {
+    emusen_core_entry::system_folder(&lib.folder, &lib.stem)
 }
 
 /// The library, initialised: callbacks set, `retro_init` called, the folders made.
@@ -127,7 +133,9 @@ pub fn ready() -> Result<&'static Library, String> {
         format!("the core's folders: {e}")
     })?;
     let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
-    front::set_library_folders(c(&system_folder(&folders)), c(&folders.save));
+    front::set_library_folders(c(&system_folder(lib)), c(&folders.save));
+    let exact = crate::exact::defaults(&lib.stem).into_iter().map(|e| (e.key, e.value)).collect();
+    front::with_declared(|d| d.options.exact = exact);
     unsafe {
         (lib.api.set_environment)(Some(front::environment));
         (lib.api.set_video_refresh)(Some(front::video_refresh));
@@ -152,7 +160,9 @@ fn info_value(lib: &Library, key: &str) -> String {
 fn systems(lib: &Library) -> Vec<(String, String, Vec<String>)> {
     let databases: Vec<String> = info_value(lib, "database").split('|').map(str::to_owned).collect();
     let refs: Vec<&str> = databases.iter().map(String::as_str).collect();
-    let found = emusen_systems::for_libretro(&info_value(lib, "systemid"), &refs);
+    // A listed core runs the systems its list line names, of those its .info claims (EmuSen_Cores.md §4.7).
+    let listed = emusen_systems::libretro_cores::hosted().iter().find(|c| c.stem == lib.stem);
+    let found: Vec<_> = emusen_systems::for_libretro(&info_value(lib, "systemid"), &refs).into_iter().filter(|s| listed.is_none_or(|c| c.systems.contains(&s.id))).collect();
     if found.is_empty() {
         let id = format!("libretro-{}", lib.stem.to_ascii_lowercase().replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
         let name = Some(info_value(lib, "systemname")).filter(|n| !n.is_empty()).unwrap_or_else(|| lib.name.clone());
@@ -522,6 +532,10 @@ impl v1::Core for Machine {
             v1::detail("the core asked to stop");
             return Err(STATUS_SHUTDOWN);
         }
+        if let Some(line) = &self.failed {
+            v1::detail(&failure::could_not_start(line));
+            return Err(STATUS_NOT_STARTED);
+        }
         let start = std::time::Instant::now();
         if let Some((cb, reference)) = self.shared.frame_time {
             unsafe { cb(reference) };
@@ -540,9 +554,17 @@ impl v1::Core for Machine {
             self.update_spaces(false);
         }
         self.phases = [ran, 0, saves_start.elapsed().as_nanos() as i64];
-        front::flush_logs();
+        let mut heard = failure::Heard::default();
+        front::flush_logs_with(|level, text| heard.hear(&self.lib.stem, level, text));
         self.raise();
-        Ok(())
+        match heard.fatal {
+            Some(line) => {
+                v1::detail(&failure::could_not_start(&line));
+                self.failed = Some(line);
+                Err(STATUS_NOT_STARTED)
+            }
+            None => Ok(()),
+        }
     }
 
     fn set_options(&mut self, flags: u32) {
@@ -855,7 +877,7 @@ impl Machine {
         let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
         let image_path = v1::image_path();
         let content = image_path.as_deref().and_then(|p| std::path::Path::new(p).parent()).map(c);
-        shared.folders = Some(front::Folders { system: c(&system_folder(&folders)), save: c(&folders.save), content });
+        shared.folders = Some(front::Folders { system: c(&system_folder(lib)), save: c(&folders.save), content });
         front::bind(&mut *shared);
         front::with_declared(|d| {
             for (k, v) in r.settings.pairs() {
@@ -876,8 +898,8 @@ impl Machine {
             STATUS_FOLDERS
         };
         saves.place(&passed).map_err(fail_folders)?;
-        let system_dir = system_folder(&folders);
-        let referee = std::env::var_os("EMUSEN_LIBRETRO_SYSTEM_DIR").is_some();
+        let system_dir = system_folder(lib);
+        let referee = std::env::var_os(emusen_core_entry::SYSTEM_DIR_VAR).is_some();
         for &(which, _, path, .., blank) in files::cards(&lib.stem) {
             let passed = r.files.iter().find(|f| f.which == which).map(|f| f.data);
             saves.card(which, system_dir.join(path), passed, blank, referee).map_err(fail_folders)?;
@@ -935,12 +957,22 @@ impl Machine {
         }
         let game = sys::retro_game_info { path: path_ptr, data, size, meta: std::ptr::null() };
         let loaded = unsafe { (lib.api.load_game)(&game) };
-        front::flush_logs();
+        let mut heard = failure::Heard::default();
+        front::flush_logs_with(|level, text| heard.hear(&lib.stem, level, text));
         if !loaded {
             let asked = front::with_declared(|d| d.contexts_asked.clone());
-            let why = if asked.is_empty() { "the core refused the game; its log says why".to_owned() } else { format!("the core refused the game after asking for a hardware context this host does not yet give ({asked:?})") };
+            let why = match (asked.is_empty(), heard.fatal.or(heard.last_error)) {
+                (false, _) => format!("the core refused the game after asking for a hardware context this host does not yet give ({asked:?})"),
+                (true, Some(line)) => format!("the core said: {line}"),
+                (true, None) => "the core refused the game and logged no error saying why".to_owned(),
+            };
             v1::detail(&why);
             return Err(STATUS_REFUSED);
+        }
+        if let Some(line) = heard.fatal {
+            unsafe { (lib.api.unload_game)() };
+            v1::detail(&failure::could_not_start(&line));
+            return Err(STATUS_NOT_STARTED);
         }
         let mut av = sys::retro_system_av_info::default();
         unsafe { (lib.api.get_system_av_info)(&mut av) };
@@ -983,6 +1015,7 @@ impl Machine {
             discs: Vec::new(),
             disc: state::disc(Some(r.image)),
             held,
+            failed: None,
         };
         front::bind(&mut *machine.shared);
         for (which, id) in [(SRAM, sys::MEMORY_SAVE_RAM), (RTC, sys::MEMORY_RTC)] {

@@ -93,6 +93,9 @@ struct Building {
     api: u32,
     timeline: bool,
     why: String,
+    said: Vec<String>,
+    /// Each device made through the wrapper, and whether it was given what the ring needs.
+    made: Vec<(vk::Device, bool)>,
 }
 
 /// The core's device and everything the host made on it.
@@ -198,6 +201,7 @@ unsafe extern "C" fn create_device_wrapper(gpu: vk::PhysicalDevice, opaque: *mut
     match unsafe { instance.create_device(gpu, &info, None) } {
         Ok(d) => {
             let h = d.handle();
+            b.made.push((h, b.timeline));
             b.device = Some(d);
             h
         }
@@ -206,6 +210,31 @@ unsafe extern "C" fn create_device_wrapper(gpu: vk::PhysicalDevice, opaque: *mut
             vk::Device::null()
         }
     }
+}
+
+// v1's create_device has no wrapper, so the host hands it a vkGetInstanceProcAddr whose vkCreateDevice is the wrapper (§10o).
+thread_local! {
+    static BUILDING: std::cell::Cell<*mut Building> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+}
+static LOADER_GIPA: std::sync::OnceLock<vk::PFN_vkGetInstanceProcAddr> = std::sync::OnceLock::new();
+
+unsafe extern "system" fn hooked_get_instance_proc_addr(instance: vk::Instance, name: *const c_char) -> vk::PFN_vkVoidFunction {
+    if !name.is_null() && unsafe { CStr::from_ptr(name) } == c"vkCreateDevice" && !BUILDING.get().is_null() {
+        let f: vk::PFN_vkCreateDevice = hooked_create_device;
+        return Some(unsafe { std::mem::transmute::<vk::PFN_vkCreateDevice, unsafe extern "system" fn()>(f) });
+    }
+    let gipa = LOADER_GIPA.get().expect("the loader's vkGetInstanceProcAddr is kept before the hook is handed");
+    unsafe { gipa(instance, name) }
+}
+
+unsafe extern "system" fn hooked_create_device(gpu: vk::PhysicalDevice, info: *const vk::DeviceCreateInfo<'_>, _allocator: *const vk::AllocationCallbacks<'_>, out: *mut vk::Device) -> vk::Result {
+    let b = BUILDING.get();
+    if b.is_null() || out.is_null() {
+        return vk::Result::ERROR_INITIALIZATION_FAILED;
+    }
+    let made = unsafe { create_device_wrapper(gpu, b as *mut c_void, info) };
+    unsafe { *out = made };
+    if made == vk::Device::null() { vk::Result::ERROR_INITIALIZATION_FAILED } else { vk::Result::SUCCESS }
 }
 
 // ---- The interface the core calls ------------------------------------------------------------------------------
@@ -290,7 +319,7 @@ impl Gpu {
         // SAFETY: the loader is loaded once per device and outlives every handle made through it.
         let entry = unsafe { ash::Entry::load() }.map_err(|e| format!("Vulkan is not available: {e}"))?;
         let asked = vk::make_api_version(0, ask.version.0, ask.version.1, 0);
-        let mut b = Box::new(Building { entry: entry.clone(), instance: None, device: None, api: asked.max(vk::API_VERSION_1_1), timeline: false, why: String::new() });
+        let mut b = Box::new(Building { entry: entry.clone(), instance: None, device: None, api: asked.max(vk::API_VERSION_1_1), timeline: false, why: String::new(), said: Vec::new(), made: Vec::new() });
         let opaque = &mut *b as *mut Building as *mut c_void;
         let v2 = negotiation.filter(|n| n.interface_type == INTERFACE_VULKAN && n.interface_version >= 2);
         let gipa = entry.static_fn().get_instance_proc_addr;
@@ -321,8 +350,11 @@ impl Gpu {
             unsafe { create2(&mut context, instance.handle(), chosen, vk::SurfaceKHR::null(), gipa, create_device_wrapper, opaque) }
         } else if let Some(create1) = negotiation.and_then(|n| n.create_device) {
             let names: Vec<*const c_char> = WANTED.iter().map(|n| n.as_ptr()).collect();
-            let ok = unsafe { create1(&mut context, instance.handle(), chosen, vk::SurfaceKHR::null(), gipa, names.as_ptr(), names.len() as u32, std::ptr::null(), 0, std::ptr::null()) };
-            if ok {
+            let _ = LOADER_GIPA.set(gipa);
+            BUILDING.set(&mut *b);
+            let ok = unsafe { create1(&mut context, instance.handle(), chosen, vk::SurfaceKHR::null(), hooked_get_instance_proc_addr, names.as_ptr(), names.len() as u32, std::ptr::null(), 0, std::ptr::null()) };
+            BUILDING.set(std::ptr::null_mut());
+            if ok && b.device.as_ref().is_none_or(|d| d.handle() != context.device) {
                 b.device = Some(unsafe { ash::Device::load(instance.fp_v1_0(), context.device) });
             }
             ok
@@ -354,7 +386,13 @@ impl Gpu {
         let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
         unsafe { instance.get_physical_device_properties2(physical, &mut props) };
         let uuids = (id.device_uuid, id.driver_uuid);
-        let exports = b.timeline.then(|| {
+        let given = b.made.iter().find(|(h, _)| *h == device.handle()).map(|m| m.1);
+        if given.is_none() && negotiation.is_some_and(|n| n.create_device.is_some() || n.create_device2.is_some()) {
+            b.said.push("the core made its device without the host's vkCreateDevice, so the external memory and timeline semaphores the ring needs were not enabled: pictures are read back".into());
+        } else if given == Some(false) {
+            b.said.push("the card lacks external memory, semaphores or timeline semaphores: pictures are read back".into());
+        }
+        let exports = (given == Some(true)).then(|| {
             (ash::khr::external_memory_fd::Device::new(&instance, &device), ash::khr::external_semaphore_fd::Device::new(&instance, &device), ash::khr::timeline_semaphore::Device::new(&instance, &device))
         });
         let family = context.queue_family_index;
@@ -415,9 +453,7 @@ impl Gpu {
             log: Vec::new(),
         });
         g.interface.handle = &mut *g as *mut Gpu as *mut c_void;
-        if g.exports.is_none() {
-            g.log.push("the card lacks external memory, semaphores or timeline semaphores: pictures are read back".into());
-        }
+        g.log.extend(std::mem::take(&mut b.said));
         Ok(g)
     }
 

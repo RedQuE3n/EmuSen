@@ -437,7 +437,9 @@ impl Engine {
         }
         let settings = self.settings_text(true);
         let system = system.map(|s| CString::new(s).unwrap_or_default());
+        let path = self.image_path(disc);
         let mut create = Create::new(disc.image.bytes());
+        create.image_path = path.as_deref();
         create.settings = &settings;
         create.files = &files;
         create.flags = if self.lends() { 1 } else { 0 } | if placement.removable_apart { 2 } else { 0 } | if placement.console_apart { 4 } else { 0 };
@@ -495,6 +497,12 @@ impl Engine {
             return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", path::file_name(Style::HOST, at)) });
         }
         Ok(())
+    }
+
+    /// The path a core claiming `IMAGE_PATH` is given beside the bytes: the image's file where it is unaltered, neither
+    /// unpacked from an archive nor patched by a package, which may hold soft patches (EmuSen_LibretroHost.md §10d).
+    fn image_path(&self, disc: &DiscFiles) -> Option<CString> {
+        disc.unaltered_path().filter(|_| self.package.is_none()).and_then(|p| CString::new(p).ok())
     }
 
     /// The disc's image with its package's soft patches applied, where the game is a package that lists any; the core is
@@ -1151,8 +1159,9 @@ impl Engine {
         .map_err(Refused::io)?;
         let lent = if self.lends() { 2 } else { 0 };
         let files: Vec<(u32, &[u8])> = disc.companions.iter().enumerate().map(|(n, c)| (flags::FILE_MEDIA + n as u32, c.bytes())).collect();
+        let path = self.image_path(&disc);
         let m = self.machine.as_mut().expect("a machine with a drive");
-        m.media_insert(drive, Some(disc.image.bytes()), &files, restore | lent).map_err(|s| Refused::fault(format!("{name} could not take the disc: {}.", m.words(s as i64))))?;
+        m.media_insert_at(drive, Some(disc.image.bytes()), path.as_deref(), &files, restore | lent).map_err(|s| Refused::fault(format!("{name} could not take the disc: {}.", m.words(s as i64))))?;
         self.loans.retain(|(d, _)| *d != drive);
         if lent != 0 {
             self.loans.push((drive, disc));

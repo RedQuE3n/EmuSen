@@ -17,5 +17,6 @@
   "media": [{ "id": "n64.pak", "title": "Controller Pak", "noun": "Pak" }],
   "byte_order": "big",
   "libretro_databases": ["Nintendo - Nintendo 64"],
-  "libretro_systemids": ["nintendo_64"]
+  "libretro_systemids": ["nintendo_64"],
+  "firmware_note": null
 }

@@ -32,6 +32,8 @@ pub struct Options {
     pub update_display: sys::retro_core_options_update_display_callback_t,
     /// Values held over the player's while the console's own picture is asked for, by key (`console_picture`).
     forced: HashMap<String, CString>,
+    /// Defaults the host gives in place of the core's, (key, value), from the core's exact defaults.
+    pub exact: Vec<(String, String)>,
 }
 
 /// Text of a C string the core owns, or empty.
@@ -109,7 +111,12 @@ impl Options {
         self.set_declared(list);
     }
 
-    fn set_declared(&mut self, list: Vec<Declared>) {
+    fn set_declared(&mut self, mut list: Vec<Declared>) {
+        for d in &mut list {
+            if let Some((_, v)) = self.exact.iter().find(|(k, v)| *k == d.key && d.values.iter().any(|x| x.0 == *v)) {
+                d.default = v.clone();
+            }
+        }
         self.values.retain(|k, _| list.iter().any(|d| d.key == *k));
         for d in &list {
             self.values.entry(d.key.clone()).or_insert_with(|| CString::new(d.default.as_str()).unwrap_or_default());
@@ -282,6 +289,18 @@ mod tests {
         assert!(o.set("scale", "2") && !o.updated, "the player's value changes nothing the core reads while held");
         assert!(o.hold(&[]).is_empty());
         assert_eq!((text(o.get("scale").unwrap()), o.updated), ("2".to_owned(), true));
+    }
+
+    #[test]
+    fn an_exact_default_replaces_the_cores_and_a_value_it_lacks_does_not() {
+        let mut o = Options { exact: vec![("threads".into(), "off".into()), ("scale".into(), "9".into())], ..Options::default() };
+        let choice = |key: &str, default: &str| Declared { key: key.into(), label: String::new(), info: String::new(), category: None, values: vec![("on".into(), "on".into()), ("off".into(), "off".into()), ("1".into(), "1".into())], default: default.into() };
+        o.set_declared(vec![choice("threads", "on"), choice("scale", "1")]);
+        assert_eq!(o.current(), [("threads".to_owned(), "off".to_owned()), ("scale".to_owned(), "1".to_owned())]);
+        assert_eq!(o.declared[0].default, "off");
+        o.set("threads", "on");
+        o.set_declared(vec![choice("threads", "on"), choice("scale", "1")]);
+        assert_eq!(o.current()[0].1, "on", "the player's choice of the core's default stands");
     }
 
     #[test]

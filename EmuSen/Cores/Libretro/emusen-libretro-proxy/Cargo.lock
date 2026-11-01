@@ -73,6 +73,7 @@ dependencies = [
 name = "emusen-core-host"
 version = "0.1.0"
 dependencies = [
+ "emusen-core-entry",
  "emusen-native",
  "libloading",
 ]

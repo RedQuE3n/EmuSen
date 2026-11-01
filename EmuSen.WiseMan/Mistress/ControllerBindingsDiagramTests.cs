@@ -92,6 +92,19 @@ namespace EmuSen.WiseMan.Mistress
             }
         });
 
+        // The Saturn's and the Dreamcast's buttons on the RetroPad controls Beetle Saturn and Flycast give them, as libretro's documentation of each tables them, and each region of their drawings reached by one control - see EmuSen_Cores.md §4.11.
+        [Theory]
+        [InlineData("Saturn", "B=A A=B R=C Y=X X=Y L=Z L2=L R2=R Start=Start Up=Up Down=Down Left=Left Right=Right")]
+        [InlineData("Dreamcast", "B=A A=B Y=X X=Y L2=LT R2=RT Start=Start Up=Up Down=Down Left=Left Right=Right")]
+        public Task The_hosted_consoles_buttons_are_the_cores_documented_retropad_controls(string console, string table) => UiTest.Run(() =>
+        {
+            var expected = table.Split(' ').Select(p => p.Split('=')).ToDictionary(p => Enum.Parse<PadControl>(p[0]), p => p[1]);
+            foreach (var (control, region) in expected) Assert.Equal(region, ControllerDiagrams.RegionFor(console, control));
+            var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console) };
+            Assert.Equal(expected.Values.Order(), diagram.Regions.Select(r => r.Id).Order());
+            foreach (string region in expected.Values) Assert.Equal(expected.Single(e => e.Value == region).Key, ControllerDiagrams.ControlFor(console, region, Enum.GetValues<PadControl>()));
+        });
+
         // With an adapter on a port the window offers each player its ports hold, and draws that player's pad - see EmuSen_Settings_Reference.md §4.102.
         [Fact]
         public Task The_genesis_tab_offers_an_adapters_players_and_draws_each_ones_pad() => UiTest.Run(() =>

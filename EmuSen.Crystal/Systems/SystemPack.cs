@@ -50,6 +50,7 @@ namespace EmuSen.Crystal.Systems
         {
             Nes.NesSystem.Pack, Snes.SnesSystem.Pack, Genesis.GenesisSystems.MegaDrivePack, Genesis.GenesisSystems.MegaCdPack, Genesis.GenesisSystems.S32xPack, Psx.PsxSystem.Pack,
             GameBoy.GameBoySystems.GameBoyPack, GameBoy.GameBoySystems.GameBoyColorPack, N64.N64System.Pack, Sms.SmsSystems.MasterSystemPack, Sms.SmsSystems.Sg1000Pack, Ps2.Ps2System.Pack,
+            SegaDisc.SegaDiscSystems.SaturnPack, SegaDisc.SegaDiscSystems.DreamcastPack,
         };
 
         // Each pack's C# literal entry in the same order: the failover under EMUSEN_SYSTEMS_NATIVE=0 and the parity class's oracle - see EmuSen_Backend.md §12.
@@ -57,6 +58,7 @@ namespace EmuSen.Crystal.Systems
         {
             Nes.NesSystem.Literal, Snes.SnesSystem.Literal, Genesis.GenesisSystems.MegaDriveLiteral, Genesis.GenesisSystems.MegaCdLiteral, Genesis.GenesisSystems.S32xLiteral, Psx.PsxSystem.Literal,
             GameBoy.GameBoySystems.GameBoyLiteral, GameBoy.GameBoySystems.GameBoyColorLiteral, N64.N64System.Literal, Sms.SmsSystems.MasterSystemLiteral, Sms.SmsSystems.Sg1000Literal, Ps2.Ps2System.Literal,
+            SegaDisc.SegaDiscSystems.SaturnLiteral, SegaDisc.SegaDiscSystems.DreamcastLiteral,
         };
 
         // Each pack's C# literal media by its system's id, in the table's order: the parity class's oracle for the table's media - see EmuSen_Backend.md §13.

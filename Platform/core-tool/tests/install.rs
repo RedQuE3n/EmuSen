@@ -68,15 +68,20 @@ fn core_name(stem: &str) -> String {
     format!("{stem}_libretro.{}", library_suffix())
 }
 
-/// A buildbot of the test's: the catalogue, and an index whose line for each core is the zip's own CRC-32 unless `claim`
-/// gives another.
+/// The CRC-32 the zip's first central directory entry records, as the buildbot's index gives a core's library; 0 for no zip.
+fn member_crc(zip: &[u8]) -> u32 {
+    zip.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).map_or(0, |at| u32::from_le_bytes(zip[at + 16..at + 20].try_into().unwrap()))
+}
+
+/// A buildbot of the test's: the catalogue, and an index whose line for each core is its library's CRC-32 as the zip
+/// records it, as the buildbot's is, unless `claim` gives another.
 fn buildbot(dir: &Path, cores: &[(&str, &str, Vec<u8>, Option<u32>)]) -> Server {
     let mut infos: Vec<(&str, &str)> = vec![("glonly", GLONLY)];
     let mut index = format!("2026-10-30 0000abcd glonly_libretro.{}.zip\n", library_suffix());
     let mut files = HashMap::new();
     for (stem, date, bytes, claim) in cores {
         infos.push((stem, if *stem == "pcsx2" { LRPS2 } else { BEETLE }));
-        index.push_str(&format!("{date} {:08x} {stem}_libretro.{}.zip\n", claim.unwrap_or_else(|| crc(bytes)), library_suffix()));
+        index.push_str(&format!("{date} {:08x} {stem}_libretro.{}.zip\n", claim.unwrap_or_else(|| member_crc(bytes)), library_suffix()));
         files.insert(format!("/nightly/linux/x86_64/latest/{stem}_libretro.{}.zip", library_suffix()), bytes.clone());
     }
     files.insert("/assets/frontend/info.zip".into(), info_zip(dir, &infos));
@@ -203,10 +208,12 @@ fn every_check_refuses_and_leaves_no_folder_behind() {
     patch_central(&mut declared_huge, 24, &(600u32 << 20).to_le_bytes());
     let mut inflates_past = zip(&dir, &[(&name, &good)]);
     patch_central(&mut inflates_past, 24, &1000u32.to_le_bytes());
-    let mut member_crc = zip(&dir, &[(&name, &good)]);
-    patch_central(&mut member_crc, 16, &0xdead_beefu32.to_le_bytes());
+    let mut damaged_crc = zip(&dir, &[(&name, &good)]);
+    patch_central(&mut damaged_crc, 16, &0xdead_beefu32.to_le_bytes());
+    let whole = zip(&dir, &[(&name, &good)]);
     let cases: Vec<(&str, Vec<u8>, Option<u32>, &str)> = vec![
         ("the index's CRC-32", zip(&dir, &[(&name, &good)]), Some(0x1234_5678), "CRC-32"),
+        ("an index giving the whole zip's CRC-32", whole.clone(), Some(crc(&whole)), "CRC-32"),
         ("two members", zip(&dir, &[(&name, &good), ("readme.txt", b"hello")]), None, "holds 2 members"),
         ("a member climbing out", zip(&dir, &[(&format!("../{name}"), &good)]), None, "member is"),
         ("a member in a folder", zip(&dir, &[(&format!("sub/{name}"), &good)]), None, "member is"),
@@ -215,7 +222,7 @@ fn every_check_refuses_and_leaves_no_folder_behind() {
         ("a link", link, None, "is a link"),
         ("a declared size over the bound", declared_huge, None, "declares"),
         ("bytes inflating past the declared size", inflates_past, None, "damaged"),
-        ("a member's CRC-32", member_crc, None, "damaged"),
+        ("a member's CRC-32", damaged_crc, None, "damaged"),
         ("another machine's library", zip(&dir, &[(&name, &wrong_machine)]), None, "not a library for this machine"),
         ("not a zip", b"PK not really".to_vec(), None, "does not read"),
     ];

@@ -7,6 +7,7 @@
 //! table (§5.2, D6): the save media's format modules first (step B3). EmuSen_Backend.md §12 and §13 record what was built.
 
 pub mod libretro_cores;
+pub mod libretro_extensions;
 pub mod cheats;
 pub mod debug;
 pub mod gb;
@@ -18,6 +19,7 @@ pub mod openvgdb;
 pub mod probe;
 pub mod ps2;
 pub mod psx;
+pub mod sega_disc;
 pub mod sms;
 pub mod snes;
 
@@ -61,6 +63,8 @@ pub struct System {
     pub libretro_databases: Vec<String>,
     /// The `systemid`s of the libretro cores that run the console, for a core whose `.info` lists no database.
     pub libretro_systemids: Vec<String>,
+    /// What the console's firmware is, said once above its files in the firmware overview; none for most (EmuSen_Cores.md §4.10).
+    pub firmware_note: Option<String>,
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -85,7 +89,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 19] = [
+pub const KEYS: [&str; 20] = [
     "id",
     "name",
     "console",
@@ -105,13 +109,14 @@ pub const KEYS: [&str; 19] = [
     "byte_order",
     "libretro_databases",
     "libretro_systemids",
+    "firmware_note",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
 pub const MEDIUM_KEYS: [&str; 3] = ["id", "title", "noun"];
 
 /// The data files, by the id each is named for, in the table's order.
-pub const DATA: [(&str, &str); 12] = [
+pub const DATA: [(&str, &str); 14] = [
     ("nes", include_str!("../data/nes.json")),
     ("snes", include_str!("../data/snes.json")),
     ("md", include_str!("../data/md.json")),
@@ -124,6 +129,8 @@ pub const DATA: [(&str, &str); 12] = [
     ("sms", include_str!("../data/sms.json")),
     ("sg1000", include_str!("../data/sg1000.json")),
     ("ps2", include_str!("../data/ps2.json")),
+    ("saturn", include_str!("../data/saturn.json")),
+    ("dreamcast", include_str!("../data/dreamcast.json")),
 ];
 
 struct Fields<'a> {
@@ -254,6 +261,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         },
         libretro_databases: f.texts_or_none("libretro_databases")?,
         libretro_systemids: f.texts_or_none("libretro_systemids")?,
+        firmware_note: f.optional_text("firmware_note")?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -340,6 +348,7 @@ pub fn to_json(systems: &[System]) -> String {
                 or_null(s.byte_order.as_deref().map(Value::string)),
                 words(&s.libretro_databases),
                 words(&s.libretro_systemids),
+                or_null(s.firmware_note.as_deref().map(Value::string)),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -430,7 +439,7 @@ mod tests {
     fn the_embedded_table_reads_whole_in_its_order() {
         let systems = table().expect("the committed data files are a table");
         let ids: Vec<&str> = systems.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000", "ps2"]);
+        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000", "ps2", "saturn", "dreamcast"]);
         for (file, _) in DATA {
             assert!(find(file).is_some(), "{file} is in the table");
         }

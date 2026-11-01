@@ -223,24 +223,164 @@ Three kinds, kept apart so the player can tell them apart:
 
 ### 4.7 The libretro cores EmuSen hosts (decided 2026-11-01)
 
-**Decided 2026-11-01:** EmuSen hosts exactly two libretro cores for now, PCEE2 (PCSX2's, for the PlayStation 2) and
-Flycast (the Dreamcast, with Naomi and Atomiswave). Cores offers and installs only those: the catalogue's other cores are
-not listed for download, and a core dropped into `/Cores/libretro` that is not on the list shows as *not supported*,
-with the reason. There is no general browsing of libretro's catalogue.
+**Decided 2026-11-01, first:** EmuSen hosts two libretro cores, PCEE2 (PCSX2's, for the PlayStation 2) and Flycast (the
+Dreamcast, with Naomi and Atomiswave). **Widened the same day:** EmuSen hosts a libretro alternative for each console it
+already has a native core for, plus the Saturn. Cores offers and installs only the listed cores: the catalogue's other
+cores are not listed for download, and a core dropped into `/Cores/libretro` that is not on the list shows as *not
+supported*, with the reason. There is no general browsing of libretro's catalogue.
+
+| Stem | Core | Systems | Licence (its `.info`) | Renderer | Upstream |
+|---|---|---|---|---|---|
+| `pcee2` | PCEE2 | ps2 | GPLv3 | vulkan | <https://github.com/libretro/ps2> |
+| `flycast` | Flycast | dreamcast, naomi, atomiswave | GPLv2 | vulkan | <https://github.com/flyinghead/flycast> |
+| `snes9x` | Snes9x | snes | Non-commercial | software | <https://github.com/libretro/snes9x> |
+| `nestopia` | Nestopia UE | nes | GPLv2 | software | <https://github.com/libretro/nestopia> |
+| `genesis_plus_gx` | Genesis Plus GX | md, mcd, sms, sg1000 | Non-commercial | software | <https://github.com/libretro/Genesis-Plus-GX> |
+| `picodrive` | PicoDrive | 32x | MAME | software | <https://github.com/libretro/picodrive> |
+| `mupen64plus_next` | Mupen64Plus-Next | n64 | GPLv2 | vulkan | <https://github.com/libretro/mupen64plus-libretro-nx> |
+| `sameboy` | SameBoy | gb, gbc | MIT | software | <https://github.com/libretro/SameBoy> |
+| `mednafen_psx_hw` | Beetle PSX HW | psx | GPLv2 | vulkan | <https://github.com/libretro/beetle-psx-libretro> |
+| `mednafen_saturn` | Beetle Saturn | saturn | GPLv2 | software | <https://github.com/libretro/beetle-saturn-libretro> |
+
+Each stem and file was checked against the buildbot's Linux x86_64 nightly index and each upstream against the core's
+page in libretro's documentation (<https://docs.libretro.com/library/>), both read 2026-11-01 [R]. **Three licences are
+non-commercial**: Snes9x's and Genesis Plus GX's (`license = "Non-commercial"`) and PicoDrive's (the MAME licence, whose
+non-commercial clause is the point of it). They allow EmuSen's use, a free project that never ships them and downloads
+them only at the player's request; Cores shows each licence before download (§4.2), so a player who would use one
+commercially sees it first. Naomi and Atomiswave stay on Flycast's line but have no systems-table entry yet, so no console
+shows them; they are placed when the arcade boards are taken up.
 
 **The list has one owner**, a data file of the systems table, `Platform/systems/data/libretro-cores.tsv`, read by
-`emusen_systems::libretro_cores::hosted()`: one line per core, tab-separated, its file stem, the EmuSen systems it runs
-(comma-separated ids, which place it in place of `for_libretro`) and its upstream source (`https://` only); `#` lines are
-comments. The libretro host's work was adding such a file when this was decided; it had not reached WiseMan, so Cores
-proposed this minimal form, in the crate that owns the host's other libretro facts, for the host to keep or reshape
-(said in the stage's report). The platform library hands the list to the core tool as its `hosted` context; a request
-for a core off the list is refused ("… is not one of the libretro cores EmuSen hosts (pcee2, flycast)") before anything
-is written. A test of the tool's own mechanics may give no list, which offers the whole catalogue.
+`emusen_systems::libretro_cores::hosted()`: one line per core, six tab-separated fields: its file stem; the EmuSen systems
+it runs (comma-separated ids, which place it in place of `for_libretro`); its upstream source (`https://` only); its
+licence as its `.info` names it; the renderer the host gives it (`software`, or `vulkan` for a core drawing through the
+host's Vulkan context); and the systems it is the default engine of ahead of a native core (§4.8), `-` for none. `#`
+lines are comments. A line of another shape, a renderer of another word, a default for a system the core does not run,
+a stem twice and a system with two defaults are each refused with the line's number. The platform library hands the list
+to the core tool as its `hosted` context, and to the C# runtime through `emusen_systems_libretro_cores` (platform
+interface 30, the export `EmuSen_LibretroHost.md` §0.3 accepted), as JSON with the keys stem, systems, upstream, licence,
+renderer and default_for. A request for a core off the list is refused ("… is not one of the libretro cores EmuSen hosts
+(…)") before anything is written. A test of the tool's own mechanics may give no list, which offers the whole catalogue.
 
-The Dreamcast is a console EmuSen has not had: its section in the window comes from the systems the list names, under
-the runtime's name for the console once the systems table carries it, and under its id (`dreamcast`) until then.
-Sections in the manager frame carry no icon, so the "icon slot" is the console art of the library's own shelves, which the
-systems table's entry brings.
+**The renderer overrides the `.info`'s `required_hw_api`** for a listed core [R, found 2026-11-01]: Mupen64Plus-Next's
+`.info` names only `OpenGL Core >= 3.3 | OpenGL ES >= 2.0`, which §4.6 kind 1 would show as *not supported*, though the
+core draws through ParaLLEl-RDP on a Vulkan context. A listed core is never judged by §4.6 kind 1; its line says what the
+host gives it, and the host refuses in words what it cannot give.
+
+The consoles a listed core runs that EmuSen had not had, the Saturn and the Dreamcast, have systems-table entries (§4.9);
+their sections in the window come from the systems the list names, under the runtime's name for the console.
+
+### 4.8 The default engine: native first, one named exception (decided 2026-11-01)
+
+**The rule** [C]: a console's engines are ordered as follows, and the first is its default:
+1. a hosted core whose list line names the system in its last field (`default_for`);
+2. the native cores, those not in a libretro entry, in discovery's order;
+3. the other hosted cores, in discovery's order.
+
+So a hosted core is never a console's default while a native core is offered for it, unless the list names it. **The one
+named exception** is the PlayStation 2: PCEE2's line names `ps2`, so PCEE2 is the default while Sapphire is under
+development, and the line's field is removed when Sapphire becomes the default. The Saturn and the Dreamcast have no native
+core, so their hosted core is the only engine. The player switches a console with `cores default <console> <engine>` and a
+game with `cores default --game`, as before (§4.3); the choices are the console's engines in this order.
+
+The rule is one function, `CoreDiscovery.InRuleOrder`, which `ForSystem`, `ForExtension`, the runtime's engine list and
+the settings schema's Engine row all go through, so the frontend, the factory and `cores default` agree. A C# runtime
+built without the platform library has no list and treats every hosted core as rule 3. Tested by
+`CoreDiscoveryTests.A_native_core_is_the_default_beside_a_hosted_one_but_the_playstation_2_opens_on_pcee2` (native
+default beside a hosted core, PCEE2 ahead of a native PS2 engine, the console's Engine set to the hosted core and back) and
+`libretro_cores::tests::only_the_playstation_2_defaults_to_a_hosted_core`.
+
+### 4.9 The Saturn and the Dreamcast in the systems table (2026-11-01)
+
+`saturn.json` and `dreamcast.json`, in the table's schema, with C# literals in `SegaDiscSystems` for the failover:
+
+| | Saturn | Dreamcast |
+|---|---|---|
+| Extensions | .cue .chd .ccd .m3u | .gdi .cdi .chd .cue .ccd .m3u |
+| ScreenScraper `systemeid` | 22 | 23 |
+| OpenVGDB `systemShortName` | Saturn | none (OpenVGDB has no Dreamcast) |
+| ES-DE system | saturn, "Sega Saturn" | dreamcast, "Sega Dreamcast" |
+| libretro database, `systemid` | Sega - Saturn, sega_saturn | Sega - Dreamcast, dreamcast |
+| libretro cheat folder | Sega - Saturn | Sega - Dreamcast |
+| Byte order | big (SH-2) | little (SH-4) |
+
+Sources [R, read 2026-11-01]: ScreenScraper's system pages (`systemeinfos.php?plateforme=22` and `23`); OpenVGDB's
+`SYSTEMS` table in the copy the library ships; libretro-database's `cht` folder listing; Beetle Saturn's and Flycast's
+`.info`. The Saturn's `cover_aspect`, 1.14, is the taller North American case [A], to be measured; the Dreamcast's, 1.0,
+is a jewel case's. Neither has a medium module or a cheat space yet.
+
+**The recogniser** (`emusen_systems::sega_disc`, and `SegaDiscSystems.Recognise` for the failover) reads the system area at
+the start of the first data sector, past a raw sector's sync and header, and claims a disc whose hardware identifier is
+`SEGA SEGASATURN ` or `SEGA SEGAKATANA `, with the ten-byte product number beside it (at 0x20 and 0x40) as the serial.
+Sources: Sega's Saturn disc format standard as commonly summarised, and Marcus Comstedt, "IP.BIN",
+<http://mc.pp.se/dc/ip.bin.html> [R]. A GD-ROM sheet's first track is its low-density area, which carries no system
+area, so such a `.cue` or `.chd` shared with another console is placed by its folder's name, as §8.4 of
+`EmuSen_CoreAPI_Extensions.md` routes any unrecognised disc; `.gdi` and `.cdi` are the Dreamcast's alone.
+
+The screens' rule (`EmuSen_CRT.md` §31) holds an owed row for each, dated 2026-11-01: their CRT profiles are separate
+work. An owed row stands only while no player reaches the console; once a Beetle Saturn or Flycast is installed the
+console has a shelf, and the rule test (`ConsoleScreenRuleTests`) would report it, which is the reminder the row is for.
+
+### 4.10 Firmware of the hosted consoles
+
+- **The Saturn** needs the player's own BIOS: Beetle Saturn's `.info` marks `sega_101.bin` and `mpr-17933.bin` required,
+  and there is no open replacement. EmuSen never fetches or ships one. The firmware overview says so above the
+  console's files: "Every Saturn game needs a Saturn BIOS of your own. There is no open replacement, and EmuSen never
+  downloads or ships one." (The systems table's `firmware_note` for the console, read by both halves' overviews and carried as the overview's
+  `note`, shown by `FirmwarePane`; every other console's row holds `null`, and the overview writes `"note": null` for it.)
+- **The Dreamcast** runs without its BIOS: Flycast boots games by its own high-level boot, and a dump of the player's own
+  is optional. The overview says "Flycast starts Dreamcast games without the console's BIOS, so a BIOS of your own is
+  optional."
+- No firmware folder was listed, opened or hashed for this work.
+
+### 4.11 Controllers of the hosted consoles
+
+LunaP draws both (`ControllerLayout.Saturn`, `.Dreamcast`, `docs/LunaP.md` §198.15); Mistress's `ControllerDiagrams` maps
+the RetroPad controls the cores give onto the drawings' regions, as libretro's documentation of each core's controls
+gives them [R, docs.libretro.com/library/beetle_saturn/ and /flycast/, read 2026-11-01]:
+
+| RetroPad | Saturn pad (Beetle Saturn) | Dreamcast controller (Flycast) |
+|---|---|---|
+| B | A | A |
+| A | B | B |
+| Y | X | X |
+| X | Y | Y |
+| L | Z | – |
+| R | C | – |
+| L2 | L | L trigger (analog) |
+| R2 | R | R trigger (analog) |
+| Start, D-pad | Start, D-pad | Start, D-pad |
+| left stick | – | analog stick |
+
+Beetle Saturn's Select is its Mode switch, which the standard pad lacks. The Dreamcast's stick is drawn as the DualShock's are, showing where it is with no direction regions of its own: with four, the window fit audit found every label of the controller below the least readable size (11.25 design pixels against 11.64). The controller window's states for both are
+audited at 1280×800 and 1920×1200 (`WindowFitAuditTests` `ControllerBindingsSaturn`, `ControllerBindingsDreamcast`),
+with the test core standing in as each console's hosted engine, and recorded.
+
+### 4.12 Smoke test of the hosted cores (2026-11-01)
+
+Each listed core new to the list was downloaded from the buildbot's Linux x86_64 nightly of 2026-10-31 into
+`~/.cache/emusen/cores-test/` (never the repository), laid out as an entry with the libretro host built from this branch,
+and loaded in-process through `emusen-libretro-host`'s `run` example, measured on 2026-11-01: core info, the options
+schema, and 300 frames of a synthetic image made for the test (a loop at the reset vector: `loop.nes`, `loop.sfc`,
+`loop.md`, `loop.sms`, `loop.32x`, `loop.gb`; for the N64, a WiseMan synthetic ROM). No commercial image, BIOS or
+firmware folder was read. The index's CRC-32 matched each library inside its zip, not the zip [M].
+
+| Core | SHA-256 of the `.so` | Info places it | Options | Run |
+|---|---|---|---|---|
+| snes9x | `9b2b6ea9d88f96c156590443ddd05ee56aaf4e495329a889c979921942717a31` | snes | 43 | 300 frames, 256×224, sound |
+| nestopia | `72e2784bb3822fc70d5e74c98f0a0b2eaa95952ac43c01cae9ac25815b0be105` | nes | 35 | 300 frames, 602×224, sound |
+| genesis_plus_gx | `eda9d0f8299e8e1347e471927edaf00988d73dbed2ea15dcb19ef90b5ddc928c` | md, mcd, sms, sg1000 | 62 | 300 frames each of `loop.md` and `loop.sms`, sound |
+| picodrive | `fd4010afa91f69d3c61be49c95e14a5c37117c4d0899d3e593ccc4339c1417d5` | 32x | 21 | 300 frames, 320×224, sound |
+| sameboy | `5f3cbc610d1de2c04d41319b6678bece8c5bc78b1067436e1f6d9d440b89b56e` | gb, gbc | 29 | 300 frames, 160×144, sound |
+| mupen64plus_next | `26f2b4ec722558d77bc9e1582e62ab80c84190bb20dfadc48a148e6210c8775e` | n64 | 85 | refused: asks for OpenGL by default; with `mupen64plus-rdp-plugin=parallel` and `mupen64plus-rsp-plugin=parallel` it asks for Vulkan 1.1, which arrives with the host's stage 3 |
+| mednafen_psx_hw | `839a16b8ff59442c06fa517f39fd9831fa3e1e1f50c0b08a643e5a0ecf5b69e9` | psx | 108 | info and options only: no free disc image; its Vulkan renderer is `beetle_psx_hw_renderer=hardware_vk` (default `hardware`, which picks by the frontend's driver) |
+| mednafen_saturn | `f9b049a65b4f7003d32d6ef3d2459e46b3263279d76a6a7b591a7392b71ca048` | saturn | 34 | info and options only: no free disc image, and every game needs the player's own BIOS |
+
+**Found by the smoke test** [M]: the host placed a core by its `.info`'s databases alone, so PicoDrive, whose `.info`
+names the Genesis, the Sega CD and the Master System beside the 32X, would have been a hosted engine of all four. A listed
+core now runs only the systems its line names, of those its `.info` claims (`machine.rs`'s `systems`, tested by
+`tests/listed.rs`). The Vulkan cores, Mupen64Plus-Next and Beetle PSX HW, are tested once the host's Vulkan ring reaches
+this branch.
 
 ## 5. Download, verification and install
 
@@ -253,12 +393,16 @@ The libretro buildbot's nightlies, one zip per core: `buildbot.libretro.com/nigh
 ### 5.2 What can and cannot be verified
 
 The buildbot publishes **no signatures and no cryptographic checksums** [R, listing read 2026-10-31]: its index carries
-a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption and nothing more. So the chain is:
+a CRC-32 per zip, which is its library's (the zip's one member's), not the whole zip's [M, 2026-11-01: pcee2's index
+line d589c813 is the member's, the zip's own fc402731], and each zip member its own CRC-32. A CRC detects corruption
+and nothing more. So the chain is:
 
 1. **Transport**: HTTPS to `buildbot.libretro.com`, certificate checked against the system's own store by `emusen-net`;
    no other host, and a redirect off it refused.
-2. **Corruption**: the zip's CRC-32 equals the index line the plan was made from (a mismatch means the build changed
-   or the bytes did; the job refuses and says which); every member's CRC-32 checked on unpacking.
+2. **Corruption**: the library's CRC-32 as the zip's directory records it equals the index line the plan was made from
+   (a mismatch means the build changed or the bytes did; the job refuses and says which); every member's CRC-32 checked
+   against its bytes on unpacking. Until 2026-11-01 the whole zip's CRC-32 was compared, which refused every real core
+   (the test's buildbot had written the zip's CRC-32 into its index).
 3. **Shape, before anything is kept**: exactly one member, named `<stem>_libretro.<ext>`, with no folder, `..`,
    link or absolute path in its name (no zip-slip: the name is compared whole, never joined to a path first); its size
    under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) both as the zip declares it and as the bytes
@@ -411,8 +555,9 @@ and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cor
   waited for. The lock is taken only once a core passes the checks that need nothing written, so a request refused
   outright (a core not in the index, not installed, not supported) writes nothing; holding it, the job clears what an
   earlier job left in `.staging/`.
-- **The download** streams into `.staging/<stem>-<pid>.zip` through `emusen-net`'s `fetch_into` with `same_host`, its
-  CRC-32 taken as it comes and the stream refused past 512 MB (or a `Content-Length` over it). The member is compared
+- **The download** streams into `.staging/<stem>-<pid>.zip` through `emusen-net`'s `fetch_into` with `same_host`, the
+  stream refused past 512 MB (or a `Content-Length` over it); the index's CRC-32 is compared with the one member's as
+  the directory records it. The member is compared
   whole with `<stem>_libretro.<ext>`, so no name is ever joined to a path; a Unix link is refused by its external
   attributes; the declared length is bounded before inflating, and Galaxia's `copy_entry` stops inflating one buffer past
   the declared length and checks length and CRC-32. The architecture is `emusen-core-host`'s own header check, shared
@@ -437,7 +582,7 @@ and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cor
 
 **Tests** [M, 2026-10-31]: `emusen-core-tool`'s `install` 9 tests against cores zipped by the test (an ELF header for
 this machine and 3 MB of noise) served by its own TLS server: every check of §5.2 refusing with no folder or staging
-left (the index's CRC-32, two members, `../`, a folder, an absolute name, another core's name, a link, a declared size
+left (the index's CRC-32, an index giving the whole zip's CRC-32 rather than the library's (added 2026-11-01), two members, `../`, a folder, an absolute name, another core's name, a link, a declared size
 over the bound, bytes inflating past the declared size, a member's CRC-32, another machine's header, not a zip, a
 redirect off the host, no libretro host, an OpenGL-only core); an install's files, modes and `NOTICE`, nothing written
 outside `/Cores`; a stopped update leaving the installed build; an update keeping one build, refused when `.previous/`
@@ -467,7 +612,9 @@ The libretro host is being built on its own branch. Four places need one owner b
    otherwise `{"folder", "file", "sha256", "corename", "name", "version", "license", "authors": [...], "source",
    "build", "trust"}`, every field from `NOTICE` but `version` (the core's own library version) and `trust` (the
    libretro file's own standing, apart from the row's), so the window's rows and the approval read one answer (agreed
-   2026-10-31).
+   2026-10-31). *Built 2026-11-01 in the Rust runtime, the frontend API's 1.5 (`EmuSen_Backend.md` §34, `EmuSen_LibretroHost.md`
+   §10m): `sha256` is the core file's own, never `NOTICE`'s; an entry waiting for approval is a row of its own; the window
+   and Mistress's question approve `libretro.sha256`.*
 4. **Stage 4 of `EmuSen_LibretroHost.md` §10** lists "the core list and download" and "the engine choice per console".
    Those are Cores; the host's stage 4 keeps the approval's content, the settings window from the schema, the sound
    rate, the cards and the cheats.

@@ -1,0 +1,22 @@
+{
+  "id": "dreamcast",
+  "name": "Sega Dreamcast",
+  "console": "Dreamcast",
+  "manufacturer": "Sega",
+  "release_year": 1998,
+  "extensions": [".gdi", ".cdi", ".chd", ".cue", ".ccd", ".m3u"],
+  "cheat_systems": ["Sega - Dreamcast"],
+  "openvgdb_systems": [],
+  "cover_aspect": 1.0,
+  "esde_system": "dreamcast",
+  "esde_full_name": "Sega Dreamcast",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 23,
+  "cheat_space": null,
+  "media": [],
+  "byte_order": "little",
+  "libretro_databases": ["Sega - Dreamcast"],
+  "libretro_systemids": ["dreamcast"],
+  "firmware_note": "Flycast starts Dreamcast games without the console's BIOS, so a BIOS of your own is optional."
+}

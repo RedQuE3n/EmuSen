@@ -66,6 +66,56 @@ namespace EmuSen.WiseMan.Cores
             system["extensions"] = new JsonArray(".sfc", ".smc");
         }
 
+        // The test core's sidecar as an engine of one system under a name of its own: native in dir, or hosted as a libretro entry's proxy sidecar under its stem; nothing is loaded.
+        private void Engine(string built, string id, string name, string system, string? hostedStem = null, string? dir = null)
+        {
+            void Edit(JsonObject sidecar)
+            {
+                sidecar["info"]!["id"] = id;
+                sidecar["info"]!["display_name"] = name;
+                ((JsonObject)sidecar["info"]!["systems"]![0]!)["id"] = system;
+            }
+            if (hostedStem is null) { Place(built, dir!, Edit); return; }
+            string folder = Path.Combine(_root, "player", LibretroEntries.Folder, hostedStem);
+            Directory.CreateDirectory(folder);
+            var sidecar = (JsonObject)JsonNode.Parse(File.ReadAllText(CoreSidecar.PathFor(built)))!;
+            Edit(sidecar);
+            File.WriteAllText(CoreSidecar.PathFor(LibretroEntries.ProxyPath(folder)), sidecar.ToJsonString());
+        }
+
+        // A console's native core stays its default beside a hosted one, and the list's one exception, the PlayStation 2, defaults to PCEE2 ahead of Sapphire - see EmuSen_Cores.md §4.8.
+        [Fact]
+        public void A_native_core_is_the_default_beside_a_hosted_one_but_the_playstation_2_opens_on_pcee2()
+        {
+            Assert.Equal("pcee2", EmuSen.Crystal.Systems.HostedCores.DefaultFor("ps2"));
+            Assert.Equal(new[] { "ps2" }, EmuSen.Crystal.Systems.HostedCores.All.Where(c => c.DefaultFor.Count > 0).SelectMany(c => c.DefaultFor));
+            string built = Install("v1_test_core", Path.Combine(_root, "build"));
+            string native = Path.Combine(_root, "native");
+            Engine(built, "genesis_plus_gx", "Genesis Plus GX", "md", hostedStem: "genesis_plus_gx");
+            Engine(built, "nephrite", "Native Genesis", "md", dir: Path.Combine(native, "a"));
+            Engine(built, "pcee2", "PCEE2", "ps2", hostedStem: "pcee2");
+            Engine(built, "sapphire", "Native PS2", "ps2", dir: Path.Combine(native, "b"));
+            CoreDiscovery.UseDirectories(new[] { Path.Combine(native, "a"), Path.Combine(native, "b") });
+            CoreDiscovery.UsePlayerDirectories(new[] { Path.Combine(_root, "player") });
+            try
+            {
+                Assert.Equal(new[] { "Native Genesis", "Genesis Plus GX" }, CoreDiscovery.ForSystem("md").Select(c => c.EngineName));
+                Assert.Equal(new[] { "PCEE2", "Native PS2" }, CoreDiscovery.ForSystem("ps2").Select(c => c.EngineName));
+                Assert.Equal("Native Genesis", EmuSen.Crystal.Managed.ManagedRuntime.Schema("Genesis", null).First(r => r.Key == CoreCatalog.EngineKey).Default);
+                var ps2 = EmuSen.Crystal.Managed.ManagedRuntime.Schema("PlayStation 2", null).First(r => r.Key == CoreCatalog.EngineKey);
+                Assert.Equal("PCEE2", ps2.Default);
+                Assert.Equal(new[] { "PCEE2", "Native PS2" }, ps2.Choices!);
+                using var runtime = new EmuSen.Crystal.Managed.ManagedRuntime();
+                const uint console = EmuSen.Crystal.Managed.CrystalNumbers.ScopeConsole;
+                Assert.Equal("Native Genesis", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
+                runtime.SetSetting(0, console, "Genesis", CoreCatalog.EngineKey, "Genesis Plus GX");
+                Assert.Equal("Genesis Plus GX", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
+                runtime.SetSetting(0, console, "Genesis", CoreCatalog.EngineKey, "Native Genesis");
+                Assert.Equal("Native Genesis", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
+            }
+            finally { CoreDiscovery.UsePlayerDirectories(null); }
+        }
+
         [Fact]
         public void A_sidecar_lists_the_core_without_loading_it()
         {

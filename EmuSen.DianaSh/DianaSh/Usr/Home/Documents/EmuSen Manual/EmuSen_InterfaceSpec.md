@@ -579,3 +579,35 @@ screen's action row scrolled sideways past its eight actions, and the plan sheet
 the content area (`docs/LunaP.md` §202.6, §203.3). The desktop form, which the recordings do not cover, is held to the
 same audit at 1280×800 and 1920×1200 by `CoresWindowTests`.
 
+#### 6.3.17 The interface's tokens, U1 (2026-11-01)
+
+Every one of the 434 recordings changed, and no case was added or removed. The causes, each read from the recordings'
+differences:
+
+- **The palette.** Every colour is a token of LunaP's two columns (`docs/LunaP.md` §206.1), so the greys the look had
+  written out are gone from all of them: a row's text `#9C9CA0` is the Text token `#D4D4D4`, the footer and a hint
+  `#86868A` are Muted `#8D8D91`, a push button's outline `#55555A` is Border `#707070`, the title `#B4B4B8` is Text, and
+  Fluent's `#007ACC` no longer appears. Each recording's `palette` line is shorter for it.
+- **The focus.** A focused row or button is SurfaceRaised `#26262B` with an Accent bar at its left and TextStrong,
+  where it was near black `#050507` (§206.4).
+- **The typeface's file.** The menus and the framed sheets draw in LunaP's Barlow Condensed, fetched from the Barlow
+  project on 2026-11-01, where Mistress carried its own older copy. The two files' advances differ: `PLAYSTATION` at
+  26 design px lays out 106.31 wide where it was 114.32. So almost every row, button and label moved by a few pixels,
+  with the sizes and capitals unchanged.
+- **Stock controls outside the look.** A control the look does not restyle, such as the search keyboard's keys, was
+  drawn in the system's Noto Sans, the fallback, and is now in Barlow, FluentTheme's face since §206.3; the keyboard
+  card is 528 × 337 rather than 543 × 345.
+
+The first recording of these was made with a framed sheet's words in Barlow at 22, and the framed audit then failed in
+23 cases at both sizes, where the same audit on the commit before U1 passed all 190: buttons in the wider face ran past
+their bars (`ClearButton` in Active Cheats, `Close` in the Cheat Database, Interrupt in the Shell), labels ended in an
+ellipsis (the scraping status's `Requests today`, the cores' missing-catalogue notice), the controller drawings'
+labels, which follow the size of the text around them, fell to 16.3 design px with their capitals under the floor, and
+two colour keys Fluent reads as colours were missing from the big screen's palette, so a cheat list and a shader
+sheet's scroll bar painted Fluent's defaults. The words went back to Barlow Condensed at 24 until the Card form (U2,
+U3), the two keys were restored, and these recordings were then made; all 190 fit checks pass and a second run read
+every recording back unchanged.
+
+The four detail pages (`CoresDetail`, `PackagesDetail`, at both sizes) were recorded again after the page focus of LunaP
+§200 met these tokens in one tree: each holds both changes, the focus on the page's first button and the palette, and
+no other recording differed.

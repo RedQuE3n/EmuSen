@@ -11,107 +11,107 @@ frame 96,37,1728,1002
 title Shaders
 footer "Drawn over the picture as it is shown, per console. A choice and every slider are saved at once and reach a running game of that console while its shader is in use. Not downloaded. libretro's slang pack, about 54 MB from buildbot.libretro.com, is the file RetroArch's updater fetches: some 2,600 presets. EmuSen ships none of it, and each shader keeps its authors' licence."
 case ShaderSettingsCrt
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=96,187,1728,699 by=panel limit=96,187,1728,698 paints=#9C9CA0FF role=none seen=96,187,1728,698
+  0 ContentControl at=96,187,1728,699 by=panel limit=96,187,1728,698 paints=#D4D4D4FF role=none seen=96,187,1728,698
     1 DockPanel at=132,205,1656,663 by=panel limit=96,187,1728,698 role=none
       2 Grid at=132,205,1656,663 by=panel limit=96,187,1728,698 role=none
-        3 Tabs at=132,205,1656,663 by=panel limit=96,187,1728,698 name=ConsoleTabs paints=#9C9CA0FF role=tab
-          4 TabItem at=132,205,90,72 by=clip drawn focus heard=NES limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=NES
-            5 TextBlock at=150,217,54,48 box=36,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=NES layout=35.46,31.8 limit=132,205,90,72 owner=4 paints=#86868AFF role=text size=26.5 text=NES
-          6 TabItem at=222,205,72,72 by=clip drawn focus heard=GB limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=GB
-            7 TextBlock at=240,217,36,48 box=24,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=GB layout=23.85,31.8 limit=222,205,72,72 owner=6 paints=#86868AFF role=text size=26.5 text=GB
-          8 TabItem at=294,205,106.5,72 by=clip drawn focus heard=SNES limit=132,205,1656,663 op paints=#EEEEF0FF role=tabitem sideways text=SNES
-            9 TextBlock at=312,217,70.5,48 box=47,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=SNES layout=46.3,31.8 limit=294,205,106.5,72 owner=8 paints=#EEEEF0FF role=text size=26.5 text=SNES
-          10 TabItem at=400.5,205,88.5,72 by=clip drawn focus heard=N64 limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=N64
-            11 TextBlock at=418.5,217,52.5,48 box=35,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=N64 layout=34.93,31.8 limit=400.5,205,88.5,72 owner=10 paints=#86868AFF role=text size=26.5 text=N64
-          12 TabItem at=489,205,147,72 by=clip drawn focus heard=SG-1000 limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=SG-1000
-            13 TextBlock at=507,217,111,48 box=74,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=SG-1000 layout=73.03,31.8 limit=489,205,147,72 owner=12 paints=#86868AFF role=text size=26.5 text=SG-1000
-          14 TabItem at=636,205,250.5,72 by=clip drawn focus heard="MASTER SYSTEM" limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text="Master System"
-            15 TextBlock at=654,217,214.5,48 box=143,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard="MASTER SYSTEM" layout=142.91,31.8 limit=636,205,250.5,72 owner=14 paints=#86868AFF role=text size=26.5 text="MASTER SYSTEM"
-          16 TabItem at=886.5,205,150,72 by=clip drawn focus heard=GENESIS limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=Genesis
-            17 TextBlock at=904.5,217,114,48 box=76,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=GENESIS layout=75.5,31.8 limit=886.5,205,150,72 owner=16 paints=#86868AFF role=text size=26.5 text=GENESIS
-          18 TabItem at=1036.5,205,148.5,72 by=clip drawn focus heard="SEGA CD" limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text="Sega CD"
-            19 TextBlock at=1054.5,217,112.5,48 box=75,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard="SEGA CD" layout=74.36,31.8 limit=1036.5,205,148.5,72 owner=18 paints=#86868AFF role=text size=26.5 text="SEGA CD"
-          20 TabItem at=1185,205,211.5,72 by=clip drawn focus heard=PLAYSTATION limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text=PlayStation
-            21 TextBlock at=1203,217,175.5,48 box=117,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard=PLAYSTATION layout=116.52,31.8 limit=1185,205,211.5,72 owner=20 paints=#86868AFF role=text size=26.5 text=PLAYSTATION
-          22 TabItem at=1396.5,205,235.5,72 by=clip drawn focus heard="PLAYSTATION 2" limit=132,205,1656,663 paints=#86868AFF role=tabitem sideways text="PlayStation 2"
-            23 TextBlock at=1414.5,217,199.5,48 box=133,32 by=clip caps=18.5487 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=132.47,31.8 limit=1396.5,205,235.5,72 owner=22 paints=#86868AFF role=text size=26.5 text="PLAYSTATION 2"
+        3 Tabs at=132,205,1656,663 by=panel limit=96,187,1728,698 name=ConsoleTabs paints=#D4D4D4FF role=tab
+          4 TabItem at=132,205,90,72 by=clip drawn focus heard=NES limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=NES
+            5 TextBlock at=150,215.5,54,51 box=36,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=NES layout=35.2,33.6 limit=132,205,90,72 owner=4 paints=#8D8D91FF role=text size=28 text=NES
+          6 TabItem at=222,205,73.5,72 by=clip drawn focus heard=GB limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=GB
+            7 TextBlock at=240,215.5,37.5,51 box=25,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=GB layout=24.05,33.6 limit=222,205,73.5,72 owner=6 paints=#8D8D91FF role=text size=28 text=GB
+          8 TabItem at=295.5,205,106.5,72 by=clip drawn focus heard=SNES limit=132,205,1656,663 op paints=#EEEEF0FF role=tabitem sideways text=SNES
+            9 TextBlock at=313.5,215.5,70.5,51 box=47,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=SNES layout=46.23,33.6 limit=295.5,205,106.5,72 owner=8 paints=#EEEEF0FF role=text size=28 text=SNES
+          10 TabItem at=402,205,90,72 by=clip drawn focus heard=N64 limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=N64
+            11 TextBlock at=420,215.5,54,51 box=36,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=N64 layout=35.45,33.6 limit=402,205,90,72 owner=10 paints=#8D8D91FF role=text size=28 text=N64
+          12 TabItem at=492,205,148.5,72 by=clip drawn focus heard=SG-1000 limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=SG-1000
+            13 TextBlock at=510,215.5,112.5,51 box=75,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=SG-1000 layout=74.48,33.6 limit=492,205,148.5,72 owner=12 paints=#8D8D91FF role=text size=28 text=SG-1000
+          14 TabItem at=640.5,205,252,72 by=clip drawn focus heard="MASTER SYSTEM" limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text="Master System"
+            15 TextBlock at=658.5,215.5,216,51 box=144,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard="MASTER SYSTEM" layout=143.44,33.6 limit=640.5,205,252,72 owner=14 paints=#8D8D91FF role=text size=28 text="MASTER SYSTEM"
+          16 TabItem at=892.5,205,148.5,72 by=clip drawn focus heard=GENESIS limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=Genesis
+            17 TextBlock at=910.5,215.5,112.5,51 box=75,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=GENESIS layout=74.56,33.6 limit=892.5,205,148.5,72 owner=16 paints=#8D8D91FF role=text size=28 text=GENESIS
+          18 TabItem at=1041,205,150,72 by=clip drawn focus heard="SEGA CD" limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text="Sega CD"
+            19 TextBlock at=1059,215.5,114,51 box=76,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard="SEGA CD" layout=75.07,33.6 limit=1041,205,150,72 owner=18 paints=#8D8D91FF role=text size=28 text="SEGA CD"
+          20 TabItem at=1191,205,208.5,72 by=clip drawn focus heard=PLAYSTATION limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text=PlayStation
+            21 TextBlock at=1209,215.5,172.5,51 box=115,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard=PLAYSTATION layout=114.49,33.6 limit=1191,205,208.5,72 owner=20 paints=#8D8D91FF role=text size=28 text=PLAYSTATION
+          22 TabItem at=1399.5,205,232.5,72 by=clip drawn focus heard="PLAYSTATION 2" limit=132,205,1656,663 paints=#8D8D91FF role=tabitem sideways text="PlayStation 2"
+            23 TextBlock at=1417.5,215.5,196.5,51 box=131,34 by=clip caps=19.5986 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=130.84,33.6 limit=1399.5,205,232.5,72 owner=22 paints=#8D8D91FF role=text size=28 text="PLAYSTATION 2"
           24 ShaderPanel at=150,292,1620,576 by=clip limit=132,280,1656,588 role=none
             25 Grid at=150,292,792,576 by=clip limit=132,280,1656,588 role=none
-              26 FilterBar at=150,292,792,69 by=clip limit=132,280,1656,588 name=SNES.ShaderSearch paints=#9C9CA0FF role=group
-                27 TextBlock at=150,304,109.5,43.5 box=73,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Category layout=72.82,28.8 limit=150,292,792,69 paints=#86868AFF part role=text size=24 text=Category
-                28 Dropdown at=271.5,292,270,66 drawn focus heard=Category name=PART_Facet op paints=#0E0E10FF,#55555AFF,#9C9CA0FF part role=combobox sideways
-                  29 TextBlock at=289.5,299.5,204,48 box=136,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=All layout=20.07,31.2 limit=289.5,299.5,204,48 owner=28 paints=#9C9CA0FF role=text size=26 text=All
-                  30 ViewboxContainer at=508.5,320.1,18,9.81 by=clip limit=508.5,320.1,18,9.81 nohit role=none
-                31 TextBox at=553.5,292,388.5,69 drawn focus heard=Search name=PART_Search op paints=#0E0E10FF,#55555AFF,#D2D2D6FF part role=edit
-                  32 ScrollViewer allow="a text box scrolls its own text" at=570,302.5,355.5,48 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-                    33 TextBlock allow="a text box scrolls its own text" at=570,302.5,355.5,48 box=237,32 caps=18.1987 drawn face="Barlow Condensed" heard=Search in=32 layout=61,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text=Search
+              26 FilterBar at=150,292,792,69 by=clip limit=132,280,1656,588 name=SNES.ShaderSearch paints=#D4D4D4FF role=group
+                27 TextBlock at=150,304,103.5,43.5 box=69,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Category layout=68.93,28.8 limit=150,292,792,69 paints=#8D8D91FF part role=text size=24 text=Category
+                28 Dropdown at=265.5,292,270,66 drawn focus heard=Category name=PART_Facet op paints=#0E0E10FF,#707070FF,#D4D4D4FF part role=combobox sideways
+                  29 TextBlock at=283.5,299.5,204,48 box=136,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=All layout=19.79,31.2 limit=283.5,299.5,204,48 owner=28 paints=#D4D4D4FF role=text size=26 text=All
+                  30 ViewboxContainer at=502.5,320.1,18,9.81 by=clip limit=502.5,320.1,18,9.81 nohit role=none
+                31 TextBox at=547.5,292,394.5,69 drawn focus heard=Search name=PART_Search op paints=#0E0E10FF,#707070FF,#D4D4D4FF part role=edit
+                  32 ScrollViewer allow="a text box scrolls its own text" at=564,302.5,361.5,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                    33 TextBlock allow="a text box scrolls its own text" at=564,302.5,361.5,48 box=241,32 caps=18.1987 drawn face="Barlow Condensed" heard=Search in=32 layout=58.32,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text=Search
               34 GroupedList at=150,373,792,393 by=clip limit=132,280,1656,588 name=SNES.ShaderList paints=#1B1B1EFF,#FFFFFFFF role=list
-                35 ScrollViewer at=150,373,792,393 name=PART_ScrollViewer overflow=0 paints=#1E1E1EFF,#FFFFFFFF part role=scrollviewer viewport=150,373,792,393
-                  36 ListBoxItem at=150,373,792,129 by=fixed-scroll drawn focus heard="Built into EmuSen: None" in=35 limit=150,373,792,393 op paints=#333337FF,#9C9CA0FF role=listitem
+                35 ScrollViewer at=150,373,792,393 name=PART_ScrollViewer overflow=0 paints=#1B1B1EFF,#FFFFFFFF part role=scrollviewer viewport=150,373,792,393
+                  36 ListBoxItem at=150,373,792,129 by=fixed-scroll drawn focus heard="Built into EmuSen: None" in=35 limit=150,373,792,393 op paints=#333337FF,#D4D4D4FF role=listitem
                     37 GroupedListRow at=150,373,792,127.5 by=clip in=35 limit=150,373,792,129 role=none
                       38 DockPanel at=165,394,762,36 by=clip in=35 limit=150,373,792,129 role=none
-                        39 TextBlock at=913.5,394,13.5,36 box=9,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=5 in=35 layout=8.18,24 limit=150,373,792,129 owner=36 paints=#86868AFF role=text size=20 text=5
-                        40 TextBlock at=165,394,736.5,36 box=491,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="BUILT INTO EMUSEN" in=35 layout=132.18,24 limit=150,373,792,129 owner=36 paints=#86868AFF role=text size=20 text="BUILT INTO EMUSEN"
+                        39 TextBlock at=915,394,12,36 box=8,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=5 in=35 layout=7.88,24 limit=150,373,792,129 owner=36 paints=#8D8D91FF role=text size=20 text=5
+                        40 TextBlock at=165,394,738,36 box=492,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="BUILT INTO EMUSEN" in=35 layout=124.7,24 limit=150,373,792,129 owner=36 paints=#8D8D91FF role=text size=20 text="BUILT INTO EMUSEN"
                       41 Border at=156,437.5,780,61.5 by=clip in=35 limit=150,373,792,129 role=none
                         42 DockPanel at=171,446.5,750,43.5 by=clip in=35 limit=150,373,792,129 role=none
-                          43 Border at=835.5,449.5,85.5,39 by=clip in=35 limit=150,373,792,129 paints=#0E0E10FF role=none
-                            44 TextBlock at=847.5,451,61.5,36 box=41,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="In use" in=35 layout=40.88,24 limit=150,373,792,129 owner=36 paints=#9C9CA0FF role=text size=20 text="In use"
-                          45 StackPanel at=171,446.5,652.5,43.5 by=clip in=35 limit=150,373,792,129 role=none
-                            46 TextBlock at=171,446.5,652.5,43.5 box=435,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=35 layout=41.74,28.8 limit=150,373,792,129 owner=36 paints=#9C9CA0FF role=text size=24 text=None
-                  47 ListBoxItem at=150,502,792,66 by=fixed-scroll drawn focus heard=CRT in=35 limit=150,373,792,393 op paints=#333337FF,#9C9CA0FF role=listitem
+                          43 Border at=838.5,449.5,82.5,39 by=clip in=35 limit=150,373,792,129 paints=#0E0E10FF role=none
+                            44 TextBlock at=850.5,451,58.5,36 box=39,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="In use" in=35 layout=39,24 limit=150,373,792,129 owner=36 paints=#D4D4D4FF role=text size=20 text="In use"
+                          45 StackPanel at=171,446.5,655.5,43.5 by=clip in=35 limit=150,373,792,129 role=none
+                            46 TextBlock at=171,446.5,655.5,43.5 box=437,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=35 layout=39.6,28.8 limit=150,373,792,129 owner=36 paints=#D4D4D4FF role=text size=24 text=None
+                  47 ListBoxItem at=150,502,792,66 by=fixed-scroll drawn focus heard=CRT in=35 limit=150,373,792,393 op paints=#333337FF,#D4D4D4FF role=listitem
                     48 GroupedListRow at=150,502,792,64.5 by=clip in=35 limit=150,502,792,66 role=none
                       49 Border at=156,503.5,780,61.5 by=clip in=35 limit=150,502,792,66 paints=#4C9AE8FF role=none
                         50 DockPanel at=171,512.5,750,43.5 by=clip in=35 limit=150,502,792,66 role=none
                           51 StackPanel at=171,512.5,750,43.5 by=clip in=35 limit=150,502,792,66 role=none
-                            52 TextBlock at=171,512.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=CRT in=35 layout=31.49,28.8 limit=150,502,792,66 owner=47 paints=#FFFFFFFF role=text size=24 text=CRT
-                  53 ListBoxItem at=150,568,792,66 by=fixed-scroll drawn focus heard="CRT (Lottes)" in=35 limit=150,373,792,393 op paints=#333337FF,#9C9CA0FF role=listitem
+                            52 TextBlock at=171,512.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=CRT in=35 layout=29.04,28.8 limit=150,502,792,66 owner=47 paints=#0E0E10FF role=text size=24 text=CRT
+                  53 ListBoxItem at=150,568,792,66 by=fixed-scroll drawn focus heard="CRT (Lottes)" in=35 limit=150,373,792,393 op paints=#333337FF,#D4D4D4FF role=listitem
                     54 GroupedListRow at=150,568,792,64.5 by=clip in=35 limit=150,568,792,66 role=none
                       55 Border at=156,569.5,780,61.5 by=clip in=35 limit=150,568,792,66 role=none
                         56 DockPanel at=171,578.5,750,43.5 by=clip in=35 limit=150,568,792,66 role=none
                           57 StackPanel at=171,578.5,750,43.5 by=clip in=35 limit=150,568,792,66 role=none
-                            58 TextBlock at=171,578.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CRT (Lottes)" in=35 layout=97.92,28.8 limit=150,568,792,66 owner=53 paints=#9C9CA0FF role=text size=24 text="CRT (Lottes)"
-                  59 ListBoxItem at=150,634,792,66 by=fixed-scroll drawn focus heard=Scanlines in=35 limit=150,373,792,393 op paints=#333337FF,#9C9CA0FF role=listitem
+                            58 TextBlock at=171,578.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CRT (Lottes)" in=35 layout=92.06,28.8 limit=150,568,792,66 owner=53 paints=#D4D4D4FF role=text size=24 text="CRT (Lottes)"
+                  59 ListBoxItem at=150,634,792,66 by=fixed-scroll drawn focus heard=Scanlines in=35 limit=150,373,792,393 op paints=#333337FF,#D4D4D4FF role=listitem
                     60 GroupedListRow at=150,634,792,64.5 by=clip in=35 limit=150,634,792,66 role=none
                       61 Border at=156,635.5,780,61.5 by=clip in=35 limit=150,634,792,66 role=none
                         62 DockPanel at=171,644.5,750,43.5 by=clip in=35 limit=150,634,792,66 role=none
                           63 StackPanel at=171,644.5,750,43.5 by=clip in=35 limit=150,634,792,66 role=none
-                            64 TextBlock at=171,644.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Scanlines in=35 layout=77.93,28.8 limit=150,634,792,66 owner=59 paints=#9C9CA0FF role=text size=24 text=Scanlines
-                  65 ListBoxItem at=150,700,792,66 by=fixed-scroll drawn focus heard="Simple CRT" in=35 limit=150,373,792,393 op paints=#333337FF,#9C9CA0FF role=listitem
+                            64 TextBlock at=171,644.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Scanlines in=35 layout=73.66,28.8 limit=150,634,792,66 owner=59 paints=#D4D4D4FF role=text size=24 text=Scanlines
+                  65 ListBoxItem at=150,700,792,66 by=fixed-scroll drawn focus heard="Simple CRT" in=35 limit=150,373,792,393 op paints=#333337FF,#D4D4D4FF role=listitem
                     66 GroupedListRow at=150,700,792,64.5 by=clip in=35 limit=150,700,792,66 role=none
                       67 Border at=156,701.5,780,61.5 by=clip in=35 limit=150,700,792,66 role=none
                         68 DockPanel at=171,710.5,750,43.5 by=clip in=35 limit=150,700,792,66 role=none
                           69 StackPanel at=171,710.5,750,43.5 by=clip in=35 limit=150,700,792,66 role=none
-                            70 TextBlock at=171,710.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Simple CRT" in=35 layout=91.2,28.8 limit=150,700,792,66 owner=65 paints=#9C9CA0FF role=text size=24 text="Simple CRT"
+                            70 TextBlock at=171,710.5,750,43.5 box=500,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Simple CRT" in=35 layout=86.16,28.8 limit=150,700,792,66 owner=65 paints=#D4D4D4FF role=text size=24 text="Simple CRT"
               71 Border at=150,781,792,87 by=clip limit=132,280,1656,588 role=none
-                72 Button at=150,781,273,66 by=clip drawn focus heard="DOWNLOAD PACK" limit=132,280,1656,588 name=SNES.DownloadPack op paints=#55555AFF,#9C9CA0FF role=button text="Download Pack"
-                  73 TextBlock at=175.5,790,222,48 box=148,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="DOWNLOAD PACK" layout=147.39,31.2 limit=150,781,273,66 owner=72 paints=#9C9CA0FF role=text size=26 text="DOWNLOAD PACK"
+                72 Button at=150,781,264,66 by=clip drawn focus heard="DOWNLOAD PACK" limit=132,280,1656,588 name=SNES.DownloadPack op paints=#707070FF,#D4D4D4FF role=button text="Download Pack"
+                  73 TextBlock at=175.5,790,213,48 box=142,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="DOWNLOAD PACK" layout=141.47,31.2 limit=150,781,264,66 owner=72 paints=#D4D4D4FF role=text size=26 text="DOWNLOAD PACK"
             74 DockPanel at=978,292,792,576 by=clip limit=132,280,1656,588 role=none
               75 StackPanel at=978,292,792,276 by=clip limit=132,280,1656,588 role=none
                 76 Grid at=978,292,792,66 by=clip limit=132,280,1656,588 role=none
-                  77 TextBlock at=978,292,292.5,66 box=195,44 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=CRT layout=31.49,28.8 limit=132,280,1656,588 name=SNES.ShaderName paints=#9C9CA0FF role=text size=24 text=CRT
-                  78 StackPanel at=1288.5,292,481.5,66 by=clip limit=132,280,1656,588 role=none
-                    79 Button at=1288.5,292,189,66 by=clip drawn focus heard="RESET ALL" limit=132,280,1656,588 name=SNES.ResetShader op paints=#55555AFF,#9C9CA0FF role=button text="Reset All"
-                      80 TextBlock at=1314,301,138,48 box=92,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET ALL" layout=91.91,31.2 limit=1288.5,292,189,66 owner=79 paints=#9C9CA0FF role=text size=26 text="RESET ALL"
-                    81 Button at=1489.5,292,280.5,66 by=clip drawn focus heard="USE THIS SHADER" limit=132,280,1656,588 name=SNES.UseShader op paints=#55555AFF,#9C9CA0FF role=button text="Use This Shader"
-                      82 TextBlock at=1515,301,229.5,48 box=153,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE THIS SHADER" layout=152.57,31.2 limit=1489.5,292,280.5,66 owner=81 paints=#9C9CA0FF role=text size=26 text="USE THIS SHADER"
-                83 MonoText at=978,367,792,75 box=528,50 by=clip caps=12.854 drawn face="Noto Sans" heard="Built into EmuSen. EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md" layout=467.8,49.03 limit=132,280,1656,588 name=SNES.ShaderPath paints=#9C9CA0FF role=text size=18 text="Built into EmuSen. EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md"
-                84 HintText at=978,451,792,36 box=528,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="28 parameters." layout=102.98,24 limit=132,280,1656,588 paints=#86868AFF role=text size=20 text="28 parameters."
-                85 FilterBar at=978,499,771,69 by=clip limit=132,280,1656,588 name=SNES.ParameterSearch paints=#9C9CA0FF role=group
-                  86 TextBox at=978,499,771,69 drawn focus heard="Search parameters" name=PART_Search op paints=#0E0E10FF,#55555AFF,#D2D2D6FF part role=edit
-                    87 ScrollViewer allow="a text box scrolls its own text" at=994.5,509.5,738,48 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-                      88 TextBlock allow="a text box scrolls its own text" at=994.5,509.5,738,48 box=492,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search parameters" in=87 layout=168.51,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text="Search parameters"
-              89 SliderList at=978,580,792,288 by=clip limit=132,280,1656,588 name=SNES.ShaderParameters paints=#9C9CA0FF role=list
-                90 ScrollViewer at=978,580,792,288 fades=b name=PART_ScrollViewer overflow=3660 paints=#1E1E1EFF,#333337FF,#4C9AE8FF,#55555AFF,#86868AFF,#9C9CA0FF,#EEEEF0FF part role=scrollviewer viewport=978,580,768,288
+                  77 TextBlock at=978,292,309,66 box=206,44 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=CRT layout=29.04,28.8 limit=132,280,1656,588 name=SNES.ShaderName paints=#D4D4D4FF role=text size=24 text=CRT
+                  78 StackPanel at=1305,292,465,66 by=clip limit=132,280,1656,588 role=none
+                    79 Button at=1305,292,184.5,66 by=clip drawn focus heard="RESET ALL" limit=132,280,1656,588 name=SNES.ResetShader op paints=#707070FF,#D4D4D4FF role=button text="Reset All"
+                      80 TextBlock at=1330.5,301,133.5,48 box=89,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET ALL" layout=88.17,31.2 limit=1305,292,184.5,66 owner=79 paints=#D4D4D4FF role=text size=26 text="RESET ALL"
+                    81 Button at=1501.5,292,268.5,66 by=clip drawn focus heard="USE THIS SHADER" limit=132,280,1656,588 name=SNES.UseShader op paints=#707070FF,#D4D4D4FF role=button text="Use This Shader"
+                      82 TextBlock at=1527,301,217.5,48 box=145,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE THIS SHADER" layout=144.69,31.2 limit=1501.5,292,268.5,66 owner=81 paints=#D4D4D4FF role=text size=26 text="USE THIS SHADER"
+                83 MonoText at=978,367,792,75 box=528,50 by=clip caps=12.854 drawn face="Noto Sans" heard="Built into EmuSen. EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md" layout=467.8,49.03 limit=132,280,1656,588 name=SNES.ShaderPath paints=#D4D4D4FF role=text size=18 text="Built into EmuSen. EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md"
+                84 HintText at=978,451,792,36 box=528,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="28 parameters." layout=98.54,24 limit=132,280,1656,588 paints=#8D8D91FF role=text size=20 text="28 parameters."
+                85 FilterBar at=978,499,771,69 by=clip limit=132,280,1656,588 name=SNES.ParameterSearch paints=#D4D4D4FF role=group
+                  86 TextBox at=978,499,771,69 drawn focus heard="Search parameters" name=PART_Search op paints=#0E0E10FF,#707070FF,#D4D4D4FF part role=edit
+                    87 ScrollViewer allow="a text box scrolls its own text" at=994.5,509.5,738,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                      88 TextBlock allow="a text box scrolls its own text" at=994.5,509.5,738,48 box=492,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search parameters" in=87 layout=161.3,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search parameters"
+              89 SliderList at=978,580,792,288 by=clip limit=132,280,1656,588 name=SNES.ShaderParameters paints=#D4D4D4FF role=list
+                90 ScrollViewer at=978,580,792,288 fades=b name=PART_ScrollViewer overflow=3660 paints=#1B1B1EFF,#333337FF,#4C9AE8FF,#707070FF,#8D8D91FF,#D4D4D4FF,#EEEEF0FF part role=scrollviewer viewport=978,580,768,288
                   91 ContentPresenter at=978,580,747,141 by=scroll in=90 limit=978,580,768,288 role=none
                     92 SliderRow at=978,580,747,135 by=scroll in=90 limit=978,580,768,288 name=SNES.Parameter.quality role=none
                       93 StackPanel at=978,586,747,123 by=scroll in=90 limit=978,580,768,288 role=none
                         94 DockPanel at=978,586,747,45 by=scroll in=90 limit=978,580,768,288 role=none
-                          95 Button at=1627.5,586,97.5,45 by=scroll drawn focus heard="Reset Quality" in=90 limit=978,580,768,288 op paints=#55555AFF,#9C9CA0FF role=button text=Reset
-                            96 TextBlock at=1644,590.5,64.5,36 box=43,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=RESET in=90 layout=42.66,24 limit=1627.5,586,97.5,45 owner=95 paints=#9C9CA0FF role=text size=20 text=RESET
-                          97 TextBlock at=1497,586,112.5,43.5 box=75,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Balanced in=90 layout=74.69,28.8 limit=978,580,768,288 paints=#9C9CA0FF role=text size=24 text=Balanced
-                          98 TextBlock at=978,586,501,43.5 box=334,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Quality in=90 layout=55.3,28.8 limit=978,580,768,288 paints=#9C9CA0FF role=text size=24 text=Quality
+                          95 Button at=1632,586,93,45 by=scroll drawn focus heard="Reset Quality" in=90 limit=978,580,768,288 op paints=#707070FF,#D4D4D4FF role=button text=Reset
+                            96 TextBlock at=1648.5,590.5,60,36 box=40,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=RESET in=90 layout=40,24 limit=1632,586,93,45 owner=95 paints=#D4D4D4FF role=text size=20 text=RESET
+                          97 TextBlock at=1506,586,108,43.5 box=72,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Balanced in=90 layout=71.83,28.8 limit=978,580,768,288 paints=#D4D4D4FF role=text size=24 text=Balanced
+                          98 TextBlock at=978,586,510,43.5 box=340,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Quality in=90 layout=52.37,28.8 limit=978,580,768,288 paints=#D4D4D4FF role=text size=24 text=Quality
                         99 Slider at=978,634,747,75 by=scroll drawn focus heard=Quality in=90 limit=978,580,768,288 op paints=#333337FF,#4C9AE8FF,#EEEEF0FF role=slider sideways
                           100 RepeatButton at=978,656.5,358.5,30 drawn in=90 name=PART_DecreaseButton paints=#4C9AE8FF part role=button
                           101 RepeatButton at=1366.5,656.5,358.5,30 drawn in=90 name=PART_IncreaseButton paints=#333337FF,#4C9AE8FF part role=button
@@ -119,22 +119,22 @@ tree
                     103 SliderRow at=978,721,747,135 by=scroll in=90 limit=978,580,768,288 name=SNES.Parameter.signal role=none
                       104 StackPanel at=978,727,747,123 by=scroll in=90 limit=978,580,768,288 role=none
                         105 DockPanel at=978,727,747,45 by=scroll in=90 limit=978,580,768,288 role=none
-                          106 Button at=1627.5,727,97.5,45 by=scroll drawn focus heard="Reset Signal" in=90 limit=978,580,768,288 op paints=#55555AFF,#9C9CA0FF role=button text=Reset
-                            107 TextBlock at=1644,731.5,64.5,36 box=43,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=RESET in=90 layout=42.66,24 limit=1627.5,727,97.5,45 owner=106 paints=#9C9CA0FF role=text size=20 text=RESET
-                          108 TextBlock at=1479,727,130.5,43.5 box=87,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Composite in=90 layout=86.3,28.8 limit=978,580,768,288 paints=#9C9CA0FF role=text size=24 text=Composite
-                          109 TextBlock at=978,727,483,43.5 box=322,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Signal in=90 layout=49.32,28.8 limit=978,580,768,288 paints=#9C9CA0FF role=text size=24 text=Signal
+                          106 Button at=1632,727,93,45 by=scroll drawn focus heard="Reset Signal" in=90 limit=978,580,768,288 op paints=#707070FF,#D4D4D4FF role=button text=Reset
+                            107 TextBlock at=1648.5,731.5,60,36 box=40,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard=RESET in=90 layout=40,24 limit=1632,727,93,45 owner=106 paints=#D4D4D4FF role=text size=20 text=RESET
+                          108 TextBlock at=1491,727,123,43.5 box=82,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Composite in=90 layout=81.77,28.8 limit=978,580,768,288 paints=#D4D4D4FF role=text size=24 text=Composite
+                          109 TextBlock at=978,727,495,43.5 box=330,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Signal in=90 layout=46.58,28.8 limit=978,580,768,288 paints=#D4D4D4FF role=text size=24 text=Signal
                         110 Slider at=978,775,747,75 by=scroll drawn focus heard=Signal in=90 limit=978,580,768,288 op paints=#333337FF,#4C9AE8FF,#EEEEF0FF role=slider sideways
                           111 RepeatButton at=978,797.5,717,30 drawn in=90 name=PART_DecreaseButton paints=#4C9AE8FF part role=button
                   112 ContentPresenter at=978,862,747,141 by=scroll in=90 limit=978,580,768,288 role=none seen=978,862,747,6
-                    113 SliderRow at=978,862,747,135 by=scroll in=90 limit=978,580,768,288 name=SNES.Parameter.standard paints=#333337FF,#4C9AE8FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=none seen=978,862,747,6
+                    113 SliderRow at=978,862,747,135 by=scroll in=90 limit=978,580,768,288 name=SNES.Parameter.standard paints=#333337FF,#4C9AE8FF,#707070FF,#D4D4D4FF,#EEEEF0FF role=none seen=978,862,747,6
                   114 RepeatButton at=1746,580,24,24 drawn heard="Line up" name=PART_LineUpButton paints=#FFFFFFFF part role=button
                     115 ViewboxContainer at=1752,589,12,6.6 by=clip limit=1752,589,12,6.6 role=none
                   116 RepeatButton at=1746,664,24,180 drawn heard="Page down" name=PART_PageDownButton part role=button
                   117 RepeatButton at=1746,844,24,24 drawn heard="Line down" name=PART_LineDownButton paints=#FFFFFFFF part role=button
                     118 ViewboxContainer at=1752,853,12,6.6 by=clip limit=1752,853,12,6.6 role=none
-        119 ButtonBar at=1653,205,135,66 by=panel limit=96,187,1728,698 paints=#9C9CA0FF role=toolbar
-          120 Button at=1653,205,135,66 by=clip drawn focus heard=CLOSE limit=1653,205,135,66 op paints=#55555AFF,#9C9CA0FF role=button text=Close
-            121 TextBlock at=1678.5,214,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1653,205,135,66 owner=120 paints=#EEEEF0FF role=text size=26 text=CLOSE
+        119 ButtonBar at=1657.5,205,130.5,66 by=panel limit=96,187,1728,698 paints=#D4D4D4FF role=toolbar
+          120 Button at=1657.5,205,130.5,66 by=clip drawn focus heard=CLOSE limit=1657.5,205,130.5,66 op paints=#707070FF,#D4D4D4FF role=button text=Close
+            121 TextBlock at=1683,214,79.5,48 box=53,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=52.75,31.2 limit=1657.5,205,130.5,66 owner=120 paints=#EEEEF0FF role=text size=26 text=CLOSE
 focus 120
 edge 8 up 120
 edge 8 down 28

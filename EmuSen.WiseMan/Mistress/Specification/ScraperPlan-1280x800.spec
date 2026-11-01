@@ -10,58 +10,58 @@ floor 16
 frame 233.65,63,812.7,629
 title Scraper
 case ScraperPlan
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,163,813,509 by=panel limit=234,163,812.35,509 paints=#9C9CA0FF role=none seen=234,163,812.35,509
+  0 ContentControl at=234,163,813,509 by=panel limit=234,163,812.35,509 paints=#D4D4D4FF role=none seen=234,163,812.35,509
     1 ScraperPane at=258,175,765,497 by=panel heard=Scraper limit=234,163,812.35,509 role=pane
       2 Grid at=258,175,765,497 by=panel limit=234,163,812.35,509 role=none
         3 DockPanel at=274,187,733,46 by=panel limit=234,163,812.35,509 role=none
           4 Border at=827,187,180,46 by=panel limit=234,163,812.35,509 name=AdaptiveSearch role=none
-            5 TextBox at=827,187,180,46 by=panel drawn focus heard=Search limit=234,163,812.35,509 op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit
-              6 ScrollViewer allow="a text box scrolls its own text" at=838,194,158,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-                7 TextBlock allow="a text box scrolls its own text" at=838,194,158,32 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=6 layout=124.77,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text="Search games"
+            5 TextBox at=827,187,180,46 by=panel drawn focus heard=Search limit=234,163,812.35,509 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+              6 ScrollViewer allow="a text box scrolls its own text" at=838,194,158,32 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                7 TextBlock allow="a text box scrolls its own text" at=838,194,158,32 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=6 layout=119.99,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search games"
           8 Border at=274,187,553,46 by=panel limit=234,163,812.35,509 name=AdaptiveNavigation role=none
             9 WholeRow at=274,187,553,46 by=panel limit=234,163,812.35,509 paints=#FFFFFFFF role=none
-              10 ToggleButton at=274,188,129,44 by=panel drawn focus heard="All Games" limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text="All Games"
-                11 TextBlock at=291,194,95,32 box=95,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="ALL GAMES" layout=94.25,31.2 limit=274,188,129,44 owner=10 paints=#EEEEF0FF role=text size=26 text="ALL GAMES"
-              12 ToggleButton at=411,188,139,44 by=panel drawn focus heard=Favourites limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text=Favourites
-                13 TextBlock at=428,194,105,32 box=105,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=FAVOURITES layout=104.44,31.2 limit=411,188,139,44 owner=12 paints=#FFFFFFFF role=text size=26 text=FAVOURITES
-              14 ToggleButton at=558,188,164,44 by=panel drawn focus heard="Missing Media" limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text="Missing Media"
-                15 TextBlock at=575,194,130,32 box=130,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MISSING MEDIA" layout=129.14,31.2 limit=558,188,164,44 owner=14 paints=#FFFFFFFF role=text size=26 text="MISSING MEDIA"
+              10 ToggleButton at=274,188,126,44 by=panel drawn focus heard="All Games" limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text="All Games"
+                11 TextBlock at=291,194,92,32 box=92,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="ALL GAMES" layout=91.44,31.2 limit=274,188,126,44 owner=10 paints=#EEEEF0FF role=text size=26 text="ALL GAMES"
+              12 ToggleButton at=408,188,133,44 by=panel drawn focus heard=Favourites limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text=Favourites
+                13 TextBlock at=425,194,99,32 box=99,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=FAVOURITES layout=98.1,31.2 limit=408,188,133,44 owner=12 paints=#FFFFFFFF role=text size=26 text=FAVOURITES
+              14 ToggleButton at=549,188,156,44 by=panel drawn focus heard="Missing Media" limit=234,163,812.35,509 op paints=#FFFFFFFF role=button text="Missing Media"
+                15 TextBlock at=566,194,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MISSING MEDIA" layout=121.71,31.2 limit=549,188,156,44 owner=14 paints=#FFFFFFFF role=text size=26 text="MISSING MEDIA"
         16 Grid at=274,245,733,240 by=panel limit=234,163,812.35,509 role=none
           17 Border at=274,245,733,240 by=panel limit=234,163,812.35,509 name=AdaptiveContent role=none
             18 Grid at=274,245,733,240 by=panel limit=234,163,812.35,509 role=none
-              19 Border at=284,245,713,240 by=panel limit=234,163,812.35,509 paints=#1B1B1EFF,#55555AFF role=none
-                20 DockPanel at=301,262,679,206 by=panel limit=234,163,812.35,509 role=none
-                  21 TextBlock at=301,262,679,29 box=679,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Apply these changes?" layout=175.61,28.8 limit=234,163,812.35,509 paints=#9C9CA0FF role=text size=24 text="Apply these changes?"
-                  22 StackPanel at=780,424,200,44 by=panel limit=234,163,812.35,509 role=none
-                    23 Button at=780,424,103,44 by=panel drawn focus heard=Cancel limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Cancel
-                      24 TextBlock at=797,430,69,32 box=69,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=68.02,31.2 limit=780,424,103,44 owner=23 paints=#EEEEF0FF role=text size=26 text=CANCEL
-                    25 Button at=891,424,89,44 by=panel drawn focus heard=Apply limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Apply
-                      26 TextBlock at=908,430,55,32 box=55,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=APPLY layout=54.29,31.2 limit=891,424,89,44 owner=25 paints=#9C9CA0FF role=text size=26 text=APPLY
-                  27 ScrollViewer at=301,303,679,109 by=panel fades=b limit=234,163,812.35,509 overflow=35 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=301,303,679,109
-                    28 TextBlock at=301,303,679,144 box=679,144 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply." in=27 layout=673.56,144 limit=301,303,679,109 paints=#9C9CA0FF role=text seen=301,303,679,109 size=24 text="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply."
+              19 Border at=298,245,684,240 by=panel limit=234,163,812.35,509 paints=#1B1B1EFF,#707070FF role=none
+                20 DockPanel at=315,262,650,206 by=panel limit=234,163,812.35,509 role=none
+                  21 TextBlock at=315,262,650,29 box=650,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Apply these changes?" layout=169.13,28.8 limit=234,163,812.35,509 paints=#D4D4D4FF role=text size=24 text="Apply these changes?"
+                  22 StackPanel at=773,424,192,44 by=panel limit=234,163,812.35,509 role=none
+                    23 Button at=773,424,99,44 by=panel drawn focus heard=Cancel limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Cancel
+                      24 TextBlock at=790,430,65,32 box=65,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=64.74,31.2 limit=773,424,99,44 owner=23 paints=#EEEEF0FF role=text size=26 text=CANCEL
+                    25 Button at=880,424,85,44 by=panel drawn focus heard=Apply limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Apply
+                      26 TextBlock at=897,430,51,32 box=51,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=APPLY layout=50.99,31.2 limit=880,424,85,44 owner=25 paints=#D4D4D4FF role=text size=26 text=APPLY
+                  27 ScrollViewer at=315,303,650,109 by=panel fades=b limit=234,163,812.35,509 overflow=35 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=315,303,650,109
+                    28 TextBlock at=315,303,650,144 box=650,144 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply." in=27 layout=644.9,144 limit=315,303,650,109 paints=#D4D4D4FF role=text seen=315,303,650,109 size=24 text="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply."
         29 Border at=274,493,733,44 by=panel limit=234,163,812.35,509 name=AdaptiveActions role=none
           30 WrapPanel at=274,493,733,44 by=panel limit=234,163,812.35,509 role=none
-            31 ActionButton at=274,493,118,44 by=panel drawn focus heard="MARK ALL" limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text="Mark All"
-              32 TextBlock at=291,499,84,32 box=84,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MARK ALL" layout=83.93,31.2 limit=274,493,118,44 owner=31 paints=#9C9CA0FF role=text size=26 text="MARK ALL"
-            33 ActionButton at=404,493,93,44 by=panel drawn focus heard=THEME limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Theme
-              34 TextBlock at=421,499,59,32 box=59,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=THEME layout=58.94,31.2 limit=404,493,93,44 owner=33 paints=#9C9CA0FF role=text size=26 text=THEME
-            35 ActionButton at=509,493,97,44 by=panel drawn focus heard=VIDEOS limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Videos
-              36 TextBlock at=526,499,63,32 box=63,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=VIDEOS layout=62.74,31.2 limit=509,493,97,44 owner=35 paints=#9C9CA0FF role=text size=26 text=VIDEOS
-            37 ActionButton at=618,493,136,44 by=panel drawn focus heard=OVERWRITE limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Overwrite
-              38 TextBlock at=635,499,102,32 box=102,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=OVERWRITE layout=101.24,31.2 limit=618,493,136,44 owner=37 paints=#9C9CA0FF role=text size=26 text=OVERWRITE
-            39 ActionButton at=766,493,78,44 by=panel drawn heard=STOP limit=234,163,812.35,509 off paints=#55555AFF,#9C9CA0FF role=button text=Stop
-              40 TextBlock at=783,499,44,32 box=44,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=43.99,31.2 limit=766,493,78,44 off owner=39 paints=#55555AFF role=text size=26 text=STOP
-            41 ActionButton at=856,493,82,44 by=panel drawn focus heard=MARK limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text=Mark
-              42 TextBlock at=873,499,48,32 box=48,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=47.48,31.2 limit=856,493,82,44 owner=41 paints=#9C9CA0FF role=text size=26 text=MARK
+            31 ActionButton at=274,493,117,44 by=panel drawn focus heard="MARK ALL" limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text="Mark All"
+              32 TextBlock at=291,499,83,32 box=83,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MARK ALL" layout=82.13,31.2 limit=274,493,117,44 owner=31 paints=#D4D4D4FF role=text size=26 text="MARK ALL"
+            33 ActionButton at=403,493,90,44 by=panel drawn focus heard=THEME limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Theme
+              34 TextBlock at=420,499,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=THEME layout=55.04,31.2 limit=403,493,90,44 owner=33 paints=#D4D4D4FF role=text size=26 text=THEME
+            35 ActionButton at=505,493,93,44 by=panel drawn focus heard=VIDEOS limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Videos
+              36 TextBlock at=522,499,59,32 box=59,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=VIDEOS layout=58.6,31.2 limit=505,493,93,44 owner=35 paints=#D4D4D4FF role=text size=26 text=VIDEOS
+            37 ActionButton at=610,493,130,44 by=panel drawn focus heard=OVERWRITE limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Overwrite
+              38 TextBlock at=627,499,96,32 box=96,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=OVERWRITE layout=95,31.2 limit=610,493,130,44 owner=37 paints=#D4D4D4FF role=text size=26 text=OVERWRITE
+            39 ActionButton at=752,493,77,44 by=panel drawn heard=STOP limit=234,163,812.35,509 off paints=#707070FF,#D4D4D4FF role=button text=Stop
+              40 TextBlock at=769,499,43,32 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=42.17,31.2 limit=752,493,77,44 off owner=39 paints=#707070FF role=text size=26 text=STOP
+            41 ActionButton at=841,493,80,44 by=panel drawn focus heard=MARK limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text=Mark
+              42 TextBlock at=858,499,46,32 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=841,493,80,44 owner=41 paints=#D4D4D4FF role=text size=26 text=MARK
         43 Border at=258,545,765,89 by=panel limit=234,163,812.35,509 name=AdaptiveStatus role=none
           44 Grid at=262,549,757,81 by=panel limit=234,163,812.35,509 role=none
             45 Grid at=262,549,757,29 by=panel limit=234,163,812.35,509 role=none
-              46 TextBlock at=270,549,749,29 box=749,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="2 games marked to scrape" layout=216.7,28.8 limit=234,163,812.35,509 paints=#9C9CA0FF role=text size=24 text="2 games marked to scrape"
-            47 StackPanel at=914,586,105,44 by=panel limit=234,163,812.35,509 role=none
-              48 Button at=914,586,105,44 by=panel drawn focus heard="Apply the marked changes" limit=234,163,812.35,509 op paints=#55555AFF,#9C9CA0FF role=button text="Apply…"
-                49 TextBlock at=931,592,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=70.54,31.2 limit=914,586,105,44 owner=48 paints=#9C9CA0FF role=text size=26 text="APPLY…"
+              46 TextBlock at=270,549,749,29 box=749,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="2 games marked to scrape" layout=208.61,28.8 limit=234,163,812.35,509 paints=#D4D4D4FF role=text size=24 text="2 games marked to scrape"
+            47 StackPanel at=917,586,102,44 by=panel limit=234,163,812.35,509 role=none
+              48 Button at=917,586,102,44 by=panel drawn focus heard="Apply the marked changes" limit=234,163,812.35,509 op paints=#707070FF,#D4D4D4FF role=button text="Apply…"
+                49 TextBlock at=934,592,68,32 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=917,586,102,44 owner=48 paints=#D4D4D4FF role=text size=26 text="APPLY…"
         50 HintBar at=274,642,733,22 by=panel heard="Open, Back, Section, Apply…, Mark" limit=234,163,812.35,509 role=group
 focus 23
 edge 5 up same
@@ -108,7 +108,7 @@ edge 41 up 23
 edge 41 down 48
 edge 41 left 37
 edge 41 right same
-edge 48 up 41
+edge 48 up 25
 edge 48 down same
 edge 48 left 23
 edge 48 right same

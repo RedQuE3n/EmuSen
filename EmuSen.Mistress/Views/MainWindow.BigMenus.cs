@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Media;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Input;
@@ -23,8 +24,8 @@ namespace EmuSen.Mistress.Views
                     [new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) }, new("Choose") { Button = PadGlyphButton.DPadLeftRight }])
                 : Dialogs.ConfirmAsync(owner, title, message, accept, cancel);
 
-        // Barlow Condensed, OFL 1.1, shipped beside the program - see THIRD_PARTY_NOTICES.md and §4.69.
-        internal static readonly string BigMenuFont = Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", "BarlowCondensed-Regular.ttf");
+        // Barlow Condensed, OFL 1.1, LunaP's copy beside the program - see THIRD_PARTY_NOTICES.md and EmuSen_Interface.md §5.2.
+        internal static readonly string BigMenuFont = LunaFonts.CondensedFile;
 
         // The menus are laid out for 800 pixels of height and scaled from there.
         private const double BigMenuDesignHeight = 800;

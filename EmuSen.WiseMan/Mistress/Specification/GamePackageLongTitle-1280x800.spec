@@ -10,35 +10,39 @@ floor 16
 frame 220,24,840,694
 title "Game Package"
 case GamePackageLongTitle
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=220,124,840,574 by=panel limit=220,124,840,574 paints=#9C9CA0FF role=none
+  0 ContentControl at=220,124,840,574 by=panel limit=220,124,840,574 paints=#D4D4D4FF role=none
     1 DockPanel at=260,152,760,530 by=panel limit=220,124,840,574 role=none
-      2 ButtonBar at=930,638,90,44 by=panel limit=220,124,840,574 paints=#9C9CA0FF role=toolbar
-        3 Button at=930,638,90,44 by=clip drawn focus heard=CLOSE limit=930,638,90,44 name=GamePackageClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
-          4 TextBlock at=947,644,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=930,638,90,44 owner=3 paints=#9C9CA0FF role=text size=26 text=CLOSE
-      5 ScrollViewer at=260,152,760,476 by=panel fades=b limit=220,124,840,574 overflow=487 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,476
-        6 GamePackageDetail at=260,152,756,963 by=scroll in=5 limit=260,152,760,476 name=GamePackageDetail paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=260,152,756,476
-          7 HintText name=GamePackageAbout paints=#86868AFF role=text volatile="its words name the run's own folders"
-          8 FieldRow at=260,264,756,99 by=scroll heard=Package in=5 limit=260,152,760,476 paints=#9C9CA0FF role=group
-            9 TextBlock at=260,264,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=5 layout=69.48,28.8 limit=260,264,756,99 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Package
-            10 StackPanel at=260,297,756,66 by=clip heard=Package in=5 limit=260,264,756,99 paints=#9C9CA0FF role=none
-              11 TextBlock at=260,297,756,58 box=756,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Packages/SNES/A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).sfc, linked to the game where it is in the library." in=5 layout=738.72,57.6 limit=260,264,756,99 name=GamePackagePlace paints=#9C9CA0FF role=text size=24 text="Packages/SNES/A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).sfc, linked to the game where it is in the library."
-          12 FieldRow at=260,379,756,207 by=scroll heard="Soft patches" in=5 limit=260,152,760,476 paints=#9C9CA0FF role=group
-            13 TextBlock at=260,379,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Soft patches" in=5 layout=102.91,28.8 limit=260,379,756,207 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Soft patches"
-            14 HintText at=260,412,756,48 box=756,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Applied in order each time the game is loaded; the game's file keeps every byte, so its hashes still name the original." in=5 layout=727.86,48 limit=260,379,756,207 paints=#86868AFF part role=text size=20 text="Applied in order each time the game is loaded; the game's file keeps every byte, so its hashes still name the original."
-            15 StackPanel at=260,464,756,122 by=clip heard="Soft patches" in=5 limit=260,379,756,207 role=none
-              16 StackPanel at=260,464,756,122 by=clip in=5 limit=260,379,756,207 name=GamePackagePatches role=none
-                17 DockPanel at=260,464,756,58 by=clip in=5 limit=260,379,756,207 role=none
-                  18 Button at=911,471,105,44 by=clip drawn focus heard=REMOVE in=5 limit=260,379,756,207 name=GamePackagePatch.0.Remove op paints=#55555AFF,#9C9CA0FF role=button text=Remove
-                    19 TextBlock at=928,477,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE in=5 layout=70.56,31.2 limit=911,471,105,44 owner=18 paints=#EEEEF0FF role=text size=26 text=REMOVE
-                  20 TextBlock at=260,464,651,58 box=651,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="1. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips (IPS)" in=5 layout=619.68,57.6 limit=260,379,756,207 paints=#9C9CA0FF role=text size=24 text="1. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips (IPS)"
-                21 DockPanel at=260,528,756,58 by=clip in=5 limit=260,379,756,207 role=none
-                  22 Button at=911,535,105,44 by=clip drawn focus heard=REMOVE in=5 limit=260,379,756,207 name=GamePackagePatch.1.Remove op paints=#55555AFF,#9C9CA0FF role=button text=Remove
-                    23 TextBlock at=928,541,71,32 box=71,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE in=5 layout=70.56,31.2 limit=911,535,105,44 owner=22 paints=#9C9CA0FF role=text size=26 text=REMOVE
-                  24 TextBlock at=260,528,651,58 box=651,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)" in=5 layout=623.18,57.6 limit=260,379,756,207 paints=#9C9CA0FF role=text size=24 text="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)"
-          25 FieldRow at=260,602,756,186 by=scroll heard="Add a patch" in=5 limit=260,152,760,476 paints=#55555AFF,#86868AFF,#9C9CA0FF role=group seen=260,602,756,26
-            26 TextBlock at=260,602,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Add a patch" in=5 layout=96.05,28.8 limit=260,602,756,186 name=PART_Label paints=#9C9CA0FF part role=text seen=260,602,756,26 size=24 text="Add a patch"
+      2 ButtonBar at=933,638,87,44 by=panel limit=220,124,840,574 paints=#D4D4D4FF role=toolbar
+        3 Button at=933,638,87,44 by=clip drawn focus heard=CLOSE limit=933,638,87,44 name=GamePackageClose op paints=#707070FF,#D4D4D4FF role=button text=Close
+          4 TextBlock at=950,644,53,32 box=53,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=52.75,31.2 limit=933,638,87,44 owner=3 paints=#D4D4D4FF role=text size=26 text=CLOSE
+      5 ScrollViewer at=260,152,760,476 by=panel fades=b limit=220,124,840,574 overflow=439 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,476
+        6 GamePackageDetail at=260,152,756,915 by=scroll in=5 limit=260,152,760,476 name=GamePackageDetail paints=#707070FF,#8D8D91FF,#D4D4D4FF role=none seen=260,152,756,476
+          7 HintText name=GamePackageAbout paints=#8D8D91FF role=text volatile="its words name the run's own folders"
+          8 FieldRow at=260,240,756,99 by=scroll heard=Package in=5 limit=260,152,760,476 paints=#D4D4D4FF role=group
+            9 TextBlock at=260,240,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=5 layout=65.81,28.8 limit=260,240,756,99 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Package
+            10 StackPanel at=260,273,756,66 by=clip heard=Package in=5 limit=260,240,756,99 paints=#D4D4D4FF role=none
+              11 TextBlock at=260,273,756,58 box=756,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Packages/SNES/A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).sfc, linked to the game where it is in the library." in=5 layout=748.46,57.6 limit=260,240,756,99 name=GamePackagePlace paints=#D4D4D4FF role=text size=24 text="Packages/SNES/A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).sfc, linked to the game where it is in the library."
+          12 FieldRow at=260,355,756,183 by=scroll heard="Soft patches" in=5 limit=260,152,760,476 paints=#D4D4D4FF role=group
+            13 TextBlock at=260,355,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Soft patches" in=5 layout=97.3,28.8 limit=260,355,756,183 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Soft patches"
+            14 HintText at=260,388,756,24 box=756,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Applied in order each time the game is loaded; the game's file keeps every byte, so its hashes still name the original." in=5 layout=753.36,24 limit=260,355,756,183 paints=#8D8D91FF part role=text size=20 text="Applied in order each time the game is loaded; the game's file keeps every byte, so its hashes still name the original."
+            15 StackPanel at=260,416,756,122 by=clip heard="Soft patches" in=5 limit=260,355,756,183 role=none
+              16 StackPanel at=260,416,756,122 by=clip in=5 limit=260,355,756,183 name=GamePackagePatches role=none
+                17 DockPanel at=260,416,756,58 by=clip in=5 limit=260,355,756,183 role=none
+                  18 Button at=915,423,101,44 by=clip drawn focus heard=REMOVE in=5 limit=260,355,756,183 name=GamePackagePatch.0.Remove op paints=#707070FF,#D4D4D4FF role=button text=Remove
+                    19 TextBlock at=932,429,67,32 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE in=5 layout=66.33,31.2 limit=915,423,101,44 owner=18 paints=#EEEEF0FF role=text size=26 text=REMOVE
+                  20 TextBlock at=260,416,655,58 box=655,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="1. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips (IPS)" in=5 layout=636.98,57.6 limit=260,355,756,183 paints=#D4D4D4FF role=text size=24 text="1. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips (IPS)"
+                21 DockPanel at=260,480,756,58 by=clip in=5 limit=260,355,756,183 role=none
+                  22 Button at=915,487,101,44 by=clip drawn focus heard=REMOVE in=5 limit=260,355,756,183 name=GamePackagePatch.1.Remove op paints=#707070FF,#D4D4D4FF role=button text=Remove
+                    23 TextBlock at=932,493,67,32 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE in=5 layout=66.33,31.2 limit=915,487,101,44 owner=22 paints=#D4D4D4FF role=text size=26 text=REMOVE
+                  24 TextBlock at=260,480,655,58 box=655,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)" in=5 layout=640.01,57.6 limit=260,355,756,183 paints=#D4D4D4FF role=text size=24 text="2. A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta).ips1 (IPS)"
+          25 FieldRow at=260,554,756,186 by=scroll heard="Add a patch" in=5 limit=260,152,760,476 paints=#D4D4D4FF role=group seen=260,554,756,74
+            26 TextBlock at=260,554,756,29 box=756,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Add a patch" in=5 layout=93.74,28.8 limit=260,554,756,186 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Add a patch"
+            27 HintText at=260,587,756,24 box=756,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="An IPS, UPS or BPS file, checked against the game before it is copied into the package." in=5 layout=557.36,24 limit=260,554,756,186 paints=#8D8D91FF part role=text size=20 text="An IPS, UPS or BPS file, checked against the game before it is copied into the package."
+            28 WrapPanel at=260,615,756,125 by=clip heard="Add a patch" in=5 limit=260,554,756,186 name=GamePackageAdds paints=#707070FF,#D4D4D4FF role=none seen=260,615,756,13
+              29 Button at=260,615,725,73 by=clip drawn focus heard="ADD A VERY LONG TRANSLATION PATCH NAME, VERSION 2.1 WITH EVERY FIX APPLIED (ENGLISH).BPS" in=5 limit=260,554,756,186 name=GamePackageAdd.0 op paints=#707070FF,#D4D4D4FF role=button seen=260,615,725,13 text="Add A Very Long Translation Patch Name, Version 2.1 With Every Fix Applied (English).bps"
+                30 TextBlock at=277,620,691,63 box=691,63 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="ADD A VERY LONG TRANSLATION PATCH NAME, VERSION 2.1 WITH EVERY FIX APPLIED (ENGLISH).BPS" in=5 layout=685.52,62.4 limit=260,615,725,73 owner=29 paints=#D4D4D4FF role=text seen=277,620,691,8 size=26 text="ADD A VERY LONG TRANSLATION PATCH NAME, VERSION 2.1 WITH EVERY FIX APPLIED (ENGLISH).BPS"
 focus 18
 edge 3 up item:ButtonBar/0//
 edge 3 down same
@@ -49,14 +53,14 @@ edge 18 down 22
 edge 18 left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
 edge 18 right same
 edge 22 up 18
-edge 22 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
+edge 22 down 29
 edge 22 left path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
 edge 22 right same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 up 22
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0 right same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 up path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/0
+edge 29 up 22
+edge 29 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1
+edge 29 left same
+edge 29 right same
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 up 29
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 down path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/5/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/1/0/0/0/3/0/2/0/1 right 22

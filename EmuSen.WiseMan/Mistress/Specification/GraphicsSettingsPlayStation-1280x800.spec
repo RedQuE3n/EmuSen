@@ -11,58 +11,58 @@ frame 233.65,24,812.7,668
 title "Graphics Settings"
 case GraphicsSettingsPlayStation
 entered shoulders
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=none seen=234,124,812.35,548
+  0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#D4D4D4FF role=none seen=234,124,812.35,548
     1 DockPanel at=274,152,733,504 by=panel limit=234,124,812.35,548 role=none
-      2 HintText at=274,152,733,48 box=733,48 by=panel caps=13.999 drawn face="Barlow Condensed" heard="What each console's core does with its picture and its machine. A change is saved at once and reaches a running game between frames unless its hint says otherwise; a game loaded later reads these too." layout=709.76,48 limit=234,124,812.35,548 paints=#86868AFF role=text size=20 text="What each console's core does with its picture and its machine. A change is saved at once and reaches a running game between frames unless its hint says otherwise; a game loaded later reads these too."
-      3 ButtonBar at=689,612,318,44 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=toolbar
-        4 Button at=689,612,220,44 by=clip drawn focus heard="RESET THIS CONSOLE" limit=689,612,318,44 op paints=#55555AFF,#9C9CA0FF role=button text="Reset This Console"
-          5 TextBlock at=706,618,186,32 box=186,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET THIS CONSOLE" layout=185.93,31.2 limit=689,612,220,44 owner=4 paints=#9C9CA0FF role=text size=26 text="RESET THIS CONSOLE"
-        6 Button at=917,612,90,44 by=clip drawn focus heard=CLOSE limit=689,612,318,44 op paints=#55555AFF,#9C9CA0FF role=button text=Close
-          7 TextBlock at=934,618,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=917,612,90,44 owner=6 paints=#9C9CA0FF role=text size=26 text=CLOSE
-      8 Tabs at=274,210,733,392 by=panel limit=234,124,812.35,548 name=ConsoleTabs paints=#9C9CA0FF role=tab
-        9 TabItem at=274,210,65,48 by=clip drawn focus heard=NES limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=NES
-          10 TextBlock at=286,216,41,36 box=41,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=NES layout=40.14,36 limit=274,210,65,48 owner=9 paints=#86868AFF role=text size=30 text=NES
-        11 TabItem at=339,210,51,48 by=clip drawn focus heard=GB limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=GB
-          12 TextBlock at=351,216,27,36 box=27,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GB layout=27,36 limit=339,210,51,48 owner=11 paints=#86868AFF role=text size=30 text=GB
-        13 TabItem at=390,210,77,48 by=clip drawn focus heard=SNES limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=SNES
-          14 TextBlock at=402,216,53,36 box=53,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SNES layout=52.41,36 limit=390,210,77,48 owner=13 paints=#86868AFF role=text size=30 text=SNES
-        15 TabItem at=467,210,64,48 by=clip drawn focus heard=N64 limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=N64
-          16 TextBlock at=479,216,40,36 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=467,210,64,48 owner=15 paints=#86868AFF role=text size=30 text=N64
-        17 TabItem at=531,210,107,48 by=clip drawn focus heard=SG-1000 limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=SG-1000
-          18 TextBlock at=543,216,83,36 box=83,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SG-1000 layout=82.68,36 limit=531,210,107,48 owner=17 paints=#86868AFF role=text size=30 text=SG-1000
-        19 TabItem at=638,210,186,48 by=clip drawn focus heard="MASTER SYSTEM" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Master System"
-          20 TextBlock at=650,216,162,36 box=162,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="MASTER SYSTEM" layout=161.79,36 limit=638,210,186,48 owner=19 paints=#86868AFF role=text size=30 text="MASTER SYSTEM"
-        21 TabItem at=824,210,110,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=Genesis
-          22 TextBlock at=836,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=824,210,110,48 owner=21 paints=#86868AFF role=text size=30 text=GENESIS
-        23 TabItem at=274,258,109,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Sega CD"
-          24 TextBlock at=286,264,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=274,258,109,48 owner=23 paints=#86868AFF role=text size=30 text="SEGA CD"
-        25 TabItem at=383,258,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
-          26 TextBlock at=395,264,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=383,258,156,48 owner=25 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
-        27 TabItem at=539,258,174,48 by=clip drawn focus heard="PLAYSTATION 2" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="PlayStation 2"
-          28 TextBlock at=551,264,150,36 box=150,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=149.97,36 limit=539,258,174,48 owner=27 paints=#86868AFF role=text size=30 text="PLAYSTATION 2"
-        29 ScrollViewer at=286,308,709,294 by=clip fades=b limit=274,308,733,294 overflow=2463 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,308,709,294
-          30 StackPanel at=286,316,709,2749 by=scroll in=29 limit=286,308,709,294 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF role=none seen=286,316,709,286
-            31 FieldRow at=286,316,709,129 by=scroll heard="Shader and shape" in=29 limit=286,308,709,294 paints=#9C9CA0FF role=group
-              32 TextBlock at=286,316,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=29 layout=145.94,28.8 limit=286,316,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
-              33 HintText at=286,349,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=29 layout=699.98,48 limit=286,316,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
+      2 HintText at=274,152,733,48 box=733,48 by=panel caps=13.999 drawn face="Barlow Condensed" heard="What each console's core does with its picture and its machine. A change is saved at once and reaches a running game between frames unless its hint says otherwise; a game loaded later reads these too." layout=680.02,48 limit=234,124,812.35,548 paints=#8D8D91FF role=text size=20 text="What each console's core does with its picture and its machine. A change is saved at once and reaches a running game between frames unless its hint says otherwise; a game loaded later reads these too."
+      3 ButtonBar at=702,612,305,44 by=panel limit=234,124,812.35,548 paints=#D4D4D4FF role=toolbar
+        4 Button at=702,612,210,44 by=clip drawn focus heard="RESET THIS CONSOLE" limit=702,612,305,44 op paints=#707070FF,#D4D4D4FF role=button text="Reset This Console"
+          5 TextBlock at=719,618,176,32 box=176,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET THIS CONSOLE" layout=175.14,31.2 limit=702,612,210,44 owner=4 paints=#D4D4D4FF role=text size=26 text="RESET THIS CONSOLE"
+        6 Button at=920,612,87,44 by=clip drawn focus heard=CLOSE limit=702,612,305,44 op paints=#707070FF,#D4D4D4FF role=button text=Close
+          7 TextBlock at=937,618,53,32 box=53,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=52.75,31.2 limit=920,612,87,44 owner=6 paints=#D4D4D4FF role=text size=26 text=CLOSE
+      8 Tabs at=274,210,733,392 by=panel limit=234,124,812.35,548 name=ConsoleTabs paints=#D4D4D4FF role=tab
+        9 TabItem at=274,210,62,48 by=clip drawn focus heard=NES limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=NES
+          10 TextBlock at=286,216,38,36 box=38,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=NES layout=37.71,36 limit=274,210,62,48 owner=9 paints=#8D8D91FF role=text size=30 text=NES
+        11 TabItem at=336,210,50,48 by=clip drawn focus heard=GB limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=GB
+          12 TextBlock at=348,216,26,36 box=26,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GB layout=25.77,36 limit=336,210,50,48 owner=11 paints=#8D8D91FF role=text size=30 text=GB
+        13 TabItem at=386,210,74,48 by=clip drawn focus heard=SNES limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=SNES
+          14 TextBlock at=398,216,50,36 box=50,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SNES layout=49.53,36 limit=386,210,74,48 owner=13 paints=#8D8D91FF role=text size=30 text=SNES
+        15 TabItem at=460,210,62,48 by=clip drawn focus heard=N64 limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=N64
+          16 TextBlock at=472,216,38,36 box=38,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=37.98,36 limit=460,210,62,48 owner=15 paints=#8D8D91FF role=text size=30 text=N64
+        17 TabItem at=522,210,104,48 by=clip drawn focus heard=SG-1000 limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=SG-1000
+          18 TextBlock at=534,216,80,36 box=80,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SG-1000 layout=79.8,36 limit=522,210,104,48 owner=17 paints=#8D8D91FF role=text size=30 text=SG-1000
+        19 TabItem at=626,210,178,48 by=clip drawn focus heard="MASTER SYSTEM" limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text="Master System"
+          20 TextBlock at=638,216,154,36 box=154,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="MASTER SYSTEM" layout=153.69,36 limit=626,210,178,48 owner=19 paints=#8D8D91FF role=text size=30 text="MASTER SYSTEM"
+        21 TabItem at=804,210,104,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text=Genesis
+          22 TextBlock at=816,216,80,36 box=80,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=79.89,36 limit=804,210,104,48 owner=21 paints=#8D8D91FF role=text size=30 text=GENESIS
+        23 TabItem at=274,258,105,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text="Sega CD"
+          24 TextBlock at=286,264,81,36 box=81,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=80.43,36 limit=274,258,105,48 owner=23 paints=#8D8D91FF role=text size=30 text="SEGA CD"
+        25 TabItem at=379,258,147,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
+          26 TextBlock at=391,264,123,36 box=123,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=122.67,36 limit=379,258,147,48 owner=25 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
+        27 TabItem at=526,258,165,48 by=clip drawn focus heard="PLAYSTATION 2" limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text="PlayStation 2"
+          28 TextBlock at=538,264,141,36 box=141,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=140.19,36 limit=526,258,165,48 owner=27 paints=#8D8D91FF role=text size=30 text="PLAYSTATION 2"
+        29 ScrollViewer at=286,308,709,294 by=clip fades=b limit=274,308,733,294 overflow=2319 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=286,308,709,294
+          30 StackPanel at=286,316,709,2605 by=scroll in=29 limit=286,308,709,294 paints=#0E0E10FF,#707070FF,#8D8D91FF,#D4D4D4FF role=none seen=286,316,709,286
+            31 FieldRow at=286,316,709,129 by=scroll heard="Shader and shape" in=29 limit=286,308,709,294 paints=#D4D4D4FF role=group
+              32 TextBlock at=286,316,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=29 layout=141.36,28.8 limit=286,316,709,129 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Shader and shape"
+              33 HintText at=286,349,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=29 layout=689.14,48 limit=286,316,709,129 paints=#8D8D91FF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
               34 DockPanel at=286,401,709,44 by=clip heard="Shader and shape" in=29 limit=286,316,709,129 role=none
-                35 Button at=286,401,128,44 by=clip drawn focus heard=SHADERS... in=29 limit=286,316,709,129 name=PlayStation.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
-                  36 TextBlock at=303,407,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=29 layout=93.96,31.2 limit=286,401,128,44 owner=35 paints=#EEEEF0FF role=text size=26 text=SHADERS...
-                37 Dropdown at=870,401,125,44 by=clip drawn focus heard="Shader and shape" in=29 limit=286,316,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  38 TextBlock at=882,406,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=29 layout=80.81,31.2 limit=882,406,81,32 owner=37 paints=#9C9CA0FF role=text size=26 text="TV shape"
+                35 Button at=286,401,125,44 by=clip drawn focus heard=SHADERS... in=29 limit=286,316,709,129 name=PlayStation.Shaders op paints=#707070FF,#D4D4D4FF role=button text=Shaders...
+                  36 TextBlock at=303,407,91,32 box=91,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=29 layout=90.48,31.2 limit=286,401,125,44 owner=35 paints=#EEEEF0FF role=text size=26 text=SHADERS...
+                37 Dropdown at=874,401,121,44 by=clip drawn focus heard="Shader and shape" in=29 limit=286,316,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=combobox sideways
+                  38 TextBlock at=886,406,77,32 box=77,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=29 layout=76.73,31.2 limit=886,406,77,32 owner=37 paints=#D4D4D4FF role=text size=26 text="TV shape"
                   39 ViewboxContainer at=973,419.73,12,6.54 by=clip in=29 limit=973,419.73,12,6.54 nohit role=none
-                40 TextBlock at=426,409,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=29 layout=41.74,28.8 limit=286,316,709,129 name=PlayStation.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
-            41 FieldRow at=286,457,709,105 by=scroll heard=Overscan in=29 limit=286,308,709,294 paints=#9C9CA0FF role=group
-              42 TextBlock at=286,457,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=29 layout=75.29,28.8 limit=286,457,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
-              43 HintText at=286,490,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=29 layout=474.92,24 limit=286,457,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
+                40 TextBlock at=423,409,439,29 box=439,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=29 layout=39.6,28.8 limit=286,316,709,129 name=PlayStation.ShaderInUse paints=#D4D4D4FF role=text size=24 text=None
+            41 FieldRow at=286,457,709,105 by=scroll heard=Overscan in=29 limit=286,308,709,294 paints=#D4D4D4FF role=group
+              42 TextBlock at=286,457,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=29 layout=71.98,28.8 limit=286,457,709,105 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Overscan
+              43 HintText at=286,490,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=29 layout=455.22,24 limit=286,457,709,105 paints=#8D8D91FF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
               44 StackPanel at=286,518,709,44 by=clip heard=Overscan in=29 limit=286,457,709,105 role=none
-                45 Dropdown at=286,518,166,44 by=clip drawn focus heard=Overscan in=29 limit=286,457,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  46 TextBlock at=298,523,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=29 layout=121.45,31.2 limit=298,523,122,32 owner=45 paints=#9C9CA0FF role=text size=26 text="Whole picture"
-                  47 ViewboxContainer at=430,536.73,12,6.54 by=clip in=29 limit=430,536.73,12,6.54 nohit role=none
-            48 FieldRow at=286,574,709,201 by=scroll heard="Memory Card" in=29 limit=286,308,709,294 name=PlayStation.Cards.Row paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=group seen=286,574,709,28
-              49 TextBlock at=286,574,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Memory Card" in=29 layout=106.42,28.8 limit=286,574,709,201 name=PART_Label paints=#9C9CA0FF part role=text seen=286,574,709,28 size=24 text="Memory Card"
+                45 Dropdown at=286,518,160,44 by=clip drawn focus heard=Overscan in=29 limit=286,457,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=combobox sideways
+                  46 TextBlock at=298,523,116,32 box=116,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=29 layout=115.73,31.2 limit=298,523,116,32 owner=45 paints=#D4D4D4FF role=text size=26 text="Whole picture"
+                  47 ViewboxContainer at=424,536.73,12,6.54 by=clip in=29 limit=424,536.73,12,6.54 nohit role=none
+            48 FieldRow at=286,574,709,201 by=scroll heard="Memory Card" in=29 limit=286,308,709,294 name=PlayStation.Cards.Row paints=#0E0E10FF,#707070FF,#8D8D91FF,#D4D4D4FF role=group seen=286,574,709,28
+              49 TextBlock at=286,574,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Memory Card" in=29 layout=102.36,28.8 limit=286,574,709,201 name=PART_Label paints=#D4D4D4FF part role=text seen=286,574,709,28 size=24 text="Memory Card"
 focus 35
 edge 4 up 25
 edge 4 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0

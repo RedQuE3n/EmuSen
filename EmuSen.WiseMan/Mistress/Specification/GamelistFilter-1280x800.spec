@@ -10,41 +10,41 @@ floor 16
 frame 220,24,840,694
 title "Filter Gamelist"
 case GamelistFilter
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=220,124,840,574 by=panel limit=220,124,840,574 paints=#9C9CA0FF role=none
+  0 ContentControl at=220,124,840,574 by=panel limit=220,124,840,574 paints=#D4D4D4FF role=none
     1 DockPanel at=260,152,760,530 by=panel limit=220,124,840,574 role=none
-      2 ButtonBar at=729,638,291,44 by=panel limit=220,124,840,574 paints=#9C9CA0FF role=toolbar
-        3 Button at=729,638,201,44 by=clip drawn focus heard="RESET ALL FILTERS" limit=729,638,291,44 name=FilterReset op paints=#55555AFF,#9C9CA0FF role=button text="Reset All Filters"
-          4 TextBlock at=746,644,167,32 box=167,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET ALL FILTERS" layout=166.53,31.2 limit=729,638,201,44 owner=3 paints=#9C9CA0FF role=text size=26 text="RESET ALL FILTERS"
-        5 Button at=938,638,82,44 by=clip drawn focus heard=DONE limit=729,638,291,44 name=FilterDone op paints=#55555AFF,#9C9CA0FF role=button text=Done
-          6 TextBlock at=955,644,48,32 box=48,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=DONE layout=47.92,31.2 limit=938,638,82,44 owner=5 paints=#9C9CA0FF role=text size=26 text=DONE
-      7 ScrollViewer at=260,152,760,474 by=panel fades=b limit=220,124,840,574 overflow=262 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,474
+      2 ButtonBar at=739,638,281,44 by=panel limit=220,124,840,574 paints=#D4D4D4FF role=toolbar
+        3 Button at=739,638,193,44 by=clip drawn focus heard="RESET ALL FILTERS" limit=739,638,281,44 name=FilterReset op paints=#707070FF,#D4D4D4FF role=button text="Reset All Filters"
+          4 TextBlock at=756,644,159,32 box=159,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="RESET ALL FILTERS" layout=158.03,31.2 limit=739,638,193,44 owner=3 paints=#D4D4D4FF role=text size=26 text="RESET ALL FILTERS"
+        5 Button at=940,638,80,44 by=clip drawn focus heard=DONE limit=739,638,281,44 name=FilterDone op paints=#707070FF,#D4D4D4FF role=button text=Done
+          6 TextBlock at=957,644,46,32 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=DONE layout=45.08,31.2 limit=940,638,80,44 owner=5 paints=#D4D4D4FF role=text size=26 text=DONE
+      7 ScrollViewer at=260,152,760,474 by=panel fades=b limit=220,124,840,574 overflow=262 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=260,152,760,474
         8 StackPanel at=264,156,752,728 by=scroll in=7 limit=260,152,760,474 role=none seen=264,156,752,470
-          9 FieldRow at=264,156,752,107 by=scroll heard="Game Name" in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-            10 TextBlock at=264,156,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Game Name" in=7 layout=97.92,28.8 limit=264,156,752,107 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Game Name"
-            11 HintText at=264,189,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Any part of the name, in any case." in=7 layout=229.28,24 limit=264,156,752,107 paints=#86868AFF part role=text size=20 text="Any part of the name, in any case."
-            12 TextBox at=264,217,752,46 by=clip drawn focus heard="Game Name" in=7 limit=264,156,752,107 name=FilterGameName op paints=#050507FF,#0E0E10FF,#55555AFF,#EEEEF0FF role=edit
+          9 FieldRow at=264,156,752,107 by=scroll heard="Game Name" in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+            10 TextBlock at=264,156,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Game Name" in=7 layout=94.1,28.8 limit=264,156,752,107 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Game Name"
+            11 HintText at=264,189,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Any part of the name, in any case." in=7 layout=220.36,24 limit=264,156,752,107 paints=#8D8D91FF part role=text size=20 text="Any part of the name, in any case."
+            12 TextBox at=264,217,752,46 by=clip drawn focus heard="Game Name" in=7 limit=264,156,752,107 name=FilterGameName op paints=#0E0E10FF,#26262BFF,#4C9AE8FF,#707070FF,#EEEEF0FF role=edit
               13 ScrollViewer allow="a text box scrolls its own text" at=275,224,730,32 in=7 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
-                14 TextBlock allow="a text box scrolls its own text" at=275,224,730,32 box=730,32 caps=18.1987 drawn face="Barlow Condensed" heard="Any name" in=7,13 layout=85.57,31.2 name=PART_Placeholder paints=#86868AFF part role=text size=26 text="Any name"
-          15 StackPanel at=264,275,752,609 by=scroll in=7 limit=260,152,760,474 paints=#86868AFF,#9C9CA0FF role=none seen=264,275,752,351
-            16 FieldRow at=264,275,752,57 by=scroll heard=Rating in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-              17 TextBlock at=264,275,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Rating in=7 layout=52.03,28.8 limit=264,275,752,57 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Rating
-              18 HintText at=264,308,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=107.14,24 limit=264,275,752,57 name=FilterRatingNothing paints=#86868AFF role=text size=20 text="Nothing to filter"
-            19 FieldRow at=264,344,752,57 by=scroll heard=Developer in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-              20 TextBlock at=264,344,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Developer in=7 layout=80.83,28.8 limit=264,344,752,57 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Developer
-              21 HintText at=264,377,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=107.14,24 limit=264,344,752,57 name=FilterDeveloperNothing paints=#86868AFF role=text size=20 text="Nothing to filter"
-            22 FieldRow at=264,413,752,57 by=scroll heard=Publisher in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-              23 TextBlock at=264,413,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Publisher in=7 layout=76.2,28.8 limit=264,413,752,57 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Publisher
-              24 HintText at=264,446,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=107.14,24 limit=264,413,752,57 name=FilterPublisherNothing paints=#86868AFF role=text size=20 text="Nothing to filter"
-            25 FieldRow at=264,482,752,57 by=scroll heard=Genre in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-              26 TextBlock at=264,482,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Genre in=7 layout=47.16,28.8 limit=264,482,752,57 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Genre
-              27 HintText at=264,515,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=107.14,24 limit=264,482,752,57 name=FilterGenreNothing paints=#86868AFF role=text size=20 text="Nothing to filter"
-            28 FieldRow at=264,551,752,57 by=scroll heard=Players in=7 limit=260,152,760,474 paints=#9C9CA0FF role=group
-              29 TextBlock at=264,551,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Players in=7 layout=59.14,28.8 limit=264,551,752,57 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Players
-              30 HintText at=264,584,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=107.14,24 limit=264,551,752,57 name=FilterPlayersNothing paints=#86868AFF role=text size=20 text="Nothing to filter"
-            31 FieldRow at=264,620,752,57 by=scroll heard=Favorite in=7 limit=260,152,760,474 paints=#86868AFF,#9C9CA0FF role=group seen=264,620,752,6
-              32 TextBlock at=264,620,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Favorite in=7 layout=66.24,28.8 limit=264,620,752,57 name=PART_Label paints=#9C9CA0FF part role=text seen=264,620,752,6 size=24 text=Favorite
+                14 TextBlock allow="a text box scrolls its own text" at=275,224,730,32 box=730,32 caps=18.1987 drawn face="Barlow Condensed" heard="Any name" in=7,13 layout=83.54,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Any name"
+          15 StackPanel at=264,275,752,609 by=scroll in=7 limit=260,152,760,474 paints=#8D8D91FF,#D4D4D4FF role=none seen=264,275,752,351
+            16 FieldRow at=264,275,752,57 by=scroll heard=Rating in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+              17 TextBlock at=264,275,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Rating in=7 layout=48.82,28.8 limit=264,275,752,57 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Rating
+              18 HintText at=264,308,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=101.2,24 limit=264,275,752,57 name=FilterRatingNothing paints=#8D8D91FF role=text size=20 text="Nothing to filter"
+            19 FieldRow at=264,344,752,57 by=scroll heard=Developer in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+              20 TextBlock at=264,344,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Developer in=7 layout=77.28,28.8 limit=264,344,752,57 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Developer
+              21 HintText at=264,377,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=101.2,24 limit=264,344,752,57 name=FilterDeveloperNothing paints=#8D8D91FF role=text size=20 text="Nothing to filter"
+            22 FieldRow at=264,413,752,57 by=scroll heard=Publisher in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+              23 TextBlock at=264,413,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Publisher in=7 layout=72.14,28.8 limit=264,413,752,57 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Publisher
+              24 HintText at=264,446,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=101.2,24 limit=264,413,752,57 name=FilterPublisherNothing paints=#8D8D91FF role=text size=20 text="Nothing to filter"
+            25 FieldRow at=264,482,752,57 by=scroll heard=Genre in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+              26 TextBlock at=264,482,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Genre in=7 layout=45.29,28.8 limit=264,482,752,57 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Genre
+              27 HintText at=264,515,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=101.2,24 limit=264,482,752,57 name=FilterGenreNothing paints=#8D8D91FF role=text size=20 text="Nothing to filter"
+            28 FieldRow at=264,551,752,57 by=scroll heard=Players in=7 limit=260,152,760,474 paints=#D4D4D4FF role=group
+              29 TextBlock at=264,551,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Players in=7 layout=56.98,28.8 limit=264,551,752,57 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Players
+              30 HintText at=264,584,752,24 box=752,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Nothing to filter" in=7 layout=101.2,24 limit=264,551,752,57 name=FilterPlayersNothing paints=#8D8D91FF role=text size=20 text="Nothing to filter"
+            31 FieldRow at=264,620,752,57 by=scroll heard=Favorite in=7 limit=260,152,760,474 paints=#8D8D91FF,#D4D4D4FF role=group seen=264,620,752,6
+              32 TextBlock at=264,620,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Favorite in=7 layout=61.06,28.8 limit=264,620,752,57 name=PART_Label paints=#D4D4D4FF part role=text seen=264,620,752,6 size=24 text=Favorite
 focus 12
 edge 3 up 12
 edge 3 down same

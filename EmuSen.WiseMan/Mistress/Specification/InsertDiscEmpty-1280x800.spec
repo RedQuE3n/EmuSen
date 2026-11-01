@@ -10,14 +10,14 @@ floor 16
 frame 233.65,265,812.7,244
 title "Insert Disc"
 case InsertDiscEmpty
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,365,813,124 by=panel limit=234,365,812.35,124 paints=#9C9CA0FF role=none seen=234,365,812.35,124
+  0 ContentControl at=234,365,813,124 by=panel limit=234,365,812.35,124 paints=#D4D4D4FF role=none seen=234,365,812.35,124
     1 StackPanel at=274,393,733,80 by=panel limit=234,365,812.35,124 role=none
-      2 HintText at=274,393,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="No PlayStation games are in the library." layout=267.52,24 limit=234,365,812.35,124 name=InsertDiscAbout paints=#86868AFF role=text size=20 text="No PlayStation games are in the library."
-      3 ButtonBar at=904,429,103,44 by=panel limit=234,365,812.35,124 paints=#9C9CA0FF role=toolbar
-        4 Button at=904,429,103,44 by=clip drawn focus heard=CANCEL limit=904,429,103,44 name=InsertDiscCancel op paints=#55555AFF,#9C9CA0FF role=button text=Cancel
-          5 TextBlock at=921,435,69,32 box=69,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=68.02,31.2 limit=904,429,103,44 owner=4 paints=#EEEEF0FF role=text size=26 text=CANCEL
+      2 HintText at=274,393,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="No PlayStation games are in the library." layout=254.62,24 limit=234,365,812.35,124 name=InsertDiscAbout paints=#8D8D91FF role=text size=20 text="No PlayStation games are in the library."
+      3 ButtonBar at=908,429,99,44 by=panel limit=234,365,812.35,124 paints=#D4D4D4FF role=toolbar
+        4 Button at=908,429,99,44 by=clip drawn focus heard=CANCEL limit=908,429,99,44 name=InsertDiscCancel op paints=#707070FF,#D4D4D4FF role=button text=Cancel
+          5 TextBlock at=925,435,65,32 box=65,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=64.74,31.2 limit=908,429,99,44 owner=4 paints=#EEEEF0FF role=text size=26 text=CANCEL
 focus 4
 edge 4 up same
 edge 4 down same

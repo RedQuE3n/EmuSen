@@ -180,14 +180,18 @@ fn pad(ports: usize, labels: &[(u32, String)]) -> Controller {
     }
 }
 
-/// The `.info` file's firmware entries, numbered from 1.
+/// The first firmware file's number: above the sixteen kept for battery files, save RAM, the clock and a profile's
+/// cards, so no file passed is both (EmuSen_LibretroHost.md §10j); Sapphire numbers its BIOS so too.
+const FIRST_FIRMWARE: u32 = 16;
+
+/// The `.info` file's firmware entries, numbered from `FIRST_FIRMWARE`.
 fn firmware(lib: &Library) -> Vec<Firmware> {
     let count: usize = info_value(lib, "firmware_count").parse().unwrap_or(0);
     (0..count.min(64))
         .map(|i| {
             let path = info_value(lib, &format!("firmware{i}_path"));
             let optional = info_value(lib, &format!("firmware{i}_opt")) == "true";
-            Firmware { which: 1 + i as u32, name: path.clone(), label: Some(info_value(lib, &format!("firmware{i}_desc"))).filter(|d| !d.is_empty()).unwrap_or(path), size: 0, required: !optional, ..Firmware::default() }
+            Firmware { which: FIRST_FIRMWARE + i as u32, name: path.clone(), label: Some(info_value(lib, &format!("firmware{i}_desc"))).filter(|d| !d.is_empty()).unwrap_or(path), size: 0, required: !optional, ..Firmware::default() }
         })
         .collect()
 }

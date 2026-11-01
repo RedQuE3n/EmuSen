@@ -28,7 +28,7 @@ fn library() -> (&'static Library, PathBuf) {
         let host = entry.join(format!("emusen-libretro-host.{}", suffix()));
         std::fs::copy(deps.join(format!("libemusen_libretro_host.{}", suffix())), &host).unwrap();
         std::fs::copy(deps.join(format!("libemusen_libretro_testcore.{}", suffix())), entry.join(format!("{STEM}_libretro.{}", suffix()))).unwrap();
-        std::fs::write(entry.join(format!("{STEM}_libretro.info")), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"\"\ndatabase = \"\"\n").unwrap();
+        std::fs::write(entry.join(format!("{STEM}_libretro.info")), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"\"\ndatabase = \"\"\nfirmware_count = 2\nfirmware0_path = \"pcsx2/bios\"\nfirmware0_opt = \"false\"\nfirmware1_path = \"pcsx2/resources\"\nfirmware1_opt = \"false\"\n").unwrap();
         let lib = Library::load(&host).unwrap_or_else(|e| panic!("{e:?}"));
         (lib, root.join("libretro"))
     });
@@ -61,6 +61,12 @@ fn the_cards_are_the_card_formats_files_a_card_not_passed_is_blank_and_a_write_c
         assert!(info.contains(&entry), "{entry} in {info}");
     }
     assert_eq!(info.matches(&format!(r#""medium":"{MEDIUM}""#)).count(), 2, "{info}");
+    let numbers = |from: &str, to: &str| -> Vec<u32> {
+        let part = info.split(&format!("\"{from}\":[")).nth(1).unwrap().split(&format!("\"{to}\":")).next().unwrap();
+        part.split("\"which\":").skip(1).map(|w| w.split(|c: char| !c.is_ascii_digit()).next().unwrap().parse().unwrap()).collect()
+    };
+    let (firmware, battery) = (numbers("firmware", "battery"), numbers("battery", "capabilities"));
+    assert!(firmware.len() == 2 && firmware.iter().all(|f| !battery.contains(f)), "firmware {firmware:?} and battery files {battery:?} share no number");
 
     let cards = root.join(".data").join(STEM).join("system/pcsx2/memcards");
     std::fs::create_dir_all(&cards).unwrap();
@@ -77,6 +83,7 @@ fn the_cards_are_the_card_formats_files_a_card_not_passed_is_blank_and_a_write_c
     let mut m = make(&[(2, &card), (3, &[])]);
     assert_eq!(std::fs::read(cards.join("Mcd001.ps2")).unwrap(), card, "the card passed is the core's slot 1");
     assert!(std::fs::read(cards.join("Mcd002.ps2")).unwrap().iter().all(|&b| b == ERASED), "an empty file is a blank card");
+    assert!(!root.join(".data").join(STEM).join("system/pcsx2/resources").exists(), "a card is never also written as a firmware file");
     m.advance().unwrap();
     let mut written = card.clone();
     emusen_ps2_card::mkdir(&mut written, b"", b"BASLUS-20001TEST", T).unwrap();

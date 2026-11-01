@@ -120,3 +120,73 @@ M1 and M3 are routine; M2 carries the risk of losing a save and is done with the
 3. The name: **Packages** (above), the menus saying *Packages*.
 4. The proposal as written: Synaptic-style mark and apply, unmake as a `pkg` job, the window over the library tool's
    jobs, in stages M1–M3.
+
+## 7. Built 2026-10-31: M1, the window
+
+*Started on 2026-10-31 by the tester's go for the new windows.* Packages is the first tool built as §1b of
+`EmuSen_LibraryTools.md` asks: a library of its own, hosted by a thin host, on LunaP's manager frame
+(`ManagerLayout<T>`, LunaP §203).
+
+### 7.1 The listing: `pkg ls --all` (service 1.5)
+
+§2's extension of the listing, in the library tool (`Platform/library-tool`) so that the shell and the window draw
+from one answer:
+
+- **The request**: `pkg-ls` gains `"unpackaged": true`; on any other op it is refused `PARSE`. The shell's
+  `pkg ls [<console>] --all` sends it (`man pkg`).
+- **A size per package**: each `package` event of `pkg-ls` gains `size` (the bytes its folder holds, hidden files
+  included and links counted as links), `game_size` (its game's bytes where the game is found: the file and, for a cue
+  sheet, every file it names), `console` (its system's console, named as the library's games are named, where the
+  manifest's `system` is the ES-DE name) and `convertible` where `chd convert` takes its game.
+- **The unpackaged games**: after the packages, one `game` event for each game of the library no package claims, found
+  and routed as `pkg make` finds them: `index`, `of`, `source`, `system` (the console), `state: unpackaged`, `size`,
+  and `convertible`. The start event gains `games`, and the end's counts `unpackaged`. A console narrows both lists.
+- **Which discs convert** has one owner: the CHD tool's own test (`discs::item_of`, the predicate `chd convert`'s
+  batch uses), exposed as `discs::convertible`; a playlist is never offered, since the tool does not convert one.
+- `emusen_library_tool.h` 1.4 → **1.5**; the module asks for 1.5. The table is unchanged.
+
+### 7.2 The tool library and its host
+
+- **`EmuSen.Tools.Packages`** references LunaP and Galaxia and nothing else of EmuSen (`LeafAssemblyTests`). It holds
+  `PackagesPane` (the content, a `ManagerLayout<PackageRow>`), `PackageRow` (one event of the listing as a row),
+  `PackagesPlan` (the marks each row is offered and the marked rows as requests, free of any control so that it is
+  tested alone), `PackagesWords`, `PackageDetail`, and `ToolWords`: the tool's refusals and reasons in a player's
+  words, moved out of Mistress's `CompressedDiscsWords`, which now forwards to it, so one table serves both windows.
+- **`PackagesWindow`** in Mistress is the thin host: a `ToolWindow` whose content is the pane, *Settings → Packages…*
+  on the desktop and *Packages* in the pad's settings menu. Framed as a sheet in big picture it switches the pane to
+  the big-screen form, hands the frame's generated hints to the help bar (face buttons as the player's swap draws
+  them) and passes the pad's buttons to the frame in ES-DE's grammar (`IPadDriven`); what the frame declines, B at the
+  top among them, is the router's. No focus routing or hint is written by hand.
+
+### 7.3 What the window does
+
+- **Columns**: Game, Console, Format (§3a: CUE/BIN, ISO, CHD, else the cartridge's extension), Mode, State, Size; the
+  big screen shows Game and State. Game and Size sort.
+- **Filters**: All, each console, then Packaged, Not yet and Problems (moved, missing, changed, unreadable).
+  `AdaptiveLayout` holds one chosen section, so a console and a state are not combined; the search narrows either.
+- **Marks** (`PackagesPlan.MarksFor`): a game not packaged, *make, linked*, *make self-contained*, *make and zip*, and
+  *convert to CHD* where it converts; a package, *check*, and unless it has a problem *convert to CHD* where it
+  converts, *make self-contained* and *make and zip* where it is linked to the library, *zip* where it is
+  self-contained. A package with a problem is offered only *check*. The toolbar's Make, Check, Zip and Convert to CHD
+  mark the chosen row where it is offered that change and do nothing otherwise; they stay enabled whichever row is
+  chosen, since the pad's walk through the action row must not change with the row (the interface recording found
+  Convert to CHD unreachable while it was enabled only for discs). X cycles the row's marks.
+- **Apply** shows the plan first (`PackagesPlan.Text`): each kind of change with its games, ending "Nothing in the
+  library is changed, moved or removed." Confirmed, the steps run one job each in a fixed order — make, make
+  self-contained, make and zip, zip, convert, check — through `pkg-make`, `pkg-zip`, `convert` and `pkg-check`, with one
+  progress line (the step, n of m, the game). Each event's outcome is kept and shown in the State column and the
+  detail's *Last run*; then the library is listed again.
+- **Refusals** (no library, chdman missing, the platform library not in use) are said in `ToolWords`' sentences in the
+  apply bar's line.
+- **Space**: the packages' folders' total and the free space of the disk `Packages` is on.
+- **The detail** (M1): the package and its mode, the game and where it lies, the state with the tool's reason, the
+  sizes, the format, the soft patches and *Open Folder* (Avalonia's launcher, so the platform's own file manager).
+  M3 adds identity, migrate and the layers.
+
+### 7.4 Otherwise than §3, and left
+
+- **Unmake** is not offered until M2 builds `pkg unmake`.
+- **Converting self-contained in one mark**, chdman's threads and the check after each disc are not options of the
+  plan: the frame's plan is text with Apply and Cancel, and the tool always checks each disc. A converted disc's
+  package is made self-contained by marking it after the conversion. The space a conversion is expected to save is
+  not estimated beforehand; each conversion's outcome says what it saved.

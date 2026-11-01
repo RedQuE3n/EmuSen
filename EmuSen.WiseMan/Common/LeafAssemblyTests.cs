@@ -42,6 +42,14 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
         }
 
+        // A tool is a library needing only LunaP, Galaxia and the platform library, never Mistress, so any thin host can show it - see EmuSen_LibraryTools.md §1b.
+        [Fact]
+        public void The_Packages_tool_references_only_LunaP_and_Galaxia()
+        {
+            Assembly packages = typeof(EmuSen.Tools.Packages.PackagesPane).Assembly;
+            Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(packages));
+        }
+
         // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
         [Fact]
         public void LunaP_references_nothing_of_EmuSen()

@@ -30,6 +30,23 @@ impl Folders {
     }
 }
 
+/// A save a core keeps outside its save folder, named by its profile: (battery number, suffix, path under the system
+/// folder, medium, slot's label, port).
+pub type Card = (u32, &'static str, &'static str, &'static str, &'static str, u32);
+
+/// The profiles: by a core's file stem, its saves outside the save folder, found by running it (EmuSen_LibretroHost.md
+/// §4.5, §10c). PCEE2 and LRPS2 keep their memory cards as two raw 8,650,752-byte files in `pcsx2/memcards/`, measured
+/// for PCEE2 on 2026-10-31 and given by LRPS2's documentation.
+pub const PROFILES: &[(&str, &[Card])] = &[
+    ("pcee2", &[(2, ".mcd1", "pcsx2/memcards/Mcd001.ps2", "ps2.card", "Slot 1", 0), (3, ".mcd2", "pcsx2/memcards/Mcd002.ps2", "ps2.card", "Slot 2", 1)]),
+    ("pcsx2", &[(2, ".mcd1", "pcsx2/memcards/Mcd001.ps2", "ps2.card", "Slot 1", 0), (3, ".mcd2", "pcsx2/memcards/Mcd002.ps2", "ps2.card", "Slot 2", 1)]),
+];
+
+/// The cards of a core's profile, none where it has no profile.
+pub fn cards(stem: &str) -> &'static [Card] {
+    PROFILES.iter().find(|p| p.0 == stem).map_or(&[], |p| p.1)
+}
+
 /// One save file as last reported.
 struct Seen {
     which: u32,
@@ -46,6 +63,8 @@ pub struct Saves {
     folder: PathBuf,
     files: BTreeMap<String, Seen>,
     next: u32,
+    /// The profile's cards, by number: their file and what was last reported of it.
+    cards: Vec<(u32, PathBuf, Seen)>,
 }
 
 /// What a scan found, for the host's events.
@@ -76,7 +95,22 @@ fn walk(base: &Path, at: &Path, out: &mut Vec<(String, PathBuf)>) {
 
 impl Saves {
     pub fn new(folder: PathBuf) -> Saves {
-        Saves { folder, files: BTreeMap::new(), next: flags::FILE_NAMED }
+        Saves { folder, files: BTreeMap::new(), next: flags::FILE_NAMED, cards: Vec::new() }
+    }
+
+    /// A profile's card, written into place from the host's copy where it passed one, else kept as the core left it.
+    pub fn card(&mut self, which: u32, path: PathBuf, passed: Option<&[u8]>) -> std::io::Result<()> {
+        if let Some(data) = passed.filter(|d| !d.is_empty()) {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, data)?;
+        }
+        let bytes = std::fs::read(&path).unwrap_or_default();
+        let meta = std::fs::metadata(&path).ok();
+        let seen = Seen { which, len: meta.as_ref().map_or(0, |m| m.len()), modified: meta.and_then(|m| m.modified().ok()), saved: bytes.clone(), bytes, removed: false };
+        self.cards.push((which, path, seen));
+        Ok(())
     }
 
     /// The files the host passed, written into place by name before the core loads; a file already there and not
@@ -139,6 +173,19 @@ impl Saves {
                 c.listed = true;
             }
         }
+        for (which, path, s) in self.cards.iter_mut() {
+            let Ok(meta) = std::fs::metadata(&path) else { continue };
+            let (len, modified) = (meta.len(), meta.modified().ok());
+            if (len, modified) != (s.len, s.modified)
+                && let Ok(bytes) = std::fs::read(&path)
+            {
+                (s.len, s.modified) = (len, modified);
+                if bytes != s.bytes {
+                    s.bytes = bytes;
+                    c.changed.push(*which);
+                }
+            }
+        }
         c
     }
 
@@ -149,10 +196,17 @@ impl Saves {
 
     /// A named file's bytes and whether they changed since the host last saved them.
     pub fn bytes(&self, which: u32) -> Option<(&[u8], bool)> {
+        if let Some((_, _, s)) = self.cards.iter().find(|c| c.0 == which) {
+            return Some((&s.bytes[..], s.bytes != s.saved));
+        }
         self.files.values().find(|s| s.which == which).map(|s| (if s.removed { &[][..] } else { &s.bytes[..] }, s.bytes != s.saved || s.removed))
     }
 
     pub fn saved(&mut self, which: u32) -> bool {
+        if let Some((_, _, s)) = self.cards.iter_mut().find(|c| c.0 == which) {
+            s.saved = s.bytes.clone();
+            return true;
+        }
         match self.files.values_mut().find(|s| s.which == which) {
             Some(s) => {
                 s.saved = s.bytes.clone();

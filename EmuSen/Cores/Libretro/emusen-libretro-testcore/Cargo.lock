@@ -3,12 +3,29 @@
 version = 4
 
 [[package]]
+name = "ash"
+version = "0.38.0+1.3.281"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
+
+[[package]]
 name = "emusen-libretro-sys"
 version = "0.1.0"
+dependencies = [
+ "ash",
+]
 
 [[package]]
 name = "emusen-libretro-testcore"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "emusen-libretro-sys",
+ "libc",
 ]
+
+[[package]]
+name = "libc"
+version = "0.2.191"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"

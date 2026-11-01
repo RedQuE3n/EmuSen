@@ -178,6 +178,9 @@ struct Inner {
     /// The physical device's UUID, and the loaders of the two calls that export memory and semaphores, where the
     /// device has the extensions (EmuSen_DevicePicture.md §2).
     uuid: [u8; 16],
+    driver_uuid: [u8; 16],
+    /// Whether timeline semaphores were enabled (Vulkan 1.2 and the feature offered).
+    timeline: bool,
     exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)>,
     /// The physical device and the API version the device was made with.
     physical: vk::PhysicalDevice,
@@ -325,7 +328,7 @@ struct Candidate {
     timestamp_period: f32,
 }
 
-fn color(base: u32, levels: u32) -> vk::ImageSubresourceRange {
+pub(crate) fn color(base: u32, levels: u32) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: base, level_count: levels, base_array_layer: 0, layer_count: 1 }
 }
 
@@ -457,6 +460,7 @@ impl Device {
         let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
         unsafe { root.instance.get_physical_device_properties2(physical, &mut properties) };
         let uuid = id.device_uuid;
+        let driver_uuid = id.driver_uuid;
         let exports = exporting.then(|| (ash::khr::external_memory_fd::Device::new(&root.instance, &device), ash::khr::external_semaphore_fd::Device::new(&root.instance, &device)));
         let made = (|| unsafe {
             let queue = device.get_device_queue(family, 0);
@@ -500,6 +504,8 @@ impl Device {
                 samplers: Mutex::new([vk::Sampler::null(); 16]),
                 submit: Mutex::new(false),
                 uuid,
+                driver_uuid,
+                timeline,
                 exports,
                 physical,
                 api,
@@ -535,6 +541,20 @@ impl Device {
     /// The physical device's UUID, which a compositor's own must equal for an exported image to be imported there.
     pub fn uuid(&self) -> [u8; 16] {
         self.inner.uuid
+    }
+
+    /// The driver's UUID, which with `uuid` names the card a ring's importer must be on (EmuSen_LibretroHost.md §5.4).
+    pub fn driver_uuid(&self) -> [u8; 16] {
+        self.inner.driver_uuid
+    }
+
+    /// Whether the device can make a ring: exports and timeline semaphores both.
+    pub fn rings(&self) -> bool {
+        self.inner.exports.is_some() && self.inner.timeline
+    }
+
+    pub(crate) fn export_loaders(&self) -> Option<&(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)> {
+        self.inner.exports.as_ref()
     }
 
     /// Whether images and semaphores made here can be exported as opaque file descriptors.
@@ -717,7 +737,7 @@ impl Device {
 
     /// Records and submits, waiting on the device for `wait` and signalling `signal`, and returns at once; the next
     /// call that submits or settles waits for it (EmuSen_DevicePicture.md §4.2).
-    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
+    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>, then: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -737,11 +757,11 @@ impl Device {
                 values.push(value);
             }
             let stages = [vk::PipelineStageFlags::TRANSFER; 2];
-            let signals = [signal];
-            let signal_values = [0u64];
+            let signals: Vec<vk::Semaphore> = std::iter::once(signal).chain(then.map(|t| t.0)).collect();
+            let signal_values: Vec<u64> = std::iter::once(0).chain(then.map(|t| t.1)).collect();
             let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values).signal_semaphore_values(&signal_values);
             let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals);
-            if timeline.is_some() {
+            if timeline.is_some() || then.is_some() {
                 submit = submit.push_next(&mut timeline_info);
             }
             device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
@@ -758,6 +778,11 @@ impl Device {
 
     /// The same, the submission first waiting on the device for a timeline semaphore to reach a value.
     pub(crate) fn run_after(&self, record: impl FnOnce(vk::CommandBuffer), timeline: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
+        self.run_timed(record, timeline, None)
+    }
+
+    /// The same, also signalling a timeline semaphore to a value when the submission ends (a ring's `done`).
+    pub(crate) fn run_timed(&self, record: impl FnOnce(vk::CommandBuffer), timeline: Option<(vk::Semaphore, u64)>, signal: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -773,9 +798,11 @@ impl Device {
             let waits: Vec<vk::Semaphore> = timeline.iter().map(|t| t.0).collect();
             let values: Vec<u64> = timeline.iter().map(|t| t.1).collect();
             let stages = [vk::PipelineStageFlags::TRANSFER];
-            let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values);
-            let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]);
-            if timeline.is_some() {
+            let signals: Vec<vk::Semaphore> = signal.iter().map(|t| t.0).collect();
+            let signal_values: Vec<u64> = signal.iter().map(|t| t.1).collect();
+            let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values).signal_semaphore_values(&signal_values);
+            let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals);
+            if timeline.is_some() || signal.is_some() {
                 submit = submit.push_next(&mut timeline_info);
             }
             device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
@@ -874,6 +901,15 @@ impl Device {
         self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
         let region = vk::BufferImageCopy::default().buffer_row_length(row_pixels).image_subresource(level(0)).image_extent(vk::Extent3D { width: image.width, height: image.height, depth: 1 });
         unsafe { self.inner.device.cmd_copy_buffer_to_image(commands, source, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
+        self.finish(commands, image);
+    }
+
+    /// A picture in another image, already moved for a transfer read, copied into level 0 at the image's size, and the
+    /// chain built if the image has one: a ring's slot (EmuSen_LibretroHost.md §10f).
+    pub(crate) fn record_copy_image_in(&self, commands: vk::CommandBuffer, image: &Image, source: vk::Image) {
+        self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
+        let region = vk::ImageCopy::default().src_subresource(level(0)).dst_subresource(level(0)).extent(vk::Extent3D { width: image.width, height: image.height, depth: 1 });
+        unsafe { self.inner.device.cmd_copy_image(commands, source, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
         self.finish(commands, image);
     }
 
@@ -1127,7 +1163,7 @@ impl Device {
 }
 
 /// Closes a descriptor the library made and could not hand over.
-unsafe fn libc_close(fd: i32) {
+pub(crate) unsafe fn libc_close(fd: i32) {
     unsafe extern "C" {
         #[cfg_attr(windows, link_name = "_close")]
         fn close(fd: i32) -> i32;

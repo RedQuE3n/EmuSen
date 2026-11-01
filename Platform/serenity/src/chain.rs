@@ -9,6 +9,7 @@
 
 use crate::compiler::Stage;
 use crate::lend::{Lend, Taken};
+use crate::ring::InRing;
 use crate::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use crate::reflection::{self, Block, Fault, Reflection};
 use crate::source::{self, Parameter};
@@ -493,6 +494,9 @@ pub struct Chain {
     /// the staging buffer; and the last such picture's value (EmuSen_DevicePicture.md §17).
     from_lend: Option<(Lend, Taken)>,
     lent_value: u64,
+    /// Where the pending frame is when it is a picture in a ring's slot, read and given back by the next render or
+    /// present (EmuSen_LibretroHost.md §10f).
+    from_ring: Option<InRing>,
     readbacks: Vec<Arc<Slot>>,
     scratch: Option<Buffer>,
     copied_images: i32,
@@ -555,6 +559,7 @@ impl Chain {
             feedback_due: false,
             upload_pending: false,
             from_lend: None,
+            from_ring: None,
             lent_value: 0,
             readbacks: Vec::new(),
             scratch: None,
@@ -639,7 +644,7 @@ impl Chain {
         let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
         let (Some(_), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
         self.device.write_staging(staging, picture);
-        (self.upload_pending, self.from_lend) = (true, None);
+        (self.upload_pending, self.from_lend, self.from_ring) = (true, None, None);
         self.frame_count = self.frame_count.wrapping_add(1);
         self.feedback_due = true;
         self.device.phase(point::ADVANCE_END);
@@ -677,11 +682,27 @@ impl Chain {
         self.shape(taken.width, taken.height, 1)?;
         self.head = (self.head + self.history.len() - 1) % self.history.len();
         (self.upload_pending, self.lent_value) = (true, taken.value);
-        self.from_lend = Some((lend.clone(), taken));
+        (self.from_lend, self.from_ring) = (Some((lend.clone(), taken)), None);
         self.frame_count = self.frame_count.wrapping_add(1);
         self.feedback_due = true;
         self.device.phase(point::ADVANCE_END);
         Ok(true)
+    }
+
+    /// A picture in a ring's slot as the chain's new frame, copied into the history by the next render or present,
+    /// which waits for its `ready` and signals its `done` (EmuSen_LibretroHost.md §10f).
+    pub fn advance_ring(&mut self, picture: InRing) -> Result<(), String> {
+        self.device.phase(point::ADVANCE_BEGIN);
+        self.device.settle()?;
+        self.flush_upload()?;
+        self.let_go_of_lend();
+        self.shape(picture.width, picture.height, 1)?;
+        self.head = (self.head + self.history.len() - 1) % self.history.len();
+        (self.upload_pending, self.from_lend, self.from_ring) = (true, None, Some(picture));
+        self.frame_count = self.frame_count.wrapping_add(1);
+        self.feedback_due = true;
+        self.device.phase(point::ADVANCE_END);
+        Ok(())
     }
 
     /// The lend's copy given back once nothing of this chain reads it, keeping which lend and value it was.
@@ -696,12 +717,21 @@ impl Chain {
         if !upload {
             return None;
         }
-        self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value))
+        self.from_ring.map(|p| (p.ready, p.value)).or_else(|| self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value)))
+    }
+
+    /// The timeline signal of the frame pending, when it is a ring's picture: its slot given back.
+    fn upload_signal(&self, upload: bool) -> Option<(vk::Semaphore, u64)> {
+        self.from_ring.filter(|_| upload).map(|p| (p.done, p.value))
     }
 
     /// The frame's upload recorded into a submission that is about to run its passes, when `upload` says one waits.
     fn record_pending_upload(&self, commands: vk::CommandBuffer, upload: bool) {
         if !upload {
+            return;
+        }
+        if let (Some(image), Some(picture)) = (&self.history[self.head], &self.from_ring) {
+            picture.record(&self.device, commands, |source| self.device.record_copy_image_in(commands, image, source));
             return;
         }
         if let (Some(image), Some((_, taken))) = (&self.history[self.head], &self.from_lend) {
@@ -721,8 +751,8 @@ impl Chain {
             return Ok(());
         }
         self.upload_pending = false;
-        let wait = self.upload_wait(true);
-        self.device.run_after(|commands| self.record_pending_upload(commands, true), wait)
+        let (wait, signal) = (self.upload_wait(true), self.upload_signal(true));
+        self.device.run_timed(|commands| self.record_pending_upload(commands, true), wait, signal)
     }
 
     fn original_at(&self, back: usize) -> &Image {
@@ -826,7 +856,7 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
         let upload = std::mem::take(&mut self.upload_pending);
-        let wait = self.upload_wait(upload);
+        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload));
         let device = &self.device;
         device.run_unwaited(
             |commands| {
@@ -849,6 +879,7 @@ impl Chain {
             wait_free.then_some(target.free),
             target.ready,
             wait,
+            signal,
         )?;
         self.device.phase(point::RAN);
         Ok(())
@@ -911,9 +942,9 @@ impl Chain {
         self.device.phase(point::BOUND);
 
         let upload = std::mem::take(&mut self.upload_pending);
-        let wait = self.upload_wait(upload);
+        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload));
         let device = &self.device;
-        device.run_after(|commands| {
+        device.run_timed(|commands| {
             self.record_pending_upload(commands, upload);
             for i in 0..count {
                 self.draw(commands, i);
@@ -927,7 +958,7 @@ impl Chain {
             unsafe { device.vk().cmd_copy_image_to_buffer(commands, last.image.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, readback.handle, &region) };
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
-        }, wait)?;
+        }, wait, signal)?;
 
         self.device.phase(point::RAN);
         self.device.phase(point::COPIED);

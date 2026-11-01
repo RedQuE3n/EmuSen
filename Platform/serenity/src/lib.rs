@@ -13,6 +13,7 @@ pub mod lend;
 pub mod parameters;
 pub mod preset;
 pub mod reflection;
+pub mod ring;
 pub mod source;
 // SQLite, moved to its own crate for the library to share (EmuSen_Backend.md §28.2).
 pub use emusen_sqlite as sqlite;

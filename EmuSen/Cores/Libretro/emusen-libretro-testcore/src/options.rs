@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 16] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 20] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -23,8 +23,12 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 16] = [
     ("tc_shutdown", "Shutdown", "states", &["off", "30"], "The core asks to stop at frame 30."),
     ("tc_probe", "Environment probe", "probe", &["off", "on"], "Every environment command called at load."),
     ("tc_log_thread", "Log from a thread", "probe", &["off", "on"], "A formatted log line from a thread of the core's."),
+    ("tc_late_option", "Declares at load", "probe", &["off", "on"], "An option declared only while loading the game."),
+    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
+    ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
+    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
 ];
 
 pub const CATEGORIES: [(&str, &str); 5] = [("picture", "Picture"), ("sound", "Sound"), ("memory", "Memory"), ("states", "States"), ("probe", "Probe")];
@@ -63,6 +67,9 @@ pub struct Options {
     pub log_thread: bool,
     pub set_variable: bool,
     pub note: String,
+    pub fault: String,
+    pub rumble: bool,
+    pub hw: String,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -92,11 +99,21 @@ fn values(list: &[&str]) -> [sys::retro_core_option_value; sys::NUM_CORE_OPTION_
     out
 }
 
+/// The options again, with one more declared only while a game loads.
+pub fn declare_late() {
+    let late: &[(&str, &str, &str, &[&str], &str)] = &[("tc_late", "Declared at load", "probe", &["first", "second"], "Known only after a game loaded.")];
+    declare_v2_from(&OPTIONS.iter().chain(late).copied().collect::<Vec<_>>());
+}
+
 fn declare_v2() {
+    declare_v2_from(&OPTIONS);
+}
+
+fn declare_v2_from(list: &[(&str, &str, &str, &[&str], &str)]) {
     let mut categories: Vec<sys::retro_core_option_v2_category> =
         CATEGORIES.iter().map(|&(k, d)| sys::retro_core_option_v2_category { key: keep(k), desc: keep(d), info: keep(&format!("The {k} options.")) }).collect();
     categories.push(sys::retro_core_option_v2_category { key: std::ptr::null(), desc: std::ptr::null(), info: std::ptr::null() });
-    let mut definitions: Vec<sys::retro_core_option_v2_definition> = OPTIONS
+    let mut definitions: Vec<sys::retro_core_option_v2_definition> = list
         .iter()
         .map(|&(key, label, category, list, info)| sys::retro_core_option_v2_definition {
             key: keep(key),
@@ -183,6 +200,9 @@ impl Options {
             log_thread: on("tc_log_thread"),
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
+            fault: get("tc_fault"),
+            rumble: on("tc_rumble"),
+            hw: get("tc_hw"),
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);
@@ -194,6 +214,9 @@ impl Options {
     }
 
     pub fn pixel_format(&self) -> i32 {
+        if self.hw != "off" && !self.hw.is_empty() {
+            return sys::PIXEL_FORMAT_XRGB8888;
+        }
         match self.format.as_str() {
             "rgb565" => sys::PIXEL_FORMAT_RGB565,
             "0rgb1555" => sys::PIXEL_FORMAT_0RGB1555,

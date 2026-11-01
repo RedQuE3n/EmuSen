@@ -7,6 +7,7 @@
   <ItemDefinitionGroup>
     <EmuSenRustCrate>
       <InDevelopment>false</InDevelopment>
+      <Role>core</Role>
     </EmuSenRustCrate>
   </ItemDefinitionGroup>
 
@@ -67,6 +68,39 @@
       <Console>the SNES</Console>
       <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
+    </EmuSenRustCrate>
+  </ItemGroup>
+
+  <!-- The libretro host's crates, Linux only while the broker confines a core only with Landlock: Role part is a library an installed entry copies (built, published, in cores.manifest, no sidecar), program an executable beside the assemblies, test a library the tests alone use - see EmuSen_LibretroHost.md §10d. -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) And ('$(RuntimeIdentifier)' == '' Or $(RuntimeIdentifier.StartsWith('linux')))">
+    <EmuSenRustCrate Include="emusen_libretro_proxy">
+      <Dir>$(MSBuildThisFileDirectory)Libretro\emusen-libretro-proxy\</Dir>
+      <Core>the libretro proxy</Core>
+      <Console>libretro cores</Console>
+      <Fallback></Fallback>
+      <Role>part</Role>
+    </EmuSenRustCrate>
+    <EmuSenRustCrate Include="emusen_libretro_host">
+      <Dir>$(MSBuildThisFileDirectory)Libretro\emusen-libretro-host\</Dir>
+      <Core>the libretro host</Core>
+      <Console>libretro cores</Console>
+      <Fallback></Fallback>
+      <Role>part</Role>
+    </EmuSenRustCrate>
+    <EmuSenRustCrate Include="emusen-core-runner">
+      <Dir>$(MSBuildThisFileDirectory)Shared\emusen-core-broker\</Dir>
+      <Core>the core runner</Core>
+      <Console>libretro cores</Console>
+      <Fallback></Fallback>
+      <Role>program</Role>
+    </EmuSenRustCrate>
+    <EmuSenRustCrate Include="emusen_libretro_testcore">
+      <Dir>$(MSBuildThisFileDirectory)Libretro\emusen-libretro-testcore\</Dir>
+      <Core>the libretro test core</Core>
+      <Console>the libretro host's tests</Console>
+      <Fallback></Fallback>
+      <Role>test</Role>
+      <InDevelopment>true</InDevelopment>
     </EmuSenRustCrate>
   </ItemGroup>
 </Project>

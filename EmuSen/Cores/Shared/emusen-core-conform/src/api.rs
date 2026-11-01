@@ -248,6 +248,20 @@ impl<'a> Machine<'a> {
         })
     }
 
+    /// `ring_lend` (since 1.18): `None` where the export is absent.
+    pub fn ring_lend(&self, ring: Option<&emusen_native::core::sys::RingLend>) -> Option<i32> {
+        let f = self.lib.f.ring_lend?;
+        Some(unsafe { f(self.h, ring.map_or(std::ptr::null(), |r| r as *const _)) })
+    }
+
+    /// `frame_ring` with a record whose `size` says `size` bytes: `None` where the export is absent.
+    pub fn frame_ring_sized(&self, size: u32) -> Option<(i32, emusen_native::core::sys::RingFrame)> {
+        let f = self.lib.f.frame_ring?;
+        let mut out = emusen_native::core::sys::RingFrame { size, ..Default::default() };
+        let r = unsafe { f(self.h, &mut out) };
+        Some((r, out))
+    }
+
     /// `raw_select` (since 1.10): `NOT_SUPPORTED` where the library lacks it.
     pub fn raw_select(&self, mask: u64) -> i32 {
         self.lib.f.raw_select.map_or(status::NOT_SUPPORTED, |f| unsafe { f(self.h, mask) })

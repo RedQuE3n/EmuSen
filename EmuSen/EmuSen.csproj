@@ -50,7 +50,8 @@
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Endou - Master System/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/Sapphire - PlayStation 2/target/**;Cores/Sony/BlackMoon-HW/*/target/**;Cores/Nintendo/SilverMillennium-HW/*/target/**</DefaultItemExcludes>
+    <EmuSenHostProgramSuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.exe</EmuSenHostProgramSuffix>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Libretro/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Endou - Master System/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/Sapphire - PlayStation 2/target/**;Cores/Sony/BlackMoon-HW/*/target/**;Cores/Nintendo/SilverMillennium-HW/*/target/**</DefaultItemExcludes>
     <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
     <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
     <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
@@ -75,14 +76,18 @@
   <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->
   <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo;BuildRustCore;WriteCoreSidecars" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <ItemGroup>
-      <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" />
+      <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" Condition="'%(EmuSenRustCrate.Role)' != 'program'" />
+      <!-- A crate of Role program is an executable beside the assemblies, as the libretro proxy finds its runner - see EmuSen_LibretroHost.md §10d. -->
+      <_EmuSenRustProgram Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/%(Identity)$(EmuSenHostProgramSuffix)')" Condition="'%(EmuSenRustCrate.Role)' == 'program'" />
+      <None Include="@(_EmuSenRustProgram)" Condition="Exists('%(_EmuSenRustProgram.FullPath)')" Link="%(_EmuSenRustProgram.Filename)%(_EmuSenRustProgram.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <_EmuSenRustSidecar Include="@(_EmuSenRustLibrary->'%(Identity).core.json')" />
       <!-- A crate InDevelopment reaches the build output, for the tests and the kit, but never a publish - see EmuSen_CoreAPI.md §27. -->
       <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' != 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' == 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
       <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' != 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' == 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
-      <_EmuSenRustLibraryBuilt Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)')" />
+      <!-- A test crate's library is no library of the installation, so the manifest never names it. -->
+      <_EmuSenRustLibraryBuilt Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.Role)' != 'test'" />
     </ItemGroup>
     <!-- The installation's cores.manifest beside the libraries, each built library's SHA-256 in sha256sum's format, which the Rust core host trusts and the C# host does not read - see EmuSen_Backend.md §27.5. -->
     <GetFileHash Condition="'@(_EmuSenRustLibraryBuilt)' != ''" Files="@(_EmuSenRustLibraryBuilt)" Algorithm="SHA256" HashEncoding="hex">

@@ -1,0 +1,40 @@
+[package]
+name = "emusen-core-broker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Any v1 core in a confined process of its own behind the same v1 surface: the proxy's machinery, which a proxy library
+# builds on, and the runner. See EmuSen_LibretroHost.md §3 and EmuSen_CoreAPI.md §7.3.
+[lib]
+name = "emusen_core_broker"
+
+[[bin]]
+name = "emusen-core-runner"
+path = "src/bin/emusen-core-runner.rs"
+
+[dependencies]
+emusen-native = { path = "../emusen-native" }
+emusen-core-host = { path = "../emusen-core-host" }
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"
+
+# The libretro proxy, host and test core, built as shared libraries beside the tests that run them brokered.
+[dev-dependencies]
+emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
+emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
+emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }
+# The host's side of the ring, lent to a brokered core across the process boundary.
+emusen-serenity = { path = "../../../../Platform/serenity" }
+
+[profile.release]
+panic = "abort"
+
+# What a publish builds (EmuSen.csproj): release without its debug information.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

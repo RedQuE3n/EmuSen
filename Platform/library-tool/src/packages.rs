@@ -589,9 +589,55 @@ fn same_seen(doc: &Value, now: &(u64, String)) -> bool {
     seen.and_then(|s| s.get("size")).and_then(|v| if let Value::Number(t) = v { t.parse::<u64>().ok() } else { None }) == Some(now.0) && seen.and_then(|s| s.get("mtime")).and_then(Value::as_str) == Some(now.1.as_str())
 }
 
+/// `pkg ls`'s view of one package with its sizes (EmuSen_Packages.md §2): `console`, its system's console as the
+/// library's games name it; `size`, the bytes its folder holds, links not followed; `game_size`, its game's bytes where
+/// the game is found; and `convertible` where `chd convert` takes the game.
+pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library::scan::Systems) -> Outcome {
+    let mut outcome = listed(ctx, folder).with("size", Value::number(folder_bytes(folder)));
+    let places = ctx.places();
+    let roots = places.roots();
+    let doc = read(folder).ok();
+    if let Some(system) = doc.as_ref().and_then(|d| d.get("system")).and_then(Value::as_str).and_then(system_named) {
+        outcome = outcome.with("console", text(&system.console));
+    }
+    let Some(game) = doc.and_then(|doc| doc.get("game").and_then(|g| claims::place(&roots, folder, g))) else { return outcome };
+    if claims::seen_of(&game).is_none() {
+        return outcome;
+    }
+    let outcome = outcome.with("game_size", Value::number(crate::convert::game_bytes(&game)));
+    if claims::within(&game, library) && crate::discs::convertible(library, &game, systems) {
+        return outcome.with("convertible", Value::Bool(true));
+    }
+    outcome
+}
+
+/// The bytes a folder's files hold, hidden ones included and links counted as links.
+fn folder_bytes(folder: &str) -> u64 {
+    let mut total = 0;
+    let _ = dotnet_files::visit_files_with(folder, Options { skip_hidden: false, ignore_inaccessible: true }, |f, _| total += std::fs::symlink_metadata(f).map_or(0, |m| m.len()));
+    total
+}
+
+/// The library's games no package claims, as `pkg make` would find them, each with its system, its bytes and whether
+/// `chd convert` takes it: the rest of `pkg ls --all`'s answer (EmuSen_Packages.md §2). `console` keeps one console's.
+pub fn unpackaged(ctx: &Context, library: &str, console: Option<&str>, systems: &emusen_library::scan::Systems) -> Vec<(Game, u64, bool)> {
+    let index = claims::index(&ctx.places().roots());
+    let (found, _) = games(library, &[String::new()]);
+    found
+        .into_iter()
+        .filter(|g| index.claimant(&g.path).is_none() && !index.inside_package(&g.path))
+        .filter(|g| console.is_none_or(|c| equals_ignore_case(&g.system.console, c) || equals_ignore_case(&g.system.id, c) || equals_ignore_case(&g.system.esde_system, c)))
+        .map(|g| {
+            let size = crate::convert::game_bytes(&g.path);
+            let convertible = crate::discs::convertible(library, &g.path, systems);
+            (g, size, convertible)
+        })
+        .collect()
+}
+
 /// `pkg ls`'s view of one package, read and never written: `ok`, `changed` (another dump now), `moved` (found again
 /// by size and hashes in the library, where `to` names), `missing`, or `refused` (a manifest this build does not read).
-pub fn list(ctx: &Context, folder: &str) -> Outcome {
+fn listed(ctx: &Context, folder: &str) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
     let doc = match read(folder) {

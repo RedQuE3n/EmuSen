@@ -25,10 +25,10 @@ namespace EmuSen.Cores.Native
             return Convert.ToHexStringLower(SHA256.HashData(file));
         }
 
-        // Loads the library once, as the build step does, and writes its sidecar beside it.
-        public static CoreSidecar Write(string libraryPath, bool development = false)
+        // Loads the library once, as the build step does, and writes its sidecar beside it; expect is a libretro entry's approved core hash - see EmuSen_CoreAPI.md §6.42.
+        public static CoreSidecar Write(string libraryPath, bool development = false, string? expect = null)
         {
-            var library = CoreLibrary.Open(libraryPath);
+            var library = CoreLibrary.Open(libraryPath, expect);
             if (!library.Available) throw new InvalidOperationException(library.Report);
             var doc = new JsonObject
             {
@@ -77,6 +77,9 @@ namespace EmuSen.Cores.Native
         // Found in one of the player's directories - see EmuSen_Backend.md §29.40.4.
         public bool Player { get; init; }
 
+        // An installed libretro core's folder, whose proxy the sidecar describes; null for every other library - see EmuSen_LibretroHost.md §1.1.
+        public string? Entry { get; init; }
+
         // The last Open refused for want of the player's approval alone.
         public bool AwaitsApproval { get; private set; }
         public CoreInfo Info => Sidecar.Info;
@@ -95,21 +98,30 @@ namespace EmuSen.Cores.Native
                 _refusal = $"{System.IO.Path.GetFileName(Sidecar.LibraryPath)} is not the library its sidecar describes (its SHA-256 differs); it was not loaded";
                 return null;
             }
-            if (!CoreDiscovery.Vouches(Sidecar.LibraryPath, hash))
+            if (Entry is not null)
+            {
+                if (LibretroEntries.Refusal(Entry, Info, out bool awaits) is { } refused)
+                {
+                    (_refusal, AwaitsApproval) = (refused, awaits);
+                    return null;
+                }
+            }
+            else if (!CoreDiscovery.Vouches(Sidecar.LibraryPath, hash))
             {
                 _refusal = $"{System.IO.Path.GetFileName(Sidecar.LibraryPath)} is in no cores manifest and has not been approved; it was not loaded";
                 AwaitsApproval = true;
                 return null;
             }
-            var library = CoreLibrary.Open(Sidecar.LibraryPath);
+            var library = CoreLibrary.Open(Sidecar.LibraryPath, Entry is not null ? Info.Libretro?.Sha256 : null);
             _library = library;
             if (library.Available && !JsonNode.DeepEquals(JsonNode.Parse(library.Info.Text), Sidecar.InfoJson))
                 _refusal = $"{System.IO.Path.GetFileName(Sidecar.LibraryPath)}'s info differs from its sidecar's; it is refused as altered";
             return _refusal is null && library.Available ? library : null;
         }
 
-        // How far the library is trusted, by its sidecar's hash: the manifest's, the player's approval, or neither.
-        public string Standing => !Player && CoreDiscovery.InManifest(Sidecar.LibraryPath, Sidecar.Sha256) ? "manifest"
+        // How far the library is trusted, by its sidecar's hash: the manifest's, the player's approval, or neither; an entry by its libretro core's, its copies older than the installation's needing refresh.
+        public string Standing => Entry is not null ? LibretroEntries.Standing(Entry, Info)
+            : !Player && CoreDiscovery.InManifest(Sidecar.LibraryPath, Sidecar.Sha256) ? "manifest"
             : CoreDiscovery.Approved(Sidecar.Sha256) ? "approved" : "needs_approval";
     }
 
@@ -197,6 +209,14 @@ namespace EmuSen.Cores.Native
 
         public static bool Vouches(string library, string sha256) => Approved(sha256) || InManifest(library, sha256);
 
+        // Whether an installation's manifest lists a library of this name with this hash, wherever its copy lies - see EmuSen_LibretroHost.md §1.3.
+        public static bool InstallationLists(string name, string sha256)
+        {
+            _ = Found;
+            string hash = sha256.ToLowerInvariant();
+            return _manifests.Values.Any(entries => entries.Any(e => e.Name == name && e.Sha256 == hash));
+        }
+
         // Whether a library the listing shows has this hash.
         public static bool ListsHash(string sha256) =>
             Found.Any(c => string.Equals(c.Sidecar.Sha256, sha256, StringComparison.OrdinalIgnoreCase)) || _unread.Any(u => string.Equals(u.Sha256, sha256, StringComparison.OrdinalIgnoreCase));
@@ -204,7 +224,7 @@ namespace EmuSen.Cores.Native
         private static string LibrarySuffix => OperatingSystem.IsWindows() ? ".dll" : OperatingSystem.IsMacOS() ? ".dylib" : ".so";
 
         // A player's library's hash, read once while its length and time stay those it was read at.
-        private static string? ScanHash(string path)
+        internal static string? ScanHash(string path)
         {
             try
             {
@@ -240,6 +260,9 @@ namespace EmuSen.Cores.Native
                         list.Add(new DiscoveredCore(sidecar) { Player = player });
                 }
                 if (!player) continue;
+                foreach (string folder in LibretroEntries.Folders(dir))
+                    if (CoreSidecar.Read(CoreSidecar.PathFor(LibretroEntries.ProxyPath(folder))) is { } sidecar && sidecar.Abi.StartsWith($"{CoreInterface.Major}.", StringComparison.Ordinal) && !list.Any(c => c.Info.Id == sidecar.Info.Id))
+                        list.Add(new DiscoveredCore(sidecar) { Player = true, Entry = folder });
                 foreach (string name in files.Where(f => f!.EndsWith(LibrarySuffix, StringComparison.Ordinal) && f.Length > LibrarySuffix.Length))
                 {
                     string path = System.IO.Path.Combine(dir, name!);

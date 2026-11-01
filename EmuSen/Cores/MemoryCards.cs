@@ -92,7 +92,7 @@ namespace EmuSen.Cores
 
         // The removable files of a console's engine, as its core info lists them; empty for a console with none.
         public static IReadOnlyList<CoreBatteryFile> RemovableFor(string console) =>
-            CoreCatalog.EngineSystem(console)?.Battery?.Where(b => b.Removable).ToArray() ?? Array.Empty<CoreBatteryFile>();
+            CoreCatalog.EngineSystem(console)?.Battery?.Where(b => b.Removable && b.Family is null).ToArray() ?? Array.Empty<CoreBatteryFile>();
 
         public static bool OfferedFor(string console) => MediaFor(console).Count > 0;
 
@@ -106,7 +106,7 @@ namespace EmuSen.Cores
         public static IReadOnlyList<SaveMedium> MediaOf(string console, CoreSystem? system)
         {
             var media = new List<SaveMedium>();
-            var slots = (system?.Battery ?? Array.Empty<CoreBatteryFile>()).Where(b => b.Kind != CoreBatteryKind.Game);
+            var slots = (system?.Battery ?? Array.Empty<CoreBatteryFile>()).Where(b => b.Kind != CoreBatteryKind.Game && b.Family is null);
             foreach (var group in slots.GroupBy(b => b.Medium ?? $"{b.Kind.ToString().ToLowerInvariant()}{ExtensionOf(b.Suffix)}"))
             {
                 CoreBatteryFile first = group.First();

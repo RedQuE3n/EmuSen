@@ -67,6 +67,8 @@ pub struct Request {
     /// Since 1.6: `rom hash -r` and `rom check -r`, folders taken whole; `rom hash --comparable`.
     pub recursive: bool,
     pub comparable: bool,
+    /// Since 1.7: `pkg ls`'s answer also lists the library's games no package claims (EmuSen_Packages.md §7.1).
+    pub unpackaged: bool,
 }
 
 /// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
@@ -76,7 +78,8 @@ pub struct Request {
 /// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}` and `{"op": "pkg-zip", "paths": [<package>...]}`,
 /// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert, or since 1.6
 /// `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}` and
-/// `{"op": "rom-dups", "console": null}` (EmuSen_LibraryTools.md §7).
+/// `{"op": "rom-dups", "console": null}` (EmuSen_LibraryTools.md §7), or since 1.7 `pkg-ls`'s
+/// `"unpackaged": true`.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -145,7 +148,11 @@ pub fn request(text: &str) -> Result<Request, String> {
     if op == Op::RomDups && !paths.is_empty() {
         return Err("rom-dups takes the whole library, or one console in \"console\"; it names no paths".into());
     }
-    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside, recursive, comparable })
+    let unpackaged = flag("unpackaged");
+    if unpackaged && op != Op::PkgList {
+        return Err("unpackaged is pkg-ls's choice alone".into());
+    }
+    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside, recursive, comparable, unpackaged })
 }
 
 fn emit(queue: &Queue, event: Value) {
@@ -311,11 +318,16 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             (Vec::new(), f, r)
         }
     };
+    let systems = if req.op == Op::PkgList { packages::every_system() } else { emusen_library::scan::Systems::named(&[]) };
+    let unclaimed = if req.unpackaged { packages::unpackaged(ctx, library, req.console.as_deref(), &systems) } else { Vec::new() };
     let total = games.len() + folders.len();
     let log_at = path::combine(Style::HOST, &ctx.logs(), &format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10]));
     let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("packages", Value::number(total))];
     if req.op != Op::PkgList {
         start.push(("log", Value::string(&log_at)));
+    }
+    if req.unpackaged {
+        start.push(("games", Value::number(unclaimed.len())));
     }
     if req.op == Op::PkgMake {
         start.push(("mode", Value::string(if req.making.self_contained { "self-contained" } else { "linked" })));
@@ -333,7 +345,7 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
         let begun = Instant::now();
         let outcome = match (&req.op, game, folder) {
             (Op::PkgMake, Some(g), _) => packages::make(ctx, &mut index, g, req.making, stop),
-            (Op::PkgList, _, Some(f)) => packages::list(ctx, f),
+            (Op::PkgList, _, Some(f)) => packages::list(ctx, library, f, &systems),
             (Op::PkgCheck, _, Some(f)) if packages::is_zip(f) => packages::check_zip(ctx, f, stop),
             (Op::PkgCheck, _, Some(f)) => packages::check(ctx, f, stop),
             (Op::PkgIdentity, _, Some(f)) => packages::identity(f, req.identity.as_deref().unwrap_or("original")),
@@ -370,6 +382,15 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             append(&log_at, &text);
         }
         emit(queue, event);
+    }
+    for (i, (game, size, convertible)) in unclaimed.iter().enumerate() {
+        count(&mut counts, "unpackaged");
+        let mut members = vec![("event", Value::string("game")), ("index", Value::number(i + 1)), ("of", Value::number(unclaimed.len()))];
+        members.extend([("source", Value::string(&game.rel)), ("system", Value::string(&game.system.console)), ("state", Value::string("unpackaged")), ("size", Value::number(*size))]);
+        if *convertible {
+            members.push(("convertible", Value::Bool(true)));
+        }
+        emit(queue, obj(members));
     }
     end(queue, &req.op, &counts, started, None);
 }

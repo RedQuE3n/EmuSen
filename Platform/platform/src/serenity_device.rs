@@ -15,6 +15,7 @@ use emusen_serenity::chain::{self, Chain, Failure, Unfed};
 use emusen_serenity::compiler::Stage;
 use emusen_serenity::format;
 use emusen_serenity::lend::Lend;
+use emusen_serenity::ring::Ring;
 use emusen_serenity::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use emusen_serenity::vulkan::{Device, Findings, Mark, Shown};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -623,6 +624,107 @@ pub unsafe extern "C" fn emusen_serenity_chain_advance_lent(h: *const ChainHandl
     let Some(lend) = (unsafe { lend.as_ref() }) else { return fail(status::NULL, "no lend") };
     match chain.advance_lent(&lend.lend) {
         Ok(advanced) => advanced as i32,
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// `emusen_serenity_ring_info`: the ring's count, its two semaphores' descriptors and the UUIDs a core matches.
+#[repr(C)]
+pub struct RingInfo {
+    pub size: u32,
+    pub count: u32,
+    pub ready: i64,
+    pub done: i64,
+    pub device_uuid: [u8; 16],
+    pub driver_uuid: [u8; 16],
+}
+
+/// `emusen_serenity_ring_image_info`, laid out as the core ABI's `emusen_ring_image`.
+#[repr(C)]
+pub struct RingImageInfo {
+    pub size: u32,
+    pub memory_type: u32,
+    pub handle: u64,
+    pub allocation_size: u64,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub usage: u32,
+}
+
+pub struct RingHandle {
+    ring: Ring,
+}
+
+/// A ring of `count` images `width` by `height` made on the device and exported, `out` filled; null when the device
+/// cannot make one, with the words why (core ABI 1.18's `DEVICE_RING`, EmuSen_LibretroHost.md §10f).
+///
+/// # Safety
+/// `d` live; `out` valid, with its size set.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_ring_new(d: *const DeviceHandle, width: u32, height: u32, count: u32, out: *mut RingInfo) -> *mut RingHandle {
+    let made = (|| {
+        let device = unsafe { device(d) }?;
+        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the ring"))?;
+        if (out.size as usize) < std::mem::size_of::<RingInfo>() {
+            return Err(fail(status::BAD_ARGUMENT, "the ring's struct is too small"));
+        }
+        if width == 0 || height == 0 || !(1..=16).contains(&count) {
+            return Err(fail(status::BAD_ARGUMENT, "a ring holds one to sixteen images of at least one by one"));
+        }
+        let ring = device.create_ring(width, height, count as usize).map_err(|words| fail(status::DEVICE, words))?;
+        (out.count, out.ready, out.done, out.device_uuid, out.driver_uuid) = (count, ring.ready_fd as i64, ring.done_fd as i64, ring.device_uuid, ring.driver_uuid);
+        Ok(RingHandle { ring })
+    })();
+    match made {
+        Ok(handle) => Box::into_raw(Box::new(handle)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// The ring's image `index`, its descriptor the ring's.
+///
+/// # Safety
+/// `h` live; `out` valid, with its size set.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_ring_image(h: *const RingHandle, index: u32, out: *mut RingImageInfo) -> i32 {
+    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no ring") };
+    let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "nowhere to put the image") };
+    if (out.size as usize) < std::mem::size_of::<RingImageInfo>() {
+        return fail(status::BAD_ARGUMENT, "the image's struct is too small");
+    }
+    let Some(i) = handle.ring.images.get(index as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such image") };
+    (out.memory_type, out.handle, out.allocation_size, out.width, out.height, out.format, out.usage) = (i.memory_type, i.handle as u64, i.allocation_size, i.width, i.height, i.format, i.usage);
+    0
+}
+
+/// Frees a ring once the device is done with it; no chain may hold a frame advanced from it and not yet rendered.
+///
+/// # Safety
+/// `h` from `emusen_serenity_ring_new`, not freed, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_ring_free(h: *mut RingHandle) -> i32 {
+    if !h.is_null() {
+        drop(unsafe { Box::from_raw(h) });
+    }
+    0
+}
+
+/// The picture `frame_ring` answered, `value` in `slot`, as the chain's new frame, read on the device by its next render
+/// or present, which waits for the ring's `ready` and signals its `done`.
+///
+/// # Safety
+/// `h` and `ring` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_chain_advance_ring(h: *const ChainHandle, ring: *const RingHandle, slot: u32, value: u64, width: i32, height: i32) -> i32 {
+    let mut chain = chain!(h);
+    let Some(ring) = (unsafe { ring.as_ref() }) else { return fail(status::NULL, "no ring") };
+    let Some(image) = ring.ring.images.get(slot as usize) else { return fail(status::BAD_ARGUMENT, "the ring has no such slot") };
+    if width < 1 || height < 1 || width as u32 > image.width || height as u32 > image.height {
+        return fail(status::BAD_ARGUMENT, "the picture does not fit the ring's images");
+    }
+    match chain.advance_ring(ring.ring.picture(slot as usize, value, width as u32, height as u32)) {
+        Ok(()) => 0,
         Err(words) => fail(status::DEVICE, words),
     }
 }

@@ -44,6 +44,8 @@ pub const CHEAT_COUNT: usize = 0x0058;
 pub const CHEAT_TEXT: usize = 0x0060;
 pub const CHEAT_TEXT_LEN: usize = 32;
 /// One byte per probe entry: 1 answered, 0 refused, `PROBE_NOT_RUN` before the probe.
+/// What `tc_fault` found: 1 the fault handled or the write done, 2 refused by the system.
+pub const FAULT: usize = 0x005C;
 pub const PROBE: usize = 0x0100;
 pub const PROBE_LEN: usize = 0x100;
 pub const PROBE_NOT_RUN: u8 = 2;

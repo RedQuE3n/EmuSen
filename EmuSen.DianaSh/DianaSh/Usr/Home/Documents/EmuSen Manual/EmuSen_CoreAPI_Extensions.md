@@ -338,6 +338,9 @@ which costs Diamond nothing since its format is not yet written.
 
 ## 4. Rumble, and the pad's other outputs
 
+*Built at core ABI 1.17 (2026-10-31), the ABI's half (`EmuSen_CoreAPI.md` §6.42, `EmuSen_LibretroHost.md` §10e); the
+runtime's routing and Endymion's half (§4.4) follow with the libretro host's stage 5.*
+
 ### 4.1 What exists today
 
 - **No output path exists anywhere.** `EmuSen_CoreAPI.md` §6.8: "Outputs, such as rumble, would be pulled through

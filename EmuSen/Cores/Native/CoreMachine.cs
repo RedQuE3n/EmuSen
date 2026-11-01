@@ -57,15 +57,15 @@ namespace EmuSen.Cores.Native
             Info = ReadInfo();
         }
 
-        // The same from bytes held in place: a loan released with the machine, shared battery kinds, a lent device, and the system to start or routed to - see EmuSen_CoreAPI.md §6.27-§6.29, §6.31, §6.40.
-        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, IDeviceLend? device = null, string? system = null)
+        // The same from bytes held in place: a loan released with the machine, shared battery kinds, a lent device, the system to start or routed to, the image's unaltered file and the named files - see EmuSen_CoreAPI.md §6.27-§6.29, §6.31, §6.40, §6.41.
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, IDeviceLend? device = null, string? system = null, string? imagePath = null, IReadOnlyList<(uint Which, string Name, byte[] Data)>? named = null)
         {
             Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;
             if (Lend is null) device?.Dispose();
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole, Lend is { } l ? LendOf(l) : null, system); }
+            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole, Lend is { } l ? LendOf(l) : null, system, imagePath, named); }
             catch
             {
                 // A refused create lends nothing.
@@ -77,10 +77,10 @@ namespace EmuSen.Cores.Native
             if (loan is not null) _loans[Info.Drives.Count > 0 ? Info.Drives[0].Drive : 0] = loan;
         }
 
-        // The file entries of a call: the pinned arrays, then the bytes the host holds in place.
-        private static CoreInterface.File[] Entries(IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, GCHandle[] pins)
+        // The file entries of a call: the pinned arrays, then the bytes the host holds in place, then the named files with their names; pins holds files.Count + 2 * named.Count.
+        private static CoreInterface.File[] Entries(IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, IReadOnlyList<(uint Which, string Name, byte[] Data)> named, GCHandle[] pins)
         {
-            var entries = new CoreInterface.File[files.Count + media.Count];
+            var entries = new CoreInterface.File[files.Count + media.Count + named.Count];
             for (int i = 0; i < files.Count; i++)
             {
                 pins[i] = GCHandle.Alloc(files[i].Data, GCHandleType.Pinned);
@@ -88,26 +88,41 @@ namespace EmuSen.Cores.Native
             }
             for (int i = 0; i < media.Count; i++)
                 entries[files.Count + i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = media[i].Which, Data = media[i].Data.Data, Len = media[i].Data.Length };
+            for (int i = 0; i < named.Count; i++)
+            {
+                int pin = files.Count + 2 * i;
+                pins[pin] = GCHandle.Alloc(named[i].Data, GCHandleType.Pinned);
+                pins[pin + 1] = GCHandle.Alloc(Encoding.UTF8.GetBytes(named[i].Name + "\0"), GCHandleType.Pinned);
+                entries[files.Count + media.Count + i] = new CoreInterface.File { Size = (uint)sizeof(CoreInterface.File), Which = named[i].Which, Data = (byte*)pins[pin].AddrOfPinnedObject(), Len = (nuint)named[i].Data.Length, Name = (byte*)pins[pin + 1].AddrOfPinnedObject() };
+            }
             return entries;
         }
 
-        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole, CoreInterface.DeviceLend? device = null, string? system = null)
+        private static readonly IReadOnlyList<(uint, string, byte[])> NoNamed = Array.Empty<(uint, string, byte[])>();
+
+        // A UTF-8 path, NUL-terminated, or nothing where the core does not claim IMAGE_PATH or there is no unaltered file - see EmuSen_CoreAPI.md §6.41.
+        private byte[] PathBytes(string? imagePath) => imagePath is not null && Library.Has(CoreInterface.CapImagePath) ? Encoding.UTF8.GetBytes(imagePath + "\0") : Array.Empty<byte>();
+
+        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole, CoreInterface.DeviceLend? device = null, string? system = null, string? imagePath = null, IReadOnlyList<(uint Which, string Name, byte[] Data)>? named = null)
         {
+            named ??= NoNamed;
+            byte[] path = PathBytes(imagePath);
             byte[] systemId = system is null ? Array.Empty<byte>() : Encoding.UTF8.GetBytes(system + "\0");
             CoreInterface.DeviceLend lend = device ?? default;
             lend.Size = (uint)sizeof(CoreInterface.DeviceLend);
             byte[] text = Encoding.UTF8.GetBytes(settings);
-            var pins = new GCHandle[files.Count];
+            var pins = new GCHandle[files.Count + 2 * named.Count];
             var error = new byte[1024];
             try
             {
-                var entries = Entries(files, media, pins);
+                var entries = Entries(files, media, named, pins);
                 int status;
                 nint handle;
                 fixed (byte* s = text)
                 fixed (CoreInterface.File* f = entries)
                 fixed (byte* e = error)
                 fixed (byte* id = systemId)
+                fixed (byte* at = path)
                 {
                     var p = new CoreInterface.CreateParams
                     {
@@ -126,6 +141,7 @@ namespace EmuSen.Cores.Native
                         Flags = (lent ? CoreInterface.CreateLent : 0) | (sharedRemovable ? CoreInterface.CreateSharedRemovable : 0) | (sharedConsole ? CoreInterface.CreateSharedConsole : 0),
                         Device = device is not null && Library.Has(CoreInterface.CapDevicePicture) ? &lend : null,
                         System = system is null ? null : id,
+                        ImagePath = path.Length == 0 ? null : at,
                     };
                     handle = _api.Create(&p, &status);
                 }
@@ -253,6 +269,28 @@ namespace EmuSen.Cores.Native
             int status;
             lock (_gate) status = _api.FrameDevice(Handle, &frame);
             if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not say where its picture is: {Library.Words(status)}.");
+            return status == 1 ? frame : null;
+        }
+
+        // DEVICE_RING: the host's ring lent, or withdrawn with null; false where the core claims no ring or refuses this one (NOT_SUPPORTED) - see EmuSen_CoreAPI.md §6.43.
+        public bool RingLend(CoreInterface.Ring* ring)
+        {
+            if (_api.RingLend == null || !Has(CoreInterface.CapDeviceRing)) return false;
+            int status;
+            lock (_gate) status = _api.RingLend(Handle, ring);
+            if (status == CoreInterface.StatusNotSupported) return false;
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not take the ring: {Library.Words(status)}.");
+            return true;
+        }
+
+        // After advance: the frame's picture in the lent ring, or null when it is not there.
+        public CoreInterface.RingFrame? FrameRing()
+        {
+            if (_api.FrameRing == null || !Has(CoreInterface.CapDeviceRing)) return null;
+            var frame = new CoreInterface.RingFrame { Size = (uint)sizeof(CoreInterface.RingFrame) };
+            int status;
+            lock (_gate) status = _api.FrameRing(Handle, &frame);
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not say where its picture is in the ring: {Library.Words(status)}.");
             return status == 1 ? frame : null;
         }
 
@@ -432,13 +470,13 @@ namespace EmuSen.Cores.Native
         // MEDIA: the disc in a drive replaced by image with its companions, or emptied by null; restore for a state about to load.
         public void MediaInsert(uint drive, byte[]? image, IReadOnlyList<(uint Which, byte[] Data)> files, bool restore)
         {
-            fixed (byte* img = image) Insert(drive, image is null ? null : new CoreBytes(img, image.Length), files, Array.Empty<(uint, CoreBytes)>(), restore, null);
+            fixed (byte* img = image) Insert(drive, image is null ? null : new CoreBytes(img, image.Length), files, Array.Empty<(uint, CoreBytes)>(), restore, null, null);
         }
 
-        // The same from bytes the host holds in place; with a loan they are lent, and the drive's earlier loan is released once the core has taken the new disc. A refused disc's loan is released at once.
-        public void MediaInsert(uint drive, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan = null)
+        // The same from bytes the host holds in place; with a loan they are lent, and the drive's earlier loan is released once the core has taken the new disc. A refused disc's loan is released at once; imagePath as create's.
+        public void MediaInsert(uint drive, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan = null, string? imagePath = null)
         {
-            try { Insert(drive, image, Array.Empty<(uint, byte[])>(), media, restore, loan); }
+            try { Insert(drive, image, Array.Empty<(uint, byte[])>(), media, restore, loan, imagePath); }
             catch
             {
                 loan?.Dispose();
@@ -446,13 +484,15 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        private void Insert(uint drive, CoreBytes? image, IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan)
+        private void Insert(uint drive, CoreBytes? image, IReadOnlyList<(uint Which, byte[] Data)> files, IReadOnlyList<(uint Which, CoreBytes Data)> media, bool restore, IDisposable? loan, string? imagePath)
         {
             var pins = new GCHandle[files.Count];
+            byte[] path = image is null ? Array.Empty<byte>() : PathBytes(imagePath);
             try
             {
-                var entries = Entries(files, media, pins);
+                var entries = Entries(files, media, NoNamed, pins);
                 fixed (CoreInterface.File* f = entries)
+                fixed (byte* at = path)
                 {
                     var m = new CoreInterface.Media
                     {
@@ -463,6 +503,7 @@ namespace EmuSen.Cores.Native
                         Files = f,
                         FileCount = (nuint)entries.Length,
                         FileSize = (nuint)sizeof(CoreInterface.File),
+                        ImagePath = path.Length == 0 ? null : at,
                     };
                     lock (_gate)
                     {

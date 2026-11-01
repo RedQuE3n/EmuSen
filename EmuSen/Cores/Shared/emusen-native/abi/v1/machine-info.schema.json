@@ -50,7 +50,20 @@
         "required": ["port", "controller"],
         "properties": {
           "port": { "type": "integer", "minimum": 0 },
-          "controller": { "type": ["string", "null"] }
+          "controller": { "type": ["string", "null"] },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["output", "kind", "label"],
+              "properties": {
+                "output": { "type": "integer", "minimum": 0 },
+                "kind": { "type": "string" },
+                "motor": { "type": "string" },
+                "label": { "type": "string" }
+              }
+            }
+          }
         }
       }
     },

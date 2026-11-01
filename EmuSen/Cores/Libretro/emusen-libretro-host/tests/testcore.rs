@@ -91,7 +91,8 @@ fn info_and_schema_describe_the_core_and_its_options() {
         assert!(info.contains(want), "{want} in {info}");
     }
     let schema = lib.settings_text().unwrap();
-    assert_eq!(schema.matches(r#""effect":"unrated""#).count(), emusen_libretro_testcore::OPTION_COUNT, "{schema}");
+    let unrated = schema.matches(r#""effect":"unrated""#).count();
+    assert!(unrated == emusen_libretro_testcore::OPTION_COUNT || unrated == emusen_libretro_testcore::OPTION_COUNT + 1, "every option, and the one declared at load once a game has loaded: {schema}");
     assert!(schema.contains(r#""category":"Picture""#) && schema.contains(r#""label":"Pixel format (in its category)""#), "{schema}");
     assert!(schema.contains(r#"{"value":"rgb565","label":"rgb565 (label)"}"#), "{schema}");
 }
@@ -322,7 +323,7 @@ fn options_reach_the_core_and_its_own_changes_are_noted() {
 }
 
 /// The answer the design gives each environment command at this stage: answered, or refused (EmuSen_LibretroHost.md
-/// §4.10; the hardware-rendering commands are refused until stage 3, rumble until stage 5).
+/// §4.10; the hardware-rendering commands are refused until stage 3; rumble answered since 1.17).
 const ANSWERED: &[&str] = &[
     "GET_CAN_DUPE", "SET_MESSAGE", "SET_PERFORMANCE_LEVEL", "GET_SYSTEM_DIRECTORY", "SET_PIXEL_FORMAT", "SET_INPUT_DESCRIPTORS", "SET_DISK_CONTROL_INTERFACE",
     "GET_VARIABLE", "GET_VARIABLE_UPDATE", "SET_SUPPORT_NO_GAME", "GET_LIBRETRO_PATH", "SET_FRAME_TIME_CALLBACK", "GET_INPUT_DEVICE_CAPABILITIES", "GET_LOG_INTERFACE",
@@ -331,7 +332,37 @@ const ANSWERED: &[&str] = &[
     "GET_TARGET_REFRESH_RATE", "GET_INPUT_BITMASKS", "GET_CORE_OPTIONS_VERSION", "SET_CORE_OPTIONS_DISPLAY", "GET_DISK_CONTROL_INTERFACE_VERSION",
     "SET_DISK_CONTROL_EXT_INTERFACE", "GET_MESSAGE_INTERFACE_VERSION", "SET_MESSAGE_EXT", "GET_INPUT_MAX_USERS", "SET_MINIMUM_AUDIO_LATENCY", "GET_GAME_INFO_EXT",
     "SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK", "SET_VARIABLE", "GET_THROTTLE_STATE", "GET_SAVESTATE_CONTEXT", "GET_JIT_CAPABLE",
+    "GET_RUMBLE_INTERFACE",
+    // Since stage 3: the Vulkan negotiation, the probe's zeroed interface reading as type 0, Vulkan.
+    "SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE", "GET_PREFERRED_HW_RENDER", "GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT",
 ];
+
+#[test]
+fn rumble_reaches_the_host_as_each_motors_level() {
+    let _t = turn();
+    let mut m = make("tc_rumble=on", 0b011);
+    let info = m.machine_info().unwrap();
+    let motors = r#""outputs":[{"output":0,"kind":"motor","motor":"strong","label":"Strong motor"},{"output":1,"kind":"motor","motor":"weak","label":"Weak motor"}]"#;
+    assert_eq!(info.matches(motors).count(), 2, "{info}");
+    let mut levels = std::collections::BTreeMap::new();
+    let mut raised = 0;
+    for n in 0..30 {
+        m.advance().unwrap();
+        for e in m.events().unwrap().iter().filter(|e| e.kind == event::OUTPUT) {
+            levels.insert(((e.a >> 32) as u32, e.a as u32), e.b);
+            raised += 1;
+        }
+        let frame = u32::from_le_bytes(ram(&mut m, FRAME_COUNTER, 4).try_into().unwrap()) as u64;
+        for (port, strong, weak) in emusen_libretro_testcore::rumble_pattern(frame) {
+            assert_eq!((levels.get(&(port, 0)).copied(), levels.get(&(port, 1)).copied()), (Some(strong as i64), Some(weak as i64)), "frame {frame}, port {port}");
+        }
+        if n == 0 {
+            assert_eq!(raised, 4, "every declared output raised once after machine info is read");
+        }
+    }
+    // Port 1's motors hold still but for one change, so only changes are raised.
+    assert_eq!(raised, 4 + 29 * 2 + 1, "{levels:?}");
+}
 
 #[test]
 fn every_environment_command_is_answered_or_refused_as_designed() {
@@ -438,3 +469,14 @@ fn a_disc_changes_through_the_cores_disk_control() {
     assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
 }
 
+
+#[test]
+fn options_declared_while_loading_are_kept_for_the_next_load() {
+    let _t = turn();
+    let (_, root) = library();
+    let m = make("tc_late_option=on", 0b011);
+    assert!(m.setting_notes().unwrap().contains("declared options while loading the game"), "{}", m.setting_notes().unwrap());
+    let kept = std::fs::read_to_string(root.join(".data").join(STEM).join("declared-options.txt")).unwrap();
+    assert!(kept.contains("option\ttc_late\tprobe\tfirst\tDeclared at load"), "{kept}");
+    assert!(kept.contains("value\ttc_late\tsecond\tsecond (label)"), "{kept}");
+}

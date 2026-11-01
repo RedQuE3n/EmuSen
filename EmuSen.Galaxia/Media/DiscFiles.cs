@@ -19,8 +19,14 @@ namespace EmuSen.Galaxia.Media
         {
             MappedFile old = Image;
             Image = patched;
+            _patched = true;
             old.Dispose();
         }
+
+        private bool _patched;
+
+        // The file whose bytes Image is, unaltered: not unpacked from an archive and not patched; null otherwise - see EmuSen_CoreAPI.md §6.41.
+        public string? UnalteredPath => _hold is null && !_patched ? Path : null;
 
         // A sheet's tracks and then an .sbi, in the order a core numbers them.
         public IReadOnlyList<MappedFile> Companions { get; }

@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 15;
+        public const uint Minor = 18;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Native
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
         public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapMedia = 1UL << 18, CapDebugReads = 1UL << 19;
         public const ulong CapBorrow = 1UL << 20, CapDevicePicture = 1UL << 21, CapRawPicture = 1UL << 22;
-        public const ulong CapTelemetry = 1UL << 23, CapPresence = 1UL << 24, CapDebugTranslate = 1UL << 25;
+        public const ulong CapTelemetry = 1UL << 23, CapPresence = 1UL << 24, CapDebugTranslate = 1UL << 25, CapImagePath = 1UL << 26, CapDeviceRing = 1UL << 27, CapExpect = 1UL << 28;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -26,7 +26,7 @@ namespace EmuSen.Cores.Native
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
             (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapMedia, "MEDIA"), (CapDebugReads, "DEBUG_READS"),
             (CapBorrow, "BORROW"), (CapDevicePicture, "DEVICE_PICTURE"), (CapRawPicture, "RAW_PICTURE"),
-            (CapTelemetry, "TELEMETRY"), (CapPresence, "PRESENCE"), (CapDebugTranslate, "DEBUG_TRANSLATE"),
+            (CapTelemetry, "TELEMETRY"), (CapPresence, "PRESENCE"), (CapDebugTranslate, "DEBUG_TRANSLATE"), (CapImagePath, "IMAGE_PATH"), (CapDeviceRing, "DEVICE_RING"), (CapExpect, "EXPECT"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -51,17 +51,21 @@ namespace EmuSen.Cores.Native
             ("emusen_core_debug_reads", CapDebugReads), ("emusen_core_frame_device", CapDevicePicture),
             ("emusen_core_raw_select", CapRawPicture), ("emusen_core_raw_info", CapRawPicture), ("emusen_core_raw_copy", CapRawPicture),
             ("emusen_core_telemetry", CapTelemetry), ("emusen_core_set_present", CapPresence), ("emusen_core_debug_translate", CapDebugTranslate),
+            ("emusen_core_expect", CapExpect), ("emusen_core_ring_lend", CapDeviceRing), ("emusen_core_frame_ring", CapDeviceRing),
         };
 
         // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
-        public static readonly IReadOnlyList<string> HostObligations = new[] { "present" };
+        public static readonly IReadOnlyList<string> HostObligations = new[] { "present", "image_path", "named_files" };
 
         // The status codes a host acts on by number.
         public const int StatusNull = -1, StatusBufferTooSmall = -7, StatusNotSupported = -256, StatusUnknownSetting = -259, StatusBadSetting = -260, StatusBadStruct = -263;
-        public const int StatusLidClosed = -265, StatusWrongMedia = -266, StatusNoSuchDrive = -267;
+        public const int StatusLidClosed = -265, StatusWrongMedia = -266, StatusNoSuchDrive = -267, StatusNotExpected = -268;
 
         // EMUSEN_FILE_MEDIA, the first companion of an image set, and EMUSEN_MEDIA_RESTORE - see EmuSen_CoreAPI.md §6.23.
         public const uint FileMedia = 65536, MediaRestore = 1;
+
+        // EMUSEN_FILE_NAMED, since 1.16: the first named battery file, each carrying File.Name - see EmuSen_CoreAPI.md §6.41.
+        public const uint FileNamed = 0x8000;
 
         // EMUSEN_CREATE_LENT and EMUSEN_MEDIA_LENT: the image and its media files kept in place by the host until the loan ends - see EmuSen_CoreAPI.md §6.24.
         public const uint CreateLent = 1, MediaLent = 2;
@@ -75,8 +79,8 @@ namespace EmuSen.Cores.Native
         // EMUSEN_FRAME_CHEATS_HELD, since 1.13: frame_info's flag for a frame after which no cheat is applied - see EmuSen_CoreAPI.md §6.37.
         public const uint FrameCheatsHeld = 2;
 
-        // The event kinds of enum emusen_event_kind; 7 is kept for a controller's outputs.
-        public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6;
+        // The event kinds of enum emusen_event_kind; since 1.17 EventOutput, a port's motor or light, a = (port << 32) | output - see EmuSen_CoreAPI.md §6.42.
+        public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6, EventOutput = 7;
 
         // EMUSEN_EVENT_MEDIA_SEEK and EMUSEN_FILE_IMAGE: a drive names the file and byte it reads next, a = (drive << 32) | file - see EmuSen_CoreAPI.md §6.25.
         public const uint EventMediaSeek = 8, FileImage = 0xFFFFFFFF;
@@ -88,6 +92,7 @@ namespace EmuSen.Cores.Native
             public uint Which;
             public byte* Data;
             public nuint Len;
+            public byte* Name;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -108,6 +113,7 @@ namespace EmuSen.Cores.Native
             public uint Flags;
             public DeviceLend* Device;
             public byte* System;
+            public byte* ImagePath;
         }
 
         // emusen_device_lend, since 1.9: the host's Vulkan device lent to a core, with a queue the core alone submits to - see EmuSen_CoreAPI.md §6.29.
@@ -141,6 +147,49 @@ namespace EmuSen.Cores.Native
             public uint Reserved;
             public ulong Ready;
             public ulong Value;
+        }
+
+        // emusen_ring_image, since 1.18: one exported image of the host's ring, its handle the host's - see EmuSen_CoreAPI.md §6.43.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RingImage
+        {
+            public uint Size;
+            public uint MemoryType;
+            public ulong Handle;
+            public ulong AllocationSize;
+            public uint Width;
+            public uint Height;
+            public uint Format;
+            public uint Usage;
+        }
+
+        // emusen_ring_lend, since 1.18: the ring's images and its two exported timeline semaphores.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Ring
+        {
+            public uint Size;
+            public uint Count;
+            public RingImage* Images;
+            public nuint ImageSize;
+            public ulong Ready;
+            public ulong Done;
+            public fixed byte DeviceUuid[16];
+            public fixed byte DriverUuid[16];
+        }
+
+        // emusen_ring_frame, since 1.18: the frame's picture in the ring, with its field structure for the screen filters.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RingFrame
+        {
+            public uint Size;
+            public uint Slot;
+            public int Width;
+            public int Height;
+            public ulong Value;
+            public uint Fields;
+            public uint Field;
+            public uint AspectNum;
+            public uint AspectDen;
         }
 
         // emusen_raw_frame, since 1.10: the shape of a frame's picture before the core's palette - see EmuSen_CoreAPI.md §6.30.
@@ -194,6 +243,7 @@ namespace EmuSen.Cores.Native
             public File* Files;
             public nuint FileCount;
             public nuint FileSize;
+            public byte* ImagePath;
         }
 
         public readonly delegate* unmanaged<uint> AbiVersion;
@@ -261,6 +311,9 @@ namespace EmuSen.Cores.Native
         public readonly delegate* unmanaged<nint, long*, nuint, long> Telemetry;
         public readonly delegate* unmanaged<nint, uint, uint, int> SetPresent;
         public readonly delegate* unmanaged<nint, uint, uint, uint*, int> DebugTranslate;
+        public readonly delegate* unmanaged<byte*, int> Expect;
+        public readonly delegate* unmanaged<nint, Ring*, int> RingLend;
+        public readonly delegate* unmanaged<nint, RingFrame*, int> FrameRing;
 
         // Each export resolved from a loaded library by name; zero where the library lacks it.
         public CoreInterface(nint library)
@@ -331,6 +384,9 @@ namespace EmuSen.Cores.Native
             Telemetry = (delegate* unmanaged<nint, long*, nuint, long>)E("telemetry");
             SetPresent = (delegate* unmanaged<nint, uint, uint, int>)E("set_present");
             DebugTranslate = (delegate* unmanaged<nint, uint, uint, uint*, int>)E("debug_translate");
+            Expect = (delegate* unmanaged<byte*, int>)E("expect");
+            RingLend = (delegate* unmanaged<nint, Ring*, int>)E("ring_lend");
+            FrameRing = (delegate* unmanaged<nint, RingFrame*, int>)E("frame_ring");
         }
 
         // The C# field that holds an export: its suffix in PascalCase, and FrameInfoOf where that names the struct.

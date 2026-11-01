@@ -316,13 +316,15 @@ impl Discovery {
         }
     }
 
-    /// A player's directory's libretro entries: each with its proxy's sidecar listed as an engine, and each whose core
-    /// on disk has no sidecar of its build listed as waiting for the approval that reads it.
+    /// A player's directory's libretro entries: each with its proxy's sidecar listed as an engine, and each whose files
+    /// on disk have no sidecar of theirs (none, one of another build of the core, or one of a proxy copy since refreshed)
+    /// listed as waiting to be read; an approval of the core's hash reads it.
     fn scan_entries(&mut self, dir: &Path) {
         for entry in Entry::list(dir).unwrap_or_default() {
             let sidecar = Sidecar::read(&crate::sidecar::path_for(&entry.broker_path()));
             let hash = crate::entry::core_hash(&entry);
-            let current = matches!((&sidecar, &hash), (Some(s), Some(h)) if s.info.libretro.as_ref().is_some_and(|l| l.sha256.eq_ignore_ascii_case(h)));
+            let proxy = scan_hash(&entry.broker_path());
+            let current = matches!((&sidecar, &hash, &proxy), (Some(s), Some(h), Some(p)) if s.info.libretro.as_ref().is_some_and(|l| l.sha256.eq_ignore_ascii_case(h)) && s.sha256.eq_ignore_ascii_case(p));
             if let Some(sha256) = hash.filter(|_| !current) {
                 self.waiting.push(Waiting { entry: entry.clone(), sha256 });
             }

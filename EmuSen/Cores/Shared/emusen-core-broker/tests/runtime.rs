@@ -108,6 +108,9 @@ fn an_approved_entry_opens_on_the_rust_runtime_runs_and_takes_and_loads_a_state(
         f = frame(&s);
     }
     assert_eq!((f.ran, f.width, f.height), (1, 320, 240));
+    // The core claims IMAGE_PATH, and the game is an unaltered file, so its path is given beside the bytes (core ABI 1.16).
+    let log: Vec<String> = s.change(|e, _| Ok(e.recent_log().iter().cloned().collect())).unwrap();
+    assert!(log.iter().any(|l| l.contains(&format!("game path: {game}"))), "{log:?}");
     let state = l.root.join("game.state").to_string_lossy().into_owned();
     s.save_state(&state, None, false).unwrap();
     let after_save = {
@@ -223,4 +226,36 @@ fn a_waiting_entry_is_a_row_of_the_listing_whose_libretro_hash_is_the_one_approv
     assert_eq!(entry_rows(&rt)[0].1, "needs_approval");
     rt.approve(&sha256).unwrap();
     assert_eq!(entry_rows(&rt)[0].1, "approved");
+}
+
+#[test]
+fn a_refreshed_proxy_copy_is_read_again_and_the_cores_approval_stands() {
+    let _t = turn();
+    let l = layout("refreshed");
+    let core = hash(&l.entry.core_path());
+    runtime(&l).approve(&core).unwrap();
+    // An update of EmuSen: a new build of the proxy in the installation's manifest, and `cores verify` refreshing the copy.
+    let mut proxy = std::fs::read(l.entry.broker_path()).unwrap();
+    proxy.extend_from_slice(b"\0a newer build");
+    // Replaced by a rename, as a refresh replaces a library this process may have mapped.
+    let fresh = l.entry.folder.join("refresh.tmp");
+    std::fs::write(&fresh, &proxy).unwrap();
+    std::fs::rename(&fresh, l.entry.broker_path()).unwrap();
+    let host = hash(&l.entry.adapter_path());
+    let manifest = format!("{}  libemusen_libretro_proxy.{SUFFIX}\n{host}  libemusen_libretro_host.{SUFFIX}\n", emusen_core_host::sha256::sha256_hex(&proxy));
+    std::fs::write(l.installation.join(MANIFEST), manifest).unwrap();
+    let rt = runtime(&l);
+    let d = rt.discovery();
+    assert!(d.waiting().is_empty(), "read again at the start, since its core stays approved");
+    let found = d.found().iter().find(|c| c.entry.is_some()).unwrap();
+    assert_eq!(found.sidecar.sha256, emusen_core_host::sha256::sha256_hex(&proxy));
+    assert_eq!(found.standing(&rt.trust()), Standing::Approved);
+    drop(d);
+    rt.approve(&core).unwrap();
+    let game = l.root.join("game.tcg");
+    std::fs::write(&game, b"TCG1 a test game").unwrap();
+    let game = game.to_string_lossy().into_owned();
+    let id = rt.open(&Asked { path: Some(&game), console: None, engine: None, opened: OpenedWith { flags: emusen_crystal::abi::OPEN_NO_BATTERY, ..OpenedWith::default() } }).unwrap();
+    assert_eq!(frame(&rt.sessions.get(id).unwrap()).ran, 1);
+    rt.close(id).unwrap();
 }

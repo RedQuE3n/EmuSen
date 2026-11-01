@@ -67,7 +67,12 @@ impl Runtime {
         let events = Arc::new(crate::events::Events::default());
         let trust = Mutex::new(Arc::new(trust_of(&directories, &player, &events)));
         let discovery = Mutex::new(Arc::new(discover(&directories, &player, development)));
-        Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied()
+        let rt = Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied();
+        let (discovery, trust) = (rt.discovery(), rt.trust());
+        if discovery.waiting().iter().any(|w| trust.approved(&w.sha256)) {
+            rt.rescan();
+        }
+        rt
     }
 
     /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.
@@ -91,8 +96,24 @@ impl Runtime {
         Catalog::new(&discovery).supported_cheat_systems()
     }
 
-    /// The cores directories listed again and the approvals read again.
+    /// The cores directories listed again and the approvals read again; an entry waiting to be read whose core is
+    /// approved already, as after `cores verify` refreshes its copies, is read and listed again, its approval standing.
     pub fn rescan(&self) {
+        self.scan();
+        let (discovery, trust) = (self.discovery(), self.trust());
+        let mut read = false;
+        for w in discovery.waiting().iter().filter(|w| trust.approved(&w.sha256)) {
+            match emusen_core_host::entry::read(w, &trust) {
+                Ok(_) => read = true,
+                Err(why) => self.say(why),
+            }
+        }
+        if read {
+            self.scan();
+        }
+    }
+
+    fn scan(&self) {
         let trust = Arc::new(trust_of(&self.directories, &self.player, &self.events));
         *self.trust.lock().unwrap_or_else(|p| p.into_inner()) = trust;
         let fresh = Arc::new(discover(&self.directories, &self.player, self.development));

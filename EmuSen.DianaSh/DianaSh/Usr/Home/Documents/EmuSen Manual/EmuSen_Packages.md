@@ -153,7 +153,8 @@ from one answer:
   tested alone), `PackagesWords`, `PackageDetail`, and `ToolWords`: the tool's refusals and reasons in a player's
   words, moved out of Mistress's `CompressedDiscsWords`, which now forwards to it, so one table serves both windows.
 - **`PackagesWindow`** in Mistress is the thin host: a `ToolWindow` whose content is the pane, *Settings → Packages…*
-  on the desktop and *Packages* in the pad's settings menu. Framed as a sheet in big picture it switches the pane to
+  on the desktop and *Packages* on the pad menu's Library page (not Settings, whose page is full at nine rows;
+  Settings Reference §4.69.8). Framed as a sheet in big picture it switches the pane to
   the big-screen form, hands the frame's generated hints to the help bar (face buttons as the player's swap draws
   them) and passes the pad's buttons to the frame in ES-DE's grammar (`IPadDriven`); what the frame declines, B at the
   top among them, is the router's. No focus routing or hint is written by hand.

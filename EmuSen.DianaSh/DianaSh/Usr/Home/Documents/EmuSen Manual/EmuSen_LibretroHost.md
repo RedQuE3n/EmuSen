@@ -1890,6 +1890,40 @@ taken at once, as before, so a launch still starts within the press; a slower on
 so no core's answer can freeze the screen again. `PreLaunchQueryTests` holds the firmware question for as long as it
 likes and proves the interface thread runs its jobs meanwhile and that each question ran off it.
 
+## 10s. A hosted core's firmware: the player's console firmware, and the data a core carries (2026-11-01)
+
+Approved by the tester on 2026-11-01. Until this pass nothing gave a hosted core the player's own firmware: §10c ran
+PCEE2 on a referee folder named by `EMUSEN_LIBRETRO_SYSTEM_DIR`, and §10q on a link made by hand. Once §10r let the
+firmware question reach the core, PCEE2's `.info` answered two required entries, both folders, `pcsx2/bios` and
+`pcsx2/resources`, and the runtime refused to open its games for firmware the library did not hold.
+
+**Which is which.** A libretro `.info` names firmware by a path in the core's system folder, and some of those paths
+are not the player's to supply. `emusen-core-entry` owns the table (`FIRMWARE_ROLES`, by the core's file stem):
+- **Carried**: data the core holds in itself, never asked for. PCEE2's `pcsx2/resources` is PCSX2's own data (shaders,
+  fonts, the game index), not firmware; its binary holds the game index (Jak and Daxter's serial `SCUS-97124` is in it
+  seven times, read 2026-11-01), and §10q ran Jak and Daxter in play with that folder empty. The libretro host leaves a
+  carried entry out of every firmware answer.
+- **Console firmware of a system**: a folder for the console's own firmware. PCEE2's `pcsx2/bios` is the PlayStation
+  2's (`ps2`). What fills it is what the console's own engines declare for that system, today Sapphire's three BIOS
+  files by their Redump names, sizes and MD5s; no list of BIOS files is kept a second time for the hosted core.
+- Every other entry is a file the player supplies by its name, as before.
+
+**At open.** Before a hosted core's machine is made, the runtime links each declared file it finds whole in the
+firmware folders (`FirmwareLibrary`'s search: by name and size, else by content) into the folder, under its declared
+name, as a symbolic link; nothing is copied, and the proxy grants the runner each link's target read-only (§10l). A
+file already there is left as it is, and a link to an older place is replaced. Only a BIOS reaches the folder this way.
+
+**The firmware question.** A folder of console firmware counts as held when the folder already has a file (a referee's
+folder, or a link made before) or when the store holds any declared file. When it holds none, the player is asked for
+one file they can give: the first declared name and size, found by the content of any market's dump, under the
+`.info`'s own words for the folder, so the file picker never asks for a folder or for data the core carries.
+
+**Tests** (`HostedFirmwareRuntimeTests`, on the Rust runtime with the test core laid out under PCEE2's stem and its
+`.info` declaring both folders): with no BIOS in the store the answer is one required file, Sapphire's first declared
+name at 4 MiB, under the folder's words, and nothing of `pcsx2/resources`; with a file of the Americas name and size in
+the store (zeros, no BIOS) the answer is empty, and opening the game leaves exactly one link in the folder, to that file.
+The firmware itself was never listed, opened or hashed by the project's tools in this work.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

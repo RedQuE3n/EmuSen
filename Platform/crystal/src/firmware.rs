@@ -3,6 +3,7 @@
 //! `EmulatorSession.MissingFirmwareFor`, `FirmwareLibrary` and `FirmwareOverview` give them (EmuSen_Backend.md §29.2).
 
 use emusen_core_host::Discovered;
+use emusen_core_host::entry::{FirmwareRole, firmware_role, system_folder};
 use emusen_firmware::Request;
 use emusen_galaxia::tree::{Directory, Tree};
 use emusen_native::json::Value;
@@ -143,8 +144,78 @@ pub fn needed(rt: &Runtime, tree: &Tree, at: &str, engine: Option<&str>) -> (Str
     let Ok(text) = lib.firmware_for(disc.image.bytes()) else { return (String::new(), Vec::new()) };
     let list = emusen_native::json::parse(text.as_bytes()).map(|v| entries(&v)).unwrap_or_default();
     let searched = folders(tree);
-    let missing = list.into_iter().filter(|e| e.required && emusen_firmware::locate(&e.request(), &searched).is_none()).collect();
+    let missing = list
+        .into_iter()
+        .filter(|e| e.required)
+        .filter_map(|e| match core.entry.as_ref().and_then(|entry| firmware_role(&entry.stem, &e.name).map(|role| (entry, role))) {
+            Some((_, FirmwareRole::Carried)) => None,
+            Some((entry, FirmwareRole::Console(system))) => {
+                let own = system_folder(&entry.folder, &entry.stem).join(&e.name);
+                let held = std::fs::read_dir(&own).is_ok_and(|mut d| d.any(|f| f.is_ok_and(|f| f.path().is_file())));
+                let wanted = console_firmware(&discovery, system);
+                let found = wanted.iter().any(|w| emusen_firmware::locate(&w.request(), &searched).is_some_and(|l| l.whole));
+                (!held && !found).then(|| asked_for_folder(&e, &wanted))
+            }
+            None => emusen_firmware::locate(&e.request(), &searched).is_none().then_some(e),
+        })
+        .collect();
     (core.sidecar.info.name.clone(), missing)
+}
+
+/// The firmware the console's own engines declare for a system, each file once: what the player's store is searched
+/// for when a hosted core's folder of console firmware is filled (EmuSen_LibretroHost.md §10s).
+pub fn console_firmware(discovery: &emusen_core_host::Discovery, system: &str) -> Vec<Entry> {
+    let mut found: Vec<Entry> = Vec::new();
+    for c in discovery.found().iter().filter(|c| c.entry.is_none() && !c.sidecar.development) {
+        for (id, _, _, list) in systems_of(&c.sidecar.info_json) {
+            if id == system {
+                found.extend(list.into_iter().filter(|e| e.size > 0 && !found.iter().any(|f| f.name == e.name)).collect::<Vec<_>>());
+            }
+        }
+    }
+    found
+}
+
+/// A folder of console firmware none of whose files the store holds, asked for as one file the player can give: the
+/// first declared name and size, found by the content of any of them, under the folder's own words.
+fn asked_for_folder(folder: &Entry, wanted: &[Entry]) -> Entry {
+    let Some(first) = wanted.first() else { return folder.clone() };
+    let mut md5: Vec<String> = Vec::new();
+    for w in wanted {
+        md5.extend(w.md5.iter().filter(|m| !md5.contains(m)).cloned().collect::<Vec<_>>());
+    }
+    Entry { which: folder.which, name: first.name.clone(), label: folder.label.clone(), size: first.size, required: true, parts: vec![vec![first.name.clone()]], replacement: None, md5 }
+}
+
+/// For a hosted libretro core: each folder of console firmware in its system folder given links, read-only, to the
+/// store's files its console's engines declare, by their declared names; a file already there is left as it is. The
+/// names linked.
+pub fn link_player_firmware(core: &Discovered, discovery: &emusen_core_host::Discovery, tree: &Tree) -> Vec<String> {
+    let Some(entry) = &core.entry else { return Vec::new() };
+    let searched = folders(tree);
+    let mut linked = Vec::new();
+    for (_, path, role) in emusen_core_host::entry::FIRMWARE_ROLES.iter().filter(|(stem, _, _)| *stem == entry.stem) {
+        let FirmwareRole::Console(system) = role else { continue };
+        let own = system_folder(&entry.folder, &entry.stem).join(path);
+        for w in console_firmware(discovery, system) {
+            let Some(at) = emusen_firmware::locate(&w.request(), &searched).filter(|l| l.whole) else { continue };
+            let source = std::path::Path::new(&at.folder).join(&at.names[0]);
+            let link = own.join(&w.name);
+            match std::fs::symlink_metadata(&link) {
+                Ok(m) if !m.file_type().is_symlink() => continue,
+                Ok(_) if std::fs::read_link(&link).is_ok_and(|t| t == source) => continue,
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&link);
+                }
+                Err(_) => {}
+            }
+            #[cfg(unix)]
+            if std::fs::create_dir_all(&own).is_ok() && std::os::unix::fs::symlink(&source, &link).is_ok() {
+                linked.push(w.name.clone());
+            }
+        }
+    }
+    linked
 }
 
 pub fn needed_json(rt: &Runtime, at: &str, engine: Option<&str>) -> String {

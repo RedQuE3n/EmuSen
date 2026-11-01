@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
@@ -102,6 +104,39 @@ namespace EmuSen.WiseMan.Galaxia
             File.WriteAllText(_dir, "a file where the folder should be");
             Assert.Null(ErrorLog.Error("test", "nowhere to go"));
             File.Delete(_dir);
+        }
+
+        // A LogDirectory this machine cannot make goes to the home's own Logs, saying so once there (the handheld's /home/red/Documents/Logs/ on 2026-11-01).
+        [Fact]
+        public void An_unusable_log_directory_logs_to_the_homes_logs_and_says_so_once()
+        {
+            ErrorLog.DirectoryOverride = null;
+            Directory.CreateDirectory(_dir);
+            File.WriteAllText(Path.Combine(_dir, "blocker"), "x");
+            string named = Path.Combine(_dir, "blocker", "Logs");
+            ConfigStore.OverrideDirectory = Path.Combine(_dir, "Config");
+            DataStore.OverrideDirectory = Path.Combine(_dir, "Home");
+            try
+            {
+                new AppSettings { LogDirectory = named }.Save();
+                ErrorLog.ResetForTests();
+                Assert.Equal(DataStore.Logs, ErrorLog.Root());
+                Assert.Equal(DataStore.Logs, ErrorLog.FallbackRoot(named));
+                Assert.Equal(ErrorLog.DefaultRoot, ErrorLog.FallbackRoot(" "));
+                string? path = ErrorLog.Error("test", "first");
+                ErrorLog.Error("test", "second");
+                Assert.Equal(DataStore.Logs, Path.GetDirectoryName(path));
+                string[] lines = File.ReadAllLines(path!);
+                Assert.Equal(3, lines.Length);
+                Assert.EndsWith("WARN [log] " + ErrorLog.FallbackWords(named, DataStore.Logs), lines[0]);
+                Assert.EndsWith("ERROR [test] first", lines[1]);
+                Assert.EndsWith("ERROR [test] second", lines[2]);
+            }
+            finally
+            {
+                ConfigStore.OverrideDirectory = null;
+                DataStore.OverrideDirectory = null;
+            }
         }
 
         // A LogDirectory copied from another machine (the handheld held /home/red/Documents/Logs/) falls back rather than logging nowhere.

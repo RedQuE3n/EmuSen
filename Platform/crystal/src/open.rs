@@ -236,6 +236,7 @@ fn open_game(
         return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", path::file_name(Style::HOST, at), list.join("; "))));
     }
     let (core, lib) = library_for(catalog, discovery, &rt.trust(), at, chosen.as_deref())?;
+    crate::firmware::link_player_firmware(core, discovery, tree);
     let system = system_of_info(catalog, discovery, at, core);
     let (row, _) = crate::route::route(catalog, discovery, at);
     let row_console = row.map(|r| catalog.rows[r].console().to_string());

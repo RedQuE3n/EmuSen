@@ -15,5 +15,7 @@
   "screenscraper_system": 57,
   "cheat_space": "RAM",
   "media": [{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Sony - PlayStation"],
+  "libretro_systemids": ["playstation"]
 }

@@ -1,0 +1,39 @@
+[package]
+name = "emusen-libretro-host"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# One libretro core as an EmuSen core on the core ABI v1. See EmuSen_LibretroHost.md.
+[lib]
+name = "emusen_libretro_host"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
+emusen-libretro-sys = { path = "../emusen-libretro-sys" }
+# The installed core's folder and its NOTICE, the Cores window's one reader (EmuSen_Cores.md §7).
+emusen-core-entry = { path = "../../../../Platform/core-entry" }
+# The systemid and database table, the systems table's (EmuSen_LibretroHost.md §4.1).
+emusen-systems = { path = "../../../../Platform/systems" }
+libloading = "0.8"
+libc = "0.2"
+sha2 = "0.11"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+emusen-core-host = { path = "../../Shared/emusen-core-host" }
+# Built as a shared library beside the tests, the libretro core they host (EmuSen_LibretroHost.md §9).
+emusen-libretro-testcore = { path = "../emusen-libretro-testcore" }
+
+[profile.release]
+panic = "abort"
+
+# What a publish builds (EmuSen.csproj): release without its debug information.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

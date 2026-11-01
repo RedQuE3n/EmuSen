@@ -1849,6 +1849,34 @@ The project's cores of two or more systems, under a 1.15 host:
 
 MarsRT, MoonRT, VenusRT and Diamond list one system each and are unchanged but for the rebuild.
 
+### 6.41 A hosted core's needs: the image's path, named files, unrated options, the exact rate (1.16, 2026-10-31)
+
+Four additions for cores hosted from another interface, designed and decided in `EmuSen_LibretroHost.md` §2 (E1–E4),
+approved by the tester on 2026-10-31. Each is optional, and a host or core that knows none of them runs as before.
+
+- **`IMAGE_PATH`** (capability bit 26): `emusen_create_params.image_path` and `emusen_media.image_path`, appended
+  (`create_params` 120 bytes, `media` 56). A host fills them for a core claiming the bit whenever the bytes it passes
+  are an unaltered file's, and may then lend the image mapped. A core that cannot run without the path lists
+  `"image_path"` in `host_requires`, so an older host refuses it with that reason. `emusen-native` gives the path to the
+  core during the call through `core::image_path()`, and only to a core claiming the bit.
+- **Named battery files**: `emusen_file.name` (appended; arrays already carry their element size), for files numbered
+  from `EMUSEN_FILE_NAMED` (`0x8000`) to `0xFFFF`, below `EMUSEN_FILE_MEDIA`, so that `BORROW`'s promise for numbers
+  from 65536 is untouched. A name is UTF-8, relative, `/`-separated, with no empty, `.` or `..` part, no backslash, colon
+  or NUL, at most 255 bytes; the crate refuses another with `BAD_FILE` before the core sees it. Core info's `battery`
+  may hold a family entry, `{ "which": 32768, "suffix": "", "family": "files", "kind": … }`; machine info lists the
+  family's files present as `{ which, suffix: "", name, length, kind }`, a removed one once more with `"removed": true`,
+  and the host keeps its last copy. A core relying on them lists `"named_files"` in `host_requires`. `emusen-native`:
+  `Core::named_files`, `Core::battery_families`, and `core::file_name()` during the call.
+- **`effect: "unrated"`** in the settings schema: an option whose cost no one has classified, a hosted core's own,
+  shown under the core's categories with no claim about cost. §6.13's rule that an accuracy or enhancement setting's
+  default is the accurate one does not bind it.
+- **`audio.rate_exact`** in machine info, `{ num, den }`, beside `audio.rate`, its rounding: the rate the frontend's
+  resampler converts from. `Core::audio_rate_exact`.
+
+`emusen-native` also lets a core claiming `SNAPSHOT` withdraw kind 1 for one machine (`Core::snapshot_offered`):
+machine info's `state.kinds` then omits it, and `state_size` and `state_save` of kind 1 answer `NOT_SUPPORTED`, which
+C14 already reads as consistent. That is the crate's, not the ABI's.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2675,6 +2703,14 @@ reads `CoreSpace.ByteOrder` and `CoreEngine`'s frame log reads a space in its or
 C14 checks the spelling where a space states one; the test core states its ROM `big`, and `FAULT_BYTE_ORDER_MISSPELT`
 (1 << 34) fails C14 alone. Nephrite states `Z80RAM` and `Z80BUS` `little`; no other core states one, and their kit
 reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
+
+**v1.16, 2026-10-31** (§6.41), decided by the tester as `EmuSen_LibretroHost.md` §2 designed it: `IMAGE_PATH` with
+`create_params.image_path` and `media.image_path`, named battery files with `emusen_file.name` and `EMUSEN_FILE_NAMED`,
+`effect: "unrated"`, and machine info's `audio.rate_exact`. Baseline 521 facts, eleven new lines and the minor's two
+moved, every released line kept (the battery entries keep `suffix` required and write it empty for named files),
+`--check` and `--against` 1.15 passing on four triples. A host of 1.15 passes 24-byte file elements and 112-byte
+create parameters, which the crate reads as before; `media`'s least size stays 48. The Rust host passes the path and
+the names and meets both new obligations; the C# host follows with the libretro host's stage 2.
 
 **v1.15, 2026-10-19** (§6.40), decided by the tester as `Endou_Plan.md` §3.7 designed it: `emusen_create_params.system`
 widened, so that beside an image it names the system the host routed the image to. A listed system is honoured, or

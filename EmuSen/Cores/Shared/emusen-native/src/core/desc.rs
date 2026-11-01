@@ -420,6 +420,9 @@ pub enum Effect {
     Accuracy { cost: String, accurate: String },
     Latency { cost: String },
     Enhancement { cost: String, hardware: String },
+    /// Since 1.16: an option whose cost no one has classified, a hosted core's own; shown as the core's options, with no
+    /// claim about cost (EmuSen_LibretroHost.md §2, E2).
+    Unrated,
 }
 
 impl Choice {
@@ -563,7 +566,7 @@ fn write_firmware(j: &mut Json, f: &Firmware) {
 }
 
 /// Core info as JSON.
-pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Option<Vec<Battery>>, starts_empty: &dyn Fn(&str) -> bool) -> String {
+pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Option<Vec<Battery>>, families: &dyn Fn(&str) -> Vec<BatteryKind>, starts_empty: &dyn Fn(&str) -> bool) -> String {
     let mut j = Json::new();
     j.begin_object();
     j.field_str("abi", &format!("{}.{}", sys::ABI_MAJOR, sys::ABI_MINOR));
@@ -615,12 +618,19 @@ pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Optio
         if starts_empty(&s.id) {
             j.field_bool("starts_empty", true);
         }
-        if let Some(files) = battery(&s.id) {
+        let named = families(&s.id);
+        let files = battery(&s.id);
+        if files.is_some() || !named.is_empty() {
             j.key("battery").begin_array();
-            for b in &files {
+            for b in files.iter().flatten() {
                 j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix);
                 write_kind(&mut j, b.kind);
                 write_slot(&mut j, b);
+                j.end_object();
+            }
+            for kind in named {
+                j.begin_object().field_uint("which", sys::flags::FILE_NAMED as u64).field_str("suffix", "").field_str("family", "files");
+                write_kind(&mut j, kind);
                 j.end_object();
             }
             j.end_array();
@@ -662,6 +672,22 @@ pub struct Measured<'a> {
     pub units: &'a [Unit],
     /// `Core::counters` of a core claiming `TELEMETRY`, written as `telemetry` when there are any (since 1.13).
     pub telemetry: &'a [Counter],
+    /// Since 1.16: `Core::named_files`, written into `battery` after the numbered files.
+    pub named: &'a [NamedFile],
+    /// Since 1.16: `Core::audio_rate_exact`, written as `audio.rate_exact` where there is one.
+    pub audio_rate_exact: Option<(u64, u64)>,
+    /// Since 1.16: `Core::snapshot_offered`; kind 1 is listed only where it is true and `SNAPSHOT` is claimed.
+    pub snapshot_offered: bool,
+}
+
+/// Since 1.16: a named battery file present on the machine, by its number from `FILE_NAMED` and its relative path; one
+/// the core removed is listed once more with `removed` (EmuSen_LibretroHost.md §2, E3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedFile {
+    pub which: u32,
+    pub name: String,
+    pub kind: BatteryKind,
+    pub removed: bool,
 }
 
 /// The most frames `state.picture_settles` may name: ten seconds at 60 frames a second (EmuSen_CoreAPI.md §6.9).
@@ -705,7 +731,11 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
         j.end_array();
     }
     j.end_object();
-    j.key("audio").begin_object().field_int("rate", m.audio.rate as i64).field_strs("channels", &m.audio.channels).end_object();
+    j.key("audio").begin_object().field_int("rate", m.audio.rate as i64).field_strs("channels", &m.audio.channels);
+    if let Some((num, den)) = measured.audio_rate_exact {
+        j.key("rate_exact").begin_object().field_uint("num", num).field_uint("den", den).end_object();
+    }
+    j.end_object();
     j.key("ports").begin_array();
     for p in &m.ports {
         j.begin_object().field_uint("port", p.port as u64).key("controller").opt_str(p.controller.as_deref()).end_object();
@@ -756,10 +786,18 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
         write_kind(&mut j, b.kind);
         j.end_object();
     }
+    for n in measured.named {
+        j.begin_object().field_uint("which", n.which as u64).field_str("suffix", "").field_str("name", &n.name).field_int("length", (measured.battery_len)(n.which).unwrap_or(0));
+        write_kind(&mut j, n.kind);
+        if n.removed {
+            j.field_bool("removed", true);
+        }
+        j.end_object();
+    }
     j.end_array();
     j.key("state").begin_object().field_str("format", &m.state.format).field_int("version", m.state.version);
     j.key("kinds").begin_array().uint(sys::kind::FULL as u64);
-    if measured.capabilities & caps::SNAPSHOT != 0 {
+    if measured.capabilities & caps::SNAPSHOT != 0 && measured.snapshot_offered {
         j.uint(sys::kind::SNAPSHOT as u64);
     }
     j.end_array();
@@ -846,6 +884,7 @@ pub fn settings_json(settings: &[Setting]) -> String {
             Effect::Accuracy { cost, accurate } => j.field_str("effect", "accuracy").field_str("cost", cost).field_str("accurate", accurate),
             Effect::Latency { cost } => j.field_str("effect", "latency").field_str("cost", cost),
             Effect::Enhancement { cost, hardware } => j.field_str("effect", "enhancement").field_str("cost", cost).field_str("hardware", hardware),
+            Effect::Unrated => j.field_str("effect", "unrated"),
         };
         j.field_bool("advanced", s.advanced).field_bool("hidden", s.hidden).field_bool("restart", s.restart).end_object();
     }

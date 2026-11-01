@@ -48,7 +48,12 @@ namespace EmuSen.Cores.Native
         public bool Claims(string extension) => Systems.Any(s => s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
 
         public CoreSystem? SystemFor(string extension) => Systems.FirstOrDefault(s => s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
+
+        // A brokered libretro entry's core: its file and the SHA-256 of the sealed copy that runs, which the approval must name - see EmuSen_LibretroHost.md §1.3.
+        public CoreLibretroFile? Libretro { get; init; }
     }
+
+    public sealed record CoreLibretroFile(string File, string Sha256);
 
     public sealed record CoreSpace(uint Id, string Name, long Size, IReadOnlyList<string> Flags)
     {
@@ -78,6 +83,13 @@ namespace EmuSen.Cores.Native
     public sealed record CoreBatteryFile(uint Which, string Suffix, long Length, CoreBatteryKind Kind = CoreBatteryKind.Game, string? Medium = null, string? Label = null, int? Port = null)
     {
         public bool Removable => Kind == CoreBatteryKind.Removable;
+
+        // Since 1.16: core info's family entry, "files", whose files a core names at run time - see EmuSen_CoreAPI.md §6.41.
+        public string? Family { get; init; }
+
+        // Since 1.16: machine info's named file, its relative path, and whether the core removed it.
+        public string? Name { get; init; }
+        public bool Removed { get; init; }
 
         public static CoreBatteryKind KindNamed(string? kind) => kind switch { "removable" => CoreBatteryKind.Removable, "console" => CoreBatteryKind.Console, _ => CoreBatteryKind.Game };
     }
@@ -188,11 +200,14 @@ namespace EmuSen.Cores.Native
             {
                 Development = Bool(s, "development", false),
                 StartsEmpty = Bool(s, "starts_empty", false),
-                Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0, CoreBatteryFile.KindNamed(OptStr(b, "kind")), OptStr(b, "medium"), OptStr(b, "label"), b.TryGetProperty("port", out var port) && port.ValueKind == JsonValueKind.Number ? (int)port.GetInt64() : null)).ToArray() : null,
+                Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0, CoreBatteryFile.KindNamed(OptStr(b, "kind")), OptStr(b, "medium"), OptStr(b, "label"), b.TryGetProperty("port", out var port) && port.ValueKind == JsonValueKind.Number ? (int)port.GetInt64() : null) { Family = OptStr(b, "family") }).ToArray() : null,
             }).ToArray();
             string name = Str(r, "name");
             return new CoreInfo(Str(r, "abi"), Str(r, "id"), name, OptStr(r, "display_name") ?? name, Str(r, "version"), Str(r, "license"), Strs(r, "authors"),
-                OptStr(r, "description"), systems, Strs(r, "capabilities"), Strs(r, "host_requires"), Bool(r, "deterministic", true), json);
+                OptStr(r, "description"), systems, Strs(r, "capabilities"), Strs(r, "host_requires"), Bool(r, "deterministic", true), json)
+            {
+                Libretro = Obj(r, "libretro") is { ValueKind: JsonValueKind.Object } l && OptStr(l, "sha256") is { } hash ? new CoreLibretroFile(Str(l, "file"), hash.ToLowerInvariant()) : null,
+            };
         }
 
         public static IReadOnlyList<CoreFirmware> FirmwareList(string json)
@@ -223,7 +238,7 @@ namespace EmuSen.Cores.Native
                 Arr(r, "processors").Select(p => new CoreProcessor((uint)Long(p, "id"), Str(p, "name"), (int)Long(p, "pc_bits"),
                     Arr(p, "registers").Select(g => (Str(g, "name"), (int)Long(g, "bits"))).ToArray(),
                     p.TryGetProperty("code_space", out var code) && code.ValueKind == JsonValueKind.Number ? (uint)code.GetInt64() : null)).ToArray(),
-                Arr(r, "battery").Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix", ".srm"), Long(b, "length"), CoreBatteryFile.KindNamed(OptStr(b, "kind")))).ToArray(),
+                Arr(r, "battery").Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix", ".srm"), Long(b, "length"), CoreBatteryFile.KindNamed(OptStr(b, "kind"))) { Name = OptStr(b, "name"), Removed = Bool(b, "removed") }).ToArray(),
                 Str(state, "format"), Long(state, "version"), kinds.Length == 0 ? new uint[] { 0 } : kinds,
                 Strs(r, "phases"),
                 patches.ValueKind == JsonValueKind.Object ? Long(patches, "low") : null, patches.ValueKind == JsonValueKind.Object ? Long(patches, "high") : null,

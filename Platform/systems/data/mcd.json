@@ -18,5 +18,7 @@
     { "id": "mcd.ramcart", "title": "Backup RAM Cartridge", "noun": "Cartridge" },
     { "id": "mcd.backup", "title": "Internal Backup RAM", "noun": "Backup RAM" }
   ],
-  "byte_order": "big"
+  "byte_order": "big",
+  "libretro_databases": ["Sega - Mega-CD - Sega CD"],
+  "libretro_systemids": []
 }

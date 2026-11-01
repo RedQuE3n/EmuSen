@@ -15,5 +15,7 @@
   "screenscraper_system": 14,
   "cheat_space": "RDRAM",
   "media": [{ "id": "n64.pak", "title": "Controller Pak", "noun": "Pak" }],
-  "byte_order": "big"
+  "byte_order": "big",
+  "libretro_databases": ["Nintendo - Nintendo 64"],
+  "libretro_systemids": ["nintendo_64"]
 }

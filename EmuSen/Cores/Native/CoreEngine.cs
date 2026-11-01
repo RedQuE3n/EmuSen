@@ -26,6 +26,7 @@ namespace EmuSen.Cores.Native
         private int _rawIndex = -1;
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly List<(uint Which, BatterySave Save)> _battery = new();
+        private NamedFiles? _named;
         private readonly List<string> _log = new();
         private readonly InputLatch _input = new();
         private CheatRegistry _cheats = new();
@@ -277,6 +278,8 @@ namespace EmuSen.Cores.Native
             CoreMachine machine;
             List<(uint Which, BatterySave Save)> wanted;
             MediaPlacement? placement = null;
+            NamedFiles? named = NamedFilesFor(system, console, path);
+            var namedFiles = named?.Read() ?? NoNamed;
             DiscFiles disc = Patched(set.Open(0), path);
             // Whether a machine has taken the keeping of the disc's files, as one that borrows does.
             bool kept = false;
@@ -288,18 +291,18 @@ namespace EmuSen.Cores.Native
                 placement = MemoryCards.Place(console, system, Media, System.IO.Path.GetFileNameWithoutExtension(path), b => BatteryFile(path, console, b.Which, b.Suffix), Options.BatteryRamDisabled);
                 BatterySave SaveFor(CoreBatteryFile b) => placement!.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatteryFile(path, console, b.Which, b.Suffix);
                 var saves = system?.Battery is { } listed
-                    ? listed.Select(b => (b.Which, Save: SaveFor(b))).ToList()
+                    ? listed.Where(b => b.Family is null).Select(b => (b.Which, Save: SaveFor(b))).ToList()
                     : new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
-                machine = Create(disc, firmware, saves, placement, system?.Id);
+                machine = Create(disc, firmware, saves, placement, system?.Id, namedFiles, named);
                 kept = Lends;
-                wanted = machine.Info.Battery.Select(b => (b.Which, Save: SaveFor(b))).ToList();
+                wanted = machine.Info.Battery.Where(b => b.Name is null).Select(b => (b.Which, Save: SaveFor(b))).ToList();
                 // Machine info is the authority: a file it names that exists and was not passed means the machine is made again with it.
                 if (wanted.Any(w => w.Save.Read() is not null && !saves.Any(s => s.Which == w.Which && s.Save.Path == w.Save.Path)))
                 {
                     machine.Dispose();
                     kept = false;
                     if (Lends) disc = Patched(set.Open(0), path);
-                    machine = Create(disc, firmware, wanted, placement, system?.Id);
+                    machine = Create(disc, firmware, wanted, placement, system?.Id, namedFiles, named);
                     kept = Lends;
                 }
             }
@@ -320,7 +323,7 @@ namespace EmuSen.Cores.Native
                 placement!.Dispose();
                 throw new ConsoleFirmwareException($"{System.IO.Path.GetFileName(path)} cannot start: {refused}");
             }
-            Adopt(machine, placement!, asked, wanted, set, path, console, null);
+            Adopt(machine, placement!, asked, wanted, set, path, console, null, named);
         }
 
         // The disc's image with its package's soft patches applied, which the core is handed; the file is never written - see EmuSen_GamePackages.md §5.4.
@@ -351,10 +354,11 @@ namespace EmuSen.Cores.Native
             MediaPlacement placement = MemoryCards.Place(console, system, choices, ConsoleSession.NameOf(console), _ => BatterySave.None, Options.BatteryRamDisabled);
             List<(uint Which, BatterySave Save)> saves;
             CoreMachine machine;
+            NamedFiles? named = NamedFilesFor(system, console, "");
             try
             {
-                saves = (system.Battery ?? Array.Empty<CoreBatteryFile>()).Select(b => (b.Which, Save: placement.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatterySave.None)).ToList();
-                machine = new CoreMachine(Library, default, Array.Empty<(uint, CoreBytes)>(), SettingsText(createScope: true), FilesFor(firmware, saves, placement), null, placement.RemovableApart, placement.ConsoleApart, Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null, system: systemId);
+                saves = (system.Battery ?? Array.Empty<CoreBatteryFile>()).Where(b => b.Family is null).Select(b => (b.Which, Save: placement.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatterySave.None)).ToList();
+                machine = new CoreMachine(Library, default, Array.Empty<(uint, CoreBytes)>(), SettingsText(createScope: true), FilesFor(firmware, saves, placement), null, placement.RemovableApart, placement.ConsoleApart || named is { Shared: true }, Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null, system: systemId, named: named?.Read());
             }
             catch
             {
@@ -367,7 +371,7 @@ namespace EmuSen.Cores.Native
                 placement.Dispose();
                 throw new ConsoleFirmwareException($"{console} cannot start with nothing in it: {refused}");
             }
-            Adopt(machine, placement, system.Firmware, saves, null, "", console, systemId);
+            Adopt(machine, placement, system.Firmware, saves, null, "", console, systemId, named);
         }
 
         // Why a console started empty, or a game of one, would run nothing: the firmware its machine chose is absent and the core offers no replacement for it, in the entry's own words; null otherwise - see Sapphire_Native.md §30.15 and §49.5.
@@ -383,7 +387,7 @@ namespace EmuSen.Cores.Native
         public string? StartedEmpty { get; private set; }
 
         // The new machine in place of the last, with its media, discs, firmware words, debugger, input and frame.
-        private void Adopt(CoreMachine machine, MediaPlacement placement, IReadOnlyList<CoreFirmware> asked, List<(uint Which, BatterySave Save)> wanted, DiscSet? set, string path, string console, string? emptySystem)
+        private void Adopt(CoreMachine machine, MediaPlacement placement, IReadOnlyList<CoreFirmware> asked, List<(uint Which, BatterySave Save)> wanted, DiscSet? set, string path, string console, string? emptySystem, NamedFiles? named)
         {
             _placement = placement;
             MediaNotice = placement.Notices.Count == 0 ? null : string.Join(" ", placement.Notices);
@@ -403,6 +407,7 @@ namespace EmuSen.Cores.Native
             AttachDebugger(machine);
             _battery.Clear();
             _battery.AddRange(wanted);
+            _named = named;
             foreach (var (_, save) in wanted) save.Settle(Say);
             RomPath = path;
             Console = console;
@@ -441,10 +446,20 @@ namespace EmuSen.Cores.Native
         }
 
         // The machine for a disc, as the system it was routed to: lent where the core borrows, else read by the core within the call - see EmuSen_CoreAPI.md §6.40.
-        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement, string? system)
+        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement, string? system, IReadOnlyList<(uint, string, byte[])> namedFiles, NamedFiles? named)
         {
             var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend, system: system);
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart || named is { Shared: true }, device: lend, system: system, imagePath: disc.UnalteredPath, named: namedFiles);
+        }
+
+        private static readonly IReadOnlyList<(uint, string, byte[])> NoNamed = Array.Empty<(uint, string, byte[])>();
+
+        // The store of the system's named files, by its family's kind; null where its core names none, battery saves are off, or a game's family has no game - see EmuSen_LibretroHost.md §4.5.
+        private NamedFiles? NamedFilesFor(CoreSystem? system, string console, string path)
+        {
+            if (Options.BatteryRamDisabled || system?.Battery?.FirstOrDefault(b => b.Family == "files") is not { } family) return null;
+            if (family.Kind == CoreBatteryKind.Game) return path.Length == 0 ? null : new NamedFiles(EmuSen.Galaxia.Library.SaveLibrary.GameFilesFolder(path, console), shared: false);
+            return new NamedFiles(EmuSen.Galaxia.Library.SaveLibrary.NamedFilesFolder(console, family.Kind == CoreBatteryKind.Console, Info.Id), shared: true);
         }
 
         // The firmware, then each battery file that holds bytes or a console medium's formatted blank.
@@ -493,7 +508,7 @@ namespace EmuSen.Cores.Native
                 return;
             }
             DiscFiles disc = _set is not null && index < _set.Images.Count ? _set.Open(index) : DiscSet.Of(_discs[index], CoreCatalog.IsImageExtension).Open(0);
-            try { Machine.MediaInsert(drive, Held(disc.Image), MediaOf(disc), restore, Lends ? disc : null); }
+            try { Machine.MediaInsert(drive, Held(disc.Image), MediaOf(disc), restore, Lends ? disc : null, disc.UnalteredPath); }
             finally
             {
                 if (!Lends) disc.Dispose();
@@ -910,6 +925,16 @@ namespace EmuSen.Cores.Native
                 if (data.Length == 0) continue;
                 if (Library.Has(CoreInterface.CapBatteryDirty) && (flags & 2) != 0 && (flags & 1) == 0) continue;
                 if (save.Write(data)) m.BatterySaved(which);
+            }
+            if (_named is not { } store) return;
+            // The named files machine info lists: each written by its name when changed, a removed one's last copy kept aside - see EmuSen_LibretroHost.md §4.5.
+            foreach (CoreBatteryFile f in m.Info.Battery)
+            {
+                if (f.Name is not { } name) continue;
+                if (f.Removed) { store.KeepRemoved(name, Say); continue; }
+                var (data, flags) = m.Battery(f.Which);
+                if (Library.Has(CoreInterface.CapBatteryDirty) && (flags & 2) != 0 && (flags & 1) == 0) continue;
+                if (store.Write(name, data, Say)) m.BatterySaved(f.Which);
             }
         }
 

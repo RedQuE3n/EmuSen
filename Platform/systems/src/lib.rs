@@ -55,6 +55,11 @@ pub struct System {
     /// The order of a multi-byte value in the console's memory, `big` or `little`, as every engine's spaces hold it; none
     /// where no one has stated it yet, which a reader takes as little-endian (EmuSen_Backend.md §18.7).
     pub byte_order: Option<String>,
+    /// The libretro database names of the console's games, as a libretro core's `.info` lists them under `database`
+    /// (EmuSen_LibretroHost.md §4.1).
+    pub libretro_databases: Vec<String>,
+    /// The `systemid`s of the libretro cores that run the console, for a core whose `.info` lists no database.
+    pub libretro_systemids: Vec<String>,
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -79,7 +84,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 17] = [
+pub const KEYS: [&str; 19] = [
     "id",
     "name",
     "console",
@@ -97,6 +102,8 @@ pub const KEYS: [&str; 17] = [
     "cheat_space",
     "media",
     "byte_order",
+    "libretro_databases",
+    "libretro_systemids",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -244,6 +251,8 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
             Some(order) if order != "big" && order != "little" => return f.fail(format!("byte_order {order} is neither big nor little")),
             order => order,
         },
+        libretro_databases: f.texts_or_none("libretro_databases")?,
+        libretro_systemids: f.texts_or_none("libretro_systemids")?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -328,6 +337,8 @@ pub fn to_json(systems: &[System]) -> String {
                         .collect(),
                 ),
                 or_null(s.byte_order.as_deref().map(Value::string)),
+                words(&s.libretro_databases),
+                words(&s.libretro_systemids),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -371,12 +382,34 @@ pub fn find(id: &str) -> Option<&'static System> {
     table().ok()?.iter().find(|s| s.id == id)
 }
 
+/// The systems a libretro core runs: those whose `libretro_databases` share a name with the core's `database` list, or,
+/// where the core lists none, the one whose `libretro_systemids` hold its `systemid` (EmuSen_LibretroHost.md §4.1).
+pub fn for_libretro(systemid: &str, databases: &[&str]) -> Vec<&'static System> {
+    let Ok(table) = table() else { return Vec::new() };
+    let databases: Vec<&str> = databases.iter().map(|d| d.trim()).filter(|d| !d.is_empty()).collect();
+    if databases.is_empty() {
+        return table.iter().filter(|s| !systemid.is_empty() && s.libretro_systemids.iter().any(|i| i == systemid)).collect();
+    }
+    table.iter().filter(|s| s.libretro_databases.iter().any(|d| databases.contains(&d.as_str()))).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn nes() -> String {
         DATA[0].1.to_string()
+    }
+
+    #[test]
+    fn a_libretro_core_runs_the_systems_its_databases_name_or_else_its_systemid() {
+        let ids = |systemid: &str, databases: &[&str]| for_libretro(systemid, databases).iter().map(|s| s.id.as_str()).collect::<Vec<_>>();
+        let gpgx = ["Sega - Master System - Mark III", "Sega - Game Gear", "Sega - Mega-CD - Sega CD", "Sega - Mega Drive - Genesis", "Sega - PICO", "Sega - SG-1000"];
+        assert_eq!(ids("mega_drive", &gpgx), ["md", "mcd", "sms", "sg1000"]);
+        assert_eq!(ids("playstation2", &["Sony - PlayStation 2"]), ["ps2"]);
+        assert_eq!(ids("game_boy", &[]), ["gb"]);
+        assert_eq!(ids("", &[" "]), Vec::<&str>::new());
+        assert_eq!(ids("wonderswan", &["Bandai - WonderSwan"]), Vec::<&str>::new());
     }
 
     #[test]

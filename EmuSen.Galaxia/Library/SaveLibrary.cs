@@ -33,6 +33,14 @@ namespace EmuSen.Galaxia.Library
         // A shared or named medium's file: <Saves>/<console>/<Cards or Console>/<name><extension>, whatever game is running.
         public static string MediumPathFor(string console, bool consoleKind, string name, string extension) => Path.Combine(MediumFolder(console, consoleKind), name + extension);
 
+        // A hosted core's named battery files, by the core's id beside its console's media, and those it removed kept in <folder>.removed - see EmuSen_LibretroHost.md §4.5.
+        public static string NamedFilesFolder(string console, bool consoleKind, string core) => Path.Combine(MediumFolder(console, consoleKind), core);
+
+        // A game's own named battery files, beside its battery save.
+        public static string GameFilesFolder(string romPath, string console) => Path.ChangeExtension(SramPathFor(romPath, console), ".files");
+
+        public const string RemovedSuffix = ".removed";
+
         // A shared or named card, the removable kind's file - see Diamond_Cards.md §9.2.
         public static string CardPathFor(string console, string name, string extension) => MediumPathFor(console, false, name, extension);
 

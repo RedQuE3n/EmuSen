@@ -24,8 +24,8 @@ namespace EmuSen.Crystal.Systems
             (nameof(SystemEntry.ScreenScraperSystem), "screenscraper_system"),
         };
 
-        // The keys a row holds beyond SystemEntry's, read into the pack's other parts: the space its RAM cheats write into, and its save media.
-        public static readonly IReadOnlyList<string> PackKeys = new[] { "cheat_space", "media", "byte_order" };
+        // The keys a row holds beyond SystemEntry's: the space its RAM cheats write into, its save media, byte order and libretro names.
+        public static readonly IReadOnlyList<string> PackKeys = new[] { "cheat_space", "media", "byte_order", "libretro_databases", "libretro_systemids" };
 
         // A save medium as a row names it, by the system whose row it is in.
         public sealed record RowMedium(string System, string Id, string Title, string Noun);

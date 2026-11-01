@@ -108,11 +108,11 @@ macro_rules! layouts {
 }
 
 layouts! {
-    sys::FileEntry = emusen_file { size, which, data, len } [];
-    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device, system];
+    sys::FileEntry = emusen_file { size, which, data, len } [name];
+    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device, system, image_path];
     sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes, lines, reserved2 } [];
     sys::Event = emusen_event { size, kind, a, b } [];
-    sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];
+    sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files, image_path];
     sys::DeviceLend = emusen_device_lend { size, api_version, get_instance_proc_addr, instance, physical_device, device, queue_family, queue_index, host_queue_family, reserved, done } [];
     sys::DeviceFrame = emusen_device_frame { size, format, buffer, offset, width, height, stride, reserved, ready, value } [];
     sys::RawFrame = emusen_raw_frame { size, element, width, height, stride, reserved, bytes } [];
@@ -177,6 +177,7 @@ constants! {
     EMUSEN_CAP_TELEMETRY = caps::TELEMETRY,
     EMUSEN_CAP_PRESENCE = caps::PRESENCE,
     EMUSEN_CAP_DEBUG_TRANSLATE = caps::DEBUG_TRANSLATE,
+    EMUSEN_CAP_IMAGE_PATH = caps::IMAGE_PATH,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
     EMUSEN_FRAME_CHEATS_HELD = flags::FRAME_CHEATS_HELD,
@@ -185,6 +186,7 @@ constants! {
     EMUSEN_FILE_BATTERY = flags::FILE_BATTERY,
     EMUSEN_NO_COMPARE = flags::NO_COMPARE,
     EMUSEN_FILE_MEDIA = flags::FILE_MEDIA,
+    EMUSEN_FILE_NAMED = flags::FILE_NAMED,
     EMUSEN_MEDIA_RESTORE = flags::MEDIA_RESTORE,
     EMUSEN_CREATE_LENT = flags::CREATE_LENT,
     EMUSEN_MEDIA_LENT = flags::MEDIA_LENT,

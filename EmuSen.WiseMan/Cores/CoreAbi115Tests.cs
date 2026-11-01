@@ -25,10 +25,10 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_interface_is_1_15()
+        public void The_interface_is_1_15_or_later()
         {
-            Assert.Equal((1u, 15u), (CoreInterface.Major, CoreInterface.Minor));
-            Assert.Equal(0x1000Fu, CoreAdapterTests.Full.AbiVersion);
+            Assert.True(CoreInterface.Major == 1 && CoreInterface.Minor >= 15);
+            Assert.True(CoreAdapterTests.Full.AbiVersion >= 0x1000Fu);
         }
 
         // §6.40: a listed system beside an image is made, and one core info does not list is refused with BAD_IMAGE and words before the core sees it.

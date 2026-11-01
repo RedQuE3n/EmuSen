@@ -15,5 +15,7 @@
   "screenscraper_system": 109,
   "cheat_space": "RAM",
   "media": [],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Sega - SG-1000"],
+  "libretro_systemids": []
 }

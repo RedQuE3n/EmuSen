@@ -72,6 +72,9 @@ struct Core {
     options: Options,
     format: c_int,
     picture: Vec<u8>,
+    /// The frame the picture shows, and the last one drawn, which `tc_lag` shows next; neither is in the state.
+    drawing: u64,
+    shown: u64,
     width: u32,
     height: u32,
     fps_num: u64,
@@ -106,6 +109,8 @@ impl Core {
             format: options.pixel_format(),
             options,
             picture: vec![0u8; MAX_WIDTH as usize * MAX_HEIGHT as usize * 4],
+            drawing: 0,
+            shown: 0,
             width: BASE_WIDTH,
             height: BASE_HEIGHT,
             fps_num: 60,
@@ -146,7 +151,7 @@ impl Core {
     /// The colour of a pixel, from the frame, the place, the lives and the pad.
     fn colour(&self, x: u32, y: u32) -> (u8, u8, u8) {
         let pad = u16::from_le_bytes([self.ram[PAD], self.ram[PAD + 1]]);
-        let r = (x as u64 + self.frame) as u8;
+        let r = (x as u64 + self.drawing) as u8;
         let g = (y * 2 + self.ram[LIVES] as u32 * 40) as u8;
         let b = (pad as u8) ^ (x >> 3) as u8;
         (r, g, b)
@@ -384,9 +389,17 @@ static DISK: sys::retro_disk_control_ext_callback = sys::retro_disk_control_ext_
 /// The descriptors of a pad's controls, the console's own words for the RetroPad's.
 const DESCRIPTORS: [(c_uint, &CStr); 6] = [(0, c"Cross"), (8, c"Circle"), (1, c"Square"), (9, c"Triangle"), (3, c"Start"), (2, c"Select")];
 
+/// What the core says when it fails to start: at load, as an error; at its first frame, as PCEE2 says it, at info level.
+pub const FAIL_AT_LOAD: &str = "the test machine found no firmware in its system folder";
+pub const FAIL_AT_FIRST_FRAME: &str = "the test machine could not start";
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> bool {
     let options = Options::read();
+    if options.fail == "load" {
+        log(sys::LOG_ERROR, FAIL_AT_LOAD);
+        return false;
+    }
     if options::get("tc_late_option") == "on" {
         options::declare_late();
     }
@@ -413,7 +426,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     {
         log(sys::LOG_INFO, &format!("game path: {}", unsafe { std::ffi::CStr::from_ptr(game.path) }.to_string_lossy()));
     }
-    let mut format = core.format;
+    let mut format = if options.hw.starts_with("vulkan") { options.declared_format() } else { core.format };
     if !environment(env::SET_PIXEL_FORMAT, &mut format as *mut c_int as *mut c_void) {
         log(sys::LOG_WARN, "the pixel format was refused; drawing 0RGB1555");
         core.format = sys::PIXEL_FORMAT_0RGB1555;
@@ -435,7 +448,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     if options.files {
         core.files_root = directories();
     }
-    if options.hw.starts_with("vulkan") && !vulkan::ask(options.hw == "vulkan_bgra") {
+    if options.hw.starts_with("vulkan") && !vulkan::ask(&options.hw) {
         log(sys::LOG_ERROR, "the host refused a Vulkan context");
         return false;
     }
@@ -635,6 +648,7 @@ pub extern "C" fn retro_run() {
             }
         }
         let core = guard.as_mut().unwrap();
+        core.drawing = if core.options.lag { std::mem::replace(&mut core.shown, core.frame) } else { core.frame };
         let (data, pitch) = match target {
             Some((data, pitch)) => {
                 let out = unsafe { std::slice::from_raw_parts_mut(data, pitch * height as usize) };
@@ -694,6 +708,9 @@ pub extern "C" fn retro_run() {
         }
     }
 
+    if frame == 1 && options.fail == "first_frame" {
+        log(sys::LOG_INFO, FAIL_AT_FIRST_FRAME);
+    }
     if frame == 2 && options.fault != "none" {
         let found = fault::run(&options.fault);
         with_core(|c| c.ram[FAULT] = found);

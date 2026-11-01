@@ -9389,9 +9389,8 @@ registry's halt unchanged. Mistress's Emulation menu offers it as Frame Advance,
 The crate's header test and baseline (eight `@1.4` lines); `CrystalHeaderTests` and `ContractShapeTests` for the binding;
 `CrystalParityTests`' frames case through both implementations, `frame_advance` among its steps (one frame run, then
 held) with `picture_ring` null for a core without `DEVICE_RING`; `ApiRingTests` on the RX 6800 for the ring itself
-(`EmuSen_LibretroHost.md` §10h). Not yet graded: a ring replaced at `MACHINE_INFO` (neither the test core nor PCEE2 grows
-its picture past the maxima it declares) and a crash with a ring lent, which the Rust half alone handles fully and
-which waits for the Rust host to open hosted cores.
+(`EmuSen_LibretroHost.md` §10h). On the Rust runtime (2026-11-01), the same four cases through the platform library's
+exports, a ring replaced at `MACHINE_INFO` and a crash with a ring lent among them (`EmuSen_LibretroHost.md` §10l).
 
 ---
 
@@ -9403,3 +9402,17 @@ documented in "chdman – CHD (Compressed Hunks of Data) File Manager", MAME Doc
 <https://docs.mamedev.org/tools/chdman.html>, read 2026-10-25; every chdman run the project records was of release
 0.289. EmuSen reads CHD through the `chd` crate (BSD-3-Clause, Ronny Chan; `THIRD_PARTY_NOTICES.md`), whose source is
 not read, and MAME's source is never read (`EmuSen_Disc.md` §1, §8).
+
+## 34. The frontend API's 1.5, 2026-11-01: the libretro entries in the cores listing
+
+Decided 2026-11-01 by the tester. `emusen_crystal_cores`' rows gain `"libretro"`: null, or an installed libretro core's
+`{folder, file, sha256, corename, name, version, license, authors, source, build, trust}` (`EmuSen_Cores.md` §7.3). A row's
+`trust` may be `needs_refresh`. An entry whose core waits for its approval is a last row, its `engine` null. The shape of
+an answer changed, so the minor is 1.5 (`EMUSEN_CRYSTAL_MINOR`, `abi.rs`, the client's `CrystalAbi`). No function or struct
+changed. `EmuSen_LibretroHost.md` §10m has the design and its proofs.
+
+**The C# implementation stays at 1.4.** It implements 1.4, and its `CrystalNumbers` says so. A 1.4 runtime binds under the
+1.5 client, as a minor allows, and its rows have no `libretro`. `CrystalHeaderTests` holds the header equal to the client's
+numbers, as `crystal_abi.rs` holds it to the Rust's; the C# mirror's minor is checked only to be at or below the header's,
+until B10 deletes it. `CoreHostParityTests` sets the key aside on the Rust side before comparing.
+

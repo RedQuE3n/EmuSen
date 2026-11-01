@@ -95,6 +95,8 @@ pub enum Standing {
     Approved,
     NeedsApproval,
     NotRead,
+    /// A libretro entry whose proxy or adapter copy is not this installation's (EmuSen_LibretroHost.md §1.3).
+    NeedsRefresh,
 }
 
 impl Standing {
@@ -104,6 +106,7 @@ impl Standing {
             Standing::Approved => "approved",
             Standing::NeedsApproval => "needs_approval",
             Standing::NotRead => "not_read",
+            Standing::NeedsRefresh => "needs_refresh",
         }
     }
 }
@@ -153,7 +156,8 @@ impl Trust {
             return Err("is not a regular file".to_owned());
         }
         let parent = real.parent();
-        let Some(home) = self.directories.iter().map(|(d, _)| d).chain(self.player.iter()).find(|d| parent == Some(d.as_path())) else {
+        let entry = parent.filter(|p| p.parent().is_some_and(|l| self.player.iter().any(|d| d.join(emusen_core_entry::LIBRETRO) == l)));
+        let Some(home) = self.directories.iter().map(|(d, _)| d.as_path()).chain(self.player.iter().map(PathBuf::as_path)).chain(entry).find(|d| parent == Some(*d)) else {
             return Err("lies outside the cores directories once its links are resolved".to_owned());
         };
         #[cfg(unix)]
@@ -200,6 +204,13 @@ impl Trust {
         let hash = sha256.to_ascii_lowercase();
         let (Some(dir), Some(name)) = (library.parent().and_then(|d| std::fs::canonicalize(d).ok()), library.file_name().and_then(|n| n.to_str())) else { return false };
         self.directories.iter().any(|(d, entries)| *d == dir && entries.iter().any(|e| e.name == name && e.sha256 == hash))
+    }
+
+    /// Whether any installation directory's manifest lists a library of this file name with this hash, wherever the
+    /// copy being checked lies: an entry's proxy and adapter copies are vouched for so (EmuSen_LibretroHost.md §1.3).
+    pub fn installation_lists(&self, name: &str, sha256: &str) -> bool {
+        let hash = sha256.to_ascii_lowercase();
+        self.directories.iter().any(|(_, entries)| entries.iter().any(|e| e.name == name && e.sha256 == hash))
     }
 
     /// Where the listing places a library that has a sidecar: by its manifest, its approval, or neither.

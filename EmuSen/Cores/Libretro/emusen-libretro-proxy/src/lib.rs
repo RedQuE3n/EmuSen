@@ -100,6 +100,48 @@ fn runner() -> Result<PathBuf, String> {
     [dir.join("emusen-core-runner"), dir.join("cores").join("emusen-core-runner")].into_iter().find(|p| p.is_file()).ok_or_else(|| format!("no emusen-core-runner beside {}", exe.display()))
 }
 
+/// How deep and how wide the system folder is searched for links, so that a folder of dumped textures cannot stall a create.
+const LINK_DEPTH: usize = 8;
+const LINK_ENTRIES: usize = 20_000;
+
+/// The system folder the core is given, and the resolved target of every link under it, each to be granted read-only: a
+/// file the player linked into the folder resolves outside it, where Landlock checks it (EmuSen_LibretroHost.md §10n).
+fn system_reads(system: &Path) -> Vec<PathBuf> {
+    let mut reads = Vec::new();
+    let Ok(root) = std::fs::canonicalize(system) else { return reads };
+    reads.push(root.clone());
+    let mut seen = vec![root.clone()];
+    let mut stack = vec![(root, 0usize)];
+    let mut entries = 0;
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(list) = std::fs::read_dir(&dir) else { continue };
+        for item in list.flatten() {
+            entries += 1;
+            if entries > LINK_ENTRIES {
+                return reads;
+            }
+            let path = item.path();
+            let Ok(kind) = item.file_type() else { continue };
+            let target = if kind.is_symlink() {
+                let Ok(target) = std::fs::canonicalize(&path) else { continue };
+                if !reads.iter().any(|r| target.starts_with(r)) {
+                    reads.push(target.clone());
+                }
+                target
+            } else if kind.is_dir() {
+                path
+            } else {
+                continue;
+            };
+            if depth + 1 < LINK_DEPTH && target.is_dir() && !seen.contains(&target) {
+                seen.push(target.clone());
+                stack.push((target, depth + 1));
+            }
+        }
+    }
+    reads
+}
+
 struct Libretro;
 
 impl Target for Libretro {
@@ -108,12 +150,13 @@ impl Target for Libretro {
     fn spawn(image_path: Option<&str>) -> Result<Spawn, String> {
         let e = entry()?;
         let runner = runner()?;
-        let data = e.folder.parent().unwrap_or(&e.folder).join(".data").join(&e.stem);
+        let data = emusen_core_entry::data_folder(&e.folder, &e.stem);
         std::fs::create_dir_all(data.join("cache").join("mesa")).map_err(|err| format!("{}: {err}", data.display()))?;
         let mut read: Vec<PathBuf> = ["/etc", "/proc/self", "/proc/cpuinfo", "/proc/meminfo", "/proc/stat", "/sys"].iter().map(PathBuf::from).filter(|p| p.exists()).collect();
         if let Some(dir) = image_path.and_then(|p| Path::new(p).parent()) {
             read.push(dir.to_path_buf());
         }
+        read.extend(system_reads(&emusen_core_entry::system_folder(&e.folder, &e.stem)));
         let mut read_exec: Vec<PathBuf> = ["/usr", "/lib", "/lib64"].iter().map(PathBuf::from).filter(|p| p.exists()).collect();
         read_exec.push(e.folder.clone());
         read_exec.extend(runner.parent().map(Path::to_path_buf));

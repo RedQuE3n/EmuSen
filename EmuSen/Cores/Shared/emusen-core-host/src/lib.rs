@@ -11,6 +11,7 @@
 
 pub mod descriptors;
 pub mod discovery;
+pub mod entry;
 pub mod exports;
 pub mod latch;
 pub mod layout;
@@ -21,7 +22,7 @@ pub mod sha256;
 pub mod sidecar;
 pub mod trust;
 
-pub use discovery::{Discovered, Discovery};
+pub use discovery::{Discovered, Discovery, HostedCore};
 pub use latch::InputLatch;
 pub use layout::StateLayout;
 pub use library::Library;

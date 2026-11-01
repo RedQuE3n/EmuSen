@@ -1,7 +1,7 @@
 //! The test core's Vulkan path: the same picture as its software one, uploaded into an image of its own device and
-//! handed by `set_image`, the device made through the negotiation interface v2 (EmuSen_LibretroHost.md §9, §10f).
+//! handed by `set_image`, the device made through the negotiation interface v2, or v1 (EmuSen_LibretroHost.md §9, §10f, §10o).
 
-use std::ffi::{c_uint, c_void};
+use std::ffi::{c_char, c_uint, c_void};
 use std::sync::Mutex;
 
 use ash::vk;
@@ -36,6 +36,46 @@ static NEGOTIATION: retro_hw_render_context_negotiation_interface_vulkan = retro
     create_device2: Some(create_device2),
 };
 
+/// Negotiation v1 (`tc_hw=vulkan_v1`): the core makes its device itself, through the vkGetInstanceProcAddr it is given.
+static NEGOTIATION_V1: retro_hw_render_context_negotiation_interface_vulkan = retro_hw_render_context_negotiation_interface_vulkan {
+    interface_type: INTERFACE_VULKAN,
+    interface_version: 1,
+    get_application_info: None,
+    create_device: Some(create_device),
+    destroy_device: None,
+    create_instance: None,
+    create_device2: None,
+};
+/// `tc_hw=vulkan_v1_loader`: v1, its vkCreateDevice taken from the system's loader rather than the one it is given.
+static OWN_LOADER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The system loader's vkGetInstanceProcAddr, the library the host has already loaded.
+fn loader_gipa() -> Option<vk::PFN_vkGetInstanceProcAddr> {
+    let lib = unsafe { libc::dlopen(c"libvulkan.so.1".as_ptr(), libc::RTLD_NOW | libc::RTLD_NOLOAD) };
+    let f = if lib.is_null() { std::ptr::null_mut() } else { unsafe { libc::dlsym(lib, c"vkGetInstanceProcAddr".as_ptr()) } };
+    (!f.is_null()).then(|| unsafe { std::mem::transmute::<*mut c_void, vk::PFN_vkGetInstanceProcAddr>(f) })
+}
+
+/// The first queue family that draws and computes, which both device paths take.
+fn graphics_family(i: &ash::Instance, gpu: vk::PhysicalDevice) -> Option<usize> {
+    let families = unsafe { i.get_physical_device_queue_family_properties(gpu) };
+    families.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE))
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe extern "C" fn create_device(context: *mut retro_vulkan_context, instance: vk::Instance, gpu: vk::PhysicalDevice, _surface: vk::SurfaceKHR, gipa: vk::PFN_vkGetInstanceProcAddr, extensions: *const *const c_char, extension_count: c_uint, _layers: *const *const c_char, _layer_count: c_uint, _features: *const vk::PhysicalDeviceFeatures) -> bool {
+    let gipa = if OWN_LOADER.load(std::sync::atomic::Ordering::Relaxed) { loader_gipa().unwrap_or(gipa) } else { gipa };
+    let i = unsafe { ash::Instance::load(&ash::StaticFn { get_instance_proc_addr: gipa }, instance) };
+    let Some(family) = graphics_family(&i, gpu) else { return false };
+    let priority = [1.0f32];
+    let queue = [vk::DeviceQueueCreateInfo::default().queue_family_index(family as u32).queue_priorities(&priority)];
+    let names = if extension_count == 0 || extensions.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(extensions, extension_count as usize) } };
+    let Ok(d) = (unsafe { i.create_device(gpu, &vk::DeviceCreateInfo::default().queue_create_infos(&queue).enabled_extension_names(names), None) }) else { return false };
+    let q = unsafe { d.get_device_queue(family as u32, 0) };
+    unsafe { *context = retro_vulkan_context { gpu, device: d.handle(), queue: q, queue_family_index: family as u32, presentation_queue: q, presentation_queue_family_index: family as u32 } };
+    true
+}
+
 unsafe extern "C" fn create_instance(_gipa: vk::PFN_vkGetInstanceProcAddr, app: *const vk::ApplicationInfo<'_>, wrapper: retro_vulkan_create_instance_wrapper_t, opaque: *mut c_void) -> vk::Instance {
     let fallback = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
     let info = vk::InstanceCreateInfo::default().application_info(unsafe { app.as_ref() }.unwrap_or(&fallback));
@@ -44,8 +84,7 @@ unsafe extern "C" fn create_instance(_gipa: vk::PFN_vkGetInstanceProcAddr, app: 
 
 unsafe extern "C" fn create_device2(context: *mut retro_vulkan_context, instance: vk::Instance, gpu: vk::PhysicalDevice, _surface: vk::SurfaceKHR, gipa: vk::PFN_vkGetInstanceProcAddr, wrapper: retro_vulkan_create_device_wrapper_t, opaque: *mut c_void) -> bool {
     let i = unsafe { ash::Instance::load(&ash::StaticFn { get_instance_proc_addr: gipa }, instance) };
-    let families = unsafe { i.get_physical_device_queue_family_properties(gpu) };
-    let Some(family) = families.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)) else { return false };
+    let Some(family) = graphics_family(&i, gpu) else { return false };
     let priority = [1.0f32];
     let queue = [vk::DeviceQueueCreateInfo::default().queue_family_index(family as u32).queue_priorities(&priority)];
     let device = unsafe { wrapper(gpu, opaque, &vk::DeviceCreateInfo::default().queue_create_infos(&queue)) };
@@ -118,13 +157,16 @@ unsafe extern "C" fn context_destroy() {
 }
 
 /// At load: the negotiation interface and a Vulkan 1.1 context asked for; false where the host refuses either.
-pub fn ask(bgra: bool) -> bool {
-    *FORMAT.lock().unwrap() = if bgra { vk::Format::B8G8R8A8_UNORM } else { vk::Format::R8G8B8A8_UNORM };
+pub fn ask(hw: &str) -> bool {
+    *FORMAT.lock().unwrap() = if hw == "vulkan_bgra" { vk::Format::B8G8R8A8_UNORM } else { vk::Format::R8G8B8A8_UNORM };
+    let v1 = hw.starts_with("vulkan_v1");
+    OWN_LOADER.store(hw == "vulkan_v1_loader", std::sync::atomic::Ordering::Relaxed);
     let mut support = [INTERFACE_VULKAN, 0u32];
     crate::environment(env::GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT, support.as_mut_ptr() as *mut c_void);
     let mut preferred: c_uint = 0;
     crate::environment(env::GET_PREFERRED_HW_RENDER, &mut preferred as *mut c_uint as *mut c_void);
-    if support[1] >= 2 && !crate::environment(env::SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE, &NEGOTIATION as *const _ as *mut c_void) {
+    let negotiation = if v1 { &NEGOTIATION_V1 } else { &NEGOTIATION };
+    if support[1] >= negotiation.interface_version && !crate::environment(env::SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE, negotiation as *const _ as *mut c_void) {
         return false;
     }
     let mut hw = sys::retro_hw_render_callback {

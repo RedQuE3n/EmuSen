@@ -1,7 +1,9 @@
 //! The v1 engines in the cores directories, listed from their sidecars alone, and opened under the trust rules when a
 //! game is opened on one; the C# host's `CoreDiscovery`, rule for rule, with §7.2's rules 1 to 3 added
 //! (EmuSen_CoreAPI.md §7, EmuSen_Backend.md §27.5). The player's directories come after the installation's, their
-//! libraries hashed at the scan and those without a sidecar listed as not yet read (EmuSen_Backend.md §29.40.4).
+//! libraries hashed at the scan and those without a sidecar listed as not yet read (EmuSen_Backend.md §29.40.4); then
+//! their installed libretro cores, each a folder of [`entry`](crate::entry)'s, ordered among a system's engines by
+//! the hosted list's rule (EmuSen_LibretroHost.md §10k, EmuSen_Cores.md §4.8).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,6 +12,7 @@ use std::sync::{Mutex, OnceLock};
 use emusen_native::json;
 
 use crate::descriptors::{CoreSystem, deep_equal};
+use crate::entry::{Entry, Waiting};
 use crate::library::{Library, full_path};
 use crate::sidecar::{SUFFIX, Sidecar};
 use crate::trust::{Standing, Trust};
@@ -34,6 +37,8 @@ pub struct Discovered {
     pub sidecar: Sidecar,
     /// Found in one of the player's directories.
     pub player: bool,
+    /// The installed libretro core whose proxy copy the sidecar describes; none for every other library.
+    pub entry: Option<Entry>,
     opened: OnceLock<Result<&'static Library, Refusal>>,
 }
 
@@ -71,10 +76,22 @@ impl Discovered {
         if !hash.eq_ignore_ascii_case(&self.sidecar.sha256) {
             return Err(Refusal::of(format!("{name} is not the library its sidecar describes (its SHA-256 differs); it was not loaded")));
         }
-        if !trust.vouches(path, &hash) {
-            return Err(Refusal { words: format!("{name} is in no cores manifest and has not been approved; it was not loaded"), approval: true });
-        }
-        let lib = Library::load(path).map_err(|e| Refusal::of(format!("{name}: {}", e.host_words())))?;
+        let expected = match &self.entry {
+            Some(entry) => {
+                let libretro = self.sidecar.info.libretro.as_ref();
+                crate::entry::check(entry, libretro, trust).map_err(|h| Refusal { words: h.words, approval: h.approval })?;
+                libretro.map(|l| l.sha256.as_str())
+            }
+            None if !trust.vouches(path, &hash) => {
+                return Err(Refusal { words: format!("{name} is in no cores manifest and has not been approved; it was not loaded"), approval: true });
+            }
+            None => None,
+        };
+        let loaded = match expected {
+            Some(sha256) => Library::load_expecting(path, sha256),
+            None => Library::load(path),
+        };
+        let lib = loaded.map_err(|e| Refusal::of(format!("{name}: {}", e.host_words())))?;
         record_loaded(path, hash);
         let checked = lib.check().map_err(|_| Refusal::of(lib.report()))?;
         let same = json::parse(checked.info.as_bytes()).is_ok_and(|v| deep_equal(&v, &self.sidecar.info_json));
@@ -100,7 +117,9 @@ impl Discovered {
 
     /// How far the library is trusted, by its sidecar's hash, which a player's library was found to have at the scan.
     pub fn standing(&self, trust: &Trust) -> Standing {
-        if self.player {
+        if let Some(entry) = &self.entry {
+            crate::entry::standing(entry, self.sidecar.info.libretro.as_ref(), trust)
+        } else if self.player {
             if trust.approved(&self.sidecar.sha256) { Standing::Approved } else { Standing::NeedsApproval }
         } else {
             trust.standing(&self.sidecar.library_path, &self.sidecar.sha256)
@@ -203,7 +222,7 @@ fn record_loaded(path: &Path, hash: String) {
 }
 
 /// A player's library's hash for the listing: the loaded image's, or the file's, read once while it is unchanged.
-fn scan_hash(path: &Path) -> Option<String> {
+pub(crate) fn scan_hash(path: &Path) -> Option<String> {
     let full = full_path(path);
     let stamp = stamp_of(path)?;
     match hashes().lock().unwrap_or_else(|e| e.into_inner()).get(&full) {
@@ -219,11 +238,22 @@ fn scan_hash(path: &Path) -> Option<String> {
     Some(hash)
 }
 
+/// A libretro core the hosted list names: the systems it may run, and those it is the default engine of ahead of a
+/// native core (`emusen_systems::libretro_cores`, EmuSen_Cores.md §4.7 and §4.8).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HostedCore {
+    pub stem: String,
+    pub systems: Vec<String>,
+    pub default_for: Vec<String>,
+}
+
 /// The engines in a list of cores directories.
 pub struct Discovery {
     pub include_development: bool,
     found: Vec<Discovered>,
     unread: Vec<Unread>,
+    waiting: Vec<Waiting>,
+    hosted: Vec<HostedCore>,
 }
 
 fn file_names(dir: &Path) -> Option<Vec<String>> {
@@ -243,7 +273,7 @@ impl Discovery {
     /// As `scan`, then the player's directories: each library there hashed, a sidecar whose hash is not its library's
     /// set aside, and a library no sidecar describes listed as not yet read.
     pub fn scan_with_player(installation: &[PathBuf], player: &[PathBuf], include_development: bool) -> Discovery {
-        let mut d = Discovery { include_development, found: Vec::new(), unread: Vec::new() };
+        let mut d = Discovery { include_development, found: Vec::new(), unread: Vec::new(), waiting: Vec::new(), hosted: Vec::new() };
         let mut seen: Vec<&Path> = Vec::new();
         for (dir, mine) in installation.iter().map(|d| (d, false)).chain(player.iter().map(|d| (d, true))) {
             if seen.contains(&dir.as_path()) {
@@ -261,9 +291,10 @@ impl Discovery {
                     }
                 }
                 described.push(sidecar.library_path.clone());
-                d.admit(sidecar, mine);
+                d.admit(sidecar, mine, None);
             }
             if mine {
+                d.scan_entries(dir);
                 let suffix = std::env::consts::DLL_SUFFIX;
                 for name in names.iter().filter(|n| n.ends_with(suffix) && n.len() > suffix.len()) {
                     let path = dir.join(name);
@@ -279,10 +310,70 @@ impl Discovery {
         d
     }
 
-    fn admit(&mut self, sidecar: Sidecar, player: bool) {
+    fn admit(&mut self, sidecar: Sidecar, player: bool, entry: Option<Entry>) {
         if sidecar.abi.starts_with("1.") && (!sidecar.development || self.include_development) && !self.found.iter().any(|c| c.sidecar.info.id == sidecar.info.id) {
-            self.found.push(Discovered { sidecar, player, opened: OnceLock::new() });
+            self.found.push(Discovered { sidecar, player, entry, opened: OnceLock::new() });
         }
+    }
+
+    /// A player's directory's libretro entries: each with its proxy's sidecar listed as an engine, and each whose files
+    /// on disk have no sidecar of theirs (none, one of another build of the core, or one of a proxy copy since refreshed)
+    /// listed as waiting to be read; an approval of the core's hash reads it.
+    fn scan_entries(&mut self, dir: &Path) {
+        for entry in Entry::list(dir).unwrap_or_default() {
+            let sidecar = Sidecar::read(&crate::sidecar::path_for(&entry.broker_path()));
+            let hash = crate::entry::core_hash(&entry);
+            let proxy = scan_hash(&entry.broker_path());
+            let current = matches!((&sidecar, &hash, &proxy), (Some(s), Some(h), Some(p)) if s.info.libretro.as_ref().is_some_and(|l| l.sha256.eq_ignore_ascii_case(h)) && s.sha256.eq_ignore_ascii_case(p));
+            if let Some(sha256) = hash.filter(|_| !current) {
+                self.waiting.push(Waiting { entry: entry.clone(), sha256 });
+            }
+            if let Some(sidecar) = sidecar {
+                self.admit(sidecar, true, Some(entry));
+            }
+        }
+    }
+
+    /// The hosted list the rule orders a system's engines by and holds each entry to; none treats every entry as a
+    /// hosted core named nowhere.
+    pub fn with_hosted(mut self, hosted: Vec<HostedCore>) -> Discovery {
+        self.hosted = hosted;
+        self
+    }
+
+    /// The entries whose core waits for an approval to be read, in the scan's order.
+    pub fn waiting(&self) -> &[Waiting] {
+        &self.waiting
+    }
+
+    /// The systems the hosted list's line names for an entry, none where the list names it nowhere.
+    pub fn hosted_systems(&self, entry: &Entry) -> &[String] {
+        self.listed(entry).map_or(&[], |h| h.systems.as_slice())
+    }
+
+    fn listed(&self, entry: &Entry) -> Option<&HostedCore> {
+        self.hosted.iter().find(|h| h.stem == entry.stem)
+    }
+
+    /// Whether an engine offers a system: offered at all, and for an entry the hosted list names, one its line names.
+    pub fn offers(&self, core: &Discovered, system: &CoreSystem) -> bool {
+        self.offered(system) && core.entry.as_ref().and_then(|e| self.listed(e)).is_none_or(|h| h.systems.contains(&system.id))
+    }
+
+    /// The rule's place of an engine among a system's: the hosted core the list makes its default, then the native
+    /// cores, then the other hosted cores.
+    fn rank(&self, core: &Discovered, system: Option<&str>) -> u8 {
+        match &core.entry {
+            None => 1,
+            Some(e) if system.is_some_and(|s| self.listed(e).is_some_and(|h| h.default_for.iter().any(|d| d == s))) => 0,
+            Some(_) => 2,
+        }
+    }
+
+    /// Engines in the rule's order for `system`, each group in discovery's order; the first is the default.
+    pub fn in_rule_order<'a>(&self, mut engines: Vec<&'a Discovered>, system: Option<&str>) -> Vec<&'a Discovered> {
+        engines.sort_by_key(|c| self.rank(c, system));
+        engines
     }
 
     pub fn found(&self) -> &[Discovered] {
@@ -304,18 +395,60 @@ impl Discovery {
         !system.development || self.include_development
     }
 
-    /// The engines whose offered systems claim `extension`, without regard to case.
-    pub fn for_extension<'a>(&'a self, extension: &str) -> impl Iterator<Item = &'a Discovered> {
+    /// The engines whose offered systems claim `extension`, without regard to case, in the rule's order for the system
+    /// each runs it as.
+    pub fn for_extension<'a>(&'a self, extension: &str) -> std::vec::IntoIter<&'a Discovered> {
         let e = extension.to_lowercase();
-        self.found.iter().filter(move |c| c.sidecar.info.systems.iter().any(|s| self.offered(s) && s.extensions.contains(&e)))
+        let system = |c: &'a Discovered| c.sidecar.info.systems.iter().find(|s| self.offers(c, s) && s.extensions.contains(&e));
+        let mut found: Vec<(&Discovered, &CoreSystem)> = self.found.iter().filter_map(|c| system(c).map(|s| (c, s))).collect();
+        found.sort_by_key(|(c, s)| self.rank(c, Some(&s.id)));
+        found.into_iter().map(|(c, _)| c).collect::<Vec<_>>().into_iter()
     }
 
-    /// The engines that offer a system, by its id.
-    pub fn for_system<'a>(&'a self, id: &'a str) -> impl Iterator<Item = &'a Discovered> {
-        self.found.iter().filter(move |c| c.sidecar.info.systems.iter().any(|s| s.id == id && self.offered(s)))
+    /// The engines that offer a system, by its id, in the rule's order.
+    pub fn for_system<'a>(&'a self, id: &str) -> std::vec::IntoIter<&'a Discovered> {
+        let found = self.found.iter().filter(|c| c.sidecar.info.systems.iter().any(|s| s.id == id && self.offers(c, s))).collect();
+        self.in_rule_order(found, Some(id)).into_iter()
     }
 
     pub fn by_engine_name(&self, name: &str) -> Option<&Discovered> {
         self.found.iter().find(|c| c.engine_name() == name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sidecar(path: &Path, id: &str, systems: &[(&str, &str)]) {
+        let systems: Vec<String> = systems.iter().map(|(s, e)| format!(r#"{{"id":"{s}","name":"{s}","extensions":["{e}"]}}"#)).collect();
+        let library = path.file_name().unwrap().to_str().unwrap().trim_end_matches(SUFFIX);
+        let text = format!(r#"{{"sidecar":1,"library":"{library}","sha256":"","abi":"1.17","info":{{"id":"{id}","name":"{id}","systems":[{}]}}}}"#, systems.join(","));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn a_systems_engines_follow_the_hosted_lists_rule_and_an_entry_offers_only_its_lines_systems() {
+        let root = std::env::temp_dir().join(format!("core-host-rule-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (native, player) = (root.join("lib"), root.join("Cores"));
+        sidecar(&native.join("libnephrite.so.core.json"), "nephrite", &[("md", ".md")]);
+        sidecar(&native.join("libsapphire.so.core.json"), "sapphire", &[("ps2", ".iso")]);
+        let entry = |stem: &str| crate::sidecar::path_for(&Entry::new(&player, stem).unwrap().broker_path());
+        sidecar(&entry("genesis_plus_gx"), "genesis_plus_gx", &[("md", ".md"), ("gg", ".gg")]);
+        sidecar(&entry("pcee2"), "pcee2", &[("ps2", ".iso")]);
+        let hosted = vec![
+            HostedCore { stem: "pcee2".into(), systems: vec!["ps2".into()], default_for: vec!["ps2".into()] },
+            HostedCore { stem: "genesis_plus_gx".into(), systems: vec!["md".into()], default_for: vec![] },
+        ];
+        let d = Discovery::scan_with_player(&[native], &[player], false).with_hosted(hosted);
+        let ids = |it: std::vec::IntoIter<&Discovered>| it.map(|c| c.sidecar.info.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(d.for_system("md")), ["nephrite", "genesis_plus_gx"], "native first");
+        assert_eq!(ids(d.for_system("ps2")), ["pcee2", "sapphire"], "the list's one default ahead of the native core");
+        assert_eq!(ids(d.for_extension(".ISO")), ["pcee2", "sapphire"]);
+        assert!(d.for_system("gg").next().is_none(), "a system its list line does not name is not offered");
+        assert!(d.found().iter().filter(|c| c.entry.is_some()).all(|c| c.entry.as_ref().unwrap().stem == c.sidecar.info.id));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -263,6 +263,7 @@ On Linux, before loading the target, the runner sets `no_new_privs` and restrict
 | read | `/proc/self`, `/sys/class/drm`, `/sys/devices` (the GPU's nodes as the driver reads them) | the driver's discovery of the card |
 | read, write, and `LANDLOCK_ACCESS_FS_IOCTL_DEV` where the Landlock ABI is 5 or later | `/dev/dri/renderD*` | the render node, and the ioctls every GPU submission is |
 | read | the image's folder | a sheet's or `.m3u`'s companions beside the image |
+| read | the core's system folder and the resolved target of each link under it (§10n) | firmware the player linked into the folder |
 | read, write | the core's private folders (§4.5), its Mesa shader cache among them | the core's own data |
 | none | the network, where the Landlock ABI is 4 or later | |
 
@@ -316,6 +317,41 @@ Vulkan program must; that path is tested on the presenter's side, and the limit 
 | `set_options` bit 0 | `GET_AUDIO_VIDEO_ENABLE` answers video off for that frame |
 | `frame_rate` | `timing.fps` as the exact ratio its `double` holds where the denominator stays under 10⁶, else the nearest with one (59.94005994 → 60000/1001); a change raises `MACHINE_INFO`, and pacing is the presenter's, as for every core |
 | `phases` (`PHASES`) | `retro_run`, picture, sound, files, as nanoseconds, so that the host's own tools measure a hosted core as any other |
+
+### 4.1a Which games a hosted core takes (2026-11-01)
+
+A hosted core takes a game file of a system when three conditions hold: its line in `libretro-cores.tsv` names the
+system; the file's name ends, past a dot and ignoring case, in one of the extensions its own `.info` lists under
+`supported_extensions`; and no named exception of `libretro-extensions.tsv` drops that extension for that core and
+system (one may also add one). The rule is one pure function in `emusen_systems::libretro_extensions`,
+
+    pub fn takes(stem: &str, supported: &[String], system: &str, game: &Path) -> bool
+
+with `info_extensions(info_text)` reading the `.info`'s value and `takes_under` the same rule over lists a test supplies.
+The ordering of a console's engines (§4.8 of `EmuSen_Cores.md`: the native core first, PCEE2 first on the PlayStation 2
+while Sapphire is developed) is the discovery's, which calls this function to filter and keeps its own order.
+
+**Sources.** The extensions are the cores' public `.info` files (libretro-core-info), never a core's source. Two are
+cited by the tests: PCEE2 lists `iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx`, so it refuses a `.cue` and a cue/bin set
+reaches it through its `.bin`; Flycast lists `chd|cdi|iso|elf|bin|cue|gdi|lst|zip|dat|7z|m3u`, for each of `dreamcast`,
+`naomi` and `atomiswave`, and refuses a `.ccd` although the Dreamcast's table row lists one.
+
+**Exceptions as data.** Each line names a core, one system its line names, the extensions added and dropped, and the
+rule that sets it; the list is checked against `libretro-cores.tsv` when read, and a line of another shape is refused
+with its number. The shipped file names none: no rule of EmuSen's yet sets one, and every difference from a core's own
+list is to be a named exception decided by the tester, never one per game.
+
+**Design notes.** (1) The rule lives in `emusen-systems` because the list it reads does; the discovery, which knows the
+installed `.info`, passes its value in, so the function reads no file. (2) `info_extensions` reads one key with the
+quoting of `emusen-core-tool`'s `CoreInfo` (first key kept, `#` lines skipped); that reader carries the network and TLS
+crates the catalogue needs, which the systems table should not depend on. (3) A suffix match lets a listed compound
+extension (`iso.gz`) and a single one (`gz`) both work without a second rule.
+
+**Tests** (`libretro_extensions::tests`, 9): each listed extension of both cores, the `.cue` refusal and the `.bin`
+path, a system off a core's line, names with no extension, the `.info` value quoted, bare, commented and absent, an
+exception's adding and dropping for its system only, a malformed exception refused, and the shipped file read whole.
+Seeded faults, each reverted, each caught by one test: the dot before a suffix not required; the system condition
+removed; drops ignored; a commented `.info` line read; case not folded.
 
 ### 4.2 Video
 
@@ -1257,7 +1293,7 @@ hand-off classes, `RingChainTests`, `HostedCoreLaunchTests` and the device-lend 
 caught: the release doing nothing (frame 5 stalls); the frame's slot reported one off (227,600 bytes differ); the ring
 frame never recorded (the record's `picture_in_ring` 0).
 
-**Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
+*Superseded by §10k, 2026-11-01: the Rust runtime discovers, admits and opens hosted cores.* **Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
 (`EmuSenCrystalNative`), and the Rust core host's discovery knows no libretro entry, so a hosted core opens only on the
 C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1` with "No core in this build handles
 '.iso'" (measured 2026-11-01). Every proof of stage 4 so far ran on the C#. Decided 2026-11-01: the Rust host's
@@ -1396,6 +1432,435 @@ time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder
 **The card manager.** No view changed: a console's media come from its engine's core info (`MemoryCards.MediaFor`), and
 with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
 existing fit audits stand.
+
+## 10k. Hosted cores on the Rust runtime (2026-11-01)
+
+*Replaces the statement of the gap at the end of §10h.* Decided 2026-11-01 by the tester: the Rust host's connection to
+the libretro host is designed as Rust would have it, not ported from the C# integration (`LibretroEntries`, the C#
+`CoreDiscovery`'s libretro parts), which stays as it is until B10 deletes the C# halves.
+
+**The design.** One module of `emusen-core-host`, `entry`, holds what an installed core's folder must satisfy; discovery,
+trust and the runtime compose it, and none of them names a file of the folder, every name being `emusen-core-entry`'s
+(`Entry::list`, `broker_path`, `adapter_path`, `core_path`):
+
+| Part | What it does |
+|---|---|
+| `entry::stale` | rule 1 for an entry: each copy (proxy, adapter) hashed and found in an installation's `cores.manifest` under the name it is built as (`Trust::installation_lists`); otherwise *needs refresh* |
+| `entry::check` | before the proxy is loaded: not stale; the sidecar's `libretro` member present and naming the core file the folder is named for; its SHA-256 approved; the file on disk still that build. Each refusal in words, marked where an approval alone would settle it |
+| `entry::standing` | `approved`, `needs_approval` or `needs_refresh` (`Standing::NeedsRefresh`, the word the Cores window already reads) |
+| `entry::read` | the approval's half (§1.1, "written by loading it once after approval"): the copies checked, rule 3 on the proxy, `Library::load_expecting` with the approved hash (so the proxy seals and compares the core before anything of it runs, §10e), rule 4, and the proxy's sidecar written by the crate's one writer |
+| `Discovery` | scans each player's directory's `libretro/` entries after its sidecars: an entry with a proxy sidecar is a `Discovered` with `entry` set; an entry whose core has no sidecar of its build (none, or one naming another build) is listed in `waiting()` with the core's hash. `Discovered::open` routes an entry through `entry::check` and loads the proxy with the sidecar's hash expected |
+| `HostedCore`, `with_hosted` | the hosted list (`emusen_systems::libretro_cores::hosted()`), handed in by the runtime so that the crate takes no dependency on the systems table: an entry the list names offers only the systems its line names (`offers`), and `for_system`, `for_extension` and `in_rule_order` give a system's engines in §4.8's order |
+| `Runtime::approve` | `core_approve` of an entry's core hash: the approval recorded, each waiting entry of that hash read (`entry::read`), the directories listed again |
+| `route::takes` (crystal) | a listed hosted core takes a game only where its installed `.info` lists the file's extension, by `emusen_systems::libretro_extensions::takes` (§4.1a); a core the list names nowhere takes what its info claims |
+
+Rule 3's cores directories now include an entry's folder, `<player>/libretro/<stem>/`, so the proxy copy passes the owner,
+mode and architecture checks where it lies. *A changed build is approved again and read again*, but a proxy loaded in
+the process under the old hash stays loaded (§7.2: never unloaded; `load_expecting` refuses a second approval), so the
+new build is read at the next start of the program. Named as a limit [A].
+
+**Found while building.** A game's creation values were read under the row's console, while a session stores its
+settings under its own console (the system's table console, else its id in capitals). For a system with no table
+console, which is the libretro test core's, a console setting stored through a session was applied only at run time, and
+a core that reads its options at load (`tc_hw`, `tc_rate`) never saw it. `open_game` now reads them under the session's
+console. In every other case the two are the same name.
+
+**Proofs, and the runtime each ran on** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs` (3), on the Rust runtime (`emusen_crystal::Runtime`), brokered through the
+  real proxy, adapter, runner and test core:
+  - an entry with no sidecar is waiting, not an engine; `approve` writes its sidecar; the game opens on it, runs 20
+    frames at 320 × 240, and a state taken and loaded brings the picture back;
+  - revoked, rebuilt and stale entries are refused in words before loading, with the standings `needs_approval`,
+    `needs_approval` and `needs_refresh`, and the new build waits for its approval;
+  - `tc_rate` stored through a session reaches the next machine's creation.
+- `emusen-core-host`: §4.8's order (native first; PCEE2 ahead of a native PS2 core; an entry's unlisted system not
+  offered), plus the crate's existing 30 tests.
+- `emusen-crystal`: `takes` refuses PCEE2 a `.cue` and gives an unlisted core what its info claims; the crate's other tests.
+- WiseMan `HostedCoreLaunchTests` under `EMUSEN_CRYSTAL_NATIVE=1`: 4 of 4, the runtime reporting the platform library and
+  frontend API 1.4. The same build's platform library from before this change fails the main case with "No core in this
+  build handles '.iso'". The fixture still lays the entry and writes its sidecar through the C# host; the test's calls are
+  the frontend API's.
+- Seeded faults, each caught: the approval unchecked (the refusals test), the copies never stale (the same), the build
+  on disk unchecked (the same), the rule's order flattened (the order test), `takes` always yes (crystal's test), the
+  creation values under the row's console (the stored-setting test).
+
+**Surfaces.** No version changes. The frontend API, the core ABI and the platform interface are unchanged. The
+`cores` listing's `trust` may now say `needs_refresh`, a word it already had. The `emusen-core-host` crate gains public
+items (`entry`, `HostedCore`, `Discovered::entry`, `CoreInfo::libretro`, `Standing::NeedsRefresh`); it is not a
+versioned C surface. `for_extension` and `for_system` now return the engines in rule order as a vector's iterator.
+
+**Left** (*the first two built in §10m*): a waiting entry is not yet a row of the `cores` listing, and the listing's `libretro` field (`EmuSen_Cores.md`
+§7.3) is not built. Until they are, the Cores window and Mistress's question take the hash to approve from the core
+tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
+`CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
+
+## 10m. The cores listing's libretro rows, the path, and the refresh (2026-11-01)
+
+Decided 2026-11-01 by the tester, taking §10k's question: the waiting entry and the listing's `libretro` field are built now,
+and the frontends take the hash to approve from the frontend API's Rust answer, not from the core tool.
+
+**The listing** (the frontend API's 1.5, `EmuSen_Backend.md` §34). `listing::cores` gives each row `libretro`: null for
+a library that is not an entry, or `{folder, file, sha256, corename, name, version, license, authors, source, build,
+trust}`. Its `sha256` is the core file's own, read as the scan reads it, never `NOTICE`'s. Its `trust` is that file's
+standing (approved where the hash is approved and is the build the sidecar names). `version` is the core's own, null
+until it has been read. The other fields are `NOTICE`'s, through `emusen-core-entry`. An entry waiting to be read
+(§10k) that is not already an engine is a last row of its own: `engine` null, `report` "not yet read", `trust` the
+entry's standing, `systems` the hosted list's line for it. `Runtime::approve` also accepts the core hash of an entry
+already read, so a revoked core can be approved again.
+
+**The frontends** read that answer and nothing else:
+- *Cores* (`EmuSen.Tools.Cores`): `CoreRow.OfRuntime` takes a row's approval hash from `libretro.sha256` where it has
+  one, and `CoresPane.Joined` lends the core tool's row that hash beside the engine and trust, so *Approve…* names the
+  libretro core's hash.
+- *Mistress* (`MainWindow.CoreAwaitingApproval`): for the routed engine's row, or where no engine is routed a waiting
+  row of the routed system, the question shows `libretro.file` and approves `libretro.sha256`; a row needing refresh
+  is not asked about.
+
+**The path, found by running real cores.** `Engine::create` never set `image_path`, so Flycast (`need_fullpath`) refused
+every game and PCEE2 was sent a 1.46 GB image through the broker's socket. The path is now given at create and at a
+disc's insert (`Machine::media_insert_at`), and only for an unaltered file: `DiscFiles::unaltered_path` withholds a copy
+unpacked from an archive, and a package (which may carry soft patches) gives none, as §10d's rule has it.
+
+**The refresh, found the same way.** After `cores verify` refreshed an entry's proxy copy, the sidecar kept the old
+copy's hash. The entry was listed approved, but it opened nothing and could not be approved. An entry whose proxy
+copy differs from its sidecar's hash is now waiting, like a new build of the core. The runtime reads every waiting entry
+whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
+A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
+
+**The player's `/Cores`, followed.** The Rust runtime fixed its player directory when it was made, where the C# reads
+`DataStore.Cores` at each scan. Mistress's one shared runtime therefore kept a data folder that had since moved. The
+`ControllerBindingsSaturn` and `ControllerBindingsDreamcast` audits showed it: their console comes only from a core the
+case places in the player's `/Cores`, and before the change the case reached it only through the C# discovery's static.
+A runtime given no directories now reads the tree's `/Cores` at each scan (`player_directories`). The audit places its
+core there, approves it through the frontend API and takes it out again with a rescan. Measured 2026-11-01: the 8 cases
+pass on both runtimes. `tests/player_cores.rs` lists a library from a data folder moved after the runtime was made.
+
+**A core that cannot start** (§10n's status -18) does not cross the frontend API as a number: it is the libretro host's
+own status, and the runtime refuses the frame with the core's words, which are its last error, PCEE2's own line where
+§10n's profile names one. So it needs no bump of its own. Tested through the runtime with the test core's
+`tc_fail=first_frame`, stored as a console setting.
+
+**Proofs** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs`, 7 tests on the Rust runtime:
+  - the waiting row approved by its `libretro.sha256` becomes one engine row, and is revoked and approved again;
+  - the path the test core logs is the game's;
+  - a refreshed proxy copy is read again at start and opens a game.
+- `emusen-crystal` (with `crystal_abi` at 1.5), `emusen-core-host` and `emusen-galaxia` pass.
+- WiseMan `CoresWindowRuntimeTests` on the Rust runtime (2): the window offers the waiting core with its core's hash,
+  approves it through the frontend API, and lists it again as an engine; Mistress asks by the core's file and hash, then
+  not after the approval.
+- `CoresWindowTests` and `HostedCoreLaunchTests` pass on the Rust runtime too.
+- On the C#: `CoresWindowTests`, `CrystalHeaderTests` and `CoreHostParityTests` pass.
+- Seeded faults, each caught: the path not set (the runtime test); the window's join dropping the hash (the window
+  test); Mistress naming the proxy's hash (Mistress's test).
+
+## 10n. Two defects real cores found on the Rust runtime (2026-11-01)
+
+Both were found by the tester running PCEE2 through the Rust runtime with the Americas BIOS linked into a system folder.
+
+**The runner could not read linked firmware.** The proxy's Landlock policy (§3.3) granted the core's private folders
+and the image's folder, but neither the system folder named by `EMUSEN_LIBRETRO_SYSTEM_DIR` (§10c) nor the target of a
+link under any system folder. Landlock checks the path a link resolves to, so a firmware file linked into a granted
+folder is still refused where it lives. PCEE2 logged "Unable to auto locate a BIOS image" and `VMManager::Initialize()`
+failed; a local patch adding the folder and the resolved BIOS file to the read list let the BIOS be found and Jak and
+Daxter boot [M, the tester]. The fix, in the proxy's `spawn`: the system folder the core is given, which the host and the
+proxy now take from one rule (`emusen_core_entry::system_folder`, the player's `.data/<stem>/system/` or the referee's
+folder), is granted read-only, and the folder is searched for links (at most 8 levels and 20,000 entries, so that a
+folder of dumped textures cannot stall a create). Each link's resolved target is granted read-only. A target that is a
+file is granted alone, never its folder; a target that is a folder is searched in turn. The search reads names and link
+targets only: no firmware file is opened by the project's code, and the core reads what it reads. The referee's folder is
+read-only, so a core that writes there (PCEE2's cache and cards) is refused those writes. A player's system folder lies
+inside the core's private folders and stays writable.
+
+**An open succeeded after the core had failed.** Measured on 2026-11-01 with PCEE2 v2.9.138 and an empty system folder
+(no firmware present), the host's calls traced in order: `retro_load_game` returns true, and `retro_serialize_size` then
+answers 100,663,296. The core starts its machine in the first `retro_run`. There it logs, at info level,
+"[PCSX2] VMManager::Initialize() failed." and hands a duplicate frame and 800 audio frames. Every later `retro_run` hands
+a black 640 × 480 software frame and no sound. It never calls `SHUTDOWN` and never logs at error level. So libretro
+carries no signal of the failure: not the load's return value, not an environment call, not a log level. The only sign
+is the core's own line. The narrowest check is therefore a per-core profile (`failure::FATAL_LINES`, by file stem as
+measured: PCEE2's line, and the test core's). A profile line logged during load ends the create with
+`STATUS_NOT_STARTED` (-18). Logged during a frame, it ends that `advance` with -18, and every later frame is refused the
+same way. In either case the detail is "it could not start: " followed by the core's line. LRPS2 has no entry: its line
+has not been measured. Independently, a load that returns false now quotes the core's last error or warning ("the core
+said: …") in place of the earlier "its log says why". The same run after the change: `advance: (-18) it could not start:
+[PCSX2] VMManager::Initialize() failed.` at the first frame [M].
+
+**Tests.** The test core gains `tc_fault=read_system` (it reads `bios/firmware.bin`, a link in its system folder, then
+`other.bin` beside the link's target, which nothing links) and `tc_fail=load|first_frame`.
+- `emusen-core-broker` `tests/libretro.rs`: the link is read and its neighbour refused by the kernel in the runner; a
+  refused load's words carry the core's error, and a first-frame failure crosses the process boundary as -18 with the
+  core's line in `last_error`.
+- `emusen-libretro-host` `tests/testcore.rs`: the same refusals in-process, the second frame refused as the first, and a
+  new machine running afterwards.
+- Seeded faults, each caught: the system folder not granted (the link test, 2), the link's folder granted instead of its
+  file (the same, 3), links not followed (the same, 2), the frame's profile check removed (the broker's refusal test),
+  the failure not kept for later frames and the load's line not quoted (the host's test).
+
+**Surfaces.** The libretro host's status band gains -18, "the core could not start the game; its log says why", which
+`status_text` gives. `emusen-core-entry` gains `DATA`, `SYSTEM_DIR_VAR`, `data_folder` and `system_folder`. The core ABI
+and the frontend API are unchanged. The runtime's message for a stopped frame names the status's words. The detail
+carrying the core's line reaches `last_error`, which the runtime does not yet show.
+
+## 10l. The ring on the Rust runtime (2026-11-01)
+
+Until this pass every proof of the frontend API's ring (§10h) ran on the C# runtime; the Rust half (the runtime's
+`Engine::lend_ring` and `take_ring_frame`, the platform library's `SerenityLender` over `emusen_serenity_ring_new`, the
+ring's release after a crash, and Serenity's `advance_ring`) had been built and type-checked only. Once the Rust core
+host discovered and admitted installed libretro entries (§10k), the ring was run through it end to end.
+
+**What was run.** `tests/api_ring.rs` in `emusen-core-broker` drives the platform library's own exports as Mistress
+does: an installation whose `cores.manifest` vouches for the proxy and the libretro host, the test core's entry under
+the player's cores, approved by its hash (`emusen_crystal_core_approve`); a session opened by `emusen_crystal_open` with
+`OPEN_RING` and a Serenity device; each frame's ring fields read from `emusen_crystal_frame`, the ring borrowed by
+`emusen_crystal_picture_ring` and drawn by a chain through `emusen_serenity_chain_advance_ring`. The core runs in the
+confined runner, so every picture crosses the process boundary and both semaphores cross by `SCM_RIGHTS`. The four
+cases are those of `ApiRingTests`:
+
+1. six frames of the test core's Vulkan picture (`tc_hw=vulkan`, 320 × 240) in slots 0, 1, 2, 0, 1, 2 at values 1 to 6,
+   each drawn from the ring byte for byte as the same frame read back by `picture_copy` and uploaded, and equal to that
+   picture; one frame advanced and held; a session without the flag lent no ring;
+2. twelve ring frames each given back by a one-pixel draw, none stalling the core (each frame bounded at 10 s);
+3. `tc_geometry=grow`: frames 0 and 1 in the first ring, frame 2 at 640 × 480 read back while `MACHINE_INFO` raises the
+   maxima, frames 3 to 9 in a second, larger ring, each drawn as its read-back picture; this case was listed as not yet
+   graded in `EmuSen_Backend.md` §33.4;
+4. `tc_fault=segv`: the session ends at the core's second frame in the runtime's words ("EmuSen - Test Core stopped:
+   the core's process ended on signal 11"), the ring is withdrawn and freed after the dead machine, and the next ringed
+   session on the same device runs four frames.
+
+The chain is one pass of a stock shader the test writes (nearest sampling at the source's size), not the PlayStation 2
+CRT filter of `ApiRingTests`, whose preset the C# frontend writes; the comparison against the uploaded picture is the
+same. A unit test in Serenity (`ring.rs`) proves the raise itself: a read on the host's device that waits for `ready` at
+a value no core signals is still waiting after 200 ms and returns once `Ring::release_after_crash` raises it. In case 4
+the core had signalled the last value handed before it died, so the raise there finds `ready` already at that value.
+
+**Found.** The ring's Rust half needed no change. One defect outside it stopped the first run: a game's machine was
+created with the console settings stored under the systems table's console, while sessions store and apply them under
+the session's console, which for a system with no console of the table (the test core's) is another name; so
+`tc_hw=vulkan`, read by a libretro core only at load, never reached the machine, and no frame was in the ring (measured
+2026-11-01: `settings_get` answered `vulkan` for the ringed session while frame 0's `picture_in_ring` was 0). It was
+fixed in the open path by naming the session's console first (`session_console`, §10k's branch). The platform library's
+last error is kept per thread, so a frame called on another thread has its words read on that thread.
+
+**Validation** (`VK_LOADER_LAYERS_ENABLE=*validation`, `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`,
+`VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`, `EMUSEN_VALIDATE=1`): silent on both devices. The host's device holds
+the layer itself, and each case asserts `emusen_serenity_device_findings` empty. The core's device is made in the runner,
+which inherits the environment and may read `/usr`, so the layer loads there too and reports on the runner's standard
+error; a seeded fault proved it (the slot's transition to `TRANSFER_DST_OPTIMAL` removed: `VUID-vkCmdCopyImage-dstImageLayout-00133`
+and 15 further lines in the log), and the clean runs' logs hold no line of it. The test does not assert the runner's
+messages, which reach no API; that check is the log's.
+
+**Seeded faults**, each caught: the host's crossing given the wrong old layout (the findings assertion, 7 messages);
+`take_ring_frame` answering none (case 1, the record's `picture_in_ring` 0); the ring not lent again at `MACHINE_INFO`
+(case 3, every frame after the growth read back); `chain_advance_ring` reading the next slot (case 1, 304,400 bytes
+differ); `release_after_crash` raising nothing (the Serenity test, still waiting after 5 s); the core's slot transition
+removed (the runner's layer, above).
+
+**Which runtime each ring proof ran on.**
+
+| Proof | Runtime | Where |
+|---|---|---|
+| in-process ring, copy and blit, refused UUIDs, a picture held for a larger ring | none (the Rust core host and the libretro host in one process) | `emusen-libretro-host/tests/ring.rs`, §10f |
+| five frames through the broker | none (the Rust core host and the runner) | `emusen-core-broker/tests/libretro.rs`, §10f |
+| the ring through the console's filters keyed on the system | C# (`RingChainTests`) | §10f |
+| the frontend API's ring, give-back, `MACHINE_INFO`, crash | C# (`ApiRingTests`) | §10h |
+| the frontend API's ring, give-back, `MACHINE_INFO`, crash | Rust (`emusen_crystal_*` and `emusen_serenity_*` of the platform library) | `emusen-core-broker/tests/api_ring.rs`, this section |
+
+Run 2026-11-01 on the RX 6800 under RADV, headless, debug builds; the broker's tests now take the platform library as a
+development dependency.
+
+## 10q. Real cores on the Rust runtime (2026-11-01)
+
+The crate `EmuSen/Cores/Libretro/emusen-libretro-games` proves the Rust runtime (`emusen_crystal::Runtime`, the default
+config: the installation's folder as its cores directory, the player's `/Cores` as its player cores) on real libretro
+cores, with no frontend. Its library lays out a sandbox player home (an installation folder holding the release proxy,
+libretro host and runner with their `cores.manifest`, the tree's data and config folders pointed inside the home) and
+runs Cores' own jobs (`core-fetch`, `core-get`, `core-verify`) with the context the platform library gives them. Its
+example `games` installs, approves (`Runtime::approve` with the hash `NOTICE` records) and runs: a game opened, N frames
+past a boot of B frames timed one by one, the picture's size and digest, a state taken, 60 frames run, the state loaded
+and the pictures compared, the core's log on request. Its example `ring` goes through the platform library's frontend
+API as Mistress does (`emusen_crystal_open` with `OPEN_RING` and Serenity's device, as `tests/api_ring.rs` of the broker
+does): each frame's picture drawn from the lent ring by a one-pass chain (nearest sampling at the source's size) and
+given back by a one-pixel draw, a picture the core read back uploaded to the chain instead; a pad script by frame
+number; PNGs of the chain's picture; a state saved to slot 1, loaded twice and the pictures compared. Tests: 4 (the
+timing summary, the `.info` reader, the installation's manifest, the pad script); seeded faults, each caught: the frames
+per second inverted, a key matched by its end, the libretro host left out of the manifest, a press released a frame
+early, the script left unsorted.
+
+**Installed** [M, 2026-11-01] through `core-fetch` and `core-get` from buildbot.libretro.com (index of 2026-11-01) into
+`~/.cache/emusen/probe/libretro-rust/home/`, then approved:
+- `pcee2`: PCEE2 v2.9.138 (commit 571962773; its `.info` says v2.7.x), SHA-256
+  `ab7ff5fdb580fdf842190be978a8dc6049db707af5177c374cea30e755b7cc68`, index CRC-32 `d589c813`.
+- `flycast`: Flycast (`.info` version "Git"), SHA-256 `3fbe535cd52a2e503dec5e7a20a38d046c3ebdd355a0970a7de7e350fee48fcf`,
+  index CRC-32 `3572a39c`.
+
+The first `core-get` refused both: the tool compared the whole zip's CRC-32 with the index, whose CRC-32 is the
+library's (`EmuSen_Cores.md` §5.2, fixed the same day).
+
+**Through the ring, with the fixes in** [M, 2026-11-01, libretro-games at 189bb9267 with libretro-rust 4a27c40bb (the
+image's path at create, 3ac0b9178; an entry refreshed by `cores verify` waiting for approval again, 4a27c40bb),
+libretro-e be1f6bf22 (the system folder and its links' targets granted, a core's failed start refusing, §10l) and
+libretro-ring 7ad12d730 (the ring on the Rust runtime, §10l) merged, no local change; the desktop, Ryzen 7 7700X with
+an RX 6800 (`EMUSEN_GPU_DEVICE="RX 6800"`), the release probe, CPU weight 20 with an 8 GB cap, a debug test run of
+another branch beside it; each frame run as fast as it goes, unpaced]:
+- **Setup.** After the installation's proxy and host were rebuilt, `core-verify` refreshed both entries' copies and the
+  runtime listed them as waiting, and one approval each put them back. PCEE2 is given no referee folder: its system
+  folder is the player's own, `.data/pcee2/system/`, holding a link `pcsx2/bios/ps2-0230a-20080220.bin` made from the
+  BIOS's path and nothing else; the approval's schema then lists that name as a `pcsx2_bios` choice, and it is set
+  through `settings_set`. The log says "BIOS Found: USA v02.30(20/02/2008)". Its cards are the host's blank cards in
+  that same folder, so Jak asks to format card 1 and the script answers No.
+- **Pad scripts** (port 0, RetroPad numbering: 0 B, 3 Start, 13 R2). Jak: Start at 2,500, then B at 2,700, 2,850 and
+  every 150 frames to 3,600 (New Game; card 1 not formatted), and B held 10 frames every 120 from 25,000. The intro,
+  drawn by the game's engine, runs from about 4,800 to 24,500; Jak stands on Geyser Rock in play by 25,000. Crazy Taxi:
+  B at 650, 800, 950 and 1,100 (a new file on the VMU), Start at 1,300 and 1,500, B at 1,700 to 2,500 every 200 (Arcade,
+  3 minutes, Axel), R2 held from 2,600 for 2,400 frames: the taxi drives from about 2,600.
+
+| Game | Core and picture path | Frames timed | Frames per second | Median, worst frame | Picture |
+|---|---|---|---|---|---|
+| Jak and Daxter (USA, Rev 1), the ISO | PCEE2 v2.9.138, Vulkan, every frame in the ring (26,798 and 26,799 of 26,800) | 25,000 to 26,800, in play | 180.24, 180.00 | 5.47 ms, 8.0 and 8.2 ms | 512 × 448, two fields, 4:3 |
+| Crazy Taxi (US), a CDI copied from the household's library | Flycast, Vulkan, every frame read back and uploaded (none in the ring) | 3,000 to 4,800, driving | 378.46, 369.62 | 2.60 and 2.69 ms, 3.7 and 4.0 ms | 640 × 480, 4:3 |
+
+Both are about three and six times the television's rate. RetroArch's 60.8 fps measured earlier is paced at the
+television's rate (`EmuSen_LibretroBridge.md` §1 records RetroArch holding 60 frames a second on frames 600 to 2,400);
+these figures are unpaced, so they say that the brokered runtime with the ring falls short of nothing RetroArch reached,
+not that it is three times faster. The two rounds of each agree within 2.4%.
+
+**States** [M]: PCEE2's load works: two loads of the same slot give the same first picture, and the frames after it are
+the saved scene's (the intro's background when saved at 3,100), though that first picture is the same in every run
+whatever the save point, so it is a picture the core gives once after a load. Flycast's load returns success but does
+not restore the picture: saved while driving at frame 3,100, the picture five frames after the load shows the game
+timer a second past the moment of the save, and two loads of the slot give different pictures; reported, its cause not
+found (Flycast logs nothing at the load).
+
+**Found on this pass** (reported):
+1. Flycast never puts a picture in the ring. The host logs "the card lacks external memory, semaphores or timeline
+   semaphores: pictures are read back" on the RX 6800, which gives PCEE2 the ring; Flycast makes its own Vulkan device
+   (its log lists only `VK_KHR_swapchain`, `VK_EXT_provoking_vertex` and `VK_KHR_buffer_device_address` enabled), so the
+   extensions the host needs appear not to reach it. Its timing above is therefore the read-back path's.
+2. Flycast's state load, above.
+
+**The first pass, superseded** [M, 2026-11-01, no ring, no input, the picture read back, with two local changes standing
+in for the image-path and system-folder fixes]: Jak 391.8, 341.8 and 656.0 fps and Crazy Taxi 603.3 and 599.7 fps over
+frames 600 to 2,400. Both spans were static menus (Jak's "please insert a memory card", the referee's cards being
+unreadable; Crazy Taxi's "Press A to create a new file"), and the spread of Jak's rounds followed the CPU it shared.
+That pass found the four defects since fixed: the image's path never given to a core claiming `IMAGE_PATH`; the
+referee's system folder and its linked BIOS not granted by the runner's Landlock policy; an open succeeding after
+PCEE2's `VMManager::Initialize() failed`; and an entry whose proxy copy `cores verify` refreshed listed as approved but
+routing nothing. The core tool's CRC-32 comparison (`EmuSen_Cores.md` §5.2) was fixed on this branch.
+
+## 10o. A core that negotiates version 1 reaches the ring (2026-11-01)
+
+**The defect.** Flycast put no picture in the ring on the Rust runtime: every frame was read back, and the host
+logged that the card lacked the external extensions, on the RX 6800 where PCEE2 is ringed on every frame. The host's
+log, with the negotiation interface's members added to it, showed Flycast declaring negotiation version 1 with
+`create_device` alone (no `create_instance`, no `create_device2`), although the host answers
+`GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT` with 2. Two faults of the host's v1 path followed (measured
+2026-11-01, Crazy Taxi, 120 frames, the run example):
+
+1. Whether the ring was possible was decided only inside the host's device wrapper, which version 2 calls and version 1
+   never does; a v1 core's device was therefore always read back, whatever it enabled.
+2. Version 1 gives the host no way to turn on a feature beyond Vulkan 1.0's: its `required_features` is a
+   `VkPhysicalDeviceFeatures`, while timeline semaphores need `timelineSemaphore` in a features chain. The required
+   extension list reached the core, but the feature could not.
+
+**The form.** `libretro_vulkan.h` (negotiation version 2) has the frontend hand `create_device` the
+`get_instance_proc_addr` the core makes its device through. The host now hands its own: it answers `vkCreateDevice`
+with the same wrapper version 2 uses (the three extensions added where the card offers them, `timelineSemaphore` set in
+the core's chain or put in front of it, nothing the core asked for changed) and passes every other name to the loader.
+The wrapper records each device it makes and whether it was given what the ring needs; the ring is offered only for the
+device the core hands back in its context. A core that makes its device without the function it was handed (through
+its own loader) gets no ring and is read back, and the host says so: "the core made its device without the host's
+vkCreateDevice, so the external memory and timeline semaphores the ring needs were not enabled: pictures are read back".
+A private device a v1 core makes through the same function is given the extensions too, as version 2's wrapper would
+give them; the core's allocation callbacks are not passed on, as with the wrapper.
+
+**Result.** Flycast is ringed: "ring: 853x853 lent", and frame 299 of Crazy Taxi read from the ring is its title screen.
+Version 2 cores are unchanged.
+
+**Validation.** The test core's v1 paths are silent. Flycast is not, on either path, and none of its messages is a call
+of the host's: its image handed by `set_image` lacks `TRANSFER_SRC` usage, which `libretro_vulkan.h` requires ("at
+least VK_IMAGE_USAGE_TRANSFER_SRC_BIT and VK_IMAGE_USAGE_SAMPLED_BIT"), so the host's copy out of it and its
+transitions are reported (`VUID-vkCmdCopyImage-aspect-06662`, `VUID-VkImageMemoryBarrier-oldLayout-01212`; on the
+read-back path `VUID-vkCmdCopyImageToBuffer-srcImage-00186`); it enables `VK_KHR_swapchain` on a device of an
+instance without `VK_KHR_surface` (`VUID-vkCreateDevice-ppEnabledExtensionNames-01387`), though no surface is given;
+and on the ring path its depth attachment is written by consecutive frames' render passes with no dependency between
+them (`SYNC-HAZARD-WRITE-AFTER-WRITE`), which the read-back path's wait at each frame's end hides. These are named here
+as the core's, not answered by the host.
+
+**The test core** gained `tc_hw=vulkan_v1` (negotiation version 1, its device made through the function it is
+handed, with the extensions it is asked for) and `tc_hw=vulkan_v1_loader` (the same through the loader's
+`vkCreateDevice`). Tests (`tests/ring.rs`, the RX 6800, validation on and silent):
+`a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device`, six frames in the ring equal to the
+software pictures; `a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why`, the ring refused
+`NOT_SUPPORTED`, three frames read back equal, and the words in the log. Seeded faults, each caught: the hook not
+answering `vkCreateDevice` and the wrapper not recording its device (the v1 test, the ring refused); the words left
+unsaid (the loader test).
+
+**A 16-bit picture of a Vulkan core.** With every pixel format offered (the run example's `0b111`), Flycast's run
+panicked in `convert_row`. A hardware frame read back (or a ring frame taken by `frame_copy`) is 8-bit XRGB, and it
+was converted into the picture of the format handed for the format the core declared, RGB565 here; `convert_row` had
+no XRGB8888-to-RGB565 pair and wrote a 640-pixel row as four bytes a pixel into a 1,706-byte row. Decided 2026-11-01: a
+host never crashes on a core's choice of format. `convert_row` now takes every pair: the two 32-bit copies and the
+RGB565 copy stay as they were, and every other pair goes through 8-bit red, green and blue (RGB565 from 8-bit keeps the
+top bits; a 16-bit format into a 32-bit one repeats them, as before). A 16-bit picture of a Vulkan core loses the low
+bits of its colours, as the format the core declared and the host accepted implies. Tests: a unit test of each libretro
+format into each handed format, and `a_vulkan_cores_frames_land_in_whatever_format_it_declared_and_the_host_accepts`
+(the test core declaring each of the three formats with `tc_hw=vulkan`, the host offering each of four masks, read back
+and ringed: 24 runs, every frame equal to the software picture in the handed format). Seeded fault: the old
+XRGB8888-to-anything arm put back, caught at RGB565 (the picture differs). The runtime offers RGBA only, so no player
+had met it.
+## 10p. Flycast's state load, and the first picture after a load (2026-11-01)
+
+§10q reported that Flycast's slot load returned success without restoring the game. Measured on 2026-11-01 with
+the release libretro host in-process through its `run` example (`EMUSEN_RUN_STATE=3100,3160,3225`: a state saved after
+frame 3,100 and loaded after frames 3,160 and 3,225). The run used Crazy Taxi (US) on the §10m pad script, Flycast
+`7adbf3c` on the RX 6800 with no BIOS (its HLE BIOS), at CPU weight 20. The host's `retro_serialize` and
+`retro_unserialize` calls were traced.
+
+**The bytes.** `retro_serialize` wrote 37,748,736 bytes, and `retro_unserialize` was given 37,748,736 bytes with the
+same SHA-256, at both loads. `retro_serialize_size` gave the same length at the load as at the save. The header's own
+digest (§4.6) already refuses a payload that differs. So neither the length, nor the offset, nor the header's wrapping
+is the cause. The state was serialized again at once after each load: it differed from the payload in 34 of
+37,748,736 bytes, and from the state before the load in 17,951,331. The core applies the state.
+
+**The pictures.** With Flycast's default, `reicast_threaded_rendering=enabled`, the second to fifth pictures after each
+load equal the second to fifth after the save. The first does not: it differed from the save's and from the other
+load's (`c225c7b0…`, `2b28c8c2…` against `3f7bd061…`), as the two loads of §10m did. With `disabled`, every picture after
+each of three loads equals the picture after the save, the first included. The core's option text says the threaded
+mode "runs the GPU and CPU on different threads". The measurement fits a picture presented one `retro_run` after its
+frame: the frame in flight at the load belongs to the abandoned timeline, and the state does not hold it. Three things
+do not change the result: the size check, a second serialize before each load (the host's rollback copy), and
+presence sent again after a load with the same devices. Presence sent with *changed* devices (ports 1 to 3 going from
+the core's default to none) does change it: the game's pictures diverge from the third frame after the load.
+
+**What §10m saw.** The §10m digest compared only the first picture after each load, which is the stale one. Its PNG after
+the load was drawn from the ring example's chain. For a picture that is read back (all of Flycast's, §10m item 1), the
+example's steps after the run never uploaded to that chain, so the PNG showed an older picture than the loaded one. The
+"timer a second past the save" was not reproduced in-process; the steps now upload. PCEE2's first picture after a load,
+the same whatever the save point (§10m), cannot be a stale picture kept by the host: a stale picture would differ with
+the save point. It is a picture the core makes after a load, and the host passes it on as given.
+
+**The fix: an exact default.** Threaded rendering is a shortcut that changes what the player gets. Under the project's
+rule, such shortcuts are player options and are not on by default. The host's new data file
+`data/exact-defaults.tsv` (stem, key, value, reason, date decided, as `console-picture.tsv`) names
+`flycast reicast_threaded_rendering disabled`. The host declares that value as the option's default in place of the
+core's, wherever the core offers it. The player may still turn the option on; this costs the first picture after a
+load and is named in the core's losses. Cost, one unpaced round each over frames 0 to 3,240: 9.74 to 10.02 s threaded
+(three runs) against 11.45 s unthreaded, about 15% more time; both are several times the television's rate.
+
+**Also fixed.** A read-back hardware frame is XRGB8888. Converted into a picture of 16 bits (a host taking RGB565, as
+the `run` example does), it overran each row and stopped the host. It is now converted to RGB565.
+
+**Tests.** `options::an_exact_default_replaces_the_cores_and_a_value_it_lacks_does_not`,
+`exact::the_data_names_flycasts_threaded_rendering`, the RGB565 case in
+`video::sixteen_bit_formats_convert_to_full_range`, and `tests/testcore.rs`
+`a_picture_shown_a_frame_late_is_stale_once_after_a_load_and_exact_without_the_lag`. The test core's new `tc_lag`
+shows each frame the previous frame's picture, held outside its state. With it on, the first picture after a load is
+stale and the second is exact; with it off, both are exact. Seeded faults, each caught: the exact default not applied
+and a value the core lacks accepted (the options test), the RGB565 arm removed (the video test), and `tc_lag` ignored
+(the lag test). One gap: no test drives `ready()`'s use of the data file, because only Flycast has a row.
+
+**Surfaces.** No version changes. The schema's default for Flycast's option is now `disabled`.
 
 ## 11. Risks
 

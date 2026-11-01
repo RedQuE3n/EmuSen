@@ -162,8 +162,14 @@ pub fn log(level: Level, text: String) {
 
 /// The records waiting, into the call in flight's log.
 pub fn flush_logs() {
+    flush_logs_with(|_, _| {});
+}
+
+/// The records waiting, each shown to `read` and then put into the call in flight's log.
+pub fn flush_logs_with(mut read: impl FnMut(Level, &str)) {
     let records = std::mem::take(&mut *LOGS.lock().unwrap_or_else(|e| e.into_inner()));
     for (level, text) in records {
+        read(level, &text);
         emusen_native::core::log(level, "libretro", &text);
     }
 }

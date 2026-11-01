@@ -393,12 +393,16 @@ The libretro buildbot's nightlies, one zip per core: `buildbot.libretro.com/nigh
 ### 5.2 What can and cannot be verified
 
 The buildbot publishes **no signatures and no cryptographic checksums** [R, listing read 2026-10-31]: its index carries
-a CRC-32 per zip, and each zip member its own CRC-32. A CRC detects corruption and nothing more. So the chain is:
+a CRC-32 per zip, which is its library's (the zip's one member's), not the whole zip's [M, 2026-11-01: pcee2's index
+line d589c813 is the member's, the zip's own fc402731], and each zip member its own CRC-32. A CRC detects corruption
+and nothing more. So the chain is:
 
 1. **Transport**: HTTPS to `buildbot.libretro.com`, certificate checked against the system's own store by `emusen-net`;
    no other host, and a redirect off it refused.
-2. **Corruption**: the zip's CRC-32 equals the index line the plan was made from (a mismatch means the build changed
-   or the bytes did; the job refuses and says which); every member's CRC-32 checked on unpacking.
+2. **Corruption**: the library's CRC-32 as the zip's directory records it equals the index line the plan was made from
+   (a mismatch means the build changed or the bytes did; the job refuses and says which); every member's CRC-32 checked
+   against its bytes on unpacking. Until 2026-11-01 the whole zip's CRC-32 was compared, which refused every real core
+   (the test's buildbot had written the zip's CRC-32 into its index).
 3. **Shape, before anything is kept**: exactly one member, named `<stem>_libretro.<ext>`, with no folder, `..`,
    link or absolute path in its name (no zip-slip: the name is compared whole, never joined to a path first); its size
    under the runtime's bound (512 MB, `EmuSen_CoreAPI.md` §7.2 rule 3) both as the zip declares it and as the bytes
@@ -551,8 +555,9 @@ and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cor
   waited for. The lock is taken only once a core passes the checks that need nothing written, so a request refused
   outright (a core not in the index, not installed, not supported) writes nothing; holding it, the job clears what an
   earlier job left in `.staging/`.
-- **The download** streams into `.staging/<stem>-<pid>.zip` through `emusen-net`'s `fetch_into` with `same_host`, its
-  CRC-32 taken as it comes and the stream refused past 512 MB (or a `Content-Length` over it). The member is compared
+- **The download** streams into `.staging/<stem>-<pid>.zip` through `emusen-net`'s `fetch_into` with `same_host`, the
+  stream refused past 512 MB (or a `Content-Length` over it); the index's CRC-32 is compared with the one member's as
+  the directory records it. The member is compared
   whole with `<stem>_libretro.<ext>`, so no name is ever joined to a path; a Unix link is refused by its external
   attributes; the declared length is bounded before inflating, and Galaxia's `copy_entry` stops inflating one buffer past
   the declared length and checks length and CRC-32. The architecture is `emusen-core-host`'s own header check, shared
@@ -577,7 +582,7 @@ and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cor
 
 **Tests** [M, 2026-10-31]: `emusen-core-tool`'s `install` 9 tests against cores zipped by the test (an ELF header for
 this machine and 3 MB of noise) served by its own TLS server: every check of §5.2 refusing with no folder or staging
-left (the index's CRC-32, two members, `../`, a folder, an absolute name, another core's name, a link, a declared size
+left (the index's CRC-32, an index giving the whole zip's CRC-32 rather than the library's (added 2026-11-01), two members, `../`, a folder, an absolute name, another core's name, a link, a declared size
 over the bound, bytes inflating past the declared size, a member's CRC-32, another machine's header, not a zip, a
 redirect off the host, no libretro host, an OpenGL-only core); an install's files, modes and `NOTICE`, nothing written
 outside `/Cores`; a stopped update leaving the installed build; an update keeping one build, refused when `.previous/`
@@ -607,7 +612,9 @@ The libretro host is being built on its own branch. Four places need one owner b
    otherwise `{"folder", "file", "sha256", "corename", "name", "version", "license", "authors": [...], "source",
    "build", "trust"}`, every field from `NOTICE` but `version` (the core's own library version) and `trust` (the
    libretro file's own standing, apart from the row's), so the window's rows and the approval read one answer (agreed
-   2026-10-31).
+   2026-10-31). *Built 2026-11-01 in the Rust runtime, the frontend API's 1.5 (`EmuSen_Backend.md` §34, `EmuSen_LibretroHost.md`
+   §10m): `sha256` is the core file's own, never `NOTICE`'s; an entry waiting for approval is a row of its own; the window
+   and Mistress's question approve `libretro.sha256`.*
 4. **Stage 4 of `EmuSen_LibretroHost.md` §10** lists "the core list and download" and "the engine choice per console".
    Those are Cores; the host's stage 4 keeps the approval's content, the settings window from the schema, the sound
    rate, the cards and the cheats.

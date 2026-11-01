@@ -381,6 +381,12 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
             return false;
         }
     }
+    // The path a host passed, so a test can see which games reach a core by path (EmuSen_LibretroHost.md §2, E1).
+    if let Some(game) = unsafe { game.as_ref() }
+        && !game.path.is_null()
+    {
+        log(sys::LOG_INFO, &format!("game path: {}", unsafe { std::ffi::CStr::from_ptr(game.path) }.to_string_lossy()));
+    }
     let mut format = core.format;
     if !environment(env::SET_PIXEL_FORMAT, &mut format as *mut c_int as *mut c_void) {
         log(sys::LOG_WARN, "the pixel format was refused; drawing 0RGB1555");

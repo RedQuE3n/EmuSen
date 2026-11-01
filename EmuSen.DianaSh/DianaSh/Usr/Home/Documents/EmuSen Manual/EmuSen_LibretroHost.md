@@ -738,6 +738,60 @@ own figure was taken over (`EmuSen_LibretroBridge.md` §1).
   is consistent with one format but does not prove it; the two engines share a card only after a card formatted and
   written by one is read by the other (stage 4).
 
+## 10d. Stage 2b: the C# host's 1.16, named files stored, the entry's trust (2026-10-31)
+
+**Built**:
+- **`CoreInterface` at 1.16**: `File.Name`, `CreateParams.ImagePath` (the struct 120 bytes), `Media.ImagePath`,
+  `CapImagePath` (bit 26), `FileNamed` (`0x8000`); `CoreAbiTests` hold them to the baseline. `HostObligations` gained
+  `image_path` and `named_files` only with the engine below, so a hosted core's `host_requires` is now met by the C# host.
+- **`CoreMachine`** passes the image's path to a core claiming `IMAGE_PATH`, at create and at `media_insert`, and the named
+  files with their names (the names pinned beside the bytes for the call). `CoreMachineInfo`'s battery entries read `name`
+  and `removed`; core info's read `family`, and core info's `"libretro"` member (`CoreInfo.Libretro`).
+- **The path is given only for an unaltered file** [C]: Galaxia's `DiscFiles.UnalteredPath` is the image's file where it
+  was neither unpacked from an archive nor patched, else null. An unpacked image is a copy whose hold ends when a core
+  that copies has taken its bytes, so a path into it could be pruned under a core reading by path; such a game reaches a
+  `need_fullpath` core with no path, and the core's `host_requires` refusal says why.
+- **Named files stored by name** (`EmuSen/Cores/NamedFiles.cs`, the folders in Galaxia's `SaveLibrary`): a family of
+  kind `console` under `Saves/<console>/Console/<core id>/<name>`, `removable` under `Cards/<core id>/`, `game` in
+  `<the game's save>.files/`. Every stored file is passed at create in ordinal order of names, numbered from
+  `FILE_NAMED`, at most 32,768; `SaveSram` writes each listed file that changed (by `BATTERY_DIRTY`'s flags) on a
+  `BATTERY` event and at the flush period; a file listed `removed` has its stored copy moved to `<folder>.removed/`, so it
+  is not passed again and nothing of the player's is deleted. Names are held to §6.41's rule before any write, and no
+  part of a path that is a link is followed, read or written. A console or removable family sets
+  `CREATE_SHARED_CONSOLE`, since its files are shared by the core's games. `--nobattery` passes and keeps none. A family
+  entry is not a slot: the card manager's media and the listed battery files leave it out.
+- **The entry's trust before any runner starts** (§1.3, with `EmuSen_Cores.md` §5.2 and §7: the same `cores.approved`,
+  the same `sha256sum` lines, the libretro core's own hash). Discovery lists each `/Cores/libretro/<stem>/` holding a
+  sidecar for its proxy copy (`LibretroEntries`). Before the proxy is loaded, `DiscoveredCore.Open` requires: the proxy
+  copy to be the sidecar's; both copies to be libraries an installation's `cores.manifest` lists under their built names
+  (else *needs refresh*); the sidecar's `libretro.sha256` approved (else *needs approval*); the libretro file on disk
+  still that hash (else *needs approval*, a new build). Only then is the proxy loaded, which starts the library's runner;
+  its `info()` must equal the sidecar's, which carries the hash of the sealed copy the runners load, so a file changed
+  between the host's hash and the proxy's seal is refused as altered. That interval, between two reads of one file in
+  the player's folder, is the one place a changed build can run (confined) before the host refuses it; closing it would
+  need the host to hand the proxy the approved bytes, which v1 has no call for. *Named* as a limit [A].
+- **`RustCores.props`** gains a `Role`: `part` (the proxy and the libretro host: built, published, in `cores.manifest`,
+  no sidecar), `program` (`emusen-core-runner`, beside the assemblies, where the proxy looks for it) and `test` (the test
+  core: build output only, never published or in the manifest). The rows are Linux's alone while Landlock is the only
+  confinement the broker has; `rust-cores.yml`'s plan is not extended until another platform can confine a core.
+- **The test core** logs the game's path when given one, so a test can see which games reach a core by path.
+
+**Tests** [M, 2026-10-31]: `LibretroHostTests` lays out an entry as Cores does, approves the test core's hash, writes the
+sidecar by loading it once, and runs it brokered through the C# engine, headless; 10 tests pass: the entry trusted by
+its core's hash; a rebuilt core, an unapproved one and a stale copy each refused with the proxy never loaded; a game's
+picture, pad and file path; named files stored, passed back and a removed one's copy kept; a crash and an abort ending
+with `-10` and the signal while the engine loads the game again; a hung frame stopped at a one-second deadline with
+`-11`; a write outside the core's folders and a network connection refused by Landlock; a kernel that cannot confine the
+core failing the load in words. `NamedFilesTests` (14) hold the name rule, links and the unaltered path. The runner's
+environment is set with libc's `setenv`, since .NET's `SetEnvironmentVariable` does not reach native code on Unix.
+Seeded faults, each caught by the test aimed at it: a named file passed without its name (the core refused the game), no
+image path given, the libretro file's hash not compared (the proxy loaded, then refused as altered: caught, and the
+reason the comparison precedes loading), the adapter copy not checked, a removed file's copy not kept.
+
+**Left for later**: the Rust host's (`emusen-core-host`) trust of entries, which the shell's `cores` listing needs with
+Cores' stage C5; the listing's `"libretro"` field (`EmuSen_Cores.md` §7.3); `audio.rate_exact` in the resampler and
+cards in the card manager (stage 4).
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

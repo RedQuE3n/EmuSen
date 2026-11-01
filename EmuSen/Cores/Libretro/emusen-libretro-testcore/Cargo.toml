@@ -16,3 +16,9 @@ libc = "0.2"
 
 [profile.release]
 panic = "abort"
+
+# What a publish builds (EmuSen.csproj): release without its debug information.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

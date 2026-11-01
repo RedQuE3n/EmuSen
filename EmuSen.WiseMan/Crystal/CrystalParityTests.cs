@@ -59,8 +59,13 @@ namespace EmuSen.WiseMan.Crystal
             Compare(managed, native);
         }
 
+        // The Rust's answer with what only its 1.5 gives set aside: the cores listing's libretro key, which no test tree fills, and its minor in a refusal's words - see EmuSen_Backend.md §34.
+        internal static string AsCSharp(string answer) =>
+            System.Text.RegularExpressions.Regex.Replace(answer.Replace(",\"libretro\":null", "", StringComparison.Ordinal), $@"(?<= (in|to) ){EmuSen.Crystal.Client.Contract.CrystalAbi.Major}\.{EmuSen.Crystal.Client.Contract.CrystalAbi.Minor}\b", $"{EmuSen.Crystal.Managed.CrystalNumbers.Major}.{EmuSen.Crystal.Managed.CrystalNumbers.Minor}");
+
         private void Compare(List<string> managed, List<string> native)
         {
+            native = native.Select(AsCSharp).ToList();
             Assert.Equal(managed.Count, native.Count);
             string? first = null;
             for (int i = 0; i < managed.Count; i++)
@@ -348,7 +353,7 @@ namespace EmuSen.WiseMan.Crystal
             }
             for (int k = 0; k < answers[0].Count; k++)
                 if (answers[0][k] != answers[1][k]) _output.WriteLine($"answer {k}\nC#:   {answers[0][k]}\nRust: {answers[1][k]}");
-            Assert.Equal(answers[0], answers[1]);
+            Assert.Equal(answers[0], answers[1].Select(AsCSharp));
             Assert.Equal(trees[0], trees[1]);
             Assert.Contains("\"done\":true", answers[0][11]);
         }

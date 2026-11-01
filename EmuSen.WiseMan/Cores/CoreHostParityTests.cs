@@ -75,7 +75,10 @@ namespace EmuSen.WiseMan.Cores
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.True(process.ExitCode == 0, $"{Tool} exited {process.ExitCode}: {error}");
-            return (JsonObject)JsonNode.Parse(output)!;
+            var listing = (JsonObject)JsonNode.Parse(output)!;
+            // The frontend API's 1.5 key, which the C# implementation of 1.4 does not have - see EmuSen_Backend.md §34.
+            foreach (JsonNode? row in listing["cores"]!.AsArray()) ((JsonObject)row!).Remove("libretro");
+            return listing;
         }
 
         private static void AssertEqual(JsonNode expected, JsonNode actual, string what) =>

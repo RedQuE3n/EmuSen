@@ -1292,7 +1292,7 @@ hand-off classes, `RingChainTests`, `HostedCoreLaunchTests` and the device-lend 
 caught: the release doing nothing (frame 5 stalls); the frame's slot reported one off (227,600 bytes differ); the ring
 frame never recorded (the record's `picture_in_ring` 0).
 
-**Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
+*Superseded by §10k, 2026-11-01: the Rust runtime discovers, admits and opens hosted cores.* **Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
 (`EmuSenCrystalNative`), and the Rust core host's discovery knows no libretro entry, so a hosted core opens only on the
 C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1` with "No core in this build handles
 '.iso'" (measured 2026-11-01). Every proof of stage 4 so far ran on the C#. Decided 2026-11-01: the Rust host's
@@ -1431,6 +1431,67 @@ time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder
 **The card manager.** No view changed: a console's media come from its engine's core info (`MemoryCards.MediaFor`), and
 with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
 existing fit audits stand.
+
+## 10k. Hosted cores on the Rust runtime (2026-11-01)
+
+*Replaces the statement of the gap at the end of §10h.* Decided 2026-11-01 by the tester: the Rust host's connection to
+the libretro host is designed as Rust would have it, not ported from the C# integration (`LibretroEntries`, the C#
+`CoreDiscovery`'s libretro parts), which stays as it is until B10 deletes the C# halves.
+
+**The design.** One module of `emusen-core-host`, `entry`, holds what an installed core's folder must satisfy; discovery,
+trust and the runtime compose it, and none of them names a file of the folder, every name being `emusen-core-entry`'s
+(`Entry::list`, `broker_path`, `adapter_path`, `core_path`):
+
+| Part | What it does |
+|---|---|
+| `entry::stale` | rule 1 for an entry: each copy (proxy, adapter) hashed and found in an installation's `cores.manifest` under the name it is built as (`Trust::installation_lists`); otherwise *needs refresh* |
+| `entry::check` | before the proxy is loaded: not stale; the sidecar's `libretro` member present and naming the core file the folder is named for; its SHA-256 approved; the file on disk still that build. Each refusal in words, marked where an approval alone would settle it |
+| `entry::standing` | `approved`, `needs_approval` or `needs_refresh` (`Standing::NeedsRefresh`, the word the Cores window already reads) |
+| `entry::read` | the approval's half (§1.1, "written by loading it once after approval"): the copies checked, rule 3 on the proxy, `Library::load_expecting` with the approved hash (so the proxy seals and compares the core before anything of it runs, §10e), rule 4, and the proxy's sidecar written by the crate's one writer |
+| `Discovery` | scans each player's directory's `libretro/` entries after its sidecars: an entry with a proxy sidecar is a `Discovered` with `entry` set; an entry whose core has no sidecar of its build (none, or one naming another build) is listed in `waiting()` with the core's hash. `Discovered::open` routes an entry through `entry::check` and loads the proxy with the sidecar's hash expected |
+| `HostedCore`, `with_hosted` | the hosted list (`emusen_systems::libretro_cores::hosted()`), handed in by the runtime so that the crate takes no dependency on the systems table: an entry the list names offers only the systems its line names (`offers`), and `for_system`, `for_extension` and `in_rule_order` give a system's engines in §4.8's order |
+| `Runtime::approve` | `core_approve` of an entry's core hash: the approval recorded, each waiting entry of that hash read (`entry::read`), the directories listed again |
+| `route::takes` (crystal) | a listed hosted core takes a game only where its installed `.info` lists the file's extension, by `emusen_systems::libretro_extensions::takes` (§4.1a); a core the list names nowhere takes what its info claims |
+
+Rule 3's cores directories now include an entry's folder, `<player>/libretro/<stem>/`, so the proxy copy passes the owner,
+mode and architecture checks where it lies. *A changed build is approved again and read again*, but a proxy loaded in
+the process under the old hash stays loaded (§7.2: never unloaded; `load_expecting` refuses a second approval), so the
+new build is read at the next start of the program. Named as a limit [A].
+
+**Found while building.** A game's creation values were read under the row's console, while a session stores its
+settings under its own console (the system's table console, else its id in capitals). For a system with no table
+console, which is the libretro test core's, a console setting stored through a session was applied only at run time, and
+a core that reads its options at load (`tc_hw`, `tc_rate`) never saw it. `open_game` now reads them under the session's
+console. In every other case the two are the same name.
+
+**Proofs, and the runtime each ran on** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs` (3), on the Rust runtime (`emusen_crystal::Runtime`), brokered through the
+  real proxy, adapter, runner and test core:
+  - an entry with no sidecar is waiting, not an engine; `approve` writes its sidecar; the game opens on it, runs 20
+    frames at 320 × 240, and a state taken and loaded brings the picture back;
+  - revoked, rebuilt and stale entries are refused in words before loading, with the standings `needs_approval`,
+    `needs_approval` and `needs_refresh`, and the new build waits for its approval;
+  - `tc_rate` stored through a session reaches the next machine's creation.
+- `emusen-core-host`: §4.8's order (native first; PCEE2 ahead of a native PS2 core; an entry's unlisted system not
+  offered), plus the crate's existing 30 tests.
+- `emusen-crystal`: `takes` refuses PCEE2 a `.cue` and gives an unlisted core what its info claims; the crate's other tests.
+- WiseMan `HostedCoreLaunchTests` under `EMUSEN_CRYSTAL_NATIVE=1`: 4 of 4, the runtime reporting the platform library and
+  frontend API 1.4. The same build's platform library from before this change fails the main case with "No core in this
+  build handles '.iso'". The fixture still lays the entry and writes its sidecar through the C# host; the test's calls are
+  the frontend API's.
+- Seeded faults, each caught: the approval unchecked (the refusals test), the copies never stale (the same), the build
+  on disk unchecked (the same), the rule's order flattened (the order test), `takes` always yes (crystal's test), the
+  creation values under the row's console (the stored-setting test).
+
+**Surfaces.** No version changes. The frontend API, the core ABI and the platform interface are unchanged. The
+`cores` listing's `trust` may now say `needs_refresh`, a word it already had. The `emusen-core-host` crate gains public
+items (`entry`, `HostedCore`, `Discovered::entry`, `CoreInfo::libretro`, `Standing::NeedsRefresh`); it is not a
+versioned C surface. `for_extension` and `for_system` now return the engines in rule order as a vector's iterator.
+
+**Left**: a waiting entry is not yet a row of the `cores` listing, and the listing's `libretro` field (`EmuSen_Cores.md`
+§7.3) is not built. Until they are, the Cores window and Mistress's question take the hash to approve from the core
+tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
+`CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
 
 ## 10l. Real cores on the Rust runtime (2026-11-01)
 

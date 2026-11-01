@@ -138,7 +138,10 @@ namespace EmuSen.WiseMan.Crystal
             var session = Defines(SessionHeader, @"EMUSEN_(?:SVC|SESSION)_\w+").Where(d => !d.Key.EndsWith("_VERSION")).ToDictionary(d => PascalOf(d.Key, "EMUSEN_(SVC|SESSION)_"), d => d.Value);
             Assert.Equal(crystal.OrderBy(d => d.Key), Constants(typeof(CrystalAbi)).OrderBy(d => d.Key));
             Assert.Equal(session.OrderBy(d => d.Key), Constants(typeof(CrystalSessionAbi)).OrderBy(d => d.Key));
-            Assert.Equal(crystal.OrderBy(d => d.Key), Constants(typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.CrystalNumbers")!).OrderBy(d => d.Key));
+            var managed = Constants(typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.CrystalNumbers")!).ToDictionary(d => d.Key, d => d.Value);
+            // The C# implementation stays at the minor it implements, at most the header's, until B10 deletes it - see EmuSen_Backend.md §34.
+            Assert.True(Convert.ToInt64(managed["Minor"]) <= Convert.ToInt64(crystal["Minor"]), $"the C# implementation's minor {managed["Minor"]} is past the header's {crystal["Minor"]}");
+            Assert.Equal(crystal.Where(d => d.Key != "Minor").OrderBy(d => d.Key), managed.Where(d => d.Key != "Minor").OrderBy(d => d.Key));
             Assert.Equal((CrystalAbi.Major << 16) | CrystalAbi.Minor, CrystalAbi.Version);
         }
 

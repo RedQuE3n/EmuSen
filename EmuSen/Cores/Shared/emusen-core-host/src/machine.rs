@@ -338,6 +338,12 @@ impl Machine {
 
     /// A disc and its companions into `drive`, or none for `None`.
     pub fn media_insert(&mut self, drive: u32, image: Option<&[u8]>, files: &[(u32, &[u8])], flags: u32) -> Result<(), Status> {
+        self.media_insert_at(drive, image, None, files, flags)
+    }
+
+    /// As `media_insert`, with the image's path given to a core claiming `IMAGE_PATH` (1.16) where the bytes are an
+    /// unaltered file's.
+    pub fn media_insert_at(&mut self, drive: u32, image: Option<&[u8]>, image_path: Option<&CStr>, files: &[(u32, &[u8])], flags: u32) -> Result<(), Status> {
         let f = self.lib.exports().media_insert.ok_or(status::NOT_SUPPORTED)?;
         let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: std::mem::size_of::<FileEntry>() as u32, which: *w, data: d.as_ptr(), len: d.len(), name: std::ptr::null() }).collect();
         let m = Media {
@@ -348,7 +354,7 @@ impl Machine {
             files: entries.as_ptr(),
             file_count: entries.len(),
             file_size: std::mem::size_of::<FileEntry>(),
-            image_path: std::ptr::null(),
+            image_path: image_path.filter(|_| image.is_some() && self.lib.claims(caps::IMAGE_PATH)).map_or(std::ptr::null(), CStr::as_ptr),
         };
         ok(unsafe { f(self.h(), drive, &m) })
     }

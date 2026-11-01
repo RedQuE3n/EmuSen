@@ -9449,6 +9449,9 @@ change to them.
 No case was sorted (a), since the C#'s own types were already marked `CSharpImplementationFact` (§29.27), and no gap in
 the Rust runtime (c) was found. Nothing was added to a C# half.
 
+On the merged tree, the full run on the Rust default passed 7,354 of 7,452 cases with 98 skipped (the picture tools,
+the uinput cases and the `CSharpImplementationFact` cases), in 47 minutes, measured on 2026-11-01 with Vulkan on lavapipe.
+
 **Seeded faults**, each reverted: the initializer applying nothing (two `CrystalSwitchTests` cases failed); applying `1`
 over a given `0` (the fills-only case failed at `=0`); the project's key set false (three `CrystalSwitchTests` cases
 failed); the fixture writing no extensions (`HostedPs2CardTests` failed on the Rust).

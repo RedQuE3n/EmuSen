@@ -213,13 +213,8 @@ pub fn read_reply(r: &mut impl Read) -> io::Result<Reply> {
 /// The most descriptors one ring carries: its images and its two semaphores.
 pub const MAX_RING_FDS: usize = 16;
 
-/// Descriptors sent by `SCM_RIGHTS` in a one-byte message of their own, after the request they belong to.
-pub fn send_fds(sock: &UnixStream, fds: &[RawFd]) -> io::Result<()> {
-    if fds.is_empty() || fds.len() > MAX_RING_FDS {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "a descriptor message of none or too many"));
-    }
-    let bytes = std::mem::size_of_val(fds) as u32;
-    let mut control = vec![0u8; unsafe { libc::CMSG_SPACE(bytes) } as usize];
+/// A one-byte message over `control`, the frame `send_fds` and `recv_fds` share.
+fn with_fd_message<T>(control: &mut [u8], f: impl FnOnce(&mut libc::msghdr) -> T) -> T {
     let mut byte = [0u8; 1];
     let mut iov = libc::iovec { iov_base: byte.as_mut_ptr() as *mut libc::c_void, iov_len: 1 };
     let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
@@ -227,14 +222,25 @@ pub fn send_fds(sock: &UnixStream, fds: &[RawFd]) -> io::Result<()> {
     msg.msg_iovlen = 1;
     msg.msg_control = control.as_mut_ptr() as *mut libc::c_void;
     msg.msg_controllen = control.len() as _;
-    unsafe {
-        let c = libc::CMSG_FIRSTHDR(&msg);
+    f(&mut msg)
+}
+
+/// Descriptors sent by `SCM_RIGHTS` in a one-byte message of their own, after the request they belong to.
+pub fn send_fds(sock: &UnixStream, fds: &[RawFd]) -> io::Result<()> {
+    if fds.is_empty() || fds.len() > MAX_RING_FDS {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "a descriptor message of none or too many"));
+    }
+    let bytes = std::mem::size_of_val(fds) as u32;
+    let mut control = vec![0u8; unsafe { libc::CMSG_SPACE(bytes) } as usize];
+    let sent = with_fd_message(&mut control, |msg| unsafe {
+        let c = libc::CMSG_FIRSTHDR(msg);
         (*c).cmsg_level = libc::SOL_SOCKET;
         (*c).cmsg_type = libc::SCM_RIGHTS;
         (*c).cmsg_len = libc::CMSG_LEN(bytes) as _;
         std::ptr::copy_nonoverlapping(fds.as_ptr() as *const u8, libc::CMSG_DATA(c), bytes as usize);
-    }
-    if unsafe { libc::sendmsg(sock.as_raw_fd(), &msg, libc::MSG_NOSIGNAL) } != 1 {
+        libc::sendmsg(sock.as_raw_fd(), msg, libc::MSG_NOSIGNAL)
+    });
+    if sent != 1 {
         return Err(io::Error::last_os_error());
     }
     Ok(())
@@ -244,30 +250,26 @@ pub fn send_fds(sock: &UnixStream, fds: &[RawFd]) -> io::Result<()> {
 /// and whatever arrived is closed.
 pub fn recv_fds(sock: &UnixStream, count: usize) -> io::Result<Vec<OwnedFd>> {
     let mut control = vec![0u8; unsafe { libc::CMSG_SPACE((MAX_RING_FDS * 4) as u32) } as usize];
-    let mut byte = [0u8; 1];
-    let mut iov = libc::iovec { iov_base: byte.as_mut_ptr() as *mut libc::c_void, iov_len: 1 };
-    let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
-    msg.msg_iov = &mut iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = control.as_mut_ptr() as *mut libc::c_void;
-    msg.msg_controllen = control.len() as _;
-    let n = unsafe { libc::recvmsg(sock.as_raw_fd(), &mut msg, libc::MSG_CMSG_CLOEXEC) };
+    let (n, got, flags) = with_fd_message(&mut control, |msg| unsafe {
+        let n = libc::recvmsg(sock.as_raw_fd(), msg, libc::MSG_CMSG_CLOEXEC);
+        let mut got = Vec::new();
+        if n == 1 {
+            let mut c = libc::CMSG_FIRSTHDR(msg);
+            while !c.is_null() {
+                if (*c).cmsg_level == libc::SOL_SOCKET && (*c).cmsg_type == libc::SCM_RIGHTS {
+                    let k = ((*c).cmsg_len as usize - libc::CMSG_LEN(0) as usize) / 4;
+                    let data = libc::CMSG_DATA(c) as *const RawFd;
+                    got.extend((0..k).map(|i| OwnedFd::from_raw_fd(std::ptr::read_unaligned(data.add(i)))));
+                }
+                c = libc::CMSG_NXTHDR(msg, c);
+            }
+        }
+        (n, got, msg.msg_flags)
+    });
     if n != 1 {
         return Err(if n < 0 { io::Error::last_os_error() } else { io::Error::new(io::ErrorKind::UnexpectedEof, "no descriptor message") });
     }
-    let mut got = Vec::new();
-    unsafe {
-        let mut c = libc::CMSG_FIRSTHDR(&msg);
-        while !c.is_null() {
-            if (*c).cmsg_level == libc::SOL_SOCKET && (*c).cmsg_type == libc::SCM_RIGHTS {
-                let k = ((*c).cmsg_len as usize - libc::CMSG_LEN(0) as usize) / 4;
-                let data = libc::CMSG_DATA(c) as *const RawFd;
-                got.extend((0..k).map(|i| OwnedFd::from_raw_fd(std::ptr::read_unaligned(data.add(i)))));
-            }
-            c = libc::CMSG_NXTHDR(&msg, c);
-        }
-    }
-    if msg.msg_flags & libc::MSG_CTRUNC != 0 || got.len() != count {
+    if flags & libc::MSG_CTRUNC != 0 || got.len() != count {
         return Err(io::Error::new(io::ErrorKind::InvalidData, format!("{} descriptors where {count} were due", got.len())));
     }
     Ok(got)

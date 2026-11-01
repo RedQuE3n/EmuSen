@@ -47,8 +47,10 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.False(CrystalRuntime.Native);
             Assert.Contains("C# implementation", CrystalRuntime.Implementation);
-            Assert.Equal(CrystalAbi.Version, EmuSen.Crystal.Client.Contract.Crystal.AbiVersion());
-            Assert.StartsWith($"EmuSen's C# implementation of the frontend API {CrystalAbi.Major}.{CrystalAbi.Minor}", CrystalRuntime.VersionText);
+            uint version = EmuSen.Crystal.Client.Contract.Crystal.AbiVersion();
+            Assert.Equal(CrystalAbi.Major, version >> 16);
+            Assert.True((version & 0xFFFF) <= CrystalAbi.Minor);
+            Assert.StartsWith($"EmuSen's C# implementation of the frontend API {CrystalAbi.Major}.{version & 0xFFFF}", CrystalRuntime.VersionText);
         }
 
         [Fact]

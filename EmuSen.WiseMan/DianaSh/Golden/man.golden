@@ -6062,7 +6062,7 @@ case the page for cores
 target none
 covers 1
 $ man cores
-out 10468
+out 10584
 NAME
     cores - list, download, install, update, roll back, remove and
     verify the libretro cores EmuSen hosts
@@ -6152,9 +6152,11 @@ INSTALLING
         transport      HTTPS, the certificate checked against the
                        system's store, a redirect off the buildbot
                        refused
-        crc32          the zip's CRC-32 equals the index line the plan
-                       was made from; a difference means the build
-                       changed since cores fetch, or the bytes did
+        crc32          the core's CRC-32 as the zip records it equals
+                       the index line the plan was made from (the
+                       index gives the library's, not the zip's); a
+                       difference means the build changed since
+                       cores fetch, or the bytes did
         shape          exactly one member, named <core>_libretro.so
                        whole: no folder, no .., no absolute path, no
                        link, no other file

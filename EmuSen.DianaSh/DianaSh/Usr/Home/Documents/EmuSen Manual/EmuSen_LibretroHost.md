@@ -1704,7 +1704,7 @@ is the cause. The state was serialized again at once after each load: it differe
 
 **The pictures.** With Flycast's default, `reicast_threaded_rendering=enabled`, the second to fifth pictures after each
 load equal the second to fifth after the save. The first does not: it differed from the save's and from the other
-load's (`c225c7b0…`, `2b28c8c2…` against `3f7bd061…`), as D's two loads did. With `disabled`, every picture after
+load's (`c225c7b0…`, `2b28c8c2…` against `3f7bd061…`), as the two loads of §10m did. With `disabled`, every picture after
 each of three loads equals the picture after the save, the first included. The core's option text says the threaded
 mode "runs the GPU and CPU on different threads". The measurement fits a picture presented one `retro_run` after its
 frame: the frame in flight at the load belongs to the abandoned timeline, and the state does not hold it. Three things
@@ -1712,7 +1712,7 @@ do not change the result: the size check, a second serialize before each load (t
 presence sent again after a load with the same devices. Presence sent with *changed* devices (ports 1 to 3 going from
 the core's default to none) does change it: the game's pictures diverge from the third frame after the load.
 
-**What §10m saw.** D's digest compared only the first picture after each load, which is the stale one. D's PNG after
+**What §10m saw.** The §10m digest compared only the first picture after each load, which is the stale one. Its PNG after
 the load was drawn from the ring example's chain. For a picture that is read back (all of Flycast's, §10m item 1), the
 example's steps after the run never uploaded to that chain, so the PNG showed an older picture than the loaded one. The
 "timer a second past the save" was not reproduced in-process; the steps now upload. PCEE2's first picture after a load,

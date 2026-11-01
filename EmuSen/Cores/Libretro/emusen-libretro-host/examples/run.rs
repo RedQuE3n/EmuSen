@@ -55,6 +55,9 @@ fn main() {
     let settings = rest.iter().skip(1).cloned().collect::<Vec<_>>().join("\n");
     let lib = Library::load(Path::new(&args[1])).unwrap_or_else(|e| panic!("{e:?}"));
     println!("info: {}", lib.info_text().unwrap_or_default());
+    if std::env::var_os("EMUSEN_RUN_SCHEMA").is_some() {
+        println!("schema: {}", lib.settings_text().unwrap_or_default());
+    }
     let image = std::fs::read(&image_path).unwrap();
     let path = CString::new(std::fs::canonicalize(&image_path).unwrap().to_string_lossy().as_bytes()).unwrap();
     let c = Create { settings: &settings, pixel_formats: 0b111, image_path: Some(&path), ..Create::new(&image) };
@@ -66,21 +69,34 @@ fn main() {
             let mut audio = vec![0i16; 1 << 16];
             let mut samples = 0;
             let race = std::env::var_os("EMUSEN_RUN_RACE").is_some();
-            let size = m.space_size(0).unwrap_or(0).min(1 << 20) as usize;
-            let (mut first, mut second) = (vec![0u8; size], vec![0u8; size]);
+            let (mut first, mut second) = (Vec::new(), Vec::new());
+            let mut size = 0;
             let mut moved = 0;
-            for _ in 0..frames {
+            let timed_from: u64 = std::env::var("EMUSEN_RUN_TIMED_FROM").ok().and_then(|v| v.parse().ok()).unwrap_or(u64::MAX);
+            let mut timed = None;
+            for n in 0..frames {
+                if n == timed_from {
+                    timed = Some(std::time::Instant::now());
+                }
                 if let Err(e) = m.advance() {
                     println!("advance: {e:?} {}", m.last_error());
                     break;
                 }
                 samples += m.audio_drain(&mut audio).map_or(0, |a| a.0);
+                if race && size == 0 {
+                    size = m.space_size(0).unwrap_or(0).min(1 << 20) as usize;
+                    (first, second) = (vec![0u8; size], vec![0u8; size]);
+                }
                 if race && size > 0 {
                     let _ = m.space_read(0, 0, &mut first);
                     std::thread::sleep(std::time::Duration::from_micros(500));
                     let _ = m.space_read(0, 0, &mut second);
                     moved += (first != second) as u32;
                 }
+            }
+            if let Some(t) = timed {
+                let k = frames - timed_from;
+                println!("timed: frames {timed_from} to {frames}, {k} frames in {:?}, {:.3} ms a frame", t.elapsed(), t.elapsed().as_secs_f64() * 1000.0 / k as f64);
             }
             if race {
                 println!("race: {moved} of {frames} frames saw the first {size} bytes of space 0 move between two reads");

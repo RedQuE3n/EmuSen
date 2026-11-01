@@ -24,6 +24,11 @@ pub const CAPABILITIES: u64 = caps::RESET
     | caps::IMAGE_PATH
     | caps::MEDIA;
 
+/// The cores whose memory was measured to hold still between frames, for which the frame-end window is exact. PCEE2's
+/// does not: its emulation runs on threads of its own between `retro_run`s, the first MiB of its RAM moving between two
+/// reads in 62 of 1,000 frames of Jak and Daxter (34 with MTVU off), measured 2026-10-31 (EmuSen_LibretroHost.md §10c).
+const STILL_BETWEEN_FRAMES: &[&str] = &["testcore"];
+
 /// The entry this proxy was copied into, its libretro core sealed, and that copy's hash.
 struct Entry {
     folder: PathBuf,
@@ -118,6 +123,10 @@ impl Target for Libretro {
             fds: vec![e.sealed.as_raw_fd()],
             require_abi: std::env::var("EMUSEN_BROKER_REQUIRE_ABI").ok().and_then(|v| v.parse().ok()).unwrap_or(1),
         })
+    }
+
+    fn window() -> bool {
+        entry().is_ok_and(|e| STILL_BETWEEN_FRAMES.contains(&e.stem.as_str()))
     }
 
     fn info_extra() -> String {

@@ -711,6 +711,33 @@ the WiseMan class through it; the host's comparison of core info's `"libretro"` 
 which belongs with the approval the Cores window shows; the frame's picture and sound batched into `advance`'s reply
 (each is one round trip now, about 9 µs).
 
+## 10c. PCEE2 with the player's firmware (2026-10-31)
+
+Approved the same day: the referee folder's Americas BIOS and the Jak and Daxter disc, each given by path only. The core's
+system folder is the referee's (`EMUSEN_LIBRETRO_SYSTEM_DIR`, a referee run's switch of the libretro host's that answers
+`GET_SYSTEM_DIRECTORY` with a path and copies nothing), the BIOS chosen by the core's own option `pcsx2_bios`; the folder
+was never listed, opened or hashed by the project's tools, and no RAM or disc data was kept.
+
+**Timing** [M, the release libretro host in-process through the Rust host, PCEE2's `software` renderer, frames 600 to
+2,400 of Jak and Daxter's start with no input, CPU weight 20 beside other work]: 10.37, 5.43 and 6.50 ms a frame over three
+rounds (the first two differed, so a third was run); every round under the 16.7 ms of a 59.94 Hz frame. The arena needs a
+route of input or a state of this core's own, which a later stage records; the start's frames match the span RetroArch's
+own figure was taken over (`EmuSen_LibretroBridge.md` §1).
+
+**What running it changed** [M]:
+- **Memory maps arrive after load.** PCEE2 gives its maps only once the game runs; the host now takes maps or blocks that
+  arrive after `create` and raises `MACHINE_INFO`. Its space is `EE RAM`, 33,554,432 bytes.
+- **The race check fails for PCEE2.** The first MiB of `EE RAM` moved between two reads 0.5 ms apart in 62 of 1,000
+  frames (34 with MTVU off): its emulation runs on threads of its own between `retro_run`s. So the frame-end window is
+  off for it, and for every core not measured still; it stays on for the test core, which was. Cheats and the debugger
+  read and write PCEE2's memory live, as RetroArch's do, and a value can change between a read and the frame's end:
+  named in its losses.
+- **Its saves.** PCEE2 writes its two memory cards, `pcsx2/memcards/Mcd001.ps2` and `Mcd002.ps2`, 8,650,752 bytes each,
+  in its system folder, and nothing in its save folder. Its profile makes them battery files 2 and 3, kind `removable`,
+  medium `ps2.card`, slots 1 and 2. Sapphire's card reader opens both as unformatted cards of the right length, which
+  is consistent with one format but does not prove it; the two engines share a card only after a card formatted and
+  written by one is read by the other (stage 4).
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

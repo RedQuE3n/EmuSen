@@ -20,6 +20,11 @@ pub trait Target: 'static {
     fn info_extra() -> String {
         String::new()
     }
+    /// Whether the served core's memory holds still between calls, measured, so the frame-end window is exact for it;
+    /// a core whose threads run between frames reads live (EmuSen_LibretroHost.md §10c).
+    fn window() -> bool {
+        false
+    }
 }
 
 /// The proxy's own setting: the deadline of a frame, in seconds; create and free get six times it.
@@ -46,6 +51,7 @@ pub struct Window {
     /// (space, address, bytes) as the runner copied them, valid until a call that changes the machine.
     held: Vec<(u32, u32, Vec<u8>)>,
     valid: bool,
+    enabled: bool,
     /// The ranges read this frame, asked for at the next frame's end.
     wanted: Vec<(u32, u32, u32)>,
 }
@@ -83,6 +89,9 @@ impl Window {
 
     /// A read the window did not hold, remembered for the next frame: merged with a neighbour within 256 bytes.
     fn want(&mut self, space: u32, address: u32, len: u32) {
+        if !self.enabled {
+            return;
+        }
         let total: u64 = self.wanted.iter().map(|w| w.2 as u64).sum();
         if total + len as u64 > WINDOW_MAX as u64 {
             return;
@@ -392,7 +401,7 @@ pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i3
     w.text((!by_path).then_some(image));
     w.text(image_path.as_deref().map(str::as_bytes));
     match link.call(Op::Create, false, 0, &w.0, frame * 6) {
-        Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame, window: Window::default() })) as *mut RawMachine,
+        Ok(r) if r.ret == 0 => Box::into_raw(Box::new(Proxied { link, log, frame, window: Window { enabled: T::window(), ..Window::default() } })) as *mut RawMachine,
         Ok(r) => refuse(r.ret as i32, &String::from_utf8_lossy(&r.bytes)),
         Err((code, why)) => refuse(code, &why),
     }

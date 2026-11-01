@@ -103,6 +103,12 @@ impl Drop for Written {
     }
 }
 
+/// The system folder the core is given: its own, or for a referee run the one `EMUSEN_LIBRETRO_SYSTEM_DIR` names by path, so
+/// that firmware is never copied (EmuSen_LibretroHost.md §10c).
+fn system_folder(folders: &files::Folders) -> std::path::PathBuf {
+    std::env::var_os("EMUSEN_LIBRETRO_SYSTEM_DIR").map_or_else(|| folders.system.clone(), std::path::PathBuf::from)
+}
+
 /// The library, initialised: callbacks set, `retro_init` called, the folders made.
 pub fn ready() -> Result<&'static Library, String> {
     let lib = library::get().map_err(str::to_owned)?;
@@ -115,7 +121,7 @@ pub fn ready() -> Result<&'static Library, String> {
         format!("the core's folders: {e}")
     })?;
     let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
-    front::set_library_folders(c(&folders.system), c(&folders.save));
+    front::set_library_folders(c(&system_folder(&folders)), c(&folders.save));
     unsafe {
         (lib.api.set_environment)(Some(front::environment));
         (lib.api.set_video_refresh)(Some(front::video_refresh));
@@ -210,6 +216,34 @@ impl Machine {
     fn refresh_blocks(&mut self) {
         if self.blocks {
             self.spaces = blocks(self.lib);
+        }
+    }
+
+    /// The spaces from memory maps the core gave since the last look, or else its blocks; a core may give either only
+    /// once the game runs, so this is asked again after each frame until there are spaces, and machine info is raised
+    /// when they change.
+    fn update_spaces(&mut self, first: bool) {
+        let before = self.spaces.len();
+        match self.shared.maps.take() {
+            Some(maps) if !maps.is_empty() => {
+                let mut s = maps;
+                if let Some(name) = crate::cheat_space(&self.system)
+                    && !s.iter().any(|x| x.name == name)
+                    && let Some(b) = memory::block(&name, unsafe { (self.lib.api.get_memory_data)(sys::MEMORY_SYSTEM_RAM) } as *mut u8, unsafe { (self.lib.api.get_memory_size)(sys::MEMORY_SYSTEM_RAM) })
+                {
+                    s.push(b);
+                }
+                self.spaces = s;
+                self.blocks = false;
+            }
+            _ if first || (self.blocks && self.spaces.is_empty()) => {
+                self.blocks = true;
+                self.spaces = blocks(self.lib);
+            }
+            _ => return,
+        }
+        if !first && self.spaces.len() != before {
+            v1::emit(event::MACHINE_INFO, 0, 0);
         }
     }
 
@@ -379,7 +413,11 @@ impl v1::Core for Machine {
     }
 
     fn battery_files(_system: &str) -> Option<Vec<Battery>> {
-        Some(vec![Battery::game(SRAM, ".srm"), Battery::game(RTC, ".rtc")])
+        let mut list = vec![Battery::game(SRAM, ".srm"), Battery::game(RTC, ".rtc")];
+        if let Ok(lib) = ready() {
+            list.extend(files::cards(&lib.stem).iter().map(|&(which, suffix, _, medium, label, port)| Battery::removable(which, suffix).medium(medium).label(label).port(port)));
+        }
+        Some(list)
     }
 
     fn battery_families(_system: &str) -> Vec<BatteryKind> {
@@ -419,6 +457,7 @@ impl v1::Core for Machine {
         if !self.memory(sys::MEMORY_RTC).is_empty() {
             battery.push(Battery::game(RTC, ".rtc"));
         }
+        battery.extend(files::cards(&self.lib.stem).iter().map(|&(which, suffix, ..)| Battery::removable(which, suffix)));
         MachineInfo {
             system: self.system.clone(),
             region: None,
@@ -465,6 +504,9 @@ impl v1::Core for Machine {
         let saves_start = std::time::Instant::now();
         if self.frames % 15 == 0 {
             self.scan_saves();
+        }
+        if self.shared.maps.is_some() || (self.blocks && self.spaces.is_empty()) {
+            self.update_spaces(false);
         }
         self.phases = [ran, 0, saves_start.elapsed().as_nanos() as i64];
         front::flush_logs();
@@ -717,7 +759,7 @@ impl Machine {
         let c = |p: &std::path::Path| CString::new(p.to_string_lossy().as_bytes()).unwrap_or_default();
         let image_path = v1::image_path();
         let content = image_path.as_deref().and_then(|p| std::path::Path::new(p).parent()).map(c);
-        shared.folders = Some(front::Folders { system: c(&folders.system), save: c(&folders.save), content });
+        shared.folders = Some(front::Folders { system: c(&system_folder(&folders)), save: c(&folders.save), content });
         front::bind(&mut *shared);
         front::with_declared(|d| {
             for (k, v) in r.settings.pairs() {
@@ -735,6 +777,11 @@ impl Machine {
             STATUS_FOLDERS
         };
         saves.place(&passed).map_err(fail_folders)?;
+        let system_dir = system_folder(&folders);
+        for &(which, _, path, ..) in files::cards(&lib.stem) {
+            let passed = r.files.iter().find(|f| f.which == which).map(|f| f.data);
+            saves.card(which, system_dir.join(path), passed).map_err(fail_folders)?;
+        }
         let mut firmware_written = Written(Vec::new());
         for fw in firmware(lib) {
             if let Some(file) = r.files.iter().find(|f| f.which == fw.which) {
@@ -836,22 +883,7 @@ impl Machine {
         for port in 0..front::ports() {
             unsafe { (lib.api.set_controller_port_device)(port as u32, device_for(port)) };
         }
-        machine.spaces = match machine.shared.maps.take() {
-            Some(maps) if !maps.is_empty() => {
-                let mut s = maps;
-                if let Some(name) = crate::cheat_space(system)
-                    && !s.iter().any(|x| x.name == name)
-                    && let Some(b) = memory::block(&name, unsafe { (lib.api.get_memory_data)(sys::MEMORY_SYSTEM_RAM) } as *mut u8, unsafe { (lib.api.get_memory_size)(sys::MEMORY_SYSTEM_RAM) })
-                {
-                    s.push(b);
-                }
-                s
-            }
-            _ => {
-                machine.blocks = true;
-                blocks(lib)
-            }
-        };
+        machine.update_spaces(true);
         machine.scan_saves();
         if front::with_declared(|d| d.declared_late) {
             let text = front::with_declared(|d| d.options.to_text());

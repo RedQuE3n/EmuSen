@@ -101,5 +101,9 @@ namespace EmuSen.Mistress.Input
 
         // While this row is on, the state slot's picture and saved time show beside the menu.
         public bool ShowsSlot { get; init; }
+
+        // While this row is on, the Pause Card's pane shows the reel's newest moments, or the paused frame (EmuSen_BigPicture.md §48.4).
+        public bool ShowsReel { get; init; }
+        public bool ShowsFrame { get; init; }
     }
 }

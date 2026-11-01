@@ -51,7 +51,8 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Memory Cards", "Crop This Game..."];
+        internal static readonly string[] GameOptions = ["Cheats", MainWindow.ControllersMenu, MainWindow.DisplayMenu];
+        internal static readonly string[] Leave = ["Back to Library", "Restart Game...", "Quit Game...", "Quit EmuSen..."];
         internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.
@@ -98,38 +99,47 @@ namespace EmuSen.WiseMan.Mistress
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public Task The_in_game_menu_is_the_game_s_actions_then_its_settings_then_leaving(bool bigScreen) => Session.Dispatch(() =>
+        public Task The_in_game_menu_is_the_game_s_actions_then_its_options_then_leaving(bool bigScreen) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(bigScreen);
             Chord(pad);
             string[] lines = PadMenu.Lines(window);
-            Assert.Equal(10, lines.Length);
+            Assert.Equal(7, lines.Length);
             Assert.Equal("Resume", lines[0]);
             Assert.StartsWith("Rewind", lines[1]);
-            Assert.Equal("Save State      <  Slot 1 (Empty)  >", lines[2]);
-            Assert.Equal("Load State      <  Slot 1 (Empty)  >", lines[3]);
+            Assert.Equal("Save      <  Slot 1 (Empty)  >", lines[2]);
+            Assert.Equal("Load      <  Slot 1 (Empty)  >", lines[3]);
             Assert.Equal("Speed      <  100%  >", lines[4]);
-            Assert.Equal(["Restart Game...", MainWindow.GameSettingsMenu, "Back to Library", "Quit Game...", MainWindow.EmuSenMenu], lines[5..]);
-            Assert.DoesNotContain(lines, l => l.StartsWith("State Slot", StringComparison.Ordinal));
+            Assert.Equal([MainWindow.GameOptionsMenu, MainWindow.LeaveMenu], lines[5..]);
 
-            // Two dividers: before the settings, and before the ways out.
+            // One divider, before the options; Preferences, Shell and the EmuSen page are the library's alone.
             List<PadMenuEntry> rows = PadMenu.Entries(window);
-            Assert.Equal([6, 7], Enumerable.Range(0, rows.Count).Where(i => rows[i].StartsSection));
+            Assert.Equal([5], Enumerable.Range(0, rows.Count).Where(i => rows[i].StartsSection));
             Assert.All(new[] { 2, 3, 4 }, i => Assert.NotNull(rows[i].Adjust));
-            Assert.Equal(["Save State", "Load State"], rows.Where(r => r.ShowsSlot).Select(r => r.Label!()));
-            Assert.Equal(["Restart Game?", "Quit Game?"], rows.Where(r => r.Question is not null).Select(r => r.Question!));
+            Assert.Equal(["Save", "Load"], rows.Where(r => r.ShowsSlot).Select(r => r.Label!()));
+            Assert.Equal(["Rewind"], rows.Where(r => r.ShowsReel).Select(r => r.Label!()));
+            Assert.DoesNotContain(PadMenu.AllLines(window), l => l is "Preferences" or "Shell" or MainWindow.EmuSenMenu or "Memory Cards");
 
-            Assert.Equal(GameSettings, SubmenuLines(window, MainWindow.GameSettingsMenu));
-            Assert.Equal(bigScreen ? ["Preferences", "Shell", "Exit Big Picture", "Exit EmuSen..."] : ["Preferences", "Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
+            string[] options = SubmenuLines(window, MainWindow.GameOptionsMenu);
+            Assert.Equal(GameOptions, options[..3]);
+            Assert.StartsWith("Volume      <  ", options[3]);
+            Assert.Equal(4, options.Length);
+            Assert.Equal(Leave, SubmenuLines(window, MainWindow.LeaveMenu));
+            Assert.Equal(["Restart Game?", "Quit Game?", "Quit EmuSen?"], rows.Single(r => r.Text() == MainWindow.LeaveMenu).Submenu!().Where(r => r.Question is not null).Select(r => r.Question!));
 
-            // The big panel: the game's name over it, a chevron on each submenu, arrows on each value, no version under the first page.
+            // The card: the game's name as its title row, the pane beside it, the frame dimmed by the card's scrim and not blurred; the help bar from its actions.
             if (bigScreen)
             {
+                Assert.True(PadMenu.Card(window).IsVisible);
+                Assert.False(window.GetControl<Control>("PadMenuBig").IsVisible);
+                Assert.False(window.GetControl<Control>("MenuBackdrop").IsVisible);
                 MenuPanel big = PadMenu.Big(window);
+                Assert.Same(PadMenu.Card(window).CardPanel, big);
+                Assert.Equal(MenuAnchor.Left, big.Anchor);
                 Assert.Equal("Cobalt Harbor (Synthetic)", big.Title);
                 Assert.Null(big.Subtitle);
                 Assert.Null(big.Footer);
-                Assert.Equal(["Close Menu", "Select", "Close Menu", "Change", "Choose"], big.Hints!.Select(h => h.Label));
+                Assert.Equal(["Select", "Back", "Close Menu", "Screenshot", "Change"], big.Hints!.Select(h => h.Label));
             }
             else Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.DeskTitle(window));
             Done(window);
@@ -172,12 +182,12 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("Back", PadMenu.Big(s.Window).Hints![2].Label);
         }, default);
 
-        // With a second pad, Game Settings begins with Swap Players, reached by pad; it trades players 1 and 2 and names both, and the page fits - see EmuSen_Input.md §8.13.
+        // With a second pad, the first page offers Swap Players before the options, reached by pad; it trades players 1 and 2 and names both, and the page fits - see EmuSen_Input.md §8.13.
         [Theory]
         [InlineData(false, 1280, 800)]
         [InlineData(true, 1280, 800)]
         [InlineData(true, 1920, 1200)]
-        public Task Swap_players_under_game_settings_trades_players_1_and_2(bool bigScreen, int width, int height) => Session.Dispatch(() =>
+        public Task Swap_players_on_the_first_page_trades_players_1_and_2(bool bigScreen, int width, int height) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(bigScreen, width, height);
             pad.Pad.Name = "Legion Go S";
@@ -185,9 +195,9 @@ namespace EmuSen.WiseMan.Mistress
             pad.Tick();
             Assert.Equal(1, pad.Gamepad.Players.PlayerOf(pad.Gamepad.Pads[0]));
             Chord(pad);
-            Enter(window, pad, MainWindow.GameSettingsMenu);
-            Assert.Equal([MainWindow.SwapPlayersRow, .. GameSettings], PadMenu.Lines(window));
-            Assert.Equal(0, PadMenu.Selected(window));
+            Assert.Equal(MainWindow.SwapPlayersRow, PadMenu.Lines(window)[5]);
+            Assert.Equal(8, PadMenu.Lines(window).Length);
+            pad.Down(5);
             WindowFitAuditTests.Settle(window);
             Control panel = bigScreen ? PadMenu.Big(window) : window.GetControl<Control>("PadMenuDesk");
             // The desktop menu keeps the desktop's text sizes, as the window audit allows it (EmuSen_Input.md §8.9).
@@ -215,26 +225,26 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver pad) = Playing(bigScreen);
             Chord(pad);
             Assert.True(window.IsPaused);
-            Enter(window, pad, MainWindow.GameSettingsMenu);
+            Enter(window, pad, MainWindow.GameOptionsMenu);
             Assert.Equal(2, PadMenu.Depth(window));
-            Assert.Equal(GameSettings, PadMenu.Lines(window));
+            Assert.Equal(GameOptions, PadMenu.Lines(window)[..3]);
             Assert.Equal(0, PadMenu.Selected(window));
             if (bigScreen)
             {
-                Assert.Equal(MainWindow.GameSettingsMenu, PadMenu.Big(window).Title);
-                Assert.Equal("‹ COBALT HARBOR (SYNTHETIC)", PadMenu.Big(window).Subtitle);
+                Assert.Equal(MainWindow.GameOptionsMenu, PadMenu.Big(window).Title);
+                Assert.Equal("‹ Cobalt Harbor (Synthetic)", PadMenu.Big(window).Subtitle);
             }
-            else Assert.Equal("Cobalt Harbor (Synthetic)  ›  Game Settings", PadMenu.DeskTitle(window));
+            else Assert.Equal("Cobalt Harbor (Synthetic)  ›  Game Options", PadMenu.DeskTitle(window));
 
             pad.Down(2);
             pad.B();
             Assert.Equal(1, PadMenu.Depth(window));
-            Assert.Equal(MainWindow.GameSettingsMenu, PadMenu.SelectedLine(window));
+            Assert.Equal(MainWindow.GameOptionsMenu, PadMenu.SelectedLine(window));
             Assert.True(window.IsPaused);
 
             // Entered again it opens on the row it was left on; Start closes the whole menu from inside it, and the game runs.
             pad.A();
-            Assert.Equal("Controller Bindings", PadMenu.SelectedLine(window));
+            Assert.Equal(MainWindow.DisplayMenu, PadMenu.SelectedLine(window));
             pad.Start();
             Assert.False(PadMenu.IsOpen(window));
             Assert.False(window.IsPaused);
@@ -242,8 +252,8 @@ namespace EmuSen.WiseMan.Mistress
             // A new opening starts on Resume, and the submenu still remembers its row; B twice closes it.
             Chord(pad);
             Assert.Equal(0, PadMenu.Selected(window));
-            Enter(window, pad, MainWindow.GameSettingsMenu);
-            Assert.Equal("Controller Bindings", PadMenu.SelectedLine(window));
+            Enter(window, pad, MainWindow.GameOptionsMenu);
+            Assert.Equal(MainWindow.DisplayMenu, PadMenu.SelectedLine(window));
             pad.B();
             pad.B();
             Assert.False(PadMenu.IsOpen(window));
@@ -252,25 +262,30 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task Left_and_right_on_save_and_load_change_the_slot_both_act_on_and_the_card_shows_what_it_holds() => Session.Dispatch(() =>
+        public Task Left_and_right_on_save_and_load_change_the_slot_both_act_on_and_the_pane_shows_every_slot() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(bigScreen: true);
             Chord(pad);
+            PauseCardPane pane = PadMenu.Pane(window);
+            Assert.Equal("none", pane.Showing);
             pad.Down(2);
-            Assert.Equal("Save State", PadMenu.Entries(window)[PadMenu.Selected(window)].Label!());
+            Assert.Equal("Save", PadMenu.Entries(window)[PadMenu.Selected(window)].Label!());
             WindowFitAuditTests.Settle(window);
-            var card = window.GetControl<Control>("PadSlotCard");
-            Assert.True(card.IsVisible);
-            Assert.Equal("Slot 1\nEmpty", window.GetControl<TextBlock>("PadSlotCaption").Text);
+            Assert.False(window.GetControl<Control>("PadSlotCard").IsVisible);
+            Assert.Equal("slots", pane.Showing);
+            Assert.Equal(Enumerable.Range(1, 8).Select(i => $"PaneSlot{i}"), PaneSlots(pane).Select(b => b.Name));
+            Assert.Equal(1, Ringed(pane));
+            Assert.Equal(8, PaneWords(pane).Count(t => t == "Empty"));
 
             pad.Right();
             Assert.True(PadMenu.IsOpen(window));
             Assert.Equal(2, (int)Field(window, "_stateSlot")!);
             Assert.Equal("Slot 2 (Empty)", PadMenu.Entries(window)[2].Value!());
             Assert.Equal("Slot 2 (Empty)", PadMenu.Entries(window)[3].Value!());
-            Assert.Equal("Slot 2\nEmpty", window.GetControl<TextBlock>("PadSlotCaption").Text);
+            WindowFitAuditTests.Settle(window);
+            Assert.Equal(2, Ringed(pane));
 
-            // A saves to slot 2 and closes the menu; slot 2 then holds a state and its picture, and Load State says so.
+            // A saves to slot 2 and closes the menu; slot 2 then holds a state and its picture, and the strip says so on Load.
             pad.A();
             Assert.False(PadMenu.IsOpen(window));
             string state = SaveLibrary.StatePathFor(Running(window)!, 2, Path.Combine(_root, "States"));
@@ -280,21 +295,37 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(File.Exists(SaveLibrary.StatePathFor(Running(window)!, 1, Path.Combine(_root, "States"))));
             Chord(pad);
             pad.Down(3);
-            Assert.Equal("Load State      <  Slot 2  >", PadMenu.SelectedLine(window));
+            Assert.Equal("Load      <  Slot 2  >", PadMenu.SelectedLine(window));
             WindowFitAuditTests.Settle(window);
-            Assert.StartsWith("Slot 2\nSaved ", window.GetControl<TextBlock>("PadSlotCaption").Text);
-            Assert.True(window.GetControl<Avalonia.Controls.Image>("PadSlotPicture").IsVisible);
-            Assert.NotNull(window.GetControl<Avalonia.Controls.Image>("PadSlotPicture").Source);
+            Assert.Equal("slots", pane.Showing);
+            Assert.Equal(7, PaneWords(pane).Count(t => t == "Empty"));
+            Assert.NotNull(PaneSlots(pane)[1].GetVisualDescendants().OfType<Avalonia.Controls.Image>().SingleOrDefault()?.Source);
+            Assert.Null(PaneSlots(pane)[0].Child);
 
-            // Left back to slot 1 on the Load row moves both rows; the card goes with any other row.
+            // Left back to slot 1 on the Load row moves both rows and the ring; the pane empties on any other row.
             pad.Left();
             Assert.Equal(1, (int)Field(window, "_stateSlot")!);
             Assert.Equal("Slot 1 (Empty)", PadMenu.Entries(window)[2].Value!());
+            WindowFitAuditTests.Settle(window);
+            Assert.Equal(1, Ringed(pane));
             pad.Down();
             WindowFitAuditTests.Settle(window);
-            Assert.False(card.IsVisible);
+            Assert.Equal("none", pane.Showing);
             Done(window);
         }, default);
+
+        internal static List<Border> PaneSlots(PauseCardPane pane) => pane.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("PaneSlot", StringComparison.Ordinal) == true && b.Name != "PaneSlots").ToList();
+
+        // The slot whose frame is drawn thicker, as the current one is ringed.
+        internal static int Ringed(PauseCardPane pane)
+        {
+            List<Border> slots = PaneSlots(pane);
+            double most = slots.Max(b => b.BorderThickness.Left);
+            Assert.Single(slots, b => b.BorderThickness.Left == most);
+            return slots.FindIndex(b => b.BorderThickness.Left == most) + 1;
+        }
+
+        internal static IEnumerable<string> PaneWords(PauseCardPane pane) => pane.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "");
 
         // Each question opens on No, No and B change nothing, and Yes does what the row says.
         [Theory]
@@ -306,24 +337,25 @@ namespace EmuSen.WiseMan.Mistress
             object session = Field(window, "_session")!;
 
             Chord(pad);
+            Enter(window, pad, MainWindow.LeaveMenu);
             Enter(window, pad, "Restart Game");
-            Assert.Equal(2, PadMenu.Depth(window));
+            Assert.Equal(3, PadMenu.Depth(window));
             Assert.Equal([MainWindow.QuestionNo, MainWindow.QuestionYes], PadMenu.Lines(window));
             Assert.Equal(0, PadMenu.Selected(window));
             if (bigScreen)
             {
                 Assert.Equal("Restart Game?", PadMenu.Big(window).Title);
                 Assert.Contains("beginning", PadMenu.Big(window).Subtitle);
-                Assert.Equal("No", PadMenu.Big(window).Hints![2].Label);
+                Assert.Equal("Back", PadMenu.Big(window).Hints![1].Label);
             }
             else Assert.Contains("beginning", window.GetControl<TextBlock>("PadMenuDetail").Text);
             pad.A();
-            Assert.Equal(1, PadMenu.Depth(window));
+            Assert.Equal(2, PadMenu.Depth(window));
             Assert.Equal("Restart Game...", PadMenu.SelectedLine(window));
             Assert.Same(session, Field(window, "_session"));
             pad.A();
             pad.B();
-            Assert.Equal(1, PadMenu.Depth(window));
+            Assert.Equal(2, PadMenu.Depth(window));
             Assert.Same(session, Field(window, "_session"));
 
             Enter(window, pad, "Quit Game");
@@ -331,12 +363,11 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(PadMenu.IsOpen(window));
             Assert.NotNull(Running(window));
 
-            Enter(window, pad, MainWindow.EmuSenMenu);
-            Enter(window, pad, "Exit EmuSen");
-            Assert.Equal("Exit EmuSen?", PadMenu.Lines(window).Length == 2 ? (bigScreen ? PadMenu.Big(window).Title : "Exit EmuSen?") : null);
+            Enter(window, pad, "Quit EmuSen");
+            Assert.Equal("Quit EmuSen?", PadMenu.Lines(window).Length == 2 ? (bigScreen ? PadMenu.Big(window).Title : "Quit EmuSen?") : null);
             PadMenu.Answer(window, pad, yes: false);
             Assert.Equal(2, PadMenu.Depth(window));
-            Assert.Equal("Exit EmuSen...", PadMenu.SelectedLine(window));
+            Assert.Equal("Quit EmuSen...", PadMenu.SelectedLine(window));
             Assert.True(window.IsVisible);
             pad.Start();
             Assert.False(PadMenu.IsOpen(window));
@@ -344,6 +375,7 @@ namespace EmuSen.WiseMan.Mistress
 
             // Yes: Restart presses the console's reset, VenusRT claiming one, so the session stays and runs on (decided 2026-10-18).
             Chord(pad);
+            Enter(window, pad, MainWindow.LeaveMenu);
             Enter(window, pad, "Restart Game");
             PadMenu.Answer(window, pad, yes: true);
             Assert.False(PadMenu.IsOpen(window));
@@ -353,6 +385,7 @@ namespace EmuSen.WiseMan.Mistress
 
             // Quit closes the game to the library.
             Chord(pad);
+            Enter(window, pad, MainWindow.LeaveMenu);
             Enter(window, pad, "Quit Game");
             PadMenu.Answer(window, pad, yes: true);
             Assert.Null(Running(window));
@@ -387,6 +420,9 @@ namespace EmuSen.WiseMan.Mistress
 
             pad.Start();
             Assert.Equal("Back to Cobalt Harbor (Synthetic)", PadMenu.Lines(window)[0]);
+            WindowFitAuditTests.Settle(window);
+            Assert.False(PadMenu.Card(window).IsVisible);
+            if (bigScreen) Assert.Equal("frame", Assert.IsType<PauseCardPane>(PadMenu.Big(window).Pane).Showing);
             pad.A();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             Assert.False(window.IsPaused);
@@ -396,8 +432,7 @@ namespace EmuSen.WiseMan.Mistress
         public static TheoryData<string, Type> InGameWindows() => new()
         {
             { "Cheats", typeof(ActiveCheatsWindow) }, { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) },
-            { "Graphics", typeof(GraphicsSettingsWindow) }, { "Shaders", typeof(ShaderSettingsWindow) }, { "Preferences", typeof(PreferencesWindow) },
-            { "Memory Cards", typeof(MemoryCardsWindow) },
+            { "Graphics", typeof(GraphicsSettingsWindow) }, { "Shaders", typeof(ShaderSettingsWindow) },
         };
 
         // Every row that moved into a submenu still opens its window, over the game, which stays paused under it.
@@ -447,17 +482,17 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver pad) = Playing(bigScreen: false);
             Chord(pad);
             Press(window, Key.Up);
-            Assert.Equal(MainWindow.EmuSenMenu, PadMenu.SelectedLine(window));
+            Assert.Equal(MainWindow.LeaveMenu, PadMenu.SelectedLine(window));
             Press(window, Key.Enter);
             Assert.Equal(2, PadMenu.Depth(window));
             Press(window, Key.Back);
             Assert.Equal(1, PadMenu.Depth(window));
-            Assert.Equal(MainWindow.EmuSenMenu, PadMenu.SelectedLine(window));
+            Assert.Equal(MainWindow.LeaveMenu, PadMenu.SelectedLine(window));
 
             WindowFitAuditTests.Settle(window);
-            Click(window, Array.IndexOf(PadMenu.Lines(window), MainWindow.GameSettingsMenu), MouseButton.Left);
+            Click(window, Array.IndexOf(PadMenu.Lines(window), MainWindow.GameOptionsMenu), MouseButton.Left);
             Assert.Equal(2, PadMenu.Depth(window));
-            Assert.Equal(GameSettings, PadMenu.Lines(window));
+            Assert.Equal(GameOptions, PadMenu.Lines(window)[..3]);
             Click(window, 0, MouseButton.Right);
             Assert.Equal(1, PadMenu.Depth(window));
             WindowFitAuditTests.Settle(window);

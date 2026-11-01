@@ -226,8 +226,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(0, Menu(window).SelectedIndex);
 
             Assert.DoesNotContain(MenuLines(window), line => line.StartsWith("State Slot", StringComparison.Ordinal));
-            int save = Array.FindIndex(MenuLines(window), line => line.StartsWith("Save State", StringComparison.Ordinal));
-            int load = Array.FindIndex(MenuLines(window), line => line.StartsWith("Load State", StringComparison.Ordinal));
+            int save = Array.FindIndex(MenuLines(window), line => line.StartsWith("Save  ", StringComparison.Ordinal));
+            int load = Array.FindIndex(MenuLines(window), line => line.StartsWith("Load  ", StringComparison.Ordinal));
             Menu(window).SelectedIndex = save;
             Pad(window, UiButton.Right);
 

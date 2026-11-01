@@ -82,6 +82,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             "ThemeBrowserFetched" => "says when the theme list was fetched, by the wall clock",
             "AboutStatement" => "says on which day the theme was downloaded, by the wall clock",
             "ReelStrip" => "the running game's moments, taken as the emulation thread runs against the wall clock",
+            "PaneReel" or "PaneReelCaption" => "the reel's newest moments in the Pause Card's pane, taken as the emulation thread runs against the wall clock",
             _ => null,
         };
 
@@ -262,6 +263,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var expected = Cases().Select(r => ((string)r[0], (int)r[1], (int)r[2]))
                 .Concat(WindowFitScrapeAuditTests.Cases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Concat(ViewCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
+                .Concat(PauseCardCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Select(c => $"{c.Item1} {c.Item2} {c.Item3}").ToHashSet();
             var recorded = Directory.EnumerateFiles(InterfaceSpecFiles.Folder, "*.spec").Select(f => SpecDocument.Parse(File.ReadAllText(f)))
                 .Select(d => $"{d["case"]} {d["size"]}").ToHashSet();

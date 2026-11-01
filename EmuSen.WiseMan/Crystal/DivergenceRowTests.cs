@@ -63,6 +63,8 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(Json(allowed.RewindReel()).GetProperty("depth").GetInt32() > 0);
         }
 
+        internal static bool KeepsRewindAcrossALoad => Environment.GetEnvironmentVariable("EMUSEN_CRYSTAL_NATIVE") == "1";
+
         // Row 2: one post-load sequence, whichever way the load is asked for: the binding's call, the session's table (a shell's `state load`), a slot or the resume state.
         [Fact]
         public unsafe void Row_2_every_way_of_loading_a_state_runs_one_sequence()
@@ -89,8 +91,10 @@ namespace EmuSen.WiseMan.Crystal
                 for (int i = 0; i < 4; i++) Frame(s);
                 Assert.True(Json(s.RewindReel()).GetProperty("depth").GetInt32() > 0);
                 events.Drain();
+                int held = Json(s.RewindReel()).GetProperty("depth").GetInt32();
                 load();
-                Assert.Equal(0, Json(s.RewindReel()).GetProperty("depth").GetInt32());
+                // The Rust keeps the chain across a load, its newest moment the present before it, so Rewind undoes it (EmuSen_Backend.md §36); the C# half, untouched until B10, still clears it.
+                Assert.Equal(KeepsRewindAcrossALoad ? held : 0, Json(s.RewindReel()).GetProperty("depth").GetInt32());
                 Assert.Equal("loaded", Json(events.Drain()).EnumerateArray().Single().GetProperty("op").GetString());
             }
         }

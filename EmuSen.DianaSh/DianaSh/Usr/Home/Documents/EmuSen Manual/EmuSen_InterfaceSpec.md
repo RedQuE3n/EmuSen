@@ -20,6 +20,10 @@ One file per state and size, in `EmuSen.WiseMan/Mistress/Specification/`, named 
   in-game and 15 themed cases, and `WindowFitScrapeAuditTests`' three scraping states, 54 in all, at 1280 × 800 and
   1920 × 1200. A window of tabs is recorded on every tab, as the audit audits it: the seven Controller Bindings cases
   give one file per console's tab, named `<case>-<tab>-<size>`.
+- **Every state of the Pause Card** (`EmuSen_BigPicture.md` §48), at both sizes: its first page, the Rewind and Save
+  rows with their pane, Game Options, Display, Leave and the Quit Game question, and the library menu's *Back to <game>*
+  row with the paused frame; and on the handheld (1920 × 1200 in Steam's Game Mode) the first page and Game Options,
+  whose volume row defers. `WindowFitAuditTests.Every_pause_card_state_is_as_its_specification_records_it` records them.
 - **Every Big Picture view**, at both sizes: the system scene and the gamelist scene of the synthetic theme, and over
   them the main menu (Start), the game options (Select), the metadata editor, Theme Settings, Game Collection Settings,
   the on-screen keyboard opened by Search, the launch screen and the screensaver's slideshow.
@@ -611,3 +615,17 @@ every recording back unchanged.
 The four detail pages (`CoresDetail`, `PackagesDetail`, at both sizes) were recorded again after the page focus of LunaP
 §200 met these tokens in one tree: each holds both changes, the focus on the page's first button and the palette, and
 no other recording differed.
+
+#### 6.3.18 The Pause Card, U2 (2026-11-01)
+
+Eighteen recordings were added and none changed: the eight Pause Card states at 1280 × 800 and 1920 × 1200 and the two
+handheld states at 1920 × 1200 (§1). Each is a menu recording from `PadMenuPanel`, the pad moving the menu's selection
+rather than the focus, with Down, Up and Back pressed afterwards. They hold the card at the left at 512 design pixels
+(40 per cent) over the scrim `#0000008C`, the title row one line, the rows in Barlow at 26, the help bar of Select, Back,
+Close Menu, Screenshot and Change, the slot strip's eight frames with the current one ringed in Accent, and on the
+handheld the volume row reading *Quick Access Menu*. The reel's pictures and its caption are recorded without their
+words and measure, as the reel's strip is (§6), since they follow the emulation thread against the wall clock. No other
+recording differed: the library menu's recorded state (`BigPicture-MainMenu`) has no game under it, so it has no Back
+row. Every page of the pad menu also passes its fit case (`Every_page_of_the_pad_menu...`), now walking the nested
+pages and checking the pane inside its room and clear of the card and the help bar; the card's title is allowed to be
+cut on its one line, as BigPicture §48.2 decides, and not to wrap.

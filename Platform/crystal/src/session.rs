@@ -327,7 +327,7 @@ impl Session {
     }
 
     /// The picture on show attached to the snapshot just taken, `AttachThumbnail`.
-    fn attach_thumbnail(&self, e: &mut Engine, rewind: &mut crate::rewind::Rewind) {
+    pub(crate) fn attach_thumbnail(&self, e: &mut Engine, rewind: &mut crate::rewind::Rewind) {
         let repeat = self.repeat_rows();
         let rr = e.shape.row_repeat.max(1);
         let mut shown = self.shown.lock().unwrap_or_else(|p| p.into_inner());

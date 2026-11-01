@@ -11442,3 +11442,147 @@ passed: 270 tests, 265 passed and 5 skipped (the gated picture and live tools).
 - **The cache keeps the MD5 alone.** A file hashed by a run that then stopped before its lookup is read again for its
   CRC-32 and SHA-1 on the next run. Keeping all three would need a migration of `scrape_file`; it was not judged worth
   one for a case that costs one more read.
+
+## 48. The Pause Card: the in-game menu redesigned (2026-11-01)
+
+*Design approved by the tester on 2026-11-01; built in stage U2 of the unified interface (`EmuSen_Interface.md` §2.8,
+§10) on LunaP's Card form (LunaP §205, §207).*
+
+### 48.1 Why
+
+The in-game menu was the library menu with other rows (§45): the game blurred away, a list that could scroll, program
+settings among the game's rows, and the save states stepped through blind, one slot's picture at a time. A player opens
+it over a game to carry on, go back, save, load or leave. The redesign puts those first, keeps the game in view, and
+shows what a row will act on before A is pressed.
+
+### 48.2 Layout
+
+- A panel anchored left at 40 per cent of the width: `PadCard`, an `AdaptiveLayout` in the Card form, whose content is
+  the pad menu's list, whose detail is the context pane (§48.4) and whose header is the title row.
+- The right 60 per cent keeps the paused frame **dimmed, not blurred**: the card's own scrim (`LunaScrim`, black at 55
+  per cent) is the only thing over it, and the window's `BlurBackdrop` stays off while the card shows. The library's menu
+  keeps the blur.
+- The title row: the game's cover (the library's own, §4.60, where one is found) and the game's name on one line in
+  Barlow Condensed at 32, shrinking to 0.55 of that and never wrapping. A submenu is titled by its name with the way
+  back under it; a question by itself with its sentence under it.
+- The rows are Barlow at 26 in their own case, the frame's Row (`EmuSen_Interface.md` §5.2); the departure of §0 there
+  ends for the card.
+- The help bar: Select, Back, Close Menu (Start), Screenshot (X) and, on a page with a value, Change. It follows the
+  player's swap of A and B (`AdaptiveLayout.SwapsAcceptAndBack`).
+- No page scrolls. The longest page has nine rows (§48.3), inside the ten the card holds at 1280 × 800 and 1920 × 1200.
+
+### 48.3 The first page
+
+1. **Resume.**
+2. **Rewind**: the pane shows the three newest pictures of the reel and how many seconds it reaches back; A opens the
+   reel, unchanged (§4.49 of the settings reference).
+3. **Save ◂ Slot n ▸**: the pane shows every slot, eight, as pictures with their times, the current one ringed in the
+   accent; Left and Right change the slot; A saves and closes.
+4. **Load ◂ Slot n ▸**: the same strip; A loads and closes.
+5. **Speed ◂ 100% ▸.**
+6. **The console's own rows, only where they apply**: Change Disc where the running machine reports a media drive with
+   discs; Insert Disc and Eject Disc on a console started without one; Swap Players 1 and 2 while `CanSwapPlayers`. They
+   come from what the running machine already reports. A per-core capability table in the core ABI, from which such rows
+   would be declared, is a later stage and is not built here.
+7. **Game Options ▸** (§48.5).
+8. **Leave ▸** (§48.6).
+
+Five rows, the console's, then two: seven on a cartridge console with one pad. The page holds at most eight: where a
+disc row and Swap Players would make nine, Swap Players goes first under Game Options ▸ Controllers instead (decided
+2026-11-01).
+
+**X takes a screenshot** on every page of the in-game menu, with no row of its own. The menu stays open, and the notice
+says where it went, as the heads-up bar's Take a Screenshot does (§4.34 of the settings reference).
+
+### 48.4 The context pane
+
+`PauseCardPane` shows what the chosen row acts on, read again only when the row or the slot changes:
+
+| Row | Pane |
+|---|---|
+| Save, Load | the eight slots, four across, each a 160 × 120 picture with *Slot n* and its time or *Empty*; the current slot ringed in Accent |
+| Rewind | up to three of the reel's newest pictures and *n seconds to go back through*, or why the reel cannot open |
+| any other | nothing: the dimmed frame shows through |
+
+The library's menu shows the paused frame, with *Paused* under it, beside its *Back to <game>* row, in the room right
+of its centred panel (140 design pixels wide).
+
+### 48.5 Game Options ▸
+
+Cheats; Controllers ▸ (Players & Controllers, Controller Bindings, and Swap Players where the first page has no room
+for it); Display ▸ (Graphics, Shaders, and Crop This Game where
+the console has an overscan, §4.100); Volume; Memory Cards on a disc console (where the machine reports a media drive).
+Five rows at most. **Volume** is the menu's own on the desktop: ◂ 80% ▸ in tenths, the same setting as the heads-up
+bar's slider. In Steam's Game Mode it reads *Quick Access Menu*, and A says that the device's quick access menu sets
+the volume, since Steam owns the device's sound there. **Rumble** has no row: neither the pads nor any core report
+rumble today, and the row is to appear where both do.
+
+### 48.6 Leave ▸
+
+Back to Library (the game kept, paused), Restart Game…, Quit Game…, Quit EmuSen…, each question with No first. EmuSen ▸,
+Preferences and Shell left the in-game menu; they stay in the library's.
+
+### 48.7 Guide-held chords
+
+With Guide held: **Up saves** to the current slot, **Down loads** it, **R1 takes a screenshot**. With the chords on,
+Guide alone opens the menu as it is let go rather than as it goes down, so that a chord is not also an opening; Select
+with Start still opens it at once. While Guide is held the game hears no buttons, as after a menu closes. The setting is
+`GuideChords` in `appsettings.json`: `Auto` (the default), `On` or `Off`; `Auto` turns them off in Steam's Game Mode,
+the session §4.43 of the settings reference detects.
+
+**Steam's chords, as published (read 2026-11-01).** Steam Input reserves chords on the Steam button of the Steam Deck,
+listed on the device by holding the Steam button: Steam + R1 takes Steam's screenshot; Steam + D-pad Left, Down and
+Right send Escape, Tab and Enter; Steam + D-pad Up has been reported as Steam's own default (to start a clip); Steam + X
+shows the keyboard; Steam + L1 holds the magnifier; Steam + B held force-quits a game [1][2][3][4]. Each of EmuSen's
+three chords clashes with one of these. On the Legion Go S under SteamOS the Legion button acts as the Steam button; no
+published list of its chords was found, and the Deck's are taken to apply. Steam also takes the Steam button itself
+before a game sees it in Game Mode unless the player's layout passes it through, so the chords could only fire there in
+a layout that gives up Steam's own. Off in Game Mode is the default for that reason; a player who has rebound Steam's
+chords can set `On`.
+
+Sources (opened 2026-11-01): [1] "Steam Deck Controller Guide - A Visual Introduction", Steam Community guide,
+https://steamcommunity.com/sharedfiles/filedetails/?id=2804823261 (Steam + X, Steam + L1, holding Steam for the list).
+[2] "any way to change the screenshot bind?", Steam Deck General Discussions,
+https://steamcommunity.com/app/1675200/discussions/0/3186866449234799973/ (Steam + R1). [3] "ESC key", Steam Deck
+General Discussions, https://steamcommunity.com/app/1675200/discussions/0/785450979403296075/ (Steam + D-pad Left;
+D-pad Up's default). [4] "Steam Deck Steam Button Shortcuts List", https://holdtoreset.com/steam-deck-steam-button-shortcuts-list
+(D-pad Right, Down and Left; Steam + B). Valve's own help pages were not found to carry the list; the device's own
+list, shown by holding the Steam button, is the authority. **The clash list therefore rests on community sources**, and
+a check by hand on the Legion Go S, holding its Legion button in Game Mode, is owed when the tester is present.
+
+### 48.8 Load's undo snapshot, in the runtime
+
+The design asks that Load first drop one snapshot into the rewind buffer, so that a wrong load is undone by Rewind. The
+runtime cleared the rewind chain after every load (`load_in` in `Platform/crystal/src/saving.rs`, `run.rewind.clear()`),
+and the C ABI has no call that captures on demand, so the frontend could not do it. Decided 2026-11-01: the Rust
+runtime does it itself. While rewind is on, a state load first takes a snapshot of the present, with its picture, unless
+the newest moment already is the present, and keeps the chain instead of clearing it; with rewind off it clears as
+before. Every way of loading takes it, the Pause Card's Load, the hotkeys and a shell's `state load` alike, and Mistress
+changed nothing. `EmuSen_Backend.md` §36 specifies it; the C# implementation is unchanged until B10 deletes it.
+
+### 48.9 The library menu
+
+It keeps its centred, blurred panel, ES-DE's grammar and its rows, gains the paused frame beside its *Back to <game>*
+row (§48.4), and never shows an in-game row. One list, two page sets, two looks: `ApplyBigMenuLook` puts the list in the
+card over a game and in the centred panel over the library.
+
+### 48.10 Kept, and how it is held
+
+The pause before the menu shows (§4.18), questions with No first, remembered submenu rows, the reel, and the desktop's
+own menu box, which takes the same pages. `PadMenuTests` holds the pages and the rows; the pad menu's fit cases
+(`WindowFitAuditTests`, `Every_page_of_the_pad_menu...`) audit every page at 1280 × 800 and 1920 × 1200, with the pane's
+room checked clear of the panel and the help bar; `PauseCardTests` holds the pane, the screenshot button, the volume row
+in both sessions, the chords and Load keeping the reel (on the Rust runtime); `ConsoleStartTests` the ninth row moving
+under Controllers; Crystal's `rewind_load` test the runtime's side; and the card's states are recorded in
+`EmuSen_InterfaceSpec.md` §6.3.18.
+
+**Seeded faults (2026-11-01).** Five faults were put in and taken out again, each caught: the card's detail left out
+of its panel (five `CardFormTests` cases), the card at half the width rather than 40 per cent (the three sizes'
+placement case), `Auto` leaving the chords on in Steam's Game Mode (`PauseCardTests`' Game Mode case), the backdrop
+blurring under the card (`PadMenuTests`' first-page case), and the strip ringing the slot after the current one (the
+slot test and both `PauseCardSave` recordings).
+
+### 48.11 Open questions
+
+- The Guide chords' switch has no row until Settings is rebuilt (`EmuSen_Interface.md` §2.7, U6).
+- The handheld check of Steam's chords by hand (§48.7).

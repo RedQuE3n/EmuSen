@@ -79,12 +79,16 @@ namespace EmuSen.Mistress.Views
             // A game on screen owns the pad; only the chord reaches the interface - see §4.29.
             if (GameOnScreen && !_padMenuOpen && OtherWindow() is null)
             {
-                bool chord = _padNavigator.MenuChord(PadHeld);
+                // With the Guide chords on, Guide is read by them and the two middle buttons alone open the menu at once (EmuSen_BigPicture.md §48.7).
+                bool chords = GuideChordsOn;
+                bool guideBusy = chords && FeedGuideChords();
+                bool chord = _padNavigator.MenuChord(chords ? b => b != UiButton.Guide && PadHeld(b) : PadHeld);
                 _padNavigator.Forget(PadHeld);
-                if (chord) OpenPadMenu();
+                if (chord && !_padMenuOpen && !guideBusy) OpenPadMenu();
                 return;
             }
 
+            _guideChords.Reset(PadHeld(UiButton.Guide));
             _padNavigator.MenuChord(PadHeld);
             TimeSpan now = UiClock();
 

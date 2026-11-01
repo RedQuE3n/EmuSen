@@ -14,7 +14,7 @@ measurements are `EmuSen_BigPicture.md`; the toolkit's side of every token is Lu
 
 **Reading order.** §1 for the idea, §2 for the structure, §3 for the frame, §4 for the six screens, §5 for the visual
 language, §6 for the forms, §7 for themes, §8 for accessibility, §9 for what becomes of what is built, §10 for the
-build order, §11 for stage U1 as built, §12 for the sources. A bracketed number cites a source in §12.
+build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for the sources. A bracketed number cites a source in §13.
 
 **Units.** One design unit is one pixel at 1280 × 800; the big-screen form scales with the screen's height (× 1.5 at
 1920 × 1200, on a monitor and on the handheld alike), as `MenuPanel.Scale` does. Desktop measurements are device pixels
@@ -524,7 +524,26 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 
 ---
 
-## 12. Sources (opened 2026-11-01)
+## 12. U2 as built (2026-11-01)
+
+- **LunaP (§207 there).** `AdaptiveForm.Card` places a layout's roles into a `MenuPanel` anchored left at 40 per cent
+  over the Scrim: the content as its rows, the detail in the room beside it, the header as its title row, the actions in
+  the help bar, no navigation. Its rows are Barlow at Row 26 in their own case, so the departure of §0 ends for what a
+  card draws. `AdaptiveRole.Header` with `AdaptiveHeader` (picture, title, subtitle, facts) is drawn as a title row on
+  the desktop and the big screen and as the card's title row; `MenuPanel`'s title, subtitle, icon and footer are what
+  the card's header sets, and the centred sheets keep setting them until they are rebuilt. `SwapsAcceptAndBack` keeps a
+  card's help bar true to a player's swap.
+- **EmuSen.** The Pause Card of §2.8 on that form (`EmuSen_BigPicture.md` §48): the first page, Game Options and Leave,
+  the slots and reel in the pane, X for a screenshot, the volume row deferring in Game Mode, the Guide chords with their
+  setting, and the library menu's Back row with the paused frame. The library menu keeps its centred, blurred look.
+- **The runtime.** A state load with rewind on keeps the chain and first takes a snapshot, so Rewind undoes a wrong
+  load (`EmuSen_Backend.md` §36), in the Rust runtime alone.
+- **Not in U2.** Rumble has no row, since nothing reports it. Console rows still come from what the running machine
+  reports; a capability table in the core ABI is later.
+- **Recordings.** Eighteen new states, the card's and the library menu's Back row, at 1280 × 800 and 1920 × 1200, and two
+  on the handheld (`EmuSen_InterfaceSpec.md` §6.3.18).
+
+## 13. Sources (opened 2026-11-01)
 
 1. Libretro forums, "The UX problems of RetroArch", https://forums.libretro.com/t/the-ux-problems-of-retroarch-the-program-that-uses-cores/29421
 2. The same thread, post 37, https://forums.libretro.com/t/the-ux-problems-of-retroarch-the-program-that-uses-cores/29421/37

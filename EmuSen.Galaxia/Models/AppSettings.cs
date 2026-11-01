@@ -44,6 +44,10 @@ namespace EmuSen.Galaxia.Models
         public bool FirstControllerOnly { get; set; } = false;
         public bool ControllerNotifications { get; set; } = true;
 
+        // Guide held with Up saves, with Down loads, with R1 takes a screenshot; Auto keeps them off in Steam's Game Mode, whose own chords they would clash with - see EmuSen_Settings_Reference.md §4.69.9.
+        public string GuideChords { get; set; } = GuideChordsAuto;
+        public const string GuideChordsAuto = "Auto", GuideChordsOn = "On", GuideChordsOff = "Off";
+
         // Player 1 is the first pad pressed in a game, and on a handheld an external pad goes ahead of the built-in controls - see EmuSen_Settings_Reference.md §4.119.
         public bool ClaimPlayersByPress { get; set; } = true;
         public bool ExternalControllerFirst { get; set; } = true;

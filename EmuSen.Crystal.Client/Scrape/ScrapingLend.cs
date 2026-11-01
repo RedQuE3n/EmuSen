@@ -10,7 +10,7 @@ namespace EmuSen.Crystal.Client.Scrape
     // The host's scraper lent to every shell through emusen_scraping_lend, so that a process holds one scraper and one quota - see EmuSen_LibraryTools.md §8.
     public static unsafe class ScrapingLend
     {
-        private struct Lend
+        private struct LendStruct
         {
             public uint Size;
             public nint Scraper;
@@ -26,10 +26,10 @@ namespace EmuSen.Crystal.Client.Scrape
         private static GameLibrary? _library;
         private static volatile Func<string, IReadOnlyList<string>?>? _themeKinds;
 
-        private static delegate* unmanaged[Cdecl]<Lend*, int> Export()
+        private static delegate* unmanaged[Cdecl]<LendStruct*, int> Export()
         {
             nint f = PlatformLibrary.Export("emusen_scraping_lend");
-            return (delegate* unmanaged[Cdecl]<Lend*, int>)f;
+            return (delegate* unmanaged[Cdecl]<LendStruct*, int>)f;
         }
 
         // Whether this platform library takes a lend at all.
@@ -46,9 +46,9 @@ namespace EmuSen.Crystal.Client.Scrape
                 _themeKinds = themeKinds;
                 fixed (byte* sp = s)
                 {
-                    var l = new Lend
+                    var l = new LendStruct
                     {
-                        Size = (uint)sizeof(Lend), Scraper = service.Handle, Library = library.Handle, Systems = sp, SystemsLen = (nuint)s.Length,
+                        Size = (uint)sizeof(LendStruct), Scraper = service.Handle, Library = library.Handle, Systems = sp, SystemsLen = (nuint)s.Length,
                         ThemeKinds = themeKinds is null ? null : &ThemeKinds,
                     };
                     int status = lend(&l);

@@ -288,6 +288,7 @@ mod tests {
         exported.extend(exports_in(include_str!("net.rs")));
         exported.extend(exports_in(include_str!("library_tool.rs")));
         exported.extend(exports_in(include_str!("patch.rs")));
+        exported.extend(exports_in(include_str!("scraping.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

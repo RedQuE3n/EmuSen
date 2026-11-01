@@ -9545,3 +9545,24 @@ core's own serialization alone is still longer than a frame for PCEE2, so these 
 - The broker's `wire.rs`: a reply of three times the threshold and the small one after it cross whole, and a reply cut
   short is an error.
 - `PicturePathTests` (Mistress): the path's words.
+
+**In the real window, after** [M, 2026-11-01, the same desktop and sandbox, the published tree of this change, a blast
+run of another branch beside it]:
+- Three runs: 25 s; 132 s through the BIOS; and 167 s with Start and Cross pressed from about frame 2,500, as §10q's
+  pad script does, into New Game and the intro.
+- Each said `[picture] … read back: the core drew into the ring, but the screen is not presenting on the device yet`
+  for the first frame, then `in a ring` for the rest. Each withheld rewind at its first snapshot (377, 380, 427 and
+  433 ms), before the first frame ran, and the rewind row of the pad menu read the same words.
+- In the 167 s run, 147 of the 166 one-second windows after the first were within 59.9 to 60.1 frames a second, and
+  163 within 59.7 to 60.3. The one exception was a pair at 58.6 and 60.6: one late frame and its debt made up.
+- The trace's frame period was 16.68 ms at the median and the tenth percentile, and 16.69 ms at the ninetieth, over
+  8,270 frames; the longest frame took 90 ms. Before this change the same launch showed 33 to 53 frames a second.
+- Twenty further launches of 30 s each ran with stacks to be taken if the frame lines stopped for 3 s. Ten went
+  through `--play`. Ten went through the library, A on Jak, each started 4 s after the last had exited. None stopped,
+  and every window after the first was within 59.4 to 60.6. No core runner of a closed instance outlived it.
+
+*One launch is unexplained.* Of the 24 launches of this build, one stopped after its first two frames: its two
+`[picture]` lines were written, then no frame line followed, and AT-SPI found no application. It was the second launch,
+started a few seconds after the first had closed. It was ended by SIGTERM after three minutes, and no stacks were taken.
+Twenty repeats with the capture armed did not reproduce it, ten of them matching its path and its few seconds' gap. It is recorded here as not understood, and is not taken as
+fixed.

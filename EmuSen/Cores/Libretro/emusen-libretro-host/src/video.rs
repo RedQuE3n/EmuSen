@@ -198,6 +198,8 @@ mod tests {
         let mut d2 = [0u8; 2];
         convert_row(sys::PIXEL_FORMAT_0RGB1555, RGB565, &0x7FFFu16.to_le_bytes(), &mut d2, 1);
         assert_eq!(u16::from_le_bytes(d2), 0xFFFF);
+        convert_row(sys::PIXEL_FORMAT_XRGB8888, RGB565, &[0xFF, 0x00, 0xFF, 0x5A], &mut d2, 1);
+        assert_eq!(u16::from_le_bytes(d2), 0xF81F, "a read-back frame into a picture of 16 bits");
     }
 
     // §10o: every libretro format into every handed one, with no panic and each colour where it belongs.

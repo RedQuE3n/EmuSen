@@ -1809,6 +1809,58 @@ format into each handed format, and `a_vulkan_cores_frames_land_in_whatever_form
 and ringed: 24 runs, every frame equal to the software picture in the handed format). Seeded fault: the old
 XRGB8888-to-anything arm put back, caught at RGB565 (the picture differs). The runtime offers RGBA only, so no player
 had met it.
+## 10p. Flycast's state load, and the first picture after a load (2026-11-01)
+
+§10q reported that Flycast's slot load returned success without restoring the game. Measured on 2026-11-01 with
+the release libretro host in-process through its `run` example (`EMUSEN_RUN_STATE=3100,3160,3225`: a state saved after
+frame 3,100 and loaded after frames 3,160 and 3,225). The run used Crazy Taxi (US) on the §10m pad script, Flycast
+`7adbf3c` on the RX 6800 with no BIOS (its HLE BIOS), at CPU weight 20. The host's `retro_serialize` and
+`retro_unserialize` calls were traced.
+
+**The bytes.** `retro_serialize` wrote 37,748,736 bytes, and `retro_unserialize` was given 37,748,736 bytes with the
+same SHA-256, at both loads. `retro_serialize_size` gave the same length at the load as at the save. The header's own
+digest (§4.6) already refuses a payload that differs. So neither the length, nor the offset, nor the header's wrapping
+is the cause. The state was serialized again at once after each load: it differed from the payload in 34 of
+37,748,736 bytes, and from the state before the load in 17,951,331. The core applies the state.
+
+**The pictures.** With Flycast's default, `reicast_threaded_rendering=enabled`, the second to fifth pictures after each
+load equal the second to fifth after the save. The first does not: it differed from the save's and from the other
+load's (`c225c7b0…`, `2b28c8c2…` against `3f7bd061…`), as the two loads of §10m did. With `disabled`, every picture after
+each of three loads equals the picture after the save, the first included. The core's option text says the threaded
+mode "runs the GPU and CPU on different threads". The measurement fits a picture presented one `retro_run` after its
+frame: the frame in flight at the load belongs to the abandoned timeline, and the state does not hold it. Three things
+do not change the result: the size check, a second serialize before each load (the host's rollback copy), and
+presence sent again after a load with the same devices. Presence sent with *changed* devices (ports 1 to 3 going from
+the core's default to none) does change it: the game's pictures diverge from the third frame after the load.
+
+**What §10m saw.** The §10m digest compared only the first picture after each load, which is the stale one. Its PNG after
+the load was drawn from the ring example's chain. For a picture that is read back (all of Flycast's, §10m item 1), the
+example's steps after the run never uploaded to that chain, so the PNG showed an older picture than the loaded one. The
+"timer a second past the save" was not reproduced in-process; the steps now upload. PCEE2's first picture after a load,
+the same whatever the save point (§10m), cannot be a stale picture kept by the host: a stale picture would differ with
+the save point. It is a picture the core makes after a load, and the host passes it on as given.
+
+**The fix: an exact default.** Threaded rendering is a shortcut that changes what the player gets. Under the project's
+rule, such shortcuts are player options and are not on by default. The host's new data file
+`data/exact-defaults.tsv` (stem, key, value, reason, date decided, as `console-picture.tsv`) names
+`flycast reicast_threaded_rendering disabled`. The host declares that value as the option's default in place of the
+core's, wherever the core offers it. The player may still turn the option on; this costs the first picture after a
+load and is named in the core's losses. Cost, one unpaced round each over frames 0 to 3,240: 9.74 to 10.02 s threaded
+(three runs) against 11.45 s unthreaded, about 15% more time; both are several times the television's rate.
+
+**Also fixed.** A read-back hardware frame is XRGB8888. Converted into a picture of 16 bits (a host taking RGB565, as
+the `run` example does), it overran each row and stopped the host. It is now converted to RGB565.
+
+**Tests.** `options::an_exact_default_replaces_the_cores_and_a_value_it_lacks_does_not`,
+`exact::the_data_names_flycasts_threaded_rendering`, the RGB565 case in
+`video::sixteen_bit_formats_convert_to_full_range`, and `tests/testcore.rs`
+`a_picture_shown_a_frame_late_is_stale_once_after_a_load_and_exact_without_the_lag`. The test core's new `tc_lag`
+shows each frame the previous frame's picture, held outside its state. With it on, the first picture after a load is
+stale and the second is exact; with it off, both are exact. Seeded faults, each caught: the exact default not applied
+and a value the core lacks accepted (the options test), the RGB565 arm removed (the video test), and `tc_lag` ignored
+(the lag test). One gap: no test drives `ready()`'s use of the data file, because only Flycast has a row.
+
+**Surfaces.** No version changes. The schema's default for Flycast's option is now `disabled`.
 
 ## 11. Risks
 

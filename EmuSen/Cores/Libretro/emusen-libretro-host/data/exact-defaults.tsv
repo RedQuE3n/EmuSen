@@ -1,0 +1,5 @@
+# Core options whose own default changes what the player gets, given the exact value as EmuSen's default instead, by the
+# core's file stem: the option's key, the exact value, the reason and the date decided. The player may still choose the
+# core's default, a shortcut named in the core's losses (EmuSen_LibretroHost.md §10p).
+# stem	key	value	reason	decided
+flycast	reicast_threaded_rendering	disabled	threaded rendering shows a frame's picture one frame late, and the picture in flight is not in a state, so the first picture after a state load is the abandoned timeline's	2026-11-01

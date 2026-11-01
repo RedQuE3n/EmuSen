@@ -2,7 +2,7 @@
 // with OPEN_RING on Serenity's device, each frame drawn from the ring by a one-pass chain (a frame read back uploaded to it
 // instead), frames from..to timed; a pad
 // script (EMUSEN_RING_PADS=FILE, lines `<frame> <control> [<frames held>]`), PNGs (EMUSEN_RING_PNG=DIR:F,F,...) and a
-// state taken and loaded at the end, the log's lines holding EMUSEN_RING_LOG's text (EmuSen_LibretroHost.md §10m).
+// state taken and loaded at the end, the log's lines holding EMUSEN_RING_LOG's text (EmuSen_LibretroHost.md §10q).
 
 use std::path::Path;
 use std::time::Instant;
@@ -203,6 +203,10 @@ fn main() {
         let n = unsafe { api::emusen_crystal_picture_copy(rt.0, s, std::ptr::null_mut(), 0) }.max(0) as usize;
         let mut rgba = vec![0u8; n];
         unsafe { api::emusen_crystal_picture_copy(rt.0, s, rgba.as_mut_ptr(), rgba.len()) };
+        // Uploaded as the main loop does, so the PNG after a load shows the loaded picture (EmuSen_LibretroHost.md §10p).
+        if n == (f.width * f.height * 4) as usize && n > 0 && unsafe { sd::emusen_serenity_chain_advance(draw, rgba.as_ptr(), rgba.len(), f.width, f.height, 1) } == 0 {
+            render(draw, 1, 1);
+        }
         digest(&rgba)
     };
     match unsafe { api::emusen_crystal_state_slot_save(rt.0, s, 1) } {

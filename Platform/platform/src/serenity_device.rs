@@ -639,7 +639,7 @@ pub struct RingInfo {
     pub driver_uuid: [u8; 16],
 }
 
-/// `emusen_serenity_ring_image`, laid out as the core ABI's `emusen_ring_image`.
+/// `emusen_serenity_ring_image_info`, laid out as the core ABI's `emusen_ring_image`.
 #[repr(C)]
 pub struct RingImageInfo {
     pub size: u32,

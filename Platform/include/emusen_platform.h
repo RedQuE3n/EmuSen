@@ -1383,10 +1383,10 @@ typedef struct {
     uint32_t size, memory_type;
     uint64_t handle, allocation_size;
     uint32_t width, height, format, usage;
-} emusen_serenity_ring_image;
+} emusen_serenity_ring_image_info;
 
 emusen_serenity_ring *emusen_serenity_ring_new(const emusen_serenity_device *device, uint32_t width, uint32_t height, uint32_t count, emusen_serenity_ring_info *out);
-int32_t emusen_serenity_ring_image(const emusen_serenity_ring *ring, uint32_t index, emusen_serenity_ring_image *out);
+int32_t emusen_serenity_ring_image(const emusen_serenity_ring *ring, uint32_t index, emusen_serenity_ring_image_info *out);
 int32_t emusen_serenity_ring_free(emusen_serenity_ring *ring);
 
 /* The picture emusen_core_frame_ring answered, `value` in `slot`, `width` by `height`, as the chain's new frame: its

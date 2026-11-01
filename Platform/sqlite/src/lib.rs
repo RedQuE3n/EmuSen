@@ -400,3 +400,32 @@ impl Drop for Connection {
         }
     }
 }
+
+/// The e_sqlite3 a test binary loads, with libm global first (the NuGet builds leave it to a .NET host); a missing copy panics unless `EMUSEN_SQLITE_SKIP=<reason>` is set, which prints the reason and gives `None`.
+pub fn for_tests() -> Option<Arc<Sqlite>> {
+    use std::path::PathBuf;
+    #[cfg(unix)]
+    unsafe {
+        libc::dlopen(c"libm.so.6".as_ptr(), libc::RTLD_NOW | libc::RTLD_GLOBAL);
+    }
+    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
+    if let Some(home) = std::env::var_os("HOME") {
+        if let Ok(versions) = std::fs::read_dir(PathBuf::from(home).join(".nuget/packages/sqlite")) {
+            let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
+            found.sort();
+            candidates.extend(found.into_iter().rev());
+        }
+    }
+    let mut errors = Vec::new();
+    for p in &candidates {
+        match Sqlite::open(&p.to_string_lossy()) {
+            Ok(s) => return Some(Arc::new(s)),
+            Err(e) => errors.push(e),
+        }
+    }
+    if let Some(reason) = std::env::var_os("EMUSEN_SQLITE_SKIP") {
+        eprintln!("SKIPPED (EMUSEN_SQLITE_SKIP): {}", reason.to_string_lossy());
+        return None;
+    }
+    panic!("no e_sqlite3 could be loaded (set EMUSEN_SQLITE, or EMUSEN_SQLITE_SKIP=<reason> to skip): {errors:?}");
+}

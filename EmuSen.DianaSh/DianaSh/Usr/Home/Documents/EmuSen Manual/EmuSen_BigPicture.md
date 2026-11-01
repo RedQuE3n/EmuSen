@@ -11673,3 +11673,10 @@ its bar, the theme dimmed and not blurred with nothing drawn outside the panel b
 `DesktopGameOptionsTests` and `GameCropTests` (the game's page); the pad menu's fit cases, which now audit the card on
 the desktop too; and the card's states, recorded in `EmuSen_InterfaceSpec.md` §6.3.19.
 
+**Seeded faults (2026-11-01).** Five faults were put in and taken out again, each caught: the backdrop blurring under
+the Home card (`EsdeMenusTests`' dimmed case and F4 case, `HomeCardTests`' Continue case, `PadMenuTests`' first-page
+case); Continue shown only with no game suspended (`HomeCardTests`, `PadMenuTests` and 19 of the card's recordings); Y
+a favourite on every page (`HomeCardTests`' Y case, `PadMenuTests`' themed case, 11 recordings whose help bar gained
+Favourite); Exit Big Picture offered in Steam's Game Mode (`HomeCardTests`' Power theory and the handheld recording);
+and the Cores line counting every core as waiting (`HomeCardTests`' tools case and both `HomeCardTools` recordings).
+

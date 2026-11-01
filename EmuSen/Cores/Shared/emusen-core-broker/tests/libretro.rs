@@ -273,3 +273,36 @@ fn memory_between_frames_holds_still_while_the_core_rests() {
         assert!(a == b, "memory moved between two reads with no frame between them");
     }
 }
+
+/// The test core's pictures through the broker: software, or Vulkan into Serenity's ring, its handles crossing to the
+/// runner by SCM_RIGHTS (EmuSen_LibretroHost.md §10f). Skipped where no card can make a ring.
+#[test]
+fn a_ring_lent_across_the_process_boundary_holds_the_software_picture() {
+    use emusen_native::core::sys::{RingImage, RingLend};
+    let _t = turn();
+    let gpu = match emusen_serenity::vulkan::Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) {
+        Ok(d) if d.rings() => d,
+        _ => return eprintln!("skipped: no Vulkan device here can make a ring"),
+    };
+    let (lib, _) = library();
+    let rows = |m: &Machine| {
+        let f = m.frame_info().unwrap();
+        let mut all = vec![0u8; m.frame_bytes().unwrap()];
+        m.frame_copy(&mut all).unwrap();
+        (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4].to_vec()).collect::<Vec<u8>>()
+    };
+    let mut soft = Machine::create(lib, &Create { settings: "", pixel_formats: 1, ..Create::new(GAME) }).unwrap();
+    let mut m = Machine::create(lib, &Create { settings: "tc_hw=vulkan", pixel_formats: 1, ..Create::new(GAME) }).unwrap();
+    let ring = gpu.create_ring(640, 480, 3).unwrap();
+    let images: Vec<RingImage> = ring.images.iter().map(|i| RingImage { size: size_of::<RingImage>() as u32, memory_type: i.memory_type, handle: i.handle as u64, allocation_size: i.allocation_size, width: i.width, height: i.height, format: i.format, usage: i.usage }).collect();
+    let lend = RingLend { size: size_of::<RingLend>() as u32, count: 3, images: images.as_ptr(), image_size: size_of::<RingImage>(), ready: ring.ready_fd as u64, done: ring.done_fd as u64, device_uuid: ring.device_uuid, driver_uuid: ring.driver_uuid };
+    m.ring_lend(Some(&lend)).unwrap();
+    for n in 0..5u64 {
+        soft.advance().unwrap();
+        m.advance().unwrap();
+        let f = m.frame_ring().unwrap().expect("the brokered picture is in the ring");
+        assert_eq!(f.value, n + 1);
+        assert!(ring.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap() == rows(&soft), "frame {n}");
+    }
+    m.ring_lend(None).unwrap();
+}

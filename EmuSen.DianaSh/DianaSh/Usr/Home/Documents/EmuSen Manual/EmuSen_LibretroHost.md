@@ -967,6 +967,64 @@ frame 2). WiseMan's blast radius (`LibretroHostTests`, `CoreAbiTests`, `CoreAdap
 `EmuSen_CoreAPI_Extensions.md` §4.4); C8's digests of the output stream (§4.5 there); the Rust host's trust of entries,
 which calls `load_expecting` (with Cores' C5).
 
+## 10f. Stage 3: the core's Vulkan device and the ring, as built (2026-11-01)
+
+**The broker carries the ring** (`emusen-core-broker`). Two operations are appended, `RingLend` and `FrameRing`. A
+ring's request holds its images but their handles and the two UUIDs; the descriptors follow in a one-byte message of
+their own (`SCM_RIGHTS`, order: images, `ready`, `done`), which the runner receives with `recvmsg` (`MSG_CMSG_CLOEXEC`)
+before it answers, writes over the host's handles, and closes after the core's `ring_lend`, since the core duplicates
+what it keeps. The proxy checks the struct as `emusen-native` does, at most sixteen descriptors, each one open, before
+anything is sent; a count other than the request's is refused, never left in the stream. The runner's Landlock rule for
+device nodes gained `ReadDir`: a Vulkan driver lists `/dev/dri` to find its render node, and without it the confined
+core saw no device at all (measured 2026-11-01).
+
+**`libretro_vulkan.h`** is in `emusen-libretro-sys::vulkan` on ash's types (no loader), its layout held to gcc 16.2.1's
+sizes and offsets for the header (96, 48, 48 and 136 bytes).
+
+**The core's device** (`emusen-libretro-host::vulkan`). `SET_HW_RENDER` is accepted for Vulkan only, any other context
+refused in words; `GET_PREFERRED_HW_RENDER` answers Vulkan; the negotiation interface is taken at version 2 or read up
+to `destroy_device` below it. After a successful `retro_load_game` the device is made: the core's `create_instance`
+(the wrapper raises the API version to 1.1 at least, nothing else), then the card `emusen-gpu` chooses
+(`choose_device`, since emusen-gpu 1.5: `EMUSEN_GPU_DEVICE`, then its ranking), then the core's `create_device2`, whose
+wrapper adds `VK_KHR_external_memory_fd`, `VK_KHR_external_semaphore_fd` and `VK_KHR_timeline_semaphore` where offered
+and turns timeline semaphores on, in the core's own `Vulkan12Features` or timeline struct where its chain has one (the
+only write into the core's structures, setting a feature, never clearing one), else in a struct put in front; v1's
+`create_device` and a device made here are the fallbacks. Then `context_reset`. Teardown: `context_destroy`,
+`retro_unload_game`, the negotiation's `destroy_device`, the device. The interface: two frames in flight, each with its
+fence (`wait_sync_index`); the queue lock a spin lock; `set_command_buffers` submitted ahead of the host's copy in the
+frame's one submission, which waits for the core's semaphores and signals its `set_signal_semaphore`.
+
+**The copy.** A frame that fits the ring goes into slot `count mod n`, waiting on the device for `done` to reach the
+value that slot last held. Ownership crosses `VK_QUEUE_FAMILY_EXTERNAL` in barriers that keep the layout
+(`SHADER_READ_ONLY_OPTIMAL` both ways), with the transitions to and from the copy as barriers of their own, so the
+release and acquire on the two devices name the same layouts as the specification asks; a slot's first use is a plain
+transition from `UNDEFINED`. `vkCmdCopyImage` for an `R8G8B8A8` picture, `vkCmdBlitImage` (nearest) for any other.
+`ready` is signalled with the picture's number. **No CPU wait** on this path. A frame larger than the ring's images is
+copied into an image of the core's device (held), read back for `frame_copy`, and `MACHINE_INFO` raised with the larger
+maxima; the first `frame_ring` after a ring that holds it is lent copies it in. **With no ring** (no lend, a ring
+refused, a card without the extensions) the picture is read back (§5.5): copied into a host-visible buffer and its fence
+waited. `frame_ring`'s field structure is `fields_of(system, height)`: PlayStation 2, 224 or 256 rows one field, 448 or
+512 two woven, else progressive; the Dreamcast's waits for Flycast's cable option, whose key is recorded with the core.
+Aspect from the geometry's `aspect_ratio`.
+
+**The host's side is Serenity's** (`emusen-serenity::ring`): `Device::create_ring(width, height, count)` makes the images
+with dedicated memory exported as `OPAQUE_FD` and the two timeline semaphores, exported; `Ring::crossing` gives the
+ownership barriers for the chain; `Ring::read` is the check a test or a details window makes (wait `ready`, take, copy
+out, give back, signal `done`); `Ring::release_after_crash` raises `ready` from the CPU before a ring of a dead core is
+destroyed. Serenity's device now keeps its driver UUID and whether timeline semaphores are on (`rings()`). Feeding a
+slot into the chain as its input is the next step (§5.4).
+
+**The test core** draws its software picture into an image of its own device (`tc_hw`: `vulkan` RGBA, `vulkan_bgra`
+BGRA), uploaded and handed by `set_image`, its device made through `create_instance` and `create_device2`.
+
+**Tests**, on the RX 6800, with validation and its synchronisation checks clean (`VK_LOADER_LAYERS_ENABLE=*validation`,
+`VK_KHRONOS_VALIDATION_VALIDATE_SYNC`, `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`): in-process, six frames' ring
+pictures equal to the software pictures by copy and by blit; with no ring and with a ring whose driver UUID is another
+card's (refused `NOT_SUPPORTED`), the read-back equal to the software picture; a picture larger than the ring held and
+copied into the next; through the broker, five frames across the process boundary equal. Seeded faults, each caught:
+the descriptor count unchecked; a BGRA picture copied unswizzled; a held picture never copied; the woven PlayStation 2
+heights read as one field; the runner passing the host's handle numbers.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

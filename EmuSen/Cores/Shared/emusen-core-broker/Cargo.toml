@@ -27,6 +27,8 @@ landlock = "0.4"
 emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
 emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
 emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }
+# The host's side of the ring, lent to a brokered core across the process boundary.
+emusen-serenity = { path = "../../../../Platform/serenity" }
 
 [profile.release]
 panic = "abort"

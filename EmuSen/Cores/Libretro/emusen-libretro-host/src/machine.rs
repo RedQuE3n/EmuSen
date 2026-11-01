@@ -267,10 +267,20 @@ impl Machine {
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        unsafe {
-            (self.lib.api.unload_game)();
-            (self.lib.api.deinit)();
+        // The context is destroyed before the game is unloaded and the device after it (EmuSen_LibretroHost.md §10f).
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.hw.and_then(|h| h.destroy)
+        {
+            unsafe { destroy() };
         }
+        unsafe { (self.lib.api.unload_game)() };
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.negotiation.and_then(|n| n.destroy_device)
+        {
+            unsafe { destroy() };
+        }
+        self.shared.gpu = None;
+        unsafe { (self.lib.api.deinit)() };
         front::with_declared(|d| d.initialised = false);
         front::bind(std::ptr::null_mut());
         front::flush_logs();
@@ -333,6 +343,7 @@ impl v1::Core for Machine {
         | caps::SETTINGS
         | caps::SETTING_NOTES
         | caps::PRESENCE
+        | caps::DEVICE_RING
         | caps::SNAPSHOT
         | caps::FRAME_SERIAL
         | caps::BATTERY_DIRTY
@@ -499,6 +510,9 @@ impl v1::Core for Machine {
         if let Some((cb, reference)) = self.shared.frame_time {
             unsafe { cb(reference) };
         }
+        if let Some(g) = self.shared.gpu.as_mut() {
+            g.begin_frame();
+        }
         unsafe { (self.lib.api.run)() };
         let ran = start.elapsed().as_nanos() as i64;
         self.frames += 1;
@@ -536,6 +550,30 @@ impl v1::Core for Machine {
 
     fn frame(&self) -> &[u8] {
         self.shared.picture.bytes()
+    }
+
+    fn ring_lend(&mut self, ring: Option<&v1::Ring>) -> Result<(), i32> {
+        let r = match self.shared.gpu.as_mut() {
+            Some(g) => g.lend(ring),
+            None if ring.is_none() => Ok(()),
+            None => Err(status::NOT_SUPPORTED),
+        };
+        for line in self.shared.gpu.as_mut().map(|g| std::mem::take(&mut g.log)).unwrap_or_default() {
+            v1::log(v1::Level::Warn, "libretro", &line);
+        }
+        r
+    }
+
+    fn frame_ring(&mut self) -> Result<Option<v1::RingFrame>, i32> {
+        let Some(g) = self.shared.gpu.as_mut() else { return Ok(None) };
+        let Some(mut f) = g.frame_ring() else { return Ok(None) };
+        (f.fields, f.field) = crate::vulkan::fields_of(&self.system, f.height as u32);
+        let a = self.shared.av.geometry.aspect_ratio;
+        if a > 0.0 {
+            let (n, d) = video::ratio(a as f64, 100_000);
+            (f.aspect_num, f.aspect_den) = (n as u32, d as u32);
+        }
+        Ok(Some(f))
     }
 
     fn audio_rate(&self) -> i32 {
@@ -862,6 +900,20 @@ impl Machine {
         shared.av = av;
         shared.sound.set_rate(video::ratio(av.timing.sample_rate, 1_000_000));
         shared.events.clear();
+        if let Some(ask) = shared.hw {
+            match crate::vulkan::Gpu::create(&ask, shared.negotiation.as_ref()) {
+                Ok(g) => shared.gpu = Some(g),
+                Err(why) => {
+                    v1::detail(&format!("the core's Vulkan device: {why}"));
+                    unsafe { (lib.api.unload_game)() };
+                    return Err(STATUS_REFUSED);
+                }
+            }
+            if let Some(reset) = ask.reset {
+                unsafe { reset() };
+            }
+            front::flush_logs();
+        }
 
         let mut machine = Machine {
             lib,

@@ -101,7 +101,8 @@ pub fn confine(p: &Policy) -> Result<String, String> {
     let read = AccessFs::from_read(abi);
     let read_exec = read | AccessFs::Execute;
     let write = AccessFs::from_write(abi);
-    let device = AccessFs::ReadFile | AccessFs::WriteFile | AccessFs::IoctlDev;
+    // ReadDir too: a Vulkan driver lists /dev/dri to find its render node (EmuSen_LibretroHost.md §10f).
+    let device = AccessFs::ReadFile | AccessFs::WriteFile | AccessFs::IoctlDev | AccessFs::ReadDir;
     let mut ruleset = Ruleset::default()
         .set_compatibility(CompatLevel::BestEffort)
         .handle_access(fs_all)

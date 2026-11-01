@@ -6,6 +6,7 @@ mod fault;
 pub mod layout;
 mod options;
 pub mod probe;
+mod vulkan;
 
 /// How many options the core declares.
 pub const OPTION_COUNT: usize = options::OPTIONS.len();
@@ -421,6 +422,10 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     if options.files {
         core.files_root = directories();
     }
+    if options.hw.starts_with("vulkan") && !vulkan::ask(options.hw == "vulkan_bgra") {
+        log(sys::LOG_ERROR, "the host refused a Vulkan context");
+        return false;
+    }
     *CORE.lock().unwrap() = Some(core);
     match options.memory {
         options::Memory::Maps => expose_maps(),
@@ -593,6 +598,7 @@ pub extern "C" fn retro_run() {
         }
     } else {
         let mut target = None;
+        let mut hw_picture = None;
         if options.framebuffer {
             let mut fb = sys::retro_framebuffer { data: std::ptr::null_mut(), width, height, pitch: 0, format: 0, access_flags: sys::MEMORY_ACCESS_WRITE, memory_flags: 0 };
             let core_format = core.format;
@@ -611,6 +617,13 @@ pub extern "C" fn retro_run() {
                 core.ram[DREW_IN_FRAMEBUFFER] = 1;
                 (data as *const u8, pitch)
             }
+            None if options.hw.starts_with("vulkan") => {
+                let pitch = MAX_WIDTH as usize * bpp;
+                let mut picture = std::mem::take(&mut core.picture);
+                core.draw(&mut picture, pitch);
+                hw_picture = Some(picture);
+                (std::ptr::null(), pitch)
+            }
             None => {
                 let pitch = MAX_WIDTH as usize * bpp;
                 let mut picture = std::mem::take(&mut core.picture);
@@ -621,7 +634,12 @@ pub extern "C" fn retro_run() {
             }
         };
         drop(guard);
-        if let Some(video) = cb.video {
+        if let Some(picture) = hw_picture {
+            if let Some(video) = cb.video {
+                vulkan::hand(&picture, pitch, width, height, video);
+            }
+            with_core(|c| c.picture = picture);
+        } else if let Some(video) = cb.video {
             unsafe { video(data as *const c_void, width, height, pitch) };
         }
     }

@@ -24,6 +24,7 @@ pub const CAPABILITIES: u64 = caps::RESET
     | caps::BATTERY_DIRTY
     | caps::IMAGE_PATH
     | caps::MEDIA
+    | caps::DEVICE_RING
     | caps::EXPECT;
 
 /// The cores whose memory was measured to hold still between frames, for which the frame-end window is exact. PCEE2's
@@ -141,4 +142,4 @@ impl Target for Libretro {
     }
 }
 
-emusen_core_broker::broker_exports!(Libretro; reset, phases, axes, settings, setting_notes, media, presence, expect);
+emusen_core_broker::broker_exports!(Libretro; reset, phases, axes, settings, setting_notes, media, presence, device_ring, expect);

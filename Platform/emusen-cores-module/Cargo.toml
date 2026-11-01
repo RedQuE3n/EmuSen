@@ -1,0 +1,16 @@
+[package]
+name = "emusen-cores-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# `emusen.cores`: the `cores` command, the shell's face of the core tool, reached through the emusen.library service (EmuSen_Cores.md §8).
+[lib]
+name = "emusen_cores_module"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+# The service's table and its one read of an event, shared rather than copied (EmuSen_Cores.md §6).
+emusen-library-module = { path = "../emusen-library-module" }

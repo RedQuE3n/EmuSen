@@ -11,6 +11,7 @@ pub mod job;
 pub mod packages;
 pub mod patches;
 pub mod pin;
+pub mod rom;
 
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::{Directory, Tree};

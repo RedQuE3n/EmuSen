@@ -1073,7 +1073,10 @@ namespace EmuSen.Cores.Native
 
         // The schema's switch, count and choice settings that are not hidden, with the core's note for the value in use.
         public virtual IReadOnlyList<CoreSetting> Settings =>
-            Library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting() is { } row ? row with { Note = _ => _notes.GetValueOrDefault(s.Key) } : null).OfType<CoreSetting>().ToArray();
+            Library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting() is { } row ? row with { Note = _ => _notes.GetValueOrDefault(s.Key), Locked = LockedKeys.Contains(s.Key) } : null).OfType<CoreSetting>().ToArray();
+
+        // The keys the machine's notes list under !locked - see EmuSen_CoreAPI.md §6.13.
+        private string[] LockedKeys => _notes.GetValueOrDefault("!locked")?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
 
         public IReadOnlyList<CoreSettingDescriptor> SettingDescriptors => Library.Settings;
 

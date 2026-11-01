@@ -1988,6 +1988,7 @@ The name a console started empty goes by ("SNES (no disc)") moved from `EmuSen.C
 | `route`'s `shelf` | the shelf a file sits on | routing |
 | `session_info.television_standard` | "ntsc", "pal" or null; `session_info.state` is now documented in the header as well | machine info |
 | `settings_schema` rows' `note` and `shown_with` | where the core words the value chosen, that sentence as the stored values stand; the row a row is shown with | the core's setting, a card's medium |
+| `settings_schema` rows' `locked` (since 2026-11-01) | true where the running engine holds the row for now, listed under its notes' `!locked` (`EmuSen_CoreAPI.md` §6.13); a window shows its note in place of its control | a hosted core's rows the CRT filter holds |
 | `cards_op` LIST's `kind`, `capacity`, `unit`, `mode`, `mode_key`, `slots`, `next_name`, `import_due` | what the card window showed from `MemoryCards` | the card manager |
 | `CHEAT_DB_STATUS`'s `attribution` | the database's licence words | the cheat database |
 

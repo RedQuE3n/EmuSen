@@ -1294,6 +1294,23 @@ libretro key: it sets `console_picture` wherever the running engine's schema dec
   row above), both read again between frames. Seeded faults, each caught by the host's test: the hold never raising
   `GET_VARIABLE_UPDATE`; the setting read as `on` instead of `true`.
 
+**The settings window from the options schema (4.2).** A hosted core's options reach Mistress's Graphics Settings
+window as every core's settings do; three things changed. *Sections:* an unrated option's row takes its category as
+its group (`CoreSettingDescriptor.Group`, and `group_of` in the Rust implementation), and the host lists the options
+category by category in the order the core first names each (libretro's menus group them so), `console_picture` first
+and ungrouped; the window already heads each group. *Locked rows:* `CoreSetting.Locked`, from the notes' `!locked`,
+reaches the frontend API's schema as `locked` in both implementations, and the window shows a locked row's note (the
+value held and why) in place of its control, so the row cannot be changed and a disabled control's colours, which are
+outside LunaP's palette, are never drawn; a reset leaves locked rows. *Restart:* the host's options are all applied
+between frames (`restart` false), so no row needed the "next start" words; the native cores already say it in their
+help. The window is the existing one, built through LunaP's layouts with its big-picture counterpart and pad
+navigation. Tests: `A_hosted_cores_tab_has_its_categories_as_sections_and_its_held_rows_locked` (the test core's rows
+from a running C# session with `console_picture` on: five sections in order, three free rows shown, the held rows and
+`console_picture` locked with their notes); `WindowFitAuditTests`' new case `GraphicsSettingsHostedPlayStation2` at
+1280 × 800 and 1920 × 1200, audited and recorded (`Mistress/Specification/`). Seeded fault: the locked list read under
+another key, caught by the window's test. The first recording drew disabled controls and the specification's palette
+rule refused their `#FFFFFF33` and `#FFFFFF66`, which is why a locked row shows its note instead.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

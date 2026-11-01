@@ -142,6 +142,7 @@ pub struct SettingDesc {
     pub effect: String,
     pub cost: Option<String>,
     pub hidden: bool,
+    pub category: Option<String>,
 }
 
 impl SettingDesc {
@@ -184,6 +185,7 @@ pub fn settings(text_json: &str) -> Vec<SettingDesc> {
                 effect: text(s, "effect").unwrap_or("none").to_string(),
                 cost: text(s, "cost").map(str::to_string),
                 hidden: matches!(s.and_then(|v| v.get("hidden")), Some(Value::Bool(true))),
+                category: text(s, "category").filter(|c| !c.is_empty()).map(str::to_string),
             }
         })
         .collect()

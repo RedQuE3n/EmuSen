@@ -16,6 +16,7 @@ use crate::files::{self, Saves};
 use crate::front::{self, Shared};
 use crate::library::{self, Library};
 use crate::memory;
+use crate::options;
 use crate::state;
 use crate::video::{self, Picture};
 
@@ -403,10 +404,12 @@ impl v1::Core for Machine {
             return Vec::new();
         }
         front::with_declared(|d| {
-            d.options
-                .declared
-                .iter()
-                .map(|o| Setting {
+            // Each category's options together, the categories in the order the core first names them, as libretro's menus group them.
+            let mut declared: Vec<&options::Declared> = d.options.declared.iter().collect();
+            let first = |c: &Option<String>| d.options.declared.iter().position(|o| o.category == *c);
+            declared.sort_by_key(|o| first(&o.category));
+            std::iter::once(console_picture::setting())
+                .chain(declared.into_iter().map(|o| Setting {
                     key: o.key.clone(),
                     label: if o.label.is_empty() { o.key.clone() } else { o.label.clone() },
                     help: o.info.clone(),
@@ -418,9 +421,8 @@ impl v1::Core for Machine {
                     advanced: false,
                     hidden: false,
                     restart: false,
-                })
+                }))
                 .filter(|s| s.check().is_ok())
-                .chain(std::iter::once(console_picture::setting()))
                 .collect()
         })
     }

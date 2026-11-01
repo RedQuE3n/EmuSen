@@ -31,26 +31,34 @@ namespace EmuSen.Mistress.Views
             catch (CrystalException e) { StatusText.Text = $"{core.File} could not be approved: {e.Message}"; }
         }
 
-        // The library of the engine route chooses for the file, where its trust is "needs_approval"; null otherwise.
+        // The core the game would open on, where it waits for the player's approval: the routed engine's library, or a libretro core's whose hash the listing gives (EmuSen_LibretroHost.md §10m); null otherwise.
         internal static CoreAwaiting? CoreAwaitingApproval(CrystalRuntime runtime, string romPath)
         {
             try
             {
                 using var route = JsonDocument.Parse(runtime.Route(romPath));
-                if (route.RootElement.GetProperty("engine").GetString() is not { } engine) return null;
+                string? engine = Text(route.RootElement, "engine"), system = Text(route.RootElement, "system");
+                if (engine is null && system is null) return null;
                 using var cores = JsonDocument.Parse(runtime.Cores());
                 foreach (JsonElement c in cores.RootElement.EnumerateArray())
                 {
-                    if (c.GetProperty("engine").ValueKind != JsonValueKind.String || c.GetProperty("engine").GetString() != engine) continue;
-                    if (!c.TryGetProperty("trust", out var trust) || trust.GetString() != "needs_approval") return null;
-                    static string[] Texts(JsonElement e) => e.EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
-                    return new CoreAwaiting(System.IO.Path.GetFileName(c.GetProperty("library").GetString() ?? ""), c.GetProperty("name").GetString() ?? engine,
-                        Texts(c.GetProperty("authors")), c.GetProperty("license").GetString() ?? "", Texts(c.GetProperty("systems")), c.GetProperty("sha256").GetString() ?? "");
+                    bool waiting = engine is null && Text(c, "engine") is null && Texts(c, "systems").Contains(system);
+                    if (!waiting && (engine is null || Text(c, "engine") != engine)) continue;
+                    if (c.TryGetProperty("libretro", out var l) && l.ValueKind == JsonValueKind.Object)
+                        return Text(l, "trust") == "needs_approval" && Text(c, "trust") != "needs_refresh" && Text(l, "sha256") is { } hash
+                            ? new CoreAwaiting(Text(l, "file") ?? "", Text(l, "name") ?? Text(c, "name") ?? engine ?? "", Texts(l, "authors"), Text(l, "license") ?? "", Texts(c, "systems"), hash) : null;
+                    if (waiting || Text(c, "trust") != "needs_approval") return null;
+                    return new CoreAwaiting(System.IO.Path.GetFileName(Text(c, "library") ?? ""), Text(c, "name") ?? engine!, Texts(c, "authors"), Text(c, "license") ?? "", Texts(c, "systems"), Text(c, "sha256") ?? "");
                 }
                 return null;
             }
             catch (Exception e) when (e is CrystalException or JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
         }
+
+        private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        private static string[] Texts(JsonElement e, string name) =>
+            e.TryGetProperty(name, out var a) && a.ValueKind == JsonValueKind.Array ? a.EnumerateArray().Select(x => x.GetString() ?? "").ToArray() : Array.Empty<string>();
 
         // The words of the question, one form with Cores' (EmuSen_Cores.md §3.4).
         internal static string ApprovalMessage(CoreAwaiting core) =>

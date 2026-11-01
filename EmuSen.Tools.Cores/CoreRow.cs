@@ -25,6 +25,7 @@ namespace EmuSen.Tools.Cores
         // The runtime's engine name, which Make Default and Options… need; none for a libretro core discovery does not list yet.
         public string? Engine { get; init; }
         public string? Library { get; init; }
+        // The hash an approval names: the library's, or for an installed libretro core its core file's, as the runtime's listing gives it.
         public string? Sha256 { get; init; }
         // The runtime's trust of the library: approved, manifest, needs_approval, not_read; none where the runtime does not list it.
         public string? Trust { get; init; }
@@ -81,7 +82,7 @@ namespace EmuSen.Tools.Cores
                 Size = File.Exists(library) ? new FileInfo(library).Length : null,
                 Engine = engine.Length > 0 ? engine : null,
                 Library = library,
-                Sha256 = Text(c, "sha256"),
+                Sha256 = c.TryGetProperty("libretro", out JsonElement l) && l.ValueKind == JsonValueKind.Object ? Text(l, "sha256") : Text(c, "sha256"),
                 Trust = trust,
                 IsDefault = engine.Length > 0 && consoles.Any(console => isDefault(console, engine)),
             };

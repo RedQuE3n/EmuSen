@@ -1,6 +1,6 @@
 //! What discovery found, as the frontend API's `emusen_crystal_cores` and `emusen_crystal_engines` shape it
 //! (`emusen_crystal.h`), so that the C# host's listing and this crate's compare value for value (EmuSen_Backend.md §27.6,
-//! and §29.40.5 for 1.3's keys; each row's `libretro` and the entries waiting for approval, EmuSen_LibretroHost.md §10l).
+//! and §29.40.5 for 1.3's keys; each row's `libretro` and the entries waiting for approval, EmuSen_LibretroHost.md §10m).
 
 use emusen_native::core::jsonw::Json;
 use emusen_native::json::Value;

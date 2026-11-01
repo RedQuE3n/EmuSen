@@ -234,7 +234,7 @@ int64_t emusen_crystal_engines(emusen_crystal_runtime *rt, uint8_t *out, size_t 
  * (section 29.40.5). Since 1.5 every row has "libretro": null, or for an installed libretro core {"folder","file",
  * "sha256","corename","name","version","license","authors":[text],"source","build","trust"}, "sha256" the core file's
  * own and "trust" its standing, the hash an approval names; "trust" of the row may be "needs_refresh"; and an entry
- * whose core waits for that approval is a last row of its own, its "engine" null (EmuSen_LibretroHost.md 10l). */
+ * whose core waits for that approval is a last row of its own, its "engine" null (EmuSen_LibretroHost.md 10m). */
 int64_t emusen_crystal_cores(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* changes. Lists the cores directories again, and reads the player's approvals again; a session already open keeps its

@@ -167,8 +167,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
             s.Pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
             s.Settle();
-            MenuPanel menu = s.Window.GetControl<MenuPanel>("PadMenuBig");
+            // Over a game the menu is the Pause Card, whose title row carries the name (EmuSen_BigPicture.md §48.2).
+            MenuPanel menu = PadMenu.Big(s.Window);
             Assert.True(menu.IsEffectivelyVisible);
+            Assert.Same(PadMenu.Card(s.Window).CardPanel, menu);
             Assert.Equal(game, menu.Title);
             Assert.DoesNotContain(".sfc", menu.Title!);
         }, default);

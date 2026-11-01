@@ -58,6 +58,12 @@ namespace EmuSen.WiseMan.Crystal
         [InlineData("EmuSen.Pharaoh", true)]
         [InlineData("emusen-shell", true)]
         [InlineData("EmuSen.Mistress", true)]
+        [InlineData("EmuSen.WiseMan", true)]
         public void Each_program_names_its_default(string program, bool rust) => Assert.Equal(rust, CrystalContract.DefaultsToRust(Assembly.Load(program)));
+
+        // The suite itself runs on the Rust unless the variable is 0, whichever host enters it.
+        [Fact]
+        public void The_suite_runs_on_the_rust_unless_the_variable_is_0() =>
+            Assert.True(CrystalContract.Native == (Environment.GetEnvironmentVariable(CrystalContract.Variable) != "0"), CrystalContract.Report);
     }
 }

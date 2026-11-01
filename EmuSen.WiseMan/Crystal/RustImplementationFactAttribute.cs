@@ -3,7 +3,7 @@ using Xunit;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // A case of an answer only the Rust implementation gives, skipped unless EMUSEN_CRYSTAL_NATIVE=1 puts the binding on the Rust; why names the answer - see EmuSen_Backend.md §34.
+    // A case of an answer only the Rust implementation gives, skipped at EMUSEN_CRYSTAL_NATIVE=0; why names the answer - see EmuSen_Backend.md §34 and §35.
     public sealed class RustImplementationFactAttribute : FactAttribute
     {
         public RustImplementationFactAttribute(string why)

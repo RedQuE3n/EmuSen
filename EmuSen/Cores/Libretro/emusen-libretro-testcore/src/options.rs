@@ -230,6 +230,11 @@ impl Options {
         if self.hw != "off" && !self.hw.is_empty() {
             return sys::PIXEL_FORMAT_XRGB8888;
         }
+        self.declared_format()
+    }
+
+    /// The format `tc_format` names, which a Vulkan core declares though its hardware frames are 8-bit (§10o).
+    pub fn declared_format(&self) -> i32 {
         match self.format.as_str() {
             "rgb565" => sys::PIXEL_FORMAT_RGB565,
             "0rgb1555" => sys::PIXEL_FORMAT_0RGB1555,

@@ -421,7 +421,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     {
         log(sys::LOG_INFO, &format!("game path: {}", unsafe { std::ffi::CStr::from_ptr(game.path) }.to_string_lossy()));
     }
-    let mut format = core.format;
+    let mut format = if options.hw.starts_with("vulkan") { options.declared_format() } else { core.format };
     if !environment(env::SET_PIXEL_FORMAT, &mut format as *mut c_int as *mut c_void) {
         log(sys::LOG_WARN, "the pixel format was refused; drawing 0RGB1555");
         core.format = sys::PIXEL_FORMAT_0RGB1555;

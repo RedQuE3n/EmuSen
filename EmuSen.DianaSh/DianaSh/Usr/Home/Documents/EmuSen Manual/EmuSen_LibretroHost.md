@@ -1719,10 +1719,19 @@ software pictures; `a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_b
 answering `vkCreateDevice` and the wrapper not recording its device (the v1 test, the ring refused); the words left
 unsaid (the loader test).
 
-**Also found**, not changed here: with every pixel format offered (the run example's `0b111`), Flycast's run panicked
-in `convert_row`, a 640-pixel XRGB8888 row written as four bytes a pixel into the 1,706-byte row of an RGB565 picture
-(853 pixels): `convert_row` has no XRGB8888-to-RGB565 pair. The runtime offers RGBA only, so no player meets it. The
-Flycast runs above were made with the example offering RGBA alone, a change not kept.
+**A 16-bit picture of a Vulkan core.** With every pixel format offered (the run example's `0b111`), Flycast's run
+panicked in `convert_row`. A hardware frame read back (or a ring frame taken by `frame_copy`) is 8-bit XRGB, and it
+was converted into the picture of the format handed for the format the core declared, RGB565 here; `convert_row` had
+no XRGB8888-to-RGB565 pair and wrote a 640-pixel row as four bytes a pixel into a 1,706-byte row. Decided 2026-11-01: a
+host never crashes on a core's choice of format. `convert_row` now takes every pair: the two 32-bit copies and the
+RGB565 copy stay as they were, and every other pair goes through 8-bit red, green and blue (RGB565 from 8-bit keeps the
+top bits; a 16-bit format into a 32-bit one repeats them, as before). A 16-bit picture of a Vulkan core loses the low
+bits of its colours, as the format the core declared and the host accepted implies. Tests: a unit test of each libretro
+format into each handed format, and `a_vulkan_cores_frames_land_in_whatever_format_it_declared_and_the_host_accepts`
+(the test core declaring each of the three formats with `tc_hw=vulkan`, the host offering each of four masks, read back
+and ringed: 24 runs, every frame equal to the software picture in the handed format). Seeded fault: the old
+XRGB8888-to-anything arm put back, caught at RGB565 (the picture differs). The runtime offers RGBA only, so no player
+had met it.
 
 ## 11. Risks
 

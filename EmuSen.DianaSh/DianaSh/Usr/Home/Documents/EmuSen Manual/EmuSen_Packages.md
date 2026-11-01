@@ -220,3 +220,48 @@ listing again; the desktop window whole at 1280×800 and 1920×1200. `WindowFitA
   star column by its content; the big screen offers only the state sections, since its section row does not scroll;
   and the `PackagesPlan` and `PackagesRunning` states are scripted but not yet audited, since the plan sheet is drawn
   over the table and the apply bar overlaps itself in the big screen's type.
+
+## 8. Built 2026-10-31: M3, the detail and a package's layers
+
+*Decided 2026-10-31 by the tester:* the `mod` commands (`EmuSen_Modding.md` X1) are not built, so the layers go over
+`pkg patch`, which §3b keeps as the alias of `mod add/rm`; X1 is a stage of its own, queued next. The Game Package
+window is kept for the per-game menus as a second host of the same control: one control, two hosts.
+
+### 8.1 One control, two hosts
+
+- **`GamePackageDetail`** (the tool library) holds the Game Package window's controls, moved rather than copied:
+  *Make Package*; the package's **layers**, today its soft patches, each with *Remove*, and *Add* from the IPS, UPS and
+  BPS files beside the game (or beside the library file a self-contained game was copied from) or, on the desktop, a
+  file chosen with *Browse…*; *Scraped as*, over `pkg identity`; and, new, **Stores: Copy Saves and Art In**, over
+  `pkg migrate` (§14 and §18.4 there), which copies the game's saves, states and their records, settings, art and
+  cheats in and overwrites nothing. Its status line says each job's outcome in the tool's words.
+- **The layers are a list of `PackageLayer`** (kind, name, format, place), read from the manifest, and the rows are
+  drawn from it, so X1 adds kinds (texture packs, scripts, audio, codes) and the on/off and order controls to the list
+  without reworking the control. `Patches()` is the list's patch kind.
+- **Packages' detail** shows the facts of §7.3 and then the control for any game whose file can be named — in the
+  library, or kept in its package — with *Browse…* on the desktop only; a change made there lists the library again.
+- **`GamePackageWindow`** is a thin host: the control in a scroller and *Close*, its constructor, properties and the
+  controls' names unchanged, so its menus, the game options sheet and the pad reach it as before.
+
+### 8.2 The gate, the tests, and the faults seeded
+
+`PackagesWindowTests.A_games_package_controls_in_the_detail_…`, through real jobs on a synthetic library: a cartridge
+made into a package from the detail and the list taken again; the patch beside it added, its layer read back as
+`patch 1 IPS`; the identity set to patched; the save in `Saves/SNES` copied in; the patch taken out; and the library
+byte for byte as it was. `GamePackageWindowTests` (4) pass unchanged against the thin host. The six Game Package
+recordings and Packages' two detail recordings were recorded again: the status line moved inside the control and the
+Stores row is new. Their first recording found *Close* not reached by the pad, since a second button bar (Stores') gave
+the recorder's walk two items of the same name; *Copy Saves and Art In* stands alone, and the rules find nothing.
+Measured on 2026-10-31, each fault reverted after its run:
+
+| Fault | Caught by |
+|---|---|
+| a change does not list the library again | `A_games_package_controls_in_the_detail_…` |
+| *Copy Saves and Art In* runs `pkg check` | `A_games_package_controls_in_the_detail_…` |
+| the detail names no game in the library | `A_games_package_controls_in_the_detail_…` |
+| the layers numbered from 0, so *Remove* takes out the wrong one | `A_games_package_controls_in_the_detail_…`, `GamePackageWindowTests.A_package_is_made_and_a_patch_…` |
+
+### 8.3 Left, for X1, X2 and X8
+
+A layer switched on and off, the layers' order, conflicts named (two layers writing the same bytes), layer kinds other
+than soft patches, installing from the emusen-mods repository, and *Export Patched Game*.

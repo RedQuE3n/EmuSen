@@ -56,12 +56,17 @@ fn loader_gipa() -> Option<vk::PFN_vkGetInstanceProcAddr> {
     (!f.is_null()).then(|| unsafe { std::mem::transmute::<*mut c_void, vk::PFN_vkGetInstanceProcAddr>(f) })
 }
 
+/// The first queue family that draws and computes, which both device paths take.
+fn graphics_family(i: &ash::Instance, gpu: vk::PhysicalDevice) -> Option<usize> {
+    let families = unsafe { i.get_physical_device_queue_family_properties(gpu) };
+    families.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE))
+}
+
 #[allow(clippy::too_many_arguments)]
 unsafe extern "C" fn create_device(context: *mut retro_vulkan_context, instance: vk::Instance, gpu: vk::PhysicalDevice, _surface: vk::SurfaceKHR, gipa: vk::PFN_vkGetInstanceProcAddr, extensions: *const *const c_char, extension_count: c_uint, _layers: *const *const c_char, _layer_count: c_uint, _features: *const vk::PhysicalDeviceFeatures) -> bool {
     let gipa = if OWN_LOADER.load(std::sync::atomic::Ordering::Relaxed) { loader_gipa().unwrap_or(gipa) } else { gipa };
     let i = unsafe { ash::Instance::load(&ash::StaticFn { get_instance_proc_addr: gipa }, instance) };
-    let families = unsafe { i.get_physical_device_queue_family_properties(gpu) };
-    let Some(family) = families.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)) else { return false };
+    let Some(family) = graphics_family(&i, gpu) else { return false };
     let priority = [1.0f32];
     let queue = [vk::DeviceQueueCreateInfo::default().queue_family_index(family as u32).queue_priorities(&priority)];
     let names = if extension_count == 0 || extensions.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(extensions, extension_count as usize) } };
@@ -79,8 +84,7 @@ unsafe extern "C" fn create_instance(_gipa: vk::PFN_vkGetInstanceProcAddr, app: 
 
 unsafe extern "C" fn create_device2(context: *mut retro_vulkan_context, instance: vk::Instance, gpu: vk::PhysicalDevice, _surface: vk::SurfaceKHR, gipa: vk::PFN_vkGetInstanceProcAddr, wrapper: retro_vulkan_create_device_wrapper_t, opaque: *mut c_void) -> bool {
     let i = unsafe { ash::Instance::load(&ash::StaticFn { get_instance_proc_addr: gipa }, instance) };
-    let families = unsafe { i.get_physical_device_queue_family_properties(gpu) };
-    let Some(family) = families.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)) else { return false };
+    let Some(family) = graphics_family(&i, gpu) else { return false };
     let priority = [1.0f32];
     let queue = [vk::DeviceQueueCreateInfo::default().queue_family_index(family as u32).queue_priorities(&priority)];
     let device = unsafe { wrapper(gpu, opaque, &vk::DeviceCreateInfo::default().queue_create_infos(&queue)) };

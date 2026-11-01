@@ -161,6 +161,7 @@ dependencies = [
 name = "emusen-core-broker"
 version = "0.1.0"
 dependencies = [
+ "emusen-core-entry",
  "emusen-core-host",
  "emusen-crystal",
  "emusen-galaxia",

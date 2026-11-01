@@ -24,6 +24,11 @@ pub const ADAPTER: &str = "emusen-libretro-host";
 /// The libraries the installation builds those copies from, as its `cores.manifest` lists them (EmuSen_LibretroHost.md §10d).
 pub const PROXY_LIBRARY: &str = "emusen_libretro_proxy";
 pub const HOST_LIBRARY: &str = "emusen_libretro_host";
+/// Inside [`LIBRETRO`]: each entry's private folders, `.data/<stem>/` with `system/`, `save/` and `cache/`, never listed as an
+/// entry (EmuSen_LibretroHost.md §4.5).
+pub const DATA: &str = ".data";
+/// A referee run's switch: the system folder a core is given, named by path in place of its own (EmuSen_LibretroHost.md §10c).
+pub const SYSTEM_DIR_VAR: &str = "EMUSEN_LIBRETRO_SYSTEM_DIR";
 /// The one `NOTICE` format this crate reads and writes.
 pub const FORMAT: u32 = 1;
 
@@ -69,6 +74,16 @@ pub fn stem_of_info(file_name: &str) -> Option<&str> {
 /// The stem of the libretro core itself, `<stem>_libretro.<suffix>`.
 pub fn stem_of_core(file_name: &str) -> Option<&str> {
     stem_before(file_name, &format!("_libretro.{}", library_suffix()))
+}
+
+/// The private folders of the entry at `folder`: `<cores>/libretro/.data/<stem>/`.
+pub fn data_folder(folder: &Path, stem: &str) -> PathBuf {
+    folder.parent().unwrap_or(folder).join(DATA).join(stem)
+}
+
+/// The system folder a core of the entry at `folder` is given: the one [`SYSTEM_DIR_VAR`] names, else its own `system/`.
+pub fn system_folder(folder: &Path, stem: &str) -> PathBuf {
+    std::env::var_os(SYSTEM_DIR_VAR).map_or_else(|| data_folder(folder, stem).join("system"), PathBuf::from)
 }
 
 /// What a `NOTICE` records of a downloaded core (EmuSen_Cores.md §5.2 step 4).

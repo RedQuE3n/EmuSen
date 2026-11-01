@@ -384,9 +384,17 @@ static DISK: sys::retro_disk_control_ext_callback = sys::retro_disk_control_ext_
 /// The descriptors of a pad's controls, the console's own words for the RetroPad's.
 const DESCRIPTORS: [(c_uint, &CStr); 6] = [(0, c"Cross"), (8, c"Circle"), (1, c"Square"), (9, c"Triangle"), (3, c"Start"), (2, c"Select")];
 
+/// What the core says when it fails to start: at load, as an error; at its first frame, as PCEE2 says it, at info level.
+pub const FAIL_AT_LOAD: &str = "the test machine found no firmware in its system folder";
+pub const FAIL_AT_FIRST_FRAME: &str = "the test machine could not start";
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> bool {
     let options = Options::read();
+    if options.fail == "load" {
+        log(sys::LOG_ERROR, FAIL_AT_LOAD);
+        return false;
+    }
     if options::get("tc_late_option") == "on" {
         options::declare_late();
     }
@@ -694,6 +702,9 @@ pub extern "C" fn retro_run() {
         }
     }
 
+    if frame == 1 && options.fail == "first_frame" {
+        log(sys::LOG_INFO, FAIL_AT_FIRST_FRAME);
+    }
     if frame == 2 && options.fault != "none" {
         let found = fault::run(&options.fault);
         with_core(|c| c.ram[FAULT] = found);

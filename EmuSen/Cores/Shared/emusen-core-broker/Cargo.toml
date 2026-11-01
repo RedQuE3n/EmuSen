@@ -27,6 +27,8 @@ landlock = "0.4"
 emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
 emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
 emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }
+# The entry's private folders, where a test links a file into the core's system folder (EmuSen_LibretroHost.md §10l).
+emusen-core-entry = { path = "../../../../Platform/core-entry" }
 # The Rust runtime that discovers an installed entry, admits it and opens a game on it (EmuSen_LibretroHost.md §10k).
 emusen-crystal = { path = "../../../../Platform/crystal" }
 emusen-galaxia = { path = "../../../../Platform/galaxia" }

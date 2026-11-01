@@ -229,9 +229,8 @@ under a lock (`Platform/platform/src/scraping.rs`):
    program). The runtime catalogue is not here, so each system is taken as its own engine for the art index: a picture
    placed by hand under a folder two systems share is found only through the system that names it.
 3. After any lend the platform library never opens a scraper of its own; a lend made after one was opened closes it.
-   A process therefore holds one scraper and one quota manager. Two processes on one store (Mistress and a standalone
-   shell at once) each hold one: the day's count is in `media.db` and shared, the pace and the thread limit are each
-   process's (open question 8.7.1).
+   A process therefore holds one scraper and one quota manager. Across processes the store lock of §8.8 refuses a
+   second.
 
 ### 8.3 Choosing the games
 
@@ -280,13 +279,22 @@ not copied; T5's first step routes Scrape Games through the command's choice, so
   named by hand through a pipe, nothing sent before `run`, a run that finds the game and saves its cover, `--missing`
   afterwards, the library unwritten, and a withdrawal after which the service refuses and has opened nothing.
   `scraping_default.rs`: a process with no lend opens its own store and `games.db` from the settings, and a later lend
-  closes it. Both load the NuGet SQLite with `libm` made global first: the NuGet build leaves `trunc` to its host, and
-  the Rust tests that load it otherwise skip silently (8.7.2).
+  closes it. Both load SQLite through `emusen_sqlite::for_tests`, which makes `libm` global first: the NuGet build
+  leaves `trunc` to its host, and tests that loaded it otherwise passed without reaching SQLite.
 - `ScrapingLendTests` (WiseMan): Mistress's binding lends a `MediaService`, a native shell answers from it, and
   disposing it withdraws the lend; `ThemeMediaKinds` on a synthetic theme.
 
-Open questions: (1) **[decision]** whether every scraper handle should take an advisory lock on its store, so that a
-second process refuses rather than paces on its own; a minor of `emusen_scrape.h`. (2) Whether the other Rust tests
-that load the NuGet SQLite (`emusen-library`, `emusen-scrape`) should make `libm` global as these do, since on this
-machine they pass without reaching SQLite.
+Open question: whether the other Rust tests that load SQLite should all use `emusen_sqlite::for_tests`, which since
+2026-10-31 loads `libm` first and fails loudly where no copy loads; the scraping tests use it.
 
+### 8.8 One scraper a store across processes (`emusen_scrape.h` 1.1)
+
+Decided 2026-10-31 by the tester: every scraper handle holds its store alone, so that a second process (Mistress and a
+standalone shell at once) refuses rather than paces on its own and the account's quota is counted once. The lock is
+Galaxia's advisory lock (`medium_lock`, the `flock` on `<store>/media.db.lock` that save media use), taken in
+`Scraper::open` before `media.db` is opened and let go after everything else of the handle has closed. A second open
+of a held store, in another process or in the same one, is `EMUSEN_SCRAPE_STORE_IN_USE` (−1167, the header's 1.1)
+with words naming the holder ("another program", or "EmuSen's scraper in this program") and what to do. Mistress shows
+the words when its store cannot be opened; a shell's `scrape` prints them. `tests/store_lock.rs` holds the store in a
+child process of the test binary and is refused in the parent, then opens once the child lets go, and is refused a
+second handle in its own process.

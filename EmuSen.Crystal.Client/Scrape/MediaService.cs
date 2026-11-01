@@ -8,7 +8,7 @@ namespace EmuSen.Crystal.Client.Scrape
     // A status the scraper answered with, and its words, as emusen_scrape.h names them; the words are always redacted.
     public sealed class MediaServiceException(int status, string words) : Exception(words)
     {
-        public const int NewerFile = -1160, Database = -1161, NoSqlite = -1162, BadRequest = -1163, Busy = -1164, Io = -1165, NoLibrary = -1166;
+        public const int NewerFile = -1160, Database = -1161, NoSqlite = -1162, BadRequest = -1163, Busy = -1164, Io = -1165, NoLibrary = -1166, StoreInUse = -1167;
 
         public int Status { get; } = status;
     }

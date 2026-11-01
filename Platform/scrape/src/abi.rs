@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 0;
+pub const MINOR: u32 = 1;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub const NULL: i32 = -1;
@@ -16,6 +16,7 @@ pub const BAD_REQUEST: i32 = -1163;
 pub const BUSY: i32 = -1164;
 pub const IO: i32 = -1165;
 pub const NO_LIBRARY: i32 = -1166;
+pub const STORE_IN_USE: i32 = -1167;
 
 /// `emusen_scrape_config`.
 #[repr(C)]

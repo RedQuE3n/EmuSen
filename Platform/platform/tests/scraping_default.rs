@@ -5,25 +5,12 @@ use emusen_library::Library;
 use emusen_platform::dianash::{dianash_free, dianash_new, dianash_output_take, dianash_session_new, dianash_submit};
 use emusen_platform::scraping::{Lend, emusen_scraping_lend, opened_its_own};
 use emusen_scrape::Scraper;
-use emusen_sqlite::Sqlite;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-/// SQLite as the C# ships it: `EMUSEN_SQLITE`, else the NuGet cache's builds, newest first, the first that loads.
-fn shipped_sqlite() -> Option<(PathBuf, Arc<Sqlite>)> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
-    if let Some(home) = std::env::var_os("HOME") {
-        for package in ["sqlitepclraw.lib.e_sqlite3", "sqlite"] {
-            if let Ok(versions) = std::fs::read_dir(PathBuf::from(&home).join(".nuget/packages").join(package)) {
-                let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
-                found.sort();
-                candidates.extend(found.into_iter().rev());
-            }
-        }
-    }
-    // The NuGet builds leave libm to their host, which a .NET process has loaded and a test binary has not.
-    unsafe { libc::dlopen(c"libm.so.6".as_ptr(), libc::RTLD_NOW | libc::RTLD_GLOBAL) };
-    candidates.into_iter().find_map(|p| Sqlite::open(&p.to_string_lossy()).ok().map(|s| (p, Arc::new(s))))
+
+/// The file the shared loader took SQLite from, read from the process's own mappings.
+fn loaded_from() -> Option<PathBuf> {
+    std::fs::read_to_string("/proc/self/maps").ok()?.lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.ends_with("libe_sqlite3.so")).map(PathBuf::from)
 }
 
 fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
@@ -37,10 +24,8 @@ fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
 
 #[test]
 fn a_process_with_no_lend_opens_its_own_scraper_and_a_lend_replaces_it() {
-    let Some((shipped, sqlite)) = shipped_sqlite() else {
-        eprintln!("skipped: no libe_sqlite3 (EMUSEN_SQLITE or the NuGet cache)");
-        return;
-    };
+    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let shipped = loaded_from().expect("for_tests loaded an e_sqlite3 file");
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-scrape-own-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (program, library, home, etc) = (base.join("program"), base.join("library"), base.join("home"), base.join("etc"));

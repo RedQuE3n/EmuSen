@@ -154,8 +154,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(Named<Slider>(s, "NavigationVolumeSlider").IsEffectivelyVisible);
             Reach(s, "NavigationVolumeSlider");
             s.Pad.Right();
-            Assert.Equal(75, s.Settings.BigPictureInterface.NavigationVolume);
-            Assert.Equal("75", RowOf(Named<Slider>(s, "NavigationVolumeSlider")).Value);
+            Assert.Equal(65, s.Settings.BigPictureInterface.NavigationVolume);
+            Assert.Equal("65", RowOf(Named<Slider>(s, "NavigationVolumeSlider")).Value);
             ThemedSwitchesTests.PutAway(s);
             Assert.False(Sheets(s).IsPresenting);
         }, default);

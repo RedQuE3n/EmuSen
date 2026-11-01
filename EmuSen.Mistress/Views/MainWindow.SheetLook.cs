@@ -13,12 +13,8 @@ namespace EmuSen.Mistress.Views
     // The windows a big-screen session shows as sheets, framed as ES-DE's menus and drawn in their look - see EmuSen_Settings_Reference.md §4.80.
     public partial class MainWindow
     {
-        // Barlow Condensed as a font family, for the stock controls of a framed sheet; the menus draw the same file by its path.
-        internal static readonly FontFamily BigMenuFontFamily = new("avares://EmuSen.Mistress/Assets/Fonts#Barlow Condensed");
-
         private void SetUpSheetLook()
         {
-            Resources[MenuLook.FontFamilyKey] = BigMenuFontFamily;
             Sheets.MenuHintsFor = SheetMenuHints;
             Sheets.MenuFrameFor = FramedAsMenu;
         }

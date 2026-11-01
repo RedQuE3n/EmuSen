@@ -128,7 +128,7 @@ namespace EmuSen.WiseMan.Fixtures
         });
 
         private static readonly FontFamily Inter = new("avares://Avalonia.Fonts.Inter/Assets#Inter");
-        private static readonly FontFamily Barlow = new("avares://EmuSen.Mistress/Assets/Fonts#Barlow Condensed");
+        private static readonly FontFamily Barlow = EmuSen.LunaP.Media.LunaFonts.Condensed;
 
         // The floor is the capitals Inter, the desktop's face, draws at SmallestText; the constant is what Inter's H measures (§4.83.7).
         [Fact]

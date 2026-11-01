@@ -4777,6 +4777,13 @@ choice rests on the reasons above and not on a comparison. It is not ES-DE's bun
 Google Fonts, and no file of ES-DE's was opened. It is bundled in Mistress, not LunaP, because LunaP is MIT and keeps
 every dependency MIT (LunaP §181.2); LunaP's controls take any font file's path.
 
+*Superseded 2026-11-01* (`EmuSen_Interface.md` §5.2): the unified interface sets every form in Barlow and Barlow
+Condensed, so LunaP bundles both families, Regular and Medium (version 1.422, from the Barlow project), under the OFL
+with its text (LunaP §206.3), and Mistress draws the menus from LunaP's copy (`LunaFonts.CondensedFile`). A font under
+the OFL places no term on the code that uses it, so it does not break LunaP's rule that its code dependencies stay MIT.
+Mistress's own copy and `licenses/BarlowCondensed-OFL-1.1.txt` were removed; the notice is `THIRD_PARTY_NOTICES.md`
+§1.5 and `licenses/Barlow-OFL-1.1.txt`.
+
 #### 4.69.3 How it is built
 
 - **LunaP** (§181) provides `MenuPanel` (the panel, title, footer and help bar), `MenuRow` (one drawn row), `MenuRows`

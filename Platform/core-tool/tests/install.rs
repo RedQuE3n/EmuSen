@@ -99,7 +99,7 @@ fn installation(dir: &Path, adapter: &[u8], broker: bool) -> PathBuf {
 }
 
 fn context(dir: &Path, server: &Server) -> Context {
-    Context { cores: dir.join("Cores"), source: Some(source(server)), placement: Some(placement()), installation: Some(installation(dir, b"the adapter", true)), notes: Vec::new() }
+    Context { cores: dir.join("Cores"), source: Some(source(server)), placement: Some(placement()), installation: Some(installation(dir, b"the adapter", true)), notes: Vec::new(), hosted: None }
 }
 
 fn fetched(ctx: &Context) {

@@ -1,0 +1,3 @@
+# The libretro cores EmuSen hosts, one line each, tab-separated: the core's file stem, the EmuSen systems it runs (comma-separated system ids), and its upstream source. Decided 2026-11-01: PCEE2 and Flycast, and no other is offered for download (EmuSen_Cores.md §4.7).
+pcee2	ps2	https://github.com/libretro/ps2
+flycast	dreamcast,naomi,atomiswave	https://github.com/flyinghead/flycast

@@ -6,6 +6,7 @@
 //! settings, `starts_empty`) is core info's (§5.3, D9). The packs' code is a module per console family beside the
 //! table (§5.2, D6): the save media's format modules first (step B3). EmuSen_Backend.md §12 and §13 record what was built.
 
+pub mod libretro_cores;
 pub mod cheats;
 pub mod debug;
 pub mod gb;

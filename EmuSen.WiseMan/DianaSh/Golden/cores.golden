@@ -29,8 +29,8 @@ Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | 
 status 1
 action none
 $ cores get pcsx2
-out 90
-cores: pcsx2: pcsx2 is not in the catalogue, which was never fetched; cores fetch reads it
+out 82
+cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast)
 status 1
 action none
 $ cores ls --installed --updates
@@ -92,8 +92,8 @@ Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | 
 status 1
 action none
 $ cores get pcsx2
-out 90
-cores: pcsx2: pcsx2 is not in the catalogue, which was never fetched; cores fetch reads it
+out 82
+cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast)
 status 1
 action none
 $ cores rm pcsx2

@@ -73,7 +73,7 @@ fn fetch_caches_the_catalogue_and_the_listing_joins_it_with_what_is_installed() 
     let dir = scratch("fetch");
     let server = serve(files(&dir));
     let cores = dir.join("Cores");
-    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: Some(placement()), installation: None, notes: Vec::new() };
+    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: Some(placement()), installation: None, notes: Vec::new(), hosted: None };
 
     let before = events(&ctx, r#"{"op":"core-ls"}"#);
     assert_eq!(before.len(), 1);
@@ -114,7 +114,7 @@ fn info_gives_the_detail_and_names_where_the_build_comes_from() {
     let dir = scratch("info");
     let server = serve(files(&dir));
     let cores = dir.join("Cores");
-    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: Some(placement()), installation: None, notes: Vec::new() };
+    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: Some(placement()), installation: None, notes: Vec::new(), hosted: None };
     events(&ctx, r#"{"op":"core-fetch"}"#);
     let e = events(&ctx, r#"{"op":"core-info","core":"pcsx2"}"#);
     let d = &e[0];
@@ -140,7 +140,7 @@ fn info_gives_the_detail_and_names_where_the_build_comes_from() {
 fn a_placement_in_the_request_replaces_none_and_without_one_nothing_is_called_unsupported_for_its_system() {
     let dir = scratch("placement");
     let server = serve(files(&dir));
-    let ctx = Context { cores: dir.join("Cores"), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new() };
+    let ctx = Context { cores: dir.join("Cores"), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new(), hosted: None };
     events(&ctx, r#"{"op":"core-fetch"}"#);
     let plain = events(&ctx, r#"{"op":"core-ls"}"#);
     assert_eq!(text(plain.iter().find(|e| text(e, "stem") == "stranger").unwrap(), "state"), "available");
@@ -158,7 +158,7 @@ fn a_failed_fetch_keeps_the_cached_catalogue_and_says_why() {
     let mut f = files(&dir);
     let server = serve(f.clone());
     let cores = dir.join("Cores");
-    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new() };
+    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new(), hosted: None };
     events(&ctx, r#"{"op":"core-fetch"}"#);
     let cached = std::fs::read(catalogue::folder(&cores).join("info.zip")).unwrap();
 
@@ -190,4 +190,27 @@ fn only_the_core_tools_requests_are_taken() {
         assert!(job::request(bad).is_err(), "{bad}");
     }
     let _ = State::Installed;
+}
+
+#[test]
+fn only_the_hosted_cores_are_offered_and_an_installed_one_off_the_list_is_not_supported() {
+    let dir = scratch("hosted");
+    let server = serve(files(&dir));
+    let cores = dir.join("Cores");
+    let hosted = vec![emusen_core_tool::Hosted { stem: "pcsx2".into(), systems: vec!["ps2".into()] }];
+    let ctx = Context { cores: cores.clone(), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new(), hosted: Some(hosted) };
+    events(&ctx, r#"{"op":"core-fetch"}"#);
+    install(&cores, "mednafen_psx", 0x1111_2222, "2026-10-29");
+    let rows = events(&ctx, r#"{"op":"core-ls"}"#);
+    let listed: Vec<(&str, &str)> = rows.iter().filter(|e| text(e, "event") == "core").map(|e| (text(e, "stem"), text(e, "state"))).collect();
+    assert_eq!(listed, [("mednafen_psx", "unsupported"), ("pcsx2", "available")]);
+    let beetle = rows.iter().find(|e| text(e, "stem") == "mednafen_psx").unwrap();
+    assert_eq!(text(beetle, "reason"), "mednafen_psx is not one of the libretro cores EmuSen hosts (pcsx2)");
+    let lrps2 = rows.iter().find(|e| text(e, "stem") == "pcsx2").unwrap();
+    assert_eq!(lrps2.get("systems"), Some(&Value::Array(vec![Value::string("ps2")])));
+    let refused = events(&ctx, r#"{"op":"core-get","core":"glonly"}"#);
+    assert!(text(&refused[0], "reason").contains("not one of the libretro cores EmuSen hosts"), "{:?}", refused[0]);
+    let refused = events(&ctx, r#"{"op":"core-update","core":"mednafen_psx"}"#);
+    assert!(text(&refused[0], "reason").contains("not one of the libretro cores EmuSen hosts"), "{:?}", refused[0]);
+    std::fs::remove_dir_all(&dir).unwrap();
 }

@@ -364,6 +364,11 @@ fn one(ctx: &Context, cat: &Catalogue, rows: &[Row], req: &Request, stem: &str, 
         let libretro = ctx.cores.join(emusen_core_entry::LIBRETRO);
         libretro.join(stem).is_dir() || libretro.join(emusen_core_entry::PREVIOUS).join(stem).is_dir()
     };
+    if matches!(req.op, Op::Get | Op::Update)
+        && let Some(why) = ctx.refuses(stem)
+    {
+        return Err(why);
+    }
     match req.op {
         Op::Get => match row {
             Some(r) if r.state == State::Unsupported => return Err(format!("{stem} is not supported: {}", r.reason.as_deref().unwrap_or("EmuSen's host cannot run it"))),

@@ -150,7 +150,7 @@ impl Row {
 /// Every libretro core the catalogue offers for this platform, and every installed entry, by stem.
 pub fn rows(ctx: &Context, catalogue: &Catalogue) -> Result<Vec<Row>, String> {
     let entries = Entry::list(&ctx.cores).map_err(|e| e.to_string())?;
-    let mut stems: Vec<String> = catalogue.index.iter().filter(|l| catalogue.infos.iter().any(|i| i.stem == l.stem)).map(|l| l.stem.clone()).collect();
+    let mut stems: Vec<String> = catalogue.index.iter().filter(|l| catalogue.infos.iter().any(|i| i.stem == l.stem) && ctx.refuses(&l.stem).is_none()).map(|l| l.stem.clone()).collect();
     stems.extend(entries.iter().map(|e| e.stem.clone()));
     stems.sort();
     stems.dedup();
@@ -161,7 +161,9 @@ pub fn rows(ctx: &Context, catalogue: &Catalogue) -> Result<Vec<Row>, String> {
         let installed_info = entry.and_then(|e| std::fs::read_to_string(e.info_path()).ok()).map(|t| CoreInfo::parse(&stem, &t));
         let info = catalogue.infos.iter().find(|i| i.stem == stem).cloned().or(installed_info);
         let index = catalogue.index.iter().find(|l| l.stem == stem).cloned();
+        let hosted = ctx.hosted.as_ref().and_then(|list| list.iter().find(|h| h.stem == stem));
         let systems = match (&ctx.placement, &info) {
+            _ if hosted.is_some() => hosted.map(|h| h.systems.clone()).unwrap_or_default(),
             (Some(place), Some(info)) => {
                 let databases = info.list("database");
                 let refs: Vec<&str> = databases.iter().map(String::as_str).collect();
@@ -171,6 +173,7 @@ pub fn rows(ctx: &Context, catalogue: &Catalogue) -> Result<Vec<Row>, String> {
         };
         let size = entry.and_then(|e| std::fs::metadata(e.core_path()).ok()).map(|m| m.len());
         let (state, reason) = match (entry, &notice) {
+            (Some(_), _) if ctx.refuses(&stem).is_some() => (State::Unsupported, ctx.refuses(&stem)),
             (Some(_), None) => (State::Added, None),
             (Some(_), Some(n)) => match &index {
                 Some(l) if l.crc32 != n.index_crc32 || l.date != n.build => (State::Update, None),

@@ -58,13 +58,14 @@ fn context() -> Context {
 }
 
 /// The core tool's context: the player's `/Cores`, the buildbot for this platform, this installation's folder for the
-/// libretro host and proxy, the shipped tested builds, and the systems table's `for_libretro` placing each core under
-/// EmuSen's systems (EmuSen_Cores.md §4.2, §5.3).
+/// libretro host and proxy, the shipped tested builds, the systems table's `for_libretro` placing each core under
+/// EmuSen's systems, and its list of the libretro cores EmuSen hosts (EmuSen_Cores.md §4.2, §4.7, §5.3).
 fn core_context() -> emusen_core_tool::Context {
     let cores = tree::tree().directory(tree::Directory::Cores).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from(path::combine(Style::HOST, &tree::user_home(), "Cores")));
     let installation = Some(std::path::PathBuf::from(tree::base_directory()));
     let placement: emusen_core_tool::Placement = std::sync::Arc::new(|systemid, databases| emusen_systems::for_libretro(systemid, databases).into_iter().map(|s| s.id.clone()).collect());
-    emusen_core_tool::Context { cores, source: emusen_core_tool::Source::buildbot(), placement: Some(placement), installation, notes: emusen_core_tool::notes::parse(emusen_core_tool::notes::SHIPPED) }
+    let hosted = emusen_systems::libretro_cores::hosted().iter().map(|c| emusen_core_tool::Hosted { stem: c.stem.clone(), systems: c.systems.clone() }).collect();
+    emusen_core_tool::Context { cores, source: emusen_core_tool::Source::buildbot(), placement: Some(placement), installation, notes: emusen_core_tool::notes::parse(emusen_core_tool::notes::SHIPPED), hosted: Some(hosted) }
 }
 
 /// The op a request names, read only far enough to route it.

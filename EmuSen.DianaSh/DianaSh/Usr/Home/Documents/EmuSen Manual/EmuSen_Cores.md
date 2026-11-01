@@ -221,6 +221,27 @@ Three kinds, kept apart so the player can tell them apart:
    build was tested on <date>" otherwise, or "Not tested by EmuSen". Never a gate (§11.4).
 3. **The core's own `notes`**, as its `.info` writes them, escaped as descriptor text (`EmuSen_CoreAPI.md` §7.2 rule 5).
 
+### 4.7 The libretro cores EmuSen hosts (decided 2026-11-01)
+
+**Decided 2026-11-01:** EmuSen hosts exactly two libretro cores for now, PCEE2 (PCSX2's, for the PlayStation 2) and
+Flycast (the Dreamcast, with Naomi and Atomiswave). Cores offers and installs only those: the catalogue's other cores are
+not listed for download, and a core dropped into `/Cores/libretro` that is not on the list shows as *not supported*,
+with the reason. There is no general browsing of libretro's catalogue.
+
+**The list has one owner**, a data file of the systems table, `Platform/systems/data/libretro-cores.tsv`, read by
+`emusen_systems::libretro_cores::hosted()`: one line per core, tab-separated, its file stem, the EmuSen systems it runs
+(comma-separated ids, which place it in place of `for_libretro`) and its upstream source (`https://` only); `#` lines are
+comments. The libretro host's work was adding such a file when this was decided; it had not reached WiseMan, so Cores
+proposed this minimal form, in the crate that owns the host's other libretro facts, for the host to keep or reshape
+(said in the stage's report). The platform library hands the list to the core tool as its `hosted` context; a request
+for a core off the list is refused ("… is not one of the libretro cores EmuSen hosts (pcee2, flycast)") before anything
+is written. A test of the tool's own mechanics may give no list, which offers the whole catalogue.
+
+The Dreamcast is a console EmuSen has not had: its section in the window comes from the systems the list names, under
+the runtime's name for the console once the systems table carries it, and under its id (`dreamcast`) until then.
+Sections in the manager frame carry no icon, so the "icon slot" is the console art of the library's own shelves, which the
+systems table's entry brings.
+
 ## 5. Download, verification and install
 
 ### 5.1 The source

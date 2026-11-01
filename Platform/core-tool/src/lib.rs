@@ -70,4 +70,27 @@ pub struct Context {
     pub installation: Option<PathBuf>,
     /// The builds the project tested (`cores-notes.tsv`).
     pub notes: Vec<notes::Tested>,
+    /// The libretro cores EmuSen hosts, the systems table's `libretro-cores.tsv` (decided 2026-11-01): only these are
+    /// offered and installed, and an installed core not on it is not supported. None, for a test of the tool's
+    /// mechanics, offers every core in the catalogue.
+    pub hosted: Option<Vec<Hosted>>,
+}
+
+/// One libretro core EmuSen hosts, and the systems it runs (EmuSen_Cores.md §4.7).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hosted {
+    pub stem: String,
+    pub systems: Vec<String>,
+}
+
+impl Context {
+    /// Whether a core is one EmuSen hosts, and why not where it is not.
+    pub fn refuses(&self, stem: &str) -> Option<String> {
+        let list = self.hosted.as_ref()?;
+        if list.iter().any(|h| h.stem == stem) {
+            return None;
+        }
+        let names: Vec<&str> = list.iter().map(|h| h.stem.as_str()).collect();
+        Some(format!("{stem} is not one of the libretro cores EmuSen hosts ({})", names.join(", ")))
+    }
 }

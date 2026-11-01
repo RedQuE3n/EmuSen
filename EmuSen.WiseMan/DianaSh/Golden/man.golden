@@ -6042,7 +6042,7 @@ case the page for cores
 target none
 covers 1
 $ man cores
-out 9657
+out 9924
 NAME
     cores - list, download, install, update, roll back, remove and
     verify the libretro cores EmuSen hosts
@@ -6068,7 +6068,12 @@ DESCRIPTION
     later, whose requests beginning core- the platform library hands to
     the core tool.
 
-    A core is named by its file's stem: pcsx2 for pcsx2_libretro.so. The
+    EmuSen hosts two libretro cores, PCEE2 for the PlayStation 2 and
+    Flycast for the Dreamcast, Naomi and Atomiswave; only they are
+    listed for download, and a core put in /Cores/libretro that is not
+    one of them is listed as unsupported, with the reason.
+
+    A core is named by its file's stem: pcee2 for pcee2_libretro.so. The
     stem names the core's folder under /Cores/libretro and its files; the
     core's own corename (LRPS2 for pcsx2) is shown, and names nothing.
 

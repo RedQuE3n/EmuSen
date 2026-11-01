@@ -20,8 +20,7 @@ pub struct Folders {
 impl Folders {
     /// The folders of the entry at `folder`, made where missing.
     pub fn for_entry(folder: &Path, stem: &str) -> std::io::Result<Folders> {
-        let libretro = folder.parent().unwrap_or(folder);
-        let root = libretro.join(".data").join(stem);
+        let root = emusen_core_entry::data_folder(folder, stem);
         let f = Folders { system: root.join("system"), save: root.join("save"), cache: root.join("cache"), root };
         for d in [&f.system, &f.save, &f.cache] {
             std::fs::create_dir_all(d)?;

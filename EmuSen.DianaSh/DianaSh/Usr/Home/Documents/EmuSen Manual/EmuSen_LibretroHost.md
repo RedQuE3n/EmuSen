@@ -263,6 +263,7 @@ On Linux, before loading the target, the runner sets `no_new_privs` and restrict
 | read | `/proc/self`, `/sys/class/drm`, `/sys/devices` (the GPU's nodes as the driver reads them) | the driver's discovery of the card |
 | read, write, and `LANDLOCK_ACCESS_FS_IOCTL_DEV` where the Landlock ABI is 5 or later | `/dev/dri/renderD*` | the render node, and the ioctls every GPU submission is |
 | read | the image's folder | a sheet's or `.m3u`'s companions beside the image |
+| read | the core's system folder and the resolved target of each link under it (§10l) | firmware the player linked into the folder |
 | read, write | the core's private folders (§4.5), its Mesa shader cache among them | the core's own data |
 | none | the network, where the Landlock ABI is 4 or later | |
 
@@ -1492,6 +1493,54 @@ versioned C surface. `for_extension` and `for_system` now return the engines in 
 §7.3) is not built. Until they are, the Cores window and Mistress's question take the hash to approve from the core
 tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
 `CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
+
+## 10l. Two defects real cores found on the Rust runtime (2026-11-01)
+
+Both were found by the tester running PCEE2 through the Rust runtime with the Americas BIOS linked into a system folder.
+
+**The runner could not read linked firmware.** The proxy's Landlock policy (§3.3) granted the core's private folders
+and the image's folder, but neither the system folder named by `EMUSEN_LIBRETRO_SYSTEM_DIR` (§10c) nor the target of a
+link under any system folder. Landlock checks the path a link resolves to, so a firmware file linked into a granted
+folder is still refused where it lives. PCEE2 logged "Unable to auto locate a BIOS image" and `VMManager::Initialize()`
+failed; a local patch adding the folder and the resolved BIOS file to the read list let the BIOS be found and Jak and
+Daxter boot [M, the tester]. The fix, in the proxy's `spawn`: the system folder the core is given, which the host and the
+proxy now take from one rule (`emusen_core_entry::system_folder`, the player's `.data/<stem>/system/` or the referee's
+folder), is granted read-only, and the folder is searched for links (at most 8 levels and 20,000 entries, so that a
+folder of dumped textures cannot stall a create). Each link's resolved target is granted read-only. A target that is a
+file is granted alone, never its folder; a target that is a folder is searched in turn. The search reads names and link
+targets only: no firmware file is opened by the project's code, and the core reads what it reads. The referee's folder is
+read-only, so a core that writes there (PCEE2's cache and cards) is refused those writes. A player's system folder lies
+inside the core's private folders and stays writable.
+
+**An open succeeded after the core had failed.** Measured on 2026-11-01 with PCEE2 v2.9.138 and an empty system folder
+(no firmware present), the host's calls traced in order: `retro_load_game` returns true, and `retro_serialize_size` then
+answers 100,663,296. The core starts its machine in the first `retro_run`. There it logs, at info level,
+"[PCSX2] VMManager::Initialize() failed." and hands a duplicate frame and 800 audio frames. Every later `retro_run` hands
+a black 640 × 480 software frame and no sound. It never calls `SHUTDOWN` and never logs at error level. So libretro
+carries no signal of the failure: not the load's return value, not an environment call, not a log level. The only sign
+is the core's own line. The narrowest check is therefore a per-core profile (`failure::FATAL_LINES`, by file stem as
+measured: PCEE2's line, and the test core's). A profile line logged during load ends the create with
+`STATUS_NOT_STARTED` (-18). Logged during a frame, it ends that `advance` with -18, and every later frame is refused the
+same way. In either case the detail is "it could not start: " followed by the core's line. LRPS2 has no entry: its line
+has not been measured. Independently, a load that returns false now quotes the core's last error or warning ("the core
+said: …") in place of the earlier "its log says why". The same run after the change: `advance: (-18) it could not start:
+[PCSX2] VMManager::Initialize() failed.` at the first frame [M].
+
+**Tests.** The test core gains `tc_fault=read_system` (it reads `bios/firmware.bin`, a link in its system folder, then
+`other.bin` beside the link's target, which nothing links) and `tc_fail=load|first_frame`.
+- `emusen-core-broker` `tests/libretro.rs`: the link is read and its neighbour refused by the kernel in the runner; a
+  refused load's words carry the core's error, and a first-frame failure crosses the process boundary as -18 with the
+  core's line in `last_error`.
+- `emusen-libretro-host` `tests/testcore.rs`: the same refusals in-process, the second frame refused as the first, and a
+  new machine running afterwards.
+- Seeded faults, each caught: the system folder not granted (the link test, 2), the link's folder granted instead of its
+  file (the same, 3), links not followed (the same, 2), the frame's profile check removed (the broker's refusal test),
+  the failure not kept for later frames and the load's line not quoted (the host's test).
+
+**Surfaces.** The libretro host's status band gains -18, "the core could not start the game; its log says why", which
+`status_text` gives. `emusen-core-entry` gains `DATA`, `SYSTEM_DIR_VAR`, `data_folder` and `system_folder`. The core ABI
+and the frontend API are unchanged. The runtime's message for a stopped frame names the status's words. The detail
+carrying the core's line reaches `last_error`, which the runtime does not yet show.
 
 ## 11. Risks
 

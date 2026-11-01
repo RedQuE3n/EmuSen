@@ -42,6 +42,7 @@ namespace EmuSen.WiseMan.Crystal
                     if (Directory.Exists(d)) Directory.Delete(d, recursive: true);
                 Directory.CreateDirectory(Path.GetDirectoryName(game)!);
                 File.WriteAllBytes(game, original);
+                File.SetLastWriteTimeUtc(game, PlantedAt);
                 new AppSettings { RomDirectory = library }.Save();
                 PackageFor(package, library, "TEST/hack.tst", "test");
                 Directory.CreateDirectory(Path.GetDirectoryName(originalSave)!);

@@ -125,6 +125,11 @@ fn info_gives_the_detail_and_names_where_the_build_comes_from() {
     assert_eq!(fw.len(), 2);
     assert_eq!(d.get("notes"), Some(&Value::Array(vec![Value::string("(!) needs a BIOS"), Value::string("disc images by path")])));
 
+    let detailed = events(&ctx, r#"{"op":"core-ls","detail":true}"#);
+    let row = detailed.iter().find(|e| text(e, "stem") == "pcsx2").unwrap();
+    assert_eq!(row, d, "core-ls with detail gives core-info's event");
+    assert!(events(&ctx, r#"{"op":"core-ls"}"#).iter().all(|e| e.get("firmware").is_none()));
+
     let missing = events(&ctx, r#"{"op":"core-info","core":"nothere"}"#);
     assert_eq!(text(&missing[0], "event"), "refused");
     assert!(text(&missing[0], "reason").contains("nothere"));

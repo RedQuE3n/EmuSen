@@ -39,6 +39,8 @@ pub struct Request {
     pub op: Op,
     pub show: Show,
     pub console: Option<String>,
+    /// `core-ls` gives each row's whole detail, `core-info`'s, so a window has it without asking row by row.
+    pub detail: bool,
     pub core: Option<String>,
     /// The cores a changing request names, from `"core"` or `"cores"`; none for `core-update` and `core-verify` means
     /// every core they apply to.
@@ -129,7 +131,8 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some(Value::Object(map)) => Some(placement_of(map)?),
         Some(_) => return Err("systems is not an object".into()),
     };
-    Ok(Request { op, show, console, core, cores, placement })
+    let detail = doc.get("detail").and_then(Value::as_bool).unwrap_or(false);
+    Ok(Request { op, show, console, detail, core, cores, placement })
 }
 
 /// Starts a request as a job.
@@ -450,7 +453,7 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
                 if stop() {
                     break;
                 }
-                emit(queue, row_event(row));
+                emit(queue, if req.detail { info_event(row, ctx) } else { row_event(row) });
                 match counts.iter_mut().find(|(k, _)| *k == row.state.word()) {
                     Some((_, n)) => *n += 1,
                     None => counts.push((row.state.word(), 1)),

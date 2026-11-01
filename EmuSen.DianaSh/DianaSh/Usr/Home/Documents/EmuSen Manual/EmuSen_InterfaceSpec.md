@@ -516,3 +516,21 @@ its two choosers during a batch and leaves its check boxes enabled, and the rule
 The paragraph that names the run's folders, its first, is recorded as volatile, as the normaliser marks words that
 hold the run's own paths.
 
+#### 6.3.12 The Cores window (2026-10-31)
+
+Cores (`EmuSen_Cores.md` §2) adds five cases, each opened over a running game from Settings with a scripted listing of
+the core tool and a runtime of the test's own: `Cores` (the list in the big screen's form), `CoresDetail` (a core's
+page, A on its row), `CoresPlan` (Apply's summary, an install and an update marked), `CoresRunning` (a download under
+way) and `CoresNoCatalogue` (EmuSen's cores alone, the apply bar's notice saying no catalogue was read). Their ten
+recordings are new, and no other recording changed.
+
+The first recordings of `Cores` and `CoresRunning` differed from run to run: the detail of a libretro core was asked of
+the core tool when its row was chosen, and the answer arriving on the poll's timer replaced the rows under the pad's
+walk. The listing now carries each core's whole detail (`core-ls` with `"detail": true`), so nothing arrives after the
+window settles, and two runs after recording matched.
+
+The framed audit's first run found two faults of the frame itself, fixed in LunaP before these were recorded: the big
+screen's action row scrolled sideways past its eight actions, and the plan sheet, a stack, ran into the action row below
+the content area (`docs/LunaP.md` §202.6, §203.3). The desktop form, which the recordings do not cover, is held to the
+same audit at 1280×800 and 1920×1200 by `CoresWindowTests`.
+

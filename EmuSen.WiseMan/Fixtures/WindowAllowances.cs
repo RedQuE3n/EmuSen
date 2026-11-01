@@ -24,8 +24,13 @@ namespace EmuSen.WiseMan.Fixtures
             "the rewind reel's strip scrolls sideways by design, and Left and Right step the pad through every moment",
             c => c.FindAncestorOfType<TileStrip<EmuSen.Mistress.Views.ReelMoment>>() is not null);
 
+        public static readonly FitAudit.Allowance CoreCells = new(
+            "a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen",
+            c => c is TextBlock && c.FindAncestorOfType<LunaTable<EmuSen.Tools.Cores.CoreRow>>() is not null);
+
         public static IReadOnlyList<FitAudit.Allowance> For(Window window) => window switch
         {
+            CoresWindow => [FitAudit.TextBoxesScroll, CoreCells],
             ActiveCheatsWindow => [FitAudit.TextBoxesScroll, CheatCells],
             ScrapeStatusWindow => [FitAudit.TextBoxesScroll, RecentGames],
             RewindReelWindow => [FitAudit.TextBoxesScroll, ReelTiles],
@@ -33,6 +38,6 @@ namespace EmuSen.WiseMan.Fixtures
         };
 
         // Every allowance, for the record of what the audit accepts.
-        public static IReadOnlyList<FitAudit.Allowance> All => [FitAudit.TextBoxesScroll, CheatCells, RecentGames, ReelTiles];
+        public static IReadOnlyList<FitAudit.Allowance> All => [FitAudit.TextBoxesScroll, CheatCells, RecentGames, ReelTiles, CoreCells];
     }
 }

@@ -483,11 +483,46 @@ Composes with the shell's tools: `cores ls --updates ps2 | wc -l`; `cores ls --i
 | **C1** | `ManagerLayout` on it (T1), checked against Packages' §3 and Cores' §2 | LunaP's tests; a harness window with Packages' columns and one with Cores' |
 | **C2** | `emusen-tool-job` drawn out of the library tool unchanged in behaviour; `emusen-core-tool`'s catalogue (`info.zip`, the index), the installed listing, `core-ls`, `core-info`, `core-fetch`; the `emusen.cores` module with `ls`, `info`, `fetch`, `default`; `man cores` | the library tool's tests unchanged; the core tool's tests on a catalogue and index built in the test, served by a local TLS server with the test's own roots; DianaSh golden corpus |
 | **C3** (built 2026-10-31, §6.2) | `get`, `update`, `rollback`, `rm`, `verify`; staging and the renames | tests of every check of §5.2 refusing, a stopped job leaving the destination as it was, an update failing back to the previous build, nothing written outside `/Cores`; seeded faults |
-| **C4** | `CoresWindow` in `EmuSen.Tools.Cores` on `ManagerLayout`, desktop and big picture; Make Default, Options…, firmware rows; hosted in Mistress | WiseMan headless: the window over a synthetic `/Cores` and catalogue; the fit audits and InterfaceSpec recordings in both forms; the pad walk |
+| **C4** (built 2026-10-31, §9.1) | `CoresWindow` in `EmuSen.Tools.Cores` on `ManagerLayout`, desktop and big picture; Make Default, Options…, firmware rows; hosted in Mistress | WiseMan headless: the window over a synthetic `/Cores` and catalogue; the fit audits and InterfaceSpec recordings in both forms; the pad walk |
 | **C5** | With the libretro host merged: the proxy copied and `broker.target` written at install, the approval of the whole entry, the `libretro` field of the listing | WiseMan: a core installed from the local server (the host's test core, zipped by the test) approved, opened and run, then updated and removed, saves kept |
 
 Tests never make a live network request and never download a real core: the catalogue, index and zips are made by the
 tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and the renames of §5.3–§5.4.
+
+### 9.1 C4 as built (2026-10-31)
+
+- **The tool library** `EmuSen.Tools.Cores` needs only LunaP and Galaxia (`LeafAssemblyTests` holds it so): `CoresPane`
+  on `ManagerLayout`, `CoreRow`, `CoresPlan` (marks, summary, plan, steps), `CoresWords`, and `CoreApproval`, the
+  approval question's words, now Mistress's too, the libretro form adding trust on first download. The runtime is
+  handed in as `CoresRuntime`, its six calls (`cores`, `systems`, a console's setting got and set, `core_approve`,
+  `core_revoke`), so the library needs no binding of its own; Mistress builds it from its `CrystalRuntime`, turning the
+  binding's refusal into the `InvalidOperationException` the tool catches. `CoresHost` carries what the host opens:
+  a console's settings, the firmware pane and a folder (through the system's launcher).
+- **Rows** join the runtime's `cores` listing (EmuSen's own and the player's) with the core tool's `core-ls` (with
+  `"detail": true`, each row with `core-info`'s fields, so the detail needs no second job). A runtime row whose library
+  lies in `/Cores/libretro/<stem>/` lends that libretro row its engine and trust (§7.3's join until the listing's
+  `libretro` field lands). Default ● is the console's stored `Engine`, else its first engine.
+- **Marks** are install, update and remove, on libretro rows only. **Approve…** is an action, not a mark: each core is
+  asked about alone, with its name, authors, licence, consoles and SHA-256, so an approval is never one line of a plan;
+  it is offered on a row waiting for approval and on an installed libretro core. A run's `revoke` hashes (a removal's
+  and an update's dropped build) are revoked through the runtime as they arrive.
+- **Make Default** writes `Engine` for the chosen section's console, else for each console the core runs; a libretro
+  core gains it once discovery lists its engine. **Options…** opens the console's settings window (which shows the
+  console's engine's options; it takes no engine of its own yet). **Verify** and **Check for Updates** are jobs.
+- **Hosted** by Mistress's `CoresWindow` from *Settings ▸ Cores…* and the pad's settings menu, framed in big picture,
+  with the pad mapped as Packages' host maps it.
+- Not in C4: the count of games choosing a core (○), the licence sheet, and firmware rows for EmuSen's own cores, whose
+  firmware the runtime answers per game; *Revoke Approval* for a core the player added waits for the shell's service (Q12)
+  so that both faces revoke the same way.
+
+**Tests** [M, 2026-10-31]: `CoresWindowTests` 7 (the join and the default, the marks and a plan run in order with its
+revocations, the approval asked and recorded only on yes, Make Default, a refusal about no row as the notice, the desktop
+form under the fit audit at both sizes); `WindowFitAuditTests` and the specification for five states at both sizes;
+`LeafAssemblyTests`; `PadMenuTests`. Found by the tests before landing: a listing row's `size` of `null` threw where the
+tool writes it so. Seeded faults, each caught: a project core offered removal; the approval recorded whatever the
+answer; a removal's hashes left approved; Make Default writing another key (it survived the first run, the test reading
+the pane's own constant; it now reads the runtime's, `RuntimeCatalog.EngineKey`); the summary naming every core (the
+big-screen audit's ellipsis).
 
 ## 10. Questions for the tester
 

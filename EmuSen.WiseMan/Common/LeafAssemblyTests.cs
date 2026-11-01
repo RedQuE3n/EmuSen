@@ -14,6 +14,14 @@ namespace EmuSen.WiseMan.Common
                 .OrderBy(n => n, StringComparer.Ordinal)
                 .ToArray();
 
+        // A tool is a library needing only LunaP, Galaxia and the platform library, never Mistress or the runtime's binding, so any thin host can show it - see EmuSen_Cores.md §3.4.
+        [Fact]
+        public void The_Cores_tool_references_only_LunaP_and_Galaxia()
+        {
+            Assembly cores = typeof(EmuSen.Tools.Cores.CoresPane).Assembly;
+            Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(cores));
+        }
+
         // Endymion takes PCM and a rate, and reports PadButton - Galaxia covers both halves.
         [Fact]
         public void Endymion_references_only_Galaxia()

@@ -1527,6 +1527,14 @@ copy differs from its sidecar's hash is now waiting, like a new build of the cor
 whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
 A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
 
+**The player's `/Cores`, followed.** The Rust runtime fixed its player directory when it was made, where the C# reads
+`DataStore.Cores` at each scan. Mistress's one shared runtime therefore kept a data folder that had since moved. The
+`ControllerBindingsSaturn` and `ControllerBindingsDreamcast` audits showed it: their console comes only from a core the
+case places in the player's `/Cores`, and before the change the case reached it only through the C# discovery's static.
+A runtime given no directories now reads the tree's `/Cores` at each scan (`player_directories`). The audit places its
+core there, approves it through the frontend API and takes it out again with a rescan. Measured 2026-11-01: the 8 cases
+pass on both runtimes. `tests/player_cores.rs` lists a library from a data folder moved after the runtime was made.
+
 **A core that cannot start** (§10n's status -18) does not cross the frontend API as a number: it is the libretro host's
 own status, and the runtime refuses the frame with the core's words, which are its last error, PCEE2's own line where
 §10n's profile names one. So it needs no bump of its own. Tested through the runtime with the test core's

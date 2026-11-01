@@ -91,6 +91,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public void Dispose()
         {
+            if (_hosted is { } library)
+            {
+                File.Delete(library);
+                File.Delete(EmuSen.Cores.Native.CoreSidecar.PathFor(library));
+                MistressRuntime().Rescan();
+            }
             EmuSen.Cores.Native.CoreDiscovery.UseDirectories(null);
             Factory.SetValue(null, _realFactory);
             ConfigStore.OverrideDirectory = null;
@@ -276,10 +282,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.region" && c.IsEffectivelyVisible);
         }
 
-        // The test core under the installation's cores, its info edited to run one system only a hosted core runs, so that console has its tabs as with a hosted core installed.
+        // The hosted console's library a case placed in the player's /Cores, taken out again by Dispose.
+        private string? _hosted;
+
+        // The runtime Mistress shares, which the windows ask.
+        private static EmuSen.Crystal.Client.CrystalRuntime MistressRuntime() =>
+            (EmuSen.Crystal.Client.CrystalRuntime)typeof(MainWindow).Assembly.GetType("EmuSen.Mistress.CoreSettings")!.GetProperty("Runtime")!.GetValue(null)!;
+
+        // The test core in the player's /Cores, its info edited to run one system only a hosted core runs, so that console has its tabs as with a hosted core installed.
         private void HostedConsole(string systemId)
         {
-            string dir = Path.Combine(_root, "Hosted", systemId);
+            // A library of the player's own /Cores, approved through the frontend API, so either implementation lists it.
+            string dir = DataStore.Cores;
             Directory.CreateDirectory(dir);
             string library = Path.Combine(dir, Path.GetFileName(EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core")));
             File.Copy(EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core"), library, overwrite: true);
@@ -289,8 +303,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             sidecar["info"]!["display_name"] = $"Hosted {systemId}";
             ((System.Text.Json.Nodes.JsonObject)sidecar["info"]!["systems"]![0]!)["id"] = systemId;
             File.WriteAllText(EmuSen.Cores.Native.CoreSidecar.PathFor(library), sidecar.ToJsonString());
-            CoreManifest.Write(dir);
-            EmuSen.Cores.Native.CoreDiscovery.UseDirectories(EmuSen.Cores.Native.CoreDiscovery.Directories.Append(dir).ToArray());
+            var runtime = MistressRuntime();
+            _hosted = library;
+            runtime.Rescan();
+            runtime.CoreApprove(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(library))));
             EmuSen.Mistress.Library.RuntimeCatalog.Forget();
         }
 

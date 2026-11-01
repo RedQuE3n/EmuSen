@@ -34,7 +34,8 @@ pub type Fetch = Arc<dyn Fn(&str) -> Result<Vec<u8>, String> + Send + Sync>;
 
 pub struct Runtime {
     directories: Vec<PathBuf>,
-    player: Vec<PathBuf>,
+    /// The player's directories as configured; none follows the data folder's `/Cores` at each scan.
+    player: Option<Vec<PathBuf>>,
     development: bool,
     trust: Mutex<Arc<Trust>>,
     discovery: Mutex<Arc<Discovery>>,
@@ -58,15 +59,16 @@ impl Runtime {
                 vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
             }
         };
-        let player: Vec<PathBuf> = match (&config.player_cores, &config.cores) {
-            (Some(dirs), _) => dirs.iter().map(PathBuf::from).collect(),
-            (None, None) => emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).map(PathBuf::from).into_iter().collect(),
-            (None, Some(_)) => Vec::new(),
+        let player: Option<Vec<PathBuf>> = match (&config.player_cores, &config.cores) {
+            (Some(dirs), _) => Some(dirs.iter().map(PathBuf::from).collect()),
+            (None, None) => None,
+            (None, Some(_)) => Some(Vec::new()),
         };
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let events = Arc::new(crate::events::Events::default());
-        let trust = Mutex::new(Arc::new(trust_of(&directories, &player, &events)));
-        let discovery = Mutex::new(Arc::new(discover(&directories, &player, development)));
+        let mine = player_directories(player.as_deref());
+        let trust = Mutex::new(Arc::new(trust_of(&directories, &mine, &events)));
+        let discovery = Mutex::new(Arc::new(discover(&directories, &mine, development)));
         let rt = Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied();
         let (discovery, trust) = (rt.discovery(), rt.trust());
         if discovery.waiting().iter().any(|w| trust.approved(&w.sha256)) {
@@ -114,9 +116,10 @@ impl Runtime {
     }
 
     fn scan(&self) {
-        let trust = Arc::new(trust_of(&self.directories, &self.player, &self.events));
+        let mine = player_directories(self.player.as_deref());
+        let trust = Arc::new(trust_of(&self.directories, &mine, &self.events));
         *self.trust.lock().unwrap_or_else(|p| p.into_inner()) = trust;
-        let fresh = Arc::new(discover(&self.directories, &self.player, self.development));
+        let fresh = Arc::new(discover(&self.directories, &mine, self.development));
         *self.discovery.lock().unwrap_or_else(|p| p.into_inner()) = fresh;
     }
 
@@ -519,6 +522,15 @@ impl Runtime {
             self.records_needed()?;
         }
         self.with_records(|r| crate::states::forget(r, at))
+    }
+}
+
+/// The player's directories: those configured, else the data folder's `/Cores` as the tree names it now, so a moved
+/// data folder is followed at the next scan, as `CoreDiscovery.PlayerDirectories` reads `DataStore.Cores` each time.
+fn player_directories(configured: Option<&[PathBuf]>) -> Vec<PathBuf> {
+    match configured {
+        Some(dirs) => dirs.to_vec(),
+        None => emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).map(PathBuf::from).into_iter().collect(),
     }
 }
 

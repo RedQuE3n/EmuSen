@@ -546,5 +546,6 @@ fn listed_name(discovery: &Discovery, sha256: &str) -> Result<String, crate::ope
         .map(|c| name(&c.sidecar.library_path))
         .or_else(|| discovery.unread().iter().find(|u| u.sha256.eq_ignore_ascii_case(sha256)).map(|u| name(&u.library_path)))
         .or_else(|| discovery.waiting().iter().find(|w| w.sha256.eq_ignore_ascii_case(sha256)).map(|w| name(&w.entry.core_path())))
+        .or_else(|| discovery.found().iter().filter_map(|c| c.entry.as_ref()).find(|e| emusen_core_host::entry::core_hash(e).is_some_and(|h| h.eq_ignore_ascii_case(sha256))).map(|e| name(&e.core_path())))
         .ok_or_else(|| (emusen_session_service::abi::status::NO_SUCH_ID, format!("no core library listed has the SHA-256 {}", sha256.to_ascii_lowercase())))
 }

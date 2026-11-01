@@ -344,6 +344,11 @@ impl Discovery {
         &self.waiting
     }
 
+    /// The systems the hosted list's line names for an entry, none where the list names it nowhere.
+    pub fn hosted_systems(&self, entry: &Entry) -> &[String] {
+        self.listed(entry).map_or(&[], |h| h.systems.as_slice())
+    }
+
     fn listed(&self, entry: &Entry) -> Option<&HostedCore> {
         self.hosted.iter().find(|h| h.stem == entry.stem)
     }

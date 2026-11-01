@@ -5,7 +5,7 @@ NAME
 
 SYNOPSIS
     pkg make <path>... [--self-contained] [--zip]
-    pkg ls [<console>]
+    pkg ls [<console>] [--all]
     pkg check [<package>...]
     pkg migrate <package>...
     pkg patch add <package> <file>
@@ -74,7 +74,17 @@ DESCRIPTION
     in the library, which is named; missing, the game or one of its files
     is gone and not found; refused, a manifest this build does not read.
     A file is hashed only when its size or time differs from the one
-    recorded, and ls writes nothing.
+    recorded, and ls writes nothing. Each line gives the bytes the
+    package's folder holds and, where its game lies outside it, the game's
+    bytes (for a cue sheet, the sheet and every file it names).
+
+    'ls --all' lists after the packages each game of the library that no
+    package claims, found and routed as 'make' finds them, with its system
+    and bytes, and says where 'chd convert' takes it: a PlayStation or
+    Sega CD disc as a sheet, a track, an ISO or a zip, never a playlist or
+    a CHD. With a console, only that console's games are listed. It is
+    the one answer the Packages window draws its list from (service 1.5,
+    EmuSen_Packages.md section 2).
 
     'check' hashes the game and every file of each <package>, a folder
     relative to Packages (a console's folder names each package in it;
@@ -254,6 +264,7 @@ EXAMPLES
     pkg check "SNES/Super Metroid (USA).sfc.zip"
     pkg zip "SNES/Super Metroid (USA).sfc"
     pkg ls NES
+    pkg ls --all PlayStation
     pkg check NES
     pkg migrate "SNES/Super Metroid (USA).sfc"
     pkg patch add "SNES/Super Metroid (USA).sfc" ~/Patches/Redesign.bps

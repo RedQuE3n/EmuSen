@@ -5,7 +5,7 @@ use std::ffi::{CStr, c_char};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, caps, flags, status};
+use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RingFrame, RingImage, RingLend, caps, flags, status};
 
 use crate::client::{Link, STATUS_ENDED, STATUS_HUNG, Spawn};
 use crate::wire::{Op, Reply, Writer};
@@ -784,6 +784,50 @@ pub unsafe fn set_present(m: *mut RawMachine, port: u32, present: u32) -> i32 {
     }))) as i32
 }
 
+/// The host's ring (since 1.18): its images and semaphores cross as descriptors by `SCM_RIGHTS`; a null ring withdraws it.
+pub unsafe fn ring_lend(m: *mut RawMachine, ring: *const RingLend) -> i32 {
+    let Some(r) = (unsafe { ring.as_ref() }) else { return code(on(m, Op::RingLend, false, 0, &args(|w| {
+        w.u32(0);
+    }))) as i32 };
+    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) || r.count as usize + 2 > crate::wire::MAX_RING_FDS {
+        return status::BAD_STRUCT;
+    }
+    let images: Vec<RingImage> = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
+    let handles: Vec<u64> = images.iter().map(|i| i.handle).chain([r.ready, r.done]).collect();
+    if handles.iter().any(|&h| h > i32::MAX as u64 || unsafe { libc::fcntl(h as i32, libc::F_GETFD) } < 0) {
+        return status::BAD_STRUCT;
+    }
+    let fds: Vec<i32> = handles.iter().map(|&h| h as i32).collect();
+    let Some(p) = (unsafe { proxied(m) }) else { return status::NULL };
+    let frame = p.frame;
+    match p.link.call_with_fds(Op::RingLend, &crate::wire::ring_args(&images, &r.device_uuid, &r.driver_uuid), &fds, frame) {
+        Ok(rep) => rep.ret as i32,
+        Err((c, why)) => {
+            record(&mut p.log, "error", &why);
+            c
+        }
+    }
+}
+
+/// The frame's picture in the ring (since 1.18), as the runner's machine answered it.
+pub unsafe fn frame_ring(m: *mut RawMachine, out: *mut RingFrame) -> i32 {
+    if out.is_null() {
+        return status::NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<RingFrame>() {
+        return status::BAD_STRUCT;
+    }
+    match on(m, Op::FrameRing, false, 0, &[]) {
+        Ok(r) => {
+            if r.ret == 1 && r.bytes.len() == size_of::<RingFrame>() {
+                unsafe { std::ptr::copy_nonoverlapping(r.bytes.as_ptr().add(4), (out as *mut u8).add(4), size_of::<RingFrame>() - 4) };
+            }
+            r.ret as i32
+        }
+        Err(c) => c,
+    }
+}
+
 /// The exports of a proxy for target `$t`, its optional groups named as `core_exports!` names them.
 #[macro_export]
 macro_rules! broker_exports {
@@ -838,6 +882,7 @@ macro_rules! __group_bit {
     (media) => { emusen_native::core::caps::MEDIA };
     (presence) => { emusen_native::core::caps::PRESENCE };
     (expect) => { emusen_native::core::caps::EXPECT };
+    (device_ring) => { emusen_native::core::caps::DEVICE_RING };
 }
 
 /// One optional group's exports.
@@ -854,6 +899,10 @@ macro_rules! broker_group {
         #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_insert(m: *mut __M, d: u32, x: *const __Md) -> i32 { unsafe { __p::media_insert::<$t>(m, d, x) } }
     };
     ($t:ty, presence) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_present(m: *mut __M, p: u32, x: u32) -> i32 { unsafe { __p::set_present(m, p, x) } } };
+    ($t:ty, device_ring) => {
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_ring_lend(m: *mut __M, r: *const emusen_native::core::sys::RingLend) -> i32 { unsafe { __p::ring_lend(m, r) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_ring(m: *mut __M, o: *mut emusen_native::core::sys::RingFrame) -> i32 { unsafe { __p::frame_ring(m, o) } }
+    };
     ($t:ty, expect) => {
         #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_expect(s: *const std::ffi::c_char) -> i32 { unsafe { __p::expect::<$t>(s) } }
         const _: emusen_native::core::sys::ExpectFn = emusen_core_expect;

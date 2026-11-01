@@ -607,7 +607,9 @@ The libretro host is being built on its own branch. Four places need one owner b
    otherwise `{"folder", "file", "sha256", "corename", "name", "version", "license", "authors": [...], "source",
    "build", "trust"}`, every field from `NOTICE` but `version` (the core's own library version) and `trust` (the
    libretro file's own standing, apart from the row's), so the window's rows and the approval read one answer (agreed
-   2026-10-31).
+   2026-10-31). *Built 2026-11-01 in the Rust runtime, the frontend API's 1.5 (`EmuSen_Backend.md` §34, `EmuSen_LibretroHost.md`
+   §10m): `sha256` is the core file's own, never `NOTICE`'s; an entry waiting for approval is a row of its own; the window
+   and Mistress's question approve `libretro.sha256`.*
 4. **Stage 4 of `EmuSen_LibretroHost.md` §10** lists "the core list and download" and "the engine choice per console".
    Those are Cores; the host's stage 4 keeps the approval's content, the settings window from the schema, the sound
    rate, the cards and the cheats.

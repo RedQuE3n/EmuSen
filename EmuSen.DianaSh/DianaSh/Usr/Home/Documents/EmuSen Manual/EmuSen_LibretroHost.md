@@ -1488,10 +1488,57 @@ console. In every other case the two are the same name.
 items (`entry`, `HostedCore`, `Discovered::entry`, `CoreInfo::libretro`, `Standing::NeedsRefresh`); it is not a
 versioned C surface. `for_extension` and `for_system` now return the engines in rule order as a vector's iterator.
 
-**Left**: a waiting entry is not yet a row of the `cores` listing, and the listing's `libretro` field (`EmuSen_Cores.md`
+**Left** (*the first two built in §10m*): a waiting entry is not yet a row of the `cores` listing, and the listing's `libretro` field (`EmuSen_Cores.md`
 §7.3) is not built. Until they are, the Cores window and Mistress's question take the hash to approve from the core
 tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
 `CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
+
+## 10m. The cores listing's libretro rows, the path, and the refresh (2026-11-01)
+
+Decided 2026-11-01 by the tester, taking §10k's question: the waiting entry and the listing's `libretro` field are built now,
+and the frontends take the hash to approve from the frontend API's Rust answer, not from the core tool.
+
+**The listing** (the frontend API's 1.5, `EmuSen_Backend.md` §34). `listing::cores` gives each row `libretro`: null for
+a library that is not an entry, or `{folder, file, sha256, corename, name, version, license, authors, source, build,
+trust}`. Its `sha256` is the core file's own, read as the scan reads it, never `NOTICE`'s. Its `trust` is that file's
+standing (approved where the hash is approved and is the build the sidecar names). `version` is the core's own, null
+until it has been read. The other fields are `NOTICE`'s, through `emusen-core-entry`. An entry waiting to be read
+(§10k) that is not already an engine is a last row of its own: `engine` null, `report` "not yet read", `trust` the
+entry's standing, `systems` the hosted list's line for it. `Runtime::approve` also accepts the core hash of an entry
+already read, so a revoked core can be approved again.
+
+**The frontends** read that answer and nothing else:
+- *Cores* (`EmuSen.Tools.Cores`): `CoreRow.OfRuntime` takes a row's approval hash from `libretro.sha256` where it has
+  one, and `CoresPane.Joined` lends the core tool's row that hash beside the engine and trust, so *Approve…* names the
+  libretro core's hash.
+- *Mistress* (`MainWindow.CoreAwaitingApproval`): for the routed engine's row, or where no engine is routed a waiting
+  row of the routed system, the question shows `libretro.file` and approves `libretro.sha256`; a row needing refresh
+  is not asked about.
+
+**The path, found by running real cores.** `Engine::create` never set `image_path`, so Flycast (`need_fullpath`) refused
+every game and PCEE2 was sent a 1.46 GB image through the broker's socket. The path is now given at create and at a
+disc's insert (`Machine::media_insert_at`), and only for an unaltered file: `DiscFiles::unaltered_path` withholds a copy
+unpacked from an archive, and a package (which may carry soft patches) gives none, as §10d's rule has it.
+
+**The refresh, found the same way.** After `cores verify` refreshed an entry's proxy copy, the sidecar kept the old
+copy's hash. The entry was listed approved, but it opened nothing and could not be approved. An entry whose proxy
+copy differs from its sidecar's hash is now waiting, like a new build of the core. The runtime reads every waiting entry
+whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
+A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
+
+**Proofs** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs`, 6 tests on the Rust runtime:
+  - the waiting row approved by its `libretro.sha256` becomes one engine row, and is revoked and approved again;
+  - the path the test core logs is the game's;
+  - a refreshed proxy copy is read again at start and opens a game.
+- `emusen-crystal` (with `crystal_abi` at 1.5), `emusen-core-host` and `emusen-galaxia` pass.
+- WiseMan `CoresWindowRuntimeTests` on the Rust runtime (2): the window offers the waiting core with its core's hash,
+  approves it through the frontend API, and lists it again as an engine; Mistress asks by the core's file and hash, then
+  not after the approval.
+- `CoresWindowTests` and `HostedCoreLaunchTests` pass on the Rust runtime too.
+- On the C#: `CoresWindowTests`, `CrystalHeaderTests` and `CoreHostParityTests` pass.
+- Seeded faults, each caught: the path not set (the runtime test); the window's join dropping the hash (the window
+  test); Mistress naming the proxy's hash (Mistress's test).
 
 ## 11. Risks
 

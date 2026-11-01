@@ -1185,6 +1185,21 @@ measured against the 16.7 ms frame on the desktop and the handheld.
 **Order and cost.** 4.4(a) and 4.1 first, since every later check needs a game running in the window; then 4.4(b)–(e),
 4.2 and 4.3. Each part ends with its WiseMan tests and the blast radius, as stage 3 did.
 
+## 10h. Stage 4: the frontend, as built (2026-11-01)
+
+**A ringed frame read back on demand** (§12 question 5, decided 2026-11-01). A frame copied into the ring now takes its
+shape and a new serial in the machine's picture at once (`Picture::drawn_unread`), its bytes left where they are; the
+core's image it came from is kept as the frame's unread source (`Gpu::unread`), which stays the core's until its next
+frame. Only when `frame_copy` asks does `Machine::frame` read that image back (`Gpu::read_unread`, the read-back of
+§5.5 with no core commands in it) and take it into the picture, keeping the serial, since a read-back is not a new
+frame. The ring's own path reads nothing back. This needed `Core::frame` in `emusen-native` to take the core by mutable
+reference (EmuSen_CoreAPI.md §6.43); every core's implementation changed with it, the C declaration unchanged.
+Test: `a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does` (`tests/ring.rs`, the RX 6800),
+six frames by copy and by blit, every frame's shape and serial right before any read-back, every second frame's
+`frame_copy` (a screenshot's call) equal to the software picture, the ring's picture unchanged beside it. Seeded
+faults, each caught: the read-back never made (frame 1's screenshot differs) and a ring frame leaving the picture's
+shape as it was (frame 0's shape).
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
@@ -1211,7 +1226,7 @@ measured against the 16.7 ms frame on the desktop and the handheld.
 what PCEE2 exposes.
 4. **Decided 2026-10-31: deferred.** The secondary cheat path's surface, `CHEAT_CODES` (§11a), is built when a target core
    honours `retro_cheat_set`.
-5. **[decision]** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10g 4.4(e)): the libretro
+5. **Decided 2026-11-01: the read-back on demand, with the trait change (§10h).** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10g 4.4(e)): the libretro
    host reads it back from the core's device only when `frame_copy` is asked for, which needs `Core::frame` in
    `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
    mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the

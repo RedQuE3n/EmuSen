@@ -351,7 +351,7 @@ impl Core for Machine {
         FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(d.width as i32, d.height as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         self.board.gpu.display.frame()
     }
 
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn the_stub_reports_the_image_its_market_and_a_black_picture() {
-        let us = create(&exe(Some("North America"), 64), &[], vec![]).unwrap();
+        let mut us = create(&exe(Some("North America"), 64), &[], vec![]).unwrap();
         let info = us.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("psx", Some(Region::Ntsc), standard_rate(false)));
         assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["R3000BUS", "RAM", "SCRATCH", "VRAM", "SPURAM", "BIOS", "TTY"]);

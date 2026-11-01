@@ -375,7 +375,7 @@ impl Core for Machine {
         self.sys.board.pcrtc.picture.frame_info()
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         &self.sys.board.pcrtc.picture.rgba
     }
 

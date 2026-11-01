@@ -1914,6 +1914,13 @@ host signals `done` once it no longer reads the slot; ownership crosses by a rel
 screen filters need with the console (`EmuSen_LibretroHost.md` §0.3). `emusen-native`: `Core::ring_lend` and
 `Core::frame_ring`, the `device_ring` group; its test core claims the bit and, holding no device, refuses every ring.
 
+*`frame_copy` with a ring lent (decided 2026-11-01, §12 question 5 of `EmuSen_LibretroHost.md`).* A frame that went to
+the ring still answers `frame_info` with its size and a new serial, and `frame_copy` hands its picture, which a core
+may read back from its own device only then: a screenshot, a state's picture or a bug report's never finds a ringed
+frame blank, and the ring's path reads nothing back. So `Core::frame` in `emusen-native` takes the core by mutable
+reference, every core's implementation changed with it; the C declaration keeps its `const emusen_machine *`, the
+handle being opaque, and the call stays one of the machine's calls, never made beside another on the same machine.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found

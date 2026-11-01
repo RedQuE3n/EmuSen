@@ -548,8 +548,17 @@ impl v1::Core for Machine {
         FrameInfo { format: p.format, stride: p.stride as i32, aspect_num: num as u32, aspect_den: den as u32, serial: p.serial, bytes: p.bytes().len() as i64, ..FrameInfo::rgba(p.width as i32, p.height as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
-        self.shared.picture.bytes()
+    fn frame(&mut self) -> &[u8] {
+        let s = &mut *self.shared;
+        if let Some(g) = s.gpu.as_mut()
+            && g.unread().is_some_and(|(w, h)| (w, h) == (s.picture.width, s.picture.height))
+            && let Some((w, h, bgra)) = g.read_unread()
+        {
+            let serial = s.picture.serial;
+            s.picture.take(sys::PIXEL_FORMAT_XRGB8888, g.read(w, h, bgra), w, h, w as usize * 4);
+            s.picture.serial = serial;
+        }
+        s.picture.bytes()
     }
 
     fn ring_lend(&mut self, ring: Option<&v1::Ring>) -> Result<(), i32> {

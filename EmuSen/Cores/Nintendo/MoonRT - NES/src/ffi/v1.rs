@@ -221,7 +221,7 @@ impl v1::Core for Machine {
         FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         debug_assert_eq!(self.bus.ppu.frame_rgba.len(), FRAME_BYTES);
         &self.bus.ppu.frame_rgba
     }
@@ -474,9 +474,10 @@ mod tests {
     }
 
     /// Every value through the palette machine info declares is the RGB frame's pixel.
-    fn drawn_through_the_palette(m: &Machine) {
+    fn drawn_through_the_palette(m: &mut Machine) {
+        let picture = m.frame().to_vec();
         let palette = &m.raw_encodings()[0].palette;
-        for (i, (&v, p)) in raw(m).iter().zip(m.frame().chunks_exact(4)).enumerate() {
+        for (i, (&v, p)) in raw(m).iter().zip(picture.chunks_exact(4)).enumerate() {
             assert_eq!(palette[v as usize], (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32, "pixel {i}: value {v:#x}");
         }
     }
@@ -513,7 +514,7 @@ mod tests {
             assert!((10..230).contains(&first), "frame {frame}: emphasis from line {first}");
             assert!(rows[..first].iter().all(|&v| v >> 6 == 0) && rows[first..].iter().all(|&v| v >> 6 == 7), "frame {frame}: off above line {first}, on from it");
             assert_eq!(*switch.get_or_insert(first), first, "frame {frame}: the same line every frame");
-            drawn_through_the_palette(&m);
+            drawn_through_the_palette(&mut m);
         }
         println!("emphasis from line {} in frames 4 to 7", switch.expect("frames 4 to 7 checked"));
     }
@@ -540,7 +541,7 @@ mod tests {
         for _ in 0..30 {
             kept.advance(&mut detail).unwrap();
             plain.advance(&mut detail).unwrap();
-            drawn_through_the_palette(&kept);
+            drawn_through_the_palette(&mut kept);
             assert_eq!(kept.frame(), plain.frame());
         }
         assert!(raw(&kept).iter().any(|&v| v & 0x3F != palette[0] as u16), "the tiles draw more than the backdrop");

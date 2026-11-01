@@ -232,7 +232,9 @@ fn hardware_frame(s: &mut Shared, width: c_uint, height: c_uint) {
     let (w, h, bgra, larger) = match shown {
         crate::vulkan::Shown::Bytes(w, h, bgra) => (w, h, bgra, false),
         crate::vulkan::Shown::Larger(w, h, bgra) => (w, h, bgra, true),
-        _ => return,
+        // Its shape and number now, its bytes only when frame_copy asks (EmuSen_LibretroHost.md §10h).
+        crate::vulkan::Shown::Ring => return s.picture.drawn_unread(width, height),
+        crate::vulkan::Shown::Nothing => return,
     };
     let fits = w <= s.av.geometry.max_width && h <= s.av.geometry.max_height;
     if larger || !fits {

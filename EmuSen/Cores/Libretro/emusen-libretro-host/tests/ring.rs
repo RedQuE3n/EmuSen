@@ -103,6 +103,38 @@ fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bg
     ring_run("vulkan_bgra", 6, &want, &gpu);
 }
 
+// §12 Q5 (decided 2026-11-01): a ringed frame's picture is read back only when frame_copy asks, as a screenshot does.
+#[test]
+fn a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(6);
+    for hw in ["vulkan", "vulkan_bgra"] {
+        let ring = gpu.create_ring(640, 480, 3).unwrap();
+        let mut m = make(&format!("tc_hw={hw}"));
+        let (lend, _keep) = lend_of(&ring);
+        m.ring_lend(Some(&lend)).unwrap();
+        let mut serial = 0;
+        for (n, (w, h, rows)) in want.iter().enumerate() {
+            m.advance().unwrap();
+            let r = m.frame_ring().unwrap().unwrap_or_else(|| panic!("{hw}: frame {n} is not in the ring"));
+            let f = m.frame_info().unwrap();
+            assert_eq!((f.width, f.height), (*w, *h), "{hw}: frame {n}'s shape before any read-back");
+            assert!(f.serial > serial, "{hw}: frame {n} keeps the last frame's number");
+            serial = f.serial;
+            if n % 2 == 1 {
+                let mut all = vec![0u8; m.frame_bytes().unwrap()];
+                m.frame_copy(&mut all).unwrap();
+                let got: Vec<u8> = (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4].to_vec()).collect();
+                assert!(got == *rows, "{hw}: frame {n}'s screenshot differs from its software picture");
+                assert_eq!(m.frame_info().unwrap().serial, serial, "{hw}: a read-back is not a new frame");
+            }
+            assert!(ring.read(r.slot as usize, r.value, r.width as u32, r.height as u32).unwrap() == *rows, "{hw}: frame {n} in the ring");
+        }
+        m.ring_lend(None).unwrap();
+    }
+}
+
 #[test]
 fn with_no_ring_the_picture_is_read_back_and_a_ring_on_another_card_is_refused() {
     let _t = turn();

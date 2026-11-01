@@ -103,6 +103,85 @@ fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bg
     ring_run("vulkan_bgra", 6, &want, &gpu);
 }
 
+// §10o: a core that negotiates v1 makes its device itself; the host's vkCreateDevice, handed through the
+// vkGetInstanceProcAddr it is given, adds what the ring needs.
+#[test]
+fn a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(6);
+    ring_run("vulkan_v1", 6, &want, &gpu);
+}
+
+// §10o: a v1 core that takes vkCreateDevice from the loader instead gets no ring, says why, and is read back.
+#[test]
+fn a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(3);
+    let mut m = make("tc_hw=vulkan_v1_loader");
+    let ring = gpu.create_ring(640, 480, 3).unwrap();
+    let (lend, _keep) = lend_of(&ring);
+    assert_eq!(m.ring_lend(Some(&lend)), Err(status::NOT_SUPPORTED));
+    for (n, (w, h, rows)) in want.iter().enumerate() {
+        m.advance().unwrap();
+        assert_eq!(m.frame_ring().unwrap(), None);
+        let f = m.frame_info().unwrap();
+        assert_eq!((f.width, f.height), (*w, *h));
+        let mut all = vec![0u8; m.frame_bytes().unwrap()];
+        m.frame_copy(&mut all).unwrap();
+        let got: Vec<u8> = (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4].to_vec()).collect();
+        assert!(got == *rows, "frame {n} read back differs");
+    }
+    let mut log = String::new();
+    m.log_drain(&mut log).unwrap();
+    assert!(log.contains("without the host's vkCreateDevice"), "{log}");
+}
+
+// §10o: a Vulkan core that declares each libretro format, the host offering each mask; every hardware frame, read
+// back or taken from the ring by frame_copy, lands in the handed format with no panic (Flycast's 16-bit picture did).
+#[test]
+fn a_vulkan_cores_frames_land_in_whatever_format_it_declared_and_the_host_accepts() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(2);
+    for format in ["xrgb8888", "rgb565", "0rgb1555"] {
+        for mask in [0b001u64, 0b011, 0b101, 0b111] {
+            for ringed in [false, true] {
+                let c = format!("tc_hw=vulkan\ntc_format={format}");
+                let mut m = Machine::create(library(), &Create { settings: &c, pixel_formats: mask, ..Create::new(GAME) }).unwrap_or_else(|r| panic!("{r:?}"));
+                let ring = gpu.create_ring(640, 480, 3).unwrap();
+                let (lend, _keep) = lend_of(&ring);
+                if ringed {
+                    m.ring_lend(Some(&lend)).unwrap();
+                }
+                for (n, (w, h, rows)) in want.iter().enumerate() {
+                    m.advance().unwrap();
+                    let f = m.frame_info().unwrap();
+                    let at = format!("{format}, mask {mask:03b}, ringed {ringed}, frame {n}");
+                    assert_eq!((f.width, f.height), (*w, *h), "{at}");
+                    let mut all = vec![0u8; m.frame_bytes().unwrap()];
+                    m.frame_copy(&mut all).unwrap();
+                    let bpp = if f.format == 2 { 2 } else { 4 };
+                    let got: Vec<u8> = (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * bpp].to_vec()).collect();
+                    let expected: Vec<u8> = rows
+                        .chunks_exact(4)
+                        .flat_map(|p| match f.format {
+                            2 => ((((p[0] as u16) >> 3) << 11) | (((p[1] as u16) >> 2) << 5) | ((p[2] as u16) >> 3)).to_le_bytes().to_vec(),
+                            1 => vec![p[2], p[1], p[0], 255],
+                            _ => p.to_vec(),
+                        })
+                        .collect();
+                    assert!(got == expected, "{at}: the picture in format {} differs", f.format);
+                }
+                if ringed {
+                    m.ring_lend(None).unwrap();
+                }
+            }
+        }
+    }
+}
+
 // §12 Q5 (decided 2026-11-01): a ringed frame's picture is read back only when frame_copy asks, as a screenshot does.
 #[test]
 fn a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does() {

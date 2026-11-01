@@ -1,0 +1,31 @@
+[package]
+name = "emusen-libretro-games"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Real libretro cores on the Rust runtime: a sandbox player home whose cores Cores' own tool downloads and the runtime
+# approves, and a game opened, run, timed and its state taken and loaded. See EmuSen_LibretroHost.md §10q.
+[lib]
+name = "emusen_libretro_games"
+path = "src/lib.rs"
+
+[dependencies]
+emusen-core-tool = { path = "../../../../Platform/core-tool" }
+emusen-systems = { path = "../../../../Platform/systems" }
+emusen-crystal = { path = "../../../../Platform/crystal" }
+emusen-galaxia = { path = "../../../../Platform/galaxia" }
+emusen-core-host = { path = "../../Shared/emusen-core-host" }
+emusen-core-entry = { path = "../../../../Platform/core-entry" }
+
+# Built as shared libraries beside the probe, the installation's proxy and libretro host a downloaded core is given.
+[dev-dependencies]
+emusen-libretro-proxy = { path = "../emusen-libretro-proxy" }
+emusen-libretro-host = { path = "../emusen-libretro-host" }
+
+[[example]]
+name = "games"
+
+[profile.release]
+panic = "abort"

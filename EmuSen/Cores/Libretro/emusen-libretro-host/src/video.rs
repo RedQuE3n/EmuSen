@@ -34,31 +34,38 @@ pub fn convert_row(retro: i32, handed: u32, src: &[u8], dst: &mut [u8], width: u
                 d.copy_from_slice(&[s[0], s[1], s[2], 0xFF]);
             }
         }
-        (sys::PIXEL_FORMAT_XRGB8888, _) => {
+        (sys::PIXEL_FORMAT_XRGB8888, RGBA8888) => {
             for (d, s) in dst[..width * 4].chunks_exact_mut(4).zip(src[..width * 4].chunks_exact(4)) {
                 d.copy_from_slice(&[s[2], s[1], s[0], 0xFF]);
             }
         }
         (sys::PIXEL_FORMAT_RGB565, RGB565) => dst[..width * 2].copy_from_slice(&src[..width * 2]),
-        (sys::PIXEL_FORMAT_0RGB1555, RGB565) => {
-            for (d, s) in dst[..width * 2].chunks_exact_mut(2).zip(src[..width * 2].chunks_exact(2)) {
-                let v = u16::from_le_bytes([s[0], s[1]]);
-                let (r, g, b) = ((v >> 10) & 0x1F, (v >> 5) & 0x1F, v & 0x1F);
-                let g6 = (g << 1) | (g >> 4);
-                d.copy_from_slice(&((r << 11) | (g6 << 5) | b).to_le_bytes());
+        // Every other pair through 8-bit red, green and blue, so no format a core chooses meets a missing case (§10o).
+        _ => {
+            let (i, o) = (retro_bytes_per_pixel(retro), bytes_per_pixel(handed));
+            for (d, s) in dst[..width * o].chunks_exact_mut(o).zip(src[..width * i].chunks_exact(i)) {
+                let (r, g, b) = rgb(retro, s);
+                match handed {
+                    RGB565 => d.copy_from_slice(&(((r as u16 >> 3) << 11) | ((g as u16 >> 2) << 5) | (b as u16 >> 3)).to_le_bytes()),
+                    BGRA8888 => d.copy_from_slice(&[b, g, r, 0xFF]),
+                    _ => d.copy_from_slice(&[r, g, b, 0xFF]),
+                }
             }
         }
-        (sys::PIXEL_FORMAT_RGB565, _) => {
-            for (d, s) in dst[..width * 4].chunks_exact_mut(4).zip(src[..width * 2].chunks_exact(2)) {
-                let v = u16::from_le_bytes([s[0], s[1]]);
-                d.copy_from_slice(&[expand5((v >> 11) as u8), expand6((v >> 5) as u8 & 0x3F), expand5(v as u8 & 0x1F), 0xFF]);
-            }
+    }
+}
+
+/// One pixel of a libretro format as 8-bit red, green and blue.
+fn rgb(retro: i32, s: &[u8]) -> (u8, u8, u8) {
+    match retro {
+        sys::PIXEL_FORMAT_XRGB8888 => (s[2], s[1], s[0]),
+        sys::PIXEL_FORMAT_RGB565 => {
+            let v = u16::from_le_bytes([s[0], s[1]]);
+            (expand5((v >> 11) as u8), expand6((v >> 5) as u8 & 0x3F), expand5(v as u8 & 0x1F))
         }
         _ => {
-            for (d, s) in dst[..width * 4].chunks_exact_mut(4).zip(src[..width * 2].chunks_exact(2)) {
-                let v = u16::from_le_bytes([s[0], s[1]]);
-                d.copy_from_slice(&[expand5((v >> 10) as u8 & 0x1F), expand5((v >> 5) as u8 & 0x1F), expand5(v as u8 & 0x1F), 0xFF]);
-            }
+            let v = u16::from_le_bytes([s[0], s[1]]);
+            (expand5((v >> 10) as u8 & 0x1F), expand5((v >> 5) as u8 & 0x1F), expand5(v as u8 & 0x1F))
         }
     }
 }
@@ -191,6 +198,22 @@ mod tests {
         let mut d2 = [0u8; 2];
         convert_row(sys::PIXEL_FORMAT_0RGB1555, RGB565, &0x7FFFu16.to_le_bytes(), &mut d2, 1);
         assert_eq!(u16::from_le_bytes(d2), 0xFFFF);
+    }
+
+    // §10o: every libretro format into every handed one, with no panic and each colour where it belongs.
+    #[test]
+    fn every_libretro_format_converts_into_every_handed_format() {
+        let red = [(sys::PIXEL_FORMAT_XRGB8888, vec![0u8, 0, 0xFF, 0]), (sys::PIXEL_FORMAT_RGB565, 0xF800u16.to_le_bytes().to_vec()), (sys::PIXEL_FORMAT_0RGB1555, 0x7C00u16.to_le_bytes().to_vec())];
+        for (retro, src) in red {
+            let mut d = [0u8; 4];
+            convert_row(retro, RGBA8888, &src, &mut d, 1);
+            assert_eq!(d, [255, 0, 0, 255], "{retro} as RGBA");
+            convert_row(retro, BGRA8888, &src, &mut d, 1);
+            assert_eq!(d, [0, 0, 255, 255], "{retro} as BGRA");
+            let mut d2 = [0u8; 2];
+            convert_row(retro, RGB565, &src, &mut d2, 1);
+            assert_eq!(u16::from_le_bytes(d2), 0xF800, "{retro} as RGB565");
+        }
     }
 
     #[test]

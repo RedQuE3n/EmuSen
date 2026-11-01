@@ -9389,9 +9389,8 @@ registry's halt unchanged. Mistress's Emulation menu offers it as Frame Advance,
 The crate's header test and baseline (eight `@1.4` lines); `CrystalHeaderTests` and `ContractShapeTests` for the binding;
 `CrystalParityTests`' frames case through both implementations, `frame_advance` among its steps (one frame run, then
 held) with `picture_ring` null for a core without `DEVICE_RING`; `ApiRingTests` on the RX 6800 for the ring itself
-(`EmuSen_LibretroHost.md` §10h). Not yet graded: a ring replaced at `MACHINE_INFO` (neither the test core nor PCEE2 grows
-its picture past the maxima it declares) and a crash with a ring lent, which the Rust half alone handles fully and
-which waits for the Rust host to open hosted cores.
+(`EmuSen_LibretroHost.md` §10h). On the Rust runtime (2026-11-01), the same four cases through the platform library's
+exports, a ring replaced at `MACHINE_INFO` and a crash with a ring lent among them (`EmuSen_LibretroHost.md` §10l).
 
 ---
 

@@ -2,9 +2,9 @@ using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace EmuSen.Tools.Packages
+namespace EmuSen.Galaxia.Native
 {
-    // The library tool's refusals and reasons in a player's words, one table for every window over its jobs - see EmuSen_GamePackages.md §13.3 and EmuSen_Packages.md §7.
+    // The library tool's refusals and reasons in a player's words, one table for every window over its jobs - see EmuSen_GamePackages.md §13.3, EmuSen_Packages.md §7 and EmuSen_LibraryTools.md §10.
     public static class ToolWords
     {
         // The tool's words for why a job did nothing, each as the window says it; the tool's own are kept where none matches.

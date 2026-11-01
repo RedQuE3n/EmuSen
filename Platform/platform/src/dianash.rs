@@ -110,7 +110,7 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     let mut shell = Shell::new(settings);
-    let modules: [&'static dyn dianash_module::Module; 7] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE, &emusen_library_module::MODULE, &emusen_cores_module::MODULE];
+    let modules: [&'static dyn dianash_module::Module; 8] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE, &emusen_library_module::MODULE, &emusen_cores_module::MODULE, &emusen_scrape_module::MODULE];
     for module in modules {
         if let Err(words) = shell.add_module(module) {
             fail(status::BAD_MANIFEST, words);
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     if let Err(code) = shell.set_services(&with_library(&[])) {
-        fail(code, "the library tool's service could not be handed to the shell");
+        fail(code, "the library tool's and the scraper's services could not be handed to the shell");
         return std::ptr::null_mut();
     }
     let cancel = shell.cancel_flag();
@@ -164,19 +164,17 @@ pub unsafe extern "C" fn dianash_add_commands(sh: *mut DianashShell, session: u3
     }
 }
 
-/// The host's services and, unless it names its own, the library tool's, which this library hands every shell so that
-/// `emusen.library` runs without the host's help (EmuSen_GamePackages.md §12.3).
+/// The host's services and, unless it names its own, the library tool's and the scraper's (EmuSen_GamePackages.md §12.3, EmuSen_LibraryTools.md §8).
 fn with_library(given: &[dianash_service]) -> Vec<dianash_service> {
-    let name = crate::library_tool::SERVICE.as_bytes();
+    let defaults: [(&str, u32, u32, *const std::ffi::c_void); 2] = [
+        (crate::library_tool::SERVICE, crate::library_tool::MAJOR, crate::library_tool::MINOR, &crate::library_tool::TABLE as *const crate::library_tool::LibraryToolV1 as *const std::ffi::c_void),
+        (crate::scraping::SERVICE, crate::scraping::MAJOR, crate::scraping::MINOR, &crate::scraping::TABLE as *const crate::scraping::ScrapeServiceV1 as *const std::ffi::c_void),
+    ];
     let mut all = given.to_vec();
-    if !given.iter().any(|s| unsafe { s.name.slice() } == Some(name)) {
-        all.push(dianash_service {
-            size: std::mem::size_of::<dianash_service>() as u32,
-            name: emusen_dianash::abi::dianash_bytes::of(name),
-            major: crate::library_tool::MAJOR,
-            minor: crate::library_tool::MINOR,
-            table: &crate::library_tool::TABLE as *const crate::library_tool::LibraryToolV1 as *const std::ffi::c_void,
-        });
+    for (name, major, minor, table) in defaults {
+        if !given.iter().any(|s| unsafe { s.name.slice() } == Some(name.as_bytes())) {
+            all.push(dianash_service { size: std::mem::size_of::<dianash_service>() as u32, name: emusen_dianash::abi::dianash_bytes::of(name.as_bytes()), major, minor, table });
+        }
     }
     all
 }

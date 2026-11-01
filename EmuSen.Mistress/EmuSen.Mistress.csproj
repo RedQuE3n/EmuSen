@@ -97,6 +97,8 @@
     <ProjectReference Include="..\EmuSen.Tools.Cores\EmuSen.Tools.Cores.csproj" />
     <!-- Packages, the package manager, a tool library Mistress hosts - see EmuSen_LibraryTools.md §1b. -->
     <ProjectReference Include="..\EmuSen.Tools.Packages\EmuSen.Tools.Packages.csproj" />
+    <ProjectReference Include="..\EmuSen.Tools.Scraper\EmuSen.Tools.Scraper.csproj" />
+    <ProjectReference Include="..\EmuSen.Tools.Library\EmuSen.Tools.Library.csproj" />
     <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
          config root - one copy for both frontends, see
          EmuSen_Settings_Reference.md §4.10. -->

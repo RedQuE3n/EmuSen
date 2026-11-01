@@ -538,8 +538,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Invoke(window, "OpenPadMenu");
             PadMenu(window).Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scraping (0 of 3)...").Accept();
             Invoke(window, "ClosePadMenu");
-            Assert.NotNull(window.ScrapeStatusShown);
-            window.ScrapeStatusShown!.Close();
+            Pump(100);
+            // The pad menu's row opens the Scraper, whose apply bar carries the run while it is open (EmuSen_LibraryTools.md §9.3).
+            ScraperWindow scraper = window.OwnedWindows.OfType<ScraperWindow>().Single();
+            window.ShowScrapeStatus();
+            Assert.Null(window.ScrapeStatusShown);
+            scraper.Close();
 
             var prefs = new PreferencesWindow(new AppSettings { RomDirectory = RomDir }, window);
             Windows.Add(prefs);
@@ -590,7 +594,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             pad.Start();
             EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scraping (");
-            Assert.IsType<ScrapeStatusWindow>(Sheets(window).Current);
+            ScraperWindow scraper = Assert.IsType<ScraperWindow>(Sheets(window).Current);
+            PumpUntil(() => scraper.Pane.Following, "the Scraper to follow the run: " + scraper.Pane.Notice);
         });
 
         // No text the window shows holds a credential: every route passes the redactor, the window's own included.

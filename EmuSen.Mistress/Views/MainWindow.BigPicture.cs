@@ -87,6 +87,7 @@ namespace EmuSen.Mistress.Views
         private void ShowThemedLibrary()
         {
             bool shown = false;
+            _scrapeTheme = ThemeNow();
             if (_themed is not null && ThemedStyleWanted)
             {
                 _themed.Status = DeviceStatusSource();

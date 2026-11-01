@@ -3172,7 +3172,7 @@ the rest of what a run knows. `EmuSen_BigPicture.md` §20 is the record: the tes
 
 **Where it opens.**
 - **When a run starts**, from **Scrape This Game...**, **Scrape Games...**, the Scraping tab's **Scrape...** or
-  **Resume**, once the confirm step has been answered. Declining asks nothing and opens nothing.
+  **Resume**, once the confirm step has been answered. (*Since 2026-11-01* the tab has no **Scrape...**; §4.60.) Declining asks nothing and opens nothing.
 - **During a run**, from the pad menu, whose entry reads "Scraping (n of m)..." and now opens this window rather than
   Preferences. Outside a run the entry is still **Scrape Games...** and still opens the Scraping tab.
 - **At any time**, from Preferences ▸ Scraping ▸ **Status...**.
@@ -3559,6 +3559,16 @@ ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a
 | **every game** | the same, with **Every console** and **Only games with no cover** off |
 
 *Amended by §4.76:* the switch became a dropdown of ES-DE's criteria, *Games with no cover* still the default.
+
+*Amended 2026-11-01, decided by the tester:* the Scrape row's console list, its criteria dropdown and **Scrape...** are
+retired in favour of the Scraper window (`EmuSen_LibraryTools.md` §9), which chooses a wide run's games by section (a
+console, a collection, favourites, missing media, no game image, no description) through the `scrape` command and shows
+the plan before anything is sent. Where the button was, **Open Scraper…** (`ScraperLinkButton`) opens that window; the
+pad menu's **Scrape Games...** and the desktop's Settings ▸ **Scraper...** open the same one. The row keeps **Refresh
+what is kept**, **Resume**, **Cancel Scraping**, **Status...** and the bar, since a run of Scrape This Game, or one cut
+off, is still Mistress's own. What the Scraper does not own stays in Preferences: the ScreenScraper switch, the member
+account, the media kinds fetched (Fetch and Fetch More), names, region and language, the quota, OpenEmu's failover and
+orphaned media. The two rows of the table above that named the console list are therefore historical.
 
 The pad menu's **Scrape Games...** opens Preferences on the Scraping tab. Before a run starts, a confirm sheet gives the
 count of games, how many ScreenScraper has not been asked about, the most requests it can cost against what is left
@@ -4888,16 +4898,25 @@ Over the library, titled *Main Menu*:
 | Game Options... | the sidebar library has a game selected (§4.63) |
 | Scrape This Game... | a game is selected and no run is going (§4.60) |
 | *divider* | when any of the three above is shown |
-| Library ▸ | Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Packages (since 2026-10-31) · Cores (since 2026-11-01) · Theme Settings (big picture) |
-| Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Firmware (since 2026-10-05, §4.89) · Preferences |
+| Library ▸ | Start Console · Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Packages (since 2026-10-31) · Compressed Discs (since 2026-11-01) · Library Manager · Cores (since 2026-11-01) · Theme Settings (big picture) |
+| Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Memory Cards · Firmware (since 2026-10-05, §4.89) · Preferences |
 | EmuSen ▸ | Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
 
 *Packages* (`EmuSen_Packages.md` §7) went under Library rather than Settings on 2026-10-31. A submenu's page in the
 big panel holds nine rows under a one-line title and its breadcrumb, at 1280×800 and 1920×1200 alike, since the panel
 scales with the screen. Settings had reached nine (with Memory Cards and Compressed Discs), and *Packages* as a tenth
 ran past the panel behind a scroll indicator, which the fit audit below refuses. Library, which holds the library's own
-tools, has at most five rows with it. *Cores* (`EmuSen_Cores.md` §2) joined it below *Packages* on 2026-11-01 for the
-same reason, a tenth row under Settings, and Library has at most six.
+tools, has at most five rows with it.
+
+*Compressed Discs* (`EmuSen_GamePackages.md` §13) moved from Settings to Library on 2026-11-01, decided by the tester,
+beside Packages and the Library Manager: all three work on the library's files rather than on how EmuSen behaves.
+Settings is left with eight rows. *Cores* (`EmuSen_Cores.md` §2) went under Library below the Library Manager the same
+day, since it had made a tenth row under Settings before Compressed Discs moved; it manages what EmuSen plays the
+library with. Library's longest page, over the themed view with a console to start, has eight: Start Console,
+Collections, Scrape Games..., Packages, Compressed Discs, Library Manager, Cores and Theme Settings, inside the panel's
+nine, which the fit audit (`WindowFitAuditTests`, the pad menu's cases) checks at 1280×800 and 1920×1200.
+The desktop menu bar is unchanged: its Settings menu keeps *Compressed Discs...* beside *Packages...*, *Scraper...*,
+*Library Manager...* and *Cores...*.
 
 *Players & Controllers* opens Preferences on its Controllers tab, where the players' rows of `EmuSen_Input.md` §8.9 are.
 *Graphics* is the window that was *Graphics Settings*; *Collections* is ES-DE's *Game Collection Settings*, whose
@@ -5567,6 +5586,11 @@ editor's Name field show ScreenScraper's name wherever a run has kept one. A nam
 and the file is never renamed.
 
 #### 4.76.3 Which games a run takes, and Refresh
+
+*Amended 2026-11-01:* the dropdown is gone with the Scrape row's scope (§4.60); the Scraper's sections choose a wide
+run's games. `ScrapeCriteria` stays in `appsettings.json` and Galaxia's model, read by nothing in Mistress since, and
+**Refresh what is kept** now reaches **Scrape This Game** alone, the Scraper having its own **Overwrite**. The table
+below records what the dropdown offered.
 
 The **Scrape** row's second dropdown (`ScrapeCriteria`) is ES-DE's *Scrape these games*:
 

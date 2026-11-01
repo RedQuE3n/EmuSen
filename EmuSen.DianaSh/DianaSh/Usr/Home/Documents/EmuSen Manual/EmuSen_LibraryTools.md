@@ -1,6 +1,6 @@
 # EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Packages
 
-*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). T2, the commands `rom hash`, `rom check` and `rom dups` and `uniq -D -w`, built 2026-10-31 (§7); the rest is not built.* Asked by the tester the same day: a proper scraping tool in place
+*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). T2, the commands `rom hash`, `rom check` and `rom dups` and `uniq -D -w`, built 2026-10-31 (§7); T4, `scrape` (§8), T5, the Scraper window (§9), and T6, the Library Manager window (§10), built 2026-10-31 and 2026-11-01; T3 and T7 are not built.* Asked by the tester the same day: a proper scraping tool in place
 of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_Packages.md`) and made for theming, with
 the system and the games (favourites or all) chosen; and a library manager laid out the same, which finds duplicate and
 broken ROMs; every backend tool these lack made as a DianaSh command.
@@ -182,8 +182,8 @@ scraper is its own crate.
 | **T1** | `ManagerLayout` in LunaP on `AdaptiveLayout` (Packages' M1 builds it) | with M1 |
 | **T2** | `rom hash`, `rom check` (the size, sheet, archive and CHD checks), `rom dups`, `uniq -D -w` | routine |
 | **T3** | The header checks, per system pack, with seeded faults | careful: a false "broken" sends a player hunting |
-| **T4** | `emusen.scrape` and `scrape` | routine |
-| **T5** | The scraping tool window | routine |
+| **T4** | `emusen.scrape` and `scrape` — built 2026-10-31 (§8) | routine |
+| **T5** | The scraping tool window, composing `scrape`; Mistress's `ScopeGames` routed through the command's choice so that it has one owner (§8.6) — built 2026-11-01 (§9) | routine |
 | **T6** | The library manager window | routine |
 | **T7** | The trash operation in the platform library (Linux and its portal first), `trash`, and Move to Trash in the library manager | careful: it is the only write to the library |
 
@@ -288,3 +288,312 @@ package's own files made a group (`dups`' test); a zip's entries not inflated (`
 - Zipped discs, as §7.2 says.
 - T3's header checks, and the second tier of duplicates (the same ScreenScraper game id), which is the Library window's.
 
+## 8. T4 as built: the `emusen.scrape` module and `scrape` (2026-10-31)
+
+### 8.1 The form chosen
+
+Decided 2026-10-31, before building: the command reaches the scraper through a service, as `chd`, `pkg` and `rom`
+reach the library tool, since a command module links neither the scraper nor Galaxia. Three forms were weighed (the
+rule of the code-design section): a scraper of the module's own was refused outright, being a second scraper; an
+extension of `emusen_scrape.h` was not needed, since every request the command makes is already one of its reads or
+changes; so the scraper is lent whole as a **new service, `emusen.scrape` 1.0** (`Platform/include/emusen_scrape_service.h`),
+and the command is a module of its own, `emusen.scrape` (`Platform/emusen-scrape-module`), as §4 says. Nothing of the
+scraper changed: its quota rules, the order of its sources and its store are what a run from a game's menu meets. The one
+addition to the crate is `Scraper::sqlite()`, so that the service's scan uses the SQLite the host lent rather than
+loading another.
+
+### 8.2 One scraper a process
+
+The service's calls take no handle. Each speaks for the process's one scraper, held in a slot of the platform library
+under a lock (`Platform/platform/src/scraping.rs`):
+
+1. A host that holds a scraper lends it with `emusen_scraping_lend` (platform interface 28), with the `games.db`
+   library it was opened with, the systems the build opens and, where it loads themes, a function answering the kinds
+   its active theme draws for a system. Mistress lends its native scraper as soon as it opens it (`OpenNative`), and
+   says at start, before any shell exists, that it scrapes with none open (a null lend). Closing the scraper or its
+   library withdraws the lend first (`ScrapingLend.Release`), and a lend or withdrawal waits for the calls in flight,
+   so a handle is never closed under a shell's call. A service `wait` is held to 250 ms for the same reason.
+2. In a process whose host never lent one, the platform library opens one on the first `scrape` that needs it, from the
+   settings file as the library tool reads it: the store under the tree's `Media`, `games.db` under `Library`, the
+   art and ES-DE folders, OpenEmu's switch, and the developer file where it is (no embedded credentials outside the
+   program). The runtime catalogue is not here, so each system is taken as its own engine for the art index: a picture
+   placed by hand under a folder two systems share is found only through the system that names it.
+3. After any lend the platform library never opens a scraper of its own; a lend made after one was opened closes it.
+   A process therefore holds one scraper and one quota manager. Across processes the store lock of §8.8 refuses a
+   second.
+
+### 8.3 Choosing the games
+
+The choice is the module's alone. The games are a scan of the settings' ROM folder, with `Packages` and `Compressed`
+beside it, on a database of the service's own, as `RomLibrary.ScanNative` makes it, each game given its ES-DE system
+from the systems table; a game with none is not one the scraper can ask about. The criteria are read through
+`emusen_library.h`: `records` for favourites, `collections` and `members` for a collection (its name matched ignoring
+case), `all_edits` for `nomultiscrape`. A game marked "Exclude from multi-scraper" is left out of a wide choice, as
+Mistress's `ScopeGames` leaves it out, and is chosen when it is named by hand, as an argument or a line of standard
+input (its first tab-separated field, so that `scrape ls` pipes back in). `--missing <kind>` keeps a game only when
+the scraper's `media` read finds no picture of the kind from any source; `--missing any` when it lacks one of the kinds
+the run asks. The run's priority is `console` for one system and `library` otherwise.
+
+### 8.4 The kinds, the theme and videos
+
+With no `--kinds` a run asks the scraper's own default (cover, screenshot, marquee, miximage). `--kinds theme` asks the
+host for each chosen system's kinds; Mistress answers by loading the active theme for that system as though every type
+were present, so that no trigger hides what it can draw, and taking the gamelist's `imageType` lists, `video` for a
+video element, and the media types of the selected variant's triggers (`ThemeMediaKinds`). The theme and its choices
+are a snapshot taken when the library is shown, so the shell's thread never reads the window's settings. Outside
+EmuSen no theme loader is lent and `--kinds theme` is refused with its reason. A run over several systems asks the
+union. Videos are asked only with `--videos` (`EmuSen_BigPicture.md` §21 Q20); a video named otherwise is dropped with
+a note.
+
+### 8.5 What it prints
+
+Data lines on standard output, notes and sentences on standard error, as `rom` does: `ls` a line a game (path, system,
+each kind's source or `-`); `plan` the scraper's `ScrapePlan` as `key<TAB>value` lines and its sentence; `run` the
+plan's sentence first and then a line a finished game, the counts at the end; `status` the quota, whether a member is
+signed in and since when, the developer credentials' origin, and the run going. No account name, password or developer
+credential is printed; the credentials are the scraper's, read as they always were. A run past the line's budget
+becomes `scrape<n>`, listed by `ps`, followed by `scrape wait`, cancelled by `kill`. The page is `man scrape`.
+
+### 8.6 For T5
+
+The Scraper window composes `scrape`. Mistress's own `ScopeGames` and its `Meets` criteria remain until then and are
+not copied; T5's first step routes Scrape Games through the command's choice, so that the choice has one owner. Done 2026-11-01 (§9.2).
+
+### 8.7 Tests, measured 2026-10-31
+
+- `emusen-scrape-module` (7): the command line, a piped list, the choice and its exclusion rule, the theme's kinds per
+  system and the videos rule, the plan, start, result, end and status lines (no account name), the manifest.
+- `Platform/platform/tests/scraping.rs`: a shell this library makes, over a scraper lent as a host lends it and a
+  recorded-response HTTPS server on 127.0.0.1 answering the scraper's own recorded `jeuInfos` fixture, with a
+  certificate made at test time; status, `ls` by system and by the theme, `plan` with and without favourites, a game
+  named by hand through a pipe, nothing sent before `run`, a run that finds the game and saves its cover, `--missing`
+  afterwards, the library unwritten, and a withdrawal after which the service refuses and has opened nothing.
+  `scraping_default.rs`: a process with no lend opens its own store and `games.db` from the settings, and a later lend
+  closes it. Both load SQLite through `emusen_sqlite::for_tests`, which makes `libm` global first: the NuGet build
+  leaves `trunc` to its host, and tests that loaded it otherwise passed without reaching SQLite.
+- `ScrapingLendTests` (WiseMan): Mistress's binding lends a `MediaService`, a native shell answers from it, and
+  disposing it withdraws the lend; `ThemeMediaKinds` on a synthetic theme.
+
+Open question: whether the other Rust tests that load SQLite should all use `emusen_sqlite::for_tests`, which since
+2026-10-31 loads `libm` first and fails loudly where no copy loads; the scraping tests use it.
+
+### 8.8 One scraper a store across processes (`emusen_scrape.h` 1.1)
+
+Decided 2026-10-31 by the tester: every scraper handle holds its store alone, so that a second process (Mistress and a
+standalone shell at once) refuses rather than paces on its own and the account's quota is counted once. The lock is
+Galaxia's advisory lock (`medium_lock`, the `flock` on `<store>/media.db.lock` that save media use), taken in
+`Scraper::open` before `media.db` is opened and let go after everything else of the handle has closed. A second open
+of a held store, in another process or in the same one, is `EMUSEN_SCRAPE_STORE_IN_USE` (−1167, the header's 1.1)
+with words naming the holder ("another program", or "EmuSen's scraper in this program") and what to do. Mistress shows
+the words when its store cannot be opened; a shell's `scrape` prints them. `tests/store_lock.rs` holds the store in a
+child process of the test binary and is refused in the parent, then opens once the child lets go, and is refused a
+second handle in its own process.
+
+## 9. T5 as built: the Scraper window (2026-11-01)
+
+### 9.1 The form chosen
+
+The window composes `scrape`, so it needs the command's own choice, plan and run as data rather than its printed lines.
+Three forms were weighed, as the code-design section asks. Driving a DianaSh shell from the window and parsing what
+`scrape` prints was refused: the tool library would need the shell's binding, a run past the line's budget turns into a
+background job, and progress would be read back out of sentences. Copying the choice into C# was refused outright, being
+a second owner of it. The form taken is an **extension** of two existing surfaces: the module crate gains
+`emusen_scrape_module::ask`, the command's subcommands as JSON in and JSON out over the same `Backend` a shell's call
+uses, and the platform library exports it as **`emusen_scraping_command`** (platform interface **29**). The request is
+`{"args": [...], "paths": [...], "sources": bool}`, `args` the words after `scrape`: `ls` answers the chosen games with
+each kind's source, `plan` the scraper's `ScrapePlan` with the shell's sentence, `run` a started run and the serial to
+follow it from, `progress` the scraper's progress with the shell's end sentence once it is not running, and `status`,
+`wait`, `cancel` and `collections` what their names say. Failures carry `emusen_scrape.h`'s statuses and words. Galaxia's
+`ScrapeCommand` is the C# binding; nothing of the scraper or its service changed.
+
+`--missing` was extended so that ES-DE's four criteria are the module's: a comma list of kinds keeps a game with none
+of them (ES-DE's "No game image" is `miximage,screenshot,titlescreen,cover`), and `--missing metadata` a game whose
+description, edited or scraped, is empty, read through the scraper's `metadata` read. A single kind and `any` mean what
+they meant.
+
+### 9.2 One owner of the choice
+
+Mistress's wide runs from the native scraper — Scrape Games from Preferences, the pad menu and a shelf — are now chosen by
+`scrape ls` through `ChosenGames`: the shelf becomes `--system <its ES-DE name>`, favourites `--favorites`, and "No
+cover", "No game image", "No game video" and "No metadata" the `--missing` forms above. Both the confirm step's
+`ScrapePlan` and the run take that list. Two paths keep `ScopeGames`: one game named by hand, which is no choice, and the
+managed scraper, which runs only where the platform library is not in use and so has no module to ask; it goes when the
+managed half does. A shelf's run chooses its ES-DE system's games, which is the scraper's own unit.
+
+### 9.3 The tool library and its host
+
+- **`EmuSen.Tools.Scraper`** references LunaP and Galaxia only (`LeafAssemblyTests`): `ScraperPane` (a
+  `ManagerLayout<ScrapeRow>`), `ScrapeRow` (one game of `ls`'s answer), and `ScraperPlan`, the words and command lines,
+  free of any control.
+- **Mistress's hosts share one base**, `ToolPaneWindow`: the form taken from the sheet's framing, the frame's generated
+  hints, and the pad's buttons offered to the pane in ES-DE's grammar. `PackagesWindow` moved onto it; `ScraperWindow`
+  is the second. Neither writes a hint or a focus route.
+- **Placement** (§1b): Home is not built yet, so the existing entry points open the Scraper — *Settings → Scraper…* on
+  the desktop, and the pad menu's Library page, whose *Scrape Games…* row opened Preferences' Scraping tab before. A
+  game's own *Scrape This Game* is one game and stays where it is.
+- **Retired as §2 says**: while the Scraper is open, the status sheet is not opened; a request for it brings the Scraper
+  forward, whose apply bar carries the run's progress. Preferences' Scraping tab keeps its controls (the question in
+  §9.6).
+- **ToolWords and ToolEvents** are the library tool's job events and refusals; the scraper's answers are neither, so
+  nothing of them is shared and nothing was moved.
+
+### 9.4 What the window does
+
+- **Sections**: All Games, Favourites, Missing Media (`--missing any`), No Game Image, No Description, each system the
+  listing found, and each collection. A section is one choice of the module's, so changing it asks `scrape ls` again;
+  the window filters nothing itself beyond the frame's search.
+- **Columns**: Game, System, Media (*n of m* of the kinds asked), Missing, Last Run; the big screen shows Game and Media.
+- **Options**, as checkable actions: *Theme* (`--kinds theme`, the "what my theme shows" preset, answered by
+  Mistress's theme loader and refused with its reason where none is lent), *Videos* (off by default), *Overwrite*.
+  *Mark All* marks the shown rows (in Missing Media, every game lacking a kind asked); X marks one. There is no
+  Refresh: a section or an option lists again, and so does a run's end. Six actions keep the big screen's row on one
+  line, which the plan sheet needs (§9.5).
+- **Apply** shows the plan first, from `scrape plan` with the marked games named by hand: the scraper's sentence ("2
+  game(s), about 7 request(s) …"), the kinds, whether what is there is kept, and that nothing is sent until Apply.
+  Confirmed, one `scrape run` starts and the apply bar follows it: *n of m games* and the game being asked, each result
+  in Last Run, the end's sentence after. *Stop* cancels. A run started elsewhere (a game's menu, a shell) is followed
+  when the window opens.
+- **Refusals** are said plainly in the apply bar's line: a store another program holds (the scraper's own words, §8.8),
+  a run already going, the platform library not in use.
+- **The detail**: each kind's source in words (the game's package, ScreenScraper, an ES-DE folder, placed by hand,
+  OpenEmu); with no game chosen, the options and the account's limits — threads, a minute, today's requests left, and
+  whether a member is signed in; never a name or password.
+- **One quota**: inside Mistress the command speaks for Mistress's own scraper, lent as §8.2 says, so a run the window
+  starts is counted by the same quota manager; standalone, the store lock refuses a second scraper (§8.8).
+
+### 9.5 Tests and seeded faults, measured 2026-11-01
+
+- `emusen-scrape-module` (9, two new): `--missing` as a list, `any` and `metadata`; the window's `ls` with each kind's
+  source and without, a plan naming an excluded game by hand, nothing started before `run`, a run's priority, a refusal,
+  `status`, `progress` with its end sentence and a serial past every result, `collections`.
+- `ScraperWindowTests` (7): through Mistress's own scraper lent to the command and the fake ScreenScraper over HTTPS,
+  the library's game listed with its four kinds, marked, planned with nothing sent, run and found, the request counted
+  by Mistress's quota, and the status sheet not opened while the Scraper is; with a scripted command, each section's
+  words, the plan and run naming the marked games by hand with Overwrite, the run followed to its end sentence, a held
+  store said plainly with nothing listed, a run started elsewhere followed and stopped, and the desktop window clean
+  under the fit audit at 1280×800 and 1920×1200. `LeafAssemblyTests` holds the library to LunaP and Galaxia.
+- `WindowFitAuditTests`: `Scraper`, `ScraperDetail`, `ScraperPlan` and `ScraperRunning` framed over a running game at
+  both sizes, audited and recorded (`EmuSen_InterfaceSpec.md` §6.3.14); Packages' eight cases unchanged on the shared
+  host base.
+- Changed for the new entry points: the pad menu's *Scrape Games…* opens the Scraper (`ScrapeWindowTests`,
+  `ScrapeStatusWindowTests`), and the sign-in sheet test opens Preferences' Scraping tab as Settings does
+  (`ScrapeSignInTests`). The golden corpus holds `man scrape` and the new `--missing` refusal.
+- Found by these tests and fixed: a `since` past every result read through a double and rounded past the scraper's
+  range, so the window never followed a run going (the big-screen status test); a quota field the scraper leaves null
+  read as a number (the sign-in test); the plan's words 38 units high and the progress line cut (the framed audit,
+  LunaP §203.7 and §6.3.14).
+
+| Seeded fault | Caught by |
+|---|---|
+| a list after `--missing` keeps a game lacking any one kind | `missing_names_a_list_of_kinds_none_present_or_a_description` |
+| `plan` and `run` as data drop the games named by hand | `a_window_asks_the_same_choice_plan_and_run_as_data` |
+| the Favourites section asks for every game | `Each_section_asks_the_command_for_its_choice_rather_than_filtering_here` |
+| the status sheet opens over an open Scraper | `Mistress_s_scraper_lists_plans_…`, `The_pad_menu_and_the_scraping_tab_reopen_the_window_during_a_run` |
+| the frame's plan floor at 0 | LunaP's `A_host_sized_to_its_content_…(Desktop)`, `ScraperPlan` at both sizes |
+
+### 9.6 Left
+
+- Region, language and threads are not options of the window; the scraper's settings in Preferences hold them.
+- Listing a large library looks up every kind's source of every game (as `scrape ls` does) and rescans the ROM folder
+  for each section; it runs off the interface thread. The plan is made on the interface thread when Apply is pressed.
+- Preferences' Scraping tab still offers its own scope and *Scrape…*: §2 gathers the choices into the tool but does not
+  say to remove them there, so that is put to the tester.
+
+
+## 10. T6 as built: the Library Manager window (2026-11-01)
+
+### 10.1 The tool library and its host
+
+- **`EmuSen.Tools.Library`** references LunaP and Galaxia only (`LeafAssemblyTests`): `LibraryPane` (a
+  `ManagerLayout<LibraryRow>`), `LibraryRow` (one finding of one file), and `LibraryFindings`, which turns the library
+  tool's events and the host's records into rows, marks, the plan and the saved list, free of any control.
+- **One owner of the job's words.** `ToolWords` (the library tool's refusals and reasons in a player's words) and
+  `ToolEvents` (how an event's field is read) moved from `EmuSen.Tools.Packages` to Galaxia's `EmuSen.Galaxia.Native`,
+  beside `LibraryToolJob`, since two tools now read the same jobs; Packages and Mistress's `CompressedDiscsWords` read
+  them there and nothing else changed.
+- **`LibraryWindow`** is the third host on `ToolPaneWindow` (§9.3), and writes no hint or focus route.
+- **Placement** (§1b): *Settings → Library Manager…* on the desktop, and *Library Manager* on the pad menu's Library
+  page, beside Packages; the page holds at most six rows (Start Console, Collections, Scrape Games, Packages, Library
+  Manager, Theme Settings), inside the nine the fit audit checks. The menus say *Library Manager* rather than §6's
+  *Library*, since the pad menu's page is already *Library* and the desktop's View menu has *Game Library*; the
+  question is put to the tester (§10.6).
+
+### 10.2 Where each finding comes from
+
+- **The same dump**: `rom dups` through the library tool's job (§7.4). Members a package claims (the `package` of a
+  group's member) are one game: they are counted once, and a group left with fewer than two games is not shown.
+- **The same game in another dump**: ScreenScraper's game id, for scraped files only, read from the host's records.
+  Two files are one dump when one package claims both, else when `rom dups` grouped them, else when ScreenScraper was
+  asked by the same MD5 and size; a game id is shown only where its files are two or more dumps, so a headered and a
+  plain copy, whose raw MD5s differ, are not shown again here. Files outside the library, or no longer there, are left
+  out. Galaxia's claim index (`GamePackages.Index`) names a file's package.
+- **Broken or suspect**: `rom check -r` over the whole library (§7.3: size, sheet, archive, CHD), each failed check by
+  name and words. The header checksums are T3's: `LibraryFindings.CheckName` already names a `header` check, and the
+  detail says "Header checksum: not checked yet", so T3 adds a check to `rom check` and the window shows it unchanged.
+- **Unrecognised**: a file ScreenScraper answered `Unknown`, shown as a hint ("a hint, not a fault"), never as broken.
+- **The records** are an interface the tool defines, `ILibraryRecords` (the hidden games, hide or show one, the
+  scraped files), which a host lends. Mistress lends games.db's `hidden` edit (`GameMetadata.Hidden`, the field its
+  game menu's *Hide* already sets) and the scraper's answers (`OutcomesByPath`, `FoundByPath`). Without a lend the
+  window lists the two `rom` findings and says that hiding and ScreenScraper's findings need games.db. Two other forms
+  were weighed: reaching games.db and media.db from the tool library would have needed Crystal.Client or a second
+  binding of `emusen_library.h`, breaking the leaf rule; a `scrape`/`games` command answering ids and the hidden flag
+  as data would serve the standalone launcher too, and is put to the tester (§10.6).
+
+### 10.3 What the window does
+
+- **Reading**: on opening, `rom check -r ""` and then `rom dups`, followed in the apply bar's progress line ("Checking
+  each file: n of m", "Comparing dumps: n of m"); *Stop* asks the job to stop, the findings read so far stay, no dump
+  group is given for a stopped comparison (§7.4), and the window says so. *Check Again* (Select) reads again.
+- **Sections**: All, Same Dump, Same Game, Broken or Suspect, Unrecognised, Hidden. **Columns**: Game, Console (the
+  system's id as the tool gives it), Finding, Group (*Dump n*, *Game n*), Size, State; the big screen shows Game and
+  Finding. A file found twice (a duplicate that is also broken) has a row for each finding.
+- **Hide**: a row is offered *hide*, or *show again* where it is hidden; X or the *Hide* action marks it, Apply shows
+  the plan by file name, ending "Only games.db changes: no file in the library is written, moved or removed", and only
+  confirming writes the edit. Marks on two rows of one file are one change.
+- **Save List…** writes every finding as text: a heading per finding, a paragraph per group, one path per line with
+  the ScreenScraper id, the package or the failed checks after a tab, so the list greps and pipes as `rom dups` does.
+  The desktop asks where with the platform's save picker; the big screen, which has no picker a pad drives, writes
+  `Library <date time>.txt` under EmuSen's Logs folder and says where. A path inside the library is refused.
+- **Show in File Manager** opens the folder holding the chosen file through Avalonia's launcher (the folder, not the
+  file, which the system would open in an emulator).
+- **Nothing writes the library.** No Move to Trash (T7). The only writes are games.db's edit and the saved list.
+
+### 10.4 Tests and seeded faults, measured 2026-11-01
+
+- `LibraryWindowTests` (7): through real jobs of the platform library on a synthetic library (a SNES cartridge plain
+  and with a copier header, an empty cartridge, two NES dumps of one game, a cue sheet naming a missing track) with
+  scripted records, the same dump found by `rom dups`, the same game by ScreenScraper's id with the copier pair not
+  shown again, both broken files by their checks, the unrecognised sheet as a hint, a file outside the library and one
+  gone left out; a row hidden by X and Start and shown again from the Hidden section, only after the plan; the list saved
+  outside the library and refused inside it; and the library byte for byte as it was. `LibraryFindings` alone: a
+  package and its files one game in both tiers. With scripted jobs: no marks without records and nothing read without
+  the platform library; a stopped read keeping its findings and comparing nothing; the pad marking, planning, opening
+  the detail, stepping sections and reading again, and *Show in File Manager* opening the file's folder; the desktop
+  window clean under the fit audit at 1280×800 and 1920×1200. `LeafAssemblyTests` holds the library to LunaP and
+  Galaxia; `PadMenuTests` the Library page's rows and its *Library Manager* row opening the window.
+- `WindowFitAuditTests`: `Library`, `LibraryDetail`, `LibraryPlan` and `LibraryRunning` framed over a running game at
+  both sizes, clean at the first audit, and recorded (`EmuSen_InterfaceSpec.md` §6.3.15).
+- Found by these tests and fixed: `rom dups` reports a file it cannot read as `failed`, which the window first took as
+  a second *broken* row of the same file (the real-jobs test). Also corrected here, carried from §9: `PadMenuTests`
+  still expected the pad menu's *Scrape Games…* to open Preferences.
+
+| Seeded fault | Caught by |
+|---|---|
+| a package's files counted apart in a dump group | `A_package_and_the_files_it_claims_are_one_game_in_both_tiers` |
+| the same game ignoring `rom dups`' groups, so a headered pair shows in both tiers | `Library_finds_both_tiers_…` |
+| *hide* offered with no records lent | `Without_records_nothing_is_offered_…` |
+| *show again* written as *hide* | `Library_finds_both_tiers_…` |
+| the list saved inside the library | `Library_finds_both_tiers_…` |
+| a comparison's unreadable file taken as broken | `Library_finds_both_tiers_…` |
+
+### 10.5 Left
+
+- The two reads each take every byte of the library (§7.6); a check and a comparison in one pass of the tool would
+  halve it, if a real library proves slow.
+- The Console column shows the system's id (`snes`, `psx`), since the `rom` events carry no console name.
+
+### 10.6 Questions for the tester
+
+- The menus' name: *Library Manager*, or §6's *Library* (which repeats the pad menu's page).
+- A records surface for the standalone launcher: a command answering the scraped ids and the hidden flag as data, so
+  `emusen-tools library` can show the second tier and hide without Mistress.

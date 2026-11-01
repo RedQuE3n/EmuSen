@@ -229,8 +229,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Server.Member = ("padplayer", "padsecret");
             MainWindow window = Open(bigScreen: true);
             var pad = new PadDriver(window);
-            pad.Start();
-            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scrape Games...", exact: true);
+            // Scrape Games opens the Scraper since 2026-11-01; the account stays on Preferences' Scraping tab, opened as Settings opens it.
+            typeof(MainWindow).GetMethod("ShowPreferencesAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, [PreferencesWindow.ScrapingTab]);
+            Pump(100);
             var prefs = Assert.IsType<PreferencesWindow>(Sheets(window).Current);
             Control sheet = RootOf(prefs);
             window.UpdateLayout();

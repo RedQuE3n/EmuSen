@@ -32,6 +32,20 @@ namespace EmuSen.Mistress.Views
 
         public NativeScraping? ScrapeNativeService => _native;
 
+        // The big picture theme and its choices as last shown, read by the shells' scrape --kinds theme on their own thread.
+        private volatile Tuple<string, BigPicture.Theme.ThemeChoices>? _scrapeTheme;
+
+        // The kinds the active theme draws for an ES-DE system; null where none is chosen or it has no view.
+        private IReadOnlyList<string>? ThemeKindsFor(string esdeSystem)
+        {
+            if (_scrapeTheme is not { } t) return null;
+            string full = RuntimeCatalog.Shelves.FirstOrDefault(s => s.EsdeSystem == esdeSystem)?.EsdeFullName ?? esdeSystem;
+            return BigPicture.Theme.ThemeMediaKinds.For(t.Item1, t.Item2, esdeSystem, full);
+        }
+
+        private Tuple<string, BigPicture.Theme.ThemeChoices>? ThemeNow() =>
+            _appSettings.BigPictureTheme is { Length: > 0 } dir ? Tuple.Create(dir, ThemeSettingsWindow.ChoicesFor(_appSettings, dir)) : null;
+
         private bool DeveloperFromFiles => DeveloperSource == (Func<DeveloperCredentials?>)DeveloperCredentials.Load;
 
         private byte[]? NativeEmbedded() => DeveloperFromFiles ? DeveloperCredentials.EmbeddedBlob() : DeveloperSource() is { } d ? DeveloperCredentials.Encode(d) : null;
@@ -53,6 +67,8 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded());
+                _scrapeTheme ??= ThemeNow();
+                ScrapingLend.Lend(_native.Service, _records.Library!, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
                 return true;
             }
             catch (MediaServiceException ex)
@@ -67,7 +83,7 @@ namespace EmuSen.Mistress.Views
         private bool StartNative(ScrapeScope scope, bool resume, ScrapedGame? chosen)
         {
             NativeScraping native = _native!;
-            var games = resume ? [] : ScopeGames(scope).Select(g => (g.FullPath, SystemOf(g)!)).ToList();
+            var games = resume ? [] : ChosenGames(scope);
             if (!resume && scope.Game is not null) _fetcher?.Forget(scope.Game);
             var priority = scope.Game is not null ? ScrapePriority.Shown : scope.Shelf is not null ? ScrapePriority.Console : ScrapePriority.Library;
             long queued;

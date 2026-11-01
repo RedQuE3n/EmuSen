@@ -308,7 +308,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_scraping_tab_offers_each_new_kind_off_the_criteria_and_refresh_and_saves_them() => OnUi(() =>
+        public Task The_scraping_tab_offers_each_new_kind_off_and_refresh_and_saves_them() => OnUi(() =>
         {
             MainWindow window = Open();
             var prefs = new PreferencesWindow(SettingsOf(window), window);
@@ -319,38 +319,31 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             string[] kinds = ["ScrapeBackCoversSwitch", "Scrape3DBoxesSwitch", "ScrapePhysicalMediaSwitch", "ScrapeFanArtSwitch", "ScrapeManualsSwitch", "ScrapeVideosSwitch", "ScrapeGameNamesSwitch", "ScrapeRefreshSwitch"];
             foreach (string name in kinds) Assert.False(Named<LunaSwitch>(prefs, name).IsChecked, name);
-            Assert.Equal("Games with no cover", Named<Dropdown>(prefs, "ScrapeCriteriaDropdown").SelectedItem);
 
             foreach (string name in kinds) Named<LunaSwitch>(prefs, name).IsChecked = true;
-            Named<Dropdown>(prefs, "ScrapeCriteriaDropdown").SelectedItem = "Favourite games";
             Pump(100);
             AppSettings saved = AppSettings.Load();
             Assert.True(saved.ScrapeBackCovers && saved.Scrape3DBoxes && saved.ScrapePhysicalMedia && saved.ScrapeFanArt && saved.ScrapeManuals && saved.ScrapeVideos && saved.ScrapeGameNames && saved.ScrapeRefresh);
-            Assert.Equal("favorites", saved.ScrapeCriteria);
             Assert.Empty(Server.Asked);
         });
 
         [Fact]
-        public Task The_tab_s_criteria_choose_what_Scrape_takes_and_Refresh_reaches_Scrape_This_Game() => OnUi(() =>
+        public Task The_tab_s_Refresh_reaches_Scrape_This_Game() => OnUi(() =>
         {
-            string liked = Game("Liked (USA)", 1), other = Game("Other (USA)", 3);
+            string liked = Game("Liked (USA)", 1);
             Server.Games.Add(new FakeGame(1, "Liked", Md5(liked)));
-            Server.Games.Add(new FakeGame(2, "Other", Md5(other)));
             MainWindow window = Open();
             Pump(200);
-            RecordsOf(window).ToggleFavourite(liked);
             var prefs = new PreferencesWindow(SettingsOf(window), window);
             Windows.Add(prefs);
             prefs.Show();
             prefs.ShowTab(PreferencesWindow.ScrapingTab);
             Pump(100);
-            Named<Dropdown>(prefs, "ScrapeCriteriaDropdown").SelectedItem = "Favourite games";
-            Click(Named<Button>(prefs, "ScrapeStartButton"));
+            Scrape(window, ScrapeScope.ThisGame(liked));
             RunEnds(window);
-            Assert.Equal(1, window.Progress!.Total);
             Assert.Equal(Md5(liked), FakeScreenScraper.Param(Server.JeuInfos.Single(), "md5"));
 
-            // Scrape This Game follows "Refresh what is kept" too, as ES-DE's single-game scraper follows its overwrite setting.
+            // Scrape This Game follows "Refresh what is kept", as ES-DE's single-game scraper follows its overwrite setting.
             int before = Server.JeuInfos.Count();
             Scrape(window, ScrapeScope.ThisGame(liked));
             RunEnds(window);

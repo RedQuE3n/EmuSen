@@ -177,7 +177,7 @@ namespace EmuSen.Mistress.Views
 
         private static string? SystemOf(RomEntry entry) => EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
 
-        // The games a scope names, from the library as last scanned; a wide run keeps those its criteria name (§38).
+        // The games a scope names for the managed scraper and for one game; the native scraper's wide runs are chosen by the scrape module (ChosenGames).
         private List<RomEntry> ScopeGames(ScrapeScope scope)
         {
             IEnumerable<RomEntry> games = scope.Game is string one
@@ -207,9 +207,9 @@ namespace EmuSen.Mistress.Views
         // The confirm step's numbers: a bound of one lookup and one request a kind, and what §38's offer rates expect of the kinds turned on.
         public ScrapePlan Plan(ScrapeScope scope)
         {
-            List<RomEntry> games = ScopeGames(scope);
             if (ScrapeNative && OpenNative())
-                return _native!.Plan(games.Select(g => g.FullPath), scope.Game is not null, scope.Refresh, _scrapeChoices.Kinds(), _appSettings.Scraping, _appSettings.OpenEmuFallback);
+                return _native!.Plan(ChosenGames(scope).Select(g => g.Path), scope.Game is not null, scope.Refresh, _scrapeChoices.Kinds(), _appSettings.Scraping, _appSettings.OpenEmuFallback);
+            List<RomEntry> games = ScopeGames(scope);
             string? why = ScreenScraperUnusable();
             int notAsked = scope.Game is not null ? games.Count : games.Count(g => !_scrapeOutcomes.ContainsKey(g.FullPath));
             var kinds = _scrapeChoices.Kinds().ToList();
@@ -336,6 +336,11 @@ namespace EmuSen.Mistress.Views
         public void ShowScrapeStatus()
         {
             if (_scrapeClosed) return;
+            if (_scraperWindow is { } scraper)
+            {
+                SheetLayer.Activate(scraper);
+                return;
+            }
             if (_scrapeStatus is { } open)
             {
                 open.Refresh();

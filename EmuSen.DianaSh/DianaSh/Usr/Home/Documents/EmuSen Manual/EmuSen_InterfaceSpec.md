@@ -543,7 +543,25 @@ does not change with the locale (C, C.UTF-8, en_US.UTF-8). No font or text packa
 two runs, so which part of the host's text stack moved is not established. Nothing is cut and the fit audit passes in
 both, so the two recordings were taken again as the machine now lays the line out.
 
-#### 6.3.14 The Cores window (2026-10-31)
+#### 6.3.14 The Scraper window (2026-11-01)
+
+The Scraper (`EmuSen_LibraryTools.md` §9) adds four cases, opened over a running game with a scripted command of three
+games: `Scraper` (the listing, the long-named disc chosen), `ScraperDetail` (its detail page, opened by A), `ScraperPlan`
+(two games marked and the plan open) and `ScraperRunning` (the run followed, one of two done). Their eight recordings are
+new, and no other recording changed. The first audit found two faults, both fixed before recording: the plan's words
+in a scroller 38 units high at 1280 by 800, a sheet sized to its content having given the plan only the three rows'
+height (the frame's plan floor, LunaP §203.7), and a progress line cut with an ellipsis where it named the game being
+asked, which the line no longer does.
+
+#### 6.3.15 The Library Manager window (2026-11-01)
+
+The Library Manager (`EmuSen_LibraryTools.md` §10) adds four cases, opened over a running game from the pad menu's
+Library page with scripted reads (`rom check` and `rom dups`) and scripted records of seven findings: `Library` (the
+findings, the long-named disc chosen), `LibraryDetail` (its detail page, opened by A), `LibraryPlan` (two files marked
+to be hidden and the plan open) and `LibraryRunning` (the check read part way, its progress line shown). The fit audit
+found nothing in any of the eight; their recordings are new, and no other recording changed.
+
+#### 6.3.16 The Cores window (2026-10-31)
 
 Cores (`EmuSen_Cores.md` §2) adds five cases, each opened over a running game from Settings with a scripted listing of
 the core tool and a runtime of the test's own: `Cores` (the list in the big screen's form), `CoresDetail` (a core's

@@ -46,6 +46,8 @@ emusen-patch = { path = "../patch" }
 emusen-library-module = { path = "../emusen-library-module" }
 # emusen.cores, the cores command over the same service (EmuSen_Cores.md §8).
 emusen-cores-module = { path = "../emusen-cores-module" }
+# emusen.scrape, the scraper as `scrape` (EmuSen_LibraryTools.md §8).
+emusen-scrape-module = { path = "../emusen-scrape-module" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).
 emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
@@ -59,3 +61,6 @@ emusen-dotnet = { path = "../dotnet" }
 # An installed core's NOTICE, written by the cores test (tests/library_tool.rs).
 [dev-dependencies]
 emusen-core-entry = { path = "../core-entry" }
+# A certificate made at test time for the recorded-response server the scraping test answers from.
+rcgen = { version = "=0.14.10", default-features = false, features = ["ring", "pem"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

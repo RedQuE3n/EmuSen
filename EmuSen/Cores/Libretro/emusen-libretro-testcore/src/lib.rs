@@ -263,7 +263,13 @@ pub unsafe extern "C" fn retro_get_system_info(info: *mut sys::retro_system_info
 fn av_info(core: &Core) -> sys::retro_system_av_info {
     let (num, den) = core.rate;
     sys::retro_system_av_info {
-        geometry: sys::retro_game_geometry { base_width: core.drawn().0, base_height: core.drawn().1, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect_ratio: 4.0 / 3.0 },
+        geometry: sys::retro_game_geometry {
+            base_width: core.drawn().0,
+            base_height: core.drawn().1,
+            max_width: if core.options.grow { core.drawn().0 } else { MAX_WIDTH },
+            max_height: if core.options.grow { core.drawn().1 } else { MAX_HEIGHT },
+            aspect_ratio: 4.0 / 3.0,
+        },
         timing: sys::retro_system_timing { fps: core.fps_num as f64, sample_rate: num as f64 / den as f64 },
     }
 }
@@ -572,6 +578,10 @@ pub extern "C" fn retro_run() {
 
     let mut geometry = None;
     let mut av = None;
+    if options.grow && frame == 3 {
+        core.options.scale = 2;
+    }
+    let options = core.options.clone();
     if options.geometry_change && frame == 60 {
         core.width = 256;
         core.height = 224;

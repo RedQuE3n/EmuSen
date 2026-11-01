@@ -580,6 +580,10 @@ impl Gpu {
                 let slot = (self.ring.as_ref().unwrap().count % self.ring.as_ref().unwrap().slots.len() as u64) as usize;
                 match self.submit(handed, w, h, Target::Slot(slot), true) {
                     Ok(()) => {
+                        // A newer frame is in the ring, so a frame held for a larger ring is never shown after it.
+                        if let Some(held) = self.held.as_mut() {
+                            held.pending = false;
+                        }
                         self.unread = Some((handed, w, h));
                         return Shown::Ring;
                     }

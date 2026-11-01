@@ -128,6 +128,86 @@ namespace EmuSen.WiseMan.Serenity
             _output.WriteLine("12 ring frames given back with the screen off the device, none stalled");
         }
 
+        // A core that draws past the maxima it declared raises MACHINE_INFO, and the session lends a larger ring there, whose pictures draw as the frames read back - see EmuSen_Backend.md §33.2.
+        [Fact]
+        public void A_ring_is_lent_again_at_machine_info_when_the_core_draws_past_its_maxima()
+        {
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            if (device is null) { _output.WriteLine($"not run: {report}"); return; }
+            using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
+            string disc = Disc();
+            using (CrystalSession first = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true }))
+            {
+                first.SetSetting("tc_hw", "vulkan", game: false);
+                first.SetSetting("tc_geometry", "grow", game: false);
+            }
+            using var none = new SlangChain(device, SlangPreset.Load(BuiltInPreset.Write(BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
+            using var uploaded = new SlangChain(device, SlangPreset.Load(BuiltInPreset.Write(BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
+            using CrystalSession s = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true, Device = device.DeviceHandle, Ring = true });
+            var seen = new System.Collections.Generic.List<string>();
+            nint smaller = 0, later = 0;
+            for (int n = 0; n < 10; n++)
+            {
+                CrystalFrameInfo f = Frame(s);
+                seen.Add($"{f.width}x{f.height} ring {f.picture_in_ring}");
+                if (f.picture_in_ring == 0) continue;
+                nint handle = s.PictureRing();
+                if (f.width == 320) smaller = smaller == 0 ? handle : smaller;
+                else later = handle;
+                byte[] picture = new byte[s.PictureBytes];
+                s.CopyPicture(picture);
+                none.AdvanceRing(SlangRing.Borrow(device, handle), (int)f.ring_slot, f.ring_value, f.width, f.height);
+                uploaded.Advance(picture, f.width, f.height, 1);
+                byte[] got = none.Render(f.width, f.height), want = uploaded.Render(f.width, f.height);
+                Assert.True(got.AsSpan().SequenceEqual(want), $"frame {n} at {f.width}x{f.height}, slot {f.ring_slot} value {f.ring_value}: the ring's picture differs from the read-back one");
+            }
+            _output.WriteLine(string.Join(", ", seen));
+            Assert.Equal(new[] { "320x240 ring 1", "320x240 ring 1", "640x480 ring 0" }.Concat(Enumerable.Repeat("640x480 ring 1", 7)), seen);
+            Assert.True(smaller != 0 && later != 0 && smaller != later, "a second, larger ring was lent at MACHINE_INFO");
+        }
+
+        // A core that dies with a ring lent ends the session in words within its deadline, and the next ringed session on the same device runs - see EmuSen_Backend.md §33.2.
+        [Fact]
+        public void A_core_that_crashes_with_a_ring_lent_ends_in_words_and_the_device_runs_the_next_ringed_session()
+        {
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            if (device is null) { _output.WriteLine($"not run: {report}"); return; }
+            using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
+            string disc = Disc();
+            using (CrystalSession first = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true }))
+            {
+                first.SetSetting("tc_hw", "vulkan", game: false);
+                first.SetSetting("tc_fault", "segv", game: false);
+            }
+            using var release = new SlangRingRelease();
+            CrystalException? ended = null;
+            using (CrystalSession s = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true, Device = device.DeviceHandle, Ring = true }))
+            {
+                for (int n = 0; n < 6 && ended is null; n++)
+                {
+                    var frame = System.Threading.Tasks.Task.Run(() => Frame(s));
+                    try
+                    {
+                        Assert.True(frame.Wait(15_000), $"frame {n} did not return in 15 s");
+                        CrystalFrameInfo f = frame.Result;
+                        if (f.picture_in_ring == 1) release.Release(new RingPicture(SlangRing.Borrow(device, s.PictureRing()), (int)f.ring_slot, f.ring_value, (int)f.fields, (int)f.field), f.width, f.height);
+                    }
+                    catch (AggregateException e) when (e.InnerException is CrystalException c) { ended = c; }
+                }
+            }
+            _output.WriteLine($"ended: {ended?.Message}");
+            Assert.NotNull(ended);
+            using (CrystalSession fault = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true }))
+                fault.SetSetting("tc_fault", "none", game: false);
+            using CrystalSession next = runtime.Open(new CrystalOpen { Path = disc, Engine = _entry.Found.EngineName, NoBattery = true, Device = device.DeviceHandle, Ring = true });
+            for (int n = 0; n < 4; n++)
+            {
+                CrystalFrameInfo f = Frame(next);
+                Assert.Equal(1u, f.picture_in_ring);
+                release.Release(new RingPicture(SlangRing.Borrow(device, next.PictureRing()), (int)f.ring_slot, f.ring_value, (int)f.fields, (int)f.field), f.width, f.height);
+            }
+        }
+
         // The frame advanced is taken too, so the core is never left waiting on a slot when the session closes.
         private static void TakeFrom(SlangChain chain, SlangVulkan device, CrystalSession s, CrystalFrameInfo f)
         {

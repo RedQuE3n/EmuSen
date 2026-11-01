@@ -1311,6 +1311,21 @@ from a running C# session with `console_picture` on: five sections in order, thr
 another key, caught by the window's test. The first recording drew disabled controls and the specification's palette
 rule refused their `#FFFFFF33` and `#FFFFFF66`, which is why a locked row shows its note instead.
 
+**The ring lent again at `MACHINE_INFO`, and a crash with a ring lent** (`ApiRingTests`, the RX 6800, the C#
+implementation). The test core's `tc_geometry` gained `grow`: maxima declared at the native size and, from frame 3, a
+picture twice as large with nothing said, the case of a core whose real resolution is known only once it draws.
+*Found:* the frame drawn past the ring is held and read back and `MACHINE_INFO` raised, and the session lends a
+640 × 480 ring; but on the next frame the host copied the held frame into the new ring after the newer one, and that
+older frame's record replaced the newer one's, so the screen would have drawn the frame before the one played
+(measured 2026-11-01: frame 3's ring picture differed from its read-back). Fixed in `Gpu::frame`: a frame put in the
+ring ends any hold, so a held frame is shown only while no newer one is. Now every frame of
+`A_ring_is_lent_again_at_machine_info_when_the_core_draws_past_its_maxima` matches: two 320 × 240 frames in the first
+ring, the held 640 × 480 frame read back, seven in the second ring, the ring's handle changed. *A crash:*
+`A_core_that_crashes_with_a_ring_lent_ends_in_words_and_the_device_runs_the_next_ringed_session`: with `tc_fault=segv`
+the frame call ends in a refusal in words within its deadline, and the next ringed session on the same device runs its
+frames in a ring, so the C# implementation's inability to raise the dead core's `ready` (§33.2) leaves the device
+usable.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

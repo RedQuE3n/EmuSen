@@ -1979,6 +1979,39 @@ platform library over it (frontend API 1.6), on a fresh home with PCEE2 installe
 - **Approve**, on the same home: the question again, then A. The session logged `[picture] Sony - PlayStation 2
   (PCEE2): read back`, and `cores.approved` was written.
 
+## 10u. A library of links: the image's resolved target granted (2026-11-01)
+
+**The defect.** The tester's real-window sandbox of 2026-11-01 kept its library as a folder of symbolic links to discs
+stored elsewhere. With PCEE2 approved, Jak and Daxter would not open: "Sony - PlayStation 2 (PCEE2) refused the game:
+…/Roms/ps2/Jak and Daxter … (Rev 1).iso: Permission denied (os error 13)" (Mistress's error log, 17:57:24). Sapphire
+opened the same link.
+
+**The cause.** The proxy's Landlock policy (§3.3) granted the image's folder as the path names it, and Landlock checks
+the path a link resolves to (§10n). So a disc linked into the library is refused where it lives. A library folder that
+is itself a link was already reached, since the rule is made on the folder it resolves to. Only a linked file was
+missed.
+
+**The fix**, in the proxy's `spawn` (`image_reads`). The image's folder is granted as before. Where the image resolves
+outside that folder, its resolved file is granted read-only as well, and nothing beside it. An image that names files
+beside it (a cue's tracks, a playlist's discs: `cue`, `gdi`, `m3u`, `ccd`, `toc`) is given its resolved folder instead,
+since its tracks lie beside its target.
+
+Left as it is: a disc inserted after the machine starts (`media` insert) reaches a runner whose policy is fixed. A linked
+second disc that resolves outside the first's grants is refused there. Not yet met in a game.
+
+**Tests.** `image_tests::a_linked_image_grants_its_resolved_file_and_a_linked_cue_its_resolved_folder`, in the proxy,
+written first and failing: a linked ISO is granted its file and not the folder of discs it sits in; a linked cue is
+granted its resolved folder; a plain file is granted its library folder only.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught by that test:
+- granting the resolved file's folder (wider);
+- granting nothing more.
+
+**In the real window (2026-11-01).** The tester's library of links (`~/.cache/emusen/realpath/Roms`, Jak and Daxter a
+link to a disc elsewhere) was used on a fresh home, with this proxy in the installation and the entry. A on the game
+asked for PCEE2's approval (§10t), and Approve opened it on PCEE2: `[picture] Sony - PlayStation 2 (PCEE2): read back`,
+with no refusal in the error log.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

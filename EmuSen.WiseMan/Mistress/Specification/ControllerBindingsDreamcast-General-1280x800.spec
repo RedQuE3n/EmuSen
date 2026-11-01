@@ -39,8 +39,8 @@ tree
           24 TextBlock at=936,162,102,28 box=102,28 by=clip caps=16.0989 drawn face="Barlow Condensed" heard=PLAYSTATION layout=101.13,27.6 limit=924,152,126,48 owner=23 paints=#86868AFF role=text size=23 text=PLAYSTATION
         25 TabItem at=1050,152,139,48 by=clip drawn focus heard="PLAYSTATION 2" limit=78,152,1124,504 paints=#86868AFF role=tabitem sideways text="PlayStation 2"
           26 TextBlock at=1062,162,115,28 box=115,28 by=clip caps=16.0989 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=114.98,27.6 limit=1050,152,139,48 owner=25 paints=#86868AFF role=text size=23 text="PLAYSTATION 2"
-        27 ScrollViewer at=90,202,1100,454 by=clip fades=b limit=78,202,1124,454 overflow=641 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=90,202,1100,454
-          28 StackPanel at=90,210,1100,1087 by=scroll in=27 limit=90,202,1100,454 paints=#55555AFF,#6E6E6EFF,#86868AFF,#9C9CA0FF role=none seen=90,210,1100,446
+        27 ScrollViewer at=90,202,1100,454 by=clip fades=b limit=78,202,1124,454 overflow=691 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=90,202,1100,454
+          28 StackPanel at=90,210,1100,1137 by=scroll in=27 limit=90,202,1100,454 paints=#55555AFF,#6E6E6EFF,#86868AFF,#9C9CA0FF role=none seen=90,210,1100,446
             29 Grid at=90,210,1100,282 by=scroll in=27 limit=90,202,1100,454 name=GamepadSection role=none
               30 StackPanel at=90,210,516,282 by=scroll in=27 limit=90,202,1100,454 role=none
                 31 TextBlock at=90,210,516,29 box=516,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Gamepad in=27 layout=76.39,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text size=24 text=Gamepad
@@ -61,15 +61,15 @@ tree
             46 HintText at=90,560,1100,24 box=1100,24 by=scroll caps=13.999 drawn face="Barlow Condensed" heard="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press." in=27 layout=858.22,24 limit=90,202,1100,454 paints=#86868AFF role=text size=20 text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
             47 Grid at=90,594,1100,29 by=scroll in=27 limit=90,202,1100,454 name=HotkeyHeaderRow role=none
               48 TextBlock at=90,594,133,29 box=133,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Action in=27 layout=50.93,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text size=24 text=Action
-              49 TextBlock at=235,594,78,29 box=78,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Keyboard in=27 layout=76.39,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text size=24 text=Keyboard
-            50 StackPanel at=90,629,1100,444 by=scroll in=27 limit=90,202,1100,454 name=HotkeysPanel paints=#55555AFF,#9C9CA0FF role=none seen=90,629,1100,27
+              49 TextBlock at=235,594,90,29 box=90,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Keyboard in=27 layout=76.39,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text size=24 text=Keyboard
+            50 StackPanel at=90,629,1100,494 by=scroll in=27 limit=90,202,1100,454 name=HotkeysPanel paints=#55555AFF,#9C9CA0FF role=none seen=90,629,1100,27
               51 Grid at=90,629,1100,44 by=scroll in=27 limit=90,202,1100,454 role=none seen=90,629,1100,27
                 52 TextBlock at=90,637,133,29 box=133,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="Fast Forward" in=27 layout=105.98,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text seen=90,637,133,19 size=24 text="Fast Forward"
-                53 TextBlock at=235,637,78,29 box=78,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Tab in=27 layout=29.71,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text seen=235,637,78,19 size=24 text=Tab
-                54 Button at=325,629,138,44 by=scroll drawn focus heard="REBIND KEY" in=27 limit=90,202,1100,454 op paints=#55555AFF,#9C9CA0FF role=button seen=325,629,138,27 text="Rebind Key"
-                  55 TextBlock at=342,635,104,32 box=104,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="REBIND KEY" in=27 layout=103.97,31.2 limit=325,629,138,44 owner=54 paints=#9C9CA0FF role=text seen=342,635,104,21 size=26 text="REBIND KEY"
-                56 Button at=480,629,90,44 by=scroll drawn focus heard=CLEAR in=27 limit=90,202,1100,454 op paints=#55555AFF,#9C9CA0FF role=button seen=480,629,90,27 text=Clear
-                  57 TextBlock at=497,635,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLEAR in=27 layout=55.85,31.2 limit=480,629,90,44 owner=56 paints=#9C9CA0FF role=text seen=497,635,56,21 size=26 text=CLEAR
+                53 TextBlock at=235,637,90,29 box=90,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard=Tab in=27 layout=29.71,28.8 limit=90,202,1100,454 paints=#9C9CA0FF role=text seen=235,637,90,19 size=24 text=Tab
+                54 Button at=337,629,138,44 by=scroll drawn focus heard="REBIND KEY" in=27 limit=90,202,1100,454 op paints=#55555AFF,#9C9CA0FF role=button seen=337,629,138,27 text="Rebind Key"
+                  55 TextBlock at=354,635,104,32 box=104,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="REBIND KEY" in=27 layout=103.97,31.2 limit=337,629,138,44 owner=54 paints=#9C9CA0FF role=text seen=354,635,104,21 size=26 text="REBIND KEY"
+                56 Button at=492,629,90,44 by=scroll drawn focus heard=CLEAR in=27 limit=90,202,1100,454 op paints=#55555AFF,#9C9CA0FF role=button seen=492,629,90,27 text=Clear
+                  57 TextBlock at=509,635,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLEAR in=27 layout=55.85,31.2 limit=492,629,90,44 owner=56 paints=#9C9CA0FF role=text seen=509,635,56,21 size=26 text=CLEAR
 focus 3
 edge 3 up same
 edge 3 down 33

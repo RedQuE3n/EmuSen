@@ -27,6 +27,8 @@ pub struct Options {
     pub audio_buffer_max_samples: u32,
     /// The presenter's device, 0 for none.
     pub device: usize,
+    /// Since the API's 1.4: a ring asked for in place of a lend (`OPEN_RING`).
+    pub ring: bool,
 }
 
 /// A refusal in the C# engine's words, and the status the API answers it with.
@@ -139,6 +141,14 @@ pub struct Engine {
     lend_refused: bool,
     /// The current machine's lend of the device.
     pub lend: Option<crate::lend::MachineLend>,
+    /// Since the API's 1.4: whether the session asked for a ring (`OPEN_RING`), and whether a refusal was logged.
+    pub ring_wanted: bool,
+    ring_refused: bool,
+    /// The current machine's ring and the one it replaced, kept one change more (EmuSen_Backend.md §33.2).
+    pub ring: Option<crate::lend::MachineRing>,
+    ring_retired: Option<crate::lend::MachineRing>,
+    /// The last frame's picture in the ring, where it lies there.
+    pub ring_frame: Option<emusen_native::core::sys::RingFrame>,
     said: Mutex<Vec<String>>,
     fresh: bool,
     pub options: Options,
@@ -218,6 +228,11 @@ impl Engine {
             device_lender: None,
             lend_refused: false,
             lend: None,
+            ring_wanted: false,
+            ring_refused: false,
+            ring: None,
+            ring_retired: None,
+            ring_frame: None,
             said: Mutex::new(Vec::new()),
             fresh: false,
             options,
@@ -351,7 +366,7 @@ impl Engine {
     /// A lend of the device for the next machine, where the core takes one and the session was given a device; a
     /// refusal logged once a session.
     fn new_lend(&mut self) -> Option<crate::lend::MachineLend> {
-        let (lender, device) = self.device_lender.clone().filter(|_| self.claims(caps::DEVICE_PICTURE))?;
+        let (lender, device) = self.device_lender.clone().filter(|_| self.claims(caps::DEVICE_PICTURE) && !self.rings())?;
         match lender.make(device) {
             Ok((handle, lent)) => Some(crate::lend::MachineLend { lender, handle, device: lent }),
             Err(why) => {
@@ -362,6 +377,49 @@ impl Engine {
                 None
             }
         }
+    }
+
+    /// Whether the machine is lent a ring in place of a lend: the session asked, gave a device, and the core claims one.
+    fn rings(&self) -> bool {
+        self.ring_wanted && self.device_lender.is_some() && self.claims(caps::DEVICE_RING)
+    }
+
+    /// A ring at machine info's maxima lent to the machine where it rings and the one it holds is smaller, the last
+    /// kept one change more; a refusal logged once a session (EmuSen_Backend.md §33.2).
+    fn lend_ring(&mut self) {
+        if !self.rings() {
+            return;
+        }
+        let (w, h) = (self.mi.max_width.max(64), self.mi.max_height.max(64));
+        if self.ring.as_ref().is_some_and(|r| r.width >= w && r.height >= h) {
+            return;
+        }
+        let (Some((lender, device)), Some(m)) = (self.device_lender.clone(), self.machine.as_mut()) else { return };
+        let made = lender.make_ring(device, w, h, 3).and_then(|mut ring| {
+            ring.lender = Some(lender.clone());
+            m.ring_lend(Some(&ring.lend())).map(|()| ring).map_err(|s| m.words(s as i64))
+        });
+        match made {
+            Ok(ring) => self.ring_retired = self.ring.replace(ring),
+            Err(why) if !self.ring_refused => {
+                self.ring_refused = true;
+                crate::error_log::warning("picture", &format!("no ring is lent to the core, so its pictures are read back: {why}"));
+            }
+            Err(_) => {}
+        }
+    }
+
+    /// The frame's picture in the ring, where it lies there, its value kept for the ring's release.
+    fn take_ring_frame(&mut self) -> Result<Option<emusen_native::core::sys::RingFrame>, Refused> {
+        if self.ring.is_none() {
+            return Ok(None);
+        }
+        let m = self.machine.as_mut().expect("a machine");
+        let f = m.frame_ring().map_err(|s| Refused::fault(format!("{} could not say where its picture is in the ring: {}.", self.display_name, m.words(s as i64))))?;
+        if let (Some(f), Some(r)) = (&f, self.ring.as_mut()) {
+            r.last_value = r.last_value.max(f.value);
+        }
+        Ok(f)
     }
 
     fn create(&mut self, disc: &DiscFiles, firmware: &[(u32, Vec<u8>)], saves: &[(u32, BatterySave)], placement: &Placement, system: Option<&str>) -> Result<Built, Refused> {
@@ -534,6 +592,7 @@ impl Engine {
             self.loans.push((self.mi.drives.first().map_or(0, |d| d.drive), loan));
         }
         self.machine = Some(machine);
+        self.lend_ring();
         self.halted = None;
         if let Some(m) = self.machine.as_mut() {
             self.debug.attach(m);
@@ -645,6 +704,7 @@ impl Engine {
                         self.shape = m.frame_info().unwrap_or(self.shape);
                     }
                     self.latch.grow(self.mi.ports.len());
+                    self.lend_ring();
                     self.raw_current = false;
                     self.reroute();
                     if let Some(m) = self.machine.as_mut() {
@@ -765,6 +825,7 @@ impl Engine {
             m.present().map_err(|s| Refused::fault(format!("{name} could not present the picture: {}.", m.words(s as i64))))?;
         }
         self.picture_on_device = !self.skip_rendering && self.take_device_frame()?;
+        self.ring_frame = if self.skip_rendering { None } else { self.take_ring_frame()? };
         self.last_frame_ms = start.elapsed().as_secs_f64() * 1000.0;
         self.drain();
         if self.total_frames() % 60 == 0 {
@@ -1193,8 +1254,16 @@ impl Engine {
         {
             l.settle();
         }
+        if self.ring.is_some()
+            && let Some(m) = self.machine.as_mut()
+        {
+            let _ = m.ring_lend(None);
+        }
         self.machine = None;
         self.lend = None;
+        self.ring_frame = None;
+        self.ring_retired = None;
+        self.ring = None;
     }
 
     /// Lets go of the media and the machine.

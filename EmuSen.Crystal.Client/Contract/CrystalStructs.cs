@@ -58,6 +58,11 @@ namespace EmuSen.Crystal.Client.Contract
         public ulong halted_address;
         public uint picture_on_device;
         public uint reserved;
+        public uint picture_in_ring;
+        public uint ring_slot;
+        public ulong ring_value;
+        public uint fields;
+        public uint field;
     }
 
     // emusen_crystal_raw_info, field for field, since 1.1.

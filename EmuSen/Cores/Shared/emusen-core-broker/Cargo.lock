@@ -219,6 +219,7 @@ dependencies = [
  "emusen-gpu",
  "emusen-libretro-sys",
  "emusen-native",
+ "emusen-ps2-card",
  "emusen-systems",
  "libc",
  "libloading 0.8.9",

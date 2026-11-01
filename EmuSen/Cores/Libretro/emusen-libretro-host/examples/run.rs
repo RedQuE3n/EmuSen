@@ -1,6 +1,8 @@
-// `run <entry's libretro host> <image|--loop-elf OUT> <frames> [key=value]...`: one machine through the Rust host, its
+// `run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT> <frames> [key=value]...`: one machine through the Rust host, its
 // image given by path, run for a number of frames, and what it said (EmuSen_LibretroHost.md §9). With EMUSEN_RUN_RING=1
 // its pictures go on a Serenity ring; EMUSEN_RUN_PNG=DIR:F,F,... keeps the ring's picture at those frames (§10f).
+// EMUSEN_RUN_PADS=FILE presses port 0's buttons by a script; EMUSEN_RUN_FILES=N=PATH,... passes battery files and
+// writes them back at the end (§10j).
 
 use std::ffi::CString;
 use std::path::Path;
@@ -8,8 +10,9 @@ use std::path::Path;
 use emusen_core_host::library::Library;
 use emusen_core_host::machine::{Create, Machine};
 
-/// A PlayStation 2 program of one instruction, a branch to itself at 0x00100000: an ELF32 for the EE, built here.
-fn loop_elf() -> Vec<u8> {
+/// A PlayStation 2 program at 0x00100000, an ELF32 for the EE, built here: `--loop-elf` one instruction, a branch to
+/// itself; `--exit-elf` the kernel's `Exit` (syscall 4), which hands the console back to its firmware's menu, then the loop.
+fn ee_elf(code: &[u32]) -> Vec<u8> {
     let mut e = vec![0u8; 0x80];
     e[..4].copy_from_slice(b"\x7fELF");
     e[4] = 1;
@@ -29,14 +32,18 @@ fn loop_elf() -> Vec<u8> {
     put32(&mut e, 0x38, 0x80);
     put32(&mut e, 0x3C, 0x0010_0000);
     put32(&mut e, 0x40, 0x0010_0000);
-    put32(&mut e, 0x44, 8);
-    put32(&mut e, 0x48, 8);
+    put32(&mut e, 0x44, 4 * code.len() as u32);
+    put32(&mut e, 0x48, 4 * code.len() as u32);
     put32(&mut e, 0x4C, 7);
     put32(&mut e, 0x50, 0x1000);
-    e.extend_from_slice(&0x1000_FFFFu32.to_le_bytes());
-    e.extend_from_slice(&0u32.to_le_bytes());
+    for w in code {
+        e.extend_from_slice(&w.to_le_bytes());
+    }
     e
 }
+
+const LOOP: [u32; 2] = [0x1000_FFFF, 0];
+const EXIT: [u32; 4] = [0x2403_0004, 0x0000_000C, 0x1000_FFFF, 0];
 
 /// A Serenity ring of the machine's largest picture, lent to it, with the device it lives on; none unless asked for.
 fn ring_for(m: &mut Machine) -> Option<(emusen_serenity::vulkan::Device, emusen_serenity::ring::Ring)> {
@@ -55,20 +62,64 @@ fn ring_for(m: &mut Machine) -> Option<(emusen_serenity::vulkan::Device, emusen_
     Some((gpu, ring))
 }
 
+/// RetroPad's buttons by name, each its bit in the host's mask.
+const BUTTONS: [&str; 16] = ["b", "y", "select", "start", "up", "down", "left", "right", "a", "x", "l", "r", "l2", "r2", "l3", "r3"];
+
+/// The script's words for the tray, opened or closed at a frame instead of a button pressed.
+const LID: u32 = 1 << 16;
+const LID_OPEN: u32 = 1 << 17;
+
+/// A pad script: each line `FRAME BUTTON[+BUTTON...] [FRAMES]`, the buttons held from that frame for FRAMES (6 unless
+/// given), or `FRAME open` or `FRAME close`, the tray's lid; `#` begins a comment. Returned as (first frame, last
+/// frame, mask).
+fn pad_script(text: &str) -> Vec<(u64, u64, u32)> {
+    let mut out = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let bad = format!("pad script line {}: `{line}` is not FRAME BUTTON[+BUTTON...] [FRAMES]", n + 1);
+        let at: u64 = words.first().and_then(|w| w.parse().ok()).expect(&bad);
+        if let Some(lid) = words.get(1).and_then(|w| [("close", LID), ("open", LID | LID_OPEN)].into_iter().find(|l| l.0 == *w)) {
+            out.push((at, at, lid.1));
+            continue;
+        }
+        let mask = words.get(1).expect(&bad).split('+').fold(0u32, |m, b| m | 1 << BUTTONS.iter().position(|&x| x == b).expect(&bad));
+        let held: u64 = words.get(2).map_or(6, |w| w.parse().expect(&bad));
+        out.push((at, at + held.max(1) - 1, mask));
+    }
+    out
+}
+
+/// The battery files to pass and write back: (number, path, its bytes or none where the file is absent).
+fn battery_files(spec: &str) -> Vec<(u32, String, Option<Vec<u8>>)> {
+    spec.split(',').filter(|s| !s.is_empty()).map(|s| {
+        let (n, path) = s.split_once('=').unwrap_or_else(|| panic!("`{s}` is not N=PATH"));
+        (n.parse().unwrap_or_else(|_| panic!("`{n}` is not a battery file's number")), path.to_owned(), std::fs::read(path).ok())
+    }).collect()
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
-        eprintln!("usage: run <entry's libretro host> <image|--loop-elf OUT> <frames> [key=value]...");
+        eprintln!("usage: run <entry's libretro host> <image|--loop-elf OUT|--exit-elf OUT> <frames> [key=value]...");
         std::process::exit(2);
     }
-    let image_path = if args[2] == "--loop-elf" {
-        let out = &args[3];
-        std::fs::write(out, loop_elf()).unwrap();
-        out.clone()
-    } else {
-        args[2].clone()
+    let built = match args[2].as_str() {
+        "--loop-elf" => Some(ee_elf(&LOOP)),
+        "--exit-elf" => Some(ee_elf(&EXIT)),
+        _ => None,
     };
-    let rest = if args[2] == "--loop-elf" { &args[4..] } else { &args[3..] };
+    let image_path = match &built {
+        Some(bytes) => {
+            std::fs::write(&args[3], bytes).unwrap();
+            args[3].clone()
+        }
+        None => args[2].clone(),
+    };
+    let rest = if built.is_some() { &args[4..] } else { &args[3..] };
     let frames: u64 = rest.first().and_then(|f| f.parse().ok()).unwrap_or(60);
     let settings = rest.iter().skip(1).cloned().collect::<Vec<_>>().join("\n");
     let lib = Library::load(Path::new(&args[1])).unwrap_or_else(|e| panic!("{e:?}"));
@@ -78,7 +129,10 @@ fn main() {
     }
     let image = std::fs::read(&image_path).unwrap();
     let path = CString::new(std::fs::canonicalize(&image_path).unwrap().to_string_lossy().as_bytes()).unwrap();
-    let c = Create { settings: &settings, pixel_formats: 0b111, image_path: Some(&path), ..Create::new(&image) };
+    let pads = std::env::var("EMUSEN_RUN_PADS").map(|f| pad_script(&std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{f}: {e}")))).unwrap_or_default();
+    let batteries = battery_files(&std::env::var("EMUSEN_RUN_FILES").unwrap_or_default());
+    let passed: Vec<(u32, &[u8])> = batteries.iter().filter_map(|(n, _, b)| b.as_deref().map(|b| (*n, b))).collect();
+    let c = Create { settings: &settings, pixel_formats: 0b111, image_path: Some(&path), files: &passed, ..Create::new(&image) };
     let mut log = String::new();
     match Machine::create(lib, &c) {
         Err(r) => println!("refused: {} {}", r.status, r.words),
@@ -99,6 +153,13 @@ fn main() {
             for n in 0..frames {
                 if n == timed_from {
                     timed = Some(std::time::Instant::now());
+                }
+                let mask = pads.iter().filter(|p| (p.0..=p.1).contains(&n)).fold(0, |m, p| m | p.2);
+                if mask & LID != 0 {
+                    println!("lid at frame {n}: {:?}", m.media_lid(0, mask & LID_OPEN != 0));
+                }
+                if !pads.is_empty() {
+                    m.set_buttons(0, mask & 0xFFFF, 0xFFFF).unwrap();
                 }
                 let t = std::time::Instant::now();
                 if let Err(e) = m.advance() {
@@ -143,6 +204,16 @@ fn main() {
             let f = m.frame_info().ok();
             println!("frames {} in {:?}; picture {:?}; samples {samples}", m.frame_count(), start.elapsed(), f.map(|f| (f.width, f.height, f.format, f.serial)));
             println!("machine: {}", m.machine_info().unwrap_or_default());
+            for (n, path, _) in &batteries {
+                let mut bytes = Vec::new();
+                match m.battery(*n, &mut bytes) {
+                    Ok(_) if !bytes.is_empty() => {
+                        std::fs::write(path, &bytes).unwrap_or_else(|e| panic!("{path}: {e}"));
+                        println!("file {n}: {} bytes written to {path}", bytes.len());
+                    }
+                    r => println!("file {n}: nothing to write ({r:?})"),
+                }
+            }
             let _ = m.log_drain(&mut log);
         }
     }

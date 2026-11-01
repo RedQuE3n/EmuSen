@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Library
 
     // A row of a console's settings schema, its note as the stored values stand, and the row it is shown with.
     public sealed record SettingRow(string Key, string Label, string Hint, string Kind, string Default, int Min, int Max, IReadOnlyList<string> Choices,
-        IReadOnlyList<string> ChoiceLabels, string? Group, string? Note, string? ShownWithKey, string? ShownWithValue, bool HasNote = false)
+        IReadOnlyList<string> ChoiceLabels, string? Group, string? Note, string? ShownWithKey, string? ShownWithValue, bool HasNote = false, bool Locked = false)
     {
         public const string Switch = "switch", Count = "count", Choice = "choice";
     }
@@ -198,7 +198,7 @@ namespace EmuSen.Mistress.Library
                 return new SettingRow(r.GetProperty("key").GetString()!, r.GetProperty("label").GetString()!, r.GetProperty("hint").GetString()!, r.GetProperty("kind").GetString()!,
                     r.GetProperty("default").GetString()!, r.GetProperty("min").GetInt32(), r.GetProperty("max").GetInt32(), Strings(r, "choices"), Strings(r, "choice_labels"),
                     Text(r, "group"), Text(r, "note"), with.ValueKind == JsonValueKind.Object ? Text(with, "key") : null, with.ValueKind == JsonValueKind.Object ? Text(with, "value") : null,
-                    r.TryGetProperty("note", out _));
+                    r.TryGetProperty("note", out _), r.TryGetProperty("locked", out JsonElement locked) && locked.ValueKind == JsonValueKind.True);
             }).ToArray();
         }
 

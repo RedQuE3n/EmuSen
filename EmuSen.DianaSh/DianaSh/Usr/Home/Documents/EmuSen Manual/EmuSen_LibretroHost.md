@@ -1185,6 +1185,218 @@ measured against the 16.7 ms frame on the desktop and the handheld.
 **Order and cost.** 4.4(a) and 4.1 first, since every later check needs a game running in the window; then 4.4(b)–(e),
 4.2 and 4.3. Each part ends with its WiseMan tests and the blast radius, as stage 3 did.
 
+## 10h. Stage 4: the frontend, as built (2026-11-01)
+
+**A ringed frame read back on demand** (§12 question 5, decided 2026-11-01). A frame copied into the ring now takes its
+shape and a new serial in the machine's picture at once (`Picture::drawn_unread`), its bytes left where they are; the
+core's image it came from is kept as the frame's unread source (`Gpu::unread`), which stays the core's until its next
+frame. Only when `frame_copy` asks does `Machine::frame` read that image back (`Gpu::read_unread`, the read-back of
+§5.5 with no core commands in it) and take it into the picture, keeping the serial, since a read-back is not a new
+frame. The ring's own path reads nothing back. This needed `Core::frame` in `emusen-native` to take the core by mutable
+reference (EmuSen_CoreAPI.md §6.43); every core's implementation changed with it, the C declaration unchanged.
+Test: `a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does` (`tests/ring.rs`, the RX 6800),
+six frames by copy and by blit, every frame's shape and serial right before any read-back, every second frame's
+`frame_copy` (a screenshot's call) equal to the software picture, the ring's picture unchanged beside it. Seeded
+faults, each caught: the read-back never made (frame 1's screenshot differs) and a ring frame leaving the picture's
+shape as it was (frame 0's shape).
+
+**The core build's SHA-256 in every state** (header version 2, 112 bytes). The header gains the SHA-256 of the
+libretro core's build that saved it (`header.build`, bytes 80 to 112, from the library's hash of the sealed copy that
+runs). A state whose name and version match but whose build differs is refused (`FOREIGN`) in plain words naming both
+builds: "this state was saved by another build of PCEE2 2.3.1 (SHA-256 …), and the build installed is …; a libretro
+core's states load only into the build that saved them". Every other refusal was reworded for the player the same way.
+A version-1 state is refused as another version of the host; none reached a player. Tests: `state.rs`'s unit tests,
+`a_state_loads_whole_and_each_refusal_is_its_own` (`tests/testcore.rs`), and through the frontend API
+`A_state_loads_and_one_of_another_build_is_refused_in_plain_words` (`HostedCoreLaunchTests`), which finds the recorded
+hash equal to the entry's and reads the refusal's words as Mistress shows them. Seeded fault: the build left unchecked,
+caught by the integration test.
+
+**Launching from the library (4.1), proven headless.** `HostedCoreLaunchTests` opens a synthetic PlayStation 2 DVD
+(`SyntheticPs2Disc`, its unused system area beginning `TCG1` so the test core takes it; the test core now claims `.iso`
+beside `.tcg`) through the frontend API as `MainWindow.OpenSession` does, with the engine the console's setting names:
+the session reports the console "PlayStation 2", the system `ps2` and the hosted engine, and plays its 320 × 240 picture.
+No code in Mistress or the runtime changed for it; Mistress knows the core only as an engine. Which engine the PlayStation
+2 runs when nothing is stored (PCEE2 while Sapphire is under development) is branch `hosted-cores`' default rule, and the
+refusal of an entry off `libretro-cores.tsv` waits for that list to land (§0.3); neither is duplicated here.
+
+**Pause and fast forward (5).** In the same test: fast forward at 300 % runs the core; paused, three frames run none and
+the picture's number holds; resumed, it runs. *Frame advance is not offered:* Mistress has no frame-advance command, and
+the frontend API's only near equivalent, the debugger's run-to-frame (`RunToFrame`), resumes the session and did not
+hold it after one frame for the hosted core (measured 2026-11-01: three more frames ran), so it is left out and put to the
+tester (§12 question 7).
+
+**A screenshot of a ringed frame in the C# frontend.** `RingChainTests` now takes `GetFrameBufferRgba` (the
+screenshot's call) of every second ringed frame and finds it the frame.
+
+**Not built in this pass**, each with what it needs: 4.4(a) the ring in Mistress's device path, which runs through the
+frontend API's session and so needs the API to lend a ring and hand `frame_ring` (an extension of `emusen_crystal.h`,
+proposed before building); 4.4(b)-(d), the field structure into the CRT filter, the named exceptions set with the filter
+on, and the ring's release when the core's process dies, which follow 4.4(a); 4.2, the settings window's sections from
+libretro's categories and the locked rows, whose `CoreSetting.Group` already carries a group; 4.3, the cards in the
+card manager and the round trip between PCEE2 and Sapphire, which needs a run of PCEE2. PCEE2 was not run.
+
+**The ring through the frontend API (4.4(a), (b), (d); the API's 1.4, 2026-11-01).** Decided 2026-11-01: the frontend
+API lends a ring as an optional capability (`EMUSEN_CRYSTAL_OPEN_RING`, `picture_ring`, the frame record's ring fields;
+`EmuSen_Backend.md` §33, written before the code). Both implementations make the ring on the presenter's device at
+machine info's maxima, lend it in place of the device lend where the core claims `DEVICE_RING`, again when a
+`MACHINE_INFO` raises the maxima, and free it after the machine, the last one kept one change more. Mistress opens every
+session with the flag when it lends a device, offers each ringed frame to the frame control as a `RingPicture`, which
+`SlangRunner.Present` advances its chain from (`advance_ring`), and names the path "in a ring" in its log. *Found while
+building:* a ring frame holds its slot until a chain has taken it or a later frame, so a client that stops drawing on
+the device stalls the core after its third frame (shown by a seeded fault: frame 5 never returned); Mistress gives the
+slots back through `SlangRingRelease` while its screen is off the device. *Field structure (b):* the frame record
+carries `fields` and `field` to the client; the CRT filter already draws a picture taller than 300 rows as two woven
+fields and a shorter one as one, which agrees with the record for every PlayStation 2 mode the host derives (448 and
+512 rows two fields, 224 and 256 one), so no structural value was added. *A dead core (d):* the Rust raises the ring's
+`ready` to the last value handed before freeing it; the C# cannot (no export does), recorded in §33.2.
+Tests: `ApiRingTests` (the RX 6800, the C# implementation): six frames of the test core's Vulkan picture in the API's
+ring drawn through no filter and the PlayStation 2 CRT filter equal to the same frames read back by `picture_copy` and
+uploaded; a session without the flag lends none; twelve ring frames given back with the screen off the device, none
+stalled; one frame advance. `CrystalParityTests`' frames case through both implementations, the header, contract and
+hand-off classes, `RingChainTests`, `HostedCoreLaunchTests` and the device-lend classes beside it. Seeded faults, each
+caught: the release doing nothing (frame 5 stalls); the frame's slot reported one off (227,600 bytes differ); the ring
+frame never recorded (the record's `picture_in_ring` 0).
+
+**Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
+(`EmuSenCrystalNative`), and the Rust core host's discovery knows no libretro entry, so a hosted core opens only on the
+C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1` with "No core in this build handles
+'.iso'" (measured 2026-11-01). Every proof of stage 4 so far ran on the C#. Decided 2026-11-01: the Rust host's
+discovery and trust of libretro entries is a stage of its own, after branch `hosted-cores` lands, on that branch's list
+reader. The ring's Rust half is built and type-checked but unexercised until then.
+
+## 10i. Stage 4, continued: the console's own picture, the settings window, the cards (2026-11-01)
+
+**The console's own picture (4.4(c)).** Decided 2026-11-01: the libretro host declares a reserved setting,
+`console_picture` (a switch, scope `run`, effect `none`, category "Screen filter"), which no libretro core's options can
+hold. Mistress sets it at console scope while the console's accurate CRT filter is the screen filter
+(`ConsolePicture.Sync`, called wherever the filter is applied) and clears it for every other filter; the host then holds
+the core's **named exceptions** over the player's values and gives them back when it is cleared. Mistress learns no
+libretro key: it sets `console_picture` wherever the running engine's schema declares it.
+- *The exceptions are data*, `emusen-libretro-host/data/console-picture.tsv`, one row per exception: the core's file
+  stem, the option's key, the value giving the console's picture, the reason and the date decided. PCEE2's rows are
+  `pcsx2_upscale_multiplier=1` (the GS's own internal resolution) and `pcsx2_deinterlace_mode=1` (no deinterlacing), both
+  decided 2026-11-01. The project's test core has two rows of its own (`tc_scale=1`, `tc_deinterlace=off`), standing in
+  for a console core's in the tests. A row whose key the core does not declare, or whose value is not among its
+  choices, is skipped.
+- *Held, never written.* `Options::hold` keeps the held values beside the player's; `GET_VARIABLE` answers the held one.
+  The player's stored values are never changed, so a change the player makes while a value is held is kept and takes
+  effect when the filter is turned off. `GET_VARIABLE_UPDATE` is raised only when the value the core reads changes.
+  Made with `console_picture` on, a machine is held from its first frame.
+- *Locked rows.* `setting_notes` gives each held row its reason ("Held at <the value's label> while the CRT filter is on: …
+  (a named exception, decided 2026-11-01)") and lists the rows a frontend shows locked under the note key `!locked`,
+  space-separated, `console_picture` always among them (`EmuSen_CoreAPI.md` §6.13).
+- Tests: `the_console_picture_holds_the_named_exceptions_and_gives_the_players_values_back` (`tests/testcore.rs`: the
+  player's 640 × 480 blended picture, 320 × 240 unblended with the filter on, the locked list and reasons, a player's
+  change while held waiting, the player's picture back; a machine made with it on held from its first frame);
+  `Options`' unit test of holding; and through the C# frontend API `The_crt_filter_gives_the_consoles_own_picture_and_turning_it_off_gives_the_players_back`
+  (`HostedCoreLaunchTests`: `ConsolePicture.Sync` with the CRT filter, then with CRT (Lottes), the stored values
+  unchanged). The test core gained `tc_scale` (1 or 2) and `tc_deinterlace` (off, or blend: each odd row a copy of the
+  row above), both read again between frames. Seeded faults, each caught by the host's test: the hold never raising
+  `GET_VARIABLE_UPDATE`; the setting read as `on` instead of `true`.
+
+**The settings window from the options schema (4.2).** A hosted core's options reach Mistress's Graphics Settings
+window as every core's settings do; three things changed. *Sections:* an unrated option's row takes its category as
+its group (`CoreSettingDescriptor.Group`, and `group_of` in the Rust implementation), and the host lists the options
+category by category in the order the core first names each (libretro's menus group them so), `console_picture` first
+and ungrouped; the window already heads each group. *Locked rows:* `CoreSetting.Locked`, from the notes' `!locked`,
+reaches the frontend API's schema as `locked` in both implementations, and the window shows a locked row's note (the
+value held and why) in place of its control, so the row cannot be changed and a disabled control's colours, which are
+outside LunaP's palette, are never drawn; a reset leaves locked rows. *Restart:* the host's options are all applied
+between frames (`restart` false), so no row needed the "next start" words; the native cores already say it in their
+help. The window is the existing one, built through LunaP's layouts with its big-picture counterpart and pad
+navigation. Tests: `A_hosted_cores_tab_has_its_categories_as_sections_and_its_held_rows_locked` (the test core's rows
+from a running C# session with `console_picture` on: five sections in order, three free rows shown, the held rows and
+`console_picture` locked with their notes); `WindowFitAuditTests`' new case `GraphicsSettingsHostedPlayStation2` at
+1280 × 800 and 1920 × 1200, audited and recorded (`Mistress/Specification/`). Seeded fault: the locked list read under
+another key, caught by the window's test. The first recording drew disabled controls and the specification's palette
+rule refused their `#FFFFFF33` and `#FFFFFF66`, which is why a locked row shows its note instead.
+
+**The ring lent again at `MACHINE_INFO`, and a crash with a ring lent** (`ApiRingTests`, the RX 6800, the C#
+implementation). The test core's `tc_geometry` gained `grow`: maxima declared at the native size and, from frame 3, a
+picture twice as large with nothing said, the case of a core whose real resolution is known only once it draws.
+*Found:* the frame drawn past the ring is held and read back and `MACHINE_INFO` raised, and the session lends a
+640 × 480 ring; but on the next frame the host copied the held frame into the new ring after the newer one, and that
+older frame's record replaced the newer one's, so the screen would have drawn the frame before the one played
+(measured 2026-11-01: frame 3's ring picture differed from its read-back). Fixed in `Gpu::frame`: a frame put in the
+ring ends any hold, so a held frame is shown only while no newer one is. Now every frame of
+`A_ring_is_lent_again_at_machine_info_when_the_core_draws_past_its_maxima` matches: two 320 × 240 frames in the first
+ring, the held 640 × 480 frame read back, seven in the second ring, the ring's handle changed. *A crash:*
+`A_core_that_crashes_with_a_ring_lent_ends_in_words_and_the_device_runs_the_next_ringed_session`: with `tc_fault=segv`
+the frame call ends in a refusal in words within its deadline, and the next ringed session on the same device runs its
+frames in a ring, so the C# implementation's inability to raise the dead core's `ready` (§33.2) leaves the device
+usable.
+
+**PS2 memory cards (4.3), not built in this pass.** PCEE2's profile already gives core info its two cards as
+battery files 2 and 3 of medium `ps2.card`, so the card manager's media and `MemoryCards.Place` take them as the
+console's cards; but their suffixes are `.mcd1` and `.mcd2` where Sapphire's are `.ps2` and `.2.ps2`, so each engine
+keeps its own files, which §4.5 asks until a card formatted and written by one engine is read by the other. Making
+them one file per slot is then one change of suffix in `files::PROFILES`. The round trip needs PCEE2 driven into its
+firmware's browser (pad input at set frames, the browser's own format of a blank card, then Sapphire's card reader
+over the bytes, and the reverse with a card Sapphire's reader formatted), which the libretro host's `run` example
+cannot yet script; adding a pad script to it is the next step.
+
+## 10j. Stage 4, item 4.3: the PlayStation 2's cards shared by every engine (2026-11-01)
+
+Decided 2026-11-01: the PlayStation 2 card's format has one owner, `emusen-ps2-card`, and a hosted engine keeps the
+same card files as Sapphire, as the standing rule has console-wide state shared by every engine and game unless the
+player says otherwise.
+
+**One owner.** The crate already held the format, its reader and its editor, which `emusen-systems`' card module (the
+card manager's) uses. It now also holds the facts every engine names a card by: the medium `ps2.card`, the files'
+suffixes `.ps2` and `.2.ps2` (`SUFFIXES`) and an erased card's byte, FFh (`ERASED`), beside `CARD_LENGTH`. Sapphire's
+card (`sio2/card.rs`: page, block and card sizes, the erased card) and its core info (`CARD_SUFFIXES`, `CARD_MEDIUM`)
+take them from it, as do `emusen-systems`' medium table and the libretro host's profiles; no engine keeps a copy.
+
+**The profiles' cards** (`files::PROFILES`). PCEE2's and LRPS2's two cards are battery files 2 and 3 with the crate's
+suffixes, medium and blank card, so the frontend's `MemoryCards` gives a hosted engine the same files as Sapphire: under
+Shared or Named a drawer card such as `Saves/PlayStation 2/Cards/Card 1.ps2`, under Per game `<game>.ps2` and
+`<game>.2.ps2`. Two changes came with it:
+- *A card not passed is a new, blank card* (8,650,752 bytes of FFh, what PCSX2 makes for a new card, `EmuSen_MediumFormats.md`
+  §6), written over whatever the core's folder last held, as Sapphire's slot holds an erased card when no file is given.
+  Before, the core kept the last game's card, so a new game, or a new name under Named, saw another game's card. Under
+  the referee's system folder (`EMUSEN_LIBRETRO_SYSTEM_DIR`) a card not passed is left as it is, so a referee run never
+  writes over the referee's cards.
+- *Firmware is numbered from 16* (`FIRST_FIRMWARE`). Numbered from 1, a core's firmware shared numbers with the clock's
+  file and the cards, so a card passed as file 2 was also written into PCEE2's `pcsx2/resources` folder while it loaded
+  (found 2026-11-01 when the round trip below passed its cards). Sixteen and up is where Sapphire numbers its BIOS.
+
+**Tests.** `tests/cards.rs` lays the test core under PCEE2's stem with PCEE2's published firmware entries: the battery
+list's suffixes and medium are the crate's, firmware and battery numbers are apart, a card left in the folder is replaced
+by a blank one, a card passed is the core's slot 1 and an empty file a blank card, no card is written as firmware, and a
+card the core changes is reported and read back by the crate's reader with its new save. In WiseMan, `HostedPs2CardTests`
+(the C# fixture can now lay the test core under another stem): the hosted engine and Sapphire give the card manager the
+same medium, suffixes, labels, drawer path, default mode and listed cards (Sapphire's console memory `ps2.nvm` is its
+own; PCEE2 keeps its NVM beside its BIOS); and a session opened through the frontend API puts the shared `Card 1.ps2` in
+the hosted core's slot and brings a save written to the core's card back to `Card 1.ps2`, listed by the card manager's
+reader. Seeded faults, each caught by `tests/cards.rs`: a card not passed kept; the old suffixes `.mcd1` and `.mcd2`; a
+card's change not reported; firmware numbered from 1 (the defect above, before its fix).
+
+**The round trip through PCEE2's firmware** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
+the Rust host's `run` example, PCEE2 v2.9.138 with `pcsx2_renderer=vulkan`, `pcsx2_fast_boot=disabled` and the
+Americas BIOS 2.30 given by path through `pcsx2_bios`, the system folder a scratch folder under `~/.cache/emusen/` whose
+BIOS is a link made from that path, the cards passed and written back through `EMUSEN_RUN_FILES`]:
+1. *PCEE2 formats, the crate reads.* The run example's `--exit-elf` program calls the kernel's `Exit`, after which the
+   firmware opens its browser on Memory Card (PS2)/1. With a blank card in slot 1, the pad script `400 b`, `600 left`,
+   `700 b` (Cross on the card, "Unformatted. Format now?", Yes) formats it: "Formatting completed.", 7,998 KB free.
+   The crate opens the card PCEE2 wrote as formatted, 7,998 KB free and no saves, the card manager's capacity.
+2. *The crate writes, PCEE2 reads and writes.* A card formatted by the crate with one save written by it
+   (`BASLUS-99999EMUSEN`, an `icon.sys` and a 4,000-byte file, 7 KB, 7,990 KB free) is listed by PCEE2's browser with
+   7,990 KB free; its information screen gives 7 KB and the time the crate wrote, 12:00 in Japan's zone shown as 07:30
+   in the zone chosen at the first start (GMT+4:30). It shows as "Corrupted Data", having no icon files, so the browser
+   refuses to copy it; its Delete works (`400 b`, `600 b`, `800 down`, `900 b`, `1050 left`, `1150 b`): "Delete
+   completed." The crate then reads the card PCEE2 wrote with no saves and 7,997 KB free, the root directory keeping the
+   cluster it grew for the save's entry.
+Not done: a save with its icons made by a game on one engine and loaded by the same game on the other, which needs a
+game's route on each engine (Sapphire runs games at about 0.4 to 5 frames a second); the run example's pad script and
+files are the means when it is wanted. The data disc tried first (an ISO 9660 disc with no `SYSTEM.CNF`) left the
+firmware at "Please insert a PlayStation or PlayStation 2 format disc." whatever was pressed or with the tray opened,
+which is why the route is the `Exit` program. The firmware's first start asked for the language, time zone and summer
+time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder.
+
+**The card manager.** No view changed: a console's media come from its engine's core info (`MemoryCards.MediaFor`), and
+with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
+existing fit audits stand.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
@@ -1211,12 +1423,15 @@ measured against the 16.7 ms frame on the desktop and the handheld.
 what PCEE2 exposes.
 4. **Decided 2026-10-31: deferred.** The secondary cheat path's surface, `CHEAT_CODES` (§11a), is built when a target core
    honours `retro_cheat_set`.
-5. **[decision]** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10g 4.4(e)): the libretro
+5. **Decided 2026-11-01: the read-back on demand, with the trait change (§10h).** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10g 4.4(e)): the libretro
    host reads it back from the core's device only when `frame_copy` is asked for, which needs `Core::frame` in
    `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
    mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the
    ring's saving.
-6. **[decision]** PCEE2's notice in the picture (§10f): its renderer writes "Blending Accuracy is Basic, High recommended"
+6. **[decision], not decided (2026-11-01); a known item.** `pcsx2_blending_accuracy` stays at the core's default and the notice is drawn as part of the picture until a handheld measurement exists; no named exception is added without one. PCEE2's notice in the picture (§10f): its renderer writes "Blending Accuracy is Basic, High recommended"
    into the frame of Jak and Daxter's title, and its published options offer no switch for notices. *Recommended:* set
    `pcsx2_blending_accuracy` to the level the core recommends as a named exception of the PlayStation 2 profile only if
    a measurement on the handheld shows it fits the frame; otherwise leave the player's choice and accept the notice.
+7. **[decision]** Frame advance for hosted cores (§10h): Mistress has none, and the debugger's run-to-frame resumes a
+   hosted core's session. *Recommended:* a frontend frame advance in the frontend API (one frame run while paused, the
+   session held after it), built for every engine at once, not for the libretro host alone.

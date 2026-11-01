@@ -65,7 +65,7 @@ fn main() {
         }
     }
     let (width, height) = (m.width as usize, m.height as usize);
-    let rgba = &m.frame()[..width * height * 4];
+    let rgba = m.frame()[..width * height * 4].to_vec();
     if let Some(path) = flags("--ppm").pop() {
         let mut out = format!("P6\n{} {}\n255\n", width, height).into_bytes();
         out.extend(rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
@@ -82,7 +82,7 @@ fn main() {
         std::fs::write(path, &m.bus.ram).expect("the RAM");
     }
     if let Some(path) = flags("--rgba").pop() {
-        std::fs::write(path, rgba).expect("the picture");
+        std::fs::write(path, &rgba).expect("the picture");
     }
     eprintln!("{} frames, {}x{}, frame digest {:016X}", m.frames, width, height, rgba.iter().fold(0xCBF29CE484222325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100000001B3)));
 }

@@ -499,7 +499,7 @@ impl Core for Machine {
         if self.picture.len() == f.width * f.height * 4 { FrameInfo::rgba(f.width as i32, f.height as i32) } else { FrameInfo::rgba(WIDTH as i32, HEIGHT as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         &self.picture
     }
 
@@ -739,7 +739,7 @@ mod tests {
 
     #[test]
     fn the_stub_reports_each_system_and_a_blank_picture() {
-        let md = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
+        let mut md = create(&cartridge("SEGA GENESIS", "JUE", None), vec![]).unwrap();
         let info = md.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("md", Some(Region::Ntsc), NTSC_FRAME));
         assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["M68KBUS", "Z80BUS", "WRAM", "Z80RAM", "VRAM", "CRAM", "VSRAM", "ROM"]);

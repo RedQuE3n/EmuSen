@@ -239,6 +239,7 @@ fn every_constant_is_the_header_s() {
         ("EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT", CONFIG_DEVELOPMENT.into()),
         ("EMUSEN_CRYSTAL_OPEN_NO_BATTERY", OPEN_NO_BATTERY.into()),
         ("EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS", OPEN_SINGLE_ROWS.into()),
+        ("EMUSEN_CRYSTAL_OPEN_RING", OPEN_RING.into()),
         ("EMUSEN_CRYSTAL_SPEED_NORMAL", SPEED_NORMAL.into()),
         ("EMUSEN_CRYSTAL_SPEED_TURBO", SPEED_TURBO.into()),
         ("EMUSEN_CRYSTAL_SPEED_SLOW", SPEED_SLOW.into()),
@@ -382,7 +383,7 @@ fn rust_layouts() -> Vec<(&'static str, usize, usize, Vec<(&'static str, usize)>
         layout!(
             "emusen_crystal_frame_info",
             emusen_crystal_frame_info,
-            [size, ran, halted, rendered, picture_serial, width, height, row_repeat, display_lines, display_aspect, audio_frames, audio_rate, play_audio, speed_percent, frame_interval_ns, total_frames, frame_rate_hz, paused, halted_processor, halted_address, picture_on_device, reserved]
+            [size, ran, halted, rendered, picture_serial, width, height, row_repeat, display_lines, display_aspect, audio_frames, audio_rate, play_audio, speed_percent, frame_interval_ns, total_frames, frame_rate_hz, paused, halted_processor, halted_address, picture_on_device, reserved, picture_in_ring, ring_slot, ring_value, fields, field]
         ),
         layout!("emusen_crystal_raw_info", emusen_crystal_raw_info, [size, element, width, height, stride, reserved]),
     ]

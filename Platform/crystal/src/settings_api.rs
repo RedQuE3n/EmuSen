@@ -43,6 +43,8 @@ pub struct Row {
     group: Option<String>,
     note: Note,
     shown_with: Option<(String, String)>,
+    /// Held by the engine for now, its note saying why, `CoreSetting.Locked`.
+    locked: bool,
 }
 
 /// An engine's own setting as a row, `AsCoreSetting`: none for a kind no row shows.
@@ -66,10 +68,25 @@ fn row_of(s: &SettingDesc, note: Note) -> Option<Row> {
         max,
         choices,
         choice_labels: labels,
-        group: (s.effect == "enhancement").then(|| "Enhancements".to_string()),
+        group: group_of(s),
         note,
         shown_with: None,
+        locked: false,
     })
+}
+
+/// An enhancement in its own group, a hosted core's unrated option in its category's, `CoreSettingDescriptor.Group`.
+fn group_of(s: &SettingDesc) -> Option<String> {
+    match s.effect.as_str() {
+        "enhancement" => Some("Enhancements".to_string()),
+        "unrated" => s.category.clone(),
+        _ => None,
+    }
+}
+
+/// The keys an engine's notes list as locked under `!locked` (EmuSen_CoreAPI.md §6.13).
+fn locked_keys(notes: &[(String, String)]) -> Vec<&str> {
+    notes.iter().find(|(k, _)| k == "!locked").map(|(_, v)| v.split(' ').filter(|k| !k.is_empty()).collect()).unwrap_or_default()
 }
 
 /// A library's settings a window lists, `CoreSidecarSettings`.
@@ -114,6 +131,7 @@ fn medium_rows(tree: &Tree, m: &SaveMedium) -> Vec<Row> {
         group: None,
         note: Note::None,
         shown_with: None,
+        locked: false,
     }];
     for slot in 0..m.slots.len() {
         rows.push(Row {
@@ -129,6 +147,7 @@ fn medium_rows(tree: &Tree, m: &SaveMedium) -> Vec<Row> {
             group: None,
             note: if slot > 0 { Note::SameName { medium: Box::new(m.clone()), slot } } else { Note::None },
             shown_with: Some((m.mode_key(), crate::media::NAMED.to_string())),
+            locked: false,
         });
     }
     rows
@@ -152,6 +171,7 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
             group: None,
             note: Note::None,
             shown_with: None,
+            locked: false,
         });
     }
     let media: Vec<Row> = crate::media::media_for(catalog, console).iter().flat_map(|m| medium_rows(tree, m)).collect();
@@ -159,9 +179,10 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
         && engine.is_none()
     {
         let e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+        let locked = locked_keys(&e.notes);
         for d in e.settings.iter().filter(|d| !d.hidden) {
             let note = e.notes.iter().find(|(k, _)| *k == d.key).map(|(_, v)| v.clone());
-            rows.extend(row_of(d, Note::Engine(note)));
+            rows.extend(row_of(d, Note::Engine(note)).map(|r| Row { locked: locked.contains(&d.key.as_str()), ..r }));
         }
         rows.extend(media);
         return rows;
@@ -223,6 +244,7 @@ pub fn schema_json(rows: &[Row], tree: &Tree, console: Option<&str>) -> String {
                 j.null("shown_with");
             }
         }
+        j.bool("locked", r.locked);
         j.end_object();
     }
     j.end_array();

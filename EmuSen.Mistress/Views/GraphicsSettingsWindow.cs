@@ -304,10 +304,13 @@ namespace EmuSen.Mistress.Views
             bool first = true;
             void Show()
             {
-                string? said = first ? setting.Note : SettingsFor(console).FirstOrDefault(r => r.Key == setting.Key)?.Note;
+                SettingRow? now = first ? setting : SettingsFor(console).FirstOrDefault(r => r.Key == setting.Key);
                 first = false;
+                string? said = now?.Note;
                 text.Text = said ?? "";
                 text.IsVisible = said is not null;
+                // A locked row shows only its note, which names the value held and why - see EmuSen_LibretroHost.md §10i.
+                control.IsVisible = now is not { Locked: true };
             }
             Show();
             _notes.Add((console, Show));
@@ -344,7 +347,9 @@ namespace EmuSen.Mistress.Views
             if (index < 0 || index >= _panels.Count) return;
 
             (string console, Action refresh) = _panels[index];
-            foreach ((string c, string key) in _core) if (c == console) CoreSettings.Set(console, key, null);
+            // A locked row is the engine's for now, not the player's, so a reset leaves it - see EmuSen_LibretroHost.md §10i.
+            HashSet<string> locked = SettingsFor(console).Where(r => r.Locked).Select(r => r.Key).ToHashSet();
+            foreach ((string c, string key) in _core) if (c == console && !locked.Contains(key)) CoreSettings.Set(console, key, null);
             _config.Forget(console);
             _config.Save();
             refresh();

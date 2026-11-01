@@ -56,6 +56,9 @@ pub struct MachineInfo {
     pub rate_den: u64,
     pub aspect_num: u32,
     pub aspect_den: u32,
+    /// `video.max_width` and `max_height`, the largest picture, which a ring is made at.
+    pub max_width: u32,
+    pub max_height: u32,
     pub ports: Vec<Port>,
     pub spaces: Vec<Space>,
     pub battery: Vec<MachineBattery>,
@@ -90,6 +93,8 @@ impl MachineInfo {
             rate_den: int(rate, "den", 1) as u64,
             aspect_num: int(aspect, "num", 0) as u32,
             aspect_den: int(aspect, "den", 0) as u32,
+            max_width: int(video, "max_width", 0).max(0) as u32,
+            max_height: int(video, "max_height", 0).max(0) as u32,
             ports: arr(r, "ports").iter().map(|p| Port { port: int(Some(p), "port", 0) as u32, controller: text(Some(p), "controller").map(str::to_string) }).collect(),
             spaces: arr(r, "spaces")
                 .iter()
@@ -137,6 +142,7 @@ pub struct SettingDesc {
     pub effect: String,
     pub cost: Option<String>,
     pub hidden: bool,
+    pub category: Option<String>,
 }
 
 impl SettingDesc {
@@ -179,6 +185,7 @@ pub fn settings(text_json: &str) -> Vec<SettingDesc> {
                 effect: text(s, "effect").unwrap_or("none").to_string(),
                 cost: text(s, "cost").map(str::to_string),
                 hidden: matches!(s.and_then(|v| v.get("hidden")), Some(Value::Bool(true))),
+                category: text(s, "category").filter(|c| !c.is_empty()).map(str::to_string),
             }
         })
         .collect()

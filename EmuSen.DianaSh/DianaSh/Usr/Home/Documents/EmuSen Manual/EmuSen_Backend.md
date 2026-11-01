@@ -1988,6 +1988,7 @@ The name a console started empty goes by ("SNES (no disc)") moved from `EmuSen.C
 | `route`'s `shelf` | the shelf a file sits on | routing |
 | `session_info.television_standard` | "ntsc", "pal" or null; `session_info.state` is now documented in the header as well | machine info |
 | `settings_schema` rows' `note` and `shown_with` | where the core words the value chosen, that sentence as the stored values stand; the row a row is shown with | the core's setting, a card's medium |
+| `settings_schema` rows' `locked` (since 2026-11-01) | true where the running engine holds the row for now, listed under its notes' `!locked` (`EmuSen_CoreAPI.md` §6.13); a window shows its note in place of its control | a hosted core's rows the CRT filter holds |
 | `cards_op` LIST's `kind`, `capacity`, `unit`, `mode`, `mode_key`, `slots`, `next_name`, `import_due` | what the card window showed from `MemoryCards` | the card manager |
 | `CHEAT_DB_STATUS`'s `attribution` | the database's licence words | the cheat database |
 
@@ -9322,6 +9323,75 @@ Each was made in the source, run, and reverted, the file compared byte for byte 
 | C. The C# 32X literal has no recogniser | `Every_system_has_code_where_its_literal_has`, the routing case |
 | D. The 32X's data file drops `.bin` | the systems crate's two routing tests, the library's case; `SystemTableParityTests` (two cases), the routing case |
 | E. `probe::recognises` leaves out `32x`, so its recogniser is never asked | the systems crate's routing test, the library's case; `Every_system_has_code_where_its_literal_has` |
+
+## 33. The frontend API's 1.4, 2026-11-01: a ring lent, and one frame advance
+
+Two optional capabilities, decided 2026-11-01 by the tester, as one minor. Nothing is removed and no meaning changes; a
+client of 1.3 sees no difference.
+
+**Why.** A hosted core's picture reaches the presenter through a ring the host owns (core ABI 1.18's `DEVICE_RING`,
+`EmuSen_LibretroHost.md` §5.4a), not through the device lend of 1.1, and Mistress drives every session through this API,
+so the API must lend a ring and say where each frame's picture lies in it (`EmuSen_LibretroHost.md` §10g, 4.4(a)). Frame
+advance was missing from every frontend: the debugger's run-to-frame resumed a hosted session and did not hold it
+(measured 2026-11-01, `EmuSen_LibretroHost.md` §10h, §12 question 7).
+
+### 33.1 The additions
+
+| Addition | What it is | Owner |
+|---|---|---|
+| `EMUSEN_CRYSTAL_OPEN_RING` (4) | open's flag: with a device, a machine whose core claims `DEVICE_RING` is lent a ring made on that device in place of a lend; without the flag, or without a device, nothing changes | the frontend asks; the runtime makes |
+| `frame_info.picture_in_ring` (offset 112), `ring_slot` (116), `ring_value` (120), `fields` (128), `field` (132); 136 bytes, 104 still taken | the frame's picture in the ring: its slot and the value the ring's `ready` reaches once the slot holds it, and its field structure (0 a progressive frame, 1 one field, 2 two fields woven; with one field, 0 the top and 1 the bottom), all 0 when the picture is not in the ring | the runtime, from the core's `frame_ring` |
+| `picture_ring` | the current machine's ring, the platform library's `emusen_serenity_ring`, for the presenter to borrow (`SlangRing.Borrow`); null with none | the runtime makes and frees it |
+| `frame_advance` | while paused, the next frame call runs one frame and the session is held after it; a running session is paused first | the runtime, for every engine |
+
+### 33.2 The ring's life
+
+- **Lent** when a machine is made, at the maxima machine info declares (`video.max_width`, `video.max_height`, at least
+  64 by 64), three images, and again, at the new maxima, after a frame whose events include `MACHINE_INFO`, as the
+  libretro host's `run.rs` does (§10f). A core that refuses it (`NOT_SUPPORTED`: another card) keeps handing its pictures
+  by `frame_copy`, and the session says so once in its log.
+- **Each frame**, after `advance`, the runtime asks `frame_ring`; an answer of 1 fills the frame's ring fields. The
+  frame's shape and serial are the machine's at once, and `picture_copy` reads the picture back only when asked
+  (`EmuSen_LibretroHost.md` §10h), so a screenshot, a state's picture or rewind's thumbnail of a ringed frame is never
+  blank and the ring's path reads nothing back.
+- **Replaced** rings are kept until the next replacement or the machine's release, since the presenter may hold one
+  offer from the last ring; the session hands only the newest frame, so one ring kept is enough.
+- **Freed** after the machine: withdrawn first (`ring_lend` with none, its failure ignored when the core's process has
+  died), the machine freed, then the ring's `ready` raised to the last value handed, so that no submission of the
+  presenter's device waits for a picture a dead core will never give (`Ring::release_after_crash`), and only then the
+  ring freed, which waits for the device to be idle.
+- **Both implementations lend it.** The Rust's engine asks the platform library's lender (`Lender::make_ring`, over
+  `emusen_serenity_ring_new`); the C#'s `CoreEngine` asks `CoreOptions.RingLender`, which the C# runtime sets to
+  `PlatformRing`, over the same exports. The C# cannot raise a dead core's `ready` (no export does it, and none is added
+  while the platform interface's next number is claimed), so it frees the ring without that step; the Rust does it.
+- **The client's part.** A frame in the ring holds its slot until a chain advanced from it, or from a later frame, has
+  signalled the ring's `done`; a core whose three slots are all held waits. So a client that takes ring frames takes
+  every one it is handed into a chain, the newest at least: Mistress draws them on its presenter, and while the screen
+  is not drawing on the device it gives each slot back through a one-pixel chain (`SlangRingRelease`) and shows the
+  picture read back.
+
+### 33.3 Frame advance
+
+`frame_advance` is a change, answered on any thread as the other changes are. It sets the session paused and asks for
+one frame; the next `frame` runs one whole frame, the frame-end order included, fills `ran` 1, and leaves the session
+paused. A `run` event `{"op":"stepped"}` follows, as the debugger's step raises. It needs nothing of the core, so every
+engine has it, native and hosted.
+
+**Run-to-frame on an engine that cannot halt inside a frame.** The debugger's run to a frame arms the core's breakpoint
+registry, which halts at the instruction after the frame is reached; a hosted core runs no instruction hook, so the
+halt never came. Where no processor of the machine can be halted, the runtime now holds the session at the boundary
+of the frame reached instead: paused once the machine's completed frames reach the number asked, with the `run` event
+`{"op":"paused"}`. "Cannot halt" is read as an engine whose core claims no `DEBUG`; engines that can halt keep the
+registry's halt unchanged. Mistress's Emulation menu offers it as Frame Advance, with a hotkey of its own (`man pause`).
+
+### 33.4 How it is graded
+
+The crate's header test and baseline (eight `@1.4` lines); `CrystalHeaderTests` and `ContractShapeTests` for the binding;
+`CrystalParityTests`' frames case through both implementations, `frame_advance` among its steps (one frame run, then
+held) with `picture_ring` null for a core without `DEVICE_RING`; `ApiRingTests` on the RX 6800 for the ring itself
+(`EmuSen_LibretroHost.md` §10h). Not yet graded: a ring replaced at `MACHINE_INFO` (neither the test core nor PCEE2 grows
+its picture past the maxima it declares) and a crash with a ring lent, which the Rust half alone handles fully and
+which waits for the Rust host to open hosted cores.
 
 ---
 

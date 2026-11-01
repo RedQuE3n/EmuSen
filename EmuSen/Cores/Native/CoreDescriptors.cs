@@ -149,7 +149,8 @@ namespace EmuSen.Cores.Native
 
         public const string EnhancementsGroup = "Enhancements";
 
-        private string? Group => Effect == "enhancement" ? EnhancementsGroup : null;
+        // A hosted core's unrated option is grouped under its category, libretro's, as the core sets its options apart - see EmuSen_LibretroHost.md §10i.
+        private string? Group => Effect switch { "enhancement" => EnhancementsGroup, "unrated" => string.IsNullOrEmpty(Category) ? null : Category, _ => null };
 
         private string Hint => Cost is null ? Help : $"{Help} {Cost}";
     }

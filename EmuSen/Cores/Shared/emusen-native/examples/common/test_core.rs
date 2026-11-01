@@ -697,7 +697,7 @@ impl Core for TestCore {
         FrameInfo { serial: self.frames, aspect_num: 4, aspect_den: 3, lines, flags, ..FrameInfo::rgba(self.width(), self.height()) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         &self.picture
     }
 

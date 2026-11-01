@@ -358,7 +358,7 @@ namespace EmuSen.Cores.Native
             try
             {
                 saves = (system.Battery ?? Array.Empty<CoreBatteryFile>()).Where(b => b.Family is null).Select(b => (b.Which, Save: placement.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatterySave.None)).ToList();
-                machine = new CoreMachine(Library, default, Array.Empty<(uint, CoreBytes)>(), SettingsText(createScope: true), FilesFor(firmware, saves, placement), null, placement.RemovableApart, placement.ConsoleApart || named is { Shared: true }, Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null, system: systemId, named: named?.Read());
+                machine = new CoreMachine(Library, default, Array.Empty<(uint, CoreBytes)>(), SettingsText(createScope: true), FilesFor(firmware, saves, placement), null, placement.RemovableApart, placement.ConsoleApart || named is { Shared: true }, Library.Has(CoreInterface.CapDevicePicture) && !Rings ? DeviceLender?.Invoke() : null, system: systemId, named: named?.Read());
             }
             catch
             {
@@ -397,8 +397,9 @@ namespace EmuSen.Cores.Native
             _closeLidAt = -1;
             StartedEmpty = emptySystem;
 
-            _machine?.Dispose();
+            ReleaseMachine();
             _machine = machine;
+            LendRing(machine);
             _bigEndian = EmuSen.Crystal.Systems.SystemPacks.BigEndian(machine.Info.System);
             FirmwareNotice = NoticeFor(machine, asked);
             foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked, _firmwareFolders)) Say(line);
@@ -448,7 +449,7 @@ namespace EmuSen.Cores.Native
         // The machine for a disc, as the system it was routed to: lent where the core borrows, else read by the core within the call - see EmuSen_CoreAPI.md §6.40.
         private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement, string? system, IReadOnlyList<(uint, string, byte[])> namedFiles, NamedFiles? named)
         {
-            var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
+            var lend = Library.Has(CoreInterface.CapDevicePicture) && !Rings ? DeviceLender?.Invoke() : null;
             return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart || named is { Shared: true }, device: lend, system: system, imagePath: disc.UnalteredPath, named: namedFiles);
         }
 
@@ -565,6 +566,7 @@ namespace EmuSen.Cores.Native
             if (!_skipRendering && Library.Has(CoreInterface.CapPresent)) m.Present();
             // A frame not drawn is not asked for, so the core is bound to nothing for it - see EmuSen_CoreAPI.md §6.29.
             PictureOnDevice = !_skipRendering && m.TakeDeviceFrame();
+            RingFrame = !_skipRendering && _ring is not null ? m.FrameRing() : null;
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             Drain();
             if (TotalFrames % 60 == 0) KeepLog(m.DrainLog());
@@ -615,6 +617,7 @@ namespace EmuSen.Cores.Native
                         _rawCurrent = false;
                         // A port added while the game runs, as by an adapter plugged in, has its buttons held from now.
                         _input.Grow(m.Info.Ports.Count);
+                        LendRing(m);
                         break;
                 }
             }
@@ -770,6 +773,40 @@ namespace EmuSen.Cores.Native
         }
 
         public Func<IDeviceLend?>? DeviceLender { get; set; }
+
+        // Since the frontend API's 1.4: the options' ring maker, null for none - see EmuSen_Backend.md §33.2.
+        private Func<int, int, IDeviceRing?>? RingLender => Options.RingLender;
+
+        // The machine's ring and the one it replaced, kept one change more; the last frame's picture in it, where it lies there.
+        private IDeviceRing? _ring, _ringRetired;
+
+        public IDeviceRing? Ring => _ring;
+
+        public CoreInterface.RingFrame? RingFrame { get; private set; }
+
+        private bool Rings => RingLender is not null && Library.Has(CoreInterface.CapDeviceRing);
+
+        // A ring at machine info's maxima lent where the machine rings and the one it holds is smaller - see EmuSen_Backend.md §33.2.
+        private void LendRing(CoreMachine m)
+        {
+            if (!Rings) return;
+            int w = Math.Max(64, m.Info.MaxWidth), h = Math.Max(64, m.Info.MaxHeight);
+            if (_ring is { } held && held.Width >= w && held.Height >= h) return;
+            if (RingLender!(w, h) is not { } ring) return;
+            if (!ring.LendTo(m)) { ring.Dispose(); return; }
+            _ringRetired?.Dispose();
+            (_ringRetired, _ring) = (_ring, ring);
+        }
+
+        // The machine freed with its ring withdrawn first, and the rings freed after it.
+        private void ReleaseMachine()
+        {
+            if (_machine is { } m && _ring is not null) { try { unsafe { m.RingLend(null); } } catch (CoreRefusedException) { } }
+            _machine?.Dispose();
+            _ringRetired?.Dispose();
+            _ring?.Dispose();
+            (_ringRetired, _ring, RingFrame) = (null, null, null);
+        }
 
         public IDeviceLend? Lend => _machine?.Lend;
 
@@ -1036,7 +1073,10 @@ namespace EmuSen.Cores.Native
 
         // The schema's switch, count and choice settings that are not hidden, with the core's note for the value in use.
         public virtual IReadOnlyList<CoreSetting> Settings =>
-            Library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting() is { } row ? row with { Note = _ => _notes.GetValueOrDefault(s.Key) } : null).OfType<CoreSetting>().ToArray();
+            Library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting() is { } row ? row with { Note = _ => _notes.GetValueOrDefault(s.Key), Locked = LockedKeys.Contains(s.Key) } : null).OfType<CoreSetting>().ToArray();
+
+        // The keys the machine's notes list under !locked - see EmuSen_CoreAPI.md §6.13.
+        private string[] LockedKeys => _notes.GetValueOrDefault("!locked")?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
 
         public IReadOnlyList<CoreSettingDescriptor> SettingDescriptors => Library.Settings;
 
@@ -1089,7 +1129,7 @@ namespace EmuSen.Cores.Native
         public void Dispose()
         {
             ReleaseMedia();
-            _machine?.Dispose();
+            ReleaseMachine();
             _machine = null;
             _lending.Close();
             _rawLending.Close();

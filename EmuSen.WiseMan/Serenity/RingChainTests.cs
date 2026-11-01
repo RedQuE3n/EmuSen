@@ -88,6 +88,8 @@ namespace EmuSen.WiseMan.Serenity
                             Assert.True(got.AsSpan().SequenceEqual(want), $"frame {n}, {name}: the ring's picture drawn differs from the uploaded one in {got.Zip(want).Count(p => p.First != p.Second)} bytes");
                             if (name == "none") Assert.True(got.AsSpan().SequenceEqual(picture), $"frame {n}: the ring's picture is not the frame");
                         }
+                        // §10h: a screenshot of a ringed frame reads its picture back on demand, never blank.
+                        if (n % 2 == 1) Assert.True(engine.GetFrameBufferRgba().AsSpan().SequenceEqual(picture), $"frame {n}: the screenshot of the ringed frame is not the frame");
                     }
                 }
                 finally

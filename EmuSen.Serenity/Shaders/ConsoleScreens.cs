@@ -38,7 +38,11 @@ namespace EmuSen.Serenity.Shaders
         // A console of the systems table still in development, offered to no player, whose screen row is owed before it reaches one, with a dated note of why - see EmuSen_CRT.md §31.8.
         public sealed record Owed(string Console, string Note);
 
-        public static IReadOnlyList<Owed> OwedRows { get; } = Array.Empty<Owed>();
+        public static IReadOnlyList<Owed> OwedRows { get; } = new Owed[]
+        {
+            new("Saturn", "2026-11-01: a console only a hosted core runs; its profile is separate work (EmuSen_Cores.md §4.9)"),
+            new("Dreamcast", "2026-11-01: a console only a hosted core runs; its profile is separate work (EmuSen_Cores.md §4.9)"),
+        };
 
         // The consoles whose television is drawn on a row of their own, which every filter of a tube is offered for; an attachment is offered its host's.
         public static IReadOnlyList<string> Televisions { get; } = All.Where(s => s.Kind == Kind.Television && s.Profile == s.Console).Select(s => s.Console).ToArray();

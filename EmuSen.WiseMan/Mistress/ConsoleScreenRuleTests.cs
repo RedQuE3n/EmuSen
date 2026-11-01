@@ -131,16 +131,16 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void An_owed_row_holds_only_for_a_console_offered_to_no_player()
         {
-            Assert.Empty(ConsoleScreens.OwedRows);
+            Assert.Equal(new[] { "Saturn", "Dreamcast" }, ConsoleScreens.OwedRows.Select(o => o.Console));
             var systems = Systems.Append(Systems[0] with { Id = "gg", Console = "Game Gear" }).ToArray();
-            var owed = new[] { new ConsoleScreens.Owed("Game Gear", "2026-10-26: a console in development") };
+            var owed = ConsoleScreens.OwedRows.Prepend(new ConsoleScreens.Owed("Game Gear", "2026-10-26: a console in development")).ToArray();
             Assert.DoesNotContain(Breaches(ConsoleScreens.All, owed, systems, RunsUnder, _ => false), b => b.Contains("Game Gear"));
             var cases = new (string What, IReadOnlyList<Screen> Screens, IReadOnlyList<ConsoleScreens.Owed> Owed, Func<SystemEntry, bool> Shelf, string Expected)[]
             {
                 ("a shelf", ConsoleScreens.All, owed, s => s.Id == "gg", "Game Gear reaches players with its screen row still owed"),
                 ("a row beside it", ConsoleScreens.All.Append(new Screen("Game Gear", ConsoleScreens.Kind.Television, "Master System")).ToArray(), owed, _ => false, "Game Gear has a screen row and an owed row"),
                 ("an undated note", ConsoleScreens.All, new[] { new ConsoleScreens.Owed("Game Gear", "later") }, _ => false, "Game Gear's owed row is not a dated note"),
-                ("no such system", ConsoleScreens.All, owed.Append(new ConsoleScreens.Owed("Dreamcast", "2026-10-24: x")).ToArray(), _ => false, "Dreamcast has an owed row and is no system of the table"),
+                ("no such system", ConsoleScreens.All, owed.Append(new ConsoleScreens.Owed("Pippin", "2026-10-24: x")).ToArray(), _ => false, "Pippin has an owed row and is no system of the table"),
                 ("nothing owed", ConsoleScreens.All, Array.Empty<ConsoleScreens.Owed>(), _ => false, "gg (Game Gear) has 0 screen rows"),
             };
             foreach (var (what, screens, o, shelf, expected) in cases)

@@ -18,6 +18,7 @@ pub mod openvgdb;
 pub mod probe;
 pub mod ps2;
 pub mod psx;
+pub mod sega_disc;
 pub mod sms;
 pub mod snes;
 
@@ -111,7 +112,7 @@ pub const KEYS: [&str; 19] = [
 pub const MEDIUM_KEYS: [&str; 3] = ["id", "title", "noun"];
 
 /// The data files, by the id each is named for, in the table's order.
-pub const DATA: [(&str, &str); 12] = [
+pub const DATA: [(&str, &str); 14] = [
     ("nes", include_str!("../data/nes.json")),
     ("snes", include_str!("../data/snes.json")),
     ("md", include_str!("../data/md.json")),
@@ -124,6 +125,8 @@ pub const DATA: [(&str, &str); 12] = [
     ("sms", include_str!("../data/sms.json")),
     ("sg1000", include_str!("../data/sg1000.json")),
     ("ps2", include_str!("../data/ps2.json")),
+    ("saturn", include_str!("../data/saturn.json")),
+    ("dreamcast", include_str!("../data/dreamcast.json")),
 ];
 
 struct Fields<'a> {
@@ -430,7 +433,7 @@ mod tests {
     fn the_embedded_table_reads_whole_in_its_order() {
         let systems = table().expect("the committed data files are a table");
         let ids: Vec<&str> = systems.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000", "ps2"]);
+        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000", "ps2", "saturn", "dreamcast"]);
         for (file, _) in DATA {
             assert!(find(file).is_some(), "{file} is in the table");
         }

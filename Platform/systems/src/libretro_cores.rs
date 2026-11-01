@@ -134,7 +134,7 @@ mod tests {
     fn every_listed_system_is_in_the_systems_table_or_named_as_arcade() {
         for core in hosted() {
             for system in &core.systems {
-                assert!(crate::find(system).is_some() || ["naomi", "atomiswave", "saturn", "dreamcast"].contains(&system.as_str()), "{} runs {system}, no system of the table", core.stem);
+                assert!(crate::find(system).is_some() || ["naomi", "atomiswave"].contains(&system.as_str()), "{} runs {system}, no system of the table", core.stem);
             }
         }
     }

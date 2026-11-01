@@ -1116,6 +1116,60 @@ Two findings: (1) PCEE2 aborted at exit while its device was destroyed before `r
 `fields_of` reads its 448 rows as progressive; with the entry's `.info` naming the PlayStation 2 it is `ps2` and two woven
 fields.
 
+## 10g. Stage 4: the frontend, planned (2026-11-01; a plan, nothing built)
+
+Stage 4 puts a hosted core in front of the player through components that exist; it adds no component. Each part
+names the surface it uses and what is new on it. Nothing reaches past a surface: Mistress knows a hosted core only as an
+EmuSen core with an entry, and the libretro host stays the only code that knows libretro.
+
+**4.1 Launching a hosted core from Mistress's library.** The library already routes a game to a system and the system
+to a core (`CoreCatalog`, `CoreDiscovery`); a libretro entry is a discovered core whose `.info` names its systems
+(`ps2`, and for Flycast `dreamcast`, `naomi`, `atomiswave`). New: (a) the systems table's `libretro-cores.tsv` list
+(§0.3) decides which entries Cores offers and which the hosts accept, refused in words before trust; (b) where a system
+has both a project core and a hosted one (PlayStation 2: Sapphire and PCEE2), the per-console core choice the settings
+already keep picks, the project core the default; (c) the game is started through `CoreEngine` as today, the broker and
+proxy unchanged. Tests: a WiseMan launch of the test core's entry from a synthetic library (its `.info` naming `ps2`)
+through the same path a click takes, headless; an unlisted entry refused in words. Exit: the test core and PCEE2 start
+from the library with no libretro knowledge in Mistress.
+
+**4.2 Its settings window from the options schema.** The libretro host already publishes the core's options as a
+settings schema (§4.7) and `ICoreSettings`/`CoreCatalog.SettingsFor` already build the per-console Graphics Settings
+window from a schema. New: (a) the schema's groups (libretro's option categories) become the window's sections, a value
+list a choice, and the restart flag a note "applies at the next start"; (b) the named exceptions the CRT path sets
+(4.4) shown locked with their reason while the CRT filter is on; (c) the window built through `AdaptiveLayout`, with its
+big-picture counterpart and pad navigation, and the fit audit at 1280 × 800 and 1920 × 1200. Tests: the window built
+from the test core's schema (every option type it declares), the fit audit, the locked rows. Exit: PCEE2's published
+options adjustable from the window, kept per console.
+
+**4.3 Memory cards and VMUs as named files.** Named battery files (1.16) and removable media (`ps2.card`, `dc.vmu`)
+already exist; PCEE2's two cards are battery files 2 and 3 of kind `removable` in its profile (§10c). New: (a) the
+Memory Card manager lists a hosted core's cards beside Sapphire's, through the save-media service, which already reads
+named files; (b) a card formatted and written by PCEE2 read by Sapphire's card reader and the reverse, the proof §10c
+left owed, run on synthetic cards only; (c) Flycast's VMU files taken the same way once Flycast is installed (its
+profile entry and the `dc.vmu` medium, §0.3). Tests: round trips of a synthetic card through both engines; a card kept
+across a state load under `CREATE_SHARED_REMOVABLE`. Exit: one card file per slot, shared by both PlayStation 2
+engines, never inside a state.
+
+**4.4 The CRT path end to end.** Stage 3 built the pieces (the ring, `advance_ring`, the field structure, the C# glue of
+interface 28) and proved them headless. New: (a) `GameFrameControl`'s device path takes a ring: the runtime lends the
+ring at the core's declared maximum and again at `MACHINE_INFO` (as `run.rs` does), and after each frame the presenter
+advances its chain from `frame_ring` where it now advances from a lend; (b) the field structure carried to the
+filter: `fields` and `field` from the record into the CRT filter's structural values, so a woven 448-row picture is
+drawn as two fields, the same as Sapphire's; (c) with the CRT filter on, the named exceptions set on the core (native
+internal resolution, deinterlacing off, from PCEE2's published keys), restored when it is turned off; (d) a ring
+withdrawn, and the ring's `ready` raised (`Ring::release_after_crash`) before it is freed, when the core's process dies;
+(e) a screenshot, a state's picture and rewind's thumbnail of a ringed frame: the libretro host reads nothing back once
+a frame is in the ring, so `frame_copy` is empty (§10f); the plan is a read-back on demand, the frame's held picture
+copied into host memory only when `frame_copy` is asked for, which needs the host's `frame` to take the picture by
+mutable reference, a change inside `emusen-native`'s trait to be weighed with the tester before it is made. Tests: the
+C# frontend's device path presenting a ring frame headless (as `DevicePictureLendTests` does a lend), the CRT filter's
+two-field drawing of a 448-row picture against the same picture uploaded with its field structure, a crash with a ring
+lent, a screenshot of a ringed frame. Exit: PCEE2's Jak and Daxter through the PlayStation 2 CRT profile in Mistress,
+measured against the 16.7 ms frame on the desktop and the handheld.
+
+**Order and cost.** 4.4(a) and 4.1 first, since every later check needs a game running in the window; then 4.4(b)–(e),
+4.2 and 4.3. Each part ends with its WiseMan tests and the blast radius, as stage 3 did.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
@@ -1142,7 +1196,7 @@ fields.
 what PCEE2 exposes.
 4. **Decided 2026-10-31: deferred.** The secondary cheat path's surface, `CHEAT_CODES` (§11a), is built when a target core
    honours `retro_cheat_set`.
-5. **[decision]** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10f): the libretro
+5. **[decision]** A ringed frame's picture for screenshots, a state's picture and rewind (§10f, §10g 4.4(e)): the libretro
    host reads it back from the core's device only when `frame_copy` is asked for, which needs `Core::frame` in
    `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
    mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Common.Firmware;
+using EmuSen.Crystal.Systems;
 using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Models;
 
@@ -34,13 +35,6 @@ namespace EmuSen.Cores
     public static class FirmwareOverview
     {
 
-        // The consoles only a hosted core runs, whose firmware need no core declares in words - see EmuSen_Cores.md §4.10.
-        public static readonly IReadOnlyDictionary<string, string> ConsoleNotes = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["saturn"] = "Every Saturn game needs a Saturn BIOS of your own. There is no open replacement, and EmuSen never downloads or ships one.",
-            ["dreamcast"] = "Flycast starts Dreamcast games without the console's BIOS, so a BIOS of your own is optional.",
-        };
-
         // home/Firmware, which EmuSen makes and a file the player installs goes in.
         public static string Folder => FirmwareLibrary.Directory;
 
@@ -68,7 +62,7 @@ namespace EmuSen.Cores
             {
                 if (Shipped(core) is null) continue;
                 foreach (CoreSystem system in core.Info.Systems.Where(s => !s.Development && CoreCatalog.ConsoleForSystem(s.Id) is null && systems.All(known => known.Name != s.Name)))
-                    systems.Add(new FirmwareSystem(system.Name, core.EngineName, system.Firmware.Select(f => Item(CoreEngine.Request(core.Info.Name, f), f.Label, folders)).ToArray()) { Note = ConsoleNotes.GetValueOrDefault(system.Id) });
+                    systems.Add(new FirmwareSystem(system.Name, core.EngineName, system.Firmware.Select(f => Item(CoreEngine.Request(core.Info.Name, f), f.Label, folders)).ToArray()) { Note = SystemTable.FirmwareNotes.GetValueOrDefault(system.Id) });
             }
             return systems;
         }

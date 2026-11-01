@@ -208,7 +208,7 @@ pub fn overview_json(rt: &Runtime) -> String {
         j.begin_object().str("name", &name);
         match shipped(chosen.as_deref().and_then(|e| discovery.by_engine_name(e))) {
             Some(v1) => {
-                j.str("engine", v1.engine_name()).key_array("items");
+                j.str("engine", v1.engine_name()).null("note").key_array("items");
                 let ids = catalog::system_ids_for(console);
                 let mut seen: Vec<String> = Vec::new();
                 for (_, _, _, list) in systems_of(&v1.sidecar.info_json).into_iter().filter(|(id, _, _, _)| ids.contains(&id.as_str())) {
@@ -223,7 +223,7 @@ pub fn overview_json(rt: &Runtime) -> String {
                 j.end_array();
             }
             None => {
-                j.str("engine", &row.display_name).key_array("items").end_array();
+                j.str("engine", &row.display_name).null("note").key_array("items").end_array();
             }
         }
         j.end_object();
@@ -237,7 +237,8 @@ pub fn overview_json(rt: &Runtime) -> String {
             if development || catalog::hand_console_of(&id).is_some() || names.contains(&sname) {
                 continue;
             }
-            j.begin_object().str("name", &sname).str("engine", core.engine_name()).key_array("items");
+            let note = emusen_systems::find(&id).and_then(|s| s.firmware_note.as_deref());
+            j.begin_object().str("name", &sname).str("engine", core.engine_name()).str_or_null("note", note).key_array("items");
             for e in &list {
                 item(&mut j, e);
             }

@@ -24,13 +24,13 @@ namespace EmuSen.Crystal.Systems
             (nameof(SystemEntry.ScreenScraperSystem), "screenscraper_system"),
         };
 
-        // The keys a row holds beyond SystemEntry's: the space its RAM cheats write into, its save media, byte order and libretro names.
-        public static readonly IReadOnlyList<string> PackKeys = new[] { "cheat_space", "media", "byte_order", "libretro_databases", "libretro_systemids" };
+        // The keys a row holds beyond SystemEntry's: the space its RAM cheats write into, its save media, byte order, libretro names and firmware note.
+        public static readonly IReadOnlyList<string> PackKeys = new[] { "cheat_space", "media", "byte_order", "libretro_databases", "libretro_systemids", "firmware_note" };
 
         // A save medium as a row names it, by the system whose row it is in.
         public sealed record RowMedium(string System, string Id, string Title, string Noun);
 
-        private sealed record Table(IReadOnlyList<SystemEntry>? Rows, string Report, string? Json, IReadOnlyList<RowMedium>? Media = null, IReadOnlyDictionary<string, string?>? CheatSpaces = null, IReadOnlyDictionary<string, string?>? ByteOrders = null);
+        private sealed record Table(IReadOnlyList<SystemEntry>? Rows, string Report, string? Json, IReadOnlyList<RowMedium>? Media = null, IReadOnlyDictionary<string, string?>? CheatSpaces = null, IReadOnlyDictionary<string, string?>? ByteOrders = null, IReadOnlyDictionary<string, string?>? FirmwareNotes = null);
 
         private static readonly Lazy<Table> Loaded = new(Load);
 
@@ -52,6 +52,9 @@ namespace EmuSen.Crystal.Systems
 
         // Each row's byte order by its system's id, big, little or null; empty where the library is not in use.
         public static IReadOnlyDictionary<string, string?> ByteOrders => Loaded.Value.ByteOrders ?? new Dictionary<string, string?>();
+
+        // Each row's firmware note by its system's id, null for most; empty where the library is not in use - see EmuSen_Cores.md §4.10.
+        public static IReadOnlyDictionary<string, string?> FirmwareNotes => Loaded.Value.FirmwareNotes ?? new Dictionary<string, string?>();
 
         // Every row's media in the table's order; empty where the library is not in use.
         public static IReadOnlyList<RowMedium> Media => Loaded.Value.Media ?? Array.Empty<RowMedium>();
@@ -86,7 +89,7 @@ namespace EmuSen.Crystal.Systems
                 byte[] bytes = new byte[length];
                 fixed (byte* b = bytes) length = call(b, (nuint)bytes.Length);
                 string json = Encoding.UTF8.GetString(bytes);
-                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table", json, ParseMedia(json), ParseCheatSpaces(json), ParseByteOrders(json));
+                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table", json, ParseMedia(json), ParseColumn(json, "cheat_space"), ParseColumn(json, "byte_order"), ParseColumn(json, "firmware_note"));
             }
             catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
             {
@@ -114,16 +117,11 @@ namespace EmuSen.Crystal.Systems
                 new RowMedium(Text(r, "id")!, Text(m, "id")!, Text(m, "title")!, Text(m, "noun")!))).ToArray();
         }
 
-        private static IReadOnlyDictionary<string, string?> ParseCheatSpaces(string json)
+        // One optional text column of every row, by the row's id.
+        private static IReadOnlyDictionary<string, string?> ParseColumn(string json, string key)
         {
             using var document = JsonDocument.Parse(json);
-            return document.RootElement.EnumerateArray().ToDictionary(r => Text(r, "id")!, r => Text(r, "cheat_space"));
-        }
-
-        private static IReadOnlyDictionary<string, string?> ParseByteOrders(string json)
-        {
-            using var document = JsonDocument.Parse(json);
-            return document.RootElement.EnumerateArray().ToDictionary(r => Text(r, "id")!, r => Text(r, "byte_order"));
+            return document.RootElement.EnumerateArray().ToDictionary(r => Text(r, "id")!, r => Text(r, key));
         }
 
         private static string? Text(JsonElement row, string key) => row.GetProperty(key).ValueKind == JsonValueKind.Null ? null : row.GetProperty(key).GetString();

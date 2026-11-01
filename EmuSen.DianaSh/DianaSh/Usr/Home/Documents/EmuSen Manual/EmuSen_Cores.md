@@ -326,7 +326,8 @@ console has a shelf, and the rule test (`ConsoleScreenRuleTests`) would report i
 - **The Saturn** needs the player's own BIOS: Beetle Saturn's `.info` marks `sega_101.bin` and `mpr-17933.bin` required,
   and there is no open replacement. EmuSen never fetches or ships one. The firmware overview says so above the
   console's files: "Every Saturn game needs a Saturn BIOS of your own. There is no open replacement, and EmuSen never
-  downloads or ships one." (`FirmwareOverview.ConsoleNotes`, carried as the overview's `note`, shown by `FirmwarePane`.)
+  downloads or ships one." (The systems table's `firmware_note` for the console, read by both halves' overviews and carried as the overview's
+  `note`, shown by `FirmwarePane`; every other console's row holds `null`, and the overview writes `"note": null` for it.)
 - **The Dreamcast** runs without its BIOS: Flycast boots games by its own high-level boot, and a dump of the player's own
   is optional. The overview says "Flycast starts Dreamcast games without the console's BIOS, so a BIOS of your own is
   optional."

@@ -17,5 +17,6 @@
   "media": [{ "id": "ps2.card", "title": "Memory Card (PS2)", "noun": "Card" }],
   "byte_order": "little",
   "libretro_databases": ["Sony - PlayStation 2"],
-  "libretro_systemids": ["playstation2"]
+  "libretro_systemids": ["playstation2"],
+  "firmware_note": null
 }

@@ -62,6 +62,8 @@ pub struct System {
     pub libretro_databases: Vec<String>,
     /// The `systemid`s of the libretro cores that run the console, for a core whose `.info` lists no database.
     pub libretro_systemids: Vec<String>,
+    /// What the console's firmware is, said once above its files in the firmware overview; none for most (EmuSen_Cores.md §4.10).
+    pub firmware_note: Option<String>,
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -86,7 +88,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 19] = [
+pub const KEYS: [&str; 20] = [
     "id",
     "name",
     "console",
@@ -106,6 +108,7 @@ pub const KEYS: [&str; 19] = [
     "byte_order",
     "libretro_databases",
     "libretro_systemids",
+    "firmware_note",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -257,6 +260,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         },
         libretro_databases: f.texts_or_none("libretro_databases")?,
         libretro_systemids: f.texts_or_none("libretro_systemids")?,
+        firmware_note: f.optional_text("firmware_note")?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -343,6 +347,7 @@ pub fn to_json(systems: &[System]) -> String {
                 or_null(s.byte_order.as_deref().map(Value::string)),
                 words(&s.libretro_databases),
                 words(&s.libretro_systemids),
+                or_null(s.firmware_note.as_deref().map(Value::string)),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })

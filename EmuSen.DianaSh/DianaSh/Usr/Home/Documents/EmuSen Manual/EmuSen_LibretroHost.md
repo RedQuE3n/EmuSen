@@ -58,6 +58,49 @@ is read for this work; they are only run, as black boxes.
 | the ring and `DEVICE_PICTURE` read as two forms | two boundaries (§5.4) |
 | smaller points | trust on first download said (§7); the archive's bounds (§7); options declared in `retro_load_game` (§4.7); `retro_cheat_reset` (§4.9); `-10` owned by the proxy's `status_text` (§3.4) |
 
+### 0.3 Decided 2026-11-01: two cores, and their pictures through the console's filters
+
+**Two cores, named in a list.** The libretro host supports exactly two cores for now: **PCEE2**, the libretro build of
+upstream PCSX2 (PlayStation 2), and **Flycast**, upstream Flycast's libretro build (Dreamcast, with Naomi and Atomiswave).
+They are listed in one data file of the systems table, `Platform/systems/data/libretro-cores.tsv` (the core's file
+stem, the systems it runs, its upstream source; `EmuSen_Cores.md` §4.7), read by its one reader,
+`emusen_systems::libretro_cores::hosted()`. Cores offers only those, and every host refuses an entry whose stem the list
+does not hold, in plain words, **before** the approval and hash checks of §1.3, which are unchanged. The Rust host calls
+`hosted()`; the C# host reaches it through a platform-library export, `emusen_systems_libretro_cores`, a minor of
+`emusen_platform.h` (accepted 2026-11-01, built once Cores' list has landed), and a test lays out the test core under a
+list of its own, never a build's. Adding a core later is one line and its tests, with no change of code; a field the host
+comes to need (a least interface version, a hardware context) is added to the file and its reader together [C].
+
+**Stage 3 is designed for these two and no other** [C]. Both draw with Vulkan; Flycast can also draw with OpenGL, which
+the host does not offer, so it is asked for Vulkan (`GET_PREFERRED_HW_RENDER`) and a request for any other context is
+refused in words. Generality that only another core would need (an OpenGL context, a core with no negotiation interface,
+formats neither core hands) is left out of §5 and named in §11a, built only when a listed core needs it.
+
+**The picture reaches the console's screen filters**, the accurate CRT filter among them, keyed on the console (the
+systems table's `ps2`, and `dreamcast`, `naomi` and `atomiswave`), never on the core: a hosted PlayStation 2 game and Sapphire's are one
+console to the filter. What the filter needs with each frame is carried by the ring's frame record (§5.4): the
+console, the picture's native size, and whether it is one field or two woven. With the CRT filter on, the host sets the
+core's own options so that the picture is the console's: its native internal resolution and no deinterlacing, each such
+option a **named exception** in the core's profile (the core's key and value, the reason, the date), the same for every
+game, never per game; with the filter off the core's upscaling is the player's to choose. The option keys are taken
+from each core's published option list when stage 3 records them [C].
+- *PCEE2*: native resolution and deinterlacing off give the GS's own output, which the PlayStation 2 profile already
+  expects (640 or 512 wide, 448, 224, 512 or 256 tall, `CrtFilter`'s timing rows). A height of 224 or 256 is one field;
+  448 or 512 is a frame, its field structure read from the picture's height against the mode's.
+- *Flycast*: the Dreamcast's picture is a television's (interlaced 480, or progressive 480 where the game and cable allow)
+  or VGA's (progressive 640 × 480). Which one is the core's cable option, so the host reads it with the picture: TV
+  interlaced is two woven fields at 640 × 480 with deinterlacing off, TV progressive and VGA are progressive frames.
+  The Dreamcast's own profile is separate work; the picture path carries the console, size and field structure it will
+  need.
+
+**What the Dreamcast needs of the project** beside the core [C], none of it the core's: the systems table's entries
+`dreamcast`, `naomi` and `atomiswave` (Cores' list names them), each with its libretro databases, extensions and media;
+the Dreamcast pad as a controller of the table, its stick and **two analog triggers** onto Endymion's `PadAxis`, and the
+arcade boards' sticks and buttons; the VMU as a removable medium (`dc.vmu`), Flycast's VMU files taken as named battery
+files under a profile as PCEE2's cards are (§10c), read with a run of the core; a console screen row and its CRT profile
+(separate work). Firmware is never fetched or shipped: Flycast boots without the console's own (its high-level boot), and
+a player's own dump is given only as a path, through the firmware settings (§4.8).
+
 ## 1. The form: three components, composed
 
 Weighed under the project's rule for features (an extension, a module, or a component):
@@ -543,6 +586,73 @@ the runner's process at all. So the core's device is its own, on the host's card
   its software renderer and still hands nothing by frame 600, while PCEE2 with `software` pinned hands 640×448 XRGB8888
   [M, `Sapphire_Referees.md` §2.3]. So LRPS2 shows nothing through this host until stage 3; PCEE2 shows its software
   picture from stage 2.
+
+### 5.4a `DEVICE_RING` as specified for minor 1.18 (2026-11-01)
+
+Bit 27, kept since 1.17, in a minor of its own. Decided 2026-11-01: the ring is built on exported images that the core's
+device imports, never on a read-back, and it is measured against the in-process `DEVICE_PICTURE` path for frame time and
+for the delay from input to picture.
+
+```c
+#define EMUSEN_CAP_DEVICE_RING (1ull << 27)   /* emusen_core_ring_lend, emusen_core_frame_ring */
+typedef struct emusen_ring_image {           /* 40 bytes; one exported image of the ring */
+    uint32_t size;
+    uint32_t memory_type;                    /* the memory type index on the card, the same for both devices */
+    uint64_t handle;                         /* the memory's OPAQUE_FD (OPAQUE_WIN32 on Windows), the host's */
+    uint64_t allocation_size;                /* of the dedicated allocation */
+    uint32_t width, height;                  /* the image's extent, machine info's maxima at lending */
+    uint32_t format;                         /* VkFormat, R8G8B8A8_UNORM */
+    uint32_t usage;                          /* the VkImageUsageFlags it was made with; tiling optimal */
+} emusen_ring_image;
+typedef struct emusen_ring_lend {            /* 72 bytes */
+    uint32_t size;
+    uint32_t count;                          /* images, three */
+    const emusen_ring_image *images;
+    size_t image_size;                       /* sizeof(emusen_ring_image) as the host knows it */
+    uint64_t ready;                          /* timeline semaphore the core signals, OPAQUE_FD */
+    uint64_t done;                           /* timeline semaphore the host signals, OPAQUE_FD */
+    uint8_t device_uuid[16], driver_uuid[16];
+} emusen_ring_lend;
+typedef struct emusen_ring_frame {           /* 40 bytes */
+    uint32_t size;
+    uint32_t slot;                           /* the image holding the picture */
+    int32_t width, height;                   /* the picture, from the image's top left */
+    uint64_t value;                          /* ready reaches it once the slot holds the picture */
+    uint32_t fields;                         /* 0 a progressive frame, 1 one field, 2 two fields woven */
+    uint32_t field;                          /* with one field: 0 the top, 1 the bottom */
+    uint32_t aspect_num, aspect_den;         /* the picture's display aspect; 0/0 for square pixels */
+} emusen_ring_frame;
+int32_t emusen_core_ring_lend(emusen_machine *machine, const emusen_ring_lend *ring);
+int32_t emusen_core_frame_ring(emusen_machine *machine, emusen_ring_frame *out);
+```
+
+- **Handles are the host's.** The core duplicates what it keeps before importing it, since an import takes the handle it is
+  given; the host closes its own when it frees the ring. A ring lent again replaces the last after every picture handed on
+  it has been released (`done` reached its value); a null ring withdraws it, and the machine hands its pictures by
+  `frame_copy` again. A ring whose UUIDs are not the core's card's is refused with `NOT_SUPPORTED`, and the read-back
+  (§5.5) serves.
+- **`frame_ring`** after `advance` answers 1 with the picture in the ring as `out` says, 0 when this frame's picture is
+  not there (none, or `frame_copy` has it), or a status. The values count the pictures handed on this ring from 1.
+- **The console's picture.** `fields` and `field` are what the screen filters need beside the console (machine info's
+  `system`) and the size (§0.3); a libretro core says nothing of fields, so the libretro host derives them from the size
+  against the console's modes and the core's own options the profile pins (PCEE2: 224 or 256 rows one field, 448 or 512
+  a frame; Flycast: its cable option, TV interlaced two fields woven, TV progressive and VGA progressive).
+- **A larger picture** (§5.4): held, `MACHINE_INFO` raised with the new maxima, copied at the first `frame_ring` after the
+  host lends a ring that holds it.
+- **Through the broker** the handles cross by `SCM_RIGHTS` on the control socket, in a message of their own after the
+  `RingLend` request, which the runner receives with `recvmsg`; the struct's handles are rewritten to the runner's.
+
+**The probe** [M, 2026-10-31, the RX 6800 under RADV, Vulkan 1.4.354, validation with synchronisation checks on, a
+40-line `ash` program run headless]: a timeline semaphore is exportable and importable as `OPAQUE_FD`
+(`EXPORTABLE | IMPORTABLE`); one made exportable on a device, exported, imported into a second device on the same card,
+signalled there to 7 from its queue, was waited for and read as 7 on the first, with no validation message; an
+`R8G8B8A8_UNORM` image of optimal tiling with transfer and sampling usage can have its memory exported and imported as
+`OPAQUE_FD`, as a dedicated allocation only (`DEDICATED_ONLY`), which the ring's dedicated memory already is.
+
+**The measurement** (decided 2026-11-01), on the RX 6800 and headless: the test core's Vulkan picture through the broker
+and the ring, against the same picture handed in-process by `DEVICE_PICTURE` (a project core's form), for (1) the frame's
+cost on the host's emulation thread and (2) the delay from `set_buttons` to the first picture showing the press, read
+on the host's device; and PCEE2 on Jak's arena through the ring.
 
 ### 5.5 The read-back, where sharing is impossible
 

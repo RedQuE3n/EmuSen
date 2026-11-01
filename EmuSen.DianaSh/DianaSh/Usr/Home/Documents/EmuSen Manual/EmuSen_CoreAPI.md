@@ -941,6 +941,11 @@ will not use the value as chosen" (`CoreCapabilities.cs`). A function cannot cro
 `setting_notes` (`SETTING_NOTES`) returns `{ "key": "sentence" }` for the machine's current values, read after each
 `set_settings`. MarsRT's antialiasing note is the case.
 
+**Locked rows** (decided 2026-11-01, no change of version). A core whose current values hold some settings fixed lists
+them under the note key `!locked`, the keys separated by spaces; `!` is outside a key's characters, so no setting can
+collide with it, and a frontend that does not know the entry finds no row for it and ignores it. A locked row's own
+note says why. The libretro host's `console_picture` is the first user (`EmuSen_LibretroHost.md` §10i).
+
 **A finding to settle.** MarsCore's `DeferredPresentation` ("the picture … reaches the screen one frame late[r]")
 defaults to on (`MarsCore.cs`). Under this schema it is `effect: latency`. The rule that defaults are accurate
 applies to `accuracy` and `enhancement`; §15 Q12 decided that it does not extend to latency.

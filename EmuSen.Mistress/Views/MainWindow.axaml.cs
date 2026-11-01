@@ -481,6 +481,14 @@ namespace EmuSen.Mistress.Views
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
+            if (_session is { } running) SyncConsolePicture(running.Crystal, choice.Filter);
+        }
+
+        // A hosted core gives the console's own picture while the CRT filter draws it; a refusal is said, never thrown - see EmuSen_LibretroHost.md §10i.
+        private void SyncConsolePicture(EmuSen.Crystal.Client.CrystalSession session, EmuSen.Serenity.Shaders.ScreenFilter? filter)
+        {
+            try { ConsolePicture.Sync(session, filter); }
+            catch (EmuSen.Crystal.Client.CrystalException e) { StatusText.Text = $"The console's own picture was not set: {e.Message}"; }
         }
 
         private Dictionary<string, float> ShaderParameterValues(string console, string shader)

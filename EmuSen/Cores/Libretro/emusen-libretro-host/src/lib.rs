@@ -2,6 +2,7 @@
 //! every frontend runs it as it runs the project's own. See EmuSen_LibretroHost.md.
 
 pub mod audio;
+pub mod console_picture;
 pub mod files;
 pub mod front;
 pub mod input;

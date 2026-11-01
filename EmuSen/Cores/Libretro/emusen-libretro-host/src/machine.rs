@@ -11,6 +11,7 @@ use emusen_native::core::{
 };
 use emusen_native::ffi::{Status, StateMachine};
 
+use crate::console_picture;
 use crate::files::{self, Saves};
 use crate::front::{self, Shared};
 use crate::library::{self, Library};
@@ -92,6 +93,8 @@ pub struct Machine {
     discs: Vec<(Option<CString>, Option<Vec<u8>>)>,
     /// The disc in the drive, as its state header records it.
     disc: [u8; 16],
+    /// The keys `console_picture` holds at the console's values, none while it is off.
+    held: Vec<String>,
 }
 
 /// Files removed when dropped: the firmware copies of a machine, or of a create that failed.
@@ -417,6 +420,7 @@ impl v1::Core for Machine {
                     restart: false,
                 })
                 .filter(|s| s.check().is_ok())
+                .chain(std::iter::once(console_picture::setting()))
                 .collect()
         })
     }
@@ -774,6 +778,9 @@ impl v1::Core for Machine {
                 d.options.set(k, v);
             }
         });
+        if let Some((_, v)) = settings.pairs().find(|p| p.0 == console_picture::KEY) {
+            self.held = hold_picture(self.lib, v == "true");
+        }
         Ok(())
     }
 
@@ -789,10 +796,20 @@ impl v1::Core for Machine {
                 let value = current.iter().find(|c| c.0 == *k).map_or("", |c| c.1.as_str());
                 notes.push((k.clone(), format!("The core set this to {value} itself.")));
             }
+            let exceptions = console_picture::exceptions(&self.lib.stem);
+            for k in &self.held {
+                if let (Some(e), Some(o)) = (exceptions.iter().find(|e| e.key == *k), d.options.declared.iter().find(|o| o.key == *k)) {
+                    let label = o.values.iter().find(|v| v.0 == e.value).map_or(e.value.as_str(), |v| v.1.as_str());
+                    notes.push((k.clone(), format!("Held at {label} while the CRT filter is on: {} (a named exception, decided {}).", e.reason, e.decided)));
+                }
+            }
+            notes.push((console_picture::KEY.into(), if self.held.is_empty() { "Set by the screen filter: on while the console's CRT filter is on.".into() } else { "On while the CRT filter is on; the options it holds are locked until the filter is turned off.".into() }));
+            let locked: Vec<&str> = self.held.iter().map(String::as_str).chain(std::iter::once(console_picture::KEY)).collect();
+            notes.push((console_picture::LOCKED.into(), locked.join(" ")));
             if d.declared_late {
                 notes.push(("libretro".into(), "The core declared options while loading the game; they take their defaults until the core is loaded again.".into()));
             }
-            notes.retain(|n| d.options.declared.iter().any(|o| o.key == n.0) || n.0 == "libretro");
+            notes.retain(|n| d.options.declared.iter().any(|o| o.key == n.0) || ["libretro", console_picture::KEY, console_picture::LOCKED].contains(&n.0.as_str()));
             notes
         })
     }
@@ -805,6 +822,13 @@ fn blocks(lib: &Library) -> Vec<memory::Space> {
         .iter()
         .filter_map(|&(name, id)| memory::block(name, unsafe { (lib.api.get_memory_data)(id) } as *mut u8, unsafe { (lib.api.get_memory_size)(id) }))
         .collect()
+}
+
+/// The core's named exceptions held over the player's values while the console's own picture is asked for, or released;
+/// the keys held (EmuSen_LibretroHost.md §10i).
+fn hold_picture(lib: &Library, on: bool) -> Vec<String> {
+    let held: Vec<(String, String)> = if on { console_picture::exceptions(&lib.stem).into_iter().map(|e| (e.key, e.value)).collect() } else { Vec::new() };
+    front::with_declared(|d| d.options.hold(&held))
 }
 
 /// The device a present pad is set to: the core's pad with sticks, else the analog pad, else the RetroPad.
@@ -831,6 +855,9 @@ impl Machine {
             for (k, v) in r.settings.pairs() {
                 d.options.set(k, v);
             }
+        });
+        let held = hold_picture(lib, r.settings.pairs().any(|p| p == (console_picture::KEY, "true")));
+        front::with_declared(|d| {
             d.options.updated = false;
             d.loaded_once = true;
         });
@@ -948,6 +975,7 @@ impl Machine {
             _firmware: firmware_written,
             discs: Vec::new(),
             disc: state::disc(Some(r.image)),
+            held,
         };
         front::bind(&mut *machine.shared);
         for (which, id) in [(SRAM, sys::MEMORY_SAVE_RAM), (RTC, sys::MEMORY_RTC)] {

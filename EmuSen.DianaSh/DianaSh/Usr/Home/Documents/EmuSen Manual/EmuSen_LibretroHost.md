@@ -1264,6 +1264,36 @@ C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1`
 discovery and trust of libretro entries is a stage of its own, after branch `hosted-cores` lands, on that branch's list
 reader. The ring's Rust half is built and type-checked but unexercised until then.
 
+## 10i. Stage 4, continued: the console's own picture, the settings window, the cards (2026-11-01)
+
+**The console's own picture (4.4(c)).** Decided 2026-11-01: the libretro host declares a reserved setting,
+`console_picture` (a switch, scope `run`, effect `none`, category "Screen filter"), which no libretro core's options can
+hold. Mistress sets it at console scope while the console's accurate CRT filter is the screen filter
+(`ConsolePicture.Sync`, called wherever the filter is applied) and clears it for every other filter; the host then holds
+the core's **named exceptions** over the player's values and gives them back when it is cleared. Mistress learns no
+libretro key: it sets `console_picture` wherever the running engine's schema declares it.
+- *The exceptions are data*, `emusen-libretro-host/data/console-picture.tsv`, one row per exception: the core's file
+  stem, the option's key, the value giving the console's picture, the reason and the date decided. PCEE2's rows are
+  `pcsx2_upscale_multiplier=1` (the GS's own internal resolution) and `pcsx2_deinterlace_mode=1` (no deinterlacing), both
+  decided 2026-11-01. The project's test core has two rows of its own (`tc_scale=1`, `tc_deinterlace=off`), standing in
+  for a console core's in the tests. A row whose key the core does not declare, or whose value is not among its
+  choices, is skipped.
+- *Held, never written.* `Options::hold` keeps the held values beside the player's; `GET_VARIABLE` answers the held one.
+  The player's stored values are never changed, so a change the player makes while a value is held is kept and takes
+  effect when the filter is turned off. `GET_VARIABLE_UPDATE` is raised only when the value the core reads changes.
+  Made with `console_picture` on, a machine is held from its first frame.
+- *Locked rows.* `setting_notes` gives each held row its reason ("Held at <the value's label> while the CRT filter is on: …
+  (a named exception, decided 2026-11-01)") and lists the rows a frontend shows locked under the note key `!locked`,
+  space-separated, `console_picture` always among them (`EmuSen_CoreAPI.md` §6.13).
+- Tests: `the_console_picture_holds_the_named_exceptions_and_gives_the_players_values_back` (`tests/testcore.rs`: the
+  player's 640 × 480 blended picture, 320 × 240 unblended with the filter on, the locked list and reasons, a player's
+  change while held waiting, the player's picture back; a machine made with it on held from its first frame);
+  `Options`' unit test of holding; and through the C# frontend API `The_crt_filter_gives_the_consoles_own_picture_and_turning_it_off_gives_the_players_back`
+  (`HostedCoreLaunchTests`: `ConsolePicture.Sync` with the CRT filter, then with CRT (Lottes), the stored values
+  unchanged). The test core gained `tc_scale` (1 or 2) and `tc_deinterlace` (off, or blend: each odd row a copy of the
+  row above), both read again between frames. Seeded faults, each caught by the host's test: the hold never raising
+  `GET_VARIABLE_UPDATE`; the setting read as `on` instead of `true`.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

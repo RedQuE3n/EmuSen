@@ -86,6 +86,38 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((target, 1u, 0u), (reached.total_frames, reached.paused, reached.ran));
         }
 
+        // The picture's size and whether its rows come in the blended pairs the test core's deinterlacing draws.
+        private static (int Width, int Height, bool Blended) Shape(CrystalSession s)
+        {
+            CrystalFrameInfo f = Frames(s, 2);
+            byte[] picture = new byte[s.PictureBytes];
+            s.CopyPicture(picture);
+            int row = f.width * 4, scale = f.width / 320;
+            return (f.width, f.height, picture.AsSpan(0, row).SequenceEqual(picture.AsSpan(scale * row, row)));
+        }
+
+        // §10i: Mistress keeps console_picture on while the CRT filter is, and the host holds the core's named exceptions, the player's stored values untouched.
+        [Fact]
+        public void The_crt_filter_gives_the_consoles_own_picture_and_turning_it_off_gives_the_players_back()
+        {
+            using CrystalRuntime runtime = Runtime();
+            using CrystalSession s = runtime.Open(new CrystalOpen { Path = Disc(), Engine = _entry.Found.EngineName, NoBattery = true });
+            s.SetSetting("tc_scale", "2", game: false);
+            s.SetSetting("tc_deinterlace", "blend", game: false);
+            Assert.Equal((640, 480, true), Shape(s));
+            Assert.False(EmuSen.Mistress.Library.ConsolePicture.Sync(s, null), "already off");
+            Assert.True(EmuSen.Mistress.Library.ConsolePicture.Sync(s, EmuSen.Serenity.Shaders.CrtFilter.Filter));
+            Assert.Equal((320, 240, false), Shape(s));
+            Assert.Equal(("2", "blend", "true"), (s.Setting("tc_scale"), s.Setting("tc_deinterlace"), s.Setting("console_picture")));
+            var rows = EmuSen.Mistress.Library.RuntimeCatalog.SettingsOf(s);
+            string? note = rows.First(r => r.Key == "tc_scale").Note;
+            _output.WriteLine($"tc_scale: {note}");
+            Assert.StartsWith("Held at 1 (label) while the CRT filter is on", note);
+            Assert.False(EmuSen.Mistress.Library.ConsolePicture.Sync(s, EmuSen.Serenity.Shaders.CrtFilter.Filter), "already on");
+            Assert.True(EmuSen.Mistress.Library.ConsolePicture.Sync(s, EmuSen.Serenity.Shaders.CrtFilters.Lottes));
+            Assert.Equal((640, 480, true), Shape(s));
+        }
+
         // §10h: the core build's SHA-256 is in every state, and a state of another build is refused in plain words.
         [Fact]
         public void A_state_loads_and_one_of_another_build_is_refused_in_plain_words()

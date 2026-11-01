@@ -534,17 +534,6 @@ namespace EmuSen.Tools.Cores
 
         private static long Number(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long n) ? n : 0;
 
-        private static (long Free, long Total)? DiskOf(string path)
-        {
-            try
-            {
-                string? at = Path.GetFullPath(path);
-                while (at is not null && !Directory.Exists(at)) at = Path.GetDirectoryName(at);
-                if (at is null) return null;
-                var drive = new DriveInfo(at);
-                return (drive.AvailableFreeSpace, drive.TotalSize);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
-        }
+        private static (long Free, long Total)? DiskOf(string path) => DiskSpace.Under(path);
     }
 }

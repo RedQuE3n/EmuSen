@@ -802,14 +802,14 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
                     new LunaAction("_Memory Cards...", ShowMemoryCards),
                     new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
-                    new LunaAction("Co_res...", ShowCores),
+                    new LunaAction("Cor_es...", ShowCores),
                     new LunaAction("Pac_kages...", ShowPackages),
                     new LunaAction("Sc_raper...", ShowScraper),
                     new LunaAction("_Library Manager...", ShowLibraryManager),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.
-                    new LunaAction("_Runtime Dashboard...", OpenVstopWindow),
+                    new LunaAction("R_untime Dashboard...", OpenVstopWindow),
                     new LunaAction("S_hell...", ShowShellConsole)));
 
             SyncMenuState();

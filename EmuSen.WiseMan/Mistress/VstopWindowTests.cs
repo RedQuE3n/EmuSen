@@ -145,17 +145,17 @@ namespace EmuSen.WiseMan.Mistress
             main.Show();
 
             // Unlike the hardware dashboard, this one never needs a ROM.
-            Assert.True(MainWindowMenu.Find(main, "_Settings", "_Runtime Dashboard...").IsEnabled);
+            Assert.True(MainWindowMenu.Find(main, "_Settings", "R_untime Dashboard...").IsEnabled);
             Assert.False(MainWindowMenu.Find(main, "_Settings", "_Hardware Dashboard...").IsEnabled);
 
             // The at-most-one rule is WindowSlot's now, so this reaches through the slot rather than a nullable field.
             var slot = (WindowSlot<VstopWindow>)Field(main, "_vstopWindow")!;
 
-            Click(main, "_Runtime Dashboard...");
+            Click(main, "R_untime Dashboard...");
             Assert.True(slot.IsOpen);
             VstopWindow first = slot.Current!;
 
-            Click(main, "_Runtime Dashboard...");
+            Click(main, "R_untime Dashboard...");
             Assert.Same(first, slot.Current);
 
             first.Close();

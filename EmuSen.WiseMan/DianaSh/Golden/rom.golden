@@ -3,38 +3,78 @@
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command rom
 shell rust
+usage 1   rom hash [-r] [--comparable] <path>...
+usage 2                                 CRC-32, MD5, SHA-1, size and name of each file (a sheet's tracks each), relative to
+usage 3                                 the library; --comparable in its system's comparable form, a disc as one line
+usage 4   rom check [-r] <path>...      each file: ok, or each check it failed (size, sheet, archive, chd)
+usage 5   rom dups [<console>]          the groups of the same dump, one a paragraph
+usage 6   rom wait [rom<n>]             follow a rom job that went on in the background
 
 case the usage, and what a command line refuses
 target none
 covers 1-6
 $ rom
+out 190
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom frobnicate
+out 190
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom hash
+out 254
+rom hash: name what to hash, or / with -r for the whole library
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom check
+out 256
+rom check: name what to check, or / with -r for the whole library
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom check --comparable a.nes
+out 238
+rom: --comparable is not an option of rom check
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom hash -x a.nes
+out 227
+rom: -x is not an option of rom hash
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom dups -r
+out 227
+rom: -r is not an option of rom dups
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom dups snes nes
+out 220
+rom dups: one console at most
+Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]
+  Paths are relative to the library, / for all of it with -r. See man rom.
 status 1
 action none
 $ rom wait
+out 25
+rom wait: no such rom job
 status 1
 action none
 $ rom wait rom9
+out 30
+rom wait: no such rom job rom9
 status 1
 action none
 end

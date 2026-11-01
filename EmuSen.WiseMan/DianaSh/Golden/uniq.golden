@@ -2,8 +2,9 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command uniq
-usage 1   uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its
-usage 2                                 repeat count) - sort first for global dedup, not just adjacent
+usage 1   uniq [-c] [-D] [-w <chars>]   collapse adjacent duplicate lines (-c prefixes each with its
+usage 2                                 repeat count; -D prints every line of each run of two or more;
+usage 3                                 -w compares only the first <chars> characters) - sort first
 
 case adjacent duplicates
 target none
@@ -60,21 +61,41 @@ x
 x
 
 $ cat b.txt | uniq -D
+out 3
+x
+x
 status 0
 action none
 $ cat b.txt | uniq -D -w 3
+out 15
+abc 1
+abc 2
+x
+x
 status 0
 action none
 $ cat b.txt | uniq -w 2
+out 7
+abc 1
+x
 status 0
 action none
 $ cat b.txt | uniq -c -w2
+out 11
+3 abc 1
+2 x
 status 0
 action none
 $ uniq -c -D
+out 135
+uniq: -c and -D together are meaningless: every line of a run is printed, not counted
+Usage: uniq [-c] [-D] [-w <chars>] - see man uniq
 status 1
 action none
 $ uniq -w
+out 87
+uniq: -w needs a number of characters
+Usage: uniq [-c] [-D] [-w <chars>] - see man uniq
 status 1
 action none
 end

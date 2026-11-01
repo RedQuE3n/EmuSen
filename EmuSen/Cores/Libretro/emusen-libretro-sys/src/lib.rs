@@ -468,23 +468,9 @@ pub struct retro_hw_render_callback {
     pub debug_context: bool,
 }
 
+/// The disk control interface of version 0, which the extended one begins with.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct retro_disk_control_ext_callback {
-    pub set_eject_state: Option<unsafe extern "C" fn(ejected: bool) -> bool>,
-    pub get_eject_state: Option<unsafe extern "C" fn() -> bool>,
-    pub get_image_index: Option<unsafe extern "C" fn() -> c_uint>,
-    pub set_image_index: Option<unsafe extern "C" fn(index: c_uint) -> bool>,
-    pub get_num_images: Option<unsafe extern "C" fn() -> c_uint>,
-    pub replace_image_index: Option<unsafe extern "C" fn(index: c_uint, info: *const retro_game_info) -> bool>,
-    pub add_image_index: Option<unsafe extern "C" fn() -> bool>,
-    pub set_initial_image: Option<unsafe extern "C" fn(index: c_uint, path: *const c_char) -> bool>,
-    pub get_image_path: Option<unsafe extern "C" fn(index: c_uint, s: *mut c_char, len: usize) -> bool>,
-    pub get_image_label: Option<unsafe extern "C" fn(index: c_uint, s: *mut c_char, len: usize) -> bool>,
-}
-
-/// The first seven entries of `retro_disk_control_ext_callback`, the version 0 interface.
-#[repr(C)]
 pub struct retro_disk_control_callback {
     pub set_eject_state: Option<unsafe extern "C" fn(ejected: bool) -> bool>,
     pub get_eject_state: Option<unsafe extern "C" fn() -> bool>,
@@ -493,6 +479,19 @@ pub struct retro_disk_control_callback {
     pub get_num_images: Option<unsafe extern "C" fn() -> c_uint>,
     pub replace_image_index: Option<unsafe extern "C" fn(index: c_uint, info: *const retro_game_info) -> bool>,
     pub add_image_index: Option<unsafe extern "C" fn() -> bool>,
+}
+
+/// An image's path or label written into the core's buffer.
+pub type retro_get_image_text_t = Option<unsafe extern "C" fn(index: c_uint, s: *mut c_char, len: usize) -> bool>;
+
+/// `retro_disk_control_ext_callback`: version 0's seven entries, laid out first as the header lays them, and three more.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct retro_disk_control_ext_callback {
+    pub base: retro_disk_control_callback,
+    pub set_initial_image: Option<unsafe extern "C" fn(index: c_uint, path: *const c_char) -> bool>,
+    pub get_image_path: retro_get_image_text_t,
+    pub get_image_label: retro_get_image_text_t,
 }
 
 /// The exports every libretro core has, by name.

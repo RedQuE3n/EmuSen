@@ -345,13 +345,15 @@ fn with_core<T: Default>(f: impl FnOnce(&mut Core) -> T) -> T {
 }
 
 static DISK: sys::retro_disk_control_ext_callback = sys::retro_disk_control_ext_callback {
-    set_eject_state: Some(set_eject),
-    get_eject_state: Some(get_eject),
-    get_image_index: Some(get_index),
-    set_image_index: Some(set_index),
-    get_num_images: Some(num_images),
-    replace_image_index: Some(replace_image),
-    add_image_index: Some(add_image),
+    base: sys::retro_disk_control_callback {
+        set_eject_state: Some(set_eject),
+        get_eject_state: Some(get_eject),
+        get_image_index: Some(get_index),
+        set_image_index: Some(set_index),
+        get_num_images: Some(num_images),
+        replace_image_index: Some(replace_image),
+        add_image_index: Some(add_image),
+    },
     set_initial_image: Some(set_initial),
     get_image_path: None,
     get_image_label: Some(image_label),

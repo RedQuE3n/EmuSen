@@ -592,15 +592,15 @@ impl v1::Core for Machine {
 
     fn drives(&self) -> Vec<Drive> {
         let Some(d) = self.shared.disk.as_ref() else { return Vec::new() };
-        let lid_open = d.get_eject_state.is_some_and(|f| unsafe { f() });
-        let images = d.get_num_images.map_or(0, |f| unsafe { f() });
-        let index = d.get_image_index.map_or(0, |f| unsafe { f() });
+        let lid_open = d.base.get_eject_state.is_some_and(|f| unsafe { f() });
+        let images = d.base.get_num_images.map_or(0, |f| unsafe { f() });
+        let index = d.base.get_image_index.map_or(0, |f| unsafe { f() });
         vec![Drive { drive: 0, label: "Disc drive".into(), kind: "disc".into(), lid_open, loaded: index < images }]
     }
 
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
         let d = self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
-        let set = d.set_eject_state.ok_or(status::NOT_SUPPORTED)?;
+        let set = d.base.set_eject_state.ok_or(status::NOT_SUPPORTED)?;
         let done = unsafe { set(open) };
         front::flush_logs();
         if done { Ok(()) } else { Err(STATUS_REFUSED) }
@@ -608,15 +608,15 @@ impl v1::Core for Machine {
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
         let d = *self.shared.disk.as_ref().filter(|_| drive == 0).ok_or(status::NO_SUCH_DRIVE)?;
-        if !insert.restore && !d.get_eject_state.is_some_and(|f| unsafe { f() }) {
+        if !insert.restore && !d.base.get_eject_state.is_some_and(|f| unsafe { f() }) {
             return Err(status::LID_CLOSED);
         }
-        let (Some(images), Some(index), Some(replace), Some(set_index)) = (d.get_num_images, d.get_image_index, d.replace_image_index, d.set_image_index) else {
+        let (Some(images), Some(index), Some(replace), Some(set_index)) = (d.base.get_num_images, d.base.get_image_index, d.base.replace_image_index, d.base.set_image_index) else {
             return Err(status::NOT_SUPPORTED);
         };
-        let closed = !d.get_eject_state.is_some_and(|f| unsafe { f() });
+        let closed = !d.base.get_eject_state.is_some_and(|f| unsafe { f() });
         if closed {
-            d.set_eject_state.map(|f| unsafe { f(true) });
+            d.base.set_eject_state.map(|f| unsafe { f(true) });
         }
         let r = match insert.image {
             None => unsafe { replace(index(), std::ptr::null()) },
@@ -633,7 +633,7 @@ impl v1::Core for Machine {
                     size: data.as_ref().map_or(0, |k| k.len()),
                     meta: std::ptr::null(),
                 };
-                let added = d.add_image_index.is_some_and(|f| unsafe { f() });
+                let added = d.base.add_image_index.is_some_and(|f| unsafe { f() });
                 let at = unsafe { images() }.saturating_sub(1);
                 let ok = added && unsafe { replace(at, &game) } && unsafe { set_index(at) };
                 self.discs.push((path, data));
@@ -641,7 +641,7 @@ impl v1::Core for Machine {
             }
         };
         if closed {
-            d.set_eject_state.map(|f| unsafe { f(false) });
+            d.base.set_eject_state.map(|f| unsafe { f(false) });
         }
         front::flush_logs();
         if !r {

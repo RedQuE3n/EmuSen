@@ -567,19 +567,8 @@ unsafe fn answer(cmd: c_uint, data: *mut c_void) -> bool {
             s.disk = Some(if cmd == env::SET_DISK_CONTROL_EXT_INTERFACE {
                 unsafe { std::ptr::read(data as *const sys::retro_disk_control_ext_callback) }
             } else {
-                let v0 = unsafe { std::ptr::read(data as *const sys::retro_disk_control_callback) };
-                sys::retro_disk_control_ext_callback {
-                    set_eject_state: v0.set_eject_state,
-                    get_eject_state: v0.get_eject_state,
-                    get_image_index: v0.get_image_index,
-                    set_image_index: v0.set_image_index,
-                    get_num_images: v0.get_num_images,
-                    replace_image_index: v0.replace_image_index,
-                    add_image_index: v0.add_image_index,
-                    set_initial_image: None,
-                    get_image_path: None,
-                    get_image_label: None,
-                }
+                let base = unsafe { std::ptr::read(data as *const sys::retro_disk_control_callback) };
+                sys::retro_disk_control_ext_callback { base, set_initial_image: None, get_image_path: None, get_image_label: None }
             });
             true
         }

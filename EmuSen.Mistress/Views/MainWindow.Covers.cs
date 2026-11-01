@@ -85,7 +85,7 @@ namespace EmuSen.Mistress.Views
             if (!_downloadingDatabase)
             {
                 if (File.Exists(OpenVgdbPath)) StartFetcher();
-                else _ = DownloadDatabaseAsync();
+                else DownloadDatabaseAsync().Logged("mistress", "DownloadDatabaseAsync");
             }
             return true;
         }

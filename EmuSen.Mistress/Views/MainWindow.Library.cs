@@ -58,8 +58,8 @@ namespace EmuSen.Mistress.Views
 
             LibrarySidebar.Chose += ChooseCollection;
             _newCollection = new LunaAction("_New Collection...", () => _ = NewCollectionAsync(null));
-            _renameCollection = new LunaAction("_Rename Collection...", () => _ = RenameCollectionAsync());
-            _deleteCollection = new LunaAction("_Delete Collection...", () => _ = DeleteCollectionAsync());
+            _renameCollection = new LunaAction("_Rename Collection...", () => RenameCollectionAsync().Logged("mistress", "RenameCollectionAsync"));
+            _deleteCollection = new LunaAction("_Delete Collection...", () => DeleteCollectionAsync().Logged("mistress", "DeleteCollectionAsync"));
             LibrarySidebar.ContextMenu = SidebarContextMenu();
             TileScale.Minimum = MinimumTileScale;
             TileScale.Maximum = MaximumTileScale;

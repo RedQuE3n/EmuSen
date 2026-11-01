@@ -269,6 +269,8 @@ namespace EmuSen.Crystal.Managed
             CrystalJson.StringOrNull(w, "reason", system is null ? routed?.Reason ?? $"no engine in this build takes {extension} files" : null);
             Cartridge(w, system, path);
             CrystalJson.StringOrNull(w, "shelf", CoreCatalog.ShelfFor(path, core));
+            // 1.6's key, which the C# half never sets (EmuSen_LibretroHost.md §10t).
+            w.WriteNull("waiting_default");
             w.WriteEndObject();
         });
 

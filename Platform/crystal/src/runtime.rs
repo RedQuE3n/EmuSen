@@ -294,7 +294,8 @@ impl Runtime {
         let discovery = self.discovery();
         let catalog = Catalog::new(&discovery);
         let tree = emusen_galaxia::tree::tree();
-        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system), None))
+        let trust = self.trust();
+        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system), None), &|sha| trust.approved(sha))
     }
 
     /// The library's shelves in release order.

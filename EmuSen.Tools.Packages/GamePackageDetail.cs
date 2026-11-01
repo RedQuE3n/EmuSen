@@ -327,7 +327,7 @@ namespace EmuSen.Tools.Packages
             }
             if (_browse)
             {
-                Button browse = Ui.Button("Browse...", () => _ = BrowseAsync());
+                Button browse = Ui.Button("Browse...", () => BrowseAsync().Logged("packages", "BrowseAsync"));
                 browse.Name = "GamePackageBrowse";
                 browse.IsEnabled = adding;
                 _adds.Children.Add(browse);

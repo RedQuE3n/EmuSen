@@ -61,7 +61,7 @@ namespace EmuSen.Tools.Packages
         private void OpenFolder()
         {
             string folder = Path.Combine(DataStore.Packages, Row.Package!.Replace('/', Path.DirectorySeparatorChar));
-            if (Directory.Exists(folder)) _ = TopLevel.GetTopLevel(this)?.Launcher.LaunchUriAsync(new Uri(folder));
+            if (Directory.Exists(folder)) TopLevel.GetTopLevel(this)?.Launcher.LaunchUriAsync(new Uri(folder)).Logged("packages", "Opening the folder");
         }
     }
 }

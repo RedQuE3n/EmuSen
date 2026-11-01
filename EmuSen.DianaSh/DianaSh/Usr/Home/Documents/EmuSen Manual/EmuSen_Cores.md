@@ -140,6 +140,64 @@ platform library and the frontend API's binding (`EmuSen.Crystal.Client`) — ne
 window (*Tools ▸ Cores*) and as a big-picture sheet; Home and `emusen-tools cores` host it once they exist. The approval
 question moves into the tool library so that Mistress's open path and Cores ask it in one form.
 
+### 3.5 Approve after a core installed in the same session, and tasks not awaited (2026-11-01)
+
+**The defect.** On 2026-11-01 the tester ran the big screen on a fresh home. PCEE2 was installed through Cores at
+17:18:48, inside the running Mistress process. Then Library ▸ Cores ▸ PCEE2 ▸ A opened the core's page with the focus on
+Approve, and A on Approve did nothing: no question, no approval, nothing logged.
+
+**The cause, with evidence.** The runtime lists the cores directories once, when it starts, and again only on `rescan`
+or after an approval. Cores never asked it to list them again after its own install job, so the runtime's listing
+predated PCEE2. The pane's row therefore carried no runtime hash (`CoreRow.Sha256` null). The page still offered
+Approve, because it showed the hash the entry's NOTICE records (the core tool's listing). `ApproveSelectedAsync`,
+however, required the row's own hash and returned false without a word. Reproduced in the real window on 2026-11-01:
+a copy of the sandbox with `pcee2/` moved back into `Cores/libretro/` after launch. The row read "installed" instead
+of "waiting for approval", A on Approve left the focus on the page's button, and `cores.approved` was not written. Ruled
+out the same day: pad focus escaping the question. With the question presented, Down, Down, Right and Right all kept
+the focus on its buttons, and Down then A approved. A headless run of the real `Dialogs.ConfirmAsync` path also passed
+before the fix. The defect lay in the stale listing, not in the sheet.
+
+**The fix.**
+1. `CoresRuntime.Rescan`, optional: Mistress hands in the frontend API's `rescan`, and Cores calls it in every refresh.
+   That covers opening the pane, after each job and after an approval. A core a job installed or removed is then the
+   runtime's to approve. Cost: one hash of each player library per refresh, which is rare.
+2. One owner for the hash a row is approved by (`HashOf`: the runtime's, else the NOTICE's). The page and the action
+   read the same one.
+3. No silent refusal. A row with no hash yet, or a refusal from the runtime, is set on the notice line and said in a
+   message over the window (`CoresHost.Tell`, `Dialogs.MessageAsync` in Mistress). The big screen's bar is easily
+   missed.
+4. Every task the tool panes start without awaiting goes through `BackgroundTask.Logged(area, what)` in Galaxia. A
+   fault is written to the error log as `ERROR [area] <what> failed` with its exception, instead of being dropped by
+   `_ = …`. The same applies to the Library, Packages and Scraper panes and to Mistress's windows.
+
+**Tests.** `CoresWindowRuntimeTests`, on the Rust runtime:
+- `A_core_installed_while_Mistress_runs_is_approved_through_the_real_question_by_pad`: the runtime made before the
+  entry is laid, the big-screen form, the real question answered by the pad, and the approval in `cores.approved`.
+- `Without_a_rescan_the_question_is_still_asked_and_the_refusal_said`.
+
+Also `CoresWindowTests.A_refused_approval_is_said_to_the_player` and
+`ErrorLogTests.A_background_task_s_fault_is_written_and_a_finished_one_writes_nothing`.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught:
+
+| Fault | Caught by |
+|---|---|
+| No rescan in the refresh | the mid-session install case |
+| Mistress handing no `Rescan` | the mid-session install case |
+| The refusal not said | the refusal case |
+| The logger continuing on success instead of fault | the error-log case |
+| The old silent return for a row without the runtime's hash | the no-rescan case |
+
+**In the real window (2026-11-01).** The build was out/ at 3351e722d with this change's assemblies over it, on a fresh
+home, with PCEE2 laid in after launch. The row read "waiting for approval". A on Approve showed "Approve a Core" with
+Approve focused, A wrote `cores.approved`, and the pane said "Approved Sony - PlayStation 2 (PCEE2)". Jak then opened
+on PCEE2: the session's `[picture] Sony - PlayStation 2 (PCEE2): read back` line.
+
+Left as they are, and recorded:
+- After the question closes, the focus lands on the sheet's first control instead of Approve.
+- Through a symlinked library the hosted runner refused the disc with "Permission denied".
+- PCEE2 ran at 34–51 fps with `retro_run` at 3–4 ms, which points at the pacer.
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts

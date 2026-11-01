@@ -114,17 +114,21 @@ fn is_game_boy_color(at: &str) -> bool {
     matches!(byte, Some(0x80 | 0xC0))
 }
 
-/// `{"system","console","engine","reason","cartridge","shelf"}`.
-/// `engine_for` is the engine the settings' layers choose, given the file, the row's console and the system.
-pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for: &dyn Fn(&str, Option<&str>, &str) -> Option<String>) -> String {
+/// `{"system","console","engine","reason","cartridge","shelf","waiting_default"}`.
+/// `engine_for` is the engine the settings' layers choose, given the file, the row's console and the system; `approved`
+/// whether the player's approvals name a hash.
+pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for: &dyn Fn(&str, Option<&str>, &str) -> Option<String>, approved: &dyn Fn(&str) -> bool) -> String {
     let (system, row, decision) = routed(catalog, discovery, at);
     let extension = image_extension(catalog, discovery, at);
     let console: Option<String> = row
         .map(|r| catalog.rows[r].console().to_string())
         .or_else(|| decision.as_ref().and_then(|d| d.system.map(|s| s.console.clone())))
         .or_else(|| system.as_deref().and_then(Catalog::discovered_console_for_system).map(str::to_string));
+    let chosen = system.as_deref().and_then(|sys| engine_for(at, row.map(|r| catalog.rows[r].console()), sys));
+    let waiting = system.as_deref().and_then(|sys| waiting_default(discovery, sys, at, chosen.is_some(), approved));
     let engine = system.as_deref().and_then(|sys| {
-        engine_for(at, row.map(|r| catalog.rows[r].console()), sys)
+        chosen
+            .clone()
             .or_else(|| console.as_deref().and_then(catalog::sole_engine).map(str::to_string))
             .or_else(|| discovery.for_system(sys).next().map(|c| c.engine_name().to_string()))
     });
@@ -140,8 +144,29 @@ pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for
         let row = &catalog.rows[r];
         if row.display_name == "Game Boy (Mercury)" && !row.discovered && is_game_boy_color(at) { catalog::GAME_BOY_COLOR_SHELF.to_string() } else { row.display_name.clone() }
     });
-    j.str_or_null("shelf", shelf.as_deref()).end_object();
+    j.str_or_null("shelf", shelf.as_deref());
+    match waiting {
+        Some((stem, sha256)) => {
+            j.key_object("waiting_default").str("stem", &stem).str("sha256", &sha256).end_object();
+        }
+        None => {
+            j.null("waiting_default");
+        }
+    }
+    j.end_object();
     j.finish()
+}
+
+/// The system's hosted default where it is installed, waits for the player's approval and takes the file, and no layer
+/// chose an engine, so that the route's engine is only the fallback: its stem and its core's hash, which an approval
+/// names (EmuSen_LibretroHost.md §10t).
+pub fn waiting_default(discovery: &Discovery, system: &str, at: &str, chosen: bool, approved: &dyn Fn(&str) -> bool) -> Option<(String, String)> {
+    let stem = emusen_systems::libretro_cores::default_for(system).filter(|_| !chosen)?;
+    if discovery.for_system(system).any(|c| c.entry.as_ref().is_some_and(|e| e.stem == stem)) {
+        return None;
+    }
+    let w = discovery.waiting().iter().find(|w| w.entry.stem == stem && !approved(&w.sha256))?;
+    entry_takes(&w.entry, system, at).then(|| (stem.to_string(), w.sha256.clone()))
 }
 
 /// What the NES pack reads of an iNES header; null for any other system or a file it cannot read.
@@ -202,6 +227,11 @@ pub fn takes(core: &emusen_core_host::Discovered, system: &str, at: &str) -> boo
     if !emusen_systems::libretro_cores::hosted().iter().any(|h| h.stem == entry.stem) {
         return true;
     }
+    entry_takes(entry, system, at)
+}
+
+/// Whether an entry the hosted list names takes the game by its installed `.info`'s own extensions.
+fn entry_takes(entry: &emusen_core_host::entry::Entry, system: &str, at: &str) -> bool {
     let info = std::fs::read_to_string(entry.info_path()).unwrap_or_default();
     emusen_systems::libretro_extensions::takes(&entry.stem, &emusen_systems::libretro_extensions::info_extensions(&info), system, std::path::Path::new(at))
 }
@@ -228,6 +258,40 @@ mod hosted_tests {
         assert!(super::takes(core("pcee2"), "ps2", "/games/Disc.ISO"));
         assert!(!super::takes(core("pcee2"), "ps2", "/games/Disc.cue"), "PCEE2's .info lists no cue");
         assert!(super::takes(core("testcore"), "ps2", "/games/Disc.cue"), "a core the list names nowhere takes what its info claims");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod waiting_default_tests {
+    use emusen_core_host::Discovery;
+    use emusen_core_host::entry::Entry;
+
+    // The tester's run on 2026-11-01: PCEE2 installed and not approved, Sapphire installed, no engine chosen.
+    fn laid(tag: &str) -> (std::path::PathBuf, Discovery, String) {
+        let root = std::env::temp_dir().join(format!("crystal-waiting-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (install, cores) = (root.join("Install"), root.join("Cores"));
+        std::fs::create_dir_all(&install).unwrap();
+        std::fs::write(install.join("libsapphire.so.core.json"), r#"{"sidecar":1,"library":"libsapphire.so","sha256":"","abi":"1.17","info":{"id":"sapphire","name":"Sapphire","systems":[{"id":"ps2","name":"PlayStation 2","extensions":[".iso",".cue"]}]}}"#).unwrap();
+        let entry = Entry::new(&cores, "pcee2").unwrap();
+        std::fs::create_dir_all(&entry.folder).unwrap();
+        std::fs::write(entry.core_path(), b"the core").unwrap();
+        std::fs::write(entry.info_path(), "supported_extensions = \"iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx\"\n").unwrap();
+        let d = Discovery::scan_with_player(&[install], &[cores], false);
+        let hash = emusen_core_host::entry::core_hash(&entry).unwrap();
+        (root, d, hash)
+    }
+
+    #[test]
+    fn the_systems_waiting_default_is_named_where_no_layer_chose_an_engine() {
+        let (root, d, hash) = laid("named");
+        assert_eq!(d.for_system("ps2").map(|c| c.engine_name().to_string()).collect::<Vec<_>>(), ["Sapphire"], "the route passes the waiting core over");
+        assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.iso", false, &|_| false), Some(("pcee2".to_string(), hash.clone())));
+        assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.iso", true, &|_| false), None, "the player chose an engine");
+        assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.iso", false, &|h| h == hash), None, "its hash is approved already");
+        assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.cue", false, &|_| false), None, "PCEE2's .info lists no cue");
+        assert_eq!(super::waiting_default(&d, "psx", "/games/Disc.iso", false, &|_| false), None, "no hosted default for the system");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

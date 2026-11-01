@@ -34,14 +34,14 @@ namespace EmuSen.Mistress.Views
             _libraryCategory.IsChecked = true;
             LibraryCategoryButtons.ItemsSource = new Control[] { new ActionToggle(_libraryCategory), new ActionToggle(_statesCategory), new ActionToggle(_screenshotsCategory) };
 
-            _playMedia = new LunaAction("_Play Save State", () => _ = PlayMediaAsync());
-            _deleteMedia = new LunaAction("_Delete Save State", () => _ = DeleteMediaAsync());
+            _playMedia = new LunaAction("_Play Save State", () => PlayMediaAsync().Logged("mistress", "PlayMediaAsync"));
+            _deleteMedia = new LunaAction("_Delete Save State", () => DeleteMediaAsync().Logged("mistress", "DeleteMediaAsync"));
             _mediaProvenance = new LunaAction("") { IsEnabled = false };
             MediaGrid.Key = m => m.Path;
             MediaGrid.Label = m => $"{m.Title}, {m.Label}";
             MediaGrid.CreateTile = () => new CoverTile();
             MediaGrid.BindTile = BindMedia;
-            MediaGrid.Activated += item => { _ = PlayMediaAsync(); };
+            MediaGrid.Activated += item => { PlayMediaAsync().Logged("mistress", "PlayMediaAsync"); };
             MediaGrid.ContextMenu = Menus.Context(_mediaProvenance, LunaAction.Separator(), _playMedia, LunaAction.Separator(), _deleteMedia);
             MediaGrid.ContextMenu.Opening += (_, _) =>
             {

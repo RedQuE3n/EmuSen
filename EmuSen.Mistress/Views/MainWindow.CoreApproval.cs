@@ -29,13 +29,25 @@ namespace EmuSen.Mistress.Views
         }
 
         // What the approval shows of a core library, read from the runtime's listing.
-        internal sealed record CoreAwaiting(string File, string Name, IReadOnlyList<string> Authors, string License, IReadOnlyList<string> Systems, string Sha256);
+        internal sealed record CoreAwaiting(string File, string Name, IReadOnlyList<string> Authors, string License, IReadOnlyList<string> Systems, string Sha256)
+        {
+            // The engine the game opens on instead when the player says Not Now, where the route's engine is only the fallback for a waiting default (EmuSen_LibretroHost.md §10t).
+            public string? Instead { get; init; }
+        }
+
+        // Shown once the game is on screen, saying why it opened on the fallback.
+        private string? _engineFallbackNotice;
 
         // Asked when the engine the game would open on waits for the player's approval; approved, the runtime records it.
         internal async Task AskCoreApprovalAsync(string romPath)
         {
+            _engineFallbackNotice = null;
             if (await OffInterface(() => AwaitingQuery(romPath)) is not { } core) return;
-            if (!await ConfirmCoreApproval(this, EmuSen.Tools.Cores.CoreApproval.Title, ApprovalMessage(core))) return;
+            if (!await ConfirmCoreApproval(this, EmuSen.Tools.Cores.CoreApproval.Title, ApprovalMessage(core)))
+            {
+                if (core.Instead is { } instead) StatusText.Text = _engineFallbackNotice = FallbackNotice(core, instead);
+                return;
+            }
             try
             {
                 Runtime.CoreApprove(core.Sha256);
@@ -53,6 +65,8 @@ namespace EmuSen.Mistress.Views
                 string? engine = Text(route.RootElement, "engine"), system = Text(route.RootElement, "system");
                 if (engine is null && system is null) return null;
                 using var cores = JsonDocument.Parse(runtime.Cores());
+                if (route.RootElement.TryGetProperty("waiting_default", out var w) && w.ValueKind == JsonValueKind.Object && Text(w, "sha256") is { } named)
+                    return Waiting(cores.RootElement, named) is { } first ? first with { Instead = engine } : null;
                 foreach (JsonElement c in cores.RootElement.EnumerateArray())
                 {
                     bool waiting = engine is null && Text(c, "engine") is null && Texts(c, "systems").Contains(system);
@@ -67,6 +81,20 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception e) when (e is CrystalException or JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
         }
+
+        // The listing's row of the libretro core whose hash the route names as the waiting default.
+        private static CoreAwaiting? Waiting(JsonElement cores, string sha256)
+        {
+            foreach (JsonElement c in cores.EnumerateArray())
+            {
+                if (!c.TryGetProperty("libretro", out var l) || l.ValueKind != JsonValueKind.Object || !string.Equals(Text(l, "sha256"), sha256, StringComparison.OrdinalIgnoreCase)) continue;
+                return new CoreAwaiting(Text(l, "file") ?? "", Text(l, "name") ?? Text(c, "name") ?? "", Texts(l, "authors"), Text(l, "license") ?? "", Texts(c, "systems"), sha256);
+            }
+            return null;
+        }
+
+        // The one line saying a game opened on the fallback because its console's default waits for approval.
+        internal static string FallbackNotice(CoreAwaiting core, string instead) => $"{core.Name} waits for your approval, so this game opens on {instead}.";
 
         private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 

@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using EmuSen.Galaxia;
@@ -32,8 +33,11 @@ namespace EmuSen.WiseMan.Mistress
             new AppSettings { RomDirectory = Path.Combine(_root, "Roms"), LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = AppSettings.ResumeNever }.Save();
         }
 
+        private readonly object _confirm = Seam("ConfirmCoreApproval").GetValue(null)!;
+
         public void Dispose()
         {
+            Seam("ConfirmCoreApproval").SetValue(null, _confirm);
             Seam("AwaitingQuery").SetValue(null, _awaiting);
             Seam("FirmwareQuery").SetValue(null, _firmware);
             Seam("CardsQuery").SetValue(null, _cards);
@@ -71,6 +75,30 @@ namespace EmuSen.WiseMan.Mistress
             while (!prepared.IsCompleted && clock.ElapsedMilliseconds < 10_000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
             Assert.True(prepared.IsCompletedSuccessfully);
             Assert.Equal(new[] { ("approval", false), ("firmware", false), ("cards", false) }, onInterface);
+            window.Close();
+        }, default);
+
+        // Not Now on a console's waiting default opens the game on the route's engine and says why in one line, on the status and once the game is on screen (EmuSen_LibretroHost.md §10t).
+        [Fact]
+        public Task Not_now_on_a_waiting_default_says_the_game_opens_on_the_fallback() => Session.Dispatch(() =>
+        {
+            Type awaiting = Seam("AwaitingQuery").FieldType, record = awaiting.GetGenericArguments()[1];
+            object core = Activator.CreateInstance(record, "pcee2_libretro.so", "Sony - PlayStation 2 (PCEE2)", new[] { "Someone" }, "GPLv3", new[] { "ps2" }, new string('a', 64))!;
+            record.GetProperty("Instead")!.SetValue(core, "Sapphire");
+            var rom0 = System.Linq.Expressions.Expression.Parameter(typeof(string));
+            Seam("AwaitingQuery").SetValue(null, System.Linq.Expressions.Expression.Lambda(awaiting, System.Linq.Expressions.Expression.Constant(core, record), rom0).Compile());
+            string? asked = null;
+            Seam("ConfirmCoreApproval").SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, message) => { asked = message; return Task.FromResult(false); }));
+            var window = new MainWindow();
+            window.Show();
+            var ask = (Task)typeof(MainWindow).GetMethod("AskCoreApprovalAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { Path.Combine(_root, "Roms", "Jak.iso") })!;
+            var clock = Stopwatch.StartNew();
+            while (!ask.IsCompleted && clock.ElapsedMilliseconds < 5000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            Assert.True(ask.IsCompletedSuccessfully);
+            Assert.Contains(new string('a', 64), asked);
+            const string said = "Sony - PlayStation 2 (PCEE2) waits for your approval, so this game opens on Sapphire.";
+            Assert.Equal(said, window.GetControl<TextBlock>("StatusText").Text);
+            Assert.Equal(said, typeof(MainWindow).GetField("_engineFallbackNotice", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
             window.Close();
         }, default);
     }

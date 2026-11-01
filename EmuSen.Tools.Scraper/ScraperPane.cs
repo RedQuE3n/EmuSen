@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -57,7 +58,7 @@ namespace EmuSen.Tools.Scraper
             _stop = new LunaAction("Stop", StopRun) { HelpText = "Stops the run; the games not reached are not asked." };
             SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop]);
             MarksChanged += UpdateActions;
-            SectionChosen += section => { _endSaid = null; _ = Refresh(); };
+            SectionChosen += section => { _endSaid = null; Refresh().Logged("scraper", "Refresh"); };
 
             _timer = new DispatcherTimer { Interval = PollEvery };
             _timer.Tick += (_, _) => Poll();
@@ -180,7 +181,7 @@ namespace EmuSen.Tools.Scraper
         private void OptionsChanged(bool relist = true)
         {
             ShowOverview();
-            if (relist) _ = Refresh();
+            if (relist) Refresh().Logged("scraper", "Refresh");
         }
 
         private void MarkWhere(Func<ScrapeRow, bool> which)
@@ -274,7 +275,7 @@ namespace EmuSen.Tools.Scraper
             if (said is not null) Say(said);
             UpdateActions();
             RunEnded?.Invoke();
-            _ = Refresh();
+            Refresh().Logged("scraper", "Refresh");
         }
 
         private void StopRun()

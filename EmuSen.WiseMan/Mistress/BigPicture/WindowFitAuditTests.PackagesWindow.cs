@@ -12,8 +12,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     // The Packages window framed in each of its states, fed a scripted listing so every run is the same: the listing, a game's detail page, Apply's summary and a plan running - see EmuSen_Packages.md §7.
     public partial class WindowFitAuditTests
     {
-        // PackagesPlan and PackagesRunning, scripted below, join the audited states when the frame's plan sheet and apply bar fit the big screen (EmuSen_Packages.md §7.4).
-        public static readonly string[] PackagesStates = ["Packages", "PackagesDetail"];
+        public static readonly string[] PackagesStates = ["Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning"];
 
         private const string LongPackaged = "Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic)";
 

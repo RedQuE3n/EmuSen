@@ -45,12 +45,11 @@ namespace EmuSen.Tools.Packages
             HasSearch = true;
             SearchHint = "Search games";
             RowKey = r => r.Key;
-            // The widest two are capped until the frame's table holds a star column to its share (§7.4).
-            Column(new LunaColumn<PackageRow>("Game", r => r.Title) { MaxWidth = 400, Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
+            Column(new LunaColumn<PackageRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
                 .Column(new LunaColumn<PackageRow>("Console", r => r.Console) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Format", r => r.Format) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Mode", PackagesWords.Mode) { Width = "Auto" })
-                .Column(new LunaColumn<PackageRow>("State", StateText) { MaxWidth = 240 }, bigScreen: true)
+                .Column(new LunaColumn<PackageRow>("State", StateText), bigScreen: true)
                 .Column(new LunaColumn<PackageRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
@@ -84,6 +83,13 @@ namespace EmuSen.Tools.Packages
         // The last refusal or failure the tool gave in a player's words, null when there was none.
         public string? Notice => _notice;
 
+        // A refusal about no row, said in the apply bar's line while nothing is marked; null clears it.
+        private void Say(string? words)
+        {
+            _notice = words;
+            SetNotice(words);
+        }
+
         // What the last run did to a row, by its key or its game's path.
         public string? OutcomeOf(PackageRow row) =>
             _outcomes.TryGetValue(row.Key, out string? said) ? said : row.Source is { } s && _outcomes.TryGetValue("library:" + s, out said) ? said : null;
@@ -105,14 +111,13 @@ namespace EmuSen.Tools.Packages
             if (_job is not null) return;
             if (!ToolAvailable())
             {
-                _notice = $"Packages are listed and made by EmuSen's platform library, which is not in use here ({LibraryToolJob.Report}).";
+                Say($"Packages are listed and made by EmuSen's platform library, which is not in use here ({LibraryToolJob.Report}).");
                 SetRows([]);
-                ShowOverview();
                 return;
             }
             _listing = new List<PackageRow>();
             if (Start(ListingRequest)) SetProgress(null, "Listing the library and its packages…");
-            else ShowOverview();
+
         }
 
         private bool Start(string request)
@@ -120,7 +125,7 @@ namespace EmuSen.Tools.Packages
             try { _job = StartJob(request); }
             catch (Exception e) when (e is FormatException or InvalidOperationException)
             {
-                _notice = ToolWords.Refusal(e.Message);
+                Say(ToolWords.Refusal(e.Message));
                 return false;
             }
             _timer.Start();
@@ -153,7 +158,7 @@ namespace EmuSen.Tools.Packages
         {
             Stop();
             _outcomes.Clear();
-            _notice = null;
+            Say(null);
             _steps = new Queue<PlanStep>(PackagesPlan.Steps(marked));
             _stepCount = _steps.Count;
             _stepsDone = 0;
@@ -189,7 +194,7 @@ namespace EmuSen.Tools.Packages
                 try { line = _job.Next(0); }
                 catch (InvalidOperationException e)
                 {
-                    _notice = ToolWords.Refusal(e.Message);
+                    Say(ToolWords.Refusal(e.Message));
                     break;
                 }
                 if (line is null) break;
@@ -219,11 +224,11 @@ namespace EmuSen.Tools.Packages
             string? kind = Text(e, "event");
             if (kind == "end" && Text(e, "error") is { } error)
             {
-                _notice = ToolWords.Refusal(error);
+                Say(ToolWords.Refusal(error));
                 foreach (PackageRow row in _step?.Rows ?? []) _outcomes.TryAdd(row.Key, _notice);
             }
             if (kind == "start" && e.TryGetProperty("refused", out JsonElement refused) && refused.ValueKind == JsonValueKind.Array && refused.GetArrayLength() > 0)
-                _notice = string.Join(" ", refused.EnumerateArray().Select(r => ToolWords.Refusal(r.GetString() ?? "")));
+                Say(string.Join(" ", refused.EnumerateArray().Select(r => ToolWords.Refusal(r.GetString() ?? ""))));
             if (_step is null)
             {
                 if (PackageRow.Of(e) is { } row) _listing.Add(row);
@@ -242,37 +247,30 @@ namespace EmuSen.Tools.Packages
             }
         }
 
-        /// <inheritdoc/>
-        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-        {
-            base.OnPropertyChanged(change);
-            if (change.Property == FormProperty && Rows.Count > 0) FillSections();
-        }
-
         private void FillSections()
         {
             var sections = new List<AdaptiveSection> { new("all", "All", "Consoles") };
-            // The big screen's section row holds the states alone until it scrolls a longer row (§7.4).
-            if (Form == AdaptiveForm.Desktop) sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
+            sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
             sections.AddRange([new AdaptiveSection("packaged", "Packaged", "State"), new AdaptiveSection("unpackaged", "Not yet", "State"), new AdaptiveSection("problems", "Problems", "State")]);
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
         }
 
-        // The packages' total and the free space of the disk they are on (§3); the meter says how full the disk is until the frame's space line takes longer words (§7.4).
+        // The packages' total and the free space of the disk they are on (§3).
         private void ShowSpace()
         {
-            if (Disk(DataStore.Packages) is not { Total: > 0 } disk) return;
-            double used = 1 - (double)disk.Free / disk.Total;
-            SetSpace((used * 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "%", used);
+            long total = Rows.Sum(r => r.PackageSize);
+            if (Disk(DataStore.Packages) is { Total: > 0 } disk)
+                SetSpace($"{ToolWords.Size(total)} in packages · {ToolWords.Size(disk.Free)} free", 1 - (double)disk.Free / disk.Total);
+            else
+                SetSpace($"{ToolWords.Size(total)} in packages", 0);
         }
 
-        // What the detail shows with no game chosen: the tool's last refusal, else the library's and the packages' totals.
+        // What the detail shows with no game chosen: the library's and the packages' totals.
         public string OverviewText
         {
             get
             {
-                if (_notice is not null) return _notice;
                 long total = Rows.Sum(r => r.PackageSize);
                 int packaged = Rows.Count(r => r.Packaged);
                 string free = Disk(DataStore.Packages) is { Total: > 0 } disk ? $", on a disk with {ToolWords.Size(disk.Free)} free" : "";

@@ -213,13 +213,12 @@ listing again; the desktop window whole at 1280×800 and 1920×1200. `WindowFitA
   plan: the frame's plan is text with Apply and Cancel, and the tool always checks each disc. A converted disc's
   package is made self-contained by marking it after the conversion. The space a conversion is expected to save is
   not estimated beforehand; each conversion's outcome says what it saved.
-- **Interim forms, until the manager frame's fixes land** (found by these audits, 2026-10-31): a refusal that is not
-  about a row is said in the detail shown when no game is chosen, which also gives the library's and the packages'
-  totals, until the apply bar takes a notice; the space meter shows how full the disk is as a percentage, since its
-  value column is 55 pixels; the Game and State columns are capped (400 and 240 pixels), since the table measures a
-  star column by its content; the big screen offers only the state sections, since its section row does not scroll;
-  and the `PackagesPlan` and `PackagesRunning` states are scripted but not yet audited, since the plan sheet is drawn
-  over the table and the apply bar overlaps itself in the big screen's type.
+- **Interim forms, dropped once the manager frame's fixes landed** (found by these audits, 2026-10-31; LunaP be0112e):
+  a refusal about no row is now the frame's notice in the apply bar's line (`SetNotice`); the space meter carries its
+  full words; the Game and State columns are no longer capped, since the frame's tables fit their width (`FitsWidth`);
+  the big screen offers the console sections again, its section row drawn whole around the chosen one; and
+  `PackagesPlan` and `PackagesRunning` are audited and recorded. The detail shown when no game is chosen keeps the
+  library's and the packages' totals.
 
 ## 8. Built 2026-10-31: M3, the detail and a package's layers
 

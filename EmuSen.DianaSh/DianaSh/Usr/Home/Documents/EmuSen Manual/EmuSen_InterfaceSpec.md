@@ -521,8 +521,9 @@ hold the run's own paths.
 
 Packages (`EmuSen_Packages.md` §7) adds two cases, opened over a running game with a scripted listing of six rows:
 `Packages` (the listing, a disc chosen) and `PackagesDetail` (its detail page, opened by A). Their four recordings are
-new, and no other recording changed. Two more, `PackagesPlan` and `PackagesRunning`, are scripted and wait for the
-manager frame's plan sheet and apply bar to fit the big screen.
+new, and no other recording changed. `PackagesPlan` (Apply's summary open) and `PackagesRunning` (a step running)
+joined once the manager frame's plan sheet and two-line apply bar fitted the big screen (LunaP be0112e), and the four
+earlier recordings were taken again over the fixed frame.
 
 The first recording found one fault of §4.2: *Convert to CHD* not reached by the pad, since the window enabled it only
 for a disc and the walk's Down presses through the table chose a cartridge before it reached the action row. The

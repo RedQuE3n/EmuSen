@@ -119,7 +119,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new FileInfo(snes).Length, cart.Size);
             Assert.False(cart.Convertible);
             Assert.Contains("PlayStation", pane.Sections.Select(s => s.Label));
-            Assert.Equal("75%", SpaceText(pane));
+            Assert.Equal("0 bytes in packages · 100 GB free", pane.SpaceText);
             Assert.Equal("3 games, 0 of them packaged. The packages' folders hold 0 bytes, on a disk with 100 GB free.", pane.OverviewText);
 
             Assert.True(pane.SetMark(cart, PackagesPlan.Make.Key));
@@ -222,8 +222,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        private static string SpaceText(PackagesPane pane) =>
-            string.Join(" ", Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(pane).OfType<MeterRow>().Select(m => m.ValueText));
 
         [Fact]
         public void Each_row_is_offered_only_the_changes_that_fit_it()
@@ -313,7 +311,7 @@ namespace EmuSen.WiseMan.Mistress
             WaitIdle(pane);
             Assert.StartsWith("chdman, the program that writes CHD files, is not beside EmuSen", pane.Notice);
             Assert.StartsWith("chdman, the program that writes CHD files", pane.OutcomeOf(pane.Rows[0]));
-            Assert.StartsWith("chdman, the program that writes CHD files", pane.OverviewText);
+            Assert.StartsWith("chdman, the program that writes CHD files", pane.SummaryText);
             window.Close();
         }, default);
 
@@ -324,8 +322,7 @@ namespace EmuSen.WiseMan.Mistress
             PackagesPane.ToolAvailable = () => false;
             PackagesPane.StartJob = _ => { started++; throw new InvalidOperationException("not reached"); };
             PackagesWindow window = Open();
-            Assert.Contains("which is not in use here", window.Pane.OverviewText);
-            Assert.Contains("which is not in use here", Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBlock>().Single(t => t.Name == "PackagesOverview").Text);
+            Assert.Contains("which is not in use here", window.Pane.SummaryText);
             Assert.Empty(window.Pane.Rows);
             Assert.Equal(0, started);
             window.Close();

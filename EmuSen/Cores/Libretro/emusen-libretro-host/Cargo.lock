@@ -117,6 +117,7 @@ name = "emusen-libretro-testcore"
 version = "0.1.0"
 dependencies = [
  "emusen-libretro-sys",
+ "libc",
 ]
 
 [[package]]

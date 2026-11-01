@@ -102,7 +102,7 @@ impl Target for Libretro {
         let runner = runner()?;
         let data = e.folder.parent().unwrap_or(&e.folder).join(".data").join(&e.stem);
         std::fs::create_dir_all(data.join("cache").join("mesa")).map_err(|err| format!("{}: {err}", data.display()))?;
-        let mut read = vec![PathBuf::from("/etc"), PathBuf::from("/proc/self"), PathBuf::from("/sys")];
+        let mut read: Vec<PathBuf> = ["/etc", "/proc/self", "/proc/cpuinfo", "/proc/meminfo", "/proc/stat", "/sys"].iter().map(PathBuf::from).filter(|p| p.exists()).collect();
         if let Some(dir) = image_path.and_then(|p| Path::new(p).parent()) {
             read.push(dir.to_path_buf());
         }
@@ -113,7 +113,7 @@ impl Target for Libretro {
         Ok(Spawn {
             runner,
             target: e.folder.join(format!("{}.{}", emusen_core_entry::ADAPTER, emusen_core_entry::library_suffix())),
-            policy: Policy { read_exec, read, read_write: vec![data.clone()], devices },
+            policy: Policy { read_exec, read, read_write: vec![data.clone(), PathBuf::from("/dev/shm")], devices, private_shm: true },
             env: vec![("EMUSEN_LIBRETRO_CORE_FD".into(), "4".into()), ("MESA_SHADER_CACHE_DIR".into(), data.join("cache").join("mesa").to_string_lossy().into_owned())],
             fds: vec![e.sealed.as_raw_fd()],
             require_abi: std::env::var("EMUSEN_BROKER_REQUIRE_ABI").ok().and_then(|v| v.parse().ok()).unwrap_or(1),

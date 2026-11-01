@@ -6,7 +6,7 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 
 use emusen_core_broker::runner::{Served, serve};
-use emusen_core_broker::sandbox::{Policy, confine};
+use emusen_core_broker::sandbox::{Policy, confine, private_shm};
 use emusen_core_broker::wire;
 
 /// The kernel's Landlock ABI, or 0 where it has none.
@@ -35,6 +35,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (policy, rest) = Policy::from_args(&args);
     let mut io = unsafe { UnixStream::from_raw_fd(3) };
+    let shm = if policy.private_shm { private_shm() } else { Ok(()) };
     watch_parent();
     let refuse = |io: &mut UnixStream, why: String| {
         let _ = wire::send_reply(io, -1, 0, why.as_bytes());
@@ -45,6 +46,9 @@ fn main() {
     let abi = landlock_abi();
     if abi < need {
         return refuse(&mut io, format!("this kernel's Landlock ABI is {abi} and the runner needs {need}; a hosted core never runs unconfined"));
+    }
+    if let Err(why) = shm {
+        return refuse(&mut io, why);
     }
     let confined = match confine(&policy) {
         Ok(words) => words,

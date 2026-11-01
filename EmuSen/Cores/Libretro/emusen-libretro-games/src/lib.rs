@@ -104,6 +104,24 @@ pub fn timing(times: &[f64]) -> Option<Timing> {
     Some(Timing { frames: times.len(), fps: times.len() as f64 / total, median_ms: sorted[sorted.len() / 2] * 1e3, worst_ms: sorted[sorted.len() - 1] * 1e3 })
 }
 
+/// A pad script's presses and releases by frame, `(frame, control, pressed)` in frame order, from lines
+/// `<frame> <control> [<frames held, 6 when left out>]`; blank lines and lines starting `#` skipped.
+pub fn pads(text: &str) -> Result<Vec<(u64, u32, bool)>, String> {
+    let mut out = Vec::new();
+    for l in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        let f: Vec<u64> = l.split_whitespace().map(|w| w.parse().map_err(|_| format!("{l:?} is not numbers"))).collect::<Result<_, _>>()?;
+        let (at, control, held) = match f.as_slice() {
+            [at, control] => (*at, *control as u32, 6),
+            [at, control, held] => (*at, *control as u32, *held),
+            _ => return Err(format!("{l:?} is not <frame> <control> [<frames held>]")),
+        };
+        out.push((at, control, true));
+        out.push((at + held, control, false));
+    }
+    out.sort_by_key(|p| p.0);
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +153,12 @@ mod tests {
         assert_eq!(std::fs::read_to_string(home.installation.join(MANIFEST)).unwrap(), manifest);
         assert_eq!(std::fs::read(home.installation.join("emusen-core-runner")).unwrap(), b"runner");
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_pad_script_presses_and_releases_in_frame_order() {
+        assert_eq!(pads("# start\n2500 3\n\n2600 13 2400\n2550 0 10\n").unwrap(), [(2500, 3, true), (2506, 3, false), (2550, 0, true), (2560, 0, false), (2600, 13, true), (5000, 13, false)]);
+        assert!(pads("12 x").is_err() && pads("1 2 3 4").is_err());
     }
 
     #[test]

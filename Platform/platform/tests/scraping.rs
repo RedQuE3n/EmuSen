@@ -79,7 +79,7 @@ fn answer(socket: TcpStream, config: Arc<rustls::ServerConfig>, asked: Arc<Mutex
 
 /// What `ScreenScraperDeveloper.targets` writes, for a made-up developer.
 fn developer_blob() -> Vec<u8> {
-    let json = br#"{"devid":"testdev","devpassword":"testdevpw","softname":"EmuSenTest"}"#;
+    let json = br#"{"devid":"dummydev","devpassword":"dummydevpw","softname":"EmuSenTest"}"#;
     let key = [0x5Au8, 0x13, 0xC7];
     let mut blob = b"ESSD".to_vec();
     blob.extend([1, key.len() as u8]);
@@ -146,7 +146,7 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
     let status = run(sh, "scrape status");
     assert!(status.contains("account.signed_in\tfalse") && status.contains("developer\tembedded") && status.contains("run.state\tidle"), "{status}");
-    assert!(!status.contains("testdev"), "no credential is printed: {status}");
+    assert!(!status.contains("dummydev"), "no credential is printed: {status}");
 
     let listed = run(sh, "scrape ls --system snes");
     assert!(listed.contains(&format!("{game}\tsnes\tcover=- screenshot=- marquee=- miximage=-")), "{listed}");

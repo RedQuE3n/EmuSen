@@ -1,0 +1,87 @@
+NAME
+    cores - list the libretro cores EmuSen can download and those
+    installed, describe one, and fetch libretro's catalogue again
+
+SYNOPSIS
+    cores ls [--installed|--available|--updates|--unsupported] [<console>]
+    cores info <core>
+    cores fetch
+    cores wait [cores<n>]
+
+DESCRIPTION
+    The command of the emusen.cores module, the shell's face of the core
+    tool; the Cores window is its other face, over the same jobs. It
+    reaches the tool through the emusen.library service, version 1.5 or
+    later, whose requests beginning core- the platform library hands to
+    the core tool.
+
+    A core is named by its file's stem: pcsx2 for pcsx2_libretro.so. The
+    stem names the core's folder under /Cores/libretro and its files; the
+    core's own corename (LRPS2 for pcsx2) is shown, and names nothing.
+
+    NOTHING IS FETCHED UNLESS ASKED. cores fetch is the only network
+    request: it reads libretro's core information archive
+    (assets/frontend/info.zip) and this platform's nightly index
+    (nightly/linux/x86_64/latest/.index-extended) from
+    buildbot.libretro.com over HTTPS, the certificate checked against the
+    system's own store, a redirect to any other host refused. Both are
+    checked before the cached copies in /Cores/libretro/.catalogue/ are
+    replaced, so a fetch that fails leaves the catalogue as it was. cores
+    ls and cores info read the cached copies, and work offline.
+
+    cores ls prints one line per core: state, console, id, source,
+    version, size and licence, separated by spaces, an empty field as -
+    and spaces inside a field as _, so that awk and cut can take them
+    apart; the licence is the rest of the line. The states:
+
+        installed     downloaded, and its index line unchanged
+        update        downloaded, and the index offers another build
+        available     in the catalogue, not downloaded
+        unsupported   EmuSen's host cannot run it: a core needing only
+                      OpenGL or Direct3D, or one for a system no EmuSen
+                      console runs; cores info gives the reason
+        added         a folder under /Cores/libretro without a NOTICE,
+                      put there by the player; never removed by Cores
+
+    Whether an installed core is approved, waits for approval, or needs
+    refreshing after EmuSen was updated is the runtime's trust, shown in
+    the Cores window.
+
+    cores info prints what the window's detail pane shows, as key: value
+    lines: the names and authors, the licence, the version and build,
+    the systems, the notes, the permissions, the firmware it names (the
+    player's own, which nothing fetches), and where the build comes from
+    with the index's CRC-32; for an installed core also its SHA-256 and
+    the date it was fetched.
+
+CONSOLES
+    A core is placed under EmuSen's consoles by its information's
+    database names, or its systemid where those are blank. Until the
+    systems table's libretro names reach this build, the console field
+    is - and no core is called unsupported for its system.
+
+JOBS
+    Each command is a job of the core tool. One the line's budget cuts
+    short goes on in the background as cores<n>: cores wait follows it,
+    ps lists it, kill stops it.
+
+EXAMPLES
+    cores fetch
+    cores ls --available
+    cores ls --updates | wc -l
+    cores ls --installed | grep GPL
+    cores info pcsx2
+    for c in $(cores ls --updates | awk '{print $3}'); do cores info $c; done
+
+SOURCES
+    libretro, "buildbot.libretro.com nightly linux x86_64",
+    https://buildbot.libretro.com/nightly/linux/x86_64/latest/ and its
+    .index-extended, read 2026-10-31: one line per core zip, its date,
+    the zip's CRC-32 and its name.
+    libretro, "libretro-core-info", 00_example_libretro.info,
+    https://github.com/libretro/libretro-core-info, read 2026-10-31: the
+    keys of a core information file.
+
+SEE ALSO
+    EmuSen_Cores.md (section 4.2: the catalogue; section 6: the jobs and
+    their events; section 8: this command), chd(1), pkg(1)

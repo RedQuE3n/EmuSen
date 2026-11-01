@@ -32,7 +32,7 @@ pub fn route(catalog: &Catalog, discovery: &Discovery, at: &str) -> (Option<usiz
     let mut rows: Vec<(Option<usize>, Option<&'static System>)> =
         catalog.rows.iter().enumerate().filter(|(_, r)| r.supports(&extension)).map(|(i, r)| (Some(i), catalog::pack_of(r.console()))).collect();
     for c in discovery.for_extension(&extension) {
-        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offered(s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension))) {
+        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension))) {
             let Some(entry) = emusen_systems::find(&s.id) else { continue };
             if catalog::hand_console_of(&entry.id).is_none()
                 && !rows.iter().any(|(r, e)| e.is_some_and(|e| std::ptr::eq(e, entry)) || r.is_some_and(|r| catalog.rows[r].console() == entry.console))
@@ -187,7 +187,7 @@ pub fn v1_engine<'d>(catalog: &Catalog, discovery: &'d Discovery, at: &str, engi
         None if engine.is_some() => None,
         None if catalog.rows.iter().any(|r| !r.discovered && r.supports(&extension)) => None,
         None => match &routed {
-            Some(system) => discovery.found().iter().find(|c| c.sidecar.info.systems.iter().any(|s| s.id == *system && discovery.offered(s))),
+            Some(system) => discovery.for_system(system).next(),
             None => discovery.for_extension(&extension).next(),
         },
     });

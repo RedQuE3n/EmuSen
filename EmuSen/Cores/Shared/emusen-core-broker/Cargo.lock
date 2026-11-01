@@ -147,10 +147,23 @@ name = "emusen-6502"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-cheats"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-systems",
+ "flate2",
+ "libc",
+]
+
+[[package]]
 name = "emusen-core-broker"
 version = "0.1.0"
 dependencies = [
  "emusen-core-host",
+ "emusen-crystal",
+ "emusen-galaxia",
  "emusen-libretro-host",
  "emusen-libretro-proxy",
  "emusen-libretro-testcore",
@@ -171,8 +184,40 @@ dependencies = [
 name = "emusen-core-host"
 version = "0.1.0"
 dependencies = [
+ "emusen-core-entry",
  "emusen-native",
  "libloading 0.9.0",
+]
+
+[[package]]
+name = "emusen-crystal"
+version = "0.1.0"
+dependencies = [
+ "emusen-cheats",
+ "emusen-core-host",
+ "emusen-crystal-debug",
+ "emusen-dotnet",
+ "emusen-firmware",
+ "emusen-galaxia",
+ "emusen-native",
+ "emusen-patch",
+ "emusen-recorder",
+ "emusen-savemedia",
+ "emusen-session-service",
+ "emusen-sqlite",
+ "emusen-systems",
+ "flate2",
+]
+
+[[package]]
+name = "emusen-crystal-debug"
+version = "0.1.0"
+dependencies = [
+ "emusen-cheats",
+ "emusen-core-host",
+ "emusen-dotnet",
+ "emusen-native",
+ "emusen-systems",
 ]
 
 [[package]]
@@ -187,6 +232,14 @@ name = "emusen-dotnet"
 version = "0.1.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "emusen-firmware"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
 ]
 
 [[package]]
@@ -270,12 +323,36 @@ name = "emusen-native"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-patch"
+version = "0.1.0"
+dependencies = [
+ "emusen-galaxia",
+]
+
+[[package]]
 name = "emusen-ps2-card"
 version = "0.1.0"
 
 [[package]]
 name = "emusen-psx-card"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-recorder"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "flate2",
+]
+
+[[package]]
+name = "emusen-savemedia"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-systems",
+]
 
 [[package]]
 name = "emusen-serenity"
@@ -286,6 +363,13 @@ dependencies = [
  "emusen-sqlite",
  "libloading 0.9.0",
  "sha2",
+]
+
+[[package]]
+name = "emusen-session-service"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
 ]
 
 [[package]]

@@ -17,6 +17,8 @@ path = "src/bin/emusen-core-host.rs"
 [dependencies]
 emusen-native = { path = "../emusen-native" }
 libloading = "0.9"
+# An installed libretro core's folder and the names of its files, Cores' one owner of them (EmuSen_Cores.md §7).
+emusen-core-entry = { path = "../../../../Platform/core-entry" }
 
 # emusen-native's two test cores and a core whose descriptors lie, built here so that this crate's tests load them.
 [[example]]

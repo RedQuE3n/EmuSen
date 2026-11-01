@@ -52,7 +52,7 @@ pub fn engines(j: &mut Json, d: &Discovery, trust: &Trust) {
     j.begin_array();
     for c in d.found() {
         let info = &c.sidecar.info;
-        let systems: Vec<&str> = info.systems.iter().filter(|s| d.offered(s)).map(|s| s.id.as_str()).collect();
+        let systems: Vec<&str> = info.systems.iter().filter(|s| d.offers(c, s)).map(|s| s.id.as_str()).collect();
         j.begin_object()
             .field_str("name", c.engine_name())
             .field_str("id", &info.id)

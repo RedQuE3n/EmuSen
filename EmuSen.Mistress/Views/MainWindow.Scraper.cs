@@ -30,6 +30,8 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(window, this);
         }
 
+        void IScrapeHost.ShowScraper() => ShowScraper();
+
         // ES-DE's "Scrape these games" as the command's words.
         internal static IReadOnlyList<string> CriteriaWords(ScrapeCriteria criteria) => criteria switch
         {

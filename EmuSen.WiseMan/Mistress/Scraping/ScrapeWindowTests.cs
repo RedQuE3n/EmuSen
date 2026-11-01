@@ -500,9 +500,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_scraping_tab_s_button_asks_first_then_starts_and_lets_go_of_the_window_when_it_closes() => OnUi(() =>
+        public Task The_scraping_tab_s_link_opens_the_Scraper_sends_nothing_and_lets_go_of_the_window_when_it_closes() => OnUi(() =>
         {
-            _server.Games.Add(new FakeGame(77, "F-Zero", Md5));
             MainWindow window = Open();
             var prefs = new PreferencesWindow(new AppSettings { RomDirectory = _romDir }, window);
             _windows.Add(prefs);
@@ -512,11 +511,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.NotNull(ScrapeChangedHandlers(window));
             Assert.Empty(_server.Asked);
 
-            Button start = prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ScrapeStartButton");
-            start.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            RunEnds(window);
-            Assert.Single(_asked);
-            Assert.Equal(ScrapedCover, CoverShown(window, _rom));
+            Assert.Empty(prefs.GetVisualDescendants().OfType<Control>().Where(c => c.Name is "ScrapeStartButton" or "ScrapeShelfDropdown" or "ScrapeCriteriaDropdown"));
+            Button link = prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ScraperLinkButton");
+            link.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Pump(100);
+            ScraperWindow scraper = window.OwnedWindows.OfType<ScraperWindow>().Single();
+            Assert.Empty(_server.Asked);
+            scraper.Close();
 
             prefs.Close();
             Pump(100);

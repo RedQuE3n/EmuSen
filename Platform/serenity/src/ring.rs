@@ -215,3 +215,31 @@ impl Ring {
         unsafe { self.device.vk().signal_semaphore(&vk::SemaphoreSignalInfo::default().semaphore(self.ready).value(value)) }.check("vkSignalSemaphore")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    // §5.4: a presenter's submission waiting on a `ready` no dead core will signal ends once the host raises it.
+    #[test]
+    fn a_wait_on_ready_that_a_dead_core_never_signals_ends_when_ready_is_raised() {
+        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { return eprintln!("skipped: no Vulkan device") };
+        if !device.rings() {
+            return eprintln!("skipped: the device makes no ring");
+        }
+        let ring = std::sync::Arc::new(device.create_ring(64, 64, 3).unwrap());
+        let reader = ring.clone();
+        let reading = std::thread::spawn(move || reader.read(0, 1, 64, 64).map(|_| ()));
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(!reading.is_finished(), "the read waits for ready to reach 1");
+        ring.release_after_crash(1).unwrap();
+        let start = Instant::now();
+        while !reading.is_finished() {
+            assert!(start.elapsed() < Duration::from_secs(5), "the read still waits after ready was raised");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        reading.join().unwrap().unwrap();
+        ring.release_after_crash(1).unwrap();
+    }
+}

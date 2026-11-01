@@ -32,6 +32,8 @@ emusen-crystal = { path = "../../../../Platform/crystal" }
 emusen-galaxia = { path = "../../../../Platform/galaxia" }
 # The host's side of the ring, lent to a brokered core across the process boundary.
 emusen-serenity = { path = "../../../../Platform/serenity" }
+# The platform library's frontend API and Serenity exports, through which the ring is lent and drawn as Mistress does.
+emusen-platform = { path = "../../../../Platform/platform" }
 
 [profile.release]
 panic = "abort"

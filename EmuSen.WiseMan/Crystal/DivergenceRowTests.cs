@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.Crystal
                 events.Drain();
                 int held = Json(s.RewindReel()).GetProperty("depth").GetInt32();
                 load();
-                // The Rust keeps the chain across a load, its newest moment the present before it, so Rewind undoes it (EmuSen_Backend.md §35); the C# half, untouched until B10, still clears it.
+                // The Rust keeps the chain across a load, its newest moment the present before it, so Rewind undoes it (EmuSen_Backend.md §36); the C# half, untouched until B10, still clears it.
                 Assert.Equal(KeepsRewindAcrossALoad ? held : 0, Json(s.RewindReel()).GetProperty("depth").GetInt32());
                 Assert.Equal("loaded", Json(events.Drain()).EnumerateArray().Single().GetProperty("op").GetString());
             }

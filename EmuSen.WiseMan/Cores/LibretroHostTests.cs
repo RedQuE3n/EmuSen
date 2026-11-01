@@ -32,12 +32,12 @@ namespace EmuSen.WiseMan.Cores
         public LibretroEntryFixture() : this("") { }
 
         // An entry whose information file names the libretro system, so that its machine reports the systems table's console; under another stem, that core's profile applies.
-        internal LibretroEntryFixture(string systemId, string stem = "testcore")
+        internal LibretroEntryFixture(string systemId, string stem = "testcore", string extensions = "")
         {
             Stem = stem;
             DataStore.OverrideDirectory = Path.Combine(Root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(Root, "Config");
-            Lay(Entry, systemId, stem);
+            Lay(Entry, systemId, stem, extensions);
             Environment("EMUSEN_CORE_RUNNER", Path.Combine(AppContext.BaseDirectory, "emusen-core-runner"));
             Sha256 = CoreSidecar.HashOf(CoreFile);
             Approve(Sha256);
@@ -48,14 +48,14 @@ namespace EmuSen.WiseMan.Cores
             Found = CoreDiscovery.Found.Single(c => c.Entry == Entry);
         }
 
-        // An entry's files: the two copies from the installation, the test core named on its stem, its information file.
-        public static void Lay(string folder, string systemId = "", string stem = "testcore")
+        // An entry's files: the two copies from the installation, the test core named on its stem, its information file, with the extensions a real core of that stem lists when given.
+        public static void Lay(string folder, string systemId = "", string stem = "testcore", string extensions = "")
         {
             Directory.CreateDirectory(folder);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.ProxyLibrary), LibretroEntries.ProxyPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.HostLibrary), LibretroEntries.AdapterPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"), Path.Combine(folder, $"{stem}_libretro.so"), overwrite: true);
-            File.WriteAllText(Path.Combine(folder, $"{stem}_libretro.info"), $"display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"{systemId}\"\ndatabase = \"\"\n");
+            File.WriteAllText(Path.Combine(folder, $"{stem}_libretro.info"), $"display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"{systemId}\"\ndatabase = \"\"\n" + (extensions.Length > 0 ? $"supported_extensions = \"{extensions}\"\n" : ""));
         }
 
         public static void Approve(string sha256)

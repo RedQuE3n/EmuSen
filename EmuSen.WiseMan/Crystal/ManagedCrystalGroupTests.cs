@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Crystal
             int held = Json(s.RewindReel()).GetProperty("depth").GetInt32();
             s.LoadSlot(3);
             Assert.Equal(saved, Picture(s));
-            // The Rust keeps the chain across a load (EmuSen_Backend.md §35); the C# half still clears it.
+            // The Rust keeps the chain across a load (EmuSen_Backend.md §36); the C# half still clears it.
             Assert.Equal(DivergenceRowTests.KeepsRewindAcrossALoad ? held : 0, Json(s.RewindReel()).GetProperty("depth").GetInt32());
             JsonElement[] drained = Json(events.Drain()).EnumerateArray().ToArray();
             Assert.Equal(new[] { "saved", "loaded" }, drained.Where(e => e.GetProperty("kind").GetString() == "state").Select(e => e.GetProperty("op").GetString()));

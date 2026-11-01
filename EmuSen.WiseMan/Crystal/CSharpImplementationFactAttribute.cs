@@ -3,7 +3,7 @@ using Xunit;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // A case that reaches the C# implementation's own types or statics, skipped when EMUSEN_CRYSTAL_NATIVE=1 puts the binding on the Rust; why names what holds the Rust - see EmuSen_Backend.md §29.27.
+    // A case that reaches the C# implementation's own types or statics, run only at EMUSEN_CRYSTAL_NATIVE=0 since the suite defaults to the Rust; why names what holds the Rust - see EmuSen_Backend.md §29.27 and §35.
     public sealed class CSharpImplementationFactAttribute : FactAttribute
     {
         public CSharpImplementationFactAttribute(string why)

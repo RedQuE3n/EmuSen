@@ -11558,7 +11558,7 @@ and the C ABI has no call that captures on demand, so the frontend could not do 
 runtime does it itself. While rewind is on, a state load first takes a snapshot of the present, with its picture, unless
 the newest moment already is the present, and keeps the chain instead of clearing it; with rewind off it clears as
 before. Every way of loading takes it, the Pause Card's Load, the hotkeys and a shell's `state load` alike, and Mistress
-changed nothing. `EmuSen_Backend.md` §35 specifies it; the C# implementation is unchanged until B10 deletes it.
+changed nothing. `EmuSen_Backend.md` §36 specifies it; the C# implementation is unchanged until B10 deletes it.
 
 ### 48.9 The library menu
 

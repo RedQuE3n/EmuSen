@@ -5085,7 +5085,7 @@ X takes a screenshot on every page and keeps the menu open. *Volume* steps the s
 Players moved from Game Settings to the first page; Preferences, Shell and the EmuSen page left the in-game menu and
 stay in the library's. *Save State* and *Load State* are *Save* and *Load*. The first page holds at most eight rows, so
 where a disc row and Swap Players would make nine, Swap Players goes under Controllers. A load keeps the reel from before
-it, so Rewind undoes a wrong load (`EmuSen_Backend.md` §35).
+it, so Rewind undoes a wrong load (`EmuSen_Backend.md` §36).
 
 **`GuideChords`** (`appsettings.json`, `Auto` by default, or `On` or `Off`): with Guide held, Up saves to the current
 slot, Down loads it and R1 takes a screenshot; Guide alone then opens the menu as it is let go, and Select with Start
@@ -5928,6 +5928,11 @@ whole assembly, and runs in the ordinary suite.
   `SceneAssets.Halves`) and `PreferencesThemeTests`' three resets; on the fixed tree it passes.
 - **Listed, not fixed:** `HeadlessRaceTool`'s two cases, which do it on purpose, and `ShaderBenchTests`, which needs a
   Vulkan device and so was never run here. Changing a test that cannot be run to see it pass was not done.
+- **Listed on 2026-11-01:** `ShaderBenchTests`' device-path case, added since, on the same ground, and
+  `HotaruOnTheApiTests.C7`, an over-approximation of the kind described below: `HotaruCommands.For` builds the command
+  table, whose `coretop` entry's lambda opens `CoretopWindow`, and the case gives `state save` and `state load` only.
+  The guard named both in full runs on either frontend API implementation measured on 2026-11-01, so neither came from
+  the suite's change to the Rust default (`EmuSen_Backend.md` §35).
 
 **What it cannot see.** It is a static reading, so it over-approximates: a method is flagged if any path through it
 reaches a site, as `LunaTheme.Apply(BuiltIn)` was, through the CSS branch that name never takes (it was wrong there for

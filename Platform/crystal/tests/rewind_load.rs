@@ -1,5 +1,5 @@
 //! A state load while rewind is on keeps the chain and first takes a snapshot, so Rewind undoes a wrong load
-//! (EmuSen_Backend.md §14.13, decided 2026-11-01 for the Pause Card, EmuSen_BigPicture.md §48.8).
+//! (EmuSen_Backend.md §36, decided 2026-11-01 for the Pause Card, EmuSen_BigPicture.md §48.8).
 use std::path::{Path, PathBuf};
 
 use emusen_core_host::sidecar;

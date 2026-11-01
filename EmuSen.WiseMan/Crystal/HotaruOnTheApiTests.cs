@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(0, resets);
             Assert.Contains("[STATE] Loaded", shell.Execute("state load"));
             Assert.False(events.Drain(s.Id, () => resets++));
-            // Since 2026-11-01 the Rust keeps the chain across a load with one snapshot more, so Rewind undoes it (EmuSen_Backend.md §35); the C# half still clears it.
+            // Since 2026-11-01 the Rust keeps the chain across a load with one snapshot more, so Rewind undoes it (EmuSen_Backend.md §36); the C# half still clears it.
             int depth = Json(s.RewindReel()).GetProperty("depth").GetInt32();
             Assert.Equal(1, resets);
             if (DivergenceRowTests.KeepsRewindAcrossALoad) Assert.True(depth > 0, "the Rust kept the chain");

@@ -537,7 +537,7 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   the slots and reel in the pane, X for a screenshot, the volume row deferring in Game Mode, the Guide chords with their
   setting, and the library menu's Back row with the paused frame. The library menu keeps its centred, blurred look.
 - **The runtime.** A state load with rewind on keeps the chain and first takes a snapshot, so Rewind undoes a wrong
-  load (`EmuSen_Backend.md` §35), in the Rust runtime alone.
+  load (`EmuSen_Backend.md` §36), in the Rust runtime alone.
 - **Not in U2.** Rumble has no row, since nothing reports it. Console rows still come from what the running machine
   reports; a capability table in the core ABI is later.
 - **Recordings.** Eighteen new states, the card's and the library menu's Back row, at 1280 × 800 and 1920 × 1200, and two

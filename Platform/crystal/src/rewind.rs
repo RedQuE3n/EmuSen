@@ -355,6 +355,14 @@ impl Rewind {
         self.capture(e)
     }
 
+    /// A snapshot of the present unless the newest moment already is it, as before a state load (EmuSen_Backend.md §14.13).
+    pub fn capture_unless_held(&mut self, e: &mut dyn Snapshots) -> Result<bool, (i32, String)> {
+        if self.moments.back().is_some_and(|m| m.frame == self.frames) {
+            return Ok(false);
+        }
+        self.capture(e)
+    }
+
     fn capture(&mut self, e: &mut dyn Snapshots) -> Result<bool, (i32, String)> {
         self.settle();
         let mut state = self.spare.take().unwrap_or_default();

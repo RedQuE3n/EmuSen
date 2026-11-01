@@ -37,9 +37,9 @@ namespace EmuSen.WiseMan.Crystal
 
         private sealed record Host(CrystalRuntime Runtime, CrystalSession Session) : IHotaruHost;
 
-        // C7, Hotaru's console case: its `state load` called the engine's LoadState, so the rewind history from before the load survived it; on the API the load clears it and raises the event the window resets its rate control on.
+        // C7, Hotaru's console case: its `state load` called the engine's LoadState around the API's sequence; on the API the load runs the one sequence and raises the event the window resets its rate control on.
         [Fact]
-        public void C7_hotaru_s_console_state_load_clears_rewind_and_resets_the_rate_control()
+        public void C7_hotaru_s_console_state_load_runs_the_api_s_sequence_and_resets_the_rate_control()
         {
             string game = _f.Game("Seven.tst");
             string kept = System.IO.Path.Combine(_f.Root, "Seven.state");
@@ -70,7 +70,11 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(0, resets);
             Assert.Contains("[STATE] Loaded", shell.Execute("state load"));
             Assert.False(events.Drain(s.Id, () => resets++));
-            Assert.Equal((1, 0), (resets, Json(s.RewindReel()).GetProperty("depth").GetInt32()));
+            // Since 2026-11-01 the Rust keeps the chain across a load with one snapshot more, so Rewind undoes it (EmuSen_Backend.md §35); the C# half still clears it.
+            int depth = Json(s.RewindReel()).GetProperty("depth").GetInt32();
+            Assert.Equal(1, resets);
+            if (DivergenceRowTests.KeepsRewindAcrossALoad) Assert.True(depth > 0, "the Rust kept the chain");
+            else Assert.Equal(0, depth);
         }
 
         // The window's events keep its own session's: another session's load resets nothing, and its own session closed ends it.

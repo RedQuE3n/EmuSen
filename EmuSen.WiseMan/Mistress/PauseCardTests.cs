@@ -194,6 +194,40 @@ namespace EmuSen.WiseMan.Mistress
             Done(window);
         }, default);
 
+        // The oldest and newest moments the reel holds, by frame.
+        private static (long Oldest, long Newest, int Count) Reel(MainWindow w)
+        {
+            var session = (EmuSen.Mistress.GameSession)Field(w, "_session")!;
+            using var reel = System.Text.Json.JsonDocument.Parse(session.Crystal.RewindReel());
+            long[] frames = reel.RootElement.GetProperty("moments").EnumerateArray().Select(m => m.GetProperty("frame").GetInt64()).ToArray();
+            return frames.Length == 0 ? (-1, -1, 0) : (frames[0], frames[^1], frames.Length);
+        }
+
+        // Load from the card leaves the moments before it in the reel, so Rewind undoes a wrong load; the Rust runtime keeps them, the C# half (untouched until B10) still clears them (EmuSen_BigPicture.md §48.8).
+        [Fact]
+        public Task Load_keeps_the_reel_from_before_it_so_rewind_undoes_it() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = Playing();
+            pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+            pad.Down(2);
+            pad.A();
+            WaitFor(() => File.Exists(State(window, _root, 1)), "the save");
+            WaitFor(() => Reel(window).Count >= 3, "moments in the reel");
+            (long oldest, long newest, _) = Reel(window);
+            pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+            pad.Down(3);
+            pad.A();
+            WaitFor(() => window.GetControl<TextBlock>("StatusText").Text?.StartsWith("State loaded", StringComparison.Ordinal) == true, "the load");
+            Assert.False(PadMenu.IsOpen(window));
+            (long after, long latest, int count) = Reel(window);
+            if (EmuSen.WiseMan.Crystal.DivergenceRowTests.KeepsRewindAcrossALoad)
+            {
+                Assert.Equal(oldest, after);
+                Assert.True(latest >= newest && count >= 3, $"the reel kept up to {newest}: {after}..{latest}, {count} moments");
+            }
+            Done(window);
+        }, default);
+
         [Fact]
         public Task With_the_swap_the_card_s_help_bar_names_east_as_select_and_south_as_back() => Session.Dispatch(() =>
         {

@@ -9416,3 +9416,30 @@ changed. `EmuSen_LibretroHost.md` §10m has the design and its proofs.
 numbers, as `crystal_abi.rs` holds it to the Rust's; the C# mirror's minor is checked only to be at or below the header's,
 until B10 deletes it. `CoreHostParityTests` sets the key aside on the Rust side before comparing.
 
+## 35. A state load keeps the rewind chain, 2026-11-01
+
+Decided 2026-11-01 for the Pause Card (`EmuSen_BigPicture.md` §48.8): a wrong load is undone by Rewind. Until now every
+state load cleared the chain (C7 of §3.12, row 2 of §14.6.1, `load_in` in `saving.rs`), so nothing from before a load could be
+returned to.
+
+**The behaviour.** While rewind is on, `state_load` and every way of loading built on it (`state_slot_load`,
+`resume_load`, the session table's `state_load` a shell calls) first takes a snapshot of the present, with the picture on
+show where pictures are on, unless the newest moment already is the present (no frame has run since it was taken), and
+then keeps the chain rather than clearing it. The present before the load is the newest moment, and `rewind_to` that
+moment or `rewind_step` back to it returns the game to it. With rewind off, a load clears the chain as before. The
+`state` event is raised as before, so a client still resets its rate control once. Deltas are differences between two
+states rather than a replay, so a load in the middle of the chain needs nothing of the encoder (§29.17).
+
+**The version.** No function, struct field, enumeration value or JSON key changed, and §3.2 asks a minor only for those,
+so the frontend API stays at 1.5. The change is one of documented behaviour, recorded here.
+
+**The C# implementation is unchanged.** It still clears the chain on a load, until B10 deletes it. No parity case loads a
+state with rewind on (`CrystalParityTests.States` leaves rewind off), so none is set aside. `DivergenceRowTests`' row 2
+and `HotaruOnTheApiTests`' C7 case expect the chain kept on the Rust and cleared on the C#, by `EMUSEN_CRYSTAL_NATIVE`.
+
+**The proof.** `Platform/crystal/tests/rewind_load.rs` was written first and failed (the newest moment after a load was
+none, the chain empty). With the change: 42 frames at an interval of 4 with a state saved at frame 20, then a load; the
+reel's newest moment is frame 42 and it holds one moment more than before; a second load at once adds none; `rewind_to`
+42 succeeds; and with rewind off a load leaves the reel empty. Mistress's `PauseCardTests` holds the same through the
+card's Load on the Rust runtime: the oldest moment from before the load is still held after it.
+

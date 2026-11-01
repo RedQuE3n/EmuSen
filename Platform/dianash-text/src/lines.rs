@@ -48,27 +48,73 @@ pub fn sort(args: &[String], stdin: Option<String>) -> Answer {
     Answer::ok(lines.join("\n"))
 }
 
+const UNIQ_USAGE: &str = "Usage: uniq [-c] [-D] [-w <chars>] - see man uniq";
+
+/// `uniq`: adjacent lines with the same key collapsed to the first, or with `-D` every line of a run of two or more
+/// printed; the key is the line, or its first `-w` characters. See `man uniq`.
 pub fn uniq(args: &[String], stdin: Option<String>) -> Answer {
-    let counted = args.len() >= 2 && args[1] == "-c";
-    let Some(text) = input(stdin, args, if counted { 2 } else { 1 }) else { return Answer::ok("") };
+    let (mut counted, mut all, mut width) = (false, false, None::<usize>);
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-c" => counted = true,
+            "-D" => all = true,
+            "-w" => match args.get(i + 1).and_then(|n| n.parse().ok()) {
+                Some(n) => {
+                    width = Some(n);
+                    i += 1;
+                }
+                None => return Answer::fail(format!("uniq: -w needs a number of characters\n{UNIQ_USAGE}")),
+            },
+            w if w.len() > 2 && w.starts_with("-w") && w[2..].parse::<usize>().is_ok() => width = w[2..].parse().ok(),
+            _ => break,
+        }
+        i += 1;
+    }
+    if counted && all {
+        return Answer::fail(format!("uniq: -c and -D together are meaningless: every line of a run is printed, not counted\n{UNIQ_USAGE}"));
+    }
+    let Some(text) = input(stdin, args, i) else { return Answer::ok("") };
+    let key = |line: &'_ str| -> String { width.map_or_else(|| line.to_string(), |n| line.chars().take(n).collect()) };
+    if all {
+        let ended = text.ends_with('\n');
+        let body = if ended { &text[..text.len() - 1] } else { &text[..] };
+        let lines: Vec<&str> = if body.is_empty() && ended { vec![""] } else { body.split('\n').collect() };
+        let mut out: Vec<&str> = Vec::new();
+        let mut from = 0;
+        for k in 1..=lines.len() {
+            if k == lines.len() || key(lines[k]) != key(lines[from]) {
+                if k - from > 1 {
+                    out.extend(&lines[from..k]);
+                }
+                from = k;
+            }
+        }
+        let mut joined = out.join("\n");
+        if ended && !out.is_empty() {
+            joined.push('\n');
+        }
+        return Answer::ok(joined);
+    }
     let mut out: Vec<String> = Vec::new();
-    let mut current: Option<&str> = None;
+    let mut current: Option<(&str, String)> = None;
     let mut count = 0;
-    let flush = |current: Option<&str>, count: usize, out: &mut Vec<String>| {
-        if let Some(line) = current {
+    let flush = |current: &Option<(&str, String)>, count: usize, out: &mut Vec<String>| {
+        if let Some((line, _)) = current {
             out.push(if counted { format!("{count} {line}") } else { line.to_string() });
         }
     };
     for line in text.split('\n') {
-        if current == Some(line) {
+        let k = key(line);
+        if current.as_ref().is_some_and(|(_, c)| *c == k) {
             count += 1;
         } else {
-            flush(current, count, &mut out);
-            current = Some(line);
+            flush(&current, count, &mut out);
+            current = Some((line, k));
             count = 1;
         }
     }
-    flush(current, count, &mut out);
+    flush(&current, count, &mut out);
     Answer::ok(out.join("\n"))
 }
 
@@ -506,4 +552,27 @@ fn parse_expression(text: &str) -> Result<Expression, String> {
         return Ok(Expression::Literal(text.to_string()));
     }
     Err(format!("unsupported awk expression: '{text}'"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn uniq_of(line: &str, stdin: &str) -> Answer {
+        uniq(&line.split_whitespace().map(str::to_string).collect::<Vec<_>>(), Some(stdin.to_string()))
+    }
+
+    #[test]
+    fn uniq_d_prints_every_line_of_each_run_and_w_keys_on_the_first_characters() {
+        assert_eq!(uniq_of("uniq", "a\na\nb\n").out, "a\nb\n");
+        assert_eq!(uniq_of("uniq -c", "a\na\nb").out, "2 a\n1 b");
+        assert_eq!(uniq_of("uniq -D", "a\na\nb\nc\nc\nc\nd\n").out, "a\na\nc\nc\nc\n");
+        assert_eq!(uniq_of("uniq -D", "a\nb\n").out, "");
+        assert_eq!(uniq_of("uniq -D", "x\nx").out, "x\nx");
+        assert_eq!(uniq_of("uniq -D -w 3", "abc one\nabc two\nabd three\n").out, "abc one\nabc two\n");
+        assert_eq!(uniq_of("uniq -w2", "abX\nabY\ncd\n").out, "abX\ncd\n");
+        assert_eq!(uniq_of("uniq -D -w 2", "é1x\né1y\n").out, "é1x\né1y\n");
+        assert!(uniq_of("uniq -c -D", "a\n").err.contains("meaningless"));
+        assert!(uniq_of("uniq -w", "a\n").err.contains("-w needs"));
+    }
 }

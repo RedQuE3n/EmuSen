@@ -1884,6 +1884,12 @@ fix the same call took 0.006 and 0.007 s over two rounds and answers what the `.
 `pcsx2/resources` folders, both required. A unit test in `emusen-core-broker` holds the request for a target that does
 not read the image to the empty one whatever image is given.
 
+**The interface thread.** The three questions the launch asks the runtime first (the core's approval, the firmware it
+lacks, the cards' import) are now asked on a worker (`MainWindow.OffInterface`): an answer that comes within 100 ms is
+taken at once, as before, so a launch still starts within the press; a slower one is awaited with the interface free,
+so no core's answer can freeze the screen again. `PreLaunchQueryTests` holds the firmware question for as long as it
+likes and proves the interface thread runs its jobs meanwhile and that each question ran off it.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

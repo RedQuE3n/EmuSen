@@ -387,7 +387,7 @@ namespace EmuSen.Mistress.Views
         private async Task PromptForMissingFirmwareAsync(string romPath)
         {
             string needed;
-            try { needed = Runtime.FirmwareNeeded(romPath); }
+            try { needed = await OffInterface(() => FirmwareQuery(romPath)); }
             catch (CrystalException) { return; }
             using System.Text.Json.JsonDocument requests = System.Text.Json.JsonDocument.Parse(needed);
             foreach (System.Text.Json.JsonElement request in requests.RootElement.EnumerateArray())

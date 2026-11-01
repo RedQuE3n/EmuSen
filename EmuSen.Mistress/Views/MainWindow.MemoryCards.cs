@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
         internal async Task OfferCardImportAsync(string romPath)
         {
             if (RuntimeCatalog.ConsoleForRom(romPath) is not { } console) return;
-            CardMedium? medium = CardMedium.Of(Runtime, console).FirstOrDefault(m => m.ImportDue && _graphics.Value(console, OfferedKey(m)) is null);
+            CardMedium? medium = (await OffInterface(() => CardsQuery(console))).FirstOrDefault(m => m.ImportDue && _graphics.Value(console, OfferedKey(m)) is null);
             if (medium is null) return;
             _graphics.SetValue(console, OfferedKey(medium), "true");
             _graphics.Save();

@@ -31,22 +31,8 @@ pub struct Lend {
     pub ctx: *mut c_void,
 }
 
-/// `emusen_scrape_service.h`'s table.
-#[repr(C)]
-pub struct ScrapeServiceV1 {
-    pub size: u32,
-    pub get: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub change: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub start: unsafe extern "C" fn(*const u8, usize) -> i64,
-    pub progress: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub wait: extern "C" fn(u64, u32) -> i64,
-    pub pause: extern "C" fn(i32) -> i32,
-    pub cancel: extern "C" fn() -> i32,
-    pub library_get: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub games: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub theme_kinds: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
-}
+/// `emusen_scrape_service.h`'s table, as the module that calls it declares it.
+pub use emusen_scrape_module::ScrapeServiceV1;
 
 /// The service's one table, for every shell.
 pub static TABLE: ScrapeServiceV1 = ScrapeServiceV1 {
@@ -98,11 +84,17 @@ fn setting(settings: &emusen_galaxia::json::Value, name: &str) -> Option<String>
     settings.get(name).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string)
 }
 
-/// The settings file's folders, as `MainWindow.NativeSettings` gives them; each system its own engine, since no runtime catalog is here.
-fn own_settings() -> (String, String, String) {
+/// The tree, the settings file and its ROM folder, as the library tool reads them.
+fn settings_file() -> (tree::Tree, emusen_galaxia::json::Value, Option<String>) {
     let tree = tree::tree().clone();
     let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
     let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
+    (tree, settings, roms)
+}
+
+/// The settings file's folders, as `MainWindow.NativeSettings` gives them; each system its own engine, since no runtime catalog is here.
+fn own_settings() -> (String, String, String) {
+    let (tree, settings, roms) = settings_file();
     let art = setting(&settings, "ArtworkDirectory").or_else(|| tree.directory(Directory::Artwork));
     let mut members = vec![
         ("roms", roms.map_or(Value::Null, Value::string)),
@@ -261,9 +253,8 @@ unsafe extern "C" fn service_library_get(r: *const u8, len: usize, out: *mut u8,
 
 /// The settings' ROM folder scanned on a database of its own, as `RomLibrary.ScanNative` does, each game with its ES-DE system.
 fn games(h: &Held<'_>, filter: &str) -> Result<String, Error> {
-    let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
-    let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path.unwrap_or_default();
+    let (tree, _, roms) = settings_file();
+    let roms = roms.unwrap_or_default();
     let scan = Library::open(h.scraper.sqlite(), ":memory:").map_err(library_error)?;
     let members = vec![
         ("roots", Value::Array(vec![Value::string(roms)])),

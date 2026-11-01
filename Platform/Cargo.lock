@@ -571,7 +571,6 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "emusen-trace",
- "libc",
  "rcgen",
  "rustls",
 ]

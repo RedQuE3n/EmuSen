@@ -41,6 +41,10 @@ The design study's seven open questions and one addition, as the tester answered
 7. **[D]** **Themes never style a card**, not even with an accent (§7).
 8. **[D]** **Video is part of the design from the start** (§5.9), not added later.
 
+**Departure from 3.** Decided 2026-11-01: a framed sheet's words stay in Barlow Condensed at their present sizes until
+the Card form rebuilds the sheets in U2 and U3, where the departure ends. Set in Barlow at the big screen's Body, the
+sheets failed the fit audit in 23 states at both sizes (§11; LunaP §206.3).
+
 ---
 
 ## 1. The idea, and the principles it rests on

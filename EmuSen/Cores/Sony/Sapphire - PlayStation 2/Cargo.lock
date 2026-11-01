@@ -346,6 +346,10 @@ name = "emusen-native"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-ps2-card"
+version = "0.1.0"
+
+[[package]]
 name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -567,6 +571,7 @@ dependencies = [
  "emusen-mips",
  "emusen-mips-planner",
  "emusen-native",
+ "emusen-ps2-card",
 ]
 
 [[package]]

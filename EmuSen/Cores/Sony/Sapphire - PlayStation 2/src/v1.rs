@@ -52,8 +52,8 @@ fn controllers() -> Vec<Controller> {
 /// The memory cards' battery files, file 0 the card in slot 1 and file 1 in slot 2, their medium and the slots' words
 /// in core info (Sapphire_Plan.md §4.4; EmuSen_SaveMedia.md §3.2; Sapphire_Native.md §30.7).
 pub const CARD_FILES: [u32; 2] = [0, 1];
-pub const CARD_SUFFIXES: [&str; 2] = [".ps2", ".2.ps2"];
-pub const CARD_MEDIUM: &str = "ps2.card";
+pub const CARD_SUFFIXES: [&str; 2] = emusen_ps2_card::SUFFIXES;
+pub const CARD_MEDIUM: &str = emusen_ps2_card::MEDIUM;
 pub const CARD_LABELS: [&str; 2] = ["Slot 1", "Slot 2"];
 
 /// The console's EEPROM, the medium `ps2.nvm` (Sapphire_Plan.md §4.4), a console file kept per console model: files 2,

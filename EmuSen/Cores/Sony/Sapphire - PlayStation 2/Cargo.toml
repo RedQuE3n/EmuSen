@@ -21,6 +21,8 @@ blackmoon-r3000 = { path = "../BlackMoon-HW/blackmoon-r3000" }
 blackmoon-spu = { path = "../BlackMoon-HW/blackmoon-spu" }
 # Discs as sectors, CDs and DVDs, which the CDVD drive reads (Sapphire_Plan.md §9.4).
 emusen-disc = { path = "../../Shared/emusen-disc" }
+# The memory card's format, its page and card sizes and the files' suffixes, one owner for every engine (EmuSen_LibretroHost.md §10j).
+emusen-ps2-card = { path = "../../Shared/emusen-ps2-card" }
 # The recompilers' thread, publication, module, code budget and verifier, shared with MarsRT: VU micro mode's lowering (Sapphire_Native.md §45) and the EE's code memory; Sapphire_Plan.md §9.6.
 emusen-jit = { path = "../../Shared/emusen-jit", features = ["native"] }
 # The EE's tier: the macro-assembler and the MIPS planner (EmuSen_Recompiler.md §14, Sapphire_Speed.md §66).

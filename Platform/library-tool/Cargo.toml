@@ -12,6 +12,8 @@ publish.workspace = true
 name = "emusen_library_tool"
 
 [dependencies]
+# The job runner, shared with the core tool (EmuSen_Cores.md §6).
+emusen-tool-job = { path = "../tool-job" }
 # Where a file lives, how it is read and hashed, the archives, the manifest and the atomic write.
 emusen-galaxia = { path = "../galaxia" }
 # What a sheet means and how a CHD reads: check 2 and check 3 read through it, never through chdman.

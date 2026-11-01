@@ -1,6 +1,7 @@
 //! The library tool's C layer (EmuSen_GamePackages.md §12.3): a job started from a request, its events taken one at a
 //! time by the length-query idiom, stopped and freed. The same four calls are the `emusen.library` service every shell
-//! this library makes is handed, so that the shell's module and Mistress's window run one tool.
+//! this library makes is handed, so that the shell's module and Mistress's window run one tool. Since 1.5 a request whose
+//! op starts `core-` is the core tool's, on the same job runner (EmuSen_Cores.md §6).
 
 use crate::{bytes, fail, put, status};
 use emusen_galaxia::dotnet_path::{self as path, Style};
@@ -25,7 +26,7 @@ pub struct LibraryToolV1 {
 
 pub const SERVICE: &str = "emusen.library";
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 5;
+pub const MINOR: u32 = 6;
 
 /// The service's one table, for every shell.
 pub static TABLE: LibraryToolV1 = LibraryToolV1 {
@@ -56,7 +57,19 @@ fn context() -> Context {
     Context { state_folder: states, sqlite, output, ..Context::pinned(tree, library, chdman()) }
 }
 
-/// Starts a job from a request (EmuSen_GamePackages.md §12.3); PARSE with words for one that is not a request.
+/// The core tool's context: the player's `/Cores`, the buildbot for this platform, and no placement until the systems
+/// table's `for_libretro` lands, a request's own `"systems"` serving meanwhile (EmuSen_Cores.md §4.2).
+fn core_context() -> emusen_core_tool::Context {
+    let cores = tree::tree().directory(tree::Directory::Cores).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from(path::combine(Style::HOST, &tree::user_home(), "Cores")));
+    emusen_core_tool::Context { cores, source: emusen_core_tool::Source::buildbot(), placement: None }
+}
+
+/// The op a request names, read only far enough to route it.
+fn op_of(text: &str) -> Option<String> {
+    emusen_galaxia::json::parse(text).ok()?.get("op")?.as_str().map(str::to_string)
+}
+
+/// Starts a job from a request (EmuSen_GamePackages.md §12.3, EmuSen_Cores.md §6); PARSE with words for one that is not a request.
 ///
 /// # Safety
 /// `request` must be valid for `len` bytes; `job` must be valid for a write.
@@ -70,7 +83,11 @@ pub unsafe extern "C" fn emusen_tool_job_start(request: *const u8, len: usize, j
         Ok(Err(_)) => return fail(status::BAD_STRING, "the request is not UTF-8"),
         Err(code) => return code,
     };
-    match job::start(text, context()) {
+    let started = match op_of(text) {
+        Some(op) if emusen_core_tool::job::is_core_op(&op) => emusen_core_tool::job::start(text, core_context()),
+        _ => job::start(text, context()),
+    };
+    match started {
         Ok(j) => {
             unsafe { *job = Box::into_raw(Box::new(LibraryJob(j))) };
             0

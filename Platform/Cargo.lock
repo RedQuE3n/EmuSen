@@ -328,11 +328,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-core-entry"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+]
+
+[[package]]
 name = "emusen-core-host"
 version = "0.1.0"
 dependencies = [
  "emusen-native",
  "libloading",
+]
+
+[[package]]
+name = "emusen-core-tool"
+version = "0.1.0"
+dependencies = [
+ "emusen-core-entry",
+ "emusen-galaxia",
+ "emusen-net",
+ "emusen-tool-job",
+ "rcgen",
+ "rustls",
+]
+
+[[package]]
+name = "emusen-cores-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-library-module",
 ]
 
 [[package]]
@@ -471,6 +499,7 @@ dependencies = [
  "emusen-scrape",
  "emusen-sqlite",
  "emusen-systems",
+ "emusen-tool-job",
  "libc",
  "sha2",
 ]
@@ -516,6 +545,9 @@ dependencies = [
  "dianash-text",
  "emusen-cheat",
  "emusen-cheats",
+ "emusen-core-entry",
+ "emusen-core-tool",
+ "emusen-cores-module",
  "emusen-crystal",
  "emusen-debug",
  "emusen-dianash",
@@ -626,6 +658,10 @@ dependencies = [
  "emusen-psx-card",
  "silvermillennium-sm83",
 ]
+
+[[package]]
+name = "emusen-tool-job"
+version = "0.1.0"
 
 [[package]]
 name = "emusen-trace"

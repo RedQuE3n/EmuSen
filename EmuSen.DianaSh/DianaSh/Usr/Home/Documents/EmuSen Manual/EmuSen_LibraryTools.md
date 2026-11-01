@@ -200,16 +200,16 @@ scraper is its own crate.
 
 ## 7. Built 2026-10-31: T2, the `rom` commands and `uniq -D -w`
 
-`rom hash`, `rom check` and `rom dups` are the command `rom` of the module `emusen.library`, beside `chd` and `pkg`, and
-each is a job of the library tool (`Platform/library-tool/src/rom.rs`), reached through the service `emusen.library`,
-now 1.5, as `chd` and `pkg` are: a module never links Galaxia, and the tool already reads the settings' library, routes
-a file to its system and owns the disc reader's use. No new crate and no new surface beyond the service's minor were
-needed. The page is `man rom` (`Lib/dianash/emusen.library/man/rom.1`), which holds what the player needs; this section
-holds the rest.
+`rom hash`, `rom check` and `rom dups` are the command `rom` of the module `emusen.library`, beside `chd` and `pkg`,
+and each is a job of the library tool (`Platform/library-tool/src/rom.rs`), reached through the service
+`emusen.library`, now 1.6 (1.5 being the core tool's `core-` ops, `EmuSen_Cores.md` §6.1), as `chd` and `pkg` are: a
+module never links Galaxia, and the tool already reads the settings' library, routes a file to its system and owns the
+disc reader's use. No new crate and no new surface beyond the service's minor were needed. The page is `man rom`
+(`Lib/dianash/emusen.library/man/rom.1`), which holds what the player needs; this section holds the rest.
 
 ### 7.1 The requests and events
 
-Requests (since 1.5): `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}`, the
+Requests (since 1.6): `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}`, the
 paths relative to the library as `chd`'s and `pkg`'s are and at least one of them; `comparable` is `rom-hash`'s alone;
 and `{"op": "rom-dups", "console": null}`, a console by its ES-DE name or id, no paths.
 

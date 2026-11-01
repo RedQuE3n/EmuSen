@@ -161,3 +161,66 @@ fn rom_dups_is_the_pipe_of_rom_hash_sort_and_uniq_in_a_shell_this_library_makes(
     unsafe { dianash_free(sh) };
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// A catalogue as `cores fetch` caches it, written by the test: one core offered, and one of them installed.
+fn seed_cores(cores: &std::path::Path) {
+    use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice};
+    let cat = cores.join("libretro/.catalogue");
+    std::fs::create_dir_all(&cat).unwrap();
+    let info = cat.join("pcsx2_libretro.info");
+    std::fs::write(&info, "display_name = \"Sony - PlayStation 2 (LRPS2)\"\ncorename = \"LRPS2\"\nlicense = \"GPLv3\"\ndisplay_version = \"2.3.1\"\nfirmware_count = 1\nfirmware0_desc = \"PlayStation 2 BIOS\"\nfirmware0_path = \"pcsx2/bios/ps2.bin\"\n").unwrap();
+    let mut zip = emusen_galaxia::archive::ZipWriter::create(cat.join("info.zip").to_str().unwrap()).unwrap();
+    zip.add("pcsx2_libretro.info", info.to_str().unwrap(), std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000), false, &|| false).unwrap();
+    zip.finish().unwrap();
+    std::fs::remove_file(&info).unwrap();
+    let s = library_suffix();
+    std::fs::write(cat.join("index-linux-x86_64"), format!("2026-10-31 3a224a58 pcsx2_libretro.{s}.zip\n2026-10-30 11112222 mine_libretro.{s}.zip\n")).unwrap();
+    std::fs::write(cat.join("fetched"), "2026-10-31\n").unwrap();
+    let e = Entry::new(cores, "mine").unwrap();
+    std::fs::create_dir_all(&e.folder).unwrap();
+    std::fs::write(e.core_path(), b"a core").unwrap();
+    let n = Notice {
+        stem: "mine".into(),
+        name: "Mine".into(),
+        corename: "MINE".into(),
+        authors: vec!["Someone".into()],
+        license: "MIT".into(),
+        source: format!("https://buildbot.libretro.com/nightly/linux/x86_64/latest/mine_libretro.{s}.zip"),
+        build: "2026-10-29".into(),
+        index_crc32: 0x1111_2222,
+        sha256: sha256_file(&e.core_path()).unwrap(),
+        fetched: "2026-10-29".into(),
+        extra: Vec::new(),
+    };
+    std::fs::write(e.notice_path(), n.to_text().unwrap()).unwrap();
+}
+
+#[test]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn cores_runs_in_a_shell_this_library_makes_over_the_cached_catalogue() {
+    let _tree = TREE.lock().unwrap_or_else(|p| p.into_inner());
+    let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-cores-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (home, etc) = (base.join("home"), base.join("etc"));
+    std::fs::create_dir_all(&etc).unwrap();
+    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    let cores = PathBuf::from(tree::tree().directory(tree::Directory::Cores).unwrap());
+    seed_cores(&cores);
+    let sh = unsafe { dianash_new(std::ptr::null()) };
+    assert_eq!(unsafe { dianash_session_new(sh) }, 1);
+    let listed = run(sh, "cores ls");
+    let lines: Vec<Vec<&str>> = listed.lines().map(|l| l.split_whitespace().collect()).collect();
+    assert!(lines.contains(&vec!["available", "-", "pcsx2", "libretro", "2.3.1", "-", "GPLv3"]), "{listed}");
+    assert!(lines.iter().any(|l| l[..3] == ["update", "-", "mine"]), "{listed}");
+    let updates = run(sh, "cores ls --updates");
+    assert_eq!(updates.lines().map(|l| l.split_whitespace().nth(2).unwrap_or("")).collect::<Vec<_>>(), ["mine"], "{updates}");
+    assert_eq!(run(sh, "cores ls | grep -c libretro").trim(), "2");
+    let info = run(sh, "cores info pcsx2");
+    assert!(info.contains("corename: LRPS2\n") && info.contains("firmware: PlayStation 2 BIOS (pcsx2/bios/ps2.bin, required)"), "{info}");
+    assert!(info.contains("from: https://buildbot.libretro.com/nightly/linux/x86_64/latest/pcsx2_libretro.so.zip"), "{info}");
+    assert!(run(sh, "cores info nothere").contains("cores: no core nothere"));
+    assert!(run(sh, "cores frobnicate").contains("Usage: cores ls"));
+    unsafe { dianash_free(sh) };
+    let _ = std::fs::remove_dir_all(&base);
+}

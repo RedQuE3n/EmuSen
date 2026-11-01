@@ -218,8 +218,15 @@ fn a_state_loads_whole_and_each_refusal_is_its_own() {
     let mut damaged = saved.clone();
     *damaged.last_mut().unwrap() ^= 1;
     assert_eq!(m.state_load(&damaged), Err(status::TRUNCATED));
+    // §10h: the core build's SHA-256 is in every state, and another build's state is refused in plain words.
+    assert!(saved[80..112].iter().any(|&b| b != 0), "the build recorded");
+    let mut other = saved.clone();
+    other[80..112].fill(0xAB);
+    assert_eq!(m.state_load(&other), Err(status::FOREIGN));
+    let said = m.last_error();
+    assert!(said.contains("another build of") && said.contains(&"ab".repeat(32)) && said.contains("the build installed is"), "{said}");
     let layout = m.layout(kind::FULL).unwrap();
-    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 16 bytes header.disc\n80 "), "{layout}");
+    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 16 bytes header.disc\n80 32 bytes header.build\n112 "), "{layout}");
 }
 
 #[test]

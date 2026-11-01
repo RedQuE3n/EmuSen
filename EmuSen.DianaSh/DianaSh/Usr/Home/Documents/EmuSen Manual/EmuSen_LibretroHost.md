@@ -1200,6 +1200,41 @@ six frames by copy and by blit, every frame's shape and serial right before any 
 faults, each caught: the read-back never made (frame 1's screenshot differs) and a ring frame leaving the picture's
 shape as it was (frame 0's shape).
 
+**The core build's SHA-256 in every state** (header version 2, 112 bytes). The header gains the SHA-256 of the
+libretro core's build that saved it (`header.build`, bytes 80 to 112, from the library's hash of the sealed copy that
+runs). A state whose name and version match but whose build differs is refused (`FOREIGN`) in plain words naming both
+builds: "this state was saved by another build of PCEE2 2.3.1 (SHA-256 …), and the build installed is …; a libretro
+core's states load only into the build that saved them". Every other refusal was reworded for the player the same way.
+A version-1 state is refused as another version of the host; none reached a player. Tests: `state.rs`'s unit tests,
+`a_state_loads_whole_and_each_refusal_is_its_own` (`tests/testcore.rs`), and through the frontend API
+`A_state_loads_and_one_of_another_build_is_refused_in_plain_words` (`HostedCoreLaunchTests`), which finds the recorded
+hash equal to the entry's and reads the refusal's words as Mistress shows them. Seeded fault: the build left unchecked,
+caught by the integration test.
+
+**Launching from the library (4.1), proven headless.** `HostedCoreLaunchTests` opens a synthetic PlayStation 2 DVD
+(`SyntheticPs2Disc`, its unused system area beginning `TCG1` so the test core takes it; the test core now claims `.iso`
+beside `.tcg`) through the frontend API as `MainWindow.OpenSession` does, with the engine the console's setting names:
+the session reports the console "PlayStation 2", the system `ps2` and the hosted engine, and plays its 320 × 240 picture.
+No code in Mistress or the runtime changed for it; Mistress knows the core only as an engine. Which engine the PlayStation
+2 runs when nothing is stored (PCEE2 while Sapphire is under development) is branch `hosted-cores`' default rule, and the
+refusal of an entry off `libretro-cores.tsv` waits for that list to land (§0.3); neither is duplicated here.
+
+**Pause and fast forward (5).** In the same test: fast forward at 300 % runs the core; paused, three frames run none and
+the picture's number holds; resumed, it runs. *Frame advance is not offered:* Mistress has no frame-advance command, and
+the frontend API's only near equivalent, the debugger's run-to-frame (`RunToFrame`), resumes the session and did not
+hold it after one frame for the hosted core (measured 2026-11-01: three more frames ran), so it is left out and put to the
+tester (§12 question 7).
+
+**A screenshot of a ringed frame in the C# frontend.** `RingChainTests` now takes `GetFrameBufferRgba` (the
+screenshot's call) of every second ringed frame and finds it the frame.
+
+**Not built in this pass**, each with what it needs: 4.4(a) the ring in Mistress's device path, which runs through the
+frontend API's session and so needs the API to lend a ring and hand `frame_ring` (an extension of `emusen_crystal.h`,
+proposed before building); 4.4(b)-(d), the field structure into the CRT filter, the named exceptions set with the filter
+on, and the ring's release when the core's process dies, which follow 4.4(a); 4.2, the settings window's sections from
+libretro's categories and the locked rows, whose `CoreSetting.Group` already carries a group; 4.3, the cards in the
+card manager and the round trip between PCEE2 and Sapphire, which needs a run of PCEE2. PCEE2 was not run.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.
@@ -1231,7 +1266,10 @@ what PCEE2 exposes.
    `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
    mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the
    ring's saving.
-6. **[decision]** PCEE2's notice in the picture (§10f): its renderer writes "Blending Accuracy is Basic, High recommended"
+6. **[decision], not decided (2026-11-01); a known item.** `pcsx2_blending_accuracy` stays at the core's default and the notice is drawn as part of the picture until a handheld measurement exists; no named exception is added without one. PCEE2's notice in the picture (§10f): its renderer writes "Blending Accuracy is Basic, High recommended"
    into the frame of Jak and Daxter's title, and its published options offer no switch for notices. *Recommended:* set
    `pcsx2_blending_accuracy` to the level the core recommends as a named exception of the PlayStation 2 profile only if
    a measurement on the handheld shows it fits the frame; otherwise leave the player's choice and accept the notice.
+7. **[decision]** Frame advance for hosted cores (§10h): Mistress has none, and the debugger's run-to-frame resumes a
+   hosted core's session. *Recommended:* a frontend frame advance in the frontend API (one frame run while paused, the
+   session held after it), built for every engine at once, not for the libretro host alone.

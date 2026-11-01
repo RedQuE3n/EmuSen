@@ -74,6 +74,8 @@ pub struct Machine {
     frames: i64,
     system: String,
     identity: u64,
+    /// The SHA-256 of the libretro core's build, which every state records.
+    build: [u8; 32],
     spaces: Vec<memory::Space>,
     saves: Saves,
     sram_saved: Vec<u8>,
@@ -260,7 +262,7 @@ impl Machine {
             v1::detail("the core did not write its state");
             return Err(STATUS_STATE_REFUSED);
         }
-        state::seal(out, n, self.identity, self.platform(), self.disc);
+        state::seal(out, n, self.identity, &self.build, self.platform(), self.disc);
         Ok(state::HEADER + n)
     }
 }
@@ -292,17 +294,21 @@ impl StateMachine for Machine {
     type Error = Fail;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), Fail> {
-        let payload = state::open(data, self.identity, self.platform(), self.disc).map_err(|r| {
-            v1::detail(match r {
-                state::Refusal::Foreign => "not a libretro host's state",
-                state::Refusal::OtherCore => "a state of another libretro core or of another version of it",
-                state::Refusal::Version => "a state of another version of the libretro host",
-                state::Refusal::Platform => "a state saved on another platform",
-                state::Refusal::Damaged => "the state's payload does not match its digest",
-                state::Refusal::WrongMedia => "the state was saved over another disc than the one in the drive",
+        let payload = state::open(data, self.identity, &self.build, self.platform(), self.disc).map_err(|r| {
+            v1::detail(&match r {
+                state::Refusal::Foreign => "this is not a state of EmuSen's libretro host".to_owned(),
+                state::Refusal::OtherCore => format!("this state was saved by another libretro core, or by another version of {}", self.lib.name),
+                state::Refusal::OtherBuild(saved) => format!(
+                    "this state was saved by another build of {} {} (SHA-256 {}), and the build installed is {}; a libretro core's states load only into the build that saved them",
+                    self.lib.name, self.lib.version, state::hex(&saved), self.lib.sha256
+                ),
+                state::Refusal::Version => "this state was saved by another version of EmuSen's libretro host".to_owned(),
+                state::Refusal::Platform => "this state was saved on another kind of computer, and this core's states do not cross between them".to_owned(),
+                state::Refusal::Damaged => "this state is damaged: its contents do not match the digest saved with them".to_owned(),
+                state::Refusal::WrongMedia => "this state was saved with another disc in the drive than the one in it now".to_owned(),
             });
             Fail(match r {
-                state::Refusal::Foreign | state::Refusal::OtherCore => status::FOREIGN,
+                state::Refusal::Foreign | state::Refusal::OtherCore | state::Refusal::OtherBuild(_) => status::FOREIGN,
                 state::Refusal::Version => status::STATE_VERSION,
                 state::Refusal::Platform => STATUS_PLATFORM,
                 state::Refusal::Damaged => status::TRUNCATED,
@@ -930,6 +936,7 @@ impl Machine {
             frames: 0,
             system: system.to_owned(),
             identity: state::identity(&lib.name, &lib.version),
+            build: state::build(&lib.sha256),
             spaces: Vec::new(),
             saves,
             sram_saved: Vec::new(),

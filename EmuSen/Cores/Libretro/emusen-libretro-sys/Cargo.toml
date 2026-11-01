@@ -8,3 +8,7 @@ license = "GPL-3.0-or-later"
 # The libretro interface's types and constants, shared by the libretro host and the test core. See EmuSen_LibretroHost.md §1.2.
 [lib]
 name = "emusen_libretro_sys"
+
+[dependencies]
+# Vulkan's types for libretro_vulkan.h; no loader, the host loads Vulkan itself.
+ash = { version = "0.38", default-features = false, features = ["std"] }

@@ -3,6 +3,8 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+pub mod vulkan;
+
 pub const RETRO_API_VERSION: c_uint = 1;
 
 pub const DEVICE_NONE: c_uint = 0;

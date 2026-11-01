@@ -36,7 +36,7 @@ const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "
 
 /// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C24.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24", "C25"]).copied().collect()
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(24));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(25));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");

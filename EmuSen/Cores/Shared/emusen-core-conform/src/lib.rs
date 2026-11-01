@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C24 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C25 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders, §6.40 C24.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders, §6.40 C24, §6.43 C25.
 
 pub mod api;
 pub mod bytes;
@@ -525,6 +525,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c22(&mut s));
     report.cases.push(c23(&mut s));
     report.cases.push(c24(&mut s));
+    report.cases.push(c25(&mut s));
     report
 }
 
@@ -2779,6 +2780,54 @@ fn translation(s: &mut Session<'_>, m: &Machine<'_>, ids: &[i64], c: &mut Check)
     c.that(r == status::NOT_SUPPORTED, || format!("debug_translate on processor {past}, which machine info does not name, answered {r}"));
     c.that(s.state_digest(m)? == before, || "debug_translate changed the state".to_owned());
     Ok(format!("; each processor's translation answered alike twice, changing nothing"))
+}
+
+
+/// The frames C25 runs a machine nobody lent a ring, or the session's where they are fewer.
+const RING_FRAMES: u64 = 60;
+
+/// C25, the picture on a ring (since 1.18, EmuSen_CoreAPI.md §6.43). Where `DEVICE_RING` is claimed: a machine nobody
+/// lent a ring never answers a picture in one; a withdrawal with no ring is taken; a lend shorter than 1.18's struct and
+/// a record shorter than its own are refused as `BAD_STRUCT`; a ring on a card nobody has (UUIDs of zeros, no images)
+/// is refused as `NOT_SUPPORTED`; and the machine goes on handing its pictures by `frame_copy` after the refusals.
+fn c25(s: &mut Session<'_>) -> Case {
+    use emusen_native::core::sys::{RingFrame, RingLend};
+    let mut c = Check::new();
+    if !s.lib.claims(caps::DEVICE_RING) {
+        c.note("DEVICE_RING is not claimed");
+        return c.done("C25", "the picture on a ring");
+    }
+    let frames = s.opts.frames.min(RING_FRAMES);
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let settings = s.opts.settings.clone();
+        let m = s.machine(&settings)?;
+        let missing = || "DEVICE_RING is claimed but emusen_core_ring_lend or emusen_core_frame_ring is missing".to_owned();
+        let none = RingLend { size: size_of::<RingLend>() as u32, count: 0, images: std::ptr::null(), image_size: 0, ready: 0, done: 0, device_uuid: [0; 16], driver_uuid: [0; 16] };
+        let r = m.ring_lend(None).ok_or_else(missing)?;
+        c.that(r == 0, || format!("a withdrawal with no ring lent answered {r}"));
+        let r = m.ring_lend(Some(&RingLend { size: 16, ..none })).ok_or_else(missing)?;
+        c.that(r == status::BAD_STRUCT, || format!("a lend of 16 bytes answered {r}, not BAD_STRUCT"));
+        let r = m.ring_lend(Some(&none)).ok_or_else(missing)?;
+        c.that(r == status::NOT_SUPPORTED, || format!("a ring on a card nobody has answered {r}, not NOT_SUPPORTED"));
+        for f in 0..frames {
+            m.advance().map_err(|r| format!("advance answered {r}"))?;
+            let (r, out) = m.frame_ring_sized(size_of::<RingFrame>() as u32).ok_or_else(missing)?;
+            if r != 0 {
+                return Err(format!("frame {f}: frame_ring answered {r} with no ring lent (slot {}, value {})", out.slot, out.value));
+            }
+            if f == 0 {
+                let (r, _) = m.frame_ring_sized(8).ok_or_else(missing)?;
+                c.that(r == status::BAD_STRUCT, || format!("a frame record of 8 bytes answered {r}, not BAD_STRUCT"));
+            }
+            c.that(!m.frame().is_empty(), || format!("frame {f}: no picture by frame_copy after the refusals"));
+        }
+        c.note(format!("no ring lent, {frames} frames handed by frame_copy; the refusals as specified"));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C25", "the picture on a ring")
 }
 
 #[cfg(test)]

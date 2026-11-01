@@ -4159,6 +4159,16 @@ single-image form and in the corpus form, and passes with `KEEPS_ITS_RULE` too (
 `FAULT_ROUTED_HALF_KEPT` (named `test2`, the machine reports `test` and runs otherwise), `FAULT_ROUTED_RUNS_OTHERWISE`
 (named `test`, it runs otherwise) and `FAULT_ROUTED_OWN_REFUSED` (named `test`, it is refused) each fail C24 alone.
 
+
+### 28.20 C25, the picture on a ring (1.18, 2026-11-01)
+
+C25 runs once per library, after C24, and judges a library that claims `DEVICE_RING` (§6.43). A withdrawal with no ring
+lent answers 0; a lend whose `size` is 16 answers `BAD_STRUCT`; a ring on a card nobody has (UUIDs of zeros, no images)
+answers `NOT_SUPPORTED`; for 60 frames (or the session's, if fewer) `frame_ring` with no ring lent answers 0, a record
+of 8 bytes `BAD_STRUCT`, and `frame_copy` keeps handing the picture. The kit makes no ring of its own: a ring lent and
+its pictures read on another device are proved by the libretro host's ring tests (`EmuSen_LibretroHost.md` §10f), not
+by the kit. Seeded fault, measured 2026-11-01: the v1 test core taking every ring, which fails C25 alone.
+
 ### 28.20 The image lent to every case where `BORROW` is claimed (2026-10-26)
 
 *Decided 2026-10-26 by the tester (`Sapphire_Native.md` §49.11, Q1): the kit lends mapped images to every case for a

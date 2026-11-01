@@ -29,6 +29,8 @@ namespace EmuSen.Mistress.Input
             _ when IsGenesis(console) => controller == GenesisThreeButton ? ControllerLayout.Genesis : ControllerLayout.GenesisSixButton,
             "PLAYSTATION" => controller == PlayStationDigital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
             "PLAYSTATION 2" => controller == PlayStation2Digital ? ControllerLayout.PlayStation : ControllerLayout.DualShock,
+            "SATURN" => ControllerLayout.Saturn,
+            "DREAMCAST" => ControllerLayout.Dreamcast,
             _ => ControllerLayout.Gamepad,
         };
 
@@ -83,8 +85,34 @@ namespace EmuSen.Mistress.Input
             [PadControl.LeftStickRight] = "StickRight",
         };
 
+        // The Saturn pad's buttons by the RetroPad controls Beetle Saturn gives them: A on B, B on A, C on R, X on Y, Y on X, Z on L, L on L2 and R on R2 - see EmuSen_Cores.md §4.11.
+        private static readonly Dictionary<PadControl, string> Saturn = new()
+        {
+            [PadControl.B] = "A",
+            [PadControl.A] = "B",
+            [PadControl.R] = "C",
+            [PadControl.Y] = "X",
+            [PadControl.X] = "Y",
+            [PadControl.L] = "Z",
+            [PadControl.L2] = "L",
+            [PadControl.R2] = "R",
+        };
+
+        // The Dreamcast controller's by the RetroPad controls Flycast gives them: A on B, B on A, X on Y, Y on X, the triggers on L2 and R2; the stick is drawn where it is, as the DualShock's - see EmuSen_Cores.md §4.11.
+        private static readonly Dictionary<PadControl, string> Dreamcast = new()
+        {
+            [PadControl.B] = "A",
+            [PadControl.A] = "B",
+            [PadControl.Y] = "X",
+            [PadControl.X] = "Y",
+            [PadControl.L2] = "LT",
+            [PadControl.R2] = "RT",
+        };
+
         public static string RegionFor(string console, PadControl control) =>
-            LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region
+            LayoutFor(console) == ControllerLayout.Saturn && Saturn.TryGetValue(control, out string? saturn) ? saturn
+            : LayoutFor(console) == ControllerLayout.Dreamcast && Dreamcast.TryGetValue(control, out string? dreamcast) ? dreamcast
+            : LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region
             : IsGenesis(console) && Genesis.TryGetValue(control, out string? button) ? button
             : LayoutFor(console) is ControllerLayout.PlayStation or ControllerLayout.DualShock && PlayStation.TryGetValue(control, out string? face) ? face
             : LayoutFor(console) is ControllerLayout.MasterSystem or ControllerLayout.Sg1000 && MasterSystem.TryGetValue(control, out string? sega) ? sega

@@ -7,7 +7,7 @@ usage 2                                 repeat count) - sort first for global de
 
 case adjacent duplicates
 target none
-covers 1-2
+covers 1-3
 file a.txt 12
 a
 a
@@ -47,5 +47,34 @@ $ uniq
 out 0
 
 status 0
+action none
+end
+
+case every line of each run, and a key of the first characters
+target none
+file b.txt 22
+abc 1
+abc 2
+abd 3
+x
+x
+
+$ cat b.txt | uniq -D
+status 0
+action none
+$ cat b.txt | uniq -D -w 3
+status 0
+action none
+$ cat b.txt | uniq -w 2
+status 0
+action none
+$ cat b.txt | uniq -c -w2
+status 0
+action none
+$ uniq -c -D
+status 1
+action none
+$ uniq -w
+status 1
 action none
 end

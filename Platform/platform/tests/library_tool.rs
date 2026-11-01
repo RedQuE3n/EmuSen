@@ -126,3 +126,38 @@ fn a_job_past_the_budget_goes_on_in_the_background_and_ps_lists_it() {
     unsafe { dianash_free(sh) };
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// `rom dups` and the pipe the shell can run instead, `rom hash -r --comparable / | sort | uniq -D -w 40`, give the
+/// same lines; `rom check` passes a sound game. The words the module prints to standard error come in the output too.
+#[test]
+fn rom_dups_is_the_pipe_of_rom_hash_sort_and_uniq_in_a_shell_this_library_makes() {
+    let _tree = TREE.lock().unwrap_or_else(|p| p.into_inner());
+    let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-rom-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (library, home, etc) = (base.join("library"), base.join("home"), base.join("etc"));
+    std::fs::create_dir_all(library.join("nes")).unwrap();
+    std::fs::create_dir_all(library.join("snes")).unwrap();
+    std::fs::create_dir_all(&etc).unwrap();
+    let body: Vec<u8> = (0..16384u32).map(|i| (i * 31 / 7) as u8).collect();
+    let mut headered = b"NES\x1A\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+    headered.extend(&body);
+    std::fs::write(library.join("nes/A.nes"), &headered).unwrap();
+    std::fs::write(library.join("nes/B.nes"), &body).unwrap();
+    std::fs::write(library.join("snes/C.sfc"), vec![7u8; 4096]).unwrap();
+    std::fs::write(etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\"}}", library.display())).unwrap();
+    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    let sh = unsafe { dianash_new(std::ptr::null()) };
+    assert_eq!(unsafe { dianash_session_new(sh) }, 1);
+    let dups = run(sh, "rom dups");
+    let groups: Vec<&str> = dups.lines().filter(|l| !l.starts_with("rom dups:")).collect();
+    assert_eq!(groups.len(), 2, "{dups}");
+    assert!(groups[0].ends_with(" nes/A.nes") && groups[1].ends_with(" nes/B.nes"), "{dups}");
+    let piped = run(sh, "rom hash -r --comparable / | sort | uniq -D -w 40");
+    assert_eq!(piped.lines().collect::<Vec<_>>(), groups, "{piped}");
+    let checked = run(sh, "rom check -r nes");
+    assert!(checked.contains("nes/A.nes: ok") && checked.contains("rom check: 2 ok"), "{checked}");
+    assert!(run(sh, "rom frobnicate").contains("Usage: rom hash"));
+    unsafe { dianash_free(sh) };
+    let _ = std::fs::remove_dir_all(&base);
+}

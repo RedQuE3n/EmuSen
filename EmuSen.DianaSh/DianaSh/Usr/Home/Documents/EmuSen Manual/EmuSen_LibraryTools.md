@@ -1,6 +1,6 @@
 # EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Packages
 
-*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). Nothing is built.* Asked by the tester the same day: a proper scraping tool in place
+*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). T2, the commands `rom hash`, `rom check` and `rom dups` and `uniq -D -w`, built 2026-10-31 (§7); the rest is not built.* Asked by the tester the same day: a proper scraping tool in place
 of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_Packages.md`) and made for theming, with
 the system and the games (favourites or all) chosen; and a library manager laid out the same, which finds duplicate and
 broken ROMs; every backend tool these lack made as a DianaSh command.
@@ -197,3 +197,89 @@ scraper is its own crate.
 5. Names: the scraping tool is **Scraper**, the library manager **Library**; the codenames Ami and Rei were dropped 2026-10-28.
 6. Order: Packages' M1 with T1, then the commands (T2, T4), then the windows; T3 and T7 with the most care, after
    2026-10-31.
+
+## 7. Built 2026-10-31: T2, the `rom` commands and `uniq -D -w`
+
+`rom hash`, `rom check` and `rom dups` are the command `rom` of the module `emusen.library`, beside `chd` and `pkg`, and
+each is a job of the library tool (`Platform/library-tool/src/rom.rs`), reached through the service `emusen.library`,
+now 1.5, as `chd` and `pkg` are: a module never links Galaxia, and the tool already reads the settings' library, routes
+a file to its system and owns the disc reader's use. No new crate and no new surface beyond the service's minor were
+needed. The page is `man rom` (`Lib/dianash/emusen.library/man/rom.1`), which holds what the player needs; this section
+holds the rest.
+
+### 7.1 The requests and events
+
+Requests (since 1.5): `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}`, the
+paths relative to the library as `chd`'s and `pkg`'s are and at least one of them; `comparable` is `rom-hash`'s alone;
+and `{"op": "rom-dups", "console": null}`, a console by its ES-DE name or id, no paths.
+
+| Event | Fields |
+|---|---|
+| `start` | `op`, `files`, `refused` (the words for each path refused: no such path, or a folder without `-r`); for `rom-check` over a CHD `chdman` (its version) or `chdman_words` (why it is not run); for `rom-dups` `console` |
+| `file` | `index`, `of`, `source`, `system` (null where no system routes it), `state`; `rom-hash`: `hashed` with `lines` (each `crc32`, `md5`, `sha1`, `size`, `name`), or `failed`/`stopped` with `words`; `rom-check`: `ok`, `failed` or `stopped` with `failed` (each `check`, `words`); `rom-dups`: `hashed`, or `failed`/`stopped` with `words` |
+| `group` | `rom-dups` only, after every file: `members`, each as a `lines` entry with `package` where a package claims it |
+| `end` | as every job's: `op`, `counts`, `seconds`, `error` |
+
+The module prints only data on standard output (the hash lines, the check lines, the groups as paragraphs) and its
+notes on standard error (a file it could not read, the summary of `check` and `dups`, chdman not run, a job gone to the
+background), so that each pipes. `ps` reading a background `rom` job's progress keeps the lines it takes, and `rom
+wait` prints them first.
+
+### 7.2 The comparable form
+
+Two copies of one dump give one comparable line. The form is owned where it already was: a cartridge's is
+`emusen_systems::openvgdb::bytes`, the transform `pkg make` records as a package's `dump.transformed` (the iNES header,
+a SNES copier header, an N64 image put in big-endian order); a zip's is its image entry, copied out by Galaxia's
+`archive::copy_entry`, which checks its CRC-32, then the same transform. A disc's is new here, and is the one decision
+of the stage: every sector as `emusen-disc` reads it, opened by `open_medium` over the files mapped, a compact disc's
+2,352 raw bytes from track 1's index 01 to the lead-out and a DVD's 2,048 user bytes; 2,048-byte images are a compact
+disc where the system takes sheets, else a DVD, as the console's word decides it in the runtimes. Reading through the
+one disc reader is what makes a sheet of one file, the same disc split a file a track, and its CHD equal: none of
+their files' bytes agree, and the reader is the one place their sectors do. The tests show all three equal
+(`tests/rom.rs`, the CHD made by the pinned chdman).
+
+Kept out, and why: a zipped disc compares as its image entry's bytes, so only with another zip of it, since a disc
+built in memory from a zip would hold the whole disc; an `.m3u` has no line, its discs follow it; a disc whose sheet
+records an unstored pause where another copy stores silence of another mode could differ in the synthesised sectors.
+Each misses a duplicate; none makes a false one, since equal hashes over every sector are equal discs.
+
+### 7.3 The checks
+
+`size`, `sheet`, `archive` and `chd`, as §3 lists them; their words are in `man rom`. A plain file is read through
+(an I/O error mid-file is "unreadable"), since only reading finds a file a network share or a failing disk will not
+give back. A sheet is checked as the disc reader would take it: it parses, every file is there and reads, the last
+track of each file ends on a whole sector (`emusen_disc::set::track_spans` places each track), and the disc opens.
+A CHD is held first to chdman's verify, the tool's own check 1, where the pinned chdman is there, and only then read
+sector by sector through EmuSen's reader, whose CHD code refuses a hunk whose CRC is not the map's; the order is the
+library tool's (§12.4 of `EmuSen_GamePackages.md`: a damaged CHD is not read after chdman fails it). Without chdman
+`rom check` says so once and reads each CHD through the reader alone. "Shorter than its header declares" and the header
+checksums wait for T3, since each is a system pack's to own.
+
+### 7.4 Duplicates
+
+`rom dups` groups the library's files by comparable CRC-32, MD5, SHA-1 and size; a group whose files are all claimed by
+one package (Galaxia's claim index: a CHD written beside its original and that original) is one game and is not shown.
+No group is given when the job was stopped, since a group of what was read is not the library's. The same pairs come
+from `rom hash -r --comparable / | sort | uniq -D -w 40`: a line begins with the CRC-32, a space and the MD5, so 40
+characters hold 124 bits of hash; the platform test runs both in one shell and requires the same lines. The shell's
+ten seconds bound the pipe as they bound any line, so a whole library is `rom dups`, followed by `rom wait`.
+
+`uniq` gained `-D` (every line of each run of two or more) and `-w <chars>` (the key is a line's first characters), as
+GNU uniq has them, in the Rust `dianash.text` and in the C# class it replaces, which the text-parity test now also
+compares on both options.
+
+### 7.5 Tests and seeded faults
+
+`Platform/library-tool/tests/rom.rs` (3 tests over a generated library: headered and bare NES, plain, copier and zipped
+SNES, one disc as one file, as two and as a CHD, and a broken file of each check's kind; the library compared byte for
+byte before and after), the module's request and line tests, `dianash-text`'s `uniq` test, the platform test running
+`rom dups` and the pipe in one shell, and in WiseMan the golden files `rom`, `uniq`, `help` and `man` and the
+text-parity lines. Seeded faults are recorded in the stage's commit.
+
+### 7.6 Left
+
+- The size of a full run: `rom dups` reads every byte of the library, measured on no real library yet. Sizes could be
+  compared first where the comparable size is known without reading (a file with no transform), if a run proves slow.
+- Zipped discs, as §7.2 says.
+- T3's header checks, and the second tier of duplicates (the same ScreenScraper game id), which is the Library window's.
+

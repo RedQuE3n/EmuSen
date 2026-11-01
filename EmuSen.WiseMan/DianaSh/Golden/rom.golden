@@ -1,0 +1,40 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command rom
+shell rust
+
+case the usage, and what a command line refuses
+target none
+covers 1-6
+$ rom
+status 1
+action none
+$ rom frobnicate
+status 1
+action none
+$ rom hash
+status 1
+action none
+$ rom check
+status 1
+action none
+$ rom check --comparable a.nes
+status 1
+action none
+$ rom hash -x a.nes
+status 1
+action none
+$ rom dups -r
+status 1
+action none
+$ rom dups snes nes
+status 1
+action none
+$ rom wait
+status 1
+action none
+$ rom wait rom9
+status 1
+action none
+end

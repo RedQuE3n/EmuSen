@@ -25,7 +25,7 @@ namespace EmuSen.WiseMan.DianaSh
         private static readonly string[][] Lines =
         {
             new[] { "sort" }, new[] { "sort", "-n" }, new[] { "sort", "-r" }, new[] { "sort", "-n", "-r" },
-            new[] { "uniq" }, new[] { "uniq", "-c" },
+            new[] { "uniq" }, new[] { "uniq", "-c" }, new[] { "uniq", "-D" }, new[] { "uniq", "-D", "-w", "1" }, new[] { "uniq", "-w", "2" }, new[] { "uniq", "-c", "-w1" },
             new[] { "wc" }, new[] { "wc", "-l" }, new[] { "wc", "-w" }, new[] { "wc", "-c" },
             new[] { "head" }, new[] { "head", "-n", "3" }, new[] { "tail" }, new[] { "tail", "-n", "2" },
             new[] { "grep", "a" }, new[] { "grep", "-i", "A" }, new[] { "grep", "-v", "a" }, new[] { "grep", "-c", "b" },

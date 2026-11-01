@@ -37,8 +37,9 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                reads piped stdin, or trailing literal text"
     )),
     ("uniq", true, concat!(
-        "  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its\n",
-        "                                repeat count) - sort first for global dedup, not just adjacent"
+        "  uniq [-c] [-D] [-w <chars>]   collapse adjacent duplicate lines (-c prefixes each with its\n",
+        "                                repeat count; -D prints every line of each run of two or more;\n",
+        "                                -w compares only the first <chars> characters) - sort first"
     )),
     ("awk", true, concat!(
         "  awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line\n",

@@ -5861,3 +5861,11 @@ SEE ALSO
 status 0
 action none
 end
+
+case the page for rom
+target none
+covers 1
+$ man rom
+status 0
+action none
+end

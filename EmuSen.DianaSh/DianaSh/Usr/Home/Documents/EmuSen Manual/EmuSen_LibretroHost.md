@@ -1542,6 +1542,73 @@ said: …") in place of the earlier "its log says why". The same run after the c
 and the frontend API are unchanged. The runtime's message for a stopped frame names the status's words. The detail
 carrying the core's line reaches `last_error`, which the runtime does not yet show.
 
+## 10l. The ring on the Rust runtime (2026-11-01)
+
+Until this pass every proof of the frontend API's ring (§10h) ran on the C# runtime; the Rust half (the runtime's
+`Engine::lend_ring` and `take_ring_frame`, the platform library's `SerenityLender` over `emusen_serenity_ring_new`, the
+ring's release after a crash, and Serenity's `advance_ring`) had been built and type-checked only. Once the Rust core
+host discovered and admitted installed libretro entries (§10k), the ring was run through it end to end.
+
+**What was run.** `tests/api_ring.rs` in `emusen-core-broker` drives the platform library's own exports as Mistress
+does: an installation whose `cores.manifest` vouches for the proxy and the libretro host, the test core's entry under
+the player's cores, approved by its hash (`emusen_crystal_core_approve`); a session opened by `emusen_crystal_open` with
+`OPEN_RING` and a Serenity device; each frame's ring fields read from `emusen_crystal_frame`, the ring borrowed by
+`emusen_crystal_picture_ring` and drawn by a chain through `emusen_serenity_chain_advance_ring`. The core runs in the
+confined runner, so every picture crosses the process boundary and both semaphores cross by `SCM_RIGHTS`. The four
+cases are those of `ApiRingTests`:
+
+1. six frames of the test core's Vulkan picture (`tc_hw=vulkan`, 320 × 240) in slots 0, 1, 2, 0, 1, 2 at values 1 to 6,
+   each drawn from the ring byte for byte as the same frame read back by `picture_copy` and uploaded, and equal to that
+   picture; one frame advanced and held; a session without the flag lent no ring;
+2. twelve ring frames each given back by a one-pixel draw, none stalling the core (each frame bounded at 10 s);
+3. `tc_geometry=grow`: frames 0 and 1 in the first ring, frame 2 at 640 × 480 read back while `MACHINE_INFO` raises the
+   maxima, frames 3 to 9 in a second, larger ring, each drawn as its read-back picture; this case was listed as not yet
+   graded in `EmuSen_Backend.md` §33.4;
+4. `tc_fault=segv`: the session ends at the core's second frame in the runtime's words ("EmuSen - Test Core stopped:
+   the core's process ended on signal 11"), the ring is withdrawn and freed after the dead machine, and the next ringed
+   session on the same device runs four frames.
+
+The chain is one pass of a stock shader the test writes (nearest sampling at the source's size), not the PlayStation 2
+CRT filter of `ApiRingTests`, whose preset the C# frontend writes; the comparison against the uploaded picture is the
+same. A unit test in Serenity (`ring.rs`) proves the raise itself: a read on the host's device that waits for `ready` at
+a value no core signals is still waiting after 200 ms and returns once `Ring::release_after_crash` raises it. In case 4
+the core had signalled the last value handed before it died, so the raise there finds `ready` already at that value.
+
+**Found.** The ring's Rust half needed no change. One defect outside it stopped the first run: a game's machine was
+created with the console settings stored under the systems table's console, while sessions store and apply them under
+the session's console, which for a system with no console of the table (the test core's) is another name; so
+`tc_hw=vulkan`, read by a libretro core only at load, never reached the machine, and no frame was in the ring (measured
+2026-11-01: `settings_get` answered `vulkan` for the ringed session while frame 0's `picture_in_ring` was 0). It was
+fixed in the open path by naming the session's console first (`session_console`, §10k's branch). The platform library's
+last error is kept per thread, so a frame called on another thread has its words read on that thread.
+
+**Validation** (`VK_LOADER_LAYERS_ENABLE=*validation`, `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`,
+`VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`, `EMUSEN_VALIDATE=1`): silent on both devices. The host's device holds
+the layer itself, and each case asserts `emusen_serenity_device_findings` empty. The core's device is made in the runner,
+which inherits the environment and may read `/usr`, so the layer loads there too and reports on the runner's standard
+error; a seeded fault proved it (the slot's transition to `TRANSFER_DST_OPTIMAL` removed: `VUID-vkCmdCopyImage-dstImageLayout-00133`
+and 15 further lines in the log), and the clean runs' logs hold no line of it. The test does not assert the runner's
+messages, which reach no API; that check is the log's.
+
+**Seeded faults**, each caught: the host's crossing given the wrong old layout (the findings assertion, 7 messages);
+`take_ring_frame` answering none (case 1, the record's `picture_in_ring` 0); the ring not lent again at `MACHINE_INFO`
+(case 3, every frame after the growth read back); `chain_advance_ring` reading the next slot (case 1, 304,400 bytes
+differ); `release_after_crash` raising nothing (the Serenity test, still waiting after 5 s); the core's slot transition
+removed (the runner's layer, above).
+
+**Which runtime each ring proof ran on.**
+
+| Proof | Runtime | Where |
+|---|---|---|
+| in-process ring, copy and blit, refused UUIDs, a picture held for a larger ring | none (the Rust core host and the libretro host in one process) | `emusen-libretro-host/tests/ring.rs`, §10f |
+| five frames through the broker | none (the Rust core host and the runner) | `emusen-core-broker/tests/libretro.rs`, §10f |
+| the ring through the console's filters keyed on the system | C# (`RingChainTests`) | §10f |
+| the frontend API's ring, give-back, `MACHINE_INFO`, crash | C# (`ApiRingTests`) | §10h |
+| the frontend API's ring, give-back, `MACHINE_INFO`, crash | Rust (`emusen_crystal_*` and `emusen_serenity_*` of the platform library) | `emusen-core-broker/tests/api_ring.rs`, this section |
+
+Run 2026-11-01 on the RX 6800 under RADV, headless, debug builds; the broker's tests now take the platform library as a
+development dependency.
+
 ## 10m. Real cores on the Rust runtime (2026-11-01)
 
 The crate `EmuSen/Cores/Libretro/emusen-libretro-games` proves the Rust runtime (`emusen_crystal::Runtime`, the default

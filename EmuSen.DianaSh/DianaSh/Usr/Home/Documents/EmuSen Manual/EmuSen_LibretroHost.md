@@ -628,7 +628,7 @@ is x86-64 only [R], which covers the desktop and the handheld.
 | Stage | What | Gate |
 |---|---|---|
 | **1** | The libretro host, in-process: software pictures, sound, input, saves and named files, states, options, firmware, memory spaces and both cheat paths, every environment call; the test core; minor 1.16's E1–E4 in the header, the Rust definitions, the C# host and the ABI baseline; `emusen-native`'s per-machine snapshot kinds | the kit and the libretro host's tests pass on the test core; the PS2 core loads, and one probe run with `find` records what it writes |
-| **2** | The broker: protocol, frame-end window, sandbox, crash containment; the libretro host behind it | the kit through the broker; §3.5's proofs in WiseMan, the `strace` reading among them; the round trip and the window's race check measured; the PS2 core loads, runs and frees in the .NET host (PCEE2's software picture shown and timed on Jak's arena; LRPS2's none until stage 3) |
+| **2** | The broker: protocol, frame-end window, sandbox, crash containment; the libretro host behind it; the C# host's 1.16; options a core declares in `retro_load_game` kept in its private folder for the next load (§4.7) | the kit through the broker; §3.5's proofs in WiseMan, the `strace` reading among them; the round trip and the window's race check measured; the PS2 core loads, runs and frees in the .NET host (PCEE2's software picture shown and timed on Jak's arena; LRPS2's none until stage 3) |
 | **3** | Vulkan: the core's device, `DEVICE_RING` (E5) in the ABI, the Rust host and Serenity, and the read-back where sharing is impossible | the test core's Vulkan pictures match its software ones on both paths, clean under synchronisation validation; PCEE2 shows Jak's arena through Vulkan, timed on the desktop and the handheld; LRPS2 shows its first picture |
 | **4** | Frontend: the core list and download, the approval of the whole entry, the settings window from the schema, the exact rate in the resampler, cards in the card manager, cheats with their path shown, big picture, the engine choice per console; the fit and pad audits | Mistress and big picture run a game either way; cards follow the save-media rules; the choice is remembered |
 | **5** | Rumble: `EmuSen_CoreAPI_Extensions.md` §4's event 7 (minor 1.17) through Endymion to the pad | a DualShock 2 game's rumble reaches a pad; the test core's rumble pattern read back by the test |
@@ -668,9 +668,9 @@ reports no `resources` folder; with no firmware it wrote no file, so its profile
 `system/pcsx2/memcards/` as `ps2.card` saves) waits for a run with the player's BIOS.
 
 **Not done in stage 1**: the profile of PCEE2's cards (above); options declared in `retro_load_game` recorded for the next
-load (they are noted, not yet kept); the C# host's 1.16 (the image path and named files), which comes with stage 2's
+load (they are noted, not yet kept; carried to stage 2, §10); the C# host's 1.16 (the image path and named files), which comes with stage 2's
 WiseMan class; and the secondary cheat path, which needs a way for the host to hand a core a code it cannot decode, which
-v1 has not (§12, question 4).
+v1 has not (§11a).
 
 ## 11. Risks
 
@@ -681,6 +681,12 @@ v1 has not (§12, question 4).
 5. **Landlock** may be absent from the handheld's kernel; then no hosted core runs there, which `create` says.
 6. **The GPU** is shared: a reset the core causes takes the presenter's device too (§3.6).
 
+## 11a. Deferred surfaces, each with its trigger
+
+| Surface | What it is | Built when |
+|---|---|---|
+| `CHEAT_CODES` | an optional capability with `emusen_core_set_cheat_codes(machine, text, len)`: the codes no codec of the console decodes, one per line with its index and switch, handed to a core that decodes its own (`retro_cheat_set`), the core answering which it took | a target core honours `retro_cheat_set` (decided 2026-10-31; PCEE2's `.info` says `cheats = "false"`) |
+
 ## 12. Questions for the tester
 
 1. **[decision]** Every libretro core in a process of its own, behind a generic broker (`emusen-core-broker`), with the
@@ -690,7 +696,5 @@ v1 has not (§12, question 4).
 3. **[decision]** The PS2's unencrypted cheat formats as a system-pack step, shared by Sapphire and the hosted core, so
    that EmuSen's own codes reach the hosted PS2 core. *Recommended:* yes (approved 2026-10-31), after stage 1 has recorded
 what PCEE2 exposes.
-4. **[decision]** The secondary cheat path (§4.9) needs the host to hand a core the text of a code no codec decodes, which
-   v1 cannot: an optional capability, `CHEAT_CODES`, with `emusen_core_set_cheat_codes(machine, text, len)`, one code per
-   line with its index and switch, the core answering which it took. *Recommended:* build it when a hosted core that
-   honours `retro_cheat_set` is a target; PCEE2's `.info` says `cheats = "false"`, so it gains nothing now.
+4. **Decided 2026-10-31: deferred.** The secondary cheat path's surface, `CHEAT_CODES` (§11a), is built when a target core
+   honours `retro_cheat_set`.

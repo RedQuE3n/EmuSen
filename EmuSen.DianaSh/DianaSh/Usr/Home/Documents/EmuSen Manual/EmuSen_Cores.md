@@ -357,7 +357,29 @@ with the test core standing in as each console's hosted engine, and recorded.
 
 ### 4.12 Smoke test of the hosted cores (2026-11-01)
 
-SMOKE_TABLE
+Each listed core new to the list was downloaded from the buildbot's Linux x86_64 nightly of 2026-10-31 into
+`~/.cache/emusen/cores-test/` (never the repository), laid out as an entry with the libretro host built from this branch,
+and loaded in-process through `emusen-libretro-host`'s `run` example, measured on 2026-11-01: core info, the options
+schema, and 300 frames of a synthetic image made for the test (a loop at the reset vector: `loop.nes`, `loop.sfc`,
+`loop.md`, `loop.sms`, `loop.32x`, `loop.gb`; for the N64, a WiseMan synthetic ROM). No commercial image, BIOS or
+firmware folder was read. The index's CRC-32 matched each library inside its zip, not the zip [M].
+
+| Core | SHA-256 of the `.so` | Info places it | Options | Run |
+|---|---|---|---|---|
+| snes9x | `9b2b6ea9d88f96c156590443ddd05ee56aaf4e495329a889c979921942717a31` | snes | 43 | 300 frames, 256×224, sound |
+| nestopia | `72e2784bb3822fc70d5e74c98f0a0b2eaa95952ac43c01cae9ac25815b0be105` | nes | 35 | 300 frames, 602×224, sound |
+| genesis_plus_gx | `eda9d0f8299e8e1347e471927edaf00988d73dbed2ea15dcb19ef90b5ddc928c` | md, mcd, sms, sg1000 | 62 | 300 frames each of `loop.md` and `loop.sms`, sound |
+| picodrive | `fd4010afa91f69d3c61be49c95e14a5c37117c4d0899d3e593ccc4339c1417d5` | 32x | 21 | 300 frames, 320×224, sound |
+| sameboy | `5f3cbc610d1de2c04d41319b6678bece8c5bc78b1067436e1f6d9d440b89b56e` | gb, gbc | 29 | 300 frames, 160×144, sound |
+| mupen64plus_next | `26f2b4ec722558d77bc9e1582e62ab80c84190bb20dfadc48a148e6210c8775e` | n64 | 85 | refused: asks for OpenGL by default; with `mupen64plus-rdp-plugin=parallel` and `mupen64plus-rsp-plugin=parallel` it asks for Vulkan 1.1, which arrives with the host's stage 3 |
+| mednafen_psx_hw | `839a16b8ff59442c06fa517f39fd9831fa3e1e1f50c0b08a643e5a0ecf5b69e9` | psx | 108 | info and options only: no free disc image; its Vulkan renderer is `beetle_psx_hw_renderer=hardware_vk` (default `hardware`, which picks by the frontend's driver) |
+| mednafen_saturn | `f9b049a65b4f7003d32d6ef3d2459e46b3263279d76a6a7b591a7392b71ca048` | saturn | 34 | info and options only: no free disc image, and every game needs the player's own BIOS |
+
+**Found by the smoke test** [M]: the host placed a core by its `.info`'s databases alone, so PicoDrive, whose `.info`
+names the Genesis, the Sega CD and the Master System beside the 32X, would have been a hosted engine of all four. A listed
+core now runs only the systems its line names, of those its `.info` claims (`machine.rs`'s `systems`, tested by
+`tests/listed.rs`). The Vulkan cores, Mupen64Plus-Next and Beetle PSX HW, are tested once the host's Vulkan ring reaches
+this branch.
 
 ## 5. Download, verification and install
 

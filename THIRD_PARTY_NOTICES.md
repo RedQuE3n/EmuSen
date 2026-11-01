@@ -197,11 +197,11 @@ Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it 
 
 | Font | Version | Licence | Copyright |
 |---|---|---|---|
-| [Barlow Condensed](https://github.com/jpt/barlow), Regular (`EmuSen.Mistress/Assets/Fonts/BarlowCondensed-Regular.ttf`), the big-screen menus' typeface | 1.408 | SIL Open Font License 1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
+| [Barlow and Barlow Condensed](https://github.com/jpt/barlow), Regular and Medium, bundled with EmuSen.LunaP and shipped as `LunaP/Fonts/*.ttf` beside the program; the interface's typefaces | 1.422 | SIL Open Font License 1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
 
-The file is unmodified, as Google Fonts distributes it; its copyright notice and the licence are in
-[`licenses/BarlowCondensed-OFL-1.1.txt`](licenses/BarlowCondensed-OFL-1.1.txt). The font is shipped as a separate file
-beside the program and is not sold by itself, as the licence requires.
+The files are unmodified, as the Barlow project distributes them; their copyright notice and the licence are in
+[`licenses/Barlow-OFL-1.1.txt`](licenses/Barlow-OFL-1.1.txt) and beside the fonts as `LunaP/Fonts/OFL.txt`. The fonts
+are shipped as separate files beside the program and are not sold by themselves, as the licence requires.
 
 ### 1.6 Code taken from another emulator
 

@@ -10,33 +10,33 @@ floor 16
 frame 233.65,170,812.7,434
 title "Crop This Game"
 case GameCrop
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,270,813,314 by=panel limit=234,270,812.35,314 paints=#9C9CA0FF role=none seen=234,270,812.35,314
+  0 ContentControl at=234,270,813,314 by=panel limit=234,270,812.35,314 paints=#D4D4D4FF role=none seen=234,270,812.35,314
     1 StackPanel at=274,298,733,270 by=panel limit=234,270,812.35,314 role=none
-      2 TextBlock at=274,298,733,29 box=733,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic)" layout=203.04,28.8 limit=234,270,812.35,314 name=GameCropGame paints=#9C9CA0FF role=text size=24 text="Cobalt Harbor (Synthetic)"
-      3 HintText at=274,337,733,48 box=733,48 by=panel caps=13.999 drawn face="Barlow Condensed" heard="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen. A crop set here is this game's alone and replaces the SNES's Overscan setting while it runs." layout=730.34,48 limit=234,270,812.35,314 paints=#86868AFF role=text size=20 text="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen. A crop set here is this game's alone and replaces the SNES's Overscan setting while it runs."
-      4 FieldRow at=274,395,733,79 by=panel heard="Crop, % of the picture" limit=234,270,812.35,314 paints=#9C9CA0FF role=group
-        5 TextBlock at=274,395,733,29 box=733,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Crop, % of the picture" layout=180.77,28.8 limit=274,395,733,79 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Crop, % of the picture"
+      2 TextBlock at=274,298,733,29 box=733,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic)" layout=192.29,28.8 limit=234,270,812.35,314 name=GameCropGame paints=#D4D4D4FF role=text size=24 text="Cobalt Harbor (Synthetic)"
+      3 HintText at=274,337,733,48 box=733,48 by=panel caps=13.999 drawn face="Barlow Condensed" heard="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen. A crop set here is this game's alone and replaces the SNES's Overscan setting while it runs." layout=700.14,48 limit=234,270,812.35,314 paints=#8D8D91FF role=text size=20 text="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen. A crop set here is this game's alone and replaces the SNES's Overscan setting while it runs."
+      4 FieldRow at=274,395,733,79 by=panel heard="Crop, % of the picture" limit=234,270,812.35,314 paints=#D4D4D4FF role=group
+        5 TextBlock at=274,395,733,29 box=733,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Crop, % of the picture" layout=170.3,28.8 limit=274,395,733,79 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Crop, % of the picture"
         6 WrapPanel at=274,428,733,46 by=clip heard="Crop, % of the picture" limit=274,395,733,79 role=none
-          7 TextBlock at=274,436,33,29 box=33,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Left layout=32.23,28.8 limit=274,395,733,79 paints=#9C9CA0FF role=text size=24 text=Left
-          8 TextBox at=313,428,64,46 by=clip drawn focus heard="Left, percent" limit=274,395,733,79 name=GameCrop.CropLeft op paints=#050507FF,#0E0E10FF,#55555AFF,#EEEEF0FF role=edit text=12.5
-            9 ScrollViewer allow="a text box scrolls its own text" at=324,435,42,32 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
-          10 TextBlock at=391,436,43,29 box=43,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Right layout=42.12,28.8 limit=274,395,733,79 paints=#9C9CA0FF role=text size=24 text=Right
-          11 TextBox at=440,428,64,46 by=clip drawn focus heard="Right, percent" limit=274,395,733,79 name=GameCrop.CropRight op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit text=12.5
-            12 ScrollViewer allow="a text box scrolls its own text" at=451,435,42,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-          13 TextBlock at=518,436,30,29 box=30,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Top layout=29.14,28.8 limit=274,395,733,79 paints=#9C9CA0FF role=text size=24 text=Top
-          14 TextBox at=554,428,64,46 by=clip drawn focus heard="Top, percent" limit=274,395,733,79 name=GameCrop.CropTop op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit text=12.5
-            15 ScrollViewer allow="a text box scrolls its own text" at=565,435,42,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-          16 TextBlock at=632,436,60,29 box=60,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Bottom layout=59.06,28.8 limit=274,395,733,79 paints=#9C9CA0FF role=text size=24 text=Bottom
-          17 TextBox at=698,428,64,46 by=clip drawn focus heard="Bottom, percent" limit=274,395,733,79 name=GameCrop.CropBottom op paints=#0E0E10FF,#55555AFF,#D2D2D6FF role=edit text=12.5
-            18 ScrollViewer allow="a text box scrolls its own text" at=709,435,42,32 name=PART_ScrollViewer paints=#D2D2D6FF part role=scrollviewer
-      19 HintText at=274,484,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="This game has a crop of its own." layout=219.26,24 limit=234,270,812.35,314 name=GameCropStatus paints=#86868AFF role=text size=20 text="This game has a crop of its own."
-      20 ButtonBar at=622,524,385,44 by=panel limit=234,270,812.35,314 paints=#9C9CA0FF role=toolbar
-        21 Button at=622,524,287,44 by=clip drawn focus heard="USE THE CONSOLE'S SETTING" limit=622,524,385,44 name=GameCropUseConsole op paints=#55555AFF,#9C9CA0FF role=button text="Use the Console's Setting"
-          22 TextBlock at=639,530,253,32 box=253,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE THE CONSOLE'S SETTING" layout=252.23,31.2 limit=622,524,287,44 owner=21 paints=#9C9CA0FF role=text size=26 text="USE THE CONSOLE'S SETTING"
-        23 Button at=917,524,90,44 by=clip drawn focus heard=CLOSE limit=622,524,385,44 op paints=#55555AFF,#9C9CA0FF role=button text=Close
-          24 TextBlock at=934,530,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=917,524,90,44 owner=23 paints=#9C9CA0FF role=text size=26 text=CLOSE
+          7 TextBlock at=274,436,31,29 box=31,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Left layout=30.1,28.8 limit=274,395,733,79 paints=#D4D4D4FF role=text size=24 text=Left
+          8 TextBox at=311,428,64,46 by=clip drawn focus heard="Left, percent" limit=274,395,733,79 name=GameCrop.CropLeft op paints=#0E0E10FF,#26262BFF,#4C9AE8FF,#707070FF,#EEEEF0FF role=edit text=12.5
+            9 ScrollViewer allow="a text box scrolls its own text" at=322,435,42,32 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
+          10 TextBlock at=389,436,40,29 box=40,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Right layout=39.38,28.8 limit=274,395,733,79 paints=#D4D4D4FF role=text size=24 text=Right
+          11 TextBox at=435,428,64,46 by=clip drawn focus heard="Right, percent" limit=274,395,733,79 name=GameCrop.CropRight op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit text=12.5
+            12 ScrollViewer allow="a text box scrolls its own text" at=446,435,42,32 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+          13 TextBlock at=513,436,29,29 box=29,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Top layout=28.87,28.8 limit=274,395,733,79 paints=#D4D4D4FF role=text size=24 text=Top
+          14 TextBox at=548,428,64,46 by=clip drawn focus heard="Top, percent" limit=274,395,733,79 name=GameCrop.CropTop op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit text=12.5
+            15 ScrollViewer allow="a text box scrolls its own text" at=559,435,42,32 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+          16 TextBlock at=626,436,56,29 box=56,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Bottom layout=55.63,28.8 limit=274,395,733,79 paints=#D4D4D4FF role=text size=24 text=Bottom
+          17 TextBox at=688,428,64,46 by=clip drawn focus heard="Bottom, percent" limit=274,395,733,79 name=GameCrop.CropBottom op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit text=12.5
+            18 ScrollViewer allow="a text box scrolls its own text" at=699,435,42,32 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+      19 HintText at=274,484,733,24 box=733,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="This game has a crop of its own." layout=209.7,24 limit=234,270,812.35,314 name=GameCropStatus paints=#8D8D91FF role=text size=20 text="This game has a crop of its own."
+      20 ButtonBar at=639,524,368,44 by=panel limit=234,270,812.35,314 paints=#D4D4D4FF role=toolbar
+        21 Button at=639,524,273,44 by=clip drawn focus heard="USE THE CONSOLE'S SETTING" limit=639,524,368,44 name=GameCropUseConsole op paints=#707070FF,#D4D4D4FF role=button text="Use the Console's Setting"
+          22 TextBlock at=656,530,239,32 box=239,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE THE CONSOLE'S SETTING" layout=238.6,31.2 limit=639,524,273,44 owner=21 paints=#D4D4D4FF role=text size=26 text="USE THE CONSOLE'S SETTING"
+        23 Button at=920,524,87,44 by=clip drawn focus heard=CLOSE limit=639,524,368,44 op paints=#707070FF,#D4D4D4FF role=button text=Close
+          24 TextBlock at=937,530,53,32 box=53,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=52.75,31.2 limit=920,524,87,44 owner=23 paints=#D4D4D4FF role=text size=26 text=CLOSE
 focus 8
 edge 8 up same
 edge 8 down 21

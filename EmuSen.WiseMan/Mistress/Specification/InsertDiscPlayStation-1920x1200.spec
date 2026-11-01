@@ -7,25 +7,25 @@ root Border
 unit 1.5
 slack 2
 floor 16
-frame 350.48,261.5,1219.05,638
+frame 350.48,283.5,1219.05,594
 title "Insert Disc"
 case InsertDiscPlayStation
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=350,412,1221,459 by=panel limit=350.48,412,1219.05,458 paints=#9C9CA0FF role=none seen=350.48,412,1219.05,458
-    1 StackPanel at=410,454,1101,393 by=panel limit=350.48,412,1219.05,458 role=none
-      2 HintText at=410,454,1101,36 box=734,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="The disc goes in as on a console: the lid opens, the disc goes in, and the lid closes a moment later." layout=666.06,24 limit=350.48,412,1219.05,458 name=InsertDiscAbout paints=#86868AFF role=text size=20 text="The disc goes in as on a console: the lid opens, the disc goes in, and the lid closes a moment later."
-      3 ScrollViewer at=410,508,1101,253.5 by=panel limit=350.48,412,1219.05,458 name=InsertDiscScroll overflow=0 paints=#9C9CA0FF role=scrollviewer viewport=410,508,1101,253.5
-        4 StackPanel at=410,508,1101,253.5 by=fixed-scroll in=3 limit=410,508,1101,253.5 name=InsertDiscList role=none
-          5 Button at=410,508,1101,66 by=fixed-scroll drawn focus heard="Amber Saga" in=3 limit=410,508,1101,253.5 name=InsertDisc0 op paints=#55555AFF,#9C9CA0FF role=button
-            6 TextBlock at=435.5,517,157.5,48 box=105,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Amber Saga" in=3 layout=104.91,31.2 limit=410,508,1101,66 owner=5 paints=#EEEEF0FF role=text size=26 text="Amber Saga"
-          7 Button at=410,580,1101,109.5 by=fixed-scroll drawn focus heard="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)" in=3 limit=410,508,1101,253.5 name=InsertDisc1 op paints=#55555AFF,#9C9CA0FF role=button
-            8 TextBlock at=435.5,587.5,1024.5,94.5 box=683,63 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)" in=3 layout=677.27,62.4 limit=410,580,1101,109.5 owner=7 paints=#9C9CA0FF role=text size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)"
-          9 Button at=410,695.5,1101,66 by=fixed-scroll drawn focus heard="Cobalt Harbor" in=3 limit=410,508,1101,253.5 name=InsertDisc2 op paints=#55555AFF,#9C9CA0FF role=button
-            10 TextBlock at=435.5,704.5,181.5,48 box=121,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Cobalt Harbor" in=3 layout=120.64,31.2 limit=410,695.5,1101,66 owner=9 paints=#9C9CA0FF role=text size=26 text="Cobalt Harbor"
-      11 ButtonBar at=1356.5,779.5,154.5,66 by=panel limit=350.48,412,1219.05,458 paints=#9C9CA0FF role=toolbar
-        12 Button at=1356.5,779.5,154.5,66 by=clip drawn focus heard=CANCEL limit=1356.5,779.5,154.5,66 name=InsertDiscCancel op paints=#55555AFF,#9C9CA0FF role=button text=Cancel
-          13 TextBlock at=1382,788.5,103.5,48 box=69,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=68.02,31.2 limit=1356.5,779.5,154.5,66 owner=12 paints=#9C9CA0FF role=text size=26 text=CANCEL
+  0 ContentControl at=350,434,1221,414 by=panel limit=350.48,434,1219.05,414 paints=#D4D4D4FF role=none seen=350.48,434,1219.05,414
+    1 StackPanel at=410,476,1101,348 by=panel limit=350.48,434,1219.05,414 role=none
+      2 HintText at=410,476,1101,36 box=734,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="The disc goes in as on a console: the lid opens, the disc goes in, and the lid closes a moment later." layout=636.26,24 limit=350.48,434,1219.05,414 name=InsertDiscAbout paints=#8D8D91FF role=text size=20 text="The disc goes in as on a console: the lid opens, the disc goes in, and the lid closes a moment later."
+      3 ScrollViewer at=410,530,1101,210 by=panel limit=350.48,434,1219.05,414 name=InsertDiscScroll overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=410,530,1101,210
+        4 StackPanel at=410,530,1101,210 by=fixed-scroll in=3 limit=410,530,1101,210 name=InsertDiscList role=none
+          5 Button at=410,530,1101,66 by=fixed-scroll drawn focus heard="Amber Saga" in=3 limit=410,530,1101,210 name=InsertDisc0 op paints=#707070FF,#D4D4D4FF role=button
+            6 TextBlock at=435.5,539,153,48 box=102,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Amber Saga" in=3 layout=101.56,31.2 limit=410,530,1101,66 owner=5 paints=#EEEEF0FF role=text size=26 text="Amber Saga"
+          7 Button at=410,602,1101,66 by=fixed-scroll drawn focus heard="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)" in=3 limit=410,530,1101,210 name=InsertDisc1 op paints=#707070FF,#D4D4D4FF role=button
+            8 TextBlock at=435.5,611,1035,48 box=690,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)" in=3 layout=689.78,31.2 limit=410,602,1101,66 owner=7 paints=#D4D4D4FF role=text size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)"
+          9 Button at=410,674,1101,66 by=fixed-scroll drawn focus heard="Cobalt Harbor" in=3 limit=410,530,1101,210 name=InsertDisc2 op paints=#707070FF,#D4D4D4FF role=button
+            10 TextBlock at=435.5,683,172.5,48 box=115,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Cobalt Harbor" in=3 layout=114.53,31.2 limit=410,674,1101,66 owner=9 paints=#D4D4D4FF role=text size=26 text="Cobalt Harbor"
+      11 ButtonBar at=1362.5,758,148.5,66 by=panel limit=350.48,434,1219.05,414 paints=#D4D4D4FF role=toolbar
+        12 Button at=1362.5,758,148.5,66 by=clip drawn focus heard=CANCEL limit=1362.5,758,148.5,66 name=InsertDiscCancel op paints=#707070FF,#D4D4D4FF role=button text=Cancel
+          13 TextBlock at=1388,767,97.5,48 box=65,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=64.74,31.2 limit=1362.5,758,148.5,66 owner=12 paints=#D4D4D4FF role=text size=26 text=CANCEL
 focus 5
 edge 5 up same
 edge 5 down 7

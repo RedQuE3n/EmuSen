@@ -182,6 +182,9 @@ struct Inner {
     /// Whether timeline semaphores were enabled (Vulkan 1.2 and the feature offered).
     timeline: bool,
     exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)>,
+    /// Whether a ring's parts were found exportable when the device was made: a timeline semaphore made for export,
+    /// and the ring's image format offered with exportable memory (EmuSen_DevicePicture.md §5.6).
+    ring_exports: bool,
     /// The physical device and the API version the device was made with.
     physical: vk::PhysicalDevice,
     api: u32,
@@ -388,6 +391,29 @@ impl Device {
         has(ash::khr::external_memory_fd::NAME) && has(ash::khr::external_semaphore_fd::NAME)
     }
 
+    /// Whether the parts of a ring can be exported as opaque file descriptors, tried rather than read from the
+    /// extensions: a timeline semaphore made for export and destroyed, and the ring's image format offered with
+    /// exportable memory (EmuSen_DevicePicture.md §5.6).
+    fn exports_rings(instance: &ash::Instance, physical: vk::PhysicalDevice, device: &ash::Device) -> bool {
+        let mut kind = vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE).initial_value(0);
+        let mut export = vk::ExportSemaphoreCreateInfo::default().handle_types(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_FD);
+        let semaphore = match unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default().push_next(&mut kind).push_next(&mut export), None) } {
+            Ok(made) => {
+                unsafe { device.destroy_semaphore(made, None) };
+                true
+            }
+            Err(_) => false,
+        };
+        let mut external = vk::PhysicalDeviceExternalImageFormatInfo::default().handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD);
+        let usage = vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED;
+        let info = vk::PhysicalDeviceImageFormatInfo2::default().format(crate::ring::FORMAT).ty(vk::ImageType::TYPE_2D).tiling(vk::ImageTiling::OPTIMAL).usage(usage).push_next(&mut external);
+        let mut offered = vk::ExternalImageFormatProperties::default();
+        let mut properties = vk::ImageFormatProperties2::default().push_next(&mut offered);
+        let image = unsafe { instance.get_physical_device_image_format_properties2(physical, &info, &mut properties) }.is_ok()
+            && offered.external_memory_properties.external_memory_features.contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE);
+        semaphore && image
+    }
+
     fn root(entry: ash::Entry, loader: libloading::Library, validate: bool) -> Result<Root, String> {
         let offered = unsafe { entry.try_enumerate_instance_version() }.ok().flatten().unwrap_or(vk::API_VERSION_1_0);
         let api = if offered >= vk::API_VERSION_1_2 { vk::API_VERSION_1_2 } else { vk::API_VERSION_1_1 };
@@ -490,6 +516,7 @@ impl Device {
                 return Err(words);
             }
         };
+        let ring_exports = exports.is_some() && timeline && Self::exports_rings(&root.instance, physical, &device);
         let memory = unsafe { root.instance.get_physical_device_memory_properties(physical) };
         let lending = lend.map(|(core, (intake_family, intake_index))| Lending { core, intake_family, intake: Mutex::new(unsafe { device.get_device_queue(intake_family, intake_index) }) });
         Ok(Device {
@@ -507,6 +534,7 @@ impl Device {
                 driver_uuid,
                 timeline,
                 exports,
+                ring_exports,
                 physical,
                 api,
                 lending,
@@ -548,9 +576,9 @@ impl Device {
         self.inner.driver_uuid
     }
 
-    /// Whether the device can make a ring: exports and timeline semaphores both.
+    /// Whether the device can make a ring: exports and timeline semaphores both, and a ring's parts found exportable.
     pub fn rings(&self) -> bool {
-        self.inner.exports.is_some() && self.inner.timeline
+        self.inner.exports.is_some() && self.inner.timeline && self.inner.ring_exports
     }
 
     pub(crate) fn export_loaders(&self) -> Option<&(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)> {

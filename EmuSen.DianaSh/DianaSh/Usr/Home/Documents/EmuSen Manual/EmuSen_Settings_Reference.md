@@ -1603,6 +1603,16 @@ mutant without the fallback fails it.
 Controls that take left and right keep them: a closed dropdown steps its choice (and saves it, as choosing does), a
 slider moves by its small change. Up and down in a list move its rows until the first or last, then leave it.
 
+**A row entered through a dropdown.** Since a closed dropdown keeps left and right, a control beside it on its row can
+be entered only by up or down. When a vertical move lands on a dropdown, the router moves instead to a control on the
+same row that does not take left and right, the one lying most over the focus, and left from it still reaches the
+dropdown. Found 2026-11-01 in the shader settings' list on the desktop: the filter bar holds the Category dropdown and
+the search box side by side above the list, and up from the list's first row is the only way into the search box.
+Avalonia's search answered the search box while it stood 33 px high beside the 32 px dropdown, its foot a pixel nearer;
+in Barlow at 13 (LunaP §206) both are 32 high, the search answered the dropdown, and the audit found the search box
+unreachable on all ten tabs. The rule covers dropdowns only; a slider beside a plain control on one row has not been
+seen.
+
 **Tabs.** The shoulders change tab and put the focus on the new page's top control. The tab strip is one stop for
 the d-pad: moving up into it lands on the selected tab, never another, because a tab header that receives the focus
 by navigation selects its tab, and the first version of this router switched tabs whenever up happened to be nearer
@@ -4358,6 +4368,10 @@ Preferences ▸ Appearance gains **Navigation Sounds Volume**, a slider from 0 t
 was). It is the interface stream's gain and applies at the next sound; at 0 nothing is played at all. It does not touch
 the game's volume.
 
+*Default changed 2026-11-01* (`EmuSen_Interface.md` §0.5): 60, the unified interface's sound level, in both
+`BigPictureInterface` and the Rust model (`Platform/galaxia`), which `GalaxiaParityTests` holds to the same default. A
+settings file that already stores a volume keeps it.
+
 **A theme without a sound.** THEMES.md: "If no navigation sounds are provided by the theme, then ES-DE will use the
 bundled navigation sounds as a fallback. This is done per sound file." Mistress does the same with sounds of its own,
 synthesised when first wanted (`NavigationSounds`): short sine tones with a quarter of their octave, a 3 ms rise and an
@@ -4655,6 +4669,20 @@ Galaxia can write to it.
 - **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
   logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
   `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **A folder this machine cannot use** (2026-11-01): the setting is used only when its folder can be made and takes a
+  file (a `.emusen-write-check` file is written and removed). When it names a folder that cannot, the log goes to the
+  home's own `Logs` (`DataStore.Logs`), and the first entry written there says so once in the run (`WARN [log] the log
+  folder … cannot be made or written on this machine, so the log is kept in …`); with no folder named, the default
+  above stands. The per-game logs (§4.22) take the same fallback (`ErrorLog.FallbackRoot`). Found on the handheld,
+  whose `home/etc/EmuSen/appsettings.json` named the desktop's `/home/red/Documents/Logs/` beside its own ROM and state
+  folders; the logs went to `~/.config/EmuSen/Logs`, outside the home, where nobody looked. How the desktop's folder got
+  there is not proven: its backups of 2026-10-17 and 2026-10-27 already hold it, its copies of 2026-09-22 do not, and the
+  handheld has no legacy `~/.config/EmuSen/appsettings.json` now. One route is shown on the desktop: a sandbox's first
+  start copies the legacy file into its home when it has none (`ConfigFile.MigrateFromLegacy`, Galaxia's `config.rs`), so
+  `out/linux-x64/Mistress/home` holds the desktop's folders, and a home or settings file carried from there to another
+  machine brings them along. The fix therefore does not depend on the route: any named folder this machine cannot use
+  falls back and is reported. Both halves, Galaxia's Rust and C#, choose
+  the same folder (`GalaxiaParityTests`), and each has its test (`error_log.rs`, `ErrorLogTests`).
 - **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
   `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
   `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's
@@ -4776,6 +4804,13 @@ coverage. Roboto Condensed and Fira Sans Condensed were the alternatives named. 
 choice rests on the reasons above and not on a comparison. It is not ES-DE's bundled font file: it was downloaded from
 Google Fonts, and no file of ES-DE's was opened. It is bundled in Mistress, not LunaP, because LunaP is MIT and keeps
 every dependency MIT (LunaP §181.2); LunaP's controls take any font file's path.
+
+*Superseded 2026-11-01* (`EmuSen_Interface.md` §5.2): the unified interface sets every form in Barlow and Barlow
+Condensed, so LunaP bundles both families, Regular and Medium (version 1.422, from the Barlow project), under the OFL
+with its text (LunaP §206.3), and Mistress draws the menus from LunaP's copy (`LunaFonts.CondensedFile`). A font under
+the OFL places no term on the code that uses it, so it does not break LunaP's rule that its code dependencies stay MIT.
+Mistress's own copy and `licenses/BarlowCondensed-OFL-1.1.txt` were removed; the notice is `THIRD_PARTY_NOTICES.md`
+§1.5 and `licenses/Barlow-OFL-1.1.txt`.
 
 #### 4.69.3 How it is built
 
@@ -8420,7 +8455,7 @@ This is a finding about the audit and not about Preferences. No player presses i
 
 **The change.** The function form of `PadAudit.Reachable` now runs the dispatcher once before it starts and once after every press it sends, which is what the pad's poll does on the other side; the `PadDriver` form and `PadAudit.Reach` press exactly as before, since they were measured clean. The desktop case no longer lays the window out itself after a tab change. Afterwards none of 3,148 presses sent straight to the router, over the five windows and the long-preset case of `ShaderBrowseTests`, leaves a control unarranged, and the Genesis case passes.
 
-**Tests.** `In_desktop_mode_a_real_window_is_driven_and_every_control_reached` passes for all five windows. `The_desktop_search_presses_only_in_a_window_grown_to_its_tab` changes Preferences to its Scraping tab with nothing run, confirms the window is still 531 high, and requires every press of the search to be sent into a window 720 high. Two mutants, each killed: without the run after a press the Genesis case fails again; without the run before the first press one of eighteen presses is sent at 531.
+**Tests.** `In_desktop_mode_a_real_window_is_driven_and_every_control_reached` passes for all five windows. `The_desktop_search_presses_only_in_a_window_grown_to_its_tab` changes Preferences to its Scraping tab with nothing run, confirms the window is still 531 high, and requires every press of the search to be sent into a window 720 high. Two mutants, each killed: without the run after a press the Genesis case fails again; without the run before the first press one of eighteen presses is sent at 531. Since LunaP §206 sets the desktop in Barlow at 13, the Library tab's height is 503 rather than 531 (measured 2026-11-01), and the test confirms 503; the grown window is still 720.
 
 **What is not shown.** The count of unarranged presses was taken over the pad-settings class only; the other users of the `PadDriver` form were not counted, and are unchanged. The three other callers of the function form (`ShaderBrowseTests`, `PlayerBindingsWindowTests`, `ControllerBindingsDiagramTests`) pass with the change and were not counted before it.
 

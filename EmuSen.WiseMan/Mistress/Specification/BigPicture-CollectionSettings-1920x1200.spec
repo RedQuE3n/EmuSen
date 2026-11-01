@@ -9,24 +9,24 @@ slack 2
 floor 16
 frame 0,0,1920,1200
 case CollectionSettings
-palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 paints=#FFFFFFFF role=none
     1 Grid at=0,0,1920,1200 by=clip limit=0,0,1920,1200 role=none
       2 MenuPanel at=0,0,1920,1200 by=clip heard="Game Collection Settings" limit=0,0,1920,1200 name=BigMenu role=menu
-        3 HintBar at=614,1114,691,71 by=clip heard="A Select, B Back, D-pad left and right Change, D-pad up and down Choose" limit=0,0,1920,1200 role=group
+        3 HintBar at=624,1114,672,71 by=clip heard="A Select, B Back, D-pad left and right Change, D-pad up and down Choose" limit=0,0,1920,1200 role=group
         4 ScrollViewer at=330,200,1260,648 by=clip limit=0,0,1920,1200 overflow=1215 paints=#FFFFFFFF role=scrollviewer viewport=330,200,1260,648
-          5 StackPanel at=330,200,1260,1863 by=scroll in=4 limit=330,200,1260,648 name=BigMenuRows paints=#55555AFF,#9C9CA0FF role=none seen=330,200,1260,648
-            6 LunaSwitch at=330,200,1260,81 by=scroll drawn focus heard="All Games" in=4 limit=330,200,1260,648 name=Autoall op paints=#9C9CA0FF role=button
-            7 LunaSwitch at=330,281,1260,81 by=scroll drawn focus heard=Favorites in=4 limit=330,200,1260,648 name=Autofavorites op paints=#9C9CA0FF role=button
-            8 LunaSwitch at=330,362,1260,81 by=scroll drawn focus heard="Last Played" in=4 limit=330,200,1260,648 name=Autorecent op paints=#9C9CA0FF role=button
+          5 StackPanel at=330,200,1260,1863 by=scroll in=4 limit=330,200,1260,648 name=BigMenuRows paints=#707070FF,#D4D4D4FF role=none seen=330,200,1260,648
+            6 LunaSwitch at=330,200,1260,81 by=scroll drawn focus heard="All Games" in=4 limit=330,200,1260,648 name=Autoall op paints=#D4D4D4FF role=button
+            7 LunaSwitch at=330,281,1260,81 by=scroll drawn focus heard=Favorites in=4 limit=330,200,1260,648 name=Autofavorites op paints=#D4D4D4FF role=button
+            8 LunaSwitch at=330,362,1260,81 by=scroll drawn focus heard="Last Played" in=4 limit=330,200,1260,648 name=Autorecent op paints=#D4D4D4FF role=button
             9 MenuRow at=330,443,1260,81 by=scroll heard="No custom collections yet. Create one below." in=4 limit=330,200,1260,648 role=listitem
-            10 Button at=330,524,1260,81 by=scroll drawn focus heard="Create New Custom Collection" in=4 limit=330,200,1260,648 name=CollectionCreate op paints=#55555AFF,#9C9CA0FF role=button text="Create New Custom Collection..."
-            11 Dropdown at=330,605,1260,81 by=scroll drawn focus heard="Group Custom Collections" in=4 limit=330,200,1260,648 name=CollectionGrouping op paints=#55555AFF,#9C9CA0FF role=combobox sideways
-            12 LunaSwitch at=330,686,1260,81 by=scroll drawn focus heard="Sort favorites on top for custom collections" in=4 limit=330,200,1260,648 name=FavoritesFirstCustom op paints=#9C9CA0FF role=button
-            13 LunaSwitch at=330,767,1260,81 by=scroll drawn focus heard="Display star markings for custom collections" in=4 limit=330,200,1260,648 name=StarsCustom op paints=#9C9CA0FF role=button
-        14 StackPanel at=896,866,128,69 by=clip limit=0,0,1920,1200 role=none
-          15 Button at=896,866,128,69 by=clip drawn focus heard=Back limit=0,0,1920,1200 name=BigMenuBack op paints=#55555AFF,#9C9CA0FF role=button text=Back
+            10 Button at=330,524,1260,81 by=scroll drawn focus heard="Create New Custom Collection" in=4 limit=330,200,1260,648 name=CollectionCreate op paints=#707070FF,#D4D4D4FF role=button text="Create New Custom Collection..."
+            11 Dropdown at=330,605,1260,81 by=scroll drawn focus heard="Group Custom Collections" in=4 limit=330,200,1260,648 name=CollectionGrouping op paints=#707070FF,#D4D4D4FF role=combobox sideways
+            12 LunaSwitch at=330,686,1260,81 by=scroll drawn focus heard="Sort favorites on top for custom collections" in=4 limit=330,200,1260,648 name=FavoritesFirstCustom op paints=#D4D4D4FF role=button
+            13 LunaSwitch at=330,767,1260,81 by=scroll drawn focus heard="Display star markings for custom collections" in=4 limit=330,200,1260,648 name=StarsCustom op paints=#D4D4D4FF role=button
+        14 StackPanel at=896,866,127,69 by=clip limit=0,0,1920,1200 role=none
+          15 Button at=896,866,127,69 by=clip drawn focus heard=Back limit=0,0,1920,1200 name=BigMenuBack op paints=#707070FF,#D4D4D4FF role=button text=Back
 focus 6
 edge 6 up same
 edge 6 down 7

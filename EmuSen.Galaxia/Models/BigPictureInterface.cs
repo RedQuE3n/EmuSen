@@ -37,8 +37,8 @@ namespace EmuSen.Galaxia.Models
 
         public bool ListScrollOverlay { get; set; }
 
-        // ES-DE's SoundVolumeNavigation, 0 to 100.
-        public int NavigationVolume { get; set; } = 70;
+        // ES-DE's SoundVolumeNavigation, 0 to 100; 60 by default since 2026-11-01 (EmuSen_Interface.md §5.6).
+        public int NavigationVolume { get; set; } = 60;
 
         // ES-DE's screensaver settings, its times in milliseconds - see EmuSen_Settings_Reference.md §4.75.
         public int ScreensaverTimer { get; set; } = 300000;

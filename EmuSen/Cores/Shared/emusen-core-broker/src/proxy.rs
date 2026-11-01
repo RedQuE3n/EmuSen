@@ -30,6 +30,11 @@ pub trait Target: 'static {
     fn expect(_sha256: &str) -> Result<(), String> {
         Err("this proxy serves nothing it can compare".to_owned())
     }
+    /// Whether the served core's firmware answer reads the image; one that does not is sent none, so a disc image is
+    /// never read through and copied to the runner to be ignored (EmuSen_LibretroHost.md §10r).
+    fn firmware_reads_image() -> bool {
+        true
+    }
 }
 
 /// The proxy's own setting: the deadline of a frame, in seconds; create and free get six times it.
@@ -249,9 +254,14 @@ fn whole(r: Result<Reply, (i32, String)>, out: *mut u8, len: usize) -> i64 {
 pub unsafe fn firmware_for<T: Target>(image: *const u8, image_len: usize, out: *mut u8, len: usize) -> i64 {
     let _ = descriptors::<T>();
     let bytes = if image.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(image, image_len) } };
+    whole(library_call(Op::FirmwareFor, out.is_null(), len as u64, &firmware_request::<T>(bytes)), out, len)
+}
+
+/// The firmware call's arguments: the image, or none for a core whose answer does not read it.
+fn firmware_request<T: Target>(image: &[u8]) -> Vec<u8> {
     let mut w = Writer::default();
-    w.bytes(bytes);
-    whole(library_call(Op::FirmwareFor, out.is_null(), len as u64, &w.0), out, len)
+    w.bytes(if T::firmware_reads_image() { image } else { &[] });
+    w.0
 }
 
 pub unsafe fn status_text<T: Target>(code: i32, out: *mut u8, len: usize) -> i64 {
@@ -907,4 +917,38 @@ macro_rules! broker_group {
         #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_expect(s: *const std::ffi::c_char) -> i32 { unsafe { __p::expect::<$t>(s) } }
         const _: emusen_native::core::sys::ExpectFn = emusen_core_expect;
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Reads;
+    struct Ignores;
+
+    impl Target for Reads {
+        const CAPABILITIES: u64 = 0;
+        fn spawn(_: Option<&str>) -> Result<Spawn, String> {
+            Err(String::new())
+        }
+    }
+
+    impl Target for Ignores {
+        const CAPABILITIES: u64 = 0;
+        fn spawn(_: Option<&str>) -> Result<Spawn, String> {
+            Err(String::new())
+        }
+        fn firmware_reads_image() -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn a_core_whose_firmware_does_not_read_the_image_is_sent_none_of_it() {
+        let image = vec![7u8; 1 << 20];
+        let (sent, empty) = (firmware_request::<Reads>(&image), firmware_request::<Ignores>(&[]));
+        assert!(sent.len() > image.len());
+        assert_eq!(firmware_request::<Ignores>(&image), empty);
+        assert!(empty.len() < 16);
+    }
 }

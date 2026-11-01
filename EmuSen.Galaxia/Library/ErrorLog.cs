@@ -16,6 +16,14 @@ namespace EmuSen.Galaxia.Library
 
         private static readonly object Gate = new();
         private static bool _pruned;
+        // The fallback's notice, written once into the log it fell back to.
+        private static bool _fellBackSaid;
+        private static string? _fellBack;
+
+        public const string WriteCheck = ".emusen-write-check";
+
+        public static string FallbackWords(string configured, string root) =>
+            $"the log folder {configured} cannot be made or written on this machine, so the log is kept in {root}";
 
         public static string? DirectoryOverride { get; set; }
 
@@ -27,7 +35,10 @@ namespace EmuSen.Galaxia.Library
         // The folder the per-game logs and crash reports share: the LogDirectory setting when it can be made, else ~/.config/EmuSen/Logs.
         public static string Root() => GalaxiaNative.Takes(DirectoryOverride) ? GalaxiaNative.LogRoot(DirectoryOverride) : Managed.Root();
 
-        // A settings file copied from another machine can name a folder this one cannot make.
+        // Where a log goes when the setting names no usable folder: the default when it names none, the home's own Logs when it names one this machine cannot make or write.
+        public static string FallbackRoot(string? configured) => string.IsNullOrWhiteSpace(configured) ? DefaultRoot : DataStore.Logs;
+
+        // A settings file copied from another machine can name a folder this one cannot make or write.
         public static bool Usable(string? directory) =>
             GalaxiaNative.Takes(directory) ? GalaxiaNative.LogUsable(directory) : Managed.Usable(directory);
 
@@ -66,6 +77,8 @@ namespace EmuSen.Galaxia.Library
         public static void ResetForTests()
         {
             _pruned = false;
+            _fellBackSaid = false;
+            _fellBack = null;
             if (GalaxiaNative.Loaded) GalaxiaNative.LogReset();
         }
 
@@ -79,7 +92,14 @@ namespace EmuSen.Galaxia.Library
                 if (DirectoryOverride is { } set) return set;
                 string? configured = null;
                 try { configured = AppSettings.LoadManaged().LogDirectory; } catch { }
-                return Usable(configured) ? configured! : DefaultRoot;
+                if (Usable(configured)) return configured!;
+                string root = string.IsNullOrWhiteSpace(configured) ? DefaultRoot : DataStore.Managed.Logs;
+                if (!string.IsNullOrWhiteSpace(configured) && !_fellBackSaid)
+                {
+                    _fellBackSaid = true;
+                    _fellBack = FallbackWords(configured!, root);
+                }
+                return root;
             }
 
             public static bool Usable(string? directory)
@@ -88,6 +108,9 @@ namespace EmuSen.Galaxia.Library
                 try
                 {
                     Directory.CreateDirectory(directory);
+                    string check = Path.Combine(directory, WriteCheck);
+                    File.WriteAllBytes(check, []);
+                    File.Delete(check);
                     return true;
                 }
                 catch
@@ -113,6 +136,11 @@ namespace EmuSen.Galaxia.Library
                         Prune(Path.GetDirectoryName(path)!, now);
                         long size = File.Exists(path) ? new FileInfo(path).Length : 0;
                         if (size >= MaxBytes) return null;
+                        if (_fellBack is { } notice)
+                        {
+                            _fellBack = null;
+                            text = $"{now:yyyy-MM-dd HH:mm:ss.fff} WARN [log] {notice}\n" + text;
+                        }
                         if (size + text.Length >= MaxBytes) text += $"{now:yyyy-MM-dd HH:mm:ss.fff} WARN [log] this file reached {MaxBytes >> 20} MB; nothing more is written to it today\n";
                         File.AppendAllText(path, text);
                         return path;

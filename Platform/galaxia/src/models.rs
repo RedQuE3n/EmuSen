@@ -74,7 +74,7 @@ pub static BIG_PICTURE_INTERFACE: Schema = Schema {
         text("StartupView", "system"),
         text("SystemsSorting", "release"),
         flag("ListScrollOverlay", false),
-        int("NavigationVolume", "70"),
+        int("NavigationVolume", "60"),
         int("ScreensaverTimer", "300000"),
         text("ScreensaverType", "dim"),
         flag("ScreensaverControls", true),
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(APP_SETTINGS.fields.len(), 62);
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));
         assert!(text.contains("\"BigPicture\": {},"));
-        assert!(text.contains("\"NavigationVolume\": 70,"));
+        assert!(text.contains("\"NavigationVolume\": 60,"));
         assert!(!text.contains("OnlineCovers"));
         let old = read(&APP_SETTINGS, r#"{"OnlineCovers":false}"#);
         assert!(format(&APP_SETTINGS, &old).unwrap().contains("\"PauseInBackground\": true,\n  \"OnlineCovers\": false,\n".replace('\n', crate::model::NEW_LINE).as_str()));

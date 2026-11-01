@@ -66,7 +66,8 @@ fn the_cards_are_the_card_formats_files_a_card_not_passed_is_blank_and_a_write_c
         part.split("\"which\":").skip(1).map(|w| w.split(|c: char| !c.is_ascii_digit()).next().unwrap().parse().unwrap()).collect()
     };
     let (firmware, battery) = (numbers("firmware", "battery"), numbers("battery", "capabilities"));
-    assert!(firmware.len() == 2 && firmware.iter().all(|f| !battery.contains(f)), "firmware {firmware:?} and battery files {battery:?} share no number");
+    // PCEE2 carries its pcsx2/resources, so only pcsx2/bios is firmware (EmuSen_LibretroHost.md §10s).
+    assert!(firmware.len() == 1 && firmware.iter().all(|f| !battery.contains(f)), "firmware {firmware:?} and battery files {battery:?} share no number");
 
     let cards = root.join(".data").join(STEM).join("system/pcsx2/memcards");
     std::fs::create_dir_all(&cards).unwrap();

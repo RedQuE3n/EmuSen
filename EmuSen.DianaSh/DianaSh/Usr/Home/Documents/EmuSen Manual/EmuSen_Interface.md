@@ -629,7 +629,8 @@ said in the pane and in the status words instead. **[M]**
 ### 14.3 The list: one list, built in and hosted together
 
 Every core EmuSen can run, in one list: the project's, libretro's and the player's own. Rows are ordered by console in
-the strip's order, then the console's default first. The name shown is the core's own, `Snes9x`, `Nestopia UE`, `PCEE2`:
+the strip's order, then the console's default first. The PlayStation 2's default is PCEE2 while Sapphire is under
+development (`EmuSen_Cores.md` §4.8, `man cores`), so Sapphire reads `Built in` there and PCEE2 `● Default` once approved. The name shown is the core's own, `Snes9x`, `Nestopia UE`, `PCEE2`:
 a libretro core's `corename`, which `EmuSen_Cores.md` §4.1 records as information and which the hosted list's `Core`
 column already uses; the `.info`'s display name (`Nintendo - SNES / SFC (Snes9x - Current)`) is in the pane's caption.
 The status words, one owner (`CoresWords.Status`), a glyph beside a word (§5.7):

@@ -1,0 +1,22 @@
+[package]
+name = "emusen-libretro-proxy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# The library a host loads for an installed libretro core: the broker's proxy, which runs the entry's libretro host in a
+# confined process and loads the core from a sealed copy whose hash core info gives. See EmuSen_LibretroHost.md §1.3, §3.
+[lib]
+name = "emusen_libretro_proxy"
+crate-type = ["cdylib"]
+
+[dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
+emusen-core-broker = { path = "../../Shared/emusen-core-broker" }
+emusen-core-entry = { path = "../../../../Platform/core-entry" }
+libc = "0.2"
+sha2 = "0.11"
+
+[profile.release]
+panic = "abort"

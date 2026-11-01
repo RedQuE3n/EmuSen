@@ -1,0 +1,26 @@
+[package]
+name = "emusen-core-broker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Any v1 core in a confined process of its own behind the same v1 surface: the proxy's machinery, which a proxy library
+# builds on, and the runner. See EmuSen_LibretroHost.md §3 and EmuSen_CoreAPI.md §7.3.
+[lib]
+name = "emusen_core_broker"
+
+[[bin]]
+name = "emusen-core-runner"
+path = "src/bin/emusen-core-runner.rs"
+
+[dependencies]
+emusen-native = { path = "../emusen-native" }
+emusen-core-host = { path = "../emusen-core-host" }
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"
+
+[profile.release]
+panic = "abort"

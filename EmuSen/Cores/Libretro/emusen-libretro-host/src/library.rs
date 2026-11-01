@@ -106,9 +106,14 @@ fn symbol<T: Copy>(lib: &libloading::Library, name: &str) -> Result<T, String> {
 fn load() -> Result<Library, String> {
     let folder = own_folder()?;
     let (stem, core_path) = find_core(&folder)?;
-    let sha256 = emusen_core_entry::sha256_file(&core_path).map_err(|e| format!("{}: {e}", core_path.display()))?;
+    // Under the broker the core comes as the sealed copy the proxy hashed, on the descriptor it names (§1.3).
+    let loaded = match std::env::var("EMUSEN_LIBRETRO_CORE_FD") {
+        Ok(fd) if fd.parse::<u32>().is_ok() => PathBuf::from(format!("/proc/self/fd/{fd}")),
+        _ => core_path.clone(),
+    };
+    let sha256 = emusen_core_entry::sha256_file(&loaded).map_err(|e| format!("{}: {e}", loaded.display()))?;
     #[cfg(unix)]
-    let handle: libloading::Library = unsafe { libloading::os::unix::Library::open(Some(&core_path), libc::RTLD_NOW | libc::RTLD_LOCAL) }
+    let handle: libloading::Library = unsafe { libloading::os::unix::Library::open(Some(&loaded), libc::RTLD_NOW | libc::RTLD_LOCAL) }
         .map_err(|e| format!("{} does not load: {e}", core_path.display()))?
         .into();
     #[cfg(not(unix))]

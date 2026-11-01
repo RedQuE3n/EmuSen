@@ -7,47 +7,51 @@ usage 1   cores ls [--installed|--available|--updates|--unsupported] [<console>]
 usage 2                                 one line per libretro core: state, console, id, source, version, size, licence
 usage 3   cores info <core>             what is known of one core, as key: value lines
 usage 4   cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)
-usage 5   cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)
+usage 5   cores get <core>...           download, check and install; prints the SHA-256 to approve
+usage 6   cores update [<core>...]      the installed cores the index offers a new build of, or those named
+usage 7   cores rollback <core>         the build kept by the last update put back in place
+usage 8   cores rm <core>...            a downloaded core removed, with its kept build; saves and settings stay
+usage 9   cores verify [<core>...]      each installed core checked against its NOTICE, the project's copies refreshed
+usage 10   cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)
 
 case the usage, and what a command line refuses
 target none
-covers 1-5
+covers 1-10
 $ cores
-out 211
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+out 332
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
   A core is named by its file's stem, as cores ls prints it. See man cores.
 status 1
 action none
 $ cores get pcsx2
-out 211
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
-  A core is named by its file's stem, as cores ls prints it. See man cores.
+out 90
+cores: pcsx2: pcsx2 is not in the catalogue, which was never fetched; cores fetch reads it
 status 1
 action none
 $ cores ls --installed --updates
-out 277
+out 398
 cores ls: --updates is not an option of cores ls, or a second one
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
   A core is named by its file's stem, as cores ls prints it. See man cores.
 status 1
 action none
 $ cores ls ps2 psx
-out 241
+out 362
 cores ls: one console at most
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
   A core is named by its file's stem, as cores ls prints it. See man cores.
 status 1
 action none
 $ cores info
-out 237
+out 358
 cores info: name one core
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
   A core is named by its file's stem, as cores ls prints it. See man cores.
 status 1
 action none
 $ cores fetch now
-out 211
-Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]
+out 332
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
   A core is named by its file's stem, as cores ls prints it. See man cores.
 status 1
 action none
@@ -60,5 +64,51 @@ $ cores wait cores9
 out 36
 cores wait: no such cores job cores9
 status 1
+action none
+$ cores get
+out 363
+cores get: name a core or more
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores rollback pcsx2 mednafen_psx
+out 362
+cores rollback: name one core
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores verify --all
+out 385
+cores verify: --all is not an option of cores verify
+Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]
+  A core is named by its file's stem, as cores ls prints it. See man cores.
+status 1
+action none
+$ cores get pcsx2
+out 90
+cores: pcsx2: pcsx2 is not in the catalogue, which was never fetched; cores fetch reads it
+status 1
+action none
+$ cores rm pcsx2
+out 36
+cores: pcsx2: pcsx2 is not installed
+status 1
+action none
+$ cores rollback pcsx2
+out 36
+cores: pcsx2: pcsx2 is not installed
+status 1
+action none
+$ cores verify
+out 0
+
+status 0
+action none
+$ cores update
+out 0
+
+status 0
 action none
 end

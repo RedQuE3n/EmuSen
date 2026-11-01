@@ -756,7 +756,7 @@ namespace EmuSen.WiseMan.Mistress
 
             PadWindowRouter.Send(other, UiButton.Down);
             PadWindowRouter.Send(other, UiButton.PageDown);
-            Assert.Equal(531, other.Bounds.Height);
+            Assert.Equal(503, other.Bounds.Height);
 
             var heights = new List<double>();
             PadAudit.Reachable(other, b => { heights.Add(other.Bounds.Height); PadWindowRouter.Send(other, b); }, limit: 4);

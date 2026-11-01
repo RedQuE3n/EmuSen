@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SheetLookTests).GetTypeInfo().Assembly);
 
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
-        internal static readonly Color Bar = Color.Parse("#050507");
+        internal static readonly Color Bar = Color.Parse("#26262B");
 
         private readonly ITestOutputHelper _out;
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSheetLookTests", Guid.NewGuid().ToString("N"));
@@ -197,7 +197,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             foreach (Point p in new[] { left, right })
             {
                 (byte r, byte g, byte b) = EsdeMenusTests.At(f, (int)p.X, (int)p.Y);
-                Assert.True(r <= 8 && g <= 8 && b <= 10, $"the row at {p} is {r},{g},{b}");
+                Assert.True(Math.Abs(r - Bar.R) <= 3 && Math.Abs(g - Bar.G) <= 3 && Math.Abs(b - Bar.B) <= 3, $"the row at {p} is {r},{g},{b}");
             }
             Stop(window);
             window.Close();

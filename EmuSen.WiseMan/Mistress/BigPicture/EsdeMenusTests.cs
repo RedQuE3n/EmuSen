@@ -46,18 +46,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return (inside, outside);
         }
 
-        // The bar across the row's top few pixels, above the text: every one the bar's colour from the panel's left edge to its right.
-        internal static void AssertBarSpans(RenderedFrame f, Rect bar, Rect panel, Color colour)
+        // The bar across the row's top few pixels: the accent edge at its left, then the bar's colour to the panel's right edge (LunaP §206.4).
+        internal static void AssertBarSpans(RenderedFrame f, Rect bar, Rect panel, Color colour, Color accent)
         {
             Assert.Equal(panel.Left, bar.Left, 0.5);
             Assert.Equal(panel.Width, bar.Width, 0.5);
             int y = (int)Math.Ceiling(bar.Top) + 2;
-            int wrong = 0;
-            for (int x = (int)Math.Ceiling(panel.Left); x < (int)Math.Floor(panel.Right); x++)
-            {
-                (byte r, byte g, byte b) = At(f, x, y);
-                if (Math.Abs(r - colour.R) > 2 || Math.Abs(g - colour.G) > 2 || Math.Abs(b - colour.B) > 2) wrong++;
-            }
+            static bool Near((byte R, byte G, byte B) p, Color c) => Math.Abs(p.R - c.R) <= 2 && Math.Abs(p.G - c.G) <= 2 && Math.Abs(p.B - c.B) <= 2;
+            int x = (int)Math.Ceiling(panel.Left), end = (int)Math.Floor(panel.Right), edge = 0, wrong = 0;
+            for (; x < end && Near(At(f, x, y), accent); x++) edge++;
+            Assert.InRange(edge, 1, (int)Math.Ceiling(EmuSen.LunaP.Theme.LunaTokens.FocusMarks.BarWidth * 2) + 1);
+            for (; x < end; x++) if (!Near(At(f, x, y), colour)) wrong++;
             Assert.Equal(0, wrong);
         }
 
@@ -91,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(2, list.SelectedIndex);
             MenuRow row = ((Control)list.ContainerFromIndex(2)!).GetVisualDescendants().OfType<MenuRow>().Single();
             Assert.True(row.IsHighlighted);
-            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor);
+            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor, row.AccentColor);
 
             // The screen under it is blurred, and the theme's own help bar is put away while the menu's is shown.
             BlurBackdrop backdrop = s.Window.GetControl<BlurBackdrop>("MenuBackdrop");
@@ -139,7 +138,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(jump.IsFocused);
             MenuRow row = jump.GetVisualDescendants().OfType<MenuRow>().Single();
             Assert.Equal(MenuRowKind.Option, row.Kind);
-            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor);
+            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor, row.AccentColor);
             Assert.Equal("Apply", ThemedCollectionsTests.Named<Button>(s, "GameOptionsClose").Content);
             Assert.Equal(MenuRowKind.Submenu, MenuRows.GetKind(ThemedCollectionsTests.Named<Button>(s, "GameOption_EditThisGamesMetadata")));
 

@@ -113,7 +113,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(editor.EditorOf(GameMetadata.Name).IsFocused);
             MenuRow name = RowOf(editor.EditorOf(GameMetadata.Name));
             Assert.True(name.IsHighlighted);
-            EsdeMenusTests.AssertBarSpans(open, EsdeMenusTests.InWindow(name, name.Layout(name.Bounds.Size).Bar, s.Window), panel, name.BarColor);
+            EsdeMenusTests.AssertBarSpans(open, EsdeMenusTests.InWindow(name, name.Layout(name.Bounds.Size).Bar, s.Window), panel, name.BarColor, name.AccentColor);
             Assert.Equal("Name: From the file name.", menu.Footer);
 
             // The buttons in one row under the rows, in ES-DE's order with Hide from Library where its Delete was, centred on the panel.
@@ -347,7 +347,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // The edited row's bar now spans the panel, as every other row's does.
             RenderedFrame f = s.Capture();
             MenuRow row = RowOf(editor.EditorOf(GameMetadata.Completed));
-            EsdeMenusTests.AssertBarSpans(f, EsdeMenusTests.InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), EsdeMenusTests.InWindow(menu, menu.PanelBounds, s.Window), row.BarColor);
+            EsdeMenusTests.AssertBarSpans(f, EsdeMenusTests.InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), EsdeMenusTests.InWindow(menu, menu.PanelBounds, s.Window), row.BarColor, row.AccentColor);
 
             ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.KidGame);
             Assert.DoesNotContain(menu.Hints!, h => h.Label == "Reset");

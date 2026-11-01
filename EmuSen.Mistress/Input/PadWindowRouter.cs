@@ -165,7 +165,27 @@ namespace EmuSen.Mistress.Input
             }
 
             // Nothing in line with the focus: the nearest control that way at all, so a button off to one side is still reached - §4.45.3.
-            (Next(focus, from, root, direction) ?? Nearest(root, from, direction) ?? BesideStrip(root, from, direction))?.Focus(NavigationMethod.Directional);
+            InputElement? found = Next(focus, from, root, direction) ?? Nearest(root, from, direction) ?? BesideStrip(root, from, direction);
+            (BesideSideways(root, from, found, direction) ?? found)?.Focus(NavigationMethod.Directional);
+        }
+
+        // Up or down onto a dropdown lands instead on a plain control on its row over the focus, which left and right would otherwise never reach - §4.45.3.
+        private static InputElement? BesideSideways(Control root, InputElement from, InputElement? found, NavigationDirection direction)
+        {
+            if (direction is not (NavigationDirection.Up or NavigationDirection.Down) || found is not ComboBox
+                || from.TranslatePoint(default, root) is not { } origin) return null;
+            var here = new Rect(origin, from.Bounds.Size);
+            InputElement? best = null;
+            double most = 0;
+            foreach (InputElement candidate in root.GetVisualDescendants().OfType<InputElement>())
+            {
+                if (ReferenceEquals(candidate, found) || ReferenceEquals(candidate, from) || candidate is ComboBox or Slider or ISidewaysAdjustable or TabItem or ScrollViewer) continue;
+                if (!candidate.Focusable || !candidate.IsEffectivelyEnabled || !candidate.IsEffectivelyVisible || !SharesRow(found, candidate, (InputElement)root)) continue;
+                if (candidate.TranslatePoint(default, root) is not { } at) continue;
+                double over = System.Math.Min(here.Right, at.X + candidate.Bounds.Width) - System.Math.Max(here.Left, at.X);
+                if (over > most) { most = over; best = candidate; }
+            }
+            return best;
         }
 
         // Up from a tab strip with nothing above: the nearest control on the strip's row outside it, such as a sheet's Close - see §4.45.3.

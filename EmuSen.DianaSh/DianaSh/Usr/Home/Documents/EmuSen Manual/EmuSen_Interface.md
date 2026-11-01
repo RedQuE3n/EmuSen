@@ -990,3 +990,6 @@ screen from one description (`EmuSen_LibraryTools.md` §1a).
 2. **[decision]** `Save States` and `Screenshots` retired as library views, into the game's page. *Recommended:* yes.
 3. **[routine]** `Emulation` renamed `Game`, and Home first in the sidebar and the window's first view.
    *Recommended:* yes.
+
+**Decided 2026-11-01 by the tester:** §16 as pictured, the three questions as recommended. D1 to D6 are built after the
+big screen's Cores work and U4 to U7, not before.

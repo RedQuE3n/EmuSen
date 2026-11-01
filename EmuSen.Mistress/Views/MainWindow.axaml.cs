@@ -156,7 +156,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring));
             EarlyLoader = OpenSession;
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
@@ -1017,7 +1017,7 @@ namespace EmuSen.Mistress.Views
         {
             EmuSen.Serenity.Slang.SlangVulkan? device = PresenterDevice;
             _lentDevice = device;
-            return GameSession.Open(Runtime, OpenOptions with { Path = what.Path, Console = what.Console, Engine = what.Engine, Device = device?.DeviceHandle ?? 0, SingleRows = true });
+            return GameSession.Open(Runtime, OpenOptions with { Path = what.Path, Console = what.Console, Engine = what.Engine, Device = device?.DeviceHandle ?? 0, Ring = device is not null, SingleRows = true });
         }
 
         // The presenter's device, read on the UI thread before a session opens on any thread; the one the open session was lent, for borrowing its lend.
@@ -1383,6 +1383,16 @@ namespace EmuSen.Mistress.Views
         {
             int width = _info.width, height = _info.height;
             if (width <= 0 || height <= 0) return;
+            if (_info.picture_in_ring != 0 && BorrowedRing(session) is { } ring)
+            {
+                var picture = new EmuSen.Serenity.Slang.RingPicture(ring, (int)_info.ring_slot, _info.ring_value, (int)_info.fields, (int)_info.field);
+                if (GameFrame.PresentsOnDevice)
+                {
+                    _frames.OfferInRing(picture, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
+                    return;
+                }
+                _ringRelease.Release(picture, width, height);
+            }
             if (_info.picture_on_device != 0 && GameFrame.PresentsOnDevice && BorrowedLend(session) is { } lend)
             {
                 _frames.OfferOnDevice(lend, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
@@ -1404,6 +1414,21 @@ namespace EmuSen.Mistress.Views
             var lend = EmuSen.Serenity.Slang.SlangLend.Borrow(device, handle);
             _borrowed = (handle, lend);
             return lend;
+        }
+
+        // The machine's ring borrowed for the presenter, kept while the runtime hands the same one - see EmuSen_Backend.md §33.
+        private (nint Handle, EmuSen.Serenity.Slang.SlangRing Ring)? _borrowedRing;
+
+        private readonly EmuSen.Serenity.Slang.SlangRingRelease _ringRelease = new();
+
+        private EmuSen.Serenity.Slang.SlangRing? BorrowedRing(GameSession session)
+        {
+            nint handle = session.Crystal.PictureRing();
+            if (handle == 0 || _lentDevice is not { } device) return null;
+            if (_borrowedRing is { } kept && kept.Handle == handle) return kept.Ring;
+            var ring = EmuSen.Serenity.Slang.SlangRing.Borrow(device, handle);
+            _borrowedRing = (handle, ring);
+            return ring;
         }
 
         // The picture before the palette in the encoding the screen's filter reads, where it reads one - see EmuSen_CRT.md §22.
@@ -1428,7 +1453,8 @@ namespace EmuSen.Mistress.Views
         // Which way the picture reaches the screen, said once a session as its first picture is shown - see EmuSen_Backend.md §14.13.
         private void NamePicturePath(GameSession session)
         {
-            string path = _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
+            string path = _info.picture_in_ring != 0 && GameFrame.PresentsOnDevice ? "in a ring: the hosted core draws into a ring made on the presenter's device and the chain reads it there"
+                : _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
                 : !session.DeviceOffered ? "read back: the picture is not presented on the device, so no device was lent"
                 : _info.picture_on_device == 0 ? "read back: the engine took no lent device"
                 : "read back: the screen stopped presenting on the device";

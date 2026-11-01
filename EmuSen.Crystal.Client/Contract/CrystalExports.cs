@@ -25,8 +25,10 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> disc_change;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> disc_lid;
         public delegate* unmanaged[Cdecl]<nint, uint, CrystalFrameInfo*, int> frame;
+        public delegate* unmanaged[Cdecl]<nint, uint, int> frame_advance;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long> picture_copy;
         public delegate* unmanaged[Cdecl]<nint, uint, nint> picture_lend;
+        public delegate* unmanaged[Cdecl]<nint, uint, nint> picture_ring;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int> raw_select;
         public delegate* unmanaged[Cdecl]<nint, uint, CrystalRawInfo*, byte*, nuint, long> raw_copy;
         public delegate* unmanaged[Cdecl]<nint, uint, short*, nuint, uint*, long> audio_drain;

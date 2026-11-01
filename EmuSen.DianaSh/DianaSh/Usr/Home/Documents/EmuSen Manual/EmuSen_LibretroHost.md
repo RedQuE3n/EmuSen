@@ -1235,6 +1235,35 @@ on, and the ring's release when the core's process dies, which follow 4.4(a); 4.
 libretro's categories and the locked rows, whose `CoreSetting.Group` already carries a group; 4.3, the cards in the
 card manager and the round trip between PCEE2 and Sapphire, which needs a run of PCEE2. PCEE2 was not run.
 
+**The ring through the frontend API (4.4(a), (b), (d); the API's 1.4, 2026-11-01).** Decided 2026-11-01: the frontend
+API lends a ring as an optional capability (`EMUSEN_CRYSTAL_OPEN_RING`, `picture_ring`, the frame record's ring fields;
+`EmuSen_Backend.md` §33, written before the code). Both implementations make the ring on the presenter's device at
+machine info's maxima, lend it in place of the device lend where the core claims `DEVICE_RING`, again when a
+`MACHINE_INFO` raises the maxima, and free it after the machine, the last one kept one change more. Mistress opens every
+session with the flag when it lends a device, offers each ringed frame to the frame control as a `RingPicture`, which
+`SlangRunner.Present` advances its chain from (`advance_ring`), and names the path "in a ring" in its log. *Found while
+building:* a ring frame holds its slot until a chain has taken it or a later frame, so a client that stops drawing on
+the device stalls the core after its third frame (shown by a seeded fault: frame 5 never returned); Mistress gives the
+slots back through `SlangRingRelease` while its screen is off the device. *Field structure (b):* the frame record
+carries `fields` and `field` to the client; the CRT filter already draws a picture taller than 300 rows as two woven
+fields and a shorter one as one, which agrees with the record for every PlayStation 2 mode the host derives (448 and
+512 rows two fields, 224 and 256 one), so no structural value was added. *A dead core (d):* the Rust raises the ring's
+`ready` to the last value handed before freeing it; the C# cannot (no export does), recorded in §33.2.
+Tests: `ApiRingTests` (the RX 6800, the C# implementation): six frames of the test core's Vulkan picture in the API's
+ring drawn through no filter and the PlayStation 2 CRT filter equal to the same frames read back by `picture_copy` and
+uploaded; a session without the flag lends none; twelve ring frames given back with the screen off the device, none
+stalled; one frame advance. `CrystalParityTests`' frames case through both implementations, the header, contract and
+hand-off classes, `RingChainTests`, `HostedCoreLaunchTests` and the device-lend classes beside it. Seeded faults, each
+caught: the release doing nothing (frame 5 stalls); the frame's slot reported one off (227,600 bytes differ); the ring
+frame never recorded (the record's `picture_in_ring` 0).
+
+**Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
+(`EmuSenCrystalNative`), and the Rust core host's discovery knows no libretro entry, so a hosted core opens only on the
+C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1` with "No core in this build handles
+'.iso'" (measured 2026-11-01). Every proof of stage 4 so far ran on the C#. Decided 2026-11-01: the Rust host's
+discovery and trust of libretro entries is a stage of its own, after branch `hosted-cores` lands, on that branch's list
+reader. The ring's Rust half is built and type-checked but unexercised until then.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

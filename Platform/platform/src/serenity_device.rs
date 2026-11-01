@@ -653,7 +653,7 @@ pub struct RingImageInfo {
 }
 
 pub struct RingHandle {
-    ring: Ring,
+    pub(crate) ring: Ring,
 }
 
 /// A ring of `count` images `width` by `height` made on the device and exported, `out` filled; null when the device

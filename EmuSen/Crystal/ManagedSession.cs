@@ -198,6 +198,17 @@ namespace EmuSen.Crystal.Managed
             Wake();
         }
 
+        // One frame advance, for every engine: paused, with one frame asked for - see EmuSen_Backend.md §33.3.
+        public void FrameAdvance()
+        {
+            Change(() =>
+            {
+                _paused = true;
+                _runRequested = true;
+            });
+            Runtime.Events.Raise(Id, CrystalNumbers.EventRun, "run", w => w.WriteString("op", "stepped"));
+        }
+
         public void Reset() => Change(() =>
         {
             if (Engine is not { } engine) throw new CrystalException(SessionAbi.NotSupported, $"{Core.CoreName} has no reset");

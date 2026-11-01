@@ -18,10 +18,11 @@ namespace EmuSen.Mistress
             public int Lines;
             public EmuSen.Serenity.RawPicture? Raw;
             public EmuSen.Serenity.Slang.SlangLend? Lend;
+            public EmuSen.Serenity.Slang.RingPicture? Ring;
             public int State;
         }
 
-        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, EmuSen.Serenity.RawPicture? raw, EmuSen.Serenity.Slang.SlangLend? lend);
+        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, EmuSen.Serenity.RawPicture? raw, EmuSen.Serenity.Slang.SlangLend? lend, EmuSen.Serenity.Slang.RingPicture? ring);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
@@ -82,6 +83,10 @@ namespace EmuSen.Mistress
         public void OfferOnDevice(EmuSen.Serenity.Slang.SlangLend lend, int width, int height, long sequence, double aspect, int lines) =>
             Push(new Frame { Pixels = Array.Empty<byte>(), Width = width, Height = height, RowRepeat = 1, Sequence = sequence, Aspect = aspect, Lines = lines, Lend = lend });
 
+        // A hosted core's picture in the ring the runtime lent, which the device path draws - see EmuSen_Backend.md §33.
+        public void OfferInRing(EmuSen.Serenity.Slang.RingPicture ring, int width, int height, long sequence, double aspect, int lines) =>
+            Push(new Frame { Pixels = Array.Empty<byte>(), Width = width, Height = height, RowRepeat = 1, Sequence = sequence, Aspect = aspect, Lines = lines, Ring = ring });
+
         private void Push(Frame frame)
         {
             Drop(Interlocked.Exchange(ref _newest, frame));
@@ -105,7 +110,7 @@ namespace EmuSen.Mistress
         private void Present(Frame frame)
         {
             if (Interlocked.CompareExchange(ref frame.State, Presented, Waiting) != Waiting) return;
-            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Pixels.Length > 0 || frame.Raw is not null ? _release : null, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw, frame.Lend);
+            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Pixels.Length > 0 || frame.Raw is not null ? _release : null, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw, frame.Lend, frame.Ring);
         }
     }
 }

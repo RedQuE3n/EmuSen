@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
@@ -94,9 +95,12 @@ namespace EmuSen.Crystal.Managed
             info->paused = _paused ? 1u : 0u;
             info->halted_processor = _halted ? HaltedIndex() : 0;
             info->halted_address = _halted ? unchecked((uint)Core.HaltedAddress) : 0;
-            if (info->size < sizeof(FrameInfoV1)) return;
+            if (info->size < (int)Marshal.OffsetOf<FrameInfoV1>(nameof(FrameInfoV1.picture_in_ring))) return;
             info->picture_on_device = ran && Core is IDevicePicture { PictureOnDevice: true } ? 1u : 0u;
             info->reserved = 0;
+            if (info->size < sizeof(FrameInfoV1)) return;
+            CoreInterface.RingFrame? r = ran && Core is CoreEngine { RingFrame: { } f } ? f : null;
+            (info->picture_in_ring, info->ring_slot, info->ring_value, info->fields, info->field) = r is { } g ? (1u, g.Slot, g.Value, g.Fields, g.Field) : (0u, 0u, 0ul, 0u, 0u);
         }
 
         private uint HaltedIndex()
@@ -110,6 +114,12 @@ namespace EmuSen.Crystal.Managed
         public nint PictureLend()
         {
             lock (_lock) return Core is IDevicePicture { Lend: PlatformLend lend } ? lend.Handle : 0;
+        }
+
+        // Since 1.4: the current machine's ring for the presenter to borrow, or zero.
+        public nint PictureRing()
+        {
+            lock (_lock) return Core is CoreEngine { Ring: { } ring } ? ring.Handle : 0;
         }
 
         // The raw encoding kept from the next frame; null keeps none.

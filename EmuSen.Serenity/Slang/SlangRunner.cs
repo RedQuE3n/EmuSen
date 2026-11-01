@@ -141,7 +141,7 @@ namespace EmuSen.Serenity.Slang
         }
 
         // On the UI thread: a new frame advanced, and the chain run into the presenter when the frame, the values or the size changed; false when the chain cannot draw, and the caller draws otherwise - see EmuSen_DevicePicture.md §4.3.
-        internal bool Present(DevicePresenter presenter, byte[] rgba, int width, int height, int rowRepeat, bool newFrame, int pixelWidth, int pixelHeight, byte[]? raw, SlangLend? lend = null)
+        internal bool Present(DevicePresenter presenter, byte[] rgba, int width, int height, int rowRepeat, bool newFrame, int pixelWidth, int pixelHeight, byte[]? raw, SlangLend? lend = null, RingPicture? ring = null)
         {
             if (_disposed || !_build.IsCompletedSuccessfully || _build.Result is not { } chain || !chain.CanPresent) return false;
             (int pw, int ph) = (Math.Max(1, pixelWidth), Math.Max(1, pixelHeight));
@@ -154,6 +154,7 @@ namespace EmuSen.Serenity.Slang
                     if (raw is not null && raw.Length == width * height * 4) chain.ReplaceLut(Shaders.BuiltInPreset.RawTexture, raw, width, height);
                     // A core's picture on the device is read there; with none taken yet the chain has no frame to draw.
                     if (lend is not null) { if (!chain.AdvanceLent(lend) && !_advanced) return false; }
+                    else if (ring is { } r) chain.AdvanceRing(r.Ring, r.Slot, r.Value, width, height);
                     else chain.Advance(rgba, width, height, rowRepeat);
                     _advanced = true;
                 }

@@ -38,6 +38,12 @@ namespace EmuSen.Crystal.Client
         // Since 1.1: the current machine's lend for the presenter to borrow, zero for none; asked again after a frame, since a machine made again is lent afresh.
         public nint PictureLend() => Contract.Crystal.PictureLend(Rt, Id);
 
+        // Since 1.4: the current machine's ring for the presenter to borrow, zero for none; asked again after a frame, since one whose maxima grew is replaced.
+        public nint PictureRing() => Contract.Crystal.PictureRing(Rt, Id);
+
+        // Since 1.4: one frame advance, the session held paused after it - see EmuSen_Backend.md §33.3.
+        public void FrameAdvance() => Check(Contract.Crystal.FrameAdvance(Rt, Id));
+
         // Since 1.1: the raw encoding kept from the next frame; null keeps none.
         public void RawSelect(string? encoding) => WithText(encoding, (e, el) => Check(Contract.Crystal.RawSelect(Rt, Id, (byte*)e, el)));
 

@@ -26,6 +26,7 @@ const EMUSEN_CRYSTAL_MAJOR 1 @1.0
 const EMUSEN_CRYSTAL_NOT_APPROVED -1115 @1.3
 const EMUSEN_CRYSTAL_NO_ENGINE -1109 @1.0
 const EMUSEN_CRYSTAL_OPEN_NO_BATTERY 1 @1.0
+const EMUSEN_CRYSTAL_OPEN_RING 4 @1.4
 const EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS 2 @1.0
 const EMUSEN_CRYSTAL_SCOPE_CONSOLE 0 @1.0
 const EMUSEN_CRYSTAL_SCOPE_GAME 2 @1.0
@@ -46,6 +47,8 @@ field emusen_crystal_frame_info.audio_frames offset 48 @1.0
 field emusen_crystal_frame_info.audio_rate offset 52 @1.0
 field emusen_crystal_frame_info.display_aspect offset 40 @1.0
 field emusen_crystal_frame_info.display_lines offset 36 @1.0
+field emusen_crystal_frame_info.field offset 132 @1.4
+field emusen_crystal_frame_info.fields offset 128 @1.4
 field emusen_crystal_frame_info.frame_interval_ns offset 64 @1.0
 field emusen_crystal_frame_info.frame_rate_hz offset 80 @1.0
 field emusen_crystal_frame_info.halted offset 8 @1.0
@@ -53,12 +56,15 @@ field emusen_crystal_frame_info.halted_address offset 96 @1.0
 field emusen_crystal_frame_info.halted_processor offset 92 @1.0
 field emusen_crystal_frame_info.height offset 28 @1.0
 field emusen_crystal_frame_info.paused offset 88 @1.0
+field emusen_crystal_frame_info.picture_in_ring offset 112 @1.4
 field emusen_crystal_frame_info.picture_on_device offset 104 @1.1
 field emusen_crystal_frame_info.picture_serial offset 16 @1.0
 field emusen_crystal_frame_info.play_audio offset 56 @1.0
 field emusen_crystal_frame_info.ran offset 4 @1.0
 field emusen_crystal_frame_info.rendered offset 12 @1.0
 field emusen_crystal_frame_info.reserved offset 108 @1.1
+field emusen_crystal_frame_info.ring_slot offset 116 @1.4
+field emusen_crystal_frame_info.ring_value offset 120 @1.4
 field emusen_crystal_frame_info.row_repeat offset 32 @1.0
 field emusen_crystal_frame_info.size offset 0 @1.0
 field emusen_crystal_frame_info.speed_percent offset 60 @1.0
@@ -122,6 +128,7 @@ fn emusen_crystal_firmware_install int32_t (emusen_crystal_runtime *, const uint
 fn emusen_crystal_firmware_needed int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_firmware_overview int64_t (emusen_crystal_runtime *, uint8_t *, size_t) @1.0
 fn emusen_crystal_frame int32_t (emusen_crystal_runtime *, uint32_t, emusen_crystal_frame_info *) @1.0
+fn emusen_crystal_frame_advance int32_t (emusen_crystal_runtime *, uint32_t) @1.4
 fn emusen_crystal_framelog_add int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint32_t, uint32_t) @1.0
 fn emusen_crystal_framelog_clear int32_t (emusen_crystal_runtime *, uint32_t, uint32_t) @1.0
 fn emusen_crystal_framelog_list int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
@@ -159,6 +166,7 @@ fn emusen_crystal_phase_names int64_t (emusen_crystal_runtime *, uint32_t, uint8
 fn emusen_crystal_phases int64_t (emusen_crystal_runtime *, uint32_t, double *, size_t) @1.0
 fn emusen_crystal_picture_copy int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_picture_lend const void * (emusen_crystal_runtime *, uint32_t) @1.1
+fn emusen_crystal_picture_ring const void * (emusen_crystal_runtime *, uint32_t) @1.4
 fn emusen_crystal_processors int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_profile_op int64_t (emusen_crystal_runtime *, uint32_t, uint32_t, uint32_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_raw_copy int64_t (emusen_crystal_runtime *, uint32_t, emusen_crystal_raw_info *, uint8_t *, size_t) @1.1

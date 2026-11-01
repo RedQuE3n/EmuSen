@@ -25,6 +25,15 @@ pub struct CoreInfo {
     pub systems: Vec<CoreSystem>,
     pub capabilities: Vec<String>,
     pub host_requires: Vec<String>,
+    /// A brokered libretro entry's core: its file and the SHA-256 of the sealed copy that runs (EmuSen_LibretroHost.md §1.3).
+    pub libretro: Option<LibretroFile>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibretroFile {
+    pub file: String,
+    /// Lowercase, as approvals compare it.
+    pub sha256: String,
 }
 
 fn str_or(v: &Value, key: &str, fallback: &str) -> String {
@@ -81,6 +90,7 @@ impl CoreInfo {
             systems,
             capabilities: strs(v, "capabilities"),
             host_requires: strs(v, "host_requires"),
+            libretro: v.get("libretro").and_then(|l| Some(LibretroFile { file: str_or(l, "file", ""), sha256: l.get("sha256")?.as_str()?.to_ascii_lowercase() })),
         })
     }
 

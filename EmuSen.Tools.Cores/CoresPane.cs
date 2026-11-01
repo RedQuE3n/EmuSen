@@ -199,7 +199,7 @@ namespace EmuSen.Tools.Cores
             foreach (CoreRow t in tool)
             {
                 CoreRow? found = runtime.FirstOrDefault(r => InLibretro(r) && Folder(r) == t.Stem);
-                rows.Add(found is null ? t : t with { Engine = found.Engine, Trust = found.Trust, Library = found.Library, IsDefault = found.IsDefault });
+                rows.Add(found is null ? t : t with { Engine = found.Engine, Trust = found.Trust, Library = found.Library, IsDefault = found.IsDefault, Sha256 = found.Sha256 });
             }
             return rows;
         }

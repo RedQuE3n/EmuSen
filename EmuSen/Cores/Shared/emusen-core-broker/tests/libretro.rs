@@ -189,6 +189,42 @@ fn the_kernel_refuses_a_write_outside_the_cores_folders_and_the_network() {
 }
 
 #[test]
+fn a_core_reads_firmware_through_a_link_in_its_system_folder_and_nothing_beside_it() {
+    let _t = turn();
+    let (_, root) = library();
+    let elsewhere = root.join("elsewhere");
+    let bios = root.join("libretro").join(emusen_core_entry::DATA).join("testcore").join("system").join("bios");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::create_dir_all(&bios).unwrap();
+    std::fs::write(elsewhere.join("firmware.bin"), b"dummy firmware").unwrap();
+    std::fs::write(elsewhere.join("other.bin"), b"not granted").unwrap();
+    let link = bios.join("firmware.bin");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(elsewhere.join("firmware.bin"), &link).unwrap();
+    let mut m = make("tc_fault=read_system").unwrap();
+    for _ in 0..3 {
+        m.advance().unwrap();
+    }
+    let read = ram(&mut m, FAULT);
+    drop(m);
+    std::fs::remove_file(&link).unwrap();
+    assert_eq!(read, 1, "1: the link read and its neighbour refused; 2: the link refused; 3: the neighbour read");
+}
+
+#[test]
+fn a_core_that_cannot_start_says_so_across_the_process_boundary() {
+    let _t = turn();
+    let refused = make("tc_fail=load").err().expect("load refused");
+    assert_eq!(refused.status, -13);
+    assert!(refused.words.contains(emusen_libretro_testcore::FAIL_AT_LOAD), "{}", refused.words);
+    let mut m = make("tc_fail=first_frame").unwrap();
+    assert_eq!(m.advance().map_err(|e| e.0), Err(-18));
+    assert!(m.last_error().contains(emusen_libretro_testcore::FAIL_AT_FIRST_FRAME), "{}", m.last_error());
+    drop(m);
+    make("").unwrap().advance().unwrap();
+}
+
+#[test]
 fn a_kernel_that_cannot_confine_the_core_fails_create_in_words() {
     let _t = turn();
     let _ = library();

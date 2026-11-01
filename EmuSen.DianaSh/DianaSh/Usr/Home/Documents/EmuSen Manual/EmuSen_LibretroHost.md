@@ -263,6 +263,7 @@ On Linux, before loading the target, the runner sets `no_new_privs` and restrict
 | read | `/proc/self`, `/sys/class/drm`, `/sys/devices` (the GPU's nodes as the driver reads them) | the driver's discovery of the card |
 | read, write, and `LANDLOCK_ACCESS_FS_IOCTL_DEV` where the Landlock ABI is 5 or later | `/dev/dri/renderD*` | the render node, and the ioctls every GPU submission is |
 | read | the image's folder | a sheet's or `.m3u`'s companions beside the image |
+| read | the core's system folder and the resolved target of each link under it (§10n) | firmware the player linked into the folder |
 | read, write | the core's private folders (§4.5), its Mesa shader cache among them | the core's own data |
 | none | the network, where the Landlock ABI is 4 or later | |
 
@@ -316,6 +317,41 @@ Vulkan program must; that path is tested on the presenter's side, and the limit 
 | `set_options` bit 0 | `GET_AUDIO_VIDEO_ENABLE` answers video off for that frame |
 | `frame_rate` | `timing.fps` as the exact ratio its `double` holds where the denominator stays under 10⁶, else the nearest with one (59.94005994 → 60000/1001); a change raises `MACHINE_INFO`, and pacing is the presenter's, as for every core |
 | `phases` (`PHASES`) | `retro_run`, picture, sound, files, as nanoseconds, so that the host's own tools measure a hosted core as any other |
+
+### 4.1a Which games a hosted core takes (2026-11-01)
+
+A hosted core takes a game file of a system when three conditions hold: its line in `libretro-cores.tsv` names the
+system; the file's name ends, past a dot and ignoring case, in one of the extensions its own `.info` lists under
+`supported_extensions`; and no named exception of `libretro-extensions.tsv` drops that extension for that core and
+system (one may also add one). The rule is one pure function in `emusen_systems::libretro_extensions`,
+
+    pub fn takes(stem: &str, supported: &[String], system: &str, game: &Path) -> bool
+
+with `info_extensions(info_text)` reading the `.info`'s value and `takes_under` the same rule over lists a test supplies.
+The ordering of a console's engines (§4.8 of `EmuSen_Cores.md`: the native core first, PCEE2 first on the PlayStation 2
+while Sapphire is developed) is the discovery's, which calls this function to filter and keeps its own order.
+
+**Sources.** The extensions are the cores' public `.info` files (libretro-core-info), never a core's source. Two are
+cited by the tests: PCEE2 lists `iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx`, so it refuses a `.cue` and a cue/bin set
+reaches it through its `.bin`; Flycast lists `chd|cdi|iso|elf|bin|cue|gdi|lst|zip|dat|7z|m3u`, for each of `dreamcast`,
+`naomi` and `atomiswave`, and refuses a `.ccd` although the Dreamcast's table row lists one.
+
+**Exceptions as data.** Each line names a core, one system its line names, the extensions added and dropped, and the
+rule that sets it; the list is checked against `libretro-cores.tsv` when read, and a line of another shape is refused
+with its number. The shipped file names none: no rule of EmuSen's yet sets one, and every difference from a core's own
+list is to be a named exception decided by the tester, never one per game.
+
+**Design notes.** (1) The rule lives in `emusen-systems` because the list it reads does; the discovery, which knows the
+installed `.info`, passes its value in, so the function reads no file. (2) `info_extensions` reads one key with the
+quoting of `emusen-core-tool`'s `CoreInfo` (first key kept, `#` lines skipped); that reader carries the network and TLS
+crates the catalogue needs, which the systems table should not depend on. (3) A suffix match lets a listed compound
+extension (`iso.gz`) and a single one (`gz`) both work without a second rule.
+
+**Tests** (`libretro_extensions::tests`, 9): each listed extension of both cores, the `.cue` refusal and the `.bin`
+path, a system off a core's line, names with no extension, the `.info` value quoted, bare, commented and absent, an
+exception's adding and dropping for its system only, a malformed exception refused, and the shipped file read whole.
+Seeded faults, each reverted, each caught by one test: the dot before a suffix not required; the system condition
+removed; drops ignored; a commented `.info` line read; case not folded.
 
 ### 4.2 Video
 
@@ -1257,7 +1293,7 @@ hand-off classes, `RingChainTests`, `HostedCoreLaunchTests` and the device-lend 
 caught: the release doing nothing (frame 5 stalls); the frame's slot reported one off (227,600 bytes differ); the ring
 frame never recorded (the record's `picture_in_ring` 0).
 
-**Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
+*Superseded by §10k, 2026-11-01: the Rust runtime discovers, admits and opens hosted cores.* **Mistress's default runtime cannot start a hosted core yet.** Mistress runs the frontend API's Rust implementation
 (`EmuSenCrystalNative`), and the Rust core host's discovery knows no libretro entry, so a hosted core opens only on the
 C# implementation: `HostedCoreLaunchTests` fails under `EMUSEN_CRYSTAL_NATIVE=1` with "No core in this build handles
 '.iso'" (measured 2026-11-01). Every proof of stage 4 so far ran on the C#. Decided 2026-11-01: the Rust host's
@@ -1397,6 +1433,174 @@ time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder
 with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
 existing fit audits stand.
 
+## 10k. Hosted cores on the Rust runtime (2026-11-01)
+
+*Replaces the statement of the gap at the end of §10h.* Decided 2026-11-01 by the tester: the Rust host's connection to
+the libretro host is designed as Rust would have it, not ported from the C# integration (`LibretroEntries`, the C#
+`CoreDiscovery`'s libretro parts), which stays as it is until B10 deletes the C# halves.
+
+**The design.** One module of `emusen-core-host`, `entry`, holds what an installed core's folder must satisfy; discovery,
+trust and the runtime compose it, and none of them names a file of the folder, every name being `emusen-core-entry`'s
+(`Entry::list`, `broker_path`, `adapter_path`, `core_path`):
+
+| Part | What it does |
+|---|---|
+| `entry::stale` | rule 1 for an entry: each copy (proxy, adapter) hashed and found in an installation's `cores.manifest` under the name it is built as (`Trust::installation_lists`); otherwise *needs refresh* |
+| `entry::check` | before the proxy is loaded: not stale; the sidecar's `libretro` member present and naming the core file the folder is named for; its SHA-256 approved; the file on disk still that build. Each refusal in words, marked where an approval alone would settle it |
+| `entry::standing` | `approved`, `needs_approval` or `needs_refresh` (`Standing::NeedsRefresh`, the word the Cores window already reads) |
+| `entry::read` | the approval's half (§1.1, "written by loading it once after approval"): the copies checked, rule 3 on the proxy, `Library::load_expecting` with the approved hash (so the proxy seals and compares the core before anything of it runs, §10e), rule 4, and the proxy's sidecar written by the crate's one writer |
+| `Discovery` | scans each player's directory's `libretro/` entries after its sidecars: an entry with a proxy sidecar is a `Discovered` with `entry` set; an entry whose core has no sidecar of its build (none, or one naming another build) is listed in `waiting()` with the core's hash. `Discovered::open` routes an entry through `entry::check` and loads the proxy with the sidecar's hash expected |
+| `HostedCore`, `with_hosted` | the hosted list (`emusen_systems::libretro_cores::hosted()`), handed in by the runtime so that the crate takes no dependency on the systems table: an entry the list names offers only the systems its line names (`offers`), and `for_system`, `for_extension` and `in_rule_order` give a system's engines in §4.8's order |
+| `Runtime::approve` | `core_approve` of an entry's core hash: the approval recorded, each waiting entry of that hash read (`entry::read`), the directories listed again |
+| `route::takes` (crystal) | a listed hosted core takes a game only where its installed `.info` lists the file's extension, by `emusen_systems::libretro_extensions::takes` (§4.1a); a core the list names nowhere takes what its info claims |
+
+Rule 3's cores directories now include an entry's folder, `<player>/libretro/<stem>/`, so the proxy copy passes the owner,
+mode and architecture checks where it lies. *A changed build is approved again and read again*, but a proxy loaded in
+the process under the old hash stays loaded (§7.2: never unloaded; `load_expecting` refuses a second approval), so the
+new build is read at the next start of the program. Named as a limit [A].
+
+**Found while building.** A game's creation values were read under the row's console, while a session stores its
+settings under its own console (the system's table console, else its id in capitals). For a system with no table
+console, which is the libretro test core's, a console setting stored through a session was applied only at run time, and
+a core that reads its options at load (`tc_hw`, `tc_rate`) never saw it. `open_game` now reads them under the session's
+console. In every other case the two are the same name.
+
+**Proofs, and the runtime each ran on** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs` (3), on the Rust runtime (`emusen_crystal::Runtime`), brokered through the
+  real proxy, adapter, runner and test core:
+  - an entry with no sidecar is waiting, not an engine; `approve` writes its sidecar; the game opens on it, runs 20
+    frames at 320 × 240, and a state taken and loaded brings the picture back;
+  - revoked, rebuilt and stale entries are refused in words before loading, with the standings `needs_approval`,
+    `needs_approval` and `needs_refresh`, and the new build waits for its approval;
+  - `tc_rate` stored through a session reaches the next machine's creation.
+- `emusen-core-host`: §4.8's order (native first; PCEE2 ahead of a native PS2 core; an entry's unlisted system not
+  offered), plus the crate's existing 30 tests.
+- `emusen-crystal`: `takes` refuses PCEE2 a `.cue` and gives an unlisted core what its info claims; the crate's other tests.
+- WiseMan `HostedCoreLaunchTests` under `EMUSEN_CRYSTAL_NATIVE=1`: 4 of 4, the runtime reporting the platform library and
+  frontend API 1.4. The same build's platform library from before this change fails the main case with "No core in this
+  build handles '.iso'". The fixture still lays the entry and writes its sidecar through the C# host; the test's calls are
+  the frontend API's.
+- Seeded faults, each caught: the approval unchecked (the refusals test), the copies never stale (the same), the build
+  on disk unchecked (the same), the rule's order flattened (the order test), `takes` always yes (crystal's test), the
+  creation values under the row's console (the stored-setting test).
+
+**Surfaces.** No version changes. The frontend API, the core ABI and the platform interface are unchanged. The
+`cores` listing's `trust` may now say `needs_refresh`, a word it already had. The `emusen-core-host` crate gains public
+items (`entry`, `HostedCore`, `Discovered::entry`, `CoreInfo::libretro`, `Standing::NeedsRefresh`); it is not a
+versioned C surface. `for_extension` and `for_system` now return the engines in rule order as a vector's iterator.
+
+**Left** (*the first two built in §10m*): a waiting entry is not yet a row of the `cores` listing, and the listing's `libretro` field (`EmuSen_Cores.md`
+§7.3) is not built. Until they are, the Cores window and Mistress's question take the hash to approve from the core
+tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
+`CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
+
+## 10m. The cores listing's libretro rows, the path, and the refresh (2026-11-01)
+
+Decided 2026-11-01 by the tester, taking §10k's question: the waiting entry and the listing's `libretro` field are built now,
+and the frontends take the hash to approve from the frontend API's Rust answer, not from the core tool.
+
+**The listing** (the frontend API's 1.5, `EmuSen_Backend.md` §34). `listing::cores` gives each row `libretro`: null for
+a library that is not an entry, or `{folder, file, sha256, corename, name, version, license, authors, source, build,
+trust}`. Its `sha256` is the core file's own, read as the scan reads it, never `NOTICE`'s. Its `trust` is that file's
+standing (approved where the hash is approved and is the build the sidecar names). `version` is the core's own, null
+until it has been read. The other fields are `NOTICE`'s, through `emusen-core-entry`. An entry waiting to be read
+(§10k) that is not already an engine is a last row of its own: `engine` null, `report` "not yet read", `trust` the
+entry's standing, `systems` the hosted list's line for it. `Runtime::approve` also accepts the core hash of an entry
+already read, so a revoked core can be approved again.
+
+**The frontends** read that answer and nothing else:
+- *Cores* (`EmuSen.Tools.Cores`): `CoreRow.OfRuntime` takes a row's approval hash from `libretro.sha256` where it has
+  one, and `CoresPane.Joined` lends the core tool's row that hash beside the engine and trust, so *Approve…* names the
+  libretro core's hash.
+- *Mistress* (`MainWindow.CoreAwaitingApproval`): for the routed engine's row, or where no engine is routed a waiting
+  row of the routed system, the question shows `libretro.file` and approves `libretro.sha256`; a row needing refresh
+  is not asked about.
+
+**The path, found by running real cores.** `Engine::create` never set `image_path`, so Flycast (`need_fullpath`) refused
+every game and PCEE2 was sent a 1.46 GB image through the broker's socket. The path is now given at create and at a
+disc's insert (`Machine::media_insert_at`), and only for an unaltered file: `DiscFiles::unaltered_path` withholds a copy
+unpacked from an archive, and a package (which may carry soft patches) gives none, as §10d's rule has it.
+
+**The refresh, found the same way.** After `cores verify` refreshed an entry's proxy copy, the sidecar kept the old
+copy's hash. The entry was listed approved, but it opened nothing and could not be approved. An entry whose proxy
+copy differs from its sidecar's hash is now waiting, like a new build of the core. The runtime reads every waiting entry
+whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
+A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
+
+**The player's `/Cores`, followed.** The Rust runtime fixed its player directory when it was made, where the C# reads
+`DataStore.Cores` at each scan. Mistress's one shared runtime therefore kept a data folder that had since moved. The
+`ControllerBindingsSaturn` and `ControllerBindingsDreamcast` audits showed it: their console comes only from a core the
+case places in the player's `/Cores`, and before the change the case reached it only through the C# discovery's static.
+A runtime given no directories now reads the tree's `/Cores` at each scan (`player_directories`). The audit places its
+core there, approves it through the frontend API and takes it out again with a rescan. Measured 2026-11-01: the 8 cases
+pass on both runtimes. `tests/player_cores.rs` lists a library from a data folder moved after the runtime was made.
+
+**A core that cannot start** (§10n's status -18) does not cross the frontend API as a number: it is the libretro host's
+own status, and the runtime refuses the frame with the core's words, which are its last error, PCEE2's own line where
+§10n's profile names one. So it needs no bump of its own. Tested through the runtime with the test core's
+`tc_fail=first_frame`, stored as a console setting.
+
+**Proofs** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs`, 7 tests on the Rust runtime:
+  - the waiting row approved by its `libretro.sha256` becomes one engine row, and is revoked and approved again;
+  - the path the test core logs is the game's;
+  - a refreshed proxy copy is read again at start and opens a game.
+- `emusen-crystal` (with `crystal_abi` at 1.5), `emusen-core-host` and `emusen-galaxia` pass.
+- WiseMan `CoresWindowRuntimeTests` on the Rust runtime (2): the window offers the waiting core with its core's hash,
+  approves it through the frontend API, and lists it again as an engine; Mistress asks by the core's file and hash, then
+  not after the approval.
+- `CoresWindowTests` and `HostedCoreLaunchTests` pass on the Rust runtime too.
+- On the C#: `CoresWindowTests`, `CrystalHeaderTests` and `CoreHostParityTests` pass.
+- Seeded faults, each caught: the path not set (the runtime test); the window's join dropping the hash (the window
+  test); Mistress naming the proxy's hash (Mistress's test).
+
+## 10n. Two defects real cores found on the Rust runtime (2026-11-01)
+
+Both were found by the tester running PCEE2 through the Rust runtime with the Americas BIOS linked into a system folder.
+
+**The runner could not read linked firmware.** The proxy's Landlock policy (§3.3) granted the core's private folders
+and the image's folder, but neither the system folder named by `EMUSEN_LIBRETRO_SYSTEM_DIR` (§10c) nor the target of a
+link under any system folder. Landlock checks the path a link resolves to, so a firmware file linked into a granted
+folder is still refused where it lives. PCEE2 logged "Unable to auto locate a BIOS image" and `VMManager::Initialize()`
+failed; a local patch adding the folder and the resolved BIOS file to the read list let the BIOS be found and Jak and
+Daxter boot [M, the tester]. The fix, in the proxy's `spawn`: the system folder the core is given, which the host and the
+proxy now take from one rule (`emusen_core_entry::system_folder`, the player's `.data/<stem>/system/` or the referee's
+folder), is granted read-only, and the folder is searched for links (at most 8 levels and 20,000 entries, so that a
+folder of dumped textures cannot stall a create). Each link's resolved target is granted read-only. A target that is a
+file is granted alone, never its folder; a target that is a folder is searched in turn. The search reads names and link
+targets only: no firmware file is opened by the project's code, and the core reads what it reads. The referee's folder is
+read-only, so a core that writes there (PCEE2's cache and cards) is refused those writes. A player's system folder lies
+inside the core's private folders and stays writable.
+
+**An open succeeded after the core had failed.** Measured on 2026-11-01 with PCEE2 v2.9.138 and an empty system folder
+(no firmware present), the host's calls traced in order: `retro_load_game` returns true, and `retro_serialize_size` then
+answers 100,663,296. The core starts its machine in the first `retro_run`. There it logs, at info level,
+"[PCSX2] VMManager::Initialize() failed." and hands a duplicate frame and 800 audio frames. Every later `retro_run` hands
+a black 640 × 480 software frame and no sound. It never calls `SHUTDOWN` and never logs at error level. So libretro
+carries no signal of the failure: not the load's return value, not an environment call, not a log level. The only sign
+is the core's own line. The narrowest check is therefore a per-core profile (`failure::FATAL_LINES`, by file stem as
+measured: PCEE2's line, and the test core's). A profile line logged during load ends the create with
+`STATUS_NOT_STARTED` (-18). Logged during a frame, it ends that `advance` with -18, and every later frame is refused the
+same way. In either case the detail is "it could not start: " followed by the core's line. LRPS2 has no entry: its line
+has not been measured. Independently, a load that returns false now quotes the core's last error or warning ("the core
+said: …") in place of the earlier "its log says why". The same run after the change: `advance: (-18) it could not start:
+[PCSX2] VMManager::Initialize() failed.` at the first frame [M].
+
+**Tests.** The test core gains `tc_fault=read_system` (it reads `bios/firmware.bin`, a link in its system folder, then
+`other.bin` beside the link's target, which nothing links) and `tc_fail=load|first_frame`.
+- `emusen-core-broker` `tests/libretro.rs`: the link is read and its neighbour refused by the kernel in the runner; a
+  refused load's words carry the core's error, and a first-frame failure crosses the process boundary as -18 with the
+  core's line in `last_error`.
+- `emusen-libretro-host` `tests/testcore.rs`: the same refusals in-process, the second frame refused as the first, and a
+  new machine running afterwards.
+- Seeded faults, each caught: the system folder not granted (the link test, 2), the link's folder granted instead of its
+  file (the same, 3), links not followed (the same, 2), the frame's profile check removed (the broker's refusal test),
+  the failure not kept for later frames and the load's line not quoted (the host's test).
+
+**Surfaces.** The libretro host's status band gains -18, "the core could not start the game; its log says why", which
+`status_text` gives. `emusen-core-entry` gains `DATA`, `SYSTEM_DIR_VAR`, `data_folder` and `system_folder`. The core ABI
+and the frontend API are unchanged. The runtime's message for a stopped frame names the status's words. The detail
+carrying the core's line reaches `last_error`, which the runtime does not yet show.
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

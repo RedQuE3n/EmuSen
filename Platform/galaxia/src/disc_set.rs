@@ -239,6 +239,12 @@ impl DiscFiles {
         DiscFiles { path: String::new(), image: Mapped::empty(), companions: Vec::new(), _hold: None }
     }
 
+    /// The image's own file, where the bytes mapped are that file's and not a copy unpacked from an archive, which a
+    /// core reading by path could find pruned (EmuSen_CoreAPI.md §6.41, the path only for an unaltered file).
+    pub fn unaltered_path(&self) -> Option<&str> {
+        (self._hold.is_none() && !self.path.is_empty()).then_some(self.path.as_str())
+    }
+
     /// Every byte of the disc on its medium.
     pub fn length(&self) -> u64 {
         self.image.bytes().len() as u64 + self.companions.iter().map(|c| c.bytes().len() as u64).sum::<u64>()

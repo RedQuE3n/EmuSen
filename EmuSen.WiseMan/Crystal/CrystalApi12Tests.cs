@@ -87,7 +87,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             var (flagged, flagWords) = New(new CrystalConfig { size = (uint)sizeof(CrystalConfig), flags = 2 });
             Assert.Equal(0, flagged);
-            Assert.Contains($"not known to 1.{CrystalAbi.Minor}", flagWords);
+            Assert.Contains($"not known to 1.{EmuSen.Crystal.Client.Contract.Crystal.AbiVersion() & 0xFFFF}", flagWords);
             var (listed, listWords) = New(new CrystalConfig { size = (uint)sizeof(CrystalConfig) }, Encoding.UTF8.GetBytes("{\"cores\":1}"));
             Assert.Equal(0, listed);
             Assert.Contains("JSON array of directories", listWords);

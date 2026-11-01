@@ -41,6 +41,9 @@ const USAGE: &str = "Usage: scrape ls|plan|run [--system <s>] [--favorites] [--c
 /// The kinds a run asks when none is named: the scraper's own default.
 pub const DEFAULT_KINDS: [&str; 4] = ["cover", "screenshot", "marquee", "miximage"];
 
+/// `--missing metadata`: a game with no description, ES-DE's "No metadata".
+pub const METADATA: &str = "metadata";
+
 /// ES-DE's eleven kinds, the scraper's names.
 pub const KINDS: [&str; 11] = ["cover", "screenshot", "marquee", "titlescreen", "miximage", "backcover", "3dbox", "physicalmedia", "fanart", "manual", "video"];
 
@@ -193,8 +196,8 @@ pub fn parse_line(args: &[String]) -> Result<Line, String> {
             "--collection" => line.collection = Some(value(&mut words, w)?),
             "--missing" => {
                 let kind = value(&mut words, w)?;
-                if kind != "any" && !KINDS.contains(&kind.as_str()) {
-                    return Err(format!("scrape: --missing {kind}: not a kind; the kinds are {}, or any", KINDS.join(", ")));
+                if let Some(bad) = kind.split(',').find(|k| !KINDS.contains(k) && (kind.contains(',') || !matches!(*k, "any" | METADATA))) {
+                    return Err(format!("scrape: --missing {bad}: not a kind; the kinds are {}, a list of them, any, or {METADATA}", KINDS.join(", ")));
                 }
                 line.missing = Some(kind);
             }
@@ -588,33 +591,53 @@ fn chosen(call: &Call, backend: &dyn Backend, line: &Line) -> Result<(Vec<Game>,
     if let Some(stdin) = call.stdin() {
         by_hand.extend(listed(&stdin));
     }
+    choice(backend, line, &by_hand, &|p| call.resolve(p).ok())
+}
+
+/// The games a line and its paths named by hand choose, each system's kinds, and the notes: the one choice, the shell's and a window's.
+pub fn choice(backend: &dyn Backend, line: &Line, by_hand: &[String], resolve: &dyn Fn(&str) -> Option<String>) -> Result<(Vec<Game>, HashMap<String, Vec<String>>, Vec<String>), String> {
     let (games, roots) = games_of(&backend.games()?)?;
     let facts = facts(backend, line, !by_hand.is_empty())?;
     let resolve = |p: &str| -> Option<String> {
-        call.resolve(p).ok().filter(|r| games.iter().any(|g| g.path == *r)).or_else(|| roots.first().map(|root| format!("{}/{}", root.trim_end_matches('/'), p.trim_start_matches('/'))))
+        resolve(p).filter(|r| games.iter().any(|g| g.path == *r)).or_else(|| roots.first().map(|root| format!("{}/{}", root.trim_end_matches('/'), p.trim_start_matches('/'))))
     };
-    let (mut picked, mut notes) = choose(&games, line, &by_hand, &resolve, &facts);
+    let (mut picked, mut notes) = choose(&games, line, by_hand, &resolve, &facts);
     let systems: BTreeSet<String> = picked.iter().map(|g| g.system.clone()).collect();
     let (per, kind_notes) = kinds(backend, line, &systems)?;
     notes.extend(kind_notes);
     if let Some(missing) = &line.missing {
         let mut kept = Vec::new();
         for g in picked {
-            let wanted: Vec<String> = if missing == "any" { per.get(&g.system).cloned().unwrap_or_default() } else { vec![missing.clone()] };
-            let mut lacks = false;
-            for k in &wanted {
-                if source(backend, &g, k)?.is_none() {
-                    lacks = true;
-                    break;
-                }
-            }
-            if lacks {
+            if lacks(backend, &g, missing, &per)? {
                 kept.push(g);
             }
         }
         picked = kept;
     }
     Ok((picked, per, notes))
+}
+
+/// Whether a game lacks what `--missing` names: one of the run's kinds for `any`, a description for `metadata`, otherwise every kind listed.
+fn lacks(backend: &dyn Backend, g: &Game, missing: &str, per: &HashMap<String, Vec<String>>) -> Result<bool, String> {
+    if missing == METADATA {
+        let request = compact(vec![("what", Value::string("metadata")), ("path", Value::string(&g.path)), ("scraped_names", Value::Bool(false))]);
+        let m = parse(&backend.get(&request)?)?;
+        return Ok(m.get("description").map_or(true, |d| text(d, "value").trim().is_empty()));
+    }
+    if missing == "any" {
+        for k in per.get(&g.system).into_iter().flatten() {
+            if source(backend, g, k)?.is_none() {
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+    for k in missing.split(',') {
+        if source(backend, g, k)?.is_some() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn ls(call: &Call, backend: &dyn Backend, line: &Line) -> Result<i32, String> {
@@ -685,6 +708,107 @@ fn status(call: &Call, backend: &dyn Backend) -> Result<i32, String> {
     let progress = parse(&backend.progress(ALL_SEEN)?)?;
     call.out(&status_lines(&quota, &account, &developer, &progress));
     Ok(0)
+}
+
+/// A request's whole number, read as its token so that a serial past 2^53 is not rounded; 0 where there is none.
+fn whole(r: &Value, name: &str) -> u64 {
+    token(r, name).parse().unwrap_or(0)
+}
+
+fn object(members: Vec<(&str, Value)>) -> Value {
+    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+}
+
+fn strings(list: &[String]) -> Value {
+    Value::Array(list.iter().map(Value::string).collect())
+}
+
+fn notes_said(notes: Vec<String>) -> Value {
+    Value::Array(notes.iter().map(|n| Value::string(n.strip_prefix("scrape: ").unwrap_or(n))).collect())
+}
+
+/// The command as data, for a window that fronts it: `{"args": [...], "paths": [...], "sources": bool}` with the words
+/// after `scrape` (ls, plan, run, status, progress, wait, cancel, collections), answered in JSON; a failure is a status and words.
+/// See EmuSen_LibraryTools.md §9.
+pub fn ask(backend: &dyn Backend, request: &str) -> Result<String, (i64, String)> {
+    const BAD: i64 = -1163;
+    let r = json::parse(request).map_err(|e| (BAD, format!("the request is not JSON: {e:?}")))?;
+    let words: Vec<String> = match r.get("args") {
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        _ => return Err((BAD, "the request names no args".into())),
+    };
+    let paths: Vec<String> = match r.get("paths") {
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        _ => Vec::new(),
+    };
+    let bad = |w: String| (BAD, w);
+    let answer = match words.first().map(String::as_str).unwrap_or("") {
+        "progress" => {
+            let p = parse(&backend.progress(whole(&r, "since").min(ALL_SEEN)).map_err(bad)?).map_err(bad)?;
+            let said = if text(&p, "state") == "running" { Value::Null } else { let e = end_line(&p); Value::string(e.trim_end().strip_prefix("scrape: ").unwrap_or(e.trim_end())) };
+            object(vec![("progress", p), ("said", said)])
+        }
+        "collections" => parse(&backend.library_get(r#"{"what":"collections"}"#).map_err(bad)?).map_err(bad)?,
+        "wait" => object(vec![("serial", Value::number(backend.wait(whole(&r, "serial"), whole(&r, "timeout_ms").min(250) as u32)))]),
+        "cancel" => object(vec![("cancelled", Value::Bool(backend.cancel()))]),
+        "status" => object(vec![
+            ("quota", parse(&backend.get(r#"{"what":"quota"}"#).map_err(bad)?).map_err(bad)?),
+            ("account", parse(&backend.get(r#"{"what":"account"}"#).map_err(bad)?).map_err(bad)?),
+            ("developer", parse(&backend.get(r#"{"what":"developer"}"#).map_err(bad)?).map_err(bad)?),
+            ("progress", parse(&backend.progress(ALL_SEEN).map_err(bad)?).map_err(bad)?),
+        ]),
+        _ => {
+            let mut argv = vec!["scrape".to_string()];
+            argv.extend(words);
+            let line = parse_line(&argv).map_err(bad)?;
+            if line.sub == "status" {
+                return Err((BAD, "status takes nothing more".into()));
+            }
+            let (picked, per, notes) = if line.resume { (Vec::new(), HashMap::new(), Vec::new()) } else { choice(backend, &line, &paths, &|_| None).map_err(bad)? };
+            let systems: BTreeSet<String> = picked.iter().map(|g| g.system.clone()).collect();
+            let kinds = union(&per, &systems);
+            let kinds = if kinds.is_empty() { line.kinds.clone().unwrap_or_else(|| DEFAULT_KINDS.iter().map(|k| k.to_string()).collect()) } else { kinds };
+            match line.sub.as_str() {
+                "ls" => {
+                    let with_sources = r.get("sources") != Some(&Value::Bool(false));
+                    let mut games = Vec::new();
+                    for g in &picked {
+                        let mut fields = vec![("path", Value::string(&g.path)), ("system", Value::string(&g.system)), ("package", g.package.as_deref().map_or(Value::Null, Value::string))];
+                        if with_sources {
+                            let mut media = Vec::new();
+                            for k in per.get(&g.system).into_iter().flatten() {
+                                media.push((json::Text::new(k), source(backend, g, k).map_err(bad)?.map_or(Value::Null, |s| Value::string(&s))));
+                            }
+                            fields.push(("media", Value::Object(media)));
+                        }
+                        games.push(object(fields));
+                    }
+                    let per_value = Value::Object(systems.iter().map(|s| (json::Text::new(s), strings(per.get(s).map(Vec::as_slice).unwrap_or(&[])))).collect());
+                    object(vec![("games", Value::Array(games)), ("kinds", per_value), ("notes", notes_said(notes))])
+                }
+                "plan" => {
+                    let plan = parse(&backend.get(&plan_request(&picked, &kinds, line.overwrite)).map_err(bad)?).map_err(bad)?;
+                    let said = plan_lines(&plan, &kinds).1;
+                    object(vec![("plan", plan), ("kinds", strings(&kinds)), ("said", Value::string(said.trim_end().strip_prefix("scrape: ").unwrap_or(said.trim_end()))), ("notes", notes_said(notes))])
+                }
+                _ => {
+                    if picked.is_empty() && !line.resume {
+                        return Err((BAD, "no game is chosen, so nothing is asked".into()));
+                    }
+                    let since = number(&parse(&backend.progress(ALL_SEEN).map_err(bad)?).map_err(bad)?, "serial") as u64;
+                    let queued = match backend.start(&start_request(&picked, &line, &kinds)) {
+                        Ok(n) => n,
+                        Err((BUSY, _)) => return Err((BUSY, "a run is already going, started in EmuSen, a shell or another window; it is shown here as it goes".into())),
+                        Err(e) => return Err(e),
+                    };
+                    object(vec![("queued", Value::number(queued.max(0) as u64)), ("since", Value::number(since)), ("kinds", strings(&kinds)), ("notes", notes_said(notes))])
+                }
+            }
+        }
+    };
+    let mut out = String::new();
+    json::write_compact(&mut out, &answer);
+    Ok(out)
 }
 
 fn wait(call: &Call, backend: &dyn Backend, jobs: &mut Jobs) -> Answer {

@@ -322,6 +322,21 @@ unsafe extern "C" fn service_theme_kinds(r: *const u8, len: usize, out: *mut u8,
     unsafe { answer(16, system, out, out_len, || with(|h| theme_kinds(&h, system))) }
 }
 
+/// The `scrape` command as data for a window that fronts it, over the service's own table (EmuSen_LibraryTools.md §9).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scraping_command(r: *const u8, len: usize, out: *mut u8, out_len: usize) -> i64 {
+    let r = match unsafe { request(r, len) } {
+        Ok(r) => r,
+        Err(s) => return s,
+    };
+    let service = emusen_scrape_module::Service(&TABLE);
+    unsafe {
+        answer(17, r, out, out_len, || {
+            emusen_scrape_module::ask(&service, r).map_err(|(status, words)| if status == abi::BUSY as i64 { Error::Busy(words) } else { Error::BadRequest(words) })
+        })
+    }
+}
+
 /// Whether this library opened a scraper of its own, for the tests that hold a lend to one per process.
 pub fn opened_its_own() -> bool {
     matches!(*SLOT.read().unwrap_or_else(|p| p.into_inner()), Slot::Own { .. })

@@ -42,8 +42,8 @@ scrape: --kinds boxart: not a kind; the kinds are cover, screenshot, marquee, ti
 status 1
 action none
 $ scrape plan --missing wheel
-out 164
-scrape: --missing wheel: not a kind; the kinds are cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart, manual, video, or any
+out 190
+scrape: --missing wheel: not a kind; the kinds are cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart, manual, video, a list of them, any, or metadata
 status 1
 action none
 $ scrape run --resume --system snes

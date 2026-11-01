@@ -10,7 +10,8 @@ SYNOPSIS
     scrape wait [scrape<n>]
 
     choices: --system <es-de name>[,...]  --favorites  --collection <name>
-             --missing <kind>|any  <path>...  (and paths on standard input)
+             --missing <kind>[,...]|any|metadata  <path>...  (and paths on
+             standard input)
     options: --kinds <kind>,...|theme  --videos  --overwrite
              --region <region>  --language <language>  --threads <n>
 
@@ -29,6 +30,10 @@ DESCRIPTION
     Data lines go to standard output and notes to standard error, so each
     form pipes. Nothing is sent to ScreenScraper except by 'scrape run'.
 
+    The Scraper window and EmuSen's own Scrape Games ask the same command
+    as data through the platform library (emusen_scraping_command), so the
+    choice has one owner: this module (EmuSen_LibraryTools.md section 9).
+
   Choosing the games
     The games are the library's (AppSettings.RomDirectory) as the scan
     shelves them, with the packages and compressed discs beside it, each
@@ -40,8 +45,12 @@ DESCRIPTION
                       case
         --missing     only the games with no picture of the kind from any
                       source (the package, the store, an ES-DE folder, a
-                      picture placed by hand, OpenEmu's); 'any' means a
-                      game lacking at least one of the kinds asked
+                      picture placed by hand, OpenEmu's); a list of kinds
+                      means a game with none of them (ES-DE's "No game
+                      image" is miximage,screenshot,titlescreen,cover);
+                      'any' means a game lacking at least one of the kinds
+                      asked; 'metadata' a game with no description, edited
+                      or scraped (ES-DE's "No metadata")
         <path>        the named games only ("by hand"): a full path, a
                       path in the shell's tree, or one relative to the
                       library. Paths on standard input, one a line, are the

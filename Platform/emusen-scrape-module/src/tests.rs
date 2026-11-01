@@ -14,6 +14,7 @@ fn game(path: &str, system: &str) -> Game {
 struct Fake {
     theme: HashMap<String, String>,
     media: HashMap<(String, String), String>,
+    described: HashSet<String>,
     asked: RefCell<Vec<String>>,
 }
 
@@ -23,6 +24,9 @@ impl Backend for Fake {
         let r = json::parse(request).unwrap();
         Ok(match text(&r, "what") {
             "media" => self.media.get(&(text(&r, "path").to_string(), text(&r, "type").to_string())).map_or("null".to_string(), |s| format!("{{\"source\":\"{s}\",\"path\":\"/x\"}}")),
+            "metadata" if self.described.contains(text(&r, "path")) => r#"{"description":{"value":"A game.","source":"scraped"}}"#.into(),
+            "metadata" => r#"{"description":{"value":null,"source":"default"}}"#.into(),
+            "plan" => r#"{"games":2,"not_yet_asked":1,"asked_again":0,"max_requests":10,"expected_requests":4.2,"expected_mb":1.5,"requests_left_today":900,"time_ticks":1200000000,"usable":true}"#.into(),
             _ => "null".into(),
         })
     }
@@ -156,4 +160,47 @@ fn the_plan_result_end_and_status_print_plain_lines() {
 fn the_manifest_names_scrape_its_job_and_requires_the_service() {
     let m = ScrapeCommands.manifest();
     assert!(m.contains("\"id\":\"emusen.scrape\"") && m.contains("\"name\":\"scrape\"") && m.contains("\"name\":\"emusen.scrape\",\"major\":1,\"minor\":0,\"required\":true") && m.contains("\"jobs\":[\"scrape\"]"), "{m}");
+}
+
+#[test]
+fn missing_names_a_list_of_kinds_none_present_or_a_description() {
+    assert!(parse_line(&args("scrape ls --missing cover,video")).is_ok());
+    assert!(parse_line(&args("scrape ls --missing metadata")).is_ok());
+    assert!(parse_line(&args("scrape ls --missing cover,any")).unwrap_err().contains("--missing any: not a kind"));
+    let mut fake = Fake::default();
+    fake.media.insert(("/r/snes/a.sfc".into(), "screenshot".into()), "store".into());
+    fake.described.insert("/r/nes/c.nes".into());
+    let paths = |line: &str| choice(&fake, &parse_line(&args(line)).unwrap(), &[], &|_| None).unwrap().0.into_iter().map(|g| g.path).collect::<Vec<_>>();
+    assert_eq!(paths("scrape ls --missing cover,screenshot"), vec!["/r/nes/c.nes".to_string()]);
+    assert_eq!(paths("scrape ls --missing cover"), vec!["/r/snes/a.sfc".to_string(), "/r/nes/c.nes".into()]);
+    assert_eq!(paths("scrape ls --missing metadata"), vec!["/r/snes/a.sfc".to_string()]);
+}
+
+#[test]
+fn a_window_asks_the_same_choice_plan_and_run_as_data() {
+    let mut fake = Fake::default();
+    fake.media.insert(("/r/snes/a.sfc".into(), "cover".into()), "package".into());
+    let ls = json::parse(&ask(&fake, r#"{"args":["ls","--system","snes"]}"#).unwrap()).unwrap();
+    let Some(Value::Array(games)) = ls.get("games") else { panic!("no games") };
+    assert_eq!(games.len(), 1, "b.sfc is excluded from a wide choice");
+    assert_eq!(text(games[0].get("media").unwrap(), "cover"), "package");
+    assert!(games[0].get("media").unwrap().get("screenshot").unwrap().is_null());
+    assert!(matches!(ls.get("notes"), Some(Value::Array(n)) if n.iter().any(|n| n.as_str().unwrap().starts_with("1 game(s) marked"))));
+    let bare = json::parse(&ask(&fake, r#"{"args":["ls"],"sources":false}"#).unwrap()).unwrap();
+    assert!(matches!(bare.get("games"), Some(Value::Array(g)) if g.len() == 2 && g[0].get("media").is_none()));
+    let by_hand = json::parse(&ask(&fake, r#"{"args":["plan"],"paths":["/r/snes/b.sfc"]}"#).unwrap()).unwrap();
+    assert!(text(&by_hand, "said").starts_with("2 game(s), about 4 request(s)"), "{}", text(&by_hand, "said"));
+    assert!(fake.asked.borrow().iter().any(|a| a.contains("\"plan\"") && a.contains("/r/snes/b.sfc")), "a game named by hand is chosen though excluded");
+    assert!(!fake.asked.borrow().iter().any(|a| a.contains("\"priority\"")), "nothing is started before run");
+    let run = json::parse(&ask(&fake, r#"{"args":["run","--system","snes"]}"#).unwrap()).unwrap();
+    assert_eq!(token(&run, "queued"), "1");
+    assert!(fake.asked.borrow().last().unwrap().contains("\"priority\":\"console\""));
+    assert_eq!(ask(&fake, r#"{"args":["run","--system","n64"]}"#).unwrap_err().1, "no game is chosen, so nothing is asked");
+    assert!(ask(&fake, r#"{"args":["ls","--bogus"]}"#).unwrap_err().1.contains("--bogus is not an option"));
+    let status = json::parse(&ask(&fake, r#"{"args":["status"]}"#).unwrap()).unwrap();
+    assert_eq!(text(status.get("progress").unwrap(), "state"), "idle");
+    assert!(ask(&fake, r#"{"args":["progress"],"since":9223372036854775807}"#).is_ok(), "a since past every result is passed whole");
+    let progress = json::parse(&ask(&fake, r#"{"args":["progress"],"since":0}"#).unwrap()).unwrap();
+    assert!(text(&progress, "said").contains("game(s) idle"), "a run not going is said as the shell says its end");
+    assert!(matches!(json::parse(&ask(&fake, r#"{"args":["collections"]}"#).unwrap()).unwrap(), Value::Array(c) if c.len() == 1));
 }

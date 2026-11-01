@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 28u
+#define EMUSEN_PLATFORM_ABI_VERSION 29u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -302,6 +302,15 @@ typedef struct emusen_scraping_lend {
 } emusen_scraping_lend;
 
 int32_t emusen_scraping_lend(const emusen_scraping_lend *lend);
+
+/*
+ * Since 29: the scrape command as data, for a window that fronts it (EmuSen_LibraryTools.md, section 9). The request is
+ * {"args": [...], "paths": [...], "sources": bool}, args the words after "scrape" (ls, plan, run, status, progress,
+ * wait, cancel, collections), and the answer JSON by the length-query idiom: the games the module chooses with each kind's source,
+ * the plan, a started run, the status. The choice is the emusen.scrape module's own, over the same service as a shell's.
+ * A failure is a status of emusen_scrape.h, its words read with emusen_scrape_last_error on the same thread.
+ */
+int64_t emusen_scraping_command(const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 
 /* ---- Soft patches (EmuSen_GamePackages.md, sections 5.4 and 15; since 26) ---- */
 

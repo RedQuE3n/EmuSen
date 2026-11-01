@@ -292,16 +292,16 @@ int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
  * process whose host has ever lent one. A lend or withdrawal waits for the service's calls in flight, so the host may
  * close its handles once it returns.
  */
-typedef struct emusen_scraping_lend {
+typedef struct emusen_scraping_lend_info {
     uint32_t size;
     struct emusen_scrape *scraper;
     struct emusen_library *library;
     const uint8_t *systems; size_t systems_len;
     int64_t (*theme_kinds)(void *ctx, const uint8_t *system, size_t len, uint8_t *out, size_t out_len);
     void *ctx;
-} emusen_scraping_lend;
+} emusen_scraping_lend_info;
 
-int32_t emusen_scraping_lend(const emusen_scraping_lend *lend);
+int32_t emusen_scraping_lend(const emusen_scraping_lend_info *lend);
 
 /*
  * Since 29: the scrape command as data, for a window that fronts it (EmuSen_LibraryTools.md, section 9). The request is

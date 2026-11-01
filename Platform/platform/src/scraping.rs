@@ -19,7 +19,7 @@ pub const MINOR: u32 = 0;
 /// The host's theme loader: the media types its active theme draws for a system, by the length-query idiom.
 pub type ThemeKinds = unsafe extern "C" fn(*mut c_void, *const u8, usize, *mut u8, usize) -> i64;
 
-/// `emusen_scraping_lend`'s struct, as `emusen_platform.h` lays it out.
+/// `emusen_scraping_lend_info`, as `emusen_platform.h` lays it out.
 #[repr(C)]
 pub struct Lend {
     pub size: u32,

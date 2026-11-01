@@ -14,7 +14,8 @@ measurements are `EmuSen_BigPicture.md`; the toolkit's side of every token is Lu
 
 **Reading order.** §1 for the idea, §2 for the structure, §3 for the frame, §4 for the six screens, §5 for the visual
 language, §6 for the forms, §7 for themes, §8 for accessibility, §9 for what becomes of what is built, §10 for the
-build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for the sources. A bracketed number cites a source in §13.
+build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for the sources, §14 for Cores redesigned, §15 for the
+family's screens held against the grammar. A bracketed number cites a source in §13.
 
 **Units.** One design unit is one pixel at 1280 × 800; the big-screen form scales with the screen's height (× 1.5 at
 1920 × 1200, on a monitor and on the handheld alike), as `MenuPanel.Scale` does. Desktop measurements are device pixels
@@ -572,3 +573,268 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 25. WCAG 2.1, Understanding 2.3.3 Animation from Interactions, https://www.w3.org/WAI/WCAG21/Understanding/animation-from-interactions.html
 26. Playnite, "Comparison with other software", https://api.playnite.link/docs/manual/gettingStarted/comparisonWithOtherSoftware.html ; LaunchBox Premium, https://www.launchbox-app.com/premium
 27. The Barlow project, https://github.com/jpt/barlow (fonts and licence fetched 2026-11-01)
+
+---
+
+## 14. Cores, redesigned (2026-11-01)
+
+Decided 2026-11-01 by the tester, after seeing the Cores window of `EmuSen_Cores.md` §9.1 on the big screen: it is
+rebuilt on the frame of §3 as a screen of its own, in the form of screen 5 (§4) with the detail beside the content.
+The stage U7 of §10 had given the four tools only a header row; this section is the screen that stage lacked,
+written for Cores and, in §15, held against the other tools.
+
+### 14.1 The window as built, measured
+
+Recorded on 2026-11-01 from `WindowFitAuditTests`' five Cores states at 1280 × 800 and 1920 × 1200 (the pictures under
+`~/.cache/emusen/probe/window-look/trials/cores-redesign/`; the recording `CoresDetail-1280x800.spec`). **[M]**
+
+1. The tool is drawn inside the centred sheet frame, 812 × 668 at 1280 × 800: 63 per cent of the width and 83 per
+   cent of the height, with the title `CORES` alone taking 100 of the 668.
+2. The section strip holds 23 chips (All, every console, then Installed, Available, Updates, Waiting for Approval, Not
+   Supported); four are drawn whole at 1280 × 800 and the rest are reached only by stepping.
+3. The list has three columns, Mark, Core and State; a libretro core's `.info` name is cut in the row (`Sony -
+   PlayStation 2 (LRPS2, the PCSX2 lib…`), and nothing in the row says which cores ship with EmuSen.
+4. The detail is a page under A, scrolling, whose lines are the tool's facts as it holds them: the firmware line with
+   the `.info`'s path (`pcsx2/bios/ps2.bin`), `Notes: (!) needs a BIOS · disc images by path`, the address and the
+   index's CRC-32, the whole SHA-256 on one line.
+5. Nine buttons in two rows (Install, Update, Remove, Approve…, Make Default, Options…, Verify, Check for Updates, Mark)
+   stand between the list and the apply bar, and the page repeats four of them; two help bars are drawn, the frame's
+   hint bar inside the sheet and the host's below it.
+6. The common path, installing and approving one core, is Mark, Apply…, Apply, then Open, then Approve… on the page,
+   then the dialog: six presses after finding the row, with the approval two levels down.
+
+The cause is that the window was built on `ManagerLayout` before §4 existed, and §9 then let the tools "gain the header
+role … without changes of their own". A tool is a destination (§2.6) and takes the screen as Packages' screen 5 does.
+
+### 14.2 The screen
+
+The big-screen form, full screen in the safe area, dark unless the player chooses light, at scale height / 800. Positions
+in design units at 1280 × 800; at 16:9 the extra width goes to the list and the pane in the same shares.
+
+| Element | Position, size | Content |
+|---|---|---|
+| Header (§3.2) | 64,40 1152 × 48 | `CORES` in Title; facts right-aligned in Caption Muted: `17 cores · 5 installed · ↑ 1 update · catalogue read 31 Oct 2026`, a count needing the player in Attention with `⚠` (`⚠ 1 to approve`) |
+| Section strip | 64,100 1152 × 44 | the consoles only: `ALL`, then each console the runtime names, in the systems table's order; the search box 240 × 44 at the right, opening the docked keyboard |
+| List | 64,160 691 × 432 | eight rows of 54 on InputSurface; columns Core (star), Console, Status (§14.3); `FitsWidth` |
+| Apply bar | 64,610 691 × 88 | the frame's two lines under the list: the summary, the last outcome, or the progress bar and its line; then `Apply…` 170 × 44 with the Start glyph, the space meter 200 × 12 and `/Cores 54 MB · 410 GB free` |
+| Pane | 771,160 445 × 538 | SurfaceRaised, radius 8, padding 24: the focused core in sentences (§14.4), spanning the list and the apply bar |
+| Help bar | 0,702 1280 × 58 | generated from the roles and the focused row's actions (§14.5) |
+
+The content's share is 0.6 (`AdaptiveLayout.ContentShare`), the detail beside it (`DetailPlacement.Beside`, LunaP
+§205.5). The pane spans the content and the status rows, which the frame's big-screen arrangement does not yet do
+(§14.9). Measured in the mockup at 1280 × 800: the name column 302–331 units, the console column 167–195, the status
+column 117–150; a fourth column (the source) would leave the name 150, under `Mupen64Plus-Next`'s 190, so the source is
+said in the pane and in the status words instead. **[M]**
+
+### 14.3 The list: one list, built in and hosted together
+
+Every core EmuSen can run, in one list: the project's, libretro's and the player's own. Rows are ordered by console in
+the strip's order, then the console's default first. The name shown is the core's own, `Snes9x`, `Nestopia UE`, `PCEE2`:
+a libretro core's `corename`, which `EmuSen_Cores.md` §4.1 records as information and which the hosted list's `Core`
+column already uses; the `.info`'s display name (`Nintendo - SNES / SFC (Snes9x - Current)`) is in the pane's caption.
+The status words, one owner (`CoresWords.Status`), a glyph beside a word (§5.7):
+
+| Status | Colour | Meaning |
+|---|---|---|
+| `● Default` | Text | the console's engine, whoever made it |
+| `Built in` | Muted | ships with EmuSen, not the default |
+| `✓ Installed` | Success | a hosted core installed and approved |
+| `↑ Update` | Attention | the index offers a newer build |
+| `⚠ To approve` | Attention | installed, or added by the player, and not approved |
+| `Available` | Muted | listed, not installed |
+| `Not supported` | Muted | the host cannot run it; the pane says why |
+| `Installing…`, `Updating…`, `Removing…` | Muted | while its job runs |
+
+A player's own core reads as the others do; the pane's first line says `Added by you`. The desktop's table keeps a
+Source column (§14.7). A marked row shows its mark's word in Accent in the status column (`install`, `update`,
+`remove`); the frame's mark box is not drawn on an unmarked row (Q4 of §14.10).
+
+### 14.4 The pane: what the player is told
+
+The focused core in sentences, Body 22, each fact once and in order, with nothing raw: no address, path, CRC-32, hash,
+`corename` or `.info` line appears here (they are the core's Details page, §14.5). The title is the core's name in Title;
+the caption in Caption Muted its source, console and, for a libretro core, the name libretro lists it under.
+
+1. What it runs, and through what: `Runs PlayStation 2 games.` for a project core, `… through EmuSen's libretro host, in
+   a sandbox of its own.` for a hosted one.
+2. Who made it, under what licence, and the build: `By the PCSX2 Team, under the GPLv3. Nightly build of 31 October
+   2026, 41 MB, downloaded today.`; for a project core `Built into EmuSen and updated with it, so there is nothing to
+   install or approve. Version 0.44.`
+3. Firmware, rewritten for the player: the console's firmware in the console's words from the systems table (`a
+   PlayStation 2 BIOS`), whether it is required or optional, that EmuSen never downloads it, and then on its own line
+   `✓ You have one.` in Success or `⚠ None found yet. Firmware, under X, says where it goes.` in Attention, from the
+   firmware settings' recognition by content (`EmuSen_Cores.md` §4.5). The `.info`'s `firmwareN_path` is never shown.
+4. The trust state: `⚠ Waiting for your approval. Nothing downloaded runs until you approve it.` in Attention; `✓
+   Approved on 1 November 2026, held to its hash.` in Success; `Not supported: it needs OpenGL, and EmuSen's host
+   draws through software and Vulkan.`; nothing for a project core.
+5. What the project found: `This exact build was tested by EmuSen on <date>.`, `An earlier build was tested on
+   <date>.` or `Not tested by EmuSen.`, Muted.
+6. The default: `● The PlayStation 2's engine: every PlayStation 2 game opens on it unless the game's own options choose
+   another.`; for an update, `A newer build of <date> is offered; the build installed now is kept for Roll Back.`; where
+   a build is kept, `The build of <date> is kept for Roll Back.`
+7. While a job runs, the steps as `EmuSen_Cores.md` §5.2 orders them, ticked as each `checked` event arrives: `✓ Secure
+   connection to buildbot.libretro.com`, `↓ Download · 18 MB of 41 MB`, then `Checksum, one file of the right name, its
+   size`, `Built for this machine`, `SHA-256 recorded`, and `Then it waits for your approval`.
+
+The mockups hold the longest case (a hosted core waiting for approval, with firmware and a tested line) inside the pane
+at both sizes with 60 units to spare at 1280 × 800 **[M]**; the pane scrolls only for a core whose `.info` names several
+firmware files.
+
+### 14.5 The pad map
+
+The grammar of §2.1, with nothing window-specific: **A** does the focused row's one action, **X** opens the core's
+page, **Select** the list's tools, **the shoulders** step consoles, **Start** applies the marked changes, **B** goes
+back to Home. The help bar names A by its action, so the row says what A does.
+
+| Row's status | A | Help bar |
+|---|---|---|
+| Available | `Install…` | `A Install… · B Back · L1/R1 Console · X More · Select List · Start Apply…` |
+| To approve | `Approve…` | `A Approve… · …` |
+| Update | `Update…` | `A Update… · …` |
+| Installed, Built in, not the default | `Make Default` | `A Make Default · …` |
+| Default | `Options ▸` (the console's settings at this engine's options) | `A Options · …` |
+| Not supported, or a job running | nothing | `B Back · L1/R1 Console · Select List` |
+
+**X, the core's page**, in the same frame with the breadcrumb `Cores`: `Mark for install` (or update, or remove, so a
+batch is still made), `Options ▸`, `Firmware ▸` (the existing pane), `Verify`, `Roll Back…`, `Remove…`, `Revoke
+Approval…` (a core the player added, through the runtime's `core_revoke`), `Open Folder`, `Licence ▸` (the folder's
+licence text), `Details ▸` (every fact as the tool holds it: the address, the build and the date fetched, the index's
+CRC-32, the SHA-256 in groups of eight, the `corename`, the `.info`'s notes and permissions). Each row is offered only
+where it applies; a project core's page holds `Options ▸`, `Firmware ▸` and `Details ▸`.
+
+**Select, the List card** (§2.4's card over the list): `Search`, `Filter ◂ All ▸` (All · Installed · Available ·
+Updates · To approve · Not supported, the five state chips of §14.1), `Sort ◂ Console ▸` (Console · Name · Status),
+`Check for Updates`, `Update All…`, `Verify All`. The filter and the sort apply across the chosen console section; the
+context pane shows the current filter in words.
+
+**Start** opens the plan for the marked rows, as the frame does, in the question form of §14.6, and is named in the help
+bar only while something is marked.
+
+### 14.6 The question form
+
+One form for every question the tool asks, the plan included: a centred sheet (`SheetLayer`'s, §3.2) 720 wide on
+SurfaceRaised with the Border edge, over the screen under the Scrim; the question in Title (`Approve PCEE2?`, `Install
+PCEE2?`, `Apply 3 changes?`); the sentences in Body; then two rows, `No` first and focused, `Yes`; the help bar `A Choose
+· B No`. B answers No. The approval's sentences are `CoreApproval.Message`'s, rewritten in this register: what it is and
+where it came from; by whom, under what licence, for what consoles; for a downloaded core, that libretro signs no build,
+so approving trusts the build the buildbot served that day, that the hash holds EmuSen to exactly that build, and that
+EmuSen's own proxy runs it in a sandbox; that it runs with the player's permissions, and that a changed file is asked
+about again; what the project found of this build; and the SHA-256 in groups of eight on two lines, in Caption. The
+install question carries the plan's words (`EmuSen_Cores.md` §2.1). On the desktop the same words are a dialog with the
+verb on its buttons (`Not Now` / `Approve`, `Cancel` / `Install`), as desktop dialogs name them.
+
+### 14.7 The desktop form
+
+`ManagerLayout`'s desktop form in the tokens, with the same facts in the same words. The toolbar carries the focused
+row's action under its own name (`Install…`, `Approve…`, `Update…`, `Make Default`), then `Options…`, a `More ▾` menu
+holding the rows of the core's page, a separator and `Check for Updates`; the search box at its right with a `Show`
+dropdown beside it (All · Installed · Available · Updates · To approve · Not supported), the List card's desktop
+rendering. The sidebar lists `All` and the consoles. The table's columns: Core, Console, Source (`EmuSen`, `libretro`,
+`Added by you`), Version, Status, Size; the Default column is folded into Status. The detail beneath the table is the
+pane's sentences in Body 13, and holds no buttons; a right click on a row opens the `More` menu. Enter does what A does,
+Space marks, F6 moves between the roles. The approval and the plan are dialogs (§14.6).
+
+### 14.8 The tile on Home
+
+`Cores` on Home's places row (§4.1) with one live line, read offline from the runtime's `cores` listing and the core
+tool's `core-ls` (never a fetch): `⚠ 1 to approve` in Attention where a core waits, else `↑ 2 updates`, else `17 cores
+· 5 installed`. A opens the screen of §14.2; B returns to Home.
+
+### 14.9 What is retired, and what LunaP gains
+
+Retired from the window of §14.1: the centred sheet frame around the tool; the state chips in the strip; the Mark
+column as the first idiom, and X as its cycle; the detail page under A; the action row and the page's duplicate
+buttons; the raw lines; the lone-glyph Default column; the second help bar.
+
+Built in LunaP first, each an optional property or a minor version, each general to the kit and taken up by Packages,
+Scraper and Library next (§15):
+
+1. **A tool screen**: a host presents an `AdaptiveLayout` full screen in the safe area (`SheetLayer.ShowScreen`, or a
+   `Frame` the host owns), the sheet's centred panel kept for questions and the sheets not yet rebuilt.
+2. **The pane spanning the status**: in the Beside placement the detail column stands beside the content and the status
+   rows both, since the apply bar belongs to the list.
+3. **A row's action**: `ManagerLayout.ActionFor(row)` gives the `LunaAction` A invokes for the focused row, named in the
+   help bar in place of `Select`; null leaves A idle.
+4. **A row's page**: `ManagerLayout.PageFor(row)` gives the rows X opens as a page in the frame, the detail page's
+   mechanism with rows and a breadcrumb.
+5. **The question form**: the plan sheet drawn as §14.6 on the big screen, and `Ask(title, sentences)` for a tool's own
+   question, so the plan and the approval are one form.
+6. **The List card**: `AdaptiveLayout.ListTools`, a Card of Search, Filter and Sort over the content, with the tool's
+   list-wide actions as its further rows; the filters are `AdaptiveSection`s of a second kind, drawn on the desktop as a
+   dropdown beside the search box.
+
+Nothing in Cores reaches past these: `CoresPane` hands the frame its rows, status words, sentences, actions and
+questions, and the frame draws both forms.
+
+### 14.10 Questions
+
+1. **[decision]** A does the row's one action where the detail is beside the content, and opens the page where the
+   detail is a page: Cores acts, Packages (screen 5) opens. *Recommended:* yes, as a rule of the family, so that the
+   help bar's A always says which.
+2. **[decision]** The six kit pieces of §14.9, built in LunaP before `CoresPane` is touched. *Recommended:* yes.
+3. **[decision]** The tool screen (§14.9 item 1) replaces the centred sheet for all four tools at once, since the frame
+   is one control. *Recommended:* yes; each tool's states are re-recorded as it is rebuilt.
+4. **[routine]** The mark box drawn only on a marked row, as the mark's word in the status column. *Recommended:* yes;
+   on Cores a mark is the exception and A's action the rule.
+5. **[routine]** A libretro core named by its `corename` in the list, the `.info`'s display name in the pane.
+   *Recommended:* yes.
+6. **[routine]** The source said in the status words and the pane on the big screen, and as a column on the desktop,
+   rather than a fourth column at 1280 (§14.2). *Recommended:* yes.
+
+---
+
+## 15. The family's screens, held against the grammar (2026-11-01)
+
+Each window built or queued, checked against §2.1, §3 and §4 for the faults §14.1 found: a tool in the centred sheet,
+filters as a chip wall, a detail as a page of raw lines, actions as a wall of buttons. A short entry each; a mockup
+only where the change is large (Cores, §14).
+
+### 15.1 Built
+
+- **Packages** (screen 5, `EmuSen_Packages.md` §3). The same frame faults as Cores: the centred sheet, and a strip of
+  `All`, the consoles and three states (`Packaged`, `Not yet`, `Problems`). Changes: the tool screen; the three states to
+  the List card's Filter. Kept: A opens the package's page, since its detail is a list of files, patches and layers,
+  not sentences; X marks; Start applies. Five actions wrap on one line.
+- **Scraper** (`EmuSen_LibraryTools.md` §9). The strip holds two groups, the systems and the collections: the
+  collections are a filter and go to the List card; the systems stay on the shoulders. Three checkable actions
+  (`Theme`, `Videos`, `Overwrite`) are the run's options, not actions, and become the plan question's rows (`Scrape 41
+  games? Kinds ◂ The theme's ▸ · Videos ◂ Off ▸ · What is there ◂ Keep ▸`); `Mark All` goes to the List card; `Stop`
+  is the apply bar's while a run goes. The detail is the game's media as pictures, which the Beside placement fits.
+- **Library Manager** (`EmuSen_LibraryTools.md` §10). Six findings on the strip and no consoles: fits as it is. A
+  becomes the file's one action, `Hide` or `Show again`; X opens the file's page (`Show in File Manager`, its hashes and
+  matches); `Save List…` and `Check Again` go to the List card; `Stop` to the bar. The detail beside, in sentences
+  (what the file is, what it matches, which others are the same dump).
+- **Cores**: §14.
+
+### 15.2 Queued
+
+- **Themes** (a tile of §2.6). Three sheets today (`ThemeSettingsWindow`, `ThemeBrowserWindow`, `ThemeDetailWindow`)
+  become one screen on the frame with `TileGrid` content (§3.2, U4–U5) and the detail beside: the theme's picture,
+  licence, variants and colour schemes; A uses the focused theme, X opens its page (variants, font size, About, Remove),
+  the List card searches and filters installed from available. The nesting is the cramped pattern here.
+- **Controllers** (§2.7, Settings ▸ Controllers). `Players ▸`, `Bindings ▸`, `Profiles ▸` as rows fit the
+  SettingsLayout. The bindings page shows the controller drawing as content with the focused control's binding in the
+  pane, so the drawing carries regions and the pane the words: with four stick regions the drawing's labels fell under
+  the floor at 1280 × 800 (`EmuSen_Cores.md` §4.11). The per-console tabs retire; the console is the section.
+- **Display** (§2.7, screen 6). The rows and the preview pane fit as drawn. The shader window keeps a second,
+  hand-written arrangement for its sheet (`EmuSen_LibraryTools.md` §1a) and a sliders page: both become rows of
+  `Shader ◂ ▸` and a page of its levers, each row with the preview; the per-console profile lives under Consoles ▸ the
+  console ▸ `CRT profile`.
+- **Cheats** (§2.5, §2.6). Two windows today, the database (three lists: systems, games, cheats) and the active cheats:
+  the game in hand gets `Options ▸ Cheats` on its page, rows `◂ On ▸`; the database is a tool on the frame, the consoles
+  on the shoulders, games as rows, A opening the game's cheats as a page of rows, the List card searching. The three-list
+  sheet is the cramped pattern.
+- **Home and Setup** (screen 1, §1b). Fits as drawn; the places read `Library`, not `Library Manager`, at 150 wide.
+  Setup is the tools' panes in order under one header whose subtitle counts the steps (`Step 2 of 5`), `Next` on A and
+  `Back` on B, from the same descriptions.
+- **Mods, X8** (`EmuSen_Modding.md` §4). No form is declared yet. It is to be declared as roles before it is built: a
+  tool on the frame, the game's packs as rows switched `◂ On ▸` by A, X the pack's page, the detail beside with the
+  pack's preview; else it repeats §14.1.
+- **Debugger**. A desktop tool that needs a running game (`EmuSen_LibraryTools.md` §1b); no big-screen form, so the
+  pad grammar does not apply; the fit audit holds it at 1280 × 800 and 1920 × 1200 as every window.
+- **Settings' six sections, U6** (screen 6). Fit as drawn. `Consoles ▸` a console `▸ Engine ◂ ▸` is the same value as
+  Cores' `Make Default` (one setting, two doors, `EmuSen_Cores.md` §4.3); the Consoles section lists every console as a
+  row, eight visible, the rest scrolling; `Rumble` only where it is reported (§12).
+- **A game's page, U4** (screen 3). Fits as drawn at both sizes and at 1280 × 720, where the scale by height gives the
+  same units with more width. Its Options rows take their values from Cores (`Engine ◂ Diamond (EmuSen, default) ▸`),
+  the longest value 360 units at Row 26, inside a 1152 row.

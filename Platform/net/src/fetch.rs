@@ -36,11 +36,14 @@ pub struct Request {
     pub test_connect: Option<SocketAddr>,
     /// Every request refused before anything is sent, in the words of WiseMan's `NoNetwork`: a test harness only.
     pub offline: bool,
+    /// Redirects followed only to the request's own scheme, host and port; one elsewhere fails the fetch before it is
+    /// followed (EmuSen_Cores.md §5.2: a core is fetched from the buildbot and nowhere else).
+    pub same_host: bool,
 }
 
 impl Request {
     pub fn new(url: impl Into<String>, timeout: Duration) -> Request {
-        Request { url: url.into(), timeout, test_roots: Vec::new(), headers: Vec::new(), test_connect: None, offline: false }
+        Request { url: url.into(), timeout, test_roots: Vec::new(), headers: Vec::new(), test_connect: None, offline: false, same_host: false }
     }
 }
 
@@ -223,6 +226,9 @@ fn exchange(request: &Request, deadlines: &Deadlines, progress: &Progress) -> Re
         let status = response.status().as_u16();
         if redirects < REDIRECTS && matches!(status, 300 | 301 | 302 | 303 | 307 | 308) {
             if let Some(next) = target(&response, &url) {
+                if request.same_host && (next.scheme != url.scheme || next.host != url.host || next.port != url.port) {
+                    return Err(Failure::other(format!("The redirect from {} to {} was refused: this request follows redirects on its own host only.", url.authority(), next.authority())));
+                }
                 redirects += 1;
                 url = next;
                 continue;

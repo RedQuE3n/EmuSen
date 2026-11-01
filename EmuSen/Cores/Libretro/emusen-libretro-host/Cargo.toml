@@ -36,6 +36,11 @@ emusen-serenity = { path = "../../../../Platform/serenity" }
 # The run example's pictures at fixed frames, as PNG.
 emusen-crystal = { path = "../../../../Platform/crystal" }
 
+# emusen-native's test core painting the libretro test core's picture on a lent device (EmuSen_LibretroHost.md §10f).
+[[example]]
+name = "device_test_core"
+crate-type = ["cdylib"]
+
 [profile.release]
 panic = "abort"
 

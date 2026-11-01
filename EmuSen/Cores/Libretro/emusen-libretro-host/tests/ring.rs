@@ -7,12 +7,14 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use emusen_core_host::library::Library;
 use emusen_core_host::machine::{Create, Machine};
-use emusen_native::core::sys::{RingImage, RingLend, event, status};
+use emusen_native::core::sys::{DeviceLend, RingImage, RingLend, event, status};
+use emusen_serenity::lend::Lend;
 use emusen_serenity::ring::Ring;
 use emusen_serenity::vulkan::Device;
 
 static TURN: Mutex<()> = Mutex::new(());
 static LIB: OnceLock<&'static Library> = OnceLock::new();
+static DEVICE_CORE: OnceLock<&'static Library> = OnceLock::new();
 const STEM: &str = "testcore";
 const GAME: &[u8] = b"TCG1 a test game";
 
@@ -194,5 +196,146 @@ fn measure_the_ring_against_the_read_back_and_software() {
         if name == "ring" {
             m.ring_lend(None).unwrap();
         }
+    }
+}
+
+/// emusen-native's test core painting the libretro test core's picture on a lent device, this crate's example
+/// `device_test_core`, built first (`cargo build --example device_test_core`).
+fn device_core() -> &'static Library {
+    DEVICE_CORE.get_or_init(|| {
+        let suffix = emusen_core_entry::library_suffix();
+        let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let path = deps.parent().unwrap().join("examples").join(format!("libdevice_test_core.{suffix}"));
+        Library::load(&path).unwrap_or_else(|e| panic!("{e:?}: build the example device_test_core first"))
+    })
+}
+
+/// What the core is lent, as the ABI's `emusen_device_lend` holds Serenity's lend.
+fn device_lend_of(lend: &Lend) -> DeviceLend {
+    let l = lend.lent();
+    let gipa = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn()>(l.get_instance_proc_addr) };
+    DeviceLend { size: size_of::<DeviceLend>() as u32, api_version: l.api, get_instance_proc_addr: Some(gipa), instance: l.instance, physical_device: l.physical, device: l.device, queue_family: l.family, queue_index: l.queue, host_queue_family: l.host_family, reserved: 0, done: l.done }
+}
+
+/// The test core's image whose payload begins with `PAINTED`.
+fn painted_image() -> Vec<u8> {
+    let payload = [0xD1u8, 1, 2, 3];
+    let mut v = b"V1TC".to_vec();
+    v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+    v.extend_from_slice(&payload);
+    v
+}
+
+/// After `advance`, the device core's picture taken into the lend's ring on the emulation thread; its record.
+fn take(m: &mut Machine, lend: &Lend) -> emusen_native::core::sys::DeviceFrame {
+    let f = m.frame_device().unwrap().expect("the picture is on the lent device");
+    assert!(lend.take(f.buffer, f.offset, f.width as u32, f.height as u32, f.stride as u32, f.ready, f.value).unwrap());
+    f
+}
+
+fn press(n: usize) -> Option<u32> {
+    match n % 7 {
+        3 => Some(1),
+        5 => Some(0),
+        _ => None,
+    }
+}
+
+#[test]
+fn the_v1_test_cores_device_picture_is_the_libretro_test_cores_software_picture() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let lend = Lend::new(&gpu).unwrap();
+    let lent = device_lend_of(&lend);
+    let image = painted_image();
+    let mut v1 = Machine::create(device_core(), &Create { device: Some(&lent), ..Create::new(&image) }).unwrap_or_else(|r| panic!("{r:?}"));
+    let mut lr = make("");
+    for n in 0..130usize {
+        if let Some(mask) = press(n) {
+            v1.set_buttons(0, mask, 1).unwrap();
+            lr.set_buttons(0, mask, 1).unwrap();
+        }
+        v1.advance().unwrap();
+        lr.advance().unwrap();
+        let f = lr.frame_info().unwrap();
+        let mut all = vec![0u8; lr.frame_bytes().unwrap()];
+        lr.frame_copy(&mut all).unwrap();
+        let want: Vec<u8> = (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4].to_vec()).collect();
+        let d = take(&mut v1, &lend);
+        assert_eq!((d.width, d.height, d.value), (f.width, f.height, n as u64 + 1), "frame {n}'s record");
+        let taken = lend.claim(0).expect("the copy is claimed");
+        let got = lend.read(&taken).unwrap();
+        lend.release();
+        assert!(got == want, "frame {n}: the device picture differs from the libretro test core's");
+        let mut copy = vec![0u8; v1.frame_bytes().unwrap()];
+        v1.frame_copy(&mut copy).unwrap();
+        assert!(copy == want, "frame {n}: frame_copy differs from the device picture");
+    }
+    lend.settle().unwrap();
+}
+
+/// The acceptance measurement of stage 3 (§10f): the ring against DEVICE_PICTURE on one picture, the libretro test
+/// core's 320 by 240, for the emulation thread's cost (advance and the sound drained, then frame_ring, or frame_device
+/// and the lend's take)
+/// and the delay from set_buttons to the picture in host memory (Ring::read, or the lend's read). Run with --ignored
+/// --nocapture.
+#[test]
+#[ignore]
+fn measure_the_ring_against_device_picture() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let frames = 600usize;
+    let stats = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        (v.iter().sum::<f64>() / v.len() as f64, v[v.len() / 2], v[v.len() * 99 / 100])
+    };
+    for name in ["ring", "device picture"] {
+        let ring = gpu.create_ring(640, 480, 3).unwrap();
+        let (rlend, _keep) = lend_of(&ring);
+        let lend = Lend::new(&gpu).unwrap();
+        let lent = device_lend_of(&lend);
+        let image = painted_image();
+        let mut m = if name == "ring" {
+            let mut m = make("tc_hw=vulkan");
+            m.ring_lend(Some(&rlend)).unwrap();
+            m
+        } else {
+            Machine::create(device_core(), &Create { device: Some(&lent), ..Create::new(&image) }).unwrap()
+        };
+        let (mut cost, mut delay, mut sound) = (Vec::new(), Vec::new(), vec![0i16; 8192]);
+        for n in 0..frames {
+            let pressed = n % 10 == 5;
+            let t0 = std::time::Instant::now();
+            if pressed || n % 10 == 6 {
+                m.set_buttons(0, if pressed { 1 } else { 0 }, 1).unwrap();
+            }
+            let t1 = std::time::Instant::now();
+            m.advance().unwrap();
+            m.audio_drain(&mut sound).unwrap();
+            let shown = if name == "ring" { m.frame_ring().unwrap() } else { None };
+            if name != "ring" {
+                take(&mut m, &lend);
+            }
+            let spent = t1.elapsed();
+            if let Some(f) = shown {
+                ring.read(f.slot as usize, f.value, f.width as u32, f.height as u32).unwrap();
+            } else {
+                let taken = lend.claim(0).unwrap();
+                lend.read(&taken).unwrap();
+                lend.release();
+            }
+            if n >= 60 {
+                cost.push(spent.as_secs_f64() * 1e3);
+                if pressed {
+                    delay.push(t0.elapsed().as_secs_f64() * 1e3);
+                }
+            }
+        }
+        let (c, d) = (stats(&mut cost), stats(&mut delay));
+        println!("{name:14}: emulation thread mean {:.3} median {:.3} p99 {:.3} ms; set_buttons to picture mean {:.3} median {:.3} p99 {:.3} ms", c.0, c.1, c.2, d.0, d.1, d.2);
+        if name == "ring" {
+            m.ring_lend(None).unwrap();
+        }
+        lend.settle().unwrap();
     }
 }

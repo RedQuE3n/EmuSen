@@ -1041,9 +1041,42 @@ out, so it overstates what a presenter that samples the slot would see.
 Through the broker the ring costs the emulation thread less than a software picture, since no picture crosses the
 socket; the press shows in the frame it was made in on every path, this core reading its pad in `retro_run`. A defect
 the first round proved: the read-back mapped host-visible memory that was not cached, and reading it cost 17.9 ms a
-frame; taking cached memory where offered brought it to 0.26 ms. **Not yet measured**: the same picture handed
-in-process by `DEVICE_PICTURE` on Serenity's lent device, the comparison §5.4a names; it needs a project core whose
-`DEVICE_PICTURE` picture is the test core's, which neither test core has yet.
+frame; taking cached memory where offered brought it to 0.26 ms. The comparison §5.4a names, against
+`DEVICE_PICTURE`, follows.
+
+**The ring against `DEVICE_PICTURE`, stage 3's acceptance check** (decided 2026-11-01). *One picture on both paths.*
+An image of emusen-native's test core whose payload begins with `PAINTED` (0xD1) draws the libretro test core's
+320 × 240 picture: red the column plus the frame, green twice the row plus forty for each life (three, one lost every
+60 frames, three again after none), blue the pad's low byte against the column divided by eight, alpha 255. Its machine
+keeps the picture in host memory for `frame_copy`; `device_test_core`, an example of `emusen-libretro-host` built from
+the same machine, claims `DEVICE_PICTURE` and hands it on the lent device: copied on the lent queue from host memory
+into one of two buffers both families read, after `done` has reached that buffer's last picture (§6.29 of
+EmuSen_CoreAPI.md). It is built here, where ash already is, so that none of the seven crates that build
+`v1_test_core` by path gains a Vulkan dependency; the shared machine names its painter through a `PAINTER` constant
+each includer sets, `None` but here. `the_v1_test_cores_device_picture_is_the_libretro_test_cores_software_picture`
+holds the two pictures equal over 130 frames with presses, so the formula written in both cores has one test as its
+owner across the two ABIs; a device picture of the wrong lives, a copy cut short and a picture handed under a stale
+value each fail it (seeded 2026-11-01).
+
+[M, 2026-11-01, the RX 6800 under RADV, release builds, 540 frames after 60 of warm-up, two rounds;
+`measure_the_ring_against_device_picture`, run with `--ignored`.] The cost is `advance` with the sound drained, then
+`frame_ring`, or `frame_device` and Serenity's `Lend::take` (the intake the emulation thread makes, §17 of
+EmuSen_DevicePicture.md); the delay is from `set_buttons` to the picture in host memory, by `Ring::read` or by
+`Lend::read`, the same check added to the lend.
+
+| Path | Cost, mean / p99 (ms), rounds 1 and 2 | Delay, mean / p99 (ms), rounds 1 and 2 |
+|---|---|---|
+| ring (libretro host, its core's own device) | 0.122 / 0.167; 0.121 / 0.153 | 0.257 / 0.328; 0.255 / 0.301 |
+| `DEVICE_PICTURE` (v1 test core, Serenity's lent device) | 0.100 / 0.168; 0.100 / 0.129 | 0.778 / 1.009; 0.797 / 1.233 |
+
+The ring costs the emulation thread 0.02 ms more a frame (the libretro host's calls, and its frame's one submission
+carrying the copy into the slot) and brings the press to host memory 0.52 ms sooner. The lent path makes three
+submissions on two queues (the core's upload on the lent queue, the intake's copy into Serenity's own buffers on its
+intake queue, the read) where the ring makes two (the core's copy into the slot, the read); the difference is put down
+to the extra copy and its crossing between queues, not separated further. **The ring is accepted**: within 0.02 ms of
+the lent device on the emulation thread, and sooner to the picture. A finding on the way: with its sound left
+undrained, the test core's queue, full at 65,536 values, dropped two from its front for every pair it made, and the
+first round's `DEVICE_PICTURE` cost read 0.66 ms; a host drains every frame, so the measurement does.
 
 **PCEE2 on Jak and Daxter through the ring** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
 the Rust host, `examples/run.rs` with `EMUSEN_RUN_RING=1`, PCEE2's `vulkan` renderer at `pcsx2_upscale_multiplier=1`,

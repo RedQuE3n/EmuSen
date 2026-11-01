@@ -33,6 +33,7 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::DEVICE_RING;
 
 pub const TEST_FAULTS: u64 = 0;
+pub const PAINTER: Option<MakePainter> = None;
 
 include!("common/test_core.rs");
 

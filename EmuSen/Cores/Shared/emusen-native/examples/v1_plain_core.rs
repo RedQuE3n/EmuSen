@@ -6,6 +6,7 @@ pub const TEST_NAME: &str = "V1PlainCore";
 pub const TEST_CAPABILITIES: u64 = 0;
 
 pub const TEST_FAULTS: u64 = 0;
+pub const PAINTER: Option<MakePainter> = None;
 
 include!("common/test_core.rs");
 

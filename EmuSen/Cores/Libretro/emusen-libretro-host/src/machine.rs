@@ -35,6 +35,8 @@ pub const STATUS_STATE_REFUSED: i32 = -16;
 pub const STATUS_FOLDERS: i32 = -17;
 
 static LIVE: AtomicBool = AtomicBool::new(false);
+/// The options a core declared while loading a game, kept in its folder for every later load (EmuSen_LibretroHost.md §4.7).
+const DECLARED_FILE: &str = "declared-options.txt";
 /// Held while the library initialises, so that a library-level call on another thread waits for its declarations.
 static INIT: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -122,6 +124,9 @@ pub fn ready() -> Result<&'static Library, String> {
         (lib.api.set_input_poll)(Some(front::input_poll));
         (lib.api.set_input_state)(Some(front::input_state));
         (lib.api.init)();
+    }
+    if let Ok(text) = std::fs::read_to_string(folders.root.join(DECLARED_FILE)) {
+        front::with_declared(|d| d.options.merge_text(&text));
     }
     front::flush_logs();
     Ok(lib)
@@ -848,6 +853,12 @@ impl Machine {
             }
         };
         machine.scan_saves();
+        if front::with_declared(|d| d.declared_late) {
+            let text = front::with_declared(|d| d.options.to_text());
+            if let Err(e) = std::fs::write(folders.root.join(DECLARED_FILE), text) {
+                v1::log(v1::Level::Warn, "libretro", &format!("the options declared at load could not be kept: {e}"));
+            }
+        }
         front::flush_logs();
         Ok(machine)
     }

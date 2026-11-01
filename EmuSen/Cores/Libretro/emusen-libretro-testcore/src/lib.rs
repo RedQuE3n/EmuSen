@@ -366,6 +366,9 @@ const DESCRIPTORS: [(c_uint, &CStr); 6] = [(0, c"Cross"), (8, c"Circle"), (1, c"
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> bool {
     let options = Options::read();
+    if options::get("tc_late_option") == "on" {
+        options::declare_late();
+    }
     *FRAME_TIME_SUM.lock().unwrap() = 0;
     let mut core = Core::new(options.clone());
     if let Some(game) = unsafe { game.as_ref() }

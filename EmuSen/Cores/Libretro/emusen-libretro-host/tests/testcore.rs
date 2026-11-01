@@ -91,7 +91,8 @@ fn info_and_schema_describe_the_core_and_its_options() {
         assert!(info.contains(want), "{want} in {info}");
     }
     let schema = lib.settings_text().unwrap();
-    assert_eq!(schema.matches(r#""effect":"unrated""#).count(), emusen_libretro_testcore::OPTION_COUNT, "{schema}");
+    let unrated = schema.matches(r#""effect":"unrated""#).count();
+    assert!(unrated == emusen_libretro_testcore::OPTION_COUNT || unrated == emusen_libretro_testcore::OPTION_COUNT + 1, "every option, and the one declared at load once a game has loaded: {schema}");
     assert!(schema.contains(r#""category":"Picture""#) && schema.contains(r#""label":"Pixel format (in its category)""#), "{schema}");
     assert!(schema.contains(r#"{"value":"rgb565","label":"rgb565 (label)"}"#), "{schema}");
 }
@@ -438,3 +439,14 @@ fn a_disc_changes_through_the_cores_disk_control() {
     assert_eq!(m.media_lid(1, true), Err(status::NO_SUCH_DRIVE));
 }
 
+
+#[test]
+fn options_declared_while_loading_are_kept_for_the_next_load() {
+    let _t = turn();
+    let (_, root) = library();
+    let m = make("tc_late_option=on", 0b011);
+    assert!(m.setting_notes().unwrap().contains("declared options while loading the game"), "{}", m.setting_notes().unwrap());
+    let kept = std::fs::read_to_string(root.join(".data").join(STEM).join("declared-options.txt")).unwrap();
+    assert!(kept.contains("option\ttc_late\tprobe\tfirst\tDeclared at load"), "{kept}");
+    assert!(kept.contains("value\ttc_late\tsecond\tsecond (label)"), "{kept}");
+}

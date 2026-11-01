@@ -19,8 +19,9 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
-            Directory.CreateDirectory(FirmwareLibrary.Directory);
+            // The player's home/Firmware and a config of no chosen folder, which either runtime reads from the tree.
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            Directory.CreateDirectory(DataStore.Firmware);
             CoreDiscovery.UseDevelopment(false);
         }
 
@@ -67,16 +68,16 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(true)]
         public void A_bios_in_the_firmware_folder_under_the_cores_name_is_the_one_that_boots(bool sheet)
         {
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "bios_CD_U.bin"), new byte[0x2_0000]);
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "bios_CD_E.bin"), new byte[0x2_0000]);
-            Assert.Equal(new[] { $"[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin, in {FirmwareLibrary.Directory}" }, Load(Disc(sheet)));
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "bios_CD_U.bin"), new byte[0x2_0000]);
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "bios_CD_E.bin"), new byte[0x2_0000]);
+            Assert.Equal(new[] { $"[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin, in {DataStore.Firmware}" }, Load(Disc(sheet)));
         }
 
         [Fact]
         public void Without_one_the_session_says_it_runs_on_nephrites_own()
         {
             // A file of the wrong size is not the BIOS (EmuSen_Firmware.md §2.1).
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "bios_CD_U.bin"), new byte[0x1_0000]);
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "bios_CD_U.bin"), new byte[0x1_0000]);
             Assert.Equal(new[] { "[Firmware] The American Sega CD's BIOS (131,072 bytes): Nephrite's own replacement" }, Load(Disc(sheet: false)));
         }
 
@@ -84,8 +85,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Another_markets_bios_is_named_when_it_is_the_one_that_boots()
         {
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "bios_CD_E.bin"), new byte[0x2_0000]);
-            Assert.Equal(new[] { $"[Firmware] The European Mega-CD's BIOS (131,072 bytes): the player's bios_CD_E.bin, in {FirmwareLibrary.Directory}" }, Load(Disc(sheet: true)));
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "bios_CD_E.bin"), new byte[0x2_0000]);
+            Assert.Equal(new[] { $"[Firmware] The European Mega-CD's BIOS (131,072 bytes): the player's bios_CD_E.bin, in {DataStore.Firmware}" }, Load(Disc(sheet: true)));
         }
 
         // Each entry of a folder with its length and time written, and the folder's own time, to show nothing was written there.

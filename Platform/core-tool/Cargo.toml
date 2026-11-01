@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# Cores' tool: libretro's catalogue and index, the installed cores, and later their download and install, run as jobs. See EmuSen_Cores.md §1, §4.2 and §6.
+# Cores' tool: libretro's catalogue and index, the installed cores, their download, install, update, roll back, removal and verification, run as jobs. See EmuSen_Cores.md §1, §4.2 and §6.
 [lib]
 name = "emusen_core_tool"
 
@@ -14,6 +14,8 @@ emusen-core-entry = { path = "../core-entry" }
 emusen-tool-job = { path = "../tool-job" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-net = { path = "../net" }
+# The check that a library's header names this machine, the host's own (EmuSen_Cores.md §5.2 step 3).
+emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
 
 # A TLS server of the test's own on 127.0.0.1 with certificates made at test time, as emusen-net's tests have; the same pins.
 [dev-dependencies]

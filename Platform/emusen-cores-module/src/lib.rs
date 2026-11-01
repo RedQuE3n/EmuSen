@@ -1,5 +1,5 @@
-//! `emusen.cores`: `cores ls`, `cores info`, `cores fetch` and `cores wait`, each a job of the core tool reached through
-//! the `emusen.library` service from its minor 5. Plain lines that pipe; a job the line's budget cuts short goes on in
+//! `emusen.cores`: `cores ls`, `info`, `fetch`, `get`, `update`, `rollback`, `rm`, `verify` and `wait`, each a job of the
+//! core tool reached through the `emusen.library` service from its minor 5. Plain lines that pipe; a job the line's budget cuts short goes on in
 //! the background as `cores<n>`. What each word means is the tool's; this module asks and prints. See EmuSen_Cores.md
 //! §8 and `man cores`.
 
@@ -14,10 +14,10 @@ pub const MINOR: u32 = 5;
 pub const COMMANDS: &[(&str, bool, &str)] = &[(
     "cores",
     false,
-    "  cores ls [--installed|--available|--updates|--unsupported] [<console>]\n                                one line per libretro core: state, console, id, source, version, size, licence\n  cores info <core>             what is known of one core, as key: value lines\n  cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)\n  cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)",
+    "  cores ls [--installed|--available|--updates|--unsupported] [<console>]\n                                one line per libretro core: state, console, id, source, version, size, licence\n  cores info <core>             what is known of one core, as key: value lines\n  cores fetch                   libretro's catalogue and this platform's index fetched again (a network request)\n  cores get <core>...           download, check and install; prints the SHA-256 to approve\n  cores update [<core>...]      the installed cores the index offers a new build of, or those named\n  cores rollback <core>         the build kept by the last update put back in place\n  cores rm <core>...            a downloaded core removed, with its kept build; saves and settings stay\n  cores verify [<core>...]      each installed core checked against its NOTICE, the project's copies refreshed\n  cores wait [cores<n>]         follow a cores job that went on in the background (ps lists them, kill stops one)",
 )];
 
-const USAGE: &str = "Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores wait [cores<n>]\n  A core is named by its file's stem, as cores ls prints it. See man cores.";
+const USAGE: &str = "Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | cores info <core> | cores fetch | cores get <core>... | cores update [<core>...] | cores rollback <core> | cores rm <core>... | cores verify [<core>...] | cores wait [cores<n>]\n  A core is named by its file's stem, as cores ls prints it. See man cores.";
 
 pub struct CoresCommands;
 
@@ -48,6 +48,21 @@ pub fn request(args: &[String]) -> Result<String, String> {
         ["info", core] => Ok(compact(vec![("op", Value::string("core-info")), ("core", Value::string(*core))])),
         ["info", ..] => Err(format!("cores info: name one core\n{USAGE}")),
         ["fetch"] => Ok(compact(vec![("op", Value::string("core-fetch"))])),
+        [verb @ ("get" | "update" | "rollback" | "rm" | "verify"), names @ ..] => {
+            if let Some(o) = names.iter().find(|n| n.starts_with('-')) {
+                return Err(format!("cores {verb}: {o} is not an option of cores {verb}\n{USAGE}"));
+            }
+            match (*verb, names.len()) {
+                ("get" | "rm", 0) => return Err(format!("cores {verb}: name a core or more\n{USAGE}")),
+                ("rollback", n) if n != 1 => return Err(format!("cores rollback: name one core\n{USAGE}")),
+                _ => {}
+            }
+            let op = match *verb {
+                "rm" => "core-rm".to_string(),
+                v => format!("core-{v}"),
+            };
+            Ok(compact(vec![("op", Value::string(op)), ("cores", Value::Array(names.iter().map(|n| Value::string(*n)).collect()))]))
+        }
         _ => Err(USAGE.into()),
     }
 }
@@ -115,9 +130,59 @@ pub fn printed(e: &Value, listing: bool) -> Option<(bool, String)> {
         "core" if listing => Some((true, listing_line(e))),
         "core" => Some((true, info_lines(e).trim_end().to_string())),
         "fetched" => Some((true, format!("Fetched libretro's catalogue on {}: {} cores for this platform{}.", text(e, "date"), number(e, "cores"), match number(e, "skipped") { 0 => String::new(), n => format!(", {n} index lines not a core of it") }))),
+        "refused" if !text(e, "stem").is_empty() => Some((false, format!("cores: {}: {}", text(e, "stem"), text(e, "reason")))),
         "refused" => Some((false, format!("cores: {}", text(e, "reason")))),
+        "installed" => Some((true, installed_lines(e))),
+        "restored" => Some((true, format!("Rolled {} back to the build of {}, SHA-256 {}; the newer build is kept, and cores rollback {} returns to it.", text(e, "stem"), text(e, "build"), text(e, "sha256"), text(e, "stem")))),
+        "removed" => Some((true, removed_lines(e))),
+        "current" => Some((true, format!("{} is the build the index offers.", text(e, "stem")))),
+        "verified" => Some((true, verified_line(e))),
         "done" if listing && e.get("catalogue").is_some_and(Value::is_null) => Some((false, "cores: no catalogue yet; cores fetch reads it from buildbot.libretro.com".into())),
         _ => None,
+    }
+}
+
+/// What a finished install or update says: the hash to approve, as trust on first download, and what EmuSen tested.
+pub fn installed_lines(e: &Value) -> String {
+    let stem = text(e, "stem");
+    let updated = !text(e, "previous").is_empty();
+    let mut out = format!("{} {stem}, build {}, SHA-256 {}.\n", if updated { "Updated" } else { "Installed" }, text(e, "build"), text(e, "sha256"));
+    out.push_str("  Nothing downloaded runs until you approve it. libretro signs no build, so approving trusts the build the buildbot served, on first download, and the hash holds it to exactly that build.\n");
+    let tested = e.get("tested");
+    let date = tested.map_or("", |t| text(t, "date"));
+    out.push_str(&match tested.map_or("none", |t| text(t, "match")) {
+        "exact" => format!("  This exact build was tested by EmuSen on {date}.\n"),
+        "other" => format!("  Another build of it was tested by EmuSen on {date}; this one was not.\n"),
+        _ => "  Not tested by EmuSen.\n".into(),
+    });
+    if updated {
+        out.push_str(&format!("  The build before it is kept: cores rollback {stem} puts it back.\n"));
+    }
+    let revoke = strings(e, "revoke");
+    if !revoke.is_empty() {
+        out.push_str(&format!("  No longer on disk, their approvals now match no file: {}\n", revoke.join(" ")));
+    }
+    out.trim_end().to_string()
+}
+
+/// What a removal says: the folder gone, the player's saves and the core's settings kept, and the hashes it was approved by.
+pub fn removed_lines(e: &Value) -> String {
+    let mut out = format!("Removed {}; your saves and its settings are kept.", text(e, "stem"));
+    let revoke = strings(e, "revoke");
+    if !revoke.is_empty() {
+        out.push_str(&format!("\n  Approvals recorded for it, now matching no file: {}", revoke.join(" ")));
+    }
+    out
+}
+
+/// One `verify` result as a line that pipes: result, core, then the files refreshed or the reason.
+pub fn verified_line(e: &Value) -> String {
+    let (result, stem) = (text(e, "result"), text(e, "stem"));
+    match result {
+        "refreshed" => format!("refreshed {stem} {}", strings(e, "files").join(" ")),
+        "changed" => format!("changed {stem} {}", text(e, "reason")),
+        "added" => format!("added {stem} your own folder, not checked"),
+        _ => format!("{result} {stem}"),
     }
 }
 
@@ -288,7 +353,15 @@ mod tests {
         assert!(request(&args("cores ls --installed --updates")).unwrap_err().contains("or a second one"));
         assert!(request(&args("cores ls ps2 psx")).unwrap_err().contains("one console at most"));
         assert!(request(&args("cores info")).unwrap_err().contains("name one core"));
-        assert!(request(&args("cores get pcsx2")).unwrap_err().starts_with("Usage: cores"));
+        assert_eq!(request(&args("cores get pcsx2 mednafen_psx")).unwrap(), r#"{"op":"core-get","cores":["pcsx2","mednafen_psx"]}"#);
+        assert_eq!(request(&args("cores update")).unwrap(), r#"{"op":"core-update","cores":[]}"#);
+        assert_eq!(request(&args("cores rm pcsx2")).unwrap(), r#"{"op":"core-rm","cores":["pcsx2"]}"#);
+        assert_eq!(request(&args("cores rollback pcsx2")).unwrap(), r#"{"op":"core-rollback","cores":["pcsx2"]}"#);
+        assert_eq!(request(&args("cores verify")).unwrap(), r#"{"op":"core-verify","cores":[]}"#);
+        assert!(request(&args("cores get")).unwrap_err().contains("name a core or more"));
+        assert!(request(&args("cores rollback a b")).unwrap_err().contains("name one core"));
+        assert!(request(&args("cores verify --all")).unwrap_err().contains("not an option"));
+        assert!(request(&args("cores approve pcsx2")).unwrap_err().starts_with("Usage: cores"));
         assert!(request(&args("cores")).unwrap_err().starts_with("Usage: cores"));
     }
 
@@ -307,6 +380,18 @@ mod tests {
         assert_eq!(printed(&e(r#"{"event":"fetched","cores":5,"skipped":0,"date":"2026-10-31"}"#), false).unwrap().1, "Fetched libretro's catalogue on 2026-10-31: 5 cores for this platform.");
         assert!(printed(&e(r#"{"event":"done","op":"core-ls","counts":{},"catalogue":null}"#), true).unwrap().1.contains("cores fetch"));
         assert_eq!(printed(&e(r#"{"event":"done","op":"core-ls","counts":{},"catalogue":"2026-10-31"}"#), true), None);
+        let h = "a".repeat(64);
+        let installed = printed(&e(&format!(r#"{{"event":"installed","stem":"pcsx2","sha256":"{h}","build":"2026-10-31","previous":null,"revoke":[],"tested":{{"match":"exact","date":"2026-10-30"}}}}"#)), false).unwrap();
+        assert!(installed.0);
+        assert!(installed.1.starts_with(&format!("Installed pcsx2, build 2026-10-31, SHA-256 {h}.\n")), "{}", installed.1);
+        assert!(installed.1.contains("on first download") && installed.1.contains("This exact build was tested by EmuSen on 2026-10-30."));
+        let updated = printed(&e(&format!(r#"{{"event":"installed","stem":"pcsx2","sha256":"{h}","build":"2026-10-31","previous":"{h}","revoke":["{h}"],"tested":{{"match":"none"}}}}"#)), false).unwrap().1;
+        assert!(updated.starts_with("Updated pcsx2") && updated.contains("cores rollback pcsx2") && updated.contains("Not tested by EmuSen.") && updated.contains("match no file"));
+        assert_eq!(printed(&e(r#"{"event":"verified","stem":"pcsx2","result":"refreshed","files":["emusen-libretro-host.so","broker.target"]}"#), false).unwrap().1, "refreshed pcsx2 emusen-libretro-host.so broker.target");
+        assert_eq!(printed(&e(r#"{"event":"verified","stem":"pcsx2","result":"ok","sha256":"x"}"#), false).unwrap().1, "ok pcsx2");
+        assert_eq!(printed(&e(r#"{"event":"refused","stem":"pcsx2","reason":"no"}"#), false), Some((false, "cores: pcsx2: no".into())));
+        assert_eq!(printed(&e(r#"{"event":"removed","stem":"pcsx2","revoke":[]}"#), false).unwrap().1, "Removed pcsx2; your saves and its settings are kept.");
+        assert_eq!(printed(&e(r#"{"event":"checked","stem":"pcsx2","check":"crc32"}"#), false), None);
     }
 
     #[test]

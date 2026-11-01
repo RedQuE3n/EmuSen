@@ -1,0 +1,2 @@
+# The libretro builds EmuSen has tested, shown in Cores as information and never as a gate (EmuSen_Cores.md §4.6, decided 2026-10-31).
+# One build per line, tab-separated: stem, the date tested, the build's SHA-256, the conformance kit's result, one sentence.

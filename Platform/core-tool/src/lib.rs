@@ -1,11 +1,13 @@
 //! `emusen-core-tool`, Cores' tool (EmuSen_Cores.md §1): libretro's catalogue and index, the installed cores under
-//! `/Cores/libretro`, and the jobs that list, describe and fetch them, run on `emusen-tool-job` as the library tool's are
-//! (§6). Its words go out as JSON lines; the `cores` command and the Cores window are its faces.
+//! `/Cores/libretro`, and the jobs that list, describe, fetch, install, update, roll back, remove and verify them, run on
+//! `emusen-tool-job` as the library tool's are (§6). Its words go out as JSON lines; the `cores` command and the Cores window are its faces.
 
 pub mod catalogue;
 pub mod index;
 pub mod info;
+pub mod install;
 pub mod job;
+pub mod notes;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -64,4 +66,8 @@ pub struct Context {
     pub cores: PathBuf,
     pub source: Option<Source>,
     pub placement: Option<Placement>,
+    /// The folder holding this installation's libretro host and proxy, copied into each core's folder (EmuSen_Cores.md §5.3).
+    pub installation: Option<PathBuf>,
+    /// The builds the project tested (`cores-notes.tsv`).
+    pub notes: Vec<notes::Tested>,
 }

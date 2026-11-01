@@ -57,11 +57,13 @@ fn context() -> Context {
     Context { state_folder: states, sqlite, output, ..Context::pinned(tree, library, chdman()) }
 }
 
-/// The core tool's context: the player's `/Cores`, the buildbot for this platform, and no placement until the systems
-/// table's `for_libretro` lands, a request's own `"systems"` serving meanwhile (EmuSen_Cores.md §4.2).
+/// The core tool's context: the player's `/Cores`, the buildbot for this platform, this installation's folder for the
+/// libretro host and proxy, the shipped tested builds, and no placement until the systems table's `for_libretro` lands, a
+/// request's own `"systems"` serving meanwhile (EmuSen_Cores.md §4.2, §5.3).
 fn core_context() -> emusen_core_tool::Context {
     let cores = tree::tree().directory(tree::Directory::Cores).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from(path::combine(Style::HOST, &tree::user_home(), "Cores")));
-    emusen_core_tool::Context { cores, source: emusen_core_tool::Source::buildbot(), placement: None }
+    let installation = Some(std::path::PathBuf::from(tree::base_directory()));
+    emusen_core_tool::Context { cores, source: emusen_core_tool::Source::buildbot(), placement: None, installation, notes: emusen_core_tool::notes::parse(emusen_core_tool::notes::SHIPPED) }
 }
 
 /// The op a request names, read only far enough to route it.

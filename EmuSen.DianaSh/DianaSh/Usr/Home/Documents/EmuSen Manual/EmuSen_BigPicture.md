@@ -11660,10 +11660,15 @@ slot card beside the desktop's box serves the desktop's in-game menu alone.
 ### 49.6 Left, and why
 
 - **Sleep and shut down.** Decided 2026-11-01 that they appear only where EmuSen is the device's shell. Nothing in
-  EmuSen knows that today, nor offers a power call, so Power does not show them; a surface is proposed first.
+  EmuSen knows that today, nor offers a power call, so Power does not show them. Decided 2026-11-01 by the tester: they
+  stay off; a platform surface saying EmuSen is the session's shell, with the power calls beside it, is built when
+  EmuSen ships as a session shell, not before.
 - **Packages and Library Manager counts.** Packages' updates come from `pkg-ls` and suspect dumps from `rom-check`,
-  each a job over every file of the library; running one on every Start would be wrong. A count kept from the last
-  listing, offered by the platform library, is proposed first.
+  each a job over every file of the library; running one on every Start would be wrong. Decided 2026-11-01 by the
+  tester: the platform library keeps a summary from the last listing for the card to read, built with U7 (the tools'
+  tiles on Home, `EmuSen_Interface.md` §10). Until then their lines are descriptions.
+- **The game's page.** Decided 2026-11-01 by the tester: no Play row and the favourite on Y (§49.3), and a long name
+  cut with an ellipsis in the game's row, the pane showing it whole; U4's game page revisits both.
 
 ### 49.7 How it is held
 

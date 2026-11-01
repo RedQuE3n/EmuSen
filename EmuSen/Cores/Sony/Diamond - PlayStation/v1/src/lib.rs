@@ -296,11 +296,11 @@ impl Core for Diamond {
         }
     }
 
-    fn frame(&self) -> &[u8] {
-        match self.renderer_ref() {
-            Some(r) => r.handed().0,
-            None => self.machine.frame(),
+    fn frame(&mut self) -> &[u8] {
+        if self.renderer_ref().is_none() {
+            return self.machine.frame();
         }
+        self.renderer_ref().unwrap().handed().0
     }
 
     /// The renderer's picture where it lies on the lent device, this frame's; `None` with no renderer or no lend.

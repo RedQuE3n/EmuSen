@@ -23,6 +23,13 @@ pub const PAGES_PER_CLUSTER: usize = 2;
 pub const CLUSTER: usize = PAGE * PAGES_PER_CLUSTER;
 pub const CLUSTERS: usize = PAGES / PAGES_PER_CLUSTER;
 pub const CARD_LENGTH: usize = PAGES * RAW_PAGE;
+/// What every byte of an erased card holds, data and spare: a new card as the flash leaves it.
+pub const ERASED: u8 = 0xFF;
+
+/// The card as EmuSen keeps it, for every engine of the console alike: the medium's id, and the files' suffixes, slot 1's
+/// and slot 2's (EmuSen_SaveMedia.md §3.2; EmuSen_LibretroHost.md §10j).
+pub const MEDIUM: &str = "ps2.card";
+pub const SUFFIXES: [&str; 2] = [".ps2", ".2.ps2"];
 /// A directory entry's length, and the entries a cluster holds.
 pub const ENTRY: usize = 512;
 pub const ENTRIES_PER_CLUSTER: usize = CLUSTER / ENTRY;
@@ -171,7 +178,7 @@ pub fn write_page(image: &mut [u8], n: usize, data: &[u8; PAGE]) {
 
 /// Whether page `n` is erased: every byte, data and spare, FFh.
 pub fn erased(image: &[u8], n: usize) -> bool {
-    image[n * RAW_PAGE..(n + 1) * RAW_PAGE].iter().all(|&b| b == 0xFF)
+    image[n * RAW_PAGE..(n + 1) * RAW_PAGE].iter().all(|&b| b == ERASED)
 }
 
 /// The superblock's fields this crate reads (Ridge "Superblock").

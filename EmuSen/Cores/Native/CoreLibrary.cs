@@ -30,13 +30,24 @@ namespace EmuSen.Cores.Native
 
         private CoreLibrary(string path) => Path = path;
 
+        // The approved hash given to emusen_core_expect at load, where there was one - see EmuSen_CoreAPI.md §6.42.
+        public string? Expected { get; private set; }
+
         // The library at path, loaded and checked the first time it is asked for; the same object, and the same verdict, every time after.
-        public static CoreLibrary Open(string path) => Loaded.GetOrAdd(System.IO.Path.GetFullPath(path), full =>
+        // With expect, a library exporting emusen_core_expect is given that hash before any other call, and one loaded before under another approval is refused - see EmuSen_CoreAPI.md §6.42.
+        public static CoreLibrary Open(string path, string? expect = null)
         {
-            var library = new CoreLibrary(full);
-            library.Load();
-            return library;
-        });
+            var library = Loaded.GetOrAdd(System.IO.Path.GetFullPath(path), full =>
+            {
+                var made = new CoreLibrary(full);
+                made.Load(expect);
+                return made;
+            });
+            if (expect is null || library.Expected == expect || library.Export("emusen_core_expect") == 0) return library;
+            var refused = new CoreLibrary(library.Path);
+            refused.Refuse("was loaded in this process under another approval");
+            return refused;
+        }
 
         public bool Has(ulong capability) => (Capabilities & capability) == capability;
 
@@ -66,13 +77,21 @@ namespace EmuSen.Cores.Native
             catch (DecoderFallbackException) { return null; }
         }
 
-        private void Load()
+        private void Load(string? expect)
         {
             if (!File.Exists(Path)) { Refuse("not found"); return; }
             if (!NativeLibrary.TryLoad(Path, out nint handle)) { Refuse("could not be loaded"); return; }
             _handle = handle;
             var api = new CoreInterface(handle);
             Api = api;
+            if (expect is not null && api.Expect != null)
+            {
+                nint hash = Marshal.StringToCoTaskMemUTF8(expect);
+                int answer = api.Expect((byte*)hash);
+                Marshal.FreeCoTaskMem(hash);
+                if (answer != 0) { Refuse($"is not the build that was approved: {NotExpectedWords(api)}"); return; }
+                Expected = expect;
+            }
             if (api.AbiVersion == null) { Refuse("has no emusen_core_abi_version; it is not on the core ABI"); return; }
             AbiVersion = api.AbiVersion();
             if (AbiVersion >> 16 != CoreInterface.Major) { Refuse($"speaks core ABI major {AbiVersion >> 16}, this host major {CoreInterface.Major}"); return; }
@@ -110,6 +129,16 @@ namespace EmuSen.Cores.Native
             if (!claimed.SetEquals(listed)) return $"its info lists the capabilities {string.Join(", ", listed.Order())}, its bits {string.Join(", ", claimed.Order())}";
             if (info.HostRequires.FirstOrDefault(r => !CoreInterface.HostObligations.Contains(r)) is { } unknown) return $"it requires the host obligation {unknown}, which this host does not know";
             return null;
+        }
+
+        // A failed expect's words, which name both hashes; asked of status_text, which starts nothing of what the library serves.
+        private static string NotExpectedWords(CoreInterface api)
+        {
+            if (api.StatusText == null) return "it answered EMUSEN_NOT_EXPECTED";
+            var buffer = new byte[1024];
+            long n;
+            fixed (byte* b = buffer) n = api.StatusText(CoreInterface.StatusNotExpected, b, (nuint)buffer.Length);
+            return n > 0 ? Encoding.UTF8.GetString(buffer, 0, (int)Math.Min(n, buffer.Length)) : "it answered EMUSEN_NOT_EXPECTED";
         }
 
         private void SetCrashLog(CoreInterface api)

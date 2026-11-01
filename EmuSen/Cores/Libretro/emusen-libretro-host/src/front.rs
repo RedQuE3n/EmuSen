@@ -4,7 +4,7 @@
 //! (EmuSen_LibretroHost.md §1.1, §4).
 
 use std::ffi::{CString, c_char, c_int, c_uint, c_void};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU16, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use emusen_libretro_sys::{self as sys, env};
@@ -33,6 +33,22 @@ pub struct Declared {
     pub initialised: bool,
     /// Whether a machine has been made, after which a late declaration is noted.
     pub loaded_once: bool,
+    /// Whether the core took the rumble interface, so that each port declares its two motors (1.17).
+    pub rumble: bool,
+}
+
+/// Each port's two motors as the core last set them, strong then weak: atomics, since a core may set them from threads
+/// of its own between frames (EmuSen_LibretroHost.md §4.4).
+pub static RUMBLE: [[AtomicU16; 2]; crate::input::PORTS] = [const { [const { AtomicU16::new(0) }; 2] }; crate::input::PORTS];
+
+unsafe extern "C" fn set_rumble_state(port: c_uint, effect: c_int, strength: u16) -> bool {
+    match RUMBLE.get(port as usize).and_then(|p| p.get(effect as usize)) {
+        Some(motor) => {
+            motor.store(strength, Ordering::Relaxed);
+            true
+        }
+        None => false,
+    }
 }
 
 /// The private folders the core is given, as the C strings it is handed.
@@ -65,6 +81,10 @@ pub struct Shared {
     /// A frame refused because it is larger than the core declared, logged once.
     pub oversized: bool,
     pub drew_in_place: bool,
+    /// Since stage 3: the Vulkan context the core asked for, its negotiation interface, and its device once made.
+    pub hw: Option<crate::vulkan::Ask>,
+    pub negotiation: Option<sys::vulkan::retro_hw_render_context_negotiation_interface_vulkan>,
+    pub gpu: Option<Box<crate::vulkan::Gpu>>,
 }
 
 /// `retro_game_info_ext` and the strings it points into.
@@ -95,6 +115,9 @@ impl Shared {
             folders: None,
             oversized: false,
             drew_in_place: false,
+            hw: None,
+            negotiation: None,
+            gpu: None,
         }
     }
 }
@@ -173,7 +196,7 @@ pub unsafe extern "C" fn video_refresh(data: *const c_void, width: c_uint, heigh
         return;
     }
     if data == sys::HW_FRAME_BUFFER_VALID {
-        log(Level::Error, "the core handed a hardware frame, which this host does not draw yet".into());
+        hardware_frame(s, width, height);
         return;
     }
     if data as *const u8 == s.picture.buffer.as_ptr() {
@@ -193,6 +216,37 @@ pub unsafe extern "C" fn video_refresh(data: *const c_void, width: c_uint, heigh
         s.oversized = true;
         log(Level::Error, format!("a {width}x{height} frame is larger than the {}x{} the core declared; such frames are not shown", s.av.geometry.max_width, s.av.geometry.max_height));
     }
+}
+
+/// A frame on the core's device: in the ring, or read back into the picture; one larger than the ring's images is held
+/// and the larger maxima raised as `MACHINE_INFO` (EmuSen_LibretroHost.md §5.4).
+fn hardware_frame(s: &mut Shared, width: c_uint, height: c_uint) {
+    let Some(g) = s.gpu.as_mut() else {
+        log(Level::Error, "the core handed a hardware frame with no device made for it".into());
+        return;
+    };
+    let shown = g.frame(width, height);
+    for line in g.log.drain(..) {
+        log(Level::Warn, line);
+    }
+    let (w, h, bgra, larger) = match shown {
+        crate::vulkan::Shown::Bytes(w, h, bgra) => (w, h, bgra, false),
+        crate::vulkan::Shown::Larger(w, h, bgra) => (w, h, bgra, true),
+        // Its shape and number now, its bytes only when frame_copy asks (EmuSen_LibretroHost.md §10h).
+        crate::vulkan::Shown::Ring => return s.picture.drawn_unread(width, height),
+        crate::vulkan::Shown::Nothing => return,
+    };
+    let fits = w <= s.av.geometry.max_width && h <= s.av.geometry.max_height;
+    if larger || !fits {
+        s.av.geometry.max_width = s.av.geometry.max_width.max(w);
+        s.av.geometry.max_height = s.av.geometry.max_height.max(h);
+        if !fits {
+            s.picture = Picture::new(s.av.geometry.max_width, s.av.geometry.max_height, s.picture.format);
+        }
+        s.events.push((emusen_native::core::event::MACHINE_INFO, 0, 0));
+    }
+    let bytes = s.gpu.as_mut().unwrap().read(w, h, bgra);
+    s.picture.take(sys::PIXEL_FORMAT_XRGB8888, bytes, w, h, w as usize * 4);
 }
 
 pub unsafe extern "C" fn audio_sample(left: i16, right: i16) {
@@ -573,12 +627,55 @@ unsafe fn answer(cmd: c_uint, data: *mut c_void) -> bool {
             true
         }
         env::GET_DISK_CONTROL_INTERFACE_VERSION => unsafe { put(data, 1 as c_uint) },
-        env::SET_HW_RENDER => {
-            if let Some(h) = unsafe { (data as *const sys::retro_hw_render_callback).as_ref() } {
-                with_declared(|d| d.contexts_asked.push((h.context_type, h.version_major, h.version_minor)));
+        env::GET_RUMBLE_INTERFACE => {
+            if !unsafe { put(data, sys::retro_rumble_interface { set_rumble_state: Some(set_rumble_state) }) } {
+                return false;
             }
-            refuse(cmd)
+            if with_declared(|d| !std::mem::replace(&mut d.rumble, true))
+                && let Some(s) = s
+            {
+                s.events.push((emusen_native::core::event::MACHINE_INFO, 0, 0));
+            }
+            true
         }
+        env::SET_HW_RENDER => {
+            let Some(h) = (unsafe { (data as *const sys::retro_hw_render_callback).as_ref() }) else { return false };
+            if h.context_type != sys::HW_CONTEXT_VULKAN || s.is_none() {
+                with_declared(|d| d.contexts_asked.push((h.context_type, h.version_major, h.version_minor)));
+                log(Level::Warn, format!("the core asked for hardware context {}, and this host gives Vulkan only", h.context_type));
+                return false;
+            }
+            s.unwrap().hw = Some(crate::vulkan::Ask { reset: h.context_reset, destroy: h.context_destroy, version: (h.version_major, h.version_minor) });
+            true
+        }
+        env::SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE => {
+            let Some(n) = (unsafe { (data as *const sys::vulkan::retro_hw_render_context_negotiation_interface_vulkan).as_ref() }) else { return false };
+            let Some(s) = s else { return false };
+            if n.interface_type != sys::vulkan::INTERFACE_VULKAN {
+                return false;
+            }
+            // The v2 members exist only from version 2; an older interface is read up to destroy_device.
+            let mut copy = sys::vulkan::retro_hw_render_context_negotiation_interface_vulkan { create_instance: None, create_device2: None, ..*n };
+            if n.interface_version >= 2 {
+                copy = *n;
+            }
+            s.negotiation = Some(copy);
+            true
+        }
+        env::GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT => {
+            let Some(q) = (unsafe { (data as *mut [c_uint; 2]).as_mut() }) else { return false };
+            if q[0] != sys::vulkan::INTERFACE_VULKAN {
+                q[1] = 0;
+                return false;
+            }
+            q[1] = sys::vulkan::HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION;
+            true
+        }
+        env::GET_PREFERRED_HW_RENDER => unsafe { put(data, sys::HW_CONTEXT_VULKAN as c_uint) },
+        env::GET_HW_RENDER_INTERFACE => match s.and_then(|s| s.gpu.as_ref()) {
+            Some(g) => unsafe { put(data, g.interface() as *const c_void) },
+            None => false,
+        },
         _ => refuse(cmd),
     }
 }

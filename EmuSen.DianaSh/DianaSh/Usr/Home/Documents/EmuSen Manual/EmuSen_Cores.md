@@ -676,7 +676,8 @@ tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and t
 - **Make Default** writes `Engine` for the chosen section's console, else for each console the core runs; a libretro
   core gains it once discovery lists its engine. **Options…** opens the console's settings window (which shows the
   console's engine's options; it takes no engine of its own yet). **Verify** and **Check for Updates** are jobs.
-- **Hosted** by Mistress's `CoresWindow` from *Settings ▸ Cores…* and the pad's settings menu, framed in big picture,
+- **Hosted** by Mistress's `CoresWindow` from *Settings ▸ Cores…* and the pad menu's Library page (since 2026-11-01,
+  as a tenth Settings row would not fit the big panel, `EmuSen_Settings_Reference.md` §4.69.8), framed in big picture,
   with the pad mapped as Packages' host maps it.
 - Not in C4: the count of games choosing a core (○), the licence sheet, and firmware rows for EmuSen's own cores, whose
   firmware the runtime answers per game; *Revoke Approval* for a core the player added waits for the shell's service (Q12)

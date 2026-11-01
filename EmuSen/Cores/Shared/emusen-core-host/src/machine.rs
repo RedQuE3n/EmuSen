@@ -5,7 +5,7 @@
 use std::ffi::CStr;
 use std::ptr::NonNull;
 
-use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RawFrame, caps, status};
+use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RawFrame, RingFrame, RingLend, caps, status};
 
 use crate::library::{Library, text};
 
@@ -179,6 +179,23 @@ impl Machine {
     pub fn frame_device(&mut self) -> Result<Option<DeviceFrame>, Status> {
         let Some(f) = self.lib.exports().frame_device else { return Ok(None) };
         let mut out = DeviceFrame { size: std::mem::size_of::<DeviceFrame>() as u32, ..DeviceFrame::default() };
+        match unsafe { f(self.h(), &mut out) } {
+            1 => Ok(Some(out)),
+            0 => Ok(None),
+            e => Err(e),
+        }
+    }
+
+    /// `ring_lend` (since 1.18, `DEVICE_RING`): the host's ring lent, or withdrawn with `None`.
+    pub fn ring_lend(&mut self, ring: Option<&RingLend>) -> Result<(), Status> {
+        let Some(f) = self.lib.exports().ring_lend else { return Err(status::NOT_SUPPORTED) };
+        ok(unsafe { f(self.h(), ring.map_or(std::ptr::null(), |r| r as *const RingLend)) })
+    }
+
+    /// `frame_ring` (since 1.18): `None` where the core lacks it or this frame's picture is not in the ring.
+    pub fn frame_ring(&mut self) -> Result<Option<RingFrame>, Status> {
+        let Some(f) = self.lib.exports().frame_ring else { return Ok(None) };
+        let mut out = RingFrame { size: std::mem::size_of::<RingFrame>() as u32, ..RingFrame::default() };
         match unsafe { f(self.h(), &mut out) } {
             1 => Ok(Some(out)),
             0 => Ok(None),

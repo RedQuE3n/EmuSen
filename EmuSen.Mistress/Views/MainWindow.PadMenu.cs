@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string MainMenuTitle = "Main Menu", GameSettingsMenu = "Game Settings", LibraryMenu = "Library", SettingsMenu = "Settings", EmuSenMenu = "EmuSen";
-        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", CompressedDiscsMenu = "Compressed Discs", CoresMenu = "Cores", SwapPlayersRow = "Swap Players 1 and 2";
+        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", CompressedDiscsMenu = "Compressed Discs", PackagesMenu = "Packages", CoresMenu = "Cores", SwapPlayersRow = "Swap Players 1 and 2";
 
         // One page of the menu: its title (null for the first, whose title is the game's or Main Menu), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
@@ -114,6 +114,9 @@ namespace EmuSen.Mistress.Views
             if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
             AddCollectionMenuEntries(rows);
             rows.Add(new(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }) { Opens = true });
+            // Under Library, where a submenu's nine rows leave it room; a tenth under Settings ran past the big panel - see EmuSen_Settings_Reference.md §4.69.8.
+            rows.Add(Opens(PackagesMenu, ShowPackages));
+            rows.Add(Opens(CoresMenu, ShowCores));
             if (_bigScreen) rows.Add(Opens("Theme Settings", ShowThemeSettings));
             return rows;
         }
@@ -127,7 +130,6 @@ namespace EmuSen.Mistress.Views
             Opens("Cheats", ShowActiveCheats),
             Opens(MemoryCardsMenu, ShowMemoryCards),
             Opens(CompressedDiscsMenu, ShowCompressedDiscs),
-            Opens(CoresMenu, ShowCores),
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::lend::{self, Lend, Loan};
 use super::outbox::{Inner, Outbox, Route, library_log};
-use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, RawFrame, caps, event, flags, kind, status};
+use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, RawFrame, RingFrame, RingImage, RingLend, caps, event, flags, kind, status};
 use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
 use crate::debug;
 use crate::ffi::{Status, copy_text, input};
@@ -20,6 +20,8 @@ pub struct Instance<T> {
     seen: Seen,
     /// The loans standing, each by the drive whose disc it lent (BORROW, §6.24).
     loans: Vec<(u32, Arc<Loan>)>,
+    /// Since 1.17: each declared output as (port, output, level last raised, -1 for none), made when machine info is read.
+    outputs: std::cell::RefCell<Vec<(u32, u32, i32)>>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -78,6 +80,7 @@ pub fn shared_words(code: i32) -> Option<String> {
         status::LID_CLOSED => "the drive's lid is closed",
         status::WRONG_MEDIA => "the drive holds another disc than the state was made with",
         status::NO_SUCH_DRIVE => "no such drive",
+        status::NOT_EXPECTED => "the library serves other bytes than the approved build",
         c if (status::FAULT_BASE - 63..=status::FAULT_BASE - 1).contains(&c) => return Some(format!("a reproduced .NET exception, kind {}", status::FAULT_BASE - c)),
         _ => return None,
     };
@@ -153,6 +156,13 @@ fn observe<T: Core>(inst: &mut Instance<T>, state: bool) {
             }
         }
         inst.seen.sizes = now;
+    }
+    for (port, output, last) in inst.outputs.borrow_mut().iter_mut() {
+        let level = core.output_level(*port, *output) as i32;
+        if level != *last {
+            o.push_event(event::OUTPUT, ((*port as i64) << 32) | *output as i64, level as i64);
+            *last = level;
+        }
     }
     o.announce();
 }
@@ -438,7 +448,7 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
         Ok((core, loan)) => {
             let seen = measure(&core);
             let drive = core.drives().first().map_or(0, |d| d.drive);
-            let inst = Box::new(Instance { core, outbox, seen, loans: loan.map(|l| (drive, l)).into_iter().collect() });
+            let inst = Box::new(Instance { core, outbox, seen, loans: loan.map(|l| (drive, l)).into_iter().collect(), outputs: Default::default() });
             inst.outbox.borrow_mut().announce();
             (Box::into_raw(inst) as *mut Machine, 0)
         }
@@ -491,9 +501,12 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         named: &core.named_files(),
         audio_rate_exact: core.audio_rate_exact(),
         snapshot_offered: core.snapshot_offered(),
+        outputs: &[],
     };
+    let outputs = core.outputs();
     let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
-    let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);
+    let text = desc::machine_info_json(&core.machine_info(), &desc::Measured { outputs: &outputs, ..measured }, &drives);
+    *inst.outputs.borrow_mut() = outputs.iter().map(|o| (o.port, o.output, -1)).collect();
     unsafe { copy_text(&text, out, len) }
 }
 
@@ -602,6 +615,37 @@ pub unsafe fn frame_device<T: Core>(machine: *mut Machine, out: *mut DeviceFrame
     }
 }
 
+/// The host's ring (since 1.18, `DEVICE_RING`), its images read at the element size the host gives; a null ring withdraws it.
+pub unsafe fn ring_lend<T: Core>(machine: *mut Machine, ring: *const RingLend) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    let Some(r) = (unsafe { ring.as_ref() }) else { return status_of(call(inst, |c| c.ring_lend(None))) };
+    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) {
+        return status::BAD_STRUCT;
+    }
+    let images = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
+    let given = super::Ring { images, ready: r.ready, done: r.done, device_uuid: r.device_uuid, driver_uuid: r.driver_uuid };
+    status_of(call(inst, |c| c.ring_lend(Some(&given))))
+}
+
+/// The frame's picture in the ring (since 1.18): 1 with `out` filled but its size, 0 where it is not there.
+pub unsafe fn frame_ring<T: Core>(machine: *mut Machine, out: *mut RingFrame) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    if out.is_null() {
+        return NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<RingFrame>() {
+        return status::BAD_STRUCT;
+    }
+    match call(inst, |c| c.frame_ring()) {
+        Ok(Some(f)) => {
+            unsafe { std::ptr::copy_nonoverlapping((&f as *const RingFrame as *const u8).add(4), (out as *mut u8).add(4), size_of::<RingFrame>() - 4) };
+            1
+        }
+        Ok(None) => 0,
+        Err(code) => code,
+    }
+}
+
 /// Keeps the encodings of `mask` from the next advance (since 1.10, `RAW_PICTURE`); a bit past the list changes nothing.
 pub unsafe fn raw_select<T: Core>(machine: *mut Machine, mask: u64) -> i32 {
     let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
@@ -641,8 +685,9 @@ pub unsafe fn raw_copy<T: Core>(machine: *const Machine, raw: u32, out: *mut u8,
     }
 }
 
+/// The picture copied out; a core may make it here, as one whose frame is on a ring reads it back (EmuSen_CoreAPI.md §6.43).
 pub unsafe fn frame_copy<T: Core>(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL as i64 };
+    let Some(inst) = (unsafe { mutable::<T>(machine as *mut Machine) }) else { return NULL as i64 };
     unsafe { copy_values(inst.core.frame(), out, len) }
 }
 

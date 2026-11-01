@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 3u
+#define EMUSEN_CRYSTAL_MINOR 4u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -75,6 +75,9 @@ extern "C" {
 #define EMUSEN_CRYSTAL_OPEN_NO_BATTERY  1u /* the game's battery save is neither read nor written */
 #define EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS 2u /* picture_copy gives each row once, and the frame's row_repeat says how often
                                             * it is shown; without it the rows come repeated and row_repeat is 1 */
+#define EMUSEN_CRYSTAL_OPEN_RING        4u /* since 1.4: with a device, a machine whose core claims DEVICE_RING is lent a
+                                            * ring made on it in place of a lend; frame_info's ring fields and
+                                            * picture_ring say where each picture lies (EmuSen_Backend.md section 33) */
 
 /* speed_mode's mode: which of speed_set's three speeds applies. */
 #define EMUSEN_CRYSTAL_SPEED_NORMAL 0u
@@ -145,7 +148,7 @@ typedef struct emusen_crystal_open_params { /* 72 bytes since 1.1; 64 in 1.0 */
                                         * its pictures are taken there inside frame (section 14.12) */
 } emusen_crystal_open_params;
 
-typedef struct emusen_crystal_frame_info {  /* 112 bytes since 1.1, 104 in 1.0; filled by frame and rewind_step */
+typedef struct emusen_crystal_frame_info {  /* 136 bytes since 1.4, 112 since 1.1, 104 in 1.0; filled by frame and rewind_step */
     uint32_t size;
     uint32_t ran;                      /* 1 when a frame completed; 0 while paused or halted, or when one halted */
     uint32_t halted;                   /* a breakpoint or a step stopped the session inside a frame */
@@ -169,6 +172,13 @@ typedef struct emusen_crystal_frame_info {  /* 112 bytes since 1.1, 104 in 1.0; 
     uint32_t picture_on_device;        /* since 1.1: the picture was taken on the device the session was lent, and the
                                         * presenter reads it from picture_lend's lend; picture_copy still reads it back */
     uint32_t reserved;                 /* 0 */
+    uint32_t picture_in_ring;          /* since 1.4: the picture is in picture_ring's ring, at ring_slot, once its ready
+                                        * reaches ring_value; picture_copy still reads it back */
+    uint32_t ring_slot;
+    uint64_t ring_value;
+    uint32_t fields;                   /* since 1.4, with the picture in the ring: 0 a progressive frame, 1 one field,
+                                        * 2 two fields woven; 0 otherwise */
+    uint32_t field;                    /* with one field: 0 the top, 1 the bottom */
 } emusen_crystal_frame_info;
 
 typedef struct emusen_crystal_raw_info { /* 24 bytes, since 1.1; filled by raw_copy */
@@ -294,6 +304,10 @@ int32_t emusen_crystal_disc_lid(emusen_crystal_runtime *rt, uint32_t session, ui
  * ran 0, halted 1, and nothing advances until run control resumes it. */
 int32_t emusen_crystal_frame(emusen_crystal_runtime *rt, uint32_t session, emusen_crystal_frame_info *out);
 
+/* changes, since 1.4. One frame advance, for every engine: the session is paused, and the next frame runs one whole
+ * frame and leaves it paused, with a run event {"op":"stepped"} (EmuSen_Backend.md section 33.3). */
+int32_t emusen_crystal_frame_advance(emusen_crystal_runtime *rt, uint32_t session);
+
 /* reads. The picture as RGBA8888, width * 4 bytes a row: the frame's width and height. */
 int64_t emusen_crystal_picture_copy(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
 
@@ -301,6 +315,12 @@ int64_t emusen_crystal_picture_copy(emusen_crystal_runtime *rt, uint32_t session
  * borrow and not free; null when nothing is lent. A machine made again, by a reset or a state of another size, is
  * lent afresh, so it is asked again after a frame. */
 const void *emusen_crystal_picture_lend(emusen_crystal_runtime *rt, uint32_t session);
+
+/* reads, since 1.4. The current machine's ring, the platform library's emusen_serenity_ring, for the presenter to borrow,
+ * or null where none is lent (no OPEN_RING, no device, a core without DEVICE_RING, or the C# implementation). A machine
+ * made again, or one whose maxima grew, holds a new one, so it is asked again after a frame; the last one stays valid
+ * until the next change. */
+const void *emusen_crystal_picture_ring(emusen_crystal_runtime *rt, uint32_t session);
 
 /* changes, since 1.1. The encoding of the picture before the core's palette that the session keeps from the next
  * frame, one the machine's raw_encodings names; absent keeps none. */

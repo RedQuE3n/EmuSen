@@ -23,6 +23,9 @@ namespace EmuSen.Crystal.Managed
         private readonly object _wakeLock = new();
         private bool _woken;
         private bool _paused, _halted, _runRequested, _closed;
+
+        // The frame a run to a frame holds at, on an engine that cannot halt inside one; -1 for none - see EmuSen_Backend.md §33.3.
+        private long _holdAtFrame = -1;
         private uint _basePercent = SpeedController.NormalPercent;
         private uint _mode = CrystalNumbers.SpeedNormal;
 
@@ -173,6 +176,7 @@ namespace EmuSen.Crystal.Managed
                     break;
                 default:
                     result = provider();
+                    if (op == SessionAbi.RunToFrame && Core is CoreEngine { Library: var library } && !library.Has(CoreInterface.CapDebug)) _holdAtFrame = argument;
                     _paused = false;
                     _runRequested = true;
                     said = "resumed";
@@ -196,6 +200,17 @@ namespace EmuSen.Crystal.Managed
             });
             Runtime.Remove(this);
             Wake();
+        }
+
+        // One frame advance, for every engine: paused, with one frame asked for - see EmuSen_Backend.md §33.3.
+        public void FrameAdvance()
+        {
+            Change(() =>
+            {
+                _paused = true;
+                _runRequested = true;
+            });
+            Runtime.Events.Raise(Id, CrystalNumbers.EventRun, "run", w => w.WriteString("op", "stepped"));
         }
 
         public void Reset() => Change(() =>

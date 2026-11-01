@@ -1374,6 +1374,34 @@ int32_t emusen_serenity_chain_present(const emusen_serenity_chain *chain, const 
 int32_t emusen_serenity_chain_advance_lent(const emusen_serenity_chain *chain, const emusen_serenity_lend *lend);
 int32_t emusen_serenity_lent_release(uint64_t slot);
 
+/* A ring (core ABI 1.18's DEVICE_RING): `count` images `width` by `height` and two timeline semaphores, made on the
+ * device and exported as opaque file descriptors, which a hosted core's device imports and writes; the descriptors
+ * stay the ring's, closed when it is freed. Null when the device cannot make one, with the words why. Freed after the
+ * machine it is lent to, and after every chain that advanced from it has rendered. Since interface 28. */
+typedef struct emusen_serenity_ring emusen_serenity_ring;
+
+typedef struct {
+    uint32_t size, count;
+    int64_t ready, done;
+    uint8_t device_uuid[16], driver_uuid[16];
+} emusen_serenity_ring_info;
+
+/* One image, laid out as emusen_core.h's emusen_ring_image. */
+typedef struct {
+    uint32_t size, memory_type;
+    uint64_t handle, allocation_size;
+    uint32_t width, height, format, usage;
+} emusen_serenity_ring_image_info;
+
+emusen_serenity_ring *emusen_serenity_ring_new(const emusen_serenity_device *device, uint32_t width, uint32_t height, uint32_t count, emusen_serenity_ring_info *out);
+int32_t emusen_serenity_ring_image(const emusen_serenity_ring *ring, uint32_t index, emusen_serenity_ring_image_info *out);
+int32_t emusen_serenity_ring_free(emusen_serenity_ring *ring);
+
+/* The picture emusen_core_frame_ring answered, `value` in `slot`, `width` by `height`, as the chain's new frame: its
+ * next render or present waits on the device for the ring's `ready` to reach `value`, takes the slot from the external
+ * queue family, copies it into the history, gives it back and signals `done` with `value`. Since interface 28. */
+int32_t emusen_serenity_chain_advance_ring(const emusen_serenity_chain *chain, const emusen_serenity_ring *ring, uint32_t slot, uint64_t value, int32_t width, int32_t height);
+
 #define EMUSEN_SERENITY_CHAIN_COPIED_IMAGES 0u /* pictures that were copies because every lendable readback was held */
 #define EMUSEN_SERENITY_CHAIN_READBACKS 1u     /* readbacks the chain has to lend */
 #define EMUSEN_SERENITY_CHAIN_MAX_LENT 2u      /* how many it may have; needs no chain */

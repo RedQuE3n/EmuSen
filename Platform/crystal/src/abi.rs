@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 3;
+pub const MINOR: u32 = 4;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub mod status {
@@ -25,6 +25,8 @@ pub const CONFIG_DEVELOPMENT: u32 = 1;
 
 pub const OPEN_NO_BATTERY: u32 = 1;
 pub const OPEN_SINGLE_ROWS: u32 = 2;
+/// Since 1.4: a ring lent in place of a lend, where the core claims `DEVICE_RING`.
+pub const OPEN_RING: u32 = 4;
 
 pub const SPEED_NORMAL: u32 = 0;
 pub const SPEED_TURBO: u32 = 1;
@@ -127,6 +129,12 @@ pub struct emusen_crystal_frame_info {
     /// Since 1.1.
     pub picture_on_device: u32,
     pub reserved: u32,
+    /// Since 1.4.
+    pub picture_in_ring: u32,
+    pub ring_slot: u32,
+    pub ring_value: u64,
+    pub fields: u32,
+    pub field: u32,
 }
 
 /// Since 1.1: the shape of `emusen_crystal_raw_copy`'s picture.

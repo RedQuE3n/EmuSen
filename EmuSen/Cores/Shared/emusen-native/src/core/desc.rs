@@ -283,6 +283,26 @@ pub struct Unit {
     pub registers: Vec<(String, u32)>,
 }
 
+/// Since 1.17: what a port's device outputs, declared in machine info's `ports[].outputs` and raised as `OUTPUT`
+/// events (EmuSen_CoreAPI_Extensions.md §4.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputKind {
+    /// The heavier, low-frequency motor.
+    StrongMotor,
+    /// The lighter, high-frequency motor.
+    WeakMotor,
+    Light,
+}
+
+/// Since 1.17: one output of the device in `port`, numbered from 0 in that port.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Output {
+    pub port: u32,
+    pub output: u32,
+    pub kind: OutputKind,
+    pub label: String,
+}
+
 /// The first id a unit may take, above every processor's (EmuSen_CoreAPI.md §6.33).
 pub const UNIT_FIRST_ID: u32 = 256;
 
@@ -678,6 +698,8 @@ pub struct Measured<'a> {
     pub audio_rate_exact: Option<(u64, u64)>,
     /// Since 1.16: `Core::snapshot_offered`; kind 1 is listed only where it is true and `SNAPSHOT` is claimed.
     pub snapshot_offered: bool,
+    /// Since 1.17: `Core::outputs`, written into each port's `outputs` where it has any.
+    pub outputs: &'a [Output],
 }
 
 /// Since 1.16: a named battery file present on the machine, by its number from `FILE_NAMED` and its relative path; one
@@ -738,7 +760,21 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     j.end_object();
     j.key("ports").begin_array();
     for p in &m.ports {
-        j.begin_object().field_uint("port", p.port as u64).key("controller").opt_str(p.controller.as_deref()).end_object();
+        j.begin_object().field_uint("port", p.port as u64).key("controller").opt_str(p.controller.as_deref());
+        if measured.outputs.iter().any(|o| o.port == p.port) {
+            j.key("outputs").begin_array();
+            for o in measured.outputs.iter().filter(|o| o.port == p.port) {
+                j.begin_object().field_uint("output", o.output as u64);
+                match o.kind {
+                    OutputKind::StrongMotor => j.field_str("kind", "motor").field_str("motor", "strong"),
+                    OutputKind::WeakMotor => j.field_str("kind", "motor").field_str("motor", "weak"),
+                    OutputKind::Light => j.field_str("kind", "light"),
+                };
+                j.field_str("label", &o.label).end_object();
+            }
+            j.end_array();
+        }
+        j.end_object();
     }
     j.end_array();
     j.key("spaces").begin_array();

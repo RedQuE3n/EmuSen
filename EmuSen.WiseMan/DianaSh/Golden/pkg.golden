@@ -6,7 +6,7 @@ shell rust
 usage 1   pkg make <path>... [--self-contained] [--zip]
 usage 2                                 a package for each game under each path (relative to the library), linked
 usage 3                                 unless the game is to be copied in; --zip also writes the package as one zip
-usage 4   pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)
+usage 4   pkg ls [<console>] [--all]    the packages, with mode, state (ok, moved, missing, changed) and size; --all also the games no package claims
 usage 5   pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too
 usage 6   pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in
 usage 7   pkg patch add <package> <file>
@@ -21,91 +21,91 @@ case the usage, and what a command line refuses
 target none
 covers 1-13
 $ pkg
-out 376
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+out 384
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg frobnicate
-out 376
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+out 384
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg make
-out 424
+out 432
 pkg make: name what to make, or / for all of it
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg migrate
-out 430
+out 438
 pkg migrate: name what to migrate, or / for all of it
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg zip
-out 422
+out 430
 pkg zip: name what to zip, or / for all of it
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg identity NES/a.nes hacked
-out 430
+out 438
 pkg identity: <package> original or <package> patched
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg identity NES/a.nes
-out 430
+out 438
 pkg identity: <package> original or <package> patched
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg make nes --fast
-out 417
+out 425
 pkg: --fast is not an option of pkg make
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg check NES --fast
-out 418
+out 426
 pkg: --fast is not an option of pkg check
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg ls NES SNES
-out 404
+out 412
 pkg ls: one console at most
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg patch
-out 428
+out 436
 pkg patch: add <package> <file> or rm <package> <n>
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg patch rm NES/a.nes 0
-out 444
+out 452
 pkg patch rm: 0 is not a patch's number; pkg ls numbers them from 1
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none
 $ pkg patch add NES/a.nes
-out 428
+out 436
 pkg patch: add <package> <file> or rm <package> <n>
-Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
+Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]
   Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.
 status 1
 action none

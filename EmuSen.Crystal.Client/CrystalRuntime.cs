@@ -18,6 +18,9 @@ namespace EmuSen.Crystal.Client
         public string? Engine { get; init; }
         public bool NoBattery { get; init; }
         public bool SingleRows { get; init; }
+
+        // Since 1.4: with a device, a ring lent in place of a lend where the core claims one - see EmuSen_Backend.md §33.
+        public bool Ring { get; init; }
         public int AudioBufferMaxSamples { get; init; }
 
         // Since 1.1: the presenter's Vulkan device, the platform library's emusen_serenity_device, lent to each machine; zero lends none.
@@ -143,7 +146,7 @@ namespace EmuSen.Crystal.Client
                 var parameters = new CrystalOpenParams
                 {
                     size = (uint)sizeof(CrystalOpenParams),
-                    flags = (open.NoBattery ? CrystalAbi.OpenNoBattery : 0) | (open.SingleRows ? CrystalAbi.OpenSingleRows : 0),
+                    flags = (open.NoBattery ? CrystalAbi.OpenNoBattery : 0) | (open.SingleRows ? CrystalAbi.OpenSingleRows : 0) | (open.Ring ? CrystalAbi.OpenRing : 0),
                     path = path is null ? null : p,
                     path_len = (nuint)(path?.Length ?? 0),
                     console = console is null ? null : c,

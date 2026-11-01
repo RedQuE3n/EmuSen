@@ -484,11 +484,16 @@ fn package_of(
 
 /// A disc's bytes in the library: the file named and, for a sheet, every file it names.
 fn disc_bytes(item: &Item) -> u64 {
-    let named = seen(&item.path).map_or(0, |s| s.size);
-    if !emusen_galaxia::image_sets::is_sheet(&item.path) {
+    game_bytes(&item.path)
+}
+
+/// A game's bytes where it lies: the file named and, for a sheet, every file it names.
+pub fn game_bytes(at: &str) -> u64 {
+    let named = seen(at).map_or(0, |s| s.size);
+    if !emusen_galaxia::image_sets::is_sheet(at) {
         return named;
     }
-    named + emusen_galaxia::image_sets::companions(&item.path).unwrap_or_default().iter().filter_map(|f| seen(f)).map(|s| s.size).sum::<u64>()
+    named + emusen_galaxia::image_sets::companions(at).unwrap_or_default().iter().filter_map(|f| seen(f)).map(|s| s.size).sum::<u64>()
 }
 
 /// `chd ls`'s view of one disc: converted, changed since, its CHD gone, or not converted; `taken` where a file already

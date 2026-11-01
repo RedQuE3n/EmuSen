@@ -8,11 +8,11 @@
 //! byte k - 2, after HiZ (FFh) for the peripheral byte and the command byte; so a command sent with two bytes beyond
 //! ps2tek's command list receives the whole reply, its terminator last.
 
-/// A page with its spare bytes, the pages an erase block, and Sony's card's pages (ps2tek "Get Specs").
-pub const RAW_PAGE: usize = 528;
-pub const PAGES_PER_BLOCK: u32 = 16;
-pub const PAGES: u32 = 16_384;
-pub const CARD_BYTES: usize = RAW_PAGE * PAGES as usize;
+/// A page with its spare bytes, the pages an erase block, and Sony's card's pages: the card format's, `emusen-ps2-card`.
+pub const RAW_PAGE: usize = emusen_ps2_card::RAW_PAGE;
+pub const PAGES_PER_BLOCK: u32 = emusen_ps2_card::PAGES_PER_BLOCK as u32;
+pub const PAGES: u32 = emusen_ps2_card::PAGES as u32;
+pub const CARD_BYTES: usize = emusen_ps2_card::CARD_LENGTH;
 /// The reply byte and the terminator at reset.
 pub const ACK: u8 = 0x2B;
 pub const TERMINATOR: u8 = 0x55;
@@ -63,7 +63,7 @@ impl MemoryCard {
 
     /// An erased card, every byte FFh, as the flash leaves an erased block.
     pub fn erased() -> MemoryCard {
-        MemoryCard::new(vec![0xFF; CARD_BYTES]).expect("the card's size")
+        MemoryCard::new(vec![emusen_ps2_card::ERASED; CARD_BYTES]).expect("the card's size")
     }
 
     fn raw(&self, page: u32) -> Option<&[u8]> {

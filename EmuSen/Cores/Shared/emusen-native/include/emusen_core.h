@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.16.
+/* emusen_core.h - the EmuSen core ABI, version 1.18.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 16u
+#define EMUSEN_CORE_ABI_MINOR 18u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -62,7 +62,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_LID_CLOSED         (-265) /* @since 1.1, MEDIA: media_insert while the drive's lid or tray is closed */
 #define EMUSEN_WRONG_MEDIA        (-266) /* @since 1.1, MEDIA: state_load with another disc in the drive than the state's */
 #define EMUSEN_NO_SUCH_DRIVE      (-267) /* @since 1.1, MEDIA: a drive machine info does not list */
-/* -268 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
+#define EMUSEN_NOT_EXPECTED       (-268) /* @since 1.17, EXPECT: the library serves other bytes than the hash expected */
+/* -269 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
  * its kind (ports only). Below -383, reserved. */
 #define EMUSEN_FAULT_BASE         (-320)
 
@@ -94,7 +95,12 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_PRESENCE          (1ull << 24)  /* @since 1.13: emusen_core_set_present */
 #define EMUSEN_CAP_DEBUG_TRANSLATE   (1ull << 25)  /* @since 1.13, with DEBUG: emusen_core_debug_translate */
 #define EMUSEN_CAP_IMAGE_PATH        (1ull << 26)  /* @since 1.16: the core reads its image through create's and media's image_path */
-/* Bits 27..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+/* @since 1.18 (section 6.43): the core hands its picture on a ring of images the host lends across devices and
+ * processes, emusen_core_ring_lend and emusen_core_frame_ring. */
+#define EMUSEN_CAP_DEVICE_RING       (1ull << 27)
+/* @since 1.17 (section 6.42): emusen_core_expect, which a host calls before any other export. */
+#define EMUSEN_CAP_EXPECT            (1ull << 28)
+/* Bits 29..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -183,7 +189,10 @@ enum emusen_event_kind {            /* section 6.19; a host skips kinds it does 
     EMUSEN_EVENT_BATTERY      = 4,  /* a: the battery file that changed */
     EMUSEN_EVENT_LOG          = 5,  /* a: records waiting in emusen_core_log_drain */
     EMUSEN_EVENT_MACHINE_INFO = 6,  /* the machine descriptor changed, or events were lost; read everything again */
-    /* 7 is kept for a controller's outputs (EmuSen_CoreAPI_Extensions.md section 4). */
+    /* @since 1.17 (section 6.42): a level a port's device outputs, a motor or a light that machine info's
+     * ports[].outputs declares. a: (port << 32) | output; b: its level over the frame, 0 to 65535. Raised on a change,
+     * and for every declared output after the first call that runs the machine once machine info has been read. */
+    EMUSEN_EVENT_OUTPUT       = 7,
     /* @since 1.4 (section 6.25): a drive is about to read its disc at a place. a: (drive << 32) | file, the drive
      * machine info's and the file an emusen_file.which of the call that gave the drive its disc (EMUSEN_FILE_MEDIA + n)
      * or EMUSEN_FILE_IMAGE; b: the byte offset in that file. Raised at a seek's start for its target, and again before
@@ -272,6 +281,48 @@ typedef struct emusen_device_frame {
     uint64_t value;
 } emusen_device_frame;
 
+/* @since 1.18, DEVICE_RING (section 6.43): one image of a ring the host made on its device, its memory exported. The
+ * handle is the host's (an OPAQUE_FD, or an OPAQUE_WIN32 handle on Windows); a core duplicates what it keeps before
+ * importing it. The image is 2D, one layer and level, optimal tiling, in a dedicated allocation. 40 bytes. */
+typedef struct emusen_ring_image {
+    uint32_t size;
+    uint32_t memory_type;           /* the memory type index on the card */
+    uint64_t handle;
+    uint64_t allocation_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t format;                /* VkFormat, R8G8B8A8_UNORM */
+    uint32_t usage;                 /* the VkImageUsageFlags it was made with */
+} emusen_ring_image;
+
+/* @since 1.18, DEVICE_RING: the ring. `ready` is a timeline semaphore the core signals with each picture's value once
+ * the slot holds it; `done` one the host signals with that value once it no longer reads the slot, before which the
+ * core does not write the slot again. Each slot's ownership crosses by a release to and an acquire from
+ * VK_QUEUE_FAMILY_EXTERNAL on both devices every frame. Both handles are the host's, as the images'. 72 bytes. */
+typedef struct emusen_ring_lend {
+    uint32_t size;
+    uint32_t count;                 /* images */
+    const emusen_ring_image *images;
+    size_t image_size;              /* sizeof(emusen_ring_image) as the host knows it */
+    uint64_t ready;                 /* timeline semaphore, the core signals */
+    uint64_t done;                  /* timeline semaphore, the host signals */
+    uint8_t device_uuid[16];        /* VkPhysicalDeviceIDProperties of the host's card */
+    uint8_t driver_uuid[16];
+} emusen_ring_lend;
+
+/* @since 1.18, DEVICE_RING: the frame's picture in the ring. A core fills everything but `size`. 40 bytes. */
+typedef struct emusen_ring_frame {
+    uint32_t size;
+    uint32_t slot;                  /* the image holding the picture */
+    int32_t width;                  /* the picture, from the image's top left */
+    int32_t height;
+    uint64_t value;                 /* `ready` reaches it once the slot holds the picture; counts from 1 on each ring */
+    uint32_t fields;                /* 0 a progressive frame, 1 one field, 2 two fields woven */
+    uint32_t field;                 /* with one field: 0 the top, 1 the bottom */
+    uint32_t aspect_num;            /* display aspect; 0/0 for square pixels */
+    uint32_t aspect_den;
+} emusen_ring_frame;
+
 typedef struct emusen_frame_info {  /* 64 bytes since 1.13; 56 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t format;                /* enum emusen_pixel_format, one the host accepted */
@@ -333,6 +384,11 @@ int64_t  emusen_core_firmware_for(const uint8_t *image, size_t image_len, uint8_
 int64_t  emusen_core_status_text(int32_t status, uint8_t *out, size_t len);
 /* Where a panic is written before the process aborts; the first path given stands. */
 int32_t  emusen_core_set_crash_log(const char *path);
+/* @since 1.17, EXPECT (section 6.42): the SHA-256 of the bytes the host approved for what this library serves, 64
+ * lower-case hexadecimal digits. Called once, right after loading and before any other export. The library compares
+ * the bytes it will run with it before running any of them: 0 on a match, EMUSEN_NOT_EXPECTED otherwise, after which
+ * it runs nothing it serves, create refuses with EMUSEN_NOT_EXPECTED, and info and status_text name both hashes. */
+int32_t  emusen_core_expect(const char *sha256);
 /* Log records as lines "level<TAB>category<TAB>text<LF>", whole records only, drained as copied; returns the
  * bytes copied, or with a null `out` the bytes waiting. A null machine drains the library's own records. */
 int64_t  emusen_core_log_drain(emusen_machine *machine, uint8_t *out, size_t len);
@@ -373,6 +429,13 @@ int64_t emusen_core_frame_copy(const emusen_machine *machine, uint8_t *out, size
  * 0 when this frame's picture is not there and frame_copy has it, or a status. frame_copy still answers on a frame
  * whose picture is on the device, waiting for it. */
 int32_t emusen_core_frame_device(emusen_machine *machine, emusen_device_frame *out);
+/* @since 1.18, DEVICE_RING: the ring lent, replacing the last once every picture handed on it is released; a null ring
+ * withdraws it. NOT_SUPPORTED for a ring on another card than the core's, or that the core cannot import. */
+int32_t emusen_core_ring_lend(emusen_machine *machine, const emusen_ring_lend *ring);
+/* @since 1.18, DEVICE_RING: after advance, 1 with the frame's picture in the ring as `out` says, 0 when it is not there
+ * (frame_copy has it, or there is none), or a status. A picture larger than the ring is held, MACHINE_INFO raised with
+ * its maxima, and handed at the first call after a ring that holds it is lent. */
+int32_t emusen_core_frame_ring(emusen_machine *machine, emusen_ring_frame *out);
 /* @since 1.10, RAW_PICTURE: bit n keeps machine info's video.raw[n] for every frame drawn from the next advance on; zero,
  * the state at create, keeps none. A bit past the list is refused with EMUSEN_NOT_SUPPORTED and nothing changes. The
  * selection is the host's: no part of a state, kept across reset and state_load. */
@@ -547,6 +610,9 @@ typedef int64_t (*emusen_core_raw_copy_fn)(const emusen_machine *, uint32_t, uin
 typedef int64_t (*emusen_core_telemetry_fn)(const emusen_machine *, int64_t *, size_t);
 typedef int32_t (*emusen_core_set_present_fn)(emusen_machine *, uint32_t, uint32_t);
 typedef int32_t (*emusen_core_debug_translate_fn)(const emusen_machine *, uint32_t, uint32_t, uint32_t *);
+typedef int32_t (*emusen_core_expect_fn)(const char *);
+typedef int32_t (*emusen_core_ring_lend_fn)(emusen_machine *, const emusen_ring_lend *);
+typedef int32_t (*emusen_core_frame_ring_fn)(emusen_machine *, emusen_ring_frame *);
 
 #ifdef __cplusplus
 }

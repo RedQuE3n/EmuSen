@@ -11,10 +11,12 @@ use emusen_native::core::{
 };
 use emusen_native::ffi::{Status, StateMachine};
 
+use crate::console_picture;
 use crate::files::{self, Saves};
 use crate::front::{self, Shared};
 use crate::library::{self, Library};
 use crate::memory;
+use crate::options;
 use crate::state;
 use crate::video::{self, Picture};
 
@@ -74,6 +76,8 @@ pub struct Machine {
     frames: i64,
     system: String,
     identity: u64,
+    /// The SHA-256 of the libretro core's build, which every state records.
+    build: [u8; 32],
     spaces: Vec<memory::Space>,
     saves: Saves,
     sram_saved: Vec<u8>,
@@ -90,6 +94,8 @@ pub struct Machine {
     discs: Vec<(Option<CString>, Option<Vec<u8>>)>,
     /// The disc in the drive, as its state header records it.
     disc: [u8; 16],
+    /// The keys `console_picture` holds at the console's values, none while it is off.
+    held: Vec<String>,
 }
 
 /// Files removed when dropped: the firmware copies of a machine, or of a create that failed.
@@ -176,14 +182,18 @@ fn pad(ports: usize, labels: &[(u32, String)]) -> Controller {
     }
 }
 
-/// The `.info` file's firmware entries, numbered from 1.
+/// The first firmware file's number: above the sixteen kept for battery files, save RAM, the clock and a profile's
+/// cards, so no file passed is both (EmuSen_LibretroHost.md §10j); Sapphire numbers its BIOS so too.
+const FIRST_FIRMWARE: u32 = 16;
+
+/// The `.info` file's firmware entries, numbered from `FIRST_FIRMWARE`.
 fn firmware(lib: &Library) -> Vec<Firmware> {
     let count: usize = info_value(lib, "firmware_count").parse().unwrap_or(0);
     (0..count.min(64))
         .map(|i| {
             let path = info_value(lib, &format!("firmware{i}_path"));
             let optional = info_value(lib, &format!("firmware{i}_opt")) == "true";
-            Firmware { which: 1 + i as u32, name: path.clone(), label: Some(info_value(lib, &format!("firmware{i}_desc"))).filter(|d| !d.is_empty()).unwrap_or(path), size: 0, required: !optional, ..Firmware::default() }
+            Firmware { which: FIRST_FIRMWARE + i as u32, name: path.clone(), label: Some(info_value(lib, &format!("firmware{i}_desc"))).filter(|d| !d.is_empty()).unwrap_or(path), size: 0, required: !optional, ..Firmware::default() }
         })
         .collect()
 }
@@ -262,17 +272,27 @@ impl Machine {
             v1::detail("the core did not write its state");
             return Err(STATUS_STATE_REFUSED);
         }
-        state::seal(out, n, self.identity, self.platform(), self.disc);
+        state::seal(out, n, self.identity, &self.build, self.platform(), self.disc);
         Ok(state::HEADER + n)
     }
 }
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        unsafe {
-            (self.lib.api.unload_game)();
-            (self.lib.api.deinit)();
+        // The context is destroyed before the game is unloaded and the device after retro_deinit (EmuSen_LibretroHost.md §10f).
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.hw.and_then(|h| h.destroy)
+        {
+            unsafe { destroy() };
         }
+        unsafe { (self.lib.api.unload_game)() };
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.negotiation.and_then(|n| n.destroy_device)
+        {
+            unsafe { destroy() };
+        }
+        unsafe { (self.lib.api.deinit)() };
+        self.shared.gpu = None;
         front::with_declared(|d| d.initialised = false);
         front::bind(std::ptr::null_mut());
         front::flush_logs();
@@ -284,17 +304,21 @@ impl StateMachine for Machine {
     type Error = Fail;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), Fail> {
-        let payload = state::open(data, self.identity, self.platform(), self.disc).map_err(|r| {
-            v1::detail(match r {
-                state::Refusal::Foreign => "not a libretro host's state",
-                state::Refusal::OtherCore => "a state of another libretro core or of another version of it",
-                state::Refusal::Version => "a state of another version of the libretro host",
-                state::Refusal::Platform => "a state saved on another platform",
-                state::Refusal::Damaged => "the state's payload does not match its digest",
-                state::Refusal::WrongMedia => "the state was saved over another disc than the one in the drive",
+        let payload = state::open(data, self.identity, &self.build, self.platform(), self.disc).map_err(|r| {
+            v1::detail(&match r {
+                state::Refusal::Foreign => "this is not a state of EmuSen's libretro host".to_owned(),
+                state::Refusal::OtherCore => format!("this state was saved by another libretro core, or by another version of {}", self.lib.name),
+                state::Refusal::OtherBuild(saved) => format!(
+                    "this state was saved by another build of {} {} (SHA-256 {}), and the build installed is {}; a libretro core's states load only into the build that saved them",
+                    self.lib.name, self.lib.version, state::hex(&saved), self.lib.sha256
+                ),
+                state::Refusal::Version => "this state was saved by another version of EmuSen's libretro host".to_owned(),
+                state::Refusal::Platform => "this state was saved on another kind of computer, and this core's states do not cross between them".to_owned(),
+                state::Refusal::Damaged => "this state is damaged: its contents do not match the digest saved with them".to_owned(),
+                state::Refusal::WrongMedia => "this state was saved with another disc in the drive than the one in it now".to_owned(),
             });
             Fail(match r {
-                state::Refusal::Foreign | state::Refusal::OtherCore => status::FOREIGN,
+                state::Refusal::Foreign | state::Refusal::OtherCore | state::Refusal::OtherBuild(_) => status::FOREIGN,
                 state::Refusal::Version => status::STATE_VERSION,
                 state::Refusal::Platform => STATUS_PLATFORM,
                 state::Refusal::Damaged => status::TRUNCATED,
@@ -335,6 +359,7 @@ impl v1::Core for Machine {
         | caps::SETTINGS
         | caps::SETTING_NOTES
         | caps::PRESENCE
+        | caps::DEVICE_RING
         | caps::SNAPSHOT
         | caps::FRAME_SERIAL
         | caps::BATTERY_DIRTY
@@ -385,10 +410,12 @@ impl v1::Core for Machine {
             return Vec::new();
         }
         front::with_declared(|d| {
-            d.options
-                .declared
-                .iter()
-                .map(|o| Setting {
+            // Each category's options together, the categories in the order the core first names them, as libretro's menus group them.
+            let mut declared: Vec<&options::Declared> = d.options.declared.iter().collect();
+            let first = |c: &Option<String>| d.options.declared.iter().position(|o| o.category == *c);
+            declared.sort_by_key(|o| first(&o.category));
+            std::iter::once(console_picture::setting())
+                .chain(declared.into_iter().map(|o| Setting {
                     key: o.key.clone(),
                     label: if o.label.is_empty() { o.key.clone() } else { o.label.clone() },
                     help: o.info.clone(),
@@ -400,7 +427,7 @@ impl v1::Core for Machine {
                     advanced: false,
                     hidden: false,
                     restart: false,
-                })
+                }))
                 .filter(|s| s.check().is_ok())
                 .collect()
         })
@@ -417,7 +444,7 @@ impl v1::Core for Machine {
     fn battery_files(_system: &str) -> Option<Vec<Battery>> {
         let mut list = vec![Battery::game(SRAM, ".srm"), Battery::game(RTC, ".rtc")];
         if let Ok(lib) = ready() {
-            list.extend(files::cards(&lib.stem).iter().map(|&(which, suffix, _, medium, label, port)| Battery::removable(which, suffix).medium(medium).label(label).port(port)));
+            list.extend(files::cards(&lib.stem).iter().map(|&(which, suffix, _, medium, label, port, _)| Battery::removable(which, suffix).medium(medium).label(label).port(port)));
         }
         Some(list)
     }
@@ -440,6 +467,7 @@ impl v1::Core for Machine {
         if LIVE.swap(true, Ordering::AcqRel) {
             return Err(STATUS_BUSY);
         }
+        front::RUMBLE.iter().flatten().for_each(|m| m.store(0, Ordering::Relaxed));
         let made = Self::make(lib, system, r);
         if made.is_err() {
             front::bind(std::ptr::null_mut());
@@ -500,6 +528,9 @@ impl v1::Core for Machine {
         if let Some((cb, reference)) = self.shared.frame_time {
             unsafe { cb(reference) };
         }
+        if let Some(g) = self.shared.gpu.as_mut() {
+            g.begin_frame();
+        }
         unsafe { (self.lib.api.run)() };
         let ran = start.elapsed().as_nanos() as i64;
         self.frames += 1;
@@ -535,8 +566,41 @@ impl v1::Core for Machine {
         FrameInfo { format: p.format, stride: p.stride as i32, aspect_num: num as u32, aspect_den: den as u32, serial: p.serial, bytes: p.bytes().len() as i64, ..FrameInfo::rgba(p.width as i32, p.height as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
-        self.shared.picture.bytes()
+    fn frame(&mut self) -> &[u8] {
+        let s = &mut *self.shared;
+        if let Some(g) = s.gpu.as_mut()
+            && g.unread().is_some_and(|(w, h)| (w, h) == (s.picture.width, s.picture.height))
+            && let Some((w, h, bgra)) = g.read_unread()
+        {
+            let serial = s.picture.serial;
+            s.picture.take(sys::PIXEL_FORMAT_XRGB8888, g.read(w, h, bgra), w, h, w as usize * 4);
+            s.picture.serial = serial;
+        }
+        s.picture.bytes()
+    }
+
+    fn ring_lend(&mut self, ring: Option<&v1::Ring>) -> Result<(), i32> {
+        let r = match self.shared.gpu.as_mut() {
+            Some(g) => g.lend(ring),
+            None if ring.is_none() => Ok(()),
+            None => Err(status::NOT_SUPPORTED),
+        };
+        for line in self.shared.gpu.as_mut().map(|g| std::mem::take(&mut g.log)).unwrap_or_default() {
+            v1::log(v1::Level::Warn, "libretro", &line);
+        }
+        r
+    }
+
+    fn frame_ring(&mut self) -> Result<Option<v1::RingFrame>, i32> {
+        let Some(g) = self.shared.gpu.as_mut() else { return Ok(None) };
+        let Some(mut f) = g.frame_ring() else { return Ok(None) };
+        (f.fields, f.field) = crate::vulkan::fields_of(&self.system, f.height as u32);
+        let a = self.shared.av.geometry.aspect_ratio;
+        if a > 0.0 {
+            let (n, d) = video::ratio(a as f64, 100_000);
+            (f.aspect_num, f.aspect_den) = (n as u32, d as u32);
+        }
+        Ok(Some(f))
     }
 
     fn audio_rate(&self) -> i32 {
@@ -572,6 +636,18 @@ impl v1::Core for Machine {
             return Err(status::NO_SUCH_PORT);
         }
         if self.shared().input.set_axis(port as usize, axis, value) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
+    }
+
+    fn outputs(&self) -> Vec<v1::Output> {
+        if !front::with_declared(|d| d.rumble) {
+            return Vec::new();
+        }
+        let motor = |port, output, kind, label: &str| v1::Output { port, output, kind, label: label.to_owned() };
+        (0..front::ports() as u32).flat_map(|p| [motor(p, 0, v1::OutputKind::StrongMotor, "Strong motor"), motor(p, 1, v1::OutputKind::WeakMotor, "Weak motor")]).collect()
+    }
+
+    fn output_level(&self, port: u32, output: u32) -> u16 {
+        front::RUMBLE.get(port as usize).and_then(|p| p.get(output as usize)).map_or(0, |m| m.load(Ordering::Relaxed))
     }
 
     fn set_present(&mut self, port: u32, present: bool) -> Result<(), i32> {
@@ -710,6 +786,9 @@ impl v1::Core for Machine {
                 d.options.set(k, v);
             }
         });
+        if let Some((_, v)) = settings.pairs().find(|p| p.0 == console_picture::KEY) {
+            self.held = hold_picture(self.lib, v == "true");
+        }
         Ok(())
     }
 
@@ -725,10 +804,20 @@ impl v1::Core for Machine {
                 let value = current.iter().find(|c| c.0 == *k).map_or("", |c| c.1.as_str());
                 notes.push((k.clone(), format!("The core set this to {value} itself.")));
             }
+            let exceptions = console_picture::exceptions(&self.lib.stem);
+            for k in &self.held {
+                if let (Some(e), Some(o)) = (exceptions.iter().find(|e| e.key == *k), d.options.declared.iter().find(|o| o.key == *k)) {
+                    let label = o.values.iter().find(|v| v.0 == e.value).map_or(e.value.as_str(), |v| v.1.as_str());
+                    notes.push((k.clone(), format!("Held at {label} while the CRT filter is on: {} (a named exception, decided {}).", e.reason, e.decided)));
+                }
+            }
+            notes.push((console_picture::KEY.into(), if self.held.is_empty() { "Set by the screen filter: on while the console's CRT filter is on.".into() } else { "On while the CRT filter is on; the options it holds are locked until the filter is turned off.".into() }));
+            let locked: Vec<&str> = self.held.iter().map(String::as_str).chain(std::iter::once(console_picture::KEY)).collect();
+            notes.push((console_picture::LOCKED.into(), locked.join(" ")));
             if d.declared_late {
                 notes.push(("libretro".into(), "The core declared options while loading the game; they take their defaults until the core is loaded again.".into()));
             }
-            notes.retain(|n| d.options.declared.iter().any(|o| o.key == n.0) || n.0 == "libretro");
+            notes.retain(|n| d.options.declared.iter().any(|o| o.key == n.0) || ["libretro", console_picture::KEY, console_picture::LOCKED].contains(&n.0.as_str()));
             notes
         })
     }
@@ -741,6 +830,13 @@ fn blocks(lib: &Library) -> Vec<memory::Space> {
         .iter()
         .filter_map(|&(name, id)| memory::block(name, unsafe { (lib.api.get_memory_data)(id) } as *mut u8, unsafe { (lib.api.get_memory_size)(id) }))
         .collect()
+}
+
+/// The core's named exceptions held over the player's values while the console's own picture is asked for, or released;
+/// the keys held (EmuSen_LibretroHost.md §10i).
+fn hold_picture(lib: &Library, on: bool) -> Vec<String> {
+    let held: Vec<(String, String)> = if on { console_picture::exceptions(&lib.stem).into_iter().map(|e| (e.key, e.value)).collect() } else { Vec::new() };
+    front::with_declared(|d| d.options.hold(&held))
 }
 
 /// The device a present pad is set to: the core's pad with sticks, else the analog pad, else the RetroPad.
@@ -767,6 +863,9 @@ impl Machine {
             for (k, v) in r.settings.pairs() {
                 d.options.set(k, v);
             }
+        });
+        let held = hold_picture(lib, r.settings.pairs().any(|p| p == (console_picture::KEY, "true")));
+        front::with_declared(|d| {
             d.options.updated = false;
             d.loaded_once = true;
         });
@@ -780,9 +879,10 @@ impl Machine {
         };
         saves.place(&passed).map_err(fail_folders)?;
         let system_dir = system_folder(&folders);
-        for &(which, _, path, ..) in files::cards(&lib.stem) {
+        let referee = std::env::var_os("EMUSEN_LIBRETRO_SYSTEM_DIR").is_some();
+        for &(which, _, path, .., blank) in files::cards(&lib.stem) {
             let passed = r.files.iter().find(|f| f.which == which).map(|f| f.data);
-            saves.card(which, system_dir.join(path), passed).map_err(fail_folders)?;
+            saves.card(which, system_dir.join(path), passed, blank, referee).map_err(fail_folders)?;
         }
         let mut firmware_written = Written(Vec::new());
         for fw in firmware(lib) {
@@ -851,6 +951,20 @@ impl Machine {
         shared.av = av;
         shared.sound.set_rate(video::ratio(av.timing.sample_rate, 1_000_000));
         shared.events.clear();
+        if let Some(ask) = shared.hw {
+            match crate::vulkan::Gpu::create(&ask, shared.negotiation.as_ref()) {
+                Ok(g) => shared.gpu = Some(g),
+                Err(why) => {
+                    v1::detail(&format!("the core's Vulkan device: {why}"));
+                    unsafe { (lib.api.unload_game)() };
+                    return Err(STATUS_REFUSED);
+                }
+            }
+            if let Some(reset) = ask.reset {
+                unsafe { reset() };
+            }
+            front::flush_logs();
+        }
 
         let mut machine = Machine {
             lib,
@@ -858,6 +972,7 @@ impl Machine {
             frames: 0,
             system: system.to_owned(),
             identity: state::identity(&lib.name, &lib.version),
+            build: state::build(&lib.sha256),
             spaces: Vec::new(),
             saves,
             sram_saved: Vec::new(),
@@ -869,6 +984,7 @@ impl Machine {
             _firmware: firmware_written,
             discs: Vec::new(),
             disc: state::disc(Some(r.image)),
+            held,
         };
         front::bind(&mut *machine.shared);
         for (which, id) in [(SRAM, sys::MEMORY_SAVE_RAM), (RTC, sys::MEMORY_RTC)] {

@@ -185,6 +185,9 @@ pub fn run_control(c: &Call, op: u32, processor: u32, argument: i64) -> Answer<i
             }
             _ => {
                 let result = own_run_control(c, e, op, processor, argument)?;
+                if op == run::TO_FRAME && !e.claims(emusen_native::core::sys::caps::DEBUG) {
+                    run.hold_at_frame = argument;
+                }
                 run.paused = false;
                 run.run_requested = true;
                 ("resumed", result)

@@ -2,10 +2,11 @@
 //! the caller's buffer sizes and the export's exact return (EmuSen_LibretroHost.md §3.2).
 
 use std::ffi::CString;
-use std::io::{Read, Write};
+use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::net::UnixStream;
 
 use emusen_core_host::exports::Exports;
-use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, status};
+use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RingFrame, RingLend, status};
 
 use crate::wire::{self, Head, Op, Reader};
 
@@ -93,7 +94,7 @@ fn files(r: &mut Reader<'_>) -> Files {
 
 impl Served {
     /// One request's reply: (return, word beside it, bytes written).
-    pub fn answer(&mut self, h: &Head, args: &[u8]) -> (i64, i64, Vec<u8>) {
+    pub fn answer(&mut self, h: &Head, args: &[u8], fds: Vec<OwnedFd>) -> (i64, i64, Vec<u8>) {
         let Some(op) = Op::from_u16(h.op) else { return (status::NOT_SUPPORTED as i64, 0, Vec::new()) };
         let mut r = Reader::new(args);
         let x = self.x;
@@ -257,6 +258,15 @@ impl Served {
                 x.media_lid.map_or(none, |f| (unsafe { f(m, drive, open) } as i64, 0, Vec::new()))
             }
             Op::MediaInsert => self.insert(&mut r),
+            Op::RingLend => self.ring(args, fds),
+            Op::FrameRing => match x.frame_ring {
+                Some(f) => {
+                    let mut out = RingFrame { size: size_of::<RingFrame>() as u32, ..RingFrame::default() };
+                    let ret = unsafe { f(m, &mut out) };
+                    (ret as i64, 0, unsafe { std::slice::from_raw_parts(&out as *const RingFrame as *const u8, size_of::<RingFrame>()) }.to_vec())
+                }
+                None => none,
+            },
             Op::SetPresent => {
                 let (port, present) = (r.u32(), r.u32());
                 x.set_present.map_or(none, |f| (unsafe { f(m, port, present) } as i64, 0, Vec::new()))
@@ -321,6 +331,34 @@ impl Served {
         (0, 0, Vec::new())
     }
 
+    /// The ring lent with this process's descriptors written over the host's handles; they close after the call, since
+    /// the core duplicates what it keeps (EmuSen_CoreAPI.md §6.43).
+    fn ring(&mut self, args: &[u8], fds: Vec<OwnedFd>) -> (i64, i64, Vec<u8>) {
+        let Some(f) = self.x.ring_lend else { return (status::NOT_SUPPORTED as i64, 0, Vec::new()) };
+        let ring = match wire::read_ring(args) {
+            Ok(r) => r,
+            Err(why) => return (status::BAD_STRUCT as i64, 0, why.into_bytes()),
+        };
+        let Some((mut images, device_uuid, driver_uuid)) = ring else { return (unsafe { f(self.m, std::ptr::null()) } as i64, 0, Vec::new()) };
+        if fds.len() != images.len() + 2 {
+            return (status::BAD_STRUCT as i64, 0, b"the ring's descriptors did not arrive".to_vec());
+        }
+        for (i, fd) in images.iter_mut().zip(&fds) {
+            i.handle = fd.as_raw_fd() as u64;
+        }
+        let lend = RingLend {
+            size: size_of::<RingLend>() as u32,
+            count: images.len() as u32,
+            images: images.as_ptr(),
+            image_size: size_of::<emusen_native::core::sys::RingImage>(),
+            ready: fds[images.len()].as_raw_fd() as u64,
+            done: fds[images.len() + 1].as_raw_fd() as u64,
+            device_uuid,
+            driver_uuid,
+        };
+        (unsafe { f(self.m, &lend) } as i64, 0, Vec::new())
+    }
+
     fn insert(&mut self, r: &mut Reader<'_>) -> (i64, i64, Vec<u8>) {
         let Some(f) = self.x.media_insert else { return (status::NOT_SUPPORTED as i64, 0, Vec::new()) };
         let drive = r.u32();
@@ -352,14 +390,19 @@ impl Served {
 }
 
 /// Requests read and answered until the caller frees the machine or goes.
-pub fn serve(served: &mut Served, io: &mut (impl Read + Write)) -> std::io::Result<()> {
+pub fn serve(served: &mut Served, io: &mut UnixStream) -> std::io::Result<()> {
     loop {
         let (h, args) = match wire::read_request(io) {
             Ok(r) => r,
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(()),
             Err(e) => return Err(e),
         };
-        let (ret, aux, bytes) = served.answer(&h, &args);
+        // A ring's descriptors come in the message after its request; a stream out of step is a broken caller.
+        let fds = match (h.op == Op::RingLend as u16).then(|| wire::read_ring(&args)) {
+            Some(Ok(Some((images, _, _)))) => wire::recv_fds(io, images.len() + 2)?,
+            _ => Vec::new(),
+        };
+        let (ret, aux, bytes) = served.answer(&h, &args, fds);
         wire::send_reply(io, ret, aux, &bytes)?;
         if served.done {
             return Ok(());

@@ -4888,9 +4888,16 @@ Over the library, titled *Main Menu*:
 | Game Options... | the sidebar library has a game selected (§4.63) |
 | Scrape This Game... | a game is selected and no run is going (§4.60) |
 | *divider* | when any of the three above is shown |
-| Library ▸ | Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Theme Settings (big picture) |
+| Library ▸ | Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Packages (since 2026-10-31) · Cores (since 2026-11-01) · Theme Settings (big picture) |
 | Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Firmware (since 2026-10-05, §4.89) · Preferences |
 | EmuSen ▸ | Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
+
+*Packages* (`EmuSen_Packages.md` §7) went under Library rather than Settings on 2026-10-31. A submenu's page in the
+big panel holds nine rows under a one-line title and its breadcrumb, at 1280×800 and 1920×1200 alike, since the panel
+scales with the screen. Settings had reached nine (with Memory Cards and Compressed Discs), and *Packages* as a tenth
+ran past the panel behind a scroll indicator, which the fit audit below refuses. Library, which holds the library's own
+tools, has at most five rows with it. *Cores* (`EmuSen_Cores.md` §2) joined it below *Packages* on 2026-11-01 for the
+same reason, a tenth row under Settings, and Library has at most six.
 
 *Players & Controllers* opens Preferences on its Controllers tab, where the players' rows of `EmuSen_Input.md` §8.9 are.
 *Graphics* is the window that was *Graphics Settings*; *Collections* is ES-DE's *Game Collection Settings*, whose

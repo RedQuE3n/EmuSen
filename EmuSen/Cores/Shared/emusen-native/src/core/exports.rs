@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::lend::{self, Lend, Loan};
 use super::outbox::{Inner, Outbox, Route, library_log};
-use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, RawFrame, caps, event, flags, kind, status};
+use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, RawFrame, RingFrame, RingImage, RingLend, caps, event, flags, kind, status};
 use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
 use crate::debug;
 use crate::ffi::{Status, copy_text, input};
@@ -608,6 +608,37 @@ pub unsafe fn frame_device<T: Core>(machine: *mut Machine, out: *mut DeviceFrame
         Ok(Some(f)) => {
             // Everything after `size`, which stays the host's.
             unsafe { std::ptr::copy_nonoverlapping((&f as *const DeviceFrame as *const u8).add(4), (out as *mut u8).add(4), size_of::<DeviceFrame>() - 4) };
+            1
+        }
+        Ok(None) => 0,
+        Err(code) => code,
+    }
+}
+
+/// The host's ring (since 1.18, `DEVICE_RING`), its images read at the element size the host gives; a null ring withdraws it.
+pub unsafe fn ring_lend<T: Core>(machine: *mut Machine, ring: *const RingLend) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    let Some(r) = (unsafe { ring.as_ref() }) else { return status_of(call(inst, |c| c.ring_lend(None))) };
+    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) {
+        return status::BAD_STRUCT;
+    }
+    let images = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
+    let given = super::Ring { images, ready: r.ready, done: r.done, device_uuid: r.device_uuid, driver_uuid: r.driver_uuid };
+    status_of(call(inst, |c| c.ring_lend(Some(&given))))
+}
+
+/// The frame's picture in the ring (since 1.18): 1 with `out` filled but its size, 0 where it is not there.
+pub unsafe fn frame_ring<T: Core>(machine: *mut Machine, out: *mut RingFrame) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    if out.is_null() {
+        return NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<RingFrame>() {
+        return status::BAD_STRUCT;
+    }
+    match call(inst, |c| c.frame_ring()) {
+        Ok(Some(f)) => {
+            unsafe { std::ptr::copy_nonoverlapping((&f as *const RingFrame as *const u8).add(4), (out as *mut u8).add(4), size_of::<RingFrame>() - 4) };
             1
         }
         Ok(None) => 0,

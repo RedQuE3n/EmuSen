@@ -84,6 +84,8 @@ signatures! {
     emusen_core_telemetry: emusen_core_telemetry_fn,
     emusen_core_set_present: emusen_core_set_present_fn,
     emusen_core_debug_translate: emusen_core_debug_translate_fn,
+    emusen_core_ring_lend: emusen_core_ring_lend_fn,
+    emusen_core_frame_ring: emusen_core_frame_ring_fn,
 }
 
 // A proxy's export, never a core's: its signature is emusen-native's `sys::ExpectFn`, which the broker's export is held to.
@@ -121,6 +123,9 @@ layouts! {
     sys::DeviceLend = emusen_device_lend { size, api_version, get_instance_proc_addr, instance, physical_device, device, queue_family, queue_index, host_queue_family, reserved, done } [];
     sys::DeviceFrame = emusen_device_frame { size, format, buffer, offset, width, height, stride, reserved, ready, value } [];
     sys::RawFrame = emusen_raw_frame { size, element, width, height, stride, reserved, bytes } [];
+    sys::RingImage = emusen_ring_image { size, memory_type, handle, allocation_size, width, height, format, usage } [];
+    sys::RingLend = emusen_ring_lend { size, count, image_size, ready, done, device_uuid, driver_uuid } [images];
+    sys::RingFrame = emusen_ring_frame { size, slot, width, height, value, fields, field, aspect_num, aspect_den } [];
 }
 
 macro_rules! constants {
@@ -185,6 +190,7 @@ constants! {
     EMUSEN_CAP_DEBUG_TRANSLATE = caps::DEBUG_TRANSLATE,
     EMUSEN_CAP_IMAGE_PATH = caps::IMAGE_PATH,
     EMUSEN_CAP_EXPECT = caps::EXPECT,
+    EMUSEN_CAP_DEVICE_RING = caps::DEVICE_RING,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
     EMUSEN_FRAME_CHEATS_HELD = flags::FRAME_CHEATS_HELD,

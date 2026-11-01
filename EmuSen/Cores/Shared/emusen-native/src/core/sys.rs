@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 17;
+pub const ABI_MINOR: u32 = 18;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -96,6 +96,49 @@ pub struct DeviceFrame {
     pub reserved: u32,
     pub ready: u64,
     pub value: u64,
+}
+
+/// `emusen_ring_image`, since 1.18 (`DEVICE_RING`): one exported image of a host's ring; the handle is the host's.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RingImage {
+    pub size: u32,
+    pub memory_type: u32,
+    pub handle: u64,
+    pub allocation_size: u64,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub usage: u32,
+}
+
+/// `emusen_ring_lend`, since 1.18: the ring's images and its two exported timeline semaphores.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RingLend {
+    pub size: u32,
+    pub count: u32,
+    pub images: *const RingImage,
+    pub image_size: usize,
+    pub ready: u64,
+    pub done: u64,
+    pub device_uuid: [u8; 16],
+    pub driver_uuid: [u8; 16],
+}
+
+/// `emusen_ring_frame`, since 1.18: the frame's picture in the ring. A core fills everything but `size`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RingFrame {
+    pub size: u32,
+    pub slot: u32,
+    pub width: i32,
+    pub height: i32,
+    pub value: u64,
+    pub fields: u32,
+    pub field: u32,
+    pub aspect_num: u32,
+    pub aspect_den: u32,
 }
 
 /// `emusen_media`, since 1.1: a disc for a drive, with its companions.
@@ -225,11 +268,13 @@ pub mod caps {
     pub const DEBUG_TRANSLATE: u64 = 1 << 25;
     /// Since 1.16: the core reads its image through the path a host gives beside the bytes.
     pub const IMAGE_PATH: u64 = 1 << 26;
+    /// Since 1.18: the picture on a ring of images the host lends across devices and processes (`ring_lend`, `frame_ring`).
+    pub const DEVICE_RING: u64 = 1 << 27;
     /// Since 1.17: `expect`, the approved hash of what a library serves, given before any other export; a proxy's
     /// (`emusen-core-broker`), never a core's built with `core_exports!`.
     pub const EXPECT: u64 = 1 << 28;
-    /// Bits 27 and 29-47, for later minors; a core may not claim them. Bit 27 is kept for `DEVICE_RING`.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 27) - 1) & !EXPECT;
+    /// Bits 29-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 29) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -359,6 +404,8 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_set_present", caps::PRESENCE),
     ("emusen_core_debug_translate", caps::DEBUG_TRANSLATE),
     ("emusen_core_expect", caps::EXPECT),
+    ("emusen_core_ring_lend", caps::DEVICE_RING),
+    ("emusen_core_frame_ring", caps::DEVICE_RING),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -390,5 +437,6 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::PRESENCE, "PRESENCE"),
     (caps::DEBUG_TRANSLATE, "DEBUG_TRANSLATE"),
     (caps::IMAGE_PATH, "IMAGE_PATH"),
+    (caps::DEVICE_RING, "DEVICE_RING"),
     (caps::EXPECT, "EXPECT"),
 ];

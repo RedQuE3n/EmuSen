@@ -1901,6 +1901,19 @@ Two additions, each optional; a host or library that knows neither runs as befor
 Bit 27 is kept for `DEVICE_RING` (`EmuSen_LibretroHost.md` §5.4). The kit refuses an `OUTPUT` that names an output
 machine info does not declare.
 
+### 6.43 The picture on a ring the host lends: `DEVICE_RING` (1.18, 2026-11-01)
+
+Bit 27, designed in `EmuSen_LibretroHost.md` §5.4 and specified in §5.4a there: `emusen_ring_image` (40 bytes),
+`emusen_ring_lend` (72), `emusen_ring_frame` (40), `emusen_core_ring_lend` and `emusen_core_frame_ring`. The form for a
+picture that crosses devices and processes, beside `DEVICE_PICTURE` (§6.29), the form within one process and one device:
+a core claims the one its boundary needs. The host makes the ring on its presenting device, images and two timeline
+semaphores exported; the core imports them, copies each picture into a slot on its own device and signals `ready`; the
+host signals `done` once it no longer reads the slot; ownership crosses by a release to and an acquire from
+`VK_QUEUE_FAMILY_EXTERNAL` on both devices every frame. The handles are the host's, and a core duplicates what it keeps.
+`emusen_ring_frame` carries the picture's field structure (`fields`, `field`) and aspect beside its size, which the
+screen filters need with the console (`EmuSen_LibretroHost.md` §0.3). `emusen-native`: `Core::ring_lend` and
+`Core::frame_ring`, the `device_ring` group; its test core claims the bit and, holding no device, refuses every ring.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found

@@ -94,9 +94,9 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.17"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.18"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 26);
+    assert_eq!(names.len(), 27);
     assert!(
         info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
         "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
@@ -552,8 +552,9 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0011);
-    assert_eq!((caps::EXPECT, caps::UNASSIGNED & caps::EXPECT, caps::UNASSIGNED & (1 << 27), status::NOT_EXPECTED, event::OUTPUT), (1 << 28, 0, 1 << 27, -268, 7), "since 1.17");
+    assert_eq!(ABI_VERSION, 0x0001_0012);
+    assert_eq!((caps::DEVICE_RING, caps::UNASSIGNED & caps::DEVICE_RING, std::mem::size_of::<RingImage>(), std::mem::size_of::<RingLend>(), std::mem::size_of::<RingFrame>()), (1 << 27, 0, 40, 72, 40), "since 1.18");
+    assert_eq!((caps::EXPECT, caps::UNASSIGNED & caps::EXPECT, caps::UNASSIGNED & (1 << 27), status::NOT_EXPECTED, event::OUTPUT), (1 << 28, 0, 0, -268, 7), "since 1.17");
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (120, 104), "since 1.11");
     assert_eq!((std::mem::offset_of!(CreateParams, image_path), std::mem::size_of::<FileEntry>(), FileEntry::SIZE_1_0, std::mem::size_of::<Media>()), (112, 32, 24, 56), "since 1.16");
     assert_eq!((caps::IMAGE_PATH, flags::FILE_NAMED, caps::UNASSIGNED & caps::IMAGE_PATH), (1 << 26, 0x8000, 0), "since 1.16");
@@ -566,9 +567,9 @@ fn the_crates_constants_are_the_headers_own_numbers() {
     assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::offset_of!(CreateParams, image_path)), (88, 96, 112), "the device lent at 1.9 follows 1.3's flags and their padding, 1.11's system follows it, and 1.16's image path that");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
-    assert_eq!(EXPORTS.len(), 66);
+    assert_eq!(EXPORTS.len(), 68);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 28);
+    assert_eq!(CAPABILITY_NAMES.len(), 29);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
@@ -946,4 +947,26 @@ fn the_debug_forwarders_answer_as_the_inherent_methods_and_refuse_as_told() {
     assert!(Forwarded::debug_disassemble(&mut t, 1, 0, 0, 1).is_ok());
     assert_eq!(Forwarded::debug_disassemble(&mut t, 1, 3, 0, 1).err(), Some(status::NO_SUCH_SPACE));
     assert_eq!(Forwarded::debug_disassemble(&mut t, 2, 0, 0, 1).err(), Some(status::NOT_SUPPORTED));
+}
+
+// Since 1.18 (EmuSen_CoreAPI.md §6.43): a ring reaches the core with its images read at the host's element size, a null
+// ring withdraws it, a short struct is refused, and frame_ring leaves the host's size alone.
+#[test]
+fn a_ring_is_read_at_the_hosts_sizes_and_frame_ring_keeps_the_hosts_size() {
+    let m = make("");
+    let images = [RingImage { size: 40, width: 640, height: 480, ..RingImage::default() }; 3];
+    let mut ring = RingLend { size: 72, count: 3, images: images.as_ptr(), image_size: 40, ready: 7, done: 8, device_uuid: [1; 16], driver_uuid: [2; 16] };
+    assert_eq!(unsafe { emusen_core_ring_lend(m, &ring) }, status::NOT_SUPPORTED, "the test core holds no device");
+    assert_eq!(unsafe { emusen_core_ring_lend(m, null()) }, 0);
+    ring.image_size = 24;
+    assert_eq!(unsafe { emusen_core_ring_lend(m, &ring) }, status::BAD_STRUCT);
+    ring.image_size = 40;
+    ring.size = 64;
+    assert_eq!(unsafe { emusen_core_ring_lend(m, &ring) }, status::BAD_STRUCT);
+    let mut f = RingFrame { size: 40, slot: 9, ..RingFrame::default() };
+    assert_eq!(unsafe { emusen_core_frame_ring(m, &mut f) }, 0);
+    assert_eq!((f.size, f.slot), (40, 9), "nothing written for a frame not in the ring");
+    f.size = 36;
+    assert_eq!(unsafe { emusen_core_frame_ring(m, &mut f) }, status::BAD_STRUCT);
+    unsafe { emusen_core_free(m) };
 }

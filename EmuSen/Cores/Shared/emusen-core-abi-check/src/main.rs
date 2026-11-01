@@ -273,7 +273,7 @@ mod tests {
         let committed = base(&read(&baseline_path()).unwrap());
         check(&facts, &committed, None, &mut problems);
         assert_eq!(problems, Vec::<String>::new());
-        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 66, "emusen_core_expect at 1.17");
+        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 68, "emusen_core_expect at 1.17, the ring's two at 1.18");
         assert_eq!(facts.get("struct emusen_media").map(String::as_str), Some("size 56 align 8"), "grown at 1.16");
         assert_eq!(facts.get("struct emusen_create_params").map(String::as_str), Some("size 120 align 8"), "grown at 1.3, 1.9, 1.11 and 1.16");
         assert_eq!(committed.get("struct emusen_create_params"), Some(&("size 88 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");
@@ -287,7 +287,8 @@ mod tests {
         assert_eq!(committed.get("field emusen_frame_info.lines"), Some(&("offset 56 type int32_t".to_owned(), "1.13".to_owned())));
         assert_eq!(committed.get("json machine_info.spaces[].byte_order"), Some(&("string optional".to_owned(), "1.14".to_owned())));
         assert_eq!(committed.get("field emusen_create_params.system"), Some(&("offset 104 type const char*".to_owned(), "1.11".to_owned())), "widened at 1.15, not moved");
-        assert_eq!(committed.get("const EMUSEN_CORE_ABI_MINOR"), Some(&("0x11".to_owned(), "1.17".to_owned())));
+        assert_eq!(committed.get("const EMUSEN_CORE_ABI_MINOR"), Some(&("0x12".to_owned(), "1.18".to_owned())));
+        assert_eq!(committed.get("struct emusen_ring_lend"), Some(&("size 72 align 8".to_owned(), "1.18".to_owned())));
         assert_eq!(committed.get("export emusen_core_expect"), Some(&("optional EMUSEN_CAP_EXPECT".to_owned(), "1.17".to_owned())));
         assert_eq!(committed.get("enum emusen_event_kind.EMUSEN_EVENT_OUTPUT"), Some(&("7".to_owned(), "1.17".to_owned())));
         assert_eq!(committed.get("field emusen_create_params.image_path"), Some(&("offset 112 type const char*".to_owned(), "1.16".to_owned())));

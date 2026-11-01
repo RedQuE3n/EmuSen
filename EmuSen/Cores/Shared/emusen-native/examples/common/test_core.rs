@@ -856,6 +856,15 @@ impl Core for TestCore {
         vec![Unit { id: TIMER_UNIT, name: "Timer".into(), kind: "timer".into(), registers: vec![("Count".into(), 8), ("Frames".into(), 64)] }]
     }
 
+    fn ring_lend(&mut self, ring: Option<&Ring>) -> Result<(), i32> {
+        // A counter with no device: every ring is on a card it does not hold (EmuSen_CoreAPI.md §6.43).
+        if ring.is_some() { Err(status::NOT_SUPPORTED) } else { Ok(()) }
+    }
+
+    fn frame_ring(&mut self) -> Result<Option<RingFrame>, i32> {
+        Ok(None)
+    }
+
     fn outputs(&self) -> Vec<Output> {
         vec![Output { port: 0, output: 0, kind: OutputKind::StrongMotor, label: "Motor".into() }, Output { port: 0, output: 1, kind: OutputKind::Light, label: "Lamp".into() }]
     }

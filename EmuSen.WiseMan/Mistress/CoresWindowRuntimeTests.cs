@@ -227,6 +227,30 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The tester's run on 2026-11-01: PCEE2 installed and waiting, Jak opened on Sapphire without a question. The route names the console's waiting default where no layer chose an engine, and Mistress asks about it first with the engine the game opens on otherwise (EmuSen_LibretroHost.md §10t).
+        [RustImplementationFact("the route's waiting default, 1.6")]
+        public void The_consoles_waiting_default_is_asked_about_ahead_of_the_native_fallback()
+        {
+            Directory.Delete(Entry, recursive: true);
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            File.AppendAllText(Path.Combine(Cores, "libretro", "pcee2", "pcee2_libretro.info"), "supported_extensions = \"iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx\"\n");
+            string game = SyntheticPs2Disc.Dvd().WriteSet(_root, "Amber Saga");
+            using CrystalRuntime runtime = Runtime();
+            using (var route = System.Text.Json.JsonDocument.Parse(runtime.Route(game)))
+            {
+                Assert.Equal("Sapphire", route.RootElement.GetProperty("engine").GetString());
+                Assert.Equal(("pcee2", Sha256(pcee2)), (route.RootElement.GetProperty("waiting_default").GetProperty("stem").GetString(), route.RootElement.GetProperty("waiting_default").GetProperty("sha256").GetString()));
+            }
+            object? core = Mistress("CoreAwaitingApproval", runtime, game);
+            Assert.True(core is not null, runtime.Route(game));
+            string? Field(string name) => (string?)core!.GetType().GetProperty(name)!.GetValue(core);
+            Assert.Equal(("pcee2_libretro.so", Sha256(pcee2), "Sony - PlayStation 2 (PCEE2)", "Sapphire"), (Field("File"), Field("Sha256"), Field("Name"), Field("Instead")));
+            Assert.Equal("Sony - PlayStation 2 (PCEE2) waits for your approval, so this game opens on Sapphire.", Mistress("FallbackNotice", core!, "Sapphire"));
+            runtime.SetSetting("PlayStation 2", CoresPane.EngineKey, "Sapphire");
+            Assert.Contains("\"waiting_default\":null", runtime.Route(game));
+            Assert.Null(Mistress("CoreAwaitingApproval", runtime, game));
+        }
+
         [RustImplementationFact("the cores listing's libretro rows, 1.5")]
         public void Mistress_asks_about_a_libretro_core_by_its_cores_file_and_hash()
         {

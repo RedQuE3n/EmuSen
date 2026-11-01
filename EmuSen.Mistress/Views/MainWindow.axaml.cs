@@ -1107,6 +1107,13 @@ namespace EmuSen.Mistress.Views
             if (session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
             if (session.FirmwareNotice is { } firmware) StatusText.Text += $"  ({firmware})";
             if (session.MediaNotice is { } media) StatusText.Text += $"  ({media})";
+            if (_engineFallbackNotice is { } fallback)
+            {
+                Console.WriteLine("[core] " + fallback);
+                StatusText.Text += $"  ({fallback})";
+                Notify(fallback);
+                _engineFallbackNotice = null;
+            }
         }
 
         // The wired session started: the pad polled and the emulation thread running.

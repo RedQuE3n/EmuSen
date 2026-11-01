@@ -1,5 +1,5 @@
 // `games <home> install <runner> <stem>...`, `approve <stem>...`, `tool <core request JSON>`, `run <console> <game> <boot>
-// <frames> [[!]key=value]...` (! stores a value the schema does not list), EMUSEN_GAMES_LOG=N printing N log events: real libretro cores in a sandbox player home through the Rust runtime (EmuSen_LibretroHost.md §10l).
+// <frames> [[!]key=value]...` (! stores a value the schema does not list), EMUSEN_GAMES_LOG=N printing N log events: real libretro cores in a sandbox player home through the Rust runtime (EmuSen_LibretroHost.md §10m).
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;

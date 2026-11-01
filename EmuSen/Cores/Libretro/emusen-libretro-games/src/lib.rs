@@ -1,4 +1,4 @@
-//! A sandbox player home for real libretro cores on the Rust runtime (EmuSen_LibretroHost.md §10l): the installation
+//! A sandbox player home for real libretro cores on the Rust runtime (EmuSen_LibretroHost.md §10m): the installation
 //! folder a build would ship, the core tool's context over the home's `/Cores`, its jobs run to their end, and the
 //! frame timings a run reports.
 

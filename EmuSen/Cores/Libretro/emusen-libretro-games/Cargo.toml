@@ -6,7 +6,7 @@ publish = false
 license = "GPL-3.0-or-later"
 
 # Real libretro cores on the Rust runtime: a sandbox player home whose cores Cores' own tool downloads and the runtime
-# approves, and a game opened, run, timed and its state taken and loaded. See EmuSen_LibretroHost.md §10l.
+# approves, and a game opened, run, timed and its state taken and loaded. See EmuSen_LibretroHost.md §10m.
 [lib]
 name = "emusen_libretro_games"
 path = "src/lib.rs"

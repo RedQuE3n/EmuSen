@@ -520,3 +520,20 @@ fn options_declared_while_loading_are_kept_for_the_next_load() {
     assert!(kept.contains("option\ttc_late\tprobe\tfirst\tDeclared at load"), "{kept}");
     assert!(kept.contains("value\ttc_late\tsecond\tsecond (label)"), "{kept}");
 }
+
+#[test]
+fn a_core_that_cannot_start_the_game_is_refused_in_its_own_words() {
+    let _t = turn();
+    let (lib, _) = library();
+    let refused = Machine::create(lib, &Create { settings: "tc_fail=load", pixel_formats: 0b011, ..Create::new(GAME) }).err().expect("load refused");
+    assert_eq!(refused.status, -13);
+    assert!(refused.words.contains(emusen_libretro_testcore::FAIL_AT_LOAD), "{}", refused.words);
+    let mut m = make("tc_fail=first_frame", 0b011);
+    for _ in 0..2 {
+        assert_eq!(m.advance().map_err(|e| e.0), Err(-18), "every frame after the core said it could not start");
+        assert!(m.last_error().contains(&format!("it could not start: {}", emusen_libretro_testcore::FAIL_AT_FIRST_FRAME)), "{}", m.last_error());
+    }
+    assert_eq!(m.library().words(-18), "the core could not start the game; its log says why");
+    drop(m);
+    make("", 0b011).advance().unwrap();
+}

@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 22] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 23] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -24,7 +24,8 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 22] = [
     ("tc_probe", "Environment probe", "probe", &["off", "on"], "Every environment command called at load."),
     ("tc_log_thread", "Log from a thread", "probe", &["off", "on"], "A formatted log line from a thread of the core's."),
     ("tc_late_option", "Declares at load", "probe", &["off", "on"], "An option declared only while loading the game."),
-    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
+    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang", "read_system"], "What the core does at its second frame, for the broker's proofs."),
+    ("tc_fail", "Fails to start", "probe", &["none", "load", "first_frame"], "The core refuses the game at load, or takes it and says at its first frame that it cannot start."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
     ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
@@ -71,6 +72,7 @@ pub struct Options {
     pub set_variable: bool,
     pub note: String,
     pub fault: String,
+    pub fail: String,
     pub rumble: bool,
     pub hw: String,
     pub scale: u32,
@@ -207,6 +209,7 @@ impl Options {
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
             fault: get("tc_fault"),
+            fail: get("tc_fail"),
             rumble: on("tc_rumble"),
             hw: get("tc_hw"),
             scale: get("tc_scale").parse().unwrap_or(1),

@@ -342,10 +342,36 @@ impl Drop for Jobs {
     }
 }
 
-fn last_error(table: &LibraryToolV1) -> String {
+/// The service's words for the last failure on this thread.
+pub fn last_error(table: &LibraryToolV1) -> String {
     let mut buffer = vec![0u8; 1024];
     let n = unsafe { (table.last_error)(buffer.as_mut_ptr(), buffer.len()) };
     String::from_utf8_lossy(&buffer[..(n.max(0) as usize).min(buffer.len())]).into_owned()
+}
+
+/// One read of a job's events by the length-query idiom.
+pub enum Next {
+    Event(String),
+    /// None came within the wait.
+    Absent,
+    /// The last was taken.
+    Ended,
+    Failed(String),
+}
+
+/// The next event of a job of the service, waiting up to `wait_ms`, `buffer` grown to hold it; shared with
+/// `emusen.cores`, whose jobs the same service runs (EmuSen_Cores.md §6).
+pub fn next_event(table: &LibraryToolV1, job: *mut c_void, wait_ms: u32, buffer: &mut Vec<u8>) -> Next {
+    loop {
+        let n = unsafe { (table.next)(job, wait_ms, buffer.as_mut_ptr(), buffer.len()) };
+        match n {
+            0 => return Next::Ended,
+            ABSENT => return Next::Absent,
+            n if n < 0 => return Next::Failed(last_error(table)),
+            n if n as usize > buffer.len() => buffer.resize(n as usize, 0),
+            n => return Next::Event(String::from_utf8_lossy(&buffer[..n as usize]).into_owned()),
+        }
+    }
 }
 
 /// How following a job ended.
@@ -362,22 +388,16 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
         if call.cancelled() {
             return Followed::Detached;
         }
-        let n = unsafe { (table.next)(r.job, 100, buffer.as_mut_ptr(), buffer.len()) };
-        if n == 0 {
-            return Followed::Ended(*status);
-        }
-        if n == ABSENT {
-            continue;
-        }
-        if n < 0 {
-            call.err(&format!("{}: {}\n", r.prefix, last_error(table)));
-            return Followed::Ended(1);
-        }
-        if n as usize > buffer.len() {
-            buffer.resize(n as usize, 0);
-            continue;
-        }
-        let Ok(event) = json::parse(&String::from_utf8_lossy(&buffer[..n as usize])) else { continue };
+        let raw = match next_event(table, r.job, 100, &mut buffer) {
+            Next::Ended => return Followed::Ended(*status),
+            Next::Absent => continue,
+            Next::Failed(words) => {
+                call.err(&format!("{}: {words}\n", r.prefix));
+                return Followed::Ended(1);
+            }
+            Next::Event(raw) => raw,
+        };
+        let Ok(event) = json::parse(&raw) else { continue };
         if let Some(Value::Array(refused)) = event.get("refused") {
             for words in refused.iter().filter_map(Value::as_str) {
                 call.err(&format!("{}: {words}\n", r.prefix));
@@ -429,18 +449,12 @@ fn drain(r: &mut Running) -> bool {
     let table = unsafe { &*r.table };
     let mut buffer = vec![0u8; 4096];
     loop {
-        let n = unsafe { (table.next)(r.job, 0, buffer.as_mut_ptr(), buffer.len()) };
-        if n == 0 {
-            return true;
-        }
-        if n < 0 {
-            return false;
-        }
-        if n as usize > buffer.len() {
-            buffer.resize(n as usize, 0);
-            continue;
-        }
-        let Ok(event) = json::parse(&String::from_utf8_lossy(&buffer[..n as usize])) else { continue };
+        let raw = match next_event(table, r.job, 0, &mut buffer) {
+            Next::Ended => return true,
+            Next::Absent | Next::Failed(_) => return false,
+            Next::Event(raw) => raw,
+        };
+        let Ok(event) = json::parse(&raw) else { continue };
         match (text(&event, "event"), text(&event, "state")) {
             ("start", _) => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).unwrap_or(0),
             ("disc", "working") => r.current = text(&event, "source").to_string(),

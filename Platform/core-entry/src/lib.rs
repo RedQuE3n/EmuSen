@@ -12,6 +12,8 @@ pub const LIBRETRO: &str = "libretro";
 /// Inside [`LIBRETRO`]: the install's working folder and the build kept for Roll Back, never listed as entries.
 pub const STAGING: &str = ".staging";
 pub const PREVIOUS: &str = ".previous";
+/// Inside [`LIBRETRO`]: the core tool's cached catalogue and index (EmuSen_Cores.md §4.2), never listed as an entry.
+pub const CATALOGUE: &str = ".catalogue";
 /// The entry's record, its proxy's target and its data files.
 pub const NOTICE: &str = "NOTICE";
 pub const TARGET: &str = "broker.target";

@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
             Approve(Sha256);
             CoreDiscovery.UseDirectories(new[] { AppContext.BaseDirectory });
             CoreDiscovery.UsePlayerDirectories(new[] { Cores });
-            CoreSidecar.Write(LibretroEntries.ProxyPath(Entry));
+            CoreSidecar.Write(LibretroEntries.ProxyPath(Entry), expect: Sha256);
             CoreDiscovery.Rescan();
             Found = CoreDiscovery.Found.Single(c => c.Entry == Entry);
         }
@@ -152,6 +152,44 @@ namespace EmuSen.WiseMan.Cores
             }
             finally { LibretroEntryFixture.Approve(entry.Sha256); }
             Assert.All(new[] { rebuilt, stale, unapproved }, f => Assert.False(CoreLibrary.IsOpen(LibretroEntries.ProxyPath(f))));
+        }
+
+        // §10d.1: a core file changed after the host hashed it and before the proxy was loaded is refused by the proxy itself, through emusen_core_expect, and no runner starts.
+        [Fact]
+        public void A_core_changed_between_the_hosts_hash_and_the_load_never_runs()
+        {
+            string folder = Path.Combine(entry.Root, "Swapped", LibretroEntries.Folder, "testcore");
+            LibretroEntryFixture.Lay(folder);
+            string core = Path.Combine(folder, "testcore_libretro.so");
+            string approved = CoreSidecar.HashOf(core);
+            File.AppendAllText(core, "a rebuilt core");
+            string actual = CoreSidecar.HashOf(core);
+            int before = Runners();
+            CoreLibrary library = CoreLibrary.Open(LibretroEntries.ProxyPath(folder), approved);
+            Assert.False(library.Available);
+            Assert.Contains("is not the build that was approved", library.Report);
+            Assert.Contains(approved, library.Report);
+            Assert.Contains(actual, library.Report);
+            Assert.Equal(before, Runners());
+            Assert.NotNull(entry.Found.Open());
+            Assert.Contains("under another approval", CoreLibrary.Open(LibretroEntries.ProxyPath(entry.Entry), new string('0', 64)).Report);
+        }
+
+        // The runners this process started that are alive, read from /proc.
+        private static int Runners()
+        {
+            string me = Environment.ProcessId.ToString();
+            int count = 0;
+            foreach (string dir in Directory.EnumerateDirectories("/proc"))
+            {
+                string stat;
+                try { stat = File.ReadAllText(Path.Combine(dir, "stat")); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
+                int open = stat.IndexOf('('), close = stat.LastIndexOf(')');
+                if (open < 0 || close < open) continue;
+                string[] rest = stat[(close + 2)..].Split(' ');
+                if (stat[(open + 1)..close].StartsWith("emusen-core-run", StringComparison.Ordinal) && rest.Length > 1 && rest[1] == me) count++;
+            }
+            return count;
         }
 
         // A game's picture, its pad and its unaltered file's path reach the brokered core; a patched or unpacked image has no path to give.

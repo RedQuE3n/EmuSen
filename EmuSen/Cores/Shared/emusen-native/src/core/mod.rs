@@ -349,6 +349,18 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// Since 1.17: what each port's device outputs, machine info's `ports[].outputs`; a change raises `MACHINE_INFO`
+    /// (EmuSen_CoreAPI_Extensions.md §4.3).
+    fn outputs(&self) -> Vec<desc::Output> {
+        Vec::new()
+    }
+
+    /// Since 1.17: an output's level over the last frame, 0 to 65535, the fraction of the frame it was driven times its
+    /// strength; the crate raises `OUTPUT` when it changes. Allocates nothing.
+    fn output_level(&self, _port: u32, _output: u32) -> u16 {
+        0
+    }
+
     /// `DEBUG_TRANSLATE`, since 1.13: the address `processor`'s bus sees for `address` by its own translation, never
     /// faulting and changing nothing; `None` where nothing maps it (EmuSen_CoreAPI.md §6.38).
     fn debug_translate(&self, _processor: u32, _address: u32) -> Result<Option<u32>, i32> {
@@ -380,13 +392,15 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::RAW_PICTURE
     | caps::TELEMETRY
     | caps::PRESENCE
-    | caps::DEBUG_TRANSLATE;
+    | caps::DEBUG_TRANSLATE
+    | caps::EXPECT;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
 pub const fn check_groups<T: Core>(named: u64) {
     assert!(T::CAPABILITIES & EXPORTING == named, "the optional groups named and CAPABILITIES disagree");
     assert!(T::CAPABILITIES & caps::UNASSIGNED == 0, "CAPABILITIES claims a bit no minor has assigned");
+    assert!(T::CAPABILITIES & caps::EXPECT == 0, "EXPECT is a proxy's (emusen-core-broker), not a core's");
     assert!(T::CAPABILITIES & caps::DEBUG_READS == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_READS is claimed without DEBUG");
     assert!(T::CAPABILITIES & caps::DEBUG_TRANSLATE == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_TRANSLATE is claimed without DEBUG");
 }

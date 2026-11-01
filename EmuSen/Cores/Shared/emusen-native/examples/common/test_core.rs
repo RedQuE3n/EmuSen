@@ -126,6 +126,9 @@ pub const FAULT_ROUTED_OWN_REFUSED: u64 = 1 << 38;
 /// Not a fault, since 1.15: under `TWO_SYSTEMS` the machine is `create`'s whatever system is named, as a core whose own
 /// rule tells its systems apart may make it (EmuSen_CoreAPI.md §6.40).
 pub const KEEPS_ITS_RULE: u64 = 1 << 39;
+/// Seeded fault for core ABI 1.17's outputs (EmuSen_CoreAPI.md §6.42): an `OUTPUT` raised for port 0's output 5, which
+/// machine info does not declare (C6).
+pub const FAULT_OUTPUT_UNDECLARED: u64 = 1 << 40;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
@@ -566,6 +569,9 @@ impl Core for TestCore {
         }
         self.frames += 1;
         self.ram[2] = self.ram[2].wrapping_add(1);
+        if faults() & FAULT_OUTPUT_UNDECLARED != 0 {
+            emit(event::OUTPUT, 5, 100);
+        }
         if !self.rom.is_empty() {
             let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
             self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
@@ -848,6 +854,18 @@ impl Core for TestCore {
 
     fn units(&self) -> Vec<Unit> {
         vec![Unit { id: TIMER_UNIT, name: "Timer".into(), kind: "timer".into(), registers: vec![("Count".into(), 8), ("Frames".into(), 64)] }]
+    }
+
+    fn outputs(&self) -> Vec<Output> {
+        vec![Output { port: 0, output: 0, kind: OutputKind::StrongMotor, label: "Motor".into() }, Output { port: 0, output: 1, kind: OutputKind::Light, label: "Lamp".into() }]
+    }
+
+    fn output_level(&self, port: u32, output: u32) -> u16 {
+        match (port, output) {
+            (0, 0) => (self.frames as u64).wrapping_mul(997) as u16,
+            (0, 1) => if self.frames % 4 < 2 { 0xFFFF } else { 0 },
+            _ => 0,
+        }
     }
 
     fn counters(&self) -> Vec<Counter> {

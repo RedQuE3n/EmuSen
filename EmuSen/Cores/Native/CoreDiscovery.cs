@@ -25,10 +25,10 @@ namespace EmuSen.Cores.Native
             return Convert.ToHexStringLower(SHA256.HashData(file));
         }
 
-        // Loads the library once, as the build step does, and writes its sidecar beside it.
-        public static CoreSidecar Write(string libraryPath, bool development = false)
+        // Loads the library once, as the build step does, and writes its sidecar beside it; expect is a libretro entry's approved core hash - see EmuSen_CoreAPI.md §6.42.
+        public static CoreSidecar Write(string libraryPath, bool development = false, string? expect = null)
         {
-            var library = CoreLibrary.Open(libraryPath);
+            var library = CoreLibrary.Open(libraryPath, expect);
             if (!library.Available) throw new InvalidOperationException(library.Report);
             var doc = new JsonObject
             {
@@ -112,7 +112,7 @@ namespace EmuSen.Cores.Native
                 AwaitsApproval = true;
                 return null;
             }
-            var library = CoreLibrary.Open(Sidecar.LibraryPath);
+            var library = CoreLibrary.Open(Sidecar.LibraryPath, Entry is not null ? Info.Libretro?.Sha256 : null);
             _library = library;
             if (library.Available && !JsonNode.DeepEquals(JsonNode.Parse(library.Info.Text), Sidecar.InfoJson))
                 _refusal = $"{System.IO.Path.GetFileName(Sidecar.LibraryPath)}'s info differs from its sidecar's; it is refused as altered";

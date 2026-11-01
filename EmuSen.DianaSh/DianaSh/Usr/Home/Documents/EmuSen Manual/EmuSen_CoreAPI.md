@@ -1877,6 +1877,30 @@ approved by the tester on 2026-10-31. Each is optional, and a host or core that 
 machine info's `state.kinds` then omits it, and `state_size` and `state_save` of kind 1 answer `NOT_SUPPORTED`, which
 C14 already reads as consistent. That is the crate's, not the ABI's.
 
+### 6.42 The approved hash given first, and a pad's outputs (1.17, 2026-10-31)
+
+Two additions, each optional; a host or library that knows neither runs as before.
+
+- **`EXPECT`** (capability bit 28): `int32_t emusen_core_expect(const char *sha256)`, a library-level export, and
+  `EMUSEN_NOT_EXPECTED` (-268). It is for a library that serves bytes it did not build, a proxy of the broker
+  (`EmuSen_LibretroHost.md` §10d.1), and is never a core's: `core_exports!` refuses the bit. A host that holds an approved
+  hash for what the library serves calls it once, right after loading and before any other export, as it may
+  `set_crash_log`; `capabilities` may be read first, since it runs nothing. The library compares the bytes it will run
+  with the hash before running any of them: 0 on a match; otherwise `NOT_EXPECTED`, after which it runs nothing it
+  serves, `create` refuses with `NOT_EXPECTED`, and `info` (a broken library's) and `status_text(-268)` name both hashes. A
+  hash that is not 64 lower-case hexadecimal digits matches nothing. The first hash given stands; a later one that differs
+  is answered `NOT_EXPECTED` and changes nothing. A host that does not call it keeps the check it made before 1.17.
+  `emusen-native` gives the type, `sys::ExpectFn`, to which the broker's export and the ABI check hold the signature.
+- **`EMUSEN_EVENT_OUTPUT`** (event kind 7) and machine info's **`ports[].outputs`**, `{ output, kind, motor, label }`, as
+  `EmuSen_CoreAPI_Extensions.md` §4.3 designed them: `a` is `(port << 32) | output`, `b` the level over the frame, 0 to
+  65535. `emusen-native`: `Core::outputs` and `Core::output_level`; the crate keeps the level last raised for each
+  declared output in a table made when machine info is read, and after every call that runs or changes the machine
+  raises an event for each output whose level changed, and for every one once after machine info is read, so that a host
+  never holds a stale level. A frame with no change raises nothing and allocates nothing.
+
+Bit 27 is kept for `DEVICE_RING` (`EmuSen_LibretroHost.md` §5.4). The kit refuses an `OUTPUT` that names an output
+machine info does not declare.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found

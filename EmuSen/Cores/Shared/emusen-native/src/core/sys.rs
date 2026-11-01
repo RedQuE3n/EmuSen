@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 16;
+pub const ABI_MINOR: u32 = 17;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -196,6 +196,8 @@ pub mod status {
     pub const LID_CLOSED: i32 = -265;
     pub const WRONG_MEDIA: i32 = -266;
     pub const NO_SUCH_DRIVE: i32 = -267;
+    /// Since 1.17, `EXPECT`: the library serves other bytes than the hash `expect` named.
+    pub const NOT_EXPECTED: i32 = -268;
 }
 
 /// The capability bits; 0-13 keep the pre-stable numbering.
@@ -223,8 +225,11 @@ pub mod caps {
     pub const DEBUG_TRANSLATE: u64 = 1 << 25;
     /// Since 1.16: the core reads its image through the path a host gives beside the bytes.
     pub const IMAGE_PATH: u64 = 1 << 26;
-    /// Bits 27-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 27) - 1);
+    /// Since 1.17: `expect`, the approved hash of what a library serves, given before any other export; a proxy's
+    /// (`emusen-core-broker`), never a core's built with `core_exports!`.
+    pub const EXPECT: u64 = 1 << 28;
+    /// Bits 27 and 29-47, for later minors; a core may not claim them. Bit 27 is kept for `DEVICE_RING`.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 27) - 1) & !EXPECT;
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -277,9 +282,14 @@ pub mod event {
     pub const BATTERY: u32 = 4;
     pub const LOG: u32 = 5;
     pub const MACHINE_INFO: u32 = 6;
-    /// Since 1.4: a drive is about to read its disc at a place; `core::seek` raises it. 7 is kept for outputs.
+    /// Since 1.17: a level a port's device outputs, `a` = (port << 32) | output, `b` = 0 to 65535.
+    pub const OUTPUT: u32 = 7;
+    /// Since 1.4: a drive is about to read its disc at a place; `core::seek` raises it.
     pub const MEDIA_SEEK: u32 = 8;
 }
+
+/// Since 1.17, `EXPECT`: `emusen_core_expect`'s type, which a proxy's export is held to.
+pub type ExpectFn = unsafe extern "C" fn(*const std::ffi::c_char) -> i32;
 
 /// Every export, and the capability bit that claims it; zero for a required one.
 pub const EXPORTS: &[(&str, u64)] = &[
@@ -348,6 +358,7 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_telemetry", caps::TELEMETRY),
     ("emusen_core_set_present", caps::PRESENCE),
     ("emusen_core_debug_translate", caps::DEBUG_TRANSLATE),
+    ("emusen_core_expect", caps::EXPECT),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -379,4 +390,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::PRESENCE, "PRESENCE"),
     (caps::DEBUG_TRANSLATE, "DEBUG_TRANSLATE"),
     (caps::IMAGE_PATH, "IMAGE_PATH"),
+    (caps::EXPECT, "EXPECT"),
 ];

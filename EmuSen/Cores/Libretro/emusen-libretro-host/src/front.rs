@@ -4,7 +4,7 @@
 //! (EmuSen_LibretroHost.md §1.1, §4).
 
 use std::ffi::{CString, c_char, c_int, c_uint, c_void};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU16, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use emusen_libretro_sys::{self as sys, env};
@@ -33,6 +33,22 @@ pub struct Declared {
     pub initialised: bool,
     /// Whether a machine has been made, after which a late declaration is noted.
     pub loaded_once: bool,
+    /// Whether the core took the rumble interface, so that each port declares its two motors (1.17).
+    pub rumble: bool,
+}
+
+/// Each port's two motors as the core last set them, strong then weak: atomics, since a core may set them from threads
+/// of its own between frames (EmuSen_LibretroHost.md §4.4).
+pub static RUMBLE: [[AtomicU16; 2]; crate::input::PORTS] = [const { [const { AtomicU16::new(0) }; 2] }; crate::input::PORTS];
+
+unsafe extern "C" fn set_rumble_state(port: c_uint, effect: c_int, strength: u16) -> bool {
+    match RUMBLE.get(port as usize).and_then(|p| p.get(effect as usize)) {
+        Some(motor) => {
+            motor.store(strength, Ordering::Relaxed);
+            true
+        }
+        None => false,
+    }
 }
 
 /// The private folders the core is given, as the C strings it is handed.
@@ -573,6 +589,17 @@ unsafe fn answer(cmd: c_uint, data: *mut c_void) -> bool {
             true
         }
         env::GET_DISK_CONTROL_INTERFACE_VERSION => unsafe { put(data, 1 as c_uint) },
+        env::GET_RUMBLE_INTERFACE => {
+            if !unsafe { put(data, sys::retro_rumble_interface { set_rumble_state: Some(set_rumble_state) }) } {
+                return false;
+            }
+            if with_declared(|d| !std::mem::replace(&mut d.rumble, true))
+                && let Some(s) = s
+            {
+                s.events.push((emusen_native::core::event::MACHINE_INFO, 0, 0));
+            }
+            true
+        }
         env::SET_HW_RENDER => {
             if let Some(h) = unsafe { (data as *const sys::retro_hw_render_callback).as_ref() } {
                 with_declared(|d| d.contexts_asked.push((h.context_type, h.version_major, h.version_minor)));

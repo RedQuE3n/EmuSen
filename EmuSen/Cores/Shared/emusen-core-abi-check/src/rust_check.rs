@@ -86,6 +86,11 @@ signatures! {
     emusen_core_debug_translate: emusen_core_debug_translate_fn,
 }
 
+// A proxy's export, never a core's: its signature is emusen-native's `sys::ExpectFn`, which the broker's export is held to.
+const _: fn(Option<sys::ExpectFn>) -> sig::emusen_core_expect_fn = |f| f;
+/// The exports whose signatures are checked through a type rather than the test core.
+pub const ASSIGNED_BY_TYPE: &[&str] = &["emusen_core_expect"];
+
 macro_rules! layouts {
     ($($ours:ty = $theirs:ident { $($f:ident),* } [$($p:ident),*]);* $(;)?) => {
         $(
@@ -150,6 +155,7 @@ constants! {
     EMUSEN_LID_CLOSED = status::LID_CLOSED,
     EMUSEN_WRONG_MEDIA = status::WRONG_MEDIA,
     EMUSEN_NO_SUCH_DRIVE = status::NO_SUCH_DRIVE,
+    EMUSEN_NOT_EXPECTED = status::NOT_EXPECTED,
     EMUSEN_FAULT_BASE = status::FAULT_BASE,
     EMUSEN_CAP_RESET = caps::RESET,
     EMUSEN_CAP_PRESENT = caps::PRESENT,
@@ -178,6 +184,7 @@ constants! {
     EMUSEN_CAP_PRESENCE = caps::PRESENCE,
     EMUSEN_CAP_DEBUG_TRANSLATE = caps::DEBUG_TRANSLATE,
     EMUSEN_CAP_IMAGE_PATH = caps::IMAGE_PATH,
+    EMUSEN_CAP_EXPECT = caps::EXPECT,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
     EMUSEN_FRAME_CHEATS_HELD = flags::FRAME_CHEATS_HELD,
@@ -231,6 +238,7 @@ constants! {
     emusen_event_kind_EMUSEN_EVENT_LOG = event::LOG,
     emusen_event_kind_EMUSEN_EVENT_MACHINE_INFO = event::MACHINE_INFO,
     emusen_event_kind_EMUSEN_EVENT_MEDIA_SEEK = event::MEDIA_SEEK,
+    emusen_event_kind_EMUSEN_EVENT_OUTPUT = event::OUTPUT,
     emusen_control_EMUSEN_CONTROL_B = Control::B,
     emusen_control_EMUSEN_CONTROL_Y = Control::Y,
     emusen_control_EMUSEN_CONTROL_SELECT = Control::Select,

@@ -27,23 +27,40 @@ fn emusen_core_entry_suffix() -> &'static str {
     }
 }
 
-/// A brokered entry: the proxy as the file hosts load, the libretro host and the test core beside it.
+/// An entry laid out as Cores lays it out under `root`: the proxy as the file hosts load, the libretro host and the
+/// test core beside it; the proxy's path and the test core's hash.
+fn entry(root: &std::path::Path) -> (PathBuf, String) {
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let entry = root.join("libretro").join("testcore");
+    let _ = std::fs::remove_dir_all(root);
+    std::fs::create_dir_all(&entry).unwrap();
+    let s = suffix();
+    std::fs::copy(deps.join(format!("libemusen_libretro_proxy.{s}")), entry.join(format!("emusen-core-broker.{s}"))).unwrap();
+    std::fs::copy(deps.join(format!("libemusen_libretro_host.{s}")), entry.join(format!("emusen-libretro-host.{s}"))).unwrap();
+    std::fs::copy(deps.join(format!("libemusen_libretro_testcore.{s}")), entry.join(format!("testcore_libretro.{s}"))).unwrap();
+    std::fs::write(entry.join("testcore_libretro.info"), "corename = \"TestCore\"\nlicense = \"GPLv3\"\n").unwrap();
+    unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", env!("CARGO_BIN_EXE_emusen-core-runner")) };
+    let hash = emusen_core_host::sha256::sha256_hex(&std::fs::read(entry.join(format!("testcore_libretro.{s}"))).unwrap());
+    (entry.join(format!("emusen-core-broker.{s}")), hash)
+}
+
+/// The brokered entry every test shares, loaded with its core's hash approved.
 fn library() -> (&'static Library, PathBuf) {
     let (lib, root) = LIB.get_or_init(|| {
-        let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
         let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("broker-{}", std::process::id()));
-        let entry = root.join("libretro").join("testcore");
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&entry).unwrap();
-        let s = suffix();
-        std::fs::copy(deps.join(format!("libemusen_libretro_proxy.{s}")), entry.join(format!("emusen-core-broker.{s}"))).unwrap();
-        std::fs::copy(deps.join(format!("libemusen_libretro_host.{s}")), entry.join(format!("emusen-libretro-host.{s}"))).unwrap();
-        std::fs::copy(deps.join(format!("libemusen_libretro_testcore.{s}")), entry.join(format!("testcore_libretro.{s}"))).unwrap();
-        std::fs::write(entry.join("testcore_libretro.info"), "corename = \"TestCore\"\nlicense = \"GPLv3\"\n").unwrap();
-        unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", env!("CARGO_BIN_EXE_emusen-core-runner")) };
-        (Library::load(&entry.join(format!("emusen-core-broker.{s}"))).unwrap_or_else(|e| panic!("{e:?}")), root)
+        let (proxy, hash) = entry(&root);
+        (Library::load_expecting(&proxy, &hash).unwrap_or_else(|e| panic!("{e:?}")), root)
     });
     (*lib, root.clone())
+}
+
+/// The runners this process has started that are still alive.
+fn runners() -> usize {
+    let me = std::process::id().to_string();
+    std::fs::read_dir("/proc").unwrap().flatten().filter_map(|e| std::fs::read_to_string(e.path().join("stat")).ok()).filter(|stat| {
+        let (Some(open), Some(close)) = (stat.find('('), stat.rfind(')')) else { return false };
+        stat[open + 1..close].starts_with("emusen-core-run") && stat[close + 2..].split(' ').nth(1) == Some(me.as_str())
+    }).count()
 }
 
 fn turn() -> MutexGuard<'static, ()> {
@@ -70,6 +87,42 @@ fn core_info_gives_the_hash_of_the_copy_that_runs() {
     let hash: String = emusen_core_host::sha256::sha256_hex(&file);
     assert!(info.contains(&format!(r#""libretro":{{"file":"testcore_libretro.{}","sha256":"{hash}"}}"#, suffix())), "{info}");
     assert!(lib.settings_text().unwrap().contains(r#""key":"broker.deadline""#));
+}
+
+#[test]
+fn a_core_changed_between_the_hosts_hash_and_the_load_never_runs() {
+    let _t = turn();
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("broker-expect-{}", std::process::id()));
+    let (proxy, approved) = entry(&root);
+    let core = proxy.with_file_name(format!("testcore_libretro.{}", suffix()));
+    let mut changed = std::fs::read(&core).unwrap();
+    changed.extend_from_slice(b"a rebuilt core");
+    std::fs::write(&core, &changed).unwrap();
+    let actual = emusen_core_host::sha256::sha256_hex(&changed);
+    let before = runners();
+    let why = match Library::load_expecting(&proxy, &approved) {
+        Err(emusen_core_host::library::LoadError::NotExpected(why)) => why,
+        other => panic!("loaded: {:?}", other.map(|l| l.file_name())),
+    };
+    assert!(why.contains(&approved) && why.contains(&actual), "{why}");
+    // Every later call answers as a broken library, and none starts a runner.
+    let path = std::ffi::CString::new(proxy.to_str().unwrap()).unwrap();
+    let handle = unsafe { libc::dlopen(path.as_ptr(), libc::RTLD_NOW) };
+    assert!(!handle.is_null());
+    let info: unsafe extern "C" fn(*mut u8, usize) -> i64 = unsafe { std::mem::transmute(libc::dlsym(handle, c"emusen_core_info".as_ptr())) };
+    let mut text = vec![0u8; 4096];
+    let n = unsafe { info(text.as_mut_ptr(), text.len()) } as usize;
+    let text = String::from_utf8_lossy(&text[..n.min(4096)]).into_owned();
+    assert!(text.contains("broken-proxy") && text.contains(&approved) && text.contains(&actual), "{text}");
+    let create: unsafe extern "C" fn(*const emusen_native::core::sys::CreateParams, *mut i32) -> *mut u8 = unsafe { std::mem::transmute(libc::dlsym(handle, c"emusen_core_create".as_ptr())) };
+    let mut params: emusen_native::core::sys::CreateParams = unsafe { std::mem::zeroed() };
+    params.size = size_of::<emusen_native::core::sys::CreateParams>() as u32;
+    params.host_abi_version = emusen_native::core::sys::ABI_VERSION;
+    (params.image, params.image_len, params.pixel_formats) = (GAME.as_ptr(), GAME.len(), 1);
+    let mut status = 0;
+    assert!(unsafe { create(&params, &mut status) }.is_null());
+    assert_eq!(status, emusen_native::core::sys::status::NOT_EXPECTED);
+    assert_eq!(runners(), before, "a runner started for a core that is not the approved build");
 }
 
 #[test]

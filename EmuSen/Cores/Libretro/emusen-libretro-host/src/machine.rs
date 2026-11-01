@@ -438,6 +438,7 @@ impl v1::Core for Machine {
         if LIVE.swap(true, Ordering::AcqRel) {
             return Err(STATUS_BUSY);
         }
+        front::RUMBLE.iter().flatten().for_each(|m| m.store(0, Ordering::Relaxed));
         let made = Self::make(lib, system, r);
         if made.is_err() {
             front::bind(std::ptr::null_mut());
@@ -570,6 +571,18 @@ impl v1::Core for Machine {
             return Err(status::NO_SUCH_PORT);
         }
         if self.shared().input.set_axis(port as usize, axis, value) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
+    }
+
+    fn outputs(&self) -> Vec<v1::Output> {
+        if !front::with_declared(|d| d.rumble) {
+            return Vec::new();
+        }
+        let motor = |port, output, kind, label: &str| v1::Output { port, output, kind, label: label.to_owned() };
+        (0..front::ports() as u32).flat_map(|p| [motor(p, 0, v1::OutputKind::StrongMotor, "Strong motor"), motor(p, 1, v1::OutputKind::WeakMotor, "Weak motor")]).collect()
+    }
+
+    fn output_level(&self, port: u32, output: u32) -> u16 {
+        front::RUMBLE.get(port as usize).and_then(|p| p.get(output as usize)).map_or(0, |m| m.load(Ordering::Relaxed))
     }
 
     fn set_present(&mut self, port: u32, present: bool) -> Result<(), i32> {

@@ -33,6 +33,13 @@ static CORE: Mutex<Option<Core>> = Mutex::new(None);
 static LOG: Mutex<sys::retro_log_printf_t> = Mutex::new(None);
 /// The frame times reported since the last frame, added into the state's own sum at each frame.
 static FRAME_TIME_SUM: Mutex<i64> = Mutex::new(0);
+static RUMBLE: Mutex<sys::retro_set_rumble_state_t> = Mutex::new(None);
+
+/// The levels `tc_rumble` drives at a frame, (port, strong, weak); the test reads them back as `OUTPUT` events.
+pub fn rumble_pattern(frame: u64) -> [(u32, u16, u16); 2] {
+    let strong = (frame.wrapping_mul(4099) & 0xFFFF) as u16;
+    [(0, strong, 0xFFFF - strong), (1, if frame >= 10 { 0x1234 } else { 0 }, 0)]
+}
 
 fn callbacks() -> Callbacks {
     *CALLBACKS.lock().unwrap()
@@ -370,6 +377,11 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
         options::declare_late();
     }
     *FRAME_TIME_SUM.lock().unwrap() = 0;
+    if options.rumble {
+        let mut r = sys::retro_rumble_interface { set_rumble_state: None };
+        environment(env::GET_RUMBLE_INTERFACE, &mut r as *mut _ as *mut c_void);
+        *RUMBLE.lock().unwrap() = r.set_rumble_state;
+    }
     let mut core = Core::new(options.clone());
     if let Some(game) = unsafe { game.as_ref() }
         && !game.data.is_null()
@@ -556,6 +568,14 @@ pub extern "C" fn retro_run() {
     }
     if let Some(a) = av {
         environment(env::SET_SYSTEM_AV_INFO, &a as *const _ as *mut c_void);
+    }
+    if options.rumble
+        && let Some(set) = *RUMBLE.lock().unwrap()
+    {
+        for (port, strong, weak) in rumble_pattern(frame as u64) {
+            unsafe { set(port, sys::RUMBLE_STRONG, strong) };
+            unsafe { set(port, sys::RUMBLE_WEAK, weak) };
+        }
     }
     if options.set_variable && frame == 5 {
         let var = sys::retro_variable { key: c"tc_note".as_ptr(), value: c"changed".as_ptr() };

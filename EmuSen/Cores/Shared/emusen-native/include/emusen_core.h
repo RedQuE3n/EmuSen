@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.16.
+/* emusen_core.h - the EmuSen core ABI, version 1.17.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 16u
+#define EMUSEN_CORE_ABI_MINOR 17u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -62,7 +62,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_LID_CLOSED         (-265) /* @since 1.1, MEDIA: media_insert while the drive's lid or tray is closed */
 #define EMUSEN_WRONG_MEDIA        (-266) /* @since 1.1, MEDIA: state_load with another disc in the drive than the state's */
 #define EMUSEN_NO_SUCH_DRIVE      (-267) /* @since 1.1, MEDIA: a drive machine info does not list */
-/* -268 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
+#define EMUSEN_NOT_EXPECTED       (-268) /* @since 1.17, EXPECT: the library serves other bytes than the hash expected */
+/* -269 .. -319 are the interface's, unassigned. -320 .. -383: a .NET exception reproduced by a port, -320 less
  * its kind (ports only). Below -383, reserved. */
 #define EMUSEN_FAULT_BASE         (-320)
 
@@ -94,7 +95,10 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_PRESENCE          (1ull << 24)  /* @since 1.13: emusen_core_set_present */
 #define EMUSEN_CAP_DEBUG_TRANSLATE   (1ull << 25)  /* @since 1.13, with DEBUG: emusen_core_debug_translate */
 #define EMUSEN_CAP_IMAGE_PATH        (1ull << 26)  /* @since 1.16: the core reads its image through create's and media's image_path */
-/* Bits 27..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+/* @since 1.17 (section 6.42): emusen_core_expect, which a host calls before any other export. Bit 27 is kept for
+ * DEVICE_RING (EmuSen_LibretroHost.md section 5.4). */
+#define EMUSEN_CAP_EXPECT            (1ull << 28)
+/* Bits 27 and 29..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -183,7 +187,10 @@ enum emusen_event_kind {            /* section 6.19; a host skips kinds it does 
     EMUSEN_EVENT_BATTERY      = 4,  /* a: the battery file that changed */
     EMUSEN_EVENT_LOG          = 5,  /* a: records waiting in emusen_core_log_drain */
     EMUSEN_EVENT_MACHINE_INFO = 6,  /* the machine descriptor changed, or events were lost; read everything again */
-    /* 7 is kept for a controller's outputs (EmuSen_CoreAPI_Extensions.md section 4). */
+    /* @since 1.17 (section 6.42): a level a port's device outputs, a motor or a light that machine info's
+     * ports[].outputs declares. a: (port << 32) | output; b: its level over the frame, 0 to 65535. Raised on a change,
+     * and for every declared output after the first call that runs the machine once machine info has been read. */
+    EMUSEN_EVENT_OUTPUT       = 7,
     /* @since 1.4 (section 6.25): a drive is about to read its disc at a place. a: (drive << 32) | file, the drive
      * machine info's and the file an emusen_file.which of the call that gave the drive its disc (EMUSEN_FILE_MEDIA + n)
      * or EMUSEN_FILE_IMAGE; b: the byte offset in that file. Raised at a seek's start for its target, and again before
@@ -333,6 +340,11 @@ int64_t  emusen_core_firmware_for(const uint8_t *image, size_t image_len, uint8_
 int64_t  emusen_core_status_text(int32_t status, uint8_t *out, size_t len);
 /* Where a panic is written before the process aborts; the first path given stands. */
 int32_t  emusen_core_set_crash_log(const char *path);
+/* @since 1.17, EXPECT (section 6.42): the SHA-256 of the bytes the host approved for what this library serves, 64
+ * lower-case hexadecimal digits. Called once, right after loading and before any other export. The library compares
+ * the bytes it will run with it before running any of them: 0 on a match, EMUSEN_NOT_EXPECTED otherwise, after which
+ * it runs nothing it serves, create refuses with EMUSEN_NOT_EXPECTED, and info and status_text name both hashes. */
+int32_t  emusen_core_expect(const char *sha256);
 /* Log records as lines "level<TAB>category<TAB>text<LF>", whole records only, drained as copied; returns the
  * bytes copied, or with a null `out` the bytes waiting. A null machine drains the library's own records. */
 int64_t  emusen_core_log_drain(emusen_machine *machine, uint8_t *out, size_t len);
@@ -547,6 +559,7 @@ typedef int64_t (*emusen_core_raw_copy_fn)(const emusen_machine *, uint32_t, uin
 typedef int64_t (*emusen_core_telemetry_fn)(const emusen_machine *, int64_t *, size_t);
 typedef int32_t (*emusen_core_set_present_fn)(emusen_machine *, uint32_t, uint32_t);
 typedef int32_t (*emusen_core_debug_translate_fn)(const emusen_machine *, uint32_t, uint32_t, uint32_t *);
+typedef int32_t (*emusen_core_expect_fn)(const char *);
 
 #ifdef __cplusplus
 }

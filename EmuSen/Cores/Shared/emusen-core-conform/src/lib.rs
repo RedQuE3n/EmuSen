@@ -304,6 +304,7 @@ impl<'a> Session<'a> {
         let mut pending: Vec<(u64, i32)> = Vec::new();
         let mut rate_events: Vec<(u64, i32)> = Vec::new();
         let mut skipping = false;
+        let mut outputs = declared_outputs(m);
         for f in from..from + count {
             progress::beat();
             if mark == Some(f) {
@@ -342,6 +343,13 @@ impl<'a> Session<'a> {
                     event::AUDIO_RATE => rate_events.push((f, e.a as i32)),
                     event::STATE_SIZE => t.state_size_events.push(f),
                     event::MEDIA_SEEK => t.places.push(((e.a >> 32) as u32, e.a as u32, e.b)),
+                    event::MACHINE_INFO => outputs = declared_outputs(m),
+                    event::OUTPUT => {
+                        let (port, output) = ((e.a >> 32) as u32, e.a as u32);
+                        if !outputs.contains(&(port, output)) || !(0..=0xFFFF).contains(&e.b) {
+                            t.problems.push(format!("frame {f}: OUTPUT names port {port}'s output {output} at level {}, which machine info's ports[].outputs do not declare in 0 to 65535", e.b));
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -432,6 +440,19 @@ fn frame_checks(f: u64, fi: &FrameInfo, copied: usize, problems: &mut Vec<String
     if fi.lines != 0 && (fi.lines < 0 || fi.height <= 0 || fi.height % fi.lines != 0) {
         problems.push(format!("frame {f}: frame_info's lines are {}, which do not divide its height of {}", fi.lines, fi.height));
     }
+}
+
+/// Since 1.17: each output machine info declares, as (port, output), which every `OUTPUT` must name (EmuSen_CoreAPI.md §6.42).
+fn declared_outputs(m: &Machine<'_>) -> Vec<(u32, u32)> {
+    let info = m.machine_info().ok().and_then(|t| parse(&t));
+    let ports = info.as_ref().and_then(|i| i.get("ports")).and_then(Value::as_array).unwrap_or(&[]);
+    ports
+        .iter()
+        .flat_map(|p| {
+            let port = p.get("port").and_then(Value::as_i64).unwrap_or(-1) as u32;
+            p.get("outputs").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(move |o| Some((port, o.get("output")?.as_i64()? as u32)))
+        })
+        .collect()
 }
 
 fn parse(text: &str) -> Option<Value> {

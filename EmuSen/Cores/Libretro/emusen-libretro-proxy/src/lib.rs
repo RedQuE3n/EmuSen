@@ -11,7 +11,8 @@ use emusen_core_broker::proxy::Target;
 use emusen_core_broker::sandbox::Policy;
 use emusen_native::core::caps;
 
-/// The libretro host's capabilities, which this proxy's exports match; the host refuses the pair if they differ.
+/// The libretro host's capabilities, which this proxy's exports match, and `EXPECT`, the proxy's own; the host refuses
+/// the pair if the rest differ.
 pub const CAPABILITIES: u64 = caps::RESET
     | caps::PHASES
     | caps::AXES
@@ -22,7 +23,8 @@ pub const CAPABILITIES: u64 = caps::RESET
     | caps::FRAME_SERIAL
     | caps::BATTERY_DIRTY
     | caps::IMAGE_PATH
-    | caps::MEDIA;
+    | caps::MEDIA
+    | caps::EXPECT;
 
 /// The cores whose memory was measured to hold still between frames, for which the frame-end window is exact. PCEE2's
 /// does not: its emulation runs on threads of its own between `retro_run`s, the first MiB of its RAM moving between two
@@ -129,9 +131,14 @@ impl Target for Libretro {
         entry().is_ok_and(|e| STILL_BETWEEN_FRAMES.contains(&e.stem.as_str()))
     }
 
+    fn expect(sha256: &str) -> Result<(), String> {
+        let e = entry()?;
+        if e.sha256 == sha256 { Ok(()) } else { Err(format!("{} is the build {}, and the approved build is {sha256}", e.file, e.sha256)) }
+    }
+
     fn info_extra() -> String {
         entry().map_or_else(|_| String::new(), |e| format!(r#""libretro":{{"file":{:?},"sha256":"{}"}}"#, e.file, e.sha256))
     }
 }
 
-emusen_core_broker::broker_exports!(Libretro; reset, phases, axes, settings, setting_notes, media, presence);
+emusen_core_broker::broker_exports!(Libretro; reset, phases, axes, settings, setting_notes, media, presence, expect);

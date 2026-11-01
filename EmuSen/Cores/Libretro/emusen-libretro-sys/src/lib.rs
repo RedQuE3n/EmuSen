@@ -178,6 +178,9 @@ pub type retro_audio_callback_t = Option<unsafe extern "C" fn()>;
 pub type retro_audio_set_state_callback_t = Option<unsafe extern "C" fn(enabled: bool)>;
 pub type retro_audio_buffer_status_callback_t = Option<unsafe extern "C" fn(active: bool, occupancy: c_uint, underrun_likely: bool)>;
 pub type retro_keyboard_event_t = Option<unsafe extern "C" fn(down: bool, keycode: c_uint, character: u32, modifiers: u16)>;
+/// `enum retro_rumble_effect`.
+pub const RUMBLE_STRONG: c_int = 0;
+pub const RUMBLE_WEAK: c_int = 1;
 pub type retro_set_rumble_state_t = Option<unsafe extern "C" fn(port: c_uint, effect: c_int, strength: u16) -> bool>;
 pub type retro_core_options_update_display_callback_t = Option<unsafe extern "C" fn() -> bool>;
 pub type retro_proc_address_t = Option<unsafe extern "C" fn()>;

@@ -315,8 +315,9 @@ off). Each port is set to the device the core's `SET_CONTROLLER_INFO` lists as i
 2" [R], on which its rumble depends; PCEE2's `input_descriptors = "false"` [R] means its labels are the RetroPad's), else `RETRO_DEVICE_ANALOG`, else `JOYPAD`; `PRESENCE` sets `RETRO_DEVICE_NONE`.
 `GET_INPUT_MAX_USERS` answers the ports machine info lists; labels from `SET_INPUT_DESCRIPTORS` become the controller's
 labels. Keyboard, mouse, light gun and pointer read zero until device kinds exist (`EmuSen_CoreAPI_Extensions.md` §10),
-and a core that asks for them is shown as asking, never silently. Rumble (stage 5): `GET_RUMBLE_INTERFACE` answered, each
-`set_rumble_state` queued as event 7 for the host to send to the player's pad through Endymion.
+and a core that asks for them is shown as asking, never silently. Rumble (since 1.17, §10e): `GET_RUMBLE_INTERFACE` answered,
+each port then declaring its two motors, and each motor's level raised as event 7 when it changes; the host sends it to
+the player's pad through Endymion (stage 5).
 
 ### 4.5 Saves: named battery files
 
@@ -447,8 +448,8 @@ answers a status saying the core stopped), `SET_MINIMUM_AUDIO_LATENCY` (recorded
 `MEDIA`: the lid onto the eject state, an inserted disc onto an added image by path, so multi-disc games change discs as
 on the console; LRPS2 lists disk control, PCEE2 `disk_control = "false"` [R]), `SET_HW_RENDER`, `GET_PREFERRED_HW_RENDER` (Vulkan),
 `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE`, `GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT` (2),
-`GET_HW_RENDER_INTERFACE` (§5), `SET_HW_SHARED_CONTEXT` (accepted: one context), and from stage 5
-`GET_RUMBLE_INTERFACE`.
+`GET_HW_RENDER_INTERFACE` (§5), `SET_HW_SHARED_CONTEXT` (accepted: one context), and since 1.17
+`GET_RUMBLE_INTERFACE` (§10e).
 
 **Refused**, each logged once per machine with the reason, as libretro specifies for a frontend without the call:
 `SET_ROTATION` and `GET_OVERSCAN` (no rotated or cropped picture in v1), `GET_USERNAME` (nothing of the player's is handed
@@ -813,6 +814,48 @@ host's hash and the load, and sees no runner started and the load refused; and a
 
 Also decided: the Rust host's trust of entries, the listing's `"libretro"` field and `rust-cores.yml`'s Linux-only
 entries come with Cores' stage C5, or at the latest in stage 3.
+
+## 10e. Minor 1.17: the approved hash given first, and rumble (2026-10-31)
+
+**Built** (`EmuSen_CoreAPI.md` §6.42):
+- **`EXPECT`** (capability bit 28), `emusen_core_expect(const char *sha256)`, and `EMUSEN_NOT_EXPECTED` (-268). The broker's
+  proxy answers it for any target that can compare what it serves (`Target::expect`): the libretro proxy seals its copy
+  of the core at that call and compares the copy's SHA-256 with the approved one. On a mismatch the proxy keeps the two
+  hashes and starts nothing: every library call that would start the library's runner, and every `create`, answers
+  `NOT_EXPECTED` with them; `info` is a broken library's naming both; `status_text(-268)` gives the same words. A later
+  `expect` with another hash is refused and changes nothing. The proxy's capabilities are the served library's and
+  `EXPECT`, which it adds to core info's list, so the host's comparison of bits and names holds.
+- **The hosts.** `emusen-core-host`'s `Library::load_expecting` and the C# `CoreLibrary.Open(path, expect)` call it right
+  after loading, before any other export, where the library exports it; a library loaded before in the process under
+  another approval, or none, is refused rather than trusted twice. `DiscoveredCore.Open` passes the sidecar's approved
+  libretro hash for an entry, and `CoreSidecar.Write` takes the hash too, so that the load that writes a sidecar is held
+  to it as well. A library without the export, an older proxy, keeps §10d's check after loading.
+- **Rumble** (E6): event kind 7, `OUTPUT`, and machine info's `ports[].outputs`, as `EmuSen_CoreAPI_Extensions.md` §4.3
+  designed them; `emusen-native`'s `Core::outputs` and `Core::output_level`, the crate raising an event for each declared
+  output whose level changed, and every declared output after machine info is read. The libretro host answers
+  `GET_RUMBLE_INTERFACE`; a core that took it has each port declare `Strong motor` and `Weak motor`, and a motor's level is
+  the strength the core last set, read at the frame's end [C]: libretro's interface gives a level and no time within the
+  frame, so the frame's mean that §4.3 asks of a project core is not known to the host; a core that sets a motor once
+  per frame, as cores do, loses nothing. The levels are atomics, since a core may set them from threads of its own. The
+  kit's play loop refuses an `OUTPUT` that names an output machine info does not declare, or a level outside 0 to 65535.
+- **Bit 27** stays kept for `DEVICE_RING`, which comes with stage 3 in a minor of its own.
+
+**Tests** [M, 2026-10-31]: a libretro entry whose core file is changed after its hash was taken and before the proxy is
+loaded is refused by `load_expecting` in words naming both hashes; its `info` is a broken library's, its `create`
+answers `NOT_EXPECTED`, and no runner of this process is alive that was not before (read from `/proc`); the same in
+WiseMan through `CoreLibrary.Open` (`LibretroHostTests`). Every other brokered test now loads its entry with its hash
+expected. The test core's `tc_rumble` drives both motors of two ports in a pattern; every level arrives as an `OUTPUT`,
+only changes are raised (63 events over 30 frames), and machine info declares the motors on both ports. The
+`emusen-native` test core declares a motor and a lamp, and its seeded fault, an `OUTPUT` for an output not declared,
+fails C6. Seeded faults, each caught: the proxy's comparison skipped (the swapped core loaded); the library calls left
+ungated after a failed `expect` (a runner started and served the swapped core's info); the C# host not calling
+`expect` (`LibretroHostTests`: the swapped core loaded); levels raised once and never on a change (the rumble test, at
+frame 2). WiseMan's blast radius (`LibretroHostTests`, `CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`,
+`CoreHostParityTests`, `NamedFilesTests`): 89 of 89.
+
+**Left**: the runtime's routing of `OUTPUT` to the seated player, Endymion's motors and the Preferences rows (stage 5,
+`EmuSen_CoreAPI_Extensions.md` §4.4); C8's digests of the output stream (§4.5 there); the Rust host's trust of entries,
+which calls `load_expecting` (with Cores' C5).
 
 ## 11. Risks
 

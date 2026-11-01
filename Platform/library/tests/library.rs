@@ -8,16 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn sqlite() -> Option<Arc<Sqlite>> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
-    if let Some(home) = std::env::var_os("HOME") {
-        let root = PathBuf::from(home).join(".nuget/packages/sqlite");
-        if let Ok(versions) = std::fs::read_dir(&root) {
-            let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
-            found.sort();
-            candidates.extend(found.into_iter().rev());
-        }
-    }
-    candidates.into_iter().find_map(|p| Sqlite::open(&p.to_string_lossy()).ok().map(Arc::new))
+    emusen_sqlite::for_tests()
 }
 
 struct Temp(PathBuf);
@@ -51,7 +42,6 @@ impl Drop for Temp {
 #[test]
 fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
     let Some(sqlite) = sqlite() else {
-        eprintln!("no e_sqlite3 found: nothing was run");
         return;
     };
     let t = Temp::new("scan");
@@ -141,7 +131,11 @@ fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
     assert!(games.contains(&format!("{{\"path\":{},\"system\":\"psx\",\"package\":{}}}", q(&t.at("compressed/psx/Disc.chd")), q(&t.at("packages/PlayStation/Disc.chd")))), "{games}");
     assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":null}}", q(&t.at("roms/nes/Free.nes")))), "{games}");
     assert!(games.contains("Stray.chd") && !games.contains("Disc.cue") && !games.contains("Inside.nes") && !games.contains("Gone.nes"), "{games}");
-    assert!(games.matches("Claimed.nes\"").count() == 1, "{games}");
+    let parsed = emusen_dotnet::json::parse(&games).unwrap();
+    let Some(emusen_dotnet::json::Value::Array(entries)) = parsed.get("games") else { panic!("{games}") };
+    let claimed: Vec<_> = entries.iter().filter(|e| e.get("path").and_then(|p| p.as_str()) == Some(t.at("roms/nes/Claimed.nes").as_str())).collect();
+    assert_eq!(claimed.len(), 1, "{games}");
+    assert_eq!(claimed[0].get("package").and_then(|p| p.as_str()), Some(t.at("packages/NES/Claimed.nes").as_str()), "{games}");
     // Without the two folders the scan is the one before packages.
     assert_eq!(lib.scan(&[t.at("roms")], &systems).unwrap(), 3);
 }

@@ -15,5 +15,7 @@
   "screenscraper_system": 9,
   "cheat_space": "CPUBUS",
   "media": [],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Nintendo - Game Boy"],
+  "libretro_systemids": ["game_boy"]
 }

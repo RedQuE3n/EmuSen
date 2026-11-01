@@ -7,19 +7,10 @@ use emusen_scrape::clock::{Clock, Stop};
 use emusen_scrape::quota::{Gate, Manager, Status, day_of, start_of_next_day};
 use emusen_scrape::store::Store;
 use emusen_sqlite::Sqlite;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 fn sqlite() -> Option<Arc<Sqlite>> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("EMUSEN_SQLITE").map(PathBuf::from).into_iter().collect();
-    if let Some(home) = std::env::var_os("HOME") {
-        if let Ok(versions) = std::fs::read_dir(PathBuf::from(home).join(".nuget/packages/sqlite")) {
-            let mut found: Vec<PathBuf> = versions.flatten().map(|v| v.path().join("runtimes/linux-x64/native/libe_sqlite3.so")).filter(|p| p.exists()).collect();
-            found.sort();
-            candidates.extend(found.into_iter().rev());
-        }
-    }
-    candidates.into_iter().find_map(|p| Sqlite::open(&p.to_string_lossy()).ok().map(Arc::new))
+    emusen_sqlite::for_tests()
 }
 
 fn store(label: &str) -> Option<Store> {
@@ -49,7 +40,6 @@ fn noon() -> i64 {
 #[test]
 fn the_pace_turns_threads_and_the_days_two_percent() {
     let Some(store) = store("rules") else {
-        eprintln!("no e_sqlite3 found: nothing was run");
         return;
     };
     let clock = Clock::test(noon());
@@ -77,7 +67,6 @@ fn the_pace_turns_threads_and_the_days_two_percent() {
 #[test]
 fn a_430_lasts_until_paris_midnight_and_a_restart_and_a_403_until_the_settings_change() {
     let Some(store) = store("stops") else {
-        eprintln!("no e_sqlite3 found: nothing was run");
         return;
     };
     let clock = Clock::test(noon());
@@ -100,7 +89,6 @@ fn a_430_lasts_until_paris_midnight_and_a_restart_and_a_403_until_the_settings_c
 #[test]
 fn a_429_halves_the_pace_and_waits_a_minute_and_a_401_five() {
     let Some(store) = store("waits") else {
-        eprintln!("no e_sqlite3 found: nothing was run");
         return;
     };
     let clock = Clock::test(noon());

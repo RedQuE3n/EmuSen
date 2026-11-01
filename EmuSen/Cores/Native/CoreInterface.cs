@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 15;
+        public const uint Minor = 16;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Native
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
         public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapMedia = 1UL << 18, CapDebugReads = 1UL << 19;
         public const ulong CapBorrow = 1UL << 20, CapDevicePicture = 1UL << 21, CapRawPicture = 1UL << 22;
-        public const ulong CapTelemetry = 1UL << 23, CapPresence = 1UL << 24, CapDebugTranslate = 1UL << 25;
+        public const ulong CapTelemetry = 1UL << 23, CapPresence = 1UL << 24, CapDebugTranslate = 1UL << 25, CapImagePath = 1UL << 26;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -26,7 +26,7 @@ namespace EmuSen.Cores.Native
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
             (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapMedia, "MEDIA"), (CapDebugReads, "DEBUG_READS"),
             (CapBorrow, "BORROW"), (CapDevicePicture, "DEVICE_PICTURE"), (CapRawPicture, "RAW_PICTURE"),
-            (CapTelemetry, "TELEMETRY"), (CapPresence, "PRESENCE"), (CapDebugTranslate, "DEBUG_TRANSLATE"),
+            (CapTelemetry, "TELEMETRY"), (CapPresence, "PRESENCE"), (CapDebugTranslate, "DEBUG_TRANSLATE"), (CapImagePath, "IMAGE_PATH"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -54,7 +54,7 @@ namespace EmuSen.Cores.Native
         };
 
         // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
-        public static readonly IReadOnlyList<string> HostObligations = new[] { "present" };
+        public static readonly IReadOnlyList<string> HostObligations = new[] { "present", "image_path", "named_files" };
 
         // The status codes a host acts on by number.
         public const int StatusNull = -1, StatusBufferTooSmall = -7, StatusNotSupported = -256, StatusUnknownSetting = -259, StatusBadSetting = -260, StatusBadStruct = -263;
@@ -62,6 +62,9 @@ namespace EmuSen.Cores.Native
 
         // EMUSEN_FILE_MEDIA, the first companion of an image set, and EMUSEN_MEDIA_RESTORE - see EmuSen_CoreAPI.md §6.23.
         public const uint FileMedia = 65536, MediaRestore = 1;
+
+        // EMUSEN_FILE_NAMED, since 1.16: the first named battery file, each carrying File.Name - see EmuSen_CoreAPI.md §6.41.
+        public const uint FileNamed = 0x8000;
 
         // EMUSEN_CREATE_LENT and EMUSEN_MEDIA_LENT: the image and its media files kept in place by the host until the loan ends - see EmuSen_CoreAPI.md §6.24.
         public const uint CreateLent = 1, MediaLent = 2;
@@ -88,6 +91,7 @@ namespace EmuSen.Cores.Native
             public uint Which;
             public byte* Data;
             public nuint Len;
+            public byte* Name;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -108,6 +112,7 @@ namespace EmuSen.Cores.Native
             public uint Flags;
             public DeviceLend* Device;
             public byte* System;
+            public byte* ImagePath;
         }
 
         // emusen_device_lend, since 1.9: the host's Vulkan device lent to a core, with a queue the core alone submits to - see EmuSen_CoreAPI.md §6.29.
@@ -194,6 +199,7 @@ namespace EmuSen.Cores.Native
             public File* Files;
             public nuint FileCount;
             public nuint FileSize;
+            public byte* ImagePath;
         }
 
         public readonly delegate* unmanaged<uint> AbiVersion;

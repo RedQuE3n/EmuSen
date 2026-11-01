@@ -2,7 +2,7 @@
 //! through the `emusen.library` service. A job is followed, one line a disc, until it ends or the line's budget is
 //! spent; a longer one goes on in the background, listed by `ps` as `chd<n>`, followed again by `chd wait` and stopped
 //! by `kill`. What each word means is the tool's; this module asks and prints. See EmuSen_GamePackages.md §12.3 and
-//! `man chd`.
+//! `man chd`; `pkg` is §14's, and `rom hash`, `rom check` and `rom dups` EmuSen_LibraryTools.md §7's (`man rom`).
 
 use dianash_module::{Answer, Call, Manifest, Module};
 use emusen_dotnet::json::{self, Value};
@@ -36,6 +36,11 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         false,
         "  pkg make <path>... [--self-contained] [--zip]\n                                a package for each game under each path (relative to the library), linked\n                                unless the game is to be copied in; --zip also writes the package as one zip\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg zip <package>...          a self-contained package written as one zip beside it, saves and all\n  pkg identity <package> original|patched\n                                which identity the scraper sends for a patched package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
     ),
+    (
+        "rom",
+        false,
+        "  rom hash [-r] [--comparable] <path>...\n                                CRC-32, MD5, SHA-1, size and name of each file (a sheet's tracks each), relative to\n                                the library; --comparable in its system's comparable form, a disc as one line\n  rom check [-r] <path>...      each file: ok, or each check it failed (size, sheet, archive, chd)\n  rom dups [<console>]          the groups of the same dump, one a paragraph\n  rom wait [rom<n>]             follow a rom job that went on in the background",
+    ),
 ];
 
 pub struct LibraryCommands;
@@ -43,6 +48,92 @@ pub struct LibraryCommands;
 pub static MODULE: LibraryCommands = LibraryCommands;
 
 const USAGE: &str = "Usage: chd ls [<path>...] | chd convert <path>... [--fast] [-j <threads>] [--output <folder> | --beside] | chd check [<path>...] | chd wait [chd<n>]\n  Paths are relative to the library (AppSettings.RomDirectory); / is all of it. See man chd.";
+
+const ROM_USAGE: &str = "Usage: rom hash [-r] [--comparable] <path>... | rom check [-r] <path>... | rom dups [<console>] | rom wait [rom<n>]\n  Paths are relative to the library, / for all of it with -r. See man rom.";
+
+/// The request a `rom` command line makes, or the usage.
+pub fn rom_request(args: &[String]) -> Result<String, String> {
+    let mut words = args.iter().skip(1);
+    let sub = words.next().map(String::as_str).unwrap_or("");
+    let op = match sub {
+        "hash" => "rom-hash",
+        "check" => "rom-check",
+        "dups" => "rom-dups",
+        _ => return Err(ROM_USAGE.into()),
+    };
+    let (mut paths, mut recursive, mut comparable) = (Vec::new(), false, false);
+    for w in words {
+        match w.as_str() {
+            "-r" if op != "rom-dups" => recursive = true,
+            "--comparable" if op == "rom-hash" => comparable = true,
+            o if o.starts_with('-') && o.len() > 1 => return Err(format!("rom: {o} is not an option of rom {sub}\n{ROM_USAGE}")),
+            p => paths.push(Value::string(p)),
+        }
+    }
+    if op == "rom-dups" {
+        if paths.len() > 1 {
+            return Err(format!("rom dups: one console at most\n{ROM_USAGE}"));
+        }
+        return Ok(compact(vec![("op", Value::string(op)), ("console", paths.pop().unwrap_or(Value::Null))]));
+    }
+    if paths.is_empty() {
+        return Err(format!("rom {sub}: name what to {sub}, or / with -r for the whole library\n{ROM_USAGE}"));
+    }
+    let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(paths)), ("recursive", Value::Bool(recursive))];
+    if op == "rom-hash" {
+        members.push(("comparable", Value::Bool(comparable)));
+    }
+    Ok(compact(members))
+}
+
+/// A `rom hash` line: CRC-32, MD5, SHA-1, size and name, one space between, so that `uniq -w 40` keys on the hashes.
+pub fn hash_line(l: &Value) -> String {
+    format!("{} {} {} {} {}", text(l, "crc32"), text(l, "md5"), text(l, "sha1"), token(l, "size"), text(l, "name"))
+}
+
+/// A `rom` job's event as what it prints: its lines for standard output, and its words for standard error.
+pub fn rom_lines(e: &Value, groups_before: u64) -> (String, String) {
+    let words = text(e, "words");
+    match (text(e, "event"), text(e, "op")) {
+        ("start", _) => {
+            let w = text(e, "chdman_words");
+            (String::new(), if w.is_empty() { String::new() } else { format!("rom check: chdman's verify is not run ({w}); each CHD is read through EmuSen's reader alone\n") })
+        }
+        ("file", _) if text(e, "state") == "failed" && !words.is_empty() => (String::new(), format!("rom: {}: {words}\n", text(e, "source"))),
+        ("file", _) if e.get("failed").is_some() => {
+            let failed: Vec<String> = match e.get("failed") {
+                Some(Value::Array(f)) => f.iter().map(|x| format!("{}: {}", text(x, "check"), text(x, "words"))).collect(),
+                _ => Vec::new(),
+            };
+            (format!("{}: {}\n", text(e, "source"), if failed.is_empty() { "ok".to_string() } else { failed.join("; ") }), String::new())
+        }
+        ("file", _) => match e.get("lines") {
+            Some(Value::Array(lines)) => (lines.iter().map(|l| hash_line(l) + "\n").collect(), String::new()),
+            _ => (String::new(), String::new()),
+        },
+        ("group", _) => {
+            let members: String = match e.get("members") {
+                Some(Value::Array(m)) => m.iter().map(|l| hash_line(l) + "\n").collect(),
+                _ => String::new(),
+            };
+            (if groups_before > 0 { format!("\n{members}") } else { members }, String::new())
+        }
+        ("end", "rom-check") if e.get("error").is_none() => (String::new(), format!("rom check: {}; {} s.\n", counts(e), token(e, "seconds"))),
+        ("end", "rom-dups") if e.get("error").is_none() => {
+            let n = e.get("counts").and_then(|c| c.get("groups")).map_or("0".to_string(), |v| if let Value::Number(t) = v { t.clone() } else { "0".into() });
+            let stopped = e.get("counts").and_then(|c| c.get("stopped")).is_some();
+            (String::new(), if stopped { "rom dups: stopped before every file was hashed, so no group is given.\n".to_string() } else { format!("rom dups: {n} group(s); {}; {} s.\n", counts(e), token(e, "seconds")) })
+        }
+        _ => (String::new(), String::new()),
+    }
+}
+
+fn counts(e: &Value) -> String {
+    match e.get("counts") {
+        Some(Value::Object(c)) if !c.is_empty() => c.iter().filter(|(k, _)| k.text != "groups").map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.as_str() } else { "" }, k.text)).collect::<Vec<_>>().join(", "),
+        _ => "no file".into(),
+    }
+}
 
 const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
 
@@ -321,6 +412,9 @@ struct Running {
     of: u64,
     current: String,
     stopping: bool,
+    /// A `rom` job's output that `ps` took while it ran in the background, printed when it is followed again.
+    pending: (String, String),
+    groups: u64,
 }
 
 /// This shell's jobs, kept in its slot and freed with it.
@@ -423,6 +517,9 @@ enum Followed {
 /// Prints a job's events as they come, until it ends or the line is cancelled, which its budget also does.
 fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
     let mut buffer = vec![0u8; 4096];
+    let (out, err) = std::mem::take(&mut r.pending);
+    call.out(&out);
+    call.err(&err);
     loop {
         if call.cancelled() {
             return Followed::Detached;
@@ -448,15 +545,22 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
             *status = 1;
         }
         match text(&event, "event") {
-            "start" => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).unwrap_or(0),
+            "start" => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).or_else(|| number(&event, "files")).unwrap_or(0),
             "disc" if text(&event, "state") == "working" => r.current = text(&event, "source").to_string(),
-            "disc" | "package" => {
+            "disc" | "package" | "file" => {
                 r.done += 1;
                 if matches!(text(&event, "state"), "failed" | "changed" | "missing" | "refused") {
                     *status = 1;
                 }
             }
             _ => {}
+        }
+        if r.prefix == "rom" {
+            let (out, err) = rom_lines(&event, r.groups);
+            r.groups += u64::from(text(&event, "event") == "group");
+            call.out(&out);
+            call.err(&err);
+            continue;
         }
         let printed = match (text(&event, "event"), r.listing) {
             ("package", true) => Some(listing_line(&event)),
@@ -494,10 +598,16 @@ fn drain(r: &mut Running) -> bool {
         };
         let Ok(event) = json::parse(&raw) else { continue };
         match (text(&event, "event"), text(&event, "state")) {
-            ("start", _) => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).unwrap_or(0),
+            ("start", _) => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).or_else(|| number(&event, "files")).unwrap_or(0),
             ("disc", "working") => r.current = text(&event, "source").to_string(),
-            ("disc" | "package", _) => r.done += 1,
+            ("disc" | "package" | "file", _) => r.done += 1,
             _ => {}
+        }
+        if r.prefix == "rom" {
+            let (out, err) = rom_lines(&event, r.groups);
+            r.groups += u64::from(text(&event, "event") == "group");
+            r.pending.0.push_str(&out);
+            r.pending.1.push_str(&err);
         }
     }
 }
@@ -511,7 +621,8 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
             status
         }
         Followed::Detached => {
-            call.out(&detached(jobs.running[at].prefix, jobs.running[at].id));
+            let (id, p) = (jobs.running[at].id, jobs.running[at].prefix);
+            if p == "rom" { call.err(&detached(p, id)) } else { call.out(&detached(p, id)) }
             status
         }
     }
@@ -519,7 +630,12 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
 
 fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     let args = call.args();
-    let request = match if prefix == "pkg" { pkg_request(&args, &|p| call.resolve(p)) } else { request(&args, &|p| call.resolve(p)) } {
+    let made = match prefix {
+        "pkg" => pkg_request(&args, &|p| call.resolve(p)),
+        "rom" => rom_request(&args),
+        _ => request(&args, &|p| call.resolve(p)),
+    };
+    let request = match made {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
@@ -529,7 +645,7 @@ fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     };
     jobs.next += 1;
     let listing = prefix == "pkg" && args.get(1).map(String::as_str) == Some("ls");
-    jobs.running.push(Running { id: jobs.next, prefix, listing, op: args[1].clone(), job, done: 0, of: 0, current: String::new(), stopping: false });
+    jobs.running.push(Running { id: jobs.next, prefix, listing, op: args[1].clone(), job, done: 0, of: 0, current: String::new(), stopping: false, pending: Default::default(), groups: 0 });
     let at = jobs.running.len() - 1;
     Answer::with(String::new(), follow_or_detach(call, jobs, at))
 }
@@ -553,7 +669,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 4, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 6, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"] }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
@@ -562,6 +678,8 @@ impl Module for LibraryCommands {
             "chd" => start(call, jobs_of(call), "chd"),
             "pkg" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "pkg"),
             "pkg" => start(call, jobs_of(call), "pkg"),
+            "rom" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "rom"),
+            "rom" => start(call, jobs_of(call), "rom"),
             other => Answer::fault(format!("emusen.library has no command '{other}'")),
         })
     }
@@ -570,7 +688,11 @@ impl Module for LibraryCommands {
         let jobs = jobs_of(call);
         for r in jobs.running.iter_mut() {
             let ended = drain(r);
-            let unit = if r.prefix == "pkg" { "packages" } else { "discs" };
+            let unit = match r.prefix {
+                "pkg" => "packages",
+                "rom" => "files",
+                _ => "discs",
+            };
             let progress = if ended { "ended".to_string() } else if r.stopping { "stopping".to_string() } else { format!("{}/{} {unit}", r.done, r.of) };
             call.out(&format!("  {}{:<7} {:<11} {progress}{}\n", r.prefix, r.id, r.op, if r.current.is_empty() || ended { String::new() } else { format!(", {}", r.current) }));
         }
@@ -578,7 +700,7 @@ impl Module for LibraryCommands {
     }
 
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
-        let prefix = ["chd", "pkg"].into_iter().find(|p| id.starts_with(p))?;
+        let prefix = ["chd", "pkg", "rom"].into_iter().find(|p| id.starts_with(p))?;
         let n = id.strip_prefix(prefix)?.parse::<u32>().ok()?;
         let jobs = jobs_of(call);
         let Some(r) = jobs.running.iter_mut().find(|r| r.id == n && r.prefix == prefix) else {
@@ -587,7 +709,11 @@ impl Module for LibraryCommands {
         };
         r.job.stop();
         r.stopping = true;
-        let what = if prefix == "pkg" { "the packages not reached are left as they are" } else { "its current disc is abandoned and nothing of it is left behind" };
+        let what = match prefix {
+            "pkg" => "the packages not reached are left as they are",
+            "rom" => "the files not reached are not read, and it wrote nothing",
+            _ => "its current disc is abandoned and nothing of it is left behind",
+        };
         call.out(&format!("{prefix}{n} is stopping: {what}; {prefix} wait {prefix}{n} shows how far it got.\n"));
         Some(0)
     }
@@ -649,7 +775,32 @@ mod tests {
     #[test]
     fn the_manifest_names_chd_and_pkg_their_jobs_and_requires_the_service() {
         let m = LibraryCommands.manifest();
-        assert!(m.starts_with("{\"manifest\":1,\"id\":\"emusen.library\"") && m.contains("\"name\":\"chd\"") && m.contains("\"name\":\"pkg\"") && m.contains("\"required\":true") && m.contains("\"jobs\":[\"chd\",\"pkg\"]"), "{m}");
+        assert!(m.starts_with("{\"manifest\":1,\"id\":\"emusen.library\"") && m.contains("\"name\":\"chd\"") && m.contains("\"name\":\"pkg\"") && m.contains("\"name\":\"rom\"") && m.contains("\"required\":true") && m.contains("\"jobs\":[\"chd\",\"pkg\",\"rom\"]"), "{m}");
+    }
+
+    #[test]
+    fn a_rom_command_line_is_a_request_and_each_event_prints_plain_lines() {
+        assert_eq!(rom_request(&args("rom hash -r --comparable / psx")).unwrap(), r#"{"op":"rom-hash","paths":["/","psx"],"recursive":true,"comparable":true}"#);
+        assert_eq!(rom_request(&args("rom check snes/a.sfc")).unwrap(), r#"{"op":"rom-check","paths":["snes/a.sfc"],"recursive":false}"#);
+        assert_eq!(rom_request(&args("rom dups")).unwrap(), r#"{"op":"rom-dups","console":null}"#);
+        assert_eq!(rom_request(&args("rom dups SNES")).unwrap(), r#"{"op":"rom-dups","console":"SNES"}"#);
+        assert!(rom_request(&args("rom check --comparable a")).unwrap_err().contains("--comparable is not an option of rom check"));
+        assert!(rom_request(&args("rom dups -r")).unwrap_err().contains("-r is not an option of rom dups"));
+        assert!(rom_request(&args("rom dups a b")).unwrap_err().contains("one console"));
+        assert!(rom_request(&args("rom hash")).unwrap_err().contains("name what to hash"));
+        assert!(rom_request(&args("rom")).unwrap_err().starts_with("Usage: rom"));
+        let e = |t: &str| json::parse(t).unwrap();
+        let line = r#"{"crc32":"0000abcd","md5":"m","sha1":"s","size":4,"name":"psx/a b.cue#02"}"#;
+        assert_eq!(rom_lines(&e(&format!(r#"{{"event":"file","source":"psx/a b.cue","state":"hashed","lines":[{line}]}}"#)), 0).0, "0000abcd m s 4 psx/a b.cue#02\n");
+        assert_eq!(rom_lines(&e(r#"{"event":"file","source":"a.nes","state":"failed","words":"a.nes: gone"}"#), 0), (String::new(), "rom: a.nes: a.nes: gone\n".into()));
+        assert_eq!(rom_lines(&e(r#"{"event":"file","source":"a.nes","state":"ok","failed":[]}"#), 0).0, "a.nes: ok\n");
+        assert_eq!(rom_lines(&e(r#"{"event":"file","source":"a.cue","state":"failed","failed":[{"check":"sheet","words":"it names a.bin, which is not there"},{"check":"size","words":"b.bin is empty"}]}"#), 0).0, "a.cue: sheet: it names a.bin, which is not there; size: b.bin is empty\n");
+        let group = format!(r#"{{"event":"group","members":[{line},{line}]}}"#);
+        assert_eq!(rom_lines(&e(&group), 0).0, "0000abcd m s 4 psx/a b.cue#02\n0000abcd m s 4 psx/a b.cue#02\n");
+        assert!(rom_lines(&e(&group), 1).0.starts_with("\n0000abcd"));
+        assert_eq!(rom_lines(&e(r#"{"event":"end","op":"rom-check","counts":{"ok":2,"failed":1},"seconds":0.5}"#), 0).1, "rom check: 2 ok, 1 failed; 0.5 s.\n");
+        assert_eq!(rom_lines(&e(r#"{"event":"end","op":"rom-dups","counts":{"hashed":3,"groups":1},"seconds":0.5}"#), 0).1, "rom dups: 1 group(s); 3 hashed; 0.5 s.\n");
+        assert!(rom_lines(&e(r#"{"event":"start","op":"rom-check","files":1,"chdman_words":"not found","refused":[]}"#), 0).1.contains("chdman's verify is not run (not found)"));
     }
 
     #[test]

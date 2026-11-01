@@ -15,5 +15,7 @@
   "screenscraper_system": 2,
   "cheat_space": "RAM",
   "media": [],
-  "byte_order": "little"
+  "byte_order": "little",
+  "libretro_databases": ["Sega - Master System - Mark III"],
+  "libretro_systemids": ["master_system"]
 }

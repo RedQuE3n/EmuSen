@@ -30,11 +30,19 @@ pub enum Op {
     /// `pkg identity` and `pkg zip` (EmuSen_GamePackages.md §19), since 1.3.
     PkgIdentity,
     PkgZip,
+    /// `rom hash`, `rom check` and `rom dups` (EmuSen_LibraryTools.md §4, §7), since 1.6.
+    RomHash,
+    RomCheck,
+    RomDups,
 }
 
 impl Op {
     fn packages(&self) -> bool {
         matches!(self, Op::PkgMake | Op::PkgList | Op::PkgCheck | Op::PkgMigrate | Op::PkgPatchAdd | Op::PkgPatchRm | Op::PkgIdentity | Op::PkgZip)
+    }
+
+    pub fn rom(&self) -> bool {
+        matches!(self, Op::RomHash | Op::RomCheck | Op::RomDups)
     }
 }
 
@@ -56,6 +64,9 @@ pub struct Request {
     /// to write each CHD beside its original in the library (EmuSen_GamePackages.md §20).
     pub output: Option<String>,
     pub beside: bool,
+    /// Since 1.6: `rom hash -r` and `rom check -r`, folders taken whole; `rom hash --comparable`.
+    pub recursive: bool,
+    pub comparable: bool,
 }
 
 /// A request's JSON: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, or since 1.1
@@ -63,7 +74,9 @@ pub struct Request {
 /// `{"op": "pkg-patch-add", "paths": [<package>], "patch": <file>}` and `{"op": "pkg-patch-rm", "paths": [<package>], "index": n}`,
 /// or since 1.3 `pkg-make`'s `"self_contained": true` and `"zip": true`, a package's zip among `pkg-check`'s paths, and
 /// `{"op": "pkg-identity", "paths": [<package>...], "identity": "original" | "patched"}` and `{"op": "pkg-zip", "paths": [<package>...]}`,
-/// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert.
+/// or since 1.4 `"output": <folder>` for convert, check and ls, and `"beside": true` for convert, or since 1.6
+/// `{"op": "rom-hash" | "rom-check", "paths": [...], "recursive": false, "comparable": false}` and
+/// `{"op": "rom-dups", "console": null}` (EmuSen_LibraryTools.md §7).
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -78,7 +91,10 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some("pkg-patch-rm") => Op::PkgPatchRm,
         Some("pkg-identity") => Op::PkgIdentity,
         Some("pkg-zip") => Op::PkgZip,
-        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add, pkg-patch-rm, pkg-identity or pkg-zip".into()),
+        Some("rom-hash") => Op::RomHash,
+        Some("rom-check") => Op::RomCheck,
+        Some("rom-dups") => Op::RomDups,
+        _ => return Err("the request's op is not convert, check, ls, pkg-make, pkg-ls, pkg-check, pkg-migrate, pkg-patch-add, pkg-patch-rm, pkg-identity, pkg-zip, rom-hash, rom-check or rom-dups".into()),
     };
     let paths = match doc.get("paths") {
         None | Some(Value::Null) => Vec::new(),
@@ -119,7 +135,17 @@ pub fn request(text: &str) -> Result<Request, String> {
     if beside && output.is_some() {
         return Err("a CHD goes to the output folder or beside its original, not both".into());
     }
-    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside })
+    let (recursive, comparable) = (flag("recursive"), flag("comparable"));
+    if (recursive && !matches!(op, Op::RomHash | Op::RomCheck)) || (comparable && op != Op::RomHash) {
+        return Err("recursive is rom-hash's and rom-check's, comparable rom-hash's alone".into());
+    }
+    if matches!(op, Op::RomHash | Op::RomCheck) && paths.is_empty() {
+        return Err("rom-hash and rom-check name the library's files or folders in \"paths\"".into());
+    }
+    if op == Op::RomDups && !paths.is_empty() {
+        return Err("rom-dups takes the whole library, or one console in \"console\"; it names no paths".into());
+    }
+    Ok(Request { op, paths, options: Options { fast: flag("fast"), threads }, console, patch, index, making, identity, output, beside, recursive, comparable })
 }
 
 fn emit(queue: &Queue, event: Value) {
@@ -148,6 +174,9 @@ fn op_word(op: &Op) -> &'static str {
         Op::PkgPatchRm => "pkg-patch-rm",
         Op::PkgIdentity => "pkg-identity",
         Op::PkgZip => "pkg-zip",
+        Op::RomHash => "rom-hash",
+        Op::RomCheck => "rom-check",
+        Op::RomDups => "rom-dups",
     }
 }
 
@@ -173,10 +202,15 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     let library = match ctx.checked_library() {
         Ok(l) => l,
         Err(words) if req.op.packages() => return end(queue, &req.op, &counts, started, Some(words.replace("there is no library to convert.", "there is no library for a package to link to."))),
+        Err(words) if req.op.rom() => return end(queue, &req.op, &counts, started, Some(words.replace("there is no library to convert.", "there is no library to read."))),
         Err(words) => return end(queue, &req.op, &counts, started, Some(words)),
     };
     if req.op.packages() {
         return run_packages(ctx, &library, req, queue, stop, started);
+    }
+    if req.op.rom() {
+        let error = crate::rom::run(ctx, &library, req, &|e| emit(queue, e), &mut |state| count(&mut counts, state), stop).err();
+        return end(queue, &req.op, &counts, started, error);
     }
     let chdman = match req.op {
         Op::List => None,

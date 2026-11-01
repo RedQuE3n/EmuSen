@@ -3,7 +3,7 @@ using Xunit;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // CSharpImplementationFact's twin for a theory: skipped when EMUSEN_CRYSTAL_NATIVE=1 puts the binding on the Rust - see EmuSen_Backend.md §29.27.
+    // CSharpImplementationFact's twin for a theory: run only at EMUSEN_CRYSTAL_NATIVE=0 - see EmuSen_Backend.md §29.27 and §35.
     public sealed class CSharpImplementationTheoryAttribute : TheoryAttribute
     {
         public CSharpImplementationTheoryAttribute(string why)

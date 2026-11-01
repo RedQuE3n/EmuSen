@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using static EmuSen.Tools.Packages.ToolEvents;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -209,8 +210,6 @@ namespace EmuSen.Tools.Packages
             _stepsDone++;
             NextStep();
         }
-
-        private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
         // One event: a row of the listing, or a step's progress and outcome.
         private void Take(string line)

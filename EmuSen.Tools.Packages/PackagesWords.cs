@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using static EmuSen.Tools.Packages.ToolEvents;
 
 namespace EmuSen.Tools.Packages
 {
@@ -26,10 +27,6 @@ namespace EmuSen.Tools.Packages
             "" => "—",
             string m => m,
         };
-
-        private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-
-        private static long Number(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long n) ? n : 0;
 
         private static string Why(JsonElement e) => Text(e, "words") is { Length: > 0 } w ? $": {ToolWords.Reason(w)}" : "";
 

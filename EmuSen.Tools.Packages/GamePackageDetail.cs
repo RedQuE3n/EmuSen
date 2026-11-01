@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using static EmuSen.Tools.Packages.ToolEvents;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Avalonia;
@@ -230,8 +231,6 @@ namespace EmuSen.Tools.Packages
             }
             Render();
         }
-
-        private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
         private static int Count(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) ? v.ValueKind == JsonValueKind.Array ? v.GetArrayLength() : v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0 : 0;
 

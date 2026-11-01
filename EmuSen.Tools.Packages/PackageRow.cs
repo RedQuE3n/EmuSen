@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using static EmuSen.Tools.Packages.ToolEvents;
 
 namespace EmuSen.Tools.Packages
 {
@@ -64,10 +65,6 @@ namespace EmuSen.Tools.Packages
             "" => "",
             string e => e[1..].ToUpperInvariant(),
         };
-
-        private static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-
-        private static long Number(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long n) ? n : 0;
 
         // A title from a file's name: the name less its extension, the package folder's for a package.
         private static string TitleOf(string path) => Path.GetFileNameWithoutExtension(path.TrimEnd('/'));

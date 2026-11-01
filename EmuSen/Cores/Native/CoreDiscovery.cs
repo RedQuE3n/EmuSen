@@ -278,12 +278,18 @@ namespace EmuSen.Cores.Native
         // A system its core marks in development is offered only where development cores are asked for - see EmuSen_CoreAPI.md §27.4.
         public static bool Offered(CoreSystem system) => !system.Development || IncludeDevelopment;
 
-        // The engines whose offered systems claim this extension.
+        // The engines whose offered systems claim this extension, in the rule's order for the system each runs it as.
         public static IEnumerable<DiscoveredCore> ForExtension(string extension) =>
-            Found.Where(c => c.Info.Systems.Any(s => Offered(s) && s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase)));
+            Found.Where(c => c.Info.Systems.Any(s => Offered(s) && s.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))).OrderBy(c => Rank(c, c.Info.SystemFor(extension)?.Id));
 
-        // The engines that offer a system, by its id.
-        public static IEnumerable<DiscoveredCore> ForSystem(string systemId) => Found.Where(c => c.Info.Systems.Any(s => s.Id == systemId && Offered(s)));
+        // The engines that offer a system, by its id, in the rule's order, the first its default.
+        public static IEnumerable<DiscoveredCore> ForSystem(string systemId) => InRuleOrder(Found.Where(c => c.Info.Systems.Any(s => s.Id == systemId && Offered(s))), systemId);
+
+        // A system's engines, the default first: a hosted core the list names its default, then the native cores, then the other hosted cores, each group in discovery's order - see EmuSen_Cores.md §4.8.
+        public static IEnumerable<DiscoveredCore> InRuleOrder(IEnumerable<DiscoveredCore> engines, string? systemId) => engines.OrderBy(c => Rank(c, systemId));
+
+        private static int Rank(DiscoveredCore core, string? systemId) =>
+            core.Entry is null ? 1 : string.Equals(Crystal.Systems.HostedCores.DefaultFor(systemId), System.IO.Path.GetFileName(core.Entry), StringComparison.Ordinal) ? 0 : 2;
 
         public static DiscoveredCore? ByEngineName(string? name) => name is null ? null : Found.FirstOrDefault(c => c.EngineName == name);
     }

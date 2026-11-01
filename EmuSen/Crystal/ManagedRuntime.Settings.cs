@@ -67,7 +67,8 @@ namespace EmuSen.Crystal.Managed
         private static Cores.Native.DiscoveredCore[] EnginesOfConsole(string console)
         {
             var ids = CoreCatalog.SystemIdsFor(console).Concat(Crystal.Systems.SystemPacks.All.Where(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase)).Select(p => p.Entry.Id)).ToHashSet(StringComparer.Ordinal);
-            return Cores.Native.CoreDiscovery.Found.Where(c => c.Info.Systems.Any(s => ids.Contains(s.Id) || string.Equals(s.Id, console, StringComparison.OrdinalIgnoreCase))).ToArray();
+            var engines = Cores.Native.CoreDiscovery.Found.Where(c => c.Info.Systems.Any(s => ids.Contains(s.Id) || string.Equals(s.Id, console, StringComparison.OrdinalIgnoreCase)));
+            return Cores.Native.CoreDiscovery.InRuleOrder(engines, ids.FirstOrDefault(id => Crystal.Systems.HostedCores.DefaultFor(id) is not null) ?? ids.FirstOrDefault()).ToArray();
         }
 
         // The rows, each with its note as the console's stored values stand, a value not stored read at its row's default - see EmuSen_Backend.md §14.13.

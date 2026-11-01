@@ -1432,6 +1432,68 @@ time (Cross on each); its NVM is kept beside the BIOS link in the scratch folder
 with the suffixes and medium now the same, the PlayStation 2 tab lists the same cards whichever engine runs, so the
 existing fit audits stand.
 
+## 10l. Real cores on the Rust runtime (2026-11-01)
+
+The crate `EmuSen/Cores/Libretro/emusen-libretro-games` proves the Rust runtime (`emusen_crystal::Runtime`, the default
+config: the installation's folder as its cores directory, the player's `/Cores` as its player cores) on real libretro
+cores, with no frontend. Its library lays out a sandbox player home (an installation folder holding the release proxy,
+libretro host and runner with their `cores.manifest`, the tree's data and config folders pointed inside the home) and
+runs Cores' own jobs (`core-fetch`, `core-get`, `core-verify`) with the context the platform library gives them. Its
+example `games` installs, approves (`Runtime::approve` with the hash `NOTICE` records) and runs: a game opened, N frames
+past a boot of B frames timed one by one, the picture's size and digest, a state taken, 60 frames run, the state loaded
+and the pictures compared, the core's log on request. Tests: 3 (the timing summary, the `.info` reader, the
+installation's manifest); seeded faults, each caught: the frames per second inverted, a key matched by its end, the
+libretro host left out of the manifest.
+
+**Installed** [M, 2026-11-01] through `core-fetch` and `core-get` from buildbot.libretro.com (index of 2026-11-01) into
+`~/.cache/emusen/probe/libretro-rust/home/`, then approved:
+- `pcee2`: PCEE2 v2.9.138 (commit 571962773; its `.info` says v2.7.x), SHA-256
+  `ab7ff5fdb580fdf842190be978a8dc6049db707af5177c374cea30e755b7cc68`, index CRC-32 `d589c813`.
+- `flycast`: Flycast (`.info` version "Git"), SHA-256 `3fbe535cd52a2e503dec5e7a20a38d046c3ebdd355a0970a7de7e350fee48fcf`,
+  index CRC-32 `3572a39c`.
+
+The first `core-get` refused both: the tool compared the whole zip's CRC-32 with the index, whose CRC-32 is the
+library's (`EmuSen_Cores.md` §5.2, fixed the same day).
+
+**Timing** [M, 2026-11-01, the desktop, Ryzen 7 7700X with an RX 6800 (`EMUSEN_GPU_DEVICE="RX 6800"`), the release
+probe, CPU weight 20 with an 8 GB cap, a CPU-only build of another branch running beside the first rounds; no input, no
+ring, the picture read back by the libretro host; each frame run as fast as it goes, unpaced]:
+
+| Game | Core | Frames timed | Frames per second | Median, worst frame | Picture |
+|---|---|---|---|---|---|
+| Jak and Daxter (USA, Rev 1), the ISO | PCEE2, renderer automatic (Vulkan) | 600 to 2,400 | 391.8, 341.8, 656.0 | 1.50 to 1.94 ms, 2.2 to 31.7 ms | 512 × 448 at 4:3 |
+| Crazy Taxi (US), a CDI copied from the household's library | Flycast, defaults | 600 to 2,400 | 603.3, 599.7 | 1.65 to 1.67 ms, 1.9 to 2.4 ms | 640 × 480 at 4:3 |
+
+RetroArch's 60.8 fps measured earlier over the same span is paced at the television's rate (`EmuSen_LibretroBridge.md`
+§1 records RetroArch holding 60 frames a second on frames 600 to 2,400); the runtime's figure is unpaced, so both are at
+or above full speed, and the comparison says only that the brokered runtime falls short of nothing RetroArch reached. The
+spread of Jak's three rounds (the third run after the build beside it ended) is the CPU it shares; PCEE2's own threads
+run at the scope's weight. Both spans are light scenes: with the referee's cards unreadable, Jak stops at "Memory card
+slot 1 … please insert a memory card" (with PCEE2's blending notice drawn over it), and Crazy Taxi has reached "Press A to
+create a new file" by frame 600. A heavier span needs a pad script, as `run.rs` has.
+
+**States** [M]: PCEE2's state is 100,663,408 bytes, Flycast's 37,748,848. Flycast's picture after the load equals the one
+after the save, and stays so. PCEE2's equals it when saved at frame 901; saved at 2,401 the frame after the load differs
+and goes on changing for the next four, which matches PCEE2's notice fading by wall-clock time rather than a state
+fault (not proven).
+
+**Found on the way** (each reported, none fixed here):
+1. The runtime never gives a core claiming `IMAGE_PATH` the game's path (`crystal`'s `Engine::create` leaves
+   `Create.image_path` unset): Flycast refuses the game ("this core opens the game file itself, and the host gave no path
+   to it"); PCEE2's runner exits with code 0, the whole 1.46 GB image having been sent across the socket.
+2. With the referee switch `EMUSEN_LIBRETRO_SYSTEM_DIR`, the runner's Landlock policy grants nothing on that folder nor on
+   the BIOS it holds by link: PCEE2 is "Unable to auto locate a BIOS image" and the approval's schema lists `pcsx2_bios` as
+   `auto` alone, so the runtime refuses the named image.
+3. An open succeeds although PCEE2 reported `VMManager::Initialize() failed`: black frames at about 4,000 a second, and a
+   state refused ("the core did not write its state").
+4. After `cores verify` refreshes an entry's proxy copy, its sidecar keeps the old proxy's hash; the entry is listed as
+   approved but routes nothing ("No core in this build handles '.iso'"), and `approve` answers "no core library listed
+   has the SHA-256"; only a sidecar removed and approved again recovers it.
+
+The timings above were taken with two local changes for items 1 and 2, never committed: the image's path given at
+create where no soft patch altered it, and the proxy's policy reading the system folder and the BIOS file named by path.
+They are to be taken again once both land, and through the ring once it runs on the Rust runtime.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

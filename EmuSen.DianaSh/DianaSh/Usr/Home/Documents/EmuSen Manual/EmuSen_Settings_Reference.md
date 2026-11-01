@@ -5068,6 +5068,28 @@ inert, which was then removed (BigPicture §45.4).
 - *A row's place is remembered only while the window lives.* It is not saved.
 - Nothing ran on the handheld or with a real pad. ES-DE was not run or read for this section.
 
+#### 4.69.9 The Pause Card and the Guide chords (2026-11-01)
+
+Over a game in big picture the pad menu is now the *Pause Card* (BigPicture §48, `EmuSen_Interface.md` §2.8): a card at
+the left at 40 per cent over the dimmed game, a pane beside it showing the slots, the reel or nothing, and these pages.
+The desktop's menu box takes the same pages; the library's menu keeps its centred look, its rows and the table above.
+
+| Page | Rows |
+|---|---|
+| first | Resume · Rewind · Save ◂ Slot n ▸ · Load ◂ Slot n ▸ · Speed ◂ 100% ▸ · the console's rows where they apply (Change Disc, Insert Disc, Eject Disc, Swap Players 1 and 2) · Game Options ▸ · Leave ▸ |
+| Game Options | Cheats · Controllers ▸ (Players & Controllers · Controller Bindings) · Display ▸ (Graphics · Shaders · Crop This Game... where §4.100 applies) · Volume ◂ 80% ▸ · Memory Cards (disc consoles) |
+| Leave | Back to Library · Restart Game... · Quit Game... · Quit EmuSen... |
+
+X takes a screenshot on every page and keeps the menu open. *Volume* steps the same setting as the heads-up bar's slider
+(§4.34) in tenths; in Steam's Game Mode (§4.43) it reads *Quick Access Menu* and leaves the volume to the device. Swap
+Players moved from Game Settings to the first page; Preferences, Shell and the EmuSen page left the in-game menu and
+stay in the library's. *Save State* and *Load State* are *Save* and *Load*.
+
+**`GuideChords`** (`appsettings.json`, `Auto` by default, or `On` or `Off`): with Guide held, Up saves to the current
+slot, Down loads it and R1 takes a screenshot; Guide alone then opens the menu as it is let go, and Select with Start
+still at once. `Auto` is off in Steam's Game Mode, where Steam's own chords on the same buttons take precedence
+(BigPicture §48.7 has the published list), and on everywhere else. It has no row until Settings is rebuilt (U6).
+
 ### 4.71 Big picture: the launch screen (2026-09-27)
 
 Pass 11 of `EmuSen_BigPicture.md` §21 (its §33 is the record: ES-DE measured, the predictions, the tests, the mutants

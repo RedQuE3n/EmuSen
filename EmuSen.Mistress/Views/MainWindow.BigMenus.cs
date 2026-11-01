@@ -39,6 +39,7 @@ namespace EmuSen.Mistress.Views
             SetUpSheetLook();
             SizeChanged += (_, e) => ScaleBigMenus(e.NewSize.Height);
             ScaleBigMenus(Bounds.Height > 0 ? Bounds.Height : Height);
+            SetUpPauseCard();
             PadMenuBig.TitleMinScale = 0.66;
             PadMenuBig.TitleMaxLines = 2;
             PadMenuList.ContainerPrepared += (_, e) =>
@@ -67,21 +68,26 @@ namespace EmuSen.Mistress.Views
         // ES-DE's title for a game's options, whatever the entry (Q85).
         internal const string GameOptionsMenuTitle = "Gamelist Options";
 
-        // The pad menu's list moves into the big panel for a big-screen session and back into the desktop's box after.
+        // The pad menu's list moves into the big panel for a big-screen session, into the Pause Card over a game, and back into the desktop's box after.
         private void ApplyBigMenuLook(bool on)
         {
-            if (on == PadMenuBig.IsVisible && (on ? ReferenceEquals(PadMenuBig.Child, PadMenuList) : PadMenuDock.Children.Contains(PadMenuList))) return;
+            bool card = on && _padMenuInGame;
+            bool placed = !on ? PadMenuDock.Children.Contains(PadMenuList) : card ? ReferenceEquals(PadCard.Content, PadMenuList) : ReferenceEquals(PadMenuBig.Child, PadMenuList);
+            if (placed && PadMenuDesk.IsVisible == !on && PadMenuBig.IsVisible == (on && !card) && PadCard.IsVisible == card) return;
+            bool wasBig = !PadMenuDock.Children.Contains(PadMenuList);
+            PadMenuDock.Children.Remove(PadMenuList);
+            if (ReferenceEquals(PadMenuBig.Child, PadMenuList)) PadMenuBig.Child = null;
+            if (ReferenceEquals(PadCard.Content, PadMenuList)) PadCard.Content = null;
             if (on)
             {
-                PadMenuDock.Children.Remove(PadMenuList);
-                PadMenuBig.Child = PadMenuList;
-                MenuRows.Apply(PadMenuList);
+                if (card) PadCard.Content = PadMenuList;
+                else PadMenuBig.Child = PadMenuList;
+                if (!wasBig) MenuRows.Apply(PadMenuList);
                 PadMenuList.ClearValue(MaxHeightProperty);
                 PadMenuPanel.Background = null;
             }
             else
             {
-                PadMenuBig.Child = null;
                 MenuRows.Remove(PadMenuList);
                 PadMenuList.ClearValue(MaxHeightProperty);
                 PadMenuList.Background = Brushes.Transparent;
@@ -89,9 +95,13 @@ namespace EmuSen.Mistress.Views
                 PadMenuPanel.Background = new SolidColorBrush(Color.FromArgb(0xD0, 0, 0, 0));
             }
             PadMenuDesk.IsVisible = !on;
-            PadMenuBig.IsVisible = on;
+            PadMenuBig.IsVisible = on && !card;
+            PadCard.IsVisible = card;
             UpdateMenuBackdrop();
         }
+
+        // The big-screen panel the pad menu is drawn in now: the Pause Card's over a game, else the centred one.
+        private MenuPanel BigPadPanel => _padMenuInGame ? PadCard.CardPanel : PadMenuBig;
 
         // A row's label, value and kind, read from its entry: an adjustable entry steps sideways, one that opens a screen has a chevron.
         private static void DescribeRow(Control row, PadMenuEntry entry)
@@ -133,14 +143,15 @@ namespace EmuSen.Mistress.Views
         internal static PadGlyphButton AcceptGlyph => PadHints.Glyph(PadGlyphButton.South);
         internal static PadGlyphButton BackGlyph => PadHints.Glyph(PadGlyphButton.East);
 
-        // Blurred while a big-screen menu is over the screen: the pad menu, or a sheet that draws its own menu.
+        // Blurred while a big-screen menu is over the screen: the library's pad menu, or a sheet that draws its own menu; the Pause Card brings its own scrim and dims instead (EmuSen_BigPicture.md §48.2).
         private void UpdateMenuBackdrop()
         {
             bool sheetMenu = Sheets.Current is { } sheet && Sheets.DrawsMenu(sheet);
+            bool card = _padMenuOpen && PauseCardShown;
             Sheets.HintFamily = HelpFamily;
-            MenuBackdrop.IsVisible = _bigScreen && (_padMenuOpen || sheetMenu);
-            HideThemedHelp(MenuBackdrop.IsVisible);
-            MenuPanel? shown = !MenuBackdrop.IsVisible ? null : Sheets.Current is { } top && Sheets.DrawsMenu(top) ? MenuPanelOf(top) : _padMenuOpen ? PadMenuBig : null;
+            MenuBackdrop.IsVisible = _bigScreen && ((_padMenuOpen && !card) || sheetMenu);
+            HideThemedHelp(MenuBackdrop.IsVisible || card);
+            MenuPanel? shown = Sheets.Current is { } top && Sheets.DrawsMenu(top) && _bigScreen ? MenuPanelOf(top) : !_bigScreen || !_padMenuOpen ? null : card ? PadCard.CardPanel : PadMenuBig;
             if (!ReferenceEquals(shown, _menuShown))
             {
                 _menuShown = shown;

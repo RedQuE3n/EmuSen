@@ -21,8 +21,10 @@ namespace EmuSen.WiseMan.Fixtures
         public static string[] Lines(MainWindow w) => Entries(w).Select(e => e.Text()).ToArray();
 
         // Every row the page shown offers: its own, then each of its submenus' rows.
-        public static string[] AllLines(MainWindow w) =>
-            Entries(w).SelectMany(e => e.Submenu is { } sub ? new[] { e.Text() }.Concat(sub().Select(s => s.Text())) : [e.Text()]).ToArray();
+        public static string[] AllLines(MainWindow w) => All(Entries(w)).ToArray();
+
+        private static IEnumerable<string> All(List<PadMenuEntry> rows) =>
+            rows.SelectMany(e => e.Submenu is { } sub ? new[] { e.Text() }.Concat(All(sub())) : [e.Text()]);
 
         public static bool IsOpen(MainWindow w) => w.GetControl<Control>("PadMenuPanel").IsVisible;
 
@@ -32,7 +34,12 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static string SelectedLine(MainWindow w) => Lines(w)[Selected(w)];
 
-        public static MenuPanel Big(MainWindow w) => w.GetControl<MenuPanel>("PadMenuBig");
+        // The big-screen panel shown: the Pause Card's over a game, else the centred one - see EmuSen_BigPicture.md §48.
+        public static MenuPanel Big(MainWindow w) => Card(w).IsVisible ? Card(w).CardPanel : w.GetControl<MenuPanel>("PadMenuBig");
+
+        public static AdaptiveLayout Card(MainWindow w) => w.GetControl<AdaptiveLayout>("PadCard");
+
+        public static PauseCardPane Pane(MainWindow w) => (PauseCardPane)Card(w).Detail!;
 
         // The desktop's title line: the pages' titles joined into a breadcrumb.
         public static string DeskTitle(MainWindow w) => w.GetControl<TextBlock>("PadMenuTitle").Text ?? "";
@@ -43,20 +50,25 @@ namespace EmuSen.WiseMan.Fixtures
         private static bool Matches(PadMenuEntry e, string entry, bool exact) =>
             exact ? e.Text() == entry : e.Text().StartsWith(entry, StringComparison.Ordinal);
 
-        // The rows to choose to reach a row whose text is or starts with the words: on this page, else in one of its submenus.
-        public static int[]? PathTo(MainWindow w, string entry, bool exact = false)
+        // The rows to choose to reach a row whose text is or starts with the words: on this page, else the shallowest submenu under it holding one.
+        public static int[]? PathTo(MainWindow w, string entry, bool exact = false) => PathIn(Entries(w), entry, exact, 3);
+
+        private static int[]? PathIn(List<PadMenuEntry> rows, string entry, bool exact, int depth)
         {
-            List<PadMenuEntry> rows = Entries(w);
             int here = rows.FindIndex(e => Matches(e, entry, exact));
             if (here >= 0) return [here];
-            for (int i = 0; i < rows.Count; i++)
-                if (rows[i].Submenu is { } sub && sub().FindIndex(e => Matches(e, entry, exact)) is var at and >= 0) return [i, at];
+            if (depth <= 1) return null;
+            for (int d = 2; d <= depth; d++)
+                for (int i = 0; i < rows.Count; i++)
+                    if (rows[i].Submenu is { } sub && PathIn(sub(), entry, exact, d - 1) is { } below) return [i, .. below];
             return null;
         }
 
         // Every row reachable from the page shown, with the submenu each is in, for a failure's message.
-        public static string Describe(MainWindow w) =>
-            string.Join(", ", Entries(w).Select(e => e.Submenu is { } sub ? $"{e.Text()} ▸ [{string.Join(", ", sub().Select(s => s.Text()))}]" : e.Text()));
+        public static string Describe(MainWindow w) => Describe(Entries(w));
+
+        private static string Describe(List<PadMenuEntry> rows) =>
+            string.Join(", ", rows.Select(e => e.Submenu is { } sub ? $"{e.Text()} ▸ [{Describe(sub())}]" : e.Text()));
 
         // Down from the row the selection is on to each row of the path, then A, as a player would.
         public static void Choose(MainWindow w, PadDriver pad, string entry, bool exact = false)

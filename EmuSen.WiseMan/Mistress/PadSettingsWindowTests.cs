@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("Graphics")]
         [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
-        [InlineData("Preferences")]
+        [InlineData("Players & Controllers")]
         [InlineData(MainWindow.CropThisGame)]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
@@ -273,7 +273,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Preferences_by_pad_a_switch_and_a_dropdown_on_another_tab() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Preferences");
+            Choose(window, pad, "Players & Controllers");
             Picture(window, "preferences-library");
 
             TabTo(window, pad, "Gameplay");

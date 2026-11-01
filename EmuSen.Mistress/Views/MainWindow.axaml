@@ -181,6 +181,8 @@
                         </DockPanel>
                     </Border>
                     <lunac:MenuPanel x:Name="PadMenuBig" IsVisible="False" />
+                    <!-- The in-game menu as a card on LunaP's Card form, the paused frame dimmed beside it - see EmuSen_BigPicture.md §48. -->
+                    <lunac:AdaptiveLayout x:Name="PadCard" Form="Card" IsVisible="False" />
                     <!-- The state slot's picture and saved time beside the menu while Save State or Load State is on - see EmuSen_Settings_Reference.md §4.69.8. -->
                     <Border x:Name="PadSlotCard" IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top"
                             CornerRadius="8" Padding="8" Background="#F01B1B1E" BorderBrush="#FF333337" BorderThickness="1">

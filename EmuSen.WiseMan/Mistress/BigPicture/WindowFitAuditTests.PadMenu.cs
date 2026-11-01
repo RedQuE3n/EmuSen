@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     List<PadMenuEntry> page = PadMenu.Entries(window).ToList();
                     for (int j = 0; top[i].Submenu is not null && j < page.Count; j++)
                     {
-                        if (page[j].Question is null) continue;
+                        if (page[j].Question is null && page[j].Submenu is null) continue;
                         Down(window, pad, j);
                         pad.A();
                         faults.AddRange(PadMenuPageFaults(window, bigScreen, $"{name}-{Short(top[i].Text())}-{Short(page[j].Text())}"));
@@ -67,7 +67,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Assert.Equal(1, PadMenu.Depth(window));
                 }
 
-                // The slot's card beside the menu, on the Save State row.
+                // The slots beside the menu, on the Save row: the Pause Card's pane in big picture, the slot's card on the desktop.
                 if (menu != "Main")
                 {
                     Down(window, pad, 2);
@@ -105,7 +105,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 double u = MenuPanel.GetScale(panel);
                 box = panel.PanelBounds;
                 help = panel.HelpBar.Bounds;
-                if (panel.IsTitleCut) faults.Add($"{name}: title cut: '{panel.Title}'");
+                // The card's title row is one line by design, shrunk then cut, the name whole in the library (EmuSen_BigPicture.md §48.2); the centred menu wraps instead.
+                bool onCard = ReferenceEquals(panel, PadMenu.Card(window).CardPanel);
+                if (panel.IsTitleCut && !onCard) faults.Add($"{name}: title cut: '{panel.Title}'");
+                if (onCard && panel.TitleLines > 1) faults.Add($"{name}: the card's title wraps");
                 if (panel.ScrollIndicator != MenuScrollIndicator.None && panel.TitleLines <= 1) faults.Add($"{name}: rows run past the panel under a one-line title");
                 GlyphTypeface face = MenuPanel.GetFontPath(panel) is { } path && FontFiles.Load(path) is { } f ? f : FontFiles.Default;
                 foreach (string line in (panel.Subtitle ?? "").Split('\n').Where(l => l.Length > 0))
@@ -129,6 +132,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (!area.Contains(box)) faults.Add($"{name}: the menu {box} leaves the window {area}");
                 if (PadMenu.List(window).GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer && viewer.Extent.Height > viewer.Viewport.Height + 0.5)
                     faults.Add($"{name}: the desktop's rows scroll, {viewer.Extent.Height:F0} in {viewer.Viewport.Height:F0}");
+            }
+            if (bigScreen && (PadMenu.Card(window).IsVisible ? PadMenu.Pane(window) : PadMenu.Big(window).Pane) is PauseCardPane { Child: not null } pane)
+            {
+                MenuPanel panel = PadMenu.Big(window);
+                Rect drawn = new(pane.TranslatePoint(default, panel) ?? default, pane.Bounds.Size);
+                if (!panel.PaneBounds.Inflate(1).Contains(drawn)) faults.Add($"{name}: the pane {drawn} leaves its room {panel.PaneBounds}");
+                if (drawn.Intersects(box)) faults.Add($"{name}: the pane {drawn} overlaps the menu {box}");
+                if (help.Width > 0 && drawn.Intersects(help)) faults.Add($"{name}: the pane {drawn} overlaps the help {help}");
+                _out.WriteLine($"PADMENU {name}: pane {pane.Showing} {drawn}");
             }
             Control card = window.GetControl<Control>("PadSlotCard");
             if (card.IsVisible)

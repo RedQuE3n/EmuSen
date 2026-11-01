@@ -214,6 +214,36 @@ fn has(extensions: &[vk::ExtensionProperties], name: &CStr) -> bool {
     extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == name))
 }
 
+/// The compute-capable devices of an instance in the order this crate chooses them, the loader's order kept among equals.
+fn candidates(instance: &ash::Instance) -> Vec<Candidate> {
+    let mut candidates = Vec::new();
+    let devices = unsafe { instance.enumerate_physical_devices() }.unwrap_or_default();
+    for physical in devices {
+        let properties = unsafe { instance.get_physical_device_properties(physical) };
+        let queues = unsafe { instance.get_physical_device_queue_family_properties(physical) };
+        let Some(family) = queues.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::COMPUTE)) else { continue };
+        let rank = match properties.device_type {
+            vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
+            _ => 3,
+        };
+        let name = properties.device_name_as_c_str().map_or_else(|_| "unnamed".to_string(), |n| n.to_string_lossy().into_owned());
+        candidates.push(Candidate { physical, name, software: properties.device_type == vk::PhysicalDeviceType::CPU, family: family as u32, api: properties.api_version, rank });
+    }
+    // A stable sort, where C#'s `List.Sort` is not: equal ranks keep the loader's order.
+    candidates.sort_by_key(|c| c.rank);
+    candidates
+}
+
+/// The device of `instance` this crate would choose: the first named like `EMUSEN_GPU_DEVICE`, else the first by rank;
+/// shared with a host that makes a device for a core it does not own (EmuSen_LibretroHost.md §5.3), since 1.5.
+pub fn choose_device(instance: &ash::Instance) -> Option<vk::PhysicalDevice> {
+    let wanted = std::env::var(DEVICE_VARIABLE).unwrap_or_default();
+    let found = candidates(instance);
+    choose(found.iter().map(|c| c.name.as_str()), &wanted).map(|i| found[i].physical)
+}
+
 impl Enumeration {
     fn new() -> Result<Enumeration, String> {
         // SAFETY: the loader is loaded once and outlives every handle made through it, which the device keeps it for.
@@ -228,23 +258,7 @@ impl Enumeration {
         }
         let instance = unsafe { entry.create_instance(&create, None) }.map_err(|e| format!("vkCreateInstance returned {e}"))?;
 
-        let mut candidates = Vec::new();
-        let devices = unsafe { instance.enumerate_physical_devices() }.unwrap_or_default();
-        for physical in devices {
-            let properties = unsafe { instance.get_physical_device_properties(physical) };
-            let queues = unsafe { instance.get_physical_device_queue_family_properties(physical) };
-            let Some(family) = queues.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::COMPUTE)) else { continue };
-            let rank = match properties.device_type {
-                vk::PhysicalDeviceType::DISCRETE_GPU => 0,
-                vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
-                vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
-                _ => 3,
-            };
-            let name = properties.device_name_as_c_str().map_or_else(|_| "unnamed".to_string(), |n| n.to_string_lossy().into_owned());
-            candidates.push(Candidate { physical, name, software: properties.device_type == vk::PhysicalDeviceType::CPU, family: family as u32, api: properties.api_version, rank });
-        }
-        // A stable sort, where C#'s `List.Sort` is not: equal ranks keep the loader's order.
-        candidates.sort_by_key(|c| c.rank);
+        let candidates = candidates(&instance);
         Ok(Enumeration { entry, instance, candidates })
     }
 }

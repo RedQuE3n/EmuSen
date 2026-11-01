@@ -272,6 +272,28 @@ namespace EmuSen.Cores.Native
             return status == 1 ? frame : null;
         }
 
+        // DEVICE_RING: the host's ring lent, or withdrawn with null; false where the core claims no ring or refuses this one (NOT_SUPPORTED) - see EmuSen_CoreAPI.md §6.43.
+        public bool RingLend(CoreInterface.Ring* ring)
+        {
+            if (_api.RingLend == null || !Has(CoreInterface.CapDeviceRing)) return false;
+            int status;
+            lock (_gate) status = _api.RingLend(Handle, ring);
+            if (status == CoreInterface.StatusNotSupported) return false;
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not take the ring: {Library.Words(status)}.");
+            return true;
+        }
+
+        // After advance: the frame's picture in the lent ring, or null when it is not there.
+        public CoreInterface.RingFrame? FrameRing()
+        {
+            if (_api.FrameRing == null || !Has(CoreInterface.CapDeviceRing)) return null;
+            var frame = new CoreInterface.RingFrame { Size = (uint)sizeof(CoreInterface.RingFrame) };
+            int status;
+            lock (_gate) status = _api.FrameRing(Handle, &frame);
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not say where its picture is in the ring: {Library.Words(status)}.");
+            return status == 1 ? frame : null;
+        }
+
         // RAW_PICTURE: the encodings of machine info's video.raw whose bits are set kept from the next advance - see EmuSen_CoreAPI.md §6.30.
         public void RawSelect(ulong mask)
         {

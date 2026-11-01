@@ -5,6 +5,7 @@ pub const TEST_ID: &str = "v1-hung-core";
 pub const TEST_NAME: &str = "V1HungCore";
 pub const TEST_CAPABILITIES: u64 = 0;
 pub const TEST_FAULTS: u64 = FAULT_HANGS;
+pub const PAINTER: Option<MakePainter> = None;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 

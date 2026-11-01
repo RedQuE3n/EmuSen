@@ -267,10 +267,20 @@ impl Machine {
 
 impl Drop for Machine {
     fn drop(&mut self) {
-        unsafe {
-            (self.lib.api.unload_game)();
-            (self.lib.api.deinit)();
+        // The context is destroyed before the game is unloaded and the device after retro_deinit (EmuSen_LibretroHost.md §10f).
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.hw.and_then(|h| h.destroy)
+        {
+            unsafe { destroy() };
         }
+        unsafe { (self.lib.api.unload_game)() };
+        if self.shared.gpu.is_some()
+            && let Some(destroy) = self.shared.negotiation.and_then(|n| n.destroy_device)
+        {
+            unsafe { destroy() };
+        }
+        unsafe { (self.lib.api.deinit)() };
+        self.shared.gpu = None;
         front::with_declared(|d| d.initialised = false);
         front::bind(std::ptr::null_mut());
         front::flush_logs();
@@ -333,6 +343,7 @@ impl v1::Core for Machine {
         | caps::SETTINGS
         | caps::SETTING_NOTES
         | caps::PRESENCE
+        | caps::DEVICE_RING
         | caps::SNAPSHOT
         | caps::FRAME_SERIAL
         | caps::BATTERY_DIRTY
@@ -438,6 +449,7 @@ impl v1::Core for Machine {
         if LIVE.swap(true, Ordering::AcqRel) {
             return Err(STATUS_BUSY);
         }
+        front::RUMBLE.iter().flatten().for_each(|m| m.store(0, Ordering::Relaxed));
         let made = Self::make(lib, system, r);
         if made.is_err() {
             front::bind(std::ptr::null_mut());
@@ -498,6 +510,9 @@ impl v1::Core for Machine {
         if let Some((cb, reference)) = self.shared.frame_time {
             unsafe { cb(reference) };
         }
+        if let Some(g) = self.shared.gpu.as_mut() {
+            g.begin_frame();
+        }
         unsafe { (self.lib.api.run)() };
         let ran = start.elapsed().as_nanos() as i64;
         self.frames += 1;
@@ -537,6 +552,30 @@ impl v1::Core for Machine {
         self.shared.picture.bytes()
     }
 
+    fn ring_lend(&mut self, ring: Option<&v1::Ring>) -> Result<(), i32> {
+        let r = match self.shared.gpu.as_mut() {
+            Some(g) => g.lend(ring),
+            None if ring.is_none() => Ok(()),
+            None => Err(status::NOT_SUPPORTED),
+        };
+        for line in self.shared.gpu.as_mut().map(|g| std::mem::take(&mut g.log)).unwrap_or_default() {
+            v1::log(v1::Level::Warn, "libretro", &line);
+        }
+        r
+    }
+
+    fn frame_ring(&mut self) -> Result<Option<v1::RingFrame>, i32> {
+        let Some(g) = self.shared.gpu.as_mut() else { return Ok(None) };
+        let Some(mut f) = g.frame_ring() else { return Ok(None) };
+        (f.fields, f.field) = crate::vulkan::fields_of(&self.system, f.height as u32);
+        let a = self.shared.av.geometry.aspect_ratio;
+        if a > 0.0 {
+            let (n, d) = video::ratio(a as f64, 100_000);
+            (f.aspect_num, f.aspect_den) = (n as u32, d as u32);
+        }
+        Ok(Some(f))
+    }
+
     fn audio_rate(&self) -> i32 {
         crate::audio::rounded(self.shared.sound.next_rate())
     }
@@ -570,6 +609,18 @@ impl v1::Core for Machine {
             return Err(status::NO_SUCH_PORT);
         }
         if self.shared().input.set_axis(port as usize, axis, value) { Ok(()) } else { Err(status::NOT_SUPPORTED) }
+    }
+
+    fn outputs(&self) -> Vec<v1::Output> {
+        if !front::with_declared(|d| d.rumble) {
+            return Vec::new();
+        }
+        let motor = |port, output, kind, label: &str| v1::Output { port, output, kind, label: label.to_owned() };
+        (0..front::ports() as u32).flat_map(|p| [motor(p, 0, v1::OutputKind::StrongMotor, "Strong motor"), motor(p, 1, v1::OutputKind::WeakMotor, "Weak motor")]).collect()
+    }
+
+    fn output_level(&self, port: u32, output: u32) -> u16 {
+        front::RUMBLE.get(port as usize).and_then(|p| p.get(output as usize)).map_or(0, |m| m.load(Ordering::Relaxed))
     }
 
     fn set_present(&mut self, port: u32, present: bool) -> Result<(), i32> {
@@ -849,6 +900,20 @@ impl Machine {
         shared.av = av;
         shared.sound.set_rate(video::ratio(av.timing.sample_rate, 1_000_000));
         shared.events.clear();
+        if let Some(ask) = shared.hw {
+            match crate::vulkan::Gpu::create(&ask, shared.negotiation.as_ref()) {
+                Ok(g) => shared.gpu = Some(g),
+                Err(why) => {
+                    v1::detail(&format!("the core's Vulkan device: {why}"));
+                    unsafe { (lib.api.unload_game)() };
+                    return Err(STATUS_REFUSED);
+                }
+            }
+            if let Some(reset) = ask.reset {
+                unsafe { reset() };
+            }
+            front::flush_logs();
+        }
 
         let mut machine = Machine {
             lib,

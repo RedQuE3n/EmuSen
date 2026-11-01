@@ -28,29 +28,32 @@ namespace EmuSen.WiseMan.Cores
         public string Sha256 { get; }
         public DiscoveredCore Found { get; }
 
-        public LibretroEntryFixture()
+        public LibretroEntryFixture() : this("") { }
+
+        // An entry whose information file names the libretro system, so that its machine reports the systems table's console.
+        internal LibretroEntryFixture(string systemId)
         {
             DataStore.OverrideDirectory = Path.Combine(Root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(Root, "Config");
-            Lay(Entry);
+            Lay(Entry, systemId);
             Environment("EMUSEN_CORE_RUNNER", Path.Combine(AppContext.BaseDirectory, "emusen-core-runner"));
             Sha256 = CoreSidecar.HashOf(CoreFile);
             Approve(Sha256);
             CoreDiscovery.UseDirectories(new[] { AppContext.BaseDirectory });
             CoreDiscovery.UsePlayerDirectories(new[] { Cores });
-            CoreSidecar.Write(LibretroEntries.ProxyPath(Entry));
+            CoreSidecar.Write(LibretroEntries.ProxyPath(Entry), expect: Sha256);
             CoreDiscovery.Rescan();
             Found = CoreDiscovery.Found.Single(c => c.Entry == Entry);
         }
 
         // An entry's files: the two copies from the installation, the test core named on its stem, its information file.
-        public static void Lay(string folder)
+        public static void Lay(string folder, string systemId = "")
         {
             Directory.CreateDirectory(folder);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.ProxyLibrary), LibretroEntries.ProxyPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.HostLibrary), LibretroEntries.AdapterPath(folder), overwrite: true);
             File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"), Path.Combine(folder, "testcore_libretro.so"), overwrite: true);
-            File.WriteAllText(Path.Combine(folder, "testcore_libretro.info"), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"\"\ndatabase = \"\"\n");
+            File.WriteAllText(Path.Combine(folder, "testcore_libretro.info"), $"display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"{systemId}\"\ndatabase = \"\"\n");
         }
 
         public static void Approve(string sha256)
@@ -152,6 +155,44 @@ namespace EmuSen.WiseMan.Cores
             }
             finally { LibretroEntryFixture.Approve(entry.Sha256); }
             Assert.All(new[] { rebuilt, stale, unapproved }, f => Assert.False(CoreLibrary.IsOpen(LibretroEntries.ProxyPath(f))));
+        }
+
+        // §10d.1: a core file changed after the host hashed it and before the proxy was loaded is refused by the proxy itself, through emusen_core_expect, and no runner starts.
+        [Fact]
+        public void A_core_changed_between_the_hosts_hash_and_the_load_never_runs()
+        {
+            string folder = Path.Combine(entry.Root, "Swapped", LibretroEntries.Folder, "testcore");
+            LibretroEntryFixture.Lay(folder);
+            string core = Path.Combine(folder, "testcore_libretro.so");
+            string approved = CoreSidecar.HashOf(core);
+            File.AppendAllText(core, "a rebuilt core");
+            string actual = CoreSidecar.HashOf(core);
+            int before = Runners();
+            CoreLibrary library = CoreLibrary.Open(LibretroEntries.ProxyPath(folder), approved);
+            Assert.False(library.Available);
+            Assert.Contains("is not the build that was approved", library.Report);
+            Assert.Contains(approved, library.Report);
+            Assert.Contains(actual, library.Report);
+            Assert.Equal(before, Runners());
+            Assert.NotNull(entry.Found.Open());
+            Assert.Contains("under another approval", CoreLibrary.Open(LibretroEntries.ProxyPath(entry.Entry), new string('0', 64)).Report);
+        }
+
+        // The runners this process started that are alive, read from /proc.
+        private static int Runners()
+        {
+            string me = Environment.ProcessId.ToString();
+            int count = 0;
+            foreach (string dir in Directory.EnumerateDirectories("/proc"))
+            {
+                string stat;
+                try { stat = File.ReadAllText(Path.Combine(dir, "stat")); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
+                int open = stat.IndexOf('('), close = stat.LastIndexOf(')');
+                if (open < 0 || close < open) continue;
+                string[] rest = stat[(close + 2)..].Split(' ');
+                if (stat[(open + 1)..close].StartsWith("emusen-core-run", StringComparison.Ordinal) && rest.Length > 1 && rest[1] == me) count++;
+            }
+            return count;
         }
 
         // A game's picture, its pad and its unaltered file's path reach the brokered core; a patched or unpacked image has no path to give.

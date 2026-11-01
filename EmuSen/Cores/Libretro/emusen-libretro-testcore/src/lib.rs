@@ -6,6 +6,7 @@ mod fault;
 pub mod layout;
 mod options;
 pub mod probe;
+mod vulkan;
 
 /// How many options the core declares.
 pub const OPTION_COUNT: usize = options::OPTIONS.len();
@@ -33,6 +34,13 @@ static CORE: Mutex<Option<Core>> = Mutex::new(None);
 static LOG: Mutex<sys::retro_log_printf_t> = Mutex::new(None);
 /// The frame times reported since the last frame, added into the state's own sum at each frame.
 static FRAME_TIME_SUM: Mutex<i64> = Mutex::new(0);
+static RUMBLE: Mutex<sys::retro_set_rumble_state_t> = Mutex::new(None);
+
+/// The levels `tc_rumble` drives at a frame, (port, strong, weak); the test reads them back as `OUTPUT` events.
+pub fn rumble_pattern(frame: u64) -> [(u32, u16, u16); 2] {
+    let strong = (frame.wrapping_mul(4099) & 0xFFFF) as u16;
+    [(0, strong, 0xFFFF - strong), (1, if frame >= 10 { 0x1234 } else { 0 }, 0)]
+}
 
 fn callbacks() -> Callbacks {
     *CALLBACKS.lock().unwrap()
@@ -370,6 +378,11 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
         options::declare_late();
     }
     *FRAME_TIME_SUM.lock().unwrap() = 0;
+    if options.rumble {
+        let mut r = sys::retro_rumble_interface { set_rumble_state: None };
+        environment(env::GET_RUMBLE_INTERFACE, &mut r as *mut _ as *mut c_void);
+        *RUMBLE.lock().unwrap() = r.set_rumble_state;
+    }
     let mut core = Core::new(options.clone());
     if let Some(game) = unsafe { game.as_ref() }
         && !game.data.is_null()
@@ -408,6 +421,10 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     }
     if options.files {
         core.files_root = directories();
+    }
+    if options.hw.starts_with("vulkan") && !vulkan::ask(options.hw == "vulkan_bgra") {
+        log(sys::LOG_ERROR, "the host refused a Vulkan context");
+        return false;
     }
     *CORE.lock().unwrap() = Some(core);
     match options.memory {
@@ -557,6 +574,14 @@ pub extern "C" fn retro_run() {
     if let Some(a) = av {
         environment(env::SET_SYSTEM_AV_INFO, &a as *const _ as *mut c_void);
     }
+    if options.rumble
+        && let Some(set) = *RUMBLE.lock().unwrap()
+    {
+        for (port, strong, weak) in rumble_pattern(frame as u64) {
+            unsafe { set(port, sys::RUMBLE_STRONG, strong) };
+            unsafe { set(port, sys::RUMBLE_WEAK, weak) };
+        }
+    }
     if options.set_variable && frame == 5 {
         let var = sys::retro_variable { key: c"tc_note".as_ptr(), value: c"changed".as_ptr() };
         environment(env::SET_VARIABLE, &var as *const _ as *mut c_void);
@@ -573,6 +598,7 @@ pub extern "C" fn retro_run() {
         }
     } else {
         let mut target = None;
+        let mut hw_picture = None;
         if options.framebuffer {
             let mut fb = sys::retro_framebuffer { data: std::ptr::null_mut(), width, height, pitch: 0, format: 0, access_flags: sys::MEMORY_ACCESS_WRITE, memory_flags: 0 };
             let core_format = core.format;
@@ -591,6 +617,13 @@ pub extern "C" fn retro_run() {
                 core.ram[DREW_IN_FRAMEBUFFER] = 1;
                 (data as *const u8, pitch)
             }
+            None if options.hw.starts_with("vulkan") => {
+                let pitch = MAX_WIDTH as usize * bpp;
+                let mut picture = std::mem::take(&mut core.picture);
+                core.draw(&mut picture, pitch);
+                hw_picture = Some(picture);
+                (std::ptr::null(), pitch)
+            }
             None => {
                 let pitch = MAX_WIDTH as usize * bpp;
                 let mut picture = std::mem::take(&mut core.picture);
@@ -601,7 +634,12 @@ pub extern "C" fn retro_run() {
             }
         };
         drop(guard);
-        if let Some(video) = cb.video {
+        if let Some(picture) = hw_picture {
+            if let Some(video) = cb.video {
+                vulkan::hand(&picture, pitch, width, height, video);
+            }
+            with_core(|c| c.picture = picture);
+        } else if let Some(video) = cb.video {
             unsafe { video(data as *const c_void, width, height, pitch) };
         }
     }

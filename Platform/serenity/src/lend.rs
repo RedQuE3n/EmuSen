@@ -274,6 +274,24 @@ impl Lend {
         Some(picture)
     }
 
+    /// A copy in host memory as RGBA rows of its own width, once `taken` reaches it: the check a test or a details
+    /// window makes, never the path a picture is presented by.
+    pub fn read(&self, taken: &Taken) -> Result<Vec<u8>, String> {
+        let device = &self.inner.device;
+        let (row, width, height) = (taken.row_pixels as usize * 4, taken.width as usize * 4, taken.height as usize);
+        let out = device.create_buffer((row * height) as u64, vk::BufferUsageFlags::TRANSFER_DST)?;
+        let d = device.vk();
+        device.run_timed(
+            |cmd| unsafe {
+                d.cmd_copy_buffer(cmd, taken.buffer, out.handle, &[vk::BufferCopy { src_offset: 0, dst_offset: 0, size: (row * height) as u64 }]);
+                device.host_read_barrier(cmd, &out);
+            },
+            Some((taken.semaphore, taken.value)),
+            None,
+        )?;
+        Ok(out.with_bytes(row * height, |b| (0..height).flat_map(|y| b[y * row..y * row + width].to_vec()).collect()))
+    }
+
     /// Lets go of what the chain claimed, its reads waited for.
     pub fn release(&self) {
         locked(&self.inner.ring).claimed = None;

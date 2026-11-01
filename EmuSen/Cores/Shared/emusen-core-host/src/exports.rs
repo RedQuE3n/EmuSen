@@ -3,7 +3,7 @@
 
 use std::ffi::c_char;
 
-use emusen_native::core::sys::{CreateParams, DeviceFrame, Event, FrameInfo, Machine as RawMachine, Media, RawFrame};
+use emusen_native::core::sys::{CreateParams, DeviceFrame, Event, FrameInfo, Machine as RawMachine, Media, RawFrame, RingFrame, RingLend};
 
 /// A machine as the exports take it.
 pub type M = *mut RawMachine;
@@ -99,5 +99,7 @@ table! {
         telemetry: fn(C, *mut i64, usize) -> i64,
         set_present: fn(M, u32, u32) -> i32,
         debug_translate: fn(C, u32, u32, *mut u32) -> i32,
+        ring_lend: fn(M, *const RingLend) -> i32,
+        frame_ring: fn(M, *mut RingFrame) -> i32,
     }
 }

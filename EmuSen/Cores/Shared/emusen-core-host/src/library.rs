@@ -26,6 +26,8 @@ pub enum LoadError {
     Unloadable(String),
     /// A required export is absent; `abi` is what `emusen_core_abi_version` answered, where the library has one.
     Missing { export: String, abi: Option<u32> },
+    /// Since 1.17: `emusen_core_expect` answered that the library serves other bytes than the approved hash, in its words.
+    NotExpected(String),
 }
 
 impl std::fmt::Display for LoadError {
@@ -33,6 +35,7 @@ impl std::fmt::Display for LoadError {
         match self {
             LoadError::Unloadable(e) => write!(f, "could not be loaded: {e}"),
             LoadError::Missing { export, .. } => write!(f, "lacks the required export {export}"),
+            LoadError::NotExpected(why) => write!(f, "is not the approved build: {why}"),
         }
     }
 }
@@ -45,6 +48,7 @@ impl LoadError {
             LoadError::Missing { abi: None, .. } => "has no emusen_core_abi_version; it is not on the core ABI".to_owned(),
             LoadError::Missing { abi: Some(v), .. } if v >> 16 != 1 => format!("speaks core ABI major {}, this host major 1", v >> 16),
             LoadError::Missing { export, .. } => format!("lacks the required export {export}"),
+            LoadError::NotExpected(why) => format!("is not the approved build: {why}"),
         }
     }
 }
@@ -66,6 +70,8 @@ pub struct Library {
     path: PathBuf,
     exports: Exports,
     verdict: OnceLock<Result<Checked, String>>,
+    /// Since 1.17: the approved hash given to `emusen_core_expect` at load, where the host had one.
+    expected: Option<String>,
 }
 
 type Registry = Mutex<HashMap<PathBuf, Result<&'static Library, LoadError>>>;
@@ -130,22 +136,52 @@ impl Library {
     /// The library at `path`, loaded the first time it is asked for with every required export; the same library, or
     /// the same refusal, every time after. Nothing is called but `emusen_core_abi_version` where an export is missing.
     pub fn load(path: &Path) -> Result<&'static Library, LoadError> {
+        Self::load_with(path, None)
+    }
+
+    /// As `load`, giving a library that exports `emusen_core_expect` the approved hash of what it serves before any
+    /// other call, so that other bytes never run (EmuSen_CoreAPI.md §6.42). A library loaded before under another
+    /// approval, or none, is refused; one without the export is loaded as `load` loads it, its host checking after.
+    pub fn load_expecting(path: &Path, sha256: &str) -> Result<&'static Library, LoadError> {
+        Self::load_with(path, Some(sha256))
+    }
+
+    fn load_with(path: &Path, expected: Option<&str>) -> Result<&'static Library, LoadError> {
         let full = full_path(path);
         let mut loaded = registry().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(found) = loaded.get(&full) {
-            return found.clone();
+            return match (found, expected) {
+                (Ok(lib), Some(want)) if lib.has("emusen_core_expect") && lib.expected.as_deref() != Some(want) => {
+                    Err(LoadError::NotExpected(format!("{} was loaded in this process under another approval", lib.file_name())))
+                }
+                _ => found.clone(),
+            };
         }
-        let made = Self::open(&full);
+        let made = Self::open(&full, expected);
         loaded.insert(full, made.clone());
         made
     }
 
-    fn open(full: &Path) -> Result<&'static Library, LoadError> {
+    fn open(full: &Path, expected: Option<&str>) -> Result<&'static Library, LoadError> {
         // SAFETY: loading runs the library's initialisers; deciding to load it is the trust rules' job (§7.2).
         let lib = unsafe { libloading::Library::new(full) }.map_err(|e| LoadError::Unloadable(e.to_string()))?;
+        if let Some(want) = expected
+            // SAFETY: the symbol is the header's `emusen_core_expect_fn`, called before any other export.
+            && let Ok(expect) = unsafe { lib.get::<emusen_native::core::sys::ExpectFn>(b"emusen_core_expect\0") }
+        {
+            let Ok(c) = CString::new(want) else { return Err(LoadError::NotExpected("the approved hash holds a NUL".into())) };
+            if unsafe { expect(c.as_ptr()) } != 0 {
+                let why = unsafe { lib.get::<unsafe extern "C" fn(i32, *mut u8, usize) -> i64>(b"emusen_core_status_text\0") }
+                    .ok()
+                    .and_then(|f| bounded(|o, l| unsafe { f(status::NOT_EXPECTED, o, l) }))
+                    .unwrap_or_else(|| "it answered EMUSEN_NOT_EXPECTED".into());
+                std::mem::forget(lib);
+                return Err(LoadError::NotExpected(why));
+            }
+        }
         // SAFETY: the export's type is the header's.
         match unsafe { Exports::resolve(&lib) } {
-            Ok(exports) => Ok(Box::leak(Box::new(Library { lib, path: full.to_path_buf(), exports, verdict: OnceLock::new() }))),
+            Ok(exports) => Ok(Box::leak(Box::new(Library { lib, path: full.to_path_buf(), exports, verdict: OnceLock::new(), expected: expected.map(str::to_owned) }))),
             Err(export) => {
                 // SAFETY: as above; the symbol is the header's `uint32_t (void)`.
                 let abi = unsafe { lib.get::<unsafe extern "C" fn() -> u32>(b"emusen_core_abi_version\0") }.ok().map(|f| unsafe { f() });

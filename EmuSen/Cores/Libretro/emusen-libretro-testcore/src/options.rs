@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 18] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 20] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -27,6 +27,8 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 18] = [
     ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
+    ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
+    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
 ];
 
 pub const CATEGORIES: [(&str, &str); 5] = [("picture", "Picture"), ("sound", "Sound"), ("memory", "Memory"), ("states", "States"), ("probe", "Probe")];
@@ -66,6 +68,8 @@ pub struct Options {
     pub set_variable: bool,
     pub note: String,
     pub fault: String,
+    pub rumble: bool,
+    pub hw: String,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -197,6 +201,8 @@ impl Options {
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
             fault: get("tc_fault"),
+            rumble: on("tc_rumble"),
+            hw: get("tc_hw"),
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);
@@ -208,6 +214,9 @@ impl Options {
     }
 
     pub fn pixel_format(&self) -> i32 {
+        if self.hw != "off" && !self.hw.is_empty() {
+            return sys::PIXEL_FORMAT_XRGB8888;
+        }
         match self.format.as_str() {
             "rgb565" => sys::PIXEL_FORMAT_RGB565,
             "0rgb1555" => sys::PIXEL_FORMAT_0RGB1555,

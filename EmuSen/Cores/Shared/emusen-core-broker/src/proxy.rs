@@ -5,7 +5,7 @@ use std::ffi::{CStr, c_char};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, flags, status};
+use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RingFrame, RingImage, RingLend, caps, flags, status};
 
 use crate::client::{Link, STATUS_ENDED, STATUS_HUNG, Spawn};
 use crate::wire::{Op, Reply, Writer};
@@ -25,6 +25,11 @@ pub trait Target: 'static {
     fn window() -> bool {
         false
     }
+    /// For a target claiming `EXPECT`: the bytes it serves sealed now, before any runs, and compared with the approved
+    /// hash; the refusal names both (EmuSen_CoreAPI.md §6.42).
+    fn expect(_sha256: &str) -> Result<(), String> {
+        Err("this proxy serves nothing it can compare".to_owned())
+    }
 }
 
 /// The proxy's own setting: the deadline of a frame, in seconds; create and free get six times it.
@@ -35,6 +40,13 @@ static LIBRARY: Mutex<Option<Link>> = Mutex::new(None);
 static CRASH_LOG: Mutex<Option<String>> = Mutex::new(None);
 static LIBRARY_LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static INFO: OnceLock<Result<(String, String, u32), String>> = OnceLock::new();
+/// Since 1.17: the hash `expect` was given and its outcome; a mismatch leaves the library broken for the process.
+static EXPECTED: OnceLock<(String, Result<(), String>)> = OnceLock::new();
+
+/// The words of a failed `expect`, after which nothing the proxy serves runs.
+fn broken() -> Option<&'static str> {
+    EXPECTED.get().and_then(|e| e.1.as_ref().err()).map(String::as_str)
+}
 
 /// One machine's handle: its runner, what the proxy itself says of it, and the frame-end window.
 pub struct Proxied {
@@ -122,6 +134,9 @@ unsafe fn copy_out(text: &[u8], out: *mut u8, len: usize) -> i64 {
 }
 
 fn library_call(op: Op, out_null: bool, out_len: u64, args: &[u8]) -> Result<Reply, (i32, String)> {
+    if let Some(why) = broken() {
+        return Err((status::NOT_EXPECTED, why.to_owned()));
+    }
     let mut guard = LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
     for attempt in 0..2 {
         if guard.as_ref().is_none_or(|l| l.dead.is_some()) {
@@ -157,8 +172,9 @@ fn descriptors<T: Target>() -> &'static Result<(String, String, u32), String> {
     let _ = SPAWN_LIBRARY.set(|| T::spawn(None));
     INFO.get_or_init(|| {
         let caps = library_call(Op::Capabilities, false, 0, &[]).map_err(|e| e.1)?;
-        if caps.ret as u64 != T::CAPABILITIES {
-            return Err(format!("the served library claims capabilities {:#x}, and this proxy forwards {:#x}", caps.ret, T::CAPABILITIES));
+        let forwarded = T::CAPABILITIES & !caps::EXPECT;
+        if caps.ret as u64 != forwarded {
+            return Err(format!("the served library claims capabilities {:#x}, and this proxy forwards {:#x}", caps.ret, forwarded));
         }
         let text = |op| -> Result<String, String> {
             let n = library_call(op, true, 0, &[]).map_err(|e| e.1)?.ret;
@@ -169,6 +185,11 @@ fn descriptors<T: Target>() -> &'static Result<(String, String, u32), String> {
             Ok(String::from_utf8_lossy(&r.bytes).into_owned())
         };
         let mut info = text(Op::Info)?;
+        if T::CAPABILITIES & caps::EXPECT != 0 {
+            let list = info.find(r#""capabilities":["#).ok_or("the served library's info lists no capabilities")? + r#""capabilities":["#.len();
+            let empty = info[list..].starts_with(']');
+            info.insert_str(list, if empty { r#""EXPECT""# } else { r#""EXPECT","# });
+        }
         let extra = T::info_extra();
         if !extra.is_empty()
             && let Some(end) = info.rfind('}')
@@ -237,6 +258,7 @@ pub unsafe fn status_text<T: Target>(code: i32, out: *mut u8, len: usize) -> i64
     let own = match code {
         STATUS_ENDED => Some("the core's process ended"),
         STATUS_HUNG => Some("the core stopped answering and was stopped"),
+        status::NOT_EXPECTED => Some(broken().unwrap_or("the library serves other bytes than the approved build")),
         _ => None,
     };
     if let Some(words) = own {
@@ -338,6 +360,23 @@ fn reads_by_path<T: Target>() -> bool {
     descriptors::<T>().as_ref().is_ok_and(|d| d.0.contains(r#""image_path""#))
 }
 
+/// `emusen_core_expect`: the first hash given stands, and a later one that differs is refused without changing it.
+pub unsafe fn expect<T: Target>(sha256: *const c_char) -> i32 {
+    if sha256.is_null() {
+        return status::NULL;
+    }
+    let given = unsafe { CStr::from_ptr(sha256) }.to_string_lossy().into_owned();
+    let (first, outcome) = EXPECTED.get_or_init(|| {
+        let outcome = if given.len() == 64 && given.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+            T::expect(&given)
+        } else {
+            Err(format!("the approved hash {given:?} is not 64 lower-case hexadecimal digits"))
+        };
+        (given.clone(), outcome)
+    });
+    if *first != given || outcome.is_err() { status::NOT_EXPECTED } else { 0 }
+}
+
 pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i32) -> *mut RawMachine {
     let set = |code: i32| {
         if !status_out.is_null() {
@@ -366,6 +405,9 @@ pub unsafe fn create<T: Target>(params: *const CreateParams, status_out: *mut i3
         set(code);
         std::ptr::null_mut()
     };
+    if let Some(why) = broken() {
+        return refuse(status::NOT_EXPECTED, why);
+    }
     if let Err(why) = descriptors::<T>() {
         return refuse(STATUS_ENDED, why);
     }
@@ -742,6 +784,50 @@ pub unsafe fn set_present(m: *mut RawMachine, port: u32, present: u32) -> i32 {
     }))) as i32
 }
 
+/// The host's ring (since 1.18): its images and semaphores cross as descriptors by `SCM_RIGHTS`; a null ring withdraws it.
+pub unsafe fn ring_lend(m: *mut RawMachine, ring: *const RingLend) -> i32 {
+    let Some(r) = (unsafe { ring.as_ref() }) else { return code(on(m, Op::RingLend, false, 0, &args(|w| {
+        w.u32(0);
+    }))) as i32 };
+    if (r.size as usize) < size_of::<RingLend>() || (r.count > 0 && (r.images.is_null() || r.image_size < size_of::<RingImage>())) || r.count as usize + 2 > crate::wire::MAX_RING_FDS {
+        return status::BAD_STRUCT;
+    }
+    let images: Vec<RingImage> = (0..r.count as usize).map(|i| unsafe { std::ptr::read_unaligned((r.images as *const u8).add(i * r.image_size) as *const RingImage) }).collect();
+    let handles: Vec<u64> = images.iter().map(|i| i.handle).chain([r.ready, r.done]).collect();
+    if handles.iter().any(|&h| h > i32::MAX as u64 || unsafe { libc::fcntl(h as i32, libc::F_GETFD) } < 0) {
+        return status::BAD_STRUCT;
+    }
+    let fds: Vec<i32> = handles.iter().map(|&h| h as i32).collect();
+    let Some(p) = (unsafe { proxied(m) }) else { return status::NULL };
+    let frame = p.frame;
+    match p.link.call_with_fds(Op::RingLend, &crate::wire::ring_args(&images, &r.device_uuid, &r.driver_uuid), &fds, frame) {
+        Ok(rep) => rep.ret as i32,
+        Err((c, why)) => {
+            record(&mut p.log, "error", &why);
+            c
+        }
+    }
+}
+
+/// The frame's picture in the ring (since 1.18), as the runner's machine answered it.
+pub unsafe fn frame_ring(m: *mut RawMachine, out: *mut RingFrame) -> i32 {
+    if out.is_null() {
+        return status::NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<RingFrame>() {
+        return status::BAD_STRUCT;
+    }
+    match on(m, Op::FrameRing, false, 0, &[]) {
+        Ok(r) => {
+            if r.ret == 1 && r.bytes.len() == size_of::<RingFrame>() {
+                unsafe { std::ptr::copy_nonoverlapping(r.bytes.as_ptr().add(4), (out as *mut u8).add(4), size_of::<RingFrame>() - 4) };
+            }
+            r.ret as i32
+        }
+        Err(c) => c,
+    }
+}
+
 /// The exports of a proxy for target `$t`, its optional groups named as `core_exports!` names them.
 #[macro_export]
 macro_rules! broker_exports {
@@ -795,6 +881,8 @@ macro_rules! __group_bit {
     (setting_notes) => { emusen_native::core::caps::SETTING_NOTES };
     (media) => { emusen_native::core::caps::MEDIA };
     (presence) => { emusen_native::core::caps::PRESENCE };
+    (expect) => { emusen_native::core::caps::EXPECT };
+    (device_ring) => { emusen_native::core::caps::DEVICE_RING };
 }
 
 /// One optional group's exports.
@@ -811,4 +899,12 @@ macro_rules! broker_group {
         #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_media_insert(m: *mut __M, d: u32, x: *const __Md) -> i32 { unsafe { __p::media_insert::<$t>(m, d, x) } }
     };
     ($t:ty, presence) => { #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_set_present(m: *mut __M, p: u32, x: u32) -> i32 { unsafe { __p::set_present(m, p, x) } } };
+    ($t:ty, device_ring) => {
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_ring_lend(m: *mut __M, r: *const emusen_native::core::sys::RingLend) -> i32 { unsafe { __p::ring_lend(m, r) } }
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_frame_ring(m: *mut __M, o: *mut emusen_native::core::sys::RingFrame) -> i32 { unsafe { __p::frame_ring(m, o) } }
+    };
+    ($t:ty, expect) => {
+        #[unsafe(no_mangle)] pub unsafe extern "C" fn emusen_core_expect(s: *const std::ffi::c_char) -> i32 { unsafe { __p::expect::<$t>(s) } }
+        const _: emusen_native::core::sys::ExpectFn = emusen_core_expect;
+    };
 }

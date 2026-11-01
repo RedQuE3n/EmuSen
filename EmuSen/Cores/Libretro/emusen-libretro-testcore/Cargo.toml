@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 emusen-libretro-sys = { path = "../emusen-libretro-sys" }
 libc = "0.2"
+# Vulkan's types and calls for its Vulkan picture, reached through the host's get_instance_proc_addr; no loader.
+ash = { version = "0.38", default-features = false, features = ["std"] }
 
 [profile.release]
 panic = "abort"

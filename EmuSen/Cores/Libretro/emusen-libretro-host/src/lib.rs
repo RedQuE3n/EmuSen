@@ -11,10 +11,11 @@ pub mod memory;
 pub mod options;
 pub mod state;
 pub mod video;
+pub mod vulkan;
 
 /// The space a console's RAM cheats write into, as the systems table names it.
 pub fn cheat_space(system: &str) -> Option<String> {
     emusen_systems::find(system).and_then(|s| s.cheat_space.clone())
 }
 
-emusen_native::core_exports!(machine::Machine; reset, phases, axes, settings, setting_notes, media, presence);
+emusen_native::core_exports!(machine::Machine; reset, phases, axes, settings, setting_notes, media, presence, device_ring);

@@ -21,6 +21,8 @@ const EMUSEN_CAP_DEBUG_REGISTERS 0x10000 @1.0
 const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
 const EMUSEN_CAP_DEBUG_TRANSLATE 0x2000000 @1.13
 const EMUSEN_CAP_DEVICE_PICTURE 0x200000 @1.9
+const EMUSEN_CAP_DEVICE_RING 0x8000000 @1.18
+const EMUSEN_CAP_EXPECT 0x10000000 @1.17
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
 const EMUSEN_CAP_IMAGE_PATH 0x4000000 @1.16
 const EMUSEN_CAP_MEDIA 0x40000 @1.1
@@ -37,8 +39,8 @@ const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CAP_TELEMETRY 0x800000 @1.13
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x10 @1.16
-const EMUSEN_CORE_ABI_VERSION 0x10010 @1.16
+const EMUSEN_CORE_ABI_MINOR 0x12 @1.18
+const EMUSEN_CORE_ABI_VERSION 0x10012 @1.18
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -100,6 +102,7 @@ enum emusen_event_kind.EMUSEN_EVENT_GEOMETRY 2 @1.0
 enum emusen_event_kind.EMUSEN_EVENT_LOG 5 @1.0
 enum emusen_event_kind.EMUSEN_EVENT_MACHINE_INFO 6 @1.0
 enum emusen_event_kind.EMUSEN_EVENT_MEDIA_SEEK 8 @1.4
+enum emusen_event_kind.EMUSEN_EVENT_OUTPUT 7 @1.17
 enum emusen_event_kind.EMUSEN_EVENT_STATE_SIZE 3 @1.0
 enum emusen_pixel_format.EMUSEN_PIXEL_BGRA8888 1 @1.0
 enum emusen_pixel_format.EMUSEN_PIXEL_RGB565 2 @1.0
@@ -132,11 +135,13 @@ export emusen_core_debug_set_stack optional EMUSEN_CAP_DEBUG_STACK @1.0
 export emusen_core_debug_translate optional EMUSEN_CAP_DEBUG_TRANSLATE @1.13
 export emusen_core_debug_writes optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_events required @1.0
+export emusen_core_expect optional EMUSEN_CAP_EXPECT @1.17
 export emusen_core_firmware_for required @1.0
 export emusen_core_frame_copy required @1.0
 export emusen_core_frame_count required @1.0
 export emusen_core_frame_device optional EMUSEN_CAP_DEVICE_PICTURE @1.9
 export emusen_core_frame_info required @1.0
+export emusen_core_frame_ring optional EMUSEN_CAP_DEVICE_RING @1.18
 export emusen_core_free required @1.0
 export emusen_core_info required @1.0
 export emusen_core_last_error required @1.0
@@ -150,6 +155,7 @@ export emusen_core_raw_copy optional EMUSEN_CAP_RAW_PICTURE @1.10
 export emusen_core_raw_info optional EMUSEN_CAP_RAW_PICTURE @1.10
 export emusen_core_raw_select optional EMUSEN_CAP_RAW_PICTURE @1.10
 export emusen_core_reset optional EMUSEN_CAP_RESET @1.0
+export emusen_core_ring_lend optional EMUSEN_CAP_DEVICE_RING @1.18
 export emusen_core_set_audio_limit required @1.0
 export emusen_core_set_axis optional EMUSEN_CAP_AXES @1.0
 export emusen_core_set_buttons required @1.0
@@ -246,6 +252,31 @@ field emusen_raw_frame.reserved offset 20 type uint32_t @1.10
 field emusen_raw_frame.size offset 0 type uint32_t @1.10
 field emusen_raw_frame.stride offset 16 type int32_t @1.10
 field emusen_raw_frame.width offset 8 type int32_t @1.10
+field emusen_ring_frame.aspect_den offset 36 type uint32_t @1.18
+field emusen_ring_frame.aspect_num offset 32 type uint32_t @1.18
+field emusen_ring_frame.field offset 28 type uint32_t @1.18
+field emusen_ring_frame.fields offset 24 type uint32_t @1.18
+field emusen_ring_frame.height offset 12 type int32_t @1.18
+field emusen_ring_frame.size offset 0 type uint32_t @1.18
+field emusen_ring_frame.slot offset 4 type uint32_t @1.18
+field emusen_ring_frame.value offset 16 type uint64_t @1.18
+field emusen_ring_frame.width offset 8 type int32_t @1.18
+field emusen_ring_image.allocation_size offset 16 type uint64_t @1.18
+field emusen_ring_image.format offset 32 type uint32_t @1.18
+field emusen_ring_image.handle offset 8 type uint64_t @1.18
+field emusen_ring_image.height offset 28 type uint32_t @1.18
+field emusen_ring_image.memory_type offset 4 type uint32_t @1.18
+field emusen_ring_image.size offset 0 type uint32_t @1.18
+field emusen_ring_image.usage offset 36 type uint32_t @1.18
+field emusen_ring_image.width offset 24 type uint32_t @1.18
+field emusen_ring_lend.count offset 4 type uint32_t @1.18
+field emusen_ring_lend.device_uuid offset 40 type uint8_t[16] @1.18
+field emusen_ring_lend.done offset 32 type uint64_t @1.18
+field emusen_ring_lend.driver_uuid offset 56 type uint8_t[16] @1.18
+field emusen_ring_lend.image_size offset 16 type size_t @1.18
+field emusen_ring_lend.images offset 8 type const emusen_ring_image* @1.18
+field emusen_ring_lend.ready offset 24 type uint64_t @1.18
+field emusen_ring_lend.size offset 0 type uint32_t @1.18
 fn emusen_core_abi_version () -> uint32_t @1.0
 fn emusen_core_advance (emusen_machine*, uint64_t*) -> int32_t @1.0
 fn emusen_core_audio_buffered (const emusen_machine*) -> int64_t @1.0
@@ -272,11 +303,13 @@ fn emusen_core_debug_set_stack (emusen_machine*, const uint32_t*, size_t) -> int
 fn emusen_core_debug_translate (const emusen_machine*, uint32_t, uint32_t, uint32_t*) -> int32_t @1.13
 fn emusen_core_debug_writes (emusen_machine*, uint32_t*, size_t) -> int64_t @1.0
 fn emusen_core_events (emusen_machine*, emusen_event*, size_t, size_t) -> int64_t @1.0
+fn emusen_core_expect (const char*) -> int32_t @1.17
 fn emusen_core_firmware_for (const uint8_t*, size_t, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_frame_copy (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_frame_count (const emusen_machine*) -> int64_t @1.0
 fn emusen_core_frame_device (emusen_machine*, emusen_device_frame*) -> int32_t @1.9
 fn emusen_core_frame_info (const emusen_machine*, emusen_frame_info*) -> int32_t @1.0
+fn emusen_core_frame_ring (emusen_machine*, emusen_ring_frame*) -> int32_t @1.18
 fn emusen_core_free (emusen_machine*) -> int32_t @1.0
 fn emusen_core_info (uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_last_error (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
@@ -290,6 +323,7 @@ fn emusen_core_raw_copy (const emusen_machine*, uint32_t, uint8_t*, size_t) -> i
 fn emusen_core_raw_info (const emusen_machine*, uint32_t, emusen_raw_frame*) -> int32_t @1.10
 fn emusen_core_raw_select (emusen_machine*, uint64_t) -> int32_t @1.10
 fn emusen_core_reset (emusen_machine*) -> int32_t @1.0
+fn emusen_core_ring_lend (emusen_machine*, const emusen_ring_lend*) -> int32_t @1.18
 fn emusen_core_set_audio_limit (emusen_machine*, uint64_t) -> int32_t @1.0
 fn emusen_core_set_axis (emusen_machine*, uint32_t, uint32_t, double) -> int32_t @1.0
 fn emusen_core_set_buttons (emusen_machine*, uint32_t, uint32_t, uint32_t) -> int32_t @1.0
@@ -419,6 +453,11 @@ json machine_info.patches.low integer required @1.0
 json machine_info.phases array<string> optional @1.0
 json machine_info.ports array<object> required @1.0
 json machine_info.ports[].controller string|null required @1.0
+json machine_info.ports[].outputs array<object> optional @1.17
+json machine_info.ports[].outputs[].kind string required @1.17
+json machine_info.ports[].outputs[].label string required @1.17
+json machine_info.ports[].outputs[].motor string optional @1.17
+json machine_info.ports[].outputs[].output integer required @1.17
 json machine_info.ports[].port integer required @1.0
 json machine_info.processors array<object> optional @1.0
 json machine_info.processors[].id integer required @1.0
@@ -504,6 +543,7 @@ status EMUSEN_CORE_BAND_LAST -255 @1.0
 status EMUSEN_FAULT_BASE -320 @1.0
 status EMUSEN_FOREIGN -3 @1.0
 status EMUSEN_LID_CLOSED -265 @1.1
+status EMUSEN_NOT_EXPECTED -268 @1.17
 status EMUSEN_NOT_SUPPORTED -256 @1.0
 status EMUSEN_NO_SUCH_DRIVE -267 @1.1
 status EMUSEN_NO_SUCH_PORT -261 @1.0
@@ -522,3 +562,6 @@ struct emusen_file size 24 align 8 @1.0
 struct emusen_frame_info size 56 align 8 @1.0
 struct emusen_media size 48 align 8 @1.1
 struct emusen_raw_frame size 32 align 8 @1.10
+struct emusen_ring_frame size 40 align 8 @1.18
+struct emusen_ring_image size 40 align 8 @1.18
+struct emusen_ring_lend size 72 align 8 @1.18

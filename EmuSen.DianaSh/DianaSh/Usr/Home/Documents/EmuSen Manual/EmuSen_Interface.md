@@ -821,6 +821,10 @@ or to show it again, through the plan's question; X opens the file's page (`Mark
 four tools re-recorded at both sizes (`EmuSen_InterfaceSpec.md`), seventeen states, held by `WindowFitAuditTests`.
 Not yet moved: the Scraper's and the Library Manager's detail content, which stays each tool's own lines rather than
 the sentences of §14.4; a stage of their own.
+Tests, measured on 2026-11-01: `LibraryWindowTests`, `PackagesWindowTests`, `ScraperWindowTests`, `CoresWindowTests` and
+`CoresWindowRuntimeTests`, 33; the fit audit and the recordings of the four tools' states, 72 cases; LunaP's `ToolFrameTests`,
+20, with its four seeded faults (its §208.9). Two seeded faults here, each caught: the scraper's filter not sent beside the
+system (`ScraperWindowTests`, two cases); the Library Manager's A left idle (`LibraryWindowTests`, two cases).
 
 ### 15.2 Queued
 

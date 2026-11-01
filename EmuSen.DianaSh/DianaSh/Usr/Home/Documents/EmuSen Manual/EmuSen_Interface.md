@@ -540,7 +540,7 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 12. Analogue, 3DOS user guide, https://www.analogue.co/support/3d/guide/3dos
 13. Analogue, "What's new in Analogue OS v1.1 beta", https://www.analogue.co/announcements/os-v1-1-available-now-what-s-new-in-analogue-os-v1-1-beta
 14. ES-DE user guide, https://gitlab.com/es-de/emulationstation-de/-/raw/master/USERGUIDE.md ; GamingOnLinux on ES-DE 3.0, https://gamingonlinux.com/2024/02/emulationstation-desktop-edition-es-de-gets-new-default-look-and-different-font-sizes
-15. Libretro docs, "The User Interface", https://docs.libretro.com/guides/gui/
+15. Libretro docs, the guide to RetroArch's interface, https://docs.libretro.com/guides/gui/
 16. Libretro docs, Ozone, https://docs.libretro.com/guides/ozone ; the Ozone announcement, https://www.libretro.com/?p=46928
 17. Libretro docs, XMB, https://docs.libretro.com/guides/xmb
 18. Microsoft, "Designing for Xbox and TV", https://learn.microsoft.com/en-us/windows/apps/design/devices/designing-for-tv

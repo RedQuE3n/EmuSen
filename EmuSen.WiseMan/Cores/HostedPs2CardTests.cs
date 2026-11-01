@@ -20,7 +20,8 @@ namespace EmuSen.WiseMan.Cores
     {
         private const string Console = "PlayStation 2";
         private readonly ITestOutputHelper _output;
-        private readonly LibretroEntryFixture _entry = new(systemId: "playstation2", stem: "pcee2");
+        // The extensions pcee2's own .info lists, by which the Rust runtime matches a game to a hosted core (EmuSen_LibretroHost.md §4.1a).
+        private readonly LibretroEntryFixture _entry = new(systemId: "playstation2", stem: "pcee2", extensions: "iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx");
 
         public HostedPs2CardTests(ITestOutputHelper output) => _output = output;
 
